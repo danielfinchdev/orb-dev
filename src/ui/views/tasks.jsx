@@ -4,6 +4,7 @@ import { Plus, Check, X, Zap, RotateCw, Square, Shuffle, Undo2, MessageSquare, G
 import { PageHeader } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { Markdown } from '@/components/markdown.jsx';
+import { useLiveTasks, liveOf, LiveTask, ProgressBar } from '@/components/live-tasks.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, Empty, Field, Input, Textarea } from '@/components/ui/basic.jsx';
@@ -46,7 +47,7 @@ async function newTask() {
   });
 }
 
-function TaskDetail({ id }) {
+function TaskDetail({ id, live }) {
   const version = useStore((s) => s.version);
   const [t, setT] = useState(null);
   useEffect(() => { let alive = true; call('tasks.get', { id }).then((r) => alive && setT(r)).catch(() => alive && setT(null)); return () => { alive = false; }; }, [id, version]);
@@ -99,6 +100,7 @@ function TaskDetail({ id }) {
         </>) : null}
         {!['done', 'cancelled'].includes(t.status) ? <Button size="sm" variant="danger" onClick={async () => { if (await confirm('Cancelar tarea', t.status === 'running' ? 'El agente se detendrá ahora.' : '¿Cancelar esta tarea?', { ok: 'Cancelar tarea', cancel: 'Volver', danger: true })) act(call('tasks.cancel', { id: t.id }), 'Cancelada'); }}><Square />Cancelar</Button> : null}
       </div>
+      {t.status === 'running' && live ? <div className="bg-muted/50 mx-5 rounded-xl border px-3.5 py-3" data-testid="task-live"><LiveTask t={live} actions={false} /></div> : null}
       <dl className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-1.5 px-5 text-[13px]">
         <dt className="text-muted-foreground">Agente</dt><dd>{AGENT[who] ?? who}{t.model ? ` · ${t.model}` : ''} · razonamiento {REASONING[t.reasoning]?.toLowerCase() ?? t.reasoning}</dd>
         <dt className="text-muted-foreground">Dónde</dt><dd className="break-all">{MODE[t.mode]}{t.readonly ? ' · solo lectura' : ''}{t.branch ? ` · rama ${t.branch}` : ''}</dd>
@@ -117,18 +119,22 @@ function TaskDetail({ id }) {
 }
 
 export function TasksView({ route }) {
-  const tasks = useStore((s) => s.tasks);
+  const all = useStore((s) => s.tasks);
+  // From a folder of the left menu: only that project's tasks (with a button to see them all).
+  const tasks = route.project ? all.filter((t) => t.project === route.project) : all;
   const [filter, setFilter] = useState(() => (route.id ? 'todas' : tasks.some((t) => t.status === 'awaiting_approval') ? 'aprobar' : 'activas'));
   const [selected, setSelected] = useState(route.id ?? null);
   const rows = tasks.filter(FILTERS.find(([k]) => k === filter)[2]);
+  const live = useLiveTasks();
   // The first task of the list is shown when nothing (or something no longer listed) is selected.
   useEffect(() => { if (rows.length && !rows.some((t) => t.id === selected)) setSelected(rows[0].id); }, [filter, rows.length]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
-      <PageHeader icon={<ListTodo className="text-primary size-5" />} title="Tareas" meta="Lo que hacen los agentes, con aprobaciones, deshacer y tu OK">
+      <PageHeader icon={<ListTodo className="text-primary size-5" />} title={route.project ? `Tareas · ${route.project}` : 'Tareas'} meta="Lo que hacen los agentes, con aprobaciones, deshacer y tu OK">
+        {route.project ? <Button size="sm" variant="ghost" onClick={() => go('tasks')}><X />Ver todos los proyectos</Button> : null}
         <Button size="sm" onClick={async () => { const id = await newTask(); if (id) { setFilter('todas'); setSelected(id); } }}><Plus />Nueva tarea</Button>
       </PageHeader>
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 md:pb-28">
         <Tabs value={filter} onValueChange={setFilter} className="mb-4">
           <TabsList>{FILTERS.map(([key, label, fn]) => { const n = tasks.filter(fn).length; return <TabsTrigger key={key} value={key}>{label}{key !== 'todas' && n ? <span className="text-muted-foreground text-xs">{n}</span> : null}</TabsTrigger>; })}</TabsList>
         </Tabs>
@@ -137,12 +143,13 @@ export function TasksView({ route }) {
             {rows.length ? rows.map((t) => (
               <button key={t.id} onClick={() => setSelected(t.id)} className={cn('flex w-full cursor-pointer items-center gap-3 border-b px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-accent/50', selected === t.id && 'bg-accent')}>
                 <AgentIcon agent={t.assigned_to ?? t.agent} />
-                <div className="min-w-0 flex-1"><div className="truncate text-[14px]">{t.title}</div><div className="text-muted-foreground truncate text-xs">#{t.id} · {t.project} · {AGENT[t.assigned_to ?? t.agent] ?? t.agent} · {ago(t.updated_at)}</div></div>
+                <div className="min-w-0 flex-1"><div className="truncate text-[14px]">{t.title}</div><div className="text-muted-foreground truncate text-xs">#{t.id} · {t.project} · {AGENT[t.assigned_to ?? t.agent] ?? t.agent} · {ago(t.updated_at)}</div>
+                  {t.status === 'running' && liveOf(live, t.id) ? <div className="mt-1.5 flex items-center gap-2"><ProgressBar percent={liveOf(live, t.id).percent} quiet={liveOf(live, t.id).quietMin >= 5} className="h-1" /><span className="text-muted-foreground shrink-0 text-[11px] tabular-nums">{liveOf(live, t.id).percent != null ? `${liveOf(live, t.id).percent} %` : `${liveOf(live, t.id).steps} pasos`}</span></div> : null}</div>
                 <StatusBadge status={t.status} />
               </button>
             )) : <Empty icon={ListTodo} title={filter === 'aprobar' ? 'Nada que aprobar' : 'Sin tareas aquí'}>Pídele algo al asistente o crea una tarea.</Empty>}
           </Card>
-          {selected ? <TaskDetail id={selected} /> : <Card><Empty icon={ListTodo} title="Elige una tarea">Verás su encargo, el resultado y lo que puedes hacer con ella.</Empty></Card>}
+          {selected ? <TaskDetail id={selected} live={liveOf(live, selected)} /> : <Card><Empty icon={ListTodo} title="Elige una tarea">Verás su encargo, el resultado y lo que puedes hacer con ella.</Empty></Card>}
         </div>
       </div>
     </>

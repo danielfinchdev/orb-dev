@@ -39,7 +39,7 @@ export function phoneConfig(c) {
 
 // What a phone may call. Everything that changes settings, accounts, connectors, installs software or publishes stays on the PC.
 const ALLOWED = new Set(['app.state', 'chat.list', 'chat.send', 'chat.reset', 'chat.stop', 'chat.accept', 'chat.settings',
-  'tasks.list', 'tasks.get', 'tasks.create', 'tasks.approve', 'tasks.retry', 'tasks.cancel', 'tasks.reassign', 'tasks.followup', 'tasks.undo', 'tasks.launchAnyway', 'tasks.accept',
+  'tasks.list', 'tasks.live', 'tasks.get', 'tasks.create', 'tasks.approve', 'tasks.retry', 'tasks.cancel', 'tasks.reassign', 'tasks.followup', 'tasks.undo', 'tasks.launchAnyway', 'tasks.accept',
   'sessions.list', 'sessions.create', 'sessions.items', 'sessions.send', 'sessions.stop', 'sessions.update',
   'projects.list', 'projects.info', 'projects.setActive', 'projects.create', 'logs.list', 'logs.read', 'activity.list', 'usage.get', 'agents.status',
   'control.pause', 'control.resume']);

@@ -38,6 +38,19 @@ export async function act(promise, okText) {
   catch (error) { toast.error(errorText(error)); return undefined; }
 }
 
+// Ctrl+J: a terminal in the folder of what is on screen (a conversation's project, the active project) or the assistant's.
+export function terminalFolder() {
+  const { route, sessions, projects, app } = state;
+  const session = route.view === 'session' ? sessions.find((s) => s.id === route.id) : null;
+  const named = (name) => projects.find((p) => p.name === name)?.path;
+  return session?.cwd ?? (route.project && named(route.project)) ?? app?.activeProject?.path ?? app?.home ?? null;
+}
+export async function openTerminal(folder = terminalFolder()) {
+  if (!bridge.openTerminal) return;
+  try { const name = await bridge.openTerminal(folder); toast.success(`Terminal abierta (${name})`); }
+  catch (error) { toast.error(errorText(error)); }
+}
+
 // Theme: "sistema" follows Windows, "claro" / "oscuro" force it.
 const media = window.matchMedia('(prefers-color-scheme: dark)');
 let theme = 'sistema';

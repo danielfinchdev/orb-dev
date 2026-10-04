@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHome, isHome, loadConfig, writeJson } from '../core/home.mjs';
 import { createAgentBrowser } from './browser.mjs';
+import { openTerminal } from './terminal.mjs';
 import { PRODUCT } from '../core/product.mjs';
 
 const SRC = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -16,6 +17,10 @@ const UNPACKED = SRC.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep
 const RENDERER = path.join(SRC, 'renderer');
 const VERSION = app.getVersion();
 const LOCATION = () => path.join(app.getPath('userData'), 'ubicacion.json');
+// Size of the interface on this PC (Ajustes → Interfaz, Ctrl + / Ctrl - / Ctrl 0, Ctrl + rueda). 1 = «Normal», which is a
+// bit bigger than Chromium's 100% (the first version looked too small on Windows). Kept per PC, also before the setup.
+const INTERFACE = () => path.join(app.getPath('userData'), 'interfaz.json');
+const ZOOM_BASE = 1.15; const ZOOM_MIN = 0.6; const ZOOM_MAX = 1.8; const ZOOM_STEP = 0.1;
 const isDev = !app.isPackaged;
 
 // ORB_USER_DATA: separate app data (tests, or a portable copy that keeps everything next to it).
@@ -39,6 +44,25 @@ function readLocation() {
   try { const h = JSON.parse(fs.readFileSync(LOCATION(), 'utf8')).home; return h && isHome(h) ? h : null; } catch { return null; }
 }
 function saveLocation(h) { fs.mkdirSync(path.dirname(LOCATION()), { recursive: true }); writeJson(LOCATION(), { home: h }); }
+
+let zoom = 1;
+function readZoom() { try { const z = Number(JSON.parse(fs.readFileSync(INTERFACE(), 'utf8')).zoom); return Number.isFinite(z) ? Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)) : 1; } catch { return 1; } }
+function setZoom(next) {
+  zoom = Math.round(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Number(next) || 1)) * 100) / 100;
+  if (win && !win.isDestroyed()) { win.webContents.setZoomFactor(zoom * ZOOM_BASE); win.webContents.send('engine:event', 'ui:zoom', { zoom }); }
+  try { fs.mkdirSync(path.dirname(INTERFACE()), { recursive: true }); writeJson(INTERFACE(), { zoom }); } catch { /* only this session */ }
+  return zoom;
+}
+// Ctrl and the key, whatever the keyboard: «+» has its own key on a Spanish one, «=» shares it on an English one, and the
+// number pad has its own. Handled here (not with menu accelerators, which miss some of these on Windows).
+function zoomKey(input) {
+  if (input.type !== 'keyDown' || !(input.control || input.meta) || input.alt) return null;
+  if (['+', '=', 'Add'].includes(input.key) || input.code === 'NumpadAdd') return 'in';
+  if (['-', '_', 'Subtract'].includes(input.key) || input.code === 'NumpadSubtract') return 'out';
+  if (input.key === '0' || input.code === 'Numpad0' || input.code === 'Digit0') return 'reset';
+  return null;
+}
+const zoomBy = (dir) => setZoom(dir === 'reset' ? 1 : zoom + (dir === 'in' ? ZOOM_STEP : -ZOOM_STEP));
 
 // The approval secret, encrypted by Windows (DPAPI via safeStorage) in .orb/datos/clave.enc. The plain clave.bin that the
 // first run writes is converted and removed, so no agent can read the secret from disk. Returns the secret as hex, or null
@@ -131,6 +155,13 @@ ipcMain.handle('engine:call', guard(async (method, params) => {
   return callEngine(method, params ?? {});
 }));
 
+ipcMain.handle('app:zoom', guard(async (value) => (value === undefined || value === null ? zoom : setZoom(value))));
+// Ctrl+J: a terminal (Warp, Windows Terminal, PowerShell…) in the folder the window is showing.
+ipcMain.handle('app:openTerminal', guard(async (target) => {
+  const dir = typeof target === 'string' && path.isAbsolute(target) ? target : home;
+  if (!dir) throw new Error('todavía no hay carpeta');
+  return openTerminal(dir, config()?.ui?.terminal ?? 'auto', { openExternal: (url) => shell.openExternal(url) });
+}));
 ipcMain.handle('app:showBrowser', guard(async () => { agentBrowser?.show(); return agentBrowser?.state() ?? null; }));
 ipcMain.handle('app:info', guard(async () => ({ version: VERSION, home, needsSetup: !home, platform: process.platform, defaultBase: app.getPath('documents') })));
 
@@ -181,6 +212,9 @@ function createWindow() {
     webPreferences: { preload: path.join(SRC, 'main', 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, spellcheck: true, devTools: isDev || process.env.ORB_DEVTOOLS === '1' }
   });
   win.once('ready-to-show', () => win.show());
+  win.webContents.on('did-finish-load', () => win?.webContents.setZoomFactor(zoom * ZOOM_BASE));
+  win.webContents.on('before-input-event', (e, input) => { const dir = zoomKey(input); if (dir) { e.preventDefault(); zoomBy(dir); } });
+  win.webContents.on('zoom-changed', (_e, dir) => zoomBy(dir)); // Ctrl + mouse wheel
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https:\/\//.test(url)) shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('orb://app/')) e.preventDefault(); });
   win.on('close', async (e) => {
@@ -208,7 +242,8 @@ app.whenReady().then(async () => {
   protocol.handle('orb', (request) => {
     const url = new URL(request.url);
     const file = path.normalize(path.join(RENDERER, decodeURIComponent(url.pathname)));
-    if (url.host !== 'app' || !file.startsWith(RENDERER + path.sep)) return new Response('no encontrado', { status: 404 });
+    // orb://pip/ is the same files for the little window: another host, so Chromium keeps its zoom apart from the app's.
+    if (!['app', 'pip'].includes(url.host) || !file.startsWith(RENDERER + path.sep)) return new Response('no encontrado', { status: 404 });
     return net.fetch(pathToFileURL(file).toString());
   });
   // The window never needs the camera, the microphone, notifications from the page, etc.
@@ -219,17 +254,19 @@ app.whenReady().then(async () => {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: 'Archivo', submenu: [{ role: 'quit', label: 'Salir' }] },
     { label: 'Edición', submenu: [{ role: 'undo', label: 'Deshacer' }, { role: 'redo', label: 'Rehacer' }, { type: 'separator' }, { role: 'cut', label: 'Cortar' }, { role: 'copy', label: 'Copiar' }, { role: 'paste', label: 'Pegar' }, { role: 'selectAll', label: 'Seleccionar todo' }] },
-    { label: 'Ver', submenu: [{ role: 'resetZoom', label: 'Tamaño normal' }, { role: 'zoomIn', label: 'Aumentar' }, { role: 'zoomOut', label: 'Reducir' }, { type: 'separator' }, { role: 'togglefullscreen', label: 'Pantalla completa' }, ...(isDev ? [{ role: 'toggleDevTools' }] : [])] }
+    // The keys themselves are handled in before-input-event (any keyboard); the menu only shows them.
+    { label: 'Ver', submenu: [{ label: 'Tamaño normal', accelerator: 'CommandOrControl+0', registerAccelerator: false, click: () => zoomBy('reset') }, { label: 'Aumentar', accelerator: 'CommandOrControl+Plus', registerAccelerator: false, click: () => zoomBy('in') }, { label: 'Reducir', accelerator: 'CommandOrControl+-', registerAccelerator: false, click: () => zoomBy('out') }, { type: 'separator' }, { label: 'Abrir terminal', accelerator: 'CommandOrControl+J', registerAccelerator: false, click: () => win?.webContents.send('engine:event', 'ui:terminal', {}) }, { type: 'separator' }, { role: 'togglefullscreen', label: 'Pantalla completa' }, ...(isDev ? [{ role: 'toggleDevTools' }] : [])] }
   ]));
   // The agents' browser: pages drawn off screen and the little window in the top-right corner (ui.pip turns it off).
   try {
     agentBrowser = createAgentBrowser({
-      pipUrl: 'orb://app/pip.html', pipPreload: path.join(SRC, 'main', 'pip-preload.cjs'), mainWindow: () => win,
+      pipUrl: 'orb://pip/pip.html', pipPreload: path.join(SRC, 'main', 'pip-preload.cjs'), mainWindow: () => win,
       pipEnabled: () => config()?.ui?.pip !== false && config()?.browser?.enabled !== false,
       label: (agent) => (agent === 'orb' ? config()?.assistantName ?? PRODUCT.assistant : { claude: 'Claude', codex: 'Codex', cursor: 'Cursor' }[agent] ?? agent)
     });
     await agentBrowser.ready;
   } catch (error) { agentBrowser = null; console.error(`navegador del agente: ${error.message}`); }
+  zoom = readZoom();
   const h = readLocation();
   if (h) startEngine(h).catch((error) => dialog.showErrorBox(`${PRODUCT.name} no pudo arrancar`, error.message));
   createWindow();
