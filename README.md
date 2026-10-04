@@ -20,8 +20,8 @@ Tú → Orb → tareas y coordinación → agentes → tareas hechas → Orb rev
 Cursor) te los instala ella misma en el primer arranque. El repositorio es privado: para descargar hay que tener acceso
 a él en GitHub (o que te pasen el archivo).
 
-Cada versión nueva se publica sola: al subir una etiqueta `vX.Y.Z`, GitHub la construye en un Windows real
-(`.github/workflows/release.yml`) y deja ahí el `.exe` y el `.zip`. Es una versión de prueba: si algo falla, cuéntalo con
+Cada versión nueva se publica sola: al cambiar `version` en `package.json` en `main`, GitHub la prueba, la construye en
+un Windows real, prueba la app empaquetada (`.github/workflows/release.yml`) y deja en Releases el `.exe` y el `.zip`. Es una versión de prueba: si algo falla, cuéntalo con
 una captura.
 
 ## Usarla desde el código (para desarrollar)
