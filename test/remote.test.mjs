@@ -21,7 +21,7 @@ before(async () => {
   base = `http://127.0.0.1:${port}`;
   await until(async () => (await call('remote.status')).running, 'servidor del móvil');
 });
-after(() => { engine.send({ type: 'shutdown' }); t.cleanup(); });
+after(() => { engine?.send({ type: 'shutdown' }); t?.cleanup(); });
 
 const api = (pathname, { method = 'POST', body, key, headers = {} } = {}) => fetch(base + pathname, { method, headers: { 'X-Orb': '1', ...(key ? { Authorization: `Bearer ${key}` } : {}), ...(body && typeof body !== 'object' ? {} : { 'Content-Type': 'application/json' }), ...headers }, body: body === undefined ? undefined : typeof body === 'object' && !(body instanceof Buffer) ? JSON.stringify(body) : body });
 

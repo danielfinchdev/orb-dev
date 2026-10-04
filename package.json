@@ -12,7 +12,7 @@
     "build": "vite build",
     "start": "vite build && electron .",
     "check": "node scripts/check.mjs",
-    "test": "node --test test/*.test.mjs",
+    "test": "vite build --logLevel warn && node --test test/*.test.mjs",
     "test:app": "vite build && node test/app.e2e.mjs",
     "icon": "node scripts/icono.mjs",
     "dist": "vite build && electron-builder --win portable nsis",
