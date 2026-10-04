@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { PRODUCT } from './product.mjs';
+import { PRODUCT, folderName } from './product.mjs';
 
 export const CONFIG_FILE = 'orb.json';
 export const AGENT_IDS = ['claude', 'codex', 'cursor'];
@@ -84,29 +84,10 @@ export function merge(base, over) {
   return out;
 }
 
-// A name that is safe as a folder name on Windows (also used for project folders).
-export function folderName(name, fallback = PRODUCT.assistant) {
-  const clean = String(name ?? '').normalize('NFC').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '').replace(/[. ]+$/g, '').trim().slice(0, 60);
-  if (!clean || /^(con|prn|aux|nul|com\d|lpt\d)$/i.test(clean)) return fallback;
-  return clean;
-}
+export { folderName };
 
 export function isHome(dir) {
-  migrateOldHome(dir);
   try { return fs.statSync(path.join(dir, CONFIG_FILE)).isFile(); } catch { return false; }
-}
-
-// A folder made by the preview of this app (before it was called Orb.dev: jarvis.json, .jarvis/datos/jarvis.db) is
-// renamed in place the first time it is opened. Only that exact layout is touched (never Jarvis 1.5's folders).
-export function migrateOldHome(dir) {
-  try {
-    const oldConfig = path.join(dir, 'jarvis.json'); const oldInternal = path.join(dir, '.jarvis'); const oldDb = path.join(oldInternal, 'datos', 'jarvis.db');
-    if (!dir || fs.existsSync(path.join(dir, CONFIG_FILE)) || !fs.existsSync(oldConfig) || !fs.existsSync(oldDb) || fs.existsSync(path.join(dir, INTERNAL_DIR))) return false;
-    for (const ext of ['', '-wal', '-shm']) if (fs.existsSync(oldDb + ext)) fs.renameSync(oldDb + ext, path.join(oldInternal, 'datos', `orb.db${ext}`));
-    fs.renameSync(oldInternal, path.join(dir, INTERNAL_DIR));
-    fs.renameSync(oldConfig, path.join(dir, CONFIG_FILE));
-    return true;
-  } catch { return false; }
 }
 
 // First run: <base>/<assistant name>/ with its folders, config, secret and the general log. An existing home is reused as is.

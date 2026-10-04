@@ -8,10 +8,23 @@ el **OK**. También puedes hablar directamente con cada agente, en directo, como
 Tú → Orb → tareas y coordinación → agentes → tareas hechas → Orb revisa → informe → tu OK
 ```
 
-## Probarlo (versión de prueba)
+## Descargar y usar (lo más fácil)
 
-Es una versión de prueba: hecha para Windows 10/11 y todavía sin probar a fondo en un Windows real. Si algo falla,
-cuéntalo con una captura.
+1. Entra en [**Releases → última versión**](https://github.com/danielfinchdev/orb-dev/releases/latest) y descarga
+   **`Orb.dev-2.1.0-portable.exe`**.
+2. Doble clic. No se instala nada: se abre tal cual (la primera vez tarda unos segundos).
+3. Windows SmartScreen avisará porque la app aún no está firmada: «Más información» → «Ejecutar de todas formas».
+
+¿Prefieres que arranque más rápido? Descarga **`Orb.dev-2.1.0-windows.zip`**, clic derecho → «Extraer todo» y abre
+`Orb.dev.exe` de dentro de la carpeta. No hace falta instalar Node.js ni Git para la app; los agentes (Claude Code, Codex,
+Cursor) te los instala ella misma en el primer arranque. El repositorio es privado: para descargar hay que tener acceso
+a él en GitHub (o que te pasen el archivo).
+
+Cada versión nueva se publica sola: al subir una etiqueta `vX.Y.Z`, GitHub la construye en un Windows real
+(`.github/workflows/release.yml`) y deja ahí el `.exe` y el `.zip`. Es una versión de prueba: si algo falla, cuéntalo con
+una captura.
+
+## Usarla desde el código (para desarrollar)
 
 1. Instala [Git](https://git-scm.com/) y [Node.js 22.13 o superior](https://nodejs.org/).
 2. Descárgalo y arráncalo:
@@ -26,17 +39,15 @@ cuéntalo con una captura.
 4. Para abrirla otra vez: en la carpeta `orb-dev`, `npm start`. Para tener la última versión: `git pull` y `npm install`
    antes de `npm start` (mejor que un zip: así recibes los arreglos).
 
-**¿Y el `.exe`?** El repositorio solo tiene el código: no trae ningún `.exe` (es normal). Hay dos formas de usarla:
-con `npm start` como arriba, o generando tú el ejecutable en Windows con `npm run dist`, que deja en `dist\` el
-`Orb.dev-2.0.0-portable.exe` (no se instala, se abre tal cual) y un instalador. Sin certificado de firma, Windows
-SmartScreen avisa la primera vez («Más información» → «Ejecutar de todas formas»).
+El `.exe` no está dentro del código: se descarga de Releases (arriba) o lo generas tú en Windows con `npm run dist`
+(deja en `dist\` el portable y un instalador).
 
 **Ojo con Cursor:** su plan gratuito no deja usar el agente desde otras apps. Si una tarea falla por eso, la app lo dice
 claro, deja Cursor en pausa un día y, si la tarea era para «cualquier agente», se la pasa a otro.
 
 ## Empezar
 
-1. Arráncala con `npm start` (o abre el `Orb.dev-2.0.0-portable.exe` que generaste con `npm run dist`).
+1. Abre `Orb.dev-2.1.0-portable.exe` (o `npm start` si la usas desde el código).
 2. Elige su nombre, cómo te llama y dónde crear su carpeta. La carpeta se llama como el asistente: con `D:\` y el nombre
    «Nova» se crea `D:\Nova`; si dejas el nombre por defecto, `D:\Orb`.
 3. En **Agentes**, comprueba que encuentra Claude Code, Codex o Cursor y que tienen la sesión iniciada (el botón abre el login
@@ -99,7 +110,8 @@ npm start            # compila la interfaz y abre la app
 npm test             # pruebas del motor (agentes falsos, sin cuentas)
 npm run test:app     # la app entera con Electron (en Linux: xvfb-run -a npm run test:app)
 npm run test:movil   # la web app del móvil a tamaño de teléfono
-npm run dist         # Orb.dev-2.0.0-portable.exe e instalador (en Windows)
+ORB_E2E_EXE=dist/win-unpacked/Orb.dev.exe node test/smoke.e2e.mjs   # prueba la app ya empaquetada
+npm run dist         # Orb.dev-2.1.0-portable.exe e instalador (en Windows)
 npm run icon         # vuelve a dibujar el icono desde el robot
 ```
 

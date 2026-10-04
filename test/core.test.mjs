@@ -162,19 +162,3 @@ test('los archivos secretos nunca entran en commits y los secretos se ocultan en
   assert.ok(!isSecretPath('.env.example'));
   assert.equal(redactSecrets('token ghp_abcdefghijklmnopqrstu y sk-1234567890abc'), 'token [secreto oculto] y [secreto oculto]');
 });
-
-test('una carpeta de la versión de prueba (jarvis.json, .jarvis) pasa a Orb.dev al abrirla', async () => {
-  const { migrateOldHome } = await import('../src/core/home.mjs');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-migra-'));
-  try {
-    fs.mkdirSync(path.join(dir, '.jarvis', 'datos'), { recursive: true });
-    fs.writeFileSync(path.join(dir, 'jarvis.json'), '{}'); fs.writeFileSync(path.join(dir, '.jarvis', 'datos', 'jarvis.db'), 'db');
-    assert.equal(isHome(dir), true);
-    assert.ok(fs.existsSync(path.join(dir, 'orb.json')) && fs.existsSync(path.join(dir, '.orb', 'datos', 'orb.db')));
-    assert.equal(migrateOldHome(dir), false, 'solo una vez');
-    const other = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-15-'));
-    fs.writeFileSync(path.join(other, 'jarvis.json'), '{}'); // something else (e.g. Jarvis 1.5): not touched
-    assert.equal(isHome(other), false); assert.ok(fs.existsSync(path.join(other, 'jarvis.json')));
-    fs.rmSync(other, { recursive: true, force: true });
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-});
