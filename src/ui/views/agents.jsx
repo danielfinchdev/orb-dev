@@ -62,7 +62,7 @@ function AgentCard({ a, reload }) {
   const login = LOGIN[a.login] ?? LOGIN.desconocido;
   return (
     <Card>
-      <CardHeader className="flex-row items-center gap-3">
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0">
         <AgentIcon agent={a.id} className="size-6" />
         <div className="flex-1"><CardTitle>{a.label}</CardTitle><CardDescription>{a.installed ? a.version ?? 'Instalado' : 'No encontrado en este equipo'}</CardDescription></div>
         <Switch checked={cfg.enabled} onCheckedChange={(enabled) => save(a.id, { enabled })} aria-label="Activado" />
@@ -108,7 +108,7 @@ export function AgentsView() {
       <PageHeader icon={<Bot className="text-primary size-5" />} title="Agentes" meta="Se usan los programas y las cuentas que ya tienes; la app nunca ve tus contraseñas">
         <Button size="sm" variant="outline" onClick={() => { setAgents(null); load(true); }}><RefreshCw />Comprobar todo</Button>
       </PageHeader>
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 py-5">
         <div className="grid gap-4">
           {system?.platform === 'win32' ? (
             <Card>
@@ -122,7 +122,7 @@ export function AgentsView() {
               <Button size="sm" variant="outline" onClick={() => bridge.openExternal('https://git-scm.com/download/win')}><ExternalLink />Descargar Git</Button>
             </Card>
           ) : null}
-          <div className="grid gap-4 lg:grid-cols-3">{agents ? agents.map((a) => <AgentCard key={a.id} a={a} reload={() => load(true)} />) : <Card className="items-center"><Spinner /></Card>}</div>
+          <div className="grid gap-4 lg:grid-cols-3 [&>*]:min-w-0">{agents ? agents.map((a) => <AgentCard key={a.id} a={a} reload={() => load(true)} />) : <Card className="items-center"><Spinner /></Card>}</div>
           <Card>
             <CardHeader><CardTitle>Uso en las últimas {usage[0]?.windowHours ?? 5} horas</CardTitle><CardDescription>El asistente limita las tareas por agente para no agotar tus suscripciones. Los topes se cambian en Ajustes.</CardDescription></CardHeader>
             <CardContent className="grid gap-4">

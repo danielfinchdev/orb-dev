@@ -92,7 +92,7 @@ export function createParser() {
       if (ev.type === 'result') {
         state.final = typeof ev.result === 'string' ? ev.result : state.text;
         state.isError = Boolean(ev.is_error) || (ev.subtype && ev.subtype !== 'success');
-        state.usage = { costUsd: ev.total_cost_usd ?? null, inputTokens: ev.usage?.input_tokens ?? null, outputTokens: ev.usage?.output_tokens ?? null, turns: ev.num_turns ?? null };
+        state.usage = { costUsd: ev.total_cost_usd ?? null, inputTokens: ev.usage?.input_tokens ?? null, cacheReadTokens: ev.usage?.cache_read_input_tokens ?? null, cacheWriteTokens: ev.usage?.cache_creation_input_tokens ?? null, outputTokens: ev.usage?.output_tokens ?? null, turns: ev.num_turns ?? null };
         items.push({ role: 'system', kind: 'usage', body: state.usage });
         if (state.isError) items.push({ role: 'error', kind: 'text', body: clip(state.final || ev.subtype || 'error', 3000) });
       }

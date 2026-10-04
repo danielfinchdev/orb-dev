@@ -90,7 +90,7 @@ export function Switch({ className, ...props }) {
 }
 export function Checkbox({ className, ...props }) {
   return (
-    <CheckboxPrimitive.Root className={cn('peer border-input dark:bg-input/30 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground data-[state=checked]:border-primary focus-visible:ring-ring/50 size-[18px] shrink-0 cursor-pointer rounded-[5px] border shadow-xs transition-shadow outline-none focus-visible:ring-[3px]', className)} {...props}>
+    <CheckboxPrimitive.Root className={cn('peer border-input dark:bg-input/30 data-[state=checked]:bg-primary dark:data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground data-[state=checked]:border-primary focus-visible:ring-ring/50 size-[18px] shrink-0 cursor-pointer rounded-[5px] disabled:cursor-not-allowed disabled:opacity-50 border shadow-xs transition-shadow outline-none focus-visible:ring-[3px]', className)} {...props}>
       <CheckboxPrimitive.Indicator className="flex items-center justify-center text-current"><CheckIcon className="size-3.5" /></CheckboxPrimitive.Indicator>
     </CheckboxPrimitive.Root>
   );
