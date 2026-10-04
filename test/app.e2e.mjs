@@ -46,6 +46,9 @@ try {
   await win.waitForTimeout(500);
   await shot('01-bienvenida');
   await win.click('text=Crear y empezar');
+  // On Windows the first run also offers to install the agents ("Preparo tu equipo") before the chat.
+  await win.getByText('Hola, Ana. Soy Orb.').or(win.getByText('Preparo tu equipo')).first().waitFor();
+  if (await win.isVisible('text=Preparo tu equipo')) { await shot('01b-preparo-equipo'); await win.click('text=Continuar'); }
   await win.waitForSelector('text=Hola, Ana. Soy Orb.');
   const home = path.join(base, 'Orb');
   for (const f of ['orb.json', '.orb/datos/orb.db', 'bitacoras/GENERAL.md']) assert.ok(fs.existsSync(path.join(home, f)), `falta ${f}`);

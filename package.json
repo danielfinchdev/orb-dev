@@ -96,5 +96,8 @@
     "linux": {
       "executableName": "orb-dev"
     }
+  },
+  "allowScripts": {
+    "electron@44.5.1": true
   }
 }
