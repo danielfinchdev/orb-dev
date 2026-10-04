@@ -98,7 +98,7 @@ export function ProjectsView({ route }) {
         <Button size="sm" variant="ghost" onClick={async () => pick(await linkFolderFlow())}><FolderOpen />Vincular carpeta</Button></>}
         <Button size="sm" onClick={async () => pick(await createProjectFlow())}><FolderPlus />Nuevo proyecto</Button>
       </PageHeader>
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 md:pb-28">
         <div className="grid gap-4">
           {bridge.mobile ? null : <GithubCard />}
           <div className="grid items-start gap-4 lg:grid-cols-[minmax(280px,1fr)_minmax(400px,1.4fr)]">

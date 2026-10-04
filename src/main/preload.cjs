@@ -24,6 +24,9 @@ contextBridge.exposeInMainWorld('orb', {
   openPath: (folder) => ipcRenderer.invoke('app:openPath', folder),
   openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),
   showBrowser: () => ipcRenderer.invoke('app:showBrowser'),
+  // Size of the interface on this PC (1 = normal): read with zoom(), change with zoom(value).
+  zoom: (value) => ipcRenderer.invoke('app:zoom', value ?? null),
+  openTerminal: (folder) => ipcRenderer.invoke('app:openTerminal', folder ?? null),
   // Path of a file dropped or pasted into the window (images for the agents).
   pathForFile: (file) => { try { return webUtils.getPathForFile(file) || null; } catch { return null; } }
 });

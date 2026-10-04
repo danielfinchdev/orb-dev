@@ -77,6 +77,17 @@ export function placeAttachments(files, cwd) {
   return out;
 }
 
+// One line for the live view: what the agent is doing now.
+export function describeItem(item) {
+  const b = item.body;
+  if (item.kind === 'tool') return oneLine(`${b?.name ?? 'herramienta'}${b?.input ? `: ${b.input}` : ''}`, 140);
+  if (item.kind === 'file') return oneLine(`${{ add: 'crea', delete: 'borra' }[b?.change] ?? 'edita'} ${b?.path ?? ''}`, 140);
+  if (item.kind === 'reasoning') return 'pensando…';
+  if (item.kind === 'text' && item.role === 'assistant') return oneLine(`escribe: ${b}`, 140);
+  if (item.role === 'error') return oneLine(`error: ${b}`, 140);
+  return null;
+}
+
 export class Sessions {
   // emit(event, payload): pushes changes to the window. log(line): engine log.
   constructor(board, { emit = () => {}, log = () => {} } = {}) {
@@ -135,6 +146,8 @@ export class Sessions {
   }
 
   isRunning(id) { return this.running.has(id); }
+  // What a running turn is doing right now (null when it is not running).
+  live(id) { const r = this.running.get(id); return r ? { startedAt: r.startedAt, lastAt: r.lastAt, steps: r.steps, last: r.last } : null; }
   runningCount(agent) { return [...this.running.values()].filter((r) => !agent || r.agent === agent).length; }
 
   stop(id) {
@@ -182,7 +195,8 @@ export class Sessions {
       onFinish?.({ code: -1, state: parser.state, stderr: error.message, logFile, stopped: false });
       return null;
     }
-    const run = { child, agent: s.agent, stopped: false };
+    // Live view of the turn (Tareas and the chat show it): when it started, steps taken, last sign of life and what it did.
+    const run = { child, agent: s.agent, stopped: false, startedAt: Date.now(), lastAt: Date.now(), steps: 0, last: 'arrancando…' };
     this.running.set(id, run);
     this.update(id, { status: 'running' });
     if (cmd.stdin != null) { child.stdin.on('error', () => {}); child.stdin.end(cmd.stdin); }
@@ -191,7 +205,8 @@ export class Sessions {
     const handle = (line) => {
       if (!line.trim()) return;
       try { fs.writeSync(log, `${line}\n`); } catch { /* log closed */ }
-      for (const item of parser.push(line)) this.addItem(id, item.role, item.kind, item.body);
+      run.lastAt = Date.now();
+      for (const item of parser.push(line)) { this.addItem(id, item.role, item.kind, item.body); const what = describeItem(item); if (what) run.last = what; if (item.kind === 'tool' || item.kind === 'file') run.steps++; }
       if (parser.state.cliSession && parser.state.cliSession !== known) { known = parser.state.cliSession; this.update(id, { cli_session: known }); }
     };
     child.stdout.setEncoding('utf8');
@@ -202,7 +217,7 @@ export class Sessions {
       if (buffer.length > 8 * 1024 * 1024) buffer = ''; // a single runaway line must not eat the memory
     });
     child.stderr.setEncoding('utf8');
-    child.stderr.on('data', (chunk) => { stderr = (stderr + chunk).slice(-8000); });
+    child.stderr.on('data', (chunk) => { stderr = (stderr + chunk).slice(-8000); run.lastAt = Date.now(); });
     const timer = timeoutMs ? setTimeout(() => { this.addItem(id, 'error', 'text', `Tiempo máximo alcanzado (${Math.round(timeoutMs / 60000)} min): se detiene.`); run.stopped = true; run.timedOut = true; killTree(child); }, timeoutMs) : null;
     let ended = false;
     const end = (code) => {

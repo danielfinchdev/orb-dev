@@ -253,7 +253,7 @@ export class Board {
   // ctx.taskId: ORB_TASK_ID of the calling worker (set for tasks launched by the engine).
   updateTask(id, args, actor, context = {}) { return this.transaction(() => this.updateTaskNow(id, args, actor, context)); }
 
-  updateTaskNow(id, { status, note, result, agent, model, reasoning, fast }, actor, context) {
+  updateTaskNow(id, { status, note, result, agent, model, reasoning, fast, progress }, actor, context) {
     const task = this.task(id); if (!task) throw new Error(`no existe la tarea #${id}`);
     const reassigning = agent !== undefined || model !== undefined || reasoning !== undefined || fast !== undefined;
     if (actor !== 'orb') {
@@ -290,7 +290,12 @@ export class Board {
     const changed = Object.keys(reassign).length > 0 && (task.sensitivity.length > 0 || 'sensitivity' in reassign);
     if (changed && task.status === 'queued') next = 'awaiting_approval';
     if (status === 'queued' && ('sensitivity' in reassign || (task.sensitivity.length && !verify(this.key, { ...task, ...reassign })))) next = 'awaiting_approval';
-    if (note) this.event(task.id, actor, 'note', String(note).slice(0, 4000));
+    // A progress report (percent and what it is doing now) is shown live; it is not kept in the history.
+    if (progress !== undefined && progress !== null) {
+      const percent = Math.max(0, Math.min(100, Math.round(Number(progress) || 0)));
+      if (task.status === 'running') this.settingJson(`progress:${task.id}`, { percent, note: note ? String(note).slice(0, 200) : null, at: now() });
+      if (!status && result === undefined && !Object.keys(reassign).length) return task;
+    } else if (note) this.event(task.id, actor, 'note', String(note).slice(0, 4000));
     const fields = { ...reassign };
     if (next) fields.status = next;
     if (next === 'awaiting_approval' || changed) Object.assign(fields, this.clearApproval());

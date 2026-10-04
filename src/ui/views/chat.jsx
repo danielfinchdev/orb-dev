@@ -6,6 +6,7 @@ import { Robot } from '@/components/robot.jsx';
 import { Markdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { ProjectPicker } from '@/components/project-actions.jsx';
+import { LiveTasksStrip } from '@/components/live-tasks.jsx';
 import { confirm } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Spinner } from '@/components/ui/basic.jsx';
@@ -126,6 +127,7 @@ export function ChatView() {
           ) : null}
         </div>
       </div>
+      <LiveTasksStrip />
       <Composer value={text} onChange={setText} onSend={send} onStop={() => act(call('chat.stop'))} busy={chat.busy} testid="chat-input"
         placeholder={`Escribe a ${name}…`}
         top={<ProjectPicker />}

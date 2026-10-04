@@ -37,7 +37,7 @@ export function LogsView({ route }) {
             {partial && !whole ? <Button size="sm" variant="ghost" onClick={() => setWhole(true)}><Maximize2 />Ver entera</Button> : null}
             <Button size="sm" variant="ghost" onClick={() => navigator.clipboard.writeText(text ?? '').then(() => toast.success('Copiada'))}><Copy />Copiar</Button>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-2 text-[14px]">{text == null ? <Spinner /> : <Markdown>{text}</Markdown>}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-2 text-[14px] md:pb-24">{text == null ? <Spinner /> : <Markdown>{text}</Markdown>}</div>
         </Card>
       </div>
     </>

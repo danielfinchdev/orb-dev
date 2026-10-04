@@ -21,7 +21,7 @@ export function ActivityView() {
         <div className="relative"><Search className="text-muted-foreground absolute top-2.5 left-2.5 size-4" /><Input className="h-8 w-64 pl-8" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar…" /></div>
         <Button size="sm" variant="ghost" onClick={copy}><Copy />Copiar</Button>
       </PageHeader>
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 md:pb-28">
         <Card className="gap-0 py-0">
           {rows.length ? rows.map((r) => (
             <div key={r.id} onClick={() => r.task_id && go({ view: 'tasks', id: r.task_id })} className={`grid grid-cols-[120px_110px_1fr] gap-3 border-b px-4 py-2.5 text-[13px] last:border-b-0 ${r.task_id ? 'hover:bg-accent/50 cursor-pointer' : ''}`}>

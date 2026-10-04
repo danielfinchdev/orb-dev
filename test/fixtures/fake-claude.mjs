@@ -31,6 +31,7 @@ process.stdin.on('end', async () => {
   out({ type: 'system', subtype: 'init', session_id: session, model: pick('--model') ?? 'falso' });
   if (/DUERME/.test(input)) await new Promise((r) => setTimeout(r, 30_000));
   if (/FALLA/.test(input)) { process.stderr.write('algo salió mal'); process.exit(2); }
+  if (/PLAN_GRATIS/.test(input)) { out({ type: 'result', subtype: 'error', is_error: true, result: 'Free plan users cannot run the agent from the CLI. Upgrade to Pro to continue.', session_id: session }); process.exit(1); }
   out({ type: 'assistant', session_id: session, message: { content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'ls' } }] } });
   out({ type: 'user', session_id: session, message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: 'a.txt', is_error: false }] } });
   if (/ESCRIBE/.test(input)) fs.writeFileSync('hecho-por-claude.txt', 'hola\n');
@@ -58,6 +59,9 @@ process.stdin.on('end', async () => {
     out({ type: 'assistant', session_id: session, message: { content: [{ type: 'tool_use', id: 't3', name: 'mcp__orb__orb_browser_open', input: { url: nav[1] } }] } });
     out({ type: 'user', session_id: session, message: { content: [{ type: 'tool_result', tool_use_id: 't3', content: first.slice(0, 300) }] } });
   }
+  // Reports how far it is (as the prompt asks), then works a little longer so the live view can be read.
+  const progress = /PROGRESO/.test(input) && input.match(/Tarea #(\d+)/);
+  if (progress && mcp) { await mcpCall(mcp, 'orb_update_task', { id: Number(progress[1]), progress: 40, note: 'probando el formulario' }); await new Promise((r) => setTimeout(r, 2500)); }
   const done = input.match(/TERMINA (\d+)/);
   if (done && mcp) await mcpCall(mcp, 'orb_update_task', { id: Number(done[1]), status: 'done', result: 'hecho por el agente falso' });
   if (/LIMITE/.test(input)) { out({ type: 'result', subtype: 'error', is_error: true, result: "You've hit your usage limit · resets 5pm", session_id: session }); process.exit(1); }
