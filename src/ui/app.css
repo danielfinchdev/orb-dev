@@ -1,0 +1,181 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@fontsource-variable/outfit";
+@import "@fontsource-variable/geist-mono";
+
+@custom-variant dark (&:is(.dark *));
+
+/* shadcn/ui tokens: a calm neutral base with the robot's soft violet as the accent. */
+:root {
+  --radius: 0.8rem;
+  --background: oklch(0.985 0.003 268);
+  --foreground: oklch(0.21 0.02 268);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.02 268);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.02 268);
+  --primary: oklch(0.57 0.19 264);
+  --primary-foreground: oklch(0.985 0.005 268);
+  --secondary: oklch(0.955 0.008 268);
+  --secondary-foreground: oklch(0.25 0.02 268);
+  --muted: oklch(0.955 0.008 268);
+  --muted-foreground: oklch(0.53 0.02 268);
+  --accent: oklch(0.945 0.03 268);
+  --accent-foreground: oklch(0.32 0.1 264);
+  --destructive: oklch(0.6 0.2 25);
+  --success: oklch(0.62 0.15 155);
+  --warning: oklch(0.72 0.15 70);
+  --info: oklch(0.62 0.14 245);
+  --border: oklch(0.915 0.008 268);
+  --input: oklch(0.905 0.01 268);
+  --ring: oklch(0.65 0.15 264);
+  --sidebar: oklch(0.975 0.004 268);
+  --bubble: oklch(0.57 0.19 264);
+  --bubble-foreground: oklch(0.99 0 0);
+}
+
+.dark {
+  --background: oklch(0.155 0.008 268);
+  --foreground: oklch(0.95 0.005 268);
+  --card: oklch(0.195 0.01 268);
+  --card-foreground: oklch(0.95 0.005 268);
+  --popover: oklch(0.205 0.012 268);
+  --popover-foreground: oklch(0.95 0.005 268);
+  --primary: oklch(0.72 0.14 264);
+  --primary-foreground: oklch(0.17 0.03 268);
+  --secondary: oklch(0.25 0.012 268);
+  --secondary-foreground: oklch(0.93 0.005 268);
+  --muted: oklch(0.24 0.01 268);
+  --muted-foreground: oklch(0.68 0.015 268);
+  --accent: oklch(0.28 0.05 266);
+  --accent-foreground: oklch(0.9 0.05 264);
+  --destructive: oklch(0.68 0.19 22);
+  --success: oklch(0.72 0.15 155);
+  --warning: oklch(0.8 0.14 75);
+  --info: oklch(0.72 0.12 245);
+  --border: oklch(0.29 0.012 268);
+  --input: oklch(0.32 0.014 268);
+  --ring: oklch(0.6 0.14 264);
+  --sidebar: oklch(0.175 0.009 268);
+  --bubble: oklch(0.47 0.16 264);
+  --bubble-foreground: oklch(0.98 0 0);
+}
+
+@theme inline {
+  --font-sans: "Outfit Variable", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", "Cascadia Code", Consolas, monospace;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 10px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-bubble: var(--bubble);
+  --color-bubble-foreground: var(--bubble-foreground);
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  html, body, #root { height: 100%; }
+  body { @apply bg-background text-foreground antialiased; font-family: var(--font-sans); font-size: 14.5px; overflow: hidden; }
+  h1, h2, h3, h4 { font-weight: 500; letter-spacing: -0.01em; }
+  ::selection { background: color-mix(in oklch, var(--primary) 30%, transparent); }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: color-mix(in oklch, var(--muted-foreground) 30%, transparent); border-radius: 10px; border: 3px solid transparent; background-clip: content-box; }
+  ::-webkit-scrollbar-track { background: transparent; }
+}
+
+/* The little floating window: dragged by its header, buttons stay clickable. */
+.drag { -webkit-app-region: drag; user-select: none; }
+.no-drag { -webkit-app-region: no-drag; }
+
+/* Markdown written by the agents */
+.prose-chat { line-height: 1.6; overflow-wrap: anywhere; }
+.prose-chat p { margin: 0 0 .6em; } .prose-chat p:last-child { margin-bottom: 0; }
+.prose-chat ul, .prose-chat ol { margin: .3em 0 .6em; padding-left: 1.3em; } .prose-chat ul { list-style: disc; } .prose-chat ol { list-style: decimal; }
+.prose-chat li { margin: .15em 0; }
+.prose-chat h1, .prose-chat h2, .prose-chat h3, .prose-chat h4 { margin: .8em 0 .4em; font-size: 1.02em; font-weight: 600; }
+.prose-chat strong { font-weight: 600; }
+.prose-chat a { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.prose-chat code { font-family: var(--font-mono); font-size: .86em; background: var(--muted); padding: .12em .4em; border-radius: 6px; }
+.prose-chat pre { background: var(--muted); padding: .8em 1em; border-radius: 10px; overflow-x: auto; margin: .5em 0; }
+.prose-chat pre code { background: none; padding: 0; }
+.prose-chat blockquote { border-left: 3px solid var(--border); padding-left: .8em; color: var(--muted-foreground); margin: .5em 0; }
+.prose-chat table { border-collapse: collapse; margin: .5em 0; font-size: .95em; }
+.prose-chat th, .prose-chat td { border: 1px solid var(--border); padding: .3em .6em; text-align: left; }
+
+/* ---------- the robot ---------- */
+.bot { --bot-eye: #7ff3da; display: inline-flex; line-height: 0; flex: none; }
+.bot svg { overflow: visible; }
+.bot .b-float { animation: b-float 3.6s ease-in-out infinite; transform-origin: 60px 70px; }
+.bot .b-shadow { animation: b-shadow 3.6s ease-in-out infinite; transform-origin: 60px 135px; transform-box: view-box; }
+.bot .b-eye { animation: b-blink 5s infinite; transform-box: fill-box; transform-origin: center; }
+.bot .b-glow { animation: b-pulse 2.4s ease-in-out infinite; }
+.bot .b-eyes { transition: transform .4s; }
+.bot .b-arm-r { transform-origin: 80px 100px; transform-box: view-box; animation: b-hello 3.6s ease-in-out infinite; }
+.bot .b-arm-l { transform-origin: 42px 100px; transform-box: view-box; animation: b-sway 3.6s ease-in-out infinite; }
+.bot .b-x { display: none; }
+.bot.happy .b-smile { display: inline; }
+.bot.thinking .b-eyes { transform: translate(4px, -4px); }
+.bot.thinking .b-dots { display: inline; }
+.bot.thinking .b-dots circle { animation: b-dot 1.2s infinite; }
+.bot.thinking .b-dots circle:nth-child(2) { animation-delay: .2s; }
+.bot.thinking .b-dots circle:nth-child(3) { animation-delay: .4s; }
+.bot.thinking .b-glow { animation-duration: .7s; }
+.bot.thinking .b-arm-r { animation: none; transform: rotate(40deg); }
+.bot.talking .b-talk { display: inline; animation: b-talk .28s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: center; }
+.bot.happy .b-eyes { display: none; }
+.bot.happy .b-happy-eyes, .bot.happy .b-sparkle { display: inline; }
+.bot.happy .b-sparkle { animation: b-pulse 1s ease-in-out infinite; }
+.bot.happy .b-arm-r { animation: b-wave .45s ease-in-out 4 alternate; }
+.bot.happy .b-float { animation: b-hop .8s ease-in-out 2; }
+.bot.worried { --bot-eye: #ffc56b; }
+.bot.worried .b-frown, .bot.worried .b-sweat { display: inline; }
+.bot.worried .b-eye { transform: scaleY(.75); animation: none; }
+.bot.worried .b-arm-r { animation: none; transform: rotate(60deg); }
+.bot.worried .b-float { animation: b-wobble .45s ease-in-out 3; }
+.bot.sleeping .b-eyes { display: none; }
+.bot.sleeping .b-closed, .bot.sleeping .b-zz { display: inline; }
+.bot.sleeping .b-zz { animation: b-zz 2.4s ease-in-out infinite; }
+.bot.sleeping .b-float { animation-duration: 6s; }
+.bot.sleeping .b-arm-r { animation: none; transform: rotate(60deg); }
+.bot.sleeping .b-glow { opacity: .35; animation: none; }
+.bot.still * { animation: none !important; }
+@keyframes b-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes b-shadow { 0%, 100% { transform: scaleX(1); opacity: .2; } 50% { transform: scaleX(.8); opacity: .12; } }
+@keyframes b-blink { 0%, 93%, 100% { transform: scaleY(1); } 96% { transform: scaleY(.1); } }
+@keyframes b-hello { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-8deg); } }
+@keyframes b-sway { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(5deg); } }
+@keyframes b-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+@keyframes b-dot { 0%, 100% { opacity: .15; } 50% { opacity: 1; } }
+@keyframes b-talk { from { transform: scale(.7, .35); } to { transform: scale(1, 1.15); } }
+@keyframes b-wave { from { transform: rotate(8deg); } to { transform: rotate(-26deg); } }
+@keyframes b-hop { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-12px); } }
+@keyframes b-wobble { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-5deg); } 70% { transform: rotate(5deg); } }
+@keyframes b-zz { 0% { opacity: 0; transform: translate(0, 0) scale(.8); } 40% { opacity: 1; } 100% { opacity: 0; transform: translate(10px, -14px) scale(1.1); } }
+@media (prefers-reduced-motion: reduce) { .bot * { animation: none !important; } }
+
+/* The brand backdrop (setup screen, app icon): the soft periwinkle of the robot's world. */
+.brand-sky { background: radial-gradient(120% 90% at 30% 10%, #c3cbff 0%, #a7b1f6 45%, #8f9ef0 100%); }
+.dark .brand-sky { background: radial-gradient(120% 90% at 30% 10%, #2b3270 0%, #1d2257 50%, #141838 100%); }
