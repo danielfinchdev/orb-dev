@@ -1,0 +1,21 @@
+# Dependencias y compilados
+node_modules/
+dist/
+
+# Bitácora privada del proyecto (nunca se sube)
+BITACORA.md
+
+# Secretos que nunca deben entrar en git
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Carpetas de pruebas locales
+.orb-prueba/
+.jarvis-prueba/
+test-results/
+
+# Interfaz compilada (npm run build la genera desde src/ui)
+src/renderer/
