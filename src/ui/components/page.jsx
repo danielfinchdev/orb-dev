@@ -15,5 +15,5 @@ export function PageHeader({ icon, title, meta, children, className }) {
 }
 
 export function PageBody({ className, children }) {
-  return <div className={cn('min-h-0 flex-1 overflow-y-auto px-5 py-5', className)}>{children}</div>;
+  return <div className={cn('min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 py-5', className)}>{children}</div>;
 }

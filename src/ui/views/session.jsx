@@ -1,7 +1,7 @@
 // A direct conversation with one agent (T3 Code style), live: messages, commands and changed files appear as the agent
 // works. Task runs open here too (messages then go through the task, so approvals and turns still apply).
 import { useEffect, useMemo, useState } from 'react';
-import { Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, FilePlus2, FileEdit, FileMinus2, ImageIcon, X, ListTodo, CircleAlert } from 'lucide-react';
+import { Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, X, ListTodo, CircleAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { Markdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
@@ -65,13 +65,24 @@ function toBlocks(items) {
   return blocks;
 }
 
+// An icon that says what the tool does (reading, writing, searching, the web, a command…).
+function toolIcon(name = '') {
+  if (/^(Write|Edit|MultiEdit|NotebookEdit|edit|write|applyPatch)/i.test(name)) return FileEdit;
+  if (/^(Read|read)/.test(name)) return FileText;
+  if (/^(Glob|Grep|glob|grep|ls|LS)|Búsqueda/.test(name)) return Search;
+  if (/^(WebFetch|WebSearch|orb:browser)|browser/i.test(name)) return Globe;
+  if (/^(Bash|Comando|shell|run_terminal)/i.test(name)) return Terminal;
+  return Wrench;
+}
+
 function ToolBlock({ b }) {
   const error = b.result?.error;
+  const Icon = toolIcon(b.call?.name);
   return (
     <Collapsible className={cn('bg-card rounded-xl border text-[13px]', error && 'border-destructive/40')}>
       <CollapsibleTrigger className="group flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left">
         <ChevronRight className="text-muted-foreground size-3.5 transition-transform group-data-[state=open]:rotate-90" />
-        <Terminal className="text-muted-foreground size-3.5" />
+        <Icon className="text-muted-foreground size-3.5" />
         <span className="font-medium">{b.call?.name ?? 'herramienta'}</span>
         <span className="text-muted-foreground min-w-0 flex-1 truncate font-mono text-xs">{b.call?.input ?? ''}</span>
         {!b.result ? <span className="bg-info size-1.5 animate-pulse rounded-full" /> : error ? <CircleAlert className="text-destructive size-3.5" /> : null}
@@ -102,7 +113,7 @@ function Block({ b, agent }) {
   if (it.kind === 'text' && it.role === 'assistant') return <div className="flex gap-3"><AgentIcon agent={agent} className="mt-1 size-5" /><div className="min-w-0 flex-1"><Markdown>{body}</Markdown></div></div>;
   if (it.kind === 'reasoning') return <div className="text-muted-foreground border-l-2 pl-3 text-[13px] italic whitespace-pre-wrap line-clamp-4">{body}</div>;
   if (it.kind === 'usage') {
-    const parts = [body?.costUsd != null ? `$${Number(body.costUsd).toFixed(3)}` : null, body?.inputTokens != null ? `${body.inputTokens.toLocaleString('es-ES')} tokens de entrada` : null, body?.outputTokens != null ? `${body.outputTokens.toLocaleString('es-ES')} de salida` : null].filter(Boolean);
+    const parts = [body?.costUsd != null ? `$${Number(body.costUsd).toFixed(3)}` : null, body?.inputTokens != null ? `${(body.inputTokens + (body.cacheReadTokens ?? 0) + (body.cacheWriteTokens ?? 0)).toLocaleString('es-ES')} tokens de entrada${body.cacheReadTokens ? ` (${body.cacheReadTokens.toLocaleString('es-ES')} en caché)` : ''}` : null, body?.outputTokens != null ? `${body.outputTokens.toLocaleString('es-ES')} de salida` : null].filter(Boolean);
     return parts.length ? <div className="text-muted-foreground text-right text-[11px]">{parts.join(' · ')}</div> : null;
   }
   if (it.role === 'error') return <div className="bg-destructive/10 text-destructive rounded-xl px-3.5 py-2.5 text-[13px] whitespace-pre-wrap break-words">{typeof body === 'string' ? body : JSON.stringify(body)}</div>;

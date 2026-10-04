@@ -4,6 +4,7 @@ import { Download, RefreshCw, Check, CircleAlert, LoaderCircle } from 'lucide-re
 import { Button } from './ui/button.jsx';
 import { Badge, Spinner } from './ui/basic.jsx';
 import { Checkbox } from './ui/overlay.jsx';
+import { ToolIcon } from './agent-icon.jsx';
 import { call, act, bridge } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 
@@ -29,6 +30,7 @@ export function Installer({ onChange }) {
         return (
           <label key={i.id} className={cn('flex items-center gap-3 rounded-lg border px-3 py-2', !i.installed && 'cursor-pointer')}>
             {i.installed ? <Check className="text-success size-4" /> : <Checkbox checked={Boolean(chosen[i.id])} onCheckedChange={(c) => setChosen({ ...chosen, [i.id]: c === true })} />}
+            <ToolIcon tool={i.id} className="size-5" />
             <div className="min-w-0 flex-1"><div className="text-sm">{i.label}{i.optional ? <span className="text-muted-foreground"> (opcional)</span> : null}</div><div className="text-muted-foreground text-xs">{i.why}</div></div>
             {step?.state === 'instalando' ? <Badge variant="info"><LoaderCircle className="animate-spin" />Instalando</Badge>
               : step?.state === 'hecho' ? <Badge variant="success">Instalado</Badge>

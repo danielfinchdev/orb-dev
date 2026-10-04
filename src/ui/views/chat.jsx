@@ -103,7 +103,7 @@ export function ChatView() {
         {app.paused
           ? <Button variant="outline" size="sm" onClick={() => act(call('control.resume'), 'Tareas reanudadas')}><Play />Reanudar tareas</Button>
           : <Tip label="No se lanza ninguna tarea nueva hasta que reanudes"><Button variant="ghost" size="sm" onClick={() => act(call('control.pause'), 'Tareas en pausa')}><Pause />Pausar tareas</Button></Tip>}
-        <Button variant="ghost" size="sm" onClick={async () => { if (await confirm('Nueva conversación', `${name} olvidará esta conversación (el tablero y las bitácoras siguen igual).`, { ok: 'Empezar de nuevo' })) act(call('chat.reset')); }}><RotateCcw />Nueva conversación</Button>
+        <Button variant="ghost" size="sm" onClick={async () => { if (await confirm('Empezar de cero', `${name} olvidará esta conversación (el tablero y las bitácoras siguen igual).`, { ok: 'Empezar de cero' })) act(call('chat.reset')); }}><RotateCcw />Empezar de cero</Button>
       </PageHeader>
       <div ref={scroll.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-3xl flex-col gap-5 px-5 py-6">

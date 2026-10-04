@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea, Kbd } from '@/components/ui/basic.jsx';
 import { Select, Switch, Checkbox } from '@/components/ui/overlay.jsx';
 import { useStore, call, act, bridge, setState, getState, applyTheme, go, openTerminal } from '@/lib/store.js';
+import { cn } from '@/lib/utils.js';
 
 async function save(patch, ok = 'Guardado') {
   const config = await act(call('config.save', { patch }), ok);
@@ -27,7 +28,7 @@ function AssistantCard({ c }) {
   const [v, setV] = useState({ assistantName: c.assistantName, userName: c.userName, language: c.language, theme: c.ui?.theme ?? 'sistema', companion: c.ui?.companion !== false });
   return (
     <Card>
-      <CardHeader className="flex-row items-center gap-3"><Robot size={40} /><div><CardTitle>Asistente</CardTitle><CardDescription>Su nombre, cómo te llama y cómo se ve.</CardDescription></div></CardHeader>
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Robot size={40} /><div><CardTitle>Asistente</CardTitle><CardDescription>Su nombre, cómo te llama y cómo se ve.</CardDescription></div></CardHeader>
       <CardContent className="grid gap-4">
         <div className="grid grid-cols-2 gap-3">
           <Field label="Nombre del asistente" hint="Su carpeta no cambia de nombre."><Input value={v.assistantName} onChange={(e) => setV({ ...v, assistantName: e.target.value })} maxLength={40} /></Field>
@@ -157,7 +158,7 @@ function MobileCard() {
   if (!st) return null;
   return (
     <Card>
-      <CardHeader className="flex-row items-center gap-3"><Smartphone className="text-primary size-5" /><div><CardTitle>Móvil</CardTitle><CardDescription>Usa el asistente desde el móvil como una app, a través de Tailscale (solo tus dispositivos lo ven).</CardDescription></div></CardHeader>
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Smartphone className="text-primary size-5" /><div><CardTitle>Móvil</CardTitle><CardDescription>Usa el asistente desde el móvil como una app, a través de Tailscale (solo tus dispositivos lo ven).</CardDescription></div></CardHeader>
       <CardContent className="grid gap-4">
         <Row label="Acceso desde el móvil" hint={st.running ? st.url : st.error ?? 'Desactivado'}><Switch checked={st.enabled} onCheckedChange={async (enabled) => { const r = await act(call('remote.enable', { enabled })); if (r) setSt(r); }} /></Row>
         {st.running ? (
@@ -190,7 +191,7 @@ function BrowserCard({ c }) {
   const on = c.browser?.enabled !== false; const pip = c.ui?.pip !== false;
   return (
     <Card>
-      <CardHeader className="flex-row items-center gap-3"><Globe className="text-primary size-5" /><div><CardTitle>Navegador de los agentes</CardTitle><CardDescription>Los agentes abren y prueban webs (también las de tus proyectos en localhost) en un navegador propio, sin tus sesiones ni contraseñas.</CardDescription></div></CardHeader>
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Globe className="text-primary size-5" /><div><CardTitle>Navegador de los agentes</CardTitle><CardDescription>Los agentes abren y prueban webs (también las de tus proyectos en localhost) en un navegador propio, sin tus sesiones ni contraseñas.</CardDescription></div></CardHeader>
       <CardContent className="grid gap-4">
         <Row label="Dejar que los agentes naveguen" hint="Abrir páginas, pulsar, escribir y hacer capturas."><Switch checked={on} onCheckedChange={(enabled) => save({ browser: { enabled } })} /></Row>
         <Row label="Ventanita en directo" hint="Arriba a la derecha, encima de todo: ves lo que hace el agente. Se agranda, se contrae o se cierra hasta la próxima vez."><Switch checked={pip} disabled={!on} onCheckedChange={(v) => save({ ui: { pip: v } })} /></Row>
@@ -211,7 +212,7 @@ function InterfaceCard({ c }) {
   const change = async (value) => setZoom(await act(bridge.zoom(Number(value))));
   return (
     <Card>
-      <CardHeader className="flex-row items-center gap-3"><MonitorCog className="text-primary size-5" /><div><CardTitle>Interfaz</CardTitle><CardDescription>El tamaño de todo en este PC y la terminal que se abre con <Kbd>Ctrl</Kbd> <Kbd>J</Kbd>.</CardDescription></div></CardHeader>
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><MonitorCog className="text-primary size-5" /><div><CardTitle>Interfaz</CardTitle><CardDescription>El tamaño de todo en este PC y la terminal que se abre con <Kbd>Ctrl</Kbd> <Kbd>J</Kbd>.</CardDescription></div></CardHeader>
       <CardContent className="grid gap-4">
         <Field label="Tamaño de la interfaz" hint={<>También con <Kbd>Ctrl</Kbd> <Kbd>+</Kbd> para agrandar, <Kbd>Ctrl</Kbd> <Kbd>-</Kbd> para reducir y <Kbd>Ctrl</Kbd> <Kbd>0</Kbd> para volver a «Normal» (o <Kbd>Ctrl</Kbd> + rueda del ratón).</>}>
           <div className="flex flex-wrap items-center gap-2">
@@ -237,11 +238,11 @@ function ExpertCard({ c }) {
   const on = c.expert?.enabled === true; const panels = c.expert?.panels ?? {};
   return (
     <Card>
-      <CardHeader className="flex-row items-center gap-3"><SquareTerminal className="text-primary size-5" /><div><CardTitle>Modo experto</CardTitle><CardDescription>Para usuarios exigentes: explorador de archivos, cambios de git, historial, carga del equipo y actividad en directo alrededor del chat. Solo en el PC.</CardDescription></div></CardHeader>
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><SquareTerminal className="text-primary size-5" /><div><CardTitle>Modo experto</CardTitle><CardDescription>Para usuarios exigentes: explorador de archivos, cambios de git, historial, carga del equipo y actividad en directo alrededor del chat. Solo en el PC.</CardDescription></div></CardHeader>
       <CardContent className="grid gap-4">
         <Row label="Activar el modo experto" hint="Aparece en el menú de la izquierda (en ventanas anchas)."><Switch checked={on} onCheckedChange={(enabled) => save({ expert: { enabled } }, enabled ? 'Modo experto activado' : 'Modo experto desactivado')} data-testid="expert-switch" /></Row>
         <div className="grid gap-2 sm:grid-cols-2">
-          {Object.entries(PANELS).map(([id, label]) => <label key={id} className="hover:bg-accent/40 -mx-1 flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-[13px]"><Checkbox checked={panels[id] !== false} onCheckedChange={(v) => savePanels({ ...panels, [id]: v === true })} />{label}</label>)}
+          {Object.entries(PANELS).map(([id, label]) => <label key={id} className={cn('-mx-1 flex items-center gap-2 rounded-md px-1 py-1 text-[13px]', on ? 'hover:bg-accent/40 cursor-pointer' : 'text-muted-foreground cursor-not-allowed')}><Checkbox disabled={!on} checked={panels[id] !== false} onCheckedChange={(v) => savePanels({ ...panels, [id]: v === true })} />{label}</label>)}
         </div>
       </CardContent>
       {on ? <CardFooter><Button size="sm" variant="outline" onClick={() => go('expert')}><SquareTerminal />Abrir el modo experto</Button></CardFooter> : null}
