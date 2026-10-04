@@ -1,0 +1,69 @@
+# The Windows downloads, built and checked on a real Windows machine and published as a GitHub release:
+#   Orb.dev-<versión>-portable.exe  one file, nothing to install: double-click and it opens
+#   Orb.dev-<versión>-windows.zip   the same, already unpacked (starts faster): extract and open Orb.dev.exe
+# Runs when a tag like v2.1.0 is pushed. From the Actions tab ("Run workflow") it builds and checks without publishing
+# (the files stay attached to that run).
+name: Versión para Windows
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: sudo apt-get update && sudo apt-get install -y xvfb
+      - name: La app entera con Electron
+        run: xvfb-run -a npm run test:app
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: capturas-pruebas
+          path: test-results/
+
+  windows:
+    needs: pruebas
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Construir el portable y el zip
+        run: npx vite build && npx electron-builder --win portable zip --x64 --publish never
+      - name: Probar la app empaquetada en Windows
+        run: node test/smoke.e2e.mjs
+        env:
+          ORB_E2E_EXE: dist/win-unpacked/Orb.dev.exe
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: orb-dev-windows
+          path: |
+            dist/*.exe
+            dist/*.zip
+            test-results/
+      - name: Publicar la versión
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Orb.dev ${{ github.ref_name }}
+          body_path: docs/NOVEDADES.md
+          files: |
+            dist/*.exe
+            dist/*.zip

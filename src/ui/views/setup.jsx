@@ -8,7 +8,7 @@ import { Input, Field, Spinner } from '@/components/ui/basic.jsx';
 import { bridge } from '@/lib/store.js';
 import { toast } from 'sonner';
 import { errorText } from '@/lib/utils.js';
-import { PRODUCT } from '../../core/product.mjs';
+import { PRODUCT, folderName } from '../../core/product.mjs';
 
 export function Setup({ onDone }) {
   const [name, setName] = useState(PRODUCT.assistant);
@@ -19,7 +19,7 @@ export function Setup({ onDone }) {
   const [step, setStep] = useState('datos'); // datos → equipo (Windows: install what is missing) → app
   const shown = name.trim() || PRODUCT.assistant;
   const sep = base?.includes('\\') ? '\\' : '/';
-  const target = base ? `${base}${base.endsWith(sep) ? '' : sep}${shown.replace(/[<>:"/\\|?*]/g, '')}` : null;
+  const target = base ? `${base}${base.endsWith(sep) ? '' : sep}${folderName(shown)}` : null; // the same rule the app uses to create it
   const create = async (e) => {
     e.preventDefault();
     setBusy(true); setMood('thinking');
