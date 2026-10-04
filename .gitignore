@@ -14,7 +14,6 @@ BITACORA.md
 
 # Carpetas de pruebas locales
 .orb-prueba/
-.jarvis-prueba/
 test-results/
 
 # Interfaz compilada (npm run build la genera desde src/ui)

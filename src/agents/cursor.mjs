@@ -18,7 +18,7 @@ function windowsEntry() {
 export function detect(cfg = {}) {
   if (cfg.path && firstFile([cfg.path])) return { cmd: cfg.path, pre: [] };
   if (IS_WIN) {
-    // The node.exe + index.js of the newest version (what Jarvis 1.5 used, reliable); otherwise the executables some
+    // The node.exe + index.js of the newest version (the most reliable way to start it); otherwise the executables some
     // installs place in the folder root.
     const entry = windowsEntry(); if (entry) return entry;
     const base = path.join(process.env.LOCALAPPDATA ?? path.join(userHome(), 'AppData', 'Local'), 'cursor-agent');
@@ -43,8 +43,8 @@ export function buildTurn({ exe, cwd, prompt, promptFile, model, permission = 'e
   const text = prompt.length > ARGV_PROMPT_MAX && promptFile ? `Tus instrucciones completas están en el archivo ${promptFile}. Léelo entero y síguelo como si fuera este mensaje.` : prompt;
   const args = [...exe.pre, '-p', '--output-format', 'stream-json', '--trust', '--workspace', cwd];
   if (permission !== 'leer') args.push('--force');
-  // No --approve-mcps: Cursor's MCP servers are global (~/.cursor/mcp.json) and may belong to another program (e.g. Orb
-  // 1.5's "jarvis"). The task reports through its final answer instead.
+  // No --approve-mcps: Cursor's MCP servers are global (~/.cursor/mcp.json) and may belong to other programs.
+  // The task reports through its final answer instead.
   if (model && model !== 'auto') args.push('--model', model);
   if (session?.resume && session.id) args.push('--resume', session.id);
   args.push(text);

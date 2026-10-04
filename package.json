@@ -1,7 +1,7 @@
 {
   "name": "orb-dev",
   "productName": "Orb.dev",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Orb.dev: asistente de escritorio que coordina agentes de IA (Claude Code, Codex, Cursor) y conversa con ellos en directo.",
   "private": true,
   "type": "module",
@@ -71,6 +71,7 @@
     ],
     "win": {
       "icon": "build/icon.png",
+      "artifactName": "Orb.dev-${version}-windows.${ext}",
       "target": [
         "portable",
         "nsis"

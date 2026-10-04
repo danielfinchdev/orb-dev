@@ -20,7 +20,7 @@ export const gitEnv = (cwd, env, ...args) => {
 };
 const gitBuffer = (cwd, ...args) => spawnSync('git', ['-C', cwd, ...args], { windowsHide: true, maxBuffer: 512 * 1024 * 1024, timeout: 120_000 });
 export const slug = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'tarea';
-// Branches and hidden refs of this app use their own prefix, so they never collide with Jarvis 1.5 in a shared repository.
+// Branches and hidden refs of this app use their own prefix, so they never collide with other tools in a shared repository.
 export const BRANCH_PREFIX = 'orb';
 export const REF_PREFIX = 'refs/orb';
 export const ORB_GIT = ['-c', `user.name=${PRODUCT.name}`, '-c', 'user.email=orb@localhost'];
