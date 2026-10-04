@@ -165,6 +165,47 @@ try {
     await shot(name);
   }
 
+  // ---- interface size: Ctrl + / Ctrl - / Ctrl 0 and the presets in Ajustes (kept per PC)
+  step = 'tamaño de la interfaz';
+  const factor = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((b) => b.webContents.getURL().endsWith('index.html')).webContents.getZoomFactor());
+  // Keys as Windows sends them (Playwright's own keyboard skips the window's before-input-event, where the app reads them).
+  const ctrl = (keyCode) => app.evaluate(({ BrowserWindow }, k) => BrowserWindow.getAllWindows().find((b) => b.webContents.getURL().endsWith('index.html')).webContents.sendInputEvent({ type: 'keyDown', keyCode: k, modifiers: ['control'] }), keyCode);
+  assert.ok(Math.abs((await factor()) - 1.15) < 0.01, 'por defecto «Normal», algo mayor que antes');
+  await ctrl('=');
+  await until(async () => Math.abs((await factor()) - 1.1 * 1.15) < 0.01, 'Ctrl + agranda');
+  await ctrl('-'); await ctrl('-');
+  await until(async () => Math.abs((await factor()) - 0.9 * 1.15) < 0.01, 'Ctrl - reduce');
+  await ctrl('0');
+  await until(async () => Math.abs((await factor()) - 1.15) < 0.01, 'Ctrl 0 vuelve a normal');
+  await win.getByText('Tamaño de la interfaz').waitFor();
+  await win.getByRole('combobox').filter({ hasText: 'Normal' }).click();
+  await win.getByRole('option', { name: 'Grande' }).click();
+  await until(async () => Math.abs((await factor()) - 1.15 * 1.15) < 0.01, 'tamaño grande');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(tmp, 'datos-app', 'interfaz.json'), 'utf8')).zoom, 1.15);
+  await win.waitForTimeout(400);
+  await shot('10a-ajustes-grande');
+  await ctrl('0');
+  // A switch of Ajustes applies at once, also clicking its text (before, it waited for «Guardar»).
+  const autoRun = (await call('app.state')).config.autoRun;
+  await win.getByText('Lanzar las tareas solas').click();
+  await until(async () => (await call('app.state')).config.autoRun === !autoRun, 'interruptor aplicado al momento');
+  await win.getByText('Lanzar las tareas solas').click();
+  await until(async () => (await call('app.state')).config.autoRun === autoRun, 'y vuelve');
+
+  // ---- left menu: each project is a folder with the tasks sent to it
+  step = 'carpetas del menú';
+  await win.locator('[data-testid=folder-webviaproject]').waitFor();
+  const folderOpen = await win.locator('[data-testid=folder-webviaproject]').getAttribute('data-state');
+  if (folderOpen !== 'open') await win.click('[data-testid=folder-webviaproject]');
+  const firstTask = (await call('tasks.list')).find((x) => x.project === 'webviaproject');
+  await win.locator('aside').getByRole('button', { name: firstTask.title }).first().click();
+  await win.waitForSelector('[data-testid=task-detail]');
+  await win.locator('[data-testid=task-detail]', { hasText: `Tarea #${firstTask.id}` }).waitFor();
+  await win.click('[data-testid=folder-webviaproject]');
+  await until(async () => (await win.locator('[data-testid=folder-webviaproject]').getAttribute('data-state')) === 'closed', 'carpeta plegada');
+  await win.click('[data-testid=folder-webviaproject]');
+  await win.click('[data-testid=nav-settings]');
+
   // ---- expert mode (PC only): turned on in Settings, files, git and panels chosen by the user
   step = 'modo experto';
   await win.click('[data-testid=expert-switch]');

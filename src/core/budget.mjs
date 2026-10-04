@@ -44,7 +44,8 @@ const nameOf = (id) => findAccount(id)?.label ?? id;
 // Can this task be launched on this account right now? { ok, reason } — reason in plain Spanish for the user.
 export function canLaunch(board, id, model) {
   const until = cooldownUntil(board, id);
-  if (until) return { ok: false, reason: `${nameOf(id)} está sin cupo hasta las ${hhmm(until)}` };
+  const why = board.setting(`cooldown_reason:${id}`); // a pause for another reason than quota (plan, login)
+  if (until) return { ok: false, reason: why ? `${nameOf(id)} está en pausa hasta las ${hhmm(until)}: ${why}` : `${nameOf(id)} está sin cupo hasta las ${hhmm(until)}` };
   const r = rules(id); const used = windowUsage(board, id); const h = budgetConfig().windowHours;
   if (used.tasks >= r.maxTasks) return { ok: false, reason: `${nameOf(id)} ya lanzó ${used.tasks} tareas en las últimas ${h} h (máximo ${r.maxTasks})` };
   if (isHeavy(id, model) && used.heavy >= r.maxHeavy) return { ok: false, reason: `${nameOf(id)} ya lanzó ${used.heavy} tareas con modelos caros en las últimas ${h} h (máximo ${r.maxHeavy})` };
@@ -89,5 +90,14 @@ export function parseReset(text, now = new Date()) {
 export function startCooldown(board, agent, text) {
   const until = parseReset(text);
   board.setting(`cooldown:${agent}`, String(until));
+  board.setting(`cooldown_reason:${agent}`, '');
+  return until;
+}
+
+// A pause for another reason (the plan does not allow it, no login): nothing is sent to that account for `ms`.
+export function pauseAccount(board, id, ms, reason) {
+  const until = Date.now() + ms;
+  board.setting(`cooldown:${id}`, String(until));
+  board.setting(`cooldown_reason:${id}`, reason);
   return until;
 }

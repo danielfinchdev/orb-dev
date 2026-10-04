@@ -2,15 +2,15 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { toast } from 'sonner';
-import { Settings, FolderOpen, Plus, Trash2, ArrowLeftRight, Smartphone, QrCode, Globe, PictureInPicture2, SquareTerminal } from 'lucide-react';
+import { Settings, FolderOpen, Plus, Trash2, ArrowLeftRight, Smartphone, QrCode, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog } from 'lucide-react';
 import { PANELS, savePanels } from './expert.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea } from '@/components/ui/basic.jsx';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea, Kbd } from '@/components/ui/basic.jsx';
 import { Select, Switch, Checkbox } from '@/components/ui/overlay.jsx';
-import { useStore, call, act, bridge, setState, getState, applyTheme, go } from '@/lib/store.js';
+import { useStore, call, act, bridge, setState, getState, applyTheme, go, openTerminal } from '@/lib/store.js';
 
 async function save(patch, ok = 'Guardado') {
   const config = await act(call('config.save', { patch }), ok);
@@ -18,8 +18,9 @@ async function save(patch, ok = 'Guardado') {
   return config;
 }
 const num = (v) => Number(v) || 0;
+// The whole row is the switch's label: clicking its text toggles it too (the switch alone is a small target).
 function Row({ label, hint, children }) {
-  return <div className="flex items-center justify-between gap-4"><div><div className="text-sm">{label}</div>{hint ? <div className="text-muted-foreground text-xs">{hint}</div> : null}</div>{children}</div>;
+  return <label className="-mx-2 flex cursor-pointer items-center justify-between gap-4 rounded-lg px-2 py-1.5 hover:bg-accent/40"><div><div className="text-sm">{label}</div>{hint ? <div className="text-muted-foreground text-xs">{hint}</div> : null}</div>{children}</label>;
 }
 
 function AssistantCard({ c }) {
@@ -34,7 +35,7 @@ function AssistantCard({ c }) {
           <Field label="Idioma de las respuestas"><Select className="w-full" value={v.language} onValueChange={(language) => setV({ ...v, language })} options={[{ value: 'es', label: 'Español' }, { value: 'en', label: 'English' }]} /></Field>
           <Field label="Tema"><Select className="w-full" value={v.theme} onValueChange={(theme) => setV({ ...v, theme })} options={[{ value: 'sistema', label: 'Como Windows' }, { value: 'claro', label: 'Día' }, { value: 'oscuro', label: 'Noche' }]} /></Field>
         </div>
-        <Row label="Robot flotante" hint="Aparece en una esquina con avisos cuando no estás en el chat."><Switch checked={v.companion} onCheckedChange={(companion) => setV({ ...v, companion })} /></Row>
+        <Row label="Robot flotante" hint="Aparece en una esquina con avisos cuando no estás en el chat."><Switch checked={v.companion} onCheckedChange={(companion) => { setV({ ...v, companion }); save({ ui: { companion } }, companion ? 'Robot flotante activado' : 'Robot flotante desactivado'); }} /></Row>
       </CardContent>
       <CardFooter><Button size="sm" onClick={() => save({ assistantName: v.assistantName.trim(), userName: v.userName.trim(), language: v.language, ui: { theme: v.theme, companion: v.companion } })}>Guardar</Button></CardFooter>
     </Card>
@@ -55,7 +56,7 @@ function BrainCard({ c }) {
         </div>
         {claudeAccounts.length > 1 ? <Field label="Cuenta de Claude que usa el asistente"><Select className="w-full" value={v.account} onValueChange={(account) => setV({ ...v, account })} options={claudeAccounts.map((a) => ({ value: a.id, label: a.label }))} /></Field> : null}
         <Field label="Mensajes antes de renovar la conversación" hint="Renovarla ahorra tokens; el tablero y las bitácoras no se pierden."><Input type="number" min={2} max={200} value={v.maxTurns} onChange={(e) => setV({ ...v, maxTurns: num(e.target.value) })} className="w-28" /></Field>
-        <Row label="Orquestador" hint="Marcado: solo coordina. Desmarcado: modo libre, trabaja directamente en el proyecto."><Switch checked={v.orchestrate} onCheckedChange={(orchestrate) => setV({ ...v, orchestrate })} /></Row>
+        <Row label="Orquestador" hint="Marcado: solo coordina. Desmarcado: modo libre, trabaja directamente en el proyecto."><Switch checked={v.orchestrate} onCheckedChange={async (orchestrate) => { if (!orchestrate && !(await confirm('Modo libre', `Sin «Orquestador», ${c.assistantName} podrá leer, ejecutar comandos y editar archivos directamente en la carpeta del proyecto. Seguirá sin poder hacer push ni publicar.`, { ok: 'Activar modo libre' }))) return; const r = await act(call('chat.settings', { orchestrate })); if (r) { setV({ ...v, orchestrate }); setState((s) => ({ app: { ...s.app, assistant: r } })); } }} /></Row>
       </CardContent>
       <CardFooter><Button size="sm" onClick={() => save({ orchestrator: v })}>Guardar</Button></CardFooter>
     </Card>
@@ -70,9 +71,9 @@ function TasksCard({ c }) {
     <Card>
       <CardHeader><CardTitle>Tareas y cupo</CardTitle><CardDescription>Cómo se lanzan las tareas y cuánto puede usar cada agente.</CardDescription></CardHeader>
       <CardContent className="grid gap-4">
-        <Row label="Lanzar las tareas solas" hint="En cuanto estén listas (aprobadas y con sus dependencias hechas)."><Switch checked={v.autoRun} onCheckedChange={(autoRun) => setV({ ...v, autoRun })} /></Row>
-        <Row label="Revisión cruzada automática" hint="Otro agente revisa cada tarea terminada antes del informe."><Switch checked={v.review} onCheckedChange={(review) => setV({ ...v, review })} /></Row>
-        <Row label="Razonamiento alto con aprobación"><Switch checked={v.high} onCheckedChange={(high) => setV({ ...v, high })} /></Row>
+        <Row label="Lanzar las tareas solas" hint="En cuanto estén listas (aprobadas y con sus dependencias hechas)."><Switch checked={v.autoRun} onCheckedChange={(autoRun) => { setV({ ...v, autoRun }); save({ autoRun }); }} /></Row>
+        <Row label="Revisión cruzada automática" hint="Otro agente revisa cada tarea terminada antes del informe."><Switch checked={v.review} onCheckedChange={(review) => { setV({ ...v, review }); save({ review: { auto: review } }); }} /></Row>
+        <Row label="Razonamiento alto con aprobación"><Switch checked={v.high} onCheckedChange={(high) => { setV({ ...v, high }); save({ policy: { highNeedsApproval: high } }); }} /></Row>
         <div className="grid grid-cols-4 gap-3">
           <Field label="A la vez"><Input type="number" min={1} max={10} value={v.maxParallel} onChange={(e) => setV({ ...v, maxParallel: num(e.target.value) })} /></Field>
           <Field label="Por agente"><Input type="number" min={1} max={5} value={v.perAgent} onChange={(e) => setV({ ...v, perAgent: num(e.target.value) })} /></Field>
@@ -199,6 +200,38 @@ function BrowserCard({ c }) {
   );
 }
 
+// Interface: its size on this PC (also Ctrl + / Ctrl - / Ctrl 0) and the terminal that Ctrl+J opens.
+export const SIZES = [{ value: '0.87', label: 'Pequeña' }, { value: '1', label: 'Normal' }, { value: '1.15', label: 'Grande' }];
+function InterfaceCard({ c }) {
+  const [zoom, setZoom] = useState(null);
+  const terminals = { auto: 'Automática (Warp si está instalado)', warp: 'Warp', wt: 'Windows Terminal', powershell: 'PowerShell', cmd: 'Símbolo del sistema (CMD)' };
+  useEffect(() => { bridge.zoom?.().then(setZoom).catch(() => {}); return bridge.on('ui:zoom', (p) => setZoom(p.zoom)); }, []);
+  if (!bridge.zoom) return null; // phone: the browser has its own zoom
+  const preset = SIZES.find((o) => Math.abs(Number(o.value) - zoom) < 0.01)?.value;
+  const change = async (value) => setZoom(await act(bridge.zoom(Number(value))));
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center gap-3"><MonitorCog className="text-primary size-5" /><div><CardTitle>Interfaz</CardTitle><CardDescription>El tamaño de todo en este PC y la terminal que se abre con <Kbd>Ctrl</Kbd> <Kbd>J</Kbd>.</CardDescription></div></CardHeader>
+      <CardContent className="grid gap-4">
+        <Field label="Tamaño de la interfaz" hint={<>También con <Kbd>Ctrl</Kbd> <Kbd>+</Kbd> para agrandar, <Kbd>Ctrl</Kbd> <Kbd>-</Kbd> para reducir y <Kbd>Ctrl</Kbd> <Kbd>0</Kbd> para volver a «Normal» (o <Kbd>Ctrl</Kbd> + rueda del ratón).</>}>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select className="w-44" value={preset} placeholder={zoom ? `Personalizado (${Math.round(zoom * 100)} %)` : '…'} onValueChange={change} options={SIZES} />
+            <Button size="icon-sm" variant="outline" title="Reducir" onClick={() => change(zoom - 0.1)}><ZoomOut /></Button>
+            <Button size="icon-sm" variant="outline" title="Agrandar" onClick={() => change(zoom + 0.1)}><ZoomIn /></Button>
+            <span className="text-muted-foreground text-xs tabular-nums">{zoom ? `${Math.round(zoom * 100)} %` : ''}</span>
+          </div>
+        </Field>
+        <Field label="Terminal" hint="Se abre en la carpeta del proyecto que tengas delante (o en la del asistente).">
+          <div className="flex flex-wrap items-center gap-2">
+            <Select className="w-72 max-w-full" value={c.ui?.terminal ?? 'auto'} onValueChange={(terminal) => save({ ui: { terminal } })} options={Object.entries(terminals).map(([value, label]) => ({ value, label }))} />
+            <Button size="sm" variant="outline" onClick={() => openTerminal()}><SquareTerminal />Abrir terminal</Button>
+          </div>
+        </Field>
+      </CardContent>
+    </Card>
+  );
+}
+
 // Expert mode: an IDE-like view (PC only) with the panels the user picks.
 function ExpertCard({ c }) {
   const on = c.expert?.enabled === true; const panels = c.expert?.panels ?? {};
@@ -208,7 +241,7 @@ function ExpertCard({ c }) {
       <CardContent className="grid gap-4">
         <Row label="Activar el modo experto" hint="Aparece en el menú de la izquierda (en ventanas anchas)."><Switch checked={on} onCheckedChange={(enabled) => save({ expert: { enabled } }, enabled ? 'Modo experto activado' : 'Modo experto desactivado')} data-testid="expert-switch" /></Row>
         <div className="grid gap-2 sm:grid-cols-2">
-          {Object.entries(PANELS).map(([id, label]) => <label key={id} className="flex cursor-pointer items-center gap-2 text-[13px]"><Checkbox checked={panels[id] !== false} disabled={!on} onCheckedChange={(v) => savePanels({ ...panels, [id]: v === true })} />{label}</label>)}
+          {Object.entries(PANELS).map(([id, label]) => <label key={id} className="hover:bg-accent/40 -mx-1 flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-[13px]"><Checkbox checked={panels[id] !== false} onCheckedChange={(v) => savePanels({ ...panels, [id]: v === true })} />{label}</label>)}
         </div>
       </CardContent>
       {on ? <CardFooter><Button size="sm" variant="outline" onClick={() => go('expert')}><SquareTerminal />Abrir el modo experto</Button></CardFooter> : null}
@@ -224,7 +257,7 @@ export function SettingsView() {
       <PageHeader icon={<Settings className="text-primary size-5" />} title="Ajustes" meta={`Versión ${app.version}`} />
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
         <div className="mx-auto grid max-w-5xl gap-4 lg:grid-cols-2">
-          <AssistantCard c={c} /><BrainCard c={c} /><TasksCard c={c} /><div className="grid content-start gap-4"><MobileCard /><ExpertCard c={c} /><BrowserCard c={c} /><McpCard c={c} /><FolderCard c={c} home={app.home} /></div>
+          <AssistantCard c={c} /><InterfaceCard c={c} /><BrainCard c={c} /><TasksCard c={c} /><div className="grid content-start gap-4"><MobileCard /><ExpertCard c={c} /><BrowserCard c={c} /><McpCard c={c} /><FolderCard c={c} home={app.home} /></div>
         </div>
       </div>
     </>

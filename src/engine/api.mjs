@@ -66,7 +66,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
 
     'agents.status': ({ refresh }) => statusAll({ refresh: Boolean(refresh) }),
     'agents.check': ({ agent }) => agentStatus(oneOf(agent, AGENT_IDS, 'agente'), { refresh: true }),
-    'agents.login': ({ account: id, agent }) => openLogin(str(id ?? agent, 'cuenta', 40)),
+    'agents.login': ({ account: id, agent }) => {
+      const acc = str(id ?? agent, 'cuenta', 40);
+      openLogin(acc);
+      // A pause because it had no login is lifted: the user is signing in now.
+      if (board.setting(`cooldown_reason:${acc}`) === 'no tiene la sesión iniciada') { board.setting(`cooldown:${acc}`, ''); board.setting(`cooldown_reason:${acc}`, ''); }
+    },
     // ---- accounts: several subscriptions of the same agent
     'accounts.add': ({ agent, label, home }) => {
       agent = oneOf(agent, AGENT_IDS, 'agente');
@@ -147,6 +152,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     },
 
     'tasks.list': ({ limit }) => board.panelTasks(Math.min(Number(limit) || 150, 500)),
+    'tasks.live': () => scheduler.live(),
     'tasks.get': ({ id }) => { const d = board.taskDetail(int(id, 'tarea')); return { ...d, accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before) }; },
     'tasks.create': (p) => board.createTask({
       project: project(p.project).name, title: str(p.title, 'título', 200), description: str(p.description, 'descripción', 12000),

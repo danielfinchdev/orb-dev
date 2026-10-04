@@ -23,11 +23,22 @@ cuéntalo con una captura.
    ```
 3. En el primer arranque te ofrece instalar lo que falte (Claude Code, Codex, Cursor…). Necesitas **tu propia cuenta** de
    al menos uno de ellos; el inicio de sesión lo hace su programa oficial, la app nunca ve tus contraseñas.
+4. Para abrirla otra vez: en la carpeta `orb-dev`, `npm start`. Para tener la última versión: `git pull` y `npm install`
+   antes de `npm start` (mejor que un zip: así recibes los arreglos).
+
+**¿Y el `.exe`?** El repositorio solo tiene el código: no trae ningún `.exe` (es normal). Hay dos formas de usarla:
+con `npm start` como arriba, o generando tú el ejecutable en Windows con `npm run dist`, que deja en `dist\` el
+`Orb.dev-2.0.0-portable.exe` (no se instala, se abre tal cual) y un instalador. Sin certificado de firma, Windows
+SmartScreen avisa la primera vez («Más información» → «Ejecutar de todas formas»).
+
+**Ojo con Cursor:** su plan gratuito no deja usar el agente desde otras apps. Si una tarea falla por eso, la app lo dice
+claro, deja Cursor en pausa un día y, si la tarea era para «cualquier agente», se la pasa a otro.
 
 ## Empezar
 
-1. Abre `Orb.dev-2.0.0-portable.exe`.
-2. Elige su nombre, cómo te llama y dónde crear su carpeta (por ejemplo `D:\` → `D:\Orb`).
+1. Arráncala con `npm start` (o abre el `Orb.dev-2.0.0-portable.exe` que generaste con `npm run dist`).
+2. Elige su nombre, cómo te llama y dónde crear su carpeta. La carpeta se llama como el asistente: con `D:\` y el nombre
+   «Nova» se crea `D:\Nova`; si dejas el nombre por defecto, `D:\Orb`.
 3. En **Agentes**, comprueba que encuentra Claude Code, Codex o Cursor y que tienen la sesión iniciada (el botón abre el login
    oficial de cada uno; la app nunca ve tus contraseñas).
 4. Crea un proyecto desde el chat (botón de proyecto bajo el cuadro de texto) y pídele algo.
@@ -65,6 +76,18 @@ D:\Orb\
 - **Modo experto** (Ajustes, solo PC): explorador y visor de archivos, cambios de git con su diff, historial, lo que está
   en marcha, uso de las cuentas, carga del equipo y actividad, alrededor del chat. Eliges qué paneles ver.
 - **Conectores MCP** extra para los agentes (bases de datos, Figma…).
+- **Menú de carpetas**: a la izquierda, cada proyecto es una carpeta que se pliega y despliega con las tareas que le has
+  mandado y sus conversaciones (el `+` de cada carpeta te lleva al chat con ese proyecto elegido). Las conversaciones sin
+  proyecto, en «Sin carpeta».
+- **Tareas en directo**: mientras trabaja, cada tarea enseña cuánto lleva, los pasos, qué está haciendo ahora y el
+  porcentaje que va informando el agente (en «Tareas» y encima del cuadro de texto del chat). Si una tarea pasa 10 minutos
+  sin dar señales, te avisa en el chat para que mires su conversación o la canceles.
+- **Fallos explicados**: si un agente no puede trabajar (plan sin acceso, sin sesión, modelo no disponible, sin red), la
+  tarea dice por qué y qué hacer, en vez de un «falló» a secas.
+- **Tamaño de la interfaz** en Ajustes → Interfaz (Pequeña / Normal / Grande) o con `Ctrl +`, `Ctrl -` y `Ctrl 0`
+  (también `Ctrl` + rueda del ratón). Se guarda en cada PC.
+- **`Ctrl J` abre una terminal** en la carpeta del proyecto que tengas delante: Warp si lo tienes instalado; si no,
+  Windows Terminal o PowerShell. En Ajustes → Interfaz puedes elegir una fija (Warp, Windows Terminal, PowerShell o CMD).
 - **Robot animado** que reacciona (piensa, habla, se alegra, se preocupa, se duerme) y avisa en una esquina. Día y noche.
   Todo es responsive (móvil y ventanas estrechas) salvo el modo experto.
 

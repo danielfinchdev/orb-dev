@@ -10,7 +10,7 @@ import { DialogHost } from '@/components/dialogs.jsx';
 import { Sidebar } from '@/components/sidebar.jsx';
 import { Companion } from '@/components/companion.jsx';
 import { Robot } from '@/components/robot.jsx';
-import { useStore, setState, getState, refresh, refreshSoon, bridge, go, applyTheme } from '@/lib/store.js';
+import { useStore, setState, getState, refresh, refreshSoon, bridge, go, applyTheme, openTerminal } from '@/lib/store.js';
 import { AGENT } from '@/lib/labels.js';
 import { Setup } from '@/views/setup.jsx';
 import { ChatView } from '@/views/chat.jsx';
@@ -23,6 +23,7 @@ import { ActivityView } from '@/views/activity.jsx';
 import { SettingsView } from '@/views/settings.jsx';
 import { ExpertView } from '@/views/expert.jsx';
 
+const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
 const VIEWS = { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: LogsView, activity: ActivityView, settings: SettingsView, expert: ExpertView };
 
 function Shell() {
@@ -44,10 +45,11 @@ function Shell() {
           <button className="hover:bg-accent grid size-9 cursor-pointer place-items-center rounded-lg" onClick={() => setDrawer(true)} aria-label="Menú"><Menu className="size-5" /></button>
           <Robot size={26} mood={mood} /><span className="truncate text-[15px] font-medium">{app.config.assistantName}</span>
         </div>
-        <View key={route.view === 'session' ? route.id : route.view} route={route} />
+        <View key={`${route.view}:${route.id ?? ''}:${route.project ?? ''}`} route={route} />
       </main>
-      {/* The floating robot only where there is room for it. */}
-      <div className="hidden md:contents"><Companion name={app.config.assistantName} base={mood} hidden={app.config.ui?.companion === false || route.view === 'chat' || route.view === 'expert' || bridge.mobile} /></div>
+      {/* The floating robot only where there is room for it: never over forms or conversations (it covered the switches of
+          Ajustes and took their clicks), and those views leave room at the bottom so nothing stays under it. */}
+      <div className="hidden md:contents"><Companion name={app.config.assistantName} base={mood} hidden={app.config.ui?.companion === false || !COMPANION_VIEWS.has(route.view) || bridge.mobile} /></div>
     </div>
   );
 }
@@ -75,6 +77,14 @@ function Root() {
     })();
     return () => { alive = false; };
   }, []);
+  // Ctrl+J: a terminal in the folder on screen (also from the menu Ver → Abrir terminal).
+  useEffect(() => {
+    if (phase !== 'app' || !bridge.openTerminal) return undefined;
+    const key = (e) => { if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.code === 'KeyJ') { e.preventDefault(); openTerminal(); } };
+    window.addEventListener('keydown', key);
+    const off = bridge.on('ui:terminal', () => openTerminal());
+    return () => { window.removeEventListener('keydown', key); off(); };
+  }, [phase]);
   useEffect(() => { const off = () => setPhase('pair'); window.addEventListener('orb:unpaired', off); return () => window.removeEventListener('orb:unpaired', off); }, []);
   useEffect(() => {
     if (phase !== 'app') return undefined;

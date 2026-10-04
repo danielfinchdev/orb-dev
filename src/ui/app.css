@@ -106,6 +106,9 @@
   ::-webkit-scrollbar-track { background: transparent; }
 }
 
+/* Progress of a task that does not report its percentage: a sliding bar. */
+@keyframes orb-indeterminate { 0% { left: -35%; } 100% { left: 100%; } }
+
 /* The little floating window: dragged by its header, buttons stay clickable. */
 .drag { -webkit-app-region: drag; user-select: none; }
 .no-drag { -webkit-app-region: no-drag; }
