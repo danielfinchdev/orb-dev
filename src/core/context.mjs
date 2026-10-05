@@ -48,7 +48,9 @@ export function validateConfig(c) {
     if (a.path) {
       // A hand-set program path must be a real executable file (on Windows an .exe: .cmd/.bat would need a shell).
       if (typeof a.path !== 'string' || !path.isAbsolute(a.path)) throw new Error(`la ruta de ${id} debe ser absoluta`);
-      if (process.platform === 'win32' && !/\.exe$/i.test(a.path)) throw new Error(`la ruta de ${id} debe ser un .exe`);
+      // ACP agents installed with npm may point to their script (Orb runs it with node, never through a shell).
+      const script = !['claude', 'codex', 'cursor'].includes(id) && /\.(c|m)?js$/i.test(a.path);
+      if (process.platform === 'win32' && !/\.exe$/i.test(a.path) && !script) throw new Error(`la ruta de ${id} debe ser un .exe`);
       let st; try { st = fs.statSync(a.path); } catch { throw new Error(`no existe ${a.path}`); }
       if (!st.isFile()) throw new Error(`la ruta de ${id} no es un archivo`);
     }
@@ -82,6 +84,8 @@ export function validateConfig(c) {
     if (s.args && (!Array.isArray(s.args) || s.args.some((x) => typeof x !== 'string'))) throw new Error(`argumentos del conector ${s.name} no válidos`);
   }
   if (!['sistema', 'claro', 'oscuro'].includes(c.ui?.theme ?? 'sistema')) throw new Error('tema no válido');
+  if (c.budget?.stopAt != null && !(Number(c.budget.stopAt) >= 0.5 && Number(c.budget.stopAt) <= 1)) throw new Error('el % de cupo real para parar debe estar entre 50 y 100');
+  if (c.delegation) int(c.delegation.maxPerTask ?? 4, 0, 20, 'las subtareas por tarea');
   if (!Array.isArray(c.projectRoots) || c.projectRoots.some((r) => typeof r !== 'string')) throw new Error('projectRoots debe ser una lista de carpetas');
   return true;
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MessageSquarePlus, ListTodo, FolderKanban, Bot, BookOpen, History, Settings, Sparkles, SquareTerminal, ChevronRight, Plus, FolderPlus } from 'lucide-react';
+import { MessageSquarePlus, ListTodo, FolderKanban, Bot, BookOpen, History, Settings, Sparkles, SquareTerminal, ChevronRight, Plus, FolderPlus, ShieldAlert, Hourglass, CirclePause, Check, CalendarClock } from 'lucide-react';
 import { Robot } from './robot.jsx';
 import { ThemeToggle } from './theme-toggle.jsx';
 import { Button } from './ui/button.jsx';
@@ -21,8 +21,29 @@ function NavItem({ icon: Icon, iconEl, label, active, onClick, children, testid 
   );
 }
 
-const statusDot = { running: 'bg-info animate-pulse', error: 'bg-destructive', idle: 'bg-success/70' };
-const taskDot = { running: 'bg-info animate-pulse', awaiting_approval: 'bg-warning', failed: 'bg-destructive', blocked: 'bg-destructive', done: 'bg-success/70', queued: 'bg-muted-foreground/50', cancelled: 'bg-muted-foreground/30' };
+const statusDot = { running: 'bg-info animate-pulse', error: 'bg-destructive', idle: 'bg-success/70', interrupted: 'bg-warning', limited: 'bg-warning' };
+
+// The inbox at the top (2.3, like T3 Code's): what needs you (a permission, a task to approve, something stopped halfway or
+// waiting for the usage limit) and what is working right now. A conversation leaves it with «Listo» (settled).
+function Inbox({ title, tone, items, route }) {
+  if (!items.length) return null;
+  return (
+    <div className="pt-4">
+      <div className={cn('flex items-center gap-1.5 px-2.5 pb-1 text-[11px] tracking-wide uppercase', tone)}>{title}<span className="opacity-70">· {items.length}</span></div>
+      <div className="grid gap-px">
+        {items.slice(0, 8).map((i) => (
+          <div key={i.key} className={cn('group/inbox flex items-center rounded-lg pr-1', i.isActive(route) ? 'bg-accent' : 'hover:bg-accent/60')}>
+            <button onClick={i.open} title={i.hint} className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 px-2.5 py-1.5 text-left text-[13px]" data-testid="inbox-item">
+              {i.icon}<span className="min-w-0 flex-1 truncate">{i.title}</span>
+            </button>
+            {i.settle ? <Tip label="Listo: quitar de aquí"><button className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 cursor-pointer place-items-center rounded-md opacity-0 group-hover/inbox:opacity-100 focus-visible:opacity-100" aria-label="Listo" onClick={i.settle}><Check className="size-3.5" /></button></Tip> : null}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+const taskDot = { running: 'bg-info animate-pulse', awaiting_approval: 'bg-warning', failed: 'bg-destructive', blocked: 'bg-destructive', done: 'bg-success/70', queued: 'bg-muted-foreground/50', cancelled: 'bg-muted-foreground/30', limited: 'bg-warning' };
 
 // Which project folders are unfolded, remembered in this window.
 const OPEN_KEY = 'orb.carpetas';
@@ -81,6 +102,19 @@ export function Sidebar({ mood }) {
     .sort((a, b) => Number(b.project.active) - Number(a.project.active) || String(b.items[0]?.at ?? '').localeCompare(String(a.items[0]?.at ?? '')) || a.project.name.localeCompare(b.project.name));
   const loose = chats.filter((c) => !c.project || !projects.some((p) => p.name === c.project)).map(asChat);
   const isOpen = (f) => openFolders[f.project.name] ?? (f.project.active || f.items.some((i) => i.status === 'running' || i.status === 'awaiting_approval'));
+  // Inbox: what needs the user, then what is working.
+  const pending = app.approvals ?? [];
+  const settle = (c) => (e) => { e.stopPropagation(); act(call('sessions.settle', { id: c.id })); };
+  const needs = [
+    ...pending.map((a) => ({ key: `a${a.id}`, title: a.session?.title ?? 'Permiso', hint: `Espera tu permiso: ${a.body?.title ?? ''}`, icon: <ShieldAlert className="text-warning size-3.5 shrink-0" />, open: () => go({ view: 'session', id: a.session_id }), isActive: (r) => r.view === 'session' && r.id === a.session_id })),
+    ...tasks.filter((t) => t.status === 'awaiting_approval').map((t) => ({ ...asTask(t), hint: `#${t.id} espera tu aprobación`, icon: <ShieldAlert className="text-warning size-3.5 shrink-0" /> })),
+    ...tasks.filter((t) => t.status === 'limited').map((t) => ({ ...asTask(t), hint: `#${t.id} espera a que se reinicie el cupo`, icon: <Hourglass className="text-warning size-3.5 shrink-0" /> })),
+    ...chats.filter((c) => ['interrupted', 'limited', 'error'].includes(c.status) && !c.settled && !pending.some((a) => a.session_id === c.id)).map((c) => ({ ...asChat(c), hint: c.status === 'error' ? 'Terminó con un error' : c.status === 'limited' ? 'Sin cupo: continúa cuando quieras' : 'Se quedó a medias', icon: <CirclePause className="text-warning size-3.5 shrink-0" />, settle: settle(c) }))
+  ];
+  const working = [
+    ...chats.filter((c) => c.status === 'running').map(asChat),
+    ...tasks.filter((t) => t.status === 'running').map((t) => ({ ...asTask(t), icon: <AgentIcon agent={t.assigned_to ?? t.agent} className="size-3.5" /> }))
+  ];
   return (
     <aside className="bg-sidebar flex h-full w-64 shrink-0 flex-col border-r">
       <div className="flex items-center gap-2.5 px-4 pt-4 pb-3">
@@ -105,6 +139,9 @@ export function Sidebar({ mood }) {
         <NavItem icon={FolderKanban} label="Proyectos" active={is('projects')} onClick={() => go('projects')} testid="nav-projects" />
         {/* Expert mode: PC only (wide screens), when turned on in Settings. */}
         {app.config.expert?.enabled && !bridge.mobile ? <div className="hidden lg:block"><NavItem icon={SquareTerminal} label="Modo experto" active={is('expert')} onClick={() => go('expert')} testid="nav-expert" /></div> : null}
+        <NavItem icon={CalendarClock} label="Programadas" active={is('schedules')} onClick={() => go('schedules')} testid="nav-schedules" />
+        <Inbox title="Te esperan" tone="text-warning" items={needs} route={route} />
+        <Inbox title="Trabajando" tone="text-info" items={working} route={route} />
         <div className="text-muted-foreground flex items-center px-2.5 pt-5 pb-1 text-[11px] tracking-wide uppercase">
           <span className="flex-1">Carpetas</span>
           {bridge.mobile ? null : <Tip label="Nuevo proyecto"><button className="hover:text-foreground grid size-6 cursor-pointer place-items-center rounded-md hover:bg-accent/60" aria-label="Nuevo proyecto" onClick={async () => { const p = await createProjectFlow(); if (p) { await act(call('projects.setActive', { name: p.name })); setOpenFolder(p.name, true); } }} data-testid="sidebar-new-project"><FolderPlus className="size-3.5" /></button></Tip>}
@@ -117,7 +154,7 @@ export function Sidebar({ mood }) {
             <span className={cn('size-1.5 shrink-0 rounded-full', statusDot[i.status] ?? 'bg-muted-foreground/40')} />
           </NavItem>
         ))
-          : <p className="text-muted-foreground px-2.5 text-xs leading-relaxed">Habla directamente con Claude, Codex o Cursor, como en T3 Code.</p>}
+          : <p className="text-muted-foreground px-2.5 text-xs leading-relaxed">Habla directamente con cualquier agente (Claude, Codex, Cursor, Gemini…), en directo.</p>}
       </nav>
       <div className="flex flex-col gap-0.5 border-t px-3 py-2.5">
         {bridge.mobile ? null : <NavItem icon={Bot} label="Agentes" active={is('agents')} onClick={() => go('agents')} testid="nav-agents" />}

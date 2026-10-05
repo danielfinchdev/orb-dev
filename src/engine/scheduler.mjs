@@ -8,6 +8,7 @@ import { assistantName, userName, ofUser } from '../core/board.mjs';
 import { git, prepareWorkdir, takeCheckpoint, changedBetween, undoCheckpoint, snapshotCommit, ORB_GIT, REF_PREFIX } from '../core/workspace.mjs';
 import { rankAccounts, isLimitText, isBudgetText, startCooldown, pauseAccount, taskBudgetUsd } from '../core/budget.mjs';
 import { installed } from '../agents/index.mjs';
+import { runDue } from '../core/schedules.mjs';
 import { explainFailure } from '../core/agent-errors.mjs';
 import { usableAccounts, account as findAccount, accountLabel, accountEnv } from '../core/accounts.mjs';
 import { oneLine, redactSecrets, secretFiles, isSecretPath, MAX_DEP_RESULT } from '../core/safety.mjs';
@@ -70,6 +71,7 @@ export class Scheduler {
     try { this.watchQuiet(); } catch (error) { this.log(`vigilancia: ${error.message}`); }
     if (!ctx.config.autoRun || board.setting('paused') === '1') return;
     try { this.resumeLimited(); } catch (error) { this.log(`continuar limitadas: ${error.message}`); }
+    try { runDue(board, this.log); } catch (error) { this.log(`programadas: ${error.message}`); }
     board.revalidateQueued(); board.warnBlockedByDeps();
     for (const task of board.readyTasks('auto')) {
       if (this.running.size >= ctx.config.maxParallel) return;

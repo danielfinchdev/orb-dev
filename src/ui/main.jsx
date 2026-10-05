@@ -21,10 +21,11 @@ import { AgentsView } from '@/views/agents.jsx';
 import { LogsView } from '@/views/logs.jsx';
 import { ActivityView } from '@/views/activity.jsx';
 import { SettingsView } from '@/views/settings.jsx';
+import { SchedulesView } from '@/views/schedules.jsx';
 import { ExpertView } from '@/views/expert.jsx';
 
 const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
-const VIEWS = { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: LogsView, activity: ActivityView, settings: SettingsView, expert: ExpertView };
+const VIEWS = { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: LogsView, activity: ActivityView, settings: SettingsView, expert: ExpertView, schedules: SchedulesView };
 
 function Shell() {
   const route = useStore((s) => s.route);
@@ -89,7 +90,7 @@ function Root() {
   useEffect(() => {
     if (phase !== 'app') return undefined;
     return bridge.on('*', (event, payload) => {
-      if (event === 'board:changed' || event === 'session:update' || event === 'session:removed' || event === 'config:changed') refreshSoon();
+      if (event === 'board:changed' || event === 'session:update' || event === 'session:removed' || event === 'config:changed' || event === 'approval:changed') refreshSoon();
       if (event === 'chat:state') setState((s) => ({ app: { ...s.app, chat: payload } }));
       if (event === 'ui:navigate') go(payload);
       if (event === 'engine:stopped') toast.error('El motor se ha detenido varias veces. Cierra y vuelve a abrir la app.');
