@@ -260,7 +260,7 @@ app.whenReady().then(async () => {
   // The agents' browser: pages drawn off screen and the little window in the top-right corner (ui.pip turns it off).
   try {
     agentBrowser = createAgentBrowser({
-      pipUrl: 'orb://pip/pip.html', pipPreload: path.join(SRC, 'main', 'pip-preload.cjs'), mainWindow: () => win,
+      pipUrl: 'orb://pip/pip.html', pipPreload: path.join(SRC, 'main', 'pip-preload.cjs'), mainWindow: () => win, language: () => config()?.language ?? 'es',
       pipEnabled: () => config()?.ui?.pip !== false && config()?.browser?.enabled !== false,
       label: (agent) => (agent === 'orb' ? config()?.assistantName ?? PRODUCT.assistant : { claude: 'Claude', codex: 'Codex', cursor: 'Cursor' }[agent] ?? agent)
     });

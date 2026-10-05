@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { openDb, taskOptions, checkPolicy } from './db.mjs';
-import { ctx } from './context.mjs';
+import { ctx, tr } from './context.mjs';
 import { AGENT_IDS, folderName, projectLogHeader, isReservedName } from './home.mjs';
 import { oneLine, MAX_DESCRIPTION } from './safety.mjs';
 import { contentHash, sign, verify, detectSensitivity, defaultApprovalKey } from './approval.mjs';
@@ -20,6 +20,9 @@ const parse = (task) => task && { ...task, mode: task.mode ?? 'carpeta', readonl
 export const userName = () => ctx.config?.userName?.trim() || 'el usuario';
 // "de Ana" / "del usuario" (Spanish contracts de + el).
 export const ofUser = () => (ctx.config?.userName?.trim() ? `de ${ctx.config.userName.trim()}` : 'del usuario');
+// The same two for what the user reads in the app (chat notices), in the language of the settings.
+export const userLabel = () => ctx.config?.userName?.trim() || tr('msg.board.theUser');
+export const ofUserLabel = () => (ctx.config?.userName?.trim() ? tr('msg.board.ofName', { name: ctx.config.userName.trim() }) : tr('msg.board.ofTheUser'));
 export const assistantName = () => ctx.config?.assistantName?.trim() || PRODUCT.assistant;
 
 // A worker (any actor but the orchestrator) may only close its own running task.
@@ -35,8 +38,8 @@ const inside = (root, p) => { const rel = path.relative(root, p); return Boolean
 export function checkModel(agent, model) {
   if (!model) return null;
   const models = ctx.config.agents[agent]?.models ?? [];
-  if (models.length && !models.includes(model)) throw new Error(`${agent} no tiene el modelo ${model}. Disponibles: ${models.join(', ')}`);
-  if (!/^[\w.:\-[\]=,]{1,80}$/.test(model)) throw new Error(`id de modelo no válido: ${model}`);
+  if (models.length && !models.includes(model)) throw new Error(tr('msg.board.noModel', { agent, model, models: models.join(', ') }));
+  if (!/^[\w.:\-[\]=,]{1,80}$/.test(model)) throw new Error(tr('msg.board.badModelId', { model }));
   return model;
 }
 
@@ -44,15 +47,15 @@ export function checkModel(agent, model) {
 // extra roots of the settings; the user can also link any outside folder from the app (fromUser). Never a drive root, the
 // assistant's folder itself, its internal folders (.orb, bitacoras) or a folder that contains the assistant's.
 export function checkProjectPath(target, { fromUser = false } = {}) {
-  let r; try { r = fs.realpathSync(target); } catch { throw new Error(`la ruta no existe: ${target}`); }
-  if (!fs.statSync(r).isDirectory()) throw new Error(`la ruta no es una carpeta: ${target}`);
-  if (path.parse(r).root.toLowerCase() === r.toLowerCase()) throw new Error('no se puede usar la raíz de una unidad como proyecto');
+  let r; try { r = fs.realpathSync(target); } catch { throw new Error(tr('msg.board.pathMissing', { target })); }
+  if (!fs.statSync(r).isDirectory()) throw new Error(tr('msg.board.pathNotFolder', { target }));
+  if (path.parse(r).root.toLowerCase() === r.toLowerCase()) throw new Error(tr('msg.board.driveRoot'));
   const home = real(ctx.home);
-  if (same(r, home)) throw new Error(`esa es la carpeta de ${assistantName()}: los proyectos son sus subcarpetas`);
-  if (inside(r, home)) throw new Error(`esa carpeta contiene la de ${assistantName()}: elige una más concreta`);
+  if (same(r, home)) throw new Error(tr('msg.board.isHome', { name: assistantName() }));
+  if (inside(r, home)) throw new Error(tr('msg.board.containsHome', { name: assistantName() }));
   if (inside(home, r)) {
     const first = path.relative(home, r).split(path.sep)[0];
-    if (isReservedName(first)) throw new Error(`no se puede usar una carpeta interna de ${assistantName()} (${first}) como proyecto`);
+    if (isReservedName(first)) throw new Error(tr('msg.board.internalFolder', { name: assistantName(), first }));
   } else if (!fromUser) {
     const roots = [home, ...(ctx.config.projectRoots ?? []).map(real)];
     if (!roots.some((root) => inside(root, r))) throw new Error(`la ruta está fuera de la carpeta de ${assistantName()} (${home}): ${target}. ${userName()} puede vincularla desde la app.`);
@@ -115,9 +118,9 @@ export class Board {
   project(name) { return this.one('SELECT * FROM projects WHERE name = ?', String(name ?? '')); }
   projects() { return this.all('SELECT * FROM projects ORDER BY name'); }
   removeProject(name, actor) {
-    const project = this.project(name); if (!project) throw new Error(`no existe el proyecto ${name}`);
+    const project = this.project(name); if (!project) throw new Error(tr('msg.board.noProject', { name }));
     const open = this.one("SELECT COUNT(*) AS n FROM tasks WHERE project = ? AND status IN ('queued', 'awaiting_approval', 'running')", project.name).n;
-    if (open) throw new Error(`el proyecto tiene ${open} tarea(s) abiertas: cancélalas antes`);
+    if (open) throw new Error(tr('msg.board.projectOpenTasks', { open }));
     this.run('DELETE FROM projects WHERE name = ?', project.name);
     if (this.setting('active_project') === project.name) this.setting('active_project', '');
     this.event(null, actor, 'project.removed', `${project.name} (la carpeta no se borra)`);
@@ -139,7 +142,7 @@ export class Board {
     const project = this.project(name); if (!project) throw new Error(`proyecto desconocido "${name}": regístralo antes con orb_add_project`);
     this.setting('active_project', project.name);
     this.event(null, actor, 'project.active', `${project.name} -> ${project.path}`);
-    this.addChat('system', `📁 Carpeta de trabajo: ${project.name} (${project.path}). Las tareas nuevas solo trabajarán ahí.`);
+    this.addChat('system', tr('msg.board.activeFolder', { name: project.name, path: project.path }));
     this.changed('projects');
     return project;
   }
@@ -157,7 +160,7 @@ export class Board {
   }
 
   taskDetail(id) {
-    const task = this.task(id); if (!task) throw new Error(`no existe la tarea #${id}`);
+    const task = this.task(id); if (!task) throw new Error(tr('msg.board.noTask', { id }));
     return {
       ...task,
       events: this.all('SELECT actor, kind, detail, at FROM events WHERE task_id = ? ORDER BY id DESC LIMIT 300', task.id).reverse(),
@@ -201,8 +204,8 @@ export class Board {
     // Approval does not depend on the creator declaring it: a task made by a worker always waits for the user,
     // and a keyword net adds the tags the creator forgot.
     const tags = [...new Set(sensitivity)]; const reasons = [];
-    if (!tags.length) { const found = detectSensitivity(`${title}\n${description}`); tags.push(...found); if (found.length) reasons.push(`palabras clave: ${found.join(', ')}`); }
-    if (policy.approval) { tags.push('razonamiento_alto'); reasons.push(`${model ?? agent} con razonamiento alto`); }
+    if (!tags.length) { const found = detectSensitivity(`${title}\n${description}`); tags.push(...found); if (found.length) reasons.push(tr('msg.board.reasonKeywords', { words: found.join(', ') })); }
+    if (policy.approval) { tags.push('razonamiento_alto'); reasons.push(tr('msg.board.reasonHighReasoning', { who: model ?? agent })); }
     // A subtask an agent delegates from its own task (orb_delegate) goes straight to the queue when the user trusts
     // delegation, the parent task came from the assistant or the user, nothing looks risky and the parent has not used
     // its quota of subtasks. Anything else made by an agent waits for the user, as always.
@@ -210,7 +213,7 @@ export class Board {
     const d = ctx.config.delegation ?? {};
     const trusted = parent && d.enabled !== false && d.trusted !== false && !tags.length && ['orb', 'usuario'].includes(parent.created_by)
       && this.one('SELECT COUNT(*) AS n FROM tasks WHERE parent_id = ?', parent.id).n < (d.maxPerTask ?? 4);
-    if (actor !== 'orb' && actor !== 'usuario' && !trusted) { tags.push('creada_por_agente'); reasons.push(`la creó ${actor}, no ${assistantName()}`); }
+    if (actor !== 'orb' && actor !== 'usuario' && !trusted) { tags.push('creada_por_agente'); reasons.push(tr('msg.board.reasonByAgent', { actor, name: assistantName() })); }
     const status = tags.length ? 'awaiting_approval' : 'queued';
     const at = now();
     const { lastInsertRowid } = this.run(`INSERT INTO tasks (project, title, description, agent, account, model, reasoning, fast, launch, priority, depends_on, sensitivity, status, created_by, project_path, created_at, updated_at, mode, readonly, parent_id, review_of, schedule_id)
@@ -218,7 +221,7 @@ export class Board {
       JSON.stringify(depends_on.map(Number)), JSON.stringify([...new Set(tags)]), status, String(actor), proj.path, at, at, mode, Number(Boolean(readonly)), parent_id ? Number(parent_id) : null, review_of ? Number(review_of) : null, schedule_id ? Number(schedule_id) : null);
     const id = Number(lastInsertRowid);
     this.event(id, actor, 'task.created', status);
-    if (status === 'awaiting_approval') this.addChat('system', `⚠️ La tarea #${id} «${title}» necesita tu aprobación (${[...new Set(tags)].join(', ')}${reasons.length ? `; ${reasons.join('; ')}` : ''}).`);
+    if (status === 'awaiting_approval') { const tagList = [...new Set(tags)].join(', '); this.addChat('system', reasons.length ? tr('msg.board.needsApprovalWhy', { id, title, tags: tagList, reasons: reasons.join('; ') }) : tr('msg.board.needsApproval', { id, title, tags: tagList })); }
     // Even a task the user typed waits for an explicit "Aprobar" when it looks sensitive: one more click, with the reasons on screen.
     this.changed('tasks');
     return this.task(id);
@@ -229,7 +232,7 @@ export class Board {
     const keys = Object.keys(fields);
     const res = this.run(`UPDATE tasks SET ${keys.map((k) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?${expect ? ' AND status = ?' : ''}`,
       ...keys.map((k) => fields[k] ?? null), now(), Number(id), ...(expect ? [expect] : []));
-    if (expect && !res.changes) throw new Error(`la tarea #${id} ya no está en estado ${expect}`);
+    if (expect && !res.changes) throw new Error(tr('msg.board.notInState', { id, expect }));
     this.event(Number(id), actor, kind, fields.status ?? fields.result ?? '');
     this.changed('tasks');
     return this.task(id);
@@ -251,7 +254,7 @@ export class Board {
       if (!moved && this.approvalOk(task)) continue;
       const tags = moved && !task.sensitivity.includes('ruta_cambiada') ? [...task.sensitivity, 'ruta_cambiada'] : task.sensitivity;
       this.patch(task.id, { status: 'awaiting_approval', sensitivity: JSON.stringify(tags), ...this.clearApproval() }, 'orb', 'approval.required', 'queued');
-      this.addChat('system', `⚠️ La tarea #${task.id} «${task.title}» vuelve a esperar tu aprobación (${moved ? 'la carpeta del proyecto cambió' : 'su aprobación no es válida o la tarea cambió'}).`);
+      this.addChat('system', tr(moved ? 'msg.board.backToApprovalMoved' : 'msg.board.backToApprovalStale', { id: task.id, title: task.title }));
       back.push(task.id);
     }
     return back;
@@ -262,7 +265,7 @@ export class Board {
   updateTask(id, args, actor, context = {}) { return this.transaction(() => this.updateTaskNow(id, args, actor, context)); }
 
   updateTaskNow(id, { status, note, result, agent, model, reasoning, fast, progress }, actor, context) {
-    const task = this.task(id); if (!task) throw new Error(`no existe la tarea #${id}`);
+    const task = this.task(id); if (!task) throw new Error(tr('msg.board.noTask', { id }));
     const reassigning = agent !== undefined || model !== undefined || reasoning !== undefined || fast !== undefined;
     if (actor !== 'orb') {
       if (reassigning) throw new Error(`solo ${assistantName()} puede cambiar agente, modelo, reasoning o fast de una tarea`);
@@ -283,7 +286,7 @@ export class Board {
     if (agent !== undefined || model !== undefined) {
       if (task.status === 'running') throw new Error(`la tarea #${id} está en curso: cancélala antes de cambiar agente o modelo`);
       const nextAgent = agent ?? task.agent;
-      if (nextAgent !== 'any' && !AGENTS.includes(nextAgent)) throw new Error(`agente no válido: ${nextAgent}`);
+      if (nextAgent !== 'any' && !AGENTS.includes(nextAgent)) throw new Error(tr('msg.board.badAgent', { agent: nextAgent }));
       const nextModel = model === undefined ? (agent !== undefined ? null : task.model) : (model || null);
       if (nextModel && nextAgent === 'any') throw new Error('para elegir modelo, elige también el agente');
       Object.assign(reassign, { agent: nextAgent, model: nextAgent === 'any' ? null : checkModel(nextAgent, nextModel), assigned_to: null });
@@ -315,8 +318,8 @@ export class Board {
   // App actions. Retry only from a stopped state; the click counts as the user's approval except for high reasoning.
   retry(id, actor) {
     return this.transaction(() => {
-      const task = this.task(id); if (!task) throw new Error(`no existe la tarea #${id}`);
-      if (!['failed', 'blocked', 'cancelled', 'limited'].includes(task.status)) throw new Error(`la tarea #${id} está en ${task.status}: solo se reintenta una tarea fallida, bloqueada, cancelada o limitada`);
+      const task = this.task(id); if (!task) throw new Error(tr('msg.board.noTask', { id }));
+      if (!['failed', 'blocked', 'cancelled', 'limited'].includes(task.status)) throw new Error(tr('msg.board.retryState', { id, status: task.status }));
       const out = this.patch(id, { status: 'queued', assigned_to: task.agent === 'any' ? null : task.assigned_to, pid: null, ...this.clearApproval() }, actor, 'task.retry', task.status);
       if (!out.sensitivity.length) return out;
       if (out.sensitivity.includes('razonamiento_alto')) return this.patch(id, { status: 'awaiting_approval' }, actor, 'approval.required', 'queued');
@@ -325,8 +328,8 @@ export class Board {
   }
   cancel(id, actor) {
     return this.transaction(() => {
-      const task = this.task(id); if (!task) throw new Error(`no existe la tarea #${id}`);
-      if (this.isFinished(task.status)) throw new Error(`la tarea #${id} ya está ${task.status}`);
+      const task = this.task(id); if (!task) throw new Error(tr('msg.board.noTask', { id }));
+      if (this.isFinished(task.status)) throw new Error(tr('msg.board.alreadyFinished', { id, status: task.status }));
       return this.patch(id, { status: 'cancelled' }, actor, 'task.updated', task.status);
     });
   }
@@ -334,11 +337,11 @@ export class Board {
   // App: the user changes the agent, model or reasoning of a task that is not running. Same branch and copy.
   reassign(id, { agent, model, reasoning }, actor) {
     return this.transaction(() => {
-      const task = this.task(id); if (!task) throw new Error(`no existe la tarea #${id}`);
-      if (task.status === 'running') throw new Error(`la tarea #${id} está en curso: cancélala antes de cambiar el modelo`);
-      if (task.status === 'done') throw new Error(`la tarea #${id} ya está hecha: escríbele al agente para pedirle cambios`);
+      const task = this.task(id); if (!task) throw new Error(tr('msg.board.noTask', { id }));
+      if (task.status === 'running') throw new Error(tr('msg.board.runningCancelModel', { id }));
+      if (task.status === 'done') throw new Error(tr('msg.board.alreadyDone', { id }));
       const nextAgent = agent || task.agent;
-      if (nextAgent !== 'any' && !AGENTS.includes(nextAgent)) throw new Error(`agente no válido: ${nextAgent}`);
+      if (nextAgent !== 'any' && !AGENTS.includes(nextAgent)) throw new Error(tr('msg.board.badAgent', { agent: nextAgent }));
       const nextModel = nextAgent === 'any' ? null : checkModel(nextAgent, model || null);
       const { reasoning: nextReasoning } = taskOptions({ reasoning: reasoning || task.reasoning, fast: false });
       const policy = checkPolicy({ agent: nextAgent, model: nextModel, reasoning: nextReasoning, fast: false });
@@ -354,7 +357,7 @@ export class Board {
 
   // User actions on a task they are looking at count as their approval.
   signNow(task, actor, status) {
-    if (this.noKey) throw new Error('las aprobaciones solo se firman desde la app');
+    if (this.noKey) throw new Error(tr('msg.board.signOnlyApp'));
     const approved = { ...task, project_path: this.projectPathNow(task) };
     const hash = contentHash(approved);
     return this.patch(task.id, { ...(status ? { status } : {}), approved_by: actor, project_path: approved.project_path, approval_hash: hash, approval_sig: sign(this.key, task.id, hash) }, actor, 'task.approved');
@@ -363,8 +366,8 @@ export class Board {
   // The user wrote to the agent of a stopped task: back to the queue, in the same copy and branch.
   requeue(id, actor, kind = 'task.followup') {
     return this.transaction(() => {
-      const task = this.task(id); if (!task) throw new Error(`no existe la tarea #${id}`);
-      if (task.status === 'running') throw new Error(`la tarea #${id} está en curso`);
+      const task = this.task(id); if (!task) throw new Error(tr('msg.board.noTask', { id }));
+      if (task.status === 'running') throw new Error(tr('msg.board.isRunning', { id }));
       if (task.status === 'awaiting_approval' && task.sensitivity.includes('razonamiento_alto')) return task;
       const out = this.patch(id, { status: 'queued', pid: null, assigned_to: task.agent === 'any' ? null : task.assigned_to }, actor, kind, task.status);
       return out.sensitivity.length ? this.signNow(out, actor) : out;
@@ -374,11 +377,11 @@ export class Board {
   // Only the app calls this. expectedHash: what the window showed (see previewHash); a mismatch means the task changed meanwhile.
   approve(id, decision, actor, expectedHash) {
     return this.transaction(() => {
-      const task = this.task(id); if (!task) throw new Error(`no existe la tarea #${id}`);
-      if (task.status !== 'awaiting_approval') throw new Error(`la tarea #${id} no espera aprobación`);
+      const task = this.task(id); if (!task) throw new Error(tr('msg.board.noTask', { id }));
+      if (task.status !== 'awaiting_approval') throw new Error(tr('msg.board.notWaiting', { id }));
       if (decision !== 'approved') return this.patch(id, { status: 'cancelled' }, actor, 'task.rejected', 'awaiting_approval');
-      if (this.noKey) throw new Error('las aprobaciones solo se firman desde la app');
-      if (expectedHash !== undefined && expectedHash !== this.previewHash(task)) throw new Error(`la tarea #${id} cambió desde que la viste: ábrela de nuevo y revísala`);
+      if (this.noKey) throw new Error(tr('msg.board.signOnlyApp'));
+      if (expectedHash !== undefined && expectedHash !== this.previewHash(task)) throw new Error(tr('msg.board.changedSince', { id }));
       const approved = { ...task, project_path: this.projectPathNow(task) };
       const hash = contentHash(approved);
       return this.patch(id, { status: 'queued', approved_by: actor, project_path: approved.project_path, approval_hash: hash, approval_sig: sign(this.key, id, hash) }, actor, 'task.approved', 'awaiting_approval');
@@ -394,7 +397,7 @@ export class Board {
         const key = `dep_warned:${task.id}:${dep}`;
         if (this.setting(key)) continue;
         this.setting(key, '1');
-        this.addChat('system', `⛔ La tarea #${task.id} «${task.title}» espera a la #${dep}, que ${this.task(dep).status === 'failed' ? 'falló' : 'se canceló'}. Reintenta la #${dep} y seguirá sola, o cancela la #${task.id}.`);
+        this.addChat('system', tr(this.task(dep).status === 'failed' ? 'msg.board.depFailed' : 'msg.board.depCancelled', { id: task.id, title: task.title, dep }));
       }
     }
   }
@@ -417,7 +420,7 @@ export class Board {
     if (!body) throw new Error('body es obligatorio');
     if (![...AGENTS, 'all', 'usuario', 'orb'].includes(to)) throw new Error(`destinatario no válido: ${to} (usa ${AGENTS.join(', ')}, all, usuario o orb)`);
     body = String(body).slice(0, 8000);
-    if (to === 'usuario') this.addChat('system', `💬 ${from}${task_id ? ` (tarea #${task_id})` : ''}: ${body}`);
+    if (to === 'usuario') this.addChat('system', `💬 ${from}${task_id ? tr('msg.board.taskRef', { id: task_id }) : ''}: ${body}`);
     const { lastInsertRowid } = this.run('INSERT INTO messages (from_agent, to_agent, task_id, body, at) VALUES (?, ?, ?, ?, ?)', String(from), to, task_id ?? null, body, now());
     this.changed('messages');
     return { id: Number(lastInsertRowid), from, to, task_id: task_id ?? null };
