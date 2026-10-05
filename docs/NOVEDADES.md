@@ -1,10 +1,67 @@
 ## Descargar
 
-- **`Orb.dev-2.1.0-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
-- **`Orb.dev-2.1.0-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.dev.exe`.
+- **`Orb.dev-2.3.0-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
+- **`Orb.dev-2.3.0-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.dev.exe`.
 
 Windows 10/11. Como aún no está firmada, SmartScreen avisa la primera vez: «Más información» → «Ejecutar de todas formas».
-En el primer arranque la app instala lo que falte (Claude Code, Codex, Cursor) con sus instaladores oficiales.
+En el primer arranque la app detecta qué agentes tienes y con qué sesión, e instala lo que falte con los instaladores oficiales.
+
+## Novedades de la 2.3.0
+
+La idea de siempre: le cuentas a Orb qué quieres y él escribe encargos optimizados, los reparte entre agentes de varios
+proveedores que trabajan a la vez, revisa lo que hacen y te pide el OK. La 2.3 rehace por dentro cómo habla con los agentes.
+
+### Agentes en directo, como T3 Code
+
+- **Un proceso vivo por conversación** en vez de uno por mensaje:
+  - Claude Code con el Claude Agent SDK oficial;
+  - Codex con `codex app-server`;
+  - Cursor con su CLI en streaming.
+  - Las respuestas llegan **mientras se escriben** y el segundo mensaje tarda segundos.
+- **Más agentes** con el estándar ACP: **Gemini CLI, OpenCode, Qwen Code y GitHub Copilot**.
+- **Usa tus sesiones:** si ya iniciaste sesión en el programa de un agente (por ejemplo Codex con ChatGPT), no hay que hacer
+  nada más en la app.
+- **Corregir en marcha** (Intro mientras trabaja) o **poner en cola** (Ctrl+Intro). La cola se puede editar, reordenar y
+  vaciar.
+- **Bifurcar** una conversación para probar otra idea sin perder la original.
+- **Continuar** lo que quedó a medias, **detalles** de cada conversación (carpeta, git, PR, tarea…), **medidor de contexto**
+  y historial por páginas.
+
+### Más trabajo, menos frenos (y sin quemar tokens)
+
+- **Permisos equilibrados:** lo normal pasa solo; lo arriesgado (push, descargar y ejecutar, borrar carpetas…) te lo pregunta
+  con una tarjeta **Permitir / Permitir siempre / Denegar**, en la conversación, en el chat, en la bandeja y en el móvil.
+  Hay un modo nuevo, «Preguntar antes», para vigilar de cerca.
+- **Cupo real:** Claude y Codex dicen cuánto llevas de tu cupo y cuándo se reinicia. Orb para al 92 % (ajustable) y reparte
+  el trabajo entre cuentas. Los topes fijos suben a 20 tareas y 6 con modelos caros por ventana, solo como red de seguridad.
+- **Tareas que esperan al cupo:** al llegar al límite, la tarea no falla, espera y **sigue sola** al reiniciarse.
+- **Continúan tras cerrar la app.**
+- **El asistente se renueva según lo lleno que esté su contexto**, no por número de mensajes, y lee el proyecto para escribir
+  encargos más precisos y cortos.
+
+### Equipo de agentes
+
+- **Delegación:** un agente puede pasar parte de su tarea a otro agente o modelo y esperar el resultado. Las subtareas
+  cuelgan de su tarea.
+- **Task Review:** otro modelo, de otro proveedor si lo hay, audita el trabajo en solo lectura y da su veredicto: correcto o
+  con fallos, y la lista de problemas. Se pide para una tarea o un proyecto entero, o se activa de forma automática.
+- **Tareas programadas:** «cada lunes a las 9, revisa las dependencias».
+- **«@»** en cualquier cuadro de mensaje para adjuntar otra tarea, conversación o bitácora como contexto (un extracto, no
+  entero).
+
+### Interfaz
+
+- **Bandeja** en la barra lateral: «Te esperan» y «Trabajando».
+- Logotipos reales de los agentes.
+- Checks visibles en modo noche.
+- Sin el robot cortado en el primer arranque.
+- Icono nítido en el `.exe` y la barra de tareas.
+- **Español de España e inglés.**
+
+### Para desarrolladores
+
+- 79 pruebas que pasan también en Windows y CI de pruebas en Windows y Linux.
+- `docs/FUNCIONAMIENTO.md` explica cada funcionalidad y qué archivos tocar.
 
 ## Novedades de la 2.1.0
 
