@@ -4,6 +4,21 @@ Autor: Claude (Claude Code), 2026-10-05, rama `arreglos-2.1.1`. Parte de una pru
 (app empaquetada y desde el código, en modo día y noche, y con Claude, Codex y Cursor de verdad) y del estudio de
 T3 Code Nightly `0.0.46-nightly.20261004` («Orchestrator V2», 3 y 4 de octubre de 2026).
 
+
+## Estado en la 2.3.0 (5 de octubre de 2026)
+
+| Fase | Estado |
+|---|---|
+| A — Motor en vivo | Hecho: Claude (Agent SDK), Codex (app-server), Cursor (CLI en streaming) y ACP (Gemini, OpenCode, Qwen, Copilot). Probado con Claude, Codex, Cursor y Gemini reales |
+| B — Cola, límites y continuidad | Hecho: cola y corrección en marcha, tareas «esperando cupo», continuar tras cerrar y medidor de contexto |
+| C — Delegación | Hecho: `orb_delegate` / `orb_wait_tasks`, delegación de confianza y árbol de subtareas |
+| D — Comodidad | Hecho: bifurcar, programadas, bandeja, «@», detalles e historial paginado |
+| E — Más agentes | Hecho con ACP (cuatro agentes nuevos) |
+| Extra | Task Review, permisos equilibrados (guardia), cupo real y español de España e inglés |
+| Pendientes de §1 | Pruebas en Windows (79/79), errores explicados (también en conversaciones directas), modelo por defecto sin Opus, icono `.ico` de 10 tamaños |
+
+El detalle de cada funcionalidad está en `docs/FUNCIONAMIENTO.md`.
+
 ## 1. Qué salió en la prueba
 
 **Funciona de verdad** con los agentes reales:
