@@ -1,18 +1,38 @@
-// Español (España). Tono: cercano, claro y sin jerga. Las claves se agrupan por pantalla.
+// Español (España). Tono: cercano, claro y sin jerga. Las claves se agrupan por pantalla; cada área tiene su archivo en es/.
+import base from './es/base.mjs';
+import labels from './es/labels.mjs';
+import chat from './es/chat.mjs';
+import session from './es/session.mjs';
+import tasks from './es/tasks.mjs';
+import schedules from './es/schedules.mjs';
+import activity from './es/activity.mjs';
+import logs from './es/logs.mjs';
+import projects from './es/projects.mjs';
+import agents from './es/agents.mjs';
+import settings from './es/settings.mjs';
+import setup from './es/setup.mjs';
+import expert from './es/expert.mjs';
+import app from './es/app.mjs';
+import pip from './es/pip.mjs';
+import comp from './es/comp.mjs';
+import msg from './es/msg.mjs';
+
 export default {
-  'nav.tasks': 'Tareas',
-  'nav.projects': 'Proyectos',
-  'nav.schedules': 'Programadas',
-  'nav.agents': 'Agentes',
-  'nav.logs': 'Bitácoras',
-  'nav.activity': 'Actividad',
-  'nav.settings': 'Ajustes',
-  'nav.expert': 'Modo experto',
-  'nav.newConversation': 'Nueva conversación',
-  'nav.folders': 'Carpetas',
-  'nav.loose': 'Sin carpeta',
-  'nav.noProject': 'Sin proyecto',
-  'inbox.waiting': 'Te esperan',
-  'inbox.working': 'Trabajando',
-  'inbox.settle': 'Listo: quitar de aquí'
+  ...base,
+  ...labels,
+  ...chat,
+  ...session,
+  ...tasks,
+  ...schedules,
+  ...activity,
+  ...logs,
+  ...projects,
+  ...agents,
+  ...settings,
+  ...setup,
+  ...expert,
+  ...app,
+  ...pip,
+  ...comp,
+  ...msg
 };

@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { isSecretPath, redactSecrets } from '../core/safety.mjs';
+import { tr } from '../core/context.mjs';
 
 const MAX_ENTRIES = 600;
 const MAX_READ = 512 * 1024;
@@ -28,18 +29,18 @@ const sneaky = (clean) => clean.includes(':') || clean.split('/').some((part) =>
 export function insideProject(root, rel = '') {
   const real = realpath(root);
   const clean = String(rel ?? '').replace(/\\/g, '/');
-  if (clean.includes('\0') || path.isAbsolute(clean) || /^[a-z]:/i.test(clean) || sneaky(clean)) throw userError('ruta no válida');
+  if (clean.includes('\0') || path.isAbsolute(clean) || /^[a-z]:/i.test(clean) || sneaky(clean)) throw userError(tr('msg.expert.badPath'));
   const abs = path.resolve(real, clean);
-  let resolved; try { resolved = realpath(abs); } catch { throw userError('no existe'); }
+  let resolved; try { resolved = realpath(abs); } catch { throw userError(tr('msg.expert.notFound')); }
   const back = path.relative(real, resolved);
-  if (back.startsWith('..') || path.isAbsolute(back)) throw userError('fuera del proyecto');
-  if (back.split(path.sep).some(isHidden)) throw userError('carpeta interna');
+  if (back.startsWith('..') || path.isAbsolute(back)) throw userError(tr('msg.expert.outside'));
+  if (back.split(path.sep).some(isHidden)) throw userError(tr('msg.expert.internal'));
   return { abs: resolved, rel: back.split(path.sep).join('/') };
 }
 
 export function tree(root, dir = '') {
   const { abs, rel } = insideProject(root, dir);
-  if (!fs.statSync(abs).isDirectory()) throw userError('no es una carpeta');
+  if (!fs.statSync(abs).isDirectory()) throw userError(tr('msg.expert.notFolder'));
   const entries = [];
   const list = fs.readdirSync(abs, { withFileTypes: true }).filter((e) => !isHidden(e.name));
   for (const e of list.slice(0, MAX_ENTRIES)) {
@@ -56,9 +57,9 @@ export function tree(root, dir = '') {
 
 export function readFile(root, file) {
   const { abs, rel } = insideProject(root, file);
-  if (isSecretPath(rel) || isSecretPath(rel.toLowerCase())) throw userError('es un archivo con secretos: no se muestra');
+  if (isSecretPath(rel) || isSecretPath(rel.toLowerCase())) throw userError(tr('msg.expert.secrets'));
   const st = fs.statSync(abs);
-  if (!st.isFile()) throw userError('no es un archivo');
+  if (!st.isFile()) throw userError(tr('msg.expert.notFile'));
   const fd = fs.openSync(abs, 'r');
   try {
     const buf = Buffer.alloc(Math.min(st.size, MAX_READ));
@@ -113,14 +114,14 @@ function withoutSecrets(diff) {
 
 // The changes of one changed file, or of every changed file (secret files left out), against the last commit.
 export async function gitDiff(root, file) {
-  if (!(await isRepo(root))) throw userError('el proyecto no tiene git');
+  if (!(await isRepo(root))) throw userError(tr('msg.expert.noGit'));
   const list = await changed(root);
   let paths;
   if (file) {
     // Only a file of the changes list, by its exact name.
     const f = list.find((x) => x.path === String(file));
-    if (!f) throw userError('ese archivo no tiene cambios');
-    if (isSecretPath(f.path) || sneaky(f.path)) throw userError('es un archivo con secretos: no se muestra');
+    if (!f) throw userError(tr('msg.expert.noChanges'));
+    if (isSecretPath(f.path) || sneaky(f.path)) throw userError(tr('msg.expert.secrets'));
     paths = [f.path];
   } else paths = ['.'];
   const head = await hasHead(root);
