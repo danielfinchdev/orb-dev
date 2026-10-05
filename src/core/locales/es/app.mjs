@@ -1,2 +1,18 @@
 // app.*
-export default {};
+export default {
+  'app.menu': 'Menú',
+  'app.engineStopped': 'El motor se ha detenido varias veces. Cierra y vuelve a abrir la app.',
+  'app.engineRestarted': 'El motor se reinició tras un fallo. Las tareas que estaban en marcha quedan como fallidas (puedes reintentarlas).',
+  'app.pairTitle': 'Vincula este dispositivo',
+  'app.pairBody1': 'En el PC abre ',
+  'app.pairBodyPath': 'Ajustes → Móvil',
+  'app.pairBody2': ', pulsa «Vincular un móvil» y escanea el código QR con la cámara de este teléfono.',
+  'app.pairTailscale': 'Funciona a través de Tailscale: solo tus dispositivos lo ven.',
+  'app.errorTitle': 'No pude arrancar',
+  'app.terminalOpened': 'Terminal abierta ({name})',
+  'app.notLinked': 'este dispositivo no está vinculado',
+  'app.httpError': 'error {n}',
+  'app.browser': 'Navegador',
+  'app.pcOnly': 'solo desde el PC',
+  'app.foldersPc': 'las carpetas se abren desde el PC'
+};

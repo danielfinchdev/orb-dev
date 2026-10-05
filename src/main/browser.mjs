@@ -72,7 +72,7 @@ const allowed = (url) => { try { return ['http:', 'https:'].includes(new URL(url
 
 // options: label(agent) → name shown in the little window; pipEnabled() → whether it may appear; mainWindow() → the app's
 // window (to place the little one on the same screen and to bring the app forward); pipUrl / pipPreload.
-export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, mainWindow = () => null, pipUrl, pipPreload, log = () => {} }) {
+export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, language = () => 'es', mainWindow = () => null, pipUrl, pipPreload, log = () => {} }) {
   const token = crypto.randomBytes(24).toString('hex');
   const id = crypto.randomBytes(8).toString('hex');
   const pipe = process.platform === 'win32' ? `\\\\.\\pipe\\orb-navegador-${id}` : path.join(os.tmpdir(), `orb-navegador-${id}.sock`);
@@ -112,7 +112,7 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
   function sendState() {
     if (!pip || pip.isDestroyed()) return;
     const t = pipTab;
-    pip.webContents.send('pip:state', { mode, agent: t ? label(t.agent) : null, task: t?.task || null, url: t?.url ?? '', title: t?.title ?? '', loading: Boolean(t?.loading), tabs: tabs.size, action: t?.action ?? '' });
+    pip.webContents.send('pip:state', { mode, agent: t ? label(t.agent) : null, task: t?.task || null, url: t?.url ?? '', title: t?.title ?? '', loading: Boolean(t?.loading), tabs: tabs.size, action: t?.action ?? '', language: language() });
   }
   // Only the page on show is drawn, and only while the little window shows it (drawing costs a full-size picture per frame).
   function painting() {

@@ -93,10 +93,10 @@ export function createLive(o) {
   const canUseTool = async (toolName, toolInput, ctx = {}) => {
     const command = toolInput?.command ?? '';
     const paths = [toolInput?.file_path, toolInput?.path, toolInput?.notebook_path].filter(Boolean);
-    const verdict = decide({ permission, tool: toolName, command, paths, internalDir: o.internalDir });
+    const verdict = decide({ permission, tool: toolName, command, paths, internalDir: o.internalDir, lang: o.lang });
     if (verdict.decision === 'allow') return { behavior: 'allow', updatedInput: toolInput };
     if (verdict.decision === 'deny') return { behavior: 'deny', message: `Orb no lo permite: ${verdict.reason}.` };
-    const answer = await approvals.ask({ id: ctx.toolUseID ?? `${toolName}-${Date.now()}`, tool: toolName, title: describeAction({ tool: toolName, command, paths }), reason: verdict.reason, input: describeInput(toolInput) });
+    const answer = await approvals.ask({ id: ctx.toolUseID ?? `${toolName}-${Date.now()}`, tool: toolName, title: describeAction({ tool: toolName, command, paths, lang: o.lang }), reason: verdict.reason, input: describeInput(toolInput) });
     if (answer === 'deny') return { behavior: 'deny', message: 'El usuario no lo ha permitido. Busca otra forma o explica qué necesitas.' };
     return { behavior: 'allow', updatedInput: toolInput, ...(answer === 'always' && ctx.suggestions ? { updatedPermissions: ctx.suggestions } : {}) };
   };

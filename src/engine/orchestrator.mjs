@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { ctx } from '../core/context.mjs';
+import { ctx, tr } from '../core/context.mjs';
 import { AGENTS, assistantName, userName, ofUser } from '../core/board.mjs';
 import { executable, installed, adapter } from '../agents/index.mjs';
 import * as claude from '../agents/claude.mjs';
@@ -74,8 +74,8 @@ export class Orchestrator {
 
   ask(text, context = '') {
     text = String(text ?? '').trim();
-    if (!text) throw new Error('escribe un mensaje');
-    if (text.length > 20000) throw new Error('mensaje demasiado largo (máximo 20 000 caracteres)');
+    if (!text) throw new Error(tr('msg.orch.writeMessage'));
+    if (text.length > 20000) throw new Error(tr('msg.orch.tooLong'));
     this.board.addChat('usuario', text);
     // While it answers, a new message corrects it on the fly (it reads it at its next step) instead of waiting.
     if (this.busy && this.live?.steer({ text: text + context })) return;
@@ -102,7 +102,7 @@ export class Orchestrator {
     this.generation++;
     this.queue = [];
     this.forget();
-    this.board.addChat('system', `Nueva conversación. ${assistantName()} ya no recuerda lo anterior, pero el tablero y las bitácoras siguen igual.`);
+    this.board.addChat('system', tr('msg.orch.newConversation', { name: assistantName() }));
     this.busy = false; this.partial = ''; this.tools = []; this.push();
   }
 
@@ -110,12 +110,12 @@ export class Orchestrator {
     if (!this.busy) return;
     this.generation++; this.queue = [];
     Promise.resolve(this.live?.interrupt()).catch(() => {});
-    this.busy = false; this.partial = ''; this.tools = []; this.board.addChat('system', 'Detenido.'); this.push();
+    this.busy = false; this.partial = ''; this.tools = []; this.board.addChat('system', tr('msg.orch.stopped')); this.push();
   }
 
   // Free mode: the answer to an approval card in the chat (a risky command the assistant wants to run).
   respond(requestId, decision) {
-    if (!this.live?.respond(requestId, decision)) throw new Error('esa petición ya no está activa');
+    if (!this.live?.respond(requestId, decision)) throw new Error(tr('msg.orch.requestGone'));
     return true;
   }
 
@@ -125,7 +125,7 @@ export class Orchestrator {
     const { text, meta } = this.queue.shift();
     this.run(text, true, meta).catch((error) => {
       this.log(`asistente: ${error.stack}`);
-      this.board.addChat('system', `No he podido responder: ${error.message}`);
+      this.board.addChat('system', tr('msg.orch.cannotAnswer', { message: error.message }));
       this.busy = false; this.push(); this.next();
     });
   }
@@ -137,7 +137,7 @@ export class Orchestrator {
     const active = this.board.activeProject();
     // Free mode works inside the working project only: never in the assistant's own folder (database, secret, logs).
     const free = o.orchestrate === false && Boolean(active?.path && fs.existsSync(active.path));
-    if (o.orchestrate === false && !free && !this.warnedFree) { this.warnedFree = true; this.board.addChat('system', '🛠️ El modo libre necesita un proyecto de trabajo: mientras no elijas uno, solo coordino.'); }
+    if (o.orchestrate === false && !free && !this.warnedFree) { this.warnedFree = true; this.board.addChat('system', tr('msg.orch.freeNeedsProject')); }
     if (free) this.warnedFree = false;
     const cwd = free ? active.path : ctx.paths.runs;
     const acc = account(o.account) ?? defaultAccount('claude') ?? { agent: 'claude' };
@@ -159,7 +159,7 @@ export class Orchestrator {
       env: { ...accountEnv(acc), ORB_HOME: ctx.home, ORB_AGENT: 'orb', ...(free ? browserEnv('orb', 'asistente') : {}) },
       systemPrompt: free ? freePersona(cwd) : persona(),
       tools: free ? { disallowed: ['Task'] } : { allowed: ['mcp__orb', 'Read', 'Glob', 'Grep'], disallowed: claude.COORDINATOR_DENIED },
-      addDirs: [...new Set(dirs)].filter((d) => d !== cwd).slice(0, 40), internalDir: ctx.paths.internal, log: writeLog,
+      addDirs: [...new Set(dirs)].filter((d) => d !== cwd).slice(0, 40), internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog,
       onEvent: (ev) => this.onEvent(ev)
     });
     this.liveKey = key;
@@ -174,7 +174,7 @@ export class Orchestrator {
     if (ev.type === 'context' && ev.size) { this.board.settingJson('orchestrator_context', { used: ev.used, size: ev.size }); this.push(); return; }
     if (ev.type === 'approval') {
       const r = ev.request;
-      const msg = this.board.addChat('system', `✋ ${assistantName()} quiere ejecutar: ${r.title}\n(${r.reason})`, { kind: 'approval', id: r.id, status: 'pending' });
+      const msg = this.board.addChat('system', tr('msg.orch.wantsToRun', { name: assistantName(), title: r.title, reason: r.reason }), { kind: 'approval', id: r.id, status: 'pending' });
       this.approvals.set(r.id, msg?.id ?? null);
       return;
     }
@@ -193,18 +193,18 @@ export class Orchestrator {
     // Renewed when its context is filling up (or after many turns): cheaper than dragging a long conversation along.
     if (this.board.setting('orchestrator_session') && ((c?.size && c.used / c.size >= (o.renewAt ?? 0.6)) || turns >= (o.maxTurns ?? 60))) {
       this.forget();
-      this.board.addChat('system', '♻️ Conversación renovada para no gastar de más (el tablero y las bitácoras siguen igual).');
+      this.board.addChat('system', tr('msg.orch.renewed'));
     }
     const fresh = !this.board.setting('orchestrator_session');
     const prompt = fresh ? `${briefing(this.board)}\n\n## Mensaje ${ofUser()}\n${text}` : text;
     try { this.ensureLive(); } catch (error) {
-      this.board.addChat('system', `${assistantName()} necesita Claude Code para pensar: ${error.message}`);
+      this.board.addChat('system', tr('msg.orch.needsClaude', { name: assistantName(), message: error.message }));
       this.busy = false; this.push(); return this.next();
     }
     this.board.setting('orchestrator_turns', String(Number(this.board.setting('orchestrator_turns') ?? 0) + 1));
     const generation = this.generation;
     const free = (ctx.config.orchestrator ?? {}).orchestrate === false;
-    const timer = setTimeout(() => { this.board.addChat('system', 'Tiempo máximo alcanzado: me detengo.'); Promise.resolve(this.live?.interrupt()).catch(() => {}); }, free ? (ctx.config.timeoutMinutes ?? 60) * 60_000 : 10 * 60_000);
+    const timer = setTimeout(() => { this.board.addChat('system', tr('msg.orch.timeLimit')); Promise.resolve(this.live?.interrupt()).catch(() => {}); }, free ? (ctx.config.timeoutMinutes ?? 60) * 60_000 : 10 * 60_000);
     const live = this.live;
     const result = await live.send({ text: prompt });
     clearTimeout(timer);
@@ -213,7 +213,7 @@ export class Orchestrator {
     if (result.isError && allowRetry && !result.text && !fresh) { this.forget(); return this.run(text, false, meta); }
     const answer = (result.final || result.text || '').trim();
     const ok = !result.isError;
-    this.board.addChat(ok ? 'orb' : 'system', answer || `No he podido responder. Revisa en Agentes que Claude Code tenga la sesión iniciada (registro: ${this.logFile}).`, ok ? meta : null);
+    this.board.addChat(ok ? 'orb' : 'system', answer || tr('msg.orch.cannotAnswerCheck', { logFile: this.logFile }), ok ? meta : null);
     this.busy = false; this.partial = ''; this.tools = []; this.push();
     this.next();
   }
