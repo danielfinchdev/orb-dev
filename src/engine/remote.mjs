@@ -42,8 +42,12 @@ const ALLOWED = new Set(['app.state', 'chat.list', 'chat.send', 'chat.reset', 'c
   'tasks.list', 'tasks.live', 'tasks.get', 'tasks.create', 'tasks.approve', 'tasks.retry', 'tasks.cancel', 'tasks.reassign', 'tasks.followup', 'tasks.undo', 'tasks.launchAnyway', 'tasks.accept',
   'sessions.list', 'sessions.create', 'sessions.items', 'sessions.send', 'sessions.stop', 'sessions.update',
   'projects.list', 'projects.info', 'projects.setActive', 'projects.create', 'logs.list', 'logs.read', 'activity.list', 'usage.get', 'agents.status',
-  'control.pause', 'control.resume']);
-const EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'session:item', 'session:update', 'session:removed', 'config:changed']);
+  'control.pause', 'control.resume',
+  // 2.3: answer permission requests, the queue, continue, fork, settle, Task Review, scheduled tasks and @ (all of it
+  // is work the PC already allowed; nothing here changes settings or gives total access).
+  'sessions.queue', 'sessions.editQueued', 'sessions.approve', 'sessions.resume', 'sessions.fork', 'sessions.settle', 'approvals.list', 'chat.approve',
+  'tasks.review', 'projects.review', 'schedules.list', 'schedules.create', 'schedules.update', 'schedules.remove', 'schedules.run', 'mentions.options']);
+const EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'session:item', 'session:update', 'session:removed', 'config:changed', 'session:delta', 'session:queue', 'approval:changed']);
 
 const inCgnat = (ip) => { const [x, y] = String(ip).split('.').map(Number); return x === 100 && y >= 64 && y <= 127; };
 const tailscaleExe = () => (IS_WIN ? path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Tailscale', 'tailscale.exe') : 'tailscale');
