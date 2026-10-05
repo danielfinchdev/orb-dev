@@ -33,7 +33,7 @@ function AssistantCard({ c }) {
         <div className="grid grid-cols-2 gap-3">
           <Field label="Nombre del asistente" hint="Su carpeta no cambia de nombre."><Input value={v.assistantName} onChange={(e) => setV({ ...v, assistantName: e.target.value })} maxLength={40} /></Field>
           <Field label="Cómo te llama"><Input value={v.userName} onChange={(e) => setV({ ...v, userName: e.target.value })} maxLength={40} /></Field>
-          <Field label="Idioma de las respuestas"><Select className="w-full" value={v.language} onValueChange={(language) => setV({ ...v, language })} options={[{ value: 'es', label: 'Español' }, { value: 'en', label: 'English' }]} /></Field>
+          <Field label="Idioma / Language" hint="La app y las respuestas del asistente."><Select className="w-full" value={v.language} onValueChange={(language) => { setV({ ...v, language }); save({ language }); }} options={[{ value: 'es', label: 'Español (España)' }, { value: 'en', label: 'English' }]} /></Field>
           <Field label="Tema"><Select className="w-full" value={v.theme} onValueChange={(theme) => setV({ ...v, theme })} options={[{ value: 'sistema', label: 'Como Windows' }, { value: 'claro', label: 'Día' }, { value: 'oscuro', label: 'Noche' }]} /></Field>
         </div>
         <Row label="Robot flotante" hint="Aparece en una esquina con avisos cuando no estás en el chat."><Switch checked={v.companion} onCheckedChange={(companion) => { setV({ ...v, companion }); save({ ui: { companion } }, companion ? 'Robot flotante activado' : 'Robot flotante desactivado'); }} /></Row>
@@ -66,14 +66,21 @@ function BrainCard({ c }) {
 
 function TasksCard({ c }) {
   const agents = Object.keys(c.agents);
-  const [v, setV] = useState({ autoRun: c.autoRun, maxParallel: c.maxParallel, perAgent: c.perAgent, timeoutMinutes: c.timeoutMinutes, review: c.review?.auto === true, high: c.policy?.highNeedsApproval !== false, windowHours: c.budget.windowHours, caps: Object.fromEntries(agents.map((a) => [a, { maxTasks: c.budget.agents?.[a]?.maxTasks ?? 6, maxHeavy: c.budget.agents?.[a]?.maxHeavy ?? 2 }])) });
+  const [v, setV] = useState({ autoRun: c.autoRun, maxParallel: c.maxParallel, perAgent: c.perAgent, timeoutMinutes: c.timeoutMinutes, review: c.review?.auto === true, high: c.policy?.highNeedsApproval !== false, windowHours: c.budget.windowHours,
+    stopAt: Math.round((c.budget.stopAt ?? 0.92) * 100), caps: Object.fromEntries(agents.map((a) => [a, { maxTasks: c.budget.agents?.[a]?.maxTasks ?? 20, maxHeavy: c.budget.agents?.[a]?.maxHeavy ?? 6 }])),
+    resumeAfterRestart: c.continuity?.resumeAfterRestart !== false, resumeAtReset: c.continuity?.resumeAtReset !== false,
+    delegation: c.delegation?.enabled !== false, trusted: c.delegation?.trusted !== false, maxPerTask: c.delegation?.maxPerTask ?? 4 });
   const cap = (a, k, val) => setV({ ...v, caps: { ...v.caps, [a]: { ...v.caps[a], [k]: num(val) } } });
   return (
     <Card>
       <CardHeader><CardTitle>Tareas y cupo</CardTitle><CardDescription>Cómo se lanzan las tareas y cuánto puede usar cada agente.</CardDescription></CardHeader>
       <CardContent className="grid gap-4">
         <Row label="Lanzar las tareas solas" hint="En cuanto estén listas (aprobadas y con sus dependencias hechas)."><Switch checked={v.autoRun} onCheckedChange={(autoRun) => { setV({ ...v, autoRun }); save({ autoRun }); }} /></Row>
-        <Row label="Revisión cruzada automática" hint="Otro agente revisa cada tarea terminada antes del informe."><Switch checked={v.review} onCheckedChange={(review) => { setV({ ...v, review }); save({ review: { auto: review } }); }} /></Row>
+        <Row label="Task Review automático" hint="Otro modelo, de otro proveedor si lo hay, audita cada tarea terminada y da su veredicto antes del informe."><Switch checked={v.review} onCheckedChange={(review) => { setV({ ...v, review }); save({ review: { auto: review } }); }} /></Row>
+        <Row label="Continuar tras cerrar la app" hint="Las tareas que estaban trabajando siguen donde estaban al volver a abrir."><Switch checked={v.resumeAfterRestart} onCheckedChange={(resumeAfterRestart) => { setV({ ...v, resumeAfterRestart }); save({ continuity: { resumeAfterRestart } }); }} /></Row>
+        <Row label="Seguir al reiniciarse el cupo" hint="Una tarea parada por el límite de uso continúa sola cuando se reinicia."><Switch checked={v.resumeAtReset} onCheckedChange={(resumeAtReset) => { setV({ ...v, resumeAtReset }); save({ continuity: { resumeAtReset } }); }} /></Row>
+        <Row label="Los agentes pueden delegar" hint="Un agente puede pasar parte de su tarea a otro agente o modelo (subtareas)."><Switch checked={v.delegation} onCheckedChange={(delegation) => { setV({ ...v, delegation }); save({ delegation: { enabled: delegation } }); }} /></Row>
+        <Row label="Delegación de confianza" hint={`Las subtareas sin nada arriesgado van directas a la cola (máximo ${v.maxPerTask} por tarea). Si no, esperan tu aprobación.`}><Switch checked={v.trusted} disabled={!v.delegation} onCheckedChange={(trusted) => { setV({ ...v, trusted }); save({ delegation: { trusted } }); }} /></Row>
         <Row label="Razonamiento alto con aprobación"><Switch checked={v.high} onCheckedChange={(high) => { setV({ ...v, high }); save({ policy: { highNeedsApproval: high } }); }} /></Row>
         <div className="grid grid-cols-4 gap-3">
           <Field label="A la vez"><Input type="number" min={1} max={10} value={v.maxParallel} onChange={(e) => setV({ ...v, maxParallel: num(e.target.value) })} /></Field>
@@ -81,12 +88,17 @@ function TasksCard({ c }) {
           <Field label="Máx. minutos"><Input type="number" min={5} max={600} value={v.timeoutMinutes} onChange={(e) => setV({ ...v, timeoutMinutes: num(e.target.value) })} /></Field>
           <Field label="Ventana (h)"><Input type="number" min={1} max={24} value={v.windowHours} onChange={(e) => setV({ ...v, windowHours: num(e.target.value) })} /></Field>
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Parar al % del cupo real" hint="Cuando una cuenta llega a este uso real, el trabajo nuevo espera o va a otra cuenta."><Input type="number" min={50} max={100} value={v.stopAt} onChange={(e) => setV({ ...v, stopAt: num(e.target.value) })} /></Field>
+          <Field label="Subtareas por tarea" hint="Máximo que un agente puede delegar de confianza."><Input type="number" min={0} max={20} value={v.maxPerTask} onChange={(e) => setV({ ...v, maxPerTask: num(e.target.value) })} /></Field>
+        </div>
         <div className="grid gap-2">
+          <div className="text-muted-foreground text-xs">Red de seguridad por cuenta (además del cupo real que dicen Claude y Codex):</div>
           <div className="text-muted-foreground grid grid-cols-3 gap-3 text-xs"><span>Agente</span><span>Tareas por ventana</span><span>Con modelos caros</span></div>
           {agents.map((a) => <div key={a} className="grid grid-cols-3 items-center gap-3"><span className="text-sm">{a}</span><Input type="number" min={1} value={v.caps[a].maxTasks} onChange={(e) => cap(a, 'maxTasks', e.target.value)} /><Input type="number" min={0} value={v.caps[a].maxHeavy} onChange={(e) => cap(a, 'maxHeavy', e.target.value)} /></div>)}
         </div>
       </CardContent>
-      <CardFooter><Button size="sm" onClick={() => save({ autoRun: v.autoRun, maxParallel: v.maxParallel, perAgent: v.perAgent, timeoutMinutes: v.timeoutMinutes, review: { auto: v.review }, policy: { highNeedsApproval: v.high }, budget: { windowHours: v.windowHours, agents: v.caps } })}>Guardar</Button></CardFooter>
+      <CardFooter><Button size="sm" onClick={() => save({ autoRun: v.autoRun, maxParallel: v.maxParallel, perAgent: v.perAgent, timeoutMinutes: v.timeoutMinutes, review: { auto: v.review }, policy: { highNeedsApproval: v.high }, budget: { windowHours: v.windowHours, stopAt: Math.min(1, Math.max(0.5, v.stopAt / 100)), agents: v.caps }, delegation: { maxPerTask: v.maxPerTask } })}>Guardar</Button></CardFooter>
     </Card>
   );
 }

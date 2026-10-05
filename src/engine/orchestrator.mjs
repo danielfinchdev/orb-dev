@@ -72,14 +72,14 @@ export class Orchestrator {
     return { model: o.model, modelLabel: model?.label ?? o.model, models: o.models ?? [], reasoning: o.reasoning ?? 'medium', orchestrate: o.orchestrate !== false, turns: Number(this.board.setting('orchestrator_session') ? this.board.setting('orchestrator_turns') ?? 0 : 0), maxTurns: o.maxTurns ?? 60, context: this.board.settingJson('orchestrator_context') };
   }
 
-  ask(text) {
+  ask(text, context = '') {
     text = String(text ?? '').trim();
     if (!text) throw new Error('escribe un mensaje');
     if (text.length > 20000) throw new Error('mensaje demasiado largo (máximo 20 000 caracteres)');
     this.board.addChat('usuario', text);
     // While it answers, a new message corrects it on the fly (it reads it at its next step) instead of waiting.
-    if (this.busy && this.live?.steer({ text })) return;
-    this.queue.push({ text });
+    if (this.busy && this.live?.steer({ text: text + context })) return;
+    this.queue.push({ text: text + context });
     this.next();
   }
 
