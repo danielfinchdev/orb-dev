@@ -1,6 +1,6 @@
 // Tasks: the board. Filters, approvals, details and every action on a task (undo, retry, model, merge, pull request, OK).
 import { useEffect, useState } from 'react';
-import { Plus, Check, X, Zap, RotateCw, Square, Shuffle, Undo2, MessageSquare, GitMerge, GitPullRequest, Trash2, ListTodo, ThumbsUp, ChevronRight } from 'lucide-react';
+import { Plus, Check, X, Zap, RotateCw, Square, Shuffle, Undo2, MessageSquare, GitMerge, GitPullRequest, Trash2, ListTodo, ThumbsUp, ChevronRight, ScanSearch, Hourglass, GitBranch } from 'lucide-react';
 import { PageHeader } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { Markdown } from '@/components/markdown.jsx';
@@ -17,10 +17,25 @@ const FILTERS = [
   ['activas', 'Activas', (t) => !['done', 'cancelled'].includes(t.status)],
   ['aprobar', 'Aprobar', (t) => t.status === 'awaiting_approval'],
   ['hechas', 'Hechas', (t) => t.status === 'done'],
-  ['problemas', 'Problemas', (t) => ['failed', 'blocked'].includes(t.status)],
+  ['problemas', 'Problemas', (t) => ['failed', 'blocked', 'limited'].includes(t.status)],
   ['todas', 'Todas', () => true]
 ];
 const StatusBadge = ({ status }) => <Badge variant={STATUS[status]?.[1]}>{STATUS[status]?.[0] ?? status}</Badge>;
+
+// Task Review: another model (another provider when there is one) audits the work read-only and gives a verdict.
+export async function askReview({ task, project }) {
+  const agents = (await call('agents.status')).filter((a) => a.enabled && a.installed);
+  return form(task ? `Task Review de la tarea #${task.id}` : `Task Review de ${project}`, {
+    description: 'Otro modelo revisa el trabajo sin cambiar nada y te da su veredicto: correcto o con fallos, y la lista de problemas. Por defecto, de otro proveedor distinto al que lo hizo.',
+    initial: { agent: '', focus: '' },
+    body: (v, set) => (<>
+      <Field label="Revisor" hint="Vacío = Orb elige uno de otro proveedor con cupo."><Select className="w-full" value={v.agent || '__auto'} onValueChange={(agent) => set({ agent: agent === '__auto' ? '' : agent })} options={[{ value: '__auto', label: 'Automático (otro proveedor)' }, ...agents.map((a) => ({ value: a.id, label: a.label }))]} /></Field>
+      <Field label="En qué fijarse (opcional)"><Textarea rows={3} value={v.focus} onChange={(e) => set({ focus: e.target.value })} placeholder="Seguridad, rendimiento, que funcione en el móvil…" /></Field>
+    </>),
+    ok: 'Pedir Task Review',
+    onOk: async (v) => (task ? call('tasks.review', { id: task.id, agent: v.agent || null, focus: v.focus }) : call('projects.review', { name: project, agent: v.agent || null, focus: v.focus }))
+  });
+}
 
 async function newTask() {
   const { projects, app } = getState();
@@ -88,9 +103,10 @@ function TaskDetail({ id, live }) {
           <Button size="sm" variant="outline" onClick={() => act(call('tasks.approve', { id: t.id, decision: 'rejected', hash: t.previewHash }), 'Rechazada')}><X />Rechazar</Button>
         </>) : null}
         {t.status === 'done' && !t.accepted ? <Button size="sm" onClick={() => act(call('tasks.accept', { id: t.id }), 'Aceptada')}><ThumbsUp />Dar el OK</Button> : null}
+        {t.status === 'done' && !t.review_of ? <A onClick={() => askReview({ task: t })} data-testid="task-review"><ScanSearch />Task Review</A> : null}
         {t.session_id ? <A onClick={() => go({ view: 'session', id: t.session_id })}><MessageSquare />Conversación del agente</A> : null}
         {t.status === 'queued' ? <A onClick={() => act(call('tasks.launchAnyway', { id: t.id }), 'Se lanzará aunque supere el cupo')}><Zap />Lanzar igualmente</A> : null}
-        {['failed', 'blocked', 'cancelled'].includes(t.status) ? <A onClick={() => act(call('tasks.retry', { id: t.id }), 'En cola otra vez')}><RotateCw />Reintentar</A> : null}
+        {['failed', 'blocked', 'cancelled', 'limited'].includes(t.status) ? <A onClick={() => act(call('tasks.retry', { id: t.id }), 'En cola otra vez')}><RotateCw />{t.status === 'limited' ? 'Continuar ya' : 'Reintentar'}</A> : null}
         {!['running', 'done'].includes(t.status) ? <A onClick={reassign}><Shuffle />Cambiar modelo</A> : null}
         {t.hasCheckpoint && t.status !== 'running' ? <A onClick={async () => { if (await confirm('Deshacer la tarea', 'Vuelven a como estaban solo los archivos que cambió esta tarea. Los que alguien cambió después no se tocan.', { ok: 'Deshacer', danger: true })) act(call('tasks.undo', { id: t.id })); }}><Undo2 />Deshacer esta tarea</A> : null}
         {t.branch && t.status === 'done' ? (<>
@@ -101,10 +117,15 @@ function TaskDetail({ id, live }) {
         {!['done', 'cancelled'].includes(t.status) ? <Button size="sm" variant="danger" onClick={async () => { if (await confirm('Cancelar tarea', t.status === 'running' ? 'El agente se detendrá ahora.' : '¿Cancelar esta tarea?', { ok: 'Cancelar tarea', cancel: 'Volver', danger: true })) act(call('tasks.cancel', { id: t.id }), 'Cancelada'); }}><Square />Cancelar</Button> : null}
       </div>
       {t.status === 'running' && live ? <div className="bg-muted/50 mx-5 rounded-xl border px-3.5 py-3" data-testid="task-live"><LiveTask t={live} actions={false} /></div> : null}
+      {t.status === 'limited' && t.limited_until ? <div className="bg-warning/10 border-warning/40 mx-5 flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-[13px]"><Hourglass className="text-warning size-4" />La cuenta llegó a su límite de uso. Continuará sola el {fmtTime(t.limited_until)}.</div> : null}
+      {t.review ? <div className={cn('mx-5 flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-[13px]', t.review.verdict === 'correcto' ? 'border-success/40 bg-success/10' : t.review.verdict === 'con fallos' ? 'border-destructive/40 bg-destructive/10' : 'bg-muted/50')}><ScanSearch className="size-4" />Task Review ({AGENT[t.review.agent] ?? t.review.agent}): <span className="font-medium">{t.review.verdict}</span><Button size="sm" variant="ghost" className="ml-auto" onClick={() => go({ view: 'tasks', id: t.review.task })}>Ver revisión #{t.review.task}</Button></div> : null}
       <dl className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-1.5 px-5 text-[13px]">
         <dt className="text-muted-foreground">Agente</dt><dd>{AGENT[who] ?? who}{t.model ? ` · ${t.model}` : ''} · razonamiento {REASONING[t.reasoning]?.toLowerCase() ?? t.reasoning}</dd>
         <dt className="text-muted-foreground">Dónde</dt><dd className="break-all">{MODE[t.mode]}{t.readonly ? ' · solo lectura' : ''}{t.branch ? ` · rama ${t.branch}` : ''}</dd>
         <dt className="text-muted-foreground">Creada</dt><dd>{fmtTime(t.created_at)} por {AGENT[t.created_by] ?? t.created_by}</dd>
+        {t.parent_id ? <><dt className="text-muted-foreground">Subtarea de</dt><dd><button className="cursor-pointer underline-offset-2 hover:underline" onClick={() => go({ view: 'tasks', id: t.parent_id })}>#{t.parent_id}</button></dd></> : null}
+        {t.review_of ? <><dt className="text-muted-foreground">Revisa</dt><dd><button className="cursor-pointer underline-offset-2 hover:underline" onClick={() => go({ view: 'tasks', id: t.review_of })}>#{t.review_of}</button></dd></> : null}
+        {t.children?.length ? <><dt className="text-muted-foreground">Subtareas</dt><dd className="flex flex-wrap gap-1">{t.children.map((c) => <button key={c.id} onClick={() => go({ view: 'tasks', id: c.id })} className="cursor-pointer"><Badge variant={STATUS[c.status]?.[1] ?? 'secondary'} className="gap-1"><GitBranch className="size-3" />#{c.id} {AGENT[c.assigned_to ?? c.agent] ?? c.agent} · {STATUS[c.status]?.[0] ?? c.status}</Badge></button>)}</dd></> : null}
         {t.dependencies?.length ? <><dt className="text-muted-foreground">Depende de</dt><dd className="flex flex-wrap gap-1">{t.dependencies.filter(Boolean).map((d) => <Badge key={d.id} variant="secondary">#{d.id} {STATUS[d.status]?.[0]}</Badge>)}</dd></> : null}
         {t.sensitivity.length ? <><dt className="text-muted-foreground">Aprobación</dt><dd className="flex flex-wrap gap-1">{t.sensitivity.map((s) => <Badge key={s} variant="warning">{SENSITIVE[s] ?? s}</Badge>)}</dd></> : null}
       </dl>

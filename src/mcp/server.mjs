@@ -12,6 +12,7 @@ import { budgetConfig } from '../core/budget.mjs';
 import { oneLine } from '../core/safety.mjs';
 import { git, copyIntoWorkdir } from '../core/workspace.mjs';
 import { createProject } from '../core/projects.mjs';
+import { createSchedule, EVERY } from '../core/schedules.mjs';
 
 const home = process.env.ORB_HOME;
 if (!home || !isHome(home)) { process.stderr.write('ORB_HOME no apunta a la carpeta de un asistente\n'); process.exit(1); }
@@ -155,6 +156,13 @@ const tools = [
     { name: 'orb_write_log', description: 'Añade una entrada al FINAL de una bitácora (proyecto o "general"), firmada y con el formato estándar. Nunca borra. Sin contraseñas ni datos personales.',
       inputSchema: { type: 'object', required: ['project', 'tema', 'hecho'], properties: { project: str('Proyecto o "general"'), tema: str('Tema corto'), pedido: str('Qué se pidió'), hecho: str('Qué se decidió o hizo'), revertir: str('Cómo revertirlo'), estado: str('Estado / pendiente') } },
       run: (a) => writeLog(board, a.project, a, `${NAME} (${ctx.config.orchestrator?.model ?? 'sonnet'})`) },
+    { name: 'orb_schedule', description: `Programa una tarea que se repite (p. ej. cada lunes a las 9 revisar dependencias). ${USER} la aprueba una vez en la app antes de que funcione sola.`,
+      inputSchema: { type: 'object', required: ['project', 'title', 'description', 'every'], properties: {
+        project: str('Proyecto registrado'), title: str('Título corto'), description: str('Encargo autocontenido y compacto'),
+        agent: { type: 'string', enum: [...AGENTS, 'any'] }, model: str('Modelo (opcional; requiere agent)'), readonly: { type: 'boolean' },
+        every: { type: 'string', enum: EVERY, description: 'hourly, every_hours (con hours), daily (con at_time) o weekly (con weekdays y at_time)' },
+        at_time: str('Hora HH:MM (daily y weekly)'), hours: { type: 'integer', minimum: 1, maximum: 168 }, weekdays: { type: 'array', items: { type: 'integer', minimum: 0, maximum: 6 }, description: '0 domingo … 6 sábado' } } },
+      run: (a) => createSchedule(board, a, ME) },
     { name: 'orb_give_files', description: 'Pasa archivos a la copia aislada de una tarea (rutas relativas al proyecto). Por defecto desde la carpeta del proyecto; con from_task, desde la copia de esa tarea.',
       inputSchema: { type: 'object', required: ['task_id', 'files'], properties: { task_id: { type: 'integer' }, files: { type: 'array', items: { type: 'string' }, maxItems: 50 }, from_task: { type: 'integer' } } },
       run: (a) => giveFiles(a) }

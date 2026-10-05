@@ -79,6 +79,50 @@ try {
     const undo = await call('tasks.undo', { id: done.id }).then(() => 'ok', (e) => e.message);
     note(`deshacer: ${undo} · saludo.md ${fs.existsSync(path.join(home, 'prueba-real', 'saludo.md')) ? 'sigue' : 'ya no está'}`);
     note(`uso: ${JSON.stringify(await call('usage.get')).slice(0, 400)}`);
+
+    // ---- 3. 2.3: approval card (denied from the window), steer, queue, fork, Task Review, schedule and @ mentions
+    if (process.env.ORB_REAL_23 !== '0') {
+      const s = await call('sessions.create', { agent: 'claude', project: 'prueba-real', model: 'haiku', permission: 'editar', title: 'Prueba 2.3' });
+      await call('sessions.send', { id: s.id, text: 'Ejecuta con Bash exactamente: git push origin main. Si no te dejan, responde solo "denegado".' });
+      await page.click('[data-testid=nav-chat]'); await page.locator(`text=Prueba 2.3`).first().click().catch(() => {});
+      await page.waitForSelector('[data-testid=approval-card] >> text=Denegar', { timeout: 120000 });
+      await shot('23-aprobacion');
+      note(`aprobaciones pendientes: ${(await call('approvals.list')).length}`);
+      await page.click('[data-testid=approve-deny]');
+      await until(async () => (await call('sessions.list')).find((x) => x.id === s.id)?.status !== 'running', 'turno tras denegar', 120000);
+      const said = (await call('sessions.items', { id: s.id })).filter((i) => i.role === 'assistant' && i.kind === 'text').map((i) => i.body).at(-1);
+      note(`tras denegar dice: ${JSON.stringify(said)}`);
+      // steer: a long turn corrected on the fly
+      await call('sessions.send', { id: s.id, text: 'Escribe en lista.txt los números del 1 al 30, uno por línea, usando la herramienta Write varias veces (de 10 en 10). Al final responde "hecho".' });
+      await page.waitForTimeout(4000);
+      const steer = await call('sessions.send', { id: s.id, text: 'Corrección: añade al final una línea que diga FIN.' });
+      const queued = await call('sessions.send', { id: s.id, text: '¿Cuántas líneas tiene lista.txt? Solo el número.', mode: 'queue' });
+      note(`corregir en marcha: ${JSON.stringify(steer)} · en cola: ${JSON.stringify(queued)} · cola: ${(await call('sessions.queue', { id: s.id })).length}`);
+      await until(async () => (await call('sessions.queue', { id: s.id })).length === 0 && (await call('sessions.list')).find((x) => x.id === s.id)?.status === 'idle', 'cola vaciada', 240000);
+      const lista = fs.existsSync(path.join(home, 'prueba-real', 'lista.txt')) ? fs.readFileSync(path.join(home, 'prueba-real', 'lista.txt'), 'utf8').trim().split(/\r?\n/) : [];
+      note(`lista.txt: ${lista.length} líneas, última «${lista.at(-1)}» · respuesta a la cola: ${JSON.stringify((await call('sessions.items', { id: s.id })).filter((i) => i.role === 'assistant' && i.kind === 'text').map((i) => i.body).at(-1))}`);
+      note(`contexto: ${JSON.stringify((await call('sessions.list')).find((x) => x.id === s.id)?.context)}`);
+      await shot('23-cola-y-correccion');
+      // fork: the copy remembers the original natively
+      const copy = await call('sessions.fork', { id: s.id });
+      await call('sessions.send', { id: copy.id, text: '¿Qué archivo con números creaste antes? Solo el nombre.' });
+      await until(async () => (await call('sessions.list')).find((x) => x.id === copy.id)?.status === 'idle' && (await call('sessions.items', { id: copy.id })).some((i) => i.role === 'assistant' && i.kind === 'text' && /lista/i.test(String(i.body))), 'bifurcación responde', 120000).catch((e) => note(`bifurcación: ${e.message}`));
+      note(`bifurcación recuerda: ${JSON.stringify((await call('sessions.items', { id: copy.id })).filter((i) => i.role === 'assistant' && i.kind === 'text').map((i) => i.body).at(-1))}`);
+      // @ mention: the assistant gets a task's result as context
+      note(`opciones @: ${(await call('mentions.options')).length}`);
+      // Task Review of the first task (another provider)
+      const review = await call('tasks.review', { id: done.id, focus: 'que el archivo existió con el texto correcto' });
+      note(`Task Review: tarea #${review.id} para ${review.agent} (${review.status})`);
+      const reviewed = await until(async () => { const t = await call('tasks.get', { id: review.id }); return ['done', 'failed', 'blocked'].includes(t.status) && t; }, 'Task Review terminado', 300000).catch((e) => { note(e.message); return null; });
+      if (reviewed) { const verdict = await until(async () => (await call('tasks.get', { id: done.id })).review, 'veredicto guardado', 60000).catch(() => null); note(`veredicto: ${JSON.stringify(verdict)} · ${String(reviewed.result ?? '').slice(0, 300)}`); }
+      // schedule
+      const sch = await call('schedules.create', { project: 'prueba-real', title: 'Revisión semanal', description: 'Revisa el proyecto y resume en 3 líneas.', every: 'weekly', at_time: '09:00', weekdays: [1], readonly: true });
+      note(`programada: #${sch.id} próxima ${sch.next_run}`);
+      await page.click('[data-testid=nav-schedules]');
+      await page.waitForSelector('text=Revisión semanal');
+      await shot('23-programadas');
+      await call('schedules.remove', { id: sch.id });
+    }
   }
   note(`errores de la página: ${errors.join(' | ') || 'ninguno'}`);
 } catch (error) {
