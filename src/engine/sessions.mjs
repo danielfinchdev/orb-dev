@@ -13,6 +13,7 @@ import { git, isGitRepo, repoRoot } from '../core/workspace.mjs';
 import { account as findAccount, defaultAccount, accountEnv } from '../core/accounts.mjs';
 import { browserKey } from '../core/browser-key.mjs';
 import { PERMISSIONS } from '../core/guard.mjs';
+import { explainFailure } from '../core/agent-errors.mjs';
 
 export { PERMISSIONS };
 export const ATTACH_DIR = '.orb-adjuntos';
@@ -389,6 +390,8 @@ export class Sessions {
         this.update(id, { cli_session: null }); this.closeLive(id);
         this.addItem(id, 'system', 'status', `No se pudo retomar la conversación de ${a.label}. El próximo mensaje empezará una nueva; este historial se conserva aquí.`);
       }
+      // A failure we recognise (no login, plan, model, network…) is explained with what to do.
+      if (failed && !onFinish) { const why = explainFailure(a.label, result.final); if (why) this.addItem(id, 'system', 'status', `${why.reason[0].toUpperCase()}${why.reason.slice(1)}. ${why.advice}`); }
       if (run.stopped && !run.timedOut) this.addItem(id, 'system', 'status', 'Detenido.');
       const limited = Boolean(result.limit);
       this.update(id, { status: limited ? 'limited' : failed ? 'error' : 'idle' });
