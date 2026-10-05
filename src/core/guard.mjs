@@ -9,6 +9,7 @@
 //   preguntar  edit files; every command asks first (for when you want to watch closely)
 //   total      no checks at all (asked once when chosen; never from the phone)
 import path from 'node:path';
+import { translate } from './i18n.mjs';
 
 export const PERMISSIONS = ['leer', 'editar', 'preguntar', 'total'];
 export const PERMISSION_LABEL = { leer: 'Solo leer', editar: 'Editar archivos', preguntar: 'Preguntar antes de comandos', total: 'Acceso total' };
@@ -35,23 +36,23 @@ export function toolClass(tool, kind) {
 // Commands that may be fine but need a human look: publishing, downloading and running things from the internet, wiping
 // files, touching the system. Matched on the whole command line (PowerShell and bash spellings).
 const RISKY = [
-  [/\bgit\s+(push|remote\s+(add|set-url|remove))\b/i, 'publica en un remoto (git push)'],
-  [/\bgh\s+(repo|pr|release|api|gist|secret)\b/i, 'usa tu cuenta de GitHub'],
-  [/\b(npm|pnpm|yarn)\s+publish\b|\bcargo\s+publish\b|\btwine\s+upload\b/i, 'publica un paquete'],
-  [/\b(curl|wget|invoke-webrequest|invoke-restmethod|iwr|irm)\b[^|;&]*\|\s*(iex|invoke-expression|sh|bash|pwsh|powershell)\b/i, 'descarga y ejecuta algo de internet'],
-  [/\b(curl|wget)\b[^|;&]*\s(-X\s*(POST|PUT|DELETE|PATCH)|--data|-d\s|-F\s|--upload-file|-T\s)/i, 'envía datos a internet'],
-  [/\b(invoke-webrequest|invoke-restmethod|iwr|irm)\b[^|;&]*-method\s+(post|put|delete|patch)/i, 'envía datos a internet'],
-  [/\brm\s+(-[a-z]*r[a-z]*f|-[a-z]*f[a-z]*r)\b|\bremove-item\b[^|;&]*-recurse\b|\brd\s+\/s\b|\brmdir\s+\/s\b|\bdel\s+\/[sq]/i, 'borra carpetas enteras'],
-  [/\b(schtasks|reg\s+(add|delete)|set-executionpolicy|shutdown|restart-computer|stop-computer|format\s+[a-z]:|diskpart|bcdedit|netsh|sc\s+(create|delete|config))\b/i, 'cambia el sistema'],
-  [/\b(taskkill|stop-process|kill\s+-9|pkill|killall)\b/i, 'cierra procesos'],
-  [/\b(ssh|scp|sftp|rsync)\s/i, 'se conecta a otro equipo'],
-  [/\bgit\s+(reset\s+--hard|clean\s+-[a-z]*f|checkout\s+--\s|branch\s+-D|rebase|filter-branch)\b/i, 'reescribe o descarta cambios de git'],
-  [/\b(docker|podman)\s+(rm|rmi|system\s+prune|volume\s+rm)\b/i, 'borra contenedores o datos de Docker']
+  [/\bgit\s+(push|remote\s+(add|set-url|remove))\b/i, 'msg.guard.push'],
+  [/\bgh\s+(repo|pr|release|api|gist|secret)\b/i, 'msg.guard.github'],
+  [/\b(npm|pnpm|yarn)\s+publish\b|\bcargo\s+publish\b|\btwine\s+upload\b/i, 'msg.guard.publish'],
+  [/\b(curl|wget|invoke-webrequest|invoke-restmethod|iwr|irm)\b[^|;&]*\|\s*(iex|invoke-expression|sh|bash|pwsh|powershell)\b/i, 'msg.guard.pipeToShell'],
+  [/\b(curl|wget)\b[^|;&]*\s(-X\s*(POST|PUT|DELETE|PATCH)|--data|-d\s|-F\s|--upload-file|-T\s)/i, 'msg.guard.sendData'],
+  [/\b(invoke-webrequest|invoke-restmethod|iwr|irm)\b[^|;&]*-method\s+(post|put|delete|patch)/i, 'msg.guard.sendData'],
+  [/\brm\s+(-[a-z]*r[a-z]*f|-[a-z]*f[a-z]*r)\b|\bremove-item\b[^|;&]*-recurse\b|\brd\s+\/s\b|\brmdir\s+\/s\b|\bdel\s+\/[sq]/i, 'msg.guard.deleteFolders'],
+  [/\b(schtasks|reg\s+(add|delete)|set-executionpolicy|shutdown|restart-computer|stop-computer|format\s+[a-z]:|diskpart|bcdedit|netsh|sc\s+(create|delete|config))\b/i, 'msg.guard.system'],
+  [/\b(taskkill|stop-process|kill\s+-9|pkill|killall)\b/i, 'msg.guard.killProcesses'],
+  [/\b(ssh|scp|sftp|rsync)\s/i, 'msg.guard.ssh'],
+  [/\bgit\s+(reset\s+--hard|clean\s+-[a-z]*f|checkout\s+--\s|branch\s+-D|rebase|filter-branch)\b/i, 'msg.guard.gitRewrite'],
+  [/\b(docker|podman)\s+(rm|rmi|system\s+prune|volume\s+rm)\b/i, 'msg.guard.docker']
 ];
 
-export function riskOf(command) {
+export function riskOf(command, lang = 'es') {
   const c = String(command ?? '');
-  for (const [re, why] of RISKY) if (re.test(c)) return why;
+  for (const [re, why] of RISKY) if (re.test(c)) return translate(lang, why);
   return null;
 }
 
@@ -63,28 +64,30 @@ function touchesInternal(text, internalDir) {
   return t.includes(d) || /(^|[\s"'\\/])\.orb[\\/](datos|copias)/i.test(String(text ?? ''));
 }
 
-// decide({ permission, tool, kind, command, paths, internalDir }) → { decision: 'allow' | 'ask' | 'deny', reason }
-export function decide({ permission = 'editar', tool, kind, command = '', paths = [], internalDir }) {
+// decide({ permission, tool, kind, command, paths, internalDir, lang }) → (lang: language of the reasons, default 'es')
+//  { decision: 'allow' | 'ask' | 'deny', reason }
+export function decide({ permission = 'editar', tool, kind, command = '', paths = [], internalDir, lang = 'es' }) {
+  const T = (k) => translate(lang, `msg.guard.${k}`);
   const cls = toolClass(tool, kind);
   const text = [command, ...paths].join(' ');
-  if (touchesInternal(text, internalDir)) return { decision: 'deny', reason: 'son los datos internos del asistente' };
-  if (permission === 'total') return { decision: 'allow', reason: 'acceso total' };
-  if (cls === 'read' || cls === 'orb') return { decision: 'allow', reason: 'solo lee' };
-  if (permission === 'leer') return { decision: 'deny', reason: 'esta conversación es de solo lectura' };
-  if (cls === 'edit') return { decision: 'allow', reason: 'edita archivos' };
+  if (touchesInternal(text, internalDir)) return { decision: 'deny', reason: T('internal') };
+  if (permission === 'total') return { decision: 'allow', reason: T('full') };
+  if (cls === 'read' || cls === 'orb') return { decision: 'allow', reason: T('readOnlyTool') };
+  if (permission === 'leer') return { decision: 'deny', reason: T('readOnlyChat') };
+  if (cls === 'edit') return { decision: 'allow', reason: T('edits') };
   if (cls === 'exec') {
-    const risk = riskOf(command);
+    const risk = riskOf(command, lang);
     if (risk) return { decision: 'ask', reason: risk };
-    if (permission === 'preguntar') return { decision: 'ask', reason: 'ejecuta un comando' };
-    return { decision: 'allow', reason: 'comando normal' };
+    if (permission === 'preguntar') return { decision: 'ask', reason: T('runs') };
+    return { decision: 'allow', reason: T('normalCommand') };
   }
-  if (cls === 'mcp') return { decision: 'allow', reason: 'conector añadido por ti' };
-  return { decision: permission === 'preguntar' ? 'ask' : 'allow', reason: 'otra herramienta' };
+  if (cls === 'mcp') return { decision: 'allow', reason: T('connector') };
+  return { decision: permission === 'preguntar' ? 'ask' : 'allow', reason: T('otherTool') };
 }
 
 // One line for the approval card: what the agent wants to do, in plain words.
-export function describeAction({ tool, command, paths = [], title }) {
+export function describeAction({ tool, command, paths = [], title, lang = 'es' }) {
   if (command) return String(command).slice(0, 400);
-  if (paths.length) return `${tool ?? 'herramienta'}: ${paths.slice(0, 3).join(', ')}`;
-  return String(title ?? tool ?? 'acción').slice(0, 400);
+  if (paths.length) return `${tool ?? translate(lang, 'msg.guard.tool')}: ${paths.slice(0, 3).join(', ')}`;
+  return String(title ?? tool ?? translate(lang, 'msg.guard.action')).slice(0, 400);
 }

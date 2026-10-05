@@ -3,6 +3,7 @@
 // user's approval once before it runs on its own; one created by the user is approved already. A schedule never piles
 // up work: while its last task is still open, the next run waits.
 import { oneLine } from './safety.mjs';
+import { tr } from './context.mjs';
 
 export const EVERY = ['hourly', 'every_hours', 'daily', 'weekly'];
 const now = () => new Date();
@@ -20,15 +21,15 @@ export function nextRun({ every, at_time: at = '09:00', weekdays = [], hours = 6
     const days = (weekdays.length ? weekdays : [1]).map(Number);
     for (let i = 0; i <= 7; i++) { const d = at0(new Date(base.getTime() + i * 86_400_000)); if (days.includes(d.getDay()) && d > base) return d; }
   }
-  throw new Error('frecuencia no válida');
+  throw new Error(tr('msg.schedules.badEvery'));
 }
 
 export function describe(s) {
-  const days = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-  if (s.every === 'hourly') return 'cada hora';
-  if (s.every === 'every_hours') return `cada ${s.hours ?? s.at_time} h`;
-  if (s.every === 'daily') return `cada día a las ${s.at_time}`;
-  if (s.every === 'weekly') return `cada ${(s.weekdays.length ? s.weekdays : [1]).map((d) => days[d]).join(', ')} a las ${s.at_time}`;
+  const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'].map((d) => tr(`msg.schedules.day.${d}`));
+  if (s.every === 'hourly') return tr('msg.schedules.hourly');
+  if (s.every === 'every_hours') return tr('msg.schedules.everyHours', { n: s.hours ?? s.at_time });
+  if (s.every === 'daily') return tr('msg.schedules.daily', { time: s.at_time });
+  if (s.every === 'weekly') return tr('msg.schedules.weekly', { days: (s.weekdays.length ? s.weekdays : [1]).map((d) => days[d]).join(', '), time: s.at_time });
   return s.every;
 }
 
@@ -36,7 +37,7 @@ export function listSchedules(board) { return board.all('SELECT * FROM schedules
 export const getSchedule = (board, id) => parseRow(board.one('SELECT * FROM schedules WHERE id = ?', Number(id)));
 
 function validate(board, a) {
-  if (!board.project(a.project)) throw new Error(`no existe el proyecto ${a.project}`);
+  if (!board.project(a.project)) throw new Error(tr('msg.schedules.noProject', { project: a.project }));
   if (!a.title || !a.description) throw new Error('title y description son obligatorios');
   if (!EVERY.includes(a.every)) throw new Error(`every debe ser ${EVERY.join(', ')}`);
   if (a.at_time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(a.at_time)) throw new Error('at_time debe ser HH:MM');
@@ -52,13 +53,13 @@ export function createSchedule(board, a, actor) {
   const { lastInsertRowid } = board.run(`INSERT INTO schedules (project, title, description, agent, model, readonly, every, at_time, weekdays, enabled, approved, next_run, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`, board.project(a.project).name, oneLine(a.title, 120), String(a.description).slice(0, 8000), a.agent || 'any', a.model || null, Number(Boolean(a.readonly)), a.every, at, JSON.stringify(a.weekdays ?? []), approved, next.toISOString(), now().toISOString());
   const s = getSchedule(board, Number(lastInsertRowid));
-  board.addChat('system', `🗓️ Tarea programada «${s.title}» (${describe({ ...s, hours: at })}) en ${s.project}.${approved ? '' : ' La creó el asistente: apruébala en «Programadas» para que empiece a funcionar.'}`);
+  board.addChat('system', tr('msg.schedules.created', { title: s.title, when: describe({ ...s, hours: at }), project: s.project }) + (approved ? '' : tr('msg.schedules.needsApproval')));
   board.changed('schedules');
   return s;
 }
 
 export function updateSchedule(board, id, patch) {
-  const s = getSchedule(board, id); if (!s) throw new Error('esa tarea programada ya no existe');
+  const s = getSchedule(board, id); if (!s) throw new Error(tr('msg.schedules.noSchedule'));
   const fields = {};
   if (patch.enabled !== undefined) fields.enabled = Number(Boolean(patch.enabled));
   if (patch.approved) fields.approved = 1;
@@ -74,7 +75,7 @@ export function removeSchedule(board, id) { board.run('DELETE FROM schedules WHE
 
 // Creates the task of a schedule now (when due, or "Ejecutar ahora").
 export function runSchedule(board, s, actor = 'usuario') {
-  const task = board.createTask({ project: s.project, title: `${s.title} (programada)`, description: s.description, agent: s.agent, model: s.model, readonly: s.readonly, schedule_id: s.id }, s.approved ? 'usuario' : actor);
+  const task = board.createTask({ project: s.project, title: tr('msg.schedules.runTitle', { title: s.title }), description: s.description, agent: s.agent, model: s.model, readonly: s.readonly, schedule_id: s.id }, s.approved ? 'usuario' : actor);
   const next = nextRun({ every: s.every, at_time: s.every === 'every_hours' ? '00:00' : s.at_time, weekdays: s.weekdays, hours: Number(s.at_time) });
   board.run('UPDATE schedules SET last_run = ?, last_task = ?, next_run = ? WHERE id = ?', now().toISOString(), task.id, next.toISOString(), s.id);
   board.changed('schedules');

@@ -103,7 +103,7 @@ export function acpAgent(id, spec) {
         const tc = p.toolCall ?? {};
         const command = tc.rawInput?.command ? [].concat(tc.rawInput.command).join(' ') : '';
         const paths = (tc.locations ?? []).map((l) => l.path).filter(Boolean);
-        const verdict = decide({ permission, tool: tc.name ?? tc.title, kind: tc.kind, command, paths, internalDir: o.internalDir });
+        const verdict = decide({ permission, tool: tc.name ?? tc.title, kind: tc.kind, command, paths, internalDir: o.internalDir, lang: o.lang });
         let d = verdict.decision;
         if (d === 'ask') d = await approvals.ask({ id: tc.toolCallId ?? `p-${Date.now()}`, tool: tc.title ?? tc.kind ?? 'acción', title: command || tc.title || paths.join(', '), reason: verdict.reason, input: clip(tc.rawInput ?? tc.title, 400) });
         // In order of preference (not in the order the agent lists its options): "always" must pick allow_always even

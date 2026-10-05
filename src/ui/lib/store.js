@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from 'react';
 import { toast } from 'sonner';
 import { errorText } from './utils.js';
+import { t } from './i18n.js';
 
 export const bridge = window.orb;
 export const call = (method, params) => bridge.call(method, params);
@@ -27,6 +28,7 @@ export async function refresh() {
   let phoneTheme = null; if (bridge.mobile) { try { phoneTheme = localStorage.getItem('orb.theme'); } catch { /* none */ } }
   applyTheme(phoneTheme || app.config.ui?.theme);
   document.title = app.config.assistantName;
+  document.documentElement.lang = app.config.language === 'en' ? 'en' : 'es';
 }
 
 let timer = null;
@@ -47,7 +49,7 @@ export function terminalFolder() {
 }
 export async function openTerminal(folder = terminalFolder()) {
   if (!bridge.openTerminal) return;
-  try { const name = await bridge.openTerminal(folder); toast.success(`Terminal abierta (${name})`); }
+  try { const name = await bridge.openTerminal(folder); toast.success(t('app.terminalOpened', { name })); }
   catch (error) { toast.error(errorText(error)); }
 }
 
