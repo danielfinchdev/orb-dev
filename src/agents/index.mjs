@@ -1,15 +1,35 @@
 // Registry of the agents the assistant can drive, plus detection, version and login checks for the "Agentes" screen.
+// 2.3: Claude Code (Agent SDK), Codex (app-server) and Cursor (CLI in streaming) plus every ACP agent of acp.mjs.
 import { spawn } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import * as claude from './claude.mjs';
 import * as codex from './codex.mjs';
 import * as cursor from './cursor.mjs';
+import { acpAgent, ACP_SPECS } from './acp.mjs';
 import { cleanEnv, IS_WIN } from './common.mjs';
 import fs from 'node:fs';
 import { ctx } from '../core/context.mjs';
-import { accountsOf, account, accountDir, accountEnv, loginState, MULTI } from '../core/accounts.mjs';
+import { accountsOf, account, accountDir, accountEnv, loginState as accountLogin, MULTI } from '../core/accounts.mjs';
 
-export const ADAPTERS = { claude, codex, cursor };
+export const ADAPTERS = { claude, codex, cursor, ...Object.fromEntries(Object.entries(ACP_SPECS).map(([id, spec]) => [id, acpAgent(id, spec)])) };
+// Tests: ORB_FAKE_AGENTS points to a module whose fakeAdapter(id) replaces every agent (no real program or account).
+if (process.env.ORB_FAKE_AGENTS) {
+  const fake = await import(pathToFileURL(process.env.ORB_FAKE_AGENTS).href);
+  for (const id of Object.keys(ADAPTERS)) ADAPTERS[id] = fake.fakeAdapter(id, ADAPTERS[id]);
+}
 export const adapter = (agent) => { const a = ADAPTERS[agent]; if (!a) throw new Error(`agente desconocido: ${agent}`); return a; };
+
+// Whether an agent's program is on this PC (asked often by the scheduler: cached for half a minute).
+const found = new Map();
+export function installed(agent) {
+  const hit = found.get(agent);
+  if (hit && Date.now() - hit.at < 30_000) return hit.ok;
+  let ok = false; try { ok = Boolean(adapter(agent).detect(ctx.config.agents[agent] ?? {})); } catch { ok = false; }
+  found.set(agent, { ok, at: Date.now() });
+  return ok;
+}
+export const forgetInstalled = () => found.clear();
+const loginState = (acc) => (MULTI[acc.agent] ? accountLogin(acc) : adapter(acc.agent).loginState());
 
 export function executable(agent) {
   const a = adapter(agent);
@@ -38,11 +58,11 @@ export async function status(agent, { refresh = false } = {}) {
   const a = adapter(agent); const cfg = ctx.config.agents[agent] ?? {};
   const exe = a.detect(cfg);
   const accounts = accountsOf(agent).map((acc) => ({ ...acc, login: exe ? loginState(acc) : 'no', dir: accountDir(acc), multi: Boolean(MULTI[agent]) }));
-  const base = { id: agent, label: a.label, enabled: Boolean(cfg.enabled), models: cfg.models ?? [], defaultModel: cfg.defaultModel ?? '', path: cfg.path ?? '', accounts, multi: Boolean(MULTI[agent]) };
+  const base = { id: agent, label: a.label, kind: a.kind, caps: a.caps ?? {}, install: a.install ?? null, enabled: Boolean(cfg.enabled), models: cfg.models ?? [], defaultModel: cfg.defaultModel ?? '', path: cfg.path ?? '', accounts, multi: Boolean(MULTI[agent]) };
   if (!exe) return { ...base, installed: false, login: 'no', version: null, where: null };
   let cached = versions.get(agent);
   if (refresh || !cached || cached.exe !== exe.cmd) {
-    const r = await quickRun(exe.cmd, [...exe.pre, '--version'], { timeoutMs: 10000 });
+    const r = await quickRun(exe.cmd, [...exe.pre, '--version'], { timeoutMs: 15000 });
     cached = { exe: exe.cmd, version: r.ok ? r.out.split(/\r?\n/)[0].slice(0, 80) : null };
     versions.set(agent, cached);
   }

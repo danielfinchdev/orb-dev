@@ -7,6 +7,7 @@ import { ctx, enabledAgents } from '../core/context.mjs';
 import { assistantName, userName, ofUser } from '../core/board.mjs';
 import { git, prepareWorkdir, takeCheckpoint, changedBetween, undoCheckpoint, snapshotCommit, ORB_GIT, REF_PREFIX } from '../core/workspace.mjs';
 import { rankAccounts, isLimitText, isBudgetText, startCooldown, pauseAccount, taskBudgetUsd } from '../core/budget.mjs';
+import { installed } from '../agents/index.mjs';
 import { explainFailure } from '../core/agent-errors.mjs';
 import { usableAccounts, account as findAccount, accountLabel, accountEnv } from '../core/accounts.mjs';
 import { oneLine, redactSecrets, secretFiles, isSecretPath, MAX_DEP_RESULT } from '../core/safety.mjs';
@@ -24,9 +25,17 @@ export class Scheduler {
     this.board = board; this.sessions = sessions; this.log = log; this.orchestrator = orchestrator;
     this.running = new Map(); // task id -> { sessionId, agent }
     this.mainSnapshot = new Map();
-    // Tasks left "running" by a closed app: their process is gone, so they are marked failed (the user can retry).
+    // Tasks left "running" by a closed app: their process is gone. 2.3: they continue where they were (the agent resumes its
+    // own conversation) when continuity.resumeAfterRestart is on; otherwise they are marked failed for the user to retry.
     for (const t of board.tasks({ status: 'running', limit: 500 })) {
-      board.patch(t.id, { status: 'failed', pid: null, result: `${assistantName()} se cerró mientras trabajaba esta tarea. Reinténtala si hace falta. ${t.result ?? ''}`.slice(0, 4000) }, 'orb', 'task.interrupted');
+      if (ctx.config.continuity?.resumeAfterRestart !== false) {
+        board.patch(t.id, { status: 'blocked', pid: null }, 'orb', 'task.interrupted');
+        board.settingJson(`followup:${t.id}`, { text: `${assistantName()} se cerró mientras trabajabas en esta tarea. Continúa donde lo dejaste (revisa el estado de la carpeta antes).`, images: [], resume: true });
+        try { board.requeue(t.id, 'orb', 'task.resumed'); } catch (error) { this.log(`continuar #${t.id}: ${error.message}`); }
+        board.addChat('system', `🔁 La tarea #${t.id} «${oneLine(t.title)}» se quedó a medias al cerrar ${assistantName()}: continúa sola donde estaba.`);
+      } else {
+        board.patch(t.id, { status: 'failed', pid: null, result: `${assistantName()} se cerró mientras trabajaba esta tarea. Reinténtala si hace falta. ${t.result ?? ''}`.slice(0, 4000) }, 'orb', 'task.interrupted');
+      }
     }
   }
 
@@ -60,16 +69,18 @@ export class Scheduler {
     const { board } = this;
     try { this.watchQuiet(); } catch (error) { this.log(`vigilancia: ${error.message}`); }
     if (!ctx.config.autoRun || board.setting('paused') === '1') return;
+    try { this.resumeLimited(); } catch (error) { this.log(`continuar limitadas: ${error.message}`); }
     board.revalidateQueued(); board.warnBlockedByDeps();
     for (const task of board.readyTasks('auto')) {
       if (this.running.size >= ctx.config.maxParallel) return;
       if (this.running.has(task.id)) continue;
       const enabled = enabledAgents();
       const order = [...new Set([...(ctx.config.agentOrder ?? []), ...enabled])];
-      const types = task.agent === 'any' ? order.filter((a) => enabled.includes(a)) : [task.agent].filter((a) => enabled.includes(a));
+      // Only agents whose program is on this PC take work (an "any" task never goes to one that is not installed).
+      const types = (task.agent === 'any' ? order.filter((a) => enabled.includes(a)) : [task.agent].filter((a) => enabled.includes(a))).filter((a) => installed(a));
       // Every enabled account of those agents; a task pinned to an account only goes there.
       const candidates = types.flatMap((a) => usableAccounts(a)).filter((acc) => !task.account || acc.id === task.account);
-      if (!candidates.length) { this.notice(task, task.account ? `la cuenta ${accountLabel(task.account)} está desactivada o ya no existe` : `${task.agent === 'any' ? 'no hay ningún agente activado' : `${label(task.agent)} no tiene cuentas activadas`} en Agentes`); continue; }
+      if (!candidates.length) { this.notice(task, task.account ? `la cuenta ${accountLabel(task.account)} está desactivada o ya no existe` : task.agent !== 'any' && !installed(task.agent) ? `${label(task.agent)} no está instalado en este equipo (instálalo desde Agentes o reasigna la tarea)` : `${task.agent === 'any' ? 'no hay ningún agente activado e instalado' : `${label(task.agent)} no tiene cuentas activadas`} en Agentes`); continue; }
       const ranked = rankAccounts(board, candidates, task.model);
       const forced = board.setting(`budget_ok:${task.id}`) === '1'; // "Lanzar igualmente" in the app
       const pick = ranked.find((r) => (forced || r.check.ok) && this.busyWith(r.account) < ctx.config.perAgent);
@@ -82,6 +93,19 @@ export class Scheduler {
       const others = [...this.running.keys()].map((id) => board.task(id)).filter(inFolder);
       if (task.mode === 'carpeta' && !task.branch && (others.some((t) => !t.readonly) || (!task.readonly && others.length))) continue;
       this.launch(task, pick.agent, pick.account);
+    }
+  }
+
+  // Tasks stopped by a usage limit continue by themselves once it resets (continuity.resumeAtReset).
+  resumeLimited() {
+    if (ctx.config.continuity?.resumeAtReset === false) return;
+    for (const t of this.board.tasks({ status: 'limited', limit: 200 })) {
+      const until = Date.parse(t.limited_until ?? '') || 0;
+      if (until > Date.now()) continue;
+      this.board.settingJson(`followup:${t.id}`, { text: 'El límite de uso se ha reiniciado. Continúa la tarea donde la dejaste.', images: [], resume: true });
+      this.board.patch(t.id, { limited_until: null }, 'orb', 'task.limit_reset');
+      this.board.requeue(t.id, 'orb', 'task.resumed');
+      this.board.addChat('system', `▶️ Se reinició el cupo: la tarea #${t.id} «${oneLine(t.title)}» continúa.`);
     }
   }
 
@@ -194,7 +218,7 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
     // The task's conversation: the same one continues when the user writes to the agent and the agent did not change.
     let session = task.session_id ? this.sessions.get(task.session_id) : null;
     // A conversation continues only on the same account (another account is another login with its own history).
-    const resume = Boolean(followup && session && session.agent === agent && (session.account ?? session.agent) === accountId && session.cli_session);
+    const resume = Boolean(followup && session && session.agent === agent && (session.account ?? session.agent) === accountId && (session.cli_session || this.sessions.lives.has(session.id)));
     if (!session || session.agent !== agent || (session.account ?? session.agent) !== accountId) {
       session = this.sessions.create({ kind: 'task', agent, account: accountId, model: task.model, reasoning: task.reasoning, permission: task.readonly ? 'leer' : 'editar', project: project.name, cwd: workspace.cwd, title: `#${task.id} ${task.title}`, taskId: task.id });
     } else {
@@ -218,7 +242,8 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
     }
     if (!run) return; // spawn failed: finish() already closed the task
     this.running.set(task.id, { sessionId: session.id, agent, account: accountId });
-    board.patch(task.id, { pid: run.child.pid }, 'orb', 'task.process');
+    // pid marks "its process is alive" (dependencies wait until it is gone and the automatic commit is done).
+    board.patch(task.id, { pid: run.live?.pid ?? -1 }, 'orb', 'task.process');
     if (followup) { board.setting(`followup:${task.id}`, ''); board.event(task.id, 'orb', 'followup.sent', `${resume ? 'misma conversación' : 'conversación nueva con contexto'} · ${agent}`); }
     board.setting(`budget_ok:${task.id}`, ''); board.setting(`wait_notice:${task.id}`, ''); board.settingJson(`progress:${task.id}`, null);
     this.log(`tarea #${task.id} lanzada con ${acc?.label ?? agent}${task.model ? ` (${task.model})` : ''} en ${workspace.workdir}`);
@@ -271,7 +296,7 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
     return commit.status === 0 ? '' : `el commit automático falló (${oneLine(commit.stderr, 200)}); los cambios siguen sin guardar en ${task.workdir}`;
   }
 
-  finishNow(taskId, { code, state, stderr, stopped, timedOut }) {
+  finishNow(taskId, { code, state, stderr, stopped, timedOut, limit }) {
     const { board } = this;
     let task = board.task(taskId);
     const project = board.project(task.project);
@@ -291,7 +316,14 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
       const summary = (state?.final || state?.text || stderr || '').trim();
       const status = held ? 'blocked' : timedOut ? 'failed' : code === 0 && !state?.isError ? 'done' : 'failed';
       task = board.patch(taskId, { status, result: redactSecrets(task.result ?? (timedOut ? `Superó el tiempo máximo (${ctx.config.timeoutMinutes} min). ${summary}` : summary)).slice(0, 4000), pid: null }, 'orb', 'task.finished');
-      if (task.status === 'failed' && isLimitText(output)) {
+      if (limit && !isBudgetText(output) && task.status !== 'done') {
+        // The account hit its usage limit (reported by the agent itself): the task waits and continues at the reset.
+        const acc = task.run_account ?? task.assigned_to;
+        const until = startCooldown(board, acc, output, limit.resetAt);
+        const hour = new Date(until).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+        task = board.patch(taskId, { status: 'limited', limited_until: new Date(until).toISOString(), result: `${accountLabel(acc)} llegó a su límite de uso. Continúa sola a las ${hour}. ${task.result ?? ''}`.slice(0, 4000) }, 'orb', 'task.limited');
+        board.addChat('system', `⏳ ${accountLabel(acc)} llegó a su límite de uso. La tarea #${task.id} «${oneLine(task.title)}» continuará sola a las ${hour}; mientras, el trabajo nuevo va a otras cuentas o agentes.`);
+      } else if (task.status === 'failed' && isLimitText(output)) {
         const agent = task.run_account ?? task.assigned_to; // the account that ran out (several accounts of one agent are separate)
         if (isBudgetText(output)) {
           task = board.patch(taskId, { status: 'blocked', result: `Se paró al llegar al tope de gasto por tarea. Para seguir, divide la tarea o sube el tope en Ajustes. ${task.result ?? ''}`.slice(0, 4000) }, 'orb', 'task.budget');
@@ -313,7 +345,7 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
     if (held && !['blocked', 'cancelled'].includes(task.status)) task = board.patch(taskId, { status: 'blocked' }, 'orb', 'task.held');
     if (held) task = board.patch(taskId, { result: `${held}. ${task.result ?? ''}`.slice(0, 4000) }, 'orb', 'task.held');
     this.log(`tarea #${taskId} terminó (código ${code}, estado ${task.status}${stopped ? ', detenida' : ''})`);
-    if (task.status === 'queued') return; // handed to another agent (explainFailed already told the user)
+    if (task.status === 'queued' || task.status === 'limited') return; // handed to another agent, or waiting for the reset (already told)
     const icon = { done: '✅', failed: '❌', blocked: '⛔', cancelled: '🚫' }[task.status] ?? 'ℹ️';
     const word = { done: 'terminó', failed: 'falló en', blocked: 'se bloqueó en', cancelled: 'paró' }[task.status] ?? 'dejó';
     board.addChat('system', `${icon} ${label(task.assigned_to)} ${word} la tarea #${task.id} «${oneLine(task.title)}».${task.result ? `\n${redactSecrets(task.result).slice(0, 600)}` : ''}`);
@@ -327,7 +359,13 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
       return;
     }
     // Automatic cross review: another agent reads what this one did (read-only) before the user looks at it.
-    if (task.status === 'done' && ctx.config.review?.auto && !task.readonly && !/^Revisión de #/.test(task.title)) this.createReview(task);
+    if (task.status === 'done' && ctx.config.review?.auto && !task.readonly && !task.review_of) { try { this.createReview(task); } catch (error) { this.log(`Task Review de #${task.id}: ${error.message}`); } }
+    // A finished Task Review leaves its verdict next to the reviewed task too.
+    if (task.review_of && ['done', 'failed', 'blocked'].includes(task.status)) {
+      const verdict = /VEREDICTO:\s*CORRECTO/i.test(task.result ?? '') ? 'correcto' : /VEREDICTO:\s*CON FALLOS/i.test(task.result ?? '') ? 'con fallos' : 'sin veredicto claro';
+      board.settingJson(`review:${task.review_of}`, { task: task.id, verdict, agent: task.assigned_to, at: new Date().toISOString() });
+      board.event(task.review_of, task.assigned_to ?? 'agente', 'review.verdict', `${verdict} (Task Review #${task.id})`);
+    }
     // The way back of the loop (person → assistant → tasks → agents → finished → assistant → person → OK).
     const reported = ['done', 'failed', 'blocked'].includes(task.status) && task.created_by === 'orb' ? this.queueReport(task) : false;
     // Blocked or failed for a reason other than quota: the assistant looks at it once an hour per task.
@@ -383,14 +421,46 @@ Cierra el ciclo: 1) revisa si el resultado cumple lo que ${userName()} pidió (o
     return true;
   }
 
-  createReview(task) {
-    const others = enabledAgents().filter((a) => a !== task.assigned_to);
-    const agent = others[0] ?? task.assigned_to;
-    try {
-      const review = this.board.createTask({ project: task.project, title: `Revisión de #${task.id}: ${oneLine(task.title, 80)}`, agent, readonly: true, mode: task.mode, depends_on: [task.id],
-        description: `Revisa con ojo crítico el trabajo de la tarea #${task.id} («${oneLine(task.title)}»), hecho por ${task.assigned_to}.\nResultado que dejó: ${oneLine(task.result, 1500)}\n${task.branch ? `Está en la rama ${task.branch}.` : 'Los cambios están en la carpeta del proyecto.'}\nComprueba que hace lo que se pedía, busca fallos y riesgos, y ejecuta las pruebas si las hay. NO cambies ningún archivo: pon en result un veredicto (correcto / con fallos) y la lista de problemas concretos.` }, 'orb');
-      this.board.addChat('system', `🔎 Revisión automática: ${label(agent)} revisará la tarea #${task.id} (tarea #${review.id}).`);
-    } catch (error) { this.log(`revisión de #${task.id}: ${error.message}`); }
+  // Task Review: another model audits finished work, read-only, and gives a verdict (correct / with problems + the list).
+  // It goes to a different provider when one is installed and has room (Claude's work is reviewed by Codex, Gemini…), else
+  // to the same agent with a different model. scope: a task ({ task }) or a whole project ({ project }).
+  reviewer(exclude = []) {
+    const order = [...new Set([...(ctx.config.agentOrder ?? []), ...enabledAgents()])].filter((a) => enabledAgents().includes(a) && installed(a));
+    const ranked = order.map((a) => ({ a, ok: usableAccounts(a).some((acc) => rankAccounts(this.board, [acc], null)[0]?.check.ok) }));
+    return ranked.find((r) => r.ok && !exclude.includes(r.a))?.a ?? ranked.find((r) => r.ok)?.a ?? order[0] ?? null;
+  }
+
+  createReview(task, { actor = 'orb', agent: wanted = null, focus = '' } = {}) {
+    const agent = wanted || this.reviewer([task.assigned_to ?? task.agent]);
+    if (!agent) throw new Error('no hay ningún agente instalado y con cupo para el Task Review');
+    // Same agent: another model, so it is a second pair of eyes and not the same one twice.
+    const models = ctx.config.agents[agent]?.models ?? [];
+    const model = agent === task.assigned_to ? models.find((m) => m !== task.model) ?? null : null;
+    const review = this.board.createTask({ project: task.project, title: `Task Review de #${task.id}: ${oneLine(task.title, 80)}`, agent, model, readonly: true, mode: task.mode, depends_on: [task.id], review_of: task.id,
+      description: `Eres el revisor (Task Review) del trabajo de la tarea #${task.id} «${oneLine(task.title)}», hecho por ${task.assigned_to ?? task.agent}${task.model ? ` (${task.model})` : ''}.
+Encargo original: ${oneLine(task.description, 1500)}
+Resultado que dejó: ${oneLine(task.result, 1500)}
+${task.branch ? `Está en la rama ${task.branch}.` : 'Los cambios están en la carpeta del proyecto.'}${focus ? `\nFíjate sobre todo en: ${oneLine(focus, 500)}` : ''}
+Comprueba que hace lo que se pedía, busca fallos, casos sin cubrir, riesgos de seguridad y código mejorable, y ejecuta las pruebas si las hay. NO cambies ningún archivo.
+En result pon, en este orden: VEREDICTO: CORRECTO o CON FALLOS; después la lista de problemas concretos (archivo y qué falla) por gravedad; y al final qué arreglarías primero.` }, actor);
+    this.board.addChat('system', `🔍 Task Review: ${label(agent)}${model ? ` (${model})` : ''} revisará la tarea #${task.id} (tarea #${review.id}).`);
+    return review;
+  }
+
+  // Task Review of a whole project: the latest changes (or the whole code if it is small), read-only, by another provider.
+  reviewProject(projectName, { actor = 'usuario', agent: wanted = null, focus = '' } = {}) {
+    const project = this.board.project(projectName); if (!project) throw new Error(`no existe el proyecto ${projectName}`);
+    const last = this.board.tasks({ project: project.name, status: 'done', limit: 5 }).filter((t) => !t.review_of);
+    const usedBy = [...new Set(last.map((t) => t.assigned_to).filter(Boolean))];
+    const agent = wanted || this.reviewer(usedBy);
+    if (!agent) throw new Error('no hay ningún agente instalado y con cupo para el Task Review');
+    const review = this.board.createTask({ project: project.name, title: `Task Review del proyecto ${project.name}`, agent, readonly: true, mode: 'carpeta',
+      description: `Eres el revisor (Task Review) del proyecto ${project.name} (${project.path}).
+${last.length ? `Últimas tareas hechas:\n${last.map((t) => `- #${t.id} ${oneLine(t.title)} (${t.assigned_to}): ${oneLine(t.result, 300)}`).join('\n')}` : 'Revisa el código del proyecto.'}${focus ? `\nFíjate sobre todo en: ${oneLine(focus, 500)}` : ''}
+Audita con ojo crítico: errores, casos sin cubrir, seguridad, rendimiento, coherencia y calidad del código. Ejecuta las pruebas si las hay. NO cambies ningún archivo.
+En result pon, en este orden: VEREDICTO: CORRECTO o CON FALLOS; la lista de problemas concretos (archivo y qué falla) por gravedad; y qué arreglarías primero.` }, actor);
+    this.board.addChat('system', `🔍 Task Review del proyecto ${project.name}: lo hará ${label(agent)} (tarea #${review.id}).`);
+    return review;
   }
 
   // Deletes the isolated copy and branch of a finished task (the user decided not to keep it).
