@@ -8,10 +8,12 @@ import { AGENT_IDS } from '../core/home.mjs';
 import { MULTI, newAccountId } from '../core/accounts.mjs';
 import { usageReport } from '../core/budget.mjs';
 import { createProject, syncProjects } from '../core/projects.mjs';
+import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../core/schedules.mjs';
 import { oneLine, redactSecrets } from '../core/safety.mjs';
 import { statusAll, status as agentStatus, openLogin, quickRun, forgetInstalled } from '../agents/index.mjs';
 import { PERMISSIONS } from './sessions.mjs';
 import { readLog, writeLog, logFiles } from './logs.mjs';
+import { expandMentions, mentionOptions } from './mentions.mjs';
 import { ofUser, userName } from '../core/board.mjs';
 import * as github from './github.mjs';
 import * as installer from './installer.mjs';
@@ -60,6 +62,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'app.state': () => ({
       version, home: ctx.home, paths: { projects: ctx.paths.projects, logs: ctx.paths.logs },
       config: ctx.config, paused: board.setting('paused') === '1', activeProject: board.activeProject(),
+      approvals: sessions.allPendingApprovals().map((a) => ({ id: a.id, session_id: a.session_id, body: { title: a.body?.title, reason: a.body?.reason }, session: a.session })),
       counts: Object.fromEntries(board.all('SELECT status, COUNT(*) AS n FROM tasks GROUP BY status').map((r) => [r.status, r.n])),
       chat: orchestrator.state(), assistant: orchestrator.info()
     }),
@@ -128,7 +131,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'github.login': () => github.login(),
 
     'chat.list': () => currentChat(),
-    'chat.send': ({ text }) => orchestrator.ask(str(text, 'mensaje', 20000)),
+    'chat.send': ({ text }) => { const t = str(text, 'mensaje', 20000); return orchestrator.ask(t, expandMentions(board, sessions, t)); },
     'chat.reset': () => orchestrator.reset(),
     'chat.stop': () => orchestrator.stop(),
     'chat.accept': ({ id }) => {
@@ -199,7 +202,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
         scheduler.followup(s.task_id, str(text, 'mensaje', 20000), images(files));
         return { queued: true };
       }
-      return sessions.message(s.id, str(text, 'mensaje', 20000), { images: images(files), mode: oneOf(mode, ['auto', 'steer', 'queue'], 'modo', 'auto') });
+      const t = str(text, 'mensaje', 20000);
+      return sessions.message(s.id, t, { images: images(files), mode: oneOf(mode, ['auto', 'steer', 'queue'], 'modo', 'auto'), context: expandMentions(board, sessions, t) });
     },
     'sessions.queue': ({ id }) => sessions.queue(str(id, 'conversación', 64)),
     'sessions.editQueued': ({ id, queueId, text, remove, move }) => sessions.editQueued(str(id, 'conversación', 64), int(queueId, 'mensaje'), { text: text === undefined ? undefined : str(text, 'mensaje', 20000), remove: Boolean(remove), move: oneOf(move, ['up', 'down'], 'mover', undefined) }),
@@ -208,6 +212,13 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'sessions.fork': ({ id, title }) => sessions.fork(str(id, 'conversación', 64), { title: str(title, 'título', 80, { optional: true }) || undefined }),
     'sessions.settle': ({ id, settled }) => sessions.update(sessions.must(str(id, 'conversación', 64)).id, { settled: settled !== false }),
     'approvals.list': () => sessions.allPendingApprovals(),
+    'mentions.options': () => mentionOptions(board, sessions),
+    'schedules.list': () => listSchedules(board).map((s) => ({ ...s, when: describeSchedule({ ...s, hours: s.at_time }) })),
+    'schedules.create': (p) => createSchedule(board, { project: project(p.project).name, title: str(p.title, 'título', 120), description: str(p.description, 'descripción', 8000), agent: oneOf(p.agent, [...AGENT_IDS, 'any'], 'agente', 'any'), model: str(p.model, 'modelo', 80, { optional: true }) || null,
+      readonly: Boolean(p.readonly), every: oneOf(p.every, EVERY, 'frecuencia'), at_time: str(p.at_time, 'hora', 5, { optional: true }) || '09:00', weekdays: Array.isArray(p.weekdays) ? p.weekdays.map(Number) : [], hours: Number(p.hours) || 6 }, 'usuario'),
+    'schedules.update': ({ id, enabled, approve, title, description }) => updateSchedule(board, int(id, 'programada'), { enabled, approved: approve === true, title, description }),
+    'schedules.remove': ({ id }) => removeSchedule(board, int(id, 'programada')),
+    'schedules.run': ({ id }) => runSchedule(board, getSchedule(board, int(id, 'programada')) ?? fail('esa tarea programada ya no existe'), 'usuario'),
     'chat.approve': ({ request, decision }) => orchestrator.respond(str(request, 'petición', 200), oneOf(decision, DECISION, 'decisión')),
     'tasks.review': ({ id, agent, focus }) => scheduler.createReview(board.task(int(id, 'tarea')) ?? fail('no existe esa tarea'), { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null), focus: str(focus, 'foco', 500, { optional: true }) }),
     'projects.review': ({ name, agent, focus }) => scheduler.reviewProject(project(name).name, { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null), focus: str(focus, 'foco', 500, { optional: true }) }),
