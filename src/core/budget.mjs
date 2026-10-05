@@ -3,16 +3,19 @@
 // - When an agent answers "usage/session limit", it goes into cooldown until its reset and nothing else is sent to it.
 // - Tasks with agent "any" go to the least used agent that still has room, so work is balanced across subscriptions.
 // Since 2.0 every count is per account (a subscription): two Codex accounts have two separate windows.
+// 2.3, balance: Claude and Codex now report how much of their real window is used and when it resets (live sessions).
+// That real figure is the main guard (stop at budget.stopAt, 92% by default); the launch counts are only a safety net
+// with roomier limits, so the app no longer stops working long before the subscription would.
 import { ctx } from './context.mjs';
 import { account as findAccount, accounts } from './accounts.mjs';
 
 export const budgetConfig = () => {
   const b = ctx.config?.budget ?? {};
-  return { windowHours: b.windowHours ?? 5, agents: b.agents ?? {} };
+  return { windowHours: b.windowHours ?? 5, stopAt: b.stopAt ?? 0.92, agents: b.agents ?? {} };
 };
 // Limits of an account: its own entry in budget.agents, else its agent's, else the defaults.
 const agentOf = (id) => findAccount(id)?.agent ?? id;
-const rules = (id) => ({ maxTasks: 6, maxHeavy: 2, ...(budgetConfig().agents[agentOf(id)] ?? {}), ...(budgetConfig().agents[id] ?? {}), heavyModels: ctx.config?.agents?.[agentOf(id)]?.heavyModels ?? [] });
+const rules = (id) => ({ maxTasks: 20, maxHeavy: 6, ...(budgetConfig().agents[agentOf(id)] ?? {}), ...(budgetConfig().agents[id] ?? {}), heavyModels: ctx.config?.agents?.[agentOf(id)]?.heavyModels ?? [] });
 export const isHeavy = (id, model) => Boolean(model && rules(id).heavyModels.includes(model));
 
 // Optional per-task spending cap for Claude (--max-budget-usd), only when the user sets one.
@@ -37,6 +40,23 @@ export function cooldownUntil(board, id) {
   return until > Date.now() ? until : 0;
 }
 
+// The real usage an account reported last (live sessions): { utilization 0-1, resetAt, window, status, at }.
+export function recordRate(board, id, rate) {
+  if (!id || !rate) return;
+  const prev = board.settingJson(`rate:${id}`) ?? {};
+  // Keep the most worrying window: a weekly window at 95% matters more than a 5-hour one at 10%.
+  const next = { utilization: rate.utilization ?? prev.utilization ?? null, resetAt: rate.resetAt ?? prev.resetAt ?? null, window: rate.window ?? prev.window ?? null, status: rate.status ?? prev.status ?? null, at: Date.now() };
+  if (prev.utilization != null && rate.utilization != null && prev.window !== rate.window && prev.utilization > rate.utilization && prev.resetAt > Date.now()) return;
+  board.settingJson(`rate:${id}`, next);
+  if (rate.status === 'rejected' && rate.resetAt) { board.setting(`cooldown:${id}`, String(rate.resetAt)); board.setting(`cooldown_reason:${id}`, ''); }
+}
+export function realRate(board, id) {
+  const r = board.settingJson(`rate:${id}`);
+  if (!r || (r.resetAt && r.resetAt < Date.now())) return null; // that window is over
+  if (Date.now() - (r.at ?? 0) > 12 * 3_600_000) return null; // too old to trust
+  return r;
+}
+
 const hhmm = (ms) => new Date(ms).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 
 const nameOf = (id) => findAccount(id)?.label ?? id;
@@ -46,6 +66,8 @@ export function canLaunch(board, id, model) {
   const until = cooldownUntil(board, id);
   const why = board.setting(`cooldown_reason:${id}`); // a pause for another reason than quota (plan, login)
   if (until) return { ok: false, reason: why ? `${nameOf(id)} está en pausa hasta las ${hhmm(until)}: ${why}` : `${nameOf(id)} está sin cupo hasta las ${hhmm(until)}` };
+  const real = realRate(board, id);
+  if (real?.utilization != null && real.utilization >= budgetConfig().stopAt) return { ok: false, reason: `${nameOf(id)} ya ha usado el ${Math.round(real.utilization * 100)} % de su cupo real${real.resetAt ? `; se reinicia a las ${hhmm(real.resetAt)}` : ''}` };
   const r = rules(id); const used = windowUsage(board, id); const h = budgetConfig().windowHours;
   if (used.tasks >= r.maxTasks) return { ok: false, reason: `${nameOf(id)} ya lanzó ${used.tasks} tareas en las últimas ${h} h (máximo ${r.maxTasks})` };
   if (isHeavy(id, model) && used.heavy >= r.maxHeavy) return { ok: false, reason: `${nameOf(id)} ya lanzó ${used.heavy} tareas con modelos caros en las últimas ${h} h (máximo ${r.maxHeavy})` };
@@ -55,14 +77,16 @@ export function canLaunch(board, id, model) {
 // Order candidate accounts ([{ id, agent }]) by how much of their window they have used (least used first).
 export function rankAccounts(board, candidates, model) {
   return candidates
-    .map((acc, index) => ({ account: acc.id, agent: acc.agent, index, check: canLaunch(board, acc.id, model), used: windowUsage(board, acc.id).tasks / Math.max(1, rules(acc.id).maxTasks) }))
+    .map((acc, index) => ({ account: acc.id, agent: acc.agent, index, check: canLaunch(board, acc.id, model), used: realRate(board, acc.id)?.utilization ?? windowUsage(board, acc.id).tasks / Math.max(1, rules(acc.id).maxTasks) }))
     .sort((a, b) => a.used - b.used || a.index - b.index);
 }
 
 export function usageReport(board) {
   return accounts().map((acc) => {
     const r = rules(acc.id); const used = windowUsage(board, acc.id);
-    return { account: acc.id, agent: acc.agent, label: acc.label, used: used.tasks, max: r.maxTasks, heavy: used.heavy, maxHeavy: r.maxHeavy, cooldownUntil: cooldownUntil(board, acc.id) || null, windowHours: budgetConfig().windowHours };
+    const real = realRate(board, acc.id);
+    return { account: acc.id, agent: acc.agent, label: acc.label, used: used.tasks, max: r.maxTasks, heavy: used.heavy, maxHeavy: r.maxHeavy, cooldownUntil: cooldownUntil(board, acc.id) || null, windowHours: budgetConfig().windowHours,
+      real: real ? { utilization: real.utilization, resetAt: real.resetAt, window: real.window } : null };
   });
 }
 
@@ -87,8 +111,8 @@ export function parseReset(text, now = new Date()) {
   return now.getTime() + budgetConfig().windowHours * 3_600_000;
 }
 
-export function startCooldown(board, agent, text) {
-  const until = parseReset(text);
+export function startCooldown(board, agent, text, resetAt = null) {
+  const until = resetAt && resetAt > Date.now() ? resetAt : parseReset(text);
   board.setting(`cooldown:${agent}`, String(until));
   board.setting(`cooldown_reason:${agent}`, '');
   return until;

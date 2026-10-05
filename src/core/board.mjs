@@ -9,7 +9,8 @@ import { contentHash, sign, verify, detectSensitivity, defaultApprovalKey } from
 import { PRODUCT } from './product.mjs';
 
 export const AGENTS = AGENT_IDS;
-export const STATUSES = ['queued', 'awaiting_approval', 'running', 'done', 'failed', 'blocked', 'cancelled'];
+// limited (2.3): stopped by the account's usage limit; continues by itself when the limit resets (tasks.limited_until).
+export const STATUSES = ['queued', 'awaiting_approval', 'running', 'done', 'failed', 'blocked', 'cancelled', 'limited'];
 const FINISHED = new Set(['done', 'failed', 'cancelled']);
 const MODES = ['carpeta', 'aislada'];
 const now = () => new Date().toISOString();
@@ -174,7 +175,7 @@ export class Board {
 
   // mode: "carpeta" (default: the project folder, in turn with the other writing tasks) or "aislada" (own branch and copy).
   // readonly: the task only reads (research, review): it may run at the same time as others in the same folder.
-  createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false }, actor) {
+  createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null }, actor) {
     if (!MODES.includes(mode)) throw new Error('mode debe ser carpeta o aislada');
     const proj = this.project(project);
     if (!proj) throw new Error(`proyecto desconocido "${project}": regístralo antes con orb_add_project`);
@@ -202,12 +203,19 @@ export class Board {
     const tags = [...new Set(sensitivity)]; const reasons = [];
     if (!tags.length) { const found = detectSensitivity(`${title}\n${description}`); tags.push(...found); if (found.length) reasons.push(`palabras clave: ${found.join(', ')}`); }
     if (policy.approval) { tags.push('razonamiento_alto'); reasons.push(`${model ?? agent} con razonamiento alto`); }
-    if (actor !== 'orb' && actor !== 'usuario') { tags.push('creada_por_agente'); reasons.push(`la creó ${actor}, no ${assistantName()}`); }
+    // A subtask an agent delegates from its own task (orb_delegate) goes straight to the queue when the user trusts
+    // delegation, the parent task came from the assistant or the user, nothing looks risky and the parent has not used
+    // its quota of subtasks. Anything else made by an agent waits for the user, as always.
+    const parent = parent_id ? this.task(parent_id) : null;
+    const d = ctx.config.delegation ?? {};
+    const trusted = parent && d.enabled !== false && d.trusted !== false && !tags.length && ['orb', 'usuario'].includes(parent.created_by)
+      && this.one('SELECT COUNT(*) AS n FROM tasks WHERE parent_id = ?', parent.id).n < (d.maxPerTask ?? 4);
+    if (actor !== 'orb' && actor !== 'usuario' && !trusted) { tags.push('creada_por_agente'); reasons.push(`la creó ${actor}, no ${assistantName()}`); }
     const status = tags.length ? 'awaiting_approval' : 'queued';
     const at = now();
-    const { lastInsertRowid } = this.run(`INSERT INTO tasks (project, title, description, agent, account, model, reasoning, fast, launch, priority, depends_on, sensitivity, status, created_by, project_path, created_at, updated_at, mode, readonly)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, proj.name, title, String(description), agent, account || null, model, reasoning, Number(fast), launch, Math.min(Math.max(Number(priority) || 2, 1), 3),
-      JSON.stringify(depends_on.map(Number)), JSON.stringify([...new Set(tags)]), status, String(actor), proj.path, at, at, mode, Number(Boolean(readonly)));
+    const { lastInsertRowid } = this.run(`INSERT INTO tasks (project, title, description, agent, account, model, reasoning, fast, launch, priority, depends_on, sensitivity, status, created_by, project_path, created_at, updated_at, mode, readonly, parent_id, review_of, schedule_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, proj.name, title, String(description), agent, account || null, model, reasoning, Number(fast), launch, Math.min(Math.max(Number(priority) || 2, 1), 3),
+      JSON.stringify(depends_on.map(Number)), JSON.stringify([...new Set(tags)]), status, String(actor), proj.path, at, at, mode, Number(Boolean(readonly)), parent_id ? Number(parent_id) : null, review_of ? Number(review_of) : null, schedule_id ? Number(schedule_id) : null);
     const id = Number(lastInsertRowid);
     this.event(id, actor, 'task.created', status);
     if (status === 'awaiting_approval') this.addChat('system', `⚠️ La tarea #${id} «${title}» necesita tu aprobación (${[...new Set(tags)].join(', ')}${reasons.length ? `; ${reasons.join('; ')}` : ''}).`);
@@ -308,7 +316,7 @@ export class Board {
   retry(id, actor) {
     return this.transaction(() => {
       const task = this.task(id); if (!task) throw new Error(`no existe la tarea #${id}`);
-      if (!['failed', 'blocked', 'cancelled'].includes(task.status)) throw new Error(`la tarea #${id} está en ${task.status}: solo se reintenta una tarea fallida, bloqueada o cancelada`);
+      if (!['failed', 'blocked', 'cancelled', 'limited'].includes(task.status)) throw new Error(`la tarea #${id} está en ${task.status}: solo se reintenta una tarea fallida, bloqueada, cancelada o limitada`);
       const out = this.patch(id, { status: 'queued', assigned_to: task.agent === 'any' ? null : task.assigned_to, pid: null, ...this.clearApproval() }, actor, 'task.retry', task.status);
       if (!out.sensitivity.length) return out;
       if (out.sensitivity.includes('razonamiento_alto')) return this.patch(id, { status: 'awaiting_approval' }, actor, 'approval.required', 'queued');
@@ -424,7 +432,13 @@ export class Board {
 
   // ---- the assistant's chat and the activity feed
   // meta: extra data of a chat line, e.g. { kind: 'report', tasks: [ids] } for the assistant's report that waits for the user's OK.
-  addChat(role, body, meta = null) { this.run('INSERT INTO chat (role, body, meta, at) VALUES (?, ?, ?, ?)', role, String(body), meta ? JSON.stringify(meta) : null, now()); this.changed('chat'); }
+  addChat(role, body, meta = null) {
+    const { lastInsertRowid } = this.run('INSERT INTO chat (role, body, meta, at) VALUES (?, ?, ?, ?)', role, String(body), meta ? JSON.stringify(meta) : null, now());
+    this.changed('chat');
+    return { id: Number(lastInsertRowid) };
+  }
+  // Changes the extra data of a chat message (e.g. an approval card that was answered).
+  patchChatMeta(id, meta) { this.run('UPDATE chat SET meta = ? WHERE id = ?', JSON.stringify(meta), Number(id)); this.changed('chat'); }
   chat(limit = 200) {
     return this.all('SELECT * FROM (SELECT * FROM chat ORDER BY id DESC LIMIT ?) ORDER BY id', limit)
       .map((r) => { let meta = null; try { meta = r.meta ? JSON.parse(r.meta) : null; } catch { /* ignore */ } return { ...r, meta }; });

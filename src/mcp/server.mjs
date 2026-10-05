@@ -1,4 +1,4 @@
-// MCP server (stdio) of the assistant: the shared board of Claude, Codex and Cursor. Every agent process gets its own
+// MCP server (stdio) of the assistant: the shared board of every agent (Claude, Codex, Cursor and the ACP agents). Every agent process gets its own
 // instance with ORB_HOME (which assistant folder) and ORB_AGENT (who it is). The coordinator identity ("orb") is only
 // honoured with the secret key the engine hands to its own chat process; the database keeps just its hash.
 import fs from 'node:fs';
@@ -36,6 +36,7 @@ ${BOSS ? `ERES EL COORDINADOR: crea tareas autocontenidas (orb_create_task), una
     : `SI TE HAN ASIGNADO UNA TAREA #N (eres trabajador):
 - Empieza con orb_read_messages. Si necesitas algo de otro agente, orb_send_message (to: agente, "all", "usuario" para preguntar a ${USER}, o "orb").
 - Termina SIEMPRE con orb_update_task: status "done" con result (qué cambiaste y cómo probarlo), o "blocked"/"failed" con el motivo.
+- Si una parte de tu tarea la haría mejor otro agente (otro proveedor u otro modelo), puedes delegarla con orb_delegate y esperar su resultado con orb_wait_tasks. Encargos cortos y autocontenidos; no delegues todo.
 - No hagas push, no publiques, no borres nada fuera de tu carpeta de trabajo y no uses credenciales.
 SI ${USER.toUpperCase()} DICE "COGE TU TAREA": orb_claim_next.`}
 Las bitácoras las escribe solo ${NAME}.${process.env.ORB_BROWSER_PIPE ? `
@@ -65,8 +66,45 @@ function giveFiles({ task_id, files, from_task }) {
   return out;
 }
 
+// Delegation (2.3): an agent working on task #N hands part of it to another agent or model. The subtask hangs from #N
+// (parent_id); it goes straight to the queue when the user trusts delegation (Ajustes) and nothing looks risky, and waits
+// for the user's approval otherwise.
+const TASK_ID = Number(process.env.ORB_TASK_ID) || null;
+function delegate(a) {
+  if (!TASK_ID) throw new Error('solo un agente que trabaja en una tarea puede delegar');
+  if (ctx.config.delegation?.enabled === false) throw new Error(`${USER} ha desactivado la delegación entre agentes`);
+  const parent = board.task(TASK_ID); if (!parent) throw new Error(`no existe la tarea #${TASK_ID}`);
+  const task = board.createTask({ project: parent.project, title: a.title, description: a.description, agent: a.agent ?? 'any', model: a.model, readonly: a.readonly === true,
+    mode: parent.mode, parent_id: parent.id, depends_on: [] }, ME);
+  board.event(parent.id, ME, 'task.delegated', `#${task.id} ${oneLine(task.title)} → ${task.agent}${task.model ? ` (${task.model})` : ''} · ${task.status}`);
+  return { id: task.id, status: task.status, note: task.status === 'awaiting_approval' ? `espera la aprobación de ${USER}` : 'en cola: se lanzará en cuanto haya un agente libre' };
+}
+// Waits until the tasks finish (up to timeout_s, at most 15 min) and returns their results.
+async function waitTasks({ ids, timeout_s = 600 }) {
+  if (!Array.isArray(ids) || !ids.length || ids.length > 10) throw new Error('ids: entre 1 y 10 tareas');
+  const end = Date.now() + Math.min(Math.max(Number(timeout_s) || 600, 10), 900) * 1000;
+  const done = new Set(['done', 'failed', 'blocked', 'cancelled']);
+  while (Date.now() < end) {
+    const list = ids.map((id) => board.task(id)).filter(Boolean);
+    if (list.length === ids.length && list.every((t) => done.has(t.status))) return list.map((t) => ({ id: t.id, title: t.title, agent: t.assigned_to ?? t.agent, status: t.status, result: oneLine(t.result, 3000) }));
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  return ids.map((id) => board.task(id)).filter(Boolean).map((t) => ({ id: t.id, status: t.status, result: done.has(t.status) ? oneLine(t.result, 3000) : 'todavía en marcha: vuelve a esperar o sigue con otra cosa' }));
+}
+
 const modelsHelp = () => AGENTS.map((a) => `${a}: ${(ctx.config.agents[a]?.models ?? []).join(', ') || 'predeterminado'}`).join(' | ');
 const tools = [
+  ...(TASK_ID && !BOSS ? [
+    { name: 'orb_delegate', description: 'Delega una parte de tu tarea en otro agente o modelo (subtarea de tu tarea). Devuelve su id: espera su resultado con orb_wait_tasks.',
+      inputSchema: { type: 'object', required: ['title', 'description'], properties: {
+        title: str('Título corto'), description: str('Encargo autocontenido y compacto: qué hacer, dónde y cuándo está terminado'),
+        agent: { type: 'string', enum: [...AGENTS, 'any'], description: 'Agente (any = el que tenga cupo)' }, model: str(`Modelo concreto (opcional; requiere agent). ${modelsHelp()}`),
+        readonly: { type: 'boolean', description: 'true si solo debe leer (investigar, revisar)' } } },
+      run: (a) => delegate(a) },
+    { name: 'orb_wait_tasks', description: 'Espera a que terminen tareas (las que delegaste) y devuelve sus resultados. Máximo 15 min por llamada.', readOnly: true,
+      inputSchema: { type: 'object', required: ['ids'], properties: { ids: { type: 'array', items: { type: 'integer' }, maxItems: 10 }, timeout_s: { type: 'integer', minimum: 10, maximum: 900 } } },
+      run: (a) => waitTasks(a) }
+  ] : []),
   { name: 'orb_board', description: 'Resumen del tablero: proyectos, tareas activas, contadores y mensajes sin leer.', inputSchema: { type: 'object', properties: {} }, readOnly: true,
     run: () => board.summary(ME) },
   { name: 'orb_list_tasks', description: 'Lista tareas, con filtros opcionales.', readOnly: true,
@@ -183,7 +221,7 @@ readline.createInterface({ input: process.stdin }).on('line', async (line) => {
   let msg; try { msg = JSON.parse(line); } catch { return; }
   if (msg.id === undefined) return;
   try {
-    if (msg.method === 'initialize') return reply(msg.id, { result: { protocolVersion: msg.params?.protocolVersion ?? '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'orb', version: '2.1.0' }, instructions: INSTRUCTIONS } });
+    if (msg.method === 'initialize') return reply(msg.id, { result: { protocolVersion: msg.params?.protocolVersion ?? '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'orb', version: '2.3.0' }, instructions: INSTRUCTIONS } });
     if (msg.method === 'ping') return reply(msg.id, { result: {} });
     if (msg.method === 'tools/list') return reply(msg.id, { result: { tools: tools.map(({ run, readOnly, ...t }) => ({ ...t, ...(readOnly ? { annotations: { readOnlyHint: true } } : {}) })) } });
     if (msg.method === 'tools/call') {
