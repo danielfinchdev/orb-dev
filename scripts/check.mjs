@@ -8,8 +8,8 @@ const walk = (dir) => { for (const e of fs.readdirSync(dir, { withFileTypes: tru
 walk('src'); walk('test'); walk('scripts');
 let failed = 0;
 for (const f of files) {
-  // Renderer files are ES modules loaded by the browser: checked as modules.
-  const r = spawnSync(process.execPath, ['--check', ...(f.endsWith('.js') ? ['--experimental-default-type=module'] : []), f], { encoding: 'utf8' });
+  // package.json says "type": "module", so .js files are checked as ES modules (Node 24 dropped --experimental-default-type).
+  const r = spawnSync(process.execPath, ['--check', f], { encoding: 'utf8' });
   if (r.status !== 0) { failed++; console.error(`✖ ${f}\n${r.stderr}`); }
 }
 console.log(failed ? `${failed} archivo(s) con errores` : `✔ ${files.length} archivos sin errores de sintaxis`);

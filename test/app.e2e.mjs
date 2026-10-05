@@ -22,7 +22,8 @@ process.on('unhandledRejection', (e) => { if (/No dialog is showing/.test(String
 
 // ORB_E2E_EXE: test a packaged build instead of the sources (e.g. dist/linux-unpacked/orb).
 const packaged = process.env.ORB_E2E_EXE;
-const app = await electron.launch({ executablePath: packaged || electronBin, args: [...(packaged ? [] : [ROOT]), ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], env: { ...process.env, ORB_USER_DATA: path.join(tmp, 'datos-app') } });
+// 2.3: the fake agents live inside the engine (ORB_FAKE_AGENTS), so nothing is launched as a program (also on Windows).
+const app = await electron.launch({ executablePath: packaged || electronBin, args: [...(packaged ? [] : [ROOT]), ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], env: { ...process.env, ORB_USER_DATA: path.join(tmp, 'datos-app'), ORB_FAKE_AGENTS: fake('fake-live.mjs') } });
 const errors = [];
 const win = await app.firstWindow();
 win.on('pageerror', (e) => errors.push(e.message));
@@ -46,6 +47,9 @@ try {
   await win.waitForTimeout(500);
   await shot('01-bienvenida');
   await win.click('text=Crear y empezar');
+  // On Windows the first run also offers to install the agents ("Preparo tu equipo") before the chat.
+  await win.getByText('Hola, Ana. Soy Orb.').or(win.getByText('Preparo tu equipo')).first().waitFor();
+  if (await win.isVisible('text=Preparo tu equipo')) { await shot('01b-preparo-equipo'); await win.click('text=Continuar'); }
   await win.waitForSelector('text=Hola, Ana. Soy Orb.');
   const home = path.join(base, 'Orb');
   for (const f of ['orb.json', '.orb/datos/orb.db', 'bitacoras/GENERAL.md']) assert.ok(fs.existsSync(path.join(home, f)), `falta ${f}`);
@@ -59,7 +63,7 @@ try {
 
   // ---- fake agents
   step = 'agentes falsos';
-  await call('config.save', { patch: { agents: { claude: { path: fake('fake-claude.mjs') }, codex: { path: fake('fake-codex.mjs'), models: [] }, cursor: { enabled: false } } } });
+  await call('config.save', { patch: { agents: { codex: { models: [] }, cursor: { enabled: false }, gemini: { enabled: false }, opencode: { enabled: false }, qwen: { enabled: false }, copilot: { enabled: false } } } });
   assert.equal((await call('agents.status', { refresh: true })).find((a) => a.id === 'claude').installed, true);
 
   // ---- a project from the chat's project control: it is a folder right inside the assistant's folder
@@ -126,7 +130,7 @@ try {
   await win.fill('[data-testid=session-input]', 'Y ahora sigue');
   await win.keyboard.press('Enter');
   await win.waitForSelector('text=Codex sigue');
-  await win.getByRole('button', { name: /Comando/ }).first().click();
+  await win.getByRole('button', { name: /Bash/ }).first().click();
   await win.waitForTimeout(300);
   await shot('05-conversacion-codex');
 
@@ -158,7 +162,7 @@ try {
 
   // ---- other views
   step = 'otras vistas';
-  for (const [nav, name, wait] of [['nav-projects', '06-proyectos', 'Git y GitHub'], ['nav-agents', '07-agentes', 'Uso en las últimas'], ['nav-logs', '08-bitacoras', 'Bitácora general'], ['nav-activity', '09-actividad', 'task.created'], ['nav-settings', '10-ajustes', 'Cerebro del asistente']]) {
+  for (const [nav, name, wait] of [['nav-projects', '06-proyectos', 'Git y GitHub'], ['nav-agents', '07-agentes', 'Uso de cada cuenta'], ['nav-logs', '08-bitacoras', 'Bitácora general'], ['nav-activity', '09-actividad', 'task.created'], ['nav-settings', '10-ajustes', 'Cerebro del asistente']]) {
     await win.click(`[data-testid=${nav}]`);
     await win.waitForSelector(`text=${wait}`);
     await win.waitForTimeout(400);

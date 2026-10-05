@@ -2,28 +2,21 @@
 // (request → tasks → agent → review and report → OK), isolated copies, secrets, quota and direct conversations.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { tempHome, until, startEngine, fakeLog } from './helpers.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fork } from 'node:child_process';
-import { tempHome, ROOT, until } from './helpers.mjs';
 import { git } from '../src/core/workspace.mjs';
 
-let t; let engine; let n = 0; const pending = new Map(); const events = [];
-const call = (method, params = {}) => new Promise((resolve, reject) => { const id = ++n; pending.set(id, { resolve, reject }); engine.send({ type: 'call', id, method, params }); });
-const taskDone = (id) => until(async () => { const x = await call('tasks.get', { id }); return !['queued', 'running'].includes(x.status) && x.pid == null && x; }, `tarea #${id}`);
+let t; let engine; let call; let taskDone; let events;
 
 before(async () => {
   t = tempHome();
-  engine = fork(path.join(ROOT, 'src', 'engine', 'engine.mjs'), [], { stdio: ['ignore', 'inherit', 'inherit', 'ipc'] });
-  engine.on('message', (m) => {
-    if (m.type === 'reply') { const p = pending.get(m.id); pending.delete(m.id); m.ok ? p.resolve(m.result) : p.reject(new Error(m.error)); }
-    if (m.type === 'event') events.push(m);
-  });
-  await new Promise((resolve, reject) => { engine.once('message', (m) => (m.type === 'started' && m.ok ? resolve() : reject(new Error(m.error)))); engine.send({ type: 'start', home: t.home, version: 'test' }); });
+  engine = await startEngine(t.home);
+  ({ call, taskDone, events } = engine);
   await call('projects.create', { name: 'web' });
   await call('projects.setActive', { name: 'web' });
 });
-after(() => { engine.send({ type: 'shutdown' }); t.cleanup(); });
+after(async () => { await engine?.stop(); t.cleanup(); });
 
 test('ciclo completo: el asistente crea la tarea, el agente la hace, el asistente informa y el usuario da el OK', async () => {
   await call('chat.send', { text: 'CREA_TAREA web' });
@@ -64,13 +57,13 @@ test('los archivos que parecen secretos no pasan a la copia aislada', async () =
   // before: an isolated copy starts from the folder as it is, but secret-looking files never travel.
   fs.writeFileSync(path.join(project.path, '.env.local'), 'API_KEY=x');
   const done = await taskDone(task.id);
-  assert.equal(done.status, 'done');
+  assert.equal(done.status, 'done', done.result);
   assert.ok(!fs.existsSync(path.join(done.workdir, '.env.local')), 'los secretos no pasan a la copia');
   fs.rmSync(path.join(project.path, '.env.local'));
 });
 
-test('si el agente avisa de límite de uso, la tarea se bloquea y el agente queda en pausa', async () => {
-  const task = await call('tasks.create', { project: 'web', title: 'Límite', description: 'LIMITE', agent: 'claude' });
+test('si el agente solo dice «usage limit» en su respuesta, la tarea se bloquea y la cuenta queda en pausa', async () => {
+  const task = await call('tasks.create', { project: 'web', title: 'Límite', description: 'LIMITE_TEXTO', agent: 'claude' });
   const done = await taskDone(task.id);
   assert.equal(done.status, 'blocked');
   assert.match(done.result, /sin cupo/);
@@ -111,8 +104,7 @@ test('varias cuentas: si una cuenta de Codex está sin cupo, el trabajo va a la 
   const done = await taskDone(next.id);
   assert.equal(done.status, 'done', done.result);
   assert.equal(done.run_account, 'codex-2', 'la cuenta principal ya gastó su tope: va a la segunda');
-  const homes = fs.readFileSync(path.join(done.workdir, '.fake-codex-home'), 'utf8').trim().split('\n');
-  assert.equal(homes.at(-1), acc.home, 'Codex recibe CODEX_HOME de su cuenta');
+  assert.equal(fakeLog(t.home, done.id).at(-1).codexHome, acc.home, 'Codex recibe CODEX_HOME de su cuenta');
   await assert.rejects(call('accounts.remove', { id: 'codex' }), /principal/);
   assert.equal(await call('accounts.remove', { id: 'codex-2' }), true);
   // A removed account's id is never given again (its usage and pauses must not pass to a new subscription).

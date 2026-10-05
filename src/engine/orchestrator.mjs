@@ -1,15 +1,14 @@
 // The assistant's brain: every message of the user goes to Claude Code (the user's own subscription) with a coordinator
-// persona. It can only read file names and use the board (MCP); the agents do the work. The conversation continues with
-// --resume and is renewed every few turns (the board and the logs keep the state).
+// persona. It reads (to write precise, compact briefs) and uses the board (MCP); the agents do the work. 2.3: one live
+// Claude session stays open between messages (streamed answer, no restart per message) and is renewed when its context
+// fills up (the board and the logs keep the state).
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { spawn } from 'node:child_process';
-import { ctx } from '../core/context.mjs';
+import { ctx, tr } from '../core/context.mjs';
 import { AGENTS, assistantName, userName, ofUser } from '../core/board.mjs';
-import { executable } from '../agents/index.mjs';
+import { executable, installed, adapter } from '../agents/index.mjs';
 import * as claude from '../agents/claude.mjs';
-import { cleanEnv, killTree } from '../agents/common.mjs';
 import { rotateIfBig } from '../core/safety.mjs';
 import { mcpServersFor, browserEnv } from './sessions.mjs';
 import { account, defaultAccount, accountEnv } from '../core/accounts.mjs';
@@ -18,14 +17,16 @@ import { briefing } from './logs.mjs';
 export function persona() {
   const c = ctx.config; const me = assistantName(); const boss = userName();
   const accountsOf = (a) => (c.accounts ?? []).filter((x) => x.agent === a && x.enabled !== false);
-  const models = AGENTS.filter((a) => c.agents[a]?.enabled && accountsOf(a).length).map((a) => `- ${a}: ${c.agents[a].strengths}. Modelos: ${(c.agents[a].models ?? []).join(', ') || 'el predeterminado de su programa'}${c.agents[a].heavyModels?.length ? ` (caros: ${c.agents[a].heavyModels.join(', ')})` : ''}.${accountsOf(a).length > 1 ? ` Cuentas: ${accountsOf(a).map((x) => x.label).join(', ')} (el trabajo se reparte solo entre ellas según su cupo).` : ''}`).join('\n');
+  const models = AGENTS.filter((a) => c.agents[a]?.enabled && accountsOf(a).length && installed(a)).map((a) => `- ${a}: ${c.agents[a].strengths}. Modelos: ${(c.agents[a].models ?? []).join(', ') || 'el predeterminado de su programa'}${c.agents[a].heavyModels?.length ? ` (caros: ${c.agents[a].heavyModels.join(', ')})` : ''}.${accountsOf(a).length > 1 ? ` Cuentas: ${accountsOf(a).map((x) => x.label).join(', ')} (el trabajo se reparte solo entre ellas según su cupo).` : ''}`).join('\n');
   return `Eres ${me}, el asistente que coordina a los agentes de IA ${ofUser()}. Hablas en ${c.language === 'en' ? 'inglés' : 'español'}, cercano y breve, sin jerga técnica innecesaria.
 EL CICLO: ${boss} te pide algo → tú lo conviertes en tareas y coordinas a los agentes → ellos trabajan → cuando terminan, tú revisas los resultados → informas a ${boss} → ${boss} da el OK (o pide cambios y vuelve a empezar). Nunca des por terminado un pedido sin ese informe.\nTU PAPEL: ${boss} es quien dirige; tú eres su jefe de proyecto. ${boss} habla contigo y tú das encargos claros a los agentes (${AGENTS.join(', ')}), vigilas que cumplan y le informas con lo esencial.
-SOLO COORDINAS: no programas, no editas, no ejecutas comandos. El trabajo lo hacen los agentes mediante tareas.
+SOLO COORDINAS: no programas, no editas, no ejecutas comandos. El trabajo lo hacen los agentes mediante tareas. Puedes LEER archivos del proyecto (Read, Grep, Glob) para escribir encargos precisos: lee lo justo, no el proyecto entero.
+ENCARGOS COMPACTOS (ahorran tokens a todos): rutas exactas, qué cambiar, criterio de terminado y qué no tocar. No copies código ni contexto que el agente puede leer él mismo; no repitas el mismo contexto en varias tareas: una tarea puede depender de otra (depends_on) y recibe su resultado.
 Tu trabajo, en este orden:
 1. ANALIZA el pedido: qué se quiere de verdad, en qué proyecto y cuándo estará terminado. Si es ambiguo, haz UNA pregunta.
 2. ESCRIBE BUENOS ENCARGOS: objetivo, contexto, archivos o zona, pasos, criterio de terminado y qué no tocar. El agente no ve este chat: cada description debe bastar por sí sola.
-3. COORDINA: divide en tareas pequeñas, da cada una al agente que mejor la hace y usa depends_on para el orden. Para algo importante, añade una tarea de revisión (readonly) con un agente distinto al que lo hizo.
+3. COORDINA: divide en tareas pequeñas, da cada una al agente que mejor la hace y reparte entre proveedores distintos para que trabajen a la vez. Usa depends_on para el orden. Para algo importante, pide un Task Review: una tarea readonly de revisión con un agente y un modelo distintos de los que lo hicieron.
+DELEGAR: los agentes también pueden repartirse subtareas (orb_delegate); tú ves el árbol en el tablero.
 AGENTES DISPONIBLES:
 ${models || '- ninguno activado: pide a ' + boss + ' que active uno en la pantalla Agentes.'}
 Razonamiento "medium" por defecto. "high" solo para algo muy complicado${c.policy?.highNeedsApproval !== false ? ` (esa tarea espera la aprobación ${ofUser()}; díselo)` : ''}.
@@ -54,28 +55,31 @@ Antes de cambiar algo grande, di en una línea qué vas a hacer.`;
 const FREE_TOOLS = ['mcp__orb', 'Read', 'Glob', 'Grep', 'Edit', 'Write', 'NotebookEdit', 'Bash', 'WebFetch', 'WebSearch', 'TodoWrite'];
 
 export class Orchestrator {
-  // key: secret handed only to this chat process (through its environment) so the MCP recognises it as the coordinator.
+  // key: secret handed only to this chat's MCP process (in memory, through the SDK) so the MCP recognises the coordinator.
   constructor(board, key, { emit = () => {}, log = () => {} } = {}) {
     this.board = board; this.key = key; this.emit = emit; this.log = log;
-    this.queue = []; this.busy = false; this.partial = ''; this.tools = []; this.child = null; this.generation = 0;
+    this.queue = []; this.busy = false; this.partial = ''; this.tools = []; this.generation = 0;
+    this.live = null; this.liveKey = ''; this.approvals = new Map(); // request id -> chat message id
   }
 
   get logFile() { return path.join(ctx.paths.runs, 'asistente.log'); }
-  state() { return { busy: this.busy, partial: this.partial, tools: this.tools, queued: this.queue.length }; }
+  state() { return { busy: this.busy, partial: this.partial, tools: this.tools, queued: this.queue.length, context: this.board.settingJson('orchestrator_context') }; }
   push() { this.emit('chat:state', this.state()); }
 
   info() {
     const o = ctx.config.orchestrator ?? {};
     const model = (o.models ?? []).find((m) => m.id === o.model);
-    return { model: o.model, modelLabel: model?.label ?? o.model, models: o.models ?? [], reasoning: o.reasoning ?? 'medium', orchestrate: o.orchestrate !== false, turns: Number(this.board.setting('orchestrator_session') ? this.board.setting('orchestrator_turns') ?? 0 : 0), maxTurns: o.maxTurns ?? 20 };
+    return { model: o.model, modelLabel: model?.label ?? o.model, models: o.models ?? [], reasoning: o.reasoning ?? 'medium', orchestrate: o.orchestrate !== false, turns: Number(this.board.setting('orchestrator_session') ? this.board.setting('orchestrator_turns') ?? 0 : 0), maxTurns: o.maxTurns ?? 60, context: this.board.settingJson('orchestrator_context') };
   }
 
-  ask(text) {
+  ask(text, context = '') {
     text = String(text ?? '').trim();
-    if (!text) throw new Error('escribe un mensaje');
-    if (text.length > 20000) throw new Error('mensaje demasiado largo (máximo 20 000 caracteres)');
+    if (!text) throw new Error(tr('msg.orch.writeMessage'));
+    if (text.length > 20000) throw new Error(tr('msg.orch.tooLong'));
     this.board.addChat('usuario', text);
-    this.queue.push({ text });
+    // While it answers, a new message corrects it on the fly (it reads it at its next step) instead of waiting.
+    if (this.busy && this.live?.steer({ text: text + context })) return;
+    this.queue.push({ text: text + context });
     this.next();
   }
 
@@ -87,96 +91,130 @@ export class Orchestrator {
     this.next();
   }
 
+  closeLive() { try { this.live?.close(); } catch { /* gone */ } this.live = null; this.liveKey = ''; }
+
+  forget() {
+    this.closeLive();
+    this.board.setting('orchestrator_session', ''); this.board.setting('orchestrator_turns', '0'); this.board.settingJson('orchestrator_context', null);
+  }
+
   reset() {
     this.generation++;
-    killTree(this.child);
     this.queue = [];
-    this.board.setting('orchestrator_session', ''); this.board.setting('orchestrator_turns', '0');
-    this.board.addChat('system', `Nueva conversación. ${assistantName()} ya no recuerda lo anterior, pero el tablero y las bitácoras siguen igual.`);
+    this.forget();
+    this.board.addChat('system', tr('msg.orch.newConversation', { name: assistantName() }));
     this.busy = false; this.partial = ''; this.tools = []; this.push();
   }
 
-  stop() { if (this.child) { this.generation++; killTree(this.child); this.queue = []; this.busy = false; this.partial = ''; this.tools = []; this.board.addChat('system', 'Detenido.'); this.push(); } }
+  stop() {
+    if (!this.busy) return;
+    this.generation++; this.queue = [];
+    Promise.resolve(this.live?.interrupt()).catch(() => {});
+    this.busy = false; this.partial = ''; this.tools = []; this.board.addChat('system', tr('msg.orch.stopped')); this.push();
+  }
+
+  // Free mode: the answer to an approval card in the chat (a risky command the assistant wants to run).
+  respond(requestId, decision) {
+    if (!this.live?.respond(requestId, decision)) throw new Error(tr('msg.orch.requestGone'));
+    return true;
+  }
 
   next() {
     if (this.busy || !this.queue.length) return;
     this.busy = true; this.partial = ''; this.tools = []; this.push();
     const { text, meta } = this.queue.shift();
-    this.run(text, true, meta);
+    this.run(text, true, meta).catch((error) => {
+      this.log(`asistente: ${error.stack}`);
+      this.board.addChat('system', tr('msg.orch.cannotAnswer', { message: error.message }));
+      this.busy = false; this.push(); this.next();
+    });
   }
 
-  run(text, allowRetry, meta = null) {
+  // The live Claude session of the assistant, created on demand; a different mode (coordinate / free), project, model or
+  // account starts a new process (the conversation itself continues with resume).
+  ensureLive() {
     const o = ctx.config.orchestrator ?? {};
-    let session = this.board.setting('orchestrator_session');
-    const turns = Number(this.board.setting('orchestrator_turns') ?? 0);
-    if (session && turns >= (o.maxTurns ?? 20)) {
-      session = ''; this.board.setting('orchestrator_session', ''); this.board.setting('orchestrator_turns', '0');
-      this.board.addChat('system', '♻️ Conversación renovada para no gastar de más (el tablero y las bitácoras siguen igual).');
-    }
-    this.board.setting('orchestrator_turns', String((session ? turns : 0) + 1));
-    if (!session) text = `${briefing(this.board)}\n\n## Mensaje ${ofUser()}\n${text}`;
-    let exe;
-    try { exe = executable('claude'); } catch (error) {
-      this.board.addChat('system', `${assistantName()} necesita Claude Code para pensar: ${error.message}`);
-      this.busy = false; this.push(); return this.next();
-    }
-    const generation = this.generation;
-    fs.mkdirSync(ctx.paths.runs, { recursive: true });
-    rotateIfBig(this.logFile);
-    const id = session || crypto.randomUUID();
-    if (!session) this.board.setting('orchestrator_session', id);
-    const dirs = [ctx.paths.projects, ...(ctx.config.projectRoots ?? []), ...this.board.projects().map((p) => p.path)].filter((d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
     const active = this.board.activeProject();
     // Free mode works inside the working project only: never in the assistant's own folder (database, secret, logs).
     const free = o.orchestrate === false && Boolean(active?.path && fs.existsSync(active.path));
-    if (o.orchestrate === false && !free) this.board.addChat('system', '🛠️ El modo libre necesita un proyecto de trabajo: mientras no elijas uno, solo coordino.');
+    if (o.orchestrate === false && !free && !this.warnedFree) { this.warnedFree = true; this.board.addChat('system', tr('msg.orch.freeNeedsProject')); }
+    if (free) this.warnedFree = false;
     const cwd = free ? active.path : ctx.paths.runs;
-    // The browser only when it works by itself (free mode); coordinating, it hands the browsing to the agents.
-    const mcpFile = claude.writeMcpConfig(path.join(ctx.paths.runs, 'asistente-mcp.json'), mcpServersFor('claude', { orchestrator: true, browser: free, session: 'asistente' }));
-    const tools = free
-      ? { permissionMode: 'acceptEdits', allowed: FREE_TOOLS, disallowed: claude.DENIED, systemPrompt: freePersona(cwd), addDirs: [...new Set(dirs)].filter((d) => d !== cwd && d !== ctx.paths.projects).slice(0, 40) }
-      : { allowed: ['mcp__orb', 'Glob'], disallowed: ['Bash', 'Edit', 'Write', 'NotebookEdit', 'Read', 'Grep', 'WebFetch', 'WebSearch', 'Task', 'Skill'], systemPrompt: persona(), addDirs: [...new Set(dirs)].slice(0, 40) };
-    const cmd = claude.buildTurn({ exe, prompt: text, model: o.model || 'claude-sonnet-5-5', reasoning: o.reasoning || 'medium', session: { id, resume: Boolean(session) }, mcpFile, tools });
-    const log = fs.openSync(this.logFile, 'a');
-    let child;
-    try { child = spawn(cmd.cmd, cmd.args, { cwd, env: cleanEnv({ ...accountEnv(account(o.account) ?? defaultAccount('claude') ?? { agent: 'claude' }), ORB_HOME: ctx.home, ORB_AGENT: 'orb', ORB_ORCH_KEY: this.key, ...(free ? browserEnv('orb', 'asistente') : {}) }), windowsHide: true, stdio: ['pipe', 'pipe', log] }); }
-    catch (error) { fs.closeSync(log); this.board.addChat('system', `No pude arrancar Claude Code: ${error.message}`); this.busy = false; this.push(); return this.next(); }
-    this.child = child;
-    const parser = claude.createParser();
-    let buffer = '';
-    child.stdout.setEncoding('utf8');
-    child.stdout.on('data', (chunk) => {
-      buffer += chunk;
-      let nl;
-      while ((nl = buffer.indexOf('\n')) >= 0) {
-        const line = buffer.slice(0, nl).trim(); buffer = buffer.slice(nl + 1);
-        if (!line) continue;
-        for (const item of parser.push(line)) {
-          if (item.kind === 'text' && item.role === 'assistant') this.partial = parser.state.text;
-          if (item.kind === 'tool') this.tools.push(String(item.body.name).replace(/^orb:/, ''));
-        }
-        if (generation === this.generation) this.push();
-      }
+    const acc = account(o.account) ?? defaultAccount('claude') ?? { agent: 'claude' };
+    const key = [free ? 'libre' : 'coordina', cwd, o.model, o.reasoning, acc.id].join('|');
+    if (this.live && this.liveKey === key && !this.live.isClosed()) return { free };
+    this.closeLive();
+    const session = this.board.setting('orchestrator_session');
+    const dirs = [ctx.paths.projects, ...(ctx.config.projectRoots ?? []), ...this.board.projects().map((p) => p.path)].filter((d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
+    fs.mkdirSync(ctx.paths.runs, { recursive: true });
+    rotateIfBig(this.logFile);
+    const writeLog = (line) => { try { fs.appendFileSync(this.logFile, `${String(line).replace(/\r?\n/g, ' ')}\n`); } catch { /* log unavailable */ } };
+    const newId = session ? null : crypto.randomUUID();
+    if (newId) { this.board.setting('orchestrator_session', newId); this.board.setting('orchestrator_turns', '0'); }
+    // Through the registry (not claude.mjs directly), so ORB_FAKE_AGENTS also replaces the assistant's own Claude in tests.
+    this.live = adapter('claude').createLive({
+      exe: executable('claude'), cwd, model: o.model || 'claude-sonnet-5-5', reasoning: o.reasoning || 'medium',
+      permission: free ? 'editar' : 'leer', resumeId: session || null, newSessionId: newId,
+      mcpServers: mcpServersFor('claude', { orchestrator: true, browser: free, session: 'asistente', orchKey: this.key }),
+      env: { ...accountEnv(acc), ORB_HOME: ctx.home, ORB_AGENT: 'orb', ...(free ? browserEnv('orb', 'asistente') : {}) },
+      systemPrompt: free ? freePersona(cwd) : persona(),
+      tools: free ? { disallowed: ['Task'] } : { allowed: ['mcp__orb', 'Read', 'Glob', 'Grep'], disallowed: claude.COORDINATOR_DENIED },
+      addDirs: [...new Set(dirs)].filter((d) => d !== cwd).slice(0, 40), internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog,
+      onEvent: (ev) => this.onEvent(ev)
     });
-    child.stdin.on('error', () => {});
-    child.stdin.end(text);
-    // Coordinating is quick; free mode may run commands and edit for a while (same limit as a task).
-    const timer = setTimeout(() => { this.board.addChat('system', 'Tiempo máximo alcanzado: me detengo.'); killTree(child); }, free ? (ctx.config.timeoutMinutes ?? 60) * 60_000 : 10 * 60_000);
-    let finished = false;
-    const done = (code) => {
-      if (finished) return; finished = true;
-      clearTimeout(timer); try { fs.closeSync(log); } catch { /* closed */ }
-      if (this.child === child) this.child = null;
-      if (generation !== this.generation) return; // reset or stop: nothing to publish
-      // A stale session id makes --resume fail before any output: forget it and try once more with a fresh conversation.
-      if (code !== 0 && session && allowRetry && !parser.state.text) { this.board.setting('orchestrator_session', ''); this.board.setting('orchestrator_turns', '0'); return this.run(text, false, meta); }
-      const answer = (parser.state.isError ? parser.state.final : parser.state.final || parser.state.text).trim();
-      const ok = code === 0 && !parser.state.isError;
-      this.board.addChat(ok ? 'orb' : 'system', answer || `No he podido responder. Revisa en Agentes que Claude Code tenga la sesión iniciada (registro: ${this.logFile}).`, ok ? meta : null);
-      this.busy = false; this.partial = ''; this.tools = []; this.push();
-      this.next();
-    };
-    child.on('error', (error) => { try { fs.appendFileSync(this.logFile, `${error.message}\n`); } catch { /* log unavailable */ } done(-1); });
-    child.on('close', (code) => done(code ?? -1));
+    this.liveKey = key;
+    return { free };
+  }
+
+  onEvent(ev) {
+    if (ev.type === 'delta') { this.partial += ev.text; this.push(); return; }
+    if (ev.type === 'item' && ev.kind === 'tool') { this.tools.push(String(ev.body?.name ?? '').replace(/^orb:/, '')); this.push(); return; }
+    if (ev.type === 'item' && ev.role === 'assistant' && ev.kind === 'text') { this.partial = ''; return; }
+    if (ev.type === 'session' && ev.id) { this.board.setting('orchestrator_session', ev.id); return; }
+    if (ev.type === 'context' && ev.size) { this.board.settingJson('orchestrator_context', { used: ev.used, size: ev.size }); this.push(); return; }
+    if (ev.type === 'approval') {
+      const r = ev.request;
+      const msg = this.board.addChat('system', tr('msg.orch.wantsToRun', { name: assistantName(), title: r.title, reason: r.reason }), { kind: 'approval', id: r.id, status: 'pending' });
+      this.approvals.set(r.id, msg?.id ?? null);
+      return;
+    }
+    if (ev.type === 'approval_done') {
+      const msgId = this.approvals.get(ev.id); this.approvals.delete(ev.id);
+      if (msgId) this.board.patchChatMeta(msgId, { kind: 'approval', id: ev.id, status: ev.decision === 'deny' ? 'denied' : 'allowed' });
+      return;
+    }
+    if (ev.type === 'exit' && !this.busy) this.live = null;
+  }
+
+  async run(text, allowRetry, meta = null) {
+    const o = ctx.config.orchestrator ?? {};
+    const turns = Number(this.board.setting('orchestrator_turns') ?? 0);
+    const c = this.board.settingJson('orchestrator_context');
+    // Renewed when its context is filling up (or after many turns): cheaper than dragging a long conversation along.
+    if (this.board.setting('orchestrator_session') && ((c?.size && c.used / c.size >= (o.renewAt ?? 0.6)) || turns >= (o.maxTurns ?? 60))) {
+      this.forget();
+      this.board.addChat('system', tr('msg.orch.renewed'));
+    }
+    const fresh = !this.board.setting('orchestrator_session');
+    const prompt = fresh ? `${briefing(this.board)}\n\n## Mensaje ${ofUser()}\n${text}` : text;
+    try { this.ensureLive(); } catch (error) {
+      this.board.addChat('system', tr('msg.orch.needsClaude', { name: assistantName(), message: error.message }));
+      this.busy = false; this.push(); return this.next();
+    }
+    this.board.setting('orchestrator_turns', String(Number(this.board.setting('orchestrator_turns') ?? 0) + 1));
+    const generation = this.generation;
+    const free = (ctx.config.orchestrator ?? {}).orchestrate === false;
+    const timer = setTimeout(() => { this.board.addChat('system', tr('msg.orch.timeLimit')); Promise.resolve(this.live?.interrupt()).catch(() => {}); }, free ? (ctx.config.timeoutMinutes ?? 60) * 60_000 : 10 * 60_000);
+    const live = this.live;
+    const result = await live.send({ text: prompt });
+    clearTimeout(timer);
+    if (generation !== this.generation) return; // reset or stop: nothing to publish
+    // A stale conversation id fails before any answer: forget it and try once more with a fresh conversation.
+    if (result.isError && allowRetry && !result.text && !fresh) { this.forget(); return this.run(text, false, meta); }
+    const answer = (result.final || result.text || '').trim();
+    const ok = !result.isError;
+    this.board.addChat(ok ? 'orb' : 'system', answer || tr('msg.orch.cannotAnswerCheck', { logFile: this.logFile }), ok ? meta : null);
+    this.busy = false; this.partial = ''; this.tools = []; this.push();
+    this.next();
   }
 }

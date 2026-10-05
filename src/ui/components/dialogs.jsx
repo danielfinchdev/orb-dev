@@ -5,14 +5,15 @@ import { Button } from '@/components/ui/button.jsx';
 import { useStore, setState } from '@/lib/store.js';
 import { toast } from 'sonner';
 import { errorText } from '@/lib/utils.js';
+import { t } from '@/lib/i18n.js';
 
 let seq = 0;
 function open(dialog) { return new Promise((resolve) => setState((s) => ({ dialogs: [...(s.dialogs ?? []), { ...dialog, id: ++seq, resolve }] }))); }
 function close(id, value) { setState((s) => { const d = (s.dialogs ?? []).find((x) => x.id === id); d?.resolve(value); return { dialogs: (s.dialogs ?? []).filter((x) => x.id !== id) }; }); }
 
-export const confirm = (title, description, { ok = 'Aceptar', cancel = 'Cancelar', danger = false } = {}) => open({ kind: 'confirm', title, description, ok, cancel, danger });
+export const confirm = (title, description, { ok = t('comp.dialogs.ok'), cancel = t('comp.dialogs.cancel'), danger = false } = {}) => open({ kind: 'confirm', title, description, ok, cancel, danger });
 // body: (values, set) => JSX; onOk(values) may throw (shown as a toast, the dialog stays open) or return the result.
-export const form = (title, { description, initial = {}, body, ok = 'Aceptar', onOk, wide = false }) => open({ kind: 'form', title, description, initial, body, ok, onOk, wide });
+export const form = (title, { description, initial = {}, body, ok = t('comp.dialogs.ok'), onOk, wide = false }) => open({ kind: 'form', title, description, initial, body, ok, onOk, wide });
 
 function FormDialog({ d }) {
   const [values, setValues] = useState(d.initial);
@@ -29,7 +30,7 @@ function FormDialog({ d }) {
     <form onSubmit={submit} className="grid gap-4">
       <DialogHeader><DialogTitle>{d.title}</DialogTitle>{d.description ? <DialogDescription>{d.description}</DialogDescription> : null}</DialogHeader>
       <div className="grid gap-4">{d.body(values, set)}</div>
-      <DialogFooter><Button type="button" variant="outline" onClick={() => close(d.id, null)}>Cancelar</Button><Button type="submit" disabled={busy}>{d.ok}</Button></DialogFooter>
+      <DialogFooter><Button type="button" variant="outline" onClick={() => close(d.id, null)}>{t('comp.dialogs.cancel')}</Button><Button type="submit" disabled={busy}>{d.ok}</Button></DialogFooter>
     </form>
   );
 }

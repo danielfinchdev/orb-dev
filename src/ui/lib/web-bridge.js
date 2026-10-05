@@ -1,5 +1,7 @@
 // When the interface runs in a phone's browser (phone access through Tailscale) there is no Electron bridge: this one
 // talks to the PC over HTTP (/api/call) and receives live events (/api/events). It must be imported before anything else.
+// Not imported statically: i18n.js needs the store, which reads window.orb when it loads (and this file defines it).
+const tl = async (key, vars) => (await import('./i18n.js')).t(key, vars);
 if (!window.orb) {
   const listeners = new Map();
   const fire = (event, payload) => {
@@ -14,8 +16,8 @@ if (!window.orb) {
   const post = async (url, body, headers = {}) => {
     const res = await fetch(url, { method: 'POST', credentials: 'omit', headers: { 'X-Orb': '1', ...auth(), ...headers }, body });
     const data = await res.json().catch(() => ({}));
-    if (res.status === 401) { unpaired(); throw new Error(data.error ?? 'este dispositivo no está vinculado'); }
-    if (!res.ok) throw new Error(data.error ?? `error ${res.status}`);
+    if (res.status === 401) { unpaired(); throw new Error(data.error ?? await tl('app.notLinked')); }
+    if (!res.ok) throw new Error(data.error ?? await tl('app.httpError', { n: res.status }));
     return data;
   };
   // Live events over a streamed fetch (EventSource cannot send the key); reconnects with a growing pause.
@@ -60,7 +62,7 @@ if (!window.orb) {
       const code = new URLSearchParams(location.hash.slice(1)).get('vincular');
       if (code) {
         history.replaceState(null, '', location.pathname); // the one-time code leaves the address bar at once
-        const r = await post('/api/pair', JSON.stringify({ token: code, name: /iPhone|iPad/.test(navigator.userAgent) ? 'iPhone' : /Android/.test(navigator.userAgent) ? 'Android' : 'Navegador' }), { 'Content-Type': 'application/json' });
+        const r = await post('/api/pair', JSON.stringify({ token: code, name: /iPhone|iPad/.test(navigator.userAgent) ? 'iPhone' : /Android/.test(navigator.userAgent) ? 'Android' : await tl('app.browser') }), { 'Content-Type': 'application/json' });
         token.set(r.token);
       }
       if (!token.get()) return { mobile: true, needsPairing: true, needsSetup: false };
@@ -70,11 +72,11 @@ if (!window.orb) {
       if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
       return { mobile: true, needsSetup: false, platform: 'web' };
     },
-    setup: async () => { throw new Error('solo desde el PC'); },
-    switchHome: async () => { throw new Error('solo desde el PC'); },
+    setup: async () => { throw new Error(await tl('app.pcOnly')); },
+    switchHome: async () => { throw new Error(await tl('app.pcOnly')); },
     pickFolder: async () => null,
     pickImages,
-    openPath: async () => { throw new Error('las carpetas se abren desde el PC'); },
+    openPath: async () => { throw new Error(await tl('app.foldersPc')); },
     openExternal: async (url) => { if (/^https:\/\//.test(url)) window.open(url, '_blank', 'noopener'); },
     pathForFile: () => null
   };

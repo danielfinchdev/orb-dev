@@ -5,7 +5,7 @@
 // It writes its progress to a log the engine watches.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx } from '../core/context.mjs';
+import { ctx, tr } from '../core/context.mjs';
 import { ADAPTERS, quickRun, openConsole } from '../agents/index.mjs';
 import { IS_WIN } from '../agents/common.mjs';
 
@@ -19,26 +19,32 @@ export const ITEMS = [
   { id: 'codex', label: 'Codex', why: 'agente de OpenAI', install: 'npm install -g @openai/codex', after: ['node'] },
   { id: 'cursor', label: 'Cursor CLI', why: 'agente de Cursor', install: "irm 'https://cursor.com/install?win32=true' | iex" },
   { id: 'gh', label: 'GitHub CLI', why: 'publicar y crear pull requests con tu cuenta', install: winget('GitHub.cli'), needsWinget: true },
-  { id: 'tailscale', label: 'Tailscale', why: 'usar el asistente desde el móvil de forma privada', install: winget('Tailscale.Tailscale'), needsWinget: true, optional: true }
+  { id: 'tailscale', label: 'Tailscale', why: 'usar el asistente desde el móvil de forma privada', install: winget('Tailscale.Tailscale'), needsWinget: true, optional: true },
+  // 2.3: more agents (ACP). Optional: each one with its own account (Google, GitHub…), signed in with its own program.
+  { id: 'gemini', label: 'Gemini CLI', why: 'agente de Google: contexto enorme, investigar y revisar', install: 'npm install -g @google/gemini-cli', after: ['node'], optional: true },
+  { id: 'copilot', label: 'GitHub Copilot CLI', why: 'agente de GitHub, con tu suscripción de Copilot', install: 'npm install -g @github/copilot', after: ['node'], optional: true },
+  { id: 'opencode', label: 'OpenCode', why: 'agente abierto con muchos proveedores y modelos', install: 'npm install -g opencode-ai', after: ['node'], optional: true },
+  { id: 'qwen', label: 'Qwen Code', why: 'agente rápido y barato para tareas repetitivas', install: 'npm install -g @qwen-code/qwen-code', after: ['node'], optional: true }
 ];
+const AGENT_ITEMS = ['claude', 'codex', 'cursor', 'gemini', 'copilot', 'opencode', 'qwen'];
 
 async function versionOf(cmd, args = ['--version']) { const r = await quickRun(cmd, args, { timeoutMs: 8000 }); return r.ok ? r.out.split(/\r?\n/)[0].slice(0, 60) : null; }
 const tailscaleExe = () => (IS_WIN ? path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Tailscale', 'tailscale.exe') : 'tailscale');
 
 export async function check() {
   const out = {};
-  for (const agent of ['claude', 'codex', 'cursor']) out[agent] = Boolean(ADAPTERS[agent].detect(ctx.config.agents[agent] ?? {}));
+  for (const agent of AGENT_ITEMS) out[agent] = Boolean(ADAPTERS[agent]?.detect(ctx.config.agents[agent] ?? {}));
   out.git = Boolean(await versionOf('git'));
   out.node = Boolean(await versionOf(IS_WIN ? 'node.exe' : 'node'));
   out.gh = Boolean(await versionOf(IS_WIN ? 'gh.exe' : 'gh'));
   out.tailscale = Boolean(await versionOf(tailscaleExe(), ['version']));
-  return ITEMS.map((i) => ({ id: i.id, label: i.label, why: i.why, optional: Boolean(i.optional), installed: out[i.id] }));
+  return ITEMS.map((i) => ({ id: i.id, label: i.label, why: tr(`msg.installer.why.${i.id}`), optional: Boolean(i.optional), installed: out[i.id] }));
 }
 
 // The PowerShell script for the chosen items, in a safe order (Node before Codex). Only fixed text from ITEMS goes in.
 export function plan(ids) {
   const chosen = ITEMS.filter((i) => ids.includes(i.id));
-  if (chosen.some((i) => i.id === 'codex') && !chosen.some((i) => i.id === 'node')) chosen.unshift(ITEMS.find((i) => i.id === 'node'));
+  if (chosen.some((i) => i.after?.includes('node')) && !chosen.some((i) => i.id === 'node')) chosen.unshift(ITEMS.find((i) => i.id === 'node'));
   return chosen;
 }
 
@@ -48,26 +54,26 @@ export function buildScript(ids, logFile) {
   const q = (s) => `'${String(s).replace(/['\u2018\u2019\u201A\u201B]/g, (c) => c + c)}'`;
   const lines = [
     "$ErrorActionPreference = 'Continue'",
-    "$Host.UI.RawUI.WindowTitle = 'Instalando agentes'",
+    `$Host.UI.RawUI.WindowTitle = ${q(tr('msg.installer.windowTitle'))}`,
     '[Console]::OutputEncoding = [Text.Encoding]::UTF8',
     `$log = ${q(logFile)}`,
     "function Refresh-Path { $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User') }",
     'function Step($id, $title, [scriptblock]$do) {',
     "  Add-Content -LiteralPath $log -Value \"INICIO $id\"; Write-Host ''; Write-Host \"== $title\" -ForegroundColor Cyan",
-    '  try { $global:LASTEXITCODE = 0; & $do; if ($LASTEXITCODE -ne 0) { throw "código de salida $LASTEXITCODE" }; Add-Content -LiteralPath $log -Value "OK $id"; Write-Host "   listo" -ForegroundColor Green }',
-    '  catch { Add-Content -LiteralPath $log -Value "ERROR $id $_"; Write-Host "   falló: $_" -ForegroundColor Red }',
+    `  try { $global:LASTEXITCODE = 0; & $do; if ($LASTEXITCODE -ne 0) { throw "${tr('msg.installer.exitCode')} $LASTEXITCODE" }; Add-Content -LiteralPath $log -Value "OK $id"; Write-Host "   ${tr('msg.installer.done')}" -ForegroundColor Green }`,
+    `  catch { Add-Content -LiteralPath $log -Value "ERROR $id $_"; Write-Host "   ${tr('msg.installer.failed')} $_" -ForegroundColor Red }`,
     '  Refresh-Path',
     '}',
     "$hasWinget = [bool](Get-Command winget -ErrorAction SilentlyContinue)",
-    "Write-Host 'Instalando lo necesario con los instaladores oficiales. Si Windows pregunta, acepta.' -ForegroundColor Yellow"
+    `Write-Host ${q(tr('msg.installer.intro'))} -ForegroundColor Yellow`
   ];
   for (const item of chosen) {
     const body = item.needsWinget
-      ? `if (-not $hasWinget) { throw 'falta winget (instala «Instalador de aplicación» desde Microsoft Store)' }; ${item.install}`
+      ? `if (-not $hasWinget) { throw ${q(tr('msg.installer.noWinget'))} }; ${item.install}`
       : item.install;
     lines.push(`Step ${q(item.id)} ${q(item.label)} { ${body} }`);
   }
-  lines.push("Add-Content -LiteralPath $log -Value 'FIN'", "Write-Host ''", "Write-Host 'Terminado. Vuelve a la app y pulsa «Comprobar». Puedes cerrar esta ventana.' -ForegroundColor Yellow", "Read-Host 'Pulsa Enter para cerrar'");
+  lines.push("Add-Content -LiteralPath $log -Value 'FIN'", "Write-Host ''", `Write-Host ${q(tr('msg.installer.finished'))} -ForegroundColor Yellow`, `Read-Host ${q(tr('msg.installer.pressEnter'))}`);
   return lines.join('\r\n');
 }
 
@@ -76,10 +82,10 @@ let timer = null;
 const MAX_MS = 45 * 60_000;
 
 export function start(ids, emit) {
-  if (!IS_WIN) throw new Error('la instalación automática es para Windows');
-  if (current && !progress().finished && Date.now() - current.startedAt < MAX_MS) throw new Error('ya hay una instalación en marcha: termina o cierra su ventana antes');
+  if (!IS_WIN) throw new Error(tr('msg.installer.windowsOnly'));
+  if (current && !progress().finished && Date.now() - current.startedAt < MAX_MS) throw new Error(tr('msg.installer.alreadyRunning'));
   const valid = plan(ids.filter((id) => ITEMS.some((i) => i.id === id))).map((i) => i.id);
-  if (!valid.length) throw new Error('elige al menos un programa');
+  if (!valid.length) throw new Error(tr('msg.installer.chooseOne'));
   const dir = path.join(ctx.paths.runs, 'instalacion');
   fs.mkdirSync(dir, { recursive: true });
   const stamp = Date.now();
