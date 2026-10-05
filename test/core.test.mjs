@@ -43,7 +43,8 @@ test('los ajustes se validan antes de guardarse', () => {
   assert.throws(() => saveConfig({ orchestrator: { model: 'otro' } }), /modelo del asistente/);
   assert.throws(() => saveConfig({ mcpServers: [{ name: 'orb', command: 'x' }] }), /no válido/);
   assert.throws(() => saveConfig({ agents: { claude: { path: 'claude' } } }), /absoluta/);
-  assert.throws(() => saveConfig({ agents: { claude: { path: path.join(t.home, 'no-existe') } } }), /no existe/);
+  assert.throws(() => saveConfig({ agents: { claude: { path: path.join(t.home, 'no-existe.exe') } } }), /no existe/);
+  if (process.platform === 'win32') assert.throws(() => saveConfig({ agents: { claude: { path: path.join(t.home, 'claude.cmd') } } }), /\.exe/);
   const c = saveConfig({ orchestrator: { model: 'claude-opus-5-5', orchestrate: false } });
   assert.equal(c.orchestrator.model, 'claude-opus-5-5');
   saveConfig({ orchestrator: { model: 'claude-sonnet-5-5', orchestrate: true } });
@@ -132,7 +133,8 @@ test('la red de palabras ignora las negaciones de su propia frase', () => {
 });
 
 test('cupo: tope por ventana, enfriamiento al agotar el límite y lectura de la hora de reinicio', () => {
-  for (let i = 0; i < 6; i++) board.event(null, 'orb', 'task.launch_options', JSON.stringify({ agent: 'codex', model: null }));
+  // The safety net of 2.3: 20 launches per window (the real usage the accounts report is the main guard).
+  for (let i = 0; i < 20; i++) board.event(null, 'orb', 'task.launch_options', JSON.stringify({ agent: 'codex', model: null }));
   assert.equal(canLaunch(board, 'codex', null).ok, false);
   assert.equal(canLaunch(board, 'claude', null).ok, true);
   assert.ok(isLimitText("You've hit your usage limit · resets 5pm"));
