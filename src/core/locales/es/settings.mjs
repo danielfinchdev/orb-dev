@@ -1,0 +1,2 @@
+// settings.*
+export default {};

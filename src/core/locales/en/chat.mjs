@@ -1,0 +1,2 @@
+// chat.*
+export default {};

@@ -1,0 +1,2 @@
+// activity.*
+export default {};

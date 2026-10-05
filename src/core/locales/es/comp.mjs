@@ -1,0 +1,2 @@
+// comp.*
+export default {};
