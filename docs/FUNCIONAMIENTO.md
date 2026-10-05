@@ -476,8 +476,10 @@ que iniciar sesión en la app. Si no, «Iniciar sesión» abre el login oficial 
 - La app está en español de España y en inglés (Ajustes → Idioma, que se aplica al momento).
 - Archivos:
   - base: `src/core/i18n.mjs` (`translate`, `createT`, `localeOf`);
-  - diccionarios: `src/core/locales/es.mjs` y `en.mjs`;
-  - interfaz: `src/ui/lib/i18n.js` (`useT()` en componentes, `t()` fuera de ellos).
+  - diccionarios: 1148 claves, un archivo por área en `src/core/locales/es/` y `en/` (chat, session, tasks, agents,
+    settings, setup, msg…), que `es.mjs` y `en.mjs` reúnen;
+  - interfaz: `src/ui/lib/i18n.js` (`useT()` y `useLocale()` en componentes, `t()` y `currentLocale()` fuera de ellos);
+  - motor: `tr()` de `src/core/context.mjs` (avisos del chat, errores y motivos del guardia en el idioma elegido).
 - **Añadir un texto:** se escribe `t('pantalla.clave')` en el componente y la clave se añade en los **dos** diccionarios.
   Una prueba comprueba que coinciden.
 - Lo que va a los agentes (encargos, instrucciones del asistente) no se traduce: el idioma de respuesta lo marca
@@ -522,7 +524,7 @@ que iniciar sesión en la app. Si no, «Iniciar sesión» abre el login oficial 
 
 | Comando | Qué cubre |
 |---|---|
-| `npm test` | 79 pruebas del motor con agentes falsos (`test/fixtures/fake-live.mjs` vía `ORB_FAKE_AGENTS`), los protocolos reales contra servidores falsos (ACP, codex app-server, CLI de Cursor), el guardia, sesiones, tareas, delegación, Task Review, cupo y migraciones |
+| `npm test` | 84 pruebas (incluye que los diccionarios es/en coinciden y que el inglés no tiene español) del motor con agentes falsos (`test/fixtures/fake-live.mjs` vía `ORB_FAKE_AGENTS`), los protocolos reales contra servidores falsos (ACP, codex app-server, CLI de Cursor), el guardia, sesiones, tareas, delegación, Task Review, cupo y migraciones |
 | `npm run test:app` | La app entera con Electron |
 | `node test/explora.e2e.mjs` | Todas las vistas en día y noche, con capturas |
 | `node test/real.e2e.mjs claude,codex,cursor` | **Agentes reales**: conversaciones, tarea del asistente, informe, deshacer, aprobación, corrección, cola, bifurcación, Task Review y programadas |
