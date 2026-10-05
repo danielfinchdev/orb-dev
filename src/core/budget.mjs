@@ -112,7 +112,8 @@ export function parseReset(text, now = new Date()) {
 }
 
 export function startCooldown(board, agent, text, resetAt = null) {
-  const until = resetAt && resetAt > Date.now() ? resetAt : parseReset(text);
+  // The agent's own reset time wins over reading the text (even if it already passed: then the limit is over).
+  const until = resetAt ? Math.max(resetAt, Date.now()) : parseReset(text);
   board.setting(`cooldown:${agent}`, String(until));
   board.setting(`cooldown_reason:${agent}`, '');
   return until;

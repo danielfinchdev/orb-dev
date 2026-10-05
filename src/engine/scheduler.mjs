@@ -92,7 +92,9 @@ export class Scheduler {
       const project = board.project(task.project);
       if (!project) continue;
       const inFolder = (t) => t?.workdir && path.resolve(t.workdir) === path.resolve(project.path);
-      const others = [...this.running.keys()].map((id) => board.task(id)).filter(inFolder);
+      // A subtask (orb_delegate) does not wait for its own parent: the parent is waiting for it (orb_wait_tasks), so
+      // holding the folder for the parent would make both wait until the wait runs out.
+      const others = [...this.running.keys()].map((id) => board.task(id)).filter((t) => inFolder(t) && t.id !== task.parent_id);
       if (task.mode === 'carpeta' && !task.branch && (others.some((t) => !t.readonly) || (!task.readonly && others.length))) continue;
       this.launch(task, pick.agent, pick.account);
     }
@@ -293,6 +295,9 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
     git(task.workdir, 'add', '-A', '--', '.', `:(exclude)${ATTACH_DIR}`);
     const staged = git(task.workdir, 'diff', '--cached', '--name-only', '-z').stdout.split('\0').filter(Boolean).filter(isSecretPath);
     if (staged.length) { git(task.workdir, 'reset', '-q'); return `no se hizo el commit automático: hay archivos que parecen secretos (${staged.slice(0, 5).join(', ')})`; }
+    // Nothing really changed: git status can list a file the agent rewrote with the same content but other line endings
+    // (core.autocrlf=true, the Git for Windows default), and then "git commit" fails with "nothing to commit".
+    if (git(task.workdir, 'diff', '--cached', '--quiet').status === 0) return '';
     const commit = git(task.workdir, ...ORB_GIT, 'commit', '-q', '-m', `orb: tarea #${task.id} ${oneLine(task.title)}`);
     this.board.event(task.id, 'orb', 'git.commit', commit.status === 0 ? 'cambios guardados en la rama' : commit.stderr.trim());
     return commit.status === 0 ? '' : `el commit automático falló (${oneLine(commit.stderr, 200)}); los cambios siguen sin guardar en ${task.workdir}`;
@@ -437,7 +442,9 @@ Cierra el ciclo: 1) revisa si el resultado cumple lo que ${userName()} pidió (o
     if (!agent) throw new Error('no hay ningún agente instalado y con cupo para el Task Review');
     // Same agent: another model, so it is a second pair of eyes and not the same one twice.
     const models = ctx.config.agents[agent]?.models ?? [];
-    const model = agent === task.assigned_to ? models.find((m) => m !== task.model) ?? null : null;
+    // A task without a model ran with the agent's default one (Sonnet for Claude): that is the model to avoid.
+    const used = task.model || ctx.config.agents[agent]?.defaultModel || null;
+    const model = agent === task.assigned_to ? models.find((m) => m !== used) ?? null : null;
     const review = this.board.createTask({ project: task.project, title: `Task Review de #${task.id}: ${oneLine(task.title, 80)}`, agent, model, readonly: true, mode: task.mode, depends_on: [task.id], review_of: task.id,
       description: `Eres el revisor (Task Review) del trabajo de la tarea #${task.id} «${oneLine(task.title)}», hecho por ${task.assigned_to ?? task.agent}${task.model ? ` (${task.model})` : ''}.
 Encargo original: ${oneLine(task.description, 1500)}
