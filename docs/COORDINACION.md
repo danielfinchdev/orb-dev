@@ -9,9 +9,9 @@ Rama principal de trabajo: **`orb-2.3`**. Nadie trabaja directamente en `main`: 
 |---|---|---|---|
 | Motor en vivo (adaptadores, sesiones, guardia, tareas, asistente, delegación, Task Review, cupo) | Claude local (PC de Dani, Windows) | `orb-2.3` | hecho (1cb7bce) |
 | Pruebas automáticas de la arquitectura 2.3 (agentes falsos, ACP falso, pruebas en Windows) | **Claude en la nube** | `orb-2.3-pruebas` | en curso |
-| Interfaz 2.3 (aprobaciones, cola, contexto, bifurcar, bandeja, Task Review, agentes nuevos) | Claude local | `orb-2.3` | siguiente |
-| Tareas programadas, `@` para adjuntar contexto, panel de detalles | Claude local | `orb-2.3` | después |
-| Español (España) e inglés completos (i18n) | por decidir (se reparte al terminar la interfaz) | `orb-2.3-i18n` | pendiente |
+| Interfaz 2.3 (aprobaciones, cola, contexto, bifurcar, bandeja, Task Review, agentes nuevos) | Claude local | `orb-2.3` | hecho |
+| Tareas programadas, `@` para adjuntar contexto, panel de detalles | Claude local | `orb-2.3` | hecho |
+| Español (España) e inglés completos (i18n) | **Claude en la nube** (segundo encargo) | `orb-2.3-i18n` | en curso |
 | Documento de funcionamiento (`docs/FUNCIONAMIENTO.md`) | Claude local | `orb-2.3` | al final |
 
 ## Reglas para todos
@@ -84,3 +84,34 @@ Las pruebas de `test/` se escribieron para la 2.1: lanzaban agentes falsos como 
    `src/`, hazlo y explícalo en el PR.
 
 Al terminar, abre un PR de `orb-2.3-pruebas` contra `orb-2.3` con un resumen de lo que cubre cada prueba.
+
+## Encargo 2 del Claude en la nube: español (España) e inglés (`orb-2.3-i18n`)
+
+La base ya está hecha:
+- `src/core/i18n.mjs`: `translate`, `createT` y `localeOf`.
+- Diccionarios en `src/core/locales/es.mjs` y `src/core/locales/en.mjs`.
+- `src/ui/lib/i18n.js`: `useT()` en componentes y `t()` fuera de ellos.
+- El selector de idioma en Ajustes, que guarda `config.language` (`es` o `en`).
+- Ejemplo ya convertido: `src/ui/components/sidebar.jsx`.
+
+Hay que:
+
+1. Convertir **todos** los textos visibles de `src/ui/**` (vistas, componentes, diálogos, avisos `toast`, `labels.js`, el
+   primer arranque y la web del móvil) a `t('clave')`.
+   - Claves por pantalla: `chat.*`, `session.*`, `tasks.*`, `agents.*`, `settings.*`, `setup.*`…
+   - Textos con datos con marcadores: `t('tasks.count', { n })`.
+   - Fechas y números con `useLocale()`, no con `'es-ES'` fijo.
+2. Pasar también a `translate(ctx.config.language, …)` los mensajes del motor que lee el usuario:
+   - los avisos del chat (`board.addChat('system', …)` en `scheduler.mjs`, `board.mjs`, `api.mjs`, `engine.mjs` y
+     `orchestrator.mjs`);
+   - los errores de validación de `api.mjs` y `context.mjs`;
+   - los textos de `guard.mjs` (motivos) y de `agent-errors.mjs`.
+3. No traduzcas lo que va a los agentes: personas, encargos, `promptFor` y las descripciones de las herramientas MCP. Eso
+   sigue en español, porque es lo que entiende el asistente, y el idioma de respuesta ya se elige con `config.language`.
+4. Español de **España** (vosotros no hace falta; tú, cercano y sin jerga) e inglés británico natural, no literal. No
+   cambies el tono ni la estética.
+5. Prueba nueva: todas las claves de `es.mjs` existen en `en.mjs` y al revés, y ningún texto visible queda en español
+   cuando el idioma es inglés. Una forma de comprobarlo es la prueba de la app cambiando el idioma y buscando palabras
+   típicas.
+6. Haz `git merge orb-2.3` a menudo, porque el Claude local sigue empujando cambios, y resuelve los conflictos con cuidado.
+   PR contra `orb-2.3`.
