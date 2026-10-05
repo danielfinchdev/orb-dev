@@ -85,7 +85,7 @@ export function usageReport(board) {
   return accounts().map((acc) => {
     const r = rules(acc.id); const used = windowUsage(board, acc.id);
     const real = realRate(board, acc.id);
-    return { account: acc.id, agent: acc.agent, label: acc.label, used: used.tasks, max: r.maxTasks, heavy: used.heavy, maxHeavy: r.maxHeavy, cooldownUntil: cooldownUntil(board, acc.id) || null, windowHours: budgetConfig().windowHours,
+    return { account: acc.id, agent: acc.agent, label: acc.label, used: used.tasks, max: r.maxTasks, heavy: used.heavy, maxHeavy: r.maxHeavy, cooldownUntil: cooldownUntil(board, acc.id) || null, windowHours: budgetConfig().windowHours, stopAt: budgetConfig().stopAt,
       real: real ? { utilization: real.utilization, resetAt: real.resetAt, window: real.window } : null };
   });
 }

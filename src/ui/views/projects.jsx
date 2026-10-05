@@ -1,11 +1,12 @@
 // Projects: the folders inside the assistant's folder (plus any linked one), with git and GitHub actions.
 import { useEffect, useState } from 'react';
-import { FolderKanban, FolderPlus, FolderOpen, Pin, MessageSquare, BookOpen, Unlink, GitBranch, Save, Upload, RefreshCw, GitPullRequest, Folder } from 'lucide-react';
+import { FolderKanban, FolderPlus, FolderOpen, Pin, MessageSquare, BookOpen, Unlink, GitBranch, Save, Upload, RefreshCw, GitPullRequest, Folder, ScanSearch } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/page.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { createProjectFlow, linkFolderFlow, cloneRepoFlow } from '@/components/project-actions.jsx';
 import { newConversation } from './session.jsx';
+import { askReview } from './tasks.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Empty, Field, Input, Spinner } from '@/components/ui/basic.jsx';
 import { Checkbox } from '@/components/ui/overlay.jsx';
@@ -59,6 +60,7 @@ function ProjectDetail({ p }) {
         {!p.active ? <Button size="sm" onClick={() => act(call('projects.setActive', { name: p.name }), `Ahora se trabaja en ${p.name}`)}><Pin />Trabajar aquí</Button> : null}
         {bridge.mobile ? null : <Button size="sm" variant="outline" onClick={() => act(bridge.openPath(p.path))}><FolderOpen />Abrir carpeta</Button>}
         <Button size="sm" variant="outline" onClick={() => newConversation({ project: p.name })}><MessageSquare />Conversación aquí</Button>
+        <Button size="sm" variant="outline" onClick={() => askReview({ project: p.name })} data-testid="project-review"><ScanSearch />Task Review</Button>
         <Button size="sm" variant="outline" onClick={() => go({ view: 'logs', name: p.name })}><BookOpen />Bitácora</Button>
         {!p.inHome ? <Button size="sm" variant="danger" onClick={async () => { if (await confirm('Desvincular carpeta', `${p.name} deja de aparecer en la app. La carpeta y sus archivos NO se borran.`, { ok: 'Desvincular', danger: true })) act(call('projects.remove', { name: p.name }), 'Desvinculada'); }}><Unlink />Desvincular</Button> : null}
       </CardContent>

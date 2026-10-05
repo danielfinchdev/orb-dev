@@ -19,15 +19,21 @@ export const ITEMS = [
   { id: 'codex', label: 'Codex', why: 'agente de OpenAI', install: 'npm install -g @openai/codex', after: ['node'] },
   { id: 'cursor', label: 'Cursor CLI', why: 'agente de Cursor', install: "irm 'https://cursor.com/install?win32=true' | iex" },
   { id: 'gh', label: 'GitHub CLI', why: 'publicar y crear pull requests con tu cuenta', install: winget('GitHub.cli'), needsWinget: true },
-  { id: 'tailscale', label: 'Tailscale', why: 'usar el asistente desde el móvil de forma privada', install: winget('Tailscale.Tailscale'), needsWinget: true, optional: true }
+  { id: 'tailscale', label: 'Tailscale', why: 'usar el asistente desde el móvil de forma privada', install: winget('Tailscale.Tailscale'), needsWinget: true, optional: true },
+  // 2.3: more agents (ACP). Optional: each one with its own account (Google, GitHub…), signed in with its own program.
+  { id: 'gemini', label: 'Gemini CLI', why: 'agente de Google: contexto enorme, investigar y revisar', install: 'npm install -g @google/gemini-cli', after: ['node'], optional: true },
+  { id: 'copilot', label: 'GitHub Copilot CLI', why: 'agente de GitHub, con tu suscripción de Copilot', install: 'npm install -g @github/copilot', after: ['node'], optional: true },
+  { id: 'opencode', label: 'OpenCode', why: 'agente abierto con muchos proveedores y modelos', install: 'npm install -g opencode-ai', after: ['node'], optional: true },
+  { id: 'qwen', label: 'Qwen Code', why: 'agente rápido y barato para tareas repetitivas', install: 'npm install -g @qwen-code/qwen-code', after: ['node'], optional: true }
 ];
+const AGENT_ITEMS = ['claude', 'codex', 'cursor', 'gemini', 'copilot', 'opencode', 'qwen'];
 
 async function versionOf(cmd, args = ['--version']) { const r = await quickRun(cmd, args, { timeoutMs: 8000 }); return r.ok ? r.out.split(/\r?\n/)[0].slice(0, 60) : null; }
 const tailscaleExe = () => (IS_WIN ? path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Tailscale', 'tailscale.exe') : 'tailscale');
 
 export async function check() {
   const out = {};
-  for (const agent of ['claude', 'codex', 'cursor']) out[agent] = Boolean(ADAPTERS[agent].detect(ctx.config.agents[agent] ?? {}));
+  for (const agent of AGENT_ITEMS) out[agent] = Boolean(ADAPTERS[agent]?.detect(ctx.config.agents[agent] ?? {}));
   out.git = Boolean(await versionOf('git'));
   out.node = Boolean(await versionOf(IS_WIN ? 'node.exe' : 'node'));
   out.gh = Boolean(await versionOf(IS_WIN ? 'gh.exe' : 'gh'));
@@ -38,7 +44,7 @@ export async function check() {
 // The PowerShell script for the chosen items, in a safe order (Node before Codex). Only fixed text from ITEMS goes in.
 export function plan(ids) {
   const chosen = ITEMS.filter((i) => ids.includes(i.id));
-  if (chosen.some((i) => i.id === 'codex') && !chosen.some((i) => i.id === 'node')) chosen.unshift(ITEMS.find((i) => i.id === 'node'));
+  if (chosen.some((i) => i.after?.includes('node')) && !chosen.some((i) => i.id === 'node')) chosen.unshift(ITEMS.find((i) => i.id === 'node'));
   return chosen;
 }
 

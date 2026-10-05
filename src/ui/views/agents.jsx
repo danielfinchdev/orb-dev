@@ -8,10 +8,15 @@ import { AgentIcon } from '@/components/agent-icon.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Field, Input, Spinner } from '@/components/ui/basic.jsx';
 import { Switch, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
+import { cn } from '@/lib/utils.js';
 import { useStore, call, act, bridge, setState, getState } from '@/lib/store.js';
 import { LOGIN } from '@/lib/labels.js';
 
-const INSTALL = { claude: 'https://docs.claude.com/en/docs/claude-code/setup', codex: 'https://developers.openai.com/codex/cli', cursor: 'https://cursor.com/cli' };
+const INSTALL = { claude: 'https://docs.claude.com/en/docs/claude-code/setup', codex: 'https://developers.openai.com/codex/cli', cursor: 'https://cursor.com/cli',
+  gemini: 'https://github.com/google-gemini/gemini-cli', opencode: 'https://opencode.ai', qwen: 'https://github.com/QwenLM/qwen-code', copilot: 'https://github.com/github/copilot-cli' };
+const WINDOW = { five_hour: '5 h', seven_day: 'semana', seven_day_opus: 'semana Opus', seven_day_sonnet: 'semana Sonnet', '300min': '5 h', '10080min': 'semana', '43200min': 'mes' };
+// How each agent is connected (2.3: all of them live).
+const KIND = { sdk: 'En directo (Agent SDK)', 'app-server': 'En directo (app-server)', 'cli-stream': 'En directo (CLI en streaming)', acp: 'En directo (ACP)' };
 
 async function save(agent, patch) {
   const config = await act(call('config.save', { patch: { agents: { [agent]: patch } } }), 'Guardado');
@@ -64,7 +69,7 @@ function AgentCard({ a, reload }) {
     <Card>
       <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0">
         <AgentIcon agent={a.id} className="size-6" />
-        <div className="flex-1"><CardTitle>{a.label}</CardTitle><CardDescription>{a.installed ? a.version ?? 'Instalado' : 'No encontrado en este equipo'}</CardDescription></div>
+        <div className="flex-1"><CardTitle>{a.label}</CardTitle><CardDescription>{a.installed ? a.version ?? 'Instalado' : 'No encontrado en este equipo'}{a.installed && KIND[a.kind] ? ` · ${KIND[a.kind]}` : ''}</CardDescription></div>
         <Switch checked={cfg.enabled} onCheckedChange={(enabled) => save(a.id, { enabled })} aria-label="Activado" />
       </CardHeader>
       <CardContent className="grid gap-3">
@@ -124,13 +129,15 @@ export function AgentsView() {
           ) : null}
           <div className="grid gap-4 lg:grid-cols-3 [&>*]:min-w-0">{agents ? agents.map((a) => <AgentCard key={a.id} a={a} reload={() => load(true)} />) : <Card className="items-center"><Spinner /></Card>}</div>
           <Card>
-            <CardHeader><CardTitle>Uso en las últimas {usage[0]?.windowHours ?? 5} horas</CardTitle><CardDescription>El asistente limita las tareas por agente para no agotar tus suscripciones. Los topes se cambian en Ajustes.</CardDescription></CardHeader>
+            <CardHeader><CardTitle>Uso de cada cuenta</CardTitle><CardDescription>El cupo real lo dicen Claude y Codex (cuánto llevas de su ventana y cuándo se reinicia): al {Math.round((usage[0]?.stopAt ?? 0.92) * 100)} % las tareas nuevas esperan o van a otra cuenta. Las tareas lanzadas en las últimas {usage[0]?.windowHours ?? 5} h son solo una red de seguridad.</CardDescription></CardHeader>
             <CardContent className="grid gap-4">
               {usage.map((u) => (
                 <div key={u.account} className="grid gap-1.5">
-                  <div className="flex items-center gap-2 text-sm"><AgentIcon agent={u.agent} /><span className="min-w-28">{u.label}</span><span className="text-muted-foreground text-xs">{u.used}/{u.max} tareas · {u.heavy}/{u.maxHeavy} con modelos caros</span>
+                  <div className="flex flex-wrap items-center gap-2 text-sm"><AgentIcon agent={u.agent} /><span className="min-w-28">{u.label}</span>
+                    {u.real ? <span className="text-xs">{Math.round(u.real.utilization * 100)} % del cupo real{u.real.window ? ` (${WINDOW[u.real.window] ?? u.real.window})` : ''}{u.real.resetAt ? ` · se reinicia ${new Date(u.real.resetAt).toLocaleString('es-ES', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}</span> : null}
+                    <span className="text-muted-foreground text-xs">{u.used}/{u.max} tareas · {u.heavy}/{u.maxHeavy} con modelos caros</span>
                     {u.cooldownUntil ? <Badge variant="destructive">sin cupo hasta las {new Date(u.cooldownUntil).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</Badge> : null}</div>
-                  <div className="bg-muted h-1.5 overflow-hidden rounded-full"><div className="bg-primary h-full rounded-full transition-all" style={{ width: `${Math.min(100, (u.used / Math.max(1, u.max)) * 100)}%` }} /></div>
+                  <div className="bg-muted h-1.5 overflow-hidden rounded-full"><div className={cn('h-full rounded-full transition-all', (u.real?.utilization ?? 0) >= 0.85 ? 'bg-warning' : 'bg-primary')} style={{ width: `${Math.min(100, (u.real ? u.real.utilization : u.used / Math.max(1, u.max)) * 100)}%` }} /></div>
                 </div>
               ))}
             </CardContent>
