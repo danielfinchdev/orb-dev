@@ -291,6 +291,9 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
     git(task.workdir, 'add', '-A', '--', '.', `:(exclude)${ATTACH_DIR}`);
     const staged = git(task.workdir, 'diff', '--cached', '--name-only', '-z').stdout.split('\0').filter(Boolean).filter(isSecretPath);
     if (staged.length) { git(task.workdir, 'reset', '-q'); return `no se hizo el commit automático: hay archivos que parecen secretos (${staged.slice(0, 5).join(', ')})`; }
+    // Nothing really changed: git status can list a file the agent rewrote with the same content but other line endings
+    // (core.autocrlf=true, the Git for Windows default), and then "git commit" fails with "nothing to commit".
+    if (git(task.workdir, 'diff', '--cached', '--quiet').status === 0) return '';
     const commit = git(task.workdir, ...ORB_GIT, 'commit', '-q', '-m', `orb: tarea #${task.id} ${oneLine(task.title)}`);
     this.board.event(task.id, 'orb', 'git.commit', commit.status === 0 ? 'cambios guardados en la rama' : commit.stderr.trim());
     return commit.status === 0 ? '' : `el commit automático falló (${oneLine(commit.stderr, 200)}); los cambios siguen sin guardar en ${task.workdir}`;
