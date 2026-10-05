@@ -16,7 +16,8 @@
     "test:app": "vite build && node test/app.e2e.mjs",
     "icon": "node scripts/icono.mjs",
     "dist": "vite build && electron-builder --win portable nsis",
-    "test:movil": "vite build && node test/mobile.e2e.mjs"
+    "test:movil": "vite build && node test/mobile.e2e.mjs",
+    "icon:ico": "electron scripts/icono-ico.cjs"
   },
   "engines": {
     "node": ">=22.13"
@@ -64,13 +65,23 @@
       "src/**/*",
       "!src/ui/**",
       "build/icon.png",
-      "package.json"
+      "build/icon.ico",
+      "package.json",
+      "!node_modules/@anthropic-ai/claude-agent-sdk-*/**",
+      "!node_modules/@anthropic-ai/sdk/**",
+      "!node_modules/@modelcontextprotocol/**",
+      "!node_modules/**/*.d.ts",
+      "!node_modules/**/*.map",
+      "!node_modules/**/README*",
+      "!node_modules/**/CHANGELOG*"
     ],
     "asarUnpack": [
-      "src/**"
+      "src/**",
+      "node_modules/@anthropic-ai/claude-agent-sdk/**",
+      "node_modules/zod/**"
     ],
     "win": {
-      "icon": "build/icon.png",
+      "icon": "build/icon.ico",
       "artifactName": "Orb.dev-${version}-windows.${ext}",
       "target": [
         "portable",
