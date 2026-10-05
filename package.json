@@ -1,8 +1,8 @@
 {
   "name": "orb-dev",
   "productName": "Orb.dev",
-  "version": "2.1.0",
-  "description": "Orb.dev: asistente de escritorio que coordina agentes de IA (Claude Code, Codex, Cursor) y conversa con ellos en directo.",
+  "version": "2.3.0",
+  "description": "Orb.dev: asistente de escritorio que escribe encargos optimizados y los reparte entre agentes de IA de varios proveedores (Claude Code, Codex, Cursor, Gemini, OpenCode, Qwen, Copilot), en directo.",
   "private": true,
   "type": "module",
   "main": "src/main/main.mjs",
