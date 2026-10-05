@@ -7,7 +7,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { ctx } from '../core/context.mjs';
 import { AGENTS, assistantName, userName, ofUser } from '../core/board.mjs';
-import { executable, installed } from '../agents/index.mjs';
+import { executable, installed, adapter } from '../agents/index.mjs';
 import * as claude from '../agents/claude.mjs';
 import { rotateIfBig } from '../core/safety.mjs';
 import { mcpServersFor, browserEnv } from './sessions.mjs';
@@ -151,7 +151,8 @@ export class Orchestrator {
     const writeLog = (line) => { try { fs.appendFileSync(this.logFile, `${String(line).replace(/\r?\n/g, ' ')}\n`); } catch { /* log unavailable */ } };
     const newId = session ? null : crypto.randomUUID();
     if (newId) { this.board.setting('orchestrator_session', newId); this.board.setting('orchestrator_turns', '0'); }
-    this.live = claude.createLive({
+    // Through the registry (not claude.mjs directly), so ORB_FAKE_AGENTS also replaces the assistant's own Claude in tests.
+    this.live = adapter('claude').createLive({
       exe: executable('claude'), cwd, model: o.model || 'claude-sonnet-5-5', reasoning: o.reasoning || 'medium',
       permission: free ? 'editar' : 'leer', resumeId: session || null, newSessionId: newId,
       mcpServers: mcpServersFor('claude', { orchestrator: true, browser: free, session: 'asistente', orchKey: this.key }),

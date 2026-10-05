@@ -13,6 +13,7 @@ import { git, isGitRepo, repoRoot } from '../core/workspace.mjs';
 import { account as findAccount, defaultAccount, accountEnv } from '../core/accounts.mjs';
 import { browserKey } from '../core/browser-key.mjs';
 import { PERMISSIONS } from '../core/guard.mjs';
+import { explainFailure } from '../core/agent-errors.mjs';
 
 export { PERMISSIONS };
 export const ATTACH_DIR = '.orb-adjuntos';
@@ -378,6 +379,7 @@ export class Sessions {
     const timer = timeoutMs ? setTimeout(() => { this.addItem(id, 'error', 'text', `Tiempo máximo alcanzado (${Math.round(timeoutMs / 60000)} min): se detiene.`); run.timedOut = true; this.stop(id); }, timeoutMs) : null;
     timer?.unref?.();
     const resumed = Boolean(s.cli_session);
+    let finished = false; // onFinish runs exactly once, also when the adapter itself fails
     entry.live.send({ text: body, images: nativeImages ? attached : [] }).then((result) => {
       if (timer) clearTimeout(timer);
       entry.lastUsed = Date.now();
@@ -388,10 +390,13 @@ export class Sessions {
         this.update(id, { cli_session: null }); this.closeLive(id);
         this.addItem(id, 'system', 'status', `No se pudo retomar la conversación de ${a.label}. El próximo mensaje empezará una nueva; este historial se conserva aquí.`);
       }
+      // A failure we recognise (no login, plan, model, network…) is explained with what to do.
+      if (failed && !onFinish) { const why = explainFailure(a.label, result.final); if (why) this.addItem(id, 'system', 'status', `${why.reason[0].toUpperCase()}${why.reason.slice(1)}. ${why.advice}`); }
       if (run.stopped && !run.timedOut) this.addItem(id, 'system', 'status', 'Detenido.');
       const limited = Boolean(result.limit);
       this.update(id, { status: limited ? 'limited' : failed ? 'error' : 'idle' });
       const state = { final: result.final, text: result.text, isError: result.isError, usage: result.usage, cliSession: this.get(id)?.cli_session };
+      finished = true;
       try { onFinish?.({ code: result.isError ? 1 : 0, state, stderr: result.isError ? result.final : '', logFile: entry.logFile, stopped: run.stopped, timedOut: Boolean(run.timedOut), limit: result.limit }); }
       catch (error) { this.log(`onFinish ${id}: ${error.stack}`); }
       // Messages written while it worked go now, in order (not after a stop or a limit: then the user decides).
@@ -399,7 +404,20 @@ export class Sessions {
         const next = this.takeQueued(id);
         if (next) { try { this.send(id, next.text, { images: next.images }); } catch (error) { this.addItem(id, 'error', 'text', error.message); } }
       }
-    }).catch((error) => { this.log(`turno ${id}: ${error.stack}`); this.running.delete(id); this.update(id, { status: 'error' }); });
+    }).catch((error) => {
+      // send() itself failed (the adapter threw instead of ending the turn): the turn is over all the same, and a task must
+      // hear it, or it would stay "running" forever with its folder locked.
+      this.log(`turno ${id}: ${error.stack}`);
+      if (timer) clearTimeout(timer);
+      if (this.running.get(id) === run) this.running.delete(id);
+      const final = `${a.label}: ${error.message}`;
+      try { this.update(id, { status: 'error' }); this.addItem(id, 'error', 'text', final); } catch { /* the conversation may be gone */ }
+      if (!finished) {
+        finished = true;
+        try { onFinish?.({ code: 1, state: { final, text: '', isError: true }, stderr: error.message, logFile: entry.logFile, stopped: run.stopped, timedOut: Boolean(run.timedOut) }); }
+        catch (inner) { this.log(`onFinish ${id}: ${inner.stack}`); }
+      }
+    });
     return run;
   }
 

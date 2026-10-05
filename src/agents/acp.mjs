@@ -30,7 +30,7 @@ export function npmBin(pkg, bin) {
 // login: files that show a saved login; loginArgs: the program's own login (opens in a console window).
 export const ACP_SPECS = {
   gemini: {
-    label: 'Gemini CLI', pkg: '@google/gemini-cli', bin: 'gemini', acpArgs: ['--experimental-acp'],
+    label: 'Gemini CLI', pkg: '@google/gemini-cli', bin: 'gemini', acpArgs: ['--acp'], altArgs: ['--experimental-acp'],
     login: ['.gemini/oauth_creds.json', '.gemini/google_accounts.json'], loginArgs: [], install: 'npm install -g @google/gemini-cli',
     strengths: 'contexto enorme, leer proyectos grandes, investigar y documentar', models: ['gemini-3-pro', 'gemini-3-flash'], defaultModel: ''
   },
@@ -40,7 +40,7 @@ export const ACP_SPECS = {
     strengths: 'agente abierto con muchos proveedores y modelos', models: [], defaultModel: ''
   },
   qwen: {
-    label: 'Qwen Code', pkg: '@qwen-code/qwen-code', bin: 'qwen', acpArgs: ['--experimental-acp'],
+    label: 'Qwen Code', pkg: '@qwen-code/qwen-code', bin: 'qwen', acpArgs: ['--acp'], altArgs: ['--experimental-acp'],
     login: ['.qwen/oauth_creds.json', '.qwen/settings.json'], loginArgs: [], install: 'npm install -g @qwen-code/qwen-code',
     strengths: 'implementación rápida y barata, tareas repetitivas', models: [], defaultModel: ''
   },
@@ -106,7 +106,9 @@ export function acpAgent(id, spec) {
         const verdict = decide({ permission, tool: tc.name ?? tc.title, kind: tc.kind, command, paths, internalDir: o.internalDir });
         let d = verdict.decision;
         if (d === 'ask') d = await approvals.ask({ id: tc.toolCallId ?? `p-${Date.now()}`, tool: tc.title ?? tc.kind ?? 'acción', title: command || tc.title || paths.join(', '), reason: verdict.reason, input: clip(tc.rawInput ?? tc.title, 400) });
-        const pick = (kinds) => (p.options ?? []).find((opt) => kinds.includes(opt.kind));
+        // In order of preference (not in the order the agent lists its options): "always" must pick allow_always even
+        // when allow_once comes first, and a single "deny" must never pick reject_always.
+        const pick = (kinds) => kinds.map((k) => (p.options ?? []).find((opt) => opt.kind === k)).find(Boolean);
         const option = d === 'deny' ? pick(['reject_once', 'reject_always']) : d === 'always' ? pick(['allow_always', 'allow_once']) : pick(['allow_once', 'allow_always']);
         return option ? { outcome: { outcome: 'selected', optionId: option.optionId } } : { outcome: { outcome: 'cancelled' } };
       }
@@ -114,17 +116,32 @@ export function acpAgent(id, spec) {
     };
 
     const mcpList = () => Object.entries(o.mcpServers ?? {}).map(([name, s]) => ({ name, command: s.command, args: s.args ?? [], env: Object.entries(s.env ?? {}).map(([k, v]) => ({ name: k, value: String(v) })) }));
+    // Starts the program in ACP mode and says hello. Versions change their flag (--acp / --experimental-acp): when the
+    // first one makes the program quit before answering, the alternative is tried once.
+    const connect = async (args) => {
+      const proc = spawnAgent(o.exe.cmd, [...o.exe.pre, ...args], { cwd: o.cwd, env: o.env, log });
+      const p = new JsonRpcPeer(proc, { onNotification, onRequest, log });
+      const quit = new Promise((resolve) => {
+        proc.once('exit', (code) => resolve(new Error(`${spec.label} se cerró al arrancar (código ${code}). ${proc.stderrText().trim().split('\n').slice(-2).join(' ')}`.trim())));
+        proc.once('error', resolve);
+      });
+      const hello = p.request('initialize', { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: 'orb-dev', title: 'Orb.dev', version: '2.3.0' } }, { timeoutMs: 60000 });
+      const first = await Promise.race([hello.then((init) => ({ init })), quit.then((error) => ({ error }))]);
+      if (first.error) { p.close(); throw first.error; }
+      return { proc, p, init: first.init };
+    };
     const start = async () => {
-      child = spawnAgent(o.exe.cmd, [...o.exe.pre, ...spec.acpArgs], { cwd: o.cwd, env: o.env, log });
+      let c;
+      try { c = await connect(spec.acpArgs); }
+      catch (error) { if (!spec.altArgs) throw error; log(`reintento con ${spec.altArgs.join(' ')}: ${error.message}`); c = await connect(spec.altArgs); }
+      child = c.proc; peer = c.p; const init = c.init;
       live.pid = child.pid;
-      peer = new JsonRpcPeer(child, { onNotification, onRequest, log });
       child.on('exit', (code) => {
         closed = true; approvals.clear(); peer.close();
         onEvent({ type: 'exit', code, stderr: child.stderrText() });
         if (turn && !turn.done) { flush(); turn.finish({ isError: true, final: turn.text || `${spec.label} se cerró (código ${code}). ${child.stderrText().trim().split('\n').slice(-2).join(' ')}`.trim() }); }
       });
       child.on('error', (error) => { closed = true; if (turn && !turn.done) turn.finish({ isError: true, final: `No se pudo arrancar ${spec.label}: ${error.message}` }); });
-      const init = await peer.request('initialize', { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: 'orb-dev', title: 'Orb.dev', version: '2.3.0' } }, { timeoutMs: 60000 });
       agentCaps = init?.agentCapabilities ?? {};
       let res = null;
       if (sessionId && agentCaps.loadSession) {

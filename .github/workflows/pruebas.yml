@@ -1,0 +1,29 @@
+# Tests on every push and pull request, on Windows (the system Orb.dev is for) and Linux. Publishes nothing: releases are
+# built by release.yml when the version changes on main.
+name: Pruebas
+
+on:
+  push:
+    branches: [main, 'orb-*']
+  pull_request:
+
+concurrency:
+  group: pruebas-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pruebas:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
