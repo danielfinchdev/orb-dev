@@ -1,7 +1,8 @@
-// A direct conversation with one agent (T3 Code style), live: messages, commands and changed files appear as the agent
-// works. Task runs open here too (messages then go through the task, so approvals and turns still apply).
+// A direct conversation with one agent (T3 Code style), live: the answer streams as it is written, commands and changed
+// files appear as the agent works, risky actions wait for a click (approval cards), messages written meanwhile correct the
+// agent on the fly or wait in a queue, and the context meter shows how full the conversation is. Task runs open here too.
 import { useEffect, useMemo, useState } from 'react';
-import { Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, X, ListTodo, CircleAlert } from 'lucide-react';
+import { Info, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, X, ListTodo, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { Markdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
@@ -9,10 +10,10 @@ import { AgentIcon } from '@/components/agent-icon.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Composer, useAutoScroll } from './chat.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Badge, Field, Input, Empty } from '@/components/ui/basic.jsx';
+import { Badge, Field, Input, Textarea, Empty } from '@/components/ui/basic.jsx';
 import { Select, Collapsible, CollapsibleTrigger, CollapsibleContent, Tip } from '@/components/ui/overlay.jsx';
 import { useStore, call, act, go, bridge, refresh, getState } from '@/lib/store.js';
-import { AGENT, PERMISSION, PERMISSION_HINT, REASONING, STATUS, options } from '@/lib/labels.js';
+import { AGENT, PERMISSION, PERMISSION_HINT, REASONING, STATUS, DECISION, CAN_STEER as AGENT_CAN_STEER, options } from '@/lib/labels.js';
 import { baseName, cn } from '@/lib/utils.js';
 
 // "Nueva conversación": agent, project, model, permissions.
@@ -95,8 +96,9 @@ function ToolBlock({ b }) {
 }
 
 const FILE_ICON = { add: FilePlus2, delete: FileMinus2 };
-function Block({ b, agent }) {
+function Block({ b, agent, sessionId }) {
   if (b.type === 'tool') return <ToolBlock b={b} />;
+  if (b.type === 'item' && b.item.kind === 'approval') return <ApprovalCard sessionId={sessionId} body={b.item.body} />;
   if (b.type === 'files') return <div className="flex flex-wrap gap-1.5">{b.files.map((f, i) => { const I = FILE_ICON[f?.change] ?? FileEdit; return <Badge key={i} variant="info" className="font-mono font-normal"><I />{f?.path}</Badge>; })}</div>;
   const it = b.item; const body = it.body;
   if (it.role === 'user') {
@@ -105,6 +107,7 @@ function Block({ b, agent }) {
     const long = textBody.length > 1200 && /^Encargo de /.test(textBody);
     return (
       <div className="bg-bubble text-bubble-foreground ml-auto max-w-[80%] rounded-2xl rounded-br-md px-4 py-2.5 break-words whitespace-pre-wrap">
+        {typeof body === 'object' && body?.steer ? <div className="mb-1 flex items-center gap-1 text-[11px] opacity-80"><CornerDownRight className="size-3" />Corrección en marcha</div> : null}
         {long ? <Collapsible><CollapsibleTrigger className="cursor-pointer text-left underline-offset-2 hover:underline">{textBody.split('\n')[0]} (ver encargo completo)</CollapsibleTrigger><CollapsibleContent className="mt-2 text-[13px] opacity-90">{textBody}</CollapsibleContent></Collapsible> : textBody}
         {images.length ? <div className="mt-2 flex flex-wrap gap-1.5">{images.map((p) => <span key={p} className="inline-flex items-center gap-1 rounded-md bg-white/15 px-2 py-0.5 text-xs"><ImageIcon className="size-3" />{baseName(p)}</span>)}</div> : null}
       </div>
@@ -120,63 +123,190 @@ function Block({ b, agent }) {
   return <div className="text-muted-foreground text-center text-xs">{typeof body === 'string' ? body : JSON.stringify(body)}</div>;
 }
 
+// An approval card: the agent wants to do something risky and waits for the user's click.
+export function ApprovalCard({ sessionId, body, compact = false }) {
+  const [busy, setBusy] = useState(false);
+  const answer = async (decision) => { setBusy(true); await act(call('sessions.approve', { id: sessionId, request: body.id, decision })); setBusy(false); };
+  const done = body.status && body.status !== 'pending' ? DECISION[body.status] : null;
+  return (
+    <div className={cn('rounded-xl border px-3.5 py-3 text-[13px]', done ? 'bg-card' : 'border-warning/50 bg-warning/10')} data-testid="approval-card">
+      <div className="flex items-start gap-2.5">
+        <ShieldAlert className={cn('mt-0.5 size-4 shrink-0', done ? 'text-muted-foreground' : 'text-warning')} />
+        <div className="min-w-0 flex-1">
+          <div className="font-medium">{done ? 'Pidió permiso para' : 'Quiere hacer esto y espera tu permiso'}</div>
+          <div className="bg-muted mt-1.5 rounded-md px-2.5 py-1.5 font-mono text-xs break-all whitespace-pre-wrap">{body.title}</div>
+          {body.reason ? <div className="text-muted-foreground mt-1.5 text-xs">Motivo: {body.reason}</div> : null}
+          {done ? <Badge variant={done[1]} className="mt-2">{done[0]}</Badge> : (
+            <div className={cn('mt-2.5 flex flex-wrap gap-2', compact && 'gap-1.5')}>
+              <Button size="sm" disabled={busy} onClick={() => answer('allow')} data-testid="approve-allow"><Check />Permitir</Button>
+              <Button size="sm" variant="outline" disabled={busy} onClick={() => answer('always')}><CheckCheck />Permitir siempre aquí</Button>
+              <Button size="sm" variant="outline" disabled={busy} onClick={() => answer('deny')} data-testid="approve-deny"><X />Denegar</Button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// How full the agent's context window is (when the agent reports it).
+export function ContextMeter({ context, className }) {
+  if (!context?.size) return null;
+  const pct = Math.min(100, Math.round((context.used / context.size) * 100));
+  const tone = pct >= 85 ? 'bg-destructive' : pct >= 60 ? 'bg-warning' : 'bg-primary';
+  return (
+    <Tip label={`Contexto: ${context.used.toLocaleString('es-ES')} de ${context.size.toLocaleString('es-ES')} tokens. Cuanto más lleno, más cara cada respuesta.`}>
+      <span className={cn('inline-flex items-center gap-1.5', className)} data-testid="context-meter">
+        <span className="bg-muted inline-block h-1.5 w-14 overflow-hidden rounded-full"><span className={cn('block h-full rounded-full', tone)} style={{ width: `${pct}%` }} /></span>
+        <span className="tabular-nums">{pct} %</span>
+      </span>
+    </Tip>
+  );
+}
+
+// Details of a conversation (2.3, like T3 Code's thread details): where it works, git, where it comes from, its task.
+async function showDetails(s, task) {
+  let info = null;
+  if (s.project) { try { info = await call('projects.info', { name: s.project }); } catch { info = null; } }
+  const parent = s.parent_id ? getState().sessions.find((x) => x.id === s.parent_id) : null;
+  const Row = ({ k, children }) => <><dt className="text-muted-foreground">{k}</dt><dd className="min-w-0 break-all">{children}</dd></>;
+  await form('Detalles de la conversación', {
+    wide: true,
+    body: () => (
+      <dl className="grid grid-cols-[130px_1fr] gap-x-4 gap-y-2 text-[13px]">
+        <Row k="Agente">{AGENT[s.agent]}{s.model ? ` · ${s.model}` : ''} · razonamiento {REASONING[s.reasoning]?.toLowerCase() ?? s.reasoning}</Row>
+        <Row k="Cuenta">{s.account}</Row>
+        <Row k="Permisos">{PERMISSION[s.permission]}</Row>
+        <Row k="Carpeta"><span className="font-mono text-xs">{s.cwd}</span></Row>
+        {info?.git ? <Row k="Git">rama <span className="font-mono">{info.branch}</span> · {info.changes ? `${info.changes} cambio(s) sin guardar` : 'sin cambios'}{info.remote ? ` · ${info.remote}` : ''}{info.ahead ? ` · ${info.ahead} commit(s) sin subir` : ''}</Row> : s.project ? <Row k="Git">esta carpeta no usa git</Row> : null}
+        {info?.prs?.length ? <Row k="Pull requests">{info.prs.map((p) => <a key={p.number} className="mr-2 cursor-pointer underline-offset-2 hover:underline" onClick={() => bridge.openExternal(p.url)}>#{p.number} {p.title}</a>)}</Row> : null}
+        {s.context?.size ? <Row k="Contexto"><ContextMeter context={s.context} /></Row> : null}
+        {task ? <Row k="Tarea"><a className="cursor-pointer underline-offset-2 hover:underline" onClick={() => go({ view: 'tasks', id: task.id })}>#{task.id} {task.title}</a> · {STATUS[task.status]?.[0]}</Row> : null}
+        {parent ? <Row k="Bifurcada de"><a className="cursor-pointer underline-offset-2 hover:underline" onClick={() => go({ view: 'session', id: parent.id })}>{parent.title}</a></Row> : null}
+        <Row k="Conversación del agente"><span className="font-mono text-xs">{s.cli_session ?? 'todavía no empezó'}</span></Row>
+        <Row k="Creada">{new Date(s.created_at).toLocaleString('es-ES')}</Row>
+      </dl>
+    ),
+    ok: 'Cerrar', onOk: () => true
+  });
+}
+
 export function SessionView({ route }) {
   const sessions = useStore((s) => s.sessions);
   const tasks = useStore((s) => s.tasks);
+  const app = useStore((s) => s.app);
   const [archived, setArchived] = useState(null);
   const s = sessions.find((x) => x.id === route.id) ?? archived;
   const [items, setItems] = useState([]);
+  const [more, setMore] = useState(false);
+  const [partial, setPartial] = useState('');
+  const [queue, setQueue] = useState([]);
   const [text, setText] = useState('');
   const [images, setImages] = useState([]);
+  const PAGE = 200;
   useEffect(() => {
     let alive = true;
+    setItems([]); setPartial(''); setQueue([]);
     if (!sessions.some((x) => x.id === route.id)) call('sessions.list', { archived: true }).then((all) => alive && setArchived(all.find((x) => x.id === route.id) ?? null)).catch(() => {});
-    call('sessions.items', { id: route.id }).then((r) => alive && setItems(r)).catch(() => {});
-    const off = bridge.on('session:item', (it) => { if (it.session_id === route.id) setItems((prev) => (prev.some((p) => p.id === it.id) ? prev : [...prev, it])); });
-    return () => { alive = false; off(); };
+    call('sessions.items', { id: route.id, limit: PAGE }).then((r) => { if (alive) { setItems(r); setMore(r.length >= PAGE); } }).catch(() => {});
+    call('sessions.queue', { id: route.id }).then((q) => alive && setQueue(q)).catch(() => {});
+    const offItem = bridge.on('session:item', (it) => {
+      if (it.session_id !== route.id) return;
+      setItems((prev) => { const i = prev.findIndex((p) => p.id === it.id); if (i >= 0) { const next = prev.slice(); next[i] = it; return next; } return [...prev, it]; });
+      if (it.role === 'assistant' && it.kind === 'text') setPartial('');
+    });
+    const offDelta = bridge.on('session:delta', (d) => { if (d.id === route.id) setPartial((p) => (p + d.text).slice(-6000)); });
+    const offQueue = bridge.on('session:queue', (q) => { if (q.id === route.id) setQueue(q.queue); });
+    return () => { alive = false; offItem(); offDelta(); offQueue(); };
   }, [route.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const blocks = useMemo(() => toBlocks(items), [items]);
-  const scroll = useAutoScroll([blocks.length, items.at(-1)?.id]);
+  const scroll = useAutoScroll([blocks.length, items.at(-1)?.id, partial.length > 0, Math.floor(partial.length / 200)]);
+  useEffect(() => { if (s && s.status !== 'running') setPartial(''); }, [s?.status]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!s) return <Empty title="Esta conversación ya no existe" className="flex-1" />;
   const task = s.task_id ? tasks.find((t) => t.id === s.task_id) : null;
   const running = s.status === 'running';
+  const models = app?.config?.agents?.[s.agent]?.models ?? [];
+  const stalled = ['interrupted', 'limited'].includes(s.status) && s.kind === 'chat';
 
+  const loadOlder = async () => {
+    const first = items[0]?.id; if (!first) return;
+    const older = await act(call('sessions.items', { id: s.id, before: first, limit: PAGE }));
+    if (older) { setItems((prev) => [...older, ...prev]); setMore(older.length >= PAGE); }
+  };
   const addImages = (paths) => setImages((prev) => [...new Set([...prev, ...(paths ?? []).filter(Boolean)])].slice(0, 10));
   const fromTransfer = (dt) => [...(dt?.files ?? [])].filter((f) => /^image\//.test(f.type)).map((f) => bridge.pathForFile(f)).filter(Boolean);
-  const send = async () => {
+  // While the agent works, Enter corrects it on the fly (it reads the message at its next step) and Ctrl+Enter queues
+  // the message for after the turn. Agents that cannot be corrected on the fly always queue.
+  const send = async ({ alt = false } = {}) => {
     const t = text.trim(); if (!t && !images.length) return;
-    const r = await act(call('sessions.send', { id: s.id, text: t || 'Mira estas imágenes.', images }), s.kind === 'task' ? 'Enviado: la tarea vuelve a la cola' : null);
-    if (r !== undefined) { setText(''); setImages([]); }
+    const mode = running ? (alt ? 'queue' : 'auto') : 'auto';
+    const r = await act(call('sessions.send', { id: s.id, text: t || 'Mira estas imágenes.', images, mode }));
+    if (r === undefined) return;
+    setText(''); setImages([]);
+    if (r?.steered) toast.success('Corrección enviada: la leerá en su siguiente paso');
+    else if (r?.queued) toast.success(s.kind === 'task' && !running ? 'Enviado: la tarea vuelve a la cola' : 'En cola: se enviará al terminar este turno');
   };
   const rename = () => form('Título', { initial: { title: s.title }, body: (v, set) => <Input autoFocus value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={80} />, ok: 'Guardar', onOk: (v) => call('sessions.update', { id: s.id, title: v.title.trim() || s.title }) });
+  const fork = async () => { const copy = await act(call('sessions.fork', { id: s.id }), 'Bifurcada: prueba otra idea sin perder la original'); if (copy) { await refresh().catch(() => {}); go({ view: 'session', id: copy.id }); } };
+  const editQueued = (q, patch) => act(call('sessions.editQueued', { id: s.id, queueId: q.id, ...patch }));
 
   return (
     <>
       <PageHeader icon={<AgentIcon agent={s.agent} className="size-5" />} title={s.title}
-        meta={<span>{AGENT[s.agent]}{s.model ? ` · ${s.model}` : ''} · {s.project ?? 'carpeta del asistente'}{bridge.mobile ? null : <> · <a className="hover:text-foreground cursor-pointer underline-offset-2 hover:underline" onClick={() => act(bridge.openPath(s.cwd))}>abrir carpeta</a></>}</span>}>
+        meta={<span className="inline-flex flex-wrap items-center gap-x-1.5">{AGENT[s.agent]}{s.model ? ` · ${s.model}` : ''} · {s.project ?? 'carpeta del asistente'}{bridge.mobile ? null : <> · <a className="hover:text-foreground cursor-pointer underline-offset-2 hover:underline" onClick={() => act(bridge.openPath(s.cwd))}>abrir carpeta</a></>}{s.context ? <> · <ContextMeter context={s.context} /></> : null}</span>}>
         {s.kind === 'chat' ? (<>
+          {models.length ? <Select size="sm" value={s.model || models[0]} title="Modelo" options={models.map((m) => ({ value: m, label: m }))} onValueChange={(model) => act(call('sessions.update', { id: s.id, model }), `Modelo: ${model}`)} /> : null}
           <Select size="sm" value={s.permission} title={s.project ? 'Permisos' : 'Sin proyecto: solo leer'} disabled={!s.project} options={options(PERMISSION).filter((o) => !bridge.mobile || o.value !== 'total')} onValueChange={async (permission) => {
             if (permission === 'total' && !(await confirm('Acceso total', 'El agente podrá hacer cualquier cosa en tu equipo sin pedir permiso. ¿Seguro?', { ok: 'Sí', danger: true }))) return;
             act(call('sessions.update', { id: s.id, permission }), 'Permisos cambiados');
           }} />
           <Select size="sm" value={s.reasoning ?? 'medium'} title="Razonamiento" options={options(REASONING)} onValueChange={(reasoning) => act(call('sessions.update', { id: s.id, reasoning }))} />
+          <Tip label="Detalles"><Button variant="ghost" size="icon-sm" onClick={() => showDetails(s, task)} data-testid="details"><Info /></Button></Tip>
+          <Tip label="Bifurcar: una copia desde aquí para probar otra idea"><Button variant="ghost" size="icon-sm" disabled={running} onClick={fork} data-testid="fork"><GitFork /></Button></Tip>
           <Tip label="Cambiar el título"><Button variant="ghost" size="icon-sm" onClick={rename}><Pencil /></Button></Tip>
           <Tip label={s.archived ? 'Recuperar' : 'Archivar'}><Button variant="ghost" size="icon-sm" onClick={async () => { await act(call('sessions.update', { id: s.id, archived: !s.archived })); if (!s.archived) go('chat'); }}><Archive /></Button></Tip>
           <Tip label="Borrar la conversación"><Button variant="danger" size="icon-sm" onClick={async () => { if (await confirm('Borrar conversación', 'Se borra este historial. Los archivos del proyecto no se tocan.', { ok: 'Borrar', danger: true })) { await act(call('sessions.remove', { id: s.id })); go('chat'); } }}><Trash2 /></Button></Tip>
         </>) : (<>
           {task ? <Badge variant={STATUS[task.status]?.[1]}>{STATUS[task.status]?.[0]}</Badge> : null}
+          <Tip label="Detalles"><Button variant="ghost" size="icon-sm" onClick={() => showDetails(s, task)}><Info /></Button></Tip>
+          <Tip label="Bifurcar: seguir en una conversación aparte desde aquí"><Button variant="ghost" size="icon-sm" disabled={running} onClick={fork}><GitFork /></Button></Tip>
           <Button variant="outline" size="sm" onClick={() => go({ view: 'tasks', id: s.task_id })}><ListTodo />Ver tarea #{s.task_id}</Button>
         </>)}
       </PageHeader>
       <div ref={scroll.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-3xl flex-col gap-3.5 px-5 py-6">
-          {blocks.length ? blocks.map((b) => <Block key={b.key} b={b} agent={s.agent} />)
+          {more ? <Button variant="ghost" size="sm" className="self-center" onClick={loadOlder}><ChevronUp />Ver mensajes anteriores</Button> : null}
+          {blocks.length ? blocks.map((b) => <Block key={b.key} b={b} agent={s.agent} sessionId={s.id} />)
             : <Empty title={`Conversación con ${AGENT[s.agent]}`}>Trabaja en <span className="font-mono text-xs">{s.cwd}</span> con permiso «{PERMISSION[s.permission]}».</Empty>}
-          {running ? <div className="text-muted-foreground flex items-center gap-2 text-[13px]"><span className="bg-info size-2 animate-pulse rounded-full" />{AGENT[s.agent]} está trabajando…</div> : null}
+          {partial ? <div className="flex gap-3" data-testid="partial"><AgentIcon agent={s.agent} className="mt-1 size-5" /><div className="min-w-0 flex-1 opacity-90"><Markdown>{partial}</Markdown></div></div> : null}
+          {running && !partial ? <div className="text-muted-foreground flex items-center gap-2 text-[13px]"><span className="bg-info size-2 animate-pulse rounded-full" />{AGENT[s.agent]} está trabajando…</div> : null}
+          {stalled ? (
+            <div className="bg-card flex flex-wrap items-center gap-3 rounded-xl border px-3.5 py-3 text-[13px]">
+              <span className="min-w-0 flex-1">{s.status === 'limited' ? 'Se paró al llegar al límite de uso de la cuenta.' : 'Se quedó a medias (la app se cerró mientras trabajaba).'}</span>
+              <Button size="sm" onClick={() => act(call('sessions.resume', { id: s.id }))}><Play />Continuar</Button>
+            </div>
+          ) : null}
         </div>
       </div>
+      {queue.length ? (
+        <div className="mx-auto w-full max-w-3xl shrink-0 px-5 pb-2" data-testid="queue">
+          <div className="text-muted-foreground mb-1.5 flex items-center gap-1.5 text-xs"><ListOrdered className="size-3.5" />En cola: se enviarán en orden cuando termine</div>
+          <div className="grid gap-1.5">
+            {queue.map((q, i) => (
+              <div key={q.id} className="bg-card flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[13px]">
+                <span className="text-muted-foreground tabular-nums">{i + 1}.</span>
+                <span className="min-w-0 flex-1 truncate">{q.text}</span>
+                <Tip label="Subir"><Button variant="ghost" size="icon-sm" disabled={i === 0} onClick={() => editQueued(q, { move: 'up' })}><ArrowUpIcon /></Button></Tip>
+                <Tip label="Bajar"><Button variant="ghost" size="icon-sm" disabled={i === queue.length - 1} onClick={() => editQueued(q, { move: 'down' })}><ArrowDown /></Button></Tip>
+                <Tip label="Editar"><Button variant="ghost" size="icon-sm" onClick={() => form('Editar mensaje en cola', { initial: { text: q.text }, body: (v, set) => <Textarea autoFocus rows={4} value={v.text} onChange={(e) => set({ text: e.target.value })} />, ok: 'Guardar', onOk: (v) => call('sessions.editQueued', { id: s.id, queueId: q.id, text: v.text }) })}><Pencil /></Button></Tip>
+                <Tip label="Quitar"><Button variant="ghost" size="icon-sm" onClick={() => editQueued(q, { remove: true })}><X /></Button></Tip>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <Composer value={text} onChange={setText} onSend={send} canSend={Boolean(text.trim() || images.length)} onStop={() => act(call('sessions.stop', { id: s.id }))} busy={running} testid="session-input"
-        placeholder={s.kind === 'task' ? 'Escribe al agente de esta tarea (sigue en la misma conversación)…' : `Escribe a ${AGENT[s.agent]}…`}
+        placeholder={running ? (AGENT_CAN_STEER[s.agent] ? `Corrige a ${AGENT[s.agent]} sobre la marcha (Ctrl+Intro: ponerlo en cola)…` : `Se enviará cuando ${AGENT[s.agent]} termine este turno…`) : s.kind === 'task' ? 'Escribe al agente de esta tarea (sigue en la misma conversación)…' : `Escribe a ${AGENT[s.agent]}…`}
         onPaste={(e) => { const f = fromTransfer(e.clipboardData); if (f.length) addImages(f); }}
         onDrop={(e) => addImages(fromTransfer(e.dataTransfer))}
         top={images.length ? images.map((p) => <Badge key={p} variant="secondary" className="gap-1.5 font-normal"><ImageIcon />{baseName(p)}<button className="cursor-pointer" onClick={() => setImages(images.filter((x) => x !== p))}><X className="size-3" /></button></Badge>) : null}

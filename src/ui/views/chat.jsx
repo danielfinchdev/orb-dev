@@ -1,7 +1,7 @@
 // The star view: the conversation with the assistant. Under the message box: the working project, the assistant's model
 // (Sonnet / Opus) and the "Orquestador" box (ticked = only coordinates; unticked = free mode, works directly).
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, Square, RotateCcw, Pause, Play, Wrench, Check, PencilLine } from 'lucide-react';
+import { ArrowUp, Square, RotateCcw, Pause, Play, Wrench, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Markdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
@@ -11,7 +11,8 @@ import { confirm } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Spinner } from '@/components/ui/basic.jsx';
 import { Select, Checkbox, Tip } from '@/components/ui/overlay.jsx';
-import { useStore, call, act, setState } from '@/lib/store.js';
+import { useStore, call, act, setState, go } from '@/lib/store.js';
+import { ContextMeter } from './session.jsx';
 import { cn } from '@/lib/utils.js';
 
 const SUGGESTIONS = ['Crea un proyecto «mi-web» con una página de inicio sencilla', '¿Cómo van las tareas?', 'Revisa el proyecto y dime qué mejorarías', 'Resume las bitácoras de esta semana'];
@@ -24,23 +25,60 @@ export function useAutoScroll(deps) {
   return { ref, onScroll };
 }
 
-export function Composer({ value, onChange, onSend, onStop, busy, placeholder, top, bottom, disabled, onPaste, onDrop, testid, canSend }) {
+// "@" picker: while typing @word, a list of tasks, conversations and logs to attach as context (token @tarea:12…).
+function useMentions(value, onChange, ta) {
+  const [options, setOptions] = useState(null);
+  const [index, setIndex] = useState(0);
+  const caret = ta.current?.selectionStart ?? value.length;
+  const match = /(^|\s)@([\wÀ-ɏ-]*)$/.exec(value.slice(0, caret));
+  const query = match ? match[2].toLowerCase() : null;
+  useEffect(() => { if (query !== null && !options) call('mentions.options').then(setOptions).catch(() => setOptions([])); }, [query !== null]); // eslint-disable-line react-hooks/exhaustive-deps
+  const list = query === null ? [] : (options ?? []).filter((o) => `${o.label} ${o.hint}`.toLowerCase().includes(query)).slice(0, 8);
+  useEffect(() => setIndex(0), [query]);
+  const pick = (o) => {
+    const before = value.slice(0, caret).replace(/@[\wÀ-ɏ-]*$/, `${o.token} `);
+    onChange(before + value.slice(caret));
+    requestAnimationFrame(() => { const el = ta.current; if (el) { el.focus(); el.selectionStart = el.selectionEnd = before.length; } });
+  };
+  const onKey = (e) => {
+    if (!list.length) return false;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setIndex((i) => (i + 1) % list.length); return true; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); setIndex((i) => (i - 1 + list.length) % list.length); return true; }
+    if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pick(list[index]); return true; }
+    if (e.key === 'Escape') { e.preventDefault(); onChange(value.slice(0, caret).replace(/@[\wÀ-ɏ-]*$/, '') + value.slice(caret)); return true; }
+    return false;
+  };
+  return { list, index, pick, onKey };
+}
+
+export function Composer({ value, onChange, onSend, onStop, busy, placeholder, top, bottom, disabled, onPaste, onDrop, testid, canSend, mentions = true }) {
   const ta = useRef(null);
   useEffect(() => { const el = ta.current; if (!el) return; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 260)}px`; }, [value]);
   const [dropping, setDropping] = useState(false);
+  const m = useMentions(value, onChange, ta);
   return (
     <div className="shrink-0 px-5 pb-5">
-      <div className={cn('bg-card mx-auto max-w-3xl rounded-2xl border shadow-sm transition-shadow focus-within:shadow-md focus-within:ring-[3px] focus-within:ring-ring/25', dropping && 'ring-primary ring-2')}
+      <div className={cn('bg-card relative mx-auto max-w-3xl rounded-2xl border shadow-sm transition-shadow focus-within:shadow-md focus-within:ring-[3px] focus-within:ring-ring/25', dropping && 'ring-primary ring-2')}
         onDragOver={onDrop ? (e) => { e.preventDefault(); setDropping(true); } : undefined} onDragLeave={() => setDropping(false)} onDrop={onDrop ? (e) => { e.preventDefault(); setDropping(false); onDrop(e); } : undefined}>
+        {mentions && m.list.length ? (
+          <div className="bg-popover text-popover-foreground absolute right-3 bottom-full left-3 z-20 mb-2 overflow-hidden rounded-xl border shadow-lg" data-testid="mention-list">
+            <div className="text-muted-foreground border-b px-3 py-1.5 text-[11px]">Adjuntar como contexto (un extracto, no entero)</div>
+            {m.list.map((o, i) => (
+              <button key={o.token} onMouseDown={(e) => { e.preventDefault(); m.pick(o); }} className={cn('flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-[13px]', i === m.index ? 'bg-accent' : 'hover:bg-accent/60')}>
+                <AtSign className="text-muted-foreground size-3.5 shrink-0" /><span className="min-w-0 flex-1 truncate">{o.label}</span><span className="text-muted-foreground shrink-0 text-[11px]">{o.hint}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
         {top ? <div className="flex flex-wrap items-center gap-2 px-3 pt-3">{top}</div> : null}
         <textarea ref={ta} data-testid={testid} value={value} disabled={disabled} rows={2} placeholder={placeholder} onPaste={onPaste}
           onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); onSend(); } }}
+          onKeyDown={(e) => { if (mentions && m.onKey(e)) return; if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); onSend({ alt: e.ctrlKey || e.metaKey }); } }}
           className="placeholder:text-muted-foreground block w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[14.5px] leading-relaxed outline-none" />
         <div className="flex items-center gap-2 px-3 pb-3">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{bottom}</div>
           {busy && onStop ? <Tip label="Detener"><Button size="icon-sm" variant="secondary" onClick={onStop} aria-label="Detener"><Square className="size-3.5 fill-current" /></Button></Tip> : null}
-          <Button size="icon-sm" className="rounded-full" onClick={onSend} disabled={disabled || !(canSend ?? value.trim())} aria-label="Enviar" data-testid="send"><ArrowUp /></Button>
+          <Button size="icon-sm" className="rounded-full" onClick={() => onSend({ alt: false })} disabled={disabled || !(canSend ?? value.trim())} aria-label="Enviar" data-testid="send"><ArrowUp /></Button>
         </div>
       </div>
     </div>
@@ -70,7 +108,32 @@ function Message({ m, name, onChanges }) {
       </div>
     );
   }
+  if (m.meta?.kind === 'approval' || m.meta?.kind === 'task-approval') return <ChatApproval m={m} />;
   return <div className="bg-muted/70 text-muted-foreground mx-auto max-w-[88%] rounded-xl px-3.5 py-2 text-center text-[13px] whitespace-pre-wrap">{m.body}</div>;
+}
+
+// A permission request in the chat: the assistant's own (free mode) or one of a task (answered here or in the task).
+function ChatApproval({ m }) {
+  const [state, setLocal] = useState(m.meta.status ?? 'pending');
+  const task = m.meta.kind === 'task-approval';
+  const answer = async (decision) => {
+    const r = await act(task ? call('sessions.approve', { id: m.meta.session, request: m.meta.request, decision }) : call('chat.approve', { request: m.meta.id, decision }));
+    if (r !== undefined) setLocal(decision === 'deny' ? 'denied' : 'allowed');
+  };
+  const done = state !== 'pending';
+  return (
+    <div className={cn('mx-auto w-full max-w-[88%] rounded-xl border px-3.5 py-2.5 text-[13px]', done ? 'bg-muted/50' : 'border-warning/50 bg-warning/10')}>
+      <div className="flex items-start gap-2"><ShieldAlert className={cn('mt-0.5 size-4 shrink-0', done ? 'text-muted-foreground' : 'text-warning')} /><div className="min-w-0 flex-1 whitespace-pre-wrap break-words">{m.body}</div></div>
+      <div className="mt-2 flex flex-wrap items-center gap-2 pl-6">
+        {done ? <Badge variant={state === 'denied' ? 'destructive' : 'success'}>{state === 'denied' ? 'Denegado' : 'Permitido'}</Badge> : (<>
+          <Button size="sm" onClick={() => answer('allow')}><Check />Permitir</Button>
+          <Button size="sm" variant="outline" onClick={() => answer('always')}><CheckCheck />Siempre</Button>
+          <Button size="sm" variant="outline" onClick={() => answer('deny')}><X />Denegar</Button>
+        </>)}
+        {task ? <Button size="sm" variant="ghost" onClick={() => go({ view: 'session', id: m.meta.session })}><ExternalLink />Ver la tarea</Button> : null}
+      </div>
+    </div>
+  );
 }
 
 export function ChatView() {
@@ -99,7 +162,7 @@ export function ChatView() {
   return (
     <>
       <PageHeader icon={<Robot size={30} mood={chat.busy ? (chat.partial ? 'talking' : 'thinking') : 'idle'} />} title={name}
-        meta={`${info.orchestrate === false ? 'Modo libre' : 'Orquestador'} · ${info.modelLabel ?? ''} · conversación ${info.turns ?? 0}/${info.maxTurns ?? 20}`}>
+        meta={<span className="inline-flex flex-wrap items-center gap-x-1.5">{info.orchestrate === false ? 'Modo libre' : 'Orquestador'} · {info.modelLabel ?? ''}{(chat.context ?? info.context) ? <> · <ContextMeter context={chat.context ?? info.context} /></> : null}</span>}>
         {app.paused
           ? <Button variant="outline" size="sm" onClick={() => act(call('control.resume'), 'Tareas reanudadas')}><Play />Reanudar tareas</Button>
           : <Tip label="No se lanza ninguna tarea nueva hasta que reanudes"><Button variant="ghost" size="sm" onClick={() => act(call('control.pause'), 'Tareas en pausa')}><Pause />Pausar tareas</Button></Tip>}
@@ -129,7 +192,7 @@ export function ChatView() {
       </div>
       <LiveTasksStrip />
       <Composer value={text} onChange={setText} onSend={send} onStop={() => act(call('chat.stop'))} busy={chat.busy} testid="chat-input"
-        placeholder={`Escribe a ${name}…`}
+        placeholder={chat.busy ? `Corrige a ${name} sobre la marcha…` : `Escribe a ${name}…`}
         top={<ProjectPicker />}
         bottom={<>
           <Select size="sm" value={info.model} onValueChange={(v) => settings({ model: v })} title="Modelo del asistente"
