@@ -106,7 +106,9 @@ export function acpAgent(id, spec) {
         const verdict = decide({ permission, tool: tc.name ?? tc.title, kind: tc.kind, command, paths, internalDir: o.internalDir });
         let d = verdict.decision;
         if (d === 'ask') d = await approvals.ask({ id: tc.toolCallId ?? `p-${Date.now()}`, tool: tc.title ?? tc.kind ?? 'acción', title: command || tc.title || paths.join(', '), reason: verdict.reason, input: clip(tc.rawInput ?? tc.title, 400) });
-        const pick = (kinds) => (p.options ?? []).find((opt) => kinds.includes(opt.kind));
+        // In order of preference (not in the order the agent lists its options): "always" must pick allow_always even
+        // when allow_once comes first, and a single "deny" must never pick reject_always.
+        const pick = (kinds) => kinds.map((k) => (p.options ?? []).find((opt) => opt.kind === k)).find(Boolean);
         const option = d === 'deny' ? pick(['reject_once', 'reject_always']) : d === 'always' ? pick(['allow_always', 'allow_once']) : pick(['allow_once', 'allow_always']);
         return option ? { outcome: { outcome: 'selected', optionId: option.optionId } } : { outcome: { outcome: 'cancelled' } };
       }
