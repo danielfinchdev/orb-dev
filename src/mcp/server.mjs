@@ -6,7 +6,7 @@ import path from 'node:path';
 import readline from 'node:readline';
 import crypto from 'node:crypto';
 import net from 'node:net';
-import { useHome, ctx } from '../core/context.mjs';
+import { useHome, ctx, tr } from '../core/context.mjs';
 import { isHome } from '../core/home.mjs';
 import { budgetConfig } from '../core/budget.mjs';
 import { oneLine } from '../core/safety.mjs';
@@ -63,7 +63,7 @@ function giveFiles({ task_id, files, from_task }) {
   if (!Array.isArray(files) || !files.length || files.length > 50) throw new Error('files: entre 1 y 50 rutas');
   const out = copyIntoWorkdir(source, inCopy(task.workdir), files);
   board.event(task.id, ME, 'files.given', `${out.copied.join(', ') || 'nada'}${out.skipped.length ? ` · no copiados: ${out.skipped.join('; ')}` : ''}`);
-  if (out.copied.length) board.addChat('system', `📎 ${NAME} pasó ${out.copied.length} archivo(s) a la copia de la tarea #${task.id}: ${oneLine(out.copied.join(', '), 200)}`);
+  if (out.copied.length) board.addChat('system', tr('msg.mcp.filesCopied', { name: NAME, n: out.copied.length, id: task.id, list: oneLine(out.copied.join(', '), 200) }));
   return out;
 }
 

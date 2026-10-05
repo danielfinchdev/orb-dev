@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { ctx } from '../core/context.mjs';
+import { ctx, tr } from '../core/context.mjs';
 import { adapter, executable } from '../agents/index.mjs';
 import { orbMcpServer } from '../agents/common.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
@@ -59,10 +59,10 @@ export function placeAttachments(files, cwd) {
   const dir = path.join(cwd, ATTACH_DIR, String(Date.now()));
   const out = [];
   for (const file of list) {
-    let st; try { st = fs.lstatSync(file); } catch { throw new Error(`no existe el adjunto ${file}`); }
-    if (!st.isFile() || st.isSymbolicLink()) throw new Error(`el adjunto no es un archivo: ${file}`);
-    if (!IMAGE_EXT.test(file)) throw new Error(`solo se adjuntan imágenes (png, jpg, gif, webp, bmp): ${path.basename(file)}`);
-    if (st.size > ATTACH_MAX) throw new Error(`la imagen ${path.basename(file)} pasa de 20 MB`);
+    let st; try { st = fs.lstatSync(file); } catch { throw new Error(tr('msg.sessions.noAttachment', { file })); }
+    if (!st.isFile() || st.isSymbolicLink()) throw new Error(tr('msg.sessions.attachNotFile', { file }));
+    if (!IMAGE_EXT.test(file)) throw new Error(tr('msg.sessions.imagesOnly', { name: path.basename(file) }));
+    if (st.size > ATTACH_MAX) throw new Error(tr('msg.sessions.imageTooBig', { name: path.basename(file) }));
     fs.mkdirSync(dir, { recursive: true });
     const target = path.join(dir, path.basename(file).replace(/[^\w.-]+/g, '_'));
     fs.copyFileSync(file, target);
@@ -83,12 +83,12 @@ export function placeAttachments(files, cwd) {
 // One line for the live view: what the agent is doing now.
 export function describeItem(item) {
   const b = item.body;
-  if (item.kind === 'tool') return oneLine(`${b?.name ?? 'herramienta'}${b?.input ? `: ${b.input}` : ''}`, 140);
-  if (item.kind === 'file') return oneLine(`${{ add: 'crea', delete: 'borra' }[b?.change] ?? 'edita'} ${b?.path ?? ''}`, 140);
-  if (item.kind === 'reasoning') return 'pensando…';
-  if (item.kind === 'approval') return oneLine(`espera tu permiso: ${b?.title ?? ''}`, 140);
-  if (item.kind === 'text' && item.role === 'assistant') return oneLine(`escribe: ${bodyText(b)}`, 140);
-  if (item.role === 'error') return oneLine(`error: ${bodyText(b)}`, 140);
+  if (item.kind === 'tool') return oneLine(`${b?.name ?? tr('msg.sessions.tool')}${b?.input ? `: ${b.input}` : ''}`, 140);
+  if (item.kind === 'file') return oneLine(`${{ add: tr('msg.sessions.fileAdd'), delete: tr('msg.sessions.fileDelete') }[b?.change] ?? tr('msg.sessions.fileEdit')} ${b?.path ?? ''}`, 140);
+  if (item.kind === 'reasoning') return tr('msg.sessions.thinking');
+  if (item.kind === 'approval') return oneLine(tr('msg.sessions.waitingPermission', { title: b?.title ?? '' }), 140);
+  if (item.kind === 'text' && item.role === 'assistant') return oneLine(tr('msg.sessions.writes', { text: bodyText(b) }), 140);
+  if (item.role === 'error') return oneLine(tr('msg.sessions.errorLine', { text: bodyText(b) }), 140);
   return null;
 }
 
@@ -115,20 +115,20 @@ export class Sessions {
     return this.board.all(`SELECT * FROM sessions WHERE archived = ? ${kind ? 'AND kind = ?' : ''} ORDER BY updated_at DESC LIMIT 300`, Number(archived), ...(kind ? [kind] : [])).map(parseRow);
   }
   get(id) { return parseRow(this.board.one('SELECT * FROM sessions WHERE id = ?', String(id))); }
-  must(id) { const s = this.get(id); if (!s) throw new Error('esa conversación ya no existe'); return s; }
+  must(id) { const s = this.get(id); if (!s) throw new Error(tr('msg.sessions.noConversation')); return s; }
 
   create({ kind = 'chat', agent, account = null, model = null, reasoning = 'medium', permission = 'editar', project = null, cwd, title, taskId = null, parentId = null }) {
     adapter(agent);
     const acc = account ? findAccount(account) : defaultAccount(agent);
-    if (!acc || acc.agent !== agent) throw new Error(`la cuenta ${account} no es de ${agent}`);
-    if (!PERMISSIONS.includes(permission)) throw new Error('permiso no válido');
-    if (!cwd || !fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) throw new Error(`la carpeta de trabajo no existe: ${cwd}`);
+    if (!acc || acc.agent !== agent) throw new Error(tr('msg.sessions.accountNotOf', { account, agent }));
+    if (!PERMISSIONS.includes(permission)) throw new Error(tr('msg.sessions.badPermission'));
+    if (!cwd || !fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) throw new Error(tr('msg.sessions.noCwd', { cwd }));
     const id = crypto.randomUUID(); const at = now();
     // No model chosen = the agent's default from Agentes (Sonnet for Claude), never its CLI's own default (which can be the
     // most expensive one).
     const chosen = model || ctx.config.agents[agent]?.defaultModel || null;
     this.board.run(`INSERT INTO sessions (id, kind, agent, account, model, reasoning, permission, project, cwd, task_id, title, status, parent_id, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'idle', ?, ?, ?)`, id, kind, agent, acc.id, chosen, reasoning, permission, project, cwd, taskId, oneLine(title || 'Conversación', 80), parentId, at, at);
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'idle', ?, ?, ?)`, id, kind, agent, acc.id, chosen, reasoning, permission, project, cwd, taskId, oneLine(title || tr('msg.sessions.defaultTitle'), 80), parentId, at, at);
     const s = this.get(id); this.emit('session:update', s); return s;
   }
 
@@ -136,7 +136,7 @@ export class Sessions {
     const allowed = ['title', 'model', 'reasoning', 'permission', 'archived', 'status', 'cli_session', 'cwd', 'account', 'settled', 'context'];
     const keys = Object.keys(fields).filter((k) => allowed.includes(k));
     if (!keys.length) return this.get(id);
-    if ('permission' in fields && !PERMISSIONS.includes(fields.permission)) throw new Error('permiso no válido');
+    if ('permission' in fields && !PERMISSIONS.includes(fields.permission)) throw new Error(tr('msg.sessions.badPermission'));
     const value = (k) => { const v = fields[k]; if (typeof v === 'boolean') return Number(v); if (v && typeof v === 'object') return JSON.stringify(v); return v ?? null; };
     this.board.run(`UPDATE sessions SET ${keys.map((k) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`, ...keys.map(value), now(), id);
     // The live process follows the changes it can take on the fly; the rest apply when it starts again.
@@ -151,8 +151,8 @@ export class Sessions {
   }
 
   remove(id) {
-    if (this.running.has(id)) throw new Error('la conversación está trabajando: detenla antes');
-    const s = this.must(id); if (s.kind === 'task') throw new Error('la conversación de una tarea se borra con la tarea');
+    if (this.running.has(id)) throw new Error(tr('msg.sessions.stopFirst'));
+    const s = this.must(id); if (s.kind === 'task') throw new Error(tr('msg.sessions.taskSession'));
     this.closeLive(id);
     this.board.run('DELETE FROM session_items WHERE session_id = ?', id);
     this.board.run('DELETE FROM session_queue WHERE session_id = ?', id);
@@ -216,7 +216,7 @@ export class Sessions {
       this.approvals.delete(key);
       this.emit('approval:changed', { session: sessionId });
     }
-    throw new Error('esa petición ya no está activa (el agente terminó o se detuvo)');
+    throw new Error(tr('msg.sessions.requestGone'));
   }
 
   // ---- the live process of a conversation
@@ -256,7 +256,7 @@ export class Sessions {
       resumeId: forkFrom || s.cli_session || null, forkSession: Boolean(forkFrom), newSessionId,
       mcpServers: mcpServersFor(s.agent, { taskId, session: s.id }), budgetUsd,
       env: { ...accountEnv(acc), ...browserEnv(s.agent, s.id, taskId), ORB_HOME: ctx.home, ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
-      internalDir: ctx.paths.internal, log: writeLog, cfg: ctx.config.agents[s.agent] ?? {},
+      internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog, cfg: ctx.config.agents[s.agent] ?? {},
       onEvent: (ev) => this.onLiveEvent(s.id, ev)
     });
     this.lives.set(s.id, entry);
@@ -306,7 +306,7 @@ export class Sessions {
   }
   editQueued(id, queueId, { text, remove, move } = {}) {
     const row = this.board.one('SELECT * FROM session_queue WHERE id = ? AND session_id = ?', Number(queueId), id);
-    if (!row) throw new Error('ese mensaje ya no está en la cola');
+    if (!row) throw new Error(tr('msg.sessions.notQueued'));
     if (remove) this.board.run('DELETE FROM session_queue WHERE id = ?', row.id);
     else if (text !== undefined) this.board.run('UPDATE session_queue SET text = ? WHERE id = ?', String(text).slice(0, 20000), row.id);
     if (move && !remove) {
@@ -352,11 +352,11 @@ export class Sessions {
   // timeoutMs, budgetUsd, taskId, showUser, onFinish({ code, state, stderr, logFile, stopped, timedOut, limit }).
   send(id, text, { images = [], prompt, timeoutMs = (ctx.config.timeoutMinutes ?? 60) * 60_000, budgetUsd, taskId, onFinish, showUser = true } = {}) {
     const s = this.must(id);
-    if (this.running.has(id)) throw new Error('el agente sigue trabajando en esta conversación: espera o detenlo');
-    if (!String(text ?? '').trim() && !images.length) throw new Error('escribe un mensaje');
+    if (this.running.has(id)) throw new Error(tr('msg.sessions.stillWorking'));
+    if (!String(text ?? '').trim() && !images.length) throw new Error(tr('msg.sessions.writeMessage'));
     // The conversation's own account: if it was removed, the turn does not silently move to another subscription.
     const acc = s.account ? findAccount(s.account) : defaultAccount(s.agent);
-    if (!acc) throw new Error(`la cuenta ${s.account} ya no existe: empieza una conversación nueva con otra cuenta`);
+    if (!acc) throw new Error(tr('msg.sessions.accountGone', { account: s.account }));
     const a = adapter(s.agent);
     const attached = placeAttachments(images, s.cwd);
     if (showUser) this.addItem(id, 'user', 'text', attached.length ? { text, images: attached } : text);
@@ -369,14 +369,14 @@ export class Sessions {
     let entry;
     try { entry = this.getLive(s, acc, { taskId, budgetUsd }); }
     catch (error) {
-      this.addItem(id, 'error', 'text', `No se pudo arrancar ${a.label}: ${error.message}`);
+      this.addItem(id, 'error', 'text', tr('msg.sessions.cannotStart', { label: a.label, message: error.message }));
       onFinish?.({ code: -1, state: { final: '', text: '', isError: true }, stderr: error.message, logFile: null, stopped: false });
       return null;
     }
     const run = { agent: s.agent, stopped: false, startedAt: Date.now(), lastAt: Date.now(), steps: 0, last: 'arrancando…', live: entry.live };
     this.running.set(id, run);
     this.update(id, { status: 'running', settled: false });
-    const timer = timeoutMs ? setTimeout(() => { this.addItem(id, 'error', 'text', `Tiempo máximo alcanzado (${Math.round(timeoutMs / 60000)} min): se detiene.`); run.timedOut = true; this.stop(id); }, timeoutMs) : null;
+    const timer = timeoutMs ? setTimeout(() => { this.addItem(id, 'error', 'text', tr('msg.sessions.timeout', { min: Math.round(timeoutMs / 60000) })); run.timedOut = true; this.stop(id); }, timeoutMs) : null;
     timer?.unref?.();
     const resumed = Boolean(s.cli_session);
     let finished = false; // onFinish runs exactly once, also when the adapter itself fails
@@ -388,11 +388,11 @@ export class Sessions {
       // A conversation that cannot be resumed (old or deleted on the agent's side) starts over on the next message.
       if (failed && resumed && !result.text && /resum|no conversation|not found|malformed|thread|session/i.test(result.final ?? '')) {
         this.update(id, { cli_session: null }); this.closeLive(id);
-        this.addItem(id, 'system', 'status', `No se pudo retomar la conversación de ${a.label}. El próximo mensaje empezará una nueva; este historial se conserva aquí.`);
+        this.addItem(id, 'system', 'status', tr('msg.sessions.cannotResume', { label: a.label }));
       }
       // A failure we recognise (no login, plan, model, network…) is explained with what to do.
-      if (failed && !onFinish) { const why = explainFailure(a.label, result.final); if (why) this.addItem(id, 'system', 'status', `${why.reason[0].toUpperCase()}${why.reason.slice(1)}. ${why.advice}`); }
-      if (run.stopped && !run.timedOut) this.addItem(id, 'system', 'status', 'Detenido.');
+      if (failed && !onFinish) { const why = explainFailure(a.label, result.final, ctx.config.language); if (why) this.addItem(id, 'system', 'status', `${why.reason[0].toUpperCase()}${why.reason.slice(1)}. ${why.advice}`); }
+      if (run.stopped && !run.timedOut) this.addItem(id, 'system', 'status', tr('msg.sessions.stopped'));
       const limited = Boolean(result.limit);
       this.update(id, { status: limited ? 'limited' : failed ? 'error' : 'idle' });
       const state = { final: result.final, text: result.text, isError: result.isError, usage: result.usage, cliSession: this.get(id)?.cli_session };
@@ -434,13 +434,13 @@ export class Sessions {
   // forks (Claude, Codex) carry their whole history; for the others the copy starts with a summary of what was said.
   fork(id, { title } = {}) {
     const s = this.must(id);
-    if (this.running.has(id)) throw new Error('espera a que termine el turno para bifurcar');
+    if (this.running.has(id)) throw new Error(tr('msg.sessions.forkWait'));
     const a = adapter(s.agent);
     const copy = this.create({ kind: 'chat', agent: s.agent, account: s.account, model: s.model, reasoning: s.reasoning, permission: s.permission,
-      project: s.project, cwd: s.cwd, title: title || `${s.title} · bifurcación`, parentId: s.id });
+      project: s.project, cwd: s.cwd, title: title || tr('msg.sessions.forkTitle', { title: s.title }), parentId: s.id });
     const old = this.board.all("SELECT role, kind, body, at FROM session_items WHERE session_id = ? AND kind = 'text' AND role IN ('user', 'assistant') ORDER BY id DESC LIMIT 40", s.id).reverse();
     for (const it of old) this.board.run('INSERT INTO session_items (session_id, role, kind, body, at) VALUES (?, ?, ?, ?, ?)', copy.id, it.role, it.kind, it.body, it.at);
-    this.addItem(copy.id, 'system', 'status', `Bifurcada de «${s.title}». Lo que hagas aquí no cambia la conversación original.`);
+    this.addItem(copy.id, 'system', 'status', tr('msg.sessions.forked', { title: s.title }));
     if (a.caps?.fork && s.cli_session) this.board.settingJson(`fork_pending:${copy.id}`, s.cli_session);
     else if (old.length) this.board.settingJson(`fork_summary:${copy.id}`, old.map((it) => `${it.role === 'user' ? 'Usuario' : 'Agente'}: ${oneLine(bodyText(parseItem(it).body), 400)}`).join('\n'));
     return copy;
