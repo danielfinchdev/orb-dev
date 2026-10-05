@@ -9,6 +9,7 @@ import { createProjectFlow } from './project-actions.jsx';
 import { STATUS } from '@/lib/labels.js';
 import { cn } from '@/lib/utils.js';
 import { AgentIcon } from './agent-icon.jsx';
+import { useT } from '@/lib/i18n.js';
 import { newConversation } from '@/views/session.jsx';
 
 function NavItem({ icon: Icon, iconEl, label, active, onClick, children, testid }) {
@@ -25,7 +26,7 @@ const statusDot = { running: 'bg-info animate-pulse', error: 'bg-destructive', i
 
 // The inbox at the top (2.3, like T3 Code's): what needs you (a permission, a task to approve, something stopped halfway or
 // waiting for the usage limit) and what is working right now. A conversation leaves it with «Listo» (settled).
-function Inbox({ title, tone, items, route }) {
+function Inbox({ title, tone, items, route, settleLabel }) {
   if (!items.length) return null;
   return (
     <div className="pt-4">
@@ -36,7 +37,7 @@ function Inbox({ title, tone, items, route }) {
             <button onClick={i.open} title={i.hint} className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 px-2.5 py-1.5 text-left text-[13px]" data-testid="inbox-item">
               {i.icon}<span className="min-w-0 flex-1 truncate">{i.title}</span>
             </button>
-            {i.settle ? <Tip label="Listo: quitar de aquí"><button className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 cursor-pointer place-items-center rounded-md opacity-0 group-hover/inbox:opacity-100 focus-visible:opacity-100" aria-label="Listo" onClick={i.settle}><Check className="size-3.5" /></button></Tip> : null}
+            {i.settle ? <Tip label={settleLabel}><button className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 cursor-pointer place-items-center rounded-md opacity-0 group-hover/inbox:opacity-100 focus-visible:opacity-100" aria-label="Listo" onClick={i.settle}><Check className="size-3.5" /></button></Tip> : null}
           </div>
         ))}
       </div>
@@ -83,6 +84,7 @@ function ProjectFolder({ project, items, open, onOpen, route, active }) {
 }
 
 export function Sidebar({ mood }) {
+  const t = useT();
   const app = useStore((s) => s.app);
   const route = useStore((s) => s.route);
   const tasks = useStore((s) => s.tasks);
@@ -121,34 +123,34 @@ export function Sidebar({ mood }) {
         <Robot size={34} mood={mood} title={name} />
         <div className="min-w-0 flex-1">
           <div className="truncate text-[15px] font-medium">{name}</div>
-          <div className="text-muted-foreground truncate text-xs">{app.activeProject ? app.activeProject.name : 'Sin proyecto'}</div>
+          <div className="text-muted-foreground truncate text-xs">{app.activeProject ? app.activeProject.name : t('nav.noProject')}</div>
         </div>
         <ThemeToggle />
       </div>
       <div className="px-3 pb-2">
-        <Button className="w-full justify-start" variant="outline" onClick={() => newConversation()} data-testid="new-conversation"><MessageSquarePlus />Nueva conversación</Button>
+        <Button className="w-full justify-start" variant="outline" onClick={() => newConversation()} data-testid="new-conversation"><MessageSquarePlus />{t('nav.newConversation')}</Button>
       </div>
-      <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-3">
+      <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-x-hidden overflow-y-auto px-3 pb-3">
         <NavItem icon={Sparkles} label={name} active={is('chat')} onClick={() => go('chat')} testid="nav-chat">
           {app.chat?.busy ? <span className="bg-primary size-2 animate-pulse rounded-full" /> : null}
         </NavItem>
-        <NavItem icon={ListTodo} label="Tareas" active={is('tasks')} onClick={() => go('tasks')} testid="nav-tasks">
+        <NavItem icon={ListTodo} label={t('nav.tasks')} active={is('tasks')} onClick={() => go('tasks')} testid="nav-tasks">
           {approvals ? <span className="bg-warning text-white rounded-full px-1.5 text-[11px] font-medium" title="Esperan tu aprobación">{approvals}</span>
             : running ? <span className="bg-muted text-muted-foreground rounded-full px-1.5 text-[11px]">{running}</span> : null}
         </NavItem>
-        <NavItem icon={FolderKanban} label="Proyectos" active={is('projects')} onClick={() => go('projects')} testid="nav-projects" />
+        <NavItem icon={FolderKanban} label={t('nav.projects')} active={is('projects')} onClick={() => go('projects')} testid="nav-projects" />
         {/* Expert mode: PC only (wide screens), when turned on in Settings. */}
-        {app.config.expert?.enabled && !bridge.mobile ? <div className="hidden lg:block"><NavItem icon={SquareTerminal} label="Modo experto" active={is('expert')} onClick={() => go('expert')} testid="nav-expert" /></div> : null}
-        <NavItem icon={CalendarClock} label="Programadas" active={is('schedules')} onClick={() => go('schedules')} testid="nav-schedules" />
-        <Inbox title="Te esperan" tone="text-warning" items={needs} route={route} />
-        <Inbox title="Trabajando" tone="text-info" items={working} route={route} />
+        {app.config.expert?.enabled && !bridge.mobile ? <div className="hidden lg:block"><NavItem icon={SquareTerminal} label={t('nav.expert')} active={is('expert')} onClick={() => go('expert')} testid="nav-expert" /></div> : null}
+        <NavItem icon={CalendarClock} label={t('nav.schedules')} active={is('schedules')} onClick={() => go('schedules')} testid="nav-schedules" />
+        <Inbox title={t('inbox.waiting')} tone="text-warning" items={needs} route={route} settleLabel={t('inbox.settle')} />
+        <Inbox title={t('inbox.working')} tone="text-info" items={working} route={route} />
         <div className="text-muted-foreground flex items-center px-2.5 pt-5 pb-1 text-[11px] tracking-wide uppercase">
-          <span className="flex-1">Carpetas</span>
+          <span className="flex-1">{t('nav.folders')}</span>
           {bridge.mobile ? null : <Tip label="Nuevo proyecto"><button className="hover:text-foreground grid size-6 cursor-pointer place-items-center rounded-md hover:bg-accent/60" aria-label="Nuevo proyecto" onClick={async () => { const p = await createProjectFlow(); if (p) { await act(call('projects.setActive', { name: p.name })); setOpenFolder(p.name, true); } }} data-testid="sidebar-new-project"><FolderPlus className="size-3.5" /></button></Tip>}
         </div>
         {folders.length ? folders.map((f) => <ProjectFolder key={f.project.name} project={f.project} items={f.items} open={isOpen(f)} onOpen={(v) => setOpenFolder(f.project.name, v)} route={route} active={f.project.active} />)
           : <p className="text-muted-foreground px-2.5 text-xs leading-relaxed">Cada proyecto es una carpeta: aquí verás las tareas que le vas mandando.</p>}
-        <div className="text-muted-foreground px-2.5 pt-4 pb-1 text-[11px] tracking-wide uppercase">Sin carpeta</div>
+        <div className="text-muted-foreground px-2.5 pt-4 pb-1 text-[11px] tracking-wide uppercase">{t('nav.loose')}</div>
         {loose.length ? loose.map((i) => (
           <NavItem key={i.key} iconEl={i.icon} label={i.title} active={i.isActive(route)} onClick={i.open}>
             <span className={cn('size-1.5 shrink-0 rounded-full', statusDot[i.status] ?? 'bg-muted-foreground/40')} />
@@ -157,10 +159,10 @@ export function Sidebar({ mood }) {
           : <p className="text-muted-foreground px-2.5 text-xs leading-relaxed">Habla directamente con cualquier agente (Claude, Codex, Cursor, Gemini…), en directo.</p>}
       </nav>
       <div className="flex flex-col gap-0.5 border-t px-3 py-2.5">
-        {bridge.mobile ? null : <NavItem icon={Bot} label="Agentes" active={is('agents')} onClick={() => go('agents')} testid="nav-agents" />}
-        <NavItem icon={BookOpen} label="Bitácoras" active={is('logs')} onClick={() => go('logs')} testid="nav-logs" />
-        <NavItem icon={History} label="Actividad" active={is('activity')} onClick={() => go('activity')} testid="nav-activity" />
-        {bridge.mobile ? null : <NavItem icon={Settings} label="Ajustes" active={is('settings')} onClick={() => go('settings')} testid="nav-settings" />}
+        {bridge.mobile ? null : <NavItem icon={Bot} label={t('nav.agents')} active={is('agents')} onClick={() => go('agents')} testid="nav-agents" />}
+        <NavItem icon={BookOpen} label={t('nav.logs')} active={is('logs')} onClick={() => go('logs')} testid="nav-logs" />
+        <NavItem icon={History} label={t('nav.activity')} active={is('activity')} onClick={() => go('activity')} testid="nav-activity" />
+        {bridge.mobile ? null : <NavItem icon={Settings} label={t('nav.settings')} active={is('settings')} onClick={() => go('settings')} testid="nav-settings" />}
       </div>
     </aside>
   );
