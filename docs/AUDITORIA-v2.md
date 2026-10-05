@@ -1,6 +1,6 @@
 # Auditoría de optimización y seguridad — Orb.dev 2.0
 
-Autor: Claude (Claude Code), 2026-10-04, rama `orb-2`. Revisión del código completo (motor, núcleo, agentes, MCP, proceso
+2026-10-04, rama `orb-2`. Revisión del código completo (motor, núcleo, agentes, MCP, proceso
 principal de Electron, interfaz y empaquetado) después de terminarlo. Cada hallazgo indica si **se aplicó** el arreglo o si
 queda como **límite conocido**.
 

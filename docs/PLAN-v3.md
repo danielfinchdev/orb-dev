@@ -1,6 +1,6 @@
 # Orb.dev 3 — plan para ser puntero (lo mejor de T3 Code Nightly)
 
-Autor: Claude (Claude Code), 2026-10-05, rama `arreglos-2.1.1`. Parte de una prueba completa de la 2.1.0 en Windows
+2026-10-05, rama `arreglos-2.1.1`. Parte de una prueba completa de la 2.1.0 en Windows
 (app empaquetada y desde el código, en modo día y noche, y con Claude, Codex y Cursor de verdad) y del estudio de
 T3 Code Nightly `0.0.46-nightly.20261004` («Orchestrator V2», 3 y 4 de octubre de 2026).
 
