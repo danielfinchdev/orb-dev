@@ -1,8 +1,12 @@
 # Orb.dev — tu jefe de proyecto de agentes de IA
 
 Aplicación de escritorio para Windows (portable). Hablas con tu asistente («Orb» o el nombre que le pongas), él convierte
-lo que pides en encargos, los reparte entre **Claude Code, Codex y Cursor**, revisa lo que hacen y te lo cuenta para que des
-el **OK**. También puedes hablar directamente con cada agente, en directo, como en T3 Code.
+lo que pides en encargos optimizados (pocos tokens), los reparte entre agentes de varios proveedores —**Claude Code, Codex,
+Cursor, Gemini CLI, OpenCode, Qwen Code y GitHub Copilot**— que trabajan a la vez, revisa lo que hacen y te lo cuenta para que
+des el **OK**. También puedes hablar directamente con cada agente, en directo (como en T3 Code): respuesta en streaming,
+corregirle sobre la marcha, cola de mensajes, permisos con un clic y bifurcar.
+
+Cómo funciona todo, funcionalidad por funcionalidad: [`docs/FUNCIONAMIENTO.md`](docs/FUNCIONAMIENTO.md). Novedades: [`docs/NOVEDADES.md`](docs/NOVEDADES.md).
 
 ```
 Tú → Orb → tareas y coordinación → agentes → tareas hechas → Orb revisa → informe → tu OK
@@ -11,11 +15,11 @@ Tú → Orb → tareas y coordinación → agentes → tareas hechas → Orb rev
 ## Descargar y usar (lo más fácil)
 
 1. Entra en [**Releases → última versión**](https://github.com/danielfinchdev/orb-dev/releases/latest) y descarga
-   **`Orb.dev-2.1.0-portable.exe`**.
+   **`Orb.dev-2.3.0-portable.exe`**.
 2. Doble clic. No se instala nada: se abre tal cual (la primera vez tarda unos segundos).
 3. Windows SmartScreen avisará porque la app aún no está firmada: «Más información» → «Ejecutar de todas formas».
 
-¿Prefieres que arranque más rápido? Descarga **`Orb.dev-2.1.0-windows.zip`**, clic derecho → «Extraer todo» y abre
+¿Prefieres que arranque más rápido? Descarga **`Orb.dev-2.3.0-windows.zip`**, clic derecho → «Extraer todo» y abre
 `Orb.dev.exe` de dentro de la carpeta. No hace falta instalar Node.js ni Git para la app; los agentes (Claude Code, Codex,
 Cursor) te los instala ella misma en el primer arranque. El repositorio es privado: para descargar hay que tener acceso
 a él en GitHub (o que te pasen el archivo).
@@ -47,11 +51,12 @@ claro, deja Cursor en pausa un día y, si la tarea era para «cualquier agente»
 
 ## Empezar
 
-1. Abre `Orb.dev-2.1.0-portable.exe` (o `npm start` si la usas desde el código).
+1. Abre `Orb.dev-2.3.0-portable.exe` (o `npm start` si la usas desde el código).
 2. Elige su nombre, cómo te llama y dónde crear su carpeta. La carpeta se llama como el asistente: con `D:\` y el nombre
    «Nova» se crea `D:\Nova`; si dejas el nombre por defecto, `D:\Orb`.
-3. En **Agentes**, comprueba que encuentra Claude Code, Codex o Cursor y que tienen la sesión iniciada (el botón abre el login
-   oficial de cada uno; la app nunca ve tus contraseñas).
+3. En **Agentes**, comprueba qué agentes encuentra (Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Qwen Code, Copilot) y
+   que tienen la sesión iniciada. Si ya iniciaste sesión en su programa (por ejemplo Codex con tu cuenta de ChatGPT), no
+   hace falta nada más; si no, el botón abre el login oficial (la app nunca ve tus contraseñas).
 4. Crea un proyecto desde el chat (botón de proyecto bajo el cuadro de texto) y pídele algo.
 
 ## La carpeta del asistente
@@ -67,6 +72,16 @@ D:\Orb\
 
 ## Lo principal
 
+- **Novedades de la 2.3**:
+  - **Agentes en directo:** un proceso vivo por conversación, respuesta en streaming, corregir en marcha (Intro), cola
+    editable (Ctrl+Intro), bifurcar, continuar tras cerrar, detalles y medidor de contexto.
+  - **Permisos equilibrados:** lo arriesgado pregunta con una tarjeta Permitir/Denegar en lugar de prohibirse.
+  - **Más agentes** por ACP.
+  - **Cupo real:** usa el uso que dicen Claude y Codex; las tareas esperan solas al reinicio.
+  - **Delegación** entre agentes.
+  - **Task Review:** otro modelo de otro proveedor audita y da un veredicto.
+  - **Tareas programadas**, **«@»** para adjuntar contexto y **bandeja** en la barra lateral.
+  - **Español de España e inglés.**
 - **Chat con el asistente**: modelo Sonnet 5.5 (ahorro) u Opus 5.5, ambos con razonamiento medio, y casilla **Orquestador**:
   marcada, solo coordina; desmarcada (modo libre), trabaja directamente en el proyecto (sin push ni publicar).
 - **Tareas**: en la carpeta del proyecto, por turnos y con **«Deshacer esta tarea»**, o en una copia aislada con rama propia.
@@ -111,7 +126,7 @@ npm test             # pruebas del motor (agentes falsos, sin cuentas)
 npm run test:app     # la app entera con Electron (en Linux: xvfb-run -a npm run test:app)
 npm run test:movil   # la web app del móvil a tamaño de teléfono
 ORB_E2E_EXE=dist/win-unpacked/Orb.dev.exe node test/smoke.e2e.mjs   # prueba la app ya empaquetada
-npm run dist         # Orb.dev-2.1.0-portable.exe e instalador (en Windows)
+npm run dist         # Orb.dev-2.3.0-portable.exe e instalador (en Windows)
 npm run icon         # vuelve a dibujar el icono desde el robot
 ```
 

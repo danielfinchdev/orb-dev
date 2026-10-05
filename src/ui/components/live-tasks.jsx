@@ -9,6 +9,7 @@ import { confirm } from './dialogs.jsx';
 import { useStore, call, act, go } from '@/lib/store.js';
 import { AGENT } from '@/lib/labels.js';
 import { cn } from '@/lib/utils.js';
+import { t as tNow, useT } from '@/lib/i18n.js';
 
 const QUIET_MIN = 5; // minutes without activity before it is shown as "sin señales"
 
@@ -26,7 +27,7 @@ export function useLiveTasks() {
   return live;
 }
 
-export const elapsed = (ms) => { const m = Math.floor(ms / 60000); return m < 1 ? `${Math.max(1, Math.floor(ms / 1000))} s` : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`; };
+export const elapsed = (ms) => { const m = Math.floor(ms / 60000); return m < 1 ? tNow('comp.live.sec', { n: Math.max(1, Math.floor(ms / 1000)) }) : m < 60 ? tNow('comp.live.min', { n: m }) : tNow('comp.live.hourMin', { h: Math.floor(m / 60), m: m % 60 }); };
 
 export function ProgressBar({ percent, quiet, className }) {
   return (
@@ -39,41 +40,43 @@ export function ProgressBar({ percent, quiet, className }) {
 }
 
 // One running task: title, bar and a line with time, steps and the current action.
-export function LiveTask({ t, compact = false, actions = true }) {
-  const quiet = t.quietMin >= QUIET_MIN;
-  const now = t.note || t.last;
+export function LiveTask({ t: task, compact = false, actions = true }) {
+  const t = useT();
+  const quiet = task.quietMin >= QUIET_MIN;
+  const now = task.note || task.last;
   return (
     <div className="grid gap-1.5" data-testid="live-task">
       <div className="flex items-center gap-2">
-        <AgentIcon agent={t.agent} className="size-3.5" />
-        <button className="min-w-0 flex-1 cursor-pointer truncate text-left text-[13px] hover:underline" onClick={() => go({ view: 'tasks', id: t.id })}>#{t.id} {t.title}</button>
-        <span className="text-muted-foreground shrink-0 text-xs tabular-nums">{t.percent != null ? `${t.percent} %` : 'trabajando'}</span>
+        <AgentIcon agent={task.agent} className="size-3.5" />
+        <button className="min-w-0 flex-1 cursor-pointer truncate text-left text-[13px] hover:underline" onClick={() => go({ view: 'tasks', id: task.id })}>#{task.id} {task.title}</button>
+        <span className="text-muted-foreground shrink-0 text-xs tabular-nums">{task.percent != null ? `${task.percent} %` : t('comp.live.working')}</span>
         {actions ? <>
-          <Button size="icon-sm" variant="ghost" className="size-6" title="Ver su conversación" onClick={() => go({ view: 'session', id: t.sessionId })}><MessageSquare className="size-3.5" /></Button>
-          <Button size="icon-sm" variant="ghost" className="size-6" title="Cancelar la tarea" onClick={async () => { if (await confirm('Cancelar tarea', `${AGENT[t.agent] ?? t.agent} se detendrá ahora.`, { ok: 'Cancelar tarea', cancel: 'Volver', danger: true })) act(call('tasks.cancel', { id: t.id }), 'Cancelada'); }}><Square className="size-3 fill-current" /></Button>
+          <Button size="icon-sm" variant="ghost" className="size-6" title={t('comp.live.viewConv')} onClick={() => go({ view: 'session', id: task.sessionId })}><MessageSquare className="size-3.5" /></Button>
+          <Button size="icon-sm" variant="ghost" className="size-6" title={t('comp.live.cancelTitle')} onClick={async () => { if (await confirm(t('comp.live.cancelTask'), t('comp.live.cancelBody', { agent: AGENT[task.agent] ?? task.agent }), { ok: t('comp.live.cancelTask'), cancel: t('comp.live.back'), danger: true })) act(call('tasks.cancel', { id: task.id }), t('comp.live.cancelled')); }}><Square className="size-3 fill-current" /></Button>
         </> : null}
       </div>
-      <ProgressBar percent={t.percent} quiet={quiet} />
+      <ProgressBar percent={task.percent} quiet={quiet} />
       <div className={cn('flex min-w-0 items-center gap-1.5 text-xs', quiet ? 'text-warning' : 'text-muted-foreground')}>
         {quiet ? <Hourglass className="size-3 shrink-0" /> : null}
-        <span className="shrink-0 tabular-nums">{elapsed(Date.now() - t.startedAt)} · {t.steps} paso{t.steps === 1 ? '' : 's'}</span>
-        <span className="min-w-0 truncate">· {quiet ? `sin señales desde hace ${t.quietMin} min (lo último: ${now})` : `ahora: ${now}`}</span>
+        <span className="shrink-0 tabular-nums">{elapsed(Date.now() - task.startedAt)} · {t(task.steps === 1 ? 'comp.live.stepOne' : 'comp.live.stepOther', { n: task.steps })}</span>
+        <span className="min-w-0 truncate">· {quiet ? t('comp.live.quiet', { min: task.quietMin, now }) : t('comp.live.now', { now })}</span>
       </div>
-      {!compact && t.percent == null ? <p className="text-muted-foreground text-[11px]">{AGENT[t.agent] ?? t.agent} no informa del porcentaje: se ve lo que hace en cada paso. Máximo {t.timeoutMin} min por tarea.</p> : null}
+      {!compact && task.percent == null ? <p className="text-muted-foreground text-[11px]">{t('comp.live.noPercent', { agent: AGENT[task.agent] ?? task.agent, min: task.timeoutMin })}</p> : null}
     </div>
   );
 }
 
 // The block above the assistant's message box: what is running now.
 export function LiveTasksStrip() {
+  const t = useT();
   const live = useLiveTasks();
   if (!live.length) return null;
   return (
     <div className="shrink-0 px-5 pb-2">
       <div className="bg-card mx-auto grid max-w-3xl gap-3 rounded-2xl border px-4 py-3 shadow-xs" data-testid="live-strip">
-        <div className="text-muted-foreground text-[11px] tracking-wide uppercase">En marcha ({live.length})</div>
-        {live.slice(0, 4).map((t) => <LiveTask key={t.id} t={t} compact />)}
-        {live.length > 4 ? <button className="text-muted-foreground cursor-pointer text-left text-xs hover:underline" onClick={() => go('tasks')}>y {live.length - 4} más en Tareas</button> : null}
+        <div className="text-muted-foreground text-[11px] tracking-wide uppercase">{t('comp.live.running', { n: live.length })}</div>
+        {live.slice(0, 4).map((task) => <LiveTask key={task.id} t={task} compact />)}
+        {live.length > 4 ? <button className="text-muted-foreground cursor-pointer text-left text-xs hover:underline" onClick={() => go('tasks')}>{t('comp.live.more', { n: live.length - 4 })}</button> : null}
       </div>
     </div>
   );
