@@ -2,6 +2,7 @@
 // such as @tarea:12, @conversacion:<id> or @bitacora:<project>; before the message goes to the agent each token becomes a
 // short, bounded excerpt (not the whole thing: tokens cost money), marked as data.
 import { oneLine, redactSecrets } from '../core/safety.mjs';
+import { tr } from '../core/context.mjs';
 import { readLog } from './logs.mjs';
 
 const TOKEN = /@(tarea|conversacion|bitacora):([\w.-]{1,64})/g;
@@ -37,8 +38,8 @@ export function expandMentions(board, sessions, text) {
 
 // What the "@" list offers in the window: recent tasks, conversations and the logs.
 export function mentionOptions(board, sessions) {
-  const tasks = board.tasks({ limit: 40 }).map((t) => ({ token: `@tarea:${t.id}`, label: `#${t.id} ${t.title}`, hint: `tarea · ${t.project}`, kind: 'tarea' }));
-  const convs = sessions.list().slice(0, 30).map((s) => ({ token: `@conversacion:${s.id}`, label: s.title, hint: `conversación · ${s.agent}`, kind: 'conversacion' }));
-  const logs = [{ token: '@bitacora:general', label: 'Bitácora general', hint: 'bitácora', kind: 'bitacora' }, ...board.projects().map((p) => ({ token: `@bitacora:${p.name}`, label: `Bitácora de ${p.name}`, hint: 'bitácora', kind: 'bitacora' }))];
+  const tasks = board.tasks({ limit: 40 }).map((t) => ({ token: `@tarea:${t.id}`, label: `#${t.id} ${t.title}`, hint: tr('msg.mentions.taskHint', { project: t.project }), kind: 'tarea' }));
+  const convs = sessions.list().slice(0, 30).map((s) => ({ token: `@conversacion:${s.id}`, label: s.title, hint: tr('msg.mentions.convHint', { agent: s.agent }), kind: 'conversacion' }));
+  const logs = [{ token: '@bitacora:general', label: tr('msg.mentions.logGeneral'), hint: tr('msg.mentions.logHint'), kind: 'bitacora' }, ...board.projects().map((p) => ({ token: `@bitacora:${p.name}`, label: tr('msg.mentions.logOf', { name: p.name }), hint: tr('msg.mentions.logHint'), kind: 'bitacora' }))];
   return [...tasks, ...convs, ...logs];
 }

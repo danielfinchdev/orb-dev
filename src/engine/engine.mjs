@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { useHome, ctx } from '../core/context.mjs';
+import { useHome, ctx, tr } from '../core/context.mjs';
 import { isHome } from '../core/home.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 
@@ -51,7 +51,7 @@ async function start(home, version, secret, browser) {
   // A task waiting for a click: a line in the assistant's chat so the user sees it wherever they are (also the phone).
   sessions.onApproval = (s, item) => {
     if (s?.kind !== 'task') return;
-    board.addChat('system', `✋ La tarea #${s.task_id} espera tu permiso: ${item.body?.title ?? ''} (${item.body?.reason ?? ''}). Ábrela para permitirlo o denegarlo.`, { kind: 'task-approval', session: s.id, task: s.task_id, request: item.body?.id });
+    board.addChat('system', tr('msg.engine.taskNeedsPermission', { id: s.task_id, title: item.body?.title ?? '', reason: item.body?.reason ?? '' }), { kind: 'task-approval', session: s.id, task: s.task_id, request: item.body?.id });
   };
   const orchestrator = new Orchestrator(board, orchKey, { emit, log });
   const scheduler = new Scheduler(board, sessions, { log, orchestrator });

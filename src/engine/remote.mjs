@@ -8,7 +8,7 @@ import path from 'node:path';
 import http from 'node:http';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { ctx } from '../core/context.mjs';
+import { ctx, tr } from '../core/context.mjs';
 import { oneLine } from '../core/safety.mjs';
 import { quickRun } from '../agents/index.mjs';
 import { IS_WIN } from '../agents/common.mjs';
@@ -112,7 +112,7 @@ export function createRemote({ board, api, log, name }) {
   const readJson = (req, max = 200_000) => new Promise((resolve, reject) => {
     let size = 0; const chunks = [];
     req.on('data', (c) => { size += c.length; if (size > max) { reject(new Error('demasiado grande')); req.destroy(); } else chunks.push(c); });
-    req.on('end', () => { try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')); } catch { reject(new Error('JSON no válido')); } });
+    req.on('end', () => { try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')); } catch { reject(new Error(tr('msg.remote.badJson'))); } });
     req.on('error', reject);
   });
 
@@ -142,31 +142,31 @@ export function createRemote({ board, api, log, name }) {
     const p = url.pathname;
     if (req.method === 'GET' && !p.startsWith('/api/')) return serveStatic(req, res, p);
     if (!originOk(req)) return send(res, 403, { error: 'origen no permitido' });
-    if (req.method === 'POST' && req.headers['x-orb'] !== '1') return send(res, 403, { error: 'petición no permitida' });
+    if (req.method === 'POST' && req.headers['x-orb'] !== '1') return send(res, 403, { error: tr('msg.remote.notAllowed') });
 
     if (req.method === 'POST' && p === '/api/pair') {
       const who = req.socket.remoteAddress ?? '?';
       const recent = (failures.get(who) ?? []).filter((t) => Date.now() - t < 10 * 60_000);
       failures.set(who, recent);
-      if (recent.length >= 10) return send(res, 429, { error: 'demasiados intentos: espera unos minutos y genera otro QR' });
+      if (recent.length >= 10) return send(res, 429, { error: tr('msg.remote.tooMany') });
       let body = await readJson(req).catch(() => null);
       if (!body || typeof body !== 'object' || Array.isArray(body)) body = {};
       const token = typeof body.token === 'string' ? body.token : '';
       const ok = pairing && Date.now() < pairing.expires && token.length > 20 && crypto.timingSafeEqual(Buffer.from(sha(token)), Buffer.from(pairing.hash));
-      if (!ok) { recent.push(Date.now()); return send(res, 401, { error: 'el código QR no es válido o ha caducado: genera otro en el PC' }); }
+      if (!ok) { recent.push(Date.now()); return send(res, 401, { error: tr('msg.remote.badQr') }); }
       pairing = null; // one use
       const session = crypto.randomBytes(32).toString('base64url');
       const id = crypto.randomUUID();
-      const name = oneLine(typeof body.name === 'string' && body.name ? body.name : 'Móvil', 60);
+      const name = oneLine(typeof body.name === 'string' && body.name ? body.name : tr('msg.remote.defaultName'), 60);
       board.run('INSERT INTO devices (id, name, token_hash, created_at, last_seen) VALUES (?, ?, ?, ?, ?)', id, name, sha(session), now(), now());
       board.event(null, 'usuario', 'device.paired', name);
-      board.addChat('system', `📱 Nuevo dispositivo vinculado: ${name}. Puedes quitarlo en Ajustes → Móvil.`);
+      board.addChat('system', tr('msg.remote.deviceLinked', { name }));
       // The page keeps it in its own storage (only this exact address and port can read it) and sends it as a header.
       return send(res, 200, { ok: true, token: session });
     }
 
     const device = deviceOf(req);
-    if (!device) return send(res, 401, { error: 'este dispositivo no está vinculado' });
+    if (!device) return send(res, 401, { error: tr('msg.remote.notLinked') });
 
     if (req.method === 'GET' && p === '/api/events') {
       res.writeHead(200, { ...HEADERS, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
@@ -185,14 +185,14 @@ export function createRemote({ board, api, log, name }) {
       let body; try { body = await readJson(req); } catch (error) { return send(res, 400, { error: error.message }); }
       const method = String(body.method ?? '');
       const params = body.params && typeof body.params === 'object' ? body.params : {};
-      if (!ALLOWED.has(method)) return send(res, 403, { error: 'esa acción solo se puede hacer desde el PC' });
-      if (params.permission === 'total') return send(res, 403, { error: 'el acceso total solo se da desde el PC' });
+      if (!ALLOWED.has(method)) return send(res, 403, { error: tr('msg.remote.pcOnly') });
+      if (params.permission === 'total') return send(res, 403, { error: tr('msg.remote.totalPcOnly') });
       // A conversation the PC gave total access to is driven from the PC only.
-      if (method.startsWith('sessions.') && method !== 'sessions.stop' && params.id !== undefined && board.one('SELECT permission FROM sessions WHERE id = ?', String(params.id))?.permission === 'total') return send(res, 403, { error: 'esta conversación tiene acceso total: solo se usa desde el PC' });
+      if (method.startsWith('sessions.') && method !== 'sessions.stop' && params.id !== undefined && board.one('SELECT permission FROM sessions WHERE id = ?', String(params.id))?.permission === 'total') return send(res, 403, { error: tr('msg.remote.totalConvPcOnly') });
       // Pictures from a phone are only the ones it uploaded itself (never other files of the PC).
       if (params.images !== undefined) {
         const dir = uploads() + path.sep;
-        if (!Array.isArray(params.images) || params.images.some((f) => typeof f !== 'string' || !path.resolve(f).startsWith(dir))) return send(res, 403, { error: 'solo imágenes subidas desde el móvil' });
+        if (!Array.isArray(params.images) || params.images.some((f) => typeof f !== 'string' || !path.resolve(f).startsWith(dir))) return send(res, 403, { error: tr('msg.remote.ownImages') });
       }
       try { const result = (await api.call(method, params)) ?? null; return send(res, 200, { ok: true, result: method === 'app.state' ? { ...result, config: phoneConfig(result.config) } : result }); }
       catch (error) { return send(res, 200, { ok: false, error: oneLine(error?.message ?? String(error), 1000) }); }
@@ -203,7 +203,7 @@ export function createRemote({ board, api, log, name }) {
   // A picture from the phone: checked by its first bytes (not its name), stored in the app's folder, path returned.
   let uploading = 0;
   function upload(req, res) {
-    if (uploading >= 3) { req.resume(); return send(res, 429, { error: 'espera a que terminen las otras imágenes' }); }
+    if (uploading >= 3) { req.resume(); return send(res, 429, { error: tr('msg.remote.waitUploads') }); }
     uploading++;
     const chunks = []; let size = 0; let done = false;
     const finish = (status, body) => { if (done) return; done = true; uploading--; send(res, status, body); };
@@ -214,14 +214,14 @@ export function createRemote({ board, api, log, name }) {
       const b = Buffer.concat(chunks);
       const ext = b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) ? 'png'
         : b[0] === 0xff && b[1] === 0xd8 ? 'jpg' : b.subarray(0, 4).toString() === 'RIFF' && b.subarray(8, 12).toString() === 'WEBP' ? 'webp' : b.subarray(0, 3).toString() === 'GIF' ? 'gif' : null;
-      if (!ext) return finish(415, { error: 'solo imágenes PNG, JPG, WEBP o GIF' });
+      if (!ext) return finish(415, { error: tr('msg.remote.imageTypes') });
       try {
         await fs.promises.mkdir(uploads(), { recursive: true });
         await pruneUploads(b.length);
         const file = path.join(uploads(), `${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${ext}`);
         await fs.promises.writeFile(file, b);
         finish(200, { ok: true, path: file });
-      } catch (error) { log(`móvil: subida: ${error.message}`); finish(500, { error: 'no se pudo guardar la imagen' }); }
+      } catch (error) { log(`móvil: subida: ${error.message}`); finish(500, { error: tr('msg.remote.cannotSaveImage') }); }
     });
   }
   // Old pictures go (7 days), and the oldest ones too while the folder would pass its quota.
@@ -256,11 +256,11 @@ export function createRemote({ board, api, log, name }) {
         try {
           const found = await tailscaleAddress();
           if (mine !== generation) return state; // turned off meanwhile
-          if (!found) { state = { running: false, error: 'No encuentro Tailscale en este PC. Instálalo, inicia sesión y vuelve a activar el acceso.' }; return state; }
+          if (!found) { state = { running: false, error: tr('msg.remote.noTailscale') }; return state; }
           const { address, dns } = found;
           const port = ctx.config.mobile?.port ?? 3131;
           const hosts = [`${address}:${port}`, ...(dns ? [`${dns.toLowerCase()}:${port}`] : [])];
-          const srv = http.createServer((req, res) => { handle(req, res).catch((error) => { log(`móvil: ${error.stack}`); try { send(res, 500, { error: 'error interno' }); } catch { /* sent */ } }); });
+          const srv = http.createServer((req, res) => { handle(req, res).catch((error) => { log(`móvil: ${error.stack}`); try { send(res, 500, { error: tr('msg.remote.internalError') }); } catch { /* sent */ } }); });
           srv.headersTimeout = 15_000; srv.requestTimeout = 60_000;
           const error = await new Promise((resolve) => { srv.once('error', resolve); srv.listen(port, address, () => resolve(null)); });
           if (error) { state = { running: false, error: `No se pudo abrir el puerto ${port}: ${error.message}` }; return state; }
@@ -281,13 +281,13 @@ export function createRemote({ board, api, log, name }) {
     },
     // A one-time QR for 5 minutes. The token travels in the URL fragment (#), so it never reaches a server log.
     pair() {
-      if (!state.running) throw new Error('activa antes el acceso desde el móvil');
+      if (!state.running) throw new Error(tr('msg.remote.enableFirst'));
       const token = crypto.randomBytes(24).toString('base64url');
       pairing = { hash: sha(token), expires: Date.now() + PAIR_MINUTES * 60_000 };
       return { url: `${state.url}#vincular=${token}`, expiresAt: pairing.expires };
     },
     revoke(id) {
-      const d = board.one('SELECT * FROM devices WHERE id = ?', String(id)); if (!d) throw new Error('ese dispositivo no existe');
+      const d = board.one('SELECT * FROM devices WHERE id = ?', String(id)); if (!d) throw new Error(tr('msg.remote.noDevice'));
       board.run('DELETE FROM devices WHERE id = ?', d.id);
       for (const c of clients) if (c.device === d.id) { try { c.res.end(); } catch { /* closed */ } clients.delete(c); }
       board.event(null, 'usuario', 'device.revoked', d.name);

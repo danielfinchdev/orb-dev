@@ -2,18 +2,18 @@
 // (so every task can be undone and isolated copies are possible), and any folder the user creates there by hand shows up too.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx } from './context.mjs';
+import { ctx, tr } from './context.mjs';
 import { folderName, isReservedName } from './home.mjs';
 import { git, ORB_GIT } from './workspace.mjs';
 
 export function createProject(board, { name, notes = '' }, actor) {
   const clean = String(name ?? '').trim();
-  if (!clean) throw new Error('el proyecto necesita un nombre');
-  if (board.project(clean)) throw new Error(`ya existe un proyecto llamado ${clean}`);
+  if (!clean) throw new Error(tr('msg.projects.needName'));
+  if (board.project(clean)) throw new Error(tr('msg.projects.exists', { name: clean }));
   const dir = folderName(clean, 'proyecto');
-  if (isReservedName(dir)) throw new Error(`«${dir}» está reservado para ${ctx.config.assistantName}: elige otro nombre`);
+  if (isReservedName(dir)) throw new Error(tr('msg.projects.reserved', { dir, name: ctx.config.assistantName }));
   const folder = path.join(ctx.paths.projects, dir);
-  if (fs.existsSync(folder) && fs.readdirSync(folder).length) throw new Error(`la carpeta ${folder} ya existe y no está vacía: impórtala en su lugar`);
+  if (fs.existsSync(folder) && fs.readdirSync(folder).length) throw new Error(tr('msg.projects.folderNotEmpty', { folder }));
   fs.mkdirSync(folder, { recursive: true });
   // "-b" needs git 2.28+; older versions get the default branch renamed instead. Without git the project still works
   // (undo then uses a copy of the folder), it just has no branches or GitHub.

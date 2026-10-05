@@ -5,6 +5,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { PRODUCT, folderName } from './product.mjs';
+import { translate } from './i18n.mjs';
 
 export const CONFIG_FILE = 'orb.json';
 // 2.3: besides Claude Code, Codex and Cursor, the agents that speak ACP (src/agents/acp.mjs). They show up in Agentes and
@@ -109,14 +110,15 @@ export function isHome(dir) {
 
 // First run: <base>/<assistant name>/ with its folders, config, secret and the general log. An existing home is reused as is.
 export function createHome(base, { assistantName = PRODUCT.assistant, userName = '', language = 'es' } = {}) {
-  if (!base || !path.isAbsolute(base)) throw new Error('la carpeta debe ser una ruta absoluta');
-  let stat; try { stat = fs.statSync(base); } catch { throw new Error(`la carpeta no existe: ${base}`); }
-  if (!stat.isDirectory()) throw new Error(`no es una carpeta: ${base}`);
+  const T = (key, vars) => translate(language, key, vars);
+  if (!base || !path.isAbsolute(base)) throw new Error(T('msg.home.absolute'));
+  let stat; try { stat = fs.statSync(base); } catch { throw new Error(T('msg.home.noFolder', { base })); }
+  if (!stat.isDirectory()) throw new Error(T('msg.home.notFolder', { base }));
   // A drive root is fine as a base: the home is always a subfolder of it.
   const name = folderName(assistantName);
   const home = isHome(base) ? base : path.join(base, name);
   if (isHome(home)) return { home, created: false };
-  if (fs.existsSync(home) && fs.readdirSync(home).length) throw new Error(`la carpeta ${home} ya existe y no está vacía: elige otra ubicación u otro nombre`);
+  if (fs.existsSync(home) && fs.readdirSync(home).length) throw new Error(T('msg.home.notEmpty', { home }));
   const p = paths(home);
   for (const dir of [p.data, p.logs, p.projectLogs, p.projects, p.runs, p.worktrees, p.checkpoints]) fs.mkdirSync(dir, { recursive: true });
   const config = merge(DEFAULT_CONFIG, { assistantName: String(assistantName || PRODUCT.assistant).trim().slice(0, 40) || PRODUCT.assistant, userName: String(userName ?? '').trim().slice(0, 40), language: language === 'en' ? 'en' : 'es' });

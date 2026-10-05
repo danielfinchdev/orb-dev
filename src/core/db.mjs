@@ -2,7 +2,7 @@
 // sessions (direct conversations and task runs) with their items.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx } from './context.mjs';
+import { ctx, tr } from './context.mjs';
 
 // node:sqlite may print an ExperimentalWarning; it would pollute the MCP stdout/stderr and the logs.
 const emitWarning = process.emitWarning;
@@ -166,9 +166,9 @@ export function taskOptions({ reasoning, fast } = {}) {
 // The user's model policy (config.policy). Returns { approval: true } when the task must wait for the user's approval.
 export function checkPolicy({ model, reasoning, fast }) {
   const policy = ctx.config?.policy ?? {};
-  if (fast && policy.fast === false) throw new Error('el modo rápido (fast) está desactivado en los ajustes');
-  if (model && (policy.banned ?? []).includes(model)) throw new Error(`el modelo ${model} está bloqueado en los ajustes`);
-  if (policy.reasoning && !policy.reasoning.includes(reasoning)) throw new Error(`razonamiento ${reasoning} no permitido (ajustes: ${policy.reasoning.join(', ')})`);
+  if (fast && policy.fast === false) throw new Error(tr('msg.db.fastOff'));
+  if (model && (policy.banned ?? []).includes(model)) throw new Error(tr('msg.db.modelBanned', { model }));
+  if (policy.reasoning && !policy.reasoning.includes(reasoning)) throw new Error(tr('msg.db.reasoningNotAllowed', { reasoning, allowed: policy.reasoning.join(', ') }));
   return { approval: (reasoning === 'high' || reasoning === 'xhigh') && policy.highNeedsApproval !== false };
 }
 

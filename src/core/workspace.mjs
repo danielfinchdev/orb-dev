@@ -11,6 +11,7 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { isSecretPath, porcelainPaths } from './safety.mjs';
 import { PRODUCT } from './product.mjs';
+import { tr } from './context.mjs';
 
 // Never throws and never returns null output: if git cannot start or times out, status is -1 and stderr carries the reason.
 export const git = (cwd, ...args) => gitEnv(cwd, {}, ...args);
@@ -60,7 +61,7 @@ export function takeCheckpoint(dir, name, backups) {
   if (isGitRepo(dir)) {
     const top = repoRoot(dir);
     const snap = snapshotCommit(top, { always: true, message: `orb: foto ${name}` });
-    if (!snap) throw new Error('no se pudo guardar la foto de la carpeta antes de la tarea');
+    if (!snap) throw new Error(tr('msg.workspace.noSnapshot'));
     git(top, 'update-ref', `${REF_PREFIX}/${name}`, snap.commit);
     return { kind: 'git', repo: top, ref: `${REF_PREFIX}/${name}`, commit: snap.commit };
   }
@@ -142,7 +143,7 @@ export function prepareWorkdir(task, project, worktrees, deps = []) {
       if (snap) { base = snap.commit; notes.push(`La copia incluye los ${snap.files} archivo(s) sin commitear de la carpeta principal (commit «punto de partida»).`); }
     }
     const res = exists ? git(project.path, 'worktree', 'add', workdir, branch) : git(project.path, 'worktree', 'add', '-b', branch, workdir, ...(base ? [base] : []));
-    if (res.status !== 0) throw new Error(`git worktree falló: ${res.stderr.trim()}`);
+    if (res.status !== 0) throw new Error(tr('msg.workspace.worktreeFailed', { error: res.stderr.trim() }));
     for (const dep of exists ? [] : toMerge) {
       const merge = git(workdir, ...ORB_GIT, 'merge', '--no-edit', '-m', `orb: trae el trabajo de la tarea #${dep.id}`, dep.branch);
       if (merge.status === 0) notes.push(`Ya tiene el trabajo de la tarea #${dep.id} (rama ${dep.branch}).`);
@@ -151,7 +152,7 @@ export function prepareWorkdir(task, project, worktrees, deps = []) {
   } else {
     // A folder with the right name but another branch is somebody else's work: never reuse it.
     const head = git(workdir, 'rev-parse', '--abbrev-ref', 'HEAD').stdout.trim();
-    if (head !== branch) throw new Error(`la carpeta ${workdir} ya existe pero está en la rama «${head || '?'}» y no en «${branch}»: revísala o bórrala antes de reintentar`);
+    if (head !== branch) throw new Error(tr('msg.workspace.wrongBranch', { workdir, head: head || '?', branch }));
   }
   // A project that lives in a subfolder of a repo works in the same subfolder of its worktree.
   const prefix = git(project.path, 'rev-parse', '--show-prefix').stdout.trim().replace(/[\/]$/, '');

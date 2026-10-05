@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { ctx } from '../core/context.mjs';
+import { ctx, tr } from '../core/context.mjs';
 import { firstFile, inPath, cleanEnv, IS_WIN } from '../agents/common.mjs';
 import { openConsole } from '../agents/index.mjs';
 import { git, isGitRepo, ORB_GIT } from '../core/workspace.mjs';
@@ -31,9 +31,9 @@ export function run(cmd, args, { cwd, timeoutMs = 120_000, input } = {}) {
   });
 }
 
-const gh = (args, opts) => { const exe = ghExe(); if (!exe) throw new Error('GitHub CLI (gh) no está instalado: descárgalo de cli.github.com y vuelve a comprobar'); return run(exe, args, opts); };
+const gh = (args, opts) => { const exe = ghExe(); if (!exe) throw new Error(tr('msg.github.ghMissing')); return run(exe, args, opts); };
 const must = (r, what) => { if (!r.ok) throw new Error(`${what}: ${oneLine(r.err || r.out, 400)}`); return r; };
-const branchName = (b) => { if (!/^[\w./-]{1,120}$/.test(String(b ?? '')) || String(b).startsWith('-') || String(b).includes('..')) throw new Error(`nombre de rama no válido: ${b}`); return b; };
+const branchName = (b) => { if (!/^[\w./-]{1,120}$/.test(String(b ?? '')) || String(b).startsWith('-') || String(b).includes('..')) throw new Error(tr('msg.github.badBranch', { b })); return b; };
 
 export async function status() {
   const exe = ghExe();
@@ -43,7 +43,7 @@ export async function status() {
   return { installed: true, loggedIn: auth.ok, user: user?.ok ? user.out : null, where: exe };
 }
 
-export function login() { const exe = ghExe(); if (!exe) throw new Error('GitHub CLI (gh) no está instalado'); openConsole(exe, ['auth', 'login', '--web', '--git-protocol', 'https'], 'GitHub: iniciar sesión'); }
+export function login() { const exe = ghExe(); if (!exe) throw new Error(tr('msg.github.ghMissingShort')); openConsole(exe, ['auth', 'login', '--web', '--git-protocol', 'https'], 'GitHub: iniciar sesión'); }
 
 export async function projectInfo(project) {
   if (!isGitRepo(project.path)) return { git: false };
@@ -62,15 +62,15 @@ export async function projectInfo(project) {
 
 // Commit of everything in the project folder (the folder mode never commits on its own). Secret-looking files stop it.
 export function commitAll(project, message) {
-  if (!isGitRepo(project.path)) throw new Error('el proyecto no usa git');
-  const msg = oneLine(message, 200); if (!msg) throw new Error('escribe un mensaje para el commit');
+  if (!isGitRepo(project.path)) throw new Error(tr('msg.github.noGit'));
+  const msg = oneLine(message, 200); if (!msg) throw new Error(tr('msg.github.commitMsg'));
   const status = git(project.path, 'status', '--porcelain=v1', '-z', '-uall');
-  if (!status.stdout.trim()) throw new Error('no hay cambios que guardar');
+  if (!status.stdout.trim()) throw new Error(tr('msg.github.noChanges'));
   const risky = secretFiles(status.stdout);
-  if (risky.length) throw new Error(`hay archivos que parecen secretos (${risky.slice(0, 5).join(', ')}): bórralos o añádelos a .gitignore antes`);
+  if (risky.length) throw new Error(tr('msg.github.looksSecret', { files: risky.slice(0, 5).join(', ') }));
   git(project.path, 'add', '-A', '--', '.', `:(exclude)${ATTACH_DIR}`);
   const staged = git(project.path, 'diff', '--cached', '--name-only', '-z').stdout.split('\0').filter(Boolean);
-  if (staged.some(isSecretPath)) { git(project.path, 'reset', '-q'); throw new Error('hay archivos que parecen secretos: no se guardó nada'); }
+  if (staged.some(isSecretPath)) { git(project.path, 'reset', '-q'); throw new Error(tr('msg.github.looksSecretNone')); }
   const r = git(project.path, 'commit', '-q', '-m', msg);
   if (r.status !== 0) throw new Error(oneLine(r.stderr || r.stdout, 300));
   return { files: staged.length };
@@ -79,43 +79,43 @@ export function commitAll(project, message) {
 // Brings a task branch into the current branch of the project (merge commit). A conflict is undone and reported.
 export function mergeBranch(project, branch) {
   branchName(branch);
-  if (git(project.path, 'status', '--porcelain').stdout.trim()) throw new Error('la carpeta tiene cambios sin guardar: guárdalos (commit) antes de integrar');
+  if (git(project.path, 'status', '--porcelain').stdout.trim()) throw new Error(tr('msg.github.unsaved'));
   const r = git(project.path, ...ORB_GIT, 'merge', '--no-ff', '--no-edit', branch);
-  if (r.status !== 0) { git(project.path, 'merge', '--abort'); throw new Error(`no se pudo integrar ${branch} sin conflictos; la carpeta queda como estaba. ${oneLine(r.stdout || r.stderr, 300)}`); }
+  if (r.status !== 0) { git(project.path, 'merge', '--abort'); throw new Error(tr('msg.github.mergeFail', { branch, detail: oneLine(r.stdout || r.stderr, 300) })); }
   return { ok: true };
 }
 
 export async function push(project, branch) {
   branchName(branch);
-  must(await run('git', ['-C', project.path, 'push', '-u', 'origin', branch], { timeoutMs: 180_000 }), 'git push falló');
+  must(await run('git', ['-C', project.path, 'push', '-u', 'origin', branch], { timeoutMs: 180_000 }), tr('msg.github.pushFailed'));
   return { ok: true };
 }
 
 export async function createPr(project, { branch, title, body = '', base }) {
   branchName(branch); if (base) branchName(base);
-  if (!oneLine(title, 200)) throw new Error('el pull request necesita un título');
+  if (!oneLine(title, 200)) throw new Error(tr('msg.github.prNeedsTitle'));
   await push(project, branch);
-  const r = must(await gh(['pr', 'create', '--head', branch, '--title', oneLine(title, 200), '--body-file', '-', ...(base ? ['--base', base] : [])], { cwd: project.path, input: String(body).slice(0, 20000) }), 'gh pr create falló');
+  const r = must(await gh(['pr', 'create', '--head', branch, '--title', oneLine(title, 200), '--body-file', '-', ...(base ? ['--base', base] : [])], { cwd: project.path, input: String(body).slice(0, 20000) }), tr('msg.github.prFailed'));
   return { url: r.out.split(/\s+/).find((s) => /^https:\/\//.test(s)) ?? r.out };
 }
 
 export async function createRepo(project, { name, isPrivate = true }) {
-  if (!/^[\w.-]{1,100}$/.test(name ?? '')) throw new Error('nombre de repositorio no válido (letras, números, punto, guion)');
-  if (!isGitRepo(project.path)) throw new Error('el proyecto no usa git');
-  if (!git(project.path, 'rev-parse', '--verify', '--quiet', 'HEAD').stdout.trim()) throw new Error('haz al menos un commit antes de publicar el repositorio');
-  if (git(project.path, 'remote', 'get-url', 'origin').status === 0) throw new Error('el proyecto ya tiene un remoto origin');
-  const r = must(await gh(['repo', 'create', name, isPrivate ? '--private' : '--public', '--source', project.path, '--remote', 'origin', '--push'], { cwd: project.path, timeoutMs: 180_000 }), 'gh repo create falló');
+  if (!/^[\w.-]{1,100}$/.test(name ?? '')) throw new Error(tr('msg.github.badRepoName'));
+  if (!isGitRepo(project.path)) throw new Error(tr('msg.github.noGit'));
+  if (!git(project.path, 'rev-parse', '--verify', '--quiet', 'HEAD').stdout.trim()) throw new Error(tr('msg.github.needCommit'));
+  if (git(project.path, 'remote', 'get-url', 'origin').status === 0) throw new Error(tr('msg.github.hasOrigin'));
+  const r = must(await gh(['repo', 'create', name, isPrivate ? '--private' : '--public', '--source', project.path, '--remote', 'origin', '--push'], { cwd: project.path, timeoutMs: 180_000 }), tr('msg.github.repoFailed'));
   return { url: r.out.split(/\s+/).find((s) => /^https:\/\//.test(s)) ?? r.out };
 }
 
 // Clones a repository into the assistant's projects folder. Returns the new folder.
 export async function clone(repo, name) {
-  if (!/^([\w.-]+\/[\w.-]+|https:\/\/github\.com\/[\w.-]+\/[\w.-]+(\.git)?)$/.test(String(repo ?? '').trim())) throw new Error('indica el repositorio como usuario/repo o https://github.com/usuario/repo');
+  if (!/^([\w.-]+\/[\w.-]+|https:\/\/github\.com\/[\w.-]+\/[\w.-]+(\.git)?)$/.test(String(repo ?? '').trim())) throw new Error(tr('msg.github.badRepo'));
   const folder = path.join(ctx.paths.projects, folderName(name || String(repo).split('/').pop().replace(/\.git$/, ''), 'proyecto'));
-  if (fs.existsSync(folder)) throw new Error(`ya existe la carpeta ${folder}`);
+  if (fs.existsSync(folder)) throw new Error(tr('msg.github.folderExists', { folder }));
   const exe = ghExe();
   const r = exe ? await run(exe, ['repo', 'clone', String(repo).trim(), folder], { timeoutMs: 600_000 })
     : await run('git', ['clone', '--', /^https:/.test(repo) ? repo : `https://github.com/${repo}.git`, folder], { timeoutMs: 600_000 });
-  must(r, 'no se pudo clonar');
+  must(r, tr('msg.github.cloneFailed'));
   return folder;
 }
