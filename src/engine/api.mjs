@@ -9,7 +9,7 @@ import { MULTI, newAccountId } from '../core/accounts.mjs';
 import { usageReport } from '../core/budget.mjs';
 import { createProject, syncProjects } from '../core/projects.mjs';
 import { oneLine, redactSecrets } from '../core/safety.mjs';
-import { statusAll, status as agentStatus, openLogin, quickRun } from '../agents/index.mjs';
+import { statusAll, status as agentStatus, openLogin, quickRun, forgetInstalled } from '../agents/index.mjs';
 import { PERMISSIONS } from './sessions.mjs';
 import { readLog, writeLog, logFiles } from './logs.mjs';
 import { ofUser, userName } from '../core/board.mjs';
@@ -26,6 +26,7 @@ const str = (v, name, max = 2000, { optional = false } = {}) => {
 };
 const int = (v, name) => { const n = Number(v); if (!Number.isInteger(n) || n < 1) fail(`${name} no válido`); return n; };
 const oneOf = (v, list, name, fallback) => { if (v == null || v === '') return fallback; if (!list.includes(v)) fail(`${name} no válido`); return v; };
+const DECISION = ['allow', 'always', 'deny'];
 const images = (list) => {
   if (list == null) return [];
   if (!Array.isArray(list) || list.length > 10 || list.some((f) => typeof f !== 'string' || !path.isAbsolute(f))) fail('adjuntos no válidos');
@@ -64,7 +65,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     }),
     'config.save': ({ patch }) => { const c = saveConfig(patch ?? {}); emit('config:changed', c); return c; },
 
-    'agents.status': ({ refresh }) => statusAll({ refresh: Boolean(refresh) }),
+    'agents.status': ({ refresh }) => { if (refresh) forgetInstalled(); return statusAll({ refresh: Boolean(refresh) }); },
     'agents.check': ({ agent }) => agentStatus(oneOf(agent, AGENT_IDS, 'agente'), { refresh: true }),
     'agents.login': ({ account: id, agent }) => {
       const acc = str(id ?? agent, 'cuenta', 40);
@@ -153,7 +154,11 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
 
     'tasks.list': ({ limit }) => board.panelTasks(Math.min(Number(limit) || 150, 500)),
     'tasks.live': () => scheduler.live(),
-    'tasks.get': ({ id }) => { const d = board.taskDetail(int(id, 'tarea')); return { ...d, accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before) }; },
+    'tasks.get': ({ id }) => {
+      const d = board.taskDetail(int(id, 'tarea'));
+      const children = board.all('SELECT id, title, status, agent, assigned_to, model FROM tasks WHERE parent_id = ? OR review_of = ? ORDER BY id', d.id, d.id);
+      return { ...d, accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children };
+    },
     'tasks.create': (p) => board.createTask({
       project: project(p.project).name, title: str(p.title, 'título', 200), description: str(p.description, 'descripción', 12000),
       agent: oneOf(p.agent, [...AGENT_IDS, 'any'], 'agente', 'any'), model: str(p.model, 'modelo', 80, { optional: true }) || null,
@@ -180,13 +185,32 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
         reasoning: oneOf(p.reasoning, ['low', 'medium', 'high'], 'razonamiento', 'medium'), permission: proj ? oneOf(p.permission, PERMISSIONS, 'permiso', 'editar') : 'leer',
         project: proj?.name ?? null, cwd, title: str(p.title, 'título', 80, { optional: true }) || `Conversación con ${p.agent}` });
     },
-    'sessions.items': ({ id, after }) => sessions.items(str(id, 'conversación', 64), { after: Number(after) || 0 }),
-    'sessions.send': ({ id, text, images: files }) => {
+    'sessions.items': ({ id, after, before, limit }) => sessions.items(str(id, 'conversación', 64), { after: Number(after) || 0, before: Number(before) || 0, limit: Number(limit) || 200 }),
+    // A message to a conversation: a new turn, or (while it works) steer the running turn or wait in its queue.
+    // mode: 'auto' (steer when the agent can, else queue), 'steer' or 'queue'.
+    'sessions.send': ({ id, text, images: files, mode }) => {
       const s = sessions.must(str(id, 'conversación', 64));
-      if (s.kind === 'task') return scheduler.followup(s.task_id, str(text, 'mensaje', 20000), images(files));
-      sessions.send(s.id, str(text, 'mensaje', 20000), { images: images(files) });
-      return true;
+      if (s.kind === 'task') {
+        // A running task: the message reaches its agent at once when it can (steer); otherwise after its turn.
+        if (sessions.isRunning(s.id) && oneOf(mode, ['auto', 'steer', 'queue'], 'modo', 'auto') !== 'queue' && !(files ?? []).length) {
+          const out = sessions.message(s.id, str(text, 'mensaje', 20000), { mode: 'steer' });
+          if (out.steered) return out;
+        }
+        scheduler.followup(s.task_id, str(text, 'mensaje', 20000), images(files));
+        return { queued: true };
+      }
+      return sessions.message(s.id, str(text, 'mensaje', 20000), { images: images(files), mode: oneOf(mode, ['auto', 'steer', 'queue'], 'modo', 'auto') });
     },
+    'sessions.queue': ({ id }) => sessions.queue(str(id, 'conversación', 64)),
+    'sessions.editQueued': ({ id, queueId, text, remove, move }) => sessions.editQueued(str(id, 'conversación', 64), int(queueId, 'mensaje'), { text: text === undefined ? undefined : str(text, 'mensaje', 20000), remove: Boolean(remove), move: oneOf(move, ['up', 'down'], 'mover', undefined) }),
+    'sessions.approve': ({ id, request, decision }) => sessions.respond(str(id, 'conversación', 64), str(request, 'petición', 200), oneOf(decision, DECISION, 'decisión')),
+    'sessions.resume': ({ id }) => sessions.resume(str(id, 'conversación', 64)),
+    'sessions.fork': ({ id, title }) => sessions.fork(str(id, 'conversación', 64), { title: str(title, 'título', 80, { optional: true }) || undefined }),
+    'sessions.settle': ({ id, settled }) => sessions.update(sessions.must(str(id, 'conversación', 64)).id, { settled: settled !== false }),
+    'approvals.list': () => sessions.allPendingApprovals(),
+    'chat.approve': ({ request, decision }) => orchestrator.respond(str(request, 'petición', 200), oneOf(decision, DECISION, 'decisión')),
+    'tasks.review': ({ id, agent, focus }) => scheduler.createReview(board.task(int(id, 'tarea')) ?? fail('no existe esa tarea'), { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null), focus: str(focus, 'foco', 500, { optional: true }) }),
+    'projects.review': ({ name, agent, focus }) => scheduler.reviewProject(project(name).name, { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null), focus: str(focus, 'foco', 500, { optional: true }) }),
     'sessions.stop': ({ id }) => { const s = sessions.must(str(id, 'conversación', 64)); if (s.kind === 'task') return scheduler.cancel(s.task_id, 'usuario'); return sessions.stop(s.id); },
     'sessions.update': ({ id, title, model, reasoning, permission, archived }) => {
       const s = sessions.must(str(id, 'conversación', 64));
