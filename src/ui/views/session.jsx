@@ -2,7 +2,7 @@
 // files appear as the agent works, risky actions wait for a click (approval cards), messages written meanwhile correct the
 // agent on the fly or wait in a queue, and the context meter shows how full the conversation is. Task runs open here too.
 import { useEffect, useMemo, useState } from 'react';
-import { Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, X, ListTodo, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight } from 'lucide-react';
+import { Info, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, X, ListTodo, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { Markdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
@@ -164,6 +164,33 @@ export function ContextMeter({ context, className }) {
   );
 }
 
+// Details of a conversation (2.3, like T3 Code's thread details): where it works, git, where it comes from, its task.
+async function showDetails(s, task) {
+  let info = null;
+  if (s.project) { try { info = await call('projects.info', { name: s.project }); } catch { info = null; } }
+  const parent = s.parent_id ? getState().sessions.find((x) => x.id === s.parent_id) : null;
+  const Row = ({ k, children }) => <><dt className="text-muted-foreground">{k}</dt><dd className="min-w-0 break-all">{children}</dd></>;
+  await form('Detalles de la conversación', {
+    wide: true,
+    body: () => (
+      <dl className="grid grid-cols-[130px_1fr] gap-x-4 gap-y-2 text-[13px]">
+        <Row k="Agente">{AGENT[s.agent]}{s.model ? ` · ${s.model}` : ''} · razonamiento {REASONING[s.reasoning]?.toLowerCase() ?? s.reasoning}</Row>
+        <Row k="Cuenta">{s.account}</Row>
+        <Row k="Permisos">{PERMISSION[s.permission]}</Row>
+        <Row k="Carpeta"><span className="font-mono text-xs">{s.cwd}</span></Row>
+        {info?.git ? <Row k="Git">rama <span className="font-mono">{info.branch}</span> · {info.changes ? `${info.changes} cambio(s) sin guardar` : 'sin cambios'}{info.remote ? ` · ${info.remote}` : ''}{info.ahead ? ` · ${info.ahead} commit(s) sin subir` : ''}</Row> : s.project ? <Row k="Git">esta carpeta no usa git</Row> : null}
+        {info?.prs?.length ? <Row k="Pull requests">{info.prs.map((p) => <a key={p.number} className="mr-2 cursor-pointer underline-offset-2 hover:underline" onClick={() => bridge.openExternal(p.url)}>#{p.number} {p.title}</a>)}</Row> : null}
+        {s.context?.size ? <Row k="Contexto"><ContextMeter context={s.context} /></Row> : null}
+        {task ? <Row k="Tarea"><a className="cursor-pointer underline-offset-2 hover:underline" onClick={() => go({ view: 'tasks', id: task.id })}>#{task.id} {task.title}</a> · {STATUS[task.status]?.[0]}</Row> : null}
+        {parent ? <Row k="Bifurcada de"><a className="cursor-pointer underline-offset-2 hover:underline" onClick={() => go({ view: 'session', id: parent.id })}>{parent.title}</a></Row> : null}
+        <Row k="Conversación del agente"><span className="font-mono text-xs">{s.cli_session ?? 'todavía no empezó'}</span></Row>
+        <Row k="Creada">{new Date(s.created_at).toLocaleString('es-ES')}</Row>
+      </dl>
+    ),
+    ok: 'Cerrar', onOk: () => true
+  });
+}
+
 export function SessionView({ route }) {
   const sessions = useStore((s) => s.sessions);
   const tasks = useStore((s) => s.tasks);
@@ -234,12 +261,14 @@ export function SessionView({ route }) {
             act(call('sessions.update', { id: s.id, permission }), 'Permisos cambiados');
           }} />
           <Select size="sm" value={s.reasoning ?? 'medium'} title="Razonamiento" options={options(REASONING)} onValueChange={(reasoning) => act(call('sessions.update', { id: s.id, reasoning }))} />
+          <Tip label="Detalles"><Button variant="ghost" size="icon-sm" onClick={() => showDetails(s, task)} data-testid="details"><Info /></Button></Tip>
           <Tip label="Bifurcar: una copia desde aquí para probar otra idea"><Button variant="ghost" size="icon-sm" disabled={running} onClick={fork} data-testid="fork"><GitFork /></Button></Tip>
           <Tip label="Cambiar el título"><Button variant="ghost" size="icon-sm" onClick={rename}><Pencil /></Button></Tip>
           <Tip label={s.archived ? 'Recuperar' : 'Archivar'}><Button variant="ghost" size="icon-sm" onClick={async () => { await act(call('sessions.update', { id: s.id, archived: !s.archived })); if (!s.archived) go('chat'); }}><Archive /></Button></Tip>
           <Tip label="Borrar la conversación"><Button variant="danger" size="icon-sm" onClick={async () => { if (await confirm('Borrar conversación', 'Se borra este historial. Los archivos del proyecto no se tocan.', { ok: 'Borrar', danger: true })) { await act(call('sessions.remove', { id: s.id })); go('chat'); } }}><Trash2 /></Button></Tip>
         </>) : (<>
           {task ? <Badge variant={STATUS[task.status]?.[1]}>{STATUS[task.status]?.[0]}</Badge> : null}
+          <Tip label="Detalles"><Button variant="ghost" size="icon-sm" onClick={() => showDetails(s, task)}><Info /></Button></Tip>
           <Tip label="Bifurcar: seguir en una conversación aparte desde aquí"><Button variant="ghost" size="icon-sm" disabled={running} onClick={fork}><GitFork /></Button></Tip>
           <Button variant="outline" size="sm" onClick={() => go({ view: 'tasks', id: s.task_id })}><ListTodo />Ver tarea #{s.task_id}</Button>
         </>)}

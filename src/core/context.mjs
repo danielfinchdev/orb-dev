@@ -14,7 +14,7 @@ export function useHome(home) {
 export function reloadConfig() { if (ctx.home) ctx.config = loadConfig(ctx.home); return ctx.config; }
 
 // Settings saved from the app. Only known top-level keys are accepted.
-const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser'];
+const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation'];
 export function saveConfig(patch) {
   const unknown = Object.keys(patch ?? {}).filter((k) => !EDITABLE.includes(k));
   if (unknown.length) throw new Error(`ajustes desconocidos: ${unknown.join(', ')}`);

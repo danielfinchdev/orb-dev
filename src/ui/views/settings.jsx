@@ -33,7 +33,7 @@ function AssistantCard({ c }) {
         <div className="grid grid-cols-2 gap-3">
           <Field label="Nombre del asistente" hint="Su carpeta no cambia de nombre."><Input value={v.assistantName} onChange={(e) => setV({ ...v, assistantName: e.target.value })} maxLength={40} /></Field>
           <Field label="Cómo te llama"><Input value={v.userName} onChange={(e) => setV({ ...v, userName: e.target.value })} maxLength={40} /></Field>
-          <Field label="Idioma de las respuestas"><Select className="w-full" value={v.language} onValueChange={(language) => setV({ ...v, language })} options={[{ value: 'es', label: 'Español' }, { value: 'en', label: 'English' }]} /></Field>
+          <Field label="Idioma / Language" hint="La app y las respuestas del asistente."><Select className="w-full" value={v.language} onValueChange={(language) => { setV({ ...v, language }); save({ language }); }} options={[{ value: 'es', label: 'Español (España)' }, { value: 'en', label: 'English' }]} /></Field>
           <Field label="Tema"><Select className="w-full" value={v.theme} onValueChange={(theme) => setV({ ...v, theme })} options={[{ value: 'sistema', label: 'Como Windows' }, { value: 'claro', label: 'Día' }, { value: 'oscuro', label: 'Noche' }]} /></Field>
         </div>
         <Row label="Robot flotante" hint="Aparece en una esquina con avisos cuando no estás en el chat."><Switch checked={v.companion} onCheckedChange={(companion) => { setV({ ...v, companion }); save({ ui: { companion } }, companion ? 'Robot flotante activado' : 'Robot flotante desactivado'); }} /></Row>

@@ -68,6 +68,9 @@ function userMessage(text, images = []) {
   return { type: 'user', message: { role: 'user', content }, parent_tool_use_id: null, origin: { kind: 'human' } };
 }
 
+// The SDK's error kinds, in plain words.
+const RESULT_ES = { error_during_execution: 'El turno se interrumpió antes de terminar.', error_max_turns: 'Llegó al máximo de pasos de este turno.', error_max_budget_usd: 'Llegó al tope de gasto de esta tarea.', error_max_structured_output_retries: 'No pudo dar la respuesta en el formato pedido.' };
+
 export const permissionModeOf = (p) => (p === 'total' ? 'bypassPermissions' : p === 'editar' ? 'acceptEdits' : 'default');
 
 // options: exe, cwd, model, reasoning, permission, resumeId, newSessionId, forkSession, mcpServers, env, systemPrompt
@@ -129,7 +132,7 @@ export function createLive(o) {
       onEvent({ type: 'item', role: 'system', kind: 'usage', body: usage });
       const isError = Boolean(m.is_error) || Boolean(m.subtype && m.subtype !== 'success');
       const final = typeof m.result === 'string' && m.result ? m.result : turn?.text ?? '';
-      if (isError) onEvent({ type: 'item', role: 'error', kind: 'text', body: clip(final || m.subtype || 'error', 3000) });
+      if (isError) onEvent({ type: 'item', role: 'error', kind: 'text', body: clip(final || RESULT_ES[m.subtype] || m.subtype || 'error', 3000) });
       if (isError && /usage limit|rate limit|limit reached|resets? (at|in)/i.test(final) && turn && !turn.limit) turn.limit = { resetAt: null };
       turn?.finish({ final, isError, usage, stopReason: m.subtype ?? null });
       // How full the context is, for the meter in the window (best effort; older CLIs do not answer).
@@ -188,8 +191,9 @@ export function createLive(o) {
     if (!closed) input.push(userMessage(text, images));
     return current.promise;
   };
-  // A message for the running turn: Claude reads it at its next step (between tool calls).
-  live.steer = ({ text }) => { if (closed || !turn || turn.done) return false; input.push({ ...userMessage(text), priority: 'now' }); return true; };
+  // A message for the running turn: Claude reads it at its next step (between tool calls) and it stays the same turn
+  // ('now' would interrupt the turn instead).
+  live.steer = ({ text }) => { if (closed || !turn || turn.done) return false; input.push({ ...userMessage(text), priority: 'next' }); return true; };
   live.interrupt = async () => { approvals.clear(); try { await query?.interrupt(); } catch { /* not running */ } };
   live.respond = (requestId, decision) => approvals.respond(requestId, decision);
   live.setModel = async (model) => { o.model = model; try { await query?.setModel(model || undefined); } catch { /* next start */ } };
