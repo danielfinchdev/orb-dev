@@ -1,6 +1,6 @@
 # Diseño de Orb.dev
 
-Aquí van las referencias visuales y los diagramas que Claude (local o en la nube) mira, descarga e implementa.
+Aquí van las referencias visuales y los diagramas de cada funcionalidad, para implementarlas.
 
 | Qué | Dónde | Formato |
 |---|---|---|
