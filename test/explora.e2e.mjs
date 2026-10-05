@@ -58,11 +58,13 @@ try {
   const shot = shooter(app, page);
   const call = (method, params = {}) => page.evaluate(([m, p]) => window.orb.call(m, p), [method, params]);
   await page.waitForSelector('text=Soy Orb', { timeout: 30000 });
+  // ORB_LANG=en: the same tour in English (the interface and the engine's notices follow config.language).
+  if (process.env.ORB_LANG) { await call('config.save', { patch: { language: process.env.ORB_LANG } }); await page.reload(); await page.waitForSelector('[data-testid=nav-chat]'); }
   if (await page.isVisible('text=Preparo tu equipo')) { await shot('01-preparo-equipo'); await page.click('text=Continuar'); }
   const dark = () => page.evaluate(() => document.documentElement.classList.contains('dark'));
   const views = [['nav-chat', 'chat'], ['nav-tasks', 'tareas'], ['nav-projects', 'proyectos'], ['nav-agents', 'agentes'], ['nav-logs', 'bitacoras'], ['nav-activity', 'actividad'], ['nav-settings', 'ajustes']];
   for (const theme of ['dia', 'noche']) {
-    if ((theme === 'noche') !== (await dark())) await page.getByRole('button', { name: 'Cambiar entre día y noche' }).click();
+    if ((theme === 'noche') !== (await dark())) await page.getByRole('button', { name: /día y noche|day and night/i }).click();
     for (const [nav, name] of views) {
       await page.click(`[data-testid=${nav}]`);
       await shot(`${theme}-${name}`);
@@ -97,7 +99,7 @@ try {
   for (const [w, h, name] of [[420, 860, 'estrecha'], [1280, 640, 'portatil-bajo']]) {
     await app.evaluate(({ BrowserWindow }, [w, h]) => BrowserWindow.getAllWindows().find((b) => b.webContents.getURL().endsWith('index.html')).setContentSize(w, h), [w, h]);
     for (const [nav, view] of [['nav-chat', 'chat'], ['nav-settings', 'ajustes']]) {
-      if (w < 700) { await page.getByRole('button', { name: 'Menú' }).click(); await page.locator(`[data-testid=${nav}]:visible`).click(); } else await page.click(`[data-testid=${nav}]`);
+      if (w < 700) { await page.getByRole('button', { name: /^(Menú|Menu)$/ }).click(); await page.locator(`[data-testid=${nav}]:visible`).click(); } else await page.click(`[data-testid=${nav}]`);
       const [sw, iw] = await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);
       if (sw > iw + 1) note(`${name}/${view}: se sale por los lados (${sw} > ${iw})`);
       await shot(`${name}-${view}`);
