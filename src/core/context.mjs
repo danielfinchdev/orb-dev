@@ -84,8 +84,12 @@ export function validateConfig(c) {
     if (s.args && (!Array.isArray(s.args) || s.args.some((x) => typeof x !== 'string'))) throw new Error(`argumentos del conector ${s.name} no válidos`);
   }
   if (!['sistema', 'claro', 'oscuro'].includes(c.ui?.theme ?? 'sistema')) throw new Error('tema no válido');
+  // 2.3: continue tasks after a restart / at the reset, and delegation between agents (orb_delegate).
+  const bool = (v, name) => { if (v !== undefined && typeof v !== 'boolean') throw new Error(`${name} debe ser verdadero o falso`); };
+  bool(c.continuity?.resumeAfterRestart, 'continuity.resumeAfterRestart'); bool(c.continuity?.resumeAtReset, 'continuity.resumeAtReset');
+  bool(c.delegation?.enabled, 'delegation.enabled'); bool(c.delegation?.trusted, 'delegation.trusted');
+  if (c.delegation?.maxPerTask !== undefined) int(c.delegation.maxPerTask, 0, 20, 'delegation.maxPerTask');
   if (c.budget?.stopAt != null && !(Number(c.budget.stopAt) >= 0.5 && Number(c.budget.stopAt) <= 1)) throw new Error('el % de cupo real para parar debe estar entre 50 y 100');
-  if (c.delegation) int(c.delegation.maxPerTask ?? 4, 0, 20, 'las subtareas por tarea');
   if (!Array.isArray(c.projectRoots) || c.projectRoots.some((r) => typeof r !== 'string')) throw new Error('projectRoots debe ser una lista de carpetas');
   return true;
 }
