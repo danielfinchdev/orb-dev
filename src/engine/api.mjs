@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, saveConfig, checkAccountHome, tr } from '../core/context.mjs';
-import { AGENT_IDS } from '../core/home.mjs';
+import { AGENT_IDS, categoryOf, CATEGORIES } from '../core/home.mjs';
 import { MULTI, newAccountId } from '../core/accounts.mjs';
 import { usageReport } from '../core/budget.mjs';
 import { createProject, syncProjects } from '../core/projects.mjs';
@@ -18,6 +18,8 @@ import { ofUser, ofUserLabel, userName } from '../core/board.mjs';
 import * as github from './github.mjs';
 import * as installer from './installer.mjs';
 import * as expert from './expert.mjs';
+import { adbStatus, ensureAdb } from './android.mjs';
+import { mcpFolder } from './mcp-folder.mjs';
 import { translate } from '../core/i18n.mjs';
 
 // Names of the fields in the messages (Spanish as they were; the key is the Spanish word).
@@ -63,7 +65,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
 
   const methods = {
     'app.state': () => ({
-      version, home: ctx.home, paths: { projects: ctx.paths.projects, logs: ctx.paths.logs },
+      version, home: ctx.home, paths: { projects: ctx.paths.projects, logs: ctx.paths.logs, mcp: ctx.paths.mcp, categories: ctx.paths.categories }, categories: CATEGORIES,
       config: ctx.config, paused: board.setting('paused') === '1', activeProject: board.activeProject(),
       approvals: sessions.allPendingApprovals().map((a) => ({ id: a.id, session_id: a.session_id, body: { title: a.body?.title, reason: a.body?.reason }, session: a.session })),
       counts: Object.fromEntries(board.all('SELECT status, COUNT(*) AS n FROM tasks GROUP BY status').map((r) => [r.status, r.n])),
@@ -114,8 +116,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'installer.progress': () => installer.progress(),
     'system.check': async () => { const r = await quickRun('git', ['--version'], { timeoutMs: 8000 }); return { platform: process.platform, git: r.ok ? r.out.replace(/^git version\s*/, '') : null }; },
 
-    'projects.list': () => (syncProjects(board), board.projects()).map((p) => ({ ...p, inHome: insideHome(p.path), active: board.setting('active_project') === p.name, open: board.one("SELECT COUNT(*) AS n FROM tasks WHERE project = ? AND status IN ('queued', 'awaiting_approval', 'running')", p.name).n })),
-    'projects.create': ({ name, notes }) => createProject(board, { name: str(name, 'nombre', 60), notes: str(notes, 'notas', 2000, { optional: true }) }, 'usuario'),
+    'projects.list': () => (syncProjects(board), board.projects()).map((p) => ({ ...p, inHome: insideHome(p.path), category: categoryOf(realHome, p.path), active: board.setting('active_project') === p.name, open: board.one("SELECT COUNT(*) AS n FROM tasks WHERE project = ? AND status IN ('queued', 'awaiting_approval', 'running')", p.name).n })),
+    'projects.create': ({ name, notes, category }) => createProject(board, { name: str(name, 'nombre', 60), notes: str(notes, 'notas', 2000, { optional: true }), category: oneOf(category, CATEGORIES, 'categoría', undefined) }, 'usuario'),
     'projects.import': ({ name, folder }) => board.addProject({ name: str(name, 'nombre', 60), path: str(folder, 'carpeta', 1000) }, 'usuario', { fromUser: true }),
     'projects.remove': ({ name }) => board.removeProject(project(name).name, 'usuario'),
     'projects.setActive': ({ name }) => board.setActiveProject(name ? project(name).name : '', 'usuario'),
@@ -125,10 +127,15 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'projects.push': ({ name, branch }) => github.push(project(name), str(branch, 'rama', 120)),
     'projects.createPr': ({ name, branch, title, body, base }) => github.createPr(project(name), { branch: str(branch, 'rama', 120), title: str(title, 'título', 200), body: str(body, 'descripción', 20000, { optional: true }), base: str(base, 'rama base', 120, { optional: true }) || undefined }),
     'projects.createRepo': ({ name, repo, isPrivate }) => github.createRepo(project(name), { name: str(repo, 'repositorio', 100), isPrivate: isPrivate !== false }),
-    'projects.clone': async ({ repo, name }) => {
-      const folder = await github.clone(str(repo, 'repositorio', 300), str(name, 'nombre', 60, { optional: true }));
+    'projects.clone': async ({ repo, name, category }) => {
+      const folder = await github.clone(str(repo, 'repositorio', 300), str(name, 'nombre', 60, { optional: true }), oneOf(category, CATEGORIES, 'categoría', undefined));
       return board.addProject({ name: oneLine(name || path.basename(folder), 60), path: folder }, 'usuario', { fromUser: true });
     },
+
+    // Orb's own folders, managed only from Ajustes: the MCP servers' folder and Android's tools.
+    'mcp.folder': () => mcpFolder(),
+    'android.status': () => adbStatus(),
+    'android.install': () => ensureAdb({ log, force: true }),
 
     'github.status': () => github.status(),
     'github.login': () => github.login(),

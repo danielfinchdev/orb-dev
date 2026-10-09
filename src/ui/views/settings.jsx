@@ -128,10 +128,34 @@ function McpCard({ c }) {
       return true;
     }
   });
+  // Orb's mcp-servers folder: each subfolder is a server; one click adds it with the command that starts it.
+  const [folder, setFolder] = useState(null);
+  const loadFolder = () => call('mcp.folder').then(setFolder).catch(() => setFolder(null));
+  useEffect(() => { if (!bridge.mobile) loadFolder(); }, [c.mcpServers.length]);
+  const use = async (s) => {
+    const entry = { name: s.name, command: s.command, args: s.args, agents: [], enabled: true };
+    const config = await act(call('config.save', { patch: { mcpServers: [...c.mcpServers, entry] } }), t('settings.mcpAdded', { name: s.name }));
+    if (config) setState({ app: { ...getState().app, config } });
+  };
   return (
     <Card>
       <CardHeader><CardTitle>{t('settings.mcp')}</CardTitle><CardDescription>{t('settings.mcpDesc')}</CardDescription></CardHeader>
       <CardContent className="grid gap-2">
+        {folder ? (
+          <div className="grid gap-2" data-testid="mcp-folder">
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1"><div className="text-muted-foreground text-xs">{t('settings.mcpFolder')}</div><div className="truncate font-mono text-xs">{folder.dir}</div></div>
+              <Button size="icon-sm" variant="ghost" onClick={() => act(bridge.openPath(folder.dir))} title={t('settings.open')}><FolderOpen /></Button>
+            </div>
+            {folder.servers.map((s) => (
+              <div key={s.dir} className="flex items-center gap-3 rounded-lg border border-dashed px-3 py-2">
+                <div className="min-w-0 flex-1"><div className="text-sm">{s.name}</div><div className="text-muted-foreground truncate font-mono text-xs">{s.command ? `${s.command} ${s.args.join(' ')}` : t('settings.mcpNoStart')}</div></div>
+                {s.configured ? <span className="text-muted-foreground text-xs">{t('settings.mcpInUse', { name: s.configured })}</span>
+                  : s.command ? <Button size="sm" variant="outline" onClick={() => use(s)}><Plus />{t('settings.mcpUse')}</Button> : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
         {c.mcpServers.length ? c.mcpServers.map((s, i) => (
           <div key={s.name} className="flex items-center gap-3 rounded-lg border px-3 py-2">
             <div className="min-w-0 flex-1"><div className="text-sm">{s.name}</div><div className="text-muted-foreground truncate font-mono text-xs">{s.command} {(s.args ?? []).join(' ')}</div></div>
@@ -141,6 +165,28 @@ function McpCard({ c }) {
         )) : <p className="text-muted-foreground text-sm">{t('settings.none')}</p>}
       </CardContent>
       <CardFooter><Button size="sm" variant="outline" onClick={add}><Plus />{t('settings.mcpAdd')}</Button></CardFooter>
+    </Card>
+  );
+}
+
+// Android's adb: downloaded by Orb into android\adb-tools (and in the agents' PATH).
+function AndroidCard() {
+  const t = useT();
+  const [st, setSt] = useState(null);
+  const load = () => call('android.status').then(setSt).catch(() => setSt(null));
+  useEffect(() => { load(); const id = setInterval(load, st?.state === 'downloading' ? 1500 : 15000); return () => clearInterval(id); }, [st?.state]);
+  if (!st) return null;
+  const label = st.ready ? t('settings.android.ready') : st.state === 'downloading' ? t('settings.android.downloading') : st.state === 'error' ? t('settings.android.error', { error: st.error }) : t('settings.android.missing');
+  return (
+    <Card data-testid="android-card">
+      <CardHeader><CardTitle>{t('settings.android')}</CardTitle><CardDescription>{t('settings.androidDesc')}</CardDescription></CardHeader>
+      <CardContent className="grid gap-2">
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1"><div className={cn('text-sm', st.state === 'error' && 'text-destructive')}>{label}</div><div className="text-muted-foreground truncate font-mono text-xs">{st.dir}</div></div>
+          {st.ready ? <Button size="icon-sm" variant="ghost" onClick={() => act(bridge.openPath(st.dir))} title={t('settings.open')}><FolderOpen /></Button>
+            : st.state !== 'downloading' ? <Button size="sm" variant="outline" onClick={async () => { setSt({ ...st, state: 'downloading' }); const r = await act(call('android.install')); if (r) setSt(r); else load(); }}>{t('settings.android.download')}</Button> : null}
+        </div>
+      </CardContent>
     </Card>
   );
 }
@@ -285,7 +331,7 @@ export function SettingsView() {
       <PageHeader icon={<Settings className="text-primary size-5" />} title={t('settings.title')} meta={t('settings.version', { v: app.version })} />
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
         <div className="mx-auto grid max-w-5xl gap-4 lg:grid-cols-2">
-          <AssistantCard c={c} /><InterfaceCard c={c} /><BrainCard c={c} /><TasksCard c={c} /><div className="grid content-start gap-4"><MobileCard /><ExpertCard c={c} /><BrowserCard c={c} /><McpCard c={c} /><FolderCard c={c} home={app.home} /></div>
+          <AssistantCard c={c} /><InterfaceCard c={c} /><BrainCard c={c} /><TasksCard c={c} /><div className="grid content-start gap-4"><MobileCard /><ExpertCard c={c} /><BrowserCard c={c} /><McpCard c={c} />{bridge.mobile ? null : <AndroidCard />}<FolderCard c={c} home={app.home} /></div>
         </div>
       </div>
     </>

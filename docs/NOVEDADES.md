@@ -1,10 +1,35 @@
 ## Descargar
 
-- **`Orb.dev-2.3.0-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
-- **`Orb.dev-2.3.0-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.dev.exe`.
+- **`Orb.dev-2.3.1-instalador.exe`** (recomendado): se instala para tu usuario, sin permisos de administrador, con acceso
+  directo en el escritorio y en el menú Inicio. Después lo encuentras escribiendo «Orb» en el buscador de Windows.
+- **`Orb.dev-2.3.1-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
+- **`Orb.dev-2.3.1-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.dev.exe`.
 
 Windows 10/11. Como aún no está firmada, SmartScreen avisa la primera vez: «Más información» → «Ejecutar de todas formas».
 En el primer arranque la app detecta qué agentes tienes y con qué sesión, e instala lo que falte con los instaladores oficiales.
+
+## Novedades de la 2.3.1
+
+### La carpeta de Orb, igual para todos
+
+Elijas la carpeta que elijas en el primer arranque, Orb crea dentro `Orb` con la misma estructura:
+
+```
+<carpeta elegida>\Orb\
+  windows\  ios\  android\  web\   tus proyectos, cada uno en su categoría
+  bitacora\                          configuración de Orb: las bitácoras (una sola carpeta)
+  mcp-servers\                       configuración de Orb: los servidores MCP
+```
+
+- **Proyectos por categoría:** al crear o clonar un proyecto eliges Windows, iOS, Android o Web, y la lista de Proyectos
+  sale agrupada así. Las carpetas que crees a mano dentro de una categoría aparecen solas.
+- **`bitacora` y `mcp-servers` son de Orb:** no salen como proyectos ni se pueden vincular. Los servidores MCP se gestionan
+  solo desde Ajustes, que lista los que hay en la carpeta y los activa con un clic.
+- **Android listo:** Orb descarga adb y fastboot de Google en `android\adb-tools` la primera vez y los pone al alcance de
+  los agentes. El estado se ve en Ajustes → Android.
+- **Una sola carpeta de bitácoras:** si venías de la 2.3.0, `bitacoras` pasa sola a `bitacora` sin perder nada, y las
+  categorías y carpetas de configuración que se colaron como proyectos desaparecen de la lista.
+- **Instalador:** además del portable, un instalador que deja Orb en el menú Inicio, en el escritorio y en el buscador.
 
 ## Novedades de la 2.3.0
 

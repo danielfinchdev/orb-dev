@@ -36,7 +36,7 @@ try {
   await call('sessions.send', { id: s.id, text: '¿Qué archivo has creado? Solo el nombre.' });
   await until(async () => (await call('sessions.items', { id: s.id })).filter((i) => i.role === 'assistant' && i.kind === 'text').length >= 2 && (await call('sessions.list')).find((x) => x.id === s.id)?.status === 'idle', 'segundo turno');
   const said = (await call('sessions.items', { id: s.id })).filter((i) => i.role === 'assistant' && i.kind === 'text').map((i) => i.body);
-  assert.ok(fs.existsSync(path.join(home, 'empaquetada', 'hola.txt')), 'creó hola.txt');
+  assert.ok(fs.existsSync(path.join(home, 'web', 'empaquetada', 'hola.txt')), 'creó hola.txt');
   assert.match(said.at(-1), /hola\.txt/i);
   console.log(`✔ empaquetada en vivo: turno 1 ${Math.round((t1 - t0) / 1000)} s, turno 2 ${Math.round((Date.now() - t1) / 1000)} s, ${deltas.length} trozos en streaming, dice ${JSON.stringify(said)}`);
 } catch (error) {

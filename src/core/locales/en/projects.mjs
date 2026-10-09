@@ -49,13 +49,13 @@ export default {
   'projects.pushBtn': 'Push branch',
   'projects.prs': 'Open pull requests',
   'projects.title': 'Projects',
-  'projects.meta': 'Every folder inside {home} is a project',
+  'projects.meta': 'Every folder inside windows, ios, android or web in {home} is a project',
   'projects.clone': 'Clone',
   'projects.link': 'Link folder',
   'projects.create': 'New project',
   'projects.openOne': '{n} open',
   'projects.openOther': '{n} open',
   'projects.empty.title': 'No projects yet',
-  'projects.empty.hint': 'Create a new one, clone a repository or create a folder inside {home}.',
+  'projects.empty.hint': 'Create a new one, clone a repository or create a folder in windows, ios, android or web inside {home}.',
   'projects.pick': 'Pick a project'
 };

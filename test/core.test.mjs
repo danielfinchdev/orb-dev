@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { tempHome } from './helpers.mjs';
-import { createHome, folderName, isHome } from '../src/core/home.mjs';
+import { createHome, folderName, isHome, ensureLayout, projectLogHeader } from '../src/core/home.mjs';
 import { PRODUCT } from '../src/core/product.mjs';
 import { ctx, saveConfig } from '../src/core/context.mjs';
 import { Board, checkProjectPath } from '../src/core/board.mjs';
@@ -20,15 +20,41 @@ before(() => { t = tempHome(); board = new Board(); project = createProject(boar
 after(() => t.cleanup());
 
 test('el primer arranque crea la carpeta del asistente con todo lo necesario', () => {
-  for (const f of ['orb.json', '.orb/datos/clave.bin', '.orb/ejecuciones', '.orb/copias', 'bitacoras/GENERAL.md', 'bitacoras/proyectos']) assert.ok(fs.existsSync(path.join(t.home, f)), f);
+  for (const f of ['orb.json', '.orb/datos/clave.bin', '.orb/ejecuciones', '.orb/copias', 'bitacora/GENERAL.md', 'bitacora/proyectos', 'mcp-servers', 'windows', 'ios', 'android', 'web']) assert.ok(fs.existsSync(path.join(t.home, f)), f);
+  assert.ok(!fs.existsSync(path.join(t.home, 'bitacoras')), 'una sola carpeta de bitácoras');
   assert.equal(fs.statSync(path.join(t.home, '.orb/datos/clave.bin')).size, 32);
-  assert.equal(ctx.paths.projects, t.home, 'los proyectos van directamente en la carpeta del asistente');
+  assert.equal(path.basename(t.home), 'Orb');
   assert.equal(ctx.config.assistantName, 'Orb');
   // Reusing an existing home, and refusing a non-empty folder that is not one.
   assert.equal(createHome(t.home).home, t.home);
-  fs.mkdirSync(path.join(t.base, 'Otro')); fs.writeFileSync(path.join(t.base, 'Otro', 'x.txt'), '1');
-  assert.throws(() => createHome(t.base, { assistantName: 'Otro' }), /no está vacía/);
+  assert.equal(createHome(t.base, { assistantName: 'Otro' }).home, t.home, 'siempre <carpeta elegida>/Orb, se llame como se llame');
+  const other = fs.mkdtempSync(path.join(t.base, 'otra-'));
+  fs.mkdirSync(path.join(other, 'Orb')); fs.writeFileSync(path.join(other, 'Orb', 'x.txt'), '1');
+  assert.throws(() => createHome(other, { assistantName: 'Nova' }), /no está vacía/);
+  // Choosing a folder already called Orb uses it as it is (no Orb inside Orb).
+  const named = path.join(fs.mkdtempSync(path.join(t.base, 'base-')), 'Orb'); fs.mkdirSync(named);
+  assert.equal(createHome(named, { assistantName: 'Nova' }).home, named);
   assert.ok(isHome(t.home));
+});
+
+test('una carpeta de la 2.3.0 se ordena: bitacoras pasa a bitacora sin perder nada', () => {
+  const base = fs.mkdtempSync(path.join(t.base, 'vieja-'));
+  const home = path.join(base, 'Orb'); fs.mkdirSync(path.join(home, 'bitacoras', 'proyectos'), { recursive: true });
+  fs.writeFileSync(path.join(home, 'orb.json'), '{}');
+  fs.writeFileSync(path.join(home, 'bitacoras', 'GENERAL.md'), '# Bitácora general de Orb\n\nCabecera.\n\n### 2026-10-01 — entrada vieja\n- Hecho: algo\n');
+  fs.writeFileSync(path.join(home, 'bitacoras', 'proyectos', 'android.md'), projectLogHeader('android'));
+  fs.writeFileSync(path.join(home, 'bitacoras', 'proyectos', 'galactica.md'), `${projectLogHeader('galactica')}\n### entrada\n`);
+  fs.mkdirSync(path.join(home, 'bitacora'));
+  fs.writeFileSync(path.join(home, 'bitacora', 'GENERAL.md'), '# Bitácora general de Orb\n\nCabecera.\n\n### 2026-10-09 — entrada nueva\n');
+  fs.writeFileSync(path.join(home, 'bitacora', 'indice.md'), 'del usuario\n');
+  ensureLayout(home);
+  assert.ok(!fs.existsSync(path.join(home, 'bitacoras')));
+  const general = fs.readFileSync(path.join(home, 'bitacora', 'GENERAL.md'), 'utf8');
+  assert.match(general, /entrada nueva[\s\S]*entrada vieja/); assert.equal(general.match(/^# /gm).length, 1);
+  assert.match(fs.readFileSync(path.join(home, 'bitacora', 'proyectos', 'galactica.md'), 'utf8'), /### entrada/);
+  assert.ok(!fs.existsSync(path.join(home, 'bitacora', 'proyectos', 'android.md')), 'la bitácora vacía de una categoría no se trae');
+  assert.equal(fs.readFileSync(path.join(home, 'bitacora', 'indice.md'), 'utf8'), 'del usuario\n');
+  for (const d of ['windows', 'ios', 'android', 'web', 'mcp-servers']) assert.ok(fs.existsSync(path.join(home, d)), d);
 });
 
 test('los nombres se convierten en nombres de carpeta válidos en Windows', () => {
@@ -50,9 +76,13 @@ test('los ajustes se validan antes de guardarse', () => {
   saveConfig({ orchestrator: { model: 'claude-sonnet-5-5', orchestrate: true } });
 });
 
-test('los proyectos nuevos son carpetas directas de la del asistente, con git, .gitignore y bitácora fuera del repositorio', () => {
-  assert.equal(project.path, fs.realpathSync(path.join(t.home, 'web')));
-  assert.throws(() => createProject(board, { name: 'bitacoras' }, 'usuario'), /reservado/);
+test('los proyectos nuevos van en una categoría de la carpeta del asistente, con git, .gitignore y bitácora fuera del repositorio', () => {
+  assert.equal(project.path, fs.realpathSync(path.join(t.home, 'web', 'web')), 'categoría web por defecto');
+  const app = createProject(board, { name: 'app-movil', category: 'android' }, 'usuario');
+  assert.equal(app.path, fs.realpathSync(path.join(t.home, 'android', 'app-movil')));
+  board.removeProject('app-movil', 'usuario');
+  assert.throws(() => createProject(board, { name: 'x', category: 'linux' }, 'usuario'), /categoría/);
+  for (const name of ['bitacora', 'bitacoras', 'mcp-servers', 'adb-tools']) assert.throws(() => createProject(board, { name }, 'usuario'), /reservado/, name);
   assert.ok(fs.existsSync(path.join(project.path, '.git')));
   assert.match(fs.readFileSync(path.join(project.path, '.gitignore'), 'utf8'), /\.env/);
   assert.ok(fs.existsSync(board.projectLogFile('web')));
@@ -66,20 +96,38 @@ test('un agente solo registra carpetas dentro de la del asistente; el usuario pu
   assert.equal(board.addProject({ name: 'otro nombre', path: outside }, 'usuario', { fromUser: true }).name, 'x', 'una carpeta, un proyecto');
   assert.throws(() => checkProjectPath(t.home, { fromUser: true }), /es la carpeta de/);
   assert.throws(() => checkProjectPath(path.join(t.home, '.orb'), { fromUser: true }), /interna/);
-  assert.throws(() => checkProjectPath(path.join(t.home, 'bitacoras'), { fromUser: true }), /interna/);
+  assert.throws(() => checkProjectPath(path.join(t.home, 'bitacora'), { fromUser: true }), /interna/);
+  assert.throws(() => checkProjectPath(path.join(t.home, 'mcp-servers'), { fromUser: true }), /interna/);
+  assert.throws(() => checkProjectPath(path.join(t.home, 'web'), { fromUser: true }), /categoría/);
+  fs.mkdirSync(path.join(t.home, 'android', 'adb-tools'), { recursive: true });
+  assert.throws(() => checkProjectPath(path.join(t.home, 'android', 'adb-tools'), { fromUser: true }), /categoría/);
   assert.throws(() => checkProjectPath(t.base, { fromUser: true }), /contiene/);
   assert.throws(() => board.addProject({ name: 'web', path: outside }, 'orb'), /otra carpeta/);
 });
 
-test('las carpetas creadas a mano en la del asistente aparecen como proyectos y desaparecen al borrarlas', () => {
-  fs.mkdirSync(path.join(t.home, 'webviaproject'));
+test('las carpetas creadas a mano en una categoría aparecen como proyectos y desaparecen al borrarlas', () => {
+  fs.mkdirSync(path.join(t.home, 'web', 'webviaproject'));
+  fs.mkdirSync(path.join(t.home, 'windows', 'kill-socials'));
+  fs.mkdirSync(path.join(t.home, 'android', 'adb-tools'), { recursive: true });
+  fs.mkdirSync(path.join(t.home, 'web', '.claude'));
+  fs.mkdirSync(path.join(t.home, 'mcp-servers', 'gmail-multi-mcp'));
+  fs.mkdirSync(path.join(t.home, 'suelta'));
   assert.equal(syncProjects(board), true);
-  assert.equal(board.project('webviaproject').path, fs.realpathSync(path.join(t.home, 'webviaproject')));
+  assert.equal(board.project('webviaproject').path, fs.realpathSync(path.join(t.home, 'web', 'webviaproject')));
+  assert.ok(board.project('kill-socials'));
   assert.equal(syncProjects(board), false, 'sin cambios la segunda vez');
-  assert.ok(!board.project('bitacoras') && !board.project('.orb'));
-  fs.rmSync(path.join(t.home, 'webviaproject'), { recursive: true });
+  for (const name of ['bitacora', 'bitacoras', '.orb', 'mcp-servers', 'gmail-multi-mcp', 'adb-tools', '.claude', 'suelta', 'windows', 'android', 'ios']) assert.ok(!board.project(name), name);
+  fs.rmSync(path.join(t.home, 'web', 'webviaproject'), { recursive: true });
   assert.equal(syncProjects(board), true);
   assert.equal(board.project('webviaproject'), undefined);
+  board.removeProject('kill-socials', 'usuario');
+});
+
+test('los proyectos que la 2.3.0 sacó de las categorías y de la configuración se quitan solos', () => {
+  for (const name of ['android', 'mcp-servers']) board.run('INSERT INTO projects (name, path, notes, created_at) VALUES (?, ?, ?, ?)', name, fs.realpathSync(path.join(t.home, name)), '', Date.now());
+  assert.ok(board.project('android'));
+  assert.equal(syncProjects(board), true);
+  assert.ok(!board.project('android') && !board.project('mcp-servers'));
 });
 
 test('aprobaciones: palabras de riesgo, tareas de agentes y razonamiento alto esperan; lo normal va a la cola', () => {
