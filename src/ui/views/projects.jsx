@@ -4,7 +4,7 @@ import { FolderKanban, FolderPlus, FolderOpen, Pin, MessageSquare, BookOpen, Unl
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/page.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
-import { createProjectFlow, linkFolderFlow, cloneRepoFlow } from '@/components/project-actions.jsx';
+import { createProjectFlow, linkFolderFlow, cloneRepoFlow, CATEGORIES } from '@/components/project-actions.jsx';
 import { newConversation } from './session.jsx';
 import { askReview } from './tasks.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -109,14 +109,23 @@ export function ProjectsView({ route }) {
           {bridge.mobile ? null : <GithubCard />}
           <div className="grid items-start gap-4 lg:grid-cols-[minmax(280px,1fr)_minmax(400px,1.4fr)]">
             <Card className="gap-0 overflow-hidden py-0">
-              {projects.length ? projects.map((p) => (
-                <button key={p.name} onClick={() => setSelected(p.name)} className={cn('flex w-full cursor-pointer items-center gap-3 border-b px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-accent/50', selected === p.name && 'bg-accent')}>
-                  <Folder className={cn('size-4 shrink-0', p.active ? 'text-primary' : 'text-muted-foreground')} />
-                  <div className="min-w-0 flex-1"><div className="truncate">{p.name}</div><div className="text-muted-foreground truncate font-mono text-[11px]">{p.path}</div></div>
-                  {p.open ? <Badge variant="info">{t(p.open === 1 ? 'projects.openOne' : 'projects.openOther', { n: p.open })}</Badge> : null}
-                  {p.active ? <Pin className="text-primary size-3.5" /> : null}
-                </button>
-              )) : <Empty icon={FolderKanban} title={t('projects.empty.title')}>{t('projects.empty.hint', { home: app.home })}</Empty>}
+              {projects.length ? [...CATEGORIES, null].map((cat) => {
+                // Grouped by category (windows, ios, android, web); linked folders outside Orb's folder go last.
+                const list = projects.filter((p) => (p.category ?? null) === cat);
+                return list.length ? (
+                  <div key={cat ?? 'other'} data-testid={`category-${cat ?? 'other'}`}>
+                    <div className="text-muted-foreground bg-muted/40 border-b px-4 py-1.5 text-[11px] font-medium tracking-wide uppercase">{t(`comp.projects.category.${cat ?? 'other'}`)}</div>
+                    {list.map((p) => (
+                      <button key={p.name} onClick={() => setSelected(p.name)} className={cn('flex w-full cursor-pointer items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-accent/50', selected === p.name && 'bg-accent')}>
+                        <Folder className={cn('size-4 shrink-0', p.active ? 'text-primary' : 'text-muted-foreground')} />
+                        <div className="min-w-0 flex-1"><div className="truncate">{p.name}</div><div className="text-muted-foreground truncate font-mono text-[11px]">{p.path}</div></div>
+                        {p.open ? <Badge variant="info">{t(p.open === 1 ? 'projects.openOne' : 'projects.openOther', { n: p.open })}</Badge> : null}
+                        {p.active ? <Pin className="text-primary size-3.5" /> : null}
+                      </button>
+                    ))}
+                  </div>
+                ) : null;
+              }) : <Empty icon={FolderKanban} title={t('projects.empty.title')}>{t('projects.empty.hint', { home: app.home })}</Empty>}
             </Card>
             {current ? <ProjectDetail key={current.name} p={current} /> : <Card><Empty icon={Folder} title={t('projects.pick')} /></Card>}
           </div>

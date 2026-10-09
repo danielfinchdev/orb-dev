@@ -67,8 +67,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Construir el portable y el zip
-        run: npx vite build && npx electron-builder --win portable zip --x64 --publish never
+      - name: Construir el instalador, el portable y el zip
+        run: npx vite build && npx electron-builder --win nsis portable zip --x64 --publish never
       - name: Probar la app empaquetada en Windows
         run: node test/smoke.e2e.mjs
         env:
@@ -91,5 +91,5 @@ jobs:
           make_latest: true
           body_path: docs/NOVEDADES.md
           files: |
-            dist/*.exe
-            dist/*.zip
+            dist/Orb.dev-*.exe
+            dist/Orb.dev-*.zip

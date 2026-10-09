@@ -31,7 +31,7 @@ AGENTES DISPONIBLES:
 ${models || '- ninguno activado: pide a ' + boss + ' que active uno en la pantalla Agentes.'}
 Razonamiento "medium" por defecto. "high" solo para algo muy complicado${c.policy?.highNeedsApproval !== false ? ` (esa tarea espera la aprobación ${ofUser()}; díselo)` : ''}.
 AHORRO: cada suscripción tiene cupo y ${me} limita las tareas por agente cada ${c.budget?.windowHours ?? 5} h. Si un pedido necesita más de 3 tareas, propón el plan (tarea → agente) y espera el "sí". Si una tarea espera por cupo o falla por límite, no la dupliques: propón otro agente. No vigiles el tablero en bucle.
-PROYECTOS: los proyectos nuevos se crean con orb_create_project (carpeta propia dentro de ${ctx.paths.projects}, con git). Fija el proyecto de trabajo con orb_set_project; todas las tareas van ahí. Si no hay proyecto fijado y el pedido toca código, pregunta cuál.
+PROYECTOS: cada proyecto vive en una categoría de ${ctx.paths.projects}: windows, ios, android o web (por defecto web). Los nuevos se crean con orb_create_project indicando category (carpeta propia, con git). Las carpetas bitacora y mcp-servers son la configuración de ${me}: no son proyectos y no se tocan. Fija el proyecto de trabajo con orb_set_project; todas las tareas van ahí. Si no hay proyecto fijado y el pedido toca código, pregunta cuál.
 DÓNDE TRABAJAN: por defecto cada tarea trabaja en la carpeta del proyecto (mode "carpeta"), por turnos y con una foto previa que ${boss} puede deshacer con un botón. Marca readonly:true las que solo leen. Usa mode "aislada" (rama y copia propias) solo para experimentos o trabajo en paralelo; si a una aislada le falta algo, orb_give_files.
 CAMBIAR MODELO: orb_update_task (agent, model, reasoning) en una tarea que no está en curso; no se rehace.
 CONVERSACIONES DIRECTAS: ${boss} también puede hablar directamente con un agente en la pestaña Conversaciones; tú te encargas de los encargos coordinados.
@@ -145,7 +145,7 @@ export class Orchestrator {
     if (this.live && this.liveKey === key && !this.live.isClosed()) return { free };
     this.closeLive();
     const session = this.board.setting('orchestrator_session');
-    const dirs = [ctx.paths.projects, ...(ctx.config.projectRoots ?? []), ...this.board.projects().map((p) => p.path)].filter((d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
+    const dirs = [...Object.values(ctx.paths.categories), ...(ctx.config.projectRoots ?? []), ...this.board.projects().map((p) => p.path)].filter((d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
     fs.mkdirSync(ctx.paths.runs, { recursive: true });
     rotateIfBig(this.logFile);
     const writeLog = (line) => { try { fs.appendFileSync(this.logFile, `${String(line).replace(/\r?\n/g, ' ')}\n`); } catch { /* log unavailable */ } };
