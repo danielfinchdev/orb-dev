@@ -544,7 +544,7 @@ que iniciar sesión en la app. Si no, «Iniciar sesión» abre el login oficial 
 - La app instalada usa `electron-updater` con GitHub Releases (`build.publish` en `package.json`; repositorio público, sin
   token). Mira al abrirse (a los 15 s) y cada 4 h; no descarga nada hasta que el usuario pulsa **Actualizar**.
 - Estados que recibe la ventana (evento `app:update`): `checking`, `available`, `downloading` (con `percent`), `downloaded`,
-  `none`, `error`, `off`. Tarjeta abajo a la izquierda (junto al menú) y tarjeta «Actualizaciones» en Ajustes.
+  `none`, `error`, `off`. Tarjeta arriba a la derecha (bajo la cabecera: no tapa el menú ni el cuadro de texto) y tarjeta «Actualizaciones» en Ajustes.
 - **Reiniciar y actualizar** (`app:updateInstall`): si hay tareas en marcha pregunta antes; luego para el motor y llama a
   `quitAndInstall` (instalación silenciosa y vuelve a abrir Orb). Con «Más tarde» se instala al cerrar la app.
 - **Portable** (`PORTABLE_EXECUTABLE_FILE`): consulta la API de GitHub (`releases/latest`) y el botón abre la descarga.

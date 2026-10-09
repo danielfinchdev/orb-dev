@@ -12,8 +12,8 @@ En el primer arranque la app detecta qué agentes tienes y con qué sesión, e i
 
 ### Orb se actualiza solo
 
-- Al abrirse y cada 4 horas, Orb mira en GitHub si hay una versión nueva. Si la hay, aparece una tarjeta abajo a la
-  izquierda: **Actualizar** la descarga en segundo plano y **Reiniciar y actualizar** la instala y vuelve a abrir Orb.
+- Al abrirse y cada 4 horas, Orb mira en GitHub si hay una versión nueva. Si la hay, aparece una tarjeta arriba a la
+  derecha: **Actualizar** la descarga en segundo plano y **Reiniciar y actualizar** la instala y vuelve a abrir Orb.
 - «Más tarde»: se instala sola la próxima vez que cierres Orb. Si hay tareas trabajando, avisa antes de reiniciar.
 - **Registro de cambios** abre las novedades de esa versión.
 - En **Ajustes → Actualizaciones** ves la versión instalada y puedes **Buscar actualizaciones** cuando quieras.
