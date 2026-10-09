@@ -121,7 +121,7 @@ export function Sidebar({ mood }) {
   return (
     <aside className="bg-sidebar flex h-full w-64 shrink-0 flex-col border-r">
       <div className="flex items-center gap-2.5 px-4 pt-4 pb-3">
-        <Robot size={34} mood={mood} title={name} />
+        <Robot size={34} mood={mood} title={name} live />
         <div className="min-w-0 flex-1">
           <div className="truncate text-[15px] font-medium">{name}</div>
           <div className="text-muted-foreground truncate text-xs">{app.activeProject ? app.activeProject.name : t('nav.noProject')}</div>
