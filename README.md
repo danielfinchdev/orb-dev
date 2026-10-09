@@ -142,4 +142,4 @@ npm run icon         # vuelve a dibujar el icono desde el robot
 | `src/agents/` | Un adaptador por agente: detectarlo, lanzarlo e interpretar sus eventos |
 | `src/mcp/` | Servidor MCP que usan los agentes y el asistente |
 | `src/ui/` | Interfaz (React + componentes shadcn/ui + Tailwind, tipografía Outfit) |
-| `docs/` | Plan y auditorías |
+| `docs/` | Toda la documentación: índice en [`docs/README.md`](docs/README.md) |

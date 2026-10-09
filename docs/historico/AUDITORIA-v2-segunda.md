@@ -1,7 +1,7 @@
 # Segunda auditoría de seguridad y optimización — Orb.dev 2.0
 
 2026-10-04, rama `orb-2`. Revisión de todo lo añadido después de la primera auditoría
-(`docs/AUDITORIA-v2.md`): acceso desde el móvil, navegador de los agentes con su ventanita, varias cuentas por agente,
+(`docs/historico/AUDITORIA-v2.md`): acceso desde el móvil, navegador de los agentes con su ventanita, varias cuentas por agente,
 instalación automática y modo experto. Tres revisiones independientes (una por área) y después la comprobación de cada
 hallazgo contra el código antes de arreglarlo. Cada punto dice si **se aplicó** o si queda como **límite conocido**.
 

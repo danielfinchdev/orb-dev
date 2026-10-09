@@ -66,7 +66,7 @@ test/          pruebas (node --test) y prueba de la app con Electron
 5. Auditoría de optimización y seguridad, arreglos y empaquetado portable (`npm run dist` en Windows).
 6. Varias cuentas por agente, instalación automática con los instaladores oficiales y acceso desde el móvil (Tailscale + QR).
 7. Navegador de los agentes con ventanita flotante en directo, modo experto (solo PC) y repaso responsive.
-8. Segunda auditoría (`docs/AUDITORIA-v2-segunda.md`) con sus arreglos.
+8. Segunda auditoría (`docs/historico/AUDITORIA-v2-segunda.md`) con sus arreglos.
 
 ## Pendiente fuera del código (antes de publicar)
 
