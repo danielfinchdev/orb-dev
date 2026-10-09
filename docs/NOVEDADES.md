@@ -10,6 +10,15 @@ En el primer arranque la app detecta qué agentes tienes y con qué sesión, e i
 
 ## Novedades de la 2.3.3
 
+### Orb estrena aspecto
+
+- **El robot nuevo** está en toda la app: cabeza viva con ojos animados y gestos, y cuatro poses de cuerpo entero
+  (saluda, piensa, señala, de pie). Se pone preocupado cuando algo falla y se duerme cuando no hay nada que hacer.
+- **Sonidos del robot:** pitidos cortos cuando habla, termina algo o le tocas la cabeza (nunca mientras escribes). Se
+  activan, se silencian y se ajusta el volumen en Ajustes.
+- **Robot animado:** en Ajustes puedes dejar las animaciones completas o solo las mínimas (parpadea y cambia de cara).
+- **Icono nuevo** de la app, sacado del mismo diseño.
+
 ### El móvil, sin Tailscale y cifrado de extremo a extremo
 
 - **Por la wifi de casa:** activa «Móvil» en Ajustes, pulsa «Vincular por wifi» y escanea el QR con el móvil conectado a

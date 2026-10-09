@@ -204,7 +204,7 @@ export function createRemote({ board, api, log }) {
     if (pathname === '/sw.js') return send(res, 200, SERVICE_WORKER, TYPES['.js'], { 'Service-Worker-Allowed': '/' });
     let rel; try { rel = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, ''); } catch { return send(res, 404, 'no encontrado', 'text/plain'); }
     // Only what the phone's page needs (not the desktop-only pages such as the agent's browser window).
-    if (!(rel === 'index.html' || rel === 'icon.png' || /^assets\/[\w.-]+$/.test(rel))) return send(res, 404, 'no encontrado', 'text/plain');
+    if (!(rel === 'index.html' || rel === 'icon.png' || /^assets\/[\w.-]+$/.test(rel) || /^robot\/[\w-]+\.png$/.test(rel))) return send(res, 404, 'no encontrado', 'text/plain');
     const file = path.normalize(path.join(RENDERER, rel));
     if (!file.startsWith(RENDERER + path.sep)) return send(res, 404, 'no encontrado', 'text/plain');
     fs.readFile(file, (error, data) => {
