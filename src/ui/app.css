@@ -180,6 +180,60 @@
 @keyframes b-zz { 0% { opacity: 0; transform: translate(0, 0) scale(.8); } 40% { opacity: 1; } 100% { opacity: 0; transform: translate(10px, -14px) scale(1.1); } }
 @media (prefers-reduced-motion: reduce) { .bot * { animation: none !important; } }
 
+/* ---------- the robot's head (orb-head.jsx): the artwork plus living eyes ---------- */
+.orb { --eye: #8cf6ff; --eye-glow: #2fd6ff; position: relative; display: inline-block; flex: none; line-height: 0; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
+.orb-body { position: absolute; inset: 0; animation: orb-float 4.2s ease-in-out infinite; will-change: transform; }
+.orb-img { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.orb-face { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.orb-eyes { transition: transform .35s ease; }
+.orb-eye { transform-box: fill-box; transform-origin: center; transition: transform .12s ease, opacity .2s; }
+.orb-pill { fill: var(--eye); }
+.orb-arc, .orb-shut { fill: none; stroke: var(--eye); stroke-linecap: round; display: none; }
+.orb-visor { position: absolute; inset: 0; mask-size: 100% 100%; -webkit-mask-size: 100% 100%; pointer-events: none; overflow: hidden; }
+.orb-code { position: absolute; top: 0; height: 200%; display: flex; flex-direction: column; justify-content: space-around; opacity: 0; mix-blend-mode: screen; transition: opacity .3s; }
+.orb-code-row { position: relative; display: block; height: 2.2%; }
+.orb-code-row i { position: absolute; top: 0; height: 100%; border-radius: 99px; opacity: .85; }
+.orb-glint { position: absolute; top: -20%; left: -60%; width: 35%; height: 140%; background: linear-gradient(90deg, transparent, rgb(255 255 255 / .35), transparent); transform: rotate(18deg); opacity: 0; }
+.orb-led { position: absolute; aspect-ratio: 1; translate: -50% -50%; border-radius: 50%; background: radial-gradient(circle, rgb(120 190 255 / .9) 0%, rgb(80 150 255 / .35) 45%, transparent 70%); mix-blend-mode: screen; animation: orb-led 3s ease-in-out infinite; pointer-events: none; }
+
+.orb[data-blink] .orb-eye { transform: scaleY(.08); }
+.orb[data-act="wink"] .orb-eye-r .orb-pill { display: none; }
+.orb[data-act="wink"] .orb-eye-r .orb-shut { display: inline; }
+.orb[data-act="look"] .orb-eyes { animation: orb-look 1.8s ease-in-out; }
+.orb[data-act="code"] .orb-code, .orb[data-mood="thinking"] .orb-code { opacity: 1; animation: orb-code 2.4s linear infinite; }
+.orb[data-act="code"] .orb-eyes, .orb[data-mood="thinking"] .orb-eyes { opacity: 0; transition: opacity .25s; }
+.orb[data-act="code"] .orb-glint, .orb[data-act="turn"] .orb-glint { animation: orb-glint 1.2s ease-in-out; }
+.orb[data-act="turn"] .orb-body { animation: orb-turn 1.3s cubic-bezier(.6, 0, .3, 1); }
+.orb[data-act="hop"] .orb-body { animation: orb-hop .8s ease-in-out; }
+.orb[data-act="boop"] .orb-body { animation: orb-boop .38s ease-out; }
+.orb[data-act="laugh"] .orb-body { animation: orb-laugh .2s ease-in-out 8 alternate; }
+.orb[data-mood="thinking"] .orb-led { animation-duration: .8s; }
+.orb[data-mood="talking"] .orb-eye { animation: orb-talk .32s ease-in-out infinite alternate; }
+.orb[data-mood="happy"] .orb-pill { display: none; }
+.orb[data-mood="happy"] .orb-arc { display: inline; }
+.orb[data-mood="happy"] .orb-body { animation: orb-hop .8s ease-in-out 2; }
+.orb[data-mood="worried"] { --eye: #ffd08a; --eye-glow: #ffae3d; }
+.orb[data-mood="worried"] .orb-eye { transform: scaleY(.72); }
+.orb[data-mood="worried"] .orb-body { animation: orb-wobble .45s ease-in-out 3; }
+.orb[data-mood="sleeping"] .orb-pill { display: none; }
+.orb[data-mood="sleeping"] .orb-shut { display: inline; }
+.orb[data-mood="sleeping"] .orb-eyes { opacity: .7; }
+.orb[data-mood="sleeping"] .orb-body { animation-duration: 7s; }
+.orb[data-mood="sleeping"] .orb-led { animation: none; opacity: .2; }
+.orb.still .orb-body, .orb.still .orb-led { animation: none; }
+@keyframes orb-float { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-5%) rotate(-1.5deg); } }
+@keyframes orb-led { 0%, 100% { opacity: .9; } 50% { opacity: .25; } }
+@keyframes orb-look { 0%, 100% { transform: translate(0, 0); } 20%, 45% { transform: translate(-28px, -6px); } 60%, 85% { transform: translate(30px, -10px); } }
+@keyframes orb-code { from { transform: translateY(0); } to { transform: translateY(-50%); } }
+@keyframes orb-glint { from { left: -60%; opacity: 1; } to { left: 120%; opacity: 1; } }
+@keyframes orb-turn { 0% { transform: perspective(400px) rotateY(0); } 100% { transform: perspective(400px) rotateY(360deg); } }
+@keyframes orb-hop { 0%, 100% { transform: translateY(0); } 35% { transform: translateY(-16%) rotate(-4deg); } 60% { transform: translateY(0) scale(1.06, .94); } }
+@keyframes orb-boop { 0% { transform: scale(1); } 35% { transform: scale(1.12, .88); } 70% { transform: scale(.96, 1.04); } 100% { transform: scale(1); } }
+@keyframes orb-laugh { from { transform: rotate(-7deg) translateY(-3%); } to { transform: rotate(7deg) translateY(0); } }
+@keyframes orb-talk { from { transform: scaleY(1); } to { transform: scaleY(.7); } }
+@keyframes orb-wobble { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-6deg); } 70% { transform: rotate(6deg); } }
+@media (prefers-reduced-motion: reduce) { .orb *, .orb { animation: none !important; } }
+
 /* The brand backdrop (setup screen, app icon): the soft periwinkle of the robot's world. */
 .brand-sky { background: radial-gradient(120% 90% at 30% 10%, #c3cbff 0%, #a7b1f6 45%, #8f9ef0 100%); }
 .dark .brand-sky { background: radial-gradient(120% 90% at 30% 10%, #2b3270 0%, #1d2257 50%, #141838 100%); }
