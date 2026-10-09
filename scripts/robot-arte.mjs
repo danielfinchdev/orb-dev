@@ -135,31 +135,71 @@ function bbox(img, pad) {
 const save = (img, name) => { const p = new PNG({ width: img.w, height: img.h }); p.data = Buffer.from(img.d); fs.writeFileSync(path.join(OUT, name), PNG.sync.write(p)); };
 const pct = (v, total) => +((v / total) * 100).toFixed(2);
 
-// ---------- the head (Orb 1): the small robot of the sidebar, headers and chat ----------
-fs.mkdirSync(OUT, { recursive: true });
-const geo = {};
-{
-  const src = from(read('Orb 1.png'));
-  despeck(src);
+// Columns of a strip with several figures side by side: [x0, x1) of each figure.
+function figures(img, gap = 12) {
+  const used = [];
+  for (let x = 0; x < img.w; x++) { let any = false; for (let y = 0; y < img.h && !any; y++) any = img.d[(y * img.w + x) * 4 + 3] > 8; used.push(any); }
+  const out = [];
+  for (let x = 0; x < img.w;) {
+    if (!used[x]) { x++; continue; }
+    const s = x;
+    let empty = 0;
+    while (x < img.w && empty < gap) { empty = used[x] ? 0 : empty + 1; x++; }
+    out.push([s, x - empty]);
+  }
+  return out;
+}
+
+const isBlue = (d, i) => d[i + 3] > 200 && d[i + 2] > 220 && d[i] < 120 && d[i + 1] > 110 && d[i + 1] < 200;
+
+// One figure → its eyeless picture, its visor mask and where everything sits (in % of the picture).
+function rig(src, name, W, eyeArea) {
   const [x0, y0, x1, y1] = bbox(src, 6);
   const img = crop(src, x0, y0, x1, y1);
   const { box } = visorMask(img);
   const eyes = findEyes(img, box);
-  removeEyes(img, eyes, 62);
+  removeEyes(img, eyes, Math.round(Math.max(...eyes.map((e) => e.len)) * 0.4));
   const { mask } = visorMask(img);
-  const isBlue = (d, i) => d[i + 3] > 200 && d[i + 2] > 220 && d[i] < 120 && d[i + 1] > 110 && d[i + 1] < 200;
-  const button = spot(img, [0, 0, img.w, img.h * 0.35], isBlue);
-  const ear = spot(img, [img.w * 0.8, img.h * 0.4, img.w, img.h], (d, i) => isEye(d, i) || isBlue(d, i));
-  const W = 320;
-  save(scale(img, W), 'cabeza.png');
-  save(scale(mask, W), 'cabeza-visera.png');
-  geo.head = {
+  const vh = box.y1 - box.y0;
+  const button = spot(img, [box.x0, Math.max(0, box.y0 - vh * 0.8), box.x1, box.y0], isBlue);
+  save(scale(img, W), `${name}.png`);
+  save(scale(mask, W), `${name}-visera.png`);
+  // Eyes that aren't pills (the happy ^ ^ pose) are measured, but drawn as pills of the usual size.
+  return {
     ratio: +(img.h / img.w).toFixed(4),
-    eyes: eyes.map((e) => ({ x: pct(e.cx, img.w), y: pct(e.cy, img.h), w: pct(e.wid, img.w), h: pct(e.len, img.h), tilt: +e.tilt.toFixed(1) })),
+    eyes: eyes.map((e) => {
+      const len = eyeArea ? eyeArea.len * (box.x1 - box.x0) : e.len, wid = eyeArea ? eyeArea.wid * (box.x1 - box.x0) : e.wid;
+      return { x: pct(e.cx, img.w), y: pct(e.cy + (eyeArea ? eyeArea.dy * vh : 0), img.h), w: pct(wid, img.w), h: pct(len, img.h), tilt: +(eyeArea ? eyeArea.tilt : e.tilt).toFixed(1) };
+    }),
     button: button && { x: pct(button.cx, img.w), y: pct(button.cy, img.h), r: pct(button.r, img.w) },
-    ear: ear && { x: pct(ear.cx, img.w), y: pct(ear.cy, img.h), r: pct(ear.r, img.w) },
     visor: { x: pct(box.x0, img.w), y: pct(box.y0, img.h), w: pct(box.x1 - box.x0, img.w), h: pct(box.y1 - box.y0, img.h) },
   };
+}
+
+fs.mkdirSync(OUT, { recursive: true });
+const geo = {};
+
+// ---------- the head (Orb 1): the small robot of the sidebar, headers and chat ----------
+{
+  const src = from(read('Orb 1.png'));
+  despeck(src);
+  geo.cabeza = rig(src, 'cabeza', 320);
+}
+
+// ---------- the whole robot (Orb 2): standing, waving, pointing (happy), thinking ----------
+{
+  const strip = from(read('Orb 2.png'));
+  despeck(strip, 300);
+  const cols = figures(strip);
+  if (cols.length !== 4) throw new Error(`Orb 2: esperaba 4 figuras y hay ${cols.length}`);
+  const names = ['de-pie', 'saluda', 'senala', 'piensa'];
+  const parts = cols.map(([a, b]) => crop(strip, a, 0, b, strip.h));
+  // The pointing pose already smiles (^ ^): its eyes are drawn as the standing pose's pills, scaled to its visor.
+  const stand = rig(parts[0], names[0], 360);
+  const sv = stand.visor, se = stand.eyes;
+  const area = { len: (se[0].h / 100) * stand.ratio / (sv.w / 100), wid: (se[0].w / 100) / (sv.w / 100), tilt: se[0].tilt, dy: 0.1 };
+  geo['de-pie'] = stand;
+  for (let i = 1; i < 4; i++) geo[names[i]] = rig(parts[i], names[i], 360, i === 2 ? area : null);
 }
 
 fs.writeFileSync(path.resolve('src/ui/components/robot-geo.json'), JSON.stringify(geo, null, 2) + '\n');

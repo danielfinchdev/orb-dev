@@ -180,9 +180,9 @@
 @keyframes b-zz { 0% { opacity: 0; transform: translate(0, 0) scale(.8); } 40% { opacity: 1; } 100% { opacity: 0; transform: translate(10px, -14px) scale(1.1); } }
 @media (prefers-reduced-motion: reduce) { .bot * { animation: none !important; } }
 
-/* ---------- the robot's head (orb-head.jsx): the artwork plus living eyes ---------- */
-.orb { --eye: #8cf6ff; --eye-glow: #2fd6ff; position: relative; display: inline-block; flex: none; line-height: 0; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
-.orb-body { position: absolute; inset: 0; animation: orb-float 4.2s ease-in-out infinite; will-change: transform; }
+/* ---------- the robot (orb.jsx): the artwork plus living eyes ---------- */
+.orb { --k: 1; --eye: #8cf6ff; --eye-glow: #2fd6ff; position: relative; display: inline-block; flex: none; line-height: 0; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
+.orb-body { position: absolute; bottom: 0; animation: orb-float 4.2s ease-in-out infinite; will-change: transform; }
 .orb-img { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .orb-face { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .orb-eyes { transition: transform .35s ease; }
@@ -202,8 +202,9 @@
 .orb[data-act="look"] .orb-eyes { animation: orb-look 1.8s ease-in-out; }
 .orb[data-act="code"] .orb-code, .orb[data-mood="thinking"] .orb-code { opacity: 1; animation: orb-code 2.4s linear infinite; }
 .orb[data-act="code"] .orb-eyes, .orb[data-mood="thinking"] .orb-eyes { opacity: 0; transition: opacity .25s; }
-.orb[data-act="code"] .orb-glint, .orb[data-act="turn"] .orb-glint { animation: orb-glint 1.2s ease-in-out; }
-.orb[data-act="turn"] .orb-body { animation: orb-turn 1.3s cubic-bezier(.6, 0, .3, 1); }
+.orb[data-act="code"] .orb-glint { animation: orb-glint 1.2s ease-in-out; }
+.orb[data-act="tilt"] .orb-body { animation: orb-tilt 2.2s ease-in-out; transform-origin: 50% 80%; }
+.orb[data-act="tilt"] .orb-eyes { animation: orb-peek 2.2s ease-in-out; }
 .orb[data-act="hop"] .orb-body { animation: orb-hop .8s ease-in-out; }
 .orb[data-act="boop"] .orb-body { animation: orb-boop .38s ease-out; }
 .orb[data-act="laugh"] .orb-body { animation: orb-laugh .2s ease-in-out 8 alternate; }
@@ -223,10 +224,11 @@
 .orb.still .orb-body, .orb.still .orb-led { animation: none; }
 @keyframes orb-float { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-5%) rotate(-1.5deg); } }
 @keyframes orb-led { 0%, 100% { opacity: .9; } 50% { opacity: .25; } }
-@keyframes orb-look { 0%, 100% { transform: translate(0, 0); } 20%, 45% { transform: translate(-28px, -6px); } 60%, 85% { transform: translate(30px, -10px); } }
+@keyframes orb-look { 0%, 100% { transform: translate(0, 0); } 20%, 45% { transform: translate(calc(var(--k) * -28px), calc(var(--k) * -6px)); } 60%, 85% { transform: translate(calc(var(--k) * 30px), calc(var(--k) * -10px)); } }
 @keyframes orb-code { from { transform: translateY(0); } to { transform: translateY(-50%); } }
 @keyframes orb-glint { from { left: -60%; opacity: 1; } to { left: 120%; opacity: 1; } }
-@keyframes orb-turn { 0% { transform: perspective(400px) rotateY(0); } 100% { transform: perspective(400px) rotateY(360deg); } }
+@keyframes orb-tilt { 0%, 100% { transform: rotate(0); } 25%, 70% { transform: rotate(-11deg) translateY(-2%); } }
+@keyframes orb-peek { 0%, 100% { transform: translate(0, 0); } 25%, 70% { transform: translate(calc(var(--k) * 14px), calc(var(--k) * -18px)); } }
 @keyframes orb-hop { 0%, 100% { transform: translateY(0); } 35% { transform: translateY(-16%) rotate(-4deg); } 60% { transform: translateY(0) scale(1.06, .94); } }
 @keyframes orb-boop { 0% { transform: scale(1); } 35% { transform: scale(1.12, .88); } 70% { transform: scale(.96, 1.04); } 100% { transform: scale(1); } }
 @keyframes orb-laugh { from { transform: rotate(-7deg) translateY(-3%); } to { transform: rotate(7deg) translateY(0); } }
