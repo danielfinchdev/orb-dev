@@ -62,7 +62,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   delegation: { enabled: true, trusted: true, maxPerTask: 4 },
   mcpServers: [],
   projectRoots: [],
-  ui: { companion: true, theme: 'sistema', pip: true }, // pip: the little window that shows the agent's browser
+  ui: { companion: true, theme: 'sistema', pip: true, sounds: true, volume: 0.5, motion: 'completa' }, // pip: the little window that shows the agent's browser; sounds and motion: the robot's
   // Expert mode (PC only): an IDE-like view with the panels chosen here around the assistant's chat.
   expert: { enabled: false, panels: { explorer: true, git: true, history: true, running: true, usage: true, system: true, activity: true } },
   browser: { enabled: true }, // the agents' browser (pages drawn by the app, driven through the MCP tools)

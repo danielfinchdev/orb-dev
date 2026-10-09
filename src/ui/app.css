@@ -170,7 +170,7 @@
 .orb[data-mood="sleeping"] .orb-eyes { opacity: .7; }
 .orb[data-mood="sleeping"] .orb-body { animation-duration: 7s; }
 .orb[data-mood="sleeping"] .orb-led { animation: none; opacity: .2; }
-.orb.still .orb-body, .orb.still .orb-led { animation: none; }
+.orb.still .orb-body, .orb.still .orb-led, .orb.calm .orb-body { animation: none; }
 @keyframes orb-float { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-5%) rotate(-1.5deg); } }
 @keyframes orb-led { 0%, 100% { opacity: .9; } 50% { opacity: .25; } }
 @keyframes orb-look { 0%, 100% { transform: translate(0, 0); } 20%, 45% { transform: translate(calc(var(--k) * -28px), calc(var(--k) * -6px)); } 60%, 85% { transform: translate(calc(var(--k) * 30px), calc(var(--k) * -10px)); } }

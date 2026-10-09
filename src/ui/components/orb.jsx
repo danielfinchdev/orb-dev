@@ -2,9 +2,12 @@
 // with the eyes drawn back on top so they can blink, wink, look around, smile or give way to code scrolling inside the
 // visor. The same character everywhere: the head alone at small sizes, or one of the four poses of the whole robot.
 // Now and then it does something on its own (only the one marked `live`, and never while the window is hidden).
-// Click it: it boops; click it a lot and it laughs.
+// Click it: it boops; click it a lot and it laughs (with its little sounds, lib/sounds.js). Ajustes → «Animaciones:
+// mínimas» keeps it still apart from blinking and its moods.
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils.js';
+import { useStore } from '@/lib/store.js';
+import { play as sound } from '@/lib/sounds.js';
 import geo from './robot-geo.json';
 
 const BASE = import.meta.env.BASE_URL;
@@ -26,7 +29,9 @@ const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').ma
 
 // pose: head, stand, wave, point, think. size: the width of the head, or of the standing robot (the other poses are
 // scaled so the robot itself stays the same size). gesture: play one now (wink, look, code, tilt, hop).
-export function Orb({ pose = 'head', size = 34, mood = 'idle', live = false, still = false, gesture, title = 'Orb', className, onPoke }) {
+export function Orb({ pose = 'head', size = 34, mood = 'idle', live: wantsLive = false, still = false, gesture, title = 'Orb', className, onPoke }) {
+  const calm = useStore((s) => s.app?.config?.ui?.motion === 'minima');
+  const live = wantsLive && !calm;
   const [act, setAct] = useState(null);
   const [blink, setBlink] = useState(false);
   const clicks = useRef([]);
@@ -66,6 +71,7 @@ export function Orb({ pose = 'head', size = 34, mood = 'idle', live = false, sti
     const laugh = clicks.current.length >= 5;
     if (laugh) clicks.current = [];
     if (!still) play(laugh ? 'laugh' : 'boop');
+    sound(laugh ? 'laugh' : 'boop');
     onPoke?.(laugh ? 'laugh' : 'boop');
   }
 
@@ -80,7 +86,7 @@ export function Orb({ pose = 'head', size = 34, mood = 'idle', live = false, sti
   const face = act === 'laugh' ? 'happy' : mood;
   const url = (n) => `${BASE}robot/${n}.png`;
   return (
-    <span className={cn('orb', still && 'still', className)} data-mood={face} data-act={act ?? undefined} data-blink={blink || undefined}
+    <span className={cn('orb', still && 'still', calm && 'calm', className)} data-mood={face} data-act={act ?? undefined} data-blink={blink || undefined}
       style={{ width: box.w, height: box.h, '--k': k }} title={title} role="img" aria-label={title} onClick={poke}>
       <span className="orb-body" style={{ width: w, height: w * G.ratio, left: (box.w - w) / 2 }}>
         <img className="orb-img" src={url(file)} alt="" draggable={false} />
