@@ -14,7 +14,7 @@ export const AGENT_IDS = ['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qw
 export const AGENT_LABELS = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor', gemini: 'Gemini', opencode: 'OpenCode', qwen: 'Qwen Code', copilot: 'GitHub Copilot' };
 
 export const DEFAULT_CONFIG = Object.freeze({
-  version: 3,
+  version: 4,
   assistantName: PRODUCT.assistant,
   userName: '',
   language: 'es',
@@ -135,8 +135,8 @@ export function isHome(dir) {
 // The folder a chosen base turns into: <base>\Orb whatever the assistant is called (or the base itself when it already is
 // an Orb folder or is called Orb), so the layout is the same for everybody.
 export function homeFor(base) {
-  if (isHome(base) || lower(path.basename(base)) === lower(PRODUCT.assistant)) return base;
-  return path.join(base, PRODUCT.assistant);
+  if (isHome(base) || lower(path.basename(base)) === lower(PRODUCT.folder)) return base;
+  return path.join(base, PRODUCT.folder);
 }
 
 // First run: <base>\Orb with its folders, config, secret and the general log. An existing home is reused as is.
@@ -222,6 +222,11 @@ export function loadConfig(home) {
     for (const b of Object.values(config.budget.agents ?? {})) { if (b.maxTasks === 6) b.maxTasks = 20; if (b.maxHeavy === 2) b.maxHeavy = 6; }
     if (config.orchestrator.maxTurns === 20) config.orchestrator.maxTurns = 60;
     config.version = 3;
+  }
+  // 2.4: the robot is called Orb·e. Who kept the old default name ("Orb") gets the new one; a name chosen by hand stays.
+  if ((stored.version ?? 2) < 4) {
+    if (config.assistantName.trim() === 'Orb') config.assistantName = PRODUCT.assistant;
+    config.version = 4;
   }
   // Folders made by older versions: agents added later get their default account and their place in the order.
   for (const a of AGENT_IDS) {

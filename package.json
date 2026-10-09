@@ -1,12 +1,12 @@
 {
   "name": "orb-dev",
-  "productName": "Orb.dev",
-  "version": "2.3.3",
-  "description": "Orb.dev: asistente de escritorio que escribe encargos optimizados y los reparte entre agentes de IA de varios proveedores (Claude Code, Codex, Cursor, Gemini, OpenCode, Qwen, Copilot), en directo.",
+  "productName": "Orb",
+  "version": "2.4.0",
+  "description": "Orb·e: tu director de bolsillo. Planifica tu proyecto por fases y escribe un encargo claro para cada agente (Claude Code, Codex, Cursor, Gemini, OpenCode, Qwen, Copilot), sin gastar tokens de más. Te entrega resultados comprobados.",
   "private": true,
   "type": "module",
   "main": "src/main/main.mjs",
-  "author": "Orb.dev",
+  "author": "Orb",
   "license": "UNLICENSED",
   "scripts": {
     "build": "vite build",
@@ -55,8 +55,8 @@
   },
   "build": {
     "appId": "dev.orb.app",
-    "productName": "Orb.dev",
-    "copyright": "Orb.dev",
+    "productName": "Orb",
+    "copyright": "Orb",
     "publish": [
       {
         "provider": "github",
@@ -90,20 +90,20 @@
     ],
     "win": {
       "icon": "build/icon.ico",
-      "artifactName": "Orb.dev-${version}-windows.${ext}",
+      "artifactName": "Orb-${version}-windows.${ext}",
       "target": [
         "portable",
         "nsis"
       ]
     },
     "portable": {
-      "artifactName": "Orb.dev-${version}-portable.exe"
+      "artifactName": "Orb-${version}-portable.exe"
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "artifactName": "Orb.dev-${version}-instalador.exe"
+      "artifactName": "Orb-${version}-instalador.exe"
     },
     "electronFuses": {
       "runAsNode": true,

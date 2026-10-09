@@ -1,12 +1,21 @@
 ## Descargar
 
-- **`Orb.dev-2.3.3-instalador.exe`** (recomendado): se instala para tu usuario, sin permisos de administrador, con acceso
+- **`Orb-2.4.0-instalador.exe`** (recomendado): se instala para tu usuario, sin permisos de administrador, con acceso
   directo en el escritorio y en el menú Inicio. Después lo encuentras escribiendo «Orb» en el buscador de Windows.
-- **`Orb.dev-2.3.3-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
-- **`Orb.dev-2.3.3-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.dev.exe`.
+- **`Orb-2.4.0-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
+- **`Orb-2.4.0-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.exe`.
 
 Windows 10/11. Como aún no está firmada, SmartScreen avisa la primera vez: «Más información» → «Ejecutar de todas formas».
 En el primer arranque la app detecta qué agentes tienes y con qué sesión, e instala lo que falte con los instaladores oficiales.
+
+## Novedades de la 2.4.0
+
+### Orb·e: Tu director de bolsillo
+
+- **El robot se llama Orb·e.** Planifica tu proyecto por fases y escribe un encargo claro para cada agente, sin gastar
+  tokens de más. Te entrega resultados comprobados. Si le habías puesto otro nombre, lo conserva.
+- **El programa se llama Orb** (`Orb.exe`) en la ventana, el instalador, los accesos directos y los avisos de Windows.
+  Al actualizar desde la 2.3.3 no se pierde nada: misma carpeta, mismos ajustes, mismos proyectos.
 
 ## Novedades de la 2.3.3
 

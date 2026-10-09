@@ -24,8 +24,9 @@ const INTERFACE = () => path.join(app.getPath('userData'), 'interfaz.json');
 const ZOOM_BASE = 1.15; const ZOOM_MIN = 0.6; const ZOOM_MAX = 1.8; const ZOOM_STEP = 0.1;
 const isDev = !app.isPackaged;
 
-// ORB_USER_DATA: separate app data (tests, or a portable copy that keeps everything next to it).
-if (process.env.ORB_USER_DATA) app.setPath('userData', process.env.ORB_USER_DATA);
+// ORB_USER_DATA: separate app data (tests, or a portable copy that keeps everything next to it). Otherwise the folder that
+// versions up to 2.3.3 used (%APPDATA%\Orb.dev), although the program is now called Orb.
+app.setPath('userData', process.env.ORB_USER_DATA || path.join(app.getPath('appData'), PRODUCT.dataDir));
 if (!app.requestSingleInstanceLock()) app.quit();
 app.setAppUserModelId(PRODUCT.appId);
 

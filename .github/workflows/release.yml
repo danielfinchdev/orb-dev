@@ -1,6 +1,6 @@
 # The Windows downloads, built and checked on a real Windows machine and published as a GitHub release:
-#   Orb.dev-<versión>-portable.exe  one file, nothing to install: double-click and it opens
-#   Orb.dev-<versión>-windows.zip   the same, already unpacked (starts faster): extract and open Orb.dev.exe
+#   Orb-<versión>-portable.exe  one file, nothing to install: double-click and it opens
+#   Orb-<versión>-windows.zip   the same, already unpacked (starts faster): extract and open Orb.exe
 # Publishing a version = changing "version" in package.json on main: when that version has no release yet, this builds it,
 # tests it (also the packaged app on Windows) and publishes it as release v<version>, creating the tag. From the Actions
 # tab ("Run workflow") it does the same; a version already published is only built and checked (files kept in the run).
@@ -72,7 +72,7 @@ jobs:
       - name: Probar la app empaquetada en Windows
         run: node test/smoke.e2e.mjs
         env:
-          ORB_E2E_EXE: dist/win-unpacked/Orb.dev.exe
+          ORB_E2E_EXE: dist/win-unpacked/Orb.exe
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -88,11 +88,11 @@ jobs:
         with:
           tag_name: v${{ needs.version.outputs.version }}
           target_commitish: ${{ github.sha }}
-          name: Orb.dev ${{ needs.version.outputs.version }}
+          name: Orb ${{ needs.version.outputs.version }}
           make_latest: true
           body_path: docs/NOVEDADES.md
           files: |
-            dist/Orb.dev-*.exe
-            dist/Orb.dev-*.zip
-            dist/Orb.dev-*.blockmap
+            dist/Orb-*.exe
+            dist/Orb-*.zip
+            dist/Orb-*.blockmap
             dist/latest.yml

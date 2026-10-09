@@ -18,7 +18,7 @@ const OFF = Object.fromEntries(['cursor', 'gemini', 'opencode', 'qwen', 'copilot
 
 export function tempHome(patch = {}) {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-test-'));
-  const { home } = createHome(base, { assistantName: 'Orb', userName: 'Ana' });
+  const { home } = createHome(base, { userName: 'Ana' });
   const config = merge(loadConfig(home), merge({ agents: OFF }, patch));
   writeJson(path.join(home, 'orb.json'), config);
   useHome(home);

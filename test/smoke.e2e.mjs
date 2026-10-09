@@ -1,4 +1,4 @@
-// Smoke test of the PACKAGED app (what people download): ORB_E2E_EXE=dist/win-unpacked/Orb.dev.exe node test/smoke.e2e.mjs
+// Smoke test of the PACKAGED app (what people download): ORB_E2E_EXE=dist/win-unpacked/Orb.exe node test/smoke.e2e.mjs
 // The packaged app does not accept --inspect (a security fuse), so it is driven like a browser through the window's
 // DevTools port: it starts with an assistant called «Nova» (its folder is still Orb), the engine answers, the interface size and a switch of
 // Ajustes work, the folders menu is there, and the MCP server the agents use starts from inside the package.
@@ -13,7 +13,7 @@ import { createHome } from '../src/core/home.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const exe = process.env.ORB_E2E_EXE;
-if (!exe || !fs.existsSync(exe)) { console.error('ORB_E2E_EXE debe apuntar a la app empaquetada (p. ej. dist/win-unpacked/Orb.dev.exe)'); process.exit(2); }
+if (!exe || !fs.existsSync(exe)) { console.error('ORB_E2E_EXE debe apuntar a la app empaquetada (p. ej. dist/win-unpacked/Orb.exe)'); process.exit(2); }
 const OUT = path.join(ROOT, 'test-results'); fs.mkdirSync(OUT, { recursive: true });
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-humo-'));
 const base = path.join(tmp, 'Documentos'); fs.mkdirSync(base);

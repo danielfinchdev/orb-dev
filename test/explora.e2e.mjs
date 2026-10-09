@@ -1,6 +1,6 @@
 // Exploratory pass over the PACKAGED app (no agents needed): the welcome screen, every view in day and night, a narrow
 // window and the settings' switches and checks, with screenshots in test-results/explora/ and the page errors collected.
-// Not an assertion test: it is for looking at.   ORB_E2E_EXE=dist/win-unpacked/Orb.dev.exe node test/explora.e2e.mjs
+// Not an assertion test: it is for looking at.   ORB_E2E_EXE=dist/win-unpacked/Orb.exe node test/explora.e2e.mjs
 import { _electron as electron } from 'playwright-core';
 import fs from 'node:fs';
 import os from 'node:os';
