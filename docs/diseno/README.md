@@ -8,6 +8,7 @@ Aquí van las referencias visuales y los diagramas de cada funcionalidad, para i
 | Diagramas de flujo o de pantallas | `docs/diseno/diagramas/` | `.excalidraw` (el archivo de Excalidraw) y su exportación `.png` |
 | Capturas, maquetas de pantallas, estética (colores, tipografías) | `docs/diseno/referencias/<funcionalidad>/` | `.png`, `.jpg`, `.webp`, `.svg` |
 | Animaciones | `docs/diseno/animaciones/` | `.gif`, `.mp4` (cortos), `.json` de Lottie |
+| Capturas de las pantallas actuales, con código (A1, B2…) | `docs/diseno/capturas/` (índice en `INDICE.md`) | `.jpg`; solo en el PC, no se suben a GitHub |
 | Archivos muy grandes (vídeos largos, exportaciones de Figma) | Una carpeta compartida de Google Drive y su enlace en el issue | Lo que sea |
 
 Normas:

@@ -1,12 +1,37 @@
 ## Descargar
 
-- **`Orb.dev-2.3.2-instalador.exe`** (recomendado): se instala para tu usuario, sin permisos de administrador, con acceso
+- **`Orb.dev-2.3.3-instalador.exe`** (recomendado): se instala para tu usuario, sin permisos de administrador, con acceso
   directo en el escritorio y en el menú Inicio. Después lo encuentras escribiendo «Orb» en el buscador de Windows.
-- **`Orb.dev-2.3.2-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
-- **`Orb.dev-2.3.2-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.dev.exe`.
+- **`Orb.dev-2.3.3-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
+- **`Orb.dev-2.3.3-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.dev.exe`.
 
 Windows 10/11. Como aún no está firmada, SmartScreen avisa la primera vez: «Más información» → «Ejecutar de todas formas».
 En el primer arranque la app detecta qué agentes tienes y con qué sesión, e instala lo que falte con los instaladores oficiales.
+
+## Novedades de la 2.3.3
+
+### Orb estrena aspecto
+
+- **El robot nuevo** está en toda la app: cabeza viva con ojos animados y gestos, y cuatro poses de cuerpo entero
+  (saluda, piensa, señala, de pie). Se pone preocupado cuando algo falla y se duerme cuando no hay nada que hacer.
+- **Sonidos del robot:** pitidos cortos cuando habla, termina algo o le tocas la cabeza (nunca mientras escribes). Se
+  activan, se silencian y se ajusta el volumen en Ajustes.
+- **Robot animado:** en Ajustes puedes dejar las animaciones completas o solo las mínimas (parpadea y cambia de cara).
+- **Icono nuevo** de la app, sacado del mismo diseño.
+
+### El móvil, sin Tailscale y cifrado de extremo a extremo
+
+- **Por la wifi de casa:** activa «Móvil» en Ajustes, pulsa «Vincular por wifi» y escanea el QR con el móvil conectado a
+  la misma wifi. No hay que instalar nada en el móvil.
+- **Por Tailscale, también fuera de casa:** si tu Tailscale tiene HTTPS, Orb lo usa solo. Así la web se instala en el
+  móvil como una app de verdad.
+- **Todo cifrado de extremo a extremo:** al escanear el QR, el móvil crea su propia clave. Desde ese momento todo lo que
+  se dicen el móvil y el PC va cifrado: ni la wifi ni nadie por el camino puede leerlo ni cambiarlo. Un QR copiado no
+  sirve, y quitar el móvil en Ajustes lo desconecta al momento.
+- **Avisos en el móvil:** en el menú del móvil, «Este móvil» → «Avisos en este móvil». Te avisa de las tareas que esperan
+  tu aprobación, las terminadas o fallidas y las respuestas de Orb cuando no tienes la app abierta. Necesita la conexión
+  segura (Tailscale con HTTPS); en iPhone, con Orb añadido a la pantalla de inicio. Gratis: los envía tu propio PC.
+- Los móviles vinculados con la 2.3.2 o antes hay que **volver a vincularlos** (una vez).
 
 ## Novedades de la 2.3.2
 

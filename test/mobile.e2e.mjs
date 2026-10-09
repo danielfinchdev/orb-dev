@@ -1,4 +1,4 @@
-// The phone's web app at phone size (390x844, touch): pairing with the QR link, then every view the phone has, with
+// The phone's web app at phone size (390x844, touch): pairing with the QR link (encrypted from then on), then every view the phone has, with
 // screenshots in test-results/movil-*.png. The engine runs with fake agents and serves on loopback instead of Tailscale.
 // Run: npm run build && node test/mobile.e2e.mjs
 import { chromium } from 'playwright-core';
@@ -19,11 +19,16 @@ await new Promise((resolve, reject) => { engine.once('message', (m) => (m.type =
 await until(async () => (await call('remote.status')).running, 'servidor del móvil');
 
 const exe = ['/opt/pw-browsers/chromium/chrome-linux/chrome', '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'].find((f) => fs.existsSync(f));
-const browser = await chromium.launch({ executablePath: exe, args: ['--no-sandbox'] });
+// Linux CI: Playwright's Chromium. Windows: the Edge that comes with the system (nothing to download).
+const browser = await chromium.launch(exe ? { executablePath: exe, args: ['--no-sandbox'] } : { channel: process.platform === 'win32' ? 'msedge' : 'chrome' });
 const ctxt = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'es-ES' });
 const page = await ctxt.newPage();
 const errors = []; page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 const shot = (name) => page.screenshot({ path: path.join(OUT, `movil-${name}.png`) });
+// What travels between the page and the PC (requests and answers of the API), to check that it is all encrypted.
+const sniffed = [];
+page.on('request', (r) => { if (r.url().includes('/api/') && r.postData()) sniffed.push(r.postData()); });
+page.on('response', async (r) => { if (r.url().includes('/api/call')) sniffed.push(await r.text().catch(() => '')); });
 // Nothing may stick out sideways at phone width.
 const noSideScroll = async (where) => { const w = await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]); assert.ok(w[0] <= w[1] + 1, `${where}: se sale por los lados (${w[0]} > ${w[1]})`); };
 let step = 'inicio';
@@ -52,6 +57,7 @@ try {
   await page.waitForTimeout(300);
   assert.equal(await page.locator('[data-testid=nav-settings]:visible').count(), 0, 'Ajustes solo en el PC');
   assert.equal(await page.locator('[data-testid=nav-expert]:visible').count(), 0, 'modo experto solo en el PC');
+  assert.equal(await page.locator('[data-testid=nav-phone]:visible').count(), 1, '«Este móvil» solo en el móvil');
   await shot('02-menu');
   await page.mouse.click(370, 400); await page.waitForTimeout(300);
 
@@ -81,6 +87,13 @@ try {
   await page.waitForSelector('text=Recibido: Hola Claude');
   await page.waitForTimeout(400);
   await noSideScroll('conversación'); await shot('09-conversacion');
+  step = 'este móvil';
+  await nav('nav-phone');
+  await page.waitForSelector('[data-testid=phone-card]');
+  await noSideScroll('este móvil'); await shot('10-este-movil');
+  // Everything the page and the PC said to each other was encrypted: nothing readable went over the wire.
+  assert.ok(sniffed.length > 5, 'hubo tráfico');
+  for (const body of sniffed) assert.ok(!/webviaproject|Hola desde el móvil|Recibido/.test(body), `se lee por el camino: ${body.slice(0, 120)}`);
   assert.deepEqual(errors.filter((e) => !/favicon/.test(e)), [], `errores: ${errors.join(' | ')}`);
   console.log('✔ web app del móvil a tamaño de teléfono');
 } catch (error) {

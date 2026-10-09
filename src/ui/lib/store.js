@@ -5,7 +5,9 @@ import { toast } from 'sonner';
 import { errorText } from './utils.js';
 import { t } from './i18n.js';
 
-export const bridge = window.orb;
+// The bridge to the PC: Electron's preload, or the phone's web bridge (src/ui/lib/web-bridge.js). Read when used, not when
+// this module loads: the bundler may load this module before the phone's bridge has defined window.orb.
+export const bridge = new Proxy({}, { get: (_, key) => window.orb?.[key], has: (_, key) => Boolean(window.orb) && key in window.orb });
 export const call = (method, params) => bridge.call(method, params);
 
 let state = { version: 0, ready: false, info: null, app: null, sessions: [], projects: [], tasks: [], route: { view: 'chat' } };

@@ -6,6 +6,7 @@ import { Robot } from './robot.jsx';
 import { Button } from './ui/button.jsx';
 import { bridge, go } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
+import { play } from '@/lib/sounds.js';
 
 const moodOf = (body) => (/^(✅|↩️|👍)/.test(body) ? 'happy' : /^(❌|⛔|🛑|⚠️)/.test(body) ? 'worried' : 'talking');
 
@@ -18,6 +19,7 @@ export function Companion({ name, base, hidden }) {
   useEffect(() => bridge.on('chat:new', (payload) => {
     const body = String(payload?.body ?? '');
     const mood = moodOf(body);
+    play(mood === 'happy' ? 'done' : mood === 'worried' ? 'uhoh' : payload.role === 'orb' ? 'talk' : null, body, { force: mood === 'worried' });
     setFlash(mood); clearTimeout(timers.current.flash); timers.current.flash = setTimeout(() => setFlash(null), 3500);
     if (hidden) return;
     const action = /aprobaci|approv/i.test(body) ? { label: t('comp.companion.viewTasks'), run: () => go('tasks') } : payload.role === 'orb' ? { label: t('comp.companion.openChat'), run: () => go('chat') } : null;
@@ -26,7 +28,7 @@ export function Companion({ name, base, hidden }) {
   }), [hidden]); // eslint-disable-line react-hooks/exhaustive-deps
   // A sleepy robot after five minutes without activity.
   useEffect(() => {
-    const wake = () => { setSleepy(false); clearTimeout(timers.current.sleep); timers.current.sleep = setTimeout(() => setSleepy(true), 5 * 60_000); };
+    const wake = () => { setSleepy(false); clearTimeout(timers.current.sleep); timers.current.sleep = setTimeout(() => { setSleepy(true); play('yawn'); }, 5 * 60_000); };
     wake();
     window.addEventListener('mousemove', wake, { passive: true }); window.addEventListener('keydown', wake);
     return () => { window.removeEventListener('mousemove', wake); window.removeEventListener('keydown', wake); clearTimeout(timers.current.sleep); };
@@ -43,7 +45,7 @@ export function Companion({ name, base, hidden }) {
         </div>
       ) : null}
       <button className="pointer-events-auto cursor-pointer drop-shadow-lg transition-transform hover:scale-105" onClick={() => go('chat')} title={t('comp.companion.talkTo', { name })}>
-        <Robot size={68} mood={mood} title={name} />
+        <Robot size={68} mood={mood} title={name} live />
       </button>
     </div>
   );
