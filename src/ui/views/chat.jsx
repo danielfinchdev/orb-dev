@@ -177,7 +177,7 @@ export function ChatView() {
         <div className="mx-auto flex max-w-3xl flex-col gap-5 px-5 py-6">
           {rows.length === 0 ? (
             <div className="flex flex-col items-center gap-3 pt-10 text-center">
-              <Robot size={130} mood="happy" />
+              <Robot size={130} mood="hello" live />
               <h2 className="mt-2 text-2xl">{app.config.userName ? t('chat.helloUser', { user: app.config.userName, name }) : t('chat.hello', { name })}</h2>
               <p className="text-muted-foreground max-w-md">{t('chat.intro')}</p>
               <div className="mt-3 flex max-w-xl flex-wrap justify-center gap-2">{SUGGESTIONS.map((s) => <Button key={s} variant="outline" size="sm" className="h-auto rounded-full py-1.5 whitespace-normal" onClick={() => setText(t(s))}>{t(s)}</Button>)}</div>

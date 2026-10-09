@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MessageSquarePlus, ListTodo, FolderKanban, Bot, BookOpen, History, Settings, Sparkles, SquareTerminal, ChevronRight, Plus, FolderPlus, ShieldAlert, Hourglass, CirclePause, Check, CalendarClock } from 'lucide-react';
+import { Smartphone, MessageSquarePlus, ListTodo, FolderKanban, Bot, BookOpen, History, Settings, Sparkles, SquareTerminal, ChevronRight, Plus, FolderPlus, ShieldAlert, Hourglass, CirclePause, Check, CalendarClock } from 'lucide-react';
 import { Robot } from './robot.jsx';
 import { ThemeToggle } from './theme-toggle.jsx';
 import { Button } from './ui/button.jsx';
@@ -121,7 +121,7 @@ export function Sidebar({ mood }) {
   return (
     <aside className="bg-sidebar flex h-full w-64 shrink-0 flex-col border-r">
       <div className="flex items-center gap-2.5 px-4 pt-4 pb-3">
-        <Robot size={34} mood={mood} title={name} />
+        <Robot size={34} mood={mood} title={name} live />
         <div className="min-w-0 flex-1">
           <div className="truncate text-[15px] font-medium">{name}</div>
           <div className="text-muted-foreground truncate text-xs">{app.activeProject ? app.activeProject.name : t('nav.noProject')}</div>
@@ -164,6 +164,7 @@ export function Sidebar({ mood }) {
         <NavItem icon={BookOpen} label={t('nav.logs')} active={is('logs')} onClick={() => go('logs')} testid="nav-logs" />
         <NavItem icon={History} label={t('nav.activity')} active={is('activity')} onClick={() => go('activity')} testid="nav-activity" />
         {bridge.mobile ? null : <NavItem icon={Settings} label={t('nav.settings')} active={is('settings')} onClick={() => go('settings')} testid="nav-settings" />}
+        {bridge.mobile ? <NavItem icon={Smartphone} label={t('nav.phone')} active={is('phone')} onClick={() => go('phone')} testid="nav-phone" /> : null}
       </div>
     </aside>
   );

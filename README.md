@@ -15,12 +15,12 @@ Tú → Orb → tareas y coordinación → agentes → tareas hechas → Orb rev
 ## Descargar y usar (lo más fácil)
 
 1. Entra en [**Releases → última versión**](https://github.com/danielfinchdev/orb-dev/releases/latest) y descarga
-   **`Orb.dev-2.3.2-instalador.exe`**.
+   **`Orb.dev-2.3.3-instalador.exe`**.
 2. Doble clic: se instala para tu usuario (sin permisos de administrador) con acceso directo en el escritorio y en el menú
    Inicio. Luego lo abres escribiendo «Orb» en el buscador de Windows.
 3. Windows SmartScreen avisará porque la app aún no está firmada: «Más información» → «Ejecutar de todas formas».
 
-¿Sin instalar nada? **`Orb.dev-2.3.2-portable.exe`** se abre tal cual con doble clic. ¿Y que arranque más rápido? Descarga **`Orb.dev-2.3.2-windows.zip`**, clic derecho → «Extraer todo» y abre
+¿Sin instalar nada? **`Orb.dev-2.3.3-portable.exe`** se abre tal cual con doble clic. ¿Y que arranque más rápido? Descarga **`Orb.dev-2.3.3-windows.zip`**, clic derecho → «Extraer todo» y abre
 `Orb.dev.exe` de dentro de la carpeta. No hace falta instalar Node.js ni Git para la app; los agentes (Claude Code, Codex,
 Cursor) te los instala ella misma en el primer arranque. El repositorio es privado: para descargar hay que tener acceso
 a él en GitHub (o que te pasen el archivo).
@@ -52,7 +52,7 @@ claro, deja Cursor en pausa un día y, si la tarea era para «cualquier agente»
 
 ## Empezar
 
-1. Abre Orb desde el menú Inicio (o `Orb.dev-2.3.2-portable.exe`, o `npm start` si la usas desde el código).
+1. Abre Orb desde el menú Inicio (o `Orb.dev-2.3.3-portable.exe`, o `npm start` si la usas desde el código).
 2. Elige su nombre, cómo te llama y dónde crear su carpeta. La carpeta se llama como el asistente: con `D:\` y el nombre
    «Nova» se crea `D:\Nova`; si dejas el nombre por defecto, `D:\Orb`.
 3. En **Agentes**, comprueba qué agentes encuentra (Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Qwen Code, Copilot) y
@@ -100,9 +100,11 @@ D:\Orb\                   (siempre <carpeta elegida>\Orb, igual para todos)
   (Git, Node.js, GitHub CLI, Tailscale, Claude Code, Codex, Cursor) en una ventana visible.
 - **Navegador de los agentes**: abren, prueban y revisan webs (también `localhost`) con las herramientas `orb_browser_*`,
   y una **ventanita flotante arriba a la derecha** te enseña en directo lo que hacen (se agranda, se contrae o se cierra).
-- **Móvil sin apps nativas**: activa «Móvil» en Ajustes, escanea el QR (de un solo uso) con el móvil conectado a tu
-  Tailscale y añade la web a la pantalla de inicio (por ejemplo desde Vivaldi). El móvil chatea, aprueba, da el OK y
-  sigue las tareas; lo delicado (ajustes, cuentas, instalar, acceso total, archivos del PC) solo desde el PC.
+- **Móvil sin apps nativas**: activa «Móvil» en Ajustes y escanea el QR (de un solo uso) con el móvil, por la wifi de
+  casa (sin instalar nada) o por Tailscale (también fuera de casa, con HTTPS). Todo va cifrado de extremo a extremo
+  entre el móvil y el PC. La web se añade a la pantalla de inicio como una app y, por HTTPS, avisa de lo que espera tu
+  aprobación. El móvil chatea, aprueba, da el OK y sigue las tareas; lo delicado (ajustes, cuentas, instalar, acceso
+  total, archivos del PC) solo desde el PC.
 - **Modo experto** (Ajustes, solo PC): explorador y visor de archivos, cambios de git con su diff, historial, lo que está
   en marcha, uso de las cuentas, carga del equipo y actividad, alrededor del chat. Eliges qué paneles ver.
 - **Conectores MCP** extra para los agentes (bases de datos, Figma…).
@@ -130,8 +132,8 @@ npm test             # pruebas del motor (agentes falsos, sin cuentas)
 npm run test:app     # la app entera con Electron (en Linux: xvfb-run -a npm run test:app)
 npm run test:movil   # la web app del móvil a tamaño de teléfono
 ORB_E2E_EXE=dist/win-unpacked/Orb.dev.exe node test/smoke.e2e.mjs   # prueba la app ya empaquetada
-npm run dist         # Orb.dev-2.3.2-portable.exe e instalador (en Windows)
-npm run icon         # vuelve a dibujar el icono desde el robot
+npm run dist         # Orb.dev-2.3.3-portable.exe e instalador (en Windows)
+npm run icon         # vuelve a sacar el icono del art work (docs/diseno/art work); luego npm run icon:ico
 ```
 
 | Carpeta | Qué hay |
@@ -142,4 +144,4 @@ npm run icon         # vuelve a dibujar el icono desde el robot
 | `src/agents/` | Un adaptador por agente: detectarlo, lanzarlo e interpretar sus eventos |
 | `src/mcp/` | Servidor MCP que usan los agentes y el asistente |
 | `src/ui/` | Interfaz (React + componentes shadcn/ui + Tailwind, tipografía Outfit) |
-| `docs/` | Plan y auditorías |
+| `docs/` | Toda la documentación: índice en [`docs/README.md`](docs/README.md) |

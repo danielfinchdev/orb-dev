@@ -6,6 +6,7 @@ export default {
   'nav.agents': 'Agents',
   'nav.logs': 'Logs',
   'nav.activity': 'Activity',
+  'nav.phone': 'This phone',
   'nav.settings': 'Settings',
   'nav.expert': 'Expert mode',
   'nav.newConversation': 'New conversation',

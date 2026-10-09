@@ -16,6 +16,7 @@ import { t, useT, useLocale } from '@/lib/i18n.js';
 import { LANGUAGES } from '../../core/i18n.mjs';
 import { REASONING, options } from '@/lib/labels.js';
 import { useUpdate, updateActions, notesUrl } from '@/components/update-card.jsx';
+import { play } from '@/lib/sounds.js';
 
 async function save(patch, ok = t('settings.saved')) {
   const config = await act(call('config.save', { patch }), ok);
@@ -30,7 +31,7 @@ function Row({ label, hint, children }) {
 
 function AssistantCard({ c }) {
   const t = useT();
-  const [v, setV] = useState({ assistantName: c.assistantName, userName: c.userName, language: c.language, theme: c.ui?.theme ?? 'sistema', companion: c.ui?.companion !== false });
+  const [v, setV] = useState({ assistantName: c.assistantName, userName: c.userName, language: c.language, theme: c.ui?.theme ?? 'sistema', companion: c.ui?.companion !== false, sounds: c.ui?.sounds !== false, volume: c.ui?.volume ?? 0.5, motion: c.ui?.motion ?? 'completa' });
   return (
     <Card>
       <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Robot size={40} /><div><CardTitle>{t('settings.assistant')}</CardTitle><CardDescription>{t('settings.assistantDesc')}</CardDescription></div></CardHeader>
@@ -42,8 +43,17 @@ function AssistantCard({ c }) {
           <Field label={t('settings.theme')}><Select className="w-full" value={v.theme} onValueChange={(theme) => setV({ ...v, theme })} options={[{ value: 'sistema', label: t('settings.theme.sistema') }, { value: 'claro', label: t('settings.theme.claro') }, { value: 'oscuro', label: t('settings.theme.oscuro') }]} /></Field>
         </div>
         <Row label={t('settings.companion')} hint={t('settings.companionHint')}><Switch checked={v.companion} onCheckedChange={(companion) => { setV({ ...v, companion }); save({ ui: { companion } }, companion ? t('settings.companionOn') : t('settings.companionOff')); }} /></Row>
+        <Row label={t('settings.sounds')} hint={t('settings.soundsHint')}><Switch checked={v.sounds} onCheckedChange={(sounds) => { setV({ ...v, sounds }); save({ ui: { sounds } }, sounds ? t('settings.soundsOn') : t('settings.soundsOff')).then(() => sounds && play('wake')); }} /></Row>
+        {v.sounds ? (
+          <div className="-mt-2 flex items-center gap-3 px-0 text-sm">
+            <span className="text-muted-foreground text-xs">{t('settings.volume')}</span>
+            <input type="range" min={0.1} max={1} step={0.1} value={v.volume} aria-label={t('settings.volume')} className="accent-primary w-40 cursor-pointer"
+              onChange={(e) => setV({ ...v, volume: Number(e.target.value) })} onPointerUp={() => save({ ui: { volume: v.volume } }, null).then(() => play('boop'))} onKeyUp={() => save({ ui: { volume: v.volume } }, null)} />
+          </div>
+        ) : null}
+        <Row label={t('settings.motion')} hint={t('settings.motionHint')}><Switch checked={v.motion !== 'minima'} onCheckedChange={(on) => { const motion = on ? 'completa' : 'minima'; setV({ ...v, motion }); save({ ui: { motion } }, on ? t('settings.motionOn') : t('settings.motionOff')); }} /></Row>
       </CardContent>
-      <CardFooter><Button size="sm" onClick={() => save({ assistantName: v.assistantName.trim(), userName: v.userName.trim(), language: v.language, ui: { theme: v.theme, companion: v.companion } })}>{t('settings.save')}</Button></CardFooter>
+      <CardFooter><Button size="sm" onClick={() => save({ assistantName: v.assistantName.trim(), userName: v.userName.trim(), language: v.language, ui: { theme: v.theme, companion: v.companion, sounds: v.sounds, volume: v.volume, motion: v.motion } })}>{t('settings.save')}</Button></CardFooter>
     </Card>
   );
 }
@@ -249,36 +259,80 @@ function MobileCard() {
   const load = () => call('remote.status').then(setSt).catch(() => {});
   useEffect(() => { load(); }, []);
   useEffect(() => { if (!qr) return undefined; const timer = setInterval(() => { if (Date.now() > qr.expiresAt) setQr(null); }, 1000); return () => clearInterval(timer); }, [qr]);
-  const pair = async () => {
-    const r = await act(call('remote.pair'));
+  const pair = async (kind) => {
+    const r = await act(call('remote.pair', { kind }));
     if (r) setQr({ ...r, svg: await QRCode.toString(r.url, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }) });
   };
+  const configure = async (patch) => { setQr(null); const r = await act(call('remote.configure', patch)); if (r) setSt(r); };
   if (!st) return null;
+  const route = (kind) => st.routes?.find((r) => r.kind === kind);
+  const via = (kind) => {
+    const r = route(kind);
+    const hint = r ? `${r.url}${r.secure ? ` · ${t('settings.mobileSecure')}` : ''}` : st.enabled && st[kind] ? t('settings.mobileUnavailable') : t(kind === 'wifi' ? 'settings.mobileWifiHint' : 'settings.mobileTsHint');
+    return (
+      <Row label={t(kind === 'wifi' ? 'settings.mobileWifi' : 'settings.mobileTs')} hint={hint}>
+        <Switch data-testid={`mobile-${kind}`} checked={st[kind]} onCheckedChange={(on) => configure({ [kind]: on })} />
+      </Row>
+    );
+  };
   return (
-    <Card>
+    <Card data-testid="mobile-card">
       <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Smartphone className="text-primary size-5" /><div><CardTitle>{t('settings.mobile')}</CardTitle><CardDescription>{t('settings.mobileDesc')}</CardDescription></div></CardHeader>
       <CardContent className="grid gap-4">
-        <Row label={t('settings.mobileAccess')} hint={st.running ? st.url : st.error ?? t('settings.disabled')}><Switch checked={st.enabled} onCheckedChange={async (enabled) => { const r = await act(call('remote.enable', { enabled })); if (r) setSt(r); }} /></Row>
+        <Row label={t('settings.mobileAccess')} hint={st.running ? t('settings.mobileOn') : st.error ?? t('settings.disabled')}><Switch checked={st.enabled} onCheckedChange={async (enabled) => { setQr(null); const r = await act(call('remote.enable', { enabled })); if (r) setSt(r); }} /></Row>
+        {st.enabled ? <div className="grid gap-1">{via('wifi')}{via('tailscale')}</div> : null}
+        {st.enabled && st.error && st.running ? <p className="text-muted-foreground text-xs">{st.error}</p> : null}
         {st.running ? (
           <div className="grid gap-3">
             {qr ? (
-              <div className="grid justify-items-center gap-2 rounded-xl border p-4 text-center">
+              <div className="grid justify-items-center gap-2 rounded-xl border p-4 text-center" data-testid="mobile-qr">
                 <img alt={t('settings.qrAlt')} className="size-52 rounded-lg bg-white p-2" src={`data:image/svg+xml;utf8,${encodeURIComponent(qr.svg)}`} />
-                <p className="text-sm">{t('settings.qrScan')}</p>
-                <p className="text-muted-foreground text-xs">{t('settings.qrInstall')}</p>
+                <p className="text-sm">{t(qr.kind === 'wifi' ? 'settings.qrScanWifi' : 'settings.qrScanTs')}</p>
+                <p className="text-muted-foreground text-xs">{t(qr.secure ? 'settings.qrInstallSecure' : 'settings.qrInstall')}</p>
+                <p className="text-muted-foreground font-mono text-[11px]">{t('settings.qrPc', { pc: qr.pc })}</p>
+                <Button size="sm" variant="ghost" onClick={() => setQr(null)}>{t('settings.close')}</Button>
               </div>
-            ) : <div><Button size="sm" onClick={pair}><QrCode />{t('settings.pair')}</Button></div>}
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {route('wifi') ? <Button size="sm" onClick={() => pair('wifi')}><QrCode />{t('settings.pairWifi')}</Button> : null}
+                {route('tailscale') ? <Button size="sm" variant={route('wifi') ? 'outline' : 'default'} onClick={() => pair('tailscale')}><QrCode />{t('settings.pairTs')}</Button> : null}
+              </div>
+            )}
+            {route('wifi') ? <p className="text-muted-foreground text-xs">{t('settings.mobileWifiNote')}</p> : null}
             <div className="grid gap-1.5">
               <div className="text-muted-foreground text-xs">{t('settings.devices')}</div>
               {st.devices.length ? st.devices.map((d) => (
                 <div key={d.id} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-                  <Smartphone className="text-muted-foreground size-4" /><span className="flex-1">{d.name}</span><span className="text-muted-foreground text-xs">{d.last_seen ? new Date(d.last_seen).toLocaleString(locale, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                  <Smartphone className="text-muted-foreground size-4" />
+                  <div className="min-w-0 flex-1"><div className="truncate">{d.name}</div><div className="text-muted-foreground text-xs">{[d.route === 'tailscale' ? 'Tailscale' : d.route === 'wifi' ? t('settings.mobileWifiShort') : null, d.push ? t('settings.mobilePushOn') : null].filter(Boolean).join(' · ')}</div></div>
+                  <span className="text-muted-foreground text-xs">{d.last_seen ? new Date(d.last_seen).toLocaleString(locale, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</span>
                   <Button size="icon-sm" variant="danger" title={t('settings.revokeTip')} onClick={async () => { if (await confirm(t('settings.revokeTitle'), t('settings.revokeBody', { name: d.name }), { ok: t('settings.remove'), danger: true })) { await act(call('remote.revoke', { id: d.id }), t('settings.revoked')); load(); } }}><Trash2 /></Button>
                 </div>
               )) : <p className="text-muted-foreground text-sm">{t('settings.none')}</p>}
             </div>
           </div>
         ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+// On the phone itself: install it as an app and turn its notifications on (https only).
+function PhoneCard() {
+  const t = useT();
+  const p = bridge.push;
+  const [on, setOn] = useState(() => p?.enabled() ?? false);
+  if (!p) return null;
+  const installed = p.installed();
+  return (
+    <Card data-testid="phone-card">
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Smartphone className="text-primary size-5" /><div><CardTitle>{t('settings.phone')}</CardTitle><CardDescription>{installed ? t('settings.phoneInstalled') : t(p.ios() ? 'settings.phoneInstallIos' : 'settings.phoneInstallAndroid')}</CardDescription></div></CardHeader>
+      <CardContent className="grid gap-2">
+        {p.supported() && (installed || !p.ios()) ? (
+          <Row label={t('settings.phonePush')} hint={t('settings.phonePushHint')}>
+            <Switch checked={on} onCheckedChange={async (next) => { const r = await act(next ? p.enable() : p.disable()); if (r !== undefined) setOn(r); }} />
+          </Row>
+        ) : <p className="text-muted-foreground text-sm">{t(p.supported() ? 'settings.phonePushInstallFirst' : 'settings.phonePushNeedsHttps')}</p>}
       </CardContent>
     </Card>
   );
@@ -349,6 +403,17 @@ function ExpertCard({ c }) {
       </CardContent>
       {on ? <CardFooter><Button size="sm" variant="outline" onClick={() => go('expert')}><SquareTerminal />{t('settings.expertOpen')}</Button></CardFooter> : null}
     </Card>
+  );
+}
+
+// The phone's own page («Este móvil»): Ajustes stays on the PC, but each phone installs itself and turns its notifications on.
+export function PhoneView() {
+  const t = useT();
+  return (
+    <>
+      <PageHeader icon={<Smartphone className="text-primary size-5" />} title={t('settings.phone')} />
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5"><div className="mx-auto grid max-w-xl gap-4"><PhoneCard /></div></div>
+    </>
   );
 }
 

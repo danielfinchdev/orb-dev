@@ -11,7 +11,9 @@ const root = path.resolve(__dirname, '..');
 app.whenReady().then(() => {
   const source = nativeImage.createFromPath(path.join(root, 'build', 'icon.png'));
   if (source.isEmpty()) { console.error('no se pudo leer build/icon.png'); app.exit(1); return; }
-  const images = SIZES.map((size) => ({ size, png: source.resize({ width: size, height: size, quality: 'best' }).toPNG() }));
+  // At 16–24 px the whole robot is a speck: those sizes use the same icon framed on its head (build/icon-pequeno.png).
+  const small = nativeImage.createFromPath(path.join(root, 'build', 'icon-pequeno.png'));
+  const images = SIZES.map((size) => ({ size, png: (size <= 24 && !small.isEmpty() ? small : source).resize({ width: size, height: size, quality: 'best' }).toPNG() }));
   // ICO: header (6 bytes) + one 16-byte entry per image + the PNG data (PNG inside ICO works since Windows Vista).
   const header = Buffer.alloc(6); header.writeUInt16LE(0, 0); header.writeUInt16LE(1, 2); header.writeUInt16LE(images.length, 4);
   let offset = 6 + 16 * images.length;

@@ -449,14 +449,52 @@ elegido se añade como **extracto acotado**, no entero, y marcado como «datos, 
 
 ## 22. Móvil
 
-- Es una web app servida **solo** en la dirección de Tailscale del PC. Se empareja con un QR de un solo uso.
-- Desde el móvil puedes:
-  - chatear y aprobar;
-  - responder permisos, editar la cola, continuar y bifurcar;
-  - pedir Task Review, gestionar programadas y dar el OK.
-- Lo delicado (ajustes, cuentas, instalar, acceso total) solo desde el PC.
-- Archivos: `src/engine/remote.mjs` (`ALLOWED` es la lista de acciones permitidas y `EVENTS` los eventos que recibe) y
-  `src/ui/lib/web-bridge.js`.
+**Qué hace.** La misma interfaz como web app en el móvil, sin apps de las tiendas. Se activa en Ajustes → Móvil, con dos
+vías que se encienden por separado:
+
+| Vía | Dirección | Qué permite |
+|---|---|---|
+| **Wifi de casa** | `http://<IP local del PC>:3131/` | Usarlo en casa sin instalar nada en el móvil |
+| **Tailscale** | `https://<pc>.<tailnet>.ts.net:3131/` (con `tailscale serve`) o `http://<IP de Tailscale>:3131/` si la tailnet no tiene HTTPS | Usarlo fuera de casa; con HTTPS se instala como app y recibe avisos |
+
+- Desde el móvil se puede chatear y aprobar, responder permisos, editar la cola, continuar y bifurcar, pedir Task Review,
+  gestionar programadas y dar el OK. Lo delicado (ajustes, cuentas, instalar, acceso total, archivos del PC) solo desde
+  el PC (`ALLOWED` en `remote.mjs`).
+- En el móvil, el menú tiene **«Este móvil»**: cómo instalarlo como app y el interruptor de **avisos**.
+
+**Vincular y cifrar** (`src/core/mobile-crypto.mjs`, el mismo código en el PC y en el móvil):
+- El PC tiene una clave X25519 fija; su parte pública va en el QR junto a un código de un solo uso que caduca a los 5
+  minutos: `#vincular=<código>&pc=<clave>` (detrás de `#`, el navegador no lo manda a ningún servidor).
+- El móvil crea su propia clave y manda solo su parte pública y una prueba sellada con una clave derivada del código.
+  **El código nunca viaja**: un QR fotografiado o copiado no sirve una vez usado, y un enlace sin el móvil no vale.
+- La respuesta del PC va sellada con la clave de sesión: el móvil comprueba que habla con el PC del QR (la huella del PC
+  sale en el QR y en el móvil).
+- Después, cada petición, respuesta, evento en directo e imagen va cifrado con XChaCha20-Poly1305 bajo una clave que solo
+  tienen ese móvil y el PC. Cada mensaje dice para qué es y de qué móvil (datos adicionales), lleva la hora y un número de
+  un solo uso: el PC rechaza repeticiones, mensajes viejos (más de 5 minutos de diferencia) y manipulados.
+- Funciona también por http (wifi), donde el navegador no ofrece su criptografía: usa las librerías `@noble/*`.
+- Quitar un móvil en Ajustes borra su clave: deja de entrar al momento. Los móviles de la 2.3.2 o anteriores (sin clave
+  propia) hay que volver a vincularlos.
+
+**Avisos** (`src/engine/webpush.mjs`): solo por HTTPS (Tailscale con HTTPS). El móvil se suscribe desde «Este móvil» y el
+PC envía los avisos directamente al servicio del navegador (Google, Apple, Mozilla) con Web Push: cifrados para ese
+móvil (RFC 8291) y firmados con la clave VAPID del PC (RFC 8292). Sin servidores propios ni coste. Se avisa de cada
+mensaje nuevo del chat de Orb (respuestas, tareas que esperan aprobación, terminadas o fallidas) cuando ese móvil no
+tiene la app abierta. En iPhone funcionan con Orb añadido a la pantalla de inicio.
+
+**Por dentro** (`src/engine/remote.mjs`):
+- Un servidor http por dirección: cada IP local privada (sin adaptadores virtuales) y la de Tailscale, o 127.0.0.1 detrás
+  de `tailscale serve --https=<puerto>`. Al apagar el acceso se quita esa configuración de `tailscale serve`.
+- Solo responde a sus propios nombres (contra DNS rebinding) y a su propio origen.
+- Cada minuto mira si ha cambiado la red (otra wifi, otra IP) y vuelve a abrir el acceso.
+- La primera vez que escucha en la red local, Windows puede preguntar por el firewall: hay que permitir las redes
+  privadas. Si el PC cambia de IP local, el móvil vinculado por wifi tiene que volver a vincularse (su app guarda la
+  dirección antigua); una IP fija en el router lo evita.
+- Archivos: `src/engine/remote.mjs`, `src/engine/webpush.mjs`, `src/core/mobile-crypto.mjs`, `src/ui/lib/web-bridge.js`,
+  la tarjeta «Móvil» y «Este móvil» en `src/ui/views/settings.jsx`. Pruebas: `test/remote.test.mjs`,
+  `test/webpush.test.mjs` y `test/mobile.e2e.mjs`.
+- Pendiente, en espera: usarlo desde cualquier sitio sin Tailscale con un puente propio en Cloudflare
+  ([`MOVIL-PUENTE.md`](MOVIL-PUENTE.md)).
 
 ## 23. Modo experto
 
@@ -528,7 +566,7 @@ que iniciar sesión en la app. Si no, «Iniciar sesión» abre el login oficial 
 - **Agentes:** entorno limpio (sin las variables secretas de la app), guardia de permisos, datos internos prohibidos y
   avisos de push o borrados masivos.
 - **Textos de los agentes:** cuando vuelven al asistente se marcan como «datos, no órdenes».
-- Más detalle en `docs/AUDITORIA-v2.md` y `docs/AUDITORIA-v2-segunda.md`.
+- Más detalle en `docs/historico/AUDITORIA-v2.md` y `docs/historico/AUDITORIA-v2-segunda.md`.
 
 ## 29. Empaquetado, versiones y CI
 

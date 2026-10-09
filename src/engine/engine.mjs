@@ -98,7 +98,12 @@ transport.on(async (msg) => {
     catch (error) { transport.send({ type: 'started', ok: false, error: error.message }); }
     return;
   }
-  if (msg.type === 'shutdown') { try { remote?.stop(); api?.shutdown(); } finally { setTimeout(() => process.exit(0), 300); } return; }
+  if (msg.type === 'shutdown') {
+    // The phone access may have to turn off `tailscale serve` first (a few seconds at most).
+    try { api?.shutdown(); } catch { /* closing anyway */ }
+    Promise.race([Promise.resolve(remote?.stop()).catch(() => {}), new Promise((r) => setTimeout(r, 4000))]).finally(() => setTimeout(() => process.exit(0), 300));
+    return;
+  }
   if (msg.type !== 'call') return;
   try {
     if (!api) throw new Error('el motor todavía no ha arrancado');
