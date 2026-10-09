@@ -528,7 +528,7 @@ que iniciar sesión en la app. Si no, «Iniciar sesión» abre el login oficial 
 - **Agentes:** entorno limpio (sin las variables secretas de la app), guardia de permisos, datos internos prohibidos y
   avisos de push o borrados masivos.
 - **Textos de los agentes:** cuando vuelven al asistente se marcan como «datos, no órdenes».
-- Más detalle en `docs/AUDITORIA-v2.md` y `docs/AUDITORIA-v2-segunda.md`.
+- Más detalle en `docs/historico/AUDITORIA-v2.md` y `docs/historico/AUDITORIA-v2-segunda.md`.
 
 ## 29. Empaquetado, versiones y CI
 
