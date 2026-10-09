@@ -14,5 +14,16 @@ export default {
   'app.httpError': 'error {n}',
   'app.browser': 'Navegador',
   'app.pcOnly': 'solo desde el PC',
-  'app.foldersPc': 'las carpetas se abren desde el PC'
+  'app.foldersPc': 'las carpetas se abren desde el PC',
+  'update.title': 'Estado',
+  'update.available': 'Hay una nueva versión de Orb disponible ({version}).',
+  'update.ready': 'Orb {version} está descargada. Reinicia para usarla; si no, se instalará al cerrar Orb.',
+  'update.downloading': 'Descargando… {percent} %',
+  'update.restart': 'Reiniciar y actualizar',
+  'update.later': 'Más tarde',
+  'update.update': 'Actualizar',
+  'update.download': 'Descargar',
+  'update.failed': 'No se pudo descargar: {error}',
+  'update.notes': 'Registro de cambios',
+  'update.close': 'Cerrar'
 };

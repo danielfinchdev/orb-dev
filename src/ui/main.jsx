@@ -9,6 +9,7 @@ import { TooltipProvider } from '@/components/ui/overlay.jsx';
 import { DialogHost } from '@/components/dialogs.jsx';
 import { Sidebar } from '@/components/sidebar.jsx';
 import { Companion } from '@/components/companion.jsx';
+import { UpdateCard } from '@/components/update-card.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { useStore, setState, getState, refresh, refreshSoon, bridge, go, applyTheme, openTerminal } from '@/lib/store.js';
 import { AGENT } from '@/lib/labels.js';
@@ -52,6 +53,7 @@ function Shell() {
       </main>
       {/* The floating robot only where there is room for it: never over forms or conversations (it covered the switches of
           Ajustes and took their clicks), and those views leave room at the bottom so nothing stays under it. */}
+      <UpdateCard />
       <div className="hidden md:contents"><Companion name={app.config.assistantName} base={mood} hidden={app.config.ui?.companion === false || !COMPANION_VIEWS.has(route.view) || bridge.mobile} /></div>
     </div>
   );

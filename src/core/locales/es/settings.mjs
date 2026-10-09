@@ -145,5 +145,17 @@ export default {
   'settings.expertDisabled': 'Modo experto desactivado',
   'settings.expertOpen': 'Abrir el modo experto',
   'settings.title': 'Ajustes',
-  'settings.version': 'Versión {v}'
+  'settings.version': 'Versión {v}',
+  'settings.updates': 'Actualizaciones',
+  'settings.updatesDesc': 'Orb mira en GitHub si hay una versión nueva al abrirse y cada 4 horas.',
+  'settings.update.current': 'Versión instalada: {version}',
+  'settings.update.check': 'Buscar actualizaciones',
+  'settings.update.checking': 'Buscando…',
+  'settings.update.none': 'Tienes la última versión.',
+  'settings.update.available': 'Hay una versión nueva: {version}',
+  'settings.update.downloading': 'Descargando {version}… {percent} %',
+  'settings.update.downloaded': '{version} lista: se instala al reiniciar',
+  'settings.update.error': 'No se pudo comprobar: {error}',
+  'settings.update.off': 'Las actualizaciones solo funcionan en la app instalada (no desde el código).',
+  'settings.update.portable': 'Versión portable: las nuevas versiones se descargan desde GitHub.'
 };

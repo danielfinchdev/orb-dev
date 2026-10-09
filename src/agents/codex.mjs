@@ -160,7 +160,7 @@ export function createLive(o) {
       if (turn && !turn.done) turn.finish({ isError: true, final: turn.text || `Codex se cerró (código ${code}). ${child.stderrText().trim().split('\n').slice(-2).join(' ')}`.trim() });
     });
     child.on('error', (error) => { closed = true; if (turn && !turn.done) turn.finish({ isError: true, final: `No se pudo arrancar Codex: ${error.message}` }); });
-    await peer.request('initialize', { clientInfo: { name: 'orb_dev', title: 'Orb.dev', version: '2.3.1' }, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs: 30000 });
+    await peer.request('initialize', { clientInfo: { name: 'orb_dev', title: 'Orb.dev', version: '2.3.2' }, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs: 30000 });
     peer.notify('initialized', {});
     const common = { cwd: o.cwd, model, ...policy(permission), config: { model_reasoning_effort: effort(o.reasoning), service_tier: 'default' } };
     let res;

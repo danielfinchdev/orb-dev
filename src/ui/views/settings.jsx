@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils.js';
 import { t, useT, useLocale } from '@/lib/i18n.js';
 import { LANGUAGES } from '../../core/i18n.mjs';
 import { REASONING, options } from '@/lib/labels.js';
+import { useUpdate, updateActions, notesUrl } from '@/components/update-card.jsx';
 
 async function save(patch, ok = t('settings.saved')) {
   const config = await act(call('config.save', { patch }), ok);
@@ -165,6 +166,35 @@ function McpCard({ c }) {
         )) : <p className="text-muted-foreground text-sm">{t('settings.none')}</p>}
       </CardContent>
       <CardFooter><Button size="sm" variant="outline" onClick={add}><Plus />{t('settings.mcpAdd')}</Button></CardFooter>
+    </Card>
+  );
+}
+
+// New versions of Orb (GitHub Releases): the installed version, «Buscar actualizaciones» and the same steps as the card.
+function UpdatesCard() {
+  const t = useT();
+  const st = useUpdate();
+  if (!st) return null;
+  const line = {
+    off: t('settings.update.off'), idle: '', checking: t('settings.update.checking'), none: t('settings.update.none'),
+    available: t('settings.update.available', { version: st.version }), downloading: t('settings.update.downloading', { version: st.version, percent: st.percent ?? 0 }),
+    downloaded: t('settings.update.downloaded', { version: st.version }), error: t('settings.update.error', { error: st.error })
+  }[st.state] ?? '';
+  return (
+    <Card data-testid="updates-card">
+      <CardHeader><CardTitle>{t('settings.updates')}</CardTitle><CardDescription>{st.portable ? t('settings.update.portable') : t('settings.updatesDesc')}</CardDescription></CardHeader>
+      <CardContent className="grid gap-1">
+        <div className="text-sm">{t('settings.update.current', { version: st.current })}</div>
+        {line ? <div className={cn('text-xs', st.state === 'error' ? 'text-destructive' : 'text-muted-foreground')}>{line}</div> : null}
+      </CardContent>
+      {st.state === 'off' ? null : (
+        <CardFooter>
+          {st.state === 'available' ? <Button size="sm" onClick={() => updateActions.update(st)}>{st.portable ? t('update.download') : t('update.update')}</Button>
+            : st.state === 'downloaded' ? <Button size="sm" onClick={updateActions.restart}>{t('update.restart')}</Button>
+              : <Button size="sm" variant="outline" disabled={['checking', 'downloading'].includes(st.state)} onClick={updateActions.check}>{t('settings.update.check')}</Button>}
+          {st.version ? <Button size="sm" variant="ghost" onClick={() => act(bridge.openExternal(notesUrl(st.version)))}>{t('update.notes')}</Button> : null}
+        </CardFooter>
+      )}
     </Card>
   );
 }
@@ -331,7 +361,7 @@ export function SettingsView() {
       <PageHeader icon={<Settings className="text-primary size-5" />} title={t('settings.title')} meta={t('settings.version', { v: app.version })} />
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
         <div className="mx-auto grid max-w-5xl gap-4 lg:grid-cols-2">
-          <AssistantCard c={c} /><InterfaceCard c={c} /><BrainCard c={c} /><TasksCard c={c} /><div className="grid content-start gap-4"><MobileCard /><ExpertCard c={c} /><BrowserCard c={c} /><McpCard c={c} />{bridge.mobile ? null : <AndroidCard />}<FolderCard c={c} home={app.home} /></div>
+          <AssistantCard c={c} /><InterfaceCard c={c} /><BrainCard c={c} /><TasksCard c={c} /><div className="grid content-start gap-4"><MobileCard /><ExpertCard c={c} /><BrowserCard c={c} /><McpCard c={c} />{bridge.mobile ? null : <><UpdatesCard /><AndroidCard /></>}<FolderCard c={c} home={app.home} /></div>
         </div>
       </div>
     </>

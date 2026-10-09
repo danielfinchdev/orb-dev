@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHome, isHome, loadConfig, writeJson } from '../core/home.mjs';
 import { createAgentBrowser } from './browser.mjs';
 import { openTerminal } from './terminal.mjs';
+import { createUpdater, RELEASES_URL } from './updater.mjs';
 import { PRODUCT } from '../core/product.mjs';
 
 const SRC = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -38,6 +39,8 @@ let home = null;
 let nextId = 0;
 const pending = new Map();
 let agentBrowser = null; // the agents' browser and its little floating window (created when the app is ready)
+// New versions from GitHub Releases (src/main/updater.mjs); the window gets the state as the 'app:update' event.
+const updater = createUpdater({ send: (state) => { if (win && !win.isDestroyed()) win.webContents.send('engine:event', 'app:update', state); }, log: (line) => console.log(line) });
 const config = () => { try { return loadConfig(home); } catch { return null; } };
 
 function readLocation() {
@@ -186,6 +189,21 @@ ipcMain.handle('app:openExternal', guard(async (url) => {
   await shell.openExternal(u.toString());
   return true;
 }));
+// Updates: state, check now, download, and restart into the new version (asking first if tasks are running).
+ipcMain.handle('app:update', guard(async () => updater.get()));
+ipcMain.handle('app:updateCheck', guard(async () => updater.check()));
+ipcMain.handle('app:updateDownload', guard(async () => updater.download()));
+ipcMain.handle('app:updateInstall', guard(async () => {
+  if (updater.get().portable) { await shell.openExternal(RELEASES_URL); return false; }
+  if (updater.get().state !== 'downloaded') return false;
+  let running = 0; try { running = engine ? (await callEngine('app.state', {}, 5000)).counts?.running ?? 0 : 0; } catch { /* updating anyway */ }
+  if (running) {
+    const r = await dialog.showMessageBox(win, { type: 'warning', buttons: ['Actualizar igualmente', 'Cancelar'], defaultId: 1, cancelId: 1, title: 'Hay tareas en marcha', message: `Hay ${running} tarea(s) trabajando. Si actualizas ahora, se detienen y quedarán como fallidas (podrás reintentarlas).` });
+    if (r.response !== 0) return false;
+  }
+  quitting = true; agentBrowser?.shutdown(); try { engine?.postMessage({ type: 'shutdown' }); } catch { /* gone */ }
+  return updater.install();
+}));
 // First run: creates <base>/<name> (or reuses an existing assistant folder), remembers it and starts the engine.
 ipcMain.handle('app:setup', guard(async ({ base, assistantName, userName } = {}) => {
   if (home) throw new Error('ya está configurado');
@@ -270,4 +288,5 @@ app.whenReady().then(async () => {
   const h = readLocation();
   if (h) startEngine(h).catch((error) => dialog.showErrorBox(`${PRODUCT.name} no pudo arrancar`, error.message));
   createWindow();
+  updater.start();
 });
