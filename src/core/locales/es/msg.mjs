@@ -131,6 +131,7 @@ export default {
   "msg.ctx.badModels": "modelos de {id} no válidos",
   "msg.ctx.badReasoning": "razonamiento del asistente no válido",
   "msg.ctx.badTheme": "tema no válido",
+  "msg.ctx.badAppearance": "{name} no es válido",
   "msg.ctx.boolean": "{name} debe ser verdadero o falso",
   "msg.ctx.connectorArgs": "argumentos del conector {name} no válidos",
   "msg.ctx.connectorCommand": "el conector {name} necesita un comando",

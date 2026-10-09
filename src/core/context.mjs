@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { paths, loadConfig, writeJson, merge, AGENT_IDS } from './home.mjs';
 import { translate } from './i18n.mjs';
+import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from './appearance.mjs';
 
 export const ctx = { home: null, paths: null, config: null, secret: null }; // secret: approval secret handed by the app (memory only)
 
@@ -92,10 +93,15 @@ export function validateConfig(c) {
     if (s.args && (!Array.isArray(s.args) || s.args.some((x) => typeof x !== 'string'))) throw new Error(tr('msg.ctx.connectorArgs', { name: s.name }));
   }
   if (!['sistema', 'claro', 'oscuro'].includes(c.ui?.theme ?? 'sistema')) throw new Error(tr('msg.ctx.badTheme'));
+  // 2.4: visual theme, fonts and colours of code (src/core/appearance.mjs).
+  for (const [key, list] of [['skin', SKINS], ['font', FONTS], ['codeFont', CODE_FONTS], ['codeTheme', CODE_THEMES]]) {
+    if (c.ui?.[key] !== undefined && !list.includes(c.ui[key])) throw new Error(tr('msg.ctx.badAppearance', { name: `ui.${key}` }));
+  }
   // 2.3: continue tasks after a restart / at the reset, and delegation between agents (orb_delegate).
   const bool = (v, name) => { if (v !== undefined && typeof v !== 'boolean') throw new Error(tr('msg.ctx.boolean', { name })); };
   bool(c.continuity?.resumeAfterRestart, 'continuity.resumeAfterRestart'); bool(c.continuity?.resumeAtReset, 'continuity.resumeAtReset');
   bool(c.delegation?.enabled, 'delegation.enabled'); bool(c.delegation?.trusted, 'delegation.trusted');
+  bool(c.ui?.menuBar, 'ui.menuBar');
   if (c.delegation?.maxPerTask !== undefined) int(c.delegation.maxPerTask, 0, 20, 'delegation.maxPerTask');
   if (c.budget?.stopAt != null && !(Number(c.budget.stopAt) >= 0.5 && Number(c.budget.stopAt) <= 1)) throw new Error(tr('msg.ctx.stopAt'));
   if (!Array.isArray(c.projectRoots) || c.projectRoots.some((r) => typeof r !== 'string')) throw new Error(tr('msg.ctx.rootsList'));

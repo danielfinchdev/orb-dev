@@ -131,6 +131,7 @@ export default {
   "msg.ctx.badModels": "the models for {id} are not valid",
   "msg.ctx.badReasoning": "the assistant's reasoning level is not valid",
   "msg.ctx.badTheme": "theme not valid",
+  "msg.ctx.badAppearance": "{name} is not valid",
   "msg.ctx.boolean": "{name} must be true or false",
   "msg.ctx.connectorArgs": "the arguments for connector {name} are not valid",
   "msg.ctx.connectorCommand": "the connector {name} needs a command",
