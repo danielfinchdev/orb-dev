@@ -15,9 +15,11 @@ const FILES = { head: 'cabeza', stand: 'de-pie', wave: 'saluda', point: 'senala'
 const STAND = geo['de-pie'];
 const ACTS = ['wink', 'look', 'code', 'tilt', 'hop', 'look', 'code'];
 // Each pose belongs to a mood, and the face must match it: the hand on the chin (with the «?») only while thinking, the
-// pointing one only when happy (laughing too). Waving is for hello, idle or talking; anything else stands.
+// pointing one only when happy (laughing too). Waving is for hello, idle or talking; anything else (worried, asleep)
+// stands and shows it on its face.
 const POSE_OF = { thinking: 'think', happy: 'point' };
-const coherent = (pose, face) => POSE_OF[face] ?? (pose === 'think' || pose === 'point' ? 'stand' : pose);
+const OWN = new Set(Object.values(POSE_OF));
+const coherent = (pose, face) => POSE_OF[face] ?? (OWN.has(pose) ? 'stand' : pose);
 const LENGTH = { wink: 900, look: 1800, code: 3200, tilt: 2200, hop: 800, boop: 380, laugh: 1600 };
 
 // Fake code for the visor: rows of coloured bars, like syntax-highlighted lines seen from afar.
@@ -115,6 +117,8 @@ export function Orb({ pose = 'head', size = 34, mood = 'idle', live: wantsLive =
                     <rect className="orb-pill" x={-ew / 2} y={-eh / 2} width={ew} height={eh} rx={ew / 2} />
                     <path className="orb-arc" d={`M${-eh * 0.42} ${eh * 0.12} Q0 ${-eh * 0.5} ${eh * 0.42} ${eh * 0.12}`} strokeWidth={ew * 0.85} />
                     <path className="orb-shut" d={`M${-eh * 0.38} 0 Q0 ${eh * 0.22} ${eh * 0.38} 0`} strokeWidth={ew * 0.7} />
+                    {/* worried: sad brows, inner end up */}
+                    <path className="orb-brow" d={i === 0 ? `M${-ew * 1.3} ${-eh * 0.5} Q${-ew * 0.2} ${-eh * 0.62} ${ew * 0.9} ${-eh * 0.86}` : `M${-ew * 0.9} ${-eh * 0.86} Q${ew * 0.2} ${-eh * 0.62} ${ew * 1.3} ${-eh * 0.5}`} strokeWidth={ew * 0.62} />
                   </g>
                 </g>
               );
