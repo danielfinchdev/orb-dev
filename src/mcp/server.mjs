@@ -7,7 +7,7 @@ import readline from 'node:readline';
 import crypto from 'node:crypto';
 import net from 'node:net';
 import { useHome, ctx, tr } from '../core/context.mjs';
-import { isHome } from '../core/home.mjs';
+import { isHome, CATEGORIES } from '../core/home.mjs';
 import { budgetConfig } from '../core/budget.mjs';
 import { oneLine } from '../core/safety.mjs';
 import { git, copyIntoWorkdir } from '../core/workspace.mjs';
@@ -128,12 +128,12 @@ const tools = [
     run: (a) => board.send({ ...a, from: ME }) },
   { name: 'orb_read_messages', description: 'Lee tus mensajes sin leer (y los marca como leídos).', inputSchema: { type: 'object', properties: {} },
     run: () => { const rows = board.inbox(ME); return rows.length ? rows : 'Sin mensajes nuevos.'; } },
-  { name: 'orb_add_project', description: `Registra una carpeta existente como proyecto (debe estar dentro de ${ctx.paths.projects} o de las carpetas permitidas).`,
+  { name: 'orb_add_project', description: `Registra una carpeta existente como proyecto (dentro de una categoría de ${ctx.paths.projects}: windows, ios, android o web; o en las carpetas permitidas).`,
     inputSchema: { type: 'object', required: ['name', 'path'], properties: { name: str('Nombre corto'), path: str('Ruta absoluta de la carpeta'), notes: str('Notas opcionales') } },
     run: (a) => board.addProject(a, ME) },
   ...(BOSS ? [
-    { name: 'orb_create_project', description: `Crea un proyecto nuevo: carpeta propia en ${ctx.paths.projects}, con git y su bitácora.`,
-      inputSchema: { type: 'object', required: ['name'], properties: { name: str('Nombre del proyecto'), notes: str('Notas opcionales') } },
+    { name: 'orb_create_project', description: `Crea un proyecto nuevo: carpeta propia en la categoría elegida de ${ctx.paths.projects}, con git y su bitácora.`,
+      inputSchema: { type: 'object', required: ['name'], properties: { name: str('Nombre del proyecto'), category: { type: 'string', enum: CATEGORIES, description: 'Plataforma: windows, ios, android o web (por defecto web)' }, notes: str('Notas opcionales') } },
       run: (a) => createProject(board, a, ME) },
     { name: 'orb_set_project', description: 'Fija el proyecto de trabajo de la sesión. Todas las tareas nuevas irán ahí. Vacío = ninguno.',
       inputSchema: { type: 'object', properties: { name: str('Nombre del proyecto registrado (vacío para quitarlo)') } },
@@ -229,7 +229,7 @@ readline.createInterface({ input: process.stdin }).on('line', async (line) => {
   let msg; try { msg = JSON.parse(line); } catch { return; }
   if (msg.id === undefined) return;
   try {
-    if (msg.method === 'initialize') return reply(msg.id, { result: { protocolVersion: msg.params?.protocolVersion ?? '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'orb', version: '2.3.0' }, instructions: INSTRUCTIONS } });
+    if (msg.method === 'initialize') return reply(msg.id, { result: { protocolVersion: msg.params?.protocolVersion ?? '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'orb', version: '2.3.1' }, instructions: INSTRUCTIONS } });
     if (msg.method === 'ping') return reply(msg.id, { result: {} });
     if (msg.method === 'tools/list') return reply(msg.id, { result: { tools: tools.map(({ run, readOnly, ...t }) => ({ ...t, ...(readOnly ? { annotations: { readOnlyHint: true } } : {}) })) } });
     if (msg.method === 'tools/call') {

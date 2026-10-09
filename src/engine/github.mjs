@@ -10,6 +10,7 @@ import { openConsole } from '../agents/index.mjs';
 import { git, isGitRepo, ORB_GIT } from '../core/workspace.mjs';
 import { secretFiles, isSecretPath, oneLine } from '../core/safety.mjs';
 import { folderName } from '../core/home.mjs';
+import { checkCategory } from '../core/projects.mjs';
 import { ATTACH_DIR } from './sessions.mjs';
 
 export function ghExe() {
@@ -108,10 +109,10 @@ export async function createRepo(project, { name, isPrivate = true }) {
   return { url: r.out.split(/\s+/).find((s) => /^https:\/\//.test(s)) ?? r.out };
 }
 
-// Clones a repository into the assistant's projects folder. Returns the new folder.
-export async function clone(repo, name) {
+// Clones a repository into a category of the assistant's folder (web by default). Returns the new folder.
+export async function clone(repo, name, category) {
   if (!/^([\w.-]+\/[\w.-]+|https:\/\/github\.com\/[\w.-]+\/[\w.-]+(\.git)?)$/.test(String(repo ?? '').trim())) throw new Error(tr('msg.github.badRepo'));
-  const folder = path.join(ctx.paths.projects, folderName(name || String(repo).split('/').pop().replace(/\.git$/, ''), 'proyecto'));
+  const folder = path.join(ctx.paths.categories[checkCategory(category)], folderName(name || String(repo).split('/').pop().replace(/\.git$/, ''), 'proyecto'));
   if (fs.existsSync(folder)) throw new Error(tr('msg.github.folderExists', { folder }));
   const exe = ghExe();
   const r = exe ? await run(exe, ['repo', 'clone', String(repo).trim(), folder], { timeoutMs: 600_000 })

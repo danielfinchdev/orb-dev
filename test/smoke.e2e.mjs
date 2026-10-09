@@ -1,6 +1,6 @@
 // Smoke test of the PACKAGED app (what people download): ORB_E2E_EXE=dist/win-unpacked/Orb.dev.exe node test/smoke.e2e.mjs
 // The packaged app does not accept --inspect (a security fuse), so it is driven like a browser through the window's
-// DevTools port: it starts with an assistant folder called «Nova», the engine answers, the interface size and a switch of
+// DevTools port: it starts with an assistant called «Nova» (its folder is still Orb), the engine answers, the interface size and a switch of
 // Ajustes work, the folders menu is there, and the MCP server the agents use starts from inside the package.
 import { chromium } from 'playwright-core';
 import assert from 'node:assert/strict';
@@ -18,7 +18,7 @@ const OUT = path.join(ROOT, 'test-results'); fs.mkdirSync(OUT, { recursive: true
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-humo-'));
 const base = path.join(tmp, 'Documentos'); fs.mkdirSync(base);
 const { home } = createHome(base, { assistantName: 'Nova', userName: 'Ana' });
-assert.equal(path.basename(home), 'Nova', 'la carpeta se llama como el asistente');
+assert.equal(path.basename(home), 'Orb', 'la carpeta es siempre Orb, se llame como se llame el asistente');
 const userData = path.join(tmp, 'datos-app'); fs.mkdirSync(userData);
 fs.writeFileSync(path.join(userData, 'ubicacion.json'), JSON.stringify({ home }));
 
@@ -61,7 +61,7 @@ try {
   await until(() => out.includes('\n'), 'respuesta del servidor MCP', 20000);
   mcp.kill();
   assert.equal(JSON.parse(out.split('\n')[0]).result.serverInfo.name, 'orb');
-  console.log('✔ app empaquetada: arranca, carpeta «Nova», motor, tamaño, ajustes, menú de carpetas y servidor MCP');
+  console.log('✔ app empaquetada: arranca, asistente «Nova» en Orb, motor, tamaño, ajustes, menú de carpetas y servidor MCP');
 } catch (error) {
   console.error(`✖ prueba de humo: ${error.stack ?? error}`);
   process.exitCode = 1;

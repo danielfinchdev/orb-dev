@@ -49,13 +49,13 @@ export default {
   'projects.pushBtn': 'Subir rama (push)',
   'projects.prs': 'Pull requests abiertos',
   'projects.title': 'Proyectos',
-  'projects.meta': 'Cada carpeta dentro de {home} es un proyecto',
+  'projects.meta': 'Cada carpeta dentro de windows, ios, android o web de {home} es un proyecto',
   'projects.clone': 'Clonar',
   'projects.link': 'Vincular carpeta',
   'projects.create': 'Nuevo proyecto',
   'projects.openOne': '{n} abierta',
   'projects.openOther': '{n} abiertas',
   'projects.empty.title': 'Todavía no hay proyectos',
-  'projects.empty.hint': 'Crea uno nuevo, clona un repositorio o crea una carpeta dentro de {home}.',
+  'projects.empty.hint': 'Crea uno nuevo, clona un repositorio o crea una carpeta en windows, ios, android o web dentro de {home}.',
   'projects.pick': 'Elige un proyecto'
 };

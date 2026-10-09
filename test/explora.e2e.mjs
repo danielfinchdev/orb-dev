@@ -50,8 +50,8 @@ try {
   // ---- 2. an assistant already created: every view
   const base = path.join(tmp, 'Documentos'); fs.mkdirSync(base);
   const { home } = createHome(base, { assistantName: 'Orb', userName: 'Dani' });
-  fs.mkdirSync(path.join(home, 'webviaproject', 'src'), { recursive: true });
-  fs.writeFileSync(path.join(home, 'webviaproject', 'src', 'index.html'), '<h1>hola</h1>\n');
+  fs.mkdirSync(path.join(home, 'web', 'webviaproject', 'src'), { recursive: true });
+  fs.writeFileSync(path.join(home, 'web', 'webviaproject', 'src', 'index.html'), '<h1>hola</h1>\n');
   const userData = path.join(tmp, 'datos'); fs.mkdirSync(userData);
   fs.writeFileSync(path.join(userData, 'ubicacion.json'), JSON.stringify({ home }));
   const { app, page, errors, close } = await open(userData);

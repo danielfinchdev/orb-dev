@@ -53,7 +53,7 @@ try {
       const items = await call('sessions.items', { id: s.id });
       const said = items.filter((i) => i.role === 'assistant' && i.kind === 'text').map((i) => String(i.body).slice(0, 80));
       const errs = items.filter((i) => i.role === 'error').map((i) => String(i.body).slice(0, 300));
-      const file = path.join(home, 'prueba-real', `${agent}.txt`);
+      const file = path.join(home, 'web', 'prueba-real', `${agent}.txt`);
       note(`${agent}: turno1 ${Math.round((t1 - t0) / 1000)} s, turno2 ${Math.round((Date.now() - t1) / 1000)} s · archivo ${fs.existsSync(file) ? 'creado' : 'NO creado'} · dice ${JSON.stringify(said)} · errores ${JSON.stringify(errs)}`);
       await page.click('text=Prueba ' + agent).catch(() => {});
       await shot(`conversacion-${agent}`);
@@ -77,7 +77,7 @@ try {
     await page.click('[data-testid=nav-chat]');
     await shot('chat-informe');
     const undo = await call('tasks.undo', { id: done.id }).then(() => 'ok', (e) => e.message);
-    note(`deshacer: ${undo} · saludo.md ${fs.existsSync(path.join(home, 'prueba-real', 'saludo.md')) ? 'sigue' : 'ya no está'}`);
+    note(`deshacer: ${undo} · saludo.md ${fs.existsSync(path.join(home, 'web', 'prueba-real', 'saludo.md')) ? 'sigue' : 'ya no está'}`);
     note(`uso: ${JSON.stringify(await call('usage.get')).slice(0, 400)}`);
 
     // ---- 3. 2.3: approval card (denied from the window), steer, queue, fork, Task Review, schedule and @ mentions
@@ -99,7 +99,7 @@ try {
       const queued = await call('sessions.send', { id: s.id, text: '¿Cuántas líneas tiene lista.txt? Solo el número.', mode: 'queue' });
       note(`corregir en marcha: ${JSON.stringify(steer)} · en cola: ${JSON.stringify(queued)} · cola: ${(await call('sessions.queue', { id: s.id })).length}`);
       await until(async () => (await call('sessions.queue', { id: s.id })).length === 0 && (await call('sessions.list')).find((x) => x.id === s.id)?.status === 'idle', 'cola vaciada', 240000);
-      const lista = fs.existsSync(path.join(home, 'prueba-real', 'lista.txt')) ? fs.readFileSync(path.join(home, 'prueba-real', 'lista.txt'), 'utf8').trim().split(/\r?\n/) : [];
+      const lista = fs.existsSync(path.join(home, 'web', 'prueba-real', 'lista.txt')) ? fs.readFileSync(path.join(home, 'web', 'prueba-real', 'lista.txt'), 'utf8').trim().split(/\r?\n/) : [];
       note(`lista.txt: ${lista.length} líneas, última «${lista.at(-1)}» · respuesta a la cola: ${JSON.stringify((await call('sessions.items', { id: s.id })).filter((i) => i.role === 'assistant' && i.kind === 'text').map((i) => i.body).at(-1))}`);
       note(`contexto: ${JSON.stringify((await call('sessions.list')).find((x) => x.id === s.id)?.context)}`);
       await shot('23-cola-y-correccion');

@@ -9,7 +9,7 @@ import { bridge } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
 import { toast } from 'sonner';
 import { errorText } from '@/lib/utils.js';
-import { PRODUCT, folderName } from '../../core/product.mjs';
+import { PRODUCT } from '../../core/product.mjs';
 
 export function Setup({ onDone }) {
   const t = useT();
@@ -21,7 +21,8 @@ export function Setup({ onDone }) {
   const [step, setStep] = useState('datos'); // datos → equipo (Windows: install what is missing) → app
   const shown = name.trim() || PRODUCT.assistant;
   const sep = base?.includes('\\') ? '\\' : '/';
-  const target = base ? `${base}${base.endsWith(sep) ? '' : sep}${folderName(shown)}` : null; // the same rule the app uses to create it
+  // The same rule the app uses (homeFor): always <base>/Orb, whatever the assistant is called, unless the base already is it.
+  const target = base ? (/^orb$/i.test(base.split(/[\\/]/).filter(Boolean).pop() ?? '') ? base : `${base}${base.endsWith(sep) ? '' : sep}${PRODUCT.assistant}`) : null;
   const create = async (e) => {
     e.preventDefault();
     setBusy(true); setMood('thinking');
