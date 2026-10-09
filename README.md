@@ -15,12 +15,12 @@ Tú → Orb → tareas y coordinación → agentes → tareas hechas → Orb rev
 ## Descargar y usar (lo más fácil)
 
 1. Entra en [**Releases → última versión**](https://github.com/danielfinchdev/orb-dev/releases/latest) y descarga
-   **`Orb.dev-2.3.1-instalador.exe`**.
+   **`Orb.dev-2.3.2-instalador.exe`**.
 2. Doble clic: se instala para tu usuario (sin permisos de administrador) con acceso directo en el escritorio y en el menú
    Inicio. Luego lo abres escribiendo «Orb» en el buscador de Windows.
 3. Windows SmartScreen avisará porque la app aún no está firmada: «Más información» → «Ejecutar de todas formas».
 
-¿Sin instalar nada? **`Orb.dev-2.3.1-portable.exe`** se abre tal cual con doble clic. ¿Y que arranque más rápido? Descarga **`Orb.dev-2.3.1-windows.zip`**, clic derecho → «Extraer todo» y abre
+¿Sin instalar nada? **`Orb.dev-2.3.2-portable.exe`** se abre tal cual con doble clic. ¿Y que arranque más rápido? Descarga **`Orb.dev-2.3.2-windows.zip`**, clic derecho → «Extraer todo» y abre
 `Orb.dev.exe` de dentro de la carpeta. No hace falta instalar Node.js ni Git para la app; los agentes (Claude Code, Codex,
 Cursor) te los instala ella misma en el primer arranque. El repositorio es privado: para descargar hay que tener acceso
 a él en GitHub (o que te pasen el archivo).
@@ -52,7 +52,7 @@ claro, deja Cursor en pausa un día y, si la tarea era para «cualquier agente»
 
 ## Empezar
 
-1. Abre Orb desde el menú Inicio (o `Orb.dev-2.3.1-portable.exe`, o `npm start` si la usas desde el código).
+1. Abre Orb desde el menú Inicio (o `Orb.dev-2.3.2-portable.exe`, o `npm start` si la usas desde el código).
 2. Elige su nombre, cómo te llama y dónde crear su carpeta. La carpeta se llama como el asistente: con `D:\` y el nombre
    «Nova» se crea `D:\Nova`; si dejas el nombre por defecto, `D:\Orb`.
 3. En **Agentes**, comprueba qué agentes encuentra (Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Qwen Code, Copilot) y
@@ -130,7 +130,7 @@ npm test             # pruebas del motor (agentes falsos, sin cuentas)
 npm run test:app     # la app entera con Electron (en Linux: xvfb-run -a npm run test:app)
 npm run test:movil   # la web app del móvil a tamaño de teléfono
 ORB_E2E_EXE=dist/win-unpacked/Orb.dev.exe node test/smoke.e2e.mjs   # prueba la app ya empaquetada
-npm run dist         # Orb.dev-2.3.1-portable.exe e instalador (en Windows)
+npm run dist         # Orb.dev-2.3.2-portable.exe e instalador (en Windows)
 npm run icon         # vuelve a dibujar el icono desde el robot
 ```
 
