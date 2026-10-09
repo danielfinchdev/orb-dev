@@ -27,6 +27,13 @@ contextBridge.exposeInMainWorld('orb', {
   // Size of the interface on this PC (1 = normal): read with zoom(), change with zoom(value).
   zoom: (value) => ipcRenderer.invoke('app:zoom', value ?? null),
   openTerminal: (folder) => ipcRenderer.invoke('app:openTerminal', folder ?? null),
+  // New versions: state (also pushed as the 'app:update' event), check, download and restart into it.
+  update: {
+    get: () => ipcRenderer.invoke('app:update'),
+    check: () => ipcRenderer.invoke('app:updateCheck'),
+    download: () => ipcRenderer.invoke('app:updateDownload'),
+    install: () => ipcRenderer.invoke('app:updateInstall')
+  },
   // Path of a file dropped or pasted into the window (images for the agents).
   pathForFile: (file) => { try { return webUtils.getPathForFile(file) || null; } catch { return null; } }
 });

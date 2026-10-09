@@ -23,7 +23,7 @@ process.on('unhandledRejection', (e) => { if (/No dialog is showing/.test(String
 // ORB_E2E_EXE: test a packaged build instead of the sources (e.g. dist/linux-unpacked/orb).
 const packaged = process.env.ORB_E2E_EXE;
 // 2.3: the fake agents live inside the engine (ORB_FAKE_AGENTS), so nothing is launched as a program (also on Windows).
-const app = await electron.launch({ executablePath: packaged || electronBin, args: [...(packaged ? [] : [ROOT]), ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], env: { ...process.env, ORB_USER_DATA: path.join(tmp, 'datos-app'), ORB_FAKE_AGENTS: fake('fake-live.mjs') } });
+const app = await electron.launch({ executablePath: packaged || electronBin, args: [...(packaged ? [] : [ROOT]), ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], env: { ...process.env, ORB_USER_DATA: path.join(tmp, 'datos-app'), ORB_FAKE_AGENTS: fake('fake-live.mjs'), ORB_FAKE_UPDATE: '9.9.9' } });
 const errors = [];
 const win = await app.firstWindow();
 win.on('pageerror', (e) => errors.push(e.message));
@@ -195,6 +195,21 @@ try {
   await until(async () => (await call('app.state')).config.autoRun === !autoRun, 'interruptor aplicado al momento');
   await win.getByText('Lanzar las tareas solas').click();
   await until(async () => (await call('app.state')).config.autoRun === autoRun, 'y vuelve');
+
+  // ---- a new version (ORB_FAKE_UPDATE: no network): the card in the corner and the Updates card in Ajustes
+  step = 'actualización';
+  await win.evaluate(() => window.orb.update.check()); // the app also checks by itself 15 s after opening
+  await win.waitForSelector('[data-testid=update-card] >> text=Hay una nueva versión de Orb disponible (9.9.9).');
+  await win.waitForSelector('[data-testid=updates-card] >> text=Hay una versión nueva: 9.9.9');
+  await win.waitForTimeout(500); // the card fades in
+  await shot('10c-actualizacion');
+  await win.click('[data-testid=nav-chat]'); // in the chat it must not cover the message box
+  await win.waitForTimeout(400);
+  await shot('10d-actualizacion-chat');
+  await win.click('[data-testid=chat-input]');
+  await win.click('[data-testid=nav-settings]');
+  await win.locator('[data-testid=update-card]').getByRole('button', { name: 'Cerrar' }).click();
+  await until(async () => (await win.locator('[data-testid=update-card]').count()) === 0, 'tarjeta cerrada');
 
   // ---- left menu: each project is a folder with the tasks sent to it
   step = 'carpetas del menú';

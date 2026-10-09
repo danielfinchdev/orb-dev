@@ -1,12 +1,24 @@
 ## Descargar
 
-- **`Orb.dev-2.3.1-instalador.exe`** (recomendado): se instala para tu usuario, sin permisos de administrador, con acceso
+- **`Orb.dev-2.3.2-instalador.exe`** (recomendado): se instala para tu usuario, sin permisos de administrador, con acceso
   directo en el escritorio y en el menú Inicio. Después lo encuentras escribiendo «Orb» en el buscador de Windows.
-- **`Orb.dev-2.3.1-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
-- **`Orb.dev-2.3.1-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.dev.exe`.
+- **`Orb.dev-2.3.2-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
+- **`Orb.dev-2.3.2-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.dev.exe`.
 
 Windows 10/11. Como aún no está firmada, SmartScreen avisa la primera vez: «Más información» → «Ejecutar de todas formas».
 En el primer arranque la app detecta qué agentes tienes y con qué sesión, e instala lo que falte con los instaladores oficiales.
+
+## Novedades de la 2.3.2
+
+### Orb se actualiza solo
+
+- Al abrirse y cada 4 horas, Orb mira en GitHub si hay una versión nueva. Si la hay, aparece una tarjeta arriba a la
+  derecha: **Actualizar** la descarga en segundo plano y **Reiniciar y actualizar** la instala y vuelve a abrir Orb.
+- «Más tarde»: se instala sola la próxima vez que cierres Orb. Si hay tareas trabajando, avisa antes de reiniciar.
+- **Registro de cambios** abre las novedades de esa versión.
+- En **Ajustes → Actualizaciones** ves la versión instalada y puedes **Buscar actualizaciones** cuando quieras.
+- La versión portable no puede cambiarse a sí misma: avisa igual, y su botón abre la página de descarga.
+- Funciona a partir de esta versión: la 2.3.1 no tenía el aviso, así que la 2.3.2 se instala a mano una última vez.
 
 ## Novedades de la 2.3.1
 
