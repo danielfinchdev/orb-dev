@@ -83,7 +83,7 @@ export function createUpdater({ send, log = () => {} }) {
   }
 
   function start() {
-    if (!enabled) return;
+    if (!enabled || fake) return; // a simulated version only shows up when a test asks (check)
     setTimeout(check, FIRST);
     timer = setInterval(check, EVERY);
     timer.unref?.();
