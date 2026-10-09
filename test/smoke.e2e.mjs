@@ -46,7 +46,7 @@ try {
   // Folders menu and a switch of Ajustes (applied at once, also clicking its text)
   await page.waitForSelector('text=Carpetas');
   await page.click('[data-testid=nav-settings]');
-  await page.click('text=Lanzar las tareas solas');
+  await page.click('text=Iniciar las tareas automáticamente');
   await until(async () => (await call('app.state')).config.autoRun === false, 'interruptor aplicado');
   await page.screenshot({ path: path.join(OUT, 'humo-empaquetada.png') });
   assert.deepEqual(errors, [], `errores de la página: ${errors.join(' | ')}`);

@@ -154,7 +154,7 @@ test('aprobaciones: palabras de riesgo, tareas de agentes y razonamiento alto es
 
 test('una aprobación firmada deja de valer si la tarea cambia', () => {
   const task = board.createTask({ project: 'web', title: 'Publicar 2', description: 'publica el blog', agent: 'claude' }, 'orb');
-  assert.throws(() => board.approve(task.id, 'approved', 'usuario', 'huella-vieja'), /cambió/);
+  assert.throws(() => board.approve(task.id, 'approved', 'usuario', 'huella-vieja'), /ha cambiado/);
   const ok = board.approve(task.id, 'approved', 'usuario', board.previewHash(task));
   assert.equal(ok.status, 'queued'); assert.ok(verify(board.key, ok));
   // Someone edits the database by hand: the scheduler sends it back to approval.

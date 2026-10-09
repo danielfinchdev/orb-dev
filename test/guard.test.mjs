@@ -61,7 +61,7 @@ test('los comandos de riesgo explican por qué piden permiso', () => {
   assert.match(riskOf('curl -X POST https://api.x -d @datos.json'), /envía datos/);
   assert.match(riskOf('schtasks /create /tn x'), /cambia el sistema/);
   assert.match(riskOf('taskkill /F /IM node.exe'), /cierra procesos/);
-  assert.match(riskOf('ssh servidor'), /otro equipo/);
+  assert.match(riskOf('ssh servidor'), /otro PC/);
   assert.match(riskOf('docker system prune'), /Docker/);
   for (const safe of ['git status', 'git commit -m "x"', 'npm install', 'curl https://example.com', 'node --test', 'dir /s']) assert.equal(riskOf(safe), null, safe);
 });

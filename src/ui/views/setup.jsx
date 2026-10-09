@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { FolderOpen, ArrowRight } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
-import { Installer } from '@/components/installer.jsx';
+import { Installer, InstallProgress, useFunPhrase } from '@/components/installer.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Input, Field, Spinner } from '@/components/ui/basic.jsx';
 import { bridge } from '@/lib/store.js';
@@ -34,16 +34,7 @@ export function Setup({ onDone }) {
     }
     catch (error) { setMood('worried'); toast.error(errorText(error)); setBusy(false); }
   };
-  if (step === 'equipo') return (
-    <div className="brand-sky flex h-full overflow-auto px-6 pt-24 pb-6">
-      <div className="bg-card/95 text-card-foreground m-auto grid w-full max-w-[520px] gap-5 rounded-3xl border border-white/40 p-8 shadow-2xl backdrop-blur">
-        <div className="-mt-20 flex justify-center"><Robot size={120} mood="hello" title={shown} live /></div>
-        <div className="text-center"><h1 className="text-2xl">{t('setup.prepareTitle')}</h1><p className="text-muted-foreground mt-2 text-sm">{t('setup.prepareDesc')}</p></div>
-        <Installer />
-        <Button size="lg" onClick={onDone}>{t('setup.continue')}<ArrowRight /></Button>
-      </div>
-    </div>
-  );
+  if (step === 'equipo') return <Prepare name={shown} onDone={onDone} />;
   return (
     <div className="brand-sky flex h-full overflow-auto px-6 pt-24 pb-6">
       <form onSubmit={create} className="bg-card/95 text-card-foreground m-auto grid w-full max-w-[460px] gap-5 rounded-3xl border border-white/40 p-8 shadow-2xl backdrop-blur">
@@ -63,6 +54,31 @@ export function Setup({ onDone }) {
         </div>
         <Button type="submit" size="lg" disabled={!base || busy}>{busy ? <Spinner className="border-white/40 border-t-white" /> : null}{t('setup.create')}<ArrowRight /></Button>
       </form>
+    </div>
+  );
+}
+
+// Windows, after the folder: install what is missing. While it installs, the title is a light phrase that changes every
+// few seconds, the bar goes under it and the explanation under the bar.
+export function Prepare({ name, onDone, initial = null }) {
+  const t = useT();
+  const [progress, setProgress] = useState(initial);
+  const running = Boolean(progress?.running);
+  const { n, phrase } = useFunPhrase(running);
+  const finished = progress?.finished && !progress.interrupted;
+  const title = running ? `${phrase}…` : finished ? t('install.ready') : t('setup.prepareTitle');
+  return (
+    <div className="brand-sky flex h-full overflow-auto px-6 pt-24 pb-6">
+      <div className="bg-card/95 text-card-foreground m-auto grid w-full max-w-[520px] gap-5 rounded-3xl border border-white/40 p-8 shadow-2xl backdrop-blur">
+        <div className="-mt-20 flex justify-center"><Robot size={120} mood={running ? 'thinking' : finished ? 'happy' : 'hello'} title={name} live /></div>
+        <div className="grid gap-3 text-center">
+          <h1 key={running ? n : title} className="animate-in fade-in slide-in-from-bottom-1 text-2xl duration-500" aria-live="polite" data-testid="prepare-title">{title}</h1>
+          {progress?.steps.length ? <InstallProgress progress={progress} fun={false} /> : null}
+          <p className="text-muted-foreground text-sm">{t('setup.prepareDesc')}</p>
+        </div>
+        <Installer bar={false} onProgress={setProgress} />
+        <Button size="lg" onClick={onDone}>{t('setup.continue')}<ArrowRight /></Button>
+      </div>
     </div>
   );
 }

@@ -60,11 +60,11 @@ try {
   await page.waitForSelector('text=Soy Orb', { timeout: 30000 });
   // ORB_LANG=en: the same tour in English (the interface and the engine's notices follow config.language).
   if (process.env.ORB_LANG) { await call('config.save', { patch: { language: process.env.ORB_LANG } }); await page.reload(); await page.waitForSelector('[data-testid=nav-chat]'); }
-  if (await page.isVisible('text=Preparo tu equipo')) { await shot('01-preparo-equipo'); await page.click('text=Continuar'); }
+  if (await page.isVisible('text=Preparando tu PC')) { await shot('01-preparo-equipo'); await page.click('text=Continuar'); }
   const dark = () => page.evaluate(() => document.documentElement.classList.contains('dark'));
   const views = [['nav-chat', 'chat'], ['nav-tasks', 'tareas'], ['nav-projects', 'proyectos'], ['nav-agents', 'agentes'], ['nav-logs', 'bitacoras'], ['nav-activity', 'actividad'], ['nav-settings', 'ajustes']];
   for (const theme of ['dia', 'noche']) {
-    if ((theme === 'noche') !== (await dark())) await page.getByRole('button', { name: /día y noche|day and night/i }).click();
+    if ((theme === 'noche') !== (await dark())) await page.getByRole('button', { name: /claro y oscuro|day and night/i }).click();
     for (const [nav, name] of views) {
       await page.click(`[data-testid=${nav}]`);
       await shot(`${theme}-${name}`);

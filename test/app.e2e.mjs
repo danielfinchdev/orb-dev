@@ -47,9 +47,9 @@ try {
   await win.waitForTimeout(500);
   await shot('01-bienvenida');
   await win.click('text=Crear y empezar');
-  // On Windows the first run also offers to install the agents ("Preparo tu equipo") before the chat.
-  await win.getByText('Hola, Ana. Soy Orb.').or(win.getByText('Preparo tu equipo')).first().waitFor();
-  if (await win.isVisible('text=Preparo tu equipo')) { await shot('01b-preparo-equipo'); await win.click('text=Continuar'); }
+  // On Windows the first run also offers to install the agents ("Preparando tu PC") before the chat.
+  await win.getByText('Hola, Ana. Soy Orb.').or(win.getByText('Preparando tu PC')).first().waitFor();
+  if (await win.isVisible('text=Preparando tu PC')) { await shot('01b-preparo-equipo'); await win.click('text=Continuar'); }
   await win.waitForSelector('text=Hola, Ana. Soy Orb.');
   const home = path.join(base, 'Orb');
   for (const f of ['orb.json', '.orb/datos/orb.db', 'bitacora/GENERAL.md', 'mcp-servers', 'windows', 'ios', 'android', 'web']) assert.ok(fs.existsSync(path.join(home, f)), `falta ${f}`);
@@ -162,7 +162,7 @@ try {
 
   // ---- other views
   step = 'otras vistas';
-  for (const [nav, name, wait] of [['nav-projects', '06-proyectos', 'Git y GitHub'], ['nav-agents', '07-agentes', 'Uso de cada cuenta'], ['nav-logs', '08-bitacoras', 'Bitácora general'], ['nav-activity', '09-actividad', 'task.created'], ['nav-settings', '10-ajustes', 'Cerebro del asistente']]) {
+  for (const [nav, name, wait] of [['nav-projects', '06-proyectos', 'Git y GitHub'], ['nav-agents', '07-agentes', 'Uso de cada cuenta'], ['nav-logs', '08-bitacoras', 'Bitácora general'], ['nav-activity', '09-actividad', 'task.created'], ['nav-settings', '10-ajustes', 'Modelo del asistente']]) {
     await win.click(`[data-testid=${nav}]`);
     await win.waitForSelector(`text=${wait}`);
     await win.waitForTimeout(400);
@@ -181,7 +181,7 @@ try {
   await until(async () => Math.abs((await factor()) - 0.9 * 1.15) < 0.01, 'Ctrl - reduce');
   await ctrl('0');
   await until(async () => Math.abs((await factor()) - 1.15) < 0.01, 'Ctrl 0 vuelve a normal');
-  await win.getByText('Tamaño de la interfaz').waitFor();
+  await win.getByText('Tamaño de la interfaz', { exact: true }).waitFor();
   await win.getByRole('combobox').filter({ hasText: 'Normal' }).click();
   await win.getByRole('option', { name: 'Grande' }).click();
   await until(async () => Math.abs((await factor()) - 1.15 * 1.15) < 0.01, 'tamaño grande');
@@ -191,16 +191,16 @@ try {
   await ctrl('0');
   // A switch of Ajustes applies at once, also clicking its text (before, it waited for «Guardar»).
   const autoRun = (await call('app.state')).config.autoRun;
-  await win.getByText('Lanzar las tareas solas').click();
+  await win.getByText('Iniciar las tareas automáticamente').click();
   await until(async () => (await call('app.state')).config.autoRun === !autoRun, 'interruptor aplicado al momento');
-  await win.getByText('Lanzar las tareas solas').click();
+  await win.getByText('Iniciar las tareas automáticamente').click();
   await until(async () => (await call('app.state')).config.autoRun === autoRun, 'y vuelve');
 
   // ---- a new version (ORB_FAKE_UPDATE: no network): the card in the corner and the Updates card in Ajustes
   step = 'actualización';
   await win.evaluate(() => window.orb.update.check()); // the app also checks by itself 15 s after opening
-  await win.waitForSelector('[data-testid=update-card] >> text=Hay una nueva versión de Orb disponible (9.9.9).');
-  await win.waitForSelector('[data-testid=updates-card] >> text=Hay una versión nueva: 9.9.9');
+  await win.waitForSelector('[data-testid=update-card] >> text=Hay una versión nueva de Orb: 9.9.9.');
+  await win.waitForSelector('[data-testid=updates-card] >> text=Nueva versión disponible: 9.9.9');
   await win.waitForTimeout(500); // the card fades in
   await shot('10c-actualizacion');
   await win.click('[data-testid=nav-chat]'); // in the chat it must not cover the message box
@@ -262,7 +262,7 @@ try {
   // ---- night mode from the sun / moon button
   step = 'modo noche';
   const wasDark = await win.evaluate(() => document.documentElement.classList.contains('dark'));
-  await win.getByRole('button', { name: 'Cambiar entre día y noche' }).click();
+  await win.getByRole('button', { name: 'Cambiar entre tema claro y oscuro' }).click();
   await until(async () => (await win.evaluate(() => document.documentElement.classList.contains('dark'))) !== wasDark, 'cambio día/noche');
   await win.click('[data-testid=nav-tasks]');
   await win.waitForTimeout(500);

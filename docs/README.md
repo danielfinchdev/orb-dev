@@ -1,5 +1,7 @@
 # Documentación de Orb.dev
 
+Textos de la app (tono, nombres y palabras): [`TEXTOS.md`](TEXTOS.md).
+
 Toda la documentación del proyecto está en esta carpeta. Dos archivos viven fuera porque GitHub los necesita en su sitio:
 el [`README.md`](../README.md) de la raíz (la portada del repositorio) y la plantilla de issue
 [`.github/ISSUE_TEMPLATE/funcionalidad.md`](../.github/ISSUE_TEMPLATE/funcionalidad.md), que está copiada en

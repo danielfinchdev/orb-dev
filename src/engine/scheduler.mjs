@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, enabledAgents, tr } from '../core/context.mjs';
 import { localeOf } from '../core/i18n.mjs';
+import { PRODUCT } from '../core/product.mjs';
 import { assistantName, userName, ofUser } from '../core/board.mjs';
 import { git, prepareWorkdir, takeCheckpoint, changedBetween, undoCheckpoint, snapshotCommit, ORB_GIT, REF_PREFIX } from '../core/workspace.mjs';
 import { rankAccounts, isLimitText, isBudgetText, startCooldown, pauseAccount, taskBudgetUsd } from '../core/budget.mjs';
@@ -35,9 +36,9 @@ export class Scheduler {
         board.patch(t.id, { status: 'blocked', pid: null }, 'orb', 'task.interrupted');
         board.settingJson(`followup:${t.id}`, { text: `${assistantName()} se cerró mientras trabajabas en esta tarea. Continúa donde lo dejaste (revisa el estado de la carpeta antes).`, images: [], resume: true });
         try { board.requeue(t.id, 'orb', 'task.resumed'); } catch (error) { this.log(`continuar #${t.id}: ${error.message}`); }
-        board.addChat('system', tr('msg.scheduler.resumedAfterClose', { id: t.id, title: oneLine(t.title), name: assistantName() }));
+        board.addChat('system', tr('msg.scheduler.resumedAfterClose', { id: t.id, title: oneLine(t.title), name: PRODUCT.name }));
       } else {
-        board.patch(t.id, { status: 'failed', pid: null, result: tr('msg.scheduler.closedWhileWorking', { name: assistantName(), result: t.result ?? '' }).slice(0, 4000) }, 'orb', 'task.interrupted');
+        board.patch(t.id, { status: 'failed', pid: null, result: tr('msg.scheduler.closedWhileWorking', { name: PRODUCT.name, result: t.result ?? '' }).slice(0, 4000) }, 'orb', 'task.interrupted');
       }
     }
   }
