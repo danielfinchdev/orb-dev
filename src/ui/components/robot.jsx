@@ -1,7 +1,7 @@
 // The assistant's face: always the same robot, the one of the artwork (docs/diseno/art work), brought to life by orb.jsx.
 // Small sizes show the head; bigger ones the whole robot, in the pose that fits the mood: standing, thinking with a hand
 // on its chin, pointing when happy, waving to say hello. Moods: idle, thinking (code on the visor), talking, happy (^ ^),
-// worried (amber eyes), sleeping.
+// worried (sad brows), sleeping (eyes shut, breathing).
 import { Orb } from './orb.jsx';
 
 const POSE = { hello: 'wave' }; // the rest follows the mood (orb.jsx keeps pose and face coherent)

@@ -34,7 +34,7 @@ export function UpdateCard() {
   // «X» hides it for this version and this step; a later step (downloaded) shows it again.
   const hide = () => { const key = `${st.state}:${st.version}`; setHidden(key); try { localStorage.setItem(HIDDEN_KEY, key); } catch { /* this session only */ } };
   return (
-    <div data-testid="update-card" role="status" className="animate-in fade-in-0 slide-in-from-top-2 fixed top-20 right-4 z-50 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl bg-linear-to-br from-[oklch(0.58_0.2_290)] to-[oklch(0.68_0.19_10)] p-5 text-center text-white shadow-2xl">
+    <div data-testid="update-card" role="status" className="animate-in fade-in-0 slide-in-from-top-2 fixed top-20 right-4 z-50 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl bg-linear-to-br from-[#8f9ef0] to-[#3d63e0] p-5 text-center text-white shadow-2xl">
       <button onClick={hide} className="absolute top-3 right-3 grid size-7 cursor-pointer place-items-center rounded-full hover:bg-white/15" aria-label={t('update.close')}><X className="size-4" /></button>
       <div className="text-[15px] font-semibold">{t('update.title')}</div>
       <p className="mt-2 text-[13px] leading-snug text-white/90">
