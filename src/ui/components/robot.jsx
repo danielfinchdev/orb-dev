@@ -4,7 +4,7 @@
 // worried (amber eyes), sleeping.
 import { Orb } from './orb.jsx';
 
-const POSE = { idle: 'stand', thinking: 'think', talking: 'stand', happy: 'point', worried: 'stand', sleeping: 'stand', hello: 'wave' };
+const POSE = { hello: 'wave' }; // the rest follows the mood (orb.jsx keeps pose and face coherent)
 
 // head: only the helmet, by default under 56 px. size: the width it takes (the whole robot is a bit narrower than tall).
 // live: this one does little things on its own now and then (keep it to the one robot in view).

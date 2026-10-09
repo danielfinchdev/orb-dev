@@ -131,7 +131,7 @@ npm run test:app     # la app entera con Electron (en Linux: xvfb-run -a npm run
 npm run test:movil   # la web app del móvil a tamaño de teléfono
 ORB_E2E_EXE=dist/win-unpacked/Orb.dev.exe node test/smoke.e2e.mjs   # prueba la app ya empaquetada
 npm run dist         # Orb.dev-2.3.2-portable.exe e instalador (en Windows)
-npm run icon         # vuelve a dibujar el icono desde el robot
+npm run icon         # vuelve a sacar el icono del art work (docs/diseno/art work); luego npm run icon:ico
 ```
 
 | Carpeta | Qué hay |
