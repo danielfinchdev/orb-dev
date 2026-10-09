@@ -52,7 +52,7 @@ try {
   if (await win.isVisible('text=Preparo tu equipo')) { await shot('01b-preparo-equipo'); await win.click('text=Continuar'); }
   await win.waitForSelector('text=Hola, Ana. Soy Orb.');
   const home = path.join(base, 'Orb');
-  for (const f of ['orb.json', '.orb/datos/orb.db', 'bitacoras/GENERAL.md']) assert.ok(fs.existsSync(path.join(home, f)), `falta ${f}`);
+  for (const f of ['orb.json', '.orb/datos/orb.db', 'bitacora/GENERAL.md', 'mcp-servers', 'windows', 'ios', 'android', 'web']) assert.ok(fs.existsSync(path.join(home, f)), `falta ${f}`);
   // The approval secret is kept encrypted by the system when it can be (then the plain file is gone).
   const encrypted = await app.evaluate(({ safeStorage }) => safeStorage.isEncryptionAvailable());
   assert.ok(fs.existsSync(path.join(home, '.orb/datos', encrypted ? 'clave.enc' : 'clave.bin')));
@@ -66,16 +66,16 @@ try {
   await call('config.save', { patch: { agents: { codex: { models: [] }, cursor: { enabled: false }, gemini: { enabled: false }, opencode: { enabled: false }, qwen: { enabled: false }, copilot: { enabled: false } } } });
   assert.equal((await call('agents.status', { refresh: true })).find((a) => a.id === 'claude').installed, true);
 
-  // ---- a project from the chat's project control: it is a folder right inside the assistant's folder
+  // ---- a project from the chat's project control: a folder in the web category (the default) of the assistant's folder
   step = 'proyecto';
   await win.click('[data-testid=project-picker]');
   await win.getByRole('menuitem', { name: 'Nuevo proyecto' }).click();
   await win.getByRole('dialog').locator('input').fill('webviaproject');
   await dialogButton('Crear proyecto').click();
   await until(async () => (await call('app.state')).activeProject?.name === 'webviaproject', 'proyecto activo');
-  assert.ok(fs.existsSync(path.join(home, 'webviaproject', '.git')), 'D:\\Orb\\webviaproject');
+  assert.ok(fs.existsSync(path.join(home, 'web', 'webviaproject', '.git')), 'D:\\Orb\\webviaproject');
   // A folder created by hand in the Explorer shows up as a project too.
-  fs.mkdirSync(path.join(home, 'hecha-a-mano'));
+  fs.mkdirSync(path.join(home, 'windows', 'hecha-a-mano'));
   await until(async () => (await call('projects.list')).some((p) => p.name === 'hecha-a-mano'), 'carpeta creada a mano');
 
   // ---- the assistant creates a task through MCP (identity "orb"), the scheduler runs it
@@ -86,8 +86,8 @@ try {
   assert.equal(task.created_by, 'orb');
   const finished = await until(async () => { const t = await call('tasks.get', { id: task.id }); return ['done', 'failed', 'blocked'].includes(t.status) && t; }, 'tarea terminada', 30000);
   assert.equal(finished.status, 'done', finished.result);
-  assert.ok(fs.existsSync(path.join(home, 'webviaproject', 'hecho-por-claude.txt')));
-  assert.match(fs.readFileSync(path.join(home, 'bitacoras', 'proyectos', 'webviaproject.md'), 'utf8'), /Tarea #\d+: Tarea del asistente/);
+  assert.ok(fs.existsSync(path.join(home, 'web', 'webviaproject', 'hecho-por-claude.txt')));
+  assert.match(fs.readFileSync(path.join(home, 'bitacora', 'proyectos', 'webviaproject.md'), 'utf8'), /Tarea #\d+: Tarea del asistente/);
 
   // ---- the way back: review, report, OK
   step = 'informe y OK';
@@ -115,7 +115,7 @@ try {
   await shot('04-tareas');
   await win.getByRole('button', { name: 'Deshacer esta tarea' }).click();
   await dialogButton('Deshacer').click();
-  await until(() => !fs.existsSync(path.join(home, 'webviaproject', 'hecho-por-claude.txt')), 'deshacer');
+  await until(() => !fs.existsSync(path.join(home, 'web', 'webviaproject', 'hecho-por-claude.txt')), 'deshacer');
 
   // ---- direct conversation (T3 style) with Codex
   step = 'conversación directa';
@@ -141,7 +141,7 @@ try {
   const browsing = await call('sessions.create', { agent: 'claude', project: 'webviaproject', permission: 'editar', title: 'Navegador' });
   await call('sessions.send', { id: browsing.id, text: `NAVEGA http://127.0.0.1:${site.address().port}/` });
   const pip = await until(() => app.windows().find((w) => w.url().endsWith('pip.html')), 'ventanita del navegador');
-  const navFile = path.join(home, 'webviaproject', 'navegador.txt');
+  const navFile = path.join(home, 'web', 'webviaproject', 'navegador.txt');
   await until(() => fs.existsSync(navFile), 'el agente usó el navegador', 30000);
   const nav = fs.readFileSync(navFile, 'utf8');
   assert.match(nav, /button "Enviar"/, nav);
@@ -227,7 +227,7 @@ try {
   await until(async () => (await call('app.state')).config.expert.panels.activity === false, 'panel quitado');
   await win.keyboard.press('Escape');
   await until(async () => (await win.locator('[data-testid=panel-activity]').count()) === 0, 'panel oculto');
-  assert.equal((await call('expert.read', { project: 'webviaproject', path: '../orb.json' }).catch((e) => e.message)).includes('fuera del proyecto'), true);
+  assert.equal((await call('expert.read', { project: 'webviaproject', path: '../../orb.json' }).catch((e) => e.message)).includes('fuera del proyecto'), true);
 
   // ---- free mode and model choice from the chat
   step = 'modo libre';
@@ -240,7 +240,7 @@ try {
   await until(async () => (await call('app.state')).config.orchestrator.orchestrate === false, 'modo libre');
   await win.fill('[data-testid=chat-input]', 'ESCRIBE algo en modo libre');
   await win.keyboard.press('Enter');
-  await until(() => fs.existsSync(path.join(home, 'webviaproject', 'hecho-por-claude.txt')), 'en modo libre trabaja en la carpeta del proyecto');
+  await until(() => fs.existsSync(path.join(home, 'web', 'webviaproject', 'hecho-por-claude.txt')), 'en modo libre trabaja en la carpeta del proyecto');
   await win.waitForTimeout(600);
   await shot('11-chat-modo-libre');
 

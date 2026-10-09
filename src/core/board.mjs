@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { openDb, taskOptions, checkPolicy } from './db.mjs';
 import { ctx, tr } from './context.mjs';
-import { AGENT_IDS, folderName, projectLogHeader, isReservedName } from './home.mjs';
+import { AGENT_IDS, folderName, projectLogHeader, isConfigName, categoryOf, CATEGORIES } from './home.mjs';
 import { oneLine, MAX_DESCRIPTION } from './safety.mjs';
 import { contentHash, sign, verify, detectSensitivity, defaultApprovalKey } from './approval.mjs';
 import { PRODUCT } from './product.mjs';
@@ -43,9 +43,10 @@ export function checkModel(agent, model) {
   return model;
 }
 
-// Projects live in the assistant's folder (each subfolder is one). Agents (MCP) may only register folders there or in the
+// Projects live in the categories of the assistant's folder (each subfolder of windows, ios, android or web is one). Agents (MCP) may only register folders there or in the
 // extra roots of the settings; the user can also link any outside folder from the app (fromUser). Never a drive root, the
-// assistant's folder itself, its internal folders (.orb, bitacoras) or a folder that contains the assistant's.
+// assistant's folder itself, its own folders (.orb, bitacora, mcp-servers), a category folder itself (inside the assistant's
+// folder a project is always <category>\<project>) or a folder that contains the assistant's.
 export function checkProjectPath(target, { fromUser = false } = {}) {
   let r; try { r = fs.realpathSync(target); } catch { throw new Error(tr('msg.board.pathMissing', { target })); }
   if (!fs.statSync(r).isDirectory()) throw new Error(tr('msg.board.pathNotFolder', { target }));
@@ -55,7 +56,8 @@ export function checkProjectPath(target, { fromUser = false } = {}) {
   if (inside(r, home)) throw new Error(tr('msg.board.containsHome', { name: assistantName() }));
   if (inside(home, r)) {
     const first = path.relative(home, r).split(path.sep)[0];
-    if (isReservedName(first)) throw new Error(tr('msg.board.internalFolder', { name: assistantName(), first }));
+    if (isConfigName(first)) throw new Error(tr('msg.board.internalFolder', { name: assistantName(), first }));
+    if (!categoryOf(home, r)) throw new Error(tr('msg.board.notInCategory', { name: assistantName(), list: CATEGORIES.join(', '), target }));
   } else if (!fromUser) {
     const roots = [home, ...(ctx.config.projectRoots ?? []).map(real)];
     if (!roots.some((root) => inside(root, r))) throw new Error(`la ruta está fuera de la carpeta de ${assistantName()} (${home}): ${target}. ${userName()} puede vincularla desde la app.`);
@@ -127,7 +129,7 @@ export class Board {
     this.changed('projects');
   }
 
-  // Each project has its log in <home>/bitacoras/proyectos/<name>.md: outside the repo, so it never ends up in git.
+  // Each project has its log in <home>/bitacora/proyectos/<name>.md: outside the repo, so it never ends up in git.
   projectLogFile(name) { return path.join(ctx.paths.projectLogs, `${folderName(name, 'proyecto')}.md`); }
   ensureProjectLog(name) {
     const file = this.projectLogFile(name);
@@ -473,6 +475,7 @@ export class Board {
       paused: this.setting('paused') === '1',
       activeProject: project ? `${project.name} — ${project.path}` : `ninguno (pregunta a ${userName()} en qué proyecto se trabaja)`,
       projectsFolder: ctx.paths.projects,
+      categories: CATEGORIES.map((c) => `${c} — ${ctx.paths.categories[c]}`),
       projects: this.projects().map((p) => `${p.name} — ${p.path}`),
       counts,
       active: active.map((t) => ({ id: t.id, project: t.project, title: t.title, agent: t.assigned_to ?? t.agent, launch: t.launch, status: t.status, depends_on: t.depends_on })),

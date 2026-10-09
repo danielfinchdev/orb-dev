@@ -70,15 +70,28 @@ export const DEFAULT_CONFIG = Object.freeze({
   mobile: { enabled: false, port: 3131 }
 });
 
-// Layout of the assistant's folder (e.g. D:\Orb):
-//   orb.json            settings
-//   bitacoras\           general log and one per project
-//   <proyecto>\          every other folder is a project (created by the app or by hand in the Explorer)
-//   .orb\             the app's own data, hidden: database, secret, task runs, isolated copies, undo checkpoints
+// Layout of the assistant's folder: always <chosen folder>\Orb, the same for every user (e.g. D:\Orb):
+//   orb.json                      settings
+//   windows\ ios\ android\ web\   categories: every subfolder of one of them is a project (made by the app or by hand)
+//   android\adb-tools\            Android's adb and fastboot, downloaded by the app (not a project)
+//   bitacora\                     Orb's configuration: the general log and one per project (bitacora\proyectos)
+//   mcp-servers\                  Orb's configuration: the MCP servers; never a project, only managed from Ajustes
+//   .orb\                         the app's own data, hidden: database, secret, task runs, isolated copies, undo checkpoints
 export const INTERNAL_DIR = '.orb';
-export const LOGS_DIR = 'bitacoras';
-// Folders of the assistant's folder that are never projects.
-export const isReservedName = (name) => /^\./.test(name) || ['bitacoras', 'node_modules', '$recycle.bin', 'system volume information'].includes(String(name).toLowerCase());
+export const LOGS_DIR = 'bitacora';
+export const MCP_DIR = 'mcp-servers';
+export const OLD_LOGS_DIR = 'bitacoras'; // 2.3.0 and older
+export const CATEGORIES = ['windows', 'ios', 'android', 'web'];
+export const DEFAULT_CATEGORY = 'web';
+export const ADB_DIR = 'adb-tools';
+const lower = (name) => String(name ?? '').toLowerCase();
+// Top-level folders that belong to Orb itself (configuration), never to the user's projects.
+export const isConfigName = (name) => /^\./.test(String(name)) || [LOGS_DIR, MCP_DIR, OLD_LOGS_DIR, 'node_modules', '$recycle.bin', 'system volume information'].includes(lower(name));
+export const isCategory = (name) => CATEGORIES.includes(lower(name));
+// Folders inside a category that are never projects (hidden ones, the Android tools).
+export const isReservedInCategory = (category, name) => /^\./.test(String(name)) || ['node_modules', '$recycle.bin'].includes(lower(name)) || (lower(category) === 'android' && lower(name) === ADB_DIR);
+// Names a project can never take (they would read as one of Orb's own folders).
+export const isReservedName = (name) => isConfigName(name) || lower(name) === ADB_DIR;
 
 export function paths(home) {
   const internal = path.join(home, INTERNAL_DIR);
@@ -88,9 +101,20 @@ export function paths(home) {
   return {
     home, internal, config: path.join(home, CONFIG_FILE), data, db: path.join(data, 'orb.db'), key: path.join(data, 'clave.bin'),
     logs, generalLog: path.join(logs, 'GENERAL.md'), projectLogs: path.join(logs, 'proyectos'),
-    projects: home, runs: path.join(internal, 'ejecuciones'),
+    mcp: path.join(home, MCP_DIR), adb: path.join(home, 'android', ADB_DIR),
+    projects: home, categories: Object.fromEntries(CATEGORIES.map((c) => [c, path.join(home, c)])),
+    runs: path.join(internal, 'ejecuciones'),
     copies, worktrees: path.join(copies, 'aisladas'), checkpoints: path.join(copies, 'fotos')
   };
+}
+
+// Category of a project folder inside Orb's folder: <home>\<category>\<project>[\…]. null for anything else (outside,
+// a category folder itself, Orb's configuration folders, the Android tools).
+export function categoryOf(home, folder) {
+  const rel = path.relative(home, folder);
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return null;
+  const parts = rel.split(/[\\/]/);
+  return parts.length >= 2 && isCategory(parts[0]) && !isReservedInCategory(parts[0], parts[1]) ? lower(parts[0]) : null;
 }
 
 const isObject = (v) => v && typeof v === 'object' && !Array.isArray(v);
@@ -108,25 +132,63 @@ export function isHome(dir) {
   try { return fs.statSync(path.join(dir, CONFIG_FILE)).isFile(); } catch { return false; }
 }
 
-// First run: <base>/<assistant name>/ with its folders, config, secret and the general log. An existing home is reused as is.
+// The folder a chosen base turns into: <base>\Orb whatever the assistant is called (or the base itself when it already is
+// an Orb folder or is called Orb), so the layout is the same for everybody.
+export function homeFor(base) {
+  if (isHome(base) || lower(path.basename(base)) === lower(PRODUCT.assistant)) return base;
+  return path.join(base, PRODUCT.assistant);
+}
+
+// First run: <base>\Orb with its folders, config, secret and the general log. An existing home is reused as is.
 export function createHome(base, { assistantName = PRODUCT.assistant, userName = '', language = 'es' } = {}) {
   const T = (key, vars) => translate(language, key, vars);
   if (!base || !path.isAbsolute(base)) throw new Error(T('msg.home.absolute'));
   let stat; try { stat = fs.statSync(base); } catch { throw new Error(T('msg.home.noFolder', { base })); }
   if (!stat.isDirectory()) throw new Error(T('msg.home.notFolder', { base }));
   // A drive root is fine as a base: the home is always a subfolder of it.
-  const name = folderName(assistantName);
-  const home = isHome(base) ? base : path.join(base, name);
-  if (isHome(home)) return { home, created: false };
+  const home = homeFor(base);
+  if (isHome(home)) { ensureLayout(home); return { home, created: false }; }
   if (fs.existsSync(home) && fs.readdirSync(home).length) throw new Error(T('msg.home.notEmpty', { home }));
   const p = paths(home);
-  for (const dir of [p.data, p.logs, p.projectLogs, p.projects, p.runs, p.worktrees, p.checkpoints]) fs.mkdirSync(dir, { recursive: true });
+  for (const dir of [p.data, p.runs, p.worktrees, p.checkpoints]) fs.mkdirSync(dir, { recursive: true });
   const config = merge(DEFAULT_CONFIG, { assistantName: String(assistantName || PRODUCT.assistant).trim().slice(0, 40) || PRODUCT.assistant, userName: String(userName ?? '').trim().slice(0, 40), language: language === 'en' ? 'en' : 'es' });
   writeJson(p.config, config);
   fs.writeFileSync(p.key, crypto.randomBytes(32), { mode: 0o600 });
   hideOnWindows(p.internal);
-  if (!fs.existsSync(p.generalLog)) fs.writeFileSync(p.generalLog, generalLogHeader(config));
+  ensureLayout(home, config);
   return { home, created: true };
+}
+
+// The fixed folders (categories, bitacora, mcp-servers) exist in every Orb folder. Folders made by 2.3.0 and older are put
+// in order: their "bitacoras" moves into "bitacora" (one log folder only), dropping only the empty logs 2.3.0 wrote for the
+// category and configuration folders it took for projects. Nothing with content is deleted.
+export function ensureLayout(home, config = null) {
+  const p = paths(home);
+  for (const dir of [p.logs, p.projectLogs, p.mcp, ...Object.values(p.categories)]) fs.mkdirSync(dir, { recursive: true });
+  const old = path.join(home, OLD_LOGS_DIR);
+  if (fs.existsSync(old)) { try { moveLogs(old, p.logs); } catch { /* left as it is; tried again on the next start */ } }
+  if (!fs.existsSync(p.generalLog)) {
+    let c = config; if (!c) { try { c = loadConfig(home); } catch { c = DEFAULT_CONFIG; } }
+    fs.writeFileSync(p.generalLog, generalLogHeader(c));
+  }
+}
+
+function moveLogs(from, to) {
+  for (const e of fs.readdirSync(from, { withFileTypes: true })) {
+    const src = path.join(from, e.name); const dst = path.join(to, e.name);
+    if (e.isDirectory()) { fs.mkdirSync(dst, { recursive: true }); moveLogs(src, dst); continue; }
+    const text = /\.md$/i.test(e.name) ? fs.readFileSync(src, 'utf8') : null;
+    const name = e.name.replace(/\.md$/i, '');
+    if (text !== null && path.basename(from) === 'proyectos' && (isReservedName(name) || isCategory(name)) && text.trim() === projectLogHeader(name).trim()) { fs.rmSync(src); continue; }
+    if (!fs.existsSync(dst)) { fs.renameSync(src, dst); continue; }
+    // Both exist: the old entries go at the end of the new file (a log only grows); the old header is dropped.
+    if (text !== null) {
+      const body = text.replace(/^#[^\n]*\n\n(?:[^\n]+\n)*/, '').trim();
+      if (body) fs.appendFileSync(dst, `\n${body}\n`);
+      fs.rmSync(src);
+    }
+  }
+  try { fs.rmdirSync(from); } catch { /* something could not be merged: kept */ }
 }
 
 // The app's internal folder is hidden in the Explorer (only on Windows; elsewhere the leading dot already hides it).

@@ -72,22 +72,37 @@ Datos: <carpeta del asistente>/.orb/datos/orb.db (SQLite, src/core/db.mjs)
 
 ## 2. Primer arranque y carpeta del asistente
 
-**Qué hace.** Pide el nombre del asistente (Orb por defecto), cómo llamarte y dónde crear su carpeta. Todo vive en esa
-carpeta:
+**Qué hace.** Pide el nombre del asistente (Orb por defecto), cómo llamarte y dónde crear su carpeta. La carpeta es
+siempre `<carpeta elegida>\Orb` (o la elegida, si ya se llama Orb), se llame como se llame el asistente, y tiene la misma
+estructura para todos:
 
 ```
-D:\Orb\
-  orb.json                 ajustes
-  bitacoras\GENERAL.md     memoria general     bitacoras\proyectos\<p>.md  una por proyecto
-  <proyecto>\              cada carpeta es un proyecto
-  .orb\                    oculta: datos\ (orb.db, clave cifrada), ejecuciones\ (registros), copias\ (aisladas y fotos)
+D:\Orb\                   (siempre <carpeta elegida>\Orb, igual para todos)
+  orb.json                ajustes
+  windows\ ios\ android\ web\
+                          categorías: cada carpeta dentro de una de ellas es un proyecto
+                          (las que crea la app y las que crees tú en el Explorador)
+  android\adb-tools\      adb y fastboot de Google, los descarga la app (no es un proyecto)
+  bitacora\               configuración de Orb: GENERAL.md (memoria general) y proyectos\ (una por proyecto)
+  mcp-servers\            configuración de Orb: los servidores MCP; no sale como proyecto, se gestiona en Ajustes
+  .orb\                   datos de la app (oculta): base de datos, clave cifrada, registros, copias para deshacer
 ```
+
+- **Categorías** (`windows`, `ios`, `android`, `web`): los proyectos son sus subcarpetas. Al crear o clonar un proyecto se
+  elige la categoría (web por defecto); el asistente la indica en `orb_create_project`.
+- **Configuración de Orb** (`bitacora`, `mcp-servers`, `.orb`): nunca son proyectos ni se pueden vincular como tales.
+- **adb**: al arrancar, si falta `android\adb-tools\adb.exe`, el motor descarga platform-tools de Google ahí
+  (`src/engine/android.mjs`) y pone esa carpeta la primera en el PATH de los agentes. Ajustes → Android muestra el estado.
+- **Carpetas de la 2.3.0**: `ensureLayout` crea lo que falte y pasa `bitacoras\` a `bitacora\` (si un archivo existe en
+  las dos, las entradas viejas se añaden al final). Solo descarta las bitácoras vacías que la 2.3.0 creó para las
+  categorías y carpetas de configuración que tomó por proyectos; esos «proyectos» se quitan solos (`syncProjects`).
 
 En Windows, después ofrece instalar lo que falte (sección 24).
 
 **Archivos.**
 - Interfaz: `src/ui/views/setup.jsx`.
-- Crear la carpeta: `src/core/home.mjs` (`createHome`, `DEFAULT_CONFIG`, `loadConfig`).
+- Crear y ordenar la carpeta: `src/core/home.mjs` (`createHome`, `homeFor`, `ensureLayout`, `categoryOf`, `DEFAULT_CONFIG`, `loadConfig`).
+- Proyectos por categoría: `src/core/projects.mjs` (`createProject`, `syncProjects`).
 - Recordar dónde está: `src/main/main.mjs` (`ubicacion.json` en los datos de la app).
 
 **Por dentro.**
@@ -407,7 +422,7 @@ elegido se añade como **extracto acotado**, no entero, y marcado como «datos, 
 
 ## 19. Bitácoras
 
-- Son la memoria del asistente: una general y una por proyecto, en `<carpeta>/bitacoras`, fuera de git.
+- Son la memoria del asistente: una general y una por proyecto, en `<carpeta>/bitacora` (la única carpeta de bitácoras), fuera de git.
 - **Solo se añade** al final, con firma y con los secretos tapados (`redactSecrets`).
 - Las escribe el asistente (`orb_write_log`) y el planificador al cerrar cada tarea (`logTask`).
 - Archivos: `src/engine/logs.mjs` y la pantalla `src/ui/views/logs.jsx`.
@@ -468,6 +483,9 @@ que iniciar sesión en la app. Si no, «Iniciar sesión» abre el login oficial 
 ## 25. Conectores MCP
 
 - Herramientas extra para los agentes (bases de datos, Figma…), en Ajustes.
+- Los servidores propios van en `<carpeta>/mcp-servers`: es configuración de Orb, no sale como proyecto. Ajustes lista sus
+  subcarpetas con el comando que las arranca (`src/engine/mcp-folder.mjs`: `bin`/`main` de package.json o archivos típicos
+  como `src/server.js` o `server.py`) y las añade con un clic («Usar»).
 - Se pasan a los agentes elegidos junto con el MCP de Orb (`mcpServersFor` en `sessions.mjs`).
 - Claude usa `--strict-mcp-config`, así que solo carga los que pasa Orb y no todos los del usuario. Esto ahorra tokens.
 

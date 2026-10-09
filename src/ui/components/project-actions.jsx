@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { form } from './dialogs.jsx';
 import { Field, Input, Textarea } from './ui/basic.jsx';
 import { Button } from './ui/button.jsx';
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel } from './ui/overlay.jsx';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, Select } from './ui/overlay.jsx';
 import { call, getState, act, bridge, useStore, refresh } from '@/lib/store.js';
 import { baseName } from '@/lib/utils.js';
 import { GithubIcon } from '@/components/agent-icon.jsx';
@@ -12,17 +12,25 @@ import { t, useT } from '@/lib/i18n.js';
 
 const home = () => getState().app?.home ?? '';
 const sep = () => (home().includes('\\') ? '\\' : '/');
+// Projects of Orb's folder live in one of its categories (windows, ios, android, web).
+export const CATEGORIES = ['windows', 'ios', 'android', 'web'];
+const CategoryField = ({ v, set }) => (
+  <Field label={t('comp.projects.category')} hint={t('comp.projects.categoryHint')}>
+    <Select className="w-full" value={v.category} onValueChange={(category) => set({ category })} options={CATEGORIES.map((value) => ({ value, label: t(`comp.projects.category.${value}`) }))} />
+  </Field>
+);
 
 export async function createProjectFlow() {
   const p = await form(t('comp.projects.newTitle'), {
     description: t('comp.projects.newDesc'),
-    initial: { name: '', notes: '' },
+    initial: { name: '', notes: '', category: 'web' },
     body: (v, set) => (<>
-      <Field label={t('comp.projects.name')} hint={v.name.trim() ? t('comp.projects.folderHint', { path: `${home()}${sep()}${v.name.trim().replace(/[<>:"/\\|?*]/g, '')}` }) : null}><Input autoFocus value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder="webviaproject" maxLength={60} /></Field>
+      <CategoryField v={v} set={set} />
+      <Field label={t('comp.projects.name')} hint={v.name.trim() ? t('comp.projects.folderHint', { path: `${home()}${sep()}${v.category}${sep()}${v.name.trim().replace(/[<>:"/\\|?*]/g, '')}` }) : null}><Input autoFocus value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder="webviaproject" maxLength={60} /></Field>
       <Field label={t('comp.projects.about')} hint={t('comp.projects.aboutHint')}><Textarea value={v.notes} onChange={(e) => set({ notes: e.target.value })} rows={3} /></Field>
     </>),
     ok: t('comp.projects.create'),
-    onOk: (v) => call('projects.create', { name: v.name.trim(), notes: v.notes.trim() })
+    onOk: (v) => call('projects.create', { name: v.name.trim(), notes: v.notes.trim(), category: v.category })
   });
   if (p) { toast.success(t('comp.projects.created', { name: p.name })); await refresh().catch(() => {}); }
   return p;
@@ -48,13 +56,14 @@ export async function linkFolderFlow() {
 export async function cloneRepoFlow() {
   const p = await form(t('comp.projects.cloneTitle'), {
     description: t('comp.projects.cloneDesc', { home: home() }),
-    initial: { repo: '', name: '' },
+    initial: { repo: '', name: '', category: 'web' },
     body: (v, set) => (<>
+      <CategoryField v={v} set={set} />
       <Field label={t('comp.projects.repo')}><Input autoFocus value={v.repo} onChange={(e) => set({ repo: e.target.value })} placeholder={t('comp.projects.repoPlaceholder')} /></Field>
       <Field label={t('comp.projects.projectNameOpt')}><Input value={v.name} onChange={(e) => set({ name: e.target.value })} maxLength={60} /></Field>
     </>),
     ok: t('comp.projects.clone'),
-    onOk: (v) => call('projects.clone', { repo: v.repo.trim(), name: v.name.trim() })
+    onOk: (v) => call('projects.clone', { repo: v.repo.trim(), name: v.name.trim(), category: v.category })
   });
   if (p) { toast.success(t('comp.projects.cloned', { path: p.path })); await refresh().catch(() => {}); }
   return p;

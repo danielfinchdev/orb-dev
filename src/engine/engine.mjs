@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { useHome, ctx, tr } from '../core/context.mjs';
-import { isHome } from '../core/home.mjs';
+import { isHome, ensureLayout } from '../core/home.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 
 const transport = (() => {
@@ -28,6 +28,7 @@ process.on('unhandledRejection', (error) => log(`unhandledRejection: ${error?.st
 
 async function start(home, version, secret, browser) {
   if (!home || !isHome(home)) throw new Error(`no es la carpeta de un asistente: ${home}`);
+  ensureLayout(home); // the fixed folders, and folders made by older versions put in order
   useHome(home);
   // The approval secret comes from the app (kept encrypted by Windows); without it, the file fallback is used.
   if (typeof secret === 'string' && /^[0-9a-f]{64}$/.test(secret)) ctx.secret = Buffer.from(secret, 'hex');
@@ -35,6 +36,9 @@ async function start(home, version, secret, browser) {
   if (typeof browser?.pipe === 'string' && /^[0-9a-f]{48}$/.test(browser.token ?? '') && /orb-navegador-[0-9a-f]{16}(\.sock)?$/.test(browser.pipe)) ctx.browser = { pipe: browser.pipe, token: browser.token };
   logFile = path.join(ctx.paths.runs, 'motor.log');
   fs.mkdirSync(ctx.paths.runs, { recursive: true });
+  // Android's adb: in the PATH of every agent, downloaded in the background the first time.
+  const { addAdbToPath, ensureAdb } = await import('./android.mjs');
+  addAdbToPath(); ensureAdb({ log });
   const { Board } = await import('../core/board.mjs');
   const { Sessions } = await import('./sessions.mjs');
   const { Orchestrator } = await import('./orchestrator.mjs');
