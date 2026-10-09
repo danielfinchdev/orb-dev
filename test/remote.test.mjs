@@ -85,6 +85,8 @@ test('sirve la web app instalable y solo responde a su propio nombre', async () 
   assert.equal((await fetch(`${base}/../../orb.json`)).status, 404);
   assert.equal((await fetch(`${base}/pip.html`)).status, 404, 'las páginas solo de escritorio no se sirven');
   assert.equal((await fetch(`${base}/icon.png`)).status, 200);
+  assert.equal((await fetch(`${base}/robot/cabeza.png`)).status, 200, 'las imágenes del robot');
+  assert.equal((await fetch(`${base}/robot/../orb.json`)).status, 404);
 });
 
 test('vincular: el QR sirve una vez, el código nunca viaja y el móvil comprueba que es su PC', async () => {
