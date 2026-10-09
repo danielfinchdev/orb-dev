@@ -1,27 +1,32 @@
-# Orb.dev — tu jefe de proyecto de agentes de IA
+# Orb·e: Tu director de bolsillo
 
-Aplicación de escritorio para Windows (instalador o portable). Hablas con tu asistente («Orb» o el nombre que le pongas), él convierte
-lo que pides en encargos optimizados (pocos tokens), los reparte entre agentes de varios proveedores —**Claude Code, Codex,
-Cursor, Gemini CLI, OpenCode, Qwen Code y GitHub Copilot**— que trabajan a la vez, revisa lo que hacen y te lo cuenta para que
-des el **OK**. También puedes hablar directamente con cada agente, en directo (como en T3 Code): respuesta en streaming,
-corregirle sobre la marcha, cola de mensajes, permisos con un clic y bifurcar.
+**Orb** (`Orb.exe`) es una aplicación de escritorio para Windows (instalador o portable). Hablas con su robot, **Orb·e** (o
+como lo llames), y él:
 
-Cómo funciona todo, funcionalidad por funcionalidad: [`docs/FUNCIONAMIENTO.md`](docs/FUNCIONAMIENTO.md). Novedades: [`docs/NOVEDADES.md`](docs/NOVEDADES.md).
+1. **Planifica tu proyecto por fases y escribe un encargo claro para cada agente, sin gastar tokens de más.** Los agentes
+   son de varios proveedores (**Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Qwen Code y GitHub Copilot**) y trabajan a la vez.
+2. **Te entrega resultados comprobados**, para que des el **OK**.
+
+También puedes hablar directamente con cada agente, en directo: respuesta en streaming, corregirle sobre la marcha, cola
+de mensajes, permisos con un clic y bifurcar.
+
+Este repositorio es **Orb.dev**, el desarrollo de la app. Cómo funciona todo, funcionalidad por funcionalidad:
+[`docs/FUNCIONAMIENTO.md`](docs/FUNCIONAMIENTO.md). Novedades: [`docs/NOVEDADES.md`](docs/NOVEDADES.md).
 
 ```
-Tú → Orb → tareas y coordinación → agentes → tareas hechas → Orb revisa → informe → tu OK
+Tú → Orb·e → tareas y coordinación → agentes → tareas hechas → Orb·e revisa → informe → tu OK
 ```
 
 ## Descargar y usar (lo más fácil)
 
 1. Entra en [**Releases → última versión**](https://github.com/danielfinchdev/orb-dev/releases/latest) y descarga
-   **`Orb.dev-2.3.3-instalador.exe`**.
+   **`Orb-2.4.0-instalador.exe`**.
 2. Doble clic: se instala para tu usuario (sin permisos de administrador) con acceso directo en el escritorio y en el menú
    Inicio. Luego lo abres escribiendo «Orb» en el buscador de Windows.
 3. Windows SmartScreen avisará porque la app aún no está firmada: «Más información» → «Ejecutar de todas formas».
 
-¿Sin instalar nada? **`Orb.dev-2.3.3-portable.exe`** se abre tal cual con doble clic. ¿Y que arranque más rápido? Descarga **`Orb.dev-2.3.3-windows.zip`**, clic derecho → «Extraer todo» y abre
-`Orb.dev.exe` de dentro de la carpeta. No hace falta instalar Node.js ni Git para la app; los agentes (Claude Code, Codex,
+¿Sin instalar nada? **`Orb-2.4.0-portable.exe`** se abre tal cual con doble clic. ¿Y que arranque más rápido? Descarga **`Orb-2.4.0-windows.zip`**, clic derecho → «Extraer todo» y abre
+`Orb.exe` de dentro de la carpeta. No hace falta instalar Node.js ni Git para la app; los agentes (Claude Code, Codex,
 Cursor) te los instala ella misma en el primer arranque. El repositorio es privado: para descargar hay que tener acceso
 a él en GitHub (o que te pasen el archivo).
 
@@ -52,7 +57,7 @@ claro, deja Cursor en pausa un día y, si la tarea era para «cualquier agente»
 
 ## Empezar
 
-1. Abre Orb desde el menú Inicio (o `Orb.dev-2.3.3-portable.exe`, o `npm start` si la usas desde el código).
+1. Abre Orb desde el menú Inicio (o `Orb-2.4.0-portable.exe`, o `npm start` si la usas desde el código).
 2. Elige su nombre, cómo te llama y dónde crear su carpeta. La carpeta se llama como el asistente: con `D:\` y el nombre
    «Nova» se crea `D:\Nova`; si dejas el nombre por defecto, `D:\Orb`.
 3. En **Agentes**, comprueba qué agentes encuentra (Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Qwen Code, Copilot) y
@@ -131,8 +136,8 @@ npm start            # compila la interfaz y abre la app
 npm test             # pruebas del motor (agentes falsos, sin cuentas)
 npm run test:app     # la app entera con Electron (en Linux: xvfb-run -a npm run test:app)
 npm run test:movil   # la web app del móvil a tamaño de teléfono
-ORB_E2E_EXE=dist/win-unpacked/Orb.dev.exe node test/smoke.e2e.mjs   # prueba la app ya empaquetada
-npm run dist         # Orb.dev-2.3.3-portable.exe e instalador (en Windows)
+ORB_E2E_EXE=dist/win-unpacked/Orb.exe node test/smoke.e2e.mjs   # prueba la app ya empaquetada
+npm run dist         # Orb-2.4.0-portable.exe e instalador (en Windows)
 npm run icon         # vuelve a sacar el icono del art work (docs/diseno/art work); luego npm run icon:ico
 ```
 

@@ -53,7 +53,7 @@ export function createUpdater({ send, log = () => {} }) {
   async function checkPortable() {
     set({ state: 'checking', error: null });
     try {
-      const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/releases/latest`, { headers: { accept: 'application/vnd.github+json', 'user-agent': 'Orb.dev' }, signal: AbortSignal.timeout(20_000) });
+      const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/releases/latest`, { headers: { accept: 'application/vnd.github+json', 'user-agent': 'Orb' }, signal: AbortSignal.timeout(20_000) });
       if (!res.ok) throw new Error(`GitHub: HTTP ${res.status}`);
       const latest = String((await res.json()).tag_name ?? '').replace(/^v/, '');
       set(newer(latest, current) ? { state: 'available', version: latest } : { state: 'none', version: null });

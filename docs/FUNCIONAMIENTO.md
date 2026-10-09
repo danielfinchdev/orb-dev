@@ -1,4 +1,4 @@
-# Cómo funciona Orb.dev 2.3, funcionalidad por funcionalidad
+# Cómo funciona Orb 2.4, funcionalidad por funcionalidad
 
 Este documento explica cada funcionalidad por separado: qué hace, cómo se usa, qué archivos la implementan y cómo funciona
 por dentro. Sirve para reprogramar **una funcionalidad concreta** sin tocar el resto. Cada sección dice qué archivos
@@ -72,9 +72,15 @@ Datos: <carpeta del asistente>/.orb/datos/orb.db (SQLite, src/core/db.mjs)
 
 ## 2. Primer arranque y carpeta del asistente
 
-**Qué hace.** Pide el nombre del asistente (Orb por defecto), cómo llamarte y dónde crear su carpeta. La carpeta es
-siempre `<carpeta elegida>\Orb` (o la elegida, si ya se llama Orb), se llame como se llame el asistente, y tiene la misma
-estructura para todos:
+**Qué hace.** Se presenta («Hola, soy Orb·e», con el título «Tu director de bolsillo») y pide el nombre del asistente
+(Orb·e por defecto), cómo llamarte y dónde crear su carpeta. La carpeta es siempre `<carpeta elegida>\Orb` (o la elegida,
+si ya se llama Orb), se llame como se llame el asistente, y tiene la misma estructura para todos:
+
+> **Nombres.** El programa es **Orb** (`Orb.exe`); su robot, **Orb·e**; **Orb.dev** es solo el desarrollo (este
+> repositorio). Están en `src/core/product.mjs`. Hasta la 2.3.3 el programa se llamaba «Orb.dev»: por eso sus datos de
+> Windows (dónde está la carpeta, tamaño de la interfaz) siguen en `%APPDATA%\Orb.dev` y una instalación actualizada sigue
+> en `%LOCALAPPDATA%\Programs\Orb.dev`. Quien tenía el nombre por defecto «Orb» pasa a Orb·e al actualizar
+> (`loadConfig`, `version` 4); un nombre elegido a mano se queda.
 
 ```
 D:\Orb\                   (siempre <carpeta elegida>\Orb, igual para todos)
@@ -598,7 +604,7 @@ que iniciar sesión en la app. Si no, «Iniciar sesión» abre el login oficial 
 | `npm run test:app` | La app entera con Electron |
 | `node test/explora.e2e.mjs` | Todas las vistas en día y noche, con capturas |
 | `node test/real.e2e.mjs claude,codex,cursor` | **Agentes reales**: conversaciones, tarea del asistente, informe, deshacer, aprobación, corrección, cola, bifurcación, Task Review y programadas |
-| `ORB_E2E_EXE=dist/win-unpacked/Orb.dev.exe node test/packaged-live.e2e.mjs` | La app empaquetada con Claude real |
+| `ORB_E2E_EXE=dist/win-unpacked/Orb.exe node test/packaged-live.e2e.mjs` | La app empaquetada con Claude real |
 
 ## 31. Cómo reprogramar una funcionalidad
 

@@ -1,7 +1,7 @@
 // A real update of the INSTALLED app, before publishing a version (Windows, by hand):
-//   1. install the current version with its installer (dist/Orb.dev-<v>-instalador.exe /S);
+//   1. install the current version with its installer (dist/Orb-<v>-instalador.exe /S);
 //   2. build a newer one into a folder: npx electron-builder --win nsis -c.extraMetadata.version=<v+1> -c.directories.output=<carpeta>
-//   3. ORB_E2E_EXE=%LOCALAPPDATA%\Programs\Orb.dev\Orb.dev.exe ORB_UPDATE_FEED=<carpeta> node test/update.e2e.mjs
+//   3. ORB_E2E_EXE=%LOCALAPPDATA%\Programs\Orb\Orb.exe ORB_UPDATE_FEED=<carpeta> node test/update.e2e.mjs
 // The feed is served on 127.0.0.1 (ORB_UPDATE_URL); the app, with its own throwaway data, finds the new version, downloads
 // it, restarts into it and the installed program ends up being the new version. Afterwards reinstall the real version.
 import { chromium } from 'playwright-core';
