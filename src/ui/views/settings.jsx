@@ -16,6 +16,7 @@ import { t, useT, useLocale } from '@/lib/i18n.js';
 import { LANGUAGES } from '../../core/i18n.mjs';
 import { REASONING, options } from '@/lib/labels.js';
 import { useUpdate, updateActions, notesUrl } from '@/components/update-card.jsx';
+import { play } from '@/lib/sounds.js';
 
 async function save(patch, ok = t('settings.saved')) {
   const config = await act(call('config.save', { patch }), ok);
@@ -30,7 +31,7 @@ function Row({ label, hint, children }) {
 
 function AssistantCard({ c }) {
   const t = useT();
-  const [v, setV] = useState({ assistantName: c.assistantName, userName: c.userName, language: c.language, theme: c.ui?.theme ?? 'sistema', companion: c.ui?.companion !== false });
+  const [v, setV] = useState({ assistantName: c.assistantName, userName: c.userName, language: c.language, theme: c.ui?.theme ?? 'sistema', companion: c.ui?.companion !== false, sounds: c.ui?.sounds !== false, volume: c.ui?.volume ?? 0.5, motion: c.ui?.motion ?? 'completa' });
   return (
     <Card>
       <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Robot size={40} /><div><CardTitle>{t('settings.assistant')}</CardTitle><CardDescription>{t('settings.assistantDesc')}</CardDescription></div></CardHeader>
@@ -42,8 +43,17 @@ function AssistantCard({ c }) {
           <Field label={t('settings.theme')}><Select className="w-full" value={v.theme} onValueChange={(theme) => setV({ ...v, theme })} options={[{ value: 'sistema', label: t('settings.theme.sistema') }, { value: 'claro', label: t('settings.theme.claro') }, { value: 'oscuro', label: t('settings.theme.oscuro') }]} /></Field>
         </div>
         <Row label={t('settings.companion')} hint={t('settings.companionHint')}><Switch checked={v.companion} onCheckedChange={(companion) => { setV({ ...v, companion }); save({ ui: { companion } }, companion ? t('settings.companionOn') : t('settings.companionOff')); }} /></Row>
+        <Row label={t('settings.sounds')} hint={t('settings.soundsHint')}><Switch checked={v.sounds} onCheckedChange={(sounds) => { setV({ ...v, sounds }); save({ ui: { sounds } }, sounds ? t('settings.soundsOn') : t('settings.soundsOff')).then(() => sounds && play('wake')); }} /></Row>
+        {v.sounds ? (
+          <div className="-mt-2 flex items-center gap-3 px-0 text-sm">
+            <span className="text-muted-foreground text-xs">{t('settings.volume')}</span>
+            <input type="range" min={0.1} max={1} step={0.1} value={v.volume} aria-label={t('settings.volume')} className="accent-primary w-40 cursor-pointer"
+              onChange={(e) => setV({ ...v, volume: Number(e.target.value) })} onPointerUp={() => save({ ui: { volume: v.volume } }, null).then(() => play('boop'))} onKeyUp={() => save({ ui: { volume: v.volume } }, null)} />
+          </div>
+        ) : null}
+        <Row label={t('settings.motion')} hint={t('settings.motionHint')}><Switch checked={v.motion !== 'minima'} onCheckedChange={(on) => { const motion = on ? 'completa' : 'minima'; setV({ ...v, motion }); save({ ui: { motion } }, on ? t('settings.motionOn') : t('settings.motionOff')); }} /></Row>
       </CardContent>
-      <CardFooter><Button size="sm" onClick={() => save({ assistantName: v.assistantName.trim(), userName: v.userName.trim(), language: v.language, ui: { theme: v.theme, companion: v.companion } })}>{t('settings.save')}</Button></CardFooter>
+      <CardFooter><Button size="sm" onClick={() => save({ assistantName: v.assistantName.trim(), userName: v.userName.trim(), language: v.language, ui: { theme: v.theme, companion: v.companion, sounds: v.sounds, volume: v.volume, motion: v.motion } })}>{t('settings.save')}</Button></CardFooter>
     </Card>
   );
 }

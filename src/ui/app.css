@@ -129,56 +129,62 @@
 .prose-chat table { border-collapse: collapse; margin: .5em 0; font-size: .95em; }
 .prose-chat th, .prose-chat td { border: 1px solid var(--border); padding: .3em .6em; text-align: left; }
 
-/* ---------- the robot ---------- */
-.bot { --bot-eye: #7ff3da; display: inline-flex; line-height: 0; flex: none; }
-.bot svg { overflow: visible; }
-.bot .b-float { animation: b-float 3.6s ease-in-out infinite; transform-origin: 60px 70px; }
-.bot .b-shadow { animation: b-shadow 3.6s ease-in-out infinite; transform-origin: 60px 135px; transform-box: view-box; }
-.bot .b-eye { animation: b-blink 5s infinite; transform-box: fill-box; transform-origin: center; }
-.bot .b-glow { animation: b-pulse 2.4s ease-in-out infinite; }
-.bot .b-eyes { transition: transform .4s; }
-.bot .b-arm-r { transform-origin: 80px 100px; transform-box: view-box; animation: b-hello 3.6s ease-in-out infinite; }
-.bot .b-arm-l { transform-origin: 42px 100px; transform-box: view-box; animation: b-sway 3.6s ease-in-out infinite; }
-.bot .b-x { display: none; }
-.bot.happy .b-smile { display: inline; }
-.bot.thinking .b-eyes { transform: translate(4px, -4px); }
-.bot.thinking .b-dots { display: inline; }
-.bot.thinking .b-dots circle { animation: b-dot 1.2s infinite; }
-.bot.thinking .b-dots circle:nth-child(2) { animation-delay: .2s; }
-.bot.thinking .b-dots circle:nth-child(3) { animation-delay: .4s; }
-.bot.thinking .b-glow { animation-duration: .7s; }
-.bot.thinking .b-arm-r { animation: none; transform: rotate(40deg); }
-.bot.talking .b-talk { display: inline; animation: b-talk .28s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: center; }
-.bot.happy .b-eyes { display: none; }
-.bot.happy .b-happy-eyes, .bot.happy .b-sparkle { display: inline; }
-.bot.happy .b-sparkle { animation: b-pulse 1s ease-in-out infinite; }
-.bot.happy .b-arm-r { animation: b-wave .45s ease-in-out 4 alternate; }
-.bot.happy .b-float { animation: b-hop .8s ease-in-out 2; }
-.bot.worried { --bot-eye: #ffc56b; }
-.bot.worried .b-frown, .bot.worried .b-sweat { display: inline; }
-.bot.worried .b-eye { transform: scaleY(.75); animation: none; }
-.bot.worried .b-arm-r { animation: none; transform: rotate(60deg); }
-.bot.worried .b-float { animation: b-wobble .45s ease-in-out 3; }
-.bot.sleeping .b-eyes { display: none; }
-.bot.sleeping .b-closed, .bot.sleeping .b-zz { display: inline; }
-.bot.sleeping .b-zz { animation: b-zz 2.4s ease-in-out infinite; }
-.bot.sleeping .b-float { animation-duration: 6s; }
-.bot.sleeping .b-arm-r { animation: none; transform: rotate(60deg); }
-.bot.sleeping .b-glow { opacity: .35; animation: none; }
-.bot.still * { animation: none !important; }
-@keyframes b-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
-@keyframes b-shadow { 0%, 100% { transform: scaleX(1); opacity: .2; } 50% { transform: scaleX(.8); opacity: .12; } }
-@keyframes b-blink { 0%, 93%, 100% { transform: scaleY(1); } 96% { transform: scaleY(.1); } }
-@keyframes b-hello { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-8deg); } }
-@keyframes b-sway { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(5deg); } }
-@keyframes b-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
-@keyframes b-dot { 0%, 100% { opacity: .15; } 50% { opacity: 1; } }
-@keyframes b-talk { from { transform: scale(.7, .35); } to { transform: scale(1, 1.15); } }
-@keyframes b-wave { from { transform: rotate(8deg); } to { transform: rotate(-26deg); } }
-@keyframes b-hop { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-12px); } }
-@keyframes b-wobble { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-5deg); } 70% { transform: rotate(5deg); } }
-@keyframes b-zz { 0% { opacity: 0; transform: translate(0, 0) scale(.8); } 40% { opacity: 1; } 100% { opacity: 0; transform: translate(10px, -14px) scale(1.1); } }
-@media (prefers-reduced-motion: reduce) { .bot * { animation: none !important; } }
+/* ---------- the robot (orb.jsx): the artwork plus living eyes ---------- */
+.orb { --k: 1; --eye: #8cf6ff; position: relative; display: inline-block; flex: none; line-height: 0; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
+.orb-body { position: absolute; bottom: 0; animation: orb-float 4.2s ease-in-out infinite; will-change: transform; }
+.orb-img { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.orb-face { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.orb-eyes { transition: transform .35s ease; }
+.orb-eye { transform-box: fill-box; transform-origin: center; transition: transform .12s ease, opacity .2s; }
+.orb-pill { fill: var(--eye); }
+.orb-arc, .orb-shut, .orb-brow { fill: none; stroke: var(--eye); stroke-linecap: round; display: none; }
+.orb-visor { position: absolute; inset: 0; mask-size: 100% 100%; -webkit-mask-size: 100% 100%; pointer-events: none; overflow: hidden; }
+.orb-code { position: absolute; top: 0; height: 200%; display: flex; flex-direction: column; justify-content: space-around; opacity: 0; mix-blend-mode: screen; transition: opacity .3s; }
+.orb-code-row { position: relative; display: block; height: 2.2%; }
+.orb-code-row i { position: absolute; top: 0; height: 100%; border-radius: 99px; opacity: .85; }
+.orb-glint { position: absolute; top: -20%; left: -60%; width: 35%; height: 140%; background: linear-gradient(90deg, transparent, rgb(255 255 255 / .35), transparent); transform: rotate(18deg); opacity: 0; }
+.orb-led { position: absolute; aspect-ratio: 1; translate: -50% -50%; border-radius: 50%; background: radial-gradient(circle, rgb(120 190 255 / .9) 0%, rgb(80 150 255 / .35) 45%, transparent 70%); mix-blend-mode: screen; animation: orb-led 3s ease-in-out infinite; pointer-events: none; }
+
+.orb[data-blink] .orb-eye { transform: scaleY(.08); }
+.orb[data-act="wink"] .orb-eye-r .orb-pill { display: none; }
+.orb[data-act="wink"] .orb-eye-r .orb-shut { display: inline; }
+.orb[data-act="look"] .orb-eyes { animation: orb-look 1.8s ease-in-out; }
+.orb[data-act="code"] .orb-code, .orb[data-mood="thinking"] .orb-code { opacity: 1; animation: orb-code 2.4s linear infinite; }
+.orb[data-act="code"] .orb-eyes, .orb[data-mood="thinking"] .orb-eyes { opacity: 0; transition: opacity .25s; }
+.orb[data-act="code"] .orb-glint { animation: orb-glint 1.2s ease-in-out; }
+.orb[data-act="tilt"] .orb-body { animation: orb-tilt 2.2s ease-in-out; transform-origin: 50% 80%; }
+.orb[data-act="tilt"] .orb-eyes { animation: orb-peek 2.2s ease-in-out; }
+.orb[data-act="hop"] .orb-body { animation: orb-hop .8s ease-in-out; }
+.orb[data-act="boop"] .orb-body { animation: orb-boop .38s ease-out; }
+.orb[data-act="laugh"] .orb-body { animation: orb-laugh .2s ease-in-out 8 alternate; }
+.orb[data-mood="thinking"] .orb-led { animation-duration: .8s; }
+.orb[data-mood="talking"] .orb-eye { animation: orb-talk .32s ease-in-out infinite alternate; }
+.orb[data-mood="happy"] .orb-pill { display: none; }
+.orb[data-mood="happy"] .orb-arc { display: inline; }
+.orb[data-mood="happy"] .orb-body { animation: orb-hop .8s ease-in-out 2; }
+.orb[data-mood="worried"] .orb-brow { display: inline; }
+.orb[data-mood="worried"] .orb-pill { transform: translateY(8%) scaleY(.82); transform-box: fill-box; transform-origin: center; }
+.orb[data-mood="worried"] .orb-body { animation: orb-wobble .45s ease-in-out 3; }
+.orb[data-mood="sleeping"] .orb-pill { display: none; }
+.orb[data-mood="sleeping"] .orb-shut { display: inline; }
+.orb[data-mood="sleeping"] .orb-eyes { opacity: .7; }
+.orb[data-mood="sleeping"] .orb-body { animation: orb-breathe 4.5s ease-in-out infinite; transform-origin: 50% 100%; }
+.orb[data-mood="sleeping"] .orb-led { animation: none; opacity: .2; }
+.orb.still .orb-body, .orb.still .orb-led, .orb.calm .orb-body { animation: none; }
+@keyframes orb-float { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-5%) rotate(-1.5deg); } }
+@keyframes orb-breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.015, .97); } }
+@keyframes orb-led { 0%, 100% { opacity: .9; } 50% { opacity: .25; } }
+@keyframes orb-look { 0%, 100% { transform: translate(0, 0); } 20%, 45% { transform: translate(calc(var(--k) * -28px), calc(var(--k) * -6px)); } 60%, 85% { transform: translate(calc(var(--k) * 30px), calc(var(--k) * -10px)); } }
+@keyframes orb-code { from { transform: translateY(0); } to { transform: translateY(-50%); } }
+@keyframes orb-glint { from { left: -60%; opacity: 1; } to { left: 120%; opacity: 1; } }
+@keyframes orb-tilt { 0%, 100% { transform: rotate(0); } 25%, 70% { transform: rotate(-11deg) translateY(-2%); } }
+@keyframes orb-peek { 0%, 100% { transform: translate(0, 0); } 25%, 70% { transform: translate(calc(var(--k) * 14px), calc(var(--k) * -18px)); } }
+@keyframes orb-hop { 0%, 100% { transform: translateY(0); } 35% { transform: translateY(-16%) rotate(-4deg); } 60% { transform: translateY(0) scale(1.06, .94); } }
+@keyframes orb-boop { 0% { transform: scale(1); } 35% { transform: scale(1.12, .88); } 70% { transform: scale(.96, 1.04); } 100% { transform: scale(1); } }
+@keyframes orb-laugh { from { transform: rotate(-7deg) translateY(-3%); } to { transform: rotate(7deg) translateY(0); } }
+@keyframes orb-talk { from { transform: scaleY(1); } to { transform: scaleY(.7); } }
+@keyframes orb-wobble { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-6deg); } 70% { transform: rotate(6deg); } }
+@media (prefers-reduced-motion: reduce) { .orb *, .orb { animation: none !important; } }
 
 /* The brand backdrop (setup screen, app icon): the soft periwinkle of the robot's world. */
 .brand-sky { background: radial-gradient(120% 90% at 30% 10%, #c3cbff 0%, #a7b1f6 45%, #8f9ef0 100%); }
