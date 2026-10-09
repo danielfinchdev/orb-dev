@@ -162,12 +162,51 @@ try {
 
   // ---- other views
   step = 'otras vistas';
-  for (const [nav, name, wait] of [['nav-projects', '06-proyectos', 'Git y GitHub'], ['nav-agents', '07-agentes', 'Uso de cada cuenta'], ['nav-logs', '08-bitacoras', 'Bitácora general'], ['nav-activity', '09-actividad', 'task.created'], ['nav-settings', '10-ajustes', 'Modelo del asistente']]) {
+  for (const [nav, name, wait] of [['nav-projects', '06-proyectos', 'Git y GitHub'], ['nav-agents', '07-agentes', 'Uso de cada cuenta'], ['nav-logs', '08-bitacoras', 'Bitácora general'], ['nav-activity', '09-actividad', 'task.created']]) {
     await win.click(`[data-testid=${nav}]`);
     await win.waitForSelector(`text=${wait}`);
     await win.waitForTimeout(400);
     await shot(name);
   }
+
+  // ---- Ajustes: a window over the app, with its sections on the left and the developer's GitHub and the version below
+  step = 'ajustes';
+  await win.click('[data-testid=nav-settings]');
+  await win.locator('[data-testid=settings-dialog]').getByText('Nombre del asistente', { exact: true }).waitFor();
+  await win.locator('[data-testid=settings-about]', { hasText: '@danielfinchdev' }).waitFor();
+  await win.locator('[data-testid=settings-about]', { hasText: 'Orb 2.4' }).waitFor();
+  await win.waitForTimeout(400);
+  await shot('10-ajustes');
+  const section = async (id) => { await win.click(`[data-testid=settings-nav-${id}]`); await win.waitForTimeout(250); };
+  await section('apariencia');
+  await win.locator('[data-testid=skin-picker]').waitFor();
+  await shot('10e-ajustes-apariencia');
+  // A visual theme applies at once to the whole app; the professional one has no robot.
+  await win.click('[data-testid=skin-retro]');
+  await until(async () => (await win.evaluate(() => document.documentElement.dataset.skin)) === 'retro', 'tema retro');
+  await until(async () => (await call('app.state')).config.ui.skin === 'retro', 'tema guardado');
+  await win.waitForTimeout(400);
+  await shot('10f-tema-retro');
+  await win.click('[data-testid=skin-profesional]');
+  await until(async () => (await win.evaluate(() => document.documentElement.dataset.skin)) === 'profesional', 'tema profesional');
+  await win.waitForTimeout(400);
+  await shot('10g-tema-profesional');
+  await win.click('[data-testid=skin-orb]');
+  await until(async () => (await win.evaluate(() => document.documentElement.dataset.skin)) === 'orb', 'vuelve al tema Orb');
+  // Windows' menu bar: hidden by default, shown from Ajustes → Apariencia.
+  const menuBar = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((b) => b.webContents.getURL().endsWith('index.html')).isMenuBarVisible());
+  assert.equal(await menuBar(), false, 'la barra de menús empieza oculta');
+  await win.click('[data-testid=menubar-switch]');
+  await until(async () => (await menuBar()) === true, 'barra de menús visible');
+  await win.click('[data-testid=menubar-switch]');
+  await until(async () => (await menuBar()) === false, 'barra de menús oculta otra vez');
+  await section('contribuye');
+  await win.locator('[data-testid=feedback-message]').waitFor();
+  await shot('10h-ajustes-contribuye');
+  await section('apps');
+  await win.locator('[data-testid=app-open-control-edge]').waitFor();
+  await shot('10i-ajustes-mas-apps');
+  await section('apariencia');
 
   // ---- interface size: Ctrl + / Ctrl - / Ctrl 0 and the presets in Ajustes (kept per PC)
   step = 'tamaño de la interfaz';
@@ -190,6 +229,7 @@ try {
   await shot('10a-ajustes-grande');
   await ctrl('0');
   // A switch of Ajustes applies at once, also clicking its text (before, it waited for «Guardar»).
+  await section('tareas');
   const autoRun = (await call('app.state')).config.autoRun;
   await win.getByText('Iniciar las tareas automáticamente').click();
   await until(async () => (await call('app.state')).config.autoRun === !autoRun, 'interruptor aplicado al momento');
@@ -200,14 +240,16 @@ try {
   step = 'actualización';
   await win.evaluate(() => window.orb.update.check()); // the app also checks by itself 15 s after opening
   await win.waitForSelector('[data-testid=update-card] >> text=Hay una versión nueva de Orb: 9.9.9.');
+  await section('actualizaciones');
   await win.waitForSelector('[data-testid=updates-card] >> text=Nueva versión disponible: 9.9.9');
   await win.waitForTimeout(500); // the card fades in
   await shot('10c-actualizacion');
+  await win.keyboard.press('Escape');
+  await until(async () => (await win.locator('[data-testid=settings-dialog]').count()) === 0, 'ajustes cerrado');
   await win.click('[data-testid=nav-chat]'); // in the chat it must not cover the message box
   await win.waitForTimeout(400);
   await shot('10d-actualizacion-chat');
   await win.click('[data-testid=chat-input]');
-  await win.click('[data-testid=nav-settings]');
   await win.locator('[data-testid=update-card]').getByRole('button', { name: 'Cerrar' }).click();
   await until(async () => (await win.locator('[data-testid=update-card]').count()) === 0, 'tarjeta cerrada');
 
@@ -223,11 +265,14 @@ try {
   await win.click('[data-testid=folder-webviaproject]');
   await until(async () => (await win.locator('[data-testid=folder-webviaproject]').getAttribute('data-state')) === 'closed', 'carpeta plegada');
   await win.click('[data-testid=folder-webviaproject]');
-  await win.click('[data-testid=nav-settings]');
 
   // ---- expert mode (PC only): turned on in Settings, files, git and panels chosen by the user
   step = 'modo experto';
+  await win.click('[data-testid=nav-settings]');
+  await section('experto');
   await win.click('[data-testid=expert-switch]');
+  await until(async () => (await call('app.state')).config.expert.enabled === true, 'modo experto activado');
+  await win.keyboard.press('Escape');
   await win.click('[data-testid=nav-expert]');
   await win.waitForSelector('[data-testid=expert-view]');
   await win.locator('[data-testid=expert-tree]').getByText('navegador.txt').click();
@@ -281,6 +326,7 @@ try {
     const [sw, iw] = await win.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);
     assert.ok(sw <= iw + 1, `${name}: se sale por los lados`);
     await shot(name);
+    if (nav === 'nav-settings') await win.keyboard.press('Escape');
   }
   await win.getByRole('button', { name: 'Menú' }).click();
   assert.equal(await win.locator('[data-testid=nav-expert]:visible').count(), 0, 'el modo experto necesita una ventana ancha');

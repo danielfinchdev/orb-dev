@@ -6,7 +6,7 @@ export function Card({ className, ...props }) {
   return <div data-slot="card" className={cn('bg-card text-card-foreground flex flex-col gap-4 rounded-xl border py-5 shadow-xs', className)} {...props} />;
 }
 export function CardHeader({ className, ...props }) { return <div className={cn('flex flex-col gap-1 px-5', className)} {...props} />; }
-export function CardTitle({ className, ...props }) { return <div className={cn('leading-none font-medium text-[15px]', className)} {...props} />; }
+export function CardTitle({ className, ...props }) { return <div data-slot="card-title" className={cn('leading-none font-medium text-[15px]', className)} {...props} />; }
 export function CardDescription({ className, ...props }) { return <div className={cn('text-muted-foreground text-[13px]', className)} {...props} />; }
 export function CardContent({ className, ...props }) { return <div className={cn('px-5', className)} {...props} />; }
 export function CardFooter({ className, ...props }) { return <div className={cn('flex items-center gap-2 px-5', className)} {...props} />; }

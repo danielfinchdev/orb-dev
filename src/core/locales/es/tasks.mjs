@@ -1,9 +1,9 @@
 // tasks.*
 export default {
-  'tasks.filter.active': 'Activas',
+  'tasks.filter.active': 'En curso',
   'tasks.filter.approve': 'Por aprobar',
   'tasks.filter.done': 'Completadas',
-  'tasks.filter.problems': 'Problemas',
+  'tasks.filter.problems': 'Incidencias',
   'tasks.filter.all': 'Todas',
   'tasks.titleProject': 'Tareas · {project}',
   'tasks.meta': 'Supervisa, aprueba y deshaz el trabajo de los agentes',

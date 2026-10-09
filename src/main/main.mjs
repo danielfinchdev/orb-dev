@@ -10,6 +10,7 @@ import { createHome, isHome, loadConfig, writeJson } from '../core/home.mjs';
 import { createAgentBrowser } from './browser.mjs';
 import { openTerminal } from './terminal.mjs';
 import { createUpdater, RELEASES_URL } from './updater.mjs';
+import { AUTHOR, MAX_IMAGES, captureWindow, readImage, sendFeedback, moreApps } from './feedback.mjs';
 import { PRODUCT } from '../core/product.mjs';
 
 const SRC = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -133,8 +134,17 @@ function callEngine(method, params, timeoutMs = 10 * 60_000) {
   });
 }
 
+// Windows' menu bar (Archivo, Edición, Ver) only when Ajustes → Interfaz turns it on; hidden, Alt still shows it.
+function applyMenuBar(c = config()) {
+  if (!win || win.isDestroyed()) return;
+  const show = c?.ui?.menuBar === true;
+  win.setAutoHideMenuBar(!show);
+  win.setMenuBarVisibility(show);
+}
+
 function onEngineEvent(event, payload) {
   if (!win || win.isDestroyed()) return;
+  if (event === 'config:changed') applyMenuBar(payload);
   win.webContents.send('engine:event', event, payload);
   // Notices while the window is in the background: finished tasks, approvals, the assistant's answers.
   if (event === 'chat:new' && !win.isFocused() && Notification.isSupported()) {
@@ -190,6 +200,15 @@ ipcMain.handle('app:openExternal', guard(async (url) => {
   await shell.openExternal(u.toString());
   return true;
 }));
+// Ajustes → Contribuye (feedback by mail with screenshots) and Más aplicaciones (src/main/feedback.mjs).
+ipcMain.handle('app:about', guard(async () => ({ ...AUTHOR, version: VERSION })));
+ipcMain.handle('app:feedbackCapture', guard(async () => (win ? captureWindow(win) : null)));
+ipcMain.handle('app:feedbackImages', guard(async () => {
+  const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], filters: [{ name: 'PNG / JPEG', extensions: ['png', 'jpg', 'jpeg'] }] });
+  return r.canceled ? [] : r.filePaths.slice(0, MAX_IMAGES).map(readImage).filter(Boolean);
+}));
+ipcMain.handle('app:feedbackSend', guard(async (data) => sendFeedback(data ?? {}, { version: VERSION, language: config()?.language ?? 'es' })));
+ipcMain.handle('app:moreApps', guard(async () => moreApps(VERSION)));
 // Updates: state, check now, download, and restart into the new version (asking first if tasks are running).
 ipcMain.handle('app:update', guard(async () => updater.get()));
 ipcMain.handle('app:updateCheck', guard(async () => updater.check()));
@@ -226,7 +245,7 @@ function setTitle() { try { win?.setTitle(home ? loadConfig(home).assistantName 
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 1360, height: 880, minWidth: 400, minHeight: 560, show: false, backgroundColor: nativeTheme.shouldUseDarkColors ? '#16151d' : '#fbfbfe', title: PRODUCT.name,
+    width: 1360, height: 880, minWidth: 400, minHeight: 560, show: false, backgroundColor: nativeTheme.shouldUseDarkColors ? '#16151d' : '#fbfbfe', title: PRODUCT.name, autoHideMenuBar: true,
     icon: path.join(SRC, '..', 'build', 'icon.png'),
     webPreferences: { preload: path.join(SRC, 'main', 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, spellcheck: true, devTools: isDev || process.env.ORB_DEVTOOLS === '1' }
   });
@@ -249,6 +268,7 @@ function createWindow() {
   // The agents' browser keeps hidden windows: when the app's window goes, the app goes with it.
   win.on('closed', () => { win = null; quitting = true; app.quit(); });
   win.loadURL('orb://app/index.html');
+  applyMenuBar();
   setTitle();
 }
 

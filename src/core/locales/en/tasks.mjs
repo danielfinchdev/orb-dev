@@ -1,9 +1,9 @@
 // tasks.*
 export default {
-  'tasks.filter.active': 'Active',
+  'tasks.filter.active': 'In progress',
   'tasks.filter.approve': 'To approve',
   'tasks.filter.done': 'Done',
-  'tasks.filter.problems': 'Problems',
+  'tasks.filter.problems': 'Issues',
   'tasks.filter.all': 'All',
   'tasks.titleProject': 'Tasks · {project}',
   'tasks.meta': 'What the agents do, with approvals, undo and your OK',

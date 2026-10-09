@@ -1,0 +1,107 @@
+/* Ajustes → Apariencia → colores del código (<html data-code-theme>): syntax colours of the chat's code blocks and of the
+   expert mode's file viewer and diff. Each theme only sets variables; the classes of highlight.js (.hljs-keyword…) and the
+   surfaces below read them. orb, github and solarized follow light / dark (.dark on <html>); one-dark, dracula and nord
+   are dark always, with their own background. Palettes are the official ones; where a colour of the original was too
+   faint to read (comments of dracula, nord, one-dark; solarized light) it is a shade stronger, same hue. */
+
+/* ---- orb (default): the app's own surfaces and its violet, blue and cyan ---- */
+html:not([data-code-theme]), html[data-code-theme="orb"] {
+  --code-bg: var(--muted); --code-fg: var(--foreground); --code-gutter: var(--muted-foreground);
+  --code-comment: oklch(0.53 0.02 268); --code-keyword: oklch(0.5 0.2 292); --code-string: oklch(0.5 0.13 155);
+  --code-number: oklch(0.53 0.16 50); --code-title: oklch(0.5 0.17 258); --code-type: oklch(0.5 0.1 205);
+  --code-attr: oklch(0.52 0.16 330); --code-tag: oklch(0.52 0.18 15); --code-variable: oklch(0.52 0.15 35);
+  --code-regexp: oklch(0.5 0.13 125); --code-meta: oklch(0.5 0.07 268); --code-add: oklch(0.55 0.15 155); --code-del: oklch(0.56 0.2 25); --code-hunk: oklch(0.5 0.14 245);
+}
+html.dark:not([data-code-theme]), html.dark[data-code-theme="orb"] {
+  --code-comment: oklch(0.66 0.02 268); --code-keyword: oklch(0.78 0.13 295); --code-string: oklch(0.8 0.13 158);
+  --code-number: oklch(0.8 0.12 65); --code-title: oklch(0.78 0.12 255); --code-type: oklch(0.85 0.1 200);
+  --code-attr: oklch(0.78 0.12 335); --code-tag: oklch(0.76 0.14 15); --code-variable: oklch(0.78 0.11 35);
+  --code-regexp: oklch(0.82 0.13 125); --code-meta: oklch(0.72 0.05 268); --code-add: oklch(0.75 0.15 155); --code-del: oklch(0.72 0.17 22); --code-hunk: oklch(0.75 0.12 245);
+}
+
+/* ---- GitHub (Primer: light default / dark default) ---- */
+html[data-code-theme="github"] {
+  --code-bg: #f6f8fa; --code-fg: #1f2328; --code-gutter: #6e7781;
+  --code-comment: #6e7781; --code-keyword: #cf222e; --code-string: #0a3069; --code-number: #0550ae; --code-title: #8250df;
+  --code-type: #953800; --code-attr: #0550ae; --code-tag: #116329; --code-variable: #953800; --code-regexp: #116329;
+  --code-meta: #0550ae; --code-add: #116329; --code-del: #82071e; --code-hunk: #0550ae;
+}
+html.dark[data-code-theme="github"] {
+  --code-bg: #161b22; --code-fg: #e6edf3; --code-gutter: #8b949e;
+  --code-comment: #8b949e; --code-keyword: #ff7b72; --code-string: #a5d6ff; --code-number: #79c0ff; --code-title: #d2a8ff;
+  --code-type: #ffa657; --code-attr: #79c0ff; --code-tag: #7ee787; --code-variable: #ffa657; --code-regexp: #7ee787;
+  --code-meta: #79c0ff; --code-add: #7ee787; --code-del: #ffa198; --code-hunk: #79c0ff;
+}
+
+/* ---- One Dark (Atom) ---- */
+html[data-code-theme="one-dark"] {
+  --code-bg: #282c34; --code-fg: #abb2bf; --code-gutter: #7f848e;
+  --code-comment: #7f848e; --code-keyword: #c678dd; --code-string: #98c379; --code-number: #d19a66; --code-title: #61afef;
+  --code-type: #e5c07b; --code-attr: #d19a66; --code-tag: #e06c75; --code-variable: #e06c75; --code-regexp: #56b6c2;
+  --code-meta: #61afef; --code-add: #98c379; --code-del: #e06c75; --code-hunk: #56b6c2;
+}
+
+/* ---- Dracula ---- */
+html[data-code-theme="dracula"] {
+  --code-bg: #282a36; --code-fg: #f8f8f2; --code-gutter: #8090c8;
+  --code-comment: #8090c8; --code-keyword: #ff79c6; --code-string: #f1fa8c; --code-number: #bd93f9; --code-title: #50fa7b;
+  --code-type: #8be9fd; --code-attr: #50fa7b; --code-tag: #ff79c6; --code-variable: #ffb86c; --code-regexp: #ff5555;
+  --code-meta: #ff79c6; --code-add: #50fa7b; --code-del: #ff5555; --code-hunk: #bd93f9;
+}
+
+/* ---- Nord ---- */
+html[data-code-theme="nord"] {
+  --code-bg: #2e3440; --code-fg: #d8dee9; --code-gutter: #8b96ad;
+  --code-comment: #8b96ad; --code-keyword: #81a1c1; --code-string: #a3be8c; --code-number: #b48ead; --code-title: #88c0d0;
+  --code-type: #8fbcbb; --code-attr: #8fbcbb; --code-tag: #81a1c1; --code-variable: #d8dee9; --code-regexp: #ebcb8b;
+  --code-meta: #81a1c1; --code-add: #a3be8c; --code-del: #bf616a; --code-hunk: #88c0d0;
+}
+
+/* ---- Solarized (light / dark) ---- */
+html[data-code-theme="solarized"] {
+  --code-bg: #fdf6e3; --code-fg: #586e75; --code-gutter: #6f7f80;
+  --code-comment: #6f7f80; --code-keyword: #6c7d00; --code-string: #1d857d; --code-number: #c02a73; --code-title: #1f74b5;
+  --code-type: #8f6c00; --code-attr: #5b60b8; --code-tag: #1f74b5; --code-variable: #b1420f; --code-regexp: #c22b28;
+  --code-meta: #b1420f; --code-add: #6c7d00; --code-del: #c22b28; --code-hunk: #1f74b5;
+}
+html.dark[data-code-theme="solarized"] {
+  --code-bg: #002b36; --code-fg: #93a1a1; --code-gutter: #6c8790;
+  --code-comment: #6c8790; --code-keyword: #859900; --code-string: #2aa198; --code-number: #d33682; --code-title: #268bd2;
+  --code-type: #b58900; --code-attr: #6c71c4; --code-tag: #268bd2; --code-variable: #cb4b16; --code-regexp: #dc322f;
+  --code-meta: #cb4b16; --code-add: #859900; --code-del: #dc322f; --code-hunk: #268bd2;
+}
+
+/* ---- surfaces ---- */
+/* Chat code blocks (app.css gives them the muted grey: this is more specific). Inline `code` keeps its look. */
+:root .prose-chat pre { background: var(--code-bg); color: var(--code-fg); font-family: var(--font-mono); }
+:root .prose-chat pre code { color: inherit; }
+/* Expert mode: file viewer and diff. */
+.code-surface { background: var(--code-bg); color: var(--code-fg); font-family: var(--font-mono); }
+.code-surface ::selection { background: color-mix(in oklab, var(--code-title) 30%, transparent); }
+.code-gutter { color: color-mix(in oklab, var(--code-gutter) 75%, transparent); }
+.code-line:hover { background: color-mix(in oklab, var(--code-fg) 6%, transparent); }
+.code-add { background: color-mix(in oklab, var(--code-add) 15%, transparent); }
+.code-del { background: color-mix(in oklab, var(--code-del) 14%, transparent); }
+.code-add > .code-sign { color: var(--code-add); }
+.code-del > .code-sign { color: var(--code-del); }
+.code-hunk { color: var(--code-hunk); background: color-mix(in oklab, var(--code-hunk) 10%, transparent); }
+.code-meta-line { color: var(--code-comment); background: color-mix(in oklab, var(--code-fg) 6%, transparent); }
+
+/* ---- highlight.js tokens ---- */
+.hljs-comment, .hljs-quote { color: var(--code-comment); font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-doctag, .hljs-template-tag, .hljs-variable.language_, .hljs-meta .hljs-keyword { color: var(--code-keyword); }
+.hljs-string, .hljs-char, .hljs-meta .hljs-string { color: var(--code-string); }
+.hljs-number, .hljs-literal, .hljs-symbol, .hljs-bullet { color: var(--code-number); }
+.hljs-title, .hljs-title.function_, .hljs-section { color: var(--code-title); }
+.hljs-title.class_, .hljs-title.class_.inherited__, .hljs-type, .hljs-built_in { color: var(--code-type); }
+.hljs-attr, .hljs-attribute, .hljs-property, .hljs-selector-attr, .hljs-selector-class, .hljs-selector-id, .hljs-selector-pseudo { color: var(--code-attr); }
+.hljs-name { color: var(--code-tag); }
+.hljs-variable, .hljs-template-variable { color: var(--code-variable); }
+.hljs-regexp, .hljs-link { color: var(--code-regexp); }
+.hljs-meta { color: var(--code-meta); }
+.hljs-subst, .hljs-params, .hljs-operator, .hljs-punctuation, .hljs-tag { color: inherit; }
+.hljs-addition { color: var(--code-add); background: color-mix(in oklab, var(--code-add) 15%, transparent); }
+.hljs-deletion { color: var(--code-del); background: color-mix(in oklab, var(--code-del) 14%, transparent); }
+.hljs-section, .hljs-strong { font-weight: 600; }
+.hljs-emphasis { font-style: italic; }
+.hljs-link { text-decoration: underline; }
