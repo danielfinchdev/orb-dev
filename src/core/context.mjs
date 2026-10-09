@@ -66,7 +66,11 @@ export function validateConfig(c) {
   if (typeof o.orchestrate !== 'boolean') throw new Error(tr('msg.ctx.orchestrateBool'));
   int(o.maxTurns, 2, 200, 'maxTurns');
   if (o.account && !(c.accounts ?? []).some((a) => a.id === o.account && a.agent === 'claude')) throw new Error(tr('msg.ctx.assistantNeedsClaude'));
-  if (c.mobile) { if (typeof c.mobile.enabled !== 'boolean') throw new Error(tr('msg.ctx.mobileBool')); int(c.mobile.port, 1024, 65535, tr('msg.ctx.mobilePort')); }
+  if (c.mobile) {
+    if (typeof c.mobile.enabled !== 'boolean') throw new Error(tr('msg.ctx.mobileBool'));
+    int(c.mobile.port, 1024, 65535, tr('msg.ctx.mobilePort'));
+    for (const k of ['wifi', 'tailscale']) if (c.mobile[k] !== undefined && typeof c.mobile[k] !== 'boolean') throw new Error(tr('msg.ctx.mobileBool'));
+  }
   if (!Array.isArray(c.accounts)) throw new Error(tr('msg.ctx.accountsList'));
   const ids = new Set();
   for (const a of c.accounts) {

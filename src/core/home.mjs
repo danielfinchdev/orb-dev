@@ -66,8 +66,8 @@ export const DEFAULT_CONFIG = Object.freeze({
   // Expert mode (PC only): an IDE-like view with the panels chosen here around the assistant's chat.
   expert: { enabled: false, panels: { explorer: true, git: true, history: true, running: true, usage: true, system: true, activity: true } },
   browser: { enabled: true }, // the agents' browser (pages drawn by the app, driven through the MCP tools)
-  // Phone access through Tailscale (off until the user turns it on).
-  mobile: { enabled: false, port: 3131 }
+  // Phone access (off until the user turns it on): through the home Wi-Fi and/or Tailscale (https when the tailnet has it).
+  mobile: { enabled: false, port: 3131, wifi: true, tailscale: true }
 });
 
 // Layout of the assistant's folder: always <chosen folder>\Orb, the same for every user (e.g. D:\Orb):
