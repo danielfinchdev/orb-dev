@@ -189,7 +189,9 @@ export function openDb(filename = ctx.paths?.db) {
 // (a Contrapunto of that task), tasks.schedule_id (created by a schedule).
 const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], ['sessions', 'account', 'TEXT'], ['chat', 'meta', 'TEXT'],
   ['sessions', 'context', 'TEXT'], ['sessions', 'settled', 'INTEGER NOT NULL DEFAULT 0'], ['sessions', 'parent_id', 'TEXT'],
-  ['tasks', 'parent_id', 'INTEGER'], ['tasks', 'limited_until', 'TEXT'], ['tasks', 'review_of', 'INTEGER'], ['tasks', 'schedule_id', 'INTEGER']];
+  ['tasks', 'parent_id', 'INTEGER'], ['tasks', 'limited_until', 'TEXT'], ['tasks', 'review_of', 'INTEGER'], ['tasks', 'schedule_id', 'INTEGER'],
+  // 2.3.3: each phone has its own key (end-to-end encryption), the way it was paired and its notifications.
+  ['devices', 'public_key', 'TEXT'], ['devices', 'route', 'TEXT'], ['devices', 'push', 'TEXT']];
 export function migrate(db) {
   for (const [table, column, type] of ADDED) {
     const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);

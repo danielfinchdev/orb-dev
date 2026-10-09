@@ -125,7 +125,7 @@ export function acpAgent(id, spec) {
         proc.once('exit', (code) => resolve(new Error(`${spec.label} se cerró al arrancar (código ${code}). ${proc.stderrText().trim().split('\n').slice(-2).join(' ')}`.trim())));
         proc.once('error', resolve);
       });
-      const hello = p.request('initialize', { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: 'orb-dev', title: 'Orb.dev', version: '2.3.2' } }, { timeoutMs: 60000 });
+      const hello = p.request('initialize', { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: 'orb-dev', title: 'Orb.dev', version: '2.3.3' } }, { timeoutMs: 60000 });
       const first = await Promise.race([hello.then((init) => ({ init })), quit.then((error) => ({ error }))]);
       if (first.error) { p.close(); throw first.error; }
       return { proc, p, init: first.init };

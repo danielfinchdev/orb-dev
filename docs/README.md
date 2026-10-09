@@ -12,6 +12,12 @@ el [`README.md`](../README.md) de la raíz (la portada del repositorio) y la pla
 | [`FUNCIONAMIENTO.md`](FUNCIONAMIENTO.md) | Cómo funciona Orb, funcionalidad por funcionalidad: qué hace, qué archivos la implementan y cómo cambiarla. |
 | [`NOVEDADES.md`](NOVEDADES.md) | Qué trae cada versión. Es también el texto de cada release en GitHub. |
 
+## Ideas en espera
+
+| Documento | Qué cuenta |
+|---|---|
+| [`MOVIL-PUENTE.md`](MOVIL-PUENTE.md) | Usar el móvil desde cualquier sitio sin Tailscale, con un puente propio en Cloudflare (gratis). En espera. |
+
 ## Para pedir cambios
 
 | Documento | Qué cuenta |

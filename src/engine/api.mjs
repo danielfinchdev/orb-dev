@@ -266,10 +266,19 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'remote.status': () => remoteRef.current.status(),
     'remote.enable': async ({ enabled }) => {
       const c = saveConfig({ mobile: { enabled: Boolean(enabled) } }); emit('config:changed', c);
-      if (enabled) await remoteRef.current.start(); else remoteRef.current.stop();
+      if (enabled) await remoteRef.current.start(); else await remoteRef.current.stop();
       return remoteRef.current.status();
     },
-    'remote.pair': () => remoteRef.current.pair(),
+    // The ways in: home Wi-Fi and/or Tailscale (the servers reopen with the new choice).
+    'remote.configure': async ({ wifi, tailscale }) => {
+      const patch = {};
+      if (typeof wifi === 'boolean') patch.wifi = wifi;
+      if (typeof tailscale === 'boolean') patch.tailscale = tailscale;
+      const c = saveConfig({ mobile: patch }); emit('config:changed', c);
+      if (c.mobile.enabled) await remoteRef.current.restart();
+      return remoteRef.current.status();
+    },
+    'remote.pair': ({ kind }) => remoteRef.current.pair(oneOf(kind, ['wifi', 'tailscale'], 'vía', undefined)),
     'remote.revoke': ({ id }) => remoteRef.current.revoke(str(id, 'dispositivo', 64)),
     'control.pause': () => { board.setting('paused', '1'); board.changed('settings'); return true; },
     'control.resume': () => { board.setting('paused', '0'); board.changed('settings'); return true; }

@@ -22,12 +22,12 @@ import { ProjectsView } from '@/views/projects.jsx';
 import { AgentsView } from '@/views/agents.jsx';
 import { LogsView } from '@/views/logs.jsx';
 import { ActivityView } from '@/views/activity.jsx';
-import { SettingsView } from '@/views/settings.jsx';
+import { SettingsView, PhoneView } from '@/views/settings.jsx';
 import { SchedulesView } from '@/views/schedules.jsx';
 import { ExpertView } from '@/views/expert.jsx';
 
 const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
-const VIEWS = { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: LogsView, activity: ActivityView, settings: SettingsView, expert: ExpertView, schedules: SchedulesView };
+const VIEWS = { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: LogsView, activity: ActivityView, settings: SettingsView, expert: ExpertView, schedules: SchedulesView, phone: PhoneView };
 
 function Shell() {
   const t = useT();
@@ -109,7 +109,8 @@ function Root() {
         <div className="-mt-16 flex justify-center"><Robot size={110} mood="idle" /></div>
         <h1 className="text-xl">{t('app.pairTitle')}</h1>
         <p className="text-muted-foreground text-sm">{t('app.pairBody1')}<b>{t('app.pairBodyPath')}</b>{t('app.pairBody2')}</p>
-        <p className="text-muted-foreground flex items-center justify-center gap-1.5 text-xs"><Smartphone className="size-3.5" />{t('app.pairTailscale')}</p>
+        {getState().info?.pairError ? <p className="text-destructive text-sm" role="alert">{getState().info.pairError}</p> : null}
+        <p className="text-muted-foreground flex items-center justify-center gap-1.5 text-xs"><Smartphone className="size-3.5" />{t('app.pairPrivate')}</p>
       </div>
     </div>
   );

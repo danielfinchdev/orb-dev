@@ -1,17 +1,23 @@
-// Phone access: the same interface as a web app, served ONLY on this PC's Tailscale address (a private, encrypted network
-// between the user's own devices). Off by default. A phone is paired by scanning a one-time QR shown on the PC; it then
-// keeps its own session (a token the page keeps and sends in a header; never a cookie, which the browser would also hand
-// to any other port of this PC), which the PC can revoke. What a phone may do is a subset of the PC's actions.
+// Phone access: the same interface as a web app, off by default. Two ways to reach the PC, each can be on or off:
+// - the home Wi-Fi: plain http on this PC's local address (nothing to install on the phone);
+// - Tailscale: https through `tailscale serve` when the tailnet has HTTPS (installable app and notifications), or plain
+//   http on the Tailscale address otherwise.
+// A phone is paired by scanning a one-time QR on the PC. The phone makes its own key and from then on every message is
+// encrypted end to end (src/core/mobile-crypto.mjs): whoever sees the traffic (the Wi-Fi, a proxy) reads nothing, and a
+// copied link or QR is useless. The PC can revoke any phone. What a phone may do is a subset of the PC's actions.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
+import { execFile } from 'node:child_process';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { ctx, tr } from '../core/context.mjs';
 import { oneLine } from '../core/safety.mjs';
 import { quickRun } from '../agents/index.mjs';
 import { IS_WIN } from '../agents/common.mjs';
+import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal, open, sealText, openText, openBytes, AAD, CLOCK_SKEW_MS } from '../core/mobile-crypto.mjs';
+import { newVapidKeys, checkSubscription, sendPush } from './webpush.mjs';
 
 const RENDERER = process.env.ORB_RENDERER || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'renderer');
 const SESSION_DAYS = 30; // a phone unused for this long has to be paired again
@@ -21,7 +27,7 @@ const UPLOADS_TOTAL = 300 * 1024 * 1024; // phone pictures kept at most (oldest 
 const UPLOADS_DAYS = 7;
 const STREAM_BACKLOG = 1024 * 1024; // a live-event stream that stops reading is dropped instead of filling the memory
 const STREAMS_PER_DEVICE = 3;
-const sha = (s) => crypto.createHash('sha256').update(String(s)).digest('hex');
+const NETWORK_CHECK_MS = 60_000; // the Wi-Fi address can change (another network, DHCP): checked every minute
 const now = () => new Date().toISOString();
 
 // The settings a phone gets: what the interface shows, without connector commands and secrets, login folders or paths
@@ -50,27 +56,45 @@ const ALLOWED = new Set(['app.state', 'chat.list', 'chat.send', 'chat.reset', 'c
 const EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'session:item', 'session:update', 'session:removed', 'config:changed', 'session:delta', 'session:queue', 'approval:changed']);
 
 const inCgnat = (ip) => { const [x, y] = String(ip).split('.').map(Number); return x === 100 && y >= 64 && y <= 127; };
+const isPrivate = (ip) => { const [a, b] = String(ip).split('.').map(Number); return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168); };
 const tailscaleExe = () => (IS_WIN ? path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Tailscale', 'tailscale.exe') : 'tailscale');
 
-// This PC's Tailscale IPv4 and MagicDNS name, as Tailscale itself reports them. The 100.64.0.0/10 range is also used by
-// operators' shared NAT and other VPNs, so an address there is only trusted when Tailscale confirms it or the network
-// adapter is Tailscale's. Tests may bind to loopback with ORB_REMOTE_BIND=127.0.0.1.
+// This PC's Tailscale IPv4 and MagicDNS name, as Tailscale itself reports them, and whether the tailnet hands out HTTPS
+// certificates. The 100.64.0.0/10 range is also used by operators' shared NAT and other VPNs, so an address there is
+// only trusted when Tailscale confirms it or the network adapter is Tailscale's.
+// `tailscale status --json` is long (quickRun keeps only the first 2000 characters): read in full, without the peers.
+const tailscaleStatus = () => new Promise((resolve) => {
+  execFile(tailscaleExe(), ['status', '--json', '--peers=false'], { windowsHide: true, timeout: 8000, maxBuffer: 4 * 1024 * 1024 }, (error, stdout) => resolve({ ok: !error, out: String(stdout ?? '') }));
+});
+
 export async function tailscaleAddress() {
-  if (process.env.ORB_REMOTE_BIND === '127.0.0.1') return { address: '127.0.0.1', dns: 'localhost' };
-  const r = await quickRun(tailscaleExe(), ['status', '--json'], { timeoutMs: 8000 });
+  const r = await tailscaleStatus();
   if (r.ok) {
     try {
-      const self = JSON.parse(r.out)?.Self;
+      const st = JSON.parse(r.out); const self = st?.Self;
       const address = (self?.TailscaleIPs ?? []).find((ip) => /^\d+\.\d+\.\d+\.\d+$/.test(ip) && inCgnat(ip));
-      if (address) return { address, dns: self.DNSName ? String(self.DNSName).replace(/\.$/, '') : null };
+      const dns = self?.DNSName ? String(self.DNSName).replace(/\.$/, '').toLowerCase() : null;
+      if (address) return { address, dns, https: Boolean(dns && (st.CertDomains ?? []).map((d) => String(d).toLowerCase()).includes(dns)) };
     } catch { /* fall back to the adapter */ }
   }
   for (const [name, list] of Object.entries(os.networkInterfaces())) {
     if (!/tailscale/i.test(name)) continue;
     const a = (list ?? []).find((x) => x.family === 'IPv4' && !x.internal && inCgnat(x.address));
-    if (a) return { address: a.address, dns: null };
+    if (a) return { address: a.address, dns: null, https: false };
   }
   return null;
+}
+
+// This PC's addresses on the local network (home Wi-Fi or cable): private IPv4 only, without virtual adapters (WSL,
+// Hyper-V, VirtualBox, Docker…) or VPNs. The Wi-Fi or Ethernet one first: it is the one the QR shows.
+export function lanAddresses() {
+  const out = [];
+  for (const [name, list] of Object.entries(os.networkInterfaces())) {
+    if (/vethernet|virtualbox|vmware|hyper-v|wsl|docker|loopback|tailscale|zerotier|bluetooth|vpn|tap|tun/i.test(name)) continue;
+    for (const a of list ?? []) if (a.family === 'IPv4' && !a.internal && isPrivate(a.address)) out.push({ name, address: a.address });
+  }
+  const rank = (n) => (/wi-?fi|wlan|wireless|inal[aá]mbrica/i.test(n) ? 0 : /ethernet|^eth|^en/i.test(n) ? 1 : 2);
+  return out.sort((x, y) => rank(x.name) - rank(y.name)).map((a) => a.address);
 }
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.json': 'application/json' };
@@ -80,47 +104,104 @@ const HEADERS = {
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
 };
 
-export function createRemote({ board, api, log, name }) {
-  let server = null; let state = { running: false, host: null, url: null, error: null };
+// The installed app's service worker: shows the notifications the PC sends and opens the app when one is tapped.
+const SERVICE_WORKER = `self.addEventListener('install',()=>self.skipWaiting());
+self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));
+self.addEventListener('fetch',()=>{});
+self.addEventListener('push',e=>{let d={};try{d=e.data?e.data.json():{}}catch{}
+e.waitUntil(self.registration.showNotification(d.title||'Orb',{body:d.body||'',tag:d.tag||'orb',renotify:true,icon:'/icon.png',badge:'/icon.png',data:{url:d.url||'/'}}))});
+self.addEventListener('notificationclick',e=>{e.notification.close();const u=(e.notification.data&&e.notification.data.url)||'/';
+e.waitUntil(self.clients.matchAll({type:'window',includeUncontrolled:true}).then(l=>{for(const c of l){if('focus' in c)return c.focus()}return self.clients.openWindow(u)}))});`;
+
+export function createRemote({ board, api, log }) {
+  let servers = []; // http servers (one per address)
+  let state = { running: false, routes: [], error: null };
   let generation = 0; // moved by stop(): a start() still waiting for Tailscale gives up
   let starting = null;
-  let pairing = null; // { hash, expires }
-  let failures = new Map(); // address -> timestamps of wrong pairing tokens (one noisy device cannot lock out the others)
-  const clients = new Set(); // SSE responses
+  let watcher = null;
+  let served = null; // the https port `tailscale serve` is forwarding for us (turned off on stop)
+  let pairing = null; // { code, expires, route }
+  const failures = new Map(); // address -> timestamps of wrong pairing attempts (one noisy device cannot lock out the others)
+  const clients = new Set(); // live-event streams: { res, device, key }
+  const seen = new Map(); // device id -> Map(nonce -> expiry): requests already answered (replays are refused)
+  const keys = new Map(); // device id -> session key
   const uploads = () => path.join(ctx.paths.internal, 'adjuntos-movil');
+
+  // This PC's own keys: X25519 for the phones, VAPID for notifications. Made once, kept in the database.
+  const own = (() => {
+    let k = board.settingJson('remote_keys');
+    if (!k?.priv || !k?.vapid?.publicKey) {
+      k = { priv: b64.enc(newKeyPair().priv), vapid: newVapidKeys() };
+      board.settingJson('remote_keys', k);
+    }
+    const priv = b64.dec(k.priv);
+    return { priv, pub: publicKeyOf(priv), vapid: k.vapid };
+  })();
+  const pcFingerprint = fingerprint(own.pub);
+  // Phones paired by 2.3.2 and older (a reusable token, no key of their own) cannot use the encrypted channel: they go.
+  board.run('DELETE FROM devices WHERE public_key IS NULL');
 
   const send = (res, status, body, type = 'application/json; charset=utf-8', extra = {}) => {
     res.writeHead(status, { ...HEADERS, 'Content-Type': type, 'Cache-Control': 'no-store', ...extra });
     res.end(type.startsWith('application/json') ? JSON.stringify(body) : body);
   };
 
+  const keyOf = (d) => { if (!keys.has(d.id)) keys.set(d.id, sessionKey(own.priv, b64.dec(d.public_key))); return keys.get(d.id); };
   const deviceOf = (req) => {
-    const m = String(req.headers.authorization ?? '').match(/^Bearer ([A-Za-z0-9_-]{40,60})$/);
-    if (!m) return null;
-    const d = board.one('SELECT * FROM devices WHERE token_hash = ?', sha(m[1]));
-    if (!d) return null;
+    const id = String(req.headers['x-orb-device'] ?? '');
+    if (!/^[0-9a-f-]{36}$/.test(id)) return null;
+    const d = board.one('SELECT * FROM devices WHERE id = ?', id);
+    if (!d?.public_key) return null;
     if (Date.now() - Date.parse(d.last_seen ?? d.created_at) > SESSION_DAYS * 86_400_000) return null;
-    if (!d.last_seen || Date.now() - Date.parse(d.last_seen) > 60_000) board.run('UPDATE devices SET last_seen = ? WHERE id = ?', now(), d.id);
     return d;
   };
+  const touch = (d) => { if (!d.last_seen || Date.now() - Date.parse(d.last_seen) > 60_000) board.run('UPDATE devices SET last_seen = ? WHERE id = ?', now(), d.id); };
 
-  // Only requests addressed to this server by its own name pass (stops DNS rebinding), and state changes must come from
-  // our own page (Origin + a custom header that other sites cannot send without a CORS preflight we never answer).
+  // A request is accepted once: recent (the phone's clock may be off a few minutes) and with a nonce not seen before.
+  function fresh(deviceId, nonce, t) {
+    if (!Number.isFinite(t) || Math.abs(Date.now() - t) > CLOCK_SKEW_MS) return false;
+    let m = seen.get(deviceId); if (!m) seen.set(deviceId, (m = new Map()));
+    const at = Date.now();
+    for (const [n, exp] of m) if (exp < at) m.delete(n);
+    if (m.has(nonce) || m.size > 5000) return false;
+    m.set(nonce, at + 2 * CLOCK_SKEW_MS);
+    return true;
+  }
+  // Opens a request sealed by this device: { body, nonce } or null.
+  function openRequest(device, box, expected) {
+    let msg; try { msg = open(keyOf(device), box, AAD.request(device.id)); } catch { return null; }
+    if (!msg || msg.m !== expected || !fresh(device.id, box.n, Number(msg.t))) return null;
+    return { body: msg.b ?? null, nonce: box.n };
+  }
+  // The same for the requests whose envelope travels in a header (live events, pictures).
+  function openHeader(req, device, expected) {
+    const text = String(req.headers['x-orb-auth'] ?? '');
+    let msg; try { msg = openText(keyOf(device), text, AAD.request(device.id)); } catch { return null; }
+    const nonce = text.split('.')[0];
+    if (!msg || msg.m !== expected || !fresh(device.id, nonce, Number(msg.t))) return null;
+    return { nonce };
+  }
+  const reply = (res, device, nonce, value) => send(res, 200, seal(keyOf(device), { r: nonce, ...value }, AAD.response(device.id)));
+
+  // Only requests addressed to this server by one of its own names pass (stops DNS rebinding), and only from our own page.
   const hostOk = (req) => state.hosts?.includes(String(req.headers.host ?? '').toLowerCase());
   const originOk = (req) => !req.headers.origin || state.origins?.includes(String(req.headers.origin).toLowerCase());
 
-  const readJson = (req, max = 200_000) => new Promise((resolve, reject) => {
+  const readBody = (req, max) => new Promise((resolve, reject) => {
     let size = 0; const chunks = [];
-    req.on('data', (c) => { size += c.length; if (size > max) { reject(new Error('demasiado grande')); req.destroy(); } else chunks.push(c); });
-    req.on('end', () => { try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')); } catch { reject(new Error(tr('msg.remote.badJson'))); } });
+    req.on('data', (c) => { size += c.length; if (size > max) { reject(Object.assign(new Error('demasiado grande'), { status: 413 })); req.destroy(); } else chunks.push(c); });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', reject);
   });
+  const readJson = async (req, max = 400_000) => { try { return JSON.parse((await readBody(req, max)).toString('utf8') || '{}'); } catch (error) { if (error.status) throw error; throw new Error(tr('msg.remote.badJson')); } };
 
   function serveStatic(req, res, pathname) {
     if (pathname === '/manifest.webmanifest') {
-      return send(res, 200, JSON.stringify({ name: ctx.config.assistantName, short_name: ctx.config.assistantName, start_url: '/', scope: '/', display: 'standalone', background_color: '#1d2257', theme_color: '#5b6ee8', icons: [{ src: '/icon.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }] }), TYPES['.webmanifest']);
+      const name = ctx.config.assistantName;
+      return send(res, 200, JSON.stringify({ name, short_name: name, id: '/', start_url: '/', scope: '/', display: 'standalone', orientation: 'portrait', background_color: '#1d2257', theme_color: '#5b6ee8',
+        icons: [{ src: '/icon.png', sizes: '512x512', type: 'image/png', purpose: 'any' }, { src: '/icon.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }] }), TYPES['.webmanifest']);
     }
-    if (pathname === '/sw.js') return send(res, 200, "self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));self.addEventListener('fetch',()=>{});", TYPES['.js'], { 'Service-Worker-Allowed': '/' });
+    if (pathname === '/sw.js') return send(res, 200, SERVICE_WORKER, TYPES['.js'], { 'Service-Worker-Allowed': '/' });
     let rel; try { rel = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, ''); } catch { return send(res, 404, 'no encontrado', 'text/plain'); }
     // Only what the phone's page needs (not the desktop-only pages such as the agent's browser window).
     if (!(rel === 'index.html' || rel === 'icon.png' || /^assets\/[\w.-]+$/.test(rel))) return send(res, 404, 'no encontrado', 'text/plain');
@@ -129,8 +210,8 @@ export function createRemote({ board, api, log, name }) {
     fs.readFile(file, (error, data) => {
       if (error) return send(res, 404, 'no encontrado', 'text/plain');
       let body = data;
-      // The installed web app needs the manifest and the service worker: added to the page served to phones only.
-      if (rel === 'index.html') body = Buffer.from(String(data).replace('</head>', '<link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#5b6ee8"><meta name="apple-mobile-web-app-capable" content="yes"></head>'));
+      // The installed web app needs the manifest and the home-screen tags: added to the page served to phones only.
+      if (rel === 'index.html') body = Buffer.from(String(data).replace('</head>', `<link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/icon.png"><meta name="theme-color" content="#5b6ee8"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="${ctx.config.assistantName.replace(/[<>"&]/g, '')}"></head>`));
       res.writeHead(200, { ...HEADERS, 'Content-Type': TYPES[path.extname(file)] ?? 'application/octet-stream', 'Cache-Control': rel === 'index.html' ? 'no-store' : 'public, max-age=86400' });
       res.end(body);
     });
@@ -142,36 +223,18 @@ export function createRemote({ board, api, log, name }) {
     const p = url.pathname;
     if (req.method === 'GET' && !p.startsWith('/api/')) return serveStatic(req, res, p);
     if (!originOk(req)) return send(res, 403, { error: 'origen no permitido' });
-    if (req.method === 'POST' && req.headers['x-orb'] !== '1') return send(res, 403, { error: tr('msg.remote.notAllowed') });
 
-    if (req.method === 'POST' && p === '/api/pair') {
-      const who = req.socket.remoteAddress ?? '?';
-      const recent = (failures.get(who) ?? []).filter((t) => Date.now() - t < 10 * 60_000);
-      failures.set(who, recent);
-      if (recent.length >= 10) return send(res, 429, { error: tr('msg.remote.tooMany') });
-      let body = await readJson(req).catch(() => null);
-      if (!body || typeof body !== 'object' || Array.isArray(body)) body = {};
-      const token = typeof body.token === 'string' ? body.token : '';
-      const ok = pairing && Date.now() < pairing.expires && token.length > 20 && crypto.timingSafeEqual(Buffer.from(sha(token)), Buffer.from(pairing.hash));
-      if (!ok) { recent.push(Date.now()); return send(res, 401, { error: tr('msg.remote.badQr') }); }
-      pairing = null; // one use
-      const session = crypto.randomBytes(32).toString('base64url');
-      const id = crypto.randomUUID();
-      const name = oneLine(typeof body.name === 'string' && body.name ? body.name : tr('msg.remote.defaultName'), 60);
-      board.run('INSERT INTO devices (id, name, token_hash, created_at, last_seen) VALUES (?, ?, ?, ?, ?)', id, name, sha(session), now(), now());
-      board.event(null, 'usuario', 'device.paired', name);
-      board.addChat('system', tr('msg.remote.deviceLinked', { name }));
-      // The page keeps it in its own storage (only this exact address and port can read it) and sends it as a header.
-      return send(res, 200, { ok: true, token: session });
-    }
+    if (req.method === 'POST' && p === '/api/pair') return pair(req, res);
 
     const device = deviceOf(req);
-    if (!device) return send(res, 401, { error: tr('msg.remote.notLinked') });
+    if (!device) { req.resume(); return send(res, 401, { error: tr('msg.remote.notLinked') }); }
 
     if (req.method === 'GET' && p === '/api/events') {
-      res.writeHead(200, { ...HEADERS, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
+      if (!openHeader(req, device, 'events')) return send(res, 401, { error: tr('msg.remote.notLinked') });
+      touch(device);
+      res.writeHead(200, { ...HEADERS, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
       res.write(': hola\n\n');
-      const client = { res, device: device.id };
+      const client = { res, device: device.id, key: keyOf(device) };
       const mine = [...clients].filter((c) => c.device === device.id);
       if (mine.length >= STREAMS_PER_DEVICE) { try { mine[0].res.end(); } catch { /* closed */ } clients.delete(mine[0]); }
       clients.add(client);
@@ -179,50 +242,87 @@ export function createRemote({ board, api, log, name }) {
       req.on('close', () => { clearInterval(ping); clients.delete(client); });
       return undefined;
     }
-    if (req.method === 'GET' && p === '/api/me') return send(res, 200, { device: device.name, name: ctx.config.assistantName });
-    if (req.method === 'POST' && p === '/api/upload') return upload(req, res);
-    if (req.method === 'POST' && p === '/api/call') {
-      let body; try { body = await readJson(req); } catch (error) { return send(res, 400, { error: error.message }); }
-      const method = String(body.method ?? '');
-      const params = body.params && typeof body.params === 'object' ? body.params : {};
-      if (!ALLOWED.has(method)) return send(res, 403, { error: tr('msg.remote.pcOnly') });
-      if (params.permission === 'total') return send(res, 403, { error: tr('msg.remote.totalPcOnly') });
-      // A conversation the PC gave total access to is driven from the PC only.
-      if (method.startsWith('sessions.') && method !== 'sessions.stop' && params.id !== undefined && board.one('SELECT permission FROM sessions WHERE id = ?', String(params.id))?.permission === 'total') return send(res, 403, { error: tr('msg.remote.totalConvPcOnly') });
-      // Pictures from a phone are only the ones it uploaded itself (never other files of the PC).
-      if (params.images !== undefined) {
-        const dir = uploads() + path.sep;
-        if (!Array.isArray(params.images) || params.images.some((f) => typeof f !== 'string' || !path.resolve(f).startsWith(dir))) return send(res, 403, { error: tr('msg.remote.ownImages') });
-      }
-      try { const result = (await api.call(method, params)) ?? null; return send(res, 200, { ok: true, result: method === 'app.state' ? { ...result, config: phoneConfig(result.config) } : result }); }
-      catch (error) { return send(res, 200, { ok: false, error: oneLine(error?.message ?? String(error), 1000) }); }
+    if (req.method !== 'POST') return send(res, 404, { error: 'no encontrado' });
+    if (p === '/api/upload') return upload(req, res, device);
+
+    const what = { '/api/call': 'call', '/api/me': 'me', '/api/push': 'push' }[p];
+    if (!what) { req.resume(); return send(res, 404, { error: 'no encontrado' }); }
+    let box; try { box = await readJson(req); } catch (error) { return send(res, error.status ?? 400, { error: error.message }); }
+    const msg = openRequest(device, box, what);
+    if (!msg) return send(res, 401, { error: tr('msg.remote.notLinked') });
+    touch(device);
+
+    if (what === 'me') return reply(res, device, msg.nonce, { ok: true, result: { device: device.name, name: ctx.config.assistantName, pc: pcFingerprint, push: Boolean(device.push), vapid: own.vapid.publicKey } });
+    if (what === 'push') {
+      // Turn notifications on (a subscription made by this phone's browser) or off (null).
+      try {
+        const sub = msg.body?.subscription ? checkSubscription(msg.body.subscription) : null;
+        board.run('UPDATE devices SET push = ? WHERE id = ?', sub ? JSON.stringify(sub) : null, device.id);
+        return reply(res, device, msg.nonce, { ok: true, result: { push: Boolean(sub) } });
+      } catch (error) { return reply(res, device, msg.nonce, { ok: false, error: error.message }); }
     }
-    return send(res, 404, { error: 'no encontrado' });
+    // what === 'call'
+    const method = String(msg.body?.method ?? '');
+    const params = msg.body?.params && typeof msg.body.params === 'object' ? msg.body.params : {};
+    const deny = (error) => reply(res, device, msg.nonce, { ok: false, status: 403, error });
+    if (!ALLOWED.has(method)) return deny(tr('msg.remote.pcOnly'));
+    if (params.permission === 'total') return deny(tr('msg.remote.totalPcOnly'));
+    // A conversation the PC gave total access to is driven from the PC only.
+    if (method.startsWith('sessions.') && method !== 'sessions.stop' && params.id !== undefined && board.one('SELECT permission FROM sessions WHERE id = ?', String(params.id))?.permission === 'total') return deny(tr('msg.remote.totalConvPcOnly'));
+    // Pictures from a phone are only the ones it uploaded itself (never other files of the PC).
+    if (params.images !== undefined) {
+      const dir = uploads() + path.sep;
+      if (!Array.isArray(params.images) || params.images.some((f) => typeof f !== 'string' || !path.resolve(f).startsWith(dir))) return deny(tr('msg.remote.ownImages'));
+    }
+    try { const result = (await api.call(method, params)) ?? null; return reply(res, device, msg.nonce, { ok: true, result: method === 'app.state' ? { ...result, config: phoneConfig(result.config) } : result }); }
+    catch (error) { return reply(res, device, msg.nonce, { ok: false, error: oneLine(error?.message ?? String(error), 1000) }); }
   }
 
-  // A picture from the phone: checked by its first bytes (not its name), stored in the app's folder, path returned.
+  // Pairing: the phone sends its public key and a proof sealed with the key of this QR (the one-time code never travels).
+  async function pair(req, res) {
+    const who = req.socket.remoteAddress ?? '?';
+    const recent = (failures.get(who) ?? []).filter((t) => Date.now() - t < 10 * 60_000);
+    failures.set(who, recent);
+    if (recent.length >= 10) { req.resume(); return send(res, 429, { error: tr('msg.remote.tooMany') }); }
+    const fail = () => { recent.push(Date.now()); return send(res, 401, { error: tr('msg.remote.badQr') }); };
+    let body; try { body = await readJson(req, 10_000); } catch { return fail(); }
+    if (!pairing || Date.now() > pairing.expires || !body || typeof body.pub !== 'string') return fail();
+    let devPub; try { devPub = b64.dec(body.pub); } catch { return fail(); }
+    if (devPub.length !== 32) return fail();
+    let proof; try { proof = open(pairingKey(own.priv, devPub, pairing.code), body.proof, AAD.pair); } catch { return fail(); }
+    if (!proof || proof.pub !== body.pub || Math.abs(Date.now() - Number(proof.t)) > CLOCK_SKEW_MS) return fail();
+    const route = pairing.route;
+    pairing = null; // one use
+    const id = crypto.randomUUID();
+    const name = oneLine(typeof proof.name === 'string' && proof.name ? proof.name : tr('msg.remote.defaultName'), 60);
+    board.run('INSERT INTO devices (id, name, token_hash, created_at, last_seen, public_key, route) VALUES (?, ?, ?, ?, ?, ?, ?)', id, name, `clave:${id}`, now(), now(), body.pub, route);
+    board.event(null, 'usuario', 'device.paired', name);
+    board.addChat('system', tr('msg.remote.deviceLinked', { name }));
+    // The answer is sealed with the new session key: the phone checks it really is the PC of the QR.
+    const key = sessionKey(own.priv, devPub); keys.set(id, key);
+    return send(res, 200, { id, box: seal(key, { id, name: ctx.config.assistantName, pc: pcFingerprint }, AAD.paired(id)) });
+  }
+
+  // A picture from the phone (encrypted): checked by its first bytes (not its name), stored in the app's folder, path returned.
   let uploading = 0;
-  function upload(req, res) {
-    if (uploading >= 3) { req.resume(); return send(res, 429, { error: tr('msg.remote.waitUploads') }); }
+  async function upload(req, res, device) {
+    const auth = openHeader(req, device, 'upload');
+    if (!auth) { req.resume(); return send(res, 401, { error: tr('msg.remote.notLinked') }); }
+    if (uploading >= 3) { req.resume(); return reply(res, device, auth.nonce, { ok: false, status: 429, error: tr('msg.remote.waitUploads') }); }
     uploading++;
-    const chunks = []; let size = 0; let done = false;
-    const finish = (status, body) => { if (done) return; done = true; uploading--; send(res, status, body); };
-    req.on('data', (c) => { size += c.length; if (size > UPLOAD_MAX) { finish(413, { error: 'la imagen pasa de 10 MB' }); req.destroy(); } else chunks.push(c); });
-    req.on('error', () => { if (!done) { done = true; uploading--; } });
-    req.on('end', async () => {
-      if (done) return;
-      const b = Buffer.concat(chunks);
+    try {
+      let raw; try { raw = await readBody(req, UPLOAD_MAX + 64); } catch { return reply(res, device, auth.nonce, { ok: false, status: 413, error: tr('msg.remote.imageTooBig') }); }
+      let b; try { b = Buffer.from(openBytes(keyOf(device), new Uint8Array(raw), AAD.upload(device.id))); } catch { return send(res, 401, { error: tr('msg.remote.notLinked') }); }
       const ext = b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) ? 'png'
         : b[0] === 0xff && b[1] === 0xd8 ? 'jpg' : b.subarray(0, 4).toString() === 'RIFF' && b.subarray(8, 12).toString() === 'WEBP' ? 'webp' : b.subarray(0, 3).toString() === 'GIF' ? 'gif' : null;
-      if (!ext) return finish(415, { error: tr('msg.remote.imageTypes') });
-      try {
-        await fs.promises.mkdir(uploads(), { recursive: true });
-        await pruneUploads(b.length);
-        const file = path.join(uploads(), `${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${ext}`);
-        await fs.promises.writeFile(file, b);
-        finish(200, { ok: true, path: file });
-      } catch (error) { log(`móvil: subida: ${error.message}`); finish(500, { error: tr('msg.remote.cannotSaveImage') }); }
-    });
+      if (!ext) return reply(res, device, auth.nonce, { ok: false, status: 415, error: tr('msg.remote.imageTypes') });
+      await fs.promises.mkdir(uploads(), { recursive: true });
+      await pruneUploads(b.length);
+      const file = path.join(uploads(), `${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${ext}`);
+      await fs.promises.writeFile(file, b);
+      return reply(res, device, auth.nonce, { ok: true, result: { path: file } });
+    } catch (error) { log(`móvil: subida: ${error.message}`); return reply(res, device, auth.nonce, { ok: false, error: tr('msg.remote.cannotSaveImage') }); }
+    finally { uploading--; }
   }
   // Old pictures go (7 days), and the oldest ones too while the folder would pass its quota.
   async function pruneUploads(incoming = 0) {
@@ -238,60 +338,136 @@ export function createRemote({ board, api, log, name }) {
     }
   }
 
-  return {
-    // Engine events go to the paired phones too (only the ones the interface needs).
+  // Notifications: a new message in the assistant's chat (an answer, a task that needs approval, finished or failed work)
+  // goes to the phones that turned them on and do not have the app open right now.
+  function notify(payload) {
+    if (!payload || payload.role === 'usuario') return;
+    const openNow = new Set([...clients].map((c) => c.device));
+    const name = ctx.config.assistantName;
+    for (const d of board.all('SELECT id, push FROM devices WHERE push IS NOT NULL')) {
+      if (openNow.has(d.id)) continue;
+      let sub; try { sub = JSON.parse(d.push); } catch { continue; }
+      sendPush(sub, { title: payload.role === 'orb' ? name : tr('msg.remote.pushNotice', { name }), body: String(payload.body ?? '').slice(0, 200), tag: 'orb-chat', url: '/' }, own.vapid)
+        .then((r) => { if (r === 'gone') board.run('UPDATE devices SET push = NULL WHERE id = ?', d.id); })
+        .catch(() => {});
+    }
+  }
+
+  // ---- listening: one http server per address; the Tailscale https name goes through `tailscale serve` to loopback.
+  const listen = (address, port) => new Promise((resolve) => {
+    const srv = http.createServer((req, res) => { handle(req, res).catch((error) => { log(`móvil: ${error.stack}`); try { send(res, 500, { error: tr('msg.remote.internalError') }); } catch { /* sent */ } }); });
+    srv.headersTimeout = 15_000; srv.requestTimeout = 60_000;
+    srv.once('error', (error) => resolve({ error }));
+    srv.listen(port, address, () => resolve({ srv }));
+  });
+  async function serveHttps(port) {
+    const r = await quickRun(tailscaleExe(), ['serve', '--bg', `--https=${port}`, `http://127.0.0.1:${port}`], { timeoutMs: 30_000 });
+    if (r.ok) { served = port; return true; }
+    log(`móvil: tailscale serve no pudo dar https: ${oneLine(r.err || r.out || '', 300)}`);
+    return false;
+  }
+  async function unserve() {
+    if (served === null) return;
+    const port = served; served = null;
+    await quickRun(tailscaleExe(), ['serve', `--https=${port}`, 'off'], { timeoutMs: 15_000 }).catch(() => {});
+  }
+
+  async function startNow() {
+    const mine = generation;
+    const m = ctx.config.mobile ?? {};
+    const port = m.port ?? 3131;
+    const routes = []; const hosts = []; const origins = []; const errors = [];
+    const bind = async (address) => {
+      const r = await listen(address, port);
+      if (r.error) { errors.push(tr('msg.remote.portBusy', { address, port, error: r.error.message })); return false; }
+      servers.push(r.srv); return true;
+    };
+    if (process.env.ORB_REMOTE_BIND === '127.0.0.1') {
+      // Tests: only loopback.
+      if (await bind('127.0.0.1')) { hosts.push(`127.0.0.1:${port}`); origins.push(`http://127.0.0.1:${port}`); routes.push({ kind: 'wifi', url: `http://127.0.0.1:${port}/`, secure: false, address: '127.0.0.1' }); }
+    } else {
+      if (m.wifi !== false) {
+        const lan = lanAddresses();
+        if (!lan.length) errors.push(tr('msg.remote.noWifi'));
+        for (const address of lan) {
+          if (mine !== generation) return state;
+          if (await bind(address)) { hosts.push(`${address}:${port}`); origins.push(`http://${address}:${port}`); if (!routes.some((r) => r.kind === 'wifi')) routes.push({ kind: 'wifi', url: `http://${address}:${port}/`, secure: false, address }); }
+        }
+      }
+      if (m.tailscale !== false) {
+        const ts = await tailscaleAddress();
+        if (mine !== generation) return state;
+        if (!ts) errors.push(tr('msg.remote.noTailscale'));
+        else if (ts.https && ts.dns && await bind('127.0.0.1') && await serveHttps(port)) {
+          hosts.push(`${ts.dns}:${port}`); origins.push(`https://${ts.dns}:${port}`);
+          routes.push({ kind: 'tailscale', url: `https://${ts.dns}:${port}/`, secure: true, address: ts.address });
+        } else if (await bind(ts.address)) {
+          hosts.push(`${ts.address}:${port}`, ...(ts.dns ? [`${ts.dns}:${port}`] : [])); origins.push(`http://${ts.address}:${port}`, ...(ts.dns ? [`http://${ts.dns}:${port}`] : []));
+          routes.push({ kind: 'tailscale', url: `http://${ts.dns ?? ts.address}:${port}/`, secure: false, address: ts.address });
+        }
+      }
+    }
+    if (mine !== generation) { closeAll(); return state; }
+    state = { running: routes.length > 0, routes, hosts, origins, lan: lanAddresses().join(','), error: routes.length ? (errors[0] ?? null) : (errors.join(' ') || tr('msg.remote.noNetwork')) };
+    for (const r of routes) log(`acceso móvil (${r.kind}) en ${r.url}`);
+    pruneUploads().catch(() => {});
+    return state;
+  }
+  function closeAll() { for (const s of servers) { try { s.close(); } catch { /* closed */ } } servers = []; }
+
+  const remote = {
+    // Engine events go to the paired phones too (only the ones the interface needs), each sealed for its phone.
     broadcast(event, payload) {
+      if (event === 'chat:new') notify(payload);
       if (!clients.size || !EVENTS.has(event)) return;
       // The settings themselves never travel to a phone (the page just reloads what it is allowed to see).
-      const data = `event: message\ndata: ${JSON.stringify({ event, payload: event === 'config:changed' ? null : payload })}\n\n`;
+      const value = { e: event, p: event === 'config:changed' ? null : payload };
       for (const c of clients) {
         if (c.res.writableLength > STREAM_BACKLOG) { try { c.res.destroy(); } catch { /* gone */ } clients.delete(c); continue; }
-        try { c.res.write(data); } catch { clients.delete(c); }
+        try { c.res.write(`data: ${sealText(c.key, value, AAD.event(c.device))}\n\n`); } catch { clients.delete(c); }
       }
     },
     start() {
-      if (server) return Promise.resolve(state);
-      starting ??= (async () => {
-        const mine = generation;
-        try {
-          const found = await tailscaleAddress();
-          if (mine !== generation) return state; // turned off meanwhile
-          if (!found) { state = { running: false, error: tr('msg.remote.noTailscale') }; return state; }
-          const { address, dns } = found;
-          const port = ctx.config.mobile?.port ?? 3131;
-          const hosts = [`${address}:${port}`, ...(dns ? [`${dns.toLowerCase()}:${port}`] : [])];
-          const srv = http.createServer((req, res) => { handle(req, res).catch((error) => { log(`móvil: ${error.stack}`); try { send(res, 500, { error: tr('msg.remote.internalError') }); } catch { /* sent */ } }); });
-          srv.headersTimeout = 15_000; srv.requestTimeout = 60_000;
-          const error = await new Promise((resolve) => { srv.once('error', resolve); srv.listen(port, address, () => resolve(null)); });
-          if (error) { state = { running: false, error: `No se pudo abrir el puerto ${port}: ${error.message}` }; return state; }
-          if (mine !== generation) { srv.close(); return state; }
-          server = srv;
-          state = { running: true, address, port, dns, hosts, origins: hosts.map((h) => `http://${h}`), url: `http://${dns ?? address}:${port}/` };
-          log(`acceso móvil en ${state.url}`);
-          pruneUploads().catch(() => {});
-          return state;
-        } finally { starting = null; }
-      })();
+      if (servers.length) return Promise.resolve(state);
+      starting ??= startNow().finally(() => { starting = null; });
+      // The Wi-Fi address changes with the network: the servers follow it.
+      watcher ??= setInterval(() => {
+        if (!state.running || starting || ctx.config.mobile?.wifi === false || process.env.ORB_REMOTE_BIND) return;
+        if (lanAddresses().join(',') !== state.lan) { log('móvil: ha cambiado la red; vuelvo a abrir el acceso'); remote.restart().catch(() => {}); }
+      }, NETWORK_CHECK_MS);
+      watcher.unref?.();
       return starting;
     },
-    stop() { generation++; for (const c of clients) { try { c.res.end(); } catch { /* closed */ } } clients.clear(); server?.close(); server = null; pairing = null; state = { running: false }; },
-    status() {
-      return { enabled: Boolean(ctx.config.mobile?.enabled), running: Boolean(state.running), url: state.url ?? null, error: state.error ?? null,
-        devices: board.all('SELECT id, name, created_at, last_seen FROM devices ORDER BY created_at DESC') };
+    async restart() { await remote.stop(); return remote.start(); },
+    async stop() {
+      generation++;
+      clearInterval(watcher); watcher = null;
+      for (const c of clients) { try { c.res.end(); } catch { /* closed */ } }
+      clients.clear(); closeAll(); pairing = null; state = { running: false, routes: [], error: null };
+      await unserve();
     },
-    // A one-time QR for 5 minutes. The token travels in the URL fragment (#), so it never reaches a server log.
-    pair() {
+    status() {
+      return { enabled: Boolean(ctx.config.mobile?.enabled), running: Boolean(state.running), routes: state.routes ?? [], error: state.error ?? null, pc: pcFingerprint,
+        wifi: ctx.config.mobile?.wifi !== false, tailscale: ctx.config.mobile?.tailscale !== false,
+        devices: board.all('SELECT id, name, created_at, last_seen, route, push IS NOT NULL AS push FROM devices ORDER BY created_at DESC').map((d) => ({ ...d, push: Boolean(d.push) })) };
+    },
+    // A one-time QR for 5 minutes, for one of the ways in (Wi-Fi or Tailscale). The code and this PC's key travel in the
+    // URL fragment (#), which the browser never sends to any server.
+    pair(kind) {
       if (!state.running) throw new Error(tr('msg.remote.enableFirst'));
-      const token = crypto.randomBytes(24).toString('base64url');
-      pairing = { hash: sha(token), expires: Date.now() + PAIR_MINUTES * 60_000 };
-      return { url: `${state.url}#vincular=${token}`, expiresAt: pairing.expires };
+      const route = state.routes.find((r) => r.kind === kind) ?? state.routes[0];
+      const code = crypto.randomBytes(18).toString('base64url');
+      pairing = { code, expires: Date.now() + PAIR_MINUTES * 60_000, route: route.kind };
+      return { url: `${route.url}#vincular=${code}&pc=${b64.enc(own.pub)}`, expiresAt: pairing.expires, kind: route.kind, secure: route.secure, pc: pcFingerprint };
     },
     revoke(id) {
       const d = board.one('SELECT * FROM devices WHERE id = ?', String(id)); if (!d) throw new Error(tr('msg.remote.noDevice'));
       board.run('DELETE FROM devices WHERE id = ?', d.id);
+      keys.delete(d.id); seen.delete(d.id);
       for (const c of clients) if (c.device === d.id) { try { c.res.end(); } catch { /* closed */ } clients.delete(c); }
       board.event(null, 'usuario', 'device.revoked', d.name);
       return true;
     }
   };
+  return remote;
 }
