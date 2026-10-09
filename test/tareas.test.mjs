@@ -23,8 +23,8 @@ test('límite de uso: la tarea queda «limitada» y sigue sola al reiniciarse el
   const task = await call('tasks.create', { project: 'web', title: 'Con límite', description: 'LIMITE 2500', agent: 'claude' });
   const limited = await status(call, task.id, ['limited']);
   assert.ok(Date.parse(limited.limited_until) > Date.now() - 1000, 'guarda cuándo se reinicia');
-  assert.match(limited.result, /llegó a su límite de uso\. Continúa sola a las/);
-  assert.ok((await call('chat.list')).some((m) => m.body.includes(`#${task.id}`) && /continuará sola/.test(m.body)));
+  assert.match(limited.result, /ha alcanzado su límite de uso\. La tarea se reanudará automáticamente a las/);
+  assert.ok((await call('chat.list')).some((m) => m.body.includes(`#${task.id}`) && /se reanudará automáticamente/.test(m.body)));
   const usage = (await call('usage.get')).find((u) => u.account === 'claude');
   assert.ok(usage.cooldownUntil > Date.now(), 'la cuenta no recibe nada más hasta el reinicio');
   const done = await status(call, task.id, ['done'], 20000);
@@ -33,7 +33,7 @@ test('límite de uso: la tarea queda «limitada» y sigue sola al reiniciarse el
   const log = fakeLog(t.home, task.id);
   assert.match(log.at(-1).text, /El límite de uso se ha reiniciado\. Continúa la tarea donde la dejaste\./);
   assert.equal(log.at(-1).resumeId, log[0].newSessionId, 'continúa la misma conversación del agente');
-  assert.ok((await call('chat.list')).some((m) => /Se reinició el cupo: la tarea #\d+/.test(m.body)));
+  assert.ok((await call('chat.list')).some((m) => /Se ha restablecido el cupo\. La tarea #\d+/.test(m.body)));
 });
 
 test('límite de uso con «seguir al reiniciarse» desactivado: espera al usuario, que puede reintentarla', async () => {
@@ -60,7 +60,7 @@ test('continuar tras reiniciar: la tarea que trabajaba al cerrarse la app sigue 
   const log = fakeLog(t.home, task.id);
   assert.match(log.at(-1).text, /se cerró mientras trabajabas en esta tarea\. Continúa donde lo dejaste/);
   assert.equal(log.at(-1).resumeId, log[0].newSessionId, 'el agente retoma su propia conversación');
-  assert.ok((await call('chat.list')).some((m) => m.body.startsWith('🔁') && m.body.includes(`#${task.id}`)));
+  assert.ok((await call('chat.list')).some((m) => /se reanuda desde donde se quedó/.test(m.body) && m.body.includes(`#${task.id}`)));
 });
 
 test('continuar tras reiniciar desactivado: la tarea interrumpida queda fallida para reintentarla', async () => {
@@ -72,7 +72,7 @@ test('continuar tras reiniciar desactivado: la tarea interrumpida queda fallida 
   ({ call } = engine);
   const failed = await call('tasks.get', { id: task.id });
   assert.equal(failed.status, 'failed');
-  assert.match(failed.result, /se cerró mientras trabajaba esta tarea\. Reinténtala/);
+  assert.match(failed.result, /se interrumpió porque Orb se cerró\. Puedes reintentarla/);
 });
 
 test('delegación: el agente reparte una subtarea, espera su resultado y la subtarea cuelga de la suya', async () => {

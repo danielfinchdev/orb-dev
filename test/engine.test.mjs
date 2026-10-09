@@ -29,7 +29,7 @@ test('ciclo completo: el asistente crea la tarea, el agente la hace, el asistent
   assert.deepEqual(report.meta.tasks, [task.id]);
   assert.deepEqual(await call('chat.accept', { id: report.id }), [task.id]);
   assert.equal((await call('chat.list')).find((m) => m.id === report.id).meta.accepted, true);
-  await assert.rejects(call('chat.accept', { id: report.id }), /pendientes de tu OK/);
+  await assert.rejects(call('chat.accept', { id: report.id }), /pendientes de aceptar/);
   const log = await call('logs.read', { project: 'web' });
   assert.match(log, /Tarea #\d+: Tarea del asistente/); assert.match(log, /dio el OK/);
   assert.ok(events.some((e) => e.event === 'chat:new'), 'avisos para la ventana');
@@ -79,9 +79,9 @@ test('conversación directa con Codex: en directo y la segunda vez continúa la 
   await call('sessions.send', { id: s.id, text: 'sigue' });
   const items = await until(async () => { const all = await call('sessions.items', { id: s.id }); return all.some((i) => /Codex sigue/.test(i.body)) && all; }, 'continuación');
   assert.ok(items.some((i) => i.kind === 'file'));
-  await assert.rejects(call('sessions.create', { agent: 'otro' }), /agente no válido/);
+  await assert.rejects(call('sessions.create', { agent: 'otro' }), /agente no es válido/);
   // Without a project the agent would sit in the assistant's own folder: read only.
-  await assert.rejects(call('sessions.create', { agent: 'codex', permission: 'editar' }), /solo puede leer/);
+  await assert.rejects(call('sessions.create', { agent: 'codex', permission: 'editar' }), /solo tiene acceso de lectura/);
   assert.equal((await call('sessions.create', { agent: 'codex' })).permission, 'leer');
   await assert.rejects(call('nada.raro'), /acción desconocida/);
 });

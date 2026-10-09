@@ -232,7 +232,7 @@ test('si el propio adaptador falla al enviar, el turno termina igual y avisa a q
 test('una conversación no se borra mientras trabaja; la de una tarea se borra con su tarea', async () => {
   const s = chat('claude');
   sessions.send(s.id, 'LENTO');
-  assert.throws(() => sessions.remove(s.id), /detenla antes/);
+  assert.throws(() => sessions.remove(s.id), /detenla antes/i);
   await idle(s.id);
   sessions.remove(s.id);
   assert.equal(sessions.get(s.id), undefined);

@@ -13,7 +13,7 @@ export default {
   'nav.folders': 'Carpetas',
   'nav.loose': 'Sin carpeta',
   'nav.noProject': 'Sin proyecto',
-  'inbox.waiting': 'Te esperan',
-  'inbox.working': 'Trabajando',
-  'inbox.settle': 'Listo: quitar de aquí'
+  'inbox.waiting': 'Pendientes',
+  'inbox.working': 'En curso',
+  'inbox.settle': 'Marcar como resuelto'
 };
