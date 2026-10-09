@@ -537,6 +537,20 @@ que iniciar sesión en la app. Si no, «Iniciar sesión» abre el login oficial 
 - **No se empaqueta** la copia de Claude Code del SDK (238 MB): se usa la del usuario.
 - `build/icon.ico` lleva 10 tamaños (`npm run icon:ico`).
 - **Pruebas en cada push y PR**, en Windows y Linux: `.github/workflows/pruebas.yml`.
+- **Instalador** (NSIS, por usuario, sin administrador): acceso directo en escritorio y menú Inicio. La release publica
+  también `latest.yml` y los `.blockmap`, que usa el actualizador.
+
+**Actualizaciones** (`src/main/updater.mjs`, `src/ui/components/update-card.jsx`):
+- La app instalada usa `electron-updater` con GitHub Releases (`build.publish` en `package.json`; repositorio público, sin
+  token). Mira al abrirse (a los 15 s) y cada 4 h; no descarga nada hasta que el usuario pulsa **Actualizar**.
+- Estados que recibe la ventana (evento `app:update`): `checking`, `available`, `downloading` (con `percent`), `downloaded`,
+  `none`, `error`, `off`. Tarjeta abajo a la izquierda (junto al menú) y tarjeta «Actualizaciones» en Ajustes.
+- **Reiniciar y actualizar** (`app:updateInstall`): si hay tareas en marcha pregunta antes; luego para el motor y llama a
+  `quitAndInstall` (instalación silenciosa y vuelve a abrir Orb). Con «Más tarde» se instala al cerrar la app.
+- **Portable** (`PORTABLE_EXECUTABLE_FILE`): consulta la API de GitHub (`releases/latest`) y el botón abre la descarga.
+- Desde el código no hay actualizaciones (`off`). `ORB_NO_UPDATE=1` las apaga; `ORB_FAKE_UPDATE=<versión>` simula una
+  versión nueva sin red (pruebas); `ORB_UPDATE_URL=http://127.0.0.1:<puerto>/` usa un servidor local para probar una
+  actualización antes de publicarla.
 
 ## 30. Pruebas
 
