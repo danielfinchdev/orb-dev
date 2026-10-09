@@ -43,7 +43,7 @@ export function Companion({ name, base, hidden }) {
         </div>
       ) : null}
       <button className="pointer-events-auto cursor-pointer drop-shadow-lg transition-transform hover:scale-105" onClick={() => go('chat')} title={t('comp.companion.talkTo', { name })}>
-        <Robot size={68} mood={mood} title={name} />
+        <Robot size={68} mood={mood} title={name} live />
       </button>
     </div>
   );

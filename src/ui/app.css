@@ -129,57 +129,6 @@
 .prose-chat table { border-collapse: collapse; margin: .5em 0; font-size: .95em; }
 .prose-chat th, .prose-chat td { border: 1px solid var(--border); padding: .3em .6em; text-align: left; }
 
-/* ---------- the robot ---------- */
-.bot { --bot-eye: #7ff3da; display: inline-flex; line-height: 0; flex: none; }
-.bot svg { overflow: visible; }
-.bot .b-float { animation: b-float 3.6s ease-in-out infinite; transform-origin: 60px 70px; }
-.bot .b-shadow { animation: b-shadow 3.6s ease-in-out infinite; transform-origin: 60px 135px; transform-box: view-box; }
-.bot .b-eye { animation: b-blink 5s infinite; transform-box: fill-box; transform-origin: center; }
-.bot .b-glow { animation: b-pulse 2.4s ease-in-out infinite; }
-.bot .b-eyes { transition: transform .4s; }
-.bot .b-arm-r { transform-origin: 80px 100px; transform-box: view-box; animation: b-hello 3.6s ease-in-out infinite; }
-.bot .b-arm-l { transform-origin: 42px 100px; transform-box: view-box; animation: b-sway 3.6s ease-in-out infinite; }
-.bot .b-x { display: none; }
-.bot.happy .b-smile { display: inline; }
-.bot.thinking .b-eyes { transform: translate(4px, -4px); }
-.bot.thinking .b-dots { display: inline; }
-.bot.thinking .b-dots circle { animation: b-dot 1.2s infinite; }
-.bot.thinking .b-dots circle:nth-child(2) { animation-delay: .2s; }
-.bot.thinking .b-dots circle:nth-child(3) { animation-delay: .4s; }
-.bot.thinking .b-glow { animation-duration: .7s; }
-.bot.thinking .b-arm-r { animation: none; transform: rotate(40deg); }
-.bot.talking .b-talk { display: inline; animation: b-talk .28s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: center; }
-.bot.happy .b-eyes { display: none; }
-.bot.happy .b-happy-eyes, .bot.happy .b-sparkle { display: inline; }
-.bot.happy .b-sparkle { animation: b-pulse 1s ease-in-out infinite; }
-.bot.happy .b-arm-r { animation: b-wave .45s ease-in-out 4 alternate; }
-.bot.happy .b-float { animation: b-hop .8s ease-in-out 2; }
-.bot.worried { --bot-eye: #ffc56b; }
-.bot.worried .b-frown, .bot.worried .b-sweat { display: inline; }
-.bot.worried .b-eye { transform: scaleY(.75); animation: none; }
-.bot.worried .b-arm-r { animation: none; transform: rotate(60deg); }
-.bot.worried .b-float { animation: b-wobble .45s ease-in-out 3; }
-.bot.sleeping .b-eyes { display: none; }
-.bot.sleeping .b-closed, .bot.sleeping .b-zz { display: inline; }
-.bot.sleeping .b-zz { animation: b-zz 2.4s ease-in-out infinite; }
-.bot.sleeping .b-float { animation-duration: 6s; }
-.bot.sleeping .b-arm-r { animation: none; transform: rotate(60deg); }
-.bot.sleeping .b-glow { opacity: .35; animation: none; }
-.bot.still * { animation: none !important; }
-@keyframes b-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
-@keyframes b-shadow { 0%, 100% { transform: scaleX(1); opacity: .2; } 50% { transform: scaleX(.8); opacity: .12; } }
-@keyframes b-blink { 0%, 93%, 100% { transform: scaleY(1); } 96% { transform: scaleY(.1); } }
-@keyframes b-hello { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-8deg); } }
-@keyframes b-sway { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(5deg); } }
-@keyframes b-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
-@keyframes b-dot { 0%, 100% { opacity: .15; } 50% { opacity: 1; } }
-@keyframes b-talk { from { transform: scale(.7, .35); } to { transform: scale(1, 1.15); } }
-@keyframes b-wave { from { transform: rotate(8deg); } to { transform: rotate(-26deg); } }
-@keyframes b-hop { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-12px); } }
-@keyframes b-wobble { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-5deg); } 70% { transform: rotate(5deg); } }
-@keyframes b-zz { 0% { opacity: 0; transform: translate(0, 0) scale(.8); } 40% { opacity: 1; } 100% { opacity: 0; transform: translate(10px, -14px) scale(1.1); } }
-@media (prefers-reduced-motion: reduce) { .bot * { animation: none !important; } }
-
 /* ---------- the robot (orb.jsx): the artwork plus living eyes ---------- */
 .orb { --k: 1; --eye: #8cf6ff; --eye-glow: #2fd6ff; position: relative; display: inline-block; flex: none; line-height: 0; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
 .orb-body { position: absolute; bottom: 0; animation: orb-float 4.2s ease-in-out infinite; will-change: transform; }

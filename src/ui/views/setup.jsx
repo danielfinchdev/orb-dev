@@ -37,7 +37,7 @@ export function Setup({ onDone }) {
   if (step === 'equipo') return (
     <div className="brand-sky flex h-full overflow-auto px-6 pt-24 pb-6">
       <div className="bg-card/95 text-card-foreground m-auto grid w-full max-w-[520px] gap-5 rounded-3xl border border-white/40 p-8 shadow-2xl backdrop-blur">
-        <div className="-mt-20 flex justify-center"><Robot size={120} mood="happy" title={shown} /></div>
+        <div className="-mt-20 flex justify-center"><Robot size={120} mood="hello" title={shown} live /></div>
         <div className="text-center"><h1 className="text-2xl">{t('setup.prepareTitle')}</h1><p className="text-muted-foreground mt-2 text-sm">{t('setup.prepareDesc')}</p></div>
         <Installer />
         <Button size="lg" onClick={onDone}>{t('setup.continue')}<ArrowRight /></Button>
