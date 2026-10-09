@@ -14,6 +14,10 @@ const BASE = import.meta.env.BASE_URL;
 const FILES = { head: 'cabeza', stand: 'de-pie', wave: 'saluda', point: 'senala', think: 'piensa' };
 const STAND = geo['de-pie'];
 const ACTS = ['wink', 'look', 'code', 'tilt', 'hop', 'look', 'code'];
+// Each pose belongs to a mood, and the face must match it: the hand on the chin (with the «?») only while thinking, the
+// pointing one only when happy (laughing too). Waving is for hello, idle or talking; anything else stands.
+const POSE_OF = { thinking: 'think', happy: 'point' };
+const coherent = (pose, face) => POSE_OF[face] ?? (pose === 'think' || pose === 'point' ? 'stand' : pose);
 const LENGTH = { wink: 900, look: 1800, code: 3200, tilt: 2200, hop: 800, boop: 380, laugh: 1600 };
 
 // Fake code for the visor: rows of coloured bars, like syntax-highlighted lines seen from afar.
@@ -75,7 +79,8 @@ export function Orb({ pose = 'head', size = 34, mood = 'idle', live: wantsLive =
     onPoke?.(laugh ? 'laugh' : 'boop');
   }
 
-  const file = FILES[pose] ?? FILES.head;
+  const face = act === 'laugh' ? 'happy' : mood;
+  const file = pose === 'head' ? FILES.head : FILES[coherent(pose, face)] ?? FILES.stand;
   const G = geo[file];
   const head = file === 'cabeza';
   // The whole robot sits on a box the size of the standing pose; other poses keep the helmet the same size, feet down.
@@ -83,7 +88,6 @@ export function Orb({ pose = 'head', size = 34, mood = 'idle', live: wantsLive =
   const w = head ? size : (size * STAND.visor.w) / G.visor.w;
   const VW = 1000, VH = Math.round(1000 * G.ratio);
   const k = G.visor.w / geo.cabeza.visor.w; // eye movements are measured on the head
-  const face = act === 'laugh' ? 'happy' : mood;
   const url = (n) => `${BASE}robot/${n}.png`;
   return (
     <span className={cn('orb', still && 'still', calm && 'calm', className)} data-mood={face} data-act={act ?? undefined} data-blink={blink || undefined}
