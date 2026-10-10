@@ -84,7 +84,9 @@ export class Orchestrator {
     const o = ctx.config.orchestrator ?? {};
     const agent = o.agent || 'claude';
     // 2.6: the brain can be any agent: its model's label comes from the assistant's list (Claude) or what the agent reported.
-    const model = [...(agent === 'claude' ? o.models ?? [] : []), ...(this.board.settingJson(`models:${agent}`) ?? [])].find((m) => m.id === o.model);
+    // Without a model of its own, the one the agent says it uses by default (Codex: GPT-6-Luna…), named.
+    const known = [...(agent === 'claude' ? o.models ?? [] : []), ...(this.board.settingJson(`models:${agent}`) ?? [])];
+    const model = known.find((m) => m.id === o.model) ?? (o.model ? null : known.find((m) => m.default));
     return { agent, agentLabel: AGENT_LABELS[agent] ?? agent, account: o.account || agent, model: o.model, modelLabel: model?.label ?? (o.model || tr('msg.orch.defaultModel')), models: o.models ?? [], reasoning: o.reasoning ?? 'medium', orchestrate: o.orchestrate !== false, turns: Number(this.board.setting('orchestrator_session') ? this.board.setting('orchestrator_turns') ?? 0 : 0), maxTurns: o.maxTurns ?? 60, context: this.board.settingJson('orchestrator_context') };
   }
 

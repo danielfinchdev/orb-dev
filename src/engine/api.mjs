@@ -14,7 +14,7 @@ import { statusAll, status as agentStatus, openLogin, quickRun, forgetInstalled 
 import { PERMISSIONS } from './sessions.mjs';
 import { readLog, writeLog, logFiles } from './logs.mjs';
 import { expandMentions, mentionOptions } from './mentions.mjs';
-import { ofUserLabel, userLabel } from '../core/board.mjs';
+import { ofUserLabel, userLabel, assistantName } from '../core/board.mjs';
 import * as github from './github.mjs';
 import * as installer from './installer.mjs';
 import * as expert from './expert.mjs';
@@ -194,7 +194,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       if (patch.agent && patch.agent !== (before.agent ?? 'claude')) orchestrator.forget();
       const info = orchestrator.info();
       const level = { low: tr('msg.api.reasoningLow'), medium: tr('msg.api.reasoningMedium'), high: tr('msg.api.reasoningHigh') }[c.orchestrator.reasoning] ?? c.orchestrator.reasoning;
-      if ((patch.model !== undefined && patch.model !== before.model) || (patch.agent && patch.agent !== (before.agent ?? 'claude')) || (patch.reasoning && patch.reasoning !== before.reasoning)) board.addChat('system', tr('msg.api.assistantBrain', { agent: info.agentLabel, label: info.modelLabel, reasoning: level }));
+      if ((patch.model !== undefined && patch.model !== before.model) || (patch.agent && patch.agent !== (before.agent ?? 'claude')) || (patch.reasoning && patch.reasoning !== before.reasoning)) board.addChat('system', tr('msg.api.assistantBrain', { name: assistantName(), agent: info.agentLabel, label: info.modelLabel, reasoning: level }));
       if (patch.orchestrate !== undefined && patch.orchestrate !== before.orchestrate) board.addChat('system', patch.orchestrate ? tr('msg.api.modeOrchestrator') : tr('msg.api.modeFree'));
       return info;
     },

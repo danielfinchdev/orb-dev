@@ -71,7 +71,7 @@ export default {
   "msg.api.reasoningMedium": "medium",
   "msg.api.reasoningLow": "low",
   "msg.api.reasoningHigh": "high",
-  "msg.api.assistantBrain": "Assistant brain: {agent} · {label} (reasoning: {reasoning}).",
+  "msg.api.assistantBrain": "{name} will use {agent} · {label}, with {reasoning} reasoning.",
   "msg.api.agentUnavailable": "{agent} is not installed or has no active account",
   "msg.api.taskModelFromTask": "a task’s model is changed from the task itself",
   "msg.api.tooLong": "the {name} field is too long (maximum: {max} characters)",
