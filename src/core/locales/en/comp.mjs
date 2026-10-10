@@ -71,6 +71,7 @@ export default {
   'comp.projects.pick': 'Choose project',
   'comp.projects.inFolder': 'Your projects',
   'comp.projects.none': 'No projects yet.',
+  'comp.projects.noneHint': 'No project, with any agent',
   'comp.projects.linkMenu': 'Link a folder…',
   'comp.projects.cloneMenu': 'Clone from GitHub…',
   'comp.projects.clear': 'Clear the selected project',
@@ -88,6 +89,5 @@ export default {
   'comp.sidebar.noQuota': 'Out of quota: you can continue whenever you want',
   'comp.sidebar.halfway': 'Interrupted',
   'comp.sidebar.waitApproval': 'Awaiting your approval',
-  'comp.sidebar.foldersHint': 'Each project is a folder. The tasks you assign to it will appear here.',
-  'comp.sidebar.looseHint': 'Talk directly to any agent (Claude, Codex, Cursor, Gemini…).'
+  'comp.sidebar.foldersHint': 'Each project is a folder. The tasks you assign to it will appear here.'
 };

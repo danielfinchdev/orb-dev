@@ -20,7 +20,7 @@ import * as installer from './installer.mjs';
 import * as expert from './expert.mjs';
 import { adbStatus, ensureAdb } from './android.mjs';
 import { mcpFolder } from './mcp-folder.mjs';
-import { modelCatalog } from './catalog.mjs';
+import { modelCatalog, refreshModels, refreshAllModels } from './catalog.mjs';
 import { translate } from '../core/i18n.mjs';
 
 // Names of the fields in the messages (Spanish as they were; the key is the Spanish word).
@@ -74,8 +74,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     }),
     'config.save': ({ patch }) => { const c = saveConfig(patch ?? {}); emit('config:changed', c); return c; },
 
-    'agents.status': ({ refresh }) => { if (refresh) forgetInstalled(); return statusAll({ refresh: Boolean(refresh) }); },
-    'agents.check': ({ agent }) => agentStatus(oneOf(agent, AGENT_IDS, 'agente'), { refresh: true }),
+    // «Comprobar» / «Comprobar todo» also ask the agents again for their models (in the background).
+    'agents.status': ({ refresh }) => { if (refresh) { forgetInstalled(); refreshAllModels(board, { force: true, log }); } return statusAll({ refresh: Boolean(refresh) }); },
+    'agents.check': ({ agent }) => { const a = oneOf(agent, AGENT_IDS, 'agente'); forgetInstalled(); refreshModels(board, a, { force: true, log }); return agentStatus(a, { refresh: true }); },
     'agents.login': ({ account: id, agent }) => {
       const acc = str(id ?? agent, 'cuenta', 40);
       openLogin(acc);
@@ -164,7 +165,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       else if (patch.agent && patch.agent !== (o.agent ?? 'claude')) patch.account = brain; // another agent: its own account
       if (model !== undefined) {
         const m = String(model ?? '');
-        if (brain === 'claude' && m && !o.models.some((x) => x.id === m) && !/^(sonnet|opus|haiku)$/.test(m)) fail(tr('msg.api.modelUnavailable'));
+        if (brain === 'claude' && m && !o.models.some((x) => x.id === m) && !/^(sonnet|opus|haiku)$/.test(m)) {
+          // 2.6: a model Claude Code itself offers (discovered) joins the assistant's models, so the settings stay valid.
+          const offered = (board.settingJson('models:claude') ?? []).find((x) => x.id === m);
+          if (!offered || !/^[\w.:-]{1,80}$/.test(m)) fail(tr('msg.api.modelUnavailable'));
+          patch.models = [...o.models, { id: m, label: offered.label }];
+        }
         if (m && !/^[\w.:\-/[\]=,@]{1,80}$/.test(m)) fail(tr('msg.api.modelUnavailable'));
         patch.model = m || (brain === 'claude' ? 'claude-sonnet-5-5' : '');
       } else if (patch.agent && patch.agent !== (o.agent ?? 'claude')) patch.model = brain === 'claude' ? 'claude-sonnet-5-5' : '';
@@ -182,7 +188,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return info;
     },
     // 2.6: the brains to choose from (agent + model), which ones spend the quota faster and how used each account is.
-    'models.catalog': () => modelCatalog(board),
+    'models.catalog': () => modelCatalog(board, { discover: true, log }),
 
     'tasks.list': ({ limit }) => board.panelTasks(Math.min(Number(limit) || 150, 500)),
     'tasks.live': () => scheduler.live(),
@@ -274,6 +280,16 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return (needle ? rows.filter((r) => `${r.actor} ${r.kind} ${r.detail} ${r.title ?? ''}`.toLowerCase().includes(needle)) : rows).map((r) => ({ ...r, detail: redactSecrets(r.detail) }));
     },
     'usage.get': () => usageReport(board),
+    // 2.6: the accounts working right now (the assistant's brain and the agents' running sessions), with the windows of
+    // their plan the agents reported (session, weekly…), for the panel of the context ring.
+    'usage.now': () => {
+      const brain = orchestrator.info();
+      const busy = board.all("SELECT DISTINCT account, agent FROM sessions WHERE status = 'running' AND account IS NOT NULL");
+      const ids = [...new Set([brain.account, ...busy.map((s) => s.account)].filter(Boolean))];
+      const report = usageReport(board);
+      return ids.map((id) => report.find((u) => u.account === id) ?? { account: id, agent: busy.find((s) => s.account === id)?.agent ?? brain.agent, label: id, windows: [] })
+        .map((u) => ({ account: u.account, agent: u.agent, label: u.label, windows: u.windows ?? [], cooldownUntil: u.cooldownUntil ?? null, brain: u.account === brain.account }));
+    },
     // Expert mode (PC only, read-only): the project's files, git and the machine's load.
     'expert.tree': ({ project: name, dir }) => expert.tree(project(name).path, str(dir, 'carpeta', 1000, { optional: true })),
     'expert.read': ({ project: name, path: file }) => expert.readFile(project(name).path, str(file, 'archivo', 1000)),

@@ -8,7 +8,7 @@ import { PageHeader } from '@/components/page.jsx';
 import { ProjectPicker } from '@/components/project-actions.jsx';
 import { BrainPicker, ReasoningPicker, PermissionPicker, UsageBubble, useCatalog, useUsageBubble } from '@/components/brain-picker.jsx';
 import { confirm } from '@/components/dialogs.jsx';
-import { Checkbox, BubbleTip } from '@/components/ui/overlay.jsx';
+import { Switch, BubbleTip } from '@/components/ui/overlay.jsx';
 import { useStore, call, act, go, refresh } from '@/lib/store.js';
 import { PERMISSION_HINT } from '@/lib/labels.js';
 import { useT } from '@/lib/i18n.js';
@@ -84,7 +84,7 @@ export function NewChatView() {
           {!orchestrate ? <PermissionPicker value={active ? permission : 'leer'} onChange={setPermission} disabled={!active} /> : null}
           <BubbleTip title={t('chat.orchestrator')} text={t('chat.orchestratorHint')} side="top">
             <label className="flex cursor-pointer items-center gap-2 text-[13px]">
-              <Checkbox checked={orchestrate} onCheckedChange={(v) => setOrchestrate(v === true)} data-testid="new-chat-orchestrator" />{t('chat.orchestrator')}
+              <Switch checked={orchestrate} onCheckedChange={(v) => setOrchestrate(v === true)} data-testid="new-chat-orchestrator" />{t('chat.orchestrator')}
             </label>
           </BubbleTip>
         </>} />

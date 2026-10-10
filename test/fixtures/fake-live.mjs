@@ -56,7 +56,17 @@ export function fakeAdapter(id, real) {
     detect: () => ({ cmd: process.execPath, pre: [] }),
     loginState: () => 'si',
     loginCommand: (exe) => ({ cmd: exe.cmd, args: ['--version'] }),
-    createLive: (o) => createFakeLive(id, real?.label ?? id, caps, o)
+    createLive: (o) => createFakeLive(id, real?.label ?? id, caps, o),
+    // 2.6: the models it offers. Fixed test models (clearly marked as such) unless ORB_FAKE_REAL_MODELS=1: then the real
+    // agent of this PC is asked (a demo with fake agents shows the real names), if it is installed.
+    discoverModels: async (exe, cfg = {}, env = {}) => {
+      if (process.env.ORB_FAKE_REAL_MODELS === '1') {
+        const realExe = real?.discoverModels ? real.detect(cfg) : null;
+        return realExe ? real.discoverModels(realExe, cfg, env) : null;
+      }
+      if (process.env.ORB_FAKE_MODELS_LOG) { try { fs.appendFileSync(process.env.ORB_FAKE_MODELS_LOG, `${id}\n`); } catch { /* log unavailable */ } }
+      return [1, 2, 3].map((n) => ({ id: `fake-${id}-${n}`, label: `Modelo de prueba ${n}`, ...(n === 1 ? { default: true } : {}) }));
+    }
   };
 }
 

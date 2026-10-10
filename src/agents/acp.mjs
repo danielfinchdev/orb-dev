@@ -3,8 +3,9 @@
 // Qwen Code, GitHub Copilot CLI…); each one is a small spec: how to find it, how to start it in ACP mode, where its login
 // lives and how to install it. The agent's own program and login are used: Orb never sees credentials.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip } from './common.mjs';
+import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, readOutput } from './common.mjs';
 import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree } from './live.mjs';
 import { decide } from '../core/guard.mjs';
 import { tr } from '../core/context.mjs';
@@ -35,7 +36,7 @@ export const ACP_SPECS = {
     strengths: 'contexto enorme, leer proyectos grandes, investigar y documentar', models: ['gemini-3-pro', 'gemini-3-flash'], defaultModel: ''
   },
   opencode: {
-    label: 'OpenCode', pkg: 'opencode-ai', bin: 'opencode', acpArgs: ['acp'],
+    label: 'OpenCode', pkg: 'opencode-ai', bin: 'opencode', acpArgs: ['acp'], listArgs: ['models'],
     login: ['.local/share/opencode/auth.json'], loginArgs: ['auth', 'login'], install: 'npm install -g opencode-ai',
     strengths: 'agente abierto con muchos proveedores y modelos', models: [], defaultModel: ''
   },
@@ -61,6 +62,17 @@ const textOfContent = (content) => (Array.isArray(content) ? content : [content]
   if (c.type === 'terminal') return `[terminal ${c.terminalId ?? ''}]`;
   return '';
 }).filter(Boolean).join('\n');
+
+// 2.6: the models an ACP agent offers in its answer to session/new (or session/load): the "model" config option
+// (options, maybe in groups, and its current value) or the older models field (availableModels, currentModelId).
+export function acpModels(res) {
+  const opt = (res?.configOptions ?? []).find((c) => c?.category === 'model' || c?.id === 'model');
+  const flat = (list) => (Array.isArray(list) ? list : []).flatMap((o) => (Array.isArray(o?.options) ? flat(o.options) : [o]));
+  const rows = opt && flat(opt.options).length ? flat(opt.options) : (res?.models?.availableModels ?? []);
+  const current = opt?.currentValue ?? res?.models?.currentModelId ?? null;
+  return rows.map((m) => ({ id: m?.value ?? m?.modelId ?? m?.id, label: m?.name ?? m?.label ?? m?.value ?? m?.modelId })).filter((m) => m.id)
+    .map((m) => ({ id: String(m.id), label: String(m.label ?? m.id), ...(current != null && String(current) === String(m.id) ? { default: true } : {}) }));
+}
 
 export function acpAgent(id, spec) {
   const caps = { images: false, steer: false, fork: false, approvals: true, models: false, context: true };
@@ -167,7 +179,7 @@ export function acpAgent(id, spec) {
       if (ro) peer.request('session/set_mode', { sessionId, modeId: ro.id }).catch(() => {});
       // 2.6: the models this agent offers, for the brain selector.
       const modelOpt = (res?.configOptions ?? []).find((c) => c.category === 'model' || c.id === 'model');
-      const offered = (modelOpt?.options ?? res?.models?.availableModels ?? []).map((m) => ({ id: m.value ?? m.modelId ?? m.id, label: m.name ?? m.label ?? m.value ?? m.modelId })).filter((m) => m.id);
+      const offered = acpModels(res);
       if (offered.length) onEvent({ type: 'models', list: offered });
       if (o.model) {
         const opt = modelOpt;
@@ -207,5 +219,28 @@ export function acpAgent(id, spec) {
     return live;
   }
 
-  return { id, label: spec.label, kind: 'acp', caps, spec, detect, loginState, loginCommand, createLive, install: spec.install };
+  // 2.6: the models before any conversation: the program in ACP mode, a hello and an empty session (no prompt, nothing is
+  // spent), whose answer lists them; then it is closed. Agents with a listing command of their own (listArgs, such as
+  // `opencode models`) use it when the session does not say.
+  async function discoverModels(exe, cfg = {}, env = {}) {
+    const attempt = async (args) => {
+      const proc = spawnAgent(exe.cmd, [...exe.pre, ...args], { cwd: os.tmpdir(), env });
+      const p = new JsonRpcPeer(proc, { onRequest: async () => ({ outcome: { outcome: 'cancelled' } }) });
+      proc.on('exit', () => p.close()); proc.on('error', () => p.close());
+      try {
+        await p.request('initialize', { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: 'orb-dev', title: 'Orb', version: '2.6.0' } }, { timeoutMs: 45000 });
+        return acpModels(await p.request('session/new', { cwd: os.tmpdir(), mcpServers: [] }, { timeoutMs: 45000 }));
+      } finally { p.close(); killTree(proc); }
+    };
+    let list = null;
+    try { list = await attempt(spec.acpArgs); } catch { if (spec.altArgs) { try { list = await attempt(spec.altArgs); } catch { list = null; } } }
+    if (!list?.length && spec.listArgs) {
+      const out = await readOutput(exe.cmd, [...exe.pre, ...spec.listArgs], { env, timeoutMs: 45000 });
+      const ids = String(out ?? '').split(/\r?\n/).map((l) => l.trim()).filter((l) => /^[\w.:\-[\]=,@]+\/[\w.:\-/[\]=,@]+$/.test(l) && l.length <= 80);
+      if (ids.length) list = ids.map((m) => ({ id: m, label: m }));
+    }
+    return list?.length ? list : null;
+  }
+
+  return { id, label: spec.label, kind: 'acp', caps, spec, detect, loginState, loginCommand, createLive, discoverModels, install: spec.install };
 }

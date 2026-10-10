@@ -18,14 +18,16 @@ export function useCatalog() {
   return catalog;
 }
 
-const modelOf = (catalog, value) => catalog?.find((a) => a.id === value.agent)?.models.find((m) => m.id === value.model) ?? null;
+const modelOf = (catalog, value) => catalog?.find((a) => a.id === value.agent)?.models.find((m) => m.id === (value.model ?? '')) ?? null;
+// The agent's own default (id ''), named after the model the agent says it uses when it says so.
+const labelOf = (a, m, t) => (m.id ? m.label : m.defaultOf ? t('brain.defaultIs', { model: m.defaultOf }) : t('brain.defaultOf', { agent: a.label }));
 
 // value: { agent, model }; onChange({ agent, model, account }).
 export function BrainPicker({ catalog, value, onChange, className }) {
   const t = useT();
   const agent = catalog?.find((a) => a.id === value.agent);
   const model = modelOf(catalog, value);
-  const label = model?.label ?? (value.model || t('brain.defaultModel'));
+  const label = model && agent ? labelOf(agent, model, t) : (value.model || t('brain.defaultModel'));
   return (
     <DropdownMenu>
       <BubbleTip title={t('brain.title')} text={t('brain.titleText')}>
@@ -46,7 +48,7 @@ export function BrainPicker({ catalog, value, onChange, className }) {
               const on = value.agent === a.id && (value.model ?? '') === m.id;
               return (
                 <DropdownMenuItem key={m.id || 'default'} onSelect={() => onChange({ agent: a.id, model: m.id, account: a.accounts[0]?.id ?? a.id })} data-testid={`brain-${a.id}-${m.id || 'default'}`}>
-                  <span className="min-w-0 flex-1 truncate pl-5">{m.label}</span>
+                  <span className="min-w-0 flex-1 truncate pl-5">{labelOf(a, m, t)}</span>
                   {m.heavy ? <Flame className="text-warning! size-3.5" aria-label={t('brain.heavy')} /> : null}
                   {on ? <Check className="text-primary!" /> : null}
                 </DropdownMenuItem>

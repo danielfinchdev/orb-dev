@@ -50,6 +50,7 @@ export default {
   'brain.none': 'There are no installed agents with an active account. Install them in Agents.',
   'brain.defaultModel': 'default',
   'brain.defaultOf': '{agent} default',
+  'brain.defaultIs': 'Default ({model})',
   'brain.heavy': 'Uses the quota faster',
   'brain.reasoning': 'Reasoning',
   'brain.reasoningShort': 'Reasoning',

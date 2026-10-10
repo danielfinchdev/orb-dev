@@ -93,6 +93,10 @@ async function start(home, version, secret, browser) {
   const { ADAPTERS } = await import('../agents/index.mjs');
   log(`agentes: ${Object.keys(ADAPTERS).map((a) => { let cmd = null; try { cmd = ADAPTERS[a].detect(ctx.config.agents[a] ?? {})?.cmd ?? null; } catch { /* not found */ } return `${a}=${cmd ?? 'no'}`; }).join(' · ')}`);
   loop();
+  // 2.6: the models of every installed agent, asked to the agents themselves a moment after starting (each one at most
+  // once every 12 h), so the brain selector names them before any conversation.
+  const { refreshAllModels } = await import('./catalog.mjs');
+  setTimeout(() => { refreshAllModels(board, { log }).catch(() => {}); }, Number(process.env.ORB_MODELS_DELAY_MS ?? 3000)).unref?.();
   // 2.6: the reports the assistant still owed when the app was closed come back.
   const owed = orchestrator.resume();
   if (owed) log(`asistente: ${owed} aviso(s) pendientes recuperados`);
