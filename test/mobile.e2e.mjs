@@ -80,13 +80,13 @@ try {
   step = 'nueva conversación';
   await page.getByRole('button', { name: 'Menú' }).click();
   await page.locator('[data-testid=new-conversation]:visible').click();
-  await page.waitForSelector('[role=dialog]');
+  await page.waitForSelector('[data-testid=new-chat-input]');
+  await page.click('[data-testid=new-chat-orchestrator]'); // a direct chat with the agent
   await page.waitForTimeout(300);
-  await shot('08-nueva-conversacion');
-  await page.getByRole('dialog').getByRole('button', { name: 'Empezar', exact: true }).click();
-  await page.waitForSelector('[data-testid=session-input]');
-  await page.fill('[data-testid=session-input]', 'Hola Claude');
+  await noSideScroll('nuevo chat'); await shot('08-nueva-conversacion');
+  await page.fill('[data-testid=new-chat-input]', 'Hola Claude');
   await page.keyboard.press('Enter');
+  await page.waitForSelector('[data-testid=session-input]');
   await page.waitForSelector('text=Recibido: Hola Claude');
   await page.waitForTimeout(400);
   await noSideScroll('conversación'); await shot('09-conversacion');

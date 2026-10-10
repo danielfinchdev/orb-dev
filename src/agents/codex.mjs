@@ -3,8 +3,9 @@
 // approval requests answered by the guard, native fork, context and the account's real usage limits.
 // It uses the user's own login (CODEX_HOME, ~/.codex by default): ChatGPT or API key, the app never reads auth.json.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { IS_WIN, firstFile, inPath, npmPrefixes, appDataDirs, userHome, clip } from './common.mjs';
+import { IS_WIN, firstFile, inPath, npmPrefixes, appDataDirs, userHome, clip, discoverDir } from './common.mjs';
 import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree } from './live.mjs';
 import { decide } from '../core/guard.mjs';
 import { tr } from '../core/context.mjs';
@@ -30,13 +31,22 @@ export const loginCommand = (exe) => ({ cmd: exe.cmd, args: [...exe.pre, 'login'
 
 const toml = (value) => JSON.stringify(value); // JSON strings and arrays are valid TOML values
 
+// Secrets (the coordinator's key, the agents' tokens) never go on the command line, which any process of the user can
+// read: they ride in Codex's own environment and Codex forwards them by name to the MCP server (env_vars).
+const SECRET = /KEY|TOKEN|SECRET/i;
+export function mcpSecrets(servers) {
+  return Object.fromEntries(Object.values(servers ?? {}).flatMap((s) => Object.entries(s.env ?? {}).filter(([k]) => SECRET.test(k)).map(([k, v]) => [k, String(v)])));
+}
+
 // MCP servers through -c overrides (no config file is written in the user's Codex folder).
 export function mcpArgs(servers) {
   const args = [];
   for (const [name, s] of Object.entries(servers ?? {})) {
     args.push('-c', `mcp_servers.${name}.command=${toml(s.command)}`, '-c', `mcp_servers.${name}.args=${toml(s.args ?? [])}`);
-    const env = Object.entries(s.env ?? {});
+    const env = Object.entries(s.env ?? {}).filter(([k]) => !SECRET.test(k));
+    const secret = Object.keys(s.env ?? {}).filter((k) => SECRET.test(k));
     if (env.length) args.push('-c', `mcp_servers.${name}.env={${env.map(([k, v]) => `${k}=${toml(String(v))}`).join(', ')}}`);
+    if (secret.length) args.push('-c', `mcp_servers.${name}.env_vars=${toml(secret)}`);
     if (name === 'orb') args.push('-c', `mcp_servers.${name}.default_tools_approval_mode="approve"`, '-c', `mcp_servers.${name}.tool_timeout_sec=960`);
   }
   return args;
@@ -45,7 +55,9 @@ export function mcpArgs(servers) {
 // The guard decides every action, so Codex asks for anything that is not plainly safe ("untrusted"); the sandbox keeps
 // writes inside the folder. Read-only conversations cannot write at all; "total" runs without sandbox or questions.
 function policy(permission) {
-  if (permission === 'leer') return { approvalPolicy: 'never', sandbox: 'read-only' };
+  // 2.6: read-only also asks Orb's guard (which denies anything that changes something) instead of trusting only the
+  // sandbox: this is how a Codex brain coordinates.
+  if (permission === 'leer') return { approvalPolicy: 'untrusted', sandbox: 'read-only' };
   if (permission === 'total') return { approvalPolicy: 'never', sandbox: 'danger-full-access' };
   return { approvalPolicy: 'untrusted', sandbox: 'workspace-write' };
 }
@@ -59,6 +71,33 @@ const ITEM_TOOL = (item) => {
   if (item.type === 'collabAgentToolCall') return { name: tr('sys.agents.tool.subagent', { tool: item.tool }), input: clip(item.prompt ?? '', 300) };
   return null;
 };
+
+// 2.6: the answer of app-server's model/list as the brain selector wants it: the models Codex shows (hidden ones are left
+// out), with their own names, and which one Codex uses when none is chosen.
+export function codexModels(r) {
+  const rows = Array.isArray(r?.data) ? r.data : Array.isArray(r?.models) ? r.models : [];
+  return rows.filter((m) => m && !m.hidden).map((m) => ({ id: m.model ?? m.id, label: m.displayName || m.model || m.id, ...(m.isDefault ? { default: true } : {}) })).filter((m) => m.id);
+}
+
+// 2.6: the models of this Codex before any conversation: a short app-server (no thread, no prompt, nothing is spent) asked
+// for model/list, page by page, and closed.
+export async function discoverModels(exe, cfg = {}, env = {}) {
+  const child = spawnAgent(exe.cmd, [...exe.pre, 'app-server'], { cwd: discoverDir(), env });
+  const peer = new JsonRpcPeer(child, { onRequest: async () => { throw new Error('no'); } });
+  child.on('error', () => peer.close());
+  child.on('exit', () => peer.close());
+  try {
+    await peer.request('initialize', { clientInfo: { name: 'orb_dev', title: 'Orb', version: '2.6.0' }, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs: 30000 });
+    peer.notify('initialized', {});
+    const list = []; let cursor = null;
+    for (let page = 0; page < 5; page++) {
+      const r = await peer.request('model/list', cursor ? { cursor } : {}, { timeoutMs: 20000 });
+      list.push(...codexModels(r));
+      cursor = r?.nextCursor; if (!cursor) break;
+    }
+    return list;
+  } catch { return null; } finally { peer.close(); killTree(child); }
+}
 
 // options: exe, cwd, model, reasoning, permission, resumeId, forkSession, mcpServers, env, internalDir, log, onEvent
 export function createLive(o) {
@@ -128,9 +167,18 @@ export function createLive(o) {
       return;
     }
     if (method === 'account/rateLimits/updated') {
-      const r = p.rateLimits ?? {}; const w = r.primary ?? r.secondary;
-      const resetAt = w?.resetsAt ? w.resetsAt * 1000 : null;
-      onEvent({ type: 'rate', status: r.rateLimitReachedType ? 'rejected' : 'allowed', resetAt, utilization: w?.usedPercent != null ? w.usedPercent / 100 : null, window: w?.windowDurationMins ? `${w.windowDurationMins}min` : null });
+      // Both windows of the plan (5 h and weekly), each as its own report: the usage panel shows them all.
+      const r = p.rateLimits ?? {};
+      // The limit reached (if any) is the one whose window ran out: the weekly one only when Codex says so.
+      const weekly = /second|week/i.test(String(r.rateLimitReachedType ?? ''));
+      for (const w of [r.primary, r.secondary].filter(Boolean)) {
+        const resetAt = w.resetsAt ? w.resetsAt * 1000 : null;
+        const reached = Boolean(r.rateLimitReachedType) && (w === r.secondary ? weekly || !r.primary : !weekly);
+        onEvent({ type: 'rate', status: reached ? 'rejected' : 'allowed', resetAt, utilization: w.usedPercent != null ? w.usedPercent / 100 : null, window: w.windowDurationMins ? `${w.windowDurationMins}min` : null });
+      }
+      // The cooldown lasts until the window that ran out resets.
+      const out = (weekly ? r.secondary : r.primary) ?? r.primary ?? r.secondary;
+      const resetAt = out?.resetsAt ? out.resetsAt * 1000 : null;
       if (r.rateLimitReachedType) { onEvent({ type: 'limit', resetAt, message: tr('sys.agents.limit', { name: 'Codex' }) }); if (turn) turn.limit = { resetAt }; }
       return;
     }
@@ -154,7 +202,7 @@ export function createLive(o) {
 
   const start = async () => {
     const args = [...o.exe.pre, 'app-server', ...mcpArgs(o.mcpServers)];
-    child = spawnAgent(o.exe.cmd, args, { cwd: o.cwd, env: o.env, log });
+    child = spawnAgent(o.exe.cmd, args, { cwd: o.cwd, env: { ...(o.env ?? {}), ...mcpSecrets(o.mcpServers) }, log });
     live.pid = child.pid;
     peer = new JsonRpcPeer(child, { onNotification, onRequest, log });
     child.on('exit', (code) => {
@@ -173,6 +221,11 @@ export function createLive(o) {
     threadId = res.thread?.id;
     if (threadId && threadId !== live.sessionId) { live.sessionId = threadId; onEvent({ type: 'session', id: threadId }); }
     onEvent({ type: 'item', role: 'system', kind: 'status', body: `Codex · ${res.model ?? model ?? ''}`.trim() });
+    // 2.6: the models this Codex offers, for the brain selector (older versions without model/list: nothing).
+    peer.request('model/list', {}, { timeoutMs: 15000 }).then((r) => {
+      const list = codexModels(r);
+      if (list.length) onEvent({ type: 'models', list });
+    }).catch(() => {});
   };
 
   const input = (text, images = []) => [{ type: 'text', text, text_elements: [] }, ...images.map((p) => ({ type: 'localImage', path: p }))];

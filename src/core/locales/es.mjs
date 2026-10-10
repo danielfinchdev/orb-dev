@@ -18,6 +18,7 @@ import comp from './es/comp.mjs';
 import install from './es/install.mjs';
 import msg from './es/msg.mjs';
 import sys from './es/sys.mjs';
+import help from './es/help.mjs';
 
 export default {
   ...base,
@@ -38,5 +39,6 @@ export default {
   ...comp,
   ...install,
   ...msg,
-  ...sys
+  ...sys,
+  ...help
 };

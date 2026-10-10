@@ -5,7 +5,7 @@
 // On Windows the CLI is installed as %LOCALAPPDATA%\cursor-agent\versions\<v>\ with its own node.exe and index.js.
 import fs from 'node:fs';
 import path from 'node:path';
-import { IS_WIN, firstFile, inPath, appDataDirs, userHome, clip, describeInput } from './common.mjs';
+import { IS_WIN, firstFile, inPath, appDataDirs, userHome, clip, describeInput, readOutput } from './common.mjs';
 import { Turn, spawnAgent, killTree } from './live.mjs';
 import { tr } from '../core/context.mjs';
 
@@ -43,6 +43,39 @@ export function loginState() {
 }
 export const loginCommand = (exe) => ({ cmd: exe.cmd, args: [...exe.pre, 'login'] });
 
+// 2.6: the models of the account, as `cursor-agent --list-models` prints them ("<id> - <name>", the one in use marked
+// "(current)", Cursor's own choice "(default)"). Cursor offers every model in many variants (effort, thinking, fast): only
+// one per model is kept, in Cursor's order — the plain one Cursor names without a variant, else the medium one — under its
+// name without the variant words. "default" marks the one Cursor uses when Orb passes no --model.
+const VARIANT_ID = /-(?:fast|thinking|none|minimal|low|medium|high|xhigh|extra-high|max)$/;
+const VARIANT_WORDS = /\s+(?:no thinking|thinking|extra high|high|medium|low|max|none|minimal|fast)$/i;
+const baseOf = (s, re) => { let prev; do { prev = s; s = s.replace(re, ''); } while (s !== prev); return s; };
+export function cursorModels(text) {
+  const rows = [];
+  for (const raw of String(text ?? '').replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').split(/\r?\n/)) {
+    const m = raw.replace(/[​-‍⁠﻿]/g, '').trim().match(/^([\w.:\-/[\]=,@]{1,80})\s+-\s+(.+)$/);
+    if (!m) continue;
+    const tags = [];
+    const name = m[2].replace(/\s*\(([^()]*)\)/g, (_, tag) => { tags.push(tag.trim()); return ' '; }).replace(/\s+/g, ' ').trim();
+    const flag = (word) => tags.some((t) => t.toLowerCase() === word);
+    const extra = tags.filter((t) => !/^(default|current)$/i.test(t));
+    rows.push({ id: m[1], name, extra, current: flag('current'), cursorDefault: flag('default'), family: baseOf(m[1], VARIANT_ID) });
+  }
+  const inUse = rows.find((r) => r.current) ?? rows.find((r) => r.cursorDefault);
+  const families = new Map();
+  for (const r of rows) { if (!families.has(r.family)) families.set(r.family, []); families.get(r.family).push(r); }
+  return [...families.values()].map((group) => {
+    const pick = group.find((r) => r === inUse) ?? group.find((r) => r.id === r.family) ?? group.find((r) => baseOf(r.name, VARIANT_WORDS) === r.name)
+      ?? group.find((r) => /-medium$/.test(r.id)) ?? group[0];
+    const label = [baseOf(pick.name, VARIANT_WORDS), ...pick.extra.map((t) => `(${t})`)].join(' ');
+    return { id: pick.id, label, ...(pick === inUse ? { default: true } : {}) };
+  });
+}
+export async function discoverModels(exe, cfg = {}, env = {}) {
+  const out = await readOutput(exe.cmd, [...exe.pre, '--list-models'], { env, timeoutMs: 45000 });
+  return out == null ? null : cursorModels(out);
+}
+
 // Windows refuses command lines near 32 767 characters and Cursor only takes the prompt as an argument:
 // long prompts go as a pointer to a file next to the conversation's log.
 export const ARGV_PROMPT_MAX = 20000;
@@ -77,7 +110,8 @@ export function createLive(o) {
     }
     const args = [...o.exe.pre, '-p', '--output-format', 'stream-json', '--stream-partial-output', '--trust', '--workspace', o.cwd];
     if (permission === 'leer') args.push('--mode', 'ask'); else args.push('--force');
-    if (model && model !== 'auto') args.push('--model', model);
+    // 2.6: «Auto» is Cursor's own choice per request (--model auto), not the model in use in Cursor.
+    if (model) args.push('--model', model);
     if (live.sessionId) args.push('--resume', live.sessionId);
     args.push(prompt);
     child = spawnAgent(o.exe.cmd, args, { cwd: o.cwd, env: o.env, log });

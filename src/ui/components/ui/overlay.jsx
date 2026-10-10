@@ -33,13 +33,17 @@ export function DialogTitle({ className, ...props }) { return <DialogPrimitive.T
 export function DialogDescription({ className, ...props }) { return <DialogPrimitive.Description className={cn('text-muted-foreground text-sm', className)} {...props} />; }
 
 // ---- select
-export function Select({ value, onValueChange, options, placeholder, className, size = 'default', disabled, title, ...props }) {
+// title: what the control is for, shown as the app's bubble on hover (and as its accessible name).
+export function Select({ value, onValueChange, options, placeholder, className, size = 'default', disabled, title, 'data-testid': testid, ...props }) {
+  const trigger = (
+    <SelectPrimitive.Trigger aria-label={title} data-testid={testid} className={cn("border-input data-[placeholder]:text-muted-foreground dark:bg-input/30 dark:hover:bg-input/50 flex w-fit items-center justify-between gap-2 rounded-lg border bg-transparent px-3 text-sm whitespace-nowrap shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/40 focus-visible:ring-[3px] disabled:opacity-50 cursor-pointer *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4", size === 'sm' ? 'h-8 text-[13px]' : 'h-9', className)}>
+      <SelectPrimitive.Value data-slot="select-value" placeholder={placeholder} />
+      <SelectPrimitive.Icon asChild><ChevronDownIcon className="size-4 opacity-50" /></SelectPrimitive.Icon>
+    </SelectPrimitive.Trigger>
+  );
   return (
     <SelectPrimitive.Root value={value ?? undefined} onValueChange={onValueChange} disabled={disabled} {...props}>
-      <SelectPrimitive.Trigger title={title} className={cn("border-input data-[placeholder]:text-muted-foreground dark:bg-input/30 dark:hover:bg-input/50 flex w-fit items-center justify-between gap-2 rounded-lg border bg-transparent px-3 text-sm whitespace-nowrap shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/40 focus-visible:ring-[3px] disabled:opacity-50 cursor-pointer *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4", size === 'sm' ? 'h-8 text-[13px]' : 'h-9', className)}>
-        <SelectPrimitive.Value data-slot="select-value" placeholder={placeholder} />
-        <SelectPrimitive.Icon asChild><ChevronDownIcon className="size-4 opacity-50" /></SelectPrimitive.Icon>
-      </SelectPrimitive.Trigger>
+      {title ? <BubbleTip title={title}>{trigger}</BubbleTip> : trigger}
       <SelectPrimitive.Portal>
         <SelectPrimitive.Content position="popper" sideOffset={4} className="bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] min-w-(--radix-select-trigger-width) overflow-x-hidden overflow-y-auto rounded-lg border shadow-md">
           <SelectPrimitive.Viewport className="p-1">
@@ -57,17 +61,27 @@ export function Select({ value, onValueChange, options, placeholder, className, 
 }
 
 // ---- tooltip
-export function Tip({ label, children, side = 'top' }) {
-  if (!label) return children;
+// 2.6: the one tooltip of the whole app, a small speech bubble (app.css: .orb-tip, styled per visual theme): a short bold
+// title and, at most, a line or two of muted text, with a little tail towards the control. No icons inside. Shown on hover
+// and on keyboard focus; the control keeps its own accessible name (aria-label).
+// offset: how far from the control (more when a button sits right next to it, so the bubble never covers it).
+export function BubbleTip({ title, text, children, side = 'bottom', align = 'center', wide = false, offset = 8 }) {
+  if (!title && !text) return children;
   return (
-    <TooltipPrimitive.Root delayDuration={350}>
+    <TooltipPrimitive.Root delayDuration={300}>
       <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal>
-        <TooltipPrimitive.Content side={side} sideOffset={6} className="bg-foreground text-background animate-in fade-in-0 zoom-in-95 z-50 max-w-xs rounded-md px-2.5 py-1.5 text-xs">{label}</TooltipPrimitive.Content>
+        <TooltipPrimitive.Content side={side} align={align} sideOffset={offset} collisionPadding={12} className={cn('orb-tip z-50', wide ? 'max-w-80' : 'max-w-[17rem]')} data-testid="bubble-tip">
+          {title ? <div className="orb-tip-title text-[13px] leading-snug font-semibold">{title}</div> : null}
+          {text ? <p className={cn('orb-tip-text text-[12px] leading-snug', title && 'mt-0.5', wide && 'break-all')}>{text}</p> : null}
+          <TooltipPrimitive.Arrow asChild width={16} height={8}><span className="orb-tip-tail" aria-hidden="true" /></TooltipPrimitive.Arrow>
+        </TooltipPrimitive.Content>
       </TooltipPrimitive.Portal>
     </TooltipPrimitive.Root>
   );
 }
+// A one-line bubble (the label is its title).
+export function Tip({ label, children, side = 'top', align }) { return <BubbleTip title={label} side={side} align={align}>{children}</BubbleTip>; }
 export const TooltipProvider = TooltipPrimitive.Provider;
 
 // ---- dropdown menu

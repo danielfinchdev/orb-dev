@@ -106,7 +106,39 @@
   ::-webkit-scrollbar-thumb { background: color-mix(in oklch, var(--muted-foreground) 30%, transparent); border-radius: 10px; border: 3px solid transparent; background-clip: content-box; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-corner { background: transparent; }
+  /* A long one-line text (a path, a command) never widens the grid cell it sits in: the cell shrinks and the text wraps,
+     cuts or scrolls as it was told to. Without this, grid cells grow to their content and spill over the next card. */
+  .grid > * { min-width: 0; }
 }
+
+/* ---------- the app's tooltip: a small speech bubble (ui/overlay.jsx: BubbleTip) ----------
+   A soft bubble of the card's colour with a diffuse shadow in the theme's accent, a bold title, a line or two of muted
+   text and a little tail towards the control. Each visual theme tunes the variables below. */
+:root {
+  --tip-bg: var(--card); --tip-border: var(--border); --tip-title: var(--foreground); --tip-text: var(--muted-foreground);
+  --tip-radius: 18px; --tip-shadow: 0 14px 34px -12px color-mix(in oklch, var(--primary) 38%, transparent), 0 3px 10px -4px color-mix(in oklch, var(--primary) 22%, transparent);
+}
+.dark { --tip-shadow: 0 14px 34px -10px rgb(0 0 0 / 0.6), 0 0 0 1px color-mix(in oklch, var(--primary) 12%, transparent); }
+.orb-tip { background: var(--tip-bg); color: var(--tip-title); border: 1px solid var(--tip-border); border-radius: var(--tip-radius); padding: 10px 14px 11px; box-shadow: var(--tip-shadow); transform-origin: var(--radix-tooltip-content-transform-origin); animation: orb-tip-in 0.16s cubic-bezier(0.2, 0.8, 0.3, 1.1); }
+.orb-tip-title { color: var(--tip-title); }
+.orb-tip-text { color: var(--tip-text); }
+/* The tail: the lower half of a bordered square, so its two edges continue the bubble's border. Radix turns it towards the control. */
+.orb-tip-tail { display: block; position: relative; width: 16px; height: 8px; overflow: hidden; translate: 0 -1px; }
+.orb-tip-tail::before { content: ""; position: absolute; left: 50%; top: 0; box-sizing: border-box; width: 11px; height: 11px; background: var(--tip-bg); border: 1px solid var(--tip-border); transform: translate(-50%, -50%) rotate(45deg); }
+@keyframes orb-tip-in { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: scale(1); } }
+html[data-motion="minima"] .orb-tip, html[data-skin="profesional"] .orb-tip { animation: none; }
+@media (prefers-reduced-motion: reduce) { .orb-tip { animation: none; } }
+/* Each theme's bubble. Vaporwave: a pastel sticker with the window's bevel colours. Retro: ink outline and a hard offset
+   shadow, like its cards. Candy: rounder, with a pink glow. Professional: tighter corners, a neutral shadow. */
+html[data-skin="vaporwave"]:not(.dark) { --tip-border: var(--vw-lo); --tip-radius: 14px; --tip-shadow: 4px 4px 0 var(--vw-hard), 0 12px 28px -12px color-mix(in oklch, var(--primary) 45%, transparent); }
+html.dark[data-skin="vaporwave"] { --tip-border: color-mix(in oklch, var(--primary) 55%, transparent); --tip-shadow: 0 0 22px -6px color-mix(in oklch, var(--primary) 80%, transparent), 0 14px 30px -12px rgb(0 0 0 / 0.6); }
+html[data-skin="retro"] { --tip-border: var(--rt-ink); --tip-radius: 12px; --tip-shadow: 4px 4px 0 var(--rt-off); }
+html[data-skin="retro"] .orb-tip { border-width: 2px; }
+html[data-skin="retro"] .orb-tip-tail::before { border-width: 2px; }
+html[data-skin="retro"] .orb-tip-tail { translate: 0 -2px; }
+html[data-skin="nube"] { --tip-border: transparent; --tip-radius: 20px; --tip-shadow: 0 14px 34px -10px var(--cd-shadow), 0 0 0 1px color-mix(in oklch, var(--primary) 10%, transparent); }
+html[data-skin="nube"] .orb-tip-title { color: var(--primary); }
+html[data-skin="profesional"] { --tip-radius: 10px; --tip-shadow: 0 10px 24px -10px rgb(0 0 0 / 0.25), 0 2px 6px -2px rgb(0 0 0 / 0.12); }
 
 /* Progress of a task that does not report its percentage: a sliding bar. */
 @keyframes orb-indeterminate { 0% { left: -35%; } 100% { left: 100%; } }
@@ -193,5 +225,119 @@ html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-di
 @media (prefers-reduced-motion: reduce) { .orb *, .orb { animation: none !important; } }
 
 /* The brand backdrop (setup screen, app icon): the soft periwinkle of the robot's world. */
+:root { --brand-sky-top: #a3adf5; }
+.dark { --brand-sky-top: #1a1f4f; } /* the sky's colour at the top right, behind the window's buttons */
 .brand-sky { background: radial-gradient(120% 90% at 30% 10%, #c3cbff 0%, #a7b1f6 45%, #8f9ef0 100%); }
 .dark .brand-sky { background: radial-gradient(120% 90% at 30% 10%, #2b3270 0%, #1d2257 50%, #141838 100%); }
+
+/* 2.6: the type of the themes' titles, for the pieces drawn with it (the Orb·E wordmark, the clock of the chat bar). */
+:root { --font-title: var(--font-sans); }
+html[data-skin="vaporwave"] { --font-title: "Orbitron Variable", "Space Grotesk Variable", var(--font-sans); }
+html[data-skin="retro"] { --font-title: "Bungee", "IBM Plex Mono", var(--font-sans); }
+html[data-skin="nube"] { --font-title: "Fredoka Variable", var(--font-sans); }
+html[data-skin="profesional"] { --font-title: "Inter Variable", var(--font-sans); }
+
+/* 2.6: the assistant's wordmark ORB·E at the top of the sidebar when it keeps its default name, chosen by Dani per theme.
+   Orb (and the others for now): «WALL·E» style, spaced capitals and a round dot of the theme's colour. */
+.wordmark { display: inline-flex; align-items: center; font-family: "Outfit Variable", var(--font-sans); font-weight: 600; font-size: 1.12rem; line-height: 1; letter-spacing: 0.16em; color: var(--foreground); }
+.wordmark-dot { width: 0.34rem; height: 0.34rem; margin: 0 0.24em 0 0.06em; border-radius: 999px; background: var(--primary); }
+/* Vaporwave: techno capitals, ·E in the theme's colour, underlined. */
+html[data-skin="vaporwave"] .wordmark { font-family: "Orbitron Variable", var(--font-sans); font-weight: 800; font-size: 1rem; letter-spacing: 0.08em; padding-bottom: 3px; border-bottom: 2px solid var(--primary); }
+html[data-skin="vaporwave"] .wordmark-dot { width: 0.22rem; height: 0.22rem; margin: 0 0.12em; }
+html[data-skin="vaporwave"] .wordmark-e { color: var(--primary); }
+/* Retro: a plate, chunky capitals in an ink frame with a hard shadow of the theme's colour. */
+html[data-skin="retro"] .wordmark { font-family: "Bungee", var(--font-sans); font-weight: 400; font-size: 0.92rem; letter-spacing: 0.1em; padding: 4px 9px 3px; border: 2px solid var(--foreground); border-radius: 6px; box-shadow: 3px 3px 0 var(--primary); }
+html[data-skin="retro"] .wordmark-dot { width: 0.24rem; height: 0.24rem; margin: 0 0.12em 0 0; }
+/* Candy: a jelly pill, white capitals on the theme's pink with the darker edge below. */
+html[data-skin="nube"] .wordmark { font-family: "Fredoka Variable", var(--font-sans); font-weight: 700; font-size: 1rem; letter-spacing: 0.06em; color: var(--primary-foreground); background: var(--primary); padding: 6px 14px 5px; border-radius: 999px; box-shadow: 0 3px 0 color-mix(in oklch, var(--primary) 60%, black); }
+html[data-skin="nube"] .wordmark-dot { width: 0.24rem; height: 0.24rem; margin: 0 0.1em 0 0; background: currentColor; }
+/* Profesional: sober, widely spaced capitals, the dot in the text's colour. */
+html[data-skin="profesional"] .wordmark { font-family: "Inter Variable", var(--font-sans); font-weight: 600; font-size: 0.9rem; letter-spacing: 0.22em; }
+html[data-skin="profesional"] .wordmark-dot { width: 0.22rem; height: 0.22rem; margin: 0 0.18em 0 0; background: currentColor; }
+
+/* 2.6: the system's date and time on the left of the chat's top bar, in the theme's title type. */
+.bar-clock { display: grid; line-height: 1.1; font-family: var(--font-title); }
+.bar-clock-time { font-size: 1.05rem; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+.bar-clock-date { font-family: var(--font-sans); font-size: 0.72rem; color: var(--muted-foreground); }
+.bar-clock-date::first-letter { text-transform: uppercase; }
+html[data-skin="retro"] .bar-clock-time { font-weight: 400; }
+/* The clock sits in the bar's title (an h1): the themes' outlined title styles are not for it. */
+html .bar-clock, html .bar-clock * { -webkit-text-stroke: 0 !important; text-shadow: none !important; color: var(--foreground); letter-spacing: normal; text-transform: none !important; }
+html .bar-clock .bar-clock-date { color: var(--muted-foreground); font-family: var(--font-sans) !important; font-weight: 400; }
+html[data-skin="retro"] .wordmark, html[data-skin="nube"] .wordmark { margin-bottom: 3px; }
+/* The line under the wordmark (the working project) echoes it in small: the same type treatment, and it starts where the
+   wordmark's letters start (inside the plate or the pill). */
+.wordmark-sub { margin-top: 4px; font-size: 10.5px; line-height: 1.2; text-transform: uppercase; letter-spacing: 0.16em; }
+html[data-skin="vaporwave"] .wordmark-sub { margin-top: 5px; letter-spacing: 0.12em; }
+html[data-skin="retro"] .wordmark-sub { margin-top: 3px; padding-inline-start: 11px; letter-spacing: 0.1em; }
+html[data-skin="nube"] .wordmark-sub { margin-top: 3px; padding-inline-start: 14px; font-family: "Fredoka Variable", var(--font-sans); font-weight: 600; letter-spacing: 0.06em; color: color-mix(in oklch, var(--primary) 70%, var(--muted-foreground)); }
+html[data-skin="profesional"] .wordmark-sub { letter-spacing: 0.14em; }
+/* A robot that only illustrates (the chat's avatars) is not a button. */
+.orb.still { cursor: default; }
+/* 2.6: the time of each message, bottom right, as in a messaging app. */
+.msg-time { float: right; margin: 0.35rem 0 -0.25rem 0.75rem; font-size: 0.68rem; line-height: 1.4; font-variant-numeric: tabular-nums; opacity: 0.6; white-space: nowrap; }
+/* 2.6: the «ahorro ↔ uso» slider of Ajustes › Tareas y cupo: five steps on a soft track, «Recomendado» under the middle. */
+.spend-slider { width: 100%; height: 1.25rem; accent-color: var(--primary); cursor: pointer; background: transparent; }
+.spend-slider::-webkit-slider-runnable-track { height: 6px; border-radius: 999px; background: color-mix(in oklch, var(--foreground) 12%, transparent); }
+.spend-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; margin-top: -6px; border-radius: 999px; background: var(--primary); border: 3px solid var(--card); box-shadow: 0 1px 4px rgb(0 0 0 / 0.25); }
+.spend-slider { -webkit-appearance: none; appearance: none; }
+.spend-slider:focus-visible { outline: none; }
+.spend-slider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 45%, transparent); }
+.spend-ticks { display: grid; grid-template-columns: repeat(5, 1fr); margin-top: -4px; font-size: 11px; color: var(--muted-foreground); }
+.spend-ticks span { text-align: center; }
+.spend-ticks span:first-child { text-align: left; } .spend-ticks span:last-child { text-align: right; }
+
+/* 2.6: the sidebar's edge, dragged to make it wider or narrower. */
+.sidebar-resize { position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; cursor: col-resize; z-index: 5; -webkit-app-region: no-drag; app-region: no-drag; }
+.sidebar-resize::after { content: ""; position: absolute; inset: 0 2px; border-radius: 2px; background: var(--primary); opacity: 0; transition: opacity 0.15s; }
+.sidebar-resize:hover::after, .sidebar-resize[data-dragging]::after { opacity: 0.45; }
+
+/* 2.6: the window has no Windows title bar nor Windows buttons: minimise, maximise and close are the app's own
+   (components/window-controls.jsx), top right over every screen, centred in the 56 px of the top bars. The top bars
+   (.app-titlebar) move the window and maximise it with a double click; what is clickable inside them stays clickable.
+   --wco-inset is the room those buttons take (0 in a browser, such as the phone), and .wco-pad / .wco-pad-md (wide
+   windows only) leave it free on the right. Each theme dresses them like the rest of its bar (themes.css). */
+:root { --wco-inset: 0px; }
+html.has-win-controls { --wco-inset: 8.25rem; }
+.win-controls { position: fixed; top: 0; right: 0; z-index: 70; height: 3.5rem; padding-inline: 0.5rem 0.625rem; display: flex; align-items: center; gap: 0.25rem; pointer-events: auto; -webkit-app-region: no-drag; app-region: no-drag; }
+.win-control { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 0.625rem; color: var(--muted-foreground); cursor: pointer; transition: background-color 0.15s, color 0.15s, transform 0.1s; }
+.win-control svg { width: 1rem; height: 1rem; stroke-width: 2; }
+.win-control:hover { background-color: color-mix(in oklch, var(--foreground) 9%, transparent); color: var(--foreground); }
+.win-control:active { transform: scale(0.94); }
+.win-control:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.win-control.win-close:hover { background-color: oklch(0.6 0.2 25); color: white; }
+@media (prefers-reduced-motion: reduce) { .win-control { transition: none; } }
+html[data-motion="minima"] .win-control { transition: none; }
+.app-titlebar { -webkit-app-region: drag; app-region: drag; }
+.app-titlebar :is(button, a, input, select, textarea, label, [role=button], [role=combobox], [role=tab], [role=switch], [contenteditable], [data-no-drag], .orb) { -webkit-app-region: no-drag; app-region: no-drag; }
+.wco-pad { padding-inline-end: calc(var(--wco-inset) + 0.75rem) !important; }
+@media (min-width: 768px) { .wco-pad-md { padding-inline-end: calc(var(--wco-inset) + 1.25rem) !important; } }
+
+/* ---------- 2.6: the guided tour (components/tour.jsx) ----------
+   A ring around the control of each step, the rest of the window dimmed by the ring's own shadow (which takes no clicks:
+   the app stays usable), and next to it the robot with its bubble. The bubble is drawn with the same variables as the
+   app's speech bubbles (--tip-*), so each visual theme dresses it its own way. */
+.tour { position: fixed; inset: 0; z-index: 60; pointer-events: none; }
+.tour-dim { position: absolute; inset: 0; background: rgb(20 18 40 / 0.45); }
+.tour-spot { position: fixed; border-radius: 14px; box-shadow: 0 0 0 9999px rgb(20 18 40 / 0.45), 0 0 0 3px var(--primary), 0 0 0 7px color-mix(in oklch, var(--primary) 30%, transparent); transition: left 0.3s ease, top 0.3s ease, width 0.3s ease, height 0.3s ease; }
+.tour-panel { position: fixed; display: flex; align-items: flex-end; gap: 0.25rem; width: max-content; max-width: min(34rem, calc(100vw - 2rem)); pointer-events: auto; animation: tour-in 0.25s cubic-bezier(0.2, 0.8, 0.3, 1.1); }
+.tour-robot { flex: none; filter: drop-shadow(0 14px 18px rgb(0 0 0 / 0.35)); margin-bottom: -4px; }
+.tour-bubble { position: relative; min-width: 0; width: 23rem; max-width: 100%; background: var(--tip-bg); color: var(--tip-title); border: 1px solid var(--tip-border); border-radius: var(--tip-radius); padding: 0.9rem 1.1rem 1rem; box-shadow: var(--tip-shadow); }
+.tour-panel-plain .tour-bubble { width: 25rem; }
+/* The bubble's tail towards the control: the lower half of a bordered square, like the app's bubbles. Only when the
+   bubble sits above or below its control (next to it, the robot already presents it). */
+.tour-tail { display: none; position: absolute; width: 14px; height: 14px; background: var(--tip-bg); border: 1px solid var(--tip-border); transform: rotate(45deg); }
+.tour[data-side="top"] .tour-tail { display: block; left: 2rem; bottom: -8px; border-top: 0; border-left: 0; }
+.tour[data-side="bottom"] .tour-tail { display: block; left: 2rem; top: -8px; border-bottom: 0; border-right: 0; }
+.tour[data-side="left"] .tour-tail { display: block; right: -8px; top: 2rem; border-bottom: 0; border-left: 0; }
+.tour-panel-plain[data-side="right"] .tour-tail, .tour[data-side="right"] .tour-panel-plain .tour-tail { display: block; left: -8px; top: 2rem; border-top: 0; border-right: 0; }
+.tour-title { color: var(--tip-title); }
+@keyframes tour-in { from { opacity: 0; transform: translateY(6px) scale(0.97); } to { opacity: 1; transform: none; } }
+html[data-skin="retro"] .tour-bubble, html[data-skin="retro"] .tour-tail { border-width: 2px; }
+html[data-skin="retro"] .tour-spot { border-radius: 8px; box-shadow: 0 0 0 9999px rgb(20 18 40 / 0.5), 0 0 0 3px var(--rt-ink), 0 0 0 6px var(--primary); }
+html[data-skin="nube"] .tour-title { color: var(--primary); }
+html[data-skin="profesional"] .tour-spot { border-radius: 8px; }
+html[data-motion="minima"] :is(.tour-panel, .tour-spot), html[data-skin="profesional"] :is(.tour-panel, .tour-spot) { animation: none; transition: none; }
+@media (prefers-reduced-motion: reduce) { .tour-panel, .tour-spot { animation: none; transition: none; } }
+@media (max-width: 640px) { .tour-robot { display: none; } .tour-bubble { width: calc(100vw - 2rem); } }
+html[data-skin="retro"] .tour-bubble { width: 25rem; }

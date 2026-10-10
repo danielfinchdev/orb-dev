@@ -36,11 +36,14 @@ const same = (a, b) => String(a).toLowerCase() === String(b).toLowerCase() || re
 const inside = (root, p) => { const rel = path.relative(root, p); return Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel); };
 
 // Validated model id for an agent: one of its configured models, or any well-formed id when the list is empty (CLI default).
-export function checkModel(agent, model) {
+// 2.6: listed = the models the agent itself reported (models:<agent>), also valid.
+export function checkModel(agent, model, listed = []) {
   if (!model) return null;
-  const models = ctx.config.agents[agent]?.models ?? [];
+  const configured = ctx.config.agents[agent]?.models ?? [];
+  // An alias the agent listed (opus) also stands for the full id it resolves to (claude-opus-5-5).
+  const models = configured.length ? [...new Set([...configured, ...(listed ?? []).flatMap((m) => [m.id ?? m, m.resolved].filter(Boolean))])] : [];
   if (models.length && !models.includes(model)) throw new Error(tr('msg.board.noModel', { agent, model, models: models.join(', ') }));
-  if (!/^[\w.:\-[\]=,]{1,80}$/.test(model)) throw new Error(tr('msg.board.badModelId', { model }));
+  if (!/^[A-Za-z0-9][\w.:\-/[\]=,@]{0,79}$/.test(model)) throw new Error(tr('msg.board.badModelId', { model }));
   return model;
 }
 
@@ -192,7 +195,7 @@ export class Board {
     if (String(description).length > MAX_DESCRIPTION) throw new Error(tr('sys.board.descTooLong', { n: String(description).length, max: MAX_DESCRIPTION }));
     if (agent !== 'any' && !AGENTS.includes(agent)) throw new Error(tr('sys.board.badAgent', { agent, list: AGENTS.join(', ') }));
     if (model && agent === 'any') throw new Error(tr('sys.board.modelNeedsAgent'));
-    model = agent === 'any' ? null : checkModel(agent, model);
+    model = agent === 'any' ? null : checkModel(agent, model, this.settingJson(`models:${agent}`));
     // An account chosen on purpose: it must belong to the task's agent.
     if (account && !(ctx.config.accounts ?? []).some((a) => a.id === account && (agent === 'any' || a.agent === agent))) throw new Error(tr('sys.board.accountNotOf', { account, agent }));
     if (account && agent === 'any') agent = (ctx.config.accounts ?? []).find((a) => a.id === account).agent;
@@ -224,7 +227,7 @@ export class Board {
       JSON.stringify(depends_on.map(Number)), JSON.stringify([...new Set(tags)]), status, String(actor), proj.path, at, at, mode, Number(Boolean(readonly)), parent_id ? Number(parent_id) : null, review_of ? Number(review_of) : null, schedule_id ? Number(schedule_id) : null);
     const id = Number(lastInsertRowid);
     this.event(id, actor, 'task.created', status);
-    if (status === 'awaiting_approval') { const tagList = [...new Set(tags)].join(', '); this.addChat('system', reasons.length ? tr('msg.board.needsApprovalWhy', { id, title, tags: tagList, reasons: reasons.join('; ') }) : tr('msg.board.needsApproval', { id, title, tags: tagList })); }
+    if (status === 'awaiting_approval') { const tagList = [...new Set(tags)].join(', '); this.addChat('system', reasons.length ? tr('msg.board.needsApprovalWhy', { id, title, tags: tagList, reasons: reasons.join('; ') }) : tr('msg.board.needsApproval', { id, title, tags: tagList }), { kind: 'attention', task: id }); }
     // Even a task the user typed waits for an explicit "Aprobar" when it looks sensitive: one more click, with the reasons on screen.
     this.changed('tasks');
     return this.task(id);
@@ -292,7 +295,7 @@ export class Board {
       if (nextAgent !== 'any' && !AGENTS.includes(nextAgent)) throw new Error(tr('msg.board.badAgent', { agent: nextAgent }));
       const nextModel = model === undefined ? (agent !== undefined ? null : task.model) : (model || null);
       if (nextModel && nextAgent === 'any') throw new Error(tr('sys.board.modelNeedsAgent'));
-      Object.assign(reassign, { agent: nextAgent, model: nextAgent === 'any' ? null : checkModel(nextAgent, nextModel), assigned_to: null });
+      Object.assign(reassign, { agent: nextAgent, model: nextAgent === 'any' ? null : checkModel(nextAgent, nextModel, this.settingJson(`models:${nextAgent}`)), assigned_to: null });
     }
     if (Object.keys(reassign).length) {
       const after = { agent: reassign.agent ?? task.agent, model: 'model' in reassign ? reassign.model : task.model, reasoning: reassign.reasoning ?? task.reasoning, fast: 'fast' in reassign ? Boolean(reassign.fast) : task.fast };
@@ -345,7 +348,7 @@ export class Board {
       if (task.status === 'done') throw new Error(tr('msg.board.alreadyDone', { id }));
       const nextAgent = agent || task.agent;
       if (nextAgent !== 'any' && !AGENTS.includes(nextAgent)) throw new Error(tr('msg.board.badAgent', { agent: nextAgent }));
-      const nextModel = nextAgent === 'any' ? null : checkModel(nextAgent, model || null);
+      const nextModel = nextAgent === 'any' ? null : checkModel(nextAgent, model || null, this.settingJson(`models:${nextAgent}`));
       const { reasoning: nextReasoning } = taskOptions({ reasoning: reasoning || task.reasoning, fast: false });
       const policy = checkPolicy({ agent: nextAgent, model: nextModel, reasoning: nextReasoning, fast: false });
       const tags = policy.approval ? [...new Set([...task.sensitivity, 'razonamiento_alto'])] : task.sensitivity.filter((t) => t !== 'razonamiento_alto');

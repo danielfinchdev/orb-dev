@@ -26,6 +26,16 @@ contextBridge.exposeInMainWorld('orb', {
   showBrowser: () => ipcRenderer.invoke('app:showBrowser'),
   // Size of the interface on this PC (1 = normal): read with zoom(), change with zoom(value).
   zoom: (value) => ipcRenderer.invoke('app:zoom', value ?? null),
+  // 2.6: the app's own minimise / maximise / close buttons; onState hears when the window is maximised or restored.
+  windowControls: {
+    act: (action) => ipcRenderer.invoke('app:window', String(action)),
+    onState: (fn) => {
+      if (typeof fn !== 'function') return () => {};
+      const listener = (_e, state) => fn(state);
+      ipcRenderer.on('app:window-state', listener);
+      return () => ipcRenderer.removeListener('app:window-state', listener);
+    }
+  },
   openTerminal: (folder) => ipcRenderer.invoke('app:openTerminal', folder ?? null),
   // Ajustes → Contribuye: feedback by mail (screenshot of the window, PNG / JPEG files) and the author's other apps.
   feedback: {

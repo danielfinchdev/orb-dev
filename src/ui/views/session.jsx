@@ -10,50 +10,12 @@ import { AgentIcon } from '@/components/agent-icon.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Composer, useAutoScroll } from './chat.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Badge, Field, Input, Textarea, Empty } from '@/components/ui/basic.jsx';
-import { Select, Collapsible, CollapsibleTrigger, CollapsibleContent, Tip } from '@/components/ui/overlay.jsx';
+import { Badge, Field, Input, Textarea, Empty, Spinner } from '@/components/ui/basic.jsx';
+import { Select, Collapsible, CollapsibleTrigger, CollapsibleContent, Tip, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent } from '@/components/ui/overlay.jsx';
 import { useStore, call, act, go, bridge, refresh, getState } from '@/lib/store.js';
 import { AGENT, PERMISSION, PERMISSION_HINT, REASONING, STATUS, DECISION, CAN_STEER as AGENT_CAN_STEER, options } from '@/lib/labels.js';
 import { baseName, cn } from '@/lib/utils.js';
 import { useT, t, useLocale, currentLocale } from '@/lib/i18n.js';
-
-// "Nueva conversación": agent, project, model, permissions.
-export async function newConversation(preset = {}) {
-  let agents = [];
-  try { agents = await call('agents.status'); } catch (error) { return toast.error(String(error.message ?? error)); }
-  const usable = agents.filter((a) => a.installed && a.enabled);
-  if (!usable.length) { toast.error(t('session.noAgents')); return go('agents'); }
-  const { projects, app } = getState();
-  const first = usable.find((a) => a.id === preset.agent) ?? usable[0];
-  const id = await form(t('nav.newConversation'), {
-    description: t('session.newDesc'),
-    initial: { agent: first.id, account: first.accounts.find((x) => x.enabled !== false)?.id ?? first.id, project: preset.project ?? app.activeProject?.name ?? '__none', model: first.defaultModel || '', permission: 'editar', reasoning: 'medium', title: '' },
-    body: (v, set) => {
-      const a = usable.find((x) => x.id === v.agent);
-      return (<>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label={t('session.agent')}><Select className="w-full" value={v.agent} onValueChange={(agent) => { const n = usable.find((x) => x.id === agent); set({ agent, model: n.defaultModel || '', account: n.accounts.find((x) => x.enabled !== false)?.id ?? agent }); }} options={usable.map((x) => ({ value: x.id, label: x.label }))} /></Field>
-          {a.accounts.length > 1 ? <Field label={t('session.account')}><Select className="w-full" value={v.account} onValueChange={(account) => set({ account })} options={a.accounts.filter((x) => x.enabled !== false).map((x) => ({ value: x.id, label: x.label }))} /></Field> : null}
-          <Field label={t('session.project')}><Select className="w-full" value={v.project} onValueChange={(project) => set({ project })} options={[{ value: '__none', label: t('session.assistantFolder') }, ...projects.map((p) => ({ value: p.name, label: p.name }))]} /></Field>
-          <Field label={t('session.model')}>{a.models.length ? <Select className="w-full" value={v.model || a.models[0]} onValueChange={(model) => set({ model })} options={a.models.map((m) => ({ value: m, label: m }))} />
-            : <Input value={v.model} onChange={(e) => set({ model: e.target.value })} placeholder={t('session.modelDefault')} />}</Field>
-          <Field label={t('session.reasoning')}><Select className="w-full" value={v.reasoning} onValueChange={(reasoning) => set({ reasoning })} options={options(REASONING)} /></Field>
-        </div>
-        {v.project === '__none'
-          ? <p className="text-muted-foreground text-xs">{t('session.noProjectHint')}</p>
-          : <Field label={t('session.permissions')} hint={PERMISSION_HINT[v.permission]}><Select className="w-full" value={v.permission} onValueChange={(permission) => set({ permission })} options={options(PERMISSION)} /></Field>}
-        <Field label={t('session.titleOptional')}><Input value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={80} /></Field>
-      </>);
-    },
-    ok: t('session.start'),
-    onOk: async (v) => {
-      if (v.project !== '__none' && v.permission === 'total' && !(await confirm(t('permission.total'), t('session.totalBody'), { ok: t('session.totalYesFull'), danger: true }))) return false;
-      const s = await call('sessions.create', { agent: v.agent, account: v.account, project: v.project === '__none' ? null : v.project, model: v.model || null, permission: v.project === '__none' ? 'leer' : v.permission, reasoning: v.reasoning, title: v.title.trim() || null });
-      return s.id;
-    }
-  });
-  if (id) { await refresh().catch(() => {}); go({ view: 'session', id }); }
-}
 
 // Items → blocks: a tool call and its result become one block (the latest call with that id gets the result).
 function toBlocks(items) {
@@ -155,19 +117,82 @@ export function ApprovalCard({ sessionId, body, compact = false }) {
 }
 
 // How full the agent's context window is (when the agent reports it).
-export function ContextMeter({ context, className }) {
+// 2.6: how full the conversation is, as a ring that fills up (no number); a click opens the panel with the context in
+// tokens and the limits of the plans working right now (the brain's and the agents' accounts: session, weekly…).
+const toneOf = (pct) => (pct >= 85 ? 'text-destructive' : pct >= 60 ? 'text-warning' : 'text-primary');
+const short = (n) => (n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n));
+function Ring({ pct, className }) {
+  const r = 7; const c = 2 * Math.PI * r;
+  return (
+    <svg viewBox="0 0 18 18" className={cn('size-[18px] -rotate-90', className)} aria-hidden="true">
+      <circle cx="9" cy="9" r={r} fill="none" stroke="currentColor" strokeOpacity="0.18" strokeWidth="2.5" />
+      <circle cx="9" cy="9" r={r} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - Math.max(pct, 2) / 100)} className="transition-[stroke-dashoffset] duration-500" />
+    </svg>
+  );
+}
+function UsageBar({ pct }) {
+  return <span className="bg-muted block h-1.5 overflow-hidden rounded-full"><span className={cn('block h-full rounded-full bg-current', toneOf(pct))} style={{ width: `${Math.min(100, Math.max(pct, 1))}%` }} /></span>;
+}
+// «five_hour», «seven_day_opus», «300min»… in words.
+function windowLabel(t, w) {
+  const s = String(w);
+  const model = s.match(/seven_day_(\w+)/)?.[1];
+  if (/five_hour|^300min$|^5h$/.test(s)) return t('session.usage.session');
+  if (model) return t('session.usage.weeklyOf', { model: model[0].toUpperCase() + model.slice(1) });
+  if (/seven_day|^10080min$/.test(s)) return t('session.usage.weekly');
+  const min = Number(s.match(/^(\d+)min$/)?.[1]);
+  if (min) return min % 1440 === 0 ? t('session.usage.days', { n: min / 1440 }) : t('session.usage.hours', { n: Math.round(min / 60) });
+  return s;
+}
+function resetText(t, locale, at) {
+  if (!at) return '';
+  const ms = at - Date.now();
+  if (ms <= 0) return t('session.usage.resetNow');
+  if (ms < 86_400_000) { const h = Math.floor(ms / 3_600_000); const m = Math.floor((ms % 3_600_000) / 60_000); return t('session.usage.resetIn', { time: h ? `${h} h ${m} min` : `${m} min` }); }
+  return t('session.usage.resetOn', { when: new Date(at).toLocaleString(locale, { weekday: 'short', hour: '2-digit', minute: '2-digit' }) });
+}
+function UsagePanel({ context, pct }) {
   const t = useT();
   const locale = useLocale();
+  const version = useStore((s) => s.version);
+  const [rows, setRows] = useState(null);
+  useEffect(() => { let alive = true; call('usage.now').then((r) => alive && setRows(r)).catch(() => alive && setRows([])); return () => { alive = false; }; }, [version]);
+  return (
+    <div className="grid w-80 gap-3 p-2.5 text-[13px]" data-testid="usage-panel">
+      <div className="grid gap-1.5">
+        <div className="flex items-baseline justify-between gap-3"><span className="text-muted-foreground">{t('session.usage.context')}</span><span className="tabular-nums">{short(context.used)} / {short(context.size)} ({pct} %)</span></div>
+        <UsageBar pct={pct} />
+        <p className="text-muted-foreground text-xs leading-snug">{t('session.contextTip')}</p>
+      </div>
+      {rows === null ? <Spinner className="size-3" /> : rows.map((u) => (
+        <div key={u.account} className="grid gap-2 border-t pt-3">
+          <div className="flex items-center gap-2 font-medium"><AgentIcon agent={u.agent} className="size-4" />{AGENT[u.agent] ?? u.agent}{u.label && u.label !== (AGENT[u.agent] ?? u.agent) ? <span className="text-muted-foreground truncate font-normal">· {u.label}</span> : null}{u.brain ? <Badge variant="outline" className="ml-auto">{t('session.usage.brain')}</Badge> : null}</div>
+          {u.windows.length ? u.windows.map((w) => {
+            const p = Math.round((w.utilization ?? 0) * 100);
+            return (
+              <div key={w.window} className="grid gap-1">
+                <div className="flex items-baseline justify-between gap-3"><span className="truncate">{windowLabel(t, w.window)}</span><span className="tabular-nums">{p} %</span></div>
+                <UsageBar pct={p} />
+                {w.resetAt ? <span className="text-muted-foreground text-xs">{resetText(t, locale, w.resetAt)}</span> : null}
+              </div>
+            );
+          }) : <p className="text-muted-foreground text-xs leading-snug">{t('session.usage.noData')}</p>}
+        </div>
+      ))}
+    </div>
+  );
+}
+export function ContextMeter({ context, className }) {
+  const t = useT();
   if (!context?.size) return null;
   const pct = Math.min(100, Math.round((context.used / context.size) * 100));
-  const tone = pct >= 85 ? 'bg-destructive' : pct >= 60 ? 'bg-warning' : 'bg-primary';
   return (
-    <Tip label={t('session.contextTip', { used: context.used.toLocaleString(locale), size: context.size.toLocaleString(locale) })}>
-      <span className={cn('inline-flex items-center gap-1.5', className)} data-testid="context-meter">
-        <span className="bg-muted inline-block h-1.5 w-14 overflow-hidden rounded-full"><span className={cn('block h-full rounded-full', tone)} style={{ width: `${pct}%` }} /></span>
-        <span className="tabular-nums">{pct} %</span>
-      </span>
-    </Tip>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" className={cn('hover:bg-accent inline-grid size-7 cursor-pointer place-items-center rounded-full', toneOf(pct), className)} aria-label={t('session.usage.open', { pct })} data-testid="context-meter"><Ring pct={pct} /></button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" side="top" className="w-auto p-0"><UsagePanel context={context} pct={pct} /></DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -276,14 +301,14 @@ export function SessionView({ route }) {
           }} />
           <Select size="sm" value={s.reasoning ?? 'medium'} title={t('session.reasoning')} options={options(REASONING)} onValueChange={(reasoning) => act(call('sessions.update', { id: s.id, reasoning }))} />
           <Tip label={t('session.detailsShort')}><Button variant="ghost" size="icon-sm" onClick={() => showDetails(s, task)} data-testid="details"><Info /></Button></Tip>
-          <Tip label={t('session.forkTip')}><Button variant="ghost" size="icon-sm" disabled={running} onClick={fork} data-testid="fork"><GitFork /></Button></Tip>
+          <BubbleTip title={t('session.fork')} text={t('session.forkTip')}><Button variant="ghost" size="icon-sm" disabled={running} onClick={fork} aria-label={t('session.fork')} data-testid="fork"><GitFork /></Button></BubbleTip>
           <Tip label={t('session.renameTip')}><Button variant="ghost" size="icon-sm" onClick={rename}><Pencil /></Button></Tip>
           <Tip label={s.archived ? t('session.restore') : t('session.archive')}><Button variant="ghost" size="icon-sm" onClick={async () => { await act(call('sessions.update', { id: s.id, archived: !s.archived })); if (!s.archived) go('chat'); }}><Archive /></Button></Tip>
           <Tip label={t('session.deleteTip')}><Button variant="danger" size="icon-sm" onClick={async () => { if (await confirm(t('session.deleteTitle'), t('session.deleteBody'), { ok: t('session.delete'), danger: true })) { await act(call('sessions.remove', { id: s.id })); go('chat'); } }}><Trash2 /></Button></Tip>
         </>) : (<>
           {task ? <Badge variant={STATUS[task.status]?.[1]}>{STATUS[task.status]?.[0]}</Badge> : null}
           <Tip label={t('session.detailsShort')}><Button variant="ghost" size="icon-sm" onClick={() => showDetails(s, task)}><Info /></Button></Tip>
-          <Tip label={t('session.forkTaskTip')}><Button variant="ghost" size="icon-sm" disabled={running} onClick={fork}><GitFork /></Button></Tip>
+          <BubbleTip title={t('session.fork')} text={t('session.forkTaskTip')}><Button variant="ghost" size="icon-sm" disabled={running} onClick={fork} aria-label={t('session.fork')}><GitFork /></Button></BubbleTip>
           <Button variant="outline" size="sm" onClick={() => go({ view: 'tasks', id: s.task_id })}><ListTodo />{t('session.viewTask', { id: s.task_id })}</Button>
         </>)}
       </PageHeader>

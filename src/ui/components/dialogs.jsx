@@ -8,7 +8,18 @@ import { errorText } from '@/lib/utils.js';
 import { t } from '@/lib/i18n.js';
 
 let seq = 0;
-function open(dialog) { return new Promise((resolve) => setState((s) => ({ dialogs: [...(s.dialogs ?? []), { ...dialog, id: ++seq, resolve }] }))); }
+// The same dialog asked for again while it is open (a double click, or clicks queued while the app was busy) does not
+// open a second copy on top: it shares the answer of the one already open.
+const opened = new Map(); // kind|title -> promise
+function open(dialog) {
+  // Same kind, title and text: two different questions that happen to share a title are two dialogs.
+  const key = `${dialog.kind}|${dialog.title}|${typeof dialog.body === 'string' ? dialog.body : ''}|${typeof dialog.description === 'string' ? dialog.description : ''}`;
+  if (opened.has(key)) return opened.get(key);
+  const promise = new Promise((resolve) => setState((s) => ({ dialogs: [...(s.dialogs ?? []), { ...dialog, id: ++seq, resolve }] })));
+  opened.set(key, promise);
+  promise.finally(() => opened.delete(key));
+  return promise;
+}
 function close(id, value) { setState((s) => { const d = (s.dialogs ?? []).find((x) => x.id === id); d?.resolve(value); return { dialogs: (s.dialogs ?? []).filter((x) => x.id !== id) }; }); }
 
 export const confirm = (title, description, { ok = t('comp.dialogs.ok'), cancel = t('comp.dialogs.cancel'), danger = false } = {}) => open({ kind: 'confirm', title, description, ok, cancel, danger });

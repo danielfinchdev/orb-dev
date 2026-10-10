@@ -1,9 +1,23 @@
 // Day / night switch. Saved in the assistant's settings (ui.theme): "claro", "oscuro" or "sistema".
-import { Moon, Sun } from 'lucide-react';
+import { Moon, Sun, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Button } from './ui/button.jsx';
 import { Tip } from './ui/overlay.jsx';
-import { call, applyTheme, isDark, act, setState, getState, bridge } from '@/lib/store.js';
+import { call, applyTheme, isDark, act, setState, getState, bridge, setSidebarCollapsed } from '@/lib/store.js';
+import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
+
+// 2.6: fold the sidebar away / bring it back (wide windows; narrow ones already have it as a drawer).
+export function SidebarToggle({ className, collapsed = false }) {
+  const t = useT();
+  const label = collapsed ? t('comp.sidebar.expand') : t('comp.sidebar.collapse');
+  return (
+    <Tip label={label}>
+      <Button variant="ghost" size="icon-sm" className={cn('hidden md:inline-flex', className)} onClick={() => setSidebarCollapsed(!collapsed)} aria-label={label} data-testid={collapsed ? 'sidebar-expand' : 'sidebar-collapse'}>
+        {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+      </Button>
+    </Tip>
+  );
+}
 
 export function ThemeToggle({ className }) {
   const t = useT();

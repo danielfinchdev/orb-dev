@@ -3,8 +3,9 @@
 // per conversation stays open between turns; answers stream as they are written; every action that needs permission goes
 // through the guard (src/core/guard.mjs) and, when it must ask, to an approval card in the app.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, describeInput, cleanEnv } from './common.mjs';
+import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, describeInput, cleanEnv, within, discoverDir } from './common.mjs';
 import { Turn, Approvals } from './live.mjs';
 import { decide, describeAction } from '../core/guard.mjs';
 import { tr } from '../core/context.mjs';
@@ -65,6 +66,29 @@ function userMessage(text, images = []) {
     try { content.push({ type: 'image', source: { type: 'base64', media_type: type, data: fs.readFileSync(file).toString('base64') } }); } catch { /* unreadable: the path is in the text too */ }
   }
   return { type: 'user', message: { role: 'user', content }, parent_tool_use_id: null, origin: { kind: 'human' } };
+}
+
+// 2.6: the models this Claude Code offers (the SDK's supportedModels: what /model shows), before any conversation. The
+// process starts with an input that never sends a message, so nothing is spent; it is closed once it has answered.
+// The "default" row is not a model of its own: it marks which one Claude uses by default (resolvedModel).
+export async function discoverModels(exe, cfg = {}, env = {}) {
+  const { query: sdkQuery } = await import('@anthropic-ai/claude-agent-sdk');
+  const abort = new AbortController();
+  let release = null;
+  const silent = { async *[Symbol.asyncIterator]() { await new Promise((r) => { release = r; }); } };
+  let q = null;
+  try {
+    q = sdkQuery({ prompt: silent, options: { cwd: discoverDir(), pathToClaudeCodeExecutable: exe.cmd, env: cleanEnv(env), settingSources: [], extraArgs: { 'strict-mcp-config': null }, mcpServers: {}, abortController: abort, stderr: () => {} } });
+    const rows = await within(q.supportedModels(), 40000);
+    if (!Array.isArray(rows)) return null;
+    const usual = rows.find((m) => m.value === 'default')?.resolvedModel ?? null;
+    let marked = false;
+    return rows.filter((m) => m?.value && m.value !== 'default').map((m) => {
+      const isDefault = !marked && usual && (m.resolvedModel ?? m.value) === usual;
+      if (isDefault) marked = true;
+      return { id: m.value, label: m.displayName || m.value, ...(m.resolvedModel && m.resolvedModel !== m.value ? { resolved: m.resolvedModel } : {}), ...(isDefault ? { default: true } : {}) };
+    });
+  } catch { return null; } finally { release?.(); try { q?.close(); } catch { /* gone */ } try { abort.abort(); } catch { /* gone */ } }
 }
 
 // The SDK's error kinds, in plain words.
@@ -136,7 +160,23 @@ export function createLive(o) {
       turn?.finish({ final, isError, usage, stopReason: m.subtype ?? null });
       // How full the context is, for the meter in the window (best effort; older CLIs do not answer).
       query?.getContextUsage?.().then((c) => onEvent({ type: 'context', used: c.totalTokens, size: c.maxTokens || c.rawMaxTokens })).catch(() => {});
+      planUsage();
     }
+  };
+  // 2.6: the plan's windows (session, weekly, weekly of a model) as /usage shows them: Claude only sends them by itself
+  // near a limit, so they are asked after a turn, at most every 90 s (experimental SDK call: best effort, any version).
+  let usageAt = 0;
+  const planUsage = () => {
+    const ask = query?.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET;
+    if (typeof ask !== 'function' || Date.now() - usageAt < 90_000) return;
+    usageAt = Date.now();
+    Promise.resolve(ask.call(query, { skipBehaviors: true })).then((u) => {
+      const r = u?.rate_limits;
+      if (!r) return;
+      const send = (window, w) => { if (w?.utilization == null) return; onEvent({ type: 'rate', status: 'allowed', resetAt: w.resets_at ? Date.parse(w.resets_at) || null : null, utilization: w.utilization / 100, window }); };
+      for (const k of ['five_hour', 'seven_day', 'seven_day_opus', 'seven_day_sonnet']) send(k, r[k]);
+      for (const m of r.model_scoped ?? []) if (m?.display_name) send(`seven_day_${String(m.display_name).toLowerCase().replace(/[^a-z0-9]+/g, '_')}`, m);
+    }).catch(() => {});
   };
 
   const start = async () => {

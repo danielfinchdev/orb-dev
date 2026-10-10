@@ -1,12 +1,56 @@
 ## Descargar
 
-- **`Orb-2.5.0-instalador.exe`** (recomendado): se instala para tu usuario, sin permisos de administrador, con acceso
+- **`Orb-2.6.0-instalador.exe`** (recomendado): se instala para tu usuario, sin permisos de administrador, con acceso
   directo en el escritorio y en el menú Inicio. Después lo encuentras escribiendo «Orb» en el buscador de Windows.
-- **`Orb-2.5.0-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
-- **`Orb-2.5.0-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.exe`.
+- **`Orb-2.6.0-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
+- **`Orb-2.6.0-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.exe`.
 
 Windows 10/11. Como aún no está firmada, SmartScreen avisa la primera vez: «Más información» → «Ejecutar de todas formas».
 En el primer arranque la app detecta qué agentes tienes y con qué sesión, e instala lo que falte con los instaladores oficiales.
+
+## Novedades de la 2.6
+
+- **Orbe:** el asistente se llama ahora Orbe (si le pusiste otro nombre, se queda el tuyo). Arriba del menú lo ves con su
+  logotipo ORB·E, dibujado a juego con cada tema.
+- **Una ventana propia:** sin barra de título ni botones de Windows. Minimizar, maximizar y cerrar son de Orb y se visten
+  como el resto del tema. La ventana se mueve arrastrando la parte de arriba, y un doble clic la maximiza.
+- **Nuevo chat, sin ventanas emergentes:** «Nuevo chat» abre un chat limpio. Debajo del mensaje eliges el proyecto (o
+  «Sin carpeta»), el cerebro, el razonamiento y, si hablas directamente con un agente, los permisos. Con el interruptor
+  «Orquestador», Orbe coordina a los agentes; sin él, hablas con el agente elegido.
+- **Cualquier cerebro, con sus modelos reales:** Orbe ya no depende de Claude. Elige cualquier agente instalado y su
+  modelo: Orb le pregunta a cada agente qué modelos tiene (sin gastar cupo) y los muestra con su nombre, agrupados y
+  plegados, con «Recomendados» arriba.
+- **Contexto y uso de tus planes:** junto al botón de enviar, un círculo se va llenando con el contexto de la
+  conversación. Al pulsarlo ves los tokens usados y el uso real de cada cuenta que está trabajando: límite de sesión,
+  semanal y semanal por modelo, con cuándo se restablece cada uno.
+- **Ahorro o potencia:** en Ajustes › Tareas y usos, un deslizador va de «Máx. ahorro» a «Máx. uso». Fija de golpe todos
+  los límites y lo cauto que es Orbe al gastar. Los parámetros siguen en «Opciones avanzadas» para quien quiera tocarlos.
+- **Aviso de cupo:** al elegir razonamiento alto, un modelo de los que más consumen o una cuenta con poco cupo, un globo
+  te avisa de que puede gastar el uso rápido.
+- **Barra superior limpia:** la fecha y la hora a la izquierda y solo iconos a la derecha (pausar tareas, reiniciar
+  conversación y minijuegos), con globos que explican lo que hace cada uno. Cada mensaje del chat lleva su hora.
+- **Proyectos en el menú:** un clic en un proyecto abre un chat nuevo en él; doble clic lo despliega con sus tareas y
+  conversaciones. Pasa el ratón por una y márcala como completada: va a «Completados», plegado al final del menú. El
+  ancho del menú se ajusta arrastrando su borde, y un botón lo pliega del todo.
+- **Minijuegos mientras esperas:** Serpiente, Tetris, Ajedrez contra el ordenador, Jumper (al estilo Geometry Dash),
+  2048, Ladrillos, Space Invaders y Pac-Man, en fácil, normal o difícil, con su récord y sonidos de 8 bits que no ocupan
+  nada. Cuando Orbe reparte el trabajo, te propone jugar desde el propio chat.
+- **Avisos con el robot:** cuando el informe está listo o algo necesita tu atención, aparece el robot con un globo, más
+  pequeño y solo cuando hace falta. Sin animaciones (o en el tema Profesional), el aviso sale arriba: verde si todo fue
+  bien y naranja si hace falta que mires algo.
+- **Temas renovados:** Candy (antes Nube) con dulces en 3D, Vaporwave con pegatinas Win95 de día y atardecer synthwave de
+  noche, y Retro con los años 70 de día y marcianitos arcade de noche. El fondo se difumina detrás de los mensajes para
+  que se lean bien, se queda quieto con la ventana en segundo plano y cada tema trae su tipografía.
+- **Globos de ayuda propios** en toda la app, en lugar de los de Windows, y Ajustes más ordenado: la sección «Modelo»
+  desaparece porque todo se elige en el chat.
+- **Los informes del asistente ya no se pierden** si cierras la app mientras está preparando uno: vuelven al abrirla.
+- **Más seguridad:** las claves internas ya no viajan a la vista en la línea de comandos, los nombres de modelos que
+  mandan los agentes se limpian antes de llegar al asistente y un cerebro en modo coordinador nunca puede cambiar nada.
+- **Tutorial guiado:** la primera vez que se abre la app, el robot la recorre contigo paso a paso (el chat, el cerebro,
+  el Orquestador, los proyectos, las tareas, los agentes, las bitácoras, los ajustes…), señalando cada control con un
+  globo. Se salta cuando quieras (Esc) y no vuelve a salir solo.
+- **Tutoriales:** una pantalla nueva en el menú con cómo funciona cada parte de la app, los atajos de teclado y las
+  preguntas frecuentes, con buscador y botones que llevan a cada pantalla. Desde ahí se repite el tutorial guiado.
 
 ## Novedades de la 2.5
 
@@ -70,7 +114,7 @@ La versión estable: más fiable en el uso de cada día.
 
 - **Ajustes se abre como ventana** sobre la app, con sus apartados a la izquierda: General, Apariencia, Modelo, Tareas y
   cupo, Móvil, Herramientas, Modo experto, Actualizaciones, Contribuye y Más aplicaciones.
-- **Apariencia:** modo claro, oscuro o el del sistema; cinco temas (Orb, Vaporwave, Retro arcade, Profesional y Nube);
+- **Apariencia:** modo claro, oscuro o el del sistema; cinco temas (Orb, Vaporwave, Retro arcade, Profesional y Candy);
   tipografía de la interfaz y del código; y colores para el código del chat y del modo experto. El tema Profesional no
   muestra el robot ni sus animaciones y sonidos.
 - **Barra de menús de Windows oculta** por defecto. Se muestra desde Apariencia o, de forma puntual, con Alt.

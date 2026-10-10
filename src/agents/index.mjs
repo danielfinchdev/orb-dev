@@ -9,7 +9,7 @@ import { acpAgent, ACP_SPECS } from './acp.mjs';
 import { cleanEnv, IS_WIN } from './common.mjs';
 import fs from 'node:fs';
 import { ctx, tr } from '../core/context.mjs';
-import { accountsOf, account, accountDir, accountEnv, loginState as accountLogin, MULTI } from '../core/accounts.mjs';
+import { accountsOf, account, accountDir, accountEnv, defaultAccount, loginState as accountLogin, MULTI } from '../core/accounts.mjs';
 
 export const ADAPTERS = { claude, codex, cursor, ...Object.fromEntries(Object.entries(ACP_SPECS).map(([id, spec]) => [id, acpAgent(id, spec)])) };
 // Tests: ORB_FAKE_AGENTS points to a module whose fakeAdapter(id) replaces every agent (no real program or account).
@@ -50,6 +50,20 @@ export function quickRun(cmd, args, { timeoutMs = 15000, env } = {}) {
     child.on('error', (error) => { clearTimeout(timer); out += error.message; finish(false); });
     child.on('exit', (code) => { clearTimeout(timer); finish(code === 0); });
   });
+}
+
+// 2.6: the models an installed agent offers, asked to the agent itself (each adapter's discoverModels, with the login of
+// its first usable account). Resolves with [{ id, label, default?, resolved? }] or null (not installed, no way to ask, the
+// agent did not answer). Never throws.
+export async function discoverModels(agent) {
+  try {
+    const a = adapter(agent); if (typeof a.discoverModels !== 'function') return null;
+    const cfg = ctx.config.agents[agent] ?? {};
+    const exe = a.detect(cfg); if (!exe) return null;
+    const acc = defaultAccount(agent);
+    const list = await a.discoverModels(exe, cfg, acc ? accountEnv(acc) : {});
+    return Array.isArray(list) && list.length ? list : null;
+  } catch { return null; }
 }
 
 const versions = new Map(); // agent -> { exe, version } (asking the CLI takes a second; cached per executable)

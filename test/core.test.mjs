@@ -24,7 +24,7 @@ test('el primer arranque crea la carpeta del asistente con todo lo necesario', (
   assert.ok(!fs.existsSync(path.join(t.home, 'bitacoras')), 'una sola carpeta de bitácoras');
   assert.equal(fs.statSync(path.join(t.home, '.orb/datos/clave.bin')).size, 32);
   assert.equal(path.basename(t.home), 'Orb');
-  assert.equal(ctx.config.assistantName, 'Orb·e', 'el robot se llama Orb·e por defecto; su carpeta sigue siendo Orb');
+  assert.equal(ctx.config.assistantName, 'Orbe', 'el robot se llama Orbe por defecto; su carpeta sigue siendo Orb');
   // Reusing an existing home, and refusing a non-empty folder that is not one.
   assert.equal(createHome(t.home).home, t.home);
   assert.equal(createHome(t.base, { assistantName: 'Otro' }).home, t.home, 'siempre <carpeta elegida>/Orb, se llame como se llame');
@@ -45,19 +45,21 @@ test('bitácoras en el idioma elegido; al cambiarlo, las que solo tienen la cabe
   assert.equal(fs.readFileSync(web, 'utf8'), projectLogHeader('web'));
   saveConfig({ language: 'en' });
   try {
-    assert.match(fs.readFileSync(general, 'utf8'), /^# Orb·e’s general log\n/);
+    assert.match(fs.readFileSync(general, 'utf8'), /^# Orbe’s general log\n/);
     assert.equal(fs.readFileSync(web, 'utf8'), projectLogHeader('web', 'en'));
     assert.match(fs.readFileSync(notes, 'utf8'), /^# Bitácora — Con notas\n[\s\S]*### 2026-10-10/, 'con entradas no se toca');
   } finally { saveConfig({ language: 'es' }); }
-  assert.match(fs.readFileSync(general, 'utf8'), /^# Bitácora general de Orb·e\n/);
+  assert.match(fs.readFileSync(general, 'utf8'), /^# Bitácora general de Orbe\n/);
   fs.rmSync(notes);
 });
 
-test('2.4: quien tenía el nombre por defecto «Orb» pasa a Orb·e; un nombre elegido a mano se queda', () => {
+test('2.4 y 2.6: quien tenía el nombre por defecto («Orb», «Orb·e») pasa a Orbe; un nombre elegido a mano se queda', () => {
   const old = (stored) => { const home = fs.mkdtempSync(path.join(t.base, 'nombre-')); fs.writeFileSync(path.join(home, 'orb.json'), JSON.stringify(stored)); return loadConfig(home); };
-  assert.equal(old({ version: 3, assistantName: 'Orb' }).assistantName, 'Orb·e');
+  assert.equal(old({ version: 3, assistantName: 'Orb' }).assistantName, 'Orbe');
+  assert.equal(old({ version: 4, assistantName: 'Orb·e' }).assistantName, 'Orbe', 'el de la 2.4 pasa a Orbe');
+  assert.equal(old({ version: 5, assistantName: 'Orb·e' }).assistantName, 'Orb·e', 'si en la 2.6 lo escribes así, se respeta');
   assert.equal(old({ version: 3, assistantName: 'Nova' }).assistantName, 'Nova');
-  assert.equal(old({ assistantName: 'Orb' }).assistantName, 'Orb·e', 'también desde carpetas más antiguas');
+  assert.equal(old({ assistantName: 'Orb' }).assistantName, 'Orbe', 'también desde carpetas más antiguas');
   assert.equal(old({ version: 4, assistantName: 'Orb' }).assistantName, 'Orb', 'si ya en la 2.4 lo llamas Orb, se respeta');
   assert.equal(PRODUCT.folder, 'Orb');
 });

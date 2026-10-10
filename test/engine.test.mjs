@@ -48,6 +48,22 @@ test('parar al asistente y escribirle enseguida: el mensaje nuevo espera a que a
   assert.ok(!after.some((m) => m.role === 'system' && /trabajando|ocupad|busy/i.test(m.body)), after.map((m) => m.body).join(' / '));
 });
 
+test('2.6: el cerebro del asistente puede ser cualquier agente instalado (Codex), con sus instrucciones al empezar', async () => {
+  const catalog = await call('models.catalog');
+  assert.ok(catalog.some((a) => a.id === 'claude' && a.models.some((m) => m.id === 'claude-opus-5-5' && m.heavy)), 'Opus gasta más cupo');
+  assert.ok(catalog.some((a) => a.id === 'codex'));
+  const info = await call('chat.settings', { agent: 'codex', model: '', reasoning: 'high' });
+  assert.equal(info.agent, 'codex'); assert.equal(info.reasoning, 'high');
+  const before = (await call('chat.list')).length;
+  await call('chat.send', { text: 'hola con otro cerebro' });
+  const answer = await until(async () => (await call('chat.list')).slice(before).find((m) => m.role === 'orb'), 'respuesta de Codex como cerebro', 15000);
+  assert.match(answer.body, /^Codex empieza:/, 'responde Codex');
+  const log = fs.readFileSync(path.join(t.home, '.orb', 'ejecuciones', 'asistente.log'), 'utf8');
+  assert.match(log, /"fake":"codex"[^\n]*Eres/, 'Codex recibe las instrucciones del asistente al empezar');
+  await assert.rejects(call('chat.settings', { agent: 'noexiste' }));
+  await call('chat.settings', { agent: 'claude', model: 'claude-sonnet-5-5', reasoning: 'medium' });
+});
+
 test('copia aislada: trabaja en su rama, el motor hace el commit y se puede integrar', async () => {
   // Start from a clean folder (the previous test left the agent's file there, uncommitted).
   const main = (await call('projects.list'))[0].path;
