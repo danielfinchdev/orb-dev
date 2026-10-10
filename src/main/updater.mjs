@@ -77,7 +77,16 @@ export function createUpdater({ send, log = () => {} }) {
   // Closes the app, installs silently and opens the new version.
   function install() {
     if (state.state !== 'downloaded') return false;
-    setImmediate(() => autoUpdater.quitAndInstall(true, true));
+    // quitAndInstall says nothing when the downloaded installer cannot be started (deleted, quarantined by the antivirus):
+    // then the app simply does not quit. It stays, says so and offers to download it again.
+    let quitting = false;
+    app.once('before-quit', () => { quitting = true; });
+    setImmediate(() => { try { autoUpdater.quitAndInstall(true, true); } catch (error) { log(`actualizar: ${error.message}`); } });
+    setTimeout(() => {
+      if (quitting) return;
+      log('actualizar: no se pudo abrir el instalador descargado');
+      set({ state: 'available', percent: 0, error: 'install' });
+    }, 5000).unref?.();
     return true;
   }
 

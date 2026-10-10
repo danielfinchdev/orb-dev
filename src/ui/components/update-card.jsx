@@ -54,7 +54,7 @@ export function UpdateCard() {
       ) : (
         <>
           <button data-testid="update-now" onClick={() => updateActions.update(st)} className="mt-4 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/70 px-4 py-2.5 text-[15px] font-medium hover:bg-white/15"><Download className="size-4" />{st.portable ? t('update.download') : t('update.update')}</button>
-          {st.error ? <p className="mt-2 text-xs text-white/90">{t('update.failed', { error: st.error })}</p> : null}
+          {st.error ? <p className="mt-2 text-xs text-white/90">{st.error === 'install' ? t('update.installFailed') : t('update.failed', { error: st.error })}</p> : null}
         </>
       )}
       <button onClick={() => act(bridge.openExternal(notesUrl(st.version)))} className="mt-3 cursor-pointer text-xs text-white/90 underline underline-offset-2">{t('update.notes')}</button>

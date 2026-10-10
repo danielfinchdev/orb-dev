@@ -178,6 +178,7 @@ test('Cursor: solo lectura sin --force, encargos largos por archivo, cupo y dete
   const prompt = long.log()[0].args.at(-1);
   assert.match(prompt, /Tus instrucciones completas están en el archivo .*orb-encargo-\d+\.md/);
   assert.ok(prompt.length < 1000, 'la línea de órdenes de Windows no admite 32 000 caracteres');
+  assert.ok(!fs.readdirSync(dir).some((f) => f.startsWith('orb-encargo-')), 'el archivo de instrucciones se borra al acabar el turno');
   const quota = await openCursor().live.send({ text: 'CUPO' });
   assert.equal(quota.isError, true); assert.deepEqual(quota.limit, { resetAt: null });
   const { live, events } = openCursor();

@@ -67,8 +67,13 @@ export function createLive(o) {
     turn = new Turn(); const current = turn;
     let prompt = text;
     if (text.length > ARGV_PROMPT_MAX) {
+      // In the folder Orb keeps out of git (promptDir), and gone when the turn ends: never part of the agent's work.
       const file = path.join(o.promptDir ?? o.cwd, `orb-encargo-${Date.now()}.md`);
-      try { fs.writeFileSync(file, text); prompt = `Tus instrucciones completas están en el archivo ${file}. Léelo entero y síguelo como si fuera este mensaje.`; } catch { /* sent as is */ }
+      try {
+        fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text);
+        prompt = `Tus instrucciones completas están en el archivo ${file}. Léelo entero y síguelo como si fuera este mensaje.`;
+        current.promise.finally(() => fs.rmSync(file, { force: true }));
+      } catch { /* sent as is */ }
     }
     const args = [...o.exe.pre, '-p', '--output-format', 'stream-json', '--stream-partial-output', '--trust', '--workspace', o.cwd];
     if (permission === 'leer') args.push('--mode', 'ask'); else args.push('--force');

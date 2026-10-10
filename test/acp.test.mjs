@@ -148,3 +148,16 @@ test('ACP: cerrar termina el proceso; detección por ruta y la lista de agentes 
   assert.deepEqual(agent.caps, { images: false, steer: false, fork: false, approvals: true, models: false, context: true });
   assert.equal(live.steer({ text: 'x' }), false, 'ACP no corrige en marcha: los mensajes esperan en la cola');
 });
+
+test('ACP: parado mientras arranca, el programa se cierra y no recibe el encargo', async () => {
+  fs.rmSync(logFile, { force: true });
+  const { live } = open({ env: { FAKE_ACP_LOG: logFile, FAKE_ACP_SLOW_START: '800' } });
+  const turn = live.send({ text: 'encargo que no debe hacerse' });
+  await until(() => live.pid !== null || fs.existsSync(logFile), 'el programa arrancó', 5000);
+  live.close();
+  const r = await turn;
+  assert.equal(r.isError, true);
+  await new Promise((resolve) => setTimeout(resolve, 1500)); // well after its slow start
+  const methods = fs.existsSync(logFile) ? sent().map((m) => m.method) : [];
+  assert.ok(!methods.includes('session/new') && !methods.includes('session/prompt'), methods.join(', '));
+});

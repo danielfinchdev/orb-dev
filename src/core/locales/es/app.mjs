@@ -29,6 +29,7 @@ export default {
   'update.update': 'Actualizar',
   'update.download': 'Descargar',
   'update.failed': 'No se pudo descargar: {error}',
+  'update.installFailed': 'No se pudo abrir el instalador descargado (quizá lo quitó el antivirus). Vuelve a descargarlo.',
   'update.notes': 'Novedades',
   'update.close': 'Cerrar'
 };

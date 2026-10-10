@@ -298,6 +298,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       lastChat = rows[rows.length - 1].id;
       for (const r of rows) if (r.role !== 'usuario') emit('chat:new', { role: r.role, body: oneLine(r.body, 240) });
     },
-    shutdown() { sessions.stopAll(); orchestrator.stop(); orchestrator.closeLive(); log('motor detenido'); }
+    // Running tasks stay "running": the next start continues them (scheduler.finish does not close them while closing).
+    shutdown() { scheduler.closing = true; sessions.stopAll(); orchestrator.stop(); orchestrator.closeLive(); log('motor detenido'); }
   };
 }

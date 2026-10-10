@@ -12,7 +12,7 @@ import { Board, checkProjectPath } from '../src/core/board.mjs';
 import { createProject, syncProjects } from '../src/core/projects.mjs';
 import { detectSensitivity, verify } from '../src/core/approval.mjs';
 import { canLaunch, parseReset, startCooldown, isLimitText } from '../src/core/budget.mjs';
-import { takeCheckpoint, snapshotCommit, undoCheckpoint } from '../src/core/workspace.mjs';
+import { takeCheckpoint, snapshotCommit, undoCheckpoint, prepareWorkdir, git } from '../src/core/workspace.mjs';
 import { isSecretPath, redactSecrets } from '../src/core/safety.mjs';
 
 let t; let board; let project;
@@ -230,6 +230,57 @@ test('deshacer devuelve solo los archivos que cambió la tarea y respeta los cam
   const out = undoCheckpoint(before, after);
   assert.deepEqual(out.restored, ['a.txt']); assert.deepEqual(out.removed, ['nuevo.txt']); assert.deepEqual(out.skipped, ['b.txt']);
   assert.equal(fs.readFileSync(path.join(dir, 'a.txt'), 'utf8'), 'original');
+});
+
+test('un repositorio recién creado con git init, sin ningún commit, también sirve: foto, deshacer y copia aislada', () => {
+  const repo = fs.mkdtempSync(path.join(t.base, 'sin commits '));
+  git(repo, 'init', '-q');
+  fs.writeFileSync(path.join(repo, 'index.html'), '<h1>hola</h1>');
+  const before = takeCheckpoint(repo, 'vacio', ctx.paths.checkpoints);
+  assert.equal(before.kind, 'git');
+  fs.writeFileSync(path.join(repo, 'index.html'), '<h1>adiós</h1>'); fs.writeFileSync(path.join(repo, 'nuevo.css'), 'a{}');
+  const out = undoCheckpoint(before, { commit: snapshotCommit(repo, { always: true }).commit });
+  assert.deepEqual([out.restored, out.removed], [['index.html'], ['nuevo.css']]);
+  assert.equal(fs.readFileSync(path.join(repo, 'index.html'), 'utf8'), '<h1>hola</h1>');
+  const copy = prepareWorkdir({ id: 99, title: 'Aislada' }, { name: 'sin commits', path: repo }, path.join(t.base, 'aisladas'));
+  assert.ok(fs.existsSync(path.join(copy.workdir, 'index.html')), 'la copia aislada parte de lo que había');
+  // The user deletes the copy by hand to free space: the task can still continue (its branch comes back as a copy).
+  fs.rmSync(copy.workdir, { recursive: true, force: true });
+  const again = prepareWorkdir({ id: 99, title: 'Aislada' }, { name: 'sin commits', path: repo }, path.join(t.base, 'aisladas'));
+  assert.ok(fs.existsSync(path.join(again.workdir, 'index.html')));
+});
+
+test('las fotos para deshacer no se acumulan: se van las de tareas terminadas hace más de 30 días y las que nadie usa', async () => {
+  const { Scheduler } = await import('../src/engine/scheduler.mjs');
+  const photo = (name) => { const dir = path.join(ctx.paths.checkpoints, name); fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, 'a.txt'), '1'); return dir; };
+  const live = board.createTask({ project: 'web', title: 'En cola', description: 'algo', agent: 'claude' }, 'usuario');
+  const liveCopy = photo(`t${live.id}-1`);
+  board.settingJson(`checkpoint:${live.id}`, { before: { kind: 'copia', dir: project.path, copy: liveCopy, at: 0 } });
+  const old = board.createTask({ project: 'web', title: 'Vieja', description: 'algo', agent: 'claude' }, 'usuario');
+  board.run("UPDATE tasks SET status = 'done', updated_at = ? WHERE id = ?", '2020-01-01T00:00:00.000Z', old.id);
+  const oldCopy = photo(`t${old.id}-1`);
+  board.settingJson(`checkpoint:${old.id}`, { before: { kind: 'copia', dir: project.path, copy: oldCopy, at: 0 } });
+  const orphan = photo(`t${live.id}-2`); // a second copy of a follow-up that 2.4 never used
+  const other = photo('no-es-de-orb');
+  new Scheduler(board, {}, {});
+  assert.ok(fs.existsSync(liveCopy), 'la de una tarea pendiente se queda');
+  assert.ok(!fs.existsSync(oldCopy) && board.settingJson(`checkpoint:${old.id}`) === null, 'la de una tarea terminada hace mucho se va');
+  assert.ok(!fs.existsSync(orphan), 'la que no usa nadie se va');
+  assert.ok(fs.existsSync(other), 'nada que no sea de Orb');
+  board.settingJson(`checkpoint:${live.id}`, null); board.run("UPDATE tasks SET status = 'cancelled' WHERE id = ?", live.id);
+});
+
+test('deshacer devuelve los archivos tal como estaban en el disco (saltos de línea de Windows con core.autocrlf)', () => {
+  const dir = project.path;
+  git(dir, 'config', 'core.autocrlf', 'true');
+  try {
+    fs.writeFileSync(path.join(dir, 'run.bat'), '@echo off\r\necho hola\r\n');
+    const before = takeCheckpoint(dir, 'crlf', ctx.paths.checkpoints);
+    fs.writeFileSync(path.join(dir, 'run.bat'), '@echo off\r\necho adios\r\n');
+    const after = { commit: snapshotCommit(dir, { always: true }).commit };
+    assert.deepEqual(undoCheckpoint(before, after).restored, ['run.bat']);
+    assert.equal(fs.readFileSync(path.join(dir, 'run.bat'), 'utf8'), '@echo off\r\necho hola\r\n');
+  } finally { git(dir, 'config', '--unset', 'core.autocrlf'); }
 });
 
 test('los archivos secretos nunca entran en commits y los secretos se ocultan en los textos', () => {

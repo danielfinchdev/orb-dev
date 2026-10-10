@@ -80,6 +80,12 @@ export function placeAttachments(files, cwd) {
     fs.copyFileSync(file, target);
     out.push(target);
   }
+  keepOutOfGit(cwd);
+  return out;
+}
+
+// The attachments folder (pictures, long instructions for Cursor) never goes into the project's git.
+function keepOutOfGit(cwd) {
   if (isGitRepo(cwd)) {
     // --git-path answers relative to the folder git ran in (cwd), or absolute for worktrees.
     const exclude = git(cwd, 'rev-parse', '--git-path', 'info/exclude').stdout.trim() || path.join(repoRoot(cwd), '.git', 'info', 'exclude');
@@ -89,7 +95,6 @@ export function placeAttachments(files, cwd) {
       if (!text.split(/\r?\n/).includes(`${ATTACH_DIR}/`)) { fs.mkdirSync(path.dirname(abs), { recursive: true }); fs.appendFileSync(abs, `${text && !text.endsWith('\n') ? '\n' : ''}${ATTACH_DIR}/\n`); }
     } catch { /* not fatal: the commit step also skips this folder */ }
   }
-  return out;
 }
 
 // One line for the live view: what the agent is doing now.
@@ -263,7 +268,11 @@ export class Sessions {
     const newSessionId = !s.cli_session && !forkFrom && s.agent === 'claude' ? crypto.randomUUID() : null;
     if (newSessionId) this.update(s.id, { cli_session: newSessionId });
     const entry = { key, lastUsed: Date.now(), logFile, live: null };
+    // Long instructions Cursor gets in a file go to the attachments folder (out of git), not among the project's files.
+    const promptDir = path.join(s.cwd, ATTACH_DIR);
+    if (s.agent === 'cursor') keepOutOfGit(s.cwd);
     entry.live = a.createLive({
+      promptDir,
       exe, cwd: s.cwd, model: s.model, reasoning: s.reasoning, permission: s.permission,
       resumeId: forkFrom || s.cli_session || null, forkSession: Boolean(forkFrom), newSessionId,
       mcpServers: mcpServersFor(s.agent, { board: this.board, taskId, session: s.id }), budgetUsd,

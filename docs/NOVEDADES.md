@@ -1,9 +1,9 @@
 ## Descargar
 
-- **`Orb-2.4.2-instalador.exe`** (recomendado): se instala para tu usuario, sin permisos de administrador, con acceso
+- **`Orb-2.5.0-instalador.exe`** (recomendado): se instala para tu usuario, sin permisos de administrador, con acceso
   directo en el escritorio y en el menú Inicio. Después lo encuentras escribiendo «Orb» en el buscador de Windows.
-- **`Orb-2.4.2-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
-- **`Orb-2.4.2-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.exe`.
+- **`Orb-2.5.0-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
+- **`Orb-2.5.0-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.exe`.
 
 Windows 10/11. Como aún no está firmada, SmartScreen avisa la primera vez: «Más información» → «Ejecutar de todas formas».
 En el primer arranque la app detecta qué agentes tienes y con qué sesión, e instala lo que falte con los instaladores oficiales.
@@ -20,6 +20,22 @@ La versión estable: más fiable en el uso de cada día.
   hacerse pasar por otro ni cerrar una tarea que no es suya.
 - **Bitácoras en tu idioma:** las bitácoras nuevas y sus entradas salen en el idioma de Ajustes (español o inglés). Al
   cambiar de idioma, las que aún están vacías cambian también.
+- **Cerrar Orb con tareas trabajando:** al volver a abrirlo, siguen donde estaban. Antes, al cerrar con normalidad,
+  algunas quedaban como «hechas» a medias.
+- **Nada se queda atascado tras un corte:** si Orb se cierra de golpe justo cuando un agente acaba su tarea, al volver se
+  completa (cambios guardados, bitácora e informe) y las tareas que dependían de ella arrancan.
+- **«Deshacer esta tarea», más seguro:** devuelve cada archivo tal como estaba (también con los saltos de línea de
+  Windows) y, si uno no se puede recuperar, lo deja como está y te lo dice; nunca lo borra.
+- **Proyectos recién creados con git:** una carpeta con `git init` y sin ningún commit ya funciona (antes se bloqueaban
+  todas sus tareas).
+- **Menos espacio en disco:** las copias para «Deshacer» ya no se repiten en cada seguimiento, y se borran solas 30 días
+  después de terminar la tarea.
+- **«Reiniciar y actualizar»:** si el instalador descargado ya no está (por ejemplo, lo quitó el antivirus), Orb sigue
+  funcionando y te ofrece descargarlo otra vez.
+- **Más arreglos:** las conversaciones del móvil ya no pierden mensajes al abrirse; Cursor ya no deja archivos
+  `orb-encargo-*.md` en el proyecto; una copia aislada borrada a mano se vuelve a crear; un agente ACP parado mientras
+  arranca no llega a hacer el encargo; «Parar» en el chat ya no tira los informes de las tareas terminadas; y un
+  seguimiento cuyas imágenes ya no existen se envía sin ellas en vez de bloquear la tarea.
 
 ## Novedades de la 2.4.2
 

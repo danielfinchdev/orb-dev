@@ -89,7 +89,7 @@ export class Orchestrator {
   // meta goes with the answer (e.g. the report that waits for the user's OK).
   internal(text, chatLine, meta = null) {
     if (chatLine) this.board.addChat('system', chatLine);
-    this.queue.push({ text, meta });
+    this.queue.push({ text, meta, internal: true });
     this.next();
   }
 
@@ -113,7 +113,8 @@ export class Orchestrator {
   // conversation).
   stop() {
     if (!this.busy) return;
-    this.generation++; this.queue = [];
+    // What the user had queued goes; the engine's own notices (the report of finished tasks…) still come after.
+    this.generation++; this.queue = this.queue.filter((q) => q.internal);
     const live = this.live; const stopped = this.inflight;
     Promise.resolve(live?.interrupt()).catch(() => {});
     if (stopped) setTimeout(() => { if (this.inflight === stopped && this.live === live) this.closeLive(); }, STOP_GRACE_MS).unref?.();

@@ -33,10 +33,13 @@ export const changedPaths = (repo) => { const r = git(repo, 'status', '--porcela
 // Built with a temporary index, so the user's own index and files are never touched. Secret-looking files stay out, and that is
 // checked on the result: if one is still inside, no snapshot is made. Returns { commit, files } (files = paths not in HEAD as-is),
 // or null on failure. always=false returns null when there is nothing uncommitted.
-export function snapshotCommit(repo, { always = false, message = 'orb: punto de partida (lo que había en la carpeta principal sin commitear; no es trabajo del agente)' } = {}) {
+export function snapshotCommit(repo, { always: wanted = false, message = 'orb: punto de partida (lo que había en la carpeta principal sin commitear; no es trabajo del agente)' } = {}) {
   const changed = changedPaths(repo); if (changed === null) return null;
+  // A repository without any commit yet (git init and nothing more): the snapshot is a first commit with no parent, and it
+  // is always made, since checkpoints and isolated copies need something to start from.
+  const head = git(repo, 'rev-parse', '--verify', '--quiet', 'HEAD').stdout.trim();
+  const always = wanted || !head;
   if (!changed.length && !always) return null;
-  const head = git(repo, 'rev-parse', 'HEAD').stdout.trim(); if (!head) return null;
   const realIndex = path.resolve(repo, git(repo, 'rev-parse', '--git-path', 'index').stdout.trim());
   const tmp = path.join(os.tmpdir(), `orb-index-${process.pid}-${crypto.randomBytes(4).toString('hex')}`);
   try {
@@ -48,8 +51,8 @@ export function snapshotCommit(repo, { always = false, message = 'orb: punto de 
     for (const file of listed().filter(isSecretPath)) gitEnv(repo, env, 'rm', '-q', '--cached', '--ignore-unmatch', '--', file);
     if (listed().some(isSecretPath)) return null;
     const tree = gitEnv(repo, env, 'write-tree').stdout.trim(); if (!tree) return null;
-    if (tree === git(repo, 'rev-parse', 'HEAD^{tree}').stdout.trim() && !always) return null;
-    const commit = gitEnv(repo, env, ...ORB_GIT, 'commit-tree', tree, '-p', head, '-m', message).stdout.trim();
+    if (head && tree === git(repo, 'rev-parse', 'HEAD^{tree}').stdout.trim() && !always) return null;
+    const commit = gitEnv(repo, env, ...ORB_GIT, 'commit-tree', tree, ...(head ? ['-p', head] : []), '-m', message).stdout.trim();
     return commit ? { commit, files: changed.length } : null;
   } finally { fs.rmSync(tmp, { force: true }); }
 }
@@ -96,15 +99,18 @@ export function undoCheckpoint(before, after) {
   const restored = []; const removed = []; const skipped = [];
   if (before.kind === 'git') {
     const repo = before.repo;
-    for (const { path: rel } of changedBetween(repo, before.commit, after.commit)) {
+    for (const { status, path: rel } of changedBetween(repo, before.commit, after.commit)) {
       const file = path.join(repo, rel);
       const nowExists = fs.existsSync(file);
       const blobAfter = git(repo, 'rev-parse', '--verify', '--quiet', `${after.commit}:${rel}`).stdout.trim();
       const blobNow = nowExists ? git(repo, 'hash-object', '--', file).stdout.trim() : '';
       if (blobNow !== blobAfter) { skipped.push(rel); continue; } // changed again after the task: the user decides
-      const old = gitBuffer(repo, 'cat-file', 'blob', `${before.commit}:${rel}`);
+      // Only a file the task created is removed; whatever else cannot be read back is left alone and reported.
+      if (status === 'A') { if (nowExists) { fs.rmSync(file, { force: true }); removed.push(rel); } continue; }
+      // --filters: the file as it was on disk (line endings of core.autocrlf, Git LFS), not git's stored form.
+      const old = gitBuffer(repo, 'cat-file', '--filters', `${before.commit}:${rel}`);
       if (old.status === 0) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, old.stdout); restored.push(rel); }
-      else if (nowExists) { fs.rmSync(file, { force: true }); removed.push(rel); }
+      else skipped.push(rel);
     }
     return { restored, removed, skipped };
   }
@@ -139,6 +145,8 @@ export function prepareWorkdir(task, project, worktrees, deps = []) {
   const notes = [];
   if (!fs.existsSync(workdir)) {
     fs.mkdirSync(worktrees, { recursive: true });
+    // A copy deleted by hand is still registered in git ("missing but already registered worktree"): forget it first.
+    git(project.path, 'worktree', 'prune');
     const exists = git(project.path, 'rev-parse', '--verify', '--quiet', branch).status === 0;
     const withBranch = deps.filter((d) => d.branch && git(project.path, 'rev-parse', '--verify', '--quiet', d.branch).status === 0);
     let base = null; let toMerge = withBranch;
