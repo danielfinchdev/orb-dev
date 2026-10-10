@@ -193,5 +193,17 @@ html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-di
 @media (prefers-reduced-motion: reduce) { .orb *, .orb { animation: none !important; } }
 
 /* The brand backdrop (setup screen, app icon): the soft periwinkle of the robot's world. */
+:root { --brand-sky-top: #a3adf5; }
+.dark { --brand-sky-top: #1a1f4f; } /* the sky's colour at the top right, behind the window's buttons */
 .brand-sky { background: radial-gradient(120% 90% at 30% 10%, #c3cbff 0%, #a7b1f6 45%, #8f9ef0 100%); }
 .dark .brand-sky { background: radial-gradient(120% 90% at 30% 10%, #2b3270 0%, #1d2257 50%, #141838 100%); }
+
+/* 2.6: the window has no Windows title bar. Minimise, maximise and close are Windows' own buttons drawn inside the app,
+   top right and 56 px tall (window controls overlay). The top bars (.app-titlebar) move the window and maximise it with
+   a double click; what is clickable inside them stays clickable. --wco-inset is the width of those buttons (0 in a
+   browser, such as the phone), and .wco-pad / .wco-pad-md (wide windows only) leave that room on the right. */
+:root { --wco-inset: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)); }
+.app-titlebar { -webkit-app-region: drag; app-region: drag; }
+.app-titlebar :is(button, a, input, select, textarea, label, [role=button], [role=combobox], [role=tab], [role=switch], [contenteditable], [data-no-drag], .orb) { -webkit-app-region: no-drag; app-region: no-drag; }
+.wco-pad { padding-inline-end: calc(var(--wco-inset) + 0.75rem) !important; }
+@media (min-width: 768px) { .wco-pad-md { padding-inline-end: calc(var(--wco-inset) + 1.25rem) !important; } }

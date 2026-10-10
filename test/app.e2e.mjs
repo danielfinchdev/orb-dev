@@ -193,13 +193,11 @@ try {
   await shot('10g-tema-profesional');
   await win.click('[data-testid=skin-orb]');
   await until(async () => (await win.evaluate(() => document.documentElement.dataset.skin)) === 'orb', 'vuelve al tema Orb');
-  // Windows' menu bar: hidden by default, shown from Ajustes → Apariencia.
-  const menuBar = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((b) => b.webContents.getURL().endsWith('index.html')).isMenuBarVisible());
-  assert.equal(await menuBar(), false, 'la barra de menús empieza oculta');
-  await win.click('[data-testid=menubar-switch]');
-  await until(async () => (await menuBar()) === true, 'barra de menús visible');
-  await win.click('[data-testid=menubar-switch]');
-  await until(async () => (await menuBar()) === false, 'barra de menús oculta otra vez');
+  // 2.6: no Windows title bar; minimise, maximise and close are drawn inside the app (window controls overlay), and the
+  // top bars move the window and leave room for them.
+  const bar = await win.evaluate(() => { const h = document.querySelector('main header'); const s = getComputedStyle(h); return { wco: navigator.windowControlsOverlay?.visible ?? null, drag: s.getPropertyValue('-webkit-app-region') || s.getPropertyValue('app-region'), pad: parseFloat(s.paddingRight) }; });
+  assert.equal(bar.drag, 'drag', 'la cabecera mueve la ventana');
+  if (process.platform === 'win32') { assert.equal(bar.wco, true, 'botones de la ventana dentro de la app'); assert.ok(bar.pad > 100, `hueco para los botones (${bar.pad} px)`); }
   await section('contribuye');
   await win.locator('[data-testid=feedback-message]').waitFor();
   await shot('10h-ajustes-contribuye');
