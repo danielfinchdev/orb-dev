@@ -45,7 +45,7 @@ try {
   assert.equal(await page.evaluate(() => window.orb.zoom(1.15)), 1.15);
   await page.evaluate(() => window.orb.zoom(1));
   // Folders menu and a switch of Ajustes (applied at once, also clicking its text)
-  await page.waitForSelector('text=Carpetas');
+  await page.waitForSelector('[data-testid=sidebar-folders]'); // 2.6: «Proyectos» (before, «Carpetas»)
   await page.click('[data-testid=nav-settings]');
   await page.click('[data-testid=settings-nav-tareas]');
   await page.click('text=Iniciar las tareas automáticamente');
