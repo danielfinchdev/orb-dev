@@ -5,10 +5,10 @@ export default {
   'pip.show': 'Show',
   'pip.closeUntil': 'Close until next time',
   'pip.noPage': 'no page',
-  'pip.toApp': 'Go to the app',
+  'pip.toApp': 'Open Orb',
   'pip.smaller': 'Smaller',
-  'pip.bigger': 'Bigger',
+  'pip.bigger': 'Larger',
   'pip.collapse': 'Collapse',
-  'pip.pageAlt': 'Agent’s page',
-  'pip.waiting': 'Waiting for the page…'
+  'pip.pageAlt': 'Agent page',
+  'pip.waiting': 'Loading page…'
 };

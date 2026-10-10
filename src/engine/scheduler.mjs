@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, enabledAgents, tr } from '../core/context.mjs';
 import { localeOf } from '../core/i18n.mjs';
+import { PRODUCT } from '../core/product.mjs';
 import { assistantName, userName, ofUser } from '../core/board.mjs';
 import { git, prepareWorkdir, takeCheckpoint, changedBetween, undoCheckpoint, snapshotCommit, ORB_GIT, REF_PREFIX } from '../core/workspace.mjs';
 import { rankAccounts, isLimitText, isBudgetText, startCooldown, pauseAccount, taskBudgetUsd } from '../core/budget.mjs';
@@ -35,9 +36,9 @@ export class Scheduler {
         board.patch(t.id, { status: 'blocked', pid: null }, 'orb', 'task.interrupted');
         board.settingJson(`followup:${t.id}`, { text: `${assistantName()} se cerró mientras trabajabas en esta tarea. Continúa donde lo dejaste (revisa el estado de la carpeta antes).`, images: [], resume: true });
         try { board.requeue(t.id, 'orb', 'task.resumed'); } catch (error) { this.log(`continuar #${t.id}: ${error.message}`); }
-        board.addChat('system', tr('msg.scheduler.resumedAfterClose', { id: t.id, title: oneLine(t.title), name: assistantName() }));
+        board.addChat('system', tr('msg.scheduler.resumedAfterClose', { id: t.id, title: oneLine(t.title), name: PRODUCT.name }));
       } else {
-        board.patch(t.id, { status: 'failed', pid: null, result: tr('msg.scheduler.closedWhileWorking', { name: assistantName(), result: t.result ?? '' }).slice(0, 4000) }, 'orb', 'task.interrupted');
+        board.patch(t.id, { status: 'failed', pid: null, result: tr('msg.scheduler.closedWhileWorking', { name: PRODUCT.name, result: t.result ?? '' }).slice(0, 4000) }, 'orb', 'task.interrupted');
       }
     }
   }
@@ -75,16 +76,16 @@ export class Scheduler {
     try { this.resumeLimited(); } catch (error) { this.log(`continuar limitadas: ${error.message}`); }
     try { runDue(board, this.log); } catch (error) { this.log(`programadas: ${error.message}`); }
     board.revalidateQueued(); board.warnBlockedByDeps();
+    const enabled = enabledAgents();
+    const order = [...new Set([...(ctx.config.agentOrder ?? []), ...enabled])];
     for (const task of board.readyTasks('auto')) {
       if (this.running.size >= ctx.config.maxParallel) return;
       if (this.running.has(task.id)) continue;
-      const enabled = enabledAgents();
-      const order = [...new Set([...(ctx.config.agentOrder ?? []), ...enabled])];
       // Only agents whose program is on this PC take work (an "any" task never goes to one that is not installed).
       const types = (task.agent === 'any' ? order.filter((a) => enabled.includes(a)) : [task.agent].filter((a) => enabled.includes(a))).filter((a) => installed(a));
       // Every enabled account of those agents; a task pinned to an account only goes there.
       const candidates = types.flatMap((a) => usableAccounts(a)).filter((acc) => !task.account || acc.id === task.account);
-      if (!candidates.length) { this.notice(task, task.account ? `la cuenta ${accountLabel(task.account)} está desactivada o ya no existe` : task.agent !== 'any' && !installed(task.agent) ? `${label(task.agent)} no está instalado en este equipo (instálalo desde Agentes o reasigna la tarea)` : `${task.agent === 'any' ? 'no hay ningún agente activado e instalado' : `${label(task.agent)} no tiene cuentas activadas`} en Agentes`); continue; }
+      if (!candidates.length) { this.notice(task, task.account ? tr('sys.scheduler.accountOff', { account: accountLabel(task.account) }) : task.agent !== 'any' && !installed(task.agent) ? tr('sys.scheduler.notInstalled', { name: label(task.agent) }) : task.agent === 'any' ? tr('sys.scheduler.noAgents') : tr('sys.scheduler.noAccounts', { name: label(task.agent) })); continue; }
       const ranked = rankAccounts(board, candidates, task.model);
       const forced = board.setting(`budget_ok:${task.id}`) === '1'; // "Lanzar igualmente" in the app
       const pick = ranked.find((r) => (forced || r.check.ok) && this.busyWith(r.account) < ctx.config.perAgent);
@@ -244,7 +245,7 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
         onFinish: (info) => this.finish(task.id, info)
       });
     } catch (error) {
-      board.patch(task.id, { status: 'blocked', result: `no se pudo lanzar ${label(agent)}: ${error.message}`, pid: null }, 'orb', 'task.blocked');
+      board.patch(task.id, { status: 'blocked', result: tr('sys.scheduler.launchFailed', { name: label(agent), error: error.message }), pid: null }, 'orb', 'task.blocked');
       return;
     }
     if (!run) return; // spawn failed: finish() already closed the task
@@ -282,7 +283,7 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
       this.log(`finish #${taskId}: ${error.stack}`);
       try {
         const task = this.board.task(taskId);
-        if (task?.status === 'running') this.board.patch(taskId, { status: 'failed', result: `Error interno al cerrar la tarea: ${error.message}`, pid: null }, 'orb', 'task.finished');
+        if (task?.status === 'running') this.board.patch(taskId, { status: 'failed', result: tr('sys.scheduler.finishError', { error: error.message }), pid: null }, 'orb', 'task.finished');
         else if (task?.pid) this.board.patch(taskId, { pid: null }, 'orb', 'task.process_exit');
       } catch (inner) { this.log(`finish #${taskId} (recuperación): ${inner.message}`); }
     }
@@ -291,19 +292,19 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
   commitIsolated(task) {
     if (!task.branch || !task.workdir || !fs.existsSync(task.workdir)) return '';
     const status = git(task.workdir, 'status', '--porcelain=v1', '-z', '-uall');
-    if (status.status !== 0) return `no se pudo comprobar el estado de git (${oneLine(status.stderr, 200)}); los cambios no se guardaron`;
+    if (status.status !== 0) return tr('sys.scheduler.gitStatusFailed', { error: oneLine(status.stderr, 200) });
     if (!status.stdout.trim()) return '';
     const risky = secretFiles(status.stdout);
-    if (risky.length) return `no se hizo el commit automático: hay archivos que parecen secretos (${risky.slice(0, 5).join(', ')}). Revisa ${task.workdir}`;
+    if (risky.length) return tr('sys.scheduler.secretFilesIn', { list: risky.slice(0, 5).join(', '), dir: task.workdir });
     git(task.workdir, 'add', '-A', '--', '.', `:(exclude)${ATTACH_DIR}`);
     const staged = git(task.workdir, 'diff', '--cached', '--name-only', '-z').stdout.split('\0').filter(Boolean).filter(isSecretPath);
-    if (staged.length) { git(task.workdir, 'reset', '-q'); return `no se hizo el commit automático: hay archivos que parecen secretos (${staged.slice(0, 5).join(', ')})`; }
+    if (staged.length) { git(task.workdir, 'reset', '-q'); return tr('sys.scheduler.secretFiles', { list: staged.slice(0, 5).join(', ') }); }
     // Nothing really changed: git status can list a file the agent rewrote with the same content but other line endings
     // (core.autocrlf=true, the Git for Windows default), and then "git commit" fails with "nothing to commit".
     if (git(task.workdir, 'diff', '--cached', '--quiet').status === 0) return '';
     const commit = git(task.workdir, ...ORB_GIT, 'commit', '-q', '-m', `orb: tarea #${task.id} ${oneLine(task.title)}`);
     this.board.event(task.id, 'orb', 'git.commit', commit.status === 0 ? 'cambios guardados en la rama' : commit.stderr.trim());
-    return commit.status === 0 ? '' : `el commit automático falló (${oneLine(commit.stderr, 200)}); los cambios siguen sin guardar en ${task.workdir}`;
+    return commit.status === 0 ? '' : tr('sys.scheduler.commitFailed', { error: oneLine(commit.stderr, 200), dir: task.workdir });
   }
 
   finishNow(taskId, { code, state, stderr, stopped, timedOut, limit }) {
@@ -378,7 +379,8 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
     // The way back of the loop (person → assistant → tasks → agents → finished → assistant → person → OK).
     const reported = ['done', 'failed', 'blocked'].includes(task.status) && task.created_by === 'orb' ? this.queueReport(task) : false;
     // Blocked or failed for a reason other than quota: the assistant looks at it once an hour per task.
-    const stuck = ['blocked', 'failed'].includes(task.status) && !held && !problem && !/sin cupo|tope de gasto/.test(task.result ?? '');
+    // The texts of msg.scheduler.quotaResult / budgetStop (Spanish and English).
+    const stuck = ['blocked', 'failed'].includes(task.status) && !held && !problem && !/sin cupo|l[ií]mite de gasto|out of usage quota|spending limit/.test(task.result ?? '');
     if (stuck && !reported && this.orchestrator && Date.now() - Number(board.setting(`unblock_asked:${task.id}`) ?? 0) > 3_600_000) {
       board.setting(`unblock_asked:${task.id}`, String(Date.now()));
       this.orchestrator.internal(`AVISO DEL SISTEMA (no es ${userName()}): la tarea #${task.id} «${oneLine(task.title)}» (${task.assigned_to}${task.model ? ` · ${task.model}` : ''}) ${task.status === 'blocked' ? 'se bloqueó' : 'falló'}.

@@ -13,7 +13,8 @@ export default {
   'nav.folders': 'Folders',
   'nav.loose': 'No folder',
   'nav.noProject': 'No project',
-  'inbox.waiting': 'Waiting for you',
-  'inbox.working': 'Working',
-  'inbox.settle': 'Done: remove from here'
+  'inbox.waiting': 'To approve',
+  'inbox.issues': 'Issues',
+  'inbox.working': 'In progress',
+  'inbox.settle': 'Mark as resolved'
 };

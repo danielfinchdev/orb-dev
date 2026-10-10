@@ -8,6 +8,7 @@ import crypto from 'node:crypto';
 import { useHome, ctx, tr } from '../core/context.mjs';
 import { isHome, ensureLayout } from '../core/home.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
+import { PRODUCT } from '../core/product.mjs';
 
 const transport = (() => {
   if (process.parentPort) return { send: (m) => process.parentPort.postMessage(m), on: (fn) => process.parentPort.on('message', (e) => fn(e.data)) };
@@ -27,7 +28,7 @@ process.on('uncaughtException', (error) => log(`uncaughtException: ${error?.stac
 process.on('unhandledRejection', (error) => log(`unhandledRejection: ${error?.stack ?? error}`));
 
 async function start(home, version, secret, browser) {
-  if (!home || !isHome(home)) throw new Error(`no es la carpeta de un asistente: ${home}`);
+  if (!home || !isHome(home)) throw new Error(tr('sys.engine.notHome', { home }));
   ensureLayout(home); // the fixed folders, and folders made by older versions put in order
   useHome(home);
   // The approval secret comes from the app (kept encrypted by Windows); without it, the file fallback is used.
@@ -106,7 +107,7 @@ transport.on(async (msg) => {
   }
   if (msg.type !== 'call') return;
   try {
-    if (!api) throw new Error('el motor todavía no ha arrancado');
+    if (!api) throw new Error(tr('sys.engine.notStarted', { name: PRODUCT.name }));
     const result = await api.call(String(msg.method), msg.params ?? {});
     transport.send({ type: 'reply', id: msg.id, ok: true, result: result === undefined ? null : result });
   } catch (error) {

@@ -44,7 +44,7 @@ test('si el plan del agente no le deja trabajar, se explica claro, se pausa esa 
   assert.ok(done.events.some((e) => e.kind === 'task.launched' && e.actor === 'orb'));
   assert.ok(done.events.some((e) => e.kind === 'agent.problem' && /plan/.test(e.detail)));
   const chat = await call('chat.list');
-  assert.ok(chat.some((m) => /no pudo hacer la tarea #\d+.*plan.*Se la paso a otro agente/s.test(m.body)), 'aviso claro en el chat');
+  assert.ok(chat.some((m) => /no pudo completar la tarea #\d+.*plan.*La tarea se asigna a otro agente/s.test(m.body)), 'aviso claro en el chat');
   const usage = await call('usage.get');
   assert.ok(usage.find((u) => u.account === 'claude').cooldownUntil > Date.now() + 3_600_000, 'Claude en pausa (un día)');
   // A task pinned to that agent waits with the reason instead of failing again.

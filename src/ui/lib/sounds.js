@@ -71,6 +71,7 @@ const SOUNDS = {
 export function play(name, text, { force = false } = {}) {
   const s = settings();
   if (!name || !s.on || s.volume <= 0) return;
+  if (document.documentElement.dataset.skin === 'profesional') return; // that visual theme has no robot, nor its voice
   if (!force && (document.hidden || !document.hasFocus())) return;
   if (name === 'talk' && Date.now() - lastKey < 1500) return; // you are typing: let you think
   const a = audio();

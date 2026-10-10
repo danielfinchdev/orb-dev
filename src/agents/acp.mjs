@@ -7,6 +7,7 @@ import path from 'node:path';
 import { IS_WIN, firstFile, inPath, shimDirs, userHome, clip } from './common.mjs';
 import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree } from './live.mjs';
 import { decide } from '../core/guard.mjs';
+import { tr } from '../core/context.mjs';
 
 // An npm-installed CLI on Windows is a .cmd shim that cannot be started without a shell: Orb runs `node <script>` instead,
 // reading the script from the package's "bin" (the same thing the shim does).
@@ -51,7 +52,8 @@ export const ACP_SPECS = {
   }
 };
 
-const TOOL_KIND_NAME = { read: 'Leer', edit: 'Editar', delete: 'Borrar', move: 'Mover', search: 'Buscar', execute: 'Comando', think: 'Pensar', fetch: 'Web', switch_mode: 'Modo', other: 'Herramienta' };
+const TOOL_KIND_KEY = { read: 'read', edit: 'edit', delete: 'delete', move: 'move', search: 'search', execute: 'execute', think: 'think', fetch: 'fetch', switch_mode: 'switchMode', other: 'other' };
+const toolKindName = (kind) => (Object.hasOwn(TOOL_KIND_KEY, kind ?? '') ? tr(`sys.agents.tool.${TOOL_KIND_KEY[kind]}`) : null);
 const textOfContent = (content) => (Array.isArray(content) ? content : [content]).map((c) => {
   if (!c) return '';
   if (c.type === 'content') return textOfContent(c.content);
@@ -89,7 +91,7 @@ export function acpAgent(id, spec) {
       switch (u.sessionUpdate) {
         case 'agent_message_chunk': { const t = textOfContent(u.content); if (t) { text += t; onEvent({ type: 'delta', text: t }); } break; }
         case 'agent_thought_chunk': thought += textOfContent(u.content); break;
-        case 'tool_call': flush(); onEvent({ type: 'item', role: 'tool', kind: 'tool', body: { id: u.toolCallId, name: u.name || TOOL_KIND_NAME[u.kind] || u.title || 'herramienta', input: clip(u.title ?? u.rawInput ?? '', 300) } }); break;
+        case 'tool_call': flush(); onEvent({ type: 'item', role: 'tool', kind: 'tool', body: { id: u.toolCallId, name: u.name || toolKindName(u.kind) || u.title || tr('sys.agents.tool.other'), input: clip(u.title ?? u.rawInput ?? '', 300) } }); break;
         case 'tool_call_update':
           if (u.status === 'completed' || u.status === 'failed') onEvent({ type: 'item', role: 'tool', kind: 'tool_result', body: { id: u.toolCallId, output: clip(textOfContent(u.content ?? []) || (u.rawOutput ? JSON.stringify(u.rawOutput) : ''), 3000), error: u.status === 'failed' } });
           break;
@@ -105,14 +107,14 @@ export function acpAgent(id, spec) {
         const paths = (tc.locations ?? []).map((l) => l.path).filter(Boolean);
         const verdict = decide({ permission, tool: tc.name ?? tc.title, kind: tc.kind, command, paths, internalDir: o.internalDir, lang: o.lang });
         let d = verdict.decision;
-        if (d === 'ask') d = await approvals.ask({ id: tc.toolCallId ?? `p-${Date.now()}`, tool: tc.title ?? tc.kind ?? 'acción', title: command || tc.title || paths.join(', '), reason: verdict.reason, input: clip(tc.rawInput ?? tc.title, 400) });
+        if (d === 'ask') d = await approvals.ask({ id: tc.toolCallId ?? `p-${Date.now()}`, tool: tc.title ?? tc.kind ?? tr('sys.agents.tool.action'), title: command || tc.title || paths.join(', '), reason: verdict.reason, input: clip(tc.rawInput ?? tc.title, 400) });
         // In order of preference (not in the order the agent lists its options): "always" must pick allow_always even
         // when allow_once comes first, and a single "deny" must never pick reject_always.
         const pick = (kinds) => kinds.map((k) => (p.options ?? []).find((opt) => opt.kind === k)).find(Boolean);
         const option = d === 'deny' ? pick(['reject_once', 'reject_always']) : d === 'always' ? pick(['allow_always', 'allow_once']) : pick(['allow_once', 'allow_always']);
         return option ? { outcome: { outcome: 'selected', optionId: option.optionId } } : { outcome: { outcome: 'cancelled' } };
       }
-      throw new Error(`no soportado: ${method}`); // fs/* and terminal/* are not offered (the agent uses its own tools)
+      throw new Error(tr('sys.agents.methodNotSupported', { method })); // fs/* and terminal/* are not offered (the agent uses its own tools)
     };
 
     const mcpList = () => Object.entries(o.mcpServers ?? {}).map(([name, s]) => ({ name, command: s.command, args: s.args ?? [], env: Object.entries(s.env ?? {}).map(([k, v]) => ({ name: k, value: String(v) })) }));
@@ -122,12 +124,12 @@ export function acpAgent(id, spec) {
       const proc = spawnAgent(o.exe.cmd, [...o.exe.pre, ...args], { cwd: o.cwd, env: o.env, log });
       const p = new JsonRpcPeer(proc, { onNotification, onRequest, log });
       const quit = new Promise((resolve) => {
-        proc.once('exit', (code) => resolve(new Error(`${spec.label} se cerró al arrancar (código ${code}). ${proc.stderrText().trim().split('\n').slice(-2).join(' ')}`.trim())));
+        proc.once('exit', (code) => resolve(new Error(tr('sys.agents.exitedAtStart', { name: spec.label, code, detail: proc.stderrText().trim().split('\n').slice(-2).join(' ') }).trim())));
         proc.once('error', resolve);
       });
-      const hello = p.request('initialize', { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: 'orb-dev', title: 'Orb.dev', version: '2.3.3' } }, { timeoutMs: 60000 });
-      const first = await Promise.race([hello.then((init) => ({ init })), quit.then((error) => ({ error }))]);
-      if (first.error) { p.close(); throw first.error; }
+      const hello = p.request('initialize', { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: 'orb-dev', title: 'Orb', version: '2.4.0' } }, { timeoutMs: 60000 });
+      const first = await Promise.race([hello.then((init) => ({ init }), (error) => ({ error })), quit.then((error) => ({ error }))]);
+      if (first.error) { p.close(); killTree(proc); throw first.error; } // no reply or an early exit: nothing left running
       return { proc, p, init: first.init };
     };
     const start = async () => {
@@ -139,9 +141,9 @@ export function acpAgent(id, spec) {
       child.on('exit', (code) => {
         closed = true; approvals.clear(); peer.close();
         onEvent({ type: 'exit', code, stderr: child.stderrText() });
-        if (turn && !turn.done) { flush(); turn.finish({ isError: true, final: turn.text || `${spec.label} se cerró (código ${code}). ${child.stderrText().trim().split('\n').slice(-2).join(' ')}`.trim() }); }
+        if (turn && !turn.done) { flush(); turn.finish({ isError: true, final: turn.text || tr('sys.agents.exitedCode', { name: spec.label, code, detail: child.stderrText().trim().split('\n').slice(-2).join(' ') }).trim() }); }
       });
-      child.on('error', (error) => { closed = true; if (turn && !turn.done) turn.finish({ isError: true, final: `No se pudo arrancar ${spec.label}: ${error.message}` }); });
+      child.on('error', (error) => { closed = true; if (turn && !turn.done) turn.finish({ isError: true, final: tr('sys.agents.startFailed', { name: spec.label, error: error.message }) }); });
       agentCaps = init?.agentCapabilities ?? {};
       let res = null;
       if (sessionId && agentCaps.loadSession) {
@@ -167,11 +169,12 @@ export function acpAgent(id, spec) {
     };
 
     live.send = async ({ text: message }) => {
-      if (closed) throw new Error(`la sesión de ${spec.label} se ha cerrado`);
-      if (turn && !turn.done) throw new Error('el agente sigue trabajando');
+      if (closed) throw new Error(tr('sys.agents.sessionClosed', { name: spec.label }));
+      if (turn && !turn.done) throw new Error(tr('sys.agents.busy'));
       turn = new Turn(); const current = turn; text = ''; thought = '';
       try {
-        started ??= start();
+        // A start that fails closes this live: the next message gets a fresh process instead of the same error again.
+        started ??= start().catch((error) => { live.close(); throw error; });
         await started;
         const res = await peer.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: message }] });
         flush();

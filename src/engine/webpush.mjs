@@ -3,6 +3,7 @@
 // and signed with this PC's VAPID key (RFC 8292). Works when the phone's page is HTTPS (Tailscale), which browsers need
 // for push.
 import crypto from 'node:crypto';
+import { tr } from '../core/context.mjs';
 
 const PUSH_HOSTS = [/(^|\.)fcm\.googleapis\.com$/, /(^|\.)android\.googleapis\.com$/, /(^|\.)push\.apple\.com$/, /(^|\.)push\.services\.mozilla\.com$/, /(^|\.)notify\.windows\.com$/];
 const SUBJECT = 'https://github.com/danielfinchdev/orb-dev';
@@ -18,12 +19,12 @@ export function newVapidKeys() {
 
 // A subscription a phone sent is only kept if it points to a known push service over https (never anywhere else).
 export function checkSubscription(sub) {
-  if (!sub || typeof sub !== 'object') throw new Error('suscripción no válida');
-  let url; try { url = new URL(String(sub.endpoint)); } catch { throw new Error('suscripción no válida'); }
-  if (url.protocol !== 'https:' || !PUSH_HOSTS.some((re) => re.test(url.hostname))) throw new Error('servicio de avisos no reconocido');
+  if (!sub || typeof sub !== 'object') throw new Error(tr('sys.push.badSubscription'));
+  let url; try { url = new URL(String(sub.endpoint)); } catch { throw new Error(tr('sys.push.badSubscription')); }
+  if (url.protocol !== 'https:' || !PUSH_HOSTS.some((re) => re.test(url.hostname))) throw new Error(tr('sys.push.unknownService'));
   const p256dh = Buffer.from(String(sub.keys?.p256dh ?? ''), 'base64url');
   const auth = Buffer.from(String(sub.keys?.auth ?? ''), 'base64url');
-  if (p256dh.length !== 65 || p256dh[0] !== 4 || auth.length !== 16) throw new Error('suscripción no válida');
+  if (p256dh.length !== 65 || p256dh[0] !== 4 || auth.length !== 16) throw new Error(tr('sys.push.badSubscription'));
   return { endpoint: url.toString(), keys: { p256dh: b64u(p256dh), auth: b64u(auth) } };
 }
 

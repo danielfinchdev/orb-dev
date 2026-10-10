@@ -1,6 +1,6 @@
 // The PACKAGED app with a real agent: the live engine (Claude Agent SDK inside app.asar.unpacked) starts, a conversation
 // streams an answer and a second turn continues it. Uses the user's Claude Code login (Haiku, a tiny task).
-//   ORB_E2E_EXE=dist/win-unpacked/Orb.dev.exe node test/packaged-live.e2e.mjs
+//   ORB_E2E_EXE=dist/win-unpacked/Orb.exe node test/packaged-live.e2e.mjs
 import { chromium } from 'playwright-core';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

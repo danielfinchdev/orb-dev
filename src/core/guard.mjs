@@ -35,18 +35,22 @@ export function toolClass(tool, kind) {
 
 // Commands that may be fine but need a human look: publishing, downloading and running things from the internet, wiping
 // files, touching the system. Matched on the whole command line (PowerShell and bash spellings).
+// GIT: "git" plus its global options (-C dir, -c key=value, --no-pager…) before the subcommand.
+const GIT = String.raw`\bgit(?:\s+-\S+(?:\s+[^-\s]\S*)?)*\s+`;
 const RISKY = [
-  [/\bgit\s+(push|remote\s+(add|set-url|remove))\b/i, 'msg.guard.push'],
+  [new RegExp(`${GIT}(push|remote\\s+(add|set-url|remove))\\b`, 'i'), 'msg.guard.push'],
   [/\bgh\s+(repo|pr|release|api|gist|secret)\b/i, 'msg.guard.github'],
   [/\b(npm|pnpm|yarn)\s+publish\b|\bcargo\s+publish\b|\btwine\s+upload\b/i, 'msg.guard.publish'],
   [/\b(curl|wget|invoke-webrequest|invoke-restmethod|iwr|irm)\b[^|;&]*\|\s*(iex|invoke-expression|sh|bash|pwsh|powershell)\b/i, 'msg.guard.pipeToShell'],
+  [/\b(iex|invoke-expression)\b[^|;&]*\b(irm|iwr|invoke-webrequest|invoke-restmethod)\b|[$<]\(\s*(curl|wget)\b/i, 'msg.guard.pipeToShell'],
+  [/\b(powershell|pwsh)(\.exe)?\b[^|;&]*\s[-/]e(c|n\w*)?\b/i, 'msg.guard.pipeToShell'], // -EncodedCommand and its short forms hide the command
   [/\b(curl|wget)\b[^|;&]*\s(-X\s*(POST|PUT|DELETE|PATCH)|--data|-d\s|-F\s|--upload-file|-T\s)/i, 'msg.guard.sendData'],
   [/\b(invoke-webrequest|invoke-restmethod|iwr|irm)\b[^|;&]*-method\s+(post|put|delete|patch)/i, 'msg.guard.sendData'],
-  [/\brm\s+(-[a-z]*r[a-z]*f|-[a-z]*f[a-z]*r)\b|\bremove-item\b[^|;&]*-recurse\b|\brd\s+\/s\b|\brmdir\s+\/s\b|\bdel\s+\/[sq]/i, 'msg.guard.deleteFolders'],
-  [/\b(schtasks|reg\s+(add|delete)|set-executionpolicy|shutdown|restart-computer|stop-computer|format\s+[a-z]:|diskpart|bcdedit|netsh|sc\s+(create|delete|config))\b/i, 'msg.guard.system'],
-  [/\b(taskkill|stop-process|kill\s+-9|pkill|killall)\b/i, 'msg.guard.killProcesses'],
+  [/\brm\s+(?:-{1,2}\S+\s+)*(-[a-z]*r|--recursive)|\b(remove-item|ri|rd|rmdir|del|erase)\b[^|;&]*\s-r(e(c(u(r(se?)?)?)?)?)?\b|\brd\s+\/s\b|\brmdir\s+\/s\b|\bdel\s+\/[sq]/i, 'msg.guard.deleteFolders'],
+  [/\b(schtasks|reg\s+(add|delete)|set-executionpolicy|shutdown|restart-computer|stop-computer|format\s+[a-z]:|diskpart|bcdedit|netsh|sc\s+(create|delete|config)|setx|sudo|runas|net\s+(user|localgroup)|new-service|set-service)\b/i, 'msg.guard.system'],
+  [/\b(taskkill|stop-process|kill\s+(-9|-kill|-s\s+kill|-sigkill)|pkill|killall)\b/i, 'msg.guard.killProcesses'],
   [/\b(ssh|scp|sftp|rsync)\s/i, 'msg.guard.ssh'],
-  [/\bgit\s+(reset\s+--hard|clean\s+-[a-z]*f|checkout\s+--\s|branch\s+-D|rebase|filter-branch)\b/i, 'msg.guard.gitRewrite'],
+  [new RegExp(`${GIT}(reset\\s+--(hard|merge)\\b|clean\\s+(?:-\\S+\\s+)*(-[a-z]*f|--force)|checkout\\s+(--\\s|\\.(?=\\s|$))|restore\\b(?![^|;&]*--staged)|stash\\s+(drop|clear)\\b|branch\\s+-D\\b|rebase\\b|filter-branch\\b)`, 'i'), 'msg.guard.gitRewrite'],
   [/\b(docker|podman)\s+(rm|rmi|system\s+prune|volume\s+rm)\b/i, 'msg.guard.docker']
 ];
 
@@ -56,12 +60,15 @@ export function riskOf(command, lang = 'es') {
   return null;
 }
 
-// Paths that are never an agent's business: the assistant's own data (database, secret, logs of runs).
+// Paths that are never an agent's business: the assistant's own data (database, secret, logs of runs, undo checkpoints).
+// The isolated copies (.orb\copias\aisladas) are where isolated tasks work, so those stay open.
+const OPEN_INTERNAL = '\\copias\\aisladas\\';
 function touchesInternal(text, internalDir) {
   if (!internalDir) return false;
   const t = String(text ?? '').replace(/\//g, '\\').toLowerCase();
   const d = path.resolve(internalDir).replace(/\//g, '\\').toLowerCase();
-  return t.includes(d) || /(^|[\s"'\\/])\.orb[\\/](datos|copias)/i.test(String(text ?? ''));
+  for (let i = t.indexOf(d); i >= 0; i = t.indexOf(d, i + 1)) if (!t.startsWith(OPEN_INTERNAL, i + d.length)) return true;
+  return /(^|[\s"'\\])\.orb\\+(datos|ejecuciones|copias(?!\\+aisladas\\))/.test(t);
 }
 
 // decide({ permission, tool, kind, command, paths, internalDir, lang }) → (lang: language of the reasons, default 'es')

@@ -1,6 +1,6 @@
 // Exploratory pass over the PACKAGED app (no agents needed): the welcome screen, every view in day and night, a narrow
 // window and the settings' switches and checks, with screenshots in test-results/explora/ and the page errors collected.
-// Not an assertion test: it is for looking at.   ORB_E2E_EXE=dist/win-unpacked/Orb.dev.exe node test/explora.e2e.mjs
+// Not an assertion test: it is for looking at.   ORB_E2E_EXE=dist/win-unpacked/Orb.exe node test/explora.e2e.mjs
 import { _electron as electron } from 'playwright-core';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -60,11 +60,11 @@ try {
   await page.waitForSelector('text=Soy Orb', { timeout: 30000 });
   // ORB_LANG=en: the same tour in English (the interface and the engine's notices follow config.language).
   if (process.env.ORB_LANG) { await call('config.save', { patch: { language: process.env.ORB_LANG } }); await page.reload(); await page.waitForSelector('[data-testid=nav-chat]'); }
-  if (await page.isVisible('text=Preparo tu equipo')) { await shot('01-preparo-equipo'); await page.click('text=Continuar'); }
+  if (await page.isVisible('text=Preparando tu PC')) { await shot('01-preparo-equipo'); await page.click('text=Continuar'); }
   const dark = () => page.evaluate(() => document.documentElement.classList.contains('dark'));
   const views = [['nav-chat', 'chat'], ['nav-tasks', 'tareas'], ['nav-projects', 'proyectos'], ['nav-agents', 'agentes'], ['nav-logs', 'bitacoras'], ['nav-activity', 'actividad'], ['nav-settings', 'ajustes']];
   for (const theme of ['dia', 'noche']) {
-    if ((theme === 'noche') !== (await dark())) await page.getByRole('button', { name: /día y noche|day and night/i }).click();
+    if ((theme === 'noche') !== (await dark())) await page.getByRole('button', { name: /claro y oscuro|day and night/i }).click();
     for (const [nav, name] of views) {
       await page.click(`[data-testid=${nav}]`);
       await shot(`${theme}-${name}`);
@@ -73,12 +73,12 @@ try {
         if (wide.length) note(`${name}: contenido más ancho que su caja → ${wide.join(' | ')}`);
       }
       if (name === 'ajustes') {
-        // the whole settings page, scrolled
-        for (let i = 1; i <= 6; i++) {
-          const moved = await page.evaluate(() => { const el = [...document.querySelectorAll('*')].find((e) => e.scrollHeight > e.clientHeight + 20 && /(auto|scroll)/.test(getComputedStyle(e).overflowY) && e.clientHeight > 300); if (!el) return false; const before = el.scrollTop; el.scrollTop += el.clientHeight * 0.85; return el.scrollTop !== before; });
-          if (!moved) break;
-          await shot(`${theme}-ajustes-${i}`);
+        // each section of the settings window
+        for (const id of ['apariencia', 'modelo', 'tareas', 'movil', 'herramientas', 'experto', 'actualizaciones', 'contribuye', 'apps']) {
+          await page.click(`[data-testid=settings-nav-${id}]`);
+          await shot(`${theme}-ajustes-${id}`);
         }
+        await page.keyboard.press('Escape');
       }
     }
     // the dialogs and menus of the chat
@@ -94,6 +94,7 @@ try {
     return `${b.getAttribute('role')} ${b.dataset.state} bg=${cs.backgroundColor} border=${cs.borderColor} color=${cs.color} «${label}»`;
   }));
   note(`controles en noche:\n    ${controls.join('\n    ')}`);
+  await page.keyboard.press('Escape');
 
   // ---- 3. narrow window and a small laptop height
   for (const [w, h, name] of [[420, 860, 'estrecha'], [1280, 640, 'portatil-bajo']]) {
@@ -103,6 +104,7 @@ try {
       const [sw, iw] = await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);
       if (sw > iw + 1) note(`${name}/${view}: se sale por los lados (${sw} > ${iw})`);
       await shot(`${name}-${view}`);
+      if (view === 'ajustes') await page.keyboard.press('Escape');
     }
   }
   const state = await call('app.state');

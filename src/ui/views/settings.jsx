@@ -2,15 +2,18 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { toast } from 'sonner';
-import { Settings, FolderOpen, Plus, Trash2, ArrowLeftRight, Smartphone, QrCode, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog } from 'lucide-react';
+import { Settings, FolderOpen, Plus, Trash2, ArrowLeftRight, Smartphone, QrCode, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, LayoutGrid, UserRound, Brain, ListChecks, Wrench, RefreshCw } from 'lucide-react';
+import { ToolIcon } from '@/components/agent-icon.jsx';
+import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, APPEARANCE_DEFAULTS } from '../../core/appearance.mjs';
+import { PRODUCT, AUTHOR } from '../../core/product.mjs';
 import { PANELS, savePanels } from './expert.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea, Kbd } from '@/components/ui/basic.jsx';
-import { Select, Switch, Checkbox } from '@/components/ui/overlay.jsx';
-import { useStore, call, act, bridge, setState, getState, applyTheme, go, openTerminal } from '@/lib/store.js';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea, Kbd, Spinner } from '@/components/ui/basic.jsx';
+import { Select, Switch, Checkbox, Dialog, DialogContent, DialogTitle } from '@/components/ui/overlay.jsx';
+import { useStore, call, act, bridge, setState, getState, applyTheme, applyAppearance, go, openTerminal, openSettings, closeSettings } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { t, useT, useLocale } from '@/lib/i18n.js';
 import { LANGUAGES } from '../../core/i18n.mjs';
@@ -20,7 +23,7 @@ import { play } from '@/lib/sounds.js';
 
 async function save(patch, ok = t('settings.saved')) {
   const config = await act(call('config.save', { patch }), ok);
-  if (config) { setState({ app: { ...getState().app, config } }); applyTheme(config.ui?.theme); }
+  if (config) { setState({ app: { ...getState().app, config } }); applyTheme(config.ui?.theme); applyAppearance(config.ui); }
   return config;
 }
 const num = (v) => Number(v) || 0;
@@ -31,29 +34,81 @@ function Row({ label, hint, children }) {
 
 function AssistantCard({ c }) {
   const t = useT();
-  const [v, setV] = useState({ assistantName: c.assistantName, userName: c.userName, language: c.language, theme: c.ui?.theme ?? 'sistema', companion: c.ui?.companion !== false, sounds: c.ui?.sounds !== false, volume: c.ui?.volume ?? 0.5, motion: c.ui?.motion ?? 'completa' });
+  const [v, setV] = useState({ assistantName: c.assistantName, userName: c.userName, language: c.language });
   return (
     <Card>
       <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Robot size={40} /><div><CardTitle>{t('settings.assistant')}</CardTitle><CardDescription>{t('settings.assistantDesc')}</CardDescription></div></CardHeader>
       <CardContent className="grid gap-4">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <Field label={t('settings.assistantName')} hint={t('settings.assistantNameHint')}><Input value={v.assistantName} onChange={(e) => setV({ ...v, assistantName: e.target.value })} maxLength={40} /></Field>
           <Field label={t('settings.userName')}><Input value={v.userName} onChange={(e) => setV({ ...v, userName: e.target.value })} maxLength={40} /></Field>
           <Field label={t('settings.language')} hint={t('settings.languageHint')}><Select className="w-full" value={v.language} onValueChange={(language) => { setV({ ...v, language }); save({ language }); }} options={Object.entries(LANGUAGES).map(([value, label]) => ({ value, label }))} /></Field>
-          <Field label={t('settings.theme')}><Select className="w-full" value={v.theme} onValueChange={(theme) => setV({ ...v, theme })} options={[{ value: 'sistema', label: t('settings.theme.sistema') }, { value: 'claro', label: t('settings.theme.claro') }, { value: 'oscuro', label: t('settings.theme.oscuro') }]} /></Field>
         </div>
-        <Row label={t('settings.companion')} hint={t('settings.companionHint')}><Switch checked={v.companion} onCheckedChange={(companion) => { setV({ ...v, companion }); save({ ui: { companion } }, companion ? t('settings.companionOn') : t('settings.companionOff')); }} /></Row>
-        <Row label={t('settings.sounds')} hint={t('settings.soundsHint')}><Switch checked={v.sounds} onCheckedChange={(sounds) => { setV({ ...v, sounds }); save({ ui: { sounds } }, sounds ? t('settings.soundsOn') : t('settings.soundsOff')).then(() => sounds && play('wake')); }} /></Row>
-        {v.sounds ? (
-          <div className="-mt-2 flex items-center gap-3 px-0 text-sm">
-            <span className="text-muted-foreground text-xs">{t('settings.volume')}</span>
-            <input type="range" min={0.1} max={1} step={0.1} value={v.volume} aria-label={t('settings.volume')} className="accent-primary w-40 cursor-pointer"
-              onChange={(e) => setV({ ...v, volume: Number(e.target.value) })} onPointerUp={() => save({ ui: { volume: v.volume } }, null).then(() => play('boop'))} onKeyUp={() => save({ ui: { volume: v.volume } }, null)} />
-          </div>
-        ) : null}
-        <Row label={t('settings.motion')} hint={t('settings.motionHint')}><Switch checked={v.motion !== 'minima'} onCheckedChange={(on) => { const motion = on ? 'completa' : 'minima'; setV({ ...v, motion }); save({ ui: { motion } }, on ? t('settings.motionOn') : t('settings.motionOff')); }} /></Row>
       </CardContent>
-      <CardFooter><Button size="sm" onClick={() => save({ assistantName: v.assistantName.trim(), userName: v.userName.trim(), language: v.language, ui: { theme: v.theme, companion: v.companion, sounds: v.sounds, volume: v.volume, motion: v.motion } })}>{t('settings.save')}</Button></CardFooter>
+      <CardFooter><Button size="sm" onClick={() => save({ assistantName: v.assistantName.trim(), userName: v.userName.trim(), language: v.language })}>{t('settings.save')}</Button></CardFooter>
+    </Card>
+  );
+}
+
+// A small picture of each visual theme for its button.
+const SWATCH = {
+  orb: 'radial-gradient(120% 90% at 30% 10%, #f3f5ff 0%, #c9d0fb 55%, #8fa0f2 100%)',
+  vaporwave: 'linear-gradient(180deg, #2b1055 0%, #d53a9d 55%, #ff9a5a 80%, #2de2e6 100%)',
+  retro: `url("data:image/svg+xml,${encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 8' shape-rendering='crispEdges'><path fill='#39ff14' d='M2 0h1v1H2zM8 0h1v1H8zM3 1h1v1H3zM7 1h1v1H7zM2 2h7v1H2zM1 3h2v1H1zM4 3h3v1H4zM8 3h2v1H8zM0 4h11v1H0zM0 5h1v1H0zM2 5h7v1H2zM10 5h1v1h-1zM0 6h1v1H0zM2 6h1v1H2zM8 6h1v1H8zM10 6h1v1h-1zM3 7h2v1H3zM6 7h2v1H6z'/></svg>")}") center / 22px 16px space no-repeat, #050805`,
+  profesional: 'linear-gradient(90deg, #18181b 0 34%, #f4f4f5 34% 100%)',
+  nube: 'radial-gradient(9% 26% at 34% 64%, #fff 0 70%, transparent 74%), radial-gradient(12% 36% at 46% 52%, #fff 0 70%, transparent 74%), radial-gradient(9% 26% at 58% 64%, #fff 0 70%, transparent 74%), radial-gradient(22% 14% at 46% 72%, #fff 0 70%, transparent 74%), linear-gradient(135deg, #ffd6ec 0%, #e4d4ff 50%, #c9ecff 100%)'
+};
+
+// Appearance: light / dark, the visual theme, fonts, colours of code and the robot (floating, sounds, animations).
+// Everything is saved as soon as it changes. The professional theme has no robot, so its options are hidden there.
+function AppearanceCard({ c }) {
+  const t = useT();
+  const ui = { ...APPEARANCE_DEFAULTS, ...c.ui };
+  const [volume, setVolume] = useState(c.ui?.volume ?? 0.5);
+  const set = (patch, ok = null) => save({ ui: patch }, ok);
+  const opts = (list, prefix) => list.map((value) => ({ value, label: t(`${prefix}.${value}`) }));
+  const robot = ui.skin !== 'profesional';
+  return (
+    <Card>
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Palette className="text-primary size-5" /><div><CardTitle>{t('appearance.title')}</CardTitle><CardDescription>{t('appearance.desc')}</CardDescription></div></CardHeader>
+      <CardContent className="grid gap-5">
+        <Field label={t('settings.theme')}>
+          <div className="bg-muted inline-flex w-fit gap-1 rounded-lg p-1" role="radiogroup" aria-label={t('settings.theme')}>
+            {['claro', 'oscuro', 'sistema'].map((theme) => <button key={theme} type="button" role="radio" aria-checked={(ui.theme ?? 'sistema') === theme} onClick={() => set({ theme })} className={cn('cursor-pointer rounded-md px-3 py-1.5 text-[13px]', (ui.theme ?? 'sistema') === theme ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}>{t(`settings.theme.${theme}`)}</button>)}
+          </div>
+        </Field>
+        <Field label={t('appearance.skin')} hint={t('appearance.skinHint')}>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" role="radiogroup" aria-label={t('appearance.skin')} data-testid="skin-picker">
+            {SKINS.map((skin) => (
+              <button key={skin} type="button" role="radio" aria-checked={ui.skin === skin} onClick={() => set({ skin })} data-testid={`skin-${skin}`}
+                className={cn('grid cursor-pointer gap-1.5 rounded-xl border p-2 text-left transition-colors', ui.skin === skin ? 'border-primary ring-primary/30 ring-2' : 'hover:bg-accent/40')}>
+                <span className="h-10 rounded-lg border border-black/5" style={{ background: SWATCH[skin] }} aria-hidden />
+                <span className="text-[13px] font-medium">{t(`appearance.skin.${skin}`)}</span>
+              </button>
+            ))}
+          </div>
+        </Field>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label={t('appearance.font')}><Select className="w-full" value={ui.font} onValueChange={(font) => set({ font })} options={opts(FONTS, 'appearance.font')} /></Field>
+          <Field label={t('appearance.codeFont')}><Select className="w-full" value={ui.codeFont} onValueChange={(codeFont) => set({ codeFont })} options={opts(CODE_FONTS, 'appearance.codeFont')} /></Field>
+          <Field label={t('appearance.codeTheme')}><Select className="w-full" value={ui.codeTheme} onValueChange={(codeTheme) => set({ codeTheme })} options={opts(CODE_THEMES, 'appearance.codeTheme')} /></Field>
+        </div>
+        <pre className="code-sample hljs overflow-x-auto rounded-lg border p-3 text-[12.5px] leading-[1.55]" aria-label={t('appearance.codeSample')}><code><span className="hljs-keyword">const</span> <span className="hljs-variable">orb</span> = <span className="hljs-title function_">director</span>(<span className="hljs-string">'bolsillo'</span>, {'{ '}<span className="hljs-attr">fases</span>: <span className="hljs-number">3</span>{' }'}); <span className="hljs-comment">// Orb·e</span></code></pre>
+        {robot ? (
+          <div className="grid gap-1">
+            <Row label={t('settings.companion')} hint={t('settings.companionHint')}><Switch checked={ui.companion !== false} onCheckedChange={(companion) => set({ companion }, companion ? t('settings.companionOn') : t('settings.companionOff'))} /></Row>
+            <Row label={t('settings.sounds')} hint={t('settings.soundsHint')}><Switch checked={ui.sounds !== false} onCheckedChange={(sounds) => set({ sounds }, sounds ? t('settings.soundsOn') : t('settings.soundsOff')).then(() => sounds && play('wake'))} /></Row>
+            {ui.sounds !== false ? (
+              <div className="flex items-center gap-3 py-1 text-sm">
+                <span className="text-muted-foreground text-xs">{t('settings.volume')}</span>
+                <input type="range" min={0.1} max={1} step={0.1} value={volume} aria-label={t('settings.volume')} className="accent-primary w-40 cursor-pointer"
+                  onChange={(e) => setVolume(Number(e.target.value))} onPointerUp={() => set({ volume }).then(() => play('boop'))} onKeyUp={() => set({ volume })} />
+              </div>
+            ) : null}
+            <Row label={t('settings.motion')} hint={t('settings.motionHint')}><Switch checked={ui.motion !== 'minima'} onCheckedChange={(on) => set({ motion: on ? 'completa' : 'minima' }, on ? t('settings.motionOn') : t('settings.motionOff'))} /></Row>
+          </div>
+        ) : <p className="text-muted-foreground text-xs">{t('appearance.noRobot')}</p>}
+      </CardContent>
     </Card>
   );
 }
@@ -383,6 +438,7 @@ function InterfaceCard({ c }) {
             <Button size="sm" variant="outline" onClick={() => openTerminal()}><SquareTerminal />{t('settings.openTerminal')}</Button>
           </div>
         </Field>
+        <Row label={t('settings.menuBar')} hint={t('settings.menuBarHint')}><Switch checked={c.ui?.menuBar === true} onCheckedChange={(menuBar) => save({ ui: { menuBar } })} data-testid="menubar-switch" /></Row>
       </CardContent>
     </Card>
   );
@@ -417,18 +473,145 @@ export function PhoneView() {
   );
 }
 
-export function SettingsView() {
+// Contribute: a contribution through PayPal and feedback straight to the developer's inbox (src/main/feedback.mjs).
+function SupportCard() {
   const t = useT();
+  return (
+    <Card>
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><HeartHandshake className="text-primary size-5" /><div><CardTitle>{t('contribute.supportTitle')}</CardTitle><CardDescription>{t('contribute.supportDesc')}</CardDescription></div></CardHeader>
+      <CardFooter><Button size="sm" onClick={() => bridge.openExternal(AUTHOR.paypal)} data-testid="contribute-paypal"><HandHeart />{t('contribute.paypal')}</Button></CardFooter>
+    </Card>
+  );
+}
+
+const FEEDBACK_TYPES = ['error', 'idea', 'otro'];
+function FeedbackCard() {
+  const t = useT();
+  const [v, setV] = useState({ type: 'idea', message: '', contact: '' });
+  const [images, setImages] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const room = images.length < 3;
+  const add = (list) => setImages((now) => [...now, ...list.filter(Boolean)].slice(0, 3));
+  const send = async () => {
+    setBusy(true);
+    const ok = await act(bridge.feedback.send({ ...v, images }), t('contribute.sent'));
+    setBusy(false);
+    if (ok) { setV({ ...v, message: '' }); setImages([]); }
+  };
+  return (
+    <Card>
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><MessageSquareText className="text-primary size-5" /><div><CardTitle>{t('contribute.feedbackTitle')}</CardTitle><CardDescription>{t('contribute.feedbackDesc')}</CardDescription></div></CardHeader>
+      <CardContent className="grid gap-4">
+        <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
+          <Field label={t('contribute.type')}><Select className="w-full" value={v.type} onValueChange={(type) => setV({ ...v, type })} options={FEEDBACK_TYPES.map((value) => ({ value, label: t(`contribute.type.${value}`) }))} /></Field>
+          <Field label={t('contribute.contact')} hint={t('contribute.contactHint')}><Input type="email" value={v.contact} maxLength={120} placeholder={t('contribute.contactPh')} onChange={(e) => setV({ ...v, contact: e.target.value })} /></Field>
+        </div>
+        <Field label={t('contribute.message')}><Textarea rows={5} maxLength={5000} value={v.message} placeholder={t('contribute.messagePh')} onChange={(e) => setV({ ...v, message: e.target.value })} data-testid="feedback-message" /></Field>
+        <div className="grid gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="outline" disabled={!room} onClick={async () => add([await act(bridge.feedback.capture())])}><Camera />{t('contribute.capture')}</Button>
+            <Button size="sm" variant="outline" disabled={!room} onClick={async () => add((await act(bridge.feedback.images())) ?? [])}><ImagePlus />{t('contribute.addImage')}</Button>
+            <span className="text-muted-foreground text-xs">{t('contribute.imagesLimit')}</span>
+          </div>
+          {images.length ? (
+            <div className="flex flex-wrap gap-2">
+              {images.map((img, i) => (
+                <div key={`${img.name}-${i}`} className="group relative">
+                  <img src={`data:${img.type};base64,${img.data}`} alt={img.name} className="h-16 w-24 rounded-md border object-cover" />
+                  <button type="button" className="bg-background/90 absolute top-1 right-1 grid size-5 cursor-pointer place-items-center rounded-full border" aria-label={t('contribute.removeImage')} onClick={() => setImages(images.filter((_, j) => j !== i))}><X className="size-3" /></button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        <p className="text-muted-foreground text-xs">{t('contribute.privacy')}</p>
+      </CardContent>
+      <CardFooter><Button size="sm" disabled={busy || !v.message.trim()} onClick={send} data-testid="feedback-send">{busy ? <Spinner className="border-white/40 border-t-white" /> : <Send />}{t('contribute.send')}</Button></CardFooter>
+    </Card>
+  );
+}
+
+// Other apps by the same developer, with their latest version and a download button.
+function MoreAppsCard() {
+  const t = useT();
+  const locale = useLocale();
+  const [apps, setApps] = useState(null);
+  useEffect(() => { bridge.moreApps?.().then(setApps).catch(() => setApps([])); }, []);
+  const DESC = { 'open-control-edge': t('apps.openControl') };
+  return (
+    <Card>
+      <CardContent className="grid gap-3">
+        {!apps ? <div className="flex items-center gap-2 text-sm"><Spinner />{t('apps.loading')}</div> : apps.map((a) => (
+          <div key={a.id} className="flex flex-wrap items-center gap-3 rounded-xl border p-3" data-testid={`app-${a.id}`}>
+            <img src={`apps/${a.id}.png`} alt="" className="size-11 rounded-xl" />
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium">{a.name}</div>
+              <div className="text-muted-foreground text-xs">{DESC[a.id]}</div>
+              <div className="text-muted-foreground mt-0.5 text-xs">{a.version ? t('apps.latest', { version: a.version, date: a.date ? new Date(a.date).toLocaleDateString(locale) : '' }) : t('apps.offline')}</div>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" variant="ghost" onClick={() => bridge.openExternal(a.page)}>{t('apps.details')}</Button>
+              <Button size="sm" onClick={() => bridge.openExternal(a.download)}><Download />{t('apps.download')}</Button>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Ajustes is a window over the app: sections on the left, with the developer's GitHub and the version at the bottom.
+const SECTIONS = [
+  { id: 'general', icon: UserRound, cards: (c, app) => <><AssistantCard c={c} /><FolderCard c={c} home={app.home} /></> },
+  { id: 'apariencia', icon: Palette, cards: (c) => <><AppearanceCard c={c} /><InterfaceCard c={c} /></> },
+  { id: 'modelo', icon: Brain, cards: (c) => <BrainCard c={c} /> },
+  { id: 'tareas', icon: ListChecks, cards: (c) => <TasksCard c={c} /> },
+  { id: 'movil', icon: Smartphone, cards: () => <MobileCard /> },
+  { id: 'herramientas', icon: Wrench, cards: (c) => <><BrowserCard c={c} /><McpCard c={c} /><AndroidCard /></> },
+  { id: 'experto', icon: SquareTerminal, cards: (c) => <ExpertCard c={c} /> },
+  { id: 'actualizaciones', icon: RefreshCw, cards: () => <UpdatesCard /> },
+  { id: 'contribuye', icon: HeartHandshake, cards: () => <><SupportCard /><FeedbackCard /></> },
+  { id: 'apps', icon: LayoutGrid, cards: () => <MoreAppsCard /> }
+];
+
+export function SettingsDialog() {
+  const t = useT();
+  const open = useStore((s) => s.settings);
   const app = useStore((s) => s.app);
+  if (!app) return null;
+  const section = SECTIONS.find((s) => s.id === open) ?? SECTIONS[0];
   const c = app.config;
   return (
-    <>
-      <PageHeader icon={<Settings className="text-primary size-5" />} title={t('settings.title')} meta={t('settings.version', { v: app.version })} />
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-        <div className="mx-auto grid max-w-5xl gap-4 lg:grid-cols-2">
-          <AssistantCard c={c} /><InterfaceCard c={c} /><BrainCard c={c} /><TasksCard c={c} /><div className="grid content-start gap-4"><MobileCard /><ExpertCard c={c} /><BrowserCard c={c} /><McpCard c={c} />{bridge.mobile ? null : <><UpdatesCard /><AndroidCard /></>}<FolderCard c={c} home={app.home} /></div>
+    <Dialog open={Boolean(open)} onOpenChange={(o) => { if (!o) closeSettings(); }}>
+      <DialogContent className="flex h-[min(780px,90vh)] w-[min(1080px,94vw)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none" data-testid="settings-dialog" aria-describedby={undefined}>
+        <div className="flex h-16 shrink-0 items-center border-b px-6 pr-14">
+          <DialogTitle className="text-lg font-medium">{PRODUCT.name} · {t('settings.title')}</DialogTitle>
         </div>
-      </div>
-    </>
+        <div className="flex min-h-0 flex-1">
+          <nav className="flex w-56 shrink-0 flex-col max-sm:w-16" aria-label={t('settings.title')}>
+            <div className="grid min-h-0 flex-1 content-start gap-1 overflow-y-auto px-3 pt-4">
+              {SECTIONS.map(({ id, icon: Icon }) => (
+                <button key={id} type="button" onClick={() => openSettings(id)} data-testid={`settings-nav-${id}`} title={t(`settings.section.${id}`)} aria-current={section.id === id ? 'page' : undefined}
+                  className={cn('flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm', section.id === id ? 'bg-accent text-accent-foreground font-medium' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground')}>
+                  <Icon className="size-[18px] shrink-0" /><span className="truncate max-sm:hidden">{t(`settings.section.${id}`)}</span>
+                </button>
+              ))}
+            </div>
+            <div className="grid gap-0.5 px-6 pt-3 pb-5 max-sm:px-3" data-testid="settings-about">
+              <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="hover:text-primary flex w-fit cursor-pointer items-center gap-1.5 text-[13px] font-medium" title={AUTHOR.url.replace('https://', '')}>
+                <ToolIcon tool="gh" className="size-4" /><span className="max-sm:hidden">@{AUTHOR.github}</span>
+              </button>
+              <span className="text-muted-foreground text-xs max-sm:hidden">{PRODUCT.name} {app.version}</span>
+            </div>
+          </nav>
+          <div key={section.id} className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 pt-6 pb-8">
+            <div className="mx-auto grid max-w-3xl gap-4">
+              <div className="grid gap-1 pb-1"><h2 className="text-2xl font-medium">{t(`settings.section.${section.id}`)}</h2><p className="text-muted-foreground text-sm">{t(`settings.sectionDesc.${section.id}`)}</p></div>
+              {section.cards(c, app)}
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

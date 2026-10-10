@@ -1,5 +1,7 @@
 # Documentación de Orb.dev
 
+Textos de la app (tono, nombres y palabras): [`TEXTOS.md`](TEXTOS.md).
+
 Toda la documentación del proyecto está en esta carpeta. Dos archivos viven fuera porque GitHub los necesita en su sitio:
 el [`README.md`](../README.md) de la raíz (la portada del repositorio) y la plantilla de issue
 [`.github/ISSUE_TEMPLATE/funcionalidad.md`](../.github/ISSUE_TEMPLATE/funcionalidad.md), que está copiada en
@@ -35,4 +37,4 @@ Planes y auditorías de versiones anteriores, guardados como referencia. No desc
 | [`historico/PLAN-v2.md`](historico/PLAN-v2.md) | Plan de la versión 2. |
 | [`historico/AUDITORIA-v2.md`](historico/AUDITORIA-v2.md) | Primera auditoría de la versión 2. |
 | [`historico/AUDITORIA-v2-segunda.md`](historico/AUDITORIA-v2-segunda.md) | Segunda auditoría de la versión 2. |
-| [`historico/PLAN-v3.md`](historico/PLAN-v3.md) | Plan de la 2.3 (ideas de T3 Code) y su estado al terminarla. |
+| [`historico/PLAN-v3.md`](historico/PLAN-v3.md) | Plan de la 2.3 y su estado al terminarla. |

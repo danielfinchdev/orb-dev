@@ -232,13 +232,13 @@ test('si el propio adaptador falla al enviar, el turno termina igual y avisa a q
 test('una conversación no se borra mientras trabaja; la de una tarea se borra con su tarea', async () => {
   const s = chat('claude');
   sessions.send(s.id, 'LENTO');
-  assert.throws(() => sessions.remove(s.id), /detenla antes/);
+  assert.throws(() => sessions.remove(s.id), /detenla antes/i);
   await idle(s.id);
   sessions.remove(s.id);
   assert.equal(sessions.get(s.id), undefined);
   assert.equal(sessions.lives.has(s.id), false, 'su proceso se cierra');
   const task = sessions.create({ kind: 'task', agent: 'codex', cwd: project.path, title: 'tarea' });
-  assert.throws(() => sessions.remove(task.id), /se borra con la tarea/);
+  assert.throws(() => sessions.remove(task.id), /se (borra|elimina) con la tarea/);
   assert.throws(() => sessions.create({ agent: 'claude', cwd: project.path, account: 'codex' }), /no es de claude/);
   assert.throws(() => sessions.create({ agent: 'claude', cwd: `${project.path}-no-existe` }), /no existe/);
 });

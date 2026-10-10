@@ -1,7 +1,7 @@
 // Expert mode (PC only): an IDE-like view for demanding users. The assistant's chat in the middle, and around it the panels
 // chosen in Settings: file explorer and viewer, git changes with their diff, commit history, what is running, account
 // usage, the machine's load and live activity. Everything here only reads; the work is still done by the agents.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight, File, FileLock2, Folder, FolderOpen, GitBranch, GitCommitHorizontal, RefreshCw, X, LayoutPanelLeft, Cpu, Activity, Gauge, Play, SquareTerminal, MessageSquare, FileDiff, Monitor } from 'lucide-react';
 import { ChatView } from './chat.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -11,6 +11,7 @@ import { AgentIcon } from '@/components/agent-icon.jsx';
 import { useStore, call, act, go, bridge, setState, getState } from '@/lib/store.js';
 import { AGENT } from '@/lib/labels.js';
 import { cn, errorText } from '@/lib/utils.js';
+import { useHighlight } from '@/lib/use-highlight.js';
 import { t, useT, useLocale } from '@/lib/i18n.js';
 
 // Labels are read when used (getters), so they follow the language chosen in Ajustes.
@@ -82,21 +83,54 @@ function Tree({ project, onOpen, version }) {
 }
 
 // ---- viewers
-function CodeView({ text }) {
-  const lines = useMemo(() => text.split('\n'), [text]);
+// Coloured by the file's language and the code theme of Ajustes → Apariencia (lib/highlight.js, code.css).
+const plain = (text) => text.split('\n').map((l) => (l ? [l] : []));
+function CodeView({ text, path }) {
+  const hl = useHighlight();
+  const lines = useMemo(() => (hl ? hl.highlightLines(text, hl.languageFor(path), createElement) : plain(text)), [hl, text, path]);
   return (
-    <div className="font-mono text-[12.5px] leading-[1.55]">
-      {lines.map((l, i) => <div key={i} className="flex hover:bg-accent/40"><span className="text-muted-foreground/60 w-12 shrink-0 pr-3 text-right select-none">{i + 1}</span><span className="pr-4 whitespace-pre">{l || ' '}</span></div>)}
+    <div className="code-surface min-h-full w-max min-w-full py-2 text-[12.5px] leading-[1.55]">
+      {lines.map((l, i) => <div key={i} className="code-line flex"><span className="code-gutter w-12 shrink-0 pr-3 text-right select-none">{i + 1}</span><span className="pr-4 whitespace-pre">{l.length ? l : ' '}</span></div>)}
     </div>
   );
 }
+// A diff's kinds of line. After "diff --git" come header lines (index, ---, +++…) until the first hunk ("@@") or the
+// "+++" line, so a removed line that starts with "--" is still a removed line.
+const MAX_DIFF_HIGHLIGHT = 8000; // lines; past that the diff is shown plain (it is coloured line by line)
+function diffRows(text, hl) {
+  const out = [];
+  let header = false; let lang = null;
+  const all = text.split('\n');
+  const colour = hl && all.length <= MAX_DIFF_HIGHLIGHT;
+  for (const l of all) {
+    if (l.startsWith('diff --git ')) { header = true; lang = hl?.languageFor(/ b\/(.+)$/.exec(l)?.[1]); out.push({ kind: 'meta', l }); continue; }
+    if (header) {
+      const m = /^(?:---|\+\+\+) [ab]\/(.+)$/.exec(l); if (m && hl) lang = hl.languageFor(m[1]) ?? lang;
+      if (l.startsWith('+++ ')) header = false;
+      if (l.startsWith('@@')) { header = false; out.push({ kind: 'hunk', l }); continue; }
+      out.push({ kind: 'meta', l }); continue;
+    }
+    if (l.startsWith('@@')) { out.push({ kind: 'hunk', l }); continue; }
+    if (l.startsWith('\\')) { out.push({ kind: 'meta', l }); continue; } // "\ No newline at end of file"
+    const signed = l[0] === '+' || l[0] === '-' || l[0] === ' ';
+    const body = signed ? l.slice(1) : l;
+    const kind = l[0] === '+' ? 'add' : l[0] === '-' ? 'del' : 'ctx';
+    out.push({ kind, sign: signed ? l[0] : '', code: colour ? hl.highlightLine(body, lang, createElement) : body ? [body] : [] });
+  }
+  return out;
+}
+const ROW = { add: 'code-add', del: 'code-del', hunk: 'code-hunk', meta: 'code-meta-line', ctx: '' };
 function DiffView({ text }) {
   const t = useT();
+  const hl = useHighlight(Boolean(text));
+  const rows = useMemo(() => (text ? diffRows(text, hl) : []), [text, hl]);
   if (!text) return <Empty icon={FileDiff} title={t('expert.noChanges')}>{t('expert.noChangesBody')}</Empty>;
   return (
-    <div className="font-mono text-[12.5px] leading-[1.55]" data-testid="expert-diff">
-      {text.split('\n').map((l, i) => (
-        <div key={i} className={cn('px-3 whitespace-pre', l.startsWith('+') && !l.startsWith('+++') ? 'bg-success/12 text-success' : l.startsWith('-') && !l.startsWith('---') ? 'bg-destructive/10 text-destructive' : l.startsWith('@@') ? 'text-info bg-info/8' : /^(diff --git|index |new file|deleted file|--- |\+\+\+ )/.test(l) ? 'text-muted-foreground bg-muted/60' : '')}>{l || ' '}</div>
+    <div className="code-surface min-h-full w-max min-w-full py-2 text-[12.5px] leading-[1.55]" data-testid="expert-diff">
+      {rows.map((r, i) => (
+        <div key={i} className={cn('px-3 whitespace-pre', ROW[r.kind])}>
+          {r.code ? <><span className="code-sign">{r.sign}</span>{r.code.length ? r.code : (r.sign ? null : ' ')}</> : (r.l || ' ')}
+        </div>
       ))}
     </div>
   );
@@ -115,7 +149,7 @@ function Viewer({ project, tab, version }) {
   if (!data) return <div className="p-4"><Spinner /></div>;
   if (tab.kind === 'diff') return <><DiffView text={data.diff} />{data.cut ? <p className="text-muted-foreground p-3 text-xs">{t('expert.cut')}</p> : null}</>;
   if (data.binary) return <Empty icon={File} title={t('expert.binary')}>{t('expert.binaryBody', { size: size(data.size) })}</Empty>;
-  return <><CodeView text={data.text} />{data.cut ? <p className="text-muted-foreground p-3 text-xs">{t('expert.firstKb', { size: size(data.size) })}</p> : null}</>;
+  return <><CodeView text={data.text} path={tab.path} />{data.cut ? <p className="text-muted-foreground p-3 text-xs">{t('expert.firstKb', { size: size(data.size) })}</p> : null}</>;
 }
 
 // ---- side panels
@@ -281,7 +315,7 @@ export function ExpertView() {
             </div>
             {/* The chat stays mounted so switching tabs never loses what is being written. */}
             <div className={cn('min-h-0 flex-1 flex-col', current === 'chat' ? 'flex' : 'hidden')}><ChatView /></div>
-            {tab ? <div className="min-h-0 flex-1 overflow-auto py-2" data-testid="expert-viewer"><Viewer project={project} tab={tab} version={version} /></div> : null}
+            {tab ? <div className="min-h-0 flex-1 overflow-auto" data-testid="expert-viewer"><Viewer project={project} tab={tab} version={version} /></div> : null}
           </div>
           {right.length ? (
             <aside className="bg-sidebar flex w-80 shrink-0 flex-col overflow-y-auto border-l">

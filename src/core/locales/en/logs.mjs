@@ -1,11 +1,11 @@
 // logs.*
 export default {
   'logs.title': 'Logs',
-  'logs.meta': 'What was asked, what was done and what is still pending. They only grow: nothing is deleted.',
+  'logs.meta': 'Record of requests, work done and pending tasks. Entries are never deleted.',
   'logs.general': 'General',
   'logs.generalTitle': 'General log',
-  'logs.projectTitle': 'Log for {name}',
-  'logs.whole': 'See all',
+  'logs.projectTitle': '{name} log',
+  'logs.whole': 'View full log',
   'logs.copy': 'Copy',
   'logs.copied': 'Copied'
 };

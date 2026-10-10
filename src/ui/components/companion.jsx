@@ -1,17 +1,19 @@
 // The floating robot: sits in a corner and says what happens (finished tasks, approvals, answers) in speech bubbles,
-// like the old Office assistant. Click it to open the chat. Hidden in the chat itself (the robot is already there).
+// like the old Office assistant. Click it to open the chat. Hidden in the chat itself (the robot is already there) and
+// in the «profesional» visual theme, which has no robot.
 import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { Robot } from './robot.jsx';
 import { Button } from './ui/button.jsx';
-import { bridge, go } from '@/lib/store.js';
+import { bridge, go, useStore } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
 import { play } from '@/lib/sounds.js';
 
 const moodOf = (body) => (/^(✅|↩️|👍)/.test(body) ? 'happy' : /^(❌|⛔|🛑|⚠️)/.test(body) ? 'worried' : 'talking');
 
-export function Companion({ name, base, hidden }) {
+export function Companion({ name, base, hidden: hiddenHere }) {
   const t = useT();
+  const hidden = useStore((s) => s.app?.config?.ui?.skin) === 'profesional' || hiddenHere;
   const [bubble, setBubble] = useState(null);
   const [flash, setFlash] = useState(null);
   const [sleepy, setSleepy] = useState(false);

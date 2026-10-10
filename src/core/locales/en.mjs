@@ -15,7 +15,9 @@ import expert from './en/expert.mjs';
 import app from './en/app.mjs';
 import pip from './en/pip.mjs';
 import comp from './en/comp.mjs';
+import install from './en/install.mjs';
 import msg from './en/msg.mjs';
+import sys from './en/sys.mjs';
 
 export default {
   ...base,
@@ -34,5 +36,7 @@ export default {
   ...app,
   ...pip,
   ...comp,
-  ...msg
+  ...install,
+  ...msg,
+  ...sys
 };

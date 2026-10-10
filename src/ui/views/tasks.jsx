@@ -15,10 +15,10 @@ import { ago, fmtTime, cn } from '@/lib/utils.js';
 import { t, useT } from '@/lib/i18n.js';
 
 const FILTERS = [
-  ['activas', 'tasks.filter.active', (x) => !['done', 'cancelled'].includes(x.status)],
+  ['encurso', 'tasks.filter.active', (x) => ['running', 'queued'].includes(x.status)], // working now or waiting its turn
   ['aprobar', 'tasks.filter.approve', (x) => x.status === 'awaiting_approval'],
   ['hechas', 'tasks.filter.done', (x) => x.status === 'done'],
-  ['problemas', 'tasks.filter.problems', (x) => ['failed', 'blocked', 'limited'].includes(x.status)],
+  ['incidencias', 'tasks.filter.problems', (x) => ['failed', 'blocked', 'limited'].includes(x.status)],
   ['todas', 'tasks.filter.all', () => true]
 ];
 const verdictLabel = (v) => (['correcto', 'con fallos'].includes(v) ? t(`tasks.verdict.${v}`) : v);
@@ -147,7 +147,7 @@ export function TasksView({ route }) {
   const all = useStore((s) => s.tasks);
   // From a folder of the left menu: only that project's tasks (with a button to see them all).
   const tasks = route.project ? all.filter((t) => t.project === route.project) : all;
-  const [filter, setFilter] = useState(() => (route.id ? 'todas' : tasks.some((x) => x.status === 'awaiting_approval') ? 'aprobar' : 'activas'));
+  const [filter, setFilter] = useState(() => (route.id ? 'todas' : tasks.some((x) => x.status === 'awaiting_approval') ? 'aprobar' : tasks.some((x) => ['running', 'queued'].includes(x.status)) ? 'encurso' : 'todas'));
   const [selected, setSelected] = useState(route.id ?? null);
   const rows = tasks.filter(FILTERS.find(([k]) => k === filter)[2]);
   const live = useLiveTasks();

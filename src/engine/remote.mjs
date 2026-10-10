@@ -19,7 +19,7 @@ import { IS_WIN } from '../agents/common.mjs';
 import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal, open, sealText, openText, openBytes, AAD, CLOCK_SKEW_MS } from '../core/mobile-crypto.mjs';
 import { newVapidKeys, checkSubscription, sendPush } from './webpush.mjs';
 
-const RENDERER = process.env.ORB_RENDERER || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'renderer');
+const RENDERER = path.resolve(process.env.ORB_RENDERER || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'renderer'));
 const SESSION_DAYS = 30; // a phone unused for this long has to be paired again
 const PAIR_MINUTES = 5;
 const UPLOAD_MAX = 10 * 1024 * 1024;
@@ -189,7 +189,7 @@ export function createRemote({ board, api, log }) {
 
   const readBody = (req, max) => new Promise((resolve, reject) => {
     let size = 0; const chunks = [];
-    req.on('data', (c) => { size += c.length; if (size > max) { reject(Object.assign(new Error('demasiado grande'), { status: 413 })); req.destroy(); } else chunks.push(c); });
+    req.on('data', (c) => { size += c.length; if (size > max) { reject(Object.assign(new Error(tr('sys.remote.tooLarge')), { status: 413 })); req.destroy(); } else chunks.push(c); });
     req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', reject);
   });
@@ -363,7 +363,7 @@ export function createRemote({ board, api, log }) {
   async function serveHttps(port) {
     const r = await quickRun(tailscaleExe(), ['serve', '--bg', `--https=${port}`, `http://127.0.0.1:${port}`], { timeoutMs: 30_000 });
     if (r.ok) { served = port; return true; }
-    log(`móvil: tailscale serve no pudo dar https: ${oneLine(r.err || r.out || '', 300)}`);
+    log(`móvil: tailscale serve no pudo dar https: ${oneLine(r.out, 300)}`);
     return false;
   }
   async function unserve() {
@@ -382,6 +382,8 @@ export function createRemote({ board, api, log }) {
       if (r.error) { errors.push(tr('msg.remote.portBusy', { address, port, error: r.error.message })); return false; }
       servers.push(r.srv); return true;
     };
+    const unbind = () => { try { servers.pop()?.close(); } catch { /* closed */ } };
+    const gaveUp = () => { closeAll(); return state; }; // stop() ran while we waited: what we bound goes too
     if (process.env.ORB_REMOTE_BIND === '127.0.0.1') {
       // Tests: only loopback.
       if (await bind('127.0.0.1')) { hosts.push(`127.0.0.1:${port}`); origins.push(`http://127.0.0.1:${port}`); routes.push({ kind: 'wifi', url: `http://127.0.0.1:${port}/`, secure: false, address: '127.0.0.1' }); }
@@ -390,15 +392,19 @@ export function createRemote({ board, api, log }) {
         const lan = lanAddresses();
         if (!lan.length) errors.push(tr('msg.remote.noWifi'));
         for (const address of lan) {
-          if (mine !== generation) return state;
+          if (mine !== generation) return gaveUp();
           if (await bind(address)) { hosts.push(`${address}:${port}`); origins.push(`http://${address}:${port}`); if (!routes.some((r) => r.kind === 'wifi')) routes.push({ kind: 'wifi', url: `http://${address}:${port}/`, secure: false, address }); }
         }
       }
       if (m.tailscale !== false) {
         const ts = await tailscaleAddress();
-        if (mine !== generation) return state;
+        if (mine !== generation) return gaveUp();
+        // The loopback server is only of use while `tailscale serve` forwards https to it: otherwise plain http.
+        let https = false;
+        if (ts?.https && ts.dns && await bind('127.0.0.1')) { https = await serveHttps(port); if (!https) unbind(); }
+        if (mine !== generation) return gaveUp();
         if (!ts) errors.push(tr('msg.remote.noTailscale'));
-        else if (ts.https && ts.dns && await bind('127.0.0.1') && await serveHttps(port)) {
+        else if (https) {
           hosts.push(`${ts.dns}:${port}`); origins.push(`https://${ts.dns}:${port}`);
           routes.push({ kind: 'tailscale', url: `https://${ts.dns}:${port}/`, secure: true, address: ts.address });
         } else if (await bind(ts.address)) {
@@ -407,7 +413,7 @@ export function createRemote({ board, api, log }) {
         }
       }
     }
-    if (mine !== generation) { closeAll(); return state; }
+    if (mine !== generation) return gaveUp();
     state = { running: routes.length > 0, routes, hosts, origins, lan: lanAddresses().join(','), error: routes.length ? (errors[0] ?? null) : (errors.join(' ') || tr('msg.remote.noNetwork')) };
     for (const r of routes) log(`acceso móvil (${r.kind}) en ${r.url}`);
     pruneUploads().catch(() => {});
@@ -430,10 +436,10 @@ export function createRemote({ board, api, log }) {
     start() {
       if (servers.length) return Promise.resolve(state);
       starting ??= startNow().finally(() => { starting = null; });
-      // The Wi-Fi address changes with the network: the servers follow it.
+      // The Wi-Fi address changes with the network (or comes back after it was gone): the servers follow it.
       watcher ??= setInterval(() => {
-        if (!state.running || starting || ctx.config.mobile?.wifi === false || process.env.ORB_REMOTE_BIND) return;
-        if (lanAddresses().join(',') !== state.lan) { log('móvil: ha cambiado la red; vuelvo a abrir el acceso'); remote.restart().catch(() => {}); }
+        if (starting || ctx.config.mobile?.wifi === false || process.env.ORB_REMOTE_BIND) return;
+        if (lanAddresses().join(',') !== (state.lan ?? '')) { log('móvil: ha cambiado la red; vuelvo a abrir el acceso'); remote.restart().catch(() => {}); }
       }, NETWORK_CHECK_MS);
       watcher.unref?.();
       return starting;
@@ -442,6 +448,7 @@ export function createRemote({ board, api, log }) {
     async stop() {
       generation++;
       clearInterval(watcher); watcher = null;
+      await starting?.catch(() => {}); // a start() still waiting for the network gives up and closes what it bound
       for (const c of clients) { try { c.res.end(); } catch { /* closed */ } }
       clients.clear(); closeAll(); pairing = null; state = { running: false, routes: [], error: null };
       await unserve();

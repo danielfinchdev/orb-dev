@@ -23,6 +23,7 @@
 // TurnResult: { final, text, isError, stopReason, usage, limit }
 import { spawn } from 'node:child_process';
 import { killTree, cleanEnv } from './common.mjs';
+import { tr } from '../core/context.mjs';
 
 export const DECISIONS = ['allow', 'always', 'deny'];
 
@@ -41,9 +42,13 @@ export class Turn {
   }
 }
 
+// Tokens Orb hands to the agents' MCP servers ({"ORB_BROWSER_TOKEN":"…"} or {"name":"ORB_…TOKEN","value":"…"}) stay out
+// of the session logs.
+const LOGGED_SECRET = /(ORB_[A-Z_]*(?:TOKEN|KEY)"(?:\s*,\s*"value")?\s*:\s*")[^"]*/g;
+
 // JSON-RPC 2.0 over a child's stdin/stdout, one message per line (Codex app-server and ACP agents).
 export class JsonRpcPeer {
-  constructor(child, { onNotification = () => {}, onRequest = async () => { throw new Error('no soportado'); }, log = () => {} } = {}) {
+  constructor(child, { onNotification = () => {}, onRequest = async () => { throw new Error(tr('sys.agents.notSupported')); }, log = () => {} } = {}) {
     this.child = child; this.onNotification = onNotification; this.onRequest = onRequest; this.log = log;
     this.nextId = 1; this.pending = new Map(); this.buffer = ''; this.closed = false;
     child.stdout.setEncoding('utf8');
@@ -75,20 +80,20 @@ export class JsonRpcPeer {
   write(obj) {
     if (this.closed) return;
     const text = JSON.stringify(obj);
-    this.log(`→ ${text.slice(0, 2000)}`);
+    this.log(`→ ${text.replace(LOGGED_SECRET, '$1***').slice(0, 2000)}`);
     try { this.child.stdin.write(`${text}\n`); } catch { /* closed */ }
   }
   request(method, params, { timeoutMs = 0 } = {}) {
-    if (this.closed) return Promise.reject(new Error('el agente ya no está conectado'));
+    if (this.closed) return Promise.reject(new Error(tr('sys.agents.disconnected')));
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
-      const timer = timeoutMs ? setTimeout(() => { this.pending.delete(id); reject(new Error(`sin respuesta a ${method}`)); }, timeoutMs) : null;
+      const timer = timeoutMs ? setTimeout(() => { this.pending.delete(id); reject(new Error(tr('sys.agents.noReply', { method }))); }, timeoutMs) : null;
       this.pending.set(id, { resolve: (v) => { if (timer) clearTimeout(timer); resolve(v); }, reject: (e) => { if (timer) clearTimeout(timer); reject(e); } });
       this.write({ jsonrpc: '2.0', id, method, params });
     });
   }
   notify(method, params) { this.write({ jsonrpc: '2.0', method, params }); }
-  close(reason = 'el agente se ha cerrado') {
+  close(reason = tr('sys.agents.closed')) {
     if (this.closed) return; this.closed = true;
     for (const p of this.pending.values()) p.reject(new Error(reason));
     this.pending.clear();
@@ -124,21 +129,6 @@ export class Approvals {
     return true;
   }
   clear() { for (const id of [...this.waiting.keys()]) this.respond(id, 'deny'); }
-}
-
-// Shared tail of every adapter: kill the process and fail the running turn when it dies.
-export function endTurnOnExit(child, getTurn, onEvent, label) {
-  child.on('exit', (code) => {
-    const turn = getTurn();
-    const stderr = child.stderrText?.() ?? '';
-    onEvent({ type: 'exit', code, stderr });
-    if (turn && !turn.done) turn.finish({ isError: code !== 0, final: turn.text || `${label} se cerró (código ${code}). ${stderr.trim().split('\n').slice(-3).join(' ')}`.trim() });
-  });
-  child.on('error', (error) => {
-    const turn = getTurn();
-    onEvent({ type: 'exit', code: -1, stderr: error.message });
-    if (turn && !turn.done) turn.finish({ isError: true, final: `No se pudo arrancar ${label}: ${error.message}` });
-  });
 }
 
 export { killTree };

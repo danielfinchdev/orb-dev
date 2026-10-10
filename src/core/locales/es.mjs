@@ -1,4 +1,4 @@
-// Español (España). Tono: cercano, claro y sin jerga. Las claves se agrupan por pantalla; cada área tiene su archivo en es/.
+// Español (España). Tono: profesional, claro y sin jerga (docs/TEXTOS.md). Las claves se agrupan por pantalla; cada área tiene su archivo en es/.
 import base from './es/base.mjs';
 import labels from './es/labels.mjs';
 import chat from './es/chat.mjs';
@@ -15,7 +15,9 @@ import expert from './es/expert.mjs';
 import app from './es/app.mjs';
 import pip from './es/pip.mjs';
 import comp from './es/comp.mjs';
+import install from './es/install.mjs';
 import msg from './es/msg.mjs';
+import sys from './es/sys.mjs';
 
 export default {
   ...base,
@@ -34,5 +36,7 @@ export default {
   ...app,
   ...pip,
   ...comp,
-  ...msg
+  ...install,
+  ...msg,
+  ...sys
 };

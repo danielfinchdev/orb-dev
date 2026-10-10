@@ -34,7 +34,7 @@ const until = async (fn, what, ms = 180000) => { const end = Date.now() + ms; wh
 
 try {
   await page.waitForSelector('text=Soy Orb', { timeout: 30000 });
-  if (await page.isVisible('text=Preparo tu equipo')) await page.click('text=Continuar');
+  if (await page.isVisible('text=Preparando tu PC')) await page.click('text=Continuar');
   note(`agentes: ${JSON.stringify((await call('agents.status', { refresh: true })).map((a) => ({ id: a.id, installed: a.installed, login: a.login, models: a.models })))}`);
   const project = await call('projects.create', { name: 'prueba-real' });
   note(`proyecto: ${JSON.stringify(project).slice(0, 200)}`);

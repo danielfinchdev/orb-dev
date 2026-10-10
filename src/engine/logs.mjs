@@ -2,7 +2,7 @@
 // Append-only: nothing written is ever edited or removed. Entries are signed and secrets are redacted.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx } from '../core/context.mjs';
+import { ctx, tr } from '../core/context.mjs';
 import { oneLine, redactSecrets } from '../core/safety.mjs';
 import { generalLogHeader } from '../core/home.mjs';
 import { assistantName, userName, ofUser } from '../core/board.mjs';
@@ -17,7 +17,7 @@ export function logFiles(board) {
 export function findLog(board, project) {
   const key = String(project ?? '').toLowerCase();
   const found = logFiles(board).find(([name]) => name.toLowerCase() === key || (key === 'central' && name === 'general'));
-  if (!found) throw new Error(`no hay bitácora para "${project}": usa "general" o un proyecto registrado`);
+  if (!found) throw new Error(tr('sys.logs.none', { project }));
   return found;
 }
 
@@ -41,7 +41,7 @@ export function readLog(board, project, { chars = 12000, whole = false } = {}) {
 // One signed entry in the standard format, appended at the end.
 export function writeLog(board, project, { tema, pedido, hecho, revertir, estado }, author) {
   const [name, file] = findLog(board, project);
-  if (!clean(tema, 120) || !clean(hecho, 6000)) throw new Error('faltan tema y hecho');
+  if (!clean(tema, 120) || !clean(hecho, 6000)) throw new Error(tr('sys.logs.required'));
   const entry = `\n### ${stamp()} — ${oneLine(author, 80)} — ${oneLine(tema, 120)}
 - Pedido ${ofUser()}: ${clean(pedido, 2000) || `(coordinación de ${assistantName()})`}
 - Hecho: ${clean(hecho, 6000)}

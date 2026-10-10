@@ -23,7 +23,7 @@ const board = new Board(undefined, { noKey: true }); // the MCP never holds the 
 
 function identity() {
   const claimed = process.env.ORB_AGENT || 'desconocido';
-  if (claimed !== 'orb') return /^[a-z0-9_-]{1,30}$/i.test(claimed) ? claimed : 'desconocido';
+  if (claimed !== 'orb') return AGENTS.includes(claimed) ? claimed : 'desconocido'; // never "usuario" or any other reserved name
   const hash = board.setting('orchestrator_key_hash');
   const given = crypto.createHash('sha256').update(process.env.ORB_ORCH_KEY ?? '').digest('hex');
   return hash && process.env.ORB_ORCH_KEY && hash.length === given.length && crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(given)) ? 'orb' : 'agente-sin-clave';
@@ -48,19 +48,19 @@ const str = (description) => ({ type: 'string', description });
 
 // Only the coordinator: files from the main folder (or another task's copy) into a task's isolated copy.
 function giveFiles({ task_id, files, from_task }) {
-  const task = board.task(task_id); if (!task) throw new Error(`no existe la tarea #${task_id}`);
+  const task = board.task(task_id); if (!task) throw new Error(tr('sys.mcp.noTask', { id: task_id }));
   const project = board.project(task.project);
-  if (!task.workdir || !fs.existsSync(task.workdir) || !project || path.resolve(task.workdir) === path.resolve(project.path)) throw new Error(`la tarea #${task_id} no tiene copia aislada (las tareas en la carpeta del proyecto ya ven todo)`);
-  if (task.status === 'running') throw new Error(`la tarea #${task_id} está en curso: espera a que termine`);
+  if (!task.workdir || !fs.existsSync(task.workdir) || !project || path.resolve(task.workdir) === path.resolve(project.path)) throw new Error(tr('sys.mcp.noIsolatedCopy', { id: task_id }));
+  if (task.status === 'running') throw new Error(tr('sys.mcp.taskRunning', { id: task_id }));
   const rel = path.relative(git(project.path, 'rev-parse', '--show-toplevel').stdout.trim() || project.path, project.path);
   const inCopy = (dir) => (rel && !rel.startsWith('..') ? path.join(dir, rel) : dir);
   let source = project.path;
   if (from_task !== undefined) {
-    const other = board.task(from_task); if (!other?.workdir || !fs.existsSync(other.workdir)) throw new Error(`la tarea #${from_task} no tiene copia`);
-    if (other.project !== task.project) throw new Error('solo entre tareas del mismo proyecto');
+    const other = board.task(from_task); if (!other?.workdir || !fs.existsSync(other.workdir)) throw new Error(tr('sys.mcp.noCopy', { id: from_task }));
+    if (other.project !== task.project) throw new Error(tr('sys.mcp.sameProject'));
     source = inCopy(other.workdir);
   }
-  if (!Array.isArray(files) || !files.length || files.length > 50) throw new Error('files: entre 1 y 50 rutas');
+  if (!Array.isArray(files) || !files.length || files.length > 50) throw new Error(tr('sys.mcp.filesRange'));
   const out = copyIntoWorkdir(source, inCopy(task.workdir), files);
   board.event(task.id, ME, 'files.given', `${out.copied.join(', ') || 'nada'}${out.skipped.length ? ` · no copiados: ${out.skipped.join('; ')}` : ''}`);
   if (out.copied.length) board.addChat('system', tr('msg.mcp.filesCopied', { name: NAME, n: out.copied.length, id: task.id, list: oneLine(out.copied.join(', '), 200) }));
@@ -72,9 +72,9 @@ function giveFiles({ task_id, files, from_task }) {
 // for the user's approval otherwise.
 const TASK_ID = Number(process.env.ORB_TASK_ID) || null;
 function delegate(a) {
-  if (!TASK_ID) throw new Error('solo un agente que trabaja en una tarea puede delegar');
-  if (ctx.config.delegation?.enabled === false) throw new Error(`${USER} ha desactivado la delegación entre agentes`);
-  const parent = board.task(TASK_ID); if (!parent) throw new Error(`no existe la tarea #${TASK_ID}`);
+  if (!TASK_ID) throw new Error(tr('sys.mcp.delegateNeedsTask'));
+  if (ctx.config.delegation?.enabled === false) throw new Error(tr('sys.mcp.delegationOff', { user: USER }));
+  const parent = board.task(TASK_ID); if (!parent) throw new Error(tr('sys.mcp.noTask', { id: TASK_ID }));
   const task = board.createTask({ project: parent.project, title: a.title, description: a.description, agent: a.agent ?? 'any', model: a.model, readonly: a.readonly === true,
     mode: parent.mode, parent_id: parent.id, depends_on: [] }, ME);
   board.event(parent.id, ME, 'task.delegated', `#${task.id} ${oneLine(task.title)} → ${task.agent}${task.model ? ` (${task.model})` : ''} · ${task.status}`);
@@ -82,7 +82,7 @@ function delegate(a) {
 }
 // Waits until the tasks finish (up to timeout_s, at most 15 min) and returns their results.
 async function waitTasks({ ids, timeout_s = 600 }) {
-  if (!Array.isArray(ids) || !ids.length || ids.length > 10) throw new Error('ids: entre 1 y 10 tareas');
+  if (!Array.isArray(ids) || !ids.length || ids.length > 10) throw new Error(tr('sys.mcp.idsRange'));
   const end = Date.now() + Math.min(Math.max(Number(timeout_s) || 600, 10), 900) * 1000;
   const done = new Set(['done', 'failed', 'blocked', 'cancelled']);
   while (Date.now() < end) {
@@ -189,14 +189,14 @@ function browser(action, args = {}) {
           if (w) (m.ok ? w.resolve(m.result) : w.reject(new Error(m.error)));
         }
       });
-      const gone = (error) => { pipe = null; reject(error); for (const w of pipeWaiting.values()) w.reject(new Error('el navegador de la app se ha cerrado')); pipeWaiting.clear(); };
-      socket.on('error', () => gone(new Error('el navegador de la app no está disponible (¿está abierta la app?)')));
-      socket.on('close', () => gone(new Error('el navegador de la app se ha cerrado')));
+      const gone = (error) => { pipe = null; reject(error); for (const w of pipeWaiting.values()) w.reject(new Error(tr('sys.mcp.browserClosed'))); pipeWaiting.clear(); };
+      socket.on('error', () => gone(new Error(tr('sys.mcp.browserUnavailable'))));
+      socket.on('close', () => gone(new Error(tr('sys.mcp.browserClosed'))));
     });
   }
   return pipe.then((socket) => new Promise((resolve, reject) => {
     const id = ++pipeSeq;
-    const timer = setTimeout(() => { pipeWaiting.delete(id); reject(new Error('el navegador no respondió a tiempo')); }, 60_000);
+    const timer = setTimeout(() => { pipeWaiting.delete(id); reject(new Error(tr('sys.mcp.browserTimeout'))); }, 60_000);
     pipeWaiting.set(id, { resolve: (v) => { clearTimeout(timer); resolve(v); }, reject: (e) => { clearTimeout(timer); reject(e); } });
     socket.write(`${JSON.stringify({ id, action, args })}\n`);
   }));
@@ -229,7 +229,7 @@ readline.createInterface({ input: process.stdin }).on('line', async (line) => {
   let msg; try { msg = JSON.parse(line); } catch { return; }
   if (msg.id === undefined) return;
   try {
-    if (msg.method === 'initialize') return reply(msg.id, { result: { protocolVersion: msg.params?.protocolVersion ?? '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'orb', version: '2.3.3' }, instructions: INSTRUCTIONS } });
+    if (msg.method === 'initialize') return reply(msg.id, { result: { protocolVersion: msg.params?.protocolVersion ?? '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'orb', version: '2.4.0' }, instructions: INSTRUCTIONS } });
     if (msg.method === 'ping') return reply(msg.id, { result: {} });
     if (msg.method === 'tools/list') return reply(msg.id, { result: { tools: tools.map(({ run, readOnly, ...t }) => ({ ...t, ...(readOnly ? { annotations: { readOnlyHint: true } } : {}) })) } });
     if (msg.method === 'tools/call') {
@@ -239,7 +239,7 @@ readline.createInterface({ input: process.stdin }).on('line', async (line) => {
         const args = msg.params.arguments ?? {};
         // Strict arguments: anything outside the schema (e.g. a forged "from") is refused instead of being passed on.
         const extra = Object.keys(args).filter((k) => !(k in (tool.inputSchema.properties ?? {})));
-        if (extra.length) throw new Error(`argumentos no permitidos: ${extra.join(', ')}`);
+        if (extra.length) throw new Error(tr('sys.mcp.extraArgs', { list: extra.join(', ') }));
         const out = await tool.run(args);
         return reply(msg.id, { result: out?.content ? out : text(out) }); // tools with pictures return MCP content themselves
       } catch (error) { return reply(msg.id, { result: { ...text(`Error: ${error.message}`), isError: true } }); }
