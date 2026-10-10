@@ -41,6 +41,39 @@ export class Scheduler {
         board.patch(t.id, { status: 'failed', pid: null, result: tr('msg.scheduler.closedWhileWorking', { name: PRODUCT.name, result: t.result ?? '' }).slice(0, 4000) }, 'orb', 'task.interrupted');
       }
     }
+    // Tasks the agent closed itself (orb_update_task) whose process was still alive when the app went away: what Orb does
+    // when the process ends (automatic commit, files changed, log, report) never happened, and their pid would hold their
+    // dependent tasks forever. It is done now.
+    for (const t of board.all("SELECT id FROM tasks WHERE pid IS NOT NULL AND status <> 'running'")) {
+      this.finish(t.id, { code: 0, state: null, stderr: '', stopped: false, timedOut: false, limit: null });
+    }
+    try { this.pruneCheckpoints(); } catch (error) { this.log(`limpiar fotos: ${error.message}`); }
+  }
+
+  // Undo checkpoints do not pile up: those of tasks over for more than `days` go (the copy of the folder, or the hidden
+  // git refs), and so do copies no task refers to any more. Only Orb's own folders t<id>-<time> in .orb\copias\fotos.
+  pruneCheckpoints(days = 30) {
+    const { board } = this;
+    const old = Date.now() - days * 86_400_000;
+    const keep = new Set();
+    for (const row of board.all("SELECT key, value FROM settings WHERE key LIKE 'checkpoint:%' AND value <> ''")) {
+      let cp; try { cp = JSON.parse(row.value); } catch { continue; }
+      const id = Number(row.key.slice('checkpoint:'.length));
+      const task = board.task(id);
+      const over = !task || (['done', 'failed', 'cancelled'].includes(task.status) && Date.parse(task.updated_at) < old);
+      if (!over) { if (cp?.before?.copy) keep.add(path.resolve(cp.before.copy).toLowerCase()); continue; }
+      if (cp?.before?.kind === 'git' && cp.before.repo && fs.existsSync(cp.before.repo)) {
+        const refs = git(cp.before.repo, 'for-each-ref', '--format=%(refname)', REF_PREFIX).stdout.split('\n').filter((r) => r.startsWith(`${REF_PREFIX}/t${id}-`));
+        for (const ref of refs) git(cp.before.repo, 'update-ref', '-d', ref);
+      }
+      board.settingJson(row.key, null);
+    }
+    let dirs = []; try { dirs = fs.readdirSync(ctx.paths.checkpoints, { withFileTypes: true }); } catch { return; }
+    for (const d of dirs) {
+      const dir = path.join(ctx.paths.checkpoints, d.name);
+      if (!d.isDirectory() || !/^t\d+-\d+$/.test(d.name) || keep.has(path.resolve(dir).toLowerCase())) continue;
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch (error) { this.log(`limpiar ${d.name}: ${error.message}`); }
+    }
   }
 
   // Tasks running on an account (the parallel limit "perAgent" applies to each account, i.e. each subscription).
@@ -161,6 +194,13 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
   // ---- "carpeta" mode: checkpoint before, so the user can undo exactly what the task changed.
   folderWorkspace(task, project) {
     const prev = this.board.settingJson(`checkpoint:${task.id}`);
+    // Follow-ups, retries and resumes reuse the first checkpoint: a new one would never be used (a whole copy of a folder
+    // without git each time).
+    if (prev?.before && (prev.before.kind !== 'copia' || fs.existsSync(prev.before.copy))) {
+      const isGit = prev.before.kind === 'git';
+      this.board.settingJson(`checkpoint:${task.id}`, { before: prev.before, after: null, head: isGit ? git(prev.before.repo, 'rev-parse', 'HEAD').stdout.trim() : null, remotes: isGit ? remotesOf(prev.before.repo) : null });
+      return { workdir: project.path, cwd: project.path, branch: null, isGit, folder: true, notes: [] };
+    }
     const cp = takeCheckpoint(project.path, `t${task.id}-${Date.now()}`, ctx.paths.checkpoints);
     const isGit = cp.kind === 'git';
     // The first checkpoint is kept: undo goes back to before the task, including later follow-up rounds.
@@ -223,6 +263,12 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
     for (const note of workspace.notes ?? []) board.event(task.id, 'orb', 'workspace', note);
     if (workspace.branch) { const s = mainStatus(project.path); if (s != null) this.mainSnapshot.set(task.id, s); }
     const followup = board.settingJson(`followup:${task.id}`);
+    // Pictures of a follow-up that are gone (moved, or the phone's uploads purged after 7 days) are left out, instead of
+    // blocking the task on every retry.
+    if (followup?.images?.length) {
+      const missing = followup.images.filter((f) => !fs.existsSync(f));
+      if (missing.length) { followup.images = followup.images.filter((f) => !missing.includes(f)); board.event(task.id, 'orb', 'followup.images_missing', missing.map((f) => path.basename(f)).join(', ')); }
+    }
     // The task's conversation: the same one continues when the user writes to the agent and the agent did not change.
     let session = task.session_id ? this.sessions.get(task.session_id) : null;
     // A conversation continues only on the same account (another account is another login with its own history).
@@ -278,6 +324,9 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
 
   finish(taskId, info) {
     this.running.delete(taskId);
+    // The app is closing: the turn was cut by the shutdown, not finished. The task stays as it is (running, with its pid)
+    // and the next start continues it, instead of closing it as done or failed half-way.
+    if (this.closing) return;
     try { this.finishNow(taskId, info); }
     catch (error) {
       this.log(`finish #${taskId}: ${error.stack}`);
@@ -325,7 +374,8 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
     const output = `${state?.final ?? ''}\n${stderr ?? ''}`;
     if (task.status === 'running') {
       const summary = (state?.final || state?.text || stderr || '').trim();
-      const status = held ? 'blocked' : timedOut ? 'failed' : code === 0 && !state?.isError ? 'done' : 'failed';
+      // A stopped turn is never "done" (Codex and the ACP agents report an interrupted turn without error).
+      const status = held ? 'blocked' : timedOut || stopped ? 'failed' : code === 0 && !state?.isError ? 'done' : 'failed';
       task = board.patch(taskId, { status, result: redactSecrets(task.result ?? (timedOut ? tr('msg.scheduler.timedOut', { min: ctx.config.timeoutMinutes, summary }) : summary)).slice(0, 4000), pid: null }, 'orb', 'task.finished');
       if (limit && !isBudgetText(output) && task.status !== 'done') {
         // The account hit its usage limit (reported by the agent itself): the task waits and continues at the reset.

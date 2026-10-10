@@ -57,7 +57,8 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
   log(m);
   if (m.id != null && !m.method) { waiting.get(m.id)?.(m.result); waiting.delete(m.id); return; } // an answer to our request
   const { id, method, params = {} } = m;
-  if (method === 'initialize') return write({ id, result: { protocolVersion: 1, agentCapabilities: { loadSession: true, promptCapabilities: { image: false } } } });
+  // FAKE_ACP_SLOW_START=<ms>: a program that takes a while to start (to stop it half-way).
+  if (method === 'initialize') return setTimeout(() => write({ id, result: { protocolVersion: 1, agentCapabilities: { loadSession: true, promptCapabilities: { image: false } } } }), Number(process.env.FAKE_ACP_SLOW_START) || 0);
   const session = { sessionId: 'acp-sesion-1', modes: { currentModeId: 'normal', availableModes: [{ id: 'normal', name: 'Normal' }, { id: 'plan', name: 'Plan (solo lectura)' }] }, configOptions: [{ id: 'modelo', category: 'model', type: 'select' }] };
   if (method === 'session/new') return write({ id, result: session });
   if (method === 'session/load') {

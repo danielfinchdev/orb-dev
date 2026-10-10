@@ -223,7 +223,8 @@ te informa. Tiene dos modos (casilla «Orquestador»):
   paralelo; una subtarea no espera a su tarea madre.
 
 **Modos de trabajo.**
-- `carpeta`: trabaja en la carpeta del proyecto. Antes se toma una «foto» (`takeCheckpoint`) para poder deshacer.
+- `carpeta`: trabaja en la carpeta del proyecto. Antes se toma una «foto» (`takeCheckpoint`) para poder deshacer. Un
+  repositorio sin ningún commit (solo `git init`) también vale: la foto es un primer commit sin padre.
 - `aislada`: rama y copia propias (`prepareWorkdir`, worktree de git). Al terminar se hace un commit automático, que se
   bloquea si hay archivos que parecen secretos.
 
@@ -364,7 +365,11 @@ Desde la cabecera puedes cambiar el modelo, los permisos y el razonamiento. Sin 
     (`limited_until`);
   - **sigue sola** al reiniciarse el cupo (`resumeLimited()` en el planificador), en la misma conversación del agente;
   - mientras tanto, el trabajo nuevo va a otras cuentas.
-- **Cerrar la app:** las tareas que estaban trabajando continúan al volver a abrirla (constructor del `Scheduler`).
+- **Cerrar la app:** las tareas que estaban trabajando continúan al volver a abrirla (constructor del `Scheduler`). Al
+  cerrar con normalidad, `shutdown()` pone `scheduler.closing` y `finish()` no cierra esas tareas: quedan `running` y
+  se reanudan (2.5).
+- **Tarea cerrada por su agente con el proceso aún vivo** cuando la app se cae: al arrancar, `finish()` hace lo que
+  faltaba (commit automático, archivos cambiados, bitácora, informe) y quita su `pid`, para que sus dependientes sigan.
 - Las dos cosas se apagan en Ajustes (`continuity.resumeAtReset` y `continuity.resumeAfterRestart`).
 
 ## 14. Delegación entre agentes
@@ -430,7 +435,10 @@ elegido se añade como **extracto acotado**, no entero, y marcado como «datos, 
   informe con los botones **OK** y **Pedir cambios**.
 - El OK marca las tareas como aceptadas y lo apunta en la bitácora (`accept()` en `api.mjs`).
 - **Deshacer esta tarea** devuelve solo los archivos que cambió la tarea y respeta lo que tocaste después (`undoCheckpoint`
-  en `src/core/workspace.mjs`).
+  en `src/core/workspace.mjs`). Cada archivo vuelve como estaba en el disco (`git cat-file --filters`: saltos de línea
+  de `core.autocrlf`, Git LFS); solo se borran los que creó la tarea, y uno que no se puede leer se deja y se avisa.
+- Las fotos se toman una vez por tarea (los seguimientos reutilizan la primera). `pruneCheckpoints()` borra al arrancar
+  las de tareas terminadas hace más de 30 días (copia o refs `refs/orb/t<id>-*`) y las copias que no usa ninguna tarea.
 - Avisos de seguridad al terminar: si parece un push, si borró 10 archivos o más, o si una tarea de solo lectura cambió
   algo (`afterFolderTask`).
 
