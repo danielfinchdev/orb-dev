@@ -1,5 +1,5 @@
-// 2.6: the illustrated backdrop of each visual theme, behind the screens (themes.css draws and moves it; it is blurred and
-// veiled at the top so it never competes with the text). Nothing in the «profesional» theme.
+// 2.6: the illustrated backdrop of each visual theme, behind the screens (themes.css draws and moves it; it sits under a
+// veil at the top so it never competes with the text). Nothing in the «profesional» theme.
 import { useStore } from '@/lib/store.js';
 
 // A palm silhouette (Vaporwave).
@@ -14,14 +14,24 @@ const Palm = ({ className }) => (
   </svg>
 );
 
-// Candy bubbles: where they rise, their size, speed and tint (hue).
-const BUBBLES = [
-  { left: '6%', size: 70, dur: 26, delay: -4, h: 330 }, { left: '18%', size: 34, dur: 19, delay: -12, h: 270 }, { left: '30%', size: 96, dur: 34, delay: -20, h: 190 },
-  { left: '44%', size: 44, dur: 23, delay: -2, h: 20 }, { left: '57%', size: 82, dur: 30, delay: -16, h: 300 }, { left: '70%', size: 38, dur: 21, delay: -9, h: 160 },
-  { left: '82%', size: 64, dur: 28, delay: -24, h: 340 }, { left: '92%', size: 30, dur: 17, delay: -6, h: 250 }, { left: '38%', size: 26, dur: 15, delay: -11, h: 45 },
-  { left: '64%', size: 20, dur: 14, delay: -3, h: 200 }, { left: '12%', size: 24, dur: 16, delay: -8, h: 290 }, { left: '76%', size: 52, dur: 25, delay: -19, h: 10 }
+const ORB_CLOUDS = [{ dur: 90, delay: -10 }, { dur: 70, delay: -45 }, { dur: 110, delay: -70 }];
+// Candy: the pastel blobs (colour, place, size, how far they drift, how long) and the clay toys floating among them.
+const BLOBS = [
+  { c: 'pink', left: '-8%', top: '-12%', w: 620, h: 480, dx: 50, dy: 30, dur: 34, delay: -6 },
+  { c: 'lilac', left: '58%', top: '-18%', w: 640, h: 520, dx: -40, dy: 40, dur: 40, delay: -18 },
+  { c: 'mint', left: '-10%', top: '52%', w: 560, h: 460, dx: 60, dy: -30, dur: 38, delay: -25 },
+  { c: 'peach', left: '62%', top: '58%', w: 560, h: 440, dx: -50, dy: -40, dur: 44, delay: -12 },
+  { c: 'sky', left: '28%', top: '70%', w: 520, h: 380, dx: 30, dy: -50, dur: 36, delay: -30 }
 ];
-const CLOUDS = [{ width: 520, dur: 90, delay: -10, bottom: -40 }, { width: 380, dur: 70, delay: -45, bottom: -20 }, { width: 600, dur: 110, delay: -70, bottom: -60 }];
+const TOYS = [
+  { kind: 'cloud', c: 'sky', left: '4%', top: '16%', w: 190, h: 70, dur: 13, delay: -2 },
+  { kind: 'sphere', c: 'pink', left: '86%', top: '18%', w: 84, h: 84, dur: 11, delay: -5 },
+  { kind: 'ring', c: 'mint', left: '8%', top: '62%', w: 120, h: 120, r: 12, dur: 15, delay: -8 },
+  { kind: 'pill', c: 'peach', left: '80%', top: '64%', w: 150, h: 54, r: -22, dur: 12, delay: -4 },
+  { kind: 'cube', c: 'lilac', left: '42%', top: '4%', w: 64, h: 64, r: 14, dur: 14, delay: -9 },
+  { kind: 'cloud', c: 'pink', left: '62%', top: '86%', w: 260, h: 90, dur: 16, delay: -11 },
+  { kind: 'sphere', c: 'sky', left: '24%', top: '88%', w: 48, h: 48, dur: 10, delay: -1 }
+];
 
 export function Scene() {
   const skin = useStore((s) => s.app?.config?.ui?.skin) ?? 'orb';
@@ -29,19 +39,21 @@ export function Scene() {
   return (
     <div className={`scene scene-${skin}`} aria-hidden="true" data-testid="scene">
       <div className="scene-blur">
-        {skin === 'orb' ? CLOUDS.map((c, i) => <div key={i} className="orb-cloud" style={{ top: `${18 + i * 26}%`, animationDuration: `${c.dur}s`, animationDelay: `${c.delay}s` }} />) : null}
+        {skin === 'orb' ? ORB_CLOUDS.map((c, i) => <div key={i} className="orb-cloud" style={{ top: `${18 + i * 26}%`, animationDuration: `${c.dur}s`, animationDelay: `${c.delay}s` }} />) : null}
         {skin === 'vaporwave' ? (<>
-          <div className="vw-sun" />
+          <div className="vw-stars" />
+          <div className="vw-glow" /><div className="vw-sun" />
+          <div className="vw-mount back" /><div className="vw-mount front" />
           <div className="vw-floor" />
           <Palm className="vw-palm left" /><Palm className="vw-palm right" />
         </>) : null}
         {skin === 'retro' ? (<>
           <div className="rt-stars s1" /><div className="rt-stars s2" /><div className="rt-stars s3" />
-          <div className="rt-fleet" /><div className="rt-ground" /><div className="rt-ship" /><div className="rt-scan" />
+          <div className="rt-planet" /><div className="rt-fleet" /><div className="rt-ground" /><div className="rt-ship" /><div className="rt-scan" />
         </>) : null}
         {skin === 'nube' ? (<>
-          {CLOUDS.map((c, i) => <div key={`c${i}`} className="cd-cloud" style={{ width: c.width, bottom: c.bottom, animationDuration: `${c.dur}s`, animationDelay: `${c.delay}s` }} />)}
-          {BUBBLES.map((b, i) => <div key={i} className="cd-bubble" style={{ left: b.left, width: b.size, height: b.size, '--h': b.h, animationDuration: `${b.dur}s`, animationDelay: `${b.delay}s` }} />)}
+          {BLOBS.map((b, i) => <div key={`b${i}`} className="cd-blob" style={{ left: b.left, top: b.top, width: b.w, height: b.h, '--c': `var(--cd-${b.c})`, '--dx': `${b.dx}px`, '--dy': `${b.dy}px`, animationDuration: `${b.dur}s`, animationDelay: `${b.delay}s` }} />)}
+          {TOYS.map((t, i) => <div key={`t${i}`} className={`cd-toy ${t.kind}`} style={{ left: t.left, top: t.top, width: t.w, height: t.h, '--c': `var(--cd-${t.c})`, '--r': `${t.r ?? 0}deg`, animationDuration: `${t.dur}s`, animationDelay: `${t.delay}s` }} />)}
         </>) : null}
       </div>
       <div className="scene-veil" />
