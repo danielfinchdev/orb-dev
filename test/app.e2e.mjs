@@ -310,7 +310,7 @@ try {
   await win.click('[data-testid=bar-games]');
   await win.locator('[data-testid=games-dialog]').waitFor();
   await shot('11c-minijuegos');
-  for (const game of ['snake', 'tetris', 'chess', 'runner', 'g2048', 'breakout']) {
+  for (const game of ['snake', 'tetris', 'chess', 'runner', 'g2048', 'breakout', 'invaders', 'pacman']) {
     await win.click(`[data-testid=game-${game}]`);
     await win.waitForTimeout(500);
     if (game === 'chess') { await win.click('[data-testid=chess-52]'); await win.click('[data-testid=chess-36]'); await win.waitForSelector('text=Te toca', { timeout: 15000 }); }

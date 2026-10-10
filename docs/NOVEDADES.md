@@ -21,7 +21,7 @@ En el primer arranque la app detecta qué agentes tienes y con qué sesión, e i
 - **Aviso de cupo:** al elegir razonamiento alto, un modelo de los que más consumen o una cuenta con poco cupo, un globo
   te avisa de que puede gastar el uso rápido.
 - **Barra superior limpia:** solo iconos (pausar tareas, reiniciar conversación y minijuegos), cada uno con un globo que
-  explica lo que hace. Cambia con el tema: atardecer en Vaporwave, marcianitos en Retro, nubes de caramelo en Nube.
+  explica lo que hace. Cambia con el tema: atardecer en Vaporwave, marcianitos en Retro, nubes de caramelo en Candy.
 - **Minijuegos mientras esperas:** Serpiente, Tetris, Ajedrez contra el ordenador, Salto, 2048 y Ladrillos, cada uno en
   fácil, normal o difícil y con su récord. Cuando Orb·e reparte el trabajo, te propone jugar desde el propio chat.
 - **Avisos con el robot:** cuando terminan las tareas o algo necesita tu atención, aparece el robot de cuerpo entero con
@@ -30,7 +30,7 @@ En el primer arranque la app detecta qué agentes tienes y con qué sesión, e i
 - **Tema Profesional:** sin robot y sin ningún logo en su lugar.
 - **Temas renovados:** cada tema viste a la vez la cabecera del menú, la barra superior y el fondo del chat (difuminado y
   levemente animado, para no molestar), y trae su propia tipografía: Space Grotesk en Vaporwave, IBM Plex Mono en Retro,
-  Nunito y Fredoka en Nube, Inter en Profesional. Si eliges una tipografía a mano en Ajustes, se respeta.
+  Nunito y Fredoka en Candy, Inter en Profesional. Si eliges una tipografía a mano en Ajustes, se respeta.
 - **Plegar el menú:** junto al botón de día y noche, un botón pliega el menú de la izquierda; otro, arriba, lo despliega.
 
 ## Novedades de la 2.5
@@ -95,7 +95,7 @@ La versión estable: más fiable en el uso de cada día.
 
 - **Ajustes se abre como ventana** sobre la app, con sus apartados a la izquierda: General, Apariencia, Modelo, Tareas y
   cupo, Móvil, Herramientas, Modo experto, Actualizaciones, Contribuye y Más aplicaciones.
-- **Apariencia:** modo claro, oscuro o el del sistema; cinco temas (Orb, Vaporwave, Retro arcade, Profesional y Nube);
+- **Apariencia:** modo claro, oscuro o el del sistema; cinco temas (Orb, Vaporwave, Retro arcade, Profesional y Candy);
   tipografía de la interfaz y del código; y colores para el código del chat y del modo experto. El tema Profesional no
   muestra el robot ni sus animaciones y sonidos.
 - **Barra de menús de Windows oculta** por defecto. Se muestra desde Apariencia o, de forma puntual, con Alt.

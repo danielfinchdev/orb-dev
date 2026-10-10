@@ -93,8 +93,26 @@ export class Orchestrator {
   // meta goes with the answer (e.g. the report that waits for the user's OK).
   internal(text, chatLine, meta = null) {
     if (chatLine) this.board.addChat('system', chatLine);
-    this.queue.push({ text, meta, internal: true });
+    const item = { id: crypto.randomUUID(), text, meta, internal: true };
+    this.queue.push(item); this.keep(item, true);
     this.next();
+  }
+
+  // 2.6: the engine's notices still to be answered are saved, so closing the app does not lose them: resume() puts them
+  // back in the queue at the next start (the one being answered when the app closed comes again).
+  keep(item, add) {
+    const list = (this.board.settingJson('orchestrator_pending') ?? []).filter((q) => q.id !== item.id);
+    if (add) list.push({ id: item.id, text: item.text, meta: item.meta ?? null });
+    this.board.settingJson('orchestrator_pending', list.length ? list : null);
+  }
+
+  resume() {
+    const list = this.board.settingJson('orchestrator_pending') ?? [];
+    if (!Array.isArray(list) || !list.length) return 0;
+    const queued = new Set(this.queue.map((q) => q.id));
+    for (const q of list) if (q?.id && !queued.has(q.id) && typeof q.text === 'string') this.queue.push({ ...q, internal: true });
+    this.next();
+    return list.length;
   }
 
   closeLive() { try { this.live?.close(); } catch { /* gone */ } this.live = null; this.liveKey = ''; }
@@ -106,7 +124,7 @@ export class Orchestrator {
 
   reset() {
     this.generation++;
-    this.queue = [];
+    this.queue = []; this.board.settingJson('orchestrator_pending', null);
     this.forget();
     this.board.addChat('system', tr('msg.orch.newConversation', { name: assistantName() }));
     this.busy = false; this.partial = ''; this.tools = []; this.push();
@@ -134,14 +152,20 @@ export class Orchestrator {
   next() {
     if (this.busy || this.inflight || !this.queue.length) return;
     this.busy = true; this.partial = ''; this.tools = []; this.push();
-    const { text, meta } = this.queue.shift();
+    const item = this.queue.shift();
+    const { text, meta } = item;
     const generation = this.generation;
     const run = this.run(text, true, meta).catch((error) => {
       this.log(`asistente: ${error.stack}`);
       if (generation !== this.generation) return; // stopped or reset meanwhile: nothing to report
       this.board.addChat('system', tr('msg.orch.cannotAnswer', { message: error.message }));
       this.busy = false; this.push();
-    }).finally(() => { if (this.inflight === run) this.inflight = null; this.next(); });
+    }).finally(() => {
+      // Answered (or given up): the notice is no longer pending, unless the app is closing in the middle of it.
+      if (item.internal && !this.closing) this.keep(item, false);
+      if (this.inflight === run) this.inflight = null;
+      if (!this.closing) this.next();
+    });
     this.inflight = run;
   }
 
