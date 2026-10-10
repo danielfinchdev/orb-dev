@@ -153,12 +153,10 @@ function callEngine(method, params, timeoutMs = 10 * 60_000) {
   });
 }
 
-// Windows' menu bar (Archivo, Edición, Ver) only when Ajustes → Interfaz turns it on; hidden, Alt still shows it.
-function applyMenuBar(c = config()) {
+// 2.6: the window has no Windows title bar, so no menu bar either; the menu stays for its keys (zoom, Ctrl+J, F11).
+function applyMenuBar() {
   if (!win || win.isDestroyed()) return;
-  const show = c?.ui?.menuBar === true;
-  win.setAutoHideMenuBar(!show);
-  win.setMenuBarVisibility(show);
+  win.setMenuBarVisibility(false);
 }
 
 // The menu in the language of the settings: built at start and again when the language changes (config:changed).
@@ -174,11 +172,11 @@ function applyMenu(c = config()) {
     // The keys themselves are handled in before-input-event (any keyboard); the menu only shows them.
     { label: L('sys.menu.view'), submenu: [{ label: L('sys.menu.zoomReset'), accelerator: 'CommandOrControl+0', registerAccelerator: false, click: () => zoomBy('reset') }, { label: L('sys.menu.zoomIn'), accelerator: 'CommandOrControl+Plus', registerAccelerator: false, click: () => zoomBy('in') }, { label: L('sys.menu.zoomOut'), accelerator: 'CommandOrControl+-', registerAccelerator: false, click: () => zoomBy('out') }, { type: 'separator' }, { label: L('sys.menu.terminal'), accelerator: 'CommandOrControl+J', registerAccelerator: false, click: () => win?.webContents.send('engine:event', 'ui:terminal', {}) }, { type: 'separator' }, { role: 'togglefullscreen', label: L('sys.menu.fullscreen') }, ...(isDev ? [{ role: 'toggleDevTools' }] : [])] }
   ]));
-  applyMenuBar(c); // a new menu on Windows comes back visible: hidden again unless Ajustes → Interfaz shows it
+  applyMenuBar(); // a new menu on Windows comes back visible: hidden again
 }
 
 function onEngineEvent(event, payload) {
-  if (event === 'config:changed') { cachedConfig = null; applyMenu(payload); applyMenuBar(payload); }
+  if (event === 'config:changed') { cachedConfig = null; applyMenu(payload); }
   if (!win || win.isDestroyed()) return;
   win.webContents.send('engine:event', event, payload);
   // Notices while the window is in the background: finished tasks, approvals, the assistant's answers.
@@ -281,9 +279,24 @@ ipcMain.handle('app:switchHome', guard(async (target) => {
 
 function setTitle() { win?.setTitle(config()?.assistantName ?? PRODUCT.name); }
 
+// The window's own buttons in the colours of the theme in use (the page sends them when its theme changes).
+const HEX = /^#[0-9a-f]{6}$/i;
+ipcMain.handle('app:titleBar', guard(async ({ color, symbolColor } = {}) => {
+  if (!win || win.isDestroyed() || !HEX.test(color ?? '') || !HEX.test(symbolColor ?? '')) return false;
+  try { win.setTitleBarOverlay({ color, symbolColor, height: TITLE_BAR_HEIGHT }); } catch { return false; }
+  return true;
+}));
+
+// 2.6: no Windows title bar. Minimise, maximise and close are Windows' own buttons drawn inside the app, top right, as
+// tall as the app's top bars (window controls overlay); the window paints them in its theme's colours (app:titleBar).
+const TITLE_BAR_HEIGHT = 56;
+const titleBarColors = (dark) => (dark ? { color: '#16151d', symbolColor: '#e8e6f0' } : { color: '#fbfbfe', symbolColor: '#1d1b26' });
+
 function createWindow() {
+  const dark = nativeTheme.shouldUseDarkColors;
   win = new BrowserWindow({
-    width: 1360, height: 880, minWidth: 400, minHeight: 560, show: false, backgroundColor: nativeTheme.shouldUseDarkColors ? '#16151d' : '#fbfbfe', title: PRODUCT.name, autoHideMenuBar: true,
+    width: 1360, height: 880, minWidth: 400, minHeight: 560, show: false, backgroundColor: dark ? '#16151d' : '#fbfbfe', title: PRODUCT.name, autoHideMenuBar: true,
+    titleBarStyle: 'hidden', titleBarOverlay: { ...titleBarColors(dark), height: TITLE_BAR_HEIGHT },
     icon: path.join(SRC, '..', 'build', 'icon.png'),
     webPreferences: { preload: path.join(SRC, 'main', 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, spellcheck: true, devTools: isDev || process.env.ORB_DEVTOOLS === '1' }
   });

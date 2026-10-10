@@ -171,8 +171,6 @@ export default {
   'settings.terminal': 'Terminal',
   'settings.terminalHint': 'Opens in the active project’s folder or, if there is none, in the assistant folder.',
   'settings.openTerminal': 'Open terminal',
-  'settings.menuBar': 'Show menu bar',
-  'settings.menuBarHint': 'Shows the File, Edit and View menus. When hidden, press Alt to open it.',
   'settings.expert': 'Expert mode',
   'settings.expertDesc': 'Shows the file explorer, git changes, commit history, PC performance and live activity alongside the chat. Desktop app only.',
   'settings.expertOn': 'Turn on expert mode',

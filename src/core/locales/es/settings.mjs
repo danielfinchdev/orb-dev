@@ -171,8 +171,6 @@ export default {
   'settings.terminal': 'Terminal',
   'settings.terminalHint': 'Se abre en la carpeta del proyecto activo o, si no hay ninguno, en la del asistente.',
   'settings.openTerminal': 'Abrir terminal',
-  'settings.menuBar': 'Mostrar la barra de menús',
-  'settings.menuBarHint': 'Muestra los menús Archivo, Edición y Ver. Si está oculta, pulsa Alt para abrirla.',
   'settings.expert': 'Modo experto',
   'settings.expertDesc': 'Muestra junto al chat el explorador de archivos, los cambios de git, el historial de commits, el rendimiento del PC y la actividad en directo. Solo en la app de escritorio.',
   'settings.expertOn': 'Activar el modo experto',

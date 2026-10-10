@@ -439,7 +439,6 @@ function InterfaceCard({ c }) {
             <Button size="sm" variant="outline" onClick={() => openTerminal()}><SquareTerminal />{t('settings.openTerminal')}</Button>
           </div>
         </Field>
-        <Row label={t('settings.menuBar')} hint={t('settings.menuBarHint')}><Switch checked={c.ui?.menuBar === true} onCheckedChange={(menuBar) => save({ ui: { menuBar } })} data-testid="menubar-switch" /></Row>
       </CardContent>
     </Card>
   );

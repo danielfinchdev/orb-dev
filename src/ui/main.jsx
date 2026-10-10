@@ -13,6 +13,7 @@ import { UpdateCard } from '@/components/update-card.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { useStore, setState, getState, refresh, refreshSoon, bridge, go, applyTheme, openTerminal } from '@/lib/store.js';
 import { AGENT } from '@/lib/labels.js';
+import { followTitleBar } from '@/lib/title-bar.js';
 import { useT, t as tNow } from '@/lib/i18n.js';
 import { Setup } from '@/views/setup.jsx';
 import { ChatView } from '@/views/chat.jsx';
@@ -45,7 +46,7 @@ function Shell() {
       {/* Phones and narrow windows: the sidebar is a drawer behind a menu button. */}
       {drawer ? <div className="fixed inset-0 z-50 flex md:hidden" onClick={() => setDrawer(false)}><div className="animate-in slide-in-from-left flex h-full shadow-2xl" onClick={(e) => { if (e.target.closest('button')) setTimeout(() => setDrawer(false), 50); }}><Sidebar mood={mood} /></div><div className="flex-1 bg-black/40" /></div> : null}
       <main className="flex min-w-0 flex-1 flex-col">
-        <div className="bg-sidebar flex h-12 shrink-0 items-center gap-2 border-b px-3 md:hidden">
+        <div className="app-titlebar wco-pad bg-sidebar flex h-14 shrink-0 items-center gap-2 border-b px-3 md:hidden">
           <button className="hover:bg-accent grid size-9 cursor-pointer place-items-center rounded-lg" onClick={() => setDrawer(true)} aria-label={t('app.menu')}><Menu className="size-5" /></button>
           <Robot size={26} mood={mood} /><span className="truncate text-[15px] font-medium">{app.config.assistantName}</span>
         </div>
@@ -93,6 +94,15 @@ function Root() {
     return () => { window.removeEventListener('keydown', key); off(); };
   }, [phase]);
   useEffect(() => { const off = () => setPhase('pair'); window.addEventListener('orb:unpaired', off); return () => window.removeEventListener('orb:unpaired', off); }, []);
+  useEffect(() => followTitleBar(), []);
+  // The welcome screens have the brand's sky behind: the window's buttons take its colour there.
+  const sky = phase === 'setup' || phase === 'pair';
+  useEffect(() => {
+    const root = document.documentElement.style;
+    if (sky) root.setProperty('--titlebar-color', 'var(--brand-sky-top)'); else root.removeProperty('--titlebar-color');
+  }, [sky]);
+  // Screens without a top bar of their own (welcome, loading, error): a strip at the top still moves the window.
+  const strip = <div className="app-titlebar fixed inset-x-0 top-0 z-40 h-14" aria-hidden="true" />;
   useEffect(() => {
     if (phase !== 'app') return undefined;
     return bridge.on('*', (event, payload) => {
@@ -103,9 +113,10 @@ function Root() {
       if (event === 'engine:restarted') { toast.warning(tNow('app.engineRestarted')); refreshSoon(); }
     });
   }, [phase]);
-  if (phase === 'setup') return <Setup onDone={async () => { await refresh(); setPhase('app'); }} />;
+  if (phase === 'setup') return <>{strip}<Setup onDone={async () => { await refresh(); setPhase('app'); }} /></>;
   if (phase === 'pair') return (
     <div className="brand-sky grid h-full place-items-center p-6 text-center">
+      {strip}
       <div className="bg-card/95 grid max-w-sm gap-3 rounded-3xl p-7 shadow-2xl">
         <div className="-mt-16 flex justify-center"><Robot size={110} mood="idle" /></div>
         <h1 className="text-xl">{t('app.pairTitle')}</h1>
@@ -115,8 +126,8 @@ function Root() {
       </div>
     </div>
   );
-  if (phase === 'error') return <div className="grid h-full place-items-center p-8 text-center"><div><Robot size={90} mood="worried" /><h1 className="mt-4 text-xl">{t('app.errorTitle')}</h1><p className="text-muted-foreground mt-1 max-w-md text-sm">{error}</p></div></div>;
-  if (phase !== 'app' || !ready) return <div className="grid h-full place-items-center"><Robot size={80} mood="thinking" /></div>;
+  if (phase === 'error') return <div className="grid h-full place-items-center p-8 text-center">{strip}<div><Robot size={90} mood="worried" /><h1 className="mt-4 text-xl">{t('app.errorTitle')}</h1><p className="text-muted-foreground mt-1 max-w-md text-sm">{error}</p></div></div>;
+  if (phase !== 'app' || !ready) return <div className="grid h-full place-items-center">{strip}<Robot size={80} mood="thinking" /></div>;
   return <Shell />;
 }
 

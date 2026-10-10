@@ -8,6 +8,12 @@
 Windows 10/11. Como aún no está firmada, SmartScreen avisa la primera vez: «Más información» → «Ejecutar de todas formas».
 En el primer arranque la app detecta qué agentes tienes y con qué sesión, e instala lo que falte con los instaladores oficiales.
 
+## Novedades de la 2.6
+
+- **Una ventana más limpia:** desaparece la barra de título de Windows. Minimizar, maximizar y cerrar quedan dentro de la
+  app, arriba a la derecha, con los colores del tema que uses. La ventana se mueve arrastrando la parte de arriba, y un
+  doble clic la maximiza.
+
 ## Novedades de la 2.5
 
 La versión estable: más fiable en el uso de cada día.

@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld('orb', {
   showBrowser: () => ipcRenderer.invoke('app:showBrowser'),
   // Size of the interface on this PC (1 = normal): read with zoom(), change with zoom(value).
   zoom: (value) => ipcRenderer.invoke('app:zoom', value ?? null),
+  // Colours of the window's minimise / maximise / close buttons (drawn by Windows inside the app), from the theme.
+  titleBar: (colors) => ipcRenderer.invoke('app:titleBar', colors),
   openTerminal: (folder) => ipcRenderer.invoke('app:openTerminal', folder ?? null),
   // Ajustes → Contribuye: feedback by mail (screenshot of the window, PNG / JPEG files) and the author's other apps.
   feedback: {

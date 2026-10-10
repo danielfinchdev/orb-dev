@@ -598,7 +598,13 @@ que iniciar sesión en la app. Si no, «Iniciar sesión» abre el login oficial 
   `robot.jsx`, el robot flotante, las animaciones decorativas y los sonidos), `src/ui/fonts.css` (tipografías, solo
   latin y latin-ext) y `src/ui/code.css` (colores del código). El resaltado (`src/ui/lib/highlight.js`, highlight.js con
   lenguajes comunes) se carga la primera vez que hace falta (`use-highlight.js`).
-- **Barra de menús de Windows:** `ui.menuBar` (falso por defecto); `applyMenuBar()` en `src/main/main.mjs` la muestra u
+- **Ventana sin la barra de Windows (2.6):** `titleBarStyle: 'hidden'` con `titleBarOverlay` (56 px). Minimizar,
+  maximizar y cerrar son los botones de Windows dibujados dentro de la app, arriba a la derecha (con Snap Layouts).
+  `src/ui/lib/title-bar.js` les pasa el color de la barra sobre la que quedan (`app:titleBar`) cada vez que cambia el
+  tema, el modo claro u oscuro o el ancho. Las barras de arriba (`.app-titlebar` en `app.css`) mueven la ventana
+  (doble clic: maximizar) y dejan hueco a los botones (`--wco-inset`, `.wco-pad`). Sin barra de Windows no hay barra de
+  menús: el ajuste `ui.menuBar` desaparece y el menú queda solo para sus atajos (zoom, Ctrl+J, F11).
+- **Barra de menús de Windows (hasta la 2.5):** `ui.menuBar` (falso por defecto); `applyMenuBar()` en `src/main/main.mjs` la muestra u
   oculta al arrancar y con cada `config:changed`. Oculta, Alt la abre.
 - **Contribuye y Más aplicaciones** (`src/main/feedback.mjs`, en el proceso principal porque la ventana no sale a
   internet): PayPal del desarrollador; comentarios por FormSubmit (el mismo buzón que Open Control Edge) con hasta 3
