@@ -60,8 +60,8 @@ export function buildScript(ids, logFile) {
     "function Refresh-Path { $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User') }",
     'function Step($id, $title, [scriptblock]$do) {',
     "  Add-Content -LiteralPath $log -Value \"INICIO $id\"; Write-Host ''; Write-Host \"== $title\" -ForegroundColor Cyan",
-    `  try { $global:LASTEXITCODE = 0; & $do; if ($LASTEXITCODE -ne 0) { throw "${tr('msg.installer.exitCode')} $LASTEXITCODE" }; Add-Content -LiteralPath $log -Value "OK $id"; Write-Host "   ${tr('msg.installer.done')}" -ForegroundColor Green }`,
-    `  catch { Add-Content -LiteralPath $log -Value "ERROR $id $_"; Write-Host "   ${tr('msg.installer.failed')} $_" -ForegroundColor Red }`,
+    `  try { $global:LASTEXITCODE = 0; & $do; if ($LASTEXITCODE -ne 0) { throw (${q(tr('msg.installer.exitCode'))} + " $LASTEXITCODE") }; Add-Content -LiteralPath $log -Value "OK $id"; Write-Host ('   ' + ${q(tr('msg.installer.done'))}) -ForegroundColor Green }`,
+    `  catch { Add-Content -LiteralPath $log -Value "ERROR $id $_"; Write-Host ('   ' + ${q(tr('msg.installer.failed'))} + " $_") -ForegroundColor Red }`,
     '  Refresh-Path',
     '}',
     "$hasWinget = [bool](Get-Command winget -ErrorAction SilentlyContinue)",
@@ -94,7 +94,8 @@ export function start(ids, emit) {
   const encoded = Buffer.from(buildScript(valid, logFile), 'utf16le').toString('base64');
   const run = { logFile, ids: valid, startedAt: stamp, closed: false };
   current = run;
-  const child = openConsole('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded]);
+  const powershell = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'); // full path: nothing in PATH can stand in
+  const child = openConsole(powershell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded]);
   child.on('exit', () => { run.closed = true; }); // its window was closed (finished or not)
   // Progress for the window: the script appends INICIO / OK / ERROR lines and FIN.
   clearInterval(timer);

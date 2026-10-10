@@ -8,7 +8,7 @@ export default {
   'permissionHint.leer': 'Can read the project but not modify it.',
   'permissionHint.editar': 'Edits files and runs commands in the project. Asks for confirmation before risky actions (push, downloads, folder deletion…).',
   'permissionHint.preguntar': 'Edits files and asks for confirmation before each command.',
-  'permissionHint.total': 'No confirmations. Use only if you know what you are doing.',
+  'permissionHint.total': 'No confirmations. Use with caution.',
   'decision.allowed': 'Allowed', 'decision.always': 'Always allowed', 'decision.denied': 'Denied', 'decision.expired': 'Expired',
   'reasoning.low': 'Low', 'reasoning.medium': 'Medium', 'reasoning.high': 'High',
   'mode.carpeta': 'In the project folder', 'mode.aislada': 'Isolated copy (own branch)',

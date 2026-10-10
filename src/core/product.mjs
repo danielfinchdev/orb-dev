@@ -12,6 +12,9 @@ export const PRODUCT = {
   dataDir: 'Orb.dev'
 };
 
+// The developer: GitHub (also where the releases live) and the contribution link (Ajustes → Contribuye).
+export const AUTHOR = { github: 'danielfinchdev', url: 'https://github.com/danielfinchdev', repo: 'danielfinchdev/orb-dev', paypal: 'https://paypal.me/DanielFinch' };
+
 // A name that is safe as a folder name on Windows (the assistant's folder and project folders). Here, without Node, so the
 // first-run screen shows exactly the folder that will be created.
 export function folderName(name, fallback = PRODUCT.folder) {

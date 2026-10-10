@@ -13,7 +13,6 @@ import { sha256 } from '@noble/hashes/sha2.js';
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
-export const PROTOCOL = 1;
 export const CLOCK_SKEW_MS = 5 * 60_000; // a phone's clock may be a few minutes off
 
 export const b64 = {

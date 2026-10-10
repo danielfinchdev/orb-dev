@@ -8,7 +8,7 @@ export default {
   'permissionHint.leer': 'Puede leer el proyecto, pero no modificarlo.',
   'permissionHint.editar': 'Edita archivos y ejecuta comandos en el proyecto. Pide confirmación para las acciones de riesgo (push, descargas, eliminación de carpetas…).',
   'permissionHint.preguntar': 'Edita archivos y pide confirmación antes de cada comando.',
-  'permissionHint.total': 'Sin confirmaciones. Úsalo solo si sabes lo que haces.',
+  'permissionHint.total': 'Sin confirmaciones. Úsalo con precaución.',
   'decision.allowed': 'Permitido', 'decision.always': 'Permitido siempre', 'decision.denied': 'Denegado', 'decision.expired': 'Caducado',
   'reasoning.low': 'Bajo', 'reasoning.medium': 'Medio', 'reasoning.high': 'Alto',
   'mode.carpeta': 'En la carpeta del proyecto', 'mode.aislada': 'Copia aislada (rama propia)',

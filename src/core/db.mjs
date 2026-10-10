@@ -186,7 +186,7 @@ export function openDb(filename = ctx.paths?.db) {
 // tasks.account: account chosen on purpose for the task (optional); tasks.run_account: account it last ran on.
 // 2.3: sessions.context (how full the context is, JSON), sessions.settled (done, moved down in the menu), sessions.parent_id
 // (forked from), tasks.parent_id (subtask of), tasks.limited_until (waiting for the usage limit to reset), tasks.review_of
-// (a Contrapunto of that task), tasks.schedule_id (created by a schedule).
+// (a Task Review of that task), tasks.schedule_id (created by a schedule).
 const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], ['sessions', 'account', 'TEXT'], ['chat', 'meta', 'TEXT'],
   ['sessions', 'context', 'TEXT'], ['sessions', 'settled', 'INTEGER NOT NULL DEFAULT 0'], ['sessions', 'parent_id', 'TEXT'],
   ['tasks', 'parent_id', 'INTEGER'], ['tasks', 'limited_until', 'TEXT'], ['tasks', 'review_of', 'INTEGER'], ['tasks', 'schedule_id', 'INTEGER'],

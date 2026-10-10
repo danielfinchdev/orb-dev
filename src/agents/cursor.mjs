@@ -51,7 +51,7 @@ export const ARGV_PROMPT_MAX = 20000;
 // Cursor's tool calls arrive as { tool_call: { <name>ToolCall: { args, result } } }.
 function toolOf(call) {
   const [key, value] = Object.entries(call ?? {})[0] ?? [];
-  return { name: String(key ?? 'herramienta').replace(/ToolCall$/, ''), args: value?.args, result: value?.result };
+  return { name: key ? String(key).replace(/ToolCall$/, '') : tr('sys.agents.tool.other'), args: value?.args, result: value?.result };
 }
 
 // options: exe, cwd, model, permission, resumeId, promptDir, env, log, onEvent
@@ -119,7 +119,7 @@ export function createLive(o) {
       if (streamed.trim()) { onEvent({ type: 'item', role: 'assistant', kind: 'text', body: streamed }); current.addText(streamed); }
       const stderr = child.stderrText();
       if (!current.done) {
-        const msg = current.text || `Cursor terminó (código ${code}). ${stderr.trim().split('\n').slice(-3).join(' ')}`.trim();
+        const msg = current.text || tr('sys.agents.exitedCode', { name: 'Cursor', code, detail: stderr.trim().split('\n').slice(-3).join(' ') }).trim();
         if (code !== 0 && !current.text) onEvent({ type: 'item', role: 'error', kind: 'text', body: clip(msg, 3000) });
         current.finish({ isError: code !== 0, final: msg });
       }

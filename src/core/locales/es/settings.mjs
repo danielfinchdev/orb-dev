@@ -14,7 +14,7 @@ export default {
   'settings.theme.claro': 'Claro',
   'settings.theme.oscuro': 'Oscuro',
   'settings.companion': 'Robot flotante',
-  'settings.companionHint': 'Muestra avisos en una esquina de la pantalla cuando no estás en el chat.',
+  'settings.companionHint': 'Muestra los mensajes del asistente en una esquina de la pantalla cuando no estás en el chat.',
   'settings.companionOn': 'Robot flotante activado',
   'settings.companionOff': 'Robot flotante desactivado',
   'settings.sounds': 'Sonidos',
@@ -75,7 +75,7 @@ export default {
   'settings.mcpAdded': 'Servidor {name} añadido',
   'settings.android': 'Android (adb)',
   'settings.androidDesc': 'Descarga adb y fastboot de Google y los añade al PATH de los agentes.',
-  'settings.android.ready': 'Listo',
+  'settings.android.ready': 'Descargado',
   'settings.android.downloading': 'Descargando…',
   'settings.android.error': 'No se pudo descargar: {error}',
   'settings.android.missing': 'No descargado',
@@ -270,7 +270,7 @@ export default {
   'apps.openControl': 'Widget para el borde de la pantalla de Windows con el cupo de Claude, Codex y Cursor, la temperatura de CPU y GPU y los FPS.',
   'apps.loading': 'Buscando la última versión…',
   'apps.latest': 'Última versión: {version} · {date}',
-  'apps.offline': 'No se ha podido consultar la última versión.',
+  'apps.offline': 'No se pudo consultar la última versión.',
   'apps.details': 'Ver en GitHub',
   'apps.download': 'Descargar'
 };

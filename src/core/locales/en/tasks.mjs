@@ -2,7 +2,7 @@
 export default {
   'tasks.filter.active': 'In progress',
   'tasks.filter.approve': 'To approve',
-  'tasks.filter.done': 'Done',
+  'tasks.filter.done': 'Completed',
   'tasks.filter.problems': 'Issues',
   'tasks.filter.all': 'All',
   'tasks.titleProject': 'Tasks · {project}',

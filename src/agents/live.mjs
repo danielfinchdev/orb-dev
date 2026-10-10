@@ -42,6 +42,10 @@ export class Turn {
   }
 }
 
+// Tokens Orb hands to the agents' MCP servers ({"ORB_BROWSER_TOKEN":"…"} or {"name":"ORB_…TOKEN","value":"…"}) stay out
+// of the session logs.
+const LOGGED_SECRET = /(ORB_[A-Z_]*(?:TOKEN|KEY)"(?:\s*,\s*"value")?\s*:\s*")[^"]*/g;
+
 // JSON-RPC 2.0 over a child's stdin/stdout, one message per line (Codex app-server and ACP agents).
 export class JsonRpcPeer {
   constructor(child, { onNotification = () => {}, onRequest = async () => { throw new Error(tr('sys.agents.notSupported')); }, log = () => {} } = {}) {
@@ -76,7 +80,7 @@ export class JsonRpcPeer {
   write(obj) {
     if (this.closed) return;
     const text = JSON.stringify(obj);
-    this.log(`→ ${text.slice(0, 2000)}`);
+    this.log(`→ ${text.replace(LOGGED_SECRET, '$1***').slice(0, 2000)}`);
     try { this.child.stdin.write(`${text}\n`); } catch { /* closed */ }
   }
   request(method, params, { timeoutMs = 0 } = {}) {
@@ -125,21 +129,6 @@ export class Approvals {
     return true;
   }
   clear() { for (const id of [...this.waiting.keys()]) this.respond(id, 'deny'); }
-}
-
-// Shared tail of every adapter: kill the process and fail the running turn when it dies.
-export function endTurnOnExit(child, getTurn, onEvent, label) {
-  child.on('exit', (code) => {
-    const turn = getTurn();
-    const stderr = child.stderrText?.() ?? '';
-    onEvent({ type: 'exit', code, stderr });
-    if (turn && !turn.done) turn.finish({ isError: code !== 0, final: turn.text || tr('sys.agents.exitedCode', { name: label, code, detail: stderr.trim().split('\n').slice(-3).join(' ') }).trim() });
-  });
-  child.on('error', (error) => {
-    const turn = getTurn();
-    onEvent({ type: 'exit', code: -1, stderr: error.message });
-    if (turn && !turn.done) turn.finish({ isError: true, final: tr('sys.agents.startFailed', { name: label, error: error.message }) });
-  });
 }
 
 export { killTree };

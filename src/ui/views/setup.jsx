@@ -60,9 +60,9 @@ export function Setup({ onDone }) {
 
 // Windows, after the folder: install what is missing. While it installs, the title is a light phrase that changes every
 // few seconds, the bar goes under it and the explanation under the bar.
-export function Prepare({ name, onDone, initial = null }) {
+export function Prepare({ name, onDone }) {
   const t = useT();
-  const [progress, setProgress] = useState(initial);
+  const [progress, setProgress] = useState(null);
   const running = Boolean(progress?.running);
   const { n, phrase } = useFunPhrase(running);
   const finished = progress?.finished && !progress.interrupted;

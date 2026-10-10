@@ -100,7 +100,7 @@ Elijas la carpeta que elijas en el primer arranque, Orb crea dentro `Orb` con la
 La idea de siempre: le cuentas a Orb qué quieres y él escribe encargos optimizados, los reparte entre agentes de varios
 proveedores que trabajan a la vez, revisa lo que hacen y te pide el OK. La 2.3 rehace por dentro cómo habla con los agentes.
 
-### Agentes en directo, como T3 Code
+### Agentes en directo
 
 - **Un proceso vivo por conversación** en vez de uno por mensaje:
   - Claude Code con el Claude Agent SDK oficial;

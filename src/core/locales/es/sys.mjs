@@ -37,7 +37,7 @@ export default {
   // Errores del proceso principal (acaban en un toast)
   'sys.main.engineStopped': '{name} se ha detenido',
   'sys.main.engineStartStopped': '{name} se detuvo al iniciarse',
-  'sys.main.engineOff': '{name} no está en marcha',
+  'sys.main.engineOff': '{name} no está en ejecución',
   'sys.main.engineTimeout': '{name} no respondió a tiempo',
   'sys.main.badOrigin': 'origen no permitido',
   'sys.main.badAction': 'acción no válida',
@@ -218,5 +218,8 @@ export default {
   // Herramientas de Android (adb)
   'sys.android.noDownload': 'no hay descarga para {platform}',
   'sys.android.downloadHttp': 'descarga: HTTP {status}',
-  'sys.android.noAdb': 'el paquete no incluye adb'
+  'sys.android.noAdb': 'el paquete no incluye adb',
+  'sys.scheduler.launchFailed': 'no se pudo iniciar {name}: {error}',
+  'sys.scheduler.finishError': 'Error interno al cerrar la tarea: {error}',
+  'sys.sessions.starting': 'iniciando…'
 };

@@ -8,7 +8,7 @@ export default {
   'chat.stop': 'Detener',
   'chat.send': 'Enviar',
   'chat.accepted': 'Aceptado · tareas {ids}',
-  'chat.acceptDone': 'Hecho. Se ha registrado en la bitácora.',
+  'chat.acceptDone': 'Aceptado. Se ha registrado en la bitácora.',
   'chat.requestChanges': 'Pedir cambios',
   'chat.tasksList': 'Tareas {ids}',
   'chat.allow': 'Permitir',

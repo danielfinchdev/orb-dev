@@ -8,12 +8,12 @@ export default {
   'app.pairBodyPath': 'Ajustes → Móvil',
   'app.pairBody2': ', pulsa «Vincular por wifi» o «Vincular por Tailscale» y escanea el código QR con la cámara de este móvil.',
   'app.pairPrivate': "Funciona en tu red wifi o a través de Tailscale. La conexión entre este móvil y tu PC está cifrada.",
-  'app.badAnswer': "No se ha podido verificar la conexión con tu PC. Vuelve a vincular este móvil.",
+  'app.badAnswer': "No se pudo verificar la conexión con tu PC. Vuelve a vincular este móvil.",
   'app.oldQr': "Este código QR es de una versión anterior. Genera uno nuevo en el PC.",
   'app.pushNeedsHttps': "Las notificaciones requieren una conexión segura (Tailscale con HTTPS).",
   'app.pushDenied': "Las notificaciones están bloqueadas en este navegador. Actívalas en su configuración.",
   'app.pairTailscale': 'Funciona a través de Tailscale. Solo tus dispositivos tienen acceso.',
-  'app.errorTitle': 'No se ha podido iniciar Orb',
+  'app.errorTitle': 'No se pudo iniciar Orb',
   'app.terminalOpened': 'Terminal abierta ({name})',
   'app.notLinked': 'este dispositivo no está vinculado',
   'app.httpError': 'error {n}',
@@ -28,7 +28,7 @@ export default {
   'update.later': 'Más tarde',
   'update.update': 'Actualizar',
   'update.download': 'Descargar',
-  'update.failed': 'No se ha podido descargar: {error}',
+  'update.failed': 'No se pudo descargar: {error}',
   'update.notes': 'Novedades',
   'update.close': 'Cerrar'
 };

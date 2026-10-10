@@ -84,4 +84,3 @@ export function applyAppearance(ui = {}) {
   root.codeFont = pick(ui.codeFont, CODE_FONTS);
   root.codeTheme = pick(ui.codeTheme, CODE_THEMES);
 }
-export const currentSkin = () => document.documentElement.dataset.skin ?? SKINS[0];
