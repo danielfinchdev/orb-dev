@@ -12,10 +12,28 @@ En el primer arranque la app detecta qué agentes tienes y con qué sesión, e i
 
 ### Orb·e: Tu director de bolsillo
 
-- **El robot se llama Orb·e.** Planifica tu proyecto por fases y escribe un encargo claro para cada agente, sin gastar
-  tokens de más. Te entrega resultados comprobados. Si le habías puesto otro nombre, lo conserva.
+- **El robot se llama Orb·e.** Planifica tu proyecto por fases, prepara instrucciones precisas para cada agente y
+  optimiza el consumo de tokens. Te entrega resultados verificados. Si le habías puesto otro nombre, lo conserva.
 - **El programa se llama Orb** (`Orb.exe`) en la ventana, el instalador, los accesos directos y los avisos de Windows.
   Al actualizar desde la 2.3.3 no se pierde nada: misma carpeta, mismos ajustes, mismos proyectos.
+- **Textos revisados** en toda la app, en español y en inglés: más claros, breves y profesionales.
+
+### Ajustes, renovados
+
+- **Ajustes se abre como ventana** sobre la app, con sus apartados a la izquierda: General, Apariencia, Modelo, Tareas y
+  cupo, Móvil, Herramientas, Modo experto, Actualizaciones, Contribuye y Más aplicaciones.
+- **Apariencia:** modo claro, oscuro o el del sistema; cinco temas (Orb, Vaporwave, Retro arcade, Profesional y Nube);
+  tipografía de la interfaz y del código; y colores para el código del chat y del modo experto. El tema Profesional no
+  muestra el robot ni sus animaciones y sonidos.
+- **Barra de menús de Windows oculta** por defecto. Se muestra desde Apariencia o, de forma puntual, con Alt.
+- **Contribuye:** apoya el desarrollo con PayPal y envía comentarios, con capturas de la ventana, sin necesidad de cuenta.
+- **Más aplicaciones:** Open Control Edge, con su última versión y el botón para descargarla.
+
+### Tareas y primer arranque
+
+- **Filtros de Tareas:** En curso (trabajando o en cola), Por aprobar, Completadas, Incidencias y Todas. El menú lateral
+  separa lo que espera tu aprobación de las incidencias.
+- **Preparando tu PC:** la instalación de los agentes muestra una barra de progreso.
 
 ## Novedades de la 2.3.3
 

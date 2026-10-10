@@ -38,10 +38,10 @@ export const getSchedule = (board, id) => parseRow(board.one('SELECT * FROM sche
 
 function validate(board, a) {
   if (!board.project(a.project)) throw new Error(tr('msg.schedules.noProject', { project: a.project }));
-  if (!a.title || !a.description) throw new Error('title y description son obligatorios');
-  if (!EVERY.includes(a.every)) throw new Error(`every debe ser ${EVERY.join(', ')}`);
-  if (a.at_time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(a.at_time)) throw new Error('at_time debe ser HH:MM');
-  if (a.weekdays && (!Array.isArray(a.weekdays) || a.weekdays.some((d) => !Number.isInteger(d) || d < 0 || d > 6))) throw new Error('weekdays: números del 0 (domingo) al 6');
+  if (!a.title || !a.description) throw new Error(tr('sys.board.titleAndDesc'));
+  if (!EVERY.includes(a.every)) throw new Error(tr('sys.schedules.badEvery', { list: EVERY.join(', ') }));
+  if (a.at_time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(a.at_time)) throw new Error(tr('sys.schedules.badTime'));
+  if (a.weekdays && (!Array.isArray(a.weekdays) || a.weekdays.some((d) => !Number.isInteger(d) || d < 0 || d > 6))) throw new Error(tr('sys.schedules.badWeekdays'));
 }
 
 export function createSchedule(board, a, actor) {

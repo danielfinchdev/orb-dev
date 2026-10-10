@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { translate } from '../core/i18n.mjs';
 
 export const AUTHOR = { github: 'danielfinchdev', url: 'https://github.com/danielfinchdev', paypal: 'https://paypal.me/DanielFinch' };
 const FORM_ALIAS = '1ee33dd306d01e9d63121af2b9fd1a2a'; // the same FormSubmit inbox as Open Control Edge
@@ -43,8 +44,9 @@ export async function captureWindow(win) {
 
 // Sends the feedback. Returns true when FormSubmit accepted it; throws with a short reason otherwise.
 export async function sendFeedback({ type, message, contact, images } = {}, { version, language }) {
+  const T = (key) => translate(language === 'en' ? 'en' : 'es', key);
   const text = String(message ?? '').trim();
-  if (!text) throw new Error(language === 'en' ? 'Write a message before sending it' : 'Escribe un mensaje antes de enviarlo');
+  if (!text) throw new Error(T('sys.feedback.empty'));
   const kind = TYPES.includes(type) ? type : 'otro';
   const form = new FormData();
   form.append('_subject', `Orb: ${kind}`);
@@ -72,12 +74,12 @@ export async function sendFeedback({ type, message, contact, images } = {}, { ve
       headers: { accept: 'text/html', origin: 'https://github.com', referer: AUTHOR.url, 'user-agent': `Orb/${version}` }
     });
   } catch (error) {
-    throw new Error(error?.name === 'TimeoutError' ? (language === 'en' ? 'Timed out' : 'Tiempo de espera agotado') : (language === 'en' ? 'No connection' : 'Sin conexión'));
+    throw new Error(T(error?.name === 'TimeoutError' ? 'sys.feedback.timeout' : 'sys.feedback.offline'));
   }
   const body = await res.text().catch(() => '');
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   // A thank-you page that says so; anything else (activation, captcha, error page) is not a delivery.
-  if (!/submitted successfully/i.test(body)) throw new Error(language === 'en' ? 'The message could not be sent' : 'No se pudo enviar el mensaje');
+  if (!/submitted successfully/i.test(body)) throw new Error(T('sys.feedback.failed'));
   return true;
 }
 

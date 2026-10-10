@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { browserKey } from '../core/browser-key.mjs';
+import { translate } from '../core/i18n.mjs';
 
 const VIEW = { width: 1280, height: 800 };
 const MAX_TABS = 4;
@@ -60,12 +61,12 @@ const focus = (ref, clear) => `(() => {
   return true;
 })()`;
 
-export function normalizeUrl(raw) {
+export function normalizeUrl(raw, language = 'es') {
   let s = String(raw ?? '').trim();
-  if (!s) throw new Error('falta la dirección');
+  if (!s) throw new Error(translate(language, 'sys.browser.noUrl'));
   if (!/^[a-z][a-z0-9+.-]*:/i.test(s)) s = (/^(localhost|127\.|\[::1\]|0\.0\.0\.0)/i.test(s) ? 'http://' : 'https://') + s;
-  let u; try { u = new URL(s); } catch { throw new Error(`dirección no válida: ${raw}`); }
-  if (!['http:', 'https:'].includes(u.protocol)) throw new Error('solo se abren páginas http o https');
+  let u; try { u = new URL(s); } catch { throw new Error(translate(language, 'sys.browser.badUrl', { url: raw })); }
+  if (!['http:', 'https:'].includes(u.protocol)) throw new Error(translate(language, 'sys.browser.httpOnly'));
   return u.toString();
 }
 const allowed = (url) => { try { return ['http:', 'https:'].includes(new URL(url).protocol); } catch { return false; } };
@@ -73,6 +74,7 @@ const allowed = (url) => { try { return ['http:', 'https:'].includes(new URL(url
 // options: label(agent) → name shown in the little window; pipEnabled() → whether it may appear; mainWindow() → the app's
 // window (to place the little one on the same screen and to bring the app forward); pipUrl / pipPreload.
 export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, language = () => 'es', mainWindow = () => null, pipUrl, pipPreload, log = () => {} }) {
+  const T = (key, vars) => translate(language() === 'en' ? 'en' : 'es', key, vars);
   const token = crypto.randomBytes(24).toString('hex');
   const id = crypto.randomBytes(8).toString('hex');
   const pipe = process.platform === 'win32' ? `\\\\.\\pipe\\orb-navegador-${id}` : path.join(os.tmpdir(), `orb-navegador-${id}.sock`);
@@ -97,7 +99,7 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
     if (pip && !pip.isDestroyed()) return pip;
     pip = new BrowserWindow({
       ...placePip(), frame: false, alwaysOnTop: true, skipTaskbar: true, resizable: true, minimizable: false, maximizable: false, fullscreenable: false,
-      show: false, transparent: false, backgroundColor: '#11131c', title: 'Navegador del agente', minWidth: 240, minHeight: 46,
+      show: false, transparent: false, backgroundColor: '#11131c', title: T('sys.browser.title'), minWidth: 240, minHeight: 46,
       webPreferences: { preload: pipPreload, sandbox: true, contextIsolation: true, nodeIntegration: false, devTools: false, spellcheck: false }
     });
     pip.setAlwaysOnTop(true, 'floating');
@@ -167,7 +169,7 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
     if (tabs.size >= MAX_TABS) {
       // Only a page no agent is using makes room; pages in use are never taken away.
       const idle = [...tabs.values()].filter((t) => t.users <= 0).sort((a, b) => a.used - b.used)[0];
-      if (!idle) throw new Error(`el navegador ya tiene ${MAX_TABS} páginas en uso por otros agentes: inténtalo en un rato`);
+      if (!idle) throw new Error(T('sys.browser.full', { n: MAX_TABS }));
       closeTab(idle);
     }
     const win = new BrowserWindow({
@@ -211,7 +213,7 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
       wc.loadURL(url).catch((e) => { if (!/ERR_ABORTED/.test(e.message)) failure = e.message; }),
       new Promise((r) => setTimeout(r, 25_000))
     ]);
-    if (failure && !wc.getURL().startsWith('http')) throw new Error(`no se pudo abrir ${url}: ${failure.replace(/^.*?(ERR_\w+).*$/s, '$1')}`);
+    if (failure && !wc.getURL().startsWith('http')) throw new Error(T('sys.browser.openFailed', { url, error: failure.replace(/^.*?(ERR_\w+).*$/s, '$1') }));
   }
   async function inPage(tab, code) {
     return tab.win.webContents.executeJavaScriptInIsolatedWorld(WORLD, [{ code }], true);
@@ -238,7 +240,7 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
   }
 
   const ACTIONS = {
-    async open(tab, { url }) { const u = normalizeUrl(url); tab.dismissed = false; showFor(tab, { force: true }); await load(tab, u); return snapshot(tab); },
+    async open(tab, { url }) { const u = normalizeUrl(url, language() === 'en' ? 'en' : 'es'); tab.dismissed = false; showFor(tab, { force: true }); await load(tab, u); return snapshot(tab); },
     snapshot: (tab) => snapshot(tab),
     async screenshot(tab) {
       const wc = tab.win.webContents;
@@ -250,20 +252,20 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
       const wc = tab.win.webContents;
       let point;
       if (ref !== undefined) {
-        point = await inPage(tab, target(ref)); if (!point) throw new Error(`no encuentro el elemento [${ref}]: pide orb_browser_snapshot otra vez`);
-        if (point.file) throw new Error('es para subir un archivo: el navegador de los agentes no sube archivos del equipo');
+        point = await inPage(tab, target(ref)); if (!point) throw new Error(T('sys.browser.noElement', { ref }));
+        if (point.file) throw new Error(T('sys.browser.fileInput'));
         await settle(150); point = await inPage(tab, target(ref)) ?? point;
       }
       else if (Number.isFinite(x) && Number.isFinite(y)) point = { x: Math.round(x), y: Math.round(y) };
-      else throw new Error('indica ref (número del elemento) o x e y');
+      else throw new Error(T('sys.browser.needTarget'));
       await click(wc, point.x, point.y);
       await waitIdle(tab);
       return snapshot(tab);
     },
     async type(tab, { ref, text, clear = true, submit = false }) {
       const wc = tab.win.webContents;
-      if (typeof text !== 'string' || text.length > 5000) throw new Error('text: hasta 5000 caracteres');
-      if (ref !== undefined && !(await inPage(tab, focus(ref, clear)))) throw new Error(`no encuentro el elemento [${ref}]: pide orb_browser_snapshot otra vez`);
+      if (typeof text !== 'string' || text.length > 5000) throw new Error(T('sys.browser.textLimit'));
+      if (ref !== undefined && !(await inPage(tab, focus(ref, clear)))) throw new Error(T('sys.browser.noElement', { ref }));
       wc.focus();
       await wc.insertText(text);
       if (submit) { await settle(80); await ACTIONS.press(tab, { key: 'Enter' }, true); }
@@ -271,7 +273,7 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
       return snapshot(tab);
     },
     async press(tab, { key }, quiet = false) {
-      const code = KEYS[key]; if (!code) throw new Error(`tecla no permitida: ${key}. Válidas: ${Object.keys(KEYS).join(', ')}`);
+      const code = KEYS[key]; if (!code) throw new Error(T('sys.browser.badKey', { key, list: Object.keys(KEYS).join(', ') }));
       const wc = tab.win.webContents;
       wc.focus();
       wc.sendInputEvent({ type: 'keyDown', keyCode: code });
@@ -288,24 +290,25 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
       await settle(250);
       return snapshot(tab);
     },
-    async back(tab) { const h = tab.win.webContents.navigationHistory; if (!h.canGoBack()) throw new Error('no hay página anterior'); h.goBack(); await waitIdle(tab); return snapshot(tab); },
+    async back(tab) { const h = tab.win.webContents.navigationHistory; if (!h.canGoBack()) throw new Error(T('sys.browser.noBack')); h.goBack(); await waitIdle(tab); return snapshot(tab); },
     async wait(tab, { ms = 1000, text }) {
       const end = Date.now() + Math.max(100, Math.min(Number(ms) || 1000, 15_000));
       if (typeof text === 'string' && text) {
         while (Date.now() < end) { if (await inPage(tab, `(document.body ? document.body.innerText : '').includes(${JSON.stringify(text)})`)) return snapshot(tab); await settle(250); }
-        throw new Error(`no apareció «${text}» a tiempo`);
+        throw new Error(T('sys.browser.waitTimeout', { text }));
       }
       await settle(end - Date.now());
       return snapshot(tab);
     },
   };
-  const DESCRIBE = { open: (a) => `abre ${a.url}`, click: (a) => (a.ref !== undefined ? `pulsa [${a.ref}]` : `pulsa en ${a.x},${a.y}`), type: (a) => `escribe «${String(a.text ?? '').slice(0, 40)}»`, press: (a) => `tecla ${a.key}`, scroll: (a) => `desplaza ${a.direction ?? 'down'}`, back: () => 'vuelve atrás', wait: () => 'espera', snapshot: () => 'mira la página', screenshot: () => 'hace una captura' };
+  // What the agent is doing, for the little window (in the language of the settings).
+  const DESCRIBE = { open: (a) => T('sys.browser.do.open', { url: a.url }), click: (a) => (a.ref !== undefined ? T('sys.browser.do.clickRef', { ref: a.ref }) : T('sys.browser.do.clickAt', { x: a.x, y: a.y })), type: (a) => T('sys.browser.do.type', { text: String(a.text ?? '').slice(0, 40) }), press: (a) => T('sys.browser.do.press', { key: a.key }), scroll: (a) => T(a.direction === 'up' ? 'sys.browser.do.scrollUp' : 'sys.browser.do.scrollDown'), back: () => T('sys.browser.do.back'), wait: () => T('sys.browser.do.wait'), snapshot: () => T('sys.browser.do.snapshot'), screenshot: () => T('sys.browser.do.screenshot') };
 
   // Runs an action with a time limit: a page that hangs (endless script, frozen renderer) is stopped and marked as such.
   async function run(tab, action, args) {
     let timer;
     try {
-      return await Promise.race([ACTIONS[action](tab, args), new Promise((_, reject) => { timer = setTimeout(() => reject(Object.assign(new Error('la página no responde: la he cerrado; ábrela otra vez si la necesitas'), { hung: true })), ACTION_MS); })]);
+      return await Promise.race([ACTIONS[action](tab, args), new Promise((_, reject) => { timer = setTimeout(() => reject(Object.assign(new Error(T('sys.browser.hung')), { hung: true })), ACTION_MS); })]);
     } catch (error) {
       if (error.hung) { tab.crashed = true; try { tab.win.webContents.forcefullyCrashRenderer(); } catch { /* gone */ } }
       throw error;
@@ -338,8 +341,8 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
           continue;
         }
         const { id: reqId, action, args = {} } = msg ?? {};
-        if (!Object.hasOwn(ACTIONS, action) || !args || typeof args !== 'object') { send({ id: reqId, ok: false, error: 'acción no válida' }); continue; }
-        if (pending >= MAX_PENDING) { send({ id: reqId, ok: false, error: 'demasiadas acciones a la vez: espera a que terminen' }); continue; }
+        if (!Object.hasOwn(ACTIONS, action) || !args || typeof args !== 'object') { send({ id: reqId, ok: false, error: T('sys.browser.badAction') }); continue; }
+        if (pending >= MAX_PENDING) { send({ id: reqId, ok: false, error: T('sys.browser.busy') }); continue; }
         // Closing never waits behind a page that does not answer.
         if (action === 'close') { const tab = tabs.get(key); if (tab) closeTab(tab); send({ id: reqId, ok: true, result: tab ? 'Navegador cerrado.' : 'No había navegador abierto.' }); continue; }
         pending++;
@@ -348,7 +351,7 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
             let tab = tabs.get(key);
             if (!tab || tab.win.isDestroyed() || tab.crashed) {
               if (tab) closeTab(tab);
-              if (action !== 'open') throw new Error('no hay ninguna página abierta: empieza con orb_browser_open');
+              if (action !== 'open') throw new Error(T('sys.browser.noPage'));
               tab = newTab(key, who);
             }
             grab(tab);

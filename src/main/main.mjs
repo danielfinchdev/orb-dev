@@ -12,6 +12,7 @@ import { openTerminal } from './terminal.mjs';
 import { createUpdater, RELEASES_URL } from './updater.mjs';
 import { AUTHOR, MAX_IMAGES, captureWindow, readImage, sendFeedback, moreApps } from './feedback.mjs';
 import { PRODUCT } from '../core/product.mjs';
+import { translate } from '../core/i18n.mjs';
 
 const SRC = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 // Packaged: the code lives in app.asar.unpacked (agents start the MCP server from there with the app's own executable).
@@ -44,6 +45,9 @@ let agentBrowser = null; // the agents' browser and its little floating window (
 // New versions from GitHub Releases (src/main/updater.mjs); the window gets the state as the 'app:update' event.
 const updater = createUpdater({ send: (state) => { if (win && !win.isDestroyed()) win.webContents.send('engine:event', 'app:update', state); }, log: (line) => console.log(line) });
 const config = () => { try { return loadConfig(home); } catch { return null; } };
+// Texts in the language of the settings (Spanish before the first run, as in the window).
+const langOf = (c) => (c?.language === 'en' ? 'en' : 'es');
+const T = (key, vars) => translate(langOf(config()), key, vars);
 
 function readLocation() {
   try { const h = JSON.parse(fs.readFileSync(LOCATION(), 'utf8')).home; return h && isHome(h) ? h : null; } catch { return null; }
@@ -109,10 +113,10 @@ function startEngine(h) {
     });
     engine.on('exit', (code) => {
       engine = null; engineReady = null;
-      for (const p of pending.values()) { clearTimeout(p.timer); p.reject(new Error('el motor se ha detenido')); }
+      for (const p of pending.values()) { clearTimeout(p.timer); p.reject(new Error(T('sys.main.engineStopped', { name: PRODUCT.name }))); }
       pending.clear();
       if (quitting) return;
-      reject(new Error('el motor se detuvo al arrancar'));
+      reject(new Error(T('sys.main.engineStartStopped', { name: PRODUCT.name })));
       // A crash of the engine is not the end of the app: it is started again (at most 3 times per session).
       if (restarts < 3) { restarts++; setTimeout(() => { startEngine(h).then(() => win?.webContents.send('engine:event', 'engine:restarted', { code })).catch(() => {}); }, 1000); }
       else win?.webContents.send('engine:event', 'engine:stopped', { code });
@@ -125,10 +129,10 @@ function startEngine(h) {
 }
 
 function callEngine(method, params, timeoutMs = 10 * 60_000) {
-  if (!engine) return Promise.reject(new Error('el motor no está en marcha'));
+  if (!engine) return Promise.reject(new Error(T('sys.main.engineOff', { name: PRODUCT.name })));
   const id = ++nextId;
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { pending.delete(id); reject(new Error('el motor no respondió a tiempo')); }, timeoutMs);
+    const timer = setTimeout(() => { pending.delete(id); reject(new Error(T('sys.main.engineTimeout', { name: PRODUCT.name }))); }, timeoutMs);
     pending.set(id, { resolve, reject, timer });
     engine.postMessage({ type: 'call', id, method, params });
   });
@@ -142,14 +146,30 @@ function applyMenuBar(c = config()) {
   win.setMenuBarVisibility(show);
 }
 
+// The menu in the language of the settings: built at start and again when the language changes (config:changed).
+let menuLanguage = null;
+function applyMenu(c = config()) {
+  const lang = langOf(c);
+  if (lang === menuLanguage) return;
+  menuLanguage = lang;
+  const L = (key) => translate(lang, key);
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    { label: L('sys.menu.file'), submenu: [{ role: 'quit', label: L('sys.menu.quit') }] },
+    { label: L('sys.menu.edit'), submenu: [{ role: 'undo', label: L('sys.menu.undo') }, { role: 'redo', label: L('sys.menu.redo') }, { type: 'separator' }, { role: 'cut', label: L('sys.menu.cut') }, { role: 'copy', label: L('sys.menu.copy') }, { role: 'paste', label: L('sys.menu.paste') }, { role: 'selectAll', label: L('sys.menu.selectAll') }] },
+    // The keys themselves are handled in before-input-event (any keyboard); the menu only shows them.
+    { label: L('sys.menu.view'), submenu: [{ label: L('sys.menu.zoomReset'), accelerator: 'CommandOrControl+0', registerAccelerator: false, click: () => zoomBy('reset') }, { label: L('sys.menu.zoomIn'), accelerator: 'CommandOrControl+Plus', registerAccelerator: false, click: () => zoomBy('in') }, { label: L('sys.menu.zoomOut'), accelerator: 'CommandOrControl+-', registerAccelerator: false, click: () => zoomBy('out') }, { type: 'separator' }, { label: L('sys.menu.terminal'), accelerator: 'CommandOrControl+J', registerAccelerator: false, click: () => win?.webContents.send('engine:event', 'ui:terminal', {}) }, { type: 'separator' }, { role: 'togglefullscreen', label: L('sys.menu.fullscreen') }, ...(isDev ? [{ role: 'toggleDevTools' }] : [])] }
+  ]));
+  applyMenuBar(c); // a new menu on Windows comes back visible: hidden again unless Ajustes → Interfaz shows it
+}
+
 function onEngineEvent(event, payload) {
   if (!win || win.isDestroyed()) return;
-  if (event === 'config:changed') applyMenuBar(payload);
+  if (event === 'config:changed') { applyMenu(payload); applyMenuBar(payload); }
   win.webContents.send('engine:event', event, payload);
   // Notices while the window is in the background: finished tasks, approvals, the assistant's answers.
   if (event === 'chat:new' && !win.isFocused() && Notification.isSupported()) {
     let name = PRODUCT.name; try { name = loadConfig(home).assistantName; } catch { /* default */ }
-    const n = new Notification({ icon: path.join(SRC, '..', 'build', 'icon.png'), title: payload.role === 'orb' ? name : `${name} · aviso`, body: String(payload.body ?? '').slice(0, 240), silent: false });
+    const n = new Notification({ icon: path.join(SRC, '..', 'build', 'icon.png'), title: payload.role === 'orb' ? name : T('sys.main.notice', { name }), body: String(payload.body ?? '').slice(0, 240), silent: false });
     n.on('click', () => { win.show(); win.focus(); win.webContents.send('engine:event', 'ui:navigate', { view: 'chat' }); });
     n.show();
   }
@@ -160,11 +180,11 @@ const fromApp = (event) => {
   const url = event.senderFrame?.url ?? '';
   return url.startsWith('orb://app/') && event.sender === win?.webContents;
 };
-const guard = (fn) => async (event, ...args) => { if (!fromApp(event)) throw new Error('origen no permitido'); return fn(...args); };
+const guard = (fn) => async (event, ...args) => { if (!fromApp(event)) throw new Error(T('sys.main.badOrigin')); return fn(...args); };
 
 const ENGINE_METHOD = /^[a-z]+\.[A-Za-z]+$/;
 ipcMain.handle('engine:call', guard(async (method, params) => {
-  if (typeof method !== 'string' || !ENGINE_METHOD.test(method)) throw new Error('acción no válida');
+  if (typeof method !== 'string' || !ENGINE_METHOD.test(method)) throw new Error(T('sys.main.badAction'));
   await engineReady;
   return callEngine(method, params ?? {});
 }));
@@ -173,30 +193,31 @@ ipcMain.handle('app:zoom', guard(async (value) => (value === undefined || value 
 // Ctrl+J: a terminal (Warp, Windows Terminal, PowerShell…) in the folder the window is showing.
 ipcMain.handle('app:openTerminal', guard(async (target) => {
   const dir = typeof target === 'string' && path.isAbsolute(target) ? target : home;
-  if (!dir) throw new Error('todavía no hay carpeta');
-  return openTerminal(dir, config()?.ui?.terminal ?? 'auto', { openExternal: (url) => shell.openExternal(url) });
+  if (!dir) throw new Error(T('sys.main.noFolderYet'));
+  const c = config();
+  return openTerminal(dir, c?.ui?.terminal ?? 'auto', { openExternal: (url) => shell.openExternal(url), language: langOf(c) });
 }));
 ipcMain.handle('app:showBrowser', guard(async () => { agentBrowser?.show(); return agentBrowser?.state() ?? null; }));
 ipcMain.handle('app:info', guard(async () => ({ version: VERSION, home, needsSetup: !home, platform: process.platform, defaultBase: app.getPath('documents') })));
 
 ipcMain.handle('app:pickFolder', guard(async (title) => {
-  const r = await dialog.showOpenDialog(win, { title: String(title ?? 'Elige una carpeta').slice(0, 100), properties: ['openDirectory', 'createDirectory'] });
+  const r = await dialog.showOpenDialog(win, { title: String(title ?? T('sys.dialog.pickFolder')).slice(0, 100), properties: ['openDirectory', 'createDirectory'] });
   return r.canceled ? null : r.filePaths[0];
 }));
 ipcMain.handle('app:pickImages', guard(async () => {
-  const r = await dialog.showOpenDialog(win, { title: 'Imágenes de referencia', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'] }] });
+  const r = await dialog.showOpenDialog(win, { title: T('sys.dialog.refImages'), properties: ['openFile', 'multiSelections'], filters: [{ name: T('sys.dialog.images'), extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'] }] });
   return r.canceled ? [] : r.filePaths.slice(0, 10);
 }));
 ipcMain.handle('app:openPath', guard(async (target) => {
-  if (typeof target !== 'string' || !path.isAbsolute(target)) throw new Error('ruta no válida');
-  let st; try { st = fs.statSync(target); } catch { throw new Error('la carpeta no existe'); }
-  if (!st.isDirectory()) throw new Error('solo se abren carpetas'); // never run a file
+  if (typeof target !== 'string' || !path.isAbsolute(target)) throw new Error(T('sys.main.badPath'));
+  let st; try { st = fs.statSync(target); } catch { throw new Error(T('sys.main.folderMissing')); }
+  if (!st.isDirectory()) throw new Error(T('sys.main.foldersOnly')); // never run a file
   const err = await shell.openPath(target); if (err) throw new Error(err);
   return true;
 }));
 ipcMain.handle('app:openExternal', guard(async (url) => {
-  let u; try { u = new URL(String(url)); } catch { throw new Error('enlace no válido'); }
-  if (u.protocol !== 'https:') throw new Error('solo se abren enlaces https');
+  let u; try { u = new URL(String(url)); } catch { throw new Error(T('sys.main.badLink')); }
+  if (u.protocol !== 'https:') throw new Error(T('sys.main.httpsOnly'));
   await shell.openExternal(u.toString());
   return true;
 }));
@@ -218,7 +239,7 @@ ipcMain.handle('app:updateInstall', guard(async () => {
   if (updater.get().state !== 'downloaded') return false;
   let running = 0; try { running = engine ? (await callEngine('app.state', {}, 5000)).counts?.running ?? 0 : 0; } catch { /* updating anyway */ }
   if (running) {
-    const r = await dialog.showMessageBox(win, { type: 'warning', buttons: ['Actualizar igualmente', 'Cancelar'], defaultId: 1, cancelId: 1, title: 'Hay tareas en marcha', message: `Hay ${running} tarea(s) trabajando. Si actualizas ahora, se detienen y quedarán como fallidas (podrás reintentarlas).` });
+    const r = await dialog.showMessageBox(win, { type: 'warning', buttons: [T('sys.dialog.updateAnyway'), T('sys.dialog.cancel')], defaultId: 1, cancelId: 1, title: T('sys.dialog.runningTitle'), message: T(running === 1 ? 'sys.dialog.updateOne' : 'sys.dialog.updateMany', { n: running }) });
     if (r.response !== 0) return false;
   }
   quitting = true; agentBrowser?.shutdown(); try { engine?.postMessage({ type: 'shutdown' }); } catch { /* gone */ }
@@ -226,16 +247,17 @@ ipcMain.handle('app:updateInstall', guard(async () => {
 }));
 // First run: creates <base>/<name> (or reuses an existing assistant folder), remembers it and starts the engine.
 ipcMain.handle('app:setup', guard(async ({ base, assistantName, userName } = {}) => {
-  if (home) throw new Error('ya está configurado');
+  if (home) throw new Error(T('sys.main.alreadySetup'));
   const { home: h } = createHome(String(base ?? ''), { assistantName: String(assistantName ?? PRODUCT.assistant), userName: String(userName ?? '') });
   saveLocation(h);
   await startEngine(h);
   setTitle();
+  applyMenu();
   return { home: h };
 }));
 // Moves to another assistant folder (restart of the engine with the new one).
 ipcMain.handle('app:switchHome', guard(async (target) => {
-  if (typeof target !== 'string' || !isHome(target)) throw new Error('esa carpeta no es la de un asistente (falta orb.json)');
+  if (typeof target !== 'string' || !isHome(target)) throw new Error(T('sys.main.notHome'));
   saveLocation(target);
   quitting = true; agentBrowser?.shutdown(); try { engine?.postMessage({ type: 'shutdown' }); } catch { /* gone */ }
   app.relaunch(); app.exit(0);
@@ -260,7 +282,7 @@ function createWindow() {
     e.preventDefault();
     let running = 0; try { running = (await callEngine('app.state', {}, 5000)).counts?.running ?? 0; } catch { /* closing anyway */ }
     if (running) {
-      const r = await dialog.showMessageBox(win, { type: 'warning', buttons: ['Cerrar igualmente', 'Cancelar'], defaultId: 1, cancelId: 1, title: 'Hay tareas en marcha', message: `Hay ${running} tarea(s) trabajando. Si cierras, se detienen y quedarán como fallidas (podrás reintentarlas).` });
+      const r = await dialog.showMessageBox(win, { type: 'warning', buttons: [T('sys.dialog.closeAnyway'), T('sys.dialog.cancel')], defaultId: 1, cancelId: 1, title: T('sys.dialog.runningTitle'), message: T(running === 1 ? 'sys.dialog.closeOne' : 'sys.dialog.closeMany', { n: running }) });
       if (r.response !== 0) return;
     }
     quitting = true; app.quit();
@@ -290,12 +312,9 @@ app.whenReady().then(async () => {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({ responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': ["default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"] } });
   });
-  Menu.setApplicationMenu(Menu.buildFromTemplate([
-    { label: 'Archivo', submenu: [{ role: 'quit', label: 'Salir' }] },
-    { label: 'Edición', submenu: [{ role: 'undo', label: 'Deshacer' }, { role: 'redo', label: 'Rehacer' }, { type: 'separator' }, { role: 'cut', label: 'Cortar' }, { role: 'copy', label: 'Copiar' }, { role: 'paste', label: 'Pegar' }, { role: 'selectAll', label: 'Seleccionar todo' }] },
-    // The keys themselves are handled in before-input-event (any keyboard); the menu only shows them.
-    { label: 'Ver', submenu: [{ label: 'Tamaño normal', accelerator: 'CommandOrControl+0', registerAccelerator: false, click: () => zoomBy('reset') }, { label: 'Aumentar', accelerator: 'CommandOrControl+Plus', registerAccelerator: false, click: () => zoomBy('in') }, { label: 'Reducir', accelerator: 'CommandOrControl+-', registerAccelerator: false, click: () => zoomBy('out') }, { type: 'separator' }, { label: 'Abrir terminal', accelerator: 'CommandOrControl+J', registerAccelerator: false, click: () => win?.webContents.send('engine:event', 'ui:terminal', {}) }, { type: 'separator' }, { role: 'togglefullscreen', label: 'Pantalla completa' }, ...(isDev ? [{ role: 'toggleDevTools' }] : [])] }
-  ]));
+  const h = readLocation();
+  let saved = null; try { saved = h ? loadConfig(h) : null; } catch { /* Spanish */ }
+  applyMenu(saved); // in the language of the settings; built again when it changes (onEngineEvent)
   // The agents' browser: pages drawn off screen and the little window in the top-right corner (ui.pip turns it off).
   try {
     agentBrowser = createAgentBrowser({
@@ -306,8 +325,7 @@ app.whenReady().then(async () => {
     await agentBrowser.ready;
   } catch (error) { agentBrowser = null; console.error(`navegador del agente: ${error.message}`); }
   zoom = readZoom();
-  const h = readLocation();
-  if (h) startEngine(h).catch((error) => dialog.showErrorBox(`${PRODUCT.name} no pudo arrancar`, error.message));
+  if (h) startEngine(h).catch((error) => dialog.showErrorBox(T('sys.main.startFailed', { name: PRODUCT.name }), error.message));
   createWindow();
   updater.start();
 });

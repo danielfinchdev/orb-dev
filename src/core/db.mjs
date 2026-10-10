@@ -158,8 +158,8 @@ export const REASONING = ['low', 'medium', 'high', 'xhigh'];
 export function taskOptions({ reasoning, fast } = {}) {
   reasoning = reasoning ?? ctx.config?.orchestrator?.defaultTaskReasoning ?? 'medium';
   fast = fast ?? false;
-  if (!REASONING.includes(reasoning)) throw new Error('reasoning debe ser low, medium, high o xhigh');
-  if (typeof fast !== 'boolean') throw new Error('fast debe ser true o false');
+  if (!REASONING.includes(reasoning)) throw new Error(tr('sys.db.badReasoning'));
+  if (typeof fast !== 'boolean') throw new Error(tr('sys.db.badFast'));
   return { reasoning, fast };
 }
 
@@ -173,7 +173,7 @@ export function checkPolicy({ model, reasoning, fast }) {
 }
 
 export function openDb(filename = ctx.paths?.db) {
-  if (!filename) throw new Error('no hay carpeta del asistente');
+  if (!filename) throw new Error(tr('sys.db.noHome'));
   if (filename !== ':memory:') fs.mkdirSync(path.dirname(filename), { recursive: true });
   const db = new DatabaseSync(filename);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 8000; PRAGMA foreign_keys = ON;');
