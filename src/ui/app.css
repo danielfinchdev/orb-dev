@@ -237,16 +237,23 @@ html[data-skin="retro"] { --font-title: "Bungee", "IBM Plex Mono", var(--font-sa
 html[data-skin="nube"] { --font-title: "Fredoka Variable", var(--font-sans); }
 html[data-skin="profesional"] { --font-title: "Inter Variable", var(--font-sans); }
 
-/* 2.6: the assistant's wordmark at the top of the sidebar when it keeps its default name: «Orb» in a gradient of the
-   theme's colour, a small glowing dot and the E in a rounded tile. */
-.wordmark { display: inline-flex; align-items: center; gap: 0.2rem; font-family: var(--font-title); font-weight: 700; font-size: 1.05rem; line-height: 1; letter-spacing: 0.01em; }
-.wordmark-orb { background: linear-gradient(100deg, var(--foreground) 15%, var(--primary)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.wordmark-dot { width: 0.32rem; height: 0.32rem; border-radius: 999px; background: var(--primary); box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary) 22%, transparent), 0 0 8px var(--primary); }
-.wordmark-e { display: inline-grid; place-items: center; min-width: 1.15rem; height: 1.2rem; padding-inline: 0.2rem; border-radius: 0.4rem; font-size: 0.82rem; color: var(--primary-foreground); background: linear-gradient(145deg, color-mix(in oklch, var(--primary) 80%, white), var(--primary)); box-shadow: 0 2px 6px -2px color-mix(in oklch, var(--primary) 70%, transparent); }
-html[data-skin="retro"] .wordmark { font-weight: 400; }
-html[data-skin="retro"] .wordmark-e { border: 1.5px solid var(--foreground); box-shadow: 2px 2px 0 var(--foreground); }
-@media (prefers-reduced-motion: no-preference) { html:not([data-motion="minima"]) .wordmark-dot { animation: wordmark-glow 3.2s ease-in-out infinite; } }
-@keyframes wordmark-glow { 50% { box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 12%, transparent), 0 0 12px var(--primary); } }
+/* 2.6: the assistant's wordmark ORB·E at the top of the sidebar when it keeps its default name, chosen by Dani per theme.
+   Orb (and the others for now): «WALL·E» style, spaced capitals and a round dot of the theme's colour. */
+.wordmark { display: inline-flex; align-items: center; font-family: "Outfit Variable", var(--font-sans); font-weight: 600; font-size: 1.12rem; line-height: 1; letter-spacing: 0.16em; color: var(--foreground); }
+.wordmark-dot { width: 0.34rem; height: 0.34rem; margin: 0 0.24em 0 0.06em; border-radius: 999px; background: var(--primary); }
+/* Vaporwave: techno capitals, ·E in the theme's colour, underlined. */
+html[data-skin="vaporwave"] .wordmark { font-family: "Orbitron Variable", var(--font-sans); font-weight: 800; font-size: 1rem; letter-spacing: 0.08em; padding-bottom: 3px; border-bottom: 2px solid var(--primary); }
+html[data-skin="vaporwave"] .wordmark-dot { width: 0.22rem; height: 0.22rem; margin: 0 0.12em; }
+html[data-skin="vaporwave"] .wordmark-e { color: var(--primary); }
+/* Retro: a plate, chunky capitals in an ink frame with a hard shadow of the theme's colour. */
+html[data-skin="retro"] .wordmark { font-family: "Bungee", var(--font-sans); font-weight: 400; font-size: 0.92rem; letter-spacing: 0.1em; padding: 4px 9px 3px; border: 2px solid var(--foreground); border-radius: 6px; box-shadow: 3px 3px 0 var(--primary); }
+html[data-skin="retro"] .wordmark-dot { width: 0.24rem; height: 0.24rem; margin: 0 0.12em 0 0; }
+/* Candy: a jelly pill, white capitals on the theme's pink with the darker edge below. */
+html[data-skin="nube"] .wordmark { font-family: "Fredoka Variable", var(--font-sans); font-weight: 700; font-size: 1rem; letter-spacing: 0.06em; color: var(--primary-foreground); background: var(--primary); padding: 6px 14px 5px; border-radius: 999px; box-shadow: 0 3px 0 color-mix(in oklch, var(--primary) 60%, black); }
+html[data-skin="nube"] .wordmark-dot { width: 0.24rem; height: 0.24rem; margin: 0 0.1em 0 0; background: currentColor; }
+/* Profesional: sober, widely spaced capitals, the dot in the text's colour. */
+html[data-skin="profesional"] .wordmark { font-family: "Inter Variable", var(--font-sans); font-weight: 600; font-size: 0.9rem; letter-spacing: 0.22em; }
+html[data-skin="profesional"] .wordmark-dot { width: 0.22rem; height: 0.22rem; margin: 0 0.18em 0 0; background: currentColor; }
 
 /* 2.6: the system's date and time on the left of the chat's top bar, in the theme's title type. */
 .bar-clock { display: grid; line-height: 1.1; font-family: var(--font-title); }
@@ -254,6 +261,17 @@ html[data-skin="retro"] .wordmark-e { border: 1.5px solid var(--foreground); box
 .bar-clock-date { font-family: var(--font-sans); font-size: 0.72rem; color: var(--muted-foreground); }
 .bar-clock-date::first-letter { text-transform: uppercase; }
 html[data-skin="retro"] .bar-clock-time { font-weight: 400; }
+/* The clock sits in the bar's title (an h1): the themes' outlined title styles are not for it. */
+html .bar-clock, html .bar-clock * { -webkit-text-stroke: 0 !important; text-shadow: none !important; color: var(--foreground); letter-spacing: normal; text-transform: none !important; }
+html .bar-clock .bar-clock-date { color: var(--muted-foreground); font-family: var(--font-sans) !important; font-weight: 400; }
+html[data-skin="retro"] .wordmark, html[data-skin="nube"] .wordmark { margin-bottom: 3px; }
+/* The line under the wordmark (the working project) echoes it in small: the same type treatment, and it starts where the
+   wordmark's letters start (inside the plate or the pill). */
+.wordmark-sub { margin-top: 4px; font-size: 10.5px; line-height: 1.2; text-transform: uppercase; letter-spacing: 0.16em; }
+html[data-skin="vaporwave"] .wordmark-sub { margin-top: 5px; letter-spacing: 0.12em; }
+html[data-skin="retro"] .wordmark-sub { margin-top: 3px; padding-inline-start: 11px; letter-spacing: 0.1em; }
+html[data-skin="nube"] .wordmark-sub { margin-top: 3px; padding-inline-start: 14px; font-family: "Fredoka Variable", var(--font-sans); font-weight: 600; letter-spacing: 0.06em; color: color-mix(in oklch, var(--primary) 70%, var(--muted-foreground)); }
+html[data-skin="profesional"] .wordmark-sub { letter-spacing: 0.14em; }
 /* A robot that only illustrates (the chat's avatars) is not a button. */
 .orb.still { cursor: default; }
 /* 2.6: the time of each message, bottom right, as in a messaging app. */
