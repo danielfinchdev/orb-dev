@@ -142,6 +142,28 @@ export default {
   // Bitácoras
   'sys.logs.none': 'no hay bitácora para "{project}": usa "general" o un proyecto registrado',
   'sys.logs.required': 'faltan tema y hecho',
+  // Cabeceras y apartados de las bitácoras (archivos .md que lee quien usa la app)
+  'sys.logs.generalHeader': '# Bitácora general de {name}\n\nMemoria de {name}: qué se pidió, qué se hizo y qué queda pendiente en todos los proyectos.\nSolo se añade al final; nunca se borra ni se edita lo escrito. Sin contraseñas, tokens ni datos personales.\n',
+  'sys.logs.projectHeader': '# Bitácora — {name}\n\nLo decidido y lo hecho en este proyecto. Solo se añade al final. Sin contraseñas, tokens ni datos personales.\n',
+  'sys.logs.request': 'Pedido {user}',
+  'sys.logs.byAssistant': '(coordinación de {name})',
+  'sys.logs.done': 'Hecho',
+  'sys.logs.revert': 'Cómo revertir',
+  'sys.logs.revertDefault': 'añadir una entrada nueva que lo corrija (las bitácoras solo crecen)',
+  'sys.logs.status': 'Estado / pendiente',
+  'sys.logs.noPending': 'sin pendientes',
+  'sys.logs.task': 'Tarea #{id}: {title}',
+  'sys.logs.createdBy': 'tarea creada por {who}.',
+  'sys.logs.noSummary': 'sin resumen',
+  'sys.logs.branch': ' (rama `{branch}`)',
+  'sys.logs.toMerge': '; pendiente de revisar e integrar.',
+  'sys.logs.revertUndo': 'botón «Deshacer esta tarea» de la tarea #{id} (devuelve solo los archivos que cambió).',
+  'sys.logs.revertBranch': 'no integrar la rama `{branch}` (o borrarla desde la tarea).',
+  'sys.logs.revertFolder': 'revisar los cambios en la carpeta del proyecto.',
+  'sys.logs.okTopic': 'OK a {ids}',
+  'sys.logs.okRequest': 'revisar el trabajo terminado',
+  'sys.logs.okDone': '{user} dio el OK a: {list}',
+  'sys.logs.okStatus': 'aceptado',
 
   // Inicio de Orb
   'sys.engine.notHome': 'no es la carpeta de un asistente: {home}',

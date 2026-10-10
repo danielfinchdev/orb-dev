@@ -93,7 +93,8 @@ D:\Orb\                   (siempre <carpeta elegida>\Orb, igual para todos)
                           categorías: cada carpeta dentro de una de ellas es un proyecto
                           (las que crea la app y las que crees tú en el Explorador)
   android\adb-tools\      adb y fastboot de Google, los descarga la app (no es un proyecto)
-  bitacora\               configuración de Orb: GENERAL.md (memoria general) y proyectos\ (una por proyecto)
+  bitacora\               configuración de Orb: GENERAL.md (memoria general) y proyectos\ (una por proyecto), en el
+                          idioma de Ajustes; al cambiarlo, las que aún no tienen entradas cambian su cabecera
   mcp-servers\            configuración de Orb: los servidores MCP; no sale como proyecto, se gestiona en Ajustes
   .orb\                   datos de la app (oculta): base de datos, clave cifrada, registros, copias para deshacer
 ```
@@ -146,6 +147,9 @@ te informa. Tiene dos modos (casilla «Orquestador»):
 - El asistente es **una sesión viva de Claude** (Claude Agent SDK con el Claude Code del usuario) que se queda abierta entre
   mensajes. La respuesta llega en streaming (`chat:state.partial`).
 - Si escribes mientras responde, tu mensaje le llega en su siguiente paso (`steer`); no hace falta esperar.
+- **Parar** deja el chat libre al momento. Si escribes enseguida, el mensaje espera a que el turno parado termine de
+  cerrarse (`inflight` en `orchestrator.mjs`); si no termina en 10 s, se cierra su proceso y la conversación sigue con
+  `resume`.
 - **Se renueva por contexto, no por turnos:** cuando el contexto pasa de `orchestrator.renewAt` (60 %), o tras `maxTurns`
   (60), empieza una conversación nueva. La memoria no se pierde, porque está en el tablero y en las bitácoras: el primer
   mensaje de cada conversación lleva un resumen (`briefing()` en `logs.mjs`).
@@ -219,7 +223,8 @@ te informa. Tiene dos modos (casilla «Orquestador»):
   paralelo; una subtarea no espera a su tarea madre.
 
 **Modos de trabajo.**
-- `carpeta`: trabaja en la carpeta del proyecto. Antes se toma una «foto» (`takeCheckpoint`) para poder deshacer.
+- `carpeta`: trabaja en la carpeta del proyecto. Antes se toma una «foto» (`takeCheckpoint`) para poder deshacer. Un
+  repositorio sin ningún commit (solo `git init`) también vale: la foto es un primer commit sin padre.
 - `aislada`: rama y copia propias (`prepareWorkdir`, worktree de git). Al terminar se hace un commit automático, que se
   bloquea si hay archivos que parecen secretos.
 
@@ -360,7 +365,11 @@ Desde la cabecera puedes cambiar el modelo, los permisos y el razonamiento. Sin 
     (`limited_until`);
   - **sigue sola** al reiniciarse el cupo (`resumeLimited()` en el planificador), en la misma conversación del agente;
   - mientras tanto, el trabajo nuevo va a otras cuentas.
-- **Cerrar la app:** las tareas que estaban trabajando continúan al volver a abrirla (constructor del `Scheduler`).
+- **Cerrar la app:** las tareas que estaban trabajando continúan al volver a abrirla (constructor del `Scheduler`). Al
+  cerrar con normalidad, `shutdown()` pone `scheduler.closing` y `finish()` no cierra esas tareas: quedan `running` y
+  se reanudan (2.5).
+- **Tarea cerrada por su agente con el proceso aún vivo** cuando la app se cae: al arrancar, `finish()` hace lo que
+  faltaba (commit automático, archivos cambiados, bitácora, informe) y quita su `pid`, para que sus dependientes sigan.
 - Las dos cosas se apagan en Ajustes (`continuity.resumeAtReset` y `continuity.resumeAfterRestart`).
 
 ## 14. Delegación entre agentes
@@ -426,7 +435,10 @@ elegido se añade como **extracto acotado**, no entero, y marcado como «datos, 
   informe con los botones **OK** y **Pedir cambios**.
 - El OK marca las tareas como aceptadas y lo apunta en la bitácora (`accept()` en `api.mjs`).
 - **Deshacer esta tarea** devuelve solo los archivos que cambió la tarea y respeta lo que tocaste después (`undoCheckpoint`
-  en `src/core/workspace.mjs`).
+  en `src/core/workspace.mjs`). Cada archivo vuelve como estaba en el disco (`git cat-file --filters`: saltos de línea
+  de `core.autocrlf`, Git LFS); solo se borran los que creó la tarea, y uno que no se puede leer se deja y se avisa.
+- Las fotos se toman una vez por tarea (los seguimientos reutilizan la primera). `pruneCheckpoints()` borra al arrancar
+  las de tareas terminadas hace más de 30 días (copia o refs `refs/orb/t<id>-*`) y las copias que no usa ninguna tarea.
 - Avisos de seguridad al terminar: si parece un push, si borró 10 archivos o más, o si una tarea de solo lectura cambió
   algo (`afterFolderTask`).
 
@@ -482,6 +494,9 @@ vías que se encienden por separado:
 - Después, cada petición, respuesta, evento en directo e imagen va cifrado con XChaCha20-Poly1305 bajo una clave que solo
   tienen ese móvil y el PC. Cada mensaje dice para qué es y de qué móvil (datos adicionales), lleva la hora y un número de
   un solo uso: el PC rechaza repeticiones, mensajes viejos (más de 5 minutos de diferencia) y manipulados.
+- **Móvil con la hora mal (2.5):** si la hora de una petición está a más de 5 minutos de la del PC, el PC responde 409
+  con su hora (solo tras abrir la petición con la clave del móvil, o la del QR al vincular). La web del móvil la adopta
+  y reintenta una vez. Antes respondía 401 y el móvil se desvinculaba solo.
 - Funciona también por http (wifi), donde el navegador no ofrece su criptografía: usa las librerías `@noble/*`.
 - Quitar un móvil en Ajustes borra su clave: deja de entrar al momento. Los móviles de la 2.3.2 o anteriores (sin clave
   propia) hay que volver a vincularlos.
@@ -597,6 +612,11 @@ que iniciar sesión en la app. Si no, «Iniciar sesión» abre el login oficial 
   nunca.
 - **Identidad del coordinador:** su clave va solo a su propio proceso MCP (por el SDK, en memoria). En la base de datos
   solo queda su hash.
+- **Identidad de los trabajadores (2.5):** cada proceso MCP de un agente lleva `ORB_AGENT_TOKEN`, la firma de Orb de quién
+  es y en qué tarea trabaja (HMAC con una clave que solo existe en la memoria del motor y cambia en cada arranque; en la
+  base queda el hash, `agent_id:*`). El MCP saca agente y tarea de la firma, no de `ORB_AGENT` ni de `ORB_TASK_ID`: un
+  agente que arranca el MCP por su cuenta no puede hacerse pasar por otro ni cerrar la tarea de otro (`agentToken()` en
+  `sessions.mjs`, `identity()` en `src/mcp/server.mjs`).
 - **Agentes:** entorno limpio (sin las variables secretas de la app), guardia de permisos, datos internos prohibidos y
   avisos de push o borrados masivos.
 - **Textos de los agentes:** cuando vuelven al asistente se marcan como «datos, no órdenes».

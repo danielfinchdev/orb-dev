@@ -256,7 +256,8 @@ ipcMain.handle('app:updateInstall', guard(async () => {
     const r = await dialog.showMessageBox(win, { type: 'warning', buttons: [T('sys.dialog.updateAnyway'), T('sys.dialog.cancel')], defaultId: 1, cancelId: 1, title: T('sys.dialog.runningTitle'), message: T(running === 1 ? 'sys.dialog.updateOne' : 'sys.dialog.updateMany', { n: running }) });
     if (r.response !== 0) return false;
   }
-  quitting = true; agentBrowser?.shutdown(); try { engine?.postMessage({ type: 'shutdown' }); } catch { /* gone */ }
+  // The engine and the browser close in before-quit, once the installer really starts: if it cannot (installer deleted or
+  // held by the antivirus), the app keeps working instead of staying open with its engine stopped.
   return updater.install();
 }));
 // First run: creates <base>/<name> (or reuses an existing assistant folder), remembers it and starts the engine.

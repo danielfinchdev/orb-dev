@@ -18,6 +18,7 @@
 //   LENTO              takes 1.5 s (to queue or steer while it works)
 //   ESPERA_CORRECCION  waits (up to 10 s) for a steer and answers with it
 //   DUERME             works for 30 s (until it is stopped)
+//   PARA_LENTO         once stopped, the turn takes 0.8 s to end (as the real Claude does)
 //   Task Review        a review prompt: answers "VEREDICTO: CORRECTO" (or "CON FALLOS" when the reviewed work says FALLOS)
 //
 // Every turn also emits streamed text (delta), a tool call (Bash ls) and the context meter, and logs what it received to
@@ -64,7 +65,7 @@ function createFakeLive(agent, label, caps, o) {
   const approvals = new Approvals(onEvent);
   let permission = o.permission ?? 'editar';
   let model = o.model ?? null;
-  let turn = null; let closed = false; let turns = 0; let steers = []; let wake = null; let seq = 0;
+  let turn = null; let closed = false; let turns = 0; let steers = []; let wake = null; let seq = 0; let slowStop = false;
   // A fork or a new conversation gets its own id; a resumed one keeps the agent's id.
   const sessionId = o.forkSession ? `fork-${crypto.randomUUID()}` : o.resumeId || o.newSessionId || `${agent}-${crypto.randomUUID()}`;
   const live = { sessionId, caps: { ...caps, interrupt: true }, pid: process.pid, get busy() { return Boolean(turn && !turn.done); } };
@@ -174,7 +175,7 @@ function createFakeLive(agent, label, caps, o) {
   live.send = async ({ text }) => {
     if (closed) throw new Error(`la sesión de ${label} se ha cerrado`);
     if (turn && !turn.done) throw new Error('el agente sigue trabajando');
-    turn = new Turn(); const current = turn; turns++; steers = [];
+    turn = new Turn(); const current = turn; turns++; steers = []; slowStop = /PARA_LENTO/.test(text);
     record({ turn: turns, text });
     if (/REVIENTA/.test(text)) { turn = null; throw new Error('el adaptador falso revienta'); }
     if (turns === 1) { onEvent({ type: 'session', id: sessionId }); item('system', 'status', `${label} (falso)${model ? ` · ${model}` : ''}`); }
@@ -189,7 +190,11 @@ function createFakeLive(agent, label, caps, o) {
   };
   live.interrupt = async () => {
     approvals.clear();
-    if (turn && !turn.done) { wake?.done(); turn.finish({ stopReason: 'interrupted', final: turn.text || 'Detenido.' }); }
+    if (!turn || turn.done) return;
+    const current = turn;
+    const end = () => { wake?.done(); current.finish({ stopReason: 'interrupted', final: current.text || 'Detenido.' }); };
+    // PARA_LENTO: like the real Claude, the turn ends a moment after the interrupt, not at once.
+    if (slowStop) setTimeout(end, 800); else end();
   };
   live.respond = (requestId, decision) => approvals.respond(requestId, decision);
   live.setModel = (m) => { model = m || null; record({ setModel: model }); };

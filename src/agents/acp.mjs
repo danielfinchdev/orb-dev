@@ -122,11 +122,12 @@ export function acpAgent(id, spec) {
     const connect = async (args) => {
       const proc = spawnAgent(o.exe.cmd, [...o.exe.pre, ...args], { cwd: o.cwd, env: o.env, log });
       const p = new JsonRpcPeer(proc, { onNotification, onRequest, log });
+      child = proc; peer = p; // known at once: close() during the start stops this process too
       const quit = new Promise((resolve) => {
         proc.once('exit', (code) => resolve(new Error(tr('sys.agents.exitedAtStart', { name: spec.label, code, detail: proc.stderrText().trim().split('\n').slice(-2).join(' ') }).trim())));
         proc.once('error', resolve);
       });
-      const hello = p.request('initialize', { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: 'orb-dev', title: 'Orb', version: '2.4.2' } }, { timeoutMs: 60000 });
+      const hello = p.request('initialize', { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: 'orb-dev', title: 'Orb', version: '2.5.0' } }, { timeoutMs: 60000 });
       const first = await Promise.race([hello.then((init) => ({ init }), (error) => ({ error })), quit.then((error) => ({ error }))]);
       if (first.error) { p.close(); killTree(proc); throw first.error; } // no reply or an early exit: nothing left running
       return { proc, p, init: first.init };
@@ -134,7 +135,10 @@ export function acpAgent(id, spec) {
     const start = async () => {
       let c;
       try { c = await connect(spec.acpArgs); }
-      catch (error) { if (!spec.altArgs) throw error; log(`reintento con ${spec.altArgs.join(' ')}: ${error.message}`); c = await connect(spec.altArgs); }
+      catch (error) { if (closed || !spec.altArgs) throw error; log(`reintento con ${spec.altArgs.join(' ')}: ${error.message}`); c = await connect(spec.altArgs); }
+      // Stopped while it was starting: nothing more is sent and its process goes (it would do the job after being told no).
+      const gone = () => { if (closed) { c.p.close(); killTree(c.proc); throw new Error(tr('sys.agents.stopped')); } };
+      gone();
       child = c.proc; peer = c.p; const init = c.init;
       live.pid = child.pid;
       child.on('exit', (code) => {
@@ -156,6 +160,7 @@ export function acpAgent(id, spec) {
         sessionId = res?.sessionId;
         live.sessionId = sessionId; onEvent({ type: 'session', id: sessionId });
       }
+      gone();
       // Read-only: the agent's own read-only mode when it has one (the guard denies changes anyway).
       const modes = res?.modes?.availableModes ?? [];
       const ro = permission === 'leer' && modes.find((m) => /plan|read|ask/i.test(`${m.id} ${m.name}`));

@@ -139,6 +139,28 @@ export default {
   // Logs
   'sys.logs.none': 'there is no log for "{project}": use "general" or a registered project',
   'sys.logs.required': 'tema and hecho are required',
+  // Headers and fields of the logs (.md files the user reads)
+  'sys.logs.generalHeader': '# {name}’s general log\n\n{name}’s memory: what was asked, what was done and what is pending across all projects.\nEntries are only added at the end; nothing written is ever deleted or edited. No passwords, tokens or personal data.\n',
+  'sys.logs.projectHeader': '# Log — {name}\n\nWhat was decided and done in this project. Entries are only added at the end. No passwords, tokens or personal data.\n',
+  'sys.logs.request': 'Request {user}',
+  'sys.logs.byAssistant': '(coordinated by {name})',
+  'sys.logs.done': 'Done',
+  'sys.logs.revert': 'How to revert',
+  'sys.logs.revertDefault': 'add a new entry that corrects it (logs only grow)',
+  'sys.logs.status': 'Status / pending',
+  'sys.logs.noPending': 'nothing pending',
+  'sys.logs.task': 'Task #{id}: {title}',
+  'sys.logs.createdBy': 'task created by {who}.',
+  'sys.logs.noSummary': 'no summary',
+  'sys.logs.branch': ' (branch `{branch}`)',
+  'sys.logs.toMerge': '; to review and merge.',
+  'sys.logs.revertUndo': '“Undo this task” button on task #{id} (restores only the files it changed).',
+  'sys.logs.revertBranch': 'do not merge branch `{branch}` (or delete it from the task).',
+  'sys.logs.revertFolder': 'review the changes in the project folder.',
+  'sys.logs.okTopic': 'OK for {ids}',
+  'sys.logs.okRequest': 'review the finished work',
+  'sys.logs.okDone': '{user} approved: {list}',
+  'sys.logs.okStatus': 'accepted',
 
   // Start-up
   'sys.engine.notHome': 'not an assistant folder: {home}',

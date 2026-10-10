@@ -27,6 +27,17 @@ if (!window.orb) {
   };
   const unpaired = () => { store.set(null); session = null; window.dispatchEvent(new Event('orb:unpaired')); };
   const headersOf = (s) => ({ 'X-Orb-Device': s.id });
+  // The PC refuses requests stamped too far from its own time (they could be replays). A phone whose clock is off gets
+  // the PC's time in that answer (409) and stamps its requests with it from then on.
+  let skew = 0;
+  const stamp = () => Date.now() + skew;
+  const clockFixed = async (res) => {
+    if (res.status !== 409) return false;
+    const d = await res.clone().json().catch(() => ({}));
+    if (!Number.isFinite(d.now)) return false;
+    skew = d.now - Date.now();
+    return true;
+  };
 
   // The answer to a sealed request: it must open with this phone's key and echo the request's nonce.
   const answer = async (res, s, nonce) => {
@@ -38,15 +49,16 @@ if (!window.orb) {
     if (msg.r !== nonce) throw new Error(await tl('app.badAnswer'));
     return msg;
   };
-  const post = async (url, kind, body) => {
+  const post = async (url, kind, body, retry = true) => {
     const s = await ready(); if (!s) { unpaired(); throw new Error(await tl('app.notLinked')); }
     const C = await crypto$();
-    const box = C.seal(s.key, { t: Date.now(), m: kind, b: body }, C.AAD.request(s.id));
+    const box = C.seal(s.key, { t: stamp(), m: kind, b: body }, C.AAD.request(s.id));
     const res = await fetch(url, { method: 'POST', credentials: 'omit', headers: { ...headersOf(s), 'Content-Type': 'application/json' }, body: JSON.stringify(box) });
+    if (retry && await clockFixed(res)) return post(url, kind, body, false);
     return answer(res, s, box.n);
   };
   // The envelope of a request whose body is not JSON (live events, pictures): in a header.
-  const authHeader = async (s, kind) => { const C = await crypto$(); return C.sealText(s.key, { t: Date.now(), m: kind }, C.AAD.request(s.id)); };
+  const authHeader = async (s, kind) => { const C = await crypto$(); return C.sealText(s.key, { t: stamp(), m: kind }, C.AAD.request(s.id)); };
 
   // Live events over a streamed fetch (EventSource cannot send headers); reconnects with a growing pause.
   let stream = null;
@@ -57,6 +69,7 @@ if (!window.orb) {
       const C = await crypto$();
       const res = await fetch('/api/events', { headers: { ...headersOf(s), 'X-Orb-Auth': await authHeader(s, 'events') }, credentials: 'omit', signal: ctrl.signal });
       if (res.status === 401) return unpaired();
+      if (await clockFixed(res)) wait = 100; // again at once, with the PC's time
       if (!res.ok) throw new Error(res.status); // retried with the growing pause, not every second
       const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = '';
       wait = 1000;
@@ -77,12 +90,13 @@ if (!window.orb) {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && session) connect(); });
 
   // Pictures chosen on the phone are encrypted and uploaded first; the PC only accepts these uploaded files as attachments.
-  const uploadOne = async (file) => {
+  const uploadOne = async (file, retry = true) => {
     const s = await ready(); if (!s) throw new Error(await tl('app.notLinked'));
     const C = await crypto$();
     const auth = await authHeader(s, 'upload');
     const body = C.sealBytes(s.key, new Uint8Array(await file.arrayBuffer()), C.AAD.upload(s.id));
     const res = await fetch('/api/upload', { method: 'POST', credentials: 'omit', headers: { ...headersOf(s), 'X-Orb-Auth': auth, 'Content-Type': 'application/octet-stream' }, body });
+    if (retry && await clockFixed(res)) return uploadOne(file, false);
     const msg = await answer(res, s, auth.split('.')[0]);
     if (!msg.ok) throw new Error(msg.error);
     return msg.result.path;
@@ -111,8 +125,10 @@ if (!window.orb) {
     if (pcPub?.length !== 32) throw new Error(await tl('app.oldQr'));
     const { priv, pub } = C.newKeyPair();
     const name = /iPhone/.test(navigator.userAgent) ? 'iPhone' : /iPad/.test(navigator.userAgent) ? 'iPad' : /Android/.test(navigator.userAgent) ? 'Android' : await tl('app.browser');
-    const proof = C.seal(C.pairingKey(priv, pcPub, code), { pub: C.b64.enc(pub), name, t: Date.now() }, C.AAD.pair);
-    const res = await fetch('/api/pair', { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pub: C.b64.enc(pub), proof }) });
+    const proof = () => C.seal(C.pairingKey(priv, pcPub, code), { pub: C.b64.enc(pub), name, t: stamp() }, C.AAD.pair);
+    const send = () => fetch('/api/pair', { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pub: C.b64.enc(pub), proof: proof() }) });
+    let res = await send();
+    if (await clockFixed(res)) res = await send();
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? await tl('app.httpError', { n: res.status }));
     // The PC answers with the new session key: if it opens, this is really the PC of the QR.

@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from '../core/context.mjs';
 import { oneLine, redactSecrets } from '../core/safety.mjs';
-import { generalLogHeader } from '../core/home.mjs';
-import { assistantName, userName, ofUser } from '../core/board.mjs';
+import { generalLogHeader, projectLogHeader } from '../core/home.mjs';
+import { assistantName, userName, ofUserLabel } from '../core/board.mjs';
 
 export const stamp = (d = new Date()) => { const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 const clean = (v, n) => redactSecrets(String(v ?? '').trim()).slice(0, n);
@@ -42,13 +42,14 @@ export function readLog(board, project, { chars = 12000, whole = false } = {}) {
 export function writeLog(board, project, { tema, pedido, hecho, revertir, estado }, author) {
   const [name, file] = findLog(board, project);
   if (!clean(tema, 120) || !clean(hecho, 6000)) throw new Error(tr('sys.logs.required'));
+  // The fields in the language of the settings: the user reads these files.
   const entry = `\n### ${stamp()} — ${oneLine(author, 80)} — ${oneLine(tema, 120)}
-- Pedido ${ofUser()}: ${clean(pedido, 2000) || `(coordinación de ${assistantName()})`}
-- Hecho: ${clean(hecho, 6000)}
-- Cómo revertir: ${clean(revertir, 1000) || 'añadir una entrada nueva que lo corrija (las bitácoras solo crecen)'}
-- Estado / pendiente: ${clean(estado, 2000) || 'sin pendientes'}
+- ${tr('sys.logs.request', { user: ofUserLabel() })}: ${clean(pedido, 2000) || tr('sys.logs.byAssistant', { name: assistantName() })}
+- ${tr('sys.logs.done')}: ${clean(hecho, 6000)}
+- ${tr('sys.logs.revert')}: ${clean(revertir, 1000) || tr('sys.logs.revertDefault')}
+- ${tr('sys.logs.status')}: ${clean(estado, 2000) || tr('sys.logs.noPending')}
 `;
-  if (!fs.existsSync(file)) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, name === 'general' ? generalLogHeader(ctx.config) : `# Bitácora — ${name}\n`); }
+  if (!fs.existsSync(file)) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, name === 'general' ? generalLogHeader(ctx.config) : projectLogHeader(name, ctx.config?.language)); }
   fs.appendFileSync(file, entry);
   board.event(null, author, 'log.written', `${name}: ${oneLine(tema, 80)}`);
   return `Anotado al final de la bitácora de ${name}.`;
@@ -56,13 +57,13 @@ export function writeLog(board, project, { tema, pedido, hecho, revertir, estado
 
 // Entry written by the scheduler when a task ends (the agent never writes logs itself).
 export function logTask(board, task, { revert }) {
-  const result = redactSecrets(task.result ?? '').replace(/\s+/g, ' ').trim().slice(0, 900) || 'sin resumen';
+  const result = redactSecrets(task.result ?? '').replace(/\s+/g, ' ').trim().slice(0, 900) || tr('sys.logs.noSummary');
   const file = board.ensureProjectLog(task.project);
-  fs.appendFileSync(file, `\n### ${stamp()} — ${assistantName()} (${oneLine(task.assigned_to, 40)}${task.model ? ` · ${oneLine(task.model, 40)}` : ''}) — Tarea #${task.id}: ${oneLine(task.title)}
-- Pedido ${ofUser()}: tarea creada por ${oneLine(task.created_by, 40)}.
-- Hecho: ${result}${task.branch ? ` (rama \`${task.branch}\`)` : ''}
-- Cómo revertir: ${revert}
-- Estado / pendiente: ${task.status}${task.branch ? '; pendiente de revisar e integrar.' : '.'}
+  fs.appendFileSync(file, `\n### ${stamp()} — ${assistantName()} (${oneLine(task.assigned_to, 40)}${task.model ? ` · ${oneLine(task.model, 40)}` : ''}) — ${tr('sys.logs.task', { id: task.id, title: oneLine(task.title) })}
+- ${tr('sys.logs.request', { user: ofUserLabel() })}: ${tr('sys.logs.createdBy', { who: oneLine(task.created_by, 40) })}
+- ${tr('sys.logs.done')}: ${result}${task.branch ? tr('sys.logs.branch', { branch: task.branch }) : ''}
+- ${tr('sys.logs.revert')}: ${revert}
+- ${tr('sys.logs.status')}: ${tr(`status.${task.status}`)}${task.branch ? tr('sys.logs.toMerge') : '.'}
 `);
 }
 

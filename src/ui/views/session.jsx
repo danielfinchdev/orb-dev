@@ -216,7 +216,13 @@ export function SessionView({ route }) {
     let alive = true;
     setItems([]); setPartial(''); setQueue([]);
     if (!sessions.some((x) => x.id === route.id)) call('sessions.list', { archived: true }).then((all) => alive && setArchived(all.find((x) => x.id === route.id) ?? null)).catch(() => {});
-    call('sessions.items', { id: route.id, limit: PAGE }).then((r) => { if (alive) { setItems(r); setMore(r.length >= PAGE); } }).catch(() => {});
+    // Merged with what arrived live meanwhile: on the phone the live events come by another connection and can get here
+    // before this answer (a live copy of an item is the newer one).
+    call('sessions.items', { id: route.id, limit: PAGE }).then((r) => {
+      if (!alive) return;
+      setItems((prev) => { const byId = new Map(r.map((x) => [x.id, x])); for (const p of prev) byId.set(p.id, p); return [...byId.values()].sort((a, b) => a.id - b.id); });
+      setMore(r.length >= PAGE);
+    }).catch(() => {});
     call('sessions.queue', { id: route.id }).then((q) => alive && setQueue(q)).catch(() => {});
     const offItem = bridge.on('session:item', (it) => {
       if (it.session_id !== route.id) return;

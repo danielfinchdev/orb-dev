@@ -54,11 +54,13 @@ Antes de cambiar algo grande, di en una línea qué vas a hacer.`;
 }
 const FREE_TOOLS = ['mcp__orb', 'Read', 'Glob', 'Grep', 'Edit', 'Write', 'NotebookEdit', 'Bash', 'WebFetch', 'WebSearch', 'TodoWrite'];
 
+const STOP_GRACE_MS = 10_000; // how long a stopped turn may take to wind down before its process is closed
+
 export class Orchestrator {
   // key: secret handed only to this chat's MCP process (in memory, through the SDK) so the MCP recognises the coordinator.
   constructor(board, key, { emit = () => {}, log = () => {} } = {}) {
     this.board = board; this.key = key; this.emit = emit; this.log = log;
-    this.queue = []; this.busy = false; this.partial = ''; this.tools = []; this.generation = 0;
+    this.queue = []; this.busy = false; this.partial = ''; this.tools = []; this.generation = 0; this.inflight = null;
     this.live = null; this.liveKey = ''; this.approvals = new Map(); // request id -> chat message id
   }
 
@@ -87,7 +89,7 @@ export class Orchestrator {
   // meta goes with the answer (e.g. the report that waits for the user's OK).
   internal(text, chatLine, meta = null) {
     if (chatLine) this.board.addChat('system', chatLine);
-    this.queue.push({ text, meta });
+    this.queue.push({ text, meta, internal: true });
     this.next();
   }
 
@@ -106,10 +108,16 @@ export class Orchestrator {
     this.busy = false; this.partial = ''; this.tools = []; this.push();
   }
 
+  // The chat is free at once, but the agent's turn takes a moment to wind down: a new message waits for it in next()
+  // (sending it now would find the agent still busy). A turn that does not end goes with its process (resume keeps the
+  // conversation).
   stop() {
     if (!this.busy) return;
-    this.generation++; this.queue = [];
-    Promise.resolve(this.live?.interrupt()).catch(() => {});
+    // What the user had queued goes; the engine's own notices (the report of finished tasks…) still come after.
+    this.generation++; this.queue = this.queue.filter((q) => q.internal);
+    const live = this.live; const stopped = this.inflight;
+    Promise.resolve(live?.interrupt()).catch(() => {});
+    if (stopped) setTimeout(() => { if (this.inflight === stopped && this.live === live) this.closeLive(); }, STOP_GRACE_MS).unref?.();
     this.busy = false; this.partial = ''; this.tools = []; this.board.addChat('system', tr('msg.orch.stopped')); this.push();
   }
 
@@ -120,14 +128,17 @@ export class Orchestrator {
   }
 
   next() {
-    if (this.busy || !this.queue.length) return;
+    if (this.busy || this.inflight || !this.queue.length) return;
     this.busy = true; this.partial = ''; this.tools = []; this.push();
     const { text, meta } = this.queue.shift();
-    this.run(text, true, meta).catch((error) => {
+    const generation = this.generation;
+    const run = this.run(text, true, meta).catch((error) => {
       this.log(`asistente: ${error.stack}`);
+      if (generation !== this.generation) return; // stopped or reset meanwhile: nothing to report
       this.board.addChat('system', tr('msg.orch.cannotAnswer', { message: error.message }));
-      this.busy = false; this.push(); this.next();
-    });
+      this.busy = false; this.push();
+    }).finally(() => { if (this.inflight === run) this.inflight = null; this.next(); });
+    this.inflight = run;
   }
 
   // The live Claude session of the assistant, created on demand; a different mode (coordinate / free), project, model or
@@ -155,7 +166,7 @@ export class Orchestrator {
     this.live = adapter('claude').createLive({
       exe: executable('claude'), cwd, model: o.model || 'claude-sonnet-5-5', reasoning: o.reasoning || 'medium',
       permission: free ? 'editar' : 'leer', resumeId: session || null, newSessionId: newId,
-      mcpServers: mcpServersFor('claude', { orchestrator: true, browser: free, session: 'asistente', orchKey: this.key }),
+      mcpServers: mcpServersFor('claude', { board: this.board, orchestrator: true, browser: free, session: 'asistente', orchKey: this.key }),
       env: { ...accountEnv(acc), ORB_HOME: ctx.home, ORB_AGENT: 'orb', ...(free ? browserEnv('orb', 'asistente') : {}) },
       systemPrompt: free ? freePersona(cwd) : persona(),
       tools: free ? { disallowed: ['Task'] } : { allowed: ['mcp__orb', 'Read', 'Glob', 'Grep'], disallowed: claude.COORDINATOR_DENIED },
@@ -200,7 +211,7 @@ export class Orchestrator {
     const prompt = fresh ? `${briefing(this.board)}\n\n## Mensaje ${ofUser()}\n${text}` : text;
     try { this.ensureLive(); } catch (error) {
       this.board.addChat('system', tr('msg.orch.needsClaude', { name: assistantName(), message: error.message }));
-      this.busy = false; this.push(); return this.next();
+      this.busy = false; this.push(); return;
     }
     this.board.setting('orchestrator_turns', String(Number(this.board.setting('orchestrator_turns') ?? 0) + 1));
     const generation = this.generation;
@@ -216,6 +227,5 @@ export class Orchestrator {
     const ok = !result.isError;
     this.board.addChat(ok ? 'orb' : 'system', answer || tr('msg.orch.cannotAnswerCheck', { logFile: this.logFile }), ok ? meta : null);
     this.busy = false; this.partial = ''; this.tools = []; this.push();
-    this.next();
   }
 }
