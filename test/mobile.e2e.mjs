@@ -22,8 +22,11 @@ const exe = ['/opt/pw-browsers/chromium/chrome-linux/chrome', '/opt/pw-browsers/
 // Linux CI: Playwright's Chromium. Windows: the Edge that comes with the system (nothing to download).
 const browser = await chromium.launch(exe ? { executablePath: exe, args: ['--no-sandbox'] } : { channel: process.platform === 'win32' ? 'msedge' : 'chrome' });
 const ctxt = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'es-ES' });
+// A phone whose clock is 30 minutes ahead: the PC refuses its first requests (409 with its own time), the page takes the
+// PC's time and everything works without pairing again.
+await ctxt.addInitScript(() => { const real = Date.now; Date.now = () => real() + 30 * 60_000; });
 const page = await ctxt.newPage();
-const errors = []; page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+const errors = []; page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => { if (m.type() === 'error' && !/status of 409/.test(m.text())) errors.push(m.text()); });
 const shot = (name) => page.screenshot({ path: path.join(OUT, `movil-${name}.png`) });
 // What travels between the page and the PC (requests and answers of the API), to check that it is all encrypted.
 const sniffed = [];

@@ -157,30 +157,35 @@ export function createRemote({ board, api, log }) {
   };
   const touch = (d) => { if (!d.last_seen || Date.now() - Date.parse(d.last_seen) > 60_000) board.run('UPDATE devices SET last_seen = ? WHERE id = ?', now(), d.id); };
 
-  // A request is accepted once: recent (the phone's clock may be off a few minutes) and with a nonce not seen before.
-  function fresh(deviceId, nonce, t) {
-    if (!Number.isFinite(t) || Math.abs(Date.now() - t) > CLOCK_SKEW_MS) return false;
+  // A request is accepted once: recent and with a nonce not seen before. 'ok', 'replay', or 'clock' when its time is too
+  // far from the PC's (the phone's clock is off: it gets the PC's time and stamps its requests with it).
+  function freshness(deviceId, nonce, t) {
+    if (!Number.isFinite(t) || Math.abs(Date.now() - t) > CLOCK_SKEW_MS) return 'clock';
     let m = seen.get(deviceId); if (!m) seen.set(deviceId, (m = new Map()));
     const at = Date.now();
     for (const [n, exp] of m) if (exp < at) m.delete(n);
-    if (m.has(nonce) || m.size > 5000) return false;
+    if (m.has(nonce) || m.size > 5000) return 'replay';
     m.set(nonce, at + 2 * CLOCK_SKEW_MS);
-    return true;
+    return 'ok';
   }
-  // Opens a request sealed by this device: { body, nonce } or null.
+  // Opens a request sealed by this device: { body, nonce }, { clock: true } or null.
   function openRequest(device, box, expected) {
     let msg; try { msg = open(keyOf(device), box, AAD.request(device.id)); } catch { return null; }
-    if (!msg || msg.m !== expected || !fresh(device.id, box.n, Number(msg.t))) return null;
-    return { body: msg.b ?? null, nonce: box.n };
+    if (!msg || msg.m !== expected) return null;
+    const f = freshness(device.id, box.n, Number(msg.t));
+    return f === 'ok' ? { body: msg.b ?? null, nonce: box.n } : f === 'clock' ? { clock: true } : null;
   }
   // The same for the requests whose envelope travels in a header (live events, pictures).
   function openHeader(req, device, expected) {
     const text = String(req.headers['x-orb-auth'] ?? '');
     let msg; try { msg = openText(keyOf(device), text, AAD.request(device.id)); } catch { return null; }
     const nonce = text.split('.')[0];
-    if (!msg || msg.m !== expected || !fresh(device.id, nonce, Number(msg.t))) return null;
-    return { nonce };
+    if (!msg || msg.m !== expected) return null;
+    const f = freshness(device.id, nonce, Number(msg.t));
+    return f === 'ok' ? { nonce } : f === 'clock' ? { clock: true } : null;
   }
+  // Only sent after the request opened with the device's own key (or the QR's), so only a paired phone learns it.
+  const clockOff = (res) => send(res, 409, { error: tr('msg.remote.clock'), now: Date.now() });
   const reply = (res, device, nonce, value) => send(res, 200, seal(keyOf(device), { r: nonce, ...value }, AAD.response(device.id)));
 
   // Only requests addressed to this server by one of its own names pass (stops DNS rebinding), and only from our own page.
@@ -230,7 +235,9 @@ export function createRemote({ board, api, log }) {
     if (!device) { req.resume(); return send(res, 401, { error: tr('msg.remote.notLinked') }); }
 
     if (req.method === 'GET' && p === '/api/events') {
-      if (!openHeader(req, device, 'events')) return send(res, 401, { error: tr('msg.remote.notLinked') });
+      const auth = openHeader(req, device, 'events');
+      if (!auth) return send(res, 401, { error: tr('msg.remote.notLinked') });
+      if (auth.clock) return clockOff(res);
       touch(device);
       res.writeHead(200, { ...HEADERS, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
       res.write(': hola\n\n');
@@ -250,6 +257,7 @@ export function createRemote({ board, api, log }) {
     let box; try { box = await readJson(req); } catch (error) { return send(res, error.status ?? 400, { error: error.message }); }
     const msg = openRequest(device, box, what);
     if (!msg) return send(res, 401, { error: tr('msg.remote.notLinked') });
+    if (msg.clock) return clockOff(res);
     touch(device);
 
     if (what === 'me') return reply(res, device, msg.nonce, { ok: true, result: { device: device.name, name: ctx.config.assistantName, pc: pcFingerprint, push: Boolean(device.push), vapid: own.vapid.publicKey } });
@@ -290,7 +298,9 @@ export function createRemote({ board, api, log }) {
     let devPub; try { devPub = b64.dec(body.pub); } catch { return fail(); }
     if (devPub.length !== 32) return fail();
     let proof; try { proof = open(pairingKey(own.priv, devPub, pairing.code), body.proof, AAD.pair); } catch { return fail(); }
-    if (!proof || proof.pub !== body.pub || Math.abs(Date.now() - Number(proof.t)) > CLOCK_SKEW_MS) return fail();
+    if (!proof || proof.pub !== body.pub) return fail();
+    // The QR was right but the phone's clock is off: it tries again with the PC's time (the QR is not used up).
+    if (!(Math.abs(Date.now() - Number(proof.t)) <= CLOCK_SKEW_MS)) return clockOff(res);
     const route = pairing.route;
     pairing = null; // one use
     const id = crypto.randomUUID();
@@ -308,6 +318,7 @@ export function createRemote({ board, api, log }) {
   async function upload(req, res, device) {
     const auth = openHeader(req, device, 'upload');
     if (!auth) { req.resume(); return send(res, 401, { error: tr('msg.remote.notLinked') }); }
+    if (auth.clock) { req.resume(); return clockOff(res); }
     if (uploading >= 3) { req.resume(); return reply(res, device, auth.nonce, { ok: false, status: 429, error: tr('msg.remote.waitUploads') }); }
     uploading++;
     try {

@@ -30,11 +30,23 @@ export const browserOn = () => Boolean(ctx.browser) && ctx.config.browser?.enabl
 // What the agent process needs in its environment for the browser tools: the key of this conversation's page only.
 export const browserEnv = (agent, session, task = '') => (browserOn() ? { ORB_BROWSER_TOKEN: browserKey(ctx.browser.token, { agent, session: String(session), task: String(task || '') }) } : {});
 
+// Orb's signature of who a worker's MCP process is (agent and task): made with a key that lives only in the engine's
+// memory (a new one each start, which retires the old signatures); the database keeps just the hash, for the MCP to look
+// it up. The same agent and task always get the same signature, so the table does not grow with every turn.
+export function agentToken(board, agent, taskId = '') {
+  if (!agentKey) { agentKey = crypto.randomBytes(32); board.run("DELETE FROM settings WHERE key LIKE 'agent_id:%'"); }
+  const token = crypto.createHmac('sha256', agentKey).update(`${agent}|${taskId}`).digest('hex');
+  board.settingJson(`agent_id:${crypto.createHash('sha256').update(token).digest('hex')}`, { agent, task: taskId ? Number(taskId) : null });
+  return token;
+}
+let agentKey = null;
+
 // MCP servers handed to an agent: the assistant's board (with the browser tools when the app offers them) plus the
 // user's own connectors enabled for that agent. session: which conversation, so its next turn reuses the same page.
-export function mcpServersFor(agent, { taskId = '', orchestrator = false, browser = !orchestrator, session = '', orchKey = '' } = {}) {
+export function mcpServersFor(agent, { board, taskId = '', orchestrator = false, browser = !orchestrator, session = '', orchKey = '' } = {}) {
   const who = orchestrator ? 'orb' : agent;
   const env = { ORB_HOME: ctx.home, ORB_AGENT: who, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) };
+  if (!orchestrator && board) env.ORB_AGENT_TOKEN = agentToken(board, who, taskId);
   // The coordinator's key goes to its own MCP process only (handed in memory by the SDK, never written to a file).
   if (orchestrator && orchKey) env.ORB_ORCH_KEY = orchKey;
   if (browser && session && browserOn()) {
@@ -254,7 +266,7 @@ export class Sessions {
     entry.live = a.createLive({
       exe, cwd: s.cwd, model: s.model, reasoning: s.reasoning, permission: s.permission,
       resumeId: forkFrom || s.cli_session || null, forkSession: Boolean(forkFrom), newSessionId,
-      mcpServers: mcpServersFor(s.agent, { taskId, session: s.id }), budgetUsd,
+      mcpServers: mcpServersFor(s.agent, { board: this.board, taskId, session: s.id }), budgetUsd,
       env: { ...accountEnv(acc), ...browserEnv(s.agent, s.id, taskId), ORB_HOME: ctx.home, ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
       internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog, cfg: ctx.config.agents[s.agent] ?? {},
       onEvent: (ev) => this.onLiveEvent(s.id, ev)

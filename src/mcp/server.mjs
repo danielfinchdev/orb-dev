@@ -1,6 +1,7 @@
 // MCP server (stdio) of the assistant: the shared board of every agent (Claude, Codex, Cursor and the ACP agents). Every agent process gets its own
-// instance with ORB_HOME (which assistant folder) and ORB_AGENT (who it is). The coordinator identity ("orb") is only
-// honoured with the secret key the engine hands to its own chat process; the database keeps just its hash.
+// instance with ORB_HOME (which assistant folder), ORB_AGENT (who it is) and ORB_AGENT_TOKEN (Orb's signature of it). The
+// coordinator identity ("orb") is only honoured with the secret key the engine hands to its own chat process; the database
+// keeps just the hashes.
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
@@ -21,14 +22,20 @@ const { Board, AGENTS, STATUSES, assistantName, userName, ofUser } = await impor
 const { readLog, writeLog } = await import('../engine/logs.mjs');
 const board = new Board(undefined, { noKey: true }); // the MCP never holds the approval secret
 
+// A worker is who Orb signed it as (agent and task, see agentToken in engine/sessions.mjs), not what its environment
+// claims: an agent that starts this server itself cannot pose as another agent, another task or the user.
 function identity() {
   const claimed = process.env.ORB_AGENT || 'desconocido';
-  if (claimed !== 'orb') return AGENTS.includes(claimed) ? claimed : 'desconocido'; // never "usuario" or any other reserved name
+  if (claimed !== 'orb') {
+    const token = process.env.ORB_AGENT_TOKEN ?? '';
+    const signed = /^[0-9a-f]{64}$/.test(token) ? board.settingJson(`agent_id:${crypto.createHash('sha256').update(token).digest('hex')}`) : null;
+    return signed && signed.agent === claimed && AGENTS.includes(claimed) ? { me: claimed, task: signed.task ?? null } : { me: 'desconocido', task: null };
+  }
   const hash = board.setting('orchestrator_key_hash');
   const given = crypto.createHash('sha256').update(process.env.ORB_ORCH_KEY ?? '').digest('hex');
-  return hash && process.env.ORB_ORCH_KEY && hash.length === given.length && crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(given)) ? 'orb' : 'agente-sin-clave';
+  return { me: hash && process.env.ORB_ORCH_KEY && hash.length === given.length && crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(given)) ? 'orb' : 'agente-sin-clave', task: null };
 }
-const ME = identity();
+const { me: ME, task: SIGNED_TASK } = identity();
 const BOSS = ME === 'orb';
 const NAME = assistantName(); const USER = userName();
 
@@ -70,7 +77,7 @@ function giveFiles({ task_id, files, from_task }) {
 // Delegation (2.3): an agent working on task #N hands part of it to another agent or model. The subtask hangs from #N
 // (parent_id); it goes straight to the queue when the user trusts delegation (Ajustes) and nothing looks risky, and waits
 // for the user's approval otherwise.
-const TASK_ID = Number(process.env.ORB_TASK_ID) || null;
+const TASK_ID = Number(SIGNED_TASK) || null;
 function delegate(a) {
   if (!TASK_ID) throw new Error(tr('sys.mcp.delegateNeedsTask'));
   if (ctx.config.delegation?.enabled === false) throw new Error(tr('sys.mcp.delegationOff', { user: USER }));
@@ -119,7 +126,7 @@ const tools = [
       progress: { type: 'integer', minimum: 0, maximum: 100, description: 'Cuánto llevas de la tarea (0-100, estimación). Se ve en directo.' },
       ...(BOSS ? { agent: { type: 'string', enum: [...AGENTS, 'any'], description: 'Reasignar una tarea que no está en curso' }, model: str(`Cambiar el modelo. ${modelsHelp()}`),
         reasoning: { type: 'string', enum: ['low', 'medium', 'high'] } } : {}) } },
-    run: (a) => board.updateTask(a.id, a, ME, { taskId: process.env.ORB_TASK_ID }) },
+    run: (a) => board.updateTask(a.id, a, ME, { taskId: TASK_ID ?? '' }) },
   { name: 'orb_claim_next', description: 'Coge la siguiente tarea manual disponible para ti y la marca como en curso.',
     inputSchema: { type: 'object', properties: { project: str('Limitar a un proyecto') } },
     run: (a) => { const t = board.claimNext(ME, a.project); return t ? board.taskDetail(t.id) : 'No hay tareas manuales pendientes para ti.'; } },

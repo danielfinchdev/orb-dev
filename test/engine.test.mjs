@@ -35,6 +35,19 @@ test('ciclo completo: el asistente crea la tarea, el agente la hace, el asistent
   assert.ok(events.some((e) => e.event === 'chat:new'), 'avisos para la ventana');
 });
 
+test('parar al asistente y escribirle enseguida: el mensaje nuevo espera a que acabe el turno parado', async () => {
+  const before = (await call('chat.list')).length;
+  await call('chat.send', { text: 'DUERME PARA_LENTO' });
+  const log = path.join(t.home, '.orb', 'ejecuciones', 'asistente.log');
+  await until(() => { try { return fs.readFileSync(log, 'utf8').includes('DUERME PARA_LENTO'); } catch { return false; } }, 'el asistente empezó');
+  await call('chat.stop');
+  await call('chat.send', { text: 'hola tras parar' });
+  const answer = await until(async () => (await call('chat.list')).slice(before).find((m) => m.role === 'orb' && /hola tras parar/.test(m.body)), 'respuesta tras parar', 15000);
+  assert.ok(answer);
+  const after = (await call('chat.list')).slice(before);
+  assert.ok(!after.some((m) => m.role === 'system' && /trabajando|ocupad|busy/i.test(m.body)), after.map((m) => m.body).join(' / '));
+});
+
 test('copia aislada: trabaja en su rama, el motor hace el commit y se puede integrar', async () => {
   // Start from a clean folder (the previous test left the agent's file there, uncommitted).
   const main = (await call('projects.list'))[0].path;

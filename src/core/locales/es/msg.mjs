@@ -273,6 +273,7 @@ export default {
   "msg.remote.noTailscale": "No se ha detectado Tailscale en este PC. Solo es necesario para acceder desde fuera de tu red local.",
   "msg.remote.notAllowed": "solicitud no permitida",
   "msg.remote.notLinked": "este dispositivo no está vinculado",
+  "msg.remote.clock": "la hora del móvil no coincide con la del PC",
   "msg.remote.ownImages": "solo se admiten imágenes subidas desde el móvil",
   "msg.remote.pcOnly": "esa acción solo se puede hacer desde el PC",
   "msg.remote.tooMany": "demasiados intentos. Espera unos minutos y genera un código QR nuevo",
