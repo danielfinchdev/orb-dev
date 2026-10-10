@@ -1,6 +1,7 @@
 // Chess against the computer: you play White. Click a piece and then where it goes; the legal squares are marked.
-// Vector pieces, coordinates, the last move and the check highlighted, the piece slides to its square, the pieces taken
-// on each side. The computer thinks in a Web Worker (the board never freezes); without workers it thinks right here.
+// The «RhosGFX» pieces (cream and terracotta) on a warm board tinted by the theme, coordinates, the last move and the
+// check highlighted, the piece slides to its square, the pieces taken on each side. The computer thinks in a Web Worker
+// (the board never freezes); without workers it thinks right here.
 import { useEffect, useRef, useState } from 'react';
 import { newGame, legalMoves, play, outcome, bestMove, inCheck } from './chess-engine.js';
 import { Piece } from './chess-pieces.jsx';
@@ -106,8 +107,8 @@ export default function Chess({ level, onScore, onOver, paused }) {
     const list = captured(g.board, color === 'w' ? 'b' : 'w'); // what this side has taken
     const lead = color === 'w' ? diff : -diff;
     return (
-      <div className={cn('flex h-6 items-center gap-0.5 px-1', side)} style={{ width: SIZE }} aria-hidden="true">
-        {list.map((p, i) => <Piece key={i} code={p} size={20} className={cn(i > 0 && list[i - 1] === p && '-ml-2.5')} />)}
+      <div className={cn('flex h-6 items-center gap-0.5 px-1', side)} style={{ width: SIZE + 12 }} aria-hidden="true">
+        {list.map((p, i) => <Piece key={i} code={p} size={22} className={cn('drop-shadow-[0_1px_1px_rgb(0_0_0/0.25)]', i > 0 && list[i - 1] === p && '-ml-3')} />)}
         {lead > 0 ? <span className="text-muted-foreground ml-1 text-[11px] font-semibold tabular-nums">+{lead}</span> : null}
       </div>
     );
@@ -116,7 +117,12 @@ export default function Chess({ level, onScore, onOver, paused }) {
   return (
     <div className="grid justify-items-center gap-1.5">
       {strip('b', 'justify-start')}
-      <div className="relative overflow-hidden rounded-xl shadow-lg ring-1 ring-black/10 dark:ring-white/10" style={{ width: SIZE, height: SIZE }}>
+      <div className={cn('relative overflow-hidden rounded-xl p-1.5 shadow-lg ring-1 ring-black/20 dark:ring-white/10',
+        // A wooden frame and warm squares that suit the cream and terracotta pieces, lightly tinted by the theme's colour.
+        'bg-[color-mix(in_oklab,var(--primary)_14%,#5e4330)] dark:bg-[color-mix(in_oklab,var(--primary)_12%,#3c2a1e)]',
+        '[--sq-l:color-mix(in_oklab,var(--primary)_6%,#f2e4cb)] [--sq-d:color-mix(in_oklab,var(--primary)_15%,#b58b61)]',
+        'dark:[--sq-l:color-mix(in_oklab,var(--primary)_8%,#c9b08c)] dark:[--sq-d:color-mix(in_oklab,var(--primary)_14%,#7d5a3e)]')} style={{ width: SIZE + 12, height: SIZE + 12 }}>
+       <div className="relative overflow-hidden rounded-md" style={{ width: SIZE, height: SIZE }}>
         <div className="grid grid-cols-8 grid-rows-8" style={{ width: SIZE, height: SIZE }} aria-label={t('games.chess')}>
           {g.board.map((p, i) => {
             const dark = ((i >> 3) + (i & 7)) % 2 === 1;
@@ -126,21 +132,22 @@ export default function Chess({ level, onScore, onOver, paused }) {
             return (
               <button key={i} onClick={() => click(i)} data-testid={`chess-${i}`} aria-label={`${FILES[i & 7]}${8 - (i >> 3)}${p ? ` ${p}` : ''}`}
                 className={cn('relative grid cursor-pointer place-items-center select-none outline-none transition-colors duration-150',
-                  // Light theme: tinted card; dark theme: a lighter board, so the black pieces still stand out.
-                  dark ? 'bg-[color-mix(in_oklab,var(--primary)_42%,var(--card))] dark:bg-[color-mix(in_oklab,var(--primary)_72%,var(--card))]' : 'bg-[color-mix(in_oklab,var(--primary)_9%,var(--card))] dark:bg-[color-mix(in_oklab,var(--primary)_28%,var(--muted-foreground))]',
-                  lastSq && (dark ? 'bg-[color-mix(in_oklab,var(--warning)_45%,var(--card))] dark:bg-[color-mix(in_oklab,var(--warning)_70%,var(--card))]' : 'bg-[color-mix(in_oklab,var(--warning)_28%,var(--card))] dark:bg-[color-mix(in_oklab,var(--warning)_55%,var(--muted-foreground))]'),
-                  pick === i && 'bg-[color-mix(in_oklab,var(--primary)_60%,var(--card))] dark:bg-[color-mix(in_oklab,var(--primary)_90%,var(--card))]',
-                  check === i && 'bg-[radial-gradient(circle,var(--destructive)_0%,color-mix(in_oklab,var(--destructive)_55%,transparent)_45%,transparent_75%)]',
+                  dark ? 'bg-[var(--sq-d)]' : 'bg-[var(--sq-l)]',
+                  // Last move: a honey glaze over the square; the chosen piece: a warmer, brighter one.
+                  lastSq && (dark ? 'bg-[color-mix(in_oklab,#f2c14e_48%,var(--sq-d))]' : 'bg-[color-mix(in_oklab,#f2c14e_42%,var(--sq-l))]'),
+                  pick === i && (dark ? 'bg-[color-mix(in_oklab,#ffd166_62%,var(--sq-d))]' : 'bg-[color-mix(in_oklab,#ffd166_58%,var(--sq-l))]'),
+                  check === i && 'bg-[radial-gradient(circle,#e5484d_0%,rgb(229_72_77/0.6)_45%,transparent_75%)]',
                   !end && g.turn === 'w' && !thinking && 'hover:brightness-105')}>
-                {(i & 7) === 0 ? <span className={cn('pointer-events-none absolute top-0.5 left-1 text-[9px] font-semibold', dark ? 'text-white/70' : 'text-foreground/45')}>{8 - (i >> 3)}</span> : null}
-                {i >= 56 ? <span className={cn('pointer-events-none absolute right-1 bottom-0 text-[9px] font-semibold', dark ? 'text-white/70' : 'text-foreground/45')}>{FILES[i & 7]}</span> : null}
-                {p && !hidden ? <Piece code={p} size={SQ - 6} className={cn('drop-shadow-[0_2px_1.5px_rgb(0_0_0/0.35)]', pick === i && '-translate-y-0.5 scale-105')} style={{ transition: 'transform 120ms' }} /> : null}
-                {target ? <span className={cn('pointer-events-none absolute rounded-full', p ? 'inset-[3px] border-[5px] border-[color-mix(in_oklab,var(--primary)_55%,transparent)] dark:border-black/35' : 'size-4 bg-[color-mix(in_oklab,var(--primary)_55%,transparent)] dark:bg-black/35')} /> : null}
+                {(i & 7) === 0 ? <span className={cn('pointer-events-none absolute top-0.5 left-1 text-[9px] font-bold', dark ? 'text-[#f7ecd8]/85' : 'text-[#6b4f36]/75')}>{8 - (i >> 3)}</span> : null}
+                {i >= 56 ? <span className={cn('pointer-events-none absolute right-1 bottom-px text-[9px] font-bold', dark ? 'text-[#f7ecd8]/85' : 'text-[#6b4f36]/75')}>{FILES[i & 7]}</span> : null}
+                {p && !hidden ? <Piece code={p} size={SQ} className={cn('drop-shadow-[0_2px_2px_rgb(60_30_10/0.35)]', pick === i && '-translate-y-1 scale-110 drop-shadow-[0_5px_5px_rgb(60_30_10/0.4)]')} style={{ transition: 'transform 120ms, filter 120ms' }} /> : null}
+                {target ? <span className={cn('pointer-events-none absolute rounded-full', p ? 'inset-[2px] border-[5px] border-[rgb(60_30_10/0.3)]' : 'size-4 bg-[rgb(60_30_10/0.3)] shadow-[inset_0_0_0_2px_rgb(255_255_255/0.25)]')} /> : null}
               </button>
             );
           })}
         </div>
-        {anim ? <div className="pointer-events-none absolute top-0 left-0 grid place-items-center" style={{ width: SQ, height: SQ, transform: pos(anim.go ? anim.to : anim.from), transition: anim.go ? 'transform 170ms cubic-bezier(.2,.8,.2,1)' : 'none', zIndex: 5 }}><Piece code={anim.piece} size={SQ - 6} className="drop-shadow-[0_4px_4px_rgb(0_0_0/0.35)]" /></div> : null}
+        {anim ? <div className="pointer-events-none absolute top-0 left-0 grid place-items-center" style={{ width: SQ, height: SQ, transform: pos(anim.go ? anim.to : anim.from), transition: anim.go ? 'transform 170ms cubic-bezier(.2,.8,.2,1)' : 'none', zIndex: 5 }}><Piece code={anim.piece} size={SQ} className="drop-shadow-[0_5px_5px_rgb(60_30_10/0.4)]" /></div> : null}
+       </div>
       </div>
       {strip('w', 'justify-start')}
       <p className={cn('flex h-5 items-center gap-1.5 text-xs', end === 'win' ? 'text-success font-medium' : end === 'lose' ? 'text-destructive font-medium' : check >= 0 && !end && !thinking ? 'text-destructive font-medium' : 'text-muted-foreground')}>

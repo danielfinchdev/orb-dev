@@ -26,18 +26,37 @@ export const THUMBS = {
   chess: () => (
     <div className="relative h-full w-full">
       <Box>
-        {Array.from({ length: 16 }, (_, i) => <rect key={i} x={36 + (i % 4) * 12} y={16 + Math.floor(i / 4) * 12} width="12" height="12" fill={P} opacity={(i + Math.floor(i / 4)) % 2 ? 0.45 : 0.12} />)}
+        <rect x="32" y="8" width="64" height="64" rx="5" fill="color-mix(in oklab, var(--primary) 14%, #5e4330)" />
+        {Array.from({ length: 16 }, (_, i) => <rect key={i} x={36 + (i % 4) * 14} y={12 + Math.floor(i / 4) * 14} width="14" height="14" fill={(i + Math.floor(i / 4)) % 2 ? 'color-mix(in oklab, var(--primary) 15%, #b58b61)' : 'color-mix(in oklab, var(--primary) 6%, #f2e4cb)'} />)}
       </Box>
-      <div className="absolute inset-0 grid place-items-center"><Piece code="N" size={46} className="drop-shadow-[0_3px_3px_rgb(0_0_0/0.35)]" style={{ width: '38%', height: 'auto' }} /></div>
+      <div className="absolute inset-0 flex items-center justify-center gap-[2%]">
+        <Piece code="N" size={48} className="drop-shadow-[0_3px_3px_rgb(60_30_10/0.4)]" style={{ width: '40%', height: 'auto' }} />
+        <Piece code="q" size={40} className="drop-shadow-[0_3px_3px_rgb(60_30_10/0.4)] -ml-[8%] mt-[10%]" style={{ width: '32%', height: 'auto' }} />
+      </div>
     </div>
   ),
   runner: () => (
     <Box>
-      <path d="M0 62h120" stroke={P} strokeWidth="2.5" />
-      <path d="M62 62l7-14 7 14zM78 62l7-14 7 14z" fill={DANGER} />
-      <rect x="100" y="48" width="16" height="14" rx="2" fill={INFO} />
-      <g transform="rotate(-18 36 36)"><rect x="24" y="24" width="24" height="24" rx="5" fill={P} /><rect x="27" y="27" width="18" height="4" rx="2" fill="#fff" opacity=".45" /><rect x="31" y="32" width="10" height="9" rx="2.5" fill="#fff" /><rect x="35" y="34" width="4" height="5" rx="1.5" fill="#1a1a2e" /></g>
-      <circle cx="18" cy="44" r="3" fill={P} opacity=".35" /><circle cx="10" cy="50" r="2" fill={P} opacity=".2" />
+      <defs>
+        <linearGradient id="thumb-jumper-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={`color-mix(in oklab, ${P} 10%, #0d1020)`} /><stop offset="1" stopColor={`color-mix(in oklab, ${P} 55%, #0d1020)`} /></linearGradient>
+        <linearGradient id="thumb-jumper-glow" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={P} stopOpacity="0" /><stop offset="1" stopColor={P} stopOpacity=".55" /></linearGradient>
+      </defs>
+      <rect x="0" y="0" width="120" height="80" fill="url(#thumb-jumper-sky)" />
+      <path d="M-10 60l22-26 22 26zM52 60l26-34 26 34zM96 60l18-20 18 20z" fill={`color-mix(in oklab, ${P} 30%, #0d1020)`} opacity=".8" />
+      <rect x="0" y="48" width="120" height="12" fill="url(#thumb-jumper-glow)" />
+      <rect x="0" y="60" width="120" height="20" fill={`color-mix(in oklab, ${P} 18%, #0d1020)`} />
+      {[12, 28, 44, 60, 76, 92, 108].map((x) => <rect key={x} x={x} y="60" width="1" height="20" fill="#fff" opacity=".12" />)}
+      <rect x="0" y="59" width="120" height="2" fill={`color-mix(in oklab, ${P} 45%, #fff)`} />
+      <path d="M70 60l8-13 8 13zM86 60l8-13 8 13z" fill={`color-mix(in oklab, ${P} 14%, #0d1020)`} stroke={`color-mix(in oklab, ${P} 45%, #fff)`} strokeWidth="1.6" strokeLinejoin="round" />
+      <rect x="104" y="44" width="18" height="16" rx="2" fill={`color-mix(in oklab, ${P} 26%, #0d1020)`} stroke={`color-mix(in oklab, ${P} 45%, #fff)`} strokeWidth="1.6" />
+      {[[8, 46, 2.5], [14, 44, 3.2], [20, 41.5, 4]].map(([x, y, r]) => <circle key={x} cx={x} cy={y} r={r} fill={`color-mix(in oklab, ${P} 55%, #fff)`} opacity={r / 8} />)}
+      <g transform="rotate(-18 36 38)">
+        <rect x="26" y="28" width="20" height="20" rx="2.5" fill={P} />
+        <rect x="29.5" y="31.5" width="13" height="13" rx="1" fill="none" stroke="#fff" strokeOpacity=".75" strokeWidth="1.8" />
+        <rect x="31" y="34" width="4" height="5" rx="1" fill="#fff" /><rect x="37" y="34" width="4" height="5" rx="1" fill="#fff" />
+        <rect x="32.5" y="35.5" width="2" height="2.5" fill="#16162a" /><rect x="38.5" y="35.5" width="2" height="2.5" fill="#16162a" />
+        <path d="M33 42.5q3 2 6 0" stroke="#16162a" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+      </g>
     </Box>
   ),
   g2048: () => (
