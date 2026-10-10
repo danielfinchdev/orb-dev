@@ -248,6 +248,7 @@ export default {
   "msg.orch.needsClaude": "{name} requires Claude Code to work: {message}",
   "msg.orch.needsAgent": "{name} cannot use {agent} as its brain: {message}. Pick another one below, next to the message box.",
   "msg.orch.defaultModel": "default model",
+  "msg.orch.playWhileWaiting": "🎮 The agents are on {n} task(s). I will let you know when they finish; meanwhile, you can play a game.",
   "msg.orch.newConversation": "New conversation. {name} does not keep the previous context. Tasks and logs are kept.",
   "msg.orch.renewed": "The conversation has been restarted to reduce token usage. Tasks and logs are kept.",
   "msg.orch.requestGone": "that request is no longer active",

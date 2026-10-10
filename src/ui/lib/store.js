@@ -21,6 +21,8 @@ export function useStore(select = (s) => s) { return select(useSyncExternalStore
 
 // Ajustes is a window over the current view: open on a section (general, apariencia, contribuye…) or close it.
 export function openSettings(section = 'general') { setState({ settings: section }); }
+// 2.6: the mini-games window (while the agents work).
+export function openGames() { setState({ games: true }); }
 export function closeSettings() { setState({ settings: null }); }
 
 export function go(route) {

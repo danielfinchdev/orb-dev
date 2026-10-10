@@ -158,6 +158,17 @@ te informa. Tiene dos modos (casilla «Orquestador»):
   conversación del asistente y le envía el mensaje; sin él, crea una conversación directa (`sessions.create`) con el
   agente, el modelo, el razonamiento, el proyecto activo y los permisos elegidos.
 - Un diálogo pedido otra vez mientras está abierto no se abre encima (`open()` en `dialogs.jsx`).
+- **Barra del chat (2.6):** sin nombre ni modelo; solo iconos con `BubbleTip` (`overlay.jsx`): pausar o reanudar,
+  reiniciar y minijuegos. Las barras de arriba (`.topbar`) se visten con el tema en `themes.css` (decoración en
+  `::before`, que se detiene antes de los botones de la ventana) y `--titlebar-color` da su color a esos botones; con un
+  diálogo abierto se oscurecen con la página (`title-bar.js`).
+- **Minijuegos** (`src/ui/games/`): Serpiente, Tetris, Ajedrez (motor propio con jugadas legales y búsqueda alfa-beta;
+  profundidad según la dificultad), Salto, 2048 y Ladrillos. Récords en `localStorage` (este PC). Cuando el asistente
+  responde y hay tareas suyas en cola o en curso, deja en el chat un mensaje con botón para jugar (`suggestGames()`, como
+  mucho cada 30 min; `meta.kind = 'games'`).
+- **Avisos** (`src/ui/components/notices.jsx`): `chat:new` lleva ahora `meta`; los mensajes de fin de tarea
+  (`task-end`), de informe (`report`) y de atención (`attention`, `task-approval`, `approval`) sacan el robot de cuerpo
+  entero con un globo. Sin animaciones, en el tema Profesional o en el móvil, un aviso arriba (verde o naranja).
 - Si escribes mientras responde, tu mensaje le llega en su siguiente paso (`steer`); no hace falta esperar.
 - **Parar** deja el chat libre al momento. Si escribes enseguida, el mensaje espera a que el turno parado termine de
   cerrarse (`inflight` en `orchestrator.mjs`); si no termina en 10 s, se cierra su proceso y la conversación sigue con

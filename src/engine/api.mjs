@@ -312,10 +312,10 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     },
     // New chat lines since the last call (the window uses them for notifications when it is in the background).
     notifyNewChat() {
-      const rows = board.all('SELECT id, role, body FROM chat WHERE id > ? ORDER BY id LIMIT 20', lastChat);
+      const rows = board.all('SELECT id, role, body, meta FROM chat WHERE id > ? ORDER BY id LIMIT 20', lastChat);
       if (!rows.length) return;
       lastChat = rows[rows.length - 1].id;
-      for (const r of rows) if (r.role !== 'usuario') emit('chat:new', { role: r.role, body: oneLine(r.body, 240) });
+      for (const r of rows) if (r.role !== 'usuario') { let meta = null; try { meta = r.meta ? JSON.parse(r.meta) : null; } catch { /* plain */ } emit('chat:new', { role: r.role, body: oneLine(r.body, 240), meta }); }
     },
     // Running tasks stay "running": the next start continues them (scheduler.finish does not close them while closing).
     shutdown() { scheduler.closing = true; sessions.stopAll(); orchestrator.stop(); orchestrator.closeLive(); log('motor detenido'); }

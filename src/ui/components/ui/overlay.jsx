@@ -68,6 +68,26 @@ export function Tip({ label, children, side = 'top' }) {
     </TooltipPrimitive.Root>
   );
 }
+// 2.6: the bigger bubble of the top bar's icon buttons (the same look as the «Cuidado» bubble): a title and one line.
+export function BubbleTip({ title, text, children, side = 'bottom', icon }) {
+  return (
+    <TooltipPrimitive.Root delayDuration={250}>
+      <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
+      <TooltipPrimitive.Portal>
+        <TooltipPrimitive.Content side={side} sideOffset={8} collisionPadding={12} className="bg-card text-card-foreground animate-in fade-in-0 zoom-in-95 z-50 max-w-64 rounded-2xl border px-3.5 py-2.5 shadow-lg" data-testid="bubble-tip">
+          <div className="flex items-start gap-2.5">
+            {icon ? <span className="text-primary mt-0.5 shrink-0 [&_svg]:size-4">{icon}</span> : null}
+            <div className="min-w-0">
+              <div className="text-[13px] font-medium">{title}</div>
+              {text ? <p className="text-muted-foreground mt-0.5 text-[12px] leading-snug">{text}</p> : null}
+            </div>
+          </div>
+          <TooltipPrimitive.Arrow className="fill-card" width={12} height={6} />
+        </TooltipPrimitive.Content>
+      </TooltipPrimitive.Portal>
+    </TooltipPrimitive.Root>
+  );
+}
 export const TooltipProvider = TooltipPrimitive.Provider;
 
 // ---- dropdown menu

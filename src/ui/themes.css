@@ -373,3 +373,59 @@ html[data-skin="nube"] .brand-sky {
 
 /* Every new theme, at night: the little yellow counters (pending approvals) carry dark text, white on yellow is unreadable. */
 html.dark:not([data-skin="orb"]) .bg-warning.text-white { color: oklch(0.2 0.03 80); }
+
+/* ================================================================================================================
+   2.6: the top bar of each screen (.topbar) dresses in the theme. Orb and Profesional keep it as it is. The decoration
+   sits in ::before, faded behind the buttons and titles; --titlebar-color is the colour at its right end, which the
+   window's own buttons (minimise, maximise, close) take.
+   ================================================================================================================ */
+.topbar { position: relative; isolation: isolate; }
+/* The decoration stops before the window's buttons (their area is one flat colour) and fades out behind the bar's own. */
+.topbar::before { content: ""; position: absolute; inset: 0 var(--wco-inset) 0 0; z-index: -1; pointer-events: none; mask-image: linear-gradient(90deg, #000 calc(100% - 300px), transparent calc(100% - 150px)); }
+
+/* Vaporwave: a sunset from pink to cyan, the sun rising on the right with its stripes and the grid of the ground. */
+html[data-skin="vaporwave"] { --titlebar-color: #c9f3ff; --vwb-a: #ffd6f1; --vwb-b: #e6d4ff; --vwb-c: #c9f3ff; --vwb-sun: #ff8fca; --vwb-sun2: #ffc56e; --vwb-line: rgb(214 70 180 / 0.28); }
+html.dark[data-skin="vaporwave"] { --titlebar-color: #0d3550; --vwb-a: #2b0d47; --vwb-b: #3a1260; --vwb-c: #0d3550; --vwb-sun: #ff4fa8; --vwb-sun2: #ffb347; --vwb-line: rgb(255 79 168 / 0.4); }
+html[data-skin="vaporwave"] .topbar { background: linear-gradient(90deg, var(--vwb-a), var(--vwb-b) 50%, var(--vwb-c) calc(100% - var(--wco-inset))); }
+html[data-skin="vaporwave"] .topbar::before {
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 5px, var(--vwb-b) 5px 7px) 46% 100% / 96px 20px no-repeat,
+    radial-gradient(circle at 50% 125%, var(--vwb-sun2) 0 26px, var(--vwb-sun) 44px, transparent 45px),
+    repeating-linear-gradient(90deg, var(--vwb-line) 0 1px, transparent 1px 36px) 0 100% / 100% 45% no-repeat,
+    linear-gradient(var(--vwb-line), var(--vwb-line)) 0 55% / 100% 1px no-repeat;
+  opacity: 0.85;
+}
+
+/* Retro arcade: a CRT screen with scanlines, stars and a row of invaders marching across. */
+html[data-skin="retro"] { --titlebar-color: #c9dba6; }
+html.dark[data-skin="retro"] { --titlebar-color: #050a06; }
+html[data-skin="retro"] .topbar { background: var(--rt-space); }
+html[data-skin="retro"] .topbar::before {
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px),
+    var(--rt-invaders) 0 50% / 132px 34px repeat-x,
+    radial-gradient(circle at 20px 10px, var(--rt-star) 0 1px, transparent 1.5px) 0 0 / 97px 56px,
+    radial-gradient(circle at 60px 40px, var(--rt-star) 0 1px, transparent 1.5px) 0 0 / 143px 56px;
+  opacity: 0.32;
+}
+@media (prefers-reduced-motion: no-preference) {
+  html[data-skin="retro"] .topbar::before { animation: rt-bar-march 2.4s steps(1, end) infinite; }
+}
+@keyframes rt-bar-march { 0%, 100% { background-position: 0 0, 0 50%, 0 0, 0 0; } 50% { background-position: 0 0, 12px 50%, 0 0, 0 0; } }
+
+/* Nube (candy): a pastel rainbow with fluffy clouds and a few sparkles. */
+html[data-skin="nube"] { --titlebar-color: #e4dcff; --nbb-a: #ffd9ec; --nbb-b: #fff1c9; --nbb-c: #d6f7e8; --nbb-d: #e4dcff; --nbb-cloud: rgb(255 255 255 / 0.95); --nbb-spark: #ffffff; }
+html.dark[data-skin="nube"] { --titlebar-color: #2d2550; --nbb-a: #3a2340; --nbb-b: #3a3328; --nbb-c: #1f3a36; --nbb-d: #2d2550; --nbb-cloud: rgb(255 255 255 / 0.1); --nbb-spark: rgb(255 240 250 / 0.8); }
+html[data-skin="nube"] .topbar { background: linear-gradient(90deg, var(--nbb-a), var(--nbb-b) 33%, var(--nbb-c) 64%, var(--nbb-d) calc(100% - var(--wco-inset))); }
+html[data-skin="nube"] .topbar::before {
+  background:
+    radial-gradient(46px 22px at 62% 78%, var(--nbb-cloud) 0 60%, transparent 62%),
+    radial-gradient(34px 24px at calc(62% - 28px) 62%, var(--nbb-cloud) 0 60%, transparent 62%),
+    radial-gradient(30px 18px at calc(62% + 28px) 74%, var(--nbb-cloud) 0 60%, transparent 62%),
+    radial-gradient(40px 18px at 42% 88%, var(--nbb-cloud) 0 60%, transparent 62%),
+    radial-gradient(28px 20px at calc(42% + 26px) 70%, var(--nbb-cloud) 0 60%, transparent 62%),
+    radial-gradient(circle at 30% 30%, var(--nbb-spark) 0 1.5px, transparent 2px),
+    radial-gradient(circle at 58% 22%, var(--nbb-spark) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 72% 70%, var(--nbb-spark) 0 1.5px, transparent 2px);
+  opacity: 0.9;
+}

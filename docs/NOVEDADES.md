@@ -20,6 +20,14 @@ En el primer arranque la app detecta qué agentes tienes y con qué sesión, e i
   por agentes (Claude, Codex, Gemini…). Orb aprende los modelos que ofrece cada agente.
 - **Aviso de cupo:** al elegir razonamiento alto, un modelo de los que más consumen o una cuenta con poco cupo, un globo
   te avisa de que puede gastar el uso rápido.
+- **Barra superior limpia:** solo iconos (pausar tareas, reiniciar conversación y minijuegos), cada uno con un globo que
+  explica lo que hace. Cambia con el tema: atardecer en Vaporwave, marcianitos en Retro, nubes de caramelo en Nube.
+- **Minijuegos mientras esperas:** Serpiente, Tetris, Ajedrez contra el ordenador, Salto, 2048 y Ladrillos, cada uno en
+  fácil, normal o difícil y con su récord. Cuando Orb·e reparte el trabajo, te propone jugar desde el propio chat.
+- **Avisos con el robot:** cuando terminan las tareas o algo necesita tu atención, aparece el robot de cuerpo entero con
+  un globo. Sin animaciones (o en el tema Profesional), el aviso sale arriba: verde si todo fue bien y naranja si hace
+  falta que mires algo.
+- **Tema Profesional:** sin robot y sin ningún logo en su lugar.
 
 ## Novedades de la 2.5
 

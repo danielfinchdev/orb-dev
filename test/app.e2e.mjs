@@ -302,6 +302,25 @@ try {
   // Opus spends the quota faster: the bubble says so.
   await win.locator('[data-testid=usage-bubble]').waitFor();
   await shot('11a-aviso-cupo');
+  // 2.6: a clean top bar: icon buttons with their bubble, and the mini-games.
+  assert.equal(await win.locator('main header').evaluate((h) => h.innerText.replace(h.querySelector('h1')?.innerText ?? '', '').trim()), '', 'sin nombre, modo ni modelo en la barra');
+  await win.hover('[data-testid=bar-pause]');
+  await win.locator('[data-testid=bubble-tip]').waitFor();
+  await shot('11b-barra-globo');
+  await win.click('[data-testid=bar-games]');
+  await win.locator('[data-testid=games-dialog]').waitFor();
+  await shot('11c-minijuegos');
+  for (const game of ['snake', 'tetris', 'chess', 'runner', 'g2048', 'breakout']) {
+    await win.click(`[data-testid=game-${game}]`);
+    await win.waitForTimeout(500);
+    if (game === 'chess') { await win.click('[data-testid=chess-52]'); await win.click('[data-testid=chess-36]'); await win.waitForSelector('text=Te toca', { timeout: 15000 }); }
+    else await win.keyboard.press('ArrowUp');
+    await win.waitForTimeout(400);
+    await shot(`11d-juego-${game}`);
+    await win.getByRole('button', { name: 'Volver a los juegos' }).click();
+  }
+  await win.keyboard.press('Escape');
+  await until(async () => (await win.locator('[data-testid=games-dialog]').count()) === 0, 'minijuegos cerrados');
   await win.click('[data-testid=orchestrator-check]');
   await dialogButton('Activar modo libre').click();
   await until(async () => (await call('app.state')).config.orchestrator.orchestrate === false, 'modo libre');
@@ -331,7 +350,8 @@ try {
     await win.locator(`[data-testid=${nav}]:visible`).click();
     await win.waitForTimeout(500);
     const [sw, iw] = await win.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);
-    assert.ok(sw <= iw + 1, `${name}: se sale por los lados`);
+    const wide = sw > iw + 1 ? await win.evaluate(() => [...document.querySelectorAll('body *')].filter((e) => e.getBoundingClientRect().right > innerWidth + 1).slice(-4).map((e) => `${e.tagName}.${String(e.className).slice(0, 60)} ${Math.round(e.getBoundingClientRect().right)}`).join(' | ')) : '';
+    assert.ok(sw <= iw + 1, `${name}: se sale por los lados ${wide}`);
     await shot(name);
     if (nav === 'nav-settings') await win.keyboard.press('Escape');
   }

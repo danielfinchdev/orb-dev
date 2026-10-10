@@ -224,7 +224,7 @@ export class Board {
       JSON.stringify(depends_on.map(Number)), JSON.stringify([...new Set(tags)]), status, String(actor), proj.path, at, at, mode, Number(Boolean(readonly)), parent_id ? Number(parent_id) : null, review_of ? Number(review_of) : null, schedule_id ? Number(schedule_id) : null);
     const id = Number(lastInsertRowid);
     this.event(id, actor, 'task.created', status);
-    if (status === 'awaiting_approval') { const tagList = [...new Set(tags)].join(', '); this.addChat('system', reasons.length ? tr('msg.board.needsApprovalWhy', { id, title, tags: tagList, reasons: reasons.join('; ') }) : tr('msg.board.needsApproval', { id, title, tags: tagList })); }
+    if (status === 'awaiting_approval') { const tagList = [...new Set(tags)].join(', '); this.addChat('system', reasons.length ? tr('msg.board.needsApprovalWhy', { id, title, tags: tagList, reasons: reasons.join('; ') }) : tr('msg.board.needsApproval', { id, title, tags: tagList }), { kind: 'attention', task: id }); }
     // Even a task the user typed waits for an explicit "Aprobar" when it looks sensitive: one more click, with the reasons on screen.
     this.changed('tasks');
     return this.task(id);

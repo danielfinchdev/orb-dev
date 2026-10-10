@@ -2,7 +2,7 @@ import { cn } from '@/lib/utils.js';
 
 export function PageHeader({ icon, title, meta, children, className }) {
   return (
-    <header className={cn('app-titlebar wco-pad-md bg-background/80 flex min-h-14 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2.5 backdrop-blur sm:px-5', className)}>
+    <header className={cn('topbar app-titlebar wco-pad-md bg-background/80 flex min-h-14 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2.5 backdrop-blur sm:px-5', className)}>
       {icon}
       {/* On a phone the buttons go under the title instead of squeezing it. */}
       <div className="min-w-[9rem] flex-1">
