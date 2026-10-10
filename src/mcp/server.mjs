@@ -229,7 +229,7 @@ readline.createInterface({ input: process.stdin }).on('line', async (line) => {
   let msg; try { msg = JSON.parse(line); } catch { return; }
   if (msg.id === undefined) return;
   try {
-    if (msg.method === 'initialize') return reply(msg.id, { result: { protocolVersion: msg.params?.protocolVersion ?? '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'orb', version: '2.4.0' }, instructions: INSTRUCTIONS } });
+    if (msg.method === 'initialize') return reply(msg.id, { result: { protocolVersion: msg.params?.protocolVersion ?? '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'orb', version: '2.4.1' }, instructions: INSTRUCTIONS } });
     if (msg.method === 'ping') return reply(msg.id, { result: {} });
     if (msg.method === 'tools/list') return reply(msg.id, { result: { tools: tools.map(({ run, readOnly, ...t }) => ({ ...t, ...(readOnly ? { annotations: { readOnlyHint: true } } : {}) })) } });
     if (msg.method === 'tools/call') {

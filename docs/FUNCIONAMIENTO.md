@@ -76,6 +76,10 @@ Datos: <carpeta del asistente>/.orb/datos/orb.db (SQLite, src/core/db.mjs)
 (Orb·e por defecto), cómo llamarte y dónde crear su carpeta. La carpeta es siempre `<carpeta elegida>\Orb` (o la elegida,
 si ya se llama Orb), se llame como se llame el asistente, y tiene la misma estructura para todos:
 
+> **Carpeta existente (2.4.1).** Si no hay ubicación guardada (instalación nueva), la app instalada busca una carpeta Orb
+> ya creada (`<unidad>:\Orb`, `Documentos\Orb` o `<usuario>\Orb`, la usada más recientemente) y la usa tal cual, sin
+> bienvenida (`findExistingHome` en `src/main/main.mjs`). No lo hace desde el código ni en las pruebas (`ORB_USER_DATA`).
+
 > **Nombres.** El programa es **Orb** (`Orb.exe`); su robot, **Orb·e**; **Orb.dev** es solo el desarrollo (este
 > repositorio). Están en `src/core/product.mjs`. Hasta la 2.3.3 el programa se llamaba «Orb.dev»: por eso sus datos de
 > Windows (dónde está la carpeta, tamaño de la interfaz) siguen en `%APPDATA%\Orb.dev` y una instalación actualizada sigue
@@ -511,8 +515,10 @@ tiene la app abierta. En iPhone funcionan con Orb añadido a la pantalla de inic
 
 ## 24. Instalador y detección de sesiones
 
-**Qué hace.** En el primer arranque, y en Agentes, detecta qué tienes e instala lo que falte con los instaladores oficiales
-en una ventana visible:
+**Qué hace.** En el primer arranque, y en Agentes, detecta qué tienes e instala lo que falte con los instaladores oficiales.
+Desde la 2.4.1, PowerShell se ejecuta oculto (una ventana aparte se cerraba sin hacer nada en algunos Windows 11) y la app
+muestra el progreso; su salida queda en `.orb/ejecuciones/instalacion/progreso-*-salida.txt`. Al arrancar, el motor anota
+en `motor.log` qué agentes encuentra (`agentes: claude=… · codex=…`). Instala:
 - herramientas: Git, Node.js, GitHub CLI y Tailscale;
 - agentes: Claude Code, Codex, Cursor, Gemini CLI, Copilot, OpenCode y Qwen.
 
@@ -622,7 +628,7 @@ que iniciar sesión en la app. Si no, «Iniciar sesión» abre el login oficial 
 |---|---|
 | `npm test` | 84 pruebas (incluye que los diccionarios es/en coinciden y que el inglés no tiene español) del motor con agentes falsos (`test/fixtures/fake-live.mjs` vía `ORB_FAKE_AGENTS`), los protocolos reales contra servidores falsos (ACP, codex app-server, CLI de Cursor), el guardia, sesiones, tareas, delegación, Task Review, cupo y migraciones |
 | `npm run test:app` | La app entera con Electron |
-| `node test/explora.e2e.mjs` | Todas las vistas en día y noche, con capturas |
+| `node test/explora.e2e.mjs` | Recorrido con capturas en `test-results/explora/`: primer arranque («Preparando tu PC», con el diálogo de carpeta simulado), todas las vistas y los apartados de Ajustes en día y noche, los cinco temas, ventana estrecha. Con `ORB_LANG=en`, lo mismo en inglés (`explora-en/`). Las notas van a `notas.txt` |
 | `node test/real.e2e.mjs claude,codex,cursor` | **Agentes reales**: conversaciones, tarea del asistente, informe, deshacer, aprobación, corrección, cola, bifurcación, Task Review y programadas |
 | `ORB_E2E_EXE=dist/win-unpacked/Orb.exe node test/packaged-live.e2e.mjs` | La app empaquetada con Claude real |
 

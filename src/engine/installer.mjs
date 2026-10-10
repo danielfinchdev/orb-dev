@@ -1,20 +1,21 @@
 // Installs what the assistant needs on Windows with each vendor's official installer: Claude Code, Codex, Cursor, Git,
-// GitHub CLI, Node.js (Codex comes from npm) and Tailscale (phone access). Runs in a visible PowerShell window so the user
-// sees every step and answers Windows' own prompts; the script only holds fixed commands (no text from the user or the
-// agents) and goes straight to PowerShell on its command line (no script file another program could swap before it runs).
-// It writes its progress to a log the engine watches.
+// GitHub CLI, Node.js (Codex comes from npm) and Tailscale (phone access). Runs in a hidden PowerShell (Windows' own
+// prompts, such as UAC, still appear); the script only holds fixed commands (no text from the user or the agents) and goes
+// straight to PowerShell on its command line (no script file another program could swap before it runs). It writes its
+// progress to a log the engine watches and the app shows as a progress bar.
 import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from '../core/context.mjs';
-import { ADAPTERS, quickRun, openConsole } from '../agents/index.mjs';
-import { IS_WIN } from '../agents/common.mjs';
+import { spawn } from 'node:child_process';
+import { ADAPTERS, quickRun } from '../agents/index.mjs';
+import { IS_WIN, cleanEnv, inPath } from '../agents/common.mjs';
 
 const winget = (id) => `winget install --id ${id} -e --source winget --accept-package-agreements --accept-source-agreements --silent --disable-interactivity`;
 
 // id → what it is, how to check it and the official way to install it.
 export const ITEMS = [
   { id: 'git', label: 'Git', why: 'deshacer tareas con historial, ramas y GitHub', install: winget('Git.Git'), needsWinget: true },
-  { id: 'node', label: 'Node.js', why: 'lo necesita Codex para instalarse', install: winget('OpenJS.NodeJS.LTS'), needsWinget: true },
+  { id: 'node', label: 'Node.js', why: 'lo necesita Codex para instalarse', install: winget('OpenJS.NodeJS.LTS'), needsWinget: true, exe: 'node.exe' },
   { id: 'claude', label: 'Claude Code', why: 'agente y cerebro del asistente', install: "irm https://claude.ai/install.ps1 | iex" },
   { id: 'codex', label: 'Codex', why: 'agente de OpenAI', install: 'npm install -g @openai/codex', after: ['node'] },
   { id: 'cursor', label: 'Cursor CLI', why: 'agente de Cursor', install: "irm 'https://cursor.com/install?win32=true' | iex" },
@@ -34,17 +35,22 @@ const tailscaleExe = () => (IS_WIN ? path.join(process.env.ProgramFiles ?? 'C:\\
 export async function check() {
   const out = {};
   for (const agent of AGENT_ITEMS) out[agent] = Boolean(ADAPTERS[agent]?.detect(ctx.config.agents[agent] ?? {}));
-  out.git = Boolean(await versionOf('git'));
-  out.node = Boolean(await versionOf(IS_WIN ? 'node.exe' : 'node'));
-  out.gh = Boolean(await versionOf(IS_WIN ? 'gh.exe' : 'gh'));
+  // A tool is there when its program answers or, at least, when its executable is in the PATH: on a busy PC a version
+  // call can fail for a moment, and «No instalado» (ticked) would make the user install it again.
+  const present = async (name, args) => Boolean(await versionOf(IS_WIN ? `${name}.exe` : name, args)) || inPath(name).length > 0;
+  out.git = await present('git');
+  out.node = await present('node');
+  out.gh = await present('gh');
   out.tailscale = Boolean(await versionOf(tailscaleExe(), ['version']));
   return ITEMS.map((i) => ({ id: i.id, label: i.label, why: tr(`msg.installer.why.${i.id}`), optional: Boolean(i.optional), installed: out[i.id] }));
 }
 
 // The PowerShell script for the chosen items, in a safe order (Node before Codex). Only fixed text from ITEMS goes in.
+// Node added here for an npm agent is usually there already (the user cannot tick an installed item): its step checks
+// first and counts as done, instead of asking winget to install it again (winget fails when there is nothing to update).
 export function plan(ids) {
   const chosen = ITEMS.filter((i) => ids.includes(i.id));
-  if (chosen.some((i) => i.after?.includes('node')) && !chosen.some((i) => i.id === 'node')) chosen.unshift(ITEMS.find((i) => i.id === 'node'));
+  if (chosen.some((i) => i.after?.includes('node')) && !chosen.some((i) => i.id === 'node')) chosen.unshift({ ...ITEMS.find((i) => i.id === 'node'), ifMissing: true });
   return chosen;
 }
 
@@ -54,7 +60,7 @@ export function buildScript(ids, logFile) {
   const q = (s) => `'${String(s).replace(/['\u2018\u2019\u201A\u201B]/g, (c) => c + c)}'`;
   const lines = [
     "$ErrorActionPreference = 'Continue'",
-    `$Host.UI.RawUI.WindowTitle = ${q(tr('msg.installer.windowTitle'))}`,
+    "$ProgressPreference = 'SilentlyContinue'",
     '[Console]::OutputEncoding = [Text.Encoding]::UTF8',
     `$log = ${q(logFile)}`,
     "function Refresh-Path { $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User') }",
@@ -68,12 +74,15 @@ export function buildScript(ids, logFile) {
     `Write-Host ${q(tr('msg.installer.intro'))} -ForegroundColor Yellow`
   ];
   for (const item of chosen) {
-    const body = item.needsWinget
+    const install = item.needsWinget
       ? `if (-not $hasWinget) { throw ${q(tr('msg.installer.noWinget'))} }; ${item.install}`
       : item.install;
+    const body = item.ifMissing && item.exe
+      ? `if (Get-Command ${q(item.exe)} -ErrorAction SilentlyContinue) { Write-Host ('   ' + ${q(tr('msg.installer.present'))}) } else { ${install} }`
+      : install;
     lines.push(`Step ${q(item.id)} ${q(item.label)} { ${body} }`);
   }
-  lines.push("Add-Content -LiteralPath $log -Value 'FIN'", "Write-Host ''", `Write-Host ${q(tr('msg.installer.finished'))} -ForegroundColor Yellow`, `Read-Host ${q(tr('msg.installer.pressEnter'))}`);
+  lines.push("Add-Content -LiteralPath $log -Value 'FIN'");
   return lines.join('\r\n');
 }
 
@@ -95,8 +104,14 @@ export function start(ids, emit) {
   const run = { logFile, ids: valid, startedAt: stamp, closed: false };
   current = run;
   const powershell = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'); // full path: nothing in PATH can stand in
-  const child = openConsole(powershell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded]);
-  child.on('exit', () => { run.closed = true; }); // its window was closed (finished or not)
+  // Hidden, with its output in a file next to the progress log: a separate console window is not reliable (on some
+  // Windows 11 PCs a detached PowerShell closes at once without running anything). The app shows the progress.
+  const output = fs.createWriteStream(logFile.replace(/\.log$/, '-salida.txt'));
+  // stderr only repeats the same text as PowerShell's CLIXML; failures are already in the progress log (ERROR lines).
+  const child = spawn(powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded], { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'], env: cleanEnv() });
+  child.stdout.pipe(output, { end: false });
+  child.on('error', (error) => { output.write(`${error.message}\n`); run.closed = true; });
+  child.on('exit', () => { run.closed = true; output.end(); }); // finished or stopped
   // Progress for the window: the script appends INICIO / OK / ERROR lines and FIN.
   clearInterval(timer);
   timer = setInterval(() => {
