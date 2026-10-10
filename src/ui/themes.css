@@ -1,17 +1,19 @@
 /* Visual themes (Ajustes → Apariencia → Tema visual): src/core/appearance.mjs lists them and lib/store.js puts the chosen one
    on <html> as data-skin. «orb» is the default and has no rules here (app.css is the orb theme). Each theme redefines the
    tokens of app.css for light (html[data-skin]) and dark (html.dark[data-skin]: the light / dark switch still applies on
-   top), plus a few touches of its own: the big backdrop (.brand-sky), corners, shadows, titles.
-   Contrast: normal text >= 4.5:1 on its background, input borders >= 3:1, in light and dark (scripts in test-results).
+   top), plus its own touches: typography, cards, buttons, the message box, the band at the top (the sidebar's head B1
+   and the top bar of each screen B2, one strip) and the illustrated backdrop behind the chat (components/scene.jsx).
+   Contrast: normal text >= 4.5:1 on its background, input borders >= 3:1, in light and dark (test-results/contraste-temas.mjs).
    These rules are outside any layer on purpose: they win over Tailwind's utilities without !important. */
 @import "@fontsource/press-start-2p/latin-400.css";
 
 /* ================================================================================================================
-   VAPORWAVE: magenta, pink, violet and cyan; a sunset with a striped sun and a neon grid on the big backdrops.
+   VAPORWAVE — a pastel sunset in the day, a neon night. Pink, lilac and cyan; the grid of the ground, a striped sun and
+   palms. Chunky Windows-95 windows (cards and the message box with a hard offset shadow). Space Grotesk, titles Orbitron.
    ================================================================================================================ */
 html[data-skin="vaporwave"] {
-  --radius: 0.6rem;
-  --background: oklch(0.975 0.018 325);
+  --radius: 0.5rem;
+  --background: oklch(0.972 0.02 315);
   --foreground: oklch(0.25 0.09 300);
   --card: oklch(0.995 0.006 325);
   --card-foreground: oklch(0.25 0.09 300);
@@ -22,76 +24,60 @@ html[data-skin="vaporwave"] {
   --secondary: oklch(0.94 0.035 300);
   --secondary-foreground: oklch(0.3 0.1 300);
   --muted: oklch(0.95 0.025 315);
-  --muted-foreground: oklch(0.48 0.09 305);
+  --muted-foreground: oklch(0.47 0.09 305);
   --accent: oklch(0.93 0.045 210);
   --accent-foreground: oklch(0.36 0.09 225);
   --destructive: oklch(0.54 0.21 22);
   --success: oklch(0.48 0.11 170);
   --warning: oklch(0.5 0.13 55);
   --info: oklch(0.5 0.13 235);
-  --border: oklch(0.89 0.04 315);
+  --border: oklch(0.87 0.05 310);
   --input: oklch(0.63 0.1 310);
   --ring: oklch(0.66 0.15 210);
-  --sidebar: oklch(0.96 0.03 310);
+  --sidebar: oklch(0.955 0.03 305);
   --bubble: oklch(0.53 0.23 345);
   --bubble-foreground: oklch(0.99 0.01 330);
-  /* the backdrop */
+  /* the welcome backdrop (.brand-sky) */
   --vw-sky: linear-gradient(180deg, #ffd9f2 0%, #f1c8ff 26%, #c9b6ff 44%, #ff9fd0 56%, #ffc79e 62%, #f6e6ff 62%, #ffe4f5 100%);
   --vw-glow: rgb(255 120 190 / 0.4);
   --vw-sun: linear-gradient(180deg, #fff09a 0%, #ffb3a7 55%, #ff74b6 100%);
   --vw-line: rgb(214 58 157 / 0.42);
-  --vw-head: linear-gradient(90deg, oklch(0.62 0.22 345), oklch(0.6 0.18 300), oklch(0.72 0.13 210));
 }
 html.dark[data-skin="vaporwave"] {
-  --background: oklch(0.16 0.05 290);
+  --background: oklch(0.17 0.05 290);
   --foreground: oklch(0.95 0.02 320);
-  --card: oklch(0.2 0.06 292);
+  --card: oklch(0.21 0.06 292);
   --card-foreground: oklch(0.95 0.02 320);
-  --popover: oklch(0.22 0.065 292);
+  --popover: oklch(0.23 0.065 292);
   --popover-foreground: oklch(0.95 0.02 320);
   --primary: oklch(0.74 0.19 350);
   --primary-foreground: oklch(0.17 0.05 290);
-  --secondary: oklch(0.26 0.07 292);
+  --secondary: oklch(0.27 0.07 292);
   --secondary-foreground: oklch(0.93 0.03 320);
-  --muted: oklch(0.24 0.06 292);
+  --muted: oklch(0.25 0.06 292);
   --muted-foreground: oklch(0.77 0.06 310);
-  --accent: oklch(0.29 0.08 285);
+  --accent: oklch(0.3 0.08 285);
   --accent-foreground: oklch(0.88 0.1 200);
   --destructive: oklch(0.66 0.2 18);
   --success: oklch(0.8 0.15 170);
   --warning: oklch(0.84 0.14 80);
   --info: oklch(0.8 0.12 205);
-  --border: oklch(0.33 0.08 295);
+  --border: oklch(0.34 0.08 295);
   --input: oklch(0.52 0.12 305);
   --ring: oklch(0.78 0.13 205);
-  --sidebar: oklch(0.14 0.045 288);
+  --sidebar: oklch(0.15 0.045 288);
   --bubble: oklch(0.5 0.2 335);
   --bubble-foreground: oklch(0.99 0 0);
   --vw-sky: linear-gradient(180deg, #12082e 0%, #2b1055 28%, #7a1f7a 46%, #d53a9d 56%, #ff9a5a 62%, #2a0a45 62%, #12052a 100%);
   --vw-glow: rgb(255 90 170 / 0.5);
   --vw-sun: linear-gradient(180deg, #ffe66d 0%, #ff8f8f 55%, #ff3fa4 100%);
   --vw-line: rgb(255 79 200 / 0.6);
-  --vw-head: linear-gradient(90deg, oklch(0.72 0.22 345), oklch(0.68 0.2 300), oklch(0.82 0.14 205));
 }
-/* The page headers sit on a sunset line; a neon halo on the titles and the main button at night. */
-html[data-skin="vaporwave"] header.border-b { border-bottom-width: 2px; border-image: var(--vw-head) 1; }
-html.dark[data-skin="vaporwave"] :is(h1, h2):not(.prose-chat *) { text-shadow: 0 0 14px color-mix(in oklch, var(--primary) 55%, transparent); }
-html.dark[data-skin="vaporwave"] [data-slot="button"].bg-primary { box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 70%, transparent), 0 0 18px -3px color-mix(in oklch, var(--primary) 75%, transparent); }
-html.dark[data-skin="vaporwave"] [data-slot="card"] { box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 12%, transparent), 0 10px 32px -16px rgb(255 60 180 / 0.45); }
-html[data-skin="vaporwave"] aside.bg-sidebar { background-image: linear-gradient(180deg, transparent 50%, color-mix(in oklch, oklch(0.8 0.13 340) 22%, transparent) 100%); }
-html.dark[data-skin="vaporwave"] aside.bg-sidebar { background-image: linear-gradient(180deg, transparent 45%, color-mix(in oklch, oklch(0.5 0.2 340) 30%, transparent) 100%); border-right-color: color-mix(in oklch, var(--primary) 30%, var(--border)); }
-html[data-skin="vaporwave"] .bg-bubble { background-image: linear-gradient(135deg, oklch(0.53 0.23 345), oklch(0.48 0.2 300)); }
-html.dark[data-skin="vaporwave"] .bg-bubble { background-image: linear-gradient(135deg, oklch(0.5 0.2 345), oklch(0.45 0.19 295)); }
-html[data-skin="vaporwave"] [data-testid="update-card"] { background-image: linear-gradient(135deg, #7b2ff7, #c2307f); }
-/* The backdrop: sky, the sun on the horizon (62 %) and the grid of the ground, which fades into the distance. */
-html[data-skin="vaporwave"] .brand-sky {
-  position: relative; isolation: isolate;
-  background: radial-gradient(70vmin 42vmin at 50% 62%, var(--vw-glow), transparent 70%), var(--vw-sky);
-}
+/* The welcome backdrop: sky, the sun on the horizon (62 %) and the grid of the ground, which fades into the distance. */
+html[data-skin="vaporwave"] .brand-sky { position: relative; isolation: isolate; background: radial-gradient(70vmin 42vmin at 50% 62%, var(--vw-glow), transparent 70%), var(--vw-sky); }
 html[data-skin="vaporwave"] .brand-sky::after {
   content: ""; position: absolute; z-index: -1; left: 50%; bottom: 38%; translate: -50% 0;
-  width: min(84vmin, 620px); aspect-ratio: 2 / 1; border-radius: 999px 999px 0 0; pointer-events: none;
-  background: var(--vw-sun);
+  width: min(84vmin, 620px); aspect-ratio: 2 / 1; border-radius: 999px 999px 0 0; pointer-events: none; background: var(--vw-sun);
   mask-image: linear-gradient(to bottom, #000 0 50%, transparent 50% 56%, #000 56% 66%, transparent 66% 73%, #000 73% 81%, transparent 81% 89%, #000 89% 94%, transparent 94%);
 }
 html[data-skin="vaporwave"] .brand-sky::before {
@@ -107,8 +93,8 @@ html[data-skin="vaporwave"] .brand-sky::before {
 }
 
 /* ================================================================================================================
-   RETRO: an 80s arcade. Phosphor green on almost black, square corners, hard pixel shadows, pixel titles, scanlines
-   and a row of space invaders on the big backdrops. Light: a pale green LCD, like a handheld console.
+   RETRO — an 80s arcade. Dark: a deep blue-black cabinet, neon green phosphor, coloured invaders, scanlines. Light: the
+   pale green LCD of a handheld console. Square corners, hard pixel shadows, pixel titles. IBM Plex Mono, Press Start 2P.
    ================================================================================================================ */
 html[data-skin="retro"] {
   --radius: 0rem;
@@ -144,55 +130,38 @@ html[data-skin="retro"] {
   --rt-ship: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 6' shape-rendering='crispEdges'%3E%3Cpath fill='%231f6b2c' d='M5 0h1v1h-1zM4 1h3v1h-3zM4 2h3v1h-3zM1 3h9v1h-9zM0 4h11v1h-11zM0 5h11v1h-11z'/%3E%3C/svg%3E");
 }
 html.dark[data-skin="retro"] {
-  --background: oklch(0.14 0.012 150);
+  --background: oklch(0.15 0.022 278);
   --foreground: oklch(0.94 0.03 145);
-  --card: oklch(0.175 0.018 150);
+  --card: oklch(0.19 0.03 278);
   --card-foreground: oklch(0.94 0.03 145);
-  --popover: oklch(0.19 0.02 150);
+  --popover: oklch(0.21 0.032 278);
   --popover-foreground: oklch(0.94 0.03 145);
   --primary: oklch(0.85 0.23 143);
   --primary-foreground: oklch(0.16 0.03 150);
-  --secondary: oklch(0.23 0.03 150);
+  --secondary: oklch(0.25 0.04 278);
   --secondary-foreground: oklch(0.92 0.04 145);
-  --muted: oklch(0.21 0.025 150);
+  --muted: oklch(0.23 0.035 278);
   --muted-foreground: oklch(0.76 0.09 148);
-  --accent: oklch(0.26 0.05 148);
+  --accent: oklch(0.28 0.06 275);
   --accent-foreground: oklch(0.9 0.17 145);
   --destructive: oklch(0.66 0.22 27);
   --success: oklch(0.84 0.22 145);
   --warning: oklch(0.88 0.17 100);
   --info: oklch(0.82 0.13 200);
-  --border: oklch(0.36 0.08 148);
+  --border: oklch(0.36 0.07 275);
   --input: oklch(0.55 0.14 147);
   --ring: oklch(0.85 0.23 143);
-  --sidebar: oklch(0.12 0.01 150);
-  --bubble: oklch(0.3 0.08 148);
+  --sidebar: oklch(0.13 0.022 278);
+  --bubble: oklch(0.32 0.1 290);
   --bubble-foreground: oklch(0.96 0.05 145);
   --rt-shadow: color-mix(in oklch, var(--primary) 28%, transparent);
   --rt-scan: rgb(0 0 0 / 0.28);
-  --rt-space: #050a06;
-  --rt-star: rgb(220 255 220 / 0.55);
+  --rt-space: #070a1a;
+  --rt-star: rgb(225 235 255 / 0.55);
   --rt-invaders: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 16' shape-rendering='crispEdges'%3E%3Cpath fill='%2339ff14' fill-opacity='0.55' d='M4 4h1v1h-1zM10 4h1v1h-1zM5 5h1v1h-1zM9 5h1v1h-1zM4 6h7v1h-7zM3 7h2v1h-2zM6 7h3v1h-3zM10 7h2v1h-2zM2 8h11v1h-11zM2 9h1v1h-1zM4 9h7v1h-7zM12 9h1v1h-1zM2 10h1v1h-1zM4 10h1v1h-1zM10 10h1v1h-1zM12 10h1v1h-1zM5 11h2v1h-2zM8 11h2v1h-2zM27 4h2v1h-2zM26 5h4v1h-4zM25 6h6v1h-6zM24 7h2v1h-2zM27 7h2v1h-2zM30 7h2v1h-2zM24 8h8v1h-8zM26 9h1v1h-1zM29 9h1v1h-1zM25 10h1v1h-1zM27 10h2v1h-2zM30 10h1v1h-1zM24 11h1v1h-1zM26 11h1v1h-1zM29 11h1v1h-1zM31 11h1v1h-1zM46 4h4v1h-4zM43 5h10v1h-10zM42 6h12v1h-12zM42 7h3v1h-3zM47 7h2v1h-2zM51 7h3v1h-3zM42 8h12v1h-12zM45 9h2v1h-2zM49 9h2v1h-2zM44 10h2v1h-2zM47 10h2v1h-2zM50 10h2v1h-2zM42 11h2v1h-2zM52 11h2v1h-2z'/%3E%3C/svg%3E");
   --rt-ship: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 6' shape-rendering='crispEdges'%3E%3Cpath fill='%2339ff14' d='M5 0h1v1h-1zM4 1h3v1h-3zM4 2h3v1h-3zM1 3h9v1h-9zM0 4h11v1h-11zM0 5h11v1h-11z'/%3E%3C/svg%3E");
 }
-/* Square corners everywhere (the robot keeps its own shapes). */
-html[data-skin="retro"] *:not(.orb, .orb *) { border-radius: 0; }
-html[data-skin="retro"] ::-webkit-scrollbar-thumb { border-radius: 0; background-color: color-mix(in oklch, var(--primary) 40%, transparent); }
-/* Pixel titles, at the size of the cap height of the interface font (the pixel font is much bigger for the same size). */
-html[data-skin="retro"] :is(h1, h2, h3, [data-slot="card-title"]):not(.prose-chat *) {
-  font-family: "Press Start 2P", var(--font-sans); font-weight: 400; letter-spacing: 0; line-height: 1.35;
-  font-size-adjust: cap-height 0.62;
-}
-/* Hard pixel shadows: cards, the main buttons (pressed: down and to the right). */
-html[data-skin="retro"] [data-slot="card"] { box-shadow: 4px 4px 0 0 var(--rt-shadow); }
-html[data-skin="retro"] [data-slot="button"].bg-primary { box-shadow: 3px 3px 0 0 color-mix(in oklch, var(--foreground) 35%, transparent); }
-html[data-skin="retro"] [data-slot="button"].bg-primary:active { translate: 2px 2px; box-shadow: 1px 1px 0 0 color-mix(in oklch, var(--foreground) 35%, transparent); }
-html[data-skin="retro"] header.border-b { border-bottom-width: 2px; }
-html[data-skin="retro"] .brand-sky .shadow-2xl { box-shadow: 6px 6px 0 0 var(--rt-shadow); }
-html[data-skin="retro"] [data-testid="update-card"] { background-image: none; background-color: oklch(0.2 0.03 150); border: 2px solid oklch(0.85 0.23 143); box-shadow: 4px 4px 0 0 rgb(57 255 20 / 0.3); }
-/* Very faint scanlines over the whole window at night. */
-html.dark[data-skin="retro"] body { background-image: repeating-linear-gradient(to bottom, transparent 0 2px, rgb(0 0 0 / 0.16) 2px 3px); }
-/* The backdrop: scanlines, two rows of invaders marching, stars, the ground line and the player's cannon. */
+/* The welcome backdrop: scanlines, two rows of invaders marching, stars, the ground line and the player's cannon. */
 html[data-skin="retro"] .brand-sky {
   background:
     repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px),
@@ -204,18 +173,18 @@ html[data-skin="retro"] .brand-sky {
     radial-gradient(circle at 110px 95px, var(--rt-star) 0 1px, transparent 1.5px) 0 0 / 230px 170px,
     var(--rt-space);
 }
-@media (prefers-reduced-motion: no-preference) {
-  html[data-skin="retro"] .brand-sky { animation: rt-march 2.4s steps(1, end) infinite; }
-}
+@media (prefers-reduced-motion: no-preference) { html[data-skin="retro"]:not([data-motion="minima"]) .brand-sky { animation: rt-march 2.4s steps(1, end) infinite; } }
 @keyframes rt-march {
   0%, 100% { background-position: 0 0, 0 9%, 120px calc(9% + 76px), 50% calc(100% - 26px), 0 calc(100% - 18px), 0 0, 0 0, 0 0; }
   50% { background-position: 0 0, 16px 9%, 136px calc(9% + 76px), 50% calc(100% - 26px), 0 calc(100% - 18px), 0 0, 0 0, 0 0; }
 }
+html[data-skin="retro"] .brand-sky .shadow-2xl { box-shadow: 6px 6px 0 0 var(--rt-shadow); }
 
 /* ================================================================================================================
    PROFESIONAL: plain and sober, like a modern developer tool. Zinc greys, a discreet blue accent, thin borders, small
    corners. No robot (components/robot.jsx shows a small «O» mark instead, companion.jsx hides the floating one), no
-   sounds (lib/sounds.js) and no decorative animation; loading spinners, pulsing status dots and progress bars stay.
+   sounds (lib/sounds.js), no backdrop, no band and no decorative animation; loading spinners, pulsing status dots and
+   progress bars stay. Inter.
    ================================================================================================================ */
 html[data-skin="profesional"] {
   --radius: 0.4rem;
@@ -270,7 +239,6 @@ html.dark[data-skin="profesional"] {
   --bubble: oklch(0.27 0.006 286);
   --bubble-foreground: oklch(0.95 0 0);
 }
-/* No shadows to speak of, no backdrop: a flat screen. */
 html[data-skin="profesional"] [data-slot="card"] { box-shadow: none; }
 html[data-skin="profesional"] .brand-sky { background: var(--muted); }
 html.dark[data-skin="profesional"] .brand-sky { background: var(--background); }
@@ -286,261 +254,316 @@ html[data-skin="profesional"] *:not([role="progressbar"] *) { transition-duratio
 html[data-skin="profesional"] *:hover { scale: none; }
 
 /* ================================================================================================================
-   NUBE: candy floss. Pastel pink, lilac, sky blue and mint, very round corners, soft shadows and clouds on the big
-   backdrops. The colours that carry text stay deep enough to read.
+   NUBE (candy) — clay candy: a warm cream base, bubblegum pink, lilac, mint, peach and sky in soft pastel, everything
+   puffy and rounded as if moulded in clay (a light edge on top, a soft coloured shadow below). Nunito, titles Fredoka.
    ================================================================================================================ */
 html[data-skin="nube"] {
-  --radius: 1.1rem;
-  --background: oklch(0.978 0.012 340);
-  --foreground: oklch(0.3 0.06 305);
-  --card: oklch(0.997 0.004 340);
-  --card-foreground: oklch(0.3 0.06 305);
-  --popover: oklch(0.997 0.004 340);
-  --popover-foreground: oklch(0.3 0.06 305);
-  --primary: oklch(0.53 0.17 348);
+  --radius: 1.2rem;
+  --background: oklch(0.975 0.014 25);
+  --foreground: oklch(0.32 0.06 320);
+  --card: oklch(0.995 0.005 30);
+  --card-foreground: oklch(0.32 0.06 320);
+  --popover: oklch(0.995 0.005 30);
+  --popover-foreground: oklch(0.32 0.06 320);
+  --primary: oklch(0.54 0.17 350);
   --primary-foreground: oklch(0.99 0.008 340);
-  --secondary: oklch(0.95 0.035 175);
-  --secondary-foreground: oklch(0.32 0.06 180);
-  --muted: oklch(0.955 0.02 320);
-  --muted-foreground: oklch(0.5 0.06 310);
-  --accent: oklch(0.94 0.035 230);
-  --accent-foreground: oklch(0.35 0.08 250);
+  --secondary: oklch(0.94 0.045 170);
+  --secondary-foreground: oklch(0.32 0.07 175);
+  --muted: oklch(0.95 0.025 30);
+  --muted-foreground: oklch(0.5 0.07 330);
+  --accent: oklch(0.935 0.045 300);
+  --accent-foreground: oklch(0.36 0.1 310);
   --destructive: oklch(0.54 0.19 15);
   --success: oklch(0.5 0.11 165);
   --warning: oklch(0.5 0.11 60);
   --info: oklch(0.5 0.12 240);
-  --border: oklch(0.91 0.03 330);
-  --input: oklch(0.64 0.08 320);
-  --ring: oklch(0.72 0.12 348);
-  --sidebar: oklch(0.965 0.02 305);
-  --bubble: oklch(0.53 0.17 348);
+  --border: oklch(0.91 0.03 20);
+  --input: oklch(0.64 0.08 340);
+  --ring: oklch(0.74 0.12 350);
+  --sidebar: oklch(0.965 0.02 340);
+  --bubble: oklch(0.54 0.17 350);
   --bubble-foreground: oklch(0.99 0.008 340);
   --nb-sky: linear-gradient(180deg, #bfe4ff 0%, #d9d3ff 42%, #ffd3ea 78%, #ffe6f2 100%);
   --nb-cloud: rgb(255 255 255 / 0.95);
   --nb-glow: rgb(255 214 236 / 0.8);
-  --nb-shadow: oklch(0.65 0.13 340 / 0.28);
 }
 html.dark[data-skin="nube"] {
-  --background: oklch(0.2 0.035 300);
+  --background: oklch(0.21 0.035 320);
   --foreground: oklch(0.96 0.015 330);
-  --card: oklch(0.23 0.04 300);
+  --card: oklch(0.245 0.04 320);
   --card-foreground: oklch(0.96 0.015 330);
-  --popover: oklch(0.26 0.045 300);
+  --popover: oklch(0.27 0.045 320);
   --popover-foreground: oklch(0.96 0.015 330);
   --primary: oklch(0.82 0.1 350);
   --primary-foreground: oklch(0.24 0.05 320);
-  --secondary: oklch(0.3 0.045 200);
+  --secondary: oklch(0.3 0.045 190);
   --secondary-foreground: oklch(0.94 0.03 175);
-  --muted: oklch(0.28 0.04 300);
-  --muted-foreground: oklch(0.8 0.04 315);
-  --accent: oklch(0.31 0.055 270);
-  --accent-foreground: oklch(0.92 0.05 225);
-  --destructive: oklch(0.68 0.17 18);
+  --muted: oklch(0.285 0.04 320);
+  --muted-foreground: oklch(0.8 0.04 320);
+  --accent: oklch(0.32 0.06 290);
+  --accent-foreground: oklch(0.92 0.05 290);
+  --destructive: oklch(0.7 0.17 18);
   --success: oklch(0.83 0.11 165);
   --warning: oklch(0.86 0.11 80);
   --info: oklch(0.82 0.09 235);
-  --border: oklch(0.35 0.05 305);
-  --input: oklch(0.56 0.07 315);
+  --border: oklch(0.36 0.05 320);
+  --input: oklch(0.56 0.07 330);
   --ring: oklch(0.82 0.1 350);
-  --sidebar: oklch(0.185 0.032 300);
+  --sidebar: oklch(0.19 0.032 320);
   --bubble: oklch(0.5 0.14 345);
   --bubble-foreground: oklch(0.99 0 0);
   --nb-sky: linear-gradient(180deg, #2c2557 0%, #4a3570 45%, #7a4d86 80%, #8f5a8f 100%);
   --nb-cloud: rgb(255 230 245 / 0.2);
   --nb-glow: rgb(255 170 220 / 0.22);
-  --nb-shadow: rgb(0 0 0 / 0.35);
 }
-html[data-skin="nube"] [data-slot="card"] { box-shadow: 0 12px 32px -18px var(--nb-shadow); border-color: color-mix(in oklch, var(--border) 70%, transparent); }
-html[data-skin="nube"] [data-slot="button"].bg-primary { box-shadow: 0 6px 16px -8px color-mix(in oklch, var(--primary) 70%, transparent); }
-html[data-skin="nube"] aside.bg-sidebar { background-image: linear-gradient(180deg, transparent 40%, color-mix(in oklch, oklch(0.9 0.05 230) 45%, transparent) 100%); }
-html.dark[data-skin="nube"] aside.bg-sidebar { background-image: linear-gradient(180deg, transparent 40%, color-mix(in oklch, oklch(0.35 0.07 330) 40%, transparent) 100%); }
-html[data-skin="nube"] [data-testid="update-card"] { background-image: linear-gradient(135deg, oklch(0.52 0.16 348), oklch(0.48 0.14 295)); }
-/* The backdrop: a soft sky and three fluffy clouds, each a few overlapping blurred puffs. */
+/* The welcome backdrop: a soft sky and three fluffy clouds, each a few overlapping blurred puffs. */
 html[data-skin="nube"] .brand-sky {
   background:
-    radial-gradient(150px 60px at 14% 20%, var(--nb-cloud) 0 42%, transparent 72%),
-    radial-gradient(110px 70px at 20% 15%, var(--nb-cloud) 0 42%, transparent 72%),
-    radial-gradient(90px 55px at 9% 17%, var(--nb-cloud) 0 42%, transparent 72%),
-    radial-gradient(190px 70px at 84% 30%, var(--nb-cloud) 0 42%, transparent 72%),
-    radial-gradient(120px 85px at 79% 24%, var(--nb-cloud) 0 42%, transparent 72%),
-    radial-gradient(100px 60px at 90% 25%, var(--nb-cloud) 0 42%, transparent 72%),
-    radial-gradient(220px 80px at 30% 88%, var(--nb-cloud) 0 42%, transparent 72%),
-    radial-gradient(140px 90px at 37% 82%, var(--nb-cloud) 0 42%, transparent 72%),
-    radial-gradient(120px 70px at 22% 84%, var(--nb-cloud) 0 42%, transparent 72%),
-    radial-gradient(60% 50% at 70% 85%, var(--nb-glow), transparent 70%),
-    var(--nb-sky);
+    radial-gradient(150px 60px at 14% 20%, var(--nb-cloud) 0 42%, transparent 72%), radial-gradient(110px 70px at 20% 15%, var(--nb-cloud) 0 42%, transparent 72%),
+    radial-gradient(90px 55px at 9% 17%, var(--nb-cloud) 0 42%, transparent 72%), radial-gradient(190px 70px at 84% 30%, var(--nb-cloud) 0 42%, transparent 72%),
+    radial-gradient(120px 85px at 79% 24%, var(--nb-cloud) 0 42%, transparent 72%), radial-gradient(100px 60px at 90% 25%, var(--nb-cloud) 0 42%, transparent 72%),
+    radial-gradient(220px 80px at 30% 88%, var(--nb-cloud) 0 42%, transparent 72%), radial-gradient(140px 90px at 37% 82%, var(--nb-cloud) 0 42%, transparent 72%),
+    radial-gradient(120px 70px at 22% 84%, var(--nb-cloud) 0 42%, transparent 72%), radial-gradient(60% 50% at 70% 85%, var(--nb-glow), transparent 70%), var(--nb-sky);
 }
 
 /* Every new theme, at night: the little yellow counters (pending approvals) carry dark text, white on yellow is unreadable. */
 html.dark:not([data-skin="orb"]) .bg-warning.text-white { color: oklch(0.2 0.03 80); }
 
 /* ================================================================================================================
-   2.6: SCENES. Each theme is one scene: the band at the top — the sidebar's head (B1) and the top bar of each screen (B2),
-   one continuous strip because their backgrounds are fixed to the window — melts into the rest of the window (no hard
-   line: the band fades down over what is under it), and behind the chat an illustrated backdrop (components/scene.jsx),
-   softly blurred, moves slowly. Everything stops with reduced motion or with «Animaciones» off
-   (html[data-motion="minima"]). The «profesional» theme has none of it.
+   THE BAND AND THE SCENE (2.6). Each theme is one scene: the band at the top — the sidebar's head (B1) and the top bar
+   of each screen (B2), one continuous strip because their backgrounds are fixed to the window — melts into the window
+   (it fades down over what is under it, no line), and behind the screens an illustrated backdrop (components/scene.jsx)
+   moves slowly, under a veil so the text stays easy to read. B1 carries only the band's colour and shading, never
+   drawings: the robot, the name and the buttons stay clean. B2's drawing lives in its middle, away from the title on the
+   left, from the bar's buttons and from the window's own buttons on the right. Everything stops with reduced motion or
+   with «Animaciones» off (html[data-motion="minima"]). The «profesional» theme has none of it.
    ================================================================================================================ */
 .theme-band { position: relative; isolation: isolate; }
 .theme-band::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--band-art, none); opacity: var(--band-art-opacity, 1); }
-html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) .theme-band { z-index: 10; background: var(--band); border-bottom-color: transparent; }
+.side-band::before { background: var(--side-art, none); opacity: 1; }
+html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) .theme-band { z-index: 10; background: var(--band); border-bottom-color: transparent; backdrop-filter: none; }
 /* The band fades down over the screen instead of ending in a line. */
 html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) .theme-band::after {
-  content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 34px; pointer-events: none;
-  background: var(--band); mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.8), transparent);
+  content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 44px; pointer-events: none;
+  background: var(--band); mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.9), rgb(0 0 0 / 0.45) 40%, transparent);
 }
-/* The top bar's decoration stops before the window's own buttons and fades out behind the bar's buttons. */
-.topbar.theme-band::before { right: var(--wco-inset); mask-image: linear-gradient(90deg, #000 calc(100% - 300px), transparent calc(100% - 150px)); }
-/* In the sidebar's head the decoration is a faint texture, so the name and the buttons stay clean. */
-.side-band::before { opacity: calc(var(--band-art-opacity, 1) * 0.3); }
+/* The top bar's drawing: in the middle, clear of the title, of the bar's buttons and of the window's buttons. */
+.topbar.theme-band::before { right: var(--wco-inset); mask-image: linear-gradient(90deg, transparent 150px, #000 290px, #000 calc(100% - 330px), transparent calc(100% - 190px)); }
+/* Only the chat's bar (no title, just a few buttons on the right) has room for a drawing: the other screens' bars carry
+   a title with a line under it, so they take just the band's shading, like the sidebar's head. */
+.topbar.theme-band:not(.topbar-chat)::before { background: var(--side-art, none); opacity: 1; mask-image: none; right: var(--wco-inset); animation: none !important; } /* the window's buttons are one flat colour: the shading stops before them */
 .theme-scene { position: relative; isolation: isolate; }
 
-/* ---- The backdrop behind the chat (components/scene.jsx): absolutely placed, under everything, blurred. ---- */
+/* ---- The backdrop behind the screens (components/scene.jsx): absolutely placed, under everything. ---- */
 .scene { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
 .scene > *, .scene-blur > * { position: absolute; }
-.scene-blur { inset: -24px; filter: blur(var(--scene-blur, 5px)); opacity: var(--scene-opacity, 0.55); }
+.scene-blur { inset: -24px; opacity: var(--scene-opacity, 0.6); }
 /* A veil of the page's own colour at the top, where the messages are read most. */
-.scene-veil { inset: 0; background: linear-gradient(to bottom, color-mix(in oklch, var(--background) 62%, transparent), color-mix(in oklch, var(--background) 22%, transparent) 55%, transparent); }
-@media (prefers-reduced-motion: reduce) { .scene *, .theme-band::before { animation: none !important; } }
-html[data-motion="minima"] :is(.scene *, .theme-band::before) { animation: none !important; }
+.scene-veil { inset: 0; background: linear-gradient(to bottom, color-mix(in oklch, var(--background) 60%, transparent), color-mix(in oklch, var(--background) 25%, transparent) 55%, transparent); }
+@media (prefers-reduced-motion: reduce) { .scene *, .scene *::before, .scene *::after, .theme-band::before { animation: none !important; } }
+html[data-motion="minima"] :is(.scene *, .scene *::before, .scene *::after, .theme-band::before) { animation: none !important; }
 
-/* ---- Orb: the bar stays as it is; behind the chat, the robot's periwinkle sky with a few clouds drifting. ---- */
-.scene-orb .scene-blur { background: radial-gradient(60% 50% at 30% 0%, #c3cbff, transparent 70%), radial-gradient(50% 60% at 90% 100%, #a7b1f6, transparent 70%); --scene-opacity: 0.45; --scene-blur: 18px; }
-html.dark .scene-orb .scene-blur { background: radial-gradient(60% 50% at 30% 0%, #2b3270, transparent 70%), radial-gradient(50% 60% at 90% 100%, #1d2257, transparent 70%); --scene-opacity: 0.7; }
-.orb-cloud { width: 240px; height: 70px; border-radius: 999px; background: rgb(255 255 255 / 0.55); filter: blur(10px); animation: cloud-drift linear infinite; }
-html.dark .orb-cloud { background: rgb(150 160 255 / 0.12); }
+/* ---- Orb: the bar stays as it is; behind the chat, the robot's periwinkle sky with a few soft clouds drifting. ---- */
+.scene-orb .scene-blur { background: radial-gradient(60% 50% at 30% 0%, #c3cbff, transparent 70%), radial-gradient(50% 60% at 90% 100%, #a7b1f6, transparent 70%); --scene-opacity: 0.5; }
+html.dark .scene-orb .scene-blur { background: radial-gradient(60% 50% at 30% 0%, #2b3270, transparent 70%), radial-gradient(50% 60% at 90% 100%, #1d2257, transparent 70%); --scene-opacity: 0.75; }
+.orb-cloud { width: 260px; height: 72px; border-radius: 999px; background: radial-gradient(closest-side, rgb(255 255 255 / 0.75), rgb(255 255 255 / 0.3) 60%, transparent); animation: cloud-drift linear infinite; }
+html.dark .orb-cloud { background: radial-gradient(closest-side, rgb(160 170 255 / 0.18), rgb(160 170 255 / 0.06) 60%, transparent); }
 @keyframes cloud-drift { from { transform: translateX(-30vw); } to { transform: translateX(130vw); } }
 
 /* ================================================================================================================
-   VAPORWAVE — a sunset: pink to violet to cyan, a striped sun on the horizon, a neon grid floor rushing towards you and
-   two palms. Space Grotesk.
+   VAPORWAVE — the scene. Day: a pastel sunset, pink to lilac to cyan, a striped peach sun behind soft mountains, a lilac
+   grid rushing towards you, two palms. Night: deep indigo, a neon magenta grid, the sun orange to pink, stars.
    ================================================================================================================ */
 html[data-skin="vaporwave"] {
   --titlebar-color: #c9f3ff;
-  --vwb-a: #ffd3ef; --vwb-b: #e5d2ff; --vwb-c: #c9f3ff; --vwb-sun: #ff7cc4; --vwb-sun2: #ffc56e; --vwb-line: rgb(214 70 180 / 0.35);
+  --vwb-a: #ffd3ef; --vwb-b: #e5d2ff; --vwb-c: #c9f3ff; --vwb-sun: #ff8ccb; --vwb-sun2: #ffc56e; --vwb-line: rgb(214 70 180 / 0.32);
   --band: linear-gradient(90deg, var(--vwb-a), var(--vwb-b) 50%, var(--vwb-c) calc(100% - var(--wco-inset))) fixed;
+  --side-art: linear-gradient(to bottom, rgb(255 255 255 / 0.35), transparent 60%);
   --band-art:
+    linear-gradient(to bottom, rgb(255 255 255 / 0.35), transparent 60%),
     repeating-linear-gradient(to bottom, transparent 0 5px, var(--vwb-b) 5px 7px) calc(50% - 46px) 33px / 92px 23px no-repeat fixed,
     radial-gradient(circle at 50% 135%, var(--vwb-sun2) 0 22px, var(--vwb-sun) 42px, transparent 43px) 0 0 / 100% 56px no-repeat fixed,
     repeating-linear-gradient(90deg, var(--vwb-line) 0 1px, transparent 1px 38px) 0 40px / 100% 16px repeat-x fixed,
     repeating-linear-gradient(to bottom, var(--vwb-line) 0 1px, transparent 1px 6px) 0 40px / 100% 16px repeat-x fixed;
-  --vw-sky: linear-gradient(to bottom, #ffe6f6 0%, #f1d9ff 40%, #ffd1ea 62%, #c9f1ff 100%);
-  --vw-grid: rgb(232 74 190 / 0.55); --vw-palm: rgb(120 40 140 / 0.35);
+  --vw-sky: linear-gradient(to bottom, #ffe3f4 0%, #ead6ff 38%, #ffd0e8 60%, #ffdcc4 68%, #c9f1ff 100%);
+  --vw-grid: rgb(220 90 200 / 0.5); --vw-palm: rgb(118 52 150 / 0.4); --vw-mount: rgb(205 160 240 / 0.8); --vw-mount2: rgb(170 120 230 / 0.6);
+  --vw-star: transparent; --vw-hard: rgb(176 120 230 / 0.45); --vw-paper: rgb(170 120 230 / 0.12);
 }
 html.dark[data-skin="vaporwave"] {
   --titlebar-color: #0d3550;
-  --vwb-a: #2b0d47; --vwb-b: #3a1260; --vwb-c: #0d3550; --vwb-sun: #ff4fa8; --vwb-sun2: #ffb347; --vwb-line: rgb(255 79 168 / 0.5);
-  --vw-sky: linear-gradient(to bottom, #12042a 0%, #2a0a4a 40%, #5a1466 62%, #0b2f4a 100%);
-  --vw-grid: rgb(255 79 200 / 0.75); --vw-palm: rgb(10 0 25 / 0.75);
+  --vwb-a: #2b0d47; --vwb-b: #3a1260; --vwb-c: #0d3550; --vwb-sun: #ff4fa8; --vwb-sun2: #ffb347; --vwb-line: rgb(255 79 168 / 0.45);
+  --side-art: linear-gradient(to bottom, rgb(255 255 255 / 0.06), transparent 60%);
+  --vw-sky: linear-gradient(to bottom, #0e0426 0%, #250a46 38%, #5a1466 60%, #b3307e 68%, #0b2f4a 100%);
+  --vw-grid: rgb(255 79 200 / 0.75); --vw-palm: rgb(8 0 22 / 0.85); --vw-mount: rgb(40 10 70 / 0.9); --vw-mount2: rgb(70 20 110 / 0.8);
+  --vw-star: rgb(255 240 250 / 0.8); --vw-hard: rgb(255 79 200 / 0.35); --vw-paper: rgb(255 120 220 / 0.07);
 }
-@media (prefers-reduced-motion: no-preference) {
-  html[data-skin="vaporwave"]:not([data-motion="minima"]) .theme-band::before { animation: vw-floor 1.6s linear infinite; }
-}
-@keyframes vw-floor { from { background-position: calc(50% - 46px) 33px, 0 0, 0 40px, 0 40px; } to { background-position: calc(50% - 46px) 33px, 0 0, 0 40px, 0 46px; } }
-.scene-vaporwave .scene-blur { background: var(--vw-sky); --scene-opacity: 0.62; --scene-blur: 3px; }
-html.dark .scene-vaporwave .scene-blur { --scene-opacity: 0.72; }
-.vw-sun { left: 50%; bottom: 30%; width: min(46vw, 420px); aspect-ratio: 1; translate: -50% 50%; border-radius: 50%;
+@media (prefers-reduced-motion: no-preference) { html[data-skin="vaporwave"]:not([data-motion="minima"]) .theme-band::before { animation: vw-floor 1.6s linear infinite; } }
+@keyframes vw-floor { from { background-position: 0 0, calc(50% - 46px) 33px, 0 0, 0 40px, 0 40px; } to { background-position: 0 0, calc(50% - 46px) 33px, 0 0, 0 40px, 0 46px; } }
+.scene-vaporwave .scene-blur { background: var(--vw-sky); --scene-opacity: 0.7; }
+html.dark .scene-vaporwave .scene-blur { --scene-opacity: 0.8; }
+.vw-stars { inset: 0 0 40% 0; background: radial-gradient(circle, var(--vw-star) 0 1px, transparent 1.6px) 0 0 / 140px 110px, radial-gradient(circle, var(--vw-star) 0 1.4px, transparent 2px) 60px 40px / 230px 190px; mask-image: linear-gradient(to bottom, #000 40%, transparent); animation: vw-twinkle 4s ease-in-out infinite alternate; }
+@keyframes vw-twinkle { from { opacity: 0.5; } to { opacity: 1; } }
+.vw-glow { left: 50%; bottom: 30%; width: min(70vw, 640px); aspect-ratio: 1; translate: -50% 50%; border-radius: 50%; background: radial-gradient(closest-side, rgb(255 110 190 / 0.5), transparent); animation: vw-breathe 7s ease-in-out infinite alternate; }
+@keyframes vw-breathe { from { opacity: 0.6; transform: scale(0.96); } to { opacity: 1; transform: scale(1.06); } }
+.vw-sun { left: 50%; bottom: 30%; width: min(44vw, 400px); aspect-ratio: 1; translate: -50% 50%; border-radius: 50%; filter: blur(1.5px);
   background: linear-gradient(to bottom, #ffe27a 0%, #ffa66b 35%, #ff5fb4 70%, #c43cff 100%);
-  mask-image: linear-gradient(to bottom, #000 0 50%, transparent 50% 54%, #000 54% 62%, transparent 62% 67%, #000 67% 74%, transparent 74% 80%, #000 80% 86%, transparent 86% 93%, #000 93%);
-  filter: drop-shadow(0 0 40px rgb(255 95 180 / 0.6)); animation: vw-sun 7s ease-in-out infinite alternate; }
-@keyframes vw-sun { from { scale: 1; filter: drop-shadow(0 0 30px rgb(255 95 180 / 0.45)); } to { scale: 1.04; filter: drop-shadow(0 0 60px rgb(255 95 180 / 0.8)); } }
-.vw-floor { left: -50%; right: -50%; bottom: -10%; height: 45%; transform-origin: 50% 0; transform: perspective(260px) rotateX(62deg);
+  mask-image: linear-gradient(to bottom, #000 0 50%, transparent 50% 54%, #000 54% 62%, transparent 62% 67%, #000 67% 74%, transparent 74% 80%, #000 80% 86%, transparent 86% 93%, #000 93%); }
+.vw-mount { left: -4%; right: -4%; bottom: 28%; height: 20%; filter: blur(2px); }
+.vw-mount.back { background: var(--vw-mount2); clip-path: polygon(0 100%, 6% 55%, 14% 72%, 22% 38%, 31% 66%, 40% 48%, 49% 78%, 57% 40%, 65% 68%, 74% 32%, 83% 64%, 92% 46%, 100% 100%); }
+.vw-mount.front { background: var(--vw-mount); height: 13%; clip-path: polygon(0 100%, 9% 62%, 18% 80%, 27% 50%, 36% 76%, 45% 58%, 53% 84%, 62% 52%, 71% 78%, 80% 44%, 89% 72%, 100% 56%, 100% 100%); }
+.vw-floor { left: -50%; right: -50%; bottom: -10%; height: 42%; transform-origin: 50% 0; transform: perspective(260px) rotateX(62deg); filter: blur(0.6px);
   background: linear-gradient(var(--vw-grid) 2px, transparent 2px) 0 0 / 60px 60px, linear-gradient(90deg, var(--vw-grid) 2px, transparent 2px) 0 0 / 60px 60px;
-  mask-image: linear-gradient(to bottom, transparent, #000 35%); animation: vw-rush 1.4s linear infinite; }
+  mask-image: linear-gradient(to bottom, transparent, #000 35%); animation: vw-rush 1.6s linear infinite; }
 @keyframes vw-rush { from { background-position: 0 0, 0 0; } to { background-position: 0 60px, 0 0; } }
-.vw-palm { bottom: 18%; width: min(18vw, 170px); color: var(--vw-palm); animation: vw-sway 6s ease-in-out infinite alternate; transform-origin: 50% 100%; }
-.vw-palm.left { left: 4%; } .vw-palm.right { right: 4%; scale: -1 1; animation-delay: -3s; }
+.vw-palm { bottom: 16%; width: min(18vw, 170px); color: var(--vw-palm); filter: blur(1.5px); animation: vw-sway 6s ease-in-out infinite alternate; transform-origin: 50% 100%; }
+.vw-palm.left { left: 3%; } .vw-palm.right { right: 3%; scale: -1 1; animation-delay: -3s; }
 @keyframes vw-sway { from { rotate: -2deg; } to { rotate: 2deg; } }
+/* Windows-95 windows: cards, the message box and dialogs with a chunky border and a hard lilac shadow; the sidebar is
+   lilac grid paper; the main button is a chrome magenta-to-violet; the active item of the menu carries a gradient edge. */
+html[data-skin="vaporwave"] [data-slot="card"] { border: 1.5px solid color-mix(in oklch, var(--primary) 30%, var(--border)); box-shadow: 4px 4px 0 0 var(--vw-hard); }
+html.dark[data-skin="vaporwave"] [data-slot="card"] { box-shadow: 4px 4px 0 0 var(--vw-hard), 0 10px 32px -16px rgb(255 60 180 / 0.45); }
+html[data-skin="vaporwave"] [data-slot="dialog-overlay"] + [role="dialog"] { border: 1.5px solid transparent; background: linear-gradient(var(--popover), var(--popover)) padding-box, linear-gradient(90deg, #ff71ce, #b967ff 50%, #01cdfe) border-box; box-shadow: 6px 6px 0 0 var(--vw-hard); }
+html[data-skin="vaporwave"] [data-slot="button"].bg-primary { background-image: linear-gradient(135deg, oklch(0.6 0.23 345), oklch(0.5 0.22 300)); }
+html.dark[data-skin="vaporwave"] [data-slot="button"].bg-primary { background-image: linear-gradient(135deg, oklch(0.74 0.19 350), oklch(0.62 0.2 300)); color: oklch(0.99 0 0); box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 70%, transparent), 0 0 18px -3px color-mix(in oklch, var(--primary) 75%, transparent); }
+html.dark[data-skin="vaporwave"] :is(h1, h2):not(.prose-chat *) { text-shadow: 0 0 14px color-mix(in oklch, var(--primary) 55%, transparent); }
+html[data-skin="vaporwave"] aside.bg-sidebar { background-image: linear-gradient(180deg, transparent 55%, color-mix(in oklch, oklch(0.8 0.13 340) 22%, transparent) 100%), linear-gradient(var(--vw-paper) 1px, transparent 1px), linear-gradient(90deg, var(--vw-paper) 1px, transparent 1px); background-size: 100% 100%, 26px 26px, 26px 26px; }
+html.dark[data-skin="vaporwave"] aside.bg-sidebar { background-image: linear-gradient(180deg, transparent 45%, color-mix(in oklch, oklch(0.5 0.2 340) 30%, transparent) 100%), linear-gradient(var(--vw-paper) 1px, transparent 1px), linear-gradient(90deg, var(--vw-paper) 1px, transparent 1px); background-size: 100% 100%, 26px 26px, 26px 26px; border-right-color: color-mix(in oklch, var(--primary) 30%, var(--border)); }
+html[data-skin="vaporwave"] nav button.bg-accent { box-shadow: inset 3px 0 0 var(--primary); }
+html[data-skin="vaporwave"] .bg-bubble { background-image: linear-gradient(135deg, oklch(0.53 0.23 345), oklch(0.48 0.2 300)); }
+html.dark[data-skin="vaporwave"] .bg-bubble { background-image: linear-gradient(135deg, oklch(0.5 0.2 345), oklch(0.45 0.19 295)); }
+html[data-skin="vaporwave"] [data-testid="update-card"] { background-image: linear-gradient(135deg, #7b2ff7, #c2307f); }
 
 /* ================================================================================================================
-   RETRO ARCADE — deep space: three layers of stars falling at different speeds, a fleet of coloured invaders marching
-   above, the ground and the cannon below, scanlines over it. IBM Plex Mono, titles in Press Start 2P.
+   RETRO — the scene. Deep space: three layers of stars falling at different speeds, a dim planet, a fleet of coloured
+   invaders marching above, the ground and the cannon below, a CRT vignette and scanlines over it.
    ================================================================================================================ */
 html[data-skin="retro"] {
   --titlebar-color: #c9dba6;
   --rt-band-invaders: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23c0268f' d='M4 4h1v1h-1zM10 4h1v1h-1zM5 5h1v1h-1zM9 5h1v1h-1zM4 6h7v1h-7zM3 7h2v1h-2zM6 7h3v1h-3zM10 7h2v1h-2zM2 8h11v1h-11zM2 9h1v1h-1zM4 9h7v1h-7zM12 9h1v1h-1zM2 10h1v1h-1zM4 10h1v1h-1zM10 10h1v1h-1zM12 10h1v1h-1zM5 11h2v1h-2zM8 11h2v1h-2z'/%3E%3Cpath fill='%230a8fa8' d='M27 4h2v1h-2zM26 5h4v1h-4zM25 6h6v1h-6zM24 7h2v1h-2zM27 7h2v1h-2zM30 7h2v1h-2zM24 8h8v1h-8zM26 9h1v1h-1zM29 9h1v1h-1zM25 10h1v1h-1zM27 10h2v1h-2zM30 10h1v1h-1zM24 11h1v1h-1zM26 11h1v1h-1zM29 11h1v1h-1zM31 11h1v1h-1z'/%3E%3Cpath fill='%23a07800' d='M46 4h4v1h-4zM43 5h10v1h-10zM42 6h12v1h-12zM42 7h3v1h-3zM47 7h2v1h-2zM51 7h3v1h-3zM42 8h12v1h-12zM45 9h2v1h-2zM49 9h2v1h-2zM44 10h2v1h-2zM47 10h2v1h-2zM50 10h2v1h-2zM42 11h2v1h-2zM52 11h2v1h-2z'/%3E%3C/svg%3E");
   --band: var(--rt-space);
+  --side-art: repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px);
   --band-art:
     repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px),
     var(--rt-band-invaders) 0 11px / 132px 34px repeat-x fixed,
     radial-gradient(circle at 20px 10px, var(--rt-star) 0 1px, transparent 1.5px) 0 0 / 97px 56px fixed,
     radial-gradient(circle at 60px 40px, var(--rt-star) 0 1px, transparent 1.5px) 0 0 / 143px 56px fixed;
-  --band-art-opacity: 0.55;
+  --band-art-opacity: 0.6;
   --rt-deep: linear-gradient(to bottom, #d4e3b4, #c3d79c);
+  --rt-vignette: rgb(40 80 30 / 0.18);
 }
-html.dark[data-skin="retro"] { --rt-band-invaders: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23ff4fd8' d='M4 4h1v1h-1zM10 4h1v1h-1zM5 5h1v1h-1zM9 5h1v1h-1zM4 6h7v1h-7zM3 7h2v1h-2zM6 7h3v1h-3zM10 7h2v1h-2zM2 8h11v1h-11zM2 9h1v1h-1zM4 9h7v1h-7zM12 9h1v1h-1zM2 10h1v1h-1zM4 10h1v1h-1zM10 10h1v1h-1zM12 10h1v1h-1zM5 11h2v1h-2zM8 11h2v1h-2z'/%3E%3Cpath fill='%233ef0ff' d='M27 4h2v1h-2zM26 5h4v1h-4zM25 6h6v1h-6zM24 7h2v1h-2zM27 7h2v1h-2zM30 7h2v1h-2zM24 8h8v1h-8zM26 9h1v1h-1zM29 9h1v1h-1zM25 10h1v1h-1zM27 10h2v1h-2zM30 10h1v1h-1zM24 11h1v1h-1zM26 11h1v1h-1zM29 11h1v1h-1zM31 11h1v1h-1z'/%3E%3Cpath fill='%23ffe14d' d='M46 4h4v1h-4zM43 5h10v1h-10zM42 6h12v1h-12zM42 7h3v1h-3zM47 7h2v1h-2zM51 7h3v1h-3zM42 8h12v1h-12zM45 9h2v1h-2zM49 9h2v1h-2zM44 10h2v1h-2zM47 10h2v1h-2zM50 10h2v1h-2zM42 11h2v1h-2zM52 11h2v1h-2z'/%3E%3C/svg%3E"); --titlebar-color: #050a06; --rt-deep: linear-gradient(to bottom, #020407, #041309 70%, #062010); }
-@media (prefers-reduced-motion: no-preference) {
-  html[data-skin="retro"]:not([data-motion="minima"]) .theme-band::before { animation: rt-band-march 2.4s steps(1, end) infinite; }
-}
+html.dark[data-skin="retro"] { --rt-band-invaders: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23ff4fd8' d='M4 4h1v1h-1zM10 4h1v1h-1zM5 5h1v1h-1zM9 5h1v1h-1zM4 6h7v1h-7zM3 7h2v1h-2zM6 7h3v1h-3zM10 7h2v1h-2zM2 8h11v1h-11zM2 9h1v1h-1zM4 9h7v1h-7zM12 9h1v1h-1zM2 10h1v1h-1zM4 10h1v1h-1zM10 10h1v1h-1zM12 10h1v1h-1zM5 11h2v1h-2zM8 11h2v1h-2z'/%3E%3Cpath fill='%233ef0ff' d='M27 4h2v1h-2zM26 5h4v1h-4zM25 6h6v1h-6zM24 7h2v1h-2zM27 7h2v1h-2zM30 7h2v1h-2zM24 8h8v1h-8zM26 9h1v1h-1zM29 9h1v1h-1zM25 10h1v1h-1zM27 10h2v1h-2zM30 10h1v1h-1zM24 11h1v1h-1zM26 11h1v1h-1zM29 11h1v1h-1zM31 11h1v1h-1z'/%3E%3Cpath fill='%23ffe14d' d='M46 4h4v1h-4zM43 5h10v1h-10zM42 6h12v1h-12zM42 7h3v1h-3zM47 7h2v1h-2zM51 7h3v1h-3zM42 8h12v1h-12zM45 9h2v1h-2zM49 9h2v1h-2zM44 10h2v1h-2zM47 10h2v1h-2zM50 10h2v1h-2zM42 11h2v1h-2zM52 11h2v1h-2z'/%3E%3C/svg%3E"); --titlebar-color: #070a1a; --rt-deep: linear-gradient(to bottom, #04061a, #070a1e 60%, #0a1a24); --rt-vignette: rgb(0 0 0 / 0.55); }
+@media (prefers-reduced-motion: no-preference) { html[data-skin="retro"]:not([data-motion="minima"]) .theme-band::before { animation: rt-band-march 2.4s steps(1, end) infinite; } }
 @keyframes rt-band-march { 0%, 100% { background-position: 0 0, 0 11px, 0 0, 0 0; } 50% { background-position: 0 0, 12px 11px, 0 0, 0 0; } }
-.scene-retro .scene-blur { background: var(--rt-deep); --scene-opacity: 1; --scene-blur: 0px; }
+.scene-retro .scene-blur { background: var(--rt-deep); --scene-opacity: 1; }
 .rt-stars { inset: -200px 0 0 0; animation: rt-fall linear infinite; }
 .rt-stars.s1 { background: radial-gradient(circle, var(--rt-star) 0 1px, transparent 1.6px) 0 0 / 120px 100px; animation-duration: 60s; }
 .rt-stars.s2 { background: radial-gradient(circle, var(--rt-star) 0 1.4px, transparent 2px) 40px 30px / 190px 170px; animation-duration: 34s; }
 .rt-stars.s3 { background: radial-gradient(circle, var(--rt-star) 0 2px, transparent 2.6px) 90px 60px / 260px 230px; animation-duration: 20s; }
 @keyframes rt-fall { from { transform: translateY(0); } to { transform: translateY(200px); } }
-.rt-fleet { top: 3%; left: 50%; width: min(70vw, 720px); height: 120px; translate: -50% 0; opacity: 0.16; filter: blur(1px);
-  background: var(--rt-band-invaders) 0 0 / 120px 32px repeat; image-rendering: pixelated; animation: rt-march 6s steps(6, end) infinite alternate; }
-@keyframes rt-march { from { transform: translateX(-40px); } to { transform: translateX(40px) translateY(12px); } }
+.rt-planet { right: 6%; top: 14%; width: min(26vw, 260px); aspect-ratio: 1; border-radius: 50%; opacity: 0.5;
+  background: radial-gradient(circle at 36% 32%, color-mix(in oklch, var(--info) 45%, transparent), color-mix(in oklch, var(--info) 14%, transparent) 55%, transparent 72%),
+    repeating-linear-gradient(to bottom, transparent 0 6px, color-mix(in oklch, var(--info) 10%, transparent) 6px 8px);
+  mask-image: radial-gradient(circle, #000 60%, transparent 70%); animation: rt-orbit 40s ease-in-out infinite alternate; }
+@keyframes rt-orbit { from { transform: translate(0, 0); } to { transform: translate(-24px, 16px); } }
+.rt-fleet { top: 3%; left: 50%; width: min(70vw, 720px); height: 120px; translate: -50% 0; opacity: 0.18; filter: blur(1px);
+  background: var(--rt-band-invaders) 0 0 / 120px 32px repeat; image-rendering: pixelated; animation: rt-march-fleet 6s steps(6, end) infinite alternate; }
+@keyframes rt-march-fleet { from { transform: translateX(-40px); } to { transform: translateX(40px) translateY(12px); } }
 .rt-ground { left: 0; right: 0; bottom: 18px; height: 3px; background: color-mix(in oklch, var(--primary) 50%, transparent); }
 .rt-ship { left: 50%; bottom: 22px; width: 44px; height: 24px; translate: -50% 0; background: var(--rt-ship) center / contain no-repeat; opacity: 0.6; animation: rt-patrol 9s ease-in-out infinite alternate; }
 @keyframes rt-patrol { from { transform: translateX(-28vw); } to { transform: translateX(28vw); } }
-.rt-scan { inset: 0; background: repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px); }
+.rt-scan { inset: 0; background: radial-gradient(120% 90% at 50% 45%, transparent 55%, var(--rt-vignette)), repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px); }
+/* Square corners everywhere (the robot keeps its own shapes), pixel titles, hard pixel shadows, the main button pressed
+   down and to the right, arcade capitals on it; the sidebar carries the scanlines too; cards and dialogs framed. */
+html[data-skin="retro"] *:not(.orb, .orb *) { border-radius: 0; }
+html[data-skin="retro"] ::-webkit-scrollbar-thumb { border-radius: 0; background-color: color-mix(in oklch, var(--primary) 40%, transparent); }
+html[data-skin="retro"] :is(h1, h2, h3, [data-slot="card-title"]):not(.prose-chat *) { font-family: "Press Start 2P", var(--font-sans); font-weight: 400; letter-spacing: 0; line-height: 1.35; font-size-adjust: cap-height 0.62; }
+html[data-skin="retro"] [data-slot="card"] { border: 2px solid color-mix(in oklch, var(--primary) 40%, var(--border)); box-shadow: 4px 4px 0 0 var(--rt-shadow); }
+html[data-skin="retro"] [data-slot="dialog-overlay"] + [role="dialog"] { border: 2px solid color-mix(in oklch, var(--primary) 70%, transparent); box-shadow: 6px 6px 0 0 var(--rt-shadow); }
+html[data-skin="retro"] [data-slot="button"].bg-primary { box-shadow: 3px 3px 0 0 color-mix(in oklch, var(--foreground) 35%, transparent); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+html[data-skin="retro"] [data-slot="button"].bg-primary:active { translate: 2px 2px; box-shadow: 1px 1px 0 0 color-mix(in oklch, var(--foreground) 35%, transparent); }
+html[data-skin="retro"] [data-slot="button"].border { box-shadow: 2px 2px 0 0 var(--rt-shadow); }
+html[data-skin="retro"] [data-testid="update-card"] { background-image: none; background-color: oklch(0.2 0.03 150); border: 2px solid oklch(0.85 0.23 143); box-shadow: 4px 4px 0 0 rgb(57 255 20 / 0.3); }
+html[data-skin="retro"] aside.bg-sidebar { background-image: repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px); }
+html[data-skin="retro"] nav button.bg-accent { box-shadow: inset 3px 0 0 var(--primary); }
+/* Very faint scanlines over the whole window at night. */
+html.dark[data-skin="retro"] body { background-image: repeating-linear-gradient(to bottom, transparent 0 2px, rgb(0 0 0 / 0.16) 2px 3px); }
 
 /* ================================================================================================================
-   CANDY (Nube) — a sugary pastel sky: bubblegum pink, lilac and mint melting into each other, glossy jelly bubbles
-   rising and puffy candy clouds below. Nunito, titles in Fredoka.
+   NUBE (candy) — the scene. Big soft pastel blobs (mint, peach, lilac, pink, sky) breathing slowly over the cream, and a
+   few clay toys floating among them: puffy clouds, a sphere, a ring, a pill, a cube with rounded corners, each with the
+   light on its top left and its soft coloured shadow. Night: a plum sky with the same toys, dimmer.
    ================================================================================================================ */
 html[data-skin="nube"] {
-  --titlebar-color: #c9e4ff;
-  --cd-a: #ffc6e6; --cd-b: #e3ccff; --cd-c: #c9e4ff; --cd-shine: rgb(255 255 255 / 0.7);
+  --titlebar-color: #cfe7ff;
+  --cd-a: #ffd1e4; --cd-b: #e8d6ff; --cd-c: #cfe7ff; --cd-shine: rgb(255 255 255 / 0.75);
   --band: linear-gradient(90deg, var(--cd-a), var(--cd-b) 50%, var(--cd-c) calc(100% - var(--wco-inset))) fixed;
+  --side-art: linear-gradient(to bottom, var(--cd-shine), transparent 48%);
   --band-art:
-    linear-gradient(to bottom, var(--cd-shine), transparent 45%),
-    radial-gradient(circle at 30% 30%, #fff 0 2px, rgb(255 255 255 / 0.45) 3px 8px, transparent 9px) 40px 14px / 180px 56px repeat-x fixed,
-    radial-gradient(circle at 30% 30%, #fff 0 1.5px, rgb(255 255 255 / 0.35) 2.5px 5px, transparent 6px) 120px 30px / 230px 56px repeat-x fixed;
-  --cd-sky: radial-gradient(45% 55% at 12% 15%, #ffb3dc, transparent 70%), radial-gradient(50% 55% at 88% 20%, #cbb8ff, transparent 70%),
-    radial-gradient(55% 50% at 25% 95%, #a8f0d8, transparent 70%), radial-gradient(45% 45% at 85% 88%, #ffd9a8, transparent 70%),
-    linear-gradient(160deg, #fff0f8, #f3ecff 50%, #eaf7ff);
-  --cd-bubble: rgb(255 255 255 / 0.55); --cd-bubble-edge: rgb(255 255 255 / 0.9); --cd-cloud: #ffffff;
+    linear-gradient(to bottom, var(--cd-shine), transparent 48%),
+    radial-gradient(circle at 50% 50%, rgb(255 255 255 / 0.9) 0 3px, transparent 4px) 40px 16px / 190px 56px repeat-x fixed,
+    radial-gradient(circle at 50% 50%, rgb(255 255 255 / 0.7) 0 2px, transparent 3px) 120px 34px / 230px 56px repeat-x fixed;
+  --cd-pink: #ffc4dc; --cd-lilac: #dccbff; --cd-mint: #bdeedd; --cd-peach: #ffd9b8; --cd-sky: #c6e3ff;
+  --cd-clay-hi: rgb(255 255 255 / 0.85); --cd-clay-lo: rgb(190 110 160 / 0.22); --cd-shadow: rgb(214 120 190 / 0.35);
+  --cd-toy-opacity: 0.9;
 }
 html.dark[data-skin="nube"] {
   --titlebar-color: #2a2452;
-  --cd-a: #4a2347; --cd-b: #352a5c; --cd-c: #2a2452; --cd-shine: rgb(255 255 255 / 0.12);
-  --cd-sky: radial-gradient(45% 55% at 12% 15%, #7a2f68, transparent 70%), radial-gradient(50% 55% at 88% 20%, #4b3a8f, transparent 70%),
-    radial-gradient(55% 50% at 25% 95%, #1f5a52, transparent 70%), radial-gradient(45% 45% at 85% 88%, #6a4a2a, transparent 70%),
-    linear-gradient(160deg, #241632, #1e1a38 50%, #182435);
-  --cd-bubble: rgb(255 200 240 / 0.12); --cd-bubble-edge: rgb(255 220 245 / 0.45); --cd-cloud: rgb(255 210 240 / 0.14);
+  --cd-a: #4a2347; --cd-b: #352a5c; --cd-c: #2a2452; --cd-shine: rgb(255 255 255 / 0.1);
+  --cd-pink: #7d3668; --cd-lilac: #55428f; --cd-mint: #2f6a5e; --cd-peach: #7a553f; --cd-sky: #365682;
+  --cd-clay-hi: rgb(255 255 255 / 0.22); --cd-clay-lo: rgb(0 0 0 / 0.35); --cd-shadow: rgb(0 0 0 / 0.45);
+  --cd-toy-opacity: 0.6;
 }
-@media (prefers-reduced-motion: no-preference) {
-  html[data-skin="nube"]:not([data-motion="minima"]) .theme-band::before { animation: cd-band 30s linear infinite; }
+@media (prefers-reduced-motion: no-preference) { html[data-skin="nube"]:not([data-motion="minima"]) .theme-band::before { animation: cd-band 36s linear infinite; } }
+@keyframes cd-band { from { background-position: 0 0, 40px 16px, 120px 34px; } to { background-position: 0 0, 230px 16px, -110px 34px; } }
+.scene-nube .scene-blur { --scene-opacity: 1; }
+/* The blobs: soft-edged ellipses of one pastel each, breathing and drifting very slowly. */
+.cd-blob { border-radius: 50%; background: radial-gradient(closest-side, var(--c), color-mix(in srgb, var(--c) 60%, transparent) 55%, transparent); animation: cd-drift ease-in-out infinite alternate; }
+@keyframes cd-drift { from { transform: translate(0, 0) scale(1); } to { transform: translate(var(--dx, 40px), var(--dy, -30px)) scale(1.12); } }
+/* The clay toys: light on the top left, a soft shade on the bottom right, a coloured shadow under them. */
+.cd-toy { --c: var(--cd-pink); opacity: var(--cd-toy-opacity); filter: blur(1.2px); animation: cd-float ease-in-out infinite alternate; }
+html.dark .cd-toy { filter: blur(1.2px) brightness(1.5) saturate(1.25); }
+.cd-toy, .cd-toy::before, .cd-toy::after {
+  background: radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--c) 45%, #fff), var(--c) 60%, color-mix(in srgb, var(--c) 78%, #7a3a6a) 100%);
+  box-shadow: inset 5px 6px 10px var(--cd-clay-hi), inset -8px -10px 16px var(--cd-clay-lo), 0 18px 28px -14px var(--cd-shadow);
 }
-@keyframes cd-band { from { background-position: 0 0, 40px 14px, 120px 30px; } to { background-position: 0 0, 220px 14px, -110px 30px; } }
-.scene-nube .scene-blur { background: var(--cd-sky); --scene-opacity: 1; --scene-blur: 2px; animation: cd-breathe 18s ease-in-out infinite alternate; }
-@keyframes cd-breathe { from { transform: scale(1) rotate(0deg); } to { transform: scale(1.08) rotate(2deg); } }
-/* Jelly bubbles: a glossy sphere with its highlight, rising and swaying. */
-.cd-bubble { bottom: -120px; border-radius: 50%; border: 1.5px solid var(--cd-bubble-edge);
-  background: radial-gradient(circle at 32% 28%, rgb(255 255 255 / 0.95) 0 9%, transparent 16%), radial-gradient(circle at 65% 72%, rgb(255 255 255 / 0.35) 0 6%, transparent 11%), radial-gradient(circle at 50% 50%, hsl(var(--h, 320) 95% 82% / 0.18) 40%, hsl(var(--h, 320) 90% 72% / 0.55) 100%);
-  box-shadow: inset -8px -10px 20px hsl(var(--h, 320) 90% 60% / 0.25), 0 8px 22px hsl(var(--h, 320) 80% 60% / 0.22); animation: cd-rise linear infinite; }
-@keyframes cd-rise { 0% { transform: translate(0, 0); opacity: 0; } 8% { opacity: 1; } 50% { transform: translate(24px, -55vh); } 92% { opacity: 1; } 100% { transform: translate(-12px, -112vh); opacity: 0; } }
-.cd-cloud { bottom: -30px; height: 120px; border-radius: 999px; background: var(--cd-cloud); filter: blur(14px); opacity: 0.85; animation: cloud-drift linear infinite; }
-html.dark .cd-cloud { opacity: 1; }
+@keyframes cd-float { from { transform: translateY(0) rotate(var(--r, 0deg)); } to { transform: translateY(-16px) rotate(calc(var(--r, 0deg) + 3deg)); } }
+.cd-toy.sphere { border-radius: 50%; }
+.cd-toy.cube { border-radius: 30%; }
+.cd-toy.pill { border-radius: 999px; }
+.cd-toy.ring { border-radius: 50%; background: transparent; box-shadow: none; }
+.cd-toy.ring::before { content: ""; position: absolute; inset: 0; border-radius: 50%; mask: radial-gradient(circle, transparent 0 34%, #000 35%); }
+.cd-toy.cloud { border-radius: 999px; }
+.cd-toy.cloud::before, .cd-toy.cloud::after { content: ""; position: absolute; border-radius: 50%; bottom: 25%; }
+.cd-toy.cloud::before { left: 16%; width: 52%; aspect-ratio: 1; }
+.cd-toy.cloud::after { left: 46%; width: 42%; aspect-ratio: 1; }
+/* Everything moulded in clay: cards, the message box and dialogs with a light edge on top and a soft coloured shadow;
+   the main button a glossy jelly; outline buttons and the active item of the menu like soft pads; inputs pressed in. */
+html[data-skin="nube"] [data-slot="card"] { border-color: transparent; box-shadow: inset 0 2px 0 var(--cd-clay-hi), inset 0 -3px 0 color-mix(in srgb, var(--cd-clay-lo) 60%, transparent), 0 16px 32px -18px var(--cd-shadow); }
+html[data-skin="nube"] [data-slot="dialog-overlay"] + [role="dialog"] { border-color: transparent; border-radius: 1.6rem; box-shadow: inset 0 2px 0 var(--cd-clay-hi), inset 0 -4px 0 color-mix(in srgb, var(--cd-clay-lo) 60%, transparent), 0 30px 60px -24px var(--cd-shadow); }
+html[data-skin="nube"] [data-slot="button"].bg-primary { background-image: linear-gradient(to bottom, rgb(255 255 255 / 0.28), transparent 55%); box-shadow: inset 0 -3px 0 rgb(0 0 0 / 0.14), 0 8px 18px -8px color-mix(in oklch, var(--primary) 80%, transparent); }
+html[data-skin="nube"] [data-slot="button"].border { border-color: transparent; background-color: var(--card); box-shadow: inset 0 1.5px 0 var(--cd-clay-hi), 0 2px 0 color-mix(in srgb, var(--cd-clay-lo) 70%, transparent), 0 8px 16px -10px var(--cd-shadow); }
+html[data-skin="nube"] nav button.bg-accent { box-shadow: inset 0 1.5px 0 var(--cd-clay-hi), inset 0 -2px 0 color-mix(in srgb, var(--cd-clay-lo) 50%, transparent); }
+html[data-skin="nube"] :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"]) { box-shadow: inset 0 2px 5px color-mix(in srgb, var(--cd-clay-lo) 70%, transparent); }
+html[data-skin="nube"] aside.bg-sidebar { background-image: linear-gradient(180deg, transparent 40%, color-mix(in srgb, var(--cd-lilac) 45%, transparent) 100%); border-right-color: transparent; }
+html.dark[data-skin="nube"] aside.bg-sidebar { background-image: linear-gradient(180deg, transparent 40%, color-mix(in srgb, var(--cd-lilac) 40%, transparent) 100%); }
+html[data-skin="nube"] .bg-bubble { background-image: linear-gradient(to bottom, rgb(255 255 255 / 0.22), transparent 60%); box-shadow: inset 0 -2px 0 rgb(0 0 0 / 0.1); }
+html[data-skin="nube"] [data-testid="update-card"] { background-image: linear-gradient(135deg, oklch(0.52 0.16 348), oklch(0.48 0.14 295)); }
 
 /* ---- Typography of each theme: used while the interface font is the default (a font chosen by hand wins). ---- */
 html[data-skin="vaporwave"][data-font="outfit"] { --font-sans: "Space Grotesk Variable", "Segoe UI", system-ui, sans-serif; }
 html[data-skin="retro"][data-font="outfit"] { --font-sans: "IBM Plex Mono", "Cascadia Code", Consolas, monospace; }
 html[data-skin="nube"][data-font="outfit"] { --font-sans: "Nunito Variable", "Segoe UI", system-ui, sans-serif; }
 html[data-skin="profesional"][data-font="outfit"] { --font-sans: "Inter Variable", "Segoe UI", system-ui, sans-serif; }
-html[data-skin="nube"] :is(h1, h2, h3, [data-slot="card-title"]):not(.prose-chat *) { font-family: "Fredoka Variable", var(--font-sans); font-weight: 600; letter-spacing: 0.005em; }
-html[data-skin="vaporwave"] :is(h1, h2, h3, [data-slot="card-title"]):not(.prose-chat *) { font-weight: 600; letter-spacing: 0.01em; }
+html[data-skin="vaporwave"] :is(h1, h2, h3, [data-slot="card-title"], .hero-title):not(.prose-chat *) { font-family: "Orbitron Variable", "Space Grotesk Variable", var(--font-sans); font-weight: 600; letter-spacing: 0.04em; }
+html[data-skin="nube"] :is(h1, h2, h3, [data-slot="card-title"], .hero-title):not(.prose-chat *) { font-family: "Fredoka Variable", var(--font-sans); font-weight: 600; letter-spacing: 0.005em; }
 /* The big greeting of the chat in the theme's own colours. */
 html[data-skin="vaporwave"] .hero-title { background: linear-gradient(90deg, #ff71ce, #b967ff 50%, #01cdfe); -webkit-background-clip: text; background-clip: text; color: transparent; }
 html[data-skin="nube"] .hero-title { background: linear-gradient(90deg, #f05aa6, #a07af0 55%, #4fb7e8); -webkit-background-clip: text; background-clip: text; color: transparent; }
 html[data-skin="retro"] .hero-title { color: var(--primary); text-shadow: 0 0 10px color-mix(in oklch, var(--primary) 45%, transparent); }
 
-/* ---- Over a backdrop, the message box is frosted glass framed in the theme's colours; the chat's notes too. ---- */
+/* ---- Over a backdrop, the message box is frosted glass framed in the theme's own way; the chat's notes too. ---- */
 html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) [data-slot="composer"] { backdrop-filter: blur(16px) saturate(1.25); }
 html:is([data-skin="vaporwave"], [data-skin="nube"]) main .bg-muted\/70 { background-color: color-mix(in oklch, var(--card) 62%, transparent); backdrop-filter: blur(10px); }
-html[data-skin="vaporwave"] [data-slot="composer"] { border: 1.5px solid transparent; background: linear-gradient(color-mix(in oklch, var(--card) 78%, transparent), color-mix(in oklch, var(--card) 78%, transparent)) padding-box, linear-gradient(90deg, #ff71ce, #b967ff 50%, #01cdfe) border-box; box-shadow: 0 10px 30px -14px rgb(185 103 255 / 0.55); }
-html[data-skin="nube"] [data-slot="composer"] { border: 1.5px solid transparent; background: linear-gradient(color-mix(in oklch, var(--card) 80%, transparent), color-mix(in oklch, var(--card) 80%, transparent)) padding-box, linear-gradient(90deg, #ffb3dc, #cbb8ff 50%, #a8e4ff) border-box; border-radius: 1.75rem; box-shadow: 0 14px 34px -18px rgb(214 120 190 / 0.6), inset 0 1px 0 rgb(255 255 255 / 0.75); }
+html[data-skin="vaporwave"] [data-slot="composer"] { border: 1.5px solid transparent; background: linear-gradient(color-mix(in oklch, var(--card) 80%, transparent), color-mix(in oklch, var(--card) 80%, transparent)) padding-box, linear-gradient(90deg, #ff71ce, #b967ff 50%, #01cdfe) border-box; box-shadow: 5px 5px 0 0 var(--vw-hard); }
+html[data-skin="nube"] [data-slot="composer"] { border-color: transparent; background-color: color-mix(in oklch, var(--card) 84%, transparent); border-radius: 1.75rem; box-shadow: inset 0 2px 0 var(--cd-clay-hi), inset 0 -4px 0 color-mix(in srgb, var(--cd-clay-lo) 60%, transparent), 0 18px 40px -18px var(--cd-shadow); }
 html[data-skin="retro"] [data-slot="composer"] { background-color: color-mix(in oklch, var(--card) 86%, transparent); border: 2px solid color-mix(in oklch, var(--primary) 70%, transparent); box-shadow: 4px 4px 0 0 color-mix(in oklch, var(--primary) 35%, transparent); }

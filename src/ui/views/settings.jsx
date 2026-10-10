@@ -54,9 +54,9 @@ function AssistantCard({ c }) {
 const SWATCH = {
   orb: 'radial-gradient(120% 90% at 30% 10%, #f3f5ff 0%, #c9d0fb 55%, #8fa0f2 100%)',
   vaporwave: 'linear-gradient(180deg, #2b1055 0%, #d53a9d 55%, #ff9a5a 80%, #2de2e6 100%)',
-  retro: `url("data:image/svg+xml,${encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 8' shape-rendering='crispEdges'><path fill='#39ff14' d='M2 0h1v1H2zM8 0h1v1H8zM3 1h1v1H3zM7 1h1v1H7zM2 2h7v1H2zM1 3h2v1H1zM4 3h3v1H4zM8 3h2v1H8zM0 4h11v1H0zM0 5h1v1H0zM2 5h7v1H2zM10 5h1v1h-1zM0 6h1v1H0zM2 6h1v1H2zM8 6h1v1H8zM10 6h1v1h-1zM3 7h2v1H3zM6 7h2v1H6z'/></svg>")}") center / 22px 16px space no-repeat, #050805`,
+  retro: `url("data:image/svg+xml,${encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 8' shape-rendering='crispEdges'><path fill='#39ff14' d='M2 0h1v1H2zM8 0h1v1H8zM3 1h1v1H3zM7 1h1v1H7zM2 2h7v1H2zM1 3h2v1H1zM4 3h3v1H4zM8 3h2v1H8zM0 4h11v1H0zM0 5h1v1H0zM2 5h7v1H2zM10 5h1v1h-1zM0 6h1v1H0zM2 6h1v1H2zM8 6h1v1H8zM10 6h1v1h-1zM3 7h2v1H3zM6 7h2v1H6z'/></svg>")}") center / 22px 16px space no-repeat, #070a1a`,
   profesional: 'linear-gradient(90deg, #18181b 0 34%, #f4f4f5 34% 100%)',
-  nube: 'radial-gradient(9% 26% at 34% 64%, #fff 0 70%, transparent 74%), radial-gradient(12% 36% at 46% 52%, #fff 0 70%, transparent 74%), radial-gradient(9% 26% at 58% 64%, #fff 0 70%, transparent 74%), radial-gradient(22% 14% at 46% 72%, #fff 0 70%, transparent 74%), linear-gradient(135deg, #ffd6ec 0%, #e4d4ff 50%, #c9ecff 100%)'
+  nube: 'radial-gradient(9% 26% at 34% 64%, #fff 0 70%, transparent 74%), radial-gradient(12% 36% at 46% 52%, #fff 0 70%, transparent 74%), radial-gradient(9% 26% at 58% 64%, #fff 0 70%, transparent 74%), radial-gradient(22% 14% at 46% 72%, #fff 0 70%, transparent 74%), radial-gradient(28% 70% at 12% 20%, #ffc4dc, transparent), radial-gradient(28% 70% at 88% 22%, #dccbff, transparent), radial-gradient(30% 60% at 20% 95%, #bdeedd, transparent), radial-gradient(30% 60% at 85% 90%, #ffd9b8, transparent), #fff6f3'
 };
 
 // Appearance: light / dark, the visual theme, fonts, colours of code and the robot (floating, sounds, animations).
