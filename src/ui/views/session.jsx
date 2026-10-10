@@ -17,44 +17,6 @@ import { AGENT, PERMISSION, PERMISSION_HINT, REASONING, STATUS, DECISION, CAN_ST
 import { baseName, cn } from '@/lib/utils.js';
 import { useT, t, useLocale, currentLocale } from '@/lib/i18n.js';
 
-// "Nueva conversación": agent, project, model, permissions.
-export async function newConversation(preset = {}) {
-  let agents = [];
-  try { agents = await call('agents.status'); } catch (error) { return toast.error(String(error.message ?? error)); }
-  const usable = agents.filter((a) => a.installed && a.enabled);
-  if (!usable.length) { toast.error(t('session.noAgents')); return go('agents'); }
-  const { projects, app } = getState();
-  const first = usable.find((a) => a.id === preset.agent) ?? usable[0];
-  const id = await form(t('nav.newConversation'), {
-    description: t('session.newDesc'),
-    initial: { agent: first.id, account: first.accounts.find((x) => x.enabled !== false)?.id ?? first.id, project: preset.project ?? app.activeProject?.name ?? '__none', model: first.defaultModel || '', permission: 'editar', reasoning: 'medium', title: '' },
-    body: (v, set) => {
-      const a = usable.find((x) => x.id === v.agent);
-      return (<>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label={t('session.agent')}><Select className="w-full" value={v.agent} onValueChange={(agent) => { const n = usable.find((x) => x.id === agent); set({ agent, model: n.defaultModel || '', account: n.accounts.find((x) => x.enabled !== false)?.id ?? agent }); }} options={usable.map((x) => ({ value: x.id, label: x.label }))} /></Field>
-          {a.accounts.length > 1 ? <Field label={t('session.account')}><Select className="w-full" value={v.account} onValueChange={(account) => set({ account })} options={a.accounts.filter((x) => x.enabled !== false).map((x) => ({ value: x.id, label: x.label }))} /></Field> : null}
-          <Field label={t('session.project')}><Select className="w-full" value={v.project} onValueChange={(project) => set({ project })} options={[{ value: '__none', label: t('session.assistantFolder') }, ...projects.map((p) => ({ value: p.name, label: p.name }))]} /></Field>
-          <Field label={t('session.model')}>{a.models.length ? <Select className="w-full" value={v.model || a.models[0]} onValueChange={(model) => set({ model })} options={a.models.map((m) => ({ value: m, label: m }))} />
-            : <Input value={v.model} onChange={(e) => set({ model: e.target.value })} placeholder={t('session.modelDefault')} />}</Field>
-          <Field label={t('session.reasoning')}><Select className="w-full" value={v.reasoning} onValueChange={(reasoning) => set({ reasoning })} options={options(REASONING)} /></Field>
-        </div>
-        {v.project === '__none'
-          ? <p className="text-muted-foreground text-xs">{t('session.noProjectHint')}</p>
-          : <Field label={t('session.permissions')} hint={PERMISSION_HINT[v.permission]}><Select className="w-full" value={v.permission} onValueChange={(permission) => set({ permission })} options={options(PERMISSION)} /></Field>}
-        <Field label={t('session.titleOptional')}><Input value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={80} /></Field>
-      </>);
-    },
-    ok: t('session.start'),
-    onOk: async (v) => {
-      if (v.project !== '__none' && v.permission === 'total' && !(await confirm(t('permission.total'), t('session.totalBody'), { ok: t('session.totalYesFull'), danger: true }))) return false;
-      const s = await call('sessions.create', { agent: v.agent, account: v.account, project: v.project === '__none' ? null : v.project, model: v.model || null, permission: v.project === '__none' ? 'leer' : v.permission, reasoning: v.reasoning, title: v.title.trim() || null });
-      return s.id;
-    }
-  });
-  if (id) { await refresh().catch(() => {}); go({ view: 'session', id }); }
-}
-
 // Items → blocks: a tool call and its result become one block (the latest call with that id gets the result).
 function toBlocks(items) {
   const blocks = []; const tools = new Map();

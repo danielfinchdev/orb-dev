@@ -10,6 +10,7 @@ export default {
   'nav.settings': 'Ajustes',
   'nav.expert': 'Modo experto',
   'nav.newConversation': 'Nueva conversación',
+  'nav.newChat': 'Nuevo chat',
   'nav.folders': 'Carpetas',
   'nav.loose': 'Sin carpeta',
   'nav.noProject': 'Sin proyecto',

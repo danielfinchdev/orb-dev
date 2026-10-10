@@ -165,8 +165,12 @@ export function acpAgent(id, spec) {
       const modes = res?.modes?.availableModes ?? [];
       const ro = permission === 'leer' && modes.find((m) => /plan|read|ask/i.test(`${m.id} ${m.name}`));
       if (ro) peer.request('session/set_mode', { sessionId, modeId: ro.id }).catch(() => {});
+      // 2.6: the models this agent offers, for the brain selector.
+      const modelOpt = (res?.configOptions ?? []).find((c) => c.category === 'model' || c.id === 'model');
+      const offered = (modelOpt?.options ?? res?.models?.availableModels ?? []).map((m) => ({ id: m.value ?? m.modelId ?? m.id, label: m.name ?? m.label ?? m.value ?? m.modelId })).filter((m) => m.id);
+      if (offered.length) onEvent({ type: 'models', list: offered });
       if (o.model) {
-        const opt = (res?.configOptions ?? []).find((c) => c.category === 'model' || c.id === 'model');
+        const opt = modelOpt;
         if (opt) peer.request('session/set_config_option', { sessionId, configId: opt.id, value: o.model }).catch(() => {});
       }
       onEvent({ type: 'item', role: 'system', kind: 'status', body: `${spec.label}${o.model ? ` · ${o.model}` : ''}` });

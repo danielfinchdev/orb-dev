@@ -63,11 +63,16 @@ export function validateConfig(c) {
   }
   const o = c.orchestrator ?? {};
   if (!Array.isArray(o.models) || !o.models.length || o.models.some((m) => !/^[\w.:-]{1,80}$/.test(m?.id ?? '') || typeof m.label !== 'string')) throw new Error(tr('msg.ctx.badAssistantModels'));
-  if (!o.models.some((m) => m.id === o.model)) throw new Error(tr('msg.ctx.assistantModelOneOf', { labels: o.models.map((m) => m.label).join(', ') }));
+  // 2.6: the brain can be any agent. With Claude, one of the assistant's models (or an alias); with the others, any model id
+  // (empty = the one configured in the agent itself).
+  const brain = o.agent || 'claude';
+  if (!AGENT_IDS.includes(brain)) throw new Error(tr('msg.ctx.missingAgentCfg', { id: brain }));
+  if (brain === 'claude' && !o.models.some((m) => m.id === o.model) && !/^(sonnet|opus|haiku)$/.test(o.model ?? '')) throw new Error(tr('msg.ctx.assistantModelOneOf', { labels: o.models.map((m) => m.label).join(', ') }));
+  if (brain !== 'claude' && o.model && !/^[\w.:\-/[\]=,@]{1,80}$/.test(o.model)) throw new Error(tr('msg.ctx.badModels', { id: brain }));
   if (!['low', 'medium', 'high'].includes(o.reasoning)) throw new Error(tr('msg.ctx.badReasoning'));
   if (typeof o.orchestrate !== 'boolean') throw new Error(tr('msg.ctx.orchestrateBool'));
   int(o.maxTurns, 2, 200, 'maxTurns');
-  if (o.account && !(c.accounts ?? []).some((a) => a.id === o.account && a.agent === 'claude')) throw new Error(tr('msg.ctx.assistantNeedsClaude'));
+  if (o.account && !(c.accounts ?? []).some((a) => a.id === o.account && a.agent === brain)) throw new Error(tr('msg.ctx.assistantNeedsClaude'));
   if (c.mobile) {
     if (typeof c.mobile.enabled !== 'boolean') throw new Error(tr('msg.ctx.mobileBool'));
     int(c.mobile.port, 1024, 65535, tr('msg.ctx.mobilePort'));

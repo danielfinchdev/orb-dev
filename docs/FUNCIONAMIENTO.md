@@ -146,6 +146,18 @@ te informa. Tiene dos modos (casilla «Orquestador»):
 **Por dentro (2.3).**
 - El asistente es **una sesión viva de Claude** (Claude Agent SDK con el Claude Code del usuario) que se queda abierta entre
   mensajes. La respuesta llega en streaming (`chat:state.partial`).
+- **Cualquier cerebro (2.6):** `orchestrator.agent` puede ser cualquier agente instalado con cuenta (`chat.settings` con
+  `agent`, `model`, `reasoning`, `account`). Claude recibe la persona como system prompt; los demás, al empezar la
+  conversación, y como coordinador van en solo lectura. Cambiar de agente empieza una conversación nueva.
+- **Catálogo de cerebros** (`models.catalog`, `src/engine/catalog.mjs`): agentes instalados con sus modelos (los de la
+  configuración y los que el propio agente informa: `model/list` de Codex y la opción de modelo de los ACP, guardados en
+  `models:<agente>`), cuáles gastan más (`heavyModels` o familias conocidas) y el uso real de cada cuenta. La interfaz
+  (`src/ui/components/brain-picker.jsx`) avisa con un globo si el razonamiento es alto, el modelo es de los caros o la
+  cuenta pasa del 75 %.
+- **Nuevo chat** (`src/ui/views/new-chat.jsx`): sin ventana emergente. Con «Orquestador», configura el cerebro, reinicia la
+  conversación del asistente y le envía el mensaje; sin él, crea una conversación directa (`sessions.create`) con el
+  agente, el modelo, el razonamiento, el proyecto activo y los permisos elegidos.
+- Un diálogo pedido otra vez mientras está abierto no se abre encima (`open()` en `dialogs.jsx`).
 - Si escribes mientras responde, tu mensaje le llega en su siguiente paso (`steer`); no hace falta esperar.
 - **Parar** deja el chat libre al momento. Si escribes enseguida, el mensaje espera a que el turno parado termine de
   cerrarse (`inflight` en `orchestrator.mjs`); si no termina en 10 s, se cierra su proceso y la conversación sigue con

@@ -10,7 +10,6 @@ import { STATUS } from '@/lib/labels.js';
 import { cn } from '@/lib/utils.js';
 import { AgentIcon } from './agent-icon.jsx';
 import { useT } from '@/lib/i18n.js';
-import { newConversation } from '@/views/session.jsx';
 
 function NavItem({ icon: Icon, iconEl, label, active, onClick, children, testid }) {
   return (
@@ -134,7 +133,7 @@ export function Sidebar({ mood }) {
         <ThemeToggle />
       </div>
       <div className="px-3 pb-2">
-        <Button className="w-full justify-start" variant="outline" onClick={() => newConversation()} data-testid="new-conversation"><MessageSquarePlus />{t('nav.newConversation')}</Button>
+        <Button className="w-full justify-start" variant="outline" onClick={() => go('new')} data-testid="new-conversation"><MessageSquarePlus />{t('nav.newChat')}</Button>
       </div>
       <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-x-hidden overflow-y-auto px-3 pb-3">
         <NavItem icon={Sparkles} label={name} active={is('chat')} onClick={() => go('chat')} testid="nav-chat">

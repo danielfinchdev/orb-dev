@@ -13,6 +13,8 @@ import { rotateIfBig } from '../core/safety.mjs';
 import { mcpServersFor, browserEnv } from './sessions.mjs';
 import { account, defaultAccount, accountEnv } from '../core/accounts.mjs';
 import { briefing } from './logs.mjs';
+import { rememberModels } from './catalog.mjs';
+import { AGENT_LABELS } from '../core/home.mjs';
 
 export function persona() {
   const c = ctx.config; const me = assistantName(); const boss = userName();
@@ -70,8 +72,10 @@ export class Orchestrator {
 
   info() {
     const o = ctx.config.orchestrator ?? {};
-    const model = (o.models ?? []).find((m) => m.id === o.model);
-    return { model: o.model, modelLabel: model?.label ?? o.model, models: o.models ?? [], reasoning: o.reasoning ?? 'medium', orchestrate: o.orchestrate !== false, turns: Number(this.board.setting('orchestrator_session') ? this.board.setting('orchestrator_turns') ?? 0 : 0), maxTurns: o.maxTurns ?? 60, context: this.board.settingJson('orchestrator_context') };
+    const agent = o.agent || 'claude';
+    // 2.6: the brain can be any agent: its model's label comes from the assistant's list (Claude) or what the agent reported.
+    const model = [...(agent === 'claude' ? o.models ?? [] : []), ...(this.board.settingJson(`models:${agent}`) ?? [])].find((m) => m.id === o.model);
+    return { agent, agentLabel: AGENT_LABELS[agent] ?? agent, account: o.account || agent, model: o.model, modelLabel: model?.label ?? (o.model || tr('msg.orch.defaultModel')), models: o.models ?? [], reasoning: o.reasoning ?? 'medium', orchestrate: o.orchestrate !== false, turns: Number(this.board.setting('orchestrator_session') ? this.board.setting('orchestrator_turns') ?? 0 : 0), maxTurns: o.maxTurns ?? 60, context: this.board.settingJson('orchestrator_context') };
   }
 
   ask(text, context = '') {
@@ -151,30 +155,39 @@ export class Orchestrator {
     if (o.orchestrate === false && !free && !this.warnedFree) { this.warnedFree = true; this.board.addChat('system', tr('msg.orch.freeNeedsProject')); }
     if (free) this.warnedFree = false;
     const cwd = free ? active.path : ctx.paths.runs;
-    const acc = account(o.account) ?? defaultAccount('claude') ?? { agent: 'claude' };
-    const key = [free ? 'libre' : 'coordina', cwd, o.model, o.reasoning, acc.id].join('|');
-    if (this.live && this.liveKey === key && !this.live.isClosed()) return { free };
+    // 2.6: the brain is any installed agent (Claude by default), on one of its accounts.
+    const agent = o.agent || 'claude';
+    const chosen = account(o.account);
+    const acc = (chosen?.agent === agent ? chosen : null) ?? defaultAccount(agent) ?? { id: agent, agent };
+    const key = [agent, free ? 'libre' : 'coordina', cwd, o.model, o.reasoning, acc.id].join('|');
+    if (this.live && this.liveKey === key && !this.live.isClosed()) return { free, cwd };
     this.closeLive();
     const session = this.board.setting('orchestrator_session');
     const dirs = [...Object.values(ctx.paths.categories), ...(ctx.config.projectRoots ?? []), ...this.board.projects().map((p) => p.path)].filter((d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
     fs.mkdirSync(ctx.paths.runs, { recursive: true });
     rotateIfBig(this.logFile);
     const writeLog = (line) => { try { fs.appendFileSync(this.logFile, `${String(line).replace(/\r?\n/g, ' ')}\n`); } catch { /* log unavailable */ } };
-    const newId = session ? null : crypto.randomUUID();
-    if (newId) { this.board.setting('orchestrator_session', newId); this.board.setting('orchestrator_turns', '0'); }
+    // Claude keeps the conversation id Orb gives it; the other agents report theirs (event 'session').
+    const newId = session || agent !== 'claude' ? null : crypto.randomUUID();
+    if (newId) this.board.setting('orchestrator_session', newId);
+    if (!session) this.board.setting('orchestrator_turns', '0');
     // Through the registry (not claude.mjs directly), so ORB_FAKE_AGENTS also replaces the assistant's own Claude in tests.
-    this.live = adapter('claude').createLive({
-      exe: executable('claude'), cwd, model: o.model || 'claude-sonnet-5-5', reasoning: o.reasoning || 'medium',
-      permission: free ? 'editar' : 'leer', resumeId: session || null, newSessionId: newId,
-      mcpServers: mcpServersFor('claude', { board: this.board, orchestrator: true, browser: free, session: 'asistente', orchKey: this.key }),
+    // Claude takes the persona as its system prompt and a list of tools; the other agents get the persona at the start
+    // of the conversation (run()) and the coordinator is held to read-only by its permission.
+    const isClaude = agent === 'claude';
+    this.liveAgent = agent;
+    this.live = adapter(agent).createLive({
+      exe: executable(agent), cwd, model: o.model || (isClaude ? 'claude-sonnet-5-5' : null), reasoning: o.reasoning || 'medium',
+      permission: free ? 'editar' : 'leer', resumeId: session || null, newSessionId: isClaude ? newId : null,
+      mcpServers: mcpServersFor(agent, { board: this.board, orchestrator: true, browser: free, session: 'asistente', orchKey: this.key }),
       env: { ...accountEnv(acc), ORB_HOME: ctx.home, ORB_AGENT: 'orb', ...(free ? browserEnv('orb', 'asistente') : {}) },
-      systemPrompt: free ? freePersona(cwd) : persona(),
-      tools: free ? { disallowed: ['Task'] } : { allowed: ['mcp__orb', 'Read', 'Glob', 'Grep'], disallowed: claude.COORDINATOR_DENIED },
+      ...(isClaude ? { systemPrompt: free ? freePersona(cwd) : persona() } : {}),
+      tools: !isClaude ? undefined : free ? { disallowed: ['Task'] } : { allowed: ['mcp__orb', 'Read', 'Glob', 'Grep'], disallowed: claude.COORDINATOR_DENIED },
       addDirs: [...new Set(dirs)].filter((d) => d !== cwd).slice(0, 40), internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog,
       onEvent: (ev) => this.onEvent(ev)
     });
     this.liveKey = key;
-    return { free };
+    return { free, cwd };
   }
 
   onEvent(ev) {
@@ -182,6 +195,7 @@ export class Orchestrator {
     if (ev.type === 'item' && ev.kind === 'tool') { this.tools.push(String(ev.body?.name ?? '').replace(/^orb:/, '')); this.push(); return; }
     if (ev.type === 'item' && ev.role === 'assistant' && ev.kind === 'text') { this.partial = ''; return; }
     if (ev.type === 'session' && ev.id) { this.board.setting('orchestrator_session', ev.id); return; }
+    if (ev.type === 'models') { rememberModels(this.board, this.liveAgent, ev.list); return; }
     if (ev.type === 'context' && ev.size) { this.board.settingJson('orchestrator_context', { used: ev.used, size: ev.size }); this.push(); return; }
     if (ev.type === 'approval') {
       const r = ev.request;
@@ -208,11 +222,15 @@ export class Orchestrator {
       this.board.addChat('system', tr('msg.orch.renewed'));
     }
     const fresh = !this.board.setting('orchestrator_session');
-    const prompt = fresh ? `${briefing(this.board)}\n\n## Mensaje ${ofUser()}\n${text}` : text;
-    try { this.ensureLive(); } catch (error) {
-      this.board.addChat('system', tr('msg.orch.needsClaude', { name: assistantName(), message: error.message }));
+    let place;
+    try { place = this.ensureLive(); } catch (error) {
+      const agent = o.agent || 'claude';
+      this.board.addChat('system', tr('msg.orch.needsAgent', { name: assistantName(), agent: AGENT_LABELS[agent] ?? agent, message: error.message }));
       this.busy = false; this.push(); return;
     }
+    // A brain other than Claude gets its instructions at the start of the conversation (Claude has them as system prompt).
+    const intro = fresh && (o.agent || 'claude') !== 'claude' ? `${place.free ? freePersona(place.cwd) : persona()}\n\n` : '';
+    const prompt = fresh ? `${intro}${briefing(this.board)}\n\n## Mensaje ${ofUser()}\n${text}` : text;
     this.board.setting('orchestrator_turns', String(Number(this.board.setting('orchestrator_turns') ?? 0) + 1));
     const generation = this.generation;
     const free = (ctx.config.orchestrator ?? {}).orchestrate === false;

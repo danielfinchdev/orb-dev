@@ -36,5 +36,27 @@ export default {
   'chat.placeholderBusy': 'Send a correction to {name}…',
   'chat.placeholder': 'Message {name}…',
   'chat.modelTitle': 'Assistant model',
-  'chat.reasoningMedium': 'medium'
+  'chat.reasoningMedium': 'medium',
+  // 2.6: New chat and the choice of brain (agent + model)
+  'newChat.title': 'New chat',
+  'newChat.hello': 'What shall we do?',
+  'newChat.metaOrchestrator': '{name} coordinates the agents',
+  'newChat.metaDirect': 'Direct chat with an agent',
+  'newChat.introOrchestrator': 'Choose the project, the brain and the reasoning below. {name} plans the work and shares it out among the agents.',
+  'newChat.introDirect': 'Without “Orchestrator”, you talk directly to the chosen agent, in the project folder and with the permissions you set.',
+  'newChat.placeholderDirect': 'Write to the agent…',
+  'brain.title': 'Brain: agent and model',
+  'brain.none': 'There are no installed agents with an active account. Install them in Agents.',
+  'brain.defaultModel': 'default',
+  'brain.defaultOf': '{agent} default',
+  'brain.heavy': 'Uses the quota faster',
+  'brain.reasoning': 'Reasoning',
+  'brain.reasoningShort': 'Reasoning',
+  'brain.permissions': 'Permissions',
+  'brain.close': 'Close',
+  'brain.warnTitle': 'Careful',
+  'brain.warnHigh': 'The chosen model may use up your quota quickly: with high reasoning, every answer costs much more.',
+  'brain.warnHeavy': 'The chosen model may use up your quota quickly: {model} is one of the most expensive.',
+  'brain.warnBoth': 'The chosen model may use up your quota very quickly: {model} with high reasoning is the most expensive combination.',
+  'brain.warnUsed': 'The chosen model may use up your quota quickly: this account has already used {pct}% of its quota.'
 };
