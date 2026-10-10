@@ -37,6 +37,22 @@ test('el primer arranque crea la carpeta del asistente con todo lo necesario', (
   assert.ok(isHome(t.home));
 });
 
+test('bitácoras en el idioma elegido; al cambiarlo, las que solo tienen la cabecera la cambian y las demás no', () => {
+  const { home } = createHome(fs.mkdtempSync(path.join(t.base, 'en-')), { assistantName: 'Nova', language: 'en' });
+  assert.match(fs.readFileSync(path.join(home, 'bitacora', 'GENERAL.md'), 'utf8'), /^# Nova’s general log\n/);
+  const general = ctx.paths.generalLog; const web = board.projectLogFile('web');
+  const notes = board.ensureProjectLog('Con notas'); fs.appendFileSync(notes, '\n### 2026-10-10 12:00 — Ana — algo\n');
+  assert.equal(fs.readFileSync(web, 'utf8'), projectLogHeader('web'));
+  saveConfig({ language: 'en' });
+  try {
+    assert.match(fs.readFileSync(general, 'utf8'), /^# Orb·e’s general log\n/);
+    assert.equal(fs.readFileSync(web, 'utf8'), projectLogHeader('web', 'en'));
+    assert.match(fs.readFileSync(notes, 'utf8'), /^# Bitácora — Con notas\n[\s\S]*### 2026-10-10/, 'con entradas no se toca');
+  } finally { saveConfig({ language: 'es' }); }
+  assert.match(fs.readFileSync(general, 'utf8'), /^# Bitácora general de Orb·e\n/);
+  fs.rmSync(notes);
+});
+
 test('2.4: quien tenía el nombre por defecto «Orb» pasa a Orb·e; un nombre elegido a mano se queda', () => {
   const old = (stored) => { const home = fs.mkdtempSync(path.join(t.base, 'nombre-')); fs.writeFileSync(path.join(home, 'orb.json'), JSON.stringify(stored)); return loadConfig(home); };
   assert.equal(old({ version: 3, assistantName: 'Orb' }).assistantName, 'Orb·e');

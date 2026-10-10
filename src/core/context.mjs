@@ -2,7 +2,7 @@
 // The engine, the MCP server and the tests call useHome() once; every core module reads ctx.
 import fs from 'node:fs';
 import path from 'node:path';
-import { paths, loadConfig, writeJson, merge, AGENT_IDS } from './home.mjs';
+import { paths, loadConfig, writeJson, merge, AGENT_IDS, relabelEmptyLogs } from './home.mjs';
 import { translate } from './i18n.mjs';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from './appearance.mjs';
 
@@ -26,6 +26,7 @@ export function saveConfig(patch) {
   const next = merge(ctx.config, patch);
   validateConfig(next);
   writeJson(ctx.paths.config, next);
+  if (next.language !== ctx.config.language) relabelEmptyLogs(ctx.home, ctx.config, next);
   ctx.config = next;
   return next;
 }

@@ -134,7 +134,7 @@ export class Board {
   projectLogFile(name) { return path.join(ctx.paths.projectLogs, `${folderName(name, 'proyecto')}.md`); }
   ensureProjectLog(name) {
     const file = this.projectLogFile(name);
-    if (!fs.existsSync(file)) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, projectLogHeader(name)); }
+    if (!fs.existsSync(file)) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, projectLogHeader(name, ctx.config?.language)); }
     return file;
   }
 

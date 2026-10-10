@@ -8,6 +8,19 @@
 Windows 10/11. Como aún no está firmada, SmartScreen avisa la primera vez: «Más información» → «Ejecutar de todas formas».
 En el primer arranque la app detecta qué agentes tienes y con qué sesión, e instala lo que falte con los instaladores oficiales.
 
+## Novedades de la 2.5
+
+La versión estable: más fiable en el uso de cada día.
+
+- **Parar y seguir:** si paras a Orb·e y le escribes enseguida, tu mensaje espera a que termine de parar y se responde.
+  Antes podía salir «no puede responder: el agente sigue trabajando».
+- **El móvil no se desvincula por la hora:** si el reloj del teléfono va adelantado o atrasado, Orb usa la hora del PC y
+  todo sigue funcionando. Antes el móvil se desvinculaba y había que escanear el QR otra vez.
+- **Más seguridad entre agentes:** cada agente se identifica ante Orb con una firma que solo da Orb. Un agente no puede
+  hacerse pasar por otro ni cerrar una tarea que no es suya.
+- **Bitácoras en tu idioma:** las bitácoras nuevas y sus entradas salen en el idioma de Ajustes (español o inglés). Al
+  cambiar de idioma, las que aún están vacías cambian también.
+
 ## Novedades de la 2.4.2
 
 - **Encuentra tus agentes estén donde estén:** si moviste programas de `C:` a otro disco para liberar espacio (por ejemplo

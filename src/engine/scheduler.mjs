@@ -360,8 +360,8 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
     const icon = { done: '✅', failed: '❌', blocked: '⛔', cancelled: '🚫' }[task.status] ?? 'ℹ️';
     board.addChat('system', `${tr(`msg.scheduler.ended.${task.status in { done: 1, failed: 1, blocked: 1, cancelled: 1 } ? task.status : 'other'}`, { icon, label: label(task.assigned_to), id: task.id, title: oneLine(task.title) })}${task.result ? `\n${redactSecrets(task.result).slice(0, 600)}` : ''}`);
     const cp = board.settingJson(`checkpoint:${task.id}`);
-    const revert = cp?.before ? `botón «Deshacer esta tarea» de la tarea #${task.id} (devuelve solo los archivos que cambió).`
-      : task.branch ? `no integrar la rama \`${task.branch}\` (o borrarla desde la tarea).` : 'revisar los cambios en la carpeta del proyecto.';
+    const revert = cp?.before ? tr('sys.logs.revertUndo', { id: task.id })
+      : task.branch ? tr('sys.logs.revertBranch', { branch: task.branch }) : tr('sys.logs.revertFolder');
     try { logTask(board, task, { revert }); } catch (error) { this.log(`bitácora #${task.id}: ${error.message}`); }
     board.event(taskId, task.assigned_to ?? 'agente', 'agent.reply', `${STATUS_ES[task.status] ?? task.status}: ${redactSecrets(task.result ?? 'sin resumen').slice(0, 1500)}`);
     if (board.settingJson(`followup:${task.id}`) && task.status !== 'cancelled') {
