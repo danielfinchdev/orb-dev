@@ -408,7 +408,7 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
     this.log(`tarea #${taskId} terminó (código ${code}, estado ${task.status}${stopped ? ', detenida' : ''})`);
     if (task.status === 'queued' || task.status === 'limited') return; // handed to another agent, or waiting for the reset (already told)
     const icon = { done: '✅', failed: '❌', blocked: '⛔', cancelled: '🚫' }[task.status] ?? 'ℹ️';
-    board.addChat('system', `${tr(`msg.scheduler.ended.${task.status in { done: 1, failed: 1, blocked: 1, cancelled: 1 } ? task.status : 'other'}`, { icon, label: label(task.assigned_to), id: task.id, title: oneLine(task.title) })}${task.result ? `\n${redactSecrets(task.result).slice(0, 600)}` : ''}`);
+    board.addChat('system', `${tr(`msg.scheduler.ended.${task.status in { done: 1, failed: 1, blocked: 1, cancelled: 1 } ? task.status : 'other'}`, { icon, label: label(task.assigned_to), id: task.id, title: oneLine(task.title) })}${task.result ? `\n${redactSecrets(task.result).slice(0, 600)}` : ''}`, { kind: 'task-end', task: task.id, status: task.status });
     const cp = board.settingJson(`checkpoint:${task.id}`);
     const revert = cp?.before ? tr('sys.logs.revertUndo', { id: task.id })
       : task.branch ? tr('sys.logs.revertBranch', { branch: task.branch }) : tr('sys.logs.revertFolder');

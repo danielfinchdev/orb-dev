@@ -22,7 +22,8 @@ export const buttonVariants = cva(
         xs: 'h-7 rounded-md gap-1 px-2 text-xs',
         lg: 'h-10 rounded-lg px-6',
         icon: 'size-9',
-        'icon-sm': 'size-8'
+        'icon-sm': 'size-8',
+        'icon-xs': 'size-7 rounded-md [&_svg:not([class*=size-])]:size-3.5'
       }
     },
     defaultVariants: { variant: 'default', size: 'default' }

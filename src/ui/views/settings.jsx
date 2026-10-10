@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { toast } from 'sonner';
-import { Settings, FolderOpen, Plus, Trash2, ArrowLeftRight, Smartphone, QrCode, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, LayoutGrid, UserRound, Brain, ListChecks, Wrench, RefreshCw } from 'lucide-react';
+import { Settings, FolderOpen, Plus, Trash2, ArrowLeftRight, Smartphone, QrCode, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, LayoutGrid, UserRound, ListChecks, Wrench, RefreshCw, ChevronRight } from 'lucide-react';
 import { ToolIcon } from '@/components/agent-icon.jsx';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, APPEARANCE_DEFAULTS } from '../../core/appearance.mjs';
 import { PRODUCT, AUTHOR } from '../../core/product.mjs';
@@ -11,13 +11,13 @@ import { PageHeader } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea, Kbd, Spinner } from '@/components/ui/basic.jsx';
-import { Select, Switch, Checkbox, Dialog, DialogContent, DialogTitle } from '@/components/ui/overlay.jsx';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea, Kbd, PathText, Spinner } from '@/components/ui/basic.jsx';
+import { Select, Switch, Checkbox, Dialog, DialogContent, DialogTitle, BubbleTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
+import { AGENT } from '@/lib/labels.js';
 import { useStore, call, act, bridge, setState, getState, applyTheme, applyAppearance, go, openTerminal, openSettings, closeSettings } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { t, useT, useLocale } from '@/lib/i18n.js';
 import { LANGUAGES } from '../../core/i18n.mjs';
-import { REASONING, options } from '@/lib/labels.js';
 import { useUpdate, updateActions, notesUrl } from '@/components/update-card.jsx';
 import { play } from '@/lib/sounds.js';
 
@@ -54,9 +54,9 @@ function AssistantCard({ c }) {
 const SWATCH = {
   orb: 'radial-gradient(120% 90% at 30% 10%, #f3f5ff 0%, #c9d0fb 55%, #8fa0f2 100%)',
   vaporwave: 'linear-gradient(180deg, #2b1055 0%, #d53a9d 55%, #ff9a5a 80%, #2de2e6 100%)',
-  retro: `url("data:image/svg+xml,${encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 8' shape-rendering='crispEdges'><path fill='#39ff14' d='M2 0h1v1H2zM8 0h1v1H8zM3 1h1v1H3zM7 1h1v1H7zM2 2h7v1H2zM1 3h2v1H1zM4 3h3v1H4zM8 3h2v1H8zM0 4h11v1H0zM0 5h1v1H0zM2 5h7v1H2zM10 5h1v1h-1zM0 6h1v1H0zM2 6h1v1H2zM8 6h1v1H8zM10 6h1v1h-1zM3 7h2v1H3zM6 7h2v1H6z'/></svg>")}") center / 22px 16px space no-repeat, #050805`,
+  retro: `url("data:image/svg+xml,${encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 8' shape-rendering='crispEdges'><path fill='#39ff14' d='M2 0h1v1H2zM8 0h1v1H8zM3 1h1v1H3zM7 1h1v1H7zM2 2h7v1H2zM1 3h2v1H1zM4 3h3v1H4zM8 3h2v1H8zM0 4h11v1H0zM0 5h1v1H0zM2 5h7v1H2zM10 5h1v1h-1zM0 6h1v1H0zM2 6h1v1H2zM8 6h1v1H8zM10 6h1v1h-1zM3 7h2v1H3zM6 7h2v1H6z'/></svg>")}") center / 22px 16px space no-repeat, #070a1a`,
   profesional: 'linear-gradient(90deg, #18181b 0 34%, #f4f4f5 34% 100%)',
-  nube: 'radial-gradient(9% 26% at 34% 64%, #fff 0 70%, transparent 74%), radial-gradient(12% 36% at 46% 52%, #fff 0 70%, transparent 74%), radial-gradient(9% 26% at 58% 64%, #fff 0 70%, transparent 74%), radial-gradient(22% 14% at 46% 72%, #fff 0 70%, transparent 74%), linear-gradient(135deg, #ffd6ec 0%, #e4d4ff 50%, #c9ecff 100%)'
+  nube: 'radial-gradient(9% 26% at 34% 64%, #fff 0 70%, transparent 74%), radial-gradient(12% 36% at 46% 52%, #fff 0 70%, transparent 74%), radial-gradient(9% 26% at 58% 64%, #fff 0 70%, transparent 74%), radial-gradient(22% 14% at 46% 72%, #fff 0 70%, transparent 74%), radial-gradient(28% 70% at 12% 20%, #ffc4dc, transparent), radial-gradient(28% 70% at 88% 22%, #dccbff, transparent), radial-gradient(30% 60% at 20% 95%, #bdeedd, transparent), radial-gradient(30% 60% at 85% 90%, #ffd9b8, transparent), #fff6f3'
 };
 
 // Appearance: light / dark, the visual theme, fonts, colours of code and the robot (floating, sounds, animations).
@@ -93,7 +93,7 @@ function AppearanceCard({ c }) {
           <Field label={t('appearance.codeFont')}><Select className="w-full" value={ui.codeFont} onValueChange={(codeFont) => set({ codeFont })} options={opts(CODE_FONTS, 'appearance.codeFont')} /></Field>
           <Field label={t('appearance.codeTheme')}><Select className="w-full" value={ui.codeTheme} onValueChange={(codeTheme) => set({ codeTheme })} options={opts(CODE_THEMES, 'appearance.codeTheme')} /></Field>
         </div>
-        <pre className="code-sample hljs overflow-x-auto rounded-lg border p-3 text-[12.5px] leading-[1.55]" aria-label={t('appearance.codeSample')}><code><span className="hljs-keyword">const</span> <span className="hljs-variable">orb</span> = <span className="hljs-title function_">director</span>(<span className="hljs-string">'bolsillo'</span>, {'{ '}<span className="hljs-attr">fases</span>: <span className="hljs-number">3</span>{' }'}); <span className="hljs-comment">// Orb·e</span></code></pre>
+        <pre className="code-sample hljs overflow-x-auto rounded-lg border p-3 text-[12.5px] leading-[1.55]" aria-label={t('appearance.codeSample')}><code><span className="hljs-keyword">const</span> <span className="hljs-variable">orb</span> = <span className="hljs-title function_">director</span>(<span className="hljs-string">'bolsillo'</span>, {'{ '}<span className="hljs-attr">fases</span>: <span className="hljs-number">3</span>{' }'}); <span className="hljs-comment">// Orbe</span></code></pre>
         {robot ? (
           <div className="grid gap-1">
             <Row label={t('settings.companion')} hint={t('settings.companionHint')}><Switch checked={ui.companion !== false} onCheckedChange={(companion) => set({ companion }, companion ? t('settings.companionOn') : t('settings.companionOff'))} /></Row>
@@ -113,22 +113,20 @@ function AppearanceCard({ c }) {
   );
 }
 
-function BrainCard({ c }) {
+// 2.6: the brain (agent, model, reasoning) and the Orquestador switch are chosen under the chat's message box; here only
+// what is not there: how long a conversation lasts and, with several accounts of the brain's agent, which one it uses.
+function ChatCard({ c }) {
   const t = useT();
   const o = c.orchestrator;
-  const [v, setV] = useState({ model: o.model, reasoning: o.reasoning, maxTurns: o.maxTurns, orchestrate: o.orchestrate !== false, account: o.account ?? 'claude' });
-  const claudeAccounts = (c.accounts ?? []).filter((a) => a.agent === 'claude');
+  const agent = o.agent || 'claude';
+  const [v, setV] = useState({ maxTurns: o.maxTurns, account: o.account || agent });
+  const accounts = (c.accounts ?? []).filter((a) => a.agent === agent);
   return (
     <Card>
-      <CardHeader><CardTitle>{t('settings.brain')}</CardTitle><CardDescription>{t('settings.brainDesc')}</CardDescription></CardHeader>
+      <CardHeader><CardTitle>{t('settings.chatCard')}</CardTitle><CardDescription>{t('settings.chatCardDesc')}</CardDescription></CardHeader>
       <CardContent className="grid gap-4">
-        <div className="grid grid-cols-2 gap-3">
-          <Field label={t('settings.model')}><Select className="w-full" value={v.model} onValueChange={(model) => setV({ ...v, model })} options={o.models.map((m) => ({ value: m.id, label: m.label }))} /></Field>
-          <Field label={t('settings.reasoning')}><Select className="w-full" value={v.reasoning} onValueChange={(reasoning) => setV({ ...v, reasoning })} options={options(REASONING)} /></Field>
-        </div>
-        {claudeAccounts.length > 1 ? <Field label={t('settings.claudeAccount')}><Select className="w-full" value={v.account} onValueChange={(account) => setV({ ...v, account })} options={claudeAccounts.map((a) => ({ value: a.id, label: a.label }))} /></Field> : null}
         <Field label={t('settings.maxTurns')} hint={t('settings.maxTurnsHint')}><Input type="number" min={2} max={200} value={v.maxTurns} onChange={(e) => setV({ ...v, maxTurns: num(e.target.value) })} className="w-28" /></Field>
-        <Row label={t('settings.orchestrator')} hint={t('settings.orchestratorHint')}><Switch checked={v.orchestrate} onCheckedChange={async (orchestrate) => { if (!orchestrate && !(await confirm(t('settings.freeModeTitle'), t('settings.freeModeBody', { name: c.assistantName }), { ok: t('settings.freeModeOk') }))) return; const r = await act(call('chat.settings', { orchestrate })); if (r) { setV({ ...v, orchestrate }); setState((s) => ({ app: { ...s.app, assistant: r } })); } }} /></Row>
+        {accounts.length > 1 ? <Field label={t('settings.brainAccount')}><Select className="w-full" value={v.account} onValueChange={(account) => setV({ ...v, account })} options={accounts.map((a) => ({ value: a.id, label: a.label }))} /></Field> : null}
       </CardContent>
       <CardFooter><Button size="sm" onClick={() => save({ orchestrator: v })}>{t('settings.save')}</Button></CardFooter>
     </Card>
@@ -143,17 +141,41 @@ function TasksCard({ c }) {
     resumeAfterRestart: c.continuity?.resumeAfterRestart !== false, resumeAtReset: c.continuity?.resumeAtReset !== false,
     delegation: c.delegation?.enabled !== false, trusted: c.delegation?.trusted !== false, maxPerTask: c.delegation?.maxPerTask ?? 4 });
   const cap = (a, k, val) => setV({ ...v, caps: { ...v.caps, [a]: { ...v.caps[a], [k]: num(val) } } });
+  // 2.6: one slider from maximum saving to maximum use sets every limit at once (and how careful the assistant is with
+  // the quota); the limits themselves stay in «Opciones avanzadas» for whoever wants to tune them by hand.
+  const [profile, setProfile] = useState(c.budget.profile === undefined ? 2 : c.budget.profile);
+  const [advanced, setAdvanced] = useState(false);
+  const applyProfile = (level) => {
+    const p = SPEND_PRESETS[level];
+    const caps = Object.fromEntries(agents.map((a) => [a, { maxTasks: p.maxTasks, maxHeavy: p.maxHeavy }]));
+    setProfile(level);
+    setV({ ...v, maxParallel: p.maxParallel, perAgent: p.perAgent, timeoutMinutes: p.timeoutMinutes, stopAt: Math.round(p.stopAt * 100), caps, high: p.high, maxPerTask: p.maxPerTask, trusted: p.trusted, review: p.review });
+    save({ maxParallel: p.maxParallel, perAgent: p.perAgent, timeoutMinutes: p.timeoutMinutes, review: { auto: p.review }, policy: { highNeedsApproval: p.high }, budget: { profile: level, stopAt: p.stopAt, agents: caps }, delegation: { maxPerTask: p.maxPerTask, trusted: p.trusted } });
+  };
+  const level = profile ?? null;
   return (
     <Card>
       <CardHeader><CardTitle>{t('settings.tasks')}</CardTitle><CardDescription>{t('settings.tasksDesc')}</CardDescription></CardHeader>
       <CardContent className="grid gap-4">
+        <div className="grid gap-2" data-testid="spend-profile">
+          <div className="flex items-baseline justify-between gap-3"><span className="text-sm font-medium">{t('settings.spend')}</span><span className="text-sm font-medium text-primary">{level == null ? t('settings.spendCustom') : t(`settings.spend${level}`)}</span></div>
+          <div className="text-muted-foreground flex justify-between text-xs"><span>{t('settings.spendLow')}</span><span>{t('settings.spendHigh')}</span></div>
+          <input type="range" min={0} max={4} step={1} value={level ?? 2} onChange={(e) => applyProfile(Number(e.target.value))} className="spend-slider" aria-label={t('settings.spend')} aria-valuetext={level == null ? t('settings.spendCustom') : t(`settings.spend${level}`)} data-testid="spend-slider" />
+          <div className="spend-ticks" aria-hidden="true">{[0, 1, 2, 3, 4].map((i) => <span key={i} className={cn(i === 2 && 'spend-ticks-rec')}>{i === 2 ? t('settings.spendRecommended') : ''}</span>)}</div>
+          <p className="text-muted-foreground text-xs leading-snug">{level == null ? t('settings.spendCustomHint') : t(`settings.spend${level}Hint`)}</p>
+        </div>
         <Row label={t('settings.autoRun')} hint={t('settings.autoRunHint')}><Switch checked={v.autoRun} onCheckedChange={(autoRun) => { setV({ ...v, autoRun }); save({ autoRun }); }} /></Row>
-        <Row label={t('settings.review')} hint={t('settings.reviewHint')}><Switch checked={v.review} onCheckedChange={(review) => { setV({ ...v, review }); save({ review: { auto: review } }); }} /></Row>
         <Row label={t('settings.resumeRestart')} hint={t('settings.resumeRestartHint')}><Switch checked={v.resumeAfterRestart} onCheckedChange={(resumeAfterRestart) => { setV({ ...v, resumeAfterRestart }); save({ continuity: { resumeAfterRestart } }); }} /></Row>
         <Row label={t('settings.resumeReset')} hint={t('settings.resumeResetHint')}><Switch checked={v.resumeAtReset} onCheckedChange={(resumeAtReset) => { setV({ ...v, resumeAtReset }); save({ continuity: { resumeAtReset } }); }} /></Row>
         <Row label={t('settings.delegation')} hint={t('settings.delegationHint')}><Switch checked={v.delegation} onCheckedChange={(delegation) => { setV({ ...v, delegation }); save({ delegation: { enabled: delegation } }); }} /></Row>
-        <Row label={t('settings.trusted')} hint={t('settings.trustedHint', { n: v.maxPerTask })}><Switch checked={v.trusted} disabled={!v.delegation} onCheckedChange={(trusted) => { setV({ ...v, trusted }); save({ delegation: { trusted } }); }} /></Row>
-        <Row label={t('settings.highApproval')}><Switch checked={v.high} onCheckedChange={(high) => { setV({ ...v, high }); save({ policy: { highNeedsApproval: high } }); }} /></Row>
+        <Collapsible open={advanced} onOpenChange={setAdvanced}>
+          <CollapsibleTrigger className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1.5 text-sm" data-testid="spend-advanced"><ChevronRight className={cn('size-4 transition-transform', advanced && 'rotate-90')} />{t('settings.advanced')}</CollapsibleTrigger>
+          <CollapsibleContent>
+        <div className="grid gap-4 pt-4">
+        <p className="text-muted-foreground text-xs leading-snug">{t('settings.advancedHint')}</p>
+        <Row label={t('settings.review')} hint={t('settings.reviewHint')}><Switch checked={v.review} onCheckedChange={(review) => { setV({ ...v, review }); setProfile(null); save({ review: { auto: review }, budget: { profile: null } }); }} /></Row>
+        <Row label={t('settings.trusted')} hint={t('settings.trustedHint', { n: v.maxPerTask })}><Switch checked={v.trusted} disabled={!v.delegation} onCheckedChange={(trusted) => { setV({ ...v, trusted }); setProfile(null); save({ delegation: { trusted }, budget: { profile: null } }); }} /></Row>
+        <Row label={t('settings.highApproval')}><Switch checked={v.high} onCheckedChange={(high) => { setV({ ...v, high }); setProfile(null); save({ policy: { highNeedsApproval: high }, budget: { profile: null } }); }} /></Row>
         <div className="grid grid-cols-4 gap-3">
           <Field label={t('settings.parallel')}><Input type="number" min={1} max={10} value={v.maxParallel} onChange={(e) => setV({ ...v, maxParallel: num(e.target.value) })} /></Field>
           <Field label={t('settings.perAgent')}><Input type="number" min={1} max={5} value={v.perAgent} onChange={(e) => setV({ ...v, perAgent: num(e.target.value) })} /></Field>
@@ -167,13 +189,25 @@ function TasksCard({ c }) {
         <div className="grid gap-2">
           <div className="text-muted-foreground text-xs">{t('settings.safetyNet')}</div>
           <div className="text-muted-foreground grid grid-cols-3 gap-3 text-xs"><span>{t('settings.colAgent')}</span><span>{t('settings.colTasks')}</span><span>{t('settings.colHeavy')}</span></div>
-          {agents.map((a) => <div key={a} className="grid grid-cols-3 items-center gap-3"><span className="text-sm">{a}</span><Input type="number" min={1} value={v.caps[a].maxTasks} onChange={(e) => cap(a, 'maxTasks', e.target.value)} /><Input type="number" min={0} value={v.caps[a].maxHeavy} onChange={(e) => cap(a, 'maxHeavy', e.target.value)} /></div>)}
+          {agents.map((a) => <div key={a} className="grid grid-cols-3 items-center gap-3"><span className="text-sm">{AGENT[a] ?? a}</span><Input type="number" min={1} value={v.caps[a].maxTasks} onChange={(e) => cap(a, 'maxTasks', e.target.value)} /><Input type="number" min={0} value={v.caps[a].maxHeavy} onChange={(e) => cap(a, 'maxHeavy', e.target.value)} /></div>)}
         </div>
+        <div><Button size="sm" onClick={() => { setProfile(null); save({ autoRun: v.autoRun, maxParallel: v.maxParallel, perAgent: v.perAgent, timeoutMinutes: v.timeoutMinutes, review: { auto: v.review }, policy: { highNeedsApproval: v.high }, budget: { profile: null, windowHours: v.windowHours, stopAt: Math.min(1, Math.max(0.5, v.stopAt / 100)), agents: v.caps }, delegation: { maxPerTask: v.maxPerTask } }); }} data-testid="spend-save">{t('settings.save')}</Button></div>
+        </div>
+          </CollapsibleContent>
+        </Collapsible>
       </CardContent>
-      <CardFooter><Button size="sm" onClick={() => save({ autoRun: v.autoRun, maxParallel: v.maxParallel, perAgent: v.perAgent, timeoutMinutes: v.timeoutMinutes, review: { auto: v.review }, policy: { highNeedsApproval: v.high }, budget: { windowHours: v.windowHours, stopAt: Math.min(1, Math.max(0.5, v.stopAt / 100)), agents: v.caps }, delegation: { maxPerTask: v.maxPerTask } })}>{t('settings.save')}</Button></CardFooter>
     </Card>
   );
 }
+
+// The five levels of the «ahorro ↔ uso» slider: the limits each one sets (2 = the usual ones, recommended).
+const SPEND_PRESETS = [
+  { maxParallel: 1, perAgent: 1, timeoutMinutes: 30, stopAt: 0.75, maxTasks: 8, maxHeavy: 1, high: true, maxPerTask: 1, trusted: false, review: false },
+  { maxParallel: 2, perAgent: 1, timeoutMinutes: 45, stopAt: 0.85, maxTasks: 12, maxHeavy: 3, high: true, maxPerTask: 2, trusted: true, review: false },
+  { maxParallel: 3, perAgent: 1, timeoutMinutes: 60, stopAt: 0.92, maxTasks: 20, maxHeavy: 6, high: true, maxPerTask: 4, trusted: true, review: false },
+  { maxParallel: 4, perAgent: 2, timeoutMinutes: 90, stopAt: 0.96, maxTasks: 30, maxHeavy: 10, high: false, maxPerTask: 6, trusted: true, review: true },
+  { maxParallel: 6, perAgent: 2, timeoutMinutes: 120, stopAt: 0.99, maxTasks: 50, maxHeavy: 20, high: false, maxPerTask: 10, trusted: true, review: true }
+];
 
 function McpCard({ c }) {
   const t = useT();
@@ -210,8 +244,8 @@ function McpCard({ c }) {
         {folder ? (
           <div className="grid min-w-0 gap-2" data-testid="mcp-folder">
             <div className="flex min-w-0 items-center gap-2">
-              <div className="min-w-0 flex-1"><div className="text-muted-foreground text-xs">{t('settings.mcpFolder')}</div><div className="truncate font-mono text-xs">{folder.dir}</div></div>
-              <Button size="icon-sm" variant="ghost" onClick={() => act(bridge.openPath(folder.dir))} title={t('settings.open')}><FolderOpen /></Button>
+              <div className="grid min-w-0 flex-1"><div className="text-muted-foreground text-xs">{t('settings.mcpFolder')}</div><PathText path={folder.dir} className="text-xs" /></div>
+              <BubbleTip title={t('settings.open')}><Button size="icon-sm" variant="ghost" onClick={() => act(bridge.openPath(folder.dir))} aria-label={t('settings.open')}><FolderOpen /></Button></BubbleTip>
             </div>
             {folder.servers.map((s) => (
               <div key={s.dir} className="flex min-w-0 items-center gap-3 rounded-lg border border-dashed px-3 py-2">
@@ -277,8 +311,8 @@ function AndroidCard() {
       <CardHeader><CardTitle>{t('settings.android')}</CardTitle><CardDescription>{t('settings.androidDesc')}</CardDescription></CardHeader>
       <CardContent className="grid gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="min-w-0 flex-1"><div className={cn('text-sm', st.state === 'error' && 'text-destructive')}>{label}</div><div className="text-muted-foreground truncate font-mono text-xs">{st.dir}</div></div>
-          {st.ready ? <Button size="icon-sm" variant="ghost" onClick={() => act(bridge.openPath(st.dir))} title={t('settings.open')}><FolderOpen /></Button>
+          <div className="grid min-w-0 flex-1"><div className={cn('text-sm', st.state === 'error' && 'text-destructive')}>{label}</div><PathText path={st.dir} className="text-muted-foreground text-xs" /></div>
+          {st.ready ? <BubbleTip title={t('settings.open')}><Button size="icon-sm" variant="ghost" onClick={() => act(bridge.openPath(st.dir))} aria-label={t('settings.open')}><FolderOpen /></Button></BubbleTip>
             : st.state !== 'downloading' ? <Button size="sm" variant="outline" onClick={async () => { setSt({ ...st, state: 'downloading' }); const r = await act(call('android.install')); if (r) setSt(r); else load(); }}>{t('settings.android.download')}</Button> : null}
         </div>
       </CardContent>
@@ -361,7 +395,7 @@ function MobileCard() {
                   <Smartphone className="text-muted-foreground size-4" />
                   <div className="min-w-0 flex-1"><div className="truncate">{d.name}</div><div className="text-muted-foreground text-xs">{[d.route === 'tailscale' ? 'Tailscale' : d.route === 'wifi' ? t('settings.mobileWifiShort') : null, d.push ? t('settings.mobilePushOn') : null].filter(Boolean).join(' · ')}</div></div>
                   <span className="text-muted-foreground text-xs">{d.last_seen ? new Date(d.last_seen).toLocaleString(locale, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</span>
-                  <Button size="icon-sm" variant="danger" title={t('settings.revokeTip')} onClick={async () => { if (await confirm(t('settings.revokeTitle'), t('settings.revokeBody', { name: d.name }), { ok: t('settings.remove'), danger: true })) { await act(call('remote.revoke', { id: d.id }), t('settings.revoked')); load(); } }}><Trash2 /></Button>
+                  <BubbleTip title={t('settings.revokeTip')}><Button size="icon-sm" variant="danger" aria-label={t('settings.revokeTip')} onClick={async () => { if (await confirm(t('settings.revokeTitle'), t('settings.revokeBody', { name: d.name }), { ok: t('settings.remove'), danger: true })) { await act(call('remote.revoke', { id: d.id }), t('settings.revoked')); load(); } }}><Trash2 /></Button></BubbleTip>
                 </div>
               )) : <p className="text-muted-foreground text-sm">{t('settings.none')}</p>}
             </div>
@@ -427,8 +461,8 @@ function InterfaceCard({ c }) {
         <Field label={t('settings.sizeLabel')} hint={<>{t('settings.sizeHint1')} <Kbd>Ctrl</Kbd> <Kbd>+</Kbd> {t('settings.sizeHint2')} <Kbd>Ctrl</Kbd> <Kbd>-</Kbd> {t('settings.sizeHint3')} <Kbd>Ctrl</Kbd> <Kbd>0</Kbd> {t('settings.sizeHint4')} <Kbd>Ctrl</Kbd> {t('settings.sizeHint5')}</>}>
           <div className="flex flex-wrap items-center gap-2">
             <Select className="w-44" value={preset} placeholder={zoom ? t('settings.custom', { pct: Math.round(zoom * 100) }) : '…'} onValueChange={change} options={SIZES} />
-            <Button size="icon-sm" variant="outline" title={t('settings.zoomOut')} onClick={() => change(zoom - 0.1)}><ZoomOut /></Button>
-            <Button size="icon-sm" variant="outline" title={t('settings.zoomIn')} onClick={() => change(zoom + 0.1)}><ZoomIn /></Button>
+            <BubbleTip title={t('settings.zoomOut')}><Button size="icon-sm" variant="outline" aria-label={t('settings.zoomOut')} onClick={() => change(zoom - 0.1)}><ZoomOut /></Button></BubbleTip>
+            <BubbleTip title={t('settings.zoomIn')}><Button size="icon-sm" variant="outline" aria-label={t('settings.zoomIn')} onClick={() => change(zoom + 0.1)}><ZoomIn /></Button></BubbleTip>
             <span className="text-muted-foreground text-xs tabular-nums">{zoom ? `${Math.round(zoom * 100)} %` : ''}</span>
           </div>
         </Field>
@@ -439,7 +473,6 @@ function InterfaceCard({ c }) {
             <Button size="sm" variant="outline" onClick={() => openTerminal()}><SquareTerminal />{t('settings.openTerminal')}</Button>
           </div>
         </Field>
-        <Row label={t('settings.menuBar')} hint={t('settings.menuBarHint')}><Switch checked={c.ui?.menuBar === true} onCheckedChange={(menuBar) => save({ ui: { menuBar } })} data-testid="menubar-switch" /></Row>
       </CardContent>
     </Card>
   );
@@ -569,9 +602,8 @@ function MoreAppsCard() {
 
 // Ajustes is a window over the app: sections on the left, with the developer's GitHub and the version at the bottom.
 const SECTIONS = [
-  { id: 'general', icon: UserRound, cards: (c, app) => <><AssistantCard c={c} /><FolderCard c={c} home={app.home} /></> },
+  { id: 'general', icon: UserRound, cards: (c, app) => <><AssistantCard c={c} /><ChatCard c={c} /><FolderCard c={c} home={app.home} /></> },
   { id: 'apariencia', icon: Palette, cards: (c) => <><AppearanceCard c={c} /><InterfaceCard c={c} /></> },
-  { id: 'modelo', icon: Brain, cards: (c) => <BrainCard c={c} /> },
   { id: 'tareas', icon: ListChecks, cards: (c) => <TasksCard c={c} /> },
   { id: 'movil', icon: Smartphone, cards: () => <MobileCard /> },
   { id: 'herramientas', icon: Wrench, cards: (c) => <><BrowserCard c={c} /><McpCard c={c} /><AndroidCard /></> },
@@ -592,22 +624,24 @@ export function SettingsDialog() {
     <Dialog open={Boolean(open)} onOpenChange={(o) => { if (!o) closeSettings(); }}>
       <DialogContent className="flex h-[min(780px,90vh)] w-[min(1080px,94vw)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none" data-testid="settings-dialog" aria-describedby={undefined}>
         <div className="flex h-16 shrink-0 items-center border-b px-6 pr-14">
-          <DialogTitle className="text-lg font-medium">{PRODUCT.name} · {t('settings.title')}</DialogTitle>
+          <DialogTitle className="text-lg font-medium">{t('settings.title')}</DialogTitle>
         </div>
         <div className="flex min-h-0 flex-1">
           <nav className="flex w-56 shrink-0 flex-col max-sm:w-16" aria-label={t('settings.title')}>
             <div className="grid min-h-0 flex-1 content-start gap-1 overflow-y-auto px-3 pt-4">
               {SECTIONS.map(({ id, icon: Icon }) => (
-                <button key={id} type="button" onClick={() => openSettings(id)} data-testid={`settings-nav-${id}`} title={t(`settings.section.${id}`)} aria-current={section.id === id ? 'page' : undefined}
+                <button key={id} type="button" onClick={() => openSettings(id)} data-testid={`settings-nav-${id}`} aria-label={t(`settings.section.${id}`)} aria-current={section.id === id ? 'page' : undefined}
                   className={cn('flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm', section.id === id ? 'bg-accent text-accent-foreground font-medium' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground')}>
                   <Icon className="size-[18px] shrink-0" /><span className="truncate max-sm:hidden">{t(`settings.section.${id}`)}</span>
                 </button>
               ))}
             </div>
             <div className="grid gap-0.5 px-6 pt-3 pb-5 max-sm:px-3" data-testid="settings-about">
-              <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="hover:text-primary flex w-fit cursor-pointer items-center gap-1.5 text-[13px] font-medium" title={AUTHOR.url.replace('https://', '')}>
-                <ToolIcon tool="gh" className="size-4" /><span className="max-sm:hidden">@{AUTHOR.github}</span>
-              </button>
+              <BubbleTip title={`@${AUTHOR.github}`} text={AUTHOR.url.replace('https://', '')} side="top" align="start">
+                <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="hover:text-primary flex w-fit cursor-pointer items-center gap-1.5 text-[13px] font-medium" aria-label={AUTHOR.url.replace('https://', '')}>
+                  <ToolIcon tool="gh" className="size-4" /><span className="max-sm:hidden">@{AUTHOR.github}</span>
+                </button>
+              </BubbleTip>
               <span className="text-muted-foreground text-xs max-sm:hidden">{PRODUCT.name} {app.version}</span>
             </div>
           </nav>

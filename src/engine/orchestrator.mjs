@@ -13,11 +13,32 @@ import { rotateIfBig } from '../core/safety.mjs';
 import { mcpServersFor, browserEnv } from './sessions.mjs';
 import { account, defaultAccount, accountEnv } from '../core/accounts.mjs';
 import { briefing } from './logs.mjs';
+import { rememberModels } from './catalog.mjs';
+import { recordRate } from '../core/budget.mjs';
+import { AGENT_LABELS } from '../core/home.mjs';
 
-export function persona() {
+// The models an agent takes for a task: the configured ones and the ones the agent itself listed (2.6, models:<agent>).
+// Each one with its name when the agent gave it (e.g. «opus = Opus 5.5 (claude-opus-5-5)»), so the brain picks the right id.
+export function knownModels(board, agent) {
+  const listed = board?.settingJson(`models:${agent}`) ?? [];
+  const named = listed.map((m) => (m.label && m.label !== m.id ? `${m.id} = ${m.label}${m.resolved ? ` (${m.resolved})` : ''}` : m.id));
+  const extra = (ctx.config.agents[agent]?.models ?? []).filter((id) => !listed.some((m) => m.id === id || m.resolved === id));
+  return [...new Set([...named, ...extra])].slice(0, 24);
+}
+
+// 2.6: how careful to be with the quota, from the «ahorro ↔ uso» slider of Ajustes (budget.profile; null = by hand).
+const SPEND = [
+  'NIVEL DE GASTO: máximo ahorro. Usa siempre el modelo más barato que pueda hacerlo y razonamiento "low"; una tarea mejor que varias; nada de revisiones extra salvo que te las pidan; lee lo mínimo.',
+  'NIVEL DE GASTO: ahorro. Prefiere los modelos baratos y razonamiento "low" o "medium"; junta el trabajo en pocas tareas; revisiones solo para lo importante.',
+  'NIVEL DE GASTO: equilibrado. Modelo y razonamiento según lo que pida cada tarea.',
+  'NIVEL DE GASTO: potencia. Puedes usar modelos potentes y razonamiento "high" cuando mejore el resultado, repartir en paralelo y pedir un Task Review en lo importante.',
+  'NIVEL DE GASTO: máximo uso. Prioriza la calidad: los modelos más potentes, razonamiento "high" en lo complejo, trabajo en paralelo entre agentes y Task Review de lo que se entrega.'
+];
+
+export function persona(board = null) {
   const c = ctx.config; const me = assistantName(); const boss = userName();
   const accountsOf = (a) => (c.accounts ?? []).filter((x) => x.agent === a && x.enabled !== false);
-  const models = AGENTS.filter((a) => c.agents[a]?.enabled && accountsOf(a).length && installed(a)).map((a) => `- ${a}: ${c.agents[a].strengths}. Modelos: ${(c.agents[a].models ?? []).join(', ') || 'el predeterminado de su programa'}${c.agents[a].heavyModels?.length ? ` (caros: ${c.agents[a].heavyModels.join(', ')})` : ''}.${accountsOf(a).length > 1 ? ` Cuentas: ${accountsOf(a).map((x) => x.label).join(', ')} (el trabajo se reparte solo entre ellas según su cupo).` : ''}`).join('\n');
+  const models = AGENTS.filter((a) => c.agents[a]?.enabled && accountsOf(a).length && installed(a)).map((a) => `- ${a}: ${c.agents[a].strengths}. Modelos: ${knownModels(board, a).join(', ') || 'el predeterminado de su programa'}${c.agents[a].heavyModels?.length ? ` (caros: ${c.agents[a].heavyModels.join(', ')})` : ''}.${accountsOf(a).length > 1 ? ` Cuentas: ${accountsOf(a).map((x) => x.label).join(', ')} (el trabajo se reparte solo entre ellas según su cupo).` : ''}`).join('\n');
   return `Eres ${me}, el asistente que coordina a los agentes de IA ${ofUser()}. Hablas en ${c.language === 'en' ? 'inglés' : 'español'}, cercano y breve, sin jerga técnica innecesaria.
 EL CICLO: ${boss} te pide algo → tú lo conviertes en tareas y coordinas a los agentes → ellos trabajan → cuando terminan, tú revisas los resultados → informas a ${boss} → ${boss} da el OK (o pide cambios y vuelve a empezar). Nunca des por terminado un pedido sin ese informe.\nTU PAPEL: ${boss} es quien dirige; tú eres su jefe de proyecto. ${boss} habla contigo y tú das encargos claros a los agentes (${AGENTS.join(', ')}), vigilas que cumplan y le informas con lo esencial.
 SOLO COORDINAS: no programas, no editas, no ejecutas comandos. El trabajo lo hacen los agentes mediante tareas. Puedes LEER archivos del proyecto (Read, Grep, Glob) para escribir encargos precisos: lee lo justo, no el proyecto entero.
@@ -30,7 +51,7 @@ DELEGAR: los agentes también pueden repartirse subtareas (orb_delegate); tú ve
 AGENTES DISPONIBLES:
 ${models || '- ninguno activado: pide a ' + boss + ' que active uno en la pantalla Agentes.'}
 Razonamiento "medium" por defecto. "high" solo para algo muy complicado${c.policy?.highNeedsApproval !== false ? ` (esa tarea espera la aprobación ${ofUser()}; díselo)` : ''}.
-AHORRO: cada suscripción tiene cupo y ${me} limita las tareas por agente cada ${c.budget?.windowHours ?? 5} h. Si un pedido necesita más de 3 tareas, propón el plan (tarea → agente) y espera el "sí". Si una tarea espera por cupo o falla por límite, no la dupliques: propón otro agente. No vigiles el tablero en bucle.
+AHORRO: cada suscripción tiene cupo y ${me} limita las tareas por agente cada ${c.budget?.windowHours ?? 5} h. ${SPEND[c.budget?.profile ?? 2] ?? ''} Si un pedido necesita más de 3 tareas, propón el plan (tarea → agente) y espera el "sí". Si una tarea espera por cupo o falla por límite, no la dupliques: propón otro agente. No vigiles el tablero en bucle.
 PROYECTOS: cada proyecto vive en una categoría de ${ctx.paths.projects}: windows, ios, android o web (por defecto web). Los nuevos se crean con orb_create_project indicando category (carpeta propia, con git). Las carpetas bitacora y mcp-servers son la configuración de ${me}: no son proyectos y no se tocan. Fija el proyecto de trabajo con orb_set_project; todas las tareas van ahí. Si no hay proyecto fijado y el pedido toca código, pregunta cuál.
 DÓNDE TRABAJAN: por defecto cada tarea trabaja en la carpeta del proyecto (mode "carpeta"), por turnos y con una foto previa que ${boss} puede deshacer con un botón. Marca readonly:true las que solo leen. Usa mode "aislada" (rama y copia propias) solo para experimentos o trabajo en paralelo; si a una aislada le falta algo, orb_give_files.
 CAMBIAR MODELO: orb_update_task (agent, model, reasoning) en una tarea que no está en curso; no se rehace.
@@ -70,8 +91,12 @@ export class Orchestrator {
 
   info() {
     const o = ctx.config.orchestrator ?? {};
-    const model = (o.models ?? []).find((m) => m.id === o.model);
-    return { model: o.model, modelLabel: model?.label ?? o.model, models: o.models ?? [], reasoning: o.reasoning ?? 'medium', orchestrate: o.orchestrate !== false, turns: Number(this.board.setting('orchestrator_session') ? this.board.setting('orchestrator_turns') ?? 0 : 0), maxTurns: o.maxTurns ?? 60, context: this.board.settingJson('orchestrator_context') };
+    const agent = o.agent || 'claude';
+    // 2.6: the brain can be any agent: its model's label comes from the assistant's list (Claude) or what the agent reported.
+    // Without a model of its own, the one the agent says it uses by default (Codex: GPT-6-Luna…), named.
+    const known = [...(agent === 'claude' ? o.models ?? [] : []), ...(this.board.settingJson(`models:${agent}`) ?? [])];
+    const model = known.find((m) => m.id === o.model) ?? (o.model ? null : known.find((m) => m.default));
+    return { agent, agentLabel: AGENT_LABELS[agent] ?? agent, account: o.account || agent, model: o.model, modelLabel: model?.label ?? (o.model || tr('msg.orch.defaultModel')), models: o.models ?? [], reasoning: o.reasoning ?? 'medium', orchestrate: o.orchestrate !== false, turns: Number(this.board.setting('orchestrator_session') ? this.board.setting('orchestrator_turns') ?? 0 : 0), maxTurns: o.maxTurns ?? 60, context: this.board.settingJson('orchestrator_context') };
   }
 
   ask(text, context = '') {
@@ -89,8 +114,27 @@ export class Orchestrator {
   // meta goes with the answer (e.g. the report that waits for the user's OK).
   internal(text, chatLine, meta = null) {
     if (chatLine) this.board.addChat('system', chatLine);
-    this.queue.push({ text, meta, internal: true });
+    const item = { id: crypto.randomUUID(), text, meta, internal: true };
+    this.queue.push(item); this.keep(item, true);
     this.next();
+  }
+
+  // 2.6: the engine's notices still to be answered are saved, so closing the app does not lose them: resume() puts them
+  // back in the queue at the next start (the one being answered when the app closed comes again).
+  keep(item, add) {
+    const list = (this.board.settingJson('orchestrator_pending') ?? []).filter((q) => q.id !== item.id);
+    if (add) list.push({ id: item.id, text: item.text, meta: item.meta ?? null });
+    this.board.settingJson('orchestrator_pending', list.length ? list : null);
+  }
+
+  resume() {
+    const list = this.board.settingJson('orchestrator_pending') ?? [];
+    if (!Array.isArray(list) || !list.length) return 0;
+    // Not twice: neither what is queued nor the one being answered now (a notice may have come in before resume()).
+    const queued = new Set([...this.queue.map((q) => q.id), this.current?.id].filter(Boolean));
+    for (const q of list) if (q?.id && !queued.has(q.id) && typeof q.text === 'string') this.queue.push({ ...q, internal: true });
+    this.next();
+    return list.length;
   }
 
   closeLive() { try { this.live?.close(); } catch { /* gone */ } this.live = null; this.liveKey = ''; }
@@ -102,7 +146,9 @@ export class Orchestrator {
 
   reset() {
     this.generation++;
-    this.queue = [];
+    // A new conversation («Nuevo chat», «Reiniciar») drops what the user had queued, not the engine's notices still owed
+    // (the report of finished tasks…): those are answered in the new one.
+    this.queue = this.queue.filter((q) => q.internal);
     this.forget();
     this.board.addChat('system', tr('msg.orch.newConversation', { name: assistantName() }));
     this.busy = false; this.partial = ''; this.tools = []; this.push();
@@ -118,7 +164,7 @@ export class Orchestrator {
     const live = this.live; const stopped = this.inflight;
     Promise.resolve(live?.interrupt()).catch(() => {});
     if (stopped) setTimeout(() => { if (this.inflight === stopped && this.live === live) this.closeLive(); }, STOP_GRACE_MS).unref?.();
-    this.busy = false; this.partial = ''; this.tools = []; this.board.addChat('system', tr('msg.orch.stopped')); this.push();
+    this.busy = false; this.partial = ''; this.tools = []; if (!this.closing) this.board.addChat('system', tr('msg.orch.stopped')); this.push();
   }
 
   // Free mode: the answer to an approval card in the chat (a risky command the assistant wants to run).
@@ -130,14 +176,20 @@ export class Orchestrator {
   next() {
     if (this.busy || this.inflight || !this.queue.length) return;
     this.busy = true; this.partial = ''; this.tools = []; this.push();
-    const { text, meta } = this.queue.shift();
+    const item = this.queue.shift(); this.current = item;
+    const { text, meta } = item;
     const generation = this.generation;
     const run = this.run(text, true, meta).catch((error) => {
       this.log(`asistente: ${error.stack}`);
       if (generation !== this.generation) return; // stopped or reset meanwhile: nothing to report
       this.board.addChat('system', tr('msg.orch.cannotAnswer', { message: error.message }));
       this.busy = false; this.push();
-    }).finally(() => { if (this.inflight === run) this.inflight = null; this.next(); });
+    }).finally(() => {
+      // Answered (or given up): the notice is no longer pending, unless the app is closing in the middle of it.
+      if (item.internal && !this.closing) this.keep(item, false);
+      if (this.inflight === run) { this.inflight = null; this.current = null; }
+      if (!this.closing) this.next();
+    });
     this.inflight = run;
   }
 
@@ -151,30 +203,39 @@ export class Orchestrator {
     if (o.orchestrate === false && !free && !this.warnedFree) { this.warnedFree = true; this.board.addChat('system', tr('msg.orch.freeNeedsProject')); }
     if (free) this.warnedFree = false;
     const cwd = free ? active.path : ctx.paths.runs;
-    const acc = account(o.account) ?? defaultAccount('claude') ?? { agent: 'claude' };
-    const key = [free ? 'libre' : 'coordina', cwd, o.model, o.reasoning, acc.id].join('|');
-    if (this.live && this.liveKey === key && !this.live.isClosed()) return { free };
+    // 2.6: the brain is any installed agent (Claude by default), on one of its accounts.
+    const agent = o.agent || 'claude';
+    const chosen = account(o.account);
+    const acc = (chosen?.agent === agent ? chosen : null) ?? defaultAccount(agent) ?? { id: agent, agent };
+    const key = [agent, free ? 'libre' : 'coordina', cwd, o.model, o.reasoning, acc.id].join('|');
+    if (this.live && this.liveKey === key && !this.live.isClosed()) return { free, cwd };
     this.closeLive();
     const session = this.board.setting('orchestrator_session');
     const dirs = [...Object.values(ctx.paths.categories), ...(ctx.config.projectRoots ?? []), ...this.board.projects().map((p) => p.path)].filter((d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
     fs.mkdirSync(ctx.paths.runs, { recursive: true });
     rotateIfBig(this.logFile);
     const writeLog = (line) => { try { fs.appendFileSync(this.logFile, `${String(line).replace(/\r?\n/g, ' ')}\n`); } catch { /* log unavailable */ } };
-    const newId = session ? null : crypto.randomUUID();
-    if (newId) { this.board.setting('orchestrator_session', newId); this.board.setting('orchestrator_turns', '0'); }
+    // Claude keeps the conversation id Orb gives it; the other agents report theirs (event 'session').
+    const newId = session || agent !== 'claude' ? null : crypto.randomUUID();
+    if (newId) this.board.setting('orchestrator_session', newId);
+    if (!session) this.board.setting('orchestrator_turns', '0');
     // Through the registry (not claude.mjs directly), so ORB_FAKE_AGENTS also replaces the assistant's own Claude in tests.
-    this.live = adapter('claude').createLive({
-      exe: executable('claude'), cwd, model: o.model || 'claude-sonnet-5-5', reasoning: o.reasoning || 'medium',
-      permission: free ? 'editar' : 'leer', resumeId: session || null, newSessionId: newId,
-      mcpServers: mcpServersFor('claude', { board: this.board, orchestrator: true, browser: free, session: 'asistente', orchKey: this.key }),
+    // Claude takes the persona as its system prompt and a list of tools; the other agents get the persona at the start
+    // of the conversation (run()) and the coordinator is held to read-only by its permission.
+    const isClaude = agent === 'claude';
+    this.liveAgent = agent; this.liveAccount = acc.id;
+    this.live = adapter(agent).createLive({
+      exe: executable(agent), cwd, model: o.model || (isClaude ? 'claude-sonnet-5-5' : null), reasoning: o.reasoning || 'medium',
+      permission: free ? 'editar' : 'leer', resumeId: session || null, newSessionId: isClaude ? newId : null,
+      mcpServers: mcpServersFor(agent, { board: this.board, orchestrator: true, browser: free, session: 'asistente', orchKey: this.key }),
       env: { ...accountEnv(acc), ORB_HOME: ctx.home, ORB_AGENT: 'orb', ...(free ? browserEnv('orb', 'asistente') : {}) },
-      systemPrompt: free ? freePersona(cwd) : persona(),
-      tools: free ? { disallowed: ['Task'] } : { allowed: ['mcp__orb', 'Read', 'Glob', 'Grep'], disallowed: claude.COORDINATOR_DENIED },
+      ...(isClaude ? { systemPrompt: free ? freePersona(cwd) : persona(this.board) } : {}),
+      tools: !isClaude ? undefined : free ? { disallowed: ['Task'] } : { allowed: ['mcp__orb', 'Read', 'Glob', 'Grep'], disallowed: claude.COORDINATOR_DENIED },
       addDirs: [...new Set(dirs)].filter((d) => d !== cwd).slice(0, 40), internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog,
       onEvent: (ev) => this.onEvent(ev)
     });
     this.liveKey = key;
-    return { free };
+    return { free, cwd };
   }
 
   onEvent(ev) {
@@ -182,6 +243,9 @@ export class Orchestrator {
     if (ev.type === 'item' && ev.kind === 'tool') { this.tools.push(String(ev.body?.name ?? '').replace(/^orb:/, '')); this.push(); return; }
     if (ev.type === 'item' && ev.role === 'assistant' && ev.kind === 'text') { this.partial = ''; return; }
     if (ev.type === 'session' && ev.id) { this.board.setting('orchestrator_session', ev.id); return; }
+    if (ev.type === 'models') { rememberModels(this.board, this.liveAgent, ev.list); return; }
+    // 2.6: the brain's own plan usage too (before, only the agents' sessions counted it): the usage panel and the budget.
+    if (ev.type === 'rate') { try { recordRate(this.board, this.liveAccount ?? this.liveAgent, ev); } catch { /* budget only */ } return; }
     if (ev.type === 'context' && ev.size) { this.board.settingJson('orchestrator_context', { used: ev.used, size: ev.size }); this.push(); return; }
     if (ev.type === 'approval') {
       const r = ev.request;
@@ -208,11 +272,15 @@ export class Orchestrator {
       this.board.addChat('system', tr('msg.orch.renewed'));
     }
     const fresh = !this.board.setting('orchestrator_session');
-    const prompt = fresh ? `${briefing(this.board)}\n\n## Mensaje ${ofUser()}\n${text}` : text;
-    try { this.ensureLive(); } catch (error) {
-      this.board.addChat('system', tr('msg.orch.needsClaude', { name: assistantName(), message: error.message }));
+    let place;
+    try { place = this.ensureLive(); } catch (error) {
+      const agent = o.agent || 'claude';
+      this.board.addChat('system', tr('msg.orch.needsAgent', { name: assistantName(), agent: AGENT_LABELS[agent] ?? agent, message: error.message }));
       this.busy = false; this.push(); return;
     }
+    // A brain other than Claude gets its instructions at the start of the conversation (Claude has them as system prompt).
+    const intro = fresh && (o.agent || 'claude') !== 'claude' ? `${place.free ? freePersona(place.cwd) : persona(this.board)}\n\n` : '';
+    const prompt = fresh ? `${intro}${briefing(this.board)}\n\n## Mensaje ${ofUser()}\n${text}` : text;
     this.board.setting('orchestrator_turns', String(Number(this.board.setting('orchestrator_turns') ?? 0) + 1));
     const generation = this.generation;
     const free = (ctx.config.orchestrator ?? {}).orchestrate === false;
@@ -227,5 +295,15 @@ export class Orchestrator {
     const ok = !result.isError;
     this.board.addChat(ok ? 'orb' : 'system', answer || tr('msg.orch.cannotAnswerCheck', { logFile: this.logFile }), ok ? meta : null);
     this.busy = false; this.partial = ''; this.tools = []; this.push();
+    if (ok) this.suggestGames();
+  }
+
+  // 2.6: when the assistant has handed out work and the agents are on it, it suggests a mini-game while waiting (once in
+  // a while, not after every answer).
+  suggestGames() {
+    const working = this.board.one("SELECT COUNT(*) AS n FROM tasks WHERE created_by = 'orb' AND status IN ('queued', 'running')").n;
+    if (!working || Date.now() - Number(this.board.setting('games_suggested') ?? 0) < 30 * 60_000) return;
+    this.board.setting('games_suggested', String(Date.now()));
+    this.board.addChat('system', tr('msg.orch.playWhileWaiting', { n: working }), { kind: 'games' });
   }
 }

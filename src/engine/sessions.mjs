@@ -14,6 +14,7 @@ import { account as findAccount, defaultAccount, accountEnv } from '../core/acco
 import { browserKey } from '../core/browser-key.mjs';
 import { PERMISSIONS } from '../core/guard.mjs';
 import { explainFailure } from '../core/agent-errors.mjs';
+import { rememberModels } from './catalog.mjs';
 
 export { PERMISSIONS };
 export const ATTACH_DIR = '.orb-adjuntos';
@@ -287,6 +288,7 @@ export class Sessions {
   onLiveEvent(id, ev) {
     const run = this.running.get(id);
     if (run) run.lastAt = Date.now();
+    if (ev.type === 'models') { const s = this.get(id); if (s) rememberModels(this.board, s.agent, ev.list); return; }
     if (ev.type === 'item') {
       const item = this.addItem(id, ev.role, ev.kind, ev.body);
       if (run) { const what = describeItem(item); if (what) run.last = what; if (ev.kind === 'tool' || ev.kind === 'file') run.steps++; }

@@ -21,7 +21,24 @@ export function useStore(select = (s) => s) { return select(useSyncExternalStore
 
 // Ajustes is a window over the current view: open on a section (general, apariencia, contribuye…) or close it.
 export function openSettings(section = 'general') { setState({ settings: section }); }
+// 2.6: the mini-games window (while the agents work).
+export function openGames() { setState({ games: true }); }
+// 2.6: the sidebar folded away (remembered on this PC). Its button is next to day / night; folded, the top bar shows one
+// to bring it back.
+export function setSidebarCollapsed(collapsed) {
+  setState({ sidebarCollapsed: collapsed });
+  try { localStorage.setItem('orb.sidebar', collapsed ? 'plegada' : 'abierta'); } catch { /* this session only */ }
+}
+try { if (localStorage.getItem('orb.sidebar') === 'plegada') state = { ...state, sidebarCollapsed: true }; } catch { /* storage unavailable */ }
 export function closeSettings() { setState({ settings: null }); }
+// 2.6: the guided tour (components/tour.jsx): the robot walks through the app, on the first launch after the setup and
+// from Tutoriales. Ajustes closes so the tour can point at the screens; done or skipped, ui.tourDone is saved in the
+// assistant folder's settings so it never comes back on its own.
+export function startTour() { closeSettings(); setState({ tour: { key: Date.now() } }); }
+export function endTour() {
+  setState({ tour: null });
+  if (getState().app?.config?.ui?.tourDone !== true) call('config.save', { patch: { ui: { tourDone: true } } }).catch(() => {});
+}
 
 export function go(route) {
   const next = typeof route === 'string' ? { view: route } : route;
@@ -83,4 +100,5 @@ export function applyAppearance(ui = {}) {
   root.font = pick(ui.font, FONTS);
   root.codeFont = pick(ui.codeFont, CODE_FONTS);
   root.codeTheme = pick(ui.codeTheme, CODE_THEMES);
+  root.motion = ui.motion === 'minima' ? 'minima' : 'completa'; // the themes' moving backdrops stop with it
 }

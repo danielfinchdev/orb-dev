@@ -153,12 +153,10 @@ function callEngine(method, params, timeoutMs = 10 * 60_000) {
   });
 }
 
-// Windows' menu bar (Archivo, Edición, Ver) only when Ajustes → Interfaz turns it on; hidden, Alt still shows it.
-function applyMenuBar(c = config()) {
+// 2.6: the window has no Windows title bar, so no menu bar either; the menu stays for its keys (zoom, Ctrl+J, F11).
+function applyMenuBar() {
   if (!win || win.isDestroyed()) return;
-  const show = c?.ui?.menuBar === true;
-  win.setAutoHideMenuBar(!show);
-  win.setMenuBarVisibility(show);
+  win.setMenuBarVisibility(false);
 }
 
 // The menu in the language of the settings: built at start and again when the language changes (config:changed).
@@ -174,11 +172,11 @@ function applyMenu(c = config()) {
     // The keys themselves are handled in before-input-event (any keyboard); the menu only shows them.
     { label: L('sys.menu.view'), submenu: [{ label: L('sys.menu.zoomReset'), accelerator: 'CommandOrControl+0', registerAccelerator: false, click: () => zoomBy('reset') }, { label: L('sys.menu.zoomIn'), accelerator: 'CommandOrControl+Plus', registerAccelerator: false, click: () => zoomBy('in') }, { label: L('sys.menu.zoomOut'), accelerator: 'CommandOrControl+-', registerAccelerator: false, click: () => zoomBy('out') }, { type: 'separator' }, { label: L('sys.menu.terminal'), accelerator: 'CommandOrControl+J', registerAccelerator: false, click: () => win?.webContents.send('engine:event', 'ui:terminal', {}) }, { type: 'separator' }, { role: 'togglefullscreen', label: L('sys.menu.fullscreen') }, ...(isDev ? [{ role: 'toggleDevTools' }] : [])] }
   ]));
-  applyMenuBar(c); // a new menu on Windows comes back visible: hidden again unless Ajustes → Interfaz shows it
+  applyMenuBar(); // a new menu on Windows comes back visible: hidden again
 }
 
 function onEngineEvent(event, payload) {
-  if (event === 'config:changed') { cachedConfig = null; applyMenu(payload); applyMenuBar(payload); }
+  if (event === 'config:changed') { cachedConfig = null; applyMenu(payload); }
   if (!win || win.isDestroyed()) return;
   win.webContents.send('engine:event', event, payload);
   // Notices while the window is in the background: finished tasks, approvals, the assistant's answers.
@@ -281,13 +279,28 @@ ipcMain.handle('app:switchHome', guard(async (target) => {
 
 function setTitle() { win?.setTitle(config()?.assistantName ?? PRODUCT.name); }
 
+// 2.6: no Windows title bar and no Windows buttons: the app draws its own minimise / maximise / close, in the style of
+// each theme (components/window-controls.jsx), and asks the window for them here. The page hears when it is maximised.
+ipcMain.handle('app:window', guard(async (action) => {
+  if (!win || win.isDestroyed()) return null;
+  if (action === 'minimize') win.minimize();
+  else if (action === 'maximize') { if (win.isMaximized()) win.unmaximize(); else win.maximize(); }
+  else if (action === 'close') win.close();
+  else if (action !== 'state') throw new Error('acción de ventana desconocida');
+  return { maximized: win.isMaximized() };
+}));
+const sendWindowState = () => { if (win && !win.isDestroyed()) win.webContents.send('app:window-state', { maximized: win.isMaximized() }); };
+
 function createWindow() {
+  const dark = nativeTheme.shouldUseDarkColors;
   win = new BrowserWindow({
-    width: 1360, height: 880, minWidth: 400, minHeight: 560, show: false, backgroundColor: nativeTheme.shouldUseDarkColors ? '#16151d' : '#fbfbfe', title: PRODUCT.name, autoHideMenuBar: true,
+    width: 1360, height: 880, minWidth: 400, minHeight: 560, show: false, backgroundColor: dark ? '#16151d' : '#fbfbfe', title: PRODUCT.name, autoHideMenuBar: true,
+    titleBarStyle: 'hidden',
     icon: path.join(SRC, '..', 'build', 'icon.png'),
     webPreferences: { preload: path.join(SRC, 'main', 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, spellcheck: true, devTools: isDev || process.env.ORB_DEVTOOLS === '1' }
   });
   win.once('ready-to-show', () => win.show());
+  for (const e of ['maximize', 'unmaximize', 'restore', 'enter-full-screen', 'leave-full-screen']) win.on(e, sendWindowState);
   win.webContents.on('did-finish-load', () => win?.webContents.setZoomFactor(zoom * ZOOM_BASE));
   win.webContents.on('before-input-event', (e, input) => { const dir = zoomKey(input); if (dir) { e.preventDefault(); zoomBy(dir); } });
   win.webContents.on('zoom-changed', (_e, dir) => zoomBy(dir)); // Ctrl + mouse wheel

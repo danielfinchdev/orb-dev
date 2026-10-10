@@ -1,10 +1,10 @@
 // Create / link / clone a project, and the project control under the assistant's message box.
-import { FolderOpen, FolderPlus, X, ChevronsUpDown, Check, Folder } from 'lucide-react';
+import { FolderOpen, FolderPlus, FolderX, X, ChevronsUpDown, Check, Folder } from 'lucide-react';
 import { toast } from 'sonner';
 import { form } from './dialogs.jsx';
 import { Field, Input, Textarea } from './ui/basic.jsx';
 import { Button } from './ui/button.jsx';
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, Select } from './ui/overlay.jsx';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, Select, BubbleTip } from './ui/overlay.jsx';
 import { call, getState, act, bridge, useStore, refresh } from '@/lib/store.js';
 import { baseName } from '@/lib/utils.js';
 import { GithubIcon } from '@/components/agent-icon.jsx';
@@ -90,13 +90,17 @@ export function ProjectPicker() {
               <Folder /><span className="flex-1 truncate">{p.name}</span>{active?.name === p.name ? <Check className="text-primary!" /> : null}
             </DropdownMenuItem>
           )) : <div className="text-muted-foreground px-2 py-1.5 text-xs">{t('comp.projects.none')}</div>}
+          {/* 2.6: without a folder (it was a section of its own in the sidebar). */}
+          <DropdownMenuItem onSelect={() => setActive('')} data-testid="project-none">
+            <FolderX /><span className="grid flex-1 leading-tight"><span className="truncate">{t('nav.loose')}</span><span className="text-muted-foreground text-xs">{t('comp.projects.noneHint')}</span></span>{!active ? <Check className="text-primary!" /> : null}
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={async () => { const p = await createProjectFlow(); if (p) setActive(p.name); }}><FolderPlus />{t('comp.projects.newTitle')}</DropdownMenuItem>
           <DropdownMenuItem onSelect={async () => { const p = await linkFolderFlow(); if (p) setActive(p.name); }}><FolderOpen />{t('comp.projects.linkMenu')}</DropdownMenuItem>
           <DropdownMenuItem onSelect={async () => { const p = await cloneRepoFlow(); if (p) setActive(p.name); }}><GithubIcon />{t('comp.projects.cloneMenu')}</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      {active ? <Button variant="ghost" size="icon-sm" className="size-7" title={t('comp.projects.clear')} onClick={() => setActive('')}><X className="size-3.5" /></Button> : null}
+      {active ? <BubbleTip title={t('comp.projects.clear')}><Button variant="ghost" size="icon-xs" aria-label={t('comp.projects.clear')} onClick={() => setActive('')}><X /></Button></BubbleTip> : null}
     </div>
   );
 }

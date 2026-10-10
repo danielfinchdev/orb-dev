@@ -58,6 +58,23 @@ try {
   assert.ok(fs.existsSync(path.join(home, '.orb/datos', encrypted ? 'clave.enc' : 'clave.bin')));
   if (encrypted) assert.ok(!fs.existsSync(path.join(home, '.orb/datos/clave.bin')), 'sin clave en texto plano');
   console.log(`  clave de aprobaciones: ${encrypted ? 'cifrada por el sistema' : 'archivo (este sistema no tiene cifrado)'}`);
+
+  // ---- the guided tour (2.6): the robot starts it by itself on the first launch; one step forward, then «Saltar
+  // tutorial»; it is remembered in the assistant's folder and never comes back on its own.
+  step = 'tutorial guiado';
+  await win.locator('[data-testid=tour]').waitFor({ timeout: 10000 });
+  await win.locator('[data-testid=tour-counter]', { hasText: /^1 de \d+/ }).waitFor();
+  await win.getByRole('button', { name: 'Siguiente', exact: true }).click();
+  await win.locator('[data-testid=tour][data-step=chat]').waitFor();
+  await win.locator('[data-testid=tour-counter]', { hasText: /^2 de \d+/ }).waitFor();
+  await win.locator('[data-testid=tour] .tour-spot').waitFor();
+  await win.waitForTimeout(500);
+  await shot('01c-tutorial-guiado');
+  await win.getByRole('button', { name: 'Saltar tutorial', exact: true }).click();
+  await until(async () => (await win.locator('[data-testid=tour]').count()) === 0, 'tutorial cerrado');
+  await until(async () => (await call('app.state')).config.ui.tourDone === true, 'tutorial recordado en orb.json');
+  await win.waitForTimeout(1500);
+  assert.equal(await win.locator('[data-testid=tour]').count(), 0, 'el tutorial no vuelve solo');
   await win.waitForTimeout(400);
   await shot('02-chat-vacio');
 
@@ -119,13 +136,22 @@ try {
 
   // ---- direct conversation (T3 style) with Codex
   step = 'conversación directa';
+  // 2.6: «Nuevo chat» opens a clean chat, no pop-up (clicked twice: still one view, no dialogs on top of each other).
   await win.click('[data-testid=new-conversation]');
-  await win.getByRole('dialog').getByRole('combobox').first().click();
-  await win.getByRole('option', { name: 'Codex' }).click();
-  await dialogButton('Empezar').click();
-  await win.waitForSelector('[data-testid=session-input]');
-  await win.fill('[data-testid=session-input]', 'Hola Codex, ¿qué hay en la carpeta?');
+  await win.click('[data-testid=new-conversation]');
+  await win.waitForSelector('[data-testid=new-chat-input]');
+  assert.equal(await win.locator('[role=dialog]').count(), 0, 'sin ventana emergente');
+  await win.click('[data-testid=brain-picker]');
+  // 2.6: the list comes folded: one group per agent (and «Recomendados» when there are any).
+  assert.equal(await win.locator('[data-testid=brain-codex-default]').count(), 0, 'los grupos empiezan plegados');
+  await win.click('[data-testid=brain-group-codex]');
+  await win.click('[data-testid=brain-codex-default]');
+  await win.click('[data-testid=new-chat-orchestrator]');
+  await win.locator('[data-testid=permission-picker]').waitFor();
+  await shot('05a-nuevo-chat');
+  await win.fill('[data-testid=new-chat-input]', 'Hola Codex, ¿qué hay en la carpeta?');
   await win.keyboard.press('Enter');
+  await win.waitForSelector('[data-testid=session-input]');
   await win.waitForSelector('text=Codex empieza');
   await win.fill('[data-testid=session-input]', 'Y ahora sigue');
   await win.keyboard.press('Enter');
@@ -162,12 +188,23 @@ try {
 
   // ---- other views
   step = 'otras vistas';
-  for (const [nav, name, wait] of [['nav-projects', '06-proyectos', 'Git y GitHub'], ['nav-agents', '07-agentes', 'Uso de cada cuenta'], ['nav-logs', '08-bitacoras', 'Bitácora general'], ['nav-activity', '09-actividad', 'task.created']]) {
+  for (const [nav, name, wait] of [['nav-projects', '06-proyectos', 'Git y GitHub'], ['nav-agents', '07-agentes', 'Uso de cada cuenta'], ['nav-logs', '08-bitacoras', 'Bitácora general'], ['nav-activity', '09-actividad', 'task.created'], ['nav-tutorials', '08b-tutoriales', 'Preguntas frecuentes']]) {
     await win.click(`[data-testid=${nav}]`);
     await win.waitForSelector(`text=${wait}`);
     await win.waitForTimeout(400);
     await shot(name);
   }
+  // Tutoriales (2.6): the search narrows the cards, a question unfolds, and the guided tour starts again from its button
+  // (skipped here with Esc).
+  await win.fill('[data-testid=help-search]', 'deshacer');
+  await until(async () => (await win.locator('[data-testid^=tutorial-]').count()) < 10, 'la búsqueda filtra los tutoriales');
+  await win.fill('[data-testid=help-search]', '');
+  await win.click('[data-testid=faq-1]');
+  await win.waitForSelector('text=Orb usa su programa oficial');
+  await win.click('[data-testid=tour-replay]');
+  await win.locator('[data-testid=tour]').waitFor();
+  await win.keyboard.press('Escape');
+  await until(async () => (await win.locator('[data-testid=tour]').count()) === 0, 'tutorial saltado con Esc');
 
   // ---- Ajustes: a window over the app, with its sections on the left and the developer's GitHub and the version below
   step = 'ajustes';
@@ -193,13 +230,18 @@ try {
   await shot('10g-tema-profesional');
   await win.click('[data-testid=skin-orb]');
   await until(async () => (await win.evaluate(() => document.documentElement.dataset.skin)) === 'orb', 'vuelve al tema Orb');
-  // Windows' menu bar: hidden by default, shown from Ajustes → Apariencia.
-  const menuBar = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((b) => b.webContents.getURL().endsWith('index.html')).isMenuBarVisible());
-  assert.equal(await menuBar(), false, 'la barra de menús empieza oculta');
-  await win.click('[data-testid=menubar-switch]');
-  await until(async () => (await menuBar()) === true, 'barra de menús visible');
-  await win.click('[data-testid=menubar-switch]');
-  await until(async () => (await menuBar()) === false, 'barra de menús oculta otra vez');
+  // 2.6: no Windows title bar nor Windows buttons: minimise, maximise and close are the app's own, and the top bars move
+  // the window and leave room for them.
+  const bar = await win.evaluate(() => { const h = document.querySelector('main header'); const s = getComputedStyle(h); return { wco: navigator.windowControlsOverlay?.visible ?? false, drag: s.getPropertyValue('-webkit-app-region') || s.getPropertyValue('app-region'), pad: parseFloat(s.paddingRight) }; });
+  assert.equal(bar.drag, 'drag', 'la cabecera mueve la ventana');
+  assert.equal(bar.wco, false, 'sin los botones de Windows');
+  assert.ok(bar.pad > 100, `hueco para los botones (${bar.pad} px)`);
+  const mainWin = (fn) => app.evaluate(({ BrowserWindow }, f) => { const w = BrowserWindow.getAllWindows().find((b) => b.webContents.getURL().endsWith('index.html')); return f === 'max' ? w.isMaximized() : w.isMinimized(); }, fn);
+  await win.click('[data-testid=window-maximize]');
+  await until(() => mainWin('max'), 'maximizada con el botón propio');
+  await win.locator('[data-testid=window-maximize][aria-label=Restaurar]').waitFor();
+  await win.click('[data-testid=window-maximize]');
+  await until(async () => !(await mainWin('max')), 'restaurada');
   await section('contribuye');
   await win.locator('[data-testid=feedback-message]').waitFor();
   await shot('10h-ajustes-contribuye');
@@ -235,6 +277,13 @@ try {
   await until(async () => (await call('app.state')).config.autoRun === !autoRun, 'interruptor aplicado al momento');
   await win.getByText('Iniciar las tareas automáticamente').click();
   await until(async () => (await call('app.state')).config.autoRun === autoRun, 'y vuelve');
+  // 2.6: one slider from maximum saving to maximum use sets every limit; the limits stay under «Opciones avanzadas».
+  await win.locator('[data-testid=spend-slider]').fill('0');
+  await until(async () => { const c = (await call('app.state')).config; return c.budget.profile === 0 && c.maxParallel === 1 && c.budget.stopAt === 0.75; }, 'máximo ahorro aplicado');
+  await win.click('[data-testid=spend-advanced]');
+  await shot('10f-ajustes-ahorro');
+  await win.locator('[data-testid=spend-slider]').fill('2');
+  await until(async () => { const c = (await call('app.state')).config; return c.budget.profile === 2 && c.maxParallel === 3; }, 'vuelve a equilibrado');
 
   // ---- a new version (ORB_FAKE_UPDATE: no network): the card in the corner and the Updates card in Ajustes
   step = 'actualización';
@@ -253,18 +302,29 @@ try {
   await win.locator('[data-testid=update-card]').getByRole('button', { name: 'Cerrar' }).click();
   await until(async () => (await win.locator('[data-testid=update-card]').count()) === 0, 'tarjeta cerrada');
 
-  // ---- left menu: each project is a folder with the tasks sent to it
-  step = 'carpetas del menú';
-  await win.locator('[data-testid=folder-webviaproject]').waitFor();
-  const folderOpen = await win.locator('[data-testid=folder-webviaproject]').getAttribute('data-state');
-  if (folderOpen !== 'open') await win.click('[data-testid=folder-webviaproject]');
+  // ---- left menu (2.6): a click on a project picks it for a new conversation; a double click unfolds its tasks and
+  // conversations; each one can be put away in «Completados» (folded at the bottom) and brought back.
+  step = 'proyectos del menú';
+  const folder = win.locator('[data-testid=folder-webviaproject]');
+  await folder.waitFor();
   const firstTask = (await call('tasks.list')).find((x) => x.project === 'webviaproject');
-  await win.locator('aside').getByRole('button', { name: firstTask.title }).first().click();
+  // The one inside the project (the inbox at the top may list the same task while it waits or works).
+  const taskInMenu = win.locator('aside').getByRole('button', { name: firstTask.title }).last();
+  if (!(await taskInMenu.isVisible())) await folder.dblclick();
+  await taskInMenu.click();
   await win.waitForSelector('[data-testid=task-detail]');
   await win.locator('[data-testid=task-detail]', { hasText: `Tarea #${firstTask.id}` }).waitFor();
-  await win.click('[data-testid=folder-webviaproject]');
-  await until(async () => (await win.locator('[data-testid=folder-webviaproject]').getAttribute('data-state')) === 'closed', 'carpeta plegada');
-  await win.click('[data-testid=folder-webviaproject]');
+  await taskInMenu.hover();
+  await win.click(`[data-testid=complete-t${firstTask.id}]`);
+  await until(async () => (await call('app.state')).completed?.includes(`t${firstTask.id}`), 'tarea completada');
+  await win.click('[data-testid=sidebar-completed]');
+  await shot('12b-menu-completados');
+  await win.locator(`[data-testid=complete-t${firstTask.id}]`).hover();
+  await win.click(`[data-testid=complete-t${firstTask.id}]`);
+  await until(async () => !(await call('app.state')).completed?.includes(`t${firstTask.id}`), 'devuelta a su proyecto');
+  await folder.click();
+  await win.locator('[data-testid=new-chat-input]').waitFor();
+  assert.equal((await call('app.state')).activeProject?.name, 'webviaproject', 'un clic elige el proyecto para conversar');
 
   // ---- expert mode (PC only): turned on in Settings, files, git and panels chosen by the user
   step = 'modo experto';
@@ -292,9 +352,32 @@ try {
   // ---- free mode and model choice from the chat
   step = 'modo libre';
   await win.click('[data-testid=nav-chat]');
-  await win.getByTitle('Modelo del asistente').click();
-  await win.getByRole('option', { name: /Opus 5\.5/ }).click();
+  await win.click('[data-testid=brain-picker]');
+  await win.click('[data-testid=brain-group-rec]');
+  await win.click('[data-testid=brain-claude-claude-opus-5-5-rec]');
   await until(async () => (await call('app.state')).config.orchestrator.model === 'claude-opus-5-5', 'modelo Opus');
+  // Opus spends the quota faster: the bubble says so.
+  await win.locator('[data-testid=usage-bubble]').waitFor();
+  await shot('11a-aviso-cupo');
+  // 2.6: a clean top bar: icon buttons with their bubble, and the mini-games.
+  assert.equal(await win.locator('main header').evaluate((h) => h.innerText.replace(h.querySelector('h1')?.innerText ?? '', '').trim()), '', 'sin nombre, modo ni modelo en la barra');
+  await win.hover('[data-testid=bar-pause]');
+  await win.locator('[data-testid=bubble-tip]').waitFor();
+  await shot('11b-barra-globo');
+  await win.click('[data-testid=bar-games]');
+  await win.locator('[data-testid=games-dialog]').waitFor();
+  await shot('11c-minijuegos');
+  for (const game of ['snake', 'tetris', 'chess', 'runner', 'g2048', 'breakout', 'invaders', 'pacman']) {
+    await win.click(`[data-testid=game-${game}]`);
+    await win.waitForTimeout(500);
+    if (game === 'chess') { await win.click('[data-testid=chess-52]'); await win.click('[data-testid=chess-36]'); await win.waitForSelector('text=Te toca', { timeout: 15000 }); }
+    else await win.keyboard.press('ArrowUp');
+    await win.waitForTimeout(400);
+    await shot(`11d-juego-${game}`);
+    await win.getByRole('button', { name: 'Volver a los juegos' }).click();
+  }
+  await win.keyboard.press('Escape');
+  await until(async () => (await win.locator('[data-testid=games-dialog]').count()) === 0, 'minijuegos cerrados');
   await win.click('[data-testid=orchestrator-check]');
   await dialogButton('Activar modo libre').click();
   await until(async () => (await call('app.state')).config.orchestrator.orchestrate === false, 'modo libre');
@@ -324,7 +407,8 @@ try {
     await win.locator(`[data-testid=${nav}]:visible`).click();
     await win.waitForTimeout(500);
     const [sw, iw] = await win.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);
-    assert.ok(sw <= iw + 1, `${name}: se sale por los lados`);
+    const wide = sw > iw + 1 ? await win.evaluate(() => [...document.querySelectorAll('body *')].filter((e) => e.getBoundingClientRect().right > innerWidth + 1).slice(-4).map((e) => `${e.tagName}.${String(e.className).slice(0, 60)} ${Math.round(e.getBoundingClientRect().right)}`).join(' | ')) : '';
+    assert.ok(sw <= iw + 1, `${name}: se sale por los lados ${wide}`);
     await shot(name);
     if (nav === 'nav-settings') await win.keyboard.press('Escape');
   }

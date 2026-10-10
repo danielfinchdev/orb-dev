@@ -50,7 +50,7 @@ export function validateConfig(c) {
   if (!['es', 'en'].includes(c.language)) throw new Error(tr('msg.ctx.badLanguage'));
   for (const id of AGENT_IDS) {
     const a = c.agents?.[id]; if (!a) throw new Error(tr('msg.ctx.missingAgentCfg', { id }));
-    if (!Array.isArray(a.models) || a.models.some((m) => typeof m !== 'string' || !/^[\w.:\-[\]=,]{1,80}$/.test(m))) throw new Error(tr('msg.ctx.badModels', { id }));
+    if (!Array.isArray(a.models) || a.models.some((m) => typeof m !== 'string' || !/^[A-Za-z0-9][\w.:\-/[\]=,@]{0,79}$/.test(m))) throw new Error(tr('msg.ctx.badModels', { id }));
     if (a.path) {
       // A hand-set program path must be a real executable file (on Windows an .exe: .cmd/.bat would need a shell).
       if (typeof a.path !== 'string' || !path.isAbsolute(a.path)) throw new Error(tr('msg.ctx.pathAbs', { id }));
@@ -63,11 +63,16 @@ export function validateConfig(c) {
   }
   const o = c.orchestrator ?? {};
   if (!Array.isArray(o.models) || !o.models.length || o.models.some((m) => !/^[\w.:-]{1,80}$/.test(m?.id ?? '') || typeof m.label !== 'string')) throw new Error(tr('msg.ctx.badAssistantModels'));
-  if (!o.models.some((m) => m.id === o.model)) throw new Error(tr('msg.ctx.assistantModelOneOf', { labels: o.models.map((m) => m.label).join(', ') }));
+  // 2.6: the brain can be any agent. With Claude, one of the assistant's models (or an alias); with the others, any model id
+  // (empty = the one configured in the agent itself).
+  const brain = o.agent || 'claude';
+  if (!AGENT_IDS.includes(brain)) throw new Error(tr('msg.ctx.missingAgentCfg', { id: brain }));
+  if (brain === 'claude' && !o.models.some((m) => m.id === o.model) && !/^(sonnet|opus|haiku)$/.test(o.model ?? '')) throw new Error(tr('msg.ctx.assistantModelOneOf', { labels: o.models.map((m) => m.label).join(', ') }));
+  if (brain !== 'claude' && o.model && !/^[A-Za-z0-9][\w.:\-/[\]=,@]{0,79}$/.test(o.model)) throw new Error(tr('msg.ctx.badModels', { id: brain }));
   if (!['low', 'medium', 'high'].includes(o.reasoning)) throw new Error(tr('msg.ctx.badReasoning'));
   if (typeof o.orchestrate !== 'boolean') throw new Error(tr('msg.ctx.orchestrateBool'));
   int(o.maxTurns, 2, 200, 'maxTurns');
-  if (o.account && !(c.accounts ?? []).some((a) => a.id === o.account && a.agent === 'claude')) throw new Error(tr('msg.ctx.assistantNeedsClaude'));
+  if (o.account && !(c.accounts ?? []).some((a) => a.id === o.account && a.agent === brain)) throw new Error(tr('msg.ctx.assistantNeedsClaude'));
   if (c.mobile) {
     if (typeof c.mobile.enabled !== 'boolean') throw new Error(tr('msg.ctx.mobileBool'));
     int(c.mobile.port, 1024, 65535, tr('msg.ctx.mobilePort'));
@@ -103,8 +108,10 @@ export function validateConfig(c) {
   bool(c.continuity?.resumeAfterRestart, 'continuity.resumeAfterRestart'); bool(c.continuity?.resumeAtReset, 'continuity.resumeAtReset');
   bool(c.delegation?.enabled, 'delegation.enabled'); bool(c.delegation?.trusted, 'delegation.trusted');
   bool(c.ui?.menuBar, 'ui.menuBar');
+  bool(c.ui?.tourDone, 'ui.tourDone'); // 2.6: the guided tour was seen (or skipped) in this assistant folder
   if (c.delegation?.maxPerTask !== undefined) int(c.delegation.maxPerTask, 0, 20, 'delegation.maxPerTask');
   if (c.budget?.stopAt != null && !(Number(c.budget.stopAt) >= 0.5 && Number(c.budget.stopAt) <= 1)) throw new Error(tr('msg.ctx.stopAt'));
+  if (c.budget?.profile != null && ![0, 1, 2, 3, 4].includes(c.budget.profile)) throw new Error(tr('msg.ctx.profile'));
   if (!Array.isArray(c.projectRoots) || c.projectRoots.some((r) => typeof r !== 'string')) throw new Error(tr('msg.ctx.rootsList'));
   return true;
 }

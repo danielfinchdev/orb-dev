@@ -1,6 +1,7 @@
 // Small shadcn/ui primitives: card, badge, input, textarea, label, separator, kbd.
 import { cva } from 'class-variance-authority';
 import { cn } from '@/lib/utils.js';
+import { BubbleTip } from './overlay.jsx';
 
 export function Card({ className, ...props }) {
   return <div data-slot="card" className={cn('bg-card text-card-foreground flex flex-col gap-4 rounded-xl border py-5 shadow-xs', className)} {...props} />;
@@ -36,7 +37,20 @@ export function Textarea({ className, ...props }) {
 export function Label({ className, ...props }) { return <label data-slot="label" className={cn('flex items-center gap-2 text-[13px] leading-none font-medium select-none', className)} {...props} />; }
 export function Field({ label, hint, children, className }) {
   // min-w-0: a field in a grid or flex row may shrink below its control's one-line text (which then cuts) instead of widening the row.
-  return <div className={cn('grid min-w-0 gap-1.5', className)}><Label>{label}</Label>{children}{hint ? <p className="text-muted-foreground text-xs">{hint}</p> : null}</div>;
+  // content-start: fields side by side keep their label and control at the same height even when only one has a hint.
+  return <div className={cn('grid min-w-0 content-start gap-1.5', className)}><Label>{label}</Label>{children}{hint ? <p className="text-muted-foreground text-xs leading-snug">{hint}</p> : null}</div>;
+}
+// A file path on one line: cut in the middle so its start and its end stay readable, the whole path in a bubble.
+export function PathText({ path, className, tail = 20 }) {
+  if (!path) return null;
+  const cut = Math.min(tail, Math.floor(path.length / 2));
+  return (
+    <BubbleTip text={path} wide side="top">
+      <span className={cn('inline-flex max-w-full min-w-0 font-mono whitespace-nowrap', className)} dir="ltr">
+        <span className="min-w-0 shrink overflow-hidden text-ellipsis">{path.slice(0, path.length - cut)}</span><span className="shrink-0">{path.slice(path.length - cut)}</span>
+      </span>
+    </BubbleTip>
+  );
 }
 export function Separator({ className, vertical = false }) { return <div role="separator" className={cn('bg-border shrink-0', vertical ? 'h-full w-px' : 'h-px w-full', className)} />; }
 export function Kbd({ className, ...props }) { return <kbd className={cn('bg-muted text-muted-foreground pointer-events-none inline-flex h-5 items-center rounded border px-1.5 font-mono text-[10px]', className)} {...props} />; }

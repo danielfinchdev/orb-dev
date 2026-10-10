@@ -26,7 +26,7 @@ export default {
   'agents.followSteps': 'Sigue los pasos en la ventana que se ha abierto',
   'agents.accounts': 'Cuentas',
   'agents.useAccount': 'Usar esta cuenta',
-  'agents.removeTip': 'Quitar cuenta (la sesión y su carpeta se conservan)',
+  'agents.removeTip': 'La sesión y su carpeta se conservan en el disco.',
   'agents.removeTitle': 'Quitar cuenta',
   'agents.removeBody': '«{label}» dejará de usarse. Su carpeta y su sesión se conservan en el disco.',
   'agents.remove': 'Quitar',

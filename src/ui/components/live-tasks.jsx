@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { Square, MessageSquare, Hourglass } from 'lucide-react';
 import { AgentIcon } from './agent-icon.jsx';
 import { Button } from './ui/button.jsx';
+import { BubbleTip } from './ui/overlay.jsx';
 import { confirm } from './dialogs.jsx';
 import { useStore, call, act, go } from '@/lib/store.js';
 import { AGENT } from '@/lib/labels.js';
@@ -51,8 +52,8 @@ export function LiveTask({ t: task, compact = false, actions = true }) {
         <button className="min-w-0 flex-1 cursor-pointer truncate text-left text-[13px] hover:underline" onClick={() => go({ view: 'tasks', id: task.id })}>#{task.id} {task.title}</button>
         <span className="text-muted-foreground shrink-0 text-xs tabular-nums">{task.percent != null ? `${task.percent} %` : t('comp.live.working')}</span>
         {actions ? <>
-          <Button size="icon-sm" variant="ghost" className="size-6" title={t('comp.live.viewConv')} onClick={() => go({ view: 'session', id: task.sessionId })}><MessageSquare className="size-3.5" /></Button>
-          <Button size="icon-sm" variant="ghost" className="size-6" title={t('comp.live.cancelTitle')} onClick={async () => { if (await confirm(t('comp.live.cancelTask'), t('comp.live.cancelBody', { agent: AGENT[task.agent] ?? task.agent }), { ok: t('comp.live.cancelTask'), cancel: t('comp.live.back'), danger: true })) act(call('tasks.cancel', { id: task.id }), t('comp.live.cancelled')); }}><Square className="size-3 fill-current" /></Button>
+          <BubbleTip title={t('comp.live.viewConv')}><Button size="icon-xs" variant="ghost" aria-label={t('comp.live.viewConv')} onClick={() => go({ view: 'session', id: task.sessionId })}><MessageSquare /></Button></BubbleTip>
+          <BubbleTip title={t('comp.live.cancelTitle')}><Button size="icon-xs" variant="ghost" aria-label={t('comp.live.cancelTitle')} onClick={async () => { if (await confirm(t('comp.live.cancelTask'), t('comp.live.cancelBody', { agent: AGENT[task.agent] ?? task.agent }), { ok: t('comp.live.cancelTask'), cancel: t('comp.live.back'), danger: true })) act(call('tasks.cancel', { id: task.id }), t('comp.live.cancelled')); }}><Square className="size-3 fill-current" /></Button></BubbleTip>
         </> : null}
       </div>
       <ProgressBar percent={task.percent} quiet={quiet} />

@@ -15,7 +15,7 @@ export const AGENT_IDS = ['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qw
 export const AGENT_LABELS = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor', gemini: 'Gemini', opencode: 'OpenCode', qwen: 'Qwen Code', copilot: 'GitHub Copilot' };
 
 export const DEFAULT_CONFIG = Object.freeze({
-  version: 4,
+  version: 5,
   assistantName: PRODUCT.assistant,
   userName: '',
   language: 'es',
@@ -51,7 +51,8 @@ export const DEFAULT_CONFIG = Object.freeze({
   // 2.3, balance between doing and spending: the agents now report their real usage (Claude and Codex say how much of the
   // 5-hour / weekly window is used and when it resets), so the fixed caps are a safety net, not the brake they were.
   // stopAt: share of the real window (0-1) at which new tasks wait for the reset instead of eating the last of it.
-  budget: { windowHours: 5, stopAt: 0.92, agents: Object.fromEntries(AGENT_IDS.map((a) => [a, { maxTasks: 20, maxHeavy: 6 }])) },
+  // profile (2.6): the «ahorro ↔ uso» slider of Ajustes (0 = maximum saving … 4 = maximum use; null = set by hand).
+  budget: { profile: 2, windowHours: 5, stopAt: 0.92, agents: Object.fromEntries(AGENT_IDS.map((a) => [a, { maxTasks: 20, maxHeavy: 6 }])) },
   policy: { reasoning: ['low', 'medium', 'high'], highNeedsApproval: true, fast: false, banned: [] },
   sensitive: ['external_write', 'publish', 'financial', 'credential_access', 'destructive', 'razonamiento_alto'],
   // Task Review: another model (another provider when there is one) audits finished work read-only and gives a verdict.
@@ -238,6 +239,11 @@ export function loadConfig(home) {
   if ((stored.version ?? 2) < 4) {
     if (config.assistantName.trim() === 'Orb') config.assistantName = PRODUCT.assistant;
     config.version = 4;
+  }
+  // 2.6: the default name is written Orbe (Orb·E only as the drawn wordmark). Who kept the 2.4 default gets it.
+  if ((stored.version ?? 2) < 5) {
+    if (config.assistantName.trim() === 'Orb·e') config.assistantName = PRODUCT.assistant;
+    config.version = 5;
   }
   // Folders made by older versions: agents added later get their default account and their place in the order.
   for (const a of AGENT_IDS) {

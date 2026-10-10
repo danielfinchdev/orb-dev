@@ -14,12 +14,13 @@ import { statusAll, status as agentStatus, openLogin, quickRun, forgetInstalled 
 import { PERMISSIONS } from './sessions.mjs';
 import { readLog, writeLog, logFiles } from './logs.mjs';
 import { expandMentions, mentionOptions } from './mentions.mjs';
-import { ofUserLabel, userLabel } from '../core/board.mjs';
+import { ofUserLabel, userLabel, assistantName } from '../core/board.mjs';
 import * as github from './github.mjs';
 import * as installer from './installer.mjs';
 import * as expert from './expert.mjs';
 import { adbStatus, ensureAdb } from './android.mjs';
 import { mcpFolder } from './mcp-folder.mjs';
+import { modelCatalog, refreshModels, refreshAllModels } from './catalog.mjs';
 import { translate } from '../core/i18n.mjs';
 
 // Names of the fields in the messages (Spanish as they were; the key is the Spanish word).
@@ -42,6 +43,7 @@ const images = (list) => {
 
 export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef = { current: null } }) {
   const realHome = (() => { try { return fs.realpathSync(ctx.home); } catch { return ctx.home; } })();
+  let catalogCache = null; // models.catalog, for a few seconds (see there)
   const insideHome = (p) => { const rel = path.relative(realHome, p); return Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel); };
   const project = (name) => board.project(str(name, 'proyecto', 200)) ?? fail(tr('msg.api.noProject', { name }));
   let lastChat = board.one('SELECT MAX(id) AS id FROM chat')?.id ?? 0;
@@ -69,12 +71,24 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       config: ctx.config, paused: board.setting('paused') === '1', activeProject: board.activeProject(),
       approvals: sessions.allPendingApprovals().map((a) => ({ id: a.id, session_id: a.session_id, body: { title: a.body?.title, reason: a.body?.reason }, session: a.session })),
       counts: Object.fromEntries(board.all('SELECT status, COUNT(*) AS n FROM tasks GROUP BY status').map((r) => [r.status, r.n])),
-      chat: orchestrator.state(), assistant: orchestrator.info()
+      chat: orchestrator.state(), assistant: orchestrator.info(),
+      // 2.6: the tasks («t<id>») and conversations («s<id>») the user put away in «Completados» of the sidebar.
+      completed: board.settingJson('sidebar_completed') ?? []
     }),
+    'sidebar.complete': ({ key, done }) => {
+      const k = str(key, 'elemento', 100);
+      if (!/^[ts][\w-]{1,90}$/.test(k)) fail(tr('msg.api.missing', { name: fld('elemento') }));
+      const list = (board.settingJson('sidebar_completed') ?? []).filter((x) => x !== k);
+      if (done !== false) list.unshift(k);
+      board.settingJson('sidebar_completed', list.slice(0, 2000));
+      board.changed('sidebar');
+      return list;
+    },
     'config.save': ({ patch }) => { const c = saveConfig(patch ?? {}); emit('config:changed', c); return c; },
 
-    'agents.status': ({ refresh }) => { if (refresh) forgetInstalled(); return statusAll({ refresh: Boolean(refresh) }); },
-    'agents.check': ({ agent }) => agentStatus(oneOf(agent, AGENT_IDS, 'agente'), { refresh: true }),
+    // «Comprobar» / «Comprobar todo» also ask the agents again for their models (in the background).
+    'agents.status': ({ refresh }) => { if (refresh) { forgetInstalled(); refreshAllModels(board, { force: true, log }); } return statusAll({ refresh: Boolean(refresh) }); },
+    'agents.check': ({ agent }) => { const a = oneOf(agent, AGENT_IDS, 'agente'); forgetInstalled(); refreshModels(board, a, { force: true, log }); return agentStatus(a, { refresh: true }); },
     'agents.login': ({ account: id, agent }) => {
       const acc = str(id ?? agent, 'cuenta', 40);
       openLogin(acc);
@@ -149,20 +163,52 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       if (row?.meta?.kind !== 'report') fail(tr('msg.api.notReport'));
       return accept(row.meta.tasks, row.meta.project);
     },
-    // The assistant's model (Sonnet / Opus) and mode ("Orquestador" ticked = only coordinate; unticked = free mode).
-    'chat.settings': ({ model, orchestrate, account: acc }) => {
+    // The assistant's brain (2.6: any installed agent and model, with its reasoning and account) and mode ("Orquestador"
+    // ticked = only coordinate; unticked = free mode).
+    'chat.settings': ({ agent, model, reasoning, orchestrate, account: acc }) => {
       const o = ctx.config.orchestrator;
       const patch = {};
+      if (agent !== undefined) {
+        if (!modelCatalog(board).some((a) => a.id === agent)) fail(tr('msg.api.agentUnavailable', { agent: String(agent).slice(0, 40) }));
+        patch.agent = agent;
+      }
+      const brain = patch.agent ?? o.agent ?? 'claude';
       if (acc !== undefined) patch.account = str(acc, 'cuenta', 40);
-      if (model !== undefined) { if (!o.models.some((m) => m.id === model)) fail(tr('msg.api.modelUnavailable')); patch.model = model; }
+      else if (patch.agent && patch.agent !== (o.agent ?? 'claude')) patch.account = brain; // another agent: its own account
+      if (model !== undefined) {
+        const m = String(model ?? '');
+        if (brain === 'claude' && m && !o.models.some((x) => x.id === m) && !/^(sonnet|opus|haiku)$/.test(m)) {
+          // 2.6: a model Claude Code itself offers (discovered) joins the assistant's models, so the settings stay valid.
+          const offered = (board.settingJson('models:claude') ?? []).find((x) => x.id === m);
+          if (!offered || !/^[\w.:-]{1,80}$/.test(m)) fail(tr('msg.api.modelUnavailable'));
+          patch.models = [...o.models, { id: m, label: offered.label }];
+        }
+        if (m && !/^[A-Za-z0-9][\w.:\-/[\]=,@]{0,79}$/.test(m)) fail(tr('msg.api.modelUnavailable'));
+        patch.model = m || (brain === 'claude' ? 'claude-sonnet-5-5' : '');
+      } else if (patch.agent && patch.agent !== (o.agent ?? 'claude')) patch.model = brain === 'claude' ? 'claude-sonnet-5-5' : '';
+      if (reasoning !== undefined) patch.reasoning = oneOf(reasoning, ['low', 'medium', 'high'], 'razonamiento');
       if (orchestrate !== undefined) patch.orchestrate = Boolean(orchestrate);
+      // Cursor's command line cannot take Orb's tools (MCP): it can talk directly, not coordinate the agents.
+      if (brain === 'cursor' && (patch.orchestrate ?? o.orchestrate !== false)) fail(tr('msg.api.cursorNoCoordinate'));
       const before = { ...o };
       const c = saveConfig({ orchestrator: patch });
       emit('config:changed', c);
-      const label = (id) => c.orchestrator.models.find((m) => m.id === id)?.label ?? id;
-      if (patch.model && patch.model !== before.model) board.addChat('system', tr('msg.api.assistantModel', { label: label(patch.model), reasoning: c.orchestrator.reasoning === 'medium' ? tr('msg.api.reasoningMedium') : c.orchestrator.reasoning }));
+      // Another agent cannot continue the previous one's conversation: a new one starts (the board and logs remember).
+      if (patch.agent && patch.agent !== (before.agent ?? 'claude')) orchestrator.forget();
+      const info = orchestrator.info();
+      const level = { low: tr('msg.api.reasoningLow'), medium: tr('msg.api.reasoningMedium'), high: tr('msg.api.reasoningHigh') }[c.orchestrator.reasoning] ?? c.orchestrator.reasoning;
+      if ((patch.model !== undefined && patch.model !== before.model) || (patch.agent && patch.agent !== (before.agent ?? 'claude')) || (patch.reasoning && patch.reasoning !== before.reasoning)) board.addChat('system', tr('msg.api.assistantBrain', { name: assistantName(), agent: info.agentLabel, label: info.modelLabel, reasoning: level }));
       if (patch.orchestrate !== undefined && patch.orchestrate !== before.orchestrate) board.addChat('system', patch.orchestrate ? tr('msg.api.modeOrchestrator') : tr('msg.api.modeFree'));
-      return orchestrator.info();
+      return info;
+    },
+    // 2.6: the brains to choose from (agent + model), which ones spend the quota faster and how used each account is.
+    // Kept for a few seconds: the window asks again on every change of the board (while the agents work, many a second).
+    'models.catalog': () => {
+      const key = JSON.stringify([ctx.config.orchestrator, ctx.config.agentOrder, Object.keys(ctx.config.agents).map((a) => ctx.config.agents[a]?.enabled), board.setting('models_rev')]);
+      if (catalogCache && catalogCache.key === key && Date.now() - catalogCache.at < 5000) return catalogCache.value;
+      const value = modelCatalog(board, { discover: true, log });
+      catalogCache = { key, at: Date.now(), value };
+      return value;
     },
 
     'tasks.list': ({ limit }) => board.panelTasks(Math.min(Number(limit) || 150, 500)),
@@ -255,6 +301,17 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return (needle ? rows.filter((r) => `${r.actor} ${r.kind} ${r.detail} ${r.title ?? ''}`.toLowerCase().includes(needle)) : rows).map((r) => ({ ...r, detail: redactSecrets(r.detail) }));
     },
     'usage.get': () => usageReport(board),
+    // 2.6: the accounts working right now (the assistant's brain and the agents' running sessions), with the windows of
+    // their plan the agents reported (session, weekly…), for the panel of the context ring.
+    'usage.now': () => {
+      const brain = orchestrator.info(); const brainAccount = orchestrator.liveAccount ?? brain.account;
+      const busy = board.all("SELECT DISTINCT account, agent FROM sessions WHERE status = 'running' AND account IS NOT NULL");
+      const report = usageReport(board);
+      // Then the other accounts whose plan reported its usage lately (a task that just finished still counts).
+      const ids = [...new Set([brainAccount, ...busy.map((s) => s.account), ...report.filter((u) => u.windows?.length).map((u) => u.account)].filter(Boolean))];
+      return ids.map((id) => report.find((u) => u.account === id) ?? { account: id, agent: busy.find((s) => s.account === id)?.agent ?? brain.agent, label: id, windows: [] })
+        .map((u) => ({ account: u.account, agent: u.agent, label: u.label, windows: u.windows ?? [], cooldownUntil: u.cooldownUntil ?? null, brain: u.account === brainAccount }));
+    },
     // Expert mode (PC only, read-only): the project's files, git and the machine's load.
     'expert.tree': ({ project: name, dir }) => expert.tree(project(name).path, str(dir, 'carpeta', 1000, { optional: true })),
     'expert.read': ({ project: name, path: file }) => expert.readFile(project(name).path, str(file, 'archivo', 1000)),
@@ -293,12 +350,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     },
     // New chat lines since the last call (the window uses them for notifications when it is in the background).
     notifyNewChat() {
-      const rows = board.all('SELECT id, role, body FROM chat WHERE id > ? ORDER BY id LIMIT 20', lastChat);
+      const rows = board.all('SELECT id, role, body, meta FROM chat WHERE id > ? ORDER BY id LIMIT 20', lastChat);
       if (!rows.length) return;
       lastChat = rows[rows.length - 1].id;
-      for (const r of rows) if (r.role !== 'usuario') emit('chat:new', { role: r.role, body: oneLine(r.body, 240) });
+      for (const r of rows) if (r.role !== 'usuario') { let meta = null; try { meta = r.meta ? JSON.parse(r.meta) : null; } catch { /* plain */ } emit('chat:new', { role: r.role, body: oneLine(r.body, 240), meta }); }
     },
     // Running tasks stay "running": the next start continues them (scheduler.finish does not close them while closing).
-    shutdown() { scheduler.closing = true; sessions.stopAll(); orchestrator.stop(); orchestrator.closeLive(); log('motor detenido'); }
+    shutdown() { scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stop(); orchestrator.closeLive(); log('motor detenido'); }
   };
 }

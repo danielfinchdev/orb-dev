@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createHome } from '../src/core/home.mjs';
+import { createHome, loadConfig, writeJson, merge } from '../src/core/home.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'test-results', 'real'); fs.mkdirSync(OUT, { recursive: true });
@@ -14,6 +14,7 @@ const AGENTS = (process.argv[2] ?? 'claude,codex,cursor').split(',');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-real-'));
 const base = path.join(tmp, 'Documentos'); fs.mkdirSync(base);
 const { home } = createHome(base, { assistantName: 'Orb', userName: 'Dani' });
+writeJson(path.join(home, 'orb.json'), merge(loadConfig(home), { ui: { tourDone: true } })); // 2.6: no guided tour in the tests
 const userData = path.join(tmp, 'datos'); fs.mkdirSync(userData);
 fs.writeFileSync(path.join(userData, 'ubicacion.json'), JSON.stringify({ home }));
 const log = [];

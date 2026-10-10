@@ -20,12 +20,12 @@ Tú → Orb·e → tareas y coordinación → agentes → tareas hechas → Orb�
 ## Descargar y usar (lo más fácil)
 
 1. Entra en [**Releases → última versión**](https://github.com/danielfinchdev/orb-dev/releases/latest) y descarga
-   **`Orb-2.5.0-instalador.exe`**.
+   **`Orb-2.6.0-instalador.exe`**.
 2. Doble clic: se instala para tu usuario (sin permisos de administrador) con acceso directo en el escritorio y en el menú
    Inicio. Luego lo abres escribiendo «Orb» en el buscador de Windows.
 3. Windows SmartScreen avisará porque la app aún no está firmada: «Más información» → «Ejecutar de todas formas».
 
-¿Sin instalar nada? **`Orb-2.5.0-portable.exe`** se abre tal cual con doble clic. ¿Y que arranque más rápido? Descarga **`Orb-2.5.0-windows.zip`**, clic derecho → «Extraer todo» y abre
+¿Sin instalar nada? **`Orb-2.6.0-portable.exe`** se abre tal cual con doble clic. ¿Y que arranque más rápido? Descarga **`Orb-2.6.0-windows.zip`**, clic derecho → «Extraer todo» y abre
 `Orb.exe` de dentro de la carpeta. No hace falta instalar Node.js ni Git para la app; los agentes (Claude Code, Codex,
 Cursor) te los instala ella misma en el primer arranque. El repositorio es privado: para descargar hay que tener acceso
 a él en GitHub (o que te pasen el archivo).
@@ -57,7 +57,7 @@ claro, deja Cursor en pausa un día y, si la tarea era para «cualquier agente»
 
 ## Empezar
 
-1. Abre Orb desde el menú Inicio (o `Orb-2.5.0-portable.exe`, o `npm start` si la usas desde el código).
+1. Abre Orb desde el menú Inicio (o `Orb-2.6.0-portable.exe`, o `npm start` si la usas desde el código).
 2. Elige su nombre, cómo te llama y dónde crear su carpeta. La carpeta se llama como el asistente: con `D:\` y el nombre
    «Nova» se crea `D:\Nova`; si dejas el nombre por defecto, `D:\Orb`.
 3. En **Agentes**, comprueba qué agentes encuentra (Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Qwen Code, Copilot) y
@@ -121,9 +121,9 @@ D:\Orb\                   (siempre <carpeta elegida>\Orb, igual para todos)
   sin dar señales, te avisa en el chat para que mires su conversación o la canceles.
 - **Fallos explicados**: si un agente no puede trabajar (plan sin acceso, sin sesión, modelo no disponible, sin red), la
   tarea dice por qué y qué hacer, en vez de un «falló» a secas.
-- **Ajustes en una ventana** con apartados (General, Apariencia, Modelo, Tareas y cupo, Móvil, Herramientas, Modo
+- **Ajustes en una ventana** con apartados (General, Apariencia, Tareas y usos, Móvil, Herramientas, Modo
   experto, Actualizaciones, Contribuye y Más aplicaciones).
-- **Apariencia:** modo claro, oscuro o sistema; temas Orb, Vaporwave, Retro arcade, Profesional (sin robot) y Nube;
+- **Apariencia:** modo claro, oscuro o sistema; temas Orb, Vaporwave, Retro arcade, Profesional (sin robot) y Candy;
   tipografía de la interfaz y del código; colores del código. La barra de menús de Windows está oculta por defecto.
 - **Tamaño de la interfaz** en Ajustes → Apariencia (Pequeña / Normal / Grande) o con `Ctrl +`, `Ctrl -` y `Ctrl 0`
   (también `Ctrl` + rueda del ratón). Se guarda en cada PC.
@@ -142,7 +142,7 @@ npm test             # pruebas del motor (agentes falsos, sin cuentas)
 npm run test:app     # la app entera con Electron (en Linux: xvfb-run -a npm run test:app)
 npm run test:movil   # la web app del móvil a tamaño de teléfono
 ORB_E2E_EXE=dist/win-unpacked/Orb.exe node test/smoke.e2e.mjs   # prueba la app ya empaquetada
-npm run dist         # Orb-2.5.0-portable.exe e instalador (en Windows)
+npm run dist         # Orb-2.6.0-portable.exe e instalador (en Windows)
 npm run icon         # vuelve a sacar el icono del art work (docs/diseno/art work); luego npm run icon:ico
 ```
 

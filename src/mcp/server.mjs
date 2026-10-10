@@ -100,7 +100,13 @@ async function waitTasks({ ids, timeout_s = 600 }) {
   return ids.map((id) => board.task(id)).filter(Boolean).map((t) => ({ id: t.id, status: t.status, result: done.has(t.status) ? oneLine(t.result, 3000) : 'todavía en marcha: vuelve a esperar o sigue con otra cosa' }));
 }
 
-const modelsHelp = () => AGENTS.map((a) => `${a}: ${(ctx.config.agents[a]?.models ?? []).join(', ') || 'predeterminado'}`).join(' | ');
+// 2.6: with the models each agent listed itself (models:<agent>), not only the configured aliases.
+const modelsOf = (a) => {
+  const listed = board.settingJson(`models:${a}`) ?? [];
+  const named = listed.map((m) => (m.label && m.label !== m.id ? `${m.id} (${m.label})` : m.id));
+  return [...new Set([...named, ...(ctx.config.agents[a]?.models ?? []).filter((id) => !listed.some((m) => m.id === id || m.resolved === id))])].slice(0, 24);
+};
+const modelsHelp = () => AGENTS.map((a) => `${a}: ${modelsOf(a).join(', ') || 'predeterminado'}`).join(' | ');
 const tools = [
   ...(TASK_ID && !BOSS ? [
     { name: 'orb_delegate', description: 'Delega una parte de tu tarea en otro agente o modelo (subtarea de tu tarea). Devuelve su id: espera su resultado con orb_wait_tasks.',
