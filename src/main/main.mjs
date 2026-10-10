@@ -30,7 +30,9 @@ const isDev = !app.isPackaged;
 // versions up to 2.3.3 used (%APPDATA%\Orb.dev), although the program is now called Orb.
 app.setPath('userData', process.env.ORB_USER_DATA || path.join(app.getPath('appData'), PRODUCT.dataDir));
 if (!app.requestSingleInstanceLock()) app.quit();
-app.setAppUserModelId(PRODUCT.appId);
+// Windows takes the taskbar icon from the Start menu shortcut with this id: running from the code (electron.exe, tests)
+// uses its own id, or Windows may give the installed Orb Electron's icon.
+app.setAppUserModelId(app.isPackaged ? PRODUCT.appId : `${PRODUCT.appId}.dev`);
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'orb', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
 
@@ -55,6 +57,17 @@ function readLocation() {
   try { const h = JSON.parse(fs.readFileSync(LOCATION(), 'utf8')).home; return h && isHome(h) ? h : null; } catch { return null; }
 }
 function saveLocation(h) { fs.mkdirSync(path.dirname(LOCATION()), { recursive: true }); writeJson(LOCATION(), { home: h }); }
+
+// A fresh install (no saved location) on a PC that already has an Orb folder uses it as it is: <drive>:\Orb, Documents\Orb
+// or <user>\Orb, the most recently used one if there are several. Nothing is created or overwritten. Not in tests or when
+// running from the code (ORB_USER_DATA or not packaged), so they never pick up a real folder.
+function findExistingHome() {
+  if (!app.isPackaged || process.env.ORB_USER_DATA) return null;
+  const drives = 'CDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((l) => `${l}:\\`).filter((d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
+  const candidates = new Set([...drives.map((d) => path.join(d, PRODUCT.folder)), path.join(app.getPath('documents'), PRODUCT.folder), path.join(app.getPath('home'), PRODUCT.folder)]);
+  const used = (h) => { try { return fs.statSync(path.join(h, 'orb.json')).mtimeMs; } catch { return 0; } };
+  return [...candidates].filter((h) => isHome(h)).sort((a, b) => used(b) - used(a))[0] ?? null;
+}
 
 let zoom = 1;
 function readZoom() { try { const z = Number(JSON.parse(fs.readFileSync(INTERFACE(), 'utf8')).zoom); return Number.isFinite(z) ? Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)) : 1; } catch { return 1; } }
@@ -318,7 +331,8 @@ app.whenReady().then(async () => {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({ responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': ["default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"] } });
   });
-  const h = readLocation();
+  let h = readLocation();
+  if (!h) { h = findExistingHome(); if (h) saveLocation(h); }
   home = h;
   applyMenu(); // in the language of the settings; built again when it changes (onEngineEvent)
   // The agents' browser: pages drawn off screen and the little window in the top-right corner (ui.pip turns it off).

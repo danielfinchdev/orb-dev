@@ -4,7 +4,7 @@
 // lives and how to install it. The agent's own program and login are used: Orb never sees credentials.
 import fs from 'node:fs';
 import path from 'node:path';
-import { IS_WIN, firstFile, inPath, shimDirs, userHome, clip } from './common.mjs';
+import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip } from './common.mjs';
 import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree } from './live.mjs';
 import { decide } from '../core/guard.mjs';
 import { tr } from '../core/context.mjs';
@@ -12,8 +12,7 @@ import { tr } from '../core/context.mjs';
 // An npm-installed CLI on Windows is a .cmd shim that cannot be started without a shell: Orb runs `node <script>` instead,
 // reading the script from the package's "bin" (the same thing the shim does).
 export function npmBin(pkg, bin) {
-  const appData = process.env.APPDATA ?? path.join(userHome(), 'AppData', 'Roaming');
-  const prefixes = [...new Set([path.join(appData, 'npm'), ...shimDirs(bin)])];
+  const prefixes = npmPrefixes(bin);
   const node = firstFile(inPath('node'));
   for (const prefix of prefixes) {
     const dir = IS_WIN ? path.join(prefix, 'node_modules', pkg) : path.join(prefix, '..', 'lib', 'node_modules', pkg);
@@ -127,7 +126,7 @@ export function acpAgent(id, spec) {
         proc.once('exit', (code) => resolve(new Error(tr('sys.agents.exitedAtStart', { name: spec.label, code, detail: proc.stderrText().trim().split('\n').slice(-2).join(' ') }).trim())));
         proc.once('error', resolve);
       });
-      const hello = p.request('initialize', { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: 'orb-dev', title: 'Orb', version: '2.4.0' } }, { timeoutMs: 60000 });
+      const hello = p.request('initialize', { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: 'orb-dev', title: 'Orb', version: '2.4.2' } }, { timeoutMs: 60000 });
       const first = await Promise.race([hello.then((init) => ({ init }), (error) => ({ error })), quit.then((error) => ({ error }))]);
       if (first.error) { p.close(); killTree(proc); throw first.error; } // no reply or an early exit: nothing left running
       return { proc, p, init: first.init };

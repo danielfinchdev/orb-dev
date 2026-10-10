@@ -5,7 +5,7 @@
 // On Windows the CLI is installed as %LOCALAPPDATA%\cursor-agent\versions\<v>\ with its own node.exe and index.js.
 import fs from 'node:fs';
 import path from 'node:path';
-import { IS_WIN, firstFile, inPath, userHome, clip, describeInput } from './common.mjs';
+import { IS_WIN, firstFile, inPath, appDataDirs, userHome, clip, describeInput } from './common.mjs';
 import { Turn, spawnAgent, killTree } from './live.mjs';
 import { tr } from '../core/context.mjs';
 
@@ -14,9 +14,9 @@ export const label = 'Cursor';
 export const kind = 'cli-stream';
 export const caps = { images: false, steer: false, fork: false, approvals: false, models: true, context: false };
 
+// In this user's Local AppData or in one moved to another drive (appDataDirs).
 function windowsEntry() {
-  const base = path.join(process.env.LOCALAPPDATA ?? path.join(userHome(), 'AppData', 'Local'), 'cursor-agent', 'versions');
-  let dirs; try { dirs = fs.readdirSync(base).map((name) => path.join(base, name)); } catch { return null; }
+  const dirs = appDataDirs().flatMap(({ local }) => { const base = path.join(local, 'cursor-agent', 'versions'); try { return fs.readdirSync(base).map((name) => path.join(base, name)); } catch { return []; } });
   const latest = dirs.filter((dir) => firstFile([path.join(dir, 'index.js')]) && firstFile([path.join(dir, 'node.exe')]))
     .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
   return latest ? { cmd: path.join(latest, 'node.exe'), pre: [path.join(latest, 'index.js')] } : null;
@@ -28,8 +28,7 @@ export function detect(cfg = {}) {
     // The node.exe + index.js of the newest version (the most reliable way to start it); otherwise the executables some
     // installs place in the folder root.
     const entry = windowsEntry(); if (entry) return entry;
-    const base = path.join(process.env.LOCALAPPDATA ?? path.join(userHome(), 'AppData', 'Local'), 'cursor-agent');
-    const exe = firstFile([path.join(base, 'cursor-agent.exe'), path.join(base, 'agent.exe')]);
+    const exe = firstFile(appDataDirs().flatMap(({ local }) => [path.join(local, 'cursor-agent', 'cursor-agent.exe'), path.join(local, 'cursor-agent', 'agent.exe')]));
     if (exe) return { cmd: exe, pre: [] };
   }
   const found = firstFile([...inPath('cursor-agent'), ...inPath('agent'), path.join(userHome(), '.local', 'bin', IS_WIN ? 'cursor-agent.exe' : 'cursor-agent')]);

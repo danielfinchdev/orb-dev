@@ -111,6 +111,11 @@
 /* Progress of a task that does not report its percentage: a sliding bar. */
 @keyframes orb-indeterminate { 0% { left: -35%; } 100% { left: 100%; } }
 
+/* Ajustes → Contribuye → «Capturar la ventana»: the capture shows what is behind Ajustes, not Ajustes itself. At once:
+   the window's duration-200 would otherwise fade it over 200 ms (transition-property defaults to all). */
+html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-dialog"]) { visibility: hidden; }
+html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-dialog"], [data-testid="settings-dialog"] *) { transition: none; }
+
 /* The little floating window: dragged by its header, buttons stay clickable. */
 .drag { -webkit-app-region: drag; user-select: none; }
 .no-drag { -webkit-app-region: no-drag; }

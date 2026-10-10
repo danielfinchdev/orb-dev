@@ -1,12 +1,31 @@
 ## Descargar
 
-- **`Orb-2.4.0-instalador.exe`** (recomendado): se instala para tu usuario, sin permisos de administrador, con acceso
+- **`Orb-2.4.2-instalador.exe`** (recomendado): se instala para tu usuario, sin permisos de administrador, con acceso
   directo en el escritorio y en el menú Inicio. Después lo encuentras escribiendo «Orb» en el buscador de Windows.
-- **`Orb-2.4.0-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
-- **`Orb-2.4.0-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.exe`.
+- **`Orb-2.4.2-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
+- **`Orb-2.4.2-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.exe`.
 
 Windows 10/11. Como aún no está firmada, SmartScreen avisa la primera vez: «Más información» → «Ejecutar de todas formas».
 En el primer arranque la app detecta qué agentes tienes y con qué sesión, e instala lo que falte con los instaladores oficiales.
+
+## Novedades de la 2.4.2
+
+- **Encuentra tus agentes estén donde estén:** si moviste programas de `C:` a otro disco para liberar espacio (por ejemplo
+  a `D:\ComputerApps\AppData`), Orb encuentra ahí Claude Code, Codex, Cursor y los demás agentes, aunque el PATH de
+  Windows siga apuntando a la carpeta antigua. No los vuelve a instalar.
+
+## Novedades de la 2.4.1
+
+- **Usa tu carpeta Orb:** al instalar Orb en un PC que ya tiene una carpeta Orb (por ejemplo `D:\Orb`), la detecta y la usa
+  tal cual, sin pasar por la bienvenida y sin crear ni sobrescribir nada.
+- **Instalación de agentes más fiable:** ya no abre una ventana de PowerShell aparte, que en algunos PC se cerraba sin
+  instalar nada. La instalación se hace en segundo plano y Orb muestra el progreso.
+- **Icono de Orb en la barra de tareas** en vez del de Electron.
+- **Primer arranque:** si un programa ya está en el PC pero no responde en ese momento, ya no sale como «No instalado»;
+  y al instalar Codex u otro agente de npm, Node.js no se vuelve a instalar si ya estaba.
+- **Contribuye → «Capturar la ventana»:** la captura muestra la app, no la propia ventana de Ajustes.
+- **Ajustes en ventanas estrechas:** los apartados ya no se cortan por la derecha (selector de terminal, rutas largas de
+  Herramientas, botones de Más aplicaciones).
 
 ## Novedades de la 2.4.0
 
