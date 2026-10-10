@@ -12,30 +12,30 @@
    palms. Chunky Windows-95 windows (cards and the message box with a hard offset shadow). Space Grotesk, titles Orbitron.
    ================================================================================================================ */
 html[data-skin="vaporwave"] {
-  --radius: 0.5rem;
-  --background: oklch(0.972 0.02 315);
-  --foreground: oklch(0.25 0.09 300);
-  --card: oklch(0.995 0.006 325);
-  --card-foreground: oklch(0.25 0.09 300);
-  --popover: oklch(0.995 0.006 325);
-  --popover-foreground: oklch(0.25 0.09 300);
-  --primary: oklch(0.53 0.23 345);
+  --radius: 0.25rem;
+  --background: oklch(0.92 0.045 178);
+  --foreground: oklch(0.24 0.06 300);
+  --card: oklch(0.975 0.006 300);
+  --card-foreground: oklch(0.24 0.06 300);
+  --popover: oklch(0.975 0.006 300);
+  --popover-foreground: oklch(0.24 0.06 300);
+  --primary: oklch(0.5 0.22 345);
   --primary-foreground: oklch(0.99 0.01 330);
-  --secondary: oklch(0.94 0.035 300);
-  --secondary-foreground: oklch(0.3 0.1 300);
-  --muted: oklch(0.95 0.025 315);
-  --muted-foreground: oklch(0.47 0.09 305);
-  --accent: oklch(0.93 0.045 210);
-  --accent-foreground: oklch(0.36 0.09 225);
-  --destructive: oklch(0.54 0.21 22);
-  --success: oklch(0.48 0.11 170);
-  --warning: oklch(0.5 0.13 55);
-  --info: oklch(0.5 0.13 235);
-  --border: oklch(0.87 0.05 310);
-  --input: oklch(0.63 0.1 310);
-  --ring: oklch(0.66 0.15 210);
-  --sidebar: oklch(0.955 0.03 305);
-  --bubble: oklch(0.53 0.23 345);
+  --secondary: oklch(0.93 0.08 95);
+  --secondary-foreground: oklch(0.35 0.08 70);
+  --muted: oklch(0.9 0.012 300);
+  --muted-foreground: oklch(0.45 0.07 300);
+  --accent: oklch(0.9 0.06 300);
+  --accent-foreground: oklch(0.33 0.12 300);
+  --destructive: oklch(0.51 0.2 22);
+  --success: oklch(0.46 0.11 170);
+  --warning: oklch(0.47 0.12 55);
+  --info: oklch(0.46 0.13 235);
+  --border: oklch(0.72 0.03 300);
+  --input: oklch(0.52 0.06 300);
+  --ring: oklch(0.6 0.2 345);
+  --sidebar: oklch(0.93 0.008 300);
+  --bubble: oklch(0.5 0.22 345);
   --bubble-foreground: oklch(0.99 0.01 330);
   /* the welcome backdrop (.brand-sky) */
   --vw-sky: linear-gradient(180deg, #ffd9f2 0%, #f1c8ff 26%, #c9b6ff 44%, #ff9fd0 56%, #ffc79e 62%, #f6e6ff 62%, #ffe4f5 100%);
@@ -93,70 +93,72 @@ html[data-skin="vaporwave"] .brand-sky::before {
 }
 
 /* ================================================================================================================
-   RETRO — an 80s arcade. Dark: a deep blue-black cabinet, neon green phosphor, coloured invaders, scanlines. Light: the
-   pale green LCD of a handheld console. Square corners, hard pixel shadows, pixel titles. IBM Plex Mono, Press Start 2P.
+   RETRO — the seventies by day (a warm orange page, peach / butter / blush panels, black outlines with hard coloured
+   shadows, hi-fi controls) and the arcade by night (pure black, rainbow pixel invaders, phosphor green). IBM Plex Mono,
+   titles in Bungee. The scene and the components are further down.
    ================================================================================================================ */
 html[data-skin="retro"] {
-  --radius: 0rem;
-  --background: oklch(0.95 0.035 125);
-  --foreground: oklch(0.22 0.05 145);
-  --card: oklch(0.975 0.025 125);
-  --card-foreground: oklch(0.22 0.05 145);
-  --popover: oklch(0.975 0.025 125);
-  --popover-foreground: oklch(0.22 0.05 145);
-  --primary: oklch(0.45 0.13 148);
-  --primary-foreground: oklch(0.97 0.03 125);
-  --secondary: oklch(0.91 0.045 128);
-  --secondary-foreground: oklch(0.25 0.06 145);
-  --muted: oklch(0.92 0.04 128);
-  --muted-foreground: oklch(0.42 0.07 145);
-  --accent: oklch(0.89 0.07 135);
-  --accent-foreground: oklch(0.27 0.08 148);
-  --destructive: oklch(0.5 0.19 27);
-  --success: oklch(0.46 0.13 148);
-  --warning: oklch(0.47 0.11 75);
-  --info: oklch(0.47 0.1 225);
-  --border: oklch(0.78 0.07 135);
-  --input: oklch(0.55 0.09 145);
-  --ring: oklch(0.45 0.13 148);
-  --sidebar: oklch(0.93 0.04 127);
-  --bubble: oklch(0.42 0.12 148);
-  --bubble-foreground: oklch(0.98 0.02 125);
-  --rt-shadow: color-mix(in oklch, var(--primary) 30%, transparent);
-  --rt-scan: rgb(20 60 20 / 0.06);
-  --rt-space: #c9dba6;
-  --rt-star: rgb(30 90 40 / 0.35);
-  --rt-invaders: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 16' shape-rendering='crispEdges'%3E%3Cpath fill='%231f6b2c' fill-opacity='0.5' d='M4 4h1v1h-1zM10 4h1v1h-1zM5 5h1v1h-1zM9 5h1v1h-1zM4 6h7v1h-7zM3 7h2v1h-2zM6 7h3v1h-3zM10 7h2v1h-2zM2 8h11v1h-11zM2 9h1v1h-1zM4 9h7v1h-7zM12 9h1v1h-1zM2 10h1v1h-1zM4 10h1v1h-1zM10 10h1v1h-1zM12 10h1v1h-1zM5 11h2v1h-2zM8 11h2v1h-2zM27 4h2v1h-2zM26 5h4v1h-4zM25 6h6v1h-6zM24 7h2v1h-2zM27 7h2v1h-2zM30 7h2v1h-2zM24 8h8v1h-8zM26 9h1v1h-1zM29 9h1v1h-1zM25 10h1v1h-1zM27 10h2v1h-2zM30 10h1v1h-1zM24 11h1v1h-1zM26 11h1v1h-1zM29 11h1v1h-1zM31 11h1v1h-1zM46 4h4v1h-4zM43 5h10v1h-10zM42 6h12v1h-12zM42 7h3v1h-3zM47 7h2v1h-2zM51 7h3v1h-3zM42 8h12v1h-12zM45 9h2v1h-2zM49 9h2v1h-2zM44 10h2v1h-2zM47 10h2v1h-2zM50 10h2v1h-2zM42 11h2v1h-2zM52 11h2v1h-2z'/%3E%3C/svg%3E");
-  --rt-ship: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 6' shape-rendering='crispEdges'%3E%3Cpath fill='%231f6b2c' d='M5 0h1v1h-1zM4 1h3v1h-3zM4 2h3v1h-3zM1 3h9v1h-9zM0 4h11v1h-11zM0 5h11v1h-11z'/%3E%3C/svg%3E");
+  --radius: 0.5rem;
+  --background: oklch(0.87 0.075 55);
+  --foreground: oklch(0.24 0.05 30);
+  --card: oklch(0.95 0.045 75);
+  --card-foreground: oklch(0.24 0.05 30);
+  --popover: oklch(0.96 0.04 75);
+  --popover-foreground: oklch(0.24 0.05 30);
+  --primary: oklch(0.45 0.18 22);
+  --primary-foreground: oklch(0.99 0.005 80);
+  --secondary: oklch(0.9 0.06 20);
+  --secondary-foreground: oklch(0.3 0.12 15);
+  --muted: oklch(0.9 0.05 60);
+  --muted-foreground: oklch(0.42 0.07 35);
+  --accent: oklch(0.88 0.07 40);
+  --accent-foreground: oklch(0.3 0.12 15);
+  --destructive: oklch(0.5 0.19 25);
+  --success: oklch(0.45 0.1 150);
+  --warning: oklch(0.45 0.11 70);
+  --info: oklch(0.42 0.1 250);
+  --border: oklch(0.3 0.04 30);
+  --input: oklch(0.3 0.04 30);
+  --ring: oklch(0.55 0.15 40);
+  --sidebar: oklch(0.92 0.06 60);
+  --bubble: oklch(0.42 0.1 250);
+  --bubble-foreground: oklch(0.99 0 0);
+  --rt-shadow: rgb(240 138 75 / 0.9);
+  --rt-scan: rgb(90 11 30 / 0.05);
+  --rt-space: #fdd9c4;
+  --rt-star: rgb(90 11 30 / 0.4);
+  --rt-invaders: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 16' shape-rendering='crispEdges'%3E%3Cpath fill='%235a0b1e' fill-opacity='0.5' d='M4 4h1v1h-1zM10 4h1v1h-1zM5 5h1v1h-1zM9 5h1v1h-1zM4 6h7v1h-7zM3 7h2v1h-2zM6 7h3v1h-3zM10 7h2v1h-2zM2 8h11v1h-11zM2 9h1v1h-1zM4 9h7v1h-7zM12 9h1v1h-1zM2 10h1v1h-1zM4 10h1v1h-1zM10 10h1v1h-1zM12 10h1v1h-1zM5 11h2v1h-2zM8 11h2v1h-2zM27 4h2v1h-2zM26 5h4v1h-4zM25 6h6v1h-6zM24 7h2v1h-2zM27 7h2v1h-2zM30 7h2v1h-2zM24 8h8v1h-8zM26 9h1v1h-1zM29 9h1v1h-1zM25 10h1v1h-1zM27 10h2v1h-2zM30 10h1v1h-1zM24 11h1v1h-1zM26 11h1v1h-1zM29 11h1v1h-1zM31 11h1v1h-1zM46 4h4v1h-4zM43 5h10v1h-10zM42 6h12v1h-12zM42 7h3v1h-3zM47 7h2v1h-2zM51 7h3v1h-3zM42 8h12v1h-12zM45 9h2v1h-2zM49 9h2v1h-2zM44 10h2v1h-2zM47 10h2v1h-2zM50 10h2v1h-2zM42 11h2v1h-2zM52 11h2v1h-2z'/%3E%3C/svg%3E");
+  --rt-ship: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 6' shape-rendering='crispEdges'%3E%3Cpath fill='%235a0b1e' d='M5 0h1v1h-1zM4 1h3v1h-3zM4 2h3v1h-3zM1 3h9v1h-9zM0 4h11v1h-11zM0 5h11v1h-11z'/%3E%3C/svg%3E");
 }
 html.dark[data-skin="retro"] {
-  --background: oklch(0.15 0.022 278);
-  --foreground: oklch(0.94 0.03 145);
-  --card: oklch(0.19 0.03 278);
-  --card-foreground: oklch(0.94 0.03 145);
-  --popover: oklch(0.21 0.032 278);
-  --popover-foreground: oklch(0.94 0.03 145);
-  --primary: oklch(0.85 0.23 143);
-  --primary-foreground: oklch(0.16 0.03 150);
-  --secondary: oklch(0.25 0.04 278);
-  --secondary-foreground: oklch(0.92 0.04 145);
-  --muted: oklch(0.23 0.035 278);
-  --muted-foreground: oklch(0.76 0.09 148);
-  --accent: oklch(0.28 0.06 275);
-  --accent-foreground: oklch(0.9 0.17 145);
-  --destructive: oklch(0.66 0.22 27);
+  --radius: 0.15rem;
+  --background: oklch(0.1 0 0);
+  --foreground: oklch(0.95 0.02 145);
+  --card: oklch(0.15 0.01 290);
+  --card-foreground: oklch(0.95 0.02 145);
+  --popover: oklch(0.17 0.012 290);
+  --popover-foreground: oklch(0.95 0.02 145);
+  --primary: oklch(0.87 0.26 142);
+  --primary-foreground: oklch(0.12 0.02 150);
+  --secondary: oklch(0.25 0.08 300);
+  --secondary-foreground: oklch(0.93 0.04 300);
+  --muted: oklch(0.2 0.02 290);
+  --muted-foreground: oklch(0.78 0.06 145);
+  --accent: oklch(0.28 0.1 330);
+  --accent-foreground: oklch(0.9 0.16 330);
+  --destructive: oklch(0.68 0.22 27);
   --success: oklch(0.84 0.22 145);
   --warning: oklch(0.88 0.17 100);
-  --info: oklch(0.82 0.13 200);
-  --border: oklch(0.36 0.07 275);
-  --input: oklch(0.55 0.14 147);
-  --ring: oklch(0.85 0.23 143);
-  --sidebar: oklch(0.13 0.022 278);
-  --bubble: oklch(0.32 0.1 290);
-  --bubble-foreground: oklch(0.96 0.05 145);
-  --rt-shadow: color-mix(in oklch, var(--primary) 28%, transparent);
+  --info: oklch(0.85 0.13 200);
+  --border: oklch(0.45 0.15 145);
+  --input: oklch(0.6 0.2 145);
+  --ring: oklch(0.87 0.26 142);
+  --sidebar: oklch(0.08 0 0);
+  --bubble: oklch(0.35 0.14 330);
+  --bubble-foreground: oklch(0.99 0 0);
+  --rt-shadow: rgb(57 255 20 / 0.55);
   --rt-scan: rgb(0 0 0 / 0.28);
-  --rt-space: #070a1a;
+  --rt-space: #000000;
   --rt-star: rgb(225 235 255 / 0.55);
   --rt-invaders: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 16' shape-rendering='crispEdges'%3E%3Cpath fill='%2339ff14' fill-opacity='0.55' d='M4 4h1v1h-1zM10 4h1v1h-1zM5 5h1v1h-1zM9 5h1v1h-1zM4 6h7v1h-7zM3 7h2v1h-2zM6 7h3v1h-3zM10 7h2v1h-2zM2 8h11v1h-11zM2 9h1v1h-1zM4 9h7v1h-7zM12 9h1v1h-1zM2 10h1v1h-1zM4 10h1v1h-1zM10 10h1v1h-1zM12 10h1v1h-1zM5 11h2v1h-2zM8 11h2v1h-2zM27 4h2v1h-2zM26 5h4v1h-4zM25 6h6v1h-6zM24 7h2v1h-2zM27 7h2v1h-2zM30 7h2v1h-2zM24 8h8v1h-8zM26 9h1v1h-1zM29 9h1v1h-1zM25 10h1v1h-1zM27 10h2v1h-2zM30 10h1v1h-1zM24 11h1v1h-1zM26 11h1v1h-1zM29 11h1v1h-1zM31 11h1v1h-1zM46 4h4v1h-4zM43 5h10v1h-10zM42 6h12v1h-12zM42 7h3v1h-3zM47 7h2v1h-2zM51 7h3v1h-3zM42 8h12v1h-12zM45 9h2v1h-2zM49 9h2v1h-2zM44 10h2v1h-2zM47 10h2v1h-2zM50 10h2v1h-2zM42 11h2v1h-2zM52 11h2v1h-2z'/%3E%3C/svg%3E");
   --rt-ship: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 6' shape-rendering='crispEdges'%3E%3Cpath fill='%2339ff14' d='M5 0h1v1h-1zM4 1h3v1h-3zM4 2h3v1h-3zM1 3h9v1h-9zM0 4h11v1h-11zM0 5h11v1h-11z'/%3E%3C/svg%3E");
@@ -254,63 +256,64 @@ html[data-skin="profesional"] *:not([role="progressbar"] *) { transition-duratio
 html[data-skin="profesional"] *:hover { scale: none; }
 
 /* ================================================================================================================
-   NUBE (candy) — clay candy: a warm cream base, bubblegum pink, lilac, mint, peach and sky in soft pastel, everything
-   puffy and rounded as if moulded in clay (a light edge on top, a soft coloured shadow below). Nunito, titles Fredoka.
+   NUBE (candy) — a candy game: a pink-to-lilac page with a fine dotted pattern, big white rounded panels with soft pink
+   shadows, chunky plum capitals for the titles, glossy 3D «jelly key» buttons, pills everywhere, and 3D clouds, candies
+   and lollipops floating at the edges. Nunito, titles Fredoka. Night: the same sweets over a plum sky.
    ================================================================================================================ */
 html[data-skin="nube"] {
-  --radius: 1.2rem;
-  --background: oklch(0.975 0.014 25);
-  --foreground: oklch(0.32 0.06 320);
-  --card: oklch(0.995 0.005 30);
-  --card-foreground: oklch(0.32 0.06 320);
-  --popover: oklch(0.995 0.005 30);
-  --popover-foreground: oklch(0.32 0.06 320);
-  --primary: oklch(0.54 0.17 350);
-  --primary-foreground: oklch(0.99 0.008 340);
-  --secondary: oklch(0.94 0.045 170);
-  --secondary-foreground: oklch(0.32 0.07 175);
-  --muted: oklch(0.95 0.025 30);
-  --muted-foreground: oklch(0.5 0.07 330);
-  --accent: oklch(0.935 0.045 300);
-  --accent-foreground: oklch(0.36 0.1 310);
+  --radius: 1rem;
+  --background: oklch(0.965 0.03 340);
+  --foreground: oklch(0.3 0.08 330);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.3 0.08 330);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.3 0.08 330);
+  --primary: oklch(0.54 0.19 352);
+  --primary-foreground: oklch(0.995 0 0);
+  --secondary: oklch(0.93 0.05 300);
+  --secondary-foreground: oklch(0.35 0.1 305);
+  --muted: oklch(0.95 0.03 340);
+  --muted-foreground: oklch(0.5 0.08 335);
+  --accent: oklch(0.94 0.05 350);
+  --accent-foreground: oklch(0.44 0.17 352);
   --destructive: oklch(0.54 0.19 15);
   --success: oklch(0.5 0.11 165);
   --warning: oklch(0.5 0.11 60);
   --info: oklch(0.5 0.12 240);
-  --border: oklch(0.91 0.03 20);
-  --input: oklch(0.64 0.08 340);
-  --ring: oklch(0.74 0.12 350);
-  --sidebar: oklch(0.965 0.02 340);
-  --bubble: oklch(0.54 0.17 350);
-  --bubble-foreground: oklch(0.99 0.008 340);
+  --border: oklch(0.9 0.04 345);
+  --input: oklch(0.63 0.1 350);
+  --ring: oklch(0.72 0.14 350);
+  --sidebar: oklch(0.99 0.006 340);
+  --bubble: oklch(0.54 0.19 352);
+  --bubble-foreground: oklch(0.995 0 0);
   --nb-sky: linear-gradient(180deg, #bfe4ff 0%, #d9d3ff 42%, #ffd3ea 78%, #ffe6f2 100%);
   --nb-cloud: rgb(255 255 255 / 0.95);
   --nb-glow: rgb(255 214 236 / 0.8);
 }
 html.dark[data-skin="nube"] {
-  --background: oklch(0.21 0.035 320);
+  --background: oklch(0.22 0.045 325);
   --foreground: oklch(0.96 0.015 330);
-  --card: oklch(0.245 0.04 320);
+  --card: oklch(0.24 0.05 325);
   --card-foreground: oklch(0.96 0.015 330);
-  --popover: oklch(0.27 0.045 320);
+  --popover: oklch(0.27 0.05 325);
   --popover-foreground: oklch(0.96 0.015 330);
-  --primary: oklch(0.82 0.1 350);
-  --primary-foreground: oklch(0.24 0.05 320);
-  --secondary: oklch(0.3 0.045 190);
-  --secondary-foreground: oklch(0.94 0.03 175);
-  --muted: oklch(0.285 0.04 320);
-  --muted-foreground: oklch(0.8 0.04 320);
-  --accent: oklch(0.32 0.06 290);
-  --accent-foreground: oklch(0.92 0.05 290);
-  --destructive: oklch(0.7 0.17 18);
+  --primary: oklch(0.8 0.12 350);
+  --primary-foreground: oklch(0.25 0.06 325);
+  --secondary: oklch(0.33 0.06 295);
+  --secondary-foreground: oklch(0.94 0.03 300);
+  --muted: oklch(0.3 0.045 325);
+  --muted-foreground: oklch(0.8 0.04 330);
+  --accent: oklch(0.36 0.08 345);
+  --accent-foreground: oklch(0.93 0.06 350);
+  --destructive: oklch(0.68 0.17 18);
   --success: oklch(0.83 0.11 165);
   --warning: oklch(0.86 0.11 80);
   --info: oklch(0.82 0.09 235);
-  --border: oklch(0.36 0.05 320);
-  --input: oklch(0.56 0.07 330);
-  --ring: oklch(0.82 0.1 350);
-  --sidebar: oklch(0.19 0.032 320);
-  --bubble: oklch(0.5 0.14 345);
+  --border: oklch(0.38 0.06 330);
+  --input: oklch(0.58 0.08 340);
+  --ring: oklch(0.8 0.12 350);
+  --sidebar: oklch(0.2 0.04 325);
+  --bubble: oklch(0.5 0.15 345);
   --bubble-foreground: oklch(0.99 0 0);
   --nb-sky: linear-gradient(180deg, #2c2557 0%, #4a3570 45%, #7a4d86 80%, #8f5a8f 100%);
   --nb-cloud: rgb(255 230 245 / 0.2);
@@ -371,199 +374,249 @@ html.dark .orb-cloud { background: radial-gradient(closest-side, rgb(160 170 255
 @keyframes cloud-drift { from { transform: translateX(-30vw); } to { transform: translateX(130vw); } }
 
 /* ================================================================================================================
-   VAPORWAVE — the scene. Day: a pastel sunset, pink to lilac to cyan, a striped peach sun behind soft mountains, a lilac
-   grid rushing towards you, two palms. Night: deep indigo, a neon magenta grid, the sun orange to pink, stars.
+   VAPORWAVE — the scene and the components.
+   DAY: a sticker sheet of old computers on a mint page. Windows-95 windows (bevelled edges, a pastel title strip lilac →
+   pink → peach, grey panels), bevelled buttons, titles in an outlined display face, and stickers with thick ink outlines
+   and flat pastel fills (a floppy, a cassette, a little CRT, a smiley, sparkles, a ringed planet, a folder, a speech
+   bubble) bobbing at the edges (components/scene.jsx). The band is the pastel title bar.
+   NIGHT: a synthwave sunset. A starry deep purple sky melting into magenta and orange, big clouds lit from below, a
+   striped sun on the horizon behind far mountains and a city skyline, a neon magenta grid rushing forward, light beams
+   and shooting stars. Neon magenta edges on deep purple panels.
    ================================================================================================================ */
 html[data-skin="vaporwave"] {
-  --titlebar-color: #c9f3ff;
-  --vwb-a: #ffd3ef; --vwb-b: #e5d2ff; --vwb-c: #c9f3ff; --vwb-sun: #ff8ccb; --vwb-sun2: #ffc56e; --vwb-line: rgb(214 70 180 / 0.32);
-  --band: linear-gradient(90deg, var(--vwb-a), var(--vwb-b) 50%, var(--vwb-c) calc(100% - var(--wco-inset))) fixed;
-  --side-art: linear-gradient(to bottom, rgb(255 255 255 / 0.35), transparent 60%);
+  --titlebar-color: #ffd4b0;
+  --vw-ink: #1f1838; --vw-hi: rgb(255 255 255 / 0.95); --vw-lo: rgb(70 50 110 / 0.5); --vw-hard: #ff8fd0; --vw-strip: linear-gradient(90deg, #cdbcff, #ffb6dc 50%, #ffd4b0);
+  --band: linear-gradient(90deg, #cdbcff, #ffb6dc 50%, #ffd4b0 calc(100% - var(--wco-inset))) fixed;
+  --side-art: linear-gradient(to bottom, rgb(255 255 255 / 0.75) 0 2px, rgb(255 255 255 / 0.25) 2px, transparent 55%);
+  --vw-sparkle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 1 L14.5 9.5 L23 12 L14.5 14.5 L12 23 L9.5 14.5 L1 12 L9.5 9.5 Z' fill='%23fff' stroke='%231f1838' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E");
   --band-art:
-    linear-gradient(to bottom, rgb(255 255 255 / 0.35), transparent 60%),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.75) 0 2px, rgb(255 255 255 / 0.25) 2px, transparent 55%),
+    var(--vw-sparkle) 60px 10px / 190px 18px repeat-x fixed,
+    var(--vw-sparkle) 150px 30px / 260px 11px repeat-x fixed;
+  --vw-page: linear-gradient(rgb(255 255 255 / 0.22) 1px, transparent 1px) 0 0 / 28px 28px, linear-gradient(90deg, rgb(255 255 255 / 0.22) 1px, transparent 1px) 0 0 / 28px 28px, linear-gradient(170deg, #d2ece4, #c3e6dc);
+  --vw-paper: rgb(170 120 230 / 0.12);
+}
+html.dark[data-skin="vaporwave"] {
+  --titlebar-color: #1b0a3a;
+  --vw-ink: #ff4fc8; --vw-hard: rgb(255 79 200 / 0.35); --vw-strip: linear-gradient(90deg, #ff71ce, #b967ff 50%, #01cdfe);
+  --vwb-sun: #ff4fa8; --vwb-sun2: #ffb347; --vwb-line: rgb(255 79 168 / 0.45); --vwb-b: #3a1260;
+  --band: linear-gradient(90deg, #170634, #2b0b52 55%, #1b0a3a calc(100% - var(--wco-inset))) fixed;
+  --side-art: linear-gradient(to bottom, rgb(255 255 255 / 0.06), transparent 60%);
+  --band-art:
+    linear-gradient(to bottom, rgb(255 255 255 / 0.06), transparent 60%),
     repeating-linear-gradient(to bottom, transparent 0 5px, var(--vwb-b) 5px 7px) calc(50% - 46px) 33px / 92px 23px no-repeat fixed,
     radial-gradient(circle at 50% 135%, var(--vwb-sun2) 0 22px, var(--vwb-sun) 42px, transparent 43px) 0 0 / 100% 56px no-repeat fixed,
     repeating-linear-gradient(90deg, var(--vwb-line) 0 1px, transparent 1px 38px) 0 40px / 100% 16px repeat-x fixed,
     repeating-linear-gradient(to bottom, var(--vwb-line) 0 1px, transparent 1px 6px) 0 40px / 100% 16px repeat-x fixed;
-  --vw-sky: linear-gradient(to bottom, #ffe3f4 0%, #ead6ff 38%, #ffd0e8 60%, #ffdcc4 68%, #c9f1ff 100%);
-  --vw-grid: rgb(220 90 200 / 0.5); --vw-palm: rgb(118 52 150 / 0.4); --vw-mount: rgb(205 160 240 / 0.8); --vw-mount2: rgb(170 120 230 / 0.6);
-  --vw-star: transparent; --vw-hard: rgb(176 120 230 / 0.45); --vw-paper: rgb(170 120 230 / 0.12);
+  --vw-night: linear-gradient(to bottom, #0b0222 0%, #1f0747 30%, #4a1270 50%, #a0287c 62%, #ff6a4d 70%, #ffb03d 72%, #12052a 72%, #0b0222 100%);
+  --vw-grid: rgb(255 79 200 / 0.8); --vw-mount: rgb(26 6 48 / 0.95); --vw-mount2: rgb(58 14 96 / 0.85); --vw-star: rgb(255 240 250 / 0.85);
+  --vw-paper: rgb(255 120 220 / 0.07);
 }
-html.dark[data-skin="vaporwave"] {
-  --titlebar-color: #0d3550;
-  --vwb-a: #2b0d47; --vwb-b: #3a1260; --vwb-c: #0d3550; --vwb-sun: #ff4fa8; --vwb-sun2: #ffb347; --vwb-line: rgb(255 79 168 / 0.45);
-  --side-art: linear-gradient(to bottom, rgb(255 255 255 / 0.06), transparent 60%);
-  --vw-sky: linear-gradient(to bottom, #0e0426 0%, #250a46 38%, #5a1466 60%, #b3307e 68%, #0b2f4a 100%);
-  --vw-grid: rgb(255 79 200 / 0.75); --vw-palm: rgb(8 0 22 / 0.85); --vw-mount: rgb(40 10 70 / 0.9); --vw-mount2: rgb(70 20 110 / 0.8);
-  --vw-star: rgb(255 240 250 / 0.8); --vw-hard: rgb(255 79 200 / 0.35); --vw-paper: rgb(255 120 220 / 0.07);
+@media (prefers-reduced-motion: no-preference) {
+  html[data-skin="vaporwave"]:not(.dark, [data-motion="minima"]) .theme-band::before { animation: vw-twinkle-band 3s ease-in-out infinite alternate; }
+  html.dark[data-skin="vaporwave"]:not([data-motion="minima"]) .theme-band::before { animation: vw-floor 1.6s linear infinite; }
 }
-@media (prefers-reduced-motion: no-preference) { html[data-skin="vaporwave"]:not([data-motion="minima"]) .theme-band::before { animation: vw-floor 1.6s linear infinite; } }
+@keyframes vw-twinkle-band { from { opacity: 0.55; } to { opacity: 1; } }
 @keyframes vw-floor { from { background-position: 0 0, calc(50% - 46px) 33px, 0 0, 0 40px, 0 40px; } to { background-position: 0 0, calc(50% - 46px) 33px, 0 0, 0 40px, 0 46px; } }
-.scene-vaporwave .scene-blur { background: var(--vw-sky); --scene-opacity: 0.7; }
-html.dark .scene-vaporwave .scene-blur { --scene-opacity: 0.8; }
-.vw-stars { inset: 0 0 40% 0; background: radial-gradient(circle, var(--vw-star) 0 1px, transparent 1.6px) 0 0 / 140px 110px, radial-gradient(circle, var(--vw-star) 0 1.4px, transparent 2px) 60px 40px / 230px 190px; mask-image: linear-gradient(to bottom, #000 40%, transparent); animation: vw-twinkle 4s ease-in-out infinite alternate; }
-@keyframes vw-twinkle { from { opacity: 0.5; } to { opacity: 1; } }
-.vw-glow { left: 50%; bottom: 30%; width: min(70vw, 640px); aspect-ratio: 1; translate: -50% 50%; border-radius: 50%; background: radial-gradient(closest-side, rgb(255 110 190 / 0.5), transparent); animation: vw-breathe 7s ease-in-out infinite alternate; }
+/* Day: the mint page and the stickers; the night pieces stay hidden. */
+.scene-vaporwave .scene-blur { background: var(--vw-page); --scene-opacity: 1; }
+html:not(.dark) .scene-vaporwave .scene-veil { background: linear-gradient(to bottom, color-mix(in oklch, var(--background) 50%, transparent), transparent 35%); }
+html:not(.dark) .scene-vaporwave :is(.vw-stars, .vw-shoot, .vw-cloud, .vw-glow, .vw-sun, .vw-mount, .vw-city, .vw-floor, .vw-beam) { display: none; }
+html.dark .scene-vaporwave .vw-sticker { display: none; }
+.vw-sticker { color: var(--vw-ink); filter: drop-shadow(4px 4px 0 var(--vw-ink)); animation: vw-bob ease-in-out infinite alternate; transform-origin: 50% 50%; }
+.vw-sticker svg { display: block; width: 100%; height: auto; overflow: visible; }
+@keyframes vw-bob { from { transform: translateY(0) rotate(var(--r, 0deg)); } to { transform: translateY(-12px) rotate(calc(var(--r, 0deg) + 5deg)); } }
+/* Night: the sunset. */
+html.dark .scene-vaporwave .scene-blur { background: var(--vw-night); }
+html.dark .scene-vaporwave .scene-veil { background: linear-gradient(to bottom, color-mix(in oklch, var(--background) 60%, transparent), color-mix(in oklch, var(--background) 40%, transparent) 50%, transparent 78%); }
+.vw-stars { inset: 0 0 30% 0; background: radial-gradient(circle, var(--vw-star) 0 1px, transparent 1.6px) 0 0 / 140px 110px, radial-gradient(circle, var(--vw-star) 0 1.4px, transparent 2px) 60px 40px / 230px 190px, radial-gradient(circle, rgb(255 255 255 / 0.5) 0 0.8px, transparent 1.3px) 20px 70px / 90px 80px; mask-image: linear-gradient(to bottom, #000 40%, transparent); animation: vw-twinkle 4s ease-in-out infinite alternate; }
+@keyframes vw-twinkle { from { opacity: 0.55; } to { opacity: 1; } }
+.vw-shoot { top: 8%; left: 60%; width: 160px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, #fff); rotate: 28deg; opacity: 0; animation: vw-shoot 9s linear infinite; }
+.vw-shoot.b { top: 20%; left: 20%; width: 110px; animation-duration: 13s; animation-delay: -6s; }
+@keyframes vw-shoot { 0%, 78% { opacity: 0; transform: translate(0, 0); } 80% { opacity: 1; } 92%, 100% { opacity: 0; transform: translate(-260px, 140px); } }
+.vw-beam { bottom: 28%; width: 3px; height: 70%; left: 50%; transform-origin: 50% 100%; background: linear-gradient(to top, rgb(255 180 120 / 0.35), transparent 70%); animation: vw-beam 6s ease-in-out infinite alternate; }
+.vw-beam.a { rotate: -34deg; } .vw-beam.b { rotate: -14deg; animation-delay: -2s; } .vw-beam.c { rotate: 18deg; animation-delay: -4s; } .vw-beam.d { rotate: 38deg; animation-delay: -1s; }
+@keyframes vw-beam { from { opacity: 0.35; } to { opacity: 0.9; } }
+.vw-cloud { animation: vw-drift linear infinite; opacity: 0.95; }
+.vw-cloud svg { display: block; width: 100%; height: auto; }
+@keyframes vw-drift { from { transform: translateX(-12vw); } to { transform: translateX(112vw); } }
+.vw-glow { left: 50%; bottom: 28%; width: min(80vw, 760px); aspect-ratio: 1; translate: -50% 50%; border-radius: 50%; background: radial-gradient(closest-side, rgb(255 150 90 / 0.55), rgb(255 80 160 / 0.25) 45%, transparent 70%); animation: vw-breathe 7s ease-in-out infinite alternate; }
 @keyframes vw-breathe { from { opacity: 0.6; transform: scale(0.96); } to { opacity: 1; transform: scale(1.06); } }
-.vw-sun { left: 50%; bottom: 30%; width: min(44vw, 400px); aspect-ratio: 1; translate: -50% 50%; border-radius: 50%; filter: blur(1.5px);
-  background: linear-gradient(to bottom, #ffe27a 0%, #ffa66b 35%, #ff5fb4 70%, #c43cff 100%);
-  mask-image: linear-gradient(to bottom, #000 0 50%, transparent 50% 54%, #000 54% 62%, transparent 62% 67%, #000 67% 74%, transparent 74% 80%, #000 80% 86%, transparent 86% 93%, #000 93%); }
-.vw-mount { left: -4%; right: -4%; bottom: 28%; height: 20%; filter: blur(2px); }
+.vw-sun { left: 50%; bottom: 28%; width: min(44vw, 420px); aspect-ratio: 1; translate: -50% 50%; border-radius: 50%; opacity: 0.85;
+  background: linear-gradient(to bottom, #fff3a0 0%, #ffd23f 30%, #ff8a2a 62%, #ff3f8e 100%);
+  mask-image: linear-gradient(to bottom, #000 0 48%, transparent 48% 52%, #000 52% 60%, transparent 60% 65%, #000 65% 72%, transparent 72% 78%, #000 78% 84%, transparent 84% 91%, #000 91%); }
+.vw-mount { left: -4%; right: -4%; bottom: 27%; height: 20%; }
 .vw-mount.back { background: var(--vw-mount2); clip-path: polygon(0 100%, 6% 55%, 14% 72%, 22% 38%, 31% 66%, 40% 48%, 49% 78%, 57% 40%, 65% 68%, 74% 32%, 83% 64%, 92% 46%, 100% 100%); }
-.vw-mount.front { background: var(--vw-mount); height: 13%; clip-path: polygon(0 100%, 9% 62%, 18% 80%, 27% 50%, 36% 76%, 45% 58%, 53% 84%, 62% 52%, 71% 78%, 80% 44%, 89% 72%, 100% 56%, 100% 100%); }
-.vw-floor { left: -50%; right: -50%; bottom: -10%; height: 42%; transform-origin: 50% 0; transform: perspective(260px) rotateX(62deg); filter: blur(0.6px);
+.vw-mount.front { background: var(--vw-mount); height: 12%; clip-path: polygon(0 100%, 9% 62%, 18% 80%, 27% 50%, 36% 76%, 45% 58%, 53% 84%, 62% 52%, 71% 78%, 80% 44%, 89% 72%, 100% 56%, 100% 100%); }
+.vw-city { left: 0; right: 0; bottom: 27.5%; height: 11%; color: #0a0318; }
+.vw-city svg { display: block; width: 100%; height: 100%; }
+.vw-floor { left: -50%; right: -50%; bottom: -10%; height: 40%; transform-origin: 50% 0; transform: perspective(260px) rotateX(62deg);
   background: linear-gradient(var(--vw-grid) 2px, transparent 2px) 0 0 / 60px 60px, linear-gradient(90deg, var(--vw-grid) 2px, transparent 2px) 0 0 / 60px 60px;
-  mask-image: linear-gradient(to bottom, transparent, #000 35%); animation: vw-rush 1.6s linear infinite; }
+  mask-image: linear-gradient(to bottom, transparent, #000 35%); animation: vw-rush 1.6s linear infinite; filter: drop-shadow(0 0 6px rgb(255 79 200 / 0.8)); }
 @keyframes vw-rush { from { background-position: 0 0, 0 0; } to { background-position: 0 60px, 0 0; } }
-.vw-palm { bottom: 16%; width: min(18vw, 170px); color: var(--vw-palm); filter: blur(1.5px); animation: vw-sway 6s ease-in-out infinite alternate; transform-origin: 50% 100%; }
-.vw-palm.left { left: 3%; } .vw-palm.right { right: 3%; scale: -1 1; animation-delay: -3s; }
-@keyframes vw-sway { from { rotate: -2deg; } to { rotate: 2deg; } }
-/* Windows-95 windows: cards, the message box and dialogs with a chunky border and a hard lilac shadow; the sidebar is
-   lilac grid paper; the main button is a chrome magenta-to-violet; the active item of the menu carries a gradient edge. */
-html[data-skin="vaporwave"] [data-slot="card"] { border: 1.5px solid color-mix(in oklch, var(--primary) 30%, var(--border)); box-shadow: 4px 4px 0 0 var(--vw-hard); }
-html.dark[data-skin="vaporwave"] [data-slot="card"] { box-shadow: 4px 4px 0 0 var(--vw-hard), 0 10px 32px -16px rgb(255 60 180 / 0.45); }
-html[data-skin="vaporwave"] [data-slot="dialog-overlay"] + [role="dialog"] { border: 1.5px solid transparent; background: linear-gradient(var(--popover), var(--popover)) padding-box, linear-gradient(90deg, #ff71ce, #b967ff 50%, #01cdfe) border-box; box-shadow: 6px 6px 0 0 var(--vw-hard); }
-html[data-skin="vaporwave"] [data-slot="button"].bg-primary { background-image: linear-gradient(135deg, oklch(0.6 0.23 345), oklch(0.5 0.22 300)); }
+/* DAY components: Windows 95 in pastel. Cards, dialogs and the message box are windows (bevelled edges, a pastel title
+   strip on top, a hard pink offset shadow); buttons are bevelled; tabs and the active menu item sink in; the sidebar is a
+   grey panel; titles are outlined (white fill, ink outline, pink offset shadow). */
+html[data-skin="vaporwave"]:not(.dark) :is([data-slot="card"], [data-slot="composer"], [data-slot="dialog-overlay"] + [role="dialog"]) { position: relative; border: 1px solid var(--vw-lo); box-shadow: inset 2px 2px 0 var(--vw-hi), inset -2px -2px 0 var(--vw-lo), 5px 5px 0 var(--vw-hard); }
+html[data-skin="vaporwave"]:not(.dark) :is([data-slot="card"], [data-slot="composer"], [data-slot="dialog-overlay"] + [role="dialog"])::before { content: ""; position: absolute; left: 2px; right: 2px; top: 2px; height: 7px; background: var(--vw-strip); pointer-events: none; z-index: 1; }
+html[data-skin="vaporwave"]:not(.dark) [data-slot="composer"] { background-color: color-mix(in oklch, var(--card) 92%, transparent); }
+html[data-skin="vaporwave"]:not(.dark) [data-slot="dialog-overlay"] + [role="dialog"]::before { height: 10px; }
+html[data-skin="vaporwave"]:not(.dark) [data-slot="button"].bg-primary { font-weight: 700; box-shadow: inset 1px 1px 0 rgb(255 255 255 / 0.55), inset -2px -2px 0 rgb(0 0 0 / 0.28), 3px 3px 0 var(--vw-ink); }
+html[data-skin="vaporwave"]:not(.dark) [data-slot="button"].bg-primary:active { box-shadow: inset -1px -1px 0 rgb(255 255 255 / 0.4), inset 2px 2px 0 rgb(0 0 0 / 0.28), 1px 1px 0 var(--vw-ink); translate: 2px 2px; }
+html[data-skin="vaporwave"]:not(.dark) [data-slot="button"].border { background-color: var(--card); border-color: var(--vw-lo); box-shadow: inset 1px 1px 0 var(--vw-hi), inset -2px -2px 0 var(--vw-lo), 2px 2px 0 var(--vw-ink); font-weight: 600; }
+html[data-skin="vaporwave"]:not(.dark) [data-slot="button"].border:active { box-shadow: inset -1px -1px 0 var(--vw-hi), inset 2px 2px 0 var(--vw-lo); translate: 1px 1px; }
+html[data-skin="vaporwave"]:not(.dark) :is([role="tablist"], [role="radiogroup"].bg-muted) { box-shadow: inset 1px 1px 0 var(--vw-lo), inset -1px -1px 0 var(--vw-hi); }
+html[data-skin="vaporwave"]:not(.dark) :is([role="tab"][data-state="active"], [role="radiogroup"].bg-muted [role="radio"][aria-checked="true"]) { background-color: var(--card); box-shadow: inset 1px 1px 0 var(--vw-hi), inset -1px -1px 0 var(--vw-lo), 1px 1px 0 var(--vw-ink); font-weight: 600; }
+html[data-skin="vaporwave"]:not(.dark) :is([data-slot="input"], [data-slot="textarea"]) { box-shadow: inset 1px 1px 0 var(--vw-lo), inset -1px -1px 0 var(--vw-hi); background-color: #fff; }
+html[data-skin="vaporwave"]:not(.dark) aside.bg-sidebar { border-right: 0; box-shadow: inset -2px 0 0 var(--vw-lo), inset -3px 0 0 var(--vw-hi); background-image: none; }
+html[data-skin="vaporwave"]:not(.dark) nav button.bg-accent { box-shadow: inset 1px 1px 0 var(--vw-lo), inset -1px -1px 0 var(--vw-hi); }
+html[data-skin="vaporwave"]:not(.dark) [data-slot="badge"] { box-shadow: 1px 1px 0 var(--vw-ink); border-color: var(--vw-ink); }
+html[data-skin="vaporwave"]:not(.dark) :is(h1, h2, h3, [data-slot="card-title"], .hero-title):not(.prose-chat *) { color: #fff; font-weight: 800; letter-spacing: 0.06em; paint-order: stroke fill; -webkit-text-stroke: 1.3px var(--vw-ink); text-shadow: 2px 2px 0 var(--vw-hard); }
+html[data-skin="vaporwave"]:not(.dark) .hero-title { -webkit-text-stroke: 2.5px var(--vw-ink); text-shadow: 4px 4px 0 var(--vw-hard); }
+/* NIGHT components: neon magenta edges and glow on deep purple; the sidebar on faint grid paper. */
+html.dark[data-skin="vaporwave"] [data-slot="card"] { border: 1px solid color-mix(in oklch, var(--primary) 45%, transparent); box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 12%, transparent), 0 0 20px -6px color-mix(in oklch, var(--primary) 70%, transparent), 0 14px 32px -16px rgb(255 60 180 / 0.45); }
+html.dark[data-skin="vaporwave"] [data-slot="dialog-overlay"] + [role="dialog"] { border: 1.5px solid transparent; background: linear-gradient(var(--popover), var(--popover)) padding-box, var(--vw-strip) border-box; box-shadow: 0 0 30px -6px rgb(255 79 200 / 0.6); }
 html.dark[data-skin="vaporwave"] [data-slot="button"].bg-primary { background-image: linear-gradient(135deg, oklch(0.74 0.19 350), oklch(0.62 0.2 300)); color: oklch(0.99 0 0); box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 70%, transparent), 0 0 18px -3px color-mix(in oklch, var(--primary) 75%, transparent); }
-html.dark[data-skin="vaporwave"] :is(h1, h2):not(.prose-chat *) { text-shadow: 0 0 14px color-mix(in oklch, var(--primary) 55%, transparent); }
-html[data-skin="vaporwave"] aside.bg-sidebar { background-image: linear-gradient(180deg, transparent 55%, color-mix(in oklch, oklch(0.8 0.13 340) 22%, transparent) 100%), linear-gradient(var(--vw-paper) 1px, transparent 1px), linear-gradient(90deg, var(--vw-paper) 1px, transparent 1px); background-size: 100% 100%, 26px 26px, 26px 26px; }
+html.dark[data-skin="vaporwave"] [data-slot="button"].border { border-color: color-mix(in oklch, var(--primary) 45%, transparent); box-shadow: 0 0 10px -4px color-mix(in oklch, var(--primary) 60%, transparent); }
+html.dark[data-skin="vaporwave"] :is([role="tab"][data-state="active"], [role="radiogroup"].bg-muted [role="radio"][aria-checked="true"]) { box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 60%, transparent), 0 0 12px -2px color-mix(in oklch, var(--primary) 70%, transparent); }
+html.dark[data-skin="vaporwave"] :is(h1, h2, h3, [data-slot="card-title"]):not(.prose-chat *) { text-shadow: 0 0 14px color-mix(in oklch, var(--primary) 65%, transparent); letter-spacing: 0.04em; }
 html.dark[data-skin="vaporwave"] aside.bg-sidebar { background-image: linear-gradient(180deg, transparent 45%, color-mix(in oklch, oklch(0.5 0.2 340) 30%, transparent) 100%), linear-gradient(var(--vw-paper) 1px, transparent 1px), linear-gradient(90deg, var(--vw-paper) 1px, transparent 1px); background-size: 100% 100%, 26px 26px, 26px 26px; border-right-color: color-mix(in oklch, var(--primary) 30%, var(--border)); }
-html[data-skin="vaporwave"] nav button.bg-accent { box-shadow: inset 3px 0 0 var(--primary); }
+html.dark[data-skin="vaporwave"] nav button.bg-accent { box-shadow: inset 3px 0 0 var(--primary), 0 0 12px -4px color-mix(in oklch, var(--primary) 70%, transparent); }
 html[data-skin="vaporwave"] .bg-bubble { background-image: linear-gradient(135deg, oklch(0.53 0.23 345), oklch(0.48 0.2 300)); }
 html.dark[data-skin="vaporwave"] .bg-bubble { background-image: linear-gradient(135deg, oklch(0.5 0.2 345), oklch(0.45 0.19 295)); }
 html[data-skin="vaporwave"] [data-testid="update-card"] { background-image: linear-gradient(135deg, #7b2ff7, #c2307f); }
 
 /* ================================================================================================================
-   RETRO — the scene. Deep space: three layers of stars falling at different speeds, a dim planet, a fleet of coloured
-   invaders marching above, the ground and the cannon below, a CRT vignette and scanlines over it.
+   RETRO — the scene and the components.
+   DAY: the seventies. A muted orange page with peach, butter and blush panels, bold chevron stripes (maroon, red,
+   orange, peach, golden) in the corner of the chat's bar and of the page, flat shapes scattered at the edges (red
+   asterisk flowers, orange diamonds, thin sparkles), titles in a wide outlined display face (Bungee), inputs and
+   buttons with a black outline and a hard coloured offset shadow, and hi-fi controls: cream knobs and toggles on navy
+   tracks, round cream icon buttons, segmented switches.
+   NIGHT: the arcade. Pure black, rainbow pixel invaders drifting in zig-zag columns at the edges, a phosphor green crab
+   and a pixel rocket with a soft CRT bloom, stars and scanlines; the same outlined titles and hard shadows in neon.
    ================================================================================================================ */
 html[data-skin="retro"] {
-  --titlebar-color: #c9dba6;
-  --rt-band-invaders: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23c0268f' d='M4 4h1v1h-1zM10 4h1v1h-1zM5 5h1v1h-1zM9 5h1v1h-1zM4 6h7v1h-7zM3 7h2v1h-2zM6 7h3v1h-3zM10 7h2v1h-2zM2 8h11v1h-11zM2 9h1v1h-1zM4 9h7v1h-7zM12 9h1v1h-1zM2 10h1v1h-1zM4 10h1v1h-1zM10 10h1v1h-1zM12 10h1v1h-1zM5 11h2v1h-2zM8 11h2v1h-2z'/%3E%3Cpath fill='%230a8fa8' d='M27 4h2v1h-2zM26 5h4v1h-4zM25 6h6v1h-6zM24 7h2v1h-2zM27 7h2v1h-2zM30 7h2v1h-2zM24 8h8v1h-8zM26 9h1v1h-1zM29 9h1v1h-1zM25 10h1v1h-1zM27 10h2v1h-2zM30 10h1v1h-1zM24 11h1v1h-1zM26 11h1v1h-1zM29 11h1v1h-1zM31 11h1v1h-1z'/%3E%3Cpath fill='%23a07800' d='M46 4h4v1h-4zM43 5h10v1h-10zM42 6h12v1h-12zM42 7h3v1h-3zM47 7h2v1h-2zM51 7h3v1h-3zM42 8h12v1h-12zM45 9h2v1h-2zM49 9h2v1h-2zM44 10h2v1h-2zM47 10h2v1h-2zM50 10h2v1h-2zM42 11h2v1h-2zM52 11h2v1h-2z'/%3E%3C/svg%3E");
-  --band: var(--rt-space);
+  --titlebar-color: #fdedb8;
+  --rt-ink: #1a0a10; --rt-cream: #eee6d5; --rt-navy: #2f5a85; --rt-orange: #f08a4b; --rt-coral: #e5584f; --rt-gold: #f6b73c; --rt-maroon: #5a0b1e; --rt-pink: #fbd3dc;
+  --rt-off: var(--rt-orange); --rt-off2: var(--rt-gold); --rt-off3: var(--rt-pink);
+  --band: linear-gradient(90deg, #fdd9c4, #fde3bf 50%, #fdedb8 calc(100% - var(--wco-inset))) fixed;
+  --side-art: none;
+  --rt-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 56' fill='none' stroke-width='11' stroke-linejoin='miter'%3E%3Cpath d='M-4 -46L100 14L204 -46' stroke='%235a0b1e'/%3E%3Cpath d='M-4 -34L100 26L204 -34' stroke='%23d9424e'/%3E%3Cpath d='M-4 -22L100 38L204 -22' stroke='%23f08a4b'/%3E%3Cpath d='M-4 -10L100 50L204 -10' stroke='%23fdd9c4'/%3E%3Cpath d='M-4 2L100 62L204 2' stroke='%23f6b73c'/%3E%3C/svg%3E");
+  --band-art: var(--rt-chevron) right 200px top 0 / 180px 56px no-repeat fixed;
+  --band-art-opacity: 1;
+  --rt-page: linear-gradient(170deg, #f4c7a2, #efb98f 60%, #f3c3a0);
+  --rt-glow: none;
+}
+html.dark[data-skin="retro"] {
+  --titlebar-color: #000000;
   --side-art: repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px);
+  --rt-ink: #39ff14; --rt-cream: #d9d2c0; --rt-navy: #1b2d4a; --rt-orange: #ff8a3d; --rt-coral: #ff4fd8; --rt-gold: #ffe14d; --rt-maroon: #4a0a2a; --rt-pink: #ff4fd8;
+  --rt-off: #ff4fd8; --rt-off2: #3ef0ff; --rt-off3: #ffe14d;
+  --band: var(--rt-space);
+  --rt-band-invaders: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23ff4fd8' d='M4 4h1v1h-1zM10 4h1v1h-1zM5 5h1v1h-1zM9 5h1v1h-1zM4 6h7v1h-7zM3 7h2v1h-2zM6 7h3v1h-3zM10 7h2v1h-2zM2 8h11v1h-11zM2 9h1v1h-1zM4 9h7v1h-7zM12 9h1v1h-1zM2 10h1v1h-1zM4 10h1v1h-1zM10 10h1v1h-1zM12 10h1v1h-1zM5 11h2v1h-2zM8 11h2v1h-2z'/%3E%3Cpath fill='%233ef0ff' d='M27 4h2v1h-2zM26 5h4v1h-4zM25 6h6v1h-6zM24 7h2v1h-2zM27 7h2v1h-2zM30 7h2v1h-2zM24 8h8v1h-8zM26 9h1v1h-1zM29 9h1v1h-1zM25 10h1v1h-1zM27 10h2v1h-2zM30 10h1v1h-1zM24 11h1v1h-1zM26 11h1v1h-1zM29 11h1v1h-1zM31 11h1v1h-1z'/%3E%3Cpath fill='%23ffe14d' d='M46 4h4v1h-4zM43 5h10v1h-10zM42 6h12v1h-12zM42 7h3v1h-3zM47 7h2v1h-2zM51 7h3v1h-3zM42 8h12v1h-12zM45 9h2v1h-2zM49 9h2v1h-2zM44 10h2v1h-2zM47 10h2v1h-2zM50 10h2v1h-2zM42 11h2v1h-2zM52 11h2v1h-2z'/%3E%3C/svg%3E");
   --band-art:
     repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px),
     var(--rt-band-invaders) 0 11px / 132px 34px repeat-x fixed,
     radial-gradient(circle at 20px 10px, var(--rt-star) 0 1px, transparent 1.5px) 0 0 / 97px 56px fixed,
     radial-gradient(circle at 60px 40px, var(--rt-star) 0 1px, transparent 1.5px) 0 0 / 143px 56px fixed;
-  --band-art-opacity: 0.6;
-  --rt-deep: linear-gradient(to bottom, #d4e3b4, #c3d79c);
-  --rt-vignette: rgb(40 80 30 / 0.18);
+  --band-art-opacity: 0.7;
+  --rt-page: #000;
+  --rt-glow: drop-shadow(0 0 4px rgb(57 255 20 / 0.9)) drop-shadow(0 0 10px rgb(57 255 20 / 0.5));
 }
-html.dark[data-skin="retro"] { --rt-band-invaders: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23ff4fd8' d='M4 4h1v1h-1zM10 4h1v1h-1zM5 5h1v1h-1zM9 5h1v1h-1zM4 6h7v1h-7zM3 7h2v1h-2zM6 7h3v1h-3zM10 7h2v1h-2zM2 8h11v1h-11zM2 9h1v1h-1zM4 9h7v1h-7zM12 9h1v1h-1zM2 10h1v1h-1zM4 10h1v1h-1zM10 10h1v1h-1zM12 10h1v1h-1zM5 11h2v1h-2zM8 11h2v1h-2z'/%3E%3Cpath fill='%233ef0ff' d='M27 4h2v1h-2zM26 5h4v1h-4zM25 6h6v1h-6zM24 7h2v1h-2zM27 7h2v1h-2zM30 7h2v1h-2zM24 8h8v1h-8zM26 9h1v1h-1zM29 9h1v1h-1zM25 10h1v1h-1zM27 10h2v1h-2zM30 10h1v1h-1zM24 11h1v1h-1zM26 11h1v1h-1zM29 11h1v1h-1zM31 11h1v1h-1z'/%3E%3Cpath fill='%23ffe14d' d='M46 4h4v1h-4zM43 5h10v1h-10zM42 6h12v1h-12zM42 7h3v1h-3zM47 7h2v1h-2zM51 7h3v1h-3zM42 8h12v1h-12zM45 9h2v1h-2zM49 9h2v1h-2zM44 10h2v1h-2zM47 10h2v1h-2zM50 10h2v1h-2zM42 11h2v1h-2zM52 11h2v1h-2z'/%3E%3C/svg%3E"); --titlebar-color: #070a1a; --rt-deep: linear-gradient(to bottom, #04061a, #070a1e 60%, #0a1a24); --rt-vignette: rgb(0 0 0 / 0.55); }
-@media (prefers-reduced-motion: no-preference) { html[data-skin="retro"]:not([data-motion="minima"]) .theme-band::before { animation: rt-band-march 2.4s steps(1, end) infinite; } }
+/* The chat bar of the day: the chevrons sit whole at the right, just before the bar's buttons (no fade over them). */
+html[data-skin="retro"]:not(.dark) .topbar-chat.theme-band::before { mask-image: linear-gradient(90deg, transparent 150px, #000 150px, #000 calc(100% - 180px), transparent calc(100% - 180px)); }
+@media (prefers-reduced-motion: no-preference) { html.dark[data-skin="retro"]:not([data-motion="minima"]) .theme-band::before { animation: rt-band-march 2.4s steps(1, end) infinite; } }
 @keyframes rt-band-march { 0%, 100% { background-position: 0 0, 0 11px, 0 0, 0 0; } 50% { background-position: 0 0, 12px 11px, 0 0, 0 0; } }
-.scene-retro .scene-blur { background: var(--rt-deep); --scene-opacity: 1; }
+.scene-retro .scene-blur { background: var(--rt-page); --scene-opacity: 1; }
+html:not(.dark) .scene-retro .scene-veil { background: linear-gradient(to bottom, color-mix(in oklch, var(--background) 40%, transparent), transparent 35%); }
+html.dark .scene-retro .scene-veil { background: linear-gradient(to bottom, rgb(0 0 0 / 0.5), transparent 40%); }
+/* Day pieces: the big chevron corner and the flat shapes; hidden at night. Night pieces hidden by day. */
+html.dark .scene-retro :is(.rt-corner, .rt-shape) { display: none; }
+html:not(.dark) .scene-retro :is(.rt-stars, .rt-scan, .rt-rocket, .rt-crab) { display: none; }
+.rt-corner { right: -2%; bottom: -2%; width: min(46vw, 520px); opacity: 0.55; }
+.rt-corner svg { display: block; width: 100%; height: auto; }
+.rt-shape { color: var(--rt-coral); animation: rt-spin ease-in-out infinite alternate; }
+.rt-shape svg { display: block; width: 100%; height: auto; }
+@keyframes rt-spin { from { transform: rotate(var(--r, 0deg)) translateY(0); } to { transform: rotate(calc(var(--r, 0deg) + 25deg)) translateY(-10px); } }
 .rt-stars { inset: -200px 0 0 0; animation: rt-fall linear infinite; }
 .rt-stars.s1 { background: radial-gradient(circle, var(--rt-star) 0 1px, transparent 1.6px) 0 0 / 120px 100px; animation-duration: 60s; }
 .rt-stars.s2 { background: radial-gradient(circle, var(--rt-star) 0 1.4px, transparent 2px) 40px 30px / 190px 170px; animation-duration: 34s; }
-.rt-stars.s3 { background: radial-gradient(circle, var(--rt-star) 0 2px, transparent 2.6px) 90px 60px / 260px 230px; animation-duration: 20s; }
 @keyframes rt-fall { from { transform: translateY(0); } to { transform: translateY(200px); } }
-.rt-planet { right: 6%; top: 14%; width: min(26vw, 260px); aspect-ratio: 1; border-radius: 50%; opacity: 0.5;
-  background: radial-gradient(circle at 36% 32%, color-mix(in oklch, var(--info) 45%, transparent), color-mix(in oklch, var(--info) 14%, transparent) 55%, transparent 72%),
-    repeating-linear-gradient(to bottom, transparent 0 6px, color-mix(in oklch, var(--info) 10%, transparent) 6px 8px);
-  mask-image: radial-gradient(circle, #000 60%, transparent 70%); animation: rt-orbit 40s ease-in-out infinite alternate; }
-@keyframes rt-orbit { from { transform: translate(0, 0); } to { transform: translate(-24px, 16px); } }
-.rt-fleet { top: 3%; left: 50%; width: min(70vw, 720px); height: 120px; translate: -50% 0; opacity: 0.18; filter: blur(1px);
-  background: var(--rt-band-invaders) 0 0 / 120px 32px repeat; image-rendering: pixelated; animation: rt-march-fleet 6s steps(6, end) infinite alternate; }
-@keyframes rt-march-fleet { from { transform: translateX(-40px); } to { transform: translateX(40px) translateY(12px); } }
-.rt-ground { left: 0; right: 0; bottom: 18px; height: 3px; background: color-mix(in oklch, var(--primary) 50%, transparent); }
-.rt-ship { left: 50%; bottom: 22px; width: 44px; height: 24px; translate: -50% 0; background: var(--rt-ship) center / contain no-repeat; opacity: 0.6; animation: rt-patrol 9s ease-in-out infinite alternate; }
-@keyframes rt-patrol { from { transform: translateX(-28vw); } to { transform: translateX(28vw); } }
-.rt-scan { inset: 0; background: radial-gradient(120% 90% at 50% 45%, transparent 55%, var(--rt-vignette)), repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px); }
-/* Square corners everywhere (the robot keeps its own shapes), pixel titles, hard pixel shadows, the main button pressed
-   down and to the right, arcade capitals on it; the sidebar carries the scanlines too; cards and dialogs framed. */
-html[data-skin="retro"] *:not(.orb, .orb *) { border-radius: 0; }
-html[data-skin="retro"] ::-webkit-scrollbar-thumb { border-radius: 0; background-color: color-mix(in oklch, var(--primary) 40%, transparent); }
-html[data-skin="retro"] :is(h1, h2, h3, [data-slot="card-title"]):not(.prose-chat *) { font-family: "Press Start 2P", var(--font-sans); font-weight: 400; letter-spacing: 0; line-height: 1.35; font-size-adjust: cap-height 0.62; }
-html[data-skin="retro"] [data-slot="card"] { border: 2px solid color-mix(in oklch, var(--primary) 40%, var(--border)); box-shadow: 4px 4px 0 0 var(--rt-shadow); }
-html[data-skin="retro"] [data-slot="dialog-overlay"] + [role="dialog"] { border: 2px solid color-mix(in oklch, var(--primary) 70%, transparent); box-shadow: 6px 6px 0 0 var(--rt-shadow); }
-html[data-skin="retro"] [data-slot="button"].bg-primary { box-shadow: 3px 3px 0 0 color-mix(in oklch, var(--foreground) 35%, transparent); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
-html[data-skin="retro"] [data-slot="button"].bg-primary:active { translate: 2px 2px; box-shadow: 1px 1px 0 0 color-mix(in oklch, var(--foreground) 35%, transparent); }
-html[data-skin="retro"] [data-slot="button"].border { box-shadow: 2px 2px 0 0 var(--rt-shadow); }
-html[data-skin="retro"] [data-testid="update-card"] { background-image: none; background-color: oklch(0.2 0.03 150); border: 2px solid oklch(0.85 0.23 143); box-shadow: 4px 4px 0 0 rgb(57 255 20 / 0.3); }
-html[data-skin="retro"] aside.bg-sidebar { background-image: repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px); }
-html[data-skin="retro"] nav button.bg-accent { box-shadow: inset 3px 0 0 var(--primary); }
+/* The columns of invaders: each one steps sideways like the arcade's and the column slides slowly down and back. */
+.rt-column { top: 6%; width: 44px; display: grid; gap: 22px; animation: rt-slide ease-in-out infinite alternate; }
+.rt-column.left { left: 0.5%; } .rt-column.right { right: 0.5%; animation-delay: -9s; }
+.rt-column > * { width: 44px; height: 32px; image-rendering: pixelated; animation: rt-step 1.6s steps(1, end) infinite; }
+.rt-column > :nth-child(even) { translate: 16px 0; animation-delay: -0.8s; }
+.rt-column svg { display: block; width: 100%; height: 100%; }
+@keyframes rt-slide { from { transform: translateY(0); } to { transform: translateY(40px); } }
+@keyframes rt-step { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(10px); } }
+.rt-crab, .rt-rocket { color: #39ff14; filter: var(--rt-glow); image-rendering: pixelated; }
+.rt-crab svg, .rt-rocket svg { display: block; width: 100%; height: auto; }
+.rt-crab { left: 1.5%; bottom: 25%; width: 80px; animation: rt-step 1.6s steps(1, end) infinite; }
+.rt-rocket { right: 2%; bottom: 24%; width: 64px; animation: rt-lift 5s ease-in-out infinite alternate; }
+@keyframes rt-lift { from { transform: translateY(0); } to { transform: translateY(-26px); } }
+.rt-rocket .flame { animation: rt-flame 0.5s steps(1, end) infinite; }
+@keyframes rt-flame { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.rt-scan { inset: 0; background: radial-gradient(120% 90% at 50% 45%, transparent 55%, rgb(0 0 0 / 0.55)), repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px); }
+/* Components: a black outline and a hard coloured offset shadow on cards, dialogs, the message box, inputs and buttons;
+   the main button golden; outline buttons cream; icon buttons round and cream; switches, checkboxes, sliders and tabs
+   as hi-fi controls (cream on navy); titles outlined (white fill, ink outline, orange offset). Night: the same in neon
+   on black (green ink, magenta / cyan / yellow shadows). */
+html[data-skin="retro"] :is(h1, h2, h3, [data-slot="card-title"], .hero-title):not(.prose-chat *) { font-family: "Bungee", "IBM Plex Mono", var(--font-sans); font-weight: 400; letter-spacing: 0.03em; color: #fff; paint-order: stroke fill; -webkit-text-stroke: 1.2px var(--rt-ink); text-shadow: 2px 2px 0 var(--rt-off); }
+html[data-skin="retro"] .hero-title { -webkit-text-stroke: 2.2px var(--rt-ink); text-shadow: 4px 4px 0 var(--rt-off); }
+html[data-skin="retro"] :is([data-slot="card"], [data-slot="dialog-overlay"] + [role="dialog"], [data-slot="composer"]) { border: 2px solid var(--rt-ink); box-shadow: 5px 5px 0 var(--rt-off); }
+html[data-skin="retro"] [data-slot="dialog-overlay"] + [role="dialog"] { box-shadow: 8px 8px 0 var(--rt-off2); }
+html[data-skin="retro"] [data-slot="composer"] { box-shadow: 5px 5px 0 var(--rt-off2); background-color: color-mix(in oklch, var(--card) 92%, transparent); }
+html[data-skin="retro"] :is([data-slot="input"], [data-slot="textarea"]) { border: 2px solid var(--rt-ink); box-shadow: 3px 3px 0 var(--rt-off3); background-color: var(--card); }
+html[data-skin="retro"] [data-slot="button"].bg-primary { border: 2px solid var(--rt-ink); box-shadow: 3px 3px 0 var(--rt-ink); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; background-color: var(--rt-gold); color: #1a0a10; }
+html[data-skin="retro"] [data-slot="button"].bg-primary:hover { background-color: color-mix(in oklch, var(--rt-gold) 88%, #000); }
+html.dark[data-skin="retro"] [data-slot="button"].bg-primary { background-color: var(--primary); color: var(--primary-foreground); box-shadow: 3px 3px 0 var(--rt-off); }
+html[data-skin="retro"] [data-slot="button"].bg-primary:active { translate: 2px 2px; box-shadow: 1px 1px 0 var(--rt-ink); }
+html[data-skin="retro"] [data-slot="button"].border { border: 2px solid var(--rt-ink); background-color: var(--rt-cream); color: var(--rt-ink); box-shadow: 3px 3px 0 var(--rt-off); font-weight: 600; }
+html.dark[data-skin="retro"] [data-slot="button"].border { background-color: var(--card); color: var(--foreground); }
+html[data-skin="retro"] [data-slot="button"].border:active { translate: 2px 2px; box-shadow: 1px 1px 0 var(--rt-off); }
+html[data-skin="retro"] [data-slot="button"]:is(.size-8, .size-9) { border-radius: 999px; border: 2px solid var(--rt-ink); background-color: var(--rt-cream); color: var(--rt-ink); box-shadow: 2px 2px 0 var(--rt-off); }
+html.dark[data-skin="retro"] [data-slot="button"]:is(.size-8, .size-9) { background-color: var(--card); color: var(--foreground); }
+html[data-skin="retro"] [data-slot="button"]:is(.size-8, .size-9):active { translate: 1px 1px; box-shadow: 1px 1px 0 var(--rt-off); }
+html[data-skin="retro"] :is([role="tablist"], [role="radiogroup"].bg-muted) { background-color: var(--rt-navy); color: var(--rt-cream); border: 2px solid var(--rt-ink); border-radius: 999px; padding: 3px; box-shadow: 3px 3px 0 var(--rt-off); }
+html[data-skin="retro"] :is([role="tab"], [role="radiogroup"].bg-muted [role="radio"]) { border-radius: 999px; color: var(--rt-cream); font-weight: 600; }
+html[data-skin="retro"] :is([role="tab"], [role="radiogroup"].bg-muted [role="radio"]) .text-muted-foreground { color: var(--rt-cream); opacity: 0.8; }
+html[data-skin="retro"] :is([role="tab"][data-state="active"], [role="radiogroup"].bg-muted [role="radio"][aria-checked="true"]) { background-color: var(--rt-cream); color: var(--rt-ink); box-shadow: inset 0 -2px 0 rgb(0 0 0 / 0.15); }
+html.dark[data-skin="retro"] :is([role="tab"][data-state="active"], [role="radiogroup"].bg-muted [role="radio"][aria-checked="true"]) { color: #000; }
+html[data-skin="retro"] [role="switch"] { background-color: var(--rt-navy); border: 2px solid var(--rt-ink); box-shadow: 2px 2px 0 var(--rt-off); }
+html[data-skin="retro"] [role="switch"][data-state="checked"] { background-color: var(--rt-orange); }
+html[data-skin="retro"] [role="switch"] > span { background-color: var(--rt-cream); box-shadow: inset 0 -2px 0 rgb(0 0 0 / 0.25), 0 1px 0 rgb(0 0 0 / 0.3); }
+html[data-skin="retro"] [role="checkbox"] { border: 2px solid var(--rt-ink); background-color: var(--rt-cream); box-shadow: 2px 2px 0 var(--rt-off); border-radius: 4px; }
+html[data-skin="retro"] [role="checkbox"][data-state="checked"] { background-color: var(--rt-gold); color: var(--rt-ink); }
+html[data-skin="retro"] input[type="range"] { accent-color: var(--rt-navy); }
+html.dark[data-skin="retro"] input[type="range"] { accent-color: var(--primary); }
+html[data-skin="retro"] [data-slot="badge"] { border: 1.5px solid var(--rt-ink); box-shadow: 2px 2px 0 var(--rt-off3); font-weight: 600; }
+html[data-skin="retro"] aside.bg-sidebar { background-image: repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px); border-right: 2px solid var(--rt-ink); }
+html[data-skin="retro"] nav button { border-radius: 999px; }
+html[data-skin="retro"] nav button.bg-accent { border: 2px solid var(--rt-ink); box-shadow: 3px 3px 0 var(--rt-off); background-color: var(--rt-pink); color: var(--rt-ink); font-weight: 600; }
+html.dark[data-skin="retro"] nav button.bg-accent { background-color: var(--accent); color: var(--accent-foreground); }
+html[data-skin="retro"] [data-testid="update-card"] { background-image: none; background-color: var(--rt-navy); border: 2px solid var(--rt-ink); box-shadow: 4px 4px 0 var(--rt-off); }
+html[data-skin="retro"] ::-webkit-scrollbar-thumb { background-color: color-mix(in oklch, var(--foreground) 35%, transparent); }
+html.dark[data-skin="retro"] [data-slot="card"] { box-shadow: 5px 5px 0 var(--rt-off), 0 0 18px -6px rgb(57 255 20 / 0.35); }
 /* Very faint scanlines over the whole window at night. */
 html.dark[data-skin="retro"] body { background-image: repeating-linear-gradient(to bottom, transparent 0 2px, rgb(0 0 0 / 0.16) 2px 3px); }
-
-/* ================================================================================================================
-   NUBE (candy) — the scene. Big soft pastel blobs (mint, peach, lilac, pink, sky) breathing slowly over the cream, and a
-   few clay toys floating among them: puffy clouds, a sphere, a ring, a pill, a cube with rounded corners, each with the
-   light on its top left and its soft coloured shadow. Night: a plum sky with the same toys, dimmer.
-   ================================================================================================================ */
-html[data-skin="nube"] {
-  --titlebar-color: #cfe7ff;
-  --cd-a: #ffd1e4; --cd-b: #e8d6ff; --cd-c: #cfe7ff; --cd-shine: rgb(255 255 255 / 0.75);
-  --band: linear-gradient(90deg, var(--cd-a), var(--cd-b) 50%, var(--cd-c) calc(100% - var(--wco-inset))) fixed;
-  --side-art: linear-gradient(to bottom, var(--cd-shine), transparent 48%);
-  --band-art:
-    linear-gradient(to bottom, var(--cd-shine), transparent 48%),
-    radial-gradient(circle at 50% 50%, rgb(255 255 255 / 0.9) 0 3px, transparent 4px) 40px 16px / 190px 56px repeat-x fixed,
-    radial-gradient(circle at 50% 50%, rgb(255 255 255 / 0.7) 0 2px, transparent 3px) 120px 34px / 230px 56px repeat-x fixed;
-  --cd-pink: #ffc4dc; --cd-lilac: #dccbff; --cd-mint: #bdeedd; --cd-peach: #ffd9b8; --cd-sky: #c6e3ff;
-  --cd-clay-hi: rgb(255 255 255 / 0.85); --cd-clay-lo: rgb(190 110 160 / 0.22); --cd-shadow: rgb(214 120 190 / 0.35);
-  --cd-toy-opacity: 0.9;
-}
-html.dark[data-skin="nube"] {
-  --titlebar-color: #2a2452;
-  --cd-a: #4a2347; --cd-b: #352a5c; --cd-c: #2a2452; --cd-shine: rgb(255 255 255 / 0.1);
-  --cd-pink: #7d3668; --cd-lilac: #55428f; --cd-mint: #2f6a5e; --cd-peach: #7a553f; --cd-sky: #365682;
-  --cd-clay-hi: rgb(255 255 255 / 0.22); --cd-clay-lo: rgb(0 0 0 / 0.35); --cd-shadow: rgb(0 0 0 / 0.45);
-  --cd-toy-opacity: 0.6;
-}
-@media (prefers-reduced-motion: no-preference) { html[data-skin="nube"]:not([data-motion="minima"]) .theme-band::before { animation: cd-band 36s linear infinite; } }
-@keyframes cd-band { from { background-position: 0 0, 40px 16px, 120px 34px; } to { background-position: 0 0, 230px 16px, -110px 34px; } }
-.scene-nube .scene-blur { --scene-opacity: 1; }
-/* The blobs: soft-edged ellipses of one pastel each, breathing and drifting very slowly. */
-.cd-blob { border-radius: 50%; background: radial-gradient(closest-side, var(--c), color-mix(in srgb, var(--c) 60%, transparent) 55%, transparent); animation: cd-drift ease-in-out infinite alternate; }
-@keyframes cd-drift { from { transform: translate(0, 0) scale(1); } to { transform: translate(var(--dx, 40px), var(--dy, -30px)) scale(1.12); } }
-/* The clay toys: light on the top left, a soft shade on the bottom right, a coloured shadow under them. */
-.cd-toy { --c: var(--cd-pink); opacity: var(--cd-toy-opacity); filter: blur(1.2px); animation: cd-float ease-in-out infinite alternate; }
-html.dark .cd-toy { filter: blur(1.2px) brightness(1.5) saturate(1.25); }
-.cd-toy, .cd-toy::before, .cd-toy::after {
-  background: radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--c) 45%, #fff), var(--c) 60%, color-mix(in srgb, var(--c) 78%, #7a3a6a) 100%);
-  box-shadow: inset 5px 6px 10px var(--cd-clay-hi), inset -8px -10px 16px var(--cd-clay-lo), 0 18px 28px -14px var(--cd-shadow);
-}
-@keyframes cd-float { from { transform: translateY(0) rotate(var(--r, 0deg)); } to { transform: translateY(-16px) rotate(calc(var(--r, 0deg) + 3deg)); } }
-.cd-toy.sphere { border-radius: 50%; }
-.cd-toy.cube { border-radius: 30%; }
-.cd-toy.pill { border-radius: 999px; }
-.cd-toy.ring { border-radius: 50%; background: transparent; box-shadow: none; }
-.cd-toy.ring::before { content: ""; position: absolute; inset: 0; border-radius: 50%; mask: radial-gradient(circle, transparent 0 34%, #000 35%); }
-.cd-toy.cloud { border-radius: 999px; }
-.cd-toy.cloud::before, .cd-toy.cloud::after { content: ""; position: absolute; border-radius: 50%; bottom: 25%; }
-.cd-toy.cloud::before { left: 16%; width: 52%; aspect-ratio: 1; }
-.cd-toy.cloud::after { left: 46%; width: 42%; aspect-ratio: 1; }
-/* Everything moulded in clay: cards, the message box and dialogs with a light edge on top and a soft coloured shadow;
-   the main button a glossy jelly; outline buttons and the active item of the menu like soft pads; inputs pressed in. */
-html[data-skin="nube"] [data-slot="card"] { border-color: transparent; box-shadow: inset 0 2px 0 var(--cd-clay-hi), inset 0 -3px 0 color-mix(in srgb, var(--cd-clay-lo) 60%, transparent), 0 16px 32px -18px var(--cd-shadow); }
-html[data-skin="nube"] [data-slot="dialog-overlay"] + [role="dialog"] { border-color: transparent; border-radius: 1.6rem; box-shadow: inset 0 2px 0 var(--cd-clay-hi), inset 0 -4px 0 color-mix(in srgb, var(--cd-clay-lo) 60%, transparent), 0 30px 60px -24px var(--cd-shadow); }
-html[data-skin="nube"] [data-slot="button"].bg-primary { background-image: linear-gradient(to bottom, rgb(255 255 255 / 0.28), transparent 55%); box-shadow: inset 0 -3px 0 rgb(0 0 0 / 0.14), 0 8px 18px -8px color-mix(in oklch, var(--primary) 80%, transparent); }
-html[data-skin="nube"] [data-slot="button"].border { border-color: transparent; background-color: var(--card); box-shadow: inset 0 1.5px 0 var(--cd-clay-hi), 0 2px 0 color-mix(in srgb, var(--cd-clay-lo) 70%, transparent), 0 8px 16px -10px var(--cd-shadow); }
-html[data-skin="nube"] nav button.bg-accent { box-shadow: inset 0 1.5px 0 var(--cd-clay-hi), inset 0 -2px 0 color-mix(in srgb, var(--cd-clay-lo) 50%, transparent); }
-html[data-skin="nube"] :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"]) { box-shadow: inset 0 2px 5px color-mix(in srgb, var(--cd-clay-lo) 70%, transparent); }
-html[data-skin="nube"] aside.bg-sidebar { background-image: linear-gradient(180deg, transparent 40%, color-mix(in srgb, var(--cd-lilac) 45%, transparent) 100%); border-right-color: transparent; }
-html.dark[data-skin="nube"] aside.bg-sidebar { background-image: linear-gradient(180deg, transparent 40%, color-mix(in srgb, var(--cd-lilac) 40%, transparent) 100%); }
-html[data-skin="nube"] .bg-bubble { background-image: linear-gradient(to bottom, rgb(255 255 255 / 0.22), transparent 60%); box-shadow: inset 0 -2px 0 rgb(0 0 0 / 0.1); }
-html[data-skin="nube"] [data-testid="update-card"] { background-image: linear-gradient(135deg, oklch(0.52 0.16 348), oklch(0.48 0.14 295)); }
 
 /* ---- Typography of each theme: used while the interface font is the default (a font chosen by hand wins). ---- */
 html[data-skin="vaporwave"][data-font="outfit"] { --font-sans: "Space Grotesk Variable", "Segoe UI", system-ui, sans-serif; }
 html[data-skin="retro"][data-font="outfit"] { --font-sans: "IBM Plex Mono", "Cascadia Code", Consolas, monospace; }
 html[data-skin="nube"][data-font="outfit"] { --font-sans: "Nunito Variable", "Segoe UI", system-ui, sans-serif; }
 html[data-skin="profesional"][data-font="outfit"] { --font-sans: "Inter Variable", "Segoe UI", system-ui, sans-serif; }
-html[data-skin="vaporwave"] :is(h1, h2, h3, [data-slot="card-title"], .hero-title):not(.prose-chat *) { font-family: "Orbitron Variable", "Space Grotesk Variable", var(--font-sans); font-weight: 600; letter-spacing: 0.04em; }
-html[data-skin="nube"] :is(h1, h2, h3, [data-slot="card-title"], .hero-title):not(.prose-chat *) { font-family: "Fredoka Variable", var(--font-sans); font-weight: 600; letter-spacing: 0.005em; }
+html[data-skin="vaporwave"] :is(h1, h2, h3, [data-slot="card-title"], .hero-title):not(.prose-chat *) { font-family: "Orbitron Variable", "Space Grotesk Variable", var(--font-sans); font-weight: 700; letter-spacing: 0.04em; }
+html[data-skin="nube"] :is(h1, h2, h3, [data-slot="card-title"], .hero-title):not(.prose-chat *) { font-family: "Fredoka Variable", var(--font-sans); font-weight: 700; }
+html[data-skin="nube"] :is(h1, h2, h3, [data-slot="card-title"]):not(.prose-chat *, .hero-title) { text-transform: uppercase; letter-spacing: 0.04em; }
 /* The big greeting of the chat in the theme's own colours. */
-html[data-skin="vaporwave"] .hero-title { background: linear-gradient(90deg, #ff71ce, #b967ff 50%, #01cdfe); -webkit-background-clip: text; background-clip: text; color: transparent; }
+html.dark[data-skin="vaporwave"] .hero-title { background: linear-gradient(90deg, #ff71ce, #b967ff 50%, #01cdfe); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; }
 html[data-skin="nube"] .hero-title { background: linear-gradient(90deg, #f05aa6, #a07af0 55%, #4fb7e8); -webkit-background-clip: text; background-clip: text; color: transparent; }
-html[data-skin="retro"] .hero-title { color: var(--primary); text-shadow: 0 0 10px color-mix(in oklch, var(--primary) 45%, transparent); }
 
 /* ---- Over a backdrop, the message box is frosted glass framed in the theme's own way; the chat's notes too. ---- */
 html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) [data-slot="composer"] { backdrop-filter: blur(16px) saturate(1.25); }
 html:is([data-skin="vaporwave"], [data-skin="nube"]) main .bg-muted\/70 { background-color: color-mix(in oklch, var(--card) 62%, transparent); backdrop-filter: blur(10px); }
-html[data-skin="vaporwave"] [data-slot="composer"] { border: 1.5px solid transparent; background: linear-gradient(color-mix(in oklch, var(--card) 80%, transparent), color-mix(in oklch, var(--card) 80%, transparent)) padding-box, linear-gradient(90deg, #ff71ce, #b967ff 50%, #01cdfe) border-box; box-shadow: 5px 5px 0 0 var(--vw-hard); }
-html[data-skin="nube"] [data-slot="composer"] { border-color: transparent; background-color: color-mix(in oklch, var(--card) 84%, transparent); border-radius: 1.75rem; box-shadow: inset 0 2px 0 var(--cd-clay-hi), inset 0 -4px 0 color-mix(in srgb, var(--cd-clay-lo) 60%, transparent), 0 18px 40px -18px var(--cd-shadow); }
-html[data-skin="retro"] [data-slot="composer"] { background-color: color-mix(in oklch, var(--card) 86%, transparent); border: 2px solid color-mix(in oklch, var(--primary) 70%, transparent); box-shadow: 4px 4px 0 0 color-mix(in oklch, var(--primary) 35%, transparent); }
+html.dark[data-skin="vaporwave"] [data-slot="composer"] { border: 1.5px solid transparent; background: linear-gradient(color-mix(in oklch, var(--card) 80%, transparent), color-mix(in oklch, var(--card) 80%, transparent)) padding-box, linear-gradient(90deg, #ff71ce, #b967ff 50%, #01cdfe) border-box; box-shadow: 0 0 24px -6px rgb(255 79 200 / 0.55); }
+html[data-skin="nube"] [data-slot="composer"] { border: 2px solid transparent; background-color: color-mix(in oklch, var(--card) 88%, transparent); border-radius: 1.6rem; box-shadow: 0 18px 40px -18px var(--cd-shadow); }
+html[data-skin="nube"] [data-slot="composer"]:focus-within { border-color: var(--cd-frame); box-shadow: 0 0 16px var(--cd-glow), 0 18px 40px -18px var(--cd-shadow); }
