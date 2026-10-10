@@ -10,8 +10,8 @@ import { AgentIcon } from '@/components/agent-icon.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Composer, useAutoScroll } from './chat.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Badge, Field, Input, Textarea, Empty } from '@/components/ui/basic.jsx';
-import { Select, Collapsible, CollapsibleTrigger, CollapsibleContent, Tip, BubbleTip } from '@/components/ui/overlay.jsx';
+import { Badge, Field, Input, Textarea, Empty, Spinner } from '@/components/ui/basic.jsx';
+import { Select, Collapsible, CollapsibleTrigger, CollapsibleContent, Tip, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent } from '@/components/ui/overlay.jsx';
 import { useStore, call, act, go, bridge, refresh, getState } from '@/lib/store.js';
 import { AGENT, PERMISSION, PERMISSION_HINT, REASONING, STATUS, DECISION, CAN_STEER as AGENT_CAN_STEER, options } from '@/lib/labels.js';
 import { baseName, cn } from '@/lib/utils.js';
@@ -117,19 +117,81 @@ export function ApprovalCard({ sessionId, body, compact = false }) {
 }
 
 // How full the agent's context window is (when the agent reports it).
-export function ContextMeter({ context, className }) {
+// 2.6: how full the conversation is, as a ring that fills up (no number); a click opens the panel with the context in
+// tokens and the limits of the plans working right now (the brain's and the agents' accounts: session, weekly…).
+const toneOf = (pct) => (pct >= 85 ? 'text-destructive' : pct >= 60 ? 'text-warning' : 'text-primary');
+const short = (n) => (n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n));
+function Ring({ pct, className }) {
+  const r = 7; const c = 2 * Math.PI * r;
+  return (
+    <svg viewBox="0 0 18 18" className={cn('size-[18px] -rotate-90', className)} aria-hidden="true">
+      <circle cx="9" cy="9" r={r} fill="none" stroke="currentColor" strokeOpacity="0.18" strokeWidth="2.5" />
+      <circle cx="9" cy="9" r={r} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - Math.max(pct, 2) / 100)} className="transition-[stroke-dashoffset] duration-500" />
+    </svg>
+  );
+}
+function UsageBar({ pct }) {
+  return <span className="bg-muted block h-1.5 overflow-hidden rounded-full"><span className={cn('block h-full rounded-full bg-current', toneOf(pct))} style={{ width: `${Math.min(100, Math.max(pct, 1))}%` }} /></span>;
+}
+// «five_hour», «seven_day_opus», «300min»… in words.
+function windowLabel(t, w) {
+  const s = String(w);
+  const model = s.match(/seven_day_(\w+)/)?.[1];
+  if (/five_hour|^300min$|^5h$/.test(s)) return t('session.usage.session');
+  if (model) return t('session.usage.weeklyOf', { model: model[0].toUpperCase() + model.slice(1) });
+  if (/seven_day|^10080min$/.test(s)) return t('session.usage.weekly');
+  const min = Number(s.match(/^(\d+)min$/)?.[1]);
+  if (min) return min % 1440 === 0 ? t('session.usage.days', { n: min / 1440 }) : t('session.usage.hours', { n: Math.round(min / 60) });
+  return s;
+}
+function resetText(t, locale, at) {
+  if (!at) return '';
+  const ms = at - Date.now();
+  if (ms <= 0) return t('session.usage.resetNow');
+  if (ms < 86_400_000) { const h = Math.floor(ms / 3_600_000); const m = Math.floor((ms % 3_600_000) / 60_000); return t('session.usage.resetIn', { time: h ? `${h} h ${m} min` : `${m} min` }); }
+  return t('session.usage.resetOn', { when: new Date(at).toLocaleString(locale, { weekday: 'short', hour: '2-digit', minute: '2-digit' }) });
+}
+function UsagePanel({ context, pct }) {
   const t = useT();
   const locale = useLocale();
+  const version = useStore((s) => s.version);
+  const [rows, setRows] = useState(null);
+  useEffect(() => { let alive = true; call('usage.now').then((r) => alive && setRows(r)).catch(() => alive && setRows([])); return () => { alive = false; }; }, [version]);
+  return (
+    <div className="grid w-80 gap-3 p-2.5 text-[13px]" data-testid="usage-panel">
+      <div className="grid gap-1.5">
+        <div className="flex items-baseline justify-between gap-3"><span className="text-muted-foreground">{t('session.usage.context')}</span><span className="tabular-nums">{short(context.used)} / {short(context.size)} ({pct} %)</span></div>
+        <UsageBar pct={pct} />
+        <p className="text-muted-foreground text-xs leading-snug">{t('session.contextTip')}</p>
+      </div>
+      {rows === null ? <Spinner className="size-3" /> : rows.map((u) => (
+        <div key={u.account} className="grid gap-2 border-t pt-3">
+          <div className="flex items-center gap-2 font-medium"><AgentIcon agent={u.agent} className="size-4" />{AGENT[u.agent] ?? u.agent}{u.label && u.label !== (AGENT[u.agent] ?? u.agent) ? <span className="text-muted-foreground truncate font-normal">· {u.label}</span> : null}{u.brain ? <Badge variant="outline" className="ml-auto">{t('session.usage.brain')}</Badge> : null}</div>
+          {u.windows.length ? u.windows.map((w) => {
+            const p = Math.round((w.utilization ?? 0) * 100);
+            return (
+              <div key={w.window} className="grid gap-1">
+                <div className="flex items-baseline justify-between gap-3"><span>{windowLabel(t, w.window)}</span><span className="text-muted-foreground truncate text-xs">{resetText(t, locale, w.resetAt)} <span className="text-foreground tabular-nums">{p} %</span></span></div>
+                <UsageBar pct={p} />
+              </div>
+            );
+          }) : <p className="text-muted-foreground text-xs leading-snug">{t('session.usage.noData')}</p>}
+        </div>
+      ))}
+    </div>
+  );
+}
+export function ContextMeter({ context, className }) {
+  const t = useT();
   if (!context?.size) return null;
   const pct = Math.min(100, Math.round((context.used / context.size) * 100));
-  const tone = pct >= 85 ? 'bg-destructive' : pct >= 60 ? 'bg-warning' : 'bg-primary';
   return (
-    <BubbleTip title={t('session.contextTitle', { used: context.used.toLocaleString(locale), size: context.size.toLocaleString(locale) })} text={t('session.contextTip')}>
-      <span className={cn('inline-flex items-center gap-1.5', className)} data-testid="context-meter">
-        <span className="bg-muted inline-block h-1.5 w-14 overflow-hidden rounded-full"><span className={cn('block h-full rounded-full', tone)} style={{ width: `${pct}%` }} /></span>
-        <span className="tabular-nums">{pct} %</span>
-      </span>
-    </BubbleTip>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" className={cn('hover:bg-accent inline-grid size-7 cursor-pointer place-items-center rounded-full', toneOf(pct), className)} aria-label={t('session.usage.open', { pct })} data-testid="context-meter"><Ring pct={pct} /></button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" side="top" className="w-auto p-0"><UsagePanel context={context} pct={pct} /></DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

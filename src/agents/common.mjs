@@ -70,6 +70,24 @@ export function killTree(child) {
   } catch { /* already gone */ }
 }
 
+// 2.6: what a short command prints (an agent listing its models): stdout only, clean environment, never throws. Resolves
+// with null when the program fails or takes longer than timeoutMs (it is stopped then).
+export function readOutput(cmd, args, { env = {}, cwd = os.tmpdir(), timeoutMs = 30000, max = 1024 * 1024 } = {}) {
+  return new Promise((resolve) => {
+    let out = ''; let done = false; let child;
+    const finish = (value) => { if (done) return; done = true; clearTimeout(timer); resolve(value); };
+    const timer = setTimeout(() => { killTree(child); finish(null); }, timeoutMs);
+    try { child = spawn(cmd, args, { cwd, env: cleanEnv(env), windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] }); } catch { finish(null); return; }
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (c) => { if (out.length < max) out += c; });
+    child.on('error', () => finish(null));
+    child.on('exit', (code) => finish(code === 0 ? out : null));
+  });
+}
+
+// A promise that gives up after ms (with null), for the steps of a discovery that may hang.
+export const within = (promise, ms) => Promise.race([promise, new Promise((resolve) => { setTimeout(() => resolve(null), ms).unref?.(); })]);
+
 // How an agent process starts the assistant's MCP server: the same runtime as the engine (the app's own executable in
 // "run as node" mode when packaged), the server script and the assistant folder. Nothing secret goes in here.
 export function orbMcpServer(env = {}) {

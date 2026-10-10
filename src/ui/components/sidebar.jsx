@@ -137,7 +137,7 @@ export function Sidebar({ mood }) {
         <ThemeToggle />
         <SidebarToggle />
       </div>
-      <div className="px-3 pb-2">
+      <div className="px-3 pt-3 pb-2">
         <Button className="w-full justify-start" variant="outline" onClick={() => go('new')} data-testid="new-conversation"><MessageSquarePlus />{t('nav.newChat')}</Button>
       </div>
       <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-x-hidden overflow-y-auto px-3 pb-3">
@@ -161,13 +161,15 @@ export function Sidebar({ mood }) {
         </div>
         {folders.length ? folders.map((f) => <ProjectFolder key={f.project.name} project={f.project} items={f.items} open={isOpen(f)} onOpen={(v) => setOpenFolder(f.project.name, v)} route={route} active={f.project.active} />)
           : <p className="text-muted-foreground px-2.5 text-xs leading-relaxed">{t('comp.sidebar.foldersHint')}</p>}
-        <div className="text-muted-foreground px-2.5 pt-4 pb-1 text-[11px] tracking-wide uppercase">{t('nav.loose')}</div>
-        {loose.length ? loose.map((i) => (
-          <NavItem key={i.key} iconEl={i.icon} label={i.title} active={i.isActive(route)} onClick={i.open}>
-            <span className={cn('size-1.5 shrink-0 rounded-full', statusDot[i.status] ?? 'bg-muted-foreground/40')} />
-          </NavItem>
-        ))
-          : <p className="text-muted-foreground px-2.5 text-xs leading-relaxed">{t('comp.sidebar.looseHint')}</p>}
+        {/* 2.6: «Sin carpeta» is picked in the project selector of the message box; here only its conversations, if any. */}
+        {loose.length ? <>
+          <div className="text-muted-foreground px-2.5 pt-4 pb-1 text-[11px] tracking-wide uppercase">{t('nav.loose')}</div>
+          {loose.map((i) => (
+            <NavItem key={i.key} iconEl={i.icon} label={i.title} active={i.isActive(route)} onClick={i.open}>
+              <span className={cn('size-1.5 shrink-0 rounded-full', statusDot[i.status] ?? 'bg-muted-foreground/40')} />
+            </NavItem>
+          ))}
+        </> : null}
       </nav>
       <div className="flex flex-col gap-0.5 border-t px-3 py-2.5">
         {bridge.mobile ? null : <NavItem icon={Bot} label={t('nav.agents')} active={is('agents')} onClick={() => go('agents')} testid="nav-agents" />}

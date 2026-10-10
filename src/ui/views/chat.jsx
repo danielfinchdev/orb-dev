@@ -10,7 +10,7 @@ import { LiveTasksStrip } from '@/components/live-tasks.jsx';
 import { confirm } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Spinner } from '@/components/ui/basic.jsx';
-import { Checkbox, Tip, BubbleTip } from '@/components/ui/overlay.jsx';
+import { Switch, Tip, BubbleTip } from '@/components/ui/overlay.jsx';
 import { useStore, call, act, setState, go, bridge, openGames } from '@/lib/store.js';
 import { ContextMeter } from './session.jsx';
 import { BrainPicker, ReasoningPicker, UsageBubble, useCatalog, useUsageBubble } from '@/components/brain-picker.jsx';
@@ -221,7 +221,7 @@ export function ChatView() {
           <ReasoningPicker value={brain.reasoning} onChange={(reasoning) => settings({ reasoning })} />
           <BubbleTip title={t('chat.orchestrator')} text={t('chat.orchestratorHint')} side="top">
             <label className="flex cursor-pointer items-center gap-2 text-[13px]">
-              <Checkbox checked={info.orchestrate !== false} onCheckedChange={(v) => toggleOrchestrator(v === true)} data-testid="orchestrator-check" />{t('chat.orchestrator')}
+              <Switch checked={info.orchestrate !== false} onCheckedChange={(v) => toggleOrchestrator(v === true)} data-testid="orchestrator-check" />{t('chat.orchestrator')}
             </label>
           </BubbleTip>
           {(chat.context ?? info.context) ? <span className="text-muted-foreground ml-auto text-xs"><ContextMeter context={chat.context ?? info.context} /></span> : null}

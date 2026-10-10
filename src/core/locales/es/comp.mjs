@@ -71,6 +71,7 @@ export default {
   'comp.projects.pick': 'Elegir proyecto',
   'comp.projects.inFolder': 'Tus proyectos',
   'comp.projects.none': 'Todavía no hay proyectos.',
+  'comp.projects.noneHint': 'Sin proyecto, con cualquier agente',
   'comp.projects.linkMenu': 'Vincular una carpeta…',
   'comp.projects.cloneMenu': 'Clonar de GitHub…',
   'comp.projects.clear': 'Quitar el proyecto seleccionado',
@@ -88,6 +89,5 @@ export default {
   'comp.sidebar.noQuota': 'Sin cupo: puedes continuar cuando quieras',
   'comp.sidebar.halfway': 'Interrumpida',
   'comp.sidebar.waitApproval': 'Esperan tu aprobación',
-  'comp.sidebar.foldersHint': 'Cada proyecto es una carpeta. Aquí verás las tareas que le asignes.',
-  'comp.sidebar.looseHint': 'Conversa directamente con cualquier agente (Claude, Codex, Cursor, Gemini…).'
+  'comp.sidebar.foldersHint': 'Cada proyecto es una carpeta. Aquí verás las tareas que le asignes.'
 };
