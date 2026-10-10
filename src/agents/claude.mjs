@@ -4,7 +4,7 @@
 // through the guard (src/core/guard.mjs) and, when it must ask, to an approval card in the app.
 import fs from 'node:fs';
 import path from 'node:path';
-import { IS_WIN, firstFile, inPath, shimDirs, userHome, clip, describeInput, cleanEnv } from './common.mjs';
+import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, describeInput, cleanEnv } from './common.mjs';
 import { Turn, Approvals } from './live.mjs';
 import { decide, describeAction } from '../core/guard.mjs';
 import { tr } from '../core/context.mjs';
@@ -22,10 +22,8 @@ export const LEAN_SOURCES = ['project', 'local'];
 
 export function detect(cfg = {}) {
   const home = userHome();
-  const appData = process.env.APPDATA ?? path.join(home, 'AppData', 'Roaming');
   const pkg = (dir) => path.join(dir, 'node_modules', '@anthropic-ai', 'claude-code', 'bin', IS_WIN ? 'claude.exe' : 'claude');
-  const candidates = [cfg.path, ...inPath('claude'), path.join(home, '.local', 'bin', IS_WIN ? 'claude.exe' : 'claude'),
-    pkg(path.join(appData, 'npm')), ...shimDirs('claude').map(pkg)];
+  const candidates = [cfg.path, ...inPath('claude'), path.join(home, '.local', 'bin', IS_WIN ? 'claude.exe' : 'claude'), ...npmPrefixes('claude').map(pkg)];
   const cmd = firstFile(candidates);
   return cmd ? { cmd, pre: [] } : null;
 }

@@ -518,7 +518,9 @@ tiene la app abierta. En iPhone funcionan con Orb añadido a la pantalla de inic
 **Qué hace.** En el primer arranque, y en Agentes, detecta qué tienes e instala lo que falte con los instaladores oficiales.
 Desde la 2.4.1, PowerShell se ejecuta oculto (una ventana aparte se cerraba sin hacer nada en algunos Windows 11) y la app
 muestra el progreso; su salida queda en `.orb/ejecuciones/instalacion/progreso-*-salida.txt`. Al arrancar, el motor anota
-en `motor.log` qué agentes encuentra (`agentes: claude=… · codex=…`). Instala:
+en `motor.log` qué agentes encuentra (`agentes: claude=… · codex=…`). Desde la 2.4.2 los busca también en las copias de
+`AppData` movidas a otro disco (`appDataDirs()` y `npmPrefixes()` en `src/agents/common.mjs`: `<unidad>:\AppData` o hasta
+dos carpetas por debajo, como `D:\ComputerApps\AppData`), aunque el PATH siga apuntando a `C:`. Instala:
 - herramientas: Git, Node.js, GitHub CLI y Tailscale;
 - agentes: Claude Code, Codex, Cursor, Gemini CLI, Copilot, OpenCode y Qwen.
 
