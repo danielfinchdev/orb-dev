@@ -7,6 +7,7 @@ import path from 'node:path';
 import { IS_WIN, firstFile, inPath, shimDirs, userHome, clip, describeInput, cleanEnv } from './common.mjs';
 import { Turn, Approvals } from './live.mjs';
 import { decide, describeAction } from '../core/guard.mjs';
+import { tr } from '../core/context.mjs';
 
 export const id = 'claude';
 export const label = 'Claude Code';
@@ -69,7 +70,7 @@ function userMessage(text, images = []) {
 }
 
 // The SDK's error kinds, in plain words.
-const RESULT_ES = { error_during_execution: 'El turno se interrumpió antes de terminar.', error_max_turns: 'Llegó al máximo de pasos de este turno.', error_max_budget_usd: 'Llegó al tope de gasto de esta tarea.', error_max_structured_output_retries: 'No pudo dar la respuesta en el formato pedido.' };
+const RESULT_KEY = { error_during_execution: 'sys.agents.result.duringExecution', error_max_turns: 'sys.agents.result.maxTurns', error_max_budget_usd: 'sys.agents.result.maxBudget', error_max_structured_output_retries: 'sys.agents.result.structuredOutput' };
 
 export const permissionModeOf = (p) => (p === 'total' ? 'bypassPermissions' : p === 'editar' ? 'acceptEdits' : 'default');
 
@@ -125,14 +126,14 @@ export function createLive(o) {
       const r = m.rate_limit_info ?? {};
       const resetAt = r.resetsAt ? r.resetsAt * 1000 : null;
       onEvent({ type: 'rate', status: r.status, resetAt, utilization: r.utilization ?? null, window: r.rateLimitType ?? null });
-      if (r.status === 'rejected') { onEvent({ type: 'limit', resetAt, message: 'límite de uso de Claude alcanzado' }); if (turn) turn.limit = { resetAt }; }
+      if (r.status === 'rejected') { onEvent({ type: 'limit', resetAt, message: tr('sys.agents.limit', { name: 'Claude' }) }); if (turn) turn.limit = { resetAt }; }
     }
     if (m.type === 'result') {
       const usage = { costUsd: m.total_cost_usd ?? null, inputTokens: m.usage?.input_tokens ?? null, outputTokens: m.usage?.output_tokens ?? null, cacheReadTokens: m.usage?.cache_read_input_tokens ?? null, cacheWriteTokens: m.usage?.cache_creation_input_tokens ?? null, turns: m.num_turns ?? null };
       onEvent({ type: 'item', role: 'system', kind: 'usage', body: usage });
       const isError = Boolean(m.is_error) || Boolean(m.subtype && m.subtype !== 'success');
       const final = typeof m.result === 'string' && m.result ? m.result : turn?.text ?? '';
-      if (isError) onEvent({ type: 'item', role: 'error', kind: 'text', body: clip(final || RESULT_ES[m.subtype] || m.subtype || 'error', 3000) });
+      if (isError) onEvent({ type: 'item', role: 'error', kind: 'text', body: clip(final || (RESULT_KEY[m.subtype] && tr(RESULT_KEY[m.subtype])) || m.subtype || 'error', 3000) });
       if (isError && /usage limit|rate limit|limit reached|resets? (at|in)/i.test(final) && turn && !turn.limit) turn.limit = { resetAt: null };
       turn?.finish({ final, isError, usage, stopReason: m.subtype ?? null });
       // How full the context is, for the meter in the window (best effort; older CLIs do not answer).
@@ -172,21 +173,21 @@ export function createLive(o) {
       try { for await (const m of query) { log(JSON.stringify(m).slice(0, 4000)); handle(m); } }
       catch (error) {
         log(`fin con error: ${error?.stack ?? error}`);
-        if (turn && !turn.done) turn.finish({ isError: true, final: closed ? 'Detenido.' : `${label} se cerró: ${error?.message ?? error}` });
+        if (turn && !turn.done) turn.finish({ isError: true, final: closed ? tr('sys.agents.stopped') : tr('sys.agents.exitedWith', { name: label, error: error?.message ?? error }) });
       } finally {
         closed = true; approvals.clear();
         onEvent({ type: 'exit', code: 0, stderr: '' });
-        if (turn && !turn.done) turn.finish({ isError: !turn.text, final: turn.text || `${label} se cerró antes de terminar.` });
+        if (turn && !turn.done) turn.finish({ isError: !turn.text, final: turn.text || tr('sys.agents.exitedEarly', { name: label }) });
       }
     })();
   };
 
   live.send = async ({ text, images = [] }) => {
-    if (closed) throw new Error(`la sesión de ${label} se ha cerrado`);
-    if (turn && !turn.done) throw new Error('el agente sigue trabajando');
+    if (closed) throw new Error(tr('sys.agents.sessionClosed', { name: label }));
+    if (turn && !turn.done) throw new Error(tr('sys.agents.busy'));
     turn = new Turn();
     const current = turn;
-    started ??= start().catch((error) => { closed = true; current.finish({ isError: true, final: `No se pudo arrancar ${label}: ${error.message}` }); });
+    started ??= start().catch((error) => { closed = true; current.finish({ isError: true, final: tr('sys.agents.startFailed', { name: label, error: error.message }) }); });
     await started;
     if (!closed) input.push(userMessage(text, images));
     return current.promise;

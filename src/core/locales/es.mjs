@@ -17,6 +17,7 @@ import pip from './es/pip.mjs';
 import comp from './es/comp.mjs';
 import install from './es/install.mjs';
 import msg from './es/msg.mjs';
+import sys from './es/sys.mjs';
 
 export default {
   ...base,
@@ -36,5 +37,6 @@ export default {
   ...pip,
   ...comp,
   ...install,
-  ...msg
+  ...msg,
+  ...sys
 };

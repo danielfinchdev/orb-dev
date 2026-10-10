@@ -6,7 +6,7 @@ export default {
   'app.pairTitle': 'Vincula este dispositivo',
   'app.pairBody1': 'En el PC, abre ',
   'app.pairBodyPath': 'Ajustes → Móvil',
-  'app.pairBody2': ', pulsa «Vincular un móvil» y escanea el código QR con la cámara de este teléfono.',
+  'app.pairBody2': ', pulsa «Vincular por wifi» o «Vincular por Tailscale» y escanea el código QR con la cámara de este móvil.',
   'app.pairPrivate': "Funciona en tu red wifi o a través de Tailscale. La conexión entre este móvil y tu PC está cifrada.",
   'app.badAnswer': "No se ha podido verificar la conexión con tu PC. Vuelve a vincular este móvil.",
   'app.oldQr': "Este código QR es de una versión anterior. Genera uno nuevo en el PC.",

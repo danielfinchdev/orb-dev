@@ -85,7 +85,7 @@ export class Scheduler {
       const types = (task.agent === 'any' ? order.filter((a) => enabled.includes(a)) : [task.agent].filter((a) => enabled.includes(a))).filter((a) => installed(a));
       // Every enabled account of those agents; a task pinned to an account only goes there.
       const candidates = types.flatMap((a) => usableAccounts(a)).filter((acc) => !task.account || acc.id === task.account);
-      if (!candidates.length) { this.notice(task, task.account ? `la cuenta ${accountLabel(task.account)} está desactivada o ya no existe` : task.agent !== 'any' && !installed(task.agent) ? `${label(task.agent)} no está instalado en este equipo (instálalo desde Agentes o reasigna la tarea)` : `${task.agent === 'any' ? 'no hay ningún agente activado e instalado' : `${label(task.agent)} no tiene cuentas activadas`} en Agentes`); continue; }
+      if (!candidates.length) { this.notice(task, task.account ? tr('sys.scheduler.accountOff', { account: accountLabel(task.account) }) : task.agent !== 'any' && !installed(task.agent) ? tr('sys.scheduler.notInstalled', { name: label(task.agent) }) : task.agent === 'any' ? tr('sys.scheduler.noAgents') : tr('sys.scheduler.noAccounts', { name: label(task.agent) })); continue; }
       const ranked = rankAccounts(board, candidates, task.model);
       const forced = board.setting(`budget_ok:${task.id}`) === '1'; // "Lanzar igualmente" in the app
       const pick = ranked.find((r) => (forced || r.check.ok) && this.busyWith(r.account) < ctx.config.perAgent);
@@ -292,19 +292,19 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
   commitIsolated(task) {
     if (!task.branch || !task.workdir || !fs.existsSync(task.workdir)) return '';
     const status = git(task.workdir, 'status', '--porcelain=v1', '-z', '-uall');
-    if (status.status !== 0) return `no se pudo comprobar el estado de git (${oneLine(status.stderr, 200)}); los cambios no se guardaron`;
+    if (status.status !== 0) return tr('sys.scheduler.gitStatusFailed', { error: oneLine(status.stderr, 200) });
     if (!status.stdout.trim()) return '';
     const risky = secretFiles(status.stdout);
-    if (risky.length) return `no se hizo el commit automático: hay archivos que parecen secretos (${risky.slice(0, 5).join(', ')}). Revisa ${task.workdir}`;
+    if (risky.length) return tr('sys.scheduler.secretFilesIn', { list: risky.slice(0, 5).join(', '), dir: task.workdir });
     git(task.workdir, 'add', '-A', '--', '.', `:(exclude)${ATTACH_DIR}`);
     const staged = git(task.workdir, 'diff', '--cached', '--name-only', '-z').stdout.split('\0').filter(Boolean).filter(isSecretPath);
-    if (staged.length) { git(task.workdir, 'reset', '-q'); return `no se hizo el commit automático: hay archivos que parecen secretos (${staged.slice(0, 5).join(', ')})`; }
+    if (staged.length) { git(task.workdir, 'reset', '-q'); return tr('sys.scheduler.secretFiles', { list: staged.slice(0, 5).join(', ') }); }
     // Nothing really changed: git status can list a file the agent rewrote with the same content but other line endings
     // (core.autocrlf=true, the Git for Windows default), and then "git commit" fails with "nothing to commit".
     if (git(task.workdir, 'diff', '--cached', '--quiet').status === 0) return '';
     const commit = git(task.workdir, ...ORB_GIT, 'commit', '-q', '-m', `orb: tarea #${task.id} ${oneLine(task.title)}`);
     this.board.event(task.id, 'orb', 'git.commit', commit.status === 0 ? 'cambios guardados en la rama' : commit.stderr.trim());
-    return commit.status === 0 ? '' : `el commit automático falló (${oneLine(commit.stderr, 200)}); los cambios siguen sin guardar en ${task.workdir}`;
+    return commit.status === 0 ? '' : tr('sys.scheduler.commitFailed', { error: oneLine(commit.stderr, 200), dir: task.workdir });
   }
 
   finishNow(taskId, { code, state, stderr, stopped, timedOut, limit }) {
@@ -379,7 +379,7 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
     // The way back of the loop (person → assistant → tasks → agents → finished → assistant → person → OK).
     const reported = ['done', 'failed', 'blocked'].includes(task.status) && task.created_by === 'orb' ? this.queueReport(task) : false;
     // Blocked or failed for a reason other than quota: the assistant looks at it once an hour per task.
-    const stuck = ['blocked', 'failed'].includes(task.status) && !held && !problem && !/sin cupo|tope de gasto/.test(task.result ?? '');
+    const stuck = ['blocked', 'failed'].includes(task.status) && !held && !problem && !/sin cupo|tope de gasto|out of usage quota|spending cap/.test(task.result ?? '');
     if (stuck && !reported && this.orchestrator && Date.now() - Number(board.setting(`unblock_asked:${task.id}`) ?? 0) > 3_600_000) {
       board.setting(`unblock_asked:${task.id}`, String(Date.now()));
       this.orchestrator.internal(`AVISO DEL SISTEMA (no es ${userName()}): la tarea #${task.id} «${oneLine(task.title)}» (${task.assigned_to}${task.model ? ` · ${task.model}` : ''}) ${task.status === 'blocked' ? 'se bloqueó' : 'falló'}.

@@ -217,7 +217,7 @@ export default {
   "msg.installer.done": "completado",
   "msg.installer.exitCode": "código de salida",
   "msg.installer.failed": "error:",
-  "msg.installer.finished": "Instalación finalizada. Vuelve a Orb y pulsa «Comprobar». Ya puedes cerrar esta ventana.",
+  "msg.installer.finished": "Instalación finalizada. Ya puedes cerrar esta ventana y volver a Orb.",
   "msg.installer.intro": "Instalando los componentes necesarios con los instaladores oficiales. Si Windows solicita confirmación, acéptala.",
   "msg.installer.noWinget": "falta winget (instala «Instalador de aplicación» desde Microsoft Store)",
   "msg.installer.pressEnter": "Pulsa Enter para cerrar",

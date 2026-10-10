@@ -6,6 +6,7 @@ import path from 'node:path';
 import { IS_WIN, firstFile, inPath, shimDirs, userHome, clip } from './common.mjs';
 import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree } from './live.mjs';
 import { decide } from '../core/guard.mjs';
+import { tr } from '../core/context.mjs';
 
 export const id = 'codex';
 export const label = 'Codex';
@@ -49,11 +50,11 @@ function policy(permission) {
 const effort = (r) => (r === 'xhigh' ? 'high' : r || 'medium');
 
 const ITEM_TOOL = (item) => {
-  if (item.type === 'commandExecution') return { name: 'Comando', input: clip(item.command, 300) };
+  if (item.type === 'commandExecution') return { name: tr('sys.agents.tool.execute'), input: clip(item.command, 300) };
   if (item.type === 'mcpToolCall') return { name: `${item.server}:${item.tool}`.replace(/^orb:/, 'orb:'), input: clip(item.arguments ?? '', 300) };
-  if (item.type === 'webSearch') return { name: 'Búsqueda web', input: clip(item.query ?? item.action?.query ?? '', 300) };
+  if (item.type === 'webSearch') return { name: tr('sys.agents.tool.webSearch'), input: clip(item.query ?? item.action?.query ?? '', 300) };
   if (item.type === 'dynamicToolCall') return { name: item.tool, input: clip(item.arguments ?? '', 300) };
-  if (item.type === 'collabAgentToolCall') return { name: `Subagente: ${item.tool}`, input: clip(item.prompt ?? '', 300) };
+  if (item.type === 'collabAgentToolCall') return { name: tr('sys.agents.tool.subagent', { tool: item.tool }), input: clip(item.prompt ?? '', 300) };
   return null;
 };
 
@@ -92,12 +93,12 @@ export function createLive(o) {
     }
     if (method === 'item/permissions/requestApproval') {
       // Asking for more than the sandbox gives (another folder, network…): the user decides.
-      const d = await approvals.ask({ id: p.itemId, tool: 'Permisos', title: p.reason || 'Codex pide más permisos', reason: 'pide salir de su carpeta o usar la red', input: clip(p.permissions, 400) });
+      const d = await approvals.ask({ id: p.itemId, tool: tr('sys.agents.permissions'), title: p.reason || tr('sys.agents.morePermissions', { name: 'Codex' }), reason: tr('sys.agents.morePermissionsWhy'), input: clip(p.permissions, 400) });
       return { permissions: d === 'deny' ? {} : p.permissions, scope: d === 'always' ? 'session' : 'turn' };
     }
     if (method === 'item/tool/requestUserInput') return { answers: {} }; // questions are answered in the conversation instead
     if (method === 'mcpServer/elicitation/request') return { action: 'decline' };
-    throw new Error(`petición no soportada: ${method}`);
+    throw new Error(tr('sys.agents.requestNotSupported', { method }));
   };
 
   const onNotification = (method, p) => {
@@ -128,7 +129,7 @@ export function createLive(o) {
       const r = p.rateLimits ?? {}; const w = r.primary ?? r.secondary;
       const resetAt = w?.resetsAt ? w.resetsAt * 1000 : null;
       onEvent({ type: 'rate', status: r.rateLimitReachedType ? 'rejected' : 'allowed', resetAt, utilization: w?.usedPercent != null ? w.usedPercent / 100 : null, window: w?.windowDurationMins ? `${w.windowDurationMins}min` : null });
-      if (r.rateLimitReachedType) { onEvent({ type: 'limit', resetAt, message: 'límite de uso de Codex alcanzado' }); if (turn) turn.limit = { resetAt }; }
+      if (r.rateLimitReachedType) { onEvent({ type: 'limit', resetAt, message: tr('sys.agents.limit', { name: 'Codex' }) }); if (turn) turn.limit = { resetAt }; }
       return;
     }
     if (method === 'error') {
@@ -157,9 +158,9 @@ export function createLive(o) {
     child.on('exit', (code) => {
       closed = true; approvals.clear(); peer.close();
       onEvent({ type: 'exit', code, stderr: child.stderrText() });
-      if (turn && !turn.done) turn.finish({ isError: true, final: turn.text || `Codex se cerró (código ${code}). ${child.stderrText().trim().split('\n').slice(-2).join(' ')}`.trim() });
+      if (turn && !turn.done) turn.finish({ isError: true, final: turn.text || tr('sys.agents.exitedCode', { name: 'Codex', code, detail: child.stderrText().trim().split('\n').slice(-2).join(' ') }).trim() });
     });
-    child.on('error', (error) => { closed = true; if (turn && !turn.done) turn.finish({ isError: true, final: `No se pudo arrancar Codex: ${error.message}` }); });
+    child.on('error', (error) => { closed = true; if (turn && !turn.done) turn.finish({ isError: true, final: tr('sys.agents.startFailed', { name: 'Codex', error: error.message }) }); });
     await peer.request('initialize', { clientInfo: { name: 'orb_dev', title: 'Orb', version: '2.4.0' }, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs: 30000 });
     peer.notify('initialized', {});
     const common = { cwd: o.cwd, model, ...policy(permission), config: { model_reasoning_effort: effort(o.reasoning), service_tier: 'default' } };
@@ -175,8 +176,8 @@ export function createLive(o) {
   const input = (text, images = []) => [{ type: 'text', text, text_elements: [] }, ...images.map((p) => ({ type: 'localImage', path: p }))];
 
   live.send = async ({ text, images = [] }) => {
-    if (closed) throw new Error('la sesión de Codex se ha cerrado');
-    if (turn && !turn.done) throw new Error('el agente sigue trabajando');
+    if (closed) throw new Error(tr('sys.agents.sessionClosed', { name: 'Codex' }));
+    if (turn && !turn.done) throw new Error(tr('sys.agents.busy'));
     turn = new Turn();
     const current = turn;
     try {
@@ -185,7 +186,7 @@ export function createLive(o) {
       const res = await peer.request('turn/start', { threadId, input: input(text, images), ...(model ? { model } : {}), effort: effort(o.reasoning) });
       turnId = res?.turn?.id ?? null;
     } catch (error) {
-      current.finish({ isError: true, final: /malformed|resume|not found/i.test(error.message) ? `Codex no pudo retomar la conversación: ${error.message}` : `Codex: ${error.message}` });
+      current.finish({ isError: true, final: /malformed|resume|not found/i.test(error.message) ? tr('sys.agents.resumeFailed', { name: 'Codex', error: error.message }) : `Codex: ${error.message}` });
     }
     return current.promise;
   };

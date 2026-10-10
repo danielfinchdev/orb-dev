@@ -550,16 +550,36 @@ que iniciar sesión en la app. Si no, «Iniciar sesión» abre el login oficial 
 ## 27. Interfaz
 
 - **Barra lateral:** asistente, Tareas, Proyectos, Programadas y, debajo:
-  - la **bandeja**: «Te esperan» (permisos, aprobaciones, a medias, sin cupo; «Listo» las quita) y «Trabajando»;
+  - la **bandeja**: «Por aprobar» (permisos y aprobaciones), «En curso» e «Incidencias» (tareas sin cupo y
+    conversaciones interrumpidas o con error; «Marcar como resuelto» las quita);
   - las **carpetas** (cada proyecto con sus tareas y conversaciones) y «Sin carpeta».
-  - Archivo: `src/ui/components/sidebar.jsx`.
+  - Archivo: `src/ui/components/sidebar.jsx`. Los filtros de Tareas usan los mismos nombres (`FILTERS` en
+    `src/ui/views/tasks.jsx`): En curso (trabajando o en cola), Por aprobar, Completadas, Incidencias, Todas.
 - **Estética:** shadcn/ui, Tailwind y la fuente Outfit, con colores en `src/ui/app.css`.
   - Componentes base en `src/ui/components/ui/` (botones, tarjetas, selectores, checks y switches con modo noche
     corregido).
   - Logotipos reales de los agentes en `agent-icon.jsx` (Simple Icons, CC0).
   - Robot animado en `robot.jsx`.
-- **Tema** día, noche o sistema; **tamaño** de la interfaz con Ctrl +, Ctrl - y Ctrl 0; **Ctrl J** abre una terminal en la
-  carpeta.
+- **Modo** claro, oscuro o sistema; **tamaño** de la interfaz con Ctrl +, Ctrl - y Ctrl 0; **Ctrl J** abre una terminal en
+  la carpeta.
+- **Textos:** tono y palabras en [`TEXTOS.md`](TEXTOS.md).
+
+### Ajustes (2.4)
+
+- **Ventana sobre la app** (`SettingsDialog` en `src/ui/views/settings.jsx`), con apartados a la izquierda (`SECTIONS`) y,
+  abajo, el GitHub del desarrollador y la versión. Se abre con `openSettings(apartado)` de `src/ui/lib/store.js`;
+  `go('settings')` también la abre. En el móvil no hay Ajustes («Este móvil»).
+- **Apariencia** (`src/core/appearance.mjs`): `ui.skin` (orb, vaporwave, retro, profesional, nube), `ui.font`,
+  `ui.codeFont` y `ui.codeTheme`. `applyAppearance()` los pone en `<html>` como `data-skin`, `data-font`,
+  `data-code-font` y `data-code-theme`, y el CSS los lee: `src/ui/themes.css` (temas; «profesional» quita el robot en
+  `robot.jsx`, el robot flotante, las animaciones decorativas y los sonidos), `src/ui/fonts.css` (tipografías, solo
+  latin y latin-ext) y `src/ui/code.css` (colores del código). El resaltado (`src/ui/lib/highlight.js`, highlight.js con
+  lenguajes comunes) se carga la primera vez que hace falta (`use-highlight.js`).
+- **Barra de menús de Windows:** `ui.menuBar` (falso por defecto); `applyMenuBar()` en `src/main/main.mjs` la muestra u
+  oculta al arrancar y con cada `config:changed`. Oculta, Alt la abre.
+- **Contribuye y Más aplicaciones** (`src/main/feedback.mjs`, en el proceso principal porque la ventana no sale a
+  internet): PayPal del desarrollador; comentarios por FormSubmit (el mismo buzón que Open Control Edge) con hasta 3
+  capturas PNG/JPEG de la ventana o de archivos; y las otras apps con su última versión de GitHub Releases.
 
 ## 28. Seguridad
 

@@ -60,7 +60,7 @@ export function checkProjectPath(target, { fromUser = false } = {}) {
     if (!categoryOf(home, r)) throw new Error(tr('msg.board.notInCategory', { name: assistantName(), list: CATEGORIES.join(', '), target }));
   } else if (!fromUser) {
     const roots = [home, ...(ctx.config.projectRoots ?? []).map(real)];
-    if (!roots.some((root) => inside(root, r))) throw new Error(`la ruta está fuera de la carpeta de ${assistantName()} (${home}): ${target}. ${userName()} puede vincularla desde la app.`);
+    if (!roots.some((root) => inside(root, r))) throw new Error(tr('sys.board.outside', { name: assistantName(), home, target, user: userName() }));
   }
   return r;
 }
@@ -103,9 +103,9 @@ export class Board {
   // Agents (MCP) can only create projects; moving one to another folder is a user action (fromUser).
   addProject({ name, path: folder, notes = '' }, actor, { fromUser = false } = {}) {
     name = oneLine(name, 60);
-    if (!name || !folder) throw new Error('name y path son obligatorios');
+    if (!name || !folder) throw new Error(tr('sys.board.nameAndPath'));
     const existing = this.project(name);
-    if (existing && !same(existing.path, folder) && !fromUser) throw new Error(`el proyecto «${existing.name}» ya existe en otra carpeta: cambiar su ruta solo se puede desde la app`);
+    if (existing && !same(existing.path, folder) && !fromUser) throw new Error(tr('sys.board.projectElsewhere', { name: existing.name }));
     const checked = existing && same(existing.path, folder) ? existing.path : checkProjectPath(folder, { fromUser });
     // One folder, one project: the same folder under another name is the project that already exists.
     const twin = !existing && this.projects().find((p) => same(p.path, checked));
@@ -141,7 +141,7 @@ export class Board {
   activeProject() { const name = this.setting('active_project'); return name ? this.project(name) ?? null : null; }
   setActiveProject(name, actor) {
     if (!name) { this.setting('active_project', ''); this.event(null, actor, 'project.active', 'ninguno'); this.changed('projects'); return null; }
-    const project = this.project(name); if (!project) throw new Error(`proyecto desconocido "${name}": regístralo antes con orb_add_project`);
+    const project = this.project(name); if (!project) throw new Error(tr('sys.board.unknownProject', { name }));
     this.setting('active_project', project.name);
     this.event(null, actor, 'project.active', `${project.name} -> ${project.path}`);
     this.addChat('system', tr('msg.board.activeFolder', { name: project.name, path: project.path }));
@@ -181,26 +181,26 @@ export class Board {
   // mode: "carpeta" (default: the project folder, in turn with the other writing tasks) or "aislada" (own branch and copy).
   // readonly: the task only reads (research, review): it may run at the same time as others in the same folder.
   createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null }, actor) {
-    if (!MODES.includes(mode)) throw new Error('mode debe ser carpeta o aislada');
+    if (!MODES.includes(mode)) throw new Error(tr('sys.board.badMode'));
     const proj = this.project(project);
-    if (!proj) throw new Error(`proyecto desconocido "${project}": regístralo antes con orb_add_project`);
+    if (!proj) throw new Error(tr('sys.board.unknownProject', { name: project }));
     const active = this.activeProject();
-    if (active && proj.name !== active.name && actor !== 'usuario') throw new Error(`hoy se trabaja en ${active.name} (${active.path}): no se crean tareas en otra carpeta. Si ${userName()} quiere cambiar, usa antes orb_set_project.`);
-    if (!title || !description) throw new Error('title y description son obligatorios');
+    if (active && proj.name !== active.name && actor !== 'usuario') throw new Error(tr('sys.board.otherFolder', { name: active.name, path: active.path, user: userName() }));
+    if (!title || !description) throw new Error(tr('sys.board.titleAndDesc'));
     title = oneLine(title);
-    if (String(description).length > MAX_DESCRIPTION) throw new Error(`description demasiado larga (${String(description).length} caracteres, máximo ${MAX_DESCRIPTION}): resume o apunta a un archivo`);
-    if (agent !== 'any' && !AGENTS.includes(agent)) throw new Error(`agente no válido: ${agent} (usa ${AGENTS.join(', ')} o any)`);
-    if (model && agent === 'any') throw new Error('para elegir modelo, elige también el agente');
+    if (String(description).length > MAX_DESCRIPTION) throw new Error(tr('sys.board.descTooLong', { n: String(description).length, max: MAX_DESCRIPTION }));
+    if (agent !== 'any' && !AGENTS.includes(agent)) throw new Error(tr('sys.board.badAgent', { agent, list: AGENTS.join(', ') }));
+    if (model && agent === 'any') throw new Error(tr('sys.board.modelNeedsAgent'));
     model = agent === 'any' ? null : checkModel(agent, model);
     // An account chosen on purpose: it must belong to the task's agent.
-    if (account && !(ctx.config.accounts ?? []).some((a) => a.id === account && (agent === 'any' || a.agent === agent))) throw new Error(`la cuenta ${account} no es de ${agent}`);
+    if (account && !(ctx.config.accounts ?? []).some((a) => a.id === account && (agent === 'any' || a.agent === agent))) throw new Error(tr('sys.board.accountNotOf', { account, agent }));
     if (account && agent === 'any') agent = (ctx.config.accounts ?? []).find((a) => a.id === account).agent;
-    if (!['auto', 'manual'].includes(launch)) throw new Error('launch debe ser auto o manual');
-    if (!Array.isArray(depends_on) || depends_on.length > 20) throw new Error('depends_on: como mucho 20 tareas');
-    for (const dep of depends_on) if (!this.task(dep)) throw new Error(`depends_on: no existe la tarea #${dep}`);
-    if (!Array.isArray(sensitivity)) throw new Error('sensitivity debe ser una lista');
+    if (!['auto', 'manual'].includes(launch)) throw new Error(tr('sys.board.badLaunch'));
+    if (!Array.isArray(depends_on) || depends_on.length > 20) throw new Error(tr('sys.board.dependsMax'));
+    for (const dep of depends_on) if (!this.task(dep)) throw new Error(tr('sys.board.dependsMissing', { id: dep }));
+    if (!Array.isArray(sensitivity)) throw new Error(tr('sys.board.sensitivityList'));
     const unknown = sensitivity.filter((s) => !ctx.config.sensitive.includes(s));
-    if (unknown.length) throw new Error(`sensitivity no válida: ${unknown.join(', ')}`);
+    if (unknown.length) throw new Error(tr('sys.board.badSensitivity', { list: unknown.join(', ') }));
     ({ reasoning, fast } = taskOptions({ reasoning, fast }));
     const policy = checkPolicy({ agent, model, reasoning, fast });
     // Approval does not depend on the creator declaring it: a task made by a worker always waits for the user,
@@ -270,35 +270,35 @@ export class Board {
     const task = this.task(id); if (!task) throw new Error(tr('msg.board.noTask', { id }));
     const reassigning = agent !== undefined || model !== undefined || reasoning !== undefined || fast !== undefined;
     if (actor !== 'orb') {
-      if (reassigning) throw new Error(`solo ${assistantName()} puede cambiar agente, modelo, reasoning o fast de una tarea`);
-      if (task.assigned_to !== actor || task.status !== 'running') throw new Error(`la tarea #${id} no es tuya o no está en curso: solo puedes actualizar tu propia tarea en curso`);
-      if (context.taskId !== undefined && context.taskId !== '' && Number(context.taskId) !== task.id) throw new Error(`tu tarea es la #${context.taskId}, no la #${id}`);
-      if (status && !WORKER_STATUSES.includes(status)) throw new Error(`un agente solo puede cerrar su tarea con ${WORKER_STATUSES.join(', ')}`);
+      if (reassigning) throw new Error(tr('sys.board.onlyAssistant', { name: assistantName() }));
+      if (task.assigned_to !== actor || task.status !== 'running') throw new Error(tr('sys.board.notYours', { id }));
+      if (context.taskId !== undefined && context.taskId !== '' && Number(context.taskId) !== task.id) throw new Error(tr('sys.board.yourTask', { mine: context.taskId, id }));
+      if (status && !WORKER_STATUSES.includes(status)) throw new Error(tr('sys.board.workerStatus', { list: WORKER_STATUSES.join(', ') }));
     } else {
-      if (status && !(ORCHESTRATOR_TO[status] ?? []).includes(task.status)) throw new Error(`transición no permitida: ${task.status} → ${status}${task.status === 'running' ? ' (las tareas en curso se cancelan desde la app)' : ''}`);
-      if (task.status === 'done' && (result !== undefined || reassigning)) throw new Error('una tarea terminada no se modifica');
+      if (status && !(ORCHESTRATOR_TO[status] ?? []).includes(task.status)) throw new Error(tr('sys.board.badTransition', { from: task.status, to: status, extra: task.status === 'running' ? tr('sys.board.cancelFromApp') : '' }));
+      if (task.status === 'done' && (result !== undefined || reassigning)) throw new Error(tr('sys.board.doneLocked'));
     }
     const reassign = {};
     if (reasoning !== undefined || fast !== undefined) {
-      if (task.status === 'running') throw new Error('la tarea está en curso: cancélala antes de cambiar reasoning o fast');
+      if (task.status === 'running') throw new Error(tr('sys.board.runningOptions'));
       const options = taskOptions({ reasoning: reasoning === undefined ? task.reasoning : reasoning, fast: fast === undefined ? task.fast : fast });
       if (reasoning !== undefined) reassign.reasoning = options.reasoning;
       if (fast !== undefined) reassign.fast = Number(options.fast);
     }
     if (agent !== undefined || model !== undefined) {
-      if (task.status === 'running') throw new Error(`la tarea #${id} está en curso: cancélala antes de cambiar agente o modelo`);
+      if (task.status === 'running') throw new Error(tr('sys.board.runningAgent', { id }));
       const nextAgent = agent ?? task.agent;
       if (nextAgent !== 'any' && !AGENTS.includes(nextAgent)) throw new Error(tr('msg.board.badAgent', { agent: nextAgent }));
       const nextModel = model === undefined ? (agent !== undefined ? null : task.model) : (model || null);
-      if (nextModel && nextAgent === 'any') throw new Error('para elegir modelo, elige también el agente');
+      if (nextModel && nextAgent === 'any') throw new Error(tr('sys.board.modelNeedsAgent'));
       Object.assign(reassign, { agent: nextAgent, model: nextAgent === 'any' ? null : checkModel(nextAgent, nextModel), assigned_to: null });
     }
     if (Object.keys(reassign).length) {
       const after = { agent: reassign.agent ?? task.agent, model: 'model' in reassign ? reassign.model : task.model, reasoning: reassign.reasoning ?? task.reasoning, fast: 'fast' in reassign ? Boolean(reassign.fast) : task.fast };
       if (checkPolicy(after).approval && !task.sensitivity.includes('razonamiento_alto')) reassign.sensitivity = JSON.stringify([...task.sensitivity, 'razonamiento_alto']);
     }
-    if (status && !STATUSES.includes(status)) throw new Error(`estado no válido: ${status}`);
-    if (status === 'awaiting_approval') throw new Error('solo el sistema pone tareas en espera de aprobación');
+    if (status && !STATUSES.includes(status)) throw new Error(tr('sys.board.badStatus', { status }));
+    if (status === 'awaiting_approval') throw new Error(tr('sys.board.systemOnly'));
     let next = status;
     const changed = Object.keys(reassign).length > 0 && (task.sensitivity.length > 0 || 'sensitivity' in reassign);
     if (changed && task.status === 'queued') next = 'awaiting_approval';
@@ -419,8 +419,8 @@ export class Board {
 
   // ---- messages between agents, the assistant and the user
   send({ from, to, body, task_id }) {
-    if (!body) throw new Error('body es obligatorio');
-    if (![...AGENTS, 'all', 'usuario', 'orb'].includes(to)) throw new Error(`destinatario no válido: ${to} (usa ${AGENTS.join(', ')}, all, usuario o orb)`);
+    if (!body) throw new Error(tr('sys.board.bodyRequired'));
+    if (![...AGENTS, 'all', 'usuario', 'orb'].includes(to)) throw new Error(tr('sys.board.badRecipient', { to, list: AGENTS.join(', ') }));
     body = String(body).slice(0, 8000);
     if (to === 'usuario') this.addChat('system', `💬 ${from}${task_id ? tr('msg.board.taskRef', { id: task_id }) : ''}: ${body}`);
     const { lastInsertRowid } = this.run('INSERT INTO messages (from_agent, to_agent, task_id, body, at) VALUES (?, ?, ?, ?, ?)', String(from), to, task_id ?? null, body, now());

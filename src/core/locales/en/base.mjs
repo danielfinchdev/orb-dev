@@ -15,6 +15,6 @@ export default {
   'nav.noProject': 'No project',
   'inbox.waiting': 'To approve',
   'inbox.issues': 'Issues',
-  'inbox.working': 'Working',
-  'inbox.settle': 'Done: remove from here'
+  'inbox.working': 'In progress',
+  'inbox.settle': 'Mark as resolved'
 };

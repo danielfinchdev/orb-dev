@@ -121,12 +121,17 @@ D:\Orb\                   (siempre <carpeta elegida>\Orb, igual para todos)
   sin dar señales, te avisa en el chat para que mires su conversación o la canceles.
 - **Fallos explicados**: si un agente no puede trabajar (plan sin acceso, sin sesión, modelo no disponible, sin red), la
   tarea dice por qué y qué hacer, en vez de un «falló» a secas.
-- **Tamaño de la interfaz** en Ajustes → Interfaz (Pequeña / Normal / Grande) o con `Ctrl +`, `Ctrl -` y `Ctrl 0`
+- **Ajustes en una ventana** con apartados (General, Apariencia, Modelo, Tareas y cupo, Móvil, Herramientas, Modo
+  experto, Actualizaciones, Contribuye y Más aplicaciones).
+- **Apariencia:** modo claro, oscuro o sistema; temas Orb, Vaporwave, Retro arcade, Profesional (sin robot) y Nube;
+  tipografía de la interfaz y del código; colores del código. La barra de menús de Windows está oculta por defecto.
+- **Tamaño de la interfaz** en Ajustes → Apariencia (Pequeña / Normal / Grande) o con `Ctrl +`, `Ctrl -` y `Ctrl 0`
   (también `Ctrl` + rueda del ratón). Se guarda en cada PC.
 - **`Ctrl J` abre una terminal** en la carpeta del proyecto que tengas delante: Warp si lo tienes instalado; si no,
-  Windows Terminal o PowerShell. En Ajustes → Interfaz puedes elegir una fija (Warp, Windows Terminal, PowerShell o CMD).
-- **Robot animado** que reacciona (piensa, habla, se alegra, se preocupa, se duerme) y avisa en una esquina. Día y noche.
+  Windows Terminal o PowerShell. En Ajustes → Apariencia puedes elegir una fija (Warp, Windows Terminal, PowerShell o CMD).
+- **Robot animado** que reacciona (piensa, habla, se alegra, se preocupa, se duerme) y avisa en una esquina.
   Todo es responsive (móvil y ventanas estrechas) salvo el modo experto.
+- **Contribuye:** apoyo por PayPal y comentarios con capturas, sin cuenta.
 
 ## Desarrollo
 
