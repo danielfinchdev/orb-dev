@@ -2,8 +2,9 @@
 // and the one T3 Code uses): one process per conversation, a thread that stays open, streamed answers, steer, interrupt,
 // approval requests answered by the guard, native fork, context and the account's real usage limits.
 // It uses the user's own login (CODEX_HOME, ~/.codex by default): ChatGPT or API key, the app never reads auth.json.
+import fs from 'node:fs';
 import path from 'node:path';
-import { IS_WIN, firstFile, inPath, shimDirs, userHome, clip } from './common.mjs';
+import { IS_WIN, firstFile, inPath, npmPrefixes, appDataDirs, userHome, clip } from './common.mjs';
 import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree } from './live.mjs';
 import { decide } from '../core/guard.mjs';
 import { tr } from '../core/context.mjs';
@@ -14,10 +15,11 @@ export const kind = 'app-server';
 export const caps = { images: true, steer: true, fork: true, approvals: true, models: true, context: true };
 
 export function detect(cfg = {}) {
-  const appData = process.env.APPDATA ?? path.join(userHome(), 'AppData', 'Roaming');
   const vendor = (dir) => ['x86_64-pc-windows-msvc', 'aarch64-pc-windows-msvc'].flatMap((triple) => ['codex-win32-x64', 'codex-win32-arm64'].map((p) =>
     path.join(dir, 'node_modules', '@openai', 'codex', 'node_modules', '@openai', p, 'vendor', triple, 'bin', 'codex.exe')));
-  const candidates = [cfg.path, ...inPath('codex'), ...(IS_WIN ? [...vendor(path.join(appData, 'npm')), ...shimDirs('codex').flatMap(vendor)] : [])];
+  // The Codex app also leaves its CLI in <Local>\OpenAI\Codex\bin\<build>\codex.exe (the newest build wins).
+  const appBuilds = (local) => { const base = path.join(local, 'OpenAI', 'Codex', 'bin'); try { return fs.readdirSync(base).map((b) => path.join(base, b, 'codex.exe')).filter((f) => firstFile([f])).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs); } catch { return []; } };
+  const candidates = [cfg.path, ...inPath('codex'), ...(IS_WIN ? [...npmPrefixes('codex').flatMap(vendor), ...appDataDirs().flatMap((d) => appBuilds(d.local))] : [])];
   const cmd = firstFile(candidates);
   return cmd ? { cmd, pre: [] } : null;
 }
@@ -161,7 +163,7 @@ export function createLive(o) {
       if (turn && !turn.done) turn.finish({ isError: true, final: turn.text || tr('sys.agents.exitedCode', { name: 'Codex', code, detail: child.stderrText().trim().split('\n').slice(-2).join(' ') }).trim() });
     });
     child.on('error', (error) => { closed = true; if (turn && !turn.done) turn.finish({ isError: true, final: tr('sys.agents.startFailed', { name: 'Codex', error: error.message }) }); });
-    await peer.request('initialize', { clientInfo: { name: 'orb_dev', title: 'Orb', version: '2.4.0' }, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs: 30000 });
+    await peer.request('initialize', { clientInfo: { name: 'orb_dev', title: 'Orb', version: '2.4.2' }, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs: 30000 });
     peer.notify('initialized', {});
     const common = { cwd: o.cwd, model, ...policy(permission), config: { model_reasoning_effort: effort(o.reasoning), service_tier: 'default' } };
     let res;

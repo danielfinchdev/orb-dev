@@ -66,7 +66,7 @@ export function Prepare({ name, onDone }) {
   const running = Boolean(progress?.running);
   const { n, phrase } = useFunPhrase(running);
   const finished = progress?.finished && !progress.interrupted;
-  const title = running ? `${phrase}…` : finished ? t('install.ready') : t('setup.prepareTitle');
+  const title = running ? `${phrase}…` : finished ? t('install.ready') : progress?.interrupted ? t('install.interrupted') : t('setup.prepareTitle');
   return (
     <div className="brand-sky flex h-full overflow-auto px-6 pt-24 pb-6">
       <div className="bg-card/95 text-card-foreground m-auto grid w-full max-w-[520px] gap-5 rounded-3xl border border-white/40 p-8 shadow-2xl backdrop-blur">

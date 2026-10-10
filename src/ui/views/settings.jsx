@@ -208,13 +208,13 @@ function McpCard({ c }) {
       <CardHeader><CardTitle>{t('settings.mcp')}</CardTitle><CardDescription>{t('settings.mcpDesc')}</CardDescription></CardHeader>
       <CardContent className="grid gap-2">
         {folder ? (
-          <div className="grid gap-2" data-testid="mcp-folder">
-            <div className="flex items-center gap-2">
+          <div className="grid min-w-0 gap-2" data-testid="mcp-folder">
+            <div className="flex min-w-0 items-center gap-2">
               <div className="min-w-0 flex-1"><div className="text-muted-foreground text-xs">{t('settings.mcpFolder')}</div><div className="truncate font-mono text-xs">{folder.dir}</div></div>
               <Button size="icon-sm" variant="ghost" onClick={() => act(bridge.openPath(folder.dir))} title={t('settings.open')}><FolderOpen /></Button>
             </div>
             {folder.servers.map((s) => (
-              <div key={s.dir} className="flex items-center gap-3 rounded-lg border border-dashed px-3 py-2">
+              <div key={s.dir} className="flex min-w-0 items-center gap-3 rounded-lg border border-dashed px-3 py-2">
                 <div className="min-w-0 flex-1"><div className="text-sm">{s.name}</div><div className="text-muted-foreground truncate font-mono text-xs">{s.command ? `${s.command} ${s.args.join(' ')}` : t('settings.mcpNoStart')}</div></div>
                 {s.configured ? <span className="text-muted-foreground text-xs">{t('settings.mcpInUse', { name: s.configured })}</span>
                   : s.command ? <Button size="sm" variant="outline" onClick={() => use(s)}><Plus />{t('settings.mcpUse')}</Button> : null}
@@ -223,7 +223,7 @@ function McpCard({ c }) {
           </div>
         ) : null}
         {c.mcpServers.length ? c.mcpServers.map((s, i) => (
-          <div key={s.name} className="flex items-center gap-3 rounded-lg border px-3 py-2">
+          <div key={s.name} className="flex min-w-0 items-center gap-3 rounded-lg border px-3 py-2">
             <div className="min-w-0 flex-1"><div className="text-sm">{s.name}</div><div className="text-muted-foreground truncate font-mono text-xs">{s.command} {(s.args ?? []).join(' ')}</div></div>
             <span className="text-muted-foreground text-xs">{s.agents?.length ? s.agents.join(', ') : t('settings.all')}</span>
             <Button variant="danger" size="icon-sm" onClick={async () => { if (await confirm(t('settings.mcpRemoveTitle'), t('settings.mcpRemoveBody', { name: s.name }), { ok: t('settings.remove'), danger: true })) save({ mcpServers: c.mcpServers.filter((_, j) => j !== i) }); }}><Trash2 /></Button>
@@ -276,7 +276,7 @@ function AndroidCard() {
     <Card data-testid="android-card">
       <CardHeader><CardTitle>{t('settings.android')}</CardTitle><CardDescription>{t('settings.androidDesc')}</CardDescription></CardHeader>
       <CardContent className="grid gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <div className="min-w-0 flex-1"><div className={cn('text-sm', st.state === 'error' && 'text-destructive')}>{label}</div><div className="text-muted-foreground truncate font-mono text-xs">{st.dir}</div></div>
           {st.ready ? <Button size="icon-sm" variant="ghost" onClick={() => act(bridge.openPath(st.dir))} title={t('settings.open')}><FolderOpen /></Button>
             : st.state !== 'downloading' ? <Button size="sm" variant="outline" onClick={async () => { setSt({ ...st, state: 'downloading' }); const r = await act(call('android.install')); if (r) setSt(r); else load(); }}>{t('settings.android.download')}</Button> : null}
@@ -433,8 +433,9 @@ function InterfaceCard({ c }) {
           </div>
         </Field>
         <Field label={t('settings.terminal')} hint={t('settings.terminalHint')}>
-          <div className="flex flex-wrap items-center gap-2">
-            <Select className="w-72 max-w-full" value={c.ui?.terminal ?? 'auto'} onValueChange={(terminal) => save({ ui: { terminal } })} options={Object.entries(terminals).map(([value, label]) => ({ value, label }))} />
+          {/* Narrow window: the selector takes the row and its long option is cut, instead of widening the card. */}
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap">
+            <Select className="w-full min-w-0 sm:w-72" value={c.ui?.terminal ?? 'auto'} onValueChange={(terminal) => save({ ui: { terminal } })} options={Object.entries(terminals).map(([value, label]) => ({ value, label }))} />
             <Button size="sm" variant="outline" onClick={() => openTerminal()}><SquareTerminal />{t('settings.openTerminal')}</Button>
           </div>
         </Field>
@@ -492,6 +493,12 @@ function FeedbackCard() {
   const [busy, setBusy] = useState(false);
   const room = images.length < 3;
   const add = (list) => setImages((now) => [...now, ...list.filter(Boolean)].slice(0, 3));
+  // The capture shows the app behind Ajustes (what the user wants to report), so the window hides while it is taken.
+  const capture = async () => {
+    document.documentElement.dataset.capturing = '1';
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    try { return await act(bridge.feedback.capture()); } finally { delete document.documentElement.dataset.capturing; }
+  };
   const send = async () => {
     setBusy(true);
     const ok = await act(bridge.feedback.send({ ...v, images }), t('contribute.sent'));
@@ -509,7 +516,7 @@ function FeedbackCard() {
         <Field label={t('contribute.message')}><Textarea rows={5} maxLength={5000} value={v.message} placeholder={t('contribute.messagePh')} onChange={(e) => setV({ ...v, message: e.target.value })} data-testid="feedback-message" /></Field>
         <div className="grid gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" variant="outline" disabled={!room} onClick={async () => add([await act(bridge.feedback.capture())])}><Camera />{t('contribute.capture')}</Button>
+            <Button size="sm" variant="outline" disabled={!room} onClick={async () => add([await capture()])} data-testid="feedback-capture"><Camera />{t('contribute.capture')}</Button>
             <Button size="sm" variant="outline" disabled={!room} onClick={async () => add((await act(bridge.feedback.images())) ?? [])}><ImagePlus />{t('contribute.addImage')}</Button>
             <span className="text-muted-foreground text-xs">{t('contribute.imagesLimit')}</span>
           </div>
@@ -549,7 +556,7 @@ function MoreAppsCard() {
               <div className="text-muted-foreground text-xs">{DESC[a.id]}</div>
               <div className="text-muted-foreground mt-0.5 text-xs">{a.version ? t('apps.latest', { version: a.version, date: a.date ? new Date(a.date).toLocaleDateString(locale) : '' }) : t('apps.offline')}</div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="ghost" onClick={() => bridge.openExternal(a.page)}>{t('apps.details')}</Button>
               <Button size="sm" onClick={() => bridge.openExternal(a.download)}><Download />{t('apps.download')}</Button>
             </div>
@@ -605,7 +612,8 @@ export function SettingsDialog() {
             </div>
           </nav>
           <div key={section.id} className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 pt-6 pb-8">
-            <div className="mx-auto grid max-w-3xl gap-4">
+            {/* min-w-0 on the cards: a long one-line text inside (a path, a wide control) must not widen the column in a narrow window */}
+            <div className="mx-auto grid max-w-3xl gap-4 [&>*]:min-w-0">
               <div className="grid gap-1 pb-1"><h2 className="text-2xl font-medium">{t(`settings.section.${section.id}`)}</h2><p className="text-muted-foreground text-sm">{t(`settings.sectionDesc.${section.id}`)}</p></div>
               {section.cards(c, app)}
             </div>

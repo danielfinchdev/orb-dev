@@ -17,7 +17,7 @@ export default {
   'comp.installer.installMarked': 'Install selected ({n})',
   'comp.installer.allReady': 'Everything is installed.',
   'comp.installer.check': 'Check again',
-  'comp.installer.windowOpened': 'Installation continues in another window. Accept any permissions Windows requests. When it finishes, sign in to each agent from “Agents”.',
+  'comp.installer.windowOpened': 'If Windows asks for permission, accept it. When it finishes, sign in to each agent from “Agents”.',
   'comp.live.sec': '{n} s',
   'comp.live.min': '{n} min',
   'comp.live.hourMin': '{h} h {m} min',
