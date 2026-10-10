@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Smartphone, MessageSquarePlus, ListTodo, FolderKanban, Bot, BookOpen, History, Settings, Sparkles, SquareTerminal, ChevronRight, Plus, FolderPlus, ShieldAlert, Hourglass, CirclePause, Check, CalendarClock, CircleCheck, Undo2 } from 'lucide-react';
+import { Smartphone, MessageSquarePlus, ListTodo, FolderKanban, Bot, BookOpen, History, Settings, Sparkles, SquareTerminal, ChevronRight, Plus, FolderPlus, ShieldAlert, Hourglass, CirclePause, Check, CalendarClock, CircleCheck, Undo2, GraduationCap } from 'lucide-react';
 import { Robot } from './robot.jsx';
 import { ThemeToggle, SidebarToggle } from './theme-toggle.jsx';
 import { Button } from './ui/button.jsx';
@@ -61,15 +61,24 @@ const taskDot = { running: 'bg-info animate-pulse', awaiting_approval: 'bg-warni
 const SIDEBAR_DEFAULT = 256; const SIDEBAR_MIN = 216; const SIDEBAR_MAX = 440; const WIDTH_KEY = 'orb.anchoMenu';
 function useSidebarWidth() {
   const [width, setRaw] = useState(() => { try { const n = Number(localStorage.getItem(WIDTH_KEY)); return n >= SIDEBAR_MIN && n <= SIDEBAR_MAX ? n : SIDEBAR_DEFAULT; } catch { return SIDEBAR_DEFAULT; } });
-  const setWidth = (n) => { const w = Math.round(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, n))); setRaw(w); try { localStorage.setItem(WIDTH_KEY, String(w)); } catch { /* storage unavailable */ } };
+  const clamp = (n) => Math.round(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, n)));
+  const remember = (w) => { try { localStorage.setItem(WIDTH_KEY, String(w)); } catch { /* storage unavailable */ } };
+  const setWidth = (n) => { const w = clamp(n); setRaw(w); remember(w); };
+  // While dragging only the width changes (it is saved once, on release); the pointer is captured by the edge, so a
+  // release outside the window or a cancelled drag still ends it.
   const startResize = (e) => {
     if (e.button !== 0) return;
     e.preventDefault();
-    const handle = e.currentTarget; const x0 = e.clientX; const w0 = handle.parentElement.getBoundingClientRect().width;
+    const handle = e.currentTarget; const x0 = e.clientX; const w0 = handle.parentElement.getBoundingClientRect().width; let last = w0;
+    try { handle.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
     handle.setAttribute('data-dragging', ''); document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
-    const move = (ev) => setWidth(w0 + ev.clientX - x0);
-    const up = () => { handle.removeAttribute('data-dragging'); document.body.style.cursor = ''; document.body.style.userSelect = ''; window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
-    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+    const move = (ev) => { last = clamp(w0 + ev.clientX - x0); setRaw(last); };
+    const end = () => {
+      handle.removeAttribute('data-dragging'); document.body.style.cursor = ''; document.body.style.userSelect = '';
+      for (const [n, f] of [['pointermove', move], ['pointerup', end], ['pointercancel', end], ['lostpointercapture', end]]) handle.removeEventListener(n, f);
+      remember(last);
+    };
+    handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', end); handle.addEventListener('pointercancel', end); handle.addEventListener('lostpointercapture', end);
   };
   return { width, setWidth, startResize };
 }
@@ -154,7 +163,8 @@ export function Sidebar({ mood }) {
   const folders = projects.map((p) => ({ project: p, items: [...tasks.filter((t) => t.project === p.name).map(asTask), ...chats.filter((c) => c.project === p.name).map(asChat)].filter(notDone).sort(byDate) }))
     .sort((a, b) => Number(b.project.active) - Number(a.project.active) || String(b.items[0]?.at ?? '').localeCompare(String(a.items[0]?.at ?? '')) || a.project.name.localeCompare(b.project.name));
   const loose = chats.filter((c) => !c.project || !projects.some((p) => p.name === c.project)).map(asChat).filter(notDone);
-  const done = (app.completed ?? []).map((k) => all.find((i) => i.key === k)).filter(Boolean);
+  const byKey = new Map(all.map((i) => [i.key, i]));
+  const done = (app.completed ?? []).map((k) => byKey.get(k)).filter(Boolean);
   const [doneOpen, setDoneOpen] = useState(false);
   const isOpen = (f) => openFolders[f.project.name] ?? f.items.some((i) => i.status === 'running' || i.status === 'awaiting_approval');
   // Inbox: what needs the user, then what is working.
@@ -205,7 +215,7 @@ export function Sidebar({ mood }) {
         <Inbox title={t('inbox.waiting')} tone="text-warning" items={needs} route={route} />
         <Inbox title={t('inbox.working')} tone="text-info" items={working} route={route} />
         <Inbox title={t('inbox.issues')} tone="text-destructive" items={issues} route={route} settleLabel={t('inbox.settle')} />
-        <div className="text-muted-foreground flex items-center px-2.5 pt-5 pb-1 text-[11px] tracking-wide uppercase">
+        <div className="text-muted-foreground flex items-center px-2.5 pt-5 pb-1 text-[11px] tracking-wide uppercase" data-testid="sidebar-folders">
           <span className="flex-1">{t('nav.folders')}</span>
           {bridge.mobile ? null : <Tip label={t('comp.projects.newTitle')}><button className="hover:text-foreground grid size-6 cursor-pointer place-items-center rounded-md hover:bg-accent/60" aria-label={t('comp.projects.newTitle')} onClick={async () => { const p = await createProjectFlow(); if (p) { await act(call('projects.setActive', { name: p.name })); setOpenFolder(p.name, true); } }} data-testid="sidebar-new-project"><FolderPlus className="size-3.5" /></button></Tip>}
         </div>
@@ -233,6 +243,8 @@ export function Sidebar({ mood }) {
         {bridge.mobile ? null : <NavItem icon={Bot} label={t('nav.agents')} active={is('agents')} onClick={() => go('agents')} testid="nav-agents" />}
         <NavItem icon={BookOpen} label={t('nav.logs')} active={is('logs')} onClick={() => go('logs')} testid="nav-logs" />
         <NavItem icon={History} label={t('nav.activity')} active={is('activity')} onClick={() => go('activity')} testid="nav-activity" />
+        {/* 2.6: how the app works, the FAQ and the button that replays the guided tour. */}
+        <NavItem icon={GraduationCap} label={t('nav.tutorials')} active={is('tutorials')} onClick={() => go('tutorials')} testid="nav-tutorials" />
         {bridge.mobile ? null : <NavItem icon={Settings} label={t('nav.settings')} active={settingsOpen} onClick={() => openSettings()} testid="nav-settings" />}
         {bridge.mobile ? <NavItem icon={Smartphone} label={t('nav.phone')} active={is('phone')} onClick={() => go('phone')} testid="nav-phone" /> : null}
       </div>

@@ -12,7 +12,8 @@ let seq = 0;
 // open a second copy on top: it shares the answer of the one already open.
 const opened = new Map(); // kind|title -> promise
 function open(dialog) {
-  const key = `${dialog.kind}|${dialog.title}`;
+  // Same kind, title and text: two different questions that happen to share a title are two dialogs.
+  const key = `${dialog.kind}|${dialog.title}|${typeof dialog.body === 'string' ? dialog.body : ''}|${typeof dialog.description === 'string' ? dialog.description : ''}`;
   if (opened.has(key)) return opened.get(key);
   const promise = new Promise((resolve) => setState((s) => ({ dialogs: [...(s.dialogs ?? []), { ...dialog, id: ++seq, resolve }] })));
   opened.set(key, promise);

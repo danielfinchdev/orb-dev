@@ -43,7 +43,7 @@ export function checkModel(agent, model, listed = []) {
   // An alias the agent listed (opus) also stands for the full id it resolves to (claude-opus-5-5).
   const models = configured.length ? [...new Set([...configured, ...(listed ?? []).flatMap((m) => [m.id ?? m, m.resolved].filter(Boolean))])] : [];
   if (models.length && !models.includes(model)) throw new Error(tr('msg.board.noModel', { agent, model, models: models.join(', ') }));
-  if (!/^[\w.:\-[\]=,]{1,80}$/.test(model)) throw new Error(tr('msg.board.badModelId', { model }));
+  if (!/^[A-Za-z0-9][\w.:\-/[\]=,@]{0,79}$/.test(model)) throw new Error(tr('msg.board.badModelId', { model }));
   return model;
 }
 

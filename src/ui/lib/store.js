@@ -31,6 +31,14 @@ export function setSidebarCollapsed(collapsed) {
 }
 try { if (localStorage.getItem('orb.sidebar') === 'plegada') state = { ...state, sidebarCollapsed: true }; } catch { /* storage unavailable */ }
 export function closeSettings() { setState({ settings: null }); }
+// 2.6: the guided tour (components/tour.jsx): the robot walks through the app, on the first launch after the setup and
+// from Tutoriales. Ajustes closes so the tour can point at the screens; done or skipped, ui.tourDone is saved in the
+// assistant folder's settings so it never comes back on its own.
+export function startTour() { closeSettings(); setState({ tour: { key: Date.now() } }); }
+export function endTour() {
+  setState({ tour: null });
+  if (getState().app?.config?.ui?.tourDone !== true) call('config.save', { patch: { ui: { tourDone: true } } }).catch(() => {});
+}
 
 export function go(route) {
   const next = typeof route === 'string' ? { view: route } : route;

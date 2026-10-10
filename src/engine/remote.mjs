@@ -275,6 +275,8 @@ export function createRemote({ board, api, log }) {
     const deny = (error) => reply(res, device, msg.nonce, { ok: false, status: 403, error });
     if (!ALLOWED.has(method)) return deny(tr('msg.remote.pcOnly'));
     if (params.permission === 'total') return deny(tr('msg.remote.totalPcOnly'));
+    // 2.6: which account the assistant spends is chosen on the PC (the brain's agent and model, also from the phone).
+    if (method === 'chat.settings' && params.account !== undefined) delete params.account;
     // A conversation the PC gave total access to is driven from the PC only.
     if (method.startsWith('sessions.') && method !== 'sessions.stop' && params.id !== undefined && board.one('SELECT permission FROM sessions WHERE id = ?', String(params.id))?.permission === 'total') return deny(tr('msg.remote.totalConvPcOnly'));
     // Pictures from a phone are only the ones it uploaded itself (never other files of the PC).

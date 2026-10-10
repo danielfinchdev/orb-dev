@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, readOutput } from './common.mjs';
+import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, readOutput, discoverDir } from './common.mjs';
 import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree } from './live.mjs';
 import { decide } from '../core/guard.mjs';
 import { tr } from '../core/context.mjs';
@@ -224,12 +224,12 @@ export function acpAgent(id, spec) {
   // `opencode models`) use it when the session does not say.
   async function discoverModels(exe, cfg = {}, env = {}) {
     const attempt = async (args) => {
-      const proc = spawnAgent(exe.cmd, [...exe.pre, ...args], { cwd: os.tmpdir(), env });
+      const proc = spawnAgent(exe.cmd, [...exe.pre, ...args], { cwd: discoverDir(), env });
       const p = new JsonRpcPeer(proc, { onRequest: async () => ({ outcome: { outcome: 'cancelled' } }) });
       proc.on('exit', () => p.close()); proc.on('error', () => p.close());
       try {
         await p.request('initialize', { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: 'orb-dev', title: 'Orb', version: '2.6.0' } }, { timeoutMs: 45000 });
-        return acpModels(await p.request('session/new', { cwd: os.tmpdir(), mcpServers: [] }, { timeoutMs: 45000 }));
+        return acpModels(await p.request('session/new', { cwd: discoverDir(), mcpServers: [] }, { timeoutMs: 45000 }));
       } finally { p.close(); killTree(proc); }
     };
     let list = null;

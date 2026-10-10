@@ -117,6 +117,10 @@ export default {
   'games.chessWin': 'Jaque mate: ¡has ganado!',
   'games.chessLose': 'Jaque mate: gana el ordenador',
   'games.chessDraw': 'Tablas',
+  'games.sound': 'Sonido de los juegos',
+  'games.soundOn': 'Silenciar los juegos',
+  'games.soundOff': 'Activar el sonido',
+  'games.soundAppOff': 'Los sonidos están desactivados en Ajustes.',
   // 2.6: avisos con el robot (o arriba, sin animaciones)
   'notice.done': 'Hecho',
   'notice.attention': 'Requiere tu atención',

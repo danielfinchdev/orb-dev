@@ -7,6 +7,7 @@ import { useEffect, useRef } from 'react';
 import { useT } from '@/lib/i18n.js';
 import { useKeys, useLoop, palette, setupCanvas, tint, mix, Particles, reducedMotion, font, corner, label, clamp } from './kit.js';
 import { SPRITES, sprite, size } from './invaders-sprites.js';
+import { sfx } from './sfx.js';
 
 const LW = 280; const LH = 210; const S = 2; const WIDTH = LW * S; const HEIGHT = LH * S; // logical screen and its scale
 const COLS = 11; const ROWS = 5; const CELL_W = 18; const CELL_H = 16; const STEP_X = 2; const STEP_Y = 8;
@@ -138,11 +139,11 @@ export default function Invaders({ level, onScore, onOver, paused }) {
   };
 
   const nextWave = () => {
-    const s = g.current; s.wave++; s.inv = formation(s.wave); s.cursor = 0; s.dir = 1; s.down = false; s.acc = 0; s.frame = Math.max(5, s.frame * 0.86);
+    const s = g.current; sfx('inv.wave'); s.wave++; s.inv = formation(s.wave); s.cursor = 0; s.dir = 1; s.down = false; s.acc = 0; s.frame = Math.max(5, s.frame * 0.86);
     s.bombs = []; s.shots = []; s.bunkers = bunkers(); s.ufo = null; s.ufoTimer = 12000; s.intro = 1400; s.bombTimer = 1500;
   };
   const killPlayer = (p) => {
-    const s = g.current; s.dead = 1100; s.lives--; s.shake = reducedMotion() ? 0 : 8; s.flash = 1; s.bombs = []; s.fire = false;
+    const s = g.current; sfx('inv.hit'); s.dead = 1100; s.lives--; s.shake = reducedMotion() ? 0 : 8; s.flash = 1; s.bombs = []; s.fire = false;
     s.sparks.burst((s.px + 6) * S, (PLAYER_Y + 4) * S, mix(p.primary, '#ffffff', 0.45), 26, 0.4, 3.5); s.sparks.burst((s.px + 6) * S, (PLAYER_Y + 4) * S, '#ffffff', 10, 0.3, 2);
   };
   useEffect(() => { screen.current = document.createElement('canvas'); screen.current.width = LW; screen.current.height = LH; setupCanvas(canvas.current, WIDTH, HEIGHT); draw(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -163,7 +164,7 @@ export default function Invaders({ level, onScore, onOver, paused }) {
     s.px = clamp(s.px, EDGE, LW - 13 - EDGE);
     s.cooldown -= dt;
     const wants = s.fire || s.pressed; s.pressed = false;
-    if (wants && s.shots.length < cfg.shots && s.cooldown <= 0 && s.intro <= 0) { s.shots.push({ x: s.px + 6, y: PLAYER_Y - 4 }); s.cooldown = 280; s.ufoShots++; }
+    if (wants && s.shots.length < cfg.shots && s.cooldown <= 0 && s.intro <= 0) { s.shots.push({ x: s.px + 6, y: PLAYER_Y - 4 }); s.cooldown = 280; s.ufoShots++; sfx('inv.shoot'); }
     for (const sh of s.shots) sh.y -= 0.3 * dt;
     // The march: one invader per tick, the whole formation per pass; at an edge the next pass is a step down.
     if (s.intro <= 0) {
@@ -181,6 +182,9 @@ export default function Invaders({ level, onScore, onOver, paused }) {
         let first = 0; while (!s.inv[first].alive) first++;
         if (s.cursor <= first || !s.inv.slice(s.cursor).some((i) => i.alive)) {
           s.cursor = first;
+          // The march: one note of the four per step of the whole formation, so its tempo is the invaders' own.
+          const gap = s.time - (s.marchAt ?? 0);
+          if (gap >= 90) { sfx('inv.march', { i: s.beat ?? 0, ms: gap }); s.beat = ((s.beat ?? 0) + 1) % 4; s.marchAt = s.time; }
           if (s.down) s.down = false;
           else if (s.inv.some((i) => i.alive && ((s.dir > 0 && i.x + i.w >= LW - EDGE) || (s.dir < 0 && i.x <= EDGE)))) { s.dir = -s.dir; s.down = true; }
         }
@@ -211,7 +215,7 @@ export default function Invaders({ level, onScore, onOver, paused }) {
       if (sh.y < TOP) { sh.dead = true; s.sparks.burst(sh.x * S, TOP * S, tint('#ffffff', 0.6), 5, 0.12, 1.5); continue; }
       const hit = s.inv.find((i) => i.alive && overlap(sh.x, sh.y, 1, 4, i.x, i.y, i.w, i.h));
       if (hit) {
-        hit.alive = false; sh.dead = true; s.score += POINTS[hit.type]; onScore(s.score);
+        hit.alive = false; sh.dead = true; s.score += POINTS[hit.type]; onScore(s.score); sfx('inv.kill');
         boom(hit.x + hit.w / 2 - 6.5, hit.y, c.rows[hit.row]); s.sparks.burst((hit.x + hit.w / 2) * S, (hit.y + 4) * S, c.rows[hit.row], 10, 0.22, 2.4);
         continue;
       }
@@ -222,7 +226,7 @@ export default function Invaders({ level, onScore, onOver, paused }) {
       if (s.ufo && overlap(sh.x, sh.y, 1, 4, s.ufo.x, UFO_Y, 16, 7)) {
         const bonus = [50, 100, 150, 300][s.ufoShots % 4]; s.score += bonus; onScore(s.score); sh.dead = true;
         pop(s.ufo.x + 8, UFO_Y + 3, String(bonus), c.ufo); boom(s.ufo.x + 1.5, UFO_Y, c.ufo, 400); s.sparks.burst((s.ufo.x + 8) * S, (UFO_Y + 3) * S, c.ufo, 16, 0.3, 2.6);
-        s.ufo = null;
+        s.ufo = null; sfx('inv.ufoHit');
       }
     }
     s.shots = s.shots.filter((sh) => !sh.dead); s.bombs = s.bombs.filter((b) => !b.dead);
@@ -230,13 +234,16 @@ export default function Invaders({ level, onScore, onOver, paused }) {
     s.ufoTimer -= dt;
     const alive = s.inv.filter((i) => i.alive).length;
     if (!s.ufo && s.ufoTimer <= 0 && alive >= 8 && s.intro <= 0) { const dir = Math.random() < 0.5 ? 1 : -1; s.ufo = { x: dir > 0 ? -16 : LW, dir }; s.ufoTimer = 16000 + Math.random() * 12000; }
-    if (s.ufo) { s.ufo.x += s.ufo.dir * 0.045 * dt; if (s.ufo.x < -18 || s.ufo.x > LW + 2) s.ufo = null; }
+    if (s.ufo) {
+      s.ufo.x += s.ufo.dir * 0.045 * dt; if (s.ufo.x < -18 || s.ufo.x > LW + 2) s.ufo = null;
+      else { s.ufo.beep = (s.ufo.beep ?? 0) - dt; if (s.ufo.beep <= 0) { s.ufo.beep = 120; s.ufo.k = (s.ufo.k ?? 0) + 1; sfx('inv.ufo', s.ufo.k); } } // its warble, while it crosses
+    }
     if (alive === 0 && !s.booms.length) nextWave();
     draw();
   }, !paused);
   return (
     <canvas ref={canvas} className="max-w-full rounded-2xl shadow-lg ring-1 ring-black/5 dark:ring-white/10" aria-label="Space Invaders"
-      onMouseDown={() => { const s = g.current; if (s.cooldown <= 0 && s.shots.length < cfg.shots && !s.dead && s.intro <= 0) { s.shots.push({ x: s.px + 6, y: PLAYER_Y - 4 }); s.cooldown = 280; s.ufoShots++; } }}
+      onMouseDown={() => { const s = g.current; if (!paused && !s.over && s.cooldown <= 0 && s.shots.length < cfg.shots && !s.dead && s.intro <= 0) { s.shots.push({ x: s.px + 6, y: PLAYER_Y - 4 }); s.cooldown = 280; s.ufoShots++; sfx('inv.shoot'); } }}
       onMouseMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); if (e.buttons || e.movementX) g.current.px = clamp((e.clientX - r.left) * (LW / r.width) - 6.5, EDGE, LW - 13 - EDGE); }} />
   );
 }

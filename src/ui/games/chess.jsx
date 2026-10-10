@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { newGame, legalMoves, play, outcome, bestMove, inCheck } from './chess-engine.js';
 import { Piece } from './chess-pieces.jsx';
 import { reducedMotion } from './kit.js';
+import { sfx } from './sfx.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
@@ -58,7 +59,14 @@ export default function Chess({ level, onScore, onOver, paused }) {
   const moves = pick === null ? [] : legalMoves(g).filter((m) => m.from === pick);
   // Points: the value of the pieces taken from the computer; a win is worth 100 more.
   const taken = (board) => 39 - material(board, 'b');
-  const finish = (next) => { const o = outcome(next); if (!o) return false; const won = o === 'mate' && next.turn === 'b'; setEnd(o === 'mate' ? (won ? 'win' : 'lose') : 'draw'); onOver(taken(next.board) + (won ? 100 : 0)); return true; };
+  const finish = (next) => { const o = outcome(next); if (!o) return false; const won = o === 'mate' && next.turn === 'b'; const r = o === 'mate' ? (won ? 'win' : 'lose') : 'draw'; setEnd(r); sfx(`chess.${r}`, null, { delay: 0.2 }); onOver(taken(next.board) + (won ? 100 : 0)); return true; };
+  // The sound of a move: a knock (two for castling, a heavier one for a capture), then promotion or check if any.
+  const knock = (m, next, mine) => {
+    sfx(m.castle ? 'chess.castle' : m.capture ? 'chess.capture' : 'chess.move', mine);
+    if (outcome(next)) return;
+    if (m.promo) sfx('chess.promo', null, { delay: 0.08 });
+    if (inCheck(next)) sfx('chess.check', null, { delay: 0.14 });
+  };
   // The piece slides from its square to the new one (the board already shows the move underneath).
   const slide = (m, piece) => { if (reducedMotion()) return; setAnim({ id: ++seq, from: m.from, to: m.to, piece, go: false }); };
   useEffect(() => {
@@ -84,7 +92,7 @@ export default function Chess({ level, onScore, onOver, paused }) {
       if (cancelled || !alive.current) return;
       setThinking(false);
       if (!m) return;
-      const next = play(g, m); setG(next); setLast(m); slide(m, m.promo ? 'q' : m.piece);
+      const next = play(g, m); setG(next); setLast(m); slide(m, m.promo ? 'q' : m.piece); knock(m, next, false);
       finish(next);
     }, 120);
     return () => { cancelled = true; clearTimeout(id); };
@@ -93,7 +101,7 @@ export default function Chess({ level, onScore, onOver, paused }) {
     if (g.turn !== 'w' || end || thinking || paused) return;
     const m = moves.find((x) => x.to === i);
     if (m) {
-      const next = play(g, m); setG(next); setLast(m); setPick(null); slide(m, m.promo ? 'Q' : m.piece);
+      const next = play(g, m); setG(next); setLast(m); setPick(null); slide(m, m.promo ? 'Q' : m.piece); knock(m, next, true);
       onScore(taken(next.board));
       finish(next);
       return;

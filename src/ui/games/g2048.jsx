@@ -2,6 +2,7 @@
 // Every tile is an element that slides to its new cell (CSS transform); the one born from a merge pops, a new one fades in.
 import { useEffect, useRef, useState } from 'react';
 import { useKeys, reducedMotion } from './kit.js';
+import { sfx } from './sfx.js';
 
 const SIZE = { facil: 5, normal: 4, dificil: 4 };
 const FOURS = { facil: 0.1, normal: 0.1, dificil: 0.3 };
@@ -59,6 +60,7 @@ export default function Game2048({ level, onScore, onOver, paused }) {
   const n = SIZE[level]; const cell = n === 5 ? 72 : 88; const board = n * cell + (n + 1) * GAP;
   const [state, setState] = useState(() => ({ tiles: spawn(spawn([], n, level), n, level), ghosts: [], score: 0, over: false }));
   const busy = useRef(false);
+  const won = useRef(false);
   const quick = reducedMotion();
   // Ghosts (tiles that merged away) go once they have travelled.
   useEffect(() => { if (!state.ghosts.length) return undefined; const id = setTimeout(() => setState((s) => ({ ...s, ghosts: [] })), 140); return () => clearTimeout(id); }, [state.ghosts]);
@@ -72,6 +74,9 @@ export default function Game2048({ level, onScore, onOver, paused }) {
     const tiles = spawn(r.tiles, n, level); const score = state.score + r.points;
     const over = !canMove(tiles, n);
     setState({ tiles, ghosts: r.ghosts, score, over });
+    // The sound: a swish, the note of the biggest tile just made, a fanfare the first time one reaches 2048.
+    const top = Math.max(0, ...r.tiles.filter((x) => x.merged).map((x) => x.v));
+    if (top >= 2048 && !won.current) { won.current = true; sfx('g2048.win'); } else if (top) sfx('g2048.merge', top); else sfx('g2048.slide');
     if (r.points) onScore(score);
     if (over) onOver(score);
     return true;

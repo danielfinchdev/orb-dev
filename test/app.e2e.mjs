@@ -58,6 +58,23 @@ try {
   assert.ok(fs.existsSync(path.join(home, '.orb/datos', encrypted ? 'clave.enc' : 'clave.bin')));
   if (encrypted) assert.ok(!fs.existsSync(path.join(home, '.orb/datos/clave.bin')), 'sin clave en texto plano');
   console.log(`  clave de aprobaciones: ${encrypted ? 'cifrada por el sistema' : 'archivo (este sistema no tiene cifrado)'}`);
+
+  // ---- the guided tour (2.6): the robot starts it by itself on the first launch; one step forward, then «Saltar
+  // tutorial»; it is remembered in the assistant's folder and never comes back on its own.
+  step = 'tutorial guiado';
+  await win.locator('[data-testid=tour]').waitFor({ timeout: 10000 });
+  await win.locator('[data-testid=tour-counter]', { hasText: /^1 de \d+/ }).waitFor();
+  await win.getByRole('button', { name: 'Siguiente', exact: true }).click();
+  await win.locator('[data-testid=tour][data-step=chat]').waitFor();
+  await win.locator('[data-testid=tour-counter]', { hasText: /^2 de \d+/ }).waitFor();
+  await win.locator('[data-testid=tour] .tour-spot').waitFor();
+  await win.waitForTimeout(500);
+  await shot('01c-tutorial-guiado');
+  await win.getByRole('button', { name: 'Saltar tutorial', exact: true }).click();
+  await until(async () => (await win.locator('[data-testid=tour]').count()) === 0, 'tutorial cerrado');
+  await until(async () => (await call('app.state')).config.ui.tourDone === true, 'tutorial recordado en orb.json');
+  await win.waitForTimeout(1500);
+  assert.equal(await win.locator('[data-testid=tour]').count(), 0, 'el tutorial no vuelve solo');
   await win.waitForTimeout(400);
   await shot('02-chat-vacio');
 
@@ -171,12 +188,23 @@ try {
 
   // ---- other views
   step = 'otras vistas';
-  for (const [nav, name, wait] of [['nav-projects', '06-proyectos', 'Git y GitHub'], ['nav-agents', '07-agentes', 'Uso de cada cuenta'], ['nav-logs', '08-bitacoras', 'Bitácora general'], ['nav-activity', '09-actividad', 'task.created']]) {
+  for (const [nav, name, wait] of [['nav-projects', '06-proyectos', 'Git y GitHub'], ['nav-agents', '07-agentes', 'Uso de cada cuenta'], ['nav-logs', '08-bitacoras', 'Bitácora general'], ['nav-activity', '09-actividad', 'task.created'], ['nav-tutorials', '08b-tutoriales', 'Preguntas frecuentes']]) {
     await win.click(`[data-testid=${nav}]`);
     await win.waitForSelector(`text=${wait}`);
     await win.waitForTimeout(400);
     await shot(name);
   }
+  // Tutoriales (2.6): the search narrows the cards, a question unfolds, and the guided tour starts again from its button
+  // (skipped here with Esc).
+  await win.fill('[data-testid=help-search]', 'deshacer');
+  await until(async () => (await win.locator('[data-testid^=tutorial-]').count()) < 10, 'la búsqueda filtra los tutoriales');
+  await win.fill('[data-testid=help-search]', '');
+  await win.click('[data-testid=faq-1]');
+  await win.waitForSelector('text=Orb usa su programa oficial');
+  await win.click('[data-testid=tour-replay]');
+  await win.locator('[data-testid=tour]').waitFor();
+  await win.keyboard.press('Escape');
+  await until(async () => (await win.locator('[data-testid=tour]').count()) === 0, 'tutorial saltado con Esc');
 
   // ---- Ajustes: a window over the app, with its sections on the left and the developer's GitHub and the version below
   step = 'ajustes';
@@ -249,6 +277,13 @@ try {
   await until(async () => (await call('app.state')).config.autoRun === !autoRun, 'interruptor aplicado al momento');
   await win.getByText('Iniciar las tareas automáticamente').click();
   await until(async () => (await call('app.state')).config.autoRun === autoRun, 'y vuelve');
+  // 2.6: one slider from maximum saving to maximum use sets every limit; the limits stay under «Opciones avanzadas».
+  await win.locator('[data-testid=spend-slider]').fill('0');
+  await until(async () => { const c = (await call('app.state')).config; return c.budget.profile === 0 && c.maxParallel === 1 && c.budget.stopAt === 0.75; }, 'máximo ahorro aplicado');
+  await win.click('[data-testid=spend-advanced]');
+  await shot('10f-ajustes-ahorro');
+  await win.locator('[data-testid=spend-slider]').fill('2');
+  await until(async () => { const c = (await call('app.state')).config; return c.budget.profile === 2 && c.maxParallel === 3; }, 'vuelve a equilibrado');
 
   // ---- a new version (ORB_FAKE_UPDATE: no network): the card in the corner and the Updates card in Ajustes
   step = 'actualización';
@@ -273,7 +308,8 @@ try {
   const folder = win.locator('[data-testid=folder-webviaproject]');
   await folder.waitFor();
   const firstTask = (await call('tasks.list')).find((x) => x.project === 'webviaproject');
-  const taskInMenu = win.locator('aside').getByRole('button', { name: firstTask.title }).first();
+  // The one inside the project (the inbox at the top may list the same task while it waits or works).
+  const taskInMenu = win.locator('aside').getByRole('button', { name: firstTask.title }).last();
   if (!(await taskInMenu.isVisible())) await folder.dblclick();
   await taskInMenu.click();
   await win.waitForSelector('[data-testid=task-detail]');

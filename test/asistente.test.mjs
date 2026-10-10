@@ -41,10 +41,17 @@ test('los avisos pendientes del asistente no se pierden al cerrar la app', async
   assert.equal(assistant(board).resume(), 0);
 });
 
-test('reiniciar la conversación descarta los avisos pendientes', () => {
+test('una conversación nueva no pierde los avisos pendientes; al volver a abrir no se contesta dos veces el que está en curso', async () => {
   const board = new Board();
   const o = assistant(board);
-  o.internal('AVISO', null);
-  o.reset();
-  assert.equal(board.settingJson('orchestrator_pending'), null);
+  o.internal('AVISO A', null);
+  o.internal('AVISO B', null);
+  o.reset(); // «Nuevo chat»
+  assert.deepEqual(board.settingJson('orchestrator_pending').map((q) => q.text), ['AVISO A', 'AVISO B']);
+  assert.ok(o.queue.some((q) => q.text === 'AVISO B'), 'el que esperaba sigue en la cola');
+  // A notice already being answered when resume() runs is not queued again.
+  const p = assistant(board);
+  p.internal('AVISO C', null);
+  p.resume();
+  assert.equal(p.queue.filter((q) => q.text === 'AVISO C').length, 0, 'el que se está contestando no se repite');
 });

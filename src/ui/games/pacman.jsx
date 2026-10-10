@@ -7,6 +7,7 @@
 import { useEffect, useRef } from 'react';
 import { useT } from '@/lib/i18n.js';
 import { useKeys, useLoop, palette, setupCanvas, tint, mix, Particles, reducedMotion, font, corner, label, clamp } from './kit.js';
+import { sfx } from './sfx.js';
 
 const MAP = [
   '############################', '#............##............#', '#.####.#####.##.#####.####.#', '#o####.#####.##.#####.####o#',
@@ -166,7 +167,7 @@ export default function Pacman({ level, onScore, onOver, paused }) {
     for (const gh of s.ghosts) { if (gh.mode === 'chase' || gh.mode === 'scatter') { gh.mode = 'fright'; gh.dx = -gh.dx; gh.dy = -gh.dy; } if (gh.mode !== 'eyes' && gh.mode !== 'entering') gh.scared = true; }
   };
   const endFright = () => { const s = g.current; s.fright = 0; for (const gh of s.ghosts) { gh.scared = false; if (gh.mode === 'fright') gh.mode = s.mode; } };
-  const die = () => { const s = g.current; s.state = 'dying'; s.timer = 1700; s.pac.dx = 0; s.pac.dy = 0; };
+  const die = () => { const s = g.current; sfx('pac.death', null, { delay: 0.25 }); s.state = 'dying'; s.timer = 1700; s.pac.dx = 0; s.pac.dy = 0; };
 
   const draw = () => {
     const ctx = canvas.current?.getContext('2d'); if (!ctx) return;
@@ -247,7 +248,7 @@ export default function Pacman({ level, onScore, onOver, paused }) {
     s.time += dt; s.sparks.step(dt);
     for (const q of s.pops) q.ttl -= dt; s.pops = s.pops.filter((q) => q.ttl > 0);
     if (s.over) { draw(); return; }
-    if (s.state === 'ready') { s.timer -= dt; if (s.timer <= 0) { s.state = 'play'; s.pac.dx = -1; s.pac.dy = 0; } draw(); return; }
+    if (s.state === 'ready') { if (!s.tuned) { s.tuned = true; sfx('pac.start', null, { delay: 0.35 }); } s.timer -= dt; if (s.timer <= 0) { s.state = 'play'; s.pac.dx = -1; s.pac.dy = 0; } draw(); return; }
     if (s.state === 'dying') {
       s.timer -= dt;
       if (s.timer < 250 && !s.puffed) { s.puffed = true; s.sparks.burst(s.pac.x * T, s.pac.y * T, PAC, 14, 0.2, 2.5); }
@@ -288,13 +289,14 @@ export default function Pacman({ level, onScore, onOver, paused }) {
     const k = Math.floor(pac.y) * W + Math.floor(pac.x); const dot = s.dots.get(k);
     if (dot) {
       s.dots.delete(k); s.eaten++; s.lastDot = 0; addScore(dot === 'o' ? 50 : 10);
+      if (dot === 'o') sfx('pac.power'); else { s.waka = !s.waka; sfx('pac.waka', s.waka); }
       if (dot === 'o') { setFright(); s.sparks.burst(pac.x * T, pac.y * T, DOT, 10, 0.2, 2); }
       if ((s.eaten === 70 || s.eaten === 170) && !s.fruit) { s.fruit = { ...FRUIT_AT, ttl: 9500 }; s.fruitShown++; }
-      if (!s.dots.size) { s.state = 'clear'; s.timer = 2200; s.fruit = null; s.sparks.burst(pac.x * T, pac.y * T, PAC, 20, 0.3, 3); draw(); return; }
+      if (!s.dots.size) { sfx('pac.clear', null, { delay: 0.1 }); s.state = 'clear'; s.timer = 2200; s.fruit = null; s.sparks.burst(pac.x * T, pac.y * T, PAC, 20, 0.3, 3); draw(); return; }
     }
     if (s.fruit) {
       s.fruit.ttl -= dt;
-      if (dist2(pac.x, pac.y, s.fruit.x, s.fruit.y) < 0.5) { const n = FRUIT_POINTS[Math.min(FRUIT_POINTS.length - 1, s.level - 1)]; addScore(n); pop(s.fruit.x, s.fruit.y - 0.6, String(n), '#ffb8ff'); s.sparks.burst(s.fruit.x * T, s.fruit.y * T, '#ff3b3b', 12, 0.25, 2.5); s.fruit = null; }
+      if (dist2(pac.x, pac.y, s.fruit.x, s.fruit.y) < 0.5) { const n = FRUIT_POINTS[Math.min(FRUIT_POINTS.length - 1, s.level - 1)]; addScore(n); sfx('pac.fruit'); pop(s.fruit.x, s.fruit.y - 0.6, String(n), '#ffb8ff'); s.sparks.burst(s.fruit.x * T, s.fruit.y * T, '#ff3b3b', 12, 0.25, 2.5); s.fruit = null; }
       else if (s.fruit.ttl <= 0) s.fruit = null;
     }
     // The ghosts.
@@ -321,7 +323,7 @@ export default function Pacman({ level, onScore, onOver, paused }) {
       if (gh.mode === 'eyes' || gh.mode === 'entering' || gh.mode === 'house' || gh.mode === 'leaving') continue;
       if (Math.abs(gh.x - pac.x) < 0.55 && Math.abs(gh.y - pac.y) < 0.55) {
         if (gh.mode === 'fright') {
-          const n = 200 * 2 ** s.combo; s.combo = Math.min(3, s.combo + 1); addScore(n); pop(gh.x, gh.y, String(n), '#00f0ff');
+          sfx('pac.ghost', s.combo); const n = 200 * 2 ** s.combo; s.combo = Math.min(3, s.combo + 1); addScore(n); pop(gh.x, gh.y, String(n), '#00f0ff');
           s.sparks.burst(gh.x * T, gh.y * T, FRIGHT, 14, 0.28, 2.5); gh.mode = 'eyes'; gh.scared = false; gh.justEaten = true; s.freeze = rm ? 250 : 500;
           draw(); return;
         }

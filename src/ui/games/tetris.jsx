@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useT } from '@/lib/i18n.js';
 import { useKeys, useLoop, palette, setupCanvas, roundRect, block, tint, mix, shade, backdrop, label, reducedMotion, Particles, font, corner } from './kit.js';
+import { sfx } from './sfx.js';
 
 const W = 10; const H = 20; const CELL = 22; const SIDE = 124; const PAD = 10;
 const BOARD_W = W * CELL; const WIDTH = BOARD_W + SIDE; const HEIGHT = H * CELL;
@@ -83,15 +84,18 @@ export default function Tetris({ level, onScore, onOver, paused }) {
     s.grid = [...Array.from({ length: s.clearing.rows.length }, () => Array(W).fill(null)), ...kept];
     s.clearing = null;
     s.piece = s.next; s.next = take();
-    if (!fits(s.piece.cells, s.piece.x, s.piece.y)) { s.over = true; onOver(s.score); }
+    if (!fits(s.piece.cells, s.piece.x, s.piece.y)) { s.over = true; sfx('tetris.top'); onOver(s.score); }
   };
-  const lock = () => {
+  const lock = (hard = false) => {
     const s = g.current;
-    for (const [cx, cy] of s.piece.cells) { const y = s.piece.y + cy; if (y < 0) { s.over = true; draw(); onOver(s.score); return; } s.grid[y][s.piece.x + cx] = s.piece.kind; }
+    for (const [cx, cy] of s.piece.cells) { const y = s.piece.y + cy; if (y < 0) { s.over = true; sfx('tetris.top'); draw(); onOver(s.score); return; } s.grid[y][s.piece.x + cx] = s.piece.kind; }
     const p = palette();
     if (!reducedMotion()) for (const [cx, cy] of s.piece.cells) s.sparks.burst((s.piece.x + cx + 0.5) * CELL, (s.piece.y + cy + 1) * CELL, tint(p.fg, 0.5), 2, 0.08, 1.5);
     const rows = []; s.grid.forEach((row, y) => { if (row.every(Boolean)) rows.push(y); });
+    if (hard) sfx('tetris.drop'); else if (!rows.length) sfx('tetris.lock');
     if (rows.length) {
+      sfx('tetris.lines', rows.length);
+      if (Math.floor((s.lines + rows.length) / 10) > Math.floor(s.lines / 10)) sfx('tetris.level', null, { delay: 0.3 });
       s.lines += rows.length; s.score += [0, 100, 300, 500, 800][rows.length] * (1 + Math.floor((s.lines - rows.length) / 10)); onScore(s.score);
       for (const y of rows) s.sparks.burst(BOARD_W / 2, (y + 0.5) * CELL, rows.length >= 4 ? p.primary : p.warning, 16, 0.4, 2.5);
       s.clearing = { rows, t: reducedMotion() ? CLEAR_MS : 0 }; s.piece = null;
@@ -99,18 +103,18 @@ export default function Tetris({ level, onScore, onOver, paused }) {
       return;
     }
     s.piece = s.next; s.next = take();
-    if (!fits(s.piece.cells, s.piece.x, s.piece.y)) { s.over = true; onOver(s.score); }
+    if (!fits(s.piece.cells, s.piece.x, s.piece.y)) { s.over = true; sfx('tetris.top'); onOver(s.score); }
   };
-  const move = (dx, dy) => { const s = g.current; if (s.piece && fits(s.piece.cells, s.piece.x + dx, s.piece.y + dy)) { s.piece.x += dx; s.piece.y += dy; return true; } return false; };
+  const move =(dx, dy) => { const s = g.current; if (s.piece && fits(s.piece.cells, s.piece.x + dx, s.piece.y + dy)) { s.piece.x += dx; s.piece.y += dy; return true; } return false; };
   useKeys((key) => {
     const s = g.current; if (s.over || paused || !s.piece) return /^(Arrow| )/.test(key) ? true : false;
-    if (key === 'ArrowLeft') move(-1, 0);
-    else if (key === 'ArrowRight') move(1, 0);
-    else if (key === 'ArrowDown') { if (!move(0, 1)) lock(); else { s.score += 1; onScore(s.score); } }
+    if (key === 'ArrowLeft') { if (move(-1, 0)) sfx('tetris.move'); }
+    else if (key === 'ArrowRight') { if (move(1, 0)) sfx('tetris.move'); }
+    else if (key === 'ArrowDown') { if (!move(0, 1)) lock(); else { s.score += 1; onScore(s.score); sfx('tetris.soft'); } }
     else if (key === 'ArrowUp' || key === 'x' || key === 'X') {
       const r = rotate(s.piece.cells, s.piece.kind);
-      for (const kick of [0, -1, 1, -2, 2]) if (fits(r, s.piece.x + kick, s.piece.y)) { s.piece.cells = r; s.piece.x += kick; break; }
-    } else if (key === ' ') { let n = 0; while (move(0, 1)) n++; s.score += n * 2; onScore(s.score); lock(); }
+      for (const kick of [0, -1, 1, -2, 2]) if (fits(r, s.piece.x + kick, s.piece.y)) { s.piece.cells = r; s.piece.x += kick; if (s.piece.kind !== 'O') sfx('tetris.rotate'); break; }
+    } else if (key === ' ') { let n = 0; while (move(0, 1)) n++; s.score += n * 2; onScore(s.score); lock(true); }
     else return false;
     draw(); return true;
   });
