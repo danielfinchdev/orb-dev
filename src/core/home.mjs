@@ -201,19 +201,26 @@ export function hideOnWindows(dir) {
   try { spawnSync('attrib', ['+h', dir], { windowsHide: true, timeout: 5000 }); } catch { /* cosmetic */ }
 }
 
-export function generalLogHeader(config) {
-  return `# Bitácora general de ${config.assistantName}
+// The headers of the logs, in the language of the settings.
+export const generalLogHeader = (config) => translate(config?.language, 'sys.logs.generalHeader', { name: config.assistantName });
+export const projectLogHeader = (name, language = 'es') => translate(language, 'sys.logs.projectHeader', { name });
 
-Memoria de ${config.assistantName}: qué se pidió, qué se hizo y qué queda pendiente en todos los proyectos.
-Solo se añade al final; nunca se borra ni se edita lo escrito. Sin contraseñas, tokens ni datos personales.
-`;
-}
-
-export function projectLogHeader(name) {
-  return `# Bitácora — ${name}
-
-Lo decidido y lo hecho en este proyecto. Solo se añade al final. Sin contraseñas, tokens ni datos personales.
-`;
+// After a change of language: a log that has nothing but its header gets the header in the new language (logs only
+// grow, so one with entries stays as it is).
+export function relabelEmptyLogs(home, before, after) {
+  const p = paths(home);
+  const read = (file) => { try { return fs.readFileSync(file, 'utf8').trim(); } catch { return null; } };
+  const write = (file, text) => { try { fs.writeFileSync(file, text); } catch { /* busy: left as it is */ } };
+  if (read(p.generalLog) === generalLogHeader(before).trim()) write(p.generalLog, generalLogHeader(after));
+  // A project's header carries its name as the user wrote it (the file name may be simplified): read it from the header.
+  const [pre, post] = projectLogHeader('\u0000', before.language).trim().split('\u0000');
+  let files = []; try { files = fs.readdirSync(p.projectLogs).filter((f) => /\.md$/i.test(f)); } catch { /* no project logs yet */ }
+  for (const f of files) {
+    const file = path.join(p.projectLogs, f); const text = read(file);
+    if (!text?.startsWith(pre) || !text.endsWith(post)) continue;
+    const name = text.slice(pre.length, text.length - post.length);
+    if (name && !name.includes('\n')) write(file, projectLogHeader(name, after.language));
+  }
 }
 
 export function loadConfig(home) {

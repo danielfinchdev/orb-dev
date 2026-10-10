@@ -8,6 +8,7 @@ import { spawn } from 'node:child_process';
 import { tempHome, ROOT } from './helpers.mjs';
 import { Board } from '../src/core/board.mjs';
 import { createProject } from '../src/core/projects.mjs';
+import { agentToken } from '../src/engine/sessions.mjs';
 
 let t; let board; const KEY = 'clave-de-prueba';
 before(() => {
@@ -33,7 +34,7 @@ function client(env) {
 test('el coordinador solo se reconoce con la clave secreta', async () => {
   const boss = client({ ORB_AGENT: 'orb', ORB_ORCH_KEY: KEY });
   const fake = client({ ORB_AGENT: 'orb', ORB_ORCH_KEY: 'otra' });
-  const worker = client({ ORB_AGENT: 'codex' });
+  const worker = client({ ORB_AGENT: 'codex', ORB_AGENT_TOKEN: agentToken(board, 'codex') });
   const user = client({ ORB_AGENT: 'usuario' });
   try {
     for (const c of [boss, fake, worker]) await c.rpc('initialize', {});
@@ -67,11 +68,32 @@ test('el coordinador crea proyectos, escribe bitácoras y no puede leer otra cos
   } finally { boss.close(); }
 });
 
+test('un agente que arranca el MCP por su cuenta no se hace pasar por otro agente ni por otra tarea', async () => {
+  const task = board.createTask({ project: 'web', title: 'Texto de la portada', description: 'Escribe el texto', agent: 'claude', launch: 'manual' }, 'orb');
+  assert.equal(board.claimNext('claude', 'web')?.id, task.id);
+  const otherTask = task.id + 1000;
+  const claims = client({ ORB_AGENT: 'claude', ORB_TASK_ID: String(task.id) }); // no signature
+  const borrowed = client({ ORB_AGENT: 'claude', ORB_AGENT_TOKEN: agentToken(board, 'codex', task.id) }); // codex's signature
+  const madeUp = client({ ORB_AGENT: 'claude', ORB_AGENT_TOKEN: 'a'.repeat(64) });
+  const otherTaskOf = client({ ORB_AGENT: 'claude', ORB_TASK_ID: String(task.id), ORB_AGENT_TOKEN: agentToken(board, 'claude', otherTask) });
+  const real = client({ ORB_AGENT: 'claude', ORB_TASK_ID: String(task.id), ORB_AGENT_TOKEN: agentToken(board, 'claude', task.id) });
+  try {
+    for (const c of [claims, borrowed, madeUp, otherTaskOf, real]) await c.rpc('initialize', {});
+    for (const c of [claims, borrowed, madeUp]) assert.match((await c.rpc('initialize', {})).result.instructions, /Tú eres "desconocido"/);
+    for (const c of [claims, borrowed, madeUp, otherTaskOf]) assert.equal((await c.call('orb_update_task', { id: task.id, status: 'done', result: 'falso' })).error, true);
+    assert.equal(board.task(task.id).status, 'running');
+    assert.ok((await real.tools()).includes('orb_delegate'), 'la firma buena trae su tarea');
+    const ok = await real.call('orb_update_task', { id: task.id, status: 'done', result: 'hecho' });
+    assert.equal(ok.error, false, ok.text);
+    assert.equal(board.task(task.id).status, 'done');
+  } finally { for (const c of [claims, borrowed, madeUp, otherTaskOf, real]) c.close(); }
+});
+
 test('el MCP no tiene la clave de aprobaciones: no puede firmar ni invalida las firmas buenas', async () => {
   const task = board.createTask({ project: 'web', title: 'Publicar', description: 'publica la web', agent: 'claude', launch: 'manual' }, 'orb');
   const ok = board.approve(task.id, 'approved', 'usuario', board.previewHash(task));
   assert.equal(ok.status, 'queued');
-  const worker = client({ ORB_AGENT: 'claude' });
+  const worker = client({ ORB_AGENT: 'claude', ORB_AGENT_TOKEN: agentToken(board, 'claude') });
   try {
     await worker.rpc('initialize', {});
     // claim_next re-checks approvals: without the secret it must not push signed tasks back to approval…

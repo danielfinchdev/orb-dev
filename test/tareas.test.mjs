@@ -75,6 +75,36 @@ test('continuar tras reiniciar desactivado: la tarea interrumpida queda fallida 
   assert.match(failed.result, /se interrumpió porque Orb se cerró\. Puedes reintentarla/);
 });
 
+test('cerrar Orb con normalidad con tareas trabajando: no se dan por hechas y siguen al volver a abrir', async () => {
+  let { call } = await fresh();
+  // Codex reports an interrupted turn without error: before 2.5 the shutdown left its task «done» half-way.
+  const tasks = [];
+  // Isolated copies, so both work at once (two folder tasks in one project take turns).
+  for (const agent of ['claude', 'codex']) tasks.push(await call('tasks.create', { project: 'web', title: `Larga ${agent}`, description: 'DUERME mucho rato', agent, mode: 'aislada' }));
+  for (const task of tasks) await until(() => fakeLog(t.home, task.id).length, `#${task.id} empezó`);
+  await engine.stop(); // the app's normal close («Cerrar igualmente»)
+  engine = await startEngine(t.home);
+  ({ call } = engine);
+  for (const task of tasks) {
+    const after = await until(async () => { const x = await call('tasks.get', { id: task.id }); return kinds(x).includes('task.resumed') && x; }, `#${task.id} reanudada`);
+    const k = kinds(after);
+    assert.ok(!k.slice(0, k.indexOf('task.interrupted')).includes('task.finished'), `#${task.id} no se cerró al apagar: ${k.join(', ')}`);
+    assert.match(fakeLog(t.home, task.id).at(-1).text, /se cerró mientras trabajabas en esta tarea/);
+  }
+});
+
+test('tarea cerrada por su agente con el proceso aún vivo cuando se cae Orb: al volver se completa y sus dependientes siguen', async () => {
+  let { call } = await fresh();
+  const a = await call('tasks.create', { project: 'web', title: 'A', description: 'TERMINA 1 DUERME', agent: 'claude' });
+  const b = await call('tasks.create', { project: 'web', title: 'B', description: 'ESCRIBE', agent: 'codex', depends_on: [a.id] });
+  await until(async () => { const x = await call('tasks.get', { id: a.id }); return x.status === 'done' && x.pid != null; }, 'A cerrada por el agente con su proceso vivo');
+  await engine.kill();
+  engine = await startEngine(t.home);
+  ({ call } = engine);
+  assert.equal((await status(call, a.id, ['done'])).pid, null);
+  assert.equal((await status(call, b.id, ['done'])).status, 'done', 'la dependiente ya no espera para siempre');
+});
+
 test('delegación: el agente reparte una subtarea, espera su resultado y la subtarea cuelga de la suya', async () => {
   const { call } = await fresh();
   const parent = await call('tasks.create', { project: 'web', title: 'Principal', description: 'DELEGA 1 codex ESPERA', agent: 'claude' });

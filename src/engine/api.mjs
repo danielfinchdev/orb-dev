@@ -14,7 +14,7 @@ import { statusAll, status as agentStatus, openLogin, quickRun, forgetInstalled 
 import { PERMISSIONS } from './sessions.mjs';
 import { readLog, writeLog, logFiles } from './logs.mjs';
 import { expandMentions, mentionOptions } from './mentions.mjs';
-import { ofUser, ofUserLabel, userName } from '../core/board.mjs';
+import { ofUserLabel, userLabel } from '../core/board.mjs';
 import * as github from './github.mjs';
 import * as installer from './installer.mjs';
 import * as expert from './expert.mjs';
@@ -59,7 +59,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     const done = board.accept(ids, 'usuario');
     if (!done.length) fail(tr('msg.api.noDoneTasks'));
     board.addChat('system', tr(done.length > 1 ? 'msg.api.okMany' : 'msg.api.okOne', { who: ofUserLabel(), ids: done.map((t) => `#${t.id}`).join(', ') }));
-    try { writeLog(board, project ?? done[0].project, { tema: `OK a ${done.map((t) => `#${t.id}`).join(', ')}`, pedido: 'revisar el trabajo terminado', hecho: `${userName()} dio el OK a: ${done.map((t) => `#${t.id} ${oneLine(t.title, 80)}`).join('; ')}`, estado: 'aceptado' }, `${ctx.config.assistantName} (app)`); } catch (error) { log(`bitácora del OK: ${error.message}`); }
+    try { writeLog(board, project ?? done[0].project, { tema: tr('sys.logs.okTopic', { ids: done.map((t) => `#${t.id}`).join(', ') }), pedido: tr('sys.logs.okRequest'), hecho: tr('sys.logs.okDone', { user: userLabel(), list: done.map((t) => `#${t.id} ${oneLine(t.title, 80)}`).join('; ') }), estado: tr('sys.logs.okStatus') }, `${ctx.config.assistantName} (app)`); } catch (error) { log(`bitácora del OK: ${error.message}`); }
     return done.map((t) => t.id);
   };
 
@@ -298,6 +298,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       lastChat = rows[rows.length - 1].id;
       for (const r of rows) if (r.role !== 'usuario') emit('chat:new', { role: r.role, body: oneLine(r.body, 240) });
     },
-    shutdown() { sessions.stopAll(); orchestrator.stop(); orchestrator.closeLive(); log('motor detenido'); }
+    // Running tasks stay "running": the next start continues them (scheduler.finish does not close them while closing).
+    shutdown() { scheduler.closing = true; sessions.stopAll(); orchestrator.stop(); orchestrator.closeLive(); log('motor detenido'); }
   };
 }

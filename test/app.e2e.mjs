@@ -174,7 +174,7 @@ try {
   await win.click('[data-testid=nav-settings]');
   await win.locator('[data-testid=settings-dialog]').getByText('Nombre del asistente', { exact: true }).waitFor();
   await win.locator('[data-testid=settings-about]', { hasText: '@danielfinchdev' }).waitFor();
-  await win.locator('[data-testid=settings-about]', { hasText: 'Orb 2.4' }).waitFor();
+  await win.locator('[data-testid=settings-about]', { hasText: /Orb \d+\.\d+\.\d+/ }).waitFor();
   await win.waitForTimeout(400);
   await shot('10-ajustes');
   const section = async (id) => { await win.click(`[data-testid=settings-nav-${id}]`); await win.waitForTimeout(250); };

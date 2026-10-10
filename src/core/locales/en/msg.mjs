@@ -273,6 +273,7 @@ export default {
   "msg.remote.noTailscale": "Tailscale was not detected on this PC. It is only required for access from outside your local network.",
   "msg.remote.notAllowed": "request not allowed",
   "msg.remote.notLinked": "this device is not paired",
+  "msg.remote.clock": "the phone's time does not match the PC's",
   "msg.remote.ownImages": "only images uploaded from the phone are supported",
   "msg.remote.pcOnly": "that action can only be performed from the PC",
   "msg.remote.tooMany": "too many attempts. Wait a few minutes and generate a new QR code",

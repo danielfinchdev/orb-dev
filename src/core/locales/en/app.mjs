@@ -29,6 +29,7 @@ export default {
   'update.update': 'Update',
   'update.download': 'Download',
   'update.failed': 'Could not download: {error}',
+  'update.installFailed': 'The downloaded installer could not be opened (perhaps your antivirus removed it). Download it again.',
   'update.notes': 'What’s new',
   'update.close': 'Close'
 };
