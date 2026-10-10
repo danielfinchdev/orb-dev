@@ -20,6 +20,7 @@ import * as installer from './installer.mjs';
 import * as expert from './expert.mjs';
 import { adbStatus, ensureAdb } from './android.mjs';
 import { mcpFolder } from './mcp-folder.mjs';
+import { modelCatalog } from './catalog.mjs';
 import { translate } from '../core/i18n.mjs';
 
 // Names of the fields in the messages (Spanish as they were; the key is the Spanish word).
@@ -149,21 +150,39 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       if (row?.meta?.kind !== 'report') fail(tr('msg.api.notReport'));
       return accept(row.meta.tasks, row.meta.project);
     },
-    // The assistant's model (Sonnet / Opus) and mode ("Orquestador" ticked = only coordinate; unticked = free mode).
-    'chat.settings': ({ model, orchestrate, account: acc }) => {
+    // The assistant's brain (2.6: any installed agent and model, with its reasoning and account) and mode ("Orquestador"
+    // ticked = only coordinate; unticked = free mode).
+    'chat.settings': ({ agent, model, reasoning, orchestrate, account: acc }) => {
       const o = ctx.config.orchestrator;
       const patch = {};
+      if (agent !== undefined) {
+        if (!modelCatalog(board).some((a) => a.id === agent)) fail(tr('msg.api.agentUnavailable', { agent: String(agent).slice(0, 40) }));
+        patch.agent = agent;
+      }
+      const brain = patch.agent ?? o.agent ?? 'claude';
       if (acc !== undefined) patch.account = str(acc, 'cuenta', 40);
-      if (model !== undefined) { if (!o.models.some((m) => m.id === model)) fail(tr('msg.api.modelUnavailable')); patch.model = model; }
+      else if (patch.agent && patch.agent !== (o.agent ?? 'claude')) patch.account = brain; // another agent: its own account
+      if (model !== undefined) {
+        const m = String(model ?? '');
+        if (brain === 'claude' && m && !o.models.some((x) => x.id === m) && !/^(sonnet|opus|haiku)$/.test(m)) fail(tr('msg.api.modelUnavailable'));
+        if (m && !/^[\w.:\-/[\]=,@]{1,80}$/.test(m)) fail(tr('msg.api.modelUnavailable'));
+        patch.model = m || (brain === 'claude' ? 'claude-sonnet-5-5' : '');
+      } else if (patch.agent && patch.agent !== (o.agent ?? 'claude')) patch.model = brain === 'claude' ? 'claude-sonnet-5-5' : '';
+      if (reasoning !== undefined) patch.reasoning = oneOf(reasoning, ['low', 'medium', 'high'], 'razonamiento');
       if (orchestrate !== undefined) patch.orchestrate = Boolean(orchestrate);
       const before = { ...o };
       const c = saveConfig({ orchestrator: patch });
       emit('config:changed', c);
-      const label = (id) => c.orchestrator.models.find((m) => m.id === id)?.label ?? id;
-      if (patch.model && patch.model !== before.model) board.addChat('system', tr('msg.api.assistantModel', { label: label(patch.model), reasoning: c.orchestrator.reasoning === 'medium' ? tr('msg.api.reasoningMedium') : c.orchestrator.reasoning }));
+      // Another agent cannot continue the previous one's conversation: a new one starts (the board and logs remember).
+      if (patch.agent && patch.agent !== (before.agent ?? 'claude')) orchestrator.forget();
+      const info = orchestrator.info();
+      const level = { low: tr('msg.api.reasoningLow'), medium: tr('msg.api.reasoningMedium'), high: tr('msg.api.reasoningHigh') }[c.orchestrator.reasoning] ?? c.orchestrator.reasoning;
+      if ((patch.model !== undefined && patch.model !== before.model) || (patch.agent && patch.agent !== (before.agent ?? 'claude')) || (patch.reasoning && patch.reasoning !== before.reasoning)) board.addChat('system', tr('msg.api.assistantBrain', { agent: info.agentLabel, label: info.modelLabel, reasoning: level }));
       if (patch.orchestrate !== undefined && patch.orchestrate !== before.orchestrate) board.addChat('system', patch.orchestrate ? tr('msg.api.modeOrchestrator') : tr('msg.api.modeFree'));
-      return orchestrator.info();
+      return info;
     },
+    // 2.6: the brains to choose from (agent + model), which ones spend the quota faster and how used each account is.
+    'models.catalog': () => modelCatalog(board),
 
     'tasks.list': ({ limit }) => board.panelTasks(Math.min(Number(limit) || 150, 500)),
     'tasks.live': () => scheduler.live(),

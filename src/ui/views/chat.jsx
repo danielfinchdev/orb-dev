@@ -13,6 +13,7 @@ import { Badge, Spinner } from '@/components/ui/basic.jsx';
 import { Select, Checkbox, Tip } from '@/components/ui/overlay.jsx';
 import { useStore, call, act, setState, go } from '@/lib/store.js';
 import { ContextMeter } from './session.jsx';
+import { BrainPicker, ReasoningPicker, UsageBubble, useCatalog, useUsageBubble } from '@/components/brain-picker.jsx';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
@@ -52,7 +53,7 @@ function useMentions(value, onChange, ta) {
   return { list, index, pick, onKey };
 }
 
-export function Composer({ value, onChange, onSend, onStop, busy, placeholder, top, bottom, disabled, onPaste, onDrop, testid, canSend, mentions = true }) {
+export function Composer({ value, onChange, onSend, onStop, busy, placeholder, top, bottom, notice, disabled, onPaste, onDrop, testid, canSend, mentions = true }) {
   const t = useT();
   const ta = useRef(null);
   useEffect(() => { const el = ta.current; if (!el) return; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 260)}px`; }, [value]);
@@ -62,6 +63,7 @@ export function Composer({ value, onChange, onSend, onStop, busy, placeholder, t
     <div className="shrink-0 px-5 pb-5">
       <div className={cn('bg-card relative mx-auto max-w-3xl rounded-2xl border shadow-sm transition-shadow focus-within:shadow-md focus-within:ring-[3px] focus-within:ring-ring/25', dropping && 'ring-primary ring-2')}
         onDragOver={onDrop ? (e) => { e.preventDefault(); setDropping(true); } : undefined} onDragLeave={() => setDropping(false)} onDrop={onDrop ? (e) => { e.preventDefault(); setDropping(false); onDrop(e); } : undefined}>
+        {mentions && m.list.length ? null : notice}
         {mentions && m.list.length ? (
           <div className="bg-popover text-popover-foreground absolute right-3 bottom-full left-3 z-20 mb-2 overflow-hidden rounded-xl border shadow-lg" data-testid="mention-list">
             <div className="text-muted-foreground border-b px-3 py-1.5 text-[11px]">{t('chat.mentionHeader')}</div>
@@ -151,6 +153,9 @@ export function ChatView() {
   const info = app.assistant ?? {};
   useEffect(() => { let alive = true; call('chat.list').then((r) => alive && setRows(r)).catch(() => {}); return () => { alive = false; }; }, [version]);
   const scroll = useAutoScroll([rows.length, chat.partial, chat.busy]);
+  const catalog = useCatalog();
+  const brain = { agent: info.agent ?? 'claude', model: info.model ?? '', account: info.account, reasoning: info.reasoning ?? 'medium' };
+  const bubble = useUsageBubble(catalog, brain);
 
   const send = async () => {
     const msg = text.trim(); if (!msg) return;
@@ -167,7 +172,7 @@ export function ChatView() {
   return (
     <>
       <PageHeader icon={<Robot size={30} mood={chat.busy ? (chat.partial ? 'talking' : 'thinking') : 'idle'} />} title={name}
-        meta={<span className="inline-flex flex-wrap items-center gap-x-1.5">{info.orchestrate === false ? t('chat.freeMode') : t('chat.orchestrator')} · {info.modelLabel ?? ''}{(chat.context ?? info.context) ? <> · <ContextMeter context={chat.context ?? info.context} /></> : null}</span>}>
+        meta={<span className="inline-flex flex-wrap items-center gap-x-1.5">{info.orchestrate === false ? t('chat.freeMode') : t('chat.orchestrator')} · {info.agentLabel ? <>{info.agentLabel} · </> : null}{info.modelLabel ?? ''}{(chat.context ?? info.context) ? <> · <ContextMeter context={chat.context ?? info.context} /></> : null}</span>}>
         {app.paused
           ? <Button variant="outline" size="sm" onClick={() => act(call('control.resume'), t('chat.resumed'))}><Play />{t('chat.resume')}</Button>
           : <Tip label={t('chat.pauseTip')}><Button variant="ghost" size="sm" onClick={() => act(call('control.pause'), t('chat.paused'))}><Pause />{t('chat.pause')}</Button></Tip>}
@@ -199,9 +204,10 @@ export function ChatView() {
       <Composer value={text} onChange={setText} onSend={send} onStop={() => act(call('chat.stop'))} busy={chat.busy} testid="chat-input"
         placeholder={chat.busy ? t('chat.placeholderBusy', { name }) : t('chat.placeholder', { name })}
         top={<ProjectPicker />}
+        notice={<UsageBubble text={bubble.text} onClose={bubble.close} />}
         bottom={<>
-          <Select size="sm" value={info.model} onValueChange={(v) => settings({ model: v })} title={t('chat.modelTitle')}
-            options={(info.models ?? []).map((m) => ({ value: m.id, label: `${m.label} · ${info.reasoning === 'medium' ? t('chat.reasoningMedium') : info.reasoning}` }))} />
+          <BrainPicker catalog={catalog} value={brain} onChange={(b) => settings({ agent: b.agent, model: b.model, account: b.account })} />
+          <ReasoningPicker value={brain.reasoning} onChange={(reasoning) => settings({ reasoning })} />
           <label className="flex cursor-pointer items-center gap-2 text-[13px]" title={t('chat.orchestratorHint')}>
             <Checkbox checked={info.orchestrate !== false} onCheckedChange={(v) => toggleOrchestrator(v === true)} data-testid="orchestrator-check" />{t('chat.orchestrator')}
           </label>

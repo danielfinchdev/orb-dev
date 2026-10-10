@@ -36,5 +36,27 @@ export default {
   'chat.placeholderBusy': 'Envía una corrección a {name}…',
   'chat.placeholder': 'Escribe a {name}…',
   'chat.modelTitle': 'Modelo del asistente',
-  'chat.reasoningMedium': 'medio'
+  'chat.reasoningMedium': 'medio',
+  // 2.6: Nuevo chat y elección del cerebro (agente + modelo)
+  'newChat.title': 'Nuevo chat',
+  'newChat.hello': '¿Qué hacemos?',
+  'newChat.metaOrchestrator': '{name} coordina a los agentes',
+  'newChat.metaDirect': 'Chat directo con un agente',
+  'newChat.introOrchestrator': 'Elige abajo el proyecto, el cerebro y el razonamiento. {name} planifica y reparte el trabajo entre los agentes.',
+  'newChat.introDirect': 'Sin «Orquestador», hablas directamente con el agente elegido, en la carpeta del proyecto y con los permisos que indiques.',
+  'newChat.placeholderDirect': 'Escribe al agente…',
+  'brain.title': 'Cerebro: agente y modelo',
+  'brain.none': 'No hay agentes instalados con una cuenta activa. Instálalos en Agentes.',
+  'brain.defaultModel': 'predeterminado',
+  'brain.defaultOf': 'Predeterminado de {agent}',
+  'brain.heavy': 'Gasta el uso más rápido',
+  'brain.reasoning': 'Razonamiento',
+  'brain.reasoningShort': 'Razonamiento',
+  'brain.permissions': 'Permisos',
+  'brain.close': 'Cerrar',
+  'brain.warnTitle': 'Cuidado',
+  'brain.warnHigh': 'El modelo elegido puede gastar el uso rápido: con razonamiento alto, cada respuesta consume bastante más.',
+  'brain.warnHeavy': 'El modelo elegido puede gastar el uso rápido: {model} es de los que más cupo consumen.',
+  'brain.warnBoth': 'El modelo elegido puede gastar el uso muy rápido: {model} con razonamiento alto es la combinación que más cupo consume.',
+  'brain.warnUsed': 'El modelo elegido puede gastar el uso rápido: esta cuenta ya ha usado un {pct} % de su cupo.'
 };

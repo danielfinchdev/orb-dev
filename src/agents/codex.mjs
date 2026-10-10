@@ -173,6 +173,11 @@ export function createLive(o) {
     threadId = res.thread?.id;
     if (threadId && threadId !== live.sessionId) { live.sessionId = threadId; onEvent({ type: 'session', id: threadId }); }
     onEvent({ type: 'item', role: 'system', kind: 'status', body: `Codex · ${res.model ?? model ?? ''}`.trim() });
+    // 2.6: the models this Codex offers, for the brain selector (older versions without model/list: nothing).
+    peer.request('model/list', {}, { timeoutMs: 15000 }).then((r) => {
+      const list = (Array.isArray(r?.data) ? r.data : Array.isArray(r?.models) ? r.models : []).map((m) => ({ id: m.model ?? m.id, label: m.displayName ?? m.model ?? m.id })).filter((m) => m.id);
+      if (list.length) onEvent({ type: 'models', list });
+    }).catch(() => {});
   };
 
   const input = (text, images = []) => [{ type: 'text', text, text_elements: [] }, ...images.map((p) => ({ type: 'localImage', path: p }))];

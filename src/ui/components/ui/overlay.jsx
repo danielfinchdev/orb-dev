@@ -33,10 +33,10 @@ export function DialogTitle({ className, ...props }) { return <DialogPrimitive.T
 export function DialogDescription({ className, ...props }) { return <DialogPrimitive.Description className={cn('text-muted-foreground text-sm', className)} {...props} />; }
 
 // ---- select
-export function Select({ value, onValueChange, options, placeholder, className, size = 'default', disabled, title, ...props }) {
+export function Select({ value, onValueChange, options, placeholder, className, size = 'default', disabled, title, 'data-testid': testid, ...props }) {
   return (
     <SelectPrimitive.Root value={value ?? undefined} onValueChange={onValueChange} disabled={disabled} {...props}>
-      <SelectPrimitive.Trigger title={title} className={cn("border-input data-[placeholder]:text-muted-foreground dark:bg-input/30 dark:hover:bg-input/50 flex w-fit items-center justify-between gap-2 rounded-lg border bg-transparent px-3 text-sm whitespace-nowrap shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/40 focus-visible:ring-[3px] disabled:opacity-50 cursor-pointer *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4", size === 'sm' ? 'h-8 text-[13px]' : 'h-9', className)}>
+      <SelectPrimitive.Trigger title={title} data-testid={testid} className={cn("border-input data-[placeholder]:text-muted-foreground dark:bg-input/30 dark:hover:bg-input/50 flex w-fit items-center justify-between gap-2 rounded-lg border bg-transparent px-3 text-sm whitespace-nowrap shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/40 focus-visible:ring-[3px] disabled:opacity-50 cursor-pointer *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4", size === 'sm' ? 'h-8 text-[13px]' : 'h-9', className)}>
         <SelectPrimitive.Value data-slot="select-value" placeholder={placeholder} />
         <SelectPrimitive.Icon asChild><ChevronDownIcon className="size-4 opacity-50" /></SelectPrimitive.Icon>
       </SelectPrimitive.Trigger>

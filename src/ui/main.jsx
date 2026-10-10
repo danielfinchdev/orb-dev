@@ -26,9 +26,10 @@ import { ActivityView } from '@/views/activity.jsx';
 import { SettingsDialog, PhoneView } from '@/views/settings.jsx';
 import { SchedulesView } from '@/views/schedules.jsx';
 import { ExpertView } from '@/views/expert.jsx';
+import { NewChatView } from '@/views/new-chat.jsx';
 
 const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
-const VIEWS = { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: LogsView, activity: ActivityView, expert: ExpertView, schedules: SchedulesView, phone: PhoneView };
+const VIEWS = { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: LogsView, activity: ActivityView, expert: ExpertView, schedules: SchedulesView, phone: PhoneView, new: NewChatView };
 
 function Shell() {
   const t = useT();

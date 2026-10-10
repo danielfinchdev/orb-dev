@@ -119,13 +119,19 @@ try {
 
   // ---- direct conversation (T3 style) with Codex
   step = 'conversación directa';
+  // 2.6: «Nuevo chat» opens a clean chat, no pop-up (clicked twice: still one view, no dialogs on top of each other).
   await win.click('[data-testid=new-conversation]');
-  await win.getByRole('dialog').getByRole('combobox').first().click();
-  await win.getByRole('option', { name: 'Codex' }).click();
-  await dialogButton('Empezar').click();
-  await win.waitForSelector('[data-testid=session-input]');
-  await win.fill('[data-testid=session-input]', 'Hola Codex, ¿qué hay en la carpeta?');
+  await win.click('[data-testid=new-conversation]');
+  await win.waitForSelector('[data-testid=new-chat-input]');
+  assert.equal(await win.locator('[role=dialog]').count(), 0, 'sin ventana emergente');
+  await win.click('[data-testid=brain-picker]');
+  await win.click('[data-testid=brain-codex-default]');
+  await win.click('[data-testid=new-chat-orchestrator]');
+  await win.locator('[data-testid=permission-picker]').waitFor();
+  await shot('05a-nuevo-chat');
+  await win.fill('[data-testid=new-chat-input]', 'Hola Codex, ¿qué hay en la carpeta?');
   await win.keyboard.press('Enter');
+  await win.waitForSelector('[data-testid=session-input]');
   await win.waitForSelector('text=Codex empieza');
   await win.fill('[data-testid=session-input]', 'Y ahora sigue');
   await win.keyboard.press('Enter');
@@ -290,9 +296,12 @@ try {
   // ---- free mode and model choice from the chat
   step = 'modo libre';
   await win.click('[data-testid=nav-chat]');
-  await win.getByTitle('Modelo del asistente').click();
-  await win.getByRole('option', { name: /Opus 5\.5/ }).click();
+  await win.click('[data-testid=brain-picker]');
+  await win.click('[data-testid=brain-claude-claude-opus-5-5]');
   await until(async () => (await call('app.state')).config.orchestrator.model === 'claude-opus-5-5', 'modelo Opus');
+  // Opus spends the quota faster: the bubble says so.
+  await win.locator('[data-testid=usage-bubble]').waitFor();
+  await shot('11a-aviso-cupo');
   await win.click('[data-testid=orchestrator-check]');
   await dialogButton('Activar modo libre').click();
   await until(async () => (await call('app.state')).config.orchestrator.orchestrate === false, 'modo libre');

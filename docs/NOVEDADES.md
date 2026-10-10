@@ -13,6 +13,13 @@ En el primer arranque la app detecta qué agentes tienes y con qué sesión, e i
 - **Una ventana más limpia:** desaparece la barra de título de Windows. Minimizar, maximizar y cerrar quedan dentro de la
   app, arriba a la derecha, con los colores del tema que uses. La ventana se mueve arrastrando la parte de arriba, y un
   doble clic la maximiza.
+- **Nuevo chat, sin ventanas emergentes:** «Nuevo chat» abre un chat limpio. Debajo del mensaje eliges el proyecto, el
+  cerebro, el razonamiento y, si hablas directamente con un agente, los permisos. Con «Orquestador», Orb·e coordina a los
+  agentes; sin él, hablas con el agente elegido.
+- **Cualquier cerebro:** Orb·e ya no depende de Claude. Elige cualquier agente instalado y su modelo en una lista ordenada
+  por agentes (Claude, Codex, Gemini…). Orb aprende los modelos que ofrece cada agente.
+- **Aviso de cupo:** al elegir razonamiento alto, un modelo de los que más consumen o una cuenta con poco cupo, un globo
+  te avisa de que puede gastar el uso rápido.
 
 ## Novedades de la 2.5
 
