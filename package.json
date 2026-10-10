@@ -1,7 +1,7 @@
 {
   "name": "orb-dev",
   "productName": "Orb",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "description": "Orb·e: tu director de bolsillo. Planifica tu proyecto por fases y escribe un encargo claro para cada agente (Claude Code, Codex, Cursor, Gemini, OpenCode, Qwen, Copilot), sin gastar tokens de más. Te entrega resultados comprobados.",
   "private": true,
   "type": "module",

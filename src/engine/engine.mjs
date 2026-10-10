@@ -88,6 +88,10 @@ async function start(home, version, secret, browser) {
   setInterval(loop, 1500);
   board.onChange((what) => { if (what === 'tasks') setImmediate(loop); });
   log(`motor arrancado (versión ${version}) en ${home}`);
+  // Which agents this PC has, as the engine sees them (with the app's environment): first thing to look at if «Agentes»
+  // says one is missing.
+  const { ADAPTERS } = await import('../agents/index.mjs');
+  log(`agentes: ${Object.keys(ADAPTERS).map((a) => { let cmd = null; try { cmd = ADAPTERS[a].detect(ctx.config.agents[a] ?? {})?.cmd ?? null; } catch { /* not found */ } return `${a}=${cmd ?? 'no'}`; }).join(' · ')}`);
   loop();
   return { home, name: ctx.config.assistantName };
 }

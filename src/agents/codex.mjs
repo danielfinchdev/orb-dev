@@ -161,7 +161,7 @@ export function createLive(o) {
       if (turn && !turn.done) turn.finish({ isError: true, final: turn.text || tr('sys.agents.exitedCode', { name: 'Codex', code, detail: child.stderrText().trim().split('\n').slice(-2).join(' ') }).trim() });
     });
     child.on('error', (error) => { closed = true; if (turn && !turn.done) turn.finish({ isError: true, final: tr('sys.agents.startFailed', { name: 'Codex', error: error.message }) }); });
-    await peer.request('initialize', { clientInfo: { name: 'orb_dev', title: 'Orb', version: '2.4.0' }, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs: 30000 });
+    await peer.request('initialize', { clientInfo: { name: 'orb_dev', title: 'Orb', version: '2.4.1' }, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs: 30000 });
     peer.notify('initialized', {});
     const common = { cwd: o.cwd, model, ...policy(permission), config: { model_reasoning_effort: effort(o.reasoning), service_tier: 'default' } };
     let res;

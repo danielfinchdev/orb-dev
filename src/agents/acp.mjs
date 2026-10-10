@@ -127,7 +127,7 @@ export function acpAgent(id, spec) {
         proc.once('exit', (code) => resolve(new Error(tr('sys.agents.exitedAtStart', { name: spec.label, code, detail: proc.stderrText().trim().split('\n').slice(-2).join(' ') }).trim())));
         proc.once('error', resolve);
       });
-      const hello = p.request('initialize', { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: 'orb-dev', title: 'Orb', version: '2.4.0' } }, { timeoutMs: 60000 });
+      const hello = p.request('initialize', { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: 'orb-dev', title: 'Orb', version: '2.4.1' } }, { timeoutMs: 60000 });
       const first = await Promise.race([hello.then((init) => ({ init }), (error) => ({ error })), quit.then((error) => ({ error }))]);
       if (first.error) { p.close(); killTree(proc); throw first.error; } // no reply or an early exit: nothing left running
       return { proc, p, init: first.init };

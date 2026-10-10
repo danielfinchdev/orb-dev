@@ -54,7 +54,7 @@ export default {
   'agents.meta': 'Usa los programas y las cuentas que ya tienes. Orb nunca ve tus contraseñas.',
   'agents.checkAll': 'Comprobar todo',
   'agents.installTitle': 'Instalar agentes y herramientas',
-  'agents.installDesc': 'Con el instalador oficial de cada uno, en una ventana visible.',
+  'agents.installDesc': 'Con el instalador oficial de cada uno. El progreso se muestra aquí.',
   'agents.noGit': 'Git no está instalado',
   'agents.noGitDesc': 'Las tareas se pueden deshacer igualmente (con copias), pero sin Git no hay ramas, copias aisladas ni integración con GitHub.',
   'agents.getGit': 'Descargar Git',

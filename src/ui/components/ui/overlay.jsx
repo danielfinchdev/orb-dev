@@ -19,7 +19,7 @@ export function DialogContent({ className, children, showClose = true, ...props 
   const t = useT();
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/45 backdrop-blur-[2px]" />
+      <DialogPrimitive.Overlay data-slot="dialog-overlay" className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/45 backdrop-blur-[2px]" />
       <DialogPrimitive.Content className={cn('bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-2xl border p-6 shadow-xl duration-200 sm:max-w-lg max-h-[90vh] overflow-y-auto', className)} {...props}>
         {children}
         {showClose ? <DialogPrimitive.Close className="ring-offset-background focus:ring-ring absolute top-4 right-4 rounded-md p-1 opacity-60 transition-opacity hover:opacity-100 focus:ring-2 focus:outline-hidden cursor-pointer"><XIcon className="size-4" /><span className="sr-only">{t('comp.close')}</span></DialogPrimitive.Close> : null}
