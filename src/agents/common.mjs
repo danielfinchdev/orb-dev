@@ -26,6 +26,33 @@ export const shimDirs = (name, env = process.env) => String(env.PATH ?? env.Path
 
 export const userHome = () => process.env.USERPROFILE || os.homedir();
 
+// Every AppData that can hold the agents: this user's, and copies moved to another drive to free space on C: (an
+// <drive>:\AppData, <drive>:\<folder>\AppData or <drive>:\<folder>\<folder>\AppData with Roaming or Local inside, such as
+// D:\ComputerApps\AppData), where PATH may still point to the old place. Found once a minute at most.
+const SKIP_DIRS = /^(\$.*|\..*|windows|program files.*|programdata|users|system volume information|recovery|perflogs|node_modules|msocache|intel|amd|nvidia|wpsystem|windowsapps|xboxgames)$/i;
+let appDataCache = null;
+export function appDataDirs() {
+  if (appDataCache && Date.now() - appDataCache.at < 60_000) return appDataCache.list;
+  const home = userHome();
+  const list = [{ roaming: process.env.APPDATA ?? path.join(home, 'AppData', 'Roaming'), local: process.env.LOCALAPPDATA ?? path.join(home, 'AppData', 'Local') }];
+  if (IS_WIN) {
+    const isDir = (p) => { try { return fs.statSync(p).isDirectory(); } catch { return false; } };
+    const subdirs = (p) => { try { return fs.readdirSync(p, { withFileTypes: true }).filter((e) => e.isDirectory() && !SKIP_DIRS.test(e.name)).map((e) => path.join(p, e.name)); } catch { return []; } };
+    const roots = 'CDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((l) => `${l}:\\`).filter(isDir);
+    const levels = roots.flatMap((root) => { const first = subdirs(root); return [root, ...first, ...first.flatMap(subdirs)]; });
+    for (const dir of levels) {
+      const appData = path.join(dir, 'AppData');
+      if (!isDir(path.join(appData, 'Roaming')) && !isDir(path.join(appData, 'Local'))) continue;
+      const entry = { roaming: path.join(appData, 'Roaming'), local: path.join(appData, 'Local') };
+      if (!list.some((d) => d.roaming.toLowerCase() === entry.roaming.toLowerCase())) list.push(entry);
+    }
+  }
+  appDataCache = { at: Date.now(), list };
+  return list;
+}
+// npm's global folders (where `npm install -g` leaves the CLIs) in every AppData, plus those found through PATH.
+export const npmPrefixes = (bin) => [...new Set([...appDataDirs().map((d) => path.join(d.roaming, 'npm')), ...shimDirs(bin)])];
+
 // Environment of every agent process: only what Windows, git and the CLIs need. Secrets of the app's environment are not passed on.
 const ENV_ALLOWED = /^(path|pathext|systemroot|systemdrive|windir|comspec|userprofile|homedrive|homepath|home|appdata|localappdata|programdata|temp|tmp|tmpdir|programfiles.*|programw6432|commonprogramfiles.*|commonprogramw6432|allusersprofile|public|username|userdomain|computername|os|processor_architecture|number_of_processors|psmodulepath|lang|language|lc_.*|tz|term|shell|user|logname|xdg_.*|http_proxy|https_proxy|no_proxy|node_extra_ca_certs|ssl_cert_file|claude_code_git_bash_path)$/i; // CODEX_HOME / CLAUDE_CONFIG_DIR are set per account, never inherited
 export function cleanEnv(extra = {}) {

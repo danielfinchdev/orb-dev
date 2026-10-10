@@ -1,12 +1,18 @@
 ## Descargar
 
-- **`Orb-2.4.1-instalador.exe`** (recomendado): se instala para tu usuario, sin permisos de administrador, con acceso
+- **`Orb-2.4.2-instalador.exe`** (recomendado): se instala para tu usuario, sin permisos de administrador, con acceso
   directo en el escritorio y en el menú Inicio. Después lo encuentras escribiendo «Orb» en el buscador de Windows.
-- **`Orb-2.4.1-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
-- **`Orb-2.4.1-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.exe`.
+- **`Orb-2.4.2-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
+- **`Orb-2.4.2-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.exe`.
 
 Windows 10/11. Como aún no está firmada, SmartScreen avisa la primera vez: «Más información» → «Ejecutar de todas formas».
 En el primer arranque la app detecta qué agentes tienes y con qué sesión, e instala lo que falte con los instaladores oficiales.
+
+## Novedades de la 2.4.2
+
+- **Encuentra tus agentes estén donde estén:** si moviste programas de `C:` a otro disco para liberar espacio (por ejemplo
+  a `D:\ComputerApps\AppData`), Orb encuentra ahí Claude Code, Codex, Cursor y los demás agentes, aunque el PATH de
+  Windows siga apuntando a la carpeta antigua. No los vuelve a instalar.
 
 ## Novedades de la 2.4.1
 
