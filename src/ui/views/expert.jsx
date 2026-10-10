@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { Badge, Empty, Spinner } from '@/components/ui/basic.jsx';
 import { Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, Checkbox } from '@/components/ui/overlay.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
+import { SidebarToggle } from '@/components/theme-toggle.jsx';
 import { useStore, call, act, go, bridge, setState, getState } from '@/lib/store.js';
 import { AGENT } from '@/lib/labels.js';
 import { cn, errorText } from '@/lib/utils.js';
@@ -268,6 +269,7 @@ export function ExpertView() {
   const projects = useStore((s) => s.projects);
   const [manual, setManual] = useState(0); // the refresh button reads everything again right away
   const version = `${useCalmVersion()}-${manual}`;
+  const folded = useStore((s) => s.sidebarCollapsed);
   const panels = app.config.expert?.panels ?? {};
   const on = (id) => panels[id] !== false;
   const [project, setProject] = useState(app.activeProject?.name ?? projects[0]?.name ?? '');
@@ -288,7 +290,8 @@ export function ExpertView() {
     <>
       <div className="m-auto max-w-sm p-6 lg:hidden"><Empty icon={Monitor} title={t('expert.tooNarrow')}>{t('expert.tooNarrowBody')}</Empty></div>
       <div className="hidden min-h-0 flex-1 flex-col lg:flex" data-testid="expert-view">
-        <header className="topbar app-titlebar wco-pad-md flex h-14 shrink-0 items-center gap-2 border-b px-3">
+        <header className="topbar theme-band app-titlebar wco-pad-md flex h-14 shrink-0 items-center gap-2 border-b px-3">
+          {folded ? <SidebarToggle collapsed /> : null}
           <SquareTerminal className="text-primary size-4" /><span className="text-[15px]">{t('nav.expert')}</span>
           <Select size="sm" value={project} onValueChange={setProject} title={t('expert.project')} className="ml-2 w-56" placeholder={t('expert.pickProject')} options={projects.map((p) => ({ value: p.name, label: p.name }))} />
           <div className="flex-1" />

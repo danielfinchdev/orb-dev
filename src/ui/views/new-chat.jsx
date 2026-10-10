@@ -64,7 +64,7 @@ export function NewChatView() {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-3xl flex-col items-center gap-3 px-5 pt-16 pb-6 text-center">
           <Robot size={120} mood="hello" live />
-          <h2 className="mt-2 text-2xl">{t('newChat.hello')}</h2>
+          <h2 className="hero-title mt-2 text-2xl">{t('newChat.hello')}</h2>
           <p className="text-muted-foreground max-w-md">{orchestrate ? t('newChat.introOrchestrator', { name }) : t('newChat.introDirect')}</p>
           {!orchestrate && active ? <p className="text-muted-foreground max-w-md text-xs">{PERMISSION_HINT[permission]}</p> : null}
           {!orchestrate && !active ? <p className="text-muted-foreground max-w-md text-xs">{t('session.noProjectHint')}</p> : null}

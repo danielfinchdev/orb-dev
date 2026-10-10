@@ -23,6 +23,13 @@ export function useStore(select = (s) => s) { return select(useSyncExternalStore
 export function openSettings(section = 'general') { setState({ settings: section }); }
 // 2.6: the mini-games window (while the agents work).
 export function openGames() { setState({ games: true }); }
+// 2.6: the sidebar folded away (remembered on this PC). Its button is next to day / night; folded, the top bar shows one
+// to bring it back.
+export function setSidebarCollapsed(collapsed) {
+  setState({ sidebarCollapsed: collapsed });
+  try { localStorage.setItem('orb.sidebar', collapsed ? 'plegada' : 'abierta'); } catch { /* this session only */ }
+}
+try { if (localStorage.getItem('orb.sidebar') === 'plegada') state = { ...state, sidebarCollapsed: true }; } catch { /* storage unavailable */ }
 export function closeSettings() { setState({ settings: null }); }
 
 export function go(route) {
@@ -85,4 +92,5 @@ export function applyAppearance(ui = {}) {
   root.font = pick(ui.font, FONTS);
   root.codeFont = pick(ui.codeFont, CODE_FONTS);
   root.codeTheme = pick(ui.codeTheme, CODE_THEMES);
+  root.motion = ui.motion === 'minima' ? 'minima' : 'completa'; // the themes' moving backdrops stop with it
 }

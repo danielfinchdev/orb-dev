@@ -162,6 +162,14 @@ te informa. Tiene dos modos (casilla «Orquestador»):
   reiniciar y minijuegos. Las barras de arriba (`.topbar`) se visten con el tema en `themes.css` (decoración en
   `::before`, que se detiene antes de los botones de la ventana) y `--titlebar-color` da su color a esos botones; con un
   diálogo abierto se oscurecen con la página (`title-bar.js`).
+- **Escenas de los temas (2.6):** `.theme-band` (cabecera del menú `.side-band` y barras de arriba) y `.theme-scene`
+  (fondo de `main`: capa difuminada que se mueve despacio con `transform`, más un patrón nítido en `::after`). Cada tema
+  define `--band`, `--band-art`, `--scene` y `--scene-pattern` en `themes.css`; los fondos de las barras van fijos a la
+  ventana, así que menú y barra se leen como una sola franja. Todo se para con movimiento reducido o con
+  `html[data-motion="minima"]` (Animaciones desactivadas). Tipografía por tema mientras la elegida sea la
+  predeterminada (`data-font="outfit"`): Space Grotesk, IBM Plex Mono, Nunito/Fredoka e Inter (`fonts.css`).
+- **Plegar el menú:** `sidebarCollapsed` en el store (recordado en `localStorage`); `SidebarToggle` en
+  `theme-toggle.jsx`, junto al día/noche y, plegado, al principio de las barras de arriba.
 - **Minijuegos** (`src/ui/games/`): Serpiente, Tetris, Ajedrez (motor propio con jugadas legales y búsqueda alfa-beta;
   profundidad según la dificultad), Salto, 2048 y Ladrillos. Récords en `localStorage` (este PC). Cuando el asistente
   responde y hay tareas suyas en cola o en curso, deja en el chat un mensaje con botón para jugar (`suggestGames()`, como

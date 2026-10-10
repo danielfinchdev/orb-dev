@@ -375,57 +375,135 @@ html[data-skin="nube"] .brand-sky {
 html.dark:not([data-skin="orb"]) .bg-warning.text-white { color: oklch(0.2 0.03 80); }
 
 /* ================================================================================================================
-   2.6: the top bar of each screen (.topbar) dresses in the theme. Orb and Profesional keep it as it is. The decoration
-   sits in ::before, faded behind the buttons and titles; --titlebar-color is the colour at its right end, which the
-   window's own buttons (minimise, maximise, close) take.
+   2.6: SCENES. Each theme dresses three places that read as one scene: the band at the top — the sidebar's head (B1) and
+   the top bar of each screen (B2), one continuous strip because their backgrounds are fixed to the window — and the
+   backdrop behind the chat, blurred and faint so it never competes with the text. Everything moves slowly and stops
+   with reduced motion or with «Animaciones» off (html[data-motion="minima"]). The «profesional» theme has none of it.
    ================================================================================================================ */
-.topbar { position: relative; isolation: isolate; }
-/* The decoration stops before the window's buttons (their area is one flat colour) and fades out behind the bar's own. */
-.topbar::before { content: ""; position: absolute; inset: 0 var(--wco-inset) 0 0; z-index: -1; pointer-events: none; mask-image: linear-gradient(90deg, #000 calc(100% - 300px), transparent calc(100% - 150px)); }
-
-/* Vaporwave: a sunset from pink to cyan, the sun rising on the right with its stripes and the grid of the ground. */
-html[data-skin="vaporwave"] { --titlebar-color: #c9f3ff; --vwb-a: #ffd6f1; --vwb-b: #e6d4ff; --vwb-c: #c9f3ff; --vwb-sun: #ff8fca; --vwb-sun2: #ffc56e; --vwb-line: rgb(214 70 180 / 0.28); }
-html.dark[data-skin="vaporwave"] { --titlebar-color: #0d3550; --vwb-a: #2b0d47; --vwb-b: #3a1260; --vwb-c: #0d3550; --vwb-sun: #ff4fa8; --vwb-sun2: #ffb347; --vwb-line: rgb(255 79 168 / 0.4); }
-html[data-skin="vaporwave"] .topbar { background: linear-gradient(90deg, var(--vwb-a), var(--vwb-b) 50%, var(--vwb-c) calc(100% - var(--wco-inset))); }
-html[data-skin="vaporwave"] .topbar::before {
-  background:
-    repeating-linear-gradient(to bottom, transparent 0 5px, var(--vwb-b) 5px 7px) 46% 100% / 96px 20px no-repeat,
-    radial-gradient(circle at 50% 125%, var(--vwb-sun2) 0 26px, var(--vwb-sun) 44px, transparent 45px),
-    repeating-linear-gradient(90deg, var(--vwb-line) 0 1px, transparent 1px 36px) 0 100% / 100% 45% no-repeat,
-    linear-gradient(var(--vwb-line), var(--vwb-line)) 0 55% / 100% 1px no-repeat;
-  opacity: 0.85;
+.theme-band { position: relative; isolation: isolate; }
+.theme-band::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--band-art, none); opacity: var(--band-art-opacity, 1); }
+html:not([data-skin="orb"]):not([data-skin="profesional"]) .theme-band { background: var(--band); border-bottom-color: var(--band-edge, var(--border)); }
+/* The top bar's decoration stops before the window's own buttons (their area is one flat colour) and fades out behind
+   the bar's buttons. */
+.topbar.theme-band::before { right: var(--wco-inset); mask-image: linear-gradient(90deg, #000 calc(100% - 300px), transparent calc(100% - 150px)); }
+/* The backdrop: a layer bigger than the view, blurred, drifting. */
+.theme-scene { position: relative; isolation: isolate; overflow: hidden; }
+.theme-scene::before { content: ""; position: absolute; inset: -12%; z-index: -1; pointer-events: none; background: var(--scene, none); opacity: var(--scene-opacity, 0); filter: blur(46px); will-change: transform; }
+@media (prefers-reduced-motion: no-preference) {
+  html:not([data-motion="minima"]) .theme-scene::before { animation: scene-drift 48s ease-in-out infinite alternate; }
 }
+@keyframes scene-drift { from { transform: translate3d(-3%, -2%, 0) scale(1.02) rotate(-1.5deg); } to { transform: translate3d(3%, 2%, 0) scale(1.08) rotate(1.5deg); } }
+/* Over a backdrop, the message box and the chat's notes let it show through, frosted. */
+html:not([data-skin="orb"]):not([data-skin="profesional"]) [data-slot="composer"] { background-color: color-mix(in oklch, var(--card) 80%, transparent); backdrop-filter: blur(14px) saturate(1.2); }
 
-/* Retro arcade: a CRT screen with scanlines, stars and a row of invaders marching across. */
-html[data-skin="retro"] { --titlebar-color: #c9dba6; }
-html.dark[data-skin="retro"] { --titlebar-color: #050a06; }
-html[data-skin="retro"] .topbar { background: var(--rt-space); }
-html[data-skin="retro"] .topbar::before {
-  background:
-    repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px),
-    var(--rt-invaders) 0 50% / 132px 34px repeat-x,
-    radial-gradient(circle at 20px 10px, var(--rt-star) 0 1px, transparent 1.5px) 0 0 / 97px 56px,
-    radial-gradient(circle at 60px 40px, var(--rt-star) 0 1px, transparent 1.5px) 0 0 / 143px 56px;
-  opacity: 0.32;
+/* ---- Orb: the bar stays as it is; behind the chat, the robot's periwinkle sky, very faint. ---- */
+html[data-skin="orb"] { --scene: radial-gradient(38% 42% at 18% 22%, #a7b1f6, transparent 70%), radial-gradient(42% 46% at 82% 70%, #c3cbff, transparent 70%); --scene-opacity: 0.32; }
+html.dark[data-skin="orb"] { --scene: radial-gradient(38% 42% at 18% 22%, #2b3270, transparent 70%), radial-gradient(42% 46% at 82% 70%, #1d2257, transparent 70%); --scene-opacity: 0.55; }
+
+/* ---- Vaporwave: a sunset strip with the sun in the middle of the window, its stripes and the floor's grid rushing
+   towards you; behind the chat, neon pink, cyan and violet haze. Space Grotesk. ---- */
+html[data-skin="vaporwave"] {
+  --titlebar-color: #c9f3ff;
+  --vwb-a: #ffd6f1; --vwb-b: #ead7ff; --vwb-c: #c9f3ff; --vwb-sun: #ff8fca; --vwb-sun2: #ffc56e; --vwb-line: rgb(214 70 180 / 0.32);
+  --band: linear-gradient(90deg, var(--vwb-a), var(--vwb-b) 50%, var(--vwb-c) calc(100% - var(--wco-inset))) fixed;
+  --band-edge: rgb(214 70 180 / 0.35);
+  --band-art:
+    repeating-linear-gradient(to bottom, transparent 0 5px, var(--vwb-b) 5px 7px) calc(50% - 46px) 33px / 92px 23px no-repeat fixed,
+    radial-gradient(circle at 50% 135%, var(--vwb-sun2) 0 22px, var(--vwb-sun) 42px, transparent 43px) 0 0 / 100% 56px no-repeat fixed,
+    repeating-linear-gradient(90deg, var(--vwb-line) 0 1px, transparent 1px 38px) 0 40px / 100% 16px repeat-x fixed,
+    repeating-linear-gradient(to bottom, var(--vwb-line) 0 1px, transparent 1px 6px) 0 40px / 100% 16px repeat-x fixed;
+  --scene: radial-gradient(34% 40% at 14% 18%, #ff71ce, transparent 70%), radial-gradient(38% 44% at 86% 26%, #01cdfe, transparent 70%), radial-gradient(48% 40% at 50% 100%, #b967ff, transparent 70%);
+  --scene-opacity: 0.26;
+}
+html.dark[data-skin="vaporwave"] {
+  --titlebar-color: #0d3550;
+  --vwb-a: #2b0d47; --vwb-b: #3a1260; --vwb-c: #0d3550; --vwb-sun: #ff4fa8; --vwb-sun2: #ffb347; --vwb-line: rgb(255 79 168 / 0.45);
+  --band-edge: rgb(255 79 168 / 0.45);
+  --scene-opacity: 0.4;
 }
 @media (prefers-reduced-motion: no-preference) {
-  html[data-skin="retro"] .topbar::before { animation: rt-bar-march 2.4s steps(1, end) infinite; }
+  html[data-skin="vaporwave"]:not([data-motion="minima"]) .theme-band::before { animation: vw-floor 1.6s linear infinite; }
 }
-@keyframes rt-bar-march { 0%, 100% { background-position: 0 0, 0 50%, 0 0, 0 0; } 50% { background-position: 0 0, 12px 50%, 0 0, 0 0; } }
+@keyframes vw-floor { from { background-position: calc(50% - 46px) 33px, 0 0, 0 40px, 0 40px; } to { background-position: calc(50% - 46px) 33px, 0 0, 0 40px, 0 46px; } }
 
-/* Nube (candy): a pastel rainbow with fluffy clouds and a few sparkles. */
-html[data-skin="nube"] { --titlebar-color: #e4dcff; --nbb-a: #ffd9ec; --nbb-b: #fff1c9; --nbb-c: #d6f7e8; --nbb-d: #e4dcff; --nbb-cloud: rgb(255 255 255 / 0.95); --nbb-spark: #ffffff; }
-html.dark[data-skin="nube"] { --titlebar-color: #2d2550; --nbb-a: #3a2340; --nbb-b: #3a3328; --nbb-c: #1f3a36; --nbb-d: #2d2550; --nbb-cloud: rgb(255 255 255 / 0.1); --nbb-spark: rgb(255 240 250 / 0.8); }
-html[data-skin="nube"] .topbar { background: linear-gradient(90deg, var(--nbb-a), var(--nbb-b) 33%, var(--nbb-c) 64%, var(--nbb-d) calc(100% - var(--wco-inset))); }
-html[data-skin="nube"] .topbar::before {
-  background:
-    radial-gradient(46px 22px at 62% 78%, var(--nbb-cloud) 0 60%, transparent 62%),
-    radial-gradient(34px 24px at calc(62% - 28px) 62%, var(--nbb-cloud) 0 60%, transparent 62%),
-    radial-gradient(30px 18px at calc(62% + 28px) 74%, var(--nbb-cloud) 0 60%, transparent 62%),
-    radial-gradient(40px 18px at 42% 88%, var(--nbb-cloud) 0 60%, transparent 62%),
-    radial-gradient(28px 20px at calc(42% + 26px) 70%, var(--nbb-cloud) 0 60%, transparent 62%),
-    radial-gradient(circle at 30% 30%, var(--nbb-spark) 0 1.5px, transparent 2px),
-    radial-gradient(circle at 58% 22%, var(--nbb-spark) 0 2px, transparent 2.5px),
-    radial-gradient(circle at 72% 70%, var(--nbb-spark) 0 1.5px, transparent 2px);
-  opacity: 0.9;
+/* ---- Retro arcade: a CRT strip with scanlines, stars and a row of invaders marching; behind the chat, a green phosphor
+   glow. IBM Plex Mono, titles in Press Start 2P. ---- */
+html[data-skin="retro"] {
+  --titlebar-color: #c9dba6;
+  --rt-band-invaders: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23c0268f' d='M4 4h1v1h-1zM10 4h1v1h-1zM5 5h1v1h-1zM9 5h1v1h-1zM4 6h7v1h-7zM3 7h2v1h-2zM6 7h3v1h-3zM10 7h2v1h-2zM2 8h11v1h-11zM2 9h1v1h-1zM4 9h7v1h-7zM12 9h1v1h-1zM2 10h1v1h-1zM4 10h1v1h-1zM10 10h1v1h-1zM12 10h1v1h-1zM5 11h2v1h-2zM8 11h2v1h-2z'/%3E%3Cpath fill='%230a8fa8' d='M27 4h2v1h-2zM26 5h4v1h-4zM25 6h6v1h-6zM24 7h2v1h-2zM27 7h2v1h-2zM30 7h2v1h-2zM24 8h8v1h-8zM26 9h1v1h-1zM29 9h1v1h-1zM25 10h1v1h-1zM27 10h2v1h-2zM30 10h1v1h-1zM24 11h1v1h-1zM26 11h1v1h-1zM29 11h1v1h-1zM31 11h1v1h-1z'/%3E%3Cpath fill='%23a07800' d='M46 4h4v1h-4zM43 5h10v1h-10zM42 6h12v1h-12zM42 7h3v1h-3zM47 7h2v1h-2zM51 7h3v1h-3zM42 8h12v1h-12zM45 9h2v1h-2zM49 9h2v1h-2zM44 10h2v1h-2zM47 10h2v1h-2zM50 10h2v1h-2zM42 11h2v1h-2zM52 11h2v1h-2z'/%3E%3C/svg%3E");
+  --band: var(--rt-space);
+  --band-edge: color-mix(in oklch, var(--primary) 55%, transparent);
+  --band-art:
+    repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px),
+    var(--rt-band-invaders) 0 11px / 132px 34px repeat-x fixed,
+    radial-gradient(circle at 20px 10px, var(--rt-star) 0 1px, transparent 1.5px) 0 0 / 97px 56px fixed,
+    radial-gradient(circle at 60px 40px, var(--rt-star) 0 1px, transparent 1.5px) 0 0 / 143px 56px fixed;
+  --band-art-opacity: 0.55;
+  --scene: radial-gradient(40% 45% at 20% 25%, #5dff7a, transparent 70%), radial-gradient(45% 45% at 80% 75%, #29c45a, transparent 70%);
+  --scene-opacity: 0.16;
 }
+html.dark[data-skin="retro"] { --rt-band-invaders: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23ff4fd8' d='M4 4h1v1h-1zM10 4h1v1h-1zM5 5h1v1h-1zM9 5h1v1h-1zM4 6h7v1h-7zM3 7h2v1h-2zM6 7h3v1h-3zM10 7h2v1h-2zM2 8h11v1h-11zM2 9h1v1h-1zM4 9h7v1h-7zM12 9h1v1h-1zM2 10h1v1h-1zM4 10h1v1h-1zM10 10h1v1h-1zM12 10h1v1h-1zM5 11h2v1h-2zM8 11h2v1h-2z'/%3E%3Cpath fill='%233ef0ff' d='M27 4h2v1h-2zM26 5h4v1h-4zM25 6h6v1h-6zM24 7h2v1h-2zM27 7h2v1h-2zM30 7h2v1h-2zM24 8h8v1h-8zM26 9h1v1h-1zM29 9h1v1h-1zM25 10h1v1h-1zM27 10h2v1h-2zM30 10h1v1h-1zM24 11h1v1h-1zM26 11h1v1h-1zM29 11h1v1h-1zM31 11h1v1h-1z'/%3E%3Cpath fill='%23ffe14d' d='M46 4h4v1h-4zM43 5h10v1h-10zM42 6h12v1h-12zM42 7h3v1h-3zM47 7h2v1h-2zM51 7h3v1h-3zM42 8h12v1h-12zM45 9h2v1h-2zM49 9h2v1h-2zM44 10h2v1h-2zM47 10h2v1h-2zM50 10h2v1h-2zM42 11h2v1h-2zM52 11h2v1h-2z'/%3E%3C/svg%3E"); --titlebar-color: #050a06; --scene: radial-gradient(40% 45% at 20% 25%, #39ff14, transparent 70%), radial-gradient(45% 45% at 80% 75%, #00b34a, transparent 70%); --scene-opacity: 0.14; }
+@media (prefers-reduced-motion: no-preference) {
+  html[data-skin="retro"]:not([data-motion="minima"]) .theme-band::before { animation: rt-band-march 2.4s steps(1, end) infinite; }
+}
+@keyframes rt-band-march { 0%, 100% { background-position: 0 0, 0 11px, 0 0, 0 0; } 50% { background-position: 0 0, 12px 11px, 0 0, 0 0; } }
+
+/* ---- Nube (candy): a pastel rainbow strip with clouds drifting and sparkles; behind the chat, soft candy blobs and
+   clouds. Nunito, titles in Fredoka. ---- */
+html[data-skin="nube"] {
+  --titlebar-color: #e4dcff;
+  --nbb-a: #ffd9ec; --nbb-b: #fff1c9; --nbb-c: #d6f7e8; --nbb-d: #e4dcff; --nbb-cloud: rgb(255 255 255 / 0.95); --nbb-spark: #ffffff;
+  --band: linear-gradient(90deg, var(--nbb-a), var(--nbb-b) 33%, var(--nbb-c) 64%, var(--nbb-d) calc(100% - var(--wco-inset))) fixed;
+  --band-edge: rgb(214 120 190 / 0.3);
+  --band-art:
+    radial-gradient(26px 13px at 60px 42px, var(--nbb-cloud) 0 60%, transparent 62%) 0 0 / 420px 56px repeat-x fixed,
+    radial-gradient(20px 15px at 82px 33px, var(--nbb-cloud) 0 60%, transparent 62%) 0 0 / 420px 56px repeat-x fixed,
+    radial-gradient(18px 11px at 102px 44px, var(--nbb-cloud) 0 60%, transparent 62%) 0 0 / 420px 56px repeat-x fixed,
+    radial-gradient(22px 11px at 290px 26px, var(--nbb-cloud) 0 60%, transparent 62%) 0 0 / 420px 56px repeat-x fixed,
+    radial-gradient(15px 11px at 306px 19px, var(--nbb-cloud) 0 60%, transparent 62%) 0 0 / 420px 56px repeat-x fixed,
+    radial-gradient(circle at 30px 14px, var(--nbb-spark) 0 1.5px, transparent 2px) 0 0 / 230px 56px fixed,
+    radial-gradient(circle at 150px 40px, var(--nbb-spark) 0 2px, transparent 2.5px) 0 0 / 310px 56px fixed;
+  --scene: radial-gradient(34% 38% at 16% 20%, #ffb8dc, transparent 70%), radial-gradient(36% 40% at 84% 24%, #c7b8ff, transparent 70%), radial-gradient(40% 40% at 30% 92%, #b8f0dc, transparent 70%), radial-gradient(34% 36% at 82% 86%, #ffe2a8, transparent 70%);
+  --scene-opacity: 0.42;
+}
+html.dark[data-skin="nube"] { --titlebar-color: #2d2550; --nbb-a: #3a2340; --nbb-b: #3a3328; --nbb-c: #1f3a36; --nbb-d: #2d2550; --nbb-cloud: rgb(255 255 255 / 0.12); --nbb-spark: rgb(255 240 250 / 0.85); --scene-opacity: 0.22; }
+@media (prefers-reduced-motion: no-preference) {
+  html[data-skin="nube"]:not([data-motion="minima"]) .theme-band::before { animation: nb-drift 70s linear infinite; }
+}
+@keyframes nb-drift { from { background-position: 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0; } to { background-position: 420px 0, 420px 0, 420px 0, 420px 0, 420px 0, 230px 0, -310px 0; } }
+
+/* ---- Typography of each theme: used while the interface font is the default (a font chosen by hand wins). ---- */
+html[data-skin="vaporwave"][data-font="outfit"] { --font-sans: "Space Grotesk Variable", "Segoe UI", system-ui, sans-serif; }
+html[data-skin="retro"][data-font="outfit"] { --font-sans: "IBM Plex Mono", "Cascadia Code", Consolas, monospace; }
+html[data-skin="nube"][data-font="outfit"] { --font-sans: "Nunito Variable", "Segoe UI", system-ui, sans-serif; }
+html[data-skin="profesional"][data-font="outfit"] { --font-sans: "Inter Variable", "Segoe UI", system-ui, sans-serif; }
+html[data-skin="nube"] :is(h1, h2, h3, [data-slot="card-title"]):not(.prose-chat *) { font-family: "Fredoka Variable", var(--font-sans); font-weight: 600; letter-spacing: 0.005em; }
+html[data-skin="vaporwave"] :is(h1, h2, h3, [data-slot="card-title"]):not(.prose-chat *) { font-weight: 600; letter-spacing: 0.01em; }
+/* The big greeting of the chat in the theme's own colours. */
+html[data-skin="vaporwave"] .hero-title { background: linear-gradient(90deg, #ff71ce, #b967ff 50%, #01cdfe); -webkit-background-clip: text; background-clip: text; color: transparent; }
+html[data-skin="nube"] .hero-title { background: linear-gradient(90deg, #e05a9b, #9a7ae8 55%, #3fb59a); -webkit-background-clip: text; background-clip: text; color: transparent; }
+html[data-skin="retro"] .hero-title { color: var(--primary); text-shadow: 0 0 10px color-mix(in oklch, var(--primary) 45%, transparent); }
+
+/* ---- In the sidebar's head the decoration is only a faint texture, so the name and the buttons stay clean. ---- */
+.side-band::before { opacity: calc(var(--band-art-opacity, 1) * 0.3); }
+
+/* ---- A crisp pattern over the blurred backdrop (the scene's second layer), very faint and fading upwards. ---- */
+.theme-scene::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--scene-pattern, none); opacity: var(--scene-pattern-opacity, 1); mask-image: linear-gradient(to top, #000, transparent 75%); }
+/* Vaporwave: the lavender grid of the 90s desktops. */
+html[data-skin="vaporwave"] { --scene-pattern: linear-gradient(rgb(185 103 255 / 0.13) 1px, transparent 1px) 0 0 / 44px 44px, linear-gradient(90deg, rgb(185 103 255 / 0.13) 1px, transparent 1px) 0 0 / 44px 44px; }
+html.dark[data-skin="vaporwave"] { --scene-pattern: linear-gradient(rgb(255 113 206 / 0.12) 1px, transparent 1px) 0 0 / 44px 44px, linear-gradient(90deg, rgb(1 205 254 / 0.1) 1px, transparent 1px) 0 0 / 44px 44px; }
+/* Retro: a starfield, twinkling. */
+html[data-skin="retro"] { --scene-pattern: radial-gradient(circle at 20px 30px, var(--rt-star) 0 1px, transparent 1.6px) 0 0 / 137px 113px, radial-gradient(circle at 90px 70px, var(--rt-star) 0 1.2px, transparent 1.8px) 0 0 / 211px 167px, radial-gradient(circle at 40px 120px, var(--rt-star) 0 0.8px, transparent 1.4px) 0 0 / 173px 149px; --scene-pattern-opacity: 0.9; }
+html[data-skin="retro"] .theme-scene::after { mask-image: none; }
+@media (prefers-reduced-motion: no-preference) {
+  html[data-skin="retro"]:not([data-motion="minima"]) .theme-scene::after { animation: rt-twinkle 3.2s steps(2, end) infinite; }
+}
+@keyframes rt-twinkle { 0%, 100% { opacity: 0.9; } 50% { opacity: 0.45; } }
+/* Nube: tiny sparkles. */
+html[data-skin="nube"] { --scene-pattern: radial-gradient(circle at 30px 40px, rgb(255 255 255 / 0.9) 0 1.5px, transparent 2px) 0 0 / 190px 170px, radial-gradient(circle at 120px 100px, rgb(255 190 225 / 0.8) 0 1.8px, transparent 2.4px) 0 0 / 260px 230px; }
+html.dark[data-skin="nube"] { --scene-pattern: radial-gradient(circle at 30px 40px, rgb(255 240 250 / 0.5) 0 1.2px, transparent 1.8px) 0 0 / 190px 170px, radial-gradient(circle at 120px 100px, rgb(200 180 255 / 0.5) 0 1.5px, transparent 2px) 0 0 / 260px 230px; }
+
+/* ---- The message box, framed in each theme's colours. ---- */
+html[data-skin="vaporwave"] [data-slot="composer"] { border: 1.5px solid transparent; background: linear-gradient(color-mix(in oklch, var(--card) 82%, transparent), color-mix(in oklch, var(--card) 82%, transparent)) padding-box, linear-gradient(90deg, #ff71ce, #b967ff 50%, #01cdfe) border-box; box-shadow: 0 10px 30px -14px rgb(185 103 255 / 0.55); }
+html[data-skin="nube"] [data-slot="composer"] { border: 1.5px solid transparent; background: linear-gradient(color-mix(in oklch, var(--card) 84%, transparent), color-mix(in oklch, var(--card) 84%, transparent)) padding-box, linear-gradient(90deg, #ffb8dc, #ffe2a8 35%, #b8f0dc 65%, #c7b8ff) border-box; border-radius: 1.6rem; box-shadow: 0 14px 34px -18px rgb(214 120 190 / 0.6), inset 0 1px 0 rgb(255 255 255 / 0.7); }
+html[data-skin="retro"] [data-slot="composer"] { border: 2px solid color-mix(in oklch, var(--primary) 70%, transparent); box-shadow: 4px 4px 0 0 color-mix(in oklch, var(--primary) 35%, transparent); }

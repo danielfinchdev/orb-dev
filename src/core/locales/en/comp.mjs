@@ -36,6 +36,8 @@ export default {
   'comp.live.running': 'In progress ({n})',
   'comp.live.more': 'and {n} more in Tasks',
   'comp.markdown.image': 'image',
+  'comp.sidebar.collapse': 'Collapse the menu',
+  'comp.sidebar.expand': 'Expand the menu',
   'comp.theme.tip': 'Light / dark mode',
   'comp.theme.aria': 'Switch between light and dark mode',
   'comp.projects.newTitle': 'New project',
