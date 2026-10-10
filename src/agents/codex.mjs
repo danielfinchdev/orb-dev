@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { IS_WIN, firstFile, inPath, npmPrefixes, appDataDirs, userHome, clip } from './common.mjs';
+import { IS_WIN, firstFile, inPath, npmPrefixes, appDataDirs, userHome, clip, discoverDir } from './common.mjs';
 import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree } from './live.mjs';
 import { decide } from '../core/guard.mjs';
 import { tr } from '../core/context.mjs';
@@ -31,13 +31,22 @@ export const loginCommand = (exe) => ({ cmd: exe.cmd, args: [...exe.pre, 'login'
 
 const toml = (value) => JSON.stringify(value); // JSON strings and arrays are valid TOML values
 
+// Secrets (the coordinator's key, the agents' tokens) never go on the command line, which any process of the user can
+// read: they ride in Codex's own environment and Codex forwards them by name to the MCP server (env_vars).
+const SECRET = /KEY|TOKEN|SECRET/i;
+export function mcpSecrets(servers) {
+  return Object.fromEntries(Object.values(servers ?? {}).flatMap((s) => Object.entries(s.env ?? {}).filter(([k]) => SECRET.test(k)).map(([k, v]) => [k, String(v)])));
+}
+
 // MCP servers through -c overrides (no config file is written in the user's Codex folder).
 export function mcpArgs(servers) {
   const args = [];
   for (const [name, s] of Object.entries(servers ?? {})) {
     args.push('-c', `mcp_servers.${name}.command=${toml(s.command)}`, '-c', `mcp_servers.${name}.args=${toml(s.args ?? [])}`);
-    const env = Object.entries(s.env ?? {});
+    const env = Object.entries(s.env ?? {}).filter(([k]) => !SECRET.test(k));
+    const secret = Object.keys(s.env ?? {}).filter((k) => SECRET.test(k));
     if (env.length) args.push('-c', `mcp_servers.${name}.env={${env.map(([k, v]) => `${k}=${toml(String(v))}`).join(', ')}}`);
+    if (secret.length) args.push('-c', `mcp_servers.${name}.env_vars=${toml(secret)}`);
     if (name === 'orb') args.push('-c', `mcp_servers.${name}.default_tools_approval_mode="approve"`, '-c', `mcp_servers.${name}.tool_timeout_sec=960`);
   }
   return args;
@@ -46,7 +55,9 @@ export function mcpArgs(servers) {
 // The guard decides every action, so Codex asks for anything that is not plainly safe ("untrusted"); the sandbox keeps
 // writes inside the folder. Read-only conversations cannot write at all; "total" runs without sandbox or questions.
 function policy(permission) {
-  if (permission === 'leer') return { approvalPolicy: 'never', sandbox: 'read-only' };
+  // 2.6: read-only also asks Orb's guard (which denies anything that changes something) instead of trusting only the
+  // sandbox: this is how a Codex brain coordinates.
+  if (permission === 'leer') return { approvalPolicy: 'untrusted', sandbox: 'read-only' };
   if (permission === 'total') return { approvalPolicy: 'never', sandbox: 'danger-full-access' };
   return { approvalPolicy: 'untrusted', sandbox: 'workspace-write' };
 }
@@ -71,7 +82,7 @@ export function codexModels(r) {
 // 2.6: the models of this Codex before any conversation: a short app-server (no thread, no prompt, nothing is spent) asked
 // for model/list, page by page, and closed.
 export async function discoverModels(exe, cfg = {}, env = {}) {
-  const child = spawnAgent(exe.cmd, [...exe.pre, 'app-server'], { cwd: os.tmpdir(), env });
+  const child = spawnAgent(exe.cmd, [...exe.pre, 'app-server'], { cwd: discoverDir(), env });
   const peer = new JsonRpcPeer(child, { onRequest: async () => { throw new Error('no'); } });
   child.on('error', () => peer.close());
   child.on('exit', () => peer.close());
@@ -191,7 +202,7 @@ export function createLive(o) {
 
   const start = async () => {
     const args = [...o.exe.pre, 'app-server', ...mcpArgs(o.mcpServers)];
-    child = spawnAgent(o.exe.cmd, args, { cwd: o.cwd, env: o.env, log });
+    child = spawnAgent(o.exe.cmd, args, { cwd: o.cwd, env: { ...(o.env ?? {}), ...mcpSecrets(o.mcpServers) }, log });
     live.pid = child.pid;
     peer = new JsonRpcPeer(child, { onNotification, onRequest, log });
     child.on('exit', (code) => {

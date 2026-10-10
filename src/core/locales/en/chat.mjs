@@ -117,6 +117,10 @@ export default {
   'games.chessWin': 'Checkmate: you win!',
   'games.chessLose': 'Checkmate: the computer wins',
   'games.chessDraw': 'Draw',
+  'games.sound': 'Game sound',
+  'games.soundOn': 'Mute the games',
+  'games.soundOff': 'Turn the sound on',
+  'games.soundAppOff': 'Sounds are turned off in Settings.',
   // 2.6: notices with the robot (or at the top, without animations)
   'notice.done': 'Done',
   'notice.attention': 'Needs your attention',

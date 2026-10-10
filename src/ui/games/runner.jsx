@@ -7,6 +7,7 @@ import { useEffect, useRef } from 'react';
 import { useKeys, useLoop, palette, setupCanvas, roundRect, tint, shade, mix, Particles, reducedMotion, corner, font, saveBest, label, clamp } from './kit.js';
 import { newRun, reset, step, progress, section, WIDTH, HEIGHT, U, SIZE, GROUND, CEIL, PX } from './runner-level.js';
 import { useT } from '@/lib/i18n.js';
+import { sfx } from './sfx.js';
 
 const BEAT = 60000 / 128; // a fake beat at 128 bpm
 const WAIT = { dead: 720, done: 1500 }; // ms before the next attempt / before the window says it is over
@@ -158,7 +159,7 @@ export default function Runner({ level, onScore, onOver, paused }) {
     ctx.restore();
   };
 
-  const restart = () => { const s = g.current; reset(s.w); s.attempt += 1; s.wait = 0; s.trail = []; s.score = 0; s.parts.list = []; onScore(0); };
+  const restart = () => { const s = g.current; reset(s.w); s.attempt += 1; s.sec = 0; s.wait = 0; s.trail = []; s.score = 0; s.parts.list = []; onScore(0); };
   useEffect(() => { setupCanvas(canvas.current, WIDTH, HEIGHT); draw(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useLoop((dt) => {
     const s = g.current; const w = s.w; const p = palette(); const rm = reducedMotion();
@@ -169,6 +170,9 @@ export default function Runner({ level, onScore, onOver, paused }) {
     const ev = step(w, dt, s.held);
     const dx = w.dist - before; const cx = PX + SIZE / 2; const cy = w.y + SIZE / 2; const feet = w.gdir > 0 ? w.y + SIZE : w.y;
     for (const q of s.parts.list) q.x -= dx; // the sparks belong to the world, which scrolls
+    // The sounds: a landing that is also a jump (the button held) only sounds as the jump.
+    for (const e of ev) if (e !== 'land' || !ev.includes('jump')) sfx(`runner.${e}`);
+    const sec = section(w).i; if (sec > (s.sec ?? 0) && w.alive && !w.done) sfx('runner.checkpoint'); s.sec = sec;
     for (const e of ev) {
       if (e === 'land') { s.squash = 1; s.parts.burst(cx, feet, tint('#ffffff', 0.6), 6, 0.12, 2); }
       else if (e === 'jump') s.parts.burst(cx - 6, feet, tint('#ffffff', 0.45), 4, 0.1, 1.6);

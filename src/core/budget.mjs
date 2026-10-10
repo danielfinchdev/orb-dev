@@ -49,13 +49,15 @@ export function recordRate(board, id, rate) {
   const next = { utilization: rate.utilization ?? prev.utilization ?? null, resetAt: rate.resetAt ?? prev.resetAt ?? null, window: rate.window ?? prev.window ?? null, status: rate.status ?? prev.status ?? null, at: Date.now() };
   // 2.6: every window is kept too (session, weekly, weekly of one model…), for the usage panel next to the message box.
   if (rate.window && rate.utilization != null) {
-    const all = Object.fromEntries(Object.entries(board.settingJson(`rates:${id}`) ?? {}).filter(([, w]) => !w.resetAt || w.resetAt > Date.now()));
+    const all = Object.fromEntries(Object.entries(board.settingJson(`rates:${id}`) ?? {}).filter(([, w]) => (!w.resetAt || w.resetAt > Date.now()) && Date.now() - (w.at ?? 0) < 7 * 86_400_000));
     all[String(rate.window).slice(0, 40)] = { utilization: rate.utilization, resetAt: rate.resetAt ?? null, status: rate.status ?? null, at: Date.now() };
     board.settingJson(`rates:${id}`, all);
   }
+  if (rate.status === 'rejected' && rate.resetAt) { board.setting(`cooldown:${id}`, String(rate.resetAt)); board.setting(`cooldown_reason:${id}`, ''); }
+  // A window of one model only (the weekly one of Opus, Fable…) does not stop the whole account: only the panel shows it.
+  if (/^seven_day_/.test(String(rate.window ?? ''))) return;
   if (prev.utilization != null && rate.utilization != null && prev.window !== rate.window && prev.utilization > rate.utilization && prev.resetAt > Date.now()) return;
   board.settingJson(`rate:${id}`, next);
-  if (rate.status === 'rejected' && rate.resetAt) { board.setting(`cooldown:${id}`, String(rate.resetAt)); board.setting(`cooldown_reason:${id}`, ''); }
 }
 // The windows an account reported that are still running, the shortest first (session before weekly).
 const windowMinutes = (w) => { const m = String(w).match(/(\d+)\s*min/); if (m) return Number(m[1]); if (/five_hour|5h/i.test(w)) return 300; if (/seven_day|week/i.test(w)) return 10080 + (/opus|sonnet|fable|model/i.test(w) ? 1 : 0); return 100000; };

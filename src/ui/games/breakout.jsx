@@ -2,6 +2,7 @@
 // Glossy bricks that burst into sparks, a glowing ball with a trail, a paddle that flashes when it hits, hearts for lives.
 import { useEffect, useRef } from 'react';
 import { useKeys, useLoop, palette, setupCanvas, roundRect, block, tint, shade, mix, backdrop, Particles, reducedMotion, font, corner } from './kit.js';
+import { sfx } from './sfx.js';
 
 const WIDTH = 520; const HEIGHT = 380; const PW = { facil: 110, normal: 84, dificil: 64 }; const PH = 12; const PY = HEIGHT - 26;
 const SPEED = { facil: 0.26, normal: 0.32, dificil: 0.4 };
@@ -60,24 +61,24 @@ export default function Breakout({ level, onScore, onOver, paused }) {
     s.px = Math.max(0, Math.min(WIDTH - PW[level], s.px));
     const b = s.ball; b.x += b.vx * dt; b.y += b.vy * dt;
     s.trail.push({ x: b.x, y: b.y }); if (s.trail.length > 10) s.trail.shift();
-    if (b.x < 6 || b.x > WIDTH - 6) { b.vx = -b.vx; b.x = Math.max(6, Math.min(WIDTH - 6, b.x)); }
-    if (b.y < 6) { b.vy = Math.abs(b.vy); }
+    if (b.x < 6 || b.x > WIDTH - 6) { b.vx = -b.vx; b.x = Math.max(6, Math.min(WIDTH - 6, b.x)); sfx('breakout.wall'); }
+    if (b.y < 6) { if (b.vy < 0) sfx('breakout.wall'); b.vy = Math.abs(b.vy); }
     // The paddle: where it hits decides the angle.
     if (b.vy > 0 && b.y > PY - 6 && b.y < PY + PH && b.x > s.px - 6 && b.x < s.px + PW[level] + 6) {
       const speed = Math.hypot(b.vx, b.vy) * 1.02; const hit = (b.x - (s.px + PW[level] / 2)) / (PW[level] / 2);
       const angle = hit * 1.05; b.vx = speed * Math.sin(angle); b.vy = -speed * Math.cos(angle); b.y = PY - 6;
-      s.flash = 120; s.sparks.burst(b.x, PY, tint(p.primary, 0.8), 4, 0.1, 1.5);
+      s.flash = 120; s.sparks.burst(b.x, PY, tint(p.primary, 0.8), 4, 0.1, 1.5); sfx('breakout.paddle');
     }
     for (const k of s.bricks) {
       if (!k.alive || b.x < k.x - 6 || b.x > k.x + BW + 6 || b.y < k.y - 6 || b.y > k.y + BH + 6) continue;
-      k.alive = false; s.score += (ROWS - k.row) * 10 * s.wave; onScore(s.score);
+      k.alive = false; s.score += (ROWS - k.row) * 10 * s.wave; onScore(s.score); sfx('breakout.brick', k.row);
       s.sparks.burst(k.x + BW / 2, k.y + BH / 2, p[TONES[k.row]], 12, 0.22, 2.6); s.sparks.burst(k.x + BW / 2, k.y + BH / 2, mix(p[TONES[k.row]], '#ffffff', 0.5), 4, 0.15, 1.5);
       const fromSide = b.x < k.x || b.x > k.x + BW; if (fromSide) b.vx = -b.vx; else b.vy = -b.vy;
       break;
     }
-    if (!s.bricks.some((k) => k.alive)) { s.bricks = bricks(); s.ball = serve(level); s.ball.vy *= 1.15; s.ball.vx *= 1.15; s.wave++; s.trail = []; }
+    if (!s.bricks.some((k) => k.alive)) { sfx('breakout.wave', null, { delay: 0.08 }); s.bricks = bricks(); s.ball = serve(level); s.ball.vy *= 1.15; s.ball.vx *= 1.15; s.wave++; s.trail = []; }
     if (b.y > HEIGHT + 10) {
-      s.lives--; s.lost = 600; s.shake = 8; s.trail = [];
+      s.lives--; s.lost = 600; s.shake = 8; s.trail = []; sfx('breakout.lose');
       if (s.lives <= 0) { s.over = true; draw(); onOver(s.score); return; }
       s.ball = serve(level);
     }

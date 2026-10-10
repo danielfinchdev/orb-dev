@@ -8,6 +8,7 @@ export default {
   'nav.activity': 'Actividad',
   'nav.phone': 'Este móvil',
   'nav.settings': 'Ajustes',
+  'nav.tutorials': 'Tutoriales',
   'nav.expert': 'Modo experto',
   'nav.newConversation': 'Nueva conversación',
   'nav.newChat': 'Nuevo chat',

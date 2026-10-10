@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { createHome } from '../src/core/home.mjs';
+import { createHome, loadConfig, writeJson, merge } from '../src/core/home.mjs';
 import { SKINS } from '../src/core/appearance.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -83,6 +83,7 @@ try {
   // ---- 2. an assistant already created: every view
   const base = path.join(tmp, 'Documentos'); fs.mkdirSync(base);
   const { home } = createHome(base, { assistantName: 'Orb', userName: 'Dani' });
+  writeJson(path.join(home, 'orb.json'), merge(loadConfig(home), { ui: { tourDone: true } })); // 2.6: no guided tour in the tests
   fs.mkdirSync(path.join(home, 'web', 'webviaproject', 'src'), { recursive: true });
   fs.writeFileSync(path.join(home, 'web', 'webviaproject', 'src', 'index.html'), '<h1>hola</h1>\n');
   const userData = path.join(tmp, 'datos'); fs.mkdirSync(userData);
@@ -97,7 +98,7 @@ try {
   const dark = () => page.evaluate(() => document.documentElement.classList.contains('dark'));
   const setDark = async (on) => { if (on !== (await dark())) await page.getByRole('button', { name: /claro y oscuro|day and night|light and dark/i }).click(); };
   const views = [['nav-chat', 'chat'], ['nav-tasks', 'tareas'], ['nav-projects', 'proyectos'], ['nav-agents', 'agentes'], ['nav-logs', 'bitacoras'], ['nav-activity', 'actividad'], ['nav-settings', 'ajustes']];
-  const SECTIONS = ['apariencia', 'modelo', 'tareas', 'movil', 'herramientas', 'experto', 'actualizaciones', 'contribuye', 'apps'];
+  const SECTIONS = ['apariencia', 'tareas', 'movil', 'herramientas', 'experto', 'actualizaciones', 'contribuye', 'apps'];
   for (const theme of ['dia', 'noche']) {
     await setDark(theme === 'noche');
     for (const [nav, name] of views) {

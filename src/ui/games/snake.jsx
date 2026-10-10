@@ -2,6 +2,7 @@
 // The snake slides between cells (the logic still moves one cell per tick); it has eyes, the food glows and bursts.
 import { useEffect, useRef } from 'react';
 import { useKeys, useLoop, palette, setupCanvas, tint, mix, shade, Particles, backdrop, reducedMotion, font } from './kit.js';
+import { sfx } from './sfx.js';
 
 const N = 20; const CELL = 21; const SIZE = N * CELL;
 const SPEED = { facil: 150, normal: 105, dificil: 70 };
@@ -91,13 +92,13 @@ export default function Snake({ level, onScore, onOver, paused }) {
       const eats = x === s.food[0] && y === s.food[1];
       const hits = x < 0 || y < 0 || x >= N || y >= N || s.body.slice(0, eats ? s.body.length : -1).some(([bx, by]) => bx === x && by === y);
       if (hits) {
-        s.over = true; s.acc = SPEED[level];
+        s.over = true; s.acc = SPEED[level]; sfx('snake.crash');
         const [hx, hy] = s.body[0]; s.sparks.burst(centre(hx), centre(hy), palette().danger, 18, 0.3, 3.5);
         draw(); onOver(s.score); return;
       }
       s.body.unshift([x, y]);
       if (eats) {
-        s.score += 10; onScore(s.score); s.tail = s.body[s.body.length - 1];
+        s.score += 10; onScore(s.score); s.tail = s.body[s.body.length - 1]; sfx('snake.eat', s.body.length - 4);
         s.sparks.burst(centre(x), centre(y), palette().warning, 14, 0.28, 3);
         s.bite = 600; s.biteAt = [centre(x), centre(y)];
         s.food = freeCell(s.body);

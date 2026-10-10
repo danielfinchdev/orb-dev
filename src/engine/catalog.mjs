@@ -12,7 +12,7 @@ import { usableAccounts } from '../core/accounts.mjs';
 import { usageReport } from '../core/budget.mjs';
 
 const HEAVY_FAMILY = /opus|fable|(^|[-_.])pro($|[-_.])|ultra|max\b|xhigh|o3\b|o1\b/i;
-const MODEL_ID = /^[\w.:\-/[\]=,@]{1,80}$/;
+const MODEL_ID = /^[A-Za-z0-9][\w.:\-/[\]=,@]{0,79}$/;
 export const MODELS_EVERY = 12 * 3_600_000; // how often an agent is asked again for its models
 const RETRY_AFTER = 3_600_000; // after an agent that did not answer
 
@@ -26,7 +26,9 @@ export function rememberModels(board, agent, list) {
     const m = typeof raw === 'string' ? { id: raw } : raw;
     if (!MODEL_ID.test(m?.id ?? '') || seen.has(m.id)) continue;
     seen.add(m.id);
-    const label = String(m.label ?? m.id).replace(/[\u0000-\u001f\u007f​-‍﻿]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60) || m.id;
+    // Names only (they reach the assistant's instructions): letters, digits, spaces and a few signs; nothing that reads
+    // as a sentence of instructions survives the 40-character cap.
+    const label = String(m.label ?? m.id).replace(/[^\p{L}\p{N} ._()+\-/:,]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 40) || m.id;
     const item = { id: m.id, label };
     if (m.default && !marked) { item.default = true; marked = true; }
     if (typeof m.resolved === 'string' && m.resolved !== m.id && MODEL_ID.test(m.resolved)) item.resolved = m.resolved;
@@ -38,6 +40,7 @@ export function rememberModels(board, agent, list) {
   const next = JSON.stringify(clean);
   if (board.setting(`models:${agent}`) === next) return false;
   board.setting(`models:${agent}`, next);
+  board.setting('models_rev', String(Date.now())); // a new list: the cached catalog is stale
   board.changed('models'); // the selector reads the catalog again
   return true;
 }
@@ -45,6 +48,7 @@ export function rememberModels(board, agent, list) {
 // Asks an agent for its models in the background (one question at a time per agent). Without force, not when it answered
 // in the last 12 h, nor when it was asked in the last hour. Resolves with whether the list changed; never rejects.
 const asking = new Map();
+let serial = Promise.resolve();
 export function refreshModels(board, agent, { force = false, log = () => {} } = {}) {
   if (asking.has(agent)) return asking.get(agent);
   const now = Date.now();
@@ -53,7 +57,8 @@ export function refreshModels(board, agent, { force = false, log = () => {} } = 
   if (!force && (now - answered < MODELS_EVERY || now - tried < RETRY_AFTER)) return Promise.resolve(false);
   if (!AGENT_IDS.includes(agent) || !ctx.config.agents?.[agent]?.enabled || !installed(agent)) return Promise.resolve(false);
   board.setting(`models_try:${agent}`, String(now));
-  const job = discoverModels(agent)
+  // One agent at a time (each question starts that agent's program): never all of them at once at the first start.
+  const job = (serial = serial.catch(() => null).then(() => discoverModels(agent)))
     .then((list) => { if (!list) { log(`modelos de ${agent}: el agente no los ha dicho`); return false; } return rememberModels(board, agent, list); })
     .catch((error) => { log(`modelos de ${agent}: ${error?.message ?? error}`); return false; })
     .finally(() => asking.delete(agent));

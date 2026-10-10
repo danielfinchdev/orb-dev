@@ -276,6 +276,17 @@ html[data-skin="profesional"] .wordmark-sub { letter-spacing: 0.14em; }
 .orb.still { cursor: default; }
 /* 2.6: the time of each message, bottom right, as in a messaging app. */
 .msg-time { float: right; margin: 0.35rem 0 -0.25rem 0.75rem; font-size: 0.68rem; line-height: 1.4; font-variant-numeric: tabular-nums; opacity: 0.6; white-space: nowrap; }
+/* 2.6: the «ahorro ↔ uso» slider of Ajustes › Tareas y cupo: five steps on a soft track, «Recomendado» under the middle. */
+.spend-slider { width: 100%; height: 1.25rem; accent-color: var(--primary); cursor: pointer; background: transparent; }
+.spend-slider::-webkit-slider-runnable-track { height: 6px; border-radius: 999px; background: color-mix(in oklch, var(--foreground) 12%, transparent); }
+.spend-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; margin-top: -6px; border-radius: 999px; background: var(--primary); border: 3px solid var(--card); box-shadow: 0 1px 4px rgb(0 0 0 / 0.25); }
+.spend-slider { -webkit-appearance: none; appearance: none; }
+.spend-slider:focus-visible { outline: none; }
+.spend-slider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 45%, transparent); }
+.spend-ticks { display: grid; grid-template-columns: repeat(5, 1fr); margin-top: -4px; font-size: 11px; color: var(--muted-foreground); }
+.spend-ticks span { text-align: center; }
+.spend-ticks span:first-child { text-align: left; } .spend-ticks span:last-child { text-align: right; }
+
 /* 2.6: the sidebar's edge, dragged to make it wider or narrower. */
 .sidebar-resize { position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; cursor: col-resize; z-index: 5; -webkit-app-region: no-drag; app-region: no-drag; }
 .sidebar-resize::after { content: ""; position: absolute; inset: 0 2px; border-radius: 2px; background: var(--primary); opacity: 0; transition: opacity 0.15s; }
@@ -301,3 +312,32 @@ html[data-motion="minima"] .win-control { transition: none; }
 .app-titlebar :is(button, a, input, select, textarea, label, [role=button], [role=combobox], [role=tab], [role=switch], [contenteditable], [data-no-drag], .orb) { -webkit-app-region: no-drag; app-region: no-drag; }
 .wco-pad { padding-inline-end: calc(var(--wco-inset) + 0.75rem) !important; }
 @media (min-width: 768px) { .wco-pad-md { padding-inline-end: calc(var(--wco-inset) + 1.25rem) !important; } }
+
+/* ---------- 2.6: the guided tour (components/tour.jsx) ----------
+   A ring around the control of each step, the rest of the window dimmed by the ring's own shadow (which takes no clicks:
+   the app stays usable), and next to it the robot with its bubble. The bubble is drawn with the same variables as the
+   app's speech bubbles (--tip-*), so each visual theme dresses it its own way. */
+.tour { position: fixed; inset: 0; z-index: 60; pointer-events: none; }
+.tour-dim { position: absolute; inset: 0; background: rgb(20 18 40 / 0.45); }
+.tour-spot { position: fixed; border-radius: 14px; box-shadow: 0 0 0 9999px rgb(20 18 40 / 0.45), 0 0 0 3px var(--primary), 0 0 0 7px color-mix(in oklch, var(--primary) 30%, transparent); transition: left 0.3s ease, top 0.3s ease, width 0.3s ease, height 0.3s ease; }
+.tour-panel { position: fixed; display: flex; align-items: flex-end; gap: 0.25rem; width: max-content; max-width: min(34rem, calc(100vw - 2rem)); pointer-events: auto; animation: tour-in 0.25s cubic-bezier(0.2, 0.8, 0.3, 1.1); }
+.tour-robot { flex: none; filter: drop-shadow(0 14px 18px rgb(0 0 0 / 0.35)); margin-bottom: -4px; }
+.tour-bubble { position: relative; min-width: 0; width: 23rem; max-width: 100%; background: var(--tip-bg); color: var(--tip-title); border: 1px solid var(--tip-border); border-radius: var(--tip-radius); padding: 0.9rem 1.1rem 1rem; box-shadow: var(--tip-shadow); }
+.tour-panel-plain .tour-bubble { width: 25rem; }
+/* The bubble's tail towards the control: the lower half of a bordered square, like the app's bubbles. Only when the
+   bubble sits above or below its control (next to it, the robot already presents it). */
+.tour-tail { display: none; position: absolute; width: 14px; height: 14px; background: var(--tip-bg); border: 1px solid var(--tip-border); transform: rotate(45deg); }
+.tour[data-side="top"] .tour-tail { display: block; left: 2rem; bottom: -8px; border-top: 0; border-left: 0; }
+.tour[data-side="bottom"] .tour-tail { display: block; left: 2rem; top: -8px; border-bottom: 0; border-right: 0; }
+.tour[data-side="left"] .tour-tail { display: block; right: -8px; top: 2rem; border-bottom: 0; border-left: 0; }
+.tour-panel-plain[data-side="right"] .tour-tail, .tour[data-side="right"] .tour-panel-plain .tour-tail { display: block; left: -8px; top: 2rem; border-top: 0; border-right: 0; }
+.tour-title { color: var(--tip-title); }
+@keyframes tour-in { from { opacity: 0; transform: translateY(6px) scale(0.97); } to { opacity: 1; transform: none; } }
+html[data-skin="retro"] .tour-bubble, html[data-skin="retro"] .tour-tail { border-width: 2px; }
+html[data-skin="retro"] .tour-spot { border-radius: 8px; box-shadow: 0 0 0 9999px rgb(20 18 40 / 0.5), 0 0 0 3px var(--rt-ink), 0 0 0 6px var(--primary); }
+html[data-skin="nube"] .tour-title { color: var(--primary); }
+html[data-skin="profesional"] .tour-spot { border-radius: 8px; }
+html[data-motion="minima"] :is(.tour-panel, .tour-spot), html[data-skin="profesional"] :is(.tour-panel, .tour-spot) { animation: none; transition: none; }
+@media (prefers-reduced-motion: reduce) { .tour-panel, .tour-spot { animation: none; transition: none; } }
+@media (max-width: 640px) { .tour-robot { display: none; } .tour-bubble { width: calc(100vw - 2rem); } }
+html[data-skin="retro"] .tour-bubble { width: 25rem; }

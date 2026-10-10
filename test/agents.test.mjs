@@ -39,6 +39,12 @@ test('Codex: el MCP de Orb va por -c con rutas de Windows escapadas para TOML', 
   assert.ok(args.includes('mcp_servers.orb.env={ORB_HOME="C:\\\\Users\\\\Ana\\\\Orb"}'));
   assert.ok(args.includes('mcp_servers.orb.default_tools_approval_mode="approve"'), 'las herramientas del tablero no piden permiso');
   assert.ok(!args.some((a) => a.startsWith('mcp_servers.otro.default_tools')), 'los conectores del usuario sí');
+  // 2.6: the coordinator's key and the agents' tokens never on the command line: by name, through Codex's environment.
+  const servers = { orb: { command: 'node', args: [], env: { ORB_HOME: 'C:\\o', ORB_ORCH_KEY: 'secreto', ORB_AGENT_TOKEN: 'tk' } } };
+  const withSecrets = codex.mcpArgs(servers);
+  assert.ok(!withSecrets.some((a) => a.includes('secreto') || a.includes('tk"')), 'ningún secreto en los argumentos');
+  assert.ok(withSecrets.includes('mcp_servers.orb.env_vars=["ORB_ORCH_KEY","ORB_AGENT_TOKEN"]'));
+  assert.deepEqual(codex.mcpSecrets(servers), { ORB_ORCH_KEY: 'secreto', ORB_AGENT_TOKEN: 'tk' });
   assert.equal(args.filter((a) => a === '-c').length, args.length / 2);
 });
 
@@ -86,7 +92,7 @@ test('Codex: solo lectura y acceso total cambian sandbox y aprobaciones; continu
   const ro = openCodex({ permission: 'leer' });
   await ro.live.send({ text: 'mira' });
   const p = ro.log().find((m) => m.method === 'thread/start').params;
-  assert.deepEqual([p.approvalPolicy, p.sandbox], ['never', 'read-only']);
+  assert.deepEqual([p.approvalPolicy, p.sandbox], ['untrusted', 'read-only']);
   const total = openCodex({ permission: 'total' });
   await total.live.send({ text: 'haz' });
   const q = total.log().find((m) => m.method === 'thread/start').params;

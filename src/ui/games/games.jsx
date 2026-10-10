@@ -1,14 +1,15 @@
 // 2.6: mini-games while the agents work. A window with the list of games and the difficulty; the game in the middle with
 // its score and best score (kept on this PC). Opened from the gamepad of the top bar or from the assistant's message.
-import { lazy, Suspense, useState } from 'react';
-import { Gamepad2, RotateCcw, ArrowLeft, Trophy, Flag, Sparkles } from 'lucide-react';
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/overlay.jsx';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { Gamepad2, RotateCcw, ArrowLeft, Trophy, Flag, Sparkles, Volume2, VolumeX } from 'lucide-react';
+import { Dialog, DialogContent, DialogTitle, DialogDescription, BubbleTip } from '@/components/ui/overlay.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { useStore, setState } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { LEVELS, best, saveBest } from './kit.js';
 import { THUMBS } from './thumbs.jsx';
+import { sfx, arm, stopAll, isMuted, setMuted } from './sfx.js';
 
 // Each game is loaded only when it is played.
 const GAMES = [
@@ -33,27 +34,47 @@ export function GamesDialog() {
   const [round, setRound] = useState(0);
   const [score, setScore] = useState(0);
   const [over, setOver] = useState(null); // { score, record }
-  const close = () => { setState({ games: false }); setGame(null); setOver(null); };
-  const start = (id) => { setGame(id); setScore(0); setOver(null); setRound((r) => r + 1); };
+  // Sound: Ajustes › Sonidos rules; the games' own mute is kept for this window.
+  const appSounds = useStore((s) => s.app?.config?.ui?.sounds !== false);
+  const [mute, setMute] = useState(isMuted);
+  const soundOn = appSounds && !mute;
+  useEffect(() => (open ? arm() : undefined), [open]);
+  const toggleSound = () => { if (!appSounds) return; setMuted(soundOn); setMute(soundOn); if (!soundOn) sfx('select'); };
+  const close = () => { stopAll(); setState({ games: false }); setGame(null); setOver(null); };
+  const start = (id) => { stopAll(); sfx('start'); setGame(id); setScore(0); setOver(null); setRound((r) => r + 1); };
+  const back = () => { stopAll(); sfx('select'); setGame(null); setOver(null); };
+  // The end of a game: a new record gets a fanfare, otherwise a short falling tune after the game's own crash. Chess
+  // and Jumper end with a tune of their own, so they only add the record one.
+  const ended = (s) => {
+    const rec = saveBest(game, level, s);
+    setOver({ score: s, record: rec });
+    const own = game === 'chess' || game === 'runner';
+    if (rec) sfx('record', null, { delay: own ? 0.9 : 0.5 }); else if (!own) sfx('over', null, { delay: 0.5 });
+  };
   const g = GAMES.find((x) => x.id === game);
   const Game = g?.load;
   const record = game ? best(game, level) : 0;
+  const soundText = !appSounds ? t('games.soundAppOff') : soundOn ? t('games.soundOn') : t('games.soundOff');
   return (
     <Dialog open={Boolean(open)} onOpenChange={(v) => { if (!v) close(); }}>
       <DialogContent className="max-h-[92vh] w-[min(760px,96vw)] max-w-none overflow-y-auto outline-none sm:max-w-none" data-testid="games-dialog">
         <div className="flex items-center gap-2.5 pr-6">
-          {game ? <Button variant="ghost" size="icon-sm" onClick={() => setGame(null)} aria-label={t('games.back')}><ArrowLeft /></Button> : <span className="bg-primary/12 text-primary grid size-9 place-items-center rounded-xl"><Gamepad2 className="size-5" /></span>}
+          {game ? <Button variant="ghost" size="icon-sm" onClick={back} aria-label={t('games.back')}><ArrowLeft /></Button> : <span className="bg-primary/12 text-primary grid size-9 place-items-center rounded-xl"><Gamepad2 className="size-5" /></span>}
           <div className="min-w-0 flex-1">
             <DialogTitle>{game ? t(`games.${game}`) : t('games.title')}</DialogTitle>
             <DialogDescription className="mt-1">{game ? t(`games.${game}Help`) : t('games.desc')}</DialogDescription>
           </div>
+          <BubbleTip title={t('games.sound')} text={soundText}>
+            <Button variant="ghost" size="icon-sm" onClick={toggleSound} aria-label={t('games.sound')} aria-pressed={soundOn} aria-disabled={!appSounds || undefined} data-testid="games-sound"
+              className={cn(!soundOn && 'text-muted-foreground', !appSounds && 'opacity-60')}>{soundOn ? <Volume2 /> : <VolumeX />}</Button>
+          </BubbleTip>
         </div>
         {/* Difficulty: chosen before playing, and changing it starts the game again. */}
         <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label={t('games.level')}>
           <span className="text-muted-foreground text-xs">{t('games.level')}</span>
           <div className="bg-muted inline-flex gap-0.5 rounded-full p-0.5">
             {LEVELS.map((l) => (
-              <button key={l} role="radio" aria-checked={level === l} onClick={() => { setLevel(l); if (game) start(game); }} data-testid={`games-level-${l}`}
+              <button key={l} role="radio" aria-checked={level === l} onClick={() => { setLevel(l); if (game) start(game); else sfx('select'); }} data-testid={`games-level-${l}`}
                 className={cn('cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-all', level === l ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>{t(`games.level_${l}`)}</button>
             ))}
           </div>
@@ -89,7 +110,7 @@ export function GamesDialog() {
             <div className="relative max-w-full">
               <Suspense fallback={<div className="text-muted-foreground p-10 text-sm">…</div>}>
                 <Game key={`${game}-${level}-${round}`} level={level} paused={Boolean(over) || !open} onScore={setScore}
-                  onOver={(s) => setOver({ score: s, record: saveBest(game, level, s) })} />
+                  onOver={ended} />
               </Suspense>
               {over ? (
                 <div className="bg-background/60 absolute inset-0 grid place-items-center rounded-2xl backdrop-blur-sm" data-testid="game-over">

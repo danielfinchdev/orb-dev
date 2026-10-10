@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, describeInput, cleanEnv, within } from './common.mjs';
+import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, describeInput, cleanEnv, within, discoverDir } from './common.mjs';
 import { Turn, Approvals } from './live.mjs';
 import { decide, describeAction } from '../core/guard.mjs';
 import { tr } from '../core/context.mjs';
@@ -78,7 +78,7 @@ export async function discoverModels(exe, cfg = {}, env = {}) {
   const silent = { async *[Symbol.asyncIterator]() { await new Promise((r) => { release = r; }); } };
   let q = null;
   try {
-    q = sdkQuery({ prompt: silent, options: { cwd: os.tmpdir(), pathToClaudeCodeExecutable: exe.cmd, env: cleanEnv(env), settingSources: [], extraArgs: { 'strict-mcp-config': null }, mcpServers: {}, abortController: abort, stderr: () => {} } });
+    q = sdkQuery({ prompt: silent, options: { cwd: discoverDir(), pathToClaudeCodeExecutable: exe.cmd, env: cleanEnv(env), settingSources: [], extraArgs: { 'strict-mcp-config': null }, mcpServers: {}, abortController: abort, stderr: () => {} } });
     const rows = await within(q.supportedModels(), 40000);
     if (!Array.isArray(rows)) return null;
     const usual = rows.find((m) => m.value === 'default')?.resolvedModel ?? null;

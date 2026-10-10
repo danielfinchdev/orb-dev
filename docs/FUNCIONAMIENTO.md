@@ -386,8 +386,27 @@ Desde la cabecera puedes cambiar el modelo, los permisos y el razonamiento. Sin 
   - `recordRate` y `realRate` (uso real);
   - `canLaunch` y `rankAccounts` (decisión y orden);
   - `startCooldown` (pausa hasta el reinicio).
-- Origen de los datos: eventos `rate` de los adaptadores, en `sessions.onRate` (`engine.mjs`).
+- Origen de los datos: eventos `rate` de los adaptadores, en `sessions.onRate` (`engine.mjs`) y, desde la 2.6, también
+  los del cerebro (`orchestrator.onEvent`).
 - Pantallas: Agentes («Uso de cada cuenta») y Ajustes («Parar al % del cupo real»).
+
+**2.6: el círculo de contexto y el panel de uso.**
+- Junto al botón de enviar, `ContextMeter` (`src/ui/views/session.jsx`) es un anillo que se llena; al pulsarlo,
+  `UsagePanel` pide `usage.now` (`api.mjs`): el cerebro, las cuentas con sesiones en marcha y las que informaron hace poco.
+- Cada ventana del plan se guarda aparte en `rates:<cuenta>` (`recordRate` → `rateWindows`, la más corta primero).
+  Las de un solo modelo (`seven_day_opus`, `seven_day_fable`…) solo se muestran: no paran la cuenta (`rate:<cuenta>`).
+- Claude solo manda su uso cerca del límite: `planUsage` (`claude.mjs`) lo pide tras cada turno, como mucho cada 90 s,
+  con la llamada experimental del SDK. Codex manda sus dos ventanas (primaria y secundaria) en `account/rateLimits/updated`.
+
+**2.6: ahorro o potencia.** `budget.profile` (0 = máx. ahorro … 4 = máx. uso; `null` = a mano). El deslizador de
+Ajustes › Tareas y usos (`SPEND_PRESETS` en `settings.jsx`) fija los límites, y `persona()` (`orchestrator.mjs`,
+`SPEND`) le dice al cerebro lo cauto que debe ser. Las «Opciones avanzadas» guardan con `profile: null`.
+
+**2.6: modelos reales de cada agente.** `discoverModels(agent)` (`src/agents/index.mjs`, uno por adaptador: Agent SDK
+`supportedModels`, Codex `model/list`, `cursor-agent --list-models`, ACP `session/new`, `opencode models`) en una
+carpeta vacía propia, de uno en uno, al arrancar (cada 12 h), con «Comprobar» y cuando el selector no conoce ninguno
+(`catalog.mjs`: `refreshModels`, `rememberModels`, que limpia los nombres). `checkModel` acepta esos modelos en las
+tareas, y `models.catalog` se guarda 5 s.
 
 ## 13. Tareas limitadas y continuidad
 
@@ -603,7 +622,8 @@ que iniciar sesión en la app. Si no, «Iniciar sesión» abre el login oficial 
 
 ## 27. Interfaz
 
-- **Barra lateral:** asistente, Tareas, Proyectos, Programadas y, debajo:
+- **Barra lateral:** asistente, Tareas, Proyectos, Programadas (y abajo Agentes, Bitácoras, Actividad, Tutoriales y
+  Ajustes) y, debajo:
   - la **bandeja**: «Por aprobar» (permisos y aprobaciones), «En curso» e «Incidencias» (tareas sin cupo y
     conversaciones interrumpidas o con error; «Marcar como resuelto» las quita);
   - las **carpetas** (cada proyecto con sus tareas y conversaciones) y «Sin carpeta».
@@ -617,6 +637,26 @@ que iniciar sesión en la app. Si no, «Iniciar sesión» abre el login oficial 
 - **Modo** claro, oscuro o sistema; **tamaño** de la interfaz con Ctrl +, Ctrl - y Ctrl 0; **Ctrl J** abre una terminal en
   la carpeta.
 - **Textos:** tono y palabras en [`TEXTOS.md`](TEXTOS.md).
+
+### Tutoriales y tutorial guiado (2.6)
+
+- **Tutoriales** (`src/ui/views/tutorials.jsx`, entrada «Tutoriales» del menú, vista `tutorials`): tarjetas por tema
+  (`TUTORIALS`: id, icono, número de líneas y la pantalla a la que lleva su botón con `go()` / `openSettings()`), los
+  atajos de teclado y las preguntas frecuentes en desplegables, todo filtrado por el buscador (sin tildes ni mayúsculas).
+  Los textos están en `src/core/locales/{es,en}/help.mjs` (`help.tut.<id>.title`, `.l1…`, `.go`; `help.key.<n>.k/.v`;
+  `help.faq.<n>.q/.a`). Para añadir un tutorial: una entrada en `TUTORIALS` y sus claves en los dos idiomas.
+- **Tutorial guiado** (`src/ui/components/tour.jsx`): el robot de cuerpo entero (el de los avisos) recorre la app paso a
+  paso. `TOUR_STEPS` lista cada paso con el `data-testid` del control que ilumina (un anillo `.tour-spot` cuya sombra
+  oscurece el resto sin tomar los clics), la vista que hay que mostrar antes (`go(view)`) y sus textos
+  (`help.tour.<id>.title/.text`). Los pasos cuyo control no está en pantalla se saltan (el círculo de contexto antes de la
+  primera respuesta, el menú lateral en ventanas estrechas). Teclado: Esc salta, ← → mueven, Tab se queda en el globo.
+  Sin animaciones el robot está quieto; en el tema «profesional» salen solo los globos (vestidos con las variables
+  `--tip-*` de los globos de ayuda, en `app.css`).
+- Arranca solo en la primera apertura tras la bienvenida (`Shell` en `main.jsx`, nunca en el móvil) y desde «Repetir el
+  tutorial guiado» en Tutoriales (`startTour()` en `store.js`). Al terminar o saltarlo, `endTour()` guarda
+  `ui.tourDone: true` en `orb.json` (`config.save`; `validateConfig` lo acepta como booleano), así que es por carpeta del
+  asistente y no vuelve a salir. Las pruebas que crean una carpeta con `createHome` escriben `ui.tourDone` antes de abrir
+  la app; `test/app.e2e.mjs` sí lo ve arrancar, avanza un paso y lo salta.
 
 ### Ajustes (2.4)
 
@@ -632,7 +672,10 @@ que iniciar sesión en la app. Si no, «Iniciar sesión» abre el login oficial 
 - **Ventana sin la barra de Windows (2.6):** `titleBarStyle: 'hidden'` con `titleBarOverlay` (56 px). Minimizar,
   maximizar y cerrar son los botones de Windows dibujados dentro de la app, arriba a la derecha (con Snap Layouts).
   `src/ui/lib/title-bar.js` les pasa el color de la barra sobre la que quedan (`app:titleBar`) cada vez que cambia el
-  tema, el modo claro u oscuro o el ancho. Las barras de arriba (`.app-titlebar` en `app.css`) mueven la ventana
+  tema, el modo claro u oscuro o el ancho. **2.6:** ya no son los de Windows (sin `titleBarOverlay`): los dibuja
+  `src/ui/components/window-controls.jsx` (IPC `app:window` y evento `app:window-state` en `main.mjs`/`preload.cjs`),
+  vestidos por tema en `themes.css` (`.win-control`); `--wco-inset` es su ancho fijo con `html.has-win-controls`.
+  Las barras de arriba (`.app-titlebar` en `app.css`) mueven la ventana
   (doble clic: maximizar) y dejan hueco a los botones (`--wco-inset`, `.wco-pad`). Sin barra de Windows no hay barra de
   menús: el ajuste `ui.menuBar` desaparece y el menú queda solo para sus atajos (zoom, Ctrl+J, F11).
 - **Barra de menús de Windows (hasta la 2.5):** `ui.menuBar` (falso por defecto); `applyMenuBar()` en `src/main/main.mjs` la muestra u
@@ -648,7 +691,12 @@ que iniciar sesión en la app. Si no, «Iniciar sesión» abre el login oficial 
 - **Clave de las aprobaciones:** cifrada por Windows (DPAPI). El motor la recibe solo en memoria y el MCP no la tiene
   nunca.
 - **Identidad del coordinador:** su clave va solo a su propio proceso MCP (por el SDK, en memoria). En la base de datos
-  solo queda su hash.
+  solo queda su hash. Con Codex de cerebro (2.6), la clave y los tokens no van en sus argumentos (los vería cualquier
+  proceso): viajan en el entorno de Codex y él los pasa por nombre al MCP (`env_vars`, `mcpSecrets` en `codex.mjs`). En
+  modo coordinador Codex usa `untrusted` + `read-only`, así que cada comando pasa por la guardia, que en «leer» lo niega.
+- **Avisos pendientes del asistente (2.6):** `orchestrator_pending` guarda los avisos del motor aún sin contestar
+  (`keep`/`resume` en `orchestrator.mjs`); al cerrar la app el que estaba en curso se repite al volver a abrirla, y
+  «Nuevo chat» no los descarta.
 - **Identidad de los trabajadores (2.5):** cada proceso MCP de un agente lleva `ORB_AGENT_TOKEN`, la firma de Orb de quién
   es y en qué tarea trabaja (HMAC con una clave que solo existe en la memoria del motor y cambia en cada arranque; en la
   base queda el hash, `agent_id:*`). El MCP saca agente y tarea de la firma, no de `ORB_AGENT` ni de `ORB_TASK_ID`: un

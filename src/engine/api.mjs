@@ -43,6 +43,7 @@ const images = (list) => {
 
 export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef = { current: null } }) {
   const realHome = (() => { try { return fs.realpathSync(ctx.home); } catch { return ctx.home; } })();
+  let catalogCache = null; // models.catalog, for a few seconds (see there)
   const insideHome = (p) => { const rel = path.relative(realHome, p); return Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel); };
   const project = (name) => board.project(str(name, 'proyecto', 200)) ?? fail(tr('msg.api.noProject', { name }));
   let lastChat = board.one('SELECT MAX(id) AS id FROM chat')?.id ?? 0;
@@ -182,11 +183,13 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
           if (!offered || !/^[\w.:-]{1,80}$/.test(m)) fail(tr('msg.api.modelUnavailable'));
           patch.models = [...o.models, { id: m, label: offered.label }];
         }
-        if (m && !/^[\w.:\-/[\]=,@]{1,80}$/.test(m)) fail(tr('msg.api.modelUnavailable'));
+        if (m && !/^[A-Za-z0-9][\w.:\-/[\]=,@]{0,79}$/.test(m)) fail(tr('msg.api.modelUnavailable'));
         patch.model = m || (brain === 'claude' ? 'claude-sonnet-5-5' : '');
       } else if (patch.agent && patch.agent !== (o.agent ?? 'claude')) patch.model = brain === 'claude' ? 'claude-sonnet-5-5' : '';
       if (reasoning !== undefined) patch.reasoning = oneOf(reasoning, ['low', 'medium', 'high'], 'razonamiento');
       if (orchestrate !== undefined) patch.orchestrate = Boolean(orchestrate);
+      // Cursor's command line cannot take Orb's tools (MCP): it can talk directly, not coordinate the agents.
+      if (brain === 'cursor' && (patch.orchestrate ?? o.orchestrate !== false)) fail(tr('msg.api.cursorNoCoordinate'));
       const before = { ...o };
       const c = saveConfig({ orchestrator: patch });
       emit('config:changed', c);
@@ -199,7 +202,14 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return info;
     },
     // 2.6: the brains to choose from (agent + model), which ones spend the quota faster and how used each account is.
-    'models.catalog': () => modelCatalog(board, { discover: true, log }),
+    // Kept for a few seconds: the window asks again on every change of the board (while the agents work, many a second).
+    'models.catalog': () => {
+      const key = JSON.stringify([ctx.config.orchestrator, ctx.config.agentOrder, Object.keys(ctx.config.agents).map((a) => ctx.config.agents[a]?.enabled), board.setting('models_rev')]);
+      if (catalogCache && catalogCache.key === key && Date.now() - catalogCache.at < 5000) return catalogCache.value;
+      const value = modelCatalog(board, { discover: true, log });
+      catalogCache = { key, at: Date.now(), value };
+      return value;
+    },
 
     'tasks.list': ({ limit }) => board.panelTasks(Math.min(Number(limit) || 150, 500)),
     'tasks.live': () => scheduler.live(),

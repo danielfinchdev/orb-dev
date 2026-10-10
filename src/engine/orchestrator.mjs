@@ -26,6 +26,15 @@ export function knownModels(board, agent) {
   return [...new Set([...named, ...extra])].slice(0, 24);
 }
 
+// 2.6: how careful to be with the quota, from the «ahorro ↔ uso» slider of Ajustes (budget.profile; null = by hand).
+const SPEND = [
+  'NIVEL DE GASTO: máximo ahorro. Usa siempre el modelo más barato que pueda hacerlo y razonamiento "low"; una tarea mejor que varias; nada de revisiones extra salvo que te las pidan; lee lo mínimo.',
+  'NIVEL DE GASTO: ahorro. Prefiere los modelos baratos y razonamiento "low" o "medium"; junta el trabajo en pocas tareas; revisiones solo para lo importante.',
+  'NIVEL DE GASTO: equilibrado. Modelo y razonamiento según lo que pida cada tarea.',
+  'NIVEL DE GASTO: potencia. Puedes usar modelos potentes y razonamiento "high" cuando mejore el resultado, repartir en paralelo y pedir un Task Review en lo importante.',
+  'NIVEL DE GASTO: máximo uso. Prioriza la calidad: los modelos más potentes, razonamiento "high" en lo complejo, trabajo en paralelo entre agentes y Task Review de lo que se entrega.'
+];
+
 export function persona(board = null) {
   const c = ctx.config; const me = assistantName(); const boss = userName();
   const accountsOf = (a) => (c.accounts ?? []).filter((x) => x.agent === a && x.enabled !== false);
@@ -42,7 +51,7 @@ DELEGAR: los agentes también pueden repartirse subtareas (orb_delegate); tú ve
 AGENTES DISPONIBLES:
 ${models || '- ninguno activado: pide a ' + boss + ' que active uno en la pantalla Agentes.'}
 Razonamiento "medium" por defecto. "high" solo para algo muy complicado${c.policy?.highNeedsApproval !== false ? ` (esa tarea espera la aprobación ${ofUser()}; díselo)` : ''}.
-AHORRO: cada suscripción tiene cupo y ${me} limita las tareas por agente cada ${c.budget?.windowHours ?? 5} h. Si un pedido necesita más de 3 tareas, propón el plan (tarea → agente) y espera el "sí". Si una tarea espera por cupo o falla por límite, no la dupliques: propón otro agente. No vigiles el tablero en bucle.
+AHORRO: cada suscripción tiene cupo y ${me} limita las tareas por agente cada ${c.budget?.windowHours ?? 5} h. ${SPEND[c.budget?.profile ?? 2] ?? ''} Si un pedido necesita más de 3 tareas, propón el plan (tarea → agente) y espera el "sí". Si una tarea espera por cupo o falla por límite, no la dupliques: propón otro agente. No vigiles el tablero en bucle.
 PROYECTOS: cada proyecto vive en una categoría de ${ctx.paths.projects}: windows, ios, android o web (por defecto web). Los nuevos se crean con orb_create_project indicando category (carpeta propia, con git). Las carpetas bitacora y mcp-servers son la configuración de ${me}: no son proyectos y no se tocan. Fija el proyecto de trabajo con orb_set_project; todas las tareas van ahí. Si no hay proyecto fijado y el pedido toca código, pregunta cuál.
 DÓNDE TRABAJAN: por defecto cada tarea trabaja en la carpeta del proyecto (mode "carpeta"), por turnos y con una foto previa que ${boss} puede deshacer con un botón. Marca readonly:true las que solo leen. Usa mode "aislada" (rama y copia propias) solo para experimentos o trabajo en paralelo; si a una aislada le falta algo, orb_give_files.
 CAMBIAR MODELO: orb_update_task (agent, model, reasoning) en una tarea que no está en curso; no se rehace.
@@ -121,7 +130,8 @@ export class Orchestrator {
   resume() {
     const list = this.board.settingJson('orchestrator_pending') ?? [];
     if (!Array.isArray(list) || !list.length) return 0;
-    const queued = new Set(this.queue.map((q) => q.id));
+    // Not twice: neither what is queued nor the one being answered now (a notice may have come in before resume()).
+    const queued = new Set([...this.queue.map((q) => q.id), this.current?.id].filter(Boolean));
     for (const q of list) if (q?.id && !queued.has(q.id) && typeof q.text === 'string') this.queue.push({ ...q, internal: true });
     this.next();
     return list.length;
@@ -136,7 +146,9 @@ export class Orchestrator {
 
   reset() {
     this.generation++;
-    this.queue = []; this.board.settingJson('orchestrator_pending', null);
+    // A new conversation («Nuevo chat», «Reiniciar») drops what the user had queued, not the engine's notices still owed
+    // (the report of finished tasks…): those are answered in the new one.
+    this.queue = this.queue.filter((q) => q.internal);
     this.forget();
     this.board.addChat('system', tr('msg.orch.newConversation', { name: assistantName() }));
     this.busy = false; this.partial = ''; this.tools = []; this.push();
@@ -152,7 +164,7 @@ export class Orchestrator {
     const live = this.live; const stopped = this.inflight;
     Promise.resolve(live?.interrupt()).catch(() => {});
     if (stopped) setTimeout(() => { if (this.inflight === stopped && this.live === live) this.closeLive(); }, STOP_GRACE_MS).unref?.();
-    this.busy = false; this.partial = ''; this.tools = []; this.board.addChat('system', tr('msg.orch.stopped')); this.push();
+    this.busy = false; this.partial = ''; this.tools = []; if (!this.closing) this.board.addChat('system', tr('msg.orch.stopped')); this.push();
   }
 
   // Free mode: the answer to an approval card in the chat (a risky command the assistant wants to run).
@@ -164,7 +176,7 @@ export class Orchestrator {
   next() {
     if (this.busy || this.inflight || !this.queue.length) return;
     this.busy = true; this.partial = ''; this.tools = []; this.push();
-    const item = this.queue.shift();
+    const item = this.queue.shift(); this.current = item;
     const { text, meta } = item;
     const generation = this.generation;
     const run = this.run(text, true, meta).catch((error) => {
@@ -175,7 +187,7 @@ export class Orchestrator {
     }).finally(() => {
       // Answered (or given up): the notice is no longer pending, unless the app is closing in the middle of it.
       if (item.internal && !this.closing) this.keep(item, false);
-      if (this.inflight === run) this.inflight = null;
+      if (this.inflight === run) { this.inflight = null; this.current = null; }
       if (!this.closing) this.next();
     });
     this.inflight = run;

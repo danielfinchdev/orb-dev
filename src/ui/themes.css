@@ -366,7 +366,9 @@ html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) .theme
 .scene-frost { inset: 0; background: color-mix(in oklch, var(--background) var(--frost-tint, 50%), transparent); backdrop-filter: var(--frost-filter, blur(5px)); }
 html.dark .scene { --frost-tint: 50%; --frost-filter: blur(7px) brightness(0.7); }
 @media (prefers-reduced-motion: reduce) { .scene *, .scene *::before, .scene *::after, .theme-band::before { animation: none !important; } }
-html[data-motion="minima"] :is(.scene *, .scene *::before, .scene *::after, .theme-band::before) { animation: none !important; }
+html[data-motion="minima"] .scene *, html[data-motion="minima"] .scene *::before, html[data-motion="minima"] .scene *::after, html[data-motion="minima"] .theme-band::before { animation: none !important; }
+/* 2.6: with the window in the background (or minimised) the scene stands still: nothing to repaint under the blur. */
+html.window-idle .scene *, html.window-idle .scene *::before, html.window-idle .scene *::after, html.window-idle .theme-band::before { animation-play-state: paused !important; }
 /* Text set straight on the scene — the assistant's messages and the greeting of a new chat — reads on a soft pane of
    the card's colour (the system's notes have theirs), gentle and in the theme's own shape. Nothing in orb / profesional. */
 html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) .chat-glass { background-color: color-mix(in oklch, var(--card) 76%, transparent); border-radius: calc(var(--radius) + 6px); padding: 0.55rem 0.9rem 0.7rem; }

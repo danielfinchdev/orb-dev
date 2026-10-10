@@ -14,7 +14,8 @@ import { Notices } from '@/components/notices.jsx';
 import { Scene } from '@/components/scene.jsx';
 import { GamesDialog } from '@/games/games.jsx';
 import { Robot } from '@/components/robot.jsx';
-import { useStore, setState, getState, refresh, refreshSoon, bridge, go, applyTheme, openTerminal } from '@/lib/store.js';
+import { useStore, setState, getState, refresh, refreshSoon, bridge, go, applyTheme, openTerminal, startTour } from '@/lib/store.js';
+import { Tour } from '@/components/tour.jsx';
 import { AGENT } from '@/lib/labels.js';
 import { WindowControls } from '@/components/window-controls.jsx';
 import { useT, t as tNow } from '@/lib/i18n.js';
@@ -30,9 +31,10 @@ import { SettingsDialog, PhoneView } from '@/views/settings.jsx';
 import { SchedulesView } from '@/views/schedules.jsx';
 import { ExpertView } from '@/views/expert.jsx';
 import { NewChatView } from '@/views/new-chat.jsx';
+import { TutorialsView } from '@/views/tutorials.jsx';
 
 const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
-const VIEWS = { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: LogsView, activity: ActivityView, expert: ExpertView, schedules: SchedulesView, phone: PhoneView, new: NewChatView };
+const VIEWS = { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: LogsView, activity: ActivityView, expert: ExpertView, schedules: SchedulesView, phone: PhoneView, new: NewChatView, tutorials: TutorialsView };
 
 function Shell() {
   const t = useT();
@@ -45,6 +47,13 @@ function Shell() {
   const busy = app.chat?.busy;
   const mood = busy ? (app.chat.partial ? 'talking' : 'thinking') : 'idle';
   AGENT.orb = app.config.assistantName;
+  // 2.6: the guided tour, once, the first time the app opens after the setup (never on the phone); later from Tutoriales.
+  const tour = useStore((s) => s.tour);
+  useEffect(() => {
+    if (bridge.mobile || getState().app?.config?.ui?.tourDone === true) return undefined;
+    const id = setTimeout(startTour, 900);
+    return () => clearTimeout(id);
+  }, []);
   return (
     <div className="flex h-full">
       {/* 2.6: folded away (its button next to day / night), the screens take the whole width. */}
@@ -65,7 +74,8 @@ function Shell() {
       <SettingsDialog />
       <GamesDialog />
       <Notices />
-      <div className="hidden md:contents"><Companion name={app.config.assistantName} base={mood} hidden={app.config.ui?.companion === false || !COMPANION_VIEWS.has(route.view) || bridge.mobile} /></div>
+      <div className="hidden md:contents"><Companion name={app.config.assistantName} base={mood} hidden={app.config.ui?.companion === false || !COMPANION_VIEWS.has(route.view) || bridge.mobile || Boolean(tour)} /></div>
+      {tour ? <Tour key={tour.key} /> : null}
     </div>
   );
 }
@@ -135,6 +145,9 @@ function Root() {
 
 applyTheme();
 if (window.orb?.windowControls) document.documentElement.classList.add('has-win-controls');
+// The animated backdrop pauses while the window is in the background or hidden (themes.css: html.window-idle).
+const idle = () => document.documentElement.classList.toggle('window-idle', document.hidden || !document.hasFocus());
+window.addEventListener('blur', idle); window.addEventListener('focus', idle); document.addEventListener('visibilitychange', idle);
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <TooltipProvider>

@@ -72,7 +72,16 @@ export function killTree(child) {
 
 // 2.6: what a short command prints (an agent listing its models): stdout only, clean environment, never throws. Resolves
 // with null when the program fails or takes longer than timeoutMs (it is stopped then).
-export function readOutput(cmd, args, { env = {}, cwd = os.tmpdir(), timeoutMs = 30000, max = 1024 * 1024 } = {}) {
+// The folder where the agents are asked for their models: an empty one of this process only (no project settings, no
+// files planted by anyone else in the shared temp folder are picked up).
+let emptyDir = null;
+export function discoverDir() {
+  if (emptyDir && fs.existsSync(emptyDir)) return emptyDir;
+  try { emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-modelos-')); } catch { emptyDir = os.tmpdir(); }
+  return emptyDir;
+}
+
+export function readOutput(cmd, args, { env = {}, cwd = discoverDir(), timeoutMs = 30000, max = 1024 * 1024 } = {}) {
   return new Promise((resolve) => {
     let out = ''; let done = false; let child;
     const finish = (value) => { if (done) return; done = true; clearTimeout(timer); resolve(value); };
@@ -81,7 +90,8 @@ export function readOutput(cmd, args, { env = {}, cwd = os.tmpdir(), timeoutMs =
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (c) => { if (out.length < max) out += c; });
     child.on('error', () => finish(null));
-    child.on('exit', (code) => finish(code === 0 ? out : null));
+    // 'close', not 'exit': by then everything the program printed has been read.
+    child.on('close', (code) => finish(code === 0 ? out : null));
   });
 }
 
