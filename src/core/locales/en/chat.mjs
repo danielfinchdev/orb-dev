@@ -99,6 +99,8 @@ export default {
   'games.next': 'Next',
   'games.lines': 'Lines',
   'games.speed': 'Speed',
+  'games.runnerAttempt': 'Attempt {n}',
+  'games.runnerDone': 'Level complete!',
   'games.chessYourTurn': 'Your move',
   'games.chessThinking': 'The computer is thinking…',
   'games.chessCheck': 'Check',

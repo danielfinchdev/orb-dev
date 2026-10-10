@@ -99,6 +99,8 @@ export default {
   'games.next': 'Siguiente',
   'games.lines': 'Líneas',
   'games.speed': 'Velocidad',
+  'games.runnerAttempt': 'Intento {n}',
+  'games.runnerDone': '¡Nivel completado!',
   'games.chessYourTurn': 'Te toca',
   'games.chessThinking': 'El ordenador está pensando…',
   'games.chessCheck': 'Jaque',
