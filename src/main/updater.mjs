@@ -4,11 +4,10 @@
 // The window gets the state as the 'app:update' event and asks through app:update* (src/main/main.mjs).
 import { app } from 'electron';
 import pkg from 'electron-updater';
+import { AUTHOR } from '../core/product.mjs';
 
 const { autoUpdater } = pkg;
-const OWNER = 'danielfinchdev';
-const REPO = 'orb-dev';
-export const RELEASES_URL = `https://github.com/${OWNER}/${REPO}/releases/latest`;
+export const RELEASES_URL = `https://github.com/${AUTHOR.repo}/releases/latest`;
 const EVERY = 4 * 60 * 60 * 1000;
 const FIRST = 15_000;
 
@@ -53,7 +52,7 @@ export function createUpdater({ send, log = () => {} }) {
   async function checkPortable() {
     set({ state: 'checking', error: null });
     try {
-      const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/releases/latest`, { headers: { accept: 'application/vnd.github+json', 'user-agent': 'Orb' }, signal: AbortSignal.timeout(20_000) });
+      const res = await fetch(`https://api.github.com/repos/${AUTHOR.repo}/releases/latest`, { headers: { accept: 'application/vnd.github+json', 'user-agent': 'Orb' }, signal: AbortSignal.timeout(20_000) });
       if (!res.ok) throw new Error(`GitHub: HTTP ${res.status}`);
       const latest = String((await res.json()).tag_name ?? '').replace(/^v/, '');
       set(newer(latest, current) ? { state: 'available', version: latest } : { state: 'none', version: null });

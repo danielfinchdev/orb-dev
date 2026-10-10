@@ -31,7 +31,8 @@ const WORKER_STATUSES = ['done', 'failed', 'blocked'];
 // a running task is cancelled from the app because that also stops its process.
 const ORCHESTRATOR_TO = { queued: ['failed', 'blocked', 'cancelled', 'queued'], cancelled: ['queued', 'blocked', 'failed'] };
 const real = (p) => { try { return fs.realpathSync(p); } catch { return path.resolve(String(p)); } };
-const same = (a, b) => real(a).toLowerCase() === real(b).toLowerCase();
+// Equal strings need no disk access (revalidateQueued compares every queued task's folder on each tick).
+const same = (a, b) => String(a).toLowerCase() === String(b).toLowerCase() || real(a).toLowerCase() === real(b).toLowerCase();
 const inside = (root, p) => { const rel = path.relative(root, p); return Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel); };
 
 // Validated model id for an agent: one of its configured models, or any well-formed id when the list is empty (CLI default).

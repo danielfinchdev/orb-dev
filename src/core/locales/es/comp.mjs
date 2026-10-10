@@ -21,7 +21,7 @@ export default {
   'comp.live.sec': '{n} s',
   'comp.live.min': '{n} min',
   'comp.live.hourMin': '{h} h {m} min',
-  'comp.live.working': 'trabajando',
+  'comp.live.working': 'en curso',
   'comp.live.viewConv': 'Ver conversación',
   'comp.live.cancelTitle': 'Cancelar la tarea',
   'comp.live.cancelTask': 'Cancelar tarea',
@@ -36,8 +36,8 @@ export default {
   'comp.live.running': 'En curso ({n})',
   'comp.live.more': 'y {n} más en Tareas',
   'comp.markdown.image': 'imagen',
-  'comp.theme.tip': 'Tema claro / oscuro',
-  'comp.theme.aria': 'Cambiar entre tema claro y oscuro',
+  'comp.theme.tip': 'Modo claro / oscuro',
+  'comp.theme.aria': 'Cambiar entre modo claro y oscuro',
   'comp.projects.newTitle': 'Nuevo proyecto',
   'comp.projects.newDesc': 'Crea una carpeta con git y bitácora dentro de la carpeta del asistente.',
   'comp.projects.category': 'Categoría',
@@ -87,5 +87,5 @@ export default {
   'comp.sidebar.halfway': 'Interrumpida',
   'comp.sidebar.waitApproval': 'Esperan tu aprobación',
   'comp.sidebar.foldersHint': 'Cada proyecto es una carpeta. Aquí verás las tareas que le asignes.',
-  'comp.sidebar.looseHint': 'Conversa directamente con cualquier agente (Claude, Codex, Cursor, Gemini…) en tiempo real.'
+  'comp.sidebar.looseHint': 'Conversa directamente con cualquier agente (Claude, Codex, Cursor, Gemini…).'
 };

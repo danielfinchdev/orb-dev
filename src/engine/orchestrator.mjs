@@ -183,7 +183,8 @@ export class Orchestrator {
       if (msgId) this.board.patchChatMeta(msgId, { kind: 'approval', id: ev.id, status: ev.decision === 'deny' ? 'denied' : 'allowed' });
       return;
     }
-    if (ev.type === 'exit' && !this.busy) this.live = null;
+    // Only the process that ended is dropped: a replaced live's late exit must not detach the one in use.
+    if (ev.type === 'exit' && !this.busy && this.live?.isClosed()) this.live = null;
   }
 
   async run(text, allowRetry, meta = null) {
@@ -206,8 +207,8 @@ export class Orchestrator {
     const free = (ctx.config.orchestrator ?? {}).orchestrate === false;
     const timer = setTimeout(() => { this.board.addChat('system', tr('msg.orch.timeLimit')); Promise.resolve(this.live?.interrupt()).catch(() => {}); }, free ? (ctx.config.timeoutMinutes ?? 60) * 60_000 : 10 * 60_000);
     const live = this.live;
-    const result = await live.send({ text: prompt });
-    clearTimeout(timer);
+    let result;
+    try { result = await live.send({ text: prompt }); } finally { clearTimeout(timer); }
     if (generation !== this.generation) return; // reset or stop: nothing to publish
     // A stale conversation id fails before any answer: forget it and try once more with a fresh conversation.
     if (result.isError && allowRetry && !result.text && !fresh) { this.forget(); return this.run(text, false, meta); }

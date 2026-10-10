@@ -49,9 +49,10 @@ async function download(url, log) {
     const out = path.join(work, 'x'); fs.mkdirSync(out);
     // Windows 10+ and macOS bring a tar that reads zip files (on Windows, System32's: Git's GNU tar reads "D:" as a host);
     // Linux usually has unzip; PowerShell as the last resort on Windows.
-    const tar = process.platform === 'win32' ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe') : 'tar';
+    const system32 = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32'); // full paths: nothing in PATH can stand in
+    const tar = process.platform === 'win32' ? path.join(system32, 'tar.exe') : 'tar';
     let r = spawnSync(tar, ['-xf', zip, '-C', out], { windowsHide: true, timeout: 120_000 });
-    if (r.status !== 0 && process.platform === 'win32') r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Expand-Archive -LiteralPath $env:ORB_ZIP -DestinationPath $env:ORB_OUT -Force'], { windowsHide: true, timeout: 180_000, env: { ...process.env, ORB_ZIP: zip, ORB_OUT: out } });
+    if (r.status !== 0 && process.platform === 'win32') r = spawnSync(path.join(system32, 'WindowsPowerShell', 'v1.0', 'powershell.exe'), ['-NoProfile', '-NonInteractive', '-Command', 'Expand-Archive -LiteralPath $env:ORB_ZIP -DestinationPath $env:ORB_OUT -Force'], { windowsHide: true, timeout: 180_000, env: { ...process.env, ORB_ZIP: zip, ORB_OUT: out } });
     else if (r.status !== 0) r = spawnSync('unzip', ['-q', '-o', zip, '-d', out], { timeout: 120_000 });
     const from = path.join(out, 'platform-tools');
     if (!fs.existsSync(path.join(from, exe('adb')))) throw new Error(tr('sys.android.noAdb'));

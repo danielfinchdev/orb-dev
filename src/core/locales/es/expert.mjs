@@ -9,7 +9,7 @@ export default {
   'expert.panel.activity': 'Actividad en directo',
   'expert.state.nuevo': 'nuevo',
   'expert.state.añadido': 'añadido',
-  'expert.state.borrado': 'borrado',
+  'expert.state.borrado': 'eliminado',
   'expert.state.renombrado': 'renombrado',
   'expert.state.cambiado': 'cambiado',
   'expert.ago.now': 'ahora',

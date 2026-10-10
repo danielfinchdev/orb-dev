@@ -307,7 +307,7 @@ try {
   // ---- night mode from the sun / moon button
   step = 'modo noche';
   const wasDark = await win.evaluate(() => document.documentElement.classList.contains('dark'));
-  await win.getByRole('button', { name: 'Cambiar entre tema claro y oscuro' }).click();
+  await win.getByRole('button', { name: 'Cambiar entre modo claro y oscuro' }).click();
   await until(async () => (await win.evaluate(() => document.documentElement.classList.contains('dark'))) !== wasDark, 'cambio día/noche');
   await win.click('[data-testid=nav-tasks]');
   await win.waitForTimeout(500);

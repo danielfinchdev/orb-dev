@@ -37,4 +37,4 @@ Planes y auditorías de versiones anteriores, guardados como referencia. No desc
 | [`historico/PLAN-v2.md`](historico/PLAN-v2.md) | Plan de la versión 2. |
 | [`historico/AUDITORIA-v2.md`](historico/AUDITORIA-v2.md) | Primera auditoría de la versión 2. |
 | [`historico/AUDITORIA-v2-segunda.md`](historico/AUDITORIA-v2-segunda.md) | Segunda auditoría de la versión 2. |
-| [`historico/PLAN-v3.md`](historico/PLAN-v3.md) | Plan de la 2.3 (ideas de T3 Code) y su estado al terminarla. |
+| [`historico/PLAN-v3.md`](historico/PLAN-v3.md) | Plan de la 2.3 y su estado al terminarla. |

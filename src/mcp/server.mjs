@@ -23,7 +23,7 @@ const board = new Board(undefined, { noKey: true }); // the MCP never holds the 
 
 function identity() {
   const claimed = process.env.ORB_AGENT || 'desconocido';
-  if (claimed !== 'orb') return /^[a-z0-9_-]{1,30}$/i.test(claimed) ? claimed : 'desconocido';
+  if (claimed !== 'orb') return AGENTS.includes(claimed) ? claimed : 'desconocido'; // never "usuario" or any other reserved name
   const hash = board.setting('orchestrator_key_hash');
   const given = crypto.createHash('sha256').update(process.env.ORB_ORCH_KEY ?? '').digest('hex');
   return hash && process.env.ORB_ORCH_KEY && hash.length === given.length && crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(given)) ? 'orb' : 'agente-sin-clave';

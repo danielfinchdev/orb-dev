@@ -51,7 +51,7 @@ const effort = (r) => (r === 'xhigh' ? 'high' : r || 'medium');
 
 const ITEM_TOOL = (item) => {
   if (item.type === 'commandExecution') return { name: tr('sys.agents.tool.execute'), input: clip(item.command, 300) };
-  if (item.type === 'mcpToolCall') return { name: `${item.server}:${item.tool}`.replace(/^orb:/, 'orb:'), input: clip(item.arguments ?? '', 300) };
+  if (item.type === 'mcpToolCall') return { name: `${item.server}:${item.tool}`, input: clip(item.arguments ?? '', 300) };
   if (item.type === 'webSearch') return { name: tr('sys.agents.tool.webSearch'), input: clip(item.query ?? item.action?.query ?? '', 300) };
   if (item.type === 'dynamicToolCall') return { name: item.tool, input: clip(item.arguments ?? '', 300) };
   if (item.type === 'collabAgentToolCall') return { name: tr('sys.agents.tool.subagent', { tool: item.tool }), input: clip(item.prompt ?? '', 300) };
@@ -181,7 +181,8 @@ export function createLive(o) {
     turn = new Turn();
     const current = turn;
     try {
-      started ??= start();
+      // A start that fails (no reply, thread not found) closes this live: the next message gets a fresh process.
+      started ??= start().catch((error) => { live.close(); throw error; });
       await started;
       const res = await peer.request('turn/start', { threadId, input: input(text, images), ...(model ? { model } : {}), effort: effort(o.reasoning) });
       turnId = res?.turn?.id ?? null;

@@ -44,7 +44,7 @@ export async function status() {
   return { installed: true, loggedIn: auth.ok, user: user?.ok ? user.out : null, where: exe };
 }
 
-export function login() { const exe = ghExe(); if (!exe) throw new Error(tr('msg.github.ghMissingShort')); openConsole(exe, ['auth', 'login', '--web', '--git-protocol', 'https'], 'GitHub: iniciar sesión'); }
+export function login() { const exe = ghExe(); if (!exe) throw new Error(tr('msg.github.ghMissingShort')); openConsole(exe, ['auth', 'login', '--web', '--git-protocol', 'https']); }
 
 export async function projectInfo(project) {
   if (!isGitRepo(project.path)) return { git: false };
@@ -101,7 +101,7 @@ export async function createPr(project, { branch, title, body = '', base }) {
 }
 
 export async function createRepo(project, { name, isPrivate = true }) {
-  if (!/^[\w.-]{1,100}$/.test(name ?? '')) throw new Error(tr('msg.github.badRepoName'));
+  if (!/^[\w.][\w.-]{0,99}$/.test(name ?? '')) throw new Error(tr('msg.github.badRepoName')); // never starts with "-": gh would read it as a flag
   if (!isGitRepo(project.path)) throw new Error(tr('msg.github.noGit'));
   if (!git(project.path, 'rev-parse', '--verify', '--quiet', 'HEAD').stdout.trim()) throw new Error(tr('msg.github.needCommit'));
   if (git(project.path, 'remote', 'get-url', 'origin').status === 0) throw new Error(tr('msg.github.hasOrigin'));
@@ -111,7 +111,7 @@ export async function createRepo(project, { name, isPrivate = true }) {
 
 // Clones a repository into a category of the assistant's folder (web by default). Returns the new folder.
 export async function clone(repo, name, category) {
-  if (!/^([\w.-]+\/[\w.-]+|https:\/\/github\.com\/[\w.-]+\/[\w.-]+(\.git)?)$/.test(String(repo ?? '').trim())) throw new Error(tr('msg.github.badRepo'));
+  if (!/^([\w.][\w.-]*\/[\w.][\w.-]*|https:\/\/github\.com\/[\w.-]+\/[\w.-]+(\.git)?)$/.test(String(repo ?? '').trim())) throw new Error(tr('msg.github.badRepo'));
   const folder = path.join(ctx.paths.categories[checkCategory(category)], folderName(name || String(repo).split('/').pop().replace(/\.git$/, ''), 'proyecto'));
   if (fs.existsSync(folder)) throw new Error(tr('msg.github.folderExists', { folder }));
   const exe = ghExe();

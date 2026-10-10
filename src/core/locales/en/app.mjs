@@ -28,7 +28,7 @@ export default {
   'update.later': 'Later',
   'update.update': 'Update',
   'update.download': 'Download',
-  'update.failed': 'Download failed: {error}',
+  'update.failed': 'Could not download: {error}',
   'update.notes': 'What’s new',
   'update.close': 'Close'
 };

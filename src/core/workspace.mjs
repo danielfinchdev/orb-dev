@@ -71,13 +71,14 @@ export function takeCheckpoint(dir, name, backups) {
   return { kind: 'copia', dir, copy: target, at: Date.now() - 2000 };
 }
 
+const MAX_COPY_FILE = 50 * 1024 * 1024;
 function copyTree(from, to) {
   fs.mkdirSync(to, { recursive: true });
   fs.cpSync(from, to, { recursive: true, force: true, dereference: false, filter: (src) => {
     const rel = path.relative(from, src).replace(/\\/g, '/');
     if (!rel) return true;
     if (/(^|\/)(\.git|node_modules)(\/|$)/.test(rel) || isSecretPath(rel)) return false;
-    try { const st = fs.lstatSync(src); return !st.isSymbolicLink() && (st.isDirectory() || st.size <= 50 * 1024 * 1024); } catch { return false; }
+    try { const st = fs.lstatSync(src); return !st.isSymbolicLink() && (st.isDirectory() || st.size <= MAX_COPY_FILE); } catch { return false; }
   } });
 }
 
@@ -118,7 +119,13 @@ export function undoCheckpoint(before, after) {
     const src = path.join(before.copy, rel); const dst = path.join(before.dir, rel);
     if (!fs.existsSync(dst) || !fs.readFileSync(src).equals(fs.readFileSync(dst))) { fs.mkdirSync(path.dirname(dst), { recursive: true }); fs.copyFileSync(src, dst); restored.push(rel); }
   }
-  for (const rel of walk(before.dir)) if (!inCopy.has(rel) && fs.statSync(path.join(before.dir, rel)).mtimeMs >= before.at) { fs.rmSync(path.join(before.dir, rel), { force: true }); removed.push(rel); }
+  for (const rel of walk(before.dir)) {
+    if (inCopy.has(rel)) continue;
+    const file = path.join(before.dir, rel); const st = fs.statSync(file);
+    if (st.mtimeMs < before.at) continue;
+    if (st.size > MAX_COPY_FILE) { skipped.push(rel); continue; } // never in the copy, so it may predate the task: the user decides
+    fs.rmSync(file, { force: true }); removed.push(rel);
+  }
   return { restored, removed, skipped };
 }
 

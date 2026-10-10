@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Settings, FolderOpen, Plus, Trash2, ArrowLeftRight, Smartphone, QrCode, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, LayoutGrid, UserRound, Brain, ListChecks, Wrench, RefreshCw } from 'lucide-react';
 import { ToolIcon } from '@/components/agent-icon.jsx';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, APPEARANCE_DEFAULTS } from '../../core/appearance.mjs';
+import { PRODUCT, AUTHOR } from '../../core/product.mjs';
 import { PANELS, savePanels } from './expert.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
@@ -473,12 +474,12 @@ export function PhoneView() {
 }
 
 // Contribute: a contribution through PayPal and feedback straight to the developer's inbox (src/main/feedback.mjs).
-function SupportCard({ about }) {
+function SupportCard() {
   const t = useT();
   return (
     <Card>
       <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><HeartHandshake className="text-primary size-5" /><div><CardTitle>{t('contribute.supportTitle')}</CardTitle><CardDescription>{t('contribute.supportDesc')}</CardDescription></div></CardHeader>
-      <CardFooter><Button size="sm" onClick={() => bridge.openExternal(about?.paypal ?? 'https://paypal.me/DanielFinch')} data-testid="contribute-paypal"><HandHeart />{t('contribute.paypal')}</Button></CardFooter>
+      <CardFooter><Button size="sm" onClick={() => bridge.openExternal(AUTHOR.paypal)} data-testid="contribute-paypal"><HandHeart />{t('contribute.paypal')}</Button></CardFooter>
     </Card>
   );
 }
@@ -569,7 +570,7 @@ const SECTIONS = [
   { id: 'herramientas', icon: Wrench, cards: (c) => <><BrowserCard c={c} /><McpCard c={c} /><AndroidCard /></> },
   { id: 'experto', icon: SquareTerminal, cards: (c) => <ExpertCard c={c} /> },
   { id: 'actualizaciones', icon: RefreshCw, cards: () => <UpdatesCard /> },
-  { id: 'contribuye', icon: HeartHandshake, cards: (c, app, about) => <><SupportCard about={about} /><FeedbackCard /></> },
+  { id: 'contribuye', icon: HeartHandshake, cards: () => <><SupportCard /><FeedbackCard /></> },
   { id: 'apps', icon: LayoutGrid, cards: () => <MoreAppsCard /> }
 ];
 
@@ -577,8 +578,6 @@ export function SettingsDialog() {
   const t = useT();
   const open = useStore((s) => s.settings);
   const app = useStore((s) => s.app);
-  const [about, setAbout] = useState(null);
-  useEffect(() => { if (open && !about) bridge.about?.().then(setAbout).catch(() => {}); }, [open, about]);
   if (!app) return null;
   const section = SECTIONS.find((s) => s.id === open) ?? SECTIONS[0];
   const c = app.config;
@@ -586,7 +585,7 @@ export function SettingsDialog() {
     <Dialog open={Boolean(open)} onOpenChange={(o) => { if (!o) closeSettings(); }}>
       <DialogContent className="flex h-[min(780px,90vh)] w-[min(1080px,94vw)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none" data-testid="settings-dialog" aria-describedby={undefined}>
         <div className="flex h-16 shrink-0 items-center border-b px-6 pr-14">
-          <DialogTitle className="text-lg font-medium">Orb · {t('settings.title')}</DialogTitle>
+          <DialogTitle className="text-lg font-medium">{PRODUCT.name} · {t('settings.title')}</DialogTitle>
         </div>
         <div className="flex min-h-0 flex-1">
           <nav className="flex w-56 shrink-0 flex-col max-sm:w-16" aria-label={t('settings.title')}>
@@ -599,16 +598,16 @@ export function SettingsDialog() {
               ))}
             </div>
             <div className="grid gap-0.5 px-6 pt-3 pb-5 max-sm:px-3" data-testid="settings-about">
-              <button type="button" onClick={() => bridge.openExternal(about?.url ?? 'https://github.com/danielfinchdev')} className="hover:text-primary flex w-fit cursor-pointer items-center gap-1.5 text-[13px] font-medium" title="github.com/danielfinchdev">
-                <ToolIcon tool="gh" className="size-4" /><span className="max-sm:hidden">@{about?.github ?? 'danielfinchdev'}</span>
+              <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="hover:text-primary flex w-fit cursor-pointer items-center gap-1.5 text-[13px] font-medium" title={AUTHOR.url.replace('https://', '')}>
+                <ToolIcon tool="gh" className="size-4" /><span className="max-sm:hidden">@{AUTHOR.github}</span>
               </button>
-              <span className="text-muted-foreground text-xs max-sm:hidden">Orb {app.version}</span>
+              <span className="text-muted-foreground text-xs max-sm:hidden">{PRODUCT.name} {app.version}</span>
             </div>
           </nav>
           <div key={section.id} className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 pt-6 pb-8">
             <div className="mx-auto grid max-w-3xl gap-4">
               <div className="grid gap-1 pb-1"><h2 className="text-2xl font-medium">{t(`settings.section.${section.id}`)}</h2><p className="text-muted-foreground text-sm">{t(`settings.sectionDesc.${section.id}`)}</p></div>
-              {section.cards(c, app, about)}
+              {section.cards(c, app)}
             </div>
           </div>
         </div>

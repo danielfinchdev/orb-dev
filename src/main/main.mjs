@@ -10,7 +10,7 @@ import { createHome, isHome, loadConfig, writeJson } from '../core/home.mjs';
 import { createAgentBrowser } from './browser.mjs';
 import { openTerminal } from './terminal.mjs';
 import { createUpdater, RELEASES_URL } from './updater.mjs';
-import { AUTHOR, MAX_IMAGES, captureWindow, readImage, sendFeedback, moreApps } from './feedback.mjs';
+import { MAX_IMAGES, captureWindow, readImage, sendFeedback, moreApps } from './feedback.mjs';
 import { PRODUCT } from '../core/product.mjs';
 import { translate } from '../core/i18n.mjs';
 
@@ -44,7 +44,9 @@ const pending = new Map();
 let agentBrowser = null; // the agents' browser and its little floating window (created when the app is ready)
 // New versions from GitHub Releases (src/main/updater.mjs); the window gets the state as the 'app:update' event.
 const updater = createUpdater({ send: (state) => { if (win && !win.isDestroyed()) win.webContents.send('engine:event', 'app:update', state); }, log: (line) => console.log(line) });
-const config = () => { try { return loadConfig(home); } catch { return null; } };
+// orb.json as the engine last saved it: read once and again after each config:changed (every save goes through the engine).
+let cachedConfig = null;
+const config = () => { if (!cachedConfig && home) { try { cachedConfig = loadConfig(home); } catch { /* unreadable: defaults */ } } return cachedConfig; };
 // Texts in the language of the settings (Spanish before the first run, as in the window).
 const langOf = (c) => (c?.language === 'en' ? 'en' : 'es');
 const T = (key, vars) => translate(langOf(config()), key, vars);
@@ -163,12 +165,12 @@ function applyMenu(c = config()) {
 }
 
 function onEngineEvent(event, payload) {
+  if (event === 'config:changed') { cachedConfig = null; applyMenu(payload); applyMenuBar(payload); }
   if (!win || win.isDestroyed()) return;
-  if (event === 'config:changed') { applyMenu(payload); applyMenuBar(payload); }
   win.webContents.send('engine:event', event, payload);
   // Notices while the window is in the background: finished tasks, approvals, the assistant's answers.
   if (event === 'chat:new' && !win.isFocused() && Notification.isSupported()) {
-    let name = PRODUCT.name; try { name = loadConfig(home).assistantName; } catch { /* default */ }
+    const name = config()?.assistantName ?? PRODUCT.name;
     const n = new Notification({ icon: path.join(SRC, '..', 'build', 'icon.png'), title: payload.role === 'orb' ? name : T('sys.main.notice', { name }), body: String(payload.body ?? '').slice(0, 240), silent: false });
     n.on('click', () => { win.show(); win.focus(); win.webContents.send('engine:event', 'ui:navigate', { view: 'chat' }); });
     n.show();
@@ -222,7 +224,6 @@ ipcMain.handle('app:openExternal', guard(async (url) => {
   return true;
 }));
 // Ajustes → Contribuye (feedback by mail with screenshots) and Más aplicaciones (src/main/feedback.mjs).
-ipcMain.handle('app:about', guard(async () => ({ ...AUTHOR, version: VERSION })));
 ipcMain.handle('app:feedbackCapture', guard(async () => (win ? captureWindow(win) : null)));
 ipcMain.handle('app:feedbackImages', guard(async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], filters: [{ name: 'PNG / JPEG', extensions: ['png', 'jpg', 'jpeg'] }] });
@@ -251,6 +252,7 @@ ipcMain.handle('app:setup', guard(async ({ base, assistantName, userName } = {})
   const { home: h } = createHome(String(base ?? ''), { assistantName: String(assistantName ?? PRODUCT.assistant), userName: String(userName ?? '') });
   saveLocation(h);
   await startEngine(h);
+  cachedConfig = null;
   setTitle();
   applyMenu();
   return { home: h };
@@ -263,7 +265,7 @@ ipcMain.handle('app:switchHome', guard(async (target) => {
   app.relaunch(); app.exit(0);
 }));
 
-function setTitle() { try { win?.setTitle(home ? loadConfig(home).assistantName : PRODUCT.name); } catch { /* keep */ } }
+function setTitle() { win?.setTitle(config()?.assistantName ?? PRODUCT.name); }
 
 function createWindow() {
   win = new BrowserWindow({
@@ -277,12 +279,16 @@ function createWindow() {
   win.webContents.on('zoom-changed', (_e, dir) => zoomBy(dir)); // Ctrl + mouse wheel
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https:\/\//.test(url)) shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('orb://app/')) e.preventDefault(); });
+  let closing = false; // a second click on the X while the question is open does not ask twice
   win.on('close', async (e) => {
     if (quitting || !engine) return;
     e.preventDefault();
+    if (closing) return;
+    closing = true;
     let running = 0; try { running = (await callEngine('app.state', {}, 5000)).counts?.running ?? 0; } catch { /* closing anyway */ }
     if (running) {
       const r = await dialog.showMessageBox(win, { type: 'warning', buttons: [T('sys.dialog.closeAnyway'), T('sys.dialog.cancel')], defaultId: 1, cancelId: 1, title: T('sys.dialog.runningTitle'), message: T(running === 1 ? 'sys.dialog.closeOne' : 'sys.dialog.closeMany', { n: running }) });
+      closing = false;
       if (r.response !== 0) return;
     }
     quitting = true; app.quit();
@@ -302,7 +308,7 @@ app.whenReady().then(async () => {
   // Our pages come from orb://app/ (only files inside src/renderer); nothing else is served.
   protocol.handle('orb', (request) => {
     const url = new URL(request.url);
-    const file = path.normalize(path.join(RENDERER, decodeURIComponent(url.pathname)));
+    let file; try { file = path.normalize(path.join(RENDERER, decodeURIComponent(url.pathname))); } catch { file = ''; }
     // orb://pip/ is the same files for the little window: another host, so Chromium keeps its zoom apart from the app's.
     if (!['app', 'pip'].includes(url.host) || !file.startsWith(RENDERER + path.sep)) return new Response('no encontrado', { status: 404 });
     return net.fetch(pathToFileURL(file).toString());
@@ -313,12 +319,12 @@ app.whenReady().then(async () => {
     callback({ responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': ["default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"] } });
   });
   const h = readLocation();
-  let saved = null; try { saved = h ? loadConfig(h) : null; } catch { /* Spanish */ }
-  applyMenu(saved); // in the language of the settings; built again when it changes (onEngineEvent)
+  home = h;
+  applyMenu(); // in the language of the settings; built again when it changes (onEngineEvent)
   // The agents' browser: pages drawn off screen and the little window in the top-right corner (ui.pip turns it off).
   try {
     agentBrowser = createAgentBrowser({
-      pipUrl: 'orb://pip/pip.html', pipPreload: path.join(SRC, 'main', 'pip-preload.cjs'), mainWindow: () => win, language: () => config()?.language ?? 'es',
+      pipUrl: 'orb://pip/pip.html', pipPreload: path.join(SRC, 'main', 'pip-preload.cjs'), mainWindow: () => win, language: () => config()?.language ?? 'es', skin: () => config()?.ui?.skin ?? 'orb',
       pipEnabled: () => config()?.ui?.pip !== false && config()?.browser?.enabled !== false,
       label: (agent) => (agent === 'orb' ? config()?.assistantName ?? PRODUCT.assistant : { claude: 'Claude', codex: 'Codex', cursor: 'Cursor' }[agent] ?? agent)
     });

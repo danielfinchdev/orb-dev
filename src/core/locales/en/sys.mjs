@@ -214,5 +214,8 @@ export default {
   // Android tools (adb)
   'sys.android.noDownload': 'no download available for {platform}',
   'sys.android.downloadHttp': 'download: HTTP {status}',
-  'sys.android.noAdb': 'the package does not include adb'
+  'sys.android.noAdb': 'the package does not include adb',
+  'sys.scheduler.launchFailed': 'could not start {name}: {error}',
+  'sys.scheduler.finishError': 'Internal error while closing the task: {error}',
+  'sys.sessions.starting': 'starting…'
 };

@@ -373,7 +373,7 @@ export class Sessions {
       onFinish?.({ code: -1, state: { final: '', text: '', isError: true }, stderr: error.message, logFile: null, stopped: false });
       return null;
     }
-    const run = { agent: s.agent, stopped: false, startedAt: Date.now(), lastAt: Date.now(), steps: 0, last: 'arrancando…', live: entry.live };
+    const run = { agent: s.agent, stopped: false, startedAt: Date.now(), lastAt: Date.now(), steps: 0, last: tr('sys.sessions.starting'), live: entry.live };
     this.running.set(id, run);
     this.update(id, { status: 'running', settled: false });
     const timer = timeoutMs ? setTimeout(() => { this.addItem(id, 'error', 'text', tr('msg.sessions.timeout', { min: Math.round(timeoutMs / 60000) })); run.timedOut = true; this.stop(id); }, timeoutMs) : null;

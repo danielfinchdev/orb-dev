@@ -73,7 +73,7 @@ const allowed = (url) => { try { return ['http:', 'https:'].includes(new URL(url
 
 // options: label(agent) → name shown in the little window; pipEnabled() → whether it may appear; mainWindow() → the app's
 // window (to place the little one on the same screen and to bring the app forward); pipUrl / pipPreload.
-export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, language = () => 'es', mainWindow = () => null, pipUrl, pipPreload, log = () => {} }) {
+export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, language = () => 'es', skin = () => 'orb', mainWindow = () => null, pipUrl, pipPreload, log = () => {} }) {
   const T = (key, vars) => translate(language() === 'en' ? 'en' : 'es', key, vars);
   const token = crypto.randomBytes(24).toString('hex');
   const id = crypto.randomBytes(8).toString('hex');
@@ -85,6 +85,7 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
   const ses = session.fromPartition('navegador-agente'); // in memory: nothing is kept between runs
   ses.setPermissionRequestHandler((_wc, _p, cb) => cb(false));
   ses.setPermissionCheckHandler(() => false);
+  ses.setDevicePermissionHandler(() => false);
   ses.on('will-download', (e) => e.preventDefault());
   ses.setUserAgent(ses.getUserAgent().replace(/\s(orb[\w.-]*|Electron)\/\S+/gi, ''));
 
@@ -114,7 +115,7 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
   function sendState() {
     if (!pip || pip.isDestroyed()) return;
     const t = pipTab;
-    pip.webContents.send('pip:state', { mode, agent: t ? label(t.agent) : null, task: t?.task || null, url: t?.url ?? '', title: t?.title ?? '', loading: Boolean(t?.loading), tabs: tabs.size, action: t?.action ?? '', language: language() });
+    pip.webContents.send('pip:state', { mode, agent: t ? label(t.agent) : null, task: t?.task || null, url: t?.url ?? '', title: t?.title ?? '', loading: Boolean(t?.loading), tabs: tabs.size, action: t?.action ?? '', language: language(), skin: skin() });
   }
   // Only the page on show is drawn, and only while the little window shows it (drawing costs a full-size picture per frame).
   function painting() {
@@ -157,12 +158,13 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
     latest = image;
     if (!frameTimer) frameTimer = setTimeout(sendFrame, Math.max(0, FRAME_MS - (Date.now() - lastSent)));
   }
-  ipcMain.on('pip:action', (event, action) => {
+  const onPipAction = (event, action) => {
     if (!pip || event.sender !== pip.webContents) return;
     if (action === 'grande' || action === 'normal' || action === 'pildora') setMode(action);
     else if (action === 'cerrar') { if (pipTab) pipTab.dismissed = true; hidePip(); }
     else if (action === 'app') { const w = mainWindow(); if (w && !w.isDestroyed()) { if (w.isMinimized()) w.restore(); w.show(); w.focus(); } }
-  });
+  };
+  ipcMain.on('pip:action', onPipAction);
 
   // ---- pages
   function newTab(key, { agent, task }) {
@@ -185,7 +187,8 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
     wc.on('will-navigate', (e, url) => { if (!allowed(url)) e.preventDefault(); });
     wc.on('will-redirect', (e, url) => { if (!allowed(url)) e.preventDefault(); });
     wc.on('will-prevent-unload', (e) => e.preventDefault()); // "leave this page?" never blocks the agent
-    wc.on('select-bluetooth-device', (e, _l, cb) => { e.preventDefault(); cb(''); });
+    // No device choosers (the callback is the last argument; its position differs per event).
+    for (const ev of ['select-bluetooth-device', 'select-hid-device', 'select-serial-port', 'select-usb-device']) wc.on(ev, (e, ...rest) => { e.preventDefault(); const cb = rest.at(-1); if (typeof cb === 'function') cb(''); });
     wc.on('login', (e, _d, _a, cb) => { e.preventDefault(); cb(); }); // no HTTP auth prompts
     wc.on('paint', (_e, _dirty, image) => frame(tab, image));
     const update = () => { if (win.isDestroyed()) return; tab.url = wc.getURL(); tab.title = wc.getTitle(); tab.loading = wc.isLoading(); if (tab === pipTab) sendState(); };
@@ -213,7 +216,8 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
       wc.loadURL(url).catch((e) => { if (!/ERR_ABORTED/.test(e.message)) failure = e.message; }),
       new Promise((r) => setTimeout(r, 25_000))
     ]);
-    if (failure && !wc.getURL().startsWith('http')) throw new Error(T('sys.browser.openFailed', { url, error: failure.replace(/^.*?(ERR_\w+).*$/s, '$1') }));
+    // An HTTP error status (404, 500…) still renders the server's page: the agent sees it. Anything else never loaded.
+    if (failure && !/ERR_HTTP_RESPONSE_CODE_FAILURE/.test(failure)) throw new Error(T('sys.browser.openFailed', { url, error: failure.replace(/^.*?(ERR_\w+).*$/s, '$1') }));
   }
   async function inPage(tab, code) {
     return tab.win.webContents.executeJavaScriptInIsolatedWorld(WORLD, [{ code }], true);
@@ -392,6 +396,7 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
     state: () => ({ tabs: [...tabs.values()].map((t) => ({ agent: t.agent, task: t.task, url: t.url, title: t.title })), pip: visible() }),
     shutdown() {
       try { server.close(); } catch { /* closed */ }
+      ipcMain.removeListener('pip:action', onPipAction); clearTimeout(frameTimer);
       for (const t of [...tabs.values()]) closeTab(t);
       if (pip && !pip.isDestroyed()) pip.destroy();
       if (process.platform !== 'win32') { try { fs.rmSync(pipe, { force: true }); } catch { /* gone */ } }

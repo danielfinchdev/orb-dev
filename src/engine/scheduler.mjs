@@ -76,11 +76,11 @@ export class Scheduler {
     try { this.resumeLimited(); } catch (error) { this.log(`continuar limitadas: ${error.message}`); }
     try { runDue(board, this.log); } catch (error) { this.log(`programadas: ${error.message}`); }
     board.revalidateQueued(); board.warnBlockedByDeps();
+    const enabled = enabledAgents();
+    const order = [...new Set([...(ctx.config.agentOrder ?? []), ...enabled])];
     for (const task of board.readyTasks('auto')) {
       if (this.running.size >= ctx.config.maxParallel) return;
       if (this.running.has(task.id)) continue;
-      const enabled = enabledAgents();
-      const order = [...new Set([...(ctx.config.agentOrder ?? []), ...enabled])];
       // Only agents whose program is on this PC take work (an "any" task never goes to one that is not installed).
       const types = (task.agent === 'any' ? order.filter((a) => enabled.includes(a)) : [task.agent].filter((a) => enabled.includes(a))).filter((a) => installed(a));
       // Every enabled account of those agents; a task pinned to an account only goes there.
@@ -245,7 +245,7 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
         onFinish: (info) => this.finish(task.id, info)
       });
     } catch (error) {
-      board.patch(task.id, { status: 'blocked', result: `no se pudo lanzar ${label(agent)}: ${error.message}`, pid: null }, 'orb', 'task.blocked');
+      board.patch(task.id, { status: 'blocked', result: tr('sys.scheduler.launchFailed', { name: label(agent), error: error.message }), pid: null }, 'orb', 'task.blocked');
       return;
     }
     if (!run) return; // spawn failed: finish() already closed the task
@@ -283,7 +283,7 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
       this.log(`finish #${taskId}: ${error.stack}`);
       try {
         const task = this.board.task(taskId);
-        if (task?.status === 'running') this.board.patch(taskId, { status: 'failed', result: `Error interno al cerrar la tarea: ${error.message}`, pid: null }, 'orb', 'task.finished');
+        if (task?.status === 'running') this.board.patch(taskId, { status: 'failed', result: tr('sys.scheduler.finishError', { error: error.message }), pid: null }, 'orb', 'task.finished');
         else if (task?.pid) this.board.patch(taskId, { pid: null }, 'orb', 'task.process_exit');
       } catch (inner) { this.log(`finish #${taskId} (recuperación): ${inner.message}`); }
     }
@@ -379,7 +379,8 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
     // The way back of the loop (person → assistant → tasks → agents → finished → assistant → person → OK).
     const reported = ['done', 'failed', 'blocked'].includes(task.status) && task.created_by === 'orb' ? this.queueReport(task) : false;
     // Blocked or failed for a reason other than quota: the assistant looks at it once an hour per task.
-    const stuck = ['blocked', 'failed'].includes(task.status) && !held && !problem && !/sin cupo|tope de gasto|out of usage quota|spending cap/.test(task.result ?? '');
+    // The texts of msg.scheduler.quotaResult / budgetStop (Spanish and English).
+    const stuck = ['blocked', 'failed'].includes(task.status) && !held && !problem && !/sin cupo|l[ií]mite de gasto|out of usage quota|spending limit/.test(task.result ?? '');
     if (stuck && !reported && this.orchestrator && Date.now() - Number(board.setting(`unblock_asked:${task.id}`) ?? 0) > 3_600_000) {
       board.setting(`unblock_asked:${task.id}`, String(Date.now()));
       this.orchestrator.internal(`AVISO DEL SISTEMA (no es ${userName()}): la tarea #${task.id} «${oneLine(task.title)}» (${task.assigned_to}${task.model ? ` · ${task.model}` : ''}) ${task.status === 'blocked' ? 'se bloqueó' : 'falló'}.

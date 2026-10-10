@@ -20,7 +20,7 @@ export default {
   'session.result': 'Result',
   'session.tool': 'tool',
   'session.noOutput': '(no output)',
-  'session.working': 'Working…',
+  'session.working': 'In progress…',
   'session.steered': 'Mid-run correction',
   'session.seeFullTask': 'view full instructions',
   'session.tokensIn': '{n} input tokens',

@@ -225,7 +225,7 @@ te informa. Tiene dos modos (casilla «Orquestador»):
 
 ## 7. Agentes en vivo
 
-**Qué hace.** Cada conversación o tarea mantiene **un proceso vivo** de su agente entre turnos, como T3 Code. La respuesta
+**Qué hace.** Cada conversación o tarea mantiene **un proceso vivo** de su agente entre turnos. La respuesta
 llega en streaming, puedes corregir en marcha, interrumpir y aprobar acciones, y la conversación del agente se retoma
 aunque se cierre la app.
 
@@ -287,7 +287,7 @@ caché de 30 s) y `status()` (versión y sesión para la pantalla Agentes).
 
 ## 9. Conversaciones directas
 
-**Qué hace.** Hablas directamente con un agente en la carpeta de un proyecto, como en T3 Code. Ves:
+**Qué hace.** Hablas directamente con un agente en la carpeta de un proyecto. Ves:
 - la respuesta en streaming;
 - los comandos (con un icono según la herramienta) y los archivos cambiados;
 - el uso de tokens (contando la caché).

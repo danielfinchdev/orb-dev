@@ -6,8 +6,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { translate } from '../core/i18n.mjs';
+import { AUTHOR } from '../core/product.mjs';
 
-export const AUTHOR = { github: 'danielfinchdev', url: 'https://github.com/danielfinchdev', paypal: 'https://paypal.me/DanielFinch' };
 const FORM_ALIAS = '1ee33dd306d01e9d63121af2b9fd1a2a'; // the same FormSubmit inbox as Open Control Edge
 export const MAX_IMAGES = 3;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -61,7 +61,9 @@ export async function sendFeedback({ type, message, contact, images } = {}, { ve
   const mail = String(contact ?? '').trim();
   if (mail.includes('@') && mail.length <= 120) { form.append('Contacto', mail); form.append('_replyto', mail); }
   for (const [i, img] of (Array.isArray(images) ? images : []).slice(0, MAX_IMAGES).entries()) {
-    const bytes = Buffer.from(String(img?.data ?? ''), 'base64');
+    const data = String(img?.data ?? '');
+    if (data.length > MAX_IMAGE_BYTES * 1.4) continue; // too big even before decoding
+    const bytes = Buffer.from(data, 'base64');
     if (!bytes.length || bytes.length > MAX_IMAGE_BYTES || !(isPng(bytes) || isJpeg(bytes))) continue;
     form.append(`captura${i + 1}`, new Blob([bytes], { type: isPng(bytes) ? 'image/png' : 'image/jpeg' }), String(img.name || `captura${i + 1}.png`).slice(0, 80));
   }
@@ -93,7 +95,9 @@ export async function moreApps(version) {
       const r = await res.json();
       const assets = Array.isArray(r.assets) ? r.assets : [];
       const setup = assets.find((x) => /setup|install|instalador/i.test(x.name) && /\.(exe|msi|msix)$/i.test(x.name)) ?? assets.find((x) => /\.(exe|msi|msix)$/i.test(x.name));
-      return { ...a, version: String(r.tag_name ?? '').replace(/^v/, ''), date: r.published_at ?? null, download: setup?.browser_download_url ?? page, page };
+      // Only a link on GitHub itself is offered as the download; anything else falls back to the release page.
+      const download = /^https:\/\/github\.com\//.test(setup?.browser_download_url ?? '') ? setup.browser_download_url : page;
+      return { ...a, version: String(r.tag_name ?? '').replace(/^v/, ''), date: r.published_at ?? null, download, page };
     } catch { return { ...a, version: null, date: null, download: page, page }; }
   }));
 }

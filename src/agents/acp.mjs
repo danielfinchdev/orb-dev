@@ -128,8 +128,8 @@ export function acpAgent(id, spec) {
         proc.once('error', resolve);
       });
       const hello = p.request('initialize', { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: 'orb-dev', title: 'Orb', version: '2.4.0' } }, { timeoutMs: 60000 });
-      const first = await Promise.race([hello.then((init) => ({ init })), quit.then((error) => ({ error }))]);
-      if (first.error) { p.close(); throw first.error; }
+      const first = await Promise.race([hello.then((init) => ({ init }), (error) => ({ error })), quit.then((error) => ({ error }))]);
+      if (first.error) { p.close(); killTree(proc); throw first.error; } // no reply or an early exit: nothing left running
       return { proc, p, init: first.init };
     };
     const start = async () => {
@@ -173,7 +173,8 @@ export function acpAgent(id, spec) {
       if (turn && !turn.done) throw new Error(tr('sys.agents.busy'));
       turn = new Turn(); const current = turn; text = ''; thought = '';
       try {
-        started ??= start();
+        // A start that fails closes this live: the next message gets a fresh process instead of the same error again.
+        started ??= start().catch((error) => { live.close(); throw error; });
         await started;
         const res = await peer.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: message }] });
         flush();

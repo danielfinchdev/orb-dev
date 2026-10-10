@@ -21,7 +21,7 @@ export default {
   'comp.live.sec': '{n} s',
   'comp.live.min': '{n} min',
   'comp.live.hourMin': '{h} h {m} min',
-  'comp.live.working': 'working',
+  'comp.live.working': 'in progress',
   'comp.live.viewConv': 'View conversation',
   'comp.live.cancelTitle': 'Cancel the task',
   'comp.live.cancelTask': 'Cancel task',
@@ -36,8 +36,8 @@ export default {
   'comp.live.running': 'In progress ({n})',
   'comp.live.more': 'and {n} more in Tasks',
   'comp.markdown.image': 'image',
-  'comp.theme.tip': 'Light / dark theme',
-  'comp.theme.aria': 'Switch between light and dark theme',
+  'comp.theme.tip': 'Light / dark mode',
+  'comp.theme.aria': 'Switch between light and dark mode',
   'comp.projects.newTitle': 'New project',
   'comp.projects.newDesc': 'Creates a folder with git and a log inside the assistant folder.',
   'comp.projects.category': 'Category',
@@ -87,5 +87,5 @@ export default {
   'comp.sidebar.halfway': 'Interrupted',
   'comp.sidebar.waitApproval': 'Awaiting your approval',
   'comp.sidebar.foldersHint': 'Each project is a folder. The tasks you assign to it will appear here.',
-  'comp.sidebar.looseHint': 'Chat directly with any agent (Claude, Codex, Cursor, Gemini…) in real time.'
+  'comp.sidebar.looseHint': 'Talk directly to any agent (Claude, Codex, Cursor, Gemini…).'
 };
