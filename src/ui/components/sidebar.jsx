@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Smartphone, MessageSquarePlus, ListTodo, FolderKanban, Bot, BookOpen, History, Settings, Sparkles, SquareTerminal, ChevronRight, Plus, FolderPlus, ShieldAlert, Hourglass, CirclePause, Check, CalendarClock } from 'lucide-react';
 import { Robot } from './robot.jsx';
-import { ThemeToggle } from './theme-toggle.jsx';
+import { ThemeToggle, SidebarToggle } from './theme-toggle.jsx';
 import { Button } from './ui/button.jsx';
 import { useStore, go, bridge, call, act, openSettings } from '@/lib/store.js';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent, Tip } from './ui/overlay.jsx';
@@ -124,13 +124,14 @@ export function Sidebar({ mood }) {
   ];
   return (
     <aside className="bg-sidebar flex h-full w-64 shrink-0 flex-col border-r">
-      <div className="app-titlebar flex items-center gap-2.5 px-4 pt-4 pb-3">
+      <div className="theme-band side-band app-titlebar flex h-14 shrink-0 items-center gap-2 border-b px-4">
         <Robot size={34} mood={mood} title={name} live />
         <div className="min-w-0 flex-1">
           <div className="truncate text-[15px] font-medium">{name}</div>
           <div className="text-muted-foreground truncate text-xs">{app.activeProject ? app.activeProject.name : t('nav.noProject')}</div>
         </div>
         <ThemeToggle />
+        <SidebarToggle />
       </div>
       <div className="px-3 pb-2">
         <Button className="w-full justify-start" variant="outline" onClick={() => go('new')} data-testid="new-conversation"><MessageSquarePlus />{t('nav.newChat')}</Button>

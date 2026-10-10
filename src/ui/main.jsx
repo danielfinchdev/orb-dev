@@ -39,17 +39,19 @@ function Shell() {
   const app = useStore((s) => s.app);
   const View = VIEWS[route.view] ?? ChatView;
   const [drawer, setDrawer] = useState(false);
+  const folded = useStore((s) => s.sidebarCollapsed);
   useEffect(() => { if (!drawer) return undefined; const esc = (e) => { if (e.key === 'Escape') setDrawer(false); }; window.addEventListener('keydown', esc); return () => window.removeEventListener('keydown', esc); }, [drawer]);
   const busy = app.chat?.busy;
   const mood = busy ? (app.chat.partial ? 'talking' : 'thinking') : 'idle';
   AGENT.orb = app.config.assistantName;
   return (
     <div className="flex h-full">
-      <div className="hidden md:flex"><Sidebar mood={mood} /></div>
+      {/* 2.6: folded away (its button next to day / night), the screens take the whole width. */}
+      <div className={folded ? 'hidden' : 'hidden md:flex'}><Sidebar mood={mood} /></div>
       {/* Phones and narrow windows: the sidebar is a drawer behind a menu button. */}
       {drawer ? <div className="fixed inset-0 z-50 flex md:hidden" onClick={() => setDrawer(false)}><div className="animate-in slide-in-from-left flex h-full shadow-2xl" onClick={(e) => { if (e.target.closest('button')) setTimeout(() => setDrawer(false), 50); }}><Sidebar mood={mood} /></div><div className="flex-1 bg-black/40" /></div> : null}
-      <main className="flex min-w-0 flex-1 flex-col">
-        <div className="topbar app-titlebar wco-pad bg-sidebar flex h-14 shrink-0 items-center gap-2 border-b px-3 md:hidden">
+      <main className="theme-scene flex min-w-0 flex-1 flex-col">
+        <div className="topbar theme-band app-titlebar wco-pad bg-sidebar flex h-14 shrink-0 items-center gap-2 border-b px-3 md:hidden">
           <button className="hover:bg-accent grid size-9 cursor-pointer place-items-center rounded-lg" onClick={() => setDrawer(true)} aria-label={t('app.menu')}><Menu className="size-5" /></button>
           <Robot size={26} mood={mood} /><span className="truncate text-[15px] font-medium">{app.config.assistantName}</span>
         </div>

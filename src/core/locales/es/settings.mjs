@@ -222,7 +222,7 @@ export default {
   'appearance.skin.profesional': 'Profesional',
   'appearance.skin.nube': 'Nube',
   'appearance.font': 'Tipografía',
-  'appearance.font.outfit': 'Outfit (predeterminada)',
+  'appearance.font.outfit': 'La del tema (predeterminada)',
   'appearance.font.inter': 'Inter',
   'appearance.font.geist': 'Geist',
   'appearance.font.plex': 'IBM Plex Sans',

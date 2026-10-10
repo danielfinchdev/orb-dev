@@ -61,7 +61,7 @@ export function Composer({ value, onChange, onSend, onStop, busy, placeholder, t
   const m = useMentions(value, onChange, ta);
   return (
     <div className="shrink-0 px-5 pb-5">
-      <div className={cn('bg-card relative mx-auto max-w-3xl rounded-2xl border shadow-sm transition-shadow focus-within:shadow-md focus-within:ring-[3px] focus-within:ring-ring/25', dropping && 'ring-primary ring-2')}
+      <div data-slot="composer" className={cn('bg-card relative mx-auto max-w-3xl rounded-2xl border shadow-sm transition-shadow focus-within:shadow-md focus-within:ring-[3px] focus-within:ring-ring/25', dropping && 'ring-primary ring-2')}
         onDragOver={onDrop ? (e) => { e.preventDefault(); setDropping(true); } : undefined} onDragLeave={() => setDropping(false)} onDrop={onDrop ? (e) => { e.preventDefault(); setDropping(false); onDrop(e); } : undefined}>
         {mentions && m.list.length ? null : notice}
         {mentions && m.list.length ? (
@@ -192,7 +192,7 @@ export function ChatView() {
           {rows.length === 0 ? (
             <div className="flex flex-col items-center gap-3 pt-10 text-center">
               <Robot size={130} mood="hello" live />
-              <h2 className="mt-2 text-2xl">{app.config.userName ? t('chat.helloUser', { user: app.config.userName, name }) : t('chat.hello', { name })}</h2>
+              <h2 className="hero-title mt-2 text-2xl">{app.config.userName ? t('chat.helloUser', { user: app.config.userName, name }) : t('chat.hello', { name })}</h2>
               <p className="text-muted-foreground max-w-md">{t('chat.intro')}</p>
               <div className="mt-3 flex max-w-xl flex-wrap justify-center gap-2">{SUGGESTIONS.map((s) => <Button key={s} variant="outline" size="sm" className="h-auto rounded-full py-1.5 whitespace-normal" onClick={() => setText(t(s))}>{t(s)}</Button>)}</div>
             </div>

@@ -28,6 +28,10 @@ En el primer arranque la app detecta qué agentes tienes y con qué sesión, e i
   un globo. Sin animaciones (o en el tema Profesional), el aviso sale arriba: verde si todo fue bien y naranja si hace
   falta que mires algo.
 - **Tema Profesional:** sin robot y sin ningún logo en su lugar.
+- **Temas renovados:** cada tema viste a la vez la cabecera del menú, la barra superior y el fondo del chat (difuminado y
+  levemente animado, para no molestar), y trae su propia tipografía: Space Grotesk en Vaporwave, IBM Plex Mono en Retro,
+  Nunito y Fredoka en Nube, Inter en Profesional. Si eliges una tipografía a mano en Ajustes, se respeta.
+- **Plegar el menú:** junto al botón de día y noche, un botón pliega el menú de la izquierda; otro, arriba, lo despliega.
 
 ## Novedades de la 2.5
 

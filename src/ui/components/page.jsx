@@ -1,8 +1,13 @@
 import { cn } from '@/lib/utils.js';
+import { useStore } from '@/lib/store.js';
+import { SidebarToggle } from './theme-toggle.jsx';
 
 export function PageHeader({ icon, title, meta, children, className }) {
+  // 2.6: with the sidebar folded away, the button that brings it back starts the bar.
+  const folded = useStore((s) => s.sidebarCollapsed);
   return (
-    <header className={cn('topbar app-titlebar wco-pad-md bg-background/80 flex min-h-14 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2.5 backdrop-blur sm:px-5', className)}>
+    <header className={cn('topbar theme-band app-titlebar wco-pad-md bg-background/80 flex min-h-14 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2.5 backdrop-blur sm:px-5', className)}>
+      {folded ? <SidebarToggle collapsed className="-ml-1.5" /> : null}
       {icon}
       {/* On a phone the buttons go under the title instead of squeezing it. */}
       <div className="min-w-[9rem] flex-1">
