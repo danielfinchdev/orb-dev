@@ -93,7 +93,7 @@ export function Orb({ pose = 'head', size = 34, mood = 'idle', live: wantsLive =
   const url = (n) => `${BASE}robot/${n}.png`;
   return (
     <span className={cn('orb', still && 'still', calm && 'calm', className)} data-mood={face} data-act={act ?? undefined} data-blink={blink || undefined}
-      style={{ width: box.w, height: box.h, '--k': k }} title={title} role="img" aria-label={title} onClick={poke}>
+      style={{ width: box.w, height: box.h, '--k': k }} role="img" aria-label={title} onClick={poke}>
       <span className="orb-body" style={{ width: w, height: w * G.ratio, left: (box.w - w) / 2 }}>
         <img className="orb-img" src={url(file)} alt="" draggable={false} />
         <span className="orb-visor" style={{ maskImage: `url(${url(`${file}-visera`)})`, WebkitMaskImage: `url(${url(`${file}-visera`)})` }}>

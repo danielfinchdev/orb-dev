@@ -11,7 +11,7 @@ import { confirm, form } from '@/components/dialogs.jsx';
 import { Composer, useAutoScroll } from './chat.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Field, Input, Textarea, Empty } from '@/components/ui/basic.jsx';
-import { Select, Collapsible, CollapsibleTrigger, CollapsibleContent, Tip } from '@/components/ui/overlay.jsx';
+import { Select, Collapsible, CollapsibleTrigger, CollapsibleContent, Tip, BubbleTip } from '@/components/ui/overlay.jsx';
 import { useStore, call, act, go, bridge, refresh, getState } from '@/lib/store.js';
 import { AGENT, PERMISSION, PERMISSION_HINT, REASONING, STATUS, DECISION, CAN_STEER as AGENT_CAN_STEER, options } from '@/lib/labels.js';
 import { baseName, cn } from '@/lib/utils.js';
@@ -124,12 +124,12 @@ export function ContextMeter({ context, className }) {
   const pct = Math.min(100, Math.round((context.used / context.size) * 100));
   const tone = pct >= 85 ? 'bg-destructive' : pct >= 60 ? 'bg-warning' : 'bg-primary';
   return (
-    <Tip label={t('session.contextTip', { used: context.used.toLocaleString(locale), size: context.size.toLocaleString(locale) })}>
+    <BubbleTip title={t('session.contextTitle', { used: context.used.toLocaleString(locale), size: context.size.toLocaleString(locale) })} text={t('session.contextTip')}>
       <span className={cn('inline-flex items-center gap-1.5', className)} data-testid="context-meter">
         <span className="bg-muted inline-block h-1.5 w-14 overflow-hidden rounded-full"><span className={cn('block h-full rounded-full', tone)} style={{ width: `${pct}%` }} /></span>
         <span className="tabular-nums">{pct} %</span>
       </span>
-    </Tip>
+    </BubbleTip>
   );
 }
 
@@ -238,14 +238,14 @@ export function SessionView({ route }) {
           }} />
           <Select size="sm" value={s.reasoning ?? 'medium'} title={t('session.reasoning')} options={options(REASONING)} onValueChange={(reasoning) => act(call('sessions.update', { id: s.id, reasoning }))} />
           <Tip label={t('session.detailsShort')}><Button variant="ghost" size="icon-sm" onClick={() => showDetails(s, task)} data-testid="details"><Info /></Button></Tip>
-          <Tip label={t('session.forkTip')}><Button variant="ghost" size="icon-sm" disabled={running} onClick={fork} data-testid="fork"><GitFork /></Button></Tip>
+          <BubbleTip title={t('session.fork')} text={t('session.forkTip')}><Button variant="ghost" size="icon-sm" disabled={running} onClick={fork} aria-label={t('session.fork')} data-testid="fork"><GitFork /></Button></BubbleTip>
           <Tip label={t('session.renameTip')}><Button variant="ghost" size="icon-sm" onClick={rename}><Pencil /></Button></Tip>
           <Tip label={s.archived ? t('session.restore') : t('session.archive')}><Button variant="ghost" size="icon-sm" onClick={async () => { await act(call('sessions.update', { id: s.id, archived: !s.archived })); if (!s.archived) go('chat'); }}><Archive /></Button></Tip>
           <Tip label={t('session.deleteTip')}><Button variant="danger" size="icon-sm" onClick={async () => { if (await confirm(t('session.deleteTitle'), t('session.deleteBody'), { ok: t('session.delete'), danger: true })) { await act(call('sessions.remove', { id: s.id })); go('chat'); } }}><Trash2 /></Button></Tip>
         </>) : (<>
           {task ? <Badge variant={STATUS[task.status]?.[1]}>{STATUS[task.status]?.[0]}</Badge> : null}
           <Tip label={t('session.detailsShort')}><Button variant="ghost" size="icon-sm" onClick={() => showDetails(s, task)}><Info /></Button></Tip>
-          <Tip label={t('session.forkTaskTip')}><Button variant="ghost" size="icon-sm" disabled={running} onClick={fork}><GitFork /></Button></Tip>
+          <BubbleTip title={t('session.fork')} text={t('session.forkTaskTip')}><Button variant="ghost" size="icon-sm" disabled={running} onClick={fork} aria-label={t('session.fork')}><GitFork /></Button></BubbleTip>
           <Button variant="outline" size="sm" onClick={() => go({ view: 'tasks', id: s.task_id })}><ListTodo />{t('session.viewTask', { id: s.task_id })}</Button>
         </>)}
       </PageHeader>

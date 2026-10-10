@@ -1,5 +1,5 @@
-// 2.6: the illustrated backdrop of each visual theme, behind the screens (themes.css draws and moves it; it sits under a
-// veil at the top so it never competes with the text). Nothing in the «profesional» theme.
+// 2.6: the illustrated backdrop of each visual theme, behind the screens (themes.css draws and moves it; one frosted
+// pane over it keeps it out of focus so it never competes with the text). Nothing in the «profesional» theme.
 import { useStore } from '@/lib/store.js';
 
 // ---- Vaporwave, day: stickers of old computers (thick ink outline, flat pastel fills; the offset shadow is CSS). ----
@@ -52,12 +52,12 @@ const Bubble = () => (
 const STICKERS = [
   { el: <Monitor />, left: '0.5%', top: '13%', w: 90, r: -8, dur: 13, delay: -2 },
   { el: <Sparkle />, left: '12%', top: '8%', w: 34, r: 15, dur: 9, delay: -5 },
-  { el: <Cassette />, right: '1%', top: '14%', w: 130, r: 10, dur: 14, delay: -7 },
+  { el: <Cassette />, right: '0.5%', top: '14%', w: 112, r: 10, dur: 14, delay: -7 },
   { el: <Floppy />, left: '2%', top: '46%', w: 86, r: 12, dur: 12, delay: -4 },
-  { el: <Planet />, right: '1%', top: '44%', w: 120, r: -6, dur: 16, delay: -9 },
+  { el: <Planet />, right: '0.5%', top: '44%', w: 104, r: -6, dur: 16, delay: -9 },
   { el: <Smiley />, left: '3%', bottom: '8%', w: 80, r: -10, dur: 11, delay: -1 },
-  { el: <Sparkle />, right: '11%', top: '36%', w: 28, r: -20, dur: 8, delay: -3 },
-  { el: <Bubble />, right: '3%', bottom: '20%', w: 96, r: 6, dur: 12, delay: -6 },
+  { el: <Sparkle />, right: '9%', top: '36%', w: 28, r: -20, dur: 8, delay: -3 },
+  { el: <Bubble />, right: '2%', bottom: '20%', w: 84, r: 6, dur: 12, delay: -6 },
   { el: <Folder />, left: '14%', bottom: '2%', w: 90, r: 8, dur: 13, delay: -8 },
   { el: <Sparkle />, left: '9%', bottom: '28%', w: 22, r: 30, dur: 10, delay: -2 }
 ];
@@ -107,7 +107,7 @@ const SHAPES = [
   { el: <Asterisk />, c: '#e5584f', left: '2%', top: '14%', w: 64, r: 0, dur: 14, delay: -3 },
   { el: <Diamond />, c: '#f08a4b', right: '3%', top: '16%', w: 34, r: 0, dur: 10, delay: -5 },
   { el: <FourDots />, c: '#2f5a85', left: '5%', top: '48%', w: 44, r: 0, dur: 12, delay: -7 },
-  { el: <ThinSparkle />, c: '#5a0b1e', right: '7%', top: '40%', w: 40, r: 0, dur: 9, delay: -2 },
+  { el: <ThinSparkle />, c: '#5a0b1e', right: '3%', top: '40%', w: 40, r: 0, dur: 9, delay: -2 },
   { el: <Asterisk />, c: '#f6b73c', right: '1%', top: '60%', w: 48, r: 20, dur: 13, delay: -8 },
   { el: <Diamond />, c: '#e5584f', left: '12%', bottom: '6%', w: 26, r: 0, dur: 11, delay: -4 },
   { el: <ThinSparkle />, c: '#f08a4b', left: '3%', bottom: '18%', w: 56, r: 0, dur: 10, delay: -6 }
@@ -169,10 +169,10 @@ const Cloud = () => (
   </svg>
 );
 const SWEETS = [
-  { el: <Cloud />, left: '0.5%', top: '9%', w: 200, dur: 14, delay: -3 },
-  { el: <Wrapped c="pink" />, right: '2%', top: '13%', w: 140, r: 18, dur: 11, delay: -6 },
+  { el: <Cloud />, left: '-1%', top: '9%', w: 150, dur: 14, delay: -3 },
+  { el: <Wrapped c="pink" />, right: '1%', top: '13%', w: 120, r: 18, dur: 11, delay: -6 },
   { el: <Gumdrop c="mint" />, left: '4%', top: '44%', w: 70, r: -6, dur: 12, delay: -1 },
-  { el: <Cloud />, right: '1%', top: '40%', w: 170, dur: 16, delay: -9 },
+  { el: <Cloud />, right: '-1%', top: '40%', w: 140, dur: 16, delay: -9 },
   { el: <Lollipop c="pink" />, left: '2%', bottom: '8%', w: 110, r: -14, dur: 13, delay: -5 },
   { el: <Bean c="lilac" />, right: '5%', bottom: '18%', w: 92, r: -25, dur: 10, delay: -2 },
   { el: <Bean c="peach" />, left: '13%', bottom: '3%', w: 60, r: 30, dur: 9, delay: -7 },
@@ -218,7 +218,8 @@ export function Scene() {
           {SWEETS.map((t, i) => <div key={`s${i}`} className="cd-candy" style={{ left: t.left, right: t.right, top: t.top, bottom: t.bottom, width: t.w, '--r': `${t.r ?? 0}deg`, animationDuration: `${t.dur}s`, animationDelay: `${t.delay}s` }}>{t.el}</div>)}
         </>) : null}
       </div>
-      <div className="scene-veil" />
+      {/* One frosted pane over the whole scene (themes.css): the art stays a soft wallpaper behind every screen. */}
+      <div className="scene-frost" />
     </div>
   );
 }

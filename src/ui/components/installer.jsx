@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Download, RefreshCw, Check, CircleAlert, LoaderCircle } from 'lucide-react';
 import { Button } from './ui/button.jsx';
 import { Badge, Spinner } from './ui/basic.jsx';
-import { Checkbox } from './ui/overlay.jsx';
+import { Checkbox, BubbleTip } from './ui/overlay.jsx';
 import { ToolIcon } from './agent-icon.jsx';
 import { call, act, bridge } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
@@ -38,7 +38,7 @@ export function Installer({ onChange, onProgress, bar = true }) {
             <div className="min-w-0 flex-1"><div className="text-sm">{i.label}{i.optional ? <span className="text-muted-foreground"> {t('comp.installer.optional')}</span> : null}</div><div className="text-muted-foreground text-xs">{i.why}</div></div>
             {step?.state === 'instalando' ? <Badge variant="info"><LoaderCircle className="animate-spin" />{t('comp.installer.installing')}</Badge>
               : step?.state === 'hecho' ? <Badge variant="success">{t('comp.installer.installed')}</Badge>
-                : step?.state === 'error' ? <Badge variant="destructive" title={step.detail}><CircleAlert />{t('comp.installer.failed')}</Badge>
+                : step?.state === 'error' ? <BubbleTip title={t('comp.installer.failed')} text={step.detail}><Badge variant="destructive" tabIndex={0}><CircleAlert />{t('comp.installer.failed')}</Badge></BubbleTip>
                   : i.installed ? <Badge variant="success">{t('comp.installer.ready')}</Badge> : <Badge variant="secondary">{t('comp.installer.missing')}</Badge>}
           </label>
         );

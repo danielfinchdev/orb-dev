@@ -106,7 +106,39 @@
   ::-webkit-scrollbar-thumb { background: color-mix(in oklch, var(--muted-foreground) 30%, transparent); border-radius: 10px; border: 3px solid transparent; background-clip: content-box; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-corner { background: transparent; }
+  /* A long one-line text (a path, a command) never widens the grid cell it sits in: the cell shrinks and the text wraps,
+     cuts or scrolls as it was told to. Without this, grid cells grow to their content and spill over the next card. */
+  .grid > * { min-width: 0; }
 }
+
+/* ---------- the app's tooltip: a small speech bubble (ui/overlay.jsx: BubbleTip) ----------
+   A soft bubble of the card's colour with a diffuse shadow in the theme's accent, a bold title, a line or two of muted
+   text and a little tail towards the control. Each visual theme tunes the variables below. */
+:root {
+  --tip-bg: var(--card); --tip-border: var(--border); --tip-title: var(--foreground); --tip-text: var(--muted-foreground);
+  --tip-radius: 18px; --tip-shadow: 0 14px 34px -12px color-mix(in oklch, var(--primary) 38%, transparent), 0 3px 10px -4px color-mix(in oklch, var(--primary) 22%, transparent);
+}
+.dark { --tip-shadow: 0 14px 34px -10px rgb(0 0 0 / 0.6), 0 0 0 1px color-mix(in oklch, var(--primary) 12%, transparent); }
+.orb-tip { background: var(--tip-bg); color: var(--tip-title); border: 1px solid var(--tip-border); border-radius: var(--tip-radius); padding: 10px 14px 11px; box-shadow: var(--tip-shadow); transform-origin: var(--radix-tooltip-content-transform-origin); animation: orb-tip-in 0.16s cubic-bezier(0.2, 0.8, 0.3, 1.1); }
+.orb-tip-title { color: var(--tip-title); }
+.orb-tip-text { color: var(--tip-text); }
+/* The tail: the lower half of a bordered square, so its two edges continue the bubble's border. Radix turns it towards the control. */
+.orb-tip-tail { display: block; position: relative; width: 16px; height: 8px; overflow: hidden; translate: 0 -1px; }
+.orb-tip-tail::before { content: ""; position: absolute; left: 50%; top: 0; box-sizing: border-box; width: 11px; height: 11px; background: var(--tip-bg); border: 1px solid var(--tip-border); transform: translate(-50%, -50%) rotate(45deg); }
+@keyframes orb-tip-in { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: scale(1); } }
+html[data-motion="minima"] .orb-tip, html[data-skin="profesional"] .orb-tip { animation: none; }
+@media (prefers-reduced-motion: reduce) { .orb-tip { animation: none; } }
+/* Each theme's bubble. Vaporwave: a pastel sticker with the window's bevel colours. Retro: ink outline and a hard offset
+   shadow, like its cards. Candy: rounder, with a pink glow. Professional: tighter corners, a neutral shadow. */
+html[data-skin="vaporwave"]:not(.dark) { --tip-border: var(--vw-lo); --tip-radius: 14px; --tip-shadow: 4px 4px 0 var(--vw-hard), 0 12px 28px -12px color-mix(in oklch, var(--primary) 45%, transparent); }
+html.dark[data-skin="vaporwave"] { --tip-border: color-mix(in oklch, var(--primary) 55%, transparent); --tip-shadow: 0 0 22px -6px color-mix(in oklch, var(--primary) 80%, transparent), 0 14px 30px -12px rgb(0 0 0 / 0.6); }
+html[data-skin="retro"] { --tip-border: var(--rt-ink); --tip-radius: 12px; --tip-shadow: 4px 4px 0 var(--rt-off); }
+html[data-skin="retro"] .orb-tip { border-width: 2px; }
+html[data-skin="retro"] .orb-tip-tail::before { border-width: 2px; }
+html[data-skin="retro"] .orb-tip-tail { translate: 0 -2px; }
+html[data-skin="nube"] { --tip-border: transparent; --tip-radius: 20px; --tip-shadow: 0 14px 34px -10px var(--cd-shadow), 0 0 0 1px color-mix(in oklch, var(--primary) 10%, transparent); }
+html[data-skin="nube"] .orb-tip-title { color: var(--primary); }
+html[data-skin="profesional"] { --tip-radius: 10px; --tip-shadow: 0 10px 24px -10px rgb(0 0 0 / 0.25), 0 2px 6px -2px rgb(0 0 0 / 0.12); }
 
 /* Progress of a task that does not report its percentage: a sliding bar. */
 @keyframes orb-indeterminate { 0% { left: -35%; } 100% { left: 100%; } }
@@ -198,11 +230,22 @@ html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-di
 .brand-sky { background: radial-gradient(120% 90% at 30% 10%, #c3cbff 0%, #a7b1f6 45%, #8f9ef0 100%); }
 .dark .brand-sky { background: radial-gradient(120% 90% at 30% 10%, #2b3270 0%, #1d2257 50%, #141838 100%); }
 
-/* 2.6: the window has no Windows title bar. Minimise, maximise and close are Windows' own buttons drawn inside the app,
-   top right and 56 px tall (window controls overlay). The top bars (.app-titlebar) move the window and maximise it with
-   a double click; what is clickable inside them stays clickable. --wco-inset is the width of those buttons (0 in a
-   browser, such as the phone), and .wco-pad / .wco-pad-md (wide windows only) leave that room on the right. */
-:root { --wco-inset: max(0px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw))); }
+/* 2.6: the window has no Windows title bar nor Windows buttons: minimise, maximise and close are the app's own
+   (components/window-controls.jsx), top right over every screen, centred in the 56 px of the top bars. The top bars
+   (.app-titlebar) move the window and maximise it with a double click; what is clickable inside them stays clickable.
+   --wco-inset is the room those buttons take (0 in a browser, such as the phone), and .wco-pad / .wco-pad-md (wide
+   windows only) leave it free on the right. Each theme dresses them like the rest of its bar (themes.css). */
+:root { --wco-inset: 0px; }
+html.has-win-controls { --wco-inset: 8.25rem; }
+.win-controls { position: fixed; top: 0; right: 0; z-index: 70; height: 3.5rem; padding-inline: 0.5rem 0.625rem; display: flex; align-items: center; gap: 0.25rem; pointer-events: auto; -webkit-app-region: no-drag; app-region: no-drag; }
+.win-control { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 0.625rem; color: var(--muted-foreground); cursor: pointer; transition: background-color 0.15s, color 0.15s, transform 0.1s; }
+.win-control svg { width: 1rem; height: 1rem; stroke-width: 2; }
+.win-control:hover { background-color: color-mix(in oklch, var(--foreground) 9%, transparent); color: var(--foreground); }
+.win-control:active { transform: scale(0.94); }
+.win-control:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.win-control.win-close:hover { background-color: oklch(0.6 0.2 25); color: white; }
+@media (prefers-reduced-motion: reduce) { .win-control { transition: none; } }
+html[data-motion="minima"] .win-control { transition: none; }
 .app-titlebar { -webkit-app-region: drag; app-region: drag; }
 .app-titlebar :is(button, a, input, select, textarea, label, [role=button], [role=combobox], [role=tab], [role=switch], [contenteditable], [data-no-drag], .orb) { -webkit-app-region: no-drag; app-region: no-drag; }
 .wco-pad { padding-inline-end: calc(var(--wco-inset) + 0.75rem) !important; }

@@ -7,8 +7,8 @@ import { confirm, form } from '@/components/dialogs.jsx';
 import { createProjectFlow, linkFolderFlow, cloneRepoFlow, CATEGORIES } from '@/components/project-actions.jsx';
 import { askReview } from './tasks.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Empty, Field, Input, Spinner } from '@/components/ui/basic.jsx';
-import { Checkbox } from '@/components/ui/overlay.jsx';
+import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Empty, Field, Input, PathText, Spinner } from '@/components/ui/basic.jsx';
+import { Checkbox, BubbleTip } from '@/components/ui/overlay.jsx';
 import { useStore, call, act, go, bridge } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { GithubIcon } from '@/components/agent-icon.jsx';
@@ -29,7 +29,7 @@ function GithubCard() {
       {!gh ? <Spinner /> : !gh.installed ? (<><Badge variant="secondary">{t('projects.gh.notInstalled')}</Badge><Button size="sm" variant="outline" onClick={() => bridge.openExternal('https://cli.github.com/')}>{t('projects.gh.download')}</Button></>)
         : gh.loggedIn ? <Badge variant="success">{t('projects.gh.connected', { user: gh.user ?? '?' })}</Badge>
           : (<><Badge variant="destructive">{t('projects.gh.noSession')}</Badge><Button size="sm" onClick={() => act(call('github.login'), t('projects.gh.login.done'))}>{t('projects.gh.login')}</Button></>)}
-      <Button size="icon-sm" variant="ghost" onClick={load} title={t('projects.gh.check')}><RefreshCw /></Button>
+      <BubbleTip title={t('projects.gh.check')}><Button size="icon-sm" variant="ghost" onClick={load} aria-label={t('projects.gh.check')}><RefreshCw /></Button></BubbleTip>
     </Card>
   );
 }
@@ -117,7 +117,7 @@ export function ProjectsView({ route }) {
                     {list.map((p) => (
                       <button key={p.name} onClick={() => setSelected(p.name)} className={cn('flex w-full cursor-pointer items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-accent/50', selected === p.name && 'bg-accent')}>
                         <Folder className={cn('size-4 shrink-0', p.active ? 'text-primary' : 'text-muted-foreground')} />
-                        <div className="min-w-0 flex-1"><div className="truncate">{p.name}</div><div className="text-muted-foreground truncate font-mono text-[11px]">{p.path}</div></div>
+                        <div className="grid min-w-0 flex-1"><div className="truncate">{p.name}</div><PathText path={p.path} className="text-muted-foreground text-[11px]" /></div>
                         {p.open ? <Badge variant="info">{t(p.open === 1 ? 'projects.openOne' : 'projects.openOther', { n: p.open })}</Badge> : null}
                         {p.active ? <Pin className="text-primary size-3.5" /> : null}
                       </button>

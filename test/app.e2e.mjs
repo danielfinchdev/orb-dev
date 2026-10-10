@@ -199,11 +199,18 @@ try {
   await shot('10g-tema-profesional');
   await win.click('[data-testid=skin-orb]');
   await until(async () => (await win.evaluate(() => document.documentElement.dataset.skin)) === 'orb', 'vuelve al tema Orb');
-  // 2.6: no Windows title bar; minimise, maximise and close are drawn inside the app (window controls overlay), and the
-  // top bars move the window and leave room for them.
-  const bar = await win.evaluate(() => { const h = document.querySelector('main header'); const s = getComputedStyle(h); return { wco: navigator.windowControlsOverlay?.visible ?? null, drag: s.getPropertyValue('-webkit-app-region') || s.getPropertyValue('app-region'), pad: parseFloat(s.paddingRight) }; });
+  // 2.6: no Windows title bar nor Windows buttons: minimise, maximise and close are the app's own, and the top bars move
+  // the window and leave room for them.
+  const bar = await win.evaluate(() => { const h = document.querySelector('main header'); const s = getComputedStyle(h); return { wco: navigator.windowControlsOverlay?.visible ?? false, drag: s.getPropertyValue('-webkit-app-region') || s.getPropertyValue('app-region'), pad: parseFloat(s.paddingRight) }; });
   assert.equal(bar.drag, 'drag', 'la cabecera mueve la ventana');
-  if (process.platform === 'win32') { assert.equal(bar.wco, true, 'botones de la ventana dentro de la app'); assert.ok(bar.pad > 100, `hueco para los botones (${bar.pad} px)`); }
+  assert.equal(bar.wco, false, 'sin los botones de Windows');
+  assert.ok(bar.pad > 100, `hueco para los botones (${bar.pad} px)`);
+  const mainWin = (fn) => app.evaluate(({ BrowserWindow }, f) => { const w = BrowserWindow.getAllWindows().find((b) => b.webContents.getURL().endsWith('index.html')); return f === 'max' ? w.isMaximized() : w.isMinimized(); }, fn);
+  await win.click('[data-testid=window-maximize]');
+  await until(() => mainWin('max'), 'maximizada con el botón propio');
+  await win.locator('[data-testid=window-maximize][aria-label=Restaurar]').waitFor();
+  await win.click('[data-testid=window-maximize]');
+  await until(async () => !(await mainWin('max')), 'restaurada');
   await section('contribuye');
   await win.locator('[data-testid=feedback-message]').waitFor();
   await shot('10h-ajustes-contribuye');

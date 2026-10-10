@@ -1,6 +1,11 @@
 // app.*
 export default {
   'app.menu': 'Menu',
+  'app.window.controls': 'Window',
+  'app.window.minimize': 'Minimise',
+  'app.window.maximize': 'Maximise',
+  'app.window.restore': 'Restore',
+  'app.window.close': 'Close',
   'app.engineStopped': 'Orb has stopped several times. Close and reopen the application.',
   'app.engineRestarted': 'Orb restarted after an error. Tasks in progress have been marked as failed and can be retried.',
   'app.pairTitle': 'Pair this device',
