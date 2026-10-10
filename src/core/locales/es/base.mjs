@@ -11,7 +11,7 @@ export default {
   'nav.expert': 'Modo experto',
   'nav.newConversation': 'Nueva conversación',
   'nav.newChat': 'Nuevo chat',
-  'nav.folders': 'Carpetas',
+  'nav.folders': 'Proyectos',
   'nav.loose': 'Sin carpeta',
   'nav.noProject': 'Sin proyecto',
   'inbox.waiting': 'Por aprobar',

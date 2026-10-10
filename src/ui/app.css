@@ -230,6 +230,39 @@ html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-di
 .brand-sky { background: radial-gradient(120% 90% at 30% 10%, #c3cbff 0%, #a7b1f6 45%, #8f9ef0 100%); }
 .dark .brand-sky { background: radial-gradient(120% 90% at 30% 10%, #2b3270 0%, #1d2257 50%, #141838 100%); }
 
+/* 2.6: the type of the themes' titles, for the pieces drawn with it (the Orb·E wordmark, the clock of the chat bar). */
+:root { --font-title: var(--font-sans); }
+html[data-skin="vaporwave"] { --font-title: "Orbitron Variable", "Space Grotesk Variable", var(--font-sans); }
+html[data-skin="retro"] { --font-title: "Bungee", "IBM Plex Mono", var(--font-sans); }
+html[data-skin="nube"] { --font-title: "Fredoka Variable", var(--font-sans); }
+html[data-skin="profesional"] { --font-title: "Inter Variable", var(--font-sans); }
+
+/* 2.6: the assistant's wordmark at the top of the sidebar when it keeps its default name: «Orb» in a gradient of the
+   theme's colour, a small glowing dot and the E in a rounded tile. */
+.wordmark { display: inline-flex; align-items: center; gap: 0.2rem; font-family: var(--font-title); font-weight: 700; font-size: 1.05rem; line-height: 1; letter-spacing: 0.01em; }
+.wordmark-orb { background: linear-gradient(100deg, var(--foreground) 15%, var(--primary)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.wordmark-dot { width: 0.32rem; height: 0.32rem; border-radius: 999px; background: var(--primary); box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary) 22%, transparent), 0 0 8px var(--primary); }
+.wordmark-e { display: inline-grid; place-items: center; min-width: 1.15rem; height: 1.2rem; padding-inline: 0.2rem; border-radius: 0.4rem; font-size: 0.82rem; color: var(--primary-foreground); background: linear-gradient(145deg, color-mix(in oklch, var(--primary) 80%, white), var(--primary)); box-shadow: 0 2px 6px -2px color-mix(in oklch, var(--primary) 70%, transparent); }
+html[data-skin="retro"] .wordmark { font-weight: 400; }
+html[data-skin="retro"] .wordmark-e { border: 1.5px solid var(--foreground); box-shadow: 2px 2px 0 var(--foreground); }
+@media (prefers-reduced-motion: no-preference) { html:not([data-motion="minima"]) .wordmark-dot { animation: wordmark-glow 3.2s ease-in-out infinite; } }
+@keyframes wordmark-glow { 50% { box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 12%, transparent), 0 0 12px var(--primary); } }
+
+/* 2.6: the system's date and time on the left of the chat's top bar, in the theme's title type. */
+.bar-clock { display: grid; line-height: 1.1; font-family: var(--font-title); }
+.bar-clock-time { font-size: 1.05rem; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+.bar-clock-date { font-family: var(--font-sans); font-size: 0.72rem; color: var(--muted-foreground); }
+.bar-clock-date::first-letter { text-transform: uppercase; }
+html[data-skin="retro"] .bar-clock-time { font-weight: 400; }
+/* A robot that only illustrates (the chat's avatars) is not a button. */
+.orb.still { cursor: default; }
+/* 2.6: the time of each message, bottom right, as in a messaging app. */
+.msg-time { float: right; margin: 0.35rem 0 -0.25rem 0.75rem; font-size: 0.68rem; line-height: 1.4; font-variant-numeric: tabular-nums; opacity: 0.6; white-space: nowrap; }
+/* 2.6: the sidebar's edge, dragged to make it wider or narrower. */
+.sidebar-resize { position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; cursor: col-resize; z-index: 5; -webkit-app-region: no-drag; app-region: no-drag; }
+.sidebar-resize::after { content: ""; position: absolute; inset: 0 2px; border-radius: 2px; background: var(--primary); opacity: 0; transition: opacity 0.15s; }
+.sidebar-resize:hover::after, .sidebar-resize[data-dragging]::after { opacity: 0.45; }
+
 /* 2.6: the window has no Windows title bar nor Windows buttons: minimise, maximise and close are the app's own
    (components/window-controls.jsx), top right over every screen, centred in the 56 px of the top bars. The top bars
    (.app-titlebar) move the window and maximise it with a double click; what is clickable inside them stays clickable.

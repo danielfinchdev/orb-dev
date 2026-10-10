@@ -172,7 +172,7 @@ test('Cursor: solo lectura sin --force, encargos largos por archivo, cupo y dete
   await ro.live.send({ text: 'mira' });
   const args = ro.log()[0].args;
   assert.ok(!args.includes('--force')); assert.equal(args[args.indexOf('--mode') + 1], 'ask');
-  assert.ok(!args.includes('--model'), 'auto = el modelo que elija Cursor');
+  assert.equal(args[args.indexOf('--model') + 1], 'auto', 'auto = Cursor elige el modelo en cada petición');
   const long = openCursor({ promptDir: dir });
   await long.live.send({ text: `ENCARGO\n${'x'.repeat(cursor.ARGV_PROMPT_MAX + 10)}` });
   const prompt = long.log()[0].args.at(-1);

@@ -160,7 +160,23 @@ export function createLive(o) {
       turn?.finish({ final, isError, usage, stopReason: m.subtype ?? null });
       // How full the context is, for the meter in the window (best effort; older CLIs do not answer).
       query?.getContextUsage?.().then((c) => onEvent({ type: 'context', used: c.totalTokens, size: c.maxTokens || c.rawMaxTokens })).catch(() => {});
+      planUsage();
     }
+  };
+  // 2.6: the plan's windows (session, weekly, weekly of a model) as /usage shows them: Claude only sends them by itself
+  // near a limit, so they are asked after a turn, at most every 90 s (experimental SDK call: best effort, any version).
+  let usageAt = 0;
+  const planUsage = () => {
+    const ask = query?.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET;
+    if (typeof ask !== 'function' || Date.now() - usageAt < 90_000) return;
+    usageAt = Date.now();
+    Promise.resolve(ask.call(query, { skipBehaviors: true })).then((u) => {
+      const r = u?.rate_limits;
+      if (!r) return;
+      const send = (window, w) => { if (w?.utilization == null) return; onEvent({ type: 'rate', status: 'allowed', resetAt: w.resets_at ? Date.parse(w.resets_at) || null : null, utilization: w.utilization / 100, window }); };
+      for (const k of ['five_hour', 'seven_day', 'seven_day_opus', 'seven_day_sonnet']) send(k, r[k]);
+      for (const m of r.model_scoped ?? []) if (m?.display_name) send(`seven_day_${String(m.display_name).toLowerCase().replace(/[^a-z0-9]+/g, '_')}`, m);
+    }).catch(() => {});
   };
 
   const start = async () => {

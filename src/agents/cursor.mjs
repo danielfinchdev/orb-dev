@@ -110,7 +110,8 @@ export function createLive(o) {
     }
     const args = [...o.exe.pre, '-p', '--output-format', 'stream-json', '--stream-partial-output', '--trust', '--workspace', o.cwd];
     if (permission === 'leer') args.push('--mode', 'ask'); else args.push('--force');
-    if (model && model !== 'auto') args.push('--model', model);
+    // 2.6: «Auto» is Cursor's own choice per request (--model auto), not the model in use in Cursor.
+    if (model) args.push('--model', model);
     if (live.sessionId) args.push('--resume', live.sessionId);
     args.push(prompt);
     child = spawnAgent(o.exe.cmd, args, { cwd: o.cwd, env: o.env, log });

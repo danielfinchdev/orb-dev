@@ -93,7 +93,9 @@ export function modelCatalog(board, { discover = false, log } = {}) {
       if (m.resolved && (seen.has(m.resolved) || stands.has(m.resolved))) continue;
       seen.add(m.id); if (m.resolved) stands.add(m.resolved);
       const heavy = (cfg.heavyModels ?? []).some((h) => m.id === h || m.id.includes(h)) || HEAVY_FAMILY.test(m.id);
-      models.push({ id: m.id, label: m.label ?? (/^[a-z]+$/.test(m.id) ? m.id[0].toUpperCase() + m.id.slice(1) : m.id), heavy });
+      // 2.6: «Recomendados» at the top of the selector: the assistant's own Claude models and the model Codex uses by default.
+      const recommended = agent === 'claude' ? labelled.some((l) => l.id === m.id) : agent === 'codex' && Boolean(usual) && m.id === usual.id;
+      models.push({ id: m.id, label: m.label ?? (/^[a-z]+$/.test(m.id) ? m.id[0].toUpperCase() + m.id.slice(1) : m.id), heavy, ...(recommended ? { recommended: true } : {}) });
     }
     out.push({
       id: agent, label: AGENT_LABELS[agent] ?? agent, defaultModel: cfg.defaultModel || '',

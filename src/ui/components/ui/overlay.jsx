@@ -64,13 +64,14 @@ export function Select({ value, onValueChange, options, placeholder, className, 
 // 2.6: the one tooltip of the whole app, a small speech bubble (app.css: .orb-tip, styled per visual theme): a short bold
 // title and, at most, a line or two of muted text, with a little tail towards the control. No icons inside. Shown on hover
 // and on keyboard focus; the control keeps its own accessible name (aria-label).
-export function BubbleTip({ title, text, children, side = 'bottom', align = 'center', wide = false }) {
+// offset: how far from the control (more when a button sits right next to it, so the bubble never covers it).
+export function BubbleTip({ title, text, children, side = 'bottom', align = 'center', wide = false, offset = 8 }) {
   if (!title && !text) return children;
   return (
     <TooltipPrimitive.Root delayDuration={300}>
       <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal>
-        <TooltipPrimitive.Content side={side} align={align} sideOffset={8} collisionPadding={12} className={cn('orb-tip z-50', wide ? 'max-w-80' : 'max-w-[17rem]')} data-testid="bubble-tip">
+        <TooltipPrimitive.Content side={side} align={align} sideOffset={offset} collisionPadding={12} className={cn('orb-tip z-50', wide ? 'max-w-80' : 'max-w-[17rem]')} data-testid="bubble-tip">
           {title ? <div className="orb-tip-title text-[13px] leading-snug font-semibold">{title}</div> : null}
           {text ? <p className={cn('orb-tip-text text-[12px] leading-snug', title && 'mt-0.5', wide && 'break-all')}>{text}</p> : null}
           <TooltipPrimitive.Arrow asChild width={16} height={8}><span className="orb-tip-tail" aria-hidden="true" /></TooltipPrimitive.Arrow>

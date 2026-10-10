@@ -1,7 +1,7 @@
 // 2.6: what the chat runs on, chosen under the message box: the brain (agent + model, one list grouped by agent), the
 // reasoning and, for a direct chat, the permissions. A bubble warns when the choice spends the quota fast.
 import { useEffect, useState } from 'react';
-import { Check, ChevronDown, Flame, Lightbulb, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Flame, Lightbulb, Star, X } from 'lucide-react';
 import { AgentIcon } from './agent-icon.jsx';
 import { Button } from './ui/button.jsx';
 import { Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, BubbleTip } from './ui/overlay.jsx';
@@ -40,25 +40,53 @@ export function BrainPicker({ catalog, value, onChange, className }) {
         </DropdownMenuTrigger>
       </BubbleTip>
       <DropdownMenuContent align="start" className="max-h-[60vh] w-72 overflow-y-auto">
-        {!catalog?.length ? <div className="text-muted-foreground px-2 py-1.5 text-xs">{t('brain.none')}</div> : catalog.map((a, i) => (
-          <div key={a.id}>
-            {i ? <DropdownMenuSeparator /> : null}
-            <DropdownMenuLabel className="flex items-center gap-2"><AgentIcon agent={a.id} className="size-3.5" />{a.label}</DropdownMenuLabel>
-            {(a.models.length ? a.models : [{ id: '', label: t('brain.defaultOf', { agent: a.label }) }]).map((m) => {
-              const on = value.agent === a.id && (value.model ?? '') === m.id;
-              return (
-                <DropdownMenuItem key={m.id || 'default'} onSelect={() => onChange({ agent: a.id, model: m.id, account: a.accounts[0]?.id ?? a.id })} data-testid={`brain-${a.id}-${m.id || 'default'}`}>
-                  <span className="min-w-0 flex-1 truncate pl-5">{labelOf(a, m, t)}</span>
-                  {m.heavy ? <Flame className="text-warning! size-3.5" aria-label={t('brain.heavy')} /> : null}
-                  {on ? <Check className="text-primary!" /> : null}
-                </DropdownMenuItem>
-              );
-            })}
-          </div>
-        ))}
+        {!catalog?.length ? <div className="text-muted-foreground px-2 py-1.5 text-xs">{t('brain.none')}</div> : <BrainGroups catalog={catalog} value={value} onChange={onChange} />}
       </DropdownMenuContent>
     </DropdownMenu>
   );
+}
+
+// 2.6: the list folded, so it stays short: «Recomendados» first (the assistant's Claude models and Codex's usual one),
+// then one group per agent; one group open at a time. The group of the brain in use says which model it is.
+function BrainGroups({ catalog, value, onChange }) {
+  const t = useT();
+  const [open, setOpen] = useState(null);
+  const list = (a) => (a.models.length ? a.models : [{ id: '', label: t('brain.defaultOf', { agent: a.label }) }]);
+  const recommended = catalog.flatMap((a) => list(a).filter((m) => m.recommended).map((m) => ({ a, m })));
+  const item = (a, m, key, withAgent) => {
+    const on = value.agent === a.id && (value.model ?? '') === m.id;
+    return (
+      <DropdownMenuItem key={key} onSelect={() => onChange({ agent: a.id, model: m.id, account: a.accounts[0]?.id ?? a.id })} data-testid={`brain-${a.id}-${m.id || 'default'}${withAgent ? '-rec' : ''}`}>
+        {withAgent ? <AgentIcon agent={a.id} className="ml-5 size-3.5" /> : null}
+        <span className={cn('min-w-0 flex-1 truncate', !withAgent && 'pl-5')}>{withAgent ? `${a.label} · ` : ''}{labelOf(a, m, t)}</span>
+        {m.heavy ? <Flame className="text-warning! size-3.5" aria-label={t('brain.heavy')} /> : null}
+        {on ? <Check className="text-primary!" /> : null}
+      </DropdownMenuItem>
+    );
+  };
+  const header = (id, icon, label, note) => (
+    <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setOpen((o) => (o === id ? null : id)); }} aria-expanded={open === id} className="text-[13px] font-medium" data-testid={`brain-group-${id}`}>
+      <ChevronRight className={cn('size-3.5 transition-transform', open === id && 'rotate-90')} />{icon}
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {note ? <span className="text-muted-foreground max-w-28 truncate text-xs font-normal">{note}</span> : null}
+    </DropdownMenuItem>
+  );
+  return (<>
+    {recommended.length ? <>
+      {header('rec', <Star className="text-warning! size-3.5" />, t('brain.recommended'))}
+      {open === 'rec' ? recommended.map(({ a, m }) => item(a, m, `rec-${a.id}-${m.id}`, true)) : null}
+      <DropdownMenuSeparator />
+    </> : null}
+    {catalog.map((a) => {
+      const current = value.agent === a.id ? list(a).find((m) => m.id === (value.model ?? '')) : null;
+      return (
+        <div key={a.id}>
+          {header(a.id, <AgentIcon agent={a.id} className="size-3.5" />, a.label, current ? labelOf(a, current, t) : null)}
+          {open === a.id ? list(a).map((m) => item(a, m, m.id || 'default', false)) : null}
+        </div>
+      );
+    })}
+  </>);
 }
 
 export function ReasoningPicker({ value, onChange }) {
