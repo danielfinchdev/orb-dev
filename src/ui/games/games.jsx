@@ -17,7 +17,9 @@ const GAMES = [
   { id: 'chess', load: lazy(() => import('./chess.jsx')) },
   { id: 'runner', load: lazy(() => import('./runner.jsx')) },
   { id: 'g2048', load: lazy(() => import('./g2048.jsx')) },
-  { id: 'breakout', load: lazy(() => import('./breakout.jsx')) }
+  { id: 'breakout', load: lazy(() => import('./breakout.jsx')) },
+  { id: 'invaders', load: lazy(() => import('./invaders.jsx')) },
+  { id: 'pacman', load: lazy(() => import('./pacman.jsx')) }
 ];
 
 // The game's picture, on a soft tinted stage.
@@ -57,7 +59,7 @@ export function GamesDialog() {
           </div>
         </div>
         {!game ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {GAMES.map((x) => {
               const Thumb = THUMBS[x.id]; const n = best(x.id, level);
               return (

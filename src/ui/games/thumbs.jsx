@@ -1,7 +1,18 @@
 // The little pictures of the game cards: one vector per game, painted with the theme's colours (CSS variables).
 import { Piece } from './chess-pieces.jsx';
+import { SPRITES, pixels } from './invaders-sprites.js';
 
-const P = 'var(--primary)'; const FG = 'var(--foreground)'; const WARN = 'var(--warning)'; const DANGER = 'var(--destructive)'; const INFO = 'var(--info)'; const OK = 'var(--success)'; const CARD = 'var(--card)';
+const P = 'var(--primary)';
+const SPACE = `color-mix(in oklab, ${P} 12%, #070a18)`;
+// A pixel sprite as little squares.
+const Pixels = ({ rows, x, y, s, fill }) => <g fill={fill}>{pixels(rows).map(([px, py]) => <rect key={`${px}-${py}`} x={x + px * s} y={y + py * s} width={s} height={s} />)}</g>;
+const Ghost = ({ x, y, r, color }) => (
+  <g>
+    <path d={`M${x - r} ${y} a${r} ${r} 0 0 1 ${2 * r} 0 v${r * 0.9} l${-r / 3} ${-r / 4} l${-r / 3} ${r / 4} l${-r / 3} ${-r / 4} l${-r / 3} ${r / 4} l${-r / 3} ${-r / 4} l${-r / 3} ${r / 4} z`} fill={color} />
+    <ellipse cx={x - r * 0.38} cy={y - r * 0.15} rx={r * 0.26} ry={r * 0.34} fill="#fff" /><ellipse cx={x + r * 0.38} cy={y - r * 0.15} rx={r * 0.26} ry={r * 0.34} fill="#fff" />
+    <circle cx={x - r * 0.3} cy={y - r * 0.15} r={r * 0.14} fill="#2233ff" /><circle cx={x + r * 0.46} cy={y - r * 0.15} r={r * 0.14} fill="#2233ff" />
+  </g>
+); const FG = 'var(--foreground)'; const WARN = 'var(--warning)'; const DANGER = 'var(--destructive)'; const INFO = 'var(--info)'; const OK = 'var(--success)'; const CARD = 'var(--card)';
 const Box = ({ children }) => <svg viewBox="0 0 120 80" className="h-full w-full" aria-hidden="true">{children}</svg>;
 
 export const THUMBS = {
@@ -71,6 +82,34 @@ export const THUMBS = {
       {[DANGER, WARN, OK, INFO].map((c, r) => Array.from({ length: 5 }, (_, i) => <rect key={`${r}-${i}`} x={22 + i * 16} y={10 + r * 9} width="14" height="7" rx="1.5" fill={c} />))}
       <rect x="44" y="66" width="32" height="5" rx="2.5" fill={P} />
       <circle cx="64" cy="56" r="4" fill={FG} /><circle cx="60" cy="50" r="2.5" fill={FG} opacity=".25" />
+    </Box>
+  ),
+  invaders: () => (
+    <Box>
+      <rect x="0" y="0" width="120" height="80" fill={SPACE} />
+      {[[8, 6], [30, 14], [57, 5], [88, 10], [110, 20], [16, 40], [104, 46], [70, 70]].map(([x, y], i) => <rect key={i} x={x} y={y} width={i % 3 ? 1 : 1.6} height={i % 3 ? 1 : 1.6} fill="#fff" opacity={0.35 + (i % 3) * 0.2} />)}
+      {['#ff5ce0', '#a66bff', '#3fd8ff'].map((c, row) => [0, 1, 2, 3].map((col) => {
+        const name = row === 0 ? 'squid' : row === 1 ? 'crab' : 'octopus'; const rows = SPRITES[name][(row + col) % 2]; const w = rows[0].length * 1.6;
+        return <Pixels key={`${row}-${col}`} rows={rows} x={24 + col * 20 + (17 - w) / 2} y={8 + row * 15} s={1.6} fill={c} />;
+      }))}
+      <Pixels rows={SPRITES.bunker[0]} x={14} y={54} s={0.9} fill="#ff9a3c" /><Pixels rows={SPRITES.bunker[0]} x={86} y={54} s={0.9} fill="#ff9a3c" />
+      <Pixels rows={SPRITES.cannon[0]} x={49} y={60} s={1.6} fill={`color-mix(in oklab, ${P} 55%, #fff)`} />
+      <rect x="59.5" y="48" width="1.6" height="6" fill="#fff" />
+      <rect x="0" y="74" width="120" height="1" fill="#ff9a3c" opacity=".8" />
+    </Box>
+  ),
+  pacman: () => (
+    <Box>
+      <rect x="0" y="0" width="120" height="80" fill={SPACE} />
+      {/* A corner of the maze: the outlines of three wall blocks. */}
+      <g fill="none" stroke={`color-mix(in oklab, ${P} 45%, #3d5afe)`} strokeWidth="2.2" strokeLinejoin="round">
+        <path d="M-4 -4h128v84h-128z M4 4h112v72h-112z" fillRule="evenodd" />
+        <rect x="18" y="18" width="30" height="14" rx="6" /><rect x="62" y="18" width="40" height="14" rx="6" /><rect x="18" y="46" width="30" height="14" rx="6" /><rect x="62" y="46" width="40" height="14" rx="6" />
+      </g>
+      {[[12, 11], [26, 11], [40, 11], [55, 11], [68, 11], [82, 11], [96, 11], [110, 11], [55, 25], [55, 39], [68, 39], [82, 39], [96, 39], [12, 39], [26, 39], [40, 39], [12, 25], [110, 25], [12, 67], [26, 67], [40, 67], [68, 67], [82, 67], [96, 67], [110, 67]].map(([x, y], i) => <rect key={i} x={x - 1.4} y={y - 1.4} width="2.8" height="2.8" fill="#ffb8ae" />)}
+      <circle cx="110" cy="39" r="4.5" fill="#ffb8ae" />
+      <path d="M55 67 L63.5 61.5 A9 9 0 1 0 63.5 72.5 Z" fill="#ffe733" transform="translate(0 0)" />
+      <Ghost x={86} y={66} r={8} color="#ff3b3b" />
     </Box>
   )
 };

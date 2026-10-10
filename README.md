@@ -123,7 +123,7 @@ D:\Orb\                   (siempre <carpeta elegida>\Orb, igual para todos)
   tarea dice por qué y qué hacer, en vez de un «falló» a secas.
 - **Ajustes en una ventana** con apartados (General, Apariencia, Modelo, Tareas y cupo, Móvil, Herramientas, Modo
   experto, Actualizaciones, Contribuye y Más aplicaciones).
-- **Apariencia:** modo claro, oscuro o sistema; temas Orb, Vaporwave, Retro arcade, Profesional (sin robot) y Nube;
+- **Apariencia:** modo claro, oscuro o sistema; temas Orb, Vaporwave, Retro arcade, Profesional (sin robot) y Candy;
   tipografía de la interfaz y del código; colores del código. La barra de menús de Windows está oculta por defecto.
 - **Tamaño de la interfaz** en Ajustes → Apariencia (Pequeña / Normal / Grande) o con `Ctrl +`, `Ctrl -` y `Ctrl 0`
   (también `Ctrl` + rueda del ratón). Se guarda en cada PC.

@@ -220,7 +220,7 @@ export default {
   'appearance.skin.vaporwave': 'Vaporwave',
   'appearance.skin.retro': 'Retro arcade',
   'appearance.skin.profesional': 'Profesional',
-  'appearance.skin.nube': 'Nube',
+  'appearance.skin.nube': 'Candy',
   'appearance.font': 'Tipografía',
   'appearance.font.outfit': 'La del tema (predeterminada)',
   'appearance.font.inter': 'Inter',
