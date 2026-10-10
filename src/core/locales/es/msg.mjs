@@ -71,7 +71,7 @@ export default {
   "msg.api.reasoningMedium": "medio",
   "msg.api.reasoningLow": "bajo",
   "msg.api.reasoningHigh": "alto",
-  "msg.api.assistantBrain": "Cerebro del asistente: {agent} · {label} (razonamiento: {reasoning}).",
+  "msg.api.assistantBrain": "{name} usará {agent} · {label}, con razonamiento {reasoning}.",
   "msg.api.agentUnavailable": "{agent} no está instalado o no tiene ninguna cuenta activa",
   "msg.api.taskModelFromTask": "el modelo de una tarea se cambia desde la propia tarea",
   "msg.api.tooLong": "el campo {name} es demasiado largo (máximo: {max} caracteres)",

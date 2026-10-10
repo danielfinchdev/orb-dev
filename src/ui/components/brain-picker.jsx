@@ -27,7 +27,8 @@ export function BrainPicker({ catalog, value, onChange, className }) {
   const t = useT();
   const agent = catalog?.find((a) => a.id === value.agent);
   const model = modelOf(catalog, value);
-  const label = model && agent ? labelOf(agent, model, t) : (value.model || t('brain.defaultModel'));
+  // On the button, the agent's default reads as the model it stands for (Codex · GPT-6-Luna), without «Predeterminado».
+  const label = model && agent ? (model.id === '' && model.defaultOf ? model.defaultOf : labelOf(agent, model, t)) : (value.model || t('brain.defaultModel'));
   return (
     <DropdownMenu>
       <BubbleTip title={t('brain.title')} text={t('brain.titleText')}>
