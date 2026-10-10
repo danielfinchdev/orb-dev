@@ -14,12 +14,22 @@ import { mcpServersFor, browserEnv } from './sessions.mjs';
 import { account, defaultAccount, accountEnv } from '../core/accounts.mjs';
 import { briefing } from './logs.mjs';
 import { rememberModels } from './catalog.mjs';
+import { recordRate } from '../core/budget.mjs';
 import { AGENT_LABELS } from '../core/home.mjs';
 
-export function persona() {
+// The models an agent takes for a task: the configured ones and the ones the agent itself listed (2.6, models:<agent>).
+// Each one with its name when the agent gave it (e.g. «opus = Opus 5.5 (claude-opus-5-5)»), so the brain picks the right id.
+export function knownModels(board, agent) {
+  const listed = board?.settingJson(`models:${agent}`) ?? [];
+  const named = listed.map((m) => (m.label && m.label !== m.id ? `${m.id} = ${m.label}${m.resolved ? ` (${m.resolved})` : ''}` : m.id));
+  const extra = (ctx.config.agents[agent]?.models ?? []).filter((id) => !listed.some((m) => m.id === id || m.resolved === id));
+  return [...new Set([...named, ...extra])].slice(0, 24);
+}
+
+export function persona(board = null) {
   const c = ctx.config; const me = assistantName(); const boss = userName();
   const accountsOf = (a) => (c.accounts ?? []).filter((x) => x.agent === a && x.enabled !== false);
-  const models = AGENTS.filter((a) => c.agents[a]?.enabled && accountsOf(a).length && installed(a)).map((a) => `- ${a}: ${c.agents[a].strengths}. Modelos: ${(c.agents[a].models ?? []).join(', ') || 'el predeterminado de su programa'}${c.agents[a].heavyModels?.length ? ` (caros: ${c.agents[a].heavyModels.join(', ')})` : ''}.${accountsOf(a).length > 1 ? ` Cuentas: ${accountsOf(a).map((x) => x.label).join(', ')} (el trabajo se reparte solo entre ellas según su cupo).` : ''}`).join('\n');
+  const models = AGENTS.filter((a) => c.agents[a]?.enabled && accountsOf(a).length && installed(a)).map((a) => `- ${a}: ${c.agents[a].strengths}. Modelos: ${knownModels(board, a).join(', ') || 'el predeterminado de su programa'}${c.agents[a].heavyModels?.length ? ` (caros: ${c.agents[a].heavyModels.join(', ')})` : ''}.${accountsOf(a).length > 1 ? ` Cuentas: ${accountsOf(a).map((x) => x.label).join(', ')} (el trabajo se reparte solo entre ellas según su cupo).` : ''}`).join('\n');
   return `Eres ${me}, el asistente que coordina a los agentes de IA ${ofUser()}. Hablas en ${c.language === 'en' ? 'inglés' : 'español'}, cercano y breve, sin jerga técnica innecesaria.
 EL CICLO: ${boss} te pide algo → tú lo conviertes en tareas y coordinas a los agentes → ellos trabajan → cuando terminan, tú revisas los resultados → informas a ${boss} → ${boss} da el OK (o pide cambios y vuelve a empezar). Nunca des por terminado un pedido sin ese informe.\nTU PAPEL: ${boss} es quien dirige; tú eres su jefe de proyecto. ${boss} habla contigo y tú das encargos claros a los agentes (${AGENTS.join(', ')}), vigilas que cumplan y le informas con lo esencial.
 SOLO COORDINAS: no programas, no editas, no ejecutas comandos. El trabajo lo hacen los agentes mediante tareas. Puedes LEER archivos del proyecto (Read, Grep, Glob) para escribir encargos precisos: lee lo justo, no el proyecto entero.
@@ -199,13 +209,13 @@ export class Orchestrator {
     // Claude takes the persona as its system prompt and a list of tools; the other agents get the persona at the start
     // of the conversation (run()) and the coordinator is held to read-only by its permission.
     const isClaude = agent === 'claude';
-    this.liveAgent = agent;
+    this.liveAgent = agent; this.liveAccount = acc.id;
     this.live = adapter(agent).createLive({
       exe: executable(agent), cwd, model: o.model || (isClaude ? 'claude-sonnet-5-5' : null), reasoning: o.reasoning || 'medium',
       permission: free ? 'editar' : 'leer', resumeId: session || null, newSessionId: isClaude ? newId : null,
       mcpServers: mcpServersFor(agent, { board: this.board, orchestrator: true, browser: free, session: 'asistente', orchKey: this.key }),
       env: { ...accountEnv(acc), ORB_HOME: ctx.home, ORB_AGENT: 'orb', ...(free ? browserEnv('orb', 'asistente') : {}) },
-      ...(isClaude ? { systemPrompt: free ? freePersona(cwd) : persona() } : {}),
+      ...(isClaude ? { systemPrompt: free ? freePersona(cwd) : persona(this.board) } : {}),
       tools: !isClaude ? undefined : free ? { disallowed: ['Task'] } : { allowed: ['mcp__orb', 'Read', 'Glob', 'Grep'], disallowed: claude.COORDINATOR_DENIED },
       addDirs: [...new Set(dirs)].filter((d) => d !== cwd).slice(0, 40), internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog,
       onEvent: (ev) => this.onEvent(ev)
@@ -220,6 +230,8 @@ export class Orchestrator {
     if (ev.type === 'item' && ev.role === 'assistant' && ev.kind === 'text') { this.partial = ''; return; }
     if (ev.type === 'session' && ev.id) { this.board.setting('orchestrator_session', ev.id); return; }
     if (ev.type === 'models') { rememberModels(this.board, this.liveAgent, ev.list); return; }
+    // 2.6: the brain's own plan usage too (before, only the agents' sessions counted it): the usage panel and the budget.
+    if (ev.type === 'rate') { try { recordRate(this.board, this.liveAccount ?? this.liveAgent, ev); } catch { /* budget only */ } return; }
     if (ev.type === 'context' && ev.size) { this.board.settingJson('orchestrator_context', { used: ev.used, size: ev.size }); this.push(); return; }
     if (ev.type === 'approval') {
       const r = ev.request;
@@ -253,7 +265,7 @@ export class Orchestrator {
       this.busy = false; this.push(); return;
     }
     // A brain other than Claude gets its instructions at the start of the conversation (Claude has them as system prompt).
-    const intro = fresh && (o.agent || 'claude') !== 'claude' ? `${place.free ? freePersona(place.cwd) : persona()}\n\n` : '';
+    const intro = fresh && (o.agent || 'claude') !== 'claude' ? `${place.free ? freePersona(place.cwd) : persona(this.board)}\n\n` : '';
     const prompt = fresh ? `${intro}${briefing(this.board)}\n\n## Mensaje ${ofUser()}\n${text}` : text;
     this.board.setting('orchestrator_turns', String(Number(this.board.setting('orchestrator_turns') ?? 0) + 1));
     const generation = this.generation;

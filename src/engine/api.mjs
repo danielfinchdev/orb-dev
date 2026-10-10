@@ -70,8 +70,19 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       config: ctx.config, paused: board.setting('paused') === '1', activeProject: board.activeProject(),
       approvals: sessions.allPendingApprovals().map((a) => ({ id: a.id, session_id: a.session_id, body: { title: a.body?.title, reason: a.body?.reason }, session: a.session })),
       counts: Object.fromEntries(board.all('SELECT status, COUNT(*) AS n FROM tasks GROUP BY status').map((r) => [r.status, r.n])),
-      chat: orchestrator.state(), assistant: orchestrator.info()
+      chat: orchestrator.state(), assistant: orchestrator.info(),
+      // 2.6: the tasks («t<id>») and conversations («s<id>») the user put away in «Completados» of the sidebar.
+      completed: board.settingJson('sidebar_completed') ?? []
     }),
+    'sidebar.complete': ({ key, done }) => {
+      const k = str(key, 'elemento', 100);
+      if (!/^[ts][\w-]{1,90}$/.test(k)) fail(tr('msg.api.missing', { name: fld('elemento') }));
+      const list = (board.settingJson('sidebar_completed') ?? []).filter((x) => x !== k);
+      if (done !== false) list.unshift(k);
+      board.settingJson('sidebar_completed', list.slice(0, 2000));
+      board.changed('sidebar');
+      return list;
+    },
     'config.save': ({ patch }) => { const c = saveConfig(patch ?? {}); emit('config:changed', c); return c; },
 
     // «Comprobar» / «Comprobar todo» also ask the agents again for their models (in the background).
@@ -283,12 +294,13 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     // 2.6: the accounts working right now (the assistant's brain and the agents' running sessions), with the windows of
     // their plan the agents reported (session, weekly…), for the panel of the context ring.
     'usage.now': () => {
-      const brain = orchestrator.info();
+      const brain = orchestrator.info(); const brainAccount = orchestrator.liveAccount ?? brain.account;
       const busy = board.all("SELECT DISTINCT account, agent FROM sessions WHERE status = 'running' AND account IS NOT NULL");
-      const ids = [...new Set([brain.account, ...busy.map((s) => s.account)].filter(Boolean))];
       const report = usageReport(board);
+      // Then the other accounts whose plan reported its usage lately (a task that just finished still counts).
+      const ids = [...new Set([brainAccount, ...busy.map((s) => s.account), ...report.filter((u) => u.windows?.length).map((u) => u.account)].filter(Boolean))];
       return ids.map((id) => report.find((u) => u.account === id) ?? { account: id, agent: busy.find((s) => s.account === id)?.agent ?? brain.agent, label: id, windows: [] })
-        .map((u) => ({ account: u.account, agent: u.agent, label: u.label, windows: u.windows ?? [], cooldownUntil: u.cooldownUntil ?? null, brain: u.account === brain.account }));
+        .map((u) => ({ account: u.account, agent: u.agent, label: u.label, windows: u.windows ?? [], cooldownUntil: u.cooldownUntil ?? null, brain: u.account === brainAccount }));
     },
     // Expert mode (PC only, read-only): the project's files, git and the machine's load.
     'expert.tree': ({ project: name, dir }) => expert.tree(project(name).path, str(dir, 'carpeta', 1000, { optional: true })),

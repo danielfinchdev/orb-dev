@@ -125,6 +125,9 @@ try {
   await win.waitForSelector('[data-testid=new-chat-input]');
   assert.equal(await win.locator('[role=dialog]').count(), 0, 'sin ventana emergente');
   await win.click('[data-testid=brain-picker]');
+  // 2.6: the list comes folded: one group per agent (and «Recomendados» when there are any).
+  assert.equal(await win.locator('[data-testid=brain-codex-default]').count(), 0, 'los grupos empiezan plegados');
+  await win.click('[data-testid=brain-group-codex]');
   await win.click('[data-testid=brain-codex-default]');
   await win.click('[data-testid=new-chat-orchestrator]');
   await win.locator('[data-testid=permission-picker]').waitFor();
@@ -264,18 +267,28 @@ try {
   await win.locator('[data-testid=update-card]').getByRole('button', { name: 'Cerrar' }).click();
   await until(async () => (await win.locator('[data-testid=update-card]').count()) === 0, 'tarjeta cerrada');
 
-  // ---- left menu: each project is a folder with the tasks sent to it
-  step = 'carpetas del menú';
-  await win.locator('[data-testid=folder-webviaproject]').waitFor();
-  const folderOpen = await win.locator('[data-testid=folder-webviaproject]').getAttribute('data-state');
-  if (folderOpen !== 'open') await win.click('[data-testid=folder-webviaproject]');
+  // ---- left menu (2.6): a click on a project picks it for a new conversation; a double click unfolds its tasks and
+  // conversations; each one can be put away in «Completados» (folded at the bottom) and brought back.
+  step = 'proyectos del menú';
+  const folder = win.locator('[data-testid=folder-webviaproject]');
+  await folder.waitFor();
   const firstTask = (await call('tasks.list')).find((x) => x.project === 'webviaproject');
-  await win.locator('aside').getByRole('button', { name: firstTask.title }).first().click();
+  const taskInMenu = win.locator('aside').getByRole('button', { name: firstTask.title }).first();
+  if (!(await taskInMenu.isVisible())) await folder.dblclick();
+  await taskInMenu.click();
   await win.waitForSelector('[data-testid=task-detail]');
   await win.locator('[data-testid=task-detail]', { hasText: `Tarea #${firstTask.id}` }).waitFor();
-  await win.click('[data-testid=folder-webviaproject]');
-  await until(async () => (await win.locator('[data-testid=folder-webviaproject]').getAttribute('data-state')) === 'closed', 'carpeta plegada');
-  await win.click('[data-testid=folder-webviaproject]');
+  await taskInMenu.hover();
+  await win.click(`[data-testid=complete-t${firstTask.id}]`);
+  await until(async () => (await call('app.state')).completed?.includes(`t${firstTask.id}`), 'tarea completada');
+  await win.click('[data-testid=sidebar-completed]');
+  await shot('12b-menu-completados');
+  await win.locator(`[data-testid=complete-t${firstTask.id}]`).hover();
+  await win.click(`[data-testid=complete-t${firstTask.id}]`);
+  await until(async () => !(await call('app.state')).completed?.includes(`t${firstTask.id}`), 'devuelta a su proyecto');
+  await folder.click();
+  await win.locator('[data-testid=new-chat-input]').waitFor();
+  assert.equal((await call('app.state')).activeProject?.name, 'webviaproject', 'un clic elige el proyecto para conversar');
 
   // ---- expert mode (PC only): turned on in Settings, files, git and panels chosen by the user
   step = 'modo experto';
@@ -304,7 +317,8 @@ try {
   step = 'modo libre';
   await win.click('[data-testid=nav-chat]');
   await win.click('[data-testid=brain-picker]');
-  await win.click('[data-testid=brain-claude-claude-opus-5-5]');
+  await win.click('[data-testid=brain-group-rec]');
+  await win.click('[data-testid=brain-claude-claude-opus-5-5-rec]');
   await until(async () => (await call('app.state')).config.orchestrator.model === 'claude-opus-5-5', 'modelo Opus');
   // Opus spends the quota faster: the bubble says so.
   await win.locator('[data-testid=usage-bubble]').waitFor();

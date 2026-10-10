@@ -15,7 +15,7 @@ import { useStore, call, act, setState, go, bridge, openGames } from '@/lib/stor
 import { ContextMeter } from './session.jsx';
 import { BrainPicker, ReasoningPicker, UsageBubble, useCatalog, useUsageBubble } from '@/components/brain-picker.jsx';
 import { cn } from '@/lib/utils.js';
-import { useT } from '@/lib/i18n.js';
+import { useT, useLocale } from '@/lib/i18n.js';
 
 const SUGGESTIONS = ['chat.suggestion1', 'chat.suggestion2', 'chat.suggestion3', 'chat.suggestion4'];
 
@@ -89,9 +89,31 @@ export function Composer({ value, onChange, onSend, onStop, busy, placeholder, t
   );
 }
 
+// 2.6: the system's date and time on the left of the chat's top bar (app.css .bar-clock, in the theme's title type).
+function BarClock() {
+  const locale = useLocale();
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => { const id = setInterval(() => setNow(new Date()), 15_000); return () => clearInterval(id); }, []);
+  return (
+    <span className="bar-clock" data-testid="bar-clock">
+      <span className="bar-clock-time">{now.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}</span>
+      <span className="bar-clock-date">{now.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+    </span>
+  );
+}
+// The time a message was written, small at its bottom right (the day too when it is not today).
+function MsgTime({ at }) {
+  const locale = useLocale();
+  if (!at) return null;
+  const d = new Date(at); if (Number.isNaN(d.getTime())) return null;
+  const today = d.toDateString() === new Date().toDateString();
+  const time = d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  return <time className="msg-time" dateTime={d.toISOString()}>{today ? time : `${d.toLocaleDateString(locale, { day: 'numeric', month: 'short' })} ${time}`}</time>;
+}
+
 function Message({ m, name, onChanges }) {
   const t = useT();
-  if (m.role === 'usuario') return <div className="bg-bubble text-bubble-foreground ml-auto max-w-[80%] rounded-2xl rounded-br-md px-4 py-2.5 whitespace-pre-wrap break-words">{m.body}</div>;
+  if (m.role === 'usuario') return <div className="bg-bubble text-bubble-foreground ml-auto max-w-[80%] rounded-2xl rounded-br-md px-4 py-2.5 whitespace-pre-wrap break-words">{m.body}<MsgTime at={m.at} /></div>;
   if (m.role === 'orb') {
     const report = m.meta?.kind === 'report' && m.meta.tasks?.length ? m.meta : null;
     return (
@@ -109,6 +131,7 @@ function Message({ m, name, onChanges }) {
               </>)}
             </div>
           ) : null}
+          <div className="text-muted-foreground flow-root"><MsgTime at={m.at} /></div>
         </div>
       </div>
     );
@@ -180,7 +203,7 @@ export function ChatView() {
     <>
       {/* 2.6: a clean bar: the name, the brain and the mode are already in the sidebar and under the message box. Only
           icon buttons, each with its bubble. */}
-      <PageHeader className="topbar-chat" title={<span className="sr-only">{name}</span>}>
+      <PageHeader className="topbar-chat" title={<><span className="sr-only">{name}</span><BarClock /></>}>
         {app.paused
           ? <BubbleTip title={t('bar.resume')} text={t('bar.resumeText')}><Button variant="soft" size="icon-sm" onClick={() => act(call('control.resume'), t('chat.resumed'))} aria-label={t('bar.resume')} data-testid="bar-resume"><Play /></Button></BubbleTip>
           : <BubbleTip title={t('bar.pause')} text={t('bar.pauseText')}><Button variant="ghost" size="icon-sm" onClick={() => act(call('control.pause'), t('chat.paused'))} aria-label={t('bar.pause')} data-testid="bar-pause"><Pause /></Button></BubbleTip>}

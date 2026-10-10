@@ -1,10 +1,10 @@
 // The product's names in one place. Orb.dev is the development (this repository); the program is Orb (Orb.exe); its robot
-// is Orb·e. To rename the program, change these values and the same ones in package.json (productName, build.appId,
+// is Orbe (2.6; drawn as the Orb·E wordmark at the top of the sidebar). To rename the program, change these values and the same ones in package.json (productName, build.appId,
 // build.productName, artifact names); `npm run check` warns if they differ. Each user can still call their assistant
 // whatever they like (that name lives in their orb.json).
 export const PRODUCT = {
   name: 'Orb', // the program: window titles, notifications, installer, Orb.exe
-  assistant: 'Orb·e', // the robot's default name
+  assistant: 'Orbe', // the robot's default name
   folder: 'Orb', // the assistant's folder (D:\\Orb), whatever the assistant is called
   appId: 'dev.orb.app', // Windows' id of the app (notifications, taskbar, installer); must match build.appId
   // Until 2.3.3 the program was "Orb.dev": its app data (where the Orb folder is, interface size) stays in that folder

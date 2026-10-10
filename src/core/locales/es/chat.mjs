@@ -52,6 +52,7 @@ export default {
   'brain.defaultOf': 'Predeterminado de {agent}',
   'brain.defaultIs': 'Predeterminado ({model})',
   'brain.heavy': 'Gasta el uso más rápido',
+  'brain.recommended': 'Recomendados',
   'brain.reasoning': 'Razonamiento',
   'brain.reasoningShort': 'Razonamiento',
   'brain.permissions': 'Permisos',

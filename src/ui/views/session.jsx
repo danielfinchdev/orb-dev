@@ -171,8 +171,9 @@ function UsagePanel({ context, pct }) {
             const p = Math.round((w.utilization ?? 0) * 100);
             return (
               <div key={w.window} className="grid gap-1">
-                <div className="flex items-baseline justify-between gap-3"><span>{windowLabel(t, w.window)}</span><span className="text-muted-foreground truncate text-xs">{resetText(t, locale, w.resetAt)} <span className="text-foreground tabular-nums">{p} %</span></span></div>
+                <div className="flex items-baseline justify-between gap-3"><span className="truncate">{windowLabel(t, w.window)}</span><span className="tabular-nums">{p} %</span></div>
                 <UsageBar pct={p} />
+                {w.resetAt ? <span className="text-muted-foreground text-xs">{resetText(t, locale, w.resetAt)}</span> : null}
               </div>
             );
           }) : <p className="text-muted-foreground text-xs leading-snug">{t('session.usage.noData')}</p>}

@@ -52,6 +52,7 @@ export default {
   'brain.defaultOf': '{agent} default',
   'brain.defaultIs': 'Default ({model})',
   'brain.heavy': 'Uses the quota faster',
+  'brain.recommended': 'Recommended',
   'brain.reasoning': 'Reasoning',
   'brain.reasoningShort': 'Reasoning',
   'brain.permissions': 'Permissions',

@@ -15,7 +15,7 @@ export const AGENT_IDS = ['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qw
 export const AGENT_LABELS = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor', gemini: 'Gemini', opencode: 'OpenCode', qwen: 'Qwen Code', copilot: 'GitHub Copilot' };
 
 export const DEFAULT_CONFIG = Object.freeze({
-  version: 4,
+  version: 5,
   assistantName: PRODUCT.assistant,
   userName: '',
   language: 'es',
@@ -238,6 +238,11 @@ export function loadConfig(home) {
   if ((stored.version ?? 2) < 4) {
     if (config.assistantName.trim() === 'Orb') config.assistantName = PRODUCT.assistant;
     config.version = 4;
+  }
+  // 2.6: the default name is written Orbe (Orb·E only as the drawn wordmark). Who kept the 2.4 default gets it.
+  if ((stored.version ?? 2) < 5) {
+    if (config.assistantName.trim() === 'Orb·e') config.assistantName = PRODUCT.assistant;
+    config.version = 5;
   }
   // Folders made by older versions: agents added later get their default account and their place in the order.
   for (const a of AGENT_IDS) {
