@@ -237,11 +237,15 @@ try {
   assert.equal(bar.wco, false, 'sin los botones de Windows');
   assert.ok(bar.pad > 100, `hueco para los botones (${bar.pad} px)`);
   const mainWin = (fn) => app.evaluate(({ BrowserWindow }, f) => { const w = BrowserWindow.getAllWindows().find((b) => b.webContents.getURL().endsWith('index.html')); return f === 'max' ? w.isMaximized() : w.isMinimized(); }, fn);
-  await win.click('[data-testid=window-maximize]');
-  await until(() => mainWin('max'), 'maximizada con el botón propio');
-  await win.locator('[data-testid=window-maximize][aria-label=Restaurar]').waitFor();
-  await win.click('[data-testid=window-maximize]');
-  await until(async () => !(await mainWin('max')), 'restaurada');
+  await win.locator('[data-testid=window-close]').waitFor();
+  // Maximising needs a window manager: on Windows (and macOS), not in the CI's bare Linux display (xvfb).
+  if (process.platform !== 'linux') {
+    await win.click('[data-testid=window-maximize]');
+    await until(() => mainWin('max'), 'maximizada con el botón propio');
+    await win.locator('[data-testid=window-maximize][aria-label=Restaurar]').waitFor();
+    await win.click('[data-testid=window-maximize]');
+    await until(async () => !(await mainWin('max')), 'restaurada');
+  }
   await section('contribuye');
   await win.locator('[data-testid=feedback-message]').waitFor();
   await shot('10h-ajustes-contribuye');
