@@ -245,5 +245,15 @@ export class Orchestrator {
     const ok = !result.isError;
     this.board.addChat(ok ? 'orb' : 'system', answer || tr('msg.orch.cannotAnswerCheck', { logFile: this.logFile }), ok ? meta : null);
     this.busy = false; this.partial = ''; this.tools = []; this.push();
+    if (ok) this.suggestGames();
+  }
+
+  // 2.6: when the assistant has handed out work and the agents are on it, it suggests a mini-game while waiting (once in
+  // a while, not after every answer).
+  suggestGames() {
+    const working = this.board.one("SELECT COUNT(*) AS n FROM tasks WHERE created_by = 'orb' AND status IN ('queued', 'running')").n;
+    if (!working || Date.now() - Number(this.board.setting('games_suggested') ?? 0) < 30 * 60_000) return;
+    this.board.setting('games_suggested', String(Date.now()));
+    this.board.addChat('system', tr('msg.orch.playWhileWaiting', { n: working }), { kind: 'games' });
   }
 }

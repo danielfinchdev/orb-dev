@@ -84,7 +84,7 @@ export function UsageBubble({ text, onClose }) {
   const t = useT();
   if (!text) return null;
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-1 bg-card absolute bottom-full left-3 z-10 mb-3 max-w-sm rounded-2xl border px-4 py-3 shadow-lg" role="status" data-testid="usage-bubble">
+    <div className="animate-in fade-in slide-in-from-bottom-1 bg-card absolute bottom-full left-3 z-10 mb-3 w-max max-w-[min(24rem,calc(100%-1.5rem))] rounded-2xl border px-4 py-3 shadow-lg" role="status" data-testid="usage-bubble">
       <div className="flex items-start gap-3">
         <Lightbulb className="text-warning mt-0.5 size-5 shrink-0" />
         <div className="min-w-0 flex-1">

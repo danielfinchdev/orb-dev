@@ -248,6 +248,7 @@ export default {
   "msg.orch.needsClaude": "{name} necesita Claude Code para funcionar: {message}",
   "msg.orch.needsAgent": "{name} no puede usar {agent} como cerebro: {message}. Elige otro abajo, junto al mensaje.",
   "msg.orch.defaultModel": "modelo predeterminado",
+  "msg.orch.playWhileWaiting": "🎮 Los agentes están con {n} tarea(s). Te aviso cuando terminen; mientras tanto, puedes echar una partida.",
   "msg.orch.newConversation": "Nueva conversación. {name} no conserva el contexto anterior. Las tareas y las bitácoras se conservan.",
   "msg.orch.renewed": "La conversación se ha reiniciado para reducir el consumo de tokens. Las tareas y las bitácoras se conservan.",
   "msg.orch.requestGone": "esa petición ya no está activa",

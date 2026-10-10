@@ -1,7 +1,7 @@
 // The star view: the conversation with the assistant. Under the message box: the working project, the assistant's model
 // (Sonnet / Opus) and the "Orquestador" box (ticked = only coordinates; unticked = free mode, works directly).
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, Square, RotateCcw, Pause, Play, Wrench, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign } from 'lucide-react';
+import { ArrowUp, Square, RotateCcw, Pause, Play, Gamepad2, Wrench, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Markdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
@@ -10,8 +10,8 @@ import { LiveTasksStrip } from '@/components/live-tasks.jsx';
 import { confirm } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Spinner } from '@/components/ui/basic.jsx';
-import { Select, Checkbox, Tip } from '@/components/ui/overlay.jsx';
-import { useStore, call, act, setState, go } from '@/lib/store.js';
+import { Checkbox, Tip, BubbleTip } from '@/components/ui/overlay.jsx';
+import { useStore, call, act, setState, go, bridge, openGames } from '@/lib/store.js';
 import { ContextMeter } from './session.jsx';
 import { BrainPicker, ReasoningPicker, UsageBubble, useCatalog, useUsageBubble } from '@/components/brain-picker.jsx';
 import { cn } from '@/lib/utils.js';
@@ -114,6 +114,13 @@ function Message({ m, name, onChanges }) {
     );
   }
   if (m.meta?.kind === 'approval' || m.meta?.kind === 'task-approval') return <ChatApproval m={m} />;
+  // 2.6: the assistant's suggestion to play while the agents work, with the button that opens the games.
+  if (m.meta?.kind === 'games') return (
+    <div className="bg-muted/70 text-muted-foreground mx-auto flex max-w-[88%] flex-wrap items-center justify-center gap-x-3 gap-y-2 rounded-xl px-3.5 py-2 text-center text-[13px]">
+      <span>{m.body}</span>
+      {bridge.mobile ? null : <Button size="xs" variant="soft" onClick={openGames} data-testid="chat-play"><Gamepad2 />{t('chat.playButton')}</Button>}
+    </div>
+  );
   return <div className="bg-muted/70 text-muted-foreground mx-auto max-w-[88%] rounded-xl px-3.5 py-2 text-center text-[13px] whitespace-pre-wrap">{m.body}</div>;
 }
 
@@ -171,12 +178,14 @@ export function ChatView() {
 
   return (
     <>
-      <PageHeader icon={<Robot size={30} mood={chat.busy ? (chat.partial ? 'talking' : 'thinking') : 'idle'} />} title={name}
-        meta={<span className="inline-flex flex-wrap items-center gap-x-1.5">{info.orchestrate === false ? t('chat.freeMode') : t('chat.orchestrator')} · {info.agentLabel ? <>{info.agentLabel} · </> : null}{info.modelLabel ?? ''}{(chat.context ?? info.context) ? <> · <ContextMeter context={chat.context ?? info.context} /></> : null}</span>}>
+      {/* 2.6: a clean bar: the name, the brain and the mode are already in the sidebar and under the message box. Only
+          icon buttons, each with its bubble. */}
+      <PageHeader className="topbar-chat" title={<span className="sr-only">{name}</span>}>
         {app.paused
-          ? <Button variant="outline" size="sm" onClick={() => act(call('control.resume'), t('chat.resumed'))}><Play />{t('chat.resume')}</Button>
-          : <Tip label={t('chat.pauseTip')}><Button variant="ghost" size="sm" onClick={() => act(call('control.pause'), t('chat.paused'))}><Pause />{t('chat.pause')}</Button></Tip>}
-        <Button variant="ghost" size="sm" onClick={async () => { if (await confirm(t('chat.reset'), t('chat.resetBody', { name }), { ok: t('chat.reset') })) act(call('chat.reset')); }}><RotateCcw />{t('chat.reset')}</Button>
+          ? <BubbleTip title={t('bar.resume')} text={t('bar.resumeText')} icon={<Play />}><Button variant="soft" size="icon-sm" onClick={() => act(call('control.resume'), t('chat.resumed'))} aria-label={t('bar.resume')} data-testid="bar-resume"><Play /></Button></BubbleTip>
+          : <BubbleTip title={t('bar.pause')} text={t('bar.pauseText')} icon={<Pause />}><Button variant="ghost" size="icon-sm" onClick={() => act(call('control.pause'), t('chat.paused'))} aria-label={t('bar.pause')} data-testid="bar-pause"><Pause /></Button></BubbleTip>}
+        <BubbleTip title={t('bar.reset')} text={t('bar.resetText')} icon={<RotateCcw />}><Button variant="ghost" size="icon-sm" onClick={async () => { if (await confirm(t('chat.reset'), t('chat.resetBody', { name }), { ok: t('chat.reset') })) act(call('chat.reset')); }} aria-label={t('bar.reset')} data-testid="bar-reset"><RotateCcw /></Button></BubbleTip>
+        {bridge.mobile ? null : <BubbleTip title={t('bar.games')} text={t('bar.gamesText')} icon={<Gamepad2 />}><Button variant="ghost" size="icon-sm" onClick={openGames} aria-label={t('bar.games')} data-testid="bar-games"><Gamepad2 /></Button></BubbleTip>}
       </PageHeader>
       <div ref={scroll.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-3xl flex-col gap-5 px-5 py-6">
@@ -211,6 +220,7 @@ export function ChatView() {
           <label className="flex cursor-pointer items-center gap-2 text-[13px]" title={t('chat.orchestratorHint')}>
             <Checkbox checked={info.orchestrate !== false} onCheckedChange={(v) => toggleOrchestrator(v === true)} data-testid="orchestrator-check" />{t('chat.orchestrator')}
           </label>
+          {(chat.context ?? info.context) ? <span className="text-muted-foreground ml-auto text-xs"><ContextMeter context={chat.context ?? info.context} /></span> : null}
         </>} />
     </>
   );

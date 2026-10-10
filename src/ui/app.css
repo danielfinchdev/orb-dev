@@ -202,7 +202,7 @@ html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-di
    top right and 56 px tall (window controls overlay). The top bars (.app-titlebar) move the window and maximise it with
    a double click; what is clickable inside them stays clickable. --wco-inset is the width of those buttons (0 in a
    browser, such as the phone), and .wco-pad / .wco-pad-md (wide windows only) leave that room on the right. */
-:root { --wco-inset: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)); }
+:root { --wco-inset: max(0px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw))); }
 .app-titlebar { -webkit-app-region: drag; app-region: drag; }
 .app-titlebar :is(button, a, input, select, textarea, label, [role=button], [role=combobox], [role=tab], [role=switch], [contenteditable], [data-no-drag], .orb) { -webkit-app-region: no-drag; app-region: no-drag; }
 .wco-pad { padding-inline-end: calc(var(--wco-inset) + 0.75rem) !important; }

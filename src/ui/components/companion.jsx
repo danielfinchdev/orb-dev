@@ -8,6 +8,7 @@ import { Button } from './ui/button.jsx';
 import { bridge, go, useStore } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
 import { play } from '@/lib/sounds.js';
+import { noticeOf } from './notices.jsx';
 
 const moodOf = (body) => (/^(✅|↩️|👍)/.test(body) ? 'happy' : /^(❌|⛔|🛑|⚠️)/.test(body) ? 'worried' : 'talking');
 
@@ -23,7 +24,7 @@ export function Companion({ name, base, hidden: hiddenHere }) {
     const mood = moodOf(body);
     play(mood === 'happy' ? 'done' : mood === 'worried' ? 'uhoh' : payload.role === 'orb' ? 'talk' : null, body, { force: mood === 'worried' });
     setFlash(mood); clearTimeout(timers.current.flash); timers.current.flash = setTimeout(() => setFlash(null), 3500);
-    if (hidden) return;
+    if (hidden || noticeOf(payload)) return; // finished tasks and things that need you: the robot of notices.jsx says them
     const action = /aprobaci|approv/i.test(body) ? { label: t('comp.companion.viewTasks'), run: () => go('tasks') } : payload.role === 'orb' ? { label: t('comp.companion.openChat'), run: () => go('chat') } : null;
     setBubble({ text: body, action });
     clearTimeout(timers.current.bubble); timers.current.bubble = setTimeout(() => setBubble(null), action ? 12000 : 7000);
