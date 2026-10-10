@@ -591,7 +591,7 @@ export function SettingsDialog() {
     <Dialog open={Boolean(open)} onOpenChange={(o) => { if (!o) closeSettings(); }}>
       <DialogContent className="flex h-[min(780px,90vh)] w-[min(1080px,94vw)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none" data-testid="settings-dialog" aria-describedby={undefined}>
         <div className="flex h-16 shrink-0 items-center border-b px-6 pr-14">
-          <DialogTitle className="text-lg font-medium">{PRODUCT.name} · {t('settings.title')}</DialogTitle>
+          <DialogTitle className="text-lg font-medium">{t('settings.title')}</DialogTitle>
         </div>
         <div className="flex min-h-0 flex-1">
           <nav className="flex w-56 shrink-0 flex-col max-sm:w-16" aria-label={t('settings.title')}>

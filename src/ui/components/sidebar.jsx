@@ -12,11 +12,12 @@ import { AgentIcon } from './agent-icon.jsx';
 import { useT } from '@/lib/i18n.js';
 import { PRODUCT } from '../../core/product.mjs';
 
-// The assistant's wordmark: «Orb», a glowing dot and a capital E in a rounded tile, in the theme's colours (app.css .wordmark).
+// The assistant's wordmark ORB·E, drawn its own way in each theme (app.css .wordmark): spaced capitals with a dot of the
+// theme's colour in Orb, a techno one underlined in Vaporwave…
 function Wordmark() {
   return (
     <div className="wordmark" role="img" aria-label={PRODUCT.assistant} data-testid="wordmark">
-      <span className="wordmark-orb" aria-hidden="true">Orb</span><span className="wordmark-dot" aria-hidden="true" /><span className="wordmark-e" aria-hidden="true">E</span>
+      <span className="wordmark-orb" aria-hidden="true">ORB</span><span className="wordmark-dot" aria-hidden="true" /><span className="wordmark-e" aria-hidden="true">E</span>
     </div>
   );
 }
@@ -181,7 +182,7 @@ export function Sidebar({ mood }) {
         <div className="min-w-0 flex-1">
           {/* 2.6: with the default name, the drawn wordmark (Orb·E); a name of one's own, as it is written. */}
           {name === PRODUCT.assistant ? <Wordmark /> : <div className="truncate text-[15px] font-medium">{name}</div>}
-          <div className="text-muted-foreground truncate text-xs">{app.activeProject ? app.activeProject.name : t('nav.noProject')}</div>
+          <div className={cn('text-muted-foreground truncate text-xs', name === PRODUCT.assistant && 'wordmark-sub')}>{app.activeProject ? app.activeProject.name : t('nav.noProject')}</div>
         </div>
         <ThemeToggle />
         <SidebarToggle />
