@@ -28,9 +28,9 @@ after(() => { engine?.send({ type: 'shutdown' }); t?.cleanup(); });
 // A phone, as the page does it (src/ui/lib/web-bridge.js).
 function phone() {
   const me = { kp: C.newKeyPair(), id: null, key: null, pc: null };
-  me.pairBody = (code, pcPub, { name = 'Android' } = {}) => {
+  me.pairBody = (code, pcPub, { name = 'Android', at = Date.now() } = {}) => {
     const pub = C.b64.enc(me.kp.pub);
-    return { pub, proof: C.seal(C.pairingKey(me.kp.priv, pcPub, code), { pub, name, t: Date.now() }, C.AAD.pair) };
+    return { pub, proof: C.seal(C.pairingKey(me.kp.priv, pcPub, code), { pub, name, t: at }, C.AAD.pair) };
   };
   me.box = (kind, body, { at = Date.now() } = {}) => C.seal(me.key, { t: at, m: kind, b: body }, C.AAD.request(me.id));
   me.post = async (pathname, box, { id = me.id, headers = {} } = {}) => fetch(base + pathname, { method: 'POST', headers: { 'X-Orb-Device': id, 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(box) });
@@ -100,7 +100,8 @@ test('vincular: el QR sirve una vez, el código nunca viaja y el móvil comprueb
   assert.equal(await pair(phone(), { ...q, pc: C.newKeyPair().pub }), 401, 'otra clave de PC (QR falso)');
   const body = JSON.stringify(p.pairBody(q.code, q.pc));
   assert.ok(!body.includes(q.code), 'el código del QR no viaja: solo su prueba');
-  assert.equal(await pair(p, q), 200);
+  assert.equal(await pair(p, q, { at: Date.now() + 30 * 60_000 }), 409, 'reloj del móvil adelantado: pide la hora del PC…');
+  assert.equal(await pair(p, q), 200, '…y el mismo QR sigue sirviendo');
   assert.equal(await pair(phone(), q), 401, 'el mismo QR no sirve dos veces');
   globalThis.phone1 = p;
   const [device] = (await call('remote.status')).devices;
@@ -120,7 +121,12 @@ test('todo va cifrado; repetir, retrasar o tocar un mensaje no sirve', async () 
   assert.deepEqual(Object.keys(JSON.parse(raw)).sort(), ['c', 'n']);
   assert.ok(!raw.includes('assistantName') && !raw.includes('Orb'), 'la respuesta no se puede leer por el camino');
   assert.equal((await p.post('/api/call', box)).status, 401, 'la misma petición dos veces (repetición)');
-  assert.equal((await p.post('/api/call', p.box('call', { method: 'app.state' }, { at: Date.now() - 20 * 60_000 }))).status, 401, 'una petición vieja');
+  // A request stamped far from the PC's time (a replay, or a phone whose clock is off): refused, but the phone stays
+  // paired and gets the PC's time, so its next request, stamped with it, goes through.
+  const late = await p.post('/api/call', p.box('call', { method: 'app.state' }, { at: Date.now() - 20 * 60_000 }));
+  assert.equal(late.status, 409, 'una petición vieja');
+  assert.ok(Math.abs((await late.json()).now - Date.now()) < 5000, 'con la hora del PC');
+  assert.equal((await p.call('app.state')).ok, true, 'el móvil sigue vinculado');
   const tampered = p.box('call', { method: 'app.state' }); tampered.c = tampered.c.replace(/^./, (ch) => (ch === 'A' ? 'B' : 'A'));
   assert.equal((await p.post('/api/call', tampered)).status, 401, 'manipulada');
   const other = phone(); assert.equal(await pair(other, await qr()), 200);
