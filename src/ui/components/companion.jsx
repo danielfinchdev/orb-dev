@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { Robot } from './robot.jsx';
 import { Button } from './ui/button.jsx';
+import { BubbleTip } from './ui/overlay.jsx';
 import { bridge, go, useStore } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
 import { play } from '@/lib/sounds.js';
@@ -47,9 +48,11 @@ export function Companion({ name, base, hidden: hiddenHere }) {
           {bubble.action ? <Button size="xs" className="mt-2" onClick={() => { bubble.action.run(); setBubble(null); }}>{bubble.action.label}</Button> : null}
         </div>
       ) : null}
-      <button className="pointer-events-auto cursor-pointer drop-shadow-lg transition-transform hover:scale-105" onClick={() => go('chat')} title={t('comp.companion.talkTo', { name })}>
-        <Robot size={68} mood={mood} title={name} live />
-      </button>
+      <BubbleTip title={t('comp.companion.talkTo', { name })} side="left">
+        <button className="pointer-events-auto cursor-pointer drop-shadow-lg transition-transform hover:scale-105" onClick={() => go('chat')} aria-label={t('comp.companion.talkTo', { name })}>
+          <Robot size={68} mood={mood} title={name} live />
+        </button>
+      </BubbleTip>
     </div>
   );
 }

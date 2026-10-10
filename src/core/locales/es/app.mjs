@@ -1,6 +1,11 @@
 // app.*
 export default {
   'app.menu': 'Menú',
+  'app.window.controls': 'Ventana',
+  'app.window.minimize': 'Minimizar',
+  'app.window.maximize': 'Maximizar',
+  'app.window.restore': 'Restaurar',
+  'app.window.close': 'Cerrar',
   'app.engineStopped': 'Orb se ha detenido varias veces. Cierra y vuelve a abrir la aplicación.',
   'app.engineRestarted': 'Orb se ha reiniciado tras un error. Las tareas en curso se han marcado como fallidas y puedes reintentarlas.',
   'app.pairTitle': 'Vincula este dispositivo',

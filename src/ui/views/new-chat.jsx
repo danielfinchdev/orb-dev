@@ -8,7 +8,7 @@ import { PageHeader } from '@/components/page.jsx';
 import { ProjectPicker } from '@/components/project-actions.jsx';
 import { BrainPicker, ReasoningPicker, PermissionPicker, UsageBubble, useCatalog, useUsageBubble } from '@/components/brain-picker.jsx';
 import { confirm } from '@/components/dialogs.jsx';
-import { Checkbox } from '@/components/ui/overlay.jsx';
+import { Checkbox, BubbleTip } from '@/components/ui/overlay.jsx';
 import { useStore, call, act, go, refresh } from '@/lib/store.js';
 import { PERMISSION_HINT } from '@/lib/labels.js';
 import { useT } from '@/lib/i18n.js';
@@ -64,10 +64,13 @@ export function NewChatView() {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-3xl flex-col items-center gap-3 px-5 pt-16 pb-6 text-center">
           <Robot size={120} mood="hello" live />
-          <h2 className="hero-title mt-2 text-2xl">{t('newChat.hello')}</h2>
-          <p className="text-muted-foreground max-w-md">{orchestrate ? t('newChat.introOrchestrator', { name }) : t('newChat.introDirect')}</p>
-          {!orchestrate && active ? <p className="text-muted-foreground max-w-md text-xs">{PERMISSION_HINT[permission]}</p> : null}
-          {!orchestrate && !active ? <p className="text-muted-foreground max-w-md text-xs">{t('session.noProjectHint')}</p> : null}
+          {/* 2.6: on a soft pane over the themes' backdrop (themes.css .chat-glass); plain in orb / profesional. */}
+          <div className="chat-glass chat-hero flex flex-col items-center gap-3">
+            <h2 className="hero-title mt-2 text-2xl">{t('newChat.hello')}</h2>
+            <p className="text-muted-foreground max-w-md">{orchestrate ? t('newChat.introOrchestrator', { name }) : t('newChat.introDirect')}</p>
+            {!orchestrate && active ? <p className="text-muted-foreground max-w-md text-xs">{PERMISSION_HINT[permission]}</p> : null}
+            {!orchestrate && !active ? <p className="text-muted-foreground max-w-md text-xs">{t('session.noProjectHint')}</p> : null}
+          </div>
         </div>
       </div>
       <Composer value={text} onChange={setText} onSend={send} busy={busy} disabled={busy} testid="new-chat-input" mentions={orchestrate}
@@ -79,9 +82,11 @@ export function NewChatView() {
           <ReasoningPicker value={brain.reasoning} onChange={(reasoning) => setBrain((x) => ({ ...x, reasoning }))} />
           {/* Without a project the agent works in the assistant's folder: read-only. */}
           {!orchestrate ? <PermissionPicker value={active ? permission : 'leer'} onChange={setPermission} disabled={!active} /> : null}
-          <label className="flex cursor-pointer items-center gap-2 text-[13px]" title={t('chat.orchestratorHint')}>
-            <Checkbox checked={orchestrate} onCheckedChange={(v) => setOrchestrate(v === true)} data-testid="new-chat-orchestrator" />{t('chat.orchestrator')}
-          </label>
+          <BubbleTip title={t('chat.orchestrator')} text={t('chat.orchestratorHint')} side="top">
+            <label className="flex cursor-pointer items-center gap-2 text-[13px]">
+              <Checkbox checked={orchestrate} onCheckedChange={(v) => setOrchestrate(v === true)} data-testid="new-chat-orchestrator" />{t('chat.orchestrator')}
+            </label>
+          </BubbleTip>
         </>} />
     </>
   );

@@ -1,9 +1,10 @@
 /* Visual themes (Ajustes → Apariencia → Tema visual): src/core/appearance.mjs lists them and lib/store.js puts the chosen one
    on <html> as data-skin. «orb» is the default and has no rules here (app.css is the orb theme). Each theme redefines the
    tokens of app.css for light (html[data-skin]) and dark (html.dark[data-skin]: the light / dark switch still applies on
-   top), plus its own touches: typography, cards, buttons, the message box, the band at the top (the sidebar's head B1
-   and the top bar of each screen B2, one strip) and the illustrated backdrop behind the chat (components/scene.jsx).
-   Contrast: normal text >= 4.5:1 on its background, input borders >= 3:1, in light and dark (test-results/contraste-temas.mjs).
+   top), plus its own touches: typography, cards, buttons, the message box, the decoration of the top bars (transparent
+   over the backdrop) and the illustrated backdrop behind every screen (components/scene.jsx), under one frosted pane.
+   Contrast: normal text >= 4.5:1 on its background, input borders >= 3:1, in light and dark, and the text of the chat
+   over the brightest and darkest piece of each scene (test-results/contraste-temas.mjs).
    These rules are outside any layer on purpose: they win over Tailwind's utilities without !important. */
 @import "@fontsource/press-start-2p/latin-400.css";
 
@@ -24,7 +25,7 @@ html[data-skin="vaporwave"] {
   --secondary: oklch(0.93 0.08 95);
   --secondary-foreground: oklch(0.35 0.08 70);
   --muted: oklch(0.9 0.012 300);
-  --muted-foreground: oklch(0.45 0.07 300);
+  --muted-foreground: oklch(0.42 0.07 300);
   --accent: oklch(0.9 0.06 300);
   --accent-foreground: oklch(0.33 0.12 300);
   --destructive: oklch(0.51 0.2 22);
@@ -55,7 +56,7 @@ html.dark[data-skin="vaporwave"] {
   --secondary: oklch(0.27 0.07 292);
   --secondary-foreground: oklch(0.93 0.03 320);
   --muted: oklch(0.25 0.06 292);
-  --muted-foreground: oklch(0.77 0.06 310);
+  --muted-foreground: oklch(0.8 0.06 310);
   --accent: oklch(0.3 0.08 285);
   --accent-foreground: oklch(0.88 0.1 200);
   --destructive: oklch(0.66 0.2 18);
@@ -110,7 +111,7 @@ html[data-skin="retro"] {
   --secondary: oklch(0.9 0.06 20);
   --secondary-foreground: oklch(0.3 0.12 15);
   --muted: oklch(0.9 0.05 60);
-  --muted-foreground: oklch(0.42 0.07 35);
+  --muted-foreground: oklch(0.38 0.07 35);
   --accent: oklch(0.88 0.07 40);
   --accent-foreground: oklch(0.3 0.12 15);
   --destructive: oklch(0.5 0.19 25);
@@ -143,7 +144,7 @@ html.dark[data-skin="retro"] {
   --secondary: oklch(0.25 0.08 300);
   --secondary-foreground: oklch(0.93 0.04 300);
   --muted: oklch(0.2 0.02 290);
-  --muted-foreground: oklch(0.78 0.06 145);
+  --muted-foreground: oklch(0.8 0.06 145);
   --accent: oklch(0.28 0.1 330);
   --accent-foreground: oklch(0.9 0.16 330);
   --destructive: oklch(0.68 0.22 27);
@@ -273,7 +274,7 @@ html[data-skin="nube"] {
   --secondary: oklch(0.93 0.05 300);
   --secondary-foreground: oklch(0.35 0.1 305);
   --muted: oklch(0.95 0.03 340);
-  --muted-foreground: oklch(0.5 0.08 335);
+  --muted-foreground: oklch(0.46 0.08 335);
   --accent: oklch(0.94 0.05 350);
   --accent-foreground: oklch(0.44 0.17 352);
   --destructive: oklch(0.54 0.19 15);
@@ -333,42 +334,90 @@ html[data-skin="nube"] .brand-sky {
 html.dark:not([data-skin="orb"]) .bg-warning.text-white { color: oklch(0.2 0.03 80); }
 
 /* ================================================================================================================
-   THE BAND AND THE SCENE (2.6). Each theme is one scene: the band at the top — the sidebar's head (B1) and the top bar
-   of each screen (B2), one continuous strip because their backgrounds are fixed to the window — melts into the window
-   (it fades down over what is under it, no line), and behind the screens an illustrated backdrop (components/scene.jsx)
-   moves slowly, under a veil so the text stays easy to read. B1 carries only the band's colour and shading, never
-   drawings: the robot, the name and the buttons stay clean. B2's drawing lives in its middle, away from the title on the
-   left, from the bar's buttons and from the window's own buttons on the right. Everything stops with reduced motion or
-   with «Animaciones» off (html[data-motion="minima"]). The «profesional» theme has none of it.
+   THE BARS AND THE SCENE (2.6). Each theme is one scene: behind every screen an illustrated backdrop
+   (components/scene.jsx) moves slowly under one frosted pane (.scene-frost: blurred and tinted with the page's own
+   colour, the same over the whole area), so the art is a soft wallpaper and the text never sits on a sharp shape. The
+   top bar of each screen (B2, and the chat's B3) has no colour of its own: it is transparent over that same backdrop,
+   so bar and screen are one — only its decoration (the sparkles, the invaders, the chevrons, the candy dots) is drawn on
+   it, in the middle, away from the title, the bar's buttons and the window's own minimise / maximise / close (the
+   app's, components/window-controls.jsx, top right over everything: each theme dresses them like its own icon buttons,
+   see .win-control further down). The sidebar's head (B1) is just the sidebar's top, with the same shading and never
+   drawings: the robot, the name and the buttons stay clean. Everything stops with reduced motion or with «Animaciones»
+   off (html[data-motion="minima"]). The «profesional» theme has none of it.
    ================================================================================================================ */
 .theme-band { position: relative; isolation: isolate; }
 .theme-band::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--band-art, none); opacity: var(--band-art-opacity, 1); }
 .side-band::before { background: var(--side-art, none); opacity: 1; }
-html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) .theme-band { z-index: 10; background: var(--band); border-bottom-color: transparent; backdrop-filter: none; }
-/* The band fades down over the screen instead of ending in a line. */
-html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) .theme-band::after {
-  content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 44px; pointer-events: none;
-  background: var(--band); mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.9), rgb(0 0 0 / 0.45) 40%, transparent);
-}
+html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) .theme-band { z-index: 10; background: none; border-bottom-color: transparent; backdrop-filter: none; }
 /* The top bar's drawing: in the middle, clear of the title, of the bar's buttons and of the window's buttons. */
-.topbar.theme-band::before { right: var(--wco-inset); mask-image: linear-gradient(90deg, transparent 150px, #000 290px, #000 calc(100% - 330px), transparent calc(100% - 190px)); }
+.topbar.theme-band::before { mask-image: linear-gradient(90deg, transparent 150px, #000 290px, #000 calc(100% - 330px), transparent calc(100% - 190px)); }
 /* Only the chat's bar (no title, just a few buttons on the right) has room for a drawing: the other screens' bars carry
    a title with a line under it, so they take just the band's shading, like the sidebar's head. */
-.topbar.theme-band:not(.topbar-chat)::before { background: var(--side-art, none); opacity: 1; mask-image: none; right: var(--wco-inset); animation: none !important; } /* the window's buttons are one flat colour: the shading stops before them */
+.topbar.theme-band:not(.topbar-chat)::before { background: var(--side-art, none); opacity: 1; mask-image: none; animation: none !important; }
 .theme-scene { position: relative; isolation: isolate; }
 
 /* ---- The backdrop behind the screens (components/scene.jsx): absolutely placed, under everything. ---- */
 .scene { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
 .scene > *, .scene-blur > * { position: absolute; }
 .scene-blur { inset: -24px; opacity: var(--scene-opacity, 0.6); }
-/* A veil of the page's own colour at the top, where the messages are read most. */
-.scene-veil { inset: 0; background: linear-gradient(to bottom, color-mix(in oklch, var(--background) 60%, transparent), color-mix(in oklch, var(--background) 25%, transparent) 55%, transparent); }
+/* The frosted pane: one backdrop-filter over the whole scene (never one per message), a light blur that keeps the big
+   pieces recognisable, and the page's colour on top; at night the art is also dimmed. --frost-tint / --frost-filter are
+   per theme and mode; test-results/contraste-temas.mjs checks the text over the brightest and darkest piece of each scene. */
+.scene-frost { inset: 0; background: color-mix(in oklch, var(--background) var(--frost-tint, 50%), transparent); backdrop-filter: var(--frost-filter, blur(5px)); }
+html.dark .scene { --frost-tint: 50%; --frost-filter: blur(7px) brightness(0.7); }
 @media (prefers-reduced-motion: reduce) { .scene *, .scene *::before, .scene *::after, .theme-band::before { animation: none !important; } }
 html[data-motion="minima"] :is(.scene *, .scene *::before, .scene *::after, .theme-band::before) { animation: none !important; }
+/* Text set straight on the scene — the assistant's messages and the greeting of a new chat — reads on a soft pane of
+   the card's colour (the system's notes have theirs), gentle and in the theme's own shape. Nothing in orb / profesional. */
+html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) .chat-glass { background-color: color-mix(in oklch, var(--card) 76%, transparent); border-radius: calc(var(--radius) + 6px); padding: 0.55rem 0.9rem 0.7rem; }
+html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) .chat-glass.chat-hero { padding: 0.9rem 1.4rem 1.1rem; }
+html[data-skin="retro"] .chat-glass { border: 1.5px solid color-mix(in oklch, var(--rt-ink) 35%, transparent); }
+html.dark[data-skin="vaporwave"] .chat-glass { border: 1px solid color-mix(in oklch, var(--primary) 22%, transparent); }
+html[data-skin="vaporwave"]:not(.dark) .chat-glass { box-shadow: inset 1px 1px 0 var(--vw-hi), inset -1px -1px 0 color-mix(in oklch, var(--vw-lo) 60%, transparent); }
+html[data-skin="nube"] .chat-glass { border-radius: 1.2rem; }
+
+/* ---- With a transparent bar, what scrolls up under it would be cut by a hard line at the bar's edge: the screens'
+   scroll areas fade their top edge instead, and only once scrolled (at the top nothing fades, the first message is
+   whole). Scroll-driven: --scroll-fade grows from 0 to 36 px over the first 40 px of scrolling; without support, no
+   fade (the cut, as before). The bar and the window's buttons sit above it and stay clickable. ---- */
+@property --scroll-fade { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@keyframes scroll-fade { from { --scroll-fade: 0px; } to { --scroll-fade: 36px; } }
+@supports (animation-timeline: scroll()) {
+  html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) main > .overflow-y-auto { mask-image: linear-gradient(to bottom, transparent, #000 var(--scroll-fade)); animation: scroll-fade linear both; }
+  /* In its own rule (another selector on purpose): the minifier would otherwise fold the timeline into the «animation»
+     shorthand, which Chromium does not accept, and the whole animation would be dropped. */
+  html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) main > div.overflow-y-auto { animation-timeline: scroll(self block); animation-range: 0 40px; }
+}
+
+/* ---- The window's own minimise / maximise / close (app.css draws the plain ghost ones of orb / profesional): in each
+   theme, the same shape as its icon buttons; the close one turns red (or the theme's hot colour) on hover. ---- */
+html[data-skin="vaporwave"]:not(.dark) .win-control { width: 2rem; height: 1.75rem; border-radius: 2px; background-color: var(--card); color: var(--vw-ink); box-shadow: inset 1px 1px 0 var(--vw-hi), inset -2px -2px 0 var(--vw-lo), 2px 2px 0 var(--vw-ink); }
+html[data-skin="vaporwave"]:not(.dark) .win-control svg { width: 0.9rem; height: 0.9rem; stroke-width: 2.4; }
+html[data-skin="vaporwave"]:not(.dark) .win-control:hover { background-color: var(--accent); color: var(--vw-ink); }
+html[data-skin="vaporwave"]:not(.dark) .win-control:active { transform: none; translate: 1px 1px; box-shadow: inset -1px -1px 0 var(--vw-hi), inset 2px 2px 0 var(--vw-lo), 1px 1px 0 var(--vw-ink); }
+html[data-skin="vaporwave"]:not(.dark) .win-control.win-close:hover { background-color: var(--primary); color: var(--primary-foreground); }
+html.dark[data-skin="vaporwave"] .win-control { border-radius: 0.5rem; border: 1px solid color-mix(in oklch, var(--primary) 40%, transparent); color: var(--primary); }
+html.dark[data-skin="vaporwave"] .win-control:hover { background-color: color-mix(in oklch, var(--primary) 16%, transparent); color: var(--primary); box-shadow: 0 0 14px -3px color-mix(in oklch, var(--primary) 75%, transparent); }
+html.dark[data-skin="vaporwave"] .win-control.win-close:hover { border-color: oklch(0.66 0.2 18); background-color: oklch(0.62 0.22 18); color: #fff; box-shadow: 0 0 16px -2px oklch(0.66 0.22 18 / 0.8); }
+html[data-skin="retro"] .win-control { width: 2rem; height: 2rem; border-radius: 999px; border: 2px solid var(--rt-ink); background-color: var(--rt-cream); color: var(--rt-ink); box-shadow: 2px 2px 0 var(--rt-off); }
+html[data-skin="retro"] .win-control svg { stroke-width: 2.4; }
+html[data-skin="retro"] .win-control:hover { background-color: color-mix(in oklch, var(--rt-cream) 88%, #000); color: var(--rt-ink); }
+html[data-skin="retro"] .win-control:active { transform: none; translate: 1px 1px; box-shadow: 1px 1px 0 var(--rt-off); }
+html[data-skin="retro"] .win-control.win-close:hover { background-color: var(--rt-coral); color: #fff; }
+html.dark[data-skin="retro"] .win-control { background-color: var(--card); color: var(--foreground); }
+html.dark[data-skin="retro"] .win-control:hover { background-color: var(--accent); color: var(--accent-foreground); }
+html.dark[data-skin="retro"] .win-control.win-close:hover { background-color: var(--rt-pink); color: #000; }
+html[data-skin="nube"] .win-control { width: 2.1rem; height: 1.9rem; border-radius: 999px; background-color: color-mix(in oklch, var(--card) 85%, transparent); color: var(--primary); box-shadow: 0 2px 0 var(--cd-pad), inset 0 1px 0 rgb(255 255 255 / 0.6); }
+html[data-skin="nube"] .win-control:hover { background-color: var(--accent); color: var(--primary); }
+html[data-skin="nube"] .win-control:active { transform: none; translate: 0 1px; box-shadow: 0 1px 0 var(--cd-pad); }
+html[data-skin="nube"] .win-control.win-close:hover { background-color: var(--primary); color: var(--primary-foreground); box-shadow: 0 2px 0 var(--cd-key); }
 
 /* ---- Orb: the bar stays as it is; behind the chat, the robot's periwinkle sky with a few soft clouds drifting. ---- */
 .scene-orb .scene-blur { background: radial-gradient(60% 50% at 30% 0%, #c3cbff, transparent 70%), radial-gradient(50% 60% at 90% 100%, #a7b1f6, transparent 70%); --scene-opacity: 0.5; }
 html.dark .scene-orb .scene-blur { background: radial-gradient(60% 50% at 30% 0%, #2b3270, transparent 70%), radial-gradient(50% 60% at 90% 100%, #1d2257, transparent 70%); --scene-opacity: 0.75; }
+/* Orb's wash is soft already: the pane only smooths the clouds. */
+.scene-orb { --frost-tint: 40%; --frost-filter: blur(8px); }
+html.dark .scene-orb { --frost-tint: 45%; --frost-filter: blur(8px); }
 .orb-cloud { width: 260px; height: 72px; border-radius: 999px; background: radial-gradient(closest-side, rgb(255 255 255 / 0.75), rgb(255 255 255 / 0.3) 60%, transparent); animation: cloud-drift linear infinite; }
 html.dark .orb-cloud { background: radial-gradient(closest-side, rgb(160 170 255 / 0.18), rgb(160 170 255 / 0.06) 60%, transparent); }
 @keyframes cloud-drift { from { transform: translateX(-30vw); } to { transform: translateX(130vw); } }
@@ -378,49 +427,42 @@ html.dark .orb-cloud { background: radial-gradient(closest-side, rgb(160 170 255
    DAY: a sticker sheet of old computers on a mint page. Windows-95 windows (bevelled edges, a pastel title strip lilac →
    pink → peach, grey panels), bevelled buttons, titles in an outlined display face, and stickers with thick ink outlines
    and flat pastel fills (a floppy, a cassette, a little CRT, a smiley, sparkles, a ringed planet, a folder, a speech
-   bubble) bobbing at the edges (components/scene.jsx). The band is the pastel title bar.
+   bubble) bobbing at the edges (components/scene.jsx). The chat's bar carries a row of sparkles.
    NIGHT: a synthwave sunset. A starry deep purple sky melting into magenta and orange, big clouds lit from below, a
    striped sun on the horizon behind far mountains and a city skyline, a neon magenta grid rushing forward, light beams
    and shooting stars. Neon magenta edges on deep purple panels.
    ================================================================================================================ */
 html[data-skin="vaporwave"] {
-  --titlebar-color: #ffd4b0;
   --vw-ink: #1f1838; --vw-hi: rgb(255 255 255 / 0.95); --vw-lo: rgb(70 50 110 / 0.5); --vw-hard: #ff8fd0; --vw-strip: linear-gradient(90deg, #cdbcff, #ffb6dc 50%, #ffd4b0);
-  --band: linear-gradient(90deg, #cdbcff, #ffb6dc 50%, #ffd4b0 calc(100% - var(--wco-inset))) fixed;
-  --side-art: linear-gradient(to bottom, rgb(255 255 255 / 0.75) 0 2px, rgb(255 255 255 / 0.25) 2px, transparent 55%);
+  --side-art: linear-gradient(to bottom, rgb(255 255 255 / 0.55) 0 2px, rgb(255 255 255 / 0.18) 2px, transparent 55%);
   --vw-sparkle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 1 L14.5 9.5 L23 12 L14.5 14.5 L12 23 L9.5 14.5 L1 12 L9.5 9.5 Z' fill='%23fff' stroke='%231f1838' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E");
   --band-art:
-    linear-gradient(to bottom, rgb(255 255 255 / 0.75) 0 2px, rgb(255 255 255 / 0.25) 2px, transparent 55%),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.55) 0 2px, rgb(255 255 255 / 0.18) 2px, transparent 55%),
     var(--vw-sparkle) 60px 10px / 190px 18px repeat-x fixed,
     var(--vw-sparkle) 150px 30px / 260px 11px repeat-x fixed;
   --vw-page: linear-gradient(rgb(255 255 255 / 0.22) 1px, transparent 1px) 0 0 / 28px 28px, linear-gradient(90deg, rgb(255 255 255 / 0.22) 1px, transparent 1px) 0 0 / 28px 28px, linear-gradient(170deg, #d2ece4, #c3e6dc);
   --vw-paper: rgb(170 120 230 / 0.12);
 }
 html.dark[data-skin="vaporwave"] {
-  --titlebar-color: #1b0a3a;
   --vw-ink: #ff4fc8; --vw-hard: rgb(255 79 200 / 0.35); --vw-strip: linear-gradient(90deg, #ff71ce, #b967ff 50%, #01cdfe);
-  --vwb-sun: #ff4fa8; --vwb-sun2: #ffb347; --vwb-line: rgb(255 79 168 / 0.45); --vwb-b: #3a1260;
-  --band: linear-gradient(90deg, #170634, #2b0b52 55%, #1b0a3a calc(100% - var(--wco-inset))) fixed;
   --side-art: linear-gradient(to bottom, rgb(255 255 255 / 0.06), transparent 60%);
+  /* The chat bar at night is the top of the same sky: a few more stars, twinkling (the sun lives in the scene). */
   --band-art:
     linear-gradient(to bottom, rgb(255 255 255 / 0.06), transparent 60%),
-    repeating-linear-gradient(to bottom, transparent 0 5px, var(--vwb-b) 5px 7px) calc(50% - 46px) 33px / 92px 23px no-repeat fixed,
-    radial-gradient(circle at 50% 135%, var(--vwb-sun2) 0 22px, var(--vwb-sun) 42px, transparent 43px) 0 0 / 100% 56px no-repeat fixed,
-    repeating-linear-gradient(90deg, var(--vwb-line) 0 1px, transparent 1px 38px) 0 40px / 100% 16px repeat-x fixed,
-    repeating-linear-gradient(to bottom, var(--vwb-line) 0 1px, transparent 1px 6px) 0 40px / 100% 16px repeat-x fixed;
+    radial-gradient(circle at 30px 14px, var(--vw-star) 0 1.2px, transparent 1.8px) 0 0 / 110px 56px repeat-x fixed,
+    radial-gradient(circle at 80px 36px, var(--vw-star) 0 1px, transparent 1.5px) 0 0 / 150px 56px repeat-x fixed,
+    radial-gradient(circle at 10px 44px, rgb(255 255 255 / 0.5) 0 0.8px, transparent 1.3px) 0 0 / 70px 56px repeat-x fixed;
   --vw-night: linear-gradient(to bottom, #0b0222 0%, #1f0747 30%, #4a1270 50%, #a0287c 62%, #ff6a4d 70%, #ffb03d 72%, #12052a 72%, #0b0222 100%);
   --vw-grid: rgb(255 79 200 / 0.8); --vw-mount: rgb(26 6 48 / 0.95); --vw-mount2: rgb(58 14 96 / 0.85); --vw-star: rgb(255 240 250 / 0.85);
   --vw-paper: rgb(255 120 220 / 0.07);
 }
 @media (prefers-reduced-motion: no-preference) {
   html[data-skin="vaporwave"]:not(.dark, [data-motion="minima"]) .theme-band::before { animation: vw-twinkle-band 3s ease-in-out infinite alternate; }
-  html.dark[data-skin="vaporwave"]:not([data-motion="minima"]) .theme-band::before { animation: vw-floor 1.6s linear infinite; }
+  html.dark[data-skin="vaporwave"]:not([data-motion="minima"]) .theme-band::before { animation: vw-twinkle-band 4s ease-in-out infinite alternate; }
 }
 @keyframes vw-twinkle-band { from { opacity: 0.55; } to { opacity: 1; } }
-@keyframes vw-floor { from { background-position: 0 0, calc(50% - 46px) 33px, 0 0, 0 40px, 0 40px; } to { background-position: 0 0, calc(50% - 46px) 33px, 0 0, 0 40px, 0 46px; } }
 /* Day: the mint page and the stickers; the night pieces stay hidden. */
 .scene-vaporwave .scene-blur { background: var(--vw-page); --scene-opacity: 1; }
-html:not(.dark) .scene-vaporwave .scene-veil { background: linear-gradient(to bottom, color-mix(in oklch, var(--background) 50%, transparent), transparent 35%); }
 html:not(.dark) .scene-vaporwave :is(.vw-stars, .vw-shoot, .vw-cloud, .vw-glow, .vw-sun, .vw-mount, .vw-city, .vw-floor, .vw-beam) { display: none; }
 html.dark .scene-vaporwave .vw-sticker { display: none; }
 .vw-sticker { color: var(--vw-ink); filter: drop-shadow(4px 4px 0 var(--vw-ink)); animation: vw-bob ease-in-out infinite alternate; transform-origin: 50% 50%; }
@@ -428,7 +470,6 @@ html.dark .scene-vaporwave .vw-sticker { display: none; }
 @keyframes vw-bob { from { transform: translateY(0) rotate(var(--r, 0deg)); } to { transform: translateY(-12px) rotate(calc(var(--r, 0deg) + 5deg)); } }
 /* Night: the sunset. */
 html.dark .scene-vaporwave .scene-blur { background: var(--vw-night); }
-html.dark .scene-vaporwave .scene-veil { background: linear-gradient(to bottom, color-mix(in oklch, var(--background) 60%, transparent), color-mix(in oklch, var(--background) 40%, transparent) 50%, transparent 78%); }
 .vw-stars { inset: 0 0 30% 0; background: radial-gradient(circle, var(--vw-star) 0 1px, transparent 1.6px) 0 0 / 140px 110px, radial-gradient(circle, var(--vw-star) 0 1.4px, transparent 2px) 60px 40px / 230px 190px, radial-gradient(circle, rgb(255 255 255 / 0.5) 0 0.8px, transparent 1.3px) 20px 70px / 90px 80px; mask-image: linear-gradient(to bottom, #000 40%, transparent); animation: vw-twinkle 4s ease-in-out infinite alternate; }
 @keyframes vw-twinkle { from { opacity: 0.55; } to { opacity: 1; } }
 .vw-shoot { top: 8%; left: 60%; width: 160px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, #fff); rotate: 28deg; opacity: 0; animation: vw-shoot 9s linear infinite; }
@@ -437,12 +478,12 @@ html.dark .scene-vaporwave .scene-veil { background: linear-gradient(to bottom, 
 .vw-beam { bottom: 28%; width: 3px; height: 70%; left: 50%; transform-origin: 50% 100%; background: linear-gradient(to top, rgb(255 180 120 / 0.35), transparent 70%); animation: vw-beam 6s ease-in-out infinite alternate; }
 .vw-beam.a { rotate: -34deg; } .vw-beam.b { rotate: -14deg; animation-delay: -2s; } .vw-beam.c { rotate: 18deg; animation-delay: -4s; } .vw-beam.d { rotate: 38deg; animation-delay: -1s; }
 @keyframes vw-beam { from { opacity: 0.35; } to { opacity: 0.9; } }
-.vw-cloud { animation: vw-drift linear infinite; opacity: 0.95; }
+.vw-cloud { animation: vw-drift linear infinite; opacity: 0.8; }
 .vw-cloud svg { display: block; width: 100%; height: auto; }
 @keyframes vw-drift { from { transform: translateX(-12vw); } to { transform: translateX(112vw); } }
 .vw-glow { left: 50%; bottom: 28%; width: min(80vw, 760px); aspect-ratio: 1; translate: -50% 50%; border-radius: 50%; background: radial-gradient(closest-side, rgb(255 150 90 / 0.55), rgb(255 80 160 / 0.25) 45%, transparent 70%); animation: vw-breathe 7s ease-in-out infinite alternate; }
 @keyframes vw-breathe { from { opacity: 0.6; transform: scale(0.96); } to { opacity: 1; transform: scale(1.06); } }
-.vw-sun { left: 50%; bottom: 28%; width: min(44vw, 420px); aspect-ratio: 1; translate: -50% 50%; border-radius: 50%; opacity: 0.85;
+.vw-sun { left: 50%; bottom: 28%; width: min(44vw, 420px); aspect-ratio: 1; translate: -50% 50%; border-radius: 50%; opacity: 0.6; /* the brightest piece, right under the messages: a little turned down */
   background: linear-gradient(to bottom, #fff3a0 0%, #ffd23f 30%, #ff8a2a 62%, #ff3f8e 100%);
   mask-image: linear-gradient(to bottom, #000 0 48%, transparent 48% 52%, #000 52% 60%, transparent 60% 65%, #000 65% 72%, transparent 72% 78%, #000 78% 84%, transparent 84% 91%, #000 91%); }
 .vw-mount { left: -4%; right: -4%; bottom: 27%; height: 20%; }
@@ -457,7 +498,8 @@ html.dark .scene-vaporwave .scene-veil { background: linear-gradient(to bottom, 
 /* DAY components: Windows 95 in pastel. Cards, dialogs and the message box are windows (bevelled edges, a pastel title
    strip on top, a hard pink offset shadow); buttons are bevelled; tabs and the active menu item sink in; the sidebar is a
    grey panel; titles are outlined (white fill, ink outline, pink offset shadow). */
-html[data-skin="vaporwave"]:not(.dark) :is([data-slot="card"], [data-slot="composer"], [data-slot="dialog-overlay"] + [role="dialog"]) { position: relative; border: 1px solid var(--vw-lo); box-shadow: inset 2px 2px 0 var(--vw-hi), inset -2px -2px 0 var(--vw-lo), 5px 5px 0 var(--vw-hard); }
+html[data-skin="vaporwave"]:not(.dark) :is([data-slot="card"], [data-slot="composer"]) { position: relative; }
+html[data-skin="vaporwave"]:not(.dark) :is([data-slot="card"], [data-slot="composer"], [data-slot="dialog-overlay"] + [role="dialog"]) { border: 1px solid var(--vw-lo); box-shadow: inset 2px 2px 0 var(--vw-hi), inset -2px -2px 0 var(--vw-lo), 5px 5px 0 var(--vw-hard); }
 html[data-skin="vaporwave"]:not(.dark) :is([data-slot="card"], [data-slot="composer"], [data-slot="dialog-overlay"] + [role="dialog"])::before { content: ""; position: absolute; left: 2px; right: 2px; top: 2px; height: 7px; background: var(--vw-strip); pointer-events: none; z-index: 1; }
 html[data-skin="vaporwave"]:not(.dark) [data-slot="composer"] { background-color: color-mix(in oklch, var(--card) 92%, transparent); }
 html[data-skin="vaporwave"]:not(.dark) [data-slot="dialog-overlay"] + [role="dialog"]::before { height: 10px; }
@@ -497,23 +539,20 @@ html[data-skin="vaporwave"] [data-testid="update-card"] { background-image: line
    and a pixel rocket with a soft CRT bloom, stars and scanlines; the same outlined titles and hard shadows in neon.
    ================================================================================================================ */
 html[data-skin="retro"] {
-  --titlebar-color: #fdedb8;
   --rt-ink: #1a0a10; --rt-cream: #eee6d5; --rt-navy: #2f5a85; --rt-orange: #f08a4b; --rt-coral: #e5584f; --rt-gold: #f6b73c; --rt-maroon: #5a0b1e; --rt-pink: #fbd3dc;
   --rt-off: var(--rt-orange); --rt-off2: var(--rt-gold); --rt-off3: var(--rt-pink);
-  --band: linear-gradient(90deg, #fdd9c4, #fde3bf 50%, #fdedb8 calc(100% - var(--wco-inset))) fixed;
   --side-art: none;
-  --rt-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 56' fill='none' stroke-width='11' stroke-linejoin='miter'%3E%3Cpath d='M-4 -46L100 14L204 -46' stroke='%235a0b1e'/%3E%3Cpath d='M-4 -34L100 26L204 -34' stroke='%23d9424e'/%3E%3Cpath d='M-4 -22L100 38L204 -22' stroke='%23f08a4b'/%3E%3Cpath d='M-4 -10L100 50L204 -10' stroke='%23fdd9c4'/%3E%3Cpath d='M-4 2L100 62L204 2' stroke='%23f6b73c'/%3E%3C/svg%3E");
-  --band-art: var(--rt-chevron) right 200px top 0 / 180px 56px no-repeat fixed;
+  /* Five nested chevrons pointing down from the top edge of the bar, whole inside it (nothing cut at its bottom). */
+  --rt-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 56' fill='none' stroke-width='6' stroke-linejoin='miter'%3E%3Cpath d='M-4 -2L100 50L204 -2' stroke='%235a0b1e'/%3E%3Cpath d='M16 -2L100 40L184 -2' stroke='%23d9424e'/%3E%3Cpath d='M36 -2L100 30L164 -2' stroke='%23f08a4b'/%3E%3Cpath d='M56 -2L100 20L144 -2' stroke='%23fdd9c4'/%3E%3Cpath d='M76 -2L100 10L124 -2' stroke='%23f6b73c'/%3E%3C/svg%3E");
+  --band-art: var(--rt-chevron) right calc(var(--wco-inset) + 160px) top 0 / 180px 56px no-repeat fixed;
   --band-art-opacity: 1;
   --rt-page: linear-gradient(170deg, #f4c7a2, #efb98f 60%, #f3c3a0);
   --rt-glow: none;
 }
 html.dark[data-skin="retro"] {
-  --titlebar-color: #000000;
   --side-art: repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px);
   --rt-ink: #39ff14; --rt-cream: #d9d2c0; --rt-navy: #1b2d4a; --rt-orange: #ff8a3d; --rt-coral: #ff4fd8; --rt-gold: #ffe14d; --rt-maroon: #4a0a2a; --rt-pink: #ff4fd8;
   --rt-off: #ff4fd8; --rt-off2: #3ef0ff; --rt-off3: #ffe14d;
-  --band: var(--rt-space);
   --rt-band-invaders: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23ff4fd8' d='M4 4h1v1h-1zM10 4h1v1h-1zM5 5h1v1h-1zM9 5h1v1h-1zM4 6h7v1h-7zM3 7h2v1h-2zM6 7h3v1h-3zM10 7h2v1h-2zM2 8h11v1h-11zM2 9h1v1h-1zM4 9h7v1h-7zM12 9h1v1h-1zM2 10h1v1h-1zM4 10h1v1h-1zM10 10h1v1h-1zM12 10h1v1h-1zM5 11h2v1h-2zM8 11h2v1h-2z'/%3E%3Cpath fill='%233ef0ff' d='M27 4h2v1h-2zM26 5h4v1h-4zM25 6h6v1h-6zM24 7h2v1h-2zM27 7h2v1h-2zM30 7h2v1h-2zM24 8h8v1h-8zM26 9h1v1h-1zM29 9h1v1h-1zM25 10h1v1h-1zM27 10h2v1h-2zM30 10h1v1h-1zM24 11h1v1h-1zM26 11h1v1h-1zM29 11h1v1h-1zM31 11h1v1h-1z'/%3E%3Cpath fill='%23ffe14d' d='M46 4h4v1h-4zM43 5h10v1h-10zM42 6h12v1h-12zM42 7h3v1h-3zM47 7h2v1h-2zM51 7h3v1h-3zM42 8h12v1h-12zM45 9h2v1h-2zM49 9h2v1h-2zM44 10h2v1h-2zM47 10h2v1h-2zM50 10h2v1h-2zM42 11h2v1h-2zM52 11h2v1h-2z'/%3E%3C/svg%3E");
   --band-art:
     repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px),
@@ -525,12 +564,11 @@ html.dark[data-skin="retro"] {
   --rt-glow: drop-shadow(0 0 4px rgb(57 255 20 / 0.9)) drop-shadow(0 0 10px rgb(57 255 20 / 0.5));
 }
 /* The chat bar of the day: the chevrons sit whole at the right, just before the bar's buttons (no fade over them). */
-html[data-skin="retro"]:not(.dark) .topbar-chat.theme-band::before { mask-image: linear-gradient(90deg, transparent 150px, #000 150px, #000 calc(100% - 180px), transparent calc(100% - 180px)); }
+html[data-skin="retro"]:not(.dark) .topbar-chat.theme-band::before { mask-image: linear-gradient(90deg, transparent 150px, #000 150px, #000 calc(100% - var(--wco-inset) - 150px), transparent calc(100% - var(--wco-inset) - 150px)); }
 @media (prefers-reduced-motion: no-preference) { html.dark[data-skin="retro"]:not([data-motion="minima"]) .theme-band::before { animation: rt-band-march 2.4s steps(1, end) infinite; } }
 @keyframes rt-band-march { 0%, 100% { background-position: 0 0, 0 11px, 0 0, 0 0; } 50% { background-position: 0 0, 12px 11px, 0 0, 0 0; } }
 .scene-retro .scene-blur { background: var(--rt-page); --scene-opacity: 1; }
-html:not(.dark) .scene-retro .scene-veil { background: linear-gradient(to bottom, color-mix(in oklch, var(--background) 40%, transparent), transparent 35%); }
-html.dark .scene-retro .scene-veil { background: linear-gradient(to bottom, rgb(0 0 0 / 0.5), transparent 40%); }
+html.dark .scene-retro { --frost-filter: blur(7px) brightness(0.65); } /* the yellow invaders glow a little less */
 /* Day pieces: the big chevron corner and the flat shapes; hidden at night. Night pieces hidden by day. */
 html.dark .scene-retro :is(.rt-corner, .rt-shape) { display: none; }
 html:not(.dark) .scene-retro :is(.rt-stars, .rt-scan, .rt-rocket, .rt-crab) { display: none; }
@@ -602,6 +640,73 @@ html.dark[data-skin="retro"] [data-slot="card"] { box-shadow: 5px 5px 0 var(--rt
 /* Very faint scanlines over the whole window at night. */
 html.dark[data-skin="retro"] body { background-image: repeating-linear-gradient(to bottom, transparent 0 2px, rgb(0 0 0 / 0.16) 2px 3px); }
 
+/* ================================================================================================================
+   NUBE (candy) — the scene and the sweets. The page is a pink-to-lilac gradient under a fine dotted pattern; three very
+   soft pastel blobs breathe over it, and 3D sweets drawn in SVG (components/scene.jsx: puffy clouds, a swirl lollipop,
+   wrapped candies, gumdrops, jelly beans) bob slowly at the edges and the bottom, never over the text.
+   ================================================================================================================ */
+html[data-skin="nube"] {
+  --cd-a: #ffcfe4; --cd-b: #ecd4ff; --cd-c: #d9d2ff; --cd-shine: rgb(255 255 255 / 0.7);
+  --side-art: linear-gradient(to bottom, var(--cd-shine), transparent 48%);
+  --band-art:
+    linear-gradient(to bottom, var(--cd-shine), transparent 48%),
+    radial-gradient(circle at 50% 50%, rgb(255 255 255 / 0.9) 0 3px, transparent 4px) 40px 16px / 190px 56px repeat-x fixed,
+    radial-gradient(circle at 50% 50%, rgb(255 255 255 / 0.7) 0 2px, transparent 3px) 120px 34px / 230px 56px repeat-x fixed;
+  --cd-page: radial-gradient(circle, rgb(255 255 255 / 0.6) 1px, transparent 1.6px) 0 0 / 14px 14px, linear-gradient(160deg, #ffd9ec 0%, #ecd9ff 55%, #d9e4ff 100%);
+  --cd-pink: #ffc4dc; --cd-lilac: #dccbff; --cd-mint: #bdeedd; --cd-peach: #ffd9b8; --cd-sky: #c6e3ff;
+  --cd-key: oklch(0.42 0.19 352); --cd-shadow: rgb(236 110 180 / 0.32); --cd-glow: rgb(255 140 200 / 0.4);
+  --cd-frame: color-mix(in oklch, var(--primary) 45%, white); --cd-pad: color-mix(in oklch, var(--primary) 18%, white);
+  --cd-toy-opacity: 0.95; --cd-toy-shadow: rgb(200 90 160 / 0.35);
+}
+html.dark[data-skin="nube"] {
+  --cd-a: #4a2347; --cd-b: #352a5c; --cd-c: #2a2452; --cd-shine: rgb(255 255 255 / 0.1);
+  --cd-page: radial-gradient(circle, rgb(255 255 255 / 0.07) 1px, transparent 1.6px) 0 0 / 14px 14px, linear-gradient(160deg, #2e1a3c 0%, #261f4a 55%, #1d2a4a 100%);
+  --cd-pink: #7d3668; --cd-lilac: #55428f; --cd-mint: #2f6a5e; --cd-peach: #7a553f; --cd-sky: #365682;
+  --cd-key: oklch(0.55 0.16 350); --cd-shadow: rgb(0 0 0 / 0.45); --cd-glow: rgb(255 140 200 / 0.3);
+  --cd-frame: color-mix(in oklch, var(--primary) 70%, transparent); --cd-pad: color-mix(in oklch, var(--primary) 35%, transparent);
+  --cd-toy-opacity: 0.55; --cd-toy-shadow: rgb(0 0 0 / 0.5);
+}
+@media (prefers-reduced-motion: no-preference) { html[data-skin="nube"]:not([data-motion="minima"]) .theme-band::before { animation: cd-band 36s linear infinite; } }
+@keyframes cd-band { from { background-position: 0 0, 40px 16px, 120px 34px; } to { background-position: 0 0, 230px 16px, -110px 34px; } }
+.scene-nube .scene-blur { --scene-opacity: 1; background: var(--cd-page); }
+/* The blobs: soft-edged ellipses of one pastel each, breathing and drifting very slowly. */
+.cd-blob { border-radius: 50%; opacity: 0.7; background: radial-gradient(closest-side, var(--c), color-mix(in srgb, var(--c) 60%, transparent) 55%, transparent); animation: cd-drift ease-in-out infinite alternate; }
+@keyframes cd-drift { from { transform: translate(0, 0) scale(1); } to { transform: translate(var(--dx, 40px), var(--dy, -30px)) scale(1.12); } }
+/* The sweets: each an SVG shaded with radial gradients, with a soft pink shadow under it, bobbing and tilting a little. */
+.cd-candy { opacity: var(--cd-toy-opacity); filter: drop-shadow(0 12px 10px var(--cd-toy-shadow)); animation: cd-bob ease-in-out infinite alternate; transform-origin: 50% 60%; }
+.cd-candy svg { display: block; width: 100%; height: auto; overflow: visible; }
+@keyframes cd-bob { from { transform: translateY(0) rotate(var(--r, 0deg)); } to { transform: translateY(-14px) rotate(calc(var(--r, 0deg) + 4deg)); } }
+/* Candy UI: white panels with a big radius and a soft pink shadow (cards, dialogs, the message box); the main button
+   a glossy 3D key with a darker edge below and bold capitals; outline buttons as white pills with pink text; the chosen
+   tab, mode or menu item framed in pink with a light glow; the sidebar a white panel; titles in chunky plum capitals. */
+html[data-skin="nube"] [data-slot="card"] { border-color: transparent; border-radius: 1.5rem; box-shadow: 0 14px 34px -14px var(--cd-shadow); }
+html[data-skin="nube"] [data-slot="dialog-overlay"] + [role="dialog"] { border-color: transparent; border-radius: 1.6rem; box-shadow: 0 30px 60px -22px var(--cd-shadow), 0 0 0 1px color-mix(in oklch, var(--primary) 10%, transparent); }
+html[data-skin="nube"] [data-slot="button"].bg-primary { font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; text-shadow: 0 1px 0 rgb(0 0 0 / 0.18); border: 0; transform: translateY(-1px);
+  background-image: linear-gradient(to bottom, rgb(255 255 255 / 0.38), rgb(255 255 255 / 0.1) 46%, transparent 52%); box-shadow: 0 4px 0 var(--cd-key), 0 12px 18px -8px var(--cd-shadow); }
+html[data-skin="nube"] [data-slot="button"].bg-primary:not(.rounded-full) { border-radius: 1rem; }
+html[data-skin="nube"] [data-slot="button"].bg-primary:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--cd-key), 0 6px 10px -6px var(--cd-shadow); }
+html.dark[data-skin="nube"] [data-slot="button"].bg-primary { text-shadow: none; }
+html[data-skin="nube"] [data-slot="button"].border { border-radius: 999px; border: 2px solid var(--cd-pad); background-color: var(--card); color: var(--primary); font-weight: 700; box-shadow: 0 3px 0 var(--cd-pad), 0 10px 16px -12px var(--cd-shadow); }
+html[data-skin="nube"] [data-slot="button"].border:hover { background-color: var(--accent); }
+html[data-skin="nube"] [data-slot="button"].border:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--cd-pad); }
+html[data-skin="nube"] [data-slot="button"].bg-secondary, html[data-skin="nube"] [data-slot="button"].bg-primary\/10 { border-radius: 999px; font-weight: 700; }
+html[data-skin="nube"] [role="tablist"] { border-radius: 999px; padding: 4px; background-color: color-mix(in oklch, var(--card) 70%, transparent); box-shadow: inset 0 1px 3px color-mix(in oklch, var(--primary) 18%, transparent); }
+html[data-skin="nube"] [role="tab"] { border-radius: 999px; font-weight: 700; }
+html[data-skin="nube"] [role="tab"][data-state="active"], html[data-skin="nube"] [role="radiogroup"].bg-muted [role="radio"][aria-checked="true"] { background-color: var(--card); color: var(--primary); box-shadow: 0 0 0 2px var(--cd-frame), 0 0 14px var(--cd-glow); }
+html[data-skin="nube"] [role="radiogroup"].bg-muted { border-radius: 999px; }
+html[data-skin="nube"] [role="radiogroup"].bg-muted [role="radio"] { border-radius: 999px; font-weight: 700; }
+html[data-skin="nube"] [data-testid="skin-picker"] [role="radio"][aria-checked="true"] { box-shadow: 0 0 0 2px var(--cd-frame), 0 0 16px var(--cd-glow); border-color: transparent; }
+html[data-skin="nube"] [data-testid="skin-picker"] [role="radio"] { border-radius: 1.2rem; }
+html[data-skin="nube"] [data-slot="badge"] { font-weight: 700; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, currentColor 25%, transparent); }
+html[data-skin="nube"] :is([data-slot="input"], [data-slot="textarea"]) { border-radius: 1rem; box-shadow: inset 0 2px 4px color-mix(in oklch, var(--primary) 10%, transparent); }
+html[data-skin="nube"] aside.bg-sidebar { border-right-color: transparent; box-shadow: 8px 0 28px -16px var(--cd-shadow); background-image: none; position: relative; z-index: 1; }
+html[data-skin="nube"] nav button { border-radius: 999px; }
+html[data-skin="nube"] nav button.bg-accent { color: var(--primary); font-weight: 700; box-shadow: 0 0 0 2px var(--cd-frame), 0 0 14px var(--cd-glow); }
+html[data-skin="nube"] nav button.bg-accent svg { color: var(--primary); }
+html[data-skin="nube"] .bg-bubble { background-image: linear-gradient(to bottom, rgb(255 255 255 / 0.22), transparent 60%); box-shadow: 0 3px 0 var(--cd-key); }
+html[data-skin="nube"] [data-testid="update-card"] { background-image: linear-gradient(135deg, oklch(0.52 0.16 348), oklch(0.48 0.14 295)); }
+html[data-skin="nube"] .bg-warning.rounded-full { box-shadow: 0 2px 0 oklch(0.42 0.12 60); font-weight: 800; }
+
 /* ---- Typography of each theme: used while the interface font is the default (a font chosen by hand wins). ---- */
 html[data-skin="vaporwave"][data-font="outfit"] { --font-sans: "Space Grotesk Variable", "Segoe UI", system-ui, sans-serif; }
 html[data-skin="retro"][data-font="outfit"] { --font-sans: "IBM Plex Mono", "Cascadia Code", Consolas, monospace; }
@@ -614,9 +719,28 @@ html[data-skin="nube"] :is(h1, h2, h3, [data-slot="card-title"]):not(.prose-chat
 html.dark[data-skin="vaporwave"] .hero-title { background: linear-gradient(90deg, #ff71ce, #b967ff 50%, #01cdfe); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; }
 html[data-skin="nube"] .hero-title { background: linear-gradient(90deg, #f05aa6, #a07af0 55%, #4fb7e8); -webkit-background-clip: text; background-clip: text; color: transparent; }
 
-/* ---- Over a backdrop, the message box is frosted glass framed in the theme's own way; the chat's notes too. ---- */
+/* ---- Over a backdrop, the message box is frosted glass framed in the theme's own way; the chat's notes (the system's
+   bubbles) are the card's colour, nearly solid: the reading column under them already blurs the scene. ---- */
 html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) [data-slot="composer"] { backdrop-filter: blur(16px) saturate(1.25); }
-html:is([data-skin="vaporwave"], [data-skin="nube"]) main .bg-muted\/70 { background-color: color-mix(in oklch, var(--card) 62%, transparent); backdrop-filter: blur(10px); }
-html.dark[data-skin="vaporwave"] [data-slot="composer"] { border: 1.5px solid transparent; background: linear-gradient(color-mix(in oklch, var(--card) 80%, transparent), color-mix(in oklch, var(--card) 80%, transparent)) padding-box, linear-gradient(90deg, #ff71ce, #b967ff 50%, #01cdfe) border-box; box-shadow: 0 0 24px -6px rgb(255 79 200 / 0.55); }
+html:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) main :is(.bg-muted\/70, .bg-muted\/50) { background-color: color-mix(in oklch, var(--card) 82%, transparent); }
+html.dark[data-skin="vaporwave"] [data-slot="composer"] { border: 1.5px solid transparent; background: linear-gradient(color-mix(in oklch, var(--card) 86%, transparent), color-mix(in oklch, var(--card) 86%, transparent)) padding-box, linear-gradient(90deg, #ff71ce, #b967ff 50%, #01cdfe) border-box; box-shadow: 0 0 24px -6px rgb(255 79 200 / 0.55); }
+/* Text set straight on the scene (the assistant's messages, the greeting, the names): a faint halo of the page's colour
+   under it, so a bright piece of the art drifting by never eats into the letters. */
+html.dark:is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) main :is(.prose-chat, .hero-title + p, .text-muted-foreground.text-xs) { text-shadow: 0 1px 2px color-mix(in oklch, var(--background) 85%, transparent), 0 0 8px color-mix(in oklch, var(--background) 70%, transparent); }
+html:not(.dark):is([data-skin="vaporwave"], [data-skin="retro"], [data-skin="nube"]) main :is(.prose-chat, .hero-title + p) { text-shadow: 0 0 6px color-mix(in oklch, var(--background) 70%, transparent); }
+/* The buttons inside a chat message (accept the report, ask for changes, play, allow / always / deny, see the task):
+   small and light so the conversation stays calm; each theme keeps its character with thinner outlines and shadows. */
+.chat-actions [data-slot="button"] { font-weight: 500; }
+html[data-skin="retro"] .chat-actions [data-slot="button"]:is(.bg-primary, .border) { border-width: 1.5px; box-shadow: 2px 2px 0 var(--rt-ink); font-weight: 600; letter-spacing: 0.02em; }
+html[data-skin="retro"] .chat-actions [data-slot="button"].border { box-shadow: 2px 2px 0 var(--rt-off); }
+html[data-skin="retro"] .chat-actions [data-slot="button"]:is(.bg-primary, .border):active { translate: 1px 1px; box-shadow: 1px 1px 0 var(--rt-ink); }
+html[data-skin="retro"] .chat-actions [data-slot="button"].bg-primary\/10 { font-weight: 600; }
+html[data-skin="vaporwave"]:not(.dark) .chat-actions [data-slot="button"].bg-primary { font-weight: 600; box-shadow: inset 1px 1px 0 rgb(255 255 255 / 0.55), inset -1px -1px 0 rgb(0 0 0 / 0.28), 2px 2px 0 var(--vw-ink); }
+html[data-skin="vaporwave"]:not(.dark) .chat-actions [data-slot="button"].border { font-weight: 500; box-shadow: inset 1px 1px 0 var(--vw-hi), inset -1px -1px 0 var(--vw-lo), 1px 1px 0 var(--vw-ink); }
+html.dark[data-skin="vaporwave"] .chat-actions [data-slot="button"].bg-primary { box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 50%, transparent), 0 0 10px -3px color-mix(in oklch, var(--primary) 60%, transparent); }
+html.dark[data-skin="vaporwave"] .chat-actions [data-slot="button"].border { box-shadow: none; }
+html[data-skin="nube"] .chat-actions [data-slot="button"].bg-primary { font-weight: 700; letter-spacing: 0.02em; box-shadow: 0 2px 0 var(--cd-key), 0 8px 12px -8px var(--cd-shadow); transform: none; }
+html[data-skin="nube"] .chat-actions [data-slot="button"].bg-primary:active { transform: translateY(1px); box-shadow: 0 1px 0 var(--cd-key); }
+html[data-skin="nube"] .chat-actions [data-slot="button"].border { border-width: 1.5px; font-weight: 600; box-shadow: 0 2px 0 var(--cd-pad); }
 html[data-skin="nube"] [data-slot="composer"] { border: 2px solid transparent; background-color: color-mix(in oklch, var(--card) 88%, transparent); border-radius: 1.6rem; box-shadow: 0 18px 40px -18px var(--cd-shadow); }
 html[data-skin="nube"] [data-slot="composer"]:focus-within { border-color: var(--cd-frame); box-shadow: 0 0 16px var(--cd-glow), 0 18px 40px -18px var(--cd-shadow); }

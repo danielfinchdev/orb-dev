@@ -11,8 +11,8 @@ import { PageHeader } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea, Kbd, Spinner } from '@/components/ui/basic.jsx';
-import { Select, Switch, Checkbox, Dialog, DialogContent, DialogTitle } from '@/components/ui/overlay.jsx';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea, Kbd, PathText, Spinner } from '@/components/ui/basic.jsx';
+import { Select, Switch, Checkbox, Dialog, DialogContent, DialogTitle, BubbleTip } from '@/components/ui/overlay.jsx';
 import { useStore, call, act, bridge, setState, getState, applyTheme, applyAppearance, go, openTerminal, openSettings, closeSettings } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { t, useT, useLocale } from '@/lib/i18n.js';
@@ -210,8 +210,8 @@ function McpCard({ c }) {
         {folder ? (
           <div className="grid min-w-0 gap-2" data-testid="mcp-folder">
             <div className="flex min-w-0 items-center gap-2">
-              <div className="min-w-0 flex-1"><div className="text-muted-foreground text-xs">{t('settings.mcpFolder')}</div><div className="truncate font-mono text-xs">{folder.dir}</div></div>
-              <Button size="icon-sm" variant="ghost" onClick={() => act(bridge.openPath(folder.dir))} title={t('settings.open')}><FolderOpen /></Button>
+              <div className="grid min-w-0 flex-1"><div className="text-muted-foreground text-xs">{t('settings.mcpFolder')}</div><PathText path={folder.dir} className="text-xs" /></div>
+              <BubbleTip title={t('settings.open')}><Button size="icon-sm" variant="ghost" onClick={() => act(bridge.openPath(folder.dir))} aria-label={t('settings.open')}><FolderOpen /></Button></BubbleTip>
             </div>
             {folder.servers.map((s) => (
               <div key={s.dir} className="flex min-w-0 items-center gap-3 rounded-lg border border-dashed px-3 py-2">
@@ -277,8 +277,8 @@ function AndroidCard() {
       <CardHeader><CardTitle>{t('settings.android')}</CardTitle><CardDescription>{t('settings.androidDesc')}</CardDescription></CardHeader>
       <CardContent className="grid gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="min-w-0 flex-1"><div className={cn('text-sm', st.state === 'error' && 'text-destructive')}>{label}</div><div className="text-muted-foreground truncate font-mono text-xs">{st.dir}</div></div>
-          {st.ready ? <Button size="icon-sm" variant="ghost" onClick={() => act(bridge.openPath(st.dir))} title={t('settings.open')}><FolderOpen /></Button>
+          <div className="grid min-w-0 flex-1"><div className={cn('text-sm', st.state === 'error' && 'text-destructive')}>{label}</div><PathText path={st.dir} className="text-muted-foreground text-xs" /></div>
+          {st.ready ? <BubbleTip title={t('settings.open')}><Button size="icon-sm" variant="ghost" onClick={() => act(bridge.openPath(st.dir))} aria-label={t('settings.open')}><FolderOpen /></Button></BubbleTip>
             : st.state !== 'downloading' ? <Button size="sm" variant="outline" onClick={async () => { setSt({ ...st, state: 'downloading' }); const r = await act(call('android.install')); if (r) setSt(r); else load(); }}>{t('settings.android.download')}</Button> : null}
         </div>
       </CardContent>
@@ -361,7 +361,7 @@ function MobileCard() {
                   <Smartphone className="text-muted-foreground size-4" />
                   <div className="min-w-0 flex-1"><div className="truncate">{d.name}</div><div className="text-muted-foreground text-xs">{[d.route === 'tailscale' ? 'Tailscale' : d.route === 'wifi' ? t('settings.mobileWifiShort') : null, d.push ? t('settings.mobilePushOn') : null].filter(Boolean).join(' · ')}</div></div>
                   <span className="text-muted-foreground text-xs">{d.last_seen ? new Date(d.last_seen).toLocaleString(locale, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</span>
-                  <Button size="icon-sm" variant="danger" title={t('settings.revokeTip')} onClick={async () => { if (await confirm(t('settings.revokeTitle'), t('settings.revokeBody', { name: d.name }), { ok: t('settings.remove'), danger: true })) { await act(call('remote.revoke', { id: d.id }), t('settings.revoked')); load(); } }}><Trash2 /></Button>
+                  <BubbleTip title={t('settings.revokeTip')}><Button size="icon-sm" variant="danger" aria-label={t('settings.revokeTip')} onClick={async () => { if (await confirm(t('settings.revokeTitle'), t('settings.revokeBody', { name: d.name }), { ok: t('settings.remove'), danger: true })) { await act(call('remote.revoke', { id: d.id }), t('settings.revoked')); load(); } }}><Trash2 /></Button></BubbleTip>
                 </div>
               )) : <p className="text-muted-foreground text-sm">{t('settings.none')}</p>}
             </div>
@@ -427,8 +427,8 @@ function InterfaceCard({ c }) {
         <Field label={t('settings.sizeLabel')} hint={<>{t('settings.sizeHint1')} <Kbd>Ctrl</Kbd> <Kbd>+</Kbd> {t('settings.sizeHint2')} <Kbd>Ctrl</Kbd> <Kbd>-</Kbd> {t('settings.sizeHint3')} <Kbd>Ctrl</Kbd> <Kbd>0</Kbd> {t('settings.sizeHint4')} <Kbd>Ctrl</Kbd> {t('settings.sizeHint5')}</>}>
           <div className="flex flex-wrap items-center gap-2">
             <Select className="w-44" value={preset} placeholder={zoom ? t('settings.custom', { pct: Math.round(zoom * 100) }) : '…'} onValueChange={change} options={SIZES} />
-            <Button size="icon-sm" variant="outline" title={t('settings.zoomOut')} onClick={() => change(zoom - 0.1)}><ZoomOut /></Button>
-            <Button size="icon-sm" variant="outline" title={t('settings.zoomIn')} onClick={() => change(zoom + 0.1)}><ZoomIn /></Button>
+            <BubbleTip title={t('settings.zoomOut')}><Button size="icon-sm" variant="outline" aria-label={t('settings.zoomOut')} onClick={() => change(zoom - 0.1)}><ZoomOut /></Button></BubbleTip>
+            <BubbleTip title={t('settings.zoomIn')}><Button size="icon-sm" variant="outline" aria-label={t('settings.zoomIn')} onClick={() => change(zoom + 0.1)}><ZoomIn /></Button></BubbleTip>
             <span className="text-muted-foreground text-xs tabular-nums">{zoom ? `${Math.round(zoom * 100)} %` : ''}</span>
           </div>
         </Field>
@@ -597,16 +597,18 @@ export function SettingsDialog() {
           <nav className="flex w-56 shrink-0 flex-col max-sm:w-16" aria-label={t('settings.title')}>
             <div className="grid min-h-0 flex-1 content-start gap-1 overflow-y-auto px-3 pt-4">
               {SECTIONS.map(({ id, icon: Icon }) => (
-                <button key={id} type="button" onClick={() => openSettings(id)} data-testid={`settings-nav-${id}`} title={t(`settings.section.${id}`)} aria-current={section.id === id ? 'page' : undefined}
+                <button key={id} type="button" onClick={() => openSettings(id)} data-testid={`settings-nav-${id}`} aria-label={t(`settings.section.${id}`)} aria-current={section.id === id ? 'page' : undefined}
                   className={cn('flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm', section.id === id ? 'bg-accent text-accent-foreground font-medium' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground')}>
                   <Icon className="size-[18px] shrink-0" /><span className="truncate max-sm:hidden">{t(`settings.section.${id}`)}</span>
                 </button>
               ))}
             </div>
             <div className="grid gap-0.5 px-6 pt-3 pb-5 max-sm:px-3" data-testid="settings-about">
-              <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="hover:text-primary flex w-fit cursor-pointer items-center gap-1.5 text-[13px] font-medium" title={AUTHOR.url.replace('https://', '')}>
-                <ToolIcon tool="gh" className="size-4" /><span className="max-sm:hidden">@{AUTHOR.github}</span>
-              </button>
+              <BubbleTip title={`@${AUTHOR.github}`} text={AUTHOR.url.replace('https://', '')} side="top" align="start">
+                <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="hover:text-primary flex w-fit cursor-pointer items-center gap-1.5 text-[13px] font-medium" aria-label={AUTHOR.url.replace('https://', '')}>
+                  <ToolIcon tool="gh" className="size-4" /><span className="max-sm:hidden">@{AUTHOR.github}</span>
+                </button>
+              </BubbleTip>
               <span className="text-muted-foreground text-xs max-sm:hidden">{PRODUCT.name} {app.version}</span>
             </div>
           </nav>

@@ -16,7 +16,7 @@ import { GamesDialog } from '@/games/games.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { useStore, setState, getState, refresh, refreshSoon, bridge, go, applyTheme, openTerminal } from '@/lib/store.js';
 import { AGENT } from '@/lib/labels.js';
-import { followTitleBar } from '@/lib/title-bar.js';
+import { WindowControls } from '@/components/window-controls.jsx';
 import { useT, t as tNow } from '@/lib/i18n.js';
 import { Setup } from '@/views/setup.jsx';
 import { ChatView } from '@/views/chat.jsx';
@@ -103,13 +103,6 @@ function Root() {
     return () => { window.removeEventListener('keydown', key); off(); };
   }, [phase]);
   useEffect(() => { const off = () => setPhase('pair'); window.addEventListener('orb:unpaired', off); return () => window.removeEventListener('orb:unpaired', off); }, []);
-  useEffect(() => followTitleBar(), []);
-  // The welcome screens have the brand's sky behind: the window's buttons take its colour there.
-  const sky = phase === 'setup' || phase === 'pair';
-  useEffect(() => {
-    const root = document.documentElement.style;
-    if (sky) root.setProperty('--titlebar-color', 'var(--brand-sky-top)'); else root.removeProperty('--titlebar-color');
-  }, [sky]);
   // Screens without a top bar of their own (welcome, loading, error): a strip at the top still moves the window.
   const strip = <div className="app-titlebar fixed inset-x-0 top-0 z-40 h-14" aria-hidden="true" />;
   useEffect(() => {
@@ -141,11 +134,13 @@ function Root() {
 }
 
 applyTheme();
+if (window.orb?.windowControls) document.documentElement.classList.add('has-win-controls');
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <TooltipProvider>
       <Root />
       <DialogHost />
+      <WindowControls />
       <Toaster position="top-center" richColors closeButton toastOptions={{ className: 'font-sans' }} />
     </TooltipProvider>
   </StrictMode>

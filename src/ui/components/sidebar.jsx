@@ -4,7 +4,7 @@ import { Robot } from './robot.jsx';
 import { ThemeToggle, SidebarToggle } from './theme-toggle.jsx';
 import { Button } from './ui/button.jsx';
 import { useStore, go, bridge, call, act, openSettings } from '@/lib/store.js';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent, Tip } from './ui/overlay.jsx';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent, Tip, BubbleTip } from './ui/overlay.jsx';
 import { createProjectFlow } from './project-actions.jsx';
 import { STATUS } from '@/lib/labels.js';
 import { cn } from '@/lib/utils.js';
@@ -33,9 +33,11 @@ function Inbox({ title, tone, items, route, settleLabel }) {
       <div className="grid gap-px">
         {items.slice(0, 8).map((i) => (
           <div key={i.key} className={cn('group/inbox flex items-center rounded-lg pr-1', i.isActive(route) ? 'bg-accent' : 'hover:bg-accent/60')}>
-            <button onClick={i.open} title={i.hint} className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 px-2.5 py-1.5 text-left text-[13px]" data-testid="inbox-item">
-              {i.icon}<span className="min-w-0 flex-1 truncate">{i.title}</span>
-            </button>
+            <BubbleTip title={i.title} text={i.hint} side="right">
+              <button onClick={i.open} className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 px-2.5 py-1.5 text-left text-[13px]" data-testid="inbox-item">
+                {i.icon}<span className="min-w-0 flex-1 truncate">{i.title}</span>
+              </button>
+            </BubbleTip>
             {i.settle ? <Tip label={settleLabel}><button className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 cursor-pointer place-items-center rounded-md opacity-0 group-hover/inbox:opacity-100 focus-visible:opacity-100" aria-label={settleLabel} onClick={i.settle}><Check className="size-3.5" /></button></Tip> : null}
           </div>
         ))}
@@ -65,16 +67,18 @@ function ProjectFolder({ project, items, open, onOpen, route, active }) {
         <CollapsibleTrigger className={cn('flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 px-2 py-1.5 text-left text-[13.5px]', active ? 'text-foreground font-medium' : 'text-foreground/80')} data-testid={`folder-${project.name}`}>
           <ChevronRight className={cn('text-muted-foreground size-3.5 shrink-0 transition-transform', open && 'rotate-90')} />
           <span className="min-w-0 flex-1 truncate">{project.name}</span>
-          {waiting ? <span className="bg-warning size-1.5 shrink-0 rounded-full" title={t('comp.sidebar.waitsApproval')} /> : running ? <span className="bg-info size-1.5 shrink-0 animate-pulse rounded-full" title={t('inbox.working')} /> : null}
+          {waiting ? <span className="bg-warning size-1.5 shrink-0 rounded-full" role="img" aria-label={t('comp.sidebar.waitsApproval')} /> : running ? <span className="bg-info size-1.5 shrink-0 animate-pulse rounded-full" role="img" aria-label={t('inbox.working')} /> : null}
         </CollapsibleTrigger>
         <Tip label={t('comp.sidebar.askHere')}><button className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 cursor-pointer place-items-center rounded-md opacity-0 group-hover/folder:opacity-100 focus-visible:opacity-100" aria-label={t('comp.sidebar.askIn', { name: project.name })} onClick={async () => { await act(call('projects.setActive', { name: project.name })); go('chat'); }}><Plus className="size-3.5" /></button></Tip>
       </div>
       <CollapsibleContent>
         <div className="ml-3.5 grid gap-px border-l pl-1.5">
           {items.length ? items.slice(0, SHOWN).map((i) => (
-            <button key={i.key} onClick={i.open} title={i.hint} className={cn('flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left text-[13px] transition-colors', i.isActive(route) ? 'bg-accent text-accent-foreground' : 'text-foreground/75 hover:bg-accent/60 hover:text-foreground')}>
-              {i.icon}<span className="min-w-0 flex-1 truncate">{i.title}</span>
-            </button>
+            <BubbleTip key={i.key} title={i.title} text={i.hint} side="right">
+              <button onClick={i.open} className={cn('flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left text-[13px] transition-colors', i.isActive(route) ? 'bg-accent text-accent-foreground' : 'text-foreground/75 hover:bg-accent/60 hover:text-foreground')}>
+                {i.icon}<span className="min-w-0 flex-1 truncate">{i.title}</span>
+              </button>
+            </BubbleTip>
           )) : <p className="text-muted-foreground px-2 py-1 text-xs">{t('comp.sidebar.nothingYet')}</p>}
           {items.length > SHOWN ? <button className="text-muted-foreground hover:text-foreground cursor-pointer px-2 py-1 text-left text-xs" onClick={() => go({ view: 'tasks', project: project.name })}>{t('comp.sidebar.viewAll', { n: items.length })}</button> : null}
         </div>
@@ -141,7 +145,7 @@ export function Sidebar({ mood }) {
           {app.chat?.busy ? <span className="bg-primary size-2 animate-pulse rounded-full" /> : null}
         </NavItem>
         <NavItem icon={ListTodo} label={t('nav.tasks')} active={is('tasks')} onClick={() => go('tasks')} testid="nav-tasks">
-          {approvals ? <span className="bg-warning text-white rounded-full px-1.5 text-[11px] font-medium" title={t('comp.sidebar.waitApproval')}>{approvals}</span>
+          {approvals ? <span className="bg-warning text-white rounded-full px-1.5 text-[11px] font-medium" aria-label={t('comp.sidebar.waitApproval')}>{approvals}</span>
             : running ? <span className="bg-muted text-muted-foreground rounded-full px-1.5 text-[11px]">{running}</span> : null}
         </NavItem>
         <NavItem icon={FolderKanban} label={t('nav.projects')} active={is('projects')} onClick={() => go('projects')} testid="nav-projects" />

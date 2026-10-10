@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Check, ChevronDown, Flame, Lightbulb, X } from 'lucide-react';
 import { AgentIcon } from './agent-icon.jsx';
 import { Button } from './ui/button.jsx';
-import { Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from './ui/overlay.jsx';
+import { Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, BubbleTip } from './ui/overlay.jsx';
 import { call, useStore } from '@/lib/store.js';
 import { PERMISSION, REASONING, options } from '@/lib/labels.js';
 import { cn } from '@/lib/utils.js';
@@ -28,13 +28,15 @@ export function BrainPicker({ catalog, value, onChange, className }) {
   const label = model?.label ?? (value.model || t('brain.defaultModel'));
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className={cn('max-w-64 gap-1.5', className)} data-testid="brain-picker" title={t('brain.title')}>
-          <AgentIcon agent={value.agent} className="size-4" />
-          <span className="truncate">{agent?.label ?? value.agent} · {label}</span>
-          <ChevronDown className="size-3.5 opacity-60" />
-        </Button>
-      </DropdownMenuTrigger>
+      <BubbleTip title={t('brain.title')} text={t('brain.titleText')}>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm" className={cn('max-w-64 gap-1.5', className)} data-testid="brain-picker" aria-label={t('brain.title')}>
+            <AgentIcon agent={value.agent} className="size-4" />
+            <span className="truncate">{agent?.label ?? value.agent} · {label}</span>
+            <ChevronDown className="size-3.5 opacity-60" />
+          </Button>
+        </DropdownMenuTrigger>
+      </BubbleTip>
       <DropdownMenuContent align="start" className="max-h-[60vh] w-72 overflow-y-auto">
         {!catalog?.length ? <div className="text-muted-foreground px-2 py-1.5 text-xs">{t('brain.none')}</div> : catalog.map((a, i) => (
           <div key={a.id}>

@@ -6,8 +6,8 @@ import { Installer } from '@/components/installer.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Field, Input, Spinner } from '@/components/ui/basic.jsx';
-import { Switch, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
+import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Field, Input, PathText, Spinner } from '@/components/ui/basic.jsx';
+import { Switch, Collapsible, CollapsibleTrigger, CollapsibleContent, BubbleTip } from '@/components/ui/overlay.jsx';
 import { cn } from '@/lib/utils.js';
 import { useStore, call, act, bridge, setState, getState } from '@/lib/store.js';
 import { LOGIN } from '@/lib/labels.js';
@@ -50,46 +50,55 @@ function Accounts({ a, reload }) {
       {a.accounts.map((acc) => {
         const login = LOGIN[acc.login] ?? LOGIN.desconocido;
         return (
-          <div key={acc.id} className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 ${acc.enabled === false ? 'opacity-60' : ''}`}>
-            <div className="min-w-0 flex-1"><div className="truncate text-[13px]">{acc.label}</div><div className="text-muted-foreground truncate font-mono text-[10px]" title={acc.dir}>{acc.dir}</div></div>
-            <Badge variant={login[1]}>{login[0]}</Badge>
-            <Button size="icon-sm" variant="ghost" title={t('agents.login')} onClick={() => act(call('agents.login', { account: acc.id }), t('agents.followSteps'))}><LogIn /></Button>
-            <Switch checked={acc.enabled !== false} onCheckedChange={(enabled) => act(call('accounts.update', { id: acc.id, enabled })).then(reload)} aria-label={t('agents.useAccount')} />
-            {acc.id !== acc.agent ? <Button size="icon-sm" variant="danger" title={t('agents.removeTip')} onClick={async () => { if (await confirm(t('agents.removeTitle'), t('agents.removeBody', { label: acc.label }), { ok: t('agents.remove'), danger: true })) act(call('accounts.remove', { id: acc.id }), t('agents.accountRemoved')).then(reload); }}><Trash2 /></Button> : null}
+          // Two lines: the name with its state and switch, then its folder with what can be done with it.
+          <div key={acc.id} className={cn('grid gap-1 rounded-lg border px-3 py-2', acc.enabled === false && 'opacity-60')}>
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1 truncate text-[13px] font-medium">{acc.label}</div>
+              <Badge variant={login[1]}>{login[0]}</Badge>
+              <BubbleTip title={t('agents.useAccount')}><Switch checked={acc.enabled !== false} onCheckedChange={(enabled) => act(call('accounts.update', { id: acc.id, enabled })).then(reload)} aria-label={t('agents.useAccount')} /></BubbleTip>
+            </div>
+            <div className="flex items-center gap-1">
+              <PathText path={acc.dir} className="text-muted-foreground min-w-0 flex-1 text-[11px]" />
+              <BubbleTip title={t('agents.login')}><Button size="icon-xs" variant="ghost" aria-label={t('agents.login')} onClick={() => act(call('agents.login', { account: acc.id }), t('agents.followSteps'))}><LogIn /></Button></BubbleTip>
+              {acc.id !== acc.agent ? <BubbleTip title={t('agents.removeTitle')} text={t('agents.removeTip')}><Button size="icon-xs" variant="danger" aria-label={t('agents.removeTitle')} onClick={async () => { if (await confirm(t('agents.removeTitle'), t('agents.removeBody', { label: acc.label }), { ok: t('agents.remove'), danger: true })) act(call('accounts.remove', { id: acc.id }), t('agents.accountRemoved')).then(reload); }}><Trash2 /></Button></BubbleTip> : null}
+            </div>
           </div>
         );
       })}
-      {a.multi ? <Button size="sm" variant="ghost" className="justify-start" onClick={add}><UserPlus />{t('agents.addAnother')}</Button> : <p className="text-muted-foreground text-[11px]">{t('agents.fixedSession', { label: a.label })}</p>}
+      {a.multi ? <Button size="sm" variant="ghost" className="w-fit" onClick={add}><UserPlus />{t('agents.addAnother')}</Button> : <p className="text-muted-foreground text-[11px] leading-snug">{t('agents.fixedSession', { label: a.label })}</p>}
     </div>
   );
 }
 
+// One agent. In the wide grid the card is a subgrid of six rows (title, state, program, actions, accounts, settings), so
+// every section sits at the same height in the three cards of a row.
 function AgentCard({ a, reload }) {
   const t = useT();
   const cfg = useStore((s) => s.app.config.agents[a.id]);
   const [form, setForm] = useState({ models: (cfg.models ?? []).join(', '), defaultModel: cfg.defaultModel ?? '', strengths: cfg.strengths ?? '', path: cfg.path ?? '' });
   const login = LOGIN[a.login] ?? LOGIN.desconocido;
   return (
-    <Card>
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0">
-        <AgentIcon agent={a.id} className="size-6" />
-        <div className="flex-1"><CardTitle>{a.label}</CardTitle><CardDescription>{a.installed ? a.version ?? t('agents.installed') : t('agents.notFoundHere')}{a.installed && KIND[a.kind] ? ` · ${t(KIND[a.kind])}` : ''}</CardDescription></div>
+    <Card className="lg:row-span-6 lg:grid lg:grid-rows-[subgrid]" data-testid={`agent-card-${a.id}`}>
+      <CardHeader className="flex-row items-start gap-3">
+        <AgentIcon agent={a.id} className="mt-0.5 size-6 shrink-0" />
+        <div className="min-w-0 flex-1"><CardTitle className="truncate">{a.label}</CardTitle><CardDescription className="truncate">{a.installed ? a.version ?? t('agents.installed') : t('agents.notFoundHere')}</CardDescription></div>
         <Switch checked={cfg.enabled} onCheckedChange={(enabled) => save(a.id, { enabled })} aria-label={t('agents.enabled')} />
       </CardHeader>
-      <CardContent className="grid gap-3">
-        <div className="flex flex-wrap gap-1.5">
-          {a.installed ? <Badge variant="success">{t('agents.installed')}</Badge> : <Badge variant="destructive">{t('agents.notFound')}</Badge>}
-          {a.installed ? <Badge variant={login[1]}>{login[0]}</Badge> : null}
-          {!cfg.enabled ? <Badge variant="secondary">{t('agents.disabled')}</Badge> : null}
-        </div>
-        {a.where ? <div className="text-muted-foreground font-mono text-[11px] break-all">{a.where}</div> : null}
-        <div className="flex flex-wrap gap-2">
-          {!a.installed ? <Button size="sm" variant="outline" onClick={() => bridge.openExternal(INSTALL[a.id])}><ExternalLink />{t('agents.howInstall')}</Button> : null}
-          <Button size="sm" variant="ghost" onClick={() => act(call('agents.check', { agent: a.id })).then(reload)}><RefreshCw />{t('agents.check')}</Button>
-        </div>
-        <Accounts a={a} reload={reload} />
+      <CardContent className="flex flex-wrap gap-1.5">
+        {a.installed ? <Badge variant="success">{t('agents.installed')}</Badge> : <Badge variant="destructive">{t('agents.notFound')}</Badge>}
+        {a.installed ? <Badge variant={login[1]}>{login[0]}</Badge> : null}
+        {!cfg.enabled ? <Badge variant="secondary">{t('agents.disabled')}</Badge> : null}
+        {a.installed && KIND[a.kind] ? <Badge variant="outline" className="text-muted-foreground font-normal">{t(KIND[a.kind])}</Badge> : null}
+      </CardContent>
+      <CardContent className="flex min-w-0">{a.where ? <PathText path={a.where} className="text-muted-foreground text-[11px]" /> : null}</CardContent>
+      <CardContent className="flex flex-wrap gap-2">
+        {!a.installed ? <Button size="sm" variant="outline" onClick={() => bridge.openExternal(INSTALL[a.id])}><ExternalLink />{t('agents.howInstall')}</Button> : null}
+        <Button size="sm" variant="ghost" onClick={() => act(call('agents.check', { agent: a.id })).then(reload)}><RefreshCw />{t('agents.check')}</Button>
+      </CardContent>
+      <CardContent><Accounts a={a} reload={reload} /></CardContent>
+      <CardContent>
         <Collapsible>
-          <CollapsibleTrigger className="text-muted-foreground group flex cursor-pointer items-center gap-1 text-xs"><ChevronRight className="size-3.5 transition-transform group-data-[state=open]:rotate-90" />{t('agents.modelsSettings')}</CollapsibleTrigger>
+          <CollapsibleTrigger className="text-muted-foreground hover:text-foreground group flex cursor-pointer items-center gap-1 text-xs"><ChevronRight className="size-3.5 transition-transform group-data-[state=open]:rotate-90" />{t('agents.modelsSettings')}</CollapsibleTrigger>
           <CollapsibleContent className="mt-3 grid gap-3">
             <Field label={t('agents.allowedModels')} hint={t('agents.allowedModelsHint')}><Input value={form.models} onChange={(e) => setForm({ ...form, models: e.target.value })} /></Field>
             <Field label={t('agents.defaultModel')}><Input value={form.defaultModel} onChange={(e) => setForm({ ...form, defaultModel: e.target.value })} /></Field>
@@ -133,7 +142,8 @@ export function AgentsView() {
               <Button size="sm" variant="outline" onClick={() => bridge.openExternal('https://git-scm.com/download/win')}><ExternalLink />{t('agents.getGit')}</Button>
             </Card>
           ) : null}
-          <div className="grid gap-4 lg:grid-cols-3 [&>*]:min-w-0">{agents ? agents.map((a) => <AgentCard key={a.id} a={a} reload={() => load(true)} />) : <Card className="items-center"><Spinner /></Card>}</div>
+          {/* Two cards per row from 1024 px, three on very wide windows: each card needs room for its account rows. */}
+          <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3 [&>*]:min-w-0">{agents ? agents.map((a) => <AgentCard key={a.id} a={a} reload={() => load(true)} />) : <Card className="items-center"><Spinner /></Card>}</div>
           <Card>
             <CardHeader><CardTitle>{t('agents.usageTitle')}</CardTitle><CardDescription>{t('agents.usageDesc', { pct: Math.round((usage[0]?.stopAt ?? 0.92) * 100), hours: usage[0]?.windowHours ?? 5 })}</CardDescription></CardHeader>
             <CardContent className="grid gap-4">

@@ -26,7 +26,7 @@ export default {
   'agents.followSteps': 'Follow the steps in the window that has opened',
   'agents.accounts': 'Accounts',
   'agents.useAccount': 'Use this account',
-  'agents.removeTip': 'Remove account (the session and its folder are kept)',
+  'agents.removeTip': 'The session and its folder stay on the disk.',
   'agents.removeTitle': 'Remove account',
   'agents.removeBody': '“{label}” will no longer be used. Its folder and session are kept on disk.',
   'agents.remove': 'Remove',

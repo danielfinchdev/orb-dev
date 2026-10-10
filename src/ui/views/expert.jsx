@@ -6,7 +6,7 @@ import { ChevronRight, File, FileLock2, Folder, FolderOpen, GitBranch, GitCommit
 import { ChatView } from './chat.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Empty, Spinner } from '@/components/ui/basic.jsx';
-import { Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, Checkbox } from '@/components/ui/overlay.jsx';
+import { Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, Checkbox, Tip } from '@/components/ui/overlay.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { SidebarToggle } from '@/components/theme-toggle.jsx';
 import { useStore, call, act, go, bridge, setState, getState } from '@/lib/store.js';
@@ -53,7 +53,7 @@ function Panel({ title, icon: Icon, actions, className, children, testid }) {
     </section>
   );
 }
-const Mini = ({ label, onClick, children }) => <button type="button" title={label} aria-label={label} onClick={onClick} className="hover:bg-accent hover:text-foreground grid size-6 cursor-pointer place-items-center rounded-md [&_svg]:size-3.5">{children}</button>;
+const Mini = ({ label, onClick, children }) => <Tip label={label}><button type="button" aria-label={label} onClick={onClick} className="hover:bg-accent hover:text-foreground grid size-6 cursor-pointer place-items-center rounded-md [&_svg]:size-3.5">{children}</button></Tip>;
 
 // ---- explorer
 function Tree({ project, onOpen, version }) {

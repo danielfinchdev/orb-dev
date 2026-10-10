@@ -279,28 +279,28 @@ ipcMain.handle('app:switchHome', guard(async (target) => {
 
 function setTitle() { win?.setTitle(config()?.assistantName ?? PRODUCT.name); }
 
-// The window's own buttons in the colours of the theme in use (the page sends them when its theme changes).
-const HEX = /^#[0-9a-f]{6}$/i;
-ipcMain.handle('app:titleBar', guard(async ({ color, symbolColor } = {}) => {
-  if (!win || win.isDestroyed() || !HEX.test(color ?? '') || !HEX.test(symbolColor ?? '')) return false;
-  try { win.setTitleBarOverlay({ color, symbolColor, height: TITLE_BAR_HEIGHT }); } catch { return false; }
-  return true;
+// 2.6: no Windows title bar and no Windows buttons: the app draws its own minimise / maximise / close, in the style of
+// each theme (components/window-controls.jsx), and asks the window for them here. The page hears when it is maximised.
+ipcMain.handle('app:window', guard(async (action) => {
+  if (!win || win.isDestroyed()) return null;
+  if (action === 'minimize') win.minimize();
+  else if (action === 'maximize') { if (win.isMaximized()) win.unmaximize(); else win.maximize(); }
+  else if (action === 'close') win.close();
+  else if (action !== 'state') throw new Error('acción de ventana desconocida');
+  return { maximized: win.isMaximized() };
 }));
-
-// 2.6: no Windows title bar. Minimise, maximise and close are Windows' own buttons drawn inside the app, top right, as
-// tall as the app's top bars (window controls overlay); the window paints them in its theme's colours (app:titleBar).
-const TITLE_BAR_HEIGHT = 56;
-const titleBarColors = (dark) => (dark ? { color: '#16151d', symbolColor: '#e8e6f0' } : { color: '#fbfbfe', symbolColor: '#1d1b26' });
+const sendWindowState = () => { if (win && !win.isDestroyed()) win.webContents.send('app:window-state', { maximized: win.isMaximized() }); };
 
 function createWindow() {
   const dark = nativeTheme.shouldUseDarkColors;
   win = new BrowserWindow({
     width: 1360, height: 880, minWidth: 400, minHeight: 560, show: false, backgroundColor: dark ? '#16151d' : '#fbfbfe', title: PRODUCT.name, autoHideMenuBar: true,
-    titleBarStyle: 'hidden', titleBarOverlay: { ...titleBarColors(dark), height: TITLE_BAR_HEIGHT },
+    titleBarStyle: 'hidden',
     icon: path.join(SRC, '..', 'build', 'icon.png'),
     webPreferences: { preload: path.join(SRC, 'main', 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, spellcheck: true, devTools: isDev || process.env.ORB_DEVTOOLS === '1' }
   });
   win.once('ready-to-show', () => win.show());
+  for (const e of ['maximize', 'unmaximize', 'restore', 'enter-full-screen', 'leave-full-screen']) win.on(e, sendWindowState);
   win.webContents.on('did-finish-load', () => win?.webContents.setZoomFactor(zoom * ZOOM_BASE));
   win.webContents.on('before-input-event', (e, input) => { const dir = zoomKey(input); if (dir) { e.preventDefault(); zoomBy(dir); } });
   win.webContents.on('zoom-changed', (_e, dir) => zoomBy(dir)); // Ctrl + mouse wheel
