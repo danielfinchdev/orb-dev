@@ -57,6 +57,7 @@ if (!window.orb) {
       const C = await crypto$();
       const res = await fetch('/api/events', { headers: { ...headersOf(s), 'X-Orb-Auth': await authHeader(s, 'events') }, credentials: 'omit', signal: ctrl.signal });
       if (res.status === 401) return unpaired();
+      if (!res.ok) throw new Error(res.status); // retried with the growing pause, not every second
       const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = '';
       wait = 1000;
       for (;;) {
@@ -93,6 +94,7 @@ if (!window.orb) {
       for (const file of [...input.files].slice(0, 10)) { try { out.push(await uploadOne(file)); } catch (e) { console.error(e); } }
       resolve(out);
     };
+    input.oncancel = () => resolve([]);
     input.click();
   });
 
@@ -105,7 +107,8 @@ if (!window.orb) {
     history.replaceState(null, '', location.pathname);
     if (!pc) throw new Error(await tl('app.oldQr'));
     const C = await crypto$();
-    const pcPub = C.b64.dec(pc);
+    let pcPub; try { pcPub = C.b64.dec(pc); } catch { pcPub = null; }
+    if (pcPub?.length !== 32) throw new Error(await tl('app.oldQr'));
     const { priv, pub } = C.newKeyPair();
     const name = /iPhone/.test(navigator.userAgent) ? 'iPhone' : /iPad/.test(navigator.userAgent) ? 'iPad' : /Android/.test(navigator.userAgent) ? 'Android' : await tl('app.browser');
     const proof = C.seal(C.pairingKey(priv, pcPub, code), { pub: C.b64.enc(pub), name, t: Date.now() }, C.AAD.pair);
@@ -122,7 +125,6 @@ if (!window.orb) {
 
   // Notifications (https only: Tailscale with HTTPS). On an iPhone they work once the app is on the home screen.
   let me = null;
-  const urlKey = (b64u) => { const s = b64u.replace(/-/g, '+').replace(/_/g, '/'); const bin = atob(s + '='.repeat((4 - (s.length % 4)) % 4)); return Uint8Array.from(bin, (c) => c.charCodeAt(0)); };
   const push = {
     supported: () => window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window,
     installed: () => Boolean(window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true),
@@ -132,7 +134,8 @@ if (!window.orb) {
       if (!push.supported()) throw new Error(await tl('app.pushNeedsHttps'));
       if (await Notification.requestPermission() !== 'granted') throw new Error(await tl('app.pushDenied'));
       const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.getSubscription() ?? await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlKey(me.vapid) });
+      const C = await crypto$();
+      const sub = await reg.pushManager.getSubscription() ?? await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: C.b64.dec(me.vapid) });
       const r = await post('/api/push', 'push', { subscription: sub.toJSON() });
       if (!r.ok) throw new Error(r.error);
       me = { ...me, push: true };

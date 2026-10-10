@@ -158,8 +158,8 @@ export const REASONING = ['low', 'medium', 'high', 'xhigh'];
 export function taskOptions({ reasoning, fast } = {}) {
   reasoning = reasoning ?? ctx.config?.orchestrator?.defaultTaskReasoning ?? 'medium';
   fast = fast ?? false;
-  if (!REASONING.includes(reasoning)) throw new Error('reasoning debe ser low, medium, high o xhigh');
-  if (typeof fast !== 'boolean') throw new Error('fast debe ser true o false');
+  if (!REASONING.includes(reasoning)) throw new Error(tr('sys.db.badReasoning'));
+  if (typeof fast !== 'boolean') throw new Error(tr('sys.db.badFast'));
   return { reasoning, fast };
 }
 
@@ -173,7 +173,7 @@ export function checkPolicy({ model, reasoning, fast }) {
 }
 
 export function openDb(filename = ctx.paths?.db) {
-  if (!filename) throw new Error('no hay carpeta del asistente');
+  if (!filename) throw new Error(tr('sys.db.noHome'));
   if (filename !== ':memory:') fs.mkdirSync(path.dirname(filename), { recursive: true });
   const db = new DatabaseSync(filename);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 8000; PRAGMA foreign_keys = ON;');
@@ -186,7 +186,7 @@ export function openDb(filename = ctx.paths?.db) {
 // tasks.account: account chosen on purpose for the task (optional); tasks.run_account: account it last ran on.
 // 2.3: sessions.context (how full the context is, JSON), sessions.settled (done, moved down in the menu), sessions.parent_id
 // (forked from), tasks.parent_id (subtask of), tasks.limited_until (waiting for the usage limit to reset), tasks.review_of
-// (a Contrapunto of that task), tasks.schedule_id (created by a schedule).
+// (a Task Review of that task), tasks.schedule_id (created by a schedule).
 const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], ['sessions', 'account', 'TEXT'], ['chat', 'meta', 'TEXT'],
   ['sessions', 'context', 'TEXT'], ['sessions', 'settled', 'INTEGER NOT NULL DEFAULT 0'], ['sessions', 'parent_id', 'TEXT'],
   ['tasks', 'parent_id', 'INTEGER'], ['tasks', 'limited_until', 'TEXT'], ['tasks', 'review_of', 'INTEGER'], ['tasks', 'schedule_id', 'INTEGER'],

@@ -8,7 +8,7 @@ import * as cursor from './cursor.mjs';
 import { acpAgent, ACP_SPECS } from './acp.mjs';
 import { cleanEnv, IS_WIN } from './common.mjs';
 import fs from 'node:fs';
-import { ctx } from '../core/context.mjs';
+import { ctx, tr } from '../core/context.mjs';
 import { accountsOf, account, accountDir, accountEnv, loginState as accountLogin, MULTI } from '../core/accounts.mjs';
 
 export const ADAPTERS = { claude, codex, cursor, ...Object.fromEntries(Object.entries(ACP_SPECS).map(([id, spec]) => [id, acpAgent(id, spec)])) };
@@ -17,7 +17,7 @@ if (process.env.ORB_FAKE_AGENTS) {
   const fake = await import(pathToFileURL(process.env.ORB_FAKE_AGENTS).href);
   for (const id of Object.keys(ADAPTERS)) ADAPTERS[id] = fake.fakeAdapter(id, ADAPTERS[id]);
 }
-export const adapter = (agent) => { const a = ADAPTERS[agent]; if (!a) throw new Error(`agente desconocido: ${agent}`); return a; };
+export const adapter = (agent) => { const a = ADAPTERS[agent]; if (!a) throw new Error(tr('sys.agents.unknown', { agent })); return a; };
 
 // Whether an agent's program is on this PC (asked often by the scheduler: cached for half a minute).
 const found = new Map();
@@ -34,7 +34,7 @@ const loginState = (acc) => (MULTI[acc.agent] ? accountLogin(acc) : adapter(acc.
 export function executable(agent) {
   const a = adapter(agent);
   const exe = a.detect(ctx.config.agents[agent] ?? {});
-  if (!exe) throw new Error(`no encuentro ${a.label} en este equipo. Instálalo o indica su ruta en Agentes.`);
+  if (!exe) throw new Error(tr('sys.agents.notFound', { name: a.label }));
   return exe;
 }
 
@@ -75,7 +75,7 @@ export async function statusAll(options) { return Promise.all(Object.keys(ADAPTE
 // Opens the agent's own login in a new console window: the user signs in with the official CLI, the app never sees it.
 // The login runs with the account's folder (CLAUDE_CONFIG_DIR / CODEX_HOME), so each account signs in separately.
 export function openLogin(accountId) {
-  const acc = account(accountId); if (!acc) throw new Error('esa cuenta no existe');
+  const acc = account(accountId); if (!acc) throw new Error(tr('sys.agents.noAccount'));
   const exe = executable(acc.agent);
   if (acc.home) fs.mkdirSync(acc.home, { recursive: true });
   const { cmd, args } = adapter(acc.agent).loginCommand(exe);
@@ -85,7 +85,7 @@ export function openLogin(accountId) {
 // A program in a console window of its own. Started directly (a detached console program gets its own window on Windows):
 // never through cmd.exe, which would re-read & ^ % in paths such as a folder called «I+D&Co».
 export function openConsole(cmd, args, env = {}) {
-  if (!IS_WIN) throw new Error('abrir una consola solo está disponible en Windows');
+  if (!IS_WIN) throw new Error(tr('sys.agents.consoleWindowsOnly'));
   const child = spawn(cmd, args, { detached: true, stdio: 'ignore', windowsHide: false, env: cleanEnv(env) });
   child.on('error', () => {});
   child.unref();

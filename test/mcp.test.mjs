@@ -34,11 +34,14 @@ test('el coordinador solo se reconoce con la clave secreta', async () => {
   const boss = client({ ORB_AGENT: 'orb', ORB_ORCH_KEY: KEY });
   const fake = client({ ORB_AGENT: 'orb', ORB_ORCH_KEY: 'otra' });
   const worker = client({ ORB_AGENT: 'codex' });
+  const user = client({ ORB_AGENT: 'usuario' });
   try {
     for (const c of [boss, fake, worker]) await c.rpc('initialize', {});
     assert.ok((await boss.tools()).includes('orb_create_task'));
     assert.ok(!(await fake.tools()).includes('orb_create_task'), 'sin la clave no es el coordinador');
     assert.ok(!(await worker.tools()).includes('orb_write_log'));
+    // An agent that starts its own MCP process cannot pose as the user (whose tasks skip the approval of agent-made ones).
+    assert.match((await user.rpc('initialize', {})).result.instructions, /Tú eres "desconocido"/);
     const created = await boss.call('orb_create_task', { project: 'web', title: 'Portada', description: 'Haz la portada' });
     assert.equal(created.error, false, created.text);
     assert.equal(JSON.parse(created.text).status, 'queued');
@@ -46,7 +49,7 @@ test('el coordinador solo se reconoce con la clave secreta', async () => {
     assert.match(forged.text, /argumentos no permitidos: from/);
     const bad = await worker.call('orb_update_task', { id: 1, status: 'done', model: 'x' });
     assert.match(bad.text, /argumentos no permitidos/);
-  } finally { boss.close(); fake.close(); worker.close(); }
+  } finally { boss.close(); fake.close(); worker.close(); user.close(); }
 });
 
 test('el coordinador crea proyectos, escribe bitácoras y no puede leer otra cosa que bitácoras', async () => {

@@ -37,7 +37,11 @@ const SECRET_PATTERNS = [
   /\bgh[pousr]_[A-Za-z0-9]{16,}/g,
   /\bgithub_pat_[A-Za-z0-9_]{20,}/g,
   /\bxai-[A-Za-z0-9]{8,}/g,
-  /\bAKIA[0-9A-Z]{16}\b/g
+  /\bAKIA[0-9A-Z]{16}\b/g,
+  /\bAIza[0-9A-Za-z_-]{35}\b/g,
+  /\bxox[abprs]-[A-Za-z0-9-]{10,}/g,
+  /\bnpm_[A-Za-z0-9]{36}\b/g,
+  /\bglpat-[A-Za-z0-9_-]{20,}/g
 ];
 export function redactSecrets(text) {
   return SECRET_PATTERNS.reduce((out, re) => out.replace(re, '[secreto oculto]'), String(text ?? ''));

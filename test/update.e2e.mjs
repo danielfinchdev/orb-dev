@@ -1,7 +1,7 @@
 // A real update of the INSTALLED app, before publishing a version (Windows, by hand):
-//   1. install the current version with its installer (dist/Orb.dev-<v>-instalador.exe /S);
+//   1. install the current version with its installer (dist/Orb-<v>-instalador.exe /S);
 //   2. build a newer one into a folder: npx electron-builder --win nsis -c.extraMetadata.version=<v+1> -c.directories.output=<carpeta>
-//   3. ORB_E2E_EXE=%LOCALAPPDATA%\Programs\Orb.dev\Orb.dev.exe ORB_UPDATE_FEED=<carpeta> node test/update.e2e.mjs
+//   3. ORB_E2E_EXE=%LOCALAPPDATA%\Programs\Orb\Orb.exe ORB_UPDATE_FEED=<carpeta> node test/update.e2e.mjs
 // The feed is served on 127.0.0.1 (ORB_UPDATE_URL); the app, with its own throwaway data, finds the new version, downloads
 // it, restarts into it and the installed program ends up being the new version. Afterwards reinstall the real version.
 import { chromium } from 'playwright-core';
@@ -18,8 +18,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const exe = process.env.ORB_E2E_EXE; const feed = process.env.ORB_UPDATE_FEED;
 if (!exe || !fs.existsSync(exe) || !feed || !fs.existsSync(path.join(feed, 'latest.yml'))) { console.error('Faltan ORB_E2E_EXE (app instalada) y ORB_UPDATE_FEED (carpeta con latest.yml)'); process.exit(2); }
 const target = /^version:\s*(\S+)/m.exec(fs.readFileSync(path.join(feed, 'latest.yml'), 'utf8'))[1];
-// While the installer replaces the program the file is briefly missing: '' until it is back.
-const fileVersion = () => { try { return execFileSync('powershell.exe', ['-NoProfile', '-Command', `(Get-Item -LiteralPath '${exe.replace(/'/g, "''")}' -ErrorAction Stop).VersionInfo.ProductVersion`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return ''; } };
+// While the installer replaces the program the file is briefly missing: '' until it is back. From 2.3.3 (Orb.dev.exe) the
+// new version is Orb.exe in the same folder.
+const versionOf = (file) => { try { return execFileSync('powershell.exe', ['-NoProfile', '-Command', `(Get-Item -LiteralPath '${file.replace(/'/g, "''")}' -ErrorAction Stop).VersionInfo.ProductVersion`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return ''; } };
+const fileVersion = () => versionOf(exe) || versionOf(path.join(path.dirname(exe), 'Orb.exe'));
 const before = fileVersion();
 const OUT = path.join(ROOT, 'test-results'); fs.mkdirSync(OUT, { recursive: true });
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-actualizar-'));
@@ -39,7 +41,7 @@ const feedUrl = `http://127.0.0.1:${server.address().port}/`;
 const port = 9300 + Math.floor(Math.random() * 500);
 const app = spawn(exe, [`--remote-debugging-port=${port}`], { env: { ...process.env, ORB_USER_DATA: userData, ORB_UPDATE_URL: feedUrl, ORB_NO_ADB: '1' }, stdio: 'ignore' });
 const until = async (fn, what, ms = 60000) => { const end = Date.now() + ms; while (Date.now() < end) { try { const v = await fn(); if (v) return v; } catch { /* not yet */ } await new Promise((r) => setTimeout(r, 500)); } throw new Error(`no llegó: ${what}`); };
-const killAll = () => { try { execFileSync('taskkill', ['/IM', path.basename(exe), '/T', '/F'], { stdio: 'ignore' }); } catch { /* none */ } };
+const killAll = () => { for (const name of new Set([path.basename(exe), 'Orb.exe'])) { try { execFileSync('taskkill', ['/IM', name, '/T', '/F'], { stdio: 'ignore' }); } catch { /* none */ } } };
 
 let browser;
 try {

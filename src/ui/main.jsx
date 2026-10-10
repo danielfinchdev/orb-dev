@@ -22,12 +22,12 @@ import { ProjectsView } from '@/views/projects.jsx';
 import { AgentsView } from '@/views/agents.jsx';
 import { LogsView } from '@/views/logs.jsx';
 import { ActivityView } from '@/views/activity.jsx';
-import { SettingsView, PhoneView } from '@/views/settings.jsx';
+import { SettingsDialog, PhoneView } from '@/views/settings.jsx';
 import { SchedulesView } from '@/views/schedules.jsx';
 import { ExpertView } from '@/views/expert.jsx';
 
 const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
-const VIEWS = { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: LogsView, activity: ActivityView, settings: SettingsView, expert: ExpertView, schedules: SchedulesView, phone: PhoneView };
+const VIEWS = { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: LogsView, activity: ActivityView, expert: ExpertView, schedules: SchedulesView, phone: PhoneView };
 
 function Shell() {
   const t = useT();
@@ -54,6 +54,7 @@ function Shell() {
       {/* The floating robot only where there is room for it: never over forms or conversations (it covered the switches of
           Ajustes and took their clicks), and those views leave room at the bottom so nothing stays under it. */}
       <UpdateCard />
+      <SettingsDialog />
       <div className="hidden md:contents"><Companion name={app.config.assistantName} base={mood} hidden={app.config.ui?.companion === false || !COMPANION_VIEWS.has(route.view) || bridge.mobile} /></div>
     </div>
   );

@@ -3,7 +3,7 @@ import { Smartphone, MessageSquarePlus, ListTodo, FolderKanban, Bot, BookOpen, H
 import { Robot } from './robot.jsx';
 import { ThemeToggle } from './theme-toggle.jsx';
 import { Button } from './ui/button.jsx';
-import { useStore, go, bridge, call, act } from '@/lib/store.js';
+import { useStore, go, bridge, call, act, openSettings } from '@/lib/store.js';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent, Tip } from './ui/overlay.jsx';
 import { createProjectFlow } from './project-actions.jsx';
 import { STATUS } from '@/lib/labels.js';
@@ -90,6 +90,7 @@ export function Sidebar({ mood }) {
   const route = useStore((s) => s.route);
   const tasks = useStore((s) => s.tasks);
   const sessions = useStore((s) => s.sessions);
+  const settingsOpen = useStore((s) => Boolean(s.settings));
   const name = app.config.assistantName;
   const approvals = tasks.filter((t) => t.status === 'awaiting_approval').length;
   const running = tasks.filter((t) => t.status === 'running').length;
@@ -108,9 +109,13 @@ export function Sidebar({ mood }) {
   // Inbox: what needs the user, then what is working.
   const pending = app.approvals ?? [];
   const settle = (c) => (e) => { e.stopPropagation(); act(call('sessions.settle', { id: c.id })); };
+  // «Por aprobar»: permissions and tasks waiting for the user's approval. «Incidencias»: tasks waiting for quota and
+  // conversations that stopped (the same names as the filters of Tareas).
   const needs = [
     ...pending.map((a) => ({ key: `a${a.id}`, title: a.session?.title ?? t('comp.sidebar.permission'), hint: t('comp.sidebar.waitsPermission', { title: a.body?.title ?? '' }), icon: <ShieldAlert className="text-warning size-3.5 shrink-0" />, open: () => go({ view: 'session', id: a.session_id }), isActive: (r) => r.view === 'session' && r.id === a.session_id })),
-    ...tasks.filter((tk) => tk.status === 'awaiting_approval').map((tk) => ({ ...asTask(tk), hint: t('comp.sidebar.taskWaitsApproval', { id: tk.id }), icon: <ShieldAlert className="text-warning size-3.5 shrink-0" /> })),
+    ...tasks.filter((tk) => tk.status === 'awaiting_approval').map((tk) => ({ ...asTask(tk), hint: t('comp.sidebar.taskWaitsApproval', { id: tk.id }), icon: <ShieldAlert className="text-warning size-3.5 shrink-0" /> }))
+  ];
+  const issues = [
     ...tasks.filter((tk) => tk.status === 'limited').map((tk) => ({ ...asTask(tk), hint: t('comp.sidebar.taskWaitsQuota', { id: tk.id }), icon: <Hourglass className="text-warning size-3.5 shrink-0" /> })),
     ...chats.filter((c) => ['interrupted', 'limited', 'error'].includes(c.status) && !c.settled && !pending.some((a) => a.session_id === c.id)).map((c) => ({ ...asChat(c), hint: c.status === 'error' ? t('comp.sidebar.endedError') : c.status === 'limited' ? t('comp.sidebar.noQuota') : t('comp.sidebar.halfway'), icon: <CirclePause className="text-warning size-3.5 shrink-0" />, settle: settle(c) }))
   ];
@@ -143,8 +148,9 @@ export function Sidebar({ mood }) {
         {/* Expert mode: PC only (wide screens), when turned on in Settings. */}
         {app.config.expert?.enabled && !bridge.mobile ? <div className="hidden lg:block"><NavItem icon={SquareTerminal} label={t('nav.expert')} active={is('expert')} onClick={() => go('expert')} testid="nav-expert" /></div> : null}
         <NavItem icon={CalendarClock} label={t('nav.schedules')} active={is('schedules')} onClick={() => go('schedules')} testid="nav-schedules" />
-        <Inbox title={t('inbox.waiting')} tone="text-warning" items={needs} route={route} settleLabel={t('inbox.settle')} />
+        <Inbox title={t('inbox.waiting')} tone="text-warning" items={needs} route={route} />
         <Inbox title={t('inbox.working')} tone="text-info" items={working} route={route} />
+        <Inbox title={t('inbox.issues')} tone="text-destructive" items={issues} route={route} settleLabel={t('inbox.settle')} />
         <div className="text-muted-foreground flex items-center px-2.5 pt-5 pb-1 text-[11px] tracking-wide uppercase">
           <span className="flex-1">{t('nav.folders')}</span>
           {bridge.mobile ? null : <Tip label={t('comp.projects.newTitle')}><button className="hover:text-foreground grid size-6 cursor-pointer place-items-center rounded-md hover:bg-accent/60" aria-label={t('comp.projects.newTitle')} onClick={async () => { const p = await createProjectFlow(); if (p) { await act(call('projects.setActive', { name: p.name })); setOpenFolder(p.name, true); } }} data-testid="sidebar-new-project"><FolderPlus className="size-3.5" /></button></Tip>}
@@ -163,7 +169,7 @@ export function Sidebar({ mood }) {
         {bridge.mobile ? null : <NavItem icon={Bot} label={t('nav.agents')} active={is('agents')} onClick={() => go('agents')} testid="nav-agents" />}
         <NavItem icon={BookOpen} label={t('nav.logs')} active={is('logs')} onClick={() => go('logs')} testid="nav-logs" />
         <NavItem icon={History} label={t('nav.activity')} active={is('activity')} onClick={() => go('activity')} testid="nav-activity" />
-        {bridge.mobile ? null : <NavItem icon={Settings} label={t('nav.settings')} active={is('settings')} onClick={() => go('settings')} testid="nav-settings" />}
+        {bridge.mobile ? null : <NavItem icon={Settings} label={t('nav.settings')} active={settingsOpen} onClick={() => openSettings()} testid="nav-settings" />}
         {bridge.mobile ? <NavItem icon={Smartphone} label={t('nav.phone')} active={is('phone')} onClick={() => go('phone')} testid="nav-phone" /> : null}
       </div>
     </aside>

@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { tempHome } from './helpers.mjs';
-import { createHome, folderName, isHome, ensureLayout, projectLogHeader } from '../src/core/home.mjs';
+import { createHome, folderName, isHome, ensureLayout, projectLogHeader, loadConfig } from '../src/core/home.mjs';
 import { PRODUCT } from '../src/core/product.mjs';
 import { ctx, saveConfig } from '../src/core/context.mjs';
 import { Board, checkProjectPath } from '../src/core/board.mjs';
@@ -24,7 +24,7 @@ test('el primer arranque crea la carpeta del asistente con todo lo necesario', (
   assert.ok(!fs.existsSync(path.join(t.home, 'bitacoras')), 'una sola carpeta de bitácoras');
   assert.equal(fs.statSync(path.join(t.home, '.orb/datos/clave.bin')).size, 32);
   assert.equal(path.basename(t.home), 'Orb');
-  assert.equal(ctx.config.assistantName, 'Orb');
+  assert.equal(ctx.config.assistantName, 'Orb·e', 'el robot se llama Orb·e por defecto; su carpeta sigue siendo Orb');
   // Reusing an existing home, and refusing a non-empty folder that is not one.
   assert.equal(createHome(t.home).home, t.home);
   assert.equal(createHome(t.base, { assistantName: 'Otro' }).home, t.home, 'siempre <carpeta elegida>/Orb, se llame como se llame');
@@ -35,6 +35,15 @@ test('el primer arranque crea la carpeta del asistente con todo lo necesario', (
   const named = path.join(fs.mkdtempSync(path.join(t.base, 'base-')), 'Orb'); fs.mkdirSync(named);
   assert.equal(createHome(named, { assistantName: 'Nova' }).home, named);
   assert.ok(isHome(t.home));
+});
+
+test('2.4: quien tenía el nombre por defecto «Orb» pasa a Orb·e; un nombre elegido a mano se queda', () => {
+  const old = (stored) => { const home = fs.mkdtempSync(path.join(t.base, 'nombre-')); fs.writeFileSync(path.join(home, 'orb.json'), JSON.stringify(stored)); return loadConfig(home); };
+  assert.equal(old({ version: 3, assistantName: 'Orb' }).assistantName, 'Orb·e');
+  assert.equal(old({ version: 3, assistantName: 'Nova' }).assistantName, 'Nova');
+  assert.equal(old({ assistantName: 'Orb' }).assistantName, 'Orb·e', 'también desde carpetas más antiguas');
+  assert.equal(old({ version: 4, assistantName: 'Orb' }).assistantName, 'Orb', 'si ya en la 2.4 lo llamas Orb, se respeta');
+  assert.equal(PRODUCT.folder, 'Orb');
 });
 
 test('una carpeta de la 2.3.0 se ordena: bitacoras pasa a bitacora sin perder nada', () => {
@@ -59,8 +68,8 @@ test('una carpeta de la 2.3.0 se ordena: bitacoras pasa a bitacora sin perder na
 
 test('los nombres se convierten en nombres de carpeta válidos en Windows', () => {
   assert.equal(folderName('Mi: proyecto?*'), 'Mi proyecto');
-  assert.equal(folderName('CON'), PRODUCT.assistant);
-  assert.equal(folderName('  ..  '), PRODUCT.assistant);
+  assert.equal(folderName('CON'), PRODUCT.folder);
+  assert.equal(folderName('  ..  '), PRODUCT.folder);
 });
 
 test('los ajustes se validan antes de guardarse', () => {
@@ -145,7 +154,7 @@ test('aprobaciones: palabras de riesgo, tareas de agentes y razonamiento alto es
 
 test('una aprobación firmada deja de valer si la tarea cambia', () => {
   const task = board.createTask({ project: 'web', title: 'Publicar 2', description: 'publica el blog', agent: 'claude' }, 'orb');
-  assert.throws(() => board.approve(task.id, 'approved', 'usuario', 'huella-vieja'), /cambió/);
+  assert.throws(() => board.approve(task.id, 'approved', 'usuario', 'huella-vieja'), /ha cambiado/);
   const ok = board.approve(task.id, 'approved', 'usuario', board.previewHash(task));
   assert.equal(ok.status, 'queued'); assert.ok(verify(board.key, ok));
   // Someone edits the database by hand: the scheduler sends it back to approval.

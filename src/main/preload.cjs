@@ -27,6 +27,13 @@ contextBridge.exposeInMainWorld('orb', {
   // Size of the interface on this PC (1 = normal): read with zoom(), change with zoom(value).
   zoom: (value) => ipcRenderer.invoke('app:zoom', value ?? null),
   openTerminal: (folder) => ipcRenderer.invoke('app:openTerminal', folder ?? null),
+  // Ajustes → Contribuye: feedback by mail (screenshot of the window, PNG / JPEG files) and the author's other apps.
+  feedback: {
+    capture: () => ipcRenderer.invoke('app:feedbackCapture'),
+    images: () => ipcRenderer.invoke('app:feedbackImages'),
+    send: (data) => ipcRenderer.invoke('app:feedbackSend', data)
+  },
+  moreApps: () => ipcRenderer.invoke('app:moreApps'),
   // New versions: state (also pushed as the 'app:update' event), check, download and restart into it.
   update: {
     get: () => ipcRenderer.invoke('app:update'),

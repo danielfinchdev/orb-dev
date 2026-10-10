@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { ctx } from '../core/context.mjs';
+import { ctx, tr } from '../core/context.mjs';
 
 const URLS = {
   win32: 'https://dl.google.com/android/repository/platform-tools-latest-windows.zip',
@@ -32,7 +32,7 @@ export function ensureAdb({ log = () => {}, force = false } = {}) {
   if (fs.existsSync(adbPath())) { state = { state: 'ready', error: null }; return Promise.resolve(adbStatus()); }
   if (!force && (process.env.ORB_NO_ADB === '1' || process.env.ORB_FAKE_AGENTS)) { state = { state: 'off', error: null }; return Promise.resolve(adbStatus()); }
   const url = URLS[process.platform];
-  if (!url) { state = { state: 'error', error: `sin descarga para ${process.platform}` }; return Promise.resolve(adbStatus()); }
+  if (!url) { state = { state: 'error', error: tr('sys.android.noDownload', { platform: process.platform }) }; return Promise.resolve(adbStatus()); }
   running ??= download(url, log).finally(() => { running = null; });
   return running;
 }
@@ -43,18 +43,19 @@ async function download(url, log) {
   try {
     fs.mkdirSync(work, { recursive: true });
     const res = await fetch(url, { signal: AbortSignal.timeout(300_000) });
-    if (!res.ok) throw new Error(`descarga: HTTP ${res.status}`);
+    if (!res.ok) throw new Error(tr('sys.android.downloadHttp', { status: res.status }));
     const zip = path.join(work, 'platform-tools.zip');
     fs.writeFileSync(zip, Buffer.from(await res.arrayBuffer()));
     const out = path.join(work, 'x'); fs.mkdirSync(out);
     // Windows 10+ and macOS bring a tar that reads zip files (on Windows, System32's: Git's GNU tar reads "D:" as a host);
     // Linux usually has unzip; PowerShell as the last resort on Windows.
-    const tar = process.platform === 'win32' ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe') : 'tar';
+    const system32 = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32'); // full paths: nothing in PATH can stand in
+    const tar = process.platform === 'win32' ? path.join(system32, 'tar.exe') : 'tar';
     let r = spawnSync(tar, ['-xf', zip, '-C', out], { windowsHide: true, timeout: 120_000 });
-    if (r.status !== 0 && process.platform === 'win32') r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Expand-Archive -LiteralPath $env:ORB_ZIP -DestinationPath $env:ORB_OUT -Force'], { windowsHide: true, timeout: 180_000, env: { ...process.env, ORB_ZIP: zip, ORB_OUT: out } });
+    if (r.status !== 0 && process.platform === 'win32') r = spawnSync(path.join(system32, 'WindowsPowerShell', 'v1.0', 'powershell.exe'), ['-NoProfile', '-NonInteractive', '-Command', 'Expand-Archive -LiteralPath $env:ORB_ZIP -DestinationPath $env:ORB_OUT -Force'], { windowsHide: true, timeout: 180_000, env: { ...process.env, ORB_ZIP: zip, ORB_OUT: out } });
     else if (r.status !== 0) r = spawnSync('unzip', ['-q', '-o', zip, '-d', out], { timeout: 120_000 });
     const from = path.join(out, 'platform-tools');
-    if (!fs.existsSync(path.join(from, exe('adb')))) throw new Error('el paquete no trae adb');
+    if (!fs.existsSync(path.join(from, exe('adb')))) throw new Error(tr('sys.android.noAdb'));
     fs.mkdirSync(ctx.paths.adb, { recursive: true });
     for (const name of fs.readdirSync(from)) fs.cpSync(path.join(from, name), path.join(ctx.paths.adb, name), { recursive: true, force: true });
     if (process.platform !== 'win32') for (const name of ['adb', 'fastboot']) { try { fs.chmodSync(path.join(ctx.paths.adb, name), 0o755); } catch { /* not there */ } }

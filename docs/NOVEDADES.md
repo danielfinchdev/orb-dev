@@ -1,12 +1,39 @@
 ## Descargar
 
-- **`Orb.dev-2.3.3-instalador.exe`** (recomendado): se instala para tu usuario, sin permisos de administrador, con acceso
+- **`Orb-2.4.0-instalador.exe`** (recomendado): se instala para tu usuario, sin permisos de administrador, con acceso
   directo en el escritorio y en el menú Inicio. Después lo encuentras escribiendo «Orb» en el buscador de Windows.
-- **`Orb.dev-2.3.3-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
-- **`Orb.dev-2.3.3-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.dev.exe`.
+- **`Orb-2.4.0-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
+- **`Orb-2.4.0-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.exe`.
 
 Windows 10/11. Como aún no está firmada, SmartScreen avisa la primera vez: «Más información» → «Ejecutar de todas formas».
 En el primer arranque la app detecta qué agentes tienes y con qué sesión, e instala lo que falte con los instaladores oficiales.
+
+## Novedades de la 2.4.0
+
+### Orb·e: Tu director de bolsillo
+
+- **El robot se llama Orb·e.** Planifica tu proyecto por fases, prepara instrucciones precisas para cada agente y
+  optimiza el consumo de tokens. Te entrega resultados verificados. Si le habías puesto otro nombre, lo conserva.
+- **El programa se llama Orb** (`Orb.exe`) en la ventana, el instalador, los accesos directos y los avisos de Windows.
+  Al actualizar desde la 2.3.3 no se pierde nada: misma carpeta, mismos ajustes, mismos proyectos.
+- **Textos revisados** en toda la app, en español y en inglés: más claros, breves y profesionales.
+
+### Ajustes, renovados
+
+- **Ajustes se abre como ventana** sobre la app, con sus apartados a la izquierda: General, Apariencia, Modelo, Tareas y
+  cupo, Móvil, Herramientas, Modo experto, Actualizaciones, Contribuye y Más aplicaciones.
+- **Apariencia:** modo claro, oscuro o el del sistema; cinco temas (Orb, Vaporwave, Retro arcade, Profesional y Nube);
+  tipografía de la interfaz y del código; y colores para el código del chat y del modo experto. El tema Profesional no
+  muestra el robot ni sus animaciones y sonidos.
+- **Barra de menús de Windows oculta** por defecto. Se muestra desde Apariencia o, de forma puntual, con Alt.
+- **Contribuye:** apoya el desarrollo con PayPal y envía comentarios, con capturas de la ventana, sin necesidad de cuenta.
+- **Más aplicaciones:** Open Control Edge, con su última versión y el botón para descargarla.
+
+### Tareas y primer arranque
+
+- **Filtros de Tareas:** En curso (trabajando o en cola), Por aprobar, Completadas, Incidencias y Todas. El menú lateral
+  separa lo que espera tu aprobación de las incidencias.
+- **Preparando tu PC:** la instalación de los agentes muestra una barra de progreso.
 
 ## Novedades de la 2.3.3
 
@@ -73,7 +100,7 @@ Elijas la carpeta que elijas en el primer arranque, Orb crea dentro `Orb` con la
 La idea de siempre: le cuentas a Orb qué quieres y él escribe encargos optimizados, los reparte entre agentes de varios
 proveedores que trabajan a la vez, revisa lo que hacen y te pide el OK. La 2.3 rehace por dentro cómo habla con los agentes.
 
-### Agentes en directo, como T3 Code
+### Agentes en directo
 
 - **Un proceso vivo por conversación** en vez de uno por mensaje:
   - Claude Code con el Claude Agent SDK oficial;

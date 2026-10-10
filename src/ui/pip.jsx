@@ -28,7 +28,7 @@ function Pip() {
   const who = state.agent ? `${state.agent}${state.task ? t('pip.task', { n: state.task }) : ''}` : t('pip.agent');
   if (state.mode === 'pildora') return (
     <div className="drag flex h-full items-center gap-2 bg-[#11131c] pr-1 pl-2.5 text-white" data-testid="pip">
-      <Robot size={22} mood={state.loading ? 'thinking' : 'talking'} still={false} />
+      <Robot size={22} mood={state.loading ? 'thinking' : 'talking'} still={false} skin={state.skin} />
       <div className="min-w-0 flex-1 truncate text-xs"><span className="text-white/90">{who}</span> <span className="text-white/50">{state.action || host(state.url)}</span></div>
       <IconButton label={t('pip.show')} onClick={() => act('normal')}><ChevronDown /></IconButton>
       <IconButton label={t('pip.closeUntil')} onClick={() => act('cerrar')}><X /></IconButton>
@@ -37,7 +37,7 @@ function Pip() {
   return (
     <div className="flex h-full flex-col bg-[#11131c] text-white" data-testid="pip">
       <div className="drag flex h-9 shrink-0 items-center gap-2 border-b border-white/10 pr-1 pl-2.5">
-        <Robot size={20} mood={state.loading ? 'thinking' : 'talking'} />
+        <Robot size={20} mood={state.loading ? 'thinking' : 'talking'} skin={state.skin} />
         <div className="min-w-0 flex-1 leading-tight">
           <div className="truncate text-xs text-white/90">{who}{state.action ? <span className="text-white/50"> · {state.action}</span> : null}</div>
           <div className="flex items-center gap-1 truncate text-[10.5px] text-white/45">{state.loading ? <LoaderCircle className="size-2.5 animate-spin" /> : null}{host(state.url) || t('pip.noPage')}</div>

@@ -9,11 +9,12 @@ const PY_FILES = ['server.py', 'main.py', 'src/server.py', 'src/main.py'];
 
 // How to start the server in `dir`: { command, args } or null when it cannot be told.
 export function startCommand(dir) {
-  const has = (rel) => { try { return fs.statSync(path.join(dir, rel)).isFile(); } catch { return false; } };
+  // A file inside `dir` (package.json may point anywhere: outside the server's folder is not its server).
+  const has = (rel) => { const f = path.resolve(dir, rel); const r = path.relative(dir, f); try { return Boolean(r) && !r.startsWith('..') && !path.isAbsolute(r) && fs.statSync(f).isFile(); } catch { return false; } };
   let pkg = null; try { pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')); } catch { /* not node */ }
   if (pkg) {
     const bin = typeof pkg.bin === 'string' ? pkg.bin : Object.values(pkg.bin ?? {})[0];
-    for (const rel of [bin, pkg.main].filter((x) => typeof x === 'string')) if (has(rel)) return { command: 'node', args: [path.join(dir, rel)] };
+    for (const rel of [bin, pkg.main].filter((x) => typeof x === 'string')) if (has(rel)) return { command: 'node', args: [path.resolve(dir, rel)] };
   }
   for (const rel of NODE_FILES) if (has(rel)) return { command: 'node', args: [path.join(dir, rel)] };
   for (const rel of PY_FILES) if (has(rel)) return { command: process.platform === 'win32' ? 'python' : 'python3', args: [path.join(dir, rel)] };

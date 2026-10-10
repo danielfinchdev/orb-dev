@@ -4,10 +4,11 @@ import { useEffect, useState } from 'react';
 import { X, Download, RotateCw } from 'lucide-react';
 import { bridge, act } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
+import { AUTHOR } from '../../core/product.mjs';
 
 const SHOWN = new Set(['available', 'downloading', 'downloaded']);
 const HIDDEN_KEY = 'orb.update.hidden';
-export const notesUrl = (version) => `https://github.com/danielfinchdev/orb-dev/releases/tag/v${version}`;
+export const notesUrl = (version) => `https://github.com/${AUTHOR.repo}/releases/tag/v${version}`;
 
 export function useUpdate() {
   const [st, setSt] = useState(null);
