@@ -1,12 +1,21 @@
 ## Descargar
 
-- **`Orb-2.7.0-instalador.exe`** (recomendado): se instala para tu usuario, sin permisos de administrador, con acceso
+- **`Orb-2.7.1-instalador.exe`** (recomendado): se instala para tu usuario, sin permisos de administrador, con acceso
   directo en el escritorio y en el menú Inicio. Después lo encuentras escribiendo «Orb» en el buscador de Windows.
-- **`Orb-2.7.0-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
-- **`Orb-2.7.0-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.exe`.
+- **`Orb-2.7.1-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
+- **`Orb-2.7.1-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.exe`.
 
 Windows 10/11. Como aún no está firmada, SmartScreen avisa la primera vez: «Más información» → «Ejecutar de todas formas».
 En el primer arranque la app detecta qué agentes tienes y con qué sesión, e instala lo que falte con los instaladores oficiales.
+
+## Novedades de la 2.7.1
+
+- **Textos revisados en toda la app**, en español e inglés: más claros, más breves y con los mismos nombres en todas las
+  pantallas (por ejemplo, «Ajustes › Tareas y usos»). Las notas de la Pizarra usan el nombre que le has dado al asistente.
+- **Tutorial guiado de 18 pasos sin repeticiones:** «El chat conmigo» y «Escríbeme aquí» eran el mismo paso y ahora es
+  uno; «Nuevo chat» ya no repite lo del Orquestador, y hay un paso nuevo para la Pizarra.
+- **Tutoriales nuevos:** Pizarra y Monitoreo del equipo; también explican los proyectos multiplataforma y la elección
+  automática del modelo. El tema «Orb» aparece ya como «Por defecto».
 
 ## Novedades de la 2.7
 

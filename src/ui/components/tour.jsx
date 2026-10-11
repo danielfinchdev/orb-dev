@@ -16,8 +16,7 @@ import { useT } from '@/lib/i18n.js';
 // screen to show first. wrap: light the control's container instead (the switch alone is tiny). mood: the robot's.
 export const TOUR_STEPS = [
   { id: 'welcome', mood: 'hello', view: 'chat' },
-  { id: 'chat', target: 'nav-chat', view: 'chat', sidebar: true },
-  { id: 'composer', target: 'chat-input', view: 'chat' },
+  { id: 'chat', target: 'chat-input', view: 'chat' },
   { id: 'project', target: 'project-picker', view: 'chat' },
   { id: 'brain', target: 'brain-picker', view: 'chat' },
   { id: 'reasoning', target: 'reasoning-picker', view: 'chat' },
@@ -28,6 +27,7 @@ export const TOUR_STEPS = [
   { id: 'folders', target: 'sidebar-folders', sidebar: true },
   { id: 'tasks', target: 'nav-tasks', view: 'tasks', sidebar: true },
   { id: 'schedules', target: 'nav-schedules', view: 'schedules', sidebar: true },
+  { id: 'board', target: 'nav-board', sidebar: true },
   { id: 'agents', target: 'nav-agents', view: 'agents', sidebar: true },
   { id: 'logs', target: 'nav-logs', view: 'logs', sidebar: true },
   { id: 'activity', target: 'nav-activity', view: 'activity', sidebar: true },
