@@ -33,7 +33,9 @@ test('límite de uso: la tarea queda «limitada» y sigue sola al reiniciarse el
   const log = fakeLog(t.home, task.id);
   assert.match(log.at(-1).text, /El límite de uso se ha reiniciado\. Continúa la tarea donde la dejaste\./);
   assert.equal(log.at(-1).resumeId, log[0].newSessionId, 'continúa la misma conversación del agente');
-  assert.ok((await call('chat.list')).some((m) => /Se ha restablecido el cupo\. La tarea #\d+/.test(m.body)));
+  // 2.7: it only informs, so it passes by as a notification (not a chat line).
+  await until(async () => engine.events.some((e) => e.event === 'notice' && /Se ha restablecido el cupo\. La tarea #\d+/.test(e.payload?.body)), 'aviso del cupo restablecido', 5000);
+  assert.ok(!(await call('chat.list')).some((m) => /Se ha restablecido el cupo/.test(m.body)));
 });
 
 test('límite de uso con «seguir al reiniciarse» desactivado: espera al usuario, que puede reintentarla', async () => {

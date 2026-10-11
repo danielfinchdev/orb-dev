@@ -9,6 +9,8 @@ import { PageHeader } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Composer, useAutoScroll } from './chat.jsx';
+import { useCatalog } from '@/components/brain-picker.jsx';
+import { GeneratedImage } from '@/components/image-viewer.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Field, Input, Textarea, Empty, Spinner } from '@/components/ui/basic.jsx';
 import { Select, Collapsible, CollapsibleTrigger, CollapsibleContent, Tip, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent } from '@/components/ui/overlay.jsx';
@@ -60,11 +62,13 @@ function ToolBlock({ b }) {
 }
 
 const FILE_ICON = { add: FilePlus2, delete: FileMinus2 };
-function Block({ b, agent, sessionId }) {
+function Block({ b, agent, sessionId, project }) {
   const t = useT();
   const locale = useLocale();
   if (b.type === 'tool') return <ToolBlock b={b} />;
   if (b.type === 'item' && b.item.kind === 'approval') return <ApprovalCard sessionId={sessionId} body={b.item.body} />;
+  if (b.type === 'item' && b.item.kind === 'opti_action') return <OptiActionCard item={b.item} />;
+  if (b.type === 'item' && b.item.kind === 'image') return <div className="flex gap-3"><AgentIcon agent={agent} className="mt-1 size-5" /><GeneratedImage body={b.item.body} sessionId={sessionId} project={project} /></div>;
   if (b.type === 'files') return <div className="flex flex-wrap gap-1.5">{b.files.map((f, i) => { const I = FILE_ICON[f?.change] ?? FileEdit; return <Badge key={i} variant="info" className="font-mono font-normal"><I />{f?.path}</Badge>; })}</div>;
   const it = b.item; const body = it.body;
   if (it.role === 'user') {
@@ -87,6 +91,37 @@ function Block({ b, agent, sessionId }) {
   }
   if (it.role === 'error') return <div className="bg-destructive/10 text-destructive rounded-xl px-3.5 py-2.5 text-[13px] whitespace-pre-wrap break-words">{typeof body === 'string' ? body : JSON.stringify(body)}</div>;
   return <div className="text-muted-foreground text-center text-xs">{typeof body === 'string' ? body : JSON.stringify(body)}</div>;
+}
+
+// 2.7: a change Opti Bot proposes on the PC (scan, clean, close a process, startup): it only runs if the user approves it,
+// and the ones that need administrator rights say so (Windows asks then, for that action alone).
+function OptiActionCard({ item }) {
+  const t = useT();
+  const body = item.body ?? {};
+  const [busy, setBusy] = useState(false);
+  const answer = async (decision) => { setBusy(true); await act(call('opti.act', { item: item.id, decision })); setBusy(false); };
+  const pending = body.status === 'pending';
+  const target = body.action === 'end_process' ? `${body.name || ''} (${body.pid})` : body.action === 'disable_startup' ? body.name : '';
+  return (
+    <div className={cn('rounded-xl border px-3.5 py-3 text-[13px]', pending ? 'border-primary/40 bg-primary/5' : 'bg-card')} data-testid="opti-action">
+      <div className="flex items-start gap-2.5">
+        <ShieldAlert className={cn('mt-0.5 size-4 shrink-0', pending ? 'text-primary' : 'text-muted-foreground')} />
+        <div className="min-w-0 flex-1">
+          <div className="font-medium">{t(`opti.action.${body.action}`)}{target ? <span className="text-muted-foreground font-normal"> · {target}</span> : null}</div>
+          <div className="text-muted-foreground mt-0.5">{body.reason}</div>
+          {body.admin && pending ? <div className="text-warning mt-1 text-xs">{t('opti.needsAdmin')}</div> : null}
+          {body.result ? <div className="mt-1.5 whitespace-pre-wrap">{body.result}</div> : null}
+        </div>
+        {!pending ? <Badge variant={body.status === 'done' ? 'success' : body.status === 'running' ? 'info' : 'secondary'}>{t(`opti.status.${body.status}`)}</Badge> : null}
+      </div>
+      {pending ? (
+        <div className="mt-2.5 flex justify-end gap-2">
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => answer('deny')} data-testid="opti-deny">{t('opti.deny')}</Button>
+          <Button size="sm" disabled={busy} onClick={() => answer('allow')} data-testid="opti-allow">{busy ? <Spinner className="size-3.5" /> : <Check />}{t('opti.allow')}</Button>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 // An approval card: the agent wants to do something risky and waits for the user's click.
@@ -223,7 +258,8 @@ async function showDetails(s, task) {
   });
 }
 
-export function SessionView({ route }) {
+// embedded: inside another page with its own header (Opti Bot's, 2.7): no header here, its own face and empty text.
+export function SessionView({ route, embedded = false, empty = null }) {
   const t = useT();
   const sessions = useStore((s) => s.sessions);
   const tasks = useStore((s) => s.tasks);
@@ -261,10 +297,16 @@ export function SessionView({ route }) {
   const blocks = useMemo(() => toBlocks(items), [items]);
   const scroll = useAutoScroll([blocks.length, items.at(-1)?.id, partial.length > 0, Math.floor(partial.length / 200)]);
   useEffect(() => { if (s && s.status !== 'running') setPartial(''); }, [s?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  const catalog = useCatalog();
   if (!s) return <Empty title={t('session.gone')} className="flex-1" />;
   const task = s.task_id ? tasks.find((x) => x.id === s.task_id) : null;
   const running = s.status === 'running';
-  const models = app?.config?.agents?.[s.agent]?.models ?? [];
+  // 2.7: the agent's real models by their names (the catalog), and the conversation's own model even if it is not listed
+  // (the selector showed an empty box when it was not among the options).
+  const listed = catalog?.find((a) => a.id === s.agent)?.models.filter((m) => m.id) ?? [];
+  const models = [...(listed.length ? listed.map((m) => ({ value: m.id, label: m.label })) : (app?.config?.agents?.[s.agent]?.models ?? []).map((m) => ({ value: m, label: m })))];
+  if (s.model && !models.some((m) => m.value === s.model)) models.unshift({ value: s.model, label: s.model });
+  const modelName = (id) => models.find((m) => m.value === id)?.label ?? id;
   const stalled = ['interrupted', 'limited'].includes(s.status) && s.kind === 'chat';
 
   const loadOlder = async () => {
@@ -291,10 +333,10 @@ export function SessionView({ route }) {
 
   return (
     <>
-      <PageHeader icon={<AgentIcon agent={s.agent} className="size-5" />} title={s.title}
-        meta={<span className="inline-flex flex-wrap items-center gap-x-1.5">{AGENT[s.agent]}{s.model ? ` · ${s.model}` : ''} · {s.project ?? t('session.assistantFolderLower')}{bridge.mobile ? null : <> · <a className="hover:text-foreground cursor-pointer underline-offset-2 hover:underline" onClick={() => act(bridge.openPath(s.cwd))}>{t('session.openFolder')}</a></>}{s.context ? <> · <ContextMeter context={s.context} /></> : null}</span>}>
+      {embedded ? null : <PageHeader icon={<AgentIcon agent={s.agent} className="size-5" />} title={s.title}
+        meta={<span className="inline-flex flex-wrap items-center gap-x-1.5">{AGENT[s.agent]}{s.model ? ` · ${modelName(s.model)}` : ''} · {s.project ?? t('session.assistantFolderLower')}{bridge.mobile ? null : <> · <a className="hover:text-foreground cursor-pointer underline-offset-2 hover:underline" onClick={() => act(bridge.openPath(s.cwd))}>{t('session.openFolder')}</a></>}{s.context ? <> · <ContextMeter context={s.context} /></> : null}</span>}>
         {s.kind === 'chat' ? (<>
-          {models.length ? <Select size="sm" value={s.model || models[0]} title={t('session.model')} options={models.map((m) => ({ value: m, label: m }))} onValueChange={(model) => act(call('sessions.update', { id: s.id, model }), t('session.modelSet', { model }))} /> : null}
+          {models.length ? <Select size="sm" value={s.model || models[0].value} title={t('session.model')} options={models} onValueChange={(model) => act(call('sessions.update', { id: s.id, model }), t('session.modelSet', { model: modelName(model) }))} data-testid="session-model" /> : null}
           <Select size="sm" value={s.permission} title={s.project ? t('session.permissions') : t('session.noProjectReadOnly')} disabled={!s.project} options={options(PERMISSION).filter((o) => !bridge.mobile || o.value !== 'total')} onValueChange={async (permission) => {
             if (permission === 'total' && !(await confirm(t('permission.total'), t('session.totalBody'), { ok: t('session.yes'), danger: true }))) return;
             act(call('sessions.update', { id: s.id, permission }), t('session.permissionsChanged'));
@@ -311,13 +353,13 @@ export function SessionView({ route }) {
           <BubbleTip title={t('session.fork')} text={t('session.forkTaskTip')}><Button variant="ghost" size="icon-sm" disabled={running} onClick={fork} aria-label={t('session.fork')}><GitFork /></Button></BubbleTip>
           <Button variant="outline" size="sm" onClick={() => go({ view: 'tasks', id: s.task_id })}><ListTodo />{t('session.viewTask', { id: s.task_id })}</Button>
         </>)}
-      </PageHeader>
+      </PageHeader>}
       <div ref={scroll.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-3xl flex-col gap-3.5 px-5 py-6">
           {more ? <Button variant="ghost" size="sm" className="self-center" onClick={loadOlder}><ChevronUp />{t('session.older')}</Button> : null}
-          {blocks.length ? blocks.map((b) => <Block key={b.key} b={b} agent={s.agent} sessionId={s.id} />)
-            : <Empty title={t('session.emptyTitle', { agent: AGENT[s.agent] })}>{t('session.workIn')} <span className="font-mono text-xs">{s.cwd}</span> {t('session.withPerm', { perm: PERMISSION[s.permission] })}</Empty>}
-          {partial ? <div className="flex gap-3" data-testid="partial"><AgentIcon agent={s.agent} className="mt-1 size-5" /><div className="min-w-0 flex-1 opacity-90"><Markdown>{partial}</Markdown></div></div> : null}
+          {blocks.length ? blocks.map((b) => <Block key={b.key} b={b} agent={embedded ? 'opti' : s.agent} sessionId={s.id} project={s.project} />)
+            : embedded && empty ? empty : <Empty title={t('session.emptyTitle', { agent: AGENT[s.agent] })}>{t('session.workIn')} <span className="font-mono text-xs">{s.cwd}</span> {t('session.withPerm', { perm: PERMISSION[s.permission] })}</Empty>}
+          {partial ? <div className="flex gap-3" data-testid="partial"><AgentIcon agent={embedded ? 'opti' : s.agent} className="mt-1 size-5" /><div className="min-w-0 flex-1 opacity-90"><Markdown>{partial}</Markdown></div></div> : null}
           {running && !partial ? <div className="text-muted-foreground flex items-center gap-2 text-[13px]"><span className="bg-info size-2 animate-pulse rounded-full" />{t('session.agentWorking', { agent: AGENT[s.agent] })}</div> : null}
           {stalled ? (
             <div className="bg-card flex flex-wrap items-center gap-3 rounded-xl border px-3.5 py-3 text-[13px]">
@@ -345,13 +387,13 @@ export function SessionView({ route }) {
         </div>
       ) : null}
       <Composer value={text} onChange={setText} onSend={send} canSend={Boolean(text.trim() || images.length)} onStop={() => act(call('sessions.stop', { id: s.id }))} busy={running} testid="session-input"
-        placeholder={running ? (AGENT_CAN_STEER[s.agent] ? t('session.phSteer', { agent: AGENT[s.agent] }) : t('session.phWait', { agent: AGENT[s.agent] })) : s.kind === 'task' ? t('session.phTask') : t('session.ph', { agent: AGENT[s.agent] })}
+        placeholder={running ? (AGENT_CAN_STEER[s.agent] ? t('session.phSteer', { agent: embedded ? 'Opti Bot' : AGENT[s.agent] }) : t('session.phWait', { agent: embedded ? 'Opti Bot' : AGENT[s.agent] })) : s.kind === 'task' ? t('session.phTask') : t('session.ph', { agent: embedded ? 'Opti Bot' : AGENT[s.agent] })}
         onPaste={(e) => { const f = fromTransfer(e.clipboardData); if (f.length) addImages(f); }}
         onDrop={(e) => addImages(fromTransfer(e.dataTransfer))}
         top={images.length ? images.map((p) => <Badge key={p} variant="secondary" className="gap-1.5 font-normal"><ImageIcon />{baseName(p)}<button className="cursor-pointer" onClick={() => setImages(images.filter((x) => x !== p))}><X className="size-3" /></button></Badge>) : null}
         bottom={<>
           <Tip label={t('session.attach')}><Button variant="ghost" size="icon-sm" onClick={async () => addImages(await bridge.pickImages())}><Paperclip /></Button></Tip>
-          <span className="text-muted-foreground flex min-w-0 items-center gap-1 truncate text-xs"><FolderOpen className="size-3.5 shrink-0" />{PERMISSION[s.permission]} · {s.cwd}</span>
+          {embedded ? <span className="flex-1" /> : <span className="text-muted-foreground flex min-w-0 items-center gap-1 truncate text-xs"><FolderOpen className="size-3.5 shrink-0" />{PERMISSION[s.permission]} · {bridge.mobile ? (s.project ?? baseName(s.cwd)) : s.cwd}</span>}
         </>} />
     </>
   );

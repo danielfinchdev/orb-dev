@@ -264,14 +264,56 @@ html[data-skin="retro"] .bar-clock-time { font-weight: 400; }
 /* The clock sits in the bar's title (an h1): the themes' outlined title styles are not for it. */
 html .bar-clock, html .bar-clock * { -webkit-text-stroke: 0 !important; text-shadow: none !important; color: var(--foreground); letter-spacing: normal; text-transform: none !important; }
 html .bar-clock .bar-clock-date { color: var(--muted-foreground); font-family: var(--font-sans) !important; font-weight: 400; }
+/* 2.7: the clock is a button (the calendar opens on click): no button look, a soft halo on hover. */
+button.bar-clock { justify-items: start; text-align: left; background: none; border: 0; margin: -4px -8px; padding: 4px 8px; border-radius: 10px; cursor: pointer; transition: background-color 0.15s; }
+button.bar-clock:hover, button.bar-clock[data-state="open"] { background: color-mix(in oklch, var(--primary) 9%, transparent); }
+button.bar-clock:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+/* The month's calendar: the help bubble (.orb-tip, its colours, corners and shadow per theme) holding a grid of days. */
+.orb-pop { transform-origin: var(--radix-popover-content-transform-origin); }
+.orb-cal { width: 17.5rem; padding: 12px 12px 12px; }
+.orb-cal-title { font-family: var(--font-title); color: var(--tip-title); }
+.orb-cal-title::first-letter { text-transform: uppercase; }
+.orb-cal-nav { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 999px; color: var(--tip-text); cursor: pointer; transition: background-color 0.15s, color 0.15s; }
+.orb-cal-nav:hover { background: color-mix(in oklch, var(--primary) 12%, transparent); color: var(--tip-title); }
+.orb-cal-head { padding: 2px 0 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--tip-text); opacity: 0.8; }
+.orb-cal-day { display: grid; place-items: center; height: 32px; border-radius: 999px; font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--tip-title); }
+.orb-cal-day.is-weekend { color: var(--tip-text); }
+.orb-cal-day.is-today { background: var(--primary); color: var(--primary-foreground); font-weight: 700; box-shadow: 0 4px 12px -4px color-mix(in oklch, var(--primary) 70%, transparent); }
+.orb-cal-today { justify-self: center; padding: 3px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--primary); cursor: pointer; }
+.orb-cal-today:hover { background: color-mix(in oklch, var(--primary) 10%, transparent); }
+.orb-cal-nav:focus-visible, .orb-cal-today:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+/* Each theme's touch: Retro squares with ink, Vaporwave a glowing day, Professional plain corners. */
+html[data-skin="retro"] .orb-cal-day, html[data-skin="retro"] .orb-cal-nav, html[data-skin="retro"] .orb-cal-today { border-radius: 6px; }
+html[data-skin="retro"] .orb-cal-day.is-today { box-shadow: 2px 2px 0 var(--rt-ink); }
+html.dark[data-skin="vaporwave"] .orb-cal-day.is-today { box-shadow: 0 0 14px -2px var(--primary); }
+html[data-skin="profesional"] .orb-cal-day, html[data-skin="profesional"] .orb-cal-nav, html[data-skin="profesional"] .orb-cal-today { border-radius: 6px; }
+html[data-skin="profesional"] .orb-cal-day.is-today { box-shadow: none; }
+html[data-skin="nube"] .orb-cal-title { font-family: "Fredoka Variable", var(--font-sans); color: var(--primary); }
+/* 2.7: the Pizarra. The canvas is Excalidraw's own (light or dark with the app); around it, the theme's surfaces. */
+.wb-canvas { isolation: isolate; }
+.wb-canvas .excalidraw { --ui-font: var(--font-sans); }
+.wb-status { background: color-mix(in oklch, var(--card) 88%, transparent); color: var(--muted-foreground); border: 1px solid var(--border); box-shadow: 0 4px 14px -8px rgb(0 0 0 / 0.25); backdrop-filter: blur(6px); }
+.wb-item { background: color-mix(in oklch, var(--card) 70%, transparent); }
+.wb-panel { background: color-mix(in oklch, var(--sidebar) 94%, transparent); backdrop-filter: blur(10px); box-shadow: 0 18px 40px -18px rgb(0 0 0 / 0.35), 0 2px 8px -4px rgb(0 0 0 / 0.15); }
+/* 2.7: a picture with a transparent background shows over a light chequerboard. */
+.img-checker { background-color: #fff; background-image: linear-gradient(45deg, #e5e5e5 25%, transparent 25%), linear-gradient(-45deg, #e5e5e5 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e5e5 75%), linear-gradient(-45deg, transparent 75%, #e5e5e5 75%); background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0; }
+/* 2.7: the GitHub contribution squares, in GitHub's greens (a little softer in dark mode). */
+.gh-cell { background: color-mix(in oklch, var(--muted-foreground) 14%, transparent); }
+.gh-cell[data-level="1"] { background: #9be9a8; } .gh-cell[data-level="2"] { background: #40c463; } .gh-cell[data-level="3"] { background: #30a14e; } .gh-cell[data-level="4"] { background: #216e39; }
+.dark .gh-cell[data-level="1"] { background: #0e4429; } .dark .gh-cell[data-level="2"] { background: #006d32; } .dark .gh-cell[data-level="3"] { background: #26a641; } .dark .gh-cell[data-level="4"] { background: #39d353; }
+/* 2.7, the phone: the tabs at the bottom, clear of the home bar of phones without buttons. */
+.mobile-tabs { position: relative; z-index: 10; padding-bottom: env(safe-area-inset-bottom, 0px); }
+.mobile-tab { -webkit-tap-highlight-color: transparent; }
+.mobile-tab:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; border-radius: 12px; }
 html[data-skin="retro"] .wordmark, html[data-skin="nube"] .wordmark { margin-bottom: 3px; }
 /* The line under the wordmark (the working project) echoes it in small: the same type treatment, and it starts where the
    wordmark's letters start (inside the plate or the pill). */
-.wordmark-sub { margin-top: 4px; font-size: 10.5px; line-height: 1.2; text-transform: uppercase; letter-spacing: 0.16em; }
-html[data-skin="vaporwave"] .wordmark-sub { margin-top: 5px; letter-spacing: 0.12em; }
-html[data-skin="retro"] .wordmark-sub { margin-top: 3px; padding-inline-start: 11px; letter-spacing: 0.1em; }
-html[data-skin="nube"] .wordmark-sub { margin-top: 3px; padding-inline-start: 14px; font-family: "Fredoka Variable", var(--font-sans); font-weight: 600; letter-spacing: 0.06em; color: color-mix(in oklch, var(--primary) 70%, var(--muted-foreground)); }
-html[data-skin="profesional"] .wordmark-sub { letter-spacing: 0.14em; }
+/* 2.7: the project's name as it is written (in capitals and spaced out, long names were cut after a few letters). */
+.wordmark-sub { margin-top: 4px; font-size: 11.5px; line-height: 1.2; letter-spacing: 0.01em; }
+html[data-skin="vaporwave"] .wordmark-sub { margin-top: 5px; letter-spacing: 0.02em; }
+html[data-skin="retro"] .wordmark-sub { margin-top: 3px; padding-inline-start: 4px; letter-spacing: 0; }
+html[data-skin="nube"] .wordmark-sub { margin-top: 3px; padding-inline-start: 6px; font-family: "Fredoka Variable", var(--font-sans); font-weight: 600; letter-spacing: 0.02em; color: color-mix(in oklch, var(--primary) 70%, var(--muted-foreground)); }
+html[data-skin="profesional"] .wordmark-sub { letter-spacing: 0.02em; }
 /* A robot that only illustrates (the chat's avatars) is not a button. */
 .orb.still { cursor: default; }
 /* 2.6: the time of each message, bottom right, as in a messaging app. */

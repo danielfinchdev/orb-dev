@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('orb', {
   switchHome: (folder) => ipcRenderer.invoke('app:switchHome', folder),
   pickFolder: (title) => ipcRenderer.invoke('app:pickFolder', title),
   pickImages: () => ipcRenderer.invoke('app:pickImages'),
+  pickProgram: (title) => ipcRenderer.invoke('app:pickProgram', title),
+  pickFiles: (title) => ipcRenderer.invoke('app:pickFiles', title),
   openPath: (folder) => ipcRenderer.invoke('app:openPath', folder),
   openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),
   showBrowser: () => ipcRenderer.invoke('app:showBrowser'),

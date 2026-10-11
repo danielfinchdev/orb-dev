@@ -4,6 +4,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, enabledAgents, tr } from '../core/context.mjs';
+import { chooseModel } from './catalog.mjs';
+import { groupOf } from '../core/projects.mjs';
+
+// 2.7: a task of a multiplatform project knows its sister projects and the shared folder (API, design, texts, images).
+const groupNote = (board, project) => {
+  const g = groupOf(board, project); if (!g) return '';
+  return `\n- Este proyecto es parte del grupo multiplataforma «${g.name}» (${g.members.map((m) => m.name).join(', ')}). Lo que compartan (API, datos, diseño, textos, imágenes) está en la carpeta común ${g.common}: síguela y, si hace falta cambiar algo compartido, dilo en tu result para que ${assistantName()} lo coordine con los demás.`;
+};
 import { localeOf } from '../core/i18n.mjs';
 import { PRODUCT } from '../core/product.mjs';
 import { assistantName, userName, ofUser } from '../core/board.mjs';
@@ -36,6 +44,7 @@ export class Scheduler {
         board.patch(t.id, { status: 'blocked', pid: null }, 'orb', 'task.interrupted');
         board.settingJson(`followup:${t.id}`, { text: `${assistantName()} se cerró mientras trabajabas en esta tarea. Continúa donde lo dejaste (revisa el estado de la carpeta antes).`, images: [], resume: true });
         try { board.requeue(t.id, 'orb', 'task.resumed'); } catch (error) { this.log(`continuar #${t.id}: ${error.message}`); }
+        // Stays in the chat (2.7): it is said while the app is starting, before the window can show a notification.
         board.addChat('system', tr('msg.scheduler.resumedAfterClose', { id: t.id, title: oneLine(t.title), name: PRODUCT.name }));
       } else {
         board.patch(t.id, { status: 'failed', pid: null, result: tr('msg.scheduler.closedWhileWorking', { name: PRODUCT.name, result: t.result ?? '' }).slice(0, 4000) }, 'orb', 'task.interrupted');
@@ -145,7 +154,7 @@ export class Scheduler {
       this.board.settingJson(`followup:${t.id}`, { text: 'El límite de uso se ha reiniciado. Continúa la tarea donde la dejaste.', images: [], resume: true });
       this.board.patch(t.id, { limited_until: null }, 'orb', 'task.limit_reset');
       this.board.requeue(t.id, 'orb', 'task.resumed');
-      this.board.addChat('system', tr('msg.scheduler.limitReset', { id: t.id, title: oneLine(t.title) }));
+      this.board.notice(tr('msg.scheduler.limitReset', { id: t.id, title: oneLine(t.title) }), 'success');
     }
   }
 
@@ -180,6 +189,7 @@ ${deps ? `\n## Hecho antes (ya está en la carpeta)\n${deps}\n` : ''}${context}
 ## Dónde trabajas
 ${where}
 - No escribas en ninguna bitácora: ${assistantName()} anota tu result.
+- Si el proyecto tiene una carpeta pizarra/ (dibujo, notas y adjuntos ${ofUser()}), úsala como referencia cuando el encargo la cite; no la modifiques ni la subas a git.${groupNote(this.board, project)}
 
 ## Mientras trabajas
 Cada pocos pasos llama a orb_update_task con id ${task.id}, progress (0-100, tu estimación de cuánto llevas) y note (qué haces ahora, en pocas palabras): ${userName()} lo ve en directo.
@@ -240,7 +250,7 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
     if (cp.before.kind === 'git' && !after) { const snap = snapshotCommit(cp.before.repo, { always: true, message: 'orb: foto para deshacer' }); if (!snap) throw new Error(tr('msg.scheduler.cannotReadFolder')); after = { commit: snap.commit }; }
     const out = undoCheckpoint(cp.before, after ?? {});
     this.board.event(task.id, 'usuario', 'task.undone', `restaurados ${out.restored.length}, quitados ${out.removed.length}, sin tocar ${out.skipped.length}`);
-    this.board.addChat('system', tr('msg.scheduler.undone', { id: task.id, restored: out.restored.length, removed: out.removed.length, skipped: out.skipped.length ? tr('msg.scheduler.undoneSkipped', { n: out.skipped.length, list: oneLine(out.skipped.join(', '), 200) }) : '' }));
+    this.board.notice(tr('msg.scheduler.undone', { id: task.id, restored: out.restored.length, removed: out.removed.length, skipped: out.skipped.length ? tr('msg.scheduler.undoneSkipped', { n: out.skipped.length, list: oneLine(out.skipped.join(', '), 200) }) : '' }), 'success');
     return out;
   }
 
@@ -249,6 +259,18 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
     const { board } = this;
     const fresh = board.task(task.id);
     if (!fresh || fresh.status !== 'queued' || this.running.has(task.id) || !board.approvalOk(fresh)) return;
+    // 2.7: «Orb elige el modelo»: a task without a model gets, on the agent and account it runs on, the most efficient
+    // model (and, when the assistant said how hard it is, reasoning) for it (catalog.chooseModel); kept on the task, so a
+    // retry or a follow-up uses the same one, and explained in its history.
+    if (!fresh.model && ctx.config.budget?.autoModel !== false) {
+      const pick = chooseModel(board, agent, fresh.level ?? 'normal', accountId);
+      const reasoning = fresh.level ? pick.reasoning : fresh.reasoning;
+      if (pick.model || reasoning !== fresh.reasoning) {
+        board.run('UPDATE tasks SET model = ?, reasoning = ? WHERE id = ?', pick.model, reasoning, fresh.id);
+        board.event(fresh.id, 'orb', 'model.auto', tr('msg.scheduler.autoModel', { model: pick.label ?? pick.model ?? tr('msg.tier.agentDefault'), tier: tr(`msg.tier.${pick.tier ?? 'default'}`), level: tr(`msg.level.${pick.level}`), reasoning: tr(`msg.reasoning.${reasoning ?? 'medium'}`) }));
+        task = board.task(fresh.id);
+      }
+    }
     const project = board.project(task.project);
     const runDir = path.join(ctx.paths.runs, String(task.id));
     fs.mkdirSync(runDir, { recursive: true });
@@ -496,9 +518,10 @@ Cierra el ciclo: 1) revisa si el resultado cumple lo que ${userName()} pidió (o
     if (!agent) throw new Error(tr('msg.scheduler.noReviewer'));
     // Same agent: another model, so it is a second pair of eyes and not the same one twice.
     const models = ctx.config.agents[agent]?.models ?? [];
-    // A task without a model ran with the agent's default one (Sonnet for Claude): that is the model to avoid.
-    const used = task.model || ctx.config.agents[agent]?.defaultModel || null;
-    const model = agent === task.assigned_to ? models.find((m) => m !== used) ?? null : null;
+    // A task without a model ran with the agent's default one (Sonnet for Claude): that is the model to avoid. 2.7: with
+    // Orb choosing models the task may have run with another one, so neither of them reviews it.
+    const avoid = new Set([task.model, ctx.config.agents[agent]?.defaultModel].filter(Boolean));
+    const model = agent === task.assigned_to ? models.find((m) => !avoid.has(m)) ?? null : null;
     const review = this.board.createTask({ project: task.project, title: tr('msg.scheduler.reviewTitle', { id: task.id, title: oneLine(task.title, 80) }), agent, model, readonly: true, mode: task.mode, depends_on: [task.id], review_of: task.id,
       description: `Eres el revisor (Task Review) del trabajo de la tarea #${task.id} «${oneLine(task.title)}», hecho por ${task.assigned_to ?? task.agent}${task.model ? ` (${task.model})` : ''}.
 Encargo original: ${oneLine(task.description, 1500)}
@@ -506,7 +529,7 @@ Resultado que dejó: ${oneLine(task.result, 1500)}
 ${task.branch ? `Está en la rama ${task.branch}.` : 'Los cambios están en la carpeta del proyecto.'}${focus ? `\nFíjate sobre todo en: ${oneLine(focus, 500)}` : ''}
 Comprueba que hace lo que se pedía, busca fallos, casos sin cubrir, riesgos de seguridad y código mejorable, y ejecuta las pruebas si las hay. NO cambies ningún archivo.
 En result pon, en este orden: VEREDICTO: CORRECTO o CON FALLOS; después la lista de problemas concretos (archivo y qué falla) por gravedad; y al final qué arreglarías primero.` }, actor);
-    this.board.addChat('system', tr('msg.scheduler.reviewing', { agent: label(agent), model: model ? ` (${model})` : '', id: task.id, review: review.id }));
+    this.board.notice(tr('msg.scheduler.reviewing', { agent: label(agent), model: model ? ` (${model})` : '', id: task.id, review: review.id }), 'info');
     return review;
   }
 

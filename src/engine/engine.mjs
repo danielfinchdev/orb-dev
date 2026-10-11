@@ -22,6 +22,7 @@ const emit = (event, payload) => {
 };
 
 let api = null;
+let bridge = null; // 2.7: the files shared with Open Control Edge (engine/bridge.mjs)
 let logFile = null;
 const log = (line) => { try { if (logFile) { rotateIfBig(logFile); fs.appendFileSync(logFile, `${new Date().toISOString()} ${line}\n`); } } catch { /* never fatal */ } };
 process.on('uncaughtException', (error) => log(`uncaughtException: ${error?.stack ?? error}`));
@@ -97,6 +98,12 @@ async function start(home, version, secret, browser) {
   // once every 12 h), so the brain selector names them before any conversation.
   const { refreshAllModels } = await import('./catalog.mjs');
   setTimeout(() => { refreshAllModels(board, { log }).catch(() => {}); }, Number(process.env.ORB_MODELS_DELAY_MS ?? 3000)).unref?.();
+  // 2.7: the bridge with Open Control Edge (engine/bridge.mjs). Only on Windows, only for the app's own engine (main.mjs
+  // sets ORB_BRIDGE) and never with the test agents: made-up runs must not reach OCE as real data.
+  if (process.platform === 'win32' && process.env.ORB_BRIDGE === '1' && !process.env.ORB_FAKE_AGENTS) {
+    const { startBridge } = await import('./bridge.mjs');
+    bridge = startBridge({ board, version, busy: () => orchestrator.busy, log });
+  }
   // 2.6: the reports the assistant still owed when the app was closed come back.
   const owed = orchestrator.resume();
   if (owed) log(`asistente: ${owed} aviso(s) pendientes recuperados`);
@@ -113,6 +120,7 @@ transport.on(async (msg) => {
   if (msg.type === 'shutdown') {
     // The phone access may have to turn off `tailscale serve` first (a few seconds at most).
     try { api?.shutdown(); } catch { /* closing anyway */ }
+    try { bridge?.stop(); } catch { /* closing anyway */ }
     Promise.race([Promise.resolve(remote?.stop()).catch(() => {}), new Promise((r) => setTimeout(r, 4000))]).finally(() => setTimeout(() => process.exit(0), 300));
     return;
   }

@@ -190,6 +190,10 @@ export function openDb(filename = ctx.paths?.db) {
 const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], ['sessions', 'account', 'TEXT'], ['chat', 'meta', 'TEXT'],
   ['sessions', 'context', 'TEXT'], ['sessions', 'settled', 'INTEGER NOT NULL DEFAULT 0'], ['sessions', 'parent_id', 'TEXT'],
   ['tasks', 'parent_id', 'INTEGER'], ['tasks', 'limited_until', 'TEXT'], ['tasks', 'review_of', 'INTEGER'], ['tasks', 'schedule_id', 'INTEGER'],
+  // 2.7: how hard the task is (simple / normal / complejo), for Orb to choose its model and reasoning.
+  ['tasks', 'level', 'TEXT'],
+  // 2.7: the multiplatform group a project belongs to (tienda-android and tienda-ios share «tienda»).
+  ['projects', 'grupo', 'TEXT'],
   // 2.3.3: each phone has its own key (end-to-end encryption), the way it was paired and its notifications.
   ['devices', 'public_key', 'TEXT'], ['devices', 'route', 'TEXT'], ['devices', 'push', 'TEXT']];
 export function migrate(db) {
