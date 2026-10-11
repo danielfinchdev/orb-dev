@@ -2,6 +2,7 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
+import * as PopoverPrimitive from '@radix-ui/react-popover';
 import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
 import * as SwitchPrimitive from '@radix-ui/react-switch';
 import * as CheckboxPrimitive from '@radix-ui/react-checkbox';
@@ -84,6 +85,20 @@ export function BubbleTip({ title, text, children, side = 'bottom', align = 'cen
 export function Tip({ label, children, side = 'top', align }) { return <BubbleTip title={label} side={side} align={align}>{children}</BubbleTip>; }
 export const TooltipProvider = TooltipPrimitive.Provider;
 
+// ---- popover: a bubble that opens with a click and holds controls (the chat's calendar), dressed as the help bubbles.
+export const Popover = PopoverPrimitive.Root;
+export const PopoverTrigger = PopoverPrimitive.Trigger;
+export function PopoverContent({ className, children, side = 'bottom', align = 'center', offset = 8, ...props }) {
+  return (
+    <PopoverPrimitive.Portal>
+      <PopoverPrimitive.Content side={side} align={align} sideOffset={offset} collisionPadding={12} className={cn('orb-tip orb-pop z-50 outline-none', className)} {...props}>
+        {children}
+        <PopoverPrimitive.Arrow asChild width={16} height={8}><span className="orb-tip-tail" aria-hidden="true" /></PopoverPrimitive.Arrow>
+      </PopoverPrimitive.Content>
+    </PopoverPrimitive.Portal>
+  );
+}
+
 // ---- dropdown menu
 export const DropdownMenu = DropdownPrimitive.Root;
 export const DropdownMenuTrigger = DropdownPrimitive.Trigger;
@@ -92,6 +107,17 @@ export function DropdownMenuContent({ className, align = 'end', ...props }) {
 }
 export function DropdownMenuItem({ className, variant, ...props }) {
   return <DropdownPrimitive.Item className={cn("focus:bg-accent focus:text-accent-foreground relative flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:text-muted-foreground", variant === 'destructive' && 'text-destructive focus:text-destructive [&_svg]:text-destructive', className)} {...props} />;
+}
+// 2.7: an item that is ticked or not (lists where several can be chosen); the menu stays open while ticking.
+export function DropdownMenuCheckboxItem({ className, children, checked, onCheckedChange, ...props }) {
+  return (
+    <DropdownPrimitive.CheckboxItem checked={checked} onCheckedChange={onCheckedChange} onSelect={(e) => e.preventDefault()} className={cn('focus:bg-accent focus:text-accent-foreground relative flex cursor-pointer items-center gap-2 rounded-md py-1.5 pr-2 pl-8 text-sm outline-hidden select-none', className)} {...props}>
+      <span className={cn('absolute left-2 grid size-4 place-items-center rounded-[5px] border', checked ? 'bg-primary border-primary text-primary-foreground' : 'border-input')}>
+        <DropdownPrimitive.ItemIndicator><CheckIcon className="size-3" /></DropdownPrimitive.ItemIndicator>
+      </span>
+      {children}
+    </DropdownPrimitive.CheckboxItem>
+  );
 }
 export function DropdownMenuSeparator() { return <DropdownPrimitive.Separator className="bg-border -mx-1 my-1 h-px" />; }
 export function DropdownMenuLabel({ className, ...props }) { return <DropdownPrimitive.Label className={cn('text-muted-foreground px-2 py-1.5 text-xs', className)} {...props} />; }

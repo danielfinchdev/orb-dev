@@ -2,17 +2,20 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { toast } from 'sonner';
-import { Settings, FolderOpen, Plus, Trash2, ArrowLeftRight, Smartphone, QrCode, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, LayoutGrid, UserRound, ListChecks, Wrench, RefreshCw, ChevronRight } from 'lucide-react';
+import { Settings, FolderOpen, HeartPulse, Plus, Trash2, ArrowLeftRight, Smartphone, QrCode, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, LayoutGrid, UserRound, ListChecks, Wrench, RefreshCw, ChevronRight } from 'lucide-react';
 import { ToolIcon } from '@/components/agent-icon.jsx';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, APPEARANCE_DEFAULTS } from '../../core/appearance.mjs';
 import { PRODUCT, AUTHOR } from '../../core/product.mjs';
 import { PANELS, savePanels } from './expert.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
+import { SkinPreview } from '@/components/skin-preview.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea, Kbd, PathText, Spinner } from '@/components/ui/basic.jsx';
 import { Select, Switch, Checkbox, Dialog, DialogContent, DialogTitle, BubbleTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
+import { ModelGuide } from '@/components/model-guide.jsx';
+import { useCatalog } from '@/components/brain-picker.jsx';
 import { AGENT } from '@/lib/labels.js';
 import { useStore, call, act, bridge, setState, getState, applyTheme, applyAppearance, go, openTerminal, openSettings, closeSettings } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
@@ -41,23 +44,13 @@ function AssistantCard({ c }) {
       <CardContent className="grid gap-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label={t('settings.assistantName')} hint={t('settings.assistantNameHint')}><Input value={v.assistantName} onChange={(e) => setV({ ...v, assistantName: e.target.value })} maxLength={40} /></Field>
-          <Field label={t('settings.userName')}><Input value={v.userName} onChange={(e) => setV({ ...v, userName: e.target.value })} maxLength={40} /></Field>
-          <Field label={t('settings.language')} hint={t('settings.languageHint')}><Select className="w-full" value={v.language} onValueChange={(language) => { setV({ ...v, language }); save({ language }); }} options={Object.entries(LANGUAGES).map(([value, label]) => ({ value, label }))} /></Field>
+          <Field label={t('settings.userName')}><Input value={v.userName} onChange={(e) => setV({ ...v, userName: e.target.value })} maxLength={40} /></Field>          <Field label={t('settings.language')} hint={t('settings.languageHint')}><Select className="w-full" value={v.language} onValueChange={(language) => { setV({ ...v, language }); save({ language }); }} options={Object.entries(LANGUAGES).map(([value, label]) => ({ value, label }))} /></Field>
         </div>
       </CardContent>
       <CardFooter><Button size="sm" onClick={() => save({ assistantName: v.assistantName.trim(), userName: v.userName.trim(), language: v.language })}>{t('settings.save')}</Button></CardFooter>
     </Card>
   );
 }
-
-// A small picture of each visual theme for its button.
-const SWATCH = {
-  orb: 'radial-gradient(120% 90% at 30% 10%, #f3f5ff 0%, #c9d0fb 55%, #8fa0f2 100%)',
-  vaporwave: 'linear-gradient(180deg, #2b1055 0%, #d53a9d 55%, #ff9a5a 80%, #2de2e6 100%)',
-  retro: `url("data:image/svg+xml,${encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 8' shape-rendering='crispEdges'><path fill='#39ff14' d='M2 0h1v1H2zM8 0h1v1H8zM3 1h1v1H3zM7 1h1v1H7zM2 2h7v1H2zM1 3h2v1H1zM4 3h3v1H4zM8 3h2v1H8zM0 4h11v1H0zM0 5h1v1H0zM2 5h7v1H2zM10 5h1v1h-1zM0 6h1v1H0zM2 6h1v1H2zM8 6h1v1H8zM10 6h1v1h-1zM3 7h2v1H3zM6 7h2v1H6z'/></svg>")}") center / 22px 16px space no-repeat, #070a1a`,
-  profesional: 'linear-gradient(90deg, #18181b 0 34%, #f4f4f5 34% 100%)',
-  nube: 'radial-gradient(9% 26% at 34% 64%, #fff 0 70%, transparent 74%), radial-gradient(12% 36% at 46% 52%, #fff 0 70%, transparent 74%), radial-gradient(9% 26% at 58% 64%, #fff 0 70%, transparent 74%), radial-gradient(22% 14% at 46% 72%, #fff 0 70%, transparent 74%), radial-gradient(28% 70% at 12% 20%, #ffc4dc, transparent), radial-gradient(28% 70% at 88% 22%, #dccbff, transparent), radial-gradient(30% 60% at 20% 95%, #bdeedd, transparent), radial-gradient(30% 60% at 85% 90%, #ffd9b8, transparent), #fff6f3'
-};
 
 // Appearance: light / dark, the visual theme, fonts, colours of code and the robot (floating, sounds, animations).
 // Everything is saved as soon as it changes. The professional theme has no robot, so its options are hidden there.
@@ -82,7 +75,7 @@ function AppearanceCard({ c }) {
             {SKINS.map((skin) => (
               <button key={skin} type="button" role="radio" aria-checked={ui.skin === skin} onClick={() => set({ skin })} data-testid={`skin-${skin}`}
                 className={cn('grid cursor-pointer gap-1.5 rounded-xl border p-2 text-left transition-colors', ui.skin === skin ? 'border-primary ring-primary/30 ring-2' : 'hover:bg-accent/40')}>
-                <span className="h-10 rounded-lg border border-black/5" style={{ background: SWATCH[skin] }} aria-hidden />
+                <SkinPreview skin={skin} />
                 <span className="text-[13px] font-medium">{t(`appearance.skin.${skin}`)}</span>
               </button>
             ))}
@@ -164,6 +157,9 @@ function TasksCard({ c }) {
           <div className="spend-ticks" aria-hidden="true">{[0, 1, 2, 3, 4].map((i) => <span key={i} className={cn(i === 2 && 'spend-ticks-rec')}>{i === 2 ? t('settings.spendRecommended') : ''}</span>)}</div>
           <p className="text-muted-foreground text-xs leading-snug">{level == null ? t('settings.spendCustomHint') : t(`settings.spend${level}Hint`)}</p>
         </div>
+        {/* 2.7: Orb chooses each task's model and reasoning (on by default), and the guide says what it uses for what. */}
+        <Row label={t('settings.autoModel')} hint={t('settings.autoModelHint')}><Switch checked={c.budget?.autoModel !== false} onCheckedChange={(autoModel) => save({ budget: { autoModel } })} data-testid="auto-model" /></Row>
+        <ModelGuide auto={c.budget?.autoModel !== false} />
         <Row label={t('settings.autoRun')} hint={t('settings.autoRunHint')}><Switch checked={v.autoRun} onCheckedChange={(autoRun) => { setV({ ...v, autoRun }); save({ autoRun }); }} /></Row>
         <Row label={t('settings.resumeRestart')} hint={t('settings.resumeRestartHint')}><Switch checked={v.resumeAfterRestart} onCheckedChange={(resumeAfterRestart) => { setV({ ...v, resumeAfterRestart }); save({ continuity: { resumeAfterRestart } }); }} /></Row>
         <Row label={t('settings.resumeReset')} hint={t('settings.resumeResetHint')}><Switch checked={v.resumeAtReset} onCheckedChange={(resumeAtReset) => { setV({ ...v, resumeAtReset }); save({ continuity: { resumeAtReset } }); }} /></Row>
@@ -479,6 +475,34 @@ function InterfaceCard({ c }) {
 }
 
 // Expert mode: an IDE-like view (PC only) with the panels the user picks.
+// 2.7: Monitoreo del equipo: Opti Bot on or off (then it appears in the menu) and its brain: any installed agent and model.
+function MonitorCard({ c }) {
+  const t = useT();
+  const catalog = useCatalog();
+  const m = c.monitor ?? {};
+  const agent = m.agent || 'claude';
+  const DEFAULT = '__default';
+  const agents = (catalog ?? []).filter((a) => a.id !== 'cursor'); // Cursor cannot keep Opti Bot to its own tools
+  const models = (agents.find((a) => a.id === agent)?.models ?? []).filter((x) => x.id);
+  return (
+    <Card data-testid="monitor-card">
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><HeartPulse className="text-success size-5" /><div><CardTitle>{t('settings.monitor')}</CardTitle><CardDescription>{t('settings.monitorDesc')}</CardDescription></div></CardHeader>
+      <CardContent className="grid gap-4">
+        <Row label={t('settings.monitorOn')} hint={t('settings.monitorOnHint')}><Switch checked={m.enabled === true} onCheckedChange={(enabled) => save({ monitor: { enabled, agent } }, enabled ? t('settings.monitorEnabled') : t('settings.monitorDisabled'))} data-testid="monitor-switch" /></Row>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label={t('settings.monitorAgent')}><Select className="w-full" value={agent} disabled={!agents.length} onValueChange={(next) => save({ monitor: { agent: next, model: null } })} options={(agents.length ? agents : [{ id: agent, label: AGENT[agent] ?? agent }]).map((a) => ({ value: a.id, label: a.label }))} /></Field>
+          <Field label={t('settings.monitorModel')} hint={t('settings.monitorModelHint')}><Select className="w-full" value={m.model || DEFAULT} onValueChange={(model) => save({ monitor: { model: model === DEFAULT ? null : model } })} options={[{ value: DEFAULT, label: t('settings.monitorModelDefault') }, ...models.map((x) => ({ value: x.id, label: x.tier ? `${x.label} · ${t(`brain.tier.${x.tier}`)}` : x.label }))]} /></Field>
+        </div>
+        <Row label={t('settings.monitorOce')} hint={t('settings.monitorOceHint')}><Switch checked={m.shareWithOce !== false} onCheckedChange={(shareWithOce) => save({ monitor: { shareWithOce } })} data-testid="monitor-oce" /></Row>
+        <ul className="text-muted-foreground grid list-disc gap-1 pl-4 text-xs leading-snug">
+          {[1, 2, 3].map((n) => <li key={n}>{t(`settings.monitorNote${n}`)}</li>)}
+        </ul>
+      </CardContent>
+      {m.enabled ? <CardFooter><Button size="sm" variant="outline" onClick={() => { closeSettings(); go('monitor'); }}><HeartPulse />{t('settings.monitorOpen')}</Button></CardFooter> : null}
+    </Card>
+  );
+}
+
 function ExpertCard({ c }) {
   const t = useT();
   const on = c.expert?.enabled === true; const panels = c.expert?.panels ?? {};
@@ -608,6 +632,7 @@ const SECTIONS = [
   { id: 'movil', icon: Smartphone, cards: () => <MobileCard /> },
   { id: 'herramientas', icon: Wrench, cards: (c) => <><BrowserCard c={c} /><McpCard c={c} /><AndroidCard /></> },
   { id: 'experto', icon: SquareTerminal, cards: (c) => <ExpertCard c={c} /> },
+  { id: 'monitor', icon: HeartPulse, cards: (c) => <MonitorCard c={c} /> },
   { id: 'actualizaciones', icon: RefreshCw, cards: () => <UpdatesCard /> },
   { id: 'contribuye', icon: HeartHandshake, cards: () => <><SupportCard /><FeedbackCard /></> },
   { id: 'apps', icon: LayoutGrid, cards: () => <MoreAppsCard /> }

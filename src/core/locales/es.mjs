@@ -19,6 +19,9 @@ import install from './es/install.mjs';
 import msg from './es/msg.mjs';
 import sys from './es/sys.mjs';
 import help from './es/help.mjs';
+import greet from './es/greet.mjs';
+import whiteboard from './es/whiteboard.mjs';
+import monitor from './es/monitor.mjs';
 
 export default {
   ...base,
@@ -40,5 +43,8 @@ export default {
   ...install,
   ...msg,
   ...sys,
-  ...help
+  ...help,
+  ...greet,
+  ...whiteboard,
+  ...monitor
 };

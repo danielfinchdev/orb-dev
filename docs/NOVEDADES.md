@@ -1,12 +1,46 @@
 ## Descargar
 
-- **`Orb-2.6.0-instalador.exe`** (recomendado): se instala para tu usuario, sin permisos de administrador, con acceso
+- **`Orb-2.7.0-instalador.exe`** (recomendado): se instala para tu usuario, sin permisos de administrador, con acceso
   directo en el escritorio y en el menú Inicio. Después lo encuentras escribiendo «Orb» en el buscador de Windows.
-- **`Orb-2.6.0-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
-- **`Orb-2.6.0-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.exe`.
+- **`Orb-2.7.0-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
+- **`Orb-2.7.0-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.exe`.
 
 Windows 10/11. Como aún no está firmada, SmartScreen avisa la primera vez: «Más información» → «Ejecutar de todas formas».
 En el primer arranque la app detecta qué agentes tienes y con qué sesión, e instala lo que falte con los instaladores oficiales.
+
+## Novedades de la 2.7
+
+- **Orb elige el modelo de cada tarea:** ya no hace falta saber qué es Haiku, Sonnet u Opus. Orbe indica si una tarea es
+  sencilla, normal o difícil, y Orb le da el modelo y el razonamiento más eficientes según tu nivel de gasto: el rápido
+  para lo sencillo, el equilibrado para el día a día y el más potente solo para lo difícil. Cada tarea cuenta en su
+  historial qué modelo se eligió y por qué. En Ajustes › Tareas y usos, una guía muestra qué usa Orb para cada cosa.
+- **Pizarra:** cada proyecto tiene la suya, como Excalidraw: dibuja pantallas y flujos, escribe, une con flechas y adjunta
+  fotos, vídeos y documentos con una nota. Se guarda sola en la carpeta del proyecto y Orbe la lee al planificar. Si le
+  pides algo muy grande, te propone definirlo antes en la pizarra.
+- **Monitoreo del equipo:** se activa en Ajustes. Opti Bot, con el cerebro que elijas, revisa la salud del PC, lo que
+  arranca con Windows, el antivirus, que Orb esté bien y sus copias de seguridad. Solo mira: lo que quiera cambiar te lo
+  propone en una tarjeta, y si hace falta administrador, Windows te lo pide en ese momento.
+- **Red:** la Wi-Fi y su seguridad, las redes cercanas, los equipos de tu red (con el nombre que les pongas),
+  Escritorio remoto o SSH a otros ordenadores y el estado de tus móviles y Android TV por adb.
+- **Open Control Edge y Orb se entienden:** si tienes Open Control Edge 2.3, las dos apps se pasan sus datos reales del
+  PC dentro del propio equipo (temperaturas, GPU, uso de las IAs). Si una no está abierta, no se muestra nada inventado.
+- **Proyectos multiplataforma:** al crear un proyecto eliges Windows, iOS, Android o Web. Con varias, Orb crea uno por
+  plataforma, unidos y con una carpeta común para la API, el diseño y los textos. También se lo puedes pedir a Orbe en el
+  chat.
+- **Imágenes:** las imágenes que crea Codex se ven en la conversación. Marca una zona con el ratón para cambiar solo esa
+  parte y guárdalas en la carpeta del proyecto.
+- **En el chat:** una línea muestra en directo lo que está haciendo Orbe («Leyendo app.jsx · 1 min 3 s»). Cuando tienes
+  que elegir, te pregunta con opciones que se marcan con un clic. Los avisos que solo informan pasan como una notificación
+  y ya no llenan el chat. El saludo cambia cada vez.
+- **Reloj y calendario:** con el ratón encima, la hora muestra los segundos; un clic abre el calendario del mes.
+- **Cuentas sin carpetas:** «Añadir otra cuenta» solo pide un nombre y abre el inicio de sesión. «Buscar y añadir» encuentra
+  las sesiones que ya tienes en el PC, sin repetir la misma cuenta. Los ajustes de cada agente son desplegables.
+- **GitHub:** debajo de tu cuenta, en Proyectos, tu tabla de contribuciones del último año.
+- **El móvil, más simple:** pestañas abajo (Orbe, Chats, Tareas, Proyectos y Más), sin lo que solo tiene sentido en el PC.
+- **Temas:** «Orb» pasa a llamarse «Por defecto» y cada tema se elige viendo una miniatura fiel. El modo experto se llama
+  ahora God mode.
+- **Arreglos:** el ajedrez ya no puede congelar la ventana; el móvil recibe todas las imágenes de la app; el nombre del
+  proyecto ya no se corta en el menú.
 
 ## Novedades de la 2.6
 

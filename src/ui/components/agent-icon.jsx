@@ -24,6 +24,8 @@ function Mark({ name, className }) {
 export function AgentIcon({ agent, className }) {
   const cls = cn('size-4 shrink-0', COLORS[agent] ?? 'text-muted-foreground', className);
   if (MARK[agent]) return <Mark name={MARK[agent]} className={cls} />;
+  // 2.7: Opti Bot (Monitoreo del equipo): a pulse line, its own sign.
+  if (agent === 'opti') return <svg viewBox="0 0 24 24" className={cn('size-4 shrink-0 text-success', className)} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M2 12h4l2.5-6 4 12 3-8 1.5 2H22" /></svg>;
   // "any agent" and the assistant: a sparkle, not a vendor's mark
   return <svg viewBox="0 0 24 24" className={cls} fill="currentColor" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" /></svg>;
 }

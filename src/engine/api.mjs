@@ -5,12 +5,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, saveConfig, checkAccountHome, tr } from '../core/context.mjs';
 import { AGENT_IDS, categoryOf, CATEGORIES } from '../core/home.mjs';
-import { MULTI, newAccountId } from '../core/accounts.mjs';
+import { MULTI, newAccountId, findAccountFolders, accountsOf, accountDir } from '../core/accounts.mjs';
+import { accountInfo as codexAccountInfo } from '../agents/codex.mjs';
 import { usageReport } from '../core/budget.mjs';
-import { createProject, syncProjects } from '../core/projects.mjs';
+import { createProject, createProjects, syncProjects } from '../core/projects.mjs';
 import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../core/schedules.mjs';
 import { oneLine, redactSecrets } from '../core/safety.mjs';
-import { statusAll, status as agentStatus, openLogin, quickRun, forgetInstalled } from '../agents/index.mjs';
+import { statusAll, status as agentStatus, openLogin, quickRun, forgetInstalled, executable } from '../agents/index.mjs';
 import { PERMISSIONS } from './sessions.mjs';
 import { readLog, writeLog, logFiles } from './logs.mjs';
 import { expandMentions, mentionOptions } from './mentions.mjs';
@@ -18,9 +19,15 @@ import { ofUserLabel, userLabel, assistantName } from '../core/board.mjs';
 import * as github from './github.mjs';
 import * as installer from './installer.mjs';
 import * as expert from './expert.mjs';
-import { adbStatus, ensureAdb } from './android.mjs';
+import { adbStatus, ensureAdb, adbPath } from './android.mjs';
+import * as net from '../core/network.mjs';
+import { spawn } from 'node:child_process';
 import { mcpFolder } from './mcp-folder.mjs';
-import { modelCatalog, refreshModels, refreshAllModels } from './catalog.mjs';
+import { modelCatalog, refreshModels, refreshAllModels, chooseModel, LEVELS } from './catalog.mjs';
+import { whiteboard } from './whiteboard.mjs';
+import { opti } from './opti.mjs';
+import { readOce } from './bridge.mjs';
+import { quickStats } from '../core/pc-health.mjs';
 import { translate } from '../core/i18n.mjs';
 
 // Names of the fields in the messages (Spanish as they were; the key is the Spanish word).
@@ -47,6 +54,19 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   const insideHome = (p) => { const rel = path.relative(realHome, p); return Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel); };
   const project = (name) => board.project(str(name, 'proyecto', 200)) ?? fail(tr('msg.api.noProject', { name }));
   let lastChat = board.one('SELECT MAX(id) AS id FROM chat')?.id ?? 0;
+  const wb = whiteboard(board);
+  const optiApi = opti({ board, sessions });
+  // 2.7: a picture the window may show: an image file inside Orb's folder, a project, or an agent account's own folder
+  // (Codex keeps what it makes in <CODEX_HOME>/generated_images). 25 MB at most.
+  const allowedImage = (file) => {
+    const real = (() => { try { return fs.realpathSync(file); } catch { return fail(tr('msg.api.badImage')); } })();
+    if (!/\.(png|jpe?g|webp|gif)$/i.test(real)) fail(tr('msg.api.badImage'));
+    const roots = [ctx.home, ...board.projects().map((p) => p.path), ...accountsOf('codex').map((a) => accountDir(a)), ...accountsOf('claude').map((a) => accountDir(a))];
+    const inside = (root) => { try { const r = fs.realpathSync(root); return real.toLowerCase().startsWith(`${r.toLowerCase()}${path.sep}`); } catch { return false; } };
+    if (!roots.some(inside)) fail(tr('msg.api.badImage'));
+    if (fs.statSync(real).size > 25 * 1024 * 1024) fail(tr('msg.api.badImage'));
+    return real;
+  };
 
   // The current conversation with the assistant (since the last "Nueva conversación"), at most 120 messages.
   const currentChat = () => {
@@ -60,7 +80,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   const accept = (ids, project) => {
     const done = board.accept(ids, 'usuario');
     if (!done.length) fail(tr('msg.api.noDoneTasks'));
-    board.addChat('system', tr(done.length > 1 ? 'msg.api.okMany' : 'msg.api.okOne', { who: ofUserLabel(), ids: done.map((t) => `#${t.id}`).join(', ') }));
+    board.notice(tr(done.length > 1 ? 'msg.api.okMany' : 'msg.api.okOne', { who: ofUserLabel(), ids: done.map((t) => `#${t.id}`).join(', ') }), 'success');
     try { writeLog(board, project ?? done[0].project, { tema: tr('sys.logs.okTopic', { ids: done.map((t) => `#${t.id}`).join(', ') }), pedido: tr('sys.logs.okRequest'), hecho: tr('sys.logs.okDone', { user: userLabel(), list: done.map((t) => `#${t.id} ${oneLine(t.title, 80)}`).join('; ') }), estado: tr('sys.logs.okStatus') }, `${ctx.config.assistantName} (app)`); } catch (error) { log(`bitácora del OK: ${error.message}`); }
     return done.map((t) => t.id);
   };
@@ -71,7 +91,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       config: ctx.config, paused: board.setting('paused') === '1', activeProject: board.activeProject(),
       approvals: sessions.allPendingApprovals().map((a) => ({ id: a.id, session_id: a.session_id, body: { title: a.body?.title, reason: a.body?.reason }, session: a.session })),
       counts: Object.fromEntries(board.all('SELECT status, COUNT(*) AS n FROM tasks GROUP BY status').map((r) => [r.status, r.n])),
-      chat: orchestrator.state(), assistant: orchestrator.info(),
+      chat: orchestrator.state(), assistant: orchestrator.info(), optiSession: board.setting('opti_session') ?? null,
       // 2.6: the tasks («t<id>») and conversations («s<id>») the user put away in «Completados» of the sidebar.
       completed: board.settingJson('sidebar_completed') ?? []
     }),
@@ -110,6 +130,24 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       emit('config:changed', c);
       return c.accounts.find((a) => a.id === id);
     },
+    // 2.7: saved logins of this agent elsewhere on the PC that are not accounts yet (only presence is checked).
+    'accounts.scan': async ({ agent }) => {
+      agent = oneOf(agent, AGENT_IDS, 'agente');
+      if (!MULTI[agent]) fail(tr('msg.api.oneAccountOnly', { agent }));
+      const found = await findAccountFolders(agent);
+      if (agent !== 'codex' || !found.length) return found;
+      // Codex says whose account each folder holds: a folder with an account Orb already has, or a copy of another
+      // folder found (the most recent is kept), is not offered. Each one gets its plan (Go, Plus, Pro…) for its name.
+      const exe = executable('codex'); if (!exe) return found;
+      const [mine, theirs] = await Promise.all([
+        Promise.all(accountsOf('codex').slice(0, 6).map((a) => codexAccountInfo(exe, accountDir(a)))),
+        Promise.all(found.slice(0, 8).map((f) => codexAccountInfo(exe, f.dir)))
+      ]);
+      const seen = new Set(mine.map((i) => i?.who).filter(Boolean));
+      const out = [];
+      found.slice(0, 8).forEach((f, i) => { const info = theirs[i]; if (info?.who && seen.has(info.who)) return; if (info?.who) seen.add(info.who); out.push({ ...f, plan: info?.plan ?? null }); });
+      return out;
+    },
     'accounts.update': ({ id, label, enabled }) => {
       const acc = ctx.config.accounts.find((a) => a.id === str(id, 'cuenta', 40)) ?? fail(tr('msg.api.noAccount'));
       const next = ctx.config.accounts.map((a) => (a.id === acc.id ? { ...a, ...(label !== undefined ? { label: oneLine(str(label, 'nombre', 60), 60) } : {}), ...(enabled !== undefined ? { enabled: Boolean(enabled) } : {}) } : a));
@@ -131,7 +169,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'system.check': async () => { const r = await quickRun('git', ['--version'], { timeoutMs: 8000 }); return { platform: process.platform, git: r.ok ? r.out.replace(/^git version\s*/, '') : null }; },
 
     'projects.list': () => (syncProjects(board), board.projects()).map((p) => ({ ...p, inHome: insideHome(p.path), category: categoryOf(realHome, p.path), active: board.setting('active_project') === p.name, open: board.one("SELECT COUNT(*) AS n FROM tasks WHERE project = ? AND status IN ('queued', 'awaiting_approval', 'running')", p.name).n })),
-    'projects.create': ({ name, notes, category }) => createProject(board, { name: str(name, 'nombre', 60), notes: str(notes, 'notas', 2000, { optional: true }), category: oneOf(category, CATEGORIES, 'categoría', undefined) }, 'usuario'),
+    // 2.7: several platforms at once (categories) = a multiplatform group; returns the first project and the whole list.
+    'projects.create': ({ name, notes, category, categories }) => {
+      const cats = Array.isArray(categories) && categories.length ? categories.slice(0, 4).map((c) => oneOf(c, CATEGORIES, 'categoría')) : [oneOf(category, CATEGORIES, 'categoría', undefined)];
+      const made = createProjects(board, { name: str(name, 'nombre', 60), notes: str(notes, 'notas', 2000, { optional: true }), categories: cats }, 'usuario');
+      return { ...made[0], all: made.map((p) => p.name) };
+    },
     'projects.import': ({ name, folder }) => board.addProject({ name: str(name, 'nombre', 60), path: str(folder, 'carpeta', 1000) }, 'usuario', { fromUser: true }),
     'projects.remove': ({ name }) => board.removeProject(project(name).name, 'usuario'),
     'projects.setActive': ({ name }) => board.setActiveProject(name ? project(name).name : '', 'usuario'),
@@ -150,14 +193,94 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'mcp.folder': () => mcpFolder(),
     'android.status': () => adbStatus(),
     'android.install': () => ensureAdb({ log, force: true }),
+    // 2.7: Monitoreo del equipo › Red (core/network.mjs): real readings of Windows, PC only.
+    'net.wifi': () => net.wifi(),
+    'net.nearby': () => net.nearby(),
+    'net.devices': async ({ sweep }) => {
+      const r = await net.devices({ sweep: sweep === true });
+      const names = board.settingJson('net_names') ?? {};
+      return { ...r, devices: r.devices.map((d) => ({ ...d, alias: names[d.mac] ?? null })) };
+    },
+    'net.rename': ({ mac, name }) => {
+      const m = str(mac, 'mac', 17); if (!/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(m)) fail(tr('msg.api.invalid', { name: 'mac' }));
+      const names = board.settingJson('net_names') ?? {}; const n = oneLine(str(name, 'nombre', 40, { optional: true }) ?? '', 40).trim();
+      if (n) names[m] = n; else delete names[m];
+      board.settingJson('net_names', names); return true;
+    },
+    // Another computer of the network, without Orb on it: Windows' own Remote Desktop, or SSH in a terminal (each asks for
+    // its own login; Orb never sees it).
+    'net.remote': ({ ip, kind, user }) => {
+      const host = str(ip, 'ip', 15); if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) fail(tr('msg.api.invalid', { name: 'ip' }));
+      const how = oneOf(kind, ['rdp', 'ssh'], 'tipo');
+      if (how === 'rdp') { spawn('mstsc.exe', [`/v:${host}`], { detached: true, stdio: 'ignore', windowsHide: false }).unref(); return true; }
+      const who = str(user, 'usuario', 32); if (!/^[\w.-]{1,32}$/.test(who)) fail(tr('msg.api.invalid', { name: 'usuario' }));
+      spawn('cmd.exe', ['/c', 'start', 'SSH', 'cmd.exe', '/k', 'ssh', `${who}@${host}`], { detached: true, stdio: 'ignore' }).unref();
+      return true;
+    },
+    // Android phones and TVs by adb (wireless pairing with the code the device shows).
+    'android.devices': async () => (adbStatus().ready ? { ready: true, devices: await net.adbDevices(adbPath()) } : { ready: false, devices: [] }),
+    'android.pair': ({ host, code }) => net.adbPair(adbPath(), str(host, 'dirección', 21), str(code, 'código', 6)),
+    'android.connect': ({ host }) => net.adbConnect(adbPath(), str(host, 'dirección', 21)),
+    'android.info': ({ serial }) => net.adbInfo(adbPath(), str(serial, 'dispositivo', 80)),
 
     'github.status': () => github.status(),
+    'github.contributions': () => github.contributions(),
     'github.login': () => github.login(),
 
     'chat.list': () => currentChat(),
     'chat.send': ({ text }) => { const t = str(text, 'mensaje', 20000); return orchestrator.ask(t, expandMentions(board, sessions, t)); },
     'chat.reset': () => orchestrator.reset(),
     'chat.stop': () => orchestrator.stop(),
+    // 2.7: Monitoreo del equipo (src/engine/opti.mjs): Opti Bot's conversation, the PC's quick numbers and the answer to
+    // one of its action cards. PC only (not in the phone's list).
+    'opti.session': () => optiApi.session(),
+    'opti.stats': async () => ({ ...(await quickStats()), oce: readOce() }),
+    'opti.act': ({ item, decision }) => optiApi.act({ item: int(item, 'tarjeta'), decision: oneOf(decision, ['allow', 'deny'], 'decisión') }),
+    // 2.7: pictures the agents make (Codex image_gen): shown in the conversation, a zone marked to change, saved in the
+    // project. Read only from the agents' own picture folders, Orb's folder and the projects; written only into Orb's
+    // folder (the marked copy) and <project>/imagenes.
+    'images.read': ({ path: file }) => {
+      const f = allowedImage(str(file, 'imagen', 1000));
+      const ext = path.extname(f).slice(1).toLowerCase();
+      return { dataUrl: `data:${ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : ext === 'gif' ? 'image/gif' : 'image/png'};base64,${fs.readFileSync(f).toString('base64')}` };
+    },
+    'images.mark': ({ dataUrl }) => {
+      const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl ?? ''));
+      if (!m || m[1].length > 34 * 1024 * 1024) fail(tr('msg.api.badImage'));
+      const dir = path.join(ctx.paths.internal, 'imagenes'); fs.mkdirSync(dir, { recursive: true });
+      const file = path.join(dir, `zona-${Date.now()}.png`); fs.writeFileSync(file, Buffer.from(m[1], 'base64'));
+      return { path: file };
+    },
+    'images.save': ({ path: file, project: name }) => {
+      const f = allowedImage(str(file, 'imagen', 1000));
+      const p = project(name);
+      const dir = path.join(p.path, 'imagenes'); fs.mkdirSync(dir, { recursive: true });
+      let base = path.basename(f).replace(/[^\w.-]/g, '_'); const ext = path.extname(base); const stem = base.slice(0, base.length - ext.length);
+      for (let i = 2; fs.existsSync(path.join(dir, base)); i++) base = `${stem}-${i}${ext}`;
+      fs.copyFileSync(f, path.join(dir, base));
+      return { path: path.join(dir, base), name: base };
+    },
+    // 2.7: the Pizarra of each project (src/engine/whiteboard.mjs), saved in <project>/pizarra.
+    'whiteboard.load': ({ project }) => wb.load({ project: str(project, 'proyecto', 200) }),
+    'whiteboard.save': ({ project, elements, appState, files, png }) => wb.save({ project: str(project, 'proyecto', 200), elements, appState, files, png }),
+    'whiteboard.attach': ({ project, paths }) => wb.attach({ project: str(project, 'proyecto', 200), paths }),
+    'whiteboard.note': ({ project, file, note }) => wb.note({ project: str(project, 'proyecto', 200), file: str(file, 'archivo', 200), note }),
+    'whiteboard.remove': ({ project, file }) => wb.remove({ project: str(project, 'proyecto', 200), file: str(file, 'archivo', 200) }),
+    'whiteboard.folder': ({ project }) => wb.folder({ project: str(project, 'proyecto', 200) }),
+    // 2.7: the answer to a question card (orb_ask): the options picked and/or own words, or skipped. The card keeps it and
+    // the assistant gets it as the user's next message.
+    'chat.answer': ({ id, choices, other, skip }) => {
+      const row = board.chat(500).find((m) => m.id === int(id, 'mensaje'));
+      if (row?.meta?.kind !== 'question' || row.meta.status !== 'pending') fail(tr('msg.api.questionGone'));
+      const labels = new Set(row.meta.options.map((o) => o.label));
+      const picked = (Array.isArray(choices) ? choices : []).map((c) => String(c)).filter((c) => labels.has(c)).slice(0, row.meta.multi ? 4 : 1);
+      const own = other === undefined ? '' : oneLine(str(other, 'respuesta', 2000, { optional: true }) ?? '', 2000).trim();
+      if (!skip && !picked.length && !own) fail(tr('msg.api.answerEmpty'));
+      const answer = skip ? '' : [...picked, ...(own ? [own] : [])].join(' · ');
+      board.patchChatMeta(row.id, { ...row.meta, status: skip ? 'skipped' : 'answered', answer });
+      const text = skip ? tr('msg.api.questionSkipped', { question: row.meta.question }) : tr('msg.api.questionAnswer', { question: row.meta.question, answer });
+      return orchestrator.ask(text);
+    },
     'chat.accept': ({ id }) => {
       const row = board.chat(500).find((m) => m.id === int(id, 'mensaje'));
       if (row?.meta?.kind !== 'report') fail(tr('msg.api.notReport'));
@@ -197,12 +320,19 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       if (patch.agent && patch.agent !== (before.agent ?? 'claude')) orchestrator.forget();
       const info = orchestrator.info();
       const level = { low: tr('msg.api.reasoningLow'), medium: tr('msg.api.reasoningMedium'), high: tr('msg.api.reasoningHigh') }[c.orchestrator.reasoning] ?? c.orchestrator.reasoning;
-      if ((patch.model !== undefined && patch.model !== before.model) || (patch.agent && patch.agent !== (before.agent ?? 'claude')) || (patch.reasoning && patch.reasoning !== before.reasoning)) board.addChat('system', tr('msg.api.assistantBrain', { name: assistantName(), agent: info.agentLabel, label: info.modelLabel, reasoning: level }));
-      if (patch.orchestrate !== undefined && patch.orchestrate !== before.orchestrate) board.addChat('system', patch.orchestrate ? tr('msg.api.modeOrchestrator') : tr('msg.api.modeFree'));
+      if ((patch.model !== undefined && patch.model !== before.model) || (patch.agent && patch.agent !== (before.agent ?? 'claude')) || (patch.reasoning && patch.reasoning !== before.reasoning)) board.notice(tr('msg.api.assistantBrain', { name: assistantName(), agent: info.agentLabel, label: info.modelLabel, reasoning: level }), 'info');
+      if (patch.orchestrate !== undefined && patch.orchestrate !== before.orchestrate) board.notice(patch.orchestrate ? tr('msg.api.modeOrchestrator') : tr('msg.api.modeFree'), 'info');
       return info;
     },
     // 2.6: the brains to choose from (agent + model), which ones spend the quota faster and how used each account is.
     // Kept for a few seconds: the window asks again on every change of the board (while the agents work, many a second).
+    // 2.7: the guide of Ajustes › Tareas y usos: each agent's models by kind (light, balanced, most capable) and what Orb
+    // would choose for a simple, normal and complex task with the current slider.
+    'models.guide': () => modelCatalog(board).map((a) => ({
+      id: a.id, label: a.label,
+      tiers: Object.fromEntries(['light', 'balanced', 'heavy'].map((tier) => [tier, a.models.filter((m) => m.id && m.tier === tier).map((m) => m.label)])),
+      picks: Object.fromEntries(LEVELS.map((level) => { const p = chooseModel(board, a.id, level, a.accounts[0]?.id ?? a.id); return [level, { label: p.label, tier: p.tier, reasoning: p.reasoning }]; }))
+    })),
     'models.catalog': () => {
       const key = JSON.stringify([ctx.config.orchestrator, ctx.config.agentOrder, Object.keys(ctx.config.agents).map((a) => ctx.config.agents[a]?.enabled), board.setting('models_rev')]);
       if (catalogCache && catalogCache.key === key && Date.now() - catalogCache.at < 5000) return catalogCache.value;
@@ -222,7 +352,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       project: project(p.project).name, title: str(p.title, 'título', 200), description: str(p.description, 'descripción', 12000),
       agent: oneOf(p.agent, [...AGENT_IDS, 'any'], 'agente', 'any'), model: str(p.model, 'modelo', 80, { optional: true }) || null,
       reasoning: oneOf(p.reasoning, ['low', 'medium', 'high'], 'razonamiento', 'medium'), mode: oneOf(p.mode, ['carpeta', 'aislada'], 'modo', 'carpeta'),
-      readonly: Boolean(p.readonly), account: str(p.account, 'cuenta', 40, { optional: true }) || null, depends_on: Array.isArray(p.depends_on) ? p.depends_on.map((d) => int(d, 'dependencia')) : []
+      readonly: Boolean(p.readonly), account: str(p.account, 'cuenta', 40, { optional: true }) || null, level: oneOf(p.level, ['simple', 'normal', 'complejo'], 'nivel', null), depends_on: Array.isArray(p.depends_on) ? p.depends_on.map((d) => int(d, 'dependencia')) : []
     }, 'usuario'),
     'tasks.approve': ({ id, decision, hash }) => board.approve(int(id, 'tarea'), decision === 'approved' ? 'approved' : 'rejected', 'usuario', str(hash, 'huella', 100)),
     'tasks.retry': ({ id }) => board.retry(int(id, 'tarea'), 'usuario'),
@@ -350,10 +480,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     },
     // New chat lines since the last call (the window uses them for notifications when it is in the background).
     notifyNewChat() {
+      try { optiApi.flush(); } catch { /* Opti Bot off or its conversation gone */ }
       const rows = board.all('SELECT id, role, body, meta FROM chat WHERE id > ? ORDER BY id LIMIT 20', lastChat);
       if (!rows.length) return;
       lastChat = rows[rows.length - 1].id;
-      for (const r of rows) if (r.role !== 'usuario') { let meta = null; try { meta = r.meta ? JSON.parse(r.meta) : null; } catch { /* plain */ } emit('chat:new', { role: r.role, body: oneLine(r.body, 240), meta }); }
+      for (const r of rows) if (r.role === 'notice') { let tone = 'info'; try { tone = JSON.parse(r.meta)?.tone ?? 'info'; } catch { /* plain */ } emit('notice', { body: oneLine(r.body, 300), tone }); } // 2.7: a passing notification, not a chat line
+      else if (r.role !== 'usuario') { let meta = null; try { meta = r.meta ? JSON.parse(r.meta) : null; } catch { /* plain */ } emit('chat:new', { role: r.role, body: oneLine(r.body, 240), meta }); }
     },
     // Running tasks stay "running": the next start continues them (scheduler.finish does not close them while closing).
     shutdown() { scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stop(); orchestrator.closeLive(); log('motor detenido'); }

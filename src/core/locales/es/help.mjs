@@ -87,10 +87,10 @@ export default {
   'help.tut.phone.l3': 'Desde el móvil chateas, apruebas, das el OK y sigues las tareas. Lo delicado (ajustes, cuentas, instalar, acceso total, archivos del PC) solo desde el PC.',
   'help.tut.phone.go': 'Abrir Móvil',
 
-  'help.tut.expert.title': 'Modo experto',
-  'help.tut.expert.l1': 'Se activa en Ajustes › Modo experto (solo en el PC, en ventanas anchas).',
+  'help.tut.expert.title': 'God mode',
+  'help.tut.expert.l1': 'Se activa en Ajustes › God mode (solo en el PC, en ventanas anchas).',
   'help.tut.expert.l2': 'Alrededor del chat: explorador y visor de archivos, cambios de git con su diff, historial, lo que está en marcha, uso de las cuentas, carga del PC y actividad. Eliges qué paneles ver.',
-  'help.tut.expert.go': 'Abrir Modo experto',
+  'help.tut.expert.go': 'Abrir God mode',
 
   'help.tut.games.title': 'Minijuegos',
   'help.tut.games.l1': 'Mientras los agentes trabajan, el mando de la barra del chat abre los minijuegos: Serpiente, Tetris, Ajedrez, Jumper, 2048, Ladrillos, Space Invaders y Pac-Man.',
@@ -200,7 +200,7 @@ export default {
   'help.tour.tutorials.title': 'Tutoriales',
   'help.tour.tutorials.text': 'Estas explicaciones por escrito, las preguntas frecuentes, los atajos de teclado y el botón para repetir este recorrido.',
   'help.tour.settings.title': 'Ajustes',
-  'help.tour.settings.text': 'Nombre e idioma, apariencia y temas, tareas y cupo, móvil, herramientas, modo experto y actualizaciones.',
+  'help.tour.settings.text': 'Nombre e idioma, apariencia y temas, tareas y cupo, móvil, herramientas, God mode y actualizaciones.',
   'help.tour.end.title': 'Listo',
   'help.tour.end.text': 'Ya conoces lo principal. Elige un proyecto, cuéntame qué quieres y empezamos.'
 };

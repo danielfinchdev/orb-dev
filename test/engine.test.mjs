@@ -18,6 +18,76 @@ before(async () => {
 });
 after(async () => { await engine?.stop(); t.cleanup(); });
 
+test('2.7: lo que solo informa (carpeta de trabajo) pasa como notificación, no como línea del chat', async () => {
+  await until(async () => events.some((e) => e.event === 'notice' && /Carpeta de trabajo: web/.test(e.payload?.body) && e.payload.tone === 'info'), 'aviso de la carpeta', 5000);
+  assert.ok(!(await call('chat.list')).some((m) => /Carpeta de trabajo/.test(m.body)));
+});
+
+test('2.7: Pizarra: se guarda en la carpeta pizarra del proyecto, fuera de git, con resumen para el asistente', async () => {
+  const web = (await call('projects.list')).find((p) => p.name === 'web');
+  const dir = path.join(web.path, 'pizarra');
+  assert.deepEqual((await call('whiteboard.load', { project: 'web' })).elements, [], 'empieza vacía');
+  const png = Buffer.from('89504e470d0a1a0a', 'hex').toString('base64');
+  const elements = [{ id: 'a', type: 'text', text: 'Botón de pagar arriba', x: 0, y: 10, version: 1 }, { id: 'b', type: 'arrow', x: 0, y: 40, version: 1 }, { id: 'c', type: 'text', text: 'borrado', x: 0, y: 0, version: 1, isDeleted: true }];
+  await call('whiteboard.save', { project: 'web', elements, appState: { viewBackgroundColor: '#fff' }, files: { img1: { mimeType: 'image/png', dataURL: `data:image/png;base64,${png}` } }, png: `data:image/png;base64,${png}` });
+  assert.ok(fs.existsSync(path.join(dir, 'pizarra.excalidraw')) && fs.existsSync(path.join(dir, 'pizarra.png')) && fs.existsSync(path.join(dir, 'imagenes', 'img1.png')));
+  const loaded = await call('whiteboard.load', { project: 'web' });
+  assert.deepEqual(loaded.elements.map((e) => e.id), ['a', 'b'], 'lo borrado no se guarda');
+  assert.match(loaded.files.img1.dataURL, /^data:image\/png;base64,/);
+  // An attachment from the PC, with its note; then taken out (kept in .papelera, never deleted).
+  const src = path.join(t.home, 'referencia.txt'); fs.writeFileSync(src, 'hola');
+  const list = await call('whiteboard.attach', { project: 'web', paths: [src] });
+  assert.equal(list[0].name, 'referencia.txt');
+  await call('whiteboard.note', { project: 'web', file: 'referencia.txt', note: 'Así quiero el texto de bienvenida' });
+  const md = fs.readFileSync(path.join(dir, 'PIZARRA.md'), 'utf8');
+  assert.match(md, /Botón de pagar arriba/); assert.match(md, /1 flechas/); assert.match(md, /referencia\.txt .*Así quiero el texto de bienvenida/); assert.doesNotMatch(md, /borrado/);
+  await assert.rejects(call('whiteboard.note', { project: 'web', file: '../../orb.json', note: 'x' }));
+  assert.deepEqual(await call('whiteboard.remove', { project: 'web', file: 'referencia.txt' }), []);
+  assert.equal(fs.readdirSync(path.join(dir, '.papelera')).length, 1);
+  assert.match(fs.readFileSync(path.join(web.path, '.git', 'info', 'exclude'), 'utf8'), /^\/pizarra\/$/m, 'fuera de git');
+  assert.ok(!git(web.path, 'status', '--porcelain').stdout.includes('pizarra'), 'git no la ve');
+});
+
+test('2.7: imagen de un agente: se ve, se marca una zona y se guarda en el proyecto; fuera de las carpetas permitidas, no', async () => {
+  const s = await call('sessions.create', { agent: 'codex', project: 'web', title: 'Imágenes' });
+  await call('sessions.send', { id: s.id, text: 'CREA_IMAGEN' });
+  const img = await until(async () => (await call('sessions.items', { id: s.id })).find((i) => i.kind === 'image'), 'imagen en la conversación', 20000);
+  assert.match((await call('images.read', { path: img.body.path })).dataUrl, /^data:image\/png;base64,/);
+  const mark = await call('images.mark', { dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==' });
+  assert.ok(fs.existsSync(mark.path));
+  const saved = await call('images.save', { path: img.body.path, project: 'web' });
+  const web = (await call('projects.list')).find((p) => p.name === 'web');
+  assert.ok(saved.path.startsWith(path.join(web.path, 'imagenes')) && fs.existsSync(saved.path));
+  fs.rmSync(path.join(web.path, 'imagenes'), { recursive: true, force: true }); // the next tests want a clean project folder
+  const outside = path.join(path.dirname(t.home), `fuera-${Date.now()}.png`); fs.copyFileSync(mark.path, outside);
+  try { await assert.rejects(call('images.read', { path: outside }), /no se puede abrir/); } finally { fs.rmSync(outside, { force: true }); }
+});
+
+test('2.7: un pedido grande: el consejo de usar la pizarra sale con su botón, debajo de la respuesta', async () => {
+  await until(async () => !(await call('app.state')).chat.busy, 'asistente libre');
+  await call('chat.send', { text: 'PIDE_PIZARRA' });
+  const tip = await until(async () => (await call('chat.list')).find((m) => m.meta?.kind === 'board'), 'consejo de la pizarra', 20000);
+  assert.match(tip.body, /tres pantallas/); assert.equal(tip.meta.project, 'web');
+  await until(async () => !(await call('app.state')).chat.busy, 'fin del turno');
+});
+
+test('2.7: pregunta con opciones: tarjeta debajo de la respuesta, actividad en vivo y la respuesta llega al asistente', async () => {
+  await call('chat.send', { text: 'PREGUNTA_OPCIONES' });
+  const card = await until(async () => (await call('chat.list')).find((m) => m.meta?.kind === 'question'), 'tarjeta de pregunta', 20000);
+  assert.equal(card.meta.status, 'pending');
+  assert.deepEqual(card.meta.options.map((o) => o.label), ['Rápido (Recomendado)', 'Completo']);
+  const list = await call('chat.list');
+  assert.ok(list.some((m) => m.role === 'orb' && !m.meta && m.id < card.id), 'la tarjeta va debajo de la respuesta del turno');
+  assert.ok(events.some((e) => e.event === 'chat:state' && e.payload.busy && e.payload.since && e.payload.tools?.some((s) => s.name === 'orb_ask' && s.at)), 'pasos con nombre y hora');
+  await until(async () => !(await call('app.state')).chat.busy, 'fin del turno');
+  await call('chat.answer', { id: card.id, choices: ['Completo', 'otra que no existe'] });
+  const after = await call('chat.list');
+  assert.equal(after.find((m) => m.id === card.id).meta.answer, 'Completo');
+  assert.ok(after.some((m) => m.role === 'usuario' && m.body === 'Mi respuesta a «¿Qué enfoque prefieres?»: Completo'));
+  await assert.rejects(call('chat.answer', { id: card.id, skip: true }), /ya está respondida/);
+  await until(async () => !(await call('app.state')).chat.busy, 'respuesta a la elección');
+});
+
 test('ciclo completo: el asistente crea la tarea, el agente la hace, el asistente informa y el usuario da el OK', async () => {
   await call('chat.send', { text: 'CREA_TAREA web' });
   const task = await until(async () => (await call('tasks.list')).find((x) => x.title === 'Tarea del asistente'), 'tarea del asistente');

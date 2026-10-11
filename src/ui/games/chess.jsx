@@ -15,22 +15,26 @@ const START_COUNT = { p: 8, n: 2, b: 2, r: 2, q: 1 };
 const SQ = 50; const SIZE = SQ * 8;
 const FILES = 'abcdefgh';
 
-// ---- the computer's brain: a worker when it can, the same code on this thread if not.
+// ---- the computer's brain: a worker when it can, the same code on this thread if not. The worker gets 4 s to think;
+// on this thread it only gets a short moment, so the window never freezes.
+const WORKER_BUDGET = 4000; const LOCAL_BUDGET = 300;
 let worker = null; let workerBroken = false; let seq = 0;
 function think(game, level) {
   return new Promise((resolve) => {
-    const local = () => resolve(bestMove(game, level));
+    const local = () => resolve(bestMove(game, level, { budget: LOCAL_BUDGET }));
     if (workerBroken || typeof Worker === 'undefined') return local();
     try {
       worker ||= new Worker(new URL('./chess-worker.js', import.meta.url), { type: 'module' });
     } catch { workerBroken = true; return local(); }
     const id = ++seq; let done = false;
+    const drop = () => { try { worker?.terminate(); } catch { /* already gone */ } worker = null; };
     const finish = (fn) => { if (done) return; done = true; clearTimeout(timer); worker?.removeEventListener('message', onMessage); worker?.removeEventListener('error', onError); fn(); };
     const onMessage = (e) => { if (e.data?.id === id) finish(() => resolve(e.data.move)); };
-    const onError = () => { workerBroken = true; try { worker?.terminate(); } catch { /* already gone */ } worker = null; finish(local); };
-    const timer = setTimeout(onError, 12000); // a worker that never answers: think here instead
+    const onError = () => finish(() => { workerBroken = true; drop(); local(); });
+    // A worker that does not answer in time (a very busy PC): start a fresh one next move and answer quickly here.
+    const timer = setTimeout(() => finish(() => { drop(); local(); }), WORKER_BUDGET + 3000);
     worker.addEventListener('message', onMessage); worker.addEventListener('error', onError);
-    worker.postMessage({ id, game, level });
+    worker.postMessage({ id, game, level, budget: WORKER_BUDGET });
   });
 }
 

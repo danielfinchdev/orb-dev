@@ -1,7 +1,7 @@
 // The star view: the conversation with the assistant. Under the message box: the working project, the assistant's model
 // (Sonnet / Opus) and the "Orquestador" box (ticked = only coordinates; unticked = free mode, works directly).
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, Square, RotateCcw, Pause, Play, Gamepad2, Wrench, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign } from 'lucide-react';
+import { ArrowUp, Square, RotateCcw, Pause, Play, Gamepad2, Wrench, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign, ChevronLeft, ChevronRight, PenTool } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Markdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
@@ -10,8 +10,10 @@ import { LiveTasksStrip } from '@/components/live-tasks.jsx';
 import { confirm } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Spinner } from '@/components/ui/basic.jsx';
-import { Switch, Tip, BubbleTip } from '@/components/ui/overlay.jsx';
-import { useStore, call, act, setState, go, bridge, openGames } from '@/lib/store.js';
+import { Switch, Tip, BubbleTip, Popover, PopoverTrigger, PopoverContent } from '@/components/ui/overlay.jsx';
+import { useStore, call, act, setState, getState, go, bridge, openGames } from '@/lib/store.js';
+import { pickGreeting, pickSubtitle } from '@/lib/greeting.js';
+import { LiveActivity, QuestionCard } from '@/components/chat-live.jsx';
 import { ContextMeter } from './session.jsx';
 import { BrainPicker, ReasoningPicker, UsageBubble, useCatalog, useUsageBubble } from '@/components/brain-picker.jsx';
 import { cn } from '@/lib/utils.js';
@@ -90,15 +92,69 @@ export function Composer({ value, onChange, onSend, onStop, busy, placeholder, t
 }
 
 // 2.6: the system's date and time on the left of the chat's top bar (app.css .bar-clock, in the theme's title type).
+// 2.7: a different greeting each time the chat opens (lib/greeting.js); the last one is remembered so it does not repeat.
+function useGreeting() {
+  const [g] = useState(() => {
+    const { app, tasks, projects } = getState();
+    let last = {}; try { last = JSON.parse(localStorage.getItem('orb.greet') || '{}'); } catch { /* none */ }
+    const pick = pickGreeting({ tasks, project: app.activeProject?.name ?? null, first: !tasks.length && !projects.length, serious: app.config.ui?.skin === 'profesional', last: last.key });
+    const sub = pickSubtitle({ last: last.sub });
+    try { localStorage.setItem('orb.greet', JSON.stringify({ key: pick.key, sub })); } catch { /* storage unavailable */ }
+    return { ...pick, sub };
+  });
+  return g;
+}
+
+// 2.7: with the pointer on it, the seconds too; a click opens the month's calendar in a bubble (MonthCalendar).
 function BarClock() {
+  const t = useT();
   const locale = useLocale();
   const [now, setNow] = useState(() => new Date());
-  useEffect(() => { const id = setInterval(() => setNow(new Date()), 15_000); return () => clearInterval(id); }, []);
+  const [hover, setHover] = useState(false);
+  const [open, setOpen] = useState(false);
+  const seconds = hover || open;
+  useEffect(() => { const id = setInterval(() => setNow(new Date()), seconds ? 1000 : 15_000); setNow(new Date()); return () => clearInterval(id); }, [seconds]);
   return (
-    <span className="bar-clock" data-testid="bar-clock">
-      <span className="bar-clock-time">{now.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}</span>
-      <span className="bar-clock-date">{now.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })}</span>
-    </span>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" className="bar-clock" data-testid="bar-clock" aria-label={t('chat.calendarOpen')} onPointerEnter={() => setHover(true)} onPointerLeave={() => setHover(false)} onFocus={() => setHover(true)} onBlur={() => setHover(false)}>
+          <span className="bar-clock-time">{now.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', ...(seconds ? { second: '2-digit' } : {}) })}</span>
+          <span className="bar-clock-date">{now.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="bottom" align="start" className="orb-cal" data-testid="bar-calendar"><MonthCalendar today={now} /></PopoverContent>
+    </Popover>
+  );
+}
+// A month at a glance: the days of the week from the language's first day (Monday in Spanish), today marked, arrows to
+// move between months and a button back to today.
+function MonthCalendar({ today }) {
+  const t = useT();
+  const locale = useLocale();
+  const [shown, setShown] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
+  const first = (() => { try { const w = new Intl.Locale(locale).getWeekInfo?.() ?? new Intl.Locale(locale).weekInfo; return (w?.firstDay ?? 1) % 7; } catch { return 1; } })();
+  const year = shown.getFullYear(); const month = shown.getMonth();
+  const lead = (new Date(year, month, 1).getDay() - first + 7) % 7;
+  const days = new Date(year, month + 1, 0).getDate();
+  const cells = [...Array(lead).fill(null), ...Array.from({ length: days }, (_, i) => i + 1)];
+  while (cells.length % 7) cells.push(null);
+  const names = Array.from({ length: 7 }, (_, i) => new Date(2024, 0, 7 + ((first + i) % 7)).toLocaleDateString(locale, { weekday: 'narrow' })); // 7 Jan 2024 was a Sunday
+  const isToday = (d) => d && year === today.getFullYear() && month === today.getMonth() && d === today.getDate();
+  const thisMonth = year === today.getFullYear() && month === today.getMonth();
+  const move = (n) => setShown(new Date(year, month + n, 1));
+  return (
+    <div className="grid gap-2">
+      <div className="flex items-center gap-1">
+        <span className="orb-cal-title flex-1 truncate px-1 text-[14px] font-semibold" aria-live="polite" data-testid="bar-calendar-title">{shown.toLocaleDateString(locale, { month: 'long', year: 'numeric' })}</span>
+        <button type="button" className="orb-cal-nav" onClick={() => move(-1)} aria-label={t('chat.calendarPrev')}><ChevronLeft className="size-4" /></button>
+        <button type="button" className="orb-cal-nav" onClick={() => move(1)} aria-label={t('chat.calendarNext')} data-testid="bar-calendar-next"><ChevronRight className="size-4" /></button>
+      </div>
+      <div className="grid grid-cols-7 gap-0.5 text-center" role="grid" aria-label={shown.toLocaleDateString(locale, { month: 'long', year: 'numeric' })}>
+        {names.map((n, i) => <span key={`h${i}`} className="orb-cal-head" role="columnheader">{n}</span>)}
+        {cells.map((d, i) => <span key={i} role="gridcell" aria-current={isToday(d) ? 'date' : undefined} className={cn('orb-cal-day', !d && 'invisible', isToday(d) && 'is-today', (first + i) % 7 === 0 || (first + i) % 7 === 6 ? 'is-weekend' : '')}>{d ?? ''}</span>)}
+      </div>
+      {thisMonth ? null : <button type="button" className="orb-cal-today" onClick={() => setShown(new Date(today.getFullYear(), today.getMonth(), 1))}>{t('chat.calendarToday')}</button>}
+    </div>
   );
 }
 // The time a message was written, small at its bottom right (the day too when it is not today).
@@ -113,6 +169,19 @@ function MsgTime({ at }) {
 
 function Message({ m, name, onChanges }) {
   const t = useT();
+  if (m.meta?.kind === 'question') return <QuestionCard m={m} />;
+  // 2.7: for a big request, the assistant's advice to define it on the Pizarra, with the way there.
+  if (m.meta?.kind === 'board') return (
+    <div className="flex gap-3">
+      <Robot size={32} still className="mt-0.5" />
+      <div className="chat-glass min-w-0 flex-1" data-testid="board-suggestion">
+        <div className="text-muted-foreground mb-1 text-xs">{name}</div>
+        <Markdown>{m.body}</Markdown>
+        <div className="chat-actions mt-2.5"><Button size="sm" onClick={() => go('board')} data-testid="open-board"><PenTool />{t('chat.openBoard')}</Button></div>
+        <div className="text-muted-foreground flow-root"><MsgTime at={m.at} /></div>
+      </div>
+    </div>
+  );
   if (m.role === 'usuario') return <div className="bg-bubble text-bubble-foreground ml-auto max-w-[80%] rounded-2xl rounded-br-md px-4 py-2.5 whitespace-pre-wrap break-words">{m.body}<MsgTime at={m.at} /></div>;
   if (m.role === 'orb') {
     const report = m.meta?.kind === 'report' && m.meta.tasks?.length ? m.meta : null;
@@ -186,6 +255,7 @@ export function ChatView() {
   const catalog = useCatalog();
   const brain = { agent: info.agent ?? 'claude', model: info.model ?? '', account: info.account, reasoning: info.reasoning ?? 'medium' };
   const bubble = useUsageBubble(catalog, brain);
+  const greeting = useGreeting();
 
   const send = async () => {
     const msg = text.trim(); if (!msg) return;
@@ -216,8 +286,8 @@ export function ChatView() {
             <div className="flex flex-col items-center gap-3 pt-10 text-center">
               <Robot size={130} mood="hello" live />
               <div className="chat-glass chat-hero flex flex-col items-center gap-3">
-                <h2 className="hero-title mt-2 text-2xl">{app.config.userName ? t('chat.helloUser', { user: app.config.userName, name }) : t('chat.hello', { name })}</h2>
-                <p className="text-muted-foreground max-w-md">{t('chat.intro')}</p>
+                <h2 className="hero-title mt-2 text-2xl" data-testid="chat-greeting">{app.config.userName ? t(greeting.key, { ...greeting, user: app.config.userName, name }) : t('chat.hello', { name })}</h2>
+                <p className="text-muted-foreground max-w-md">{t(greeting.sub)}</p>
               </div>
               <div className="mt-3 flex max-w-xl flex-wrap justify-center gap-2">{SUGGESTIONS.map((s) => <Button key={s} variant="outline" size="sm" className="h-auto rounded-full py-1.5 whitespace-normal" onClick={() => setText(t(s))}>{t(s)}</Button>)}</div>
             </div>
@@ -228,7 +298,7 @@ export function ChatView() {
               <div className="chat-glass min-w-0 flex-1">
                 <div className="text-muted-foreground mb-1 text-xs">{name}</div>
                 {chat.partial ? <Markdown>{chat.partial}</Markdown> : null}
-                <div className="text-muted-foreground mt-1 flex items-center gap-2 text-[13px]"><Spinner className="size-3.5" />{chat.tools?.length ? <><Wrench className="size-3.5" />{[...new Set(chat.tools)].slice(-4).join(', ')}</> : t('chat.thinking')}{chat.queued ? ` · ${t('chat.queued', { n: chat.queued })}` : ''}</div>
+                <LiveActivity chat={chat} />
               </div>
             </div>
           ) : null}

@@ -110,12 +110,16 @@ function evaluate(g) {
 }
 const order = (moves) => moves.sort((a, b) => (b.capture ? VALUE[b.capture.toLowerCase()] * 10 - VALUE[b.piece.toLowerCase()] : 0) - (a.capture ? VALUE[a.capture.toLowerCase()] * 10 - VALUE[a.piece.toLowerCase()] : 0));
 
-function search(g, depth, alpha, beta) {
+// The search stops when its time is up: `clock.end` is the deadline, checked every few hundred positions.
+const TIME_UP = Symbol('time up');
+const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+function search(g, depth, alpha, beta, clock) {
+  if (clock && ++clock.nodes % 256 === 0 && now() > clock.end) throw TIME_UP;
   if (depth === 0) return evaluate(g);
   const moves = legalMoves(g);
   if (!moves.length) return inCheck(g) ? -100000 - depth : 0;
   for (const m of order(moves)) {
-    const v = -search(play(g, m), depth - 1, -beta, -alpha);
+    const v = -search(play(g, m), depth - 1, -beta, -alpha, clock);
     if (v >= beta) return beta;
     if (v > alpha) alpha = v;
   }
@@ -123,14 +127,31 @@ function search(g, depth, alpha, beta) {
 }
 
 const DEPTH = { facil: 1, normal: 2, dificil: 3 };
-export function bestMove(g, level) {
-  const moves = order(legalMoves(g)); if (!moves.length) return null;
+// The computer's move. It deepens one level at a time and keeps the best move of the last level it finished, so it
+// answers within `budget` ms (the first level always finishes: it only looks one move ahead).
+export function bestMove(g, level, { budget = 4000 } = {}) {
+  let moves = order(legalMoves(g)); if (!moves.length) return null;
   // Easy also blunders now and then.
   if (level === 'facil' && Math.random() < 0.3) return moves[Math.floor(Math.random() * moves.length)];
-  let best = moves[0]; let alpha = -Infinity;
-  for (const m of moves) {
-    const v = -search(play(g, m), DEPTH[level] - 1, -Infinity, -alpha) + Math.random() * 6; // a little variety
-    if (v > alpha) { alpha = v; best = m; }
+  // A mate in one is played at once, however little time there is.
+  const mate = moves.find((m) => { const next = play(g, m); return inCheck(next) && !legalMoves(next).length; });
+  if (mate) return mate;
+  const clock = { end: now() + budget, nodes: 0 };
+  const noise = new Map(moves.map((m) => [m, Math.random() * 6])); // a little variety, the same at every level
+  let best = moves[0];
+  for (let depth = 1; depth <= (DEPTH[level] || 2); depth++) {
+    let alpha = -Infinity; let found = null; const scores = new Map();
+    try {
+      for (const m of moves) {
+        const v = -search(play(g, m), depth - 1, -Infinity, -alpha, depth > 1 ? clock : null) + noise.get(m);
+        scores.set(m, v);
+        if (v > alpha) { alpha = v; found = m; }
+      }
+    } catch (e) { if (e === TIME_UP) break; throw e; }
+    best = found || best;
+    // The next level looks at the best moves first, so a cut-off comes sooner.
+    moves = [...moves].sort((a, b) => (scores.get(b) ?? -Infinity) - (scores.get(a) ?? -Infinity));
+    if (now() > clock.end) break;
   }
   return best;
 }

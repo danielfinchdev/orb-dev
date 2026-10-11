@@ -2,6 +2,7 @@
 // and the one T3 Code uses): one process per conversation, a thread that stays open, streamed answers, steer, interrupt,
 // approval requests answered by the guard, native fork, context and the account's real usage limits.
 // It uses the user's own login (CODEX_HOME, ~/.codex by default): ChatGPT or API key, the app never reads auth.json.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -28,6 +29,26 @@ export function detect(cfg = {}) {
 export const codexHome = () => process.env.CODEX_HOME || path.join(userHome(), '.codex');
 export function loginState() { return firstFile([path.join(codexHome(), 'auth.json')]) ? 'si' : 'no'; }
 export const loginCommand = (exe) => ({ cmd: exe.cmd, args: [...exe.pre, 'login'] });
+
+// 2.7: whose account a session folder holds, asked to Codex itself (account/read; auth.json is never opened): the plan
+// and a short fingerprint of the account, so «Buscar y añadir» does not offer the same subscription twice. The e-mail
+// never leaves this function. null if Codex does not answer.
+export async function accountInfo(exe, dir, { timeoutMs = 20000 } = {}) {
+  let child; let peer;
+  try {
+    child = spawnAgent(exe.cmd, [...exe.pre, 'app-server'], { cwd: os.tmpdir(), env: { CODEX_HOME: dir }, log: () => {} });
+    peer = new JsonRpcPeer(child, { onNotification: () => {}, onRequest: async () => ({}), log: () => {} });
+    await peer.request('initialize', { clientInfo: { name: 'orb_dev', title: 'Orb', version: '2.7.0' }, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs });
+    peer.notify('initialized', {});
+    const r = await peer.request('account/read', { refreshToken: false }, { timeoutMs });
+    const acc = r?.account; if (!acc) return null;
+    const id = acc.email ?? acc.accountId ?? null;
+    return { plan: typeof acc.planType === 'string' ? acc.planType : null, who: id ? crypto.createHash('sha256').update(String(id).toLowerCase()).digest('hex').slice(0, 16) : null };
+  } catch { return null; } finally {
+    try { peer?.close(); } catch { /* gone */ }
+    try { killTree(child); } catch { /* gone */ }
+  }
+}
 
 const toml = (value) => JSON.stringify(value); // JSON strings and arrays are valid TOML values
 
@@ -69,6 +90,7 @@ const ITEM_TOOL = (item) => {
   if (item.type === 'webSearch') return { name: tr('sys.agents.tool.webSearch'), input: clip(item.query ?? item.action?.query ?? '', 300) };
   if (item.type === 'dynamicToolCall') return { name: item.tool, input: clip(item.arguments ?? '', 300) };
   if (item.type === 'collabAgentToolCall') return { name: tr('sys.agents.tool.subagent', { tool: item.tool }), input: clip(item.prompt ?? '', 300) };
+  if (item.type === 'imageGeneration') return { name: tr('sys.agents.tool.imageGen'), input: '' }; // 2.7
   return null;
 };
 
@@ -158,6 +180,17 @@ export function createLive(o) {
       if (item.type === 'mcpToolCall' || item.type === 'dynamicToolCall') onEvent({ type: 'item', role: 'tool', kind: 'tool_result', body: { id: item.id, output: clip(item.result ?? item.error ?? item.contentItems ?? '', 3000), error: Boolean(item.error) || item.success === false } });
       if (item.type === 'webSearch') onEvent({ type: 'item', role: 'tool', kind: 'tool_result', body: { id: item.id, output: '', error: false } });
       if (item.type === 'plan' && item.text?.trim()) onEvent({ type: 'item', role: 'assistant', kind: 'reasoning', body: clip(item.text, 4000) });
+      // 2.7: a picture Codex made (image_gen): kept as a file (Codex's own savedPath, or written next to Orb's runs when
+      // it only came inline), never as base64 in the conversation.
+      if (item.type === 'imageGeneration') {
+        let file = item.savedPath ?? null;
+        if (!file && item.result && o.internalDir) {
+          try { const dir = path.join(o.internalDir, 'imagenes'); fs.mkdirSync(dir, { recursive: true }); file = path.join(dir, `${String(item.id).replace(/[^\w-]/g, '')}.png`); fs.writeFileSync(file, Buffer.from(item.result, 'base64')); } catch { file = null; }
+        }
+        if (item.status === 'failed' && item.failure?.resetsAt) onEvent({ type: 'limit', resetAt: item.failure.resetsAt * 1000, message: tr('sys.agents.limit', { name: 'Codex' }) });
+        onEvent({ type: 'item', role: 'tool', kind: 'tool_result', body: { id: item.id, output: item.revisedPrompt ? clip(item.revisedPrompt, 400) : '', error: item.status === 'failed' } });
+        if (file && item.status !== 'failed') onEvent({ type: 'item', role: 'assistant', kind: 'image', body: { path: file, prompt: item.revisedPrompt ? clip(item.revisedPrompt, 600) : null, transparent: Boolean(item.transparentBackground) } });
+      }
       return;
     }
     if (method === 'thread/tokenUsage/updated') {

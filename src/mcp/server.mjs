@@ -12,7 +12,7 @@ import { isHome, CATEGORIES } from '../core/home.mjs';
 import { budgetConfig } from '../core/budget.mjs';
 import { oneLine } from '../core/safety.mjs';
 import { git, copyIntoWorkdir } from '../core/workspace.mjs';
-import { createProject } from '../core/projects.mjs';
+import { createProjects } from '../core/projects.mjs';
 import { createSchedule, EVERY } from '../core/schedules.mjs';
 
 const home = process.env.ORB_HOME;
@@ -70,8 +70,29 @@ function giveFiles({ task_id, files, from_task }) {
   if (!Array.isArray(files) || !files.length || files.length > 50) throw new Error(tr('sys.mcp.filesRange'));
   const out = copyIntoWorkdir(source, inCopy(task.workdir), files);
   board.event(task.id, ME, 'files.given', `${out.copied.join(', ') || 'nada'}${out.skipped.length ? ` · no copiados: ${out.skipped.join('; ')}` : ''}`);
-  if (out.copied.length) board.addChat('system', tr('msg.mcp.filesCopied', { name: NAME, n: out.copied.length, id: task.id, list: oneLine(out.copied.join(', '), 200) }));
+  if (out.copied.length) board.notice(tr('msg.mcp.filesCopied', { name: NAME, n: out.copied.length, id: task.id, list: oneLine(out.copied.join(', '), 200) }), 'info');
   return out;
+}
+
+// 2.7: the coordinator's question with options. It waits in the board (pending_questions) and the assistant puts it in the
+// chat right after its answer of this turn, so the card comes below what it said.
+function askUser(a) {
+  const clean = (s, n) => oneLine(String(s ?? ''), n).trim();
+  const question = clean(a.question, 300);
+  const options = (Array.isArray(a.options) ? a.options : []).map((o) => ({ label: clean(o?.label, 80), description: clean(o?.description, 240) })).filter((o) => o.label).slice(0, 4);
+  if (!question || options.length < 2) throw new Error(tr('sys.mcp.askNeedsOptions'));
+  const list = board.settingJson('pending_questions') ?? [];
+  board.settingJson('pending_questions', [...list, { question, header: clean(a.header, 14), options, multi: a.multi === true }].slice(-3));
+  return `Pregunta mostrada a ${USER}. Termina tu turno ahora (una línea como mucho, sin repetir las opciones): su respuesta llegará como su próximo mensaje.`;
+}
+
+// 2.7: the advice to use the Pizarra, as a card with its button, below the answer of this turn (like orb_ask).
+function suggestBoard(a) {
+  const message = oneLine(String(a.message ?? ''), 600).trim();
+  if (!message) throw new Error(tr('sys.mcp.boardNeedsText'));
+  const list = board.settingJson('pending_questions') ?? [];
+  board.settingJson('pending_questions', [...list, { kind: 'board', message }].slice(-3));
+  return `Consejo mostrado a ${USER} con el botón de la pizarra. Termina tu turno: cuando la tenga, te lo dirá.`;
 }
 
 // Delegation (2.3): an agent working on task #N hands part of it to another agent or model. The subtask hangs from #N
@@ -83,7 +104,7 @@ function delegate(a) {
   if (ctx.config.delegation?.enabled === false) throw new Error(tr('sys.mcp.delegationOff', { user: USER }));
   const parent = board.task(TASK_ID); if (!parent) throw new Error(tr('sys.mcp.noTask', { id: TASK_ID }));
   const task = board.createTask({ project: parent.project, title: a.title, description: a.description, agent: a.agent ?? 'any', model: a.model, readonly: a.readonly === true,
-    mode: parent.mode, parent_id: parent.id, depends_on: [] }, ME);
+    mode: parent.mode, parent_id: parent.id, depends_on: [], level: a.nivel }, ME);
   board.event(parent.id, ME, 'task.delegated', `#${task.id} ${oneLine(task.title)} → ${task.agent}${task.model ? ` (${task.model})` : ''} · ${task.status}`);
   return { id: task.id, status: task.status, note: task.status === 'awaiting_approval' ? `espera la aprobación de ${USER}` : 'en cola: se lanzará en cuanto haya un agente libre' };
 }
@@ -113,7 +134,8 @@ const tools = [
       inputSchema: { type: 'object', required: ['title', 'description'], properties: {
         title: str('Título corto'), description: str('Encargo autocontenido y compacto: qué hacer, dónde y cuándo está terminado'),
         agent: { type: 'string', enum: [...AGENTS, 'any'], description: 'Agente (any = el que tenga cupo)' }, model: str(`Modelo concreto (opcional; requiere agent). ${modelsHelp()}`),
-        readonly: { type: 'boolean', description: 'true si solo debe leer (investigar, revisar)' } } },
+        readonly: { type: 'boolean', description: 'true si solo debe leer (investigar, revisar)' },
+        nivel: { type: 'string', enum: ['simple', 'normal', 'complejo'], description: 'Lo difícil que es (simple, normal o complejo): Orb elige con ello el modelo si no pones uno' } } },
       run: (a) => delegate(a) },
     { name: 'orb_wait_tasks', description: 'Espera a que terminen tareas (las que delegaste) y devuelve sus resultados. Máximo 15 min por llamada.', readOnly: true,
       inputSchema: { type: 'object', required: ['ids'], properties: { ids: { type: 'array', items: { type: 'integer' }, maxItems: 10 }, timeout_s: { type: 'integer', minimum: 10, maximum: 900 } } },
@@ -145,9 +167,9 @@ const tools = [
     inputSchema: { type: 'object', required: ['name', 'path'], properties: { name: str('Nombre corto'), path: str('Ruta absoluta de la carpeta'), notes: str('Notas opcionales') } },
     run: (a) => board.addProject(a, ME) },
   ...(BOSS ? [
-    { name: 'orb_create_project', description: `Crea un proyecto nuevo: carpeta propia en la categoría elegida de ${ctx.paths.projects}, con git y su bitácora.`,
-      inputSchema: { type: 'object', required: ['name'], properties: { name: str('Nombre del proyecto'), category: { type: 'string', enum: CATEGORIES, description: 'Plataforma: windows, ios, android o web (por defecto web)' }, notes: str('Notas opcionales') } },
-      run: (a) => createProject(board, a, ME) },
+    { name: 'orb_create_project', description: `Crea un proyecto nuevo: carpeta propia en su categoría de ${ctx.paths.projects}, con git y su bitácora. Con varias plataformas es multiplataforma: crea <name>-<plataforma> en cada categoría (tienda-android, tienda-ios…), unidos en un grupo, y una carpeta común ${path.join(ctx.home, 'comun', '<name>')} para lo que comparten. Si ${USER} no ha dicho la plataforma, pregúntasela antes con orb_ask (multi: true).`,
+      inputSchema: { type: 'object', required: ['name'], properties: { name: str('Nombre del proyecto'), categories: { type: 'array', items: { type: 'string', enum: CATEGORIES }, minItems: 1, maxItems: 4, description: 'Plataformas: windows, ios, android, web (una o varias)' }, category: { type: 'string', enum: CATEGORIES, description: 'Una sola plataforma (como categories con una)' }, notes: str('Notas opcionales') } },
+      run: (a) => createProjects(board, { name: a.name, notes: a.notes, categories: a.categories?.length ? a.categories : [a.category] }, ME).map((p) => ({ name: p.name, path: p.path, grupo: p.grupo ?? null })) },
     { name: 'orb_set_project', description: 'Fija el proyecto de trabajo de la sesión. Todas las tareas nuevas irán ahí. Vacío = ninguno.',
       inputSchema: { type: 'object', properties: { name: str('Nombre del proyecto registrado (vacío para quitarlo)') } },
       run: (a) => board.setActiveProject(a.name, ME) },
@@ -157,12 +179,13 @@ const tools = [
         description: str('Instrucciones autocontenidas: qué hacer, dónde y criterio de terminado'),
         agent: { type: 'string', enum: [...AGENTS, 'any'] }, model: str(`Modelo concreto (opcional; requiere agent). ${modelsHelp()}`),
         account: str(`Solo si ${USER} pide una cuenta concreta (si no, se reparte sola entre las que tienen cupo). Cuentas: ${(ctx.config.accounts ?? []).map((a) => `${a.id} (${a.label})`).join(', ')}`),
+        nivel: { type: 'string', enum: ['simple', 'normal', 'complejo'], description: 'Lo difícil que es: simple (un cambio pequeño, un texto, una pregunta), normal (lo habitual) o complejo (diseño, un fallo difícil, mucho código). ' + (ctx.config.budget?.autoModel !== false ? 'Con esto Orb elige solo el modelo y el razonamiento más eficientes: no pongas model ni reasoning salvo que ' + USER + ' pida uno concreto.' : 'Ayuda a elegir modelo y razonamiento.') }, 
         reasoning: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Por defecto medium. high solo para algo muy complicado.' },
         launch: { type: 'string', enum: ['auto', 'manual'] }, priority: { type: 'integer', minimum: 1, maximum: 3, description: '1 alta, 2 normal, 3 baja' },
         depends_on: { type: 'array', items: { type: 'integer' }, maxItems: 20 },
         sensitivity: { type: 'array', items: { type: 'string', enum: ctx.config.sensitive }, description: `Si publica, envía, paga, borra o toca credenciales: espera la aprobación de ${USER}` },
         mode: { type: 'string', enum: ['carpeta', 'aislada'] }, readonly: { type: 'boolean', description: 'true si solo lee (investigar, revisar)' } } },
-      run: (a) => board.createTask(a, ME) },
+      run: (a) => board.createTask({ ...a, level: a.nivel }, ME) },
     { name: 'orb_read_log', description: 'Lee una bitácora: la de un proyecto o la "general". Devuelve las entradas más recientes completas. Sin project: lista las bitácoras.', readOnly: true,
       inputSchema: { type: 'object', properties: { project: str('Proyecto registrado o "general"'), chars: { type: 'integer', minimum: 1000, maximum: 40000 }, entera: { type: 'boolean' } } },
       run: (a) => readLog(board, a.project, { chars: a.chars, whole: a.entera === true }) },
@@ -176,6 +199,18 @@ const tools = [
         every: { type: 'string', enum: EVERY, description: 'hourly, every_hours (con hours), daily (con at_time) o weekly (con weekdays y at_time)' },
         at_time: str('Hora HH:MM (daily y weekly)'), hours: { type: 'integer', minimum: 1, maximum: 168 }, weekdays: { type: 'array', items: { type: 'integer', minimum: 0, maximum: 6 }, description: '0 domingo … 6 sábado' } } },
       run: (a) => createSchedule(board, a, ME) },
+    // 2.7: a question with options, shown in the chat as a card the user answers with a click (or skips). It does not
+    // wait: the answer comes as the user's next message.
+    { name: 'orb_ask', description: `Pregunta a ${USER} con opciones (una tarjeta en el chat). Úsala cuando deba elegir entre 2-4 caminos claros. No espera: termina tu turno y su respuesta llegará como su próximo mensaje.`,
+      inputSchema: { type: 'object', required: ['question', 'options'], properties: {
+        question: str('La pregunta, completa y clara, terminada en ?'), header: str('Etiqueta muy corta (máx. 14 caracteres), p. ej. «Enfoque»'),
+        options: { type: 'array', minItems: 2, maxItems: 4, items: { type: 'object', required: ['label'], properties: { label: str('Opción (1-6 palabras); la recomendada primero, con «(Recomendado)»'), description: str('Qué implica, en una frase') } } },
+        multi: { type: 'boolean', description: 'true si puede elegir varias' } } },
+      run: (a) => askUser(a) },
+    // 2.7: for a big request, the advice to define it on the project's Pizarra, with a button that opens it.
+    { name: 'orb_pizarra', description: `Recomienda a ${USER} definir un pedido grande en la pizarra del proyecto (dibujar pantallas y flujos, flechas, notas, capturas y archivos) antes de crear las tareas. Sale en el chat con un botón que la abre. No espera: termina tu turno.`,
+      inputSchema: { type: 'object', required: ['message'], properties: { message: str('El consejo en 1-3 frases: qué conviene dibujar o adjuntar en la pizarra para este pedido') } },
+      run: (a) => suggestBoard(a) },
     { name: 'orb_give_files', description: 'Pasa archivos a la copia aislada de una tarea (rutas relativas al proyecto). Por defecto desde la carpeta del proyecto; con from_task, desde la copia de esa tarea.',
       inputSchema: { type: 'object', required: ['task_id', 'files'], properties: { task_id: { type: 'integer' }, files: { type: 'array', items: { type: 'string' }, maxItems: 50 }, from_task: { type: 'integer' } } },
       run: (a) => giveFiles(a) }

@@ -20,19 +20,33 @@ const CategoryField = ({ v, set }) => (
   </Field>
 );
 
+// 2.7: one platform or several: several at once is a multiplatform project (tienda-android, tienda-ios… linked, with a
+// shared folder), each in its own category.
+const PlatformsField = ({ v, set }) => (
+  <Field label={t('comp.projects.platforms')} hint={v.categories.length > 1 ? t('comp.projects.multiHint', { n: v.categories.length }) : t('comp.projects.platformsHint')}>
+    <div className="flex flex-wrap gap-1.5" role="group" aria-label={t('comp.projects.platforms')}>
+      {CATEGORIES.map((c) => {
+        const on = v.categories.includes(c);
+        return <Button key={c} type="button" size="sm" variant={on ? 'default' : 'outline'} aria-pressed={on} onClick={() => set({ categories: on ? (v.categories.length > 1 ? v.categories.filter((x) => x !== c) : v.categories) : [...v.categories, c] })} data-testid={`platform-${c}`}>{on ? <Check /> : null}{t(`comp.projects.category.${c}`)}</Button>;
+      })}
+    </div>
+  </Field>
+);
+const folderOf = (v, c) => `${home()}${sep()}${c}${sep()}${v.name.trim().replace(/[<>:"/\\|?*]/g, '')}${v.categories.length > 1 ? `-${c}` : ''}`;
+
 export async function createProjectFlow() {
   const p = await form(t('comp.projects.newTitle'), {
     description: t('comp.projects.newDesc'),
-    initial: { name: '', notes: '', category: 'web' },
+    initial: { name: '', notes: '', categories: ['web'] },
     body: (v, set) => (<>
-      <CategoryField v={v} set={set} />
-      <Field label={t('comp.projects.name')} hint={v.name.trim() ? t('comp.projects.folderHint', { path: `${home()}${sep()}${v.category}${sep()}${v.name.trim().replace(/[<>:"/\\|?*]/g, '')}` }) : null}><Input autoFocus value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder="webviaproject" maxLength={60} /></Field>
+      <PlatformsField v={v} set={set} />
+      <Field label={t('comp.projects.name')} hint={v.name.trim() ? (v.categories.length > 1 ? t('comp.projects.foldersHint', { list: v.categories.map((c) => `${v.name.trim()}-${c}`).join(', ') }) : t('comp.projects.folderHint', { path: folderOf(v, v.categories[0]) })) : null}><Input autoFocus value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder="webviaproject" maxLength={60} /></Field>
       <Field label={t('comp.projects.about')} hint={t('comp.projects.aboutHint')}><Textarea value={v.notes} onChange={(e) => set({ notes: e.target.value })} rows={3} /></Field>
     </>),
     ok: t('comp.projects.create'),
-    onOk: (v) => call('projects.create', { name: v.name.trim(), notes: v.notes.trim(), category: v.category })
+    onOk: (v) => call('projects.create', { name: v.name.trim(), notes: v.notes.trim(), categories: v.categories })
   });
-  if (p) { toast.success(t('comp.projects.created', { name: p.name })); await refresh().catch(() => {}); }
+  if (p) { toast.success(p.all?.length > 1 ? t('comp.projects.createdMany', { list: p.all.join(', ') }) : t('comp.projects.created', { name: p.name })); await refresh().catch(() => {}); }
   return p;
 }
 

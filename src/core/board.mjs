@@ -148,7 +148,7 @@ export class Board {
     const project = this.project(name); if (!project) throw new Error(tr('sys.board.unknownProject', { name }));
     this.setting('active_project', project.name);
     this.event(null, actor, 'project.active', `${project.name} -> ${project.path}`);
-    this.addChat('system', tr('msg.board.activeFolder', { name: project.name, path: project.path }));
+    this.notice(tr('msg.board.activeFolder', { name: project.name, path: project.path }), 'info');
     this.changed('projects');
     return project;
   }
@@ -184,12 +184,13 @@ export class Board {
 
   // mode: "carpeta" (default: the project folder, in turn with the other writing tasks) or "aislada" (own branch and copy).
   // readonly: the task only reads (research, review): it may run at the same time as others in the same folder.
-  createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null }, actor) {
+  createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null, level = null }, actor) {
     if (!MODES.includes(mode)) throw new Error(tr('sys.board.badMode'));
     const proj = this.project(project);
     if (!proj) throw new Error(tr('sys.board.unknownProject', { name: project }));
     const active = this.activeProject();
-    if (active && proj.name !== active.name && actor !== 'usuario') throw new Error(tr('sys.board.otherFolder', { name: active.name, path: active.path, user: userName() }));
+    // 2.7: the projects of a multiplatform group work together: a task may go to a sister of the active project.
+    if (active && proj.name !== active.name && actor !== 'usuario' && !(active.grupo && proj.grupo === active.grupo)) throw new Error(tr('sys.board.otherFolder', { name: active.name, path: active.path, user: userName() }));
     if (!title || !description) throw new Error(tr('sys.board.titleAndDesc'));
     title = oneLine(title);
     if (String(description).length > MAX_DESCRIPTION) throw new Error(tr('sys.board.descTooLong', { n: String(description).length, max: MAX_DESCRIPTION }));
@@ -222,9 +223,9 @@ export class Board {
     if (actor !== 'orb' && actor !== 'usuario' && !trusted) { tags.push('creada_por_agente'); reasons.push(tr('msg.board.reasonByAgent', { actor, name: assistantName() })); }
     const status = tags.length ? 'awaiting_approval' : 'queued';
     const at = now();
-    const { lastInsertRowid } = this.run(`INSERT INTO tasks (project, title, description, agent, account, model, reasoning, fast, launch, priority, depends_on, sensitivity, status, created_by, project_path, created_at, updated_at, mode, readonly, parent_id, review_of, schedule_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, proj.name, title, String(description), agent, account || null, model, reasoning, Number(fast), launch, Math.min(Math.max(Number(priority) || 2, 1), 3),
-      JSON.stringify(depends_on.map(Number)), JSON.stringify([...new Set(tags)]), status, String(actor), proj.path, at, at, mode, Number(Boolean(readonly)), parent_id ? Number(parent_id) : null, review_of ? Number(review_of) : null, schedule_id ? Number(schedule_id) : null);
+    const { lastInsertRowid } = this.run(`INSERT INTO tasks (project, title, description, agent, account, model, reasoning, fast, launch, priority, depends_on, sensitivity, status, created_by, project_path, created_at, updated_at, mode, readonly, parent_id, review_of, schedule_id, level)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, proj.name, title, String(description), agent, account || null, model, reasoning, Number(fast), launch, Math.min(Math.max(Number(priority) || 2, 1), 3),
+      JSON.stringify(depends_on.map(Number)), JSON.stringify([...new Set(tags)]), status, String(actor), proj.path, at, at, mode, Number(Boolean(readonly)), parent_id ? Number(parent_id) : null, review_of ? Number(review_of) : null, schedule_id ? Number(schedule_id) : null, ['simple', 'normal', 'complejo'].includes(level) ? level : null);
     const id = Number(lastInsertRowid);
     this.event(id, actor, 'task.created', status);
     if (status === 'awaiting_approval') { const tagList = [...new Set(tags)].join(', '); this.addChat('system', reasons.length ? tr('msg.board.needsApprovalWhy', { id, title, tags: tagList, reasons: reasons.join('; ') }) : tr('msg.board.needsApproval', { id, title, tags: tagList }), { kind: 'attention', task: id }); }
@@ -446,10 +447,14 @@ export class Board {
     this.changed('chat');
     return { id: Number(lastInsertRowid) };
   }
+  // 2.7: a notice that only informs (the working folder changed, the brain in use, a schedule created…): the window shows
+  // it as a passing notification instead of a grey line in the chat. tone: info | success | warning. Kept in the table
+  // (role 'notice') so the engine sees it whichever process wrote it, but left out of the chat.
+  notice(body, tone = 'info') { return this.addChat('notice', body, { tone }); }
   // Changes the extra data of a chat message (e.g. an approval card that was answered).
   patchChatMeta(id, meta) { this.run('UPDATE chat SET meta = ? WHERE id = ?', JSON.stringify(meta), Number(id)); this.changed('chat'); }
   chat(limit = 200) {
-    return this.all('SELECT * FROM (SELECT * FROM chat ORDER BY id DESC LIMIT ?) ORDER BY id', limit)
+    return this.all("SELECT * FROM (SELECT * FROM chat WHERE role != 'notice' ORDER BY id DESC LIMIT ?) ORDER BY id", limit)
       .map((r) => { let meta = null; try { meta = r.meta ? JSON.parse(r.meta) : null; } catch { /* ignore */ } return { ...r, meta }; });
   }
 

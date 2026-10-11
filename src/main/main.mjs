@@ -115,7 +115,8 @@ function startEngine(h) {
   home = h;
   engine = utilityProcess.fork(path.join(UNPACKED, 'engine', 'engine.mjs'), [], {
     serviceName: `Motor de ${PRODUCT.name}`, stdio: 'pipe',
-    env: { ...process.env, ORB_MCP_SCRIPT: path.join(UNPACKED, 'mcp', 'server.mjs') }
+    // ORB_BRIDGE: only the app's own engine shares data with Open Control Edge (never an engine started by the tests).
+    env: { ...process.env, ORB_MCP_SCRIPT: path.join(UNPACKED, 'mcp', 'server.mjs'), ORB_BRIDGE: process.env.ORB_FAKE_AGENTS ? '0' : '1' }
   });
   const logFile = path.join(h, '.orb', 'ejecuciones', 'motor-salida.log');
   const append = (chunk) => { try { fs.appendFileSync(logFile, chunk); } catch { /* ignore */ } };
@@ -216,6 +217,17 @@ ipcMain.handle('app:info', guard(async () => ({ version: VERSION, home, needsSet
 ipcMain.handle('app:pickFolder', guard(async (title) => {
   const r = await dialog.showOpenDialog(win, { title: String(title ?? T('sys.dialog.pickFolder')).slice(0, 100), properties: ['openDirectory', 'createDirectory'] });
   return r.canceled ? null : r.filePaths[0];
+}));
+// 2.7: Agentes › Ruta del programa: the agent's program, chosen in Windows' own dialog instead of typed.
+ipcMain.handle('app:pickProgram', guard(async (title) => {
+  const exts = process.platform === 'win32' ? ['exe', 'cmd', 'bat', 'ps1', 'js', 'mjs', 'cjs'] : ['*'];
+  const r = await dialog.showOpenDialog(win, { title: String(title ?? T('sys.dialog.pickProgram')).slice(0, 100), properties: ['openFile'], filters: [{ name: T('sys.dialog.programs'), extensions: exts }, { name: T('sys.dialog.allFiles'), extensions: ['*'] }] });
+  return r.canceled ? null : r.filePaths[0];
+}));
+// 2.7: the Pizarra's attachments: any files (photos, videos, documents), up to 20 at a time.
+ipcMain.handle('app:pickFiles', guard(async (title) => {
+  const r = await dialog.showOpenDialog(win, { title: String(title ?? T('sys.dialog.pickFiles')).slice(0, 100), properties: ['openFile', 'multiSelections'] });
+  return r.canceled ? [] : r.filePaths.slice(0, 20);
 }));
 ipcMain.handle('app:pickImages', guard(async () => {
   const r = await dialog.showOpenDialog(win, { title: T('sys.dialog.refImages'), properties: ['openFile', 'multiSelections'], filters: [{ name: T('sys.dialog.images'), extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'] }] });
@@ -343,7 +355,7 @@ app.whenReady().then(async () => {
   // The window never needs the camera, the microphone, notifications from the page, etc.
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({ responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': ["default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"] } });
+    callback({ responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': ["default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; worker-src 'self' blob:; connect-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"] } });
   });
   let h = readLocation();
   if (!h) { h = findExistingHome(); if (h) saveLocation(h); }
