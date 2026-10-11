@@ -44,7 +44,7 @@ export function phoneConfig(c) {
 }
 
 // What a phone may call. Everything that changes settings, accounts, connectors, installs software or publishes stays on the PC.
-const ALLOWED = new Set(['app.state', 'chat.list', 'chat.send', 'chat.reset', 'chat.stop', 'chat.accept', 'chat.answer', 'chat.settings', 'whiteboard.load', 'whiteboard.save', 'whiteboard.note',
+const ALLOWED = new Set(['app.state', 'chat.list', 'chat.send', 'chat.reset', 'chat.new', 'chat.older', 'projects.securityReview', 'chat.stop', 'chat.accept', 'chat.answer', 'chat.settings', 'whiteboard.load', 'whiteboard.save', 'whiteboard.note',
   'tasks.list', 'tasks.live', 'tasks.get', 'tasks.create', 'tasks.approve', 'tasks.retry', 'tasks.cancel', 'tasks.reassign', 'tasks.followup', 'tasks.undo', 'tasks.launchAnyway', 'tasks.accept',
   'sessions.list', 'sessions.create', 'sessions.items', 'sessions.send', 'sessions.stop', 'sessions.update',
   'projects.list', 'projects.info', 'projects.setActive', 'projects.create', 'logs.list', 'logs.read', 'activity.list', 'usage.get', 'usage.now', 'agents.status', 'models.catalog', 'models.guide',
@@ -164,7 +164,10 @@ export function createRemote({ board, api, log }) {
     let m = seen.get(deviceId); if (!m) seen.set(deviceId, (m = new Map()));
     const at = Date.now();
     for (const [n, exp] of m) if (exp < at) m.delete(n);
-    if (m.has(nonce) || m.size > 5000) return 'replay';
+    if (m.has(nonce)) return 'replay';
+    // 3.0: a busy phone (thousands of requests in 10 min) is not mistaken for a replay and unpaired: the oldest nonces
+    // make room (a Map keeps insertion order).
+    while (m.size >= 5000) m.delete(m.keys().next().value);
     m.set(nonce, at + 2 * CLOCK_SKEW_MS);
     return 'ok';
   }

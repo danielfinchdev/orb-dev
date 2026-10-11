@@ -16,8 +16,6 @@ export function useHome(home) {
   return ctx;
 }
 
-export function reloadConfig() { if (ctx.home) ctx.config = loadConfig(ctx.home); return ctx.config; }
-
 // Settings saved from the app. Only known top-level keys are accepted.
 const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'monitor'];
 export function saveConfig(patch) {
@@ -121,5 +119,4 @@ export function validateConfig(c) {
   return true;
 }
 
-export const agentConfig = (agent) => ctx.config?.agents?.[agent];
 export const enabledAgents = () => AGENT_IDS.filter((a) => ctx.config.agents[a]?.enabled);

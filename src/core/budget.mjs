@@ -63,11 +63,11 @@ export function recordRate(board, id, rate) {
   board.settingJson(`rate:${id}`, next);
 }
 // The windows an account reported that are still running, the shortest first (session before weekly).
-const windowMinutes = (w) => { const m = String(w).match(/(\d+)\s*min/); if (m) return Number(m[1]); if (/five_hour|5h/i.test(w)) return 300; if (/seven_day|week/i.test(w)) return 10080 + (/opus|sonnet|fable|model/i.test(w) ? 1 : 0); return 100000; };
+export const windowMinutes = (w) => { const m = String(w).match(/(\d+)\s*min/); if (m) return Number(m[1]); if (/five_hour|5h/i.test(w)) return 300; if (/seven_day|week/i.test(w)) return 10080 + (/opus|sonnet|fable|model/i.test(w) ? 1 : 0); return 100000; };
 export function rateWindows(board, id) {
   const all = board.settingJson(`rates:${id}`) ?? {};
   return Object.entries(all).filter(([, w]) => (!w.resetAt || w.resetAt > Date.now()) && Date.now() - (w.at ?? 0) < 7 * 86_400_000)
-    .map(([window, w]) => ({ window, utilization: w.utilization, resetAt: w.resetAt, status: w.status }))
+    .map(([window, w]) => ({ window, utilization: w.utilization, resetAt: w.resetAt, status: w.status, at: w.at ?? null }))
     .sort((a, b) => windowMinutes(a.window) - windowMinutes(b.window));
 }
 export function realRate(board, id) {

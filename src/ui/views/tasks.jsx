@@ -1,15 +1,16 @@
 // Tasks: the board. Filters, approvals, details and every action on a task (undo, retry, model, merge, pull request, OK).
 import { useEffect, useState } from 'react';
-import { Plus, Check, X, Zap, RotateCw, Square, Shuffle, Undo2, MessageSquare, GitMerge, GitPullRequest, Trash2, ListTodo, ThumbsUp, ChevronRight, ScanSearch, Hourglass, GitBranch } from 'lucide-react';
+import { Check, X, Zap, RotateCw, Square, Shuffle, Undo2, MessageSquare, GitMerge, GitPullRequest, Trash2, ListTodo, ThumbsUp, ChevronRight, ScanSearch, Hourglass, GitBranch } from 'lucide-react';
 import { PageHeader } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { Markdown } from '@/components/markdown.jsx';
 import { useLiveTasks, liveOf, LiveTask, ProgressBar } from '@/components/live-tasks.jsx';
+import { modelsOf } from '@/components/brain-picker.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, Empty, Field, Input, Textarea } from '@/components/ui/basic.jsx';
-import { Tabs, TabsList, TabsTrigger, Select, Collapsible, CollapsibleTrigger, CollapsibleContent, Checkbox } from '@/components/ui/overlay.jsx';
-import { useStore, call, act, go, bridge, getState } from '@/lib/store.js';
+import { Tabs, TabsList, TabsTrigger, Select, Collapsible, CollapsibleTrigger, CollapsibleContent, BubbleTip } from '@/components/ui/overlay.jsx';
+import { useStore, call, act, go, bridge } from '@/lib/store.js';
 import { AGENT, STATUS, REASONING, MODE, SENSITIVE, options } from '@/lib/labels.js';
 import { ago, fmtTime, cn } from '@/lib/utils.js';
 import { t, useT } from '@/lib/i18n.js';
@@ -24,14 +25,18 @@ const FILTERS = [
 const verdictLabel = (v) => (['correcto', 'con fallos'].includes(v) ? t(`tasks.verdict.${v}`) : v);
 const StatusBadge = ({ status }) => <Badge variant={STATUS[status]?.[1]}>{STATUS[status]?.[0] ?? status}</Badge>;
 
+// Who reviews (Task Review, Security Review): automatic (another provider with quota) or an installed agent.
+const reviewers = async () => (await call('agents.status')).filter((a) => a.enabled && a.installed);
+const ReviewerField = ({ agents, v, set }) => <Field label={t('tasks.review.reviewer')} hint={t('tasks.review.reviewerHint')}><Select className="w-full" value={v.agent || '__auto'} onValueChange={(agent) => set({ agent: agent === '__auto' ? '' : agent })} options={[{ value: '__auto', label: t('tasks.review.auto') }, ...agents.map((a) => ({ value: a.id, label: a.label }))]} /></Field>;
+
 // Task Review: another model (another provider when there is one) audits the work read-only and gives a verdict.
 export async function askReview({ task, project }) {
-  const agents = (await call('agents.status')).filter((a) => a.enabled && a.installed);
+  const agents = await reviewers();
   return form(task ? t('tasks.review.titleTask', { id: task.id }) : t('tasks.review.titleProject', { project }), {
     description: t('tasks.review.desc'),
     initial: { agent: '', focus: '' },
     body: (v, set) => (<>
-      <Field label={t('tasks.review.reviewer')} hint={t('tasks.review.reviewerHint')}><Select className="w-full" value={v.agent || '__auto'} onValueChange={(agent) => set({ agent: agent === '__auto' ? '' : agent })} options={[{ value: '__auto', label: t('tasks.review.auto') }, ...agents.map((a) => ({ value: a.id, label: a.label }))]} /></Field>
+      <ReviewerField agents={agents} v={v} set={set} />
       <Field label={t('tasks.review.focus')}><Textarea rows={3} value={v.focus} onChange={(e) => set({ focus: e.target.value })} placeholder={t('tasks.review.focusPh')} /></Field>
     </>),
     ok: t('tasks.review.ok'),
@@ -39,30 +44,15 @@ export async function askReview({ task, project }) {
   });
 }
 
-async function newTask() {
-  const { projects, app } = getState();
-  if (!projects.length) { await confirm(t('tasks.new.projectFirst'), t('tasks.new.projectFirstMsg'), { cancel: null, ok: t('tasks.new.goProjects') }); return go('projects'); }
-  const agents = (await call('agents.status')).filter((a) => a.enabled);
-  return form(t('tasks.new'), {
-    wide: true,
-    description: t('tasks.new.desc'),
-    initial: { project: app.activeProject?.name ?? projects[0].name, title: '', description: '', agent: 'any', mode: 'carpeta', readonly: false, level: 'normal' },
-    body: (v, set) => (<>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label={t('tasks.project')}><Select className="w-full" value={v.project} onValueChange={(project) => set({ project })} options={projects.map((p) => ({ value: p.name, label: p.name }))} /></Field>
-        <Field label={t('tasks.agent')}><Select className="w-full" value={v.agent} onValueChange={(agent) => set({ agent })} options={[{ value: 'any', label: t('tasks.new.anyLeast') }, ...agents.map((a) => ({ value: a.id, label: a.label }))]} /></Field>
-      </div>
-      <Field label={t('tasks.titleField')}><Input autoFocus value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={200} placeholder={t('tasks.new.titlePh')} /></Field>
-      <Field label={t('tasks.brief')} hint={t('tasks.new.briefHint')}><Textarea rows={6} value={v.description} onChange={(e) => set({ description: e.target.value })} /></Field>
-      <div className="grid grid-cols-3 items-end gap-3">
-        {/* 2.7: how hard it is: Orb chooses the model and reasoning with it (Ajustes › Tareas y usos). */}
-        <Field label={t('tasks.new.level')} hint={app.config.budget?.autoModel !== false ? t('tasks.new.levelHint') : null}><Select className="w-full" value={v.level} onValueChange={(level) => set({ level })} options={['simple', 'normal', 'complejo'].map((value) => ({ value, label: t(`tasks.level.${value}`) }))} data-testid="new-task-level" /></Field>
-        <Field label={t('tasks.new.where')}><Select className="w-full" value={v.mode} onValueChange={(mode) => set({ mode })} options={options(MODE)} /></Field>
-        <label className="flex h-9 cursor-pointer items-center gap-2 text-sm"><Checkbox checked={v.readonly} onCheckedChange={(c) => set({ readonly: c === true })} />{t('tasks.new.readonly')}</label>
-      </div>
-    </>),
-    ok: t('tasks.new.create'),
-    onOk: async (v) => (await call('tasks.create', v)).id
+// 3.0: Security Review of a whole project: who audits it (automatic: another provider with quota).
+export async function askSecurityReview({ project }) {
+  const agents = await reviewers();
+  return form(t('tasks.security.title', { project }), {
+    description: t('tasks.security.desc'),
+    initial: { agent: '' },
+    body: (v, set) => <ReviewerField agents={agents} v={v} set={set} />,
+    ok: t('tasks.security.ok'),
+    onOk: (v) => call('projects.securityReview', { name: project, agent: v.agent || null })
   });
 }
 
@@ -80,7 +70,7 @@ function TaskDetail({ id, live }) {
     const catalog = await call('models.catalog').catch(() => []);
     const AUTO = '__auto';
     const modelOptions = (agent) => {
-      const list = (catalog.find((a) => a.id === agent)?.models ?? []).filter((m) => m.id);
+      const list = modelsOf(catalog.find((a) => a.id === agent), agent === t.agent ? t.account : null).filter((m) => m.id);
       const opts = [{ value: AUTO, label: tr('tasks.reassign.auto') }, ...list.map((m) => ({ value: m.id, label: m.tier ? `${m.label} · ${tr(`tasks.tier.${m.tier}`)}` : m.label }))];
       if (t.model && !opts.some((o) => o.value === t.model)) opts.push({ value: t.model, label: t.model });
       return opts;
@@ -117,7 +107,7 @@ function TaskDetail({ id, live }) {
           <Button size="sm" variant="outline" onClick={() => act(call('tasks.approve', { id: t.id, decision: 'rejected', hash: t.previewHash }), tr('tasks.reject.done'))}><X />{tr('tasks.reject')}</Button>
         </>) : null}
         {t.status === 'done' && !t.accepted ? <Button size="sm" onClick={() => act(call('tasks.accept', { id: t.id }), tr('tasks.accepted'))}><ThumbsUp />{tr('tasks.giveOk')}</Button> : null}
-        {t.status === 'done' && !t.review_of ? <A onClick={() => askReview({ task: t })} data-testid="task-review"><ScanSearch />{tr('tasks.review.btn')}</A> : null}
+        {t.status === 'done' && !t.review_of ? <BubbleTip title={tr('tasks.review.btn')} text={tr('projects.reviewTip')}><A onClick={() => askReview({ task: t })} data-testid="task-review"><ScanSearch />{tr('tasks.review.btn')}</A></BubbleTip> : null}
         {t.session_id ? <A onClick={() => go({ view: 'session', id: t.session_id })}><MessageSquare />{tr('tasks.agentChat')}</A> : null}
         {t.status === 'queued' ? <A onClick={() => act(call('tasks.launchAnyway', { id: t.id }), tr('tasks.launchAnyway.done'))}><Zap />{tr('tasks.launchAnyway')}</A> : null}
         {['failed', 'blocked', 'cancelled', 'limited'].includes(t.status) ? <A onClick={() => act(call('tasks.retry', { id: t.id }), tr('tasks.retry.done'))}><RotateCw />{t.status === 'limited' ? tr('tasks.continueNow') : tr('tasks.retry')}</A> : null}
@@ -168,7 +158,6 @@ export function TasksView({ route }) {
     <>
       <PageHeader icon={<ListTodo className="text-primary size-5" />} title={route.project ? tr('tasks.titleProject', { project: route.project }) : tr('nav.tasks')} meta={tr('tasks.meta')}>
         {route.project ? <Button size="sm" variant="ghost" onClick={() => go('tasks')}><X />{tr('tasks.allProjects')}</Button> : null}
-        <Button size="sm" onClick={async () => { const id = await newTask(); if (id) { setFilter('todas'); setSelected(id); } }}><Plus />{tr('tasks.new')}</Button>
       </PageHeader>
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 md:pb-28">
         <Tabs value={filter} onValueChange={setFilter} className="mb-4">

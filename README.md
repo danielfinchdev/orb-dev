@@ -20,12 +20,12 @@ Tú → Orb·e → tareas y coordinación → agentes → tareas hechas → Orb�
 ## Descargar y usar (lo más fácil)
 
 1. Entra en [**Releases → última versión**](https://github.com/danielfinchdev/orb-dev/releases/latest) y descarga
-   **`Orb-2.7.3-instalador.exe`**.
+   **`Orb-3.0.0-instalador.exe`**.
 2. Doble clic: se instala para tu usuario (sin permisos de administrador) con acceso directo en el escritorio y en el menú
    Inicio. Luego lo abres escribiendo «Orb» en el buscador de Windows.
 3. Windows SmartScreen avisará porque la app aún no está firmada: «Más información» → «Ejecutar de todas formas».
 
-¿Sin instalar nada? **`Orb-2.7.3-light-portable.exe`** es **Orb Light**: doble clic y se abre, con lo esencial
+¿Sin instalar nada? **`Orb-3.0.0-light-portable.exe`** es **Orb Light**: doble clic y se abre, con lo esencial
 (chat, tareas, proyectos, pizarra, agentes…) y sin minijuegos, God mode, Monitoreo del equipo ni temas. No se actualiza
 sola: avisa de cada versión nueva y abre la descarga. No hace falta instalar Node.js ni Git para la app; los agentes (Claude Code, Codex,
 Cursor) te los instala ella misma en el primer arranque. El repositorio es privado: para descargar hay que tener acceso
@@ -58,7 +58,7 @@ claro, deja Cursor en pausa un día y, si la tarea era para «cualquier agente»
 
 ## Empezar
 
-1. Abre Orb desde el menú Inicio (o `Orb-2.7.3-light-portable.exe`, o `npm start` si la usas desde el código).
+1. Abre Orb desde el menú Inicio (o `Orb-3.0.0-light-portable.exe`, o `npm start` si la usas desde el código).
 2. Elige su nombre, cómo te llama y dónde crear su carpeta. La carpeta se llama como el asistente: con `D:\` y el nombre
    «Nova» se crea `D:\Nova`; si dejas el nombre por defecto, `D:\Orb`.
 3. En **Agentes**, comprueba qué agentes encuentra (Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Qwen Code, Copilot) y
@@ -82,6 +82,8 @@ D:\Orb\                   (siempre <carpeta elegida>\Orb, igual para todos)
 
 ## Lo principal
 
+- **Novedades de la 3.0:** un solo «Nuevo chat» (y «Nueva tarea» para dirigir tú el trabajo), Security Review, «Iniciar
+  test», modelos propios de cada cuenta, el puente con Open Control Edge afinado, más rapidez y arreglos.
 - **Novedades de la 2.7.3:** el portable pasa a ser **Orb Light**, con lo esencial (el instalador es la app completa), y los
   avisos antiguos de «Carpeta de trabajo» salen del chat.
 - **Novedades de la 2.7.2:** el puente con Open Control Edge se recupera solo si una lectura no responde, y las pruebas
@@ -155,7 +157,7 @@ npm test             # pruebas del motor (agentes falsos, sin cuentas)
 npm run test:app     # la app entera con Electron (en Linux: xvfb-run -a npm run test:app)
 npm run test:movil   # la web app del móvil a tamaño de teléfono
 ORB_E2E_EXE=dist/win-unpacked/Orb.exe node test/smoke.e2e.mjs   # prueba la app ya empaquetada
-npm run dist         # Orb-2.7.3-instalador.exe y Orb-2.7.3-light-portable.exe (en Windows)
+npm run dist         # Orb-3.0.0-instalador.exe y Orb-3.0.0-light-portable.exe (en Windows)
 npm run icon         # vuelve a sacar el icono del art work (docs/diseno/art work); luego npm run icon:ico
 ```
 

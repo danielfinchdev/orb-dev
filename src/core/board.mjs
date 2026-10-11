@@ -184,7 +184,7 @@ export class Board {
 
   // mode: "carpeta" (default: the project folder, in turn with the other writing tasks) or "aislada" (own branch and copy).
   // readonly: the task only reads (research, review): it may run at the same time as others in the same folder.
-  createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null, level = null }, actor) {
+  createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null, level = null, fixedBrief = false }, actor) {
     if (!MODES.includes(mode)) throw new Error(tr('sys.board.badMode'));
     const proj = this.project(project);
     if (!proj) throw new Error(tr('sys.board.unknownProject', { name: project }));
@@ -211,7 +211,9 @@ export class Board {
     // Approval does not depend on the creator declaring it: a task made by a worker always waits for the user,
     // and a keyword net adds the tags the creator forgot.
     const tags = [...new Set(sensitivity)]; const reasons = [];
-    if (!tags.length) { const found = detectSensitivity(`${title}\n${description}`); tags.push(...found); if (found.length) reasons.push(tr('msg.board.reasonKeywords', { words: found.join(', ') })); }
+    // 3.0: fixedBrief: a read-only brief written by Orb itself (Security Review), whose checklist names «secretos» and
+    // «credenciales» on purpose; only for code paths of the engine (the API does not pass it).
+    if (!tags.length && !(fixedBrief && readonly)) { const found = detectSensitivity(`${title}\n${description}`); tags.push(...found); if (found.length) reasons.push(tr('msg.board.reasonKeywords', { words: found.join(', ') })); }
     if (policy.approval) { tags.push('razonamiento_alto'); reasons.push(tr('msg.board.reasonHighReasoning', { who: model ?? agent })); }
     // A subtask an agent delegates from its own task (orb_delegate) goes straight to the queue when the user trusts
     // delegation, the parent task came from the assistant or the user, nothing looks risky and the parent has not used
@@ -453,9 +455,30 @@ export class Board {
   notice(body, tone = 'info') { return this.addChat('notice', body, { tone }); }
   // Changes the extra data of a chat message (e.g. an approval card that was answered).
   patchChatMeta(id, meta) { this.run('UPDATE chat SET meta = ? WHERE id = ?', JSON.stringify(meta), Number(id)); this.changed('chat'); }
-  chat(limit = 200) {
-    return this.all("SELECT * FROM (SELECT * FROM chat WHERE role != 'notice' ORDER BY id DESC LIMIT ?) ORDER BY id", limit)
+  // The chat lines (not the notices), oldest first: the last `limit`, or only those after / before a line id.
+  chat(limit = 200, { after = 0, before = null } = {}) {
+    return this.all(`SELECT * FROM (SELECT * FROM chat WHERE role != 'notice' AND id > ?${before ? ' AND id < ?' : ''} ORDER BY id DESC LIMIT ?) ORDER BY id`, ...[Number(after) || 0, ...(before ? [Number(before)] : []), limit])
       .map((r) => { let meta = null; try { meta = r.meta ? JSON.parse(r.meta) : null; } catch { /* ignore */ } return { ...r, meta }; });
+  }
+  // One chat line by its id (any conversation), with its extra data.
+  chatRow(id) {
+    const r = this.one('SELECT * FROM chat WHERE id = ?', Number(id)); if (!r) return null;
+    let meta = null; try { meta = r.meta ? JSON.parse(r.meta) : null; } catch { /* ignore */ }
+    return { ...r, meta };
+  }
+  // 3.0: where the current conversation with the assistant starts: the id of the last «Nueva conversación» line (a notice
+  // since 2.7, a system line before), or 0.
+  // Kept up to date by looking only at the lines added since the last look (lines never change after being written).
+  chatStart() {
+    const c = this.startCache ?? (this.startCache = { id: 0, seen: 0 });
+    const top = this.one('SELECT MAX(id) AS id FROM chat')?.id ?? 0;
+    if (top < c.seen) { c.id = 0; c.seen = 0; } // a database put back from a copy: look again from the start
+    if (top > c.seen) {
+      const found = this.one("SELECT MAX(id) AS id FROM chat WHERE id > ? AND role IN ('notice', 'system') AND (body LIKE 'Nueva conversación%' OR body LIKE 'New conversation%')", c.seen)?.id;
+      if (found) c.id = found;
+      c.seen = top;
+    }
+    return c.id;
   }
 
   // ---- the end of the loop: the user gives the OK to finished work
