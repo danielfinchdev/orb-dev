@@ -115,8 +115,9 @@ function startEngine(h) {
   home = h;
   engine = utilityProcess.fork(path.join(UNPACKED, 'engine', 'engine.mjs'), [], {
     serviceName: `Motor de ${PRODUCT.name}`, stdio: 'pipe',
-    // ORB_BRIDGE: only the app's own engine shares data with Open Control Edge (never an engine started by the tests).
-    env: { ...process.env, ORB_MCP_SCRIPT: path.join(UNPACKED, 'mcp', 'server.mjs'), ORB_BRIDGE: process.env.ORB_FAKE_AGENTS ? '0' : '1' }
+    // ORB_BRIDGE: only the app's own engine shares data with Open Control Edge (never one with the test agents, nor an app
+    // started by the tests, which set ORB_NO_BRIDGE).
+    env: { ...process.env, ORB_MCP_SCRIPT: path.join(UNPACKED, 'mcp', 'server.mjs'), ORB_BRIDGE: process.env.ORB_FAKE_AGENTS || process.env.ORB_NO_BRIDGE ? '0' : '1' }
   });
   const logFile = path.join(h, '.orb', 'ejecuciones', 'motor-salida.log');
   const append = (chunk) => { try { fs.appendFileSync(logFile, chunk); } catch { /* ignore */ } };

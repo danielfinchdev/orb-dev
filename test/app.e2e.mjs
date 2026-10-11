@@ -23,7 +23,7 @@ process.on('unhandledRejection', (e) => { if (/No dialog is showing/.test(String
 // ORB_E2E_EXE: test a packaged build instead of the sources (e.g. dist/linux-unpacked/orb).
 const packaged = process.env.ORB_E2E_EXE;
 // 2.3: the fake agents live inside the engine (ORB_FAKE_AGENTS), so nothing is launched as a program (also on Windows).
-const app = await electron.launch({ executablePath: packaged || electronBin, args: [...(packaged ? [] : [ROOT]), ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], env: { ...process.env, ORB_USER_DATA: path.join(tmp, 'datos-app'), ORB_FAKE_AGENTS: fake('fake-live.mjs'), ORB_FAKE_UPDATE: '9.9.9' } });
+const app = await electron.launch({ executablePath: packaged || electronBin, args: [...(packaged ? [] : [ROOT]), ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], env: { ...process.env, ORB_NO_BRIDGE: '1', ORB_USER_DATA: path.join(tmp, 'datos-app'), ORB_FAKE_AGENTS: fake('fake-live.mjs'), ORB_FAKE_UPDATE: '9.9.9' } });
 const errors = [];
 const win = await app.firstWindow();
 win.on('pageerror', (e) => errors.push(e.message));
