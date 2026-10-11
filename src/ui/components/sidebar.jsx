@@ -3,7 +3,7 @@ import { Smartphone, MessageSquarePlus, ListTodo, FolderKanban, Bot, BookOpen, H
 import { Robot } from './robot.jsx';
 import { ThemeToggle, SidebarToggle } from './theme-toggle.jsx';
 import { Button } from './ui/button.jsx';
-import { useStore, go, bridge, call, act, openSettings } from '@/lib/store.js';
+import { useStore, go, bridge, call, act, openSettings, fullPc } from '@/lib/store.js';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent, Tip, BubbleTip } from './ui/overlay.jsx';
 import { createProjectFlow } from './project-actions.jsx';
 import { STATUS } from '@/lib/labels.js';
@@ -251,12 +251,12 @@ export function Sidebar({ mood, page = false }) {
         </NavItem>
         <NavItem icon={FolderKanban} label={t('nav.projects')} active={is('projects')} onClick={() => go('projects')} testid="nav-projects" />
         {/* Expert mode: PC only (wide screens), when turned on in Settings. */}
-        {app.config.expert?.enabled && !bridge.mobile ? <div className="hidden lg:block"><NavItem icon={SquareTerminal} label={t('nav.expert')} active={is('expert')} onClick={() => go('expert')} testid="nav-expert" /></div> : null}
+        {app.config.expert?.enabled && fullPc() ? <div className="hidden lg:block"><NavItem icon={SquareTerminal} label={t('nav.expert')} active={is('expert')} onClick={() => go('expert')} testid="nav-expert" /></div> : null}
         <NavItem icon={CalendarClock} label={t('nav.schedules')} active={is('schedules')} onClick={() => go('schedules')} testid="nav-schedules" />
         {/* 2.7: the project's Pizarra (draw and attach what the assistant should know). */}
         <NavItem icon={PenTool} label={t('nav.board')} active={is('board')} onClick={() => go('board')} testid="nav-board" />
         {/* 2.7: Monitoreo del equipo (Opti Bot), only once turned on in Ajustes, and only on the PC. */}
-        {app.config.monitor?.enabled && !bridge.mobile ? <NavItem icon={HeartPulse} label={t('nav.monitor')} active={is('monitor')} onClick={() => go('monitor')} testid="nav-monitor" /> : null}
+        {app.config.monitor?.enabled && fullPc() ? <NavItem icon={HeartPulse} label={t('nav.monitor')} active={is('monitor')} onClick={() => go('monitor')} testid="nav-monitor" /> : null}
         <Inbox title={t('inbox.waiting')} tone="text-warning" items={needs} route={route} />
         <Inbox title={t('inbox.working')} tone="text-info" items={working} route={route} />
         <Inbox title={t('inbox.issues')} tone="text-destructive" items={issues} route={route} settleLabel={t('inbox.settle')} />

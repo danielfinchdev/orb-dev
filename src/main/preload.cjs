@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('orb', {
     return () => listeners.get(event)?.delete(fn);
   },
   info: () => ipcRenderer.invoke('app:info'),
+  // 2.7.3: Orb Light (the portable .exe): the window shows the essentials only (main.mjs passes --orb-light).
+  light: process.argv.includes('--orb-light'),
   setup: (data) => ipcRenderer.invoke('app:setup', data),
   switchHome: (folder) => ipcRenderer.invoke('app:switchHome', folder),
   pickFolder: (title) => ipcRenderer.invoke('app:pickFolder', title),

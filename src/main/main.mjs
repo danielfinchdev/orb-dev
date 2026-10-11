@@ -25,6 +25,9 @@ const LOCATION = () => path.join(app.getPath('userData'), 'ubicacion.json');
 const INTERFACE = () => path.join(app.getPath('userData'), 'interfaz.json');
 const ZOOM_BASE = 1.15; const ZOOM_MIN = 0.6; const ZOOM_MAX = 1.8; const ZOOM_STEP = 0.1;
 const isDev = !app.isPackaged;
+// 2.7.3: the portable .exe is Orb Light: the essentials, like the phone (no mini-games, God mode, PC Status or themes).
+// The installer is the whole app. ORB_LIGHT=1 shows it from the code too.
+const LIGHT = Boolean(process.env.PORTABLE_EXECUTABLE_FILE) || process.env.ORB_LIGHT === '1';
 
 // ORB_USER_DATA: separate app data (tests, or a portable copy that keeps everything next to it). Otherwise the folder that
 // versions up to 2.3.3 used (%APPDATA%\Orb.dev), although the program is now called Orb.
@@ -310,7 +313,7 @@ function createWindow() {
     width: 1360, height: 880, minWidth: 400, minHeight: 560, show: false, backgroundColor: dark ? '#16151d' : '#fbfbfe', title: PRODUCT.name, autoHideMenuBar: true,
     titleBarStyle: 'hidden',
     icon: path.join(SRC, '..', 'build', 'icon.png'),
-    webPreferences: { preload: path.join(SRC, 'main', 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, spellcheck: true, devTools: isDev || process.env.ORB_DEVTOOLS === '1' }
+    webPreferences: { preload: path.join(SRC, 'main', 'preload.cjs'), additionalArguments: LIGHT ? ['--orb-light'] : [], contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, spellcheck: true, devTools: isDev || process.env.ORB_DEVTOOLS === '1' }
   });
   win.once('ready-to-show', () => win.show());
   for (const e of ['maximize', 'unmaximize', 'restore', 'enter-full-screen', 'leave-full-screen']) win.on(e, sendWindowState);

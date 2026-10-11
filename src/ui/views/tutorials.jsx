@@ -33,6 +33,8 @@ const TUTORIALS = [
   { id: 'privacy', icon: ShieldCheck, lines: 5 }
 ];
 const PC_ONLY = new Set(['agents', 'usage', 'monitor', 'expert', 'games', 'looks']);
+// 2.7.3: what Orb Light (the portable .exe) does not have.
+const NOT_LIGHT = new Set(['monitor', 'expert', 'games']);
 const KEYS = 8; // help.key.1…8
 const FAQS = 14; // help.faq.1…14
 const range = (n) => Array.from({ length: n }, (_, i) => i + 1);
@@ -77,7 +79,7 @@ export function TutorialsView() {
   const query = fold(q.trim());
   const hit = (...parts) => !query || parts.some((p) => fold(p).includes(query));
   // 2.7: the phone leaves out what it does not have (agents, settings, expert mode, games, themes).
-  const tutorials = TUTORIALS.filter((item) => !(bridge.mobile && PC_ONLY.has(item.id))).filter((item) => hit(t(`help.tut.${item.id}.title`, { name }), ...range(item.lines).map((n) => t(`help.tut.${item.id}.l${n}`, { name }))));
+  const tutorials = TUTORIALS.filter((item) => !(bridge.mobile && PC_ONLY.has(item.id)) && !(bridge.light && NOT_LIGHT.has(item.id))).filter((item) => hit(t(`help.tut.${item.id}.title`, { name }), ...range(item.lines).map((n) => t(`help.tut.${item.id}.l${n}`, { name }))));
   const keys = bridge.mobile ? [] : range(KEYS).filter((n) => hit(t(`help.key.${n}.k`), t(`help.key.${n}.v`)));
   const faqs = range(FAQS).filter((n) => hit(t(`help.faq.${n}.q`, { name }), t(`help.faq.${n}.a`, { name })));
   const nothing = !tutorials.length && !keys.length && !faqs.length;

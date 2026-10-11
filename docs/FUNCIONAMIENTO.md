@@ -120,7 +120,7 @@ En Windows, después ofrece instalar lo que falte (sección 24).
 - `loadConfig` mezcla `orb.json` con los valores por defecto. A una carpeta antigua le añade sola lo nuevo:
   - cuentas de los agentes nuevos;
   - en la versión 3, los topes de cupo nuevos (sección 12).
-- `ORB_USER_DATA` permite separar los datos de la app (portable o pruebas).
+- `ORB_USER_DATA` permite separar los datos de la app (otra copia o las pruebas). `ORB_LIGHT=1` abre Orb Light desde el código.
 
 ## 3. El chat con el asistente
 
@@ -709,7 +709,7 @@ que iniciar sesión en la app. Si no, «Iniciar sesión» abre el login oficial 
 
 ## 29. Empaquetado, versiones y CI
 
-- **Portable de Windows:** `npm run dist`, o la CI al cambiar `version` en `main` (`.github/workflows/release.yml`).
+- **Instalador y Orb Light (portable) de Windows:** `npm run dist`, o la CI al cambiar `version` en `main` (`.github/workflows/release.yml`).
 - El SDK de Claude y `zod` van en `app.asar.unpacked`, junto al motor (`build.asarUnpack`).
 - **No se empaqueta** la copia de Claude Code del SDK (238 MB): se usa la del usuario.
 - `build/icon.ico` lleva 10 tamaños (`npm run icon:ico`).
@@ -724,7 +724,7 @@ que iniciar sesión en la app. Si no, «Iniciar sesión» abre el login oficial 
   `none`, `error`, `off`. Tarjeta arriba a la derecha (bajo la cabecera: no tapa el menú ni el cuadro de texto) y tarjeta «Actualizaciones» en Ajustes.
 - **Reiniciar y actualizar** (`app:updateInstall`): si hay tareas en marcha pregunta antes; luego para el motor y llama a
   `quitAndInstall` (instalación silenciosa y vuelve a abrir Orb). Con «Más tarde» se instala al cerrar la app.
-- **Portable** (`PORTABLE_EXECUTABLE_FILE`): consulta la API de GitHub (`releases/latest`) y el botón abre la descarga.
+- **Sin instalar** (Orb Light con `PORTABLE_EXECUTABLE_FILE`, o la carpeta del programa sin `Uninstall Orb.exe` al lado): consulta la API de GitHub (`releases/latest`) y el botón abre la descarga.
 - Desde el código no hay actualizaciones (`off`). `ORB_NO_UPDATE=1` las apaga; `ORB_FAKE_UPDATE=<versión>` simula una
   versión nueva sin red (pruebas); `ORB_UPDATE_URL=http://127.0.0.1:<puerto>/` usa un servidor local para probar una
   actualización antes de publicarla.
