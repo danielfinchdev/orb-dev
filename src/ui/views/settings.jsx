@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { toast } from 'sonner';
-import { Settings, FolderOpen, HeartPulse, Plus, Trash2, ArrowLeftRight, Smartphone, QrCode, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, LayoutGrid, UserRound, ListChecks, Wrench, RefreshCw, ChevronRight } from 'lucide-react';
+import { Settings, FlaskConical, FolderOpen, HeartPulse, Plus, Trash2, ArrowLeftRight, Smartphone, QrCode, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, LayoutGrid, UserRound, ListChecks, Wrench, RefreshCw, ChevronRight } from 'lucide-react';
 import { ToolIcon } from '@/components/agent-icon.jsx';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, APPEARANCE_DEFAULTS } from '../../core/appearance.mjs';
 import { PRODUCT, AUTHOR } from '../../core/product.mjs';
@@ -17,7 +17,7 @@ import { Select, Switch, Checkbox, Dialog, DialogContent, DialogTitle, BubbleTip
 import { ModelGuide } from '@/components/model-guide.jsx';
 import { useCatalog } from '@/components/brain-picker.jsx';
 import { AGENT } from '@/lib/labels.js';
-import { useStore, call, act, bridge, setState, getState, applyTheme, applyAppearance, go, openTerminal, openSettings, closeSettings, fullPc } from '@/lib/store.js';
+import { useStore, call, act, bridge, setState, getState, applyTheme, applyAppearance, go, openTerminal, openSettings, closeSettings, fullPc, runTest } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { t, useT, useLocale } from '@/lib/i18n.js';
 import { LANGUAGES } from '../../core/i18n.mjs';
@@ -312,6 +312,17 @@ function AndroidCard() {
             : st.state !== 'downloading' ? <Button size="sm" variant="outline" onClick={async () => { setSt({ ...st, state: 'downloading' }); const r = await act(call('android.install')); if (r) setSt(r); else load(); }}>{t('settings.android.download')}</Button> : null}
         </div>
       </CardContent>
+    </Card>
+  );
+}
+
+// 3.0: the test request, always here (in the chat it shows only on the first opening of the day).
+function TestCard() {
+  const t = useT();
+  return (
+    <Card>
+      <CardHeader><CardTitle>{t('test.title')}</CardTitle><CardDescription>{t('test.desc')}</CardDescription></CardHeader>
+      <CardFooter><Button size="sm" variant="outline" onClick={() => { closeSettings(); runTest(t('test.prompt')); }} data-testid="settings-test"><FlaskConical />{t('test.button')}</Button></CardFooter>
     </Card>
   );
 }
@@ -626,7 +637,7 @@ function MoreAppsCard() {
 
 // Ajustes is a window over the app: sections on the left, with the developer's GitHub and the version at the bottom.
 const SECTIONS = [
-  { id: 'general', icon: UserRound, cards: (c, app) => <><AssistantCard c={c} /><ChatCard c={c} /><FolderCard c={c} home={app.home} /></> },
+  { id: 'general', icon: UserRound, cards: (c, app) => <><AssistantCard c={c} /><ChatCard c={c} />{bridge.mobile ? null : <TestCard />}<FolderCard c={c} home={app.home} /></> },
   { id: 'apariencia', icon: Palette, cards: (c) => <><AppearanceCard c={c} /><InterfaceCard c={c} /></> },
   { id: 'tareas', icon: ListChecks, cards: (c) => <TasksCard c={c} /> },
   { id: 'movil', icon: Smartphone, cards: () => <MobileCard /> },

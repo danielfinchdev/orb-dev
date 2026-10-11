@@ -1,11 +1,11 @@
 // Projects: the folders inside the assistant's folder (plus any linked one), with git and GitHub actions.
 import { useEffect, useState } from 'react';
-import { FolderKanban, FolderPlus, FolderOpen, Pin, MessageSquare, BookOpen, Unlink, GitBranch, Save, Upload, RefreshCw, GitPullRequest, Folder, ScanSearch } from 'lucide-react';
+import { FolderKanban, FolderPlus, FolderOpen, Pin, MessageSquare, BookOpen, Unlink, GitBranch, Save, Upload, RefreshCw, GitPullRequest, Folder, ScanSearch, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/page.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { createProjectFlow, linkFolderFlow, cloneRepoFlow, CATEGORIES } from '@/components/project-actions.jsx';
-import { askReview } from './tasks.jsx';
+import { askReview, askSecurityReview } from './tasks.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Empty, Field, Input, PathText, Spinner } from '@/components/ui/basic.jsx';
 import { Checkbox, BubbleTip } from '@/components/ui/overlay.jsx';
@@ -88,8 +88,9 @@ function ProjectDetail({ p }) {
       <CardContent className="flex flex-wrap gap-2">
         {!p.active ? <Button size="sm" onClick={() => act(call('projects.setActive', { name: p.name }), t('projects.setActive.done', { name: p.name }))}><Pin />{t('projects.setActive')}</Button> : null}
         {bridge.mobile ? null : <Button size="sm" variant="outline" onClick={() => act(bridge.openPath(p.path))}><FolderOpen />{t('projects.openFolder')}</Button>}
-        <Button size="sm" variant="outline" onClick={async () => { await act(call('projects.setActive', { name: p.name })); go('new'); }}><MessageSquare />{t('projects.chatHere')}</Button>
-        <Button size="sm" variant="outline" onClick={() => askReview({ project: p.name })} data-testid="project-review"><ScanSearch />{t('projects.review')}</Button>
+        <Button size="sm" variant="outline" onClick={async () => { await act(call('projects.setActive', { name: p.name })); go('chat'); }}><MessageSquare />{t('projects.chatHere')}</Button>
+        <BubbleTip title={t('projects.review')} text={t('projects.reviewTip')}><Button size="sm" variant="outline" onClick={() => askReview({ project: p.name })} data-testid="project-review"><ScanSearch />{t('projects.review')}</Button></BubbleTip>
+        <BubbleTip title={t('projects.security')} text={t('projects.securityTip')}><Button size="sm" variant="outline" onClick={() => askSecurityReview({ project: p.name })} data-testid="project-security"><ShieldCheck />{t('projects.security')}</Button></BubbleTip>
         <Button size="sm" variant="outline" onClick={() => go({ view: 'logs', name: p.name })}><BookOpen />{t('projects.log')}</Button>
         {!p.inHome ? <Button size="sm" variant="danger" onClick={async () => { if (await confirm(t('projects.unlink.title'), t('projects.unlink.body', { name: p.name }), { ok: t('projects.unlink.ok'), danger: true })) act(call('projects.remove', { name: p.name }), t('projects.unlink.done')); }}><Unlink />{t('projects.unlink.ok')}</Button> : null}
       </CardContent>

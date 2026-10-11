@@ -1,4 +1,4 @@
-// Claude Code adapter. 2.3: a live session through the official Claude Agent SDK (the same one T3 Code uses), driving the
+// Claude Code adapter. 2.3: a live session through the official Claude Agent SDK, driving the
 // Claude Code the user installed (pathToClaudeCodeExecutable): its login, its subscription, nothing is copied. One process
 // per conversation stays open between turns; answers stream as they are written; every action that needs permission goes
 // through the guard (src/core/guard.mjs) and, when it must ask, to an approval card in the app.
@@ -208,7 +208,9 @@ export function createLive(o) {
     if (o.budgetUsd) options.maxBudgetUsd = o.budgetUsd;
     query = sdkQuery({ prompt: input, options });
     (async () => {
-      try { for await (const m of query) { log(JSON.stringify(m).slice(0, 4000)); handle(m); } }
+      // 3.0: the streamed pieces of each answer are not written to the run log one by one (a disk write per token); the
+      // whole message that follows them is.
+      try { for await (const m of query) { if (m?.type !== 'stream_event') log(JSON.stringify(m).slice(0, 4000)); handle(m); } }
       catch (error) {
         log(`fin con error: ${error?.stack ?? error}`);
         if (turn && !turn.done) turn.finish({ isError: true, final: closed ? tr('sys.agents.stopped') : tr('sys.agents.exitedWith', { name: label, error: error?.message ?? error }) });

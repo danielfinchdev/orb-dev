@@ -13,6 +13,8 @@ export function translate(lang, key, vars) {
   const text = DICTS[lang]?.[key] ?? DICTS.es[key] ?? key;
   return vars ? text.replace(/\{(\w+)\}/g, (m, k) => (vars[k] ?? m)) : text;
 }
-export const createT = (lang) => (key, vars) => translate(DICTS[lang] ? lang : 'es', key, vars);
+// One function per language (stable across renders: components can depend on it).
+const T_CACHE = {};
+export const createT = (lang) => (T_CACHE[DICTS[lang] ? lang : 'es'] ??= (key, vars) => translate(DICTS[lang] ? lang : 'es', key, vars));
 // Locale for dates and numbers.
 export const localeOf = (lang) => (lang === 'en' ? 'en-GB' : 'es-ES');

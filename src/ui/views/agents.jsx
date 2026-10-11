@@ -75,7 +75,7 @@ function Accounts({ a, reload }) {
       for (const f of list) await call('accounts.add', { agent: a.id, label: `${a.label} ${planName(f.plan) ?? ++n}`, home: f.dir });
       return list.length;
     };
-    if (found.length === 1) {
+    if (found.length === 1 && found[0].checked !== false) { // one that Codex could not check is shown to choose, not added by itself
       const n = await act(addAll(found), t('agents.scanAddedOne', { label: a.label }));
       if (n) reload();
       return;

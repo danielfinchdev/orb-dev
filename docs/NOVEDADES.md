@@ -1,14 +1,44 @@
 ## Descargar
 
-- **`Orb-2.7.3-instalador.exe`** (recomendado, la app completa): se instala para tu usuario, sin permisos de
+- **`Orb-3.0.0-instalador.exe`** (recomendado, la app completa): se instala para tu usuario, sin permisos de
   administrador, con acceso directo en el escritorio y en el menú Inicio, y se actualiza sola. Después lo encuentras
   escribiendo «Orb» en el buscador de Windows.
-- **`Orb-2.7.3-light-portable.exe`** (Orb Light, sin instalar): doble clic y se abre. Lo esencial (chat, tareas,
+- **`Orb-3.0.0-light-portable.exe`** (Orb Light, sin instalar): doble clic y se abre. Lo esencial (chat, tareas,
   proyectos, pizarra, agentes…), sin minijuegos, God mode, Monitoreo del equipo ni temas. No se actualiza sola: avisa de
   cada versión nueva y abre la descarga.
 
 Windows 10/11. Como aún no está firmada, SmartScreen avisa la primera vez: «Más información» → «Ejecutar de todas formas».
 En el primer arranque la app detecta qué agentes tienes y con qué sesión, e instala lo que falte con los instaladores oficiales.
+
+## Novedades de la 3.0
+
+- **Un solo «Nuevo chat»:** desaparece «Orbe» del menú. «Nuevo chat» abre una conversación limpia con Orbe, sin carpeta,
+  y la carpeta se elige en el cuadro de mensaje. Para volver a la conversación en curso, pulsa el robot de arriba a la
+  izquierda. Las anteriores no se pierden: «Ver conversación anterior», arriba del chat. Se arregla también que, desde la
+  2.7, al reiniciar la conversación seguían viéndose los mensajes de antes.
+- **Nueva tarea (tú diriges):** con el Orquestador apagado, el botón se divide en «Nuevo chat» y «Nueva tarea». En
+  «Nueva tarea» cada mensaje es una tarea para el agente y el modelo que elijas, y puedes lanzar varias a la vez; cada una
+  muestra su progreso, su estado y su resultado. Sale del botón «Nueva tarea» de la pantalla Tareas.
+- **Security Review** en cada proyecto, junto a Task Review: un agente busca vulnerabilidades y secretos expuestos sin
+  tocar nada y entrega los hallazgos por gravedad. Los dos botones explican en un globito qué hacen.
+- **Iniciar test:** la primera vez que abres Orb cada día, encima del selector de carpeta, un botón pide a Orbe (con el
+  Orquestador) una web de prueba hecha con varios modelos y la abre para probarla. Siempre está en Ajustes › General.
+- **El robot de la esquina** se queda oculto hasta que acercas el ratón, y nunca coincide con el robot de los avisos.
+- **Cada cuenta, sus modelos:** con dos suscripciones de un mismo agente (Codex Go y Codex Pro), cada una ve y usa sus
+  propios modelos; antes se mezclaban y una tarea podía recibir un modelo que su cuenta no tiene.
+- **Cuentas más seguras:** no se puede añadir dos veces la misma carpeta de sesión, una cuenta cuya carpeta ha
+  desaparecido deja de recibir trabajo, «Buscar y añadir» compara todas las cuentas y no añade sola una carpeta que Codex
+  no ha podido comprobar, y cambiar el asistente a otra cuenta empieza una conversación nueva en vez de fallar.
+- **Puente con Open Control Edge:** desactivarlo corta los datos en los dos sentidos, solo escribe cuando OCE está
+  abierto, comparte la ventana de uso más corta de cada cuenta (5 h) con su nombre corto y cuándo se midió, y nunca
+  muestra una VRAM inventada.
+- **Más rápido y ligero:** la respuesta en directo ya no redibuja toda la ventana en cada palabra, cada parte de la
+  ventana se actualiza solo cuando cambia lo suyo, nada se refresca con la ventana minimizada, las listas de tareas pesan
+  mucho menos, hay índices nuevos en la base de datos y los registros no escriben cada palabra en disco.
+- **Arreglos:** un informe de tareas que Orbe estaba escribiendo ya no se pierde al empezar un chat nuevo o pulsar
+  «Detener»; un móvil muy activo ya no se desvincula solo; el «OK» de un informe funciona también en conversaciones
+  anteriores; una tarea cancelada mientras arrancaba no pasa a «bloqueada»; Security Review también desde el móvil.
+- **Limpieza:** fuera código, textos y funciones que ya no se usaban.
 
 ## Novedades de la 2.7.3
 

@@ -87,7 +87,6 @@ PIZARRA: ${boss} dibuja y adjunta lo que quiere en ${path.join(cwd, 'pizarra')}:
 Antes de cambiar algo grande, di en una línea qué vas a hacer.
 Si ${boss} debe elegir entre 2-4 caminos claros, usa orb_ask (la recomendada primero) y termina tu turno: su respuesta llega como su próximo mensaje.`;
 }
-const FREE_TOOLS = ['mcp__orb', 'Read', 'Glob', 'Grep', 'Edit', 'Write', 'NotebookEdit', 'Bash', 'WebFetch', 'WebSearch', 'TodoWrite'];
 
 const STOP_GRACE_MS = 10_000; // how long a stopped turn may take to wind down before its process is closed
 
@@ -111,7 +110,10 @@ export class Orchestrator {
 
   get logFile() { return path.join(ctx.paths.runs, 'asistente.log'); }
   state() { return { busy: this.busy, since: this.busy ? this.since : null, partial: this.partial, tools: this.tools, queued: this.queue.length, context: this.board.settingJson('orchestrator_context') }; }
-  push() { this.emit('chat:state', this.state()); }
+  push() { if (this.pushTimer) { clearTimeout(this.pushTimer); this.pushTimer = null; } this.emit('chat:state', this.state()); }
+  // 3.0: the streamed answer goes to the window at most every 80 ms (each push sends the whole partial answer, and the
+  // window and the phones redraw on each one); anything else still pushes at once.
+  pushSoon() { if (!this.pushTimer) { this.pushTimer = setTimeout(() => this.push(), 80); this.pushTimer.unref?.(); } }
 
   info() {
     const o = ctx.config.orchestrator ?? {};
@@ -174,6 +176,7 @@ export class Orchestrator {
     // A new conversation («Nuevo chat», «Reiniciar») drops what the user had queued, not the engine's notices still owed
     // (the report of finished tasks…): those are answered in the new one.
     this.queue = this.queue.filter((q) => q.internal);
+    this.requeueCurrent();
     this.forget();
     this.board.notice(tr('msg.orch.newConversation', { name: assistantName() }), 'info');
     this.busy = false; this.partial = ''; this.tools = []; this.push();
@@ -186,10 +189,20 @@ export class Orchestrator {
     if (!this.busy) return;
     // What the user had queued goes; the engine's own notices (the report of finished tasks…) still come after.
     this.generation++; this.queue = this.queue.filter((q) => q.internal);
+    this.requeueCurrent();
     const live = this.live; const stopped = this.inflight;
     Promise.resolve(live?.interrupt()).catch(() => {});
     if (stopped) setTimeout(() => { if (this.inflight === stopped && this.live === live) this.closeLive(); }, STOP_GRACE_MS).unref?.();
     this.busy = false; this.partial = ''; this.tools = []; if (!this.closing) this.board.notice(tr('msg.orch.stopped'), 'info'); this.push();
+  }
+
+  // 3.0: an engine notice cut short (a report of finished tasks the assistant was writing when the user started a new
+  // conversation or pressed «Detener») goes back to the front of the queue instead of being lost: it is answered next.
+  requeueCurrent() {
+    const item = this.current;
+    if (!this.busy || !item?.internal || item.requeued) return;
+    item.requeued = true;
+    this.queue.unshift(item);
   }
 
   // Free mode: the answer to an approval card in the chat (a risky command the assistant wants to run).
@@ -201,7 +214,7 @@ export class Orchestrator {
   next() {
     if (this.busy || this.inflight || !this.queue.length) return;
     this.busy = true; this.since = Date.now(); this.partial = ''; this.tools = []; this.push();
-    const item = this.queue.shift(); this.current = item;
+    const item = this.queue.shift(); this.current = item; item.requeued = false;
     const { text, meta } = item;
     const generation = this.generation;
     const run = this.run(text, true, meta).catch((error) => {
@@ -212,7 +225,7 @@ export class Orchestrator {
       this.busy = false; this.push();
     }).finally(() => {
       // Answered (or given up): the notice is no longer pending, unless the app is closing in the middle of it.
-      if (item.internal && !this.closing) this.keep(item, false);
+      if (item.internal && !this.closing && !item.requeued) this.keep(item, false);
       if (this.inflight === run) { this.inflight = null; this.current = null; }
       if (!this.closing) this.next();
     });
@@ -289,13 +302,13 @@ export class Orchestrator {
   }
 
   onEvent(ev) {
-    if (ev.type === 'delta') { this.partial += ev.text; this.push(); return; }
+    if (ev.type === 'delta') { this.partial += ev.text; this.pushSoon(); return; }
     // 2.7: each step with what it works on (a file's name, a command, a search) and when it started, for the live line of
     // the chat («Leyendo claude.mjs · 1 min 3 s»). Only the last 30.
     if (ev.type === 'item' && ev.kind === 'tool') { this.tools.push(toolStep(ev.body)); if (this.tools.length > 30) this.tools.shift(); this.push(); return; }
     if (ev.type === 'item' && ev.role === 'assistant' && ev.kind === 'text') { this.partial = ''; return; }
     if (ev.type === 'session' && ev.id) { this.board.setting('orchestrator_session', ev.id); return; }
-    if (ev.type === 'models') { rememberModels(this.board, this.liveAgent, ev.list); return; }
+    if (ev.type === 'models') { rememberModels(this.board, this.liveAgent, ev.list, this.liveAccount ?? this.liveAgent); return; }
     // 2.6: the brain's own plan usage too (before, only the agents' sessions counted it): the usage panel and the budget.
     if (ev.type === 'rate') { try { recordRate(this.board, this.liveAccount ?? this.liveAgent, ev); } catch { /* budget only */ } return; }
     if (ev.type === 'context' && ev.size) { this.board.settingJson('orchestrator_context', { used: ev.used, size: ev.size }); this.push(); return; }

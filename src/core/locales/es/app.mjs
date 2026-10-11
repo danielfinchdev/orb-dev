@@ -17,7 +17,6 @@ export default {
   'app.oldQr': "Este código QR es de una versión anterior. Genera uno nuevo en el PC.",
   'app.pushNeedsHttps': "Las notificaciones requieren una conexión segura (Tailscale con HTTPS).",
   'app.pushDenied': "Las notificaciones están bloqueadas en este navegador. Actívalas en su configuración.",
-  'app.pairTailscale': 'Funciona a través de Tailscale. Solo tus dispositivos tienen acceso.',
   'app.errorTitle': 'No se pudo iniciar Orb',
   'app.terminalOpened': 'Terminal abierta ({name})',
   'app.notLinked': 'este dispositivo no está vinculado',

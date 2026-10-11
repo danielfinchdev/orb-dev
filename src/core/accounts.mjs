@@ -15,7 +15,8 @@ export const accounts = () => (ctx.config.accounts ?? []).filter((a) => AGENT_ID
 export const account = (id) => accounts().find((a) => a.id === id) ?? null;
 export const accountsOf = (agent) => accounts().filter((a) => a.agent === agent);
 // Accounts that can take work: the account and its agent are enabled.
-export const usableAccounts = (agent) => accountsOf(agent).filter((a) => a.enabled !== false && ctx.config.agents[agent]?.enabled);
+// 3.0: an account whose own folder is gone (moved, renamed, deleted) gets no work: the agent would fail on every task.
+export const usableAccounts = (agent) => accountsOf(agent).filter((a) => a.enabled !== false && ctx.config.agents[agent]?.enabled && (!a.home || fs.existsSync(a.home)));
 
 // The folder where the CLI keeps this account's login.
 export function accountDir(acc) {

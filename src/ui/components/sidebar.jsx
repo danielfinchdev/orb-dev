@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Smartphone, MessageSquarePlus, ListTodo, FolderKanban, Bot, BookOpen, History, Settings, Sparkles, SquareTerminal, ChevronRight, Plus, FolderPlus, ShieldAlert, Hourglass, CirclePause, Check, CalendarClock, CircleCheck, Undo2, GraduationCap, PenTool, HeartPulse, Layers } from 'lucide-react';
+import { Smartphone, MessageSquarePlus, ListTodo, FolderKanban, Bot, BookOpen, History, Settings, SquareTerminal, ListPlus, ChevronRight, FolderPlus, ShieldAlert, Hourglass, CirclePause, Check, CalendarClock, CircleCheck, Undo2, GraduationCap, PenTool, HeartPulse, Layers } from 'lucide-react';
 import { Robot } from './robot.jsx';
 import { ThemeToggle, SidebarToggle } from './theme-toggle.jsx';
 import { Button } from './ui/button.jsx';
-import { useStore, go, bridge, call, act, openSettings, fullPc } from '@/lib/store.js';
+import { useStore, go, bridge, call, act, openSettings, fullPc, newChat } from '@/lib/store.js';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent, Tip, BubbleTip } from './ui/overlay.jsx';
 import { createProjectFlow } from './project-actions.jsx';
 import { STATUS } from '@/lib/labels.js';
@@ -33,7 +33,7 @@ export function NavItem({ icon: Icon, iconEl, label, active, onClick, children, 
 }
 
 
-// The inbox at the top (2.3, like T3 Code's): what needs you (a permission, a task to approve, something stopped halfway or
+// The inbox at the top (2.3): what needs you (a permission, a task to approve, something stopped halfway or
 // waiting for the usage limit) and what is working right now. A conversation leaves it with «Listo» (settled).
 function Inbox({ title, tone, items, route, settleLabel }) {
   if (!items.length) return null;
@@ -107,17 +107,17 @@ function SideItem({ item, route, done }) {
   );
 }
 
-// 2.6: a project. A click picks it for a new conversation in it; a double click (or its arrow) unfolds what was asked in
-// it: its tasks and its direct conversations, newest first (those put away in «Completados» are not here).
+// 2.6: a project. A click picks it for the conversation with the assistant; a double click (or its arrow) unfolds what was
+// asked in it: its tasks and its direct conversations, newest first (those put away in «Completados» are not here).
 function ProjectFolder({ project, items, open, onOpen, route, active }) {
   const t = useT();
   const SHOWN = 8;
   const running = items.filter((i) => i.status === 'running').length;
   const waiting = items.filter((i) => i.status === 'awaiting_approval').length;
-  const pick = async () => { await act(call('projects.setActive', { name: project.name })); go('new'); };
+  const pick = async () => { await act(call('projects.setActive', { name: project.name })); go('chat'); };
   return (
     <Collapsible open={open} onOpenChange={onOpen}>
-      <div className={cn('group/folder flex items-center rounded-lg', active && route.view === 'new' ? 'bg-accent' : 'hover:bg-accent/60')}>
+      <div className={cn('group/folder flex items-center rounded-lg', active && route.view === 'chat' ? 'bg-accent' : 'hover:bg-accent/60')}>
         <CollapsibleTrigger className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 cursor-pointer place-items-center rounded-md" aria-label={t(open ? 'comp.sidebar.fold' : 'comp.sidebar.unfold', { name: project.name })}>
           <ChevronRight className={cn('size-3.5 transition-transform', open && 'rotate-90')} />
         </CollapsibleTrigger>
@@ -198,7 +198,10 @@ export function Sidebar({ mood, page = false }) {
   // 2.7, the phone: the conversations as a screen of their own (the «Chats» tab); the sections are the tabs below.
   if (page) return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="mobile-chats">
-      <div className="px-4 pt-3 pb-2"><Button className="w-full justify-start" variant="outline" onClick={() => go('new')} data-testid="new-conversation"><MessageSquarePlus />{t('nav.newChat')}</Button></div>
+      <div className="flex gap-2 px-4 pt-3 pb-2">
+        <Button className="min-w-0 flex-1 justify-start" variant="outline" onClick={() => newChat()} data-testid="new-conversation"><MessageSquarePlus /><span className="truncate">{t('nav.newChat')}</span></Button>
+        {app.assistant?.orchestrate === false ? <Button className="min-w-0 flex-1 justify-start" variant="outline" onClick={() => go('newtask')} data-testid="new-task"><ListPlus /><span className="truncate">{t('nav.newTask')}</span></Button> : null}
+      </div>
       <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-x-hidden overflow-y-auto px-4 pb-4">
         <Inbox title={t('inbox.waiting')} tone="text-warning" items={needs} route={route} />
         <Inbox title={t('inbox.working')} tone="text-info" items={working} route={route} />
@@ -226,7 +229,13 @@ export function Sidebar({ mood, page = false }) {
     <aside className="bg-sidebar relative flex h-full shrink-0 flex-col border-r" style={{ width }}>
       {bridge.mobile ? null : <div className="sidebar-resize" role="separator" aria-orientation="vertical" aria-label={t('comp.sidebar.resize')} onPointerDown={startResize} onDoubleClick={() => setWidth(SIDEBAR_DEFAULT)} data-testid="sidebar-resize" />}
       <div className="theme-band side-band app-titlebar flex h-14 shrink-0 items-center gap-2 border-b px-4">
-        <Robot size={34} mood={mood} title={name} live />
+        {/* 3.0: the robot goes back to the conversation in progress. */}
+        <Tip label={t('nav.backToChat', { name })} side="bottom" align="start">
+          <button type="button" className="no-drag relative shrink-0 cursor-pointer rounded-full" onClick={() => go('chat')} aria-label={t('nav.backToChat', { name })} data-testid="sidebar-home">
+            <Robot size={34} mood={mood} title={name} live />
+            {app.chat?.busy ? <span className="bg-primary absolute right-0 bottom-0 size-2 animate-pulse rounded-full" /> : null}
+          </button>
+        </Tip>
         {/* 2.7: the buttons share the first line with the name, so the project below has the whole width (long names were cut). */}
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-1">
@@ -238,13 +247,13 @@ export function Sidebar({ mood, page = false }) {
           <Tip label={app.activeProject?.name} side="bottom" align="start"><div className={cn('text-muted-foreground truncate text-xs', name === PRODUCT.assistant && 'wordmark-sub')} data-testid="sidebar-project">{app.activeProject ? app.activeProject.name : t('nav.noProject')}</div></Tip>
         </div>
       </div>
-      <div className="px-3 pt-3 pb-2">
-        <Button className="w-full justify-start" variant="outline" onClick={() => go('new')} data-testid="new-conversation"><MessageSquarePlus />{t('nav.newChat')}</Button>
+      {/* 3.0: «Nuevo chat» opens a clean conversation with the assistant. With «Orquestador» off the user hands out the work,
+          and the button splits in two: «Nuevo chat» and «Nueva tarea». */}
+      <div className="flex gap-2 px-3 pt-3 pb-2">
+        <Button className={cn('min-w-0 flex-1', app.assistant?.orchestrate === false ? 'gap-1 px-2 has-[>svg]:px-2 text-[13px] [&_svg]:size-3.5' : 'justify-start', is('chat') && 'bg-accent')} variant="outline" onClick={() => newChat()} data-testid="new-conversation"><MessageSquarePlus /><span className="truncate">{t('nav.newChat')}</span></Button>
+        {app.assistant?.orchestrate === false ? <Button className={cn('min-w-0 flex-1 gap-1 px-2 has-[>svg]:px-2 text-[13px] [&_svg]:size-3.5', is('newtask') && 'bg-accent')} variant="outline" onClick={() => go('newtask')} data-testid="new-task"><ListPlus /><span className="truncate">{t('nav.newTask')}</span></Button> : null}
       </div>
       <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-x-hidden overflow-y-auto px-3 pb-3">
-        <NavItem icon={Sparkles} label={name} active={is('chat')} onClick={() => go('chat')} testid="nav-chat">
-          {app.chat?.busy ? <span className="bg-primary size-2 animate-pulse rounded-full" /> : null}
-        </NavItem>
         <NavItem icon={ListTodo} label={t('nav.tasks')} active={is('tasks')} onClick={() => go('tasks')} testid="nav-tasks">
           {approvals ? <span className="bg-warning text-white rounded-full px-1.5 text-[11px] font-medium" aria-label={t('comp.sidebar.waitApproval')}>{approvals}</span>
             : running ? <span className="bg-muted text-muted-foreground rounded-full px-1.5 text-[11px]">{running}</span> : null}

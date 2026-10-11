@@ -1,4 +1,4 @@
-// Live sessions: a conversation with one agent in one folder. Direct conversations (T3 Code style) and task runs launched
+// Live sessions: a conversation with one agent in one folder. Direct conversations and task runs launched
 // by the scheduler use the same machinery. 2.3: every conversation keeps ONE live process of its agent open between turns
 // (src/agents/live.mjs): answers stream as they are written, the user can steer the running turn or queue messages,
 // approval requests show up as cards, the context meter fills up, and a closed app resumes the agent's own conversation.
@@ -294,7 +294,7 @@ export class Sessions {
   onLiveEvent(id, ev) {
     const run = this.running.get(id);
     if (run) run.lastAt = Date.now();
-    if (ev.type === 'models') { const s = this.get(id); if (s) rememberModels(this.board, s.agent, ev.list); return; }
+    if (ev.type === 'models') { const s = this.get(id); if (s) rememberModels(this.board, s.agent, ev.list, s.account ?? s.agent); return; }
     if (ev.type === 'item') {
       const item = this.addItem(id, ev.role, ev.kind, ev.body);
       if (run) { const what = describeItem(item); if (what) run.last = what; if (ev.kind === 'tool' || ev.kind === 'file') run.steps++; }

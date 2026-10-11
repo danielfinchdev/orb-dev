@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Wifi, WifiOff, Router, Smartphone, Tv, Monitor, RefreshCw, MoreHorizontal, Pencil, MonitorSmartphone, TerminalSquare, Link2, ShieldAlert, Battery, HardDrive, MemoryStick, Download } from 'lucide-react';
 import { Button } from './ui/button.jsx';
-import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Field, Input, Spinner, Empty } from './ui/basic.jsx';
+import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Field, Input, Spinner } from './ui/basic.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, Collapsible, CollapsibleTrigger, CollapsibleContent } from './ui/overlay.jsx';
 import { form } from './dialogs.jsx';
 import { call, act } from '@/lib/store.js';

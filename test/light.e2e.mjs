@@ -25,9 +25,9 @@ win.on('pageerror', (e) => errors.push(e.message));
 await win.setViewportSize({ width: 1360, height: 860 });
 const count = (sel) => win.locator(sel).count();
 try {
-  await win.locator('[data-testid=nav-chat]').waitFor({ timeout: 30000 });
+  await win.locator('[data-testid=sidebar-home]').waitFor({ timeout: 30000 });
   assert.equal(await win.evaluate(() => window.orb.light), true, 'la ventana sabe que es Orb Light');
-  for (const id of ['nav-chat', 'nav-tasks', 'nav-projects', 'nav-schedules', 'nav-board', 'nav-agents', 'nav-logs', 'nav-activity', 'nav-tutorials', 'nav-settings']) assert.equal(await count(`[data-testid=${id}]`), 1, `${id} sigue`);
+  for (const id of ['sidebar-home', 'nav-tasks', 'nav-projects', 'nav-schedules', 'nav-board', 'nav-agents', 'nav-logs', 'nav-activity', 'nav-tutorials', 'nav-settings']) assert.equal(await count(`[data-testid=${id}]`), 1, `${id} sigue`);
   assert.equal(await count('[data-testid=nav-expert]'), 0, 'sin God mode en el menú');
   assert.equal(await count('[data-testid=nav-monitor]'), 0, 'sin Monitoreo en el menú');
   assert.equal(await count('[data-testid=bar-games]'), 0, 'sin minijuegos en la barra del chat');
