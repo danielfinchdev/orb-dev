@@ -98,7 +98,7 @@ test('el catálogo nombra los modelos de un agente que no es Claude y su predete
   const claude = catalog.find((a) => a.id === 'claude');
   assert.deepEqual(claude.models.map((m) => m.id), ['claude-sonnet-5-5', 'claude-opus-5-5', 'fable', 'haiku'], 'sin repetir los alias que ya están con su id completo');
   assert.equal(claude.models.find((m) => m.id === 'haiku').label, 'Haiku 4.5');
-  assert.ok(claude.models.find((m) => m.id === 'fable').heavy, 'Fable gasta más cupo');
+  assert.ok(claude.models.find((m) => m.id === 'fable').heavy, 'Fable gasta más uso');
   // Cursor without a list yet: its default and the configured «auto»; asked in the background when the selector wants it.
   fs.rmSync(asked, { force: true });
   board.setting('models_try:cursor', ''); board.setting('models_at:cursor', ''); board.setting('models:cursor', '');

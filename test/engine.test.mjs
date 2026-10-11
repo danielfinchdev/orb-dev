@@ -120,7 +120,7 @@ test('parar al asistente y escribirle enseguida: el mensaje nuevo espera a que a
 
 test('2.6: el cerebro del asistente puede ser cualquier agente instalado (Codex), con sus instrucciones al empezar', async () => {
   const catalog = await call('models.catalog');
-  assert.ok(catalog.some((a) => a.id === 'claude' && a.models.some((m) => m.id === 'claude-opus-5-5' && m.heavy)), 'Opus gasta más cupo');
+  assert.ok(catalog.some((a) => a.id === 'claude' && a.models.some((m) => m.id === 'claude-opus-5-5' && m.heavy)), 'Opus gasta más uso');
   assert.ok(catalog.some((a) => a.id === 'codex'));
   const info = await call('chat.settings', { agent: 'codex', model: '', reasoning: 'high' });
   assert.equal(info.agent, 'codex'); assert.equal(info.reasoning, 'high');
@@ -165,7 +165,7 @@ test('si el agente solo dice «usage limit» en su respuesta, la tarea se bloque
   const task = await call('tasks.create', { project: 'web', title: 'Límite', description: 'LIMITE_TEXTO', agent: 'claude' });
   const done = await taskDone(task.id);
   assert.equal(done.status, 'blocked');
-  assert.match(done.result, /sin cupo/);
+  assert.match(done.result, /límite de uso/);
   const usage = await call('usage.get');
   assert.ok(usage.find((u) => u.agent === 'claude').cooldownUntil > Date.now());
 });
@@ -185,13 +185,13 @@ test('conversación directa con Codex: en directo y la segunda vez continúa la 
   await assert.rejects(call('nada.raro'), /acción desconocida/);
 });
 
-test('varias cuentas: si una cuenta de Codex está sin cupo, el trabajo va a la otra con su propia carpeta', async () => {
+test('varias cuentas: si una cuenta de Codex llega a su límite de uso, el trabajo va a la otra con su propia carpeta', async () => {
   const acc = await call('accounts.add', { agent: 'codex', label: 'Codex Pro' });
   assert.equal(acc.id, 'codex-2');
   assert.ok(acc.home.includes(path.join('.orb', 'cuentas', 'codex-2')));
   await assert.rejects(call('accounts.add', { agent: 'cursor', label: 'otra' }), /solo admite una cuenta/);
   // The main Codex account runs out of quota: the next Codex task goes to the second account.
-  const quota = await call('tasks.create', { project: 'web', title: 'Cupo', description: 'algo', agent: 'codex' });
+  const quota = await call('tasks.create', { project: 'web', title: 'Uso', description: 'algo', agent: 'codex' });
   await taskDone(quota.id);
   const status = await call('agents.status');
   assert.equal(status.find((a) => a.id === 'codex').accounts.length, 2);

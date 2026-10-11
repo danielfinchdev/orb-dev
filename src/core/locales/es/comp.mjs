@@ -94,9 +94,9 @@ export default {
   'comp.sidebar.permission': 'Permiso',
   'comp.sidebar.waitsPermission': 'Espera tu permiso: {title}',
   'comp.sidebar.taskWaitsApproval': '#{id} espera tu aprobación',
-  'comp.sidebar.taskWaitsQuota': '#{id} espera a que se reinicie el cupo',
+  'comp.sidebar.taskWaitsQuota': '#{id} espera a que se reinicie el uso',
   'comp.sidebar.endedError': 'Terminó con un error',
-  'comp.sidebar.noQuota': 'Sin cupo: puedes continuar cuando quieras',
+  'comp.sidebar.noQuota': 'Límite de uso alcanzado: puedes continuar cuando quieras',
   'comp.sidebar.halfway': 'Interrumpida',
   'comp.sidebar.waitApproval': 'Esperan tu aprobación',
   'comp.sidebar.foldersHint': 'Cada proyecto es una carpeta. Aquí verás las tareas que le asignes.'

@@ -131,7 +131,7 @@ export class Scheduler {
       const ranked = rankAccounts(board, candidates, task.model);
       const forced = board.setting(`budget_ok:${task.id}`) === '1'; // "Lanzar igualmente" in the app
       const pick = ranked.find((r) => (forced || r.check.ok) && this.busyWith(r.account) < ctx.config.perAgent);
-      if (pick && forced) board.event(task.id, 'usuario', 'budget.override', 'lanzada aunque superaba el cupo');
+      if (pick && forced) board.event(task.id, 'usuario', 'budget.override', 'lanzada aunque superaba el límite de uso');
       if (!pick) { if (ranked.every((r) => !r.check.ok)) this.notice(task, ranked.map((r) => r.check.reason).join('; ')); continue; }
       // In its folder only one task that writes at a time (read-only tasks may run alongside); isolated copies run in parallel.
       const project = board.project(task.project);
@@ -451,9 +451,9 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
     }
     // The way back of the loop (person → assistant → tasks → agents → finished → assistant → person → OK).
     const reported = ['done', 'failed', 'blocked'].includes(task.status) && task.created_by === 'orb' ? this.queueReport(task) : false;
-    // Blocked or failed for a reason other than quota: the assistant looks at it once an hour per task.
+    // Blocked or failed for a reason other than the usage limit: the assistant looks at it once an hour per task.
     // The texts of msg.scheduler.quotaResult / budgetStop (Spanish and English).
-    const stuck = ['blocked', 'failed'].includes(task.status) && !held && !problem && !/sin cupo|l[ií]mite de gasto|out of usage quota|spending limit/.test(task.result ?? '');
+    const stuck = ['blocked', 'failed'].includes(task.status) && !held && !problem && !/sin cupo|l[ií]mite de uso|l[ií]mite de gasto|out of usage quota|spending limit/.test(task.result ?? '');
     if (stuck && !reported && this.orchestrator && Date.now() - Number(board.setting(`unblock_asked:${task.id}`) ?? 0) > 3_600_000) {
       board.setting(`unblock_asked:${task.id}`, String(Date.now()));
       this.orchestrator.internal(`AVISO DEL SISTEMA (no es ${userName()}): la tarea #${task.id} «${oneLine(task.title)}» (${task.assigned_to}${task.model ? ` · ${task.model}` : ''}) ${task.status === 'blocked' ? 'se bloqueó' : 'falló'}.

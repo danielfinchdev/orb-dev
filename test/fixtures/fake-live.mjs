@@ -19,6 +19,7 @@
 //   ESPERA_CORRECCION  waits (up to 10 s) for a steer and answers with it
 //   DUERME             works for 30 s (until it is stopped)
 //   PARA_LENTO         once stopped, the turn takes 0.8 s to end (as the real Claude does)
+//   TABLA_MARKDOWN     answers in GFM: a table, a task list and strikethrough
 //   Task Review        a review prompt: answers "VEREDICTO: CORRECTO" (or "CON FALLOS" when the reviewed work says FALLOS)
 //
 // Every turn also emits streamed text (delta), a tool call (Bash ls) and the context meter, and logs what it received to
@@ -198,6 +199,12 @@ function createFakeLive(agent, label, caps, o) {
     if (/ESPERA_CORRECCION/.test(scan) && !steers.length) await sleep(10_000, { untilSteer: true });
     if (/DUERME/.test(scan)) await sleep(30_000);
     if (current.done) return;
+    // 3.1: an answer in GFM (a plan as a table, strikethrough, task list), as the real agents write them.
+    if (/TABLA_MARKDOWN/.test(scan)) {
+      const reply = 'Te propongo este plan:\n\n| # | Tarea | Agente | Depende de |\n|---|---|---|---|\n| 1 | Base: servidor localhost, escena 3D (Three.js), espacio, Sol y Tierra con rotación | codex | — |\n| 2 | Texto «Hello World» con textura de globos y letras destruibles | cursor | 1 |\n| 3 | Barra de inventario y armas: rayo láser, bombas, meteoritos | claude | 1 |\n| 4 | Revisión y pruebas con un modelo distinto | gemini | 2, 3 |\n\n- [x] Proyecto creado\n- [ ] Lanzar las tareas\n\n~~Una sola tarea~~ Cuatro tareas.';
+      item('assistant', 'text', reply); current.addText(reply);
+      return current.finish({ usage: { inputTokens: 10, outputTokens: 5 }, stopReason: 'end_turn' });
+    }
     const reply = [`${agent === 'codex' ? `Codex ${continued ? 'sigue' : 'empieza'}` : 'Recibido'}: ${first}`, ...steers.map((s) => `corrección: ${s}`), ...notes].join(' | ');
     for (const piece of reply.match(/.{1,20}/gs) ?? []) onEvent({ type: 'delta', text: piece });
     item('assistant', 'text', reply);

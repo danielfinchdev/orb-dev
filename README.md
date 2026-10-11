@@ -84,8 +84,8 @@ D:\Orb\                   (siempre <carpeta elegida>\Orb, igual para todos)
   cambios».
 - **Revisión independiente.** Task Review pide a otro modelo, de otro proveedor si es posible, que audite el trabajo;
   Security Review busca vulnerabilidades y secretos expuestos en todo el proyecto. Ninguno modifica nada.
-- **Varias cuentas por agente.** Cada cuenta con su sesión, sus modelos y su cupo; el trabajo se reparte entre las que
-  tienen cupo y espera solo cuando se agota.
+- **Varias cuentas por agente.** Cada cuenta con su sesión, sus modelos y su uso; el trabajo se reparte entre las que
+  tienen uso disponible y espera solo al llegar al límite.
 - **Pizarra por proyecto** para dibujar, escribir y adjuntar referencias que Orb·e tiene en cuenta al planificar.
 - **Desde el móvil**, sin instalar nada: chat, aprobaciones y seguimiento de tareas, con cifrado de extremo a extremo.
 - **Monitoreo del equipo** con Opti Bot: salud, seguridad y red del PC; cualquier cambio requiere tu aprobación.
@@ -111,7 +111,7 @@ npm run icon         # vuelve a sacar el icono del art work (docs/diseno/art wor
 |---|---|
 | `src/main/` | Electron: ventana, primer arranque, puente seguro, arranque del motor y navegador de los agentes con su ventanita |
 | `src/engine/` | Motor (proceso aparte): API, sesiones en directo, planificador, orquestador, bitácoras, GitHub, móvil, instalador, modo experto |
-| `src/core/` | Tablero, aprobaciones, seguridad, cupo, carpetas y deshacer |
+| `src/core/` | Tablero, aprobaciones, seguridad, uso, carpetas y deshacer |
 | `src/agents/` | Un adaptador por agente: detectarlo, lanzarlo e interpretar sus eventos |
 | `src/mcp/` | Servidor MCP que usan los agentes y el asistente |
 | `src/ui/` | Interfaz (React + componentes shadcn/ui + Tailwind, tipografía Outfit) |
