@@ -222,7 +222,7 @@ export default {
   'settings.update.downloaded': '{version} descargada. Se instalará al reiniciar.',
   'settings.update.error': 'No se pudo comprobar: {error}',
   'settings.update.off': 'Las actualizaciones solo están disponibles en la versión instalada.',
-  'settings.update.portable': 'Versión portable: descarga las versiones nuevas desde GitHub.',
+  'settings.update.portable': 'Orb Light (portable): lo esencial, sin minijuegos, God mode, Monitoreo ni temas, y sin actualizaciones automáticas. Las versiones nuevas se descargan desde GitHub. La app completa es el instalador.',
   'settings.section.general': 'General',
   'settings.section.apariencia': 'Apariencia',
   'settings.section.tareas': 'Tareas y usos',

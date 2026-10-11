@@ -163,7 +163,7 @@ export default {
   'help.faq.10.q': 'Why can’t I see the robot?',
   'help.faq.10.a': 'The Professional theme hides the robot and animations; change it in Settings › Appearance. The floating robot is turned on or off in Settings › General.',
   'help.faq.11.q': 'How does Orb update?',
-  'help.faq.11.a': 'The installed version checks for updates when it opens and every 4 hours. "Update" downloads the new version and "Restart and update" installs it. You can also check in Settings › Updates. The portable version notifies you and opens the download.',
+  'help.faq.11.a': 'The installed version checks for updates when it opens and every 4 hours. "Update" downloads the new version and "Restart and update" installs it. You can also check in Settings › Updates. Orb Light (portable) notifies you and opens the download.',
   'help.faq.12.q': 'A Cursor task fails with "plan without access". What should I do?',
   'help.faq.12.a': 'Cursor’s free plan doesn’t allow its agent to be used from other apps. Orb pauses Cursor for a day and, if the task was for "any agent", assigns it to another. With a paid plan it works normally.',
   'help.faq.13.q': 'How do I send feedback or support the project?',

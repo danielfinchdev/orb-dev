@@ -1,12 +1,24 @@
 ## Descargar
 
-- **`Orb-2.7.2-instalador.exe`** (recomendado): se instala para tu usuario, sin permisos de administrador, con acceso
-  directo en el escritorio y en el menú Inicio. Después lo encuentras escribiendo «Orb» en el buscador de Windows.
-- **`Orb-2.7.2-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
-- **`Orb-2.7.2-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.exe`.
+- **`Orb-2.7.3-instalador.exe`** (recomendado, la app completa): se instala para tu usuario, sin permisos de
+  administrador, con acceso directo en el escritorio y en el menú Inicio, y se actualiza sola. Después lo encuentras
+  escribiendo «Orb» en el buscador de Windows.
+- **`Orb-2.7.3-light-portable.exe`** (Orb Light, sin instalar): doble clic y se abre. Lo esencial (chat, tareas,
+  proyectos, pizarra, agentes…), sin minijuegos, God mode, Monitoreo del equipo ni temas. No se actualiza sola: avisa de
+  cada versión nueva y abre la descarga.
 
 Windows 10/11. Como aún no está firmada, SmartScreen avisa la primera vez: «Más información» → «Ejecutar de todas formas».
 En el primer arranque la app detecta qué agentes tienes y con qué sesión, e instala lo que falte con los instaladores oficiales.
+
+## Novedades de la 2.7.3
+
+- **Orb Light:** el portable pasa a ser una versión ligera con lo esencial, como la del móvil: sin minijuegos, God mode,
+  Monitoreo del equipo ni temas (siempre el tema por defecto). El instalador sigue siendo la app completa, que se
+  actualiza sola. Desaparece el zip, que repetía lo mismo que el portable.
+- **Los avisos antiguos salen del chat:** las líneas grises de «Carpeta de trabajo» (y las de modo, cerebro o nueva
+  conversación) guardadas antes de la 2.7 pasan a avisos, como las nuevas, que salen un momento en verde.
+- **Una copia sin instalar lo sabe:** Orb Light, o la carpeta del programa copiada a otro sitio, avisa de las versiones
+  nuevas y abre la descarga en vez de intentar instalarse.
 
 ## Novedades de la 2.7.2
 

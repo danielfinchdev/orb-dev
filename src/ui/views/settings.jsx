@@ -17,7 +17,7 @@ import { Select, Switch, Checkbox, Dialog, DialogContent, DialogTitle, BubbleTip
 import { ModelGuide } from '@/components/model-guide.jsx';
 import { useCatalog } from '@/components/brain-picker.jsx';
 import { AGENT } from '@/lib/labels.js';
-import { useStore, call, act, bridge, setState, getState, applyTheme, applyAppearance, go, openTerminal, openSettings, closeSettings } from '@/lib/store.js';
+import { useStore, call, act, bridge, setState, getState, applyTheme, applyAppearance, go, openTerminal, openSettings, closeSettings, fullPc } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { t, useT, useLocale } from '@/lib/i18n.js';
 import { LANGUAGES } from '../../core/i18n.mjs';
@@ -70,7 +70,7 @@ function AppearanceCard({ c }) {
             {['claro', 'oscuro', 'sistema'].map((theme) => <button key={theme} type="button" role="radio" aria-checked={(ui.theme ?? 'sistema') === theme} onClick={() => set({ theme })} className={cn('cursor-pointer rounded-md px-3 py-1.5 text-[13px]', (ui.theme ?? 'sistema') === theme ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}>{t(`settings.theme.${theme}`)}</button>)}
           </div>
         </Field>
-        <Field label={t('appearance.skin')} hint={t('appearance.skinHint')}>
+        {fullPc() ? <Field label={t('appearance.skin')} hint={t('appearance.skinHint')}>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" role="radiogroup" aria-label={t('appearance.skin')} data-testid="skin-picker">
             {SKINS.map((skin) => (
               <button key={skin} type="button" role="radio" aria-checked={ui.skin === skin} onClick={() => set({ skin })} data-testid={`skin-${skin}`}
@@ -80,7 +80,7 @@ function AppearanceCard({ c }) {
               </button>
             ))}
           </div>
-        </Field>
+        </Field> : null}
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label={t('appearance.font')}><Select className="w-full" value={ui.font} onValueChange={(font) => set({ font })} options={opts(FONTS, 'appearance.font')} /></Field>
           <Field label={t('appearance.codeFont')}><Select className="w-full" value={ui.codeFont} onValueChange={(codeFont) => set({ codeFont })} options={opts(CODE_FONTS, 'appearance.codeFont')} /></Field>
@@ -643,7 +643,9 @@ export function SettingsDialog() {
   const open = useStore((s) => s.settings);
   const app = useStore((s) => s.app);
   if (!app) return null;
-  const section = SECTIONS.find((s) => s.id === open) ?? SECTIONS[0];
+  // 2.7.3: Orb Light (the portable .exe) leaves out God mode and PC Status.
+  const sections = fullPc() ? SECTIONS : SECTIONS.filter((s) => s.id !== 'experto' && s.id !== 'monitor');
+  const section = sections.find((s) => s.id === open) ?? sections[0];
   const c = app.config;
   return (
     <Dialog open={Boolean(open)} onOpenChange={(o) => { if (!o) closeSettings(); }}>
@@ -654,7 +656,7 @@ export function SettingsDialog() {
         <div className="flex min-h-0 flex-1">
           <nav className="flex w-56 shrink-0 flex-col max-sm:w-16" aria-label={t('settings.title')}>
             <div className="grid min-h-0 flex-1 content-start gap-1 overflow-y-auto px-3 pt-4">
-              {SECTIONS.map(({ id, icon: Icon }) => (
+              {sections.map(({ id, icon: Icon }) => (
                 <button key={id} type="button" onClick={() => openSettings(id)} data-testid={`settings-nav-${id}`} aria-label={t(`settings.section.${id}`)} aria-current={section.id === id ? 'page' : undefined}
                   className={cn('flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm', section.id === id ? 'bg-accent text-accent-foreground font-medium' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground')}>
                   <Icon className="size-[18px] shrink-0" /><span className="truncate max-sm:hidden">{t(`settings.section.${id}`)}</span>

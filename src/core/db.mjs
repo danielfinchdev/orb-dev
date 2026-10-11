@@ -201,4 +201,14 @@ export function migrate(db) {
     const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
     if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
   }
+  // 2.7.3: the notices saved as grey system lines before 2.7 (working folder, mode, brain, new conversation…) become
+  // notices too, so the old ones leave the chat like the new ones. Only system lines with those exact openings.
+  const where = OLD_NOTICES.map(() => 'body LIKE ?').join(' OR ');
+  db.prepare(`UPDATE chat SET role = 'notice' WHERE role = 'system' AND (${where})`).run(...OLD_NOTICES);
 }
+const OLD_NOTICES = ['Carpeta de trabajo:%', '📁 Carpeta de trabajo:%', 'Working folder:%', '📁 Working folder:%',
+  'Modo orquestador:%', 'Modo libre:%', 'Orchestrator mode:%', 'Free mode:%', 'Modelo del asistente:%', 'Assistant model:%',
+  '% usará % con razonamiento %', '% will use % reasoning.', 'Nueva conversación.%', 'New conversation.%', 'Detenido.', 'Stopped.',
+  'La conversación se ha reiniciado%', 'The conversation has been restarted%', 'Nuevo dispositivo vinculado:%', 'New device paired:%',
+  'Tarea programada «%', 'Scheduled task “%', 'Task Review: %', 'Se ha restablecido el cupo.%', 'The usage limit has been reset.%',
+  '👍 Aceptad%', '👍 Accepted%', 'El modo libre requiere un proyecto.%', 'Free mode requires a project.%'];
