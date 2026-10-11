@@ -98,6 +98,16 @@ export class Board {
     this.setting(key, value === null ? '' : JSON.stringify(value));
   }
 
+  // 3.1: the agents this PC can really run (turned on, installed and with an account). The engine keeps the list here
+  // (agents_available), so the MCP processes, the app and the scheduler all check against the same thing. null: not known
+  // yet (a board without an engine, e.g. the first instant): nothing is refused.
+  availableAgents() { const list = this.settingJson('agents_available'); return Array.isArray(list) ? list : null; }
+  checkAvailable(agent) {
+    if (!agent || agent === 'any') return;
+    const list = this.availableAgents();
+    if (list && !list.includes(agent)) throw new Error(tr('sys.board.agentUnavailable', { agent, list: list.length ? list.join(', ') : tr('sys.board.noAgentsAvailable') }));
+  }
+
   event(taskId, actor, kind, detail = '') {
     this.run('INSERT INTO events (task_id, actor, kind, detail, at) VALUES (?, ?, ?, ?, ?)', taskId ?? null, String(actor), kind, String(detail).slice(0, 4000), now());
     this.changed('events');
@@ -184,13 +194,14 @@ export class Board {
 
   // mode: "carpeta" (default: the project folder, in turn with the other writing tasks) or "aislada" (own branch and copy).
   // readonly: the task only reads (research, review): it may run at the same time as others in the same folder.
-  createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null, level = null, fixedBrief = false }, actor) {
+  createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null, level = null, fixedBrief = false, internal = false }, actor) {
     if (!MODES.includes(mode)) throw new Error(tr('sys.board.badMode'));
     const proj = this.project(project);
     if (!proj) throw new Error(tr('sys.board.unknownProject', { name: project }));
     const active = this.activeProject();
     // 2.7: the projects of a multiplatform group work together: a task may go to a sister of the active project.
-    if (active && proj.name !== active.name && actor !== 'usuario' && !(active.grupo && proj.grupo === active.grupo)) throw new Error(tr('sys.board.otherFolder', { name: active.name, path: active.path, user: userName() }));
+    // 3.1: internal: a task the engine itself needs in that project (joining a copy), whatever project is active now.
+    if (!internal && active && proj.name !== active.name && actor !== 'usuario' && !(active.grupo && proj.grupo === active.grupo)) throw new Error(tr('sys.board.otherFolder', { name: active.name, path: active.path, user: userName() }));
     if (!title || !description) throw new Error(tr('sys.board.titleAndDesc'));
     title = oneLine(title);
     if (String(description).length > MAX_DESCRIPTION) throw new Error(tr('sys.board.descTooLong', { n: String(description).length, max: MAX_DESCRIPTION }));
@@ -200,6 +211,7 @@ export class Board {
     // An account chosen on purpose: it must belong to the task's agent.
     if (account && !(ctx.config.accounts ?? []).some((a) => a.id === account && (agent === 'any' || a.agent === agent))) throw new Error(tr('sys.board.accountNotOf', { account, agent }));
     if (account && agent === 'any') agent = (ctx.config.accounts ?? []).find((a) => a.id === account).agent;
+    this.checkAvailable(agent);
     if (!['auto', 'manual'].includes(launch)) throw new Error(tr('sys.board.badLaunch'));
     if (!Array.isArray(depends_on) || depends_on.length > 20) throw new Error(tr('sys.board.dependsMax'));
     for (const dep of depends_on) if (!this.task(dep)) throw new Error(tr('sys.board.dependsMissing', { id: dep }));
@@ -296,6 +308,7 @@ export class Board {
       if (task.status === 'running') throw new Error(tr('sys.board.runningAgent', { id }));
       const nextAgent = agent ?? task.agent;
       if (nextAgent !== 'any' && !AGENTS.includes(nextAgent)) throw new Error(tr('msg.board.badAgent', { agent: nextAgent }));
+      if (agent !== undefined) this.checkAvailable(nextAgent);
       const nextModel = model === undefined ? (agent !== undefined ? null : task.model) : (model || null);
       if (nextModel && nextAgent === 'any') throw new Error(tr('sys.board.modelNeedsAgent'));
       Object.assign(reassign, { agent: nextAgent, model: nextAgent === 'any' ? null : checkModel(nextAgent, nextModel, this.settingJson(`models:${nextAgent}`)), assigned_to: null });
@@ -351,6 +364,7 @@ export class Board {
       if (task.status === 'done') throw new Error(tr('msg.board.alreadyDone', { id }));
       const nextAgent = agent || task.agent;
       if (nextAgent !== 'any' && !AGENTS.includes(nextAgent)) throw new Error(tr('msg.board.badAgent', { agent: nextAgent }));
+      if (agent) this.checkAvailable(nextAgent);
       const nextModel = nextAgent === 'any' ? null : checkModel(nextAgent, model || null, this.settingJson(`models:${nextAgent}`));
       const { reasoning: nextReasoning } = taskOptions({ reasoning: reasoning || task.reasoning, fast: false });
       const policy = checkPolicy({ agent: nextAgent, model: nextModel, reasoning: nextReasoning, fast: false });
@@ -398,7 +412,8 @@ export class Board {
   }
 
   // A dependency counts as done only once its process is gone too, so its automatic commit already happened.
-  depsDone(task) { return task.depends_on.every((dep) => { const d = this.task(dep); return d?.status === 'done' && d.pid == null; }); }
+  // 3.1: and, for one that worked in its own copy alongside others, once its work is in the folder (integrate:<id>).
+  depsDone(task) { return task.depends_on.every((dep) => { const d = this.task(dep); return d?.status === 'done' && d.pid == null && !this.setting(`integrate:${d.id}`); }); }
   failedDeps(task) { return task.depends_on.filter((dep) => ['failed', 'cancelled'].includes(this.task(dep)?.status)); }
   warnBlockedByDeps() {
     for (const task of this.all("SELECT * FROM tasks WHERE status IN ('queued', 'awaiting_approval')").map(parse)) {

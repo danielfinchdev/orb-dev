@@ -24,7 +24,7 @@ Object.defineProperty(AGENT, 'usuario', { get: () => t('agent.user'), enumerable
 export const PERMISSION = translated({ leer: 'permission.leer', editar: 'permission.editar', preguntar: 'permission.preguntar', total: 'permission.total' });
 // Agents that can be corrected while they work (the message reaches them at their next step).
 export const CAN_STEER = { claude: true, codex: true };
-export const DECISION = translated({ allowed: ['decision.allowed', 'success'], always: ['decision.always', 'success'], denied: ['decision.denied', 'destructive'], expired: ['decision.expired', 'secondary'] });
+export const DECISION = translated({ allowed: ['decision.allowed', 'success'], always: ['decision.always', 'success'], denied: ['decision.denied', 'destructive'], expired: ['decision.expired', 'secondary'], timeout: ['decision.timeout', 'secondary'] });
 export const REASONING = translated({ low: 'reasoning.low', medium: 'reasoning.medium', high: 'reasoning.high' });
 export const MODE = translated({ carpeta: 'mode.carpeta', aislada: 'mode.aislada' });
 export const SENSITIVE = translated({
