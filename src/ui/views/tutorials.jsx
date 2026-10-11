@@ -30,6 +30,7 @@ const TUTORIALS = [
   { id: 'looks', icon: Palette, lines: 3, go: () => openSettings('apariencia'), pc: true },
   { id: 'privacy', icon: ShieldCheck, lines: 5 }
 ];
+const PC_ONLY = new Set(['agents', 'usage', 'expert', 'games', 'looks']);
 const KEYS = 8; // help.key.1…8
 const FAQS = 14; // help.faq.1…14
 const range = (n) => Array.from({ length: n }, (_, i) => i + 1);
@@ -73,8 +74,9 @@ export function TutorialsView() {
   const [q, setQ] = useState('');
   const query = fold(q.trim());
   const hit = (...parts) => !query || parts.some((p) => fold(p).includes(query));
-  const tutorials = TUTORIALS.filter((item) => hit(t(`help.tut.${item.id}.title`, { name }), ...range(item.lines).map((n) => t(`help.tut.${item.id}.l${n}`, { name }))));
-  const keys = range(KEYS).filter((n) => hit(t(`help.key.${n}.k`), t(`help.key.${n}.v`)));
+  // 2.7: the phone leaves out what it does not have (agents, settings, expert mode, games, themes).
+  const tutorials = TUTORIALS.filter((item) => !(bridge.mobile && PC_ONLY.has(item.id))).filter((item) => hit(t(`help.tut.${item.id}.title`, { name }), ...range(item.lines).map((n) => t(`help.tut.${item.id}.l${n}`, { name }))));
+  const keys = bridge.mobile ? [] : range(KEYS).filter((n) => hit(t(`help.key.${n}.k`), t(`help.key.${n}.v`)));
   const faqs = range(FAQS).filter((n) => hit(t(`help.faq.${n}.q`, { name }), t(`help.faq.${n}.a`, { name })));
   const nothing = !tutorials.length && !keys.length && !faqs.length;
   const Section = ({ icon: Icon, title, children }) => (

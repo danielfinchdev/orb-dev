@@ -44,16 +44,16 @@ export function phoneConfig(c) {
 }
 
 // What a phone may call. Everything that changes settings, accounts, connectors, installs software or publishes stays on the PC.
-const ALLOWED = new Set(['app.state', 'chat.list', 'chat.send', 'chat.reset', 'chat.stop', 'chat.accept', 'chat.settings',
+const ALLOWED = new Set(['app.state', 'chat.list', 'chat.send', 'chat.reset', 'chat.stop', 'chat.accept', 'chat.answer', 'chat.settings', 'whiteboard.load', 'whiteboard.save', 'whiteboard.note',
   'tasks.list', 'tasks.live', 'tasks.get', 'tasks.create', 'tasks.approve', 'tasks.retry', 'tasks.cancel', 'tasks.reassign', 'tasks.followup', 'tasks.undo', 'tasks.launchAnyway', 'tasks.accept',
   'sessions.list', 'sessions.create', 'sessions.items', 'sessions.send', 'sessions.stop', 'sessions.update',
-  'projects.list', 'projects.info', 'projects.setActive', 'projects.create', 'logs.list', 'logs.read', 'activity.list', 'usage.get', 'usage.now', 'agents.status', 'models.catalog',
+  'projects.list', 'projects.info', 'projects.setActive', 'projects.create', 'logs.list', 'logs.read', 'activity.list', 'usage.get', 'usage.now', 'agents.status', 'models.catalog', 'models.guide',
   'control.pause', 'control.resume', 'sidebar.complete',
   // 2.3: answer permission requests, the queue, continue, fork, settle, Task Review, scheduled tasks and @ (all of it
   // is work the PC already allowed; nothing here changes settings or gives total access).
   'sessions.queue', 'sessions.editQueued', 'sessions.approve', 'sessions.resume', 'sessions.fork', 'sessions.settle', 'approvals.list', 'chat.approve',
   'tasks.review', 'projects.review', 'schedules.list', 'schedules.create', 'schedules.update', 'schedules.remove', 'schedules.run', 'mentions.options']);
-const EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'session:item', 'session:update', 'session:removed', 'config:changed', 'session:delta', 'session:queue', 'approval:changed']);
+const EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'notice', 'session:item', 'session:update', 'session:removed', 'config:changed', 'session:delta', 'session:queue', 'approval:changed']);
 
 const inCgnat = (ip) => { const [x, y] = String(ip).split('.').map(Number); return x === 100 && y >= 64 && y <= 127; };
 const isPrivate = (ip) => { const [a, b] = String(ip).split('.').map(Number); return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168); };
@@ -209,7 +209,7 @@ export function createRemote({ board, api, log }) {
     if (pathname === '/sw.js') return send(res, 200, SERVICE_WORKER, TYPES['.js'], { 'Service-Worker-Allowed': '/' });
     let rel; try { rel = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, ''); } catch { return send(res, 404, 'no encontrado', 'text/plain'); }
     // Only what the phone's page needs (not the desktop-only pages such as the agent's browser window).
-    if (!(rel === 'index.html' || rel === 'icon.png' || /^assets\/[\w.-]+$/.test(rel) || /^robot\/[\w-]+\.png$/.test(rel))) return send(res, 404, 'no encontrado', 'text/plain');
+    if (!(rel === 'index.html' || rel === 'icon.png' || /^assets\/[\w.-]+$/.test(rel) || /^(robot|apps)\/[\w-]+\.png$/.test(rel) || /^juegos\/ajedrez\/rhosgfx\/[wb][KQRBNP]\.svg$/.test(rel) || /^excalidraw\/fonts\/[A-Za-z]+\/[\w.-]+\.woff2$/.test(rel))) return send(res, 404, 'no encontrado', 'text/plain');
     const file = path.normalize(path.join(RENDERER, rel));
     if (!file.startsWith(RENDERER + path.sep)) return send(res, 404, 'no encontrado', 'text/plain');
     fs.readFile(file, (error, data) => {
@@ -309,7 +309,7 @@ export function createRemote({ board, api, log }) {
     const name = oneLine(typeof proof.name === 'string' && proof.name ? proof.name : tr('msg.remote.defaultName'), 60);
     board.run('INSERT INTO devices (id, name, token_hash, created_at, last_seen, public_key, route) VALUES (?, ?, ?, ?, ?, ?, ?)', id, name, `clave:${id}`, now(), now(), body.pub, route);
     board.event(null, 'usuario', 'device.paired', name);
-    board.addChat('system', tr('msg.remote.deviceLinked', { name }));
+    board.notice(tr('msg.remote.deviceLinked', { name }), 'success');
     // The answer is sealed with the new session key: the phone checks it really is the PC of the QR.
     const key = sessionKey(own.priv, devPub); keys.set(id, key);
     return send(res, 200, { id, box: seal(key, { id, name: ctx.config.assistantName, pc: pcFingerprint }, AAD.paired(id)) });
@@ -369,8 +369,7 @@ export function createRemote({ board, api, log }) {
   // ---- listening: one http server per address; the Tailscale https name goes through `tailscale serve` to loopback.
   const listen = (address, port) => new Promise((resolve) => {
     const srv = http.createServer((req, res) => { handle(req, res).catch((error) => { log(`móvil: ${error.stack}`); try { send(res, 500, { error: tr('msg.remote.internalError') }); } catch { /* sent */ } }); });
-    srv.headersTimeout = 15_000; srv.requestTimeout = 60_000;
-    srv.once('error', (error) => resolve({ error }));
+    srv.headersTimeout = 15_000; srv.requestTimeout = 60_000;    srv.once('error', (error) => resolve({ error }));
     srv.listen(port, address, () => resolve({ srv }));
   });
   async function serveHttps(port) {
@@ -432,7 +431,14 @@ export function createRemote({ board, api, log }) {
     pruneUploads().catch(() => {});
     return state;
   }
-  function closeAll() { for (const s of servers) { try { s.close(); } catch { /* closed */ } } servers = []; }
+  // 2.7: closing waits until every server and its open connections are really gone (2 s at most), so a restart on the same
+  // port never answers through a half-closed old one: a phone's request could hang on it for ~20 s and then fail (the
+  // «reabrir el acceso» test failed now and then for that).
+  function closeAll() {
+    const closing = servers.map((s) => new Promise((resolve) => { try { s.close(() => resolve()); s.closeAllConnections?.(); } catch { resolve(); } setTimeout(resolve, 2000).unref?.(); }));
+    servers = [];
+    return Promise.all(closing);
+  }
 
   const remote = {
     // Engine events go to the paired phones too (only the ones the interface needs), each sealed for its phone.
@@ -463,7 +469,7 @@ export function createRemote({ board, api, log }) {
       clearInterval(watcher); watcher = null;
       await starting?.catch(() => {}); // a start() still waiting for the network gives up and closes what it bound
       for (const c of clients) { try { c.res.end(); } catch { /* closed */ } }
-      clients.clear(); closeAll(); pairing = null; state = { running: false, routes: [], error: null };
+      clients.clear(); await closeAll(); pairing = null; state = { running: false, routes: [], error: null };
       await unserve();
     },
     status() {

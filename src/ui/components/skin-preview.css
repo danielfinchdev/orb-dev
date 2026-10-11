@@ -1,0 +1,177 @@
+/* 2.7: the thumbnails of the theme picker (components/skin-preview.jsx, Ajustes › Apariencia › Tema). Each one is a tiny
+   window drawn only with its own --p-* variables, fixed here per theme and per mode (html.dark), so every card shows its
+   theme whatever theme is active: nothing inside reads the app's tokens. The pieces: the sidebar (the wordmark, the «new
+   chat» button, a chosen menu item and three lines), the top bar with the window's buttons, the assistant's message, the
+   user's bubble and the message box, over the theme's backdrop (--p-scene), its decorations and a light frost (--p-frost),
+   as in the real screens. One gentle bob of the decorations, off with reduced motion or «Animaciones» off. */
+.skp { --p-r: 5px; position: relative; display: block; height: 88px; overflow: hidden; border-radius: 8px; isolation: isolate; contain: content;
+  background: var(--p-bg); color: var(--p-fg); font-family: var(--p-font); font-size: 7px; line-height: 1; font-weight: 500; text-align: left; letter-spacing: 0; text-transform: none; text-shadow: none; -webkit-text-stroke: 0; }
+.skp > *, .skp-scene > *, .skp-main > * { position: absolute; }
+.skp-scene { inset: 0; z-index: 0; background: var(--p-scene, none); }
+.skp-frost { inset: 0; background: var(--p-frost, none); }
+.skp .night { display: none; }
+.dark .skp .night { display: block; }
+.dark .skp .day { display: none; }
+.skp-deco { display: block; }
+.skp svg.skp-deco, .skp svg.skp-rt-chev { display: block; height: auto; overflow: visible; }
+.dark .skp svg.night { display: block; }
+
+/* The sidebar. */
+.skp-side { left: 0; top: 0; bottom: 0; width: 31%; z-index: 1; display: grid; align-content: start; gap: 4px; padding: 6px 5px; background: var(--p-side); background-image: var(--p-side-art, none); border-right: 1px solid var(--p-side-line, var(--p-border)); box-shadow: var(--p-side-shadow, none); }
+.skp-mark { display: inline-flex; align-items: center; width: fit-content; max-width: 100%; margin-bottom: 1px; font-family: var(--p-title); font-weight: 600; font-size: 7px; letter-spacing: 0.14em; white-space: nowrap; color: var(--p-fg); }
+.skp-mark i { width: 2px; height: 2px; margin: 0 2px 0 1px; border-radius: 99px; background: var(--p-primary); }
+.skp-mark em { font-style: normal; }
+.skp-new { height: 10px; border-radius: var(--p-r); background: var(--p-new, var(--p-card)); border: 1px solid var(--p-new-line, var(--p-border)); box-shadow: var(--p-card-shadow, none); }
+.skp-nav { height: 3px; width: 72%; margin-left: 3px; border-radius: 2px; background: currentColor; opacity: 0.32; }
+.skp-nav.on { position: relative; height: 9px; width: 100%; margin: 0; opacity: 1; background: var(--p-accent); border: 1px solid var(--p-on-line, transparent); border-radius: var(--p-r); box-shadow: var(--p-on-shadow, none); }
+.skp-nav.on::after { content: ""; position: absolute; left: 3px; top: 2px; width: 55%; height: 3px; border-radius: 2px; background: var(--p-accent-fg); opacity: 0.85; }
+
+/* The screen: the bar, the two messages and the message box. */
+.skp-main { left: 31%; right: 0; top: 0; bottom: 0; z-index: 1; }
+.skp-bar { left: 0; right: 0; top: 0; height: 15px; display: flex; align-items: center; gap: 2px; padding: 0 6px; background: var(--p-bar, none); border-bottom: 1px solid var(--p-bar-line, var(--p-border)); }
+.skp-bar b { width: 28%; height: 3px; border-radius: 2px; background: currentColor; opacity: 0.6; }
+.skp-bar i { width: 4px; height: 4px; border-radius: 1px; border: 1px solid currentColor; opacity: 0.45; }
+.skp-bar i:first-of-type { margin-left: auto; }
+.skp-bot { left: 7px; top: 21px; width: 58%; padding: 4px 5px; display: grid; gap: 3px; border-radius: var(--p-r); background: var(--p-glass, transparent); border: 1px solid var(--p-glass-line, transparent); }
+.skp-bot b { height: 3px; border-radius: 2px; background: currentColor; opacity: 0.75; }
+.skp-bot b:last-child { width: 62%; opacity: 0.45; }
+.skp-me { right: 7px; top: 43px; width: 38%; height: 11px; border-radius: var(--p-r); background: var(--p-bubble); border: 1px solid var(--p-bubble-line, transparent); box-shadow: var(--p-bubble-shadow, none); }
+.skp-me::after { content: ""; position: absolute; left: 5px; top: 3.5px; width: 58%; height: 3px; border-radius: 2px; background: var(--p-bubble-fg); opacity: 0.85; }
+.skp-box { left: 7px; right: 7px; bottom: 7px; height: 19px; border-radius: calc(var(--p-r) + 2px); background: var(--p-box, var(--p-card)); border: 1px solid var(--p-box-line, var(--p-border)); box-shadow: var(--p-box-shadow, none); }
+.skp-box::before { content: ""; display: none; position: absolute; left: 1px; right: 1px; top: 1px; height: 3px; background: var(--p-strip); }
+.skp-box b { position: absolute; left: 6px; top: 8px; width: 40%; height: 3px; border-radius: 2px; background: currentColor; opacity: 0.35; }
+.skp-box i { position: absolute; right: 4px; top: 4px; width: 10px; height: 10px; border-radius: 99px; background: var(--p-send, var(--p-primary)); border: 1px solid var(--p-send-line, transparent); box-shadow: var(--p-send-shadow, none); }
+
+/* One gentle bob of the decorations. */
+@media (prefers-reduced-motion: no-preference) { html:not([data-motion="minima"]) .skp-deco { animation: skp-bob 5s ease-in-out infinite alternate; } }
+@keyframes skp-bob { from { transform: translateY(0) rotate(var(--r, 0deg)); } to { transform: translateY(-2px) rotate(calc(var(--r, 0deg) + 4deg)); } }
+html.window-idle .skp-deco { animation-play-state: paused; }
+
+/* ================================================================ ORB: the robot's periwinkle sky, soft clouds. */
+.skp[data-skin-preview="orb"] { --p-font: "Outfit Variable", "Segoe UI", system-ui, sans-serif; --p-title: var(--p-font); --p-r: 5px;
+  --p-bg: oklch(0.985 0.003 268); --p-fg: oklch(0.21 0.02 268); --p-side: oklch(0.975 0.004 268); --p-card: #fff; --p-border: oklch(0.915 0.008 268); --p-primary: oklch(0.57 0.19 264);
+  --p-accent: oklch(0.945 0.03 268); --p-accent-fg: oklch(0.32 0.1 264); --p-bubble: oklch(0.57 0.19 264); --p-bubble-fg: #fff; --p-bar: oklch(0.985 0.003 268 / 0.75); --p-box-line: oklch(0.88 0.01 268);
+  --p-scene: radial-gradient(60% 50% at 30% 0%, rgb(195 203 255 / 0.55), transparent 70%), radial-gradient(50% 60% at 90% 100%, rgb(167 177 246 / 0.55), transparent 70%); --p-box-shadow: 0 2px 6px -3px rgb(60 70 140 / 0.25); }
+.dark .skp[data-skin-preview="orb"] { --p-bg: oklch(0.155 0.008 268); --p-fg: oklch(0.95 0.005 268); --p-side: oklch(0.175 0.009 268); --p-card: oklch(0.195 0.01 268); --p-border: oklch(0.29 0.012 268); --p-primary: oklch(0.72 0.14 264);
+  --p-accent: oklch(0.28 0.05 266); --p-accent-fg: oklch(0.9 0.05 264); --p-bubble: oklch(0.47 0.16 264); --p-bar: oklch(0.155 0.008 268 / 0.75); --p-box-line: oklch(0.32 0.014 268);
+  --p-scene: radial-gradient(60% 50% at 30% 0%, rgb(43 50 112 / 0.8), transparent 70%), radial-gradient(50% 60% at 90% 100%, rgb(29 34 87 / 0.8), transparent 70%); --p-box-shadow: none; }
+.skp[data-skin-preview="orb"] .skp-mark { letter-spacing: 0.16em; }
+.skp-cloud { width: 48px; height: 13px; border-radius: 99px; background: radial-gradient(closest-side, rgb(255 255 255 / 0.85), rgb(255 255 255 / 0.3) 60%, transparent); }
+.dark .skp-cloud { background: radial-gradient(closest-side, rgb(160 170 255 / 0.22), rgb(160 170 255 / 0.06) 60%, transparent); }
+.skp-cloud.a { left: 40%; top: 20%; } .skp-cloud.b { left: 66%; top: 58%; width: 40px; }
+
+/* ================================================================ VAPORWAVE: by day a sticker sheet of old computers
+   on mint grid paper, Windows-95 panels in pastel with a hard pink shadow; by night the synthwave sunset, neon magenta
+   edges on deep purple. Space Grotesk, titles Orbitron. */
+.skp[data-skin-preview="vaporwave"] { --p-font: "Space Grotesk Variable", "Segoe UI", system-ui, sans-serif; --p-title: "Orbitron Variable", var(--p-font); --p-r: 2px;
+  --p-ink: #1f1838; --p-hi: rgb(255 255 255 / 0.95); --p-lo: rgb(70 50 110 / 0.5); --p-hard: #ff8fd0; --p-strip: linear-gradient(90deg, #cdbcff, #ffb6dc 50%, #ffd4b0);
+  --p-bg: #cde9e0; --p-fg: oklch(0.24 0.06 300); --p-side: oklch(0.93 0.008 300); --p-card: oklch(0.975 0.006 300); --p-border: oklch(0.72 0.03 300); --p-primary: oklch(0.5 0.22 345);
+  --p-accent: oklch(0.9 0.06 300); --p-accent-fg: oklch(0.33 0.12 300); --p-bubble: linear-gradient(135deg, oklch(0.53 0.23 345), oklch(0.48 0.2 300)); --p-bubble-fg: #fff;
+  --p-scene: linear-gradient(rgb(255 255 255 / 0.32) 1px, transparent 1px) 0 0 / 8px 8px, linear-gradient(90deg, rgb(255 255 255 / 0.32) 1px, transparent 1px) 0 0 / 8px 8px, linear-gradient(170deg, #d2ece4, #c3e6dc);
+  --p-glass: rgb(248 246 251 / 0.78); --p-side-line: transparent; --p-side-shadow: inset -2px 0 0 var(--p-lo), inset -3px 0 0 var(--p-hi);
+  --p-new-line: var(--p-lo); --p-card-shadow: inset 1px 1px 0 var(--p-hi), inset -1px -1px 0 var(--p-lo), 2px 2px 0 var(--p-ink);
+  --p-on-shadow: inset 1px 1px 0 var(--p-lo), inset -1px -1px 0 var(--p-hi);
+  --p-box-line: var(--p-lo); --p-box-shadow: inset 1px 1px 0 var(--p-hi), inset -1px -1px 0 var(--p-lo), 3px 3px 0 var(--p-hard);
+  --p-bar: linear-gradient(to bottom, rgb(255 255 255 / 0.6) 0 1px, rgb(255 255 255 / 0.2) 1px, transparent 60%); --p-bar-line: transparent; --p-frost: rgb(205 233 224 / 0.2); }
+.skp[data-skin-preview="vaporwave"] .skp-mark { font-weight: 800; letter-spacing: 0.08em; padding-bottom: 1px; border-bottom: 1px solid var(--p-primary); }
+.skp[data-skin-preview="vaporwave"] .skp-mark i { width: 1.5px; height: 1.5px; margin: 0 1px; }
+.skp[data-skin-preview="vaporwave"] .skp-mark em { color: var(--p-primary); }
+.skp[data-skin-preview="vaporwave"] .skp-box::before { display: block; }
+.skp-vw-floppy { right: 5px; top: 19px; width: 13px; --r: 10deg; }
+.skp-vw-sparkle { left: calc(31% + 6px); bottom: 30px; width: 8px; --r: 15deg; }
+.skp-vw-smiley { right: 22px; bottom: 29px; width: 11px; --r: -8deg; }
+.skp[data-skin-preview="vaporwave"] .skp-deco.day { filter: drop-shadow(1.5px 1.5px 0 var(--p-ink)); }
+.dark .skp[data-skin-preview="vaporwave"] { --p-ink: #ff4fc8; --p-bg: #0b0222; --p-fg: oklch(0.95 0.02 320); --p-side: oklch(0.15 0.045 288); --p-card: oklch(0.21 0.06 292); --p-border: oklch(0.34 0.08 295); --p-primary: oklch(0.74 0.19 350);
+  --p-accent: oklch(0.3 0.08 285); --p-accent-fg: oklch(0.88 0.1 200); --p-bubble: linear-gradient(135deg, oklch(0.5 0.2 345), oklch(0.45 0.19 295));
+  --p-scene: linear-gradient(to bottom, #0b0222 0%, #1f0747 30%, #4a1270 50%, #a0287c 62%, #ff6a4d 70%, #ffb03d 72%, #12052a 72%, #0b0222 100%);
+  --p-glass: oklch(0.21 0.06 292 / 0.72); --p-glass-line: oklch(0.74 0.19 350 / 0.25); --p-side-line: oklch(0.5 0.15 340 / 0.5); --p-side-shadow: none;
+  --p-side-art: linear-gradient(180deg, transparent 45%, rgb(170 60 140 / 0.3) 100%), linear-gradient(rgb(255 120 220 / 0.08) 1px, transparent 1px) 0 0 / 7px 7px, linear-gradient(90deg, rgb(255 120 220 / 0.08) 1px, transparent 1px) 0 0 / 7px 7px;
+  --p-new-line: oklch(0.74 0.19 350 / 0.5); --p-card-shadow: 0 0 6px -2px oklch(0.74 0.19 350 / 0.7); --p-on-shadow: inset 2px 0 0 var(--p-primary);
+  --p-box-line: transparent; --p-box: linear-gradient(oklch(0.21 0.06 292 / 0.9), oklch(0.21 0.06 292 / 0.9)) padding-box, linear-gradient(90deg, #ff71ce, #b967ff 50%, #01cdfe) border-box; --p-box-shadow: 0 0 8px -2px rgb(255 79 200 / 0.6);
+  --p-bar: linear-gradient(to bottom, rgb(255 255 255 / 0.06), transparent 60%); --p-frost: rgb(23 10 46 / 0.28); }
+.skp-vw-stars { inset: 0 0 35% 0; background: radial-gradient(circle, rgb(255 240 250 / 0.9) 0 0.6px, transparent 1px) 0 0 / 14px 11px, radial-gradient(circle, rgb(255 240 250 / 0.7) 0 0.5px, transparent 0.9px) 5px 6px / 23px 17px; }
+.skp-vw-glow { left: 50%; bottom: 28%; width: 70px; aspect-ratio: 1; translate: -50% 50%; border-radius: 50%; background: radial-gradient(closest-side, rgb(255 150 90 / 0.55), rgb(255 80 160 / 0.25) 45%, transparent 70%); }
+.skp-vw-sun { left: 50%; bottom: 28%; width: 36px; aspect-ratio: 1; translate: -50% 50%; border-radius: 50%; opacity: 0.85; background: linear-gradient(to bottom, #fff3a0 0%, #ffd23f 30%, #ff8a2a 62%, #ff3f8e 100%);
+  mask-image: linear-gradient(to bottom, #000 0 48%, transparent 48% 52%, #000 52% 60%, transparent 60% 65%, #000 65% 72%, transparent 72% 78%, #000 78% 84%, transparent 84% 91%, #000 91%); }
+.skp-vw-mount { left: -4%; right: -4%; bottom: 27%; height: 18%; background: rgb(26 6 48 / 0.95); clip-path: polygon(0 100%, 6% 55%, 14% 72%, 22% 38%, 31% 66%, 40% 48%, 49% 78%, 57% 40%, 65% 68%, 74% 32%, 83% 64%, 92% 46%, 100% 100%); }
+.skp-vw-floor { left: -50%; right: -50%; bottom: -8%; height: 36%; transform-origin: 50% 0; transform: perspective(60px) rotateX(60deg);
+  background: linear-gradient(rgb(255 79 200 / 0.8) 1px, transparent 1px) 0 0 / 11px 11px, linear-gradient(90deg, rgb(255 79 200 / 0.8) 1px, transparent 1px) 0 0 / 11px 11px; mask-image: linear-gradient(to bottom, transparent, #000 35%); }
+
+/* ================================================================ RETRO: the seventies by day (orange page, peach
+   panels, black outlines with hard orange shadows, chevrons and flat shapes), the arcade by night (black, rainbow
+   pixel invaders, phosphor green, scanlines). IBM Plex Mono, titles Bungee. */
+.skp[data-skin-preview="retro"] { --p-font: "IBM Plex Mono", "Cascadia Code", Consolas, monospace; --p-title: "Bungee", var(--p-font); --p-r: 3px;
+  --p-ink: #1a0a10; --p-off: #f08a4b; --p-off2: #f6b73c; --p-cream: #eee6d5;
+  --p-bg: #f3c3a0; --p-fg: oklch(0.24 0.05 30); --p-side: oklch(0.92 0.06 60); --p-card: oklch(0.95 0.045 75); --p-border: var(--p-ink); --p-primary: oklch(0.45 0.18 22);
+  --p-accent: #fbd3dc; --p-accent-fg: var(--p-ink); --p-bubble: oklch(0.42 0.1 250); --p-bubble-fg: #fff;
+  --p-scene: linear-gradient(170deg, #f4c7a2, #efb98f 60%, #f3c3a0); --p-glass: oklch(0.95 0.045 75 / 0.78); --p-glass-line: rgb(26 10 16 / 0.35);
+  --p-side-art: repeating-linear-gradient(to bottom, transparent 0 2px, rgb(90 11 30 / 0.05) 2px 3px); --p-side-line: var(--p-ink);
+  --p-new: var(--p-cream); --p-card-shadow: 1.5px 1.5px 0 var(--p-off); --p-on-line: var(--p-ink); --p-on-shadow: 1.5px 1.5px 0 var(--p-off);
+  --p-box-shadow: 2px 2px 0 var(--p-off2); --p-send: var(--p-cream); --p-send-line: var(--p-ink); --p-send-shadow: 1px 1px 0 var(--p-off);
+  --p-bar: none; --p-bar-line: transparent; --p-frost: rgb(243 195 160 / 0.22); }
+.skp[data-skin-preview="retro"] .skp-mark { font-weight: 400; font-size: 6px; letter-spacing: 0.1em; padding: 1.5px 3px 1px; border: 1px solid var(--p-fg); border-radius: 2px; box-shadow: 1.5px 1.5px 0 var(--p-primary); }
+.skp[data-skin-preview="retro"] .skp-mark i { width: 1.5px; height: 1.5px; margin: 0 1px 0 0; }
+.skp[data-skin-preview="retro"] :is(.skp-new, .skp-nav.on, .skp-box, .skp-bot) { border-width: 1px; }
+.skp[data-skin-preview="retro"] .skp-bot { border-color: var(--p-glass-line); }
+.skp-rt-chev { right: -6px; bottom: 2px; width: 52px; opacity: 0.7; }
+.skp-rt-aster { right: 4px; top: 19px; width: 11px; }
+.skp-rt-diamond { left: calc(31% + 7px); bottom: 30px; width: 7px; --r: 0deg; }
+.dark .skp[data-skin-preview="retro"] { --p-ink: #39ff14; --p-off: #ff4fd8; --p-off2: #3ef0ff; --p-cream: oklch(0.15 0.01 290);
+  --p-bg: #000; --p-fg: oklch(0.95 0.02 145); --p-side: oklch(0.08 0 0); --p-card: oklch(0.15 0.01 290); --p-primary: oklch(0.87 0.26 142);
+  --p-accent: oklch(0.28 0.1 330); --p-accent-fg: oklch(0.9 0.16 330); --p-bubble: oklch(0.35 0.14 330);
+  --p-scene: #000; --p-glass: oklch(0.15 0.01 290 / 0.78); --p-glass-line: rgb(57 255 20 / 0.4); --p-side-art: repeating-linear-gradient(to bottom, transparent 0 2px, rgb(0 0 0 / 0.28) 2px 3px);
+  --p-send: var(--p-card); --p-send-line: var(--p-ink); --p-frost: rgb(0 0 0 / 0.2); }
+.dark .skp[data-skin-preview="retro"] .skp-mark { box-shadow: 1.5px 1.5px 0 var(--p-off); border-color: var(--p-ink); }
+.skp-rt-stars { inset: 0; background: radial-gradient(circle, rgb(225 235 255 / 0.55) 0 0.6px, transparent 1px) 0 0 / 13px 11px, radial-gradient(circle, rgb(225 235 255 / 0.5) 0 0.7px, transparent 1.1px) 6px 5px / 21px 19px; }
+.skp-rt-inv1 { right: 4px; top: 19px; width: 10px; }
+.skp-rt-inv2 { right: 5px; top: 31px; width: 9px; }
+.skp-rt-crab { left: calc(31% + 7px); bottom: 30px; width: 9px; filter: drop-shadow(0 0 2px rgb(57 255 20 / 0.9)); }
+.skp-rt-rocket { right: 4px; bottom: 27px; width: 8px; filter: drop-shadow(0 0 2px rgb(57 255 20 / 0.9)); }
+.skp-rt-scan { inset: 0; background: repeating-linear-gradient(to bottom, transparent 0 2px, rgb(0 0 0 / 0.3) 2px 3px); }
+
+/* ================================================================ PROFESIONAL: plain and sober, zinc greys and a
+   discreet blue, thin borders, small corners; no backdrop, no robot. Inter. */
+.skp[data-skin-preview="profesional"] { --p-font: "Inter Variable", "Segoe UI", system-ui, sans-serif; --p-title: var(--p-font); --p-r: 3px;
+  --p-bg: oklch(0.99 0 0); --p-fg: oklch(0.21 0.006 286); --p-side: oklch(0.975 0.002 286); --p-card: #fff; --p-border: oklch(0.92 0.004 286); --p-primary: oklch(0.5 0.14 256);
+  --p-accent: oklch(0.955 0.003 286); --p-accent-fg: oklch(0.21 0.006 286); --p-bubble: oklch(0.94 0.004 286); --p-bubble-fg: oklch(0.21 0.006 286); --p-bar: oklch(0.99 0 0); --p-box-line: oklch(0.84 0.008 286); }
+.dark .skp[data-skin-preview="profesional"] { --p-bg: oklch(0.155 0.004 286); --p-fg: oklch(0.95 0 0); --p-side: oklch(0.14 0.004 286); --p-card: oklch(0.185 0.005 286); --p-border: oklch(0.28 0.006 286); --p-primary: oklch(0.7 0.13 252);
+  --p-accent: oklch(0.26 0.006 286); --p-accent-fg: oklch(0.95 0 0); --p-bubble: oklch(0.27 0.006 286); --p-bubble-fg: oklch(0.95 0 0); --p-bar: oklch(0.155 0.004 286); --p-box-line: oklch(0.4 0.006 286); }
+.skp[data-skin-preview="profesional"] .skp-mark { letter-spacing: 0.22em; font-size: 6.5px; }
+.skp[data-skin-preview="profesional"] .skp-mark i { background: currentColor; }
+
+/* ================================================================ NUBE (Candy): a pink-to-lilac page with a dotted
+   pattern and pastel blobs, white rounded panels with soft pink shadows, pills, 3D jelly keys, and 3D sweets at the
+   edges. Nunito, titles Fredoka. Night: the same sweets over a plum sky. */
+.skp[data-skin-preview="nube"] { --p-font: "Nunito Variable", "Segoe UI", system-ui, sans-serif; --p-title: "Fredoka Variable", var(--p-font); --p-r: 7px;
+  --p-key: oklch(0.42 0.19 352); --p-shadow: rgb(236 110 180 / 0.35); --p-frame: color-mix(in oklch, oklch(0.54 0.19 352) 45%, white); --p-glow: rgb(255 140 200 / 0.4);
+  --p-bg: #ffd9ec; --p-fg: oklch(0.3 0.08 330); --p-side: oklch(0.99 0.006 340); --p-card: #fff; --p-border: transparent; --p-primary: oklch(0.54 0.19 352);
+  --p-accent: oklch(0.94 0.05 350); --p-accent-fg: oklch(0.54 0.19 352); --p-bubble: oklch(0.54 0.19 352); --p-bubble-fg: #fff; --p-bubble-shadow: 0 1.5px 0 var(--p-key);
+  --p-scene: radial-gradient(circle, rgb(255 255 255 / 0.65) 0.6px, transparent 1px) 0 0 / 5px 5px, linear-gradient(160deg, #ffd9ec 0%, #ecd9ff 55%, #d9e4ff 100%);
+  --p-glass: rgb(255 255 255 / 0.78); --p-side-line: transparent; --p-side-shadow: 3px 0 10px -5px var(--p-shadow); --p-side-art: linear-gradient(to bottom, rgb(255 255 255 / 0.7), transparent 40%);
+  --p-new: var(--p-accent); --p-card-shadow: 0 0 0 1px var(--p-frame), 0 0 5px var(--p-glow); --p-on-shadow: 0 0 0 1px var(--p-frame), 0 0 5px var(--p-glow);
+  --p-box-shadow: 0 6px 14px -7px var(--p-shadow); --p-send-shadow: 0 1.5px 0 var(--p-key);
+  --p-bar: linear-gradient(to bottom, rgb(255 255 255 / 0.7), transparent 50%); --p-bar-line: transparent; --p-frost: rgb(255 240 248 / 0.2);
+  --p-blob-a: #ffc4dc; --p-blob-b: #bdeedd; --p-blob-c: #c6e3ff; --p-toy: 0.95; --p-toy-shadow: rgb(200 90 160 / 0.4); }
+.skp[data-skin-preview="nube"] .skp-mark { font-weight: 700; font-size: 6.5px; letter-spacing: 0.06em; color: #fff; background: var(--p-primary); padding: 2px 4px 1.5px; border-radius: 99px; box-shadow: 0 1px 0 var(--p-key); }
+.skp[data-skin-preview="nube"] .skp-mark i { background: currentColor; width: 1.5px; height: 1.5px; margin: 0 1px 0 0; }
+.skp[data-skin-preview="nube"] :is(.skp-new, .skp-nav.on) { border-radius: 99px; }
+.skp[data-skin-preview="nube"] .skp-nav.on { background: var(--p-card); }
+.skp[data-skin-preview="nube"] .skp-box { border-radius: 10px; }
+.skp[data-skin-preview="nube"] .skp-bot { border-radius: 9px; }
+.skp[data-skin-preview="nube"] .skp-me { border-radius: 7px; background-image: linear-gradient(to bottom, rgb(255 255 255 / 0.25), transparent 60%); }
+.skp-cd-blob { border-radius: 50%; opacity: 0.75; background: radial-gradient(closest-side, var(--c), color-mix(in srgb, var(--c) 60%, transparent) 55%, transparent); }
+.skp-cd-blob.a { --c: var(--p-blob-a); left: -5%; top: -30%; width: 70%; height: 90%; }
+.skp-cd-blob.b { --c: var(--p-blob-b); left: 10%; top: 50%; width: 55%; height: 80%; }
+.skp-cd-blob.c { --c: var(--p-blob-c); left: 60%; top: 45%; width: 60%; height: 90%; }
+.skp[data-skin-preview="nube"] .skp-deco { opacity: var(--p-toy); filter: drop-shadow(0 2px 2px var(--p-toy-shadow)); }
+.skp-cd-cloud { right: 2px; top: 17px; width: 26px; }
+.skp-cd-lolli { right: 4px; bottom: 23px; width: 10px; --r: -14deg; }
+.skp-cd-drop { left: calc(31% + 6px); bottom: 29px; width: 9px; --r: -6deg; }
+.skp-cd-bean { right: 20px; bottom: 26px; width: 11px; --r: -25deg; }
+.dark .skp[data-skin-preview="nube"] { --p-key: oklch(0.55 0.16 350); --p-shadow: rgb(0 0 0 / 0.45); --p-frame: oklch(0.8 0.12 350 / 0.7); --p-glow: rgb(255 140 200 / 0.3);
+  --p-bg: #2e1a3c; --p-fg: oklch(0.96 0.015 330); --p-side: oklch(0.2 0.04 325); --p-card: oklch(0.24 0.05 325); --p-primary: oklch(0.8 0.12 350);
+  --p-accent: oklch(0.36 0.08 345); --p-accent-fg: oklch(0.93 0.06 350); --p-bubble: oklch(0.5 0.15 345); --p-bubble-fg: #fff;
+  --p-scene: radial-gradient(circle, rgb(255 255 255 / 0.08) 0.6px, transparent 1px) 0 0 / 5px 5px, linear-gradient(160deg, #2e1a3c 0%, #261f4a 55%, #1d2a4a 100%);
+  --p-glass: oklch(0.24 0.05 325 / 0.78); --p-side-art: linear-gradient(to bottom, rgb(255 255 255 / 0.1), transparent 40%); --p-bar: linear-gradient(to bottom, rgb(255 255 255 / 0.1), transparent 50%); --p-frost: rgb(46 26 60 / 0.25);
+  --p-blob-a: #7d3668; --p-blob-b: #2f6a5e; --p-blob-c: #365682; --p-toy: 0.6; --p-toy-shadow: rgb(0 0 0 / 0.5); }
+.dark .skp[data-skin-preview="nube"] .skp-mark { color: oklch(0.25 0.06 325); }

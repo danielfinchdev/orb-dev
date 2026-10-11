@@ -26,7 +26,9 @@ const ctxt = await browser.newContext({ viewport: { width: 390, height: 844 }, d
 // PC's time and everything works without pairing again.
 await ctxt.addInitScript(() => { const real = Date.now; Date.now = () => real() + 30 * 60_000; });
 const page = await ctxt.newPage();
-const errors = []; page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => { if (m.type() === 'error' && !/status of 409/.test(m.text())) errors.push(m.text()); });
+const errors = []; page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => { if (m.type() === 'error' && !/status of (409|404)/.test(m.text())) errors.push(m.text()); });
+// A file the PC does not serve to the phone: named, so the failure says which one.
+page.on('response', (r) => { if (r.status() === 404 && !/favicon/.test(r.url())) errors.push(`404 ${new URL(r.url()).pathname}`); });
 const shot = (name) => page.screenshot({ path: path.join(OUT, `movil-${name}.png`) });
 // What travels between the page and the PC (requests and answers of the API), to check that it is all encrypted.
 const sniffed = [];
@@ -54,15 +56,21 @@ try {
   await page.waitForTimeout(500);
   await noSideScroll('chat'); await shot('01-chat');
 
-  const nav = async (testid) => { await page.getByRole('button', { name: 'Menú' }).click(); await page.locator(`[data-testid=${testid}]:visible`).click(); await page.waitForTimeout(500); };
-  step = 'menú';
-  await page.getByRole('button', { name: 'Menú' }).click();
-  await page.waitForTimeout(300);
-  assert.equal(await page.locator('[data-testid=nav-settings]:visible').count(), 0, 'Ajustes solo en el PC');
-  assert.equal(await page.locator('[data-testid=nav-expert]:visible').count(), 0, 'modo experto solo en el PC');
+  // 2.7: a simpler app on the phone, with tabs at the bottom (Orbe, Chats, Tareas, Proyectos, Más); the screens of «Más»
+  // open from its list.
+  const MORE = new Set(['nav-schedules', 'nav-logs', 'nav-activity', 'nav-tutorials', 'nav-phone']);
+  const nav = async (testid) => { if (MORE.has(testid)) await page.click('[data-testid=nav-more]'); await page.locator(`[data-testid=${testid}]:visible`).click(); await page.waitForTimeout(500); };
+  step = 'pestañas';
+  assert.equal(await page.locator('[data-testid=mobile-tabs]:visible').count(), 1, 'pestañas abajo');
+  assert.equal(await page.getByRole('button', { name: 'Menú' }).count(), 0, 'sin menú lateral en el móvil');
+  assert.equal(await page.locator('[data-testid=chat-play], [data-testid=bar-games]').count(), 0, 'sin minijuegos en el móvil');
+  assert.equal(await page.evaluate(() => document.documentElement.dataset.skin), 'orb', 'el móvil lleva el tema predeterminado');
+  await page.click('[data-testid=nav-more]'); await page.waitForSelector('[data-testid=mobile-more]');
+  assert.equal(await page.locator('[data-testid=nav-settings], [data-testid=nav-agents], [data-testid=nav-expert]').count(), 0, 'Ajustes, Agentes y modo experto solo en el PC');
   assert.equal(await page.locator('[data-testid=nav-phone]:visible').count(), 1, '«Este móvil» solo en el móvil');
-  await shot('02-menu');
-  await page.mouse.click(370, 400); await page.waitForTimeout(300);
+  await noSideScroll('más'); await shot('02-mas');
+  await page.click('[data-testid=nav-chats]'); await page.waitForSelector('[data-testid=mobile-chats]');
+  await noSideScroll('chats'); await shot('02b-chats');
 
   for (const [testid, name, wait] of [['nav-tasks', '03-tareas', 'Publicar la web'], ['nav-projects', '04-proyectos', 'webviaproject'], ['nav-logs', '05-bitacoras', 'Bitácora general'], ['nav-activity', '06-actividad', 'task.created']]) {
     step = name;
@@ -78,7 +86,7 @@ try {
   await page.waitForTimeout(400);
   await noSideScroll('detalle'); await shot('07-tarea-detalle');
   step = 'nueva conversación';
-  await page.getByRole('button', { name: 'Menú' }).click();
+  await page.click('[data-testid=nav-chats]');
   await page.locator('[data-testid=new-conversation]:visible').click();
   await page.waitForSelector('[data-testid=new-chat-input]');
   await page.click('[data-testid=new-chat-orchestrator]'); // a direct chat with the agent

@@ -12,7 +12,7 @@ import { Checkbox, BubbleTip } from '@/components/ui/overlay.jsx';
 import { useStore, call, act, go, bridge } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { GithubIcon } from '@/components/agent-icon.jsx';
-import { useT } from '@/lib/i18n.js';
+import { useT, useLocale } from '@/lib/i18n.js';
 
 function GithubCard() {
   const t = useT();
@@ -30,6 +30,33 @@ function GithubCard() {
         : gh.loggedIn ? <Badge variant="success">{t('projects.gh.connected', { user: gh.user ?? '?' })}</Badge>
           : (<><Badge variant="destructive">{t('projects.gh.noSession')}</Badge><Button size="sm" onClick={() => act(call('github.login'), t('projects.gh.login.done'))}>{t('projects.gh.login')}</Button></>)}
       <BubbleTip title={t('projects.gh.check')}><Button size="icon-sm" variant="ghost" onClick={load} aria-label={t('projects.gh.check')}><RefreshCw /></Button></BubbleTip>
+    </Card>
+  );
+}
+
+// 2.7: the green squares of the user's GitHub profile (last year), right under the GitHub card. Real data from GitHub;
+// the day under the pointer is told below the grid (no browser tooltips).
+function ContributionGraph() {
+  const t = useT();
+  const locale = useLocale();
+  const [data, setData] = useState(undefined);
+  const [hover, setHover] = useState(null);
+  useEffect(() => { let alive = true; call('github.contributions').then((d) => alive && setData(d)).catch(() => alive && setData(null)); return () => { alive = false; }; }, []);
+  if (data === undefined) return null;
+  if (!data) return null;
+  const fmt = (d) => new Date(`${d}T12:00:00`).toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
+  return (
+    <Card className="gap-2 px-5 py-3.5" data-testid="gh-contributions">
+      <div className="flex items-baseline justify-between gap-3 text-xs">
+        <span className="font-medium">{t('projects.gh.contributions', { n: data.total.toLocaleString(locale) })}</span>
+        <span className="text-muted-foreground truncate">{hover ? t('projects.gh.day', { n: hover.count, date: fmt(hover.date) }) : `@${data.user}`}</span>
+      </div>
+      <div className="overflow-x-auto">
+        <div className="gh-graph inline-grid grid-flow-col gap-[3px]" style={{ gridTemplateRows: 'repeat(7, 10px)' }} role="img" aria-label={t('projects.gh.contributions', { n: data.total })} onMouseLeave={() => setHover(null)}>
+          {data.weeks.flatMap((w, wi) => w.map((d) => <span key={d.date} className="gh-cell size-[10px] rounded-[2px]" data-level={d.level} style={wi === 0 ? { gridRowStart: new Date(`${d.date}T12:00:00`).getDay() + 1 } : undefined} onMouseEnter={() => setHover(d)} />))}
+        </div>
+      </div>
+      <div className="text-muted-foreground flex items-center justify-end gap-1 text-[10.5px]">{t('projects.gh.less')}{[0, 1, 2, 3, 4].map((l) => <span key={l} className="gh-cell size-[10px] rounded-[2px]" data-level={l} />)}{t('projects.gh.more')}</div>
     </Card>
   );
 }
@@ -105,7 +132,7 @@ export function ProjectsView({ route }) {
       </PageHeader>
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 md:pb-28">
         <div className="grid gap-4">
-          {bridge.mobile ? null : <GithubCard />}
+          {bridge.mobile ? null : <><GithubCard /><ContributionGraph /></>}
           <div className="grid items-start gap-4 lg:grid-cols-[minmax(280px,1fr)_minmax(400px,1.4fr)]">
             <Card className="gap-0 overflow-hidden py-0">
               {projects.length ? [...CATEGORIES, null].map((cat) => {

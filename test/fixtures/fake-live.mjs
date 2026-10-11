@@ -64,6 +64,8 @@ export function fakeAdapter(id, real) {
         const realExe = real?.discoverModels ? real.detect(cfg) : null;
         return realExe ? real.discoverModels(realExe, cfg, env) : null;
       }
+      // 2.7: models of every kind (light, balanced, most capable), to test how Orb chooses for each task.
+      if (process.env.ORB_FAKE_TIERED === '1' && id === 'claude') return [{ id: 'claude-haiku-4-5', label: 'Haiku 4.5' }, { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5', default: true }, { id: 'claude-sonnet-5', label: 'Sonnet 5' }, { id: 'claude-opus-5-5', label: 'Opus 5.5' }, { id: 'claude-opus-4-8', label: 'Opus 4.8' }, { id: 'claude-fable-5-1', label: 'Fable 5.1' }];
       if (process.env.ORB_FAKE_MODELS_LOG) { try { fs.appendFileSync(process.env.ORB_FAKE_MODELS_LOG, `${id}\n`); } catch { /* log unavailable */ } }
       return [1, 2, 3].map((n) => ({ id: `fake-${id}-${n}`, label: `Modelo de prueba ${n}`, ...(n === 1 ? { default: true } : {}) }));
     }
@@ -118,6 +120,29 @@ function createFakeLive(agent, label, caps, o) {
     if (proj) {
       const out = await mcpCall(orb, 'orb_create_task', { project: proj[1], title: 'Tarea del asistente', description: 'ESCRIBE un archivo de prueba', agent: 'claude' });
       item('tool', 'tool', { id: `t${++seq}`, name: 'orb:orb_create_task', input: proj[1] });
+      item('tool', 'tool_result', { id: `t${seq}`, output: out.slice(0, 300), error: false });
+    }
+    // 2.7: Opti Bot: reads the Orb folder with its own tools and proposes cleaning the temporary files.
+    if (/OPTI_REVISA/.test(scan) && o.mcpServers?.opti) {
+      const check = await mcpCall(o.mcpServers.opti, 'opti_orb_check', {});
+      item('tool', 'tool', { id: `t${++seq}`, name: 'opti:opti_orb_check', input: '' });
+      item('tool', 'tool_result', { id: `t${seq}`, output: check.slice(0, 300), error: false });
+      await mcpCall(o.mcpServers.opti, 'opti_propose', { action: 'clean_temp', reason: 'Hay temporales viejos que ocupan sitio' });
+      notes.push(/"database":\s*"ok"/.test(check) ? 'Orb está bien.' : 'Orb tiene un problema.');
+    }
+    // 2.7: a picture the agent made (as Codex's image_gen leaves it: a PNG file and an image item).
+    if (/CREA_IMAGEN/.test(scan) && o.internalDir) {
+      const dir = path.join(o.internalDir, 'imagenes'); fs.mkdirSync(dir, { recursive: true });
+      const file = path.join(dir, `prueba-${Date.now()}.png`);
+      fs.writeFileSync(file, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==', 'base64'));
+      item('assistant', 'image', { path: file, prompt: 'Un logotipo de prueba', transparent: false });
+    }
+    // 2.7: the advice to define a big request on the Pizarra (orb_pizarra).
+    if (/PIDE_PIZARRA/.test(scan)) await mcpCall(orb, 'orb_pizarra', { message: 'Dibuja las tres pantallas y cómo se pasa de una a otra.' });
+    // 2.7: a question with options (orb_ask): the card comes below this turn's answer.
+    if (/PREGUNTA_OPCIONES/.test(scan)) {
+      const out = await mcpCall(orb, 'orb_ask', { question: '¿Qué enfoque prefieres?', header: 'Enfoque', options: [{ label: 'Rápido (Recomendado)', description: 'Lo mínimo que funciona' }, { label: 'Completo', description: 'Con pruebas y documentación' }] });
+      item('tool', 'tool', { id: `t${++seq}`, name: 'orb:orb_ask', input: 'Enfoque' });
       item('tool', 'tool_result', { id: `t${seq}`, output: out.slice(0, 300), error: false });
     }
     const nav = scan.match(/NAVEGA (\S+)/);

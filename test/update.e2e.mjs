@@ -48,7 +48,7 @@ let browser;
 try {
   browser = await until(() => chromium.connectOverCDP(`http://127.0.0.1:${port}`), 'la ventana de la app');
   const page = await until(() => browser.contexts().flatMap((c) => c.pages()).find((p) => p.url().endsWith('index.html')), 'la página principal');
-  await page.waitForSelector('text=Hola, Ana. Soy Orb.', { timeout: 60000 });
+  await page.waitForSelector('[data-testid=chat-greeting]', { timeout: 60000 });
   const st = () => page.evaluate(() => window.orb.update.get());
   assert.equal((await st()).current, before.replace(/\.0$/, ''));
   await page.evaluate(() => window.orb.update.check());

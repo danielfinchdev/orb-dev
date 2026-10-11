@@ -17,7 +17,10 @@ export const budgetConfig = () => {
 // Limits of an account: its own entry in budget.agents, else its agent's, else the defaults.
 const agentOf = (id) => findAccount(id)?.agent ?? id;
 const rules = (id) => ({ maxTasks: 20, maxHeavy: 6, ...(budgetConfig().agents[agentOf(id)] ?? {}), ...(budgetConfig().agents[id] ?? {}), heavyModels: ctx.config?.agents?.[agentOf(id)]?.heavyModels ?? [] });
-export const isHeavy = (id, model) => Boolean(model && rules(id).heavyModels.includes(model));
+// Models that use the quota faster: the agent's heavyModels and, 2.7, any of a known heavy family (Opus, Fable, Pro…), so
+// a model Orb picks by its full name (claude-opus-5-5) counts as heavy too, not only the alias «opus».
+export const HEAVY_FAMILY = /opus|fable|(^|[-_.])pro($|[-_.])|ultra|max\b|xhigh|o3\b|o1\b/i;
+export const isHeavy = (id, model) => Boolean(model && (rules(id).heavyModels.includes(model) || HEAVY_FAMILY.test(model)));
 
 // Optional per-task spending cap for Claude (--max-budget-usd), only when the user sets one.
 export function taskBudgetUsd(agent, model) {

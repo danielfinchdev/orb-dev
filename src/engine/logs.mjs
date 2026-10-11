@@ -6,6 +6,7 @@ import { ctx, tr } from '../core/context.mjs';
 import { oneLine, redactSecrets } from '../core/safety.mjs';
 import { generalLogHeader, projectLogHeader } from '../core/home.mjs';
 import { assistantName, userName, ofUserLabel } from '../core/board.mjs';
+import { groupOf } from '../core/projects.mjs';
 
 export const stamp = (d = new Date()) => { const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 const clean = (v, n) => redactSecrets(String(v ?? '').trim()).slice(0, n);
@@ -79,6 +80,14 @@ export function briefing(board) {
   const stats = board.agentStats();
   if (Object.keys(stats).length) parts.push(`Historial de los agentes (últimas tareas): ${Object.entries(stats).map(([a, s]) => `${a} ${s.done} hechas, ${s.failed} fallidas, ${s.blocked} bloqueadas`).join('; ')}`);
   if (active) { const log = read(board.projectLogFile(active.name), 6000); if (log) parts.push(`### Últimas entradas de la bitácora de ${active.name}\n${log}`); }
+  // 2.7: a multiplatform project: its sister projects and the shared folder, so the work stays coordinated between them.
+  const group = active ? groupOf(board, active) : null;
+  if (group) parts.push(`Grupo multiplataforma «${group.name}»: ${group.members.map((m) => `${m.name} (${m.path})`).join(', ')}. Carpeta común (API, diseño, textos e imágenes que comparten): ${group.common}. Mantenlos coordinados: lo que se decida para uno (API, datos, diseño) debe valer para los demás; puedes crear tareas en cualquiera del grupo.`);
+  // 2.7: the project's Pizarra, if it has a drawing or attachments: its summary, so the assistant knows what is there.
+  if (active) {
+    const md = path.join(active.path, 'pizarra', 'PIZARRA.md');
+    try { const text = fs.readFileSync(md, 'utf8'); if (text.trim()) parts.push(`### Pizarra de ${active.name} (${path.join(active.path, 'pizarra')}; el dibujo entero en pizarra.png)\n${text.slice(0, 4000)}`); } catch { /* no Pizarra yet */ }
+  }
   const general = read(ctx.paths.generalLog, 3000); if (general) parts.push(`### Últimas entradas de la bitácora general\n${general}`);
   parts.push('Para el estado de las tareas usa orb_board.');
   return parts.join('\n\n');

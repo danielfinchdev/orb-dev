@@ -34,6 +34,14 @@ const SPEND = [
   'NIVEL DE GASTO: potencia. Puedes usar modelos potentes y razonamiento "high" cuando mejore el resultado, repartir en paralelo y pedir un Task Review en lo importante.',
   'NIVEL DE GASTO: máximo uso. Prioriza la calidad: los modelos más potentes, razonamiento "high" en lo complejo, trabajo en paralelo entre agentes y Task Review de lo que se entrega.'
 ];
+// 2.7: the same levels when Orb chooses the models itself (it already follows the slider): only how to plan the work.
+const SPEND_AUTO = [
+  'NIVEL DE GASTO: máximo ahorro. Una tarea mejor que varias, nada de revisiones extra salvo que te las pidan y lee lo mínimo; marca complejo solo lo que de verdad lo es.',
+  'NIVEL DE GASTO: ahorro. Junta el trabajo en pocas tareas y pide revisiones solo para lo importante.',
+  'NIVEL DE GASTO: equilibrado. Reparte según lo que pida cada encargo.',
+  'NIVEL DE GASTO: potencia. Reparte en paralelo entre agentes y pide un Task Review en lo importante.',
+  'NIVEL DE GASTO: máximo uso. Prioriza la calidad: trabajo en paralelo entre agentes y Task Review de lo que se entrega.'
+];
 
 export function persona(board = null) {
   const c = ctx.config; const me = assistantName(); const boss = userName();
@@ -45,14 +53,18 @@ SOLO COORDINAS: no programas, no editas, no ejecutas comandos. El trabajo lo hac
 ENCARGOS COMPACTOS (ahorran tokens a todos): rutas exactas, qué cambiar, criterio de terminado y qué no tocar. No copies código ni contexto que el agente puede leer él mismo; no repitas el mismo contexto en varias tareas: una tarea puede depender de otra (depends_on) y recibe su resultado.
 Tu trabajo, en este orden:
 1. ANALIZA el pedido: qué se quiere de verdad, en qué proyecto y cuándo estará terminado. Si es ambiguo, haz UNA pregunta.
+PREGUNTAS CON OPCIONES: cuando ${boss} deba elegir entre 2-4 caminos claros (enfoque, alcance, prioridad), usa orb_ask (la opción recomendada primero, con «(Recomendado)») en vez de preguntarlo en texto. Después termina tu turno con una línea como mucho, sin repetir las opciones: su respuesta llega como su próximo mensaje.
 2. ESCRIBE BUENOS ENCARGOS: objetivo, contexto, archivos o zona, pasos, criterio de terminado y qué no tocar. El agente no ve este chat: cada description debe bastar por sí sola.
 3. COORDINA: divide en tareas pequeñas, da cada una al agente que mejor la hace y reparte entre proveedores distintos para que trabajen a la vez. Usa depends_on para el orden. Para algo importante, pide un Task Review: una tarea readonly de revisión con un agente y un modelo distintos de los que lo hicieron.
 DELEGAR: los agentes también pueden repartirse subtareas (orb_delegate); tú ves el árbol en el tablero.
 AGENTES DISPONIBLES:
 ${models || '- ninguno activado: pide a ' + boss + ' que active uno en la pantalla Agentes.'}
-Razonamiento "medium" por defecto. "high" solo para algo muy complicado${c.policy?.highNeedsApproval !== false ? ` (esa tarea espera la aprobación ${ofUser()}; díselo)` : ''}.
-AHORRO: cada suscripción tiene cupo y ${me} limita las tareas por agente cada ${c.budget?.windowHours ?? 5} h. ${SPEND[c.budget?.profile ?? 2] ?? ''} Si un pedido necesita más de 3 tareas, propón el plan (tarea → agente) y espera el "sí". Si una tarea espera por cupo o falla por límite, no la dupliques: propón otro agente. No vigiles el tablero en bucle.
-PROYECTOS: cada proyecto vive en una categoría de ${ctx.paths.projects}: windows, ios, android o web (por defecto web). Los nuevos se crean con orb_create_project indicando category (carpeta propia, con git). Las carpetas bitacora y mcp-servers son la configuración de ${me}: no son proyectos y no se tocan. Fija el proyecto de trabajo con orb_set_project; todas las tareas van ahí. Si no hay proyecto fijado y el pedido toca código, pregunta cuál.
+${c.budget?.autoModel !== false ? `MODELO Y RAZONAMIENTO: los elige ${me} solo, tarea a tarea, según su nivel y el cupo (el modelo ligero para lo sencillo, el equilibrado para lo habitual, el más potente para lo difícil). Tú pon en cada tarea nivel: simple (un cambio pequeño, un texto, una pregunta), normal (lo habitual) o complejo (diseño, un fallo difícil, mucho código), y no pongas model ni reasoning salvo que ${boss} pida uno concreto. Si ${boss} pregunta qué modelo usar, explícaselo así de fácil.`
+    : `Razonamiento "medium" por defecto. "high" solo para algo muy complicado${c.policy?.highNeedsApproval !== false ? ` (esa tarea espera la aprobación ${ofUser()}; díselo)` : ''}.`}
+AHORRO: cada suscripción tiene cupo y ${me} limita las tareas por agente cada ${c.budget?.windowHours ?? 5} h. ${(c.budget?.autoModel !== false ? SPEND_AUTO : SPEND)[c.budget?.profile ?? 2] ?? ''} Si un pedido necesita más de 3 tareas, propón el plan (tarea → agente) y espera el "sí". Si una tarea espera por cupo o falla por límite, no la dupliques: propón otro agente. No vigiles el tablero en bucle.
+PROYECTOS: cada proyecto vive en una categoría de ${ctx.paths.projects}: windows, ios, android o web (por defecto web). Los nuevos se crean con orb_create_project indicando category (carpeta propia, con git). Las carpetas bitacora y mcp-servers son la configuración de ${me}: no son proyectos y no se tocan. Fija el proyecto de trabajo con orb_set_project; todas las tareas van ahí. Si no hay proyecto fijado y el pedido toca código, pregunta cuál. Para crear un proyecto necesitas su plataforma: si ${boss} no la ha dicho, pregúntasela con orb_ask (multi: true; opciones Windows, iOS, Android y Web) antes de crearlo. Si elige varias es multiplataforma: orb_create_project con categories crea <nombre>-android, <nombre>-ios… unidos en un grupo, con una carpeta común para lo que comparten; mantenlos coordinados.
+PEDIDOS GRANDES: si un pedido es muy complejo (varias pantallas, un diseño, un flujo con muchos pasos, algo que se explica mejor dibujado) y la pizarra del proyecto está vacía o no lo cubre, antes de crear tareas usa orb_pizarra para recomendar a ${boss} que lo dibuje y adjunte allí lo necesario (le sale un botón que la abre), y termina tu turno.
+PIZARRA: cada proyecto tiene su pizarra en <proyecto>/pizarra, donde ${boss} dibuja, escribe y adjunta lo que quiere: PIZARRA.md (sus textos y los adjuntos con su nota), pizarra.png (el dibujo entero: míralo con Read, las flechas y formas también cuentan) y adjuntos/ (fotos, vídeos, documentos). Léela al planificar en ese proyecto y siempre que ${boss} la mencione; trátala como su especificación. En los encargos, da a cada agente las rutas de la pizarra que necesite (la imagen, un adjunto concreto). Es material de ${boss}: no la modifiques.
 DÓNDE TRABAJAN: por defecto cada tarea trabaja en la carpeta del proyecto (mode "carpeta"), por turnos y con una foto previa que ${boss} puede deshacer con un botón. Marca readonly:true las que solo leen. Usa mode "aislada" (rama y copia propias) solo para experimentos o trabajo en paralelo; si a una aislada le falta algo, orb_give_files.
 CAMBIAR MODELO: orb_update_task (agent, model, reasoning) en una tarea que no está en curso; no se rehace.
 CONVERSACIONES DIRECTAS: ${boss} también puede hablar directamente con un agente en la pestaña Conversaciones; tú te encargas de los encargos coordinados.
@@ -71,11 +83,23 @@ MODO LIBRE: ${boss} ha desactivado el modo «solo orquestador». Puedes leer y b
 Sigues teniendo el tablero (orb_*): si algo es largo o conviene repartirlo entre agentes (Claude, Codex, Cursor), crea tareas como coordinador.
 LÍMITES: no hagas push ni publiques, no envíes nada a terceros, no borres archivos en masa y no muestres claves ni contraseñas. Si te lo piden, explica que eso se hace con los botones de GitHub de la app.
 BITÁCORAS: anota con orb_write_log las decisiones importantes y lo que cambies (en la del proyecto).
-Antes de cambiar algo grande, di en una línea qué vas a hacer.`;
+PIZARRA: ${boss} dibuja y adjunta lo que quiere en ${path.join(cwd, 'pizarra')}: PIZARRA.md (textos y adjuntos con nota), pizarra.png (el dibujo) y adjuntos/. Léela cuando la mencione o al empezar algo nuevo; no la modifiques.
+Antes de cambiar algo grande, di en una línea qué vas a hacer.
+Si ${boss} debe elegir entre 2-4 caminos claros, usa orb_ask (la recomendada primero) y termina tu turno: su respuesta llega como su próximo mensaje.`;
 }
 const FREE_TOOLS = ['mcp__orb', 'Read', 'Glob', 'Grep', 'Edit', 'Write', 'NotebookEdit', 'Bash', 'WebFetch', 'WebSearch', 'TodoWrite'];
 
 const STOP_GRACE_MS = 10_000; // how long a stopped turn may take to wind down before its process is closed
+
+// 2.7: a step of the assistant for the chat's live line: the tool, what it works on (only a file's name, never its folder;
+// the first words of a command) and when it started.
+function toolStep(body) {
+  const name = String(body?.name ?? '').replace(/^orb:/, '');
+  let target = String(body?.input ?? '').replace(/\s+/g, ' ').trim();
+  if (/^([a-z]:)?[\\/]|^\.{0,2}[\\/]|[\\/][^\\/\s]+\.[\w]{1,8}$/i.test(target) && !/\s/.test(target)) target = target.split(/[\\/]/).filter(Boolean).pop() ?? '';
+  if (target.startsWith('{')) target = '';
+  return { name, target: target.slice(0, 80), at: Date.now() };
+}
 
 export class Orchestrator {
   // key: secret handed only to this chat's MCP process (in memory, through the SDK) so the MCP recognises the coordinator.
@@ -86,7 +110,7 @@ export class Orchestrator {
   }
 
   get logFile() { return path.join(ctx.paths.runs, 'asistente.log'); }
-  state() { return { busy: this.busy, partial: this.partial, tools: this.tools, queued: this.queue.length, context: this.board.settingJson('orchestrator_context') }; }
+  state() { return { busy: this.busy, since: this.busy ? this.since : null, partial: this.partial, tools: this.tools, queued: this.queue.length, context: this.board.settingJson('orchestrator_context') }; }
   push() { this.emit('chat:state', this.state()); }
 
   info() {
@@ -104,6 +128,7 @@ export class Orchestrator {
     if (!text) throw new Error(tr('msg.orch.writeMessage'));
     if (text.length > 20000) throw new Error(tr('msg.orch.tooLong'));
     this.board.addChat('usuario', text);
+    context += this.whiteboardNote();
     // While it answers, a new message corrects it on the fly (it reads it at its next step) instead of waiting.
     if (this.busy && this.live?.steer({ text: text + context })) return;
     this.queue.push({ text: text + context });
@@ -150,7 +175,7 @@ export class Orchestrator {
     // (the report of finished tasks…): those are answered in the new one.
     this.queue = this.queue.filter((q) => q.internal);
     this.forget();
-    this.board.addChat('system', tr('msg.orch.newConversation', { name: assistantName() }));
+    this.board.notice(tr('msg.orch.newConversation', { name: assistantName() }), 'info');
     this.busy = false; this.partial = ''; this.tools = []; this.push();
   }
 
@@ -164,7 +189,7 @@ export class Orchestrator {
     const live = this.live; const stopped = this.inflight;
     Promise.resolve(live?.interrupt()).catch(() => {});
     if (stopped) setTimeout(() => { if (this.inflight === stopped && this.live === live) this.closeLive(); }, STOP_GRACE_MS).unref?.();
-    this.busy = false; this.partial = ''; this.tools = []; if (!this.closing) this.board.addChat('system', tr('msg.orch.stopped')); this.push();
+    this.busy = false; this.partial = ''; this.tools = []; if (!this.closing) this.board.notice(tr('msg.orch.stopped'), 'info'); this.push();
   }
 
   // Free mode: the answer to an approval card in the chat (a risky command the assistant wants to run).
@@ -175,7 +200,7 @@ export class Orchestrator {
 
   next() {
     if (this.busy || this.inflight || !this.queue.length) return;
-    this.busy = true; this.partial = ''; this.tools = []; this.push();
+    this.busy = true; this.since = Date.now(); this.partial = ''; this.tools = []; this.push();
     const item = this.queue.shift(); this.current = item;
     const { text, meta } = item;
     const generation = this.generation;
@@ -183,6 +208,7 @@ export class Orchestrator {
       this.log(`asistente: ${error.stack}`);
       if (generation !== this.generation) return; // stopped or reset meanwhile: nothing to report
       this.board.addChat('system', tr('msg.orch.cannotAnswer', { message: error.message }));
+      this.flushQuestions();
       this.busy = false; this.push();
     }).finally(() => {
       // Answered (or given up): the notice is no longer pending, unless the app is closing in the middle of it.
@@ -200,7 +226,7 @@ export class Orchestrator {
     const active = this.board.activeProject();
     // Free mode works inside the working project only: never in the assistant's own folder (database, secret, logs).
     const free = o.orchestrate === false && Boolean(active?.path && fs.existsSync(active.path));
-    if (o.orchestrate === false && !free && !this.warnedFree) { this.warnedFree = true; this.board.addChat('system', tr('msg.orch.freeNeedsProject')); }
+    if (o.orchestrate === false && !free && !this.warnedFree) { this.warnedFree = true; this.board.notice(tr('msg.orch.freeNeedsProject'), 'warning'); }
     if (free) this.warnedFree = false;
     const cwd = free ? active.path : ctx.paths.runs;
     // 2.6: the brain is any installed agent (Claude by default), on one of its accounts.
@@ -238,9 +264,35 @@ export class Orchestrator {
     return { free, cwd };
   }
 
+  // 2.7: the user draws or attaches on the Pizarra and the assistant sees it by itself: with the next message, a line
+  // telling it that the active project's Pizarra changed since it last heard (a new conversation reads it in the briefing).
+  whiteboardNote() {
+    const active = this.board.activeProject(); if (!active?.path) return '';
+    const md = path.join(active.path, 'pizarra', 'PIZARRA.md');
+    let at; try { at = fs.statSync(md).mtimeMs; } catch { return ''; }
+    const key = `wb_seen:${active.name}`; const seen = Number(this.board.setting(key) ?? 0);
+    if (at <= seen) return '';
+    this.board.setting(key, String(at));
+    if (!this.board.setting('orchestrator_session')) return ''; // the briefing of the new conversation already has it
+    return `\n\n(AVISO DEL SISTEMA: ${userName()} ha cambiado la pizarra de ${active.name} desde la última vez. Léela antes de seguir: ${md} y el dibujo en ${path.join(active.path, 'pizarra', 'pizarra.png')}.)`;
+  }
+
+  // 2.7: the questions with options the assistant asked in this turn (orb_ask), as cards below its answer.
+  flushQuestions() {
+    const list = this.board.settingJson('pending_questions');
+    if (!Array.isArray(list) || !list.length) return;
+    this.board.settingJson('pending_questions', []);
+    for (const q of list) {
+      if (q.kind === 'board') { this.board.addChat('orb', q.message, { kind: 'board', project: this.board.activeProject()?.name ?? null }); continue; }
+      this.board.addChat('orb', q.question, { kind: 'question', question: q.question, header: q.header, options: q.options, multi: q.multi === true, status: 'pending' });
+    }
+  }
+
   onEvent(ev) {
     if (ev.type === 'delta') { this.partial += ev.text; this.push(); return; }
-    if (ev.type === 'item' && ev.kind === 'tool') { this.tools.push(String(ev.body?.name ?? '').replace(/^orb:/, '')); this.push(); return; }
+    // 2.7: each step with what it works on (a file's name, a command, a search) and when it started, for the live line of
+    // the chat («Leyendo claude.mjs · 1 min 3 s»). Only the last 30.
+    if (ev.type === 'item' && ev.kind === 'tool') { this.tools.push(toolStep(ev.body)); if (this.tools.length > 30) this.tools.shift(); this.push(); return; }
     if (ev.type === 'item' && ev.role === 'assistant' && ev.kind === 'text') { this.partial = ''; return; }
     if (ev.type === 'session' && ev.id) { this.board.setting('orchestrator_session', ev.id); return; }
     if (ev.type === 'models') { rememberModels(this.board, this.liveAgent, ev.list); return; }
@@ -269,7 +321,7 @@ export class Orchestrator {
     // Renewed when its context is filling up (or after many turns): cheaper than dragging a long conversation along.
     if (this.board.setting('orchestrator_session') && ((c?.size && c.used / c.size >= (o.renewAt ?? 0.6)) || turns >= (o.maxTurns ?? 60))) {
       this.forget();
-      this.board.addChat('system', tr('msg.orch.renewed'));
+      this.board.notice(tr('msg.orch.renewed'), 'info');
     }
     const fresh = !this.board.setting('orchestrator_session');
     let place;
@@ -293,7 +345,10 @@ export class Orchestrator {
     if (result.isError && allowRetry && !result.text && !fresh) { this.forget(); return this.run(text, false, meta); }
     const answer = (result.final || result.text || '').trim();
     const ok = !result.isError;
-    this.board.addChat(ok ? 'orb' : 'system', answer || tr('msg.orch.cannotAnswerCheck', { logFile: this.logFile }), ok ? meta : null);
+    // A turn that only asked (orb_ask) and said nothing more: the card alone.
+    const asked = (this.board.settingJson('pending_questions') ?? []).length > 0;
+    if (!(ok && !answer && asked)) this.board.addChat(ok ? 'orb' : 'system', answer || tr('msg.orch.cannotAnswerCheck', { logFile: this.logFile }), ok ? meta : null);
+    this.flushQuestions();
     this.busy = false; this.partial = ''; this.tools = []; this.push();
     if (ok) this.suggestGames();
   }

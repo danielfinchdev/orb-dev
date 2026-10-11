@@ -197,8 +197,11 @@ test('reabrir el acceso (cambio de red o de vía) conserva los móviles vinculad
   const p = phone(); assert.equal(await pair(p, await qr()), 200);
   const st = await call('remote.configure', { wifi: true }); // stop + start on the same port
   assert.equal(st.running, true);
-  assert.equal((await fetch(`${base}/`)).status, 200);
-  assert.equal((await p.call('app.state')).ok, true, 'el móvil sigue vinculado');
+  // A keep-alive connection to the server just closed can still be in fetch's pool for a moment (Windows hands over the
+  // close late) and fail once with ECONNRESET; the phone's page retries the same way.
+  const again = async (fn) => { for (let i = 0; ; i++) { try { return await fn(); } catch (error) { if (i >= 2 || !/fetch failed/.test(error.message)) throw error; await new Promise((r) => setTimeout(r, 150)); } } };
+  assert.equal((await again(() => fetch(`${base}/`))).status, 200);
+  assert.equal((await again(() => p.call('app.state'))).ok, true, 'el móvil sigue vinculado');
   assert.equal((await call('remote.enable', { enabled: false })).running, false);
   await assert.rejects(fetch(`${base}/`), 'apagado: nada escucha');
   assert.equal((await call('remote.enable', { enabled: true })).running, true);

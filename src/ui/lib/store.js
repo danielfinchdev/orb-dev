@@ -96,7 +96,7 @@ export const isDark = () => document.documentElement.classList.contains('dark');
 export function applyAppearance(ui = {}) {
   const pick = (value, list) => (list.includes(value) ? value : list[0]);
   const root = document.documentElement.dataset;
-  root.skin = pick(ui.skin, SKINS);
+  root.skin = bridge.mobile ? SKINS[0] : pick(ui.skin, SKINS); // 2.7: the phone always wears the default theme
   root.font = pick(ui.font, FONTS);
   root.codeFont = pick(ui.codeFont, CODE_FONTS);
   root.codeTheme = pick(ui.codeTheme, CODE_THEMES);

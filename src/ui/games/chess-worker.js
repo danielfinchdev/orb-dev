@@ -2,6 +2,6 @@
 import { bestMove } from './chess-engine.js';
 
 self.onmessage = (e) => {
-  const { id, game, level } = e.data;
-  self.postMessage({ id, move: bestMove(game, level) });
+  const { id, game, level, budget } = e.data;
+  self.postMessage({ id, move: bestMove(game, level, { budget }) });
 };

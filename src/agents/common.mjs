@@ -105,6 +105,12 @@ export function orbMcpServer(env = {}) {
   return { command: process.execPath, args: [script], env: { ELECTRON_RUN_AS_NODE: '1', ...env } };
 }
 
+// 2.7: Opti Bot's own tools (Monitoreo del equipo): diagnosis of the PC, a copy of Orb and proposals the user approves.
+export function optiMcpServer(env = {}) {
+  const script = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'mcp', 'opti.mjs');
+  return { command: process.execPath, args: [script], env: { ELECTRON_RUN_AS_NODE: '1', ...env } };
+}
+
 // Bounded text for the UI (tool inputs and outputs can be huge).
 export const clip = (value, max = 4000) => {
   const s = typeof value === 'string' ? value : JSON.stringify(value ?? '');
