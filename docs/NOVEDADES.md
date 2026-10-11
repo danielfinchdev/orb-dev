@@ -1,12 +1,19 @@
 ## Descargar
 
-- **`Orb-2.7.1-instalador.exe`** (recomendado): se instala para tu usuario, sin permisos de administrador, con acceso
+- **`Orb-2.7.2-instalador.exe`** (recomendado): se instala para tu usuario, sin permisos de administrador, con acceso
   directo en el escritorio y en el menú Inicio. Después lo encuentras escribiendo «Orb» en el buscador de Windows.
-- **`Orb-2.7.1-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
-- **`Orb-2.7.1-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.exe`.
+- **`Orb-2.7.2-portable.exe`**: un solo archivo. Doble clic y se abre, sin instalar nada.
+- **`Orb-2.7.2-windows.zip`**: lo mismo ya descomprimido (arranca más rápido). Clic derecho → «Extraer todo» y abre `Orb.exe`.
 
 Windows 10/11. Como aún no está firmada, SmartScreen avisa la primera vez: «Más información» → «Ejecutar de todas formas».
 En el primer arranque la app detecta qué agentes tienes y con qué sesión, e instala lo que falte con los instaladores oficiales.
+
+## Novedades de la 2.7.2
+
+- **El puente con Open Control Edge no se detiene nunca:** si una lectura del PC no responde, se reintenta a los pocos
+  segundos y el fallo se anota una sola vez en el registro.
+- **Las pruebas ya no tocan tus datos del puente:** una copia de Orb abierta por las pruebas no escribe en
+  `%LOCALAPPDATA%\OrbPuente`, así que Open Control Edge solo ve a tu Orb de verdad.
 
 ## Novedades de la 2.7.1
 

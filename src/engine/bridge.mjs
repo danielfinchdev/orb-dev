@@ -38,12 +38,13 @@ export function readOce() {
 export function startBridge({ board, version, busy: isBusy = () => false, log = () => {} }) {
   const file = path.join(bridgeDir(), 'orb.json');
   const remove = () => { try { fs.rmSync(file, { force: true }); } catch { /* gone */ } };
-  let busy = false;
+  let busy = false; let lastError = null;
   const write = async () => {
     if (busy) return; busy = true;
     try {
       if (ctx.config?.monitor?.shareWithOce === false) { remove(); return; }
-      const s = await quickStats();
+      // A reading that never answers (a disk that does not respond) must not stop the bridge: 10 s at most, then retry.
+      const s = await Promise.race([quickStats(), new Promise((_, reject) => setTimeout(() => reject(new Error('la lectura del PC no responde')), 10_000).unref?.())]);
       const usage = usageReport(board).filter((u) => u.real?.utilization != null).map((u) => ({ agent: u.agent, label: u.label, usedPct: num(u.real.utilization * 100), window: u.real.window ?? null, resetAt: u.real.resetAt ? new Date(u.real.resetAt).toISOString() : null }));
       const count = (st) => board.one('SELECT COUNT(*) AS n FROM tasks WHERE status = ?', st)?.n ?? 0;
       const data = { schema: 1, app: 'Orb', version, pid: process.pid, at: new Date().toISOString(),
@@ -52,7 +53,8 @@ export function startBridge({ board, version, busy: isBusy = () => false, log = 
       fs.mkdirSync(bridgeDir(), { recursive: true });
       fs.writeFileSync(`${file}.tmp`, JSON.stringify(data));
       fs.renameSync(`${file}.tmp`, file);
-    } catch (e) { log(`puente con Open Control Edge: ${e.message}`); } finally { busy = false; }
+      lastError = null;
+    } catch (e) { if (e.message !== lastError) log(`puente con Open Control Edge: ${e.message}`); lastError = e.message; } finally { busy = false; }
   };
   write(); const timer = setInterval(write, 5000); timer.unref?.();
   return { stop() { clearInterval(timer); remove(); } };

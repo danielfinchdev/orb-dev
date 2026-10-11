@@ -18,7 +18,7 @@ writeJson(path.join(home, 'orb.json'), merge(loadConfig(home), { ui: { tourDone:
 const userData = path.join(tmp, 'datos'); fs.mkdirSync(userData);
 fs.writeFileSync(path.join(userData, 'ubicacion.json'), JSON.stringify({ home }));
 const port = 9300 + Math.floor(Math.random() * 500);
-const app = spawn(exe, [`--remote-debugging-port=${port}`], { env: { ...process.env, ORB_USER_DATA: userData }, stdio: 'ignore' });
+const app = spawn(exe, [`--remote-debugging-port=${port}`], { env: { ...process.env, ORB_NO_BRIDGE: '1', ORB_USER_DATA: userData }, stdio: 'ignore' });
 const until = async (fn, what, ms = 120000) => { const end = Date.now() + ms; while (Date.now() < end) { try { const v = await fn(); if (v) return v; } catch { /* not yet */ } await new Promise((r) => setTimeout(r, 500)); } throw new Error(`no llegó: ${what}`); };
 let browser;
 try {
