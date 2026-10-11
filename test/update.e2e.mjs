@@ -40,7 +40,7 @@ await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const feedUrl = `http://127.0.0.1:${server.address().port}/`;
 
 const port = 9300 + Math.floor(Math.random() * 500);
-const app = spawn(exe, [`--remote-debugging-port=${port}`], { env: { ...process.env, ORB_USER_DATA: userData, ORB_UPDATE_URL: feedUrl, ORB_NO_ADB: '1' }, stdio: 'ignore' });
+const app = spawn(exe, [`--remote-debugging-port=${port}`], { env: { ...process.env, ORB_NO_BRIDGE: '1', ORB_USER_DATA: userData, ORB_UPDATE_URL: feedUrl, ORB_NO_ADB: '1' }, stdio: 'ignore' });
 const until = async (fn, what, ms = 60000) => { const end = Date.now() + ms; while (Date.now() < end) { try { const v = await fn(); if (v) return v; } catch { /* not yet */ } await new Promise((r) => setTimeout(r, 500)); } throw new Error(`no llegó: ${what}`); };
 const killAll = () => { for (const name of new Set([path.basename(exe), 'Orb.exe'])) { try { execFileSync('taskkill', ['/IM', name, '/T', '/F'], { stdio: 'ignore' }); } catch { /* none */ } } };
 
