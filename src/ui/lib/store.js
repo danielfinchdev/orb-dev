@@ -10,6 +10,9 @@ import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from '../../core/appearance.mjs
 // this module loads: the bundler may load this module before the phone's bridge has defined window.orb.
 export const bridge = new Proxy({}, { get: (_, key) => window.orb?.[key], has: (_, key) => Boolean(window.orb) && key in window.orb });
 export const call = (method, params) => bridge.call(method, params);
+// 2.7.3: the whole PC app (the installer), not the phone nor Orb Light (the portable .exe): mini-games, God mode, PC Status
+// and the themes live only here.
+export const fullPc = () => !bridge.mobile && !bridge.light;
 
 let state = { version: 0, ready: false, info: null, app: null, sessions: [], projects: [], tasks: [], route: { view: 'chat' }, settings: null };
 const listeners = new Set();
@@ -96,7 +99,7 @@ export const isDark = () => document.documentElement.classList.contains('dark');
 export function applyAppearance(ui = {}) {
   const pick = (value, list) => (list.includes(value) ? value : list[0]);
   const root = document.documentElement.dataset;
-  root.skin = bridge.mobile ? SKINS[0] : pick(ui.skin, SKINS); // 2.7: the phone always wears the default theme
+  root.skin = fullPc() ? pick(ui.skin, SKINS) : SKINS[0]; // 2.7: the phone (and Orb Light) always wears the default theme
   root.font = pick(ui.font, FONTS);
   root.codeFont = pick(ui.codeFont, CODE_FONTS);
   root.codeTheme = pick(ui.codeTheme, CODE_THEMES);

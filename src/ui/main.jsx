@@ -42,7 +42,9 @@ const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
 function ChatsView() { const t = useT(); return <><PageHeader icon={<MessagesSquare className="text-primary size-5" />} title={t('nav.chats')} /><Sidebar page /></>; }
 const VIEWS = bridge.mobile
   ? { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: LogsView, activity: ActivityView, schedules: SchedulesView, phone: PhoneView, new: NewChatView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
-  : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: LogsView, activity: ActivityView, expert: ExpertView, schedules: SchedulesView, phone: PhoneView, new: NewChatView, tutorials: TutorialsView, board: WhiteboardView, monitor: MonitorView };
+  : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: LogsView, activity: ActivityView, schedules: SchedulesView, phone: PhoneView, new: NewChatView, tutorials: TutorialsView, board: WhiteboardView,
+    // 2.7.3: Orb Light (the portable .exe) has no God mode nor PC Status.
+    ...(bridge.light ? {} : { expert: ExpertView, monitor: MonitorView }) };
 
 // The phone's frame: the screen (each with its own header) and the tabs at the bottom.
 function MobileShell() {

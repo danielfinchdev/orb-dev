@@ -1,7 +1,7 @@
 {
   "name": "orb-dev",
   "productName": "Orb",
-  "version": "2.7.2",
+  "version": "2.7.3",
   "description": "Orb·e: tu director de bolsillo. Planifica tu proyecto por fases y escribe un encargo claro para cada agente (Claude Code, Codex, Cursor, Gemini, OpenCode, Qwen, Copilot), sin gastar tokens de más. Te entrega resultados comprobados.",
   "private": true,
   "type": "module",
@@ -15,7 +15,7 @@
     "test": "vite build --logLevel warn && node --test test/*.test.mjs",
     "test:app": "vite build && node test/app.e2e.mjs",
     "icon": "node scripts/icono.mjs",
-    "dist": "vite build && electron-builder --win portable nsis",
+    "dist": "vite build && electron-builder --win nsis portable",
     "test:movil": "vite build && node test/mobile.e2e.mjs",
     "icon:ico": "electron scripts/icono-ico.cjs"
   },
@@ -109,12 +109,12 @@
       "icon": "build/icon.ico",
       "artifactName": "Orb-${version}-windows.${ext}",
       "target": [
-        "portable",
-        "nsis"
+        "nsis",
+        "portable"
       ]
     },
     "portable": {
-      "artifactName": "Orb-${version}-portable.exe"
+      "artifactName": "Orb-${version}-light-portable.exe"
     },
     "nsis": {
       "oneClick": false,

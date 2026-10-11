@@ -164,7 +164,7 @@ export default {
   'help.faq.10.q': '¿Por qué no veo el robot?',
   'help.faq.10.a': 'El tema Profesional no muestra el robot ni animaciones; cámbialo en Ajustes › Apariencia. El robot flotante se activa o desactiva en Ajustes › General.',
   'help.faq.11.q': '¿Cómo se actualiza Orb?',
-  'help.faq.11.a': 'La versión instalada busca actualizaciones al abrirse y cada 4 horas. «Actualizar» descarga la nueva versión y «Reiniciar y actualizar» la instala. También puedes buscarlas en Ajustes › Actualizaciones. La versión portable avisa y abre la descarga.',
+  'help.faq.11.a': 'La versión instalada busca actualizaciones al abrirse y cada 4 horas. «Actualizar» descarga la nueva versión y «Reiniciar y actualizar» la instala. También puedes buscarlas en Ajustes › Actualizaciones. Orb Light (portable) avisa y abre la descarga.',
   'help.faq.12.q': 'Una tarea de Cursor falla por «plan sin acceso». ¿Qué hago?',
   'help.faq.12.a': 'El plan gratuito de Cursor no permite usar su agente desde otras aplicaciones. Orb pausa Cursor un día y, si la tarea era para «cualquier agente», la asigna a otro. Con un plan de pago funciona con normalidad.',
   'help.faq.13.q': '¿Cómo envío comentarios o apoyo el proyecto?',

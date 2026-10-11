@@ -1,6 +1,6 @@
 # The Windows downloads, built and checked on a real Windows machine and published as a GitHub release:
-#   Orb-<versión>-portable.exe  one file, nothing to install: double-click and it opens
-#   Orb-<versión>-windows.zip   the same, already unpacked (starts faster): extract and open Orb.exe
+#   Orb-<versión>-instalador.exe      the whole app: installs for the user and updates itself (recommended)
+#   Orb-<versión>-light-portable.exe  Orb Light: the essentials, nothing to install (it only tells of new versions)
 # Publishing a version = changing "version" in package.json on main: when that version has no release yet, this builds it,
 # tests it (also the packaged app on Windows) and publishes it as release v<version>, creating the tag. From the Actions
 # tab ("Run workflow") it does the same; a version already published is only built and checked (files kept in the run).
@@ -67,8 +67,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Construir el instalador, el portable y el zip
-        run: npx vite build && npx electron-builder --win nsis portable zip --x64 --publish never
+      - name: Construir el instalador y Orb Light (portable)
+        run: npx vite build && npx electron-builder --win nsis portable --x64 --publish never
       - name: Probar la app empaquetada en Windows
         run: node test/smoke.e2e.mjs
         env:
@@ -79,7 +79,6 @@ jobs:
           name: orb-dev-windows
           path: |
             dist/*.exe
-            dist/*.zip
             dist/latest.yml
             test-results/
       - name: Publicar la versión
@@ -93,6 +92,5 @@ jobs:
           body_path: docs/NOVEDADES.md
           files: |
             dist/Orb-*.exe
-            dist/Orb-*.zip
             dist/Orb-*.blockmap
             dist/latest.yml
