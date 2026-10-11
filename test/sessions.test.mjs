@@ -202,7 +202,7 @@ test('bifurcar: Claude y Codex copian su conversación de forma nativa; Cursor e
   await idle(s.id);
 });
 
-test('el uso real que informa el agente llega al cupo de su cuenta', async () => {
+test('el uso real que informa el agente llega al uso de su cuenta', async () => {
   const s = chat('codex');
   sessions.send(s.id, 'RATE 37');
   await idle(s.id);

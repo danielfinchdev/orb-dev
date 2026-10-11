@@ -173,7 +173,7 @@ test('Cursor: CLI en streaming, un proceso por turno que continúa el mismo chat
   assert.equal(live.steer({ text: 'x' }), false, 'Cursor no corrige en marcha: espera en la cola');
 });
 
-test('Cursor: solo lectura sin --force, encargos largos por archivo, cupo y detener', async () => {
+test('Cursor: solo lectura sin --force, encargos largos por archivo, límite de uso y detener', async () => {
   const ro = openCursor({ permission: 'leer', model: 'auto' });
   await ro.live.send({ text: 'mira' });
   const args = ro.log()[0].args;
@@ -185,7 +185,7 @@ test('Cursor: solo lectura sin --force, encargos largos por archivo, cupo y dete
   assert.match(prompt, /Tus instrucciones completas están en el archivo .*orb-encargo-\d+\.md/);
   assert.ok(prompt.length < 1000, 'la línea de órdenes de Windows no admite 32 000 caracteres');
   assert.ok(!fs.readdirSync(dir).some((f) => f.startsWith('orb-encargo-')), 'el archivo de instrucciones se borra al acabar el turno');
-  const quota = await openCursor().live.send({ text: 'CUPO' });
+  const quota = await openCursor().live.send({ text: 'LIMITE_USO' });
   assert.equal(quota.isError, true); assert.deepEqual(quota.limit, { resetAt: null });
   const { live, events } = openCursor();
   const turn = live.send({ text: 'ESPERA' });

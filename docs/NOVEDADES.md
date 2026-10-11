@@ -110,14 +110,14 @@ En el primer arranque la app detecta qué agentes tienes y con qué sesión, e i
   «Sin carpeta»), el cerebro, el razonamiento y, si hablas directamente con un agente, los permisos. Con el interruptor
   «Orquestador», Orbe coordina a los agentes; sin él, hablas con el agente elegido.
 - **Cualquier cerebro, con sus modelos reales:** Orbe ya no depende de Claude. Elige cualquier agente instalado y su
-  modelo: Orb le pregunta a cada agente qué modelos tiene (sin gastar cupo) y los muestra con su nombre, agrupados y
+  modelo: Orb le pregunta a cada agente qué modelos tiene (sin gastar uso) y los muestra con su nombre, agrupados y
   plegados, con «Recomendados» arriba.
 - **Contexto y uso de tus planes:** junto al botón de enviar, un círculo se va llenando con el contexto de la
   conversación. Al pulsarlo ves los tokens usados y el uso real de cada cuenta que está trabajando: límite de sesión,
   semanal y semanal por modelo, con cuándo se restablece cada uno.
 - **Ahorro o potencia:** en Ajustes › Tareas y usos, un deslizador va de «Máx. ahorro» a «Máx. uso». Fija de golpe todos
   los límites y lo cauto que es Orbe al gastar. Los parámetros siguen en «Opciones avanzadas» para quien quiera tocarlos.
-- **Aviso de cupo:** al elegir razonamiento alto, un modelo de los que más consumen o una cuenta con poco cupo, un globo
+- **Aviso de uso:** al elegir razonamiento alto, un modelo de los que más consumen o una cuenta con poco uso disponible, un globo
   te avisa de que puede gastar el uso rápido.
 - **Barra superior limpia:** la fecha y la hora a la izquierda y solo iconos a la derecha (pausar tareas, reiniciar
   conversación y minijuegos), con globos que explican lo que hace cada uno. Cada mensaje del chat lleva su hora.
@@ -205,7 +205,7 @@ La versión estable: más fiable en el uso de cada día.
 ### Ajustes, renovados
 
 - **Ajustes se abre como ventana** sobre la app, con sus apartados a la izquierda: General, Apariencia, Modelo, Tareas y
-  cupo, Móvil, Herramientas, Modo experto, Actualizaciones, Contribuye y Más aplicaciones.
+  usos, Móvil, Herramientas, Modo experto, Actualizaciones, Contribuye y Más aplicaciones.
 - **Apariencia:** modo claro, oscuro o el del sistema; cinco temas (Orb, Vaporwave, Retro arcade, Profesional y Candy);
   tipografía de la interfaz y del código; y colores para el código del chat y del modo experto. El tema Profesional no
   muestra el robot ni sus animaciones y sonidos.
@@ -305,9 +305,9 @@ proveedores que trabajan a la vez, revisa lo que hacen y te pide el OK. La 2.3 r
 - **Permisos equilibrados:** lo normal pasa solo; lo arriesgado (push, descargar y ejecutar, borrar carpetas…) te lo pregunta
   con una tarjeta **Permitir / Permitir siempre / Denegar**, en la conversación, en el chat, en la bandeja y en el móvil.
   Hay un modo nuevo, «Preguntar antes», para vigilar de cerca.
-- **Cupo real:** Claude y Codex dicen cuánto llevas de tu cupo y cuándo se reinicia. Orb para al 92 % (ajustable) y reparte
+- **Uso real:** Claude y Codex dicen cuánto llevas de tu uso y cuándo se reinicia. Orb para al 92 % (ajustable) y reparte
   el trabajo entre cuentas. Los topes fijos suben a 20 tareas y 6 con modelos caros por ventana, solo como red de seguridad.
-- **Tareas que esperan al cupo:** al llegar al límite, la tarea no falla, espera y **sigue sola** al reiniciarse.
+- **Tareas que esperan al uso:** al llegar al límite, la tarea no falla, espera y **sigue sola** al reiniciarse.
 - **Continúan tras cerrar la app.**
 - **El asistente se renueva según lo lleno que esté su contexto**, no por número de mensajes, y lee el proyecto para escribir
   encargos más precisos y cortos.

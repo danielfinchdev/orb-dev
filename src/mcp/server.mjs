@@ -133,7 +133,7 @@ const tools = [
     { name: 'orb_delegate', description: 'Delega una parte de tu tarea en otro agente o modelo (subtarea de tu tarea). Devuelve su id: espera su resultado con orb_wait_tasks.',
       inputSchema: { type: 'object', required: ['title', 'description'], properties: {
         title: str('Título corto'), description: str('Encargo autocontenido y compacto: qué hacer, dónde y cuándo está terminado'),
-        agent: { type: 'string', enum: [...AGENTS, 'any'], description: 'Agente (any = el que tenga cupo)' }, model: str(`Modelo concreto (opcional; requiere agent). ${modelsHelp()}`),
+        agent: { type: 'string', enum: [...AGENTS, 'any'], description: 'Agente (any = el que tenga uso disponible)' }, model: str(`Modelo concreto (opcional; requiere agent). ${modelsHelp()}`),
         readonly: { type: 'boolean', description: 'true si solo debe leer (investigar, revisar)' },
         nivel: { type: 'string', enum: ['simple', 'normal', 'complejo'], description: 'Lo difícil que es (simple, normal o complejo): Orb elige con ello el modelo si no pones uno' } } },
       run: (a) => delegate(a) },
@@ -178,7 +178,7 @@ const tools = [
         project: str('Nombre del proyecto registrado'), title: str('Título corto'),
         description: str('Instrucciones autocontenidas: qué hacer, dónde y criterio de terminado'),
         agent: { type: 'string', enum: [...AGENTS, 'any'] }, model: str(`Modelo concreto (opcional; requiere agent). ${modelsHelp()}`),
-        account: str(`Solo si ${USER} pide una cuenta concreta (si no, se reparte sola entre las que tienen cupo). Cuentas: ${(ctx.config.accounts ?? []).map((a) => `${a.id} (${a.label})`).join(', ')}`),
+        account: str(`Solo si ${USER} pide una cuenta concreta (si no, se reparte sola entre las que tienen uso disponible). Cuentas: ${(ctx.config.accounts ?? []).map((a) => `${a.id} (${a.label})`).join(', ')}`),
         nivel: { type: 'string', enum: ['simple', 'normal', 'complejo'], description: 'Lo difícil que es: simple (un cambio pequeño, un texto, una pregunta), normal (lo habitual) o complejo (diseño, un fallo difícil, mucho código). ' + (ctx.config.budget?.autoModel !== false ? 'Con esto Orb elige solo el modelo y el razonamiento más eficientes: no pongas model ni reasoning salvo que ' + USER + ' pida uno concreto.' : 'Ayuda a elegir modelo y razonamiento.') }, 
         reasoning: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Por defecto medium. high solo para algo muy complicado.' },
         launch: { type: 'string', enum: ['auto', 'manual'] }, priority: { type: 'integer', minimum: 1, maximum: 3, description: '1 alta, 2 normal, 3 baja' },
