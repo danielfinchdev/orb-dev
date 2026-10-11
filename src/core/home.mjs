@@ -27,6 +27,11 @@ export const DEFAULT_CONFIG = Object.freeze({
   maxParallel: 3,
   perAgent: 1,
   timeoutMinutes: 60,
+  // 3.1: tasks work at the same time by default (each in its own copy when another one is writing in the folder, joined
+  // back by Orb when it ends); oneAtATime makes them wait for each other. approvalWaitMinutes: a task's permission that
+  // nobody answers in this time is denied and the agent goes on another way (0 = wait for ever).
+  oneAtATime: false,
+  approvalWaitMinutes: 10,
   agentOrder: ['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot'],
   agents: {
     // Claude Code accepts the aliases sonnet/opus/haiku, so the list keeps working when new versions come out.

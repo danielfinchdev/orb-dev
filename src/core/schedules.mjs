@@ -1,9 +1,10 @@
 // Scheduled tasks (2.3): "every Monday at 9 review the dependencies", "every night run the tests". A schedule creates a
-// normal task when it is due (same approvals, quota and agents as any task). One created by the assistant needs the
+// normal task when it is due (same approvals, usage limits and agents as any task). One created by the assistant needs the
 // user's approval once before it runs on its own; one created by the user is approved already. A schedule never piles
 // up work: while its last task is still open, the next run waits.
 import { oneLine } from './safety.mjs';
 import { tr } from './context.mjs';
+import { AGENT_IDS as AGENTS } from './home.mjs';
 
 export const EVERY = ['hourly', 'every_hours', 'daily', 'weekly'];
 const now = () => new Date();
@@ -42,6 +43,8 @@ function validate(board, a) {
   if (!EVERY.includes(a.every)) throw new Error(tr('sys.schedules.badEvery', { list: EVERY.join(', ') }));
   if (a.at_time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(a.at_time)) throw new Error(tr('sys.schedules.badTime'));
   if (a.weekdays && (!Array.isArray(a.weekdays) || a.weekdays.some((d) => !Number.isInteger(d) || d < 0 || d > 6))) throw new Error(tr('sys.schedules.badWeekdays'));
+  if (a.agent && a.agent !== 'any' && !AGENTS.includes(a.agent)) throw new Error(tr('sys.board.badAgent', { agent: a.agent, list: AGENTS.join(', ') }));
+  board.checkAvailable(a.agent);
 }
 
 export function createSchedule(board, a, actor) {
@@ -75,7 +78,10 @@ export function removeSchedule(board, id) { board.run('DELETE FROM schedules WHE
 
 // Creates the task of a schedule now (when due, or "Ejecutar ahora").
 export function runSchedule(board, s, actor = 'usuario') {
-  const task = board.createTask({ project: s.project, title: tr('msg.schedules.runTitle', { title: s.title }), description: s.description, agent: s.agent, model: s.model, readonly: s.readonly, schedule_id: s.id }, s.approved ? 'usuario' : actor);
+  // 3.1: an agent that is no longer on this PC does not stop the schedule: this run goes to any available agent.
+  const gone = s.agent && s.agent !== 'any' && board.availableAgents() && !board.availableAgents().includes(s.agent);
+  const task = board.createTask({ project: s.project, title: tr('msg.schedules.runTitle', { title: s.title }), description: s.description, agent: gone ? 'any' : s.agent, model: gone ? null : s.model, readonly: s.readonly, schedule_id: s.id }, s.approved ? 'usuario' : actor);
+  if (gone) board.event(task.id, 'orb', 'note', `${s.agent} no está disponible en este PC: la ejecución va a cualquier agente disponible`);
   const next = nextRun({ every: s.every, at_time: s.every === 'every_hours' ? '00:00' : s.at_time, weekdays: s.weekdays, hours: Number(s.at_time) });
   board.run('UPDATE schedules SET last_run = ?, last_task = ?, next_run = ? WHERE id = ?', now().toISOString(), task.id, next.toISOString(), s.id);
   board.changed('schedules');

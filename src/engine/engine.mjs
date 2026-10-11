@@ -57,7 +57,21 @@ async function start(home, version, secret, browser) {
   // A task waiting for a click: a line in the assistant's chat so the user sees it wherever they are (also the phone).
   sessions.onApproval = (s, item) => {
     if (s?.kind !== 'task') return;
-    board.addChat('system', tr('msg.engine.taskNeedsPermission', { id: s.task_id, title: item.body?.title ?? '', reason: item.body?.reason ?? '' }), { kind: 'task-approval', session: s.id, task: s.task_id, request: item.body?.id });
+    const wait = Number(ctx.config.approvalWaitMinutes ?? 10);
+    board.addChat('system', tr(wait > 0 ? 'msg.engine.taskNeedsPermissionWait' : 'msg.engine.taskNeedsPermission', { id: s.task_id, title: item.body?.title ?? '', reason: item.body?.reason ?? '', min: wait }), { kind: 'task-approval', session: s.id, task: s.task_id, request: item.body?.id });
+  };
+  // 3.1: the chat line of a task's permission shows how it ended (answered here or in the task, nobody answered, the task
+  // stopped), instead of staying «pending» with buttons that no longer work.
+  sessions.onApprovalDone = (s, requestId, status) => {
+    if (s?.kind !== 'task' || requestId == null) return;
+    for (const row of board.all("SELECT id, meta FROM chat WHERE meta LIKE '%task-approval%' ORDER BY id DESC LIMIT 50")) {
+      let meta; try { meta = JSON.parse(row.meta); } catch { continue; }
+      if (meta?.kind === 'task-approval' && meta.session === s.id && String(meta.request) === String(requestId)) { board.patchChatMeta(row.id, { ...meta, status }); break; }
+    }
+  };
+  sessions.onApprovalExpired = (s, item) => {
+    if (s?.kind !== 'task') return;
+    board.notice(tr('msg.engine.permissionTimedOut', { id: s.task_id, title: item.body?.title ?? '', min: Number(ctx.config.approvalWaitMinutes ?? 10) }), 'warning');
   };
   const orchestrator = new Orchestrator(board, orchKey, { emit, log });
   const scheduler = new Scheduler(board, sessions, { log, orchestrator });

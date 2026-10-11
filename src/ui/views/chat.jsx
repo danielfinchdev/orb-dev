@@ -17,6 +17,7 @@ import { LiveActivity, QuestionCard } from '@/components/chat-live.jsx';
 import { ContextMeter } from './session.jsx';
 import { BrainPicker, ReasoningPicker, UsageBubble, useCatalog, useUsageBubble } from '@/components/brain-picker.jsx';
 import { cn } from '@/lib/utils.js';
+import { DECISION } from '@/lib/labels.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 
 const SUGGESTIONS = ['chat.suggestion1', 'chat.suggestion2', 'chat.suggestion3', 'chat.suggestion4'];
@@ -220,18 +221,21 @@ const Message = memo(function Message({ m, name, onChanges }) {
 // A permission request in the chat: the assistant's own (free mode) or one of a task (answered here or in the task).
 function ChatApproval({ m }) {
   const t = useT();
-  const [state, setLocal] = useState(m.meta.status ?? 'pending');
+  // 3.1: how the request ended comes from the engine too (answered in the task, nobody answered, the task stopped).
+  const [local, setLocal] = useState(null);
+  const state = local ?? m.meta.status ?? 'pending';
   const task = m.meta.kind === 'task-approval';
   const answer = async (decision) => {
     const r = await act(task ? call('sessions.approve', { id: m.meta.session, request: m.meta.request, decision }) : call('chat.approve', { request: m.meta.id, decision }));
-    if (r !== undefined) setLocal(decision === 'deny' ? 'denied' : 'allowed');
+    if (r !== undefined) setLocal(decision === 'deny' ? 'denied' : decision === 'always' ? 'always' : 'allowed');
   };
   const done = state !== 'pending';
+  const badge = DECISION[state] ?? DECISION.denied;
   return (
     <div className={cn('mx-auto w-full max-w-[88%] rounded-xl border px-3.5 py-2.5 text-[13px]', done ? 'bg-muted/50' : 'border-warning/50 bg-warning/10')}>
       <div className="flex items-start gap-2"><ShieldAlert className={cn('mt-0.5 size-4 shrink-0', done ? 'text-muted-foreground' : 'text-warning')} /><div className="min-w-0 flex-1 whitespace-pre-wrap break-words">{m.body}</div></div>
       <div className="chat-actions mt-2 flex flex-wrap items-center gap-2 pl-6">
-        {done ? <Badge variant={state === 'denied' ? 'destructive' : 'success'}>{state === 'denied' ? t('decision.denied') : t('decision.allowed')}</Badge> : (<>
+        {done ? <Badge variant={badge[1]}>{badge[0]}</Badge> : (<>
           <Button size="xs" className="px-2.5" onClick={() => answer('allow')}><Check />{t('chat.allow')}</Button>
           <Button size="xs" className="px-2.5" variant="outline" onClick={() => answer('always')}><CheckCheck />{t('chat.always')}</Button>
           <Button size="xs" className="px-2.5" variant="outline" onClick={() => answer('deny')}><X />{t('chat.deny')}</Button>

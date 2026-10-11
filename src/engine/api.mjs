@@ -501,7 +501,11 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const fn = Object.hasOwn(methods, method) ? methods[method] : null;
       if (!fn) fail(tr('msg.api.unknownAction', { method }));
       if (params === null || typeof params !== 'object' || Array.isArray(params)) fail(tr('msg.api.badParams'));
-      return fn(params);
+      const out = await fn(params);
+      // 3.1: an agent turned on or off, checked again, or an account added or removed: the list of available agents is
+      // updated at once (the next task may already be for it).
+      if (/^(config\.save|agents\.(status|check)|accounts\.(add|update|remove))$/.test(method)) { try { scheduler.refreshAvailable(true); } catch { /* next tick */ } }
+      return out;
     },
     // New chat lines since the last call, sent to the window as 'chat:new' (corner robot, robot notices) or 'notice' (toasts).
     notifyNewChat() {

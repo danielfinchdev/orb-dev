@@ -151,6 +151,8 @@ export default {
   'sys.board.titleAndDesc': 'title y description son obligatorios',
   'sys.board.descTooLong': 'description demasiado larga ({n} caracteres, máximo {max}): resúmela o indica un archivo',
   'sys.board.badAgent': 'agente no válido: {agent} (usa {list} o any)',
+  'sys.board.agentUnavailable': '{agent} no está disponible en este PC (no está instalado, está desactivado o no tiene cuenta). Agentes disponibles: {list}. Usa uno de ellos o any',
+  'sys.board.noAgentsAvailable': 'ninguno',
   'sys.board.modelNeedsAgent': 'para elegir un modelo, elige también el agente',
   'sys.board.accountNotOf': 'la cuenta {account} no es de {agent}',
   'sys.board.badLaunch': 'launch debe ser auto o manual',

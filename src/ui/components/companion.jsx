@@ -27,7 +27,8 @@ export function Companion({ name, base, hidden: hiddenHere }) {
   const timers = useRef({});
   useEffect(() => bridge.on('chat:new', (payload) => {
     const body = String(payload?.body ?? '');
-    const mood = moodOf(body);
+    // 3.1: something that waits for the user (a permission, an approval) sounds like a warning too, whatever its text.
+    const mood = ['task-approval', 'approval', 'attention'].includes(payload?.meta?.kind) ? 'worried' : moodOf(body);
     play(mood === 'happy' ? 'done' : mood === 'worried' ? 'uhoh' : payload.role === 'orb' ? 'talk' : null, body, { force: mood === 'worried' });
     setFlash(mood); clearTimeout(timers.current.flash); timers.current.flash = setTimeout(() => setFlash(null), 3500);
     if (hidden || noticeOf(payload)) return; // finished tasks and things that need you: the robot of notices.jsx says them

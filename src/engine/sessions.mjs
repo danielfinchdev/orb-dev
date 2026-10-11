@@ -23,6 +23,7 @@ export const ATTACH_DIR = '.orb-adjuntos';
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp)$/i;
 const ATTACH_MAX = 20 * 1024 * 1024;
 const IDLE_CLOSE_MS = 20 * 60_000; // a live process with nothing to do for this long is closed (it resumes on the next message)
+const WATCH_MS = Number(process.env.ORB_WATCH_MS) || 5000; // how often a running turn is checked (time limit, permissions)
 const now = () => new Date().toISOString();
 const parseJson = (v, fallback = null) => { try { return v ? JSON.parse(v) : fallback; } catch { return fallback; } };
 const parseRow = (row) => row && { ...row, archived: Boolean(row.archived), settled: Boolean(row.settled), context: parseJson(row.context) };
@@ -120,6 +121,8 @@ export class Sessions {
     this.lives = new Map();     // session id -> { live, key, lastUsed, logFile }
     this.approvals = new Map(); // `${session}:${request}` -> item id of its card
     this.onApproval = () => {}; // set by the engine: a notice in the chat when a task waits for a click
+    this.onApprovalDone = () => {}; // set by the engine: that notice shows how it ended (allowed, denied, nobody answered)
+    this.onApprovalExpired = () => {};
     this.onRate = () => {};     // set by the engine: the real usage each account reports (budget)
     // Sessions left "running" by a closed app: their process is gone. Marked "interrupted" so they can continue.
     board.run("UPDATE sessions SET status = 'interrupted' WHERE status = 'running'");
@@ -236,6 +239,7 @@ export class Sessions {
       const row = this.board.one('SELECT * FROM session_items WHERE id = ?', itemId);
       if (row) this.updateItem(itemId, { ...parseItem(row).body, status: 'expired' });
       this.approvals.delete(key);
+      try { this.onApprovalDone(this.get(sessionId), requestId, 'expired'); } catch { /* the chat line keeps its state */ }
       this.emit('approval:changed', { session: sessionId });
     }
     throw new Error(tr('msg.sessions.requestGone'));
@@ -315,8 +319,10 @@ export class Sessions {
       const key = `${id}:${ev.id}`; const itemId = this.approvals.get(key);
       if (itemId) {
         const row = this.board.one('SELECT * FROM session_items WHERE id = ?', itemId);
-        if (row) this.updateItem(itemId, { ...parseItem(row).body, status: ev.decision === 'deny' ? 'denied' : ev.decision === 'always' ? 'always' : 'allowed' });
+        const status = ev.decision === 'deny' ? 'denied' : ev.decision === 'always' ? 'always' : 'allowed';
+        if (row) this.updateItem(itemId, { ...parseItem(row).body, status });
         this.approvals.delete(key);
+        try { this.onApprovalDone(this.get(id), ev.id, status); } catch (error) { this.log(`aviso de permiso: ${error.message}`); }
       }
       this.emit('approval:changed', { session: id });
       return;
@@ -375,6 +381,40 @@ export class Sessions {
     const t = setTimeout(() => { if (this.running.get(id) === run) this.closeLive(id); }, 8000); t.unref?.();
     return true;
   }
+  // 3.1: a running turn, every few seconds.
+  // - Time limit on working time: the minutes spent waiting for the user's permission do not count.
+  // - A task's permission that nobody answers in approvalWaitMinutes (Ajustes, 10 by default; 0 = wait for ever) is
+  //   denied, the agent is told why and goes on another way: a task never sits waiting with nobody looking.
+  watchRun(id, run, { timeoutMs, taskId }) {
+    if (this.running.get(id) !== run) return;
+    const t = Date.now();
+    const pending = this.pendingApprovals(id);
+    if (pending.length && run.pausedAt == null) run.pausedAt = t;
+    if (!pending.length && run.pausedAt != null) { run.waitMs += t - run.pausedAt; run.pausedAt = null; }
+    const worked = t - run.startedAt - run.waitMs - (run.pausedAt != null ? t - run.pausedAt : 0);
+    if (timeoutMs && worked >= timeoutMs && !run.timedOut) {
+      run.timedOut = true;
+      this.addItem(id, 'error', 'text', tr('msg.sessions.timeout', { min: Math.round(timeoutMs / 60000) }));
+      this.stop(id);
+      return;
+    }
+    const waitMin = Number(ctx.config.approvalWaitMinutes ?? 10);
+    if (!taskId || !(waitMin > 0)) return;
+    for (const [key, itemId] of [...this.approvals.entries()].filter(([k]) => k.startsWith(`${id}:`))) {
+      const row = this.board.one('SELECT * FROM session_items WHERE id = ?', itemId); if (!row) continue;
+      const item = parseItem(row);
+      if (item.body?.status !== 'pending' || t - Date.parse(item.at) < waitMin * 60_000) continue;
+      const requestId = key.slice(id.length + 1);
+      if (!this.lives.get(id)?.live.respond(requestId, 'deny')) continue;
+      this.updateItem(itemId, { ...item.body, status: 'timeout' });
+      try { this.onApprovalDone(this.get(id), requestId, 'timeout'); } catch { /* the chat line keeps its state */ }
+      this.addItem(id, 'system', 'status', tr('msg.sessions.approvalTimedOut', { min: waitMin, title: item.body?.title ?? '' }));
+      const entry = this.lives.get(id);
+      if (entry?.live.caps.steer) entry.live.steer({ text: tr('msg.sessions.approvalTimedOutAgent', { min: waitMin, title: item.body?.title ?? '' }) });
+      try { this.onApprovalExpired(this.get(id), item); } catch (error) { this.log(`permiso caducado: ${error.message}`); }
+    }
+  }
+
   stopAll() { for (const id of this.running.keys()) this.stop(id); for (const id of [...this.lives.keys()]) this.closeLive(id); clearInterval(this.sweeper); }
 
   // One turn. options: images (absolute paths), prompt (what the agent receives, if it differs from what the user typed),
@@ -404,15 +444,17 @@ export class Sessions {
       onFinish?.({ code: -1, state: { final: '', text: '', isError: true }, stderr: error.message, logFile: null, stopped: false });
       return null;
     }
-    const run = { agent: s.agent, stopped: false, startedAt: Date.now(), lastAt: Date.now(), steps: 0, last: tr('sys.sessions.starting'), live: entry.live };
+    const run = { agent: s.agent, stopped: false, startedAt: Date.now(), lastAt: Date.now(), steps: 0, last: tr('sys.sessions.starting'), live: entry.live, waitMs: 0, pausedAt: null };
     this.running.set(id, run);
     this.update(id, { status: 'running', settled: false });
-    const timer = timeoutMs ? setTimeout(() => { this.addItem(id, 'error', 'text', tr('msg.sessions.timeout', { min: Math.round(timeoutMs / 60000) })); run.timedOut = true; this.stop(id); }, timeoutMs) : null;
-    timer?.unref?.();
+    // 3.1: the time limit counts working time only: while the turn waits for the user's permission the clock stops. A task
+    // whose permission nobody answers is not left hanging either (watchRun).
+    const timer = setInterval(() => { try { this.watchRun(id, run, { timeoutMs, taskId }); } catch (error) { this.log(`vigilancia ${id}: ${error.message}`); } }, WATCH_MS);
+    timer.unref?.();
     const resumed = Boolean(s.cli_session);
     let finished = false; // onFinish runs exactly once, also when the adapter itself fails
     entry.live.send({ text: body, images: nativeImages ? attached : [] }).then((result) => {
-      if (timer) clearTimeout(timer);
+      clearInterval(timer);
       entry.lastUsed = Date.now();
       if (this.running.get(id) === run) this.running.delete(id);
       const failed = result.isError && !run.stopped;
@@ -439,7 +481,7 @@ export class Sessions {
       // send() itself failed (the adapter threw instead of ending the turn): the turn is over all the same, and a task must
       // hear it, or it would stay "running" forever with its folder locked.
       this.log(`turno ${id}: ${error.stack}`);
-      if (timer) clearTimeout(timer);
+      clearInterval(timer);
       if (this.running.get(id) === run) this.running.delete(id);
       const final = `${a.label}: ${error.message}`;
       try { this.update(id, { status: 'error' }); this.addItem(id, 'error', 'text', final); } catch { /* the conversation may be gone */ }

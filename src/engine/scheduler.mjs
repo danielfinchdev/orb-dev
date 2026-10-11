@@ -15,7 +15,7 @@ const groupNote = (board, project) => {
 import { localeOf } from '../core/i18n.mjs';
 import { PRODUCT } from '../core/product.mjs';
 import { assistantName, userName, ofUser } from '../core/board.mjs';
-import { git, prepareWorkdir, takeCheckpoint, changedBetween, undoCheckpoint, snapshotCommit, ORB_GIT, REF_PREFIX } from '../core/workspace.mjs';
+import { git, prepareWorkdir, takeCheckpoint, changedBetween, undoCheckpoint, snapshotCommit, integrateInto, isGitRepo, repoRoot, ORB_GIT, REF_PREFIX } from '../core/workspace.mjs';
 import { rankAccounts, isLimitText, isBudgetText, startCooldown, pauseAccount, taskBudgetUsd } from '../core/budget.mjs';
 import { installed } from '../agents/index.mjs';
 import { runDue } from '../core/schedules.mjs';
@@ -57,6 +57,7 @@ export class Scheduler {
       this.finish(t.id, { code: 0, state: null, stderr: '', stopped: false, timedOut: false, limit: null });
     }
     try { this.pruneCheckpoints(); } catch (error) { this.log(`limpiar fotos: ${error.message}`); }
+    try { this.refreshAvailable(true); } catch (error) { this.log(`agentes disponibles: ${error.message}`); }
   }
 
   // Undo checkpoints do not pile up: those of tasks over for more than `days` go (the copy of the folder, or the hidden
@@ -103,34 +104,76 @@ export class Scheduler {
   // user is told once, with what it was doing, so they can wait, look at its conversation or cancel it.
   watchQuiet(minutes = 10) {
     for (const t of this.live()) {
-      if (t.quietMin < minutes || this.board.setting(`quiet_notice:${t.id}`) === String(t.lastAt)) continue;
+      // Waiting for a permission has its own notice and its own time limit (sessions.watchRun).
+      if (t.waiting || t.quietMin < minutes || this.board.setting(`quiet_notice:${t.id}`) === String(t.lastAt)) continue;
       this.board.setting(`quiet_notice:${t.id}`, String(t.lastAt));
       this.board.event(t.id, 'orb', 'task.quiet', `${t.quietMin} min sin actividad; lo último: ${t.last}`);
       this.board.addChat('system', tr('msg.scheduler.quiet', { id: t.id, title: oneLine(t.title), min: t.quietMin, agent: label(t.agent), last: t.last }));
     }
   }
 
+  // 3.1: the agents this PC can run now (turned on, installed, with an account), kept in the board for every process: the
+  // MCP of each agent, the app and the assistant's instructions offer only these, and a task for any other is refused.
+  refreshAvailable(force = false) {
+    if (!force && Date.now() - (this.availableAt ?? 0) < 10_000) return;
+    this.availableAt = Date.now();
+    const list = enabledAgents().filter((a) => installed(a) && usableAccounts(a).length);
+    if (JSON.stringify(list) !== this.board.setting('agents_available')) this.board.settingJson('agents_available', list);
+  }
+
+  // 3.1: an agent that closed its task itself (orb_update_task done/blocked/failed) but whose program does not end (Cursor's
+  // CLI sometimes stays open after its answer): after a short quiet grace its turn is stopped, so the task's slot, its
+  // folder and the tasks that depend on it are freed instead of waiting for the time limit.
+  releaseClosed(graceMs = Number(process.env.ORB_RELEASE_MS) || 90_000) {
+    for (const [id, r] of this.running) {
+      const task = this.board.task(id);
+      if (!task || task.status === 'running' || r.released) continue;
+      const now = this.sessions.live(r.sessionId);
+      if (!now || Date.now() - now.lastAt < graceMs) continue;
+      r.released = true;
+      this.board.event(id, 'orb', 'task.released', 'el agente cerró la tarea pero su programa seguía abierto: Orb lo cierra');
+      this.sessions.stop(r.sessionId);
+    }
+  }
+
   // Called every few seconds and after every change of the board.
   tick() {
     const { board } = this;
+    try { this.refreshAvailable(); } catch (error) { this.log(`agentes disponibles: ${error.message}`); }
     try { this.watchQuiet(); } catch (error) { this.log(`vigilancia: ${error.message}`); }
+    try { this.releaseClosed(); } catch (error) { this.log(`liberar tareas cerradas: ${error.message}`); }
     if (!ctx.config.autoRun || board.setting('paused') === '1') return;
     try { this.resumeLimited(); } catch (error) { this.log(`continuar limitadas: ${error.message}`); }
     try { runDue(board, this.log); } catch (error) { this.log(`programadas: ${error.message}`); }
+    try { this.integratePending(); } catch (error) { this.log(`unir copias: ${error.stack}`); }
     board.revalidateQueued(); board.warnBlockedByDeps();
     const enabled = enabledAgents();
     const order = [...new Set([...(ctx.config.agentOrder ?? []), ...enabled])];
     for (const task of board.readyTasks('auto')) {
-      if (this.running.size >= ctx.config.maxParallel) return;
       if (this.running.has(task.id)) continue;
+      // 3.1: a subtask whose parent is running is what that parent waits for (orb_wait_tasks): it does not wait for a free
+      // slot, or with «one at a time» (or one per account) both would wait until the wait runs out.
+      const forParent = Boolean(task.parent_id && this.running.has(task.parent_id));
+      if (this.running.size >= (ctx.config.oneAtATime ? 1 : ctx.config.maxParallel) && !forParent) continue;
       // Only agents whose program is on this PC take work (an "any" task never goes to one that is not installed).
       const types = (task.agent === 'any' ? order.filter((a) => enabled.includes(a)) : [task.agent].filter((a) => enabled.includes(a))).filter((a) => installed(a));
       // Every enabled account of those agents; a task pinned to an account only goes there.
       const candidates = types.flatMap((a) => usableAccounts(a)).filter((acc) => !task.account || acc.id === task.account);
+      // 3.1: a task for an agent this PC cannot run (uninstalled or turned off after it was created) does not wait for
+      // ever: it goes to any available agent. Not a sensitive one: its approval was for that agent, so the user decides.
+      const available = board.availableAgents();
+      if (!candidates.length && task.agent !== 'any' && !task.account && !task.sensitivity.length && available?.length && !available.includes(task.agent)) {
+        try {
+          board.reassign(task.id, { agent: 'any' }, 'orb');
+          board.event(task.id, 'orb', 'note', `${task.agent} no está disponible en este PC: pasa a cualquier agente disponible`);
+          board.notice(tr('msg.scheduler.reassignedUnavailable', { id: task.id, title: oneLine(task.title), name: label(task.agent) }), 'warning');
+        } catch (error) { this.log(`reasignar #${task.id}: ${error.message}`); }
+        continue;
+      }
       if (!candidates.length) { this.notice(task, task.account ? tr('sys.scheduler.accountOff', { account: accountLabel(task.account) }) : task.agent !== 'any' && !installed(task.agent) ? tr('sys.scheduler.notInstalled', { name: label(task.agent) }) : task.agent === 'any' ? tr('sys.scheduler.noAgents') : tr('sys.scheduler.noAccounts', { name: label(task.agent) })); continue; }
       const ranked = rankAccounts(board, candidates, task.model);
       const forced = board.setting(`budget_ok:${task.id}`) === '1'; // "Lanzar igualmente" in the app
-      const pick = ranked.find((r) => (forced || r.check.ok) && this.busyWith(r.account) < ctx.config.perAgent);
+      const pick = ranked.find((r) => (forced || r.check.ok) && (forParent || this.busyWith(r.account) < ctx.config.perAgent));
       if (pick && forced) board.event(task.id, 'usuario', 'budget.override', 'lanzada aunque superaba el límite de uso');
       if (!pick) { if (ranked.every((r) => !r.check.ok)) this.notice(task, ranked.map((r) => r.check.reason).join('; ')); continue; }
       // In its folder only one task that writes at a time (read-only tasks may run alongside); isolated copies run in parallel.
@@ -140,8 +183,17 @@ export class Scheduler {
       // A subtask (orb_delegate) does not wait for its own parent: the parent is waiting for it (orb_wait_tasks), so
       // holding the folder for the parent would make both wait until the wait runs out.
       const others = [...this.running.keys()].map((id) => board.task(id)).filter((t) => inFolder(t) && t.id !== task.parent_id);
-      if (task.mode === 'carpeta' && !task.branch && (others.some((t) => !t.readonly) || (!task.readonly && others.length))) continue;
-      this.launch(task, pick.agent, pick.account);
+      // A writer waiting to be joined into the folder (integratePending) holds it too.
+      const joining = this.integrating(project);
+      let isolate = false;
+      if (task.mode === 'carpeta' && !task.branch && (joining || others.some((t) => !t.readonly) || (!task.readonly && others.length))) {
+        // 3.1: work at the same time. A writing task that finds the folder busy works in its own copy (git worktree) and
+        // Orb joins its work into the folder when it ends. «Una tarea cada vez», a read-only task or a folder without git:
+        // it waits its turn, as before.
+        if (ctx.config.oneAtATime || task.readonly || !others.some((t) => !t.readonly) || !isGitRepo(project.path)) continue;
+        isolate = true;
+      }
+      this.launch(task, pick.agent, pick.account, { isolate });
     }
   }
 
@@ -254,7 +306,7 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
     return out;
   }
 
-  launch(task, agent, accountId = agent) {
+  launch(task, agent, accountId = agent, { isolate = false } = {}) {
     const acc = findAccount(accountId);
     const { board } = this;
     const fresh = board.task(task.id);
@@ -276,14 +328,22 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
     fs.mkdirSync(runDir, { recursive: true });
     let workspace;
     try {
-      if (task.mode === 'carpeta' && !task.branch) workspace = this.folderWorkspace(task, project);
+      if (task.mode === 'carpeta' && !task.branch && !isolate) workspace = this.folderWorkspace(task, project);
       else {
         const deps = task.depends_on.map((id) => board.task(id)).filter((d) => d?.branch).map((d) => ({ id: d.id, branch: d.branch, workdir: d.workdir }));
         workspace = prepareWorkdir(task, project, ctx.paths.worktrees, deps);
+        // 3.1: a "carpeta" task working in a copy because the folder was busy: where its copy started, so its work can be
+        // joined into the folder when it ends (integratePending). Kept from its first launch (retries reuse the copy).
+        if (isolate && workspace.branch && !board.settingJson(`isolated:${task.id}`)) {
+          board.settingJson(`isolated:${task.id}`, { base: git(workspace.workdir, 'rev-parse', 'HEAD').stdout.trim(), at: new Date().toISOString() });
+          board.event(task.id, 'orb', 'workspace', `trabaja a la vez que otras tareas, en su propia copia (${workspace.branch}); al terminar, ${assistantName()} une su trabajo a la carpeta`);
+        }
       }
     } catch (error) { board.patch(task.id, { status: 'blocked', result: error.message }, 'orb', 'task.blocked'); return; }
     for (const note of workspace.notes ?? []) board.event(task.id, 'orb', 'workspace', note);
-    if (workspace.branch) { const s = mainStatus(project.path); if (s != null) this.mainSnapshot.set(task.id, s); }
+    // An isolated task by choice is warned if the main folder changed meanwhile; one isolated to work alongside others
+    // expects it (its work is joined with theirs).
+    if (workspace.branch && !board.settingJson(`isolated:${task.id}`)) { const s = mainStatus(project.path); if (s != null) this.mainSnapshot.set(task.id, s); }
     const followup = board.settingJson(`followup:${task.id}`);
     // Pictures of a follow-up that are gone (moved, or the phone's uploads purged after 7 days) are left out, instead of
     // blocking the task on every retry.
@@ -397,8 +457,10 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
     const output = `${state?.final ?? ''}\n${stderr ?? ''}`;
     if (task.status === 'running') {
       const summary = (state?.final || state?.text || stderr || '').trim();
-      // A stopped turn is never "done" (Codex and the ACP agents report an interrupted turn without error).
-      const status = held ? 'blocked' : timedOut || stopped ? 'failed' : code === 0 && !state?.isError ? 'done' : 'failed';
+      // A stopped turn is never "done" (Codex and the ACP agents report an interrupted turn without error). 3.1: one that
+      // ran out of time is not "failed" either: its work stays in the folder and it waits for review (the assistant looks
+      // at it like any blocked task).
+      const status = held || timedOut ? 'blocked' : stopped ? 'failed' : code === 0 && !state?.isError ? 'done' : 'failed';
       task = board.patch(taskId, { status, result: redactSecrets(task.result ?? (timedOut ? tr('msg.scheduler.timedOut', { min: ctx.config.timeoutMinutes, summary }) : summary)).slice(0, 4000), pid: null }, 'orb', 'task.finished');
       if (limit && !isBudgetText(output) && task.status !== 'done') {
         // The account hit its usage limit (reported by the agent itself): the task waits and continues at the reset.
@@ -424,10 +486,19 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
         if (explained) { task = explained; problem = true; }
       }
     } else if (task.pid) {
-      task = board.patch(taskId, { pid: null }, 'orb', 'task.process_exit');
+      // 3.1: a task cancelled while it worked keeps what its agent said it did (its files are still in the folder).
+      const said = !task.result && (state?.final || state?.text || '').trim();
+      task = board.patch(taskId, { pid: null, ...(said ? { result: redactSecrets(said).slice(0, 4000) } : {}) }, 'orb', 'task.process_exit');
     }
     if (held && !['blocked', 'cancelled'].includes(task.status)) task = board.patch(taskId, { status: 'blocked' }, 'orb', 'task.held');
     if (held) task = board.patch(taskId, { result: `${held}. ${task.result ?? ''}`.slice(0, 4000) }, 'orb', 'task.held');
+    // 3.1: a task that worked in its own copy to run alongside others: its work goes into the folder now (or as soon as no
+    // other task is writing there). Until then the tasks that depend on it wait (Board.depsDone).
+    const isolated = board.settingJson(`isolated:${task.id}`);
+    if (task.status === 'done' && isolated?.base && task.branch) {
+      board.settingJson(`integrate:${task.id}`, { base: isolated.base, at: new Date().toISOString() });
+      try { this.integratePending(); task = board.task(task.id); } catch (error) { this.log(`unir #${task.id}: ${error.stack}`); }
+    }
     this.log(`tarea #${taskId} terminó (código ${code}, estado ${task.status}${stopped ? ', detenida' : ''})`);
     if (task.status === 'queued' || task.status === 'limited') return; // handed to another agent, or waiting for the reset (already told)
     const icon = { done: '✅', failed: '❌', blocked: '⛔', cancelled: '🚫' }[task.status] ?? 'ℹ️';
@@ -462,6 +533,86 @@ Resuélvelo si puedes (p. ej. pasar archivos con orb_give_files y volver a poner
     }
   }
 
+  // ---- 3.1: work done alongside others, joined into the project folder
+  // Whether a task's work is waiting to be joined into this project's folder (it then holds the folder like a writer).
+  integrating(project) {
+    // Not one a task is joining by hand (info.by): that task is the writer.
+    return this.pendingJoins().some(({ task, info }) => task?.project === project.name && !task.pid && !info?.by);
+  }
+  pendingJoins() {
+    return this.board.all("SELECT key, value FROM settings WHERE key LIKE 'integrate:%' AND value <> ''").map((row) => {
+      let info = null; try { info = JSON.parse(row.value); } catch { /* broken: dropped below */ }
+      const id = Number(row.key.slice('integrate:'.length));
+      return { id, info, task: this.board.task(id) };
+    });
+  }
+  // Joins every finished copy whose folder has no task writing in it now. Clean: the files land in the folder, with the
+  // same undo as a "carpeta" task, and the copy and its branch go. Conflict: nothing is touched; a task joins it by hand.
+  integratePending() {
+    const { board } = this;
+    for (const { id, info, task } of this.pendingJoins()) {
+      if (!task || !info || task.status === 'cancelled') { board.settingJson(`integrate:${id}`, null); continue; }
+      if (info.by) { this.joinedBy(task, info); continue; }
+      if (task.status !== 'done' || task.pid || this.running.has(id)) continue;
+      const project = board.project(task.project); if (!project) continue;
+      const writing = [...this.running.keys()].map((rid) => board.task(rid)).some((t) => t && !t.readonly && !t.branch && t.workdir && path.resolve(t.workdir) === path.resolve(project.path));
+      if (writing) continue;
+      this.integrate(task, project, info);
+    }
+  }
+  integrate(task, project, info) {
+    const { board } = this;
+    const repo = repoRoot(project.path);
+    const tip = task.branch ? git(repo, 'rev-parse', '--verify', '--quiet', task.branch).stdout.trim() : '';
+    if (!tip) { board.settingJson(`integrate:${task.id}`, null); board.event(task.id, 'orb', 'integrate.skipped', 'no hay rama que unir'); return; }
+    if (tip === info.base) { this.dropCopy(task, project); board.settingJson(`integrate:${task.id}`, null); board.event(task.id, 'orb', 'files.changed', 'ningún archivo'); return; }
+    const out = integrateInto(repo, { base: info.base, tip });
+    if (out.ok) {
+      // Undo works as for a task that wrote in the folder: back to the folder as it was right before joining.
+      git(repo, 'update-ref', `${REF_PREFIX}/t${task.id}-antes-de-unir`, out.before);
+      git(repo, 'update-ref', `${REF_PREFIX}/t${task.id}-despues`, out.after);
+      board.settingJson(`checkpoint:${task.id}`, { before: { kind: 'git', repo, ref: `${REF_PREFIX}/t${task.id}-antes-de-unir`, commit: out.before }, after: { kind: 'git', repo, commit: out.after }, head: git(repo, 'rev-parse', 'HEAD').stdout.trim(), remotes: null });
+      board.event(task.id, 'orb', 'files.changed', out.changed.length ? out.changed.slice(0, 60).map((c) => `${c.status} ${c.path}`).join(', ') + (out.changed.length > 60 ? ` … y ${out.changed.length - 60} más` : '') : 'ningún archivo');
+      this.dropCopy(task, project);
+      board.settingJson(`integrate:${task.id}`, null);
+      board.event(task.id, 'orb', 'task.integrated', `unida a la carpeta (${out.changed.length} archivo(s))`);
+      board.notice(tr('msg.scheduler.joined', { id: task.id, title: oneLine(task.title), n: out.changed.length, name: project.name }), 'success');
+      return;
+    }
+    if (!out.conflicts?.length) {
+      // git could not do it (not a conflict): said once; it is tried again on the next ticks.
+      if (board.setting(`integrate_error:${task.id}`) !== out.error) { board.setting(`integrate_error:${task.id}`, out.error); board.event(task.id, 'orb', 'integrate.error', out.error); this.log(`unir #${task.id}: ${out.error}`); }
+      return;
+    }
+    // Both changed the same lines: a task (the same agent when it can) joins it by hand, in the folder, in its turn.
+    const agent = task.assigned_to && board.availableAgents()?.includes(task.assigned_to) ? task.assigned_to : 'any';
+    const join = board.createTask({ project: project.name, agent, mode: 'carpeta', level: 'normal', internal: true,
+      title: tr('msg.scheduler.joinTitle', { id: task.id, title: oneLine(task.title, 60) }),
+      description: `La tarea #${task.id} «${oneLine(task.title)}» trabajó a la vez que otras, en una copia aislada (rama ${task.branch}, carpeta ${task.workdir}). Al unir su trabajo a la carpeta del proyecto hay conflicto en: ${out.conflicts.slice(0, 30).join(', ')}.
+Lo que hizo esa tarea: ${oneLine(task.result ?? 'sin resumen', 1500)}
+Une su trabajo a mano en la carpeta del proyecto (${project.path}): mira qué cambió con \`git diff ${info.base} ${task.branch}\` (o lee los archivos en ${task.workdir}) y aplica esos cambios encima de lo que ya hay en la carpeta, conservando también lo que hicieron las otras tareas. Comprueba que el proyecto sigue funcionando (compila o arranca).
+No hagas commit, merge, rebase ni cambies de rama: deja los cambios en los archivos.` }, 'orb');
+    board.settingJson(`integrate:${task.id}`, { ...info, by: join.id });
+    board.event(task.id, 'orb', 'integrate.conflict', `conflicto en ${out.conflicts.slice(0, 20).join(', ')}: lo une la tarea #${join.id}`);
+    board.notice(tr('msg.scheduler.joinConflict', { id: task.id, join: join.id, list: oneLine(out.conflicts.slice(0, 5).join(', '), 200) }), 'warning');
+  }
+  // The task that joins a conflicting copy by hand: once it is done, the copy goes and the dependents may start.
+  joinedBy(task, info) {
+    const by = this.board.task(info.by);
+    if (!by || by.status !== 'done' || by.pid) return;
+    const project = this.board.project(task.project);
+    if (project) this.dropCopy(task, project);
+    this.board.settingJson(`integrate:${task.id}`, null);
+    this.board.event(task.id, 'orb', 'task.integrated', `unida a la carpeta por la tarea #${by.id}`);
+  }
+  // The copy (worktree) and its branch, once their work is in the folder. Only Orb's own copies under .orb\copias\aisladas.
+  dropCopy(task, project) {
+    const inside = task.workdir && path.resolve(task.workdir).toLowerCase().startsWith(path.resolve(ctx.paths.worktrees).toLowerCase() + path.sep);
+    if (inside && fs.existsSync(task.workdir)) { const r = git(project.path, 'worktree', 'remove', '--force', task.workdir); if (r.status !== 0) this.log(`quitar copia #${task.id}: ${r.stderr.trim()}`); }
+    if (task.branch) git(project.path, 'branch', '-D', task.branch);
+    this.board.patch(task.id, { branch: null, workdir: project.path }, 'orb', 'task.copy_removed');
+  }
+
   // Returns the task updated with a clear reason, or null when the failure is not one we recognise.
   explainFailed(task, output) {
     const { board } = this;
@@ -474,7 +625,7 @@ Resuélvelo si puedes (p. ej. pasar archivos con orb_give_files y volver a poner
     if (why.kind === 'plan') pauseAccount(board, acc, 24 * 3_600_000, tr('msg.budget.noPlan'));
     if (why.kind === 'login') pauseAccount(board, acc, 10 * 60_000, tr('msg.budget.noLogin'));
     const others = task.agent === 'any' && ['plan', 'login', 'missing'].includes(why.kind) && board.setting(`auto_retry:${task.id}`) !== '1'
-      && enabledAgents().filter((a) => a !== task.assigned_to).some((a) => usableAccounts(a).length);
+      && enabledAgents().filter((a) => a !== task.assigned_to).some((a) => installed(a) && usableAccounts(a).length);
     let out = board.patch(task.id, { status: 'blocked', result: `${why.reason[0].toUpperCase()}${why.reason.slice(1)}. ${why.advice}
 
 ${task.result ?? ''}`.trim().slice(0, 4000) }, 'orb', 'task.problem');
