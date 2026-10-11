@@ -46,7 +46,7 @@ async function newTask() {
   return form(t('tasks.new'), {
     wide: true,
     description: t('tasks.new.desc'),
-    initial: { project: app.activeProject?.name ?? projects[0].name, title: '', description: '', agent: 'any', mode: 'carpeta', readonly: false },
+    initial: { project: app.activeProject?.name ?? projects[0].name, title: '', description: '', agent: 'any', mode: 'carpeta', readonly: false, level: 'normal' },
     body: (v, set) => (<>
       <div className="grid grid-cols-2 gap-3">
         <Field label={t('tasks.project')}><Select className="w-full" value={v.project} onValueChange={(project) => set({ project })} options={projects.map((p) => ({ value: p.name, label: p.name }))} /></Field>
@@ -54,7 +54,9 @@ async function newTask() {
       </div>
       <Field label={t('tasks.titleField')}><Input autoFocus value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={200} placeholder={t('tasks.new.titlePh')} /></Field>
       <Field label={t('tasks.brief')} hint={t('tasks.new.briefHint')}><Textarea rows={6} value={v.description} onChange={(e) => set({ description: e.target.value })} /></Field>
-      <div className="grid grid-cols-2 items-end gap-3">
+      <div className="grid grid-cols-3 items-end gap-3">
+        {/* 2.7: how hard it is: Orb chooses the model and reasoning with it (Ajustes › Tareas y usos). */}
+        <Field label={t('tasks.new.level')} hint={app.config.budget?.autoModel !== false ? t('tasks.new.levelHint') : null}><Select className="w-full" value={v.level} onValueChange={(level) => set({ level })} options={['simple', 'normal', 'complejo'].map((value) => ({ value, label: t(`tasks.level.${value}`) }))} data-testid="new-task-level" /></Field>
         <Field label={t('tasks.new.where')}><Select className="w-full" value={v.mode} onValueChange={(mode) => set({ mode })} options={options(MODE)} /></Field>
         <label className="flex h-9 cursor-pointer items-center gap-2 text-sm"><Checkbox checked={v.readonly} onCheckedChange={(c) => set({ readonly: c === true })} />{t('tasks.new.readonly')}</label>
       </div>
@@ -74,14 +76,23 @@ function TaskDetail({ id, live }) {
   const A = (props) => <Button size="sm" variant="outline" {...props} />;
   const reassign = async () => {
     const agents = (await call('agents.status')).filter((a) => a.enabled);
+    // 2.7: the model is chosen from the agent's real ones (with what each is for), or left to Orb: never typed.
+    const catalog = await call('models.catalog').catch(() => []);
+    const AUTO = '__auto';
+    const modelOptions = (agent) => {
+      const list = (catalog.find((a) => a.id === agent)?.models ?? []).filter((m) => m.id);
+      const opts = [{ value: AUTO, label: tr('tasks.reassign.auto') }, ...list.map((m) => ({ value: m.id, label: m.tier ? `${m.label} · ${tr(`tasks.tier.${m.tier}`)}` : m.label }))];
+      if (t.model && !opts.some((o) => o.value === t.model)) opts.push({ value: t.model, label: t.model });
+      return opts;
+    };
     await form(tr('tasks.reassign.title', { id: t.id }), {
-      initial: { agent: t.agent, model: t.model ?? '', reasoning: t.reasoning },
+      initial: { agent: t.agent, model: t.model ?? AUTO, reasoning: t.reasoning },
       body: (v, set) => (<>
-        <Field label={tr('tasks.agent')}><Select className="w-full" value={v.agent} onValueChange={(agent) => set({ agent })} options={[{ value: 'any', label: tr('tasks.reassign.any') }, ...agents.map((a) => ({ value: a.id, label: a.label }))]} /></Field>
-        <Field label={tr('tasks.reassign.model')} hint={tr('tasks.reassign.modelHint')}><Input value={v.model} onChange={(e) => set({ model: e.target.value })} maxLength={80} /></Field>
+        <Field label={tr('tasks.agent')}><Select className="w-full" value={v.agent} onValueChange={(agent) => set({ agent, model: AUTO })} options={[{ value: 'any', label: tr('tasks.reassign.any') }, ...agents.map((a) => ({ value: a.id, label: a.label }))]} /></Field>
+        <Field label={tr('tasks.reassign.model')} hint={tr('tasks.reassign.modelHint')}><Select className="w-full" value={v.agent === 'any' ? AUTO : v.model} disabled={v.agent === 'any'} onValueChange={(model) => set({ model })} options={modelOptions(v.agent)} data-testid="reassign-model" /></Field>
         <Field label={tr('tasks.reassign.reasoning')}><Select className="w-full" value={v.reasoning} onValueChange={(reasoning) => set({ reasoning })} options={options(REASONING)} /></Field>
       </>),
-      ok: tr('tasks.reassign.ok'), onOk: (v) => call('tasks.reassign', { id: t.id, agent: v.agent, model: v.model.trim() || null, reasoning: v.reasoning })
+      ok: tr('tasks.reassign.ok'), onOk: (v) => call('tasks.reassign', { id: t.id, agent: v.agent, model: v.agent === 'any' || v.model === AUTO ? null : v.model, reasoning: v.reasoning })
     });
   };
   const createPr = async () => {

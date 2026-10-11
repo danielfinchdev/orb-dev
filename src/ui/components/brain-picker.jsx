@@ -59,7 +59,11 @@ function BrainGroups({ catalog, value, onChange }) {
     return (
       <DropdownMenuItem key={key} onSelect={() => onChange({ agent: a.id, model: m.id, account: a.accounts[0]?.id ?? a.id })} data-testid={`brain-${a.id}-${m.id || 'default'}${withAgent ? '-rec' : ''}`}>
         {withAgent ? <AgentIcon agent={a.id} className="ml-5 size-3.5" /> : null}
-        <span className={cn('min-w-0 flex-1 truncate', !withAgent && 'pl-5')}>{withAgent ? `${a.label} · ` : ''}{labelOf(a, m, t)}</span>
+        {/* 2.7: each model says what it is for (fast, balanced, most capable), so no one has to know the names. */}
+        <span className={cn('grid min-w-0 flex-1', !withAgent && 'pl-5')}>
+          <span className="truncate">{withAgent ? `${a.label} · ` : ''}{labelOf(a, m, t)}</span>
+          {m.tier ? <span className="text-muted-foreground truncate text-[11px] leading-tight">{t(`brain.tier.${m.tier}`)}</span> : null}
+        </span>
         {m.heavy ? <Flame className="text-warning! size-3.5" aria-label={t('brain.heavy')} /> : null}
         {on ? <Check className="text-primary!" /> : null}
       </DropdownMenuItem>

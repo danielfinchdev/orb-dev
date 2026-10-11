@@ -4,7 +4,9 @@ import './app.css';
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Toaster, toast } from 'sonner';
-import { Menu, Smartphone } from 'lucide-react';
+import { Menu, Smartphone, MessagesSquare } from 'lucide-react';
+import { PageHeader } from '@/components/page.jsx';
+import { MobileTabs, MoreView } from '@/components/mobile-tabs.jsx';
 import { TooltipProvider } from '@/components/ui/overlay.jsx';
 import { DialogHost } from '@/components/dialogs.jsx';
 import { Sidebar } from '@/components/sidebar.jsx';
@@ -32,9 +34,31 @@ import { SchedulesView } from '@/views/schedules.jsx';
 import { ExpertView } from '@/views/expert.jsx';
 import { NewChatView } from '@/views/new-chat.jsx';
 import { TutorialsView } from '@/views/tutorials.jsx';
+import { WhiteboardView } from '@/views/whiteboard.jsx';
+import { MonitorView } from '@/views/monitor.jsx';
 
 const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
-const VIEWS = { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: LogsView, activity: ActivityView, expert: ExpertView, schedules: SchedulesView, phone: PhoneView, new: NewChatView, tutorials: TutorialsView };
+// 2.7, the phone: the conversations («Chats») and «Más» are screens of their own; Agentes and Modo experto are PC only.
+function ChatsView() { const t = useT(); return <><PageHeader icon={<MessagesSquare className="text-primary size-5" />} title={t('nav.chats')} /><Sidebar page /></>; }
+const VIEWS = bridge.mobile
+  ? { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: LogsView, activity: ActivityView, schedules: SchedulesView, phone: PhoneView, new: NewChatView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
+  : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: LogsView, activity: ActivityView, expert: ExpertView, schedules: SchedulesView, phone: PhoneView, new: NewChatView, tutorials: TutorialsView, board: WhiteboardView, monitor: MonitorView };
+
+// The phone's frame: the screen (each with its own header) and the tabs at the bottom.
+function MobileShell() {
+  const route = useStore((s) => s.route);
+  const View = VIEWS[route.view] ?? ChatView;
+  return (
+    <div className="flex h-full flex-col">
+      <main className="theme-scene flex min-h-0 min-w-0 flex-1 flex-col">
+        <Scene />
+        <View key={`${route.view}:${route.id ?? ''}:${route.project ?? ''}`} route={route} />
+      </main>
+      <MobileTabs />
+      <Notices />
+    </div>
+  );
+}
 
 function Shell() {
   const t = useT();
@@ -54,6 +78,7 @@ function Shell() {
     const id = setTimeout(startTour, 900);
     return () => clearTimeout(id);
   }, []);
+  if (bridge.mobile) return <MobileShell />;
   return (
     <div className="flex h-full">
       {/* 2.6: folded away (its button next to day / night), the screens take the whole width. */}
@@ -120,6 +145,8 @@ function Root() {
     return bridge.on('*', (event, payload) => {
       if (event === 'board:changed' || event === 'session:update' || event === 'session:removed' || event === 'config:changed' || event === 'approval:changed') refreshSoon();
       if (event === 'chat:state') setState((s) => ({ app: { ...s.app, chat: payload } }));
+      // 2.7: what only informs (working folder, brain in use, schedule created…) passes by as a notification.
+      if (event === 'notice' && payload?.body) (toast[payload.tone] ?? toast.info)(payload.body);
       if (event === 'ui:navigate') go(payload);
       if (event === 'engine:stopped') toast.error(tNow('app.engineStopped'));
       if (event === 'engine:restarted') { toast.warning(tNow('app.engineRestarted')); refreshSoon(); }
@@ -143,6 +170,17 @@ function Root() {
   return <Shell />;
 }
 
+// 2.7: the notifications follow the app's day / night (not the system's): more of them now that the notices pass by here.
+function ThemedToaster() {
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
+  useEffect(() => {
+    const obs = new MutationObserver(() => setDark(document.documentElement.classList.contains('dark')));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => obs.disconnect();
+  }, []);
+  return <Toaster position="top-center" theme={dark ? 'dark' : 'light'} richColors closeButton toastOptions={{ className: 'font-sans' }} />;
+}
+
 applyTheme();
 if (window.orb?.windowControls) document.documentElement.classList.add('has-win-controls');
 // The animated backdrop pauses while the window is in the background or hidden (themes.css: html.window-idle).
@@ -154,7 +192,7 @@ createRoot(document.getElementById('root')).render(
       <Root />
       <DialogHost />
       <WindowControls />
-      <Toaster position="top-center" richColors closeButton toastOptions={{ className: 'font-sans' }} />
+      <ThemedToaster />
     </TooltipProvider>
   </StrictMode>
 );

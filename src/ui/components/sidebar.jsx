@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Smartphone, MessageSquarePlus, ListTodo, FolderKanban, Bot, BookOpen, History, Settings, Sparkles, SquareTerminal, ChevronRight, Plus, FolderPlus, ShieldAlert, Hourglass, CirclePause, Check, CalendarClock, CircleCheck, Undo2, GraduationCap } from 'lucide-react';
+import { Smartphone, MessageSquarePlus, ListTodo, FolderKanban, Bot, BookOpen, History, Settings, Sparkles, SquareTerminal, ChevronRight, Plus, FolderPlus, ShieldAlert, Hourglass, CirclePause, Check, CalendarClock, CircleCheck, Undo2, GraduationCap, PenTool, HeartPulse, Layers } from 'lucide-react';
 import { Robot } from './robot.jsx';
 import { ThemeToggle, SidebarToggle } from './theme-toggle.jsx';
 import { Button } from './ui/button.jsx';
@@ -22,7 +22,7 @@ function Wordmark() {
   );
 }
 
-function NavItem({ icon: Icon, iconEl, label, active, onClick, children, testid }) {
+export function NavItem({ icon: Icon, iconEl, label, active, onClick, children, testid }) {
   return (
     <button data-testid={testid} onClick={onClick} className={cn('group flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[14px] transition-colors', active ? 'bg-accent text-accent-foreground' : 'text-foreground/80 hover:bg-accent/60 hover:text-foreground')}>
       {iconEl ?? (Icon ? <Icon className={cn('size-4 shrink-0', active ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')} /> : null)}
@@ -123,6 +123,7 @@ function ProjectFolder({ project, items, open, onOpen, route, active }) {
         </CollapsibleTrigger>
         <button className={cn('flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 py-1.5 pr-2 text-left text-[13.5px] select-none', active ? 'text-foreground font-medium' : 'text-foreground/80')} onClick={pick} onDoubleClick={() => onOpen(!open)} data-testid={`folder-${project.name}`}>
           <span className="min-w-0 flex-1 truncate">{project.name}</span>
+          {project.grupo ? <BubbleTip title={t('comp.sidebar.group', { name: project.grupo })}><Layers className="text-muted-foreground size-3 shrink-0" aria-label={t('comp.sidebar.group', { name: project.grupo })} /></BubbleTip> : null}
           {waiting ? <span className="bg-warning size-1.5 shrink-0 rounded-full" role="img" aria-label={t('comp.sidebar.waitsApproval')} /> : running ? <span className="bg-info size-1.5 shrink-0 animate-pulse rounded-full" role="img" aria-label={t('inbox.working')} /> : null}
         </button>
       </div>
@@ -137,7 +138,7 @@ function ProjectFolder({ project, items, open, onOpen, route, active }) {
   );
 }
 
-export function Sidebar({ mood }) {
+export function Sidebar({ mood, page = false }) {
   const t = useT();
   const app = useStore((s) => s.app);
   const route = useStore((s) => s.route);
@@ -150,7 +151,8 @@ export function Sidebar({ mood }) {
   const projects = useStore((s) => s.projects);
   const [openFolders, setOpenFolder] = useOpenFolders();
   const { width, setWidth, startResize } = useSidebarWidth();
-  const chats = sessions.filter((s) => s.kind === 'chat').slice(0, 40);
+  // Opti Bot's conversation has its own page (Monitoreo del equipo): not among the chats.
+  const chats = sessions.filter((s) => s.kind === 'chat' && s.id !== app.optiSession).slice(0, 40);
   const is = (view) => route.view === view;
   // Tasks and conversations grouped by project folder; conversations without a project go to «Sin carpeta».
   const asTask = (t) => ({ key: `t${t.id}`, at: t.updated_at, status: t.status, title: t.title, hint: `#${t.id} · ${STATUS[t.status]?.[0] ?? t.status}`, icon: <span className={cn('size-1.5 shrink-0 rounded-full', taskDot[t.status] ?? 'bg-muted-foreground/40')} />, open: () => go({ view: 'tasks', id: t.id }), isActive: (r) => r.view === 'tasks' && r.id === t.id });
@@ -162,6 +164,15 @@ export function Sidebar({ mood }) {
   const all = [...tasks.map(asTask), ...chats.map(asChat)];
   const folders = projects.map((p) => ({ project: p, items: [...tasks.filter((t) => t.project === p.name).map(asTask), ...chats.filter((c) => c.project === p.name).map(asChat)].filter(notDone).sort(byDate) }))
     .sort((a, b) => Number(b.project.active) - Number(a.project.active) || String(b.items[0]?.at ?? '').localeCompare(String(a.items[0]?.at ?? '')) || a.project.name.localeCompare(b.project.name));
+  // 2.7: the projects of a multiplatform group stay together, where the first of them falls.
+  for (let i = 0; i < folders.length; i++) {
+    const g = folders[i].project.grupo; if (!g) continue;
+    const rest = folders.slice(i + 1).filter((f) => f.project.grupo === g);
+    if (!rest.length) continue;
+    const others = folders.slice(i + 1).filter((f) => f.project.grupo !== g);
+    folders.splice(i + 1, folders.length - i - 1, ...rest, ...others);
+    i += rest.length;
+  }
   const loose = chats.filter((c) => !c.project || !projects.some((p) => p.name === c.project)).map(asChat).filter(notDone);
   const byKey = new Map(all.map((i) => [i.key, i]));
   const done = (app.completed ?? []).map((k) => byKey.get(k)).filter(Boolean);
@@ -184,18 +195,48 @@ export function Sidebar({ mood }) {
     ...chats.filter((c) => c.status === 'running').map(asChat),
     ...tasks.filter((t) => t.status === 'running').map((t) => ({ ...asTask(t), icon: <AgentIcon agent={t.assigned_to ?? t.agent} className="size-3.5" /> }))
   ];
+  // 2.7, the phone: the conversations as a screen of their own (the «Chats» tab); the sections are the tabs below.
+  if (page) return (
+    <div className="flex min-h-0 flex-1 flex-col" data-testid="mobile-chats">
+      <div className="px-4 pt-3 pb-2"><Button className="w-full justify-start" variant="outline" onClick={() => go('new')} data-testid="new-conversation"><MessageSquarePlus />{t('nav.newChat')}</Button></div>
+      <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-x-hidden overflow-y-auto px-4 pb-4">
+        <Inbox title={t('inbox.waiting')} tone="text-warning" items={needs} route={route} />
+        <Inbox title={t('inbox.working')} tone="text-info" items={working} route={route} />
+        <Inbox title={t('inbox.issues')} tone="text-destructive" items={issues} route={route} settleLabel={t('inbox.settle')} />
+        <div className="text-muted-foreground px-2.5 pt-5 pb-1 text-[11px] tracking-wide uppercase" data-testid="sidebar-folders">{t('nav.folders')}</div>
+        {folders.length ? folders.map((f) => <ProjectFolder key={f.project.name} project={f.project} items={f.items} open={isOpen(f)} onOpen={(v) => setOpenFolder(f.project.name, v)} route={route} active={f.project.active} />)
+          : <p className="text-muted-foreground px-2.5 text-xs leading-relaxed">{t('comp.sidebar.foldersHint')}</p>}
+        {loose.length ? <>
+          <div className="text-muted-foreground px-2.5 pt-4 pb-1 text-[11px] tracking-wide uppercase">{t('nav.loose')}</div>
+          {loose.map((i) => <SideItem key={i.key} item={i} route={route} />)}
+        </> : null}
+        {done.length ? (
+          <Collapsible open={doneOpen} onOpenChange={setDoneOpen} className="pt-4">
+            <CollapsibleTrigger className="text-muted-foreground hover:text-foreground flex w-full cursor-pointer items-center gap-1.5 px-2.5 pb-1 text-left text-[11px] tracking-wide uppercase" data-testid="sidebar-completed">
+              <ChevronRight className={cn('size-3 transition-transform', doneOpen && 'rotate-90')} />
+              <span className="flex-1">{t('comp.sidebar.completed')}</span><span className="opacity-70">{done.length}</span>
+            </CollapsibleTrigger>
+            <CollapsibleContent><div className="grid gap-px">{done.slice(0, 50).map((i) => <SideItem key={i.key} item={i} route={route} done />)}</div></CollapsibleContent>
+          </Collapsible>
+        ) : null}
+      </nav>
+    </div>
+  );
   return (
     <aside className="bg-sidebar relative flex h-full shrink-0 flex-col border-r" style={{ width }}>
       {bridge.mobile ? null : <div className="sidebar-resize" role="separator" aria-orientation="vertical" aria-label={t('comp.sidebar.resize')} onPointerDown={startResize} onDoubleClick={() => setWidth(SIDEBAR_DEFAULT)} data-testid="sidebar-resize" />}
       <div className="theme-band side-band app-titlebar flex h-14 shrink-0 items-center gap-2 border-b px-4">
         <Robot size={34} mood={mood} title={name} live />
+        {/* 2.7: the buttons share the first line with the name, so the project below has the whole width (long names were cut). */}
         <div className="min-w-0 flex-1">
-          {/* 2.6: with the default name, the drawn wordmark (Orb·E); a name of one's own, as it is written. */}
-          {name === PRODUCT.assistant ? <Wordmark /> : <div className="truncate text-[15px] font-medium">{name}</div>}
-          <div className={cn('text-muted-foreground truncate text-xs', name === PRODUCT.assistant && 'wordmark-sub')}>{app.activeProject ? app.activeProject.name : t('nav.noProject')}</div>
+          <div className="flex min-w-0 items-center gap-1">
+            {/* 2.6: with the default name, the drawn wordmark (Orb·E); a name of one's own, as it is written. */}
+            <div className="min-w-0 flex-1">{name === PRODUCT.assistant ? <Wordmark /> : <div className="truncate text-[15px] font-medium">{name}</div>}</div>
+            <ThemeToggle />
+            <SidebarToggle />
+          </div>
+          <Tip label={app.activeProject?.name} side="bottom" align="start"><div className={cn('text-muted-foreground truncate text-xs', name === PRODUCT.assistant && 'wordmark-sub')} data-testid="sidebar-project">{app.activeProject ? app.activeProject.name : t('nav.noProject')}</div></Tip>
         </div>
-        <ThemeToggle />
-        <SidebarToggle />
       </div>
       <div className="px-3 pt-3 pb-2">
         <Button className="w-full justify-start" variant="outline" onClick={() => go('new')} data-testid="new-conversation"><MessageSquarePlus />{t('nav.newChat')}</Button>
@@ -212,6 +253,10 @@ export function Sidebar({ mood }) {
         {/* Expert mode: PC only (wide screens), when turned on in Settings. */}
         {app.config.expert?.enabled && !bridge.mobile ? <div className="hidden lg:block"><NavItem icon={SquareTerminal} label={t('nav.expert')} active={is('expert')} onClick={() => go('expert')} testid="nav-expert" /></div> : null}
         <NavItem icon={CalendarClock} label={t('nav.schedules')} active={is('schedules')} onClick={() => go('schedules')} testid="nav-schedules" />
+        {/* 2.7: the project's Pizarra (draw and attach what the assistant should know). */}
+        <NavItem icon={PenTool} label={t('nav.board')} active={is('board')} onClick={() => go('board')} testid="nav-board" />
+        {/* 2.7: Monitoreo del equipo (Opti Bot), only once turned on in Ajustes, and only on the PC. */}
+        {app.config.monitor?.enabled && !bridge.mobile ? <NavItem icon={HeartPulse} label={t('nav.monitor')} active={is('monitor')} onClick={() => go('monitor')} testid="nav-monitor" /> : null}
         <Inbox title={t('inbox.waiting')} tone="text-warning" items={needs} route={route} />
         <Inbox title={t('inbox.working')} tone="text-info" items={working} route={route} />
         <Inbox title={t('inbox.issues')} tone="text-destructive" items={issues} route={route} settleLabel={t('inbox.settle')} />

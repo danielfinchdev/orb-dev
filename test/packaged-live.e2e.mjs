@@ -24,7 +24,7 @@ let browser;
 try {
   browser = await until(() => chromium.connectOverCDP(`http://127.0.0.1:${port}`), 'la ventana', 60000);
   const page = await until(() => browser.contexts().flatMap((c) => c.pages()).find((p) => p.url().endsWith('index.html')), 'la página', 60000);
-  await page.waitForSelector('text=Soy Orb', { timeout: 60000 });
+  await page.waitForSelector('[data-testid=chat-greeting]', { timeout: 60000 });
   const call = (method, params = {}) => page.evaluate(([m, p]) => window.orb.call(m, p), [method, params]);
   const project = await call('projects.create', { name: 'empaquetada' });
   const s = await call('sessions.create', { agent: 'claude', project: project.name, model: 'haiku', permission: 'editar', title: 'Empaquetada' });

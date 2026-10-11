@@ -9,10 +9,10 @@ import { ctx } from '../core/context.mjs';
 import { AGENT_IDS, AGENT_LABELS } from '../core/home.mjs';
 import { installed, discoverModels } from '../agents/index.mjs';
 import { usableAccounts } from '../core/accounts.mjs';
-import { usageReport } from '../core/budget.mjs';
-
-const HEAVY_FAMILY = /opus|fable|(^|[-_.])pro($|[-_.])|ultra|max\b|xhigh|o3\b|o1\b/i;
+import { usageReport, HEAVY_FAMILY, canLaunch } from '../core/budget.mjs';
 const MODEL_ID = /^[A-Za-z0-9][\w.:\-/[\]=,@]{0,79}$/;
+// 2.7: the light models (fast and cheap) by their names; heavy ones by HEAVY_FAMILY; everything else is «balanced».
+const LIGHT = /haiku|mini\b|nano|flash|lite\b|small|spark/i;
 export const MODELS_EVERY = 12 * 3_600_000; // how often an agent is asked again for its models
 const RETRY_AFTER = 3_600_000; // after an agent that did not answer
 
@@ -100,12 +100,46 @@ export function modelCatalog(board, { discover = false, log } = {}) {
       const heavy = (cfg.heavyModels ?? []).some((h) => m.id === h || m.id.includes(h)) || HEAVY_FAMILY.test(m.id);
       // 2.6: «Recomendados» at the top of the selector: the assistant's own Claude models and the model Codex uses by default.
       const recommended = agent === 'claude' ? labelled.some((l) => l.id === m.id) : agent === 'codex' && Boolean(usual) && m.id === usual.id;
-      models.push({ id: m.id, label: m.label ?? (/^[a-z]+$/.test(m.id) ? m.id[0].toUpperCase() + m.id.slice(1) : m.id), heavy, ...(recommended ? { recommended: true } : {}) });
+      const name = m.label ?? (/^[a-z]+$/.test(m.id) ? m.id[0].toUpperCase() + m.id.slice(1) : m.id);
+      models.push({ id: m.id, label: name, heavy, tier: heavy ? 'heavy' : LIGHT.test(`${m.id} ${name}`) ? 'light' : 'balanced', ...(recommended ? { recommended: true } : {}) });
     }
     out.push({
-      id: agent, label: AGENT_LABELS[agent] ?? agent, defaultModel: cfg.defaultModel || '',
+      id: agent, label: AGENT_LABELS[agent] ?? agent, defaultModel: cfg.defaultModel || '', strengths: cfg.strengths ?? '',
       models, accounts: usableAccounts(agent).map((a) => ({ id: a.id, label: a.label, usage: usage[a.id] ?? null }))
     });
   }
   return out;
+}
+
+// 2.7: «Orb elige el modelo»: the model and reasoning for a task, from how hard it is (level, set by the assistant:
+// simple / normal / complejo) and the «ahorro ↔ uso» slider (budget.profile). Light models for the simple, balanced for
+// the everyday, the most capable for the hard ones, always the newest of each kind the agent offers. A heavy model only
+// while the account has room for one; Fable last (it may need extra credits); Cursor keeps its own «Auto».
+export const LEVELS = ['simple', 'normal', 'complejo'];
+const TARGET = [['light', 'light', 'balanced'], ['light', 'balanced', 'balanced'], ['light', 'balanced', 'heavy'], ['balanced', 'balanced', 'heavy'], ['balanced', 'heavy', 'heavy']];
+const REASONING = [['low', 'low', 'medium'], ['low', 'medium', 'medium'], ['low', 'medium', 'high'], ['medium', 'medium', 'high'], ['medium', 'high', 'high']];
+const FALLBACK = { light: ['light', 'balanced', 'heavy'], balanced: ['balanced', 'heavy', 'light'], heavy: ['heavy', 'balanced', 'light'] };
+const version = (m) => { const n = String(m.label ?? m.id).match(/(\d+(?:\.\d+)?)/); return n ? parseFloat(n[1]) : 0; };
+export function chooseModel(board, agent, level = 'normal', accountId = agent) {
+  const li = LEVELS.includes(level) ? LEVELS.indexOf(level) : 1;
+  const profile = [0, 1, 2, 3, 4].includes(ctx.config.budget?.profile) ? ctx.config.budget.profile : 2;
+  let reasoning = REASONING[profile][li];
+  // «high» waits for the user's approval when the policy says so: Orb never makes a task wait by choosing it itself.
+  if (reasoning === 'high' && ctx.config.policy?.highNeedsApproval !== false) reasoning = 'medium';
+  if (!(ctx.config.policy?.reasoning ?? ['low', 'medium', 'high']).includes(reasoning)) reasoning = 'medium';
+  const base = { model: null, label: null, tier: null, reasoning, level: LEVELS[li], profile };
+  if (agent === 'cursor') return base; // Cursor's «Auto» already chooses for each request
+  const entry = modelCatalog(board).find((a) => a.id === agent);
+  const models = (entry?.models ?? []).filter((m) => m.id);
+  if (!models.length) return base;
+  const rank = (a, b) => Number(/fable/i.test(a.id)) - Number(/fable/i.test(b.id)) || Number(Boolean(b.recommended)) - Number(Boolean(a.recommended)) || version(b) - version(a);
+  let wanted = TARGET[profile][li];
+  for (const tier of FALLBACK[wanted]) {
+    const list = models.filter((m) => m.tier === tier).sort(rank);
+    if (!list.length) continue;
+    // The heavy one only if the account still has room for heavy work in this window; otherwise the next kind.
+    if (tier === 'heavy' && wanted === 'heavy' && !canLaunch(board, accountId, list[0].id).ok) { wanted = 'balanced'; continue; }
+    return { ...base, model: list[0].id, label: list[0].label, tier };
+  }
+  return base;
 }

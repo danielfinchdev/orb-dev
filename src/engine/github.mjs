@@ -44,6 +44,19 @@ export async function status() {
   return { installed: true, loggedIn: auth.ok, user: user?.ok ? user.out : null, where: exe };
 }
 
+// 2.7: the user's contribution calendar of the last year (the green squares of their GitHub profile), from GitHub itself
+// through gh (GraphQL contributionsCollection). Real numbers only: nothing is filled in when gh cannot answer.
+export async function contributions() {
+  const exe = ghExe(); if (!exe) return null;
+  const query = 'query { viewer { login contributionsCollection { contributionCalendar { totalContributions weeks { contributionDays { date contributionCount contributionLevel } } } } } }';
+  const r = await run(exe, ['api', 'graphql', '-f', `query=${query}`], { timeoutMs: 30_000 });
+  if (!r.ok) return null;
+  let data; try { data = JSON.parse(r.out)?.data?.viewer; } catch { return null; }
+  const cal = data?.contributionsCollection?.contributionCalendar; if (!cal) return null;
+  const LEVEL = { NONE: 0, FIRST_QUARTILE: 1, SECOND_QUARTILE: 2, THIRD_QUARTILE: 3, FOURTH_QUARTILE: 4 };
+  return { user: data.login, total: cal.totalContributions, weeks: cal.weeks.map((w) => w.contributionDays.map((d) => ({ date: d.date, count: d.contributionCount, level: LEVEL[d.contributionLevel] ?? 0 }))) };
+}
+
 export function login() { const exe = ghExe(); if (!exe) throw new Error(tr('msg.github.ghMissingShort')); openConsole(exe, ['auth', 'login', '--web', '--git-protocol', 'https']); }
 
 export async function projectInfo(project) {

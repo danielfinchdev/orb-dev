@@ -91,7 +91,7 @@ try {
   const { app, page, errors, close } = await open(userData);
   const shot = shooter(app, page);
   const call = (method, params = {}) => page.evaluate(([m, p]) => window.orb.call(m, p), [method, params]);
-  await page.waitForSelector('text=Soy Orb', { timeout: 30000 });
+  await page.waitForSelector('[data-testid=chat-greeting]', { timeout: 30000 });
   // ORB_LANG=en: the same tour in English (the interface and the engine's notices follow config.language).
   if (LANG) { await call('config.save', { patch: { language: LANG } }); await page.reload(); await page.waitForSelector('[data-testid=nav-chat]'); }
   if (await page.isVisible('text=Preparando tu PC')) { await shot('01-preparo-equipo'); await page.click('text=Continuar'); }

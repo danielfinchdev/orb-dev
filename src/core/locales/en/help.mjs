@@ -86,10 +86,10 @@ export default {
   'help.tut.phone.l3': 'From the phone you chat, approve, give the OK and follow the tasks. Delicate things (settings, accounts, installing, full access, PC files) only from the PC.',
   'help.tut.phone.go': 'Open Phone',
 
-  'help.tut.expert.title': 'Expert mode',
-  'help.tut.expert.l1': 'Turn it on in Settings › Expert mode (PC only, in wide windows).',
+  'help.tut.expert.title': 'God mode',
+  'help.tut.expert.l1': 'Turn it on in Settings › God mode (PC only, in wide windows).',
   'help.tut.expert.l2': 'Around the chat: file explorer and viewer, git changes with their diff, history, what is running, account usage, PC load and activity. You choose which panels to show.',
-  'help.tut.expert.go': 'Open Expert mode',
+  'help.tut.expert.go': 'Open God mode',
 
   'help.tut.games.title': 'Mini-games',
   'help.tut.games.l1': 'While the agents work, the gamepad in the chat bar opens the mini-games: Snake, Tetris, Chess, Jumper, 2048, Bricks, Space Invaders and Pac-Man.',
@@ -199,7 +199,7 @@ export default {
   'help.tour.tutorials.title': 'Tutorials',
   'help.tour.tutorials.text': 'These explanations in writing, the frequently asked questions, the keyboard shortcuts and the button to replay this tour.',
   'help.tour.settings.title': 'Settings',
-  'help.tour.settings.text': 'Name and language, appearance and themes, tasks and quota, phone, tools, expert mode and updates.',
+  'help.tour.settings.text': 'Name and language, appearance and themes, tasks and quota, phone, tools, God mode and updates.',
   'help.tour.end.title': 'All set',
   'help.tour.end.text': 'You know the essentials now. Pick a project, tell me what you want and off we go.'
 };

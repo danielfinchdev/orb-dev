@@ -33,7 +33,7 @@ try {
   browser = await until(() => chromium.connectOverCDP(`http://127.0.0.1:${port}`), 'la ventana de la app');
   const page = await until(() => browser.contexts().flatMap((c) => c.pages()).find((p) => p.url().endsWith('index.html')), 'la página principal');
   const errors = []; page.on('pageerror', (e) => errors.push(e.message));
-  await page.waitForSelector('text=Soy Nova', { timeout: 30000 });
+  await page.waitForSelector('[data-testid=chat-greeting] >> text=Nova', { timeout: 30000 });
   const call = (method, params = {}) => page.evaluate(([m, p]) => window.orb.call(m, p), [method, params]);
   const state = await call('app.state');
   assert.equal(state.config.assistantName, 'Nova');

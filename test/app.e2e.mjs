@@ -48,9 +48,9 @@ try {
   await shot('01-bienvenida');
   await win.click('text=Crear y empezar');
   // On Windows the first run also offers to install the agents ("Preparando tu PC") before the chat.
-  await win.getByText('Hola, Ana. Soy Orb.').or(win.getByText('Preparando tu PC')).first().waitFor();
+  await win.getByTestId('chat-greeting').or(win.getByText('Preparando tu PC')).first().waitFor();
   if (await win.isVisible('text=Preparando tu PC')) { await shot('01b-preparo-equipo'); await win.click('text=Continuar'); }
-  await win.waitForSelector('text=Hola, Ana. Soy Orb.');
+  await win.waitForSelector('[data-testid=chat-greeting]');
   const home = path.join(base, 'Orb');
   for (const f of ['orb.json', '.orb/datos/orb.db', 'bitacora/GENERAL.md', 'mcp-servers', 'windows', 'ios', 'android', 'web']) assert.ok(fs.existsSync(path.join(home, f)), `falta ${f}`);
   // The approval secret is kept encrypted by the system when it can be (then the plain file is gone).

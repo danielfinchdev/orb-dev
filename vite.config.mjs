@@ -4,11 +4,23 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'node:path';
+import fs from 'node:fs';
+
+// 2.7: the Pizarra (Excalidraw) draws with its own fonts: copied next to the app so it works offline (not the Chinese
+// one, Xiaolai: 12 MB; Chinese text falls back to the system's fonts).
+const excalidrawFonts = () => ({
+  name: 'orb-excalidraw-fonts',
+  writeBundle(options) {
+    const from = path.resolve('node_modules/@excalidraw/excalidraw/dist/prod/fonts');
+    const to = path.join(options.dir, 'excalidraw', 'fonts');
+    for (const family of fs.readdirSync(from)) if (family !== 'Xiaolai') fs.cpSync(path.join(from, family), path.join(to, family), { recursive: true });
+  }
+});
 
 export default defineConfig({
   root: 'src/ui',
   base: './',
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), excalidrawFonts()],
   resolve: { alias: { '@': path.resolve('src/ui') } },
   build: { rollupOptions: { input: { index: path.resolve('src/ui/index.html'), pip: path.resolve('src/ui/pip.html') } }, outDir: '../renderer', emptyOutDir: true, target: 'chrome140', sourcemap: false, chunkSizeWarningLimit: 2000, assetsInlineLimit: 0 }
 });
