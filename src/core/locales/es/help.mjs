@@ -36,11 +36,11 @@ export default {
   'help.tut.brain.l5': 'Cambiar de agente inicia una conversación nueva. Las tareas y las bitácoras se conservan.',
   'help.tut.brain.go': 'Ir al chat',
 
-  'help.tut.newchat.title': 'Nuevo chat y chats directos',
-  'help.tut.newchat.l1': '«Nuevo chat» abre una conversación limpia en la que eliges proyecto, cerebro y razonamiento.',
-  'help.tut.newchat.l2': 'Sin «Orquestador», hablas directamente con el agente en la carpeta del proyecto, con el permiso que elijas: Solo lectura, Editar archivos, Preguntar antes o Acceso total.',
-  'help.tut.newchat.l3': 'Verás en directo la respuesta, los comandos y los archivos modificados. Intro corrige sobre la marcha; Ctrl+Intro deja el mensaje en cola.',
-  'help.tut.newchat.l4': 'Desde la cabecera cambias el modelo y los permisos, bifurcas la conversación para probar otra idea o retomas una que quedó a medias.',
+  'help.tut.newchat.title': 'Nuevo chat y Nueva tarea',
+  'help.tut.newchat.l1': '«Nuevo chat» abre una conversación limpia con {name}, sin carpeta: el proyecto, el cerebro y el razonamiento se eligen en el cuadro de mensaje.',
+  'help.tut.newchat.l2': 'Con «Orquestador» desactivado aparece también «Nueva tarea»: repartes tú el trabajo. Cada mensaje es una tarea para el agente y el modelo que elijas, y puedes lanzar varias a la vez.',
+  'help.tut.newchat.l3': 'Para volver a la conversación en curso, pulsa el robot de arriba a la izquierda. Las anteriores siguen disponibles con «Ver conversación anterior».',
+  'help.tut.newchat.l4': 'En la conversación de una tarea ves la respuesta en directo, los comandos y los archivos modificados. Intro corrige sobre la marcha; Ctrl+Intro deja el mensaje en cola.',
   'help.tut.newchat.go': 'Nuevo chat',
 
   'help.tut.tasks.title': 'Tareas',
@@ -49,6 +49,7 @@ export default {
   'help.tut.tasks.l3': 'Al terminar un pedido, {name} revisa las tareas y te entrega un informe con «OK» y «Pedir cambios». «Deshacer esta tarea» restaura sus archivos sin tocar tus cambios posteriores.',
   'help.tut.tasks.l4': 'Task Review: otro modelo, de otro proveedor si es posible, audita el trabajo en solo lectura. Pídelo desde una tarea o un proyecto, o actívalo en Ajustes › Tareas y usos.',
   'help.tut.tasks.l5': 'Si cierras Orb, las tareas en curso continúan al volver a abrirlo. Si una cuenta agota su cupo, la tarea espera y se reanuda sola.',
+  'help.tut.tasks.l6': 'Security Review: desde un proyecto, un agente busca vulnerabilidades y secretos expuestos sin tocar nada, y entrega los hallazgos por gravedad.',
   'help.tut.tasks.go': 'Ir a Tareas',
 
   'help.tut.sidebar.title': 'Proyectos en el menú',
@@ -171,6 +172,10 @@ export default {
   'help.faq.13.a': 'En Ajustes › Contribuye puedes enviar comentarios con capturas, sin necesidad de cuenta, y apoyar el proyecto a través de PayPal.',
   'help.faq.14.q': '¿Cómo repito el tutorial guiado?',
   'help.faq.14.a': 'Con el botón «Repetir el tutorial guiado», en la parte superior de esta pantalla. Puedes salir en cualquier momento con «Saltar tutorial» o Esc.',
+  'help.faq.15.q': '¿Dónde está la conversación con {name}?',
+  'help.faq.15.a': 'Pulsa el robot de arriba a la izquierda para volver a la conversación en curso. «Nuevo chat» empieza otra limpia, y las anteriores se recuperan con «Ver conversación anterior», arriba del chat.',
+  'help.faq.16.q': '¿Qué es «Iniciar test»?',
+  'help.faq.16.a': 'Una prueba de funcionamiento: {name}, con el Orquestador activado, pide a varios modelos una web de prueba y la abre. Aparece en el chat la primera vez que abres Orb cada día y siempre está en Ajustes › General.',
 
   // ---- tutorial guiado (el robot recorre la app)
   'help.tour.aria': 'Tutorial guiado',
@@ -180,7 +185,7 @@ export default {
   'help.tour.finish': 'Empezar',
   'help.tour.counter': '{n} de {total}',
   'help.tour.welcome.title': 'Hola, soy {name}',
-  'help.tour.welcome.text': 'Te enseño lo esencial en un minuto. Puedes saltarlo cuando quieras y repetirlo desde Tutoriales.',
+  'help.tour.welcome.text': 'Te enseño lo esencial en un minuto. Pulsa el robot de arriba a la izquierda para volver siempre a nuestra conversación. Puedes repetir esto desde Tutoriales.',
   'help.tour.chat.title': 'Escríbeme aquí',
   'help.tour.chat.text': 'Cuéntame qué necesitas: lo convierto en tareas para los agentes, las superviso y te aviso al terminar. Intro envía, Mayús+Intro añade una línea y @ adjunta contexto.',
   'help.tour.project.title': 'Proyecto',
@@ -196,7 +201,7 @@ export default {
   'help.tour.bar.title': 'Barra del chat',
   'help.tour.bar.text': 'Pausa las tareas, reinicia la conversación o abre los minijuegos mientras esperas.',
   'help.tour.newchat.title': 'Nuevo chat',
-  'help.tour.newchat.text': 'Abre una conversación limpia, conmigo o directamente con un agente, con el permiso que elijas.',
+  'help.tour.newchat.text': 'Abre una conversación limpia conmigo. Con el Orquestador desactivado aparece también «Nueva tarea», para que repartas tú el trabajo.',
   'help.tour.folders.title': 'Tus proyectos',
   'help.tour.folders.text': 'Un clic selecciona un proyecto; doble clic muestra sus tareas y conversaciones. Lo terminado pasa a «Completados».',
   'help.tour.tasks.title': 'Tareas',

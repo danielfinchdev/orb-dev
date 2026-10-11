@@ -50,7 +50,7 @@ function findTarget(step) {
 function knownMissing() {
   const out = new Set();
   const { app } = getState();
-  if (!visible(document.querySelector('[data-testid="nav-chat"]'))) for (const s of TOUR_STEPS) if (s.sidebar) out.add(s.id);
+  if (!visible(document.querySelector('[data-testid="new-conversation"]'))) for (const s of TOUR_STEPS) if (s.sidebar) out.add(s.id);
   if (!(app?.chat?.context ?? app?.assistant?.context)?.size) out.add('context');
   return out;
 }

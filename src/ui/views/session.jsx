@@ -1,4 +1,4 @@
-// A direct conversation with one agent (T3 Code style), live: the answer streams as it is written, commands and changed
+// A direct conversation with one agent, live: the answer streams as it is written, commands and changed
 // files appear as the agent works, risky actions wait for a click (approval cards), messages written meanwhile correct the
 // agent on the fly or wait in a queue, and the context meter shows how full the conversation is. Task runs open here too.
 import { useEffect, useMemo, useState } from 'react';
@@ -9,13 +9,13 @@ import { PageHeader } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Composer, useAutoScroll } from './chat.jsx';
-import { useCatalog } from '@/components/brain-picker.jsx';
+import { useCatalog, modelsOf } from '@/components/brain-picker.jsx';
 import { GeneratedImage } from '@/components/image-viewer.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Badge, Field, Input, Textarea, Empty, Spinner } from '@/components/ui/basic.jsx';
+import { Badge, Input, Textarea, Empty, Spinner } from '@/components/ui/basic.jsx';
 import { Select, Collapsible, CollapsibleTrigger, CollapsibleContent, Tip, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent } from '@/components/ui/overlay.jsx';
 import { useStore, call, act, go, bridge, refresh, getState } from '@/lib/store.js';
-import { AGENT, PERMISSION, PERMISSION_HINT, REASONING, STATUS, DECISION, CAN_STEER as AGENT_CAN_STEER, options } from '@/lib/labels.js';
+import { AGENT, PERMISSION, REASONING, STATUS, DECISION, CAN_STEER as AGENT_CAN_STEER, options } from '@/lib/labels.js';
 import { baseName, cn } from '@/lib/utils.js';
 import { useT, t, useLocale, currentLocale } from '@/lib/i18n.js';
 
@@ -231,7 +231,7 @@ export function ContextMeter({ context, className }) {
   );
 }
 
-// Details of a conversation (2.3, like T3 Code's thread details): where it works, git, where it comes from, its task.
+// Details of a conversation (2.3): where it works, git, where it comes from, its task.
 async function showDetails(s, task) {
   let info = null;
   if (s.project) { try { info = await call('projects.info', { name: s.project }); } catch { info = null; } }
@@ -303,7 +303,7 @@ export function SessionView({ route, embedded = false, empty = null }) {
   const running = s.status === 'running';
   // 2.7: the agent's real models by their names (the catalog), and the conversation's own model even if it is not listed
   // (the selector showed an empty box when it was not among the options).
-  const listed = catalog?.find((a) => a.id === s.agent)?.models.filter((m) => m.id) ?? [];
+  const listed = modelsOf(catalog?.find((a) => a.id === s.agent), s.account).filter((m) => m.id);
   const models = [...(listed.length ? listed.map((m) => ({ value: m.id, label: m.label })) : (app?.config?.agents?.[s.agent]?.models ?? []).map((m) => ({ value: m, label: m })))];
   if (s.model && !models.some((m) => m.value === s.model)) models.unshift({ value: s.model, label: s.model });
   const modelName = (id) => models.find((m) => m.value === id)?.label ?? id;

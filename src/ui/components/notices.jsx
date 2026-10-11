@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { CircleCheck, TriangleAlert, X } from 'lucide-react';
 import { Robot } from './robot.jsx';
 import { Button } from './ui/button.jsx';
-import { bridge, go, useStore, getState } from '@/lib/store.js';
+import { bridge, go, useStore, getState, setState } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
@@ -46,6 +46,8 @@ export function Notices() {
     clearTimeout(timer.current); timer.current = setTimeout(() => setNotice(null), n.level === 'ok' ? 6000 : 10000);
   }), [quiet]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => clearTimeout(timer.current), []);
+  // 3.0: while this robot is on screen, the one of the corner (companion.jsx) steps aside: never two robots at once.
+  useEffect(() => { setState({ noticeShown: Boolean(notice && !quiet) }); }, [notice, quiet]);
   if (!notice || quiet) return null;
   const ok = notice.level === 'ok';
   return (

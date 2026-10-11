@@ -1,5 +1,5 @@
-// Codex adapter. 2.3: a live session through "codex app-server" (JSON-RPC over stdio, the protocol of Codex's own apps
-// and the one T3 Code uses): one process per conversation, a thread that stays open, streamed answers, steer, interrupt,
+// Codex adapter. 2.3: a live session through "codex app-server" (JSON-RPC over stdio, the protocol of Codex's own
+// apps): one process per conversation, a thread that stays open, streamed answers, steer, interrupt,
 // approval requests answered by the guard, native fork, context and the account's real usage limits.
 // It uses the user's own login (CODEX_HOME, ~/.codex by default): ChatGPT or API key, the app never reads auth.json.
 import crypto from 'node:crypto';
@@ -42,7 +42,8 @@ export async function accountInfo(exe, dir, { timeoutMs = 20000 } = {}) {
     peer.notify('initialized', {});
     const r = await peer.request('account/read', { refreshToken: false }, { timeoutMs });
     const acc = r?.account; if (!acc) return null;
-    const id = acc.email ?? acc.accountId ?? null;
+    // The e-mail and the workspace together: a personal plan and a Team one with the same e-mail are two accounts.
+    const id = acc.email || acc.accountId ? `${acc.email ?? ''}|${acc.accountId ?? ''}` : null;
     return { plan: typeof acc.planType === 'string' ? acc.planType : null, who: id ? crypto.createHash('sha256').update(String(id).toLowerCase()).digest('hex').slice(0, 16) : null };
   } catch { return null; } finally {
     try { peer?.close(); } catch { /* gone */ }

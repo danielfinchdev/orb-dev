@@ -8,7 +8,7 @@ import { AGENT_IDS, categoryOf, CATEGORIES } from '../core/home.mjs';
 import { MULTI, newAccountId, findAccountFolders, accountsOf, accountDir } from '../core/accounts.mjs';
 import { accountInfo as codexAccountInfo } from '../agents/codex.mjs';
 import { usageReport } from '../core/budget.mjs';
-import { createProject, createProjects, syncProjects } from '../core/projects.mjs';
+import { createProjects, syncProjects } from '../core/projects.mjs';
 import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../core/schedules.mjs';
 import { oneLine, redactSecrets } from '../core/safety.mjs';
 import { statusAll, status as agentStatus, openLogin, quickRun, forgetInstalled, executable } from '../agents/index.mjs';
@@ -68,13 +68,16 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     return real;
   };
 
-  // The current conversation with the assistant (since the last "Nueva conversación"), at most 120 messages.
-  const currentChat = () => {
-    const all = board.chat(300);
-    let start = 0;
-    all.forEach((m, i) => { if (m.role === 'system' && /^(Nueva conversaci|New conversation)/.test(m.body)) start = i; });
-    return all.slice(start).slice(-120).map((m) => (m.meta?.kind === 'report' ? { ...m, meta: { ...m.meta, accepted: m.meta.tasks.length > 0 && m.meta.tasks.every((id) => board.isAccepted(id)) } } : m));
-  };
+  // A task text cut for the lists (the window shows a few hundred characters of each).
+  const cut = (s) => (typeof s === 'string' && s.length > 1200 ? `${s.slice(0, 1200)}…` : s);
+  // Folders made by hand in the Explorer: the engine's loop looks every 5 s; a list asked for in between looks at most
+  // every 2 s (each refresh of the window asks for it).
+  let lastSync = 0;
+  const syncSoon = () => { if (Date.now() - lastSync > 2000) { lastSync = Date.now(); syncProjects(board); } };
+  // The current conversation with the assistant (since the last «Nueva conversación»), at most 120 messages. 3.0: that line
+  // is a notice since 2.7 (hidden from the chat), so the start is looked up in the whole table (board.chatStart).
+  const withAccepted = (m) => (m.meta?.kind === 'report' ? { ...m, meta: { ...m.meta, accepted: m.meta.tasks.length > 0 && m.meta.tasks.every((id) => board.isAccepted(id)) } } : m);
+  const currentChat = () => board.chat(120, { after: board.chatStart() }).map(withAccepted);
 
   // The user's OK closes the loop: tasks marked accepted, a line in the chat and an entry in the project's log.
   const accept = (ids, project) => {
@@ -91,7 +94,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       config: ctx.config, paused: board.setting('paused') === '1', activeProject: board.activeProject(),
       approvals: sessions.allPendingApprovals().map((a) => ({ id: a.id, session_id: a.session_id, body: { title: a.body?.title, reason: a.body?.reason }, session: a.session })),
       counts: Object.fromEntries(board.all('SELECT status, COUNT(*) AS n FROM tasks GROUP BY status').map((r) => [r.status, r.n])),
-      chat: orchestrator.state(), assistant: orchestrator.info(), optiSession: board.setting('opti_session') ?? null,
+      chat: orchestrator.state(), chatStart: board.chatStart(), assistant: orchestrator.info(), optiSession: board.setting('opti_session') ?? null,
       // 2.6: the tasks («t<id>») and conversations («s<id>») the user put away in «Completados» of the sidebar.
       completed: board.settingJson('sidebar_completed') ?? []
     }),
@@ -125,6 +128,10 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const dir = str(home, 'carpeta', 1000, { optional: true }) || path.join(ctx.paths.internal, 'cuentas', id);
       if (!path.isAbsolute(dir)) fail(tr('msg.api.accountAbs'));
       try { checkAccountHome(dir, ctx.config, board.projects().map((p) => p.path)); } catch (error) { fail(error.message); }
+      // 3.0: the folder of an account this agent already has (also the default one, ~/.codex, through a link or another
+      // spelling) would count the same subscription twice: its quota and its parallel runs.
+      const real = (p) => { try { return fs.realpathSync.native(p).toLowerCase(); } catch { return path.resolve(p).toLowerCase(); } };
+      if (accountsOf(agent).some((a) => real(accountDir(a)) === real(dir))) fail(tr('msg.ctx.sameHome'));
       fs.mkdirSync(dir, { recursive: true });
       const c = saveConfig({ accounts: [...ctx.config.accounts, { id, agent, label: oneLine(str(label, 'nombre', 60), 60), home: dir, enabled: true }] });
       emit('config:changed', c);
@@ -138,14 +145,16 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       if (agent !== 'codex' || !found.length) return found;
       // Codex says whose account each folder holds: a folder with an account Orb already has, or a copy of another
       // folder found (the most recent is kept), is not offered. Each one gets its plan (Go, Plus, Pro…) for its name.
-      const exe = executable('codex'); if (!exe) return found;
-      const [mine, theirs] = await Promise.all([
-        Promise.all(accountsOf('codex').slice(0, 6).map((a) => codexAccountInfo(exe, accountDir(a)))),
-        Promise.all(found.slice(0, 8).map((f) => codexAccountInfo(exe, f.dir)))
-      ]);
+      let exe = null; try { exe = executable('codex'); } catch { /* not installed: offered as found */ }
+      if (!exe) return found;
+      // 3.0: three questions at a time (each one starts Codex for a moment), every account and folder compared.
+      const limited = async (items, fn, n = 3) => { const out = new Array(items.length); let next = 0; await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (next < items.length) { const i = next++; out[i] = await fn(items[i]); } })); return out; };
+      const mine = await limited(accountsOf('codex'), (a) => codexAccountInfo(exe, accountDir(a)));
+      const theirs = await limited(found, (f) => codexAccountInfo(exe, f.dir));
       const seen = new Set(mine.map((i) => i?.who).filter(Boolean));
       const out = [];
-      found.slice(0, 8).forEach((f, i) => { const info = theirs[i]; if (info?.who && seen.has(info.who)) return; if (info?.who) seen.add(info.who); out.push({ ...f, plan: info?.plan ?? null }); });
+      // A folder Codex could not say about is offered but never added by itself (unchecked: it may be a copy).
+      found.forEach((f, i) => { const info = theirs[i]; if (info?.who && seen.has(info.who)) return; if (info?.who) seen.add(info.who); out.push({ ...f, plan: info?.plan ?? null, checked: Boolean(info?.who) }); });
       return out;
     },
     'accounts.update': ({ id, label, enabled }) => {
@@ -168,7 +177,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'installer.progress': () => installer.progress(),
     'system.check': async () => { const r = await quickRun('git', ['--version'], { timeoutMs: 8000 }); return { platform: process.platform, git: r.ok ? r.out.replace(/^git version\s*/, '') : null }; },
 
-    'projects.list': () => (syncProjects(board), board.projects()).map((p) => ({ ...p, inHome: insideHome(p.path), category: categoryOf(realHome, p.path), active: board.setting('active_project') === p.name, open: board.one("SELECT COUNT(*) AS n FROM tasks WHERE project = ? AND status IN ('queued', 'awaiting_approval', 'running')", p.name).n })),
+    'projects.list': () => (syncSoon(), board.projects()).map((p) => ({ ...p, inHome: insideHome(p.path), category: categoryOf(realHome, p.path), active: board.setting('active_project') === p.name, open: board.one("SELECT COUNT(*) AS n FROM tasks WHERE project = ? AND status IN ('queued', 'awaiting_approval', 'running')", p.name).n })),
     // 2.7: several platforms at once (categories) = a multiplatform group; returns the first project and the whole list.
     'projects.create': ({ name, notes, category, categories }) => {
       const cats = Array.isArray(categories) && categories.length ? categories.slice(0, 4).map((c) => oneOf(c, CATEGORIES, 'categoría')) : [oneOf(category, CATEGORIES, 'categoría', undefined)];
@@ -230,6 +239,16 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'chat.list': () => currentChat(),
     'chat.send': ({ text }) => { const t = str(text, 'mensaje', 20000); return orchestrator.ask(t, expandMentions(board, sessions, t)); },
     'chat.reset': () => orchestrator.reset(),
+    // 3.0: «Nuevo chat»: a clean conversation with the assistant (only if the current one has anything), in the project
+    // chosen (or none: the user picks it in the message box).
+    'chat.new': ({ project: name }) => {
+      const want = name ? project(name).name : ''; // checked before anything is reset
+      if (board.chat(1, { after: board.chatStart() }).length) orchestrator.reset();
+      if (want !== (board.setting('active_project') ?? '')) board.setActiveProject(want, 'usuario');
+      return { ok: true };
+    },
+    // 3.0: the conversations before the current one, 120 lines at a time going back (nothing is lost with «Nuevo chat»).
+    'chat.older': ({ before, limit }) => board.chat(Math.min(Math.max(Number(limit) || 120, 1), 120), { before: int(before, 'mensaje') }).map(withAccepted),
     'chat.stop': () => orchestrator.stop(),
     // 2.7: Monitoreo del equipo (src/engine/opti.mjs): Opti Bot's conversation, the PC's quick numbers and the answer to
     // one of its action cards. PC only (not in the phone's list).
@@ -270,8 +289,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     // 2.7: the answer to a question card (orb_ask): the options picked and/or own words, or skipped. The card keeps it and
     // the assistant gets it as the user's next message.
     'chat.answer': ({ id, choices, other, skip }) => {
-      const row = board.chat(500).find((m) => m.id === int(id, 'mensaje'));
-      if (row?.meta?.kind !== 'question' || row.meta.status !== 'pending') fail(tr('msg.api.questionGone'));
+      const row = board.chatRow(int(id, 'mensaje'));
+      // A question left open in an earlier conversation is gone: the new one would not know what it was about.
+      if (row?.meta?.kind !== 'question' || row.meta.status !== 'pending' || row.id < board.chatStart()) fail(tr('msg.api.questionGone'));
       const labels = new Set(row.meta.options.map((o) => o.label));
       const picked = (Array.isArray(choices) ? choices : []).map((c) => String(c)).filter((c) => labels.has(c)).slice(0, row.meta.multi ? 4 : 1);
       const own = other === undefined ? '' : oneLine(str(other, 'respuesta', 2000, { optional: true }) ?? '', 2000).trim();
@@ -282,7 +302,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return orchestrator.ask(text);
     },
     'chat.accept': ({ id }) => {
-      const row = board.chat(500).find((m) => m.id === int(id, 'mensaje'));
+      const row = board.chatRow(int(id, 'mensaje'));
       if (row?.meta?.kind !== 'report') fail(tr('msg.api.notReport'));
       return accept(row.meta.tasks, row.meta.project);
     },
@@ -317,7 +337,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const c = saveConfig({ orchestrator: patch });
       emit('config:changed', c);
       // Another agent cannot continue the previous one's conversation: a new one starts (the board and logs remember).
-      if (patch.agent && patch.agent !== (before.agent ?? 'claude')) orchestrator.forget();
+      // Another agent, or another account of the same one (its conversation lives in the other account's folder): the
+      // next message starts a new conversation instead of failing to resume the old one.
+      if ((patch.agent && patch.agent !== (before.agent ?? 'claude')) || (patch.account !== undefined && patch.account !== before.account)) orchestrator.forget();
       const info = orchestrator.info();
       const level = { low: tr('msg.api.reasoningLow'), medium: tr('msg.api.reasoningMedium'), high: tr('msg.api.reasoningHigh') }[c.orchestrator.reasoning] ?? c.orchestrator.reasoning;
       if ((patch.model !== undefined && patch.model !== before.model) || (patch.agent && patch.agent !== (before.agent ?? 'claude')) || (patch.reasoning && patch.reasoning !== before.reasoning)) board.notice(tr('msg.api.assistantBrain', { name: assistantName(), agent: info.agentLabel, label: info.modelLabel, reasoning: level }), 'info');
@@ -341,7 +363,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return value;
     },
 
-    'tasks.list': ({ limit }) => board.panelTasks(Math.min(Number(limit) || 150, 500)),
+    // 3.0: the list of every view, sent on each refresh: long texts cut (the whole task is tasks.get) and no approval
+    // signatures (only the detail needs them).
+    'tasks.list': ({ limit }) => board.panelTasks(Math.min(Number(limit) || 150, 500)).map(({ approval_hash, approval_sig, ...task }) => ({ ...task, description: cut(task.description), result: cut(task.result) })),
     'tasks.live': () => scheduler.live(),
     'tasks.get': ({ id }) => {
       const d = board.taskDetail(int(id, 'tarea'));
@@ -408,6 +432,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'chat.approve': ({ request, decision }) => orchestrator.respond(str(request, 'petición', 200), oneOf(decision, DECISION, 'decisión')),
     'tasks.review': ({ id, agent, focus }) => scheduler.createReview(board.task(int(id, 'tarea')) ?? fail(tr('msg.api.noTaskThat')), { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null), focus: str(focus, 'foco', 500, { optional: true }) }),
     'projects.review': ({ name, agent, focus }) => scheduler.reviewProject(project(name).name, { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null), focus: str(focus, 'foco', 500, { optional: true }) }),
+    'projects.securityReview': ({ name, agent }) => scheduler.securityReview(project(name).name, { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null) }),
     'sessions.stop': ({ id }) => { const s = sessions.must(str(id, 'conversación', 64)); if (s.kind === 'task') return scheduler.cancel(s.task_id, 'usuario'); return sessions.stop(s.id); },
     'sessions.update': ({ id, title, model, reasoning, permission, archived }) => {
       const s = sessions.must(str(id, 'conversación', 64));
@@ -478,7 +503,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       if (params === null || typeof params !== 'object' || Array.isArray(params)) fail(tr('msg.api.badParams'));
       return fn(params);
     },
-    // New chat lines since the last call (the window uses them for notifications when it is in the background).
+    // New chat lines since the last call, sent to the window as 'chat:new' (corner robot, robot notices) or 'notice' (toasts).
     notifyNewChat() {
       try { optiApi.flush(); } catch { /* Opti Bot off or its conversation gone */ }
       const rows = board.all('SELECT id, role, body, meta FROM chat WHERE id > ? ORDER BY id LIMIT 20', lastChat);

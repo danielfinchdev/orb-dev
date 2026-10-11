@@ -75,7 +75,7 @@ export function MonitorView() {
           <div className="mx-auto mt-2 grid max-w-3xl grid-cols-2 gap-2 sm:grid-cols-4" data-testid="opti-oce">
             <Stat icon={Thermometer} label={t('opti.cpuTemp')} value={stats.oce.cpu.tempC != null ? `${Math.round(stats.oce.cpu.tempC)} °C` : '—'} pct={stats.oce.cpu.tempC != null ? Math.round((stats.oce.cpu.tempC / 100) * 100) : null} />
             <Stat icon={Thermometer} label={t('opti.gpuTemp')} value={stats.oce.gpu?.tempC != null ? `${Math.round(stats.oce.gpu.tempC)} °C` : '—'} pct={stats.oce.gpu?.tempC != null ? Math.round(stats.oce.gpu.tempC) : null} sub={stats.oce.gpu?.name ?? null} />
-            <Stat icon={Gpu} label={t('opti.gpu')} value={stats.oce.gpu?.loadPct != null ? `${Math.round(stats.oce.gpu.loadPct)} %` : '—'} pct={stats.oce.gpu?.loadPct ?? null} sub={stats.oce.gpu?.vramTotalMb ? t('opti.vram', { used: Math.round((stats.oce.gpu.vramUsedMb ?? 0) / 1024 * 10) / 10, total: Math.round(stats.oce.gpu.vramTotalMb / 1024 * 10) / 10 }) : null} />
+            <Stat icon={Gpu} label={t('opti.gpu')} value={stats.oce.gpu?.loadPct != null ? `${Math.round(stats.oce.gpu.loadPct)} %` : '—'} pct={stats.oce.gpu?.loadPct ?? null} sub={stats.oce.gpu?.vramTotalMb && stats.oce.gpu?.vramUsedMb != null ? t('opti.vram', { used: Math.round(stats.oce.gpu.vramUsedMb / 1024 * 10) / 10, total: Math.round(stats.oce.gpu.vramTotalMb / 1024 * 10) / 10 }) : null} />
             <Stat icon={Gauge} label="FPS" value={stats.oce.fps != null ? `${Math.round(stats.oce.fps)}` : '—'} />
           </div>
         ) : null}

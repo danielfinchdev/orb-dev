@@ -35,11 +35,11 @@ export default {
   'help.tut.brain.l5': 'Switching agents starts a new conversation. Tasks and logs are kept.',
   'help.tut.brain.go': 'Go to chat',
 
-  'help.tut.newchat.title': 'New chat and direct chats',
-  'help.tut.newchat.l1': '"New chat" opens a clean conversation where you choose the project, brain and reasoning.',
-  'help.tut.newchat.l2': 'With "Orchestrator" off, you talk directly to the agent in the project folder, with the permission you choose: Read-only, Edit files, Ask first or Full access.',
-  'help.tut.newchat.l3': 'You’ll see the answer, commands and changed files live. Enter corrects it on the fly; Ctrl+Enter queues the message.',
-  'help.tut.newchat.l4': 'From the header, change the model and permissions, fork the conversation to try another idea, or resume one you left unfinished.',
+  'help.tut.newchat.title': 'New chat and New task',
+  'help.tut.newchat.l1': '“New chat” opens a clean conversation with {name}, with no folder: choose the project, brain and reasoning in the message box.',
+  'help.tut.newchat.l2': 'With “Orchestrator” off, “New task” shows up too: you hand out the work. Each message is a task for the agent and model you choose, and you can send several at once.',
+  'help.tut.newchat.l3': 'To go back to the conversation in progress, click the robot at the top left. Earlier ones are still there with “Show the previous conversation”.',
+  'help.tut.newchat.l4': 'In a task’s conversation you see the answer, commands and changed files live. Enter corrects it on the fly; Ctrl+Enter queues the message.',
   'help.tut.newchat.go': 'New chat',
 
   'help.tut.tasks.title': 'Tasks',
@@ -48,6 +48,7 @@ export default {
   'help.tut.tasks.l3': 'When a request is finished, {name} reviews the tasks and gives you a report with "OK" and "Request changes". "Undo this task" restores its files without touching your later changes.',
   'help.tut.tasks.l4': 'Task Review: another model, from a different provider when possible, audits the work read-only. Request it from a task or project, or turn it on in Settings › Tasks and usage.',
   'help.tut.tasks.l5': 'If you close Orb, running tasks continue when you reopen it. If an account runs out of quota, the task waits and resumes automatically.',
+  'help.tut.tasks.l6': 'Security Review: from a project, an agent looks for vulnerabilities and exposed secrets without changing anything, and reports the findings by severity.',
   'help.tut.tasks.go': 'Go to Tasks',
 
   'help.tut.sidebar.title': 'Projects in the menu',
@@ -170,6 +171,10 @@ export default {
   'help.faq.13.a': 'In Settings › Contribute you can send feedback with screenshots, no account needed, and support the project via PayPal.',
   'help.faq.14.q': 'How do I replay the guided tour?',
   'help.faq.14.a': 'Use the "Replay the guided tour" button at the top of this screen. You can exit at any time with "Skip tour" or Esc.',
+  'help.faq.15.q': 'Where is the conversation with {name}?',
+  'help.faq.15.a': 'Click the robot at the top left to go back to the conversation in progress. "New chat" starts a clean one, and earlier ones come back with "Show the previous conversation", at the top of the chat.',
+  'help.faq.16.q': 'What is "Start test"?',
+  'help.faq.16.a': 'A health check: {name}, with Orchestrator on, asks several models for a test web page and opens it. It shows in the chat the first time you open Orb each day and is always in Settings › General.',
 
   // ---- guided tour (the robot walks through the app)
   'help.tour.aria': 'Guided tour',
@@ -179,7 +184,7 @@ export default {
   'help.tour.finish': 'Get started',
   'help.tour.counter': '{n} of {total}',
   'help.tour.welcome.title': 'Hi, I’m {name}',
-  'help.tour.welcome.text': 'Here are the essentials in a minute. You can skip this at any time and replay it from Tutorials.',
+  'help.tour.welcome.text': 'Here are the essentials in a minute. Click the robot at the top left to always come back to our conversation. You can replay this from Tutorials.',
   'help.tour.chat.title': 'Write to me here',
   'help.tour.chat.text': 'Tell me what you need: I turn it into tasks for the agents, supervise them and let you know when they’re done. Enter sends, Shift+Enter adds a line and @ attaches context.',
   'help.tour.project.title': 'Project',
@@ -195,7 +200,7 @@ export default {
   'help.tour.bar.title': 'Chat bar',
   'help.tour.bar.text': 'Pause tasks, restart the conversation or open the mini-games while you wait.',
   'help.tour.newchat.title': 'New chat',
-  'help.tour.newchat.text': 'Start a clean conversation, with me or directly with an agent, using the permission you choose.',
+  'help.tour.newchat.text': 'Start a clean conversation with me. With Orchestrator off, “New task” shows up too, so you can hand out the work yourself.',
   'help.tour.folders.title': 'Your projects',
   'help.tour.folders.text': 'Click to select a project; double-click to show its tasks and conversations. Finished items move to "Completed".',
   'help.tour.tasks.title': 'Tasks',

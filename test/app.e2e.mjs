@@ -134,23 +134,24 @@ try {
   await dialogButton('Deshacer').click();
   await until(() => !fs.existsSync(path.join(home, 'web', 'webviaproject', 'hecho-por-claude.txt')), 'deshacer');
 
-  // ---- direct conversation (T3 style) with Codex
+  // ---- direct conversation with Codex
   step = 'conversación directa';
-  // 2.6: «Nuevo chat» opens a clean chat, no pop-up (clicked twice: still one view, no dialogs on top of each other).
+  // 3.0: «Nuevo chat» opens a clean conversation with the assistant, no pop-up (clicked twice: still one view).
   await win.click('[data-testid=new-conversation]');
   await win.click('[data-testid=new-conversation]');
-  await win.waitForSelector('[data-testid=new-chat-input]');
+  await win.waitForSelector('[data-testid=chat-input]');
   assert.equal(await win.locator('[role=dialog]').count(), 0, 'sin ventana emergente');
   await win.click('[data-testid=brain-picker]');
   // 2.6: the list comes folded: one group per agent (and «Recomendados» when there are any).
   assert.equal(await win.locator('[data-testid=brain-codex-default]').count(), 0, 'los grupos empiezan plegados');
   await win.click('[data-testid=brain-group-codex]');
-  await win.click('[data-testid=brain-codex-default]');
-  await win.click('[data-testid=new-chat-orchestrator]');
-  await win.locator('[data-testid=permission-picker]').waitFor();
+  await win.locator('[data-testid=brain-codex-default]').waitFor();
   await shot('05a-nuevo-chat');
-  await win.fill('[data-testid=new-chat-input]', 'Hola Codex, ¿qué hay en la carpeta?');
-  await win.keyboard.press('Enter');
+  await win.keyboard.press('Escape');
+  // A direct conversation with Codex (the same screen as a task's conversation), opened from the menu.
+  const direct = await call('sessions.create', { agent: 'codex', project: 'webviaproject', permission: 'editar', title: 'Hola Codex' });
+  await call('sessions.send', { id: direct.id, text: 'Hola Codex, ¿qué hay en la carpeta?' });
+  await win.getByText('Hola Codex', { exact: true }).first().click();
   await win.waitForSelector('[data-testid=session-input]');
   await win.waitForSelector('text=Codex empieza');
   await win.fill('[data-testid=session-input]', 'Y ahora sigue');
@@ -299,7 +300,7 @@ try {
   await shot('10c-actualizacion');
   await win.keyboard.press('Escape');
   await until(async () => (await win.locator('[data-testid=settings-dialog]').count()) === 0, 'ajustes cerrado');
-  await win.click('[data-testid=nav-chat]'); // in the chat it must not cover the message box
+  await win.click('[data-testid=sidebar-home]'); // in the chat it must not cover the message box
   await win.waitForTimeout(400);
   await shot('10d-actualizacion-chat');
   await win.click('[data-testid=chat-input]');
@@ -327,7 +328,7 @@ try {
   await win.click(`[data-testid=complete-t${firstTask.id}]`);
   await until(async () => !(await call('app.state')).completed?.includes(`t${firstTask.id}`), 'devuelta a su proyecto');
   await folder.click();
-  await win.locator('[data-testid=new-chat-input]').waitFor();
+  await win.locator('[data-testid=chat-input]').waitFor();
   assert.equal((await call('app.state')).activeProject?.name, 'webviaproject', 'un clic elige el proyecto para conversar');
 
   // ---- expert mode (PC only): turned on in Settings, files, git and panels chosen by the user
@@ -355,7 +356,7 @@ try {
 
   // ---- free mode and model choice from the chat
   step = 'modo libre';
-  await win.click('[data-testid=nav-chat]');
+  await win.click('[data-testid=sidebar-home]');
   await win.click('[data-testid=brain-picker]');
   await win.click('[data-testid=brain-group-rec]');
   await win.click('[data-testid=brain-claude-claude-opus-5-5-rec]');
@@ -399,14 +400,14 @@ try {
   await win.click('[data-testid=nav-tasks]');
   await win.waitForTimeout(500);
   await shot('12-noche-tareas');
-  await win.click('[data-testid=nav-chat]');
+  await win.click('[data-testid=sidebar-home]');
   await win.waitForTimeout(500);
   await shot('13-noche-chat');
 
   // ---- a narrow window (the app is responsive; only expert mode needs a wide one)
   step = 'ventana estrecha';
   await win.setViewportSize({ width: 420, height: 860 });
-  for (const [nav, name] of [['nav-chat', '14-estrecha-chat'], ['nav-tasks', '15-estrecha-tareas'], ['nav-settings', '16-estrecha-ajustes'], ['nav-agents', '17-estrecha-agentes']]) {
+  for (const [nav, name] of [['sidebar-home', '14-estrecha-chat'], ['nav-tasks', '15-estrecha-tareas'], ['nav-settings', '16-estrecha-ajustes'], ['nav-agents', '17-estrecha-agentes']]) {
     await win.getByRole('button', { name: 'Menú' }).click();
     await win.locator(`[data-testid=${nav}]:visible`).click();
     await win.waitForTimeout(500);

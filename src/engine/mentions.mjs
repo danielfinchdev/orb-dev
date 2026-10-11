@@ -1,4 +1,4 @@
-// "@" in a message (2.3, like T3 Code's): another task, conversation or log attached as context. The window inserts tokens
+// "@" in a message (2.3): another task, conversation or log attached as context. The window inserts tokens
 // such as @tarea:12, @conversacion:<id> or @bitacora:<project>; before the message goes to the agent each token becomes a
 // short, bounded excerpt (not the whole thing: tokens cost money), marked as data.
 import { oneLine, redactSecrets } from '../core/safety.mjs';

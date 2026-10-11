@@ -20,7 +20,7 @@ import { rankAccounts, isLimitText, isBudgetText, startCooldown, pauseAccount, t
 import { installed } from '../agents/index.mjs';
 import { runDue } from '../core/schedules.mjs';
 import { explainFailure } from '../core/agent-errors.mjs';
-import { usableAccounts, account as findAccount, accountLabel, accountEnv } from '../core/accounts.mjs';
+import { usableAccounts, account as findAccount, accountLabel } from '../core/accounts.mjs';
 import { oneLine, redactSecrets, secretFiles, isSecretPath, MAX_DEP_RESULT } from '../core/safety.mjs';
 import { ATTACH_DIR } from './sessions.mjs';
 import { logTask } from './logs.mjs';
@@ -313,7 +313,8 @@ Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros,
         onFinish: (info) => this.finish(task.id, info)
       });
     } catch (error) {
-      board.patch(task.id, { status: 'blocked', result: tr('sys.scheduler.launchFailed', { name: label(agent), error: error.message }), pid: null }, 'orb', 'task.blocked');
+      // 3.0: only if it is still waiting to start: a task cancelled (or changed) meanwhile keeps its own state.
+      if (board.task(task.id)?.status === 'queued') board.patch(task.id, { status: 'blocked', result: tr('sys.scheduler.launchFailed', { name: label(agent), error: error.message }), pid: null }, 'orb', 'task.blocked');
       return;
     }
     if (!run) return; // spawn failed: finish() already closed the task
@@ -534,18 +535,42 @@ En result pon, en este orden: VEREDICTO: CORRECTO o CON FALLOS; después la list
   }
 
   // Task Review of a whole project: the latest changes (or the whole code if it is small), read-only, by another provider.
-  reviewProject(projectName, { actor = 'usuario', agent: wanted = null, focus = '' } = {}) {
+  // The project and who reviews it: the one asked for, or another provider than those of its last work (not its reviews).
+  reviewerFor(projectName, wanted) {
     const project = this.board.project(projectName); if (!project) throw new Error(tr('msg.scheduler.noProject', { projectName }));
     const last = this.board.tasks({ project: project.name, status: 'done', limit: 5 }).filter((t) => !t.review_of);
-    const usedBy = [...new Set(last.map((t) => t.assigned_to).filter(Boolean))];
-    const agent = wanted || this.reviewer(usedBy);
+    const agent = wanted || this.reviewer([...new Set(last.map((t) => t.assigned_to).filter(Boolean))]);
     if (!agent) throw new Error(tr('msg.scheduler.noReviewer'));
+    return { project, last, agent };
+  }
+
+  reviewProject(projectName, { actor = 'usuario', agent: wanted = null, focus = '' } = {}) {
+    const { project, last, agent } = this.reviewerFor(projectName, wanted);
     const review = this.board.createTask({ project: project.name, title: tr('msg.scheduler.reviewProjectTitle', { name: project.name }), agent, readonly: true, mode: 'carpeta',
       description: `Eres el revisor (Task Review) del proyecto ${project.name} (${project.path}).
 ${last.length ? `Últimas tareas hechas:\n${last.map((t) => `- #${t.id} ${oneLine(t.title)} (${t.assigned_to}): ${oneLine(t.result, 300)}`).join('\n')}` : 'Revisa el código del proyecto.'}${focus ? `\nFíjate sobre todo en: ${oneLine(focus, 500)}` : ''}
 Audita con ojo crítico: errores, casos sin cubrir, seguridad, rendimiento, coherencia y calidad del código. Ejecuta las pruebas si las hay. NO cambies ningún archivo.
 En result pon, en este orden: VEREDICTO: CORRECTO o CON FALLOS; la lista de problemas concretos (archivo y qué falla) por gravedad; y qué arreglarías primero.` }, actor);
-    this.board.addChat('system', tr('msg.scheduler.reviewProjectChat', { name: project.name, agent: label(agent), review: review.id }));
+    this.board.notice(tr('msg.scheduler.reviewProjectChat', { name: project.name, agent: label(agent), review: review.id }), 'info');
+    return review;
+  }
+
+  // 3.0: Security Review: a security audit of the whole project, read-only, by an agent with quota (another provider than
+  // the one that did the last work, when there is one). It reports; it never changes or "fixes" anything.
+  securityReview(projectName, { actor = 'usuario', agent: wanted = null } = {}) {
+    const { project, agent } = this.reviewerFor(projectName, wanted);
+    const review = this.board.createTask({ project: project.name, title: tr('msg.scheduler.securityTitle', { name: project.name }), agent, readonly: true, mode: 'carpeta', fixedBrief: true,
+      description: `Eres el auditor de seguridad (Security Review) del proyecto ${project.name} (${project.path}).
+Revisa todo el código y la configuración buscando vulnerabilidades reales y explotables, no estilo:
+- secretos y credenciales en el código, en el historial de git o en archivos de configuración;
+- inyección (SQL, comandos del sistema, rutas de archivo, plantillas), XSS y CSRF;
+- autenticación, sesiones y permisos (quién puede hacer qué, comprobaciones que faltan);
+- datos del usuario sin validar, deserialización insegura, eval y código dinámico;
+- dependencias con vulnerabilidades conocidas (npm audit, pip-audit o lo que use el proyecto, sin instalar nada nuevo);
+- cifrado débil, aleatoriedad predecible, cabeceras y CORS, registros que guardan datos sensibles.
+NO cambies ningún archivo ni ejecutes nada que modifique el proyecto o el sistema.
+En result pon, en este orden: VEREDICTO: SEGURO o CON RIESGOS; los hallazgos por gravedad (crítica, alta, media, baja), cada uno con archivo y línea, cómo se explotaría y cómo arreglarlo; y qué arreglarías primero.` }, actor);
+    this.board.notice(tr('msg.scheduler.securityChat', { name: project.name, agent: label(agent), review: review.id }), 'info');
     return review;
   }
 

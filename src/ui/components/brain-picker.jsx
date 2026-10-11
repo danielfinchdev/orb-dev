@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Flame, Lightbulb, Star, X } from 'lucide-react';
 import { AgentIcon } from './agent-icon.jsx';
 import { Button } from './ui/button.jsx';
-import { Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, BubbleTip } from './ui/overlay.jsx';
+import { Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, BubbleTip } from './ui/overlay.jsx';
 import { call, useStore } from '@/lib/store.js';
-import { PERMISSION, REASONING, options } from '@/lib/labels.js';
+import { REASONING, options } from '@/lib/labels.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
@@ -18,7 +18,9 @@ export function useCatalog() {
   return catalog;
 }
 
-const modelOf = (catalog, value) => catalog?.find((a) => a.id === value.agent)?.models.find((m) => m.id === (value.model ?? '')) ?? null;
+// 3.0: an account with its own plan has its own models (Codex Go and Pro); the others use the agent's list.
+export const modelsOf = (a, account) => (account && a?.accountModels?.[account]) || a?.models || [];
+const modelOf = (catalog, value) => modelsOf(catalog?.find((a) => a.id === value.agent), value.account).find((m) => m.id === (value.model ?? '')) ?? null;
 // The agent's own default (id ''), named after the model the agent says it uses when it says so.
 const labelOf = (a, m, t) => (m.id ? m.label : m.defaultOf ? t('brain.defaultIs', { model: m.defaultOf }) : t('brain.defaultOf', { agent: a.label }));
 
@@ -52,12 +54,12 @@ export function BrainPicker({ catalog, value, onChange, className }) {
 function BrainGroups({ catalog, value, onChange }) {
   const t = useT();
   const [open, setOpen] = useState(null);
-  const list = (a) => (a.models.length ? a.models : [{ id: '', label: t('brain.defaultOf', { agent: a.label }) }]);
+  const list = (a) => { const own = modelsOf(a, value.agent === a.id ? value.account : null); return own.length ? own : [{ id: '', label: t('brain.defaultOf', { agent: a.label }) }]; };
   const recommended = catalog.flatMap((a) => list(a).filter((m) => m.recommended).map((m) => ({ a, m })));
   const item = (a, m, key, withAgent) => {
     const on = value.agent === a.id && (value.model ?? '') === m.id;
     return (
-      <DropdownMenuItem key={key} onSelect={() => onChange({ agent: a.id, model: m.id, account: a.accounts[0]?.id ?? a.id })} data-testid={`brain-${a.id}-${m.id || 'default'}${withAgent ? '-rec' : ''}`}>
+      <DropdownMenuItem key={key} onSelect={() => onChange({ agent: a.id, model: m.id, account: value.agent === a.id && a.accounts.some((x) => x.id === value.account) ? value.account : a.accounts[0]?.id ?? a.id })} data-testid={`brain-${a.id}-${m.id || 'default'}${withAgent ? '-rec' : ''}`}>
         {withAgent ? <AgentIcon agent={a.id} className="ml-5 size-3.5" /> : null}
         {/* 2.7: each model says what it is for (fast, balanced, most capable), so no one has to know the names. */}
         <span className={cn('grid min-w-0 flex-1', !withAgent && 'pl-5')}>
@@ -97,11 +99,6 @@ function BrainGroups({ catalog, value, onChange }) {
 export function ReasoningPicker({ value, onChange }) {
   const t = useT();
   return <Select size="sm" value={value} onValueChange={onChange} title={t('brain.reasoning')} options={options(REASONING).map((o) => ({ ...o, label: `${t('brain.reasoningShort')}: ${o.label.toLowerCase()}` }))} data-testid="reasoning-picker" />;
-}
-
-export function PermissionPicker({ value, onChange, disabled }) {
-  const t = useT();
-  return <Select size="sm" value={value} onValueChange={onChange} disabled={disabled} title={t('brain.permissions')} options={options(PERMISSION)} data-testid="permission-picker" />;
 }
 
 // Why this choice may spend the quota fast (or null): high reasoning, a heavy model, or an account already well used.

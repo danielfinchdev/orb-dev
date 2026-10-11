@@ -1,21 +1,8 @@
-// Small helpers that keep the daemon alive and its outputs clean: bounded log reads, log rotation, secret redaction, text normalisation.
+// Small helpers that keep the daemon alive and its outputs clean: log rotation, secret redaction, text normalisation.
 import fs from 'node:fs';
 
 export const MAX_DESCRIPTION = 12000;
 export const MAX_DEP_RESULT = 1500;
-
-// Last `bytes` bytes of a file as text ('' if it does not exist). Never reads the whole file.
-export function tailFile(file, bytes = 20000) {
-  let fd;
-  try {
-    fd = fs.openSync(file, 'r');
-    const { size } = fs.fstatSync(fd);
-    const length = Math.min(size, bytes);
-    const buffer = Buffer.alloc(length);
-    fs.readSync(fd, buffer, 0, length, size - length);
-    return buffer.toString('utf8');
-  } catch { return ''; } finally { if (fd !== undefined) try { fs.closeSync(fd); } catch { /* already closed */ } }
-}
 
 // Keeps one previous generation (file.1) once a log passes `max` bytes.
 export function rotateIfBig(file, max = 10 * 1024 * 1024) {

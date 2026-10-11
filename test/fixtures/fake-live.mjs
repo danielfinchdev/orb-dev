@@ -31,7 +31,6 @@ import { spawn } from 'node:child_process';
 import { Turn, Approvals } from '../../src/agents/live.mjs';
 import { decide } from '../../src/core/guard.mjs';
 
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // One call to a tool of the "orb" MCP server, started exactly as the real agents start it (command, args, env).
 async function mcpCall(server, name, args, whole = false) {

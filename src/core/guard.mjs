@@ -12,8 +12,6 @@ import path from 'node:path';
 import { translate } from './i18n.mjs';
 
 export const PERMISSIONS = ['leer', 'editar', 'preguntar', 'total'];
-export const PERMISSION_LABEL = { leer: 'Solo leer', editar: 'Editar archivos', preguntar: 'Preguntar antes de comandos', total: 'Acceso total' };
-
 // What a tool does, whatever the agent calls it (Claude tool names, Codex items, ACP kinds).
 const READ = /^(read|glob|grep|ls|search|find|view|notebookread|webfetch|websearch|fetch|think|todowrite|todoread|task|agent|exitplanmode|skill|toolsearch|listmcpresources|readmcpresource|bashoutput|monitor)$/i;
 const EDIT = /^(edit|write|multiedit|notebookedit|filechange|applypatch|edit_file|write_file|replace|move|delete|create)$/i;

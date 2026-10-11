@@ -32,7 +32,7 @@ import { ActivityView } from '@/views/activity.jsx';
 import { SettingsDialog, PhoneView } from '@/views/settings.jsx';
 import { SchedulesView } from '@/views/schedules.jsx';
 import { ExpertView } from '@/views/expert.jsx';
-import { NewChatView } from '@/views/new-chat.jsx';
+import { NewTaskView } from '@/views/new-task.jsx';
 import { TutorialsView } from '@/views/tutorials.jsx';
 import { WhiteboardView } from '@/views/whiteboard.jsx';
 import { MonitorView } from '@/views/monitor.jsx';
@@ -41,8 +41,8 @@ const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
 // 2.7, the phone: the conversations («Chats») and «Más» are screens of their own; Agentes and Modo experto are PC only.
 function ChatsView() { const t = useT(); return <><PageHeader icon={<MessagesSquare className="text-primary size-5" />} title={t('nav.chats')} /><Sidebar page /></>; }
 const VIEWS = bridge.mobile
-  ? { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: LogsView, activity: ActivityView, schedules: SchedulesView, phone: PhoneView, new: NewChatView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
-  : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: LogsView, activity: ActivityView, schedules: SchedulesView, phone: PhoneView, new: NewChatView, tutorials: TutorialsView, board: WhiteboardView,
+  ? { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: LogsView, activity: ActivityView, schedules: SchedulesView, phone: PhoneView, newtask: NewTaskView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
+  : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: LogsView, activity: ActivityView, schedules: SchedulesView, phone: PhoneView, newtask: NewTaskView, tutorials: TutorialsView, board: WhiteboardView,
     // 2.7.3: Orb Light (the portable .exe) has no God mode nor PC Status.
     ...(bridge.light ? {} : { expert: ExpertView, monitor: MonitorView }) };
 
@@ -85,7 +85,7 @@ function Shell() {
     <div className="flex h-full">
       {/* 2.6: folded away (its button next to day / night), the screens take the whole width. */}
       <div className={folded ? 'hidden' : 'hidden md:flex'}><Sidebar mood={mood} /></div>
-      {/* Phones and narrow windows: the sidebar is a drawer behind a menu button. */}
+      {/* Narrow windows: the sidebar is a drawer behind a menu button (phones have their own shell). */}
       {drawer ? <div className="fixed inset-0 z-50 flex md:hidden" onClick={() => setDrawer(false)}><div className="animate-in slide-in-from-left flex h-full shadow-2xl" onClick={(e) => { if (e.target.closest('button')) setTimeout(() => setDrawer(false), 50); }}><Sidebar mood={mood} /></div><div className="flex-1 bg-black/40" /></div> : null}
       <main className="theme-scene flex min-w-0 flex-1 flex-col">
         <Scene />
