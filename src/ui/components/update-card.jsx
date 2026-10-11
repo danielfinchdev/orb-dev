@@ -20,7 +20,7 @@ export function useUpdate() {
   return st;
 }
 
-// What the button does in each state: download (installed), open the download page (portable) or restart into it.
+// What the button does in each state: download (installed), open the download page (not installed: the zip) or restart into it.
 export const updateActions = {
   update: (st) => act(st?.portable ? bridge.update.install() : bridge.update.download()),
   restart: () => act(bridge.update.install()),
