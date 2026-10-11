@@ -2,7 +2,7 @@
 // keyboard shortcuts and the frequently asked questions, all searchable; and the button that replays the robot's guided
 // tour (components/tour.jsx). Texts: help.* in the locales.
 import { useState } from 'react';
-import { GraduationCap, Search, Rocket, MessageSquare, Brain, MessageSquarePlus, ListTodo, FolderKanban, Bot, Gauge, CalendarClock, BookOpen, Smartphone, SquareTerminal, Gamepad2, Palette, ShieldCheck, Keyboard, CircleHelp, ChevronRight, Play, ArrowRight } from 'lucide-react';
+import { GraduationCap, Search, Rocket, MessageSquare, Brain, MessageSquarePlus, ListTodo, FolderKanban, Bot, Gauge, CalendarClock, BookOpen, Smartphone, SquareTerminal, Gamepad2, Palette, ShieldCheck, PenTool, HeartPulse, Keyboard, CircleHelp, ChevronRight, Play, ArrowRight } from 'lucide-react';
 import { PageHeader } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -14,23 +14,25 @@ import { useT } from '@/lib/i18n.js';
 
 // id: texts help.tut.<id>.title and .l1…lN (lines). go: the screen it talks about (pc: a button only on the PC).
 const TUTORIALS = [
-  { id: 'start', icon: Rocket, lines: 4, go: () => go('projects') },
+  { id: 'start', icon: Rocket, lines: 5, go: () => go('projects') },
   { id: 'chat', icon: MessageSquare, lines: 4, go: () => go('chat') },
-  { id: 'brain', icon: Brain, lines: 4, go: () => go('chat') },
+  { id: 'brain', icon: Brain, lines: 5, go: () => go('chat') },
   { id: 'newchat', icon: MessageSquarePlus, lines: 4, go: () => go('new') },
   { id: 'tasks', icon: ListTodo, lines: 5, go: () => go('tasks') },
   { id: 'sidebar', icon: FolderKanban, lines: 4, go: () => go('projects') },
+  { id: 'board', icon: PenTool, lines: 3, go: () => go('board') },
   { id: 'agents', icon: Bot, lines: 4, go: () => go('agents'), pc: true },
   { id: 'usage', icon: Gauge, lines: 3, go: () => openSettings('tareas'), pc: true },
   { id: 'schedules', icon: CalendarClock, lines: 3, go: () => go('schedules') },
   { id: 'logs', icon: BookOpen, lines: 3, go: () => go('logs') },
+  { id: 'monitor', icon: HeartPulse, lines: 3, go: () => openSettings('monitor'), pc: true },
   { id: 'phone', icon: Smartphone, lines: 3, go: () => openSettings('movil'), pc: true },
   { id: 'expert', icon: SquareTerminal, lines: 2, go: () => openSettings('experto'), pc: true },
   { id: 'games', icon: Gamepad2, lines: 2, go: () => openGames(), pc: true },
   { id: 'looks', icon: Palette, lines: 3, go: () => openSettings('apariencia'), pc: true },
   { id: 'privacy', icon: ShieldCheck, lines: 5 }
 ];
-const PC_ONLY = new Set(['agents', 'usage', 'expert', 'games', 'looks']);
+const PC_ONLY = new Set(['agents', 'usage', 'monitor', 'expert', 'games', 'looks']);
 const KEYS = 8; // help.key.1…8
 const FAQS = 14; // help.faq.1…14
 const range = (n) => Array.from({ length: n }, (_, i) => i + 1);
