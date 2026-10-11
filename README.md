@@ -1,39 +1,31 @@
+<p align="center"><img src="docs/portada.png" alt="Orb·e, tu director de bolsillo" /></p>
+
 # Orb·e: Tu director de bolsillo
 
-**Orb** (`Orb.exe`) es una aplicación de escritorio para Windows. Hablas con su robot, **Orb·e** (o
-como lo llames), y él:
+**Orb** es una aplicación de escritorio para Windows que coordina tus agentes de IA desde un solo chat. Le cuentas qué
+necesitas y su asistente, **Orb·e**, planifica el trabajo, lo reparte entre Claude Code, Codex, Cursor, Gemini CLI,
+OpenCode, Qwen Code y GitHub Copilot, elige el modelo adecuado para cada tarea y revisa el resultado antes de pedirte el OK.
 
-1. **Planifica tu proyecto por fases y escribe un encargo claro para cada agente, sin gastar tokens de más.** Los agentes
-   son de varios proveedores (**Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Qwen Code y GitHub Copilot**) y trabajan a la vez.
-2. **Te entrega resultados comprobados**, para que des el **OK**.
+Todo funciona en tu PC, con tus propias cuentas: Orb no tiene servidor en la nube ni ve tus contraseñas.
 
-También puedes hablar directamente con cada agente, en directo: respuesta en streaming, corregirle sobre la marcha, cola
-de mensajes, permisos con un clic y bifurcar.
+Este repositorio es **Orb.dev**, el código de la app. Funcionamiento detallado: [`docs/FUNCIONAMIENTO.md`](docs/FUNCIONAMIENTO.md).
+Novedades de cada versión: [`docs/NOVEDADES.md`](docs/NOVEDADES.md).
 
-Este repositorio es **Orb.dev**, el desarrollo de la app. Cómo funciona todo, funcionalidad por funcionalidad:
-[`docs/FUNCIONAMIENTO.md`](docs/FUNCIONAMIENTO.md). Novedades: [`docs/NOVEDADES.md`](docs/NOVEDADES.md).
+## Descargar
 
-```
-Tú → Orb·e → tareas y coordinación → agentes → tareas hechas → Orb·e revisa → informe → tu OK
-```
+Desde [**Releases → última versión**](https://github.com/danielfinchdev/orb-dev/releases/latest):
 
-## Descargar y usar (lo más fácil)
+- **`Orb-3.0.0-instalador.exe`** (recomendado): la app completa. Se instala para tu usuario, sin permisos de
+  administrador, y se actualiza sola.
+- **`Orb-3.0.0-light-portable.exe`**: **Orb Light**, lo esencial sin instalar nada (sin minijuegos, God mode, Monitoreo
+  del equipo ni temas). Avisa de las versiones nuevas.
 
-1. Entra en [**Releases → última versión**](https://github.com/danielfinchdev/orb-dev/releases/latest) y descarga
-   **`Orb-3.0.0-instalador.exe`**.
-2. Doble clic: se instala para tu usuario (sin permisos de administrador) con acceso directo en el escritorio y en el menú
-   Inicio. Luego lo abres escribiendo «Orb» en el buscador de Windows.
-3. Windows SmartScreen avisará porque la app aún no está firmada: «Más información» → «Ejecutar de todas formas».
+Windows 10 y 11. Al ser una app sin firmar, SmartScreen avisa la primera vez: «Más información» → «Ejecutar de todas
+formas». En el primer arranque, Orb instala los agentes que falten con sus instaladores oficiales. El repositorio es
+privado: para descargar hace falta acceso en GitHub.
 
-¿Sin instalar nada? **`Orb-3.0.0-light-portable.exe`** es **Orb Light**: doble clic y se abre, con lo esencial
-(chat, tareas, proyectos, pizarra, agentes…) y sin minijuegos, God mode, Monitoreo del equipo ni temas. No se actualiza
-sola: avisa de cada versión nueva y abre la descarga. No hace falta instalar Node.js ni Git para la app; los agentes (Claude Code, Codex,
-Cursor) te los instala ella misma en el primer arranque. El repositorio es privado: para descargar hay que tener acceso
-a él en GitHub (o que te pasen el archivo).
-
-Cada versión nueva se publica sola: al cambiar `version` en `package.json` en `main`, GitHub la prueba, la construye en
-un Windows real, prueba la app empaquetada (`.github/workflows/release.yml`) y deja en Releases el instalador y Orb Light. Es una versión de prueba: si algo falla, cuéntalo con
-una captura.
+Cada versión se publica automáticamente: al cambiar `version` en `package.json` en `main`, la integración continua la
+prueba en Windows, construye el instalador y Orb Light, y los publica en Releases (`.github/workflows/release.yml`).
 
 ## Usarla desde el código (para desarrollar)
 
@@ -53,8 +45,8 @@ una captura.
 El `.exe` no está dentro del código: se descarga de Releases (arriba) o lo generas tú en Windows con `npm run dist`
 (deja en `dist\` el instalador y Orb Light).
 
-**Ojo con Cursor:** su plan gratuito no deja usar el agente desde otras apps. Si una tarea falla por eso, la app lo dice
-claro, deja Cursor en pausa un día y, si la tarea era para «cualquier agente», se la pasa a otro.
+**Cursor:** su plan gratuito no permite usar el agente desde otras aplicaciones. Si una tarea falla por ese motivo, Orb
+lo indica, pausa Cursor durante un día y, si la tarea era para «cualquier agente», la asigna a otro.
 
 ## Empezar
 
@@ -82,71 +74,25 @@ D:\Orb\                   (siempre <carpeta elegida>\Orb, igual para todos)
 
 ## Lo principal
 
-- **Novedades de la 3.0:** un solo «Nuevo chat» (y «Nueva tarea» para dirigir tú el trabajo), Security Review, «Iniciar
-  test», modelos propios de cada cuenta, el puente con Open Control Edge afinado, más rapidez y arreglos.
-- **Novedades de la 2.7.3:** el portable pasa a ser **Orb Light**, con lo esencial (el instalador es la app completa), y los
-  avisos antiguos de «Carpeta de trabajo» salen del chat.
-- **Novedades de la 2.7.2:** el puente con Open Control Edge se recupera solo si una lectura no responde, y las pruebas
-  ya no escriben en sus archivos.
-- **Novedades de la 2.7.1:** textos revisados en toda la app y tutorial guiado de 18 pasos sin repeticiones, con la Pizarra.
-- **Novedades de la 2.7** (detalle en [docs/NOVEDADES.md](docs/NOVEDADES.md)):
-  - **Orb elige el modelo** de cada tarea según lo difícil que es y tu nivel de gasto, y explica por qué.
-  - **Pizarra** por proyecto (Excalidraw) con adjuntos; Orbe la lee al planificar.
-  - **Monitoreo del equipo** con Opti Bot (salud, seguridad, Orb y copias; cambios solo con tu OK) y **Red** (Wi-Fi,
-    equipos, Escritorio remoto/SSH, Android y TV por adb).
-  - **Proyectos multiplataforma**, **imágenes de Codex** con edición por zonas, **actividad en vivo** y **preguntas con
-    opciones** en el chat, **puente con Open Control Edge** y la tabla de contribuciones de GitHub.
-- **Novedades de la 2.3**:
-  - **Agentes en directo:** un proceso vivo por conversación, respuesta en streaming, corregir en marcha (Intro), cola
-    editable (Ctrl+Intro), bifurcar, continuar tras cerrar, detalles y medidor de contexto.
-  - **Permisos equilibrados:** lo arriesgado pregunta con una tarjeta Permitir/Denegar en lugar de prohibirse.
-  - **Más agentes** por ACP.
-  - **Cupo real:** usa el uso que dicen Claude y Codex; las tareas esperan solas al reinicio.
-  - **Delegación** entre agentes.
-  - **Task Review:** otro modelo de otro proveedor audita y da un veredicto.
-  - **Tareas programadas**, **«@»** para adjuntar contexto y **bandeja** en la barra lateral.
-  - **Español de España e inglés.**
-- **Chat con el asistente**: modelo Sonnet 5.5 (ahorro) u Opus 5.5, ambos con razonamiento medio, y casilla **Orquestador**:
-  marcada, solo coordina; desmarcada (modo libre), trabaja directamente en el proyecto (sin push ni publicar).
-- **Tareas**: en la carpeta del proyecto, por turnos y con **«Deshacer esta tarea»**, o en una copia aislada con rama propia.
-  Aprobación obligatoria para lo delicado (publicar, borrar, credenciales, pagos, razonamiento alto, tareas creadas por un agente).
-  Cupo por agente cada 5 h. Revisión cruzada opcional. Informe final con **OK / Pedir cambios**.
-- **Conversaciones directas** con cada agente, en directo: mensajes, comandos, archivos cambiados, imágenes de referencia
-  y permisos («Solo leer», «Editar archivos», «Acceso total»).
-- **GitHub** con el `gh` oficial: publicar un proyecto, subir ramas, crear pull requests, clonar, ver PR abiertos.
-- **Varias cuentas por agente** (2 de Codex, 3 de Claude…): cada una con su login, su cupo y su pausa por límite; las
-  tareas se reparten solas entre las que tienen cupo, o fijas una concreta.
-- **Instalación automática**: en el primer arranque (y en «Agentes») instala lo que falte con los instaladores oficiales
-  (Git, Node.js, GitHub CLI, Tailscale, Claude Code, Codex, Cursor) en una ventana visible.
-- **Navegador de los agentes**: abren, prueban y revisan webs (también `localhost`) con las herramientas `orb_browser_*`,
-  y una **ventanita flotante arriba a la derecha** te enseña en directo lo que hacen (se agranda, se contrae o se cierra).
-- **Móvil sin apps nativas**: activa «Móvil» en Ajustes y escanea el QR (de un solo uso) con el móvil, por la wifi de
-  casa (sin instalar nada) o por Tailscale (también fuera de casa, con HTTPS). Todo va cifrado de extremo a extremo
-  entre el móvil y el PC. La web se añade a la pantalla de inicio como una app y, por HTTPS, avisa de lo que espera tu
-  aprobación. El móvil chatea, aprueba, da el OK y sigue las tareas; lo delicado (ajustes, cuentas, instalar, acceso
-  total, archivos del PC) solo desde el PC.
-- **God mode** (Ajustes, solo PC): explorador y visor de archivos, cambios de git con su diff, historial, lo que está
-  en marcha, uso de las cuentas, carga del equipo y actividad, alrededor del chat. Eliges qué paneles ver.
-- **Conectores MCP** extra para los agentes (bases de datos, Figma…).
-- **Menú de carpetas**: a la izquierda, cada proyecto es una carpeta que se pliega y despliega con las tareas que le has
-  mandado y sus conversaciones (el `+` de cada carpeta te lleva al chat con ese proyecto elegido). Las conversaciones sin
-  proyecto, en «Sin carpeta».
-- **Tareas en directo**: mientras trabaja, cada tarea enseña cuánto lleva, los pasos, qué está haciendo ahora y el
-  porcentaje que va informando el agente (en «Tareas» y encima del cuadro de texto del chat). Si una tarea pasa 10 minutos
-  sin dar señales, te avisa en el chat para que mires su conversación o la canceles.
-- **Fallos explicados**: si un agente no puede trabajar (plan sin acceso, sin sesión, modelo no disponible, sin red), la
-  tarea dice por qué y qué hacer, en vez de un «falló» a secas.
-- **Ajustes en una ventana** con apartados (General, Apariencia, Tareas y usos, Móvil, Herramientas, Modo
-  experto, Actualizaciones, Contribuye y Más aplicaciones).
-- **Apariencia:** modo claro, oscuro o sistema; temas Por defecto, Vaporwave, Retro arcade, Profesional (sin robot) y Candy;
-  tipografía de la interfaz y del código; colores del código. La barra de menús de Windows está oculta por defecto.
-- **Tamaño de la interfaz** en Ajustes → Apariencia (Pequeña / Normal / Grande) o con `Ctrl +`, `Ctrl -` y `Ctrl 0`
-  (también `Ctrl` + rueda del ratón). Se guarda en cada PC.
-- **`Ctrl J` abre una terminal** en la carpeta del proyecto que tengas delante: Warp si lo tienes instalado; si no,
-  Windows Terminal o PowerShell. En Ajustes → Apariencia puedes elegir una fija (Warp, Windows Terminal, PowerShell o CMD).
-- **Robot animado** que reacciona (piensa, habla, se alegra, se preocupa, se duerme) y avisa en una esquina.
-  Todo es responsive (móvil y ventanas estrechas) salvo el God mode.
-- **Contribuye:** apoyo por PayPal y comentarios con capturas, sin cuenta.
+- **Un chat para dirigirlo todo.** Con el Orquestador activado, Orb·e planifica, reparte y supervisa; desactivado, trabaja
+  directamente en el proyecto (nunca hace push ni publica sin ti). «Nueva tarea» te permite repartir tú el trabajo, con
+  el modelo que elijas para cada tarea y varias a la vez.
+- **El modelo justo para cada tarea.** Orb elige un modelo rápido para lo sencillo y el más capaz solo cuando hace falta,
+  según el nivel de gasto que fijes.
+- **Tareas con control.** Lo delicado (publicar, borrar, credenciales, pagos, razonamiento alto) espera tu aprobación.
+  Cada tarea se puede deshacer, trabajar en una copia aislada con su propia rama y terminar con un informe «OK / Pedir
+  cambios».
+- **Revisión independiente.** Task Review pide a otro modelo, de otro proveedor si es posible, que audite el trabajo;
+  Security Review busca vulnerabilidades y secretos expuestos en todo el proyecto. Ninguno modifica nada.
+- **Varias cuentas por agente.** Cada cuenta con su sesión, sus modelos y su cupo; el trabajo se reparte entre las que
+  tienen cupo y espera solo cuando se agota.
+- **Pizarra por proyecto** para dibujar, escribir y adjuntar referencias que Orb·e tiene en cuenta al planificar.
+- **Desde el móvil**, sin instalar nada: chat, aprobaciones y seguimiento de tareas, con cifrado de extremo a extremo.
+- **Monitoreo del equipo** con Opti Bot: salud, seguridad y red del PC; cualquier cambio requiere tu aprobación.
+- **Integración con GitHub** mediante `gh`: publicar proyectos, subir ramas y crear pull requests.
+- **God mode** para quien quiera ver más: archivos, cambios de git, historial y actividad alrededor del chat.
+- **En español e inglés**, con temas, modo claro y oscuro, y conectores MCP para ampliar las herramientas de los agentes.
+
 
 ## Desarrollo
 
