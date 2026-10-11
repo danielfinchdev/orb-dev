@@ -35,7 +35,7 @@ export function WhiteboardView() {
   const project = projects.find((p) => p.name === app.activeProject?.name) ?? null;
   return (
     <>
-      <PageHeader icon={<PenTool className="text-primary size-5" />} title={t('wb.title')} meta={project ? t('wb.meta', { project: project.name }) : t('wb.metaNone')}>
+      <PageHeader icon={<PenTool className="text-primary size-5" />} title={t('wb.title')} meta={project ? t('wb.meta', { project: project.name, assistant: app.config.assistantName }) : t('wb.metaNone')}>
         <ProjectPicker />
       </PageHeader>
       {project ? <Whiteboard key={project.name} project={project.name} /> : <Empty icon={PenTool} title={t('wb.pickTitle')} className="m-auto">{t('wb.pickBody')}</Empty>}
@@ -47,6 +47,7 @@ function Whiteboard({ project }) {
   const t = useT();
   const dark = useDark();
   const lang = useStore((s) => s.app.config.language);
+  const assistant = useStore((s) => s.app.config.assistantName);
   const [data, setData] = useState(null);
   const [attachments, setAttachments] = useState([]);
   const [panel, setPanel] = useState(() => { try { return localStorage.getItem('orb.wb.panel') !== '0'; } catch { return true; } });
@@ -141,11 +142,11 @@ function Whiteboard({ project }) {
                     <div className="min-w-0 flex-1"><div className="truncate text-[12.5px] font-medium">{a.name}</div><div className="text-muted-foreground text-[11px]">{size(a.size)}</div></div>
                     {bridge.mobile ? null : <BubbleTip title={t('wb.remove')}><Button size="icon-xs" variant="ghost" onClick={() => remove(a.name)} aria-label={t('wb.remove')}><Trash2 /></Button></BubbleTip>}
                   </div>
-                  <textarea defaultValue={a.note} rows={2} maxLength={2000} placeholder={t('wb.notePh')} onBlur={(e) => { if (e.target.value !== a.note) note(a.name, e.target.value); }}
+                  <textarea defaultValue={a.note} rows={2} maxLength={2000} placeholder={t('wb.notePh', { assistant })} onBlur={(e) => { if (e.target.value !== a.note) note(a.name, e.target.value); }}
                     className="border-input bg-background/70 placeholder:text-muted-foreground focus-visible:ring-ring/40 w-full resize-y rounded-lg border px-2 py-1 text-[12px] outline-none focus-visible:ring-2" />
                 </div>
               );
-            }) : <p className="text-muted-foreground px-2 py-6 text-center text-[12px] leading-relaxed">{t('wb.noAttachments')}</p>}
+            }) : <p className="text-muted-foreground px-2 py-6 text-center text-[12px] leading-relaxed">{t('wb.noAttachments', { assistant })}</p>}
           </div>
           <div className="grid gap-1.5 border-t p-3">
             {/* Orb reads the Pizarra by itself (and hears when it changes): no button to ask it. */}

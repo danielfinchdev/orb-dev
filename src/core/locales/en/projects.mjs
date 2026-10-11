@@ -1,6 +1,6 @@
 // projects.*
 export default {
-  'projects.gh.desc': 'Your account is used through GitHub CLI (gh). Orb has no access to your password or tokens.',
+  'projects.gh.desc': 'Your account is used through GitHub CLI (gh). Orb never accesses your password or tokens.',
   'projects.gh.notInstalled': 'GitHub CLI is not installed',
   'projects.gh.download': 'Download',
   'projects.gh.connected': 'Connected as {user}',
@@ -13,13 +13,13 @@ export default {
   'projects.gh.less': 'Less',
   'projects.gh.more': 'More',
   'projects.commit.title': 'Save changes',
-  'projects.commit.desc': 'All changes in the folder will be committed. If files with possible secrets are detected, the commit will not be made.',
+  'projects.commit.desc': 'All changes in the folder will be committed. If possible secrets are detected, the commit won’t be made.',
   'projects.commit.message': 'Message',
   'projects.commit.ph': 'Describe the changes in one sentence',
   'projects.commit.ok': 'Save',
   'projects.commit.done': '{files} file(s) saved',
   'projects.publish.title': 'Publish to GitHub',
-  'projects.publish.desc': 'A repository will be created in your GitHub account and the project will be uploaded.',
+  'projects.publish.desc': 'A repository will be created in your GitHub account and the project uploaded to it.',
   'projects.publish.repo': 'Repository name',
   'projects.publish.private': 'Private',
   'projects.publish.ok': 'Publish',
@@ -36,7 +36,7 @@ export default {
   'projects.unlink.ok': 'Unlink',
   'projects.unlink.done': 'Unlinked',
   'projects.git': 'Git and GitHub',
-  'projects.noGit': 'This folder does not use git. Tasks can still be undone, but there are no branches or GitHub integration.',
+  'projects.noGit': 'This project doesn’t use git. You can still undo tasks, but without branches or GitHub integration.',
   'projects.branch': 'Current branch',
   'projects.changes': 'Unsaved changes',
   'projects.filesN': '{n} file(s)',
@@ -60,6 +60,6 @@ export default {
   'projects.openOne': '{n} open',
   'projects.openOther': '{n} open',
   'projects.empty.title': 'No projects',
-  'projects.empty.hint': 'Create a project, clone a repository or create a folder in windows, ios, android or web inside {home}.',
+  'projects.empty.hint': 'Create a project, clone a repository or add a folder in windows, ios, android or web inside {home}.',
   'projects.pick': 'Select a project'
 };
