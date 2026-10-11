@@ -20,7 +20,7 @@ fs.writeFileSync(path.join(userData, 'ubicacion.json'), JSON.stringify({ home })
 const log = [];
 const note = (s) => { const line = `[${new Date().toISOString().slice(11, 19)}] ${s}`; log.push(line); console.log(line); };
 
-const app = await electron.launch({ executablePath: (await import('electron')).default, args: [ROOT], env: { ...process.env, ORB_USER_DATA: userData } });
+const app = await electron.launch({ executablePath: (await import('electron')).default, args: [ROOT], env: { ...process.env, ORB_NO_BRIDGE: '1', ORB_USER_DATA: userData } });
 const page = await app.firstWindow();
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));

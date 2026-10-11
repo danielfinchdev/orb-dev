@@ -22,7 +22,7 @@ const notes = [];
 const note = (s) => { notes.push(s); console.log(`  · ${s}`); };
 
 async function open(userData) {
-  const app = await electron.launch({ executablePath: exe || electronBin, args: exe ? [] : [ROOT], env: { ...process.env, ORB_USER_DATA: userData } });
+  const app = await electron.launch({ executablePath: exe || electronBin, args: exe ? [] : [ROOT], env: { ...process.env, ORB_NO_BRIDGE: '1', ORB_USER_DATA: userData } });
   const page = await app.firstWindow();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));

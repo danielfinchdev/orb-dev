@@ -24,7 +24,7 @@ const userData = path.join(tmp, 'datos-app'); fs.mkdirSync(userData);
 fs.writeFileSync(path.join(userData, 'ubicacion.json'), JSON.stringify({ home }));
 
 const port = 9300 + Math.floor(Math.random() * 500);
-const app = spawn(exe, [`--remote-debugging-port=${port}`, ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], { env: { ...process.env, ORB_USER_DATA: userData }, stdio: 'ignore' });
+const app = spawn(exe, [`--remote-debugging-port=${port}`, ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], { env: { ...process.env, ORB_NO_BRIDGE: '1', ORB_USER_DATA: userData }, stdio: 'ignore' });
 const stop = () => { try { if (process.platform === 'win32') spawn('taskkill', ['/PID', String(app.pid), '/T', '/F'], { stdio: 'ignore' }); else app.kill(); } catch { /* gone */ } };
 const until = async (fn, what, ms = 30000) => { const end = Date.now() + ms; while (Date.now() < end) { try { const v = await fn(); if (v) return v; } catch { /* not yet */ } await new Promise((r) => setTimeout(r, 300)); } throw new Error(`no llegó: ${what}`); };
 

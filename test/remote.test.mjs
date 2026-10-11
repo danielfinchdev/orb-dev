@@ -119,7 +119,8 @@ test('todo va cifrado; repetir, retrasar o tocar un mensaje no sirve', async () 
   const res = await p.post('/api/call', box);
   const raw = await res.text();
   assert.deepEqual(Object.keys(JSON.parse(raw)).sort(), ['c', 'n']);
-  assert.ok(!raw.includes('assistantName') && !raw.includes('Orb'), 'la respuesta no se puede leer por el camino');
+  // With quotes: base64 never has them, so a random run of letters in the ciphertext (an «Orb» by chance) does not count.
+  assert.ok(!raw.includes('"assistantName"') && !raw.includes('"config"'), 'la respuesta no se puede leer por el camino');
   assert.equal((await p.post('/api/call', box)).status, 401, 'la misma petición dos veces (repetición)');
   // A request stamped far from the PC's time (a replay, or a phone whose clock is off): refused, but the phone stays
   // paired and gets the PC's time, so its next request, stamped with it, goes through.
