@@ -8,7 +8,7 @@ import { Robot } from '@/components/robot.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, CardHeader, CardTitle, CardContent, Empty, Input, Kbd } from '@/components/ui/basic.jsx';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
-import { useStore, go, openSettings, openGames, startTour, bridge } from '@/lib/store.js';
+import { useStore, go, openSettings, openGames, startTour, bridge, newChat } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
@@ -17,8 +17,8 @@ const TUTORIALS = [
   { id: 'start', icon: Rocket, lines: 5, go: () => go('projects') },
   { id: 'chat', icon: MessageSquare, lines: 4, go: () => go('chat') },
   { id: 'brain', icon: Brain, lines: 5, go: () => go('chat') },
-  { id: 'newchat', icon: MessageSquarePlus, lines: 4, go: () => go('new') },
-  { id: 'tasks', icon: ListTodo, lines: 5, go: () => go('tasks') },
+  { id: 'newchat', icon: MessageSquarePlus, lines: 4, go: () => newChat() },
+  { id: 'tasks', icon: ListTodo, lines: 6, go: () => go('tasks') },
   { id: 'sidebar', icon: FolderKanban, lines: 4, go: () => go('projects') },
   { id: 'board', icon: PenTool, lines: 3, go: () => go('board') },
   { id: 'agents', icon: Bot, lines: 4, go: () => go('agents'), pc: true },
@@ -36,7 +36,7 @@ const PC_ONLY = new Set(['agents', 'usage', 'monitor', 'expert', 'games', 'looks
 // 2.7.3: what Orb Light (the portable .exe) does not have.
 const NOT_LIGHT = new Set(['monitor', 'expert', 'games']);
 const KEYS = 8; // help.key.1…8
-const FAQS = 14; // help.faq.1…14
+const FAQS = 16; // help.faq.1…16
 const range = (n) => Array.from({ length: n }, (_, i) => i + 1);
 // Search without accents or case: «bitacora» finds «Bitácoras».
 const fold = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();

@@ -55,12 +55,12 @@ export function quickRun(cmd, args, { timeoutMs = 15000, env } = {}) {
 // 2.6: the models an installed agent offers, asked to the agent itself (each adapter's discoverModels, with the login of
 // its first usable account). Resolves with [{ id, label, default?, resolved? }] or null (not installed, no way to ask, the
 // agent did not answer). Never throws.
-export async function discoverModels(agent) {
+export async function discoverModels(agent, accountId = null) {
   try {
     const a = adapter(agent); if (typeof a.discoverModels !== 'function') return null;
     const cfg = ctx.config.agents[agent] ?? {};
     const exe = a.detect(cfg); if (!exe) return null;
-    const acc = defaultAccount(agent);
+    const acc = (accountId && account(accountId)?.agent === agent ? account(accountId) : null) ?? defaultAccount(agent);
     const list = await a.discoverModels(exe, cfg, acc ? accountEnv(acc) : {});
     return Array.isArray(list) && list.length ? list : null;
   } catch { return null; }

@@ -2,7 +2,6 @@
 // the Android phones and TVs reachable by adb. Read only and real: Windows' own answers (netsh, the neighbour table);
 // a value Windows does not give is null. Finding devices sends one ping to each address of this PC's own /24 network
 // (never other networks, never ports); the Android side runs fixed adb commands on devices the user paired.
-import fs from 'node:fs';
 import { execFile } from 'node:child_process';
 import { powershell } from './pc-health.mjs';
 
@@ -113,4 +112,3 @@ export async function adbInfo(adb, serial) {
     topApps: apps
   };
 }
-export const adbAvailable = (p) => Boolean(p && fs.existsSync(p));

@@ -1,6 +1,6 @@
 // App state shared by every view: what the engine knows (assistant, projects, tasks, conversations) plus the current
 // route. A tiny external store read with useSyncExternalStore; engine events trigger a debounced refresh.
-import { useSyncExternalStore } from 'react';
+import { useRef, useSyncExternalStore } from 'react';
 import { toast } from 'sonner';
 import { errorText } from './utils.js';
 import { t } from './i18n.js';
@@ -14,13 +14,38 @@ export const call = (method, params) => bridge.call(method, params);
 // and the themes live only here.
 export const fullPc = () => !bridge.mobile && !bridge.light;
 
-let state = { version: 0, ready: false, info: null, app: null, sessions: [], projects: [], tasks: [], route: { view: 'chat' }, settings: null };
+// 3.0: «Iniciar test» shows on the first opening of the day (on the PC), until the user writes to the assistant.
+function firstOpenToday() {
+  if (bridge.mobile) return false;
+  const day = new Date().toLocaleDateString('sv');
+  try { if (localStorage.getItem('orb.testDay') === day) return false; localStorage.setItem('orb.testDay', day); return true; } catch { return false; }
+}
+let state = { version: 0, ready: false, info: null, app: null, sessions: [], projects: [], tasks: [], route: { view: 'chat' }, settings: null, testToday: null };
 const listeners = new Set();
 const emit = () => { for (const fn of listeners) fn(); };
 export const getState = () => state;
 export function setState(patch) { state = { ...state, ...(typeof patch === 'function' ? patch(state) : patch) }; emit(); }
 const subscribe = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
-export function useStore(select = (s) => s) { return select(useSyncExternalStore(subscribe, getState)); }
+// 3.0: a component draws again only when what it selects changes (before, every change of the store redrew every
+// component). A selector that builds a new object or array each time is compared one level deep, so it stays stable.
+const same = (a, b) => {
+  if (Object.is(a, b)) return true;
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object' || Array.isArray(a) !== Array.isArray(b)) return false;
+  const ka = Object.keys(a); if (ka.length !== Object.keys(b).length) return false;
+  return ka.every((k) => Object.prototype.hasOwnProperty.call(b, k) && Object.is(a[k], b[k]));
+};
+const whole = (s) => s;
+export function useStore(select = whole) {
+  const last = useRef(null);
+  const snapshot = () => {
+    const prev = last.current;
+    if (prev && prev.state === state && prev.select === select) return prev.value;
+    const value = select(state);
+    last.current = { state, select, value: prev && same(prev.value, value) ? prev.value : value };
+    return last.current.value;
+  };
+  return useSyncExternalStore(subscribe, snapshot);
+}
 
 // Ajustes is a window over the current view: open on a section (general, apariencia, contribuye…) or close it.
 export function openSettings(section = 'general') { setState({ settings: section }); }
@@ -60,13 +85,46 @@ export async function refresh() {
   document.documentElement.lang = app.config.language === 'en' ? 'en' : 'es';
 }
 
-let timer = null;
-export function refreshSoon() { clearTimeout(timer); timer = setTimeout(() => refresh().catch(() => {}), 120); }
+let timer = null; let missed = false;
+// 3.0: while the window is not visible (minimised, another tab on the phone) nothing is fetched; one refresh when it
+// shows again. The notifications of the PC come from the main process, not from here.
+export function refreshSoon() {
+  if (document.hidden) { missed = true; return; }
+  clearTimeout(timer); timer = setTimeout(() => refresh().catch(() => {}), 120);
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && missed) { missed = false; refreshSoon(); } });
 
 // Runs an engine action with a toast on error (and on success when okText is given). Returns undefined on error.
 export async function act(promise, okText) {
   try { const r = await promise; if (okText) toast.success(okText); return r; }
   catch (error) { toast.error(errorText(error)); return undefined; }
+}
+
+// 3.0: «Nuevo chat»: a clean conversation with the assistant, in that project or none (the user picks it in the box).
+export async function newChat(project = null) {
+  const ok = await act(call('chat.new', { project }));
+  if (!ok) return;
+  await refresh().catch(() => {});
+  go('chat');
+}
+
+// Whether «Iniciar test» is offered in the chat (decided once per opening of the app, the first time the chat shows).
+export function initTestOfTheDay() { if (state.testToday === null) setState({ testToday: firstOpenToday() }); }
+export const dismissTest = () => { if (state.testToday) setState({ testToday: false }); };
+// «Iniciar test»: a new conversation with «Orquestador» on and the test request (t('test.prompt')), to check that the
+// whole chain works: the assistant plans, the agents build a web page and it is opened to try it.
+export async function runTest(prompt) {
+  dismissTest();
+  const ok = await act((async () => {
+    // Cursor cannot coordinate the agents: the test runs with Claude as the brain.
+    await call('chat.settings', state.app?.assistant?.agent === 'cursor' ? { agent: 'claude', model: '', orchestrate: true } : { orchestrate: true });
+    await call('chat.new', { project: null });
+    await call('chat.send', { text: prompt });
+    return true;
+  })());
+  if (!ok) return;
+  await refresh().catch(() => {});
+  go('chat');
 }
 
 // Ctrl+J: a terminal in the folder of what is on screen (a conversation's project, the active project) or the assistant's.

@@ -6,7 +6,6 @@ import { _electron as electron } from 'playwright-core';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createHome, loadConfig, writeJson, merge } from '../src/core/home.mjs';
 import { SKINS } from '../src/core/appearance.mjs';
@@ -74,7 +73,7 @@ try {
       if (wide.length) note(`preparo equipo: contenido más ancho que su caja → ${wide.join(' | ')}`);
       await page.click('text=/^(Continuar|Continue)$/');
     } else note('sin pantalla «Preparando tu PC» (no es Windows o ya se pasó)');
-    await page.waitForSelector('[data-testid=nav-chat]', { timeout: 30000 });
+    await page.waitForSelector('[data-testid=sidebar-home]', { timeout: 30000 });
     await shot('01c-primer-chat');
     note(`errores en bienvenida: ${errors.join(' | ') || 'ninguno'}`);
     await close();
@@ -93,11 +92,11 @@ try {
   const call = (method, params = {}) => page.evaluate(([m, p]) => window.orb.call(m, p), [method, params]);
   await page.waitForSelector('[data-testid=chat-greeting]', { timeout: 30000 });
   // ORB_LANG=en: the same tour in English (the interface and the engine's notices follow config.language).
-  if (LANG) { await call('config.save', { patch: { language: LANG } }); await page.reload(); await page.waitForSelector('[data-testid=nav-chat]'); }
+  if (LANG) { await call('config.save', { patch: { language: LANG } }); await page.reload(); await page.waitForSelector('[data-testid=sidebar-home]'); }
   if (await page.isVisible('text=Preparando tu PC')) { await shot('01-preparo-equipo'); await page.click('text=Continuar'); }
   const dark = () => page.evaluate(() => document.documentElement.classList.contains('dark'));
   const setDark = async (on) => { if (on !== (await dark())) await page.getByRole('button', { name: /claro y oscuro|day and night|light and dark/i }).click(); };
-  const views = [['nav-chat', 'chat'], ['nav-tasks', 'tareas'], ['nav-projects', 'proyectos'], ['nav-agents', 'agentes'], ['nav-logs', 'bitacoras'], ['nav-activity', 'actividad'], ['nav-settings', 'ajustes']];
+  const views = [['sidebar-home', 'chat'], ['nav-tasks', 'tareas'], ['nav-projects', 'proyectos'], ['nav-agents', 'agentes'], ['nav-logs', 'bitacoras'], ['nav-activity', 'actividad'], ['nav-settings', 'ajustes']];
   const SECTIONS = ['apariencia', 'tareas', 'movil', 'herramientas', 'experto', 'actualizaciones', 'contribuye', 'apps'];
   for (const theme of ['dia', 'noche']) {
     await setDark(theme === 'noche');
@@ -122,7 +121,7 @@ try {
       }
     }
     // the dialogs and menus of the chat
-    await page.click('[data-testid=nav-chat]');
+    await page.click('[data-testid=sidebar-home]');
     await page.click('[data-testid=project-picker]'); await shot(`${theme}-chat-menu-proyecto`); await page.keyboard.press('Escape');
     await page.click('[data-testid=new-conversation]').catch(() => note('sin botón nueva conversación visible'));
     await shot(`${theme}-nueva-conversacion`); await page.keyboard.press('Escape');
@@ -143,7 +142,7 @@ try {
     await until(async () => (await page.evaluate(() => document.documentElement.dataset.skin)) === skin, `tema ${skin}`);
     for (const theme of ['dia', 'noche']) {
       await setDark(theme === 'noche');
-      await page.click('[data-testid=nav-chat]'); await shot(`tema-${skin}-${theme}-chat`);
+      await page.click('[data-testid=sidebar-home]'); await shot(`tema-${skin}-${theme}-chat`);
       await page.click('[data-testid=nav-tasks]'); await shot(`tema-${skin}-${theme}-tareas`);
       await page.click('[data-testid=nav-settings]'); await page.click('[data-testid=settings-nav-apariencia]'); await shot(`tema-${skin}-${theme}-ajustes`);
       if (theme === 'dia') {
@@ -162,7 +161,7 @@ try {
   // ---- 4. narrow window and a small laptop height
   for (const [w, h, name] of [[420, 860, 'estrecha'], [1280, 640, 'portatil-bajo']]) {
     await app.evaluate(({ BrowserWindow }, [w, h]) => BrowserWindow.getAllWindows().find((b) => b.webContents.getURL().endsWith('index.html')).setContentSize(w, h), [w, h]);
-    for (const [nav, view] of [['nav-chat', 'chat'], ['nav-tasks', 'tareas'], ['nav-settings', 'ajustes']]) {
+    for (const [nav, view] of [['sidebar-home', 'chat'], ['nav-tasks', 'tareas'], ['nav-settings', 'ajustes']]) {
       if (w < 700) { await page.getByRole('button', { name: /^(Menú|Menu)$/ }).click(); await page.locator(`[data-testid=${nav}]:visible`).click(); } else await page.click(`[data-testid=${nav}]`);
       const [sw, iw] = await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);
       if (sw > iw + 1) note(`${name}/${view}: se sale por los lados (${sw} > ${iw})`);

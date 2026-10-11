@@ -201,10 +201,19 @@ export function migrate(db) {
     const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
     if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
   }
+  // 3.0: indexes for lookups that run on every refresh of an open task or at start (on columns that may have just been
+  // added above, so not in SCHEMA).
+  db.exec(`CREATE INDEX IF NOT EXISTS messages_task ON messages (task_id, id);
+    CREATE INDEX IF NOT EXISTS tasks_parent ON tasks (parent_id);
+    CREATE INDEX IF NOT EXISTS tasks_review ON tasks (review_of);
+    CREATE INDEX IF NOT EXISTS session_items_approval ON session_items (id) WHERE kind = 'approval';`);
   // 2.7.3: the notices saved as grey system lines before 2.7 (working folder, mode, brain, new conversation…) become
-  // notices too, so the old ones leave the chat like the new ones. Only system lines with those exact openings.
+  // notices too, so the old ones leave the chat like the new ones. Only system lines with those exact openings. 3.0: once
+  // per database (no grey line of those is written any more), not at every start of the engine and of each MCP server.
+  if (db.prepare("SELECT value FROM settings WHERE key = 'notices_migrated'").get()) return;
   const where = OLD_NOTICES.map(() => 'body LIKE ?').join(' OR ');
   db.prepare(`UPDATE chat SET role = 'notice' WHERE role = 'system' AND (${where})`).run(...OLD_NOTICES);
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('notices_migrated', '1')").run();
 }
 const OLD_NOTICES = ['Carpeta de trabajo:%', '📁 Carpeta de trabajo:%', 'Working folder:%', '📁 Working folder:%',
   'Modo orquestador:%', 'Modo libre:%', 'Orchestrator mode:%', 'Free mode:%', 'Modelo del asistente:%', 'Assistant model:%',

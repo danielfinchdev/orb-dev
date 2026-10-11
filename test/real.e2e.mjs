@@ -64,7 +64,7 @@ try {
   // ---- 2. the assistant (Claude, coordinator) creates a task, an agent does it, report with OK, then undo
   if (AGENTS.includes('claude')) {
     const t0 = Date.now();
-    await page.click('[data-testid=nav-chat]');
+    await page.click('[data-testid=sidebar-home]');
     await call('chat.send', { text: 'En el proyecto prueba-real, encarga a cualquier agente crear un archivo saludo.md con una línea que diga "Hola Dani". Es una prueba: tarea mínima, modelo barato.' });
     const task = await until(async () => (await call('tasks.list')).find((t) => t.project === 'prueba-real'), 'tarea creada por el asistente');
     note(`asistente creó tarea #${task.id} «${task.title}» para ${task.agent} (${task.status}) en ${Math.round((Date.now() - t0) / 1000)} s`);
@@ -75,7 +75,7 @@ try {
     await shot('tarea-terminada');
     const report = await until(async () => (await call('chat.list')).find((m) => m.role === 'orb' && m.meta?.kind === 'report'), 'informe', 240000).catch((e) => { note(e.message); return null; });
     if (report) note(`informe: ${String(report.body).slice(0, 400)}`);
-    await page.click('[data-testid=nav-chat]');
+    await page.click('[data-testid=sidebar-home]');
     await shot('chat-informe');
     const undo = await call('tasks.undo', { id: done.id }).then(() => 'ok', (e) => e.message);
     note(`deshacer: ${undo} · saludo.md ${fs.existsSync(path.join(home, 'web', 'prueba-real', 'saludo.md')) ? 'sigue' : 'ya no está'}`);
@@ -85,7 +85,7 @@ try {
     if (process.env.ORB_REAL_23 !== '0') {
       const s = await call('sessions.create', { agent: 'claude', project: 'prueba-real', model: 'haiku', permission: 'editar', title: 'Prueba 2.3' });
       await call('sessions.send', { id: s.id, text: 'Ejecuta con Bash exactamente: git push origin main. Si no te dejan, responde solo "denegado".' });
-      await page.click('[data-testid=nav-chat]'); await page.locator(`text=Prueba 2.3`).first().click().catch(() => {});
+      await page.click('[data-testid=sidebar-home]'); await page.locator(`text=Prueba 2.3`).first().click().catch(() => {});
       await page.waitForSelector('[data-testid=approval-card] >> text=Denegar', { timeout: 120000 });
       await shot('23-aprobacion');
       note(`aprobaciones pendientes: ${(await call('approvals.list')).length}`);

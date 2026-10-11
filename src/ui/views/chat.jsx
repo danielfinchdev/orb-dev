@@ -1,7 +1,7 @@
-// The star view: the conversation with the assistant. Under the message box: the working project, the assistant's model
-// (Sonnet / Opus) and the "Orquestador" box (ticked = only coordinates; unticked = free mode, works directly).
-import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, Square, RotateCcw, Pause, Play, Gamepad2, Wrench, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign, ChevronLeft, ChevronRight, PenTool } from 'lucide-react';
+// The star view: the conversation with the assistant. Under the message box: the working project, the brain (agent and
+// model), the reasoning and the «Orquestador» switch (on = only coordinates; off = free mode, works directly).
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowUp, Square, RotateCcw, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign, ChevronLeft, ChevronRight, PenTool, History, FlaskConical } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Markdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
@@ -9,9 +9,9 @@ import { ProjectPicker } from '@/components/project-actions.jsx';
 import { LiveTasksStrip } from '@/components/live-tasks.jsx';
 import { confirm } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Badge, Spinner } from '@/components/ui/basic.jsx';
+import { Badge } from '@/components/ui/basic.jsx';
 import { Switch, Tip, BubbleTip, Popover, PopoverTrigger, PopoverContent } from '@/components/ui/overlay.jsx';
-import { useStore, call, act, setState, getState, go, bridge, openGames, fullPc } from '@/lib/store.js';
+import { useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest } from '@/lib/store.js';
 import { pickGreeting, pickSubtitle } from '@/lib/greeting.js';
 import { LiveActivity, QuestionCard } from '@/components/chat-live.jsx';
 import { ContextMeter } from './session.jsx';
@@ -167,7 +167,8 @@ function MsgTime({ at }) {
   return <time className="msg-time" dateTime={d.toISOString()}>{today ? time : `${d.toLocaleDateString(locale, { day: 'numeric', month: 'short' })} ${time}`}</time>;
 }
 
-function Message({ m, name, onChanges }) {
+// Memoised: the list (up to 120 lines) is not drawn again while the assistant streams its answer.
+const Message = memo(function Message({ m, name, onChanges }) {
   const t = useT();
   if (m.meta?.kind === 'question') return <QuestionCard m={m} />;
   // 2.7: for a big request, the assistant's advice to define it on the Pizarra, with the way there.
@@ -214,7 +215,7 @@ function Message({ m, name, onChanges }) {
     </div>
   );
   return <div className="bg-muted/70 text-muted-foreground mx-auto max-w-[88%] rounded-xl px-3.5 py-2 text-center text-[13px] whitespace-pre-wrap">{m.body}</div>;
-}
+});
 
 // A permission request in the chat: the assistant's own (free mode) or one of a task (answered here or in the task).
 function ChatApproval({ m }) {
@@ -251,6 +252,26 @@ export function ChatView() {
   const chat = app.chat ?? {};
   const info = app.assistant ?? {};
   useEffect(() => { let alive = true; call('chat.list').then((r) => alive && setRows(r)).catch(() => {}); return () => { alive = false; }; }, [version]);
+  // 3.0: the conversations before this one (nothing is lost with «Nuevo chat»): shown on request, above a divider.
+  const [older, setOlder] = useState([]);
+  const [hasOlder, setHasOlder] = useState(false);
+  const firstId = (older[0] ?? rows[0])?.id ?? 2 ** 31;
+  useEffect(() => { let alive = true; call('chat.older', { before: firstId, limit: 1 }).then((r) => alive && setHasOlder(r.length > 0)).catch(() => {}); return () => { alive = false; }; }, [firstId]);
+  const askChanges = useCallback((ids) => setText(t('chat.changesFor', { ids: ids.map((id) => `#${id}`).join(', ') })), [t]);
+  const [loading, setLoading] = useState(false);
+  const loadOlder = async () => {
+    if (loading) return; setLoading(true);
+    const r = await act(call('chat.older', { before: firstId }));
+    if (r) setOlder((o) => { const have = new Set(o.map((m) => m.id)); return [...r.filter((m) => !have.has(m.id)), ...o]; });
+    setLoading(false);
+  };
+  // Where this conversation starts: older lines before it belong to earlier conversations (above the divider), after it
+  // to the beginning of this one (a long conversation shows only its last 120 lines). A new conversation starts clean.
+  const chatStart = app.chatStart ?? 0;
+  useEffect(() => { setOlder([]); }, [chatStart]);
+  const before = older.filter((m) => m.id < chatStart); const earlier = older.filter((m) => m.id > chatStart);
+  useEffect(() => { initTestOfTheDay(); }, []);
+  const showTest = useStore((s) => s.testToday) === true;
   const scroll = useAutoScroll([rows.length, chat.partial, chat.busy]);
   const catalog = useCatalog();
   const brain = { agent: info.agent ?? 'claude', model: info.model ?? '', account: info.account, reasoning: info.reasoning ?? 'medium' };
@@ -260,6 +281,7 @@ export function ChatView() {
   const send = async () => {
     const msg = text.trim(); if (!msg) return;
     setText('');
+    dismissTest();
     if ((await act(call('chat.send', { text: msg }))) === undefined) setText(msg);
     else call('chat.list').then(setRows).catch(() => {});
   };
@@ -282,6 +304,12 @@ export function ChatView() {
       </PageHeader>
       <div ref={scroll.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-3xl flex-col gap-5 px-5 py-6">
+          {hasOlder ? <Button variant="ghost" size="sm" className="text-muted-foreground mx-auto" onClick={loadOlder} disabled={loading} data-testid="chat-older"><History />{t('chat.older')}</Button> : null}
+          {before.length ? <>
+            {before.map((m) => <Message key={m.id} m={m} name={name} onChanges={askChanges} />)}
+            <div className="text-muted-foreground flex items-center gap-3 text-[11px] tracking-wide uppercase"><span className="bg-border h-px flex-1" />{t('chat.thisConversation')}<span className="bg-border h-px flex-1" /></div>
+          </> : null}
+          {earlier.map((m) => <Message key={m.id} m={m} name={name} onChanges={askChanges} />)}
           {rows.length === 0 ? (
             <div className="flex flex-col items-center gap-3 pt-10 text-center">
               <Robot size={130} mood="hello" live />
@@ -291,7 +319,7 @@ export function ChatView() {
               </div>
               <div className="mt-3 flex max-w-xl flex-wrap justify-center gap-2">{SUGGESTIONS.map((s) => <Button key={s} variant="outline" size="sm" className="h-auto rounded-full py-1.5 whitespace-normal" onClick={() => setText(t(s))}>{t(s)}</Button>)}</div>
             </div>
-          ) : rows.map((m) => <Message key={m.id} m={m} name={name} onChanges={(ids) => setText(t('chat.changesFor', { ids: ids.map((id) => `#${id}`).join(', ') }))} />)}
+          ) : rows.map((m) => <Message key={m.id} m={m} name={name} onChanges={askChanges} />)}
           {chat.busy ? (
             <div className="flex gap-3">
               <Robot size={32} mood={chat.partial ? 'talking' : 'thinking'} className="mt-0.5" />
@@ -307,7 +335,11 @@ export function ChatView() {
       <LiveTasksStrip />
       <Composer value={text} onChange={setText} onSend={send} onStop={() => act(call('chat.stop'))} busy={chat.busy} testid="chat-input"
         placeholder={chat.busy ? t('chat.placeholderBusy', { name }) : t('chat.placeholder', { name })}
-        top={<ProjectPicker />}
+        top={<div className="flex flex-col items-start gap-2">
+          {/* 3.0: the test of the day (first opening of the day, until the user writes; always in Ajustes › General). */}
+          {showTest ? <BubbleTip title={t('test.button')} text={t('test.tip')} side="top"><Button size="xs" variant="soft" onClick={() => runTest(t('test.prompt'))} data-testid="chat-test"><FlaskConical />{t('test.button')}</Button></BubbleTip> : null}
+          <ProjectPicker />
+        </div>}
         notice={<UsageBubble text={bubble.text} onClose={bubble.close} />}
         bottom={<>
           <BrainPicker catalog={catalog} value={brain} onChange={(b) => settings({ agent: b.agent, model: b.model, account: b.account })} />

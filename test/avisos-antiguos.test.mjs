@@ -16,9 +16,11 @@ test('avisos antiguos: las líneas grises de siempre pasan a avisos y nada más 
   add.run('system', '⚠️ La tarea #3 «Web» necesita tu aprobación (publica).');
   add.run('user', 'Carpeta de trabajo: esto lo escribí yo');
   add.run('assistant', 'Modo libre: te explico cómo funciona');
+  db.prepare("DELETE FROM settings WHERE key = 'notices_migrated'").run(); // a database that comes from 2.7
   migrate(db);
   const roles = db.prepare('SELECT role FROM chat ORDER BY id').all().map((r) => r.role);
   assert.deepEqual(roles, ['notice', 'notice', 'notice', 'notice', 'notice', 'system', 'user', 'assistant']);
-  migrate(db); // otra vez, sin cambios: se puede ejecutar en cada arranque
+  add.run('system', 'Carpeta de trabajo: una línea escrita después');
+  migrate(db); // otra vez: ya está hecha y no vuelve a recorrer la tabla en cada arranque
   assert.equal(db.prepare("SELECT COUNT(*) AS n FROM chat WHERE role = 'notice'").get().n, 5);
 });

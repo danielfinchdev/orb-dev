@@ -5,7 +5,6 @@
 // The «profesional» visual theme (Ajustes → Apariencia) has no robot and no mark in its place (2.6): nothing is drawn.
 import { Orb } from './orb.jsx';
 import { useStore } from '@/lib/store.js';
-import { cn } from '@/lib/utils.js';
 
 const POSE = { hello: 'wave' }; // the rest follows the mood (orb.jsx keeps pose and face coherent)
 

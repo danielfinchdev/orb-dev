@@ -1,5 +1,5 @@
-// Agents that speak ACP (Agent Client Protocol, agentclientprotocol.com): JSON-RPC over stdio, the open standard that
-// T3 Code and Zed use to drive many coding agents with one client. One adapter serves them all (Gemini CLI, OpenCode,
+// Agents that speak ACP (Agent Client Protocol, agentclientprotocol.com): JSON-RPC over stdio, an open standard several
+// clients use to drive many coding agents with one client. One adapter serves them all (Gemini CLI, OpenCode,
 // Qwen Code, GitHub Copilot CLI…); each one is a small spec: how to find it, how to start it in ACP mode, where its login
 // lives and how to install it. The agent's own program and login are used: Orb never sees credentials.
 import fs from 'node:fs';

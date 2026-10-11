@@ -10,6 +10,7 @@ import { bridge, go, useStore } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
 import { play } from '@/lib/sounds.js';
 import { noticeOf } from './notices.jsx';
+import { cn } from '@/lib/utils.js';
 
 const moodOf = (body) => (/^(✅|↩️|👍)/.test(body) ? 'happy' : /^(❌|⛔|🛑|⚠️)/.test(body) ? 'worried' : 'talking');
 
@@ -19,6 +20,10 @@ export function Companion({ name, base, hidden: hiddenHere }) {
   const [bubble, setBubble] = useState(null);
   const [flash, setFlash] = useState(null);
   const [sleepy, setSleepy] = useState(false);
+  // 3.0: out of sight until the pointer comes near the corner (its last bubble waits there), and never while the robot
+  // of the notices is on screen, so two robots never show at once.
+  const [near, setNear] = useState(false);
+  const noticeShown = useStore((s) => s.noticeShown);
   const timers = useRef({});
   useEffect(() => bridge.on('chat:new', (payload) => {
     const body = String(payload?.body ?? '');
@@ -33,14 +38,16 @@ export function Companion({ name, base, hidden: hiddenHere }) {
   // A sleepy robot after five minutes without activity.
   useEffect(() => {
     const wake = () => { setSleepy(false); clearTimeout(timers.current.sleep); timers.current.sleep = setTimeout(() => { setSleepy(true); play('yawn'); }, 5 * 60_000); };
+    const move = (e) => { wake(); setNear(window.innerWidth - e.clientX < 230 && window.innerHeight - e.clientY < 200); };
+    const leave = () => setNear(false);
     wake();
-    window.addEventListener('mousemove', wake, { passive: true }); window.addEventListener('keydown', wake);
-    return () => { window.removeEventListener('mousemove', wake); window.removeEventListener('keydown', wake); clearTimeout(timers.current.sleep); };
+    window.addEventListener('mousemove', move, { passive: true }); window.addEventListener('keydown', wake); document.addEventListener('mouseleave', leave);
+    return () => { window.removeEventListener('mousemove', move); window.removeEventListener('keydown', wake); document.removeEventListener('mouseleave', leave); clearTimeout(timers.current.sleep); };
   }, []);
-  if (hidden) return null;
+  if (hidden || noticeShown) return null;
   const mood = flash ?? (base === 'idle' && sleepy ? 'sleeping' : base);
   return (
-    <div className="pointer-events-none fixed right-6 bottom-6 z-40 flex items-end gap-2">
+    <div className={cn('fixed right-6 bottom-6 z-40 flex items-end gap-2 transition-opacity duration-200', near ? 'pointer-events-none opacity-100' : 'pointer-events-none opacity-0 [&_*]:pointer-events-none')} data-testid="companion" data-shown={near ? 'true' : 'false'}>
       {bubble ? (
         <div className="bg-popover text-popover-foreground animate-in fade-in-0 slide-in-from-bottom-2 pointer-events-auto relative mb-14 max-w-72 rounded-2xl rounded-br-md border p-3 pr-8 text-[13px] shadow-lg">
           <button className="text-muted-foreground hover:text-foreground absolute top-2 right-2 cursor-pointer" onClick={() => setBubble(null)} aria-label={t('comp.close')}><X className="size-3.5" /></button>

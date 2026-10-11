@@ -124,15 +124,6 @@ export function backdrop(ctx, w, h, p, { grid = 0, radius = 14 } = {}) {
   ctx.restore();
 }
 
-// A small HUD label with a translucent pill behind it.
-export function hud(ctx, text, x, y, p, { align = 'left', size = 12, color = p.fg } = {}) {
-  ctx.font = font(p, size); ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
-  const w = ctx.measureText(text).width + 16; const h = size + 10;
-  const left = align === 'right' ? x - w : align === 'center' ? x - w / 2 : x;
-  ctx.fillStyle = tint(p.bg, p.dark ? 0.55 : 0.75); roundRect(ctx, left, y - h / 2, w, h, corner(p, h / 2));
-  ctx.fillStyle = color; ctx.fillText(text, left + 8, y + 0.5);
-}
-
 const KEY = 'orb.juegos.records';
 export function best(game, level) { try { return JSON.parse(localStorage.getItem(KEY) || '{}')[`${game}:${level}`] ?? 0; } catch { return 0; } }
 export function saveBest(game, level, score) {
@@ -167,8 +158,6 @@ export function block(ctx, x, y, w, h, color, p, r = 4) {
   ctx.fillStyle = shade(color, 0.42); roundRect(ctx, x + Math.max(1.5, w * 0.1), y + Math.max(1.5, h * 0.1), w - Math.max(3, w * 0.2), Math.max(1.5, h * 0.2), Math.max(0, radius - 2));
 }
 
-// Easing for the little animations.
-export const easeOut = (t) => 1 - (1 - t) ** 3;
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // A text from i18n with a fallback while the key is still missing (t() returns the key itself in that case).
