@@ -212,8 +212,8 @@ export default {
   'help.tour.board.text': 'Dibuja, escribe y adjunta referencias de cada proyecto. La consulto al planificar el trabajo.',
   'help.tour.agents.title': 'Agentes',
   'help.tour.agents.text': 'Los agentes instalados, su sesión y sus cuentas. Con varias cuentas, el trabajo se reparte entre las que tienen uso disponible.',
-  'help.tour.logs.title': 'Bitácoras',
-  'help.tour.logs.text': 'Mi memoria: una bitácora general y una por proyecto, para recordar lo hecho entre conversaciones.',
+  'help.tour.logs.title': 'Memorias',
+  'help.tour.logs.text': 'Mi memoria: las bitácoras (una general y una por proyecto) y la actividad, quién hizo qué y cuándo.',
   'help.tour.activity.title': 'Actividad',
   'help.tour.activity.text': 'Quién hizo qué y cuándo, con buscador.',
   'help.tour.tutorials.title': 'Tutoriales',
@@ -226,5 +226,8 @@ export default {
   'help.tour.search.title': 'Buscar',
   'help.tour.search.text': 'Encuentra cualquier conversación, tarea o proyecto, también por lo que se dijo. Con el filtro, solo lo que está en curso o requiere tu atención.',
   'help.tour.conversations.title': 'Conversaciones',
-  'help.tour.conversations.text': 'Todas las conversaciones abiertas, la más reciente arriba. Al pasar el ratón ves su proyecto, quién responde y cómo van sus tareas. Lo terminado pasa solo a «Completadas».'
+  'help.tour.conversations.text': 'Todas las conversaciones abiertas, la más reciente arriba. Al pasar el ratón ves su proyecto, quién responde y cómo van sus tareas. Lo terminado pasa solo a «Completadas».',
+  // 3.2: pie del menú
+  'help.tour.feedback.title': 'Enviar comentarios',
+  'help.tour.feedback.text': 'Si algo falla o se te ocurre una mejora, cuéntamelo desde aquí. Al lado, la versión de Orb.'
 };

@@ -7,5 +7,9 @@ export default {
   'logs.projectTitle': 'Bitácora de {name}',
   'logs.whole': 'Ver completa',
   'logs.copy': 'Copiar',
-  'logs.copied': 'Copiada'
+  'logs.copied': 'Copiada',
+  // 3.2: Memorias
+  'memories.title': 'Memorias',
+  'memories.logs': 'Bitácoras',
+  'memories.activity': 'Actividad'
 };

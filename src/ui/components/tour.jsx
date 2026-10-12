@@ -30,11 +30,12 @@ export const TOUR_STEPS = [
   { id: 'tasks', target: 'nav-tasks', view: 'tasks', sidebar: true },
   { id: 'schedules', target: 'nav-schedules', view: 'schedules', sidebar: true },
   { id: 'board', target: 'nav-board', sidebar: true },
-  { id: 'agents', target: 'nav-agents', view: 'agents', sidebar: true },
-  { id: 'logs', target: 'nav-logs', view: 'logs', sidebar: true },
-  { id: 'activity', target: 'nav-activity', view: 'activity', sidebar: true },
-  { id: 'tutorials', target: 'nav-tutorials', view: 'tutorials', sidebar: true },
+  // 3.2: the foot of the sidebar, in its order (Ajustes, then alphabetical); Bitácoras and Actividad are «Memorias».
   { id: 'settings', target: 'nav-settings', sidebar: true },
+  { id: 'agents', target: 'nav-agents', view: 'agents', sidebar: true },
+  { id: 'logs', target: 'nav-memories', view: 'logs', sidebar: true },
+  { id: 'tutorials', target: 'nav-tutorials', view: 'tutorials', sidebar: true },
+  { id: 'feedback', target: 'nav-feedback', sidebar: true },
   { id: 'end', mood: 'happy', view: 'chat' }
 ];
 const GESTURES = ['look', 'tilt', 'wink'];

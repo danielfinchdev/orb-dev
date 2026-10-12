@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Smartphone, MessageSquarePlus, ListTodo, FolderKanban, Bot, BookOpen, History, Settings, SquareTerminal, ChevronRight, FolderPlus, ShieldAlert, CalendarClock, CircleCheck, Undo2, GraduationCap, PenTool, HeartPulse, Layers, Search, SlidersHorizontal, X, Sparkles, GitBranch, ListChecks, Clock, MessageCircleQuestion, CirclePause, Folder } from 'lucide-react';
+import { Smartphone, MessageSquarePlus, ListTodo, FolderKanban, Bot, BookOpen, Bug, ChevronUp, ChevronDown, Settings, SquareTerminal, ChevronRight, FolderPlus, ShieldAlert, CalendarClock, CircleCheck, Undo2, GraduationCap, PenTool, HeartPulse, Layers, Search, SlidersHorizontal, X, Sparkles, GitBranch, ListChecks, Clock, MessageCircleQuestion, CirclePause, Folder } from 'lucide-react';
 import { Robot } from './robot.jsx';
 import { ThemeToggle, SidebarToggle } from './theme-toggle.jsx';
 import { Button } from './ui/button.jsx';
@@ -222,6 +222,48 @@ function SearchBox({ query, setQuery, filter, setFilter, agents }) {
   );
 }
 
+// 3.2: the foot of the sidebar. Folded (by default) only the icons, each with its bubble, and on the right the bug to send
+// feedback with Orb's version; unfolded, the list with names. The little arrow on the line above unfolds and folds it.
+function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
+  const t = useT();
+  const memories = is('logs') || is('activity');
+  // Ajustes first (the phone screen on the phone), then the rest in alphabetical order.
+  const items = [
+    ...(bridge.mobile ? [{ icon: Smartphone, label: t('nav.phone'), active: is('phone'), onClick: () => go('phone'), testid: 'nav-phone' }]
+      : [{ icon: Settings, label: t('nav.settings'), active: settingsOpen, onClick: () => openSettings(), testid: 'nav-settings' }]),
+    ...(bridge.mobile ? [] : [{ icon: Bot, label: t('nav.agents'), active: is('agents'), onClick: () => go('agents'), testid: 'nav-agents' }]),
+    { icon: BookOpen, label: t('nav.memories'), hint: t('nav.memoriesHint'), active: memories, onClick: () => go('logs'), testid: 'nav-memories' },
+    // 2.6: how the app works, the FAQ and the button that replays the guided tour.
+    { icon: GraduationCap, label: t('nav.tutorials'), active: is('tutorials'), onClick: () => go('tutorials'), testid: 'nav-tutorials' }
+  ];
+  const toggle = open ? t('nav.footerFold') : t('nav.footerUnfold');
+  return (
+    <div className="side-foot relative border-t px-3 pt-2.5 pb-2" data-testid="sidebar-footer" data-open={open}>
+      <Tip label={toggle}>
+        <button type="button" className="side-foot-toggle" onClick={() => onOpen(!open)} aria-label={toggle} aria-expanded={open} data-testid="sidebar-footer-toggle">
+          {open ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
+        </button>
+      </Tip>
+      {open ? <div className="mb-1 flex flex-col gap-0.5">{items.map((i) => <NavItem key={i.testid} icon={i.icon} label={i.label} active={i.active} onClick={i.onClick} testid={i.testid} />)}</div> : null}
+      <div className="flex items-center gap-0.5">
+        {open ? null : items.map((i) => (
+          <BubbleTip key={i.testid} title={i.label} text={i.hint} side="top">
+            <button type="button" onClick={i.onClick} aria-label={i.label} data-testid={i.testid} className={cn('side-foot-icon', i.active && 'is-active')}><i.icon className="size-4" /></button>
+          </BubbleTip>
+        ))}
+        <span className="flex-1" />
+        {/* The bug: straight to «Enviar comentarios» (Ajustes › Contribuye), with the version next to it. */}
+        {bridge.mobile ? null : (
+          <BubbleTip title={t('nav.feedback')} side="top">
+            <button type="button" onClick={() => openSettings('contribuye')} aria-label={t('nav.feedback')} data-testid="nav-feedback" className="side-foot-icon"><Bug className="size-4" /></button>
+          </BubbleTip>
+        )}
+        {version ? <span className="side-foot-version" data-testid="app-version">v{version}</span> : null}
+      </div>
+    </div>
+  );
+}
+
 export function Sidebar({ mood, page = false }) {
   const t = useT();
   const app = useStore((s) => s.app);
@@ -235,7 +277,7 @@ export function Sidebar({ mood, page = false }) {
   const running = tasks.filter((x) => x.status === 'running').length;
   const projects = useStore((s) => s.projects);
   const [openFolders, setOpenFolder] = useRemembered('orb.carpetas', {});
-  const [sections, setSection] = useRemembered('orb.secciones', { projects: true, conversations: true, done: false });
+  const [sections, setSection] = useRemembered('orb.secciones', { projects: true, conversations: true, done: false, footer: false });
   const { width, setWidth, startResize } = useSidebarWidth();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState(FILTER0);
@@ -415,15 +457,7 @@ export function Sidebar({ mood, page = false }) {
         {app.config.monitor?.enabled && fullPc() ? <NavItem icon={HeartPulse} label={t('nav.monitor')} active={is('monitor')} onClick={() => go('monitor')} testid="nav-monitor" /> : null}
         {lists}
       </nav>
-      <div className="flex flex-col gap-0.5 border-t px-3 py-2.5">
-        {bridge.mobile ? null : <NavItem icon={Bot} label={t('nav.agents')} active={is('agents')} onClick={() => go('agents')} testid="nav-agents" />}
-        <NavItem icon={BookOpen} label={t('nav.logs')} active={is('logs')} onClick={() => go('logs')} testid="nav-logs" />
-        <NavItem icon={History} label={t('nav.activity')} active={is('activity')} onClick={() => go('activity')} testid="nav-activity" />
-        {/* 2.6: how the app works, the FAQ and the button that replays the guided tour. */}
-        <NavItem icon={GraduationCap} label={t('nav.tutorials')} active={is('tutorials')} onClick={() => go('tutorials')} testid="nav-tutorials" />
-        {bridge.mobile ? null : <NavItem icon={Settings} label={t('nav.settings')} active={settingsOpen} onClick={() => openSettings()} testid="nav-settings" />}
-        {bridge.mobile ? <NavItem icon={Smartphone} label={t('nav.phone')} active={is('phone')} onClick={() => go('phone')} testid="nav-phone" /> : null}
-      </div>
+      <SidebarFooter version={app.version} is={is} settingsOpen={settingsOpen} open={sections.footer === true} onOpen={(v) => setSection('footer', v)} />
     </aside>
   );
 }

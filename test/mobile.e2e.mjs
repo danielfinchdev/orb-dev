@@ -58,7 +58,7 @@ try {
 
   // 2.7: a simpler app on the phone, with tabs at the bottom (Orbe, Chats, Tareas, Proyectos, Más); the screens of «Más»
   // open from its list.
-  const MORE = new Set(['nav-schedules', 'nav-logs', 'nav-activity', 'nav-tutorials', 'nav-phone']);
+  const MORE = new Set(['nav-schedules', 'nav-memories', 'nav-tutorials', 'nav-phone']);
   const nav = async (testid) => { if (MORE.has(testid)) await page.click('[data-testid=nav-more]'); await page.locator(`[data-testid=${testid}]:visible`).click(); await page.waitForTimeout(500); };
   step = 'pestañas';
   assert.equal(await page.locator('[data-testid=mobile-tabs]:visible').count(), 1, 'pestañas abajo');
@@ -72,7 +72,7 @@ try {
   await page.click('[data-testid=nav-chats]'); await page.waitForSelector('[data-testid=mobile-chats]');
   await noSideScroll('chats'); await shot('02b-chats');
 
-  for (const [testid, name, wait] of [['nav-tasks', '03-tareas', 'Publicar la web'], ['nav-projects', '04-proyectos', 'webviaproject'], ['nav-logs', '05-bitacoras', 'Bitácora general'], ['nav-activity', '06-actividad', 'task.created']]) {
+  for (const [testid, name, wait] of [['nav-tasks', '03-tareas', 'Publicar la web'], ['nav-projects', '04-proyectos', 'webviaproject'], ['nav-memories', '05-bitacoras', 'Bitácora general'], ['memories-activity', '06-actividad', 'task.created']]) {
     step = name;
     await nav(testid);
     await page.waitForSelector(`text=${wait} >> visible=true`);

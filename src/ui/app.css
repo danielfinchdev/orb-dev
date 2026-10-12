@@ -312,6 +312,18 @@ html[data-skin="profesional"] .project-icon:not(.is-image) { background: var(--m
 html[data-skin="retro"] .side-search-box, html[data-skin="retro"] .side-search button { border-radius: 6px; border-width: 2px; }
 html[data-skin="nube"] .side-search-box { border-radius: 999px; }
 .orb-card { padding: 12px 14px 12px; }
+/* 3.2: the foot of the sidebar: icons with their bubble (folded) or the list (unfolded); its arrow sits on the line above. */
+.side-foot-toggle { position: absolute; top: 0; left: 50%; z-index: 1; display: grid; place-items: center; width: 26px; height: 16px; transform: translate(-50%, -50%); border: 1px solid var(--border); border-radius: 999px; background: var(--sidebar); color: var(--muted-foreground); cursor: pointer; transition: color 0.15s, border-color 0.15s; }
+.side-foot-toggle:hover { color: var(--foreground); border-color: color-mix(in oklch, var(--foreground) 30%, var(--border)); }
+.side-foot-toggle:focus-visible, .side-foot-icon:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.side-foot-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; color: var(--muted-foreground); cursor: pointer; transition: background-color 0.15s, color 0.15s; }
+.side-foot-icon:hover { color: var(--foreground); background: color-mix(in oklch, var(--accent) 60%, transparent); }
+.side-foot-icon.is-active { color: var(--primary); background: var(--accent); }
+.side-foot-version { margin-left: 2px; padding-right: 2px; color: var(--muted-foreground); font-size: 11px; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+html[data-skin="retro"] .side-foot-icon, html[data-skin="profesional"] .side-foot-icon { border-radius: 6px; }
+html[data-skin="retro"] .side-foot-toggle { border-width: 2px; border-color: var(--foreground); border-radius: 4px; }
+html[data-skin="retro"] .side-foot-version { font-family: var(--font-title); font-size: 10px; }
+html[data-skin="nube"] .side-foot-icon { border-radius: 999px; }
 /* 3.2: the bell and its list (notification-center.jsx), dressed as the help bubbles. */
 .notice-dot { position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; border-radius: 999px; background: var(--primary); box-shadow: 0 0 0 2px var(--background); }
 .notice-center { width: min(22rem, calc(100vw - 24px)); padding: 10px 10px 8px; }
