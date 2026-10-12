@@ -2,6 +2,7 @@
 // prepares where each task works (project folder with an undo checkpoint, or an isolated git worktree) and closes them:
 // result, automatic commit on isolated copies, safety checks, project log and notices.
 import fs from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { ctx, enabledAgents, tr } from '../core/context.mjs';
 import { chooseModel } from './catalog.mjs';
@@ -532,6 +533,8 @@ ${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo
       }
     }
     let held = ''; let problem = false;
+    // Before anything looks at the folder (and before a copy is removed: a running server would keep its files locked).
+    try { this.stopLeftovers(task); } catch (error) { this.log(`parar restos #${taskId}: ${error.message}`); }
     if (task.mode === 'carpeta' && !task.branch) held = this.afterFolderTask(task);
     else held = this.commitIsolated(task);
     // 3.1: what the program itself said went wrong (its error output, or an error message that is not the agent's own
@@ -711,6 +714,25 @@ No hagas commit, merge, rebase ni cambies de rama: deja los cambios en los archi
     // Its copy is gone: a later run starts from the folder as it is then (a fresh base if it works in a copy again).
     this.board.settingJson(`isolated:${task.id}`, null);
     this.board.patch(task.id, { branch: null, workdir: project.path }, 'orb', 'task.copy_removed');
+  }
+
+  // 3.1: a task that started a dev server (vite, node server.js…) and left it running: it is stopped when the task ends,
+  // so the next task or the user does not find the port taken. Windows only. Only programs of the usual runtimes, started
+  // from the task's own folder after the task began, and only if no other task is still working in that folder.
+  stopLeftovers(task) {
+    if (process.platform !== 'win32' || !task.workdir || process.env.ORB_FAKE_AGENTS) return; // the test agents never start programs
+    const busy = [...this.running.keys()].some((id) => { const t = this.board.task(id); return t && t.workdir && path.resolve(t.workdir) === path.resolve(task.workdir); });
+    if (busy) return;
+    const since = this.board.one("SELECT at FROM events WHERE task_id = ? AND kind = 'task.launched' ORDER BY id DESC LIMIT 1", task.id)?.at;
+    if (!since) return;
+    const script = "$dir=$env:ORB_LEFTOVER_DIR; $since=[datetime]::Parse($env:ORB_LEFTOVER_SINCE).ToUniversalTime(); "
+      + "Get-CimInstance Win32_Process | Where-Object { $_.Name -match '^(node|python|python3|py|deno|bun|php|ruby|java|dotnet)(\\.exe)?$' -and $_.CommandLine "
+      + "-and $_.CommandLine.IndexOf($dir, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and $_.CreationDate.ToUniversalTime() -ge $since } "
+      + "| ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; $_.ProcessId }";
+    const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', windowsHide: true, timeout: 20_000,
+      env: { ...process.env, ORB_LEFTOVER_DIR: path.resolve(task.workdir), ORB_LEFTOVER_SINCE: since } });
+    const pids = String(r.stdout ?? '').split(/\s+/).filter((x) => /^\d+$/.test(x));
+    if (pids.length) this.board.event(task.id, 'orb', 'task.cleanup', `paró ${pids.length} programa(s) que la tarea dejó en marcha (${pids.join(', ')})`);
   }
 
   // 3.1: what a task's last run cost: minutes, tokens and (Claude) dollars, from its conversation's usage reports.

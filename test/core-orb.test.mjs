@@ -137,6 +137,33 @@ test('lo que pediste con tus palabras no vuelve a pedir aprobación; lo que no p
   } finally { h.cleanup(); }
 });
 
+test('al terminar una tarea, Orb para el servidor que dejó en marcha en su carpeta (y no los de antes ni los de otras carpetas)', { skip: process.platform !== 'win32' }, async () => {
+  const { Scheduler } = await import('../src/engine/scheduler.mjs');
+  const { spawn } = await import('node:child_process');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-restos-'));
+  const other = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-otro-'));
+  for (const d of [dir, other]) fs.writeFileSync(path.join(d, 'server.js'), 'setInterval(() => {}, 1000);');
+  const before = spawn(process.execPath, [path.join(dir, 'server.js')], { stdio: 'ignore' }); // already running before the task
+  await wait(1500);
+  const since = new Date().toISOString();
+  await wait(300);
+  const left = spawn(process.execPath, [path.join(dir, 'server.js')], { stdio: 'ignore' });
+  const elsewhere = spawn(process.execPath, [path.join(other, 'server.js')], { stdio: 'ignore' });
+  await wait(800);
+  const events = [];
+  const self = { running: new Map(), board: { task: () => null, one: () => ({ at: since }), event: (...a) => events.push(a) } };
+  const saved = process.env.ORB_FAKE_AGENTS; delete process.env.ORB_FAKE_AGENTS;
+  try { Scheduler.prototype.stopLeftovers.call(self, { id: 9, workdir: dir }); } finally { process.env.ORB_FAKE_AGENTS = saved; }
+  const alive = (c) => { try { process.kill(c.pid, 0); return true; } catch { return false; } };
+  await wait(500);
+  try {
+    assert.equal(alive(left), false, 'el que dejó la tarea, parado');
+    assert.equal(alive(before), true, 'el que ya estaba antes, intacto');
+    assert.equal(alive(elsewhere), true, 'el de otra carpeta, intacto');
+    assert.match(events[0]?.[3] ?? '', /paró 1 programa/);
+  } finally { for (const c of [before, left, elsewhere]) { try { c.kill(); } catch { /* gone */ } } }
+});
+
 // ---- the engine with the fake agents (Claude and Codex available; Cursor and the ACP agents off, see helpers.mjs)
 let t; let engine; let call;
 before(async () => {
