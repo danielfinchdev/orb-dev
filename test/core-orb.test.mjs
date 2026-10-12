@@ -74,8 +74,7 @@ test('Cursor: las reglas del guardia y las herramientas de Orb solo durante el t
   const mine = JSON.stringify({ permissions: { allow: ['Shell(ls)'], deny: ['Shell(rm)'] } }, null, 1);
   fs.writeFileSync(path.join(dir, '.cursor', 'cli.json'), mine);
   fs.writeFileSync(path.join(dir, '.cursor', 'mcp.json'), JSON.stringify({ mcpServers: { delRepo: { command: 'evil' } } }));
-  const secretDir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-secretos-'));
-  const restore = prepareCursorFolder(dir, { mcpServers: { orb: { command: 'node', args: ['x.mjs'], env: { ORB_AGENT_TOKEN: 'secreto123' } } }, deny: ['Shell(git push)'], secretDir });
+  const restore = prepareCursorFolder(dir, { mcpServers: { orb: { command: 'node', args: ['x.mjs'], env: { ORB_AGENT_TOKEN: 'secreto123' } } }, deny: ['Shell(git push)'] });
   assert.equal(prepareCursorFolder(dir, { deny: ['Shell(x)'] })(), undefined, 'un segundo turno en la misma carpeta no toca nada');
   const cli = JSON.parse(fs.readFileSync(path.join(dir, '.cursor', 'cli.json'), 'utf8'));
   assert.deepEqual(cli.permissions.allow, ['Shell(ls)']);
@@ -84,10 +83,10 @@ test('Cursor: las reglas del guardia y las herramientas de Orb solo durante el t
   const mcp = JSON.parse(mcpText);
   assert.deepEqual(Object.keys(mcp.mcpServers), ['orb'], 'durante el turno, solo las herramientas de Orb (no las que trae el repositorio)');
   assert.ok(!mcpText.includes('secreto123'), 'ninguna clave en la carpeta del proyecto');
-  assert.ok(mcp.mcpServers.orb.envFile.startsWith(secretDir) && fs.readFileSync(mcp.mcpServers.orb.envFile, 'utf8').includes('ORB_AGENT_TOKEN=secreto123'));
-  const envFile = mcp.mcpServers.orb.envFile;
+  // Checked against the real CLI: it fills ${env:…} in from its own environment (and ignores envFile).
+  assert.equal(mcp.mcpServers.orb.env.ORB_AGENT_TOKEN, '${env:ORB_MCP_orb_ORB_AGENT_TOKEN}');
+  assert.deepEqual(restore.env, { ORB_MCP_orb_ORB_AGENT_TOKEN: 'secreto123' }, 'el valor va solo en el entorno del proceso de Cursor');
   restore();
-  assert.ok(!fs.existsSync(envFile), 'el archivo con la clave se borra al acabar');
   assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(path.join(dir, '.cursor', 'mcp.json'), 'utf8')).mcpServers), ['delRepo'], 'el del repositorio vuelve');
   assert.equal(fs.readFileSync(path.join(dir, '.cursor', 'cli.json'), 'utf8'), mine, 'el archivo del usuario vuelve igual');
   const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-cursor-'));

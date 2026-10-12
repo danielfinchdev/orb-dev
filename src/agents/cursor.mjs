@@ -127,20 +127,22 @@ export function cursorRules(permission, internalDir) {
 // the user's own files there are kept (Orb's entries are added to them) and put back as they were when the turn ends.
 // Patterns for the repository's info/exclude: in any subfolder (a project can live in a subfolder of its repository).
 export const CURSOR_FILES = ['**/.cursor/mcp.json', '**/.cursor/cli.json'];
-// - Secrets never go into the project: each server's environment (Orb's signature of the agent, the user's connector
-//   keys) goes to an env file in secretDir (Orb's own run folder) and mcp.json only points to it (envFile).
+// - Secrets never go into the project: mcp.json names each value of a server's environment (Orb's signature of the agent,
+//   the user's connector keys) as ${env:ORB_MCP_…}, and the values travel only in the environment of Cursor's own process
+//   (the returned function's .env). Checked against the real CLI: it fills ${env:…} in, but ignores envFile and does not
+//   pass its own environment on to the servers.
 // - During the turn only Orb's servers are in mcp.json: servers a cloned repository declares would otherwise start
 //   unasked (--approve-mcps).
 // - One turn at a time per folder: a second Cursor turn in the same folder while one is running leaves the files alone
 //   (it would save the first one's files as "the user's" and put them back for good).
 const PREPARED = new Set();
-export function prepareCursorFolder(cwd, { mcpServers = {}, deny = [], secretDir = null } = {}) {
+export function prepareCursorFolder(cwd, { mcpServers = {}, deny = [] } = {}) {
   const key = path.resolve(cwd).toLowerCase();
-  if (PREPARED.has(key)) return () => {};
+  if (PREPARED.has(key)) return Object.assign(() => {}, { env: {} });
   PREPARED.add(key);
   const dir = path.join(cwd, '.cursor');
   const hadDir = fs.existsSync(dir);
-  const saved = []; const secrets = [];
+  const saved = []; const env = {};
   const read = (file) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; } };
   const put = (name, merge) => {
     const file = path.join(dir, name);
@@ -152,28 +154,26 @@ export function prepareCursorFolder(cwd, { mcpServers = {}, deny = [], secretDir
   try {
     const servers = {};
     for (const [name, s] of Object.entries(mcpServers)) {
-      const { env, ...rest } = s;
-      if (env && Object.keys(env).length && secretDir) {
-        fs.mkdirSync(secretDir, { recursive: true });
-        const envFile = path.join(secretDir, `cursor-${name.replace(/[^\w-]/g, '_')}.env`);
-        fs.writeFileSync(envFile, Object.entries(env).map(([k, v]) => `${k}=${String(v).replace(/\r?\n/g, ' ')}`).join('\n') + '\n');
-        secrets.push(envFile);
-        servers[name] = { ...rest, envFile };
-      } else if (!env || !Object.keys(env).length) servers[name] = rest;
-      // A server with secrets and nowhere safe to put them is left out rather than written into the project.
+      const { env: own, ...rest } = s;
+      const refs = {};
+      for (const [k, v] of Object.entries(own ?? {})) {
+        const ref = `ORB_MCP_${name}_${k}`.replace(/[^A-Za-z0-9_]/g, '_');
+        env[ref] = String(v); refs[k] = `\${env:${ref}}`;
+      }
+      servers[name] = Object.keys(refs).length ? { ...rest, env: refs } : rest;
     }
     if (Object.keys(servers).length) put('mcp.json', (cur) => ({ ...cur, mcpServers: servers }));
     // Cursor validates the file strictly: permissions needs both lists, allow too (found in a real run: «Required»).
     if (deny.length) put('cli.json', (cur) => ({ ...cur, permissions: { ...(cur.permissions ?? {}), allow: Array.isArray(cur.permissions?.allow) ? cur.permissions.allow : [], deny: [...new Set([...(cur.permissions?.deny ?? []), ...deny])] } }));
   } catch (error) { PREPARED.delete(key); throw error; }
   let done = false;
-  return () => {
+  const restore = () => {
     if (done) return; done = true;
     for (const { file, before } of saved) { try { if (before) fs.writeFileSync(file, before); else fs.rmSync(file, { force: true }); } catch { /* best effort */ } }
-    for (const file of secrets) { try { fs.rmSync(file, { force: true }); } catch { /* best effort */ } }
     if (!hadDir) { try { fs.rmdirSync(dir); } catch { /* not empty: Cursor left something of its own */ } }
     PREPARED.delete(key);
   };
+  return Object.assign(restore, { env });
 }
 
 // options: exe, cwd, model, permission, resumeId, promptDir, env, log, onEvent, mcpServers, internalDir
@@ -201,8 +201,8 @@ export function createLive(o) {
     // 3.1: Orb's tools (orb_update_task, messages, the browser) through the project's .cursor/mcp.json, approved for this
     // run (--approve-mcps), and the guard as deny rules; both only for this turn. A command left running in the background
     // (a dev server) no longer keeps the CLI waiting for ever after its answer (--background-shell-timeout).
-    let restore = () => {};
-    try { restore = prepareCursorFolder(o.cwd, { mcpServers: o.mcpServers ?? {}, deny: cursorRules(permission, o.internalDir), secretDir: o.secretDir }); }
+    let restore = Object.assign(() => {}, { env: {} });
+    try { restore = prepareCursorFolder(o.cwd, { mcpServers: o.mcpServers ?? {}, deny: cursorRules(permission, o.internalDir) }); }
     catch (error) { log(`preparar .cursor: ${error.message}`); }
     current.promise.finally(() => restore());
     const args = [...o.exe.pre, '-p', '--output-format', 'stream-json', '--stream-partial-output', '--trust', '--workspace', o.cwd, '--approve-mcps', '--background-shell-timeout', '60'];
@@ -211,7 +211,8 @@ export function createLive(o) {
     if (model) args.push('--model', model);
     if (live.sessionId) args.push('--resume', live.sessionId);
     args.push(prompt);
-    child = spawnAgent(o.exe.cmd, args, { cwd: o.cwd, env: o.env, log });
+    // The values mcp.json names as ${env:ORB_MCP_…} travel only here (never in a file of the project).
+    child = spawnAgent(o.exe.cmd, args, { cwd: o.cwd, env: { ...o.env, ...restore.env }, log });
     live.pid = child.pid;
     let buffer = ''; let streamed = '';
     // 3.1: the CLI can stay open after its last answer without ever sending "result" (it waited on a background shell or

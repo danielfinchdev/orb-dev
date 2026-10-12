@@ -284,7 +284,7 @@ export class Sessions {
     const promptDir = path.join(s.cwd, ATTACH_DIR);
     if (s.agent === 'cursor') keepOutOfGit(s.cwd, [`${ATTACH_DIR}/`, ...CURSOR_FILES]);
     entry.live = a.createLive({
-      promptDir, secretDir: dir, // 3.1: Cursor's MCP secrets go next to the run log, never into the project
+      promptDir,
       exe, cwd: s.cwd, model: s.model, reasoning: s.reasoning, permission: s.permission,
       resumeId: forkFrom || s.cli_session || null, forkSession: Boolean(forkFrom), newSessionId,
       // 2.7: Opti Bot (Monitoreo del equipo) gets only its own tools (diagnosis, copy of Orb and proposals) and reads only.
