@@ -12,13 +12,17 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
-export function startDevControl({ api, board, sessions, log = () => {}, home }) {
+export function startDevControl({ api, board, sessions, log = () => {}, home, internalDir }) {
   const token = crypto.randomBytes(24).toString('hex');
+  // The key lives in Orb's own data folder (agents can never read it: guard.touchesInternal, Cursor's deny rules); the
+  // file in the temp folder only says where it is, so an agent that reads it learns nothing it can use.
   const file = process.env.ORB_DEV_CONTROL_FILE || path.join(os.tmpdir(), 'orb-dev-control.json');
+  const keyFile = path.join(internalDir, 'datos', 'control-desarrollo.json');
   const clients = new Set();
   const authorised = (req) => {
-    const given = String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
-    return given.length === token.length && crypto.timingSafeEqual(Buffer.from(given), Buffer.from(token));
+    const given = Buffer.from(String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, ''));
+    const want = Buffer.from(token);
+    return given.length === want.length && crypto.timingSafeEqual(given, want);
   };
   const send = (res, code, body) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(body)); };
   const snapshot = () => ({
@@ -48,7 +52,9 @@ export function startDevControl({ api, board, sessions, log = () => {}, home }) 
   });
   server.listen(0, '127.0.0.1', () => {
     const { port } = server.address();
-    fs.writeFileSync(file, JSON.stringify({ url: `http://127.0.0.1:${port}`, token, home, pid: process.pid, startedAt: new Date().toISOString() }, null, 2), { mode: 0o600 });
+    fs.mkdirSync(path.dirname(keyFile), { recursive: true });
+    fs.writeFileSync(keyFile, JSON.stringify({ url: `http://127.0.0.1:${port}`, token, home, pid: process.pid, startedAt: new Date().toISOString() }, null, 2), { mode: 0o600 });
+    fs.writeFileSync(file, JSON.stringify({ keyFile, home, pid: process.pid }, null, 2));
     log(`control de desarrollo en 127.0.0.1:${port} (${file})`);
   });
   const beat = setInterval(() => { for (const c of clients) c.write(': latido\n\n'); }, 15_000); beat.unref?.();
@@ -58,6 +64,6 @@ export function startDevControl({ api, board, sessions, log = () => {}, home }) 
       const line = `event: ${event}\ndata: ${JSON.stringify(payload ?? null)}\n\n`;
       for (const c of clients) { try { c.write(line); } catch { clients.delete(c); } }
     },
-    stop() { clearInterval(beat); for (const c of clients) { try { c.end(); } catch { /* gone */ } } server.close(); try { fs.rmSync(file, { force: true }); } catch { /* gone */ } }
+    stop() { clearInterval(beat); for (const c of clients) { try { c.end(); } catch { /* gone */ } } server.close(); for (const f of [file, keyFile]) { try { fs.rmSync(f, { force: true }); } catch { /* gone */ } } }
   };
 }

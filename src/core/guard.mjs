@@ -46,7 +46,10 @@ const RISKY = [
   // -EncodedCommand and its short forms hide the command: PowerShell's own option followed by its base64 text. 3.1: not any
   // " -e" later in the line (powershell -Command "node -e '…'" was taken for it in a real run).
   // (-Command / -File end PowerShell's own options: what follows is the script, whatever it says.)
-  [/\b(powershell|pwsh)(\.exe)?["']?(\s+-(?!e\b|ec\b|en\w*\b|c\b|command\b|f\b|file\b)\w+(\s+(?!-)\S+)?)*\s+[-/]e(c|n\w*)?\s+["']?[A-Za-z0-9+/]{4,}={0,2}/i, 'msg.guard.pipeToShell'],
+  // Options may start with - / or a dash (– —), and their values may be quoted with spaces.
+  [/\b(powershell|pwsh)(\.exe)?["']?(\s+[-/–—](?!e\b|ec\b|en\w*\b|c\b|command\b|f\b|file\b)\w+(\s+(?![-/–—])("[^"]*"|'[^']*'|\S+))?)*\s+[-/–—]e(c|n\w*)?\s+["']?[A-Za-z0-9+/]{4,}={0,2}/i, 'msg.guard.pipeToShell'],
+  // …and hidden in the arguments of a new PowerShell process (Start-Process powershell -ArgumentList "-enc …").
+  [/\b(powershell|pwsh)(\.exe)?\b[^|;&]*-argumentlist\s+["'][^"']*[-/–—]e(c|n\w*)?\s+[A-Za-z0-9+/]{4,}/i, 'msg.guard.pipeToShell'],
   [/\b(curl|wget)\b[^|;&]*\s(-X\s*(POST|PUT|DELETE|PATCH)|--data|-d\s|-F\s|--upload-file|-T\s)/i, 'msg.guard.sendData'],
   [/\b(invoke-webrequest|invoke-restmethod|iwr|irm)\b[^|;&]*-method\s+(post|put|delete|patch)/i, 'msg.guard.sendData'],
   [/\brm\s+(?:-{1,2}\S+\s+)*(-[a-z]*r|--recursive)|\b(remove-item|ri|rd|rmdir|del|erase)\b[^|;&]*\s-r(e(c(u(r(se?)?)?)?)?)?\b|\brd\s+\/s\b|\brmdir\s+\/s\b|\bdel\s+\/[sq]/i, 'msg.guard.deleteFolders'],
@@ -58,15 +61,41 @@ const RISKY = [
 ];
 
 // 3.1: data sent only to this PC (an agent testing its own local API: curl -X POST localhost:3000…) never leaves it.
-// Also written without http:// (curl localhost:3000/api, B=localhost:3000 … $B/api), as long as no other address appears:
-// neither an http(s):// one nor a bare host with a usual domain ending.
-const LOCAL_URL = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/i;
-const LOCAL_HOST = /(^|[\s'"=(@/])(localhost|127\.0\.0\.1|\[::1\])(:\d+)?([/\s'";)]|$)/i;
-const OTHER_HOST = /(^|[\s'"=(@/])(?!localhost\b)(?:[a-z0-9-]+\.)+(?:com|net|org|io|dev|app|ai|co|me|xyz|info|biz|es|uk|de|fr|eu|us|ru|cn|tk|sh|ly|gg|tv|cloud|site|online|link)(:\d+)?([/\s'";)]|$)/i;
+// An allow-list, not a block-list: the WHOLE command must be requests to this PC and nothing else. Every line or step is
+// either echo / cd / a pause / a variable set to a local address, or curl / wget / Invoke-WebRequest / Invoke-RestMethod
+// whose every address is local (localhost, 127.0.0.1, [::1], with or without http://, or a variable holding one), with no
+// proxy or address-rewriting option. A pipe, a sub-command or anything else: not local, it asks as before.
+const IS_LOCAL = /^(https?:\/\/)?(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/\S*)?$/i;
+const NET_TOOL = /^(curl|curl\.exe|wget|wget\.exe|iwr|irm|invoke-webrequest|invoke-restmethod)$/i;
+// curl's one-letter options are case-sensitive (-x is a proxy, -X the method; -o takes a file, -O does not).
+const REROUTE = (a) => /^-x$/.test(a) || /^(--(resolve|connect-to|proxy\S*|preproxy|socks\S*|doh-url|haproxy\S*)|-proxy\S*)(=|$)/i.test(a);
+const URL_OPT = /^(-uri|--url)$/i;
+const VALUE_OPT = (a) => /^-[HdFXwoTuAbemrzD]$/.test(a)
+  || /^(--(header|data\S*|form\S*|request|write-out|output|upload-file|user|user-agent|referer|cookie\S*|max-time|connect-timeout|retry\S*)|-(method|body|contenttype|headers|outfile|infile|timeoutsec|erroraction|maximumredirection))$/i.test(a);
+const words = (s) => (s.match(/"(?:[^"\\]|\\.)*"|'[^']*'|\S+/g) ?? []).map((w) => w.replace(/^(["'])([\s\S]*)\1$/, '$2'));
 const onlyLocal = (c) => {
-  const urls = c.match(/https?:\/\/[^\s'"`;|)]+/gi) ?? [];
-  if (urls.some((u) => !LOCAL_URL.test(u))) return false;
-  return (urls.length > 0 || LOCAL_HOST.test(c)) && !OTHER_HOST.test(c);
+  if (/[|`]|\$\(|<\(/.test(c.replace(/&&|\|\|/g, ';').replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, (q) => q.replace(/\|/g, '')))) return false;
+  const vars = new Map();
+  const resolve = (w) => w.replace(/^\$\{?(\w+)\}?/, (m, name) => (vars.has(name.toLowerCase()) ? vars.get(name.toLowerCase()) : '\u0000'));
+  const local = (w) => IS_LOCAL.test(resolve(w));
+  let requests = 0;
+  for (const step of c.split(/\r?\n|;|&&|\|\|/).map((s) => s.trim()).filter(Boolean)) {
+    const set = step.match(/^\$?(\w+)\s*=\s*(.*)$/);
+    if (set) { const v = words(set[2])[0] ?? ''; if (!local(v)) return false; vars.set(set[1].toLowerCase(), resolve(v)); continue; }
+    const w = words(step); const cmd = (w[0] ?? '').toLowerCase();
+    if (['echo', 'write-host', 'write-output', 'cd', 'set-location', 'sleep', 'start-sleep'].includes(cmd)) continue;
+    if (!NET_TOOL.test(cmd)) return false;
+    for (let i = 1; i < w.length; i++) {
+      const a = w[i];
+      if (REROUTE(a)) return false;
+      if (URL_OPT.test(a)) { if (!local(w[++i] ?? '')) return false; requests++; continue; }
+      if (VALUE_OPT(a)) { i++; continue; }
+      if (a.startsWith('-')) continue;
+      if (!local(a)) return false;
+      requests++;
+    }
+  }
+  return requests > 0;
 };
 export function riskOf(command, lang = 'es') {
   const c = String(command ?? '');
@@ -131,7 +160,8 @@ const PLAIN = [
 export function plainAction(command, { description = '', lang = 'es' } = {}) {
   if (String(description ?? '').trim()) return String(description).trim().replace(/\.$/, '').slice(0, 160);
   // The command inside a "powershell -Command '…'" or "cmd /c …" wrapper is the one that counts.
-  let c = String(command ?? '').trim().replace(/^"?[^"\s]*\\(?:powershell|pwsh|cmd)(?:\.exe)?"?\s+(?:-\w+\s+)*?(?:-command|-c|\/c)\s+["']?/i, '').replace(/^(?:powershell|pwsh|cmd)(?:\.exe)?\s+(?:-\w+\s+)*?(?:-command|-c|\/c)\s+["']?/i, '');
+  // (Also a quoted path with spaces: "C:\Program Files\PowerShell\7\pwsh.exe" -Command "…".)
+  let c = String(command ?? '').trim().replace(/^(?:"[^"]*[\\/]|[^\s"]*[\\/])?(?:powershell|pwsh|cmd)(?:\.exe)?"?\s+(?:[-/]\w+\s+)*?(?:-command|-c|\/c)\s+["']?/i, '');
   c = c.replace(/^\s*(?:cd\s+[^;&|]+(?:&&|;)\s*)+/i, '').replace(/^\$\w+\s*=\s*/, '');
   const hit = PLAIN.find(([re]) => re.test(c));
   return translate(lang, hit ? hit[1] : 'msg.guard.plain.other', { program: (c.split(/\s+/)[0] ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').slice(0, 30) });

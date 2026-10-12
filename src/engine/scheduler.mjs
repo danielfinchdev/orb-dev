@@ -590,7 +590,9 @@ ${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo
     let spent = '';
     try { const u = this.runUsage(task); if (u) { spent = this.usageLine(u); board.event(task.id, 'orb', 'task.usage', JSON.stringify({ ...u, minutes: Math.round(u.minutes * 10) / 10 })); } } catch (error) { this.log(`uso #${task.id}: ${error.message}`); }
     // 3.1: one clear line for the user; what the agent reported (technical) goes folded under it (meta.result).
-    board.addChat('system', `${tr(`msg.scheduler.ended.${task.status in { done: 1, failed: 1, blocked: 1, cancelled: 1 } ? task.status : 'other'}`, { icon, label: label(task.assigned_to), id: task.id, title: oneLine(task.title) })}${spent ? ` (${spent})` : ''}`,
+    // (A task that failed or got blocked says why in a short line: that is what the user needs to decide.)
+    const why = ['failed', 'blocked'].includes(task.status) && task.result ? `\n${oneLine(redactSecrets(task.result), 160)}` : '';
+    board.addChat('system', `${tr(`msg.scheduler.ended.${task.status in { done: 1, failed: 1, blocked: 1, cancelled: 1 } ? task.status : 'other'}`, { icon, label: label(task.assigned_to), id: task.id, title: oneLine(task.title) })}${spent ? ` (${spent})` : ''}${why}`,
       { kind: 'task-end', task: task.id, status: task.status, ...(task.result ? { result: redactSecrets(task.result).slice(0, 1500) } : {}) });
     const cp = board.settingJson(`checkpoint:${task.id}`);
     const revert = cp?.before ? tr('sys.logs.revertUndo', { id: task.id })

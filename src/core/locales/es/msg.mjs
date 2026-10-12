@@ -188,6 +188,7 @@ export default {
   "msg.db.reasoningNotAllowed": "el razonamiento {reasoning} no está permitido (permitidos en Ajustes: {allowed})",
   "msg.engine.taskNeedsPermission": "La tarea #{id} ({agent}) pide permiso para {what}. Lo pregunta porque {reason}.",
   "msg.engine.taskNeedsPermissionWait": "La tarea #{id} ({agent}) pide permiso para {what}. Lo pregunta porque {reason}. Si no respondes en {min} min, se deniega y el agente sigue por otro camino.",
+  "msg.engine.agentSays": " El agente dice que es para: «{text}».",
   "msg.engine.permissionTimedOut": "Tarea #{id}: nadie respondió en {min} min al permiso para {title}. Se ha denegado y el agente sigue por otro camino.",
   "msg.expert.badPath": "ruta no válida",
   "msg.expert.internal": "no se puede acceder a una carpeta interna",
