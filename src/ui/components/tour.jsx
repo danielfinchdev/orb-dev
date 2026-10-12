@@ -24,7 +24,9 @@ export const TOUR_STEPS = [
   { id: 'context', target: 'context-meter', view: 'chat', optional: true },
   { id: 'bar', target: 'bar-games', view: 'chat' },
   { id: 'newchat', target: 'new-conversation', sidebar: true },
+  { id: 'search', target: 'sidebar-search', sidebar: true },
   { id: 'folders', target: 'sidebar-folders', sidebar: true },
+  { id: 'conversations', target: 'sidebar-conversations', sidebar: true },
   { id: 'tasks', target: 'nav-tasks', view: 'tasks', sidebar: true },
   { id: 'schedules', target: 'nav-schedules', view: 'schedules', sidebar: true },
   { id: 'board', target: 'nav-board', sidebar: true },
@@ -51,7 +53,8 @@ function knownMissing() {
   const out = new Set();
   const { app } = getState();
   if (!visible(document.querySelector('[data-testid="new-conversation"]'))) for (const s of TOUR_STEPS) if (s.sidebar) out.add(s.id);
-  if (!(app?.chat?.context ?? app?.assistant?.context)?.size) out.add('context');
+  // 3.2: the tour shows a new conversation, whose ring only appears after an answer.
+  if (!visible(document.querySelector('[data-testid="context-meter"]')) && !(app?.assistant?.context)?.size) out.add('context');
   return out;
 }
 

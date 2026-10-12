@@ -20,7 +20,7 @@ function firstOpenToday() {
   const day = new Date().toLocaleDateString('sv');
   try { if (localStorage.getItem('orb.testDay') === day) return false; localStorage.setItem('orb.testDay', day); return true; } catch { return false; }
 }
-let state = { version: 0, ready: false, info: null, app: null, sessions: [], projects: [], tasks: [], route: { view: 'chat' }, settings: null, testToday: null };
+let state = { version: 0, ready: false, info: null, app: null, sessions: [], projects: [], tasks: [], conversations: [], route: { view: 'chat' }, settings: null, testToday: null };
 const listeners = new Set();
 const emit = () => { for (const fn of listeners) fn(); };
 export const getState = () => state;
@@ -76,13 +76,22 @@ export function go(route) {
 }
 
 export async function refresh() {
-  const [app, sessions, projects, tasks] = await Promise.all([call('app.state'), call('sessions.list'), call('projects.list'), call('tasks.list', { limit: 200 })]);
-  setState((s) => ({ app, sessions, projects, tasks, ready: true, version: s.version + 1 })); // version: views refetch their own data when it moves
+  const [app, sessions, projects, tasks, conversations] = await Promise.all([call('app.state'), call('sessions.list'), call('projects.list'), call('tasks.list', { limit: 200 }), call('conversations.list')]);
+  setState((s) => ({ app, sessions, projects, tasks, conversations, ready: true, version: s.version + 1 })); // version: views refetch their own data when it moves
+  // 3.2: the projects' icons, again only when the list of projects changes (or one is set by hand: loadProjectIcons).
+  const names = projects.map((p) => p.name).join('|');
+  if (names !== iconsFor) loadProjectIcons(names);
   let phoneTheme = null; if (bridge.mobile) { try { phoneTheme = localStorage.getItem('orb.theme'); } catch { /* none */ } }
   applyTheme(phoneTheme || app.config.ui?.theme);
   applyAppearance(app.config.ui);
   document.title = app.config.assistantName;
   document.documentElement.lang = app.config.language === 'en' ? 'en' : 'es';
+}
+
+let iconsFor = null;
+export function loadProjectIcons(names = iconsFor) {
+  iconsFor = names;
+  return call('projects.icons').then((projectIcons) => setState({ projectIcons })).catch(() => {});
 }
 
 let timer = null; let missed = false;
@@ -100,13 +109,15 @@ export async function act(promise, okText) {
   catch (error) { toast.error(errorText(error)); return undefined; }
 }
 
-// 3.0: «Nuevo chat»: a clean conversation with the assistant, in that project or none (the user picks it in the box).
-export async function newChat(project = null) {
-  const ok = await act(call('chat.new', { project }));
-  if (!ok) return;
-  await refresh().catch(() => {});
-  go('chat');
+// 3.2: «Nuevo chat»: the screen of a new conversation (it is made with its first message), in that project when one is
+// given (it becomes the working folder) or in the current one.
+export async function newChat(project) {
+  if (project !== undefined && (project ?? '') !== (state.app?.activeProject?.name ?? '')) await act(call('projects.setActive', { name: project ?? '' }));
+  go({ view: 'chat' });
 }
+// 3.2: what a conversation with the assistant is doing now (answering, its streamed text, its steps), from app.chats.
+export const chatOf = (app, id) => (id == null ? null : (app?.chats ?? []).find((c) => c.conversation === Number(id)) ?? null);
+export const anyChatBusy = (app) => (app?.chats ?? []).some((c) => c.busy);
 
 // Whether «Iniciar test» is offered in the chat (decided once per opening of the app, the first time the chat shows).
 export function initTestOfTheDay() { if (state.testToday === null) setState({ testToday: firstOpenToday() }); }
@@ -118,13 +129,11 @@ export async function runTest(prompt) {
   const ok = await act((async () => {
     // Cursor cannot coordinate the agents: the test runs with Claude as the brain.
     await call('chat.settings', state.app?.assistant?.agent === 'cursor' ? { agent: 'claude', model: '', orchestrate: true } : { orchestrate: true });
-    await call('chat.new', { project: null });
-    await call('chat.send', { text: prompt });
-    return true;
+    return call('chat.send', { text: prompt, project: null });
   })());
   if (!ok) return;
   await refresh().catch(() => {});
-  go('chat');
+  go({ view: 'chat', id: ok.conversation });
 }
 
 // Ctrl+J: a terminal in the folder of what is on screen (a conversation's project, the active project) or the assistant's.

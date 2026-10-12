@@ -195,7 +195,7 @@ function RunningPanel() {
   const t = useT();
   const tasks = useStore((s) => s.tasks).filter((t) => t.status === 'running');
   const sessions = useStore((s) => s.sessions).filter((s) => s.status === 'running' && s.kind === 'chat');
-  const chat = useStore((s) => s.app.chat);
+  const chat = useStore((s) => (s.app.chats ?? []).find((c) => c.busy) ?? null); // 3.2: a conversation answering now
   const name = useStore((s) => s.app.config.assistantName);
   if (!tasks.length && !sessions.length && !chat?.busy) return <p className="text-muted-foreground px-3 py-2 text-xs">{t('expert.nothingRunning')}</p>;
   return (

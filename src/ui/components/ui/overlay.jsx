@@ -82,6 +82,21 @@ export function BubbleTip({ title, text, children, side = 'bottom', align = 'cen
     </TooltipPrimitive.Root>
   );
 }
+// 3.2: a bubble with richer content (the card of a conversation in the sidebar): the same look, any content inside.
+// onOpen: called when it shows (to fetch what it needs then, not before).
+export function RichTip({ content, children, side = 'right', align = 'start', offset = 12, onOpen }) {
+  return (
+    <TooltipPrimitive.Root delayDuration={450} onOpenChange={(open) => { if (open) onOpen?.(); }}>
+      <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
+      <TooltipPrimitive.Portal>
+        <TooltipPrimitive.Content side={side} align={align} sideOffset={offset} collisionPadding={12} className="orb-tip orb-card z-50 w-72" data-testid="rich-tip">
+          {content}
+          <TooltipPrimitive.Arrow asChild width={16} height={8}><span className="orb-tip-tail" aria-hidden="true" /></TooltipPrimitive.Arrow>
+        </TooltipPrimitive.Content>
+      </TooltipPrimitive.Portal>
+    </TooltipPrimitive.Root>
+  );
+}
 // A one-line bubble (the label is its title).
 export function Tip({ label, children, side = 'top', align }) { return <BubbleTip title={label} side={side} align={align}>{children}</BubbleTip>; }
 export const TooltipProvider = TooltipPrimitive.Provider;

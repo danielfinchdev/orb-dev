@@ -28,7 +28,7 @@ export function startDevControl({ api, board, sessions, log = () => {}, home, in
   const snapshot = () => ({
     tasks: board.panelTasks(60).map((t) => ({ id: t.id, project: t.project, title: t.title, agent: t.agent, assigned_to: t.assigned_to, model: t.model, status: t.status, branch: t.branch, depends_on: t.depends_on, readonly: t.readonly, created_by: t.created_by, sensitivity: t.sensitivity, result: t.result ? String(t.result).slice(0, 400) : null })),
     approvals: sessions.allPendingApprovals().map((a) => ({ session: a.session?.id, task: a.session?.task_id ?? null, request: a.body?.id, title: a.body?.title, reason: a.body?.reason, at: a.at })),
-    chat: board.all('SELECT id, role, body, meta, at FROM chat ORDER BY id DESC LIMIT 25').reverse().map((r) => ({ ...r, body: String(r.body).slice(0, 1500), meta: r.meta ? JSON.parse(r.meta) : null }))
+    chat: board.all('SELECT id, role, body, meta, at, conversation_id FROM chat ORDER BY id DESC LIMIT 25').reverse().map((r) => ({ ...r, body: String(r.body).slice(0, 1500), meta: r.meta ? JSON.parse(r.meta) : null }))
   });
   const server = http.createServer(async (req, res) => {
     if (req.socket.remoteAddress && !/^(::ffff:)?127\.0\.0\.1$|^::1$/.test(req.socket.remoteAddress)) return send(res, 403, { ok: false, error: 'solo local' });

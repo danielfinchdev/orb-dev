@@ -17,7 +17,7 @@ import { Notices } from '@/components/notices.jsx';
 import { Scene } from '@/components/scene.jsx';
 import { GamesDialog } from '@/games/games.jsx';
 import { Robot } from '@/components/robot.jsx';
-import { useStore, setState, getState, refresh, refreshSoon, bridge, go, applyTheme, openTerminal, startTour } from '@/lib/store.js';
+import { useStore, setState, getState, refresh, refreshSoon, bridge, go, applyTheme, openTerminal, startTour, anyChatBusy } from '@/lib/store.js';
 import { Tour } from '@/components/tour.jsx';
 import { AGENT } from '@/lib/labels.js';
 import { WindowControls } from '@/components/window-controls.jsx';
@@ -33,7 +33,6 @@ import { ActivityView } from '@/views/activity.jsx';
 import { SettingsDialog, PhoneView } from '@/views/settings.jsx';
 import { SchedulesView } from '@/views/schedules.jsx';
 import { ExpertView } from '@/views/expert.jsx';
-import { NewTaskView } from '@/views/new-task.jsx';
 import { TutorialsView } from '@/views/tutorials.jsx';
 import { WhiteboardView } from '@/views/whiteboard.jsx';
 import { MonitorView } from '@/views/monitor.jsx';
@@ -42,8 +41,8 @@ const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
 // 2.7, the phone: the conversations («Chats») and «Más» are screens of their own; Agentes and Modo experto are PC only.
 function ChatsView() { const t = useT(); return <><PageHeader icon={<MessagesSquare className="text-primary size-5" />} title={t('nav.chats')} /><Sidebar page /></>; }
 const VIEWS = bridge.mobile
-  ? { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: LogsView, activity: ActivityView, schedules: SchedulesView, phone: PhoneView, newtask: NewTaskView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
-  : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: LogsView, activity: ActivityView, schedules: SchedulesView, phone: PhoneView, newtask: NewTaskView, tutorials: TutorialsView, board: WhiteboardView,
+  ? { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: LogsView, activity: ActivityView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
+  : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: LogsView, activity: ActivityView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView,
     // 2.7.3: Orb Light (the portable .exe) has no God mode nor PC Status.
     ...(bridge.light ? {} : { expert: ExpertView, monitor: MonitorView }) };
 
@@ -71,8 +70,9 @@ function Shell() {
   const [drawer, setDrawer] = useState(false);
   const folded = useStore((s) => s.sidebarCollapsed);
   useEffect(() => { if (!drawer) return undefined; const esc = (e) => { if (e.key === 'Escape') setDrawer(false); }; window.addEventListener('keydown', esc); return () => window.removeEventListener('keydown', esc); }, [drawer]);
-  const busy = app.chat?.busy;
-  const mood = busy ? (app.chat.partial ? 'talking' : 'thinking') : 'idle';
+  // 3.2: the robot thinks while the assistant answers in any conversation (and talks while one streams its answer).
+  const busy = anyChatBusy(app);
+  const mood = busy ? ((app.chats ?? []).some((c) => c.partial) ? 'talking' : 'thinking') : 'idle';
   AGENT.orb = app.config.assistantName;
   // 2.6: the guided tour, once, the first time the app opens after the setup (never on the phone); later from Tutoriales.
   const tour = useStore((s) => s.tour);
@@ -124,7 +124,11 @@ function Root() {
       for (let i = 0; i < 40 && alive; i++) {
         try {
           await refresh();
-          try { const saved = JSON.parse(localStorage.getItem('orb.route') || 'null'); if (saved?.view && VIEWS[saved.view] && (saved.view !== 'session' || getState().sessions.some((s) => s.id === saved.id))) setState({ route: saved }); } catch { /* default */ }
+          try {
+            const saved = JSON.parse(localStorage.getItem('orb.route') || 'null');
+            const exists = saved?.view === 'session' ? getState().sessions.some((s) => s.id === saved.id) : saved?.view === 'chat' && saved.id != null ? getState().conversations.some((c) => c.id === saved.id) : true;
+            if (saved?.view && VIEWS[saved.view] && exists) setState({ route: saved });
+          } catch { /* default */ }
           return setPhase('app');
         } catch (e) { setError(String(e?.message ?? e)); await new Promise((r) => setTimeout(r, 250)); }
       }
@@ -147,7 +151,11 @@ function Root() {
     if (phase !== 'app') return undefined;
     return bridge.on('*', (event, payload) => {
       if (event === 'board:changed' || event === 'session:update' || event === 'session:removed' || event === 'config:changed' || event === 'approval:changed') refreshSoon();
-      if (event === 'chat:state') setState((s) => ({ app: { ...s.app, chat: payload } }));
+      // 3.2: what one conversation is doing now (answering, waiting its turn or idle again).
+      if (event === 'chat:state' && payload?.conversation != null) setState((s) => {
+        const others = (s.app?.chats ?? []).filter((c) => c.conversation !== payload.conversation);
+        return { app: { ...s.app, chats: payload.busy || payload.waiting ? [...others, payload] : others } };
+      });
       // 2.7: what only informs (working folder, brain in use, schedule created…) passes by as a notification.
       // 3.2: through lib/notify.js: one at a time, never repeated, kept under the bell.
       if (event === 'notice' && payload?.body) notify({ body: payload.body, tone: payload.tone });

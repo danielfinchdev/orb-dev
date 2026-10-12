@@ -29,6 +29,10 @@ import { opti } from './opti.mjs';
 import { readOce } from './bridge.mjs';
 import { quickStats } from '../core/pc-health.mjs';
 import { translate } from '../core/i18n.mjs';
+import { titleFrom } from '../core/titles.mjs';
+import { autoTitle } from './titles.mjs';
+import { projectIcon, setProjectIcon, clearProjectIcon } from './project-icons.mjs';
+import { git } from '../core/workspace.mjs';
 
 // Names of the fields in the messages (Spanish as they were; the key is the Spanish word).
 const fld = (name) => { const key = `msg.api.f.${String(name).replace(/ /g, '_')}`; const t = tr(key); return t === key ? name : t; };
@@ -54,6 +58,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   const insideHome = (p) => { const rel = path.relative(realHome, p); return Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel); };
   const project = (name) => board.project(str(name, 'proyecto', 200)) ?? fail(tr('msg.api.noProject', { name }));
   let lastChat = board.one('SELECT MAX(id) AS id FROM chat')?.id ?? 0;
+  const conversationId = (id) => { const c = board.conversation(int(id, 'conversación')); if (!c) fail(tr('msg.board.noConversation')); return c.id; };
   const wb = whiteboard(board);
   const optiApi = opti({ board, sessions });
   // 2.7: a picture the window may show: an image file inside Orb's folder, a project, or an agent account's own folder
@@ -74,10 +79,19 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   // every 2 s (each refresh of the window asks for it).
   let lastSync = 0;
   const syncSoon = () => { if (Date.now() - lastSync > 2000) { lastSync = Date.now(); syncProjects(board); } };
-  // The current conversation with the assistant (since the last «Nueva conversación»), at most 120 messages. 3.0: that line
-  // is a notice since 2.7 (hidden from the chat), so the start is looked up in the whole table (board.chatStart).
   const withAccepted = (m) => (m.meta?.kind === 'report' ? { ...m, meta: { ...m.meta, accepted: m.meta.tasks.length > 0 && m.meta.tasks.every((id) => board.isAccepted(id)) } } : m);
-  const currentChat = () => board.chat(120, { after: board.chatStart() }).map(withAccepted);
+  // 3.2: the conversations for the sidebar, with how their tasks go, whether the assistant is answering in them now and
+  // whether a question of its waits for the user (three queries for all of them, not three each).
+  const conversationList = () => {
+    const counts = {};
+    for (const r of board.all('SELECT conversation_id AS c, status, COUNT(*) AS n FROM tasks WHERE conversation_id IS NOT NULL GROUP BY conversation_id, status')) (counts[r.c] ??= {})[r.status] = r.n;
+    const asking = new Set(board.all(`SELECT DISTINCT conversation_id AS c FROM chat WHERE conversation_id IS NOT NULL AND meta LIKE '%"kind":"question"%' AND meta LIKE '%"status":"pending"%'`).map((r) => r.c));
+    const live = new Map(orchestrator.states().map((x) => [x.conversation, x]));
+    return board.conversations().map((c) => ({ id: c.id, title: c.title, project: c.project, agent: c.agent, account: c.account, model: c.model, reasoning: c.reasoning, status: c.status,
+      created_at: c.created_at, updated_at: c.updated_at, done_at: c.done_at, context: c.context ?? null, tasks: counts[c.id] ?? {}, busy: Boolean(live.get(c.id)?.busy), waiting: Boolean(live.get(c.id)?.waiting), asking: asking.has(c.id) }));
+  };
+  // 3.2: a conversation is done when the user gave the OK to its work and none of its tasks is still open.
+  const settleConversation = (id) => { if (id && board.conversation(id)?.status === 'open' && !board.openTasksOf(id) && !orchestrator.state(id).busy) board.setConversationDone(id, true); };
 
   // The user's OK closes the loop: tasks marked accepted, a line in the chat and an entry in the project's log.
   const accept = (ids, project) => {
@@ -94,18 +108,28 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       config: ctx.config, paused: board.setting('paused') === '1', activeProject: board.activeProject(),
       approvals: sessions.allPendingApprovals().map((a) => ({ id: a.id, session_id: a.session_id, body: { title: a.body?.title, reason: a.body?.reason }, session: a.session })),
       counts: Object.fromEntries(board.all('SELECT status, COUNT(*) AS n FROM tasks GROUP BY status').map((r) => [r.status, r.n])),
-      chat: orchestrator.state(), chatStart: board.chatStart(), assistant: orchestrator.info(), optiSession: board.setting('opti_session') ?? null,
-      // 2.6: the tasks («t<id>») and conversations («s<id>») the user put away in «Completados» of the sidebar.
-      completed: board.settingJson('sidebar_completed') ?? []
+      // 3.2: what each conversation with the assistant is doing now (only the ones answering or waiting their turn).
+      chats: orchestrator.states(), assistant: orchestrator.info(), optiSession: board.setting('opti_session') ?? null,
+      // 2.6: the tasks («t<id>») and direct conversations («s<id>») the user put away in «Completadas» of the sidebar;
+      // 3.2: kept, the finished tasks the user brought back (a finished task goes to «Completadas» by itself).
+      completed: board.settingJson('sidebar_completed') ?? [], kept: board.settingJson('sidebar_kept') ?? []
     }),
+    'conversations.list': () => conversationList(),
+    // 3.2: completed by hand (or open again): a task («t<id>»), a direct conversation («s<id>») or a conversation with the
+    // assistant («c<id>»).
     'sidebar.complete': ({ key, done }) => {
       const k = str(key, 'elemento', 100);
-      if (!/^[ts][\w-]{1,90}$/.test(k)) fail(tr('msg.api.missing', { name: fld('elemento') }));
+      if (!/^[tsc][\w-]{1,90}$/.test(k)) fail(tr('msg.api.missing', { name: fld('elemento') }));
+      const finish = done !== false;
+      if (k[0] === 'c') { board.setConversationDone(conversationId(k.slice(1)), finish); return { ok: true }; }
+      // A direct conversation: its own «settled» (writing in it again opens it), not the list.
+      if (k[0] === 's') { sessions.update(sessions.must(k.slice(1)).id, { settled: finish }); board.settingJson('sidebar_completed', (board.settingJson('sidebar_completed') ?? []).filter((x) => x !== k)); board.changed('sidebar'); return { ok: true }; }
       const list = (board.settingJson('sidebar_completed') ?? []).filter((x) => x !== k);
-      if (done !== false) list.unshift(k);
+      if (finish) list.unshift(k);
       board.settingJson('sidebar_completed', list.slice(0, 2000));
+      if (k[0] === 't') { const kept = (board.settingJson('sidebar_kept') ?? []).filter((x) => x !== k); if (!finish) kept.unshift(k); board.settingJson('sidebar_kept', kept.slice(0, 500)); }
       board.changed('sidebar');
-      return list;
+      return { ok: true };
     },
     'config.save': ({ patch }) => { const c = saveConfig(patch ?? {}); emit('config:changed', c); return c; },
 
@@ -193,6 +217,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'projects.import': ({ name, folder }) => board.addProject({ name: str(name, 'nombre', 60), path: str(folder, 'carpeta', 1000) }, 'usuario', { fromUser: true }),
     'projects.remove': ({ name }) => board.removeProject(project(name).name, 'usuario'),
     'projects.setActive': ({ name }) => board.setActiveProject(name ? project(name).name : '', 'usuario'),
+    // 3.2: the projects' icons (their favicon or app icon, or one chosen here) for the sidebar: { name: dataUrl | null }.
+    'projects.icons': () => Object.fromEntries(board.projects().map((p) => [p.name, projectIcon(p)])),
+    'projects.setIcon': ({ name, path: file }) => { const p = project(name); const icon = setProjectIcon(p, str(file, 'imagen', 1000)); board.changed('projects'); return icon; },
+    // 3.2: only the current branch (the hover card of a conversation): one quick git call, nothing from the network.
+    'projects.branch': ({ name }) => { const p = project(name); const r = git(p.path, 'rev-parse', '--abbrev-ref', 'HEAD'); return { branch: r.status === 0 ? r.stdout.trim() || null : null }; },
+    'projects.clearIcon': ({ name }) => { const icon = clearProjectIcon(project(name)); board.changed('projects'); return icon; },
     'projects.info': ({ name }) => github.projectInfo(project(name)),
     'projects.commit': ({ name, message }) => github.commitAll(project(name), str(message, 'mensaje', 200)),
     'projects.merge': ({ name, branch }) => github.mergeBranch(project(name), str(branch, 'rama', 120)),
@@ -242,20 +272,54 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'github.contributions': () => github.contributions(),
     'github.login': () => github.login(),
 
-    'chat.list': () => currentChat(),
-    'chat.send': ({ text }) => { const t = str(text, 'mensaje', 20000); return orchestrator.ask(t, expandMentions(board, sessions, t)); },
-    'chat.reset': () => orchestrator.reset(),
-    // 3.0: «Nuevo chat»: a clean conversation with the assistant (only if the current one has anything), in the project
-    // chosen (or none: the user picks it in the message box).
-    'chat.new': ({ project: name }) => {
-      const want = name ? project(name).name : ''; // checked before anything is reset
-      if (board.chat(1, { after: board.chatStart() }).length) orchestrator.reset();
-      if (want !== (board.setting('active_project') ?? '')) board.setActiveProject(want, 'usuario');
+    // 3.2: a conversation's lines (the last 160, or 120 more before a line).
+    // Without a conversation: the lines of none (tasks made by hand or by a schedule), which the window shows as notices.
+    'chat.list': ({ conversation, before }) => board.chat(conversation == null ? null : conversationId(conversation), before ? 120 : 160, { before: before ? int(before, 'mensaje') : null }).map(withAccepted),
+    // A message to a conversation with the assistant; without one, it starts a new conversation (in the project given, or
+    // the working folder). → { conversation }
+    'chat.send': ({ text, conversation, project: name }) => {
+      const t = str(text, 'mensaje', 20000);
+      const id = conversation == null ? null : conversationId(conversation);
+      const proj = name === undefined ? undefined : name ? project(name).name : null;
+      if (!id && (ctx.config.orchestrator?.agent || 'claude') === 'cursor') fail(tr('msg.api.cursorNoCoordinate'));
+      return orchestrator.ask(t, expandMentions(board, sessions, t), { conversation: id, project: proj });
+    },
+    'chat.stop': ({ conversation }) => orchestrator.stop(conversationId(conversation)),
+    // 3.2: rename, change the project of a conversation, mark it done or open it again.
+    'conversations.update': ({ id, title, project: name, done }) => {
+      const c = conversationId(id);
+      if (title !== undefined) board.updateConversation(c, { title: oneLine(str(title, 'título', 80), 80), titled: true });
+      if (name !== undefined) board.setConversationProject(c, name ? project(name).name : '', 'usuario');
+      if (done !== undefined) board.setConversationDone(c, Boolean(done));
+      return board.conversation(c);
+    },
+    // Deleted with its lines (its tasks stay, in Tareas).
+    'conversations.remove': ({ id }) => {
+      const c = conversationId(id);
+      orchestrator.drop(c);
+      board.run('DELETE FROM chat WHERE conversation_id = ?', c);
+      board.run('UPDATE tasks SET conversation_id = NULL WHERE conversation_id = ?', c);
+      board.run('DELETE FROM conversations WHERE id = ?', c);
+      board.setting(`pending_questions:${c}`, '');
+      board.changed('conversations');
       return { ok: true };
     },
-    // 3.0: the conversations before the current one, 120 lines at a time going back (nothing is lost with «Nuevo chat»).
-    'chat.older': ({ before, limit }) => board.chat(Math.min(Math.max(Number(limit) || 120, 1), 120), { before: int(before, 'mensaje') }).map(withAccepted),
-    'chat.stop': () => orchestrator.stop(),
+    // 3.2: the search of the sidebar: conversations (with the assistant and direct) whose title or messages have the words.
+    'conversations.search': ({ q }) => {
+      const words = String(q ?? '').trim().toLowerCase().slice(0, 100);
+      if (words.length < 2) return { conversations: [], sessions: [] };
+      const like = `%${words.replace(/[%_!]/g, (m) => `!${m}`)}%`;
+      // SQLite's LIKE ignores case only for ASCII: with accents or «ñ» the words are matched here, in JavaScript.
+      if (/[^\x00-\x7f]/.test(words)) {
+        const has = (s) => String(s ?? '').toLowerCase().includes(words);
+        const conversations = board.all("SELECT c.id, c.title, (SELECT group_concat(m.body, ' ') FROM chat m WHERE m.conversation_id = c.id AND m.role IN ('usuario', 'orb')) AS text FROM conversations c").filter((r) => has(r.title) || has(r.text)).slice(0, 100).map((r) => r.id);
+        const found = board.all("SELECT s.id, s.title, (SELECT group_concat(i.body, ' ') FROM session_items i WHERE i.session_id = s.id AND i.kind = 'text') AS text FROM sessions s WHERE s.kind = 'chat'").filter((r) => has(r.title) || has(r.text)).slice(0, 100).map((r) => r.id);
+        return { conversations, sessions: found };
+      }
+      const conversations = board.all("SELECT DISTINCT c.id FROM conversations c LEFT JOIN chat m ON m.conversation_id = c.id AND m.role IN ('usuario', 'orb') WHERE lower(c.title) LIKE ? ESCAPE '!' OR lower(m.body) LIKE ? ESCAPE '!' LIMIT 100", like, like).map((r) => r.id);
+      const found = board.all("SELECT DISTINCT s.id FROM sessions s LEFT JOIN session_items i ON i.session_id = s.id AND i.kind = 'text' WHERE s.kind = 'chat' AND (lower(s.title) LIKE ? ESCAPE '!' OR lower(i.body) LIKE ? ESCAPE '!') LIMIT 100", like, like).map((r) => r.id);
+      return { conversations, sessions: found };
+    },
     // 2.7: Monitoreo del equipo (src/engine/opti.mjs): Opti Bot's conversation, the PC's quick numbers and the answer to
     // one of its action cards. PC only (not in the phone's list).
     'opti.session': () => optiApi.session(),
@@ -293,11 +357,10 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'whiteboard.remove': ({ project, file }) => wb.remove({ project: str(project, 'proyecto', 200), file: str(file, 'archivo', 200) }),
     'whiteboard.folder': ({ project }) => wb.folder({ project: str(project, 'proyecto', 200) }),
     // 2.7: the answer to a question card (orb_ask): the options picked and/or own words, or skipped. The card keeps it and
-    // the assistant gets it as the user's next message.
+    // the assistant gets it as the user's next message, in the conversation of the question.
     'chat.answer': ({ id, choices, other, skip }) => {
       const row = board.chatRow(int(id, 'mensaje'));
-      // A question left open in an earlier conversation is gone: the new one would not know what it was about.
-      if (row?.meta?.kind !== 'question' || row.meta.status !== 'pending' || row.id < board.chatStart()) fail(tr('msg.api.questionGone'));
+      if (row?.meta?.kind !== 'question' || row.meta.status !== 'pending' || !row.conversation_id || !board.conversation(row.conversation_id)) fail(tr('msg.api.questionGone'));
       const labels = new Set(row.meta.options.map((o) => o.label));
       const picked = (Array.isArray(choices) ? choices : []).map((c) => String(c)).filter((c) => labels.has(c)).slice(0, row.meta.multi ? 4 : 1);
       const own = other === undefined ? '' : oneLine(str(other, 'respuesta', 2000, { optional: true }) ?? '', 2000).trim();
@@ -305,25 +368,31 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const answer = skip ? '' : [...picked, ...(own ? [own] : [])].join(' · ');
       board.patchChatMeta(row.id, { ...row.meta, status: skip ? 'skipped' : 'answered', answer });
       const text = skip ? tr('msg.api.questionSkipped', { question: row.meta.question }) : tr('msg.api.questionAnswer', { question: row.meta.question, answer });
-      return orchestrator.ask(text);
+      return orchestrator.ask(text, '', { conversation: row.conversation_id });
     },
     'chat.accept': ({ id }) => {
       const row = board.chatRow(int(id, 'mensaje'));
       if (row?.meta?.kind !== 'report') fail(tr('msg.api.notReport'));
-      return accept(row.meta.tasks, row.meta.project);
+      const out = accept(row.meta.tasks, row.meta.project);
+      // 3.2: the OK closes the conversation when nothing of it is still open (written in again, it opens).
+      settleConversation(row.conversation_id);
+      return out;
     },
-    // The assistant's brain (2.6: any installed agent and model, with its reasoning and account) and mode ("Orquestador"
-    // ticked = only coordinate; unticked = free mode).
-    'chat.settings': ({ agent, model, reasoning, orchestrate, account: acc }) => {
+    // The assistant's brain (2.6: any installed agent and model, with its reasoning and account). 3.2: of a conversation
+    // (conversation given) and, always, the one new conversations start with; orchestrate: whether a new conversation is
+    // with the assistant (on) or directly with the agent chosen (off: the user hands out the work).
+    'chat.settings': ({ conversation, agent, model, reasoning, orchestrate, account: acc }) => {
       const o = ctx.config.orchestrator;
+      const conv = conversation == null ? null : board.conversation(conversationId(conversation));
+      const base = conv ? { agent: conv.agent, account: conv.account, model: conv.model, reasoning: conv.reasoning } : o;
       const patch = {};
       if (agent !== undefined) {
         if (!modelCatalog(board).some((a) => a.id === agent)) fail(tr('msg.api.agentUnavailable', { agent: String(agent).slice(0, 40) }));
         patch.agent = agent;
       }
-      const brain = patch.agent ?? o.agent ?? 'claude';
+      const brain = patch.agent ?? base.agent ?? 'claude';
       if (acc !== undefined) patch.account = str(acc, 'cuenta', 40);
-      else if (patch.agent && patch.agent !== (o.agent ?? 'claude')) patch.account = brain; // another agent: its own account
+      else if (patch.agent && patch.agent !== (base.agent ?? 'claude')) patch.account = brain; // another agent: its own account
       if (model !== undefined) {
         const m = String(model ?? '');
         if (brain === 'claude' && m && !o.models.some((x) => x.id === m) && !/^(sonnet|opus|haiku)$/.test(m)) {
@@ -334,22 +403,26 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
         }
         if (m && !/^[A-Za-z0-9][\w.:\-/[\]=,@]{0,79}$/.test(m)) fail(tr('msg.api.modelUnavailable'));
         patch.model = m || (brain === 'claude' ? 'claude-sonnet-5-5' : '');
-      } else if (patch.agent && patch.agent !== (o.agent ?? 'claude')) patch.model = brain === 'claude' ? 'claude-sonnet-5-5' : '';
+      } else if (patch.agent && patch.agent !== (base.agent ?? 'claude')) patch.model = brain === 'claude' ? 'claude-sonnet-5-5' : '';
       if (reasoning !== undefined) patch.reasoning = oneOf(reasoning, ['low', 'medium', 'high'], 'razonamiento');
-      if (orchestrate !== undefined) patch.orchestrate = Boolean(orchestrate);
+      if (orchestrate !== undefined && !conv) patch.orchestrate = Boolean(orchestrate);
       // Cursor's command line cannot take Orb's tools (MCP): it can talk directly, not coordinate the agents.
-      if (brain === 'cursor' && (patch.orchestrate ?? o.orchestrate !== false)) fail(tr('msg.api.cursorNoCoordinate'));
-      const before = { ...o };
+      if (brain === 'cursor' && (conv || (patch.orchestrate ?? o.orchestrate !== false))) fail(tr('msg.api.cursorNoCoordinate'));
+      const before = { ...base };
+      if (conv) {
+        const fields = {};
+        for (const k of ['agent', 'account', 'model', 'reasoning']) if (patch[k] !== undefined) fields[k] = patch[k] || null;
+        board.updateConversation(conv.id, fields);
+        // Another agent, or another account (its conversation lives in that account's folder): this conversation goes on
+        // afresh with the logs instead of failing to resume.
+        if ((patch.agent && patch.agent !== before.agent) || (patch.account !== undefined && patch.account !== before.account)) orchestrator.forget(conv.id);
+      }
+      // The choice is also the one the next new conversation starts with.
       const c = saveConfig({ orchestrator: patch });
       emit('config:changed', c);
-      // Another agent cannot continue the previous one's conversation: a new one starts (the board and logs remember).
-      // Another agent, or another account of the same one (its conversation lives in the other account's folder): the
-      // next message starts a new conversation instead of failing to resume the old one.
-      if ((patch.agent && patch.agent !== (before.agent ?? 'claude')) || (patch.account !== undefined && patch.account !== before.account)) orchestrator.forget();
-      const info = orchestrator.info();
-      const level = { low: tr('msg.api.reasoningLow'), medium: tr('msg.api.reasoningMedium'), high: tr('msg.api.reasoningHigh') }[c.orchestrator.reasoning] ?? c.orchestrator.reasoning;
+      const info = orchestrator.info(conv?.id ?? null);
+      const level = { low: tr('msg.api.reasoningLow'), medium: tr('msg.api.reasoningMedium'), high: tr('msg.api.reasoningHigh') }[info.reasoning] ?? info.reasoning;
       if ((patch.model !== undefined && patch.model !== before.model) || (patch.agent && patch.agent !== (before.agent ?? 'claude')) || (patch.reasoning && patch.reasoning !== before.reasoning)) board.notice(tr('msg.api.assistantBrain', { name: assistantName(), agent: info.agentLabel, label: info.modelLabel, reasoning: level }), 'info');
-      if (patch.orchestrate !== undefined && patch.orchestrate !== before.orchestrate) board.notice(patch.orchestrate ? tr('msg.api.modeOrchestrator') : tr('msg.api.modeFree'), 'info');
       return info;
     },
     // 2.6: the brains to choose from (agent + model), which ones spend the quota faster and how used each account is.
@@ -402,9 +475,11 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const cwd = proj ? proj.path : ctx.paths.projects;
       // Without a project the agent sits in the assistant's own folder (its database, secret and logs): it may only look.
       if (!proj && p.permission && p.permission !== 'leer') fail(tr('msg.api.readOnlyNoProject'));
-      return sessions.create({ kind: 'chat', agent: oneOf(p.agent, AGENT_IDS, 'agente'), account: str(p.account, 'cuenta', 40, { optional: true }) || null, model: str(p.model, 'modelo', 80, { optional: true }) || null,
+      const created = sessions.create({ kind: 'chat', agent: oneOf(p.agent, AGENT_IDS, 'agente'), account: str(p.account, 'cuenta', 40, { optional: true }) || null, model: str(p.model, 'modelo', 80, { optional: true }) || null,
         reasoning: oneOf(p.reasoning, ['low', 'medium', 'high'], 'razonamiento', 'medium'), permission: proj ? oneOf(p.permission, PERMISSIONS, 'permiso', 'editar') : 'leer',
         project: proj?.name ?? null, cwd, title: str(p.title, 'título', 80, { optional: true }) || tr('msg.api.chatWith', { agent: p.agent }) });
+      // 3.2: a title given here stays; without one, Orb names it from its first message.
+      return p.title ? sessions.update(created.id, { titled: true }) : created;
     },
     'sessions.items': ({ id, after, before, limit }) => sessions.items(str(id, 'conversación', 64), { after: Number(after) || 0, before: Number(before) || 0, limit: Number(limit) || 200 }),
     // A message to a conversation: a new turn, or (while it works) steer the running turn or wait in its queue.
@@ -421,6 +496,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
         return { queued: true };
       }
       const t = str(text, 'mensaje', 20000);
+      // 3.2: a new direct conversation is named by Orb from its first message (at once a quick title, then a better one).
+      if (s.kind === 'chat' && !s.titled && !sessions.isOpti(s)) {
+        const quick = titleFrom(t) || s.title;
+        sessions.update(s.id, { title: quick, titled: true });
+        autoTitle(board, { agent: s.agent, account: s.account, text: t }).then((better) => { if (better && sessions.get(s.id)?.title === quick) sessions.update(s.id, { title: better }); }).catch(() => {});
+      }
       return sessions.message(s.id, t, { images: images(files), mode: oneOf(mode, ['auto', 'steer', 'queue'], 'modo', 'auto'), context: expandMentions(board, sessions, t) });
     },
     'sessions.queue': ({ id }) => sessions.queue(str(id, 'conversación', 64)),
@@ -437,7 +518,6 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'schedules.update': ({ id, enabled, approve, title, description }) => updateSchedule(board, int(id, 'programada'), { enabled, approved: approve === true, title, description }),
     'schedules.remove': ({ id }) => removeSchedule(board, int(id, 'programada')),
     'schedules.run': ({ id }) => runSchedule(board, getSchedule(board, int(id, 'programada')) ?? fail(tr('msg.api.noScheduled')), 'usuario'),
-    'chat.approve': ({ request, decision }) => orchestrator.respond(str(request, 'petición', 200), oneOf(decision, DECISION, 'decisión')),
     'tasks.review': ({ id, agent, focus }) => scheduler.createReview(board.task(int(id, 'tarea')) ?? fail(tr('msg.api.noTaskThat')), { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null), focus: str(focus, 'foco', 500, { optional: true }) }),
     'projects.review': ({ name, agent, focus }) => scheduler.reviewProject(project(name).name, { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null), focus: str(focus, 'foco', 500, { optional: true }) }),
     'projects.securityReview': ({ name, agent }) => scheduler.securityReview(project(name).name, { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null) }),
@@ -467,7 +547,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     // 2.6: the accounts working right now (the assistant's brain and the agents' running sessions), with the windows of
     // their plan the agents reported (session, weekly…), for the panel of the context ring.
     'usage.now': () => {
-      const brain = orchestrator.info(); const brainAccount = orchestrator.liveAccount ?? brain.account;
+      // 3.2: the brain of the conversations answering now (or the one new conversations use).
+      const brain = orchestrator.info(); const brainAccount = orchestrator.states().find((x) => x.busy) ? board.conversation(orchestrator.states().find((x) => x.busy).conversation)?.account ?? brain.account : brain.account;
       const busy = board.all("SELECT DISTINCT account, agent FROM sessions WHERE status = 'running' AND account IS NOT NULL");
       const report = usageReport(board);
       // Then the other accounts whose plan reported its usage lately (a task that just finished still counts).
@@ -518,13 +599,18 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     // New chat lines since the last call, sent to the window as 'chat:new' (corner robot, robot notices) or 'notice' (toasts).
     notifyNewChat() {
       try { optiApi.flush(); } catch { /* Opti Bot off or its conversation gone */ }
-      const rows = board.all('SELECT id, role, body, meta FROM chat WHERE id > ? ORDER BY id LIMIT 20', lastChat);
+      const rows = board.all('SELECT id, role, body, meta, conversation_id FROM chat WHERE id > ? ORDER BY id LIMIT 20', lastChat);
       if (!rows.length) return;
       lastChat = rows[rows.length - 1].id;
       for (const r of rows) if (r.role === 'notice') { let tone = 'info'; try { tone = JSON.parse(r.meta)?.tone ?? 'info'; } catch { /* plain */ } emit('notice', { body: oneLine(r.body, 300), tone }); } // 2.7: a passing notification, not a chat line
-      else if (r.role !== 'usuario') { let meta = null; try { meta = r.meta ? JSON.parse(r.meta) : null; } catch { /* plain */ } emit('chat:new', { role: r.role, body: oneLine(r.body, 240), meta }); }
+      else if (r.role !== 'usuario') {
+        let meta = null; try { meta = r.meta ? JSON.parse(r.meta) : null; } catch { /* plain */ }
+        // 3.2: a plain line of no conversation (a task made by hand or by a schedule) passes by as a notification.
+        if (r.role === 'system' && r.conversation_id == null && !meta?.kind) emit('notice', { body: oneLine(r.body, 300), tone: 'info' });
+        else emit('chat:new', { role: r.role, body: oneLine(r.body, 240), meta, conversation: r.conversation_id ?? null });
+      }
     },
     // Running tasks stay "running": the next start continues them (scheduler.finish does not close them while closing).
-    shutdown() { scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stop(); orchestrator.closeLive(); log('motor detenido'); }
+    shutdown() { scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stopAll(); orchestrator.closeLive(); log('motor detenido'); }
   };
 }

@@ -83,7 +83,15 @@ async function start(home, version, secret, browser) {
     if (s?.kind !== 'task') return;
     board.notice(tr('msg.engine.permissionTimedOut', { id: s.task_id, title: plainAction(item.body?.title ?? '', { lang: ctx.config.language }), min: Number(ctx.config.approvalWaitMinutes ?? 10) }), 'warning');
   };
-  const orchestrator = new Orchestrator(board, orchKey, { emit, log });
+  // 3.2: a new conversation gets its title from Orb (the lightest model of its agent), once; the quick one stays if not.
+  const { autoTitle } = await import('./titles.mjs');
+  const title = (c, text) => {
+    if (c.titled) return;
+    board.updateConversation(c.id, { titled: true });
+    // Not over one the user wrote meanwhile.
+    autoTitle(board, { agent: c.agent, account: c.account, text }).then((t) => { if (t && board.conversation(c.id)?.title === c.title) board.updateConversation(c.id, { title: t }); }).catch(() => {});
+  };
+  const orchestrator = new Orchestrator(board, orchKey, { emit, log, title });
   const scheduler = new Scheduler(board, sessions, { log, orchestrator });
   const { createRemote } = await import('./remote.mjs');
   const remoteRef = { current: null };

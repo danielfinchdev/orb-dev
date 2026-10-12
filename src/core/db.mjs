@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from './context.mjs';
+import { titleFrom } from './titles.mjs';
 
 // node:sqlite may print an ExperimentalWarning; it would pollute the MCP stdout/stderr and the logs.
 const emitWarning = process.emitWarning;
@@ -144,6 +145,26 @@ CREATE TABLE IF NOT EXISTS schedules (
   last_task INTEGER,
   created_at TEXT NOT NULL
 );
+-- 3.2: each conversation with the assistant is its own (title, project, brain, its agent's conversation id and context),
+-- listed in the sidebar and continued later. The chat lines and the tasks it asked for point to it (conversation_id).
+CREATE TABLE IF NOT EXISTS conversations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  titled INTEGER NOT NULL DEFAULT 0,
+  project TEXT,
+  agent TEXT NOT NULL DEFAULT 'claude',
+  account TEXT,
+  model TEXT,
+  reasoning TEXT NOT NULL DEFAULT 'medium',
+  session_id TEXT,
+  turns INTEGER NOT NULL DEFAULT 0,
+  context TEXT,
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'done')),
+  done_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS conversations_updated ON conversations (status, updated_at);
 CREATE INDEX IF NOT EXISTS session_queue_session ON session_queue (session_id, position, id);
 CREATE INDEX IF NOT EXISTS events_task ON events (task_id, id);
 CREATE INDEX IF NOT EXISTS events_kind_at ON events (kind, at);
@@ -195,8 +216,15 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   // 2.7: the multiplatform group a project belongs to (tienda-android and tienda-ios share «tienda»).
   ['projects', 'grupo', 'TEXT'],
   // 2.3.3: each phone has its own key (end-to-end encryption), the way it was paired and its notifications.
-  ['devices', 'public_key', 'TEXT'], ['devices', 'route', 'TEXT'], ['devices', 'push', 'TEXT']];
+  ['devices', 'public_key', 'TEXT'], ['devices', 'route', 'TEXT'], ['devices', 'push', 'TEXT'],
+  // 3.2: the conversation a chat line belongs to and the one that asked for a task.
+  ['chat', 'conversation_id', 'INTEGER'], ['tasks', 'conversation_id', 'INTEGER']];
 export function migrate(db) {
+  // 3.2: whether a direct conversation already has its title (Orb names a new one from its first message); the ones made
+  // before keep theirs.
+  if (!db.prepare('PRAGMA table_info(sessions)').all().some((c) => c.name === 'titled')) {
+    db.exec('ALTER TABLE sessions ADD COLUMN titled INTEGER NOT NULL DEFAULT 0; UPDATE sessions SET titled = 1;');
+  }
   for (const [table, column, type] of ADDED) {
     const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
     if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
@@ -206,7 +234,10 @@ export function migrate(db) {
   db.exec(`CREATE INDEX IF NOT EXISTS messages_task ON messages (task_id, id);
     CREATE INDEX IF NOT EXISTS tasks_parent ON tasks (parent_id);
     CREATE INDEX IF NOT EXISTS tasks_review ON tasks (review_of);
-    CREATE INDEX IF NOT EXISTS session_items_approval ON session_items (id) WHERE kind = 'approval';`);
+    CREATE INDEX IF NOT EXISTS session_items_approval ON session_items (id) WHERE kind = 'approval';
+    CREATE INDEX IF NOT EXISTS chat_conversation ON chat (conversation_id, id);
+    CREATE INDEX IF NOT EXISTS tasks_conversation ON tasks (conversation_id);`);
+  migrateConversations(db);
   // 2.7.3: the notices saved as grey system lines before 2.7 (working folder, mode, brain, new conversation…) become
   // notices too, so the old ones leave the chat like the new ones. Only system lines with those exact openings. 3.0: once
   // per database (no grey line of those is written any more), not at every start of the engine and of each MCP server.
@@ -215,6 +246,61 @@ export function migrate(db) {
   db.prepare(`UPDATE chat SET role = 'notice' WHERE role = 'system' AND (${where})`).run(...OLD_NOTICES);
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('notices_migrated', '1')").run();
 }
+// 3.2: the chat before 3.2 was one long line cut by «Nueva conversación» notices. Once per database, each piece with
+// something the user wrote becomes a conversation of its own (the pieces without, such as the lines of a task that ended
+// later, join the one before); the tasks the assistant created go with the conversation they were asked in, and the
+// assistant's live conversation continues in the last one. Nothing is deleted.
+function migrateConversations(db) {
+  const get = (key) => db.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value;
+  if (get('conversations_migrated')) return;
+  // Inside one write lock, looked at again: the engine and the MCP servers open the database at the same time.
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    if (!get('conversations_migrated')) splitChat(db, get);
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('conversations_migrated', '1')").run();
+    db.exec('COMMIT');
+  } catch (error) { db.exec('ROLLBACK'); throw error; }
+}
+function splitChat(db, get) {
+  const rows = db.prepare('SELECT id, role, body, meta, at FROM chat WHERE conversation_id IS NULL ORDER BY id').all();
+  const pieces = []; let current = null;
+  for (const r of rows) {
+    if ((r.role === 'notice' || r.role === 'system') && /^(Nueva conversación|New conversation)/.test(r.body)) { current = null; continue; }
+    if (r.role === 'notice') continue;
+    if (!current) { current = { lines: [] }; pieces.push(current); }
+    current.lines.push(r);
+  }
+  // A piece without a message of the user joins the one before it (or the next one, at the start).
+  const kept = [];
+  for (const p of pieces) {
+    if (p.lines.some((l) => l.role === 'usuario')) kept.push(p);
+    else if (kept.length) kept.at(-1).lines.push(...p.lines);
+    else p.orphan = true;
+  }
+  const firstOrphans = pieces.filter((p) => p.orphan).flatMap((p) => p.lines);
+  if (kept.length && firstOrphans.length) kept[0].lines.unshift(...firstOrphans);
+  const active = get('active_project') || null;
+  kept.forEach((p, i) => {
+    const last = i === kept.length - 1;
+    const from = p.lines[0].at; const to = kept[i + 1]?.lines[0]?.at ?? '9999';
+    const tasks = db.prepare("SELECT id, project FROM tasks WHERE created_by = 'orb' AND conversation_id IS NULL AND created_at >= ? AND created_at < ?").all(from, to);
+    const counts = {}; for (const t of tasks) counts[t.project] = (counts[t.project] ?? 0) + 1;
+    const project = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? (last ? active : null);
+    const first = p.lines.find((l) => l.role === 'usuario');
+    const title = titleFrom(first.body) || 'Conversación';
+    const at = p.lines.at(-1).at;
+    // With the brain configured then (its account and model: the live conversation of the last one continues there).
+    const o = ctx.config?.orchestrator ?? {};
+    const { lastInsertRowid } = db.prepare(`INSERT INTO conversations (title, titled, project, agent, account, model, reasoning, status, done_at, created_at, updated_at, session_id, turns)
+      VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(title, project, o.agent || 'claude', o.account || null, o.model || null, o.reasoning || 'medium', last ? 'open' : 'done', last ? null : at, from, at,
+      last ? (get('orchestrator_session') || null) : null, last ? Number(get('orchestrator_turns') ?? 0) : 0);
+    const id = Number(lastInsertRowid);
+    const ids = p.lines.map((l) => l.id);
+    for (let k = 0; k < ids.length; k += 400) { const part = ids.slice(k, k + 400); db.prepare(`UPDATE chat SET conversation_id = ? WHERE id IN (${part.map(() => '?').join(',')})`).run(id, ...part); }
+    for (const t of tasks) db.prepare('UPDATE tasks SET conversation_id = ? WHERE id = ?').run(id, t.id);
+  });
+}
+
 const OLD_NOTICES = ['Carpeta de trabajo:%', '📁 Carpeta de trabajo:%', 'Working folder:%', '📁 Working folder:%',
   'Modo orquestador:%', 'Modo libre:%', 'Orchestrator mode:%', 'Free mode:%', 'Modelo del asistente:%', 'Assistant model:%',
   '% usará % con razonamiento %', '% will use % reasoning.', 'Nueva conversación.%', 'New conversation.%', 'Detenido.', 'Stopped.',
