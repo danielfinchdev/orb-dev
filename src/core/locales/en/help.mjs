@@ -202,7 +202,7 @@ export default {
   'help.tour.newchat.title': 'New chat',
   'help.tour.newchat.text': 'Each «New chat» is a conversation of its own, with its title and project. You can have several at once and go back to any of them.',
   'help.tour.folders.title': 'Your projects',
-  'help.tour.folders.text': 'A click starts a conversation in that project; its arrow shows its conversations and active tasks, each in its own group.',
+  'help.tour.folders.text': 'A click starts a conversation in that project; its arrow shows its active tasks.',
   'help.tour.tasks.title': 'Tasks',
   'help.tour.tasks.text': 'All the agents’ work: in progress, to approve, completed and issues. You can undo any task.',
   'help.tour.schedules.title': 'Scheduled',
@@ -225,7 +225,7 @@ export default {
   'help.tour.search.title': 'Search',
   'help.tour.search.text': 'Find any conversation, task or project, also by what was said. With the filter, only what is in progress or needs you.',
   'help.tour.conversations.title': 'Conversations',
-  'help.tour.conversations.text': 'Every open conversation, the latest on top. On hover you see its project, who answers and how its tasks go. What is finished goes to «Completed» by itself.',
+  'help.tour.conversations.text': 'All your conversations, the latest on top. On hover you see its project, who answers and how its tasks go; what is finished goes to «Completed» by itself.',
   // 3.2: sidebar foot
   'help.tour.feedback.title': 'Send feedback',
   'help.tour.feedback.text': 'If something fails or you think of an improvement, tell me from here. Next to it, Orb\'s version.'
