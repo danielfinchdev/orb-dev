@@ -88,7 +88,7 @@ try {
   await win.click('[data-testid=nav-projects]');
   await win.locator('[data-testid=project-security]').first().waitFor();
   await win.hover('[data-testid=project-security]');
-  await win.locator('[data-testid=bubble-tip]').waitFor();
+  await win.locator('[data-testid=bubble-tip]:not([data-state=closed])').first().waitFor();
   await shot('05-security-review');
   await win.click('[data-testid=project-security]');
   await win.getByRole('button', { name: 'Solicitar Security Review' }).click();

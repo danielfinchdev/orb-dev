@@ -367,7 +367,8 @@ try {
   // 2.6: a clean top bar: icon buttons with their bubble, and the mini-games.
   assert.equal(await win.locator('main header').evaluate((h) => h.innerText.replace(h.querySelector('h1')?.innerText ?? '', '').trim()), '', 'sin nombre, modo ni modelo en la barra');
   await win.hover('[data-testid=bar-pause]');
-  await win.locator('[data-testid=bubble-tip]').waitFor();
+  // The bubble that is open (another one may still be closing for a moment: seen on the CI's Linux machine).
+  await win.locator('[data-testid=bubble-tip]:not([data-state=closed])').first().waitFor();
   await shot('11b-barra-globo');
   await win.click('[data-testid=bar-games]');
   await win.locator('[data-testid=games-dialog]').waitFor();
