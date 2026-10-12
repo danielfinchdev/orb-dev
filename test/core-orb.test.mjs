@@ -64,7 +64,7 @@ test('unir una copia con conflicto: la carpeta no se toca y se dice qué choca',
 test('Cursor: las reglas del guardia y las herramientas de Orb solo durante el turno, respetando los archivos del usuario', () => {
   assert.deepEqual(cursorRules('total'), []);
   const editar = cursorRules('editar', 'C:\\Orb\\.orb');
-  for (const rule of ['Shell(git push)', 'Shell(taskkill)', 'Shell(*Remove-Item*-Recurse*)', 'Shell(gh pr)']) assert.ok(editar.includes(rule), rule);
+  for (const rule of ['Shell(git push)', 'Shell(taskkill)', 'Shell(*Remove-Item*-Recurse*)', 'Shell(gh pr)', 'Shell(*git push*)', 'Shell(*git -C * push*)']) assert.ok(editar.includes(rule), rule);
   assert.ok(!editar.includes('Write(**)'));
   assert.ok(editar.some((r) => /^Write\(.*datos/.test(r)), 'las carpetas privadas de Orb');
   assert.ok(cursorRules('probar').includes('Write(**)'), 'revisar y probar: no cambia archivos');
@@ -73,14 +73,23 @@ test('Cursor: las reglas del guardia y las herramientas de Orb solo durante el t
   fs.mkdirSync(path.join(dir, '.cursor'));
   const mine = JSON.stringify({ permissions: { allow: ['Shell(ls)'], deny: ['Shell(rm)'] } }, null, 1);
   fs.writeFileSync(path.join(dir, '.cursor', 'cli.json'), mine);
-  const restore = prepareCursorFolder(dir, { mcpServers: { orb: { command: 'node', args: ['x.mjs'] } }, deny: ['Shell(git push)'] });
+  fs.writeFileSync(path.join(dir, '.cursor', 'mcp.json'), JSON.stringify({ mcpServers: { delRepo: { command: 'evil' } } }));
+  const secretDir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-secretos-'));
+  const restore = prepareCursorFolder(dir, { mcpServers: { orb: { command: 'node', args: ['x.mjs'], env: { ORB_AGENT_TOKEN: 'secreto123' } } }, deny: ['Shell(git push)'], secretDir });
+  assert.equal(prepareCursorFolder(dir, { deny: ['Shell(x)'] })(), undefined, 'un segundo turno en la misma carpeta no toca nada');
   const cli = JSON.parse(fs.readFileSync(path.join(dir, '.cursor', 'cli.json'), 'utf8'));
   assert.deepEqual(cli.permissions.allow, ['Shell(ls)']);
   assert.deepEqual(cli.permissions.deny, ['Shell(rm)', 'Shell(git push)']);
-  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, '.cursor', 'mcp.json'), 'utf8')).mcpServers.orb.command, 'node');
+  const mcpText = fs.readFileSync(path.join(dir, '.cursor', 'mcp.json'), 'utf8');
+  const mcp = JSON.parse(mcpText);
+  assert.deepEqual(Object.keys(mcp.mcpServers), ['orb'], 'durante el turno, solo las herramientas de Orb (no las que trae el repositorio)');
+  assert.ok(!mcpText.includes('secreto123'), 'ninguna clave en la carpeta del proyecto');
+  assert.ok(mcp.mcpServers.orb.envFile.startsWith(secretDir) && fs.readFileSync(mcp.mcpServers.orb.envFile, 'utf8').includes('ORB_AGENT_TOKEN=secreto123'));
+  const envFile = mcp.mcpServers.orb.envFile;
   restore();
+  assert.ok(!fs.existsSync(envFile), 'el archivo con la clave se borra al acabar');
+  assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(path.join(dir, '.cursor', 'mcp.json'), 'utf8')).mcpServers), ['delRepo'], 'el del repositorio vuelve');
   assert.equal(fs.readFileSync(path.join(dir, '.cursor', 'cli.json'), 'utf8'), mine, 'el archivo del usuario vuelve igual');
-  assert.ok(!fs.existsSync(path.join(dir, '.cursor', 'mcp.json')), 'el de Orb se va');
   const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-cursor-'));
   prepareCursorFolder(empty, { deny: ['Shell(x)'] })();
   assert.ok(!fs.existsSync(path.join(empty, '.cursor')), 'sin rastro si no había carpeta .cursor');
@@ -115,6 +124,13 @@ before(async () => {
 after(async () => { await engine?.stop(); t.cleanup(); });
 const get = (id) => call('tasks.get', { id });
 const kinds = (task) => task.events.map((e) => e.kind);
+
+test('los ajustes nuevos del CORE se guardan desde la app y se validan', async () => {
+  const c = await call('config.save', { patch: { oneAtATime: true, approvalWaitMinutes: 3 } });
+  assert.equal(c.oneAtATime, true); assert.equal(c.approvalWaitMinutes, 3);
+  await assert.rejects(call('config.save', { patch: { approvalWaitMinutes: 999 } }), /approvalWaitMinutes/);
+  await call('config.save', { patch: { oneAtATime: false, approvalWaitMinutes: 10 } });
+});
 
 test('solo agentes disponibles: una tarea para uno que no hay se rechaza, y la que se queda sin agente pasa a otro', async () => {
   await assert.rejects(call('tasks.create', { project: 'web', title: 'X', description: 'algo', agent: 'gemini' }), /no está disponible/);
