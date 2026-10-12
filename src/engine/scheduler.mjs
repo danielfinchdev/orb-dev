@@ -302,7 +302,8 @@ En los hitos importantes (2-4 veces en toda la tarea, no más) llama a orb_updat
 Llama a la herramienta orb_update_task con id ${task.id}: status "done" y en result qué cambiaste y cómo probarlo (breve), o "blocked"/"failed" con el motivo. Si necesitas algo de otro agente o ${ofUser()}, orb_send_message.
 
 ## Límites
-Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros, no borres archivos en masa, no uses ni muestres credenciales. Si la tarea pide algo de eso, para y explícalo en el result.`;
+Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros, no borres archivos en masa, no uses ni muestres credenciales. Si la tarea pide algo de eso, para y explícalo en el result.
+Para probar un servidor, arráncalo en segundo plano con tu propia herramienta y, al terminar, páralo con esa misma herramienta o por el número de proceso que te dio. No uses taskkill ni Stop-Process por nombre o por puerto: pide permiso a ${userName()} y podría cerrar otros programas suyos.`;
   }
 
   // ---- "carpeta" mode: checkpoint before, so the user can undo exactly what the task changed.
