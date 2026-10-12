@@ -41,6 +41,7 @@ cambiar y con qué otras se conecta.
 29. [Empaquetado, versiones y CI](#29-empaquetado-versiones-y-ci)
 30. [Pruebas](#30-pruebas)
 31. [Cómo reprogramar una funcionalidad sin romper el resto](#31-cómo-reprogramar-una-funcionalidad)
+32. [El CORE: del pedido al informe (3.1)](#32-el-core)
 
 ---
 
@@ -752,3 +753,41 @@ que iniciar sesión en la app. Si no, «Iniciar sesión» abre el login oficial 
 5. Una prueba en `test/` con el agente falso (`fake-live.mjs` reconoce palabras clave como `LIMITE`, `PIDE_PERMISO`,
    `DELEGA`, `DUERME`…).
 6. `npm run check` y `npm test` en verde antes de subir.
+
+## 32. El CORE
+
+El CORE es el núcleo de Orb: pedido → Orbe planifica → tareas → agentes trabajando a la vez → piezas unidas → verificación
+→ informe → OK. Se rehízo en la 3.1 tras una prueba real que tardó 2 h 23 min (los agentes esperaban unos a otros, un
+permiso sin respuesta agotó el reloj, se asignó un agente no instalado y Cursor no podía cerrar su tarea).
+
+- **Solo agentes disponibles** (`Scheduler.refreshAvailable` → ajuste `agents_available`; `Board.checkAvailable`): Orbe, las
+  herramientas `orb_*`, la app y las programadas solo ofrecen y aceptan agentes activados, instalados y con cuenta. Una
+  tarea en cola de un agente que desaparece pasa a cualquiera (salvo las sensibles).
+- **Cuentas y planes** (`engine/plans.mjs`): el plan de cada cuenta se lee del propio agente (Claude: `.credentials.json`,
+  solo `subscriptionType`/`rateLimitTier`; Codex: `account/read`; Cursor: `about`). `budget.mjs` escala los límites de
+  tareas por plan (`PLAN_FACTOR`); el uso real que informan Claude y Codex sigue mandando. Las tareas que escriben código
+  nunca reciben un modelo ligero (`chooseModel({ writes })`).
+- **A la vez** (`Scheduler.tick` → `launch({ isolate })`): si otra tarea ya escribe en la carpeta, la nueva trabaja en su
+  copia (worktree) y al terminar Orb la une a la carpeta (`integratePending` → `workspace.integrateInto`: fusión a tres
+  bandas con `git merge-tree`, todo o nada, sin tocar ramas ni el índice; con foto para deshacer). Si chocan, una tarea de
+  unión lo resuelve a mano. Las dependientes esperan a la unión (`Board.depsDone`). «Una tarea cada vez» (`oneAtATime`) lo
+  desactiva. Las subtareas de una tarea aislada trabajan en la copia de su padre.
+- **Orb como centro:** mensajes entre agentes entregados en marcha (`deliverMessages`: Claude y Codex los reciben en su
+  siguiente paso; los dirigidos a «orb» llegan a Orbe como aviso). Cursor recibe las herramientas de Orb por un
+  `.cursor/mcp.json` temporal (las claves van en un `envFile` fuera del proyecto) y las reglas del guardia como reglas
+  `deny` de `.cursor/cli.json` (`cursorRules`), solo durante su turno. Cada encargo lleva los archivos que cambió cada
+  dependencia y qué otras tareas trabajan a la vez.
+- **Nada parado con el reloj corriendo** (`Sessions.watchRun`): el tiempo máximo cuenta solo trabajo, no las esperas de
+  permiso; un permiso sin respuesta en `approvalWaitMinutes` (10 por defecto) se deniega y el agente sigue; una tarea que
+  se pasa de tiempo queda bloqueada «para revisar» con su trabajo; un agente que cierra su tarea y no termina su programa
+  se libera (`releaseClosed`); a los 10 min de silencio se le pregunta. Una tarea que vuelve a la cola continúa su propia
+  conversación. Los avisos a Orbe que fallan se reintentan y nunca se pierde el informe.
+- **Revisar es probar:** las tareas de solo lectura usan el permiso `probar` (comandos sí, cambiar archivos no) y la
+  verificación arranca el proyecto y abre la web con `orb_browser_*`.
+- **Avisos claros:** los permisos se explican en palabras normales (`guard.plainAction`) con el comando plegado, y el fin
+  de cada tarea es una línea con lo que hizo plegado debajo.
+- **Pruebas:** `test/core-orb.test.mjs` (agentes falsos) y la prueba real `test-results/core-real.mjs` con agentes de
+  verdad, medida con `test-results/informe-core.mjs`.
+- **Línea de control de desarrollo** (`engine/dev-control.mjs`, `scripts/orb-dev.mjs`): solo en Orb.dev sin empaquetar
+  y con `ORB_DEV_CONTROL=1` (`npm run start:control`). Permite vigilar y manejar la app desde la terminal (estado,
+  vigilar, aprobar, permitir, enviar, responder). Local, con clave; el Orb instalado nunca la abre.
