@@ -427,6 +427,7 @@ export default {
   "msg.sessions.taskSession": "la conversación de una tarea se elimina con la tarea",
   "msg.sessions.thinking": "pensando…",
   "msg.sessions.timeout": "Se ha alcanzado el tiempo máximo de trabajo ({min} min, sin contar las esperas de tu permiso). Se ha detenido.",
+  "msg.sessions.ownProcess": "permitido sin preguntar: solo para un programa que arrancó esta misma tarea",
   "msg.sessions.approvalTimedOut": "Nadie respondió en {min} min: permiso denegado ({title}). El agente sigue por otro camino.",
   "msg.sessions.approvalTimedOutAgent": "AVISO DE ORB: nadie ha podido aprobar «{title}» en {min} min y se ha denegado. No lo intentes de nuevo: sigue sin ello por otro camino o, si es imprescindible, termina la tarea con status \"blocked\" explicando qué hace falta.",
   "msg.sessions.tool": "herramienta",

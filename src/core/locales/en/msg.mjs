@@ -427,6 +427,7 @@ export default {
   "msg.sessions.taskSession": "a task’s conversation is deleted together with the task",
   "msg.sessions.thinking": "thinking…",
   "msg.sessions.timeout": "The working time limit ({min} min, not counting waits for your permission) has been reached. It has been stopped.",
+  "msg.sessions.ownProcess": "allowed without asking: it only stops a program this same task started",
   "msg.sessions.approvalTimedOut": "Nobody answered within {min} min: permission denied ({title}). The agent goes on another way.",
   "msg.sessions.approvalTimedOutAgent": "ORB NOTICE: nobody could approve “{title}” within {min} min and it was denied. Do not try it again: go on without it another way or, if it is essential, finish the task with status \"blocked\" explaining what is needed.",
   "msg.sessions.tool": "tool",
