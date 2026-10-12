@@ -148,6 +148,8 @@ export default {
   'sys.board.titleAndDesc': 'title and description are required',
   'sys.board.descTooLong': 'description is too long ({n} characters, maximum {max}): summarise it or point to a file',
   'sys.board.badAgent': 'invalid agent: {agent} (use {list} or any)',
+  'sys.board.agentUnavailable': '{agent} is not available on this PC (not installed, turned off or without an account). Available agents: {list}. Use one of them or any',
+  'sys.board.noAgentsAvailable': 'none',
   'sys.board.modelNeedsAgent': 'to choose a model, choose the agent as well',
   'sys.board.accountNotOf': 'account {account} does not belong to {agent}',
   'sys.board.badLaunch': 'launch must be auto or manual',

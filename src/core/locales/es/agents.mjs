@@ -92,10 +92,12 @@ export default {
   'agents.noGitDesc': 'Las tareas se pueden deshacer igualmente, pero sin Git no hay ramas, copias aisladas ni integración con GitHub.',
   'agents.getGit': 'Descargar Git',
   'agents.usageTitle': 'Uso de cada cuenta',
-  'agents.usageDesc': 'Claude y Codex informan del cupo usado y de cuándo se reinicia. Al llegar al {pct} %, las tareas nuevas esperan o pasan a otra cuenta. Como medida adicional, se limita el número de tareas de las últimas {hours} h.',
-  'agents.realQuota': '{pct} % del cupo real',
-  'agents.realQuotaWindow': '{pct} % del cupo real ({window})',
+  'agents.usageDesc': 'Claude y Codex informan del uso de cada cuenta y de cuándo se reinicia. Al llegar al {pct} %, las tareas nuevas esperan o pasan a otra cuenta. Como medida adicional, se limita el número de tareas de las últimas {hours} h, según el plan de cada cuenta.',
+  'agents.plan': 'Plan {plan}',
+  'agents.planHint': 'El plan de la cuenta, leído del propio agente. Marca cuánto trabajo recibe mientras no informa de su uso real.',
+  'agents.realQuota': '{pct} % de uso real',
+  'agents.realQuotaWindow': '{pct} % de uso real ({window})',
   'agents.resetsAt': 'se reinicia {when}',
   'agents.tasksUsed': '{used}/{max} tareas · {heavy}/{maxHeavy} con modelos de alto consumo',
-  'agents.cooldown': 'sin cupo hasta las {time}'
+  'agents.cooldown': 'límite de uso alcanzado hasta las {time}'
 };

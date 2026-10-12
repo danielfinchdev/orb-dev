@@ -42,10 +42,16 @@ export function Notices() {
       toast[n.level === 'ok' ? 'success' : 'warning'](title, { description: text, action: { label: t('notice.open'), onClick: () => go(n.go) } });
       return;
     }
-    setNotice({ ...n, title, text, key: Date.now() });
+    setNotice({ ...n, kind: payload?.meta?.kind, session: payload?.meta?.session, title, text, key: Date.now() });
     clearTimeout(timer.current); timer.current = setTimeout(() => setNotice(null), n.level === 'ok' ? 6000 : 10000);
   }), [quiet]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => clearTimeout(timer.current), []);
+  // 3.1: a permission notice goes as soon as the permission is answered (here, in the task or by nobody in time).
+  useEffect(() => bridge.on('approval:changed', () => {
+    // Only when its own task no longer waits (another task may still have one pending).
+    const answered = (n) => n?.kind === 'task-approval' && !(getState().app?.approvals ?? []).some((a) => a.session_id === n.session);
+    setTimeout(() => setNotice((n) => (answered(n) ? null : n)), 800);
+  }), []);
   // 3.0: while this robot is on screen, the one of the corner (companion.jsx) steps aside: never two robots at once.
   useEffect(() => { setState({ noticeShown: Boolean(notice && !quiet) }); }, [notice, quiet]);
   if (!notice || quiet) return null;

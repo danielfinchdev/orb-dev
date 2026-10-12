@@ -17,6 +17,7 @@ import { LiveActivity, QuestionCard } from '@/components/chat-live.jsx';
 import { ContextMeter } from './session.jsx';
 import { BrainPicker, ReasoningPicker, UsageBubble, useCatalog, useUsageBubble } from '@/components/brain-picker.jsx';
 import { cn } from '@/lib/utils.js';
+import { DECISION } from '@/lib/labels.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 
 const SUGGESTIONS = ['chat.suggestion1', 'chat.suggestion2', 'chat.suggestion3', 'chat.suggestion4'];
@@ -214,24 +215,49 @@ const Message = memo(function Message({ m, name, onChanges }) {
       {!fullPc() ? null : <Button size="xs" variant="soft" onClick={openGames} data-testid="chat-play"><Gamepad2 />{t('chat.playButton')}</Button>}
     </div>
   );
+  // 3.1: a finished task says it in one line; what the agent reported (technical) unfolds on request.
+  if (m.meta?.kind === 'task-end' && m.meta.result) return (
+    <div className="bg-muted/70 text-muted-foreground mx-auto max-w-[88%] rounded-xl px-3.5 py-2 text-center text-[13px]">
+      <div className="whitespace-pre-wrap">{m.body}</div>
+      <Details label={t('chat.seeResult')} className="text-left"><div className="mt-1.5 max-h-60 overflow-auto text-xs whitespace-pre-wrap break-words">{m.meta.result}</div></Details>
+    </div>
+  );
   return <div className="bg-muted/70 text-muted-foreground mx-auto max-w-[88%] rounded-xl px-3.5 py-2 text-center text-[13px] whitespace-pre-wrap">{m.body}</div>;
 });
+
+// A fold: a small link that shows what is inside (details the user may want, not by default).
+function Details({ label, className, children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={className}>
+      <button type="button" className="text-muted-foreground hover:text-foreground mt-1 inline-flex cursor-pointer items-center gap-1 text-xs underline-offset-2 hover:underline" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <ChevronRight className={cn('size-3 transition-transform', open && 'rotate-90')} />{label}
+      </button>
+      {open ? children : null}
+    </div>
+  );
+}
 
 // A permission request in the chat: the assistant's own (free mode) or one of a task (answered here or in the task).
 function ChatApproval({ m }) {
   const t = useT();
-  const [state, setLocal] = useState(m.meta.status ?? 'pending');
+  // 3.1: how the request ended comes from the engine too (answered in the task, nobody answered, the task stopped).
+  const [local, setLocal] = useState(null);
+  const state = local ?? m.meta.status ?? 'pending';
   const task = m.meta.kind === 'task-approval';
   const answer = async (decision) => {
     const r = await act(task ? call('sessions.approve', { id: m.meta.session, request: m.meta.request, decision }) : call('chat.approve', { request: m.meta.id, decision }));
-    if (r !== undefined) setLocal(decision === 'deny' ? 'denied' : 'allowed');
+    if (r !== undefined) setLocal(decision === 'deny' ? 'denied' : decision === 'always' ? 'always' : 'allowed');
   };
   const done = state !== 'pending';
+  const badge = DECISION[state] ?? DECISION.denied;
   return (
     <div className={cn('mx-auto w-full max-w-[88%] rounded-xl border px-3.5 py-2.5 text-[13px]', done ? 'bg-muted/50' : 'border-warning/50 bg-warning/10')}>
       <div className="flex items-start gap-2"><ShieldAlert className={cn('mt-0.5 size-4 shrink-0', done ? 'text-muted-foreground' : 'text-warning')} /><div className="min-w-0 flex-1 whitespace-pre-wrap break-words">{m.body}</div></div>
+      {/* 3.1: the command itself, for whoever wants to look: never in the sentence. */}
+      {m.meta.detail ? <Details label={t('chat.seeDetails')} className="pl-6"><pre className="bg-muted mt-1.5 max-h-48 overflow-auto rounded-md px-2.5 py-1.5 font-mono text-[11px] whitespace-pre-wrap break-all">{m.meta.detail}</pre></Details> : null}
       <div className="chat-actions mt-2 flex flex-wrap items-center gap-2 pl-6">
-        {done ? <Badge variant={state === 'denied' ? 'destructive' : 'success'}>{state === 'denied' ? t('decision.denied') : t('decision.allowed')}</Badge> : (<>
+        {done ? <Badge variant={badge[1]}>{badge[0]}</Badge> : (<>
           <Button size="xs" className="px-2.5" onClick={() => answer('allow')}><Check />{t('chat.allow')}</Button>
           <Button size="xs" className="px-2.5" variant="outline" onClick={() => answer('always')}><CheckCheck />{t('chat.always')}</Button>
           <Button size="xs" className="px-2.5" variant="outline" onClick={() => answer('deny')}><X />{t('chat.deny')}</Button>

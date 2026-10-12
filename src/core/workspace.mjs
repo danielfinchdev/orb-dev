@@ -174,6 +174,47 @@ export function prepareWorkdir(task, project, worktrees, deps = []) {
   return { workdir, cwd: prefix ? path.join(workdir, prefix) : workdir, branch, isGit: true, notes };
 }
 
+// 3.1: brings the work of an isolated copy back into the project folder, the way a "carpeta" task would have left it:
+// files only, never git history, branches or the user's index. base: the commit the copy started from; tip: its branch
+// after the task. A three-way merge (git merge-tree) of the folder as it is NOW (uncommitted work of other tasks included)
+// with the task's work. Clean: the files that change are written (and a file that changed on disk meanwhile stops it all,
+// before anything is written). Conflict: nothing is touched and the conflicting paths are returned.
+// → { ok: true, before, after, changed } | { ok: false, conflicts: [paths] } | { ok: false, error }
+export function integrateInto(repo, { base, tip }) {
+  const now = snapshotCommit(repo, { always: true, message: 'orb: carpeta antes de unir el trabajo de una copia aislada' });
+  if (!now) return { ok: false, error: tr('msg.workspace.noSnapshot') };
+  const m = git(repo, 'merge-tree', '--write-tree', '--name-only', '--no-messages', `--merge-base=${base}`, now.commit, tip);
+  const lines = m.stdout.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (m.status === 1) return { ok: false, conflicts: [...new Set(lines.slice(1))] };
+  if (m.status !== 0 || !/^[0-9a-f]{40,64}$/.test(lines[0] ?? '')) return { ok: false, error: oneLineOf(m.stderr) || 'git merge-tree' };
+  const tree = lines[0];
+  const changed = changedBetween(repo, now.commit, tree).filter((c) => !isSecretPath(c.path));
+  // Everything is checked and read BEFORE the first file is touched, so a join either happens whole or not at all:
+  // nothing may have moved since the snapshot, no path goes through a link, and every new content can be read.
+  const plan = [];
+  for (const { status, path: rel } of changed) {
+    const file = path.join(repo, rel);
+    const before = git(repo, 'rev-parse', '--verify', '--quiet', `${now.commit}:${rel}`).stdout.trim();
+    const onDisk = fs.existsSync(file) ? git(repo, 'hash-object', '--', file).stdout.trim() : '';
+    if (status !== 'A' && onDisk !== before) return { ok: false, conflicts: [rel] };
+    if (status === 'A' && onDisk) return { ok: false, conflicts: [rel] };
+    if (!linkFree(repo, file)) return { ok: false, error: `${rel}: pasa por un enlace` };
+    if (status === 'D') { plan.push({ file }); continue; }
+    // --filters: as the file is on disk (line endings of core.autocrlf), not git's stored form.
+    const blob = gitBuffer(repo, 'cat-file', '--filters', `${tree}:${rel}`);
+    if (blob.status !== 0) return { ok: false, error: `${rel}: ${String(blob.stderr ?? '').trim()}` };
+    plan.push({ file, data: blob.stdout });
+  }
+  for (const { file, data } of plan) {
+    if (data === undefined) { fs.rmSync(file, { force: true }); continue; }
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, data);
+  }
+  const after = snapshotCommit(repo, { always: true, message: 'orb: carpeta después de unir el trabajo de una copia aislada' });
+  return { ok: true, before: now.commit, after: after?.commit ?? tree, changed };
+}
+const oneLineOf = (s) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, 300);
+
 // No component of `target` (from root down) may be a link or junction: a link in the middle could point outside the project.
 function linkFree(root, target) {
   let cur = root;

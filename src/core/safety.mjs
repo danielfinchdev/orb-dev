@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 
 export const MAX_DESCRIPTION = 12000;
-export const MAX_DEP_RESULT = 1500;
+export const MAX_DEP_RESULT = 4000; // 3.1: a dependency's whole summary (1500 cut the "how to test it" part)
 
 // Keeps one previous generation (file.1) once a log passes `max` bytes.
 export function rotateIfBig(file, max = 10 * 1024 * 1024) {

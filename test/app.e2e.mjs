@@ -363,7 +363,7 @@ try {
   await until(async () => (await call('app.state')).config.orchestrator.model === 'claude-opus-5-5', 'modelo Opus');
   // Opus spends the quota faster: the bubble says so.
   await win.locator('[data-testid=usage-bubble]').waitFor();
-  await shot('11a-aviso-cupo');
+  await shot('11a-aviso-uso');
   // 2.6: a clean top bar: icon buttons with their bubble, and the mini-games.
   assert.equal(await win.locator('main header').evaluate((h) => h.innerText.replace(h.querySelector('h1')?.innerText ?? '', '').trim()), '', 'sin nombre, modo ni modelo en la barra');
   await win.hover('[data-testid=bar-pause]');

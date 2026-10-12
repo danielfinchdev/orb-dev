@@ -21,7 +21,7 @@ cambiar y con qué otras se conecta.
 9. [Conversaciones directas](#9-conversaciones-directas)
 10. [Cola y corrección en marcha](#10-cola-y-corrección-en-marcha)
 11. [Bifurcar, continuar y detalles](#11-bifurcar-continuar-y-detalles)
-12. [Contexto y cupo real (anti quema de tokens)](#12-contexto-y-cupo-real)
+12. [Contexto y uso real (anti quema de tokens)](#12-contexto-y-uso-real)
 13. [Tareas limitadas y continuidad](#13-tareas-limitadas-y-continuidad)
 14. [Delegación entre agentes](#14-delegación-entre-agentes)
 15. [Task Review](#15-task-review)
@@ -41,6 +41,7 @@ cambiar y con qué otras se conecta.
 29. [Empaquetado, versiones y CI](#29-empaquetado-versiones-y-ci)
 30. [Pruebas](#30-pruebas)
 31. [Cómo reprogramar una funcionalidad sin romper el resto](#31-cómo-reprogramar-una-funcionalidad)
+32. [El CORE: del pedido al informe (3.1)](#32-el-core)
 
 ---
 
@@ -65,7 +66,7 @@ Datos: <carpeta del asistente>/.orb/datos/orb.db (SQLite, src/core/db.mjs)
 - **Los agentes** son los programas oficiales que el usuario ya tiene (Claude Code, Codex, Cursor, Gemini CLI…), con su
   propia sesión. Orb nunca ve credenciales.
 - **Capas** (de abajo arriba):
-  1. `src/core` es la lógica pura: tablero, aprobaciones, cupo, guardia, carpetas y programadas.
+  1. `src/core` es la lógica pura: tablero, aprobaciones, uso, guardia, carpetas y programadas.
   2. `src/agents` son los adaptadores.
   3. `src/engine` junta las piezas.
   4. `src/ui` es la interfaz.
@@ -119,7 +120,7 @@ En Windows, después ofrece instalar lo que falte (sección 24).
 **Por dentro.**
 - `loadConfig` mezcla `orb.json` con los valores por defecto. A una carpeta antigua le añade sola lo nuevo:
   - cuentas de los agentes nuevos;
-  - en la versión 3, los topes de cupo nuevos (sección 12).
+  - en la versión 3, los topes de uso nuevos (sección 12).
 - `ORB_USER_DATA` permite separar los datos de la app (otra copia o las pruebas). `ORB_LIGHT=1` abre Orb Light desde el código.
 
 ## 3. El chat con el asistente
@@ -207,7 +208,7 @@ te informa. Tiene dos modos (casilla «Orquestador»):
 ## 5. El tablero de tareas
 
 **Qué hace.** Guarda las tareas con:
-- estado: en cola, espera aprobación, trabajando, hecha, fallida, bloqueada, cancelada o **esperando cupo** (`limited`);
+- estado: en cola, espera aprobación, trabajando, hecha, fallida, bloqueada, cancelada o **esperando uso** (`limited`);
 - dependencias, agente, modelo, razonamiento;
 - dónde trabaja: en la carpeta del proyecto o en una copia aislada con su rama;
 - de qué tarea es subtarea (`parent_id`), qué tarea revisa (`review_of`) y de qué programada sale (`schedule_id`).
@@ -247,7 +248,7 @@ te informa. Tiene dos modos (casilla «Orquestador»):
 - `queueReport`: el informe final.
 
 **Reparto.**
-- Candidatos: solo los agentes **activados e instalados** (`installed()` en `src/agents/index.mjs`) y sus cuentas con cupo.
+- Candidatos: solo los agentes **activados e instalados** (`installed()` en `src/agents/index.mjs`) y sus cuentas con uso disponible.
 - Orden: por uso real de cada cuenta (sección 12) y, si no hay dato real, por tareas lanzadas.
 - `maxParallel` tareas a la vez y `perAgent` por cuenta.
 - En la carpeta del proyecto, solo una tarea que escribe a la vez. Las de solo lectura y las copias aisladas van en
@@ -280,7 +281,7 @@ eventos: item · delta · session · approval · approval_done · context · rat
 
 | Agente | Archivo | Cómo se conecta | Sesión que usa |
 |---|---|---|---|
-| Claude Code | `src/agents/claude.mjs` | Claude Agent SDK oficial con el `claude.exe` del usuario (`pathToClaudeCodeExecutable`), entrada en streaming, `canUseTool` para el guardia, `rate_limit_event` para el cupo real y `getContextUsage` para el contexto | `~/.claude` (o la carpeta de la cuenta) |
+| Claude Code | `src/agents/claude.mjs` | Claude Agent SDK oficial con el `claude.exe` del usuario (`pathToClaudeCodeExecutable`), entrada en streaming, `canUseTool` para el guardia, `rate_limit_event` para el uso real y `getContextUsage` para el contexto | `~/.claude` (o la carpeta de la cuenta) |
 | Codex | `src/agents/codex.mjs` | `codex app-server`: JSON-RPC por stdio con `thread/start`, `resume` y `fork`, `turn/start`, `steer` e `interrupt`, más las peticiones de aprobación y `account/rateLimits` | `~/.codex` (ChatGPT o API key) |
 | Cursor | `src/agents/cursor.mjs` | La CLI oficial con `--stream-partial-output`, un proceso por turno y `--resume` del chat. Su SDK pide otro login aparte, así que no se usa | `~/.cursor` |
 | Gemini CLI, OpenCode, Qwen Code, GitHub Copilot | `src/agents/acp.mjs` | **ACP** (Agent Client Protocol), un adaptador para todos: `initialize`, `session/new` o `load`, `session/prompt`, `session/update`, `session/request_permission` y `session/cancel` | La de cada programa |
@@ -366,17 +367,17 @@ Desde la cabecera puedes cambiar el modelo, los permisos y el razonamiento. Sin 
 - **Bifurcar** hace una copia de la conversación desde este punto para probar otra idea. Claude y Codex llevan su historial
   completo de forma nativa (`forkSession`, `thread/fork`). Los demás empiezan con un resumen. Código: `sessions.fork()` y el
   botón con el icono de bifurcar.
-- **Continuar:** una conversación que quedó a medias (la app se cerró) o sin cupo muestra «Continuar» (`sessions.resume()`).
+- **Continuar:** una conversación que quedó a medias (la app se cerró) o en su límite de uso muestra «Continuar» (`sessions.resume()`).
 - **Detalles** (icono «i»): agente, cuenta, permisos, carpeta, rama de git y cambios, pull requests, contexto, tarea, de
   dónde sale y el id de la conversación del agente (`showDetails()` en `session.jsx`).
 - **Historial paginado:** se cargan los 200 últimos mensajes y «Ver mensajes anteriores» trae más
   (`sessions.items({ before })`).
 
-## 12. Contexto y cupo real
+## 12. Contexto y uso real
 
 **Qué hace.** Es el punto medio entre trabajar y no quemar tokens.
 - **Medidor de contexto** en cada conversación y en el chat. Cuanto más lleno, más cara cada respuesta.
-- **Cupo real:** Claude y Codex dicen cuánto llevas de su ventana (5 horas, semana) y cuándo se reinicia. A partir de
+- **Uso real:** Claude y Codex dicen cuánto llevas de su ventana (5 horas, semana) y cuándo se reinicia. A partir de
   `budget.stopAt` (92 %), el trabajo nuevo espera o va a otra cuenta.
 - **Red de seguridad:** 20 tareas por ventana y 6 con modelos caros por cuenta. Antes eran 6 y 2, demasiado poco.
 - Topes opcionales de gasto por tarea (`maxBudgetUsd`) y aprobación para razonamiento alto.
@@ -388,7 +389,7 @@ Desde la cabecera puedes cambiar el modelo, los permisos y el razonamiento. Sin 
   - `startCooldown` (pausa hasta el reinicio).
 - Origen de los datos: eventos `rate` de los adaptadores, en `sessions.onRate` (`engine.mjs`) y, desde la 2.6, también
   los del cerebro (`orchestrator.onEvent`).
-- Pantallas: Agentes («Uso de cada cuenta») y Ajustes («Parar al % del cupo real»).
+- Pantallas: Agentes («Uso de cada cuenta») y Ajustes («Parar al % de uso real»).
 
 **2.6: el círculo de contexto y el panel de uso.**
 - Junto al botón de enviar, `ContextMeter` (`src/ui/views/session.jsx`) es un anillo que se llena; al pulsarlo,
@@ -411,9 +412,9 @@ tareas, y `models.catalog` se guarda 5 s.
 ## 13. Tareas limitadas y continuidad
 
 - **Límite de uso:**
-  - si una cuenta llega a su límite, la tarea no falla: queda **«esperando cupo»** (`limited`) con la hora de reinicio
+  - si una cuenta llega a su límite, la tarea no falla: queda **«esperando uso»** (`limited`) con la hora de reinicio
     (`limited_until`);
-  - **sigue sola** al reiniciarse el cupo (`resumeLimited()` en el planificador), en la misma conversación del agente;
+  - **sigue sola** al reiniciarse el uso (`resumeLimited()` en el planificador), en la misma conversación del agente;
   - mientras tanto, el trabajo nuevo va a otras cuentas.
 - **Cerrar la app:** las tareas que estaban trabajando continúan al volver a abrirla (constructor del `Scheduler`). Al
   cerrar con normalidad, `shutdown()` pone `scheduler.closing` y `finish()` no cierra esas tareas: quedan `running` y
@@ -458,7 +459,7 @@ de problemas y qué arreglar primero.
 
 **Qué hace.** Tareas que se repiten solas: cada hora, cada N horas, cada día o ciertos días de la semana a una hora. Por
 ejemplo, «cada lunes a las 9, revisa las dependencias».
-- Cada vez se crea una tarea normal, con las mismas aprobaciones y el mismo cupo.
+- Cada vez se crea una tarea normal, con las mismas aprobaciones y el mismo límite de uso.
 - Si la anterior sigue abierta, espera: no se acumulan.
 - Las que crea el asistente (`orb_schedule`) necesitan tu aprobación una vez.
 
@@ -595,7 +596,7 @@ que iniciar sesión en la app. Si no, «Iniciar sesión» abre el login oficial 
 **Archivos.**
 - `src/engine/installer.mjs`: `ITEMS`, `check()` y el script de PowerShell.
 - `detect()` y `loginState()` de cada adaptador (por ejemplo, la sesión de Codex está en `~/.codex/auth.json`).
-- `src/core/accounts.mjs`: varias cuentas por agente; cada una tiene su carpeta de login y su cupo.
+- `src/core/accounts.mjs`: varias cuentas por agente; cada una tiene su carpeta de login y su uso.
 
 ## 25. Conectores MCP
 
@@ -624,7 +625,7 @@ que iniciar sesión en la app. Si no, «Iniciar sesión» abre el login oficial 
 
 - **Barra lateral:** asistente, Tareas, Proyectos, Programadas (y abajo Agentes, Bitácoras, Actividad, Tutoriales y
   Ajustes) y, debajo:
-  - la **bandeja**: «Por aprobar» (permisos y aprobaciones), «En curso» e «Incidencias» (tareas sin cupo y
+  - la **bandeja**: «Por aprobar» (permisos y aprobaciones), «En curso» e «Incidencias» (tareas en su límite de uso y
     conversaciones interrumpidas o con error; «Marcar como resuelto» las quita);
   - las **carpetas** (cada proyecto con sus tareas y conversaciones) y «Sin carpeta».
   - Archivo: `src/ui/components/sidebar.jsx`. Los filtros de Tareas usan los mismos nombres (`FILTERS` en
@@ -733,7 +734,7 @@ que iniciar sesión en la app. Si no, «Iniciar sesión» abre el login oficial 
 
 | Comando | Qué cubre |
 |---|---|
-| `npm test` | 84 pruebas (incluye que los diccionarios es/en coinciden y que el inglés no tiene español) del motor con agentes falsos (`test/fixtures/fake-live.mjs` vía `ORB_FAKE_AGENTS`), los protocolos reales contra servidores falsos (ACP, codex app-server, CLI de Cursor), el guardia, sesiones, tareas, delegación, Task Review, cupo y migraciones |
+| `npm test` | 84 pruebas (incluye que los diccionarios es/en coinciden y que el inglés no tiene español) del motor con agentes falsos (`test/fixtures/fake-live.mjs` vía `ORB_FAKE_AGENTS`), los protocolos reales contra servidores falsos (ACP, codex app-server, CLI de Cursor), el guardia, sesiones, tareas, delegación, Task Review, uso y migraciones |
 | `npm run test:app` | La app entera con Electron |
 | `node test/explora.e2e.mjs` | Recorrido con capturas en `test-results/explora/`: primer arranque («Preparando tu PC», con el diálogo de carpeta simulado), todas las vistas y los apartados de Ajustes en día y noche, los cinco temas, ventana estrecha. Con `ORB_LANG=en`, lo mismo en inglés (`explora-en/`). Las notas van a `notas.txt` |
 | `node test/real.e2e.mjs claude,codex,cursor` | **Agentes reales**: conversaciones, tarea del asistente, informe, deshacer, aprobación, corrección, cola, bifurcación, Task Review y programadas |
@@ -752,3 +753,41 @@ que iniciar sesión en la app. Si no, «Iniciar sesión» abre el login oficial 
 5. Una prueba en `test/` con el agente falso (`fake-live.mjs` reconoce palabras clave como `LIMITE`, `PIDE_PERMISO`,
    `DELEGA`, `DUERME`…).
 6. `npm run check` y `npm test` en verde antes de subir.
+
+## 32. El CORE
+
+El CORE es el núcleo de Orb: pedido → Orbe planifica → tareas → agentes trabajando a la vez → piezas unidas → verificación
+→ informe → OK. Se rehízo en la 3.1 tras una prueba real que tardó 2 h 23 min (los agentes esperaban unos a otros, un
+permiso sin respuesta agotó el reloj, se asignó un agente no instalado y Cursor no podía cerrar su tarea).
+
+- **Solo agentes disponibles** (`Scheduler.refreshAvailable` → ajuste `agents_available`; `Board.checkAvailable`): Orbe, las
+  herramientas `orb_*`, la app y las programadas solo ofrecen y aceptan agentes activados, instalados y con cuenta. Una
+  tarea en cola de un agente que desaparece pasa a cualquiera (salvo las sensibles).
+- **Cuentas y planes** (`engine/plans.mjs`): el plan de cada cuenta se lee del propio agente (Claude: `.credentials.json`,
+  solo `subscriptionType`/`rateLimitTier`; Codex: `account/read`; Cursor: `about`). `budget.mjs` escala los límites de
+  tareas por plan (`PLAN_FACTOR`); el uso real que informan Claude y Codex sigue mandando. Las tareas que escriben código
+  nunca reciben un modelo ligero (`chooseModel({ writes })`).
+- **A la vez** (`Scheduler.tick` → `launch({ isolate })`): si otra tarea ya escribe en la carpeta, la nueva trabaja en su
+  copia (worktree) y al terminar Orb la une a la carpeta (`integratePending` → `workspace.integrateInto`: fusión a tres
+  bandas con `git merge-tree`, todo o nada, sin tocar ramas ni el índice; con foto para deshacer). Si chocan, una tarea de
+  unión lo resuelve a mano. Las dependientes esperan a la unión (`Board.depsDone`). «Una tarea cada vez» (`oneAtATime`) lo
+  desactiva. Las subtareas de una tarea aislada trabajan en la copia de su padre.
+- **Orb como centro:** mensajes entre agentes entregados en marcha (`deliverMessages`: Claude y Codex los reciben en su
+  siguiente paso; los dirigidos a «orb» llegan a Orbe como aviso). Cursor recibe las herramientas de Orb por un
+  `.cursor/mcp.json` temporal (las claves van en un `envFile` fuera del proyecto) y las reglas del guardia como reglas
+  `deny` de `.cursor/cli.json` (`cursorRules`), solo durante su turno. Cada encargo lleva los archivos que cambió cada
+  dependencia y qué otras tareas trabajan a la vez.
+- **Nada parado con el reloj corriendo** (`Sessions.watchRun`): el tiempo máximo cuenta solo trabajo, no las esperas de
+  permiso; un permiso sin respuesta en `approvalWaitMinutes` (10 por defecto) se deniega y el agente sigue; una tarea que
+  se pasa de tiempo queda bloqueada «para revisar» con su trabajo; un agente que cierra su tarea y no termina su programa
+  se libera (`releaseClosed`); a los 10 min de silencio se le pregunta. Una tarea que vuelve a la cola continúa su propia
+  conversación. Los avisos a Orbe que fallan se reintentan y nunca se pierde el informe.
+- **Revisar es probar:** las tareas de solo lectura usan el permiso `probar` (comandos sí, cambiar archivos no) y la
+  verificación arranca el proyecto y abre la web con `orb_browser_*`.
+- **Avisos claros:** los permisos se explican en palabras normales (`guard.plainAction`) con el comando plegado, y el fin
+  de cada tarea es una línea con lo que hizo plegado debajo.
+- **Pruebas:** `test/core-orb.test.mjs` (agentes falsos) y la prueba real `test-results/core-real.mjs` con agentes de
+  verdad, medida con `test-results/informe-core.mjs`.
+- **Línea de control de desarrollo** (`engine/dev-control.mjs`, `scripts/orb-dev.mjs`): solo en Orb.dev sin empaquetar
+  y con `ORB_DEV_CONTROL=1` (`npm run start:control`). Permite vigilar y manejar la app desde la terminal (estado,
+  vigilar, aprobar, permitir, enviar, responder). Local, con clave; el Orb instalado nunca la abre.

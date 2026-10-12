@@ -29,7 +29,8 @@ export const assistantName = () => ctx.config?.assistantName?.trim() || PRODUCT.
 const WORKER_STATUSES = ['done', 'failed', 'blocked'];
 // Orchestrator transitions through MCP. Nothing leaves "done"; "awaiting_approval" only leaves through the app (approve/reject);
 // a running task is cancelled from the app because that also stops its process.
-const ORCHESTRATOR_TO = { queued: ['failed', 'blocked', 'cancelled', 'queued'], cancelled: ['queued', 'blocked', 'failed'] };
+// 3.1: the coordinator may also cancel a running task (or one waiting for its usage to reset): the engine stops its process.
+const ORCHESTRATOR_TO = { queued: ['failed', 'blocked', 'cancelled', 'queued'], cancelled: ['queued', 'blocked', 'failed', 'running', 'limited'] };
 const real = (p) => { try { return fs.realpathSync(p); } catch { return path.resolve(String(p)); } };
 // Equal strings need no disk access (revalidateQueued compares every queued task's folder on each tick).
 const same = (a, b) => String(a).toLowerCase() === String(b).toLowerCase() || real(a).toLowerCase() === real(b).toLowerCase();
@@ -96,6 +97,16 @@ export class Board {
   settingJson(key, value) {
     if (value === undefined) { try { return JSON.parse(this.setting(key) || 'null'); } catch { return null; } }
     this.setting(key, value === null ? '' : JSON.stringify(value));
+  }
+
+  // 3.1: the agents this PC can really run (turned on, installed and with an account). The engine keeps the list here
+  // (agents_available), so the MCP processes, the app and the scheduler all check against the same thing. null: not known
+  // yet (a board without an engine, e.g. the first instant): nothing is refused.
+  availableAgents() { const list = this.settingJson('agents_available'); return Array.isArray(list) ? list : null; }
+  checkAvailable(agent) {
+    if (!agent || agent === 'any') return;
+    const list = this.availableAgents();
+    if (list && !list.includes(agent)) throw new Error(tr('sys.board.agentUnavailable', { agent, list: list.length ? list.join(', ') : tr('sys.board.noAgentsAvailable') }));
   }
 
   event(taskId, actor, kind, detail = '') {
@@ -184,13 +195,14 @@ export class Board {
 
   // mode: "carpeta" (default: the project folder, in turn with the other writing tasks) or "aislada" (own branch and copy).
   // readonly: the task only reads (research, review): it may run at the same time as others in the same folder.
-  createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null, level = null, fixedBrief = false }, actor) {
+  createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null, level = null, fixedBrief = false, internal = false }, actor) {
     if (!MODES.includes(mode)) throw new Error(tr('sys.board.badMode'));
     const proj = this.project(project);
     if (!proj) throw new Error(tr('sys.board.unknownProject', { name: project }));
     const active = this.activeProject();
     // 2.7: the projects of a multiplatform group work together: a task may go to a sister of the active project.
-    if (active && proj.name !== active.name && actor !== 'usuario' && !(active.grupo && proj.grupo === active.grupo)) throw new Error(tr('sys.board.otherFolder', { name: active.name, path: active.path, user: userName() }));
+    // 3.1: internal: a task the engine itself needs in that project (joining a copy), whatever project is active now.
+    if (!internal && active && proj.name !== active.name && actor !== 'usuario' && !(active.grupo && proj.grupo === active.grupo)) throw new Error(tr('sys.board.otherFolder', { name: active.name, path: active.path, user: userName() }));
     if (!title || !description) throw new Error(tr('sys.board.titleAndDesc'));
     title = oneLine(title);
     if (String(description).length > MAX_DESCRIPTION) throw new Error(tr('sys.board.descTooLong', { n: String(description).length, max: MAX_DESCRIPTION }));
@@ -200,6 +212,7 @@ export class Board {
     // An account chosen on purpose: it must belong to the task's agent.
     if (account && !(ctx.config.accounts ?? []).some((a) => a.id === account && (agent === 'any' || a.agent === agent))) throw new Error(tr('sys.board.accountNotOf', { account, agent }));
     if (account && agent === 'any') agent = (ctx.config.accounts ?? []).find((a) => a.id === account).agent;
+    this.checkAvailable(agent);
     if (!['auto', 'manual'].includes(launch)) throw new Error(tr('sys.board.badLaunch'));
     if (!Array.isArray(depends_on) || depends_on.length > 20) throw new Error(tr('sys.board.dependsMax'));
     for (const dep of depends_on) if (!this.task(dep)) throw new Error(tr('sys.board.dependsMissing', { id: dep }));
@@ -213,7 +226,22 @@ export class Board {
     const tags = [...new Set(sensitivity)]; const reasons = [];
     // 3.0: fixedBrief: a read-only brief written by Orb itself (Security Review), whose checklist names «secretos» and
     // «credenciales» on purpose; only for code paths of the engine (the API does not pass it).
-    if (!tags.length && !(fixedBrief && readonly)) { const found = detectSensitivity(`${title}\n${description}`); tags.push(...found); if (found.length) reasons.push(tr('msg.board.reasonKeywords', { words: found.join(', ') })); }
+    let askedNote = null;
+    if (!tags.length && !(fixedBrief && readonly)) {
+      let found = detectSensitivity(`${title}\n${description}`);
+      // 3.1: what the user asked for in their own words is already their decision: a task the assistant writes from «una
+      // app de notas que se puedan borrar» does not wait for approval because it says «borrar». Narrow on purpose:
+      // - only «destructive» (credentials, payments, publishing and sending stay behind the click whatever was said);
+      // - only the user's current request (their messages since the assistant last answered), not something said before;
+      // - only tasks the assistant writes, never the engine's own (whose text can carry an agent's words).
+      if (actor === 'orb' && !internal && found.includes('destructive')) {
+        // (Since the answer before the last one: the request, the plan the assistant proposed and the user's «sí».)
+        const lastAnswer = this.one("SELECT id AS n FROM chat WHERE role = 'orb' ORDER BY id DESC LIMIT 1 OFFSET 1")?.n ?? 0;
+        const asked = detectSensitivity(this.all("SELECT body FROM chat WHERE role = 'usuario' AND id > ? ORDER BY id DESC LIMIT 5", lastAnswer).map((r) => r.body).join('\n'));
+        if (asked.includes('destructive')) { found = found.filter((tag) => tag !== 'destructive'); askedNote = tr('msg.board.askedByUser', { words: 'destructive' }); }
+      }
+      tags.push(...found); if (found.length) reasons.push(tr('msg.board.reasonKeywords', { words: found.join(', ') }));
+    }
     if (policy.approval) { tags.push('razonamiento_alto'); reasons.push(tr('msg.board.reasonHighReasoning', { who: model ?? agent })); }
     // A subtask an agent delegates from its own task (orb_delegate) goes straight to the queue when the user trusts
     // delegation, the parent task came from the assistant or the user, nothing looks risky and the parent has not used
@@ -230,6 +258,7 @@ export class Board {
       JSON.stringify(depends_on.map(Number)), JSON.stringify([...new Set(tags)]), status, String(actor), proj.path, at, at, mode, Number(Boolean(readonly)), parent_id ? Number(parent_id) : null, review_of ? Number(review_of) : null, schedule_id ? Number(schedule_id) : null, ['simple', 'normal', 'complejo'].includes(level) ? level : null);
     const id = Number(lastInsertRowid);
     this.event(id, actor, 'task.created', status);
+    if (askedNote) this.event(id, 'orb', 'note', askedNote);
     if (status === 'awaiting_approval') { const tagList = [...new Set(tags)].join(', '); this.addChat('system', reasons.length ? tr('msg.board.needsApprovalWhy', { id, title, tags: tagList, reasons: reasons.join('; ') }) : tr('msg.board.needsApproval', { id, title, tags: tagList }), { kind: 'attention', task: id }); }
     // Even a task the user typed waits for an explicit "Aprobar" when it looks sensitive: one more click, with the reasons on screen.
     this.changed('tasks');
@@ -296,6 +325,7 @@ export class Board {
       if (task.status === 'running') throw new Error(tr('sys.board.runningAgent', { id }));
       const nextAgent = agent ?? task.agent;
       if (nextAgent !== 'any' && !AGENTS.includes(nextAgent)) throw new Error(tr('msg.board.badAgent', { agent: nextAgent }));
+      if (agent !== undefined) this.checkAvailable(nextAgent);
       const nextModel = model === undefined ? (agent !== undefined ? null : task.model) : (model || null);
       if (nextModel && nextAgent === 'any') throw new Error(tr('sys.board.modelNeedsAgent'));
       Object.assign(reassign, { agent: nextAgent, model: nextAgent === 'any' ? null : checkModel(nextAgent, nextModel, this.settingJson(`models:${nextAgent}`)), assigned_to: null });
@@ -351,6 +381,7 @@ export class Board {
       if (task.status === 'done') throw new Error(tr('msg.board.alreadyDone', { id }));
       const nextAgent = agent || task.agent;
       if (nextAgent !== 'any' && !AGENTS.includes(nextAgent)) throw new Error(tr('msg.board.badAgent', { agent: nextAgent }));
+      if (agent) this.checkAvailable(nextAgent);
       const nextModel = nextAgent === 'any' ? null : checkModel(nextAgent, model || null, this.settingJson(`models:${nextAgent}`));
       const { reasoning: nextReasoning } = taskOptions({ reasoning: reasoning || task.reasoning, fast: false });
       const policy = checkPolicy({ agent: nextAgent, model: nextModel, reasoning: nextReasoning, fast: false });
@@ -398,15 +429,27 @@ export class Board {
   }
 
   // A dependency counts as done only once its process is gone too, so its automatic commit already happened.
-  depsDone(task) { return task.depends_on.every((dep) => { const d = this.task(dep); return d?.status === 'done' && d.pid == null; }); }
-  failedDeps(task) { return task.depends_on.filter((dep) => ['failed', 'cancelled'].includes(this.task(dep)?.status)); }
+  // 3.1: and, for one that worked in its own copy alongside others, once its work is in the folder (integrate:<id>).
+  depsDone(task) { return task.depends_on.every((dep) => { const d = this.task(dep); return d?.status === 'done' && d.pid == null && !this.setting(`integrate:${d.id}`); }); }
+  // 3.1: a blocked dependency stops its dependents too (until someone unblocks it): they are told, and they no longer hold
+  // back the report of the request, which would otherwise never come.
+  // Also one whose work could not be joined into the folder because the task joining it by hand did not finish.
+  failedDeps(task) {
+    return task.depends_on.filter((dep) => {
+      const d = this.task(dep); if (!d) return false;
+      if (['failed', 'cancelled', 'blocked'].includes(d.status)) return true;
+      const by = this.settingJson(`integrate:${d.id}`)?.by;
+      return Boolean(by && ['failed', 'cancelled', 'blocked'].includes(this.task(by)?.status));
+    });
+  }
   warnBlockedByDeps() {
     for (const task of this.all("SELECT * FROM tasks WHERE status IN ('queued', 'awaiting_approval')").map(parse)) {
       for (const dep of this.failedDeps(task)) {
         const key = `dep_warned:${task.id}:${dep}`;
         if (this.setting(key)) continue;
         this.setting(key, '1');
-        this.addChat('system', tr(this.task(dep).status === 'failed' ? 'msg.board.depFailed' : 'msg.board.depCancelled', { id: task.id, title: task.title, dep }));
+        const st = this.task(dep).status;
+        this.addChat('system', tr(st === 'failed' ? 'msg.board.depFailed' : st === 'blocked' || st === 'done' ? 'msg.board.depBlocked' : 'msg.board.depCancelled', { id: task.id, title: task.title, dep }));
       }
     }
   }

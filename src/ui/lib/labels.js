@@ -21,10 +21,10 @@ export const STATUS = translated({
 export const AGENT = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor', gemini: 'Gemini', opencode: 'OpenCode', qwen: 'Qwen Code', copilot: 'Copilot', orb: 'Orb' };
 Object.defineProperty(AGENT, 'any', { get: () => t('agent.any'), enumerable: true, configurable: true });
 Object.defineProperty(AGENT, 'usuario', { get: () => t('agent.user'), enumerable: true, configurable: true });
-export const PERMISSION = translated({ leer: 'permission.leer', editar: 'permission.editar', preguntar: 'permission.preguntar', total: 'permission.total' });
+export const PERMISSION = translated({ leer: 'permission.leer', probar: 'permission.probar', editar: 'permission.editar', preguntar: 'permission.preguntar', total: 'permission.total' });
 // Agents that can be corrected while they work (the message reaches them at their next step).
 export const CAN_STEER = { claude: true, codex: true };
-export const DECISION = translated({ allowed: ['decision.allowed', 'success'], always: ['decision.always', 'success'], denied: ['decision.denied', 'destructive'], expired: ['decision.expired', 'secondary'] });
+export const DECISION = translated({ allowed: ['decision.allowed', 'success'], always: ['decision.always', 'success'], denied: ['decision.denied', 'destructive'], expired: ['decision.expired', 'secondary'], timeout: ['decision.timeout', 'secondary'] });
 export const REASONING = translated({ low: 'reasoning.low', medium: 'reasoning.medium', high: 'reasoning.high' });
 export const MODE = translated({ carpeta: 'mode.carpeta', aislada: 'mode.aislada' });
 export const SENSITIVE = translated({

@@ -119,7 +119,8 @@ export function createLive(o) {
     const verdict = decide({ permission, tool: toolName, command, paths, internalDir: o.internalDir, lang: o.lang });
     if (verdict.decision === 'allow') return { behavior: 'allow', updatedInput: toolInput };
     if (verdict.decision === 'deny') return { behavior: 'deny', message: `Orb no lo permite: ${verdict.reason}.` };
-    const answer = await approvals.ask({ id: ctx.toolUseID ?? `${toolName}-${Date.now()}`, tool: toolName, title: describeAction({ tool: toolName, command, paths, lang: o.lang }), reason: verdict.reason, input: describeInput(toolInput) });
+    // 3.1: summary: what the agent itself says the command is for (Claude's Bash tool asks it for a description).
+    const answer = await approvals.ask({ id: ctx.toolUseID ?? `${toolName}-${Date.now()}`, tool: toolName, title: describeAction({ tool: toolName, command, paths, lang: o.lang }), reason: verdict.reason, input: describeInput(toolInput), summary: typeof toolInput?.description === 'string' ? toolInput.description.slice(0, 200) : undefined });
     if (answer === 'deny') return { behavior: 'deny', message: 'El usuario no lo ha permitido. Busca otra forma o explica qué necesitas.' };
     return { behavior: 'allow', updatedInput: toolInput, ...(answer === 'always' && ctx.suggestions ? { updatedPermissions: ctx.suggestions } : {}) };
   };
@@ -202,7 +203,7 @@ export function createLive(o) {
     if (o.forkSession) options.forkSession = true;
     if (o.systemPrompt) options.systemPrompt = { type: 'preset', preset: 'claude_code', append: o.systemPrompt };
     if (o.tools?.allowed?.length) options.allowedTools = o.tools.allowed;
-    const disallowed = [...(o.tools?.disallowed ?? []), ...(permission === 'leer' ? ['Bash', 'Edit', 'Write', 'NotebookEdit', 'MultiEdit'] : [])];
+    const disallowed = [...(o.tools?.disallowed ?? []), ...(permission === 'leer' ? ['Bash', 'Edit', 'Write', 'NotebookEdit', 'MultiEdit'] : permission === 'probar' ? ['Edit', 'Write', 'NotebookEdit', 'MultiEdit'] : [])];
     if (disallowed.length) options.disallowedTools = disallowed;
     if (permission === 'total') options.allowDangerouslySkipPermissions = true;
     if (o.budgetUsd) options.maxBudgetUsd = o.budgetUsd;

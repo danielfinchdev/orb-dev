@@ -16,9 +16,11 @@ const transport = (() => {
   throw new Error('el motor debe arrancarse desde la app');
 })();
 let remote = null; // phone access (src/engine/remote.mjs), when turned on
+let devControl = null; // 3.1: the developer's control line (src/engine/dev-control.mjs), only in Orb.dev
 const emit = (event, payload) => {
   try { transport.send({ type: 'event', event, payload }); } catch { /* window gone */ }
   remote?.broadcast(event, payload);
+  devControl?.broadcast(event, payload);
 };
 
 let api = null;
@@ -51,13 +53,35 @@ async function start(home, version, secret, browser) {
   const orchKey = crypto.randomBytes(24).toString('hex');
   board.setting('orchestrator_key_hash', crypto.createHash('sha256').update(orchKey).digest('hex'));
   const sessions = new Sessions(board, { emit, log });
+  const { plainAction } = await import('../core/guard.mjs');
+  const { adapter } = await import('../agents/index.mjs');
   const { recordRate } = await import('../core/budget.mjs');
   // The real usage the agents report (Claude and Codex): the budget guard uses it instead of guessing.
   sessions.onRate = (accountId, rate) => recordRate(board, accountId, rate);
   // A task waiting for a click: a line in the assistant's chat so the user sees it wherever they are (also the phone).
   sessions.onApproval = (s, item) => {
     if (s?.kind !== 'task') return;
-    board.addChat('system', tr('msg.engine.taskNeedsPermission', { id: s.task_id, title: item.body?.title ?? '', reason: item.body?.reason ?? '' }), { kind: 'task-approval', session: s.id, task: s.task_id, request: item.body?.id });
+    // 3.1: in plain words (what for, and why it asks); the command itself goes in the notice's details, one click away.
+    const wait = Number(ctx.config.approvalWaitMinutes ?? 10);
+    // What it does comes from the command itself; what the agent says it is for is shown as its words, not as a fact.
+    const what = plainAction(item.body?.title ?? '', { lang: ctx.config.language });
+    const says = item.body?.summary ? tr('msg.engine.agentSays', { text: String(item.body.summary).slice(0, 160) }) : '';
+    let agent = s.agent; try { agent = adapter(s.agent).label; } catch { /* id */ }
+    board.addChat('system', tr(wait > 0 ? 'msg.engine.taskNeedsPermissionWait' : 'msg.engine.taskNeedsPermission', { id: s.task_id, agent, what, reason: item.body?.reason ?? '', min: wait }) + says,
+      { kind: 'task-approval', session: s.id, task: s.task_id, request: item.body?.id, detail: String(item.body?.title ?? '').slice(0, 2000) });
+  };
+  // 3.1: the chat line of a task's permission shows how it ended (answered here or in the task, nobody answered, the task
+  // stopped), instead of staying «pending» with buttons that no longer work.
+  sessions.onApprovalDone = (s, requestId, status) => {
+    if (s?.kind !== 'task' || requestId == null) return;
+    for (const row of board.all("SELECT id, meta FROM chat WHERE meta LIKE '%task-approval%' ORDER BY id DESC LIMIT 50")) {
+      let meta; try { meta = JSON.parse(row.meta); } catch { continue; }
+      if (meta?.kind === 'task-approval' && meta.session === s.id && String(meta.request) === String(requestId)) { board.patchChatMeta(row.id, { ...meta, status }); break; }
+    }
+  };
+  sessions.onApprovalExpired = (s, item) => {
+    if (s?.kind !== 'task') return;
+    board.notice(tr('msg.engine.permissionTimedOut', { id: s.task_id, title: plainAction(item.body?.title ?? '', { lang: ctx.config.language }), min: Number(ctx.config.approvalWaitMinutes ?? 10) }), 'warning');
   };
   const orchestrator = new Orchestrator(board, orchKey, { emit, log });
   const scheduler = new Scheduler(board, sessions, { log, orchestrator });
@@ -65,6 +89,11 @@ async function start(home, version, secret, browser) {
   const remoteRef = { current: null };
   api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef });
   remote = remoteRef.current = createRemote({ board, api, log });
+  // 3.1: only an unpacked Orb.dev started with ORB_DEV_CONTROL=1 (main.mjs decides; never an installed Orb).
+  if (process.env.ORB_DEV_CONTROL === '1') {
+    const { startDevControl } = await import('./dev-control.mjs');
+    devControl = startDevControl({ api, board, sessions, log, home, internalDir: ctx.paths.internal });
+  }
   if (ctx.config.mobile?.enabled) remote.start().catch((error) => log(`móvil: ${error.message}`));
 
   // Changes made by this process are pushed right away; changes made by MCP processes (other connections) are found with
@@ -98,6 +127,12 @@ async function start(home, version, secret, browser) {
   // once every 12 h), so the brain selector names them before any conversation.
   const { refreshAllModels } = await import('./catalog.mjs');
   setTimeout(() => { refreshAllModels(board, { log }).catch(() => {}); }, Number(process.env.ORB_MODELS_DELAY_MS ?? 3000)).unref?.();
+  // 3.1: the plan of every account (Claude Pro, ChatGPT Plus, Cursor Pro…), so the usage limits fit what is paid for.
+  // Not with the test agents: a fake engine must not start the real CLIs.
+  if (!process.env.ORB_FAKE_AGENTS) {
+    const { refreshPlans } = await import('./plans.mjs');
+    setTimeout(() => { refreshPlans(board, { log }).catch(() => {}); }, Number(process.env.ORB_MODELS_DELAY_MS ?? 3000) + 2000).unref?.();
+  }
   // 2.7: the bridge with Open Control Edge (engine/bridge.mjs). Only on Windows, only for the app's own engine (main.mjs
   // sets ORB_BRIDGE) and never with the test agents: made-up runs must not reach OCE as real data.
   if (process.platform === 'win32' && process.env.ORB_BRIDGE === '1' && !process.env.ORB_FAKE_AGENTS) {
@@ -121,6 +156,7 @@ transport.on(async (msg) => {
     // The phone access may have to turn off `tailscale serve` first (a few seconds at most).
     try { api?.shutdown(); } catch { /* closing anyway */ }
     try { bridge?.stop(); } catch { /* closing anyway */ }
+    try { devControl?.stop(); } catch { /* closing anyway */ }
     Promise.race([Promise.resolve(remote?.stop()).catch(() => {}), new Promise((r) => setTimeout(r, 4000))]).finally(() => setTimeout(() => process.exit(0), 300));
     return;
   }

@@ -38,11 +38,13 @@ function identity() {
 const { me: ME, task: SIGNED_TASK } = identity();
 const BOSS = ME === 'orb';
 const NAME = assistantName(); const USER = userName();
+// 3.1: only the agents this PC can run (installed, turned on, with an account) are offered; the board refuses the rest.
+const AVAILABLE = board.availableAgents() ?? AGENTS;
 
-const INSTRUCTIONS = `${NAME} es el tablero común de los agentes (${AGENTS.join(', ')}) ${ofUser()}. Tú eres "${ME}".
-${BOSS ? `ERES EL COORDINADOR: crea tareas autocontenidas (orb_create_task), una por agente según sus fortalezas (${AGENTS.map((a) => `${a}: ${ctx.config.agents[a]?.strengths}`).join('; ')}), con depends_on para el orden. Límite: tareas por agente cada ${budgetConfig().windowHours} h.`
+const INSTRUCTIONS = `${NAME} es el tablero común de los agentes ${ofUser()} disponibles en este PC (${AVAILABLE.join(', ') || 'ninguno'}). Tú eres "${ME}".
+${BOSS ? `ERES EL COORDINADOR: crea tareas autocontenidas (orb_create_task) solo para esos agentes (${AVAILABLE.map((a) => `${a}: ${ctx.config.agents[a]?.strengths}`).join('; ')}), con depends_on para el orden. Límite: tareas por agente cada ${budgetConfig().windowHours} h.`
     : `SI TE HAN ASIGNADO UNA TAREA #N (eres trabajador):
-- Empieza con orb_read_messages. Si necesitas algo de otro agente, orb_send_message (to: agente, "all", "usuario" para preguntar a ${USER}, o "orb").
+- Los mensajes de ${NAME} y de otros agentes te llegan mientras trabajas (si no, léelos con orb_read_messages). Si necesitas algo de otro agente, orb_send_message (to: agente, "all", "usuario" para preguntar a ${USER}, o "orb" para el coordinador).
 - Termina SIEMPRE con orb_update_task: status "done" con result (qué cambiaste y cómo probarlo), o "blocked"/"failed" con el motivo.
 - Si una parte de tu tarea la haría mejor otro agente (otro proveedor u otro modelo), puedes delegarla con orb_delegate y esperar su resultado con orb_wait_tasks. Encargos cortos y autocontenidos; no delegues todo.
 - No hagas push, no publiques, no borres nada fuera de tu carpeta de trabajo y no uses credenciales.
@@ -127,13 +129,24 @@ const modelsOf = (a) => {
   const named = listed.map((m) => (m.label && m.label !== m.id ? `${m.id} (${m.label})` : m.id));
   return [...new Set([...named, ...(ctx.config.agents[a]?.models ?? []).filter((id) => !listed.some((m) => m.id === id || m.resolved === id))])].slice(0, 24);
 };
-const modelsHelp = () => AGENTS.map((a) => `${a}: ${modelsOf(a).join(', ') || 'predeterminado'}`).join(' | ');
+// 3.1: short answers save every agent tokens on each call: a write answers what changed, not the whole task back (whose
+// description can be thousands of characters), and the detail of a task brings its latest history, trimmed.
+const ack = (t) => t && { ok: true, id: t.id, title: t.title, status: t.status, agent: t.assigned_to ?? t.agent, ...(t.depends_on?.length ? { depends_on: t.depends_on } : {}) };
+function taskBrief(id) {
+  const d = board.taskDetail(id);
+  return { id: d.id, project: d.project, title: d.title, description: d.description, status: d.status, agent: d.assigned_to ?? d.agent, model: d.model, mode: d.mode, readonly: d.readonly,
+    branch: d.branch, depends_on: d.depends_on, result: d.result,
+    events: d.events.slice(-30).map((e) => ({ ...e, detail: oneLine(e.detail, 300) })),
+    messages: d.messages.slice(-20).map((m) => ({ ...m, body: oneLine(m.body, 600) })),
+    dependencies: d.dependencies.map((x) => x && { ...x, result: oneLine(x.result, 1500) }) };
+}
+const modelsHelp = () => AVAILABLE.map((a) => `${a}: ${modelsOf(a).join(', ') || 'predeterminado'}`).join(' | ');
 const tools = [
   ...(TASK_ID && !BOSS ? [
     { name: 'orb_delegate', description: 'Delega una parte de tu tarea en otro agente o modelo (subtarea de tu tarea). Devuelve su id: espera su resultado con orb_wait_tasks.',
       inputSchema: { type: 'object', required: ['title', 'description'], properties: {
         title: str('Título corto'), description: str('Encargo autocontenido y compacto: qué hacer, dónde y cuándo está terminado'),
-        agent: { type: 'string', enum: [...AGENTS, 'any'], description: 'Agente (any = el que tenga cupo)' }, model: str(`Modelo concreto (opcional; requiere agent). ${modelsHelp()}`),
+        agent: { type: 'string', enum: [...AVAILABLE, 'any'], description: 'Agente (any = el que tenga uso disponible)' }, model: str(`Modelo concreto (opcional; requiere agent). ${modelsHelp()}`),
         readonly: { type: 'boolean', description: 'true si solo debe leer (investigar, revisar)' },
         nivel: { type: 'string', enum: ['simple', 'normal', 'complejo'], description: 'Lo difícil que es (simple, normal o complejo): Orb elige con ello el modelo si no pones uno' } } },
       run: (a) => delegate(a) },
@@ -147,20 +160,22 @@ const tools = [
     inputSchema: { type: 'object', properties: { project: str('Proyecto'), status: { type: 'string', enum: STATUSES }, agent: str('Agente'), limit: { type: 'integer', minimum: 1, maximum: 200 } } },
     run: (a) => board.tasks(a).map(({ id, project, title, agent, assigned_to, status, branch, depends_on }) => ({ id, project, title, agent: assigned_to ?? agent, status, branch, depends_on })) },
   { name: 'orb_get_task', description: 'Detalle de una tarea: descripción, resultado, eventos, mensajes y dependencias.', readOnly: true,
-    inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'integer' } } }, run: (a) => board.taskDetail(a.id) },
+    inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'integer' } } }, run: (a) => taskBrief(a.id) },
   { name: 'orb_update_task', description: 'Informa del progreso de una tarea: estado, nota o resultado final.',
     inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'integer' },
       status: { type: 'string', enum: ['queued', 'done', 'failed', 'blocked', 'cancelled'] }, note: str('Nota de progreso (con progress: qué haces ahora, en pocas palabras)'), result: str('Resumen final'),
       progress: { type: 'integer', minimum: 0, maximum: 100, description: 'Cuánto llevas de la tarea (0-100, estimación). Se ve en directo.' },
-      ...(BOSS ? { agent: { type: 'string', enum: [...AGENTS, 'any'], description: 'Reasignar una tarea que no está en curso' }, model: str(`Cambiar el modelo. ${modelsHelp()}`),
+      ...(BOSS ? { agent: { type: 'string', enum: [...AVAILABLE, 'any'], description: 'Reasignar una tarea que no está en curso' }, model: str(`Cambiar el modelo. ${modelsHelp()}`),
         reasoning: { type: 'string', enum: ['low', 'medium', 'high'] } } : {}) } },
-    run: (a) => board.updateTask(a.id, a, ME, { taskId: TASK_ID ?? '' }) },
+    run: (a) => ack(board.updateTask(a.id, a, ME, { taskId: TASK_ID ?? '' })) },
   { name: 'orb_claim_next', description: 'Coge la siguiente tarea manual disponible para ti y la marca como en curso.',
     inputSchema: { type: 'object', properties: { project: str('Limitar a un proyecto') } },
     run: (a) => { const t = board.claimNext(ME, a.project); return t ? board.taskDetail(t.id) : 'No hay tareas manuales pendientes para ti.'; } },
   { name: 'orb_send_message', description: `Envía un mensaje a otro agente, a "all", a "orb" o a "usuario" (${USER}).`,
-    inputSchema: { type: 'object', required: ['to', 'body'], properties: { to: str(`${AGENTS.join(', ')}, all, orb o usuario`), body: str('Mensaje'), task_id: { type: 'integer' } } },
-    run: (a) => board.send({ ...a, from: ME }) },
+    inputSchema: { type: 'object', required: ['to', 'body'], properties: { to: str(`${AVAILABLE.join(', ')}, all, orb o usuario`), body: str('Mensaje'), task_id: { type: 'integer' } } },
+    // 3.1: a worker's message carries its own task when it names none, so Orb knows who sent it (and does not hand it
+    // back to the same task).
+    run: (a) => board.send({ ...a, task_id: a.task_id ?? TASK_ID ?? undefined, from: ME }) },
   { name: 'orb_read_messages', description: 'Lee tus mensajes sin leer (y los marca como leídos).', inputSchema: { type: 'object', properties: {} },
     run: () => { const rows = board.inbox(ME); return rows.length ? rows : 'Sin mensajes nuevos.'; } },
   { name: 'orb_add_project', description: `Registra una carpeta existente como proyecto (dentro de una categoría de ${ctx.paths.projects}: windows, ios, android o web; o en las carpetas permitidas).`,
@@ -177,15 +192,15 @@ const tools = [
       inputSchema: { type: 'object', required: ['project', 'title', 'description'], properties: {
         project: str('Nombre del proyecto registrado'), title: str('Título corto'),
         description: str('Instrucciones autocontenidas: qué hacer, dónde y criterio de terminado'),
-        agent: { type: 'string', enum: [...AGENTS, 'any'] }, model: str(`Modelo concreto (opcional; requiere agent). ${modelsHelp()}`),
-        account: str(`Solo si ${USER} pide una cuenta concreta (si no, se reparte sola entre las que tienen cupo). Cuentas: ${(ctx.config.accounts ?? []).map((a) => `${a.id} (${a.label})`).join(', ')}`),
+        agent: { type: 'string', enum: [...AVAILABLE, 'any'] }, model: str(`Modelo concreto (opcional; requiere agent). ${modelsHelp()}`),
+        account: str(`Solo si ${USER} pide una cuenta concreta (si no, se reparte sola entre las que tienen uso disponible). Cuentas: ${(ctx.config.accounts ?? []).map((a) => `${a.id} (${a.label})`).join(', ')}`),
         nivel: { type: 'string', enum: ['simple', 'normal', 'complejo'], description: 'Lo difícil que es: simple (un cambio pequeño, un texto, una pregunta), normal (lo habitual) o complejo (diseño, un fallo difícil, mucho código). ' + (ctx.config.budget?.autoModel !== false ? 'Con esto Orb elige solo el modelo y el razonamiento más eficientes: no pongas model ni reasoning salvo que ' + USER + ' pida uno concreto.' : 'Ayuda a elegir modelo y razonamiento.') }, 
         reasoning: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Por defecto medium. high solo para algo muy complicado.' },
         launch: { type: 'string', enum: ['auto', 'manual'] }, priority: { type: 'integer', minimum: 1, maximum: 3, description: '1 alta, 2 normal, 3 baja' },
         depends_on: { type: 'array', items: { type: 'integer' }, maxItems: 20 },
         sensitivity: { type: 'array', items: { type: 'string', enum: ctx.config.sensitive }, description: `Si publica, envía, paga, borra o toca credenciales: espera la aprobación de ${USER}` },
         mode: { type: 'string', enum: ['carpeta', 'aislada'] }, readonly: { type: 'boolean', description: 'true si solo lee (investigar, revisar)' } } },
-      run: (a) => board.createTask({ ...a, level: a.nivel }, ME) },
+      run: (a) => ack(board.createTask({ ...a, level: a.nivel }, ME)) },
     { name: 'orb_read_log', description: 'Lee una bitácora: la de un proyecto o la "general". Devuelve las entradas más recientes completas. Sin project: lista las bitácoras.', readOnly: true,
       inputSchema: { type: 'object', properties: { project: str('Proyecto registrado o "general"'), chars: { type: 'integer', minimum: 1000, maximum: 40000 }, entera: { type: 'boolean' } } },
       run: (a) => readLog(board, a.project, { chars: a.chars, whole: a.entera === true }) },
@@ -195,7 +210,7 @@ const tools = [
     { name: 'orb_schedule', description: `Programa una tarea que se repite (p. ej. cada lunes a las 9 revisar dependencias). ${USER} la aprueba una vez en la app antes de que funcione sola.`,
       inputSchema: { type: 'object', required: ['project', 'title', 'description', 'every'], properties: {
         project: str('Proyecto registrado'), title: str('Título corto'), description: str('Encargo autocontenido y compacto'),
-        agent: { type: 'string', enum: [...AGENTS, 'any'] }, model: str('Modelo (opcional; requiere agent)'), readonly: { type: 'boolean' },
+        agent: { type: 'string', enum: [...AVAILABLE, 'any'] }, model: str('Modelo (opcional; requiere agent)'), readonly: { type: 'boolean' },
         every: { type: 'string', enum: EVERY, description: 'hourly, every_hours (con hours), daily (con at_time) o weekly (con weekdays y at_time)' },
         at_time: str('Hora HH:MM (daily y weekly)'), hours: { type: 'integer', minimum: 1, maximum: 168 }, weekdays: { type: 'array', items: { type: 'integer', minimum: 0, maximum: 6 }, description: '0 domingo … 6 sábado' } } },
       run: (a) => createSchedule(board, a, ME) },

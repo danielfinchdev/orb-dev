@@ -110,7 +110,13 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'config.save': ({ patch }) => { const c = saveConfig(patch ?? {}); emit('config:changed', c); return c; },
 
     // «Comprobar» / «Comprobar todo» also ask the agents again for their models (in the background).
-    'agents.status': ({ refresh }) => { if (refresh) { forgetInstalled(); refreshAllModels(board, { force: true, log }); } return statusAll({ refresh: Boolean(refresh) }); },
+    'agents.status': ({ refresh }) => {
+      if (refresh) {
+        forgetInstalled(); refreshAllModels(board, { force: true, log });
+        if (!process.env.ORB_FAKE_AGENTS) import('./plans.mjs').then(({ refreshPlans }) => refreshPlans(board, { force: true, log })).catch(() => {});
+      }
+      return statusAll({ refresh: Boolean(refresh) });
+    },
     'agents.check': ({ agent }) => { const a = oneOf(agent, AGENT_IDS, 'agente'); forgetInstalled(); refreshModels(board, a, { force: true, log }); return agentStatus(a, { refresh: true }); },
     'agents.login': ({ account: id, agent }) => {
       const acc = str(id ?? agent, 'cuenta', 40);
@@ -353,7 +359,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'models.guide': () => modelCatalog(board).map((a) => ({
       id: a.id, label: a.label,
       tiers: Object.fromEntries(['light', 'balanced', 'heavy'].map((tier) => [tier, a.models.filter((m) => m.id && m.tier === tier).map((m) => m.label)])),
-      picks: Object.fromEntries(LEVELS.map((level) => { const p = chooseModel(board, a.id, level, a.accounts[0]?.id ?? a.id); return [level, { label: p.label, tier: p.tier, reasoning: p.reasoning }]; }))
+      picks: Object.fromEntries(LEVELS.map((level) => { const p = chooseModel(board, a.id, level, a.accounts[0]?.id ?? a.id, { writes: true }); return [level, { label: p.label, tier: p.tier, reasoning: p.reasoning }]; }))
     })),
     'models.catalog': () => {
       const key = JSON.stringify([ctx.config.orchestrator, ctx.config.agentOrder, Object.keys(ctx.config.agents).map((a) => ctx.config.agents[a]?.enabled), board.setting('models_rev')]);
@@ -384,7 +390,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'tasks.reassign': ({ id, agent, model, reasoning }) => board.reassign(int(id, 'tarea'), { agent: oneOf(agent, [...AGENT_IDS, 'any'], 'agente'), model: str(model, 'modelo', 80, { optional: true }) || null, reasoning: oneOf(reasoning, ['low', 'medium', 'high'], 'razonamiento') }, 'usuario'),
     'tasks.followup': ({ id, text, images: files }) => scheduler.followup(int(id, 'tarea'), str(text, 'mensaje', 20000), images(files)),
     'tasks.undo': ({ id }) => scheduler.undo(int(id, 'tarea')),
-    'tasks.launchAnyway': ({ id }) => { const t = board.task(int(id, 'tarea')); if (t?.status !== 'queued') fail(tr('msg.api.onlyQueued')); board.setting(`budget_ok:${t.id}`, '1'); board.event(t.id, 'usuario', 'budget.authorised', 'lanzar aunque supere el cupo'); return true; },
+    'tasks.launchAnyway': ({ id }) => { const t = board.task(int(id, 'tarea')); if (t?.status !== 'queued') fail(tr('msg.api.onlyQueued')); board.setting(`budget_ok:${t.id}`, '1'); board.event(t.id, 'usuario', 'budget.authorised', 'lanzar aunque supere el límite de uso'); return true; },
     'tasks.accept': ({ id }) => accept([int(id, 'tarea')]),
     'tasks.discardBranch': ({ id }) => scheduler.discardBranch(int(id, 'tarea')),
 
@@ -501,7 +507,11 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const fn = Object.hasOwn(methods, method) ? methods[method] : null;
       if (!fn) fail(tr('msg.api.unknownAction', { method }));
       if (params === null || typeof params !== 'object' || Array.isArray(params)) fail(tr('msg.api.badParams'));
-      return fn(params);
+      const out = await fn(params);
+      // 3.1: an agent turned on or off, checked again, or an account added or removed: the list of available agents is
+      // updated at once (the next task may already be for it).
+      if (/^(config\.save|agents\.(status|check)|accounts\.(add|update|remove))$/.test(method)) { try { scheduler.refreshAvailable(true); } catch { /* next tick */ } }
+      return out;
     },
     // New chat lines since the last call, sent to the window as 'chat:new' (corner robot, robot notices) or 'notice' (toasts).
     notifyNewChat() {
