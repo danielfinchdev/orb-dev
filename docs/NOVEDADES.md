@@ -1,15 +1,53 @@
 ## Descargar
 
-- **`Orb-3.0.0-instalador.exe`** (recomendado, la app completa): se instala para tu usuario, sin permisos de
+- **`Orb-3.1.0-instalador.exe`** (recomendado, la app completa): se instala para tu usuario, sin permisos de
   administrador, con acceso directo en el escritorio y en el menú Inicio, y se actualiza sola. Después lo encuentras
   escribiendo «Orb» en el buscador de Windows.
-- **`Orb-3.0.0-light-portable.exe`** (Orb Light, sin instalar): doble clic y se abre. Lo esencial (chat, tareas,
+- **`Orb-3.1.0-light-portable.exe`** (Orb Light, sin instalar): doble clic y se abre. Lo esencial (chat, tareas,
   proyectos, pizarra, agentes…), sin minijuegos, God mode, Monitoreo del equipo ni temas. No se actualiza sola: avisa de
   cada versión nueva y abre la descarga.
 
 Windows 10/11. Como aún no está firmada, SmartScreen avisa la primera vez: «Más información» → «Ejecutar de todas formas».
 En el primer arranque la app detecta qué agentes tienes y con qué sesión, e instala lo que falte con los instaladores oficiales.
 
+## Novedades de la 3.1
+
+El núcleo de Orb (del pedido al informe) se ha rehecho para que los agentes trabajen a la vez, sin atascos y con un
+resultado comprobado.
+
+- **Trabajo en paralelo de verdad:** si una tarea ya está escribiendo en la carpeta del proyecto, la siguiente trabaja en
+  su propia copia y Orb une los dos trabajos al terminar. Si los dos cambian lo mismo, una tarea los une a mano. Quien
+  prefiera el modo anterior tiene «Una tarea cada vez» en Ajustes › Tareas y usos.
+- **Mejor planificación:** para algo pequeño, una tarea y su verificación. Para algo grande, una base corta con el contrato
+  entre piezas y después varias piezas a la vez con agentes o cuentas distintos. Siempre termina con una verificación que
+  arranca el proyecto y lo prueba en el navegador.
+- **Solo agentes disponibles:** Orb nunca encarga trabajo a un agente que no está instalado o no tiene cuenta. Si uno
+  desaparece, sus tareas pendientes pasan a otro.
+- **Tu plan, tu uso:** Orb lee el plan de cada cuenta (Claude, Codex y Cursor) y ajusta cuánto trabajo le da mientras no
+  conoce su uso real. Las tareas que escriben código nunca usan el modelo más ligero.
+- **Ninguna tarea parada sin que lo sepas:**
+  - El tiempo máximo cuenta solo el trabajo, no lo que una tarea espera tu permiso.
+  - Un permiso sin respuesta se deniega a los 10 minutos (ajustable) y el agente sigue por otro camino.
+  - Una tarea que se pasa de tiempo conserva su trabajo y queda para revisar.
+  - Si un agente se queda callado, Orb le pregunta. Si cierra su tarea y su programa no termina, Orb lo libera.
+  - Al terminar una tarea se paran los servidores de prueba que dejó en marcha.
+- **Orb conecta a los agentes:** los mensajes entre agentes les llegan mientras trabajan, y los dirigidos a Orbe le
+  llegan como aviso. Cada encargo incluye qué archivos cambiaron las tareas anteriores y quién trabaja a la vez.
+- **Cursor, integrado del todo:** usa las herramientas de Orb (informa de su tarea, mensajes, navegador) y respeta las
+  reglas de seguridad de Orb durante su turno.
+- **Revisiones que prueban:** las revisiones y verificaciones pueden ejecutar pruebas, arrancar el proyecto y abrir la web,
+  sin poder cambiar archivos.
+- **Avisos claros en el chat:** los permisos explican en palabras normales qué quiere hacer el agente, con el comando en
+  «Ver detalles». Cada tarea terminada ocupa una línea, con lo que hizo plegado debajo, y se indican su tiempo y su uso.
+- **Informes que no se pierden:** si Orbe no puede revisar el trabajo terminado (por ejemplo, al llegar al límite de uso),
+  lo intenta de nuevo y, si no lo consigue, te deja el resumen con los botones de OK.
+- **Varias cuentas en el selector:** con dos cuentas de un agente (Codex Go y Codex Pro), cada una aparece por separado con
+  sus modelos.
+- **Seguridad:** comprobaciones más finas para no pedir permiso por probar una API en tu propio equipo, detectar comandos
+  cifrados en cualquiera de sus formas y no volver a pedir aprobación por lo que pediste con tus palabras (solo para
+  borrar, y solo en tu petición actual).
+- **Tablas en el chat:** las respuestas con tablas, tachados y listas de casillas se ven bien.
+- **Uso, no cupo:** los textos de la app hablan del uso de cada cuenta.
 ## Novedades de la 3.0
 
 - **Un solo «Nuevo chat»:** desaparece «Orbe» del menú. «Nuevo chat» abre una conversación limpia con Orbe, sin carpeta,
