@@ -236,15 +236,12 @@ export function Sidebar({ mood, page = false }) {
             {app.chat?.busy ? <span className="bg-primary absolute right-0 bottom-0 size-2 animate-pulse rounded-full" /> : null}
           </button>
         </Tip>
-        {/* 2.7: the buttons share the first line with the name, so the project below has the whole width (long names were cut). */}
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-1">
-            {/* 2.6: with the default name, the drawn wordmark (Orb·E); a name of one's own, as it is written. */}
-            <div className="min-w-0 flex-1">{name === PRODUCT.assistant ? <Wordmark /> : <div className="truncate text-[15px] font-medium">{name}</div>}</div>
-            <ThemeToggle />
-            <SidebarToggle />
-          </div>
-          <Tip label={app.activeProject?.name} side="bottom" align="start"><div className={cn('text-muted-foreground truncate text-xs', name === PRODUCT.assistant && 'wordmark-sub')} data-testid="sidebar-project">{app.activeProject ? app.activeProject.name : t('nav.noProject')}</div></Tip>
+        {/* 2.6: with the default name, the drawn wordmark (Orb·E); a name of one's own, as it is written. 3.2: one line, all
+            on the band's middle; the working folder is in the middle of the chat's top bar. */}
+        <div className="flex min-w-0 flex-1 items-center">{name === PRODUCT.assistant ? <Wordmark /> : <div className="truncate text-[15px] font-medium">{name}</div>}</div>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <ThemeToggle />
+          <SidebarToggle />
         </div>
       </div>
       {/* 3.0: «Nuevo chat» opens a clean conversation with the assistant. With «Orquestador» off the user hands out the work,

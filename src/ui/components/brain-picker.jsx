@@ -1,11 +1,12 @@
 // 2.6: what the chat runs on, chosen under the message box: the brain (agent + model, one list grouped by agent), the
-// reasoning and, for a direct chat, the permissions. A bubble warns when the choice spends the quota fast.
+// reasoning and, for a direct chat, the permissions. A bubble warns when the account's usage runs high.
 import { useEffect, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Flame, Lightbulb, Star, X } from 'lucide-react';
 import { AgentIcon } from './agent-icon.jsx';
 import { Button } from './ui/button.jsx';
 import { Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, BubbleTip } from './ui/overlay.jsx';
 import { call, useStore } from '@/lib/store.js';
+import { notify } from '@/lib/notify.js';
 import { REASONING, options } from '@/lib/labels.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
@@ -116,19 +117,24 @@ export function ReasoningPicker({ value, onChange }) {
   return <Select size="sm" value={value} onValueChange={onChange} title={t('brain.reasoning')} options={options(REASONING).map((o) => ({ ...o, label: `${t('brain.reasoningShort')}: ${o.label.toLowerCase()}` }))} data-testid="reasoning-picker" />;
 }
 
-// Why this choice may spend the quota fast (or null): high reasoning, a heavy model, or an account already well used.
+// 3.2: why the account may run out soon (or null). Only from its real usage (what the agent reports): 75 % or more, or
+// 50 % with a choice that spends more (a heavy model or high reasoning). Without that figure, nothing: the model alone
+// is no reason to warn (the bubble came out far too often).
 export function usageWarning(catalog, value, t) {
   const agent = catalog?.find((a) => a.id === value.agent);
   const model = modelOf(catalog, value);
   const used = agent?.accounts.find((a) => a.id === value.account)?.usage ?? agent?.accounts[0]?.usage ?? null;
-  if (value.reasoning === 'high' && model?.heavy) return t('brain.warnBoth', { model: model.label });
-  if (value.reasoning === 'high') return t('brain.warnHigh');
-  if (model?.heavy) return t('brain.warnHeavy', { model: model.label });
-  if (used != null && used >= 0.75) return t('brain.warnUsed', { pct: Math.round(used * 100) });
+  if (used == null || used < 0.5) return null;
+  const pct = Math.round(used * 100);
+  const high = value.reasoning === 'high';
+  if (high && model?.heavy) return t('brain.warnBoth', { model: model.label, pct });
+  if (model?.heavy) return t('brain.warnHeavy', { model: model.label, pct });
+  if (high) return t('brain.warnHigh', { pct });
+  if (used >= 0.75) return t('brain.warnUsed', { pct });
   return null;
 }
 
-// The bubble above the message box. Closed with its X, it stays closed for that same choice.
+// The bubble above the message box, for a few seconds (or until its X).
 export function UsageBubble({ text, onClose }) {
   const t = useT();
   if (!text) return null;
@@ -147,11 +153,30 @@ export function UsageBubble({ text, onClose }) {
   );
 }
 
-// The bubble for a choice, shown once per choice until closed.
+// 3.2: shown for 3 seconds and, once shown, not again for that account for a while (45 min, remembered on this PC); it
+// stays in the bell (lib/notify.js).
+const SHOW_MS = 3000;
+const QUIET_MS = 45 * 60_000;
+const WARNED = 'orb.usageWarned';
+let warned = {}; try { warned = JSON.parse(localStorage.getItem(WARNED) || '{}') ?? {}; } catch { /* none yet */ }
 export function useUsageBubble(catalog, value) {
   const t = useT();
   const text = usageWarning(catalog, value, t);
-  const key = `${value.agent}|${value.model}|${value.reasoning}|${text}`;
-  const [closed, setClosed] = useState('');
-  return { text: closed === key ? null : text, close: () => setClosed(key) };
+  const who = value.account ?? value.agent;
+  const [shown, setShown] = useState(null);
+  useEffect(() => {
+    if (!text) return undefined;
+    const now = Date.now(); const at = warned[who] ?? 0;
+    const left = at + SHOW_MS - now; // still within its seconds (shown again on the way back, or by another screen)
+    if (left <= 0) {
+      if (now - at < QUIET_MS) return undefined;
+      warned = { ...warned, [who]: now };
+      try { localStorage.setItem(WARNED, JSON.stringify(warned)); } catch { /* this session only */ }
+      if (!notify({ title: t('brain.warnTitle'), body: text, tone: 'warning' }, { toast: false, ms: SHOW_MS }).show) return undefined;
+    }
+    setShown(text);
+    const id = setTimeout(() => setShown(null), left > 0 ? left : SHOW_MS);
+    return () => { clearTimeout(id); setShown(null); };
+  }, [text, who]); // eslint-disable-line react-hooks/exhaustive-deps
+  return { text: shown, close: () => setShown(null) };
 }

@@ -1,12 +1,13 @@
 // The star view: the conversation with the assistant. Under the message box: the working project, the brain (agent and
 // model), the reasoning and the «Orquestador» switch (on = only coordinates; off = free mode, works directly).
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowUp, Square, RotateCcw, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign, ChevronLeft, ChevronRight, PenTool, History, FlaskConical } from 'lucide-react';
+import { ArrowUp, Square, RotateCcw, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign, ChevronLeft, ChevronRight, PenTool, History, FlaskConical, Folder } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Markdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { ProjectPicker } from '@/components/project-actions.jsx';
 import { LiveTasksStrip } from '@/components/live-tasks.jsx';
+import { NotificationBell } from '@/components/notification-center.jsx';
 import { confirm } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
@@ -125,6 +126,18 @@ function BarClock() {
       </PopoverTrigger>
       <PopoverContent side="bottom" align="start" className="orb-cal" data-testid="bar-calendar"><MonthCalendar today={now} /></PopoverContent>
     </Popover>
+  );
+}
+// 3.2: the working folder in the middle of the bar (it was under the wordmark of the sidebar).
+function BarProject({ project }) {
+  const t = useT();
+  return (
+    <BubbleTip title={project ? project.path : t('bar.project')} text={t('bar.projectText')} wide={Boolean(project)}>
+      <span className={cn('bar-project', !project && 'is-empty')} tabIndex={0} data-testid="bar-project">
+        <Folder className="size-3.5 shrink-0" aria-hidden="true" />
+        <span className="truncate">{project ? project.name : t('bar.noProject')}</span>
+      </span>
+    </BubbleTip>
   );
 }
 // A month at a glance: the days of the week from the language's first day (Monday in Spanish), today marked, arrows to
@@ -321,7 +334,8 @@ export function ChatView() {
     <>
       {/* 2.6: a clean bar: the name, the brain and the mode are already in the sidebar and under the message box. Only
           icon buttons, each with its bubble. */}
-      <PageHeader className="topbar-chat" title={<><span className="sr-only">{name}</span><BarClock /></>}>
+      <PageHeader className="topbar-chat" title={<><span className="sr-only">{name}</span><BarClock /></>} center={<BarProject project={app.activeProject} />}>
+        <NotificationBell />
         {app.paused
           ? <BubbleTip title={t('bar.resume')} text={t('bar.resumeText')}><Button variant="soft" size="icon-sm" onClick={() => act(call('control.resume'), t('chat.resumed'))} aria-label={t('bar.resume')} data-testid="bar-resume"><Play /></Button></BubbleTip>
           : <BubbleTip title={t('bar.pause')} text={t('bar.pauseText')}><Button variant="ghost" size="icon-sm" onClick={() => act(call('control.pause'), t('chat.paused'))} aria-label={t('bar.pause')} data-testid="bar-pause"><Pause /></Button></BubbleTip>}

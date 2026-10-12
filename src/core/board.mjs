@@ -157,6 +157,8 @@ export class Board {
   setActiveProject(name, actor) {
     if (!name) { this.setting('active_project', ''); this.event(null, actor, 'project.active', 'ninguno'); this.changed('projects'); return null; }
     const project = this.project(name); if (!project) throw new Error(tr('sys.board.unknownProject', { name }));
+    // 3.2: the same folder again (the assistant sets it on each request) says nothing: the notice came out again and again.
+    if (this.setting('active_project') === project.name) return project;
     this.setting('active_project', project.name);
     this.event(null, actor, 'project.active', `${project.name} -> ${project.path}`);
     this.notice(tr('msg.board.activeFolder', { name: project.name, path: project.path }), 'info');
