@@ -55,8 +55,16 @@ const RISKY = [
 ];
 
 // 3.1: data sent only to this PC (an agent testing its own local API: curl -X POST localhost:3000…) never leaves it.
+// Also written without http:// (curl localhost:3000/api, B=localhost:3000 … $B/api), as long as no other address appears:
+// neither an http(s):// one nor a bare host with a usual domain ending.
 const LOCAL_URL = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/i;
-const onlyLocal = (c) => { const urls = c.match(/https?:\/\/[^\s'"`;|)]+/gi) ?? []; return urls.length > 0 && urls.every((u) => LOCAL_URL.test(u)); };
+const LOCAL_HOST = /(^|[\s'"=(@/])(localhost|127\.0\.0\.1|\[::1\])(:\d+)?([/\s'";)]|$)/i;
+const OTHER_HOST = /(^|[\s'"=(@/])(?!localhost\b)(?:[a-z0-9-]+\.)+(?:com|net|org|io|dev|app|ai|co|me|xyz|info|biz|es|uk|de|fr|eu|us|ru|cn|tk|sh|ly|gg|tv|cloud|site|online|link)(:\d+)?([/\s'";)]|$)/i;
+const onlyLocal = (c) => {
+  const urls = c.match(/https?:\/\/[^\s'"`;|)]+/gi) ?? [];
+  if (urls.some((u) => !LOCAL_URL.test(u))) return false;
+  return (urls.length > 0 || LOCAL_HOST.test(c)) && !OTHER_HOST.test(c);
+};
 export function riskOf(command, lang = 'es') {
   const c = String(command ?? '');
   for (const [re, why] of RISKY) {

