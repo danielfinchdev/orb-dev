@@ -56,6 +56,8 @@ function knownMissing() {
   if (!visible(document.querySelector('[data-testid="new-conversation"]'))) for (const s of TOUR_STEPS) if (s.sidebar) out.add(s.id);
   // 3.2: the tour shows a new conversation, whose ring only appears after an answer.
   if (!visible(document.querySelector('[data-testid="context-meter"]')) && !(app?.assistant?.context)?.size) out.add('context');
+  // 3.2: other optional steps whose control is not there (the conversations without a project, when there are none).
+  for (const s of TOUR_STEPS) if (s.optional && s.target && !document.querySelector(`[data-testid="${s.target}"]`)) out.add(s.id);
   return out;
 }
 

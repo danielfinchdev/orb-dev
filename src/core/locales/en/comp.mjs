@@ -99,7 +99,7 @@ export default {
   'comp.sidebar.noQuota': 'Out of quota: you can continue whenever you want',
   'comp.sidebar.halfway': 'Interrupted',
   'comp.sidebar.waitApproval': 'Awaiting your approval',
-  'comp.sidebar.foldersHint': 'Each project is a folder. Its conversations and tasks show here.',
+  'comp.sidebar.foldersHint': 'Each project is a folder. Its active tasks show here.',
   // 3.2: conversaciones, menú lateral, buscador y globito
   'comp.sidebar.conversations': 'Conversations',
   'comp.sidebar.tasks': 'Tasks',

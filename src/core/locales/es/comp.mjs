@@ -99,7 +99,7 @@ export default {
   'comp.sidebar.noQuota': 'Límite de uso alcanzado: puedes continuar cuando quieras',
   'comp.sidebar.halfway': 'Interrumpida',
   'comp.sidebar.waitApproval': 'Esperan tu aprobación',
-  'comp.sidebar.foldersHint': 'Cada proyecto es una carpeta. Aquí verás sus conversaciones y sus tareas.',
+  'comp.sidebar.foldersHint': 'Cada proyecto es una carpeta. Aquí verás sus tareas activas.',
   // 3.2: conversaciones, menú lateral, buscador y globito
   'comp.sidebar.conversations': 'Conversaciones',
   'comp.sidebar.tasks': 'Tareas',
