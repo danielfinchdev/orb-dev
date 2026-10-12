@@ -70,6 +70,7 @@ export function validateConfig(c) {
   if (!['low', 'medium', 'high'].includes(o.reasoning)) throw new Error(tr('msg.ctx.badReasoning'));
   if (typeof o.orchestrate !== 'boolean') throw new Error(tr('msg.ctx.orchestrateBool'));
   int(o.maxTurns, 2, 200, 'maxTurns');
+  if (o.parallel !== undefined) int(o.parallel, 1, 6, 'parallel'); // 3.2: conversations answered at the same time
   if (o.account && !(c.accounts ?? []).some((a) => a.id === o.account && a.agent === brain)) throw new Error(tr('msg.ctx.assistantNeedsClaude'));
   if (c.mobile) {
     if (typeof c.mobile.enabled !== 'boolean') throw new Error(tr('msg.ctx.mobileBool'));

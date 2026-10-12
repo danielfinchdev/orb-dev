@@ -8,7 +8,8 @@ import { Markdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
-import { Composer, useAutoScroll } from './chat.jsx';
+import { Composer, useAutoScroll, BarClock, BarHeading } from './chat.jsx';
+import { NotificationBell } from '@/components/notification-center.jsx';
 import { useCatalog, modelsOf } from '@/components/brain-picker.jsx';
 import { GeneratedImage } from '@/components/image-viewer.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -333,18 +334,16 @@ export function SessionView({ route, embedded = false, empty = null }) {
 
   return (
     <>
-      {embedded ? null : <PageHeader icon={<AgentIcon agent={s.agent} className="size-5" />} title={s.title}
-        meta={<span className="inline-flex flex-wrap items-center gap-x-1.5">{AGENT[s.agent]}{s.model ? ` · ${modelName(s.model)}` : ''} · {s.project ?? t('session.assistantFolderLower')}{bridge.mobile ? null : <> · <a className="hover:text-foreground cursor-pointer underline-offset-2 hover:underline" onClick={() => act(bridge.openPath(s.cwd))}>{t('session.openFolder')}</a></>}{s.context ? <> · <ContextMeter context={s.context} /></> : null}</span>}>
+      {/* 3.2: like the chat's: the clock on the left, the conversation's title (and under it its project and agent) in the
+          middle, its controls on the right. */}
+      {embedded ? null : <PageHeader className="topbar-chat" title={<BarClock />}
+        center={<BarHeading title={s.title} project={s.project} onRename={s.kind === 'chat' ? rename : null} renameLabel={t('session.renameTip')}
+          extra={<span className="bar-title-agent"><AgentIcon agent={s.agent} className="size-3.5" />{AGENT[s.agent]}{s.model ? ` · ${modelName(s.model)}` : ''}</span>} />}>
+        <NotificationBell />
+        {bridge.mobile ? null : <Tip label={t('session.openFolder')}><Button variant="ghost" size="icon-sm" onClick={() => act(bridge.openPath(s.cwd))} aria-label={t('session.openFolder')}><FolderOpen /></Button></Tip>}
         {s.kind === 'chat' ? (<>
-          {models.length ? <Select size="sm" value={s.model || models[0].value} title={t('session.model')} options={models} onValueChange={(model) => act(call('sessions.update', { id: s.id, model }), t('session.modelSet', { model: modelName(model) }))} data-testid="session-model" /> : null}
-          <Select size="sm" value={s.permission} title={s.project ? t('session.permissions') : t('session.noProjectReadOnly')} disabled={!s.project} options={options(PERMISSION).filter((o) => !bridge.mobile || o.value !== 'total')} onValueChange={async (permission) => {
-            if (permission === 'total' && !(await confirm(t('permission.total'), t('session.totalBody'), { ok: t('session.yes'), danger: true }))) return;
-            act(call('sessions.update', { id: s.id, permission }), t('session.permissionsChanged'));
-          }} />
-          <Select size="sm" value={s.reasoning ?? 'medium'} title={t('session.reasoning')} options={options(REASONING)} onValueChange={(reasoning) => act(call('sessions.update', { id: s.id, reasoning }))} />
           <Tip label={t('session.detailsShort')}><Button variant="ghost" size="icon-sm" onClick={() => showDetails(s, task)} data-testid="details"><Info /></Button></Tip>
           <BubbleTip title={t('session.fork')} text={t('session.forkTip')}><Button variant="ghost" size="icon-sm" disabled={running} onClick={fork} aria-label={t('session.fork')} data-testid="fork"><GitFork /></Button></BubbleTip>
-          <Tip label={t('session.renameTip')}><Button variant="ghost" size="icon-sm" onClick={rename}><Pencil /></Button></Tip>
           <Tip label={s.archived ? t('session.restore') : t('session.archive')}><Button variant="ghost" size="icon-sm" onClick={async () => { await act(call('sessions.update', { id: s.id, archived: !s.archived })); if (!s.archived) go('chat'); }}><Archive /></Button></Tip>
           <Tip label={t('session.deleteTip')}><Button variant="danger" size="icon-sm" onClick={async () => { if (await confirm(t('session.deleteTitle'), t('session.deleteBody'), { ok: t('session.delete'), danger: true })) { await act(call('sessions.remove', { id: s.id })); go('chat'); } }}><Trash2 /></Button></Tip>
         </>) : (<>
@@ -393,7 +392,17 @@ export function SessionView({ route, embedded = false, empty = null }) {
         top={images.length ? images.map((p) => <Badge key={p} variant="secondary" className="gap-1.5 font-normal"><ImageIcon />{baseName(p)}<button className="cursor-pointer" onClick={() => setImages(images.filter((x) => x !== p))}><X className="size-3" /></button></Badge>) : null}
         bottom={<>
           <Tip label={t('session.attach')}><Button variant="ghost" size="icon-sm" onClick={async () => addImages(await bridge.pickImages())}><Paperclip /></Button></Tip>
-          {embedded ? <span className="flex-1" /> : <span className="text-muted-foreground flex min-w-0 items-center gap-1 truncate text-xs"><FolderOpen className="size-3.5 shrink-0" />{PERMISSION[s.permission]} · {bridge.mobile ? (s.project ?? baseName(s.cwd)) : s.cwd}</span>}
+          {/* 3.2: the model, the permissions and the reasoning under the box, like the chat's brain (the bar keeps the title). */}
+          {!embedded && s.kind === 'chat' ? (<>
+            {models.length ? <Select size="sm" value={s.model || models[0].value} title={t('session.model')} options={models} onValueChange={(model) => act(call('sessions.update', { id: s.id, model }), t('session.modelSet', { model: modelName(model) }))} data-testid="session-model" /> : null}
+            <Select size="sm" value={s.permission} title={s.project ? t('session.permissions') : t('session.noProjectReadOnly')} disabled={!s.project} options={options(PERMISSION).filter((o) => !bridge.mobile || o.value !== 'total')} onValueChange={async (permission) => {
+              if (permission === 'total' && !(await confirm(t('permission.total'), t('session.totalBody'), { ok: t('session.yes'), danger: true }))) return;
+              act(call('sessions.update', { id: s.id, permission }), t('session.permissionsChanged'));
+            }} data-testid="session-permission" />
+            <Select size="sm" value={s.reasoning ?? 'medium'} title={t('session.reasoning')} options={options(REASONING).map((o) => ({ ...o, label: `${t('brain.reasoningShort')}: ${o.label.toLowerCase()}` }))} onValueChange={(reasoning) => act(call('sessions.update', { id: s.id, reasoning }))} />
+          </>) : null}
+          {embedded ? <span className="flex-1" /> : <Tip label={s.cwd}><span className="text-muted-foreground hidden min-w-0 items-center gap-1 truncate text-xs xl:flex"><FolderOpen className="size-3.5 shrink-0" />{s.project ?? baseName(s.cwd)}</span></Tip>}
+          {!embedded && s.context ? <span className="text-muted-foreground ml-auto text-xs"><ContextMeter context={s.context} /></span> : null}
         </>} />
     </>
   );

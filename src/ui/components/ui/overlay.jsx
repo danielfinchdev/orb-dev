@@ -66,15 +66,31 @@ export function Select({ value, onValueChange, options, placeholder, className, 
 // title and, at most, a line or two of muted text, with a little tail towards the control. No icons inside. Shown on hover
 // and on keyboard focus; the control keeps its own accessible name (aria-label).
 // offset: how far from the control (more when a button sits right next to it, so the bubble never covers it).
-export function BubbleTip({ title, text, children, side = 'bottom', align = 'center', wide = false, offset = 8 }) {
+// off: kept closed (its control has a list of its own open, like the bell's).
+export function BubbleTip({ title, text, children, side = 'bottom', align = 'center', wide = false, offset = 8, off = false }) {
   if (!title && !text) return children;
   return (
-    <TooltipPrimitive.Root delayDuration={300}>
+    <TooltipPrimitive.Root delayDuration={300} open={off ? false : undefined}>
       <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal>
         <TooltipPrimitive.Content side={side} align={align} sideOffset={offset} collisionPadding={12} className={cn('orb-tip z-50', wide ? 'max-w-80' : 'max-w-[17rem]')} data-testid="bubble-tip">
           {title ? <div className="orb-tip-title text-[13px] leading-snug font-semibold">{title}</div> : null}
           {text ? <p className={cn('orb-tip-text text-[12px] leading-snug', title && 'mt-0.5', wide && 'break-all')}>{text}</p> : null}
+          <TooltipPrimitive.Arrow asChild width={16} height={8}><span className="orb-tip-tail" aria-hidden="true" /></TooltipPrimitive.Arrow>
+        </TooltipPrimitive.Content>
+      </TooltipPrimitive.Portal>
+    </TooltipPrimitive.Root>
+  );
+}
+// 3.2: a bubble with richer content (the card of a conversation in the sidebar): the same look, any content inside.
+// onOpen: called when it shows (to fetch what it needs then, not before).
+export function RichTip({ content, children, side = 'right', align = 'start', offset = 12, onOpen }) {
+  return (
+    <TooltipPrimitive.Root delayDuration={450} onOpenChange={(open) => { if (open) onOpen?.(); }}>
+      <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
+      <TooltipPrimitive.Portal>
+        <TooltipPrimitive.Content side={side} align={align} sideOffset={offset} collisionPadding={12} className="orb-tip orb-card z-50 w-72" data-testid="rich-tip">
+          {content}
           <TooltipPrimitive.Arrow asChild width={16} height={8}><span className="orb-tip-tail" aria-hidden="true" /></TooltipPrimitive.Arrow>
         </TooltipPrimitive.Content>
       </TooltipPrimitive.Portal>

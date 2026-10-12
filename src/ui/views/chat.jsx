@@ -1,23 +1,27 @@
-// The star view: the conversation with the assistant. Under the message box: the working project, the brain (agent and
-// model), the reasoning and the «Orquestador» switch (on = only coordinates; off = free mode, works directly).
+// The star view: a conversation with the assistant. Under the message box: its project, the brain (agent and model), the
+// reasoning and, for a new conversation, the «Orquestador» switch (on = with the assistant, who coordinates the agents;
+// off = directly with the agent chosen). 3.2: each conversation is its own (route.id), several at once.
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowUp, Square, RotateCcw, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign, ChevronLeft, ChevronRight, PenTool, History, FlaskConical } from 'lucide-react';
+import { ArrowUp, Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign, ChevronLeft, ChevronRight, PenTool, History, FlaskConical, Folder } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Markdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { ProjectPicker } from '@/components/project-actions.jsx';
 import { LiveTasksStrip } from '@/components/live-tasks.jsx';
-import { confirm } from '@/components/dialogs.jsx';
+import { NotificationBell } from '@/components/notification-center.jsx';
+import { confirm, form } from '@/components/dialogs.jsx';
+import { ProjectIcon } from '@/components/project-icon.jsx';
+import { Input } from '@/components/ui/basic.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { Switch, Tip, BubbleTip, Popover, PopoverTrigger, PopoverContent } from '@/components/ui/overlay.jsx';
-import { useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest } from '@/lib/store.js';
+import { useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon } from '@/lib/store.js';
 import { pickGreeting, pickSubtitle } from '@/lib/greeting.js';
 import { LiveActivity, QuestionCard } from '@/components/chat-live.jsx';
 import { ContextMeter } from './session.jsx';
 import { BrainPicker, ReasoningPicker, UsageBubble, useCatalog, useUsageBubble } from '@/components/brain-picker.jsx';
 import { cn } from '@/lib/utils.js';
-import { DECISION } from '@/lib/labels.js';
+import { DECISION, AGENT } from '@/lib/labels.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 
 const SUGGESTIONS = ['chat.suggestion1', 'chat.suggestion2', 'chat.suggestion3', 'chat.suggestion4'];
@@ -107,7 +111,7 @@ function useGreeting() {
 }
 
 // 2.7: with the pointer on it, the seconds too; a click opens the month's calendar in a bubble (MonthCalendar).
-function BarClock() {
+export function BarClock() {
   const t = useT();
   const locale = useLocale();
   const [now, setNow] = useState(() => new Date());
@@ -125,6 +129,18 @@ function BarClock() {
       </PopoverTrigger>
       <PopoverContent side="bottom" align="start" className="orb-cal" data-testid="bar-calendar"><MonthCalendar today={now} /></PopoverContent>
     </Popover>
+  );
+}
+// 3.2: the working folder in the middle of the bar (it was under the wordmark of the sidebar).
+function BarProject({ project }) {
+  const t = useT();
+  return (
+    <BubbleTip title={project ? project.path : t('bar.project')} text={t('bar.projectText')} wide={Boolean(project)}>
+      <span className={cn('bar-project', !project && 'is-empty')} tabIndex={0} data-testid="bar-project">
+        <Folder className="size-3.5 shrink-0" aria-hidden="true" />
+        <span className="truncate">{project ? project.name : t('bar.noProject')}</span>
+      </span>
+    </BubbleTip>
   );
 }
 // A month at a glance: the days of the week from the language's first day (Monday in Spanish), today marked, arrows to
@@ -243,10 +259,11 @@ function ChatApproval({ m }) {
   const t = useT();
   // 3.1: how the request ended comes from the engine too (answered in the task, nobody answered, the task stopped).
   const [local, setLocal] = useState(null);
-  const state = local ?? m.meta.status ?? 'pending';
   const task = m.meta.kind === 'task-approval';
+  // 3.2: the assistant no longer runs commands itself (free mode is a direct conversation now): an old request of its is over.
+  const state = local ?? (task ? m.meta.status ?? 'pending' : m.meta.status === 'pending' || !m.meta.status ? 'expired' : m.meta.status);
   const answer = async (decision) => {
-    const r = await act(task ? call('sessions.approve', { id: m.meta.session, request: m.meta.request, decision }) : call('chat.approve', { request: m.meta.id, decision }));
+    const r = await act(call('sessions.approve', { id: m.meta.session, request: m.meta.request, decision }));
     if (r !== undefined) setLocal(decision === 'deny' ? 'denied' : decision === 'always' ? 'always' : 'allowed');
   };
   const done = state !== 'pending';
@@ -268,75 +285,118 @@ function ChatApproval({ m }) {
   );
 }
 
-export function ChatView() {
+// 3.2: the title of the conversation in the middle of the bar, in big, and under it, small, its project with its icon.
+// A click on the title renames it.
+function BarTitle({ conversation }) {
+  const t = useT();
+  const rename = () => form(t('chat.renameTitle'), { initial: { title: conversation.title }, body: (v, set) => <Input autoFocus value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={80} data-testid="rename-input" />, ok: t('session.save'), onOk: (v) => call('conversations.update', { id: conversation.id, title: v.title.trim() || conversation.title }) });
+  return <BarHeading title={conversation.title} project={conversation.project} onRename={rename} renameLabel={t('chat.rename')} />;
+}
+export function BarHeading({ title, project, onRename, renameLabel, extra }) {
+  const t = useT();
+  return (
+    <div className="bar-title" data-testid="bar-title">
+      {onRename ? <BubbleTip title={renameLabel}><button type="button" className="bar-title-main" onClick={onRename} data-testid="bar-title-text">{title}</button></BubbleTip> : <span className="bar-title-main">{title}</span>}
+      <span className="bar-title-sub" data-testid="bar-title-project">
+        {project ? <ProjectIcon name={project} className="size-3.5" /> : <Folder className="size-3 shrink-0" aria-hidden="true" />}
+        <span className="truncate">{project ?? t('bar.noProject')}</span>{extra}
+      </span>
+    </div>
+  );
+}
+
+export function ChatView({ route }) {
   const t = useT();
   const app = useStore((s) => s.app);
   const version = useStore((s) => s.version);
+  const id = route?.id ?? null;
+  const conv = useStore((s) => (id == null ? null : s.conversations.find((c) => c.id === id) ?? null));
   const [rows, setRows] = useState([]);
   const [text, setText] = useState('');
   const name = app.config.assistantName;
-  const chat = app.chat ?? {};
-  const info = app.assistant ?? {};
-  useEffect(() => { let alive = true; call('chat.list').then((r) => alive && setRows(r)).catch(() => {}); return () => { alive = false; }; }, [version]);
-  // 3.0: the conversations before this one (nothing is lost with «Nuevo chat»): shown on request, above a divider.
+  const chat = chatOf(app, id) ?? {};
+  const defaults = app.assistant ?? {};
+  useEffect(() => { setRows([]); setOlder([]); setMore(false); }, [id]);
+  useEffect(() => {
+    if (id == null) return undefined;
+    let alive = true;
+    call('chat.list', { conversation: id }).then((r) => { if (alive) { setRows(r); setMore(r.length >= 160); } }).catch(() => {});
+    return () => { alive = false; };
+  }, [id, version]);
+  // A long conversation shows its last 160 lines; the earlier ones, on request.
   const [older, setOlder] = useState([]);
-  const [hasOlder, setHasOlder] = useState(false);
-  const firstId = (older[0] ?? rows[0])?.id ?? 2 ** 31;
-  useEffect(() => { let alive = true; call('chat.older', { before: firstId, limit: 1 }).then((r) => alive && setHasOlder(r.length > 0)).catch(() => {}); return () => { alive = false; }; }, [firstId]);
-  const askChanges = useCallback((ids) => setText(t('chat.changesFor', { ids: ids.map((id) => `#${id}`).join(', ') })), [t]);
+  const [more, setMore] = useState(false);
+  const askChanges = useCallback((ids) => setText(t('chat.changesFor', { ids: ids.map((x) => `#${x}`).join(', ') })), [t]);
   const [loading, setLoading] = useState(false);
   const loadOlder = async () => {
-    if (loading) return; setLoading(true);
-    const r = await act(call('chat.older', { before: firstId }));
-    if (r) setOlder((o) => { const have = new Set(o.map((m) => m.id)); return [...r.filter((m) => !have.has(m.id)), ...o]; });
+    const first = (older[0] ?? rows[0])?.id; if (loading || !first) return; setLoading(true);
+    const r = await act(call('chat.list', { conversation: id, before: first }));
+    if (r) { setOlder((o) => [...r, ...o]); setMore(r.length >= 120); }
     setLoading(false);
   };
-  // Where this conversation starts: older lines before it belong to earlier conversations (above the divider), after it
-  // to the beginning of this one (a long conversation shows only its last 120 lines). A new conversation starts clean.
-  const chatStart = app.chatStart ?? 0;
-  useEffect(() => { setOlder([]); }, [chatStart]);
-  const before = older.filter((m) => m.id < chatStart); const earlier = older.filter((m) => m.id > chatStart);
   useEffect(() => { initTestOfTheDay(); }, []);
-  const showTest = useStore((s) => s.testToday) === true;
-  const scroll = useAutoScroll([rows.length, chat.partial, chat.busy]);
+  const showTest = useStore((s) => s.testToday) === true && id == null;
+  const scroll = useAutoScroll([rows.length, chat.partial, chat.busy, id]);
   const catalog = useCatalog();
-  const brain = { agent: info.agent ?? 'claude', model: info.model ?? '', account: info.account, reasoning: info.reasoning ?? 'medium' };
+  const brain = conv
+    ? { agent: conv.agent ?? 'claude', model: conv.model ?? '', account: conv.account ?? conv.agent, reasoning: conv.reasoning ?? 'medium' }
+    : { agent: defaults.agent ?? 'claude', model: defaults.model ?? '', account: defaults.account, reasoning: defaults.reasoning ?? 'medium' };
+  const orchestrate = conv ? true : defaults.orchestrate !== false;
   const bubble = useUsageBubble(catalog, brain);
   const greeting = useGreeting();
+  const [sending, setSending] = useState(false);
 
   const send = async () => {
-    const msg = text.trim(); if (!msg) return;
+    const msg = text.trim(); if (!msg || sending) return;
     setText('');
     dismissTest();
-    if ((await act(call('chat.send', { text: msg }))) === undefined) setText(msg);
-    else call('chat.list').then(setRows).catch(() => {});
+    if (id != null) {
+      if ((await act(call('chat.send', { text: msg, conversation: id }))) === undefined) setText(msg);
+      else call('chat.list', { conversation: id }).then((r) => { if (getState().route?.id === id) setRows(r); }).catch(() => {});
+      return;
+    }
+    setSending(true);
+    try {
+      if (orchestrate) {
+        // 3.2: the first message makes the conversation (in the working folder): then the screen is that conversation.
+        const r = await act(call('chat.send', { text: msg }));
+        if (!r) { setText(msg); return; }
+        await refresh().catch(() => {});
+        go({ view: 'chat', id: r.conversation });
+      } else {
+        // «Orquestador» off: the user hands out the work, and the conversation is directly with the agent chosen below.
+        const project = app.activeProject?.name ?? null;
+        const s = await act(call('sessions.create', { agent: brain.agent, account: brain.account && brain.account !== brain.agent ? brain.account : undefined, model: brain.model || undefined, reasoning: brain.reasoning, project, permission: project ? 'editar' : 'leer' }));
+        if (!s) { setText(msg); return; }
+        await act(call('sessions.send', { id: s.id, text: msg }));
+        await refresh().catch(() => {});
+        go({ view: 'session', id: s.id });
+      }
+    } finally { setSending(false); }
   };
-  const settings = async (patch) => { const r = await act(call('chat.settings', patch)); if (r) setState((s) => ({ app: { ...s.app, assistant: r } })); };
+  const settings = async (patch) => { const r = await act(call('chat.settings', { ...patch, ...(id != null ? { conversation: id } : {}) })); if (r) { setState((s) => ({ app: { ...s.app, ...(id == null ? { assistant: r } : {}) } })); refreshSoon(); } };
   const toggleOrchestrator = async (checked) => {
     if (!checked && !(await confirm(t('chat.freeMode'), t('chat.freeModeBody', { name }), { ok: t('chat.freeModeOk') }))) return;
     settings({ orchestrate: checked });
   };
+  const lines = [...older, ...rows];
 
   return (
     <>
-      {/* 2.6: a clean bar: the name, the brain and the mode are already in the sidebar and under the message box. Only
-          icon buttons, each with its bubble. */}
-      <PageHeader className="topbar-chat" title={<><span className="sr-only">{name}</span><BarClock /></>}>
+      {/* 2.6: a clean bar: the clock, (3.2) the conversation's title and project in the middle, and icon buttons, each with
+          its bubble. */}
+      <PageHeader className="topbar-chat" title={<><span className="sr-only">{name}</span><BarClock /></>}
+        center={conv ? <BarTitle conversation={conv} /> : <BarProject project={app.activeProject} />}>
+        <NotificationBell />
         {app.paused
           ? <BubbleTip title={t('bar.resume')} text={t('bar.resumeText')}><Button variant="soft" size="icon-sm" onClick={() => act(call('control.resume'), t('chat.resumed'))} aria-label={t('bar.resume')} data-testid="bar-resume"><Play /></Button></BubbleTip>
           : <BubbleTip title={t('bar.pause')} text={t('bar.pauseText')}><Button variant="ghost" size="icon-sm" onClick={() => act(call('control.pause'), t('chat.paused'))} aria-label={t('bar.pause')} data-testid="bar-pause"><Pause /></Button></BubbleTip>}
-        <BubbleTip title={t('bar.reset')} text={t('bar.resetText')}><Button variant="ghost" size="icon-sm" onClick={async () => { if (await confirm(t('chat.reset'), t('chat.resetBody', { name }), { ok: t('chat.reset') })) act(call('chat.reset')); }} aria-label={t('bar.reset')} data-testid="bar-reset"><RotateCcw /></Button></BubbleTip>
         {!fullPc() ? null : <BubbleTip title={t('bar.games')} text={t('bar.gamesText')}><Button variant="ghost" size="icon-sm" onClick={openGames} aria-label={t('bar.games')} data-testid="bar-games"><Gamepad2 /></Button></BubbleTip>}
       </PageHeader>
       <div ref={scroll.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex max-w-3xl flex-col gap-5 px-5 py-6">
-          {hasOlder ? <Button variant="ghost" size="sm" className="text-muted-foreground mx-auto" onClick={loadOlder} disabled={loading} data-testid="chat-older"><History />{t('chat.older')}</Button> : null}
-          {before.length ? <>
-            {before.map((m) => <Message key={m.id} m={m} name={name} onChanges={askChanges} />)}
-            <div className="text-muted-foreground flex items-center gap-3 text-[11px] tracking-wide uppercase"><span className="bg-border h-px flex-1" />{t('chat.thisConversation')}<span className="bg-border h-px flex-1" /></div>
-          </> : null}
-          {earlier.map((m) => <Message key={m.id} m={m} name={name} onChanges={askChanges} />)}
-          {rows.length === 0 ? (
+        <div className="mx-auto flex max-w-3xl flex-col gap-5 px-5 py-6" data-testid="chat-lines">
+          {more ? <Button variant="ghost" size="sm" className="text-muted-foreground mx-auto" onClick={loadOlder} disabled={loading} data-testid="chat-older"><History />{t('chat.older')}</Button> : null}
+          {id == null && !sending ? (
             <div className="flex flex-col items-center gap-3 pt-10 text-center">
               <Robot size={130} mood="hello" live />
               <div className="chat-glass chat-hero flex flex-col items-center gap-3">
@@ -345,37 +405,41 @@ export function ChatView() {
               </div>
               <div className="mt-3 flex max-w-xl flex-wrap justify-center gap-2">{SUGGESTIONS.map((s) => <Button key={s} variant="outline" size="sm" className="h-auto rounded-full py-1.5 whitespace-normal" onClick={() => setText(t(s))}>{t(s)}</Button>)}</div>
             </div>
-          ) : rows.map((m) => <Message key={m.id} m={m} name={name} onChanges={askChanges} />)}
-          {chat.busy ? (
+          ) : lines.map((m) => <Message key={m.id} m={m} name={name} onChanges={askChanges} />)}
+          {chat.busy || chat.waiting || sending ? (
             <div className="flex gap-3">
               <Robot size={32} mood={chat.partial ? 'talking' : 'thinking'} className="mt-0.5" />
               <div className="chat-glass min-w-0 flex-1">
                 <div className="text-muted-foreground mb-1 text-xs">{name}</div>
                 {chat.partial ? <Markdown>{chat.partial}</Markdown> : null}
-                <LiveActivity chat={chat} />
+                {chat.waiting ? <div className="text-muted-foreground text-[13px]" data-testid="chat-waiting-turn">{t('chat.waitingTurn')}</div> : <LiveActivity chat={chat} />}
               </div>
             </div>
           ) : null}
         </div>
       </div>
       <LiveTasksStrip />
-      <Composer value={text} onChange={setText} onSend={send} onStop={() => act(call('chat.stop'))} busy={chat.busy} testid="chat-input"
-        placeholder={chat.busy ? t('chat.placeholderBusy', { name }) : t('chat.placeholder', { name })}
+      <Composer value={text} onChange={setText} onSend={send} onStop={id != null ? () => act(call('chat.stop', { conversation: id })) : undefined} busy={chat.busy} disabled={sending} testid="chat-input"
+        placeholder={chat.busy ? t('chat.placeholderBusy', { name }) : orchestrate ? t('chat.placeholder', { name }) : t('chat.placeholderDirect', { agent: AGENT[brain.agent] ?? brain.agent })}
         top={<div className="flex flex-col items-start gap-2">
           {/* 3.0: the test of the day (first opening of the day, until the user writes; always in Ajustes › General). */}
           {showTest ? <BubbleTip title={t('test.button')} text={t('test.tip')} side="top"><Button size="xs" variant="soft" onClick={() => runTest(t('test.prompt'))} data-testid="chat-test"><FlaskConical />{t('test.button')}</Button></BubbleTip> : null}
-          <ProjectPicker />
+          <ProjectPicker conversation={id} />
         </div>}
         notice={<UsageBubble text={bubble.text} onClose={bubble.close} />}
         bottom={<>
           <BrainPicker catalog={catalog} value={brain} onChange={(b) => settings({ agent: b.agent, model: b.model, account: b.account })} />
           <ReasoningPicker value={brain.reasoning} onChange={(reasoning) => settings({ reasoning })} />
-          <BubbleTip title={t('chat.orchestrator')} text={t('chat.orchestratorHint')} side="top">
-            <label className="flex cursor-pointer items-center gap-2 text-[13px]">
-              <Switch checked={info.orchestrate !== false} onCheckedChange={(v) => toggleOrchestrator(v === true)} data-testid="orchestrator-check" />{t('chat.orchestrator')}
-            </label>
-          </BubbleTip>
-          {(chat.context ?? info.context) ? <span className="text-muted-foreground ml-auto text-xs"><ContextMeter context={chat.context ?? info.context} /></span> : null}
+          {/* 3.2: whether a NEW conversation is with the assistant or directly with the agent chosen; a conversation keeps
+              the way it started. */}
+          {id == null ? (
+            <BubbleTip title={t('chat.orchestrator')} text={t('chat.orchestratorHint')} side="top">
+              <label className="flex cursor-pointer items-center gap-2 text-[13px]">
+                <Switch checked={orchestrate} onCheckedChange={(v) => toggleOrchestrator(v === true)} data-testid="orchestrator-check" />{t('chat.orchestrator')}
+              </label>
+            </BubbleTip>
+          ) : null}
+          {(chat.context ?? conv?.context) ? <span className="text-muted-foreground ml-auto text-xs"><ContextMeter context={chat.context ?? conv?.context} /></span> : null}
         </>} />
     </>
   );

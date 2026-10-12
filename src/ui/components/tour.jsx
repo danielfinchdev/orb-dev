@@ -24,15 +24,18 @@ export const TOUR_STEPS = [
   { id: 'context', target: 'context-meter', view: 'chat', optional: true },
   { id: 'bar', target: 'bar-games', view: 'chat' },
   { id: 'newchat', target: 'new-conversation', sidebar: true },
+  { id: 'search', target: 'sidebar-search', sidebar: true },
   { id: 'folders', target: 'sidebar-folders', sidebar: true },
+  { id: 'conversations', target: 'sidebar-conversations', sidebar: true },
   { id: 'tasks', target: 'nav-tasks', view: 'tasks', sidebar: true },
   { id: 'schedules', target: 'nav-schedules', view: 'schedules', sidebar: true },
   { id: 'board', target: 'nav-board', sidebar: true },
-  { id: 'agents', target: 'nav-agents', view: 'agents', sidebar: true },
-  { id: 'logs', target: 'nav-logs', view: 'logs', sidebar: true },
-  { id: 'activity', target: 'nav-activity', view: 'activity', sidebar: true },
-  { id: 'tutorials', target: 'nav-tutorials', view: 'tutorials', sidebar: true },
+  // 3.2: the foot of the sidebar, in its order (Ajustes, then alphabetical); Bitácoras and Actividad are «Memorias».
   { id: 'settings', target: 'nav-settings', sidebar: true },
+  { id: 'agents', target: 'nav-agents', view: 'agents', sidebar: true },
+  { id: 'logs', target: 'nav-memories', view: 'logs', sidebar: true },
+  { id: 'tutorials', target: 'nav-tutorials', view: 'tutorials', sidebar: true },
+  { id: 'feedback', target: 'nav-feedback', sidebar: true },
   { id: 'end', mood: 'happy', view: 'chat' }
 ];
 const GESTURES = ['look', 'tilt', 'wink'];
@@ -51,7 +54,8 @@ function knownMissing() {
   const out = new Set();
   const { app } = getState();
   if (!visible(document.querySelector('[data-testid="new-conversation"]'))) for (const s of TOUR_STEPS) if (s.sidebar) out.add(s.id);
-  if (!(app?.chat?.context ?? app?.assistant?.context)?.size) out.add('context');
+  // 3.2: the tour shows a new conversation, whose ring only appears after an answer.
+  if (!visible(document.querySelector('[data-testid="context-meter"]')) && !(app?.assistant?.context)?.size) out.add('context');
   return out;
 }
 

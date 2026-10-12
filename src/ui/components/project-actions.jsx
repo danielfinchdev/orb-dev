@@ -84,11 +84,14 @@ export async function cloneRepoFlow() {
 }
 
 // The working project of the assistant's chat: pick one, create one, link a folder, or clear it to pick another.
-export function ProjectPicker() {
+// 3.2: conversation: the project of that conversation (otherwise, the working folder new conversations start in).
+export function ProjectPicker({ conversation = null }) {
   const t = useT();
   const projects = useStore((s) => s.projects);
-  const active = useStore((s) => s.app?.activeProject);
-  const setActive = (name) => act(call('projects.setActive', { name }));
+  const working = useStore((s) => s.app?.activeProject);
+  const conv = useStore((s) => (conversation == null ? null : s.conversations?.find((c) => c.id === conversation) ?? null));
+  const active = conversation == null ? working : conv?.project ? projects.find((p) => p.name === conv.project) ?? { name: conv.project } : null;
+  const setActive = (name) => act(conversation == null ? call('projects.setActive', { name }) : call('conversations.update', { id: conversation, project: name }));
   return (
     <div className="flex items-center gap-1">
       <DropdownMenu>

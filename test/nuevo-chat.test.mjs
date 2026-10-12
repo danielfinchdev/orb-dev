@@ -8,30 +8,40 @@ import assert from 'node:assert/strict';
 let t; let engine;
 afterEach(async () => { await engine?.stop(); engine = null; t?.cleanup(); });
 
-test('Nuevo chat: conversación limpia sin carpeta, y la anterior sigue disponible', async () => {
+test('3.2: cada «Nuevo chat» es una conversación propia, con título y proyecto, que se puede retomar, completar, buscar y borrar', async () => {
   t = tempHome();
   engine = await startEngine(t.home);
   const { call } = engine;
   await call('projects.create', { name: 'web' });
   await call('projects.setActive', { name: 'web' });
-  await call('chat.send', { text: 'Primera pregunta' });
-  await until(async () => (await call('chat.list')).some((m) => m.role === 'orb'), 'respuesta del asistente');
-  const first = await call('chat.list');
-  assert.ok(first.some((m) => m.body === 'Primera pregunta'));
+  const a = (await call('chat.send', { text: 'Quiero que me hagas una web de recetas con buscador' })).conversation;
+  await until(async () => (await call('chat.list', { conversation: a })).some((m) => m.role === 'orb'), 'respuesta del asistente');
+  const b = (await call('chat.send', { text: 'Revisa las dependencias', project: null })).conversation;
+  assert.notEqual(a, b, 'sin conversación, el mensaje empieza una nueva');
+  await until(async () => (await call('chat.list', { conversation: b })).some((m) => m.role === 'orb'), 'respuesta en la segunda');
+  const list = await call('conversations.list');
+  const ca = list.find((c) => c.id === a); const cb = list.find((c) => c.id === b);
+  assert.equal(ca.title, 'Web de recetas con buscador', 'título corto sacado del primer mensaje');
+  assert.equal(ca.project, 'web', 'con la carpeta de trabajo');
+  assert.equal(cb.project, null, 'o sin carpeta, si se elige así');
+  assert.ok(!(await call('chat.list', { conversation: b })).some((m) => /recetas/.test(m.body)), 'no se mezclan');
 
-  await call('chat.new', { project: null });
-  await until(async () => (await call('chat.list')).length === 0, 'la conversación nueva empieza vacía');
-  assert.equal((await call('app.state')).activeProject, null, 'sin carpeta seleccionada');
-  const older = await call('chat.older', { before: 2 ** 31 });
-  assert.ok(older.some((m) => m.body === 'Primera pregunta'), 'la conversación anterior se puede volver a ver');
-  assert.equal((await call('chat.older', { before: 2 ** 31, limit: 1 })).length, 1, 'basta con una línea para saber que hay más');
+  // Taken up again: the message goes to its own conversation.
+  await call('chat.send', { text: 'Y que tenga modo oscuro', conversation: a });
+  await until(async () => (await call('chat.list', { conversation: a })).filter((m) => m.role === 'orb').length === 2, 'segunda respuesta en la primera');
+  assert.equal((await call('chat.list', { conversation: b })).filter((m) => m.role === 'usuario').length, 1);
 
-  // An empty conversation is not started again (no extra «Nueva conversación»), and a project can come with it.
-  await call('chat.new', { project: 'web' });
-  assert.equal((await call('app.state')).activeProject?.name, 'web', 'con el proyecto elegido');
-  await call('chat.send', { text: 'Segunda pregunta' });
-  await until(async () => (await call('chat.list')).some((m) => m.role === 'orb'), 'segunda respuesta');
-  assert.ok(!(await call('chat.list')).some((m) => m.body === 'Primera pregunta'), 'lo de la conversación anterior no se mezcla');
+  // Rename, done by hand (and open again when written to), search and delete.
+  await call('conversations.update', { id: a, title: 'Recetas' });
+  await call('sidebar.complete', { key: `c${b}` });
+  assert.equal((await call('conversations.list')).find((c) => c.id === b).status, 'done');
+  await call('chat.send', { text: 'Una cosa más', conversation: b });
+  assert.equal((await call('conversations.list')).find((c) => c.id === b).status, 'open', 'escribir en una completada la abre');
+  assert.deepEqual((await call('conversations.search', { q: 'modo oscuro' })).conversations, [a], 'busca también en los mensajes');
+  await until(async () => !(await call('app.state')).chats.some((x) => x.busy), 'el asistente terminó');
+  await call('conversations.remove', { id: b });
+  assert.ok(!(await call('conversations.list')).some((c) => c.id === b));
+  await assert.rejects(call('chat.list', { conversation: b }), /ya no existe/);
 });
 
 test('Security Review: auditoría de solo lectura del proyecto, sin esperar aprobación', async () => {

@@ -22,5 +22,11 @@ export default {
   'inbox.waiting': 'To approve',
   'inbox.issues': 'Issues',
   'inbox.working': 'In progress',
-  'inbox.settle': 'Mark as resolved'
+  'inbox.settle': 'Mark as resolved',
+  // 3.2: sidebar foot
+  'nav.memories': 'Memories',
+  'nav.memoriesHint': 'Logs and activity: what Orb remembers.',
+  'nav.feedback': 'Send feedback',
+  'nav.footerUnfold': 'Show with names',
+  'nav.footerFold': 'Icons only'
 };
