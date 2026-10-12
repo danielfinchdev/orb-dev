@@ -91,6 +91,7 @@ export default {
   "msg.board.changedSince": "la tarea #{id} ha cambiado. Ábrela de nuevo para revisarla",
   "msg.board.containsHome": "la carpeta contiene la carpeta de {name}. Elige una carpeta más específica",
   "msg.board.depCancelled": "⛔ La tarea #{id} «{title}» depende de la #{dep}, que se ha cancelado. Reintenta la #{dep} para que continúe automáticamente o cancela la #{id}.",
+  "msg.board.askedByUser": "sin aprobación aparte para {words}: lo pidió el usuario con sus palabras",
   "msg.board.depBlocked": "⛔ La tarea #{id} «{title}» espera a la #{dep}, que se ha bloqueado. Cuando la #{dep} termine, seguirá sola; si no hace falta, cancela la #{id}.",
   "msg.board.depFailed": "⛔ La tarea #{id} «{title}» depende de la #{dep}, que ha fallado. Reintenta la #{dep} para que continúe automáticamente o cancela la #{id}.",
   "msg.board.driveRoot": "no se puede usar la raíz de una unidad como proyecto",

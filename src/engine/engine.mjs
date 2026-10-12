@@ -16,9 +16,11 @@ const transport = (() => {
   throw new Error('el motor debe arrancarse desde la app');
 })();
 let remote = null; // phone access (src/engine/remote.mjs), when turned on
+let devControl = null; // 3.1: the developer's control line (src/engine/dev-control.mjs), only in Orb.dev
 const emit = (event, payload) => {
   try { transport.send({ type: 'event', event, payload }); } catch { /* window gone */ }
   remote?.broadcast(event, payload);
+  devControl?.broadcast(event, payload);
 };
 
 let api = null;
@@ -79,6 +81,11 @@ async function start(home, version, secret, browser) {
   const remoteRef = { current: null };
   api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef });
   remote = remoteRef.current = createRemote({ board, api, log });
+  // 3.1: only an unpacked Orb.dev started with ORB_DEV_CONTROL=1 (main.mjs decides; never an installed Orb).
+  if (process.env.ORB_DEV_CONTROL === '1') {
+    const { startDevControl } = await import('./dev-control.mjs');
+    devControl = startDevControl({ api, board, sessions, log, home });
+  }
   if (ctx.config.mobile?.enabled) remote.start().catch((error) => log(`móvil: ${error.message}`));
 
   // Changes made by this process are pushed right away; changes made by MCP processes (other connections) are found with
@@ -141,6 +148,7 @@ transport.on(async (msg) => {
     // The phone access may have to turn off `tailscale serve` first (a few seconds at most).
     try { api?.shutdown(); } catch { /* closing anyway */ }
     try { bridge?.stop(); } catch { /* closing anyway */ }
+    try { devControl?.stop(); } catch { /* closing anyway */ }
     Promise.race([Promise.resolve(remote?.stop()).catch(() => {}), new Promise((r) => setTimeout(r, 4000))]).finally(() => setTimeout(() => process.exit(0), 300));
     return;
   }

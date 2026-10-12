@@ -54,9 +54,16 @@ const RISKY = [
   [/\b(docker|podman)\s+(rm|rmi|system\s+prune|volume\s+rm)\b/i, 'msg.guard.docker']
 ];
 
+// 3.1: data sent only to this PC (an agent testing its own local API: curl -X POST localhost:3000…) never leaves it.
+const LOCAL_URL = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/i;
+const onlyLocal = (c) => { const urls = c.match(/https?:\/\/[^\s'"`;|)]+/gi) ?? []; return urls.length > 0 && urls.every((u) => LOCAL_URL.test(u)); };
 export function riskOf(command, lang = 'es') {
   const c = String(command ?? '');
-  for (const [re, why] of RISKY) if (re.test(c)) return translate(lang, why);
+  for (const [re, why] of RISKY) {
+    if (!re.test(c)) continue;
+    if (why === 'msg.guard.sendData' && onlyLocal(c)) continue;
+    return translate(lang, why);
+  }
   return null;
 }
 

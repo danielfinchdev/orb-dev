@@ -163,7 +163,8 @@ export function prepareCursorFolder(cwd, { mcpServers = {}, deny = [], secretDir
       // A server with secrets and nowhere safe to put them is left out rather than written into the project.
     }
     if (Object.keys(servers).length) put('mcp.json', (cur) => ({ ...cur, mcpServers: servers }));
-    if (deny.length) put('cli.json', (cur) => ({ ...cur, permissions: { ...(cur.permissions ?? {}), deny: [...new Set([...(cur.permissions?.deny ?? []), ...deny])] } }));
+    // Cursor validates the file strictly: permissions needs both lists, allow too (found in a real run: «Required»).
+    if (deny.length) put('cli.json', (cur) => ({ ...cur, permissions: { ...(cur.permissions ?? {}), allow: Array.isArray(cur.permissions?.allow) ? cur.permissions.allow : [], deny: [...new Set([...(cur.permissions?.deny ?? []), ...deny])] } }));
   } catch (error) { PREPARED.delete(key); throw error; }
   let done = false;
   return () => {

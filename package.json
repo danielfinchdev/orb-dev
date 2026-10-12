@@ -11,6 +11,7 @@
   "scripts": {
     "build": "vite build",
     "start": "vite build && electron .",
+    "start:control": "vite build && node scripts/start-control.mjs",
     "check": "node scripts/check.mjs",
     "test": "vite build --logLevel warn && node --test test/*.test.mjs",
     "test:app": "vite build && node test/app.e2e.mjs",
