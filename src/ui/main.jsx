@@ -180,7 +180,8 @@ function ThemedToaster() {
     obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => obs.disconnect();
   }, []);
-  return <Toaster position="top-center" theme={dark ? 'dark' : 'light'} richColors closeButton toastOptions={{ className: 'font-sans' }} />;
+  // 3.1: below the window's header (offset), so a passing notice never covers the menu or the window buttons.
+  return <Toaster position="top-center" offset={72} mobileOffset={72} theme={dark ? 'dark' : 'light'} richColors closeButton toastOptions={{ className: 'font-sans' }} />;
 }
 
 applyTheme();
