@@ -101,9 +101,15 @@ const RISKY_SHELL = [
   'New-Service', 'Set-Service', 'ssh', 'scp', 'sftp', 'rsync', 'iex', 'Invoke-Expression', 'invoke-expression', 'powershell -e*', 'powershell -E*', 'pwsh -e*', 'pwsh -E*',
   'docker rm*', 'docker rmi*', 'docker system prune*', 'docker volume rm*', 'podman rm*', 'podman rmi*'
 ];
+// Also anywhere in the line, so a wrapper does not slip them through (cmd /c "git push", powershell -Command "…",
+// bash -c '…', git -C . push). Only phrases specific enough not to catch normal commands.
+const RISKY_ANYWHERE = ['git push', 'git -C * push', 'git remote add', 'git remote set-url', 'git reset --hard', 'git clean -f', 'git branch -D', 'git filter-branch',
+  'gh pr ', 'gh release', 'gh repo', 'gh api', 'gh secret', 'npm publish', 'pnpm publish', 'yarn publish', 'cargo publish', 'twine upload',
+  'rm -rf', 'rm -fr', 'taskkill', 'Stop-Process', 'stop-process', 'Invoke-Expression', 'invoke-expression', 'Set-ExecutionPolicy',
+  'schtasks', 'Restart-Computer', 'Stop-Computer', 'reg add', 'reg delete', 'diskpart', 'bcdedit', '-EncodedCommand', '-encodedcommand'];
 export function cursorRules(permission, internalDir) {
   if (permission === 'total') return [];
-  const deny = RISKY_SHELL.map((c) => `Shell(${c})`);
+  const deny = [...RISKY_SHELL.map((c) => `Shell(${c})`), ...RISKY_ANYWHERE.map((c) => `Shell(*${c}*)`)];
   // «Preguntar antes»: every command would ask; Cursor cannot ask, so it runs none.
   if (permission === 'preguntar') deny.push('Shell(*)');
   // «Revisar y probar»: commands yes, changing files no.
@@ -119,11 +125,22 @@ export function cursorRules(permission, internalDir) {
 
 // The project file of Cursor (.cursor/mcp.json for Orb's tools, .cursor/cli.json for the rules) only lives during a turn:
 // the user's own files there are kept (Orb's entries are added to them) and put back as they were when the turn ends.
-export const CURSOR_FILES = ['.cursor/mcp.json', '.cursor/cli.json'];
-export function prepareCursorFolder(cwd, { mcpServers = {}, deny = [] } = {}) {
+// Patterns for the repository's info/exclude: in any subfolder (a project can live in a subfolder of its repository).
+export const CURSOR_FILES = ['**/.cursor/mcp.json', '**/.cursor/cli.json'];
+// - Secrets never go into the project: each server's environment (Orb's signature of the agent, the user's connector
+//   keys) goes to an env file in secretDir (Orb's own run folder) and mcp.json only points to it (envFile).
+// - During the turn only Orb's servers are in mcp.json: servers a cloned repository declares would otherwise start
+//   unasked (--approve-mcps).
+// - One turn at a time per folder: a second Cursor turn in the same folder while one is running leaves the files alone
+//   (it would save the first one's files as "the user's" and put them back for good).
+const PREPARED = new Set();
+export function prepareCursorFolder(cwd, { mcpServers = {}, deny = [], secretDir = null } = {}) {
+  const key = path.resolve(cwd).toLowerCase();
+  if (PREPARED.has(key)) return () => {};
+  PREPARED.add(key);
   const dir = path.join(cwd, '.cursor');
   const hadDir = fs.existsSync(dir);
-  const saved = [];
+  const saved = []; const secrets = [];
   const read = (file) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; } };
   const put = (name, merge) => {
     const file = path.join(dir, name);
@@ -132,13 +149,29 @@ export function prepareCursorFolder(cwd, { mcpServers = {}, deny = [] } = {}) {
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(file, JSON.stringify(merge(before ? read(file) ?? {} : {}), null, 2));
   };
-  if (Object.keys(mcpServers).length) put('mcp.json', (cur) => ({ ...cur, mcpServers: { ...(cur.mcpServers ?? {}), ...mcpServers } }));
-  if (deny.length) put('cli.json', (cur) => ({ ...cur, permissions: { ...(cur.permissions ?? {}), deny: [...new Set([...(cur.permissions?.deny ?? []), ...deny])] } }));
+  try {
+    const servers = {};
+    for (const [name, s] of Object.entries(mcpServers)) {
+      const { env, ...rest } = s;
+      if (env && Object.keys(env).length && secretDir) {
+        fs.mkdirSync(secretDir, { recursive: true });
+        const envFile = path.join(secretDir, `cursor-${name.replace(/[^\w-]/g, '_')}.env`);
+        fs.writeFileSync(envFile, Object.entries(env).map(([k, v]) => `${k}=${String(v).replace(/\r?\n/g, ' ')}`).join('\n') + '\n');
+        secrets.push(envFile);
+        servers[name] = { ...rest, envFile };
+      } else if (!env || !Object.keys(env).length) servers[name] = rest;
+      // A server with secrets and nowhere safe to put them is left out rather than written into the project.
+    }
+    if (Object.keys(servers).length) put('mcp.json', (cur) => ({ ...cur, mcpServers: servers }));
+    if (deny.length) put('cli.json', (cur) => ({ ...cur, permissions: { ...(cur.permissions ?? {}), deny: [...new Set([...(cur.permissions?.deny ?? []), ...deny])] } }));
+  } catch (error) { PREPARED.delete(key); throw error; }
   let done = false;
   return () => {
     if (done) return; done = true;
     for (const { file, before } of saved) { try { if (before) fs.writeFileSync(file, before); else fs.rmSync(file, { force: true }); } catch { /* best effort */ } }
+    for (const file of secrets) { try { fs.rmSync(file, { force: true }); } catch { /* best effort */ } }
     if (!hadDir) { try { fs.rmdirSync(dir); } catch { /* not empty: Cursor left something of its own */ } }
+    PREPARED.delete(key);
   };
 }
 
@@ -168,7 +201,7 @@ export function createLive(o) {
     // run (--approve-mcps), and the guard as deny rules; both only for this turn. A command left running in the background
     // (a dev server) no longer keeps the CLI waiting for ever after its answer (--background-shell-timeout).
     let restore = () => {};
-    try { restore = prepareCursorFolder(o.cwd, { mcpServers: o.mcpServers ?? {}, deny: cursorRules(permission, o.internalDir) }); }
+    try { restore = prepareCursorFolder(o.cwd, { mcpServers: o.mcpServers ?? {}, deny: cursorRules(permission, o.internalDir), secretDir: o.secretDir }); }
     catch (error) { log(`preparar .cursor: ${error.message}`); }
     current.promise.finally(() => restore());
     const args = [...o.exe.pre, '-p', '--output-format', 'stream-json', '--stream-partial-output', '--trust', '--workspace', o.cwd, '--approve-mcps', '--background-shell-timeout', '60'];

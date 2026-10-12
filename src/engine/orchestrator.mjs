@@ -223,7 +223,10 @@ export class Orchestrator {
     if (item.attempts >= MAX) {
       this.keep(item, false);
       const lines = String(item.text).split('\n').filter((l) => /^- #\d+/.test(l)).join('\n');
-      this.board.addChat('orb', tr('msg.orch.noticeFallback', { name: assistantName(), lines: lines || '—' }), item.meta ?? null);
+      // A report: its tasks and results, with the OK buttons. Any other notice (an agent's message, a blocked task): what
+      // it said, so it is not lost either.
+      if (lines) this.board.addChat('orb', tr('msg.orch.noticeFallback', { name: assistantName(), lines }), item.meta ?? null);
+      else this.board.addChat('system', tr('msg.orch.noticeFallbackOther', { name: assistantName(), text: String(item.text).replace(/^AVISO DEL SISTEMA[^:]*:\s*/, '').slice(0, 1200) }));
       return;
     }
     this.keep(item, true);

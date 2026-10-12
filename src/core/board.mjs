@@ -417,7 +417,15 @@ export class Board {
   depsDone(task) { return task.depends_on.every((dep) => { const d = this.task(dep); return d?.status === 'done' && d.pid == null && !this.setting(`integrate:${d.id}`); }); }
   // 3.1: a blocked dependency stops its dependents too (until someone unblocks it): they are told, and they no longer hold
   // back the report of the request, which would otherwise never come.
-  failedDeps(task) { return task.depends_on.filter((dep) => ['failed', 'cancelled', 'blocked'].includes(this.task(dep)?.status)); }
+  // Also one whose work could not be joined into the folder because the task joining it by hand did not finish.
+  failedDeps(task) {
+    return task.depends_on.filter((dep) => {
+      const d = this.task(dep); if (!d) return false;
+      if (['failed', 'cancelled', 'blocked'].includes(d.status)) return true;
+      const by = this.settingJson(`integrate:${d.id}`)?.by;
+      return Boolean(by && ['failed', 'cancelled', 'blocked'].includes(this.task(by)?.status));
+    });
+  }
   warnBlockedByDeps() {
     for (const task of this.all("SELECT * FROM tasks WHERE status IN ('queued', 'awaiting_approval')").map(parse)) {
       for (const dep of this.failedDeps(task)) {
@@ -425,7 +433,7 @@ export class Board {
         if (this.setting(key)) continue;
         this.setting(key, '1');
         const st = this.task(dep).status;
-        this.addChat('system', tr(st === 'failed' ? 'msg.board.depFailed' : st === 'blocked' ? 'msg.board.depBlocked' : 'msg.board.depCancelled', { id: task.id, title: task.title, dep }));
+        this.addChat('system', tr(st === 'failed' ? 'msg.board.depFailed' : st === 'blocked' || st === 'done' ? 'msg.board.depBlocked' : 'msg.board.depCancelled', { id: task.id, title: task.title, dep }));
       }
     }
   }
