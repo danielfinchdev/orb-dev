@@ -15,9 +15,9 @@ Novedades de cada versión: [`docs/NOVEDADES.md`](docs/NOVEDADES.md).
 
 Desde [**Releases → última versión**](https://github.com/danielfinchdev/orb-dev/releases/latest):
 
-- **`Orb-3.1.0-instalador.exe`** (recomendado): la app completa. Se instala para tu usuario, sin permisos de
+- **`Orb-3.2.0-instalador.exe`** (recomendado): la app completa. Se instala para tu usuario, sin permisos de
   administrador, y se actualiza sola.
-- **`Orb-3.1.0-light-portable.exe`**: **Orb Light**, lo esencial sin instalar nada (sin minijuegos, God mode, Monitoreo
+- **`Orb-3.2.0-light-portable.exe`**: **Orb Light**, lo esencial sin instalar nada (sin minijuegos, God mode, Monitoreo
   del equipo ni temas). Avisa de las versiones nuevas.
 
 Windows 10 y 11. Al ser una app sin firmar, SmartScreen avisa la primera vez: «Más información» → «Ejecutar de todas
@@ -50,7 +50,7 @@ lo indica, pausa Cursor durante un día y, si la tarea era para «cualquier agen
 
 ## Empezar
 
-1. Abre Orb desde el menú Inicio (o `Orb-3.1.0-light-portable.exe`, o `npm start` si la usas desde el código).
+1. Abre Orb desde el menú Inicio (o `Orb-3.2.0-light-portable.exe`, o `npm start` si la usas desde el código).
 2. Elige su nombre, cómo te llama y dónde crear su carpeta. La carpeta se llama como el asistente: con `D:\` y el nombre
    «Nova» se crea `D:\Nova`; si dejas el nombre por defecto, `D:\Orb`.
 3. En **Agentes**, comprueba qué agentes encuentra (Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Qwen Code, Copilot) y
@@ -74,9 +74,9 @@ D:\Orb\                   (siempre <carpeta elegida>\Orb, igual para todos)
 
 ## Lo principal
 
-- **Un chat para dirigirlo todo.** Con el Orquestador activado, Orb·e planifica, reparte y supervisa; desactivado, trabaja
-  directamente en el proyecto (nunca hace push ni publica sin ti). «Nueva tarea» te permite repartir tú el trabajo, con
-  el modelo que elijas para cada tarea y varias a la vez.
+- **Conversaciones para dirigirlo todo.** Con el Orquestador activado, Orb·e planifica, reparte y supervisa, en varias
+  conversaciones a la vez, cada una con su proyecto y su título. Desactivado, hablas directamente con el agente que
+  elijas, en tantas conversaciones como quieras. Nunca hace push ni publica sin ti.
 - **El modelo justo para cada tarea.** Orb elige un modelo rápido para lo sencillo y el más capaz solo cuando hace falta,
   según el nivel de gasto que fijes.
 - **Tareas con control.** Lo delicado (publicar, borrar, credenciales, pagos, razonamiento alto) espera tu aprobación.
@@ -103,7 +103,7 @@ npm test             # pruebas del motor (agentes falsos, sin cuentas)
 npm run test:app     # la app entera con Electron (en Linux: xvfb-run -a npm run test:app)
 npm run test:movil   # la web app del móvil a tamaño de teléfono
 ORB_E2E_EXE=dist/win-unpacked/Orb.exe node test/smoke.e2e.mjs   # prueba la app ya empaquetada
-npm run dist         # Orb-3.1.0-instalador.exe y Orb-3.1.0-light-portable.exe (en Windows)
+npm run dist         # Orb-3.2.0-instalador.exe y Orb-3.2.0-light-portable.exe (en Windows)
 npm run icon         # vuelve a sacar el icono del art work (docs/diseno/art work); luego npm run icon:ico
 ```
 

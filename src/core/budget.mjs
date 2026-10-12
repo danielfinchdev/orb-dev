@@ -20,7 +20,8 @@ const agentOf = (id) => findAccount(id)?.agent ?? id;
 // ChatGPT Pro takes much more work before its real usage is known; a free or Go plan, less and no heavy models.
 const PLAN_FACTOR = {
   claude: { free: 0.5, pro: 1, max5: 4, max20: 12, team: 2, enterprise: 4 },
-  codex: { free: 0.5, go: 0.75, plus: 1, edu: 1, team: 1.5, business: 1.5, pro: 5, enterprise: 3 },
+  // 3.2: Pro Lite (ChatGPT's smaller Pro), between Plus and Pro.
+  codex: { free: 0.5, go: 0.75, plus: 1, edu: 1, team: 1.5, business: 1.5, prolite: 2.5, pro: 5, enterprise: 3 },
   cursor: { free: 0.5, pro: 1, business: 1.5, proplus: 2, ultra: 6 }
 };
 const NO_HEAVY = new Set(['free', 'go']);

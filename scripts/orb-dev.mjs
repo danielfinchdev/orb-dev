@@ -36,7 +36,7 @@ try {
     console.log('TAREAS'); for (const t of s.tasks) console.log(`  ${taskLine(t)}${t.sensitivity?.length ? ` [${t.sensitivity.join(',')}]` : ''}`);
     console.log('EN MARCHA'); for (const l of s.live ?? []) console.log(`  #${l.id} ${l.agent} · ${Math.round((Date.now() - l.startedAt) / 60000)} min · ${l.steps} pasos · ${one(l.last, 120)}${l.waiting ? ' · ESPERA PERMISO' : ''}`);
     console.log('PERMISOS PENDIENTES'); for (const a of s.approvals) console.log(`  tarea #${a.task} · ${one(a.title, 200)} (${one(a.reason, 80)})`);
-    console.log('CHAT'); for (const m of s.chat.slice(-10)) console.log(`  [${m.id}] ${m.role}${m.meta?.kind ? `/${m.meta.kind}` : ''}: ${one(m.body, 300)}`);
+    console.log('CHAT'); for (const m of s.chat.slice(-10)) console.log(`  [${m.id}${m.conversation_id ? ` c${m.conversation_id}` : ''}] ${m.role}${m.meta?.kind ? `/${m.meta.kind}` : ''}: ${one(m.body, 300)}`);
   } else if (cmd === 'vigilar') {
     // Changes of the tasks are reported as status lines (compared with the last snapshot), the rest as they come.
     let last = new Map((await snapshot()).tasks.map((t) => [t.id, taskLine(t)]));
@@ -59,14 +59,17 @@ try {
         const event = block.match(/^event: (.+)$/m)?.[1]; const data = block.match(/^data: (.*)$/m)?.[1];
         if (!event) continue;
         let p = null; try { p = JSON.parse(data); } catch { /* none */ }
-        if (event === 'chat:new') console.log(`${hhmm()} CHAT ${p?.role}${p?.meta?.kind ? `/${p.meta.kind}` : ''}: ${one(p?.body, 400)}`);
+        if (event === 'chat:new') console.log(`${hhmm()} CHAT${p?.conversation ? ` c${p.conversation}` : ''} ${p?.role}${p?.meta?.kind ? `/${p.meta.kind}` : ''}: ${one(p?.body, 400)}`);
         else if (event === 'notice') console.log(`${hhmm()} AVISO ${p?.tone}: ${one(p?.body, 300)}`);
         else if (['board:changed', 'approval:changed', 'session:update'].includes(event)) soon();
       }
     }
     console.log(`${hhmm()} desconectado (Orb.dev se cerró)`);
   } else if (cmd === 'enviar') {
-    await call('chat.send', { text: args.join(' ') }); console.log('enviado');
+    // 3.2: «enviar c3 texto» writes in conversation 3; without it, a new conversation starts.
+    const conv = /^c(\d+)$/.exec(args[0] ?? '');
+    const r = await call('chat.send', { text: (conv ? args.slice(1) : args).join(' '), ...(conv ? { conversation: Number(conv[1]) } : {}) });
+    console.log(`enviado (conversación c${r.conversation})`);
   } else if (cmd === 'responder') {
     await call('chat.answer', { id: Number(args[0]), choices: [args.slice(1).join(' ')] }); console.log('respondido');
   } else if (cmd === 'aprobar' || cmd === 'rechazar') {

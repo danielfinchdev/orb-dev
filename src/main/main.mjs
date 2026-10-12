@@ -191,7 +191,7 @@ function onEngineEvent(event, payload) {
   if (event === 'chat:new' && !win.isFocused() && Notification.isSupported()) {
     const name = config()?.assistantName ?? PRODUCT.name;
     const n = new Notification({ icon: path.join(SRC, '..', 'build', 'icon.png'), title: payload.role === 'orb' ? name : T('sys.main.notice', { name }), body: String(payload.body ?? '').slice(0, 240), silent: false });
-    n.on('click', () => { win.show(); win.focus(); win.webContents.send('engine:event', 'ui:navigate', { view: 'chat' }); });
+    n.on('click', () => { win.show(); win.focus(); win.webContents.send('engine:event', 'ui:navigate', payload.conversation ? { view: 'chat', id: payload.conversation } : { view: 'chat' }); }); // 3.2: its conversation
     n.show();
   }
 }

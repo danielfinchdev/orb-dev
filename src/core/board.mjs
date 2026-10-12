@@ -157,6 +157,8 @@ export class Board {
   setActiveProject(name, actor) {
     if (!name) { this.setting('active_project', ''); this.event(null, actor, 'project.active', 'ninguno'); this.changed('projects'); return null; }
     const project = this.project(name); if (!project) throw new Error(tr('sys.board.unknownProject', { name }));
+    // 3.2: the same folder again (the assistant sets it on each request) says nothing: the notice came out again and again.
+    if (this.setting('active_project') === project.name) return project;
     this.setting('active_project', project.name);
     this.event(null, actor, 'project.active', `${project.name} -> ${project.path}`);
     this.notice(tr('msg.board.activeFolder', { name: project.name, path: project.path }), 'info');
@@ -195,11 +197,18 @@ export class Board {
 
   // mode: "carpeta" (default: the project folder, in turn with the other writing tasks) or "aislada" (own branch and copy).
   // readonly: the task only reads (research, review): it may run at the same time as others in the same folder.
-  createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null, level = null, fixedBrief = false, internal = false }, actor) {
+  // 3.2: conversation_id: the conversation that asked for it (its report goes back there); a subtask, a review or a join
+  // task belongs to the one of the task it comes from.
+  createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null, level = null, fixedBrief = false, internal = false, conversation_id = null }, actor) {
     if (!MODES.includes(mode)) throw new Error(tr('sys.board.badMode'));
     const proj = this.project(project);
     if (!proj) throw new Error(tr('sys.board.unknownProject', { name: project }));
-    const active = this.activeProject();
+    const convId = (conversation_id ? this.conversation(conversation_id)?.id : null) ?? (parent_id ? this.conversationOfTask(parent_id) : review_of ? this.conversationOfTask(review_of) : null);
+    // A subtask or a review is checked against the project of its own conversation, not the folder another one set.
+    const conversation = convId ? this.conversation(convId) : null;
+    // The folder the work must stay in: the conversation's project (3.2: several conversations work at once, each in its
+    // own), else the working folder of the app.
+    const active = conversation ? (conversation.project ? this.project(conversation.project) : null) : this.activeProject();
     // 2.7: the projects of a multiplatform group work together: a task may go to a sister of the active project.
     // 3.1: internal: a task the engine itself needs in that project (joining a copy), whatever project is active now.
     if (!internal && active && proj.name !== active.name && actor !== 'usuario' && !(active.grupo && proj.grupo === active.grupo)) throw new Error(tr('sys.board.otherFolder', { name: active.name, path: active.path, user: userName() }));
@@ -236,8 +245,10 @@ export class Board {
       // - only tasks the assistant writes, never the engine's own (whose text can carry an agent's words).
       if (actor === 'orb' && !internal && found.includes('destructive')) {
         // (Since the answer before the last one: the request, the plan the assistant proposed and the user's «sí».)
-        const lastAnswer = this.one("SELECT id AS n FROM chat WHERE role = 'orb' ORDER BY id DESC LIMIT 1 OFFSET 1")?.n ?? 0;
-        const asked = detectSensitivity(this.all("SELECT body FROM chat WHERE role = 'usuario' AND id > ? ORDER BY id DESC LIMIT 5", lastAnswer).map((r) => r.body).join('\n'));
+        // 3.2: in the conversation that asks for the task (with several at once, another one's words do not count).
+        const inConv = convId ? ' AND conversation_id = ?' : ' AND conversation_id IS NULL';
+        const lastAnswer = this.one(`SELECT id AS n FROM chat WHERE role = 'orb'${inConv} ORDER BY id DESC LIMIT 1 OFFSET 1`, ...(convId ? [convId] : []))?.n ?? 0;
+        const asked = detectSensitivity(this.all(`SELECT body FROM chat WHERE role = 'usuario' AND id > ?${inConv} ORDER BY id DESC LIMIT 5`, lastAnswer, ...(convId ? [convId] : [])).map((r) => r.body).join('\n'));
         if (asked.includes('destructive')) { found = found.filter((tag) => tag !== 'destructive'); askedNote = tr('msg.board.askedByUser', { words: 'destructive' }); }
       }
       tags.push(...found); if (found.length) reasons.push(tr('msg.board.reasonKeywords', { words: found.join(', ') }));
@@ -253,13 +264,13 @@ export class Board {
     if (actor !== 'orb' && actor !== 'usuario' && !trusted) { tags.push('creada_por_agente'); reasons.push(tr('msg.board.reasonByAgent', { actor, name: assistantName() })); }
     const status = tags.length ? 'awaiting_approval' : 'queued';
     const at = now();
-    const { lastInsertRowid } = this.run(`INSERT INTO tasks (project, title, description, agent, account, model, reasoning, fast, launch, priority, depends_on, sensitivity, status, created_by, project_path, created_at, updated_at, mode, readonly, parent_id, review_of, schedule_id, level)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, proj.name, title, String(description), agent, account || null, model, reasoning, Number(fast), launch, Math.min(Math.max(Number(priority) || 2, 1), 3),
-      JSON.stringify(depends_on.map(Number)), JSON.stringify([...new Set(tags)]), status, String(actor), proj.path, at, at, mode, Number(Boolean(readonly)), parent_id ? Number(parent_id) : null, review_of ? Number(review_of) : null, schedule_id ? Number(schedule_id) : null, ['simple', 'normal', 'complejo'].includes(level) ? level : null);
+    const { lastInsertRowid } = this.run(`INSERT INTO tasks (project, title, description, agent, account, model, reasoning, fast, launch, priority, depends_on, sensitivity, status, created_by, project_path, created_at, updated_at, mode, readonly, parent_id, review_of, schedule_id, level, conversation_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, proj.name, title, String(description), agent, account || null, model, reasoning, Number(fast), launch, Math.min(Math.max(Number(priority) || 2, 1), 3),
+      JSON.stringify(depends_on.map(Number)), JSON.stringify([...new Set(tags)]), status, String(actor), proj.path, at, at, mode, Number(Boolean(readonly)), parent_id ? Number(parent_id) : null, review_of ? Number(review_of) : null, schedule_id ? Number(schedule_id) : null, ['simple', 'normal', 'complejo'].includes(level) ? level : null, convId ?? null);
     const id = Number(lastInsertRowid);
     this.event(id, actor, 'task.created', status);
     if (askedNote) this.event(id, 'orb', 'note', askedNote);
-    if (status === 'awaiting_approval') { const tagList = [...new Set(tags)].join(', '); this.addChat('system', reasons.length ? tr('msg.board.needsApprovalWhy', { id, title, tags: tagList, reasons: reasons.join('; ') }) : tr('msg.board.needsApproval', { id, title, tags: tagList }), { kind: 'attention', task: id }); }
+    if (status === 'awaiting_approval') { const tagList = [...new Set(tags)].join(', '); this.addChat('system', reasons.length ? tr('msg.board.needsApprovalWhy', { id, title, tags: tagList, reasons: reasons.join('; ') }) : tr('msg.board.needsApproval', { id, title, tags: tagList }), { kind: 'attention', task: id }, convId ?? null); }
     // Even a task the user typed waits for an explicit "Aprobar" when it looks sensitive: one more click, with the reasons on screen.
     this.changed('tasks');
     return this.task(id);
@@ -292,7 +303,7 @@ export class Board {
       if (!moved && this.approvalOk(task)) continue;
       const tags = moved && !task.sensitivity.includes('ruta_cambiada') ? [...task.sensitivity, 'ruta_cambiada'] : task.sensitivity;
       this.patch(task.id, { status: 'awaiting_approval', sensitivity: JSON.stringify(tags), ...this.clearApproval() }, 'orb', 'approval.required', 'queued');
-      this.addChat('system', tr(moved ? 'msg.board.backToApprovalMoved' : 'msg.board.backToApprovalStale', { id: task.id, title: task.title }));
+      this.addChat('system', tr(moved ? 'msg.board.backToApprovalMoved' : 'msg.board.backToApprovalStale', { id: task.id, title: task.title }), { task: task.id });
       back.push(task.id);
     }
     return back;
@@ -449,7 +460,7 @@ export class Board {
         if (this.setting(key)) continue;
         this.setting(key, '1');
         const st = this.task(dep).status;
-        this.addChat('system', tr(st === 'failed' ? 'msg.board.depFailed' : st === 'blocked' || st === 'done' ? 'msg.board.depBlocked' : 'msg.board.depCancelled', { id: task.id, title: task.title, dep }));
+        this.addChat('system', tr(st === 'failed' ? 'msg.board.depFailed' : st === 'blocked' || st === 'done' ? 'msg.board.depBlocked' : 'msg.board.depCancelled', { id: task.id, title: task.title, dep }), { task: task.id });
       }
     }
   }
@@ -472,7 +483,7 @@ export class Board {
     if (!body) throw new Error(tr('sys.board.bodyRequired'));
     if (![...AGENTS, 'all', 'usuario', 'orb'].includes(to)) throw new Error(tr('sys.board.badRecipient', { to, list: AGENTS.join(', ') }));
     body = String(body).slice(0, 8000);
-    if (to === 'usuario') this.addChat('system', `💬 ${from}${task_id ? tr('msg.board.taskRef', { id: task_id }) : ''}: ${body}`);
+    if (to === 'usuario') this.addChat('system', `💬 ${from}${task_id ? tr('msg.board.taskRef', { id: task_id }) : ''}: ${body}`, task_id ? { task: Number(task_id) } : null);
     const { lastInsertRowid } = this.run('INSERT INTO messages (from_agent, to_agent, task_id, body, at) VALUES (?, ?, ?, ?, ?)', String(from), to, task_id ?? null, body, now());
     this.changed('messages');
     return { id: Number(lastInsertRowid), from, to, task_id: task_id ?? null };
@@ -485,12 +496,74 @@ export class Board {
     return rows;
   }
 
+  // ---- 3.2: the conversations with the assistant (each with its title, project, brain and its agent's conversation id)
+  conversation(id) {
+    const r = id == null ? null : this.one('SELECT * FROM conversations WHERE id = ?', Number(id));
+    if (!r) return null;
+    let context = null; try { context = r.context ? JSON.parse(r.context) : null; } catch { /* none */ }
+    return { ...r, titled: Boolean(r.titled), context };
+  }
+  conversations({ limit = 300 } = {}) {
+    return this.all('SELECT * FROM conversations ORDER BY updated_at DESC, id DESC LIMIT ?', Math.min(Math.max(Number(limit) || 300, 1), 2000)).map((r) => this.conversation(r.id) ?? r);
+  }
+  createConversation({ title = '', project = null, agent = 'claude', account = null, model = null, reasoning = 'medium' } = {}) {
+    if (project && !this.project(project)) throw new Error(tr('sys.board.unknownProject', { name: project }));
+    const at = now();
+    const { lastInsertRowid } = this.run(`INSERT INTO conversations (title, titled, project, agent, account, model, reasoning, created_at, updated_at) VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?)`,
+      oneLine(title || tr('msg.board.newConversation'), 80), project ? this.project(project).name : null, agent, account || null, model || null, reasoning || 'medium', at, at);
+    this.changed('conversations');
+    return this.conversation(Number(lastInsertRowid));
+  }
+  updateConversation(id, fields) {
+    const allowed = ['title', 'titled', 'project', 'agent', 'account', 'model', 'reasoning', 'session_id', 'turns', 'context', 'status', 'done_at', 'updated_at'];
+    const keys = Object.keys(fields).filter((k) => allowed.includes(k));
+    if (!keys.length) return this.conversation(id);
+    const value = (k) => (k === 'context' ? (fields[k] == null ? null : JSON.stringify(fields[k])) : k === 'titled' ? Number(Boolean(fields[k])) : k === 'title' ? oneLine(String(fields[k]), 80) : fields[k] ?? null);
+    this.run(`UPDATE conversations SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`, ...keys.map(value), Number(id));
+    this.changed('conversations');
+    return this.conversation(id);
+  }
+  // Done (the user gave the OK and nothing of it is still open, or put away by hand) or open again.
+  setConversationDone(id, done = true) {
+    const c = this.conversation(id); if (!c) return null;
+    if ((c.status === 'done') === Boolean(done)) return c;
+    // Opened again counts as activity: the day-long quiet before it would complete it again at once.
+    return this.updateConversation(c.id, { status: done ? 'done' : 'open', done_at: done ? now() : null, ...(done ? {} : { updated_at: now() }) });
+  }
+  // The project of a conversation; 3.2: also the default for the next new conversation (the global working folder).
+  setConversationProject(id, name, actor) {
+    const c = this.conversation(id); if (!c) throw new Error(tr('msg.board.noConversation'));
+    const project = name ? this.project(name) : null;
+    if (name && !project) throw new Error(tr('sys.board.unknownProject', { name }));
+    if ((c.project ?? null) !== (project?.name ?? null)) this.updateConversation(c.id, { project: project?.name ?? null });
+    this.setActiveProject(project?.name ?? '', actor);
+    return project;
+  }
+  // The conversation a task belongs to: its own, or the one of the task it comes from (a subtask, a review, a join).
+  conversationOfTask(taskId) {
+    let task = this.task(taskId);
+    for (let i = 0; task && i < 8; i++) {
+      if (task.conversation_id) return task.conversation_id;
+      const from = task.parent_id ?? task.review_of ?? null;
+      task = from ? this.task(from) : null;
+    }
+    return null;
+  }
+  // The tasks of a conversation that are not over yet (they keep it open).
+  openTasksOf(conversationId) {
+    return this.one("SELECT COUNT(*) AS n FROM tasks WHERE conversation_id = ? AND status IN ('queued', 'awaiting_approval', 'running', 'limited')", Number(conversationId)).n;
+  }
+
   // ---- the assistant's chat and the activity feed
   // meta: extra data of a chat line, e.g. { kind: 'report', tasks: [ids] } for the assistant's report that waits for the user's OK.
-  addChat(role, body, meta = null) {
-    const { lastInsertRowid } = this.run('INSERT INTO chat (role, body, meta, at) VALUES (?, ?, ?, ?)', role, String(body), meta ? JSON.stringify(meta) : null, now());
+  // 3.2: conversation: the one the line belongs to; when not given, the one of the task the line is about (meta.task).
+  addChat(role, body, meta = null, conversation = undefined) {
+    const conv = conversation !== undefined ? conversation : meta?.task ? this.conversationOfTask(meta.task) : null;
+    const at = now();
+    const { lastInsertRowid } = this.run('INSERT INTO chat (role, body, meta, at, conversation_id) VALUES (?, ?, ?, ?, ?)', role, String(body), meta ? JSON.stringify(meta) : null, at, conv ?? null);
+    if (conv && role !== 'notice') this.run('UPDATE conversations SET updated_at = ? WHERE id = ?', at, Number(conv));
     this.changed('chat');
-    return { id: Number(lastInsertRowid) };
+    return { id: Number(lastInsertRowid), conversation: conv ?? null };
   }
   // 2.7: a notice that only informs (the working folder changed, the brain in use, a schedule created…): the window shows
   // it as a passing notification instead of a grey line in the chat. tone: info | success | warning. Kept in the table
@@ -498,9 +571,11 @@ export class Board {
   notice(body, tone = 'info') { return this.addChat('notice', body, { tone }); }
   // Changes the extra data of a chat message (e.g. an approval card that was answered).
   patchChatMeta(id, meta) { this.run('UPDATE chat SET meta = ? WHERE id = ?', JSON.stringify(meta), Number(id)); this.changed('chat'); }
-  // The chat lines (not the notices), oldest first: the last `limit`, or only those after / before a line id.
-  chat(limit = 200, { after = 0, before = null } = {}) {
-    return this.all(`SELECT * FROM (SELECT * FROM chat WHERE role != 'notice' AND id > ?${before ? ' AND id < ?' : ''} ORDER BY id DESC LIMIT ?) ORDER BY id`, ...[Number(after) || 0, ...(before ? [Number(before)] : []), limit])
+  // The chat lines of a conversation (not the notices), oldest first: the last `limit`, or only those before a line id.
+  // conversation null: the lines of no conversation (about tasks made outside one: by hand, by a schedule).
+  chat(conversation, limit = 200, { before = null } = {}) {
+    const where = conversation == null ? 'conversation_id IS NULL' : 'conversation_id = ?';
+    return this.all(`SELECT * FROM (SELECT * FROM chat WHERE role != 'notice' AND ${where}${before ? ' AND id < ?' : ''} ORDER BY id DESC LIMIT ?) ORDER BY id`, ...(conversation == null ? [] : [Number(conversation)]), ...(before ? [Number(before)] : []), limit)
       .map((r) => { let meta = null; try { meta = r.meta ? JSON.parse(r.meta) : null; } catch { /* ignore */ } return { ...r, meta }; });
   }
   // One chat line by its id (any conversation), with its extra data.
@@ -509,21 +584,6 @@ export class Board {
     let meta = null; try { meta = r.meta ? JSON.parse(r.meta) : null; } catch { /* ignore */ }
     return { ...r, meta };
   }
-  // 3.0: where the current conversation with the assistant starts: the id of the last «Nueva conversación» line (a notice
-  // since 2.7, a system line before), or 0.
-  // Kept up to date by looking only at the lines added since the last look (lines never change after being written).
-  chatStart() {
-    const c = this.startCache ?? (this.startCache = { id: 0, seen: 0 });
-    const top = this.one('SELECT MAX(id) AS id FROM chat')?.id ?? 0;
-    if (top < c.seen) { c.id = 0; c.seen = 0; } // a database put back from a copy: look again from the start
-    if (top > c.seen) {
-      const found = this.one("SELECT MAX(id) AS id FROM chat WHERE id > ? AND role IN ('notice', 'system') AND (body LIKE 'Nueva conversación%' OR body LIKE 'New conversation%')", c.seen)?.id;
-      if (found) c.id = found;
-      c.seen = top;
-    }
-    return c.id;
-  }
-
   // ---- the end of the loop: the user gives the OK to finished work
   isAccepted(taskId) { return this.setting(`accepted:${Number(taskId)}`) === '1'; }
   accept(taskIds, actor) {
@@ -542,10 +602,12 @@ export class Board {
     return this.all('SELECT e.*, t.title FROM events e LEFT JOIN tasks t ON t.id = e.task_id ORDER BY e.id DESC LIMIT ?', limit);
   }
 
-  summary(agent) {
+  // 3.2: conversation: the coordinator's, whose project is the one it works in (others may have set the app's folder).
+  summary(agent, conversation = null) {
     const counts = Object.fromEntries(this.all('SELECT status, COUNT(*) AS n FROM tasks GROUP BY status').map((r) => [r.status, r.n]));
     const active = this.all("SELECT * FROM tasks WHERE status NOT IN ('done', 'cancelled') ORDER BY priority, id LIMIT 50").map(parse);
-    const project = this.activeProject();
+    const conv = conversation ? this.conversation(conversation) : null;
+    const project = conv ? (conv.project ? this.project(conv.project) : null) : this.activeProject();
     return {
       paused: this.setting('paused') === '1',
       activeProject: project ? `${project.name} — ${project.path}` : `ninguno (pregunta a ${userName()} en qué proyecto se trabaja)`,

@@ -1,7 +1,7 @@
 // Orb 3.0 in the real window (fake agents): no «Orbe» item, the robot at the top goes back to the conversation, «Nuevo
-// chat» starts a clean one and the previous one is still there, «Iniciar test» on the first opening of the day, «Nueva
-// tarea» with «Orquestador» off (a task per message, several at once), Security Review in Proyectos and the corner robot
-// out of sight until the pointer comes near. Run: npm run build && node test/v3.e2e.mjs (screenshots in test-results/).
+// chat» starts a clean one and the previous one is still there (3.2: in the menu), «Iniciar test» on the first opening of
+// the day, direct conversations with an agent with «Orquestador» off (several at once), Security Review in Proyectos and
+// the corner robot out of sight until the pointer comes near. Run: npm run build && node test/v3.e2e.mjs (screenshots in test-results/).
 import { _electron as electron } from 'playwright-core';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -43,46 +43,47 @@ try {
   step = 'conversación y Nuevo chat';
   await win.fill('[data-testid=chat-input]', 'Hola, ¿qué tal?');
   await win.keyboard.press('Enter');
-  await until(async () => (await call('chat.list')).some((m) => m.role === 'orb'), 'respuesta del asistente');
+  // 3.2: the first message makes a conversation of its own, and the screen is that conversation.
+  const first = await until(async () => (await call('conversations.list'))[0], 'conversación creada');
+  await until(async () => (await call('chat.list', { conversation: first.id })).some((m) => m.role === 'orb'), 'respuesta del asistente');
+  await win.locator('[data-testid=bar-title]').waitFor();
   assert.equal(await count('[data-testid=chat-test]'), 0, 'tras hablar con Orb, el botón de test se va');
   await win.click('[data-testid=nav-tasks]');
   await win.click('[data-testid=sidebar-home]');
   await until(async () => (await win.locator('text=Hola, ¿qué tal?').count()) > 0, 'el robot de arriba vuelve a la misma conversación');
   await win.click('[data-testid=new-conversation]');
-  await until(async () => (await call('chat.list')).length === 0, 'Nuevo chat empieza una conversación limpia');
   await win.locator('[data-testid=chat-greeting]').waitFor();
-  assert.equal((await call('app.state')).activeProject, null, 'sin carpeta seleccionada');
-  await win.locator('[data-testid=chat-older]').waitFor();
-  await win.click('[data-testid=chat-older]');
+  assert.equal(await win.locator('[data-testid=chat-lines] >> text=Hola, ¿qué tal?').count(), 0, 'Nuevo chat empieza una conversación limpia');
+  assert.equal(await count('[data-testid=chat-older]'), 0, 'sin «Ver conversación anterior»: cada una está en el menú');
+  await win.click(`[data-testid=item-c${first.id}]`);
   await win.locator('text=Hola, ¿qué tal?').waitFor();
-  await shot('02-conversacion-anterior');
+  await shot('02-conversaciones');
 
-  step = 'Nueva tarea';
-  await call('chat.settings', { orchestrate: false });
-  await win.evaluate(() => window.orb.call('app.state')); // the sidebar follows the next refresh
-  await win.click('[data-testid=nav-projects]'); await win.click('[data-testid=new-conversation]');
-  await win.locator('[data-testid=new-task]').waitFor({ timeout: 10000 });
-  await shot('03-botones-divididos');
-  await win.click('[data-testid=new-task]');
-  await win.locator('[data-testid=new-task-input]').waitFor();
-  await win.fill('[data-testid=new-task-input]', 'Revisa el README');
-  await win.keyboard.press('Enter'); // no project yet: asks for one
-  await win.waitForTimeout(400);
-  assert.equal((await call('tasks.list')).length, 0, 'sin proyecto no se crea la tarea');
+  step = 'conversaciones directas';
+  // 3.2: with «Orquestador» off the user talks directly to the agent chosen, in as many conversations at once as wanted.
+  await win.click('[data-testid=new-conversation]');
+  await win.click('[data-testid=orchestrator-check]');
+  await win.getByRole('button', { name: 'Hablar directamente' }).click();
+  await until(async () => (await call('app.state')).config.orchestrator.orchestrate === false, 'Orquestador desactivado');
   await call('projects.setActive', { name: 'tienda' });
-  await win.waitForTimeout(400);
-  await win.fill('[data-testid=new-task-input]', 'Revisa el README');
-  await win.keyboard.press('Enter');
-  await win.fill('[data-testid=new-task-input]', 'Añade una página de contacto');
-  await win.keyboard.press('Enter');
-  await until(async () => (await call('tasks.list')).length === 2, 'dos tareas creadas desde Nueva tarea');
-  await until(async () => (await count('[data-testid^=new-task-]')) >= 4, 'las dos tareas en la lista'); // the input, the list and the 2 tasks
-  await shot('04-nueva-tarea');
+  await until(async () => (await win.locator('[data-testid=project-picker]').innerText()).includes('tienda'), 'la carpeta elegida en el cuadro');
+  for (const text of ['Revisa el README', 'Añade una página de contacto']) {
+    await win.click('[data-testid=new-conversation]');
+    await win.fill('[data-testid=chat-input]', text);
+    await win.keyboard.press('Enter');
+    await win.locator('[data-testid=session-input]').waitFor({ timeout: 15000 });
+  }
+  const direct = await until(async () => { const l = (await call('sessions.list')).filter((x) => x.kind === 'chat'); return l.length === 2 && l; }, 'dos conversaciones directas');
+  assert.ok(direct.every((x) => x.project === 'tienda' && x.agent === 'claude'), `en el proyecto y con el agente elegidos: ${JSON.stringify(direct.map((x) => [x.project, x.agent, x.permission]))}`);
+  assert.equal(await count('[data-testid=new-task]'), 0, 'un solo botón: «Nuevo chat»');
+  await win.waitForTimeout(500);
+  await shot('03-conversaciones-directas');
+  await call('chat.settings', { orchestrate: true });
 
   step = 'Tareas sin botón Nueva tarea';
   await win.click('[data-testid=nav-tasks]');
   await win.waitForTimeout(300);
-  assert.equal(await win.getByRole('button', { name: 'Nueva tarea', exact: true }).count(), 1, 'en Tareas no queda otro botón «Nueva tarea» (solo el del menú)');
+  assert.equal(await win.getByRole('button', { name: 'Nueva tarea', exact: true }).count(), 0, 'ya no hay «Nueva tarea»: se habla directamente con el agente');
 
   step = 'Security Review';
   await win.click('[data-testid=nav-projects]');
@@ -104,6 +105,6 @@ try {
   await until(async () => (await win.locator('[data-testid=companion]').getAttribute('data-shown')) === 'true', 'aparece al acercar el ratón');
   await shot('06-robot-esquina');
   assert.deepEqual(errors, [], 'sin errores en la ventana');
-  console.log('✔ Orb 3.0: Nuevo chat, Nueva tarea, Iniciar test, Security Review y robot de la esquina');
+  console.log('✔ Orb 3.0/3.2: conversaciones, conversaciones directas, Iniciar test, Security Review y robot de la esquina');
 } catch (e) { await shot('fallo').catch(() => {}); console.error(`✖ ${step}: ${e.message}`); process.exitCode = 1; }
 finally { await app.close().catch(() => {}); fs.rmSync(tmp, { recursive: true, force: true }); }

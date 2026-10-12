@@ -22,5 +22,11 @@ export default {
   'inbox.waiting': 'Por aprobar',
   'inbox.issues': 'Incidencias',
   'inbox.working': 'En curso',
-  'inbox.settle': 'Marcar como resuelto'
+  'inbox.settle': 'Marcar como resuelto',
+  // 3.2: pie del menú
+  'nav.memories': 'Memorias',
+  'nav.memoriesHint': 'Bitácoras y actividad: lo que Orb recuerda.',
+  'nav.feedback': 'Enviar comentarios',
+  'nav.footerUnfold': 'Mostrar con nombres',
+  'nav.footerFold': 'Solo iconos'
 };

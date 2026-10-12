@@ -12,7 +12,7 @@ cambiar y con qué otras se conecta.
 
 1. [Mapa de la aplicación](#1-mapa-de-la-aplicación)
 2. [Primer arranque y carpeta del asistente](#2-primer-arranque-y-carpeta-del-asistente)
-3. [El chat con el asistente (orquestador y modo libre)](#3-el-chat-con-el-asistente)
+3. [El chat con el asistente (orquestador y conversaciones directas)](#3-el-chat-con-el-asistente)
 4. [Encargos optimizados en tokens](#4-encargos-optimizados-en-tokens)
 5. [El tablero de tareas](#5-el-tablero-de-tareas)
 6. [El planificador: quién hace cada tarea y cuándo](#6-el-planificador)
@@ -42,6 +42,7 @@ cambiar y con qué otras se conecta.
 30. [Pruebas](#30-pruebas)
 31. [Cómo reprogramar una funcionalidad sin romper el resto](#31-cómo-reprogramar-una-funcionalidad)
 32. [El CORE: del pedido al informe (3.1)](#32-el-core)
+33. [Conversaciones (3.2)](#33-conversaciones-32)
 
 ---
 
@@ -126,23 +127,22 @@ En Windows, después ofrece instalar lo que falte (sección 24).
 ## 3. El chat con el asistente
 
 **Qué hace.** Es la pantalla principal. Le cuentas qué quieres y el asistente lo convierte en tareas, las reparte, vigila y
-te informa. Tiene dos modos (casilla «Orquestador»):
+te informa. Cada «Nuevo chat» es una conversación propia (sección 33). La casilla «Orquestador» decide con quién es una
+conversación nueva:
 
-- **Orquestador** (por defecto):
+- **Orquestador** (por defecto): con el asistente, que:
   - solo coordina;
   - puede **leer** el proyecto (Read, Grep, Glob) para escribir mejores encargos;
   - no edita ni ejecuta nada.
-- **Modo libre:**
-  - trabaja directamente en el proyecto de trabajo (edita y ejecuta comandos);
-  - sigue pudiendo crear tareas;
-  - lo arriesgado te lo pregunta con una tarjeta (sección 8).
+- **Sin Orquestador (3.2):** directamente con el agente elegido bajo el cuadro (una sesión directa, sección 4), en el
+  proyecto de trabajo. El usuario reparte el trabajo y puede abrir tantas a la vez como quiera. Sustituye al antiguo
+  «modo libre» del asistente y a «Nueva tarea».
 
 **Archivos.**
 - Interfaz: `src/ui/views/chat.jsx` (incluye el `Composer`, el cuadro de mensaje de toda la app).
 - Motor: `src/engine/orchestrator.mjs`.
   - `persona()`: sus instrucciones de coordinador.
-  - `freePersona()`: las del modo libre.
-  - `Orchestrator`: la sesión viva.
+  - `Orchestrator`: las conversaciones; `Lane`: una conversación con su sesión viva.
 
 **Por dentro (2.3).**
 - El asistente es **una sesión viva de Claude** (Claude Agent SDK con el Claude Code del usuario) que se queda abierta entre
@@ -155,9 +155,10 @@ te informa. Tiene dos modos (casilla «Orquestador»):
   `models:<agente>`), cuáles gastan más (`heavyModels` o familias conocidas) y el uso real de cada cuenta. La interfaz
   (`src/ui/components/brain-picker.jsx`) avisa con un globo si el razonamiento es alto, el modelo es de los caros o la
   cuenta pasa del 75 %.
-- **Nuevo chat** (`src/ui/views/new-chat.jsx`): sin ventana emergente. Con «Orquestador», configura el cerebro, reinicia la
-  conversación del asistente y le envía el mensaje; sin él, crea una conversación directa (`sessions.create`) con el
-  agente, el modelo, el razonamiento, el proyecto activo y los permisos elegidos.
+- **Nuevo chat** (3.2): abre la pantalla de una conversación nueva (ruta `{ view: 'chat' }` sin `id`). El primer mensaje
+  la crea: con «Orquestador», `chat.send` sin `conversation` (devuelve su id y la pantalla pasa a esa conversación); sin
+  él, una sesión directa (`sessions.create` + `sessions.send`) con el agente, el modelo, el razonamiento y el proyecto
+  elegidos.
 - Un diálogo pedido otra vez mientras está abierto no se abre encima (`open()` en `dialogs.jsx`).
 - **Barra del chat (2.6):** sin nombre ni modelo; solo iconos con `BubbleTip` (`overlay.jsx`): pausar o reanudar,
   reiniciar y minijuegos. Las barras de arriba (`.topbar`) se visten con el tema en `themes.css` (decoración en
@@ -791,3 +792,44 @@ permiso sin respuesta agotó el reloj, se asignó un agente no instalado y Curso
 - **Línea de control de desarrollo** (`engine/dev-control.mjs`, `scripts/orb-dev.mjs`): solo en Orb.dev sin empaquetar
   y con `ORB_DEV_CONTROL=1` (`npm run start:control`). Permite vigilar y manejar la app desde la terminal (estado,
   vigilar, aprobar, permitir, enviar, responder). Local, con clave; el Orb instalado nunca la abre.
+
+## 33. Conversaciones (3.2)
+
+**Qué hace.** Cada conversación con el asistente es propia: tiene título, proyecto, cerebro y estado, aparece en el menú
+lateral y se retoma cuando quieras. El asistente puede contestar en varias a la vez, y cada tarea pertenece a la
+conversación que la pidió: su informe vuelve allí.
+
+**Archivos.**
+- Datos: tabla `conversations` (`src/core/db.mjs`); `chat.conversation_id` y `tasks.conversation_id`. Tablero
+  (`src/core/board.mjs`): `createConversation`, `updateConversation`, `setConversationDone`, `setConversationProject`,
+  `conversationOfTask` (la de la tarea o la de la tarea de la que viene: subtarea, revisión, unión) y `openTasksOf`.
+  `addChat(role, body, meta, conversation)` deduce la conversación de `meta.task` cuando no se da.
+- Motor: `src/engine/orchestrator.mjs`. `Orchestrator` lleva una `Lane` por conversación (cola, proceso vivo, texto en
+  directo); hasta `orchestrator.parallel` (3 por defecto) contestan a la vez y las demás esperan su turno.
+- Títulos: `src/core/titles.mjs` (uno rápido sacado del primer mensaje) y `src/engine/titles.mjs` (el modelo más ligero
+  del agente de la conversación escribe uno de 2 a 5 palabras; con los agentes de prueba, no).
+- Iconos de proyecto: `src/engine/project-icons.mjs` (el elegido en Orb, guardado en `.orb/datos/iconos`; si no, el
+  favicon o el icono de app que haya en la carpeta) y `src/ui/components/project-icon.jsx` (sin icono, sus iniciales en un
+  color fijo para ese nombre).
+- Interfaz: `src/ui/components/sidebar.jsx` (buscador con filtro, «Por aprobar», Proyectos, Conversaciones y
+  Completadas, globito de cada conversación), `src/ui/views/chat.jsx` (`ChatView` por `route.id`, `BarTitle` y
+  `BarHeading` en el centro de la barra) y `src/ui/views/session.jsx` (la misma barra en las conversaciones directas).
+
+**Por dentro.**
+- **Contexto:** cada conversación guarda el id de la conversación de su agente (`session_id`), sus turnos y lo lleno de su
+  contexto. Una conversación que se retoma tras más de 6 h empieza de nuevo con el resumen de siempre (bitácoras, proyecto,
+  pizarra) y sus últimos mensajes, sin cargar entera la conversación larga: las bitácoras son la memoria. El proceso de
+  una conversación sin usar se cierra a los 10 minutos y se reanuda al escribir.
+- **Herramientas de Orbe:** su servidor MCP recibe `ORB_CONVERSATION`: sus preguntas van a `pending_questions:<id>`, sus
+  tareas a esa conversación y `orb_set_project` fija el proyecto de esa conversación (y la carpeta de trabajo para las
+  siguientes). Una conversación sin proyecto toma el de su primera tarea.
+- **Informes:** `queueReport` espera a que terminen todas las tareas de la conversación y avisa en ella. Lo que no es de
+  ninguna conversación (tareas anteriores a la 3.2 o de una programada) va a la última conversación de su proyecto o a
+  una nueva. Los avisos pendientes guardan su conversación (`orchestrator_pending`).
+- **Completadas:** una tarea terminada o cancelada pasa sola a «Completadas» (se puede devolver: `sidebar_kept`). Una
+  conversación se completa con el OK de su informe si no le queda nada abierto, o tras un día sin actividad y sin nada
+  pendiente; una directa, tras un día sin actividad. Escribir en una completada la abre.
+- **Buscador:** filtra en la propia ventana por título, proyecto y número de tarea, y `conversations.search` busca
+  también en los mensajes (de las conversaciones con el asistente y de las directas).
+- **Migración:** la primera vez, el chat antiguo se parte por sus «Nueva conversación» en conversaciones (las anteriores,
+  completadas; la última sigue abierta con la sesión viva del asistente) y las tareas del asistente se reparten por fecha.

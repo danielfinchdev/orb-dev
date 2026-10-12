@@ -65,7 +65,7 @@ try {
   if (AGENTS.includes('claude')) {
     const t0 = Date.now();
     await page.click('[data-testid=sidebar-home]');
-    await call('chat.send', { text: 'En el proyecto prueba-real, encarga a cualquier agente crear un archivo saludo.md con una línea que diga "Hola Dani". Es una prueba: tarea mínima, modelo barato.' });
+    const { conversation } = await call('chat.send', { text: 'En el proyecto prueba-real, encarga a cualquier agente crear un archivo saludo.md con una línea que diga "Hola Dani". Es una prueba: tarea mínima, modelo barato.' });
     const task = await until(async () => (await call('tasks.list')).find((t) => t.project === 'prueba-real'), 'tarea creada por el asistente');
     note(`asistente creó tarea #${task.id} «${task.title}» para ${task.agent} (${task.status}) en ${Math.round((Date.now() - t0) / 1000)} s`);
     await shot('chat-tarea-creada');
@@ -73,7 +73,7 @@ try {
     const done = await until(async () => { const t = await call('tasks.get', { id: task.id }); return ['done', 'failed', 'blocked', 'cancelled'].includes(t.status) && t; }, 'tarea terminada', 300000);
     note(`tarea #${done.id}: ${done.status} en ${Math.round((Date.now() - t0) / 1000)} s · ${String(done.result ?? '').slice(0, 300)}`);
     await shot('tarea-terminada');
-    const report = await until(async () => (await call('chat.list')).find((m) => m.role === 'orb' && m.meta?.kind === 'report'), 'informe', 240000).catch((e) => { note(e.message); return null; });
+    const report = await until(async () => (await call('chat.list', { conversation })).find((m) => m.role === 'orb' && m.meta?.kind === 'report'), 'informe', 240000).catch((e) => { note(e.message); return null; });
     if (report) note(`informe: ${String(report.body).slice(0, 400)}`);
     await page.click('[data-testid=sidebar-home]');
     await shot('chat-informe');

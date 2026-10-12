@@ -108,7 +108,9 @@ try {
 
   // ---- the way back: review, report, OK
   step = 'informe y OK';
-  const report = await until(async () => (await call('chat.list')).find((m) => m.role === 'orb' && m.meta?.kind === 'report'), 'informe del asistente', 30000);
+  // 3.2: in the conversation that asked for the task (the screen is that conversation since the first message).
+  assert.ok(task.conversation_id, 'la tarea es de una conversación');
+  const report = await until(async () => (await call('chat.list', { conversation: task.conversation_id })).find((m) => m.role === 'orb' && m.meta?.kind === 'report'), 'informe del asistente', 30000);
   assert.deepEqual(report.meta.tasks, [task.id]);
   await win.waitForSelector('[data-testid=report-actions] >> text=OK');
   await win.waitForTimeout(300);
@@ -189,7 +191,7 @@ try {
 
   // ---- other views
   step = 'otras vistas';
-  for (const [nav, name, wait] of [['nav-projects', '06-proyectos', 'Git y GitHub'], ['nav-agents', '07-agentes', 'Uso de cada cuenta'], ['nav-logs', '08-bitacoras', 'Bitácora general'], ['nav-activity', '09-actividad', 'task.created'], ['nav-tutorials', '08b-tutoriales', 'Preguntas frecuentes']]) {
+  for (const [nav, name, wait] of [['nav-projects', '06-proyectos', 'Git y GitHub'], ['nav-agents', '07-agentes', 'Uso de cada cuenta'], ['nav-memories', '08-bitacoras', 'Bitácora general'], ['memories-activity', '09-actividad', 'task.created'], ['nav-tutorials', '08b-tutoriales', 'Preguntas frecuentes']]) {
     await win.click(`[data-testid=${nav}]`);
     await win.waitForSelector(`text=${wait}`);
     await win.waitForTimeout(400);
@@ -307,29 +309,34 @@ try {
   await win.locator('[data-testid=update-card]').getByRole('button', { name: 'Cerrar' }).click();
   await until(async () => (await win.locator('[data-testid=update-card]').count()) === 0, 'tarjeta cerrada');
 
-  // ---- left menu (2.6): a click on a project picks it for a new conversation; a double click unfolds its tasks and
-  // conversations; each one can be put away in «Completados» (folded at the bottom) and brought back.
+  // ---- left menu (3.2): projects with their conversations and active tasks, the conversations, and «Completadas» with
+  // what finished by itself (a done task, a conversation with the OK); each one can be brought back or put away by hand.
   step = 'proyectos del menú';
   const folder = win.locator('[data-testid=folder-webviaproject]');
   await folder.waitFor();
-  const firstTask = (await call('tasks.list')).find((x) => x.project === 'webviaproject');
-  // The one inside the project (the inbox at the top may list the same task while it waits or works).
-  const taskInMenu = win.locator('aside').getByRole('button', { name: firstTask.title }).last();
-  if (!(await taskInMenu.isVisible())) await folder.dblclick();
-  await taskInMenu.click();
+  const firstTask = (await call('tasks.list')).find((x) => x.project === 'webviaproject' && x.status === 'done');
+  const doneItem = win.locator(`[data-testid=item-t${firstTask.id}]`);
+  if (!(await doneItem.isVisible())) await win.click('[data-testid=sidebar-completed]');
+  await doneItem.click();
   await win.waitForSelector('[data-testid=task-detail]');
   await win.locator('[data-testid=task-detail]', { hasText: `Tarea #${firstTask.id}` }).waitFor();
-  await taskInMenu.hover();
-  await win.click(`[data-testid=complete-t${firstTask.id}]`);
-  await until(async () => (await call('app.state')).completed?.includes(`t${firstTask.id}`), 'tarea completada');
-  await win.click('[data-testid=sidebar-completed]');
   await shot('12b-menu-completados');
-  await win.locator(`[data-testid=complete-t${firstTask.id}]`).hover();
+  // Brought back to its project, and put away again.
+  await doneItem.hover();
   await win.click(`[data-testid=complete-t${firstTask.id}]`);
-  await until(async () => !(await call('app.state')).completed?.includes(`t${firstTask.id}`), 'devuelta a su proyecto');
+  await until(async () => (await call('app.state')).kept?.includes(`t${firstTask.id}`), 'devuelta a su proyecto');
+  const inFolder = win.locator(`[data-testid=folder-items-webviaproject] [data-testid=item-t${firstTask.id}]`);
+  await win.waitForTimeout(800);
+  if (await win.getByRole('button', { name: 'Desplegar webviaproject' }).count()) await win.getByRole('button', { name: 'Desplegar webviaproject' }).click();
+  await inFolder.waitFor();
+  await inFolder.hover();
+  await win.click(`[data-testid=complete-t${firstTask.id}]`);
+  await until(async () => (await call('app.state')).completed?.includes(`t${firstTask.id}`), 'completada otra vez');
+  // The conversation of the first request is done after the OK (nothing of it is still open).
+  assert.equal((await call('conversations.list')).find((c) => c.id === task.conversation_id).status, 'done', 'conversación completada con el OK');
   await folder.click();
-  await win.locator('[data-testid=chat-input]').waitFor();
-  assert.equal((await call('app.state')).activeProject?.name, 'webviaproject', 'un clic elige el proyecto para conversar');
+  await win.locator('[data-testid=chat-greeting]').waitFor();
+  assert.equal((await call('app.state')).activeProject?.name, 'webviaproject', 'un clic empieza una conversación en el proyecto');
 
   // ---- expert mode (PC only): turned on in Settings, files, git and panels chosen by the user
   step = 'modo experto';
@@ -356,16 +363,39 @@ try {
 
   // ---- free mode and model choice from the chat
   step = 'modo libre';
-  await win.click('[data-testid=sidebar-home]');
+  // 3.2: the bubble only comes with the account's real usage high: Claude at 60 % (a session that reports it).
+  const rateSession = await call('sessions.create', { agent: 'claude', project: 'webviaproject' });
+  await call('sessions.send', { id: rateSession.id, text: 'RATE 60' });
+  await until(async () => (await call('usage.get')).find((u) => u.account === 'claude')?.real?.utilization === 0.6, 'uso real de Claude');
+  await until(async () => (await call('sessions.list')).find((s) => s.id === rateSession.id)?.status !== 'running', 'sesión del uso parada').catch(() => {});
+  await call('sessions.remove', { id: rateSession.id }).catch(() => {});
+  await win.click('[data-testid=new-conversation]');
+  // 60 % with the default model: no bubble (before, it came out for the model alone).
+  await win.waitForTimeout(600);
+  assert.equal(await win.locator('[data-testid=usage-bubble]').count(), 0, 'sin globo con uso medio y modelo normal');
   await win.click('[data-testid=brain-picker]');
   await win.click('[data-testid=brain-group-rec]');
   await win.click('[data-testid=brain-claude-claude-opus-5-5-rec]');
   await until(async () => (await call('app.state')).config.orchestrator.model === 'claude-opus-5-5', 'modelo Opus');
-  // Opus spends the quota faster: the bubble says so.
+  // Opus with the account at 60 %: the bubble says so, for a few seconds, and it stays in the bell.
   await win.locator('[data-testid=usage-bubble]').waitFor();
   await shot('11a-aviso-uso');
-  // 2.6: a clean top bar: icon buttons with their bubble, and the mini-games.
-  assert.equal(await win.locator('main header').evaluate((h) => h.innerText.replace(h.querySelector('h1')?.innerText ?? '', '').trim()), '', 'sin nombre, modo ni modelo en la barra');
+  await win.locator('[data-testid=usage-bubble]').waitFor({ state: 'detached', timeout: 6000 });
+  await win.locator('[data-testid=bar-notices-dot]').waitFor();
+  await win.click('[data-testid=bar-notices]');
+  await win.locator('[data-testid=notice-center] >> text=Opus').first().waitFor();
+  await shot('11a2-notificaciones');
+  await win.keyboard.press('Escape');
+  assert.equal(await win.locator('[data-testid=bar-notices-dot]').count(), 0, 'abierta la campanita, sin punto');
+  // Chosen again, it does not come back (45 min of quiet for that account).
+  await call('chat.settings', { model: 'sonnet' }); await call('chat.settings', { model: 'claude-opus-5-5' });
+  await win.waitForTimeout(800);
+  assert.equal(await win.locator('[data-testid=usage-bubble]').count(), 0, 'el globo no se repite');
+  // 2.6: a clean top bar: the clock, the working folder in the middle and icon buttons with their bubble.
+  assert.equal(await win.locator('main header').evaluate((h) => h.innerText.replace(h.querySelector('h1')?.innerText ?? '', '').replace(h.querySelector('[data-testid=bar-project]')?.innerText ?? '', '').trim()), '', 'sin nombre, modo ni modelo en la barra');
+  // 3.2: the folder in the middle of the bar, centred between the clock and the buttons.
+  const centre = await win.locator('main header').evaluate((h) => { const a = h.getBoundingClientRect(); const p = h.querySelector('[data-testid=bar-project]').getBoundingClientRect(); const cs = getComputedStyle(h); const left = a.left + parseFloat(cs.paddingLeft); const right = a.right - parseFloat(cs.paddingRight); return Math.abs((p.left + p.right) / 2 - (left + right) / 2); });
+  assert.ok(centre < 3, `carpeta centrada en la barra (desvío ${centre}px)`);
   await win.hover('[data-testid=bar-pause]');
   // The bubble that is open (another one may still be closing for a moment: seen on the CI's Linux machine).
   await win.locator('[data-testid=bubble-tip]:not([data-state=closed])').first().waitFor();
@@ -384,14 +414,18 @@ try {
   }
   await win.keyboard.press('Escape');
   await until(async () => (await win.locator('[data-testid=games-dialog]').count()) === 0, 'minijuegos cerrados');
+  // 3.2: «Orquestador» off: the conversation is directly with the agent chosen, in the project folder.
   await win.click('[data-testid=orchestrator-check]');
-  await dialogButton('Activar modo libre').click();
-  await until(async () => (await call('app.state')).config.orchestrator.orchestrate === false, 'modo libre');
-  await win.fill('[data-testid=chat-input]', 'ESCRIBE algo en modo libre');
+  await dialogButton('Hablar directamente').click();
+  await until(async () => (await call('app.state')).config.orchestrator.orchestrate === false, 'conversación directa');
+  fs.rmSync(path.join(home, 'web', 'webviaproject', 'hecho-por-claude.txt'), { force: true });
+  await win.fill('[data-testid=chat-input]', 'ESCRIBE algo directamente');
   await win.keyboard.press('Enter');
-  await until(() => fs.existsSync(path.join(home, 'web', 'webviaproject', 'hecho-por-claude.txt')), 'en modo libre trabaja en la carpeta del proyecto');
+  await win.locator('[data-testid=session-input]').waitFor({ timeout: 15000 });
+  await until(() => fs.existsSync(path.join(home, 'web', 'webviaproject', 'hecho-por-claude.txt')), 'el agente trabaja en la carpeta del proyecto');
   await win.waitForTimeout(600);
-  await shot('11-chat-modo-libre');
+  await shot('11-chat-directo');
+  await call('chat.settings', { orchestrate: true });
 
   // ---- night mode from the sun / moon button
   step = 'modo noche';

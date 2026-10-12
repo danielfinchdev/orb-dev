@@ -17,11 +17,11 @@ export default {
   'chat.viewTask': 'Ver la tarea',
   'chat.seeDetails': 'Ver detalles',
   'chat.seeResult': 'Ver lo que hizo',
-  'chat.freeMode': 'Modo libre',
-  'chat.freeModeBody': 'Sin «Orquestador», {name} lee, ejecuta comandos y edita archivos directamente en la carpeta del proyecto. Nunca hace push ni publica.',
-  'chat.freeModeOk': 'Activar modo libre',
+  'chat.freeMode': 'Conversación directa',
+  'chat.freeModeBody': 'Sin «Orquestador», las conversaciones nuevas son directamente con el agente que elijas abajo: trabaja en la carpeta del proyecto y tú repartes el trabajo. Puedes tener tantas a la vez como quieras.',
+  'chat.freeModeOk': 'Hablar directamente',
   'chat.orchestrator': 'Orquestador',
-  'chat.orchestratorHint': 'Coordina a los agentes y ahorra tokens. Desactivado, el asistente trabaja directamente.',
+  'chat.orchestratorHint': 'Activado, la conversación nueva es con Orbe, que coordina a los agentes y ahorra tokens. Desactivado, hablas directamente con el agente elegido.',
   'chat.resumed': 'Tareas reanudadas',
   'chat.paused': 'Tareas en pausa',
   'chat.reset': 'Reiniciar conversación',
@@ -33,7 +33,7 @@ export default {
   'chat.thinking': 'Pensando…',
   'chat.queued': '{n} en cola',
   // 3.0: las conversaciones anteriores, «Nueva tarea» y el test del día
-  'chat.older': 'Ver conversación anterior',
+  'chat.older': 'Ver mensajes anteriores',
   'chat.thisConversation': 'Esta conversación',
   'newTask.title': 'Nueva tarea',
   'newTask.meta': 'Tú repartes el trabajo: cada mensaje es una tarea',
@@ -99,10 +99,11 @@ export default {
   'brain.reasoningShort': 'Razonamiento',
   'brain.close': 'Cerrar',
   'brain.warnTitle': 'Cuidado',
-  'brain.warnHigh': 'Esta elección puede agotar el uso rápidamente: con razonamiento alto, cada respuesta consume bastante más.',
-  'brain.warnHeavy': 'Esta elección puede agotar el uso rápidamente: {model} es uno de los modelos de mayor consumo.',
-  'brain.warnBoth': 'Esta elección puede agotar el uso muy rápido: {model} con razonamiento alto es la combinación de mayor consumo.',
-  'brain.warnUsed': 'Esta elección puede agotar el uso: esta cuenta ya ha usado el {pct} %.',
+  // 3.2: solo cuando el uso real de la cuenta va alto
+  'brain.warnHigh': 'Esta cuenta lleva el {pct} % de su uso y el razonamiento alto gasta bastante más en cada respuesta.',
+  'brain.warnHeavy': 'Esta cuenta lleva el {pct} % de su uso y {model} es de los modelos que más gastan.',
+  'brain.warnBoth': 'Esta cuenta lleva el {pct} % de su uso y {model} con razonamiento alto es la combinación que más gasta.',
+  'brain.warnUsed': 'Esta cuenta lleva el {pct} % de su uso: a este ritmo puede agotarse pronto.',
   // 2.6: barra superior del chat (solo iconos, con su globo)
   'bar.pause': 'Pausar tareas',
   'bar.pauseText': 'Las tareas en curso terminan; las nuevas esperan hasta que reanudes.',
@@ -112,6 +113,15 @@ export default {
   'bar.resetText': 'Empieza una conversación nueva. Las tareas y las bitácoras se conservan.',
   'bar.games': 'Minijuegos',
   'bar.gamesText': 'Juega mientras los agentes trabajan.',
+  // 3.2: centro de notificaciones y carpeta de trabajo en la barra
+  'bar.notices': 'Notificaciones',
+  'bar.noticesText': 'Todo lo que Orb te ha avisado, por si se te pasó algo.',
+  'bar.noticesNew': 'Notificaciones nuevas',
+  'bar.noticesEmpty': 'Sin notificaciones por ahora.',
+  'bar.noticesClear': 'Borrar todo',
+  'bar.project': 'Carpeta de trabajo',
+  'bar.projectText': 'Las tareas nuevas se ejecutan aquí. Cámbiala desde el cuadro de mensaje.',
+  'bar.noProject': 'Sin carpeta de trabajo',
   'chat.playButton': 'Jugar mientras tanto',
   'chat.calendarOpen': 'Ver el calendario',
   'chat.openBoard': 'Abrir la pizarra',
@@ -186,5 +196,10 @@ export default {
   // 2.6: avisos con el robot (o arriba, sin animaciones)
   'notice.done': 'Hecho',
   'notice.attention': 'Requiere tu atención',
-  'notice.open': 'Ver'
+  'notice.open': 'Ver',
+  // 3.2: conversaciones, menú lateral, buscador y globito
+  'chat.rename': 'Cambiar el título',
+  'chat.renameTitle': 'Título de la conversación',
+  'chat.placeholderDirect': 'Escribe a {agent}…',
+  'chat.waitingTurn': 'Espera su turno: hay otras conversaciones respondiendo.'
 };

@@ -37,6 +37,9 @@ function identity() {
 }
 const { me: ME, task: SIGNED_TASK } = identity();
 const BOSS = ME === 'orb';
+// 3.2: the coordinator's conversation: its questions, the tasks it creates and its project belong to that conversation.
+const CONV = BOSS ? Number(process.env.ORB_CONVERSATION) || null : null;
+const QUESTIONS = CONV ? `pending_questions:${CONV}` : 'pending_questions';
 const NAME = assistantName(); const USER = userName();
 // 3.1: only the agents this PC can run (installed, turned on, with an account) are offered; the board refuses the rest.
 const AVAILABLE = board.availableAgents() ?? AGENTS;
@@ -83,8 +86,8 @@ function askUser(a) {
   const question = clean(a.question, 300);
   const options = (Array.isArray(a.options) ? a.options : []).map((o) => ({ label: clean(o?.label, 80), description: clean(o?.description, 240) })).filter((o) => o.label).slice(0, 4);
   if (!question || options.length < 2) throw new Error(tr('sys.mcp.askNeedsOptions'));
-  const list = board.settingJson('pending_questions') ?? [];
-  board.settingJson('pending_questions', [...list, { question, header: clean(a.header, 14), options, multi: a.multi === true }].slice(-3));
+  const list = board.settingJson(QUESTIONS) ?? [];
+  board.settingJson(QUESTIONS, [...list, { question, header: clean(a.header, 14), options, multi: a.multi === true }].slice(-3));
   return `Pregunta mostrada a ${USER}. Termina tu turno ahora (una línea como mucho, sin repetir las opciones): su respuesta llegará como su próximo mensaje.`;
 }
 
@@ -92,9 +95,16 @@ function askUser(a) {
 function suggestBoard(a) {
   const message = oneLine(String(a.message ?? ''), 600).trim();
   if (!message) throw new Error(tr('sys.mcp.boardNeedsText'));
-  const list = board.settingJson('pending_questions') ?? [];
-  board.settingJson('pending_questions', [...list, { kind: 'board', message }].slice(-3));
+  const list = board.settingJson(QUESTIONS) ?? [];
+  board.settingJson(QUESTIONS, [...list, { kind: 'board', message }].slice(-3));
   return `Consejo mostrado a ${USER} con el botón de la pizarra. Termina tu turno: cuando la tenga, te lo dirá.`;
+}
+
+// 3.2: a task of the coordinator belongs to its conversation; a conversation without a project yet takes the task's.
+function createTask(a) {
+  const task = board.createTask({ ...a, level: a.nivel, conversation_id: CONV }, ME);
+  if (CONV && !board.conversation(CONV)?.project) { try { board.setConversationProject(CONV, task.project, ME); } catch { /* the task is made anyway */ } }
+  return task;
 }
 
 // Delegation (2.3): an agent working on task #N hands part of it to another agent or model. The subtask hangs from #N
@@ -155,7 +165,7 @@ const tools = [
       run: (a) => waitTasks(a) }
   ] : []),
   { name: 'orb_board', description: 'Resumen del tablero: proyectos, tareas activas, contadores y mensajes sin leer.', inputSchema: { type: 'object', properties: {} }, readOnly: true,
-    run: () => board.summary(ME) },
+    run: () => board.summary(ME, CONV) },
   { name: 'orb_list_tasks', description: 'Lista tareas, con filtros opcionales.', readOnly: true,
     inputSchema: { type: 'object', properties: { project: str('Proyecto'), status: { type: 'string', enum: STATUSES }, agent: str('Agente'), limit: { type: 'integer', minimum: 1, maximum: 200 } } },
     run: (a) => board.tasks(a).map(({ id, project, title, agent, assigned_to, status, branch, depends_on }) => ({ id, project, title, agent: assigned_to ?? agent, status, branch, depends_on })) },
@@ -185,9 +195,9 @@ const tools = [
     { name: 'orb_create_project', description: `Crea un proyecto nuevo: carpeta propia en su categoría de ${ctx.paths.projects}, con git y su bitácora. Con varias plataformas es multiplataforma: crea <name>-<plataforma> en cada categoría (tienda-android, tienda-ios…), unidos en un grupo, y una carpeta común ${path.join(ctx.home, 'comun', '<name>')} para lo que comparten. Si ${USER} no ha dicho la plataforma, pregúntasela antes con orb_ask (multi: true).`,
       inputSchema: { type: 'object', required: ['name'], properties: { name: str('Nombre del proyecto'), categories: { type: 'array', items: { type: 'string', enum: CATEGORIES }, minItems: 1, maxItems: 4, description: 'Plataformas: windows, ios, android, web (una o varias)' }, category: { type: 'string', enum: CATEGORIES, description: 'Una sola plataforma (como categories con una)' }, notes: str('Notas opcionales') } },
       run: (a) => createProjects(board, { name: a.name, notes: a.notes, categories: a.categories?.length ? a.categories : [a.category] }, ME).map((p) => ({ name: p.name, path: p.path, grupo: p.grupo ?? null })) },
-    { name: 'orb_set_project', description: 'Fija el proyecto de trabajo de la sesión. Todas las tareas nuevas irán ahí. Vacío = ninguno.',
+    { name: 'orb_set_project', description: 'Fija el proyecto de esta conversación. Todas sus tareas nuevas irán ahí. Vacío = ninguno.',
       inputSchema: { type: 'object', properties: { name: str('Nombre del proyecto registrado (vacío para quitarlo)') } },
-      run: (a) => board.setActiveProject(a.name, ME) },
+      run: (a) => (CONV ? board.setConversationProject(CONV, a.name, ME) : board.setActiveProject(a.name, ME)) },
     { name: 'orb_create_task', description: 'Crea una tarea. Las tareas auto se lanzan solas cuando sus dependencias están hechas.',
       inputSchema: { type: 'object', required: ['project', 'title', 'description'], properties: {
         project: str('Nombre del proyecto registrado'), title: str('Título corto'),
@@ -200,7 +210,7 @@ const tools = [
         depends_on: { type: 'array', items: { type: 'integer' }, maxItems: 20 },
         sensitivity: { type: 'array', items: { type: 'string', enum: ctx.config.sensitive }, description: `Si publica, envía, paga, borra o toca credenciales: espera la aprobación de ${USER}` },
         mode: { type: 'string', enum: ['carpeta', 'aislada'] }, readonly: { type: 'boolean', description: 'true si solo lee (investigar, revisar)' } } },
-      run: (a) => ack(board.createTask({ ...a, level: a.nivel }, ME)) },
+      run: (a) => ack(createTask(a)) },
     { name: 'orb_read_log', description: 'Lee una bitácora: la de un proyecto o la "general". Devuelve las entradas más recientes completas. Sin project: lista las bitácoras.', readOnly: true,
       inputSchema: { type: 'object', properties: { project: str('Proyecto registrado o "general"'), chars: { type: 'integer', minimum: 1000, maximum: 40000 }, entera: { type: 'boolean' } } },
       run: (a) => readLog(board, a.project, { chars: a.chars, whole: a.entera === true }) },

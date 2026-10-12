@@ -10,7 +10,8 @@ import { useStore, call } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
-export function LogsView({ route }) {
+// 3.2: bare: inside «Memorias» (its header is that screen's).
+export function LogsView({ route, bare = false }) {
   const t = useT();
   const version = useStore((s) => s.version);
   const [logs, setLogs] = useState([]);
@@ -22,7 +23,7 @@ export function LogsView({ route }) {
   const partial = body?.startsWith('(');
   return (
     <>
-      <PageHeader icon={<BookOpen className="text-primary size-5" />} title={t('logs.title')} meta={t('logs.meta')} />
+      {bare ? null : <PageHeader icon={<BookOpen className="text-primary size-5" />} title={t('logs.title')} meta={t('logs.meta')} />}
       <div className="grid min-h-0 flex-1 grid-cols-[240px_1fr] gap-4 overflow-hidden px-5 py-5">
         <Card className="gap-0.5 overflow-y-auto p-2">
           {logs.map((l) => (
