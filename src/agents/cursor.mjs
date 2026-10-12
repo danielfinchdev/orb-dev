@@ -79,6 +79,7 @@ export async function discoverModels(exe, cfg = {}, env = {}) {
 // Windows refuses command lines near 32 767 characters and Cursor only takes the prompt as an argument:
 // long prompts go as a pointer to a file next to the conversation's log.
 export const ARGV_PROMPT_MAX = 20000;
+const IDLE_AFTER_ANSWER_MS = Number(process.env.ORB_CURSOR_IDLE_MS) || 180_000;
 
 // Cursor's tool calls arrive as { tool_call: { <name>ToolCall: { args, result } } }.
 function toolOf(call) {
@@ -86,7 +87,62 @@ function toolOf(call) {
   return { name: key ? String(key).replace(/ToolCall$/, '') : tr('sys.agents.tool.other'), args: value?.args, result: value?.result };
 }
 
-// options: exe, cwd, model, permission, resumeId, promptDir, env, log, onEvent
+// 3.1: Cursor cannot ask Orb before acting (its CLI has no callback), so Orb's guard reaches it as Cursor's own deny rules,
+// which win even over --force. The risky commands of guard.mjs (what would ask first for the other agents) are refused
+// outright here, and so are the assistant's private folders. Cursor matches a rule on the whole command, its first word
+// or its start ("git push" also covers "git push -f"), case-sensitive: common spellings of PowerShell names are listed.
+const RISKY_SHELL = [
+  'git push', 'git remote add', 'git remote set-url', 'git remote remove', 'git reset --hard*', 'git reset --merge*', 'git clean -f*', 'git clean -df*', 'git clean -fd*',
+  'git checkout -- *', 'git checkout .', 'git restore *', 'git stash drop*', 'git stash clear*', 'git branch -D*', 'git rebase*', 'git filter-branch*',
+  'gh repo', 'gh pr', 'gh release', 'gh api', 'gh gist', 'gh secret', 'npm publish', 'pnpm publish', 'yarn publish', 'cargo publish', 'twine upload',
+  'rm -r*', 'rm -fr*', 'rm -rf*', 'rm -Rf*', '*Remove-Item*-Recurse*', '*remove-item*-recurse*', '*Remove-Item*-r *', 'rmdir /s*', 'rd /s*', 'del /s*', 'del /q*',
+  'taskkill', 'Stop-Process', 'stop-process', 'kill -9*', 'pkill', 'killall', 'shutdown', 'Restart-Computer', 'Stop-Computer', 'schtasks', 'reg add', 'reg delete',
+  'Set-ExecutionPolicy', 'set-executionpolicy', 'diskpart', 'bcdedit', 'netsh', 'sc create', 'sc delete', 'sc config', 'setx', 'sudo', 'runas', 'net user', 'net localgroup',
+  'New-Service', 'Set-Service', 'ssh', 'scp', 'sftp', 'rsync', 'iex', 'Invoke-Expression', 'invoke-expression', 'powershell -e*', 'powershell -E*', 'pwsh -e*', 'pwsh -E*',
+  'docker rm*', 'docker rmi*', 'docker system prune*', 'docker volume rm*', 'podman rm*', 'podman rmi*'
+];
+export function cursorRules(permission, internalDir) {
+  if (permission === 'total') return [];
+  const deny = RISKY_SHELL.map((c) => `Shell(${c})`);
+  // «Preguntar antes»: every command would ask; Cursor cannot ask, so it runs none.
+  if (permission === 'preguntar') deny.push('Shell(*)');
+  // «Revisar y probar»: commands yes, changing files no.
+  if (permission === 'probar') deny.push('Write(**)');
+  if (internalDir) {
+    for (const sub of ['datos', 'ejecuciones', path.join('copias', 'fotos')]) {
+      const dir = path.join(internalDir, sub);
+      for (const p of [dir, dir.replace(/\\/g, '/')]) deny.push(`Read(${p}/**)`, `Write(${p}/**)`);
+    }
+  }
+  return [...new Set(deny)];
+}
+
+// The project file of Cursor (.cursor/mcp.json for Orb's tools, .cursor/cli.json for the rules) only lives during a turn:
+// the user's own files there are kept (Orb's entries are added to them) and put back as they were when the turn ends.
+export const CURSOR_FILES = ['.cursor/mcp.json', '.cursor/cli.json'];
+export function prepareCursorFolder(cwd, { mcpServers = {}, deny = [] } = {}) {
+  const dir = path.join(cwd, '.cursor');
+  const hadDir = fs.existsSync(dir);
+  const saved = [];
+  const read = (file) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; } };
+  const put = (name, merge) => {
+    const file = path.join(dir, name);
+    const before = fs.existsSync(file) ? fs.readFileSync(file) : null;
+    saved.push({ file, before });
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(merge(before ? read(file) ?? {} : {}), null, 2));
+  };
+  if (Object.keys(mcpServers).length) put('mcp.json', (cur) => ({ ...cur, mcpServers: { ...(cur.mcpServers ?? {}), ...mcpServers } }));
+  if (deny.length) put('cli.json', (cur) => ({ ...cur, permissions: { ...(cur.permissions ?? {}), deny: [...new Set([...(cur.permissions?.deny ?? []), ...deny])] } }));
+  let done = false;
+  return () => {
+    if (done) return; done = true;
+    for (const { file, before } of saved) { try { if (before) fs.writeFileSync(file, before); else fs.rmSync(file, { force: true }); } catch { /* best effort */ } }
+    if (!hadDir) { try { fs.rmdirSync(dir); } catch { /* not empty: Cursor left something of its own */ } }
+  };
+}
+
+// options: exe, cwd, model, permission, resumeId, promptDir, env, log, onEvent, mcpServers, internalDir
 export function createLive(o) {
   const onEvent = o.onEvent ?? (() => {});
   const log = o.log ?? (() => {});
@@ -108,7 +164,14 @@ export function createLive(o) {
         current.promise.finally(() => fs.rmSync(file, { force: true }));
       } catch { /* sent as is */ }
     }
-    const args = [...o.exe.pre, '-p', '--output-format', 'stream-json', '--stream-partial-output', '--trust', '--workspace', o.cwd];
+    // 3.1: Orb's tools (orb_update_task, messages, the browser) through the project's .cursor/mcp.json, approved for this
+    // run (--approve-mcps), and the guard as deny rules; both only for this turn. A command left running in the background
+    // (a dev server) no longer keeps the CLI waiting for ever after its answer (--background-shell-timeout).
+    let restore = () => {};
+    try { restore = prepareCursorFolder(o.cwd, { mcpServers: o.mcpServers ?? {}, deny: cursorRules(permission, o.internalDir) }); }
+    catch (error) { log(`preparar .cursor: ${error.message}`); }
+    current.promise.finally(() => restore());
+    const args = [...o.exe.pre, '-p', '--output-format', 'stream-json', '--stream-partial-output', '--trust', '--workspace', o.cwd, '--approve-mcps', '--background-shell-timeout', '60'];
     if (permission === 'leer') args.push('--mode', 'ask'); else args.push('--force');
     // 2.6: «Auto» is Cursor's own choice per request (--model auto), not the model in use in Cursor.
     if (model) args.push('--model', model);
@@ -117,9 +180,27 @@ export function createLive(o) {
     child = spawnAgent(o.exe.cmd, args, { cwd: o.cwd, env: o.env, log });
     live.pid = child.pid;
     let buffer = ''; let streamed = '';
+    // 3.1: the CLI can stay open after its last answer without ever sending "result" (it waited on a background shell or
+    // its own shutdown). Once it has said something and has no tool running, a long silence is that: the turn is over.
+    const open = new Set();
+    let idle = null;
+    const quiet = () => {
+      clearTimeout(idle);
+      idle = setTimeout(() => {
+        if (current.done || open.size || !(streamed.trim() || current.text)) return;
+        log('sin salida tras la respuesta: el turno se da por terminado');
+        if (streamed.trim()) { onEvent({ type: 'item', role: 'assistant', kind: 'text', body: streamed }); current.addText(streamed); streamed = ''; }
+        current.finish({ final: current.text });
+        killTree(child);
+      }, IDLE_AFTER_ANSWER_MS);
+      idle.unref?.();
+    };
+    current.promise.finally(() => clearTimeout(idle));
     const handle = (line) => {
       let ev; try { ev = JSON.parse(line); } catch { return; }
       log(line);
+      quiet();
+      if (ev.type === 'tool_call' && ev.call_id) { if (ev.subtype === 'started') open.add(ev.call_id); else if (ev.subtype === 'completed') open.delete(ev.call_id); }
       if (ev.session_id && ev.session_id !== live.sessionId) { live.sessionId = ev.session_id; onEvent({ type: 'session', id: ev.session_id }); }
       if (ev.type === 'system' && ev.subtype === 'init') onEvent({ type: 'item', role: 'system', kind: 'status', body: `${label} · ${ev.model ?? ''}`.trim() });
       if (ev.type === 'assistant') {

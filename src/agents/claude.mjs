@@ -202,7 +202,7 @@ export function createLive(o) {
     if (o.forkSession) options.forkSession = true;
     if (o.systemPrompt) options.systemPrompt = { type: 'preset', preset: 'claude_code', append: o.systemPrompt };
     if (o.tools?.allowed?.length) options.allowedTools = o.tools.allowed;
-    const disallowed = [...(o.tools?.disallowed ?? []), ...(permission === 'leer' ? ['Bash', 'Edit', 'Write', 'NotebookEdit', 'MultiEdit'] : [])];
+    const disallowed = [...(o.tools?.disallowed ?? []), ...(permission === 'leer' ? ['Bash', 'Edit', 'Write', 'NotebookEdit', 'MultiEdit'] : permission === 'probar' ? ['Edit', 'Write', 'NotebookEdit', 'MultiEdit'] : [])];
     if (disallowed.length) options.disallowedTools = disallowed;
     if (permission === 'total') options.allowDangerouslySkipPermissions = true;
     if (o.budgetUsd) options.maxBudgetUsd = o.budgetUsd;

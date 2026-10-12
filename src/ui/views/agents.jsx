@@ -262,6 +262,7 @@ export function AgentsView() {
               {usage.map((u) => (
                 <div key={u.account} className="grid gap-1.5">
                   <div className="flex flex-wrap items-center gap-2 text-sm"><AgentIcon agent={u.agent} /><span className="min-w-28">{u.label}</span>
+                    {u.plan ? <Badge variant="secondary" title={t('agents.planHint')}>{t('agents.plan', { plan: u.plan })}</Badge> : null}
                     {u.real ? <span className="text-xs">{u.real.window ? t('agents.realQuotaWindow', { pct: Math.round(u.real.utilization * 100), window: windowLabel(u.real.window) }) : t('agents.realQuota', { pct: Math.round(u.real.utilization * 100) })}{u.real.resetAt ? ` · ${t('agents.resetsAt', { when: new Date(u.real.resetAt).toLocaleString(locale, { weekday: 'short', hour: '2-digit', minute: '2-digit' }) })}` : ''}</span> : null}
                     <span className="text-muted-foreground text-xs">{t('agents.tasksUsed', { used: u.used, max: u.max, heavy: u.heavy, maxHeavy: u.maxHeavy })}</span>
                     {u.cooldownUntil ? <Badge variant="destructive">{t('agents.cooldown', { time: new Date(u.cooldownUntil).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) })}</Badge> : null}</div>

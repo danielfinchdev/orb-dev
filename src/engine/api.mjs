@@ -110,7 +110,13 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'config.save': ({ patch }) => { const c = saveConfig(patch ?? {}); emit('config:changed', c); return c; },
 
     // «Comprobar» / «Comprobar todo» also ask the agents again for their models (in the background).
-    'agents.status': ({ refresh }) => { if (refresh) { forgetInstalled(); refreshAllModels(board, { force: true, log }); } return statusAll({ refresh: Boolean(refresh) }); },
+    'agents.status': ({ refresh }) => {
+      if (refresh) {
+        forgetInstalled(); refreshAllModels(board, { force: true, log });
+        if (!process.env.ORB_FAKE_AGENTS) import('./plans.mjs').then(({ refreshPlans }) => refreshPlans(board, { force: true, log })).catch(() => {});
+      }
+      return statusAll({ refresh: Boolean(refresh) });
+    },
     'agents.check': ({ agent }) => { const a = oneOf(agent, AGENT_IDS, 'agente'); forgetInstalled(); refreshModels(board, a, { force: true, log }); return agentStatus(a, { refresh: true }); },
     'agents.login': ({ account: id, agent }) => {
       const acc = str(id ?? agent, 'cuenta', 40);
@@ -353,7 +359,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'models.guide': () => modelCatalog(board).map((a) => ({
       id: a.id, label: a.label,
       tiers: Object.fromEntries(['light', 'balanced', 'heavy'].map((tier) => [tier, a.models.filter((m) => m.id && m.tier === tier).map((m) => m.label)])),
-      picks: Object.fromEntries(LEVELS.map((level) => { const p = chooseModel(board, a.id, level, a.accounts[0]?.id ?? a.id); return [level, { label: p.label, tier: p.tier, reasoning: p.reasoning }]; }))
+      picks: Object.fromEntries(LEVELS.map((level) => { const p = chooseModel(board, a.id, level, a.accounts[0]?.id ?? a.id, { writes: true }); return [level, { label: p.label, tier: p.tier, reasoning: p.reasoning }]; }))
     })),
     'models.catalog': () => {
       const key = JSON.stringify([ctx.config.orchestrator, ctx.config.agentOrder, Object.keys(ctx.config.agents).map((a) => ctx.config.agents[a]?.enabled), board.setting('models_rev')]);

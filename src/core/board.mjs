@@ -29,7 +29,8 @@ export const assistantName = () => ctx.config?.assistantName?.trim() || PRODUCT.
 const WORKER_STATUSES = ['done', 'failed', 'blocked'];
 // Orchestrator transitions through MCP. Nothing leaves "done"; "awaiting_approval" only leaves through the app (approve/reject);
 // a running task is cancelled from the app because that also stops its process.
-const ORCHESTRATOR_TO = { queued: ['failed', 'blocked', 'cancelled', 'queued'], cancelled: ['queued', 'blocked', 'failed'] };
+// 3.1: the coordinator may also cancel a running task (or one waiting for its usage to reset): the engine stops its process.
+const ORCHESTRATOR_TO = { queued: ['failed', 'blocked', 'cancelled', 'queued'], cancelled: ['queued', 'blocked', 'failed', 'running', 'limited'] };
 const real = (p) => { try { return fs.realpathSync(p); } catch { return path.resolve(String(p)); } };
 // Equal strings need no disk access (revalidateQueued compares every queued task's folder on each tick).
 const same = (a, b) => String(a).toLowerCase() === String(b).toLowerCase() || real(a).toLowerCase() === real(b).toLowerCase();
@@ -414,14 +415,17 @@ export class Board {
   // A dependency counts as done only once its process is gone too, so its automatic commit already happened.
   // 3.1: and, for one that worked in its own copy alongside others, once its work is in the folder (integrate:<id>).
   depsDone(task) { return task.depends_on.every((dep) => { const d = this.task(dep); return d?.status === 'done' && d.pid == null && !this.setting(`integrate:${d.id}`); }); }
-  failedDeps(task) { return task.depends_on.filter((dep) => ['failed', 'cancelled'].includes(this.task(dep)?.status)); }
+  // 3.1: a blocked dependency stops its dependents too (until someone unblocks it): they are told, and they no longer hold
+  // back the report of the request, which would otherwise never come.
+  failedDeps(task) { return task.depends_on.filter((dep) => ['failed', 'cancelled', 'blocked'].includes(this.task(dep)?.status)); }
   warnBlockedByDeps() {
     for (const task of this.all("SELECT * FROM tasks WHERE status IN ('queued', 'awaiting_approval')").map(parse)) {
       for (const dep of this.failedDeps(task)) {
         const key = `dep_warned:${task.id}:${dep}`;
         if (this.setting(key)) continue;
         this.setting(key, '1');
-        this.addChat('system', tr(this.task(dep).status === 'failed' ? 'msg.board.depFailed' : 'msg.board.depCancelled', { id: task.id, title: task.title, dep }));
+        const st = this.task(dep).status;
+        this.addChat('system', tr(st === 'failed' ? 'msg.board.depFailed' : st === 'blocked' ? 'msg.board.depBlocked' : 'msg.board.depCancelled', { id: task.id, title: task.title, dep }));
       }
     }
   }
