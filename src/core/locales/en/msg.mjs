@@ -91,6 +91,7 @@ export default {
   "msg.board.changedSince": "task #{id} has changed. Open it again to review it",
   "msg.board.containsHome": "the folder contains the {name} folder. Choose a more specific folder",
   "msg.board.depCancelled": "⛔ Task #{id} “{title}” depends on #{dep}, which has been cancelled. Retry #{dep} so that it continues automatically, or cancel #{id}.",
+  "msg.board.askedByUser": "no separate approval for {words}: the user asked for it in their own words",
   "msg.board.depBlocked": "⛔ Task #{id} “{title}” waits for #{dep}, which is blocked. When #{dep} is done it continues automatically; if it is not needed, cancel #{id}.",
   "msg.board.depFailed": "⛔ Task #{id} “{title}” depends on #{dep}, which has failed. Retry #{dep} so that it continues automatically, or cancel #{id}.",
   "msg.board.driveRoot": "the root of a drive cannot be used as a project",

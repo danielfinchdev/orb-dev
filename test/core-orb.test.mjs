@@ -91,7 +91,9 @@ test('Cursor: las reglas del guardia y las herramientas de Orb solo durante el t
   assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(path.join(dir, '.cursor', 'mcp.json'), 'utf8')).mcpServers), ['delRepo'], 'el del repositorio vuelve');
   assert.equal(fs.readFileSync(path.join(dir, '.cursor', 'cli.json'), 'utf8'), mine, 'el archivo del usuario vuelve igual');
   const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-cursor-'));
-  prepareCursorFolder(empty, { deny: ['Shell(x)'] })();
+  const undo = prepareCursorFolder(empty, { deny: ['Shell(x)'] });
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(empty, '.cursor', 'cli.json'), 'utf8')).permissions, { allow: [], deny: ['Shell(x)'] }, 'Cursor exige las dos listas');
+  undo();
   assert.ok(!fs.existsSync(path.join(empty, '.cursor')), 'sin rastro si no había carpeta .cursor');
 });
 
@@ -110,6 +112,26 @@ test('el reloj de una tarea no cuenta el rato que espera tu permiso', () => {
   run.startedAt -= 4 * 60_000; // 4 more minutes of work: 6 > 5
   Sessions.prototype.watchRun.call(self, 's', run, { timeoutMs: 5 * 60_000 });
   assert.deepEqual(stopped, ['s']);
+});
+
+test('lo que pediste con tus palabras no vuelve a pedir aprobación; lo que no pediste, sí', async () => {
+  const h = tempHome();
+  try {
+    const { Board } = await import('../src/core/board.mjs');
+    const board = new Board();
+    const dir = path.join(h.home, 'web', 'notas'); fs.mkdirSync(dir, { recursive: true });
+    board.addProject({ name: 'notas', path: dir }, 'usuario');
+    const make = () => board.createTask({ project: 'notas', title: 'API de notas', description: 'Servidor para guardar, listar y borrar notas', agent: 'claude' }, 'orb');
+    assert.equal(make().status, 'awaiting_approval', 'sin que el usuario lo pidiera, «borrar» espera aprobación');
+    board.addChat('usuario', 'Crea una web de notas rápidas donde se puedan escribir y borrar notas');
+    const t = make();
+    assert.equal(t.status, 'queued', 'el usuario pidió borrar notas: no hace falta otro clic');
+    assert.ok(board.all("SELECT detail FROM events WHERE task_id = ? AND kind = 'note'", t.id).some((e) => /lo pidió el usuario/.test(e.detail)));
+    assert.equal(board.createTask({ project: 'notas', title: 'Publicar', description: 'Publica la web en internet', agent: 'claude' }, 'orb').status, 'awaiting_approval', 'publicar no lo pidió: sigue esperando');
+    board.addChat('usuario', 'No borres nada todavía');
+    // The three latest messages still include the request; a negated mention never authorises anything by itself.
+    board.db.close();
+  } finally { h.cleanup(); }
 });
 
 // ---- the engine with the fake agents (Claude and Codex available; Cursor and the ACP agents off, see helpers.mjs)
