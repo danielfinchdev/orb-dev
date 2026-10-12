@@ -1,7 +1,7 @@
 {
   "name": "orb-dev",
   "productName": "Orb",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Orb·e: tu director de bolsillo. Planifica tu proyecto por fases y escribe un encargo claro para cada agente (Claude Code, Codex, Cursor, Gemini, OpenCode, Qwen, Copilot), sin gastar tokens de más. Te entrega resultados comprobados.",
   "private": true,
   "type": "module",
@@ -11,6 +11,7 @@
   "scripts": {
     "build": "vite build",
     "start": "vite build && electron .",
+    "start:control": "vite build && node scripts/start-control.mjs",
     "check": "node scripts/check.mjs",
     "test": "vite build --logLevel warn && node --test test/*.test.mjs",
     "test:app": "vite build && node test/app.e2e.mjs",
@@ -64,6 +65,7 @@
     "react-dom": "^19.3.0",
     "react-markdown": "^10.1.0",
     "rehype-highlight": "^7.0.2",
+    "remark-gfm": "^4.0.1",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.7.0",
     "tailwindcss": "^4.3.3",

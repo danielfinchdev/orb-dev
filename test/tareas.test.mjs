@@ -18,7 +18,7 @@ afterEach(async () => { await engine?.stop(); engine = null; t?.cleanup(); });
 const kinds = (task) => task.events.map((e) => e.kind);
 const status = async (call, id, wanted, ms = 20000) => until(async () => { const x = await call('tasks.get', { id }); return wanted.includes(x.status) && x.pid == null && x; }, `tarea #${id} en ${wanted.join('/')}`, ms);
 
-test('límite de uso: la tarea queda «limitada» y sigue sola al reiniciarse el cupo', async () => {
+test('límite de uso: la tarea queda «limitada» y sigue sola al reiniciarse el uso', async () => {
   const { call } = await fresh();
   const task = await call('tasks.create', { project: 'web', title: 'Con límite', description: 'LIMITE 2500', agent: 'claude' });
   const limited = await status(call, task.id, ['limited']);
@@ -34,8 +34,8 @@ test('límite de uso: la tarea queda «limitada» y sigue sola al reiniciarse el
   assert.match(log.at(-1).text, /El límite de uso se ha reiniciado\. Continúa la tarea donde la dejaste\./);
   assert.equal(log.at(-1).resumeId, log[0].newSessionId, 'continúa la misma conversación del agente');
   // 2.7: it only informs, so it passes by as a notification (not a chat line).
-  await until(async () => engine.events.some((e) => e.event === 'notice' && /Se ha restablecido el cupo\. La tarea #\d+/.test(e.payload?.body)), 'aviso del cupo restablecido', 5000);
-  assert.ok(!(await call('chat.list')).some((m) => /Se ha restablecido el cupo/.test(m.body)));
+  await until(async () => engine.events.some((e) => e.event === 'notice' && /Se ha reiniciado el uso\. La tarea #\d+/.test(e.payload?.body)), 'aviso del uso reiniciado', 5000);
+  assert.ok(!(await call('chat.list')).some((m) => /Se ha reiniciado el uso/.test(m.body)));
 });
 
 test('límite de uso con «seguir al reiniciarse» desactivado: espera al usuario, que puede reintentarla', async () => {
@@ -45,7 +45,9 @@ test('límite de uso con «seguir al reiniciarse» desactivado: espera al usuari
   await wait(3500); // the reset passed and several ticks went by
   assert.equal((await call('tasks.get', { id: task.id })).status, 'limited');
   assert.equal((await call('tasks.retry', { id: task.id })).status, 'queued', 'una tarea limitada se puede reintentar');
-  assert.equal((await status(call, task.id, ['done', 'limited'])).status, 'limited', 'el agente vuelve a encontrarse el límite (sigue diciendo LIMITE)');
+  // 3.1: a retry continues the agent's own conversation (it does not start the task from zero again).
+  const again = await status(call, task.id, ['done', 'limited']);
+  assert.ok(again.events.some((e) => e.kind === 'followup.sent' && /misma conversación/.test(e.detail)), 'sigue en la misma conversación');
 });
 
 test('continuar tras reiniciar: la tarea que trabajaba al cerrarse la app sigue en la misma conversación', async () => {
@@ -168,13 +170,13 @@ test('Task Review automático, del proyecto entero y con el mismo agente (otro m
   assert.ok(same.model && same.model !== 'sonnet', `otro modelo que el predeterminado (sonnet), no ${same.model}`);
 });
 
-test('cupo real: al pasar de budget.stopAt la cuenta no recibe trabajo nuevo, y sí cuando se sube el tope', async () => {
+test('uso real: al pasar de budget.stopAt la cuenta no recibe trabajo nuevo, y sí cuando se sube el tope', async () => {
   const { call } = await fresh();
   const s = await call('sessions.create', { agent: 'codex', project: 'web' });
   await call('sessions.send', { id: s.id, text: 'RATE 95' });
   await until(async () => (await call('usage.get')).find((u) => u.account === 'codex').real?.utilization === 0.95, 'uso real de Codex');
-  const task = await call('tasks.create', { project: 'web', title: 'Espera cupo', description: 'algo', agent: 'codex' });
-  await until(async () => (await call('chat.list')).some((m) => m.body.includes(`#${task.id}`) && /ya ha usado el 95 % de su cupo real/.test(m.body)), 'aviso de espera');
+  const task = await call('tasks.create', { project: 'web', title: 'Espera uso', description: 'algo', agent: 'codex' });
+  await until(async () => (await call('chat.list')).some((m) => m.body.includes(`#${task.id}`) && /ya ha gastado el 95 % de su uso real/.test(m.body)), 'aviso de espera');
   assert.equal((await call('tasks.get', { id: task.id })).status, 'queued');
   await call('config.save', { patch: { budget: { stopAt: 0.99 } } });
   assert.equal((await status(call, task.id, ['done'])).status, 'done');

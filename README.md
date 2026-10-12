@@ -15,9 +15,9 @@ Novedades de cada versión: [`docs/NOVEDADES.md`](docs/NOVEDADES.md).
 
 Desde [**Releases → última versión**](https://github.com/danielfinchdev/orb-dev/releases/latest):
 
-- **`Orb-3.0.0-instalador.exe`** (recomendado): la app completa. Se instala para tu usuario, sin permisos de
+- **`Orb-3.1.0-instalador.exe`** (recomendado): la app completa. Se instala para tu usuario, sin permisos de
   administrador, y se actualiza sola.
-- **`Orb-3.0.0-light-portable.exe`**: **Orb Light**, lo esencial sin instalar nada (sin minijuegos, God mode, Monitoreo
+- **`Orb-3.1.0-light-portable.exe`**: **Orb Light**, lo esencial sin instalar nada (sin minijuegos, God mode, Monitoreo
   del equipo ni temas). Avisa de las versiones nuevas.
 
 Windows 10 y 11. Al ser una app sin firmar, SmartScreen avisa la primera vez: «Más información» → «Ejecutar de todas
@@ -50,7 +50,7 @@ lo indica, pausa Cursor durante un día y, si la tarea era para «cualquier agen
 
 ## Empezar
 
-1. Abre Orb desde el menú Inicio (o `Orb-3.0.0-light-portable.exe`, o `npm start` si la usas desde el código).
+1. Abre Orb desde el menú Inicio (o `Orb-3.1.0-light-portable.exe`, o `npm start` si la usas desde el código).
 2. Elige su nombre, cómo te llama y dónde crear su carpeta. La carpeta se llama como el asistente: con `D:\` y el nombre
    «Nova» se crea `D:\Nova`; si dejas el nombre por defecto, `D:\Orb`.
 3. En **Agentes**, comprueba qué agentes encuentra (Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Qwen Code, Copilot) y
@@ -84,8 +84,8 @@ D:\Orb\                   (siempre <carpeta elegida>\Orb, igual para todos)
   cambios».
 - **Revisión independiente.** Task Review pide a otro modelo, de otro proveedor si es posible, que audite el trabajo;
   Security Review busca vulnerabilidades y secretos expuestos en todo el proyecto. Ninguno modifica nada.
-- **Varias cuentas por agente.** Cada cuenta con su sesión, sus modelos y su cupo; el trabajo se reparte entre las que
-  tienen cupo y espera solo cuando se agota.
+- **Varias cuentas por agente.** Cada cuenta con su sesión, sus modelos y su uso; el trabajo se reparte entre las que
+  tienen uso disponible y espera solo al llegar al límite.
 - **Pizarra por proyecto** para dibujar, escribir y adjuntar referencias que Orb·e tiene en cuenta al planificar.
 - **Desde el móvil**, sin instalar nada: chat, aprobaciones y seguimiento de tareas, con cifrado de extremo a extremo.
 - **Monitoreo del equipo** con Opti Bot: salud, seguridad y red del PC; cualquier cambio requiere tu aprobación.
@@ -103,7 +103,7 @@ npm test             # pruebas del motor (agentes falsos, sin cuentas)
 npm run test:app     # la app entera con Electron (en Linux: xvfb-run -a npm run test:app)
 npm run test:movil   # la web app del móvil a tamaño de teléfono
 ORB_E2E_EXE=dist/win-unpacked/Orb.exe node test/smoke.e2e.mjs   # prueba la app ya empaquetada
-npm run dist         # Orb-3.0.0-instalador.exe y Orb-3.0.0-light-portable.exe (en Windows)
+npm run dist         # Orb-3.1.0-instalador.exe y Orb-3.1.0-light-portable.exe (en Windows)
 npm run icon         # vuelve a sacar el icono del art work (docs/diseno/art work); luego npm run icon:ico
 ```
 
@@ -111,7 +111,7 @@ npm run icon         # vuelve a sacar el icono del art work (docs/diseno/art wor
 |---|---|
 | `src/main/` | Electron: ventana, primer arranque, puente seguro, arranque del motor y navegador de los agentes con su ventanita |
 | `src/engine/` | Motor (proceso aparte): API, sesiones en directo, planificador, orquestador, bitácoras, GitHub, móvil, instalador, modo experto |
-| `src/core/` | Tablero, aprobaciones, seguridad, cupo, carpetas y deshacer |
+| `src/core/` | Tablero, aprobaciones, seguridad, uso, carpetas y deshacer |
 | `src/agents/` | Un adaptador por agente: detectarlo, lanzarlo e interpretar sus eventos |
 | `src/mcp/` | Servidor MCP que usan los agentes y el asistente |
 | `src/ui/` | Interfaz (React + componentes shadcn/ui + Tailwind, tipografía Outfit) |

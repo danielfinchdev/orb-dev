@@ -1,10 +1,10 @@
 // labels.js (estados, permisos, decisiones…) y tiempos relativos.
 export default {
   'status.queued': 'En cola', 'status.awaiting_approval': 'Pendiente de aprobación', 'status.running': 'En curso', 'status.done': 'Completada',
-  'status.failed': 'Fallida', 'status.blocked': 'Bloqueada', 'status.cancelled': 'Cancelada', 'status.limited': 'Esperando cupo',
+  'status.failed': 'Fallida', 'status.blocked': 'Bloqueada', 'status.cancelled': 'Cancelada', 'status.limited': 'Esperando uso',
   'agent.any': 'Cualquiera', 'agent.user': 'Tú',
-  'permission.leer': 'Solo lectura', 'permission.editar': 'Editar archivos', 'permission.preguntar': 'Preguntar antes', 'permission.total': 'Acceso total',
-  'decision.allowed': 'Permitido', 'decision.always': 'Permitido siempre', 'decision.denied': 'Denegado', 'decision.expired': 'Caducado',
+  'permission.leer': 'Solo lectura', 'permission.probar': 'Revisar y probar', 'permission.editar': 'Editar archivos', 'permission.preguntar': 'Preguntar antes', 'permission.total': 'Acceso total',
+  'decision.allowed': 'Permitido', 'decision.always': 'Permitido siempre', 'decision.denied': 'Denegado', 'decision.expired': 'Caducado', 'decision.timeout': 'Sin respuesta: denegado',
   'reasoning.low': 'Bajo', 'reasoning.medium': 'Medio', 'reasoning.high': 'Alto',
   'mode.carpeta': 'En la carpeta del proyecto', 'mode.aislada': 'Copia aislada (rama propia)',
   'sensitive.external_write': 'escribe fuera del proyecto', 'sensitive.publish': 'publica', 'sensitive.financial': 'pagos', 'sensitive.credential_access': 'credenciales',

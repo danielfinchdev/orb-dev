@@ -139,7 +139,9 @@ const TARGET = [['light', 'light', 'balanced'], ['light', 'balanced', 'balanced'
 const REASONING = [['low', 'low', 'medium'], ['low', 'medium', 'medium'], ['low', 'medium', 'high'], ['medium', 'medium', 'high'], ['medium', 'high', 'high']];
 const FALLBACK = { light: ['light', 'balanced', 'heavy'], balanced: ['balanced', 'heavy', 'light'], heavy: ['heavy', 'balanced', 'light'] };
 const version = (m) => { const n = String(m.label ?? m.id).match(/(\d+(?:\.\d+)?)/); return n ? parseFloat(n[1]) : 0; };
-export function chooseModel(board, agent, level = 'normal', accountId = agent) {
+// 3.1: writes: the task changes code. Then never a light model (Haiku, mini…): a weak first version costs more in
+// corrections than the model saves. Light stays for reading, reviewing and answering.
+export function chooseModel(board, agent, level = 'normal', accountId = agent, { writes = false } = {}) {
   const li = LEVELS.includes(level) ? LEVELS.indexOf(level) : 1;
   const profile = [0, 1, 2, 3, 4].includes(ctx.config.budget?.profile) ? ctx.config.budget.profile : 2;
   let reasoning = REASONING[profile][li];
@@ -153,6 +155,7 @@ export function chooseModel(board, agent, level = 'normal', accountId = agent) {
   if (!models.length) return base;
   const rank = (a, b) => Number(/fable/i.test(a.id)) - Number(/fable/i.test(b.id)) || Number(Boolean(b.recommended)) - Number(Boolean(a.recommended)) || version(b) - version(a);
   let wanted = TARGET[profile][li];
+  if (writes && wanted === 'light') wanted = 'balanced';
   for (const tier of FALLBACK[wanted]) {
     const list = models.filter((m) => m.tier === tier).sort(rank);
     if (!list.length) continue;

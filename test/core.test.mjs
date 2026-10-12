@@ -207,7 +207,7 @@ test('la red de palabras ignora las negaciones de su propia frase', () => {
   assert.deepEqual(detectSensitivity('lee el token del .env'), ['credential_access']);
 });
 
-test('cupo: tope por ventana, enfriamiento al agotar el límite y lectura de la hora de reinicio', () => {
+test('uso: tope por ventana, enfriamiento al agotar el límite y lectura de la hora de reinicio', () => {
   // The safety net of 2.3: 20 launches per window (the real usage the accounts report is the main guard).
   for (let i = 0; i < 20; i++) board.event(null, 'orb', 'task.launch_options', JSON.stringify({ agent: 'codex', model: null }));
   assert.equal(canLaunch(board, 'codex', null).ok, false);
@@ -217,7 +217,7 @@ test('cupo: tope por ventana, enfriamiento al agotar el límite y lectura de la 
   assert.equal(new Date(parseReset('resets 5pm', now)).getHours(), 17);
   assert.equal(parseReset('reset in 2 hours', now), now.getTime() + 7_200_000);
   startCooldown(board, 'claude', 'resets in 1 hours');
-  assert.match(canLaunch(board, 'claude', null).reason, /sin cupo/);
+  assert.match(canLaunch(board, 'claude', null).reason, /límite de uso/);
 });
 
 test('deshacer devuelve solo los archivos que cambió la tarea y respeta los cambios posteriores', () => {

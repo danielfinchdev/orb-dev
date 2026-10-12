@@ -19,6 +19,9 @@
 //   ESPERA_CORRECCION  waits (up to 10 s) for a steer and answers with it
 //   DUERME             works for 30 s (until it is stopped)
 //   PARA_LENTO         once stopped, the turn takes 0.8 s to end (as the real Claude does)
+//   TABLA_MARKDOWN     answers in GFM: a table, a task list and strikethrough
+//   CIERRA_Y_CUELGA    closes its task (orb_update_task done) and then never ends its turn
+//   MANDA_MENSAJE <agente> <texto>   sends a message to another agent through Orb (orb_send_message)
 //   Task Review        a review prompt: answers "VEREDICTO: CORRECTO" (or "CON FALLOS" when the reviewed work says FALLOS)
 //
 // Every turn also emits streamed text (delta), a tool call (Bash ls) and the context meter, and logs what it received to
@@ -174,6 +177,12 @@ function createFakeLive(agent, label, caps, o) {
     }
     const done = scan.match(/TERMINA (\d+)/);
     if (done) await mcpCall(orb, 'orb_update_task', { id: Number(done[1]), status: 'done', result: 'hecho por el agente falso' });
+    // 3.1: closes its own task through the MCP and then never ends its turn (a CLI that stays open after answering).
+    const hang = /CIERRA_Y_CUELGA/.test(scan) && text.match(/Tarea #(\d+)/);
+    if (hang) { await mcpCall(orb, 'orb_update_task', { id: Number(hang[1]), status: 'done', result: 'hecho, y el programa se queda abierto' }); await sleep(60_000); if (current.done) return; }
+    // 3.1: a message to another agent through Orb (orb_send_message), as a worker would send it.
+    const say = scan.match(/MANDA_MENSAJE (\w+) (.+)/);
+    if (say) notes.push(`mensaje: ${await mcpCall(orb, 'orb_send_message', { to: say[1], body: say[2].trim() })}`);
     if (/PIDE_PERMISO/.test(scan)) {
       const command = 'git push origin main';
       const verdict = decide({ permission, tool: 'Bash', command, internalDir: o.internalDir });
@@ -198,6 +207,12 @@ function createFakeLive(agent, label, caps, o) {
     if (/ESPERA_CORRECCION/.test(scan) && !steers.length) await sleep(10_000, { untilSteer: true });
     if (/DUERME/.test(scan)) await sleep(30_000);
     if (current.done) return;
+    // 3.1: an answer in GFM (a plan as a table, strikethrough, task list), as the real agents write them.
+    if (/TABLA_MARKDOWN/.test(scan)) {
+      const reply = 'Te propongo este plan:\n\n| # | Tarea | Agente | Depende de |\n|---|---|---|---|\n| 1 | Base: servidor localhost, escena 3D (Three.js), espacio, Sol y Tierra con rotación | codex | — |\n| 2 | Texto «Hello World» con textura de globos y letras destruibles | cursor | 1 |\n| 3 | Barra de inventario y armas: rayo láser, bombas, meteoritos | claude | 1 |\n| 4 | Revisión y pruebas con un modelo distinto | gemini | 2, 3 |\n\n- [x] Proyecto creado\n- [ ] Lanzar las tareas\n\n~~Una sola tarea~~ Cuatro tareas.';
+      item('assistant', 'text', reply); current.addText(reply);
+      return current.finish({ usage: { inputTokens: 10, outputTokens: 5 }, stopReason: 'end_turn' });
+    }
     const reply = [`${agent === 'codex' ? `Codex ${continued ? 'sigue' : 'empieza'}` : 'Recibido'}: ${first}`, ...steers.map((s) => `corrección: ${s}`), ...notes].join(' | ');
     for (const piece of reply.match(/.{1,20}/gs) ?? []) onEvent({ type: 'delta', text: piece });
     item('assistant', 'text', reply);

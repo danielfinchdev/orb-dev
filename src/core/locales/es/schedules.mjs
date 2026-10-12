@@ -16,7 +16,7 @@ export default {
   'schedules.new.desc': 'Cada ejecución crea una tarea. Si la anterior sigue abierta, espera a que termine.',
   'schedules.project': 'Proyecto',
   'schedules.agent': 'Agente',
-  'schedules.anyQuota': 'Cualquiera con cupo disponible',
+  'schedules.anyQuota': 'Cualquiera con uso disponible',
   'schedules.titleField': 'Título',
   'schedules.titlePh': 'Revisar dependencias',
   'schedules.what': 'Instrucciones',

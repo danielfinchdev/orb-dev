@@ -116,7 +116,7 @@ test('ACP: continuar una sesión la carga (session/load) sin volver a mostrar su
   assert.ok(!JSON.stringify(events).includes('mensaje antiguo repetido'), 'el historial que repite el agente al cargar no se muestra');
 });
 
-test('ACP: cupo agotado, rechazo y caída del agente se ven como error claro', async () => {
+test('ACP: límite de uso alcanzado, rechazo y caída del agente se ven como error claro', async () => {
   const { live } = open();
   const quota = await live.send({ text: 'CUOTA' });
   assert.equal(quota.isError, true);

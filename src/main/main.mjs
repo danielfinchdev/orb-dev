@@ -120,7 +120,10 @@ function startEngine(h) {
     serviceName: `Motor de ${PRODUCT.name}`, stdio: 'pipe',
     // ORB_BRIDGE: only the app's own engine shares data with Open Control Edge (never one with the test agents, nor an app
     // started by the tests, which set ORB_NO_BRIDGE).
-    env: { ...process.env, ORB_MCP_SCRIPT: path.join(UNPACKED, 'mcp', 'server.mjs'), ORB_BRIDGE: process.env.ORB_FAKE_AGENTS || process.env.ORB_NO_BRIDGE ? '0' : '1' }
+    // ORB_DEV_CONTROL (3.1): the developer's control line (engine/dev-control.mjs) exists only in an unpacked Orb.dev
+    // started with ORB_DEV_CONTROL=1; an installed Orb never passes it, whatever its environment says.
+    env: { ...process.env, ORB_MCP_SCRIPT: path.join(UNPACKED, 'mcp', 'server.mjs'), ORB_BRIDGE: process.env.ORB_FAKE_AGENTS || process.env.ORB_NO_BRIDGE ? '0' : '1',
+      ORB_DEV_CONTROL: isDev && process.env.ORB_DEV_CONTROL === '1' ? '1' : '0' }
   });
   const logFile = path.join(h, '.orb', 'ejecuciones', 'motor-salida.log');
   const append = (chunk) => { try { fs.appendFileSync(logFile, chunk); } catch { /* ignore */ } };
