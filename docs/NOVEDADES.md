@@ -1,14 +1,43 @@
 ## Descargar
 
-- **`Orb-3.1.0-instalador.exe`** (recomendado, la app completa): se instala para tu usuario, sin permisos de
+- **`Orb-3.2.0-instalador.exe`** (recomendado, la app completa): se instala para tu usuario, sin permisos de
   administrador, con acceso directo en el escritorio y en el menú Inicio, y se actualiza sola. Después lo encuentras
   escribiendo «Orb» en el buscador de Windows.
-- **`Orb-3.1.0-light-portable.exe`** (Orb Light, sin instalar): doble clic y se abre. Lo esencial (chat, tareas,
+- **`Orb-3.2.0-light-portable.exe`** (Orb Light, sin instalar): doble clic y se abre. Lo esencial (chat, tareas,
   proyectos, pizarra, agentes…), sin minijuegos, God mode, Monitoreo del equipo ni temas. No se actualiza sola: avisa de
   cada versión nueva y abre la descarga.
 
 Windows 10/11. Como aún no está firmada, SmartScreen avisa la primera vez: «Más información» → «Ejecutar de todas formas».
 En el primer arranque la app detecta qué agentes tienes y con qué sesión, e instala lo que falte con los instaladores oficiales.
+
+## Novedades de la 3.2
+
+- **Conversaciones propias:** cada «Nuevo chat» es una conversación con su título (lo pone Orb), su proyecto y su estado.
+  Están todas en el menú y puedes volver a cualquiera; Orbe recuerda lo hablado y, si la retomas días después, sigue
+  desde las bitácoras. Tu chat de antes se reparte en conversaciones sin perder nada.
+- **Varias a la vez:** Orbe contesta en varias conversaciones al mismo tiempo (3 por defecto, ajustable en Ajustes ›
+  Tareas y usos). Cada tarea pertenece a la conversación que la pidió y su informe vuelve allí.
+- **Tú diriges:** con «Orquestador» desactivado, la conversación nueva es directamente con el agente que elijas, en el
+  proyecto elegido, y puedes abrir tantas a la vez como quieras.
+- **Menú lateral nuevo:** buscador (también dentro de los mensajes) con filtro por tipo, estado y agente; «Por aprobar»;
+  Proyectos, cada uno con sus conversaciones y sus tareas activas; Conversaciones; y Completadas, a donde pasa solo lo
+  terminado. Al pasar el ratón por una conversación ves su proyecto, quién responde, la rama, cómo van sus tareas y su
+  última actividad.
+- **Iconos de proyecto:** cada proyecto muestra su favicon o el icono de su app y, si no tiene, sus iniciales en un color
+  propio.
+- **Barra superior:** el título de la conversación y su proyecto en el centro, entre la hora y los botones.
+- **Notificaciones:** campanita con el historial y un punto cuando hay nuevas. Solo un aviso en pantalla a la vez y sin
+  repetidos.
+- **Aviso de uso más justo:** el globo «Cuidado» sale solo cuando el uso real de la cuenta va alto, dura unos segundos y
+  no se repite en un rato.
+- **Pie del menú compacto:** Ajustes, Agentes, Memorias y Tutoriales como iconos (se despliegan con la flecha), con
+  «Enviar comentarios» y la versión de Orb a mano.
+- **Memorias:** Bitácoras y Actividad, juntas en una pantalla.
+- **Orbe hace lo que pides, ni más ni menos:** no añade funciones que nadie ha pedido (gastaban uso y pedían permisos de
+  más).
+- **Pulido visual en todos los temas:** marca del menú centrada, hora con cifras tabulares y sin recuadro al pasar el
+  ratón, y todo lo nuevo con el estilo de cada tema.
+- **Planes:** se reconoce el plan Pro Lite de Codex.
 
 ## Novedades de la 3.1
 
