@@ -76,58 +76,66 @@ test('2.7: imagen de un agente: se ve, se marca una zona y se guarda en el proye
   try { await assert.rejects(call('images.read', { path: outside }), /no se puede abrir/); } finally { fs.rmSync(outside, { force: true }); }
 });
 
+// 3.2: whether the assistant is answering in a conversation (or in any, without one).
+const busy = async (conversation = null) => (await call('app.state')).chats.some((x) => x.busy && (conversation == null || x.conversation === conversation));
+
 test('2.7: un pedido grande: el consejo de usar la pizarra sale con su botón, debajo de la respuesta', async () => {
-  await until(async () => !(await call('app.state')).chat.busy, 'asistente libre');
-  await call('chat.send', { text: 'PIDE_PIZARRA' });
-  const tip = await until(async () => (await call('chat.list')).find((m) => m.meta?.kind === 'board'), 'consejo de la pizarra', 20000);
+  await until(async () => !(await busy()), 'asistente libre');
+  const { conversation } = await call('chat.send', { text: 'PIDE_PIZARRA' });
+  const tip = await until(async () => (await call('chat.list', { conversation })).find((m) => m.meta?.kind === 'board'), 'consejo de la pizarra', 20000);
   assert.match(tip.body, /tres pantallas/); assert.equal(tip.meta.project, 'web');
-  await until(async () => !(await call('app.state')).chat.busy, 'fin del turno');
+  await until(async () => !(await busy(conversation)), 'fin del turno');
 });
 
 test('2.7: pregunta con opciones: tarjeta debajo de la respuesta, actividad en vivo y la respuesta llega al asistente', async () => {
-  await call('chat.send', { text: 'PREGUNTA_OPCIONES' });
-  const card = await until(async () => (await call('chat.list')).find((m) => m.meta?.kind === 'question'), 'tarjeta de pregunta', 20000);
+  const { conversation } = await call('chat.send', { text: 'PREGUNTA_OPCIONES' });
+  const card = await until(async () => (await call('chat.list', { conversation })).find((m) => m.meta?.kind === 'question'), 'tarjeta de pregunta', 20000);
   assert.equal(card.meta.status, 'pending');
   assert.deepEqual(card.meta.options.map((o) => o.label), ['Rápido (Recomendado)', 'Completo']);
-  const list = await call('chat.list');
+  const list = await call('chat.list', { conversation });
   assert.ok(list.some((m) => m.role === 'orb' && !m.meta && m.id < card.id), 'la tarjeta va debajo de la respuesta del turno');
-  assert.ok(events.some((e) => e.event === 'chat:state' && e.payload.busy && e.payload.since && e.payload.tools?.some((s) => s.name === 'orb_ask' && s.at)), 'pasos con nombre y hora');
-  await until(async () => !(await call('app.state')).chat.busy, 'fin del turno');
+  assert.ok(events.some((e) => e.event === 'chat:state' && e.payload.conversation === conversation && e.payload.busy && e.payload.since && e.payload.tools?.some((s) => s.name === 'orb_ask' && s.at)), 'pasos con nombre y hora');
+  await until(async () => !(await busy(conversation)), 'fin del turno');
+  assert.equal((await call('conversations.list')).find((c) => c.id === conversation).asking, true, 'la conversación dice que espera una respuesta');
   await call('chat.answer', { id: card.id, choices: ['Completo', 'otra que no existe'] });
-  const after = await call('chat.list');
+  const after = await call('chat.list', { conversation });
   assert.equal(after.find((m) => m.id === card.id).meta.answer, 'Completo');
-  assert.ok(after.some((m) => m.role === 'usuario' && m.body === 'Mi respuesta a «¿Qué enfoque prefieres?»: Completo'));
+  assert.ok(after.some((m) => m.role === 'usuario' && m.body === 'Mi respuesta a «¿Qué enfoque prefieres?»: Completo'), 'la respuesta va a la misma conversación');
   await assert.rejects(call('chat.answer', { id: card.id, skip: true }), /ya está respondida/);
-  await until(async () => !(await call('app.state')).chat.busy, 'respuesta a la elección');
+  await until(async () => !(await busy(conversation)), 'respuesta a la elección');
 });
 
-test('ciclo completo: el asistente crea la tarea, el agente la hace, el asistente informa y el usuario da el OK', async () => {
-  await call('chat.send', { text: 'CREA_TAREA web' });
+test('ciclo completo: el asistente crea la tarea, el agente la hace, el asistente informa en esa conversación y el usuario da el OK', async () => {
+  const { conversation } = await call('chat.send', { text: 'CREA_TAREA web' });
+  const other = (await call('chat.send', { text: 'otra conversación a la vez' })).conversation;
   const task = await until(async () => (await call('tasks.list')).find((x) => x.title === 'Tarea del asistente'), 'tarea del asistente');
   assert.equal(task.created_by, 'orb');
+  assert.equal(task.conversation_id, conversation, 'la tarea es de la conversación que la pidió');
   const done = await taskDone(task.id);
   assert.equal(done.status, 'done', done.result);
   assert.ok(done.hasCheckpoint, 'foto antes de trabajar en la carpeta');
-  const report = await until(async () => (await call('chat.list')).find((m) => m.meta?.kind === 'report'), 'informe del asistente', 20000);
+  const report = await until(async () => (await call('chat.list', { conversation })).find((m) => m.meta?.kind === 'report'), 'informe del asistente', 20000);
   assert.deepEqual(report.meta.tasks, [task.id]);
+  assert.ok(!(await call('chat.list', { conversation: other })).some((m) => m.meta?.kind === 'report' || /#\d+/.test(m.body) && m.role === 'system'), 'el informe y las líneas de la tarea no van a la otra conversación');
+  await until(async () => !(await busy(conversation)), 'informe escrito');
   assert.deepEqual(await call('chat.accept', { id: report.id }), [task.id]);
-  assert.equal((await call('chat.list')).find((m) => m.id === report.id).meta.accepted, true);
+  assert.equal((await call('chat.list', { conversation })).find((m) => m.id === report.id).meta.accepted, true);
+  assert.equal((await call('conversations.list')).find((c) => c.id === conversation).status, 'done', 'con el OK y nada abierto, la conversación queda completada');
   await assert.rejects(call('chat.accept', { id: report.id }), /pendientes de aceptar/);
   const log = await call('logs.read', { project: 'web' });
   assert.match(log, /Tarea #\d+: Tarea del asistente/); assert.match(log, /dio el OK/);
-  assert.ok(events.some((e) => e.event === 'chat:new'), 'avisos para la ventana');
+  assert.ok(events.some((e) => e.event === 'chat:new' && e.payload.conversation === conversation), 'avisos para la ventana, con su conversación');
 });
 
 test('parar al asistente y escribirle enseguida: el mensaje nuevo espera a que acabe el turno parado', async () => {
-  const before = (await call('chat.list')).length;
-  await call('chat.send', { text: 'DUERME PARA_LENTO' });
+  const { conversation } = await call('chat.send', { text: 'DUERME PARA_LENTO' });
   const log = path.join(t.home, '.orb', 'ejecuciones', 'asistente.log');
   await until(() => { try { return fs.readFileSync(log, 'utf8').includes('DUERME PARA_LENTO'); } catch { return false; } }, 'el asistente empezó');
-  await call('chat.stop');
-  await call('chat.send', { text: 'hola tras parar' });
-  const answer = await until(async () => (await call('chat.list')).slice(before).find((m) => m.role === 'orb' && /hola tras parar/.test(m.body)), 'respuesta tras parar', 15000);
+  await call('chat.stop', { conversation });
+  await call('chat.send', { text: 'hola tras parar', conversation });
+  const answer = await until(async () => (await call('chat.list', { conversation })).find((m) => m.role === 'orb' && /hola tras parar/.test(m.body)), 'respuesta tras parar', 15000);
   assert.ok(answer);
-  const after = (await call('chat.list')).slice(before);
+  const after = await call('chat.list', { conversation });
   assert.ok(!after.some((m) => m.role === 'system' && /trabajando|ocupad|busy/i.test(m.body)), after.map((m) => m.body).join(' / '));
 });
 
@@ -137,12 +145,16 @@ test('2.6: el cerebro del asistente puede ser cualquier agente instalado (Codex)
   assert.ok(catalog.some((a) => a.id === 'codex'));
   const info = await call('chat.settings', { agent: 'codex', model: '', reasoning: 'high' });
   assert.equal(info.agent, 'codex'); assert.equal(info.reasoning, 'high');
-  const before = (await call('chat.list')).length;
-  await call('chat.send', { text: 'hola con otro cerebro' });
-  const answer = await until(async () => (await call('chat.list')).slice(before).find((m) => m.role === 'orb'), 'respuesta de Codex como cerebro', 15000);
+  const { conversation } = await call('chat.send', { text: 'hola con otro cerebro' });
+  assert.equal((await call('conversations.list')).find((c) => c.id === conversation).agent, 'codex', 'la conversación nueva empieza con el cerebro elegido');
+  const answer = await until(async () => (await call('chat.list', { conversation })).find((m) => m.role === 'orb'), 'respuesta de Codex como cerebro', 15000);
   assert.match(answer.body, /^Codex empieza:/, 'responde Codex');
   const log = fs.readFileSync(path.join(t.home, '.orb', 'ejecuciones', 'asistente.log'), 'utf8');
   assert.match(log, /"fake":"codex"[^\n]*Eres/, 'Codex recibe las instrucciones del asistente al empezar');
+  // The brain of one conversation changes only that one (and the next new ones).
+  await until(async () => !(await busy(conversation)), 'fin del turno');
+  const back = await call('chat.settings', { conversation, agent: 'claude', model: 'claude-sonnet-5-5', reasoning: 'medium' });
+  assert.equal(back.conversation, conversation); assert.equal(back.agent, 'claude');
   await assert.rejects(call('chat.settings', { agent: 'noexiste' }));
   await call('chat.settings', { agent: 'claude', model: 'claude-sonnet-5-5', reasoning: 'medium' });
 });

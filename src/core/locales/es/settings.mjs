@@ -297,5 +297,8 @@ export default {
   'apps.latest': 'Última versión: {version} · {date}',
   'apps.offline': 'No se pudo consultar la última versión.',
   'apps.details': 'Ver en GitHub',
-  'apps.download': 'Descargar'
+  'apps.download': 'Descargar',
+  // 3.2: conversaciones a la vez
+  'settings.parallelChats': 'Conversaciones con Orbe a la vez',
+  'settings.parallelChatsHint': 'Cuántas conversaciones contesta Orbe al mismo tiempo (de 1 a 6). Las demás esperan su turno.'
 };

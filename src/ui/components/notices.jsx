@@ -29,11 +29,13 @@ export function Notices() {
   const last = useRef(0);
   const quiet = ui?.motion === 'minima' || ui?.skin === 'profesional' || bridge.mobile || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   useEffect(() => bridge.on('chat:new', (payload) => {
-    const n = noticeOf(payload); if (!n) return;
-    // 2.6: less often, so it never gets in the way: not for what is already on screen (the report while in the chat),
-    // and good news at most once a minute; what needs the user always comes.
+    const found = noticeOf(payload); if (!found) return;
+    // 3.2: «chat» is the conversation the notice belongs to.
+    const n = found.go === 'chat' && payload?.conversation != null ? { ...found, go: { view: 'chat', id: payload.conversation } } : found;
+    // 2.6: less often, so it never gets in the way: not for what is already on screen (the report while in its
+    // conversation), and good news at most once a minute; what needs the user always comes.
     const route = getState().route;
-    if (n.go === 'chat' && route?.view === 'chat' && document.hasFocus()) return;
+    if (found.go === 'chat' && route?.view === 'chat' && (payload?.conversation == null || route.id === payload.conversation) && document.hasFocus()) return;
     if (n.level === 'ok' && Date.now() - last.current < 60_000) return;
     last.current = Date.now();
     const title = t(n.level === 'ok' ? 'notice.done' : 'notice.attention');

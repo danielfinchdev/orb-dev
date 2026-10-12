@@ -25,7 +25,7 @@ export function MobileTabs() {
   const working = sessions.some((s) => s.kind === 'chat' && s.status === 'running');
   const current = tabOf(route.view);
   const tabs = [
-    { id: 'chat', icon: Sparkles, label: app.config.assistantName, testid: 'nav-chat', dot: app.chat?.busy },
+    { id: 'chat', icon: Sparkles, label: app.config.assistantName, testid: 'nav-chat', dot: (app.chats ?? []).some((c) => c.busy) },
     { id: 'chats', icon: MessagesSquare, label: t('nav.chats'), testid: 'nav-chats', count: permissions, dot: working },
     { id: 'tasks', icon: ListTodo, label: t('nav.tasks'), testid: 'nav-tasks', count: approvals },
     { id: 'projects', icon: FolderKanban, label: t('nav.projects'), testid: 'nav-projects' },

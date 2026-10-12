@@ -17,11 +17,11 @@ export default {
   'chat.viewTask': 'View task',
   'chat.seeDetails': 'See details',
   'chat.seeResult': 'See what it did',
-  'chat.freeMode': 'Free mode',
-  'chat.freeModeBody': 'Without “Orchestrator”, {name} reads, runs commands and edits files directly in the project folder. It never pushes or publishes.',
-  'chat.freeModeOk': 'Turn on free mode',
+  'chat.freeMode': 'Direct conversation',
+  'chat.freeModeBody': 'Without «Orchestrator», new conversations are directly with the agent you choose below: it works in the project folder and you hand out the work. You can have as many at once as you like.',
+  'chat.freeModeOk': 'Talk directly',
   'chat.orchestrator': 'Orchestrator',
-  'chat.orchestratorHint': 'Coordinates the agents and saves tokens. When off, the assistant works directly.',
+  'chat.orchestratorHint': 'On, the new conversation is with Orbe, who coordinates the agents and saves tokens. Off, you talk directly to the agent chosen.',
   'chat.resumed': 'Tasks resumed',
   'chat.paused': 'Tasks paused',
   'chat.reset': 'Reset conversation',
@@ -33,7 +33,7 @@ export default {
   'chat.thinking': 'Thinking…',
   'chat.queued': '{n} queued',
   // 3.0: earlier conversations, «New task» and the test of the day
-  'chat.older': 'Show the previous conversation',
+  'chat.older': 'See earlier messages',
   'chat.thisConversation': 'This conversation',
   'newTask.title': 'New task',
   'newTask.meta': 'You hand out the work: each message is a task',
@@ -196,5 +196,10 @@ export default {
   // 2.6: notices with the robot (or at the top, without animations)
   'notice.done': 'Done',
   'notice.attention': 'Needs your attention',
-  'notice.open': 'View'
+  'notice.open': 'View',
+  // 3.2: conversaciones, menú lateral, buscador y globito
+  'chat.rename': 'Change the title',
+  'chat.renameTitle': 'Conversation title',
+  'chat.placeholderDirect': 'Write to {agent}…',
+  'chat.waitingTurn': 'Waiting its turn: other conversations are answering.'
 };

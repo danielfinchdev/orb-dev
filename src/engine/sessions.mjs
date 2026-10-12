@@ -28,7 +28,7 @@ const IDLE_CLOSE_MS = 20 * 60_000; // a live process with nothing to do for this
 const WATCH_MS = Number(process.env.ORB_WATCH_MS) || 5000; // how often a running turn is checked (time limit, permissions)
 const now = () => new Date().toISOString();
 const parseJson = (v, fallback = null) => { try { return v ? JSON.parse(v) : fallback; } catch { return fallback; } };
-const parseRow = (row) => row && { ...row, archived: Boolean(row.archived), settled: Boolean(row.settled), context: parseJson(row.context) };
+const parseRow = (row) => row && { ...row, archived: Boolean(row.archived), settled: Boolean(row.settled), titled: Boolean(row.titled), context: parseJson(row.context) };
 const parseItem = (row) => { let body = row.body; if (/^[[{]/.test(body)) { try { body = JSON.parse(body); } catch { /* plain text */ } } return { ...row, body }; };
 const bodyText = (body) => (typeof body === 'string' ? body : body?.text ?? '');
 
@@ -49,9 +49,10 @@ let agentKey = null;
 
 // MCP servers handed to an agent: the assistant's board (with the browser tools when the app offers them) plus the
 // user's own connectors enabled for that agent. session: which conversation, so its next turn reuses the same page.
-export function mcpServersFor(agent, { board, taskId = '', orchestrator = false, browser = !orchestrator, session = '', orchKey = '' } = {}) {
+// 3.2: conversation: the coordinator's conversation (its questions, tasks and project are that conversation's).
+export function mcpServersFor(agent, { board, taskId = '', orchestrator = false, browser = !orchestrator, session = '', orchKey = '', conversation = null } = {}) {
   const who = orchestrator ? 'orb' : agent;
-  const env = { ORB_HOME: ctx.home, ORB_AGENT: who, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) };
+  const env = { ORB_HOME: ctx.home, ORB_AGENT: who, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}), ...(orchestrator && conversation ? { ORB_CONVERSATION: String(conversation) } : {}) };
   if (!orchestrator && board) env.ORB_AGENT_TOKEN = agentToken(board, who, taskId);
   // The coordinator's key goes to its own MCP process only (handed in memory by the SDK, never written to a file).
   if (orchestrator && orchKey) env.ORB_ORCH_KEY = orchKey;
@@ -160,7 +161,7 @@ export class Sessions {
   }
 
   update(id, fields) {
-    const allowed = ['title', 'model', 'reasoning', 'permission', 'archived', 'status', 'cli_session', 'cwd', 'account', 'settled', 'context'];
+    const allowed = ['title', 'model', 'reasoning', 'permission', 'archived', 'status', 'cli_session', 'cwd', 'account', 'settled', 'context', 'titled'];
     const keys = Object.keys(fields).filter((k) => allowed.includes(k));
     if (!keys.length) return this.get(id);
     if ('permission' in fields && !PERMISSIONS.includes(fields.permission)) throw new Error(tr('msg.sessions.badPermission'));
@@ -259,6 +260,13 @@ export class Sessions {
   }
   closeIdle() {
     for (const [id, entry] of this.lives) if (!this.running.has(id) && Date.now() - entry.lastUsed > IDLE_CLOSE_MS) this.closeLive(id);
+    // 3.2: a direct conversation quiet for a day, with nothing waiting, is done by itself (it opens again when written to).
+    const since = new Date(Date.now() - 24 * 3_600_000).toISOString();
+    for (const s of this.board.all("SELECT id FROM sessions WHERE kind = 'chat' AND settled = 0 AND archived = 0 AND status IN ('idle', 'done') AND updated_at < ?", since)) {
+      if (this.running.has(s.id) || this.pendingApprovals(s.id).length) continue;
+      this.board.run('UPDATE sessions SET settled = 1 WHERE id = ?', s.id);
+      this.board.changed('sessions');
+    }
   }
 
   getLive(s, acc, { taskId, budgetUsd } = {}) {
@@ -536,6 +544,7 @@ export class Sessions {
     const a = adapter(s.agent);
     const copy = this.create({ kind: 'chat', agent: s.agent, account: s.account, model: s.model, reasoning: s.reasoning, permission: s.permission,
       project: s.project, cwd: s.cwd, title: title || tr('msg.sessions.forkTitle', { title: s.title }), parentId: s.id });
+    this.board.run('UPDATE sessions SET titled = 1 WHERE id = ?', copy.id); // 3.2: its title stays (not renamed by its next message)
     const old = this.board.all("SELECT role, kind, body, at FROM session_items WHERE session_id = ? AND kind = 'text' AND role IN ('user', 'assistant') ORDER BY id DESC LIMIT 40", s.id).reverse();
     for (const it of old) this.board.run('INSERT INTO session_items (session_id, role, kind, body, at) VALUES (?, ?, ?, ?, ?)', copy.id, it.role, it.kind, it.body, it.at);
     this.addItem(copy.id, 'system', 'status', tr('msg.sessions.forked', { title: s.title }));

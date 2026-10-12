@@ -195,15 +195,15 @@ export default {
   'help.tour.reasoning.title': 'Razonamiento',
   'help.tour.reasoning.text': 'Bajo, medio o alto. El alto piensa más, gasta bastante más uso y sus tareas requieren tu aprobación.',
   'help.tour.orchestrator.title': 'Orquestador',
-  'help.tour.orchestrator.text': 'Activado, coordino a los agentes y reparto el trabajo. Desactivado (modo libre), trabajo yo en la carpeta del proyecto, te consulto lo arriesgado y nunca hago push.',
+  'help.tour.orchestrator.text': 'Activado, la conversación es conmigo: coordino a los agentes y reparto el trabajo. Desactivado, hablas directamente con el agente que elijas, en tantas conversaciones a la vez como quieras.',
   'help.tour.context.title': 'Contexto y uso',
   'help.tour.context.text': 'Este círculo se llena con la conversación. Púlsalo para ver los tokens y el uso de tus planes.',
   'help.tour.bar.title': 'Barra del chat',
-  'help.tour.bar.text': 'Pausa las tareas, reinicia la conversación o abre los minijuegos mientras esperas.',
+  'help.tour.bar.text': 'Arriba, el título de la conversación y su proyecto. Las notificaciones, pausar las tareas y los minijuegos, a la derecha.',
   'help.tour.newchat.title': 'Nuevo chat',
-  'help.tour.newchat.text': 'Abre una conversación limpia conmigo. Con el Orquestador desactivado aparece también «Nueva tarea», para que repartas tú el trabajo.',
+  'help.tour.newchat.text': 'Cada «Nuevo chat» es una conversación propia, con su título y su proyecto. Puedes tener varias a la vez y volver a cualquiera.',
   'help.tour.folders.title': 'Tus proyectos',
-  'help.tour.folders.text': 'Un clic selecciona un proyecto; doble clic muestra sus tareas y conversaciones. Lo terminado pasa a «Completados».',
+  'help.tour.folders.text': 'Un clic empieza una conversación en ese proyecto; la flecha muestra sus conversaciones y sus tareas activas, cada una en su grupo.',
   'help.tour.tasks.title': 'Tareas',
   'help.tour.tasks.text': 'Todo el trabajo de los agentes: en curso, por aprobar, completado e incidencias. Puedes deshacer cualquier tarea.',
   'help.tour.schedules.title': 'Programadas',
@@ -221,5 +221,10 @@ export default {
   'help.tour.settings.title': 'Ajustes',
   'help.tour.settings.text': 'Perfil e idioma, apariencia, tareas y usos, móvil, herramientas, God mode y actualizaciones.',
   'help.tour.end.title': 'Todo listo',
-  'help.tour.end.text': 'Elige un proyecto, cuéntame qué necesitas y empezamos.'
+  'help.tour.end.text': 'Elige un proyecto, cuéntame qué necesitas y empezamos.',
+  // 3.2: conversaciones, menú lateral, buscador y globito
+  'help.tour.search.title': 'Buscar',
+  'help.tour.search.text': 'Encuentra cualquier conversación, tarea o proyecto, también por lo que se dijo. Con el filtro, solo lo que está en curso o requiere tu atención.',
+  'help.tour.conversations.title': 'Conversaciones',
+  'help.tour.conversations.text': 'Todas las conversaciones abiertas, la más reciente arriba. Al pasar el ratón ves su proyecto, quién responde y cómo van sus tareas. Lo terminado pasa solo a «Completadas».'
 };

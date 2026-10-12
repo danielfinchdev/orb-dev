@@ -8,14 +8,14 @@ export function PageHeader({ icon, title, meta, center, children, className }) {
   // 3.2: something in the very middle of the bar (the chat's working folder): three columns, the sides of equal width,
   // so it stays centred whatever is on each side.
   if (center) return (
-    <header className={cn('topbar theme-band app-titlebar wco-pad-md bg-background/80 flex min-h-14 shrink-0 items-center gap-x-3 border-b px-4 py-2.5 backdrop-blur sm:grid sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:px-5', className)}>
+    <header className={cn('topbar theme-band app-titlebar wco-pad-md bg-background/80 flex min-h-14 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2.5 backdrop-blur sm:grid sm:flex-nowrap sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:px-5', className)}>
       <div className="flex min-w-0 flex-1 items-center gap-3">
         {folded ? <SidebarToggle collapsed className="-ml-1.5" /> : null}
         {icon}
         <h1 className="min-w-0 text-[16px] leading-tight">{title}</h1>
       </div>
-      {/* Too narrow for three (a phone): the middle steps out; the message box still names the folder. */}
-      <div className="hidden max-w-[min(22rem,34vw)] min-w-0 justify-center sm:flex">{center}</div>
+      {/* Too narrow for three (a phone): the middle goes to a line of its own, under the clock and the buttons. */}
+      <div className="order-last flex min-w-0 basis-full justify-center sm:order-none sm:max-w-[min(28rem,38vw)] sm:basis-auto">{center}</div>
       <div className="flex min-w-0 items-center justify-end gap-2">{children}</div>
     </header>
   );

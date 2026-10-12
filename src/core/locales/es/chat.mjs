@@ -17,11 +17,11 @@ export default {
   'chat.viewTask': 'Ver la tarea',
   'chat.seeDetails': 'Ver detalles',
   'chat.seeResult': 'Ver lo que hizo',
-  'chat.freeMode': 'Modo libre',
-  'chat.freeModeBody': 'Sin «Orquestador», {name} lee, ejecuta comandos y edita archivos directamente en la carpeta del proyecto. Nunca hace push ni publica.',
-  'chat.freeModeOk': 'Activar modo libre',
+  'chat.freeMode': 'Conversación directa',
+  'chat.freeModeBody': 'Sin «Orquestador», las conversaciones nuevas son directamente con el agente que elijas abajo: trabaja en la carpeta del proyecto y tú repartes el trabajo. Puedes tener tantas a la vez como quieras.',
+  'chat.freeModeOk': 'Hablar directamente',
   'chat.orchestrator': 'Orquestador',
-  'chat.orchestratorHint': 'Coordina a los agentes y ahorra tokens. Desactivado, el asistente trabaja directamente.',
+  'chat.orchestratorHint': 'Activado, la conversación nueva es con Orbe, que coordina a los agentes y ahorra tokens. Desactivado, hablas directamente con el agente elegido.',
   'chat.resumed': 'Tareas reanudadas',
   'chat.paused': 'Tareas en pausa',
   'chat.reset': 'Reiniciar conversación',
@@ -33,7 +33,7 @@ export default {
   'chat.thinking': 'Pensando…',
   'chat.queued': '{n} en cola',
   // 3.0: las conversaciones anteriores, «Nueva tarea» y el test del día
-  'chat.older': 'Ver conversación anterior',
+  'chat.older': 'Ver mensajes anteriores',
   'chat.thisConversation': 'Esta conversación',
   'newTask.title': 'Nueva tarea',
   'newTask.meta': 'Tú repartes el trabajo: cada mensaje es una tarea',
@@ -196,5 +196,10 @@ export default {
   // 2.6: avisos con el robot (o arriba, sin animaciones)
   'notice.done': 'Hecho',
   'notice.attention': 'Requiere tu atención',
-  'notice.open': 'Ver'
+  'notice.open': 'Ver',
+  // 3.2: conversaciones, menú lateral, buscador y globito
+  'chat.rename': 'Cambiar el título',
+  'chat.renameTitle': 'Título de la conversación',
+  'chat.placeholderDirect': 'Escribe a {agent}…',
+  'chat.waitingTurn': 'Espera su turno: hay otras conversaciones respondiendo.'
 };
