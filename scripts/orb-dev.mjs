@@ -14,7 +14,11 @@ import path from 'node:path';
 
 const file = process.env.ORB_DEV_CONTROL_FILE || path.join(os.tmpdir(), 'orb-dev-control.json');
 let info;
-try { info = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { console.error(`No hay ningún Orb.dev con control de desarrollo abierto (${file}). Arráncalo con ORB_DEV_CONTROL=1.`); process.exit(2); }
+try {
+  info = JSON.parse(fs.readFileSync(file, 'utf8'));
+  // The file in the temp folder only says where the key is (inside Orb's own data, which agents cannot read).
+  if (info.keyFile) info = JSON.parse(fs.readFileSync(info.keyFile, 'utf8'));
+} catch { console.error(`No hay ningún Orb.dev con control de desarrollo abierto (${file}). Arráncalo con ORB_DEV_CONTROL=1.`); process.exit(2); }
 const headers = { authorization: `Bearer ${info.token}`, 'content-type': 'application/json' };
 async function call(method, params = {}) {
   const r = await fetch(`${info.url}/call`, { method: 'POST', headers, body: JSON.stringify({ method, params }) });

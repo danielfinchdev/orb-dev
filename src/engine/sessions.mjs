@@ -110,7 +110,7 @@ export function describeItem(item) {
   if (item.kind === 'tool') return oneLine(`${b?.name ?? tr('msg.sessions.tool')}${b?.input ? `: ${b.input}` : ''}`, 140);
   if (item.kind === 'file') return oneLine(`${{ add: tr('msg.sessions.fileAdd'), delete: tr('msg.sessions.fileDelete') }[b?.change] ?? tr('msg.sessions.fileEdit')} ${b?.path ?? ''}`, 140);
   if (item.kind === 'reasoning') return tr('msg.sessions.thinking');
-  if (item.kind === 'approval') return oneLine(tr('msg.sessions.waitingPermission', { title: plainAction(b?.title ?? '', { description: b?.summary, lang: ctx.config?.language }) }), 140);
+  if (item.kind === 'approval') return oneLine(tr('msg.sessions.waitingPermission', { title: plainAction(b?.title ?? '', { lang: ctx.config?.language }) }), 140);
   if (item.kind === 'text' && item.role === 'assistant') return oneLine(tr('msg.sessions.writes', { text: bodyText(b) }), 140);
   if (item.role === 'error') return oneLine(tr('msg.sessions.errorLine', { text: bodyText(b) }), 140);
   return null;

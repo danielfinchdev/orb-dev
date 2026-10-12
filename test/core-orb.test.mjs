@@ -128,8 +128,12 @@ test('lo que pediste con tus palabras no vuelve a pedir aprobación; lo que no p
     assert.equal(t.status, 'queued', 'el usuario pidió borrar notas: no hace falta otro clic');
     assert.ok(board.all("SELECT detail FROM events WHERE task_id = ? AND kind = 'note'", t.id).some((e) => /lo pidió el usuario/.test(e.detail)));
     assert.equal(board.createTask({ project: 'notas', title: 'Publicar', description: 'Publica la web en internet', agent: 'claude' }, 'orb').status, 'awaiting_approval', 'publicar no lo pidió: sigue esperando');
-    board.addChat('usuario', 'No borres nada todavía');
-    // The three latest messages still include the request; a negated mention never authorises anything by itself.
+    board.addChat('usuario', 'Y publícala cuando esté');
+    assert.equal(board.createTask({ project: 'notas', title: 'Publicar', description: 'Publica la web en internet', agent: 'claude' }, 'orb').status, 'awaiting_approval', 'publicar espera siempre su clic, aunque se pidiera');
+    assert.equal(board.createTask({ project: 'notas', title: 'Unir', description: 'borrar notas', agent: 'claude', internal: true }, 'orb').status, 'awaiting_approval', 'las tareas que crea Orb solo no se benefician');
+    // Two answers later the old request no longer counts.
+    board.addChat('orb', 'Hecho.'); board.addChat('usuario', 'Gracias'); board.addChat('orb', 'De nada.');
+    assert.equal(make().status, 'awaiting_approval', 'lo que se pidió antes no vale para siempre');
     board.db.close();
   } finally { h.cleanup(); }
 });

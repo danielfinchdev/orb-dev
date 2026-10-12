@@ -63,9 +63,11 @@ async function start(home, version, secret, browser) {
     if (s?.kind !== 'task') return;
     // 3.1: in plain words (what for, and why it asks); the command itself goes in the notice's details, one click away.
     const wait = Number(ctx.config.approvalWaitMinutes ?? 10);
-    const what = plainAction(item.body?.title ?? '', { description: item.body?.summary, lang: ctx.config.language });
+    // What it does comes from the command itself; what the agent says it is for is shown as its words, not as a fact.
+    const what = plainAction(item.body?.title ?? '', { lang: ctx.config.language });
+    const says = item.body?.summary ? tr('msg.engine.agentSays', { text: String(item.body.summary).slice(0, 160) }) : '';
     let agent = s.agent; try { agent = adapter(s.agent).label; } catch { /* id */ }
-    board.addChat('system', tr(wait > 0 ? 'msg.engine.taskNeedsPermissionWait' : 'msg.engine.taskNeedsPermission', { id: s.task_id, agent, what, reason: item.body?.reason ?? '', min: wait }),
+    board.addChat('system', tr(wait > 0 ? 'msg.engine.taskNeedsPermissionWait' : 'msg.engine.taskNeedsPermission', { id: s.task_id, agent, what, reason: item.body?.reason ?? '', min: wait }) + says,
       { kind: 'task-approval', session: s.id, task: s.task_id, request: item.body?.id, detail: String(item.body?.title ?? '').slice(0, 2000) });
   };
   // 3.1: the chat line of a task's permission shows how it ended (answered here or in the task, nobody answered, the task
@@ -79,7 +81,7 @@ async function start(home, version, secret, browser) {
   };
   sessions.onApprovalExpired = (s, item) => {
     if (s?.kind !== 'task') return;
-    board.notice(tr('msg.engine.permissionTimedOut', { id: s.task_id, title: plainAction(item.body?.title ?? '', { description: item.body?.summary, lang: ctx.config.language }), min: Number(ctx.config.approvalWaitMinutes ?? 10) }), 'warning');
+    board.notice(tr('msg.engine.permissionTimedOut', { id: s.task_id, title: plainAction(item.body?.title ?? '', { lang: ctx.config.language }), min: Number(ctx.config.approvalWaitMinutes ?? 10) }), 'warning');
   };
   const orchestrator = new Orchestrator(board, orchKey, { emit, log });
   const scheduler = new Scheduler(board, sessions, { log, orchestrator });
@@ -90,7 +92,7 @@ async function start(home, version, secret, browser) {
   // 3.1: only an unpacked Orb.dev started with ORB_DEV_CONTROL=1 (main.mjs decides; never an installed Orb).
   if (process.env.ORB_DEV_CONTROL === '1') {
     const { startDevControl } = await import('./dev-control.mjs');
-    devControl = startDevControl({ api, board, sessions, log, home });
+    devControl = startDevControl({ api, board, sessions, log, home, internalDir: ctx.paths.internal });
   }
   if (ctx.config.mobile?.enabled) remote.start().catch((error) => log(`móvil: ${error.message}`));
 

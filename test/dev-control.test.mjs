@@ -25,8 +25,15 @@ test('sin ORB_DEV_CONTROL=1 no hay línea de control', async () => {
 test('con ella: estado, aprobar una tarea y la clave obligatoria', async () => {
   engine = await startEngine(t.home, { env: { ORB_DEV_CONTROL: '1', ORB_DEV_CONTROL_FILE: file } });
   await until(() => fs.existsSync(file), 'archivo de control');
-  const info = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const pointer = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.ok(!pointer.token && !JSON.stringify(pointer).includes('token'), 'el archivo de la carpeta temporal no lleva la clave');
+  assert.match(pointer.keyFile, /[\\/]\.orb[\\/]datos[\\/]/, 'la clave vive en los datos privados de Orb');
+  const { decide } = await import('../src/core/guard.mjs');
+  assert.equal(decide({ tool: 'Read', paths: [pointer.keyFile], internalDir: path.join(t.home, '.orb') }).decision, 'deny', 'ningún agente puede leerla');
+  const info = JSON.parse(fs.readFileSync(pointer.keyFile, 'utf8'));
   assert.match(info.url, /^http:\/\/127\.0\.0\.1:\d+$/);
+  const odd = await fetch(`${info.url}/snapshot`, { headers: { authorization: `Bearer ${'ñ'.repeat(48)}` } });
+  assert.equal(odd.status, 401, 'una clave rara no tumba la petición');
   const bad = await fetch(`${info.url}/snapshot`, { headers: { authorization: 'Bearer otra' } });
   assert.equal(bad.status, 401, 'sin la clave, nada');
   await engine.call('projects.create', { name: 'web' });

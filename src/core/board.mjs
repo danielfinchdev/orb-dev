@@ -226,16 +226,19 @@ export class Board {
     const tags = [...new Set(sensitivity)]; const reasons = [];
     // 3.0: fixedBrief: a read-only brief written by Orb itself (Security Review), whose checklist names «secretos» and
     // «credenciales» on purpose; only for code paths of the engine (the API does not pass it).
+    let askedNote = null;
     if (!tags.length && !(fixedBrief && readonly)) {
       let found = detectSensitivity(`${title}\n${description}`);
       // 3.1: what the user asked for in their own words is already their decision: a task the assistant writes from «una
-      // app de notas que se puedan borrar» does not wait for approval because it says «borrar». Only the assistant's tasks,
-      // only the kinds of action the user's latest messages name; the words of a file or an agent still need the click.
-      if (actor === 'orb' && found.length) {
-        const asked = detectSensitivity(this.all("SELECT body FROM chat WHERE role = 'usuario' ORDER BY id DESC LIMIT 3").map((r) => r.body).join('\n'));
-        const kept = found.filter((tag) => !asked.includes(tag));
-        if (kept.length < found.length) this.pendingNote = tr('msg.board.askedByUser', { words: found.filter((t) => !kept.includes(t)).join(', ') });
-        found = kept;
+      // app de notas que se puedan borrar» does not wait for approval because it says «borrar». Narrow on purpose:
+      // - only «destructive» (credentials, payments, publishing and sending stay behind the click whatever was said);
+      // - only the user's current request (their messages since the assistant last answered), not something said before;
+      // - only tasks the assistant writes, never the engine's own (whose text can carry an agent's words).
+      if (actor === 'orb' && !internal && found.includes('destructive')) {
+        // (Since the answer before the last one: the request, the plan the assistant proposed and the user's «sí».)
+        const lastAnswer = this.one("SELECT id AS n FROM chat WHERE role = 'orb' ORDER BY id DESC LIMIT 1 OFFSET 1")?.n ?? 0;
+        const asked = detectSensitivity(this.all("SELECT body FROM chat WHERE role = 'usuario' AND id > ? ORDER BY id DESC LIMIT 5", lastAnswer).map((r) => r.body).join('\n'));
+        if (asked.includes('destructive')) { found = found.filter((tag) => tag !== 'destructive'); askedNote = tr('msg.board.askedByUser', { words: 'destructive' }); }
       }
       tags.push(...found); if (found.length) reasons.push(tr('msg.board.reasonKeywords', { words: found.join(', ') }));
     }
@@ -255,7 +258,7 @@ export class Board {
       JSON.stringify(depends_on.map(Number)), JSON.stringify([...new Set(tags)]), status, String(actor), proj.path, at, at, mode, Number(Boolean(readonly)), parent_id ? Number(parent_id) : null, review_of ? Number(review_of) : null, schedule_id ? Number(schedule_id) : null, ['simple', 'normal', 'complejo'].includes(level) ? level : null);
     const id = Number(lastInsertRowid);
     this.event(id, actor, 'task.created', status);
-    if (this.pendingNote) { this.event(id, 'orb', 'note', this.pendingNote); this.pendingNote = null; }
+    if (askedNote) this.event(id, 'orb', 'note', askedNote);
     if (status === 'awaiting_approval') { const tagList = [...new Set(tags)].join(', '); this.addChat('system', reasons.length ? tr('msg.board.needsApprovalWhy', { id, title, tags: tagList, reasons: reasons.join('; ') }) : tr('msg.board.needsApproval', { id, title, tags: tagList }), { kind: 'attention', task: id }); }
     // Even a task the user typed waits for an explicit "Aprobar" when it looks sensitive: one more click, with the reasons on screen.
     this.changed('tasks');
