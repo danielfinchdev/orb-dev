@@ -582,7 +582,9 @@ Para probar un servidor, arráncalo en segundo plano con tu propia herramienta y
     const icon = { done: '✅', failed: '❌', blocked: '⛔', cancelled: '🚫' }[task.status] ?? 'ℹ️';
     let spent = '';
     try { const u = this.runUsage(task); if (u) { spent = this.usageLine(u); board.event(task.id, 'orb', 'task.usage', JSON.stringify({ ...u, minutes: Math.round(u.minutes * 10) / 10 })); } } catch (error) { this.log(`uso #${task.id}: ${error.message}`); }
-    board.addChat('system', `${tr(`msg.scheduler.ended.${task.status in { done: 1, failed: 1, blocked: 1, cancelled: 1 } ? task.status : 'other'}`, { icon, label: label(task.assigned_to), id: task.id, title: oneLine(task.title) })}${spent ? ` (${spent})` : ''}${task.result ? `\n${redactSecrets(task.result).slice(0, 600)}` : ''}`, { kind: 'task-end', task: task.id, status: task.status });
+    // 3.1: one clear line for the user; what the agent reported (technical) goes folded under it (meta.result).
+    board.addChat('system', `${tr(`msg.scheduler.ended.${task.status in { done: 1, failed: 1, blocked: 1, cancelled: 1 } ? task.status : 'other'}`, { icon, label: label(task.assigned_to), id: task.id, title: oneLine(task.title) })}${spent ? ` (${spent})` : ''}`,
+      { kind: 'task-end', task: task.id, status: task.status, ...(task.result ? { result: redactSecrets(task.result).slice(0, 1500) } : {}) });
     const cp = board.settingJson(`checkpoint:${task.id}`);
     const revert = cp?.before ? tr('sys.logs.revertUndo', { id: task.id })
       : task.branch ? tr('sys.logs.revertBranch', { branch: task.branch }) : tr('sys.logs.revertFolder');

@@ -43,7 +43,10 @@ const RISKY = [
   [/\b(npm|pnpm|yarn)\s+publish\b|\bcargo\s+publish\b|\btwine\s+upload\b/i, 'msg.guard.publish'],
   [/\b(curl|wget|invoke-webrequest|invoke-restmethod|iwr|irm)\b[^|;&]*\|\s*(iex|invoke-expression|sh|bash|pwsh|powershell)\b/i, 'msg.guard.pipeToShell'],
   [/\b(iex|invoke-expression)\b[^|;&]*\b(irm|iwr|invoke-webrequest|invoke-restmethod)\b|[$<]\(\s*(curl|wget)\b/i, 'msg.guard.pipeToShell'],
-  [/\b(powershell|pwsh)(\.exe)?\b[^|;&]*\s[-/]e(c|n\w*)?\b/i, 'msg.guard.pipeToShell'], // -EncodedCommand and its short forms hide the command
+  // -EncodedCommand and its short forms hide the command: PowerShell's own option followed by its base64 text. 3.1: not any
+  // " -e" later in the line (powershell -Command "node -e '…'" was taken for it in a real run).
+  // (-Command / -File end PowerShell's own options: what follows is the script, whatever it says.)
+  [/\b(powershell|pwsh)(\.exe)?["']?(\s+-(?!e\b|ec\b|en\w*\b|c\b|command\b|f\b|file\b)\w+(\s+(?!-)\S+)?)*\s+[-/]e(c|n\w*)?\s+["']?[A-Za-z0-9+/]{4,}={0,2}/i, 'msg.guard.pipeToShell'],
   [/\b(curl|wget)\b[^|;&]*\s(-X\s*(POST|PUT|DELETE|PATCH)|--data|-d\s|-F\s|--upload-file|-T\s)/i, 'msg.guard.sendData'],
   [/\b(invoke-webrequest|invoke-restmethod|iwr|irm)\b[^|;&]*-method\s+(post|put|delete|patch)/i, 'msg.guard.sendData'],
   [/\brm\s+(?:-{1,2}\S+\s+)*(-[a-z]*r|--recursive)|\b(remove-item|ri|rd|rmdir|del|erase)\b[^|;&]*\s-r(e(c(u(r(se?)?)?)?)?)?\b|\brd\s+\/s\b|\brmdir\s+\/s\b|\bdel\s+\/[sq]/i, 'msg.guard.deleteFolders'],
@@ -106,6 +109,32 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
   }
   if (cls === 'mcp') return { decision: 'allow', reason: T('connector') };
   return { decision: permission === 'preguntar' ? 'ask' : 'allow', reason: T('otherTool') };
+}
+
+// 3.1: what a command does, in words anyone understands, for the permission notice in the chat (the command itself is
+// one click away, never in the sentence). The agent's own description wins (Claude's Bash tool gives one).
+const PLAIN = [
+  [/^(taskkill|stop-process|kill|pkill|killall)\b/i, 'msg.guard.plain.stop'],
+  [/^(rm|remove-item|ri|rd|rmdir|del|erase)\b/i, 'msg.guard.plain.delete'],
+  [/^git\s+(?:-\S+\s+)*push\b/i, 'msg.guard.plain.push'],
+  [/^git\b/i, 'msg.guard.plain.git'],
+  [/^gh\b/i, 'msg.guard.plain.github'],
+  [/^(npm|pnpm|yarn)\s+(i|install|add|ci)\b/i, 'msg.guard.plain.install'],
+  [/^(npm|pnpm|yarn)\s+publish\b/i, 'msg.guard.plain.publish'],
+  [/^(npm|pnpm|yarn|npx)\b/i, 'msg.guard.plain.npm'],
+  [/^(curl|wget|invoke-webrequest|invoke-restmethod|iwr|irm)\b/i, 'msg.guard.plain.web'],
+  [/^(node|python|py|deno|bun)\b/i, 'msg.guard.plain.script'],
+  [/^(ssh|scp|sftp|rsync)\b/i, 'msg.guard.plain.remote'],
+  [/^(schtasks|reg|setx|netsh|sc|shutdown|restart-computer|stop-computer|set-executionpolicy)\b/i, 'msg.guard.plain.system'],
+  [/^(docker|podman)\b/i, 'msg.guard.plain.docker']
+];
+export function plainAction(command, { description = '', lang = 'es' } = {}) {
+  if (String(description ?? '').trim()) return String(description).trim().replace(/\.$/, '').slice(0, 160);
+  // The command inside a "powershell -Command '…'" or "cmd /c …" wrapper is the one that counts.
+  let c = String(command ?? '').trim().replace(/^"?[^"\s]*\\(?:powershell|pwsh|cmd)(?:\.exe)?"?\s+(?:-\w+\s+)*?(?:-command|-c|\/c)\s+["']?/i, '').replace(/^(?:powershell|pwsh|cmd)(?:\.exe)?\s+(?:-\w+\s+)*?(?:-command|-c|\/c)\s+["']?/i, '');
+  c = c.replace(/^\s*(?:cd\s+[^;&|]+(?:&&|;)\s*)+/i, '').replace(/^\$\w+\s*=\s*/, '');
+  const hit = PLAIN.find(([re]) => re.test(c));
+  return translate(lang, hit ? hit[1] : 'msg.guard.plain.other', { program: (c.split(/\s+/)[0] ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').slice(0, 30) });
 }
 
 // One line for the approval card: what the agent wants to do, in plain words.

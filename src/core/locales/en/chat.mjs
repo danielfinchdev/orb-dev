@@ -15,6 +15,8 @@ export default {
   'chat.always': 'Always',
   'chat.deny': 'Deny',
   'chat.viewTask': 'View task',
+  'chat.seeDetails': 'See details',
+  'chat.seeResult': 'See what it did',
   'chat.freeMode': 'Free mode',
   'chat.freeModeBody': 'Without “Orchestrator”, {name} reads, runs commands and edits files directly in the project folder. It never pushes or publishes.',
   'chat.freeModeOk': 'Turn on free mode',
