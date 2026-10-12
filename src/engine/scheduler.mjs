@@ -270,6 +270,13 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
     const filesOf = (id) => this.board.one("SELECT detail FROM events WHERE task_id = ? AND kind = 'files.changed' ORDER BY id DESC LIMIT 1", id)?.detail;
     const deps = task.depends_on.map((id) => this.board.task(id)).filter(Boolean)
       .map((d) => { const files = filesOf(d.id); return `- #${d.id} ${d.title} (${d.assigned_to ?? d.agent}): ${(d.result ?? 'sin resumen').slice(0, MAX_DEP_RESULT)}${files && files !== 'ningún archivo' ? `\n  Archivos: ${oneLine(files, 600)}` : ''}`; }).join('\n');
+    // 3.1: a read-only task waits for this one (a verification): this one need not test at length too.
+    // (Directly or through other tasks: base → pieces → verification.)
+    const waiting = this.board.all("SELECT id, readonly, depends_on FROM tasks WHERE project = ? AND status IN ('queued', 'awaiting_approval')", task.project)
+      .map((r) => { let deps = []; try { deps = JSON.parse(r.depends_on); } catch { /* none */ } return { id: r.id, readonly: Boolean(r.readonly), deps }; });
+    const after = new Set([task.id]);
+    for (let grew = true; grew;) { grew = false; for (const w of waiting) if (!after.has(w.id) && w.deps.some((d) => after.has(d))) { after.add(w.id); grew = true; } }
+    const verifiedLater = !task.readonly && waiting.some((w) => w.readonly && after.has(w.id));
     // 3.1: who else works on this project right now, so two agents do not step on the same files without knowing.
     const siblings = this.board.all("SELECT * FROM tasks WHERE project = ? AND status IN ('running', 'queued') AND id <> ? ORDER BY id LIMIT 12", task.project, task.id)
       .filter((t) => !task.depends_on.includes(t.id) && t.id !== task.parent_id)
@@ -303,7 +310,7 @@ Llama a la herramienta orb_update_task con id ${task.id}: status "done" y en res
 
 ## Límites
 Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros, no borres archivos en masa, no uses ni muestres credenciales. Si la tarea pide algo de eso, para y explícalo en el result.
-Para probar un servidor, arráncalo en segundo plano con tu propia herramienta y, al terminar, páralo con esa misma herramienta o por el número de proceso que te dio. No uses taskkill ni Stop-Process por nombre o por puerto: pide permiso a ${userName()} y podría cerrar otros programas suyos.`;
+${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo: tú basta con comprobar que arranca, compila y no da errores (sin pruebas largas en el navegador).\n` : ''}Para probar un servidor, arráncalo en segundo plano con tu propia herramienta y, al terminar, páralo con esa misma herramienta o por el número de proceso que te dio. No uses taskkill ni Stop-Process por nombre o por puerto: pide permiso a ${userName()} y podría cerrar otros programas suyos.`;
   }
 
   // ---- "carpeta" mode: checkpoint before, so the user can undo exactly what the task changed.
