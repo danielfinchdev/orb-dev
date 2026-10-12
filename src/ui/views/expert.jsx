@@ -6,6 +6,7 @@ import { ChevronRight, File, FileLock2, Folder, FolderOpen, GitBranch, GitCommit
 import { ChatView } from './chat.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Empty, Spinner } from '@/components/ui/basic.jsx';
+import { OpenInMenu, ActionsMenu } from '@/components/project-tools.jsx';
 import { Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, Checkbox, Tip } from '@/components/ui/overlay.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { SidebarToggle } from '@/components/theme-toggle.jsx';
@@ -274,6 +275,12 @@ export function ExpertView() {
   const panels = app.config.expert?.panels ?? {};
   const on = (id) => panels[id] !== false;
   const [project, setProject] = useState(app.activeProject?.name ?? projects[0]?.name ?? '');
+  // 3.2: the chat of God mode is a conversation of that project (the latest still open, or a new one in it).
+  const conversations = useStore((s) => s.conversations) ?? [];
+  const latest = (name) => conversations.find((c) => c.project === name && c.status === 'open')?.id ?? null;
+  const [conversation, setConversation] = useState(() => latest(app.activeProject?.name ?? projects[0]?.name ?? ''));
+  useEffect(() => { setConversation(latest(project)); setState({ expertProject: project }); }, [project]); // eslint-disable-line react-hooks/exhaustive-deps
+  const info = projects.find((p) => p.name === project) ?? null;
   const [tabs, setTabs] = useState([]);
   const [current, setCurrent] = useState('chat');
   useEffect(() => { if (!project && projects[0]) setProject(app.activeProject?.name ?? projects[0].name); }, [projects]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -293,8 +300,11 @@ export function ExpertView() {
       <div className="hidden min-h-0 flex-1 flex-col lg:flex" data-testid="expert-view">
         <header className="topbar theme-band app-titlebar wco-pad-md flex h-14 shrink-0 items-center gap-2 border-b px-3">
           {folded ? <SidebarToggle collapsed /> : null}
-          <SquareTerminal className="text-primary size-4" /><span className="text-[15px]">{t('nav.expert')}</span>
+          <SquareTerminal className="text-primary size-4 shrink-0" /><span className="shrink-0 text-[15px] whitespace-nowrap">{t('nav.expert')}</span>
           <Select size="sm" value={project} onValueChange={setProject} title={t('expert.project')} className="ml-2 w-56" placeholder={t('expert.pickProject')} options={projects.map((p) => ({ value: p.name, label: p.name }))} />
+          {/* 3.2: the project in an editor, and its actions (commands of the user's own, with their shortcut). */}
+          <OpenInMenu project={info} />
+          <ActionsMenu project={info} />
           <div className="flex-1" />
           <Button variant="ghost" size="sm" onClick={() => go('settings')}>{t('nav.settings')}</Button>
           <PanelsMenu />
@@ -318,7 +328,7 @@ export function ExpertView() {
               ))}
             </div>
             {/* The chat stays mounted so switching tabs never loses what is being written. */}
-            <div className={cn('min-h-0 flex-1 flex-col', current === 'chat' ? 'flex' : 'hidden')}><ChatView /></div>
+            <div className={cn('min-h-0 flex-1 flex-col', current === 'chat' ? 'flex' : 'hidden')}><ChatView route={{ view: 'chat', id: conversation }} onConversation={setConversation} project={project || undefined} /></div>
             {tab ? <div className="min-h-0 flex-1 overflow-auto" data-testid="expert-viewer"><Viewer project={project} tab={tab} version={version} /></div> : null}
           </div>
           {right.length ? (

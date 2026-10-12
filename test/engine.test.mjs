@@ -241,3 +241,26 @@ test('varias cuentas: si una cuenta de Codex llega a su límite de uso, el traba
   await assert.rejects(call('accounts.add', { agent: 'claude', label: 'x', home: path.join(t.home, 'cosas') }), /no puede estar dentro/);
   await assert.rejects(call('accounts.add', { agent: 'claude', label: 'x', home: '//servidor/compartida/claude' }), /red/);
 });
+
+test('3.2: acciones del proyecto: se guardan con su atajo y su vista previa, y solo con datos válidos', async () => {
+  const a = await call('actions.save', { project: 'web', action: { name: 'Probar', command: 'npm test', shortcut: 'Ctrl+Shift+T', preview: 'http://localhost:5173', openPreview: true } });
+  assert.equal(a.name, 'Probar'); assert.equal(a.openPreview, true);
+  assert.deepEqual((await call('actions.list', { project: 'web' })).map((x) => x.id), [a.id]);
+  await call('actions.save', { project: 'web', action: { id: a.id, name: 'Probar todo', command: 'npm test -- --all', shortcut: 'Ctrl+Shift+T' } });
+  assert.equal((await call('actions.list', { project: 'web' }))[0].name, 'Probar todo', 'editar no la duplica');
+  await assert.rejects(call('actions.save', { project: 'web', action: { name: 'Otra', command: 'x', shortcut: 'Ctrl+Shift+T' } }), /otra acción/);
+  await assert.rejects(call('actions.save', { project: 'web', action: { name: 'Mal', command: 'x', shortcut: 'T' } }), /atajo/);
+  await assert.rejects(call('actions.save', { project: 'web', action: { name: 'Fuera', command: 'x', preview: 'https://ejemplo.com' } }), /este PC/);
+  await call('actions.remove', { project: 'web', id: a.id });
+  assert.deepEqual(await call('actions.list', { project: 'web' }), []);
+});
+
+test('3.2: una acción se abre en una ventana de terminal en la carpeta del proyecto, sin pasar por cmd.exe', async () => {
+  const { actionPlan } = await import('../src/main/editors.mjs');
+  const found = { wt: 'C:\\wt.exe', powershell: 'C:\\ps.exe', cmd: 'C:\\cmd.exe' };
+  const wt = actionPlan('npm test; npm run dev', 'D:\\Orb\\web\\a;b', found, 'auto', 'win32');
+  assert.equal(wt.cmd, 'C:\\wt.exe');
+  assert.deepEqual(wt.args, ['-d', 'D:\\Orb\\web\\a\\;b', 'C:\\ps.exe', '-NoExit', '-NoLogo', '-Command', 'npm test\\; npm run dev'], 'el punto y coma de Windows Terminal, escapado');
+  assert.deepEqual(actionPlan('npm test', 'D:\\p', { ...found, wt: null }, 'auto', 'win32').args, ['-NoExit', '-NoLogo', '-Command', 'npm test']);
+  assert.deepEqual(actionPlan('npm test', 'D:\\p', found, 'cmd', 'win32').args, ['/k', 'npm test']);
+});

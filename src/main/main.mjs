@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHome, isHome, loadConfig, writeJson } from '../core/home.mjs';
 import { createAgentBrowser } from './browser.mjs';
 import { openTerminal } from './terminal.mjs';
+import { findEditors, openInEditor, runAction } from './editors.mjs';
 import { createUpdater, RELEASES_URL } from './updater.mjs';
 import { MAX_IMAGES, captureWindow, readImage, sendFeedback, moreApps } from './feedback.mjs';
 import { PRODUCT } from '../core/product.mjs';
@@ -217,6 +218,26 @@ ipcMain.handle('app:openTerminal', guard(async (target) => {
   if (!dir) throw new Error(T('sys.main.noFolderYet'));
   const c = config();
   return openTerminal(dir, c?.ui?.terminal ?? 'auto', { openExternal: (url) => shell.openExternal(url), language: langOf(c) });
+}));
+// 3.2, God mode: the project in Cursor / VS Code (only the installed ones are offered), and an action of the project run
+// in a terminal window of its own, with its preview (only a page of this PC) opened in the browser after a moment.
+ipcMain.handle('app:editors', guard(async () => { const e = findEditors(); return { cursor: Boolean(e.cursor), vscode: Boolean(e.vscode) }; }));
+ipcMain.handle('app:openIn', guard(async (which, target) => {
+  if (!['cursor', 'vscode', 'explorer'].includes(which) || typeof target !== 'string' || !path.isAbsolute(target)) throw new Error(T('sys.main.badPath'));
+  if (which === 'explorer') { const err = await shell.openPath(target); if (err) throw new Error(err); return true; }
+  await openInEditor(which, target, { language: langOf(config()) });
+  return true;
+}));
+ipcMain.handle('app:runAction', guard(async (action) => {
+  const { dir, command, preview, openPreview } = action ?? {};
+  if (typeof dir !== 'string' || !path.isAbsolute(dir) || typeof command !== 'string' || !command.trim() || command.length > 2000) throw new Error(T('sys.main.badAction'));
+  const c = config();
+  await runAction(command, dir, { choice: c?.ui?.terminal ?? 'auto', language: langOf(c) });
+  if (openPreview && typeof preview === 'string') {
+    let u = null; try { u = new URL(preview); } catch { /* not a link */ }
+    if (u && /^https?:$/.test(u.protocol) && ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname)) setTimeout(() => { shell.openExternal(u.toString()).catch(() => {}); }, 2500);
+  }
+  return true;
 }));
 ipcMain.handle('app:showBrowser', guard(async () => { agentBrowser?.show(); return agentBrowser?.state() ?? null; }));
 ipcMain.handle('app:info', guard(async () => ({ version: VERSION, home, needsSetup: !home, platform: process.platform, defaultBase: app.getPath('documents') })));

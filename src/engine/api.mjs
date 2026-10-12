@@ -222,6 +222,31 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'projects.setIcon': ({ name, path: file }) => { const p = project(name); const icon = setProjectIcon(p, str(file, 'imagen', 1000)); board.changed('projects'); return icon; },
     // 3.2: only the current branch (the hover card of a conversation): one quick git call, nothing from the network.
     'projects.branch': ({ name }) => { const p = project(name); const r = git(p.path, 'rev-parse', '--abbrev-ref', 'HEAD'); return { branch: r.status === 0 ? r.stdout.trim() || null : null }; },
+    // 3.2, God mode: the project's actions (commands of the user's own, run in a terminal window from the bar or with their
+    // shortcut). Kept per project; at most 20.
+    'actions.list': ({ project: name }) => board.settingJson(`actions:${project(name).name.toLowerCase()}`) ?? [],
+    'actions.save': ({ project: name, action: a }) => {
+      const p = project(name); const key = `actions:${p.name.toLowerCase()}`;
+      if (!a || typeof a !== 'object') fail(tr('msg.api.badParams'));
+      const shortcut = str(a.shortcut, 'atajo', 40, { optional: true }) || null;
+      if (shortcut && !/^((Ctrl|Alt|Shift|Meta)\+){1,3}([A-Z0-9]|F\d{1,2})$|^F\d{1,2}$/.test(shortcut)) fail(tr('msg.api.badShortcut'));
+      const preview = str(a.preview, 'vista previa', 300, { optional: true }) || null;
+      if (preview && !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?(\/\S*)?$/i.test(preview)) fail(tr('msg.api.badPreview'));
+      const list = board.settingJson(key) ?? [];
+      const id = typeof a.id === 'string' && /^[\w-]{1,40}$/.test(a.id) ? a.id : `a${Date.now().toString(36)}`;
+      const item = { id, name: oneLine(str(a.name, 'nombre', 40), 40), command: str(a.command, 'comando', 2000).trim(), shortcut, preview, openPreview: Boolean(a.openPreview && preview) };
+      if (shortcut && list.some((x) => x.id !== id && x.shortcut === shortcut)) fail(tr('msg.api.shortcutTaken', { shortcut }));
+      const next = list.some((x) => x.id === id) ? list.map((x) => (x.id === id ? item : x)) : [...list, item];
+      if (next.length > 20) fail(tr('msg.api.tooManyActions'));
+      board.settingJson(key, next); board.changed('actions');
+      return item;
+    },
+    'actions.remove': ({ project: name, id }) => {
+      const key = `actions:${project(name).name.toLowerCase()}`;
+      const next = (board.settingJson(key) ?? []).filter((x) => x.id !== String(id));
+      board.settingJson(key, next.length ? next : null); board.changed('actions');
+      return { ok: true };
+    },
     'projects.clearIcon': ({ name }) => { const icon = clearProjectIcon(project(name)); board.changed('projects'); return icon; },
     'projects.info': ({ name }) => github.projectInfo(project(name)),
     'projects.commit': ({ name, message }) => github.commitAll(project(name), str(message, 'mensaje', 200)),

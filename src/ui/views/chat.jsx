@@ -305,7 +305,8 @@ export function BarHeading({ title, project, onRename, renameLabel, extra }) {
   );
 }
 
-export function ChatView({ route }) {
+// 3.2: onConversation / project: inside God mode, a new conversation stays there (in its project) instead of navigating.
+export function ChatView({ route, onConversation, project: inProject }) {
   const t = useT();
   const app = useStore((s) => s.app);
   const version = useStore((s) => s.version);
@@ -359,10 +360,10 @@ export function ChatView({ route }) {
     try {
       if (orchestrate) {
         // 3.2: the first message makes the conversation (in the working folder): then the screen is that conversation.
-        const r = await act(call('chat.send', { text: msg }));
+        const r = await act(call('chat.send', { text: msg, ...(inProject ? { project: inProject } : {}) }));
         if (!r) { setText(msg); return; }
         await refresh().catch(() => {});
-        go({ view: 'chat', id: r.conversation });
+        if (onConversation) onConversation(r.conversation); else go({ view: 'chat', id: r.conversation });
       } else {
         // «Orquestador» off: the user hands out the work, and the conversation is directly with the agent chosen below.
         const project = app.activeProject?.name ?? null;
