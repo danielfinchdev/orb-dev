@@ -191,7 +191,7 @@ try {
 
   // ---- other views
   step = 'otras vistas';
-  for (const [nav, name, wait] of [['nav-projects', '06-proyectos', 'Git y GitHub'], ['nav-agents', '07-agentes', 'Uso de cada cuenta'], ['nav-logs', '08-bitacoras', 'Bitácora general'], ['nav-activity', '09-actividad', 'task.created'], ['nav-tutorials', '08b-tutoriales', 'Preguntas frecuentes']]) {
+  for (const [nav, name, wait] of [['nav-projects', '06-proyectos', 'Git y GitHub'], ['nav-agents', '07-agentes', 'Uso de cada cuenta'], ['nav-memories', '08-bitacoras', 'Bitácora general'], ['memories-activity', '09-actividad', 'task.created'], ['nav-tutorials', '08b-tutoriales', 'Preguntas frecuentes']]) {
     await win.click(`[data-testid=${nav}]`);
     await win.waitForSelector(`text=${wait}`);
     await win.waitForTimeout(400);

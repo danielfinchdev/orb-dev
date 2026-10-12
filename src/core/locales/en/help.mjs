@@ -211,8 +211,8 @@ export default {
   'help.tour.board.text': 'Sketch, write and attach references for each project. I read it when planning the work.',
   'help.tour.agents.title': 'Agents',
   'help.tour.agents.text': 'Installed agents, their sessions and accounts. With several accounts, work is shared among those with quota.',
-  'help.tour.logs.title': 'Logs',
-  'help.tour.logs.text': 'My memory: a general log and one per project, so I remember what was done between conversations.',
+  'help.tour.logs.title': 'Memories',
+  'help.tour.logs.text': 'My memory: the logs (a general one and one per project) and the activity, who did what and when.',
   'help.tour.activity.title': 'Activity',
   'help.tour.activity.text': 'Who did what and when, with search.',
   'help.tour.tutorials.title': 'Tutorials',
@@ -225,5 +225,8 @@ export default {
   'help.tour.search.title': 'Search',
   'help.tour.search.text': 'Find any conversation, task or project, also by what was said. With the filter, only what is in progress or needs you.',
   'help.tour.conversations.title': 'Conversations',
-  'help.tour.conversations.text': 'Every open conversation, the latest on top. On hover you see its project, who answers and how its tasks go. What is finished goes to «Completed» by itself.'
+  'help.tour.conversations.text': 'Every open conversation, the latest on top. On hover you see its project, who answers and how its tasks go. What is finished goes to «Completed» by itself.',
+  // 3.2: sidebar foot
+  'help.tour.feedback.title': 'Send feedback',
+  'help.tour.feedback.text': 'If something fails or you think of an improvement, tell me from here. Next to it, Orb\'s version.'
 };

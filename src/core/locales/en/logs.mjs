@@ -7,5 +7,9 @@ export default {
   'logs.projectTitle': '{name} log',
   'logs.whole': 'View full log',
   'logs.copy': 'Copy',
-  'logs.copied': 'Copied'
+  'logs.copied': 'Copied',
+  // 3.2: Memories
+  'memories.title': 'Memories',
+  'memories.logs': 'Logs',
+  'memories.activity': 'Activity'
 };

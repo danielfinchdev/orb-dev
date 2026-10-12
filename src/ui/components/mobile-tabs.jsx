@@ -1,7 +1,7 @@
 // 2.7, the phone: a simpler app. The sections are tabs at the bottom (Orbe, Chats, Tareas, Proyectos, Más) instead of the
 // sidebar; «Más» holds the screens to look things up and the phone's own options. What only makes sense on the PC
 // (Agentes, Ajustes, Modo experto, minijuegos, the themes) is not here.
-import { Sparkles, MessagesSquare, ListTodo, FolderKanban, Ellipsis, CalendarClock, PenTool, BookOpen, History, GraduationCap, Smartphone, Moon } from 'lucide-react';
+import { Sparkles, MessagesSquare, ListTodo, FolderKanban, Ellipsis, CalendarClock, PenTool, BookOpen, GraduationCap, Smartphone, Moon } from 'lucide-react';
 import { NavItem } from './sidebar.jsx';
 import { PageHeader } from './page.jsx';
 import { Switch } from './ui/overlay.jsx';
@@ -64,8 +64,8 @@ export function MoreView() {
           <div className="bg-card/80 grid gap-0.5 rounded-2xl border p-2">
             <NavItem icon={CalendarClock} label={t('nav.schedules')} onClick={() => go('schedules')} testid="nav-schedules" />
             <NavItem icon={PenTool} label={t('nav.board')} onClick={() => go('board')} testid="nav-board" />
-            <NavItem icon={BookOpen} label={t('nav.logs')} onClick={() => go('logs')} testid="nav-logs" />
-            <NavItem icon={History} label={t('nav.activity')} onClick={() => go('activity')} testid="nav-activity" />
+            {/* 3.2: Bitácoras and Actividad together, as «Memorias». */}
+            <NavItem icon={BookOpen} label={t('nav.memories')} onClick={() => go('logs')} testid="nav-memories" />
             <NavItem icon={GraduationCap} label={t('nav.tutorials')} onClick={() => go('tutorials')} testid="nav-tutorials" />
           </div>
           <div className="bg-card/80 grid gap-0.5 rounded-2xl border p-2">

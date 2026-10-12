@@ -96,7 +96,7 @@ try {
   if (await page.isVisible('text=Preparando tu PC')) { await shot('01-preparo-equipo'); await page.click('text=Continuar'); }
   const dark = () => page.evaluate(() => document.documentElement.classList.contains('dark'));
   const setDark = async (on) => { if (on !== (await dark())) await page.getByRole('button', { name: /claro y oscuro|day and night|light and dark/i }).click(); };
-  const views = [['sidebar-home', 'chat'], ['nav-tasks', 'tareas'], ['nav-projects', 'proyectos'], ['nav-agents', 'agentes'], ['nav-logs', 'bitacoras'], ['nav-activity', 'actividad'], ['nav-settings', 'ajustes']];
+  const views = [['sidebar-home', 'chat'], ['nav-tasks', 'tareas'], ['nav-projects', 'proyectos'], ['nav-agents', 'agentes'], ['nav-memories', 'bitacoras'], ['memories-activity', 'actividad'], ['nav-settings', 'ajustes']];
   const SECTIONS = ['apariencia', 'tareas', 'movil', 'herramientas', 'experto', 'actualizaciones', 'contribuye', 'apps'];
   for (const theme of ['dia', 'noche']) {
     await setDark(theme === 'noche');

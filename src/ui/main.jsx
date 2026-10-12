@@ -28,8 +28,7 @@ import { SessionView } from '@/views/session.jsx';
 import { TasksView } from '@/views/tasks.jsx';
 import { ProjectsView } from '@/views/projects.jsx';
 import { AgentsView } from '@/views/agents.jsx';
-import { LogsView } from '@/views/logs.jsx';
-import { ActivityView } from '@/views/activity.jsx';
+import { MemoriesView } from '@/views/memories.jsx';
 import { SettingsDialog, PhoneView } from '@/views/settings.jsx';
 import { SchedulesView } from '@/views/schedules.jsx';
 import { ExpertView } from '@/views/expert.jsx';
@@ -41,8 +40,8 @@ const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
 // 2.7, the phone: the conversations («Chats») and «Más» are screens of their own; Agentes and Modo experto are PC only.
 function ChatsView() { const t = useT(); return <><PageHeader icon={<MessagesSquare className="text-primary size-5" />} title={t('nav.chats')} /><Sidebar page /></>; }
 const VIEWS = bridge.mobile
-  ? { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: LogsView, activity: ActivityView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
-  : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: LogsView, activity: ActivityView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView,
+  ? { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
+  : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView,
     // 2.7.3: Orb Light (the portable .exe) has no God mode nor PC Status.
     ...(bridge.light ? {} : { expert: ExpertView, monitor: MonitorView }) };
 
