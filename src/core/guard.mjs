@@ -140,6 +140,20 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
   return { decision: permission === 'preguntar' ? 'ask' : 'allow', reason: T('otherTool') };
 }
 
+// 3.1: a command whose only risky part is stopping processes BY THEIR NUMBER (taskkill /PID n, Stop-Process -Id n,
+// kill n): the numbers, so the engine can check they are the task's own (its test server). null when it stops anything
+// by name or image, pipes into Stop-Process, or has another risk besides.
+export function pidKills(command) {
+  const c = String(command ?? '');
+  if (/\/IM\b|\s-name\b|\bpkill\b|\bkillall\b|\|\s*(stop-process|kill)\b|\$\(|`/i.test(c)) return null;
+  const pids = [];
+  const rest = c.replace(/\btaskkill(?:\s+(?:\/\/|\/)(?:F|T))*\s+(?:\/\/|\/)PID\s+(\d+)(?:\s+(?:\/\/|\/)(?:F|T))*/gi, (m, pid) => { pids.push(Number(pid)); return ' '; })
+    .replace(/\bstop-process\s+(?:-(?:force|confirm:\$false)\s+)*-id\s+(\d+)(?:\s+-(?:force|confirm:\$false|erroraction\s+\w+))*/gi, (m, pid) => { pids.push(Number(pid)); return ' '; })
+    .replace(/\bkill\s+(?:-9\s+)?(\d+)\b/gi, (m, pid) => { pids.push(Number(pid)); return ' '; });
+  if (!pids.length || /\b(taskkill|stop-process|kill)\b/i.test(rest)) return null;
+  return riskOf(rest) ? null : pids;
+}
+
 // 3.1: what a command does, in words anyone understands, for the permission notice in the chat (the command itself is
 // one click away, never in the sentence). The agent's own description wins (Claude's Bash tool gives one).
 const PLAIN = [

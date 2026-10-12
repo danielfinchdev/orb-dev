@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { ctx, tr } from '../core/context.mjs';
 import { adapter, executable } from '../agents/index.mjs';
 import { orbMcpServer, optiMcpServer } from '../agents/common.mjs';
@@ -15,7 +16,7 @@ import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { git, isGitRepo, repoRoot } from '../core/workspace.mjs';
 import { account as findAccount, defaultAccount, accountEnv } from '../core/accounts.mjs';
 import { browserKey } from '../core/browser-key.mjs';
-import { PERMISSIONS, plainAction } from '../core/guard.mjs';
+import { PERMISSIONS, plainAction, pidKills } from '../core/guard.mjs';
 import { explainFailure } from '../core/agent-errors.mjs';
 import { rememberModels } from './catalog.mjs';
 
@@ -311,6 +312,11 @@ export class Sessions {
     if (ev.type === 'session') { if (ev.id && this.get(id)?.cli_session !== ev.id) this.update(id, { cli_session: ev.id }); return; }
     if (ev.type === 'approval') {
       const r = ev.request;
+      // 3.1: a task stopping its own test server by its number needs nobody: allowed at once, and said in its conversation.
+      if (run && this.get(id)?.kind === 'task' && this.ownProcesses(r.title, this.get(id)?.cwd, run.startedAt) && this.lives.get(id)?.live.respond(r.id, 'allow')) {
+        this.addItem(id, 'system', 'approval', { id: r.id, tool: r.tool, title: r.title, reason: tr('msg.sessions.ownProcess'), input: r.input, status: 'allowed' });
+        return;
+      }
       const item = this.addItem(id, 'system', 'approval', { id: r.id, tool: r.tool, title: r.title, reason: r.reason, input: r.input, ...(r.summary ? { summary: r.summary } : {}), status: 'pending' });
       this.approvals.set(`${id}:${r.id}`, item.id);
       if (run) run.last = describeItem(item);
@@ -333,6 +339,21 @@ export class Sessions {
     if (ev.type === 'context') { if (ev.size) this.update(id, { context: { used: ev.used, size: ev.size, at: now() } }); return; }
     if (ev.type === 'rate') { const s = this.get(id); try { this.onRate(s?.account ?? s?.agent, ev); } catch { /* budget only */ } return; }
     if (ev.type === 'exit') { if (!this.running.has(id) && this.lives.get(id)?.live.isClosed?.()) this.lives.delete(id); }
+  }
+
+  // 3.1: whether a command only stops processes this task started itself: every number it names is a process launched
+  // after the turn began from the task's own folder (Windows). Anything else (by name, someone else's process, a
+  // command cut short in the card) asks as always.
+  ownProcesses(command, cwd, since) {
+    if (process.platform !== 'win32' || !cwd || String(command ?? '').length >= 400) return false;
+    const pids = pidKills(command);
+    if (!pids?.length || pids.length > 5) return false;
+    const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+      `Get-CimInstance Win32_Process -Filter "${pids.map((p) => `ProcessId=${Number(p)}`).join(' OR ')}" | ForEach-Object { [pscustomobject]@{ id = $_.ProcessId; cmd = $_.CommandLine; at = $_.CreationDate.ToUniversalTime().ToString('o') } } | ConvertTo-Json -Compress`],
+      { encoding: 'utf8', windowsHide: true, timeout: 15_000 });
+    let found = []; try { const j = JSON.parse(r.stdout || '[]'); found = Array.isArray(j) ? j : [j]; } catch { return false; }
+    const dir = path.resolve(cwd).toLowerCase();
+    return pids.every((pid) => found.some((p) => p.id === pid && String(p.cmd ?? '').toLowerCase().includes(dir) && Date.parse(p.at) >= since - 1000));
   }
 
   // ---- the queue: messages written while the agent works

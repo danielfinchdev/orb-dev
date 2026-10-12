@@ -164,6 +164,27 @@ test('al terminar una tarea, Orb para el servidor que dejó en marcha en su carp
   } finally { for (const c of [before, left, elsewhere]) { try { c.kill(); } catch { /* gone */ } } }
 });
 
+test('parar por su número el servidor que arrancó la propia tarea no pregunta; cualquier otro proceso, sí', { skip: process.platform !== 'win32' }, async () => {
+  const { pidKills } = await import('../src/core/guard.mjs');
+  assert.deepEqual(pidKills('taskkill //PID 9824 //T //F; sleep 1; netstat -ano | grep ":5199 " | grep LISTEN | wc -l'), [9824]);
+  assert.deepEqual(pidKills('Stop-Process -Id 12 -Force'), [12]);
+  assert.deepEqual(pidKills('Stop-Process -Id 17624 -Confirm:$false; Start-Sleep 1; netstat -ano | Select-String ":5175 .*LISTENING"'), [17624], 'visto en una prueba real');
+  for (const c of ['taskkill /IM node.exe /F', 'Get-Process node | Stop-Process -Force', 'Stop-Process -Name node', 'taskkill /PID 5 /F; git push', 'pkill node']) assert.equal(pidKills(c), null, c);
+  const { spawn } = await import('node:child_process');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-propio-'));
+  fs.writeFileSync(path.join(dir, 'server.js'), 'setInterval(() => {}, 1000);');
+  const old = spawn(process.execPath, [path.join(dir, 'server.js')], { stdio: 'ignore' });
+  await wait(1200);
+  const since = Date.now();
+  const mine = spawn(process.execPath, [path.join(dir, 'server.js')], { stdio: 'ignore' });
+  await wait(800);
+  try {
+    assert.equal(Sessions.prototype.ownProcesses.call({}, `taskkill /PID ${mine.pid} /F`, dir, since), true, 'el suyo');
+    assert.equal(Sessions.prototype.ownProcesses.call({}, `taskkill /PID ${old.pid} /F`, dir, since), false, 'uno de antes de la tarea');
+    assert.equal(Sessions.prototype.ownProcesses.call({}, `taskkill /PID ${process.pid} /F`, dir, since), false, 'uno de fuera');
+  } finally { old.kill(); mine.kill(); }
+});
+
 // ---- the engine with the fake agents (Claude and Codex available; Cursor and the ACP agents off, see helpers.mjs)
 let t; let engine; let call;
 before(async () => {
