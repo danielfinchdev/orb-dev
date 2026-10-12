@@ -15,7 +15,7 @@ import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { git, isGitRepo, repoRoot } from '../core/workspace.mjs';
 import { account as findAccount, defaultAccount, accountEnv } from '../core/accounts.mjs';
 import { browserKey } from '../core/browser-key.mjs';
-import { PERMISSIONS } from '../core/guard.mjs';
+import { PERMISSIONS, plainAction } from '../core/guard.mjs';
 import { explainFailure } from '../core/agent-errors.mjs';
 import { rememberModels } from './catalog.mjs';
 
@@ -110,7 +110,7 @@ export function describeItem(item) {
   if (item.kind === 'tool') return oneLine(`${b?.name ?? tr('msg.sessions.tool')}${b?.input ? `: ${b.input}` : ''}`, 140);
   if (item.kind === 'file') return oneLine(`${{ add: tr('msg.sessions.fileAdd'), delete: tr('msg.sessions.fileDelete') }[b?.change] ?? tr('msg.sessions.fileEdit')} ${b?.path ?? ''}`, 140);
   if (item.kind === 'reasoning') return tr('msg.sessions.thinking');
-  if (item.kind === 'approval') return oneLine(tr('msg.sessions.waitingPermission', { title: b?.title ?? '' }), 140);
+  if (item.kind === 'approval') return oneLine(tr('msg.sessions.waitingPermission', { title: plainAction(b?.title ?? '', { description: b?.summary, lang: ctx.config?.language }) }), 140);
   if (item.kind === 'text' && item.role === 'assistant') return oneLine(tr('msg.sessions.writes', { text: bodyText(b) }), 140);
   if (item.role === 'error') return oneLine(tr('msg.sessions.errorLine', { text: bodyText(b) }), 140);
   return null;
@@ -311,7 +311,7 @@ export class Sessions {
     if (ev.type === 'session') { if (ev.id && this.get(id)?.cli_session !== ev.id) this.update(id, { cli_session: ev.id }); return; }
     if (ev.type === 'approval') {
       const r = ev.request;
-      const item = this.addItem(id, 'system', 'approval', { id: r.id, tool: r.tool, title: r.title, reason: r.reason, input: r.input, status: 'pending' });
+      const item = this.addItem(id, 'system', 'approval', { id: r.id, tool: r.tool, title: r.title, reason: r.reason, input: r.input, ...(r.summary ? { summary: r.summary } : {}), status: 'pending' });
       this.approvals.set(`${id}:${r.id}`, item.id);
       if (run) run.last = describeItem(item);
       this.emit('approval:changed', { session: id });

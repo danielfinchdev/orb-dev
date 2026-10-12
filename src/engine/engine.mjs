@@ -53,14 +53,20 @@ async function start(home, version, secret, browser) {
   const orchKey = crypto.randomBytes(24).toString('hex');
   board.setting('orchestrator_key_hash', crypto.createHash('sha256').update(orchKey).digest('hex'));
   const sessions = new Sessions(board, { emit, log });
+  const { plainAction } = await import('../core/guard.mjs');
+  const { adapter } = await import('../agents/index.mjs');
   const { recordRate } = await import('../core/budget.mjs');
   // The real usage the agents report (Claude and Codex): the budget guard uses it instead of guessing.
   sessions.onRate = (accountId, rate) => recordRate(board, accountId, rate);
   // A task waiting for a click: a line in the assistant's chat so the user sees it wherever they are (also the phone).
   sessions.onApproval = (s, item) => {
     if (s?.kind !== 'task') return;
+    // 3.1: in plain words (what for, and why it asks); the command itself goes in the notice's details, one click away.
     const wait = Number(ctx.config.approvalWaitMinutes ?? 10);
-    board.addChat('system', tr(wait > 0 ? 'msg.engine.taskNeedsPermissionWait' : 'msg.engine.taskNeedsPermission', { id: s.task_id, title: item.body?.title ?? '', reason: item.body?.reason ?? '', min: wait }), { kind: 'task-approval', session: s.id, task: s.task_id, request: item.body?.id });
+    const what = plainAction(item.body?.title ?? '', { description: item.body?.summary, lang: ctx.config.language });
+    let agent = s.agent; try { agent = adapter(s.agent).label; } catch { /* id */ }
+    board.addChat('system', tr(wait > 0 ? 'msg.engine.taskNeedsPermissionWait' : 'msg.engine.taskNeedsPermission', { id: s.task_id, agent, what, reason: item.body?.reason ?? '', min: wait }),
+      { kind: 'task-approval', session: s.id, task: s.task_id, request: item.body?.id, detail: String(item.body?.title ?? '').slice(0, 2000) });
   };
   // 3.1: the chat line of a task's permission shows how it ended (answered here or in the task, nobody answered, the task
   // stopped), instead of staying «pending» with buttons that no longer work.
@@ -73,7 +79,7 @@ async function start(home, version, secret, browser) {
   };
   sessions.onApprovalExpired = (s, item) => {
     if (s?.kind !== 'task') return;
-    board.notice(tr('msg.engine.permissionTimedOut', { id: s.task_id, title: item.body?.title ?? '', min: Number(ctx.config.approvalWaitMinutes ?? 10) }), 'warning');
+    board.notice(tr('msg.engine.permissionTimedOut', { id: s.task_id, title: plainAction(item.body?.title ?? '', { description: item.body?.summary, lang: ctx.config.language }), min: Number(ctx.config.approvalWaitMinutes ?? 10) }), 'warning');
   };
   const orchestrator = new Orchestrator(board, orchKey, { emit, log });
   const scheduler = new Scheduler(board, sessions, { log, orchestrator });

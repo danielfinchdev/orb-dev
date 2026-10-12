@@ -15,6 +15,8 @@ export default {
   'chat.always': 'Siempre',
   'chat.deny': 'Denegar',
   'chat.viewTask': 'Ver la tarea',
+  'chat.seeDetails': 'Ver detalles',
+  'chat.seeResult': 'Ver lo que hizo',
   'chat.freeMode': 'Modo libre',
   'chat.freeModeBody': 'Sin «Orquestador», {name} lee, ejecuta comandos y edita archivos directamente en la carpeta del proyecto. Nunca hace push ni publica.',
   'chat.freeModeOk': 'Activar modo libre',

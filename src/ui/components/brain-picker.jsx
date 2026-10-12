@@ -31,13 +31,15 @@ export function BrainPicker({ catalog, value, onChange, className }) {
   const model = modelOf(catalog, value);
   // On the button, the agent's default reads as the model it stands for (Codex · GPT-6-Luna), without «Predeterminado».
   const label = model && agent ? (model.id === '' && model.defaultOf ? model.defaultOf : labelOf(agent, model, t)) : (value.model || t('brain.defaultModel'));
+  // 3.1: with several accounts of one agent (Codex Go and Codex Pro), the button names the account in use.
+  const who = agent?.accounts?.length > 1 ? agent.accounts.find((x) => x.id === value.account)?.label ?? agent.label : agent?.label;
   return (
     <DropdownMenu>
       <BubbleTip title={t('brain.title')} text={t('brain.titleText')}>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm" className={cn('max-w-64 gap-1.5', className)} data-testid="brain-picker" aria-label={t('brain.title')}>
             <AgentIcon agent={value.agent} className="size-4" />
-            <span className="truncate">{agent?.label ?? value.agent} · {label}</span>
+            <span className="truncate">{who ?? value.agent} · {label}</span>
             <ChevronDown className="size-3.5 opacity-60" />
           </Button>
         </DropdownMenuTrigger>
@@ -56,10 +58,12 @@ function BrainGroups({ catalog, value, onChange }) {
   const [open, setOpen] = useState(null);
   const list = (a) => { const own = modelsOf(a, value.agent === a.id ? value.account : null); return own.length ? own : [{ id: '', label: t('brain.defaultOf', { agent: a.label }) }]; };
   const recommended = catalog.flatMap((a) => list(a).filter((m) => m.recommended).map((m) => ({ a, m })));
-  const item = (a, m, key, withAgent) => {
-    const on = value.agent === a.id && (value.model ?? '') === m.id;
+  // acc: the account of a group of its own (an agent with several accounts); otherwise the one in use or the first.
+  const item = (a, m, key, withAgent, acc = null) => {
+    const account = acc?.id ?? (value.agent === a.id && a.accounts.some((x) => x.id === value.account) ? value.account : a.accounts[0]?.id ?? a.id);
+    const on = value.agent === a.id && (value.model ?? '') === m.id && (!acc || value.account === acc.id);
     return (
-      <DropdownMenuItem key={key} onSelect={() => onChange({ agent: a.id, model: m.id, account: value.agent === a.id && a.accounts.some((x) => x.id === value.account) ? value.account : a.accounts[0]?.id ?? a.id })} data-testid={`brain-${a.id}-${m.id || 'default'}${withAgent ? '-rec' : ''}`}>
+      <DropdownMenuItem key={key} onSelect={() => onChange({ agent: a.id, model: m.id, account })} data-testid={`brain-${acc?.id ?? a.id}-${m.id || 'default'}${withAgent ? '-rec' : ''}`}>
         {withAgent ? <AgentIcon agent={a.id} className="ml-5 size-3.5" /> : null}
         {/* 2.7: each model says what it is for (fast, balanced, most capable), so no one has to know the names. */}
         <span className={cn('grid min-w-0 flex-1', !withAgent && 'pl-5')}>
@@ -85,6 +89,17 @@ function BrainGroups({ catalog, value, onChange }) {
       <DropdownMenuSeparator />
     </> : null}
     {catalog.map((a) => {
+      // 3.1: one group per account when the agent has several (Codex Go, Codex Pro), each with its own models.
+      if (a.accounts?.length > 1) return a.accounts.map((acc) => {
+        const own = modelsOf(a, acc.id); const models = own.length ? own : [{ id: '', label: t('brain.defaultOf', { agent: acc.label }) }];
+        const current = value.agent === a.id && value.account === acc.id ? models.find((m) => m.id === (value.model ?? '')) : null;
+        return (
+          <div key={acc.id}>
+            {header(acc.id, <AgentIcon agent={a.id} className="size-3.5" />, acc.label, current ? labelOf(a, current, t) : null)}
+            {open === acc.id ? models.map((m) => item(a, m, `${acc.id}-${m.id || 'default'}`, false, acc)) : null}
+          </div>
+        );
+      });
       const current = value.agent === a.id ? list(a).find((m) => m.id === (value.model ?? '')) : null;
       return (
         <div key={a.id}>
