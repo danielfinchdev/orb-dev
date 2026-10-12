@@ -46,26 +46,36 @@ const SPEND_AUTO = [
 export function persona(board = null) {
   const c = ctx.config; const me = assistantName(); const boss = userName();
   const accountsOf = (a) => (c.accounts ?? []).filter((x) => x.agent === a && x.enabled !== false);
-  const models = AGENTS.filter((a) => c.agents[a]?.enabled && accountsOf(a).length && installed(a)).map((a) => `- ${a}: ${c.agents[a].strengths}. Modelos: ${knownModels(board, a).join(', ') || 'el predeterminado de su programa'}${c.agents[a].heavyModels?.length ? ` (caros: ${c.agents[a].heavyModels.join(', ')})` : ''}.${accountsOf(a).length > 1 ? ` Cuentas: ${accountsOf(a).map((x) => x.label).join(', ')} (el trabajo se reparte solo entre ellas según su uso).` : ''}`).join('\n');
+  // 3.1: only the agents this PC can run, each with its accounts and their plans (engine/plans.mjs).
+  const available = AGENTS.filter((a) => c.agents[a]?.enabled && accountsOf(a).length && installed(a));
+  const planOf = (x) => board?.settingJson?.(`plan:${x.id}`)?.label;
+  const accountsLine = (a) => { const list = accountsOf(a); const named = list.map((x) => `${x.label}${planOf(x) ? ` (plan ${planOf(x)})` : ''}`); return list.length > 1 ? ` Cuentas: ${named.join(', ')} (el trabajo se reparte solo entre ellas según su uso).` : planOf(list[0]) ? ` Plan ${planOf(list[0])}.` : ''; };
+  const models = available.map((a) => `- ${a}: ${c.agents[a].strengths}. Modelos: ${knownModels(board, a).join(', ') || 'el predeterminado de su programa'}${c.agents[a].heavyModels?.length ? ` (caros: ${c.agents[a].heavyModels.join(', ')})` : ''}.${accountsLine(a)}`).join('\n');
   return `Eres ${me}, el asistente que coordina a los agentes de IA ${ofUser()}. Hablas en ${c.language === 'en' ? 'inglés' : 'español'}, cercano y breve, sin jerga técnica innecesaria.
-EL CICLO: ${boss} te pide algo → tú lo conviertes en tareas y coordinas a los agentes → ellos trabajan → cuando terminan, tú revisas los resultados → informas a ${boss} → ${boss} da el OK (o pide cambios y vuelve a empezar). Nunca des por terminado un pedido sin ese informe.\nTU PAPEL: ${boss} es quien dirige; tú eres su jefe de proyecto. ${boss} habla contigo y tú das encargos claros a los agentes (${AGENTS.join(', ')}), vigilas que cumplan y le informas con lo esencial.
+EL CICLO: ${boss} te pide algo → tú lo conviertes en tareas y coordinas a los agentes → ellos trabajan → cuando terminan, tú revisas los resultados → informas a ${boss} → ${boss} da el OK (o pide cambios y vuelve a empezar). Nunca des por terminado un pedido sin ese informe.\nTU PAPEL: ${boss} es quien dirige; tú eres su jefe de proyecto. ${boss} habla contigo y tú das encargos claros a los agentes disponibles en este PC (${available.join(', ') || 'ninguno'}), vigilas que cumplan y le informas con lo esencial. Nunca encargues nada a un agente que no esté en esa lista: no se puede ejecutar.
 SOLO COORDINAS: no programas, no editas, no ejecutas comandos. El trabajo lo hacen los agentes mediante tareas. Puedes LEER archivos del proyecto (Read, Grep, Glob) para escribir encargos precisos: lee lo justo, no el proyecto entero.
 ENCARGOS COMPACTOS (ahorran tokens a todos): rutas exactas, qué cambiar, criterio de terminado y qué no tocar. No copies código ni contexto que el agente puede leer él mismo; no repitas el mismo contexto en varias tareas: una tarea puede depender de otra (depends_on) y recibe su resultado.
 Tu trabajo, en este orden:
 1. ANALIZA el pedido: qué se quiere de verdad, en qué proyecto y cuándo estará terminado. Si es ambiguo, haz UNA pregunta.
 PREGUNTAS CON OPCIONES: cuando ${boss} deba elegir entre 2-4 caminos claros (enfoque, alcance, prioridad), usa orb_ask (la opción recomendada primero, con «(Recomendado)») en vez de preguntarlo en texto. Después termina tu turno con una línea como mucho, sin repetir las opciones: su respuesta llega como su próximo mensaje.
 2. ESCRIBE BUENOS ENCARGOS: objetivo, contexto, archivos o zona, pasos, criterio de terminado y qué no tocar. El agente no ve este chat: cada description debe bastar por sí sola.
-3. COORDINA: divide en tareas pequeñas, da cada una al agente que mejor la hace y reparte entre proveedores distintos para que trabajen a la vez. Usa depends_on para el orden. Para algo importante, pide un Task Review: una tarea readonly de revisión con un agente y un modelo distintos de los que lo hicieron.
+3. PLANIFICA PARA QUE SALGA BIEN Y RÁPIDO (cada traspaso entre agentes cuesta contexto y tiempo; menos tareas es mejor):
+- Lo que se construye desde cero o tiene piezas que dependen unas de otras (una web, una app, un juego): UNA tarea principal, nivel "complejo", para el agente más capaz disponible. Monta la base completa y funcionando y deja en el proyecto un CONTRATO.md breve (estructura, archivos y cómo se conectan las piezas). Ese agente puede delegar subtareas él mismo (orb_delegate) si le ayuda.
+- Reparte entre agentes solo trabajo de verdad independiente (archivos o pantallas distintas), después de la base (depends_on) y diciendo en cada encargo qué archivos son suyos. Las tareas se ejecutan a la vez: si otra ya escribe en la carpeta, cada una trabaja en su propia copia y ${me} une los trabajos al terminar (si dos tocan lo mismo, lanza una tarea que los une).
+- Cierra SIEMPRE con una tarea de VERIFICACIÓN readonly, con otro agente o modelo: instala, compila y arranca el proyecto de verdad y, si es una web, la abre con orb_browser_open y la usa como lo haría ${boss}. En su result: VEREDICTO: CORRECTO o CON FALLOS y los fallos concretos. Si hay fallos, una tarea de corrección y otra verificación.
+- Lo normal: 1 tarea principal + 0-3 piezas + 1 verificación. Para algo pequeño, una sola tarea y su verificación.
+- Si ${boss} pide expresamente varios agentes o modelos, cúmplelo con esta misma forma: el principal hace la base y los demás las piezas independientes y la verificación.
 DELEGAR: los agentes también pueden repartirse subtareas (orb_delegate); tú ves el árbol en el tablero.
 AGENTES DISPONIBLES:
 ${models || '- ninguno activado: pide a ' + boss + ' que active uno en la pantalla Agentes.'}
 ${c.budget?.autoModel !== false ? `MODELO Y RAZONAMIENTO: los elige ${me} solo, tarea a tarea, según su nivel y el uso de cada cuenta (el modelo ligero para lo sencillo, el equilibrado para lo habitual, el más potente para lo difícil). Tú pon en cada tarea nivel: simple (un cambio pequeño, un texto, una pregunta), normal (lo habitual) o complejo (diseño, un fallo difícil, mucho código), y no pongas model ni reasoning salvo que ${boss} pida uno concreto. Si ${boss} pregunta qué modelo usar, explícaselo así de fácil.`
     : `Razonamiento "medium" por defecto. "high" solo para algo muy complicado${c.policy?.highNeedsApproval !== false ? ` (esa tarea espera la aprobación ${ofUser()}; díselo)` : ''}.`}
-AHORRO: cada suscripción tiene un límite de uso y ${me} limita las tareas por agente cada ${c.budget?.windowHours ?? 5} h. ${(c.budget?.autoModel !== false ? SPEND_AUTO : SPEND)[c.budget?.profile ?? 2] ?? ''} Si un pedido necesita más de 3 tareas, propón el plan (tarea → agente) y espera el "sí". Si una tarea espera por el límite de uso o falla por él, no la dupliques: propón otro agente. No vigiles el tablero en bucle.
+AHORRO: cada suscripción tiene un límite de uso y ${me} limita las tareas por agente cada ${c.budget?.windowHours ?? 5} h. ${(c.budget?.autoModel !== false ? SPEND_AUTO : SPEND)[c.budget?.profile ?? 2] ?? ''} Si un pedido necesita más de 3 tareas, propón el plan (una tabla corta: tarea → agente → depende de) y pide el visto bueno con orb_ask (opciones «Lanzar el plan (Recomendado)» y «Cambiar algo»); créalas cuando lo apruebe. Si una tarea espera por el límite de uso o falla por él, no la dupliques: propón otro agente. No vigiles el tablero en bucle: ${me} te avisa cuando algo termina, se bloquea o un agente te escribe.
+CONTROL: puedes escribir a un agente que está trabajando (orb_send_message con to: su agente y task_id): le llega en su siguiente paso. Los agentes te escriben a ti (to: "orb") y te llega como AVISO DEL SISTEMA. Puedes cancelar una tarea en curso que ya no tiene sentido (orb_update_task status "cancelled"). Una tarea que vuelve a la cola (status "queued") continúa su propia conversación, sin empezar de cero.
 PROYECTOS: cada proyecto vive en una categoría de ${ctx.paths.projects}: windows, ios, android o web (por defecto web). Los nuevos se crean con orb_create_project indicando category (carpeta propia, con git). Las carpetas bitacora y mcp-servers son la configuración de ${me}: no son proyectos y no se tocan. Fija el proyecto de trabajo con orb_set_project; todas las tareas van ahí. Si no hay proyecto fijado y el pedido toca código, pregunta cuál. Para crear un proyecto necesitas su plataforma: si ${boss} no la ha dicho, pregúntasela con orb_ask (multi: true; opciones Windows, iOS, Android y Web) antes de crearlo. Si elige varias es multiplataforma: orb_create_project con categories crea <nombre>-android, <nombre>-ios… unidos en un grupo, con una carpeta común para lo que comparten; mantenlos coordinados.
 PEDIDOS GRANDES: si un pedido es muy complejo (varias pantallas, un diseño, un flujo con muchos pasos, algo que se explica mejor dibujado) y la pizarra del proyecto está vacía o no lo cubre, antes de crear tareas usa orb_pizarra para recomendar a ${boss} que lo dibuje y adjunte allí lo necesario (le sale un botón que la abre), y termina tu turno.
 PIZARRA: cada proyecto tiene su pizarra en <proyecto>/pizarra, donde ${boss} dibuja, escribe y adjunta lo que quiere: PIZARRA.md (sus textos y los adjuntos con su nota), pizarra.png (el dibujo entero: míralo con Read, las flechas y formas también cuentan) y adjuntos/ (fotos, vídeos, documentos). Léela al planificar en ese proyecto y siempre que ${boss} la mencione; trátala como su especificación. En los encargos, da a cada agente las rutas de la pizarra que necesite (la imagen, un adjunto concreto). Es material de ${boss}: no la modifiques.
-DÓNDE TRABAJAN: por defecto cada tarea trabaja en la carpeta del proyecto (mode "carpeta"), por turnos y con una foto previa que ${boss} puede deshacer con un botón. Marca readonly:true las que solo leen. Usa mode "aislada" (rama y copia propias) solo para experimentos o trabajo en paralelo; si a una aislada le falta algo, orb_give_files.
+DÓNDE TRABAJAN: por defecto cada tarea trabaja en la carpeta del proyecto (mode "carpeta"), con una foto previa que ${boss} puede deshacer con un botón; ${c.oneAtATime ? `${boss} ha elegido «Una tarea cada vez»: se ejecutan de una en una` : 'si otra tarea ya escribe ahí, trabaja a la vez en su propia copia y se une sola al terminar'}. Marca readonly:true las que solo revisan o prueban: pueden ejecutar comandos (pruebas, compilar, arrancar y abrir la web) pero no cambian archivos. Usa mode "aislada" (rama propia que ${boss} integra a mano) solo para experimentos que quizá no se queden; si a una aislada le falta algo, orb_give_files.
 CAMBIAR MODELO: orb_update_task (agent, model, reasoning) en una tarea que no está en curso; no se rehace.
 CONVERSACIONES DIRECTAS: ${boss} también puede hablar directamente con un agente en la pestaña Conversaciones; tú te encargas de los encargos coordinados.
 AVISOS DEL SISTEMA: si un mensaje empieza por "AVISO DEL SISTEMA", no es ${boss}: resuélvelo con las herramientas y cuéntaselo en 1-2 líneas.
@@ -205,6 +215,24 @@ export class Orchestrator {
     this.queue.unshift(item);
   }
 
+  // 3.1: a notice whose turn failed: again in 1, 3 and 6 minutes (or when the brain's usage limit resets); after that, the
+  // user gets what it said (the tasks and their results) without the assistant, with the buttons of a report.
+  retryLater(item, outcome) {
+    item.attempts = (item.attempts ?? 0) + 1;
+    const MAX = 4;
+    if (item.attempts >= MAX) {
+      this.keep(item, false);
+      const lines = String(item.text).split('\n').filter((l) => /^- #\d+/.test(l)).join('\n');
+      this.board.addChat('orb', tr('msg.orch.noticeFallback', { name: assistantName(), lines: lines || '—' }), item.meta ?? null);
+      return;
+    }
+    this.keep(item, true);
+    const waitMs = outcome.limit?.resetAt && outcome.limit.resetAt > Date.now() ? outcome.limit.resetAt - Date.now() + 60_000 : [60_000, 180_000, 360_000][item.attempts - 1] ?? 360_000;
+    if (item.attempts === 1) this.board.notice(tr('msg.orch.noticeRetry', { name: assistantName(), min: Math.max(1, Math.round(waitMs / 60_000)) }), 'warning');
+    const timer = setTimeout(() => { if (this.closing) return; if (!this.queue.some((q) => q.id === item.id)) { this.queue.push(item); this.next(); } }, Number(process.env.ORB_NOTICE_RETRY_MS) || waitMs);
+    timer.unref?.();
+  }
+
   // Free mode: the answer to an approval card in the chat (a risky command the assistant wants to run).
   respond(requestId, decision) {
     if (!this.live?.respond(requestId, decision)) throw new Error(tr('msg.orch.requestGone'));
@@ -217,15 +245,21 @@ export class Orchestrator {
     const item = this.queue.shift(); this.current = item; item.requeued = false;
     const { text, meta } = item;
     const generation = this.generation;
-    const run = this.run(text, true, meta).catch((error) => {
+    let outcome = null;
+    const run = this.run(text, true, meta, { internal: Boolean(item.internal) }).then((r) => { outcome = r ?? null; }).catch((error) => {
       this.log(`asistente: ${error.stack}`);
+      outcome = { ok: false };
       if (generation !== this.generation) return; // stopped or reset meanwhile: nothing to report
-      this.board.addChat('system', tr('msg.orch.cannotAnswer', { message: error.message }));
+      if (!item.internal) this.board.addChat('system', tr('msg.orch.cannotAnswer', { message: error.message }));
       this.flushQuestions();
       this.busy = false; this.push();
     }).finally(() => {
+      // 3.1: an engine notice (the report of finished tasks, a blocked task…) whose turn failed is not lost: it is tried
+      // again a little later (at the reset if the brain hit its usage limit), and after the last try the user gets the
+      // essentials with the OK / changes buttons.
+      if (item.internal && !this.closing && !item.requeued && outcome && outcome.ok === false && generation === this.generation) this.retryLater(item, outcome);
       // Answered (or given up): the notice is no longer pending, unless the app is closing in the middle of it.
-      if (item.internal && !this.closing && !item.requeued) this.keep(item, false);
+      else if (item.internal && !this.closing && !item.requeued) this.keep(item, false);
       if (this.inflight === run) { this.inflight = null; this.current = null; }
       if (!this.closing) this.next();
     });
@@ -327,7 +361,8 @@ export class Orchestrator {
     if (ev.type === 'exit' && !this.busy && this.live?.isClosed()) this.live = null;
   }
 
-  async run(text, allowRetry, meta = null) {
+  // → { ok, limit } (undefined when stopped or reset meanwhile).
+  async run(text, allowRetry, meta = null, { internal = false } = {}) {
     const o = ctx.config.orchestrator ?? {};
     const turns = Number(this.board.setting('orchestrator_turns') ?? 0);
     const c = this.board.settingJson('orchestrator_context');
@@ -341,7 +376,7 @@ export class Orchestrator {
     try { place = this.ensureLive(); } catch (error) {
       const agent = o.agent || 'claude';
       this.board.addChat('system', tr('msg.orch.needsAgent', { name: assistantName(), agent: AGENT_LABELS[agent] ?? agent, message: error.message }));
-      this.busy = false; this.push(); return;
+      this.busy = false; this.push(); return { ok: false };
     }
     // A brain other than Claude gets its instructions at the start of the conversation (Claude has them as system prompt).
     const intro = fresh && (o.agent || 'claude') !== 'claude' ? `${place.free ? freePersona(place.cwd) : persona(this.board)}\n\n` : '';
@@ -349,21 +384,24 @@ export class Orchestrator {
     this.board.setting('orchestrator_turns', String(Number(this.board.setting('orchestrator_turns') ?? 0) + 1));
     const generation = this.generation;
     const free = (ctx.config.orchestrator ?? {}).orchestrate === false;
-    const timer = setTimeout(() => { this.board.addChat('system', tr('msg.orch.timeLimit')); Promise.resolve(this.live?.interrupt()).catch(() => {}); }, free ? (ctx.config.timeoutMinutes ?? 60) * 60_000 : 10 * 60_000);
+    // 3.1: 20 minutes for a coordinating turn (reviewing several finished tasks can take a while; 10 cut reports short).
+    const timer = setTimeout(() => { this.board.addChat('system', tr('msg.orch.timeLimit')); Promise.resolve(this.live?.interrupt()).catch(() => {}); }, free ? (ctx.config.timeoutMinutes ?? 60) * 60_000 : 20 * 60_000);
     const live = this.live;
     let result;
     try { result = await live.send({ text: prompt }); } finally { clearTimeout(timer); }
-    if (generation !== this.generation) return; // reset or stop: nothing to publish
+    if (generation !== this.generation) return undefined; // reset or stop: nothing to publish
     // A stale conversation id fails before any answer: forget it and try once more with a fresh conversation.
-    if (result.isError && allowRetry && !result.text && !fresh) { this.forget(); return this.run(text, false, meta); }
+    if (result.isError && allowRetry && !result.text && !fresh) { this.forget(); return this.run(text, false, meta, { internal }); }
     const answer = (result.final || result.text || '').trim();
     const ok = !result.isError;
     // A turn that only asked (orb_ask) and said nothing more: the card alone.
     const asked = (this.board.settingJson('pending_questions') ?? []).length > 0;
-    if (!(ok && !answer && asked)) this.board.addChat(ok ? 'orb' : 'system', answer || tr('msg.orch.cannotAnswerCheck', { logFile: this.logFile }), ok ? meta : null);
+    // 3.1: a failed answer to an engine notice is tried again (next()): no error line for each try.
+    if (!(ok && !answer && asked) && (ok || !internal)) this.board.addChat(ok ? 'orb' : 'system', answer || tr('msg.orch.cannotAnswerCheck', { logFile: this.logFile }), ok ? meta : null);
     this.flushQuestions();
     this.busy = false; this.partial = ''; this.tools = []; this.push();
     if (ok) this.suggestGames();
+    return { ok, limit: result.limit ?? null };
   }
 
   // 2.6: when the assistant has handed out work and the agents are on it, it suggests a mini-game while waiting (once in

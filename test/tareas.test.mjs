@@ -45,7 +45,9 @@ test('límite de uso con «seguir al reiniciarse» desactivado: espera al usuari
   await wait(3500); // the reset passed and several ticks went by
   assert.equal((await call('tasks.get', { id: task.id })).status, 'limited');
   assert.equal((await call('tasks.retry', { id: task.id })).status, 'queued', 'una tarea limitada se puede reintentar');
-  assert.equal((await status(call, task.id, ['done', 'limited'])).status, 'limited', 'el agente vuelve a encontrarse el límite (sigue diciendo LIMITE)');
+  // 3.1: a retry continues the agent's own conversation (it does not start the task from zero again).
+  const again = await status(call, task.id, ['done', 'limited']);
+  assert.ok(again.events.some((e) => e.kind === 'followup.sent' && /misma conversación/.test(e.detail)), 'sigue en la misma conversación');
 });
 
 test('continuar tras reiniciar: la tarea que trabajaba al cerrarse la app sigue en la misma conversación', async () => {

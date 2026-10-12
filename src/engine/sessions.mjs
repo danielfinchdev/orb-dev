@@ -9,6 +9,7 @@ import { ctx, tr } from '../core/context.mjs';
 import { adapter, executable } from '../agents/index.mjs';
 import { orbMcpServer, optiMcpServer } from '../agents/common.mjs';
 import { COORDINATOR_DENIED } from '../agents/claude.mjs';
+import { CURSOR_FILES } from '../agents/cursor.mjs';
 import { optiPersona } from './opti.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { git, isGitRepo, repoRoot } from '../core/workspace.mjs';
@@ -88,15 +89,17 @@ export function placeAttachments(files, cwd) {
   return out;
 }
 
-// The attachments folder (pictures, long instructions for Cursor) never goes into the project's git.
-function keepOutOfGit(cwd) {
+// The attachments folder (pictures, long instructions for Cursor) never goes into the project's git; 3.1: nor do the files
+// Orb gives Cursor for one turn (its tools and rules, see cursor.mjs).
+function keepOutOfGit(cwd, entries = [`${ATTACH_DIR}/`]) {
   if (isGitRepo(cwd)) {
     // --git-path answers relative to the folder git ran in (cwd), or absolute for worktrees.
     const exclude = git(cwd, 'rev-parse', '--git-path', 'info/exclude').stdout.trim() || path.join(repoRoot(cwd), '.git', 'info', 'exclude');
     const abs = path.resolve(cwd, exclude);
     try {
       const text = fs.existsSync(abs) ? fs.readFileSync(abs, 'utf8') : '';
-      if (!text.split(/\r?\n/).includes(`${ATTACH_DIR}/`)) { fs.mkdirSync(path.dirname(abs), { recursive: true }); fs.appendFileSync(abs, `${text && !text.endsWith('\n') ? '\n' : ''}${ATTACH_DIR}/\n`); }
+      const missing = entries.filter((e) => !text.split(/\r?\n/).includes(e));
+      if (missing.length) { fs.mkdirSync(path.dirname(abs), { recursive: true }); fs.appendFileSync(abs, `${text && !text.endsWith('\n') ? '\n' : ''}${missing.join('\n')}\n`); }
     } catch { /* not fatal: the commit step also skips this folder */ }
   }
 }
@@ -279,7 +282,7 @@ export class Sessions {
     const entry = { key, lastUsed: Date.now(), logFile, live: null };
     // Long instructions Cursor gets in a file go to the attachments folder (out of git), not among the project's files.
     const promptDir = path.join(s.cwd, ATTACH_DIR);
-    if (s.agent === 'cursor') keepOutOfGit(s.cwd);
+    if (s.agent === 'cursor') keepOutOfGit(s.cwd, [`${ATTACH_DIR}/`, ...CURSOR_FILES]);
     entry.live = a.createLive({
       promptDir,
       exe, cwd: s.cwd, model: s.model, reasoning: s.reasoning, permission: s.permission,
@@ -400,10 +403,11 @@ export class Sessions {
     }
     const waitMin = Number(ctx.config.approvalWaitMinutes ?? 10);
     if (!taskId || !(waitMin > 0)) return;
+    const waitMs = Number(process.env.ORB_APPROVAL_WAIT_MS) || waitMin * 60_000; // tests: seconds instead of minutes
     for (const [key, itemId] of [...this.approvals.entries()].filter(([k]) => k.startsWith(`${id}:`))) {
       const row = this.board.one('SELECT * FROM session_items WHERE id = ?', itemId); if (!row) continue;
       const item = parseItem(row);
-      if (item.body?.status !== 'pending' || t - Date.parse(item.at) < waitMin * 60_000) continue;
+      if (item.body?.status !== 'pending' || t - Date.parse(item.at) < waitMs) continue;
       const requestId = key.slice(id.length + 1);
       if (!this.lives.get(id)?.live.respond(requestId, 'deny')) continue;
       this.updateItem(itemId, { ...item.body, status: 'timeout' });

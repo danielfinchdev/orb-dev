@@ -16,7 +16,22 @@ export const budgetConfig = () => {
 };
 // Limits of an account: its own entry in budget.agents, else its agent's, else the defaults.
 const agentOf = (id) => findAccount(id)?.agent ?? id;
-const rules = (id) => ({ maxTasks: 20, maxHeavy: 6, ...(budgetConfig().agents[agentOf(id)] ?? {}), ...(budgetConfig().agents[id] ?? {}), heavyModels: ctx.config?.agents?.[agentOf(id)]?.heavyModels ?? [] });
+// 3.1: the limits are set for a Pro-like plan and scale with the account's real plan (engine/plans.mjs): a Max 20x or a
+// ChatGPT Pro takes much more work before its real usage is known; a free or Go plan, less and no heavy models.
+const PLAN_FACTOR = {
+  claude: { free: 0.5, pro: 1, max5: 4, max20: 12, team: 2, enterprise: 4 },
+  codex: { free: 0.5, go: 0.75, plus: 1, edu: 1, team: 1.5, business: 1.5, pro: 5, enterprise: 3 },
+  cursor: { free: 0.5, pro: 1, business: 1.5, proplus: 2, ultra: 6 }
+};
+const NO_HEAVY = new Set(['free', 'go']);
+export function planOf(board, id) { const p = board?.settingJson?.(`plan:${id}`); return p?.plan ? p : null; }
+const rules = (id, board = null) => {
+  const base = { maxTasks: 20, maxHeavy: 6, ...(budgetConfig().agents[agentOf(id)] ?? {}), ...(budgetConfig().agents[id] ?? {}), heavyModels: ctx.config?.agents?.[agentOf(id)]?.heavyModels ?? [] };
+  const plan = planOf(board, id)?.plan;
+  const f = plan ? PLAN_FACTOR[agentOf(id)]?.[plan] : null;
+  if (!f) return base;
+  return { ...base, maxTasks: Math.max(1, Math.round(base.maxTasks * f)), maxHeavy: NO_HEAVY.has(plan) ? 0 : Math.round(base.maxHeavy * f), plan };
+};
 // Models that use the quota faster: the agent's heavyModels and, 2.7, any of a known heavy family (Opus, Fable, Pro…), so
 // a model Orb picks by its full name (claude-opus-5-5) counts as heavy too, not only the alias «opus».
 export const HEAVY_FAMILY = /opus|fable|(^|[-_.])pro($|[-_.])|ultra|max\b|xhigh|o3\b|o1\b/i;
@@ -88,7 +103,7 @@ export function canLaunch(board, id, model) {
   if (until) return { ok: false, reason: why ? tr('msg.budget.paused', { name: nameOf(id), time: hhmm(until), why }) : tr('msg.budget.noQuota', { name: nameOf(id), time: hhmm(until) }) };
   const real = realRate(board, id);
   if (real?.utilization != null && real.utilization >= budgetConfig().stopAt) return { ok: false, reason: tr('msg.budget.realUsed', { name: nameOf(id), pct: Math.round(real.utilization * 100), reset: real.resetAt ? tr('msg.budget.realUsedReset', { time: hhmm(real.resetAt) }) : '' }) };
-  const r = rules(id); const used = windowUsage(board, id); const h = budgetConfig().windowHours;
+  const r = rules(id, board); const used = windowUsage(board, id); const h = budgetConfig().windowHours;
   if (used.tasks >= r.maxTasks) return { ok: false, reason: tr('msg.budget.maxTasks', { name: nameOf(id), tasks: used.tasks, h, max: r.maxTasks }) };
   if (isHeavy(id, model) && used.heavy >= r.maxHeavy) return { ok: false, reason: tr('msg.budget.maxHeavy', { name: nameOf(id), heavy: used.heavy, h, max: r.maxHeavy }) };
   return { ok: true, reason: '' };
@@ -97,15 +112,15 @@ export function canLaunch(board, id, model) {
 // Order candidate accounts ([{ id, agent }]) by how much of their window they have used (least used first).
 export function rankAccounts(board, candidates, model) {
   return candidates
-    .map((acc, index) => ({ account: acc.id, agent: acc.agent, index, check: canLaunch(board, acc.id, model), used: realRate(board, acc.id)?.utilization ?? windowUsage(board, acc.id).tasks / Math.max(1, rules(acc.id).maxTasks) }))
+    .map((acc, index) => ({ account: acc.id, agent: acc.agent, index, check: canLaunch(board, acc.id, model), used: realRate(board, acc.id)?.utilization ?? windowUsage(board, acc.id).tasks / Math.max(1, rules(acc.id, board).maxTasks) }))
     .sort((a, b) => a.used - b.used || a.index - b.index);
 }
 
 export function usageReport(board) {
   return accounts().map((acc) => {
-    const r = rules(acc.id); const used = windowUsage(board, acc.id);
+    const r = rules(acc.id, board); const used = windowUsage(board, acc.id);
     const real = realRate(board, acc.id);
-    return { account: acc.id, agent: acc.agent, label: acc.label, used: used.tasks, max: r.maxTasks, heavy: used.heavy, maxHeavy: r.maxHeavy, cooldownUntil: cooldownUntil(board, acc.id) || null, windowHours: budgetConfig().windowHours, stopAt: budgetConfig().stopAt,
+    return { account: acc.id, agent: acc.agent, label: acc.label, plan: planOf(board, acc.id)?.label ?? null, used: used.tasks, max: r.maxTasks, heavy: used.heavy, maxHeavy: r.maxHeavy, cooldownUntil: cooldownUntil(board, acc.id) || null, windowHours: budgetConfig().windowHours, stopAt: budgetConfig().stopAt,
       real: real ? { utilization: real.utilization, resetAt: real.resetAt, window: real.window } : null, windows: rateWindows(board, acc.id) };
   });
 }

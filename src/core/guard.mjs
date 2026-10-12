@@ -11,7 +11,9 @@
 import path from 'node:path';
 import { translate } from './i18n.mjs';
 
-export const PERMISSIONS = ['leer', 'editar', 'preguntar', 'total'];
+//   probar     (3.1, read-only tasks: reviews, verification) read and run commands (tests, the build, a dev server to
+//              open in the browser), but change no file; risky commands ask first
+export const PERMISSIONS = ['leer', 'probar', 'editar', 'preguntar', 'total'];
 // What a tool does, whatever the agent calls it (Claude tool names, Codex items, ACP kinds).
 const READ = /^(read|glob|grep|ls|search|find|view|notebookread|webfetch|websearch|fetch|think|todowrite|todoread|task|agent|exitplanmode|skill|toolsearch|listmcpresources|readmcpresource|bashoutput|monitor)$/i;
 const EDIT = /^(edit|write|multiedit|notebookedit|filechange|applypatch|edit_file|write_file|replace|move|delete|create)$/i;
@@ -79,6 +81,7 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
   if (permission === 'total') return { decision: 'allow', reason: T('full') };
   if (cls === 'read' || cls === 'orb') return { decision: 'allow', reason: T('readOnlyTool') };
   if (permission === 'leer') return { decision: 'deny', reason: T('readOnlyChat') };
+  if (permission === 'probar' && cls === 'edit') return { decision: 'deny', reason: T('testOnly') };
   if (cls === 'edit') return { decision: 'allow', reason: T('edits') };
   if (cls === 'exec') {
     const risk = riskOf(command, lang);

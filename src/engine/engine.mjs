@@ -112,6 +112,12 @@ async function start(home, version, secret, browser) {
   // once every 12 h), so the brain selector names them before any conversation.
   const { refreshAllModels } = await import('./catalog.mjs');
   setTimeout(() => { refreshAllModels(board, { log }).catch(() => {}); }, Number(process.env.ORB_MODELS_DELAY_MS ?? 3000)).unref?.();
+  // 3.1: the plan of every account (Claude Pro, ChatGPT Plus, Cursor Pro…), so the usage limits fit what is paid for.
+  // Not with the test agents: a fake engine must not start the real CLIs.
+  if (!process.env.ORB_FAKE_AGENTS) {
+    const { refreshPlans } = await import('./plans.mjs');
+    setTimeout(() => { refreshPlans(board, { log }).catch(() => {}); }, Number(process.env.ORB_MODELS_DELAY_MS ?? 3000) + 2000).unref?.();
+  }
   // 2.7: the bridge with Open Control Edge (engine/bridge.mjs). Only on Windows, only for the app's own engine (main.mjs
   // sets ORB_BRIDGE) and never with the test agents: made-up runs must not reach OCE as real data.
   if (process.platform === 'win32' && process.env.ORB_BRIDGE === '1' && !process.env.ORB_FAKE_AGENTS) {

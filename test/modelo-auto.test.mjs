@@ -19,9 +19,10 @@ after(async () => { await engine?.stop(); t.cleanup(); });
 
 const picks = async () => (await call('models.guide')).find((a) => a.id === 'claude').picks;
 
-test('equilibrado: Haiku para lo sencillo, Sonnet 5.5 para lo normal y Opus 5.5 (no Fable) para lo difícil', async () => {
+// 3.1: a task that writes code never gets a light model (the guide shows tasks that write): Haiku stays for reading.
+test('equilibrado: Sonnet 5.5 para lo sencillo y lo normal (nunca Haiku para escribir código) y Opus 5.5 (no Fable) para lo difícil', async () => {
   const p = await picks();
-  assert.equal(p.simple.label, 'Haiku 4.5'); assert.equal(p.simple.reasoning, 'low');
+  assert.equal(p.simple.label, 'Sonnet 5.5'); assert.equal(p.simple.reasoning, 'low');
   assert.equal(p.normal.label, 'Sonnet 5.5'); assert.equal(p.normal.reasoning, 'medium');
   assert.equal(p.complejo.label, 'Opus 5.5');
   assert.equal(p.complejo.reasoning, 'medium', 'el alto espera aprobación: Orb no lo elige solo');
@@ -32,7 +33,7 @@ test('equilibrado: Haiku para lo sencillo, Sonnet 5.5 para lo normal y Opus 5.5 
 test('con máximo ahorro, lo difícil va al equilibrado; con máximo uso, lo normal al más potente', async () => {
   await call('config.save', { patch: { budget: { profile: 0 } } });
   let p = await picks();
-  assert.equal(p.complejo.label, 'Sonnet 5.5'); assert.equal(p.normal.label, 'Haiku 4.5');
+  assert.equal(p.complejo.label, 'Sonnet 5.5'); assert.equal(p.normal.label, 'Sonnet 5.5', 'escribir código: nunca el ligero');
   await call('config.save', { patch: { budget: { profile: 4 }, policy: { highNeedsApproval: false } } });
   p = await picks();
   assert.equal(p.normal.label, 'Opus 5.5'); assert.equal(p.complejo.reasoning, 'high', 'sin aprobación, el alto sí');
