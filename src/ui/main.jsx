@@ -3,7 +3,8 @@ import './lib/web-bridge.js'; // first: in a phone's browser it provides window.
 import './app.css';
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Toaster, toast } from 'sonner';
+import { Toaster } from 'sonner';
+import { notify } from '@/lib/notify.js';
 import { Menu, Smartphone, MessagesSquare } from 'lucide-react';
 import { PageHeader } from '@/components/page.jsx';
 import { MobileTabs, MoreView } from '@/components/mobile-tabs.jsx';
@@ -148,10 +149,11 @@ function Root() {
       if (event === 'board:changed' || event === 'session:update' || event === 'session:removed' || event === 'config:changed' || event === 'approval:changed') refreshSoon();
       if (event === 'chat:state') setState((s) => ({ app: { ...s.app, chat: payload } }));
       // 2.7: what only informs (working folder, brain in use, schedule created…) passes by as a notification.
-      if (event === 'notice' && payload?.body) (toast[payload.tone] ?? toast.info)(payload.body);
+      // 3.2: through lib/notify.js: one at a time, never repeated, kept under the bell.
+      if (event === 'notice' && payload?.body) notify({ body: payload.body, tone: payload.tone });
       if (event === 'ui:navigate') go(payload);
-      if (event === 'engine:stopped') toast.error(tNow('app.engineStopped'));
-      if (event === 'engine:restarted') { toast.warning(tNow('app.engineRestarted')); refreshSoon(); }
+      if (event === 'engine:stopped') notify({ body: tNow('app.engineStopped'), tone: 'error' });
+      if (event === 'engine:restarted') { notify({ body: tNow('app.engineRestarted'), tone: 'warning' }); refreshSoon(); }
     });
   }, [phase]);
   if (phase === 'setup') return <>{strip}<Setup onDone={async () => { await refresh(); setPhase('app'); }} /></>;
@@ -181,7 +183,8 @@ function ThemedToaster() {
     return () => obs.disconnect();
   }, []);
   // 3.1: below the window's header (offset), so a passing notice never covers the menu or the window buttons.
-  return <Toaster position="top-center" offset={72} mobileOffset={72} theme={dark ? 'dark' : 'light'} richColors closeButton toastOptions={{ className: 'font-sans' }} />;
+  // 3.2: one on screen at a time (the newest); the others are under the bell of the top bar.
+  return <Toaster position="top-center" offset={72} mobileOffset={72} visibleToasts={1} theme={dark ? 'dark' : 'light'} richColors closeButton toastOptions={{ className: 'font-sans' }} />;
 }
 
 applyTheme();

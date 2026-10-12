@@ -21,6 +21,19 @@ after(async () => { await engine?.stop(); t.cleanup(); });
 test('2.7: lo que solo informa (carpeta de trabajo) pasa como notificación, no como línea del chat', async () => {
   await until(async () => events.some((e) => e.event === 'notice' && /Carpeta de trabajo: web/.test(e.payload?.body) && e.payload.tone === 'info'), 'aviso de la carpeta', 5000);
   assert.ok(!(await call('chat.list')).some((m) => /Carpeta de trabajo/.test(m.body)));
+  // 3.2: the same folder again (the assistant sets it on each request) says nothing more.
+  const count = () => events.filter((e) => e.event === 'notice' && /Carpeta de trabajo/.test(e.payload?.body)).length;
+  const before = count();
+  await call('projects.setActive', { name: 'web' }); await call('projects.setActive', { name: 'web' });
+  await new Promise((r) => setTimeout(r, 600));
+  assert.equal(count(), before, 'sin avisos repetidos de la misma carpeta');
+});
+
+test('3.2: el plan Pro Lite de Codex se reconoce con su nombre', async () => {
+  const { codexPlan, PLAN_LABELS } = await import('../src/engine/plans.mjs');
+  assert.equal(codexPlan('prolite'), 'prolite');
+  assert.equal(codexPlan('Pro Lite'), 'prolite');
+  assert.equal(PLAN_LABELS.prolite, 'Pro Lite');
 });
 
 test('2.7: Pizarra: se guarda en la carpeta pizarra del proyecto, fuera de git, con resumen para el asistente', async () => {

@@ -246,35 +246,58 @@ html[data-skin="profesional"] { --font-title: "Inter Variable", var(--font-sans)
 
 /* 2.6: the assistant's wordmark ORB·E at the top of the sidebar when it keeps its default name, chosen by Dani per theme.
    Orb (and the others for now): «WALL·E» style, spaced capitals and a round dot of the theme's colour. */
-.wordmark { display: inline-flex; align-items: center; font-family: "Outfit Variable", var(--font-sans); font-weight: 600; font-size: 1.12rem; line-height: 1; letter-spacing: 0.16em; color: var(--foreground); }
-.wordmark-dot { width: 0.34rem; height: 0.34rem; margin: 0 0.24em 0 0.06em; border-radius: 999px; background: var(--primary); }
+/* 3.2: --wm-track is the spacing between letters and --wm-gap the extra room on each side of the dot: the dot sits exactly
+   halfway between B and E, and the last letter gives back its spacing (it pushed the wordmark off its centre). */
+.wordmark { --wm-track: 0.16em; --wm-gap: 0.06em; display: inline-flex; align-items: center; font-family: "Outfit Variable", var(--font-sans); font-weight: 600; font-size: 1.12rem; line-height: 1; letter-spacing: var(--wm-track); color: var(--foreground); }
+.wordmark-dot { flex: none; width: 0.34rem; height: 0.34rem; margin: 0 calc(var(--wm-track) + var(--wm-gap)) 0 var(--wm-gap); border-radius: 999px; background: var(--primary); }
+.wordmark-e { margin-inline-end: calc(var(--wm-track) * -1); }
 /* Vaporwave: techno capitals, ·E in the theme's colour, underlined. */
-html[data-skin="vaporwave"] .wordmark { font-family: "Orbitron Variable", var(--font-sans); font-weight: 800; font-size: 1rem; letter-spacing: 0.08em; padding-bottom: 3px; border-bottom: 2px solid var(--primary); }
-html[data-skin="vaporwave"] .wordmark-dot { width: 0.22rem; height: 0.22rem; margin: 0 0.12em; }
+html[data-skin="vaporwave"] .wordmark { font-family: "Orbitron Variable", var(--font-sans); --wm-track: 0.08em; --wm-gap: 0.06em; font-weight: 800; font-size: 1rem; padding-bottom: 3px; border-bottom: 2px solid var(--primary); }
+html[data-skin="vaporwave"] .wordmark-dot { width: 0.22rem; height: 0.22rem; }
 html[data-skin="vaporwave"] .wordmark-e { color: var(--primary); }
 /* Retro: a plate, chunky capitals in an ink frame with a hard shadow of the theme's colour. */
-html[data-skin="retro"] .wordmark { font-family: "Bungee", var(--font-sans); font-weight: 400; font-size: 0.92rem; letter-spacing: 0.1em; padding: 4px 9px 3px; border: 2px solid var(--foreground); border-radius: 6px; box-shadow: 3px 3px 0 var(--primary); }
-html[data-skin="retro"] .wordmark-dot { width: 0.24rem; height: 0.24rem; margin: 0 0.12em 0 0; }
+html[data-skin="retro"] .wordmark { font-family: "Bungee", var(--font-sans); --wm-track: 0.1em; --wm-gap: 0.02em; font-weight: 400; font-size: 0.92rem; padding: 4px 9px 3px; border: 2px solid var(--foreground); border-radius: 6px; box-shadow: 3px 3px 0 var(--primary); }
+html[data-skin="retro"] .wordmark-dot { width: 0.24rem; height: 0.24rem; }
 /* Candy: a jelly pill, white capitals on the theme's pink with the darker edge below. */
-html[data-skin="nube"] .wordmark { font-family: "Fredoka Variable", var(--font-sans); font-weight: 700; font-size: 1rem; letter-spacing: 0.06em; color: var(--primary-foreground); background: var(--primary); padding: 6px 14px 5px; border-radius: 999px; box-shadow: 0 3px 0 color-mix(in oklch, var(--primary) 60%, black); }
-html[data-skin="nube"] .wordmark-dot { width: 0.24rem; height: 0.24rem; margin: 0 0.1em 0 0; background: currentColor; }
+html[data-skin="nube"] .wordmark { font-family: "Fredoka Variable", var(--font-sans); --wm-track: 0.06em; --wm-gap: 0.03em; font-weight: 700; font-size: 1rem; color: var(--primary-foreground); background: var(--primary); padding: 6px 14px 5px; border-radius: 999px; box-shadow: 0 3px 0 color-mix(in oklch, var(--primary) 60%, black); }
+html[data-skin="nube"] .wordmark-dot { width: 0.24rem; height: 0.24rem; background: currentColor; }
 /* Profesional: sober, widely spaced capitals, the dot in the text's colour. */
-html[data-skin="profesional"] .wordmark { font-family: "Inter Variable", var(--font-sans); font-weight: 600; font-size: 0.9rem; letter-spacing: 0.22em; }
-html[data-skin="profesional"] .wordmark-dot { width: 0.22rem; height: 0.22rem; margin: 0 0.18em 0 0; background: currentColor; }
+html[data-skin="profesional"] .wordmark { font-family: "Inter Variable", var(--font-sans); --wm-track: 0.22em; --wm-gap: 0em; font-weight: 600; font-size: 0.9rem; }
+html[data-skin="profesional"] .wordmark-dot { width: 0.22rem; height: 0.22rem; background: currentColor; }
 
 /* 2.6: the system's date and time on the left of the chat's top bar, in the theme's title type. */
-.bar-clock { display: grid; line-height: 1.1; font-family: var(--font-title); }
+.bar-clock { display: grid; line-height: 1.1; font-family: var(--font-title); font-variant-numeric: tabular-nums; }
 .bar-clock-time { font-size: 1.05rem; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
-.bar-clock-date { font-family: var(--font-sans); font-size: 0.72rem; color: var(--muted-foreground); }
+.bar-clock-date { font-family: var(--font-sans); font-size: 0.72rem; color: var(--muted-foreground); white-space: nowrap; }
 .bar-clock-date::first-letter { text-transform: uppercase; }
 html[data-skin="retro"] .bar-clock-time { font-weight: 400; }
 /* The clock sits in the bar's title (an h1): the themes' outlined title styles are not for it. */
 html .bar-clock, html .bar-clock * { -webkit-text-stroke: 0 !important; text-shadow: none !important; color: var(--foreground); letter-spacing: normal; text-transform: none !important; }
-html .bar-clock .bar-clock-date { color: var(--muted-foreground); font-family: var(--font-sans) !important; font-weight: 400; }
-/* 2.7: the clock is a button (the calendar opens on click): no button look, a soft halo on hover. */
-button.bar-clock { justify-items: start; text-align: left; background: none; border: 0; margin: -4px -8px; padding: 4px 8px; border-radius: 10px; cursor: pointer; transition: background-color 0.15s; }
-button.bar-clock:hover, button.bar-clock[data-state="open"] { background: color-mix(in oklch, var(--primary) 9%, transparent); }
+html .bar-clock .bar-clock-date { color: var(--muted-foreground); font-family: var(--font-sans) !important; font-weight: 400; font-variant-numeric: tabular-nums; }
+/* 2.7: the clock is a button (the calendar opens on click), with no button look. 3.2: no box behind it on hover either,
+   in any theme (only the keyboard's focus ring). */
+html button.bar-clock, html button.bar-clock:hover, html button.bar-clock[data-state="open"] { justify-items: start; text-align: left; background: none !important; box-shadow: none !important; border: 0; margin: -4px -8px; padding: 4px 8px; border-radius: 10px; cursor: pointer; }
 button.bar-clock:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+/* 3.2: the working folder in the middle of the chat's bar: a quiet pill over the theme's art. */
+.bar-project { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--border); background: color-mix(in oklch, var(--card) 82%, transparent); backdrop-filter: blur(6px); color: var(--foreground); font-size: 13px; font-weight: 500; line-height: 1.3; cursor: default; }
+.bar-project svg { color: var(--primary); }
+.bar-project.is-empty { color: var(--muted-foreground); font-weight: 400; }
+.bar-project:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+html[data-skin="retro"] .bar-project { border-radius: 6px; border: 2px solid var(--foreground); box-shadow: 2px 2px 0 var(--primary); font-family: var(--font-title); font-weight: 400; font-size: 12px; letter-spacing: 0.03em; }
+html[data-skin="nube"] .bar-project { font-family: "Fredoka Variable", var(--font-sans); font-weight: 600; border-color: color-mix(in oklch, var(--primary) 35%, var(--border)); }
+html[data-skin="vaporwave"] .bar-project { border-color: color-mix(in oklch, var(--primary) 45%, transparent); }
+html.dark[data-skin="vaporwave"] .bar-project { box-shadow: 0 0 12px -4px var(--primary); }
+html[data-skin="profesional"] .bar-project { border-radius: 6px; backdrop-filter: none; background: var(--card); }
+/* 3.2: the bell and its list (notification-center.jsx), dressed as the help bubbles. */
+.notice-dot { position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; border-radius: 999px; background: var(--primary); box-shadow: 0 0 0 2px var(--background); }
+.notice-center { width: min(22rem, calc(100vw - 24px)); padding: 10px 10px 8px; }
+.notice-row { display: flex; gap: 10px; width: 100%; padding: 7px 8px; border-radius: 10px; text-align: left; color: var(--tip-title); }
+button.notice-row { cursor: pointer; transition: background-color 0.15s; }
+button.notice-row:hover { background: color-mix(in oklch, var(--primary) 9%, transparent); }
+button.notice-row:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.notice-time { font-variant-numeric: tabular-nums; }
+html[data-skin="retro"] .notice-row, html[data-skin="profesional"] .notice-row { border-radius: 6px; }
+html[data-skin="retro"] .notice-dot { border-radius: 2px; }
 /* The month's calendar: the help bubble (.orb-tip, its colours, corners and shadow per theme) holding a grid of days. */
 .orb-pop { transform-origin: var(--radix-popover-content-transform-origin); }
 .orb-cal { width: 17.5rem; padding: 12px 12px 12px; }
@@ -313,14 +336,6 @@ html[data-skin="nube"] .orb-cal-title { font-family: "Fredoka Variable", var(--f
 .mobile-tab { -webkit-tap-highlight-color: transparent; }
 .mobile-tab:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; border-radius: 12px; }
 html[data-skin="retro"] .wordmark, html[data-skin="nube"] .wordmark { margin-bottom: 3px; }
-/* The line under the wordmark (the working project) echoes it in small: the same type treatment, and it starts where the
-   wordmark's letters start (inside the plate or the pill). */
-/* 2.7: the project's name as it is written (in capitals and spaced out, long names were cut after a few letters). */
-.wordmark-sub { margin-top: 4px; font-size: 11.5px; line-height: 1.2; letter-spacing: 0.01em; }
-html[data-skin="vaporwave"] .wordmark-sub { margin-top: 5px; letter-spacing: 0.02em; }
-html[data-skin="retro"] .wordmark-sub { margin-top: 3px; padding-inline-start: 4px; letter-spacing: 0; }
-html[data-skin="nube"] .wordmark-sub { margin-top: 3px; padding-inline-start: 6px; font-family: "Fredoka Variable", var(--font-sans); font-weight: 600; letter-spacing: 0.02em; color: color-mix(in oklch, var(--primary) 70%, var(--muted-foreground)); }
-html[data-skin="profesional"] .wordmark-sub { letter-spacing: 0.02em; }
 /* A robot that only illustrates (the chat's avatars) is not a button. */
 .orb.still { cursor: default; }
 /* 2.6: the time of each message, bottom right, as in a messaging app. */

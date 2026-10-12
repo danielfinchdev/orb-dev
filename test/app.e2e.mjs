@@ -356,16 +356,39 @@ try {
 
   // ---- free mode and model choice from the chat
   step = 'modo libre';
+  // 3.2: the bubble only comes with the account's real usage high: Claude at 60 % (a session that reports it).
+  const rateSession = await call('sessions.create', { agent: 'claude', project: 'webviaproject' });
+  await call('sessions.send', { id: rateSession.id, text: 'RATE 60' });
+  await until(async () => (await call('usage.get')).find((u) => u.account === 'claude')?.real?.utilization === 0.6, 'uso real de Claude');
+  await until(async () => (await call('sessions.list')).find((s) => s.id === rateSession.id)?.status !== 'running', 'sesión del uso parada').catch(() => {});
+  await call('sessions.remove', { id: rateSession.id }).catch(() => {});
   await win.click('[data-testid=sidebar-home]');
+  // 60 % with the default model: no bubble (before, it came out for the model alone).
+  await win.waitForTimeout(600);
+  assert.equal(await win.locator('[data-testid=usage-bubble]').count(), 0, 'sin globo con uso medio y modelo normal');
   await win.click('[data-testid=brain-picker]');
   await win.click('[data-testid=brain-group-rec]');
   await win.click('[data-testid=brain-claude-claude-opus-5-5-rec]');
   await until(async () => (await call('app.state')).config.orchestrator.model === 'claude-opus-5-5', 'modelo Opus');
-  // Opus spends the quota faster: the bubble says so.
+  // Opus with the account at 60 %: the bubble says so, for a few seconds, and it stays in the bell.
   await win.locator('[data-testid=usage-bubble]').waitFor();
   await shot('11a-aviso-uso');
-  // 2.6: a clean top bar: icon buttons with their bubble, and the mini-games.
-  assert.equal(await win.locator('main header').evaluate((h) => h.innerText.replace(h.querySelector('h1')?.innerText ?? '', '').trim()), '', 'sin nombre, modo ni modelo en la barra');
+  await win.locator('[data-testid=usage-bubble]').waitFor({ state: 'detached', timeout: 6000 });
+  await win.locator('[data-testid=bar-notices-dot]').waitFor();
+  await win.click('[data-testid=bar-notices]');
+  await win.locator('[data-testid=notice-center] >> text=Opus').first().waitFor();
+  await shot('11a2-notificaciones');
+  await win.keyboard.press('Escape');
+  assert.equal(await win.locator('[data-testid=bar-notices-dot]').count(), 0, 'abierta la campanita, sin punto');
+  // Chosen again, it does not come back (45 min of quiet for that account).
+  await call('chat.settings', { model: 'sonnet' }); await call('chat.settings', { model: 'claude-opus-5-5' });
+  await win.waitForTimeout(800);
+  assert.equal(await win.locator('[data-testid=usage-bubble]').count(), 0, 'el globo no se repite');
+  // 2.6: a clean top bar: the clock, the working folder in the middle and icon buttons with their bubble.
+  assert.equal(await win.locator('main header').evaluate((h) => h.innerText.replace(h.querySelector('h1')?.innerText ?? '', '').replace(h.querySelector('[data-testid=bar-project]')?.innerText ?? '', '').trim()), '', 'sin nombre, modo ni modelo en la barra');
+  // 3.2: the folder in the middle of the bar, centred between the clock and the buttons.
+  const centre = await win.locator('main header').evaluate((h) => { const a = h.getBoundingClientRect(); const p = h.querySelector('[data-testid=bar-project]').getBoundingClientRect(); const cs = getComputedStyle(h); const left = a.left + parseFloat(cs.paddingLeft); const right = a.right - parseFloat(cs.paddingRight); return Math.abs((p.left + p.right) / 2 - (left + right) / 2); });
+  assert.ok(centre < 3, `carpeta centrada en la barra (desvío ${centre}px)`);
   await win.hover('[data-testid=bar-pause]');
   // The bubble that is open (another one may still be closing for a moment: seen on the CI's Linux machine).
   await win.locator('[data-testid=bubble-tip]:not([data-state=closed])').first().waitFor();
