@@ -178,8 +178,28 @@ export function plainAction(command, { description = '', lang = 'es' } = {}) {
   let c = String(command ?? '').trim().replace(/^(?:"[^"]*[\\/]|[^\s"]*[\\/])?(?:powershell|pwsh|cmd)(?:\.exe)?"?\s+(?:[-/]\w+\s+)*?(?:-command|-c|\/c)\s+["']?/i, '');
   c = c.replace(/^\s*(?:cd\s+[^;&|]+(?:&&|;)\s*)+/i, '').replace(/^\$\w+\s*=\s*/, '');
   const hit = PLAIN.find(([re]) => re.test(c));
+  // 3.2.1: a deletion names what it deletes («borrar /tmp/tierra-build-check»), so the user can tell a temporary folder
+  // of the agent's from their work.
+  if (hit?.[1] === 'msg.guard.plain.delete') { const target = deleteTarget(c); if (target) return translate(lang, 'msg.guard.plain.deleteWhat', { target }); }
   return translate(lang, hit ? hit[1] : 'msg.guard.plain.other', { program: (c.split(/\s+/)[0] ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').slice(0, 30) });
 }
+
+// The first thing a delete command names (rm -rf X, Remove-Item -Recurse -Path "X", rd /s /q X), shortened from the left
+// when it is long; null when it names nothing readable (a variable, a pattern of several files).
+export function deleteTarget(command) {
+  const words = [...String(command ?? '').split(/[;&|]/)[0].matchAll(/"([^"]+)"|'([^']+)'|(\S+)/g)].map((m) => m[1] ?? m[2] ?? m[3]).slice(1);
+  const target = words.find((w) => !/^-|^\/[a-z]{1,2}$/i.test(w));
+  if (!target || /^\$|[*?]/.test(target)) return null;
+  const clean = target.replace(/^["']+|["']+$/g, '').replace(/[\\/]+$/, '');
+  if (!clean) return null;
+  return clean.length > 60 ? `…${clean.slice(-57)}` : clean;
+}
+
+// 3.2.1: whether an agent's own words are in English (Claude describes its commands in English even when the user
+// writes in Spanish): then they are not quoted in a Spanish notice.
+const EN_WORDS = /\b(the|and|for|with|from|into|start|run|check|install|build|create|remove|delete|kill|stop|test|verify|list|open|read|write|update|server|dev|file|files|folder|directory|temp|temporary|clean|cleanup|port|process|launch)\b/i;
+const ES_WORDS = /[áéíóúñ¿¡]|\b(el|la|los|las|de|del|para|que|con|un|una|y|en|por|archivo|archivos|carpeta|servidor)\b/i;
+export const looksEnglish = (text) => EN_WORDS.test(String(text ?? '')) && !ES_WORDS.test(String(text ?? ''));
 
 // One line for the approval card: what the agent wants to do, in plain words.
 export function describeAction({ tool, command, paths = [], title, lang = 'es' }) {

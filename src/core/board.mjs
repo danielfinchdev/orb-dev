@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { openDb, taskOptions, checkPolicy } from './db.mjs';
 import { ctx, tr } from './context.mjs';
-import { AGENT_IDS, folderName, projectLogHeader, isConfigName, categoryOf, CATEGORIES } from './home.mjs';
+import { AGENT_IDS, AGENT_LABELS, folderName, projectLogHeader, isConfigName, categoryOf, CATEGORIES } from './home.mjs';
 import { oneLine, MAX_DESCRIPTION } from './safety.mjs';
 import { contentHash, sign, verify, detectSensitivity, defaultApprovalKey } from './approval.mjs';
 import { PRODUCT } from './product.mjs';
@@ -24,6 +24,8 @@ export const ofUser = () => (ctx.config?.userName?.trim() ? `de ${ctx.config.use
 export const userLabel = () => ctx.config?.userName?.trim() || tr('msg.board.theUser');
 export const ofUserLabel = () => (ctx.config?.userName?.trim() ? tr('msg.board.ofName', { name: ctx.config.userName.trim() }) : tr('msg.board.ofTheUser'));
 export const assistantName = () => ctx.config?.assistantName?.trim() || PRODUCT.assistant;
+// 3.2.1: the tags of a sensitive task in words («elimina datos»), never the internal ones («destructive»).
+export const tagWords = (tags) => [...new Set(tags)].map((tag) => { const key = `sensitive.${tag}`; const w = tr(key); return w === key ? tag : w; }).join(', ');
 
 // A worker (any actor but the orchestrator) may only close its own running task.
 const WORKER_STATUSES = ['done', 'failed', 'blocked'];
@@ -249,9 +251,9 @@ export class Board {
         const inConv = convId ? ' AND conversation_id = ?' : ' AND conversation_id IS NULL';
         const lastAnswer = this.one(`SELECT id AS n FROM chat WHERE role = 'orb'${inConv} ORDER BY id DESC LIMIT 1 OFFSET 1`, ...(convId ? [convId] : []))?.n ?? 0;
         const asked = detectSensitivity(this.all(`SELECT body FROM chat WHERE role = 'usuario' AND id > ?${inConv} ORDER BY id DESC LIMIT 5`, lastAnswer, ...(convId ? [convId] : [])).map((r) => r.body).join('\n'));
-        if (asked.includes('destructive')) { found = found.filter((tag) => tag !== 'destructive'); askedNote = tr('msg.board.askedByUser', { words: 'destructive' }); }
+        if (asked.includes('destructive')) { found = found.filter((tag) => tag !== 'destructive'); askedNote = tr('msg.board.askedByUser', { words: tagWords(['destructive']) }); }
       }
-      tags.push(...found); if (found.length) reasons.push(tr('msg.board.reasonKeywords', { words: found.join(', ') }));
+      tags.push(...found); if (found.length) reasons.push(tr('msg.board.reasonKeywords', { words: tagWords(found) }));
     }
     if (policy.approval) { tags.push('razonamiento_alto'); reasons.push(tr('msg.board.reasonHighReasoning', { who: model ?? agent })); }
     // A subtask an agent delegates from its own task (orb_delegate) goes straight to the queue when the user trusts
@@ -270,7 +272,7 @@ export class Board {
     const id = Number(lastInsertRowid);
     this.event(id, actor, 'task.created', status);
     if (askedNote) this.event(id, 'orb', 'note', askedNote);
-    if (status === 'awaiting_approval') { const tagList = [...new Set(tags)].join(', '); this.addChat('system', reasons.length ? tr('msg.board.needsApprovalWhy', { id, title, tags: tagList, reasons: reasons.join('; ') }) : tr('msg.board.needsApproval', { id, title, tags: tagList }), { kind: 'attention', task: id }, convId ?? null); }
+    if (status === 'awaiting_approval') { const tagList = tagWords(tags); this.addChat('system', reasons.length ? tr('msg.board.needsApprovalWhy', { id, title, tags: tagList, reasons: reasons.join('; ') }) : tr('msg.board.needsApproval', { id, title, tags: tagList }), { kind: 'attention', task: id }, convId ?? null); }
     // Even a task the user typed waits for an explicit "Aprobar" when it looks sensitive: one more click, with the reasons on screen.
     this.changed('tasks');
     return this.task(id);
@@ -483,7 +485,9 @@ export class Board {
     if (!body) throw new Error(tr('sys.board.bodyRequired'));
     if (![...AGENTS, 'all', 'usuario', 'orb'].includes(to)) throw new Error(tr('sys.board.badRecipient', { to, list: AGENTS.join(', ') }));
     body = String(body).slice(0, 8000);
-    if (to === 'usuario') this.addChat('system', `💬 ${from}${task_id ? tr('msg.board.taskRef', { id: task_id }) : ''}: ${body}`, task_id ? { task: Number(task_id) } : null);
+    // 3.2.1: the agent by its name («Cursor», not «cursor»).
+    const who = from === 'orb' ? assistantName() : AGENT_LABELS[from] ?? from;
+    if (to === 'usuario') this.addChat('system', `💬 ${who}${task_id ? tr('msg.board.taskRef', { id: task_id }) : ''}: ${body}`, task_id ? { task: Number(task_id) } : null);
     const { lastInsertRowid } = this.run('INSERT INTO messages (from_agent, to_agent, task_id, body, at) VALUES (?, ?, ?, ?, ?)', String(from), to, task_id ?? null, body, now());
     this.changed('messages');
     return { id: Number(lastInsertRowid), from, to, task_id: task_id ?? null };
