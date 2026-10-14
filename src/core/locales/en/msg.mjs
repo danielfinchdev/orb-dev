@@ -456,6 +456,7 @@ export default {
   "msg.sessions.taskClosed": "the task is already closed; Orb stops the programs you left running on its own",
   "msg.sessions.approvalTimedOut": "Nobody answered within {min} min: permission denied ({title}). The agent goes on another way.",
   "msg.sessions.approvalTimedOutAgent": "ORB NOTICE: nobody could approve “{title}” within {min} min and it was denied. Do not try it again: go on without it another way or, if it is essential, finish the task with status \"blocked\" explaining what is needed.",
+  "msg.sessions.steerLate": "The correction arrived as the agent was finishing: it goes as the next message.",
   "msg.sessions.tool": "tool",
   "msg.sessions.waitingPermission": "waiting for your permission to {title}",
   "msg.sessions.writeMessage": "enter a message",

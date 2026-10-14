@@ -419,7 +419,8 @@ export class Sessions {
     // context: what @ attached (another task, conversation or log), added for the agent but not shown as typed.
     if (!this.running.has(id)) { this.send(id, text, { images, prompt: context ? `${text}${context}` : undefined }); return { sent: true }; }
     const entry = this.lives.get(id);
-    if (mode !== 'queue' && !images.length && entry?.live.caps.steer && entry.live.steer({ text: context ? `${text}${context}` : text })) {
+    const onFail = () => { this.addItem(id, 'system', 'status', tr('msg.sessions.steerLate')); this.enqueue(id, text, []); };
+    if (mode !== 'queue' && !images.length && entry?.live.caps.steer && entry.live.steer({ text: context ? `${text}${context}` : text, onFail })) {
       this.addItem(id, 'user', 'text', { text, steer: true });
       return { steered: true };
     }

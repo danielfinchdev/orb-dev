@@ -72,7 +72,7 @@ try {
   await page.click('[data-testid=nav-chats]'); await page.waitForSelector('[data-testid=mobile-chats]');
   await noSideScroll('chats'); await shot('02b-chats');
 
-  for (const [testid, name, wait] of [['nav-tasks', '03-tareas', 'Publicar la web'], ['nav-projects', '04-proyectos', 'webviaproject'], ['nav-memories', '05-bitacoras', 'Bitácora general'], ['memories-activity', '06-actividad', 'task.created']]) {
+  for (const [testid, name, wait] of [['nav-tasks', '03-tareas', 'Publicar la web'], ['nav-projects', '04-proyectos', 'webviaproject'], ['nav-memories', '05-bitacoras', 'Bitácora general'], ['memories-activity', '06-actividad', 'Tarea creada']]) {
     step = name;
     await nav(testid);
     await page.waitForSelector(`text=${wait} >> visible=true`);
