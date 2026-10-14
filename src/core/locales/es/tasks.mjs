@@ -98,5 +98,7 @@ export default {
   'tasks.dependsOn': 'Depende de',
   'tasks.approval': 'Aprobación',
   'tasks.result': 'Resultado',
-  'tasks.history': 'Historial ({n})'
+  'tasks.history': 'Historial ({n})',
+  'tasks.undone': 'Deshecha',
+  'tasks.undoneNote': 'Se deshizo el {when}: los archivos volvieron a como estaban antes de la tarea.'
 };

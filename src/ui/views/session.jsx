@@ -282,6 +282,9 @@ export function ContextMeter({ context, className }) {
 }
 
 // Details of a conversation (2.3): where it works, git, where it comes from, its task.
+// The account of a conversation by its name, only when its agent has more than one (otherwise the agent's name says it).
+const accountName = (accounts = [], s) => (accounts.filter((a) => a.agent === s.agent).length > 1 ? accounts.find((a) => a.id === (s.account ?? s.agent))?.label ?? null : null);
+
 async function showDetails(s, task) {
   let info = null;
   if (s.project) { try { info = await call('projects.info', { name: s.project }); } catch { info = null; } }
@@ -292,7 +295,7 @@ async function showDetails(s, task) {
     body: () => (
       <dl className="grid grid-cols-[130px_1fr] gap-x-4 gap-y-2 text-[13px]">
         <Row k={t('session.agent')}>{AGENT[s.agent]}{s.model ? ` · ${s.model}` : ''} · {t('session.reasoningOf', { level: REASONING[s.reasoning]?.toLowerCase() ?? s.reasoning })}</Row>
-        <Row k={t('session.account')}>{s.account}</Row>
+        <Row k={t('session.account')}>{(getState().app?.config?.accounts ?? []).find((a) => a.id === (s.account ?? s.agent))?.label ?? s.account}</Row>
         <Row k={t('session.permissions')}>{PERMISSION[s.permission]}</Row>
         <Row k={t('session.folder')}><span className="font-mono text-xs">{s.cwd}</span></Row>
         {info?.git ? <Row k="Git">{t('session.branch')} <span className="font-mono">{info.branch}</span> · {info.changes ? t('session.unsaved', { n: info.changes }) : t('session.noChanges')}{info.remote ? ` · ${info.remote}` : ''}{info.ahead ? ` · ${t('session.unpushed', { n: info.ahead })}` : ''}</Row> : s.project ? <Row k="Git">{t('session.noGit')}</Row> : null}
@@ -358,6 +361,8 @@ export function SessionView({ route, embedded = false, empty = null }) {
   if (s.model && !models.some((m) => m.value === s.model)) models.unshift({ value: s.model, label: modelLabel(catalog, s.agent, s.model) });
   const modelName = (id) => models.find((m) => m.value === id)?.label ?? modelLabel(catalog, s.agent, id);
   const stalled = ['interrupted', 'limited'].includes(s.status) && s.kind === 'chat';
+  // 3.2.1: with several accounts of the agent (Codex Go, Codex Pro), the one this conversation uses, by its name.
+  const who = accountName(app?.config?.accounts, s) ?? AGENT[s.agent];
 
   const loadOlder = async () => {
     const first = items[0]?.id; if (!first) return;
@@ -387,7 +392,7 @@ export function SessionView({ route, embedded = false, empty = null }) {
           middle, its controls on the right. */}
       {embedded ? null : <PageHeader className="topbar-chat" title={<BarClock />}
         center={<BarHeading title={s.title} project={s.project} onRename={s.kind === 'chat' ? rename : null} renameLabel={t('session.renameTip')}
-          extra={<span className="bar-title-agent"><AgentIcon agent={s.agent} className="size-3.5" />{AGENT[s.agent]}{s.model ? ` · ${modelName(s.model)}` : ''}</span>} />}>
+          extra={<span className="bar-title-agent"><AgentIcon agent={s.agent} className="size-3.5" />{who}{s.model ? ` · ${modelName(s.model)}` : ''}</span>} />}>
         <NotificationBell />
         {bridge.mobile ? null : <Tip label={t('session.openFolder')}><Button variant="ghost" size="icon-sm" onClick={() => act(bridge.openPath(s.cwd))} aria-label={t('session.openFolder')}><FolderOpen /></Button></Tip>}
         {s.kind === 'chat' ? (<>

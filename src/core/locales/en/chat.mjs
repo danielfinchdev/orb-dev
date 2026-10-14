@@ -213,5 +213,7 @@ export default {
   'chat.rename': 'Change the title',
   'chat.renameTitle': 'Conversation title',
   'chat.placeholderDirect': 'Write to {agent}…',
-  'chat.waitingTurn': 'Waiting its turn: other conversations are answering.'
+  'chat.waitingTurn': 'Waiting its turn: other conversations are answering.',
+  'brain.noUsage': 'No usage on your plan until {when}',
+  'brain.noUsageDay': 'No usage on your plan until {when}'
 };

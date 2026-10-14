@@ -9,7 +9,8 @@ import crypto from 'node:crypto';
 import net from 'node:net';
 import { useHome, ctx, tr } from '../core/context.mjs';
 import { isHome, CATEGORIES } from '../core/home.mjs';
-import { budgetConfig } from '../core/budget.mjs';
+import { budgetConfig, waitReason, modelLimits } from '../core/budget.mjs';
+import { accountLabel } from '../core/accounts.mjs';
 import { oneLine } from '../core/safety.mjs';
 import { git, copyIntoWorkdir } from '../core/workspace.mjs';
 import { createProjects } from '../core/projects.mjs';
@@ -104,7 +105,10 @@ function suggestBoard(a) {
 function createTask(a) {
   const task = board.createTask({ ...a, level: a.nivel, conversation_id: CONV }, ME);
   if (CONV && !board.conversation(CONV)?.project) { try { board.setConversationProject(CONV, task.project, ME); } catch { /* the task is made anyway */ } }
-  return task;
+  // 3.2.1: an agent whose accounts are all paused (usage limit) or out of usage: the coordinator learns it at once, so it
+  // tells the user and offers another agent instead of leaving the task waiting for hours without a word.
+  const waits = waitReason(board, task.agent, { account: task.account, model: task.model });
+  return waits ? { ...task, waits } : task;
 }
 
 // Delegation (2.3): an agent working on task #N hands part of it to another agent or model. The subtask hangs from #N
@@ -135,16 +139,20 @@ async function waitTasks({ ids, timeout_s = 600 }) {
 
 // 2.6: with the models each agent listed itself (models:<agent>), not only the configured aliases.
 const modelsOf = (a) => {
-  const listed = board.settingJson(`models:${a}`) ?? [];
+  // 3.2.1: not the models the account has no usage of now (Cursor's API models after «usage limit»).
+  const blocked = modelLimits(board, a);
+  const listed = (board.settingJson(`models:${a}`) ?? []).filter((m) => !blocked[m.id]);
   const named = listed.map((m) => (m.label && m.label !== m.id ? `${m.id} (${m.label})` : m.id));
   return [...new Set([...named, ...(ctx.config.agents[a]?.models ?? []).filter((id) => !listed.some((m) => m.id === id || m.resolved === id))])].slice(0, 24);
 };
 // 3.1: short answers save every agent tokens on each call: a write answers what changed, not the whole task back (whose
 // description can be thousands of characters), and the detail of a task brings its latest history, trimmed.
-const ack = (t) => t && { ok: true, id: t.id, title: t.title, status: t.status, agent: t.assigned_to ?? t.agent, ...(t.depends_on?.length ? { depends_on: t.depends_on } : {}) };
+const ack = (t) => t && { ok: true, id: t.id, title: t.title, status: t.status, agent: t.assigned_to ?? t.agent, ...(t.depends_on?.length ? { depends_on: t.depends_on } : {}),
+  ...(t.waits ? { espera: `${t.waits}. No empezará hasta entonces: díselo a ${USER} y ofrécele pasarla a otro agente disponible (orb_update_task con agent).` } : {}) };
 function taskBrief(id) {
   const d = board.taskDetail(id);
-  return { id: d.id, project: d.project, title: d.title, description: d.description, status: d.status, agent: d.assigned_to ?? d.agent, model: d.model, mode: d.mode, readonly: d.readonly,
+  // 3.2.1: with the account that ran it by its name (Codex Go, Codex Pro), not its id.
+  return { id: d.id, project: d.project, title: d.title, description: d.description, status: d.status, agent: d.assigned_to ?? d.agent, account: d.run_account ? accountLabel(d.run_account) : null, model: d.model, mode: d.mode, readonly: d.readonly,
     branch: d.branch, depends_on: d.depends_on, result: d.result,
     events: d.events.slice(-30).map((e) => ({ ...e, detail: oneLine(e.detail, 300) })),
     messages: d.messages.slice(-20).map((m) => ({ ...m, body: oneLine(m.body, 600) })),
@@ -168,7 +176,7 @@ const tools = [
     run: () => board.summary(ME, CONV) },
   { name: 'orb_list_tasks', description: 'Lista tareas, con filtros opcionales.', readOnly: true,
     inputSchema: { type: 'object', properties: { project: str('Proyecto'), status: { type: 'string', enum: STATUSES }, agent: str('Agente'), limit: { type: 'integer', minimum: 1, maximum: 200 } } },
-    run: (a) => board.tasks(a).map(({ id, project, title, agent, assigned_to, status, branch, depends_on }) => ({ id, project, title, agent: assigned_to ?? agent, status, branch, depends_on })) },
+    run: (a) => board.tasks(a).map(({ id, project, title, agent, assigned_to, run_account, status, branch, depends_on }) => ({ id, project, title, agent: assigned_to ?? agent, ...(run_account ? { account: accountLabel(run_account) } : {}), status, branch, depends_on })) },
   { name: 'orb_get_task', description: 'Detalle de una tarea: descripción, resultado, eventos, mensajes y dependencias.', readOnly: true,
     inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'integer' } } }, run: (a) => taskBrief(a.id) },
   { name: 'orb_update_task', description: 'Informa del progreso de una tarea: estado, nota o resultado final.',

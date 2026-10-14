@@ -8,6 +8,7 @@ import path from 'node:path';
 import { IS_WIN, firstFile, inPath, appDataDirs, userHome, clip, describeInput, readOutput } from './common.mjs';
 import { Turn, spawnAgent, killTree } from './live.mjs';
 import { tr } from '../core/context.mjs';
+import { isModelLimitText, parseReset, untilText } from '../core/budget.mjs';
 
 export const id = 'cursor';
 export const label = 'Cursor';
@@ -50,6 +51,9 @@ export const loginCommand = (exe) => ({ cmd: exe.cmd, args: [...exe.pre, 'login'
 const VARIANT_ID = /-(?:fast|thinking|none|minimal|low|medium|high|xhigh|extra-high|max)$/;
 const VARIANT_WORDS = /\s+(?:no thinking|thinking|extra high|high|medium|low|max|none|minimal|fast)$/i;
 const baseOf = (s, re) => { let prev; do { prev = s; s = s.replace(re, ''); } while (s !== prev); return s; };
+// 3.2.1: the name of the model Cursor says it opened, without the effort words («Claude Opus 5 300K High No Thinking» →
+// «Claude Opus 5 300K»).
+export const cursorShownName = (name) => baseOf(String(name ?? '').replace(/\s+/g, ' ').trim(), VARIANT_WORDS);
 export function cursorModels(text) {
   const rows = [];
   for (const raw of String(text ?? '').replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').split(/\r?\n/)) {
@@ -82,9 +86,32 @@ export const ARGV_PROMPT_MAX = 20000;
 const IDLE_AFTER_ANSWER_MS = Number(process.env.ORB_CURSOR_IDLE_MS) || 180_000;
 
 // Cursor's tool calls arrive as { tool_call: { <name>ToolCall: { args, result } } }.
+// 3.2.1: Cursor looks up an MCP tool before calling it (getMcpToolsToolCall): an inner step, not shown. A call to an MCP
+// tool (mcpToolCall) shows the tool by a readable name (Orb's own tools) and what it does, never its raw arguments.
 function toolOf(call) {
   const [key, value] = Object.entries(call ?? {})[0] ?? [];
+  if (key === 'getMcpToolsToolCall') return { hidden: true, result: value?.result };
+  if (key === 'mcpToolCall') {
+    const a = value?.args ?? {};
+    const server = a.serverIdentifier ?? a.providerIdentifier ?? '';
+    const tool = a.toolName ?? String(a.name ?? '').replace(new RegExp(`^${server}-`), '');
+    const shown = mcpToolLabel(server, tool, a.args ?? {});
+    return { name: shown.name, input: shown.input || value?.description || describeInput(a.args), args: a.args, result: value?.result };
+  }
   return { name: key ? String(key).replace(/ToolCall$/, '') : tr('sys.agents.tool.other'), args: value?.args, result: value?.result };
+}
+
+// Orb's tools by what they do («Progreso de la tarea · 20 % · Creando saludo.html»); another server's tools by «server: tool».
+export function mcpToolLabel(server, tool, args = {}) {
+  const t = String(tool ?? '');
+  if (server && server !== 'orb' && !/^orb_/.test(t)) return { name: `${server}: ${t}`, input: '' };
+  const parts = (...xs) => xs.filter((x) => x != null && x !== '').map((x) => clip(String(x), 200)).join(' · ');
+  if (t === 'orb_update_task') return { name: tr('sys.agents.orbTool.progress'), input: parts(args.progress != null ? `${args.progress} %` : null, args.status ? tr(`sys.agents.orbTool.status.${args.status}`) : null, args.note, args.result) };
+  if (t === 'orb_send_message') return { name: tr('sys.agents.orbTool.message', { to: args.to ?? '' }), input: parts(args.body) };
+  if (t === 'orb_read_messages') return { name: tr('sys.agents.orbTool.readMessages'), input: '' };
+  if (/^orb_browser_/.test(t)) return { name: tr('sys.agents.orbTool.browser'), input: parts(t.replace(/^orb_browser_/, ''), args.url ?? args.text ?? args.key ?? (args.ref != null ? `#${args.ref}` : null)) };
+  if (t === 'orb_get_task' || t === 'orb_list_tasks' || t === 'orb_board') return { name: tr('sys.agents.orbTool.board'), input: parts(args.id != null ? `#${args.id}` : null, args.project) };
+  return { name: `Orb: ${t.replace(/^orb_/, '').replace(/_/g, ' ')}`, input: '' };
 }
 
 // 3.1: Cursor cannot ask Orb before acting (its CLI has no callback), so Orb's guard reaches it as Cursor's own deny rules,
@@ -215,6 +242,19 @@ export function createLive(o) {
     child = spawnAgent(o.exe.cmd, args, { cwd: o.cwd, env: { ...o.env, ...restore.env }, log });
     live.pid = child.pid;
     let buffer = ''; let streamed = '';
+    // 3.2.1: a usage limit in what Cursor said (its result, or its error output when the CLI exits with it). Cursor's API
+    // models (Gemini, GPT, Claude… inside Cursor) have their own monthly usage: that limit is only the model's, reported as
+    // such (a «rate» of that model, so only it waits), and the error is shown in the user's language.
+    const usedModel = model && model !== 'auto' ? model : null;
+    const limitOf = (text) => {
+      if (!/usage limit|rate limit|quota/i.test(String(text ?? ''))) return null;
+      const onlyModel = Boolean(usedModel && isModelLimitText(text));
+      const when = untilText(parseReset(text));
+      onEvent({ type: 'item', role: 'error', kind: 'text', body: onlyModel ? tr('sys.agents.cursorModelLimit', { model: modelLabel ?? usedModel, when }) : tr('sys.agents.cursorLimit', { when }) });
+      if (onlyModel) onEvent({ type: 'rate', status: 'rejected', model: usedModel, resetAt: null, text: clip(text, 1000) });
+      return { resetAt: null, ...(onlyModel ? { model: usedModel } : {}), text: clip(text, 1000) };
+    };
+    let modelLabel = null;
     // 3.1: the CLI can stay open after its last answer without ever sending "result" (it waited on a background shell or
     // its own shutdown). Once it has said something and has no tool running, a long silence is that: the turn is over.
     const open = new Set();
@@ -237,17 +277,21 @@ export function createLive(o) {
       quiet();
       if (ev.type === 'tool_call' && ev.call_id) { if (ev.subtype === 'started') open.add(ev.call_id); else if (ev.subtype === 'completed') open.delete(ev.call_id); }
       if (ev.session_id && ev.session_id !== live.sessionId) { live.sessionId = ev.session_id; onEvent({ type: 'session', id: ev.session_id }); }
-      if (ev.type === 'system' && ev.subtype === 'init') onEvent({ type: 'item', role: 'system', kind: 'status', body: `${label} · ${ev.model ?? ''}`.trim() });
+      if (ev.type === 'system' && ev.subtype === 'init') { if (ev.model) modelLabel = String(ev.model); onEvent({ type: 'item', role: 'system', kind: 'status', body: `${label} · ${ev.model ?? ''}`.trim() }); }
       if (ev.type === 'assistant') {
         const t = (ev.message?.content ?? []).map((c) => c.text ?? '').join('');
-        // With --stream-partial-output the text arrives in pieces (they carry timestamp_ms), then once complete.
-        if (t && ev.timestamp_ms) { streamed += t; onEvent({ type: 'delta', text: t }); }
+        // With --stream-partial-output the text arrives in pieces (they carry timestamp_ms), then once complete. 3.2.1: the
+        // complete one carries timestamp_ms too, with the model call's id (model_call_id): taken as a piece, every text came
+        // out twice («Voy a leer…Voy a leer…»).
+        const complete = !ev.timestamp_ms || Boolean(ev.model_call_id) || (streamed && t === streamed);
+        if (t && !complete) { streamed += t; onEvent({ type: 'delta', text: t }); }
         else if (t.trim()) { streamed = ''; onEvent({ type: 'item', role: 'assistant', kind: 'text', body: t }); current.addText(t); }
       }
       if (ev.type === 'tool_call') {
         if (streamed.trim()) { onEvent({ type: 'item', role: 'assistant', kind: 'text', body: streamed }); current.addText(streamed); streamed = ''; }
         const tool = toolOf(ev.tool_call);
-        if (ev.subtype === 'started') onEvent({ type: 'item', role: 'tool', kind: 'tool', body: { id: ev.call_id, name: tool.name, input: describeInput(tool.args) } });
+        if (tool.hidden) return;
+        if (ev.subtype === 'started') onEvent({ type: 'item', role: 'tool', kind: 'tool', body: { id: ev.call_id, name: tool.name, input: tool.input ?? describeInput(tool.args) } });
         if (ev.subtype === 'completed') {
           const r = tool.result ?? {};
           onEvent({ type: 'item', role: 'tool', kind: 'tool_result', body: { id: ev.call_id, output: clip(r.success ?? r.error ?? r, 3000), error: Boolean(r.error) } });
@@ -257,9 +301,13 @@ export function createLive(o) {
         if (streamed.trim()) { onEvent({ type: 'item', role: 'assistant', kind: 'text', body: streamed }); current.addText(streamed); streamed = ''; }
         const isError = Boolean(ev.is_error) || Boolean(ev.subtype && ev.subtype !== 'success');
         const final = typeof ev.result === 'string' && ev.result ? ev.result : current.text;
-        if (isError) onEvent({ type: 'item', role: 'error', kind: 'text', body: clip(final || 'error', 3000) });
-        if (ev.duration_ms) onEvent({ type: 'item', role: 'system', kind: 'usage', body: { durationMs: ev.duration_ms } });
-        current.finish({ final, isError, limit: isError && /usage limit|rate limit|quota/i.test(final) ? { resetAt: null } : null });
+        const limit = isError ? limitOf(final) : null;
+        if (isError && !limit) onEvent({ type: 'item', role: 'error', kind: 'text', body: clip(final || 'error', 3000) });
+        // 3.2.1: the tokens Cursor reports with its result (newer CLIs), so its tasks count their usage like the others.
+        const u = ev.usage ?? {};
+        const usage = { durationMs: ev.duration_ms ?? null, inputTokens: u.inputTokens ?? null, outputTokens: u.outputTokens ?? null, cacheReadTokens: u.cacheReadTokens ?? null, cacheWriteTokens: u.cacheWriteTokens ?? null };
+        if (ev.duration_ms || u.inputTokens != null) onEvent({ type: 'item', role: 'system', kind: 'usage', body: usage });
+        current.finish({ final, isError, limit, ...(u.inputTokens != null ? { usage } : {}) });
       }
     };
     child.stdout.setEncoding('utf8');
@@ -274,8 +322,10 @@ export function createLive(o) {
       const stderr = child.stderrText();
       if (!current.done) {
         const msg = current.text || tr('sys.agents.exitedCode', { name: 'Cursor', code, detail: stderr.trim().split('\n').slice(-3).join(' ') }).trim();
-        if (code !== 0 && !current.text) onEvent({ type: 'item', role: 'error', kind: 'text', body: clip(msg, 3000) });
-        current.finish({ isError: code !== 0, final: msg });
+        // 3.2.1: the CLI ends with the usage limit on its error output (ActionRequiredError), not as a result.
+        const limit = code !== 0 ? limitOf(stderr) : null;
+        if (code !== 0 && !current.text && !limit) onEvent({ type: 'item', role: 'error', kind: 'text', body: clip(msg, 3000) });
+        current.finish({ isError: code !== 0, final: limit && current.text ? `${current.text}\n${limit.text}` : msg, limit });
       }
     });
     child.on('error', (error) => { if (!current.done) current.finish({ isError: true, final: tr('sys.agents.startFailed', { name: 'Cursor', error: error.message }) }); });

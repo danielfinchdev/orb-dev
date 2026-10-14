@@ -24,7 +24,8 @@ const FILTERS = [
   ['todas', 'tasks.filter.all', () => true]
 ];
 const verdictLabel = (v) => (['correcto', 'con fallos'].includes(v) ? t(`tasks.verdict.${v}`) : v);
-const StatusBadge = ({ status }) => <Badge variant={STATUS[status]?.[1]}>{STATUS[status]?.[0] ?? status}</Badge>;
+// 3.2.1: an undone task reads «Deshecha» (its files are back as they were), not «Completada».
+const StatusBadge = ({ status, undone }) => (undone ? <Badge variant="secondary" data-testid="task-undone"><Undo2 />{t('tasks.undone')}</Badge> : <Badge variant={STATUS[status]?.[1]}>{STATUS[status]?.[0] ?? status}</Badge>);
 
 // Who reviews (Task Review, Security Review): automatic (another provider with quota) or an installed agent.
 const reviewers = async () => (await call('agents.status')).filter((a) => a.enabled && a.installed);
@@ -66,7 +67,7 @@ function TaskDetail({ id, live }) {
   const who = t.assigned_to ?? t.agent;
   const A = (props) => <Button size="sm" variant="outline" {...props} />;
   const reassign = async () => {
-    const agents = (await call('agents.status')).filter((a) => a.enabled);
+    const agents = (await call('agents.status')).filter((a) => a.enabled && a.installed);
     // 2.7: the model is chosen from the agent's real ones (with what each is for), or left to Orb: never typed.
     const catalog = await call('models.catalog').catch(() => []);
     const AUTO = '__auto';
@@ -100,14 +101,14 @@ function TaskDetail({ id, live }) {
       <div className="flex items-start gap-3 px-5">
         <AgentIcon agent={who} className="mt-1 size-5" />
         <div className="min-w-0 flex-1"><div className="text-muted-foreground text-xs">{tr('tasks.taskNo', { id: t.id, project: t.project })}</div><h2 className="text-[17px] leading-snug">{t.title}</h2></div>
-        {t.accepted ? <Badge variant="success"><ThumbsUp />{tr('tasks.accepted')}</Badge> : null}<StatusBadge status={t.status} />
+        {t.accepted ? <Badge variant="success"><ThumbsUp />{tr('tasks.accepted')}</Badge> : null}<StatusBadge status={t.status} undone={Boolean(t.undone)} />
       </div>
       <div className="flex flex-wrap gap-2 px-5">
         {t.status === 'awaiting_approval' ? (<>
           <Button size="sm" onClick={() => approveTask(t)}><Check />{tr('tasks.approve.ok')}</Button>
           <Button size="sm" variant="outline" onClick={() => rejectTask(t)}><X />{tr('tasks.reject')}</Button>
         </>) : null}
-        {t.status === 'done' && !t.accepted ? <Button size="sm" onClick={() => act(call('tasks.accept', { id: t.id }), tr('tasks.accepted'))}><ThumbsUp />{tr('tasks.giveOk')}</Button> : null}
+        {t.status === 'done' && !t.accepted && !t.undone ? <Button size="sm" onClick={() => act(call('tasks.accept', { id: t.id }), tr('tasks.accepted'))}><ThumbsUp />{tr('tasks.giveOk')}</Button> : null}
         {t.status === 'done' && !t.review_of ? <BubbleTip title={tr('tasks.review.btn')} text={tr('projects.reviewTip')}><A onClick={() => askReview({ task: t })} data-testid="task-review"><ScanSearch />{tr('tasks.review.btn')}</A></BubbleTip> : null}
         {t.session_id ? <A onClick={() => go({ view: 'session', id: t.session_id })}><MessageSquare />{tr('tasks.agentChat')}</A> : null}
         {t.status === 'queued' ? <A onClick={() => act(call('tasks.launchAnyway', { id: t.id }), tr('tasks.launchAnyway.done'))}><Zap />{tr('tasks.launchAnyway')}</A> : null}
@@ -122,10 +123,11 @@ function TaskDetail({ id, live }) {
         {!['done', 'cancelled'].includes(t.status) ? <Button size="sm" variant="danger" onClick={async () => { if (await confirm(tr('tasks.cancel.title'), t.status === 'running' ? tr('tasks.cancel.running') : tr('tasks.cancel.ask'), { ok: tr('tasks.cancel.title'), cancel: tr('tasks.cancel.back'), danger: true })) act(call('tasks.cancel', { id: t.id }), tr('tasks.cancel.done')); }}><Square />{tr('tasks.cancel')}</Button> : null}
       </div>
       {t.status === 'running' && live ? <div className="bg-muted/50 mx-5 rounded-xl border px-3.5 py-3" data-testid="task-live"><LiveTask t={live} actions={false} /></div> : null}
+      {t.undone ? <div className="bg-muted/50 mx-5 flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-[13px]"><Undo2 className="text-muted-foreground size-4" />{tr('tasks.undoneNote', { when: fmtTime(t.undone.at) })}</div> : null}
       {t.status === 'limited' && t.limited_until ? <div className="bg-warning/10 border-warning/40 mx-5 flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-[13px]"><Hourglass className="text-warning size-4" />{tr('tasks.limitedNote', { when: fmtTime(t.limited_until) })}</div> : null}
       {t.review ? <div className={cn('mx-5 flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-[13px]', t.review.verdict === 'correcto' ? 'border-success/40 bg-success/10' : t.review.verdict === 'con fallos' ? 'border-destructive/40 bg-destructive/10' : 'bg-muted/50')}><ScanSearch className="size-4" />{tr('tasks.review.line', { agent: AGENT[t.review.agent] ?? t.review.agent })} <span className="font-medium">{verdictLabel(t.review.verdict)}</span><Button size="sm" variant="ghost" className="ml-auto" onClick={() => go({ view: 'tasks', id: t.review.task })}>{tr('tasks.review.see', { id: t.review.task })}</Button></div> : null}
       <dl className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-1.5 px-5 text-[13px]">
-        <dt className="text-muted-foreground">{tr('tasks.agent')}</dt><dd>{tr('tasks.agentLine', { agent: `${AGENT[who] ?? who}${t.model ? ` · ${t.model}` : ''}`, reasoning: REASONING[t.reasoning]?.toLowerCase() ?? t.reasoning })}</dd>
+        <dt className="text-muted-foreground">{tr('tasks.agent')}</dt><dd>{tr('tasks.agentLine', { agent: `${t.accountLabel ?? AGENT[who] ?? who}${t.model ? ` · ${t.modelLabel ?? t.model}` : ''}`, reasoning: REASONING[t.reasoning]?.toLowerCase() ?? t.reasoning })}</dd>
         <dt className="text-muted-foreground">{tr('tasks.where')}</dt><dd className="break-all">{MODE[t.mode]}{t.readonly ? ` · ${tr('tasks.readonlyShort')}` : ''}{t.branch ? ` · ${tr('tasks.branchShort', { branch: t.branch })}` : ''}</dd>
         <dt className="text-muted-foreground">{tr('tasks.created')}</dt><dd>{tr('tasks.createdBy', { time: fmtTime(t.created_at), agent: AGENT[t.created_by] ?? t.created_by })}</dd>
         {t.parent_id ? <><dt className="text-muted-foreground">{tr('tasks.subOf')}</dt><dd><button className="cursor-pointer underline-offset-2 hover:underline" onClick={() => go({ view: 'tasks', id: t.parent_id })}>#{t.parent_id}</button></dd></> : null}
@@ -171,7 +173,7 @@ export function TasksView({ route }) {
                 <AgentIcon agent={t.assigned_to ?? t.agent} />
                 <div className="min-w-0 flex-1"><div className="truncate text-[14px]">{t.title}</div><div className="text-muted-foreground truncate text-xs">#{t.id} · {t.project} · {AGENT[t.assigned_to ?? t.agent] ?? t.agent} · {ago(t.updated_at)}</div>
                   {t.status === 'running' && liveOf(live, t.id) ? <div className="mt-1.5 flex items-center gap-2"><ProgressBar percent={liveOf(live, t.id).percent} quiet={liveOf(live, t.id).quietMin >= 5} className="h-1" /><span className="text-muted-foreground shrink-0 text-[11px] tabular-nums">{liveOf(live, t.id).percent != null ? `${liveOf(live, t.id).percent} %` : tr('tasks.steps', { n: liveOf(live, t.id).steps })}</span></div> : null}</div>
-                <StatusBadge status={t.status} />
+                <StatusBadge status={t.status} undone={t.undone} />
               </button>
             )) : <Empty icon={ListTodo} title={filter === 'aprobar' ? tr('tasks.empty.approve') : tr('tasks.empty.none')}>{tr('tasks.empty.hint')}</Empty>}
           </Card>

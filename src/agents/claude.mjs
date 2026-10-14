@@ -94,6 +94,9 @@ export async function discoverModels(exe, cfg = {}, env = {}) {
 // The SDK's error kinds, in plain words.
 const RESULT_KEY = { error_during_execution: 'sys.agents.result.duringExecution', error_max_turns: 'sys.agents.result.maxTurns', error_max_budget_usd: 'sys.agents.result.maxBudget', error_max_structured_output_retries: 'sys.agents.result.structuredOutput' };
 
+// 3.2.1: whether a result answers a message of Orb's (sent with origin «human»), not a notice Claude handles by itself.
+export const answersOrb = (m) => !(m?.origin?.kind && m.origin.kind !== 'human');
+
 export const permissionModeOf = (p) => (p === 'total' ? 'bypassPermissions' : p === 'editar' ? 'acceptEdits' : 'default');
 
 // options: exe, cwd, model, reasoning, permission, resumeId, newSessionId, forkSession, mcpServers, env, systemPrompt
@@ -151,6 +154,10 @@ export function createLive(o) {
       onEvent({ type: 'rate', status: r.status, resetAt, utilization: r.utilization ?? null, window: r.rateLimitType ?? null });
       if (r.status === 'rejected') { onEvent({ type: 'limit', resetAt, message: tr('sys.agents.limit', { name: 'Claude' }) }); if (turn) turn.limit = { resetAt }; }
     }
+    // 3.2.1: a result that does not answer Orb's message (origin «task-notification»: Claude first handles a notice left by
+    // the conversation it resumes, such as a background command of the previous session) does not end Orb's turn. Taking
+    // it as the answer, a task resumed after a close passed as done in seconds while Claude was still working.
+    if (m.type === 'result' && !answersOrb(m)) { log(`resultado de ${m.origin.kind}: no es la respuesta al mensaje de Orb`); return; }
     if (m.type === 'result') {
       const usage = { costUsd: m.total_cost_usd ?? null, inputTokens: m.usage?.input_tokens ?? null, outputTokens: m.usage?.output_tokens ?? null, cacheReadTokens: m.usage?.cache_read_input_tokens ?? null, cacheWriteTokens: m.usage?.cache_creation_input_tokens ?? null, turns: m.num_turns ?? null };
       onEvent({ type: 'item', role: 'system', kind: 'usage', body: usage });

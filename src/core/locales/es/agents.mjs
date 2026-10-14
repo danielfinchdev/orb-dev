@@ -99,5 +99,10 @@ export default {
   'agents.realQuotaWindow': '{pct} % de uso real ({window})',
   'agents.resetsAt': 'se reinicia {when}',
   'agents.tasksUsed': '{used}/{max} tareas · {heavy}/{maxHeavy} con modelos de alto consumo',
-  'agents.cooldown': 'límite de uso alcanzado hasta las {time}'
+  'agents.cooldown': 'límite de uso alcanzado hasta las {time}',
+  'agents.cooldownDay': 'límite de uso alcanzado hasta el {time}',
+  'agents.tasksUsedNoHeavy': '{used}/{max} tareas · este plan no incluye modelos de alto consumo',
+  'agents.modelLimit': '{model}: sin uso hasta el {time}',
+  'agents.clearCooldown': 'Quitar pausa',
+  'agents.clearCooldownDone': 'Pausa quitada: {name} vuelve a recibir tareas'
 };

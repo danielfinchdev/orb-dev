@@ -17,7 +17,7 @@ import { localeOf } from '../core/i18n.mjs';
 import { PRODUCT } from '../core/product.mjs';
 import { assistantName, userName, ofUser } from '../core/board.mjs';
 import { git, prepareWorkdir, takeCheckpoint, changedBetween, undoCheckpoint, snapshotCommit, integrateInto, isGitRepo, repoRoot, ORB_GIT, REF_PREFIX } from '../core/workspace.mjs';
-import { rankAccounts, isLimitText, isBudgetText, startCooldown, pauseAccount, taskBudgetUsd } from '../core/budget.mjs';
+import { rankAccounts, isLimitText, isBudgetText, startCooldown, pauseAccount, taskBudgetUsd, blockModel, isModelLimitText, liftAfterSuccess, untilText, modelName } from '../core/budget.mjs';
 import { installed } from '../agents/index.mjs';
 import { runDue } from '../core/schedules.mjs';
 import { explainFailure } from '../core/agent-errors.mjs';
@@ -219,7 +219,7 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
       const forced = board.setting(`budget_ok:${task.id}`) === '1'; // "Lanzar igualmente" in the app
       const pick = ranked.find((r) => (forced || r.check.ok) && (forParent || this.busyWith(r.account) < ctx.config.perAgent));
       if (pick && forced) board.event(task.id, 'usuario', 'budget.override', 'lanzada aunque superaba el límite de uso');
-      if (!pick) { if (ranked.every((r) => !r.check.ok)) this.notice(task, ranked.map((r) => r.check.reason).join('; ')); continue; }
+      if (!pick) { if (ranked.every((r) => !r.check.ok)) this.waitFor(task, ranked); continue; }
       // In its folder only one task that writes at a time (read-only tasks may run alongside); isolated copies run in parallel.
       const project = board.project(task.project);
       if (!project) continue;
@@ -257,6 +257,23 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
       this.board.requeue(t.id, 'orb', 'task.resumed');
       this.board.notice(tr('msg.scheduler.limitReset', { id: t.id, title: oneLine(t.title) }), 'success');
     }
+  }
+
+  // 3.2.1: a task none of whose accounts can take it now. When all of them are paused for a while (usage limit), its
+  // conversation says until when and how to hand it to another agent, and the assistant offers the user to do it (once
+  // per task): before, it waited for hours with only an internal event.
+  waitFor(task, ranked) {
+    const until = Math.min(...ranked.map((r) => r.check.paused ?? 0));
+    const long = until > 0 && until - Date.now() >= 30 * 60_000;
+    const reason = ranked.map((r) => r.check.reason).join('; ');
+    this.notice(task, reason);
+    if (!long || this.board.setting(`pause_offer:${task.id}`) || !this.orchestrator || task.created_by !== 'orb') return;
+    const conversation = this.board.conversationOfTask(task.id);
+    const others = (this.board.availableAgents() ?? []).filter((a) => a !== task.agent);
+    if (!conversation || !others.length) return;
+    this.board.setting(`pause_offer:${task.id}`, String(until));
+    this.orchestrator.internal(`AVISO DEL SISTEMA (no es ${userName()}): la tarea #${task.id} «${oneLine(task.title)}» (${task.agent}${task.model ? ` · ${modelName(this.board, task.account ?? task.agent, task.model)}` : ''}) no puede empezar: ${reason}. Esperará hasta ${untilText(until)}.
+Díselo a ${userName()} en 1-2 líneas, con esa hora, y ofrécele pasarla a otro agente disponible (${others.join(', ')}) con orb_ask. Si acepta, reasígnala con orb_update_task (id ${task.id}, agent). No encargues más trabajo a esa cuenta mientras esté en pausa.`, null, null, { conversation, project: task.project });
   }
 
   // One chat notice per task and reason, so a waiting task does not flood the chat.
@@ -363,12 +380,22 @@ ${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo
     const task = this.board.task(taskId); if (!task) throw new Error(tr('msg.scheduler.noTask', { id: taskId }));
     if (this.running.has(task.id)) throw new Error(tr('msg.scheduler.undoRunning'));
     const cp = this.board.settingJson(`checkpoint:${task.id}`);
+    if (!cp?.before && this.board.settingJson(`undone:${task.id}`)) throw new Error(tr('msg.scheduler.alreadyUndone', { id: task.id }));
     if (!cp?.before) throw new Error(tr('msg.scheduler.noPhoto'));
     let after = cp.after;
     if (cp.before.kind === 'git' && !after) { const snap = snapshotCommit(cp.before.repo, { always: true, message: 'orb: foto para deshacer' }); if (!snap) throw new Error(tr('msg.scheduler.cannotReadFolder')); after = { commit: snap.commit }; }
     const out = undoCheckpoint(cp.before, after ?? {});
     this.board.event(task.id, 'usuario', 'task.undone', `restaurados ${out.restored.length}, quitados ${out.removed.length}, sin tocar ${out.skipped.length}`);
-    this.board.notice(tr('msg.scheduler.undone', { id: task.id, restored: out.restored.length, removed: out.removed.length, skipped: out.skipped.length ? tr('msg.scheduler.undoneSkipped', { n: out.skipped.length, list: oneLine(out.skipped.join(', '), 200) }) : '' }), 'success');
+    // 3.2.1: the task stays «Deshecha» (its result can no longer be accepted) and its photo goes: a second undo over a folder
+    // that changed since would restore something else. Running it again (retry, a message to its agent) takes a new one.
+    this.board.settingJson(`undone:${task.id}`, { at: new Date().toISOString(), restored: out.restored.length, removed: out.removed.length });
+    this.board.settingJson(`checkpoint:${task.id}`, null);
+    if (cp.before.kind === 'git' && cp.before.repo && fs.existsSync(cp.before.repo)) {
+      for (const ref of git(cp.before.repo, 'for-each-ref', '--format=%(refname)', REF_PREFIX).stdout.split('\n').filter((r) => r.startsWith(`${REF_PREFIX}/t${task.id}-`))) git(cp.before.repo, 'update-ref', '-d', ref);
+    }
+    this.board.changed('tasks');
+    const n = (key, count) => tr(`msg.scheduler.${key}.${count === 1 ? 'one' : 'other'}`, { n: count });
+    this.board.notice(tr('msg.scheduler.undone', { id: task.id, restored: n('undoneRestored', out.restored.length), removed: n('undoneRemoved', out.removed.length), skipped: out.skipped.length ? tr('msg.scheduler.undoneSkipped', { n: out.skipped.length, list: oneLine(out.skipped.join(', '), 200) }) : '' }), 'success');
     return out;
   }
 
@@ -414,6 +441,10 @@ ${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo
     // expects it (its work is joined with theirs).
     if (workspace.branch && !board.settingJson(`isolated:${task.id}`)) { const s = mainStatus(project.path); if (s != null) this.mainSnapshot.set(task.id, s); }
     let followup = board.settingJson(`followup:${task.id}`);
+    // 3.2.1: a run that resumes the agent's own conversation after a close or a usage limit: if it ends without a new
+    // result, it is not taken as done (finishNow). A task run again is no longer «undone».
+    board.setting(`resumed_run:${task.id}`, followup?.resume ? '1' : '');
+    board.settingJson(`undone:${task.id}`, null);
     // 3.1: a task that runs again on the same agent and account (retried, put back in the queue by the assistant after a
     // time limit or a block) continues its own conversation instead of starting from zero and redoing the work.
     const prev = task.session_id ? this.sessions.get(task.session_id) : null;
@@ -543,20 +574,38 @@ ${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo
     // answer). Never the agent's prose: «the API returned 429» in a summary must not pause a whole account for hours.
     const errorFinal = state?.isError && state.final && state.final !== state.text ? state.final : '';
     const output = `${errorFinal}\n${stderr ?? ''}`;
+    const resumed = board.setting(`resumed_run:${taskId}`) === '1';
+    if (resumed) board.setting(`resumed_run:${taskId}`, '');
     if (task.status === 'running') {
       const summary = (state?.final || state?.text || stderr || '').trim();
       // A stopped turn is never "done" (Codex and the ACP agents report an interrupted turn without error). 3.1: one that
       // ran out of time is not "failed" either: its work stays in the folder and it waits for review (the assistant looks
       // at it like any blocked task).
-      const status = held || timedOut ? 'blocked' : stopped ? 'failed' : code === 0 && !state?.isError ? 'done' : 'failed';
+      let status = held || timedOut ? 'blocked' : stopped ? 'failed' : code === 0 && !state?.isError ? 'done' : 'failed';
+      // 3.2.1: a run that resumed the agent's conversation (after Orb closed, or a usage limit) and ended without closing
+      // its task and without a word of its own did nothing new: it waits for review instead of passing as done.
+      const emptyResume = resumed && status === 'done' && !String(state?.text ?? '').trim();
+      if (emptyResume) { status = 'blocked'; board.event(taskId, 'orb', 'task.resumed_empty', 'la tarea se reanudó y terminó sin resultado nuevo'); }
       // 3.1: the agent ended its turn without closing its task (orb_update_task): taken as done, but the review is told.
       if (status === 'done') board.event(taskId, 'orb', 'task.unconfirmed', 'el agente terminó sin cerrar la tarea con orb_update_task');
-      task = board.patch(taskId, { status, result: redactSecrets(task.result ?? (timedOut ? tr('msg.scheduler.timedOut', { min: ctx.config.timeoutMinutes, summary }) : summary)).slice(0, 4000), pid: null }, 'orb', 'task.finished');
-      if (limit && !isBudgetText(output) && task.status !== 'done') {
+      task = board.patch(taskId, { status, result: redactSecrets(task.result ?? (emptyResume ? tr('msg.scheduler.resumedNoResult', { name: PRODUCT.name }) : timedOut ? tr('msg.scheduler.timedOut', { min: ctx.config.timeoutMinutes, summary }) : summary)).slice(0, 4000), pid: null }, 'orb', 'task.finished');
+      // 3.2.1: the usage limit of one model only (Cursor's API models): that model waits, the account does not. The task
+      // goes back to the queue without a model (Cursor's own choice, or another model Orb picks), not paused for hours.
+      const acc = task.run_account ?? task.assigned_to;
+      const limitText = `${output}\n${limit?.text ?? ''}`;
+      const onlyModel = task.status !== 'done' && Boolean(task.model) && (limit?.model === task.model || ((limit || isLimitText(output)) && !isBudgetText(output) && isModelLimitText(limitText)));
+      if (onlyModel) {
+        const until = blockModel(board, acc, task.model, limitText, limit?.resetAt ?? null);
+        const info = { account: accountLabel(acc), model: modelName(board, acc, task.model), id: task.id, title: oneLine(task.title), when: untilText(until) };
+        // A task the user approved keeps what was approved (its model): the user chooses another one.
+        if (task.sensitivity.length) task = board.patch(taskId, { status: 'blocked', result: tr('msg.scheduler.modelLimitResult', info) }, 'orb', 'task.model_limited');
+        else task = board.patch(taskId, { status: 'queued', model: null, pid: null, assigned_to: task.agent === 'any' ? null : task.assigned_to }, 'orb', 'task.model_limited');
+        board.addChat('system', tr(task.status === 'queued' ? 'msg.scheduler.modelLimitChat' : 'msg.scheduler.modelLimitBlocked', info), { task: task.id });
+      } else if (limit && !isBudgetText(output) && task.status !== 'done') {
         // The account hit its usage limit (reported by the agent itself): the task waits and continues at the reset.
         const acc = task.run_account ?? task.assigned_to;
         const until = startCooldown(board, acc, output, limit.resetAt);
-        const hour = hhmm(until);
+        const hour = untilText(until);
         task = board.patch(taskId, { status: 'limited', limited_until: new Date(until).toISOString(), result: tr('msg.scheduler.limitResult', { account: accountLabel(acc), hour, result: task.result ?? '' }).slice(0, 4000) }, 'orb', 'task.limited');
         board.addChat('system', tr('msg.scheduler.limitChat', { account: accountLabel(acc), id: task.id, title: oneLine(task.title), hour }), { task: task.id });
       } else if (task.status === 'failed' && isLimitText(output)) {
@@ -565,7 +614,7 @@ ${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo
           task = board.patch(taskId, { status: 'blocked', result: tr('msg.scheduler.budgetStop', { result: task.result ?? '' }).slice(0, 4000) }, 'orb', 'task.budget');
         } else {
           const until = startCooldown(board, agent, output);
-          const hour = hhmm(until);
+          const hour = untilText(until);
           task = board.patch(taskId, { status: 'blocked', result: tr('msg.scheduler.quotaResult', { account: accountLabel(agent), hour, result: task.result ?? '' }).slice(0, 4000) }, 'orb', 'task.quota');
           board.addChat('system', tr('msg.scheduler.quotaChat', { account: accountLabel(agent), hour }), { task: taskId });
         }
@@ -582,6 +631,12 @@ ${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo
     }
     if (held && !['blocked', 'cancelled'].includes(task.status)) task = board.patch(taskId, { status: 'blocked' }, 'orb', 'task.held');
     if (held) task = board.patch(taskId, { result: `${held}. ${task.result ?? ''}`.slice(0, 4000) }, 'orb', 'task.held');
+    // 3.2.1: a task that ended well on an account paused by a usage limit (launched anyway, or after the limit) lifts it.
+    if (task.status === 'done') {
+      const launchedAt = board.one("SELECT at FROM events WHERE task_id = ? AND kind = 'task.launched' ORDER BY id DESC LIMIT 1", task.id)?.at;
+      const lifted = liftAfterSuccess(board, task.run_account ?? task.assigned_to, task.model, launchedAt);
+      if (lifted.length) board.event(taskId, 'orb', 'budget.lifted', `la tarea terminó bien: se quita la pausa por límite de uso (${lifted.join(', ')})`);
+    }
     // 3.1: a task that worked in its own copy to run alongside others: its work goes into the folder now (or as soon as no
     // other task is writing there). Until then the tasks that depend on it wait (Board.depsDone).
     const isolated = board.settingJson(`isolated:${task.id}`);
@@ -742,22 +797,24 @@ No hagas commit, merge, rebase ni cambies de rama: deja los cambios en los archi
     const launched = this.board.one("SELECT at FROM events WHERE task_id = ? AND kind = 'task.launched' ORDER BY id DESC LIMIT 1", task.id)?.at;
     if (!launched || !task.session_id) return null;
     const rows = this.board.all("SELECT body FROM session_items WHERE session_id = ? AND kind = 'usage' AND at >= ?", task.session_id, launched);
-    let tokens = 0; let cost = null;
+    let tokens = 0; let cost = null; let measured = false;
     for (const r of rows) {
       let u; try { u = JSON.parse(r.body); } catch { continue; }
       // Re-read cache is not counted: it is the same context read again at a fraction of the cost, and would inflate it.
+      // 3.2.1: an agent that says nothing of its tokens (older Cursor CLIs) leaves «no data», not 0.
+      if (['inputTokens', 'outputTokens'].some((k) => u[k] != null)) measured = true;
       tokens += ['inputTokens', 'outputTokens', 'cacheWriteTokens'].reduce((s, k) => s + (Number(u[k]) || 0), 0);
       // Claude reports the conversation's cost so far: the last one minus what it had before this run.
       if (u.costUsd != null) cost = Number(u.costUsd);
     }
     const before = cost == null ? null : this.board.all("SELECT body FROM session_items WHERE session_id = ? AND kind = 'usage' AND at < ? ORDER BY id DESC LIMIT 1", task.session_id, launched)
       .map((r) => { try { return Number(JSON.parse(r.body).costUsd) || 0; } catch { return 0; } })[0] ?? 0;
-    return { minutes: Math.max(0, (Date.now() - Date.parse(launched)) / 60_000), tokens, costUsd: cost == null ? null : Math.max(0, cost - before) };
+    return { minutes: Math.max(0, (Date.now() - Date.parse(launched)) / 60_000), tokens: measured ? tokens : null, costUsd: cost == null ? null : Math.max(0, cost - before) };
   }
   usageLine(u) {
     if (!u) return '';
     const tok = u.tokens >= 1e6 ? `${(u.tokens / 1e6).toFixed(1)} M` : u.tokens >= 1e3 ? `${Math.round(u.tokens / 1e3)} k` : String(u.tokens);
-    return [`${u.minutes < 1 ? '<1' : Math.round(u.minutes)} min`, u.tokens ? `${tok} tokens` : null, u.costUsd ? `${u.costUsd.toFixed(2)} $` : null].filter(Boolean).join(' · ');
+    return [`${u.minutes < 1 ? '<1' : Math.round(u.minutes)} min`, u.tokens == null ? tr('msg.scheduler.noTokenData') : u.tokens ? `${tok} tokens` : null, u.costUsd ? `${u.costUsd.toFixed(2)} $` : null].filter(Boolean).join(' · ');
   }
 
   // Returns the task updated with a clear reason, or null when the failure is not one we recognise.

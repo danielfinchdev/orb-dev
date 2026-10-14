@@ -279,5 +279,17 @@ export default {
   'sys.android.noAdb': 'el paquete no incluye adb',
   'sys.scheduler.launchFailed': 'no se pudo iniciar {name}: {error}',
   'sys.scheduler.finishError': 'Error interno al cerrar la tarea: {error}',
-  'sys.sessions.starting': 'iniciando…'
+  'sys.sessions.starting': 'iniciando…',
+  'sys.agents.cursorModelLimit': 'Tu plan de Cursor no tiene uso del modelo {model} hasta las {when}. Elige otro modelo, por ejemplo Auto.',
+  'sys.agents.cursorLimit': 'Cursor ha alcanzado el límite de uso de tu plan hasta las {when}.',
+  'sys.agents.orbTool.progress': 'Progreso de la tarea',
+  'sys.agents.orbTool.status.done': 'hecha',
+  'sys.agents.orbTool.status.blocked': 'bloqueada',
+  'sys.agents.orbTool.status.failed': 'fallida',
+  'sys.agents.orbTool.status.queued': 'en cola',
+  'sys.agents.orbTool.status.cancelled': 'cancelada',
+  'sys.agents.orbTool.message': 'Mensaje para {to}',
+  'sys.agents.orbTool.readMessages': 'Lee sus mensajes',
+  'sys.agents.orbTool.browser': 'Navegador',
+  'sys.agents.orbTool.board': 'Consulta el tablero'
 };

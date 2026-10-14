@@ -85,7 +85,8 @@ test('Codex: sesión viva por app-server con hilo, permisos, herramientas, archi
   assert.ok(!JSON.stringify(events).includes('esto es de un subagente'), 'lo de otros hilos no se mezcla');
   assert.deepEqual(events.find((e) => e.type === 'context'), { type: 'context', used: 900, size: 272000 });
   assert.deepEqual(events.find((e) => e.type === 'rate'), { type: 'rate', status: 'allowed', resetAt: 2_000_000_000_000, utilization: 0.42, window: '300min' });
-  assert.deepEqual(r.usage, { inputTokens: 1200, outputTokens: 80, cachedTokens: 100 });
+  // 3.2.1: per turn and without the cached part (Codex's totals are the thread's and include the cache).
+  assert.deepEqual(r.usage, { inputTokens: 800, outputTokens: 80, cacheReadTokens: 100 });
 });
 
 test('Codex: solo lectura y acceso total cambian sandbox y aprobaciones; continuar y bifurcar usan el hilo', async () => {
@@ -186,13 +187,57 @@ test('Cursor: solo lectura sin --force, encargos largos por archivo, límite de 
   assert.ok(prompt.length < 1000, 'la línea de órdenes de Windows no admite 32 000 caracteres');
   assert.ok(!fs.readdirSync(dir).some((f) => f.startsWith('orb-encargo-')), 'el archivo de instrucciones se borra al acabar el turno');
   const quota = await openCursor().live.send({ text: 'LIMITE_USO' });
-  assert.equal(quota.isError, true); assert.deepEqual(quota.limit, { resetAt: null });
+  assert.equal(quota.isError, true); assert.deepEqual(quota.limit, { resetAt: null, text: 'You have reached your usage limit' });
   const { live, events } = openCursor();
   const turn = live.send({ text: 'ESPERA' });
   await until(() => events.some((e) => e.kind === 'tool'), 'turno en marcha');
   await live.interrupt();
   const r = await turn;
   assert.ok(r.final, 'termina aunque el proceso se corte');
+});
+
+test('Cursor 3.2.1: el texto completo no se repite, las herramientas MCP con nombre legible y los tokens del resultado', async () => {
+  const { live, events } = openCursor({ model: 'gemini-3.8-flash-medium' });
+  const r = await live.send({ text: 'FORMATO_NUEVO' });
+  assert.equal(r.isError, false, r.final);
+  const texts = events.filter((e) => e.kind === 'text' && e.role === 'assistant').map((e) => e.body);
+  assert.deepEqual(texts, ['Voy a crear saludo.html.', 'Hecho.'], 'cada texto una sola vez, sin «texto+texto»');
+  const tools = events.filter((e) => e.kind === 'tool').map((e) => e.body);
+  assert.equal(tools.length, 1, 'la consulta de herramientas (getMcpTools) no se enseña');
+  assert.equal(tools[0].name, 'Progreso de la tarea');
+  assert.equal(tools[0].input, '20 % · Creando saludo.html');
+  assert.ok(!JSON.stringify(events).includes('smartModeApprovalOnly'), 'sin los argumentos crudos');
+  const usage = events.find((e) => e.kind === 'usage').body;
+  assert.equal(usage.inputTokens, 13038); assert.equal(usage.cacheReadTokens, 50688); assert.equal(usage.outputTokens, 841);
+});
+
+test('Cursor 3.2.1: el límite de uso de un modelo de API es solo de ese modelo, con la fecha real y el aviso en español', async () => {
+  const { live, events } = openCursor({ model: 'gemini-3.8-flash-medium' });
+  const r = await live.send({ text: 'LIMITE_MODELO' });
+  assert.equal(r.isError, true);
+  assert.equal(r.limit?.model, 'gemini-3.8-flash-medium', 'el límite es del modelo');
+  const rate = events.find((e) => e.type === 'rate');
+  assert.deepEqual([rate.status, rate.model], ['rejected', 'gemini-3.8-flash-medium']);
+  assert.match(rate.text, /monthly cycle ends on \d+\/\d+\/\d{4}/);
+  const error = events.find((e) => e.role === 'error').body;
+  assert.match(error, /^Tu plan de Cursor no tiene uso del modelo Gemini 3\.8 Flash Medium hasta las 00:00 del .+\. Elige otro modelo/, 'con el día en que vuelve el uso');
+  assert.ok(!/ActionRequiredError|usage limit/.test(error), 'sin el texto en inglés del programa');
+  // With Cursor's own choice (Auto) the same text is the account's limit.
+  const auto = await openCursor({ model: 'auto' }).live.send({ text: 'LIMITE_MODELO' });
+  assert.equal(auto.limit?.model, undefined);
+  assert.ok(auto.limit);
+});
+
+test('Claude 3.2.1: un resultado que no responde a Orb (aviso de tarea en segundo plano) no cierra el turno', () => {
+  assert.equal(claude.answersOrb({ type: 'result', origin: { kind: 'task-notification' } }), false);
+  assert.equal(claude.answersOrb({ type: 'result', origin: { kind: 'human' } }), true);
+  assert.equal(claude.answersOrb({ type: 'result' }), true, 'sin origen (versiones anteriores): sí es la respuesta');
+});
+
+test('Codex 3.2.1: el uso de cada turno es lo nuevo del turno, sin la caché', () => {
+  const turn = {};
+  assert.deepEqual(codex.turnUsage({ last: { inputTokens: 30_000, cachedInputTokens: 25_000, outputTokens: 500 }, total: { inputTokens: 300_000, cachedInputTokens: 250_000, outputTokens: 5_000 } }, turn), { inputTokens: 5_000, outputTokens: 500, cacheReadTokens: 25_000 });
+  assert.deepEqual(codex.turnUsage({ last: { inputTokens: 40_000, cachedInputTokens: 38_000, outputTokens: 700 }, total: { inputTokens: 340_000, cachedInputTokens: 288_000, outputTokens: 5_700 } }, turn), { inputTokens: 7_000, outputTokens: 1_200, cacheReadTokens: 63_000 }, 'la segunda petición del mismo turno se suma');
 });
 
 test('el entorno de los agentes no lleva secretos del proceso', () => {
