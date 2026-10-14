@@ -35,6 +35,12 @@ function readIcon(file) {
   return dataUrl;
 }
 
+// 3.2.1: a renamed project keeps the icon chosen for it.
+export function renameProjectIcon(from, to) {
+  const next = ownFiles(to);
+  ownFiles(from).forEach((f, i) => { try { if (f !== next[i] && fs.existsSync(f) && !fs.existsSync(next[i])) fs.renameSync(f, next[i]); } catch { /* keeps the old one */ } });
+}
+
 // The icon of a project as a data URL (or null). The one chosen in Orb wins over the project's own.
 export function projectIcon(project) {
   if (!project) return null;

@@ -6,8 +6,20 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
+import { localStamp, localText, sizeText } from './safety.mjs';
 
 const IS_WIN = process.platform === 'win32';
+
+// 3.2.1: the name a person knows a program by, for Opti Bot's cards: "MicrosoftEdgeAutoLaunch_60E4EE12…" → "Microsoft
+// Edge", "Teams.exe" → "Teams". Words are split only when an internal suffix was taken off, so "OneDrive" stays as it is.
+export function programLabel(name) {
+  const raw = String(name ?? '').trim();
+  let n = raw.replace(/\.exe$/i, '').replace(/[_-][0-9A-F]{12,}$/i, '');
+  const cut = n.replace(/(Auto ?Launch|Auto ?Start|Startup|Launcher|Updater?Task)$/i, '');
+  if (cut && cut !== n) n = cut.replace(/([a-z])([A-Z])/g, '$1 $2');
+  n = n.replace(/[_]+/g, ' ').trim();
+  return n || raw;
+}
 
 // A fixed PowerShell script → its JSON answer (null if it fails or is not Windows).
 export function powershell(script, { timeoutMs = 30000 } = {}) {
@@ -65,26 +77,33 @@ export async function security() {
 // The assistant's own folder: it exists, its settings read, its database is sound, and how big each part is.
 export function orbCheck(home, db) {
   const size = (p) => { let n = 0; try { for (const e of fs.readdirSync(p, { withFileTypes: true })) { const f = path.join(p, e.name); n += e.isDirectory() ? size(f) : fs.statSync(f).size; } } catch { /* gone */ } return n; };
-  const out = { folder: home, exists: fs.existsSync(home), settings: null, database: null, sizesMb: {}, backups: [] };
+  const out = { folder: home, exists: fs.existsSync(home), settings: null, database: null, sizes: {}, backups: [] };
   try { JSON.parse(fs.readFileSync(path.join(home, 'orb.json'), 'utf8')); out.settings = 'ok'; } catch (e) { out.settings = `no se puede leer: ${e.message}`; }
   try { out.database = db.prepare('PRAGMA integrity_check').get()?.integrity_check ?? 'desconocido'; } catch (e) { out.database = `error: ${e.message}`; }
-  for (const part of ['.orb', 'bitacora', 'web', 'windows', 'ios', 'android']) { const p = path.join(home, part); if (fs.existsSync(p)) out.sizesMb[part] = Math.round(size(p) / 1048576); }
+  for (const part of ['.orb', 'bitacora', 'web', 'windows', 'ios', 'android']) { const p = path.join(home, part); if (fs.existsSync(p)) out.sizes[part] = sizeText(size(p)); }
   out.backups = backups(home).slice(0, 10);
   return out;
 }
 
 // The assistant's copies: <home>/.orb/copias/orb-<stamp>, newest first.
 export const backupsDir = (home) => path.join(home, '.orb', 'copias', 'orb');
+// 3.2.1: newest first by date on disk (names were UTC until 3.2.0 and are local time now, so by name they would mix), with
+// the size in words (KB below 1 MB) besides the number.
 export function backups(home) {
   const dir = backupsDir(home);
-  try { return fs.readdirSync(dir).filter((d) => /^\d{8}-\d{6}$/.test(d)).sort().reverse().map((d) => ({ name: d, mb: Math.round(sizeOf(path.join(dir, d)) / 1048576) })); } catch { return []; }
+  try {
+    return fs.readdirSync(dir).filter((d) => /^\d{8}-\d{6}$/.test(d))
+      .map((d) => { const p = path.join(dir, d); const bytes = sizeOf(p); let at = 0; try { at = fs.statSync(p).mtimeMs; } catch { /* gone */ } return { name: d, at, bytes, size: sizeText(bytes), mb: Math.round(bytes / 1048576) }; })
+      .sort((a, b) => b.at - a.at || b.name.localeCompare(a.name)).map(({ at, ...rest }) => rest);
+  } catch { return []; }
 }
 const sizeOf = (p) => { let n = 0; try { for (const e of fs.readdirSync(p, { withFileTypes: true })) { const f = path.join(p, e.name); n += e.isDirectory() ? sizeOf(f) : fs.statSync(f).size; } } catch { /* gone */ } return n; };
 
 // A copy of what makes the assistant itself (not the projects, which have their own git): its settings, its logs and a
 // consistent copy of its database (VACUUM INTO). Keeps the last 10.
 export function backup(home, db) {
-  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
+  let stamp = localStamp(); // the PC's local time (3.2.0 named them in UTC)
+  for (let i = 1; fs.existsSync(path.join(backupsDir(home), stamp)); i++) stamp = localStamp(new Date(Date.now() + i * 1000));
   const dir = path.join(backupsDir(home), stamp);
   fs.mkdirSync(path.join(dir, 'datos'), { recursive: true });
   for (const f of ['orb.json']) if (fs.existsSync(path.join(home, f))) fs.copyFileSync(path.join(home, f), path.join(dir, f));
@@ -92,5 +111,6 @@ export function backup(home, db) {
   db.exec(`VACUUM INTO '${path.join(dir, 'datos', 'orb.db').replace(/'/g, "''")}'`);
   const all = backups(home);
   for (const old of all.slice(10)) fs.rmSync(path.join(backupsDir(home), old.name), { recursive: true, force: true });
-  return { folder: dir, name: stamp, mb: Math.round(sizeOf(dir) / 1048576), kept: Math.min(all.length, 10) };
+  const bytes = sizeOf(dir);
+  return { folder: dir, name: stamp, when: localText(), size: sizeText(bytes), bytes, kept: Math.min(all.length, 10) };
 }

@@ -1,5 +1,6 @@
 // Imperative dialogs: confirm(...) and form(...) return promises, rendered by <DialogHost/> once in the app.
 import { useState } from 'react';
+import { LoaderCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/overlay.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { useStore, setState } from '@/lib/store.js';
@@ -41,7 +42,7 @@ function FormDialog({ d }) {
     <form onSubmit={submit} className="grid gap-4">
       <DialogHeader><DialogTitle>{d.title}</DialogTitle>{d.description ? <DialogDescription>{d.description}</DialogDescription> : null}</DialogHeader>
       <div className="grid gap-4">{d.body(values, set)}</div>
-      <DialogFooter><Button type="button" variant="outline" onClick={() => close(d.id, null)}>{t('comp.dialogs.cancel')}</Button><Button type="submit" disabled={busy}>{d.ok}</Button></DialogFooter>
+      <DialogFooter><Button type="button" variant="outline" onClick={() => close(d.id, null)}>{t('comp.dialogs.cancel')}</Button><Button type="submit" disabled={busy} aria-busy={busy}>{busy ? <LoaderCircle className="animate-spin" /> : null}{d.ok}</Button></DialogFooter>
     </form>
   );
 }

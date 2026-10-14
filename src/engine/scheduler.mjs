@@ -13,16 +13,21 @@ const groupNote = (board, project) => {
   const g = groupOf(board, project); if (!g) return '';
   return `\n- Este proyecto es parte del grupo multiplataforma «${g.name}» (${g.members.map((m) => m.name).join(', ')}). Lo que compartan (API, datos, diseño, textos, imágenes) está en la carpeta común ${g.common}: síguela y, si hace falta cambiar algo compartido, dilo en tu result para que ${assistantName()} lo coordine con los demás.`;
 };
+// 3.2.1: pieces built in parallel did not fit (.balloon-letter against .game-letter, 5 weapons against 4, a key nobody
+// made): when the base left a CONTRATO.md, every piece that writes reads it first and checks its names against it.
+export const contractNote = (cwd, task) => (!task.readonly && cwd && fs.existsSync(path.join(cwd, 'CONTRATO.md'))
+  ? '\n- Hay un CONTRATO.md en la carpeta: léelo al empezar y respeta exactamente sus nombres (archivos, ids, clases, data-*, funciones, datos comunes como armas o niveles, y teclas). Antes de terminar, comprueba que lo tuyo coincide; si el contrato no basta o tienes que cambiar algo de él, avisa con orb_send_message a la otra pieza y dilo en tu result.'
+  : '');
 import { localeOf } from '../core/i18n.mjs';
 import { PRODUCT } from '../core/product.mjs';
-import { assistantName, userName, ofUser } from '../core/board.mjs';
+import { assistantName, userName, ofUser, eventKey } from '../core/board.mjs';
 import { git, prepareWorkdir, takeCheckpoint, changedBetween, undoCheckpoint, snapshotCommit, integrateInto, isGitRepo, repoRoot, ORB_GIT, REF_PREFIX } from '../core/workspace.mjs';
 import { rankAccounts, isLimitText, isBudgetText, startCooldown, pauseAccount, taskBudgetUsd, blockModel, isModelLimitText, liftAfterSuccess, untilText, modelName } from '../core/budget.mjs';
 import { installed } from '../agents/index.mjs';
 import { runDue } from '../core/schedules.mjs';
 import { explainFailure } from '../core/agent-errors.mjs';
 import { usableAccounts, account as findAccount, accountLabel } from '../core/accounts.mjs';
-import { oneLine, redactSecrets, secretFiles, isSecretPath, MAX_DEP_RESULT } from '../core/safety.mjs';
+import { oneLine, redactSecrets, secretFiles, isSecretPath, stagedSecrets, MAX_DEP_RESULT } from '../core/safety.mjs';
 import { ATTACH_DIR } from './sessions.mjs';
 import { logTask } from './logs.mjs';
 import { adapter } from '../agents/index.mjs';
@@ -320,7 +325,8 @@ ${deps ? `\n## Hecho antes (ya está en ${folder ? 'la carpeta' : 'tu copia'})\n
 ## Dónde trabajas
 ${where}
 - No escribas en ninguna bitácora: ${assistantName()} anota tu result.
-- Si el proyecto tiene una carpeta pizarra/ (dibujo, notas y adjuntos ${ofUser()}), úsala como referencia cuando el encargo la cite; no la modifiques ni la subas a git.${groupNote(this.board, project)}
+- Si el proyecto tiene una carpeta pizarra/ (dibujo, notas y adjuntos ${ofUser()}), úsala como referencia cuando el encargo la cite; no la modifiques ni la subas a git.${groupNote(this.board, project)}${contractNote(cwd, task)}
+- Para probar una web en el navegador de ${assistantName()}: orb_browser_console lee los errores de su consola y orb_browser_dialog decide si se aceptan o se cancelan sus confirm() y prompt(). No digas que no hay errores en la consola sin haberla leído.
 
 ## Mientras trabajas
 En los hitos importantes (2-4 veces en toda la tarea, no más) llama a orb_update_task con id ${task.id}, progress (0-100, tu estimación de cuánto llevas) y note (qué haces ahora, en pocas palabras): ${userName()} lo ve en directo.
@@ -347,7 +353,7 @@ ${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo
     const isGit = cp.kind === 'git';
     // The first checkpoint is kept: undo goes back to before the task, including later follow-up rounds.
     this.board.settingJson(`checkpoint:${task.id}`, { before: prev?.before ?? cp, after: null, head: isGit ? git(cp.repo, 'rev-parse', 'HEAD').stdout.trim() : null, remotes: isGit ? remotesOf(cp.repo) : null });
-    this.board.event(task.id, 'orb', 'checkpoint', isGit ? `foto de la carpeta antes de la tarea (${cp.ref})` : `copia de la carpeta antes de la tarea (${cp.copy})`);
+    this.board.event(task.id, 'orb', 'checkpoint', isGit ? eventKey('sys.events.checkpointGit', { ref: cp.ref }) : eventKey('sys.events.checkpointCopy', { copy: cp.copy }));
     return { workdir: project.path, cwd: project.path, branch: null, isGit, folder: true, notes: [] };
   }
 
@@ -412,7 +418,7 @@ ${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo
       const reasoning = fresh.level ? pick.reasoning : fresh.reasoning;
       if (pick.model || reasoning !== fresh.reasoning) {
         board.run('UPDATE tasks SET model = ?, reasoning = ? WHERE id = ?', pick.model, reasoning, fresh.id);
-        board.event(fresh.id, 'orb', 'model.auto', tr('msg.scheduler.autoModel', { model: pick.label ?? pick.model ?? tr('msg.tier.agentDefault'), tier: tr(`msg.tier.${pick.tier ?? 'default'}`), level: tr(`msg.level.${pick.level}`), reasoning: tr(`msg.reasoning.${reasoning ?? 'medium'}`) }));
+        board.event(fresh.id, 'orb', 'model.auto', eventKey('msg.scheduler.autoModel', { model: pick.label ?? pick.model ?? { k: 'msg.tier.agentDefault' }, tier: { k: `msg.tier.${pick.tier ?? 'default'}` }, level: { k: `msg.level.${pick.level}` }, reasoning: { k: `msg.reasoning.${reasoning ?? 'medium'}` } }));
         task = board.task(fresh.id);
       }
     }
@@ -545,11 +551,13 @@ ${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo
     git(task.workdir, 'add', '-A', '--', '.', `:(exclude)${ATTACH_DIR}`);
     const staged = git(task.workdir, 'diff', '--cached', '--name-only', '-z').stdout.split('\0').filter(Boolean).filter(isSecretPath);
     if (staged.length) { git(task.workdir, 'reset', '-q'); return tr('sys.scheduler.secretFiles', { list: staged.slice(0, 5).join(', ') }); }
+    const inText = stagedSecrets(task.workdir, git); // 3.2.1: a key pasted into any file, not only secret-looking names
+    if (inText.length) { git(task.workdir, 'reset', '-q'); return tr('sys.scheduler.secretFiles', { list: inText.slice(0, 5).join(', ') }); }
     // Nothing really changed: git status can list a file the agent rewrote with the same content but other line endings
     // (core.autocrlf=true, the Git for Windows default), and then "git commit" fails with "nothing to commit".
     if (git(task.workdir, 'diff', '--cached', '--quiet').status === 0) return '';
     const commit = git(task.workdir, ...ORB_GIT, 'commit', '-q', '-m', `orb: tarea #${task.id} ${oneLine(task.title)}`);
-    this.board.event(task.id, 'orb', 'git.commit', commit.status === 0 ? 'cambios guardados en la rama' : commit.stderr.trim());
+    this.board.event(task.id, 'orb', 'git.commit', commit.status === 0 ? eventKey('sys.events.committed') : commit.stderr.trim());
     return commit.status === 0 ? '' : tr('sys.scheduler.commitFailed', { error: oneLine(commit.stderr, 200), dir: task.workdir });
   }
 
@@ -658,7 +666,7 @@ ${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo
     const revert = cp?.before ? tr('sys.logs.revertUndo', { id: task.id })
       : task.branch ? tr('sys.logs.revertBranch', { branch: task.branch }) : tr('sys.logs.revertFolder');
     try { logTask(board, task, { revert }); } catch (error) { this.log(`bitácora #${task.id}: ${error.message}`); }
-    board.event(taskId, task.assigned_to ?? 'agente', 'agent.reply', `${STATUS_ES[task.status] ?? task.status}: ${redactSecrets(task.result ?? 'sin resumen').slice(0, 1500)}`);
+    board.event(taskId, task.assigned_to ?? 'agente', 'agent.reply', eventKey('sys.events.agentReply', { status: { k: `sys.events.status.${STATUS_ES[task.status] ? task.status : 'other'}`, v: { status: task.status } }, result: task.result ? redactSecrets(task.result).slice(0, 1500) : { k: 'sys.events.noSummary' } }));
     if (board.settingJson(`followup:${task.id}`) && task.status !== 'cancelled') {
       try { board.requeue(task.id, 'usuario'); } catch (error) { this.log(`seguimiento #${task.id}: ${error.message}`); }
       return;

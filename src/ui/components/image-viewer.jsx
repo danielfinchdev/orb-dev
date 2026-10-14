@@ -6,7 +6,8 @@ import { Download, Expand, Crop, Send, X } from 'lucide-react';
 import { Button } from './ui/button.jsx';
 import { Spinner } from './ui/basic.jsx';
 import { Dialog, DialogContent, DialogTitle } from './ui/overlay.jsx';
-import { call, act, getState } from '@/lib/store.js';
+import { toast } from 'sonner';
+import { call, act, getState, setState, useStore } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
@@ -27,10 +28,24 @@ export function GeneratedImage({ body, sessionId, project }) {
         {src ? <img src={src} alt={body.prompt ?? ''} className={cn('block max-h-80 max-w-full object-contain', body.transparent && 'img-checker')} /> : <span className="grid size-40 place-items-center"><Spinner /></span>}
         <span className="bg-background/80 absolute top-2 right-2 grid size-7 place-items-center rounded-lg opacity-0 transition-opacity group-hover:opacity-100"><Expand className="size-4" /></span>
       </button>
-      {body.prompt ? <div className="text-muted-foreground max-w-xl text-[11.5px] leading-snug">{body.prompt}</div> : null}
+      {/* 3.2.1: what was asked for, in two lines (the whole prompt repeated under every picture filled the conversation). */}
+      {body.prompt ? <div className="text-muted-foreground line-clamp-2 max-w-xl text-[11.5px] leading-snug" title={body.prompt}>{body.prompt}</div> : null}
       {open && src ? <ImageEditor src={src} body={body} sessionId={sessionId} project={project} onClose={() => setOpen(false)} /> : null}
     </div>
   );
+}
+
+// 3.2.1: a picture of this PC linked from a message ("Ver imagen editada"): the same viewer, to look at it and save it.
+export const openImage = (file) => setState({ imagePreview: { path: String(file) } });
+export function ImagePreviewHost() {
+  const preview = useStore((s) => s.imagePreview);
+  return preview ? <ImagePreview key={preview.path} body={preview} onClose={() => setState({ imagePreview: null })} /> : null;
+}
+function ImagePreview({ body, onClose }) {
+  const t = useT();
+  const src = useImage(body.path);
+  useEffect(() => { if (src === false) { toast.error(t('img.unavailable')); onClose(); } }, [src]); // eslint-disable-line react-hooks/exhaustive-deps
+  return src ? <ImageEditor src={src} body={body} sessionId={null} onClose={onClose} /> : null;
 }
 
 // The zone is a rectangle in the picture's own pixels; the marked copy dims what is outside it and outlines it.
@@ -62,7 +77,7 @@ function ImageEditor({ src, body, sessionId, project, onClose }) {
   const save = async () => {
     const name = project ?? getState().app?.activeProject?.name;
     if (!name) return act(Promise.reject(new Error(t('img.noProject'))));
-    const r = await act(call('images.save', { path: body.path, project: name }), t('img.saved', { project: name }));
+    const r = await act(call('images.save', { path: body.path, project: name, title: body.prompt ?? undefined }), t('img.saved', { project: name }));
     return r;
   };
   const ask = async () => {
@@ -87,17 +102,17 @@ function ImageEditor({ src, body, sessionId, project, onClose }) {
       <DialogContent className="max-w-[min(1100px,95vw)] gap-3" data-testid="image-editor">
         <DialogTitle>{t('img.title')}</DialogTitle>
         <div className="bg-muted/40 grid max-h-[62vh] place-items-center overflow-auto rounded-xl p-2">
-          <div className="relative inline-block cursor-crosshair select-none" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerLeave={up} data-testid="image-canvas">
+          <div className={cn('relative inline-block select-none', sessionId && 'cursor-crosshair')} onPointerDown={sessionId ? down : undefined} onPointerMove={move} onPointerUp={up} onPointerLeave={up} data-testid="image-canvas">
             <img ref={imgRef} src={src} alt={body.prompt ?? ''} draggable={false} className={cn('block max-h-[58vh] max-w-full object-contain', body.transparent && 'img-checker')} />
             {zone && imgRef.current ? <span className="pointer-events-none absolute rounded-sm border-2 border-[#ff2d55] shadow-[0_0_0_9999px_rgb(0_0_0/0.35)]" style={pct(zone)} /> : null}
           </div>
         </div>
-        <p className="text-muted-foreground text-xs">{zone ? t('img.zoneHint') : t('img.markHint')}</p>
+        {sessionId ? <p className="text-muted-foreground text-xs">{zone ? t('img.zoneHint') : t('img.markHint')}</p> : null}
         <div className="flex flex-wrap items-center gap-2">
-          <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') ask(); }} placeholder={zone ? t('img.changeZonePh') : t('img.changePh')} maxLength={1000}
+          {sessionId ? <><input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') ask(); }} placeholder={zone ? t('img.changeZonePh') : t('img.changePh')} maxLength={1000}
             className="border-input bg-background focus-visible:ring-ring/40 h-9 min-w-0 flex-1 rounded-lg border px-3 text-sm outline-none focus-visible:ring-2" data-testid="image-change" />
           {zone ? <Button size="sm" variant="ghost" onClick={() => setZone(null)}><X />{t('img.clearZone')}</Button> : null}
-          <Button size="sm" onClick={ask} disabled={!text.trim() || busy} data-testid="image-ask">{busy ? <Spinner className="size-3.5" /> : zone ? <Crop /> : <Send />}{t('img.ask')}</Button>
+          <Button size="sm" onClick={ask} disabled={!text.trim() || busy} data-testid="image-ask">{busy ? <Spinner className="size-3.5" /> : zone ? <Crop /> : <Send />}{t('img.ask')}</Button></> : null}
           <Button size="sm" variant="outline" onClick={save} data-testid="image-save"><Download />{t('img.save')}</Button>
         </div>
       </DialogContent>

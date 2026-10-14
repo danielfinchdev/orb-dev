@@ -19,10 +19,13 @@ import { browserKey } from '../core/browser-key.mjs';
 import { PERMISSIONS, plainAction, pidKills } from '../core/guard.mjs';
 import { explainFailure } from '../core/agent-errors.mjs';
 import { rememberModels } from './catalog.mjs';
+import { changedFiles, logDirect } from './logs.mjs';
 
 export { PERMISSIONS };
 export const ATTACH_DIR = '.orb-adjuntos';
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp)$/i;
+// 3.2.1: a message that asks for a picture (or to change one): Codex gets a short note on how Orb wants it done.
+const IMAGE_ASK = /\b(imagen|im[aá]genes|image|images|picture|ilustraci[oó]n|illustration|logo|icono|icon|dibujo|drawing|foto|photo|wallpaper|edita la imagen)\b/i;
 const ATTACH_MAX = 20 * 1024 * 1024;
 const IDLE_CLOSE_MS = 20 * 60_000; // a live process with nothing to do for this long is closed (it resumes on the next message)
 const WATCH_MS = Number(process.env.ORB_WATCH_MS) || 5000; // how often a running turn is checked (time limit, permissions)
@@ -470,6 +473,8 @@ export class Sessions {
     if (this.isOpti(s) && s.agent !== 'claude' && !s.cli_session) body = `${optiPersona()}\n\n## Mensaje\n${body}`;
     const nativeImages = a.caps?.images === true;
     if (attached.length && !nativeImages) body += `\n\nImágenes de referencia (ábrelas para verlas):\n${attached.map((f) => `- ${f}`).join('\n')}`;
+    // 3.2.1: Codex made three pictures for "una imagen" and edited them by pasting pieces with scripts (losing quality).
+    if (s.agent === 'codex' && s.kind === 'chat' && IMAGE_ASK.test(text)) body += `\n\n${tr(attached.length ? 'sys.sessions.imageEditHint' : 'sys.sessions.imageHint')}`;
     let entry;
     try { entry = this.getLive(s, acc, { taskId, budgetUsd }); }
     catch (error) {
@@ -485,6 +490,9 @@ export class Sessions {
     const timer = setInterval(() => { try { this.watchRun(id, run, { timeoutMs, taskId }); } catch (error) { this.log(`vigilancia ${id}: ${error.message}`); } }, WATCH_MS);
     timer.unref?.();
     const resumed = Boolean(s.cli_session);
+    // 3.2.1: a direct conversation in a project leaves a log entry for the files its turn changed (logs.mjs logDirect).
+    const direct = s.kind === 'chat' && !this.isOpti(s) && s.project && s.permission !== 'leer';
+    let before = null; if (direct) { try { before = changedFiles(s.cwd); } catch { /* no entry */ } }
     let finished = false; // onFinish runs exactly once, also when the adapter itself fails
     entry.live.send({ text: body, images: nativeImages ? attached : [] }).then((result) => {
       clearInterval(timer);
@@ -501,6 +509,7 @@ export class Sessions {
       if (run.stopped && !run.timedOut) this.addItem(id, 'system', 'status', tr('msg.sessions.stopped'));
       const limited = Boolean(result.limit);
       this.update(id, { status: limited ? 'limited' : failed ? 'error' : 'idle' });
+      if (before) { try { logDirect(this.board, this.get(id) ?? s, { before, request: text, answer: result.text || result.final }); } catch (error) { this.log(`bitácora de la conversación ${id}: ${error.message}`); } }
       const state = { final: result.final, text: result.text, isError: result.isError, usage: result.usage, cliSession: this.get(id)?.cli_session };
       finished = true;
       try { onFinish?.({ code: result.isError ? 1 : 0, state, stderr: result.isError ? result.final : '', logFile: entry.logFile, stopped: run.stopped, timedOut: Boolean(run.timedOut), limit: result.limit }); }

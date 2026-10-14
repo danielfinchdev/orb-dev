@@ -8,9 +8,10 @@ import { AGENT_IDS, categoryOf, CATEGORIES } from '../core/home.mjs';
 import { MULTI, newAccountId, findAccountFolders, accountsOf, accountDir, accountLabel } from '../core/accounts.mjs';
 import { accountInfo as codexAccountInfo } from '../agents/codex.mjs';
 import { usageReport, clearCooldown, modelName } from '../core/budget.mjs';
-import { createProjects, syncProjects } from '../core/projects.mjs';
+import { createProjects, syncProjects, checkProjectName, renameProject } from '../core/projects.mjs';
+import { PRODUCT } from '../core/product.mjs';
 import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../core/schedules.mjs';
-import { oneLine, redactSecrets } from '../core/safety.mjs';
+import { oneLine, redactSecrets, localStamp } from '../core/safety.mjs';
 import { statusAll, status as agentStatus, openLogin, quickRun, forgetInstalled, executable } from '../agents/index.mjs';
 import { PERMISSIONS } from './sessions.mjs';
 import { readLog, writeLog, logFiles } from './logs.mjs';
@@ -31,8 +32,8 @@ import { quickStats } from '../core/pc-health.mjs';
 import { translate } from '../core/i18n.mjs';
 import { titleFrom } from '../core/titles.mjs';
 import { autoTitle } from './titles.mjs';
-import { projectIcon, setProjectIcon, clearProjectIcon } from './project-icons.mjs';
-import { git } from '../core/workspace.mjs';
+import { projectIcon, setProjectIcon, clearProjectIcon, renameProjectIcon } from './project-icons.mjs';
+import { git, slug } from '../core/workspace.mjs';
 
 // Names of the fields in the messages (Spanish as they were; the key is the Spanish word).
 const fld = (name) => { const key = `msg.api.f.${String(name).replace(/ /g, '_')}`; const t = tr(key); return t === key ? name : t; };
@@ -118,7 +119,13 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     const done = board.accept(ids.filter((id) => !board.settingJson(`undone:${id}`)), 'usuario');
     if (!done.length) fail(tr('msg.api.noDoneTasks'));
     board.notice(tr(done.length > 1 ? 'msg.api.okMany' : 'msg.api.okOne', { who: ofUserLabel(), ids: done.map((t) => `#${t.id}`).join(', ') }), 'success');
-    try { writeLog(board, project ?? done[0].project, { tema: tr('sys.logs.okTopic', { ids: done.map((t) => `#${t.id}`).join(', ') }), pedido: tr('sys.logs.okRequest'), hecho: tr('sys.logs.okDone', { user: userLabel(), list: done.map((t) => `#${t.id} ${oneLine(t.title, 80)}`).join('; ') }), estado: tr('sys.logs.okStatus') }, `${ctx.config.assistantName} (app)`); } catch (error) { log(`bitácora del OK: ${error.message}`); }
+    // 3.2.1: signed as Orb with whose OK it is (not «Orbe (app)»), and the general log gets each cycle too (it only had the
+    // assistant's first entry of the day).
+    const entry = { tema: tr('sys.logs.okTopic', { ids: done.map((t) => `#${t.id}`).join(', ') }), pedido: tr('sys.logs.okRequest'), hecho: tr('sys.logs.okDone', { user: userLabel(), list: done.map((t) => `#${t.id} ${oneLine(t.title, 80)}`).join('; ') }), estado: tr('sys.logs.okStatus') };
+    const author = `${PRODUCT.name} (${tr('sys.logs.okBy', { user: userLabel() })})`;
+    const where = project ?? done[0].project;
+    try { writeLog(board, where, entry, author); } catch (error) { log(`bitácora del OK: ${error.message}`); }
+    try { writeLog(board, 'general', { ...entry, tema: tr('sys.logs.okGeneralTopic', { project: where, ids: done.map((t) => `#${t.id}`).join(', ') }) }, author); } catch (error) { log(`bitácora general del OK: ${error.message}`); }
     return done.map((t) => t.id);
   };
 
@@ -236,8 +243,15 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const made = createProjects(board, { name: str(name, 'nombre', 60), notes: str(notes, 'notas', 2000, { optional: true }), categories: cats }, 'usuario');
       return { ...made[0], all: made.map((p) => p.name) };
     },
-    'projects.import': ({ name, folder }) => board.addProject({ name: str(name, 'nombre', 60), path: str(folder, 'carpeta', 1000) }, 'usuario', { fromUser: true }),
+    'projects.import': ({ name, folder }) => board.addProject({ name: checkProjectName(str(name, 'nombre', 60)), path: str(folder, 'carpeta', 1000) }, 'usuario', { fromUser: true }),
     'projects.remove': ({ name }) => board.removeProject(project(name).name, 'usuario'),
+    // 3.2.1: a new name (and folder) for a project with nothing working in it (core/projects.mjs renameProject).
+    'projects.rename': ({ name, to }) => {
+      const from = project(name).name;
+      const p = renameProject(board, { name: from, to: str(to, 'nombre', 60) }, 'usuario');
+      renameProjectIcon(from, p.name);
+      return p;
+    },
     'projects.setActive': ({ name }) => board.setActiveProject(name ? project(name).name : '', 'usuario'),
     // 3.2: the projects' icons (their favicon or app icon, or one chosen here) for the sidebar: { name: dataUrl | null }.
     'projects.icons': () => Object.fromEntries(board.projects().map((p) => [p.name, projectIcon(p)])),
@@ -277,6 +291,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'projects.createPr': ({ name, branch, title, body, base }) => github.createPr(project(name), { branch: str(branch, 'rama', 120), title: str(title, 'título', 200), body: str(body, 'descripción', 20000, { optional: true }), base: str(base, 'rama base', 120, { optional: true }) || undefined }),
     'projects.createRepo': ({ name, repo, isPrivate }) => github.createRepo(project(name), { name: str(repo, 'repositorio', 100), isPrivate: isPrivate !== false }),
     'projects.clone': async ({ repo, name, category }) => {
+      if (name) checkProjectName(name);
       const folder = await github.clone(str(repo, 'repositorio', 300), str(name, 'nombre', 60, { optional: true }), oneOf(category, CATEGORIES, 'categoría', undefined));
       return board.addProject({ name: oneLine(name || path.basename(folder), 60), path: folder }, 'usuario', { fromUser: true });
     },
@@ -387,11 +402,18 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const file = path.join(dir, `zona-${Date.now()}.png`); fs.writeFileSync(file, Buffer.from(m[1], 'base64'));
       return { path: file };
     },
-    'images.save': ({ path: file, project: name }) => {
+    'images.save': ({ path: file, project: name, title }) => {
       const f = allowedImage(str(file, 'imagen', 1000));
       const p = project(name);
       const dir = path.join(p.path, 'imagenes'); fs.mkdirSync(dir, { recursive: true });
-      let base = path.basename(f).replace(/[^\w.-]/g, '_'); const ext = path.extname(base); const stem = base.slice(0, base.length - ext.length);
+      // 3.2.1: a name people can read: the first words of what was asked for (or "imagen" and the date), not Codex's
+      // internal "exec-6ac8e3e7-….png".
+      const ext = path.extname(f).toLowerCase() || '.png';
+      const words = slug(oneLine(str(title, 'título', 300, { optional: true }) ?? '', 300).split(/\s+/).slice(0, 6).join(' '));
+      const own = path.basename(f, path.extname(f));
+      const internal = /^(exec|ig|img|image)[-_]?[0-9a-f-]{8,}$/i.test(own) || /^[0-9a-f-]{16,}$/i.test(own);
+      const stem = words && words !== 'tarea' ? words : internal ? `imagen-${localStamp()}` : own.replace(/[^\w.-]/g, '_');
+      let base = `${stem}${ext}`;
       for (let i = 2; fs.existsSync(path.join(dir, base)); i++) base = `${stem}-${i}${ext}`;
       fs.copyFileSync(f, path.join(dir, base));
       return { path: path.join(dir, base), name: base };

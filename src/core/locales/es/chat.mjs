@@ -55,6 +55,9 @@ export default {
   'test.title': 'Prueba de funcionamiento',
   'test.desc': 'Pide a Orb, con el Orquestador activado, una web de prueba hecha con varios modelos y la abre para probarla. Así compruebas que toda la cadena funciona.',
   'test.prompt': 'Crea una web localhost con las palabras «Hello World» con textura de globos y, de fondo, el espacio con el Sol y el planeta Tierra animado. Añade una barra de inventario con armas y herramientas para destruir el planeta, como en los juegos virales de navegador de destruir el mundo: rayo láser, bombas, meteoritos y más. Las letras también se pueden destruir. Todo debe tener una estética hiperrealista y animaciones de movimiento, y el planeta se puede girar. Usa varios modelos para hacerlo y abre la web para probarla.',
+  // 3.2.1: lo que se añade al pedido del test (proyecto propio y sin preguntas)
+  'test.wrap': '{prompt}\n\nEs la prueba automática de Orb: decide tú todo y no me preguntes nada (ni el proyecto, ni la pizarra, ni el visto bueno del plan). Trabaja en el proyecto {project}, ya creado para esta prueba. Al final, que la verificación deje la web abierta en el navegador de Orb para que yo la vea funcionando, y en tu informe pon el comando exacto para abrirla de nuevo (comprobado: que funcione tal cual).',
+  'test.projectNotes': 'Proyecto de la prueba automática de Orb («Iniciar test»). Se puede borrar.',
   // 2.7: la línea de actividad en vivo y las preguntas con opciones
   'chat.act.read': 'Leyendo {target}',
   'chat.act.readAny': 'Leyendo archivos',

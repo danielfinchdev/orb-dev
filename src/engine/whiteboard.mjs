@@ -8,6 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { tr } from '../core/context.mjs';
+import { localText, sizeText } from '../core/safety.mjs';
 
 const MB = 1024 * 1024;
 const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp',
@@ -20,6 +21,20 @@ const mimeOf = (file) => MIME[path.extname(file).slice(1).toLowerCase()] ?? 'app
 const kindOf = (mime) => (mime.startsWith('image/') ? 'image' : mime.startsWith('video/') ? 'video' : mime.startsWith('audio/') ? 'audio' : 'file');
 const safeName = (name) => String(name ?? '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/^\.+/, '').trim().slice(0, 120) || 'archivo';
 const readJson = (file, fallback) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; } };
+
+// 3.2.1: the "Contiene" line of PIZARRA.md: every kind of element (texts and frames too), singular or plural as it
+// should be, and "empty" only when there is nothing at all. PIZARRA.md is read by the agents, so it stays in Spanish.
+const KINDS = [['text', 'texto', 'textos'], ['rectangle', 'rectángulo', 'rectángulos'], ['ellipse', 'elipse', 'elipses'], ['diamond', 'rombo', 'rombos'],
+  ['arrow', 'flecha', 'flechas'], ['line', 'línea', 'líneas'], ['freedraw', 'trazo a mano', 'trazos a mano'], ['image', 'imagen', 'imágenes'], ['frame', 'marco', 'marcos'],
+  ['embeddable', 'elemento incrustado', 'elementos incrustados'], ['iframe', 'elemento incrustado', 'elementos incrustados']];
+export function drawingContents(elements) {
+  const live = (Array.isArray(elements) ? elements : []).filter((e) => e && !e.isDeleted);
+  if (!live.length) return 'El dibujo está vacío.';
+  const parts = KINDS.map(([type, one, many]) => { const n = live.filter((e) => e.type === type).length; return n ? `${n} ${n === 1 ? one : many}` : ''; }).filter(Boolean);
+  const other = live.filter((e) => !KINDS.some(([type]) => type === e.type)).length;
+  if (other) parts.push(`${other} ${other === 1 ? 'elemento más' : 'elementos más'}`);
+  return `Contiene: ${parts.join(', ')}.`;
+}
 
 export function whiteboard(board) {
   const folder = (name) => {
@@ -59,15 +74,13 @@ export function whiteboard(board) {
     const texts = live.filter((e) => e.type === 'text' && String(e.text ?? '').trim()).sort((a, b) => (a.y - b.y) || (a.x - b.x)).map((e) => String(e.text).trim().replace(/\n+/g, ' / '));
     const frames = live.filter((e) => e.type === 'frame' && e.name).map((e) => e.name);
     const links = live.filter((e) => e.link).map((e) => e.link);
-    const count = (t) => live.filter((e) => e.type === t).length;
-    const shapes = [['rectangle', 'rectángulos'], ['ellipse', 'elipses'], ['diamond', 'rombos'], ['arrow', 'flechas'], ['line', 'líneas'], ['freedraw', 'trazos a mano'], ['image', 'imágenes']].map(([t, w]) => [count(t), w]).filter(([n]) => n).map(([n, w]) => `${n} ${w}`).join(', ');
     const att = attachments(dir, { thumbs: false });
-    return [`# Pizarra de ${project.name}`, '', `Actualizada: ${new Date().toISOString().slice(0, 16).replace('T', ' ')}. El dibujo completo está en pizarra/pizarra.png (míralo: las formas y flechas dicen tanto como los textos).`,
-      shapes ? `Contiene: ${shapes}.` : 'El dibujo está vacío.', '',
+    return [`# Pizarra de ${project.name}`, '', `Actualizada: ${localText()}. El dibujo completo está en pizarra/pizarra.png (míralo: las formas y flechas dicen tanto como los textos).`,
+      drawingContents(elements), '',
       '## Textos del dibujo (de arriba abajo)', ...(texts.length ? texts.map((x) => `- ${x}`) : ['- (ninguno)']),
       ...(frames.length ? ['', '## Marcos', ...frames.map((x) => `- ${x}`)] : []),
       ...(links.length ? ['', '## Enlaces', ...links.map((x) => `- ${x}`)] : []),
-      '', '## Adjuntos (carpeta pizarra/adjuntos)', ...(att.length ? att.map((a) => `- ${a.name} (${a.kind}, ${(a.size / MB).toFixed(1)} MB)${a.note ? `: ${a.note.replace(/\n+/g, ' ')}` : ''}`) : ['- (ninguno)']), ''].join('\n');
+      '', '## Adjuntos (carpeta pizarra/adjuntos)', ...(att.length ? att.map((a) => `- ${a.name} (${a.kind}, ${sizeText(a.size)})${a.note ? `: ${a.note.replace(/\n+/g, ' ')}` : ''}`) : ['- (ninguno)']), ''].join('\n');
   }
   const writeSummary = (project, dir) => {
     const scene = readJson(path.join(dir, 'pizarra.excalidraw'), null);

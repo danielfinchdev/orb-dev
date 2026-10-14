@@ -11,7 +11,7 @@ export default {
   'tasks.steps': '{n} pasos',
   'tasks.empty.approve': 'No hay tareas pendientes de aprobación',
   'tasks.empty.none': 'No hay tareas',
-  'tasks.empty.hint': 'Pídesela al asistente o créala con «Nueva tarea» (con el Orquestador desactivado).',
+  'tasks.empty.hint': 'Pídesela al asistente en el chat, con el Orquestador activado. Las que se repiten se crean en Programadas.',
   'tasks.pick': 'Selecciona una tarea',
   'tasks.pickHint': 'Aquí verás sus instrucciones, el resultado y las acciones disponibles.',
   'tasks.review.titleTask': 'Task Review de la tarea #{id}',

@@ -55,6 +55,9 @@ export default {
   'test.title': 'Health check',
   'test.desc': 'Asks Orb, with Orchestrator on, for a test web page built with several models and opens it for you to try. A quick way to check the whole chain works.',
   'test.prompt': 'Create a localhost web page with the words “Hello World” in a balloon texture and, in the background, space with the Sun and an animated planet Earth. Add an inventory bar with weapons and tools to destroy the planet, like the viral browser games where you destroy the world: laser beam, bombs, meteorites and more. The letters can be destroyed too. Everything must look hyper-realistic, with motion animations, and the planet can be rotated. Use several models to build it and open the page to try it.',
+  // 3.2.1: what is added to the test request (a project of its own and no questions)
+  'test.wrap': '{prompt}\n\nThis is Orb’s automatic test: decide everything yourself and do not ask me anything (not the project, not the whiteboard, not the go-ahead for the plan). Work in the project {project}, already created for this test. At the end, have the check leave the page open in Orb’s browser so I can see it working, and put in your report the exact command to open it again (tested: it must work as written).',
+  'test.projectNotes': 'Project of Orb’s automatic test (“Start test”). It can be deleted.',
   // 2.7: the live activity line and the questions with options
   'chat.act.read': 'Reading {target}',
   'chat.act.readAny': 'Reading files',

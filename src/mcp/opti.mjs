@@ -6,7 +6,7 @@ import readline from 'node:readline';
 import { useHome, tr } from '../core/context.mjs';
 import { isHome } from '../core/home.mjs';
 import { oneLine } from '../core/safety.mjs';
-import { health, startup, security, orbCheck, backup } from '../core/pc-health.mjs';
+import { health, startup, security, orbCheck, backup, programLabel } from '../core/pc-health.mjs';
 import { readOce } from '../engine/bridge.mjs';
 import { wifi, nearby, devices, adbDevices, adbInfo } from '../core/network.mjs';
 
@@ -25,8 +25,8 @@ function propose(a) {
   const reason = oneLine(String(a.reason ?? ''), 300).trim();
   if (!reason) throw new Error(tr('sys.opti.needsReason'));
   const p = { action: a.action, reason };
-  if (a.action === 'end_process') { const pid = Number(a.pid); if (!Number.isInteger(pid) || pid <= 4) throw new Error(tr('sys.opti.needsPid')); p.pid = pid; p.name = oneLine(String(a.name ?? ''), 80); }
-  if (a.action === 'disable_startup') { const name = oneLine(String(a.name ?? ''), 120).trim(); if (!name) throw new Error(tr('sys.opti.needsName')); p.name = name; }
+  if (a.action === 'end_process') { const pid = Number(a.pid); if (!Number.isInteger(pid) || pid <= 4) throw new Error(tr('sys.opti.needsPid')); p.pid = pid; p.name = oneLine(String(a.name ?? ''), 80); p.label = programLabel(p.name); }
+  if (a.action === 'disable_startup') { const name = oneLine(String(a.name ?? ''), 120).trim(); if (!name) throw new Error(tr('sys.opti.needsName')); p.name = name; p.label = programLabel(name); }
   const list = board.settingJson('opti_pending') ?? [];
   board.settingJson('opti_pending', [...list, p].slice(-5));
   return `Propuesta mostrada a ${USER} como una tarjeta. No la repitas: espera su respuesta, llegará como su próximo mensaje.`;

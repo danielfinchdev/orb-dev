@@ -8,7 +8,7 @@ import readline from 'node:readline';
 import crypto from 'node:crypto';
 import net from 'node:net';
 import { useHome, ctx, tr } from '../core/context.mjs';
-import { isHome, CATEGORIES } from '../core/home.mjs';
+import { isHome, CATEGORIES, AGENT_LABELS } from '../core/home.mjs';
 import { budgetConfig, waitReason, modelLimits } from '../core/budget.mjs';
 import { accountLabel } from '../core/accounts.mjs';
 import { oneLine } from '../core/safety.mjs';
@@ -42,6 +42,14 @@ const BOSS = ME === 'orb';
 const CONV = BOSS ? Number(process.env.ORB_CONVERSATION) || null : null;
 const QUESTIONS = CONV ? `pending_questions:${CONV}` : 'pending_questions';
 const NAME = assistantName(); const USER = userName();
+// 3.2.1: the author of the assistant's own log entries with the brain of its conversation («Orbe (Claude · claude-opus-5-5)»;
+// it was «Orbe ()» with the default model).
+const brainAuthor = () => {
+  const c = CONV ? board.conversation(CONV) : null;
+  const agent = c?.agent || ctx.config.orchestrator?.agent || 'claude';
+  const model = c?.model || ctx.config.orchestrator?.model || '';
+  return `${NAME} (${[AGENT_LABELS[agent] ?? agent, model].filter(Boolean).join(' · ')})`;
+};
 // 3.1: only the agents this PC can run (installed, turned on, with an account) are offered; the board refuses the rest.
 const AVAILABLE = board.availableAgents() ?? AGENTS;
 
@@ -224,7 +232,7 @@ const tools = [
       run: (a) => readLog(board, a.project, { chars: a.chars, whole: a.entera === true }) },
     { name: 'orb_write_log', description: 'Añade una entrada al FINAL de una bitácora (proyecto o "general"), firmada y con el formato estándar. Nunca borra. Sin contraseñas ni datos personales.',
       inputSchema: { type: 'object', required: ['project', 'tema', 'hecho'], properties: { project: str('Proyecto o "general"'), tema: str('Tema corto'), pedido: str('Qué se pidió'), hecho: str('Qué se decidió o hizo'), revertir: str('Cómo revertirlo'), estado: str('Estado / pendiente') } },
-      run: (a) => writeLog(board, a.project, a, `${NAME} (${ctx.config.orchestrator?.model ?? 'sonnet'})`) },
+      run: (a) => writeLog(board, a.project, a, brainAuthor()) },
     { name: 'orb_schedule', description: `Programa una tarea que se repite (p. ej. cada lunes a las 9 revisar dependencias). ${USER} la aprueba una vez en la app antes de que funcione sola.`,
       inputSchema: { type: 'object', required: ['project', 'title', 'description', 'every'], properties: {
         project: str('Proyecto registrado'), title: str('Título corto'), description: str('Encargo autocontenido y compacto'),
@@ -298,6 +306,11 @@ if (PIPE && PIPE_TOKEN) tools.push(
     inputSchema: { type: 'object', required: ['key'], properties: { key: { type: 'string', enum: ['Enter', 'Tab', 'Escape', 'Backspace', 'Delete', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End'] } } }, run: (a) => browser('press', a) },
   { name: 'orb_browser_scroll', description: 'Desplaza la página hacia abajo o arriba.',
     inputSchema: { type: 'object', properties: { direction: { type: 'string', enum: ['down', 'up'] }, amount: { type: 'integer', minimum: 50, maximum: 5000, description: 'Píxeles (600 por defecto)' } } }, run: (a) => browser('scroll', a) },
+  // 3.2.1: the page's dialogs and console (a check that says «sin errores en la consola» now can look at it).
+  { name: 'orb_browser_dialog', description: 'Decide cómo se responden los alert(), confirm() y prompt() de la página abierta a partir de ahora (por defecto se cancelan): accept true para aceptarlos, false para cancelarlos; text, la respuesta de prompt(). Úsalo antes de pulsar el botón que los muestra. Devuelve los diálogos que ya mostró.',
+    inputSchema: { type: 'object', properties: { accept: { type: 'boolean' }, text: str('Respuesta para prompt()') } }, run: (a) => browser('dialog', a) },
+  { name: 'orb_browser_console', description: 'Lee los errores y avisos de la consola de la página abierta (y los recursos que no cargaron) desde la última lectura. clear false los conserva para la siguiente.', readOnly: true,
+    inputSchema: { type: 'object', properties: { clear: { type: 'boolean' } } }, run: (a) => browser('console', a) },
   { name: 'orb_browser_back', description: 'Vuelve a la página anterior.', inputSchema: { type: 'object', properties: {} }, run: () => browser('back') },
   { name: 'orb_browser_wait', description: 'Espera unos milisegundos (máx. 15000) o hasta que aparezca un texto en la página.',
     inputSchema: { type: 'object', properties: { ms: { type: 'integer', minimum: 100, maximum: 15000 }, text: str('Texto que esperar') } }, run: (a) => browser('wait', a) },

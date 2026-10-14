@@ -37,6 +37,23 @@ const KEYWORDS = [
   ['financial', /\b(pago\w*|pagar|compra\w*|comprar|transferencia\w*|payment\w*)\b/i],
   ['external_write', /\b(env[ií]a\w*\s+(un\s+|el\s+)?(correo|email|mensaje)|send\s+(an?\s+)?(email|message)|tweet\w*)\b/i]
 ];
+// 3.2.1: the one rule for deletions the user asked for (the same whether the assistant marked the task as destructive or
+// the keyword net found it): no separate approval when the user's current request asks to delete (a clause that is not
+// negated) and names every file the task's deleting sentences name. A task that names no file (an app "where notes can be
+// deleted") only needs the request to ask for it. Anything else waits for the click.
+const FILE_RE = /(?:^|[\s«"'`(\[/\\])((?:[\w-][\w.-]*[\\/])*[\w-][\w.-]*\.[A-Za-z][A-Za-z0-9]{0,7})(?=$|[\s»"'`),;:!?\]]|\.(?:\s|$))/g;
+const DELETE_RE = /(rm\s+-rf|\b(borra\w*|borr[eé]\w*|elimina\w*|elimin[eé]\w*|delete\w*|remove\s+(the\s+)?files?|drop\s+table|formatea\w*)\b)/i;
+export const filesIn = (text) => [...String(text ?? '').matchAll(FILE_RE)].map((m) => m[1].replace(/\\/g, '/').split('/').pop().toLowerCase());
+export function filesToDelete(taskText) {
+  const sentences = String(taskText ?? '').split(/(?<=[.!?;])\s+|\n+/);
+  return [...new Set(sentences.filter((s) => DELETE_RE.test(s)).flatMap(filesIn))];
+}
+export function deletionAskedByUser(userText, taskText) {
+  if (!detectSensitivity(userText).includes('destructive')) return false;
+  const named = new Set(filesIn(userText));
+  return filesToDelete(taskText).every((f) => named.has(f));
+}
+
 export function detectSensitivity(text) {
   const NEG = /(^|[^\p{L}])(no|nunca|jam[aá]s|sin|ni|don'?t|never|without)(?![\p{L}])/iu;
   const clauses = String(text).split(/[.;,:\n!?()]+|\s(?:y|e|o|pero|luego|después|entonces|además|and|then|but)\s/i);

@@ -10,6 +10,7 @@ import { PageHeader } from '@/components/page.jsx';
 import { MobileTabs, MoreView } from '@/components/mobile-tabs.jsx';
 import { TooltipProvider } from '@/components/ui/overlay.jsx';
 import { DialogHost } from '@/components/dialogs.jsx';
+import { ImagePreviewHost } from '@/components/image-viewer.jsx';
 import { Sidebar } from '@/components/sidebar.jsx';
 import { Companion } from '@/components/companion.jsx';
 import { UpdateCard } from '@/components/update-card.jsx';
@@ -210,6 +211,7 @@ createRoot(document.getElementById('root')).render(
     <TooltipProvider>
       <Root />
       <DialogHost />
+      <ImagePreviewHost />
       <WindowControls />
       <ThemedToaster />
     </TooltipProvider>

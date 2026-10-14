@@ -96,6 +96,9 @@ export default {
   'sys.browser.do.wait': 'espera',
   'sys.browser.do.snapshot': 'lee la página',
   'sys.browser.do.screenshot': 'hace una captura',
+  'sys.browser.do.dialogAccept': 'aceptará los avisos de la página',
+  'sys.browser.do.dialogCancel': 'cancelará los avisos de la página',
+  'sys.browser.do.console': 'lee la consola',
 
   // Herramientas MCP de los agentes
   'sys.mcp.noTask': 'no existe la tarea #{id}',
@@ -199,6 +202,14 @@ export default {
   'sys.logs.okRequest': 'revisar el trabajo terminado',
   'sys.logs.okDone': '{user} dio el OK a: {list}',
   'sys.logs.okStatus': 'aceptado',
+  'sys.logs.okBy': 'OK de {user}',
+  'sys.logs.okGeneralTopic': '{project}: OK a {ids}',
+  'sys.logs.viaTask': 'tarea #{id}',
+  'sys.logs.viaDirect': 'conversación directa',
+  'sys.logs.directTopic': 'Conversación «{title}»',
+  'sys.logs.directFiles': 'archivos cambiados: {list}.',
+  'sys.logs.directRevert': 'desde el historial de git del proyecto (God mode › Cambios) o pidiéndoselo al agente en la misma conversación',
+  'sys.logs.andMore': ' y {n} más',
 
   // Inicio de Orb
   'sys.engine.notHome': 'no es la carpeta de un asistente: {home}',
@@ -291,5 +302,20 @@ export default {
   'sys.agents.orbTool.message': 'Mensaje para {to}',
   'sys.agents.orbTool.readMessages': 'Lee sus mensajes',
   'sys.agents.orbTool.browser': 'Navegador',
-  'sys.agents.orbTool.board': 'Consulta el tablero'
+  'sys.agents.orbTool.board': 'Consulta el tablero',
+  // 3.2.1: textos de la Actividad (se guardan como clave y se muestran en el idioma de la app)
+  'sys.events.checkpointGit': 'foto de la carpeta antes de la tarea ({ref})',
+  'sys.events.checkpointCopy': 'copia de la carpeta antes de la tarea ({copy})',
+  'sys.events.committed': 'cambios guardados en la rama',
+  'sys.events.accepted': 'aceptada por el usuario',
+  'sys.events.agentReply': '{status}: {result}',
+  'sys.events.noSummary': 'sin resumen',
+  'sys.events.status.done': 'hecha',
+  'sys.events.status.failed': 'fallida',
+  'sys.events.status.blocked': 'bloqueada',
+  'sys.events.status.cancelled': 'cancelada',
+  'sys.events.status.other': '{status}',
+  'sys.projects.firstCommit': 'Proyecto creado',
+  'sys.sessions.imageHint': '(Nota de Orb: si este mensaje pide una imagen, genera una sola, salvo que pida varias expresamente. Los textos que vayan dentro de la imagen, en el idioma del mensaje.)',
+  'sys.sessions.imageEditHint': '(Nota de Orb: para cambiar la imagen, pásala como imagen de referencia a la herramienta de generar imágenes y genera una sola imagen nueva con el cambio. No la montes con scripts ni pegando trozos: pierde calidad.)'
 };
