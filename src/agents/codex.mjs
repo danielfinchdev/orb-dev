@@ -122,6 +122,19 @@ export async function discoverModels(exe, cfg = {}, env = {}) {
   } catch { return null; } finally { peer.close(); killTree(child); }
 }
 
+// 3.2.1: what one turn spent, from Codex's token reports. Its totals are the whole thread's (they grow turn after turn) and
+// its input includes the cached part: counted as they came, a small task looked like 280 k new tokens when most of them
+// were the same context read again. Per turn: the total now minus the total before the turn's first request (that one's
+// own figure, «last», tells where it started); cached input apart (cacheReadTokens), as Claude reports it.
+const TOKEN_KEYS = ['inputTokens', 'cachedInputTokens', 'outputTokens'];
+export function turnUsage(u, turn) {
+  const total = u.total ?? {};
+  turn.tokenBase ??= Object.fromEntries(TOKEN_KEYS.map((k) => [k, Math.max(0, (total[k] ?? 0) - (u.last?.[k] ?? total[k] ?? 0))]));
+  const spent = (k) => Math.max(0, (total[k] ?? 0) - turn.tokenBase[k]);
+  const cached = Math.min(spent('cachedInputTokens'), spent('inputTokens'));
+  return { inputTokens: total.inputTokens == null ? null : spent('inputTokens') - cached, outputTokens: total.outputTokens == null ? null : spent('outputTokens'), cacheReadTokens: total.cachedInputTokens == null ? null : cached };
+}
+
 // options: exe, cwd, model, reasoning, permission, resumeId, forkSession, mcpServers, env, internalDir, log, onEvent
 export function createLive(o) {
   const onEvent = o.onEvent ?? (() => {});
@@ -197,7 +210,7 @@ export function createLive(o) {
     if (method === 'thread/tokenUsage/updated') {
       const u = p.tokenUsage;
       if (u?.modelContextWindow) onEvent({ type: 'context', used: u.last?.inputTokens ?? u.total?.inputTokens ?? 0, size: u.modelContextWindow });
-      if (turn) turn.usage = { inputTokens: u?.total?.inputTokens ?? null, outputTokens: u?.total?.outputTokens ?? null, cachedTokens: u?.total?.cachedInputTokens ?? null };
+      if (turn && u?.total) turn.usage = turnUsage(u, turn);
       return;
     }
     if (method === 'account/rateLimits/updated') {

@@ -99,5 +99,10 @@ export default {
   'agents.realQuotaWindow': '{pct}% of actual quota ({window})',
   'agents.resetsAt': 'resets {when}',
   'agents.tasksUsed': '{used}/{max} tasks · {heavy}/{maxHeavy} with high-usage models',
-  'agents.cooldown': 'no quota until {time}'
+  'agents.cooldown': 'no quota until {time}',
+  'agents.cooldownDay': 'no quota until {time}',
+  'agents.tasksUsedNoHeavy': '{used}/{max} tasks · this plan does not include high-usage models',
+  'agents.modelLimit': '{model}: no usage until {time}',
+  'agents.clearCooldown': 'Lift pause',
+  'agents.clearCooldownDone': 'Pause lifted: {name} takes tasks again'
 };

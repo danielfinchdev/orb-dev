@@ -21,7 +21,8 @@ export async function newSchedule(preset = {}) {
   const { projects, app } = getState();
   const list = projects ?? [];
   if (!list.length) { toast.error(t('schedules.noProject')); return null; }
-  const agents = Object.keys(app?.config?.agents ?? {});
+  // 3.2.1: only the agents this PC can run (the engine refuses a schedule for another one).
+  const agents = app?.agentsAvailable ?? Object.keys(app?.config?.agents ?? {});
   return form(t('schedules.new.title'), {
     description: t('schedules.new.desc'),
     initial: { project: preset.project ?? app?.activeProject?.name ?? list[0].name, title: '', description: '', agent: 'any', every: 'weekly', at_time: '09:00', weekdays: [1], hours: 6, readonly: false },

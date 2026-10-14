@@ -5,9 +5,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, saveConfig, checkAccountHome, tr } from '../core/context.mjs';
 import { AGENT_IDS, categoryOf, CATEGORIES } from '../core/home.mjs';
-import { MULTI, newAccountId, findAccountFolders, accountsOf, accountDir } from '../core/accounts.mjs';
+import { MULTI, newAccountId, findAccountFolders, accountsOf, accountDir, accountLabel } from '../core/accounts.mjs';
 import { accountInfo as codexAccountInfo } from '../agents/codex.mjs';
-import { usageReport } from '../core/budget.mjs';
+import { usageReport, clearCooldown, modelName } from '../core/budget.mjs';
 import { createProjects, syncProjects } from '../core/projects.mjs';
 import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../core/schedules.mjs';
 import { oneLine, redactSecrets } from '../core/safety.mjs';
@@ -82,6 +82,16 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     if ((board.settingJson(`report_queue:c${conv}`) ?? []).length) { board.addChat('system', line, { task: task.id }, conv); scheduler?.queueReport?.(task); return; }
     orchestrator.internal(`AVISO DEL SISTEMA (no es ${userName()}): ${userName()} ha rechazado la tarea #${task.id} «${oneLine(task.title)}». No se hará y no se ha tocado ningún archivo. No la vuelvas a crear salvo que te lo pida. Díselo en una línea y sigue con el resto del pedido, si lo hay.`, line, null, { conversation: conv, project: task.project });
   };
+  // 3.2.1: a model by the name the selector shows (its agent's list, or the account's own), else the agent's own name for it.
+  const modelLabelOf = (agent, account, id) => {
+    try {
+      const entry = (catalogCache?.value ?? modelCatalog(board)).find((a) => a.id === agent);
+      const found = [...(entry?.accountModels?.[account] ?? []), ...(entry?.models ?? [])].find((m) => m.id === id);
+      if (found?.label) return found.label;
+    } catch { /* the name the agent gave it */ }
+    const named = modelName(board, account, id);
+    return named !== id ? named : /^[a-z]+$/.test(id) ? id[0].toUpperCase() + id.slice(1) : id;
+  };
   // A task text cut for the lists (the window shows a few hundred characters of each).
   const cut = (s) => (typeof s === 'string' && s.length > 1200 ? `${s.slice(0, 1200)}…` : s);
   // Folders made by hand in the Explorer: the engine's loop looks every 5 s; a list asked for in between looks at most
@@ -104,7 +114,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
 
   // The user's OK closes the loop: tasks marked accepted, a line in the chat and an entry in the project's log.
   const accept = (ids, project) => {
-    const done = board.accept(ids, 'usuario');
+    // 3.2.1: an undone task has no result left to accept.
+    const done = board.accept(ids.filter((id) => !board.settingJson(`undone:${id}`)), 'usuario');
     if (!done.length) fail(tr('msg.api.noDoneTasks'));
     board.notice(tr(done.length > 1 ? 'msg.api.okMany' : 'msg.api.okOne', { who: ofUserLabel(), ids: done.map((t) => `#${t.id}`).join(', ') }), 'success');
     try { writeLog(board, project ?? done[0].project, { tema: tr('sys.logs.okTopic', { ids: done.map((t) => `#${t.id}`).join(', ') }), pedido: tr('sys.logs.okRequest'), hecho: tr('sys.logs.okDone', { user: userLabel(), list: done.map((t) => `#${t.id} ${oneLine(t.title, 80)}`).join('; ') }), estado: tr('sys.logs.okStatus') }, `${ctx.config.assistantName} (app)`); } catch (error) { log(`bitácora del OK: ${error.message}`); }
@@ -121,7 +132,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       chats: orchestrator.states(), assistant: orchestrator.info(), optiSession: board.setting('opti_session') ?? null,
       // 2.6: the tasks («t<id>») and direct conversations («s<id>») the user put away in «Completadas» of the sidebar;
       // 3.2: kept, the finished tasks the user brought back (a finished task goes to «Completadas» by itself).
-      completed: board.settingJson('sidebar_completed') ?? [], kept: board.settingJson('sidebar_kept') ?? []
+      completed: board.settingJson('sidebar_completed') ?? [], kept: board.settingJson('sidebar_kept') ?? [],
+      // 3.2.1: the agents this PC can run now (installed, on, with an account): the lists of the window offer only these.
+      agentsAvailable: board.availableAgents()
     }),
     'conversations.list': () => conversationList(),
     // 3.2: completed by hand (or open again): a task («t<id>»), a direct conversation («s<id>») or a conversation with the
@@ -407,7 +420,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'chat.accept': ({ id }) => {
       const row = board.chatRow(int(id, 'mensaje'));
       if (row?.meta?.kind !== 'report') fail(tr('msg.api.notReport'));
-      const out = accept(row.meta.tasks, row.meta.project);
+      // 3.2.1: the OK to the report also settles the tasks of that request Orb held «for your review» (a read-only check
+      // that changed build files, for instance), which the report already explained: before, they stayed blocked for ever.
+      const held = row.conversation_id ? board.all("SELECT id FROM tasks WHERE conversation_id = ? AND status = 'blocked' AND updated_at <= ?", row.conversation_id, row.at)
+        .map((r) => r.id).filter((tid) => board.one("SELECT 1 AS x FROM events WHERE task_id = ? AND kind = 'task.held' AND id > COALESCE((SELECT MAX(id) FROM events WHERE task_id = ? AND kind = 'task.launched'), 0)", tid, tid)) : [];
+      for (const tid of held) board.patch(tid, { status: 'done' }, 'usuario', 'task.review_accepted');
+      const out = accept([...row.meta.tasks, ...held], row.meta.project);
       // 3.2: the OK closes the conversation when nothing of it is still open (written in again, it opens).
       settleConversation(row.conversation_id);
       return out;
@@ -466,7 +484,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'models.guide': () => modelCatalog(board).map((a) => ({
       id: a.id, label: a.label,
       tiers: Object.fromEntries(['light', 'balanced', 'heavy'].map((tier) => [tier, a.models.filter((m) => m.id && m.tier === tier).map((m) => m.label)])),
-      picks: Object.fromEntries(LEVELS.map((level) => { const p = chooseModel(board, a.id, level, a.accounts[0]?.id ?? a.id, { writes: true }); return [level, { label: p.label, tier: p.tier, reasoning: p.reasoning }]; }))
+      picks: Object.fromEntries(LEVELS.map((level) => { const p = chooseModel(board, a.id, level, a.accounts[0]?.id ?? a.id, { writes: true }); return [level, { label: p.label, tier: p.tier, reasoning: p.reasoning }]; })),
+      // 3.2.1: what the read-only tasks (reviews and verifications) really get: they may use the light model.
+      readPicks: Object.fromEntries(LEVELS.map((level) => { const p = chooseModel(board, a.id, level, a.accounts[0]?.id ?? a.id, { writes: false }); return [level, { label: p.label, tier: p.tier, reasoning: p.reasoning }]; }))
     })),
     'models.catalog': () => {
       // 3.2: with the accounts' real usage in the key: the usage bubble reads it from here and must not see an old figure.
@@ -480,12 +500,19 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
 
     // 3.0: the list of every view, sent on each refresh: long texts cut (the whole task is tasks.get) and no approval
     // signatures (only the detail needs them).
-    'tasks.list': ({ limit }) => board.panelTasks(Math.min(Number(limit) || 150, 500)).map(({ approval_hash, approval_sig, ...task }) => ({ ...task, description: cut(task.description), result: cut(task.result) })),
+    'tasks.list': ({ limit }) => {
+      const undone = new Set(board.all("SELECT key FROM settings WHERE key LIKE 'undone:%' AND value <> '' AND value <> 'null'").map((r) => Number(r.key.slice('undone:'.length))));
+      return board.panelTasks(Math.min(Number(limit) || 150, 500)).map(({ approval_hash, approval_sig, ...task }) => ({ ...task, description: cut(task.description), result: cut(task.result), ...(undone.has(task.id) ? { undone: true } : {}) }));
+    },
     'tasks.live': () => scheduler.live(),
     'tasks.get': ({ id }) => {
       const d = board.taskDetail(int(id, 'tarea'));
       const children = board.all('SELECT id, title, status, agent, assigned_to, model FROM tasks WHERE parent_id = ? OR review_of = ? ORDER BY id', d.id, d.id);
-      return { ...d, accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children };
+      // 3.2.1: «Deshecha» (undone: the files are as before the task), the model by its name («Haiku 4.5», not «haiku») and the
+      // account that ran it by the name the user gave it («Codex Pro»).
+      const who = d.assigned_to ?? d.agent; const acc = d.run_account ?? d.account ?? null;
+      return { ...d, accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children,
+        undone: board.settingJson(`undone:${d.id}`), modelLabel: d.model ? modelLabelOf(who, acc ?? who, d.model) : null, accountLabel: acc && accountsOf(who).length > 1 ? accountLabel(acc) : null };
     },
     'tasks.create': (p) => board.createTask({
       project: project(p.project).name, title: str(p.title, 'título', 200), description: str(p.description, 'descripción', 12000),
@@ -581,7 +608,15 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const needle = String(q ?? '').toLowerCase().trim();
       return (needle ? rows.filter((r) => `${r.actor} ${r.kind} ${r.detail} ${r.title ?? ''}`.toLowerCase().includes(needle)) : rows).map((r) => ({ ...r, detail: redactSecrets(r.detail) }));
     },
-    'usage.get': () => usageReport(board),
+    // 3.2.1: only the accounts of the agents this PC can run (not every agent Orb knows).
+    'usage.get': () => { const avail = board.availableAgents(); return usageReport(board).filter((u) => !avail || avail.includes(u.agent)); },
+    // 3.2.1: the user lifts an account's usage pause (and its models without usage) by hand.
+    'accounts.clearCooldown': ({ account: id }) => {
+      const acc = str(id, 'cuenta', 40);
+      if (!ctx.config.accounts.some((a) => a.id === acc)) fail(tr('msg.api.noAccount'));
+      clearCooldown(board, acc);
+      return true;
+    },
     // 2.6: the accounts working right now (the assistant's brain and the agents' running sessions), with the windows of
     // their plan the agents reported (session, weekly…), for the panel of the context ring.
     'usage.now': () => {

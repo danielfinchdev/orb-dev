@@ -10,7 +10,7 @@ import { notify } from '@/lib/notify.js';
 import { REASONING, options } from '@/lib/labels.js';
 import { prettyModel } from '@/lib/tools.js';
 import { cn } from '@/lib/utils.js';
-import { useT } from '@/lib/i18n.js';
+import { useT, useLocale } from '@/lib/i18n.js';
 
 // The installed agents with their models (engine: models.catalog), read again when the settings change.
 export function useCatalog() {
@@ -33,6 +33,9 @@ export function modelLabel(catalog, agent, id) {
     ?? (/^(sonnet|opus|haiku)$/.test(low) ? all.find((m) => m.id.toLowerCase().includes(low)) : null);
   return hit?.label ?? prettyModel(id);
 }
+// 3.2.1: the models the account has no usage of now (Cursor's API models after «usage limit») go last, dimmed.
+const usableFirst = (list) => [...list].sort((x, y) => Number(Boolean(x.limitedUntil)) - Number(Boolean(y.limitedUntil)));
+const untilShort = (ms, locale) => { const d = new Date(ms); return ms - Date.now() > 20 * 3_600_000 ? d.toLocaleDateString(locale, { day: 'numeric', month: 'short' }) : d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }); };
 const modelOf = (catalog, value) => modelsOf(catalog?.find((a) => a.id === value.agent), value.account).find((m) => m.id === (value.model ?? '')) ?? null;
 // The agent's own default (id ''), named after the model the agent says it uses when it says so.
 const labelOf = (a, m, t) => (m.id ? m.label : m.defaultOf ? t('brain.defaultIs', { model: m.defaultOf }) : t('brain.defaultOf', { agent: a.label }));
@@ -70,20 +73,22 @@ export function BrainPicker({ catalog, value, onChange, className }) {
 // then one group per agent; one group open at a time. The group of the brain in use says which model it is.
 function BrainGroups({ catalog, value, onChange }) {
   const t = useT();
+  const locale = useLocale();
   const [open, setOpen] = useState(null);
-  const list = (a) => { const own = modelsOf(a, value.agent === a.id ? value.account : null); return own.length ? own : [{ id: '', label: t('brain.defaultOf', { agent: a.label }) }]; };
+  const list = (a) => { const own = usableFirst(modelsOf(a, value.agent === a.id ? value.account : null)); return own.length ? own : [{ id: '', label: t('brain.defaultOf', { agent: a.label }) }]; };
   const recommended = catalog.flatMap((a) => list(a).filter((m) => m.recommended).map((m) => ({ a, m })));
   // acc: the account of a group of its own (an agent with several accounts); otherwise the one in use or the first.
   const item = (a, m, key, withAgent, acc = null) => {
     const account = acc?.id ?? (value.agent === a.id && a.accounts.some((x) => x.id === value.account) ? value.account : a.accounts[0]?.id ?? a.id);
     const on = value.agent === a.id && (value.model ?? '') === m.id && (!acc || value.account === acc.id);
     return (
-      <DropdownMenuItem key={key} onSelect={() => onChange({ agent: a.id, model: m.id, account })} data-testid={`brain-${acc?.id ?? a.id}-${m.id || 'default'}${withAgent ? '-rec' : ''}`}>
+      <DropdownMenuItem key={key} onSelect={() => onChange({ agent: a.id, model: m.id, account })} className={cn(m.limitedUntil && 'opacity-55')} data-testid={`brain-${acc?.id ?? a.id}-${m.id || 'default'}${withAgent ? '-rec' : ''}`}>
         {withAgent ? <AgentIcon agent={a.id} className="ml-5 size-3.5" /> : null}
         {/* 2.7: each model says what it is for (fast, balanced, most capable), so no one has to know the names. */}
         <span className={cn('grid min-w-0 flex-1', !withAgent && 'pl-5')}>
           <span className="truncate">{withAgent ? `${a.label} · ` : ''}{labelOf(a, m, t)}</span>
-          {m.tier ? <span className="text-muted-foreground truncate text-[11px] leading-tight">{t(`brain.tier.${m.tier}`)}</span> : null}
+          {m.limitedUntil ? <span className="text-warning truncate text-[11px] leading-tight">{t('brain.noUsage', { when: untilShort(m.limitedUntil, locale) })}</span>
+            : m.tier ? <span className="text-muted-foreground truncate text-[11px] leading-tight">{t(`brain.tier.${m.tier}`)}</span> : null}
         </span>
         {m.heavy ? <Flame className="text-warning! size-3.5" aria-label={t('brain.heavy')} /> : null}
         {on ? <Check className="text-primary!" /> : null}
@@ -106,7 +111,7 @@ function BrainGroups({ catalog, value, onChange }) {
     {catalog.map((a) => {
       // 3.1: one group per account when the agent has several (Codex Go, Codex Pro), each with its own models.
       if (a.accounts?.length > 1) return a.accounts.map((acc) => {
-        const own = modelsOf(a, acc.id); const models = own.length ? own : [{ id: '', label: t('brain.defaultOf', { agent: acc.label }) }];
+        const own = usableFirst(modelsOf(a, acc.id)); const models = own.length ? own : [{ id: '', label: t('brain.defaultOf', { agent: acc.label }) }];
         const current = value.agent === a.id && value.account === acc.id ? models.find((m) => m.id === (value.model ?? '')) : null;
         return (
           <div key={acc.id}>

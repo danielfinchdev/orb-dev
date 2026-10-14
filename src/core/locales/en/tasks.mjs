@@ -98,5 +98,7 @@ export default {
   'tasks.dependsOn': 'Depends on',
   'tasks.approval': 'Approval',
   'tasks.result': 'Result',
-  'tasks.history': 'History ({n})'
+  'tasks.history': 'History ({n})',
+  'tasks.undone': 'Undone',
+  'tasks.undoneNote': 'Undone on {when}: the files are back as they were before the task.'
 };
