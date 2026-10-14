@@ -392,10 +392,11 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
           continue;
         }
         const { id: reqId, action, args = {} } = msg ?? {};
+        // Closing never waits behind a page that does not answer, and is checked before the action list (it is not in
+        // ACTIONS: closing the page is handled here, not by running something in it).
+        if (action === 'close') { const tab = tabs.get(key); if (tab) closeTab(tab); send({ id: reqId, ok: true, result: tab ? 'Navegador cerrado.' : 'No había navegador abierto.' }); continue; }
         if (!Object.hasOwn(ACTIONS, action) || !args || typeof args !== 'object') { send({ id: reqId, ok: false, error: T('sys.browser.badAction') }); continue; }
         if (pending >= MAX_PENDING) { send({ id: reqId, ok: false, error: T('sys.browser.busy') }); continue; }
-        // Closing never waits behind a page that does not answer.
-        if (action === 'close') { const tab = tabs.get(key); if (tab) closeTab(tab); send({ id: reqId, ok: true, result: tab ? 'Navegador cerrado.' : 'No había navegador abierto.' }); continue; }
         pending++;
         const next = (queues.get(key) ?? Promise.resolve()).then(async () => {
           try {
@@ -440,6 +441,9 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
   return {
     pipe, token, ready,
     show() { if (pipTab) showFor(pipTab, { force: true }); },
+    // 3.2.1: when a task ends Orb closes the pages it opened (as it already stops the servers it left): the tabs do not
+    // pile up and the next agent never looks at a half-built page of a task that is over.
+    closeTask(task) { const id = String(task ?? ''); if (!id) return; for (const t of [...tabs.values()]) if (String(t.task ?? '') === id) closeTab(t); },
     state: () => ({ tabs: [...tabs.values()].map((t) => ({ agent: t.agent, task: t.task, url: t.url, title: t.title })), pip: visible() }),
     shutdown() {
       try { server.close(); } catch { /* closed */ }

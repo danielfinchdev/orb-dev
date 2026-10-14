@@ -186,6 +186,9 @@ function applyMenu(c = config()) {
 
 function onEngineEvent(event, payload) {
   if (event === 'config:changed') { cachedConfig = null; applyMenu(payload); }
+  // The agents' browser lives here (main process): a task that ended asks for its pages to be closed. Done whether or not
+  // the window exists.
+  if (event === 'agentBrowser:closeTask') { try { agentBrowser?.closeTask(payload?.task); } catch { /* going away */ } return; }
   if (!win || win.isDestroyed()) return;
   win.webContents.send('engine:event', event, payload);
   // Notices while the window is in the background: finished tasks, approvals, the assistant's answers.

@@ -96,7 +96,7 @@ async function start(home, version, secret, browser) {
     autoTitle(board, { agent: c.agent, account: c.account, text }).then((t) => { if (t && board.conversation(c.id)?.title === c.title) board.updateConversation(c.id, { title: t }); }).catch(() => {});
   };
   const orchestrator = new Orchestrator(board, orchKey, { emit, log, title });
-  const scheduler = new Scheduler(board, sessions, { log, orchestrator });
+  const scheduler = new Scheduler(board, sessions, { log, orchestrator, emit });
   const { createRemote } = await import('./remote.mjs');
   const remoteRef = { current: null };
   api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef });
@@ -169,6 +169,8 @@ transport.on(async (msg) => {
     try { api?.shutdown(); } catch { /* closing anyway */ }
     try { bridge?.stop(); } catch { /* closing anyway */ }
     try { devControl?.stop(); } catch { /* closing anyway */ }
+    // 3.2.1: if Orb started adb this session, its resident server goes too (never a server the user runs elsewhere).
+    try { const { stopAdb } = await import('./android.mjs'); stopAdb(); } catch { /* not used or already gone */ }
     Promise.race([Promise.resolve(remote?.stop()).catch(() => {}), new Promise((r) => setTimeout(r, 4000))]).finally(() => setTimeout(() => process.exit(0), 300));
     return;
   }
