@@ -8,6 +8,7 @@ import { Button } from './ui/button.jsx';
 import { bridge, go, useStore, getState, setState } from '@/lib/store.js';
 import { notify, popupClosed } from '@/lib/notify.js';
 import { cn } from '@/lib/utils.js';
+import { cutWords } from '@/lib/text.js';
 import { useT } from '@/lib/i18n.js';
 
 // Which chat messages are notices: { level: 'ok' | 'attention', go } or null.
@@ -39,7 +40,7 @@ export function Notices() {
     if (n.level === 'ok' && Date.now() - last.current < 60_000) return;
     last.current = Date.now();
     const title = t(n.level === 'ok' ? 'notice.done' : 'notice.attention');
-    const text = clean(payload.body).slice(0, 220);
+    const text = cutWords(clean(payload.body), 240);
     // 3.2: kept for the bell, never twice in a row and one on screen at a time (lib/notify.js).
     const ms = n.level === 'ok' ? 6000 : 10000;
     const shown = notify({ title, body: text, tone: n.level === 'ok' ? 'success' : 'warning', go: n.go, action: quiet ? { label: t('notice.open'), onClick: () => go(n.go) } : undefined }, { toast: quiet, ms });
