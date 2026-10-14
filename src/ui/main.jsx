@@ -10,10 +10,12 @@ import { PageHeader } from '@/components/page.jsx';
 import { MobileTabs, MoreView } from '@/components/mobile-tabs.jsx';
 import { TooltipProvider } from '@/components/ui/overlay.jsx';
 import { DialogHost } from '@/components/dialogs.jsx';
+import { ImagePreviewHost } from '@/components/image-viewer.jsx';
 import { Sidebar } from '@/components/sidebar.jsx';
 import { Companion } from '@/components/companion.jsx';
 import { UpdateCard } from '@/components/update-card.jsx';
 import { Notices } from '@/components/notices.jsx';
+import { ActionShortcuts } from '@/components/project-tools.jsx';
 import { Scene } from '@/components/scene.jsx';
 import { GamesDialog } from '@/games/games.jsx';
 import { Robot } from '@/components/robot.jsx';
@@ -68,6 +70,10 @@ function Shell() {
   const View = VIEWS[route.view] ?? ChatView;
   const [drawer, setDrawer] = useState(false);
   const folded = useStore((s) => s.sidebarCollapsed);
+  // 3.2: the shortcuts of the project's actions: God mode's project there, the working folder elsewhere.
+  const projects = useStore((s) => s.projects);
+  const expertProject = useStore((s) => s.expertProject);
+  const shortcutProject = projects.find((p) => p.name === (route.view === 'expert' ? expertProject : app.activeProject?.name)) ?? null;
   useEffect(() => { if (!drawer) return undefined; const esc = (e) => { if (e.key === 'Escape') setDrawer(false); }; window.addEventListener('keydown', esc); return () => window.removeEventListener('keydown', esc); }, [drawer]);
   // 3.2: the robot thinks while the assistant answers in any conversation (and talks while one streams its answer).
   const busy = anyChatBusy(app);
@@ -101,6 +107,7 @@ function Shell() {
       <SettingsDialog />
       <GamesDialog />
       <Notices />
+      <ActionShortcuts project={shortcutProject} />
       <div className="hidden md:contents"><Companion name={app.config.assistantName} base={mood} hidden={app.config.ui?.companion === false || !COMPANION_VIEWS.has(route.view) || bridge.mobile || Boolean(tour)} /></div>
       {tour ? <Tour key={tour.key} /> : null}
     </div>
@@ -204,6 +211,7 @@ createRoot(document.getElementById('root')).render(
     <TooltipProvider>
       <Root />
       <DialogHost />
+      <ImagePreviewHost />
       <WindowControls />
       <ThemedToaster />
     </TooltipProvider>

@@ -9,6 +9,7 @@ import { call, getState, act, bridge, useStore, refresh } from '@/lib/store.js';
 import { baseName } from '@/lib/utils.js';
 import { GithubIcon } from '@/components/agent-icon.jsx';
 import { t, useT } from '@/lib/i18n.js';
+import { projectNameProblem } from '../../core/product.mjs';
 
 const home = () => getState().app?.home ?? '';
 const sep = () => (home().includes('\\') ? '\\' : '/');
@@ -40,7 +41,7 @@ export async function createProjectFlow() {
     initial: { name: '', notes: '', categories: ['web'] },
     body: (v, set) => (<>
       <PlatformsField v={v} set={set} />
-      <Field label={t('comp.projects.name')} hint={v.name.trim() ? (v.categories.length > 1 ? t('comp.projects.foldersHint', { list: v.categories.map((c) => `${v.name.trim()}-${c}`).join(', ') }) : t('comp.projects.folderHint', { path: folderOf(v, v.categories[0]) })) : null}><Input autoFocus value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder="webviaproject" maxLength={60} /></Field>
+      <Field label={t('comp.projects.name')} hint={v.name.trim() && projectNameProblem(v.name) ? <span className="text-destructive">{t(projectNameProblem(v.name), { name: v.name.trim() })}</span> : v.name.trim() ? (v.categories.length > 1 ? t('comp.projects.foldersHint', { list: v.categories.map((c) => `${v.name.trim()}-${c}`).join(', ') }) : t('comp.projects.folderHint', { path: folderOf(v, v.categories[0]) })) : null}><Input autoFocus value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder="webviaproject" maxLength={60} /></Field>
       <Field label={t('comp.projects.about')} hint={t('comp.projects.aboutHint')}><Textarea value={v.notes} onChange={(e) => set({ notes: e.target.value })} rows={3} /></Field>
     </>),
     ok: t('comp.projects.create'),

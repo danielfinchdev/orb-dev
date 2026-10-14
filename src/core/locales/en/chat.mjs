@@ -4,6 +4,14 @@ export default {
   'chat.suggestion2': 'How are the tasks going?',
   'chat.suggestion3': 'Review the project and suggest improvements',
   'chat.suggestion4': 'Summarise this week’s logs',
+  'chat.suggestionProject1': 'Explain in a few lines what is in this project',
+  'chat.suggestionProject2': 'What was left pending in this project?',
+  'chat.startedIn': 'Your message is in the conversation “{title}”',
+  'chat.startedInBody': 'It is already being handled. Open it whenever you like from here or from the menu.',
+  'chat.orchestratorCursor': 'With Cursor as the brain you talk to it directly. Turning the Orchestrator on moves {name} to Claude or Codex, which can coordinate the agents.',
+  'chat.orchestratorSwitched': '{name} will use {agent} to coordinate: with Cursor it cannot hand out the work.',
+  'chat.orchestratorNoBrain': '{name} needs Claude or Codex to coordinate the agents. Install one in Agents.',
+  'chat.cursorDirect': 'With Cursor the new conversation is a direct one: Cursor cannot coordinate the agents.',
   'chat.mentionHeader': 'Attach as context (excerpt)',
   'chat.stop': 'Stop',
   'chat.send': 'Send',
@@ -47,6 +55,9 @@ export default {
   'test.title': 'Health check',
   'test.desc': 'Asks Orb, with Orchestrator on, for a test web page built with several models and opens it for you to try. A quick way to check the whole chain works.',
   'test.prompt': 'Create a localhost web page with the words “Hello World” in a balloon texture and, in the background, space with the Sun and an animated planet Earth. Add an inventory bar with weapons and tools to destroy the planet, like the viral browser games where you destroy the world: laser beam, bombs, meteorites and more. The letters can be destroyed too. Everything must look hyper-realistic, with motion animations, and the planet can be rotated. Use several models to build it and open the page to try it.',
+  // 3.2.1: what is added to the test request (a project of its own and no questions)
+  'test.wrap': '{prompt}\n\nThis is Orb’s automatic test: decide everything yourself and do not ask me anything (not the project, not the whiteboard, not the go-ahead for the plan). Work in the project {project}, already created for this test. At the end, have the check leave the page open in Orb’s browser so I can see it working, and put in your report the exact command to open it again (tested: it must work as written).',
+  'test.projectNotes': 'Project of Orb’s automatic test (“Start test”). It can be deleted.',
   // 2.7: the live activity line and the questions with options
   'chat.act.read': 'Reading {target}',
   'chat.act.readAny': 'Reading files',
@@ -70,6 +81,10 @@ export default {
   'chat.act.plan': 'Organising the steps',
   'chat.act.delegate': 'Sharing out the work',
   'chat.act.other': 'Using {name}',
+  'chat.act.otherAny': 'Using a tool',
+  'chat.act.tools': 'Getting its tools ready',
+  'chat.act.pc': 'Checking the PC',
+  'chat.act.propose': 'Preparing a proposal',
   'chat.act.writing': 'Writing…',
   'chat.act.sec': '{s} s',
   'chat.act.min': '{m} min {s} s',
@@ -81,7 +96,7 @@ export default {
   'chat.q.fold': 'Fold the question',
   'chat.q.unfold': 'Unfold the question',
   'chat.q.skipped': 'Skipped',
-  'chat.placeholderBusy': 'Send a correction to {name}…',
+  'chat.placeholderBusy': 'Write another message: {name} will read it when done…',
   'chat.placeholder': 'Message {name}…',
   // 2.6: the choice of brain (agent + model)
   'brain.title': 'Brain: agent and model',
@@ -201,5 +216,7 @@ export default {
   'chat.rename': 'Change the title',
   'chat.renameTitle': 'Conversation title',
   'chat.placeholderDirect': 'Write to {agent}…',
-  'chat.waitingTurn': 'Waiting its turn: other conversations are answering.'
+  'chat.waitingTurn': 'Waiting its turn: other conversations are answering.',
+  'brain.noUsage': 'No usage on your plan until {when}',
+  'brain.noUsageDay': 'No usage on your plan until {when}'
 };

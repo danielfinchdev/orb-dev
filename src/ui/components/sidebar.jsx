@@ -152,8 +152,8 @@ function Section({ title, count, open, onOpen, action, children, testid, classNa
 }
 const Sub = ({ children }) => <div className="text-muted-foreground/80 px-2 pt-1.5 pb-0.5 text-[10.5px] tracking-wide uppercase">{children}</div>;
 
-// 2.6: a project. A click starts a new conversation in it; its arrow (or a double click) unfolds what is going on in it:
-// 3.2: its conversations and its tasks, each in its own group (the completed ones are under «Completadas»).
+// 2.6: a project. A click starts a new conversation in it; its arrow (or a double click) unfolds its active tasks (3.2:
+// its conversations are under «Conversaciones»; the completed tasks, under «Completadas»).
 function ProjectFolder({ project, convs, tasks, open, onOpen, route, active, modelName }) {
   const t = useT();
   const SHOWN = 6;
@@ -177,8 +177,7 @@ function ProjectFolder({ project, convs, tasks, open, onOpen, route, active, mod
       <CollapsibleContent>
         <div className="ml-3 grid gap-px border-l pl-1.5" data-testid={`folder-items-${project.name}`}>
           {!all.length ? <p className="text-muted-foreground px-2 py-1 text-xs">{t('comp.sidebar.nothingYet')}</p> : null}
-          {convs.length ? <><Sub>{t('comp.sidebar.conversations')}</Sub>{convs.slice(0, SHOWN).map((i) => <SideItem key={i.key} item={i} route={route} modelName={modelName} />)}</> : null}
-          {tasks.length ? <><Sub>{t('comp.sidebar.tasks')}</Sub>{tasks.slice(0, SHOWN).map((i) => <SideItem key={i.key} item={i} route={route} modelName={modelName} />)}</> : null}
+          {tasks.slice(0, SHOWN).map((i) => <SideItem key={i.key} item={i} route={route} modelName={modelName} />)}
           {tasks.length > SHOWN ? <button className="text-muted-foreground hover:text-foreground cursor-pointer px-2 py-1 text-left text-xs" onClick={() => go({ view: 'tasks', project: project.name })}>{t('comp.sidebar.viewAll', { n: tasks.length })}</button> : null}
         </div>
       </CollapsibleContent>
@@ -320,10 +319,11 @@ export function Sidebar({ mood, page = false }) {
     return () => clearTimeout(id);
   }, [query]);
 
+  // 3.2: each thing in one place: every conversation under «Conversaciones», each project with its tasks.
   const openConvs = items.convs.filter((i) => !i.done);
   const doneConvs = items.convs.filter((i) => i.done);
   const doneTasks = items.tasks.filter((i) => i.done);
-  const folders = projects.map((p) => ({ project: p, convs: openConvs.filter((i) => i.project === p.name), tasks: items.tasks.filter((i) => !i.done && i.project === p.name) }))
+  const folders = projects.map((p) => ({ project: p, convs: [], tasks: items.tasks.filter((i) => !i.done && i.project === p.name) }))
     .sort((a, b) => Number(b.project.active) - Number(a.project.active) || String([...b.convs, ...b.tasks][0]?.at ?? '').localeCompare(String([...a.convs, ...a.tasks][0]?.at ?? '')) || a.project.name.localeCompare(b.project.name));
   // 2.7: the projects of a multiplatform group stay together, where the first of them falls.
   for (let i = 0; i < folders.length; i++) {

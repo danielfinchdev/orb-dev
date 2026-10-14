@@ -300,5 +300,6 @@ export default {
   'apps.download': 'Descargar',
   // 3.2: conversaciones a la vez
   'settings.parallelChats': 'Conversaciones con Orbe a la vez',
-  'settings.parallelChatsHint': 'Cuántas conversaciones contesta Orbe al mismo tiempo (de 1 a 6). Las demás esperan su turno.'
+  'settings.parallelChatsHint': 'Cuántas conversaciones contesta Orbe al mismo tiempo (de 1 a 6). Las demás esperan su turno.',
+  'guide.readOnly': 'Revisiones y pruebas (solo lectura): {list}'
 };

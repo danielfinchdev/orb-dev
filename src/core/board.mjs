@@ -3,9 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { openDb, taskOptions, checkPolicy } from './db.mjs';
 import { ctx, tr } from './context.mjs';
-import { AGENT_IDS, folderName, projectLogHeader, isConfigName, categoryOf, CATEGORIES } from './home.mjs';
+import { AGENT_IDS, AGENT_LABELS, folderName, projectLogHeader, isConfigName, categoryOf, CATEGORIES } from './home.mjs';
 import { oneLine, MAX_DESCRIPTION } from './safety.mjs';
-import { contentHash, sign, verify, detectSensitivity, defaultApprovalKey } from './approval.mjs';
+import { contentHash, sign, verify, detectSensitivity, deletionAskedByUser, defaultApprovalKey } from './approval.mjs';
 import { PRODUCT } from './product.mjs';
 
 export const AGENTS = AGENT_IDS;
@@ -24,6 +24,22 @@ export const ofUser = () => (ctx.config?.userName?.trim() ? `de ${ctx.config.use
 export const userLabel = () => ctx.config?.userName?.trim() || tr('msg.board.theUser');
 export const ofUserLabel = () => (ctx.config?.userName?.trim() ? tr('msg.board.ofName', { name: ctx.config.userName.trim() }) : tr('msg.board.ofTheUser'));
 export const assistantName = () => ctx.config?.assistantName?.trim() || PRODUCT.assistant;
+// 3.2.1: the tags of a sensitive task in words («elimina datos»), never the internal ones («destructive»).
+export const tagWords = (tags) => [...new Set(tags)].map((tag) => { const key = `sensitive.${tag}`; const w = tr(key); return w === key ? tag : w; }).join(', ');
+
+// 3.2.1: an event's text stored as a key (eventKey) is told in the app's language when it is read (Actividad, a task's
+// history), not fixed in the language of the moment it happened. A var { k, v } is itself a key; old texts stay as they are.
+const EVENT_KEY = '@t:';
+export const eventKey = (key, vars = {}) => `${EVENT_KEY}${JSON.stringify({ k: key, v: vars })}`;
+export function eventText(detail) {
+  const s = String(detail ?? '');
+  if (!s.startsWith(EVENT_KEY)) return detail;
+  try {
+    const { k, v } = JSON.parse(s.slice(EVENT_KEY.length));
+    const vars = Object.fromEntries(Object.entries(v ?? {}).map(([name, val]) => [name, val && typeof val === 'object' && val.k ? tr(val.k, val.v ?? {}) : val]));
+    return tr(k, vars);
+  } catch { return s; }
+}
 
 // A worker (any actor but the orchestrator) may only close its own running task.
 const WORKER_STATUSES = ['done', 'failed', 'blocked'];
@@ -182,7 +198,7 @@ export class Board {
     const task = this.task(id); if (!task) throw new Error(tr('msg.board.noTask', { id }));
     return {
       ...task,
-      events: this.all('SELECT actor, kind, detail, at FROM events WHERE task_id = ? ORDER BY id DESC LIMIT 300', task.id).reverse(),
+      events: this.all('SELECT actor, kind, detail, at FROM events WHERE task_id = ? ORDER BY id DESC LIMIT 300', task.id).reverse().map((e) => ({ ...e, detail: eventText(e.detail) })),
       messages: this.all('SELECT id, from_agent, to_agent, body, at FROM messages WHERE task_id = ? ORDER BY id DESC LIMIT 100', task.id).reverse(),
       dependencies: task.depends_on.map((dep) => { const d = this.task(dep); return d && { id: d.id, title: d.title, status: d.status, result: d.result }; })
     };
@@ -236,23 +252,19 @@ export class Board {
     // 3.0: fixedBrief: a read-only brief written by Orb itself (Security Review), whose checklist names «secretos» and
     // «credenciales» on purpose; only for code paths of the engine (the API does not pass it).
     let askedNote = null;
-    if (!tags.length && !(fixedBrief && readonly)) {
-      let found = detectSensitivity(`${title}\n${description}`);
-      // 3.1: what the user asked for in their own words is already their decision: a task the assistant writes from «una
-      // app de notas que se puedan borrar» does not wait for approval because it says «borrar». Narrow on purpose:
-      // - only «destructive» (credentials, payments, publishing and sending stay behind the click whatever was said);
-      // - only the user's current request (their messages since the assistant last answered), not something said before;
-      // - only tasks the assistant writes, never the engine's own (whose text can carry an agent's words).
-      if (actor === 'orb' && !internal && found.includes('destructive')) {
-        // (Since the answer before the last one: the request, the plan the assistant proposed and the user's «sí».)
-        // 3.2: in the conversation that asks for the task (with several at once, another one's words do not count).
-        const inConv = convId ? ' AND conversation_id = ?' : ' AND conversation_id IS NULL';
-        const lastAnswer = this.one(`SELECT id AS n FROM chat WHERE role = 'orb'${inConv} ORDER BY id DESC LIMIT 1 OFFSET 1`, ...(convId ? [convId] : []))?.n ?? 0;
-        const asked = detectSensitivity(this.all(`SELECT body FROM chat WHERE role = 'usuario' AND id > ?${inConv} ORDER BY id DESC LIMIT 5`, lastAnswer, ...(convId ? [convId] : [])).map((r) => r.body).join('\n'));
-        if (asked.includes('destructive')) { found = found.filter((tag) => tag !== 'destructive'); askedNote = tr('msg.board.askedByUser', { words: 'destructive' }); }
-      }
-      tags.push(...found); if (found.length) reasons.push(tr('msg.board.reasonKeywords', { words: found.join(', ') }));
+    let found = [];
+    if (!tags.length && !(fixedBrief && readonly)) { found = detectSensitivity(`${title}\n${description}`); tags.push(...found); }
+    // 3.1: what the user asked for in their own words is already their decision. 3.2.1: one rule, whether the assistant
+    // marked the task as destructive or the keyword net found it (approval.mjs deletionAskedByUser): the user's current
+    // request asks to delete and names the files the task deletes. Narrow on purpose:
+    // - only «destructive» (credentials, payments, publishing and sending stay behind the click whatever was said);
+    // - only the user's current request (their messages since the assistant last answered), not something said before;
+    // - only tasks the assistant writes, never the engine's own (whose text can carry an agent's words).
+    if (actor === 'orb' && !internal && tags.includes('destructive') && deletionAskedByUser(this.currentRequest(convId), `${title}\n${description}`)) {
+      tags.splice(tags.indexOf('destructive'), 1); found = found.filter((tag) => tag !== 'destructive');
+      askedNote = eventKey('msg.board.askedByUser', { words: { k: 'msg.board.deleteWords' } });
     }
+    if (found.length) reasons.push(tr('msg.board.reasonKeywords', { words: tagWords(found) }));
     if (policy.approval) { tags.push('razonamiento_alto'); reasons.push(tr('msg.board.reasonHighReasoning', { who: model ?? agent })); }
     // A subtask an agent delegates from its own task (orb_delegate) goes straight to the queue when the user trusts
     // delegation, the parent task came from the assistant or the user, nothing looks risky and the parent has not used
@@ -270,10 +282,19 @@ export class Board {
     const id = Number(lastInsertRowid);
     this.event(id, actor, 'task.created', status);
     if (askedNote) this.event(id, 'orb', 'note', askedNote);
-    if (status === 'awaiting_approval') { const tagList = [...new Set(tags)].join(', '); this.addChat('system', reasons.length ? tr('msg.board.needsApprovalWhy', { id, title, tags: tagList, reasons: reasons.join('; ') }) : tr('msg.board.needsApproval', { id, title, tags: tagList }), { kind: 'attention', task: id }, convId ?? null); }
+    if (status === 'awaiting_approval') { const tagList = tagWords(tags); this.addChat('system', reasons.length ? tr('msg.board.needsApprovalWhy', { id, title, tags: tagList, reasons: reasons.join('; ') }) : tr('msg.board.needsApproval', { id, title, tags: tagList }), { kind: 'attention', task: id }, convId ?? null); }
     // Even a task the user typed waits for an explicit "Aprobar" when it looks sensitive: one more click, with the reasons on screen.
     this.changed('tasks');
     return this.task(id);
+  }
+
+  // The user's current request in a conversation: their messages since the assistant's answer before the last one (the
+  // request, the plan the assistant proposed and the user's «sí»). 3.2: only that conversation's (with several at once,
+  // another one's words do not count).
+  currentRequest(convId) {
+    const inConv = convId ? ' AND conversation_id = ?' : ' AND conversation_id IS NULL';
+    const lastAnswer = this.one(`SELECT id AS n FROM chat WHERE role = 'orb'${inConv} ORDER BY id DESC LIMIT 1 OFFSET 1`, ...(convId ? [convId] : []))?.n ?? 0;
+    return this.all(`SELECT body FROM chat WHERE role = 'usuario' AND id > ?${inConv} ORDER BY id DESC LIMIT 5`, lastAnswer, ...(convId ? [convId] : [])).map((r) => r.body).join('\n');
   }
 
   // expect: only apply if the task is still in that status (compare-and-set); throws if someone else moved it first.
@@ -483,7 +504,9 @@ export class Board {
     if (!body) throw new Error(tr('sys.board.bodyRequired'));
     if (![...AGENTS, 'all', 'usuario', 'orb'].includes(to)) throw new Error(tr('sys.board.badRecipient', { to, list: AGENTS.join(', ') }));
     body = String(body).slice(0, 8000);
-    if (to === 'usuario') this.addChat('system', `💬 ${from}${task_id ? tr('msg.board.taskRef', { id: task_id }) : ''}: ${body}`, task_id ? { task: Number(task_id) } : null);
+    // 3.2.1: the agent by its name («Cursor», not «cursor»).
+    const who = from === 'orb' ? assistantName() : AGENT_LABELS[from] ?? from;
+    if (to === 'usuario') this.addChat('system', `💬 ${who}${task_id ? tr('msg.board.taskRef', { id: task_id }) : ''}: ${body}`, task_id ? { task: Number(task_id) } : null);
     const { lastInsertRowid } = this.run('INSERT INTO messages (from_agent, to_agent, task_id, body, at) VALUES (?, ?, ?, ?, ?)', String(from), to, task_id ?? null, body, now());
     this.changed('messages');
     return { id: Number(lastInsertRowid), from, to, task_id: task_id ?? null };
@@ -592,14 +615,14 @@ export class Board {
       const task = this.task(id);
       if (!task || task.status !== 'done' || this.isAccepted(id)) continue;
       this.setting(`accepted:${task.id}`, '1');
-      this.event(task.id, actor, 'task.accepted', 'OK del usuario');
+      this.event(task.id, actor, 'task.accepted', eventKey('sys.events.accepted'));
       done.push(task);
     }
     if (done.length) this.changed('tasks');
     return done;
   }
   recentEvents(limit = 80) {
-    return this.all('SELECT e.*, t.title FROM events e LEFT JOIN tasks t ON t.id = e.task_id ORDER BY e.id DESC LIMIT ?', limit);
+    return this.all('SELECT e.*, t.title FROM events e LEFT JOIN tasks t ON t.id = e.task_id ORDER BY e.id DESC LIMIT ?', limit).map((e) => ({ ...e, detail: eventText(e.detail) }));
   }
 
   // 3.2: conversation: the coordinator's, whose project is the one it works in (others may have set the app's folder).

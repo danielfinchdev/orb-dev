@@ -11,7 +11,7 @@ import { AGENT } from '@/lib/labels.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { SessionView } from './session.jsx';
-import { useCatalog } from '@/components/brain-picker.jsx';
+import { useCatalog, modelLabel } from '@/components/brain-picker.jsx';
 import { NetworkPanel } from '@/components/network-panel.jsx';
 
 const QUICK = ['health', 'security', 'orb', 'backup', 'optimize'];
@@ -51,11 +51,11 @@ export function MonitorView() {
   }, [monitor.enabled]);
   if (!monitor.enabled) return <Empty icon={HeartPulse} title={t('opti.offTitle')} className="m-auto"><p>{t('opti.offBody')}</p><Button size="sm" className="mt-3" onClick={() => openSettings('monitor')}><Settings2 />{t('opti.openSettings')}</Button></Empty>;
   const s = sessions.find((x) => x.id === id);
-  const modelLabel = (catalog?.find((a) => a.id === s?.agent)?.models ?? []).find((m) => m.id === s?.model)?.label ?? s?.model;
+  const modelName = modelLabel(catalog, s?.agent, s?.model); // 3.2.1: «Sonnet 5.5», never «sonnet»
   const ask = (key) => id && act(call('sessions.send', { id, text: t(`opti.quick.${key}.text`) }));
   return (
     <>
-      <PageHeader icon={<AgentIcon agent="opti" className="size-5" />} title={t('opti.title')} meta={`Opti Bot · ${AGENT[s?.agent ?? monitor.agent ?? 'claude'] ?? ''}${modelLabel ? ` · ${modelLabel}` : ''}`}>
+      <PageHeader icon={<AgentIcon agent="opti" className="size-5" />} title={t('opti.title')} meta={`Opti Bot · ${AGENT[s?.agent ?? monitor.agent ?? 'claude'] ?? ''}${modelName ? ` · ${modelName}` : ''}`}>
         {/* 2.7: two views: this PC with Opti Bot, and the network (Wi-Fi, devices, Android). */}
         <div className="bg-muted flex rounded-lg p-0.5" role="tablist">
           {[['bot', t('opti.tabPc')], ['red', t('opti.tabNet')]].map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={cn('cursor-pointer rounded-md px-3 py-1 text-[13px] transition-colors', tab === id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')} data-testid={`opti-tab-${id}`}>{label}</button>)}

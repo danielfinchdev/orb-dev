@@ -8,7 +8,7 @@
 // with roomier limits, so the app no longer stops working long before the subscription would.
 import { ctx, tr } from './context.mjs';
 import { localeOf } from './i18n.mjs';
-import { account as findAccount, accounts } from './accounts.mjs';
+import { account as findAccount, accounts, usableAccounts } from './accounts.mjs';
 
 export const budgetConfig = () => {
   const b = ctx.config?.budget ?? {};
@@ -60,9 +60,66 @@ export function cooldownUntil(board, id) {
   return until > Date.now() ? until : 0;
 }
 
+// 3.2.1: a limit of one model only (Cursor's API models: «Switch to a different model … to continue with Gemini») stops that
+// model on that account, never the whole account: the other models (Cursor's own, Auto) keep working.
+export const MODEL_LIMIT_RE = /switch to a different model|continue with this model|to continue with \w|limit (of|for) this model|model'?s? (usage )?limit/i;
+export const isModelLimitText = (text) => MODEL_LIMIT_RE.test(String(text ?? ''));
+const modelKey = (id, model) => `model_limit:${id}:${String(model).slice(0, 80)}`;
+export function modelLimitUntil(board, id, model) {
+  if (!model) return 0;
+  const until = Number(board.setting(modelKey(id, model)) ?? 0);
+  return until > Date.now() ? until : 0;
+}
+export function blockModel(board, id, model, text = '', resetAt = null) {
+  const until = resetAt ? Math.max(resetAt, Date.now()) : parseReset(text);
+  board.setting(modelKey(id, model), String(until));
+  board.setting(`model_limit_at:${id}:${String(model).slice(0, 80)}`, String(Date.now()));
+  board.setting('models_rev', String(Date.now())); // the brain selector reads the catalog again (the model shows as without usage)
+  board.changed?.('models');
+  return until;
+}
+// The models of an account that are without usage now: { model: until }.
+export function modelLimits(board, id) {
+  const out = {};
+  for (const r of board.all("SELECT key, value FROM settings WHERE key LIKE ? AND value <> ''", `model_limit:${id}:%`)) {
+    const until = Number(r.value) || 0;
+    if (until > Date.now()) out[r.key.slice(`model_limit:${id}:`.length)] = until;
+  }
+  return out;
+}
+
+// 3.2.1: the user lifts a pause by hand (Agentes › Uso de cada cuenta), also the models without usage of that account.
+export function clearCooldown(board, id, { models = true } = {}) {
+  board.setting(`cooldown:${id}`, ''); board.setting(`cooldown_reason:${id}`, ''); board.setting(`cooldown_at:${id}`, '');
+  if (models) for (const r of board.all("SELECT key FROM settings WHERE key LIKE ? AND value <> ''", `model_limit:${id}:%`)) board.setting(r.key, '');
+  board.setting('models_rev', String(Date.now()));
+  board.changed?.('settings');
+}
+
+// 3.2.1: a task of that account that ends well proves the account (and the model it used) works again: a usage pause set
+// before that task started is lifted. Not a pause for another reason (plan, login): those have their own way out.
+export function liftAfterSuccess(board, id, model, launchedAt) {
+  const since = Date.parse(launchedAt ?? '') || 0;
+  const lifted = [];
+  if (cooldownUntil(board, id) && !board.setting(`cooldown_reason:${id}`) && Number(board.setting(`cooldown_at:${id}`) || 0) <= since) {
+    board.setting(`cooldown:${id}`, ''); board.setting(`cooldown_at:${id}`, ''); lifted.push('account');
+  }
+  if (model && modelLimitUntil(board, id, model) && Number(board.setting(`model_limit_at:${id}:${String(model).slice(0, 80)}`) || 0) <= since) {
+    board.setting(modelKey(id, model), ''); board.setting('models_rev', String(Date.now())); lifted.push('model');
+  }
+  return lifted;
+}
+
+// 3.2.1: the earliest moment this account can take a task with this model, when it is paused (0 when it is not).
+export function blockedUntil(board, id, model = null) {
+  return Math.max(cooldownUntil(board, id), modelLimitUntil(board, id, model));
+}
+
 // The real usage an account reported last (live sessions): { utilization 0-1, resetAt, window, status, at }.
 export function recordRate(board, id, rate) {
   if (!id || !rate) return;
+  // 3.2.1: one model without usage (Cursor's API models): only that model waits; nothing else of the account changes.
+  if (rate.model) { if (rate.status === 'rejected') blockModel(board, id, rate.model, rate.text ?? '', rate.resetAt ?? null); return; }
   const prev = board.settingJson(`rate:${id}`) ?? {};
   // Keep the most worrying window: a weekly window at 95% matters more than a 5-hour one at 10%.
   const next = { utilization: rate.utilization ?? prev.utilization ?? null, resetAt: rate.resetAt ?? prev.resetAt ?? null, window: rate.window ?? prev.window ?? null, status: rate.status ?? prev.status ?? null, at: Date.now() };
@@ -72,7 +129,7 @@ export function recordRate(board, id, rate) {
     all[String(rate.window).slice(0, 40)] = { utilization: rate.utilization, resetAt: rate.resetAt ?? null, status: rate.status ?? null, at: Date.now() };
     board.settingJson(`rates:${id}`, all);
   }
-  if (rate.status === 'rejected' && rate.resetAt) { board.setting(`cooldown:${id}`, String(rate.resetAt)); board.setting(`cooldown_reason:${id}`, ''); }
+  if (rate.status === 'rejected' && rate.resetAt) { board.setting(`cooldown:${id}`, String(rate.resetAt)); board.setting(`cooldown_reason:${id}`, ''); board.setting(`cooldown_at:${id}`, String(Date.now())); }
   // A window of one model only (the weekly one of Opus, Fable…) does not stop the whole account: only the panel shows it.
   if (/^seven_day_/.test(String(rate.window ?? ''))) return;
   if (prev.utilization != null && rate.utilization != null && prev.window !== rate.window && prev.utilization > rate.utilization && prev.resetAt > Date.now()) return;
@@ -94,14 +151,31 @@ export function realRate(board, id) {
 }
 
 const hhmm = (ms) => new Date(ms).toLocaleTimeString(localeOf(ctx.config?.language), { hour: '2-digit', minute: '2-digit' });
+// 3.2.1: the hour, and the day too when it is not within the next 20 h (a monthly cycle that ends on the 20th): «16:42» or
+// «00:00 del mar, 20 oct», so it reads right after «hasta las» / «a las» (until / at).
+export function untilText(ms, now = Date.now()) {
+  if (ms - now <= 20 * 3_600_000) return hhmm(ms);
+  return tr('msg.budget.timeOnDay', { time: hhmm(ms), day: new Date(ms).toLocaleDateString(localeOf(ctx.config?.language), { weekday: 'short', day: 'numeric', month: 'short' }) });
+}
 
 const nameOf = (id) => findAccount(id)?.label ?? id;
+// The name the agent gives a model (its list of models), not its id: «Gemini 3.8 Flash», not «gemini-3.8-flash-medium».
+export function modelName(board, id, model) {
+  if (!model) return '';
+  for (const key of [`models:${id}`, `models:${agentOf(id)}`]) {
+    const found = (board?.settingJson?.(key) ?? []).find?.((m) => m.id === model);
+    if (found?.label) return found.label;
+  }
+  return model;
+}
 
 // Can this task be launched on this account right now? { ok, reason } — reason in plain words, in the user's language.
 export function canLaunch(board, id, model) {
   const until = cooldownUntil(board, id);
   const why = board.setting(`cooldown_reason:${id}`); // a pause for another reason than quota (plan, login)
-  if (until) return { ok: false, reason: why ? tr('msg.budget.paused', { name: nameOf(id), time: hhmm(until), why }) : tr('msg.budget.noQuota', { name: nameOf(id), time: hhmm(until) }) };
+  if (until) return { ok: false, paused: until, reason: why ? tr('msg.budget.paused', { name: nameOf(id), time: untilText(until), why }) : tr('msg.budget.noQuota', { name: nameOf(id), time: untilText(until) }) };
+  const modelUntil = modelLimitUntil(board, id, model);
+  if (modelUntil) return { ok: false, paused: modelUntil, reason: tr('msg.budget.modelNoQuota', { name: nameOf(id), model: modelName(board, id, model), time: untilText(modelUntil) }) };
   const real = realRate(board, id);
   if (real?.utilization != null && real.utilization >= budgetConfig().stopAt) return { ok: false, reason: tr('msg.budget.realUsed', { name: nameOf(id), pct: Math.round(real.utilization * 100), reset: real.resetAt ? tr('msg.budget.realUsedReset', { time: hhmm(real.resetAt) }) : '' }) };
   const r = rules(id, board); const used = windowUsage(board, id); const h = budgetConfig().windowHours;
@@ -121,9 +195,22 @@ export function usageReport(board) {
   return accounts().map((acc) => {
     const r = rules(acc.id, board); const used = windowUsage(board, acc.id);
     const real = realRate(board, acc.id);
-    return { account: acc.id, agent: acc.agent, label: acc.label, plan: planOf(board, acc.id)?.label ?? null, used: used.tasks, max: r.maxTasks, heavy: used.heavy, maxHeavy: r.maxHeavy, cooldownUntil: cooldownUntil(board, acc.id) || null, windowHours: budgetConfig().windowHours, stopAt: budgetConfig().stopAt,
+    // 3.2.1: why it is paused (usage, or a reason such as no login) and the models without usage of this account.
+    const models = Object.entries(modelLimits(board, acc.id)).map(([model, until]) => ({ model, label: modelName(board, acc.id, model), until }));
+    return { account: acc.id, agent: acc.agent, label: acc.label, plan: planOf(board, acc.id)?.label ?? null, used: used.tasks, max: r.maxTasks, heavy: used.heavy, maxHeavy: r.maxHeavy, cooldownUntil: cooldownUntil(board, acc.id) || null, cooldownReason: board.setting(`cooldown_reason:${acc.id}`) || null,
+      modelLimits: models, windowHours: budgetConfig().windowHours, stopAt: budgetConfig().stopAt,
       real: real ? { utilization: real.utilization, resetAt: real.resetAt, window: real.window } : null, windows: rateWindows(board, acc.id) };
   });
+}
+
+// 3.2.1: why a task for this agent (and account, and model) would wait now, when every account it could use is paused or
+// out of usage; '' when one of them can take it. For the assistant, right when it hands the task out.
+export function waitReason(board, agent, { account = null, model = null } = {}) {
+  if (!agent || agent === 'any') return '';
+  const list = usableAccounts(agent).filter((a) => !account || a.id === account);
+  if (!list.length) return '';
+  const checks = list.map((a) => canLaunch(board, a.id, model));
+  return checks.every((c) => !c.ok) ? checks.map((c) => c.reason).join('; ') : '';
 }
 
 const LIMIT_RE = /(usage limit|session limit|hit your limit|rate limit|limit reached|quota|too many requests|\b429\b|exceeded.*budget|budget.*exceeded|out of credits|límite de uso)/i;
@@ -131,8 +218,14 @@ export const isLimitText = (text) => LIMIT_RE.test(String(text ?? ''));
 export const isBudgetText = (text) => /budget/i.test(String(text ?? '')) && !/session limit|usage limit/i.test(String(text ?? ''));
 
 // "resets 5:10am", "resets at 17:30", "reset in 2 hours" → epoch ms; otherwise a full window from now.
+// 3.2.1: also a date (Cursor: «will reset when your monthly cycle ends on 10/20/2026», US order; or 2026-10-20): the start of
+// that day, local time, if it is still ahead (at most two months).
 export function parseReset(text, now = new Date()) {
   const s = String(text ?? '');
+  const us = s.match(/\b(?:on|until|by)\s+(\d{1,2})\/(\d{1,2})\/(\d{4})\b/i) ?? s.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/);
+  const iso = !us && s.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  const day = us ? new Date(Number(us[3]), Number(us[1]) - 1, Number(us[2])) : iso ? new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])) : null;
+  if (day && !Number.isNaN(day.getTime()) && day > now && day.getTime() - now.getTime() <= 62 * 86_400_000) return day.getTime();
   const inHours = s.match(/reset[s]?\s+in\s+(\d+)\s*h/i);
   if (inHours) return now.getTime() + Number(inHours[1]) * 3_600_000;
   const at = s.match(/reset[s]?\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
@@ -152,6 +245,7 @@ export function startCooldown(board, agent, text, resetAt = null) {
   const until = resetAt ? Math.max(resetAt, Date.now()) : parseReset(text);
   board.setting(`cooldown:${agent}`, String(until));
   board.setting(`cooldown_reason:${agent}`, '');
+  board.setting(`cooldown_at:${agent}`, String(Date.now()));
   return until;
 }
 
@@ -160,5 +254,6 @@ export function pauseAccount(board, id, ms, reason) {
   const until = Date.now() + ms;
   board.setting(`cooldown:${id}`, String(until));
   board.setting(`cooldown_reason:${id}`, reason);
+  board.setting(`cooldown_at:${id}`, String(Date.now()));
   return until;
 }

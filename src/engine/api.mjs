@@ -5,21 +5,22 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, saveConfig, checkAccountHome, tr } from '../core/context.mjs';
 import { AGENT_IDS, categoryOf, CATEGORIES } from '../core/home.mjs';
-import { MULTI, newAccountId, findAccountFolders, accountsOf, accountDir } from '../core/accounts.mjs';
+import { MULTI, newAccountId, findAccountFolders, accountsOf, accountDir, accountLabel } from '../core/accounts.mjs';
 import { accountInfo as codexAccountInfo } from '../agents/codex.mjs';
-import { usageReport } from '../core/budget.mjs';
-import { createProjects, syncProjects } from '../core/projects.mjs';
+import { usageReport, clearCooldown, modelName } from '../core/budget.mjs';
+import { createProjects, syncProjects, checkProjectName, renameProject } from '../core/projects.mjs';
+import { PRODUCT } from '../core/product.mjs';
 import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../core/schedules.mjs';
-import { oneLine, redactSecrets } from '../core/safety.mjs';
+import { oneLine, redactSecrets, localStamp } from '../core/safety.mjs';
 import { statusAll, status as agentStatus, openLogin, quickRun, forgetInstalled, executable } from '../agents/index.mjs';
 import { PERMISSIONS } from './sessions.mjs';
 import { readLog, writeLog, logFiles } from './logs.mjs';
 import { expandMentions, mentionOptions } from './mentions.mjs';
-import { ofUserLabel, userLabel, assistantName } from '../core/board.mjs';
+import { ofUserLabel, userLabel, assistantName, userName } from '../core/board.mjs';
 import * as github from './github.mjs';
 import * as installer from './installer.mjs';
 import * as expert from './expert.mjs';
-import { adbStatus, ensureAdb, adbPath } from './android.mjs';
+import { adbStatus, ensureAdb, adbPath, markAdbUsed } from './android.mjs';
 import * as net from '../core/network.mjs';
 import { spawn } from 'node:child_process';
 import { mcpFolder } from './mcp-folder.mjs';
@@ -31,8 +32,8 @@ import { quickStats } from '../core/pc-health.mjs';
 import { translate } from '../core/i18n.mjs';
 import { titleFrom } from '../core/titles.mjs';
 import { autoTitle } from './titles.mjs';
-import { projectIcon, setProjectIcon, clearProjectIcon } from './project-icons.mjs';
-import { git } from '../core/workspace.mjs';
+import { projectIcon, setProjectIcon, clearProjectIcon, renameProjectIcon } from './project-icons.mjs';
+import { git, slug } from '../core/workspace.mjs';
 
 // Names of the fields in the messages (Spanish as they were; the key is the Spanish word).
 const fld = (name) => { const key = `msg.api.f.${String(name).replace(/ /g, '_')}`; const t = tr(key); return t === key ? name : t; };
@@ -73,6 +74,25 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     return real;
   };
 
+  // 3.2.1: a task the user rejects says so in its conversation, and the assistant hears it (it used to keep saying the
+  // task was waiting for approval). If other tasks of the request already finished, their report now comes with it.
+  const taskRejected = (task) => {
+    const conv = board.conversationOfTask(task.id);
+    const line = tr('msg.api.taskRejected', { id: task.id, title: oneLine(task.title, 120) });
+    if (!conv || task.created_by !== 'orb' || !orchestrator) { board.addChat('system', line, { task: task.id }, conv ?? null); return; }
+    if ((board.settingJson(`report_queue:c${conv}`) ?? []).length) { board.addChat('system', line, { task: task.id }, conv); scheduler?.queueReport?.(task); return; }
+    orchestrator.internal(`AVISO DEL SISTEMA (no es ${userName()}): ${userName()} ha rechazado la tarea #${task.id} «${oneLine(task.title)}». No se hará y no se ha tocado ningún archivo. No la vuelvas a crear salvo que te lo pida. Díselo en una línea y sigue con el resto del pedido, si lo hay.`, line, null, { conversation: conv, project: task.project });
+  };
+  // 3.2.1: a model by the name the selector shows (its agent's list, or the account's own), else the agent's own name for it.
+  const modelLabelOf = (agent, account, id) => {
+    try {
+      const entry = (catalogCache?.value ?? modelCatalog(board)).find((a) => a.id === agent);
+      const found = [...(entry?.accountModels?.[account] ?? []), ...(entry?.models ?? [])].find((m) => m.id === id);
+      if (found?.label) return found.label;
+    } catch { /* the name the agent gave it */ }
+    const named = modelName(board, account, id);
+    return named !== id ? named : /^[a-z]+$/.test(id) ? id[0].toUpperCase() + id.slice(1) : id;
+  };
   // A task text cut for the lists (the window shows a few hundred characters of each).
   const cut = (s) => (typeof s === 'string' && s.length > 1200 ? `${s.slice(0, 1200)}…` : s);
   // Folders made by hand in the Explorer: the engine's loop looks every 5 s; a list asked for in between looks at most
@@ -95,10 +115,17 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
 
   // The user's OK closes the loop: tasks marked accepted, a line in the chat and an entry in the project's log.
   const accept = (ids, project) => {
-    const done = board.accept(ids, 'usuario');
+    // 3.2.1: an undone task has no result left to accept.
+    const done = board.accept(ids.filter((id) => !board.settingJson(`undone:${id}`)), 'usuario');
     if (!done.length) fail(tr('msg.api.noDoneTasks'));
     board.notice(tr(done.length > 1 ? 'msg.api.okMany' : 'msg.api.okOne', { who: ofUserLabel(), ids: done.map((t) => `#${t.id}`).join(', ') }), 'success');
-    try { writeLog(board, project ?? done[0].project, { tema: tr('sys.logs.okTopic', { ids: done.map((t) => `#${t.id}`).join(', ') }), pedido: tr('sys.logs.okRequest'), hecho: tr('sys.logs.okDone', { user: userLabel(), list: done.map((t) => `#${t.id} ${oneLine(t.title, 80)}`).join('; ') }), estado: tr('sys.logs.okStatus') }, `${ctx.config.assistantName} (app)`); } catch (error) { log(`bitácora del OK: ${error.message}`); }
+    // 3.2.1: signed as Orb with whose OK it is (not «Orbe (app)»), and the general log gets each cycle too (it only had the
+    // assistant's first entry of the day).
+    const entry = { tema: tr('sys.logs.okTopic', { ids: done.map((t) => `#${t.id}`).join(', ') }), pedido: tr('sys.logs.okRequest'), hecho: tr('sys.logs.okDone', { user: userLabel(), list: done.map((t) => `#${t.id} ${oneLine(t.title, 80)}`).join('; ') }), estado: tr('sys.logs.okStatus') };
+    const author = `${PRODUCT.name} (${tr('sys.logs.okBy', { user: userLabel() })})`;
+    const where = project ?? done[0].project;
+    try { writeLog(board, where, entry, author); } catch (error) { log(`bitácora del OK: ${error.message}`); }
+    try { writeLog(board, 'general', { ...entry, tema: tr('sys.logs.okGeneralTopic', { project: where, ids: done.map((t) => `#${t.id}`).join(', ') }) }, author); } catch (error) { log(`bitácora general del OK: ${error.message}`); }
     return done.map((t) => t.id);
   };
 
@@ -112,7 +139,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       chats: orchestrator.states(), assistant: orchestrator.info(), optiSession: board.setting('opti_session') ?? null,
       // 2.6: the tasks («t<id>») and direct conversations («s<id>») the user put away in «Completadas» of the sidebar;
       // 3.2: kept, the finished tasks the user brought back (a finished task goes to «Completadas» by itself).
-      completed: board.settingJson('sidebar_completed') ?? [], kept: board.settingJson('sidebar_kept') ?? []
+      completed: board.settingJson('sidebar_completed') ?? [], kept: board.settingJson('sidebar_kept') ?? [],
+      // 3.2.1: the agents this PC can run now (installed, on, with an account): the lists of the window offer only these.
+      agentsAvailable: board.availableAgents()
     }),
     'conversations.list': () => conversationList(),
     // 3.2: completed by hand (or open again): a task («t<id>»), a direct conversation («s<id>») or a conversation with the
@@ -214,14 +243,46 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const made = createProjects(board, { name: str(name, 'nombre', 60), notes: str(notes, 'notas', 2000, { optional: true }), categories: cats }, 'usuario');
       return { ...made[0], all: made.map((p) => p.name) };
     },
-    'projects.import': ({ name, folder }) => board.addProject({ name: str(name, 'nombre', 60), path: str(folder, 'carpeta', 1000) }, 'usuario', { fromUser: true }),
+    'projects.import': ({ name, folder }) => board.addProject({ name: checkProjectName(str(name, 'nombre', 60)), path: str(folder, 'carpeta', 1000) }, 'usuario', { fromUser: true }),
     'projects.remove': ({ name }) => board.removeProject(project(name).name, 'usuario'),
+    // 3.2.1: a new name (and folder) for a project with nothing working in it (core/projects.mjs renameProject).
+    'projects.rename': ({ name, to }) => {
+      const from = project(name).name;
+      const p = renameProject(board, { name: from, to: str(to, 'nombre', 60) }, 'usuario');
+      renameProjectIcon(from, p.name);
+      return p;
+    },
     'projects.setActive': ({ name }) => board.setActiveProject(name ? project(name).name : '', 'usuario'),
     // 3.2: the projects' icons (their favicon or app icon, or one chosen here) for the sidebar: { name: dataUrl | null }.
     'projects.icons': () => Object.fromEntries(board.projects().map((p) => [p.name, projectIcon(p)])),
     'projects.setIcon': ({ name, path: file }) => { const p = project(name); const icon = setProjectIcon(p, str(file, 'imagen', 1000)); board.changed('projects'); return icon; },
     // 3.2: only the current branch (the hover card of a conversation): one quick git call, nothing from the network.
     'projects.branch': ({ name }) => { const p = project(name); const r = git(p.path, 'rev-parse', '--abbrev-ref', 'HEAD'); return { branch: r.status === 0 ? r.stdout.trim() || null : null }; },
+    // 3.2, God mode: the project's actions (commands of the user's own, run in a terminal window from the bar or with their
+    // shortcut). Kept per project; at most 20.
+    'actions.list': ({ project: name }) => board.settingJson(`actions:${project(name).name.toLowerCase()}`) ?? [],
+    'actions.save': ({ project: name, action: a }) => {
+      const p = project(name); const key = `actions:${p.name.toLowerCase()}`;
+      if (!a || typeof a !== 'object') fail(tr('msg.api.badParams'));
+      const shortcut = str(a.shortcut, 'atajo', 40, { optional: true }) || null;
+      if (shortcut && !/^((Ctrl|Alt|Shift|Meta)\+){1,3}([A-Z0-9]|F\d{1,2})$|^F\d{1,2}$/.test(shortcut)) fail(tr('msg.api.badShortcut'));
+      const preview = str(a.preview, 'vista previa', 300, { optional: true }) || null;
+      if (preview && !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?(\/\S*)?$/i.test(preview)) fail(tr('msg.api.badPreview'));
+      const list = board.settingJson(key) ?? [];
+      const id = typeof a.id === 'string' && /^[\w-]{1,40}$/.test(a.id) ? a.id : `a${Date.now().toString(36)}`;
+      const item = { id, name: oneLine(str(a.name, 'nombre', 40), 40), command: str(a.command, 'comando', 2000).trim(), shortcut, preview, openPreview: Boolean(a.openPreview && preview) };
+      if (shortcut && list.some((x) => x.id !== id && x.shortcut === shortcut)) fail(tr('msg.api.shortcutTaken', { shortcut }));
+      const next = list.some((x) => x.id === id) ? list.map((x) => (x.id === id ? item : x)) : [...list, item];
+      if (next.length > 20) fail(tr('msg.api.tooManyActions'));
+      board.settingJson(key, next); board.changed('actions');
+      return item;
+    },
+    'actions.remove': ({ project: name, id }) => {
+      const key = `actions:${project(name).name.toLowerCase()}`;
+      const next = (board.settingJson(key) ?? []).filter((x) => x.id !== String(id));
+      board.settingJson(key, next.length ? next : null); board.changed('actions');
+      return { ok: true };
+    },
     'projects.clearIcon': ({ name }) => { const icon = clearProjectIcon(project(name)); board.changed('projects'); return icon; },
     'projects.info': ({ name }) => github.projectInfo(project(name)),
     'projects.commit': ({ name, message }) => github.commitAll(project(name), str(message, 'mensaje', 200)),
@@ -230,6 +291,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'projects.createPr': ({ name, branch, title, body, base }) => github.createPr(project(name), { branch: str(branch, 'rama', 120), title: str(title, 'título', 200), body: str(body, 'descripción', 20000, { optional: true }), base: str(base, 'rama base', 120, { optional: true }) || undefined }),
     'projects.createRepo': ({ name, repo, isPrivate }) => github.createRepo(project(name), { name: str(repo, 'repositorio', 100), isPrivate: isPrivate !== false }),
     'projects.clone': async ({ repo, name, category }) => {
+      if (name) checkProjectName(name);
       const folder = await github.clone(str(repo, 'repositorio', 300), str(name, 'nombre', 60, { optional: true }), oneOf(category, CATEGORIES, 'categoría', undefined));
       return board.addProject({ name: oneLine(name || path.basename(folder), 60), path: folder }, 'usuario', { fromUser: true });
     },
@@ -262,11 +324,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       spawn('cmd.exe', ['/c', 'start', 'SSH', 'cmd.exe', '/k', 'ssh', `${who}@${host}`], { detached: true, stdio: 'ignore' }).unref();
       return true;
     },
-    // Android phones and TVs by adb (wireless pairing with the code the device shows).
-    'android.devices': async () => (adbStatus().ready ? { ready: true, devices: await net.adbDevices(adbPath()) } : { ready: false, devices: [] }),
-    'android.pair': ({ host, code }) => net.adbPair(adbPath(), str(host, 'dirección', 21), str(code, 'código', 6)),
-    'android.connect': ({ host }) => net.adbConnect(adbPath(), str(host, 'dirección', 21)),
-    'android.info': ({ serial }) => net.adbInfo(adbPath(), str(serial, 'dispositivo', 80)),
+    // Android phones and TVs by adb (wireless pairing with the code the device shows). Each use notes that Orb started
+    // adb, so the engine stops its server when it closes (android.stopAdb).
+    'android.devices': async () => (adbStatus().ready ? (markAdbUsed(), { ready: true, devices: await net.adbDevices(adbPath()) }) : { ready: false, devices: [] }),
+    'android.pair': ({ host, code }) => (markAdbUsed(), net.adbPair(adbPath(), str(host, 'dirección', 21), str(code, 'código', 6))),
+    'android.connect': ({ host }) => (markAdbUsed(), net.adbConnect(adbPath(), str(host, 'dirección', 21))),
+    'android.info': ({ serial }) => (markAdbUsed(), net.adbInfo(adbPath(), str(serial, 'dispositivo', 80))),
 
     'github.status': () => github.status(),
     'github.contributions': () => github.contributions(),
@@ -340,11 +403,18 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const file = path.join(dir, `zona-${Date.now()}.png`); fs.writeFileSync(file, Buffer.from(m[1], 'base64'));
       return { path: file };
     },
-    'images.save': ({ path: file, project: name }) => {
+    'images.save': ({ path: file, project: name, title }) => {
       const f = allowedImage(str(file, 'imagen', 1000));
       const p = project(name);
       const dir = path.join(p.path, 'imagenes'); fs.mkdirSync(dir, { recursive: true });
-      let base = path.basename(f).replace(/[^\w.-]/g, '_'); const ext = path.extname(base); const stem = base.slice(0, base.length - ext.length);
+      // 3.2.1: a name people can read: the first words of what was asked for (or "imagen" and the date), not Codex's
+      // internal "exec-6ac8e3e7-….png".
+      const ext = path.extname(f).toLowerCase() || '.png';
+      const words = slug(oneLine(str(title, 'título', 300, { optional: true }) ?? '', 300).split(/\s+/).slice(0, 6).join(' '));
+      const own = path.basename(f, path.extname(f));
+      const internal = /^(exec|ig|img|image)[-_]?[0-9a-f-]{8,}$/i.test(own) || /^[0-9a-f-]{16,}$/i.test(own);
+      const stem = words && words !== 'tarea' ? words : internal ? `imagen-${localStamp()}` : own.replace(/[^\w.-]/g, '_');
+      let base = `${stem}${ext}`;
       for (let i = 2; fs.existsSync(path.join(dir, base)); i++) base = `${stem}-${i}${ext}`;
       fs.copyFileSync(f, path.join(dir, base));
       return { path: path.join(dir, base), name: base };
@@ -373,7 +443,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'chat.accept': ({ id }) => {
       const row = board.chatRow(int(id, 'mensaje'));
       if (row?.meta?.kind !== 'report') fail(tr('msg.api.notReport'));
-      const out = accept(row.meta.tasks, row.meta.project);
+      // 3.2.1: the OK to the report also settles the tasks of that request Orb held «for your review» (a read-only check
+      // that changed build files, for instance), which the report already explained: before, they stayed blocked for ever.
+      const held = row.conversation_id ? board.all("SELECT id FROM tasks WHERE conversation_id = ? AND status = 'blocked' AND updated_at <= ?", row.conversation_id, row.at)
+        .map((r) => r.id).filter((tid) => board.one("SELECT 1 AS x FROM events WHERE task_id = ? AND kind = 'task.held' AND id > COALESCE((SELECT MAX(id) FROM events WHERE task_id = ? AND kind = 'task.launched'), 0)", tid, tid)) : [];
+      for (const tid of held) board.patch(tid, { status: 'done' }, 'usuario', 'task.review_accepted');
+      const out = accept([...row.meta.tasks, ...held], row.meta.project);
       // 3.2: the OK closes the conversation when nothing of it is still open (written in again, it opens).
       settleConversation(row.conversation_id);
       return out;
@@ -432,7 +507,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'models.guide': () => modelCatalog(board).map((a) => ({
       id: a.id, label: a.label,
       tiers: Object.fromEntries(['light', 'balanced', 'heavy'].map((tier) => [tier, a.models.filter((m) => m.id && m.tier === tier).map((m) => m.label)])),
-      picks: Object.fromEntries(LEVELS.map((level) => { const p = chooseModel(board, a.id, level, a.accounts[0]?.id ?? a.id, { writes: true }); return [level, { label: p.label, tier: p.tier, reasoning: p.reasoning }]; }))
+      picks: Object.fromEntries(LEVELS.map((level) => { const p = chooseModel(board, a.id, level, a.accounts[0]?.id ?? a.id, { writes: true }); return [level, { label: p.label, tier: p.tier, reasoning: p.reasoning }]; })),
+      // 3.2.1: what the read-only tasks (reviews and verifications) really get: they may use the light model.
+      readPicks: Object.fromEntries(LEVELS.map((level) => { const p = chooseModel(board, a.id, level, a.accounts[0]?.id ?? a.id, { writes: false }); return [level, { label: p.label, tier: p.tier, reasoning: p.reasoning }]; }))
     })),
     'models.catalog': () => {
       // 3.2: with the accounts' real usage in the key: the usage bubble reads it from here and must not see an old figure.
@@ -446,12 +523,19 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
 
     // 3.0: the list of every view, sent on each refresh: long texts cut (the whole task is tasks.get) and no approval
     // signatures (only the detail needs them).
-    'tasks.list': ({ limit }) => board.panelTasks(Math.min(Number(limit) || 150, 500)).map(({ approval_hash, approval_sig, ...task }) => ({ ...task, description: cut(task.description), result: cut(task.result) })),
+    'tasks.list': ({ limit }) => {
+      const undone = new Set(board.all("SELECT key FROM settings WHERE key LIKE 'undone:%' AND value <> '' AND value <> 'null'").map((r) => Number(r.key.slice('undone:'.length))));
+      return board.panelTasks(Math.min(Number(limit) || 150, 500)).map(({ approval_hash, approval_sig, ...task }) => ({ ...task, description: cut(task.description), result: cut(task.result), ...(undone.has(task.id) ? { undone: true } : {}) }));
+    },
     'tasks.live': () => scheduler.live(),
     'tasks.get': ({ id }) => {
       const d = board.taskDetail(int(id, 'tarea'));
       const children = board.all('SELECT id, title, status, agent, assigned_to, model FROM tasks WHERE parent_id = ? OR review_of = ? ORDER BY id', d.id, d.id);
-      return { ...d, accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children };
+      // 3.2.1: «Deshecha» (undone: the files are as before the task), the model by its name («Haiku 4.5», not «haiku») and the
+      // account that ran it by the name the user gave it («Codex Pro»).
+      const who = d.assigned_to ?? d.agent; const acc = d.run_account ?? d.account ?? null;
+      return { ...d, accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children,
+        undone: board.settingJson(`undone:${d.id}`), modelLabel: d.model ? modelLabelOf(who, acc ?? who, d.model) : null, accountLabel: acc && accountsOf(who).length > 1 ? accountLabel(acc) : null };
     },
     'tasks.create': (p) => board.createTask({
       project: project(p.project).name, title: str(p.title, 'título', 200), description: str(p.description, 'descripción', 12000),
@@ -459,7 +543,11 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       reasoning: oneOf(p.reasoning, ['low', 'medium', 'high'], 'razonamiento', 'medium'), mode: oneOf(p.mode, ['carpeta', 'aislada'], 'modo', 'carpeta'),
       readonly: Boolean(p.readonly), account: str(p.account, 'cuenta', 40, { optional: true }) || null, level: oneOf(p.level, ['simple', 'normal', 'complejo'], 'nivel', null), depends_on: Array.isArray(p.depends_on) ? p.depends_on.map((d) => int(d, 'dependencia')) : []
     }, 'usuario'),
-    'tasks.approve': ({ id, decision, hash }) => board.approve(int(id, 'tarea'), decision === 'approved' ? 'approved' : 'rejected', 'usuario', str(hash, 'huella', 100)),
+    'tasks.approve': ({ id, decision, hash }) => {
+      const out = board.approve(int(id, 'tarea'), decision === 'approved' ? 'approved' : 'rejected', 'usuario', str(hash, 'huella', 100));
+      if (out?.status === 'cancelled') { try { taskRejected(out); } catch (error) { log?.(`rechazo #${out.id}: ${error.message}`); } }
+      return out;
+    },
     'tasks.retry': ({ id }) => board.retry(int(id, 'tarea'), 'usuario'),
     'tasks.cancel': ({ id }) => scheduler.cancel(int(id, 'tarea'), 'usuario'),
     'tasks.reassign': ({ id, agent, model, reasoning }) => board.reassign(int(id, 'tarea'), { agent: oneOf(agent, [...AGENT_IDS, 'any'], 'agente'), model: str(model, 'modelo', 80, { optional: true }) || null, reasoning: oneOf(reasoning, ['low', 'medium', 'high'], 'razonamiento') }, 'usuario'),
@@ -543,7 +631,15 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const needle = String(q ?? '').toLowerCase().trim();
       return (needle ? rows.filter((r) => `${r.actor} ${r.kind} ${r.detail} ${r.title ?? ''}`.toLowerCase().includes(needle)) : rows).map((r) => ({ ...r, detail: redactSecrets(r.detail) }));
     },
-    'usage.get': () => usageReport(board),
+    // 3.2.1: only the accounts of the agents this PC can run (not every agent Orb knows).
+    'usage.get': () => { const avail = board.availableAgents(); return usageReport(board).filter((u) => !avail || avail.includes(u.agent)); },
+    // 3.2.1: the user lifts an account's usage pause (and its models without usage) by hand.
+    'accounts.clearCooldown': ({ account: id }) => {
+      const acc = str(id, 'cuenta', 40);
+      if (!ctx.config.accounts.some((a) => a.id === acc)) fail(tr('msg.api.noAccount'));
+      clearCooldown(board, acc);
+      return true;
+    },
     // 2.6: the accounts working right now (the assistant's brain and the agents' running sessions), with the windows of
     // their plan the agents reported (session, weekly…), for the panel of the context ring.
     'usage.now': () => {

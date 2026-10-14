@@ -10,7 +10,9 @@ import { AgentIcon } from '@/components/agent-icon.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Composer, useAutoScroll, BarClock, BarHeading } from './chat.jsx';
 import { NotificationBell } from '@/components/notification-center.jsx';
-import { useCatalog, modelsOf } from '@/components/brain-picker.jsx';
+import { useCatalog, modelsOf, modelLabel } from '@/components/brain-picker.jsx';
+import { stepText, bareTool } from '@/components/chat-live.jsx';
+import { readableInput, readableCommand } from '@/lib/tools.js';
 import { GeneratedImage } from '@/components/image-viewer.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Input, Textarea, Empty, Spinner } from '@/components/ui/basic.jsx';
@@ -42,30 +44,76 @@ function toolIcon(name = '') {
   return Wrench;
 }
 
+// 3.2.1: a tool's name as people read it: the tools of Orb and Opti Bot by what they do («Creando una tarea»), the
+// agents' own (Read, Bash…) as they are, never «mcp__opti__opti_propose» or «ToolSearch».
+function toolName(t, name) {
+  const bare = bareTool(name);
+  if (!bare) return t('session.tool');
+  if (/^(orb|opti)_|^tool_?search$/i.test(bare) || bare !== String(name)) return stepText(t, { name: bare });
+  return /^[A-Za-z][\w .-]{0,30}$/.test(bare) ? bare : t('session.tool');
+}
+
 function ToolBlock({ b }) {
   const t = useT();
   const error = b.result?.error;
-  const Icon = toolIcon(b.call?.name);
+  const Icon = toolIcon(bareTool(b.call?.name));
+  const input = readableInput(b.call?.input, b.call?.name);
+  const raw = String(b.call?.input ?? '');
   return (
     <Collapsible className={cn('bg-card rounded-xl border text-[13px]', error && 'border-destructive/40')}>
       <CollapsibleTrigger className="group flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left">
         <ChevronRight className="text-muted-foreground size-3.5 transition-transform group-data-[state=open]:rotate-90" />
         <Icon className="text-muted-foreground size-3.5" />
-        <span className="font-medium">{b.call?.name ?? t('session.tool')}</span>
-        <span className="text-muted-foreground min-w-0 flex-1 truncate font-mono text-xs">{b.call?.input ?? ''}</span>
+        <span className="font-medium">{toolName(t, b.call?.name)}</span>
+        <span className="text-muted-foreground min-w-0 flex-1 truncate font-mono text-xs">{input}</span>
         {!b.result ? <span className="bg-info size-1.5 animate-pulse rounded-full" /> : error ? <CircleAlert className="text-destructive size-3.5" /> : null}
       </CollapsibleTrigger>
       <CollapsibleContent>
+        {/* The whole call (a long command, the data it sent) only when unfolded. */}
+        {raw && readableCommand(raw) !== input ? <pre className="text-muted-foreground mx-3 mb-1.5 max-h-40 overflow-auto px-1 font-mono text-[11px] whitespace-pre-wrap break-all">{readableCommand(raw)}</pre> : null}
         <pre className="bg-muted mx-3 mb-3 max-h-80 overflow-auto rounded-lg px-3 py-2 font-mono text-xs whitespace-pre-wrap break-words">{b.result?.output || (b.result ? t('session.noOutput') : t('session.working'))}</pre>
       </CollapsibleContent>
     </Collapsible>
   );
 }
 
+// 3.2.1: Opti Bot's conversation is for anyone: its steps go folded in one line («5 pasos · Revisando el PC»).
+function ToolGroup({ blocks }) {
+  const t = useT();
+  const last = blocks.at(-1);
+  return (
+    <Collapsible className="text-muted-foreground text-[12.5px]" data-testid="tool-group">
+      <CollapsibleTrigger className="group hover:text-foreground flex cursor-pointer items-center gap-1.5 text-left">
+        <ChevronRight className="size-3.5 transition-transform group-data-[state=open]:rotate-90" />
+        <span>{t(blocks.length === 1 ? 'session.stepsOne' : 'session.stepsOther', { n: blocks.length })} · {toolName(t, last.call?.name)}</span>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-2 grid gap-2">{blocks.map((b) => <ToolBlock key={b.key} b={b} />)}</CollapsibleContent>
+    </Collapsible>
+  );
+}
+const groupTools = (blocks) => {
+  const out = [];
+  for (const b of blocks) {
+    const last = out.at(-1);
+    if (b.type === 'tool' && last?.type === 'tools') last.blocks.push(b);
+    else if (b.type === 'tool') out.push({ type: 'tools', key: `g${b.key}`, blocks: [b] });
+    else out.push(b);
+  }
+  return out;
+};
+
+// 3.2.1: «Claude Code · claude-sonnet-5-5», «Codex · gpt-6-luna» (the line an agent writes when it starts) with the names
+// the rest of the app uses.
+function statusText(body, agent, catalog) {
+  const m = /^(.+?) · ([\w.:\-/[\]]+)$/.exec(String(body ?? ''));
+  return m ? `${AGENT[agent] ?? m[1]} · ${modelLabel(catalog, agent, m[2])}` : body;
+}
+
 const FILE_ICON = { add: FilePlus2, delete: FileMinus2 };
-function Block({ b, agent, sessionId, project }) {
+function Block({ b, agent, brain, sessionId, project, catalog }) {
   const t = useT();
   const locale = useLocale();
+  if (b.type === 'tools') return <ToolGroup blocks={b.blocks} />;
   if (b.type === 'tool') return <ToolBlock b={b} />;
   if (b.type === 'item' && b.item.kind === 'approval') return <ApprovalCard sessionId={sessionId} body={b.item.body} />;
   if (b.type === 'item' && b.item.kind === 'opti_action') return <OptiActionCard item={b.item} />;
@@ -91,6 +139,7 @@ function Block({ b, agent, sessionId, project }) {
     return parts.length ? <div className="text-muted-foreground text-right text-[11px]">{parts.join(' · ')}</div> : null;
   }
   if (it.role === 'error') return <div className="bg-destructive/10 text-destructive rounded-xl px-3.5 py-2.5 text-[13px] whitespace-pre-wrap break-words">{typeof body === 'string' ? body : JSON.stringify(body)}</div>;
+  if (it.kind === 'status' && typeof body === 'string') return <div className="text-muted-foreground text-center text-xs">{statusText(body, brain ?? agent, catalog)}</div>;
   return <div className="text-muted-foreground text-center text-xs">{typeof body === 'string' ? body : JSON.stringify(body)}</div>;
 }
 
@@ -102,7 +151,7 @@ function OptiActionCard({ item }) {
   const [busy, setBusy] = useState(false);
   const answer = async (decision) => { setBusy(true); await act(call('opti.act', { item: item.id, decision })); setBusy(false); };
   const pending = body.status === 'pending';
-  const target = body.action === 'end_process' ? `${body.name || ''} (${body.pid})` : body.action === 'disable_startup' ? body.name : '';
+  const target = body.action === 'end_process' ? `${body.label || body.name || ''} (${body.pid})` : body.action === 'disable_startup' ? body.label || body.name : '';
   return (
     <div className={cn('rounded-xl border px-3.5 py-3 text-[13px]', pending ? 'border-primary/40 bg-primary/5' : 'bg-card')} data-testid="opti-action">
       <div className="flex items-start gap-2.5">
@@ -233,6 +282,9 @@ export function ContextMeter({ context, className }) {
 }
 
 // Details of a conversation (2.3): where it works, git, where it comes from, its task.
+// The account of a conversation by its name, only when its agent has more than one (otherwise the agent's name says it).
+const accountName = (accounts = [], s) => (accounts.filter((a) => a.agent === s.agent).length > 1 ? accounts.find((a) => a.id === (s.account ?? s.agent))?.label ?? null : null);
+
 async function showDetails(s, task) {
   let info = null;
   if (s.project) { try { info = await call('projects.info', { name: s.project }); } catch { info = null; } }
@@ -243,7 +295,7 @@ async function showDetails(s, task) {
     body: () => (
       <dl className="grid grid-cols-[130px_1fr] gap-x-4 gap-y-2 text-[13px]">
         <Row k={t('session.agent')}>{AGENT[s.agent]}{s.model ? ` · ${s.model}` : ''} · {t('session.reasoningOf', { level: REASONING[s.reasoning]?.toLowerCase() ?? s.reasoning })}</Row>
-        <Row k={t('session.account')}>{s.account}</Row>
+        <Row k={t('session.account')}>{(getState().app?.config?.accounts ?? []).find((a) => a.id === (s.account ?? s.agent))?.label ?? s.account}</Row>
         <Row k={t('session.permissions')}>{PERMISSION[s.permission]}</Row>
         <Row k={t('session.folder')}><span className="font-mono text-xs">{s.cwd}</span></Row>
         {info?.git ? <Row k="Git">{t('session.branch')} <span className="font-mono">{info.branch}</span> · {info.changes ? t('session.unsaved', { n: info.changes }) : t('session.noChanges')}{info.remote ? ` · ${info.remote}` : ''}{info.ahead ? ` · ${t('session.unpushed', { n: info.ahead })}` : ''}</Row> : s.project ? <Row k="Git">{t('session.noGit')}</Row> : null}
@@ -306,9 +358,11 @@ export function SessionView({ route, embedded = false, empty = null }) {
   // (the selector showed an empty box when it was not among the options).
   const listed = modelsOf(catalog?.find((a) => a.id === s.agent), s.account).filter((m) => m.id);
   const models = [...(listed.length ? listed.map((m) => ({ value: m.id, label: m.label })) : (app?.config?.agents?.[s.agent]?.models ?? []).map((m) => ({ value: m, label: m })))];
-  if (s.model && !models.some((m) => m.value === s.model)) models.unshift({ value: s.model, label: s.model });
-  const modelName = (id) => models.find((m) => m.value === id)?.label ?? id;
+  if (s.model && !models.some((m) => m.value === s.model)) models.unshift({ value: s.model, label: modelLabel(catalog, s.agent, s.model) });
+  const modelName = (id) => models.find((m) => m.value === id)?.label ?? modelLabel(catalog, s.agent, id);
   const stalled = ['interrupted', 'limited'].includes(s.status) && s.kind === 'chat';
+  // 3.2.1: with several accounts of the agent (Codex Go, Codex Pro), the one this conversation uses, by its name.
+  const who = accountName(app?.config?.accounts, s) ?? AGENT[s.agent];
 
   const loadOlder = async () => {
     const first = items[0]?.id; if (!first) return;
@@ -338,17 +392,17 @@ export function SessionView({ route, embedded = false, empty = null }) {
           middle, its controls on the right. */}
       {embedded ? null : <PageHeader className="topbar-chat" title={<BarClock />}
         center={<BarHeading title={s.title} project={s.project} onRename={s.kind === 'chat' ? rename : null} renameLabel={t('session.renameTip')}
-          extra={<span className="bar-title-agent"><AgentIcon agent={s.agent} className="size-3.5" />{AGENT[s.agent]}{s.model ? ` · ${modelName(s.model)}` : ''}</span>} />}>
+          extra={<span className="bar-title-agent"><AgentIcon agent={s.agent} className="size-3.5" />{who}{s.model ? ` · ${modelName(s.model)}` : ''}</span>} />}>
         <NotificationBell />
         {bridge.mobile ? null : <Tip label={t('session.openFolder')}><Button variant="ghost" size="icon-sm" onClick={() => act(bridge.openPath(s.cwd))} aria-label={t('session.openFolder')}><FolderOpen /></Button></Tip>}
         {s.kind === 'chat' ? (<>
-          <Tip label={t('session.detailsShort')}><Button variant="ghost" size="icon-sm" onClick={() => showDetails(s, task)} data-testid="details"><Info /></Button></Tip>
+          <Tip label={t('session.detailsShort')}><Button variant="ghost" size="icon-sm" onClick={() => showDetails(s, task)} aria-label={t('session.detailsShort')} data-testid="details"><Info /></Button></Tip>
           <BubbleTip title={t('session.fork')} text={t('session.forkTip')}><Button variant="ghost" size="icon-sm" disabled={running} onClick={fork} aria-label={t('session.fork')} data-testid="fork"><GitFork /></Button></BubbleTip>
-          <Tip label={s.archived ? t('session.restore') : t('session.archive')}><Button variant="ghost" size="icon-sm" onClick={async () => { await act(call('sessions.update', { id: s.id, archived: !s.archived })); if (!s.archived) go('chat'); }}><Archive /></Button></Tip>
-          <Tip label={t('session.deleteTip')}><Button variant="danger" size="icon-sm" onClick={async () => { if (await confirm(t('session.deleteTitle'), t('session.deleteBody'), { ok: t('session.delete'), danger: true })) { await act(call('sessions.remove', { id: s.id })); go('chat'); } }}><Trash2 /></Button></Tip>
+          <Tip label={s.archived ? t('session.restore') : t('session.archive')}><Button variant="ghost" size="icon-sm" aria-label={s.archived ? t('session.restore') : t('session.archive')} onClick={async () => { await act(call('sessions.update', { id: s.id, archived: !s.archived })); if (!s.archived) go('chat'); }}><Archive /></Button></Tip>
+          <Tip label={t('session.deleteTip')}><Button variant="danger" size="icon-sm" aria-label={t('session.deleteTip')} onClick={async () => { if (await confirm(t('session.deleteTitle'), t('session.deleteBody'), { ok: t('session.delete'), danger: true })) { await act(call('sessions.remove', { id: s.id })); go('chat'); } }}><Trash2 /></Button></Tip>
         </>) : (<>
           {task ? <Badge variant={STATUS[task.status]?.[1]}>{STATUS[task.status]?.[0]}</Badge> : null}
-          <Tip label={t('session.detailsShort')}><Button variant="ghost" size="icon-sm" onClick={() => showDetails(s, task)}><Info /></Button></Tip>
+          <Tip label={t('session.detailsShort')}><Button variant="ghost" size="icon-sm" onClick={() => showDetails(s, task)} aria-label={t('session.detailsShort')}><Info /></Button></Tip>
           <BubbleTip title={t('session.fork')} text={t('session.forkTaskTip')}><Button variant="ghost" size="icon-sm" disabled={running} onClick={fork} aria-label={t('session.fork')}><GitFork /></Button></BubbleTip>
           <Button variant="outline" size="sm" onClick={() => go({ view: 'tasks', id: s.task_id })}><ListTodo />{t('session.viewTask', { id: s.task_id })}</Button>
         </>)}
@@ -356,7 +410,7 @@ export function SessionView({ route, embedded = false, empty = null }) {
       <div ref={scroll.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-3xl flex-col gap-3.5 px-5 py-6">
           {more ? <Button variant="ghost" size="sm" className="self-center" onClick={loadOlder}><ChevronUp />{t('session.older')}</Button> : null}
-          {blocks.length ? blocks.map((b) => <Block key={b.key} b={b} agent={embedded ? 'opti' : s.agent} sessionId={s.id} project={s.project} />)
+          {blocks.length ? (embedded ? groupTools(blocks) : blocks).map((b) => <Block key={b.key} b={b} agent={embedded ? 'opti' : s.agent} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />)
             : embedded && empty ? empty : <Empty title={t('session.emptyTitle', { agent: AGENT[s.agent] })}>{t('session.workIn')} <span className="font-mono text-xs">{s.cwd}</span> {t('session.withPerm', { perm: PERMISSION[s.permission] })}</Empty>}
           {partial ? <div className="flex gap-3" data-testid="partial"><AgentIcon agent={embedded ? 'opti' : s.agent} className="mt-1 size-5" /><div className="min-w-0 flex-1 opacity-90"><Markdown>{partial}</Markdown></div></div> : null}
           {running && !partial ? <div className="text-muted-foreground flex items-center gap-2 text-[13px]"><span className="bg-info size-2 animate-pulse rounded-full" />{t('session.agentWorking', { agent: AGENT[s.agent] })}</div> : null}
@@ -376,10 +430,10 @@ export function SessionView({ route, embedded = false, empty = null }) {
               <div key={q.id} className="bg-card flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[13px]">
                 <span className="text-muted-foreground tabular-nums">{i + 1}.</span>
                 <span className="min-w-0 flex-1 truncate">{q.text}</span>
-                <Tip label={t('session.up')}><Button variant="ghost" size="icon-sm" disabled={i === 0} onClick={() => editQueued(q, { move: 'up' })}><ArrowUpIcon /></Button></Tip>
-                <Tip label={t('session.down')}><Button variant="ghost" size="icon-sm" disabled={i === queue.length - 1} onClick={() => editQueued(q, { move: 'down' })}><ArrowDown /></Button></Tip>
-                <Tip label={t('session.edit')}><Button variant="ghost" size="icon-sm" onClick={() => form(t('session.editQueued'), { initial: { text: q.text }, body: (v, set) => <Textarea autoFocus rows={4} value={v.text} onChange={(e) => set({ text: e.target.value })} />, ok: t('session.save'), onOk: (v) => call('sessions.editQueued', { id: s.id, queueId: q.id, text: v.text }) })}><Pencil /></Button></Tip>
-                <Tip label={t('session.remove')}><Button variant="ghost" size="icon-sm" onClick={() => editQueued(q, { remove: true })}><X /></Button></Tip>
+                <Tip label={t('session.up')}><Button variant="ghost" size="icon-sm" aria-label={t('session.up')} disabled={i === 0} onClick={() => editQueued(q, { move: 'up' })}><ArrowUpIcon /></Button></Tip>
+                <Tip label={t('session.down')}><Button variant="ghost" size="icon-sm" aria-label={t('session.down')} disabled={i === queue.length - 1} onClick={() => editQueued(q, { move: 'down' })}><ArrowDown /></Button></Tip>
+                <Tip label={t('session.edit')}><Button variant="ghost" size="icon-sm" aria-label={t('session.edit')} onClick={() => form(t('session.editQueued'), { initial: { text: q.text }, body: (v, set) => <Textarea autoFocus rows={4} value={v.text} onChange={(e) => set({ text: e.target.value })} />, ok: t('session.save'), onOk: (v) => call('sessions.editQueued', { id: s.id, queueId: q.id, text: v.text }) })}><Pencil /></Button></Tip>
+                <Tip label={t('session.remove')}><Button variant="ghost" size="icon-sm" aria-label={t('session.remove')} onClick={() => editQueued(q, { remove: true })}><X /></Button></Tip>
               </div>
             ))}
           </div>
@@ -391,7 +445,7 @@ export function SessionView({ route, embedded = false, empty = null }) {
         onDrop={(e) => addImages(fromTransfer(e.dataTransfer))}
         top={images.length ? images.map((p) => <Badge key={p} variant="secondary" className="gap-1.5 font-normal"><ImageIcon />{baseName(p)}<button className="cursor-pointer" onClick={() => setImages(images.filter((x) => x !== p))}><X className="size-3" /></button></Badge>) : null}
         bottom={<>
-          <Tip label={t('session.attach')}><Button variant="ghost" size="icon-sm" onClick={async () => addImages(await bridge.pickImages())}><Paperclip /></Button></Tip>
+          <Tip label={t('session.attach')}><Button variant="ghost" size="icon-sm" aria-label={t('session.attach')} onClick={async () => addImages(await bridge.pickImages())}><Paperclip /></Button></Tip>
           {/* 3.2: the model, the permissions and the reasoning under the box, like the chat's brain (the bar keeps the title). */}
           {!embedded && s.kind === 'chat' ? (<>
             {models.length ? <Select size="sm" value={s.model || models[0].value} title={t('session.model')} options={models} onValueChange={(model) => act(call('sessions.update', { id: s.id, model }), t('session.modelSet', { model: modelName(model) }))} data-testid="session-model" /> : null}

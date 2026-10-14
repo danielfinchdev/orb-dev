@@ -5,7 +5,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, describeInput, cleanEnv, within, discoverDir } from './common.mjs';
+import { spawn } from 'node:child_process';
+import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, describeInput, cleanEnv, within, discoverDir, killTree } from './common.mjs';
 import { Turn, Approvals } from './live.mjs';
 import { decide, describeAction } from '../core/guard.mjs';
 import { tr } from '../core/context.mjs';
@@ -94,6 +95,9 @@ export async function discoverModels(exe, cfg = {}, env = {}) {
 // The SDK's error kinds, in plain words.
 const RESULT_KEY = { error_during_execution: 'sys.agents.result.duringExecution', error_max_turns: 'sys.agents.result.maxTurns', error_max_budget_usd: 'sys.agents.result.maxBudget', error_max_structured_output_retries: 'sys.agents.result.structuredOutput' };
 
+// 3.2.1: whether a result answers a message of Orb's (sent with origin «human»), not a notice Claude handles by itself.
+export const answersOrb = (m) => !(m?.origin?.kind && m.origin.kind !== 'human');
+
 export const permissionModeOf = (p) => (p === 'total' ? 'bypassPermissions' : p === 'editar' ? 'acceptEdits' : 'default');
 
 // options: exe, cwd, model, reasoning, permission, resumeId, newSessionId, forkSession, mcpServers, env, systemPrompt
@@ -105,7 +109,7 @@ export function createLive(o) {
   const input = inputQueue();
   const abort = new AbortController();
   let permission = o.permission ?? 'editar';
-  let turn = null; let query = null; let closed = false; let started = null;
+  let turn = null; let query = null; let closed = false; let started = null; let child = null;
   const live = {
     sessionId: o.resumeId ?? o.newSessionId ?? null,
     caps: { steer: true, approvals: true, fork: true, interrupt: true, context: true, models: true },
@@ -151,6 +155,10 @@ export function createLive(o) {
       onEvent({ type: 'rate', status: r.status, resetAt, utilization: r.utilization ?? null, window: r.rateLimitType ?? null });
       if (r.status === 'rejected') { onEvent({ type: 'limit', resetAt, message: tr('sys.agents.limit', { name: 'Claude' }) }); if (turn) turn.limit = { resetAt }; }
     }
+    // 3.2.1: a result that does not answer Orb's message (origin «task-notification»: Claude first handles a notice left by
+    // the conversation it resumes, such as a background command of the previous session) does not end Orb's turn. Taking
+    // it as the answer, a task resumed after a close passed as done in seconds while Claude was still working.
+    if (m.type === 'result' && !answersOrb(m)) { log(`resultado de ${m.origin.kind}: no es la respuesta al mensaje de Orb`); return; }
     if (m.type === 'result') {
       const usage = { costUsd: m.total_cost_usd ?? null, inputTokens: m.usage?.input_tokens ?? null, outputTokens: m.usage?.output_tokens ?? null, cacheReadTokens: m.usage?.cache_read_input_tokens ?? null, cacheWriteTokens: m.usage?.cache_creation_input_tokens ?? null, turns: m.num_turns ?? null };
       onEvent({ type: 'item', role: 'system', kind: 'usage', body: usage });
@@ -197,7 +205,16 @@ export function createLive(o) {
       canUseTool,
       permissionMode: permissionModeOf(permission),
       stderr: (d) => log(`stderr: ${d}`),
-      settings: { fastMode: false }
+      settings: { fastMode: false },
+      // 3.2.1: spawn Claude Code ourselves so Orb knows its process (live.pid) and can stop its whole tree when the task
+      // ends — otherwise its background shells (bash.exe) can outlive the turn, holding an isolated copy's folder open and
+      // leaving test servers behind. The signal is forwarded by the SDK after its own graceful stdin-close window.
+      spawnClaudeCodeProcess: (opts) => {
+        child = spawn(opts.command, opts.args, { cwd: opts.cwd, env: opts.env, signal: opts.signal, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+        live.pid = child.pid ?? null;
+        try { child.stderr?.setEncoding('utf8'); child.stderr?.on('data', (d) => log(`stderr: ${d}`)); child.stderr?.on('error', () => {}); } catch { /* best effort */ }
+        return child;
+      }
     };
     if (o.resumeId) options.resume = o.resumeId; else if (o.newSessionId) options.sessionId = o.newSessionId;
     if (o.forkSession) options.forkSession = true;
@@ -240,7 +257,7 @@ export function createLive(o) {
   live.respond = (requestId, decision) => approvals.respond(requestId, decision);
   live.setModel = async (model) => { o.model = model; try { await query?.setModel(model || undefined); } catch { /* next start */ } };
   live.setPermission = async (p) => { permission = p; try { await query?.setPermissionMode(permissionModeOf(p)); } catch { /* next start */ } };
-  live.close = () => { if (closed && !query) return; closed = true; approvals.clear(); input.close(); try { query?.close(); } catch { /* gone */ } try { abort.abort(); } catch { /* gone */ } };
+  live.close = () => { if (closed && !query) return; closed = true; approvals.clear(); input.close(); try { query?.close(); } catch { /* gone */ } try { abort.abort(); } catch { /* gone */ } try { killTree(child); } catch { /* gone */ } };
   live.isClosed = () => closed;
   return live;
 }

@@ -9,7 +9,8 @@ import { ctx } from '../core/context.mjs';
 import { AGENT_IDS, AGENT_LABELS } from '../core/home.mjs';
 import { installed, discoverModels } from '../agents/index.mjs';
 import { usableAccounts } from '../core/accounts.mjs';
-import { usageReport, HEAVY_FAMILY, canLaunch } from '../core/budget.mjs';
+import { usageReport, HEAVY_FAMILY, canLaunch, modelLimits } from '../core/budget.mjs';
+import { cursorShownName } from '../agents/cursor.mjs';
 const MODEL_ID = /^[A-Za-z0-9][\w.:\-/[\]=,@]{0,79}$/;
 // 2.7: the light models (fast and cheap) by their names; heavy ones by HEAVY_FAMILY; everything else is «balanced».
 const LIGHT = /haiku|mini\b|nano|flash|lite\b|small|spark/i;
@@ -81,6 +82,21 @@ export async function refreshAllModels(board, options = {}) {
   return changed;
 }
 
+// 3.2.1: the name Cursor itself gave each model when it opened it (its «init» line: «Claude Opus 5 300K High»), without
+// the effort words. Its model list names some by another variant («Claude Opus 5 1M») than the one it really opens.
+export function cursorSeenNames(board) {
+  const out = {};
+  const rows = board.all(`SELECT s.model AS model, (SELECT body FROM session_items i WHERE i.session_id = s.id AND i.kind = 'status' AND i.body LIKE 'Cursor · %' ORDER BY i.id DESC LIMIT 1) AS body
+    FROM sessions s WHERE s.agent = 'cursor' AND s.model IS NOT NULL AND s.model <> '' ORDER BY s.updated_at DESC LIMIT 80`);
+  for (const r of rows) {
+    const name = typeof r.body === 'string' ? cursorShownName(r.body.replace(/^Cursor · /, '')) : '';
+    if (name && !out[r.model] && name.toLowerCase() !== String(r.model).toLowerCase()) out[r.model] = name.slice(0, 40);
+  }
+  return out;
+}
+// Each model of a list with the moment its usage comes back, when the account ran out of it (limitedUntil).
+const withLimits = (board, account, list) => { const lim = modelLimits(board, account); return Object.keys(lim).length ? list.map((m) => (m.id && lim[m.id] ? { ...m, limitedUntil: lim[m.id] } : m)) : list; };
+
 // discover: the agents with no models known yet are asked in the background (the window hears when they answer).
 export function modelCatalog(board, { discover = false, log } = {}) {
   const c = ctx.config;
@@ -89,20 +105,21 @@ export function modelCatalog(board, { discover = false, log } = {}) {
   for (const agent of [...new Set([...(c.agentOrder ?? []), ...AGENT_IDS])]) {
     const cfg = c.agents?.[agent];
     if (!cfg?.enabled || !usableAccounts(agent).length || !installed(agent)) continue;
-    const known = board.settingJson(`models:${agent}`) ?? [];
+    let known = board.settingJson(`models:${agent}`) ?? [];
     if (discover && !known.length) refreshModels(board, agent, { log });
+    if (agent === 'cursor' && known.length) { try { const seen = cursorSeenNames(board); known = known.map((m) => (seen[m.id] ? { ...m, label: seen[m.id] } : m)); } catch { /* the names of its list */ } }
     const accounts = usableAccounts(agent);
     // 3.0: another account with its own list (another plan) gets its own models; the others use the agent's.
     const accountModels = {};
     for (const acc of accounts) {
       if (acc.id === agent) continue;
       const own = board.settingJson(`models:${acc.id}`);
-      if (own?.length) accountModels[acc.id] = buildModels(agent, cfg, own);
+      if (own?.length) accountModels[acc.id] = withLimits(board, acc.id, buildModels(agent, cfg, own));
       else if (discover) refreshModels(board, agent, { log, account: acc.id });
     }
     out.push({
       id: agent, label: AGENT_LABELS[agent] ?? agent, defaultModel: cfg.defaultModel || '', strengths: cfg.strengths ?? '',
-      models: buildModels(agent, cfg, known), accountModels, accounts: accounts.map((a) => ({ id: a.id, label: a.label, usage: usage[a.id] ?? null }))
+      models: withLimits(board, agent, buildModels(agent, cfg, known)), accountModels, accounts: accounts.map((a) => ({ id: a.id, label: a.label, usage: usage[a.id] ?? null }))
     });
   }
   return out;
@@ -151,7 +168,9 @@ export function chooseModel(board, agent, level = 'normal', accountId = agent, {
   const base = { model: null, label: null, tier: null, reasoning, level: LEVELS[li], profile };
   if (agent === 'cursor') return base; // Cursor's «Auto» already chooses for each request
   const entry = modelCatalog(board).find((a) => a.id === agent);
-  const models = (entry?.accountModels?.[accountId] ?? entry?.models ?? []).filter((m) => m.id);
+  // 3.2.1: never a model this account has no usage of now.
+  const blocked = modelLimits(board, accountId);
+  const models = (entry?.accountModels?.[accountId] ?? entry?.models ?? []).filter((m) => m.id && !blocked[m.id]);
   if (!models.length) return base;
   const rank = (a, b) => Number(/fable/i.test(a.id)) - Number(/fable/i.test(b.id)) || Number(Boolean(b.recommended)) - Number(Boolean(a.recommended)) || version(b) - version(a);
   let wanted = TARGET[profile][li];

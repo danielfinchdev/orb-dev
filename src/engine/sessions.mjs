@@ -16,13 +16,17 @@ import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { git, isGitRepo, repoRoot } from '../core/workspace.mjs';
 import { account as findAccount, defaultAccount, accountEnv } from '../core/accounts.mjs';
 import { browserKey } from '../core/browser-key.mjs';
-import { PERMISSIONS, plainAction, pidKills } from '../core/guard.mjs';
+import { PERMISSIONS, plainAction, pidKills, unwrapShell } from '../core/guard.mjs';
+import { processList, taskProcesses } from '../core/procs.mjs';
 import { explainFailure } from '../core/agent-errors.mjs';
 import { rememberModels } from './catalog.mjs';
+import { changedFiles, logDirect } from './logs.mjs';
 
 export { PERMISSIONS };
 export const ATTACH_DIR = '.orb-adjuntos';
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp)$/i;
+// 3.2.1: a message that asks for a picture (or to change one): Codex gets a short note on how Orb wants it done.
+const IMAGE_ASK = /\b(imagen|im[aá]genes|image|images|picture|ilustraci[oó]n|illustration|logo|icono|icon|dibujo|drawing|foto|photo|wallpaper|edita la imagen)\b/i;
 const ATTACH_MAX = 20 * 1024 * 1024;
 const IDLE_CLOSE_MS = 20 * 60_000; // a live process with nothing to do for this long is closed (it resumes on the next message)
 const WATCH_MS = Number(process.env.ORB_WATCH_MS) || 5000; // how often a running turn is checked (time limit, permissions)
@@ -320,8 +324,20 @@ export class Sessions {
     if (ev.type === 'session') { if (ev.id && this.get(id)?.cli_session !== ev.id) this.update(id, { cli_session: ev.id }); return; }
     if (ev.type === 'approval') {
       const r = ev.request;
+      const s = this.get(id);
+      // 3.2.1 (finding 47): the agent already closed its task (orb_update_task) but its process is still asking for a
+      // permission as it winds down. The task is over: the request is denied and the agent told, so nothing is left
+      // hanging for the user to answer on a task that is already "Completada" (Orb stops its programs itself).
+      if (s?.kind === 'task' && s.task_id) {
+        const t = this.board.task(s.task_id);
+        if (t && t.status !== 'running') {
+          this.lives.get(id)?.live.respond(r.id, 'deny');
+          this.addItem(id, 'system', 'approval', { id: r.id, tool: r.tool, title: r.title, reason: tr('msg.sessions.taskClosed'), input: r.input, status: 'denied' });
+          return;
+        }
+      }
       // 3.1: a task stopping its own test server by its number needs nobody: allowed at once, and said in its conversation.
-      if (run && this.get(id)?.kind === 'task' && this.ownProcesses(r.title, this.get(id)?.cwd, run.startedAt) && this.lives.get(id)?.live.respond(r.id, 'allow')) {
+      if (run && s?.kind === 'task' && this.ownProcesses(r.title, s.cwd, run.startedAt, { roots: [this.lives.get(id)?.live.pid].filter(Boolean) }) && this.lives.get(id)?.live.respond(r.id, 'allow')) {
         this.addItem(id, 'system', 'approval', { id: r.id, tool: r.tool, title: r.title, reason: tr('msg.sessions.ownProcess'), input: r.input, status: 'allowed' });
         return;
       }
@@ -352,16 +368,23 @@ export class Sessions {
   // 3.1: whether a command only stops processes this task started itself: every number it names is a process launched
   // after the turn began from the task's own folder (Windows). Anything else (by name, someone else's process, a
   // command cut short in the card) asks as always.
-  ownProcesses(command, cwd, since) {
-    if (process.platform !== 'win32' || !cwd || String(command ?? '').length >= 400) return false;
-    const pids = pidKills(command);
-    if (!pids?.length || pids.length > 5) return false;
+  ownProcesses(command, cwd, since, { roots = [] } = {}) {
+    if (process.platform !== 'win32' || !cwd) return false;
+    // 3.2.1: Codex sends the whole command wrapped in powershell -Command and may keep the number in a variable
+    // (`$p = 11188; Stop-Process -Id $p`); pidKills unwraps and resolves that now, so the 400-char cap of 3.1 is gone.
+    const pids = pidKills(unwrapShell(command));
+    if (!pids?.length || pids.length > 8) return false;
     const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
       `Get-CimInstance Win32_Process -Filter "${pids.map((p) => `ProcessId=${Number(p)}`).join(' OR ')}" | ForEach-Object { [pscustomobject]@{ id = $_.ProcessId; cmd = $_.CommandLine; at = $_.CreationDate.ToUniversalTime().ToString('o') } } | ConvertTo-Json -Compress`],
       { encoding: 'utf8', windowsHide: true, timeout: 15_000 });
     let found = []; try { const j = JSON.parse(r.stdout || '[]'); found = Array.isArray(j) ? j : [j]; } catch { return false; }
     const dir = path.resolve(cwd).toLowerCase();
-    return pids.every((pid) => found.some((p) => p.id === pid && String(p.cmd ?? '').toLowerCase().includes(dir) && Date.parse(p.at) >= since - 1000));
+    const byCmd = (pid) => found.some((p) => p.id === pid && String(p.cmd ?? '').toLowerCase().includes(dir) && Date.parse(p.at) >= since - 1000);
+    // 3.2.1: a server started with a relative path does not name the folder in its command line (`node server.js`); it is
+    // recognised instead as part of the task's process tree (descendant of the agent).
+    let tree = new Set();
+    if (roots.length) { const list = processList(since); if (list) for (const p of taskProcesses(list, { since, roots: roots.map(Number), dir, engine: process.pid })) tree.add(p.id); }
+    return pids.every((pid) => byCmd(pid) || tree.has(pid));
   }
 
   // ---- the queue: messages written while the agent works
@@ -396,7 +419,8 @@ export class Sessions {
     // context: what @ attached (another task, conversation or log), added for the agent but not shown as typed.
     if (!this.running.has(id)) { this.send(id, text, { images, prompt: context ? `${text}${context}` : undefined }); return { sent: true }; }
     const entry = this.lives.get(id);
-    if (mode !== 'queue' && !images.length && entry?.live.caps.steer && entry.live.steer({ text: context ? `${text}${context}` : text })) {
+    const onFail = () => { this.addItem(id, 'system', 'status', tr('msg.sessions.steerLate')); this.enqueue(id, text, []); };
+    if (mode !== 'queue' && !images.length && entry?.live.caps.steer && entry.live.steer({ text: context ? `${text}${context}` : text, onFail })) {
       this.addItem(id, 'user', 'text', { text, steer: true });
       return { steered: true };
     }
@@ -470,6 +494,8 @@ export class Sessions {
     if (this.isOpti(s) && s.agent !== 'claude' && !s.cli_session) body = `${optiPersona()}\n\n## Mensaje\n${body}`;
     const nativeImages = a.caps?.images === true;
     if (attached.length && !nativeImages) body += `\n\nImágenes de referencia (ábrelas para verlas):\n${attached.map((f) => `- ${f}`).join('\n')}`;
+    // 3.2.1: Codex made three pictures for "una imagen" and edited them by pasting pieces with scripts (losing quality).
+    if (s.agent === 'codex' && s.kind === 'chat' && IMAGE_ASK.test(text)) body += `\n\n${tr(attached.length ? 'sys.sessions.imageEditHint' : 'sys.sessions.imageHint')}`;
     let entry;
     try { entry = this.getLive(s, acc, { taskId, budgetUsd }); }
     catch (error) {
@@ -485,6 +511,9 @@ export class Sessions {
     const timer = setInterval(() => { try { this.watchRun(id, run, { timeoutMs, taskId }); } catch (error) { this.log(`vigilancia ${id}: ${error.message}`); } }, WATCH_MS);
     timer.unref?.();
     const resumed = Boolean(s.cli_session);
+    // 3.2.1: a direct conversation in a project leaves a log entry for the files its turn changed (logs.mjs logDirect).
+    const direct = s.kind === 'chat' && !this.isOpti(s) && s.project && s.permission !== 'leer';
+    let before = null; if (direct) { try { before = changedFiles(s.cwd); } catch { /* no entry */ } }
     let finished = false; // onFinish runs exactly once, also when the adapter itself fails
     entry.live.send({ text: body, images: nativeImages ? attached : [] }).then((result) => {
       clearInterval(timer);
@@ -501,6 +530,7 @@ export class Sessions {
       if (run.stopped && !run.timedOut) this.addItem(id, 'system', 'status', tr('msg.sessions.stopped'));
       const limited = Boolean(result.limit);
       this.update(id, { status: limited ? 'limited' : failed ? 'error' : 'idle' });
+      if (before) { try { logDirect(this.board, this.get(id) ?? s, { before, request: text, answer: result.text || result.final }); } catch (error) { this.log(`bitácora de la conversación ${id}: ${error.message}`); } }
       const state = { final: result.final, text: result.text, isError: result.isError, usage: result.usage, cliSession: this.get(id)?.cli_session };
       finished = true;
       try { onFinish?.({ code: result.isError ? 1 : 0, state, stderr: result.isError ? result.final : '', logFile: entry.logFile, stopped: run.stopped, timedOut: Boolean(run.timedOut), limit: result.limit }); }

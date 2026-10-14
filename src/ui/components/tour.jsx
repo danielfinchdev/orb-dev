@@ -22,7 +22,8 @@ export const TOUR_STEPS = [
   { id: 'reasoning', target: 'reasoning-picker', view: 'chat' },
   { id: 'orchestrator', target: 'orchestrator-check', view: 'chat', wrap: 'label' },
   { id: 'context', target: 'context-meter', view: 'chat', optional: true },
-  { id: 'bar', target: 'bar-games', view: 'chat' },
+  // 3.2.1: the whole bar (its text speaks of the title, the project, the notifications, pause and the games), not the last button.
+  { id: 'bar', target: 'bar-clock', view: 'chat', wrap: 'header' },
   { id: 'newchat', target: 'new-conversation', sidebar: true },
   { id: 'search', target: 'sidebar-search', sidebar: true },
   { id: 'folders', target: 'sidebar-folders', sidebar: true },
@@ -56,6 +57,8 @@ function knownMissing() {
   if (!visible(document.querySelector('[data-testid="new-conversation"]'))) for (const s of TOUR_STEPS) if (s.sidebar) out.add(s.id);
   // 3.2: the tour shows a new conversation, whose ring only appears after an answer.
   if (!visible(document.querySelector('[data-testid="context-meter"]')) && !(app?.assistant?.context)?.size) out.add('context');
+  // 3.2: other optional steps whose control is not there (the conversations without a project, when there are none).
+  for (const s of TOUR_STEPS) if (s.optional && s.target && !document.querySelector(`[data-testid="${s.target}"]`)) out.add(s.id);
   return out;
 }
 

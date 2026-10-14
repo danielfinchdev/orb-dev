@@ -193,6 +193,16 @@ function createFakeLive(agent, label, caps, o) {
     }
     const rate = scan.match(/RATE (\d+)/);
     if (rate) onEvent({ type: 'rate', status: 'allowed', resetAt: Date.now() + 3_600_000, utilization: Number(rate[1]) / 100, window: '5h' });
+    // 3.2.1: the usage limit of one model only (an API model of Cursor's plan), with the date the monthly cycle ends.
+    if (/LIMITE_MODELO/.test(scan) && model) {
+      const end = new Date(Date.now() + 6 * 86_400_000);
+      const msg = `You've hit your usage limit. Switch to a different model or set a Spend Limit to continue with this model. Your usage limits will reset when your monthly cycle ends on ${end.getMonth() + 1}/${end.getDate()}/${end.getFullYear()}.`;
+      item('error', 'text', msg);
+      onEvent({ type: 'rate', status: 'rejected', model, resetAt: null, text: msg });
+      return current.finish({ isError: true, final: msg, limit: { resetAt: null, model, text: msg } });
+    }
+    // 3.2.1: a conversation resumed after a close that ends at once without a word (as Claude did with a pending notice).
+    if (process.env.ORB_FAKE_EMPTY_RESUME === '1' && o.resumeId && /Continúa donde lo dejaste/.test(text)) return current.finish({});
     const limit = scan.match(/LIMITE(?:_TEXTO)?(?: (\d+))?/);
     if (limit) {
       const msg = "You've hit your usage limit · resets 5pm";

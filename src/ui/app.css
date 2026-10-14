@@ -120,6 +120,8 @@
 }
 .dark { --tip-shadow: 0 14px 34px -10px rgb(0 0 0 / 0.6), 0 0 0 1px color-mix(in oklch, var(--primary) 12%, transparent); }
 .orb-tip { background: var(--tip-bg); color: var(--tip-title); border: 1px solid var(--tip-border); border-radius: var(--tip-radius); padding: 10px 14px 11px; box-shadow: var(--tip-shadow); transform-origin: var(--radix-tooltip-content-transform-origin); animation: orb-tip-in 0.16s cubic-bezier(0.2, 0.8, 0.3, 1.1); }
+/* 3.2.1: a help bubble lets clicks through, its positioning box too (it covered the project picker next to the brain's). */
+[data-radix-popper-content-wrapper]:has(> [data-testid="bubble-tip"]) { pointer-events: none; }
 .orb-tip-title { color: var(--tip-title); }
 .orb-tip-text { color: var(--tip-text); }
 /* The tail: the lower half of a bordered square, so its two edges continue the bubble's border. Radix turns it towards the control. */

@@ -15,16 +15,17 @@ import { Input } from '@/components/ui/basic.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { Switch, Tip, BubbleTip, Popover, PopoverTrigger, PopoverContent } from '@/components/ui/overlay.jsx';
-import { useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon } from '@/lib/store.js';
-import { pickGreeting, pickSubtitle } from '@/lib/greeting.js';
+import { useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere } from '@/lib/store.js';
+import { notify } from '@/lib/notify.js';
+import { approveTask, rejectTask } from '@/components/task-approval.jsx';
+import { pickGreeting, pickSubtitle, suggestionsFor } from '@/lib/greeting.js';
 import { LiveActivity, QuestionCard } from '@/components/chat-live.jsx';
 import { ContextMeter } from './session.jsx';
 import { BrainPicker, ReasoningPicker, UsageBubble, useCatalog, useUsageBubble } from '@/components/brain-picker.jsx';
 import { cn } from '@/lib/utils.js';
-import { DECISION, AGENT } from '@/lib/labels.js';
+import { DECISION, AGENT, STATUS } from '@/lib/labels.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 
-const SUGGESTIONS = ['chat.suggestion1', 'chat.suggestion2', 'chat.suggestion3', 'chat.suggestion4'];
 
 export function useAutoScroll(deps) {
   const ref = useRef(null);
@@ -224,6 +225,7 @@ const Message = memo(function Message({ m, name, onChanges }) {
     );
   }
   if (m.meta?.kind === 'approval' || m.meta?.kind === 'task-approval') return <ChatApproval m={m} />;
+  if (m.meta?.kind === 'attention' && m.meta.task) return <TaskApprovalLine m={m} />;
   // 2.6: the assistant's suggestion to play while the agents work, with the button that opens the games.
   if (m.meta?.kind === 'games') return (
     <div className="chat-actions bg-muted/70 text-muted-foreground mx-auto flex max-w-[88%] flex-wrap items-center justify-center gap-x-3 gap-y-2 rounded-xl px-3.5 py-2 text-center text-[13px]">
@@ -285,6 +287,28 @@ function ChatApproval({ m }) {
   );
 }
 
+// 3.2.1: a task that waits for the user's approval, with «Aprobar» and «Rechazar» right in the chat (before, only in
+// Tareas). Once answered, how it ended.
+function TaskApprovalLine({ m }) {
+  const t = useT();
+  const task = useStore((s) => s.tasks.find((x) => x.id === m.meta.task) ?? null);
+  const [busy, setBusy] = useState(false);
+  const waiting = task?.status === 'awaiting_approval';
+  const run = async (fn) => { setBusy(true); try { await fn(task); } finally { setBusy(false); } };
+  return (
+    <div className={cn('mx-auto w-full max-w-[88%] rounded-xl border px-3.5 py-2.5 text-[13px]', waiting ? 'border-warning/50 bg-warning/10' : 'bg-muted/50')} data-testid="chat-task-approval">
+      <div className="flex items-start gap-2"><ShieldAlert className={cn('mt-0.5 size-4 shrink-0', waiting ? 'text-warning' : 'text-muted-foreground')} /><div className="min-w-0 flex-1 whitespace-pre-wrap break-words">{m.body.replace(/^⚠️\s*/u, '')}</div></div>
+      <div className="chat-actions mt-2 flex flex-wrap items-center gap-2 pl-6">
+        {waiting ? (<>
+          <Button size="xs" className="px-2.5" disabled={busy} onClick={() => run(approveTask)} data-testid="chat-task-approve"><Check />{t('tasks.approve.ok')}</Button>
+          <Button size="xs" className="px-2.5" variant="outline" disabled={busy} onClick={() => run(rejectTask)} data-testid="chat-task-reject"><X />{t('tasks.reject')}</Button>
+        </>) : task ? <Badge variant={STATUS[task.status]?.[1]}>{STATUS[task.status]?.[0] ?? task.status}</Badge> : null}
+        <Button size="xs" className="px-2.5" variant="ghost" onClick={() => go({ view: 'tasks', id: m.meta.task })}><ExternalLink />{t('chat.viewTask')}</Button>
+      </div>
+    </div>
+  );
+}
+
 // 3.2: the title of the conversation in the middle of the bar, in big, and under it, small, its project with its icon.
 // A click on the title renames it.
 function BarTitle({ conversation }) {
@@ -305,7 +329,8 @@ export function BarHeading({ title, project, onRename, renameLabel, extra }) {
   );
 }
 
-export function ChatView({ route }) {
+// 3.2: onConversation / project: inside God mode, a new conversation stays there (in its project) instead of navigating.
+export function ChatView({ route, onConversation, project: inProject }) {
   const t = useT();
   const app = useStore((s) => s.app);
   const version = useStore((s) => s.version);
@@ -345,7 +370,15 @@ export function ChatView({ route }) {
   const bubble = useUsageBubble(catalog, brain);
   const greeting = useGreeting();
   const [sending, setSending] = useState(false);
+  // 3.2.1: in God mode, a new conversation goes to the project chosen there, and the bar says that one.
+  const projects = useStore((s) => s.projects);
+  const workProject = inProject ? projects.find((p) => p.name === inProject) ?? { name: inProject } : app.activeProject ?? null;
 
+  // 3.2.1: inside God mode, the project chosen there right now (the answer to a first message may come after a change).
+  const projectNow = useRef(inProject); projectNow.current = inProject;
+  // The user went elsewhere while the first message was on its way: they stay where they are, and a notice says where
+  // the message is (one click away).
+  const leftBehind = (target, title) => notify({ title: t('chat.startedIn', { title }), body: t('chat.startedInBody'), tone: 'info', go: target, action: { label: t('notice.open'), onClick: () => go(target) } });
   const send = async () => {
     const msg = text.trim(); if (!msg || sending) return;
     setText('');
@@ -356,28 +389,49 @@ export function ChatView({ route }) {
       return;
     }
     setSending(true);
+    const ticket = navTicket(); const startedIn = inProject;
+    const moved = () => !stillHere(ticket) || (onConversation && projectNow.current !== startedIn);
     try {
       if (orchestrate) {
         // 3.2: the first message makes the conversation (in the working folder): then the screen is that conversation.
-        const r = await act(call('chat.send', { text: msg }));
-        if (!r) { setText(msg); return; }
+        const r = await act(call('chat.send', { text: msg, ...(inProject ? { project: inProject } : {}) }));
+        if (!r) { if (!moved()) setText(msg); return; }
         await refresh().catch(() => {});
-        go({ view: 'chat', id: r.conversation });
+        if (moved()) { leftBehind({ view: 'chat', id: r.conversation }, getState().conversations.find((c) => c.id === r.conversation)?.title ?? msg.slice(0, 60)); return; }
+        if (onConversation) onConversation(r.conversation); else go({ view: 'chat', id: r.conversation });
       } else {
-        // «Orquestador» off: the user hands out the work, and the conversation is directly with the agent chosen below.
-        const project = app.activeProject?.name ?? null;
+        // «Orquestador» off: the user hands out the work, and the conversation is directly with the agent chosen below
+        // (3.2.1: in God mode, in the project chosen there).
+        const project = inProject ?? app.activeProject?.name ?? null;
         const s = await act(call('sessions.create', { agent: brain.agent, account: brain.account && brain.account !== brain.agent ? brain.account : undefined, model: brain.model || undefined, reasoning: brain.reasoning, project, permission: project ? 'editar' : 'leer' }));
-        if (!s) { setText(msg); return; }
+        if (!s) { if (!moved()) setText(msg); return; }
         await act(call('sessions.send', { id: s.id, text: msg }));
         await refresh().catch(() => {});
+        if (!stillHere(ticket)) { leftBehind({ view: 'session', id: s.id }, s.title); return; }
         go({ view: 'session', id: s.id });
       }
     } finally { setSending(false); }
   };
-  const settings = async (patch) => { const r = await act(call('chat.settings', { ...patch, ...(id != null ? { conversation: id } : {}) })); if (r) { setState((s) => ({ app: { ...s.app, ...(id == null ? { assistant: r } : {}) } })); refreshSoon(); } };
+  const settings = async (patch) => { const r = await act(call('chat.settings', { ...patch, ...(id != null ? { conversation: id } : {}) })); if (r) { setState((s) => ({ app: { ...s.app, ...(id == null ? { assistant: r } : {}) } })); refreshSoon(); } return r; };
+  // 3.2.1: the assistant cannot coordinate with Cursor as its brain (Cursor takes no tools of Orb's): turning the
+  // «Orquestador» on moves the brain to Claude (or Codex) and says so, instead of doing nothing.
+  const coordinator = ['claude', 'codex'].find((a) => catalog?.some((x) => x.id === a)) ?? null;
   const toggleOrchestrator = async (checked) => {
     if (!checked && !(await confirm(t('chat.freeMode'), t('chat.freeModeBody', { name }), { ok: t('chat.freeModeOk') }))) return;
+    if (checked && brain.agent === 'cursor') {
+      if (!coordinator) { notify({ title: t('chat.orchestratorNoBrain', { name }), tone: 'warning' }); return; }
+      if (await settings({ orchestrate: true, agent: coordinator, model: '' })) notify({ title: t('chat.orchestratorSwitched', { name, agent: AGENT[coordinator] }), tone: 'info' });
+      return;
+    }
     settings({ orchestrate: checked });
+  };
+  // Choosing Cursor for a new conversation with the «Orquestador» on: the conversation becomes a direct one with Cursor.
+  const pickBrain = async (b) => {
+    if (id == null && b.agent === 'cursor' && orchestrate) {
+      if (await settings({ agent: b.agent, model: b.model, account: b.account, orchestrate: false })) notify({ title: t('chat.cursorDirect'), tone: 'info' });
+      return;
+    }
+    settings({ agent: b.agent, model: b.model, account: b.account });
   };
   const lines = [...older, ...rows];
 
@@ -386,7 +440,7 @@ export function ChatView({ route }) {
       {/* 2.6: a clean bar: the clock, (3.2) the conversation's title and project in the middle, and icon buttons, each with
           its bubble. */}
       <PageHeader className="topbar-chat" title={<><span className="sr-only">{name}</span><BarClock /></>}
-        center={conv ? <BarTitle conversation={conv} /> : <BarProject project={app.activeProject} />}>
+        center={conv ? <BarTitle conversation={conv} /> : <BarProject project={workProject} />}>
         <NotificationBell />
         {app.paused
           ? <BubbleTip title={t('bar.resume')} text={t('bar.resumeText')}><Button variant="soft" size="icon-sm" onClick={() => act(call('control.resume'), t('chat.resumed'))} aria-label={t('bar.resume')} data-testid="bar-resume"><Play /></Button></BubbleTip>
@@ -403,7 +457,7 @@ export function ChatView({ route }) {
                 <h2 className="hero-title mt-2 text-2xl" data-testid="chat-greeting">{app.config.userName ? t(greeting.key, { ...greeting, user: app.config.userName, name }) : t('chat.hello', { name })}</h2>
                 <p className="text-muted-foreground max-w-md">{t(greeting.sub)}</p>
               </div>
-              <div className="mt-3 flex max-w-xl flex-wrap justify-center gap-2">{SUGGESTIONS.map((s) => <Button key={s} variant="outline" size="sm" className="h-auto rounded-full py-1.5 whitespace-normal" onClick={() => setText(t(s))}>{t(s)}</Button>)}</div>
+              <div className="mt-3 flex max-w-xl flex-wrap justify-center gap-2">{suggestionsFor(workProject?.name).map((s) => <Button key={s} variant="outline" size="sm" className="h-auto max-w-full shrink rounded-full py-1.5 whitespace-normal" onClick={() => setText(t(s))}>{t(s)}</Button>)}</div>
             </div>
           ) : lines.map((m) => <Message key={m.id} m={m} name={name} onChanges={askChanges} />)}
           {chat.busy || chat.waiting || sending ? (
@@ -418,22 +472,23 @@ export function ChatView({ route }) {
           ) : null}
         </div>
       </div>
-      <LiveTasksStrip />
+      <LiveTasksStrip conversation={id} />
       <Composer value={text} onChange={setText} onSend={send} onStop={id != null ? () => act(call('chat.stop', { conversation: id })) : undefined} busy={chat.busy} disabled={sending} testid="chat-input"
         placeholder={chat.busy ? t('chat.placeholderBusy', { name }) : orchestrate ? t('chat.placeholder', { name }) : t('chat.placeholderDirect', { agent: AGENT[brain.agent] ?? brain.agent })}
         top={<div className="flex flex-col items-start gap-2">
           {/* 3.0: the test of the day (first opening of the day, until the user writes; always in Ajustes › General). */}
           {showTest ? <BubbleTip title={t('test.button')} text={t('test.tip')} side="top"><Button size="xs" variant="soft" onClick={() => runTest(t('test.prompt'))} data-testid="chat-test"><FlaskConical />{t('test.button')}</Button></BubbleTip> : null}
-          <ProjectPicker conversation={id} />
+          {/* 3.2.1: in God mode a new conversation takes the project chosen at the top of God mode. */}
+          {inProject && id == null ? null : <ProjectPicker conversation={id} />}
         </div>}
         notice={<UsageBubble text={bubble.text} onClose={bubble.close} />}
         bottom={<>
-          <BrainPicker catalog={catalog} value={brain} onChange={(b) => settings({ agent: b.agent, model: b.model, account: b.account })} />
+          <BrainPicker catalog={catalog} value={brain} onChange={pickBrain} />
           <ReasoningPicker value={brain.reasoning} onChange={(reasoning) => settings({ reasoning })} />
           {/* 3.2: whether a NEW conversation is with the assistant or directly with the agent chosen; a conversation keeps
               the way it started. */}
           {id == null ? (
-            <BubbleTip title={t('chat.orchestrator')} text={t('chat.orchestratorHint')} side="top">
+            <BubbleTip title={t('chat.orchestrator')} text={brain.agent === 'cursor' ? t('chat.orchestratorCursor', { name }) : t('chat.orchestratorHint')} side="top">
               <label className="flex cursor-pointer items-center gap-2 text-[13px]">
                 <Switch checked={orchestrate} onCheckedChange={(v) => toggleOrchestrator(v === true)} data-testid="orchestrator-check" />{t('chat.orchestrator')}
               </label>
