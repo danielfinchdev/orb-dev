@@ -124,5 +124,9 @@ test('herramientas del navegador: solo si la app lo ofrece, y se presentan con s
     const shot = (await nav.rpc('tools/call', { name: 'orb_browser_screenshot', arguments: {} })).result;
     assert.deepEqual(shot.content[1], { type: 'image', data: 'AAAA', mimeType: 'image/jpeg' });
     assert.equal((await nav.call('orb_browser_click', { ref: 1, selector: 'a' })).error, true, 'argumentos fuera del esquema');
+    // 3.2.1: the page's dialogs (accept / cancel / text for prompt) and its console.
+    assert.equal((await nav.call('orb_browser_dialog', { accept: true, text: 'sí' })).text, 'hecho dialog');
+    assert.deepEqual(seen.at(-1).args, { accept: true, text: 'sí' });
+    assert.equal((await nav.call('orb_browser_console', {})).text, 'hecho console');
   } finally { none.close(); nav.close(); server.close(); }
 });

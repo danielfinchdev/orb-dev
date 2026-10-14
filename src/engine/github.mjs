@@ -8,7 +8,7 @@ import { ctx, tr } from '../core/context.mjs';
 import { firstFile, inPath, cleanEnv, IS_WIN } from '../agents/common.mjs';
 import { openConsole } from '../agents/index.mjs';
 import { git, isGitRepo, ORB_GIT } from '../core/workspace.mjs';
-import { secretFiles, isSecretPath, oneLine } from '../core/safety.mjs';
+import { secretFiles, isSecretPath, oneLine, stagedSecrets, secretsInDiff } from '../core/safety.mjs';
 import { folderName } from '../core/home.mjs';
 import { checkCategory } from '../core/projects.mjs';
 import { ATTACH_DIR } from './sessions.mjs';
@@ -85,6 +85,9 @@ export function commitAll(project, message) {
   git(project.path, 'add', '-A', '--', '.', `:(exclude)${ATTACH_DIR}`);
   const staged = git(project.path, 'diff', '--cached', '--name-only', '-z').stdout.split('\0').filter(Boolean);
   if (staged.some(isSecretPath)) { git(project.path, 'reset', '-q'); throw new Error(tr('msg.github.looksSecretNone')); }
+  // 3.2.1: also what the files say (a key pasted into any file), not only their names.
+  const inText = stagedSecrets(project.path, git);
+  if (inText.length) { git(project.path, 'reset', '-q'); throw new Error(tr('msg.github.secretInText', { files: inText.slice(0, 5).join(', ') })); }
   const r = git(project.path, 'commit', '-q', '-m', msg);
   if (r.status !== 0) throw new Error(oneLine(r.stderr || r.stdout, 300));
   return { files: staged.length };
@@ -99,8 +102,23 @@ export function mergeBranch(project, branch) {
   return { ok: true };
 }
 
+// 3.2.1: nothing that looks like a key leaves the PC. Checks the commits of the branch that no remote has yet (all of them
+// for a repository without remotes): files named like secrets and added lines that look like keys.
+export function unpushedSecrets(dir, branch = 'HEAD') {
+  const range = [branch, '--not', '--remotes'];
+  const names = git(dir, '-c', 'core.quotePath=false', 'log', '-n', '500', '--format=', '--name-only', '--diff-filter=AM', ...range).stdout.split(/\r?\n/).filter(Boolean);
+  const byName = [...new Set(names.filter(isSecretPath))];
+  if (byName.length) return byName;
+  return secretsInDiff(git(dir, '-c', 'core.quotePath=false', 'log', '-n', '500', '-p', '-U0', '--no-color', '--no-ext-diff', '--format=', ...range).stdout);
+}
+const checkUnpushed = (dir, branch) => {
+  const found = unpushedSecrets(dir, branch);
+  if (found.length) throw new Error(tr('msg.github.secretBeforePush', { files: found.slice(0, 5).join(', ') }));
+};
+
 export async function push(project, branch) {
   branchName(branch);
+  checkUnpushed(project.path, branch);
   must(await run('git', ['-C', project.path, 'push', '-u', 'origin', branch], { timeoutMs: 180_000 }), tr('msg.github.pushFailed'));
   return { ok: true };
 }
@@ -118,6 +136,7 @@ export async function createRepo(project, { name, isPrivate = true }) {
   if (!isGitRepo(project.path)) throw new Error(tr('msg.github.noGit'));
   if (!git(project.path, 'rev-parse', '--verify', '--quiet', 'HEAD').stdout.trim()) throw new Error(tr('msg.github.needCommit'));
   if (git(project.path, 'remote', 'get-url', 'origin').status === 0) throw new Error(tr('msg.github.hasOrigin'));
+  checkUnpushed(project.path, 'HEAD');
   const r = must(await gh(['repo', 'create', name, isPrivate ? '--private' : '--public', '--source', project.path, '--remote', 'origin', '--push'], { cwd: project.path, timeoutMs: 180_000 }), tr('msg.github.repoFailed'));
   return { url: r.out.split(/\s+/).find((s) => /^https:\/\//.test(s)) ?? r.out };
 }
@@ -130,6 +149,11 @@ export async function clone(repo, name, category) {
   const exe = ghExe();
   const r = exe ? await run(exe, ['repo', 'clone', String(repo).trim(), folder], { timeoutMs: 600_000 })
     : await run('git', ['clone', '--', /^https:/.test(repo) ? repo : `https://github.com/${repo}.git`, folder], { timeoutMs: 600_000 });
+  // 3.2.1: the usual case (a wrong name or a private repository of someone else) in the user's words, not gh's.
+  if (!r.ok && /could not resolve to a repository|repository not found|not found|HTTP 404|does not exist/i.test(`${r.err} ${r.out}`)) {
+    fs.rmSync(folder, { recursive: true, force: true });
+    throw new Error(tr('msg.github.cloneNotFound', { repo: oneLine(repo, 200) }));
+  }
   must(r, tr('msg.github.cloneFailed'));
   return folder;
 }

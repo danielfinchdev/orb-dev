@@ -22,3 +22,16 @@ export function folderName(name, fallback = PRODUCT.folder) {
   if (!clean || /^(con|prn|aux|nul|com\d|lpt\d)$/i.test(clean)) return fallback;
   return clean;
 }
+
+// 3.2.1: a project's name is also its folder's name, so a name that the folder could not keep as it is (\ / : * ? " < > |,
+// a final dot or space, CON, NUL…) is refused instead of showing one name and saving another. Returns the text key of the
+// problem, or null when the name is fine. Without Node, so the dialog can say it while the user types.
+export function projectNameProblem(name) {
+  const n = String(name ?? '').normalize('NFC').trim();
+  if (!n) return 'msg.projects.needName';
+  if (/[<>:"/\\|?*\u0000-\u001f]/.test(n)) return 'msg.projects.badChars';
+  if (/[. ]$/.test(n)) return 'msg.projects.badEnd';
+  if (n.length > 60) return 'msg.projects.tooLong';
+  if (/^(con|prn|aux|nul|com\d|lpt\d)$/i.test(n)) return 'msg.projects.windowsName';
+  return null;
+}

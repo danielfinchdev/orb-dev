@@ -151,7 +151,7 @@ function OptiActionCard({ item }) {
   const [busy, setBusy] = useState(false);
   const answer = async (decision) => { setBusy(true); await act(call('opti.act', { item: item.id, decision })); setBusy(false); };
   const pending = body.status === 'pending';
-  const target = body.action === 'end_process' ? `${body.name || ''} (${body.pid})` : body.action === 'disable_startup' ? body.name : '';
+  const target = body.action === 'end_process' ? `${body.label || body.name || ''} (${body.pid})` : body.action === 'disable_startup' ? body.label || body.name : '';
   return (
     <div className={cn('rounded-xl border px-3.5 py-3 text-[13px]', pending ? 'border-primary/40 bg-primary/5' : 'bg-card')} data-testid="opti-action">
       <div className="flex items-start gap-2.5">

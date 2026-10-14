@@ -93,6 +93,9 @@ export default {
   'sys.browser.do.wait': 'waits',
   'sys.browser.do.snapshot': 'reads the page',
   'sys.browser.do.screenshot': 'takes a screenshot',
+  'sys.browser.do.dialogAccept': 'will accept the page’s dialogs',
+  'sys.browser.do.dialogCancel': 'will cancel the page’s dialogs',
+  'sys.browser.do.console': 'reads the console',
 
   // Agents' MCP tools
   'sys.mcp.noTask': 'task #{id} does not exist',
@@ -196,6 +199,14 @@ export default {
   'sys.logs.okRequest': 'review the finished work',
   'sys.logs.okDone': '{user} approved: {list}',
   'sys.logs.okStatus': 'accepted',
+  'sys.logs.okBy': 'OK from {user}',
+  'sys.logs.okGeneralTopic': '{project}: OK to {ids}',
+  'sys.logs.viaTask': 'task #{id}',
+  'sys.logs.viaDirect': 'direct conversation',
+  'sys.logs.directTopic': 'Conversation “{title}”',
+  'sys.logs.directFiles': 'files changed: {list}.',
+  'sys.logs.directRevert': 'from the project’s git history (God mode › Changes) or by asking the agent in the same conversation',
+  'sys.logs.andMore': ' and {n} more',
 
   // Start-up
   'sys.engine.notHome': 'not an assistant folder: {home}',
@@ -287,5 +298,20 @@ export default {
   'sys.agents.orbTool.message': 'Message to {to}',
   'sys.agents.orbTool.readMessages': 'Reads its messages',
   'sys.agents.orbTool.browser': 'Browser',
-  'sys.agents.orbTool.board': 'Checks the board'
+  'sys.agents.orbTool.board': 'Checks the board',
+  // 3.2.1: Activity texts (stored as a key and shown in the app's language)
+  'sys.events.checkpointGit': 'snapshot of the folder before the task ({ref})',
+  'sys.events.checkpointCopy': 'copy of the folder before the task ({copy})',
+  'sys.events.committed': 'changes saved in the branch',
+  'sys.events.accepted': 'accepted by the user',
+  'sys.events.agentReply': '{status}: {result}',
+  'sys.events.noSummary': 'no summary',
+  'sys.events.status.done': 'done',
+  'sys.events.status.failed': 'failed',
+  'sys.events.status.blocked': 'blocked',
+  'sys.events.status.cancelled': 'cancelled',
+  'sys.events.status.other': '{status}',
+  'sys.projects.firstCommit': 'Project created',
+  'sys.sessions.imageHint': '(Note from Orb: if this message asks for a picture, make just one unless it asks for several. Any text inside the picture goes in the language of the message.)',
+  'sys.sessions.imageEditHint': '(Note from Orb: to change the picture, pass it as a reference image to the image generation tool and make one new picture with the change. Do not build it with scripts or by pasting pieces: it loses quality.)'
 };

@@ -3,8 +3,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from '../core/context.mjs';
-import { oneLine, redactSecrets } from '../core/safety.mjs';
-import { generalLogHeader, projectLogHeader } from '../core/home.mjs';
+import { oneLine, redactSecrets, porcelainPaths } from '../core/safety.mjs';
+import { generalLogHeader, projectLogHeader, AGENT_LABELS } from '../core/home.mjs';
+import { git, isGitRepo } from '../core/workspace.mjs';
 import { assistantName, userName, ofUserLabel } from '../core/board.mjs';
 import { groupOf } from '../core/projects.mjs';
 
@@ -56,16 +57,60 @@ export function writeLog(board, project, { tema, pedido, hecho, revertir, estado
   return `Anotado al final de la bitácora de ${name}.`;
 }
 
+// 3.2.1: a text cut to a length without breaking a word («Diálogo de confirmac»), with «…» when something was left out.
+export function cutWords(text, max) {
+  const s = String(text ?? '').replace(/\s+/g, ' ').trim();
+  if (s.length <= max) return s;
+  const part = s.slice(0, max - 1); const space = part.lastIndexOf(' ');
+  return `${(space > max * 0.6 ? part.slice(0, space) : part).replace(/[\s,;:.—-]+$/, '')}…`;
+}
+// 3.2.1: who wrote an entry is the agent that did the work («Codex (tarea #12, gpt-6-luna)»), not the assistant.
+export function agentAuthor(agent, { model, via } = {}) {
+  const extra = [via, model && oneLine(model, 40)].filter(Boolean).join(', ');
+  return `${AGENT_LABELS[agent] ?? oneLine(agent || assistantName(), 40)}${extra ? ` (${extra})` : ''}`;
+}
+
 // Entry written by the scheduler when a task ends (the agent never writes logs itself).
 export function logTask(board, task, { revert }) {
-  const result = redactSecrets(task.result ?? '').replace(/\s+/g, ' ').trim().slice(0, 900) || tr('sys.logs.noSummary');
+  const result = cutWords(redactSecrets(task.result ?? ''), 900) || tr('sys.logs.noSummary');
   const file = board.ensureProjectLog(task.project);
-  fs.appendFileSync(file, `\n### ${stamp()} — ${assistantName()} (${oneLine(task.assigned_to, 40)}${task.model ? ` · ${oneLine(task.model, 40)}` : ''}) — ${tr('sys.logs.task', { id: task.id, title: oneLine(task.title) })}
+  fs.appendFileSync(file, `\n### ${stamp()} — ${agentAuthor(task.assigned_to, { model: task.model, via: tr('sys.logs.viaTask', { id: task.id }) })} — ${tr('sys.logs.task', { id: task.id, title: oneLine(task.title) })}
 - ${tr('sys.logs.request', { user: ofUserLabel() })}: ${tr('sys.logs.createdBy', { who: oneLine(task.created_by, 40) })}
 - ${tr('sys.logs.done')}: ${result}${task.branch ? tr('sys.logs.branch', { branch: task.branch }) : ''}
 - ${tr('sys.logs.revert')}: ${revert}
 - ${tr('sys.logs.status')}: ${tr(`status.${task.status}`)}${task.branch ? tr('sys.logs.toMerge') : '.'}
 `);
+}
+
+// 3.2.1: a direct conversation (without the assistant) that changes files of its project leaves an entry too, so the
+// assistant later knows where each file came from. What changed is read from git: the files whose state is new or
+// different after the turn (a project without git leaves no entry).
+export function changedFiles(dir) {
+  if (!dir || !isGitRepo(dir)) return null;
+  const r = git(dir, 'status', '--porcelain=v1', '-z', '-uall');
+  if (r.status !== 0) return null;
+  const out = new Map();
+  for (const f of porcelainPaths(r.stdout)) {
+    if (/(^|\/)BITACORA\.md$/i.test(f) || f.startsWith('.orb-adjuntos/')) continue;
+    let mark = 'gone'; try { mark = String(fs.statSync(path.join(dir, f)).mtimeMs); } catch { /* deleted */ }
+    out.set(f, mark);
+  }
+  return out;
+}
+export function logDirect(board, session, { before, request, answer }) {
+  if (!before || !session?.project || !board.project(session.project)) return false;
+  const now = changedFiles(session.cwd); if (!now) return false;
+  const files = [...now].filter(([f, mark]) => before.get(f) !== mark).map(([f]) => f);
+  if (!files.length) return false;
+  const file = board.ensureProjectLog(session.project);
+  const list = files.slice(0, 15).join(', ') + (files.length > 15 ? tr('sys.logs.andMore', { n: files.length - 15 }) : '');
+  fs.appendFileSync(file, `\n### ${stamp()} — ${agentAuthor(session.agent, { model: session.model, via: tr('sys.logs.viaDirect') })} — ${tr('sys.logs.directTopic', { title: oneLine(session.title, 80) })}
+- ${tr('sys.logs.request', { user: ofUserLabel() })}: ${cutWords(redactSecrets(request), 300) || '—'}
+- ${tr('sys.logs.done')}: ${tr('sys.logs.directFiles', { list })}${answer ? ` ${cutWords(redactSecrets(answer), 400)}` : ''}
+- ${tr('sys.logs.revert')}: ${tr('sys.logs.directRevert')}
+- ${tr('sys.logs.status')}: ${tr('sys.logs.noPending')}
+`);
+  return true;
 }
 
 // Context for the assistant when a conversation starts: its project, latest project and general entries (bounded).

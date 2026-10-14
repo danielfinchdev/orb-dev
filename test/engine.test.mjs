@@ -53,7 +53,7 @@ test('2.7: Pizarra: se guarda en la carpeta pizarra del proyecto, fuera de git, 
   assert.equal(list[0].name, 'referencia.txt');
   await call('whiteboard.note', { project: 'web', file: 'referencia.txt', note: 'Así quiero el texto de bienvenida' });
   const md = fs.readFileSync(path.join(dir, 'PIZARRA.md'), 'utf8');
-  assert.match(md, /Botón de pagar arriba/); assert.match(md, /1 flechas/); assert.match(md, /referencia\.txt .*Así quiero el texto de bienvenida/); assert.doesNotMatch(md, /borrado/);
+  assert.match(md, /Botón de pagar arriba/); assert.match(md, /Contiene: 1 texto, 1 flecha\./); assert.match(md, /referencia\.txt .*Así quiero el texto de bienvenida/); assert.doesNotMatch(md, /borrado/);
   await assert.rejects(call('whiteboard.note', { project: 'web', file: '../../orb.json', note: 'x' }));
   assert.deepEqual(await call('whiteboard.remove', { project: 'web', file: 'referencia.txt' }), []);
   assert.equal(fs.readdirSync(path.join(dir, '.papelera')).length, 1);

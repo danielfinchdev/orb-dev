@@ -133,7 +133,13 @@ export async function runTest(prompt) {
   const ok = await act((async () => {
     // Cursor cannot coordinate the agents: the test runs with Claude as the brain.
     await call('chat.settings', state.app?.assistant?.agent === 'cursor' ? { agent: 'claude', model: '', orchestrate: true } : { orchestrate: true });
-    return call('chat.send', { text: prompt, project: null });
+    // 3.2.1: a project of its own (prueba-orb-<date>, never one of the user's) and «decide tú»: the test ran into three
+    // questions (which project, the whiteboard, the plan) before any task started.
+    const day = new Date().toLocaleDateString('sv').replace(/-/g, '');
+    const taken = new Set((state.projects ?? []).map((p) => String(p.name).toLowerCase()));
+    let name = `prueba-orb-${day}`; for (let i = 2; taken.has(name.toLowerCase()); i++) name = `prueba-orb-${day}-${i}`;
+    const project = await call('projects.create', { name, category: 'web', notes: t('test.projectNotes') });
+    return call('chat.send', { text: t('test.wrap', { prompt, project: project.name }), project: project.name });
   })());
   if (!ok) return;
   await refresh().catch(() => {});

@@ -116,7 +116,7 @@ test('el reloj de una tarea no cuenta el rato que espera tu permiso', () => {
 test('lo que pediste con tus palabras no vuelve a pedir aprobación; lo que no pediste, sí', async () => {
   const h = tempHome();
   try {
-    const { Board } = await import('../src/core/board.mjs');
+    const { Board, eventText } = await import('../src/core/board.mjs');
     const board = new Board();
     const dir = path.join(h.home, 'web', 'notas'); fs.mkdirSync(dir, { recursive: true });
     board.addProject({ name: 'notas', path: dir }, 'usuario');
@@ -125,7 +125,7 @@ test('lo que pediste con tus palabras no vuelve a pedir aprobación; lo que no p
     board.addChat('usuario', 'Crea una web de notas rápidas donde se puedan escribir y borrar notas');
     const t = make();
     assert.equal(t.status, 'queued', 'el usuario pidió borrar notas: no hace falta otro clic');
-    assert.ok(board.all("SELECT detail FROM events WHERE task_id = ? AND kind = 'note'", t.id).some((e) => /lo pidió el usuario/.test(e.detail)));
+    assert.ok(board.all("SELECT detail FROM events WHERE task_id = ? AND kind = 'note'", t.id).some((e) => /lo pidió el usuario/.test(eventText(e.detail))));
     assert.equal(board.createTask({ project: 'notas', title: 'Publicar', description: 'Publica la web en internet', agent: 'claude' }, 'orb').status, 'awaiting_approval', 'publicar no lo pidió: sigue esperando');
     board.addChat('usuario', 'Y publícala cuando esté');
     assert.equal(board.createTask({ project: 'notas', title: 'Publicar', description: 'Publica la web en internet', agent: 'claude' }, 'orb').status, 'awaiting_approval', 'publicar espera siempre su clic, aunque se pidiera');

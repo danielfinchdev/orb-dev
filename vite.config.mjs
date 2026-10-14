@@ -6,14 +6,15 @@ import tailwindcss from '@tailwindcss/vite';
 import path from 'node:path';
 import fs from 'node:fs';
 
-// 2.7: the Pizarra (Excalidraw) draws with its own fonts: copied next to the app so it works offline (not the Chinese
-// one, Xiaolai: 12 MB; Chinese text falls back to the system's fonts).
+// 2.7: the Pizarra (Excalidraw) draws with its own fonts: copied next to the app so it works offline. 3.2.1: all of them,
+// Xiaolai too (12 MB): it is the fallback font of every family, and without it Excalidraw asked esm.sh for each of its
+// pieces, which the window's CSP blocks (about a hundred errors each time the Pizarra opened).
 const excalidrawFonts = () => ({
   name: 'orb-excalidraw-fonts',
   writeBundle(options) {
     const from = path.resolve('node_modules/@excalidraw/excalidraw/dist/prod/fonts');
     const to = path.join(options.dir, 'excalidraw', 'fonts');
-    for (const family of fs.readdirSync(from)) if (family !== 'Xiaolai') fs.cpSync(path.join(from, family), path.join(to, family), { recursive: true });
+    for (const family of fs.readdirSync(from)) fs.cpSync(path.join(from, family), path.join(to, family), { recursive: true });
   }
 });
 
