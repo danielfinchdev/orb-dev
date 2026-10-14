@@ -8,8 +8,9 @@ import readline from 'node:readline';
 import crypto from 'node:crypto';
 import net from 'node:net';
 import { useHome, ctx, tr } from '../core/context.mjs';
-import { isHome, CATEGORIES } from '../core/home.mjs';
-import { budgetConfig } from '../core/budget.mjs';
+import { isHome, CATEGORIES, AGENT_LABELS } from '../core/home.mjs';
+import { budgetConfig, waitReason, modelLimits } from '../core/budget.mjs';
+import { accountLabel } from '../core/accounts.mjs';
 import { oneLine } from '../core/safety.mjs';
 import { git, copyIntoWorkdir } from '../core/workspace.mjs';
 import { createProjects } from '../core/projects.mjs';
@@ -41,6 +42,14 @@ const BOSS = ME === 'orb';
 const CONV = BOSS ? Number(process.env.ORB_CONVERSATION) || null : null;
 const QUESTIONS = CONV ? `pending_questions:${CONV}` : 'pending_questions';
 const NAME = assistantName(); const USER = userName();
+// 3.2.1: the author of the assistant's own log entries with the brain of its conversation («Orbe (Claude · claude-opus-5-5)»;
+// it was «Orbe ()» with the default model).
+const brainAuthor = () => {
+  const c = CONV ? board.conversation(CONV) : null;
+  const agent = c?.agent || ctx.config.orchestrator?.agent || 'claude';
+  const model = c?.model || ctx.config.orchestrator?.model || '';
+  return `${NAME} (${[AGENT_LABELS[agent] ?? agent, model].filter(Boolean).join(' · ')})`;
+};
 // 3.1: only the agents this PC can run (installed, turned on, with an account) are offered; the board refuses the rest.
 const AVAILABLE = board.availableAgents() ?? AGENTS;
 
@@ -104,7 +113,10 @@ function suggestBoard(a) {
 function createTask(a) {
   const task = board.createTask({ ...a, level: a.nivel, conversation_id: CONV }, ME);
   if (CONV && !board.conversation(CONV)?.project) { try { board.setConversationProject(CONV, task.project, ME); } catch { /* the task is made anyway */ } }
-  return task;
+  // 3.2.1: an agent whose accounts are all paused (usage limit) or out of usage: the coordinator learns it at once, so it
+  // tells the user and offers another agent instead of leaving the task waiting for hours without a word.
+  const waits = waitReason(board, task.agent, { account: task.account, model: task.model });
+  return waits ? { ...task, waits } : task;
 }
 
 // Delegation (2.3): an agent working on task #N hands part of it to another agent or model. The subtask hangs from #N
@@ -135,16 +147,20 @@ async function waitTasks({ ids, timeout_s = 600 }) {
 
 // 2.6: with the models each agent listed itself (models:<agent>), not only the configured aliases.
 const modelsOf = (a) => {
-  const listed = board.settingJson(`models:${a}`) ?? [];
+  // 3.2.1: not the models the account has no usage of now (Cursor's API models after «usage limit»).
+  const blocked = modelLimits(board, a);
+  const listed = (board.settingJson(`models:${a}`) ?? []).filter((m) => !blocked[m.id]);
   const named = listed.map((m) => (m.label && m.label !== m.id ? `${m.id} (${m.label})` : m.id));
   return [...new Set([...named, ...(ctx.config.agents[a]?.models ?? []).filter((id) => !listed.some((m) => m.id === id || m.resolved === id))])].slice(0, 24);
 };
 // 3.1: short answers save every agent tokens on each call: a write answers what changed, not the whole task back (whose
 // description can be thousands of characters), and the detail of a task brings its latest history, trimmed.
-const ack = (t) => t && { ok: true, id: t.id, title: t.title, status: t.status, agent: t.assigned_to ?? t.agent, ...(t.depends_on?.length ? { depends_on: t.depends_on } : {}) };
+const ack = (t) => t && { ok: true, id: t.id, title: t.title, status: t.status, agent: t.assigned_to ?? t.agent, ...(t.depends_on?.length ? { depends_on: t.depends_on } : {}),
+  ...(t.waits ? { espera: `${t.waits}. No empezará hasta entonces: díselo a ${USER} y ofrécele pasarla a otro agente disponible (orb_update_task con agent).` } : {}) };
 function taskBrief(id) {
   const d = board.taskDetail(id);
-  return { id: d.id, project: d.project, title: d.title, description: d.description, status: d.status, agent: d.assigned_to ?? d.agent, model: d.model, mode: d.mode, readonly: d.readonly,
+  // 3.2.1: with the account that ran it by its name (Codex Go, Codex Pro), not its id.
+  return { id: d.id, project: d.project, title: d.title, description: d.description, status: d.status, agent: d.assigned_to ?? d.agent, account: d.run_account ? accountLabel(d.run_account) : null, model: d.model, mode: d.mode, readonly: d.readonly,
     branch: d.branch, depends_on: d.depends_on, result: d.result,
     events: d.events.slice(-30).map((e) => ({ ...e, detail: oneLine(e.detail, 300) })),
     messages: d.messages.slice(-20).map((m) => ({ ...m, body: oneLine(m.body, 600) })),
@@ -168,7 +184,7 @@ const tools = [
     run: () => board.summary(ME, CONV) },
   { name: 'orb_list_tasks', description: 'Lista tareas, con filtros opcionales.', readOnly: true,
     inputSchema: { type: 'object', properties: { project: str('Proyecto'), status: { type: 'string', enum: STATUSES }, agent: str('Agente'), limit: { type: 'integer', minimum: 1, maximum: 200 } } },
-    run: (a) => board.tasks(a).map(({ id, project, title, agent, assigned_to, status, branch, depends_on }) => ({ id, project, title, agent: assigned_to ?? agent, status, branch, depends_on })) },
+    run: (a) => board.tasks(a).map(({ id, project, title, agent, assigned_to, run_account, status, branch, depends_on }) => ({ id, project, title, agent: assigned_to ?? agent, ...(run_account ? { account: accountLabel(run_account) } : {}), status, branch, depends_on })) },
   { name: 'orb_get_task', description: 'Detalle de una tarea: descripción, resultado, eventos, mensajes y dependencias.', readOnly: true,
     inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'integer' } } }, run: (a) => taskBrief(a.id) },
   { name: 'orb_update_task', description: 'Informa del progreso de una tarea: estado, nota o resultado final.',
@@ -216,7 +232,7 @@ const tools = [
       run: (a) => readLog(board, a.project, { chars: a.chars, whole: a.entera === true }) },
     { name: 'orb_write_log', description: 'Añade una entrada al FINAL de una bitácora (proyecto o "general"), firmada y con el formato estándar. Nunca borra. Sin contraseñas ni datos personales.',
       inputSchema: { type: 'object', required: ['project', 'tema', 'hecho'], properties: { project: str('Proyecto o "general"'), tema: str('Tema corto'), pedido: str('Qué se pidió'), hecho: str('Qué se decidió o hizo'), revertir: str('Cómo revertirlo'), estado: str('Estado / pendiente') } },
-      run: (a) => writeLog(board, a.project, a, `${NAME} (${ctx.config.orchestrator?.model ?? 'sonnet'})`) },
+      run: (a) => writeLog(board, a.project, a, brainAuthor()) },
     { name: 'orb_schedule', description: `Programa una tarea que se repite (p. ej. cada lunes a las 9 revisar dependencias). ${USER} la aprueba una vez en la app antes de que funcione sola.`,
       inputSchema: { type: 'object', required: ['project', 'title', 'description', 'every'], properties: {
         project: str('Proyecto registrado'), title: str('Título corto'), description: str('Encargo autocontenido y compacto'),
@@ -290,6 +306,11 @@ if (PIPE && PIPE_TOKEN) tools.push(
     inputSchema: { type: 'object', required: ['key'], properties: { key: { type: 'string', enum: ['Enter', 'Tab', 'Escape', 'Backspace', 'Delete', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End'] } } }, run: (a) => browser('press', a) },
   { name: 'orb_browser_scroll', description: 'Desplaza la página hacia abajo o arriba.',
     inputSchema: { type: 'object', properties: { direction: { type: 'string', enum: ['down', 'up'] }, amount: { type: 'integer', minimum: 50, maximum: 5000, description: 'Píxeles (600 por defecto)' } } }, run: (a) => browser('scroll', a) },
+  // 3.2.1: the page's dialogs and console (a check that says «sin errores en la consola» now can look at it).
+  { name: 'orb_browser_dialog', description: 'Decide cómo se responden los alert(), confirm() y prompt() de la página abierta a partir de ahora (por defecto se cancelan): accept true para aceptarlos, false para cancelarlos; text, la respuesta de prompt(). Úsalo antes de pulsar el botón que los muestra. Devuelve los diálogos que ya mostró.',
+    inputSchema: { type: 'object', properties: { accept: { type: 'boolean' }, text: str('Respuesta para prompt()') } }, run: (a) => browser('dialog', a) },
+  { name: 'orb_browser_console', description: 'Lee los errores y avisos de la consola de la página abierta (y los recursos que no cargaron) desde la última lectura. clear false los conserva para la siguiente.', readOnly: true,
+    inputSchema: { type: 'object', properties: { clear: { type: 'boolean' } } }, run: (a) => browser('console', a) },
   { name: 'orb_browser_back', description: 'Vuelve a la página anterior.', inputSchema: { type: 'object', properties: {} }, run: () => browser('back') },
   { name: 'orb_browser_wait', description: 'Espera unos milisegundos (máx. 15000) o hasta que aparezca un texto en la página.',
     inputSchema: { type: 'object', properties: { ms: { type: 'integer', minimum: 100, maximum: 15000 }, text: str('Texto que esperar') } }, run: (a) => browser('wait', a) },

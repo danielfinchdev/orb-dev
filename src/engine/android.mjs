@@ -19,6 +19,16 @@ let running = null;
 export const adbPath = () => path.join(ctx.paths.adb, exe('adb'));
 export const adbStatus = () => ({ ...state, dir: ctx.paths.adb, ready: fs.existsSync(adbPath()) });
 
+// 3.2.1: the first adb command starts a server that stays resident. Orb notes when it used adb this session, so it can
+// stop that server when it closes (`adb kill-server`) without touching a server the user runs for Android Studio.
+let adbUsed = false;
+export const markAdbUsed = () => { adbUsed = true; };
+export function stopAdb() {
+  if (!adbUsed || !fs.existsSync(adbPath())) return;
+  adbUsed = false;
+  try { spawnSync(adbPath(), ['kill-server'], { windowsHide: true, timeout: 5000 }); } catch { /* already gone */ }
+}
+
 // adb's folder first in this process's PATH (Windows names the variable "Path").
 export function addAdbToPath() {
   const key = Object.keys(process.env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH';

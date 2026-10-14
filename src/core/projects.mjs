@@ -6,6 +6,7 @@ import path from 'node:path';
 import { ctx, tr } from './context.mjs';
 import { folderName, isReservedName, isReservedInCategory, isCategory, categoryOf, CATEGORIES, DEFAULT_CATEGORY } from './home.mjs';
 import { git, ORB_GIT } from './workspace.mjs';
+import { projectNameProblem } from './product.mjs';
 
 export const checkCategory = (category) => {
   const c = String(category ?? '').trim().toLowerCase() || DEFAULT_CATEGORY;
@@ -13,9 +14,16 @@ export const checkCategory = (category) => {
   return c;
 };
 
+// 3.2.1: the name is the folder's name: refused (with the reason) when the folder could not keep it as it is.
+export function checkProjectName(name) {
+  const problem = projectNameProblem(name);
+  if (problem) throw new Error(tr(problem, { name: String(name ?? '').trim() }));
+  return String(name).normalize('NFC').trim();
+}
+
 export function createProject(board, { name, notes = '', category }, actor) {
-  const clean = String(name ?? '').trim();
-  if (!clean) throw new Error(tr('msg.projects.needName'));
+  const clean = String(name ?? '').normalize('NFC').trim();
+  checkProjectName(clean);
   if (board.project(clean)) throw new Error(tr('msg.projects.exists', { name: clean }));
   const cat = checkCategory(category);
   const dir = folderName(clean, 'proyecto');
@@ -28,11 +36,62 @@ export function createProject(board, { name, notes = '', category }, actor) {
   let init = git(folder, 'init', '-q', '-b', 'main');
   if (init.status !== 0 && init.status !== -1) { init = git(folder, 'init', '-q'); if (init.status === 0) git(folder, 'symbolic-ref', 'HEAD', 'refs/heads/main'); }
   if (init.status === 0) {
-    fs.writeFileSync(path.join(folder, '.gitignore'), 'node_modules/\n.env\n.env.*\n!.env.example\n.orb-adjuntos/\n');
+    fs.writeFileSync(path.join(folder, '.gitignore'), 'node_modules/\ndist/\n.env\n.env.*\n*.env\n!.env.example\n.orb-adjuntos/\nBITACORA.md\n');
     git(folder, 'add', '.gitignore');
-    git(folder, ...ORB_GIT, 'commit', '-q', '-m', 'Proyecto creado');
+    git(folder, ...ORB_GIT, 'commit', '-q', '-m', tr('sys.projects.firstCommit'));
   }
   return board.addProject({ name: clean, path: folder, notes }, actor);
+}
+
+// 3.2.1: renames a project and, when it is a project folder of a category, its folder too (name = folder). Only when
+// nothing of it is working (no open tasks, no running conversation): the folder moves first and, if the database update
+// fails, it moves back. Its tasks, conversations, direct conversations, schedules, working folder, whiteboard marks and
+// log file follow it. A linked folder outside Orb's folder keeps its place: only the name changes.
+export function renameProject(board, { name, to }, actor) {
+  const project = board.project(name); if (!project) throw new Error(tr('msg.board.noProject', { name }));
+  const next = checkProjectName(to);
+  if (next === project.name) return project;
+  const other = board.project(next);
+  if (other && other.name !== project.name) throw new Error(tr('msg.projects.exists', { name: next }));
+  const open = board.one("SELECT COUNT(*) AS n FROM tasks WHERE project = ? AND status IN ('queued', 'awaiting_approval', 'running')", project.name).n;
+  const live = board.one("SELECT COUNT(*) AS n FROM sessions WHERE project = ? AND status = 'running'", project.name).n;
+  if (open || live) throw new Error(tr('msg.projects.renameBusy', { name: project.name }));
+  const home = ctx.paths.home;
+  const rel = path.relative(home, project.path);
+  const inside = Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel) && Boolean(categoryOf(home, project.path));
+  let target = project.path;
+  if (inside) {
+    const dir = folderName(next, 'proyecto');
+    if (isReservedName(dir)) throw new Error(tr('msg.projects.reserved', { dir, name: ctx.config.assistantName }));
+    target = path.join(path.dirname(project.path), dir);
+    if (target.toLowerCase() !== project.path.toLowerCase() && fs.existsSync(target)) throw new Error(tr('msg.github.folderExists', { folder: target }));
+    try { fs.renameSync(project.path, target); } catch { throw new Error(tr('msg.projects.renameInUse', { folder: project.path })); }
+    git(target, 'worktree', 'repair'); // isolated copies of old tasks keep pointing at the moved repository
+  }
+  const moveIn = (p) => (p && inside && (p === project.path || p.startsWith(project.path + path.sep)) ? target + p.slice(project.path.length) : p);
+  try {
+    board.transaction(() => {
+      board.run('UPDATE projects SET name = ?, path = ? WHERE name = ?', next, target, project.name);
+      for (const table of ['tasks', 'conversations', 'sessions', 'schedules']) board.run(`UPDATE ${table} SET project = ? WHERE project = ?`, next, project.name);
+      if (inside) {
+        for (const t of board.all('SELECT id, workdir, project_path FROM tasks WHERE workdir = ? OR project_path = ?', project.path, project.path)) board.run('UPDATE tasks SET workdir = ?, project_path = ? WHERE id = ?', moveIn(t.workdir), moveIn(t.project_path), t.id);
+        for (const s of board.all('SELECT id, cwd FROM sessions WHERE project = ?', next)) if (moveIn(s.cwd) !== s.cwd) board.run('UPDATE sessions SET cwd = ? WHERE id = ?', moveIn(s.cwd), s.id);
+      }
+      if (board.setting('active_project') === project.name) board.setting('active_project', next);
+      const prefix = `wb_seen:${project.name}:`;
+      for (const r of board.all('SELECT key FROM settings WHERE substr(key, 1, ?) = ?', prefix.length, prefix)) board.run('UPDATE settings SET key = ? WHERE key = ?', `wb_seen:${next}:${r.key.slice(prefix.length)}`, r.key);
+    });
+  } catch (error) {
+    if (inside) { try { fs.renameSync(target, project.path); git(project.path, 'worktree', 'repair'); } catch { /* reported below */ } }
+    throw error;
+  }
+  // The log keeps its entries (logs are only ever added to): the file just follows the new name.
+  const oldLog = board.projectLogFile(project.name); const newLog = board.projectLogFile(next);
+  try { if (oldLog !== newLog && fs.existsSync(oldLog) && !fs.existsSync(newLog)) fs.renameSync(oldLog, newLog); } catch { /* a new log starts */ }
+  board.ensureProjectLog(next);
+  board.event(null, actor, 'project.renamed', `${project.name} -> ${next}`);
+  for (const what of ['projects', 'tasks', 'conversations', 'sessions']) board.changed(what);
+  return board.project(next);
 }
 
 // 2.7: a project for one platform or for several. Several = a multiplatform group: one project per platform in its own
@@ -41,8 +100,7 @@ export function createProject(board, { name, notes = '', category }, actor) {
 export function createProjects(board, { name, notes = '', categories }, actor) {
   const cats = [...new Set((Array.isArray(categories) && categories.length ? categories : [undefined]).map(checkCategory))];
   if (cats.length === 1) return [createProject(board, { name, notes, category: cats[0] }, actor)];
-  const base = String(name ?? '').trim();
-  if (!base) throw new Error(tr('msg.projects.needName'));
+  const base = checkProjectName(name);
   const names = cats.map((c) => `${base}-${c}`);
   for (const n of names) if (board.project(n)) throw new Error(tr('msg.projects.exists', { name: n }));
   const made = names.map((n, i) => createProject(board, { name: n, notes, category: cats[i] }, actor));

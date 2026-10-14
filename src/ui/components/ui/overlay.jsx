@@ -73,7 +73,8 @@ export function BubbleTip({ title, text, children, side = 'bottom', align = 'cen
     <TooltipPrimitive.Root delayDuration={300} open={off ? false : undefined}>
       <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal>
-        <TooltipPrimitive.Content side={side} align={align} sideOffset={offset} collisionPadding={12} className={cn('orb-tip z-50', wide ? 'max-w-80' : 'max-w-[17rem]')} data-testid="bubble-tip">
+        {/* 3.2.1: a bubble only informs: clicks go through it to whatever it covers (it hid the project picker). */}
+        <TooltipPrimitive.Content side={side} align={align} sideOffset={offset} collisionPadding={12} className={cn('orb-tip pointer-events-none z-50', wide ? 'max-w-80' : 'max-w-[17rem]')} data-testid="bubble-tip">
           {title ? <div className="orb-tip-title text-[13px] leading-snug font-semibold">{title}</div> : null}
           {text ? <p className={cn('orb-tip-text text-[12px] leading-snug', title && 'mt-0.5', wide && 'break-all')}>{text}</p> : null}
           <TooltipPrimitive.Arrow asChild width={16} height={8}><span className="orb-tip-tail" aria-hidden="true" /></TooltipPrimitive.Arrow>

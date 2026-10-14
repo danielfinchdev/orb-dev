@@ -579,6 +579,15 @@ tiene la app abierta. En iPhone funcionan con Orb añadido a la pantalla de inic
   equipo y actividad, alrededor del chat. Solo en el PC.
 - Se activa en Ajustes; los paneles solo se pueden marcar con el modo encendido.
 - Archivos: `src/engine/expert.mjs` y `src/ui/views/expert.jsx`.
+- **3.2, «Abrir en»:** el proyecto en Cursor o VS Code (solo los instalados) o en el Explorador (`src/main/editors.mjs`,
+  `app:openIn`; los programas se arrancan directamente, nunca a través de cmd.exe).
+- **3.2, acciones del proyecto:** comandos propios de cada proyecto (`actions:<proyecto>` en el tablero, como mucho 20;
+  `actions.list/save/remove`) con nombre, atajo de teclado y una vista previa opcional, que solo puede ser una página de
+  este PC. Se lanzan desde «Acciones» o con su atajo (`ActionShortcuts`: el proyecto del God mode, o la carpeta de
+  trabajo fuera de él) en una ventana de terminal propia (`app:runAction`: Windows Terminal o PowerShell; CMD si se eligió
+  en Ajustes). Solo en el PC: el móvil no puede lanzarlas.
+- **3.2:** el chat del God mode es una conversación del proyecto elegido (la última abierta, o una nueva en él) y no
+  saca del God mode al empezar una.
 
 ## 24. Instalador y detección de sesiones
 

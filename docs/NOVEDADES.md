@@ -1,14 +1,41 @@
 ## Descargar
 
-- **`Orb-3.2.0-instalador.exe`** (recomendado, la app completa): se instala para tu usuario, sin permisos de
+- **`Orb-3.2.1-instalador.exe`** (recomendado, la app completa): se instala para tu usuario, sin permisos de
   administrador, con acceso directo en el escritorio y en el menú Inicio, y se actualiza sola. Después lo encuentras
   escribiendo «Orb» en el buscador de Windows.
-- **`Orb-3.2.0-light-portable.exe`** (Orb Light, sin instalar): doble clic y se abre. Lo esencial (chat, tareas,
+- **`Orb-3.2.1-light-portable.exe`** (Orb Light, sin instalar): doble clic y se abre. Lo esencial (chat, tareas,
   proyectos, pizarra, agentes…), sin minijuegos, God mode, Monitoreo del equipo ni temas. No se actualiza sola: avisa de
   cada versión nueva y abre la descarga.
 
 Windows 10/11. Como aún no está firmada, SmartScreen avisa la primera vez: «Más información» → «Ejecutar de todas formas».
 En el primer arranque la app detecta qué agentes tienes y con qué sesión, e instala lo que falte con los instaladores oficiales.
+
+## Novedades de la 3.2.1
+
+Versión de arreglos tras un día entero de pruebas como usuario, con agentes reales.
+
+- **Ningún mensaje se pierde:** si escribes a Orbe mientras responde, tu mensaje se suma al anterior y se atienden los
+  dos. Pulsar «Nuevo chat» justo después de enviar ya no mete el siguiente mensaje en la conversación anterior.
+- **Commits sin claves:** «Guardar cambios», las uniones de las copias y la publicación revisan el contenido en busca de
+  claves y contraseñas antes de guardar o subir nada. Los proyectos nuevos ignoran `*.env` y `dist/`.
+- **Límites más justos:** si se agota un modelo concreto (por ejemplo, un modelo de otro proveedor dentro de Cursor),
+  solo se aparta ese modelo y el agente sigue trabajando. La pausa termina en la hora real que indica el plan, una tarea
+  que sale bien la levanta y puedes quitarla a mano en Agentes › Uso de cada cuenta. El selector atenúa los modelos sin uso.
+- **Todo lo que arranca una tarea se cierra con ella:** servidores de prueba, pestañas del navegador de los agentes,
+  copias aisladas y el propio agente. Ya no se pide permiso para parar un programa que arrancó la misma tarea.
+- **Solo lectura de verdad:** las revisiones y verificaciones no pueden escribir archivos, ni siquiera bitácoras.
+- **Tras cerrar Orb de golpe,** una tarea reanudada ya no se da por terminada sin haber hecho nada.
+- **El navegador de los agentes** acepta o cancela los avisos de las páginas y lee su consola, así que las verificaciones
+  comprueban también esas partes.
+- **Tareas:** «Deshacer» deja la tarea como deshecha; «Rechazar» se avisa en la conversación; aprobar o rechazar se puede
+  hacer desde el propio aviso del chat; el OK al informe resuelve lo que esperaba revisión. Una sola regla para los
+  borrados: si nombras lo que se borra, no hace falta aprobarlo aparte.
+- **Proyectos:** ya se pueden renombrar, y los nombres con caracteres que una carpeta no admite se avisan al escribirlos.
+- **Más claro:** comandos y herramientas con nombres legibles, la Actividad en palabras y en tu idioma, nombres de las
+  cuentas (Codex Go, Codex Pro) en los avisos, horas locales en copias y pizarra, tutoriales al día y textos sin cortes.
+- **Imágenes de Codex:** una sola por petición, se guardan con un nombre legible y el enlace a la imagen editada la abre.
+- **Opti Bot, God mode y pizarra:** rechazar una tarjeta ya no da error interno; el God mode sigue al proyecto elegido y
+  muestra imágenes; la pizarra trae sus tipografías sin pedir nada a internet.
 
 ## Novedades de la 3.2
 

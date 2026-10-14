@@ -191,7 +191,7 @@ try {
 
   // ---- other views
   step = 'otras vistas';
-  for (const [nav, name, wait] of [['nav-projects', '06-proyectos', 'Git y GitHub'], ['nav-agents', '07-agentes', 'Uso de cada cuenta'], ['nav-memories', '08-bitacoras', 'Bitácora general'], ['memories-activity', '09-actividad', 'task.created'], ['nav-tutorials', '08b-tutoriales', 'Preguntas frecuentes']]) {
+  for (const [nav, name, wait] of [['nav-projects', '06-proyectos', 'Git y GitHub'], ['nav-agents', '07-agentes', 'Uso de cada cuenta'], ['nav-memories', '08-bitacoras', 'Bitácora general'], ['memories-activity', '09-actividad', 'Tarea creada'], ['nav-tutorials', '08b-tutoriales', 'Preguntas frecuentes']]) {
     await win.click(`[data-testid=${nav}]`);
     await win.waitForSelector(`text=${wait}`);
     await win.waitForTimeout(400);
@@ -360,6 +360,34 @@ try {
   await win.keyboard.press('Escape');
   await until(async () => (await win.locator('[data-testid=panel-activity]').count()) === 0, 'panel oculto');
   assert.equal((await call('expert.read', { project: 'webviaproject', path: '../../orb.json' }).catch((e) => e.message)).includes('fuera del proyecto'), true);
+  // 3.2: «Abrir en» and the project's actions (what would open or run is caught here: no editor nor terminal opens).
+  step = 'acciones del God mode';
+  await app.evaluate(({ ipcMain }) => {
+    globalThis.__ran = []; globalThis.__opened = [];
+    ipcMain.removeHandler('app:runAction'); ipcMain.handle('app:runAction', (_e, a) => { globalThis.__ran.push(a); return true; });
+    ipcMain.removeHandler('app:openIn'); ipcMain.handle('app:openIn', (_e, which, dir) => { globalThis.__opened.push([which, dir]); return true; });
+  });
+  await win.click('[data-testid=open-in-main]');
+  await until(async () => (await app.evaluate(() => globalThis.__opened.length)) === 1, 'abrir la carpeta');
+  assert.match((await app.evaluate(() => globalThis.__opened[0][1])), /webviaproject$/);
+  await win.click('[data-testid=actions-menu]');
+  await win.click('[data-testid=action-add]');
+  await win.fill('[data-testid=action-name]', 'Probar');
+  await win.click('[data-testid=action-shortcut]'); await win.keyboard.press('Control+Shift+KeyT');
+  assert.equal(await win.inputValue('[data-testid=action-shortcut]'), 'Ctrl+Shift+T');
+  await win.fill('[data-testid=action-command]', 'npm test');
+  await win.fill('[data-testid=action-preview]', 'http://localhost:5173');
+  await shot('10b2-nueva-accion');
+  await dialogButton('Guardar acción').click();
+  await until(async () => (await call('actions.list', { project: 'webviaproject' })).length === 1, 'acción guardada');
+  await win.click('[data-testid=actions-menu]');
+  await win.getByRole('menuitem', { name: /Probar/ }).waitFor();
+  await shot('10b3-acciones');
+  await win.getByRole('menuitem', { name: /Probar/ }).click();
+  await until(async () => (await app.evaluate(() => globalThis.__ran.length)) === 1, 'acción lanzada');
+  assert.equal(await app.evaluate(() => globalThis.__ran[0].command), 'npm test');
+  await win.keyboard.press('Control+Shift+KeyT');
+  await until(async () => (await app.evaluate(() => globalThis.__ran.length)) === 2, 'acción lanzada con su atajo');
 
   // ---- free mode and model choice from the chat
   step = 'modo libre';

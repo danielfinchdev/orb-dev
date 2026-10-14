@@ -11,7 +11,7 @@ export default {
   'tasks.steps': '{n} steps',
   'tasks.empty.approve': 'No tasks awaiting approval',
   'tasks.empty.none': 'No tasks',
-  'tasks.empty.hint': 'Ask the assistant, or create one with “New task” (with Orchestrator off).',
+  'tasks.empty.hint': 'Ask the assistant in the chat, with Orchestrator on. Recurring ones are created in Scheduled.',
   'tasks.pick': 'Select a task',
   'tasks.pickHint': 'Its instructions, result and available actions will appear here.',
   'tasks.review.titleTask': 'Task Review of task #{id}',
@@ -98,5 +98,7 @@ export default {
   'tasks.dependsOn': 'Depends on',
   'tasks.approval': 'Approval',
   'tasks.result': 'Result',
-  'tasks.history': 'History ({n})'
+  'tasks.history': 'History ({n})',
+  'tasks.undone': 'Undone',
+  'tasks.undoneNote': 'Undone on {when}: the files are back as they were before the task.'
 };

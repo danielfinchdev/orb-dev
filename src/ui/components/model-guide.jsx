@@ -38,6 +38,12 @@ export function ModelGuide({ auto }) {
               );
             })}
           </div>
+          {/* 3.2.1: read-only tasks (reviews, verifications) may use the light model: said here, so the table is the real rule. */}
+          {a.readPicks && LEVELS.some(([level]) => a.readPicks[level]?.label !== a.picks[level]?.label) ? (
+            <div className="text-muted-foreground text-[11.5px] leading-snug" data-testid={`model-guide-read-${a.id}`}>
+              {t('guide.readOnly', { list: LEVELS.map(([level]) => `${t(`guide.level.${level}`)}: ${a.readPicks[level]?.label ?? t('guide.agentOwn')} (${t('guide.reasoning', { level: t(`guide.r.${a.readPicks[level]?.reasoning ?? 'medium'}`) })})`).join(' · ') })}
+            </div>
+          ) : null}
           {TIERS.some((tier) => a.tiers[tier]?.length) ? (
             <Collapsible>
               <CollapsibleTrigger className="text-muted-foreground hover:text-foreground group flex cursor-pointer items-center gap-1 text-xs"><ChevronRight className="size-3.5 transition-transform group-data-[state=open]:rotate-90" />{t('guide.allModels')}</CollapsibleTrigger>

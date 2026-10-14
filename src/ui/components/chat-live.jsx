@@ -15,14 +15,21 @@ const KIND = [
   [/^(bash|shell|exec|command|run|terminal|powershell)/i, 'run'], [/^(edit|write|multiedit|notebookedit|apply_patch|create_file|str_replace)/i, 'edit'],
   [/^(webfetch|websearch|fetch|web_search|browse)/i, 'web'], [/^orb_create_task$/, 'task'], [/^orb_(board|list_tasks|get_task|wait_tasks)$/, 'board'],
   [/^orb_read_log$/, 'readLog'], [/^orb_write_log$/, 'writeLog'], [/^orb_ask$/, 'ask'], [/^orb_(set_project|create_project|add_project)$/, 'project'],
-  [/^orb_schedule$/, 'schedule'], [/^orb_browser_/, 'browser'], [/^orb_(send_message|read_messages)$/, 'messages'], [/^(todowrite|todo)/i, 'plan'], [/^(task|agent|delegate)/i, 'delegate']
+  [/^orb_schedule$/, 'schedule'], [/^orb_browser_/, 'browser'], [/^orb_(send_message|read_messages)$/, 'messages'], [/^(todowrite|todo)/i, 'plan'], [/^(task|agent|delegate)/i, 'delegate'],
+  // 3.2.1: the agent looking up its own tools, and Opti Bot's
+  [/^tool_?search$/i, 'tools'], [/^opti_propose$/, 'propose'], [/^opti_/, 'pc']
 ];
 const WITH_TARGET = new Set(['read', 'search', 'run', 'edit', 'web']);
+// «mcp__orb__orb_ask», «orb:orb_ask», «orb-orb_ask» → «orb_ask» (how each agent names the tools of a server).
+export const bareTool = (name) => String(name ?? '').replace(/^mcp__[^_]+(?:_[^_]+)*?__/, '').replace(/^(orb|opti)[:-](?=(orb|opti)_)/, '');
 const kindOf = (name) => KIND.find(([re]) => re.test(name))?.[1] ?? 'other';
 export function stepText(t, step) {
-  const kind = kindOf(step.name);
+  const name = bareTool(step.name);
+  const kind = kindOf(name);
   if (WITH_TARGET.has(kind)) return step.target ? t(`chat.act.${kind}`, { target: step.target }) : t(`chat.act.${kind}Any`);
-  return kind === 'other' ? t('chat.act.other', { name: step.name }) : t(`chat.act.${kind}`);
+  if (kind !== 'other') return t(`chat.act.${kind}`);
+  // An unknown tool: its name only when it reads as a word (never «mcp__…» or «server_tool_name»).
+  return /^[A-Za-z][A-Za-z ]{1,30}$/.test(name) ? t('chat.act.other', { name }) : t('chat.act.otherAny');
 }
 const elapsed = (t, ms) => {
   const s = Math.max(0, Math.floor(ms / 1000));

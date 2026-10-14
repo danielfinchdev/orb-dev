@@ -300,5 +300,6 @@ export default {
   'apps.download': 'Download',
   // 3.2: conversations at once
   'settings.parallelChats': 'Conversations with Orbe at once',
-  'settings.parallelChatsHint': 'How many conversations Orbe answers at the same time (1 to 6). The rest wait their turn.'
+  'settings.parallelChatsHint': 'How many conversations Orbe answers at the same time (1 to 6). The rest wait their turn.',
+  'guide.readOnly': 'Reviews and checks (read-only): {list}'
 };

@@ -53,7 +53,7 @@ async function start(home, version, secret, browser) {
   const orchKey = crypto.randomBytes(24).toString('hex');
   board.setting('orchestrator_key_hash', crypto.createHash('sha256').update(orchKey).digest('hex'));
   const sessions = new Sessions(board, { emit, log });
-  const { plainAction } = await import('../core/guard.mjs');
+  const { plainAction, looksEnglish } = await import('../core/guard.mjs');
   const { adapter } = await import('../agents/index.mjs');
   const { recordRate } = await import('../core/budget.mjs');
   // The real usage the agents report (Claude and Codex): the budget guard uses it instead of guessing.
@@ -65,7 +65,11 @@ async function start(home, version, secret, browser) {
     const wait = Number(ctx.config.approvalWaitMinutes ?? 10);
     // What it does comes from the command itself; what the agent says it is for is shown as its words, not as a fact.
     const what = plainAction(item.body?.title ?? '', { lang: ctx.config.language });
-    const says = item.body?.summary ? tr('msg.engine.agentSays', { text: String(item.body.summary).slice(0, 160) }) : '';
+    // 3.2.1: cut at a word, and not quoted when it is in English and the app is not (Claude describes its commands in
+    // English: «Start Vite dev server»).
+    const summary = String(item.body?.summary ?? '').trim();
+    const shown = summary && !(ctx.config.language !== 'en' && looksEnglish(summary)) ? (summary.length > 160 ? `${summary.slice(0, 160).replace(/\s+\S*$/, '')}…` : summary) : '';
+    const says = shown ? tr('msg.engine.agentSays', { text: shown }) : '';
     let agent = s.agent; try { agent = adapter(s.agent).label; } catch { /* id */ }
     board.addChat('system', tr(wait > 0 ? 'msg.engine.taskNeedsPermissionWait' : 'msg.engine.taskNeedsPermission', { id: s.task_id, agent, what, reason: item.body?.reason ?? '', min: wait }) + says,
       { kind: 'task-approval', session: s.id, task: s.task_id, request: item.body?.id, detail: String(item.body?.title ?? '').slice(0, 2000) });
@@ -92,7 +96,7 @@ async function start(home, version, secret, browser) {
     autoTitle(board, { agent: c.agent, account: c.account, text }).then((t) => { if (t && board.conversation(c.id)?.title === c.title) board.updateConversation(c.id, { title: t }); }).catch(() => {});
   };
   const orchestrator = new Orchestrator(board, orchKey, { emit, log, title });
-  const scheduler = new Scheduler(board, sessions, { log, orchestrator });
+  const scheduler = new Scheduler(board, sessions, { log, orchestrator, emit });
   const { createRemote } = await import('./remote.mjs');
   const remoteRef = { current: null };
   api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef });
@@ -165,6 +169,8 @@ transport.on(async (msg) => {
     try { api?.shutdown(); } catch { /* closing anyway */ }
     try { bridge?.stop(); } catch { /* closing anyway */ }
     try { devControl?.stop(); } catch { /* closing anyway */ }
+    // 3.2.1: if Orb started adb this session, its resident server goes too (never a server the user runs elsewhere).
+    try { const { stopAdb } = await import('./android.mjs'); stopAdb(); } catch { /* not used or already gone */ }
     Promise.race([Promise.resolve(remote?.stop()).catch(() => {}), new Promise((r) => setTimeout(r, 4000))]).finally(() => setTimeout(() => process.exit(0), 300));
     return;
   }
