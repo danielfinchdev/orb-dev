@@ -15,7 +15,7 @@ import { statusAll, status as agentStatus, openLogin, quickRun, forgetInstalled,
 import { PERMISSIONS } from './sessions.mjs';
 import { readLog, writeLog, logFiles } from './logs.mjs';
 import { expandMentions, mentionOptions } from './mentions.mjs';
-import { ofUserLabel, userLabel, assistantName } from '../core/board.mjs';
+import { ofUserLabel, userLabel, assistantName, userName } from '../core/board.mjs';
 import * as github from './github.mjs';
 import * as installer from './installer.mjs';
 import * as expert from './expert.mjs';
@@ -73,6 +73,15 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     return real;
   };
 
+  // 3.2.1: a task the user rejects says so in its conversation, and the assistant hears it (it used to keep saying the
+  // task was waiting for approval). If other tasks of the request already finished, their report now comes with it.
+  const taskRejected = (task) => {
+    const conv = board.conversationOfTask(task.id);
+    const line = tr('msg.api.taskRejected', { id: task.id, title: oneLine(task.title, 120) });
+    if (!conv || task.created_by !== 'orb' || !orchestrator) { board.addChat('system', line, { task: task.id }, conv ?? null); return; }
+    if ((board.settingJson(`report_queue:c${conv}`) ?? []).length) { board.addChat('system', line, { task: task.id }, conv); scheduler?.queueReport?.(task); return; }
+    orchestrator.internal(`AVISO DEL SISTEMA (no es ${userName()}): ${userName()} ha rechazado la tarea #${task.id} «${oneLine(task.title)}». No se hará y no se ha tocado ningún archivo. No la vuelvas a crear salvo que te lo pida. Díselo en una línea y sigue con el resto del pedido, si lo hay.`, line, null, { conversation: conv, project: task.project });
+  };
   // A task text cut for the lists (the window shows a few hundred characters of each).
   const cut = (s) => (typeof s === 'string' && s.length > 1200 ? `${s.slice(0, 1200)}…` : s);
   // Folders made by hand in the Explorer: the engine's loop looks every 5 s; a list asked for in between looks at most
@@ -484,7 +493,11 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       reasoning: oneOf(p.reasoning, ['low', 'medium', 'high'], 'razonamiento', 'medium'), mode: oneOf(p.mode, ['carpeta', 'aislada'], 'modo', 'carpeta'),
       readonly: Boolean(p.readonly), account: str(p.account, 'cuenta', 40, { optional: true }) || null, level: oneOf(p.level, ['simple', 'normal', 'complejo'], 'nivel', null), depends_on: Array.isArray(p.depends_on) ? p.depends_on.map((d) => int(d, 'dependencia')) : []
     }, 'usuario'),
-    'tasks.approve': ({ id, decision, hash }) => board.approve(int(id, 'tarea'), decision === 'approved' ? 'approved' : 'rejected', 'usuario', str(hash, 'huella', 100)),
+    'tasks.approve': ({ id, decision, hash }) => {
+      const out = board.approve(int(id, 'tarea'), decision === 'approved' ? 'approved' : 'rejected', 'usuario', str(hash, 'huella', 100));
+      if (out?.status === 'cancelled') { try { taskRejected(out); } catch (error) { log?.(`rechazo #${out.id}: ${error.message}`); } }
+      return out;
+    },
     'tasks.retry': ({ id }) => board.retry(int(id, 'tarea'), 'usuario'),
     'tasks.cancel': ({ id }) => scheduler.cancel(int(id, 'tarea'), 'usuario'),
     'tasks.reassign': ({ id, agent, model, reasoning }) => board.reassign(int(id, 'tarea'), { agent: oneOf(agent, [...AGENT_IDS, 'any'], 'agente'), model: str(model, 'modelo', 80, { optional: true }) || null, reasoning: oneOf(reasoning, ['low', 'medium', 'high'], 'razonamiento') }, 'usuario'),

@@ -73,8 +73,13 @@ test('un node -e dentro de powershell -Command no es un comando cifrado; -Encode
 });
 
 test('qué quiere hacer un comando, en palabras normales y sacado del propio comando', () => {
-  assert.equal(plainAction('"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -Command "rm -r dist"'), 'borrar archivos o carpetas');
-  assert.equal(plainAction('cd "C:/x/y" && rm -rf dist && npm run dev'), 'borrar archivos o carpetas');
+  // 3.2.1: a deletion names what it deletes (when it names one thing it can say).
+  assert.equal(plainAction('"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -Command "rm -r dist"'), 'borrar «dist»');
+  assert.equal(plainAction('cd "C:/x/y" && rm -rf dist && npm run dev'), 'borrar «dist»');
+  assert.equal(plainAction('rm -rf /tmp/tierra-build-check'), 'borrar «/tmp/tierra-build-check»');
+  assert.equal(plainAction('Remove-Item -Recurse -Force -Path "C:\\Orb\\web\\x\\build"'), 'borrar «C:\\Orb\\web\\x\\build»');
+  assert.equal(plainAction('rm -rf $dir'), 'borrar archivos o carpetas', 'una variable: no se sabe qué es');
+  assert.equal(plainAction('del *.log'), 'borrar archivos o carpetas', 'varios archivos: tampoco');
   assert.equal(plainAction('git push origin main'), 'subir cambios a GitHub');
   assert.equal(plainAction('"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "node -e \'1\'"'), 'ejecutar un pequeño programa');
 });
