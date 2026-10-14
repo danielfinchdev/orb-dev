@@ -7,6 +7,7 @@ import { Markdown } from '@/components/markdown.jsx';
 import { useLiveTasks, liveOf, LiveTask, ProgressBar } from '@/components/live-tasks.jsx';
 import { modelsOf } from '@/components/brain-picker.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
+import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, Empty, Field, Input, Textarea } from '@/components/ui/basic.jsx';
 import { Tabs, TabsList, TabsTrigger, Select, Collapsible, CollapsibleTrigger, CollapsibleContent, BubbleTip } from '@/components/ui/overlay.jsx';
@@ -103,8 +104,8 @@ function TaskDetail({ id, live }) {
       </div>
       <div className="flex flex-wrap gap-2 px-5">
         {t.status === 'awaiting_approval' ? (<>
-          <Button size="sm" onClick={async () => { if (await confirm(tr('tasks.approve.title', { id: t.id }), tr('tasks.approve.body', { title: t.title, agent: `${AGENT[t.agent] ?? t.agent}${t.model ? ` (${t.model})` : ''}`, path: t.project_path, reason: t.sensitivity.map((s) => SENSITIVE[s] ?? s).join(', ') }), { ok: tr('tasks.approve.ok') })) act(call('tasks.approve', { id: t.id, decision: 'approved', hash: t.previewHash }), tr('tasks.approve.done')); }}><Check />{tr('tasks.approve.ok')}</Button>
-          <Button size="sm" variant="outline" onClick={() => act(call('tasks.approve', { id: t.id, decision: 'rejected', hash: t.previewHash }), tr('tasks.reject.done'))}><X />{tr('tasks.reject')}</Button>
+          <Button size="sm" onClick={() => approveTask(t)}><Check />{tr('tasks.approve.ok')}</Button>
+          <Button size="sm" variant="outline" onClick={() => rejectTask(t)}><X />{tr('tasks.reject')}</Button>
         </>) : null}
         {t.status === 'done' && !t.accepted ? <Button size="sm" onClick={() => act(call('tasks.accept', { id: t.id }), tr('tasks.accepted'))}><ThumbsUp />{tr('tasks.giveOk')}</Button> : null}
         {t.status === 'done' && !t.review_of ? <BubbleTip title={tr('tasks.review.btn')} text={tr('projects.reviewTip')}><A onClick={() => askReview({ task: t })} data-testid="task-review"><ScanSearch />{tr('tasks.review.btn')}</A></BubbleTip> : null}

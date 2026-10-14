@@ -2,7 +2,7 @@
 // chosen in Settings: file explorer and viewer, git changes with their diff, commit history, what is running, account
 // usage, the machine's load and live activity. Everything here only reads; the work is still done by the agents.
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronRight, File, FileLock2, Folder, FolderOpen, GitBranch, GitCommitHorizontal, RefreshCw, X, LayoutPanelLeft, Cpu, Activity, Gauge, Play, SquareTerminal, MessageSquare, FileDiff, Monitor } from 'lucide-react';
+import { ChevronRight, File, FileLock2, Folder, FolderOpen, GitBranch, GitCommitHorizontal, RefreshCw, X, LayoutPanelLeft, Cpu, Activity, Gauge, Play, SquareTerminal, MessageSquare, FileDiff, Monitor, ImageIcon } from 'lucide-react';
 import { ChatView } from './chat.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Empty, Spinner } from '@/components/ui/basic.jsx';
@@ -16,6 +16,7 @@ import { cn, errorText } from '@/lib/utils.js';
 import { useHighlight } from '@/lib/use-highlight.js';
 import { t, useT, useLocale } from '@/lib/i18n.js';
 import { stepText } from '@/components/chat-live.jsx';
+import { activityLabel, activityDetail } from '@/lib/activity.js';
 
 // Labels are read when used (getters), so they follow the language chosen in Ajustes.
 export const PANELS = {
@@ -138,7 +139,21 @@ function DiffView({ text }) {
     </div>
   );
 }
-function Viewer({ project, tab, version }) {
+// 3.2.1: a picture of the project is shown as a picture (it said «binary file, cannot be shown as text»).
+const IMAGE = /\.(png|jpe?g|webp|gif)$/i;
+function ImagePreview({ file, name }) {
+  const t = useT();
+  const [src, setSrc] = useState(null);
+  useEffect(() => { let alive = true; setSrc(null); call('images.read', { path: file }).then((r) => alive && setSrc(r.dataUrl)).catch(() => alive && setSrc(false)); return () => { alive = false; }; }, [file]);
+  if (src === false) return <Empty icon={ImageIcon} title={t('expert.cannotShow')}>{t('img.unavailable')}</Empty>;
+  if (!src) return <div className="p-4"><Spinner /></div>;
+  return <div className="grid min-h-full place-items-center p-4" data-testid="expert-image"><img src={src} alt={name} className="img-checker max-h-[calc(100vh-10rem)] max-w-full rounded-md border object-contain" /></div>;
+}
+function Viewer({ project, root, tab, version }) {
+  if (tab.kind !== 'diff' && root && IMAGE.test(tab.path)) return <ImagePreview file={`${root.replace(/[\\/]+$/, '')}/${tab.path}`} name={tab.path.split('/').pop()} />;
+  return <TextViewer project={project} tab={tab} version={version} />;
+}
+function TextViewer({ project, tab, version }) {
   const t = useT();
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
@@ -237,12 +252,13 @@ function SystemPanel() {
   );
 }
 function ActivityPanel({ version }) {
+  const t = useT();
   const locale = useLocale();
   const [rows, setRows] = useState([]);
   useEffect(() => { call('activity.list', { limit: 40 }).then(setRows).catch(() => {}); }, [version]);
   return (
-    <div className="py-1 font-mono text-[11.5px]">
-      {rows.map((r) => <div key={r.id} className="flex gap-2 px-3 py-[2px]" title={r.detail}><span className="text-muted-foreground shrink-0">{new Date(r.at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}</span><span className="text-primary shrink-0">{r.actor}</span><span className="min-w-0 truncate">{r.kind}{r.task_id ? ` #${r.task_id}` : ''} {r.detail}</span></div>)}
+    <div className="py-1 text-[11.5px]">
+      {rows.map((r) => <div key={r.id} className="flex gap-2 px-3 py-[2px]" title={`${r.kind} ${r.detail ?? ''}`}><span className="text-muted-foreground shrink-0 tabular-nums">{new Date(r.at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}</span><span className="text-primary shrink-0">{AGENT[r.actor] ?? r.actor}</span><span className="min-w-0 truncate">{activityLabel(t, r.kind)}{r.task_id ? ` #${r.task_id}` : ''} <span className="text-muted-foreground">{activityDetail(t, r, locale, AGENT)}</span></span></div>)}
     </div>
   );
 }
@@ -318,18 +334,19 @@ export function ExpertView() {
             </aside>
           ) : null}
           <div className="flex min-w-0 flex-1 flex-col">
-            <div className="bg-sidebar flex h-9 shrink-0 items-end gap-px overflow-x-auto border-b px-1">
+            {/* 3.2.1: the tabs give way (their names cut with «…») instead of running off the edge with a scroll bar. */}
+            <div className="bg-sidebar flex h-9 shrink-0 items-end gap-px overflow-x-auto border-b px-1 [scrollbar-width:none]">
               {[{ id: 'chat', label: app.config.assistantName, icon: MessageSquare }, ...tabs].map((tb) => (
-                <div key={tb.id} className={cn('group flex h-8 max-w-52 shrink-0 cursor-pointer items-center gap-1.5 rounded-t-md border border-b-0 px-3 text-[12.5px]', current === tb.id ? 'bg-background text-foreground' : 'text-muted-foreground hover:text-foreground border-transparent')} onClick={() => setCurrent(tb.id)} title={tb.path}>
-                  {tb.icon ? <tb.icon className="size-3.5" /> : tb.kind === 'diff' ? <FileDiff className="size-3.5" /> : <File className="size-3.5" />}
+                <div key={tb.id} className={cn('group flex h-8 max-w-52 cursor-pointer items-center gap-1.5 rounded-t-md border border-b-0 px-3 text-[12.5px]', tb.id === 'chat' || tb.id === current ? 'shrink-0' : 'min-w-20 shrink', current === tb.id ? 'bg-background text-foreground' : 'text-muted-foreground hover:text-foreground border-transparent')} onClick={() => setCurrent(tb.id)} title={tb.path}>
+                  {tb.icon ? <tb.icon className="size-3.5 shrink-0" /> : tb.kind === 'diff' ? <FileDiff className="size-3.5 shrink-0" /> : IMAGE.test(tb.path) ? <ImageIcon className="size-3.5 shrink-0" /> : <File className="size-3.5 shrink-0" />}
                   <span className="truncate">{tb.label ?? t('expert.allChanges')}</span>
-                  {tb.id !== 'chat' ? <button type="button" aria-label={t('expert.close')} className="hover:bg-accent -mr-1 grid size-4 place-items-center rounded opacity-60 group-hover:opacity-100" onClick={(e) => { e.stopPropagation(); closeTab(tb.id); }}><X className="size-3" /></button> : null}
+                  {tb.id !== 'chat' ? <button type="button" aria-label={t('expert.close')} className="hover:bg-accent -mr-1 grid size-4 shrink-0 place-items-center rounded opacity-60 group-hover:opacity-100" onClick={(e) => { e.stopPropagation(); closeTab(tb.id); }}><X className="size-3" /></button> : null}
                 </div>
               ))}
             </div>
             {/* The chat stays mounted so switching tabs never loses what is being written. */}
             <div className={cn('min-h-0 flex-1 flex-col', current === 'chat' ? 'flex' : 'hidden')}><ChatView route={{ view: 'chat', id: conversation }} onConversation={setConversation} project={project || undefined} /></div>
-            {tab ? <div className="min-h-0 flex-1 overflow-auto" data-testid="expert-viewer"><Viewer project={project} tab={tab} version={version} /></div> : null}
+            {tab ? <div className="min-h-0 flex-1 overflow-auto" data-testid="expert-viewer"><Viewer project={project} root={info?.path} tab={tab} version={version} /></div> : null}
           </div>
           {right.length ? (
             <aside className="bg-sidebar flex w-80 shrink-0 flex-col overflow-y-auto border-l">

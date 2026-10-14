@@ -20,16 +20,19 @@ function GithubCard() {
   const load = () => { setGh(null); call('github.status').then(setGh).catch((e) => setGh({ error: e.message })); };
   useEffect(load, []);
   return (
-    <Card className="flex-row items-center gap-3 px-5 py-3.5">
+    // 3.2.1: in a narrow window the state and its buttons go under the text (the text was left with a word per line).
+    <Card className="flex-row flex-wrap items-center gap-x-3 gap-y-2 px-5 py-3.5">
       <GithubIcon className="size-5 shrink-0" />
-      <div className="min-w-0 flex-1">
+      <div className="min-w-[12rem] flex-1">
         <div className="text-[14px] font-medium">GitHub</div>
         <div className="text-muted-foreground text-xs">{t('projects.gh.desc')}</div>
       </div>
-      {!gh ? <Spinner /> : !gh.installed ? (<><Badge variant="secondary">{t('projects.gh.notInstalled')}</Badge><Button size="sm" variant="outline" onClick={() => bridge.openExternal('https://cli.github.com/')}>{t('projects.gh.download')}</Button></>)
-        : gh.loggedIn ? <Badge variant="success">{t('projects.gh.connected', { user: gh.user ?? '?' })}</Badge>
-          : (<><Badge variant="destructive">{t('projects.gh.noSession')}</Badge><Button size="sm" onClick={() => act(call('github.login'), t('projects.gh.login.done'))}>{t('projects.gh.login')}</Button></>)}
-      <BubbleTip title={t('projects.gh.check')}><Button size="icon-sm" variant="ghost" onClick={load} aria-label={t('projects.gh.check')}><RefreshCw /></Button></BubbleTip>
+      <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">
+        {!gh ? <Spinner /> : !gh.installed ? (<><Badge variant="secondary">{t('projects.gh.notInstalled')}</Badge><Button size="sm" variant="outline" onClick={() => bridge.openExternal('https://cli.github.com/')}>{t('projects.gh.download')}</Button></>)
+          : gh.loggedIn ? <Badge variant="success" className="max-w-full truncate">{t('projects.gh.connected', { user: gh.user ?? '?' })}</Badge>
+            : (<><Badge variant="destructive">{t('projects.gh.noSession')}</Badge><Button size="sm" onClick={() => act(call('github.login'), t('projects.gh.login.done'))}>{t('projects.gh.login')}</Button></>)}
+        <BubbleTip title={t('projects.gh.check')}><Button size="icon-sm" variant="ghost" onClick={load} aria-label={t('projects.gh.check')}><RefreshCw /></Button></BubbleTip>
+      </div>
     </Card>
   );
 }

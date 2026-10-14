@@ -8,6 +8,7 @@ import { Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, Dropdow
 import { call, useStore } from '@/lib/store.js';
 import { notify } from '@/lib/notify.js';
 import { REASONING, options } from '@/lib/labels.js';
+import { prettyModel } from '@/lib/tools.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
@@ -21,6 +22,17 @@ export function useCatalog() {
 
 // 3.0: an account with its own plan has its own models (Codex Go and Pro); the others use the agent's list.
 export const modelsOf = (a, account) => (account && a?.accountModels?.[account]) || a?.models || [];
+// 3.2.1: a model's name as the selector shows it, wherever the id comes from (an alias like «sonnet», the full id the
+// agent reports like «claude-sonnet-5-5» or «gpt-6-luna»); never the raw id.
+export function modelLabel(catalog, agent, id) {
+  if (!id) return '';
+  const a = catalog?.find((x) => x.id === agent);
+  const all = [...(a?.models ?? []), ...Object.values(a?.accountModels ?? {}).flat()].filter((m) => m?.id && m.label);
+  const low = String(id).toLowerCase();
+  const hit = all.find((m) => m.id === id) ?? all.find((m) => m.id.toLowerCase() === low)
+    ?? (/^(sonnet|opus|haiku)$/.test(low) ? all.find((m) => m.id.toLowerCase().includes(low)) : null);
+  return hit?.label ?? prettyModel(id);
+}
 const modelOf = (catalog, value) => modelsOf(catalog?.find((a) => a.id === value.agent), value.account).find((m) => m.id === (value.model ?? '')) ?? null;
 // The agent's own default (id ''), named after the model the agent says it uses when it says so.
 const labelOf = (a, m, t) => (m.id ? m.label : m.defaultOf ? t('brain.defaultIs', { model: m.defaultOf }) : t('brain.defaultOf', { agent: a.label }));
@@ -45,7 +57,9 @@ export function BrainPicker({ catalog, value, onChange, className }) {
           </Button>
         </DropdownMenuTrigger>
       </BubbleTip>
-      <DropdownMenuContent align="start" className="max-h-[60vh] w-72 overflow-y-auto">
+      {/* 3.2.1: closing the menu does not put the focus back on its button: that opened the bubble, which then covered
+          the project picker next to it. */}
+      <DropdownMenuContent align="start" className="max-h-[60vh] w-72 overflow-y-auto" onCloseAutoFocus={(e) => e.preventDefault()}>
         {!catalog?.length ? <div className="text-muted-foreground px-2 py-1.5 text-xs">{t('brain.none')}</div> : <BrainGroups catalog={catalog} value={value} onChange={onChange} />}
       </DropdownMenuContent>
     </DropdownMenu>

@@ -37,9 +37,17 @@ export function pickGreeting({ tasks = [], project = null, first = false, seriou
   ];
   const roll = random();
   if (news.length && roll < 0.55) return pick(news);
-  if (!serious && roll > 0.8) return pick(words(FUN));
+  // 3.2.1: never «the agents are rested» while they are working.
+  const working = tasks.some((t) => ['queued', 'running'].includes(t.status));
+  if (!serious && roll > 0.8) return pick(words(FUN.filter((k) => !(working && k === 'greet.rested'))));
   return pick([...words(TIME(now.getHours(), now.getDay())), ...words(BACK)]);
 }
+
+// 3.2.1: the suggestions under the greeting. With a project already chosen, nothing about creating one; without one,
+// nothing about «the project».
+const SUGGESTIONS = ['chat.suggestion1', 'chat.suggestion2', 'chat.suggestion4'];
+const PROJECT_SUGGESTIONS = ['chat.suggestionProject1', 'chat.suggestion3', 'chat.suggestion2', 'chat.suggestionProject2'];
+export const suggestionsFor = (project) => (project ? PROJECT_SUGGESTIONS : SUGGESTIONS);
 
 export function pickSubtitle({ last = null, random = Math.random } = {}) {
   const pool = SUBS.filter((k) => k !== last);

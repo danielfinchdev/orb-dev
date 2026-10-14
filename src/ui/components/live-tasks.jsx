@@ -67,10 +67,13 @@ export function LiveTask({ t: task, compact = false, actions = true }) {
   );
 }
 
-// The block above the assistant's message box: what is running now.
-export function LiveTasksStrip() {
+// The block above the assistant's message box: what is running now. 3.2.1: in a conversation, only its own tasks (a new,
+// empty chat shows none: each conversation has its tasks); without a conversation given, all of them.
+export function LiveTasksStrip({ conversation }) {
   const t = useT();
-  const live = useLiveTasks();
+  const all = useLiveTasks();
+  const owner = useStore((s) => (conversation === undefined ? null : Object.fromEntries(s.tasks.filter((x) => x.status === 'running').map((x) => [x.id, x.conversation_id ?? null]))));
+  const live = conversation === undefined ? all : conversation == null ? [] : all.filter((x) => owner?.[x.id] === conversation);
   if (!live.length) return null;
   return (
     <div className="shrink-0 px-5 pb-2">
