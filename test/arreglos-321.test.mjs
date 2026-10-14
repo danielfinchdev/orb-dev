@@ -45,6 +45,9 @@ test('60: los secretos se buscan también por contenido, y los *.env por nombre'
 });
 
 test('60: «Guardar cambios» no hace commit de una clave escrita en cualquier archivo; el .gitignore nuevo cubre *.env y dist/', () => {
+  // The CI machines have no git identity of their own.
+  for (const k of ['GIT_AUTHOR_NAME', 'GIT_COMMITTER_NAME']) process.env[k] ??= 'Prueba';
+  for (const k of ['GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_EMAIL']) process.env[k] ??= 'prueba@orb.local';
   const p = createProject(board, { name: 'secretos' }, 'usuario');
   const ignore = fs.readFileSync(path.join(p.path, '.gitignore'), 'utf8');
   assert.match(ignore, /^\*\.env$/m); assert.match(ignore, /^dist\/$/m);

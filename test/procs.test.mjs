@@ -7,6 +7,8 @@ import { taskProcesses, startedBy, STOPPABLE } from '../src/core/procs.mjs';
 
 const since = 1_000_000;
 const AGENT = 100; const ENGINE = 1;
+// The task folder as the system writes it (the CI also runs on Linux).
+const DIR = process.platform === 'win32' ? 'D:\\proj\\prueba' : '/proj/prueba';
 // A process list as processList() would return it (ms times; name/cmd only for the recent ones).
 const list = [
   { id: ENGINE, ppid: 0, at: since - 50_000, name: null, cmd: null },
@@ -16,11 +18,11 @@ const list = [
   { id: 202, ppid: 999, at: since + 700, name: 'python3.13.exe', cmd: 'C:\\…\\python3.13.exe -m http.server 8000' }, // the alias relaunch: parent is an AppX service
   { id: 203, ppid: 300, at: since + 800, name: 'bash.exe', cmd: 'bash -c "python -m http.server 8233"' }, // orphan: its shell (300, the agent) has gone
   { id: 50, ppid: 7, at: since - 5000, name: 'node.exe', cmd: 'node server.js' }, // created before the task: not ours
-  { id: 60, ppid: 7, at: since + 900, name: 'node.exe', cmd: 'node D:\\proj\\prueba\\server.js' } // another process, but names the task folder
+  { id: 60, ppid: 7, at: since + 900, name: 'node.exe', cmd: `node ${DIR}${process.platform === 'win32' ? '\\' : '/'}server.js` } // another process, but names the task folder
 ];
 
 test('taskProcesses: por árbol (hijos, nietos y huérfanos del agente) y por carpeta; nunca los de antes', () => {
-  const found = taskProcesses(list, { since, roots: [AGENT], dir: 'D:\\proj\\prueba', engine: ENGINE, known: new Map([[300, since - 100]]) });
+  const found = taskProcesses(list, { since, roots: [AGENT], dir: DIR, engine: ENGINE, known: new Map([[300, since - 100]]) });
   const ids = new Set(found.map((p) => p.id));
   assert.ok(ids.has(200), 'hijo del agente con ruta relativa');
   assert.ok(ids.has(201), 'nieto del agente');
@@ -32,7 +34,7 @@ test('taskProcesses: por árbol (hijos, nietos y huérfanos del agente) y por ca
 });
 
 test('taskProcesses: sin raíces, solo la regla de la carpeta (como la verificación de 3.1)', () => {
-  const found = taskProcesses(list, { since, roots: [], dir: 'D:\\proj\\prueba', engine: ENGINE });
+  const found = taskProcesses(list, { since, roots: [], dir: DIR, engine: ENGINE });
   assert.deepEqual(found.map((p) => p.id).sort((a, b) => a - b), [60], 'solo el que nombra la carpeta');
 });
 
