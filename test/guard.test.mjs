@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import os from 'node:os';
-import { decide, toolClass, riskOf, describeAction, plainAction, PERMISSIONS } from '../src/core/guard.mjs';
+import { decide, toolClass, riskOf, describeAction, plainAction, pidKills, writesProjectFile, PERMISSIONS } from '../src/core/guard.mjs';
 
 const internal = path.join(os.tmpdir(), 'Orb', '.orb');
 
@@ -82,6 +82,30 @@ test('qué quiere hacer un comando, en palabras normales y sacado del propio com
   assert.equal(plainAction('del *.log'), 'borrar archivos o carpetas', 'varios archivos: tampoco');
   assert.equal(plainAction('git push origin main'), 'subir cambios a GitHub');
   assert.equal(plainAction('"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "node -e \'1\'"'), 'ejecutar un pequeño programa');
+  // 3.2.1 (hallazgo 40): un comando compuesto se lee por cláusulas; el número en una variable no se cuela como «programa».
+  assert.equal(plainAction('$pidToStop = 11188; Stop-Process -Id $pidToStop'), 'cerrar un programa que está en marcha');
+  assert.equal(plainAction('Stop-Process -Id 24976; Start-Process node server.js'), 'cerrar un programa que está en marcha');
+});
+
+test('3.2.1 (hallazgo 40): parar por su número un proceso con el PID guardado en una variable', () => {
+  assert.deepEqual(pidKills('$p = 11188; Stop-Process -Id $p'), [11188]);
+  assert.deepEqual(pidKills('$pidToStop = 11188; Stop-Process -Id $pidToStop; Start-Sleep 1'), [11188]);
+  assert.deepEqual(pidKills('Stop-Process -Id 24976; Start-Process node server.js'), [24976]);
+  assert.equal(pidKills('Get-Process python | Where-Object { $_.Id -eq 8767 } | Stop-Process'), null, 'por nombre y tubería: pide permiso');
+});
+
+test('3.2.1 (hallazgo 25): una tarea de solo lectura no escribe archivos del proyecto por el shell', () => {
+  assert.equal(writesProjectFile('echo x >> BITACORA.md'), true);
+  assert.equal(writesProjectFile('node -e "1" > salida.txt'), true);
+  assert.equal(writesProjectFile('"x" | Set-Content notas.md'), true);
+  assert.equal(writesProjectFile('New-Item -ItemType File nuevo.txt'), true);
+  assert.equal(writesProjectFile('npm run build'), false, 'compilar no redirige a un archivo');
+  assert.equal(writesProjectFile('cat a.js 2> errores.log'), false, 'redirigir stderr a un log no cuenta');
+  assert.equal(writesProjectFile('vite build > dist/out.txt'), false, 'una carpeta de compilación no cuenta');
+  // En una tarea de solo lectura (permiso «probar»), una escritura por el shell pide permiso (y sin nadie que responda, se deniega).
+  assert.equal(decide({ permission: 'probar', tool: 'Bash', kind: 'execute', command: 'echo x >> BITACORA.md' }).decision, 'ask');
+  assert.equal(decide({ permission: 'probar', tool: 'Bash', kind: 'execute', command: 'npm test' }).decision, 'allow');
+  assert.equal(decide({ permission: 'editar', tool: 'Bash', kind: 'execute', command: 'echo x >> BITACORA.md' }).decision, 'allow', 'editar sí puede escribir');
 });
 
 test('el guardia reconoce las herramientas de cada agente', () => {

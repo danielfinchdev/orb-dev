@@ -118,6 +118,26 @@ function touchesInternal(text, internalDir) {
   return /(^|[\s"'\\])\.orb\\+(datos|ejecuciones|copias(?!\\+aisladas\\))/.test(t);
 }
 
+// 3.2.1: whether a shell command writes a file of the project (for the read-only guard). A redirection (`>`, `>>`, not
+// `2>`/`>&`), or a cmdlet that writes a file (Out-File, Set-Content, Add-Content, New-Item -ItemType File, tee), to a
+// target that is not the null device and not inside a build folder (dist, build, out, coverage, .vite, .next, node_modules).
+const BUILD_DIR = /(^|[\\/])(dist|build|out|coverage|\.vite|\.next|\.turbo|\.cache|node_modules|tmp|temp)([\\/]|$)/i;
+const NULLISH = /^(\$null|\/dev\/null|nul|con|\/dev\/stdout|\/dev\/stderr|&\d)$/i;
+const unq = (w) => String(w ?? '').replace(/^(["'])([\s\S]*)\1$/, '$2');
+export function writesProjectFile(command) {
+  const c = String(command ?? '');
+  const to = [];
+  // A redirection `>`/`>>` into a file (not `2>` or `>&`, which redirect a stream, not a file the task means to keep).
+  for (const m of c.matchAll(/(?<![0-9&])>>?\s*("[^"]+"|'[^']+'|[^\s|&;<>]+)/g)) to.push(m[1]);
+  // A cmdlet that writes a file: its -Path, or the first positional argument that looks like a file name.
+  if (/\b(?:Out-File|Set-Content|Add-Content|tee|tee-object)\b/i.test(c) || /\bNew-Item\b[^|;&\n]*-ItemType\s+File\b/i.test(c)) {
+    const named = c.match(/-(?:File)?Path\s+("[^"]+"|'[^']+'|[^\s|&;<>]+)/i);
+    if (named) to.push(named[1]);
+    else { const cand = (c.match(/"[^"]+"|'[^']+'|[^\s|&;<>]+/g) ?? []).map(unq).reverse().find((t) => !t.startsWith('-') && /[.\\/]/.test(t) && !/^(Out-File|Set-Content|Add-Content|tee|tee-object|New-Item)$/i.test(t)); if (cand) to.push(cand); }
+  }
+  return to.map(unq).some((t) => t && !NULLISH.test(t) && !BUILD_DIR.test(t));
+}
+
 // decide({ permission, tool, kind, command, paths, internalDir, lang }) → (lang: language of the reasons, default 'es')
 //  { decision: 'allow' | 'ask' | 'deny', reason }
 export function decide({ permission = 'editar', tool, kind, command = '', paths = [], internalDir, lang = 'es' }) {
@@ -133,6 +153,10 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
   if (cls === 'exec') {
     const risk = riskOf(command, lang);
     if (risk) return { decision: 'ask', reason: risk };
+    // 3.2.1: a read-only task must not write files. Running the tests or the build is fine, but a command that redirects
+    // into a project file (echo >> BITACORA.md, Set-Content, Out-File…) outside a build folder asks first: with nobody to
+    // answer, a task's permission times out and is denied, so the write never happens.
+    if (permission === 'probar' && writesProjectFile(command)) return { decision: 'ask', reason: T('testWrite') };
     if (permission === 'preguntar') return { decision: 'ask', reason: T('runs') };
     return { decision: 'allow', reason: T('normalCommand') };
   }
@@ -140,11 +164,38 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
   return { decision: permission === 'preguntar' ? 'ask' : 'allow', reason: T('otherTool') };
 }
 
+// The command inside a "powershell -Command '…'" wrapper (how Codex runs every command on Windows), or the command itself.
+export function unwrapShell(command) {
+  const c = String(command ?? '').trim();
+  const m = c.match(/^(?:"[^"]*[\\/]|[^\s"]*[\\/])?(?:powershell|pwsh)(?:\.exe)?"?\s+(?:[-/]\w+\s+)*?(?:-command|-c)\s+(['"])([\s\S]*)\1\s*$/i);
+  if (!m) return c;
+  return m[1] === "'" ? m[2].replace(/''/g, "'") : m[2];
+}
+// The statements of a command line (split at ; && || and new lines, outside quotes, braces and brackets).
+export function statements(command) {
+  const s = String(command ?? ''); const out = []; let cur = ''; let quote = null; let depth = 0;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (quote) { cur += ch; if (ch === quote) quote = null; continue; }
+    if (ch === '"' || ch === "'") { quote = ch; cur += ch; continue; }
+    if (ch === '{' || ch === '(') depth++;
+    if ((ch === '}' || ch === ')') && depth > 0) depth--;
+    if (!depth && (ch === ';' || ch === '\n' || ch === '\r' || ((ch === '&' || ch === '|') && s[i + 1] === ch))) { if (cur.trim()) out.push(cur.trim()); cur = ''; if (ch !== ';' && ch !== '\n' && ch !== '\r') i++; continue; }
+    cur += ch;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out;
+}
+
 // 3.1: a command whose only risky part is stopping processes BY THEIR NUMBER (taskkill /PID n, Stop-Process -Id n,
 // kill n): the numbers, so the engine can check they are the task's own (its test server). null when it stops anything
 // by name or image, pipes into Stop-Process, or has another risk besides.
+// 3.2.1: a number kept in a simple variable (`$p = 11188; Stop-Process -Id $p`, seen with Codex) is resolved first.
 export function pidKills(command) {
-  const c = String(command ?? '');
+  let c = String(command ?? '');
+  const vars = new Map();
+  for (const m of c.matchAll(/\$(\w+)\s*=\s*(\d{1,9})\b/g)) vars.set(m[1].toLowerCase(), m[2]);
+  if (vars.size) c = c.replace(/\$\{?(\w+)\}?/g, (whole, name) => vars.get(name.toLowerCase()) ?? whole).replace(/\$(\w+)\s*=\s*\d{1,9}\s*;?/g, ' ');
   if (/\/IM\b|\s-name\b|\bpkill\b|\bkillall\b|\|\s*(stop-process|kill)\b|\$\(|`/i.test(c)) return null;
   const pids = [];
   const rest = c.replace(/\btaskkill(?:\s+(?:\/\/|\/)(?:F|T))*\s+(?:\/\/|\/)PID\s+(\d+)(?:\s+(?:\/\/|\/)(?:F|T))*/gi, (m, pid) => { pids.push(Number(pid)); return ' '; })
@@ -176,13 +227,21 @@ export function plainAction(command, { description = '', lang = 'es' } = {}) {
   // The command inside a "powershell -Command '…'" or "cmd /c …" wrapper is the one that counts.
   // (Also a quoted path with spaces: "C:\Program Files\PowerShell\7\pwsh.exe" -Command "…".)
   let c = String(command ?? '').trim().replace(/^(?:"[^"]*[\\/]|[^\s"]*[\\/])?(?:powershell|pwsh|cmd)(?:\.exe)?"?\s+(?:[-/]\w+\s+)*?(?:-command|-c|\/c)\s+["']?/i, '');
-  c = c.replace(/^\s*(?:cd\s+[^;&|]+(?:&&|;)\s*)+/i, '').replace(/^\$\w+\s*=\s*/, '');
-  const hit = PLAIN.find(([re]) => re.test(c));
-  // 3.2.1: a deletion names what it deletes («borrar /tmp/tierra-build-check»), so the user can tell a temporary folder
-  // of the agent's from their work.
-  if (hit?.[1] === 'msg.guard.plain.delete') { const target = deleteTarget(c); if (target) return translate(lang, 'msg.guard.plain.deleteWhat', { target }); }
-  return translate(lang, hit ? hit[1] : 'msg.guard.plain.other', { program: (c.split(/\s+/)[0] ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').slice(0, 30) });
+  // 3.2.1: a compound command (`$p = 11188; Stop-Process -Id $p`, `cd x && npm run dev`) is read clause by clause: the
+  // first clause that names a known action wins, so the sentence is not built from a stray `11188;` or a `cd`.
+  const clauses = statements(c).map((s) => s.replace(/^\s*(?:cd\s+[^;&|]+(?:&&|;)\s*)+/i, '').replace(/^\$\w+\s*=\s*\d+\s*$/,'').replace(/^\$\w+\s*=\s*/, '').trim()).filter(Boolean);
+  for (const [re, key] of PLAIN) {
+    const s = clauses.find((cl) => re.test(cl));
+    if (!s) continue;
+    // 3.2.1: a deletion names what it deletes («borrar /tmp/tierra-build-check»), so the user can tell a temporary folder
+    // of the agent's from their work.
+    if (key === 'msg.guard.plain.delete') { const target = deleteTarget(s); if (target) return translate(lang, 'msg.guard.plain.deleteWhat', { target }); }
+    return translate(lang, key, { program: progOf(s) });
+  }
+  const first = clauses.find((cl) => !/^\$\w+\s*=/.test(cl)) ?? c.replace(/^\$\w+\s*=\s*/, '');
+  return translate(lang, 'msg.guard.plain.other', { program: progOf(first) });
 }
+const progOf = (s) => (String(s ?? '').trim().split(/\s+/)[0] ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').replace(/[;,]+$/, '').slice(0, 30);
 
 // The first thing a delete command names (rm -rf X, Remove-Item -Recurse -Path "X", rd /s /q X), shortened from the left
 // when it is long; null when it names nothing readable (a variable, a pattern of several files).
