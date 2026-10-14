@@ -293,9 +293,11 @@ export function createLive(o) {
     }
     return current.promise;
   };
-  live.steer = ({ text }) => {
+  // 3.2.1: the answer of turn/steer arrives later; when it fails (the turn had just ended), onFail gets the message so the
+  // caller sends it as the next turn instead of losing it.
+  live.steer = ({ text, onFail }) => {
     if (closed || !turn || turn.done || !turnId) return false;
-    peer.request('turn/steer', { threadId, input: input(text), expectedTurnId: turnId }).catch((error) => log(`steer: ${error.message}`));
+    peer.request('turn/steer', { threadId, input: input(text), expectedTurnId: turnId }).catch((error) => { log(`steer: ${error.message}`); try { onFail?.(error); } catch { /* caller gone */ } });
     return true;
   };
   live.interrupt = async () => { approvals.clear(); if (threadId && turnId) { try { await peer.request('turn/interrupt', { threadId, turnId }, { timeoutMs: 8000 }); } catch { /* finishing anyway */ } } };

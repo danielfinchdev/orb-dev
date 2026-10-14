@@ -35,6 +35,8 @@ import { processList, taskProcesses, stopProcesses, alive } from '../core/procs.
 const hhmm = (ms) => new Date(ms).toLocaleTimeString(localeOf(ctx.config.language), { hour: '2-digit', minute: '2-digit' });
 const STATUS_ES = { done: 'hecha', failed: 'fallida', blocked: 'bloqueada', cancelled: 'cancelada' };
 const label = (agent) => { try { return adapter(agent).label; } catch { return agent; } };
+// 3.2.1: who did a task in words the user knows: the account's own name when the agent has several (Codex Go, Codex Pro).
+const whoRan = (task) => { const acc = task.run_account; const name = acc ? accountLabel(acc) : null; return name && name !== acc ? name : label(task.assigned_to); };
 const remotesOf = (dir) => git(dir, 'for-each-ref', '--format=%(refname) %(objectname)', 'refs/remotes').stdout;
 const mainStatus = (dir) => { const r = git(dir, 'status', '--porcelain', '-uall'); return r.status === 0 ? r.stdout : null; };
 
@@ -729,7 +731,7 @@ ${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo
     // 3.1: one clear line for the user; what the agent reported (technical) goes folded under it (meta.result).
     // (A task that failed or got blocked says why in a short line: that is what the user needs to decide.)
     const why = ['failed', 'blocked'].includes(task.status) && task.result ? `\n${oneLine(redactSecrets(task.result), 160)}` : '';
-    board.addChat('system', `${tr(`msg.scheduler.ended.${task.status in { done: 1, failed: 1, blocked: 1, cancelled: 1 } ? task.status : 'other'}`, { icon, label: label(task.assigned_to), id: task.id, title: oneLine(task.title) })}${spent ? ` (${spent})` : ''}${why}`,
+    board.addChat('system', `${tr(`msg.scheduler.ended.${task.status in { done: 1, failed: 1, blocked: 1, cancelled: 1 } ? task.status : 'other'}`, { icon, label: whoRan(task), id: task.id, title: oneLine(task.title) })}${spent ? ` (${spent})` : ''}${why}`,
       { kind: 'task-end', task: task.id, status: task.status, ...(task.result ? { result: redactSecrets(task.result).slice(0, 1500) } : {}) });
     const cp = board.settingJson(`checkpoint:${task.id}`);
     const revert = cp?.before ? tr('sys.logs.revertUndo', { id: task.id })

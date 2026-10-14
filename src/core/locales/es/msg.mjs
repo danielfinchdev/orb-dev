@@ -456,6 +456,7 @@ export default {
   "msg.sessions.taskClosed": "la tarea ya está cerrada; Orb para por su cuenta los programas que dejaste en marcha",
   "msg.sessions.approvalTimedOut": "Nadie respondió en {min} min: permiso denegado ({title}). El agente sigue por otro camino.",
   "msg.sessions.approvalTimedOutAgent": "AVISO DE ORB: nadie ha podido aprobar «{title}» en {min} min y se ha denegado. No lo intentes de nuevo: sigue sin ello por otro camino o, si es imprescindible, termina la tarea con status \"blocked\" explicando qué hace falta.",
+  "msg.sessions.steerLate": "La corrección llegó cuando el agente ya terminaba: se envía como siguiente mensaje.",
   "msg.sessions.tool": "herramienta",
   "msg.sessions.waitingPermission": "esperando tu permiso para {title}",
   "msg.sessions.writeMessage": "escribe un mensaje",
