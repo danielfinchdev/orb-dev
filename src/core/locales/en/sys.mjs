@@ -34,6 +34,7 @@ export default {
   'sys.dialog.refImages': 'Reference images',
   'sys.dialog.images': 'Images',
   'sys.main.startFailed': '{name} could not start',
+  'sys.main.keyringWeak': 'Your desktop has no keyring (GNOME Keyring or KWallet), so Orb’s key is kept unencrypted in a file in its folder. Everything works the same; to protect it, install gnome-keyring or kwallet and restart Orb.',
   'sys.main.notice': '{name} · Notification',
 
   // Main process errors

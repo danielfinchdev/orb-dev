@@ -20,11 +20,16 @@ From [**Releases → latest**](https://github.com/danielfinchdev/orb-dev/release
 - **`Orb-3.2.1-light-portable.exe`**: **Orb Light**, the essentials with nothing to install (no minigames, God mode
   or themes). It tells you about new versions.
 
+- **`Orb-<version>-linux-x86_64.AppImage`** or **`.deb`** (also arm64): the same app for a Linux desktop. The
+  AppImage updates itself; the `.deb` tells you about new versions. How to install, update and uninstall:
+  [`docs/LINUX.md`](docs/LINUX.md).
+
 Windows 10 and 11. Since the app is not signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
 On first launch, Orb installs any missing agents with their official installers.
 
-Every version is published automatically: when `version` changes in `package.json` on `main`, CI tests it on Windows,
-builds the installer and Orb Light, and publishes them to Releases (`.github/workflows/release.yml`).
+Every version is published automatically: when `version` changes in `package.json` on `main`, CI tests it on Windows
+and Linux, builds the installer, Orb Light, the AppImage and the `.deb`, and publishes them to Releases
+(`.github/workflows/release.yml`).
 
 ## Run it from source (for development)
 
