@@ -48,17 +48,39 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm test
-      - run: sudo apt-get update && sudo apt-get install -y xvfb
-      - name: La app entera con Electron
+
+  # The whole desktop app with Electron, on Windows and on Linux (Linux with a virtual screen).
+  app:
+    needs: version
+    if: needs.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+      - name: La app entera con Electron (Linux)
+        if: runner.os == 'Linux'
         run: xvfb-run -a -s "-screen 0 1920x1080x24" npm run test:app
+      - name: La app entera con Electron (Windows)
+        if: runner.os == 'Windows'
+        run: npm run test:app
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: capturas-pruebas
+          name: capturas-pruebas-${{ matrix.os }}
           path: test-results/
 
   windows:
-    needs: [version, pruebas]
+    needs: [version, pruebas, app]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4

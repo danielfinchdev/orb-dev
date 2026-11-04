@@ -19,7 +19,8 @@ function useEditors() {
   return editors ?? {};
 }
 
-export function OpenInMenu({ project }) {
+// labelClassName hides the words on a narrow bar (God mode's): the button keeps its icon, its name and a tooltip.
+export function OpenInMenu({ project, labelClassName }) {
   const t = useT();
   const editors = useEditors();
   if (!project?.path || !bridge.openIn) return null;
@@ -30,7 +31,7 @@ export function OpenInMenu({ project }) {
   const Main = ICON[first];
   return (
     <div className="flex items-center" data-testid="open-in">
-      <Button variant="outline" size="sm" className="rounded-r-none" onClick={() => open(first)} data-testid="open-in-main"><Main />{t('tools.openIn', { app: LABEL[first] })}</Button>
+      <Button variant="outline" size="sm" className="rounded-r-none" onClick={() => open(first)} aria-label={t('tools.openIn', { app: LABEL[first] })} title={labelClassName ? t('tools.openIn', { app: LABEL[first] }) : undefined} data-testid="open-in-main"><Main /><span className={labelClassName}>{t('tools.openIn', { app: LABEL[first] })}</span></Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild><Button variant="outline" size="sm" className="rounded-l-none border-l-0 px-1.5" aria-label={t('tools.openWith')} data-testid="open-in-menu"><ChevronDown /></Button></DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
@@ -98,14 +99,14 @@ export function useProjectActions(name) {
   return actions;
 }
 
-export function ActionsMenu({ project }) {
+export function ActionsMenu({ project, labelClassName }) {
   const t = useT();
   const actions = useProjectActions(project?.name);
   if (!project || !bridge.runAction) return null;
   const remove = async (a) => { if (await confirm(t('tools.removeAction'), t('tools.removeActionBody', { name: a.name }), { ok: t('tools.remove'), danger: true })) act(call('actions.remove', { project: project.name, id: a.id })); };
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild><Button variant="outline" size="sm" data-testid="actions-menu"><Zap />{t('tools.actions')}<ChevronDown className="opacity-60" /></Button></DropdownMenuTrigger>
+      <DropdownMenuTrigger asChild><Button variant="outline" size="sm" aria-label={t('tools.actions')} title={labelClassName ? t('tools.actions') : undefined} data-testid="actions-menu"><Zap /><span className={labelClassName}>{t('tools.actions')}</span><ChevronDown className="opacity-60" /></Button></DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">
         {actions.length ? <DropdownMenuLabel>{t('tools.actionsOf', { name: project.name })}</DropdownMenuLabel> : null}
         {actions.map((a) => (
