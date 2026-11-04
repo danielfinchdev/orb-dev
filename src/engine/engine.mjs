@@ -117,6 +117,7 @@ async function start(home, version, secret, browser, headless) {
     const { createLink, orbIdentity } = await import('../core/link.mjs');
     const { macAddresses } = await import('../core/wol.mjs');
     const { guardCall, shapeResult, orbNameOf } = await import('./remote.mjs');
+    const { principalOf } = await import('../core/authz.mjs');
     const { readKey } = await import('../core/home.mjs');
     let macs = { at: 0, list: [] }; // the network cards, looked at once a minute at most
     const myMacs = () => { if (Date.now() - macs.at > 60_000) macs = { at: Date.now(), list: macAddresses() }; return macs.list; };
@@ -126,7 +127,8 @@ async function start(home, version, secret, browser, headless) {
       onRequest: async (method, params) => {
         const why = guardCall(board, method, params);
         if (why) throw Object.assign(new Error(why), { status: 403 });
-        return shapeResult(method, (await api.call(method, params)) ?? null);
+        // 3.6: a call the centre forwards runs as the owner here (WS2: as the person the link maps to).
+        return shapeResult(method, (await api.call(method, params, principalOf(board, { forwarded: true }))) ?? null);
       },
       onChange: (peers) => emit('link:peers', peers)
     });
@@ -211,7 +213,8 @@ transport.on(async (msg) => {
   if (msg.type !== 'call') return;
   try {
     if (!api) throw new Error(tr('sys.engine.notStarted', { name: PRODUCT.name }));
-    const result = await api.call(String(msg.method), msg.params ?? {});
+    // 3.6: this PC's window calls as the person sitting at it (the owner until persons.switch).
+    const result = await api.call(String(msg.method), msg.params ?? {}, api.desktopPrincipal());
     transport.send({ type: 'reply', id: msg.id, ok: true, result: result === undefined ? null : result });
   } catch (error) {
     if (!error?.userFacing) log(`${msg.method}: ${error?.stack ?? error}`);

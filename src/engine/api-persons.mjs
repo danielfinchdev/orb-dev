@@ -1,0 +1,48 @@
+// 3.6 «Personas»: the people of this Orb (src/core/persons.mjs keeps them; src/core/policy.mjs says who may call what).
+// The owner sees everyone's name and numbers (persons.overview), never their content.
+import { getPerson, mustPerson, listPersons, personsCount, createPerson, renamePerson, removePerson, setPin, verifyPin, dropTickets, overview } from '../core/persons.mjs';
+import { tr } from '../core/context.mjs';
+import { fail, str } from './api-common.mjs';
+
+const pin = (v) => (v == null || v === '' ? null : String(v).slice(0, 12));
+
+export function personMethods({ board, emit, desktop }) {
+  const changed = () => board.changed('persons');
+  const shown = (p, who) => (who.role === 'owner' || p.id === who.person
+    ? { id: p.id, name: p.name, role: p.role, color: p.color, language: p.language, tz: p.tz, caps: p.caps, hasPin: p.hasPin, locked: p.locked, me: p.id === who.person }
+    : { id: p.id, name: p.name, role: p.role, color: p.color, me: false });
+  return {
+    // Everyone sees the names (to share with them); the owner, also their settings and whether they have a PIN.
+    'persons.list': (_, who) => listPersons(board).map((p) => shown(p, who)),
+    'persons.me': (_, who) => {
+      const p = getPerson(board, who.person);
+      return { person: p ? shown(p, who) : null, role: who.role, channel: who.channel, rights: who.rights, personsCount: personsCount(board) };
+    },
+    'persons.create': ({ name, language, tz, color, caps }) => { const p = createPerson(board, { name: str(name, 'nombre', 40), language, tz, color, caps }); changed(); return p; },
+    'persons.rename': ({ id, name }, who) => { const p = renamePerson(board, id ?? who.person, str(name, 'nombre', 40)); changed(); return p; },
+    // WS1: marked as removed only (WS5 removes the person's data, with the export first).
+    'persons.remove': ({ id }, who) => { const r = removePerson(board, id ?? who.person); dropTickets(r.id); changed(); return r; },
+    // A new PIN (or none: pin null). For oneself, with the PIN in use typed again (current) or a strong ticket; the owner
+    // may only take another person's PIN away (they set a new one themselves).
+    'persons.setPin': ({ id, pin: next, current }, who) => {
+      const target = mustPerson(board, id ?? who.person);
+      if (target.id !== who.person && pin(next) != null) fail(tr('msg.persons.notYours'));
+      if (target.id === who.person && target.hasPin && current != null && !verifyPin(board, target.id, pin(current), { device: who.device ?? null }).ok) fail(tr('msg.persons.wrongPin'));
+      const r = setPin(board, target.id, pin(next)); dropTickets(target.id); changed(); return r;
+    },
+    // → { ok, ticket, until } | { ok: false, reason, triesLeft?, lockedUntil? }. The ticket works only on this device.
+    'persons.verifyPin': ({ pin: given }, who) => verifyPin(board, who.person, pin(given), { device: who.device ?? (who.channel === 'desktop' ? 'desktop' : null) }),
+    // This PC's window changes person (their PIN, if they have one). WS2: the lock screen and the router.
+    'persons.switch': ({ id, pin: given }) => {
+      const target = mustPerson(board, str(id, 'persona', 40));
+      if (target.hasPin) {
+        const r = verifyPin(board, target.id, pin(given), { device: 'desktop' });
+        if (!r.ok) return { ok: false, reason: r.reason, triesLeft: r.triesLeft, lockedUntil: r.lockedUntil };
+      }
+      desktop.person = target.id;
+      emit('persons:switched', { person: target.id });
+      return { ok: true, person: { id: target.id, name: target.name, role: target.role } };
+    },
+    'persons.overview': () => overview(board)
+  };
+}

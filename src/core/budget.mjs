@@ -8,7 +8,7 @@
 // with roomier limits, so the app no longer stops working long before the subscription would.
 import { ctx, tr } from './context.mjs';
 import { localeOf } from './i18n.mjs';
-import { account as findAccount, accounts, usableAccounts } from './accounts.mjs';
+import { account as findAccount, accounts, usableAccounts, defaultAccount } from './accounts.mjs';
 
 export const budgetConfig = () => {
   const b = ctx.config?.budget ?? {};
@@ -256,4 +256,28 @@ export function pauseAccount(board, id, ms, reason) {
   board.setting(`cooldown_reason:${id}`, reason);
   board.setting(`cooldown_at:${id}`, String(Date.now()));
   return until;
+}
+
+// ---- 3.6 «Personas» (WS1 stubs; WS3 makes them real: accounts per person, loans, caps, reserve)
+// The account a run spends: the one chosen on purpose when it is of that agent, else the agent's default (what 3.5.1
+// did everywhere with defaultAccount). WS3: only the person's own and lent accounts (accountsFor), ranked.
+export function pickAccount(board, { person = null, agent, bot = null, preferred = null } = {}) {
+  const chosen = preferred ? findAccount(preferred) : null;
+  return (chosen?.agent === agent ? chosen : null) ?? defaultAccount(agent) ?? null;
+}
+// Whether a person may spend now on that account (and that bot): { ok: true } | { ok: false, reason: 'loanCap' |
+// 'botCap' | 'reserve' | 'expired', resetsAt }. WS3: loans, bot caps and the lender's reserve.
+export function checkSpend(board, { person = null, account = null, bot = null } = {}) {
+  return { ok: true };
+}
+// What one turn spent, for the person who spent it (usage_ledger; day in that person's time zone).
+export function recordSpend(board, { person = null, account = null, bot = null, conversation = null, session = null, task = null, usage = {} } = {}) {
+  const at = new Date();
+  let tz = null; try { tz = person ? board.one('SELECT tz FROM persons WHERE id = ?', person)?.tz : null; } catch { /* before 3.6 */ }
+  let day = at.toISOString().slice(0, 10);
+  try { day = new Intl.DateTimeFormat('en-CA', { timeZone: tz || undefined, year: 'numeric', month: '2-digit', day: '2-digit' }).format(at); } catch { /* UTC day */ }
+  const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
+  board.run('INSERT INTO usage_ledger (at, day, person_id, account_id, bot_id, conversation_id, session_id, task_id, turns, tokens_in, tokens_out, usd) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    at.toISOString(), day, person, account, bot, conversation, session, task, n(usage.turns) ?? 1, n(usage.tokens_in ?? usage.input_tokens), n(usage.tokens_out ?? usage.output_tokens), n(usage.usd ?? usage.cost_usd));
+  return { day };
 }

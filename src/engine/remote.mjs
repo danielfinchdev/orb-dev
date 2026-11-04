@@ -21,6 +21,8 @@ import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal
 import { newVapidKeys, checkSubscription, sendPush } from './webpush.mjs';
 import { wake, normalMac } from '../core/wol.mjs';
 import { PROTOCOL, CODE_ALPHABET, RELAY_EVENTS, shortCodeLabel } from '../core/link.mjs';
+import { PHONE_SET as ALLOWED, BOTS_OWNER, ORB_SET, CONSOLE_SET, CENTRO_PHONE } from '../core/policy.mjs';
+import { principalOf } from '../core/authz.mjs';
 
 const RENDERER = path.resolve(process.env.ORB_RENDERER || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'renderer'));
 const SESSION_DAYS = 30; // a phone unused for this long has to be paired again
@@ -46,29 +48,17 @@ export function phoneConfig(c) {
   };
 }
 
-// What a phone may call. Everything that changes settings, accounts, connectors, installs software or publishes stays on the PC.
-const ALLOWED = new Set(['app.state', 'chat.list', 'chat.send', 'conversations.list', 'conversations.update', 'conversations.search', 'projects.securityReview', 'chat.stop', 'chat.accept', 'chat.answer', 'chat.settings', 'whiteboard.load', 'whiteboard.save', 'whiteboard.note',
-  'tasks.list', 'tasks.live', 'tasks.get', 'tasks.create', 'tasks.approve', 'tasks.retry', 'tasks.cancel', 'tasks.reassign', 'tasks.followup', 'tasks.undo', 'tasks.launchAnyway', 'tasks.accept',
-  'sessions.list', 'sessions.create', 'sessions.items', 'sessions.send', 'sessions.stop', 'sessions.update',
-  'projects.list', 'projects.icons', 'projects.branch', 'projects.info', 'projects.setActive', 'projects.create', 'logs.list', 'logs.read', 'activity.list', 'usage.get', 'usage.now', 'agents.status', 'models.catalog', 'models.guide',
-  'control.pause', 'control.resume', 'sidebar.complete',
-  // 2.3: answer permission requests, the queue, continue, fork, settle, Task Review, scheduled tasks and @ (all of it
-  // is work the PC already allowed; nothing here changes settings or gives total access).
-  'sessions.queue', 'sessions.editQueued', 'sessions.approve', 'sessions.resume', 'sessions.fork', 'sessions.settle', 'approvals.list',
-  'tasks.review', 'projects.review', 'schedules.list', 'schedules.create', 'schedules.update', 'schedules.remove', 'schedules.run', 'mentions.options',
-  // 3.5: talking to the bots, answering their cards and questions, pausing one and its reminders. Creating, changing or
-  // deleting bots, their memories, the golden rules, what nobody touches and Home Assistant's token are set on the PC.
-  'bots.list', 'bots.get', 'bots.chat', 'bots.send', 'bots.stop', 'bots.decide', 'bots.answer', 'bots.pause', 'bots.groups.list', 'bots.groups.chat', 'bots.groups.send',
-  'bots.memory.get', 'bots.rules.get', 'bots.protected.get', 'bots.reminders.list', 'bots.reminders.create', 'bots.reminders.cancel', 'bots.ha.states', 'bots.srv.status']);
+// What a phone may call (ALLOWED): src/core/policy.mjs PHONE_SET (3.6: the ceiling of phones, browsers and terminals).
 // 3.5: a device the user marked «Puede administrar» (Ajustes › Magic Link › Dispositivos enlazados) manages this Orb's
 // bots and links from afar (a server without a window needs one; `orb-nucleo enlazar` gives it to the first device it
 // links). Never by the kind a device says it is, and still nothing with total access.
 // The bots of a centre are the user's: their own Orb linked to it (a device of kind «orb») manages them too.
-export const BOTS_OWNER = ['bots.create', 'bots.update', 'bots.delete', 'bots.groups.create', 'bots.groups.update', 'bots.groups.delete', 'bots.memory.set', 'bots.rules.set', 'bots.protected.set', 'bots.ha.get', 'bots.ha.set'];
-export const ORB_ALLOWED = new Set([...ALLOWED, ...BOTS_OWNER]);
+// 3.6: the lists live in src/core/policy.mjs (the ceilings of each channel); these names stay for the rest of the code.
+export { BOTS_OWNER };
+export const ORB_ALLOWED = ORB_SET;
 // What a workshop passes on to its centre (centro.<method>): the bots, nothing else.
 export const CENTRO_FORWARD = new Set([...ORB_ALLOWED].filter((m) => m.startsWith('bots.')));
-export const CONSOLE_ALLOWED = new Set([...ORB_ALLOWED, 'link.qr', 'link.devices', 'link.rename', 'link.revoke', 'link.setAdmin', 'link.setApprove', 'link.confirm', 'link.peers', 'link.connect', 'link.disconnect']);
+export const CONSOLE_ALLOWED = CONSOLE_SET;
 // What a centre sends to the Orbs linked with it (their Bots mode shows the centre's bots, live).
 const BOT_EVENTS = new Set(['bot.updated', 'bot.message', 'bot.state']);
 // What the access of a device allows on this Orb (role: this Orb's): everything of the console for a device marked
@@ -91,7 +81,7 @@ const EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'notice', 'se
   'bot.updated', 'bot.message', 'bot.state']);
 // 3.5 «Solo Orb»: the server (Orb Núcleo, without a window) has no screen of its own, so a linked phone signs its agents in: it gets the
 // link and the code, and pastes Claude's code back. On a PC the sign-in stays on the PC.
-const CENTRO_PHONE = new Set(['agents.login', 'agents.loginCode', 'agents.loginCancel', 'agents.loginState']);
+// (CENTRO_PHONE, in src/core/policy.mjs)
 // 3.5: what a phone may also ask: the links' state and its workshop through the centre (taller.*).
 const LINK_ALLOWED = new Set(['link.status']);
 // What may be forwarded to each role (the workshop checks it again on its side): the same work a phone may do there.
@@ -439,7 +429,8 @@ export function createRemote({ board, api, log, emit = () => {} }) {
     const why = guardCall(board, method, params, { uploadsDir: uploads(), allowed });
     if (why) return deny(why);
     try {
-      let result = shapeResult(method, (await api.call(method, params)) ?? null);
+      // 3.6: as the device's person, within what this device may call (WS2: the router and per-person shaping).
+      let result = shapeResult(method, (await api.call(method, params, principalOf(board, { device, ceiling: allowed }))) ?? null);
       // What this device may do here (the interface shows or hides the buttons for it).
       if (method === 'app.state' && result) result = { ...result, access: { admin: Boolean(device.admin), bots: allowed.has('bots.create'), links: allowed.has('link.qr'), approve: Number(device.approve ?? 1) === 1 } };
       return reply(res, device, msg.nonce, { ok: true, result });

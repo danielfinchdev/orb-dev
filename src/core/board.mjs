@@ -2,7 +2,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { openDb, taskOptions, checkPolicy } from './db.mjs';
-import { ctx, tr, isHeadless } from './context.mjs';
+import { ctx, tr, isHeadless, personSetting as personSettingOf } from './context.mjs';
+import { ownerId as findOwner, personName as nameOf } from './persons.mjs';
+import { scopeSql } from './authz.mjs';
 import { AGENT_IDS, AGENT_LABELS, folderName, projectLogHeader, isConfigName, categoryOf, CATEGORIES } from './home.mjs';
 import { oneLine, MAX_DESCRIPTION } from './safety.mjs';
 import { contentHash, sign, verify, detectSensitivity, deletionAskedByUser, defaultApprovalKey } from './approval.mjs';
@@ -18,6 +20,8 @@ const parse = (task) => task && { ...task, mode: task.mode ?? 'carpeta', readonl
 
 // The user's name as the assistant writes it ("el usuario" when not set).
 export const userName = () => ctx.config?.userName?.trim() || 'el usuario';
+// 3.6: a person's name (the owner's: userName, as before). userName() stays the owner's.
+export const personName = (board, id) => nameOf(board, id);
 // "de Ana" / "del usuario" (Spanish contracts de + el).
 export const ofUser = () => (ctx.config?.userName?.trim() ? `de ${ctx.config.userName.trim()}` : 'del usuario');
 // The same two for what the user reads in the app (chat notices), in the language of the settings.
@@ -95,7 +99,13 @@ export class Board {
 
   // The engine listens to push changes to the window; MCP processes have no listeners (the engine polls the database).
   onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
-  changed(what) { for (const fn of this.listeners) { try { fn(what); } catch { /* a listener must never break a write */ } } }
+  // 3.6: hints { person, res } say whose change it is (the router of WS2 tells only them); never content.
+  changed(what, hints = null) { for (const fn of this.listeners) { try { fn(what, hints); } catch { /* a listener must never break a write */ } } }
+
+  // ---- 3.6 «Personas»: the owner, a person's name and their own settings.
+  ownerId() { return (this._owner ??= findOwner(this) ?? null); }
+  personName(id) { return nameOf(this, id); }
+  personSetting(pid, key, value) { return personSettingOf(pid ?? this.ownerId(), key, value, this.db); }
 
   all(sql, ...params) { return this.db.prepare(sql).all(...params); }
   one(sql, ...params) { return this.db.prepare(sql).get(...params); }
@@ -125,9 +135,11 @@ export class Board {
     if (list && !list.includes(agent)) throw new Error(tr('sys.board.agentUnavailable', { agent, list: list.length ? list.join(', ') : tr('sys.board.noAgentsAvailable') }));
   }
 
-  event(taskId, actor, kind, detail = '') {
-    this.run('INSERT INTO events (task_id, actor, kind, detail, at) VALUES (?, ?, ?, ?, ?)', taskId ?? null, String(actor), kind, String(detail).slice(0, 4000), now());
-    this.changed('events');
+  // 3.6: person: whose activity it is (default: the task's, else none = the owner's).
+  event(taskId, actor, kind, detail = '', { person = null } = {}) {
+    const who = person ?? (taskId != null ? this.one('SELECT person_id FROM tasks WHERE id = ?', Number(taskId))?.person_id ?? null : null);
+    this.run('INSERT INTO events (task_id, actor, kind, detail, at, person_id) VALUES (?, ?, ?, ?, ?, ?)', taskId ?? null, String(actor), kind, String(detail).slice(0, 4000), now(), who);
+    this.changed('events', who ? { person: who } : null);
   }
 
   // ---- projects
@@ -185,8 +197,10 @@ export class Board {
   // ---- tasks
   task(id) { return parse(this.one('SELECT * FROM tasks WHERE id = ?', Number(id))); }
 
-  tasks({ project, status, agent, limit = 100 } = {}) {
+  // 3.6: principal: only that person's tasks and those of the projects shared with them.
+  tasks({ project, status, agent, limit = 100, principal = null } = {}) {
     const where = []; const params = [];
+    if (principal) { const s = scopeSql(principal, 'task', 'tasks'); where.push(s.where); params.push(...s.args); }
     if (project) { where.push('project = ? COLLATE NOCASE'); params.push(project); }
     if (status) { where.push('status = ?'); params.push(status); }
     if (agent) { where.push('(agent = ? OR assigned_to = ?)'); params.push(agent, agent); }
@@ -528,15 +542,18 @@ export class Board {
     let context = null; try { context = r.context ? JSON.parse(r.context) : null; } catch { /* none */ }
     return { ...r, titled: Boolean(r.titled), context };
   }
-  conversations({ limit = 300 } = {}) {
-    return this.all('SELECT * FROM conversations WHERE bot_id IS NULL AND group_id IS NULL ORDER BY updated_at DESC, id DESC LIMIT ?', Math.min(Math.max(Number(limit) || 300, 1), 2000)).map((r) => this.conversation(r.id) ?? r);
+  // 3.6: principal: only that person's conversations (they are always private).
+  conversations({ limit = 300, principal = null } = {}) {
+    const s = principal ? scopeSql(principal, 'conversation', 'conversations') : { where: '1=1', args: [] };
+    return this.all(`SELECT * FROM conversations WHERE bot_id IS NULL AND group_id IS NULL AND ${s.where} ORDER BY updated_at DESC, id DESC LIMIT ?`, ...s.args, Math.min(Math.max(Number(limit) || 300, 1), 2000)).map((r) => this.conversation(r.id) ?? r);
   }
-  createConversation({ title = '', project = null, agent = 'claude', account = null, model = null, reasoning = 'medium' } = {}) {
+  // 3.6: person: whose it is (default: the owner).
+  createConversation({ title = '', project = null, agent = 'claude', account = null, model = null, reasoning = 'medium', person = null } = {}) {
     if (project && !this.project(project)) throw new Error(tr('sys.board.unknownProject', { name: project }));
-    const at = now();
-    const { lastInsertRowid } = this.run(`INSERT INTO conversations (title, titled, project, agent, account, model, reasoning, created_at, updated_at) VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?)`,
-      oneLine(title || tr('msg.board.newConversation'), 80), project ? this.project(project).name : null, agent, account || null, model || null, reasoning || 'medium', at, at);
-    this.changed('conversations');
+    const at = now(); const who = person ?? this.ownerId();
+    const { lastInsertRowid } = this.run(`INSERT INTO conversations (title, titled, project, agent, account, model, reasoning, created_at, updated_at, person_id) VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      oneLine(title || tr('msg.board.newConversation'), 80), project ? this.project(project).name : null, agent, account || null, model || null, reasoning || 'medium', at, at, who);
+    this.changed('conversations', { person: who });
     return this.conversation(Number(lastInsertRowid));
   }
   updateConversation(id, fields) {
@@ -582,10 +599,11 @@ export class Board {
   // ---- the assistant's chat and the activity feed
   // meta: extra data of a chat line, e.g. { kind: 'report', tasks: [ids] } for the assistant's report that waits for the user's OK.
   // 3.2: conversation: the one the line belongs to; when not given, the one of the task the line is about (meta.task).
-  addChat(role, body, meta = null, conversation = undefined) {
+  // 3.6: person: who wrote the line (in a shared group, its author; the window's notices: whom they are for).
+  addChat(role, body, meta = null, conversation = undefined, { person = null } = {}) {
     const conv = conversation !== undefined ? conversation : meta?.task ? this.conversationOfTask(meta.task) : null;
     const at = now();
-    const { lastInsertRowid } = this.run('INSERT INTO chat (role, body, meta, at, conversation_id) VALUES (?, ?, ?, ?, ?)', role, String(body), meta ? JSON.stringify(meta) : null, at, conv ?? null);
+    const { lastInsertRowid } = this.run('INSERT INTO chat (role, body, meta, at, conversation_id, person_id) VALUES (?, ?, ?, ?, ?, ?)', role, String(body), meta ? JSON.stringify(meta) : null, at, conv ?? null, person ?? null);
     if (conv && role !== 'notice') this.run('UPDATE conversations SET updated_at = ? WHERE id = ?', at, Number(conv));
     this.changed('chat');
     return { id: Number(lastInsertRowid), conversation: conv ?? null };
@@ -593,7 +611,8 @@ export class Board {
   // 2.7: a notice that only informs (the working folder changed, the brain in use, a schedule created…): the window shows
   // it as a passing notification instead of a grey line in the chat. tone: info | success | warning. Kept in the table
   // (role 'notice') so the engine sees it whichever process wrote it, but left out of the chat.
-  notice(body, tone = 'info') { return this.addChat('notice', body, { tone }); }
+  // 3.6: person: the one the notice is for (default: the owner; owner: true also tells the owner when it is someone else's).
+  notice(body, tone = 'info', { person = null, owner = false } = {}) { return this.addChat('notice', body, { tone, ...(person ? { person } : {}), ...(owner ? { owner: true } : {}) }, undefined, { person }); }
   // Changes the extra data of a chat message (e.g. an approval card that was answered).
   patchChatMeta(id, meta) { this.run('UPDATE chat SET meta = ? WHERE id = ?', JSON.stringify(meta), Number(id)); this.changed('chat'); }
   // The chat lines of a conversation (not the notices), oldest first: the last `limit`, or only those before a line id.
