@@ -21,7 +21,7 @@ const HOME_HERE = "(home IS NULL OR home = (SELECT value FROM settings WHERE key
 
 // The tool groups a bot can have (casillas). Memory, messages to other bots, the list of bots and questions to the user
 // are always there. gestion: create, change and pause bots (always with the user's approval); the chief has it.
-export const TOOL_GROUPS = ['internet', 'recordatorios', 'correo', 'calendario', 'navegador', 'casa', 'equipo', 'servidor', 'gestion'];
+export const TOOL_GROUPS = ['internet', 'recordatorios', 'correo', 'calendario', 'navegador', 'casa', 'equipo', 'oce', 'servidor', 'gestion'];
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh'];
 export const EVERY = ['once', 'daily', 'weekly', 'monthly', 'yearly'];
 const STARTER_TOOLS = ['internet', 'recordatorios'];
@@ -223,7 +223,8 @@ export function exclusiveOwner(board, topic, { except = null, person = null } = 
 // 3.6: Home Assistant (integration:ha) and the server (integration:srv) are the owner's; a bot gets «casa» / «servidor»
 // only when its person may talk on that integration (the owner, or someone it was shared with to talk or more). 3.7: the
 // same for «equipo» (integration:pc, this computer: what Opti Bot did until 3.6).
-export const INTEGRATION_TOOLS = { casa: 'ha', equipo: 'pc', servidor: 'srv' };
+// 3.7 (WS8): «oce» (Open Control Edge) reads this computer and the owner's linked ones: integration:pc too.
+export const INTEGRATION_TOOLS = { casa: 'ha', equipo: 'pc', oce: 'pc', servidor: 'srv' };
 export const mayUseIntegration = (board, person, id, right = 'talk') => rank(rightOn(board, person, { type: 'integration', id })) >= rank(right);
 // The tool groups a bot really gets: its own, minus the ones another active bot of its person has as exclusive, minus the
 // integrations its person may not use; the chief also manages bots.

@@ -155,6 +155,46 @@ async function pcTools() {
   ];
 }
 const PC_TOOLS = ME && has('equipo') ? await pcTools() : [];
+// 3.7 (WS8): «Open Control Edge»: its readings on this computer and on the owner's linked Orbs, read-only (engine/oce.mjs).
+// The linked ones come from what the engine last heard from them (setting oce_machines); a call asks it for a fresh
+// reading (oce_wanted) and waits a few seconds. The limits for alerts live in the bot's folder; the engine checks them.
+async function oceTools() {
+  const O = await import('../engine/oce.mjs');
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const all = () => [{ key: R.selfId(board), name: O.machineName(), here: true }, ...(board.settingJson(O.MACHINES_KEY)?.list ?? []).map((m) => ({ ...m, here: false }))];
+  const pick = (machine) => {
+    const list = all(); if (!String(machine ?? '').trim()) return list;
+    const hit = list.filter((m) => O.sameMachine(machine, m));
+    if (!hit.length) throw new Error(tr('sys.oce.unknownMachine', { name: oneLine(String(machine), 60), list: list.map((m) => m.name).join(', ') }));
+    return hit;
+  };
+  const refresh = async (targets) => {
+    if (!targets.some((m) => !m.here && m.online && m.capable)) return;
+    const at = Date.now(); board.settingJson(O.WANTED_KEY, { at });
+    for (const end = at + 9000; Date.now() < end; await sleep(250)) if (Date.parse(board.settingJson(O.MACHINES_KEY)?.at ?? 0) >= at) return;
+  };
+  const fresh = (targets) => { const list = board.settingJson(O.MACHINES_KEY)?.list ?? []; return targets.map((m) => (m.here ? m : { ...m, ...(list.find((x) => x.key === m.key) ?? {}), here: false })); };
+  const remoteView = (m, what) => {
+    if (!m.capable) return { machine: m.name, here: false, available: false, reason: tr('sys.oce.oldOrb', { name: m.name }) };
+    const got = what === 'values' ? m.values : m.status;
+    if (!m.online || !got) return { machine: m.name, here: false, online: false, reason: tr('sys.oce.offline', { name: m.name }), ...(got ? { last: { ...got, machine: m.name }, readAt: what === 'values' ? m.valuesAt : m.statusAt } : {}) };
+    return { ...got, machine: m.name, here: false, online: true, readAt: what === 'values' ? m.valuesAt : m.statusAt };
+  };
+  const machineArg = { machine: str('El equipo: su nombre (de oce_status) o «este»; vacío = todos') };
+  const one = (list) => (list.length === 1 ? list[0] : list);
+  return [
+    { name: 'oce_status', description: 'Open Control Edge en este equipo y en los Orbs enlazados: si está disponible (solo Windows), instalado y abierto, su versión y la hora de su última lectura. Si no hay lectura, «reason» dice por qué (no lo inventes).', readOnly: true,
+      inputSchema: { type: 'object', properties: machineArg },
+      run: async (a) => { const targets = pick(a.machine); await refresh(targets); return one(fresh(targets).map((m) => (m.here ? O.localStatus() : remoteView(m, 'status')))); } },
+    { name: 'oce_values', description: 'Las lecturas reales de Open Control Edge: CPU (carga y temperatura), GPU (nombre, carga, temperatura, VRAM), RAM en uso, FPS y el uso de las IA (claude, codex…: % de la ventana corta y cuándo se reinicia). null = sin lectura: dilo así, no lo inventes. Grados en °C, el resto en %.', readOnly: true,
+      inputSchema: { type: 'object', properties: machineArg },
+      run: async (a) => { const targets = pick(a.machine); await refresh(targets); return one(fresh(targets).map((m) => (m.here ? O.localValues() : remoteView(m, 'values')))); } },
+    { name: 'oce_alerts', description: `Los avisos que ${USER} te pide: cuando una lectura pasa de un límite, Orb lo escribe en tu chat y avisa a su móvil (como mucho cada 30 min por aviso). Sin rules, devuelve los que hay; con rules, los sustituye todos (lista vacía = ninguno). metric: cpuTemp, gpuTemp (°C), cpuLoad, gpuLoad, ram, vram, ai (%); above: el límite; machine: el equipo (vacío = todos); provider: para ai, la IA (claude, codex…). Pon solo los que ${USER} haya pedido.`,
+      inputSchema: { type: 'object', properties: { rules: { type: 'array', maxItems: 20, items: { type: 'object', required: ['metric', 'above'], properties: { metric: { type: 'string', enum: O.METRICS }, above: { type: 'number' }, machine: str('El equipo (vacío = todos)'), provider: str('Para ai: claude, codex…') } } } } },
+      run: (a) => (Array.isArray(a.rules) ? { saved: O.writeThresholds(ME, a.rules) } : { rules: O.readThresholds(ME) }) }
+  ];
+}
+const OCE_TOOLS = ME && has('oce') ? await oceTools() : [];
 const tools = !ME ? [] : [
   { name: 'bot_list', description: 'Los bots a los que puedes escribir: nombre, papel, quién es el jefe, quién está en pausa y los temas exclusivos de cada uno.', readOnly: true, inputSchema: { type: 'object', properties: {} }, run: () => listForBot() },
   { name: 'bot_send', description: 'Manda un mensaje a otro bot (por nombre). Su respuesta te llega como un mensaje nuevo; no esperes. Si el tema es exclusivo de un bot, va a ese bot.',
@@ -193,6 +233,7 @@ const tools = !ME ? [] : [
       inputSchema: { type: 'object', required: ['name'], properties: { name: str('Nombre del bot'), paused: { type: 'boolean' }, reason: str('Por qué') } }, run: (a) => admin('pause', a) }
   ] : []),
   ...PC_TOOLS,
+  ...OCE_TOOLS,
   ...(has('servidor') ? [
     { name: 'srv_status', description: 'Cómo está el servidor: CPU, memoria, discos, tiempo encendido; en Linux también los contenedores (docker ps) y los servicios con fallos.', readOnly: true, inputSchema: { type: 'object', properties: {} }, run: () => S.serverStatus() },
     { name: 'srv_logs', description: 'Últimas líneas del registro de un contenedor (kind docker) o de un servicio (kind journal; user true para los del usuario).', readOnly: true,

@@ -25,10 +25,13 @@ export const PROTOCOL = 3;
 export const MIN_PROTOCOL = 2;
 export const FORWARD_MIN = 3;
 // 3.7 (WS3): bots.home.v1 (one home per bot, moves by uid) and replica.v1 (live copies pulled from the home).
-export const FEATURES = ['persons', 'bots.home.v1', 'replica.v1'];
+// 3.7 (WS8): oce.v1: this Orb answers oce.status / oce.values (read-only Open Control Edge readings, src/engine/oce.mjs).
+export const FEATURES = ['persons', 'bots.home.v1', 'replica.v1', 'oce.v1'];
 // 3.7: the calls between two Orbs about their bots' homes and copies (src/engine/replica.mjs): any linked Orb of the user,
 // whatever its role (the other side checks who it is and whose bots it may see).
-export const isHomeCall = (method) => /^(replica|home)\.[a-zA-Z]+$/.test(String(method ?? ''));
+// 3.7 (WS8): oce.* (read-only Open Control Edge readings) travel the same way between the owner's Orbs.
+export const isHomeCall = (method) => /^(replica|home|oce)\.[a-zA-Z]+$/.test(String(method ?? ''));
+export const isOceCall = (method) => /^oce\.[a-zA-Z]+$/.test(String(method ?? ''));
 // Who has to update, given what this side speaks and what the other says: null (they understand each other), 'me' (this
 // side is too old for the other) or 'them' (the other is too old for this one). An answer without v is protocol 2 (3.5).
 export function versionGap(mine = {}, theirs = {}) {

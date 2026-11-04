@@ -474,7 +474,7 @@ function InterfaceCard({ c }) {
 
 // Expert mode: an IDE-like view (PC only) with the panels the user picks.
 // 2.7: the bridge with Open Control Edge (engine/bridge.mjs): on unless turned off. 3.7: its own card (it was part of
-// «Monitoreo del equipo», which is gone), config oce.share.
+// «Monitoreo del equipo», which is gone), config oce.share. 3.7 (WS8): «Crear Optimus automáticamente», oce.optimus.
 function OceCard({ c }) {
   const t = useT();
   return (
@@ -482,6 +482,7 @@ function OceCard({ c }) {
       <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><HeartPulse className="text-success size-5" /><div><CardTitle>{t('settings.oce')}</CardTitle><CardDescription>{t('settings.oceDesc')}</CardDescription></div></CardHeader>
       <CardContent>
         <Row label={t('settings.oceShare')}><Switch checked={c.oce?.share !== false} onCheckedChange={(share) => save({ oce: { share } }, share ? t('settings.oceShared') : t('settings.oceNotShared'))} data-testid="oce-share" /></Row>
+        <Row label={t('settings.oceOptimus')} hint={t('settings.oceOptimusHint')}><Switch checked={c.oce?.optimus !== false} onCheckedChange={(optimus) => save({ oce: { optimus } }, optimus ? t('settings.oceOptimusOn') : t('settings.oceOptimusOff'))} data-testid="oce-optimus" /></Row>
       </CardContent>
     </Card>
   );

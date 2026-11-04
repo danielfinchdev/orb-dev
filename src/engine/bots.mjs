@@ -67,6 +67,7 @@ const TOOL_TEXT = {
   navegador: 'el navegador de Orb (orb_browser_*): mirar precios, citas, comparar; comprar, reservar, pagar o enviar formularios solo después de un bot_confirm aprobado',
   casa: 'Home Assistant: ha_states y ha_call (cerraduras, alarma, persianas, puertas, scripts y automatizaciones con tarjeta)',
   equipo: 'este equipo: pc_health, pc_network, pc_android, pc_orb_check y pc_backup; en Windows también pc_startup, pc_security y pc_propose (cualquier cambio con tarjeta; si hace falta administrador, Windows lo pide en ese momento)',
+  oce: 'Open Control Edge, solo lectura: oce_status y oce_values ({ machine }: este equipo o uno de los Orbs enlazados; sin machine, todos). null = no hay lectura: no lo inventes',
   servidor: 'el servidor: srv_status, srv_logs y srv_propose (cualquier cambio con tarjeta)',
   gestion: 'crear, cambiar y pausar bots (bot_create, bot_update, bot_pause), siempre con tarjeta'
 };
