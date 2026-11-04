@@ -24,7 +24,7 @@ import { ofUserLabel, userLabel, assistantName } from '../core/board.mjs';
 import * as github from './github.mjs';
 import * as installer from './installer.mjs';
 import * as expert from './expert.mjs';
-import { adbStatus, ensureAdb, adbPath, markAdbUsed } from './android.mjs';
+import { adbStatus, ensureAdb, adbPath, markAdbUsed, adbDisabled } from './android.mjs';
 import * as net from '../core/network.mjs';
 import { spawn } from 'node:child_process';
 import { mcpFolder } from './mcp-folder.mjs';
@@ -326,10 +326,10 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     },
     // Android phones and TVs by adb (wireless pairing with the code the device shows). Each use notes that Orb started
     // adb, so the engine stops its server when it closes (android.stopAdb).
-    'android.devices': async () => (adbStatus().ready ? (markAdbUsed(), { ready: true, devices: await net.adbDevices(adbPath()) }) : { ready: false, devices: [] }),
-    'android.pair': ({ host, code }) => (markAdbUsed(), net.adbPair(adbPath(), str(host, 'dirección', 21), str(code, 'código', 6))),
-    'android.connect': ({ host }) => (markAdbUsed(), net.adbConnect(adbPath(), str(host, 'dirección', 21))),
-    'android.info': ({ serial }) => (markAdbUsed(), net.adbInfo(adbPath(), str(serial, 'dispositivo', 80))),
+    'android.devices': async () => (!adbDisabled() && adbStatus().ready ? (markAdbUsed(), { ready: true, devices: await net.adbDevices(adbPath()) }) : { ready: false, devices: [] }),
+    'android.pair': ({ host, code }) => (adbDisabled() ? fail(tr('msg.android.off')) : markAdbUsed(), net.adbPair(adbPath(), str(host, 'dirección', 21), str(code, 'código', 6))),
+    'android.connect': ({ host }) => (adbDisabled() ? fail(tr('msg.android.off')) : markAdbUsed(), net.adbConnect(adbPath(), str(host, 'dirección', 21))),
+    'android.info': ({ serial }) => (adbDisabled() ? fail(tr('msg.android.off')) : markAdbUsed(), net.adbInfo(adbPath(), str(serial, 'dispositivo', 80))),
 
     'github.status': () => github.status(),
     'github.contributions': () => github.contributions(),
