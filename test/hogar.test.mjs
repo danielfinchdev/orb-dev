@@ -12,11 +12,17 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { tempHome, startEngine, until, wait, ROOT } from './helpers.mjs';
+import net from 'node:net';
+import { tempHome, startEngine, until as untilShort, wait, ROOT } from './helpers.mjs';
 import { paths } from '../src/core/home.mjs';
 import { orbIdOf } from '../src/core/backup.mjs';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
+// 3.7: up to five engines talk over loopback here; with the whole suite running (a loaded PC) a step may take far longer
+// than alone. Every wait gets at least 45 s: the checks are the same, only the patience grows (it returns as soon as true).
+const until = (fn, what, ms) => untilShort(fn, what, Math.max(ms ?? 0, 45_000));
+// A port nobody listens on (a fixed «+1» could be taken).
+const freePort = () => new Promise((resolve, reject) => { const s = net.createServer(); s.once('error', reject); s.listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)); }); });
 const env = { ORB_REMOTE_BIND: '127.0.0.1', ORB_WOL_DRY: '1', ORB_REPLICA_MS: '400', ORB_MOVE_TURN_MS: '1500', ORB_FORWARD_MS: '8000' };
 const tmp = []; const engines = new Map();
 const db = (home, fn) => { const d = new DatabaseSync(paths(home).db); d.exec('PRAGMA busy_timeout = 8000'); try { return fn(d); } finally { d.close(); } };
@@ -37,7 +43,7 @@ const homesReady = (e, k) => until(async () => (await e.call('bots.homes')).some
 
 before(async () => {
   if (!fs.existsSync(path.join(ROOT, 'src', 'renderer', 'index.html'))) throw new Error('compila antes la interfaz (npm run build)');
-  portSrv = 20000 + Math.floor(Math.random() * 20000);
+  portSrv = await freePort();
   tSrv = tempHome({ role: 'centro', mobile: { enabled: true, port: portSrv, name: 'Servidor' } }); tmp.push(tSrv);
   tPc = tempHome({ mobile: { name: 'Portátil' } }); tmp.push(tPc);
   srv = await engine('srv', tSrv); pc = await engine('pc', tPc);
@@ -234,6 +240,8 @@ test('desenlazar: cancelar no hace nada; traer todos los devuelve al PC antes de
 test('desenlazar dejándolos en el Server; restaurar una copia en un Server nuevo', async () => {
   const agenda = await homeOf(pc, 'Agenda');
   assert.equal(agenda.homeHere, false);
+  // The PC's copy up to date with its home first (under load the last pull may still be on its way).
+  await until(async () => (await pc.call('replica.sync').catch(() => null), linesOf(tPc, agenda.uid).length === linesOf(tSrv, agenda.uid).length), 'la copia del PC al día');
   const peer = (await pc.call('link.peers')).find((p) => p.orb === key(tSrv));
   const r = await pc.call('bots.unlink', { peer: peer.id, mode: 'leave' });
   assert.equal(r.ok, true); assert.ok(r.archived >= 1);
@@ -241,7 +249,7 @@ test('desenlazar dejándolos en el Server; restaurar una copia en un Server nuev
   assert.equal(frozen.homeState, 'archived'); assert.equal(frozen.homeKnown, false);
   assert.ok(linesOf(tPc, agenda.uid).length > 2, 'su historia sigue aquí');
   // A new Server: the copy goes there and runs there.
-  const port2 = portSrv + 1;
+  const port2 = await freePort();
   const t3 = tempHome({ role: 'centro', mobile: { enabled: true, port: port2, name: 'Servidor nuevo' } }); tmp.push(t3);
   const srv2 = await engine('srv2', t3);
   await until(async () => (await srv2.call('remote.status')).running, 'acceso del servidor nuevo');

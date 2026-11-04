@@ -1,6 +1,7 @@
 // 3.5/3.7, `npm run dist:server` (also `dist:servidor`): Orb Server for Linux, made on the Windows PC. One package per
 // processor, dist/orb-server-<version>-linux-x64.tar.gz and …-linux-arm64.tar.gz, with
-//   orb-server-<version>/node/bin/node          the official Node 22 LTS for that processor (checked against nodejs.org's SHA-256)
+//   orb-server-<version>/node/bin/node          the official Node 24 LTS for that processor (crypto.argon2 for
+//                                               Argon2id vault accounts) (checked against nodejs.org's SHA-256)
 //   orb-server-<version>/src/…                  only what the server engine loads (src/server/engine-server.mjs and the CLI,
 //                                               the bots' tools, the terminal client): never the interface, the Electron app
 //                                               nor the programming modules (src/server/server-product.mjs)
@@ -11,7 +12,9 @@
 //   orb-server-<version>/bin/orb                the terminal client (src/terminal), with the same Node
 // and dist/install.sh (scripts/install.sh.tmpl with the packages' and Node's sums inside). The tar is written here (ustar
 // with pax names), so the Linux permissions (the executables) are exact on any PC. Target: 50 MB per package at most.
-// Options: --node <22.x.y>, --arch x64|arm64|all (default all), --out <folder>, --keep (keep the staging folder).
+// Then src/core/server-release.mjs gets the real version, url and sha256 of that install.sh (the app's install command;
+// scripts/release.mjs refuses to sign, and the release workflow to build the app, while it holds no real hash).
+// Options: --node <24.x.y>, --arch x64|arm64|all (default all), --out <folder>, --keep (keep the staging folder).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -20,11 +23,17 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { writeTarGz, readTarGz } from '../src/server/tar.mjs';
 import { HELPER_PATH, UNITS_ALLOW, SUDOERS_FILE } from '../src/server/admin-verbs.mjs';
+import { installUrlFor } from '../src/core/server-install.mjs';
 
 export { writeTarGz, readTarGz };
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const ARCHES = ['x64', 'arm64'];
 export const MAX_MB = 50;
+// 3.7: the Node line inside the package: 24 LTS (crypto.argon2, for the vault's Argon2id accounts; no wasm).
+export const NODE_MAJOR = 24;
+export const NODE_ENGINES = '>=24';
+// The module the app reads to show the install command (written by main() once install.sh exists).
+export const RELEASE_MODULE = path.join(ROOT, 'src', 'core', 'server-release.mjs');
 // What the server runs (each one and everything it imports goes in), and the data files they read.
 export const SERVER_ENTRIES = ['src/server/orb-server.mjs', 'src/server/orb-nucleo.mjs', 'src/server/engine-server.mjs', 'src/mcp/server.mjs', 'src/mcp/bot.mjs', 'src/terminal/orb-cli.mjs'];
 export const SERVER_DATA = ['src/core/templates', 'src/server/admin-helper.sh'];
@@ -71,7 +80,7 @@ export function appFiles(root = ROOT) {
 // The package.json of the server: its name and version, and only the production modules it uses.
 export function serverPackage(pkg) {
   const deps = Object.fromEntries(Object.entries(pkg.dependencies ?? {}).filter(([k]) => !DEPS_EXCLUDE.includes(k)));
-  return { name: 'orb-server', version: pkg.version, private: true, type: 'module', description: 'Orb Server: los bots de Orb, siempre encendidos, para un servidor Linux.', engines: { node: '>=22.13' }, dependencies: deps };
+  return { name: 'orb-server', version: pkg.version, private: true, type: 'module', description: 'Orb Server: los bots de Orb, siempre encendidos, para un servidor Linux.', engines: { node: NODE_ENGINES }, dependencies: deps };
 }
 
 // 3.7: a new version that fails to start three times in a row goes back to the one before (src/server/update.mjs does
@@ -188,15 +197,19 @@ Tus datos están en \`~/orb-server\` (bots, data, logs). Más en docs/SERVER.md.
 
 async function fetchText(url) { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.text(); }
 async function nodeVersion(wanted) {
-  if (wanted) return wanted.replace(/^v?/, 'v');
+  if (wanted) {
+    const v = wanted.replace(/^v?/, 'v');
+    if (!v.startsWith(`v${NODE_MAJOR}.`) || Number(v.split('.')[1]) < 7) throw new Error(`Orb Server lleva Node ${NODE_MAJOR}.7 o posterior (crypto.argon2): ${v} no vale`);
+    return v;
+  }
   try {
     const index = JSON.parse(await fetchText('https://nodejs.org/dist/index.json'));
-    const v = index.find((x) => /^v22\./.test(x.version) && x.lts)?.version;
+    const v = index.find((x) => x.version.startsWith(`v${NODE_MAJOR}.`) && x.lts)?.version;
     if (v) return v;
   } catch (error) { console.warn(`  sin conexión con nodejs.org (${error.message}): se usa la versión guardada`); }
-  const cached = fs.existsSync(cacheDir()) ? fs.readdirSync(cacheDir()).map((f) => f.match(/^node-(v22\.\d+\.\d+)-linux-(x64|arm64)\.tar\.gz$/)?.[1]).filter(Boolean) : [];
+  const cached = fs.existsSync(cacheDir()) ? fs.readdirSync(cacheDir()).map((f) => f.match(/^node-(v\d+\.\d+\.\d+)-linux-(x64|arm64)\.tar\.gz$/)?.[1]).filter((v) => v?.startsWith(`v${NODE_MAJOR}.`)).filter(Boolean) : [];
   const best = cached.sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))[0];
-  if (!best) throw new Error('no se pudo saber qué Node 22 descargar (sin conexión y sin copia guardada)');
+  if (!best) throw new Error(`no se pudo saber qué Node ${NODE_MAJOR} descargar (sin conexión y sin copia guardada)`);
   return best;
 }
 export async function nodeTarball(version, arch = 'x64') {
@@ -291,6 +304,21 @@ export function nodeFiles(tarball) {
 }
 
 export const sha256 = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+// src/core/server-release.mjs for the install.sh just made: what the app puts in its one-line install command.
+export function releaseModuleSource({ version, sha256: sum, url = installUrlFor(version) }) {
+  if (!/^\d+\.\d+\.\d+([-+][\w.]+)?$/.test(String(version ?? ''))) throw new Error(`versión no válida: ${version}`);
+  if (!/^[0-9a-f]{64}$/.test(String(sum ?? '')) || /^0+$/.test(sum)) throw new Error('la suma de install.sh no es válida');
+  if (!/^https:\/\/[^\s'"]+\/install\.sh$/.test(String(url ?? ''))) throw new Error(`dirección de install.sh no válida: ${url}`);
+  return `// 3.7: the Orb Server release this app installs (src/core/server-install.mjs). GENERATED by npm run dist:server
+// (scripts/dist-servidor.mjs) from the install.sh it made: do not edit by hand. A development build has nulls here, and
+// the app's command then carries a placeholder hash that sha256sum refuses (scripts/release.mjs checks it never ships).
+export const SERVER_RELEASE = ${JSON.stringify({ version, url, sha256: sum })};
+`;
+}
+export function writeServerRelease({ file = RELEASE_MODULE, ...release }) {
+  fs.writeFileSync(file, releaseModuleSource(release));
+  return file;
+}
 // install.sh from its template: the version and the sums of each package and of the Node inside it.
 export function renderInstall(template, { version, packages }) {
   if (!/^\d+\.\d+\.\d+([-+][\w.]+)?$/.test(version)) throw new Error(`versión no válida: ${version}`);
@@ -334,6 +362,8 @@ async function main() {
     const install = path.join(outDir, 'install.sh');
     fs.writeFileSync(install, renderInstall(fs.readFileSync(path.join(ROOT, 'scripts', 'install.sh.tmpl'), 'utf8'), { version, packages }), { mode: 0o755 });
     console.log(`✔ ${install} (sha256 ${sha256(install)}): fírmalo con npm run release:sign`);
+    writeServerRelease({ version, sha256: sha256(install) });
+    console.log(`✔ ${path.relative(ROOT, RELEASE_MODULE)} con esa suma: haz commit de ese archivo antes de publicar la app`);
   }
   console.log(`Node ${nv}, ${Math.round((Date.now() - started) / 1000)} s`);
 }

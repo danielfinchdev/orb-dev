@@ -9,6 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { ROOT } from './helpers.mjs';
+import { writeServerRelease } from '../scripts/dist-servidor.mjs';
 import { keygen, sign, checkKeyPath, embedKey, buildManifest, fingerprint, defaultKeyPath } from '../scripts/release.mjs';
 import { readManifest, verifySignature, updateFor, createUpdater, rollback, readPending, appDirOf } from '../src/server/update.mjs';
 import { RELEASE_PUBLIC_KEY } from '../src/server/release-key.mjs';
@@ -52,7 +53,12 @@ test('release:sign firma manifest.json e install.sh; el servidor rechaza firmas 
     fs.writeFileSync(path.join(dist, 'orb-server-3.7.1-linux-arm64.tar.gz'), 'paquete arm64');
     fs.writeFileSync(path.join(dist, 'orb-server-3.7.0-linux-x64.tar.gz'), 'otra versión');
     fs.writeFileSync(path.join(dist, 'install.sh'), '#!/bin/sh\n');
-    const r = await sign({ dir: dist, version: '3.7.1', file, publicKey });
+    // 3.7: never signed while the app's module does not carry this install.sh's sum (npm run dist:server writes it).
+    const rel = path.join(dir, 'server-release.mjs');
+    fs.writeFileSync(rel, 'export const SERVER_RELEASE = { version: null, url: null, sha256: null };\n');
+    await assert.rejects(sign({ dir: dist, version: '3.7.1', file, publicKey, releaseModule: rel }), /suma real/);
+    writeServerRelease({ file: rel, version: '3.7.1', sha256: sha('#!/bin/sh\n') });
+    const r = await sign({ dir: dist, version: '3.7.1', file, publicKey, releaseModule: rel });
     assert.deepEqual(r.signed, ['manifest.json', 'install.sh']);
     const data = fs.readFileSync(path.join(dist, 'manifest.json')); const sig = fs.readFileSync(path.join(dist, 'manifest.json.sig'), 'utf8');
     const m = readManifest(data, sig, { publicKey });
@@ -67,7 +73,7 @@ test('release:sign firma manifest.json e install.sh; el servidor rechaza firmas 
     assert.throws(() => readManifest(data, sig, { publicKey: '' }), /clave pública/);
     assert.throws(() => readManifest(data, 'basura', { publicKey }), /firma/);
     // signing with a key that is not the embedded one's pair: refused
-    await assert.rejects(sign({ dir: dist, version: '3.7.1', file, publicKey: other.publicKey.export({ type: 'spki', format: 'pem' }) }), /no es la de la clave pública/);
+    await assert.rejects(sign({ dir: dist, version: '3.7.1', file, releaseModule: rel, publicKey: other.publicKey.export({ type: 'spki', format: 'pem' }) }), /no es la de la clave pública/);
     assert.throws(() => buildManifest(dist, '3.9.9'), /no hay paquetes/);
     // within 3.7.x only, and only newer
     assert.equal(updateFor(m, '3.7.0', 'x64').name, 'orb-server-3.7.1-linux-x64.tar.gz');

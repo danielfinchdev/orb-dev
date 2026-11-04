@@ -10,7 +10,7 @@ export const PRODUCT_SERVER = 'server';
 export const SERVER_SUBSYSTEMS = Object.freeze(['bots', 'link', 'remote', 'backup', 'server-admin', 'agents-login', 'engines', 'update']);
 
 // What the server's API answers. Everything else is refused before it is looked up.
-const SERVER_METHOD = /^(app\.(state|lockState)$|config\.save$|bots\.|inbox\.|link\.|remote\.|backup\.|persons\.|shares\.|templates\.|server\.|vault\.|accounts\.|usage\.(get|byPerson)$|agents\.(status|check|login|loginCode|loginCancel|loginState)$|data\.(moveExport|moveStatus|moveUndo|moveKeepBoth|exportPerson|deletePerson)$|taller\.|browser\.live\.)/;
+const SERVER_METHOD = /^(app\.(state|lockState)$|config\.save$|bots\.|inbox\.|link\.|remote\.|backup\.|persons\.|shares\.|templates\.|server\.|vault\.|replica\.(status|sync)$|accounts\.|usage\.(get|byPerson)$|agents\.(status|check|login|loginCode|loginCancel|loginState)$|data\.(moveExport|moveStatus|moveUndo|moveKeepBoth|exportPerson|deletePerson)$|taller\.|browser\.live\.)/;
 export const serverAllows = (method) => SERVER_METHOD.test(String(method ?? ''));
 // The programming methods (for the sets below and the tests): what a phone of a PC may call and the server never.
 export const PROGRAMMING_METHOD = /^(chat|conversations|tasks|sessions|projects|whiteboard|schedules|logs|activity|expert|opti|actions|installer|github|mcp|android|net|images|models|mentions|approvals|sidebar|control|system|centro)\./;

@@ -17,7 +17,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { ctx, tr, role } from '../core/context.mjs';
 import { oneLine } from '../core/safety.mjs';
-import { readOce, bridgeDir } from './bridge.mjs';
+import { readOce, bridgeDir } from './oce-reading.mjs';
 
 const FAKE = Boolean(process.env.ORB_FAKE_AGENTS);
 // Tests: the fake agents read a made-up bridge (ORB_OCE_FAKE=1, any system) and a made-up install folder (ORB_OCE_DIR).

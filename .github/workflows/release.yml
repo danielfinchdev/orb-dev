@@ -69,6 +69,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: La app nunca sale con la suma de install.sh de relleno
+        run: node scripts/release.mjs check-server-release
       - name: Construir el instalador y Orb Light (portable)
         run: npx vite build && npx electron-builder --win nsis portable --x64 --publish never
       - name: Probar la app empaquetada en Windows
@@ -96,6 +98,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: La app nunca sale con la suma de install.sh de relleno
+        run: node scripts/release.mjs check-server-release
       - name: Construir la AppImage y el .deb
         run: npx vite build && npx electron-builder --linux AppImage deb --x64 --arm64 --publish never
       - run: sudo apt-get update && sudo apt-get install -y xvfb

@@ -350,11 +350,14 @@ export function createServerBrowser({ language = () => 'es', ownerId = () => 'ow
 
 // The engine's side (src/server/engine-server.mjs, and src/engine/engine.mjs headless): the browser started with the
 // engine (Chromium itself only when a bot needs it), «Necesito que lo hagas tú» as a notice, a push and an event.
-export async function startServerBrowser({ board, emit, push = () => {}, log = () => {} }) {
+// vaultFill: the vault's hook (src/server/vault/fill.mjs); by default ctx.vaultFill, looked up at each call (none: failed).
+// testing: createServerBrowser's test options (launchContext, readMeminfo, executable, scope, display, root).
+export async function startServerBrowser({ board, emit, push = () => {}, log = () => {}, vaultFill = null, testing = {} }) {
   const { ctx, tr } = await import('../core/context.mjs');
   const { ownerOfBoard } = await import('../core/authz.mjs');
+  const fill = vaultFill ?? ((tab, args, page) => (typeof ctx.vaultFill === 'function' ? ctx.vaultFill(tab, args, page) : { ok: false, reason: 'vault_off' }));
   const sb = createServerBrowser({
-    language: () => ctx.config.language, ownerId: () => ownerOfBoard(board), config: () => ctx.config.browser ?? {}, log,
+    language: () => ctx.config.language, ownerId: () => ownerOfBoard(board), config: () => ctx.config.browser ?? {}, log, vaultFill: fill,
     root: process.env.ORB_SERVER_BROWSER_DIR || ctx.paths.browser || path.join(os.homedir(), 'orb-server', 'browser'),
     enginesRoot: ctx.paths.engines || process.env.ORB_ENGINES || null,
     display: process.env.ORB_SERVER_BROWSER_DISPLAY || ctx.config.browser?.server?.display || 'auto',
@@ -365,10 +368,12 @@ export async function startServerBrowser({ board, emit, push = () => {}, log = (
       board.notice(body, 'warning', { person: whose && !board.isOwnerPerson(whose) ? whose : null });
       emit('browser:human', { person: whose, kind, site, open: 'browser.live' });
       try { push({ title: tr('msg.browser.human.title'), body, person: whose }); } catch { /* no phones */ }
-    }
+    },
+    ...testing
   });
   await sb.ready;
   ctx.serverBrowser = sb;
   ctx.browser = { pipe: sb.pipe, token: sb.token, server: true };
+  ctx.browserLive = true; // its pages can be watched and driven from the app/phone (cap browser.live.v1, src/core/link.mjs)
   return sb;
 }

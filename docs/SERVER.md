@@ -120,8 +120,9 @@ How it is kept safe:
   when you connect a vault.
 - **Bitwarden cloud is not 100 % local**: Orb Server connects to the Bitwarden servers to read the collection. With a
   Vaultwarden on your network everything stays at home.
-- **Argon2id accounts** need Orb Server running on Node 24.7 or later (`crypto.argon2`). With an older Node, connecting
-  such an account fails with a clear message; switch the Orb account to PBKDF2 in the web vault.
+- **Argon2id accounts** need Node 24.7 or later (`crypto.argon2`). The Orb Server package carries the latest Node 24 LTS
+  (`npm run dist:server`), so they work as installed; on an older Node (a hand-made install), connecting such an account
+  fails with a clear message: switch the Orb account to PBKDF2 in the web vault.
 
 The browser's hook contract (for `vault_fill`) is written at the top of `src/server/vault/fill.mjs`.
 

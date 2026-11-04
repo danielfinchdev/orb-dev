@@ -68,12 +68,28 @@ function stubPipe(page) {
   });
   return { pipe, seen, ready: new Promise((r) => server.listen(pipe, r)), close: () => server.close() };
 }
+// The MCP child with a time limit on every call: a child that dies (or never answers) fails the test at once instead of
+// leaving it waiting forever; close() kills it if it does not exit by itself.
 function mcp(home, env) {
   const child = spawn(process.execPath, [path.join(ROOT, 'src', 'mcp', 'server.mjs')], { env: { ...process.env, ORB_HOME: home, ...env }, stdio: ['pipe', 'pipe', 'inherit'], windowsHide: true });
-  const replies = new Map(); let n = 0;
-  readline.createInterface({ input: child.stdout }).on('line', (l) => { const m = JSON.parse(l); replies.get(m.id)?.(m); });
-  const rpc = (method, params) => new Promise((r) => { const id = ++n; replies.set(id, r); child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`); });
-  return { rpc, call: async (name, args) => { const r = (await rpc('tools/call', { name, arguments: args })).result; return { error: Boolean(r.isError), text: r.content[0].text }; }, close: () => { const gone = new Promise((r) => (child.exitCode != null ? r() : child.once('exit', r))); child.stdin.end(); return gone; } };
+  const replies = new Map(); let n = 0; let gone = null;
+  const exited = new Promise((r) => child.once('exit', (code) => { gone = code ?? 'killed'; for (const [, fn] of replies) fn(null); replies.clear(); r(); }));
+  readline.createInterface({ input: child.stdout }).on('line', (l) => { let m; try { m = JSON.parse(l); } catch { return; } const fn = replies.get(m.id); if (fn) { replies.delete(m.id); fn(m); } });
+  const rpc = (method, params, ms = 30_000) => new Promise((resolve, reject) => {
+    if (gone != null) return reject(new Error(`el servidor MCP terminó (${gone})`));
+    const id = ++n;
+    const timer = setTimeout(() => { replies.delete(id); reject(new Error(`${method}: sin respuesta en ${ms} ms`)); }, ms);
+    replies.set(id, (m) => { clearTimeout(timer); return m ? resolve(m) : reject(new Error(`el servidor MCP terminó (${gone}) durante ${method}`)); });
+    child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}
+`);
+  });
+  return {
+    rpc,
+    call: async (name, args) => { const r = (await rpc('tools/call', { name, arguments: args })).result; return { error: Boolean(r.isError), text: r.content[0].text }; },
+    close: async () => {
+      if (gone == null) { child.stdin.end(); const t = setTimeout(() => child.kill(), 5000); await exited; clearTimeout(t); }
+    }
+  };
 }
 
 test('MCP de un bot: el clic de riesgo por número se reconoce, y la tarjeta de acciones masivas sale a la 51', async () => {
@@ -108,18 +124,18 @@ test('MCP de un bot: el clic de riesgo por número se reconoce, y la tarjeta de 
   } finally { await c.close(); stub.close(); h.cleanup(); }
 });
 
-test('MCP: orb_browser_vault_fill solo con la bóveda encendida, y solo devuelve ok o failed', async () => {
+// 3.7: one sign-in tool only, vault_fill of the bots' «Contraseñas» group (src/mcp/bot.mjs; test/boveda.test.mjs): the
+// general MCP server never offers a second one, whatever the environment says.
+test('MCP: la bóveda tiene una sola herramienta (vault_fill de los bots), nunca orb_browser_vault_fill', async () => {
   const h = tempHome();
   const stub = stubPipe(() => 'ok'); await stub.ready;
-  const off = mcp(h.home, { ORB_AGENT: 'claude', ORB_BROWSER_PIPE: stub.pipe, ORB_BROWSER_TOKEN: 'a'.repeat(64), ORB_SESSION: 's1' });
-  const on = mcp(h.home, { ORB_AGENT: 'claude', ORB_BROWSER_PIPE: stub.pipe, ORB_BROWSER_TOKEN: 'a'.repeat(64), ORB_SESSION: 's2', ORB_BROWSER_VAULT: '1' });
+  const c = mcp(h.home, { ORB_AGENT: 'claude', ORB_BROWSER_PIPE: stub.pipe, ORB_BROWSER_TOKEN: 'a'.repeat(64), ORB_SESSION: 's2', ORB_BROWSER_VAULT: '1' });
   try {
-    await off.rpc('initialize', {}); await on.rpc('initialize', {});
-    assert.ok(!(await off.rpc('tools/list', {})).result.tools.some((x) => x.name === 'orb_browser_vault_fill'));
-    assert.ok((await on.rpc('tools/list', {})).result.tools.some((x) => x.name === 'orb_browser_vault_fill'));
-    assert.equal((await on.call('orb_browser_vault_fill', { site: 'example.com' })).text, 'ok');
-    assert.deepEqual(stub.seen.at(-1), { id: stub.seen.at(-1).id, action: 'vault_fill', args: { site: 'example.com' } });
-  } finally { await off.close(); await on.close(); stub.close(); h.cleanup(); }
+    await c.rpc('initialize', {});
+    const names = (await c.rpc('tools/list', {})).result.tools.map((x) => x.name);
+    assert.ok(names.includes('orb_browser_open'), 'el navegador sí está');
+    assert.ok(!names.some((x) => /vault/.test(x)), names.filter((x) => /vault/.test(x)).join());
+  } finally { await c.close(); stub.close(); h.cleanup(); }
 });
 
 test('la página como texto se lee de vuelta (dirección y elementos)', () => {

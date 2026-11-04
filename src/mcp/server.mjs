@@ -421,12 +421,8 @@ if (PIPE && PIPE_TOKEN) tools.push(
     inputSchema: { type: 'object', properties: { ms: { type: 'integer', minimum: 100, maximum: 15000 }, text: str('Texto que esperar') } }, run: (a) => botBrowser('wait', a) },
   { name: 'orb_browser_close', description: 'Cierra el navegador del agente cuando ya no lo necesites.', inputSchema: { type: 'object', properties: {} }, run: () => browser('close') }
 );
-// 3.7 (WS5, the vault is WS6): Orb Server types the sign-in of the open site itself, from the person's vault. The agent
-// never sees the user name, the password or the code: it only learns ok or failed. Only where the vault is on.
-if (PIPE && PIPE_TOKEN && (ctx.config.vault?.enabled === true || process.env.ORB_BROWSER_VAULT === '1')) tools.push(
-  { name: 'orb_browser_vault_fill', description: `Inicia sesión en la web abierta con la cuenta que ${USER} guardó en su bóveda: Orb escribe el usuario, la contraseña y el código en la página sin que tú los veas. Devuelve solo ok o failed. Nunca pidas ni escribas contraseñas tú.`,
-    inputSchema: { type: 'object', properties: { site: str('La web (opcional; por defecto, la abierta)') } }, run: (a) => botBrowser('vault_fill', a) }
-);
+// 3.7: the vault's sign-in is one tool only, vault_fill in the bots' «Contraseñas» group (src/mcp/bot.mjs): it talks to
+// the same browser page and gives the model only «ok» or «failed: reason».
 
 const reply = (id, payload) => process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id, ...payload })}\n`);
 

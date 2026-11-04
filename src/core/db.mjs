@@ -525,12 +525,15 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
 export function migrate(db, { file = null } = {}) {
   // 3.2: whether a direct conversation already has its title (Orb names a new one from its first message); the ones made
   // before keep theirs.
+  // 3.7: two processes may open a new or older database at the same moment (the engine and a bot's MCP server): the
+  // other one adding the column first is not an error.
+  const addColumn = (sql) => { try { db.exec(sql); return true; } catch (error) { if (/duplicate column name/i.test(String(error?.message))) return false; throw error; } };
   if (!db.prepare('PRAGMA table_info(sessions)').all().some((c) => c.name === 'titled')) {
-    db.exec('ALTER TABLE sessions ADD COLUMN titled INTEGER NOT NULL DEFAULT 0; UPDATE sessions SET titled = 1;');
+    if (addColumn('ALTER TABLE sessions ADD COLUMN titled INTEGER NOT NULL DEFAULT 0')) db.exec('UPDATE sessions SET titled = 1');
   }
   for (const [table, column, type] of ADDED) {
     const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
-    if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+    if (!has) addColumn(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
   }
   // 3.6: every bot has an avatar; one made before gets the fixed one of its id (the same on every run).
   const plain = db.prepare("SELECT id FROM bots WHERE avatar IS NULL OR avatar = ''").all();

@@ -5,7 +5,10 @@
 //   npm run release:keygen [-- --no-embed]   once: makes the pair (refuses to overwrite one) and writes the public key in
 //                                            src/server/release-key.mjs (unless --no-embed)
 //   npm run release:sign [-- --dir dist]     after `npm run dist:server`: writes dist/manifest.json (each package and its
-//                                            sha256) and signs it and install.sh (manifest.json.sig, install.sh.sig)
+//                                            sha256) and signs it and install.sh (manifest.json.sig, install.sh.sig);
+//                                            refused unless src/core/server-release.mjs holds that install.sh's sha256
+//   node scripts/release.mjs check-server-release [-- --dir dist]   the app is never built for release with the
+//                                            placeholder hash (release workflow, before electron-builder)
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -15,6 +18,17 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const defaultKeyPath = (env = process.env) => path.resolve(env.ORB_RELEASE_KEY || path.join(env.USERPROFILE || os.homedir(), '.orb-release', 'release.key'));
 export const KEY_MODULE = path.join(ROOT, 'src', 'server', 'release-key.mjs');
+export const RELEASE_MODULE = path.join(ROOT, 'src', 'core', 'server-release.mjs');
+// The Orb Server release the app will offer (written by npm run dist:server): it must name a real install.sh sha256 of
+// this version, and the same as install (dist/install.sh) when there is one. Throws otherwise; returns the release.
+export async function checkServerRelease({ file = RELEASE_MODULE, version = null, install = null } = {}) {
+  const { SERVER_RELEASE: r } = await import(`${pathToFileURL(file).href}?t=${Date.now()}-${Math.random()}`);
+  const sum = String(r?.sha256 ?? '');
+  if (!/^[0-9a-f]{64}$/.test(sum) || /^0+$/.test(sum)) throw new Error(`${path.basename(file)} no tiene la suma real de install.sh: ejecuta npm run dist:server antes de publicar`);
+  if (version && r.version !== version) throw new Error(`${path.basename(file)} es de la versión ${r.version}, no de ${version}: ejecuta npm run dist:server`);
+  if (install && fs.existsSync(install) && sha256(install) !== sum) throw new Error(`${path.basename(file)} no coincide con ${install}: ejecuta npm run dist:server otra vez`);
+  return r;
+}
 const inside = (root, p) => { const r = path.relative(path.resolve(root), path.resolve(p)); return !r.startsWith('..') && !path.isAbsolute(r); };
 // The key may never be inside the repository (nor in any folder of it).
 export function checkKeyPath(file, root = ROOT) {
@@ -51,8 +65,10 @@ export function buildManifest(dir, version) {
   if (!Object.keys(assets).some((n) => n.endsWith('.tar.gz'))) throw new Error(`no hay paquetes de Orb Server ${version} en ${dir}`);
   return { product: 'orb-server', version, created: new Date().toISOString(), assets };
 }
-export async function sign({ dir, version, file = defaultKeyPath(), root = ROOT, publicKey = null }) {
+export async function sign({ dir, version, file = defaultKeyPath(), root = ROOT, publicKey = null, releaseModule = RELEASE_MODULE }) {
   checkKeyPath(file, root);
+  // The app's install command must check this very install.sh (never the placeholder).
+  if (fs.existsSync(path.join(dir, 'install.sh'))) await checkServerRelease({ file: releaseModule, version, install: path.join(dir, 'install.sh') });
   let priv; try { priv = crypto.createPrivateKey(fs.readFileSync(file)); } catch (error) { throw new Error(`no se pudo leer la clave privada (${file}): ${error.message}`); }
   const pub = crypto.createPublicKey(priv).export({ type: 'spki', format: 'pem' });
   // The key must be the one whose public half the servers carry.
@@ -83,7 +99,14 @@ async function main() {
     if (r.installSha256) console.log(`  sha256 de install.sh: ${r.installSha256}`);
     return;
   }
-  throw new Error('uso: node scripts/release.mjs keygen [--no-embed] | sign [--dir dist]');
+  if (cmd === 'check-server-release') {
+    const version = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
+    const dir = path.resolve(opt('--dir') ?? path.join(ROOT, 'dist'));
+    const r = await checkServerRelease({ version, install: path.join(dir, 'install.sh') });
+    console.log(`✔ la app ofrece Orb Server ${r.version} (install.sh ${r.sha256.slice(0, 12)}…)`);
+    return;
+  }
+  throw new Error('uso: node scripts/release.mjs keygen [--no-embed] | sign [--dir dist] | check-server-release [--dir dist]');
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

@@ -81,7 +81,6 @@
     "highlight.js": "~11.11.2",
     "lowlight": "^3.3.0",
     "lucide-react": "^1.52.0",
-    "playwright-core": "1.63.0",
     "qrcode": "^1.5.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
@@ -116,6 +115,7 @@
       "build/icon.png",
       "build/icon.ico",
       "package.json",
+      "!node_modules/playwright-core/**",
       "!node_modules/@anthropic-ai/claude-agent-sdk-*/**",
       "!node_modules/@anthropic-ai/sdk/**",
       "!node_modules/@modelcontextprotocol/**",
@@ -193,6 +193,7 @@
     "@noble/curves": "2.4.0",
     "@noble/hashes": "2.4.0",
     "electron-updater": "6.8.10",
+    "playwright-core": "1.63.0",
     "zod": "^4.6.5"
   }
 }

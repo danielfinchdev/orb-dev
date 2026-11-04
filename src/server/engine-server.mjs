@@ -14,10 +14,12 @@ import { isHome, ensureLayout, hostsBots, readKey } from '../core/home.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { PRODUCT } from '../core/product.mjs';
 import { PRODUCT_SERVER } from './server-product.mjs';
+import { botRelay } from '../engine/bot-relay.mjs';
 
 // One engine per process. send(message) takes what the engine says (the host's side of the protocol).
 export function createServerEngine({ send }) {
   let api = null; let remote = null; let link = null; let router = null; let bots = null; let engines = null; let updater = null; let vault = null;
+  let replica = null; let oce = null; // 3.7 (WS3, WS8): the bots' homes and copies; Open Control Edge readings and Optimus
   let logFile = null; let loopTimer = null;
   const toHost = (event, payload) => { try { send({ type: 'event', event, payload }); } catch { /* host gone */ } };
   const emit = (event, payload, hint = null) => { if (router) router.route(event, payload, hint); else toHost(event, payload); };
@@ -48,7 +50,10 @@ export function createServerEngine({ send }) {
       // The host (the server's console, `orb-server` commands): the owner's events.
       router.add('window', (event, payload, audience, to) => { if (event !== 'browser:live' && to(ownerOfBoard(board))) toHost(event, payload); });
       router.add('remote', (event, payload, audience, to) => remote?.broadcast(event, payload, audience, to));
-      router.add('link', (event, payload, audience, to) => link?.relay(event, payload, (pid) => to(pid ?? ownerOfBoard(board))));
+      // 3.7 (WS2): the events of the bots run here go with their uids (never those of a copy: its home sends its own).
+      router.add('link', (event, payload, audience, to) => { const p = botRelay(board, event, payload); if (p) link?.relay(event, p, (pid) => to(pid ?? ownerOfBoard(board))); });
+      // 3.7 (WS5): the browser closes the pages of a task that ended.
+      router.add('serverBrowser', (event, payload) => { if (event === 'agentBrowser:closeTask') ctx.serverBrowser?.closeTask(payload?.task); });
     }
     const remoteRef = { current: null };
     const { Bots } = await import('../engine/bots.mjs');
@@ -77,7 +82,22 @@ export function createServerEngine({ send }) {
     const { buildServerApi } = await import('./api-server.mjs');
     api = buildServerApi({ board, emit, log, version, remoteRef, bots, engines, updater, vault });
     const { createRemote } = await import('../engine/remote.mjs');
-    remote = remoteRef.current = createRemote({ board, api, log, emit, version });
+    // 3.7 (WS2): what this Server says it can do (server, plus browser.live.v1 / vault.v1 once those are up), as the app's.
+    const { capsFor, isHomeCall, isOceCall } = await import('../core/link.mjs');
+    const testCaps = process.env.ORB_FAKE_AGENTS && process.env.ORB_LINK_CAPS ? process.env.ORB_LINK_CAPS.split(',').filter(Boolean) : null;
+    const caps = () => testCaps ?? capsFor({ server: true, browserLive: Boolean(ctx.browserLive), vault: Boolean(ctx.vault) });
+    remote = remoteRef.current = createRemote({ board, api, log, emit, version, features: caps });
+    // 3.7 (WS2): who is who between the app and this Server (link_persons); the handoff of the phones is the app's side
+    // (remote.mjs answers its 'handoff' op here). A mirrored line of a bot pulls its copy at once.
+    const { createHub } = await import('../engine/hub.mjs');
+    const hub = remoteRef.hub = createHub({ board, remote: () => remote, link: () => link, log, version });
+    { let t = null; remote.onMirror = (peer, ev) => { if (ev?.e !== 'bot.message') return; clearTimeout(t); t = setTimeout(() => { replica?.syncNow?.().catch?.(() => {}); }, 500); t.unref?.(); }; }
+    const notReady = () => Object.assign(new Error('este Orb aún no está listo'), { status: 503 });
+    const homeCall = (peer, method, params) => {
+      if (isOceCall(method)) { if (!oce) throw notReady(); return oce.serve(peer, method, params); }
+      if (!replica) throw notReady();
+      return replica.serve(peer, method, params);
+    };
     // 3.7 (WS5): the bots' browser (src/server/browser.mjs): its pipe now, Chromium only when a bot needs it.
     if (ctx.config.browser?.enabled !== false && (process.platform === 'linux' || process.env.ORB_SERVER_BROWSER === '1')) {
       try { const { startServerBrowser } = await import('./browser.mjs'); await startServerBrowser({ board, emit, log, push: (note) => remoteRef.current?.push?.(note) }); }
@@ -100,7 +120,10 @@ export function createServerEngine({ send }) {
         ...(testProtocol ? { protocol: testProtocol, min: Math.min(2, testProtocol) } : {}),
         identity: () => { const id = orbIdOf(home); return { ...orbIdentity({ name: orbNameOf(ctx.config), role: role(), version, macs: myMacs() }), product: PRODUCT_SERVER, orb: { orbId: id.orbId, incarnation: id.incarnation, host: os.hostname().slice(0, 80) } }; },
         verdict: cloneVerdict,
+        features: caps, mapped: (p) => hub.mapped(p),
         onRequest: async (method, params, peer, { principal = null, requestId = null } = {}) => {
+          // 3.7 (WS3, WS8): the bots' homes and copies, and the Open Control Edge readings: replica.mjs / oce.mjs decide.
+          if (isHomeCall(method)) return homeCall(peer, method, params);
           const who = whoAsks(board, peer, principal);
           const why = guardCall(board, method, params);
           if (why) { audit(board, who, method, { type: 'link', id: peer?.id ?? '' }, 'deny', 'guard'); throw Object.assign(new Error(why), { status: 403 }); }
@@ -110,6 +133,23 @@ export function createServerEngine({ send }) {
         onChange: (peers) => emit('link:peers', peers)
       });
       if (!ctx.moved) link.start();
+      // 3.7 (WS3): one home per bot, a live copy on the other linked Orbs (as in src/engine/engine.mjs).
+      {
+        const { createReplica } = await import('../engine/replica.mjs');
+        replica = remoteRef.replica = createReplica({ board, bots, emit, log, link: () => link, remote: () => remote, api });
+        remote.onHomeCall = (peer, method, params) => {
+          if (!isHomeCall(method)) throw Object.assign(new Error('operación desconocida'), { status: 404 });
+          return homeCall(peer, method, params);
+        };
+        remote.onOrbGone = (peer) => replica.onOrbGone(peer);
+        if (!ctx.moved) replica.start();
+      }
+      // 3.7 (WS8): Open Control Edge on the owner's linked Orbs (read-only) and its bot Optimus, made once.
+      {
+        const { createOce } = await import('../engine/oce.mjs');
+        oce = createOce({ board, bots, log, link: () => link, remote: () => remote, replica: () => replica });
+        if (!ctx.moved) oce.start();
+      }
       link.on('*', (event, payload, peer) => { if (hostsBots(peer?.role ?? 'taller') && /^bot\./.test(event)) emit(`centro:${event}`, payload, { person: peer?.person ?? ownerOfBoard(board) }); });
       link.on('link:clone', (p, peer) => board.notice(tr('msg.link.clone', { name: p?.name ?? '' }), 'warning', { person: peer?.person ?? null }));
       link.on('link:moved', (p, peer) => board.notice(tr('msg.link.moved', { name: p?.name ?? '' }), 'info', { person: peer?.person ?? null }));
@@ -165,6 +205,8 @@ export function createServerEngine({ send }) {
     try { api?.shutdown(); } catch { /* closing anyway */ }
     try { await Promise.race([ctx.serverBrowser?.shutdown(), new Promise((r) => setTimeout(r, 3000))]); } catch { /* closing anyway */ }
     try { vault?.close(); } catch { /* closing anyway */ }
+    try { oce?.stop(); } catch { /* closing anyway */ }
+    try { replica?.stop(); } catch { /* closing anyway */ }
     try { link?.stop(); } catch { /* closing anyway */ }
     await Promise.race([Promise.resolve(remote?.stop()).catch(() => {}), new Promise((r) => setTimeout(r, 4000))]);
   }
