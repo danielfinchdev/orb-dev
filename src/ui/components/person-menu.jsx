@@ -1,9 +1,8 @@
-// 3.6 «Personas»: who is using Orb here. With two or more users, the bottom of the sidebar shows them (avatar and name,
-// like most apps); a click opens «Mi perfil», «Cambiar de usuario» and «Bloquear». On a phone the same is at the top of
-// «Más». A phone or a browser is of one user: it cannot change user, only lock (with a PIN). With one user, nothing shows.
+// 3.6 «Personas»: who is using Orb here. With two or more users, the gear at the foot of the sidebar shows the user's
+// initial and opens Ajustes, «Mi perfil», «Cambiar de usuario» and «Bloquear». On a phone the same is in the menu ☰. A phone or a browser is of one user: it cannot change user, only lock (with a PIN). With one user, nothing shows.
 import { Fragment } from 'react';
-import { Lock, UserRound, ChevronsUpDown, ArrowLeftRight, ChevronRight } from 'lucide-react';
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
+import { Lock, UserRound, ArrowLeftRight, ChevronRight, Settings } from 'lucide-react';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, BubbleTip } from '@/components/ui/overlay.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { Input } from '@/components/ui/basic.jsx';
 import { form } from '@/components/dialogs.jsx';
@@ -56,30 +55,39 @@ function useActions() {
   ];
 }
 
-// The sidebar's footer: avatar and name; the menu opens upwards.
-export function PersonMenu({ className }) {
+// The sidebar's footer (3.6, owner's correction): the footer stays as in 3.5; with two or more users the gear of Ajustes
+// shows the current user's initial instead, and opens a small menu upwards: Ajustes, Mi perfil, Cambiar de usuario and
+// Bloquear. With one user this returns null and the footer keeps its plain gear (Ajustes straight away).
+// list: the footer unfolded (a row with the name, like the other rows) instead of the icon.
+export function PersonMenu({ list = false, active = false }) {
   useT();
   const me = useStore((s) => s.me);
   const actions = useActions();
   if (!actions) return null;
+  const label = t('persons.menu', { name: me.person.name });
+  // A linked browser has no Ajustes (the PC's): only who, «Mi perfil» and «Bloquear».
+  const items = [...(bridge.mobile ? [] : [{ id: 'nav-settings', icon: Settings, label: t('nav.settings'), run: () => openSettings() }]), ...actions];
+  const trigger = list ? (
+    <button type="button" className={cn('hover:bg-accent/60 flex w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[14px]', active && 'bg-accent text-accent-foreground')} aria-label={label} data-testid="person-menu">
+      <PersonDot name={me.person.name} color={me.person.color} size="sm" /><span className="min-w-0 flex-1 truncate" data-testid="person-menu-name">{me.person.name}</span>
+    </button>
+  ) : (
+    <button type="button" className={cn('side-foot-icon', active && 'is-active')} aria-label={label} data-testid="person-menu">
+      <PersonDot name={me.person.name} color={me.person.color} size="sm" /><span className="sr-only" data-testid="person-menu-name">{me.person.name}</span>
+    </button>
+  );
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button type="button" className={cn('side-user hover:bg-accent/60 flex w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-left text-[14px]', className)} aria-label={t('persons.menu', { name: me.person.name })} data-testid="person-menu">
-          <PersonDot name={me.person.name} color={me.person.color} />
-          <span className="min-w-0 flex-1 truncate font-medium" data-testid="person-menu-name">{me.person.name}</span>
-          <ChevronsUpDown className="text-muted-foreground size-4 shrink-0" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" className="w-(--radix-dropdown-menu-trigger-width) min-w-52">
-        {/* 3.6: who is here and whether they are the admin, as the menu's header. */}
+      {list ? <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger> : <BubbleTip title={bridge.mobile ? me.person.name : t('nav.settings')} text={bridge.mobile ? null : me.person.name} side="top"><DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger></BubbleTip>}
+      <DropdownMenuContent side="top" align="start" className="min-w-52">
+        {/* Who is here and whether they are the admin, as the menu's header. */}
         <DropdownMenuLabel className="flex min-w-0 items-center gap-2.5 py-2 text-foreground" data-testid="person-menu-header">
           <PersonDot name={me.person.name} color={me.person.color} />
           <span className="min-w-0 flex-1 truncate text-sm font-medium">{me.person.name}</span>
           {isOwner(me) ? <Badge variant="secondary">{t('persons.role.owner')}</Badge> : null}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {actions.map((a) => (<Fragment key={a.id}>{a.id === 'person-lock' ? <DropdownMenuSeparator /> : null}<DropdownMenuItem onSelect={a.run} data-testid={a.id}><a.icon className="size-4" />{a.label}</DropdownMenuItem></Fragment>))}
+        {items.map((a) => (<Fragment key={a.id}>{a.id === 'person-lock' ? <DropdownMenuSeparator /> : null}<DropdownMenuItem onSelect={a.run} data-testid={a.id}><a.icon className="size-4" />{a.label}</DropdownMenuItem></Fragment>))}
       </DropdownMenuContent>
     </DropdownMenu>
   );

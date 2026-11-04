@@ -15,6 +15,7 @@ import { useT } from '@/lib/i18n.js';
 import { PRODUCT } from '../../core/product.mjs';
 import { ModeSwitch } from './mode-switch.jsx';
 import { PersonMenu } from './person-menu.jsx';
+import { personsOn } from '@/lib/persons.js';
 import { SharedWithMe } from './share-dialog.jsx';
 import { BotsNav } from './bots-nav.jsx';
 import { modeOf } from '@/lib/store.js';
@@ -243,6 +244,12 @@ function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
     { icon: GraduationCap, label: t('nav.tutorials'), active: is('tutorials'), onClick: () => go('tutorials'), testid: 'nav-tutorials' }
   ];
   const toggle = open ? t('nav.footerFold') : t('nav.footerUnfold');
+  // 3.6: with two or more users the gear is the user's initial and opens a small menu (person-menu.jsx); with one, the gear.
+  const me = useStore((s) => s.me);
+  // A linked browser (no Ajustes there) gets the initial as the first icon instead.
+  const users = personsOn(me) && Boolean(me?.person);
+  if (users && bridge.mobile) items.unshift({ testid: 'nav-settings' });
+  const row = (i) => (users && i.testid === 'nav-settings' ? <PersonMenu key={i.testid} list={open} active={i.active} /> : null);
   return (
     <div className="side-foot relative border-t px-3 pt-2.5 pb-2" data-testid="sidebar-footer" data-open={open}>
       <Tip label={toggle}>
@@ -250,23 +257,22 @@ function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
           {open ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
         </button>
       </Tip>
-      {open ? <div className="mb-1 flex flex-col gap-0.5">{items.map((i) => <NavItem key={i.testid} icon={i.icon} label={i.label} active={i.active} onClick={i.onClick} testid={i.testid} />)}</div> : null}
+      {open ? <div className="mb-1 flex flex-col gap-0.5">{items.map((i) => row(i) ?? <NavItem key={i.testid} icon={i.icon} label={i.label} active={i.active} onClick={i.onClick} testid={i.testid} />)}</div> : null}
       <div className="flex items-center gap-0.5">
-        {open ? null : items.map((i) => (
+        {open ? null : items.map((i) => row(i) ?? (
           <BubbleTip key={i.testid} title={i.label} text={i.hint} side="top">
             <button type="button" onClick={i.onClick} aria-label={i.label} data-testid={i.testid} className={cn('side-foot-icon', i.active && 'is-active')}><i.icon className="size-4" /></button>
           </BubbleTip>
         ))}
         <span className="flex-1" />
-        {/* The bug: straight to «Enviar comentarios» (Ajustes › Acerca de). 3.6: the version is in Acerca de. */}
+        {/* The bug: straight to «Enviar comentarios» (Ajustes › Acerca de), with the version next to it. */}
         {bridge.mobile ? null : (
           <BubbleTip title={t('nav.feedback')} side="top">
             <button type="button" onClick={() => openSettings('contribuye')} aria-label={t('nav.feedback')} data-testid="nav-feedback" className="side-foot-icon"><Bug className="size-4" /></button>
           </BubbleTip>
         )}
+        {version ? <span className="side-foot-version" data-testid="app-version">v{version}</span> : null}
       </div>
-      {/* 3.6: with two or more users, who is here, at the very bottom (profile, change user, lock). */}
-      <PersonMenu className="mt-1" />
     </div>
   );
 }

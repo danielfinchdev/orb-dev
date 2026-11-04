@@ -261,14 +261,14 @@ try {
   await phone.click('[data-testid=nav-chats]'); await phone.waitForTimeout(500);
   assert.deepEqual(leaks(await phone.textContent('body')), [], 'los chats del móvil de Leo');
   await pshot('18-movil-leo');
-  await phone.click('[data-testid=nav-more]');
+  await phone.click('[data-testid=nav-menu]:visible');
   await phone.waitForSelector('[data-testid=person-card]');
   assert.equal((await phone.textContent('[data-testid=person-card-name]')).trim(), 'Leo');
   await pshot('18b-movil-mas');
   await phone.click('[data-testid=nav-profile]');
   await phone.waitForSelector('[data-testid=profile-card]');
   await pshot('19-movil-perfil');
-  await phone.click('[data-testid=mode-bots]'); await phone.click('[data-testid=nav-bots]');
+  await phone.click('[data-testid=nav-menu]:visible'); await phone.click('[data-testid=mode-bots]'); await phone.click('[data-testid=nav-bots]');
   await phone.waitForSelector('[data-testid="bot-Agenda de Leo"]');
   assert.deepEqual(leaks(await phone.textContent('body')), [], 'los bots del móvil de Leo');
   for (const m of ['projects.list', 'conversations.list', 'bots.list', 'tasks.list', 'bots.reminders.list', 'app.state', 'link.status', 'shares.list']) {

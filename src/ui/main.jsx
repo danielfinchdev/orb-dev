@@ -46,7 +46,6 @@ import { BotChatView } from '@/views/bots/chat.jsx';
 import { BotsView } from '@/views/bots/list.jsx';
 import { BotGroupsView, BotRemindersView, BotMemoryView, BotHomeView, BotServerView, BotSettingsView } from '@/views/bots/more.jsx';
 import { MagicLinkView } from '@/views/magic-link.jsx';
-import { ModeSwitch } from '@/components/mode-switch.jsx';
 import { TallerBanner } from '@/components/taller-banner.jsx';
 // 3.6 «Personas»
 import { LockScreen, PhoneLock, UpdateNeeded } from '@/components/lock-screen.jsx';
@@ -73,8 +72,7 @@ function MobileShell() {
   const bots = modeOf(route) === 'bots';
   return (
     <div className="mobile-shell flex h-full flex-col">
-      {/* 3.5: «Orb | Bots» at the top; in Orb mode, how the PC that does the work is (when linked with the server). */}
-      <div className="mobile-mode bg-sidebar shrink-0 border-b px-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2"><ModeSwitch className="mx-auto max-w-xs" /></div>
+      {/* 3.6: no «Orb | Bots» bar on top: it lives in the menu ☰ of each screen's bar (components/mobile-menu.jsx). */}
       {bots ? null : <TallerBanner />}
       <main className="theme-scene flex min-h-0 min-w-0 flex-1 flex-col">
         <Scene />

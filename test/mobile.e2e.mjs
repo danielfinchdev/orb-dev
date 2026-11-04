@@ -59,16 +59,18 @@ try {
   // 2.7: a simpler app on the phone, with tabs at the bottom (Orbe, Chats, Tareas, Proyectos, Más); the screens of «Más»
   // open from its list.
   const MORE = new Set(['nav-schedules', 'nav-memories', 'nav-tutorials', 'nav-phone']);
-  const nav = async (testid) => { if (MORE.has(testid)) await page.click('[data-testid=nav-more]'); await page.locator(`[data-testid=${testid}]:visible`).click(); await page.waitForTimeout(500); };
+  const nav = async (testid) => { if (MORE.has(testid)) await page.click('[data-testid=nav-menu]:visible'); await page.locator(`[data-testid=${testid}]:visible`).click(); await page.waitForTimeout(500); };
   step = 'pestañas';
   assert.equal(await page.locator('[data-testid=mobile-tabs]:visible').count(), 1, 'pestañas abajo');
-  assert.equal(await page.getByRole('button', { name: 'Menú' }).count(), 0, 'sin menú lateral en el móvil');
+  assert.equal(await page.locator('[data-testid=nav-menu]:visible').count(), 1, '3.6: el menú ☰ arriba a la izquierda');
+  assert.equal(await page.locator('[data-testid=mode-switch]:visible').count(), 0, '3.6: sin el selector Orb | Bots a la vista');
   assert.equal(await page.locator('[data-testid=chat-play], [data-testid=bar-games]').count(), 0, 'sin minijuegos en el móvil');
   assert.equal(await page.evaluate(() => document.documentElement.dataset.skin), 'orb', 'el móvil lleva el tema predeterminado');
-  await page.click('[data-testid=nav-more]'); await page.waitForSelector('[data-testid=mobile-more]');
+  await page.click('[data-testid=nav-menu]:visible'); await page.waitForSelector('[data-testid=mobile-menu]'); await page.waitForTimeout(400);
   assert.equal(await page.locator('[data-testid=nav-settings], [data-testid=nav-agents], [data-testid=nav-expert]').count(), 0, 'Ajustes, Agentes y modo experto solo en el PC');
   assert.equal(await page.locator('[data-testid=nav-phone]:visible').count(), 1, '«Este móvil» solo en el móvil');
-  await noSideScroll('más'); await shot('02-mas');
+  await noSideScroll('menú'); await shot('02-menu');
+  await page.keyboard.press('Escape'); await page.waitForTimeout(300);
   await page.click('[data-testid=nav-chats]'); await page.waitForSelector('[data-testid=mobile-chats]');
   await noSideScroll('chats'); await shot('02b-chats');
 
@@ -118,10 +120,9 @@ try {
   const agenda = await call('bots.create', { name: 'Agenda', icon: '📅', role_text: 'Mi calendario', tools: ['recordatorios'] });
   const soon = new Date(Date.now() + 26 * 3_600_000); const p2 = (x) => String(x).padStart(2, '0');
   await call('bots.reminders.create', { id: agenda.id, text: 'Cita con el dentista', when: `${soon.getFullYear()}-${p2(soon.getMonth() + 1)}-${p2(soon.getDate())}T10:00` });
-  await page.click('[data-testid=mode-bots]');
+  await page.click('[data-testid=nav-menu]:visible'); await page.click('[data-testid=mode-bots]');
   await page.waitForSelector('[data-testid=bot-chat-input]');
   assert.equal(await page.locator('[data-testid=nav-bot-chat]:visible').count(), 1, 'las pestañas del modo Bots');
-  assert.match(await page.locator('[data-testid=mode-switch] .mode-thumb').getAttribute('style'), /translateX\(calc\(100% \+ 2px\)\)/, 'la marca del selector pasa a Bots');
   assert.equal(await page.locator('[data-testid=nav-tasks]:visible').count(), 0, 'sin las pestañas de Orb');
   assert.match(await page.textContent('[data-testid=bot-chat-title]'), /Jefe/, 'el chat abre con el jefe');
   await page.fill('[data-testid=bot-chat-input]', 'Pausa a Agenda\nBOT_CALL bot_pause {"name":"Agenda","reason":"de vacaciones"}');
@@ -143,15 +144,15 @@ try {
     await noSideScroll(name); await page.screenshot({ path: path.join(OUT, `movil-bots-${name}.png`) });
   }
   step = 'bots más';
-  await page.click('[data-testid=nav-more]');
-  await page.waitForSelector('[data-testid=mobile-more-bots]');
+  await page.click('[data-testid=nav-menu]:visible');
+  await page.waitForSelector('[data-testid=mobile-more-bots]'); await page.waitForTimeout(400);
   await noSideScroll('más de bots'); await page.screenshot({ path: path.join(OUT, 'movil-bots-05-mas.png') });
   await page.click('[data-testid=nav-bot-memory]');
   await page.waitForSelector('[data-testid=memory-text]');
   assert.equal(await page.locator('[data-testid=memory-save]').count(), 0, 'la memoria se cambia en el PC');
   await noSideScroll('memoria'); await page.screenshot({ path: path.join(OUT, 'movil-bots-06-memoria.png') });
   step = 'volver a Orb';
-  await page.click('[data-testid=mode-orb]');
+  await page.click('[data-testid=nav-menu]:visible'); await page.click('[data-testid=mode-orb]');
   await page.waitForSelector('[data-testid=nav-tasks]:visible');
   // Everything the page and the PC said to each other was encrypted: nothing readable went over the wire.
   assert.ok(sniffed.length > 5, 'hubo tráfico');

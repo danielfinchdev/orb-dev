@@ -53,14 +53,13 @@ html.glass.dark {
 /* ---- The colour field: static, under every screen; the animated scene and its frosted pane are off. ---- */
 html.glass .mobile-shell { position: relative; background: var(--glass-field); }
 html.glass .mobile-shell .scene { display: none; }
-html.glass .mobile-shell :is(.mobile-mode, .topbar, .theme-scene) { background: transparent; border-color: transparent; backdrop-filter: none; }
+html.glass .mobile-shell :is(.topbar, .theme-scene) { background: transparent; border-color: transparent; backdrop-filter: none; }
 
-/* ---- Top: the «Orb | Bots» switch is a glass capsule, the screen's bar a large title straight on the field. ---- */
-html.glass .mobile-mode { padding-bottom: 4px; }
-html.glass .mobile-mode [data-testid="mode-switch"] { background: var(--glass-regular); border-radius: 999px; padding: 4px; box-shadow: inset 0 1px 0 var(--glass-edge), 0 0 0 1px var(--glass-stroke); }
-html.glass .mobile-mode .mode-thumb { inset-block: 4px; left: 4px; width: calc(50% - 5px); border-radius: 999px; background: var(--glass-solid); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 4px 10px -4px rgb(40 50 130 / 0.3); }
-html.glass.dark .mobile-mode .mode-thumb { background: rgb(74 78 108 / 0.9); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 4px 10px -4px rgb(0 0 0 / 0.6); }
-html.glass .mobile-mode [role="tab"] { border-radius: 999px; padding-block: 6px; }
+/* ---- Top: the screen's bar is a large title straight on the field, after the menu ☰. ---- */
+html.glass [data-slot="drawer-content"] [data-testid="mode-switch"] { background: var(--glass-regular); border-radius: 999px; padding: 4px; box-shadow: inset 0 1px 0 var(--glass-edge), 0 0 0 1px var(--glass-stroke); }
+html.glass [data-slot="drawer-content"] .mode-thumb { inset-block: 4px; left: 4px; width: calc(50% - 5px); border-radius: 999px; background: var(--glass-solid); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 4px 10px -4px rgb(40 50 130 / 0.3); }
+html.glass.dark [data-slot="drawer-content"] .mode-thumb { background: rgb(74 78 108 / 0.9); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 4px 10px -4px rgb(0 0 0 / 0.6); }
+html.glass [data-slot="drawer-content"] [role="tab"] { border-radius: 999px; padding-block: 6px; }
 html.glass .mobile-shell .topbar { min-height: 3.25rem; padding-block: 0.5rem; }
 html.glass .mobile-shell .topbar h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.15; }
 html.glass .mobile-shell .topbar-chat h1 { font-size: inherit; }
@@ -119,6 +118,15 @@ html.glass [data-slot="dialog-overlay"] { background: var(--glass-scrim); backdr
   html.glass [data-slot="dialog-content"] [data-slot="button"] { min-height: 44px; border-radius: 14px; }
 }
 
+/* ---- The menu ☰: a glass sheet from the left edge (the transient blurred layer), with «Orb | Bots» as a glass capsule. ---- */
+html.glass [data-slot="drawer-content"] {
+  border: 0; border-radius: 0 var(--glass-r-sheet) var(--glass-r-sheet) 0;
+  background: var(--glass-thick); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  box-shadow: inset -1px 0 0 var(--glass-edge), 18px 0 48px -20px rgb(0 0 0 / 0.35);
+}
+html.glass [data-slot="drawer-content"] .bg-card\/80 { background: var(--glass-regular); border: 0; border-radius: 18px; box-shadow: inset 0 1px 0 var(--glass-edge), 0 0 0 1px var(--glass-stroke); }
+html.glass.glass-lite [data-slot="drawer-content"] { -webkit-backdrop-filter: none; backdrop-filter: none; }
+
 /* ---- Menus and selects: thick glass, growing from their trigger (overlay.jsx already sets the origin). ---- */
 html.glass :is([data-slot="menu-content"], [data-slot="select-content"]) {
   border: 0; border-radius: 16px; padding: 6px;
@@ -145,11 +153,11 @@ html.glass.glass-lite :is(.mobile-tabs, [data-slot="dialog-content"], [data-slot
 @media (prefers-reduced-transparency: reduce) {
   html.glass { --glass-thin: rgb(250 251 255); --glass-regular: rgb(255 255 255); --glass-thick: rgb(250 251 255); }
   html.glass.dark { --glass-thin: rgb(30 32 46); --glass-regular: rgb(34 36 52); --glass-thick: rgb(28 30 44); }
-  html.glass :is(.mobile-tabs, [data-slot="dialog-content"], [data-slot="menu-content"], [data-slot="select-content"]) { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  html.glass :is(.mobile-tabs, [data-slot="dialog-content"], [data-slot="drawer-content"], [data-slot="menu-content"], [data-slot="select-content"]) { -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 @media (prefers-contrast: more) {
   html.glass { --glass-thin: var(--card); --glass-regular: var(--card); --glass-thick: var(--popover); --glass-stroke: var(--foreground); --glass-label: var(--foreground); }
-  html.glass :is(.mobile-tabs, [data-slot="dialog-content"], [data-slot="menu-content"], [data-slot="select-content"]) { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  html.glass :is(.mobile-tabs, [data-slot="dialog-content"], [data-slot="drawer-content"], [data-slot="menu-content"], [data-slot="select-content"]) { -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   html.glass { --glass-thin: rgb(250 251 255 / 0.95); --glass-thick: rgb(250 251 255 / 0.98); }

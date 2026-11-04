@@ -239,42 +239,24 @@ try {
     meta.get(pc).dark = dark;
     await pc.emulateMedia({ colorScheme: dark ? 'dark' : 'light' }); // before the setup the theme follows the system
     await pc.goto(pcUrl);
-    await pc.waitForSelector('[data-testid=setup-create]', { timeout: 20000 });
+    // 3.6: three screens, one question each (name; anyone else?; what for).
+    await pc.waitForSelector('[data-testid=wizard-nombre]', { timeout: 20000 });
     const W = 'src/ui/views/setup.jsx';
-    await shot(pc, { area: 'wizard', screen: 'datos', state: 'empty', src: W, desc: 'Welcome wizard, step 1 (name, language, time zone, folder) before choosing a folder' });
-    await pc.getByRole('button', { name: /Elegir|Elige|ubicación/i }).first().click();
-    await pc.waitForSelector('[data-testid=setup-move-import]');
-    await shot(pc, { area: 'wizard', screen: 'datos', state: 'folder-chosen', src: W, desc: 'Welcome wizard, step 1 with the folder chosen and the «bring my Orb» note', scroll: true });
+    await pc.fill('[data-testid=setup-name]', 'Ana');
+    await shot(pc, { area: 'wizard', screen: 'nombre', state: 'filled', src: W, desc: 'Welcome wizard 1/3: «¿Cómo te llamas?»' });
+    if (await pc.locator('[data-testid=setup-folder]').count()) await pc.click('[data-testid=setup-folder]');
     await pc.click('[data-testid=setup-create]');
     await pc.waitForSelector('[data-testid=wizard-quien]', { timeout: 20000 });
-    await shot(pc, { area: 'wizard', screen: 'quien', state: 'only-me', src: W, desc: 'Wizard «¿Quién usará este Orb?», Solo yo' });
+    await shot(pc, { area: 'wizard', screen: 'quien', state: 'default', src: W, desc: 'Welcome wizard 2/3: «¿Lo usará alguien más?»' });
     await attempt(pc, 'wizard more people', async () => {
       await pc.click('[data-testid=wizard-more-people]');
       await pc.fill('[data-testid=wizard-person-0]', 'Leo');
-      await shot(pc, { area: 'wizard', screen: 'quien', state: 'several-users', src: W, desc: 'Wizard «¿Quién usará este Orb?», Varios usuarios with one name' });
-      await pc.click('[data-testid=wizard-only-me]');
+      await shot(pc, { area: 'wizard', screen: 'quien', state: 'several-users', src: W, desc: 'Welcome wizard 2/3 with one more user' });
     });
-    await pc.click('[data-testid=wizard-next]');
-    await pc.waitForSelector('[data-testid=wizard-plantilla]');
-    await shot(pc, { area: 'wizard', screen: 'plantilla', state: 'list', src: W, desc: 'Wizard, optional templates' });
-    await attempt(pc, 'wizard template preview', async () => {
-      await pc.locator('[data-testid^=wizard-tpl-]').first().click();
-      await pc.waitForSelector('[data-testid=wizard-tpl-preview]');
-      await shot(pc, { area: 'wizard', screen: 'plantilla', state: 'preview', src: W, desc: 'Wizard, a template chosen with its editable preview', scroll: true });
-    });
-    await pc.getByRole('button', { name: 'Saltar' }).click();
-    await pc.waitForSelector('[data-testid=wizard-fuera]');
-    await shot(pc, { area: 'wizard', screen: 'fuera', state: 'default', src: W, desc: 'Wizard, reaching Orb from outside (Tailscale) and «keep the PC on»' });
-    await pc.click('[data-testid=wizard-next]');
-    await pc.waitForSelector('[data-testid=wizard-copias]');
-    await shot(pc, { area: 'wizard', screen: 'copias', state: 'default', src: W, desc: 'Wizard, backups and recovery code' });
-    await attempt(pc, 'wizard recovery code', async () => {
-      await pc.click('[data-testid=wizard-code]');
-      await pc.waitForSelector('[data-testid=recovery-code]');
-      await shot(pc, { area: 'wizard', screen: 'copias', state: 'recovery-code', src: 'src/ui/views/setup.jsx + views/data.jsx', desc: 'Wizard, the recovery code dialog' });
-      await pc.getByRole('button', { name: 'Lo he guardado' }).click();
-    });
-    await pc.click('[data-testid=wizard-finish]');
+    await pc.click('[data-testid=wizard-only-me]');
+    await pc.waitForSelector('[data-testid=wizard-para]', { timeout: 20000 });
+    await shot(pc, { area: 'wizard', screen: 'para', state: 'default', src: W, desc: 'Welcome wizard 3/3: «¿Para qué lo quieres?»' });
+    await pc.click('[data-testid=wizard-use-later]');
     await attempt(pc, 'wizard prepare', async () => {
       await pc.waitForSelector('[data-testid=prepare-title]', { timeout: 15000 });
       await pc.waitForTimeout(1500);
@@ -475,7 +457,7 @@ try {
       const M = phone;
       await setLook(M, look);
       await views(M, PHONE_VIEWS, st);
-      await attempt(M, 'phone more bots', async () => { await nav(M, { view: 'bot-chat' }); await M.click('[data-testid=nav-more]'); await M.waitForSelector('[data-testid=mobile-more-bots]'); await shot(M, { area: 'bots', screen: 'more', state: st, src: 'src/ui/components/mobile-tabs.jsx (bots More)', desc: 'Bots mode «Más» list' }); });
+      await attempt(M, 'phone more bots', async () => { await nav(M, { view: 'bot-chat' }); await M.click('[data-testid=nav-menu]:visible'); await M.waitForSelector('[data-testid=mobile-more-bots]'); await M.waitForTimeout(400); await shot(M, { area: 'bots', screen: 'menu', state: st, src: 'src/ui/components/mobile-menu.jsx', desc: 'The phone menu ☰ in Bots mode' }); await M.keyboard.press('Escape'); });
       await attempt(M, 'phone conversation', async () => { await nav(M, { view: 'chat', id: conv.id }); await shot(M, { area: 'orb', screen: 'chat', state: 'conversation-long-code-table', src: 'src/ui/views/chat.jsx', desc: 'Orb chat on the phone, long text, code and table', scroll: true }); });
       await attempt(M, 'phone session', async () => { await nav(M, { view: 'session', id: s1.id }); await shot(M, { area: 'orb', screen: 'session', state: 'image-and-table', src: 'src/ui/views/session.jsx', desc: 'Conversation with Claude on the phone', scroll: true }); });
       await attempt(M, 'phone approval', async () => { await nav(M, { view: 'session', id: s2.id }); await M.waitForSelector('[data-testid=approval-card]'); await shot(M, { area: 'orb', screen: 'session', state: 'approval-card-pending', src: 'src/ui/views/session.jsx (ApprovalCard)', desc: 'Permission card on the phone' }); });
@@ -483,7 +465,7 @@ try {
       await attempt(M, 'phone group', async () => { await nav(M, { view: 'bot-group', id: casa.id }); await shot(M, { area: 'bots', screen: 'bot-group', state: 'casa', src: 'src/ui/views/bots/chat.jsx', desc: 'Group chat on the phone' }); });
       await attempt(M, 'phone bot detail', async () => { await nav(M, { view: 'bots', id: agenda.id }); await shot(M, { area: 'bots', screen: 'bot-editor', state: 'agenda-readonly', src: 'src/ui/views/bots/list.jsx', desc: 'A bot opened on the phone (changes are made on the PC)', scroll: true }); });
       await tasksDetail(M, st);
-      await attempt(M, 'phone person menu', async () => { await nav(M, { view: 'more' }); await shot(M, { area: 'menu', screen: 'more', state: 'with-users', src: 'src/ui/components/mobile-tabs.jsx + components/person-menu.jsx', desc: '«Más» on the phone with several users' }); });
+      await attempt(M, 'phone person menu', async () => { await nav(M, { view: 'chat' }); await M.click('[data-testid=nav-menu]:visible'); await M.waitForSelector('[data-testid=mobile-menu]'); await M.waitForTimeout(400); await shot(M, { area: 'menu', screen: 'menu', state: 'with-users', src: 'src/ui/components/mobile-menu.jsx + components/person-menu.jsx', desc: 'The phone menu ☰ with several users' }); await M.keyboard.press('Escape'); });
     }
     if (web) {
       step = `navegador ${look.dark ? 'oscuro' : 'claro'}`;

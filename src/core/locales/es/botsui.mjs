@@ -35,7 +35,7 @@ export default {
   'bots.deleteTitle': '¿Eliminar {name}?',
   'bots.deleteBody': 'Se eliminan el bot, su chat y su memoria. Sus recordatorios dejan de sonar.',
   'bots.refresh': 'Actualizar',
-  'bots.noRole': 'Sin papel escrito',
+  'bots.noRole': 'Sin descripción',
   'bots.onlyHim': 'Solo él lleva: {list}',
   'bots.gone': 'Ese bot o ese grupo ya no existe.',
   'bots.switchTo': 'Cambiar de chat',

@@ -112,18 +112,21 @@ try {
     step = `${scheme}: proyectos y más`;
     await tab('nav-projects');
     await shot('08-proyectos');
-    await tab('nav-more');
-    await shot('09-mas');
+    await page.click('[data-testid=nav-menu]:visible');
+    await page.waitForSelector('[data-testid=mobile-menu]'); await page.waitForTimeout(400);
+    await shot('09-menu');
+    assert.ok((await blurred()).length <= 2, 'el menú es la única capa pasajera');
+    await page.keyboard.press('Escape'); await page.waitForTimeout(300);
 
     step = `${scheme}: bots`;
-    await page.click('[data-testid=mode-bots]');
+    await page.click('[data-testid=nav-menu]:visible'); await page.click('[data-testid=mode-bots]');
     await tab('nav-bot-chat');
     await page.waitForSelector('[data-testid=bot-chat-input]');
     await shot('10-bot-chat');
     await tab('nav-bots');
     await page.waitForSelector('[data-testid=bot-Agenda]');
     await shot('11-bots');
-    await page.click('[data-testid=mode-orb]');
+    await page.click('[data-testid=nav-menu]:visible'); await page.click('[data-testid=mode-orb]');
     await page.waitForSelector('[data-testid=nav-tasks]:visible');
   }
   step = 'menos transparencia';

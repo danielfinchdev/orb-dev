@@ -35,7 +35,7 @@ export default {
   'bots.deleteTitle': 'Delete {name}?',
   'bots.deleteBody': 'The bot, its chat and its memory are deleted. Its reminders stop.',
   'bots.refresh': 'Refresh',
-  'bots.noRole': 'No role written',
+  'bots.noRole': 'No description',
   'bots.onlyHim': 'Only this bot handles: {list}',
   'bots.gone': 'That bot or group no longer exists.',
   'bots.switchTo': 'Switch chat',

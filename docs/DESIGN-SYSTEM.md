@@ -45,9 +45,8 @@ rules come from), `src/ui/app.css` (tokens), `src/ui/themes.css` (visual themes)
 │ Nav          │                                                          │
 │ Sections     │              (chat: messages + composer)                 │
 │ (lists)      │                                                          │
-├──────────────┤                                                          │
-│ Footer icons │                                                          │
-│ (A) Ana   ⇕  │                                                          │
+├──────^───────┤                                                          │
+│ icons  bug v │                                                          │
 └──────────────┴──────────────────────────────────────────────────────────┘
 ```
 
@@ -55,9 +54,12 @@ rules come from), `src/ui/app.css` (tokens), `src/ui/themes.css` (visual themes)
   here.
 - **Mode switch** `Orb | Bots` below the head. Then the mode's primary action (`Nuevo chat` / `Nuevo bot`), search, the
   navigation and the collapsible lists (Por aprobar, Proyectos, Conversaciones / Tus bots, Grupos).
-- **Sidebar footer**: a row of icon buttons (Ajustes, Agentes, Bitácoras, Tutoriales, Reportar un problema) with
-  tooltips (the version is in Ajustes › Acerca de). Below it, **only with 2+ users**, the user row: avatar + name + `⇕`,
-  opening the user menu upwards: a header (avatar, name, `Admin` badge), `Mi perfil`, `Cambiar de usuario`, separator,
+- **Sidebar footer** (as in 3.5, owner's decision): a small arrow on the separator line folds/unfolds it; folded, one
+  row of icon buttons with tooltips `Ajustes · Agentes · Memorias · Tutoriales`, and on the right the bug (report a
+  problem) and the version; unfolded, the same as a list with names. No separate user block. **With 2+ users** the gear
+  shows the current user's initial and opens a small menu upwards (header: avatar, name, `Admin` badge): `Ajustes`,
+  `Mi perfil`, `Cambiar de usuario`, separator, `Bloquear`. With one user the gear opens Ajustes directly. A linked
+  browser with the PC layout has no Ajustes: there the initial is the first icon and its menu has `Mi perfil` and
   `Bloquear`.
 - **Top bar** (56 px): left, the screen title (chat: the clock); center, the context (chat: the conversation title and
   its project, or the working project); right, at most three icon buttons of that screen, then the window controls.
@@ -107,8 +109,8 @@ Six sections. Each section is a vertical stack of cards; each card = title, at m
 | Avanzado | `Wrench` | Herramientas (browser, MCP, Android), God mode, Monitoreo |
 | Acerca de | `Info` | Version, Contribuye (support, report a problem), Más aplicaciones, licence |
 
-`Mi perfil` is **not** a settings section: it opens from the user menu (sidebar footer) and from the top of `Más` on
-the phone. With a single user, profile fields (your name, language) live in General.
+`Mi perfil` is **not** a settings section: it opens from the initial in the sidebar footer and from the phone's
+menu ☰. With a single user, profile fields (your name, language) live in General.
 
 **Usuarios screen rules**: one explanation per screen (the section subtitle, or the card description, not both); per
 user: avatar, name, role badge (`Admin` or nothing; never `Dueño`/`Persona`), one summary line ("2 dispositivos · visto
@@ -119,23 +121,27 @@ depending on state, Eliminar in red after a separator).
 ### 2.4 Phone (browser and Android app)
 
 ```
-┌───────────────────────────┐
-│      [ Orb  |  Bots ]     │  mode switch (safe area top)
-│ Title                [⋯]  │  screen bar (large title)
-│                           │
-│        content            │
-│                           │
-│ ╭───────────────────────╮ │
-│ │ Orbe Chats Tareas Proy Más│  tab bar (5 tabs)
-│ ╰───────────────────────╯ │
-└───────────────────────────┘
+┌───────────────────────────┐   ┌────────────────────┐
+│ ☰ Title           [🔔][⏸] │   │ robot Orbe       ✕ │  drawer ☰, from the left
+│                           │   │ [ Orb  |  Bots ]   │
+│        content            │   │ (A) Ana  Mi perfil │  2+ users, then Bloquear
+│                           │   │ Programadas …      │  the mode's other screens
+│ ╭───────────────────────╮ │   │ AJUSTES            │
+│ │ Orbe Chats Tareas Proy│ │   │ Este móvil, Magic  │
+│ ╰───────────────────────╯ │   │ Link, Modo oscuro  │
+└───────────────────────────┘   └────────────────────┘
 ```
 
-- **Tabs**: Orb mode `Orbe · Chats · Tareas · Proyectos · Más`; Bots mode `Chat · Bots · Recordatorios · Casa · Más`.
-  Badges: a number for things waiting on the user (approvals), a dot for activity.
-- **Más**: first, with 2+ users, the user card (avatar + name, `Mi perfil`, `Bloquear`); then the screens to look things
-  up (Programadas, Pizarra, Memorias, Tutoriales); then the phone's own (Este móvil, Magic Link, Modo oscuro).
-- PC-only things (Ajustes, Agentes, God mode, games, themes) never appear on the phone.
+- **No mode switch on screen** (owner's decision). Every screen's bar starts with the menu ☰ (top left, 40 px target),
+  then the title and at most two icon buttons on the right.
+- **Drawer ☰** (`components/mobile-menu.jsx`; on Android a glass sheet from the left): the robot, the assistant's name
+  and close; `Orb | Bots`; with 2+ users the user card (avatar + name → `Mi perfil`, then `Bloquear`); the current
+  mode's other screens (Orb: Programadas, Pizarra, Memorias, Tutoriales; Bots: Grupos, Memoria, Servidor, Ajustes de
+  bots); group `Ajustes`: Este móvil, Magic Link, Modo oscuro. Any choice closes it.
+- **Tabs**: four, the current mode's main screens. Orb `Orbe · Chats · Tareas · Proyectos`; Bots
+  `Chat · Bots · Recordatorios · Casa`. Badges: a number for things waiting on the user (dark text on `warning`), a dot
+  for activity.
+- PC-only things (Ajustes dialog, Agentes, God mode, games, themes) never appear on the phone.
 - Dialogs become bottom sheets on the phone (Android glass) and full-width dialogs in a phone browser.
 
 ## 3. Tokens
@@ -326,11 +332,13 @@ coloured shadow; floating ones a deeper shadow. **Never glass on glass**: what s
 
 ### 8.2 Components
 
+- **Drawer ☰**: thick material with blur from the left edge, radius 28 on its right corners, inner groups in regular
+  material; while open it is the one transient blurred layer.
 - **Floating tab bar**: inset 12 px from the sides and 10 px above the safe area, 62 px tall, full radius, thin
   material with blur. Active tab: primary colour and a 14 % primary capsule behind the icon. Labels 10.5 px / 600.
   Count badges with dark text on `warning`.
-- **Top**: the `Orb | Bots` switch is a regular-material capsule with a solid sliding thumb. The screen bar has no
-  surface: a large title (22 px / 600) on the field; content scrolling under it fades over 14 px instead of being cut.
+- **Top**: the screen bar has no surface: ☰, then a large title (22 px / 600) on the field (inside the drawer the
+  `Orb | Bots` switch is a regular-material capsule with a solid sliding thumb); content scrolling under it fades over 14 px instead of being cut.
 - **Cards**: regular material, radius 22, no blur.
 - **Composer**: regular material, radius 26, focus = 1.5 px ring at 55 %; it sits above the tab bar.
 - **Sheets**: every dialog on the phone is a bottom sheet: full width, radius 28 at the top, a 36×5 grabber, thick
@@ -360,7 +368,7 @@ coloured shadow; floating ones a deeper shadow. **Never glass on glass**: what s
 ### 8.5 Screenshots
 
 `node test/glass.e2e.mjs` builds the Android page, serves it as a linked phone (390×844) and writes
-`test-results/diseno/glass-{light,dark}-*.png`: chat, project menu, chats, new chat, tasks, task, sheet, projects, Más,
+`test-results/diseno/glass-{light,dark}-*.png`: chat, project menu, chats, new chat, tasks, task, sheet, projects, menu ☰,
 bot chat, bots.
 
 ## 9. Reviewer checklist
@@ -369,8 +377,8 @@ Use it on every UI change. A "no" is an issue; P1 if it breaks a principle for m
 confusing, P3 polish.
 
 **Placement and structure**
-- [ ] Each element is where section 2 says (user menu in the sidebar footer, settings in their six sections, composer
-      rows as specified, phone tabs).
+- [ ] Each element is where section 2 says (sidebar footer as in 3.5, with the initial for 2+ users; settings in
+      their six sections; composer rows as specified; phone ☰ drawer and four tabs).
 - [ ] One primary action per view/card; secondary actions are quieter or in an overflow menu.
 - [ ] Nothing is explained twice on the same screen; helper text is present only where a wrong choice is likely.
 - [ ] PC-only features do not appear on the phone; hover-only features have a tap path.
