@@ -452,7 +452,17 @@ for (const set of [PHONE_SET, ORB_SET, CONSOLE_SET]) for (const m of [...INBOX_M
 for (const set of [ORB_SET, CONSOLE_SET]) for (const m of ['bots.groups.members.add', 'bots.groups.members.remove']) set.add(m);
 BOTS_OWNER.push('bots.groups.members.add', 'bots.groups.members.remove');
 
-export const POLICY = Object.freeze({ ...CORE, ...GATEWAY, ...ORBMODE, ...BOTSP, ...DATA, ...INBOX, ...UI });
+// ---- 3.7 (WS1): Orb Server's own methods (src/server/api-server.mjs): its state, the agent engines it downloads and its
+// self-update. Only the owner, and from afar only a device with «Puede administrar» (or the server's own console).
+export const SERVER_METHODS = ['server.status', 'server.engines', 'server.engines.install', 'server.update.status', 'server.update.check', 'server.update.apply'];
+const SERVERP = {
+  'server.status': { ownerOnly: true }, 'server.engines': { ownerOnly: true }, 'server.update.status': { ownerOnly: true },
+  'server.engines.install': { ownerOnly: true, admin: true }, 'server.update.check': { ownerOnly: true, admin: true }, 'server.update.apply': { ownerOnly: true, admin: true }
+};
+for (const set of [CONSOLE_SET, CONTROL_SET]) for (const m of SERVER_METHODS) set.add(m);
+CONTROL_SET.add('link.connect'); // the installer pairs the server with the app from the server's own console
+
+export const POLICY = Object.freeze({ ...CORE, ...GATEWAY, ...ORBMODE, ...BOTSP, ...DATA, ...INBOX, ...UI, ...SERVERP });
 export const policyOf = (method) => {
   const m = String(method);
   if (Object.hasOwn(POLICY, m)) return POLICY[m];

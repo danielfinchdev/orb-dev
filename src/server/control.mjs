@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { paths } from '../core/home.mjs';
 
 // 3.5.1: also closing a device's link (orb-server quitar): whoever is on the server itself is its owner, so a lost or
 // stolen phone that administers it can be taken out from here.
@@ -13,7 +14,9 @@ import crypto from 'node:crypto';
 export const CONTROL_METHODS = new Set(['link.qr', 'link.devices', 'link.status', 'link.revoke', 'app.state',
   'backup.status', 'backup.list', 'backup.now', 'backup.verify', 'backup.restore', 'backup.recovery', 'data.moveExport', 'data.moveStatus', 'data.moveUndo', 'data.moveKeepBoth',
   // 3.6 (WS2): orb-server personas / persona nueva / pin-reset / enlazar --persona
-  'persons.list', 'persons.create', 'persons.setPin', 'persons.overview']);
+  'persons.list', 'persons.create', 'persons.setPin', 'persons.overview',
+  // 3.7 (WS1): orb-server estado / motores / actualizar, and the installer's pairing with the app (orb-server emparejar)
+  'server.status', 'server.engines', 'server.engines.install', 'server.update.status', 'server.update.check', 'server.update.apply', 'link.connect']);
 
 // 3.5.1 (orb-server quitar): the device named by its id (or the start of it, 4+ characters) or its exact name.
 export function pickDevice(list, target) {
@@ -24,7 +27,7 @@ export function pickDevice(list, target) {
   return found.length === 1 ? { device: found[0] } : { error: found.length ? 'many' : 'none' };
 }
 export function controlPath(home) {
-  const dir = path.join(path.resolve(home), '.orb');
+  const dir = paths(path.resolve(home)).internal; // .orb on a PC, data/ in Orb Server's folder (3.7)
   if (process.platform === 'win32') return `\\\\.\\pipe\\orb-nucleo-${crypto.createHash('sha256').update(path.resolve(home).toLowerCase()).digest('hex').slice(0, 16)}`;
   const file = path.join(dir, 'nucleo.sock');
   // Unix sockets have a short path limit (about 104 bytes): a long home gets a socket in the temp folder, by its hash.

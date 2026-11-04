@@ -123,6 +123,23 @@ export const walkFiles = (dir, skip = () => false) => {
 const NO_COPY = new Set(['node_modules', '.git', '.venv', '__pycache__', 'dist', 'build', '.next', '.cache']);
 const DATA_FILES = ['enlaces.json', 'clave.bin', 'copia-clave.json', 'orb-id.json'];
 const rel = (home, file) => path.relative(home, file).split(path.sep).join('/');
+// 3.7: the names inside a backup are always the PC's (.orb/…, bitacora/…), whatever the folder's layout (Orb Server keeps
+// .orb in data/ and the bitácora in logs/bitacora): a backup made on one restores on the other.
+const under = (root, f) => { const r = path.relative(root, f); return r && !r.startsWith('..') && !path.isAbsolute(r) ? r.split(path.sep).join('/') : null; };
+export function archiveName(home, file) {
+  const p = paths(home);
+  if (p.layout === 'server') {
+    const i = under(p.internal, file); if (i) return `${INTERNAL_DIR}/${i}`;
+    const l = under(p.logs, file); if (l) return `${LOGS_DIR}/${l}`;
+  }
+  return rel(home, file);
+}
+export function homePath(home, name) {
+  const p = paths(home); const s = String(name).split('/');
+  if (p.layout === 'server' && s[0] === INTERNAL_DIR) return path.join(p.internal, ...s.slice(1));
+  if (p.layout === 'server' && s[0] === LOGS_DIR) return path.join(p.logs, ...s.slice(1));
+  return path.join(home, ...s);
+}
 const insideOf = (root, p) => { const r = path.relative(root, p); return Boolean(r) && !r.startsWith('..') && !path.isAbsolute(r); };
 
 // Copies what goes in to `stage` (a mini Orb folder) and returns the manifest.
@@ -147,7 +164,7 @@ async function stageFiles(home, stage, { secret, includeProjects = false, includ
   // The secret that seals enlaces.json and the recovery wrap: on a new machine the links keep working.
   if (secret) { await fsp.writeFile(path.join(stage, INTERNAL_DIR, 'datos', 'clave.bin'), Buffer.from(secret), { mode: 0o600 }); files.push(`${INTERNAL_DIR}/datos/clave.bin`); }
   for (const name of DATA_FILES.filter((n) => n !== 'clave.bin')) { const f = path.join(p.data, name); if (fs.existsSync(f)) await put(f, `${INTERNAL_DIR}/datos/${name}`); }
-  for (const dir of [p.bots, p.logs, path.join(p.internal, 'bots-borrados')]) for (const f of walkFiles(dir)) await put(f, rel(home, f));
+  for (const dir of [p.bots, p.logs, path.join(p.internal, 'bots-borrados')]) for (const f of walkFiles(dir)) await put(f, archiveName(home, f));
   // The projects: their whiteboards always, the whole folder only if asked (without dependencies and build output).
   let projects = [];
   if (fs.existsSync(dbOut)) {
@@ -161,7 +178,7 @@ async function stageFiles(home, stage, { secret, includeProjects = false, includ
     if (!fs.existsSync(board)) continue;
     for (const f of walkFiles(board)) await put(f, inside ? rel(home, f) : `${INTERNAL_DIR}/pizarras-de-fuera/${String(pr.name).replace(/[^\w.-]+/g, '_')}/${path.relative(board, f).split(path.sep).join('/')}`);
   }
-  if (includeAccounts) for (const f of walkFiles(path.join(p.internal, 'cuentas'))) await put(f, rel(home, f));
+  if (includeAccounts) for (const f of walkFiles(path.join(p.internal, 'cuentas'))) await put(f, archiveName(home, f));
   const manifest = { format: FORMAT, files: [] };
   let bytes = 0;
   for (const name of files) {
@@ -377,11 +394,11 @@ export async function pruneBackups(dir, opts) {
 }
 
 // ---- restore: verify, unpack into a fresh folder, test-open the database, then swap at the next start
-export const pendingDir = (home) => path.join(home, INTERNAL_DIR, 'restaurar-pendiente');
+export const pendingDir = (home) => path.join(paths(home).internal, 'restaurar-pendiente');
 export async function stageRestore(home, file, keys = {}) {
   const ready = pendingDir(home);
-  await fsp.mkdir(path.join(home, INTERNAL_DIR), { recursive: true });
-  const tmp = await fsp.mkdtemp(path.join(home, INTERNAL_DIR, 'restaurar-'));
+  await fsp.mkdir(paths(home).internal, { recursive: true });
+  const tmp = await fsp.mkdtemp(path.join(paths(home).internal, 'restaurar-'));
   try {
     const r = await walkBackup(file, keys, tmp);
     const db = path.join(tmp, INTERNAL_DIR, 'datos', 'orb.db');
@@ -411,7 +428,7 @@ export function applyPendingRestore(home) {
   const ready = pendingDir(home);
   let info; try { info = JSON.parse(fs.readFileSync(path.join(ready, 'listo.json'), 'utf8')); } catch { return null; }
   fs.rmSync(path.join(ready, 'listo.json'), { force: true });
-  const aside = path.join(home, INTERNAL_DIR, `antes-de-restaurar-${stamp()}`);
+  const aside = path.join(paths(home).internal, `antes-de-restaurar-${stamp()}`);
   const units = new Set();
   for (const f of walkFiles(ready)) units.add(unitOf(rel(ready, f)));
   // A unit inside another one (a whiteboard inside a whole project) travels with it.
@@ -423,7 +440,7 @@ export function applyPendingRestore(home) {
     const f = path.join(paths(home).data, extra); if (fs.existsSync(f)) move(f, path.join(aside, INTERNAL_DIR, 'datos', extra));
   }
   for (const u of [...units].sort()) {
-    const target = path.join(home, ...u.split('/'));
+    const target = homePath(home, u);
     if (fs.existsSync(target)) move(target, path.join(aside, ...u.split('/')));
     move(path.join(ready, ...u.split('/')), target);
   }

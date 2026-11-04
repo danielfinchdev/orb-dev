@@ -17,8 +17,13 @@
 //                                                           starts again; stopped, it is applied at once)
 //   orb-server mover exportar --clave <código>              a copy to move this Orb to another machine (this one stops)
 //   orb-server mover importar <archivo> --clave <código> [--home <carpeta nueva>]  the moved Orb, on the new machine
+//   orb-server migrar [--home …]                            3.7: an install from before 3.7 (~/orb, ~/orb-nucleo) moves to
+//                                                           ~/orb-server (with the service stopped; the installer runs it)
+//   orb-server emparejar <código>@<dirección>#<huella>      3.7: pairs this server with the Orb app that gave the command
+//   orb-server motores [instalar claude|codex]               3.7: the agent engines (downloaded on demand)
+//   orb-server actualizar [--comprobar]                      3.7: a newer 3.7.x, signed (it updates by itself once a day)
 //   orb-server --version
-// The Orb folder: --home, else ORB_HOME, else ~/orb. Its log: <home>/.orb/ejecuciones/nucleo.log (and the console).
+// The Orb folder: --home, else ORB_HOME, else ~/orb-server (3.7). Its log: logs/nucleo.log (and the console).
 // While it runs, the same user's commands reach it through a local socket (src/server/control.mjs).
 import readline from 'node:readline';
 import { createHost, prepareHome, defaultHome, packageVersion } from './host.mjs';
@@ -29,6 +34,7 @@ import { readKey } from '../core/home.mjs';
 import { stageRestore, applyPendingRestore } from '../core/backup.mjs';
 import { moveImport } from '../core/export.mjs';
 import { translator, painter } from '../terminal/render.mjs';
+import { startWatchdog } from './watchdog.mjs';
 
 function parse(argv) {
   const o = { command: 'run', home: null, profile: null, account: null, wait: true, admin: false, kind: null, taller: false, target: null, sub: null, file: null, code: process.env.ORB_BACKUP_CODE || null };
@@ -66,6 +72,13 @@ function parse(argv) {
     else if (a === 'quitar' || a === 'revoke' || a === 'remove') { o.command = 'revoke'; o.target = argv[++i]; if (!o.target) throw new Error('falta el dispositivo: orb-server quitar <id>'); }
     // 3.5 «Solo Orb»: the sign-in without a screen: the link and the code are printed, Claude's code is pasted here.
     else if (a === 'entrar' || a === 'login') { o.command = 'login'; o.account = argv[++i]; if (!o.account) throw new Error('falta la cuenta: orb-server entrar claude'); }
+    // 3.7 (WS1)
+    else if (a === 'migrar' || a === 'migrate') o.command = 'migrate';
+    else if (a === 'emparejar' || a === 'pair-app') { o.command = 'pair'; o.target = argv[++i]; if (!o.target) throw new Error('orb-server emparejar <código>@<dirección>#<huella>'); }
+    else if (a === '--pair') { o.command = 'pair'; o.target = argv[++i]; if (!o.target) throw new Error('orb-server --pair <código>@<dirección>#<huella>'); }
+    else if (a === 'motores' || a === 'engines') { o.command = 'engines'; if (['instalar', 'install'].includes(String(argv[i + 1] ?? '').toLowerCase())) { i++; o.target = argv[++i]; if (!o.target) throw new Error('orb-server motores instalar claude|codex'); } }
+    else if (a === 'actualizar' || a === 'update') o.command = 'update';
+    else if (a === '--comprobar' || a === '--check') o.checkOnly = true;
     else throw new Error(`no entiendo «${a}» (prueba --help)`);
   }
   return o;
@@ -242,13 +255,70 @@ async function linkDevice(home, o, version) {
   return code;
 }
 
+// 3.7: «código@dirección#huella», what the app's «Añadir Orb Server» puts in the install command (the fingerprint of the
+// app's key: the link is made only with that app).
+export function parsePair(text) {
+  const m = /^([A-Za-z0-9-]{4,40})@([^#\s]{3,300})#([A-Za-z0-9:_-]{6,128})$/.exec(String(text ?? '').trim());
+  if (!m) throw new Error('el emparejado va así: <código>@<dirección>#<huella>');
+  return { code: m[1], address: m[2], fp: m[3] };
+}
+async function pairCommand(home, version, target) {
+  const t = translator(); const p = painter();
+  const pair = parsePair(target);
+  return withEngine(home, version, async (call) => {
+    try { await call('link.connect', pair); }
+    catch (error) {
+      // The app could not be reached from here: a short code the app can use instead (link.connect on its side).
+      console.error(p.yellow(t('term.server.pairFailed', { error: error.message })));
+      const q = await call('link.qr', { admin: 'first', device: 'orb' });
+      console.log(t('term.server.pairFallback'));
+      console.log(`  ${p.bold(t('term.server.code', { code: q.code }))}`);
+      console.log(`  ${t('term.server.address', { address: q.address })}`);
+      return 1;
+    }
+    console.log(p.green(t('term.server.paired')));
+    return 0;
+  });
+}
+async function migrateCommand(home) {
+  const { migrateLegacy, legacyPaths } = await import('./migrate.mjs');
+  const { createBackup, backupDir, pruneBackups } = await import('../core/backup.mjs');
+  const { loadConfig } = await import('../core/home.mjs');
+  const where = { ...legacyPaths(), ...(home ? { home } : {}) };
+  if (await serviceRunning(where.oldHome).catch(() => false)) { console.error('Orb Server está en marcha: páralo antes (systemctl --user stop orb-nucleo orb-server)'); return 1; }
+  const r = await migrateLegacy({ ...where, log: () => {},
+    backup: async (old) => { const config = loadConfig(old); const b = await createBackup({ home: old, secret: readKey(old), kind: 'preupdate', folder: backupDir(old, config) }); await pruneBackups(backupDir(old, config)).catch(() => {}); return b.file; } });
+  for (const line of r.steps) console.log(`- ${line}`);
+  console.log(r.state === 'migrated' ? `Migrado: tus datos están en ${where.home}` : r.state === 'done' ? `Nada que migrar: ${where.home} ya es de Orb Server` : 'Nada que migrar');
+  return 0;
+}
+async function enginesCommand(home, version, target) {
+  return withEngine(home, version, async (call) => {
+    if (target) { const r = await call('server.engines.install', { id: target }); console.log(`${target} ${r.version}`); return 0; }
+    for (const e of await call('server.engines')) console.log(`${e.label.padEnd(8)} ${e.installed ? e.version : '-'}`);
+    return 0;
+  });
+}
+async function updateCommand(home, version, checkOnly) {
+  return withEngine(home, version, async (call) => {
+    const c = await call('server.update.check', {});
+    if (!c.available) { console.log(`Orb Server ${version}: no hay una versión nueva`); return 0; }
+    console.log(`Hay una versión nueva: ${c.available.version}`);
+    if (checkOnly) return 0;
+    const r = await call('server.update.apply', {});
+    console.log(r.updated ? `Actualizado a ${r.version}: el servicio arranca de nuevo` : 'Sin cambios');
+    return 0;
+  });
+}
+
 async function main() {
   const o = parse(process.argv.slice(2));
   const version = packageVersion();
   if (o.command === 'version') { console.log(version); return; }
-  if (o.command === 'help') { console.log('orb-server [--home <carpeta>] [--papel centro|todo|taller] | estado | entrar <claude|codex|cuenta> | enlazar [--tipo movil|navegador|orb|terminal] [--admin] [--taller] [--no-esperar] | dispositivos | quitar <id> | usuarios | usuario nuevo <nombre> | pin-reset <usuario> | enlazar --usuario <nombre> | copia ahora|lista|restaurar <archivo>|clave [--clave <código>] | mover exportar|importar <archivo> --clave <código> | --version'); return; }
+  if (o.command === 'help') { console.log('orb-server [--home <carpeta>] [--papel centro|todo|taller] | estado | migrar | emparejar <código>@<dirección>#<huella> | motores [instalar claude|codex] | actualizar [--comprobar] | entrar <claude|codex|cuenta> | enlazar [--tipo movil|navegador|orb|terminal] [--admin] [--taller] [--no-esperar] | dispositivos | quitar <id> | usuarios | usuario nuevo <nombre> | pin-reset <usuario> | enlazar --usuario <nombre> | copia ahora|lista|restaurar <archivo>|clave [--clave <código>] | mover exportar|importar <archivo> --clave <código> | --version'); return; }
   // 3.6: importing a moved Orb goes into a folder that is not an Orb yet (nothing is prepared there first).
   if (o.command === 'move' && o.sub === 'import') { process.exit(await moveCommand(null, version, o, path.resolve(o.home ? o.home : defaultHome()))); }
+  if (o.command === 'migrate') { process.exit(await migrateCommand(o.home ? path.resolve(o.home) : null)); }
   const home = prepareHome(o.home ? o.home : defaultHome(), { profile: o.profile });
   if (o.command === 'backup') { process.exit(await backupCommand(home, version, o)); }
   if (o.command === 'move') { process.exit(await moveCommand(home, version, o)); }
@@ -258,8 +328,15 @@ async function main() {
   if (o.command === 'personNew') { process.exit(await personNewCommand(home, version, o.target)); }
   if (o.command === 'pinReset') { process.exit(await pinResetCommand(home, version, o.target)); }
   if (o.command === 'revoke') { process.exit(await revokeCommand(home, version, o.target)); }
+  if (o.command === 'pair') { process.exit(await pairCommand(home, version, o.target)); }
+  if (o.command === 'engines') { process.exit(await enginesCommand(home, version, o.target)); }
+  if (o.command === 'update') { process.exit(await updateCommand(home, version, o.checkOnly)); }
   let onLogin = () => {};
-  const host = createHost({ home, version, echo: o.command === 'run', onEvent: (event, payload) => { if (event === 'agents:login') onLogin(payload); } });
+  const host = createHost({ home, version, echo: o.command === 'run', onEvent: (event, payload) => {
+    if (event === 'agents:login') onLogin(payload);
+    // 3.7: a new version that does not even start goes back to the previous one (src/server/update.mjs).
+    if (event === 'engine:failed' && o.command === 'run') import('./update.mjs').then(({ rollback, appDirOf }) => { const app = appDirOf(); if (app && rollback(app, host.log)) process.exit(1); }).catch(() => {});
+  } });
   let control = null;
   let closing = false;
   const close = async (why) => {
@@ -272,7 +349,12 @@ async function main() {
   process.on('SIGTERM', () => close('SIGTERM'));
   process.on('SIGINT', () => close('SIGINT'));
   process.on('SIGHUP', () => close('SIGHUP'));
-  const info = await host.start();
+  let info;
+  try { info = await host.start(); }
+  catch (error) {
+    if (o.command === 'run') { const { rollback, appDirOf } = await import('./update.mjs'); const app = appDirOf(); if (app) rollback(app, host.log); }
+    throw error;
+  }
   if (o.command === 'status') {
     const s = await host.call('app.state');
     const remote = await host.call('remote.status').catch(() => null);
@@ -285,6 +367,8 @@ async function main() {
     control = serveControl({ home, call: (m, params) => host.call(m, params, { as: 'control' }), log: host.log });
     const where = await control.ready;
     if (where) host.log(`control local en ${where}`);
+    // 3.7: systemd's watchdog (orb-server.service): told only while the engine answers.
+    startWatchdog({ healthy: async () => Boolean(await host.call('app.lockState').catch(() => null)), log: host.log });
     return;
   }
   if (o.command === 'login') {
@@ -310,4 +394,6 @@ async function main() {
   }
 }
 
-main().catch((error) => { console.error(`Orb Server: ${error.message}`); process.exit(1); });
+// Run only as the command (the tests import parsePair).
+const isMain = process.argv[1] && /orb-(server|nucleo)(\.mjs)?$/.test(process.argv[1].replace(/\\/g, '/'));
+if (isMain) main().catch((error) => { console.error(`Orb Server: ${error.message}`); process.exit(1); });
