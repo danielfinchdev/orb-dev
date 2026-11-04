@@ -33,6 +33,8 @@ export const OPTIMUS_KEY = 'oce_optimus';
 export const MACHINES_KEY = 'oce_machines';
 export const WANTED_KEY = 'oce_wanted';
 export const THRESHOLDS_FILE = 'oce-umbrales.json';
+export const ORIGIN_FILE = 'oce-origen.json';
+const UIDS_KEY = 'oce_optimus_uids';
 export const METRICS = ['cpuTemp', 'cpuLoad', 'gpuTemp', 'gpuLoad', 'ram', 'vram', 'ai'];
 export const OPTIMUS_AVATAR = Object.freeze({ shape: 'estrella', color: 'cielo' });
 
@@ -108,7 +110,7 @@ export function creatorKey(candidates) {
 }
 
 // ---- the engine's side
-export function createOce({ board, bots, log = () => {}, link: getLink = () => null, remote: getRemote = () => null, product = () => ctx.product ?? process.env.ORB_PRODUCT ?? 'app' }) {
+export function createOce({ board, bots, log = () => {}, link: getLink = () => null, remote: getRemote = () => null, replica: getReplica = () => null, product = () => ctx.product ?? process.env.ORB_PRODUCT ?? 'app' }) {
   let R = null; let LP = null; let B = null; let A = null;
   const ready = (async () => {
     R = await import('../core/replica.mjs'); LP = await import('../core/link-persons.mjs'); B = await import('../core/bots.mjs'); A = await import('../core/authz.mjs');
@@ -143,7 +145,7 @@ export function createOce({ board, bots, log = () => {}, link: getLink = () => n
     if (LP.linkPerson(board, peer) !== owner()) throw Object.assign(new Error(tr('msg.authz.denied')), { status: 403 });
     if (method === 'oce.status') {
       const flag = board.settingJson(OPTIMUS_KEY);
-      return { ...localStatus(), server: selfServer(), autoCreate: ctx.config?.oce?.optimus !== false, optimus: flag ? { known: true, uid: flag.uid ?? null } : { known: false } };
+      return { ...localStatus(), server: selfServer(), autoCreate: ctx.config?.oce?.optimus !== false, optimus: flag ? { known: true, uid: flag.uid ?? null, uids: optimusUids() } : { known: false } };
     }
     if (method === 'oce.values') return localValues();
     throw Object.assign(new Error('operación desconocida'), { status: 404 });
@@ -173,8 +175,12 @@ export function createOce({ board, bots, log = () => {}, link: getLink = () => n
   }
 
   // ---- Optimus, once
-  function markKnown(uid, by) { if (!board.settingJson(OPTIMUS_KEY)) board.settingJson(OPTIMUS_KEY, { uid: uid ?? null, by, at: new Date().toISOString() }); }
+  // Every Optimus this Orb knows of (its own and the ones the linked Orbs said they made): the ones kept to one.
+  const optimusUids = () => [...new Set([...(board.settingJson(UIDS_KEY) ?? []), board.settingJson(OPTIMUS_KEY)?.uid].filter(Boolean))].slice(0, 20);
+  const addUids = (list) => { const all = new Set(optimusUids()); for (const u of list ?? []) if (R.isUid(String(u ?? ''))) all.add(String(u)); board.settingJson(UIDS_KEY, [...all].slice(0, 20)); };
+  function markKnown(uid, by) { if (uid) addUids([uid]); if (!board.settingJson(OPTIMUS_KEY)) board.settingJson(OPTIMUS_KEY, { uid: uid ?? null, by, at: new Date().toISOString() }); }
   function optimusCheck(fresh) {
+    for (const m of fresh) addUids([m.status?.optimus?.uid, ...(m.status?.optimus?.uids ?? [])]);
     if (board.settingJson(OPTIMUS_KEY)) return null;
     // A bot with these tools already here (one of this Orb or the copy of one run elsewhere) is the one.
     const have = board.all('SELECT uid, tools FROM bots').find((b) => { try { return JSON.parse(b.tools || '[]').includes('oce'); } catch { return false; } });
@@ -195,6 +201,8 @@ export function createOce({ board, bots, log = () => {}, link: getLink = () => n
     let name = 'Optimus'; for (let i = 2; taken.has(name.toLowerCase()); i++) name = `Optimus ${i}`;
     const bot = B.createBot(board, { name, icon: '🌡️', avatar: { ...OPTIMUS_AVATAR }, role_text: tr('sys.oce.optimusRole'), tools: ['oce', 'recordatorios'], effort: 'low' }, { person });
     markKnown(bot.uid, 'here');
+    // Where it was born, in its own folder (it travels with the bot): if two are kept to one, both PCs are named.
+    try { fs.writeFileSync(originFile(bot.id), JSON.stringify({ sources: [{ key: self(), machine: machineName() }] })); } catch { /* best effort */ }
     try {
       const conv = B.botConversation(board, bot, { person });
       if (bots) bots.say('bot', tr('sys.oce.optimusHello', { name }), bots.botMeta(bot), conv, { notify: [person] });
@@ -203,6 +211,49 @@ export function createOce({ board, bots, log = () => {}, link: getLink = () => n
     } catch (error) { log(`optimus: ${error.message}`); }
     log(`Open Control Edge encontrado: bot ${name} creado (${bot.uid})`);
     return bot;
+  }
+
+  // ---- ONE Optimus: two made by Orbs that were not linked yet (each found OCE alone) become one once they see each other.
+  // Kept: the one whose home is the Orb Server, else the older (then the lower uid): every Orb picks the same. The home of
+  // the other one moves it to the kept one's home (bots.move of WS3); there, bots.merge keeps the survivor, the other's
+  // memory goes as pending proposals and it is archived with its chat; the survivor names both PCs as its sources.
+  const originFile = (id) => path.join(ctx.paths?.bots ?? path.join(ctx.home, 'bots'), String(Number(id)), ORIGIN_FILE);
+  const sourcesOf = (id) => { try { return JSON.parse(fs.readFileSync(originFile(id), 'utf8')).sources ?? []; } catch { return []; } };
+  const tried = new Map();
+  async function dedupe() {
+    const rep = getReplica(); if (!rep) return;
+    const uids = new Set(optimusUids());
+    const rows = board.all("SELECT * FROM bots WHERE uid IS NOT NULL AND (home_state IS NULL OR home_state IN ('active', 'moving'))").filter((r) => uids.has(r.uid));
+    if (rows.length < 2) return;
+    const servers = new Set(peers().filter(isServer).map((p) => p.key)); if (selfServer()) servers.add(self());
+    const rank = (r) => `${servers.has(r.home) ? 0 : 1}|${r.created_at ?? ''}|${r.uid}`;
+    rows.sort((a, b) => (rank(a) < rank(b) ? -1 : 1));
+    const keep = rows[0];
+    for (const other of rows.slice(1)) {
+      if (!R.isHomeHere(board, other) || other.home_state === 'moving') continue;
+      if (R.isHomeHere(board, keep)) {
+        const all = [...sourcesOf(keep.id), ...sourcesOf(other.id)].filter((x, i, l) => x?.key && l.findIndex((y) => y.key === x.key) === i);
+        const r = rep.merge(keep.id, other.id);
+        try { fs.writeFileSync(originFile(keep.id), JSON.stringify({ sources: all })); } catch { /* best effort */ }
+        const row = B.getBot(board, keep.id); const person = B.botPerson(board, row) ?? owner();
+        const body = tr('sys.oce.merged', { name: row.name, machines: all.map((x) => x.machine).join(', ') || machineName() });
+        const conv = B.botConversation(board, row, { person });
+        if (bots) bots.say('system', body, { bot: row.id, kind: 'oce_merged', sources: all }, conv, { notify: [person] });
+        else board.addChat('system', body, { bot: row.id, kind: 'oce_merged', sources: all }, conv);
+        log(`optimus: ${other.uid} unido a ${keep.uid} (${r.proposals} propuestas de memoria)`);
+        continue;
+      }
+      // Its home is elsewhere: this one goes there first (once a minute at most while it fails).
+      if (Date.now() - (tried.get(other.uid) ?? 0) < 60_000) continue;
+      const home = peers().find((p) => p.key === keep.home);
+      if (!home?.online) continue;
+      tried.set(other.uid, Date.now());
+      try {
+        let r = await rep.move(other.id, keep.home, { group: 'leave' });
+        if (r?.step === 'brain' && r.brains?.length) r = await rep.move(other.id, keep.home, { group: 'leave', brain: { agent: r.brains[0], model: null } });
+        log(`optimus: ${other.uid} pasa a ${home.name} para quedar uno solo: ${r?.ok ? 'hecho' : JSON.stringify(r).slice(0, 200)}`);
+      } catch (error) { log(`optimus: no se pudo pasar ${other.uid}: ${error.message}`); }
+    }
   }
 
   // ---- alerts of the bots run here
@@ -246,12 +297,12 @@ export function createOce({ board, bots, log = () => {}, link: getLink = () => n
       await ready;
       const wanted = Number(board.settingJson(WANTED_KEY)?.at) || 0;
       if (wanted > lastWanted) { lastWanted = wanted; lastStatus = Date.now(); const r = await poll({ values: true }); optimusCheck(r.fresh); }
-      else if (Date.now() - lastStatus >= STATUS_MS) { lastStatus = Date.now(); const r = await poll(); optimusCheck(r.fresh); }
+      else if (Date.now() - lastStatus >= STATUS_MS) { lastStatus = Date.now(); const r = await poll(); optimusCheck(r.fresh); await dedupe(); }
       if (Date.now() - lastAlert >= ALERT_MS) { lastAlert = Date.now(); await alerts(); }
     } catch (error) { log(`open control edge: ${error.message}`); } finally { busy = false; }
   }
   return {
-    serve, poll, tick, alerts, optimusCheck: (fresh = []) => optimusCheck(fresh), peers,
+    serve, poll, tick, alerts, dedupe, optimusCheck: (fresh = []) => optimusCheck(fresh), peers,
     start() { lastStatus = Date.now() - STATUS_MS + Math.min(STATUS_MS, 3000); const t = setInterval(tick, 1000); t.unref?.(); timers.push(t); return this; },
     stop() { for (const t of timers) clearInterval(t); timers = []; }
   };

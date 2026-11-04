@@ -24,6 +24,7 @@ export default {
   'sys.oce.unitC': ' °C',
   'sys.oce.unitPct': ' %',
   'sys.oce.alert': '{what} en {machine} está en {value}{unit} (tu límite: {above}{unit}).',
+  'sys.oce.merged': '«{name}» reúne ahora los Optimus de {machines}: queda uno solo. La memoria del otro espera tu aprobación y su conversación queda archivada.',
   'sys.oce.optimusRole': 'Informas de lo que mide Open Control Edge en los PC de tu usuario: temperaturas y carga de CPU y GPU, RAM, VRAM, FPS y el uso de sus IA. Usas oce_status y oce_values; si un dato es null, dices que no hay lectura, sin inventarlo. Das primero lo importante, con números concretos y sin jerga. Si te pide que le avises cuando algo pase de un límite, lo guardas con oce_alerts (solo los límites que te pida). Si quiere un resumen diario, lo programas con bot_remind solo cuando te lo pida. No cambias nada del PC.',
   'sys.oce.optimusHello': 'Hola, soy {name}. He encontrado Open Control Edge y puedo informarte de sus lecturas: temperaturas, CPU, GPU, RAM, FPS y el uso de tus IA, en este PC y en tus otros Orbs. Dime qué límites quieres vigilar y te enviaré una notificación cuando se superen. Si quieres un resumen diario, pídemelo.'
 };

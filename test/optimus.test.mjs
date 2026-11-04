@@ -137,3 +137,39 @@ test('dos Orbs enlazados: un solo Optimus (en el Server), que lee el OCE del PC 
     assert.equal((await optimus(pc)).filter((b) => b.homeHere).length, 0, 'el PC no crea el suyo');
   } finally { clearInterval(beat); }
 });
+
+test('dos Orbs con su propio Optimus (cada uno encontró OCE sin estar enlazados): al enlazarse queda uno solo', async () => {
+  const base = { ORB_REMOTE_BIND: '127.0.0.1', ORB_WOL_DRY: '1', ORB_REPLICA_MS: '400', ORB_MOVE_TURN_MS: '1500', ORB_FORWARD_MS: '8000', ORB_OCE_FAKE: '1', ORB_OCE_MS: '500' };
+  const d = { srv: path.join(fakeRoot, 'srv2'), pc: path.join(fakeRoot, 'pc2') };
+  for (const x of Object.values(d)) fs.mkdirSync(path.join(x, 'OrbPuente'), { recursive: true });
+  const beat = () => { writeOce(d.srv); writeOce(d.pc); };
+  beat(); const timer = setInterval(beat, 1500);
+  try {
+    const port = 20000 + Math.floor(Math.random() * 20000);
+    const tSrv = tempHome({ role: 'centro', mobile: { enabled: true, port, name: 'Servidor' } }); tmp.push(tSrv);
+    const tPc = tempHome({ mobile: { name: 'Sobremesa' } }); tmp.push(tPc);
+    const srv = await startEngine(tSrv.home, { env: { ...base, LOCALAPPDATA: d.srv, ORB_OCE_DIR: path.join(d.srv, 'nada') } }); engines.push(srv);
+    const pc = await startEngine(tPc.home, { env: { ...base, LOCALAPPDATA: d.pc, ORB_OCE_DIR: path.join(d.pc, 'nada') } }); engines.push(pc);
+    const active = (e) => e.call('bots.list').then((r) => r.bots.filter((b) => b.tools.includes('oce') && b.homeState !== 'archived'));
+    const mine = async (e) => (await active(e)).find((b) => b.homeHere);
+    const a = await until(() => mine(srv), 'el Server crea el suyo', 20000);
+    const b = await until(() => mine(pc), 'el PC crea el suyo', 20000);
+    assert.notEqual(a.uid, b.uid);
+    await pc.call('bots.memory.set', { id: b.id, text: 'Avisar si la GPU pasa de 80 grados' });
+    await until(async () => (await srv.call('remote.status')).running, 'acceso del servidor');
+    const q = await srv.call('link.qr', { device: 'orb' });
+    await pc.call('link.connect', { code: q.code, address: `127.0.0.1:${port}` });
+    // Se queda el del Server (siempre encendido); el del PC pasa al Server y allí se une a él.
+    await until(async () => { const s = await active(srv); const p = await active(pc); return s.length === 1 && s[0].uid === a.uid && p.length === 1 && p[0].uid === a.uid; }, 'un solo Optimus en los dos Orbs', 60000);
+    const archived = await until(async () => (await srv.call('bots.list')).bots.find((x) => x.uid === b.uid && x.homeState === 'archived'), 'el otro, archivado con su chat', 20000);
+    assert.equal(archived.homeHere, true); assert.equal(archived.paused, true);
+    assert.ok((await srv.call('bots.chat', { id: archived.id })).lines.some((l) => /Open Control Edge/.test(l.body)), 'su conversación se conserva');
+    const pending = await srv.call('bots.memory.pending');
+    assert.ok(pending.some((m) => /GPU pasa de 80/.test(m.text)), 'su memoria espera aprobación');
+    const merged = (await srv.call('bots.chat', { id: a.id })).lines.find((l) => l.meta?.kind === 'oce_merged');
+    assert.match(merged.body, /Servidor/); assert.match(merged.body, /Sobremesa/);
+    assert.deepEqual(merged.meta.sources.map((x) => x.machine).sort(), ['Servidor', 'Sobremesa'], 'los dos PC, como fuentes');
+    await wait(2500);
+    assert.equal((await active(srv)).length, 1); assert.equal((await active(pc)).length, 1, 'ninguno vuelve a crear otro');
+  } finally { clearInterval(timer); }
+});

@@ -222,7 +222,7 @@ async function start(home, version, secret, browser, headless) {
     // 3.7 (WS8): Open Control Edge here and on the owner's linked Orbs (read-only), and its bot Optimus, made once.
     {
       const { createOce } = await import('./oce.mjs');
-      oce = createOce({ board, bots, log, link: () => link, remote: () => remote });
+      oce = createOce({ board, bots, log, link: () => link, remote: () => remote, replica: () => replica });
       if (!ctx.moved) oce.start();
     }
     // 3.5: the bots live on the centre: what its bots say comes to this Orb's window as centro:<event>.
