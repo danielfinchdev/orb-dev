@@ -2,6 +2,8 @@
 import './lib/app-bridge.js'; // first: in the Android app it tells the web bridge where the linked Orb is
 import './lib/web-bridge.js'; // then: in a phone's browser (or the app) it provides window.orb
 import './app.css';
+// 3.6: the Android app's «glass» look, only in the Android build (the other builds drop this line and its CSS).
+if (import.meta.env.MODE === 'android') (await import('./lib/glass.js')).enableGlass();
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Toaster } from 'sonner';
@@ -70,7 +72,7 @@ function MobileShell() {
   const View = VIEWS[route.view] ?? ChatView;
   const bots = modeOf(route) === 'bots';
   return (
-    <div className="flex h-full flex-col">
+    <div className="mobile-shell flex h-full flex-col">
       {/* 3.5: «Orb | Bots» at the top; in Orb mode, how the PC that does the work is (when linked with the server). */}
       <div className="mobile-mode bg-sidebar shrink-0 border-b px-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2"><ModeSwitch className="mx-auto max-w-xs" /></div>
       {bots ? null : <TallerBanner />}

@@ -1,0 +1,163 @@
+/* 3.6: the Android app's «glass» look (docs/DESIGN-SYSTEM.md › Android glass). Only the Android build loads this file
+   (lib/glass.js, from main.jsx) and every rule hangs from html.glass, so nothing here can reach the PC or a browser.
+   Original work: translucent layers over a soft colour field, light catching their top edge, large radii and a floating
+   tab bar. No platform assets, fonts or icons.
+
+   Performance budget (Android WebView):
+   - backdrop-filter only on a layer that floats over content that moves: the tab bar (always) and one transient layer at
+     a time (a sheet, a menu or a select). Surfaces that sit in the flow (cards, the composer, the top bar) are tinted
+     glass with no blur: over the static colour field a blur would cost a full repaint and look the same.
+   - The colour field is static (no drifting clouds, no animated scene) and the scene's own frosted pane is off.
+   - html.glass-lite (a modest phone), prefers-reduced-transparency, prefers-contrast: more and a WebView without
+     backdrop-filter: no blur anywhere and more opaque surfaces. Contrast stays >= 4.5:1 for text in every case. */
+
+html.glass {
+  /* Materials: how much of the colour field shows through. Thin for the tab bar, regular for cards and the composer,
+     thick for sheets and menus (they carry the most text). */
+  --glass-thin: rgb(255 255 255 / 0.58);
+  --glass-regular: rgb(255 255 255 / 0.66);
+  --glass-thick: rgb(250 251 255 / 0.86);
+  --glass-solid: rgb(252 252 255 / 0.97);
+  --glass-edge: rgb(255 255 255 / 0.85);      /* light catching the top edge */
+  --glass-stroke: rgb(30 36 90 / 0.09);       /* the hairline around a surface */
+  --glass-blur: blur(22px) saturate(180%);
+  --glass-shadow: 0 1px 1px rgb(30 36 90 / 0.04), 0 10px 28px -14px rgb(40 50 130 / 0.32);
+  --glass-shadow-float: 0 2px 4px rgb(30 36 90 / 0.06), 0 18px 40px -16px rgb(40 50 130 / 0.42);
+  --glass-scrim: rgb(14 16 38 / 0.32);
+  --glass-label: color-mix(in oklch, var(--foreground) 66%, transparent);
+  /* The colour field behind everything: a few soft pools of the robot's periwinkle, lilac and sky. */
+  --glass-field: radial-gradient(70% 45% at 10% 0%, #c7cdfd 0%, transparent 70%), radial-gradient(60% 40% at 100% 28%, #ecd5fb 0%, transparent 72%), radial-gradient(80% 45% at 40% 100%, #cfe3ff 0%, transparent 70%), var(--background);
+  /* Shape */
+  --glass-r-sheet: 28px;
+  --glass-r-card: 22px;
+  --glass-r-control: 12px;
+  /* The floating tab bar and the room it takes at the bottom of each screen. */
+  --dock-h: 62px;
+  --dock-gap: 10px;
+  --dock-space: calc(var(--dock-h) + var(--dock-gap) * 2 + env(safe-area-inset-bottom, 0px));
+}
+html.glass.dark {
+  --glass-thin: rgb(34 36 52 / 0.56);
+  --glass-regular: rgb(36 38 54 / 0.6);
+  --glass-thick: rgb(30 32 46 / 0.86);
+  --glass-solid: rgb(26 28 40 / 0.97);
+  --glass-edge: rgb(255 255 255 / 0.1);
+  --glass-stroke: rgb(255 255 255 / 0.07);
+  --glass-shadow: 0 1px 1px rgb(0 0 0 / 0.2), 0 12px 30px -14px rgb(0 0 0 / 0.7);
+  --glass-shadow-float: 0 2px 4px rgb(0 0 0 / 0.25), 0 20px 44px -16px rgb(0 0 0 / 0.8);
+  --glass-scrim: rgb(0 0 0 / 0.45);
+  --glass-label: color-mix(in oklch, var(--foreground) 70%, transparent);
+  --glass-field: radial-gradient(70% 45% at 10% 0%, #262c6e 0%, transparent 70%), radial-gradient(60% 40% at 100% 28%, #3a1f5c 0%, transparent 72%), radial-gradient(80% 45% at 40% 100%, #12305a 0%, transparent 70%), var(--background);
+}
+
+/* ---- The colour field: static, under every screen; the animated scene and its frosted pane are off. ---- */
+html.glass .mobile-shell { position: relative; background: var(--glass-field); }
+html.glass .mobile-shell .scene { display: none; }
+html.glass .mobile-shell :is(.mobile-mode, .topbar, .theme-scene) { background: transparent; border-color: transparent; backdrop-filter: none; }
+
+/* ---- Top: the «Orb | Bots» switch is a glass capsule, the screen's bar a large title straight on the field. ---- */
+html.glass .mobile-mode { padding-bottom: 4px; }
+html.glass .mobile-mode [data-testid="mode-switch"] { background: var(--glass-regular); border-radius: 999px; padding: 4px; box-shadow: inset 0 1px 0 var(--glass-edge), 0 0 0 1px var(--glass-stroke); }
+html.glass .mobile-mode .mode-thumb { inset-block: 4px; left: 4px; width: calc(50% - 5px); border-radius: 999px; background: var(--glass-solid); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 4px 10px -4px rgb(40 50 130 / 0.3); }
+html.glass.dark .mobile-mode .mode-thumb { background: rgb(74 78 108 / 0.9); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 4px 10px -4px rgb(0 0 0 / 0.6); }
+html.glass .mobile-mode [role="tab"] { border-radius: 999px; padding-block: 6px; }
+html.glass .mobile-shell .topbar { min-height: 3.25rem; padding-block: 0.5rem; }
+html.glass .mobile-shell .topbar h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.15; }
+html.glass .mobile-shell .topbar-chat h1 { font-size: inherit; }
+/* What scrolls up meets the bar with a soft edge, not a cut. */
+html.glass .mobile-shell main .overflow-y-auto { mask-image: linear-gradient(to bottom, transparent 0, #000 14px); }
+
+/* ---- Cards and grouped lists: tinted glass, no blur (they sit in the flow). ---- */
+html.glass .mobile-shell main :is([data-slot="card"], .bg-card\/80) {
+  background: var(--glass-regular); border: 0; border-radius: var(--glass-r-card);
+  box-shadow: inset 0 1px 0 var(--glass-edge), 0 0 0 1px var(--glass-stroke), var(--glass-shadow);
+}
+/* Never glass on glass: what sits inside a card is drawn with hairlines only. */
+html.glass .mobile-shell main [data-slot="card"] :is([data-slot="card"], .bg-card, .bg-card\/80) { background: transparent; box-shadow: 0 0 0 1px var(--glass-stroke); }
+
+/* ---- The composer: a regular glass slab with the light on its top edge; it sits above the floating tab bar. ---- */
+html.glass .mobile-shell [data-slot="composer"] {
+  background: var(--glass-regular); border: 0; border-radius: 26px;
+  box-shadow: inset 0 1px 0 var(--glass-edge), 0 0 0 1px var(--glass-stroke), var(--glass-shadow);
+}
+html.glass .mobile-shell [data-slot="composer"]:focus-within { box-shadow: inset 0 1px 0 var(--glass-edge), 0 0 0 1.5px color-mix(in oklch, var(--ring) 55%, transparent), var(--glass-shadow); --tw-ring-shadow: 0 0 #0000; }
+html.glass .mobile-shell .composer-dock { padding-inline: 12px; padding-bottom: calc(var(--dock-space) + 2px); }
+/* The screens leave room for the tab bar at the end of their scroll; the chat's own list does not (the composer does). */
+html.glass .mobile-shell main .overflow-y-auto { padding-bottom: calc(var(--dock-space) + 12px); }
+html.glass .mobile-shell main .overflow-y-auto:has(~ .composer-dock) { padding-bottom: 12px; }
+
+/* ---- The floating tab bar: the one always-on blurred layer. ---- */
+html.glass .mobile-tabs {
+  position: absolute; z-index: 30; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom, 0px) + var(--dock-gap));
+  height: var(--dock-h); padding: 0 6px; align-items: center; border: 0; border-radius: 999px;
+  background: var(--glass-thin); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  box-shadow: inset 0 1px 0 var(--glass-edge), 0 0 0 1px var(--glass-stroke), var(--glass-shadow-float);
+}
+html.glass .mobile-tabs::before { display: none; }
+html.glass .mobile-tab { padding: 0; gap: 1px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.01em; color: var(--glass-label); }
+html.glass .mobile-tab[aria-current="page"] { color: var(--primary); }
+html.glass .mobile-tab-icon { height: 30px; width: 52px; }
+html.glass .mobile-tab[aria-current="page"] .mobile-tab-icon { background: color-mix(in oklch, var(--primary) 14%, transparent); }
+/* A number on a tab: dark text on the warning colour (white on yellow does not reach 4.5:1). */
+html.glass .mobile-tab .bg-warning { color: oklch(0.22 0.04 70); font-weight: 700; }
+
+/* ---- Sheets: on the phone a dialog rises from the bottom edge, thick glass with a grabber. The one transient
+   blurred layer; the scrim under it only dims (no second blur). ---- */
+html.glass [data-slot="dialog-overlay"] { background: var(--glass-scrim); backdrop-filter: none; }
+@media (max-width: 640px) {
+  html.glass [data-slot="dialog-content"] {
+    top: auto; bottom: 0; left: 0; right: 0; width: 100%; max-width: 100%; translate: 0 0;
+    max-height: 90dvh; padding: 26px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+    border: 0; border-radius: var(--glass-r-sheet) var(--glass-r-sheet) 0 0;
+    background: var(--glass-thick); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+    box-shadow: inset 0 1px 0 var(--glass-edge), 0 -1px 0 var(--glass-stroke), 0 -18px 48px -20px rgb(0 0 0 / 0.35);
+    --tw-duration: 320ms; --tw-ease: var(--ease-drawer);
+    --tw-enter-scale: 1; --tw-exit-scale: 1; --tw-enter-translate-y: 100%; --tw-exit-translate-y: 100%; --tw-enter-opacity: 1;
+  }
+  html.glass [data-slot="dialog-content"]::before { content: ""; position: absolute; top: 8px; left: 50%; width: 36px; height: 5px; translate: -50% 0; border-radius: 999px; background: color-mix(in oklch, var(--foreground) 22%, transparent); }
+  /* The sheet's actions: full width, the main one last (closest to the thumb). */
+  html.glass [data-slot="dialog-content"] [data-slot="button"] { min-height: 44px; border-radius: 14px; }
+}
+
+/* ---- Menus and selects: thick glass, growing from their trigger (overlay.jsx already sets the origin). ---- */
+html.glass :is([data-slot="menu-content"], [data-slot="select-content"]) {
+  border: 0; border-radius: 16px; padding: 6px;
+  background: var(--glass-thick); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  box-shadow: inset 0 1px 0 var(--glass-edge), 0 0 0 1px var(--glass-stroke), var(--glass-shadow-float);
+}
+html.glass :is([data-slot="menu-content"], [data-slot="select-content"]) [role^="menuitem"], html.glass [data-slot="select-content"] [role="option"] { min-height: 40px; border-radius: 10px; }
+
+/* ---- Controls: softer corners and a press that feels physical (down at once, back with ease-out). ---- */
+html.glass .mobile-shell [data-slot="button"] { border-radius: var(--glass-r-control); }
+html.glass .mobile-shell [data-slot="button"].rounded-full { border-radius: 999px; }
+html.glass .mobile-shell :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], button[role="combobox"]) { border-radius: var(--glass-r-control); background-color: color-mix(in oklch, var(--glass-solid) 70%, transparent); }
+@media (prefers-reduced-motion: no-preference) {
+  html.glass:not([data-motion="minima"]) :is([data-slot="button"], .press, .mobile-tab):not(:disabled):active { transform: scale(0.96); filter: brightness(0.96); transition: transform 90ms var(--ease-out), filter 90ms var(--ease-out); }
+}
+
+/* ---- Fallbacks: no blur, more opaque surfaces. A modest phone (lib/glass.js), the system asking for less transparency
+   or more contrast, or a WebView that cannot blur. ---- */
+html.glass.glass-lite {
+  --glass-thin: rgb(250 251 255 / 0.94); --glass-regular: rgb(255 255 255 / 0.9); --glass-thick: rgb(250 251 255 / 0.98);
+}
+html.glass.glass-lite.dark { --glass-thin: rgb(30 32 46 / 0.95); --glass-regular: rgb(34 36 52 / 0.9); --glass-thick: rgb(28 30 44 / 0.98); }
+html.glass.glass-lite :is(.mobile-tabs, [data-slot="dialog-content"], [data-slot="menu-content"], [data-slot="select-content"]) { -webkit-backdrop-filter: none; backdrop-filter: none; }
+@media (prefers-reduced-transparency: reduce) {
+  html.glass { --glass-thin: rgb(250 251 255); --glass-regular: rgb(255 255 255); --glass-thick: rgb(250 251 255); }
+  html.glass.dark { --glass-thin: rgb(30 32 46); --glass-regular: rgb(34 36 52); --glass-thick: rgb(28 30 44); }
+  html.glass :is(.mobile-tabs, [data-slot="dialog-content"], [data-slot="menu-content"], [data-slot="select-content"]) { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@media (prefers-contrast: more) {
+  html.glass { --glass-thin: var(--card); --glass-regular: var(--card); --glass-thick: var(--popover); --glass-stroke: var(--foreground); --glass-label: var(--foreground); }
+  html.glass :is(.mobile-tabs, [data-slot="dialog-content"], [data-slot="menu-content"], [data-slot="select-content"]) { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  html.glass { --glass-thin: rgb(250 251 255 / 0.95); --glass-thick: rgb(250 251 255 / 0.98); }
+  html.glass.dark { --glass-thin: rgb(30 32 46 / 0.95); --glass-thick: rgb(28 30 44 / 0.98); }
+}
+
+/* ---- Reduced motion (the system's or «mínima»): the sheet fades in place instead of rising. ---- */
+@media (prefers-reduced-motion: reduce) {
+  html.glass [data-slot="dialog-content"] { --tw-enter-translate-y: 0; --tw-exit-translate-y: 0; --tw-enter-opacity: 0; --tw-duration: 180ms; }
+}
+html.glass[data-motion="minima"] [data-slot="dialog-content"] { --tw-enter-translate-y: 0; --tw-exit-translate-y: 0; --tw-enter-opacity: 0; --tw-duration: 180ms; }

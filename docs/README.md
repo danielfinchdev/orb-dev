@@ -1,6 +1,7 @@
 # Orb.dev documentation
 
-App copy (tone, names and wording): [`WRITING-GUIDE.md`](WRITING-GUIDE.md).
+App copy (tone, names and wording): [`WRITING-GUIDE.md`](WRITING-GUIDE.md). UI rules, layout, components, tokens and the
+review checklist (including the Android app's glass look): [`DESIGN-SYSTEM.md`](DESIGN-SYSTEM.md).
 
 All the project's documentation lives in this folder. Two files live elsewhere because GitHub needs them in place:
 the root [`README.md`](../README.md) (the repository's front page) and the issue template

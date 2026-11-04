@@ -76,7 +76,7 @@ export function Composer({ value, onChange, onSend, onStop, busy, placeholder, t
     finally { setHearing(false); }
   };
   return (
-    <div className="shrink-0 px-5 pb-5">
+    <div className="composer-dock shrink-0 px-5 pb-5">
       <div data-slot="composer" className={cn('bg-card relative mx-auto max-w-3xl rounded-2xl border shadow-sm transition-shadow focus-within:shadow-md focus-within:ring-[3px] focus-within:ring-ring/25', dropping && 'ring-primary ring-2')}
         onDragOver={onDrop ? (e) => { e.preventDefault(); setDropping(true); } : undefined} onDragLeave={() => setDropping(false)} onDrop={onDrop ? (e) => { e.preventDefault(); setDropping(false); onDrop(e); } : undefined}>
         {mentions && m.list.length ? null : notice}
