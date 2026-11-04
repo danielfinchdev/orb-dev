@@ -289,7 +289,7 @@ function UpdatesCard() {
   }[st.state] ?? '';
   return (
     <Card data-testid="updates-card">
-      <CardHeader><CardTitle>{t('settings.updates')}</CardTitle><CardDescription>{st.portable ? t('settings.update.portable') : t('settings.updatesDesc')}</CardDescription></CardHeader>
+      <CardHeader><CardTitle>{t('settings.updates')}</CardTitle><CardDescription>{st.portable ? t(st.linux === 'package' ? 'settings.update.linuxPackage' : 'settings.update.portable') : t('settings.updatesDesc')}</CardDescription></CardHeader>
       <CardContent className="grid gap-1">
         <div className="text-sm">{t('settings.update.current', { version: st.current })}</div>
         {line ? <div className={cn('text-xs', st.state === 'error' ? 'text-destructive' : 'text-muted-foreground')}>{line}</div> : null}
@@ -442,7 +442,11 @@ export const sizes = () => [{ value: '0.87', label: t('settings.size.small') }, 
 function InterfaceCard({ c }) {
   const t = useT();
   const [zoom, setZoom] = useState(null);
-  const terminals = { auto: t('settings.term.auto'), warp: 'Warp', wt: 'Windows Terminal', powershell: 'PowerShell', cmd: t('settings.term.cmd') };
+  // 3.7: on Linux, its usual terminals (src/main/terminal.mjs LINUX_TERMINALS) instead of Windows' ones.
+  const linux = window.orb?.platform === 'linux';
+  const terminals = linux ? { auto: t('settings.term.auto'), warp: 'Warp', 'x-terminal-emulator': t('settings.term.system'), 'gnome-terminal': 'GNOME Terminal', konsole: 'Konsole', 'xfce4-terminal': 'Xfce Terminal', kitty: 'kitty', alacritty: 'Alacritty', xterm: 'XTerm' }
+    : window.orb?.platform && window.orb.platform !== 'win32' ? { auto: t('settings.term.auto'), warp: 'Warp' }
+      : { auto: t('settings.term.auto'), warp: 'Warp', wt: 'Windows Terminal', powershell: 'PowerShell', cmd: t('settings.term.cmd') };
   useEffect(() => { bridge.zoom?.().then(setZoom).catch(() => {}); return bridge.on('ui:zoom', (p) => setZoom(p.zoom)); }, []);
   if (!bridge.zoom) return null; // phone: the browser has its own zoom
   const SIZES = sizes();

@@ -4,12 +4,19 @@
   rights, and updates itself.
 - **`Orb-3.6.0-light-portable.exe`** (Orb Light, no install needed).
 - **`Orb-3.6.0-android.apk`**: the Orb app for Android. Links to your Orb by scanning a QR code.
+- **`Orb-<version>-linux-x86_64.AppImage`** / **`Orb-<version>-linux-amd64.deb`** (also arm64, from 3.7): the Orb app
+  for a Linux desktop.
 - **`orb-nucleo-3.6.0-linux-x64.tar.gz`**: windowless Orb for an always-on Linux server.
 - **`orb-terminal-3.6.0`**: Orb in the terminal (Windows and Linux, requires Node 22).
 
 Windows 10/11. Since it isn't signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
 
 ## What's new in 3.7.0 (draft)
+
+- **Orb for Linux desktops:** the same app as on Windows, as an AppImage (updates itself) or a `.deb` (tells you about
+  new versions), for x64 and arm64. Ctrl+J opens your system's terminal or the one you choose (GNOME Terminal, Konsole,
+  Xfce Terminal, kitty, Alacritty, XTerm, Warp), and «Abrir en» finds Cursor and VS Code. How to install, update and
+  uninstall: `docs/LINUX.md`.
 
 - **PC Monitoring and Opti Bot are now a bot's tools:** the "Monitoring" screen is gone. Give any bot the new
   "Computer" tools (or create one from the "PC maintenance" template) to check the PC's health, temperatures, network,

@@ -6,7 +6,9 @@
   "private": true,
   "type": "module",
   "main": "src/main/main.mjs",
+  "desktopName": "orb-dev.desktop",
   "author": "Orb",
+  "homepage": "https://github.com/danielfinchdev/orb-dev",
   "license": "MIT",
   "scripts": {
     "build": "vite build",
@@ -17,6 +19,7 @@
     "test:app": "vite build && node test/app.e2e.mjs",
     "icon": "node scripts/icono.mjs",
     "dist": "vite build && electron-builder --win nsis portable",
+    "dist:linux": "vite build && electron-builder --linux AppImage deb",
     "dist:server": "node scripts/dist-servidor.mjs",
     "dist:servidor": "node scripts/dist-servidor.mjs",
     "release:keygen": "node scripts/release.mjs keygen",
@@ -153,7 +156,32 @@
       "grantFileProtocolExtraPrivileges": false
     },
     "linux": {
-      "executableName": "orb-dev"
+      "executableName": "orb-dev",
+      "icon": "build/icon.png",
+      "artifactName": "Orb-${version}-linux-${arch}.${ext}",
+      "category": "Development",
+      "synopsis": "Your pocket director: one chat for your AI coding agents",
+      "description": "Orb coordinates your AI agents (Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Qwen Code, GitHub Copilot) from a single chat. Everything runs on your computer, with your own accounts.",
+      "maintainer": "danielfinchdev <danielfinchdev@users.noreply.github.com>",
+      "vendor": "Orb",
+      "desktop": {
+        "entry": {
+          "Name": "Orb",
+          "GenericName": "AI agents director",
+          "Comment": "One chat for your AI coding agents",
+          "Comment[es]": "Un chat para tus agentes de IA",
+          "Keywords": "AI;agents;Claude;Codex;Cursor;chat;IA;agentes;",
+          "StartupWMClass": "Orb",
+          "StartupNotify": "true"
+        }
+      },
+      "target": [
+        { "target": "AppImage", "arch": ["x64", "arm64"] },
+        { "target": "deb", "arch": ["x64", "arm64"] }
+      ]
+    },
+    "deb": {
+      "recommends": ["gnome-keyring | kwalletmanager"]
     }
   },
   "allowScripts": {

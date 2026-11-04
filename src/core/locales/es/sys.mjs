@@ -36,6 +36,7 @@ export default {
   'sys.dialog.refImages': 'Imágenes de referencia',
   'sys.dialog.images': 'Imágenes',
   'sys.main.startFailed': 'No se pudo iniciar {name}',
+  'sys.main.keyringWeak': 'Tu escritorio no tiene un llavero (GNOME Keyring o KWallet), así que la clave de Orb se guarda en un archivo de su carpeta sin cifrar. Funciona igual; para protegerla, instala gnome-keyring o kwallet y reinicia Orb.',
   'sys.main.notice': '{name} · Notificación',
 
   // Errores del proceso principal (acaban en un toast)
