@@ -36,6 +36,7 @@ import ola1 from './es/ola1.mjs';
 import mensajeria from './es/mensajeria.mjs';
 import orbchats from './es/orbchats.mjs';
 import notes from './es/notes.mjs';
+import vault from './es/vault.mjs';
 
 export default {
   ...base,
@@ -74,5 +75,6 @@ export default {
   ...ola1,
   ...mensajeria,
   ...orbchats,
-  ...notes
+  ...notes,
+  ...vault
 };

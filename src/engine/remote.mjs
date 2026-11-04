@@ -26,7 +26,7 @@ import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal
 import { newVapidKeys, checkSubscription, sendPush } from './webpush.mjs';
 import { wake, normalMac } from '../core/wol.mjs';
 import { PROTOCOL, MIN_PROTOCOL, FORWARD_MIN, FEATURES, versionOfProtocol, CODE_ALPHABET, RELAY_EVENTS, shortCodeLabel } from '../core/link.mjs';
-import { PHONE_SET as ALLOWED, BOTS_OWNER, ORB_SET, CONSOLE_SET, CENTRO_PHONE } from '../core/policy.mjs';
+import { PHONE_SET as ALLOWED, BOTS_OWNER, ORB_SET, CONSOLE_SET, CENTRO_PHONE, SECRET_PARAMS } from '../core/policy.mjs';
 import { principalOf, reaches, audienceOf, ownerOfBoard, peopleWith, audit } from '../core/authz.mjs';
 import { checkTicket, getPerson } from '../core/persons.mjs';
 import { MAGIC as BACKUP_MAGIC, backupDir } from '../core/backup.mjs';
@@ -1266,6 +1266,8 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       }
       if (sub === 'queue') {
         const method = String(params.method ?? ''); const inner = params.params && typeof params.params === 'object' ? params.params : {};
+        // 3.7 (WS6): the vault is the Server's own; a call with a secret in it is never kept in a queue.
+        if (/^vault\./.test(method) || SECRET_PARAMS.has(method)) throw linkError(tr('msg.remote.pcOnly'), { status: 403 });
         forwardCheck(method, inner);
         mayForward(d, principal, method);
         const requestId = crypto.randomUUID();
@@ -1274,6 +1276,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
         if (onlineIds().has(d.id)) flushQueue().catch((error) => log(`enlace: cola: ${error.message}`));
         return { id: Number(id), queued: true, online: onlineIds().has(d.id) };
       }
+      if (/^vault\./.test(sub) || SECRET_PARAMS.has(sub)) throw linkError(tr('msg.remote.pcOnly'), { status: 403 });
       forwardCheck(sub, params);
       mayForward(d, principal, sub);
       if (!onlineIds().has(d.id)) throw offline(d);

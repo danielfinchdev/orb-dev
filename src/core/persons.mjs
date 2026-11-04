@@ -7,7 +7,8 @@ import { ctx, tr } from './context.mjs';
 import { oneLine } from './safety.mjs';
 
 export const ROLES = ['owner', 'user'];
-export const CAPS = ['dev', 'house', 'approveHouse'];
+// 3.7 (WS6): vault: may use a password vault on Orb Server (vault_fill). The owner always may; others when the owner allows.
+export const CAPS = ['dev', 'house', 'approveHouse', 'vault'];
 // PIN: 4 to 12 digits, kept as scrypt(pin, salt). 5 wrong tries lock it; each further wrong try doubles the wait.
 export const PIN_TRIES = 5;
 const LOCK_FIRST_S = 30; const LOCK_MAX_S = 3600;
@@ -159,4 +160,13 @@ export function overview(board) {
       counts: { bots: c('bots'), botsPaused: c('bots', ' AND paused = 1'), groups: c('bot_groups'), conversations: c('conversations', ' AND bot_id IS NULL AND group_id IS NULL'), tasks: c('tasks'), schedules: c('schedules'), projects: c('projects'), reminders: c('bot_reminders', ' AND enabled = 1') },
       today: { turns: Number(usage?.turns ?? 0), tokens: Number(usage?.tokens ?? 0), usd: Number(usage?.usd ?? 0) } };
   });
+}
+
+// 3.7 (Orb Server, WS6): who may connect a password vault and let bots sign in with it: the owner, or a person the owner
+// gave the «vault» capability.
+export function mayUseVault(board, person) {
+  if (!person) return false;
+  const r = board.one('SELECT role, caps FROM persons WHERE id = ? AND deleted_at IS NULL', String(person));
+  if (!r) return false;
+  return r.role === 'owner' || parseCaps(r.caps).vault === true;
 }

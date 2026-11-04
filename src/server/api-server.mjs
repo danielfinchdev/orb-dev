@@ -17,9 +17,10 @@ import { dataApi, MOVED_OK } from '../engine/api-data.mjs';
 import { shareApi } from '../engine/api-shares.mjs';
 import { serverAllows, serverCeiling, PRODUCT_SERVER } from './server-product.mjs';
 import { adminState } from '../core/server-admin.mjs';
+import { vaultMethods } from './api-vault.mjs';
 
 // engines: src/server/engines.mjs (createEngines), update: src/server/update.mjs (createUpdater); both optional (tests).
-export function buildServerApi({ board, emit, log, version, remoteRef = { current: null }, bots = null, engines = null, updater = null }) {
+export function buildServerApi({ board, emit, log, version, remoteRef = { current: null }, bots = null, engines = null, updater = null, vault = null }) {
   let lastChat = board.one('SELECT MAX(id) AS id FROM chat')?.id ?? 0;
   const desktop = { person: null, locked: false }; // no window on a server: kept for the shared parts of the API
   const desktopPrincipal = () => principalOf(board, { desktop: true, person: desktop.person });
@@ -61,7 +62,9 @@ export function buildServerApi({ board, emit, log, version, remoteRef = { curren
     ...gatewayMethods(shared),
     ...inboxMethods(shared),
     ...data.methods,
-    ...shares.methods
+    ...shares.methods,
+    // 3.7 (WS6): the person's password vault (vault_fill types from it; nothing of it is ever returned).
+    ...vaultMethods({ board, log, vault })
   };
   // Only what the server does: what the shared parts also have for the PC (agents.install, data.* of projects…) is left out.
   const methods = Object.fromEntries(Object.entries(all).filter(([k]) => serverAllows(k)));
