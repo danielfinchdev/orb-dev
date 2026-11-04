@@ -29,7 +29,7 @@ import { BrainPicker, ReasoningMenu, UsageBubble, useCatalog, useUsageBubble } f
 import { ContextSlot } from '@/components/context-slot.jsx';
 import { cn } from '@/lib/utils.js';
 import { DECISION, AGENT, STATUS } from '@/lib/labels.js';
-import { useT, useLocale } from '@/lib/i18n.js';
+import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
 
 
 export function useAutoScroll(deps) {
@@ -41,14 +41,17 @@ export function useAutoScroll(deps) {
 }
 
 // "@" picker: while typing @word, a list of tasks, conversations and logs to attach as context (token @tarea:12…).
-function useMentions(value, onChange, ta) {
-  const [options, setOptions] = useState(null);
+// 3.6 (M2): own: the options given by the caller (a group's members: «@Agenda»); else the assistant's (mentions.options).
+function useMentions(value, onChange, ta, own = null) {
+  const [fetched, setOptions] = useState(null);
+  const options = own ?? fetched;
   const [index, setIndex] = useState(0);
   const caret = ta.current?.selectionStart ?? value.length;
   const match = /(^|\s)@([\wÀ-ɏ-]*)$/.exec(value.slice(0, caret));
   const query = match ? match[2].toLowerCase() : null;
-  useEffect(() => { if (query !== null && !options) call('mentions.options').then(setOptions).catch(() => setOptions([])); }, [query !== null]); // eslint-disable-line react-hooks/exhaustive-deps
-  const list = query === null ? [] : (options ?? []).filter((o) => `${o.label} ${o.hint}`.toLowerCase().includes(query)).slice(0, 8);
+  useEffect(() => { if (!own && query !== null && !options) call('mentions.options').then(setOptions).catch(() => setOptions([])); }, [query !== null]); // eslint-disable-line react-hooks/exhaustive-deps
+  const fold = (x) => String(x ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+  const list = query === null ? [] : (options ?? []).filter((o) => fold(`${o.label} ${o.hint ?? ''}`).includes(fold(query))).slice(0, 8);
   useEffect(() => setIndex(0), [query]);
   const pick = (o) => {
     const before = value.slice(0, caret).replace(/@[\wÀ-ɏ-]*$/, `${o.token} `);
@@ -66,17 +69,30 @@ function useMentions(value, onChange, ta) {
   return { list, index, pick, onKey };
 }
 
+// 3.6 (M2): mentions may be a list of options ({ token, label, hint, icon }) instead of the assistant's; the microphone also
+// dictates in a computer's browser that has speech recognition (not in the PC app, whose engine has none).
+const WebSpeech = typeof window !== 'undefined' && !/Electron/i.test(navigator.userAgent) ? (window.SpeechRecognition || window.webkitSpeechRecognition || null) : null;
+function webDictate(lang) {
+  return new Promise((resolve, reject) => {
+    const r = new WebSpeech(); r.lang = lang === 'en' ? 'en-US' : 'es-ES'; r.interimResults = false; r.maxAlternatives = 1;
+    r.onresult = (e) => resolve(e.results?.[0]?.[0]?.transcript ?? '');
+    r.onerror = (e) => reject(new Error(e.error === 'not-allowed' ? tNow('chats.dictateDenied') : tNow('chats.dictateOff')));
+    r.onend = () => resolve('');
+    r.start();
+  });
+}
 export function Composer({ value, onChange, onSend, onStop, busy, placeholder, top, bottom, notice, disabled, onPaste, onDrop, testid, canSend, mentions = true }) {
   const t = useT();
   const ta = useRef(null);
   useEffect(() => { const el = ta.current; if (!el) return; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 260)}px`; }, [value]);
   const [dropping, setDropping] = useState(false);
-  const m = useMentions(value, onChange, ta);
+  const m = useMentions(value, onChange, ta, Array.isArray(mentions) ? mentions : null);
+  const dictateWith = bridge.dictate ? (lang) => bridge.dictate(lang) : WebSpeech ? webDictate : null;
   // 3.5, the Android app: dictate with the phone's own speech recognition (what is said is added to the text).
   const [hearing, setHearing] = useState(false);
   const dictate = async () => {
     setHearing(true);
-    try { const said = await act(bridge.dictate(getState().app?.config?.language ?? 'es')); if (said) onChange(value.trim() ? `${value.trimEnd()} ${said}` : said); }
+    try { const said = await act(dictateWith(getState().app?.config?.language ?? 'es')); if (said) onChange(value.trim() ? `${value.trimEnd()} ${said}` : said); }
     finally { setHearing(false); }
   };
   return (
@@ -86,10 +102,10 @@ export function Composer({ value, onChange, onSend, onStop, busy, placeholder, t
         {mentions && m.list.length ? null : notice}
         {mentions && m.list.length ? (
           <div className="bg-popover text-popover-foreground absolute right-3 bottom-full left-3 z-20 mb-2 overflow-hidden rounded-xl border shadow-lg" data-testid="mention-list">
-            <div className="text-muted-foreground border-b px-3 py-1.5 text-[11px]">{t('chat.mentionHeader')}</div>
+            <div className="text-muted-foreground border-b px-3 py-1.5 text-[11px]">{Array.isArray(mentions) ? t('chats.mentionHeader') : t('chat.mentionHeader')}</div>
             {m.list.map((o, i) => (
               <button key={o.token} onMouseDown={(e) => { e.preventDefault(); m.pick(o); }} className={cn('flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-[13px]', i === m.index ? 'bg-accent' : 'hover:bg-accent/60')}>
-                <AtSign className="text-muted-foreground size-3.5 shrink-0" /><span className="min-w-0 flex-1 truncate">{o.label}</span><span className="text-muted-foreground shrink-0 text-[11px]">{o.hint}</span>
+                {o.icon ?? <AtSign className="text-muted-foreground size-3.5 shrink-0" />}<span className="min-w-0 flex-1 truncate">{o.label}</span><span className="text-muted-foreground shrink-0 text-[11px]">{o.hint}</span>
               </button>
             ))}
           </div>
@@ -101,7 +117,7 @@ export function Composer({ value, onChange, onSend, onStop, busy, placeholder, t
           className="placeholder:text-muted-foreground block w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[14.5px] leading-relaxed outline-none" />
         <div className="flex items-center gap-2 px-3 pb-3">
           <div className="flex min-w-0 flex-1 items-center gap-1.5" data-testid="composer-bottom">{bottom}</div>
-          {bridge.dictate ? <Tip label={t('chat.dictate')}><Button size="icon-sm" variant="ghost" className="rounded-full" onClick={dictate} disabled={disabled || hearing} aria-label={t('chat.dictate')} data-testid="dictate"><Mic className={hearing ? 'text-primary animate-pulse' : undefined} /></Button></Tip> : null}
+          {dictateWith ? <Tip label={t('chat.dictate')}><Button size="icon-sm" variant="ghost" className="rounded-full" onClick={dictate} disabled={disabled || hearing} aria-label={t('chat.dictate')} data-testid="dictate"><Mic className={hearing ? 'text-primary animate-pulse' : undefined} /></Button></Tip> : null}
           {busy && onStop ? <Tip label={t('chat.stop')}><Button size="icon-sm" variant="secondary" onClick={onStop} aria-label={t('chat.stop')}><Square className="size-3.5 fill-current" /></Button></Tip> : null}
           <Button size="icon-sm" className="rounded-full" onClick={() => onSend({ alt: false })} disabled={disabled || !(canSend ?? value.trim())} aria-label={t('chat.send')} data-testid="send"><ArrowUp /></Button>
         </div>

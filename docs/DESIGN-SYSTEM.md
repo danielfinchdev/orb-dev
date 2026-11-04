@@ -185,7 +185,18 @@ sections 2.1–2.4 describe the shipped app.
   `views/bots/create.jsx` (the «Nuevo bot» dialog, full screen on the phone, glass sheet on Android; `AvatarPicker` is
   also in the editor). Bots store `avatar` { shape, color }; older bots got the fixed one of their id. States are wired
   through `BotFace`: working while its turn runs, paused, a bounce on a new message and a hop when its card is approved
-  (`lib/avatar-pulse.js`). Selects show names only (plain-text labels).
+  (`lib/avatar-pulse.js`). Selects may show an avatar again (`Select` options take an `icon`; the trigger draws the chosen option itself).
+- **Built (M2): the Bots zone.** `views/bots/inbox.jsx` (the chat list: search + «+» with Nuevo bot / Nuevo grupo /
+  Nueva sección; on the PC the places Recordatorios · Casa · Memoria · Servidor and «Más» with all the bots, the groups
+  and the bots' settings; pinned row, sections, «Sin asignar»; right click or ⋯ on the PC and a long press on the phone
+  open the chat's menu: pin/unpin, move to a section, mute, mark as read, delete the chat), `views/bots/chat.jsx` (header
+  pill that opens the info, day separators, reminders and notices as small centred lines, bot-to-bot forward lines,
+  group messages with each bot's avatar, name and colour, «@» members in the composer, «+» and dictation, marks read
+  while visible), `views/bots/info.jsx` (bot and group info: a right pane on the PC, a full sheet on the phone),
+  `views/bots/new-group.jsx` (pick bots and users, then name with the composite avatar). Phone: the zone opens on its
+  chat list (`bot-chats`), tabs Chats · Recordatorios · Casa, the conversation full screen with a back arrow; ☰ holds
+  Memoria, Servidor, Bots, Grupos and the bots' settings. Unread counts on the Chats tab, on «Bots» of the zone switch
+  and as a dot on ☰. The Orb zone keeps today's screens inside the same shell until M3.
 
 ## 3. Tokens
 

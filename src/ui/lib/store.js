@@ -7,6 +7,7 @@ import { bumpNav, navTicket, stillHere } from './nav.js';
 import { t } from './i18n.js';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from '../../core/appearance.mjs';
 import { modeOf, botsPrefix } from './bots.js';
+import { fallbackInbox } from './inbox.js';
 
 // The bridge to the PC: Electron's preload, or the phone's web bridge (src/ui/lib/web-bridge.js). Read when used, not when
 // this module loads: the bundler may load this module before the phone's bridge has defined window.orb.
@@ -91,7 +92,8 @@ const KEEPS_ID = new Set(['session', 'chat', 'bot-chat', 'bot-group', 'bots']);
 const MODES_KEY = 'orb.modos';
 const lastOf = () => { try { return JSON.parse(localStorage.getItem(MODES_KEY) || '{}') ?? {}; } catch { return {}; } };
 function rememberMode(route) { try { localStorage.setItem(MODES_KEY, JSON.stringify({ ...lastOf(), [modeOf(route)]: route })); } catch { /* storage unavailable */ } }
-export const modeHome = (mode) => lastOf()[mode] ?? (mode === 'bots' ? { view: 'bot-chat' } : { view: 'chat' });
+// 3.6 (M2): the phone opens the Bots zone on its chat list («bot-chats»); the PC on the last chat (its list is beside).
+export const modeHome = (mode) => lastOf()[mode] ?? (mode === 'bots' ? { view: phoneLayout() ? 'bot-chats' : 'bot-chat' } : { view: 'chat' });
 export function setMode(mode) {
   const next = mode === 'bots' ? 'bots' : 'orb';
   if (modeOf(state.route) !== next) go(modeHome(next));
@@ -117,7 +119,7 @@ export async function loadCentro() {
   const before = getState().centro;
   let centro; try { centro = await call('centro.status'); } catch { centro = { linked: false }; }
   setState({ centro });
-  if (botsPrefix(before) !== botsPrefix(centro) || before?.id !== centro.id) { setState({ bots: null }); loadBots(); }
+  if (botsPrefix(before) !== botsPrefix(centro) || before?.id !== centro.id) { setState({ bots: null, inbox: null }); loadBots(); loadInbox(); }
   return centro;
 }
 let botsTimer = null;
@@ -126,6 +128,20 @@ export async function loadBots() {
   catch (error) { setState({ botsError: errorText(error) }); return null; }
 }
 export function loadBotsSoon() { clearTimeout(botsTimer); botsTimer = setTimeout(() => { loadBots(); }, 150); }
+// 3.6 (messaging, M2): the Bots zone's chat list (inbox.list: pins, sections, unread, last message), read again when it
+// changes (inbox:changed, a bot's line or state). An Orb that does not answer inbox.list gets the same shape from
+// bots.list (no pins, sections or unread). The changes (pin, mute, sections…) go through inboxAct.
+let inboxTimer = null;
+export async function loadInbox() {
+  try { const inbox = await botCall('inbox.list', { zone: 'bots' }); setState({ inbox }); return inbox; }
+  catch {
+    const b = getState().bots ?? await loadBots();
+    const inbox = fallbackInbox(b?.bots ?? [], b?.groups ?? [], getState().botStates ?? {});
+    setState({ inbox }); return inbox;
+  }
+}
+export function loadInboxSoon(ms = 200) { clearTimeout(inboxTimer); inboxTimer = setTimeout(() => { loadInbox(); }, ms); }
+export async function inboxAct(method, params, okText) { const r = await act(botCall(method, params), okText); loadInboxSoon(0); return r; }
 export function botStateChanged(p) {
   if (p?.bot == null) return;
   setState((s) => ({ botStates: { ...(s.botStates ?? {}), [p.bot]: p } }));
@@ -165,11 +181,11 @@ export const uiLanguage = (s) => (Number(s.me?.personsCount ?? 1) > 1 && s.me?.p
 // 3.6: someone else sat down (persons.switch / persons.unlock): everything is read again as them; what was on screen
 // (a conversation, a bot) may not be theirs, so the window goes back to the start of its mode.
 export async function personSwitched() {
-  setState({ route: { view: 'chat' }, bots: null, botStates: {}, settings: null, share: null });
+  setState({ route: { view: 'chat' }, bots: null, botStates: {}, inbox: null, settings: null, share: null });
   try { localStorage.removeItem('orb.route'); localStorage.removeItem(MODES_KEY); } catch { /* storage unavailable */ }
   await refresh().catch(() => {});
   if (getState().app?.config) setState({ locked: false });
-  loadBots();
+  loadBots(); loadInbox();
 }
 
 let iconsFor = null;

@@ -7,11 +7,13 @@ import { useStore, go, modeOf } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { MoreContent } from './mobile-menu.jsx';
+import { unreadOf } from '@/lib/inbox.js';
 
 // Which tab a screen belongs to.
 const TAB_OF = { chat: 'chat', session: 'chats', new: 'chats', chats: 'chats', tasks: 'tasks', projects: 'projects',
   // 3.5: the Bots mode has its own tabs (Chat, Bots, Recordatorios, Casa, Más)
-  'bot-chat': 'bot-chat', 'bot-group': 'bot-chat', bots: 'bots', 'bot-reminders': 'bot-reminders', 'bot-home': 'bot-home' };
+  // 3.6 (M2): Chats · Recordatorios · Casa
+  'bot-chats': 'bot-chats', 'bot-chat': 'bot-chats', 'bot-group': 'bot-chats', 'bot-reminders': 'bot-reminders', 'bot-home': 'bot-home' };
 export const tabOf = (view) => TAB_OF[view] ?? 'more';
 
 export function MobileTabs() {
@@ -25,9 +27,9 @@ export function MobileTabs() {
   const working = sessions.some((s) => s.kind === 'chat' && s.status === 'running');
   const current = tabOf(route.view);
   const botsBusy = useStore((s) => Object.values(s.botStates ?? {}).some((x) => x.busy));
+  const unread = useStore((s) => unreadOf(s.inbox));
   const tabs = modeOf(route) === 'bots' ? [
-    { id: 'bot-chat', icon: MessageSquare, label: t('nav.botChat'), testid: 'nav-bot-chat', dot: botsBusy },
-    { id: 'bots', icon: Bot, label: t('nav.bots'), testid: 'nav-bots' },
+    { id: 'bot-chats', icon: MessagesSquare, label: t('nav.chats'), testid: 'nav-bot-chats', count: unread, tone: 'primary', dot: botsBusy },
     { id: 'bot-reminders', icon: Bell, label: t('nav.botReminders'), testid: 'nav-bot-reminders' },
     { id: 'bot-home', icon: Home, label: t('nav.botHome'), testid: 'nav-bot-home' }
   ] : [
@@ -37,8 +39,8 @@ export function MobileTabs() {
     { id: 'projects', icon: FolderKanban, label: t('nav.projects'), testid: 'nav-projects' }
   ];
   return (
-    <nav className="mobile-tabs theme-band bg-sidebar grid shrink-0 grid-cols-4 border-t" aria-label={t('app.menu')} data-testid="mobile-tabs">
-      {tabs.map(({ id, icon: Icon, label, testid, count, dot }) => {
+    <nav className={cn('mobile-tabs theme-band bg-sidebar grid shrink-0 border-t', tabs.length === 3 ? 'grid-cols-3' : 'grid-cols-4')} aria-label={t('app.menu')} data-testid="mobile-tabs">
+      {tabs.map(({ id, icon: Icon, label, testid, count, dot, tone }) => {
         const active = current === id;
         return (
           <button key={id} type="button" onClick={() => go(id)} data-testid={testid} aria-current={active ? 'page' : undefined}
@@ -47,7 +49,7 @@ export function MobileTabs() {
               <Icon className="size-5" />
             </span>
             <span className="max-w-full truncate">{label}</span>
-            {count ? <span className="bg-warning absolute top-1 left-1/2 ml-2 min-w-4 rounded-full px-1 text-[10px] leading-4 font-semibold text-warning-foreground tabular-nums" aria-label={String(count)}>{count}</span>
+            {count ? <span className={cn('absolute top-1 left-1/2 ml-2 min-w-4 rounded-full px-1 text-[10px] leading-4 font-semibold tabular-nums', tone === 'primary' ? 'bg-primary text-primary-foreground' : 'bg-warning text-warning-foreground')} aria-label={String(count)} data-testid={`${testid}-count`}>{count > 99 ? '99+' : count}</span>
               : dot ? <span className="bg-primary absolute top-2 left-1/2 ml-3 size-2 animate-pulse rounded-full" /> : null}
           </button>
         );

@@ -87,7 +87,7 @@ export function BotRemindersView() {
         <Field label={t('bots.rem.when')}><Input type="datetime-local" value={v.when} onChange={(e) => set({ when: e.target.value })} data-testid="reminder-when" /></Field>
         <Field label={t('bots.rem.every')}><Select className="w-full" value={v.every} onValueChange={(every) => set({ every })} options={EVERY.map((e) => ({ value: e, label: t(`bots.every.${e}`) }))} /></Field>
       </div>
-      <Field label={t('bots.rem.bot')}><Select className="w-full" value={v.bot} onValueChange={(bot) => set({ bot })} options={bots.map((b) => ({ value: String(b.id), label: b.name }))} /></Field>
+      <Field label={t('bots.rem.bot')}><Select className="w-full" value={v.bot} onValueChange={(bot) => set({ bot })} options={bots.map((b) => ({ value: String(b.id), label: b.name, icon: <BotFace bot={b} size={18} still /> }))} /></Field>
     </>),
     ok: t('bots.rem.create'),
     onOk: async (v) => { await botCall('bots.reminders.create', { id: Number(v.bot), text: v.text, when: v.when, every: v.every }); list.reload(); return true; }
@@ -124,11 +124,12 @@ export function BotRemindersView() {
 }
 
 // ---- Memoria: the global one and each bot's, editable on the PC (read only on a phone).
-export function BotMemoryView() {
+export function BotMemoryView({ route }) {
   const t = useT();
   const { bots, loaded, error } = useBots();
   const manage = useCanManage();
-  const [which, setWhich] = useState('global');
+  // 3.6 (M2): opened from a bot's info («Biblioteca»), on that bot's memory.
+  const [which, setWhich] = useState(route?.bot != null ? String(route.bot) : 'global');
   const mem = useLoad('bots.memory.get', { id: which === 'global' ? 'global' : Number(which) }, [which]);
   const [text, setText] = useState('');
   useEffect(() => { if (mem.data) setText(mem.data.text ?? ''); }, [mem.data]);
@@ -137,7 +138,7 @@ export function BotMemoryView() {
   return (
     <>
       <PageHeader icon={<BookOpen className="text-primary size-5" />} title={t('nav.botMemory')} meta={t('bots.mem.hint')}>
-        <Select size="sm" value={which} onValueChange={setWhich} title={t('bots.mem.which')} options={[{ value: 'global', label: t('bots.mem.global') }, ...bots.map((b) => ({ value: String(b.id), label: b.name }))]} data-testid="memory-which" />
+        <Select size="sm" value={which} onValueChange={setWhich} title={t('bots.mem.which')} options={[{ value: 'global', label: t('bots.mem.global') }, ...bots.map((b) => ({ value: String(b.id), label: b.name, icon: <BotFace bot={b} size={18} still /> }))]} data-testid="memory-which" />
         {manage ? <Button size="sm" onClick={save} disabled={!dirty} data-testid="memory-save"><Save />{t('bots.save')}</Button> : null}
       </PageHeader>
       {!loaded ? (error ? <BotsDown error={error} /> : <Loading />) : (

@@ -423,6 +423,7 @@ const INBOX = {
   'inbox.reorderPins': { public: true },
   'inbox.mute': { res: inboxItem, right: 'view' },
   'inbox.markRead': { res: inboxItem, right: 'view' },
+  'inbox.clear': { res: inboxItem, right: 'talk' },
   'inbox.sections.list': { public: true },
   'inbox.sections.create': { public: true },
   'inbox.sections.rename': { public: true },

@@ -33,6 +33,7 @@ import ws5 from './en/ws5.mjs';
 import ws6 from './en/ws6.mjs';
 import ws6android from './en/ws6-android.mjs';
 import ola1 from './en/ola1.mjs';
+import mensajeria from './en/mensajeria.mjs';
 
 export default {
   ...base,
@@ -68,5 +69,6 @@ export default {
   ...ws5,
   ...ws6,
   ...ws6android,
-  ...ola1
+  ...ola1,
+  ...mensajeria
 };

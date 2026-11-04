@@ -26,7 +26,7 @@ const ctxt = await browser.newContext({ viewport: { width: 1440, height: 900 }, 
 const page = await ctxt.newPage();
 const errors = []; page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => { if (m.type() === 'error' && !/status of (409|404)/.test(m.text())) errors.push(m.text()); });
 const shots = [];
-const shot = async (name) => { const file = path.join(OUT, `pc-${name}.png`); await page.waitForTimeout(400); await page.evaluate(() => document.querySelectorAll('[data-sonner-toast]').forEach((e) => e.remove())); await page.screenshot({ path: file }); shots.push(file); };
+const shot = async (name) => { const file = path.join(OUT, `pc-${name}.png`); await page.waitForTimeout(400); await page.evaluate(() => { const st = document.createElement('style'); st.id = 'no-toasts'; st.textContent = '[data-sonner-toaster] { visibility: hidden !important; }'; document.head.append(st); }); await page.screenshot({ path: file }); shots.push(file); await page.evaluate(() => document.getElementById('no-toasts')?.remove()); };
 let step = 'inicio';
 try {
   // The sample bots (only in this test's folder): a chief and two specialists.
@@ -99,6 +99,8 @@ try {
   step = 'lista de bots';
   await page.click('[data-testid=mode-bots]');
   await page.waitForSelector('[data-testid=bots-nav]');
+  // 3.6 (M2): all the bots (the cards) are under «Más» of the zone's places.
+  await page.click('[data-testid=bots-places-more]');
   await page.click('[data-testid=nav-bots]');
   await page.waitForSelector('[data-testid=bot-Compras]');
   assert.ok(await page.locator('[data-testid=bot-Asistente]').count(), 'el bot inicial, sin bots hechos de nadie');

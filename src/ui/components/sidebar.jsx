@@ -17,7 +17,7 @@ import { ModeSwitch } from './mode-switch.jsx';
 import { PersonMenu, BrowserSettingsMenu } from './person-menu.jsx';
 import { personsOn } from '@/lib/persons.js';
 import { SharedWithMe } from './share-dialog.jsx';
-import { BotsNav } from './bots-nav.jsx';
+import { BotsInbox } from '@/views/bots/inbox.jsx';
 import { modeOf } from '@/lib/store.js';
 
 // The assistant's wordmark ORB·E, drawn its own way in each theme (app.css .wordmark): spaced capitals with a dot of the
@@ -436,7 +436,7 @@ export function Sidebar({ mood, page = false }) {
     </div>
   );
   return (
-    <aside className="bg-sidebar relative flex h-full shrink-0 flex-col border-r" style={{ width }}>
+    <aside className="bg-sidebar relative flex h-full shrink-0 flex-col border-r" style={{ width: modeOf(route) === 'bots' ? Math.max(width, 320) : width }}>
       {bridge.mobile ? null : <div className="sidebar-resize" role="separator" aria-orientation="vertical" aria-label={t('comp.sidebar.resize')} onPointerDown={startResize} onDoubleClick={() => setWidth(SIDEBAR_DEFAULT)} data-testid="sidebar-resize" />}
       <div className="theme-band side-band app-titlebar flex h-14 shrink-0 items-center gap-2 border-b px-4">
         {/* 3.0: the robot goes back to the conversation in progress (3.2: the last one opened). */}
@@ -456,7 +456,8 @@ export function Sidebar({ mood, page = false }) {
       </div>
       {/* 3.5: «Orb | Bots»: the app as always, or the user's bots with their own menu. */}
       <div className="px-3 pt-3 pb-1"><ModeSwitch /></div>
-      {modeOf(route) === 'bots' ? <BotsNav /> : (<>
+      {/* 3.6 (M2): the Bots zone is a messaging app's chat list (views/bots/inbox.jsx). */}
+      {modeOf(route) === 'bots' ? <BotsInbox /> : (<>
       {/* 3.2: one button: a new conversation (with the assistant, or directly with an agent when «Orquestador» is off). */}
       <div className="flex gap-2 px-3 pt-2 pb-2">{newButton}</div>
       <SearchBox query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} agents={agents} />

@@ -4,7 +4,7 @@
 import { parseAvatar } from '../../core/avatar.mjs';
 
 // The screens of the «Bots» mode; any other belongs to «Orb».
-export const BOT_VIEWS = ['bot-chat', 'bot-group', 'bots', 'bot-groups', 'bot-reminders', 'bot-memory', 'bot-home', 'bot-server', 'bot-settings'];
+export const BOT_VIEWS = ['bot-chats', 'bot-chat', 'bot-group', 'bots', 'bot-groups', 'bot-reminders', 'bot-memory', 'bot-home', 'bot-server', 'bot-settings'];
 // A shared screen («Más», Magic Link) opened from the Bots mode carries mode: 'bots' and stays in it.
 export const modeOf = (route) => (BOT_VIEWS.includes(route?.view) || route?.mode === 'bots' ? 'bots' : 'orb');
 

@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/page.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea } from '@/components/ui/basic.jsx';
 import { Switch, Checkbox, Select } from '@/components/ui/overlay.jsx';
-import { BrainPicker, useCatalog, modelLabel } from '@/components/brain-picker.jsx';
+import { BrainPicker, useCatalog, modelLabel, ReasoningMenu, levelsFor } from '@/components/brain-picker.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { confirm } from '@/components/dialogs.jsx';
 import { useStore, botCall, act, go, loadBots, call, personNameOf } from '@/lib/store.js';
@@ -145,7 +145,8 @@ function BotEditor({ id }) {
           <CardHeader><CardTitle>{t('bots.f.brain')}</CardTitle><CardDescription>{t('bots.f.brainHint')}</CardDescription></CardHeader>
           <CardContent className="flex flex-wrap items-center gap-2">
             <BrainPicker catalog={catalog?.filter((a) => BOT_BRAINS.includes(a.id))} value={{ agent: d.agent, model: d.model ?? '', account: d.account ?? d.agent }} onChange={(b) => set({ agent: b.agent, model: b.model, account: b.account })} />
-            <Select size="sm" value={d.effort} onValueChange={(effort) => set({ effort })} title={t('bots.f.effort')} options={EFFORTS.map((e) => ({ value: e, label: `${t('bots.f.effort')}: ${t(`bots.effort.${e}`).toLowerCase()}` }))} data-testid="bot-effort" />
+            {/* 3.6 (M2): the same reasoning control as the chat's composer (brain pill with the level, menu with usage bars). */}
+            <span data-testid="bot-effort" className="contents"><ReasoningMenu catalog={catalog?.filter((a) => BOT_BRAINS.includes(a.id))} value={{ agent: d.agent, model: d.model ?? '', account: d.account ?? d.agent, reasoning: d.effort }} levels={levelsFor(catalog, { agent: d.agent, model: d.model ?? '' }).filter((l) => EFFORTS.includes(l))} onChange={(effort) => set({ effort })} /></span>
           </CardContent>
         </Card>
         <Card>

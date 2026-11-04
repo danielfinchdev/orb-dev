@@ -144,6 +144,16 @@ export function inboxMethods({ board, emit, bots, orchestrator }) {
       const m = I.markRead(board, person, it.kind, it.id, conv, p.upTo == null ? null : int(p.upTo, 'línea'));
       told(person, it); return { ...m, unread: I.unread(board, person, conv, m.lastRead) };
     },
+    // 3.6 (M2): «Eliminar chat» empties its messages (the bot or the group stay; a card still waiting for an answer stays
+    // too). A bot: the caller's own chat with it. A group: its one chat, so only whose the group is may empty it.
+    'inbox.clear': (p, who) => {
+      const it = itemOf(p, who, 'inbox.clear'); const person = me(who);
+      if (it.kind === 'conversation') fail(tr('msg.api.invalid', { name: 'kind' }));
+      if (it.kind === 'group' && scoped(who) && B.personOf(board, B.getGroup(board, it.id)) !== person) notFound(who, 'inbox.clear', { type: 'group', id: Number(it.id) });
+      const conv = I.conversationOf(board, person, it.kind, it.id);
+      if (conv != null) board.run(`DELETE FROM chat WHERE conversation_id = ? AND NOT (COALESCE(meta, '') LIKE '%"kind":"bot_card"%' AND COALESCE(meta, '') LIKE '%"status":"pending"%')`, conv);
+      told(person, it); return { ok: true };
+    },
     'inbox.sections.list': ({ zone }, who) => I.sections(board, me(who), zoneOf(zone)),
     'inbox.sections.create': ({ zone, name }, who) => {
       const z = zoneOf(zone); const person = me(who);

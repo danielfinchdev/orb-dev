@@ -45,8 +45,8 @@ const watch = (page) => { page.on('pageerror', (e) => errors.push(`[${step}] ${e
 const shooter = (page, prefix) => async (name) => {
   const file = path.join(OUT, `${prefix}-${name}.png`);
   await page.waitForTimeout(450);
-  await page.evaluate(() => document.querySelectorAll('[data-sonner-toast]').forEach((e) => e.remove()));
-  await page.screenshot({ path: file }); shots.push(file);
+  await page.evaluate(() => { const st = document.createElement('style'); st.id = 'no-toasts'; st.textContent = '[data-sonner-toaster] { visibility: hidden !important; }'; document.head.append(st); });
+  await page.screenshot({ path: file }); shots.push(file); await page.evaluate(() => document.getElementById('no-toasts')?.remove());
 };
 const EMOJI = /\p{Extended_Pictographic}/u;
 let step = 'inicio';
@@ -69,7 +69,7 @@ try {
   step = 'PC: lista de bots';
   await page.click('[data-testid=mode-bots]');
   await page.waitForSelector('[data-testid=bots-nav]');
-  await page.click('[data-testid=nav-bots]');
+  await page.click('[data-testid=bots-places-more]'); await page.click('[data-testid=nav-bots]');
   await page.waitForSelector('[data-testid=bot-Compras]');
   const card = (name) => page.locator(`[data-testid=bot-${name}] [data-testid=bot-avatar]`);
   assert.equal(await card('Agenda').getAttribute('data-avatar'), 'gota:lavanda');
@@ -113,6 +113,7 @@ try {
   await shot('04-chat-respuesta');
 
   step = 'PC: editor';
+  await page.click('[data-testid=bot-chat-head]'); // 3.6 (M2): «Editar» is in the bot's info
   await page.click('[data-testid=bot-chat-edit]');
   await page.waitForSelector('[data-testid=bot-editor]');
   await page.click('[data-testid=avatar-color-menta]');
@@ -127,7 +128,7 @@ try {
   await page.waitForSelector('[data-testid=bot-chat-title] >> text=Casa');
   assert.ok(await page.locator('header [data-testid=group-avatar], [data-testid=bot-chat-lines] [data-testid=group-avatar]').count() >= 1);
   await shot('06-grupo');
-  await page.click('[data-testid=nav-bot-groups]');
+  await page.click('[data-testid=bots-places-more]'); await page.click('[data-testid=nav-bot-groups]');
   await page.waitForSelector('[data-testid=group-Casa]');
   await shot('07-grupos');
   await ctxt.close();
@@ -153,7 +154,8 @@ try {
       await p.waitForSelector('[data-testid=mobile-tabs]');
       if (kind === 'glass') assert.match(await p.evaluate(() => document.documentElement.className), /\bglass\b/, 'la app de Android, con cristal');
       await p.click('[data-testid=nav-menu]:visible'); await p.click('[data-testid=mode-bots]');
-      await p.click('[data-testid=nav-bots]:visible');
+      await p.waitForSelector('[data-testid=bot-inbox]'); await p.waitForTimeout(400);
+      await p.click('[data-testid=nav-menu]:visible'); await p.click('[data-testid=nav-bots]:visible');
       await p.waitForSelector('[data-testid=bot-Compras]');
       const s = shooter(p, `${kind}-${scheme}`);
       await s('01-lista-bots');

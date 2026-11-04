@@ -25,7 +25,7 @@ import { Scene } from '@/components/scene.jsx';
 import { GamesDialog } from '@/games/games.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { avatarEvent } from '@/lib/avatar-pulse.js';
-import { useStore, setState, getState, refresh, refreshSoon, bridge, go, applyTheme, openTerminal, startTour, anyChatBusy, phoneLayout, modeOf, modeHome, loadBotsSoon, botStateChanged, loadCentro, botsVia } from '@/lib/store.js';
+import { useStore, setState, getState, refresh, refreshSoon, bridge, go, applyTheme, openTerminal, startTour, anyChatBusy, phoneLayout, modeOf, modeHome, loadBotsSoon, botStateChanged, loadCentro, botsVia, loadInbox, loadInboxSoon } from '@/lib/store.js';
 import { Tour } from '@/components/tour.jsx';
 import { AGENT } from '@/lib/labels.js';
 import { WindowControls } from '@/components/window-controls.jsx';
@@ -44,6 +44,8 @@ import { TutorialsView } from '@/views/tutorials.jsx';
 import { WhiteboardView } from '@/views/whiteboard.jsx';
 import { MonitorView } from '@/views/monitor.jsx';
 import { BotChatView } from '@/views/bots/chat.jsx';
+import { BotChatsView } from '@/views/bots/inbox.jsx';
+import { NewGroupHost } from '@/views/bots/new-group.jsx';
 import { BotsView } from '@/views/bots/list.jsx';
 import { BotGroupsView, BotRemindersView, BotMemoryView, BotHomeView, BotServerView, BotSettingsView } from '@/views/bots/more.jsx';
 import { MagicLinkView } from '@/views/magic-link.jsx';
@@ -59,7 +61,9 @@ const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
 // 2.7, the phone: the conversations («Chats») and «Más» are screens of their own; Agentes and Modo experto are PC only.
 function ChatsView() { const t = useT(); return <><PageHeader icon={<MessagesSquare className="text-primary size-5" />} title={t('nav.chats')} /><Sidebar page /></>; }
 // 3.5: the screens of the Bots mode (both layouts) and Magic Link as a screen of a linked device.
-const BOT_SCREENS = { 'bot-chat': BotChatView, 'bot-group': BotChatView, bots: BotsView, 'bot-groups': BotGroupsView, 'bot-reminders': BotRemindersView, 'bot-memory': BotMemoryView, 'bot-home': BotHomeView, 'bot-server': BotServerView, 'bot-settings': BotSettingsView };
+// 3.6 (M2): «bot-chats» is the phone's chat list (the PC has it beside: there it opens the last chat).
+function BotChatsScreen({ route }) { return phoneLayout() ? <BotChatsView /> : <BotChatView route={{ view: 'bot-chat' }} key={route.view} />; }
+const BOT_SCREENS = { 'bot-chats': BotChatsScreen, 'bot-chat': BotChatView, 'bot-group': BotChatView, bots: BotsView, 'bot-groups': BotGroupsView, 'bot-reminders': BotRemindersView, 'bot-memory': BotMemoryView, 'bot-home': BotHomeView, 'bot-server': BotServerView, 'bot-settings': BotSettingsView };
 const VIEWS = bridge.mobile
   ? { ...BOT_SCREENS, link: MagicLinkView, chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, profile: ProfileView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
   : { ...BOT_SCREENS, chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView,
@@ -71,6 +75,8 @@ function MobileShell() {
   const route = useStore((s) => s.route);
   const View = VIEWS[route.view] ?? ChatView;
   const bots = modeOf(route) === 'bots';
+  // 3.6 (M2): a conversation of the Bots zone takes the whole screen (with its back arrow); the tabs are on the list.
+  const fullChat = (route.view === 'bot-chat' || route.view === 'bot-group') && route.id != null;
   return (
     <div className="mobile-shell flex h-full flex-col">
       {/* 3.6: no «Orb | Bots» bar on top: it lives in the menu ☰ of each screen's bar (components/mobile-menu.jsx). */}
@@ -79,9 +85,10 @@ function MobileShell() {
         <Scene />
         <View key={`${route.view}:${route.id ?? ''}:${route.project ?? ''}`} route={route} />
       </main>
-      <MobileTabs />
+      {fullChat ? null : <MobileTabs />}
       <Notices />
       <ShareHost />
+      <NewGroupHost />
     </div>
   );
 }
@@ -131,6 +138,7 @@ function Shell() {
       {bridge.mobile ? null : <><UpdateCard /><SettingsDialog /><GamesDialog /><RecoveryNotice /></>}
       <Notices />
       <ShareHost />
+      <NewGroupHost />
       {bridge.mobile ? null : <ActionShortcuts project={shortcutProject} />}
       <div className="hidden md:contents"><Companion name={app.config.assistantName} base={mood} hidden={app.config.ui?.companion === false || !COMPANION_VIEWS.has(route.view) || bridge.mobile || Boolean(tour)} /></div>
       {tour ? <Tour key={tour.key} /> : null}
@@ -166,6 +174,7 @@ function Root() {
             if (!bridge.mobile && (mode === 'bots' || mode === 'orb') && modeOf(getState().route) !== mode) setState({ route: modeHome(mode) });
           } catch { /* default */ }
           loadCentro();
+          loadInbox(); // 3.6 (M2): the unread badges show in both zones
           return setPhase('app');
         } catch (e) { setError(String(e?.message ?? e)); await new Promise((r) => setTimeout(r, 250)); }
       }
@@ -208,7 +217,12 @@ function Root() {
       // 3.5: the bots, here or on the server this PC is linked with.
       const local = !event.startsWith('centro:');
       const name = local ? event : event.slice(7);
-      if (name.startsWith('bot.') && local === !botsVia()) { if (name === 'bot.state') botStateChanged(payload); else if (name === 'bot.updated') loadBotsSoon(); else if (name === 'bot.message') avatarEvent(payload); }
+      if (name.startsWith('bot.') && local === !botsVia()) {
+        if (name === 'bot.state') botStateChanged(payload); else if (name === 'bot.updated') loadBotsSoon(); else if (name === 'bot.message') avatarEvent(payload);
+        // 3.6 (M2): the chat list follows: a new line, a bot that starts or stops, a bot changed.
+        if (name !== 'bot.state' || !payload?.partial) loadInboxSoon(name === 'bot.state' ? 400 : 200);
+      }
+      if (event === 'inbox:changed') loadInboxSoon(120);
       if (event === 'link:peers') loadCentro();
       // 3.6 «Personas»: someone else at this PC, the window locked or unlocked, the people changed.
       if (event === 'persons:switched') personSwitched();

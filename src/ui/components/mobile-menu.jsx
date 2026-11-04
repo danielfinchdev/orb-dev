@@ -2,7 +2,7 @@
 // with, in this order: Orb | Bots, who is using this device (with two or more users), the mode's other screens and the
 // phone's own settings. The bottom tabs are the four main screens of the current mode. The PC keeps its sidebar.
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { Menu, X, CalendarClock, PenTool, BookOpen, GraduationCap, Smartphone, Moon, Users, Server, Settings2, Radar } from 'lucide-react';
+import { Menu, X, CalendarClock, PenTool, BookOpen, GraduationCap, Smartphone, Moon, Users, Server, Settings2, Radar, Bot } from 'lucide-react';
 import { useState } from 'react';
 import { NavItem } from './sidebar.jsx';
 import { Switch } from './ui/overlay.jsx';
@@ -11,6 +11,7 @@ import { PersonCard } from './person-menu.jsx';
 import { Robot } from './robot.jsx';
 import { useStore, go, applyTheme, isDark, modeOf } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
+import { unreadOf } from '@/lib/inbox.js';
 
 const Group = ({ label, children, testid }) => (
   <section className="grid gap-1" data-testid={testid}>
@@ -32,9 +33,12 @@ export function MoreContent() {
       <PersonCard />
       {bots ? (
         <Group testid="mobile-more-bots">
-          <NavItem icon={Users} label={t('nav.botGroups')} onClick={() => go('bot-groups')} testid="nav-bot-groups" />
+          {/* 3.6 (M2): what is not a tab (Chats · Recordatorios · Casa): Memoria, Servidor, then all the bots, the groups and
+              the bots' settings. */}
           <NavItem icon={BookOpen} label={t('nav.botMemory')} onClick={() => go('bot-memory')} testid="nav-bot-memory" />
           <NavItem icon={Server} label={t('nav.botServer')} onClick={() => go('bot-server')} testid="nav-bot-server" />
+          <NavItem icon={Bot} label={t('nav.bots')} onClick={() => go('bots')} testid="nav-bots" />
+          <NavItem icon={Users} label={t('nav.botGroups')} onClick={() => go('bot-groups')} testid="nav-bot-groups" />
           <NavItem icon={Settings2} label={t('nav.botSettings')} onClick={() => go('bot-settings')} testid="nav-bot-settings" />
         </Group>
       ) : (
@@ -62,11 +66,13 @@ export function MobileMenu() {
   const t = useT();
   const [open, setOpen] = useState(false);
   const name = useStore((s) => s.app?.config?.assistantName ?? 'Orb');
+  // 3.6 (M2): new messages of the bots while in the Orb zone: a dot on ☰ (the switch inside says how many).
+  const otherUnread = useStore((s) => modeOf(s.route) !== 'bots' && unreadOf(s.inbox) > 0);
   const close = (e) => { if (e.target.closest('button:not([role=switch]), a')) setTimeout(() => setOpen(false), 60); };
   return (
     <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
       <DialogPrimitive.Trigger asChild>
-        <button type="button" className="press hover:bg-accent -ml-2 grid size-10 shrink-0 cursor-pointer place-items-center rounded-xl" aria-label={t('app.menu')} data-testid="nav-menu"><Menu className="size-5" /></button>
+        <button type="button" className="press hover:bg-accent relative -ml-2 grid size-10 shrink-0 cursor-pointer place-items-center rounded-xl" aria-label={t('app.menu')} data-testid="nav-menu"><Menu className="size-5" />{otherUnread ? <span className="bg-primary absolute top-2 right-2 size-2 rounded-full" data-testid="nav-menu-dot" /> : null}</button>
       </DialogPrimitive.Trigger>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay data-slot="dialog-overlay" className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/40" />

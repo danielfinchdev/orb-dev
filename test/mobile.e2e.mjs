@@ -123,10 +123,15 @@ try {
   const soon = new Date(Date.now() + 26 * 3_600_000); const p2 = (x) => String(x).padStart(2, '0');
   await call('bots.reminders.create', { id: agenda.id, text: 'Cita con el dentista', when: `${soon.getFullYear()}-${p2(soon.getMonth() + 1)}-${p2(soon.getDate())}T10:00` });
   await page.click('[data-testid=nav-menu]:visible'); await page.click('[data-testid=mode-bots]');
-  await page.waitForSelector('[data-testid=bot-chat-input]');
-  assert.equal(await page.locator('[data-testid=nav-bot-chat]:visible').count(), 1, 'las pestañas del modo Bots');
+  // 3.6 (M2): the Bots zone opens on its chat list (Chats · Recordatorios · Casa); a chat takes the whole screen.
+  await page.waitForSelector('[data-testid=bot-inbox]');
+  assert.equal(await page.locator('[data-testid=nav-bot-chats]:visible').count(), 1, 'las pestañas del modo Bots');
   assert.equal(await page.locator('[data-testid=nav-tasks]:visible').count(), 0, 'sin las pestañas de Orb');
-  assert.match(await page.textContent('[data-testid=bot-chat-title]'), /Jefe/, 'el chat abre con el jefe');
+  await noSideScroll('lista de chats'); await page.screenshot({ path: path.join(OUT, 'movil-bots-00-chats.png') });
+  await page.locator('[data-testid=side-bot-Jefe]:visible').click();
+  await page.waitForSelector('[data-testid=bot-chat-input]');
+  assert.match(await page.textContent('[data-testid=bot-chat-title]'), /Jefe/, 'el chat del jefe');
+  assert.equal(await page.locator('[data-testid=mobile-tabs]').count(), 0, 'la conversación a pantalla completa');
   await page.fill('[data-testid=bot-chat-input]', 'Pausa a Agenda\nBOT_CALL bot_pause {"name":"Agenda","reason":"de vacaciones"}');
   await page.click('[data-testid=send]');
   await page.waitForSelector('[data-testid=bot-card][data-status=pending]', { timeout: 30000 });
@@ -137,9 +142,11 @@ try {
   assert.equal((await call('bots.get', { id: agenda.id })).paused, true, 'aprobada desde el móvil');
   await call('bots.pause', { id: agenda.id, paused: false });
   assert.ok(jefe.id);
+  await page.click('[data-testid=chat-back]');
   for (const [testid, name, wait] of [['nav-bots', '02-lista', '[data-testid=bot-Agenda]'], ['nav-bot-reminders', '03-recordatorios', 'text=Cita con el dentista'], ['nav-bot-home', '04-casa', '[data-testid=home-setup]']]) {
     step = `bots ${name}`;
-    await page.click(`[data-testid=${testid}]`);
+    if (testid === 'nav-bots') await page.click('[data-testid=nav-menu]:visible');
+    await page.click(`[data-testid=${testid}]:visible`);
     await page.waitForSelector(wait);
     await page.waitForTimeout(300);
     if (testid === 'nav-bots') assert.equal(await page.locator('[data-testid=bots-new]').count(), 0, 'los bots se crean en el PC');

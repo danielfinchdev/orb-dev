@@ -168,7 +168,7 @@ try {
 
   step = 'compartir y prestar';
   await pc.click('[data-testid=mode-bots]');
-  await pc.click('[data-testid=nav-bots]');
+  await pc.click('[data-testid=bots-places-more]'); await pc.click('[data-testid=nav-bots]');
   await pc.click('[data-testid="bot-edit-Diario de Ana"]');
   await pc.waitForSelector('[data-testid=bot-spend]');
   await pc.click('[data-testid=share-bot]');
@@ -217,7 +217,7 @@ try {
     assert.deepEqual(leaks(r), [], `${m} en el PC como Leo`);
   }
   await shot('13c-pc-leo');
-  await pc.click('[data-testid=mode-bots]'); await pc.click('[data-testid=nav-bots]');
+  await pc.click('[data-testid=mode-bots]'); await pc.click('[data-testid=bots-places-more]'); await pc.click('[data-testid=nav-bots]');
   await pc.waitForSelector('[data-testid="bot-Agenda de Leo"]');
   assert.deepEqual(leaks(await pc.textContent('body')), [], 'los bots de Leo');
   await shot('14-pc-leo-bots');
@@ -268,7 +268,7 @@ try {
   await phone.click('[data-testid=nav-profile]');
   await phone.waitForSelector('[data-testid=profile-card]');
   await pshot('19-movil-perfil');
-  await phone.click('[data-testid=nav-menu]:visible'); await phone.click('[data-testid=mode-bots]'); await phone.click('[data-testid=nav-bots]');
+  await phone.click('[data-testid=nav-menu]:visible'); await phone.click('[data-testid=mode-bots]'); await phone.waitForSelector('[data-testid=bot-inbox]'); await phone.waitForTimeout(400); await phone.click('[data-testid=nav-menu]:visible'); await phone.click('[data-testid=nav-bots]:visible');
   await phone.waitForSelector('[data-testid="bot-Agenda de Leo"]');
   assert.deepEqual(leaks(await phone.textContent('body')), [], 'los bots del móvil de Leo');
   for (const m of ['projects.list', 'conversations.list', 'bots.list', 'tasks.list', 'bots.reminders.list', 'app.state', 'link.status', 'shares.list']) {

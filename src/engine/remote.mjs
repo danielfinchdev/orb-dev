@@ -61,7 +61,8 @@ export function phoneConfig(c) {
 export { BOTS_OWNER };
 export const ORB_ALLOWED = ORB_SET;
 // What a workshop passes on to its centre (centro.<method>): the bots, nothing else.
-export const CENTRO_FORWARD = new Set([...ORB_ALLOWED].filter((m) => m.startsWith('bots.')));
+// 3.6 (M2): and the chat list of the Bots zone (inbox.*), so the bots of a centre keep their pins, sections and unread.
+export const CENTRO_FORWARD = new Set([...ORB_ALLOWED].filter((m) => m.startsWith('bots.') || m.startsWith('inbox.')));
 export const CONSOLE_ALLOWED = CONSOLE_SET;
 // What a centre sends to the Orbs linked with it (their Bots mode shows the centre's bots, live).
 const BOT_EVENTS = new Set(['bot.updated', 'bot.message', 'bot.state']);
@@ -82,7 +83,9 @@ const EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'notice', 'se
   // 3.5 (Magic Link): which linked Orbs are on, and the calls left waiting for the workshop.
   'link:status', 'link:queue',
   // 3.5 (bots)
-  'bot.updated', 'bot.message', 'bot.state']);
+  'bot.updated', 'bot.message', 'bot.state',
+  // 3.6 (messaging lists): a chat list changed (only to its person)
+  'inbox:changed']);
 // 3.5 «Solo Orb»: the server (Orb Núcleo, without a window) has no screen of its own, so a linked phone signs its agents in: it gets the
 // link and the code, and pastes Claude's code back. On a PC the sign-in stays on the PC.
 // (CENTRO_PHONE, in src/core/policy.mjs)

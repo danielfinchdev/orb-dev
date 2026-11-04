@@ -35,10 +35,16 @@ export function DialogDescription({ className, ...props }) { return <DialogPrimi
 
 // ---- select
 // title: what the control is for, shown as the app's bubble on hover (and as its accessible name).
+// 3.6 (M2): the trigger shows the chosen option itself (SelectPrimitive.Value with children). Without them, Radix copies the
+// option's text into the trigger through a portal into the same <span> React also writes the placeholder in, and with the
+// list kept in a detached fragment while closed, React 19 could fail with «insertBefore… is not a child of this node» when
+// the screen changed (seen going from a bot's chat to its editor). With children there is one writer: options may carry
+// an icon (an avatar) again. o.icon: drawn before the label in the list and in the trigger.
 export function Select({ value, onValueChange, options, placeholder, className, size = 'default', disabled, title, 'data-testid': testid, ...props }) {
+  const chosen = options.find((o) => o.value === value) ?? null;
   const trigger = (
     <SelectPrimitive.Trigger aria-label={title} data-testid={testid} className={cn("border-input data-[placeholder]:text-muted-foreground dark:bg-input/30 dark:hover:bg-input/50 flex w-fit items-center justify-between gap-2 rounded-lg border bg-transparent px-3 text-sm whitespace-nowrap shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/40 focus-visible:ring-[3px] disabled:opacity-50 cursor-pointer *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4", size === 'sm' ? 'h-8 text-[13px]' : 'h-9', className)}>
-      <SelectPrimitive.Value data-slot="select-value" placeholder={placeholder} />
+      <SelectPrimitive.Value data-slot="select-value" placeholder={placeholder}>{chosen ? <>{chosen.icon ?? null}<span className="truncate">{chosen.label}</span></> : null}</SelectPrimitive.Value>
       <SelectPrimitive.Icon asChild><ChevronDownIcon className="size-4 opacity-50" /></SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   );
@@ -51,7 +57,7 @@ export function Select({ value, onValueChange, options, placeholder, className, 
             {options.map((o) => (
               <SelectPrimitive.Item key={o.value} value={o.value} disabled={o.disabled} className="focus:bg-accent focus:text-accent-foreground relative flex w-full cursor-pointer items-center gap-2 rounded-md py-1.5 pr-8 pl-2 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg:not([class*='size-'])]:size-4">
                 <span className="absolute right-2 flex size-3.5 items-center justify-center"><SelectPrimitive.ItemIndicator><CheckIcon className="size-4" /></SelectPrimitive.ItemIndicator></span>
-                <SelectPrimitive.ItemText>{o.label}</SelectPrimitive.ItemText>
+                {o.icon ?? null}<SelectPrimitive.ItemText>{o.label}</SelectPrimitive.ItemText>
               </SelectPrimitive.Item>
             ))}
           </SelectPrimitive.Viewport>

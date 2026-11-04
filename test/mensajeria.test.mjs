@@ -276,3 +276,24 @@ test('grupos: con personas a las que se comparte; añadir y quitar bots y person
   await assert.rejects(call(asLeo, 'bots.groups.create', { name: 'Mío', members: [ids.jefe] }), /No hay ningún bot/);
   await denied(call(asLeo, 'bots.groups.members.add', { id: ids.group, person: leo }));
 });
+
+test('M2: «Eliminar chat» vacía sus mensajes (no la tarjeta pendiente); el chat de un grupo solo lo vacía quien lo creó', async () => {
+  const agenda = B.getBot(board, ids.agenda);
+  const conv = B.botConversation(board, agenda, { person: ana });
+  board.addChat('usuario', 'borrame', null, conv, { person: ana });
+  botSays(agenda, 'vale', conv);
+  botSays(agenda, 'tarjeta', conv, { kind: 'bot_card', status: 'pending' });
+  await call(asAna, 'inbox.clear', { kind: 'bot', id: ids.agenda });
+  const left = board.all('SELECT body FROM chat WHERE conversation_id = ?', conv).map((r) => r.body);
+  assert.deepEqual(left, ['tarjeta'], 'solo queda la tarjeta que espera respuesta');
+  assert.ok(B.getBot(board, ids.agenda), 'el bot sigue');
+  await denied(call(asLeo, 'inbox.clear', { kind: 'bot', id: ids.agenda }));
+  const g = await call(asAna, 'bots.groups.create', { name: 'Vaciar', members: [ids.jefe], people: [leo] });
+  const gconv = B.groupConversation(board, g.id);
+  board.addChat('usuario', 'en el grupo', null, gconv, { person: ana });
+  await denied(call(asLeo, 'inbox.clear', { kind: 'group', id: g.id }));
+  assert.equal(board.all('SELECT id FROM chat WHERE conversation_id = ?', gconv).length, 1, 'Leo no vacía el grupo de Ana');
+  await call(asAna, 'inbox.clear', { kind: 'group', id: g.id });
+  assert.equal(board.all('SELECT id FROM chat WHERE conversation_id = ?', gconv).length, 0);
+  await assert.rejects(call(asAna, 'inbox.clear', { kind: 'conversation', id: gconv }));
+});
