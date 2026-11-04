@@ -46,6 +46,7 @@ import { dataApi, MOVED_OK } from './api-data.mjs';
 import { inboxMethods } from './api-inbox.mjs';
 import { browserMethods } from './api-browser.mjs';
 import { shareApi } from './api-shares.mjs';
+import { connectionMethods, sshOpen, noteAdbDevices } from './api-connections.mjs';
 
 export { fail, str, int, oneOf } from './api-common.mjs';
 // 3.5: what a server without a window (Orb Server) does not do, whatever its role: the PC's development tools (God mode and expert view,
@@ -317,18 +318,19 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     },
     // Another computer of the network, without Orb on it: Windows' own Remote Desktop, or SSH in a terminal (each asks for
     // its own login; Orb never sees it).
-    'net.remote': ({ ip, kind, user }) => {
+    'net.remote': ({ ip, kind, user }, principal) => {
       if (process.platform !== 'win32') fail(tr('msg.api.windowsOnly'));
       const host = str(ip, 'ip', 15); if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) fail(tr('msg.api.invalid', { name: 'ip' }));
       const how = oneOf(kind, ['rdp', 'ssh'], 'tipo');
       if (how === 'rdp') { spawn('mstsc.exe', [`/v:${host}`], { detached: true, stdio: 'ignore', windowsHide: false }).unref(); return true; }
       const who = str(user, 'usuario', 32); if (!/^[\w.-]{1,32}$/.test(who)) fail(tr('msg.api.invalid', { name: 'usuario' }));
-      spawn('cmd.exe', ['/c', 'start', 'SSH', 'cmd.exe', '/k', 'ssh', `${who}@${host}`], { detached: true, stdio: 'ignore' }).unref();
-      return true;
+      // 3.7 (WS9): its own console, tracked, so Conexiones lists it and «Cerrar túnel» ends it.
+      return sshOpen({ host, user: who, person: principal?.channel === 'system' ? null : principal?.person ?? null });
     },
     // Android phones and TVs by adb (wireless pairing with the code the device shows). Each use notes that Orb started
     // adb, so the engine stops its server when it closes (android.stopAdb).
-    'android.devices': async () => (!adbDisabled() && adbStatus().ready ? (markAdbUsed(), { ready: true, devices: await net.adbDevices(adbPath()) }) : { ready: false, devices: [] }),
+    // 3.7 (WS9): what it found is kept for Conexiones (which never asks adb itself).
+    'android.devices': async () => { if (adbDisabled() || !adbStatus().ready) return { ready: false, devices: [] }; markAdbUsed(); const devices = await net.adbDevices(adbPath()); noteAdbDevices(board, devices); return { ready: true, devices }; },
     'android.pair': ({ host, code }) => (adbDisabled() ? fail(tr('msg.android.off')) : markAdbUsed(), net.adbPair(adbPath(), str(host, 'dirección', 21), str(code, 'código', 6))),
     'android.connect': ({ host }) => (adbDisabled() ? fail(tr('msg.android.off')) : markAdbUsed(), net.adbConnect(adbPath(), str(host, 'dirección', 21))),
     'android.info': ({ serial }) => (adbDisabled() ? fail(tr('msg.android.off')) : markAdbUsed(), net.adbInfo(adbPath(), str(serial, 'dispositivo', 80))),
@@ -700,6 +702,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     ...gatewayMethods(shared),
     ...inboxMethods(shared),
     ...browserMethods(shared), // 3.7 (WS5): «Ver navegador del Server»
+    ...connectionMethods(shared), // 3.7 (WS9): «Conexiones»
     ...data.methods
   };
   // 3.6: the approval cards a person may answer (of their own sessions and tasks, and those of projects shared with them).

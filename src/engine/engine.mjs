@@ -97,6 +97,8 @@ async function start(home, version, secret, browser, headless) {
     router.add('dev', (event, payload, audience, to) => { if (devControl && to(ownerOfBoard(board))) devControl.broadcast(event, payload); });
     // 3.7 (WS5): Orb Server's own browser closes the pages of a task that ended (the app's does it in its main process).
     router.add('serverBrowser', (event, payload) => { if (event === 'agentBrowser:closeTask') ctx.serverBrowser?.closeTask(payload?.task); });
+    // 3.7 (WS9): «Conexiones» follows the links' own events (one connections:changed a moment later).
+    { const { connectionsSink } = await import('./api-connections.mjs'); router.add('connections', connectionsSink(emit)); }
   }
   // Only the coordinator's chat process gets this key; the MCP accepts the identity "orb" only with it.
   const orchKey = crypto.randomBytes(24).toString('hex');

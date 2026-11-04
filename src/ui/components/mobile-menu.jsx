@@ -2,7 +2,7 @@
 // with, in this order: Orb | Bots, who is using this device (with two or more users), the mode's other screens and the
 // phone's own settings. The bottom tabs are the four main screens of the current mode. The PC keeps its sidebar.
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { Menu, X, CalendarClock, PenTool, BookOpen, GraduationCap, Smartphone, Moon, Users, Server, Settings2, Radar, Bot } from 'lucide-react';
+import { Menu, X, CalendarClock, PenTool, BookOpen, GraduationCap, Smartphone, Moon, Users, Server, Settings2, Radar, Bot, PlugZap } from 'lucide-react';
 import { useState } from 'react';
 import { NavItem } from './sidebar.jsx';
 import { Switch } from './ui/overlay.jsx';
@@ -52,6 +52,7 @@ export function MoreContent() {
       <Group label={t('nav.settings')}>
         <NavItem icon={Smartphone} label={t('nav.phone')} onClick={() => go({ view: 'phone', ...mode })} testid="nav-phone" />
         <NavItem icon={Radar} label={t('link.title')} onClick={() => go({ view: 'link', ...mode })} testid="nav-link" />
+        <NavItem icon={PlugZap} label={t('conn.title')} onClick={() => go({ view: 'connections', ...mode })} testid="nav-connections" />
         <label className="flex min-h-10 cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[14px]">
           <Moon className="text-muted-foreground size-4 shrink-0" /><span className="flex-1">{t('nav.darkMode')}</span>
           <Switch checked={dark} onCheckedChange={night} data-testid="mobile-dark" />

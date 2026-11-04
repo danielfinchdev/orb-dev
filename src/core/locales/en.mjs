@@ -40,6 +40,7 @@ import notes from './en/notes.mjs';
 import navegadorServer from './en/navegador-server.mjs';
 import oce from './en/oce.mjs';
 import vault from './en/vault.mjs';
+import ws9 from './en/ws9.mjs';
 
 export default {
   ...base,
@@ -82,5 +83,6 @@ export default {
   ...notes,
   ...navegadorServer,
   ...oce,
-  ...vault
+  ...vault,
+  ...ws9
 };
