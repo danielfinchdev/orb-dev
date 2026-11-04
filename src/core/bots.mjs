@@ -12,7 +12,7 @@ import { AGENT_IDS } from './home.mjs';
 import { oneLine, looksPrivateText } from './safety.mjs';
 import { protectedHit } from './guard.mjs';
 import { scopeSql, rightOn, rank, ownerOfBoard } from './authz.mjs';
-import { nextLocalRun, minutesLate, shouldFireLate, isValidTz, systemTz, utcToZoned } from './tz.mjs';
+import { nextLocalRun, zonedToUtc, minutesLate, shouldFireLate, isValidTz, systemTz, utcToZoned } from './tz.mjs';
 
 // The tool groups a bot can have (casillas). Memory, messages to other bots, the list of bots and questions to the user
 // are always there. gestion: create, change and pause bots (always with the user's approval); the chief has it.
@@ -419,6 +419,10 @@ export const personTzOf = (board, person) => { try { const tz = board.one('SELEC
 // The first run at or after `after` (ms). With local_at + tz, in that zone's wall time; else (a reminder made before
 // 3.6 without them) from start_at in this machine's time, as 3.5.
 export function nextRun(rem, after = Date.now()) {
+  if (rem.local_at && rem.every === 'once') {
+    let at; try { at = zonedToUtc(String(rem.local_at), rem.tz || systemTz()); } catch { return null; }
+    return at.getTime() > after ? at.toISOString() : null;
+  }
   if (rem.local_at) {
     const at = nextLocalRun({ every: rem.every, start: String(rem.local_at).slice(0, 16), weekdays: rem.weekdays ?? [] }, rem.tz || systemTz(), after);
     return at ? at.toISOString() : null;
@@ -459,11 +463,11 @@ export function createReminder(board, { bot_id, text, every = 'once', when, week
   const wall = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?$/.test(raw);
   let local;
   if (wall) local = raw.replace(' ', 'T').slice(0, 16);
-  else { const d = new Date(raw); if (!raw || Number.isNaN(d.getTime())) throw bad('msg.bots.badWhen'); local = utcToZoned(d, zone).iso.slice(0, 16); }
+  else { const d = new Date(raw); if (!raw || Number.isNaN(d.getTime())) throw bad('msg.bots.badWhen'); local = utcToZoned(d, zone).iso.slice(0, d.getUTCSeconds() ? 19 : 16); }
   const rem = { every, local_at: local, tz: zone, weekdays };
   const next = nextRun(rem, Date.now() - 1000);
   if (!next) throw bad('msg.bots.whenPast');
-  const startAt = nextLocalRun({ every: 'once', start: local }, zone, -Infinity)?.toISOString() ?? next;
+  const startAt = (() => { try { return zonedToUtc(local, zone).toISOString(); } catch { return next; } })();
   const { lastInsertRowid } = board.run('INSERT INTO bot_reminders (bot_id, text, every, start_at, weekdays, next_run, enabled, created_by, created_at, person_id, tz, local_at, skip_missed) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)',
     bot.id, body, every, startAt, JSON.stringify(weekdays), next, String(actor).slice(0, 40), now(), who, zone, local, skip_missed === false ? 0 : 1);
   return getReminder(board, Number(lastInsertRowid));

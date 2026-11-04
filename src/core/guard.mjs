@@ -202,10 +202,14 @@ export function botCheck({ tool, paths = [], patterns = [], url = null, bot, lan
   const at = (p) => (dir && !path.isAbsolute(p) ? path.resolve(dir, p) : path.resolve(p));
   const wanted = [...paths.filter(Boolean).map(String).map((p) => at(p)), ...patterns.filter(Boolean).map(String).map((p) => at(globBase(p)))];
   for (const raw of [...paths, ...patterns].filter(Boolean)) if (SECRET_NAME.test(String(raw).replace(/\\/g, '/'))) return { decision: 'deny', reason: T('botSecret') };
+  // 3.6 (S1): the real path counts on its own (a link inside the bot's folder that points outside is outside), also for a
+  // file that does not exist yet (its nearest existing folder, resolved).
+  const realDir = dir ? realDeep(dir) : null;
+  const inDir = (x) => inside(x, dir) || inside(x, realDir);
   for (const p of wanted) {
-    const r = real(p);
+    const r = realDeep(p);
     if (secrets.some((d) => inside(p, d) || inside(r, d))) return { decision: 'deny', reason: T('botSecret') };
-    if (dir && !inside(p, dir) && !inside(r, dir)) return { decision: 'deny', reason: T('botOwnFolder') };
+    if (dir && (!inDir(p) || !inDir(r))) return { decision: 'deny', reason: T('botOwnFolder') };
   }
   // 3.6: a shared bot keeps each person's memory of it in personas/<person>.md: in one person's turn the others' files
   // are not its business (on the real path too), nor a search or a pattern that would sweep that folder while it holds

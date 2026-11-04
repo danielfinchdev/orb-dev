@@ -70,7 +70,7 @@ function hub({ board, bots, remoteRef }) {
     const me = person ?? owner();
     const call = (m, p) => remoteRef.link.call(peer.id, m, p);
     const offline = (error) => { const e = new Error(tr('msg.link.centroOffline', { name: peer.name })); e.userFacing = true; e.cause = error; throw e; };
-    const there = await call('bots.list', {}).catch(offline);
+    let there = await call('bots.list', {}).catch(offline);
     const mine = B.listBots(board, { person: me });
     const accounts = [...new Set(mine.map((b) => b.accounts?.account).filter(Boolean))];
     const connectors = [...new Set(mine.flatMap((b) => b.accounts?.mcp ?? []))];
@@ -82,6 +82,7 @@ function hub({ board, bots, remoteRef }) {
     }
     mapping = mapping && typeof mapping === 'object' ? mapping : {};
     const cleaned = await cleanLeftovers(call, peer);
+    if (cleaned) there = await call('bots.list', {}).catch(offline);
     const mapAccount = (id) => (id && Object.hasOwn(mapping.accounts ?? {}, id) ? mapping.accounts[id] || null : null);
     const mapMcp = (list) => (list ?? []).map((n) => (Object.hasOwn(mapping.connectors ?? {}, n) ? mapping.connectors[n] : null)).filter((n) => typeof n === 'string' && n);
     const taken = new Set((there.bots ?? []).map((b) => String(b.name).toLowerCase()));
@@ -138,9 +139,10 @@ function hub({ board, bots, remoteRef }) {
     }
     // Phase 2: everything is there and checked. Here, at once: paused, reminders cancelled.
     board.transaction(() => {
+      const at = new Date().toISOString();
       for (const c of copies) {
-        for (const r of c.reminders) { try { B.cancelReminder(board, r.id); } catch { /* gone */ } }
-        if (!c.local.paused) B.updateBot(board, c.local.id, { paused: true });
+        for (const r of c.reminders) board.run('UPDATE bot_reminders SET enabled = 0, next_run = NULL WHERE id = ?', r.id);
+        if (!c.local.paused) board.run('UPDATE bots SET paused = 1, updated_at = ? WHERE id = ?', at, c.local.id);
       }
       board.run('DELETE FROM settings WHERE key = ?', JOURNAL);
     });
