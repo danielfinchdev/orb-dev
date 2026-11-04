@@ -26,6 +26,12 @@ export const MIN_PROTOCOL = 2;
 export const FORWARD_MIN = 3;
 // 3.7 (WS3): bots.home.v1 (one home per bot, moves by uid) and replica.v1 (live copies pulled from the home).
 export const FEATURES = ['persons', 'bots.home.v1', 'replica.v1'];
+// 3.7 (WS2): what each Orb says it can do, in its hello and /api/me: the above plus 'server' (an Orb Server),
+// 'browser.live.v1' (its browser can be watched and driven from the app/phone) and 'vault.v1' (password vault). The other
+// side checks the capability before offering something (src/core/server-pair.mjs › missingCap, serverSkew).
+export function capsFor({ server = false, browserLive = false, vault = false, extra = [] } = {}) {
+  return [...new Set([...FEATURES, ...(server ? ['server'] : []), ...(browserLive ? ['browser.live.v1'] : []), ...(vault ? ['vault.v1'] : []), ...extra.map(String)])];
+}
 // 3.7: the calls between two Orbs about their bots' homes and copies (src/engine/replica.mjs): any linked Orb of the user,
 // whatever its role (the other side checks who it is and whose bots it may see).
 export const isHomeCall = (method) => /^(replica|home)\.[a-zA-Z]+$/.test(String(method ?? ''));
@@ -41,6 +47,14 @@ export function versionGap(mine = {}, theirs = {}) {
 export const versionOfProtocol = (v) => (Number(v) >= 3 ? '3.6' : Number(v) === 2 ? '3.5' : '3.4');
 // Live events of a workshop the centre passes on to its phones (the same ones a phone gets from its own PC).
 export const RELAY_EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'notice', 'session:item', 'session:update', 'session:removed', 'config:changed', 'session:delta', 'session:queue', 'approval:changed']);
+// 3.7 (WS2): the live events of the bots this Orb runs, mirrored to an Orb of 3.7 that keeps bots (its phones get them as
+// taller:bot.*; each one carries the bot's uid and the line's uid, so a copy there and the mirror are told apart).
+export const BOT_RELAY_EVENTS = new Set(['bot.updated', 'bot.message', 'bot.state', 'bot.home']);
+// 3.7 (WS2, Q1): an Orb that keeps the bots (the hub) asks its phones and terminals to link to the Orb Server instead
+// (link:handoff), or back (link:handback): a one-time pairing offer sealed for that device on its existing link.
+export const HANDOFF_EVENTS = new Set(['link:handoff', 'link:handback']);
+// Tests only: everything this side seals for the other Orb is written to this file (the payload scan of WS2).
+const TRACE = process.env.ORB_FAKE_AGENTS && process.env.ORB_LINK_TRACE ? process.env.ORB_LINK_TRACE : null;
 // The short code typed by hand: 8 letters and digits that cannot be confused (no 0/O, 1/I/L, U).
 export const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTVWXYZ23456789';
 export const normalCode = (code) => String(code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
@@ -66,7 +80,7 @@ export function parseQr(input) {
   if (q && typeof q === 'object') {
     const urls = (Array.isArray(q.urls) ? q.urls : [q.url]).filter((u) => typeof u === 'string' && /^https?:\/\//.test(u)).map((u) => normalAddress(u));
     if (!urls.length || typeof q.pc !== 'string' || typeof q.code !== 'string') throw err('el QR no es válido');
-    return { v: Number(q.v ?? 2), urls, pc: q.pc, code: q.code, name: q.name ?? null, role: q.role ?? null };
+    return { v: Number(q.v ?? 2), urls, pc: q.pc, code: q.code, name: q.name ?? null, role: q.role ?? null, h: typeof q.h === 'string' ? q.h.slice(0, 64) : null };
   }
   let u; try { u = new URL(String(q ?? '').trim()); } catch { throw err('el QR no es válido'); }
   const h = new URLSearchParams(u.hash.slice(1));
@@ -74,7 +88,7 @@ export function parseQr(input) {
   if (!code || !pc) throw err('el QR no es válido');
   const others = (h.get('a') ?? '').split(',').filter((x) => /^https?:\/\//.test(x));
   const urls = [...new Set([`${u.protocol}//${u.host}`, ...others.map((x) => normalAddress(x))])];
-  return { v: Number(h.get('v') ?? 1), urls, pc, code, name: h.get('n'), role: h.get('r') };
+  return { v: Number(h.get('v') ?? 1), urls, pc, code, name: h.get('n'), role: h.get('r'), h: h.get('h') ? h.get('h').slice(0, 64) : null };
 }
 
 // The other Orb's public data (for the short code, which does not carry its key): GET /api/hello.
@@ -92,7 +106,11 @@ const storeKey = (secret) => new Uint8Array(nodeCrypto.createHmac('sha256', Buff
 // verdict(known, seen): what to make of the other Orb's identity ({ orbId, incarnation, host }): 'new' | 'same' | 'moved' |
 // 'clone' (src/core/export.mjs › cloneVerdict; not imported: the terminal ships this file alone). A clone is not trusted:
 // its link is marked and the event 'link:clone' fires.
-export function createLink({ file, secret, identity = () => ({}), onRequest = null, onChange = () => {}, log = () => {}, fetch: f = globalThis.fetch, protocol = PROTOCOL, min = MIN_PROTOCOL, verdict = null } = {}) {
+// 3.7 (WS2): features() what this side says it can do (capsFor); mapped(peer) the persons of this Orb mapped to persons
+// of that Orb ([{ local, remote }], src/core/link-persons.mjs: their events go to that person there); beforeDisconnect(peer)
+// runs before a link is dropped (the hub hands its phones back).
+export function createLink({ file, secret, identity = () => ({}), onRequest = null, onChange = () => {}, log = () => {}, fetch: f = globalThis.fetch, protocol = PROTOCOL, min = MIN_PROTOCOL, verdict = null,
+  features = () => FEATURES, mapped = null, beforeDisconnect = null } = {}) {
   if (!file || !secret) throw new Error('createLink: falta el archivo o la clave');
   const peers = new Map(); // id -> { rec, key, skew, ctrl, online, wait, at }
   const listeners = new Map();
@@ -109,7 +127,9 @@ export function createLink({ file, secret, identity = () => ({}), onRequest = nu
     online: Boolean(p.online), revoked: Boolean(p.rec.revoked), linkedAt: p.rec.linkedAt, lastSeen: p.rec.lastSeen ?? null,
     person: p.rec.person ?? null, remotePerson: p.rec.remotePerson ?? null, remote: p.rec.remote ?? null, clone: Boolean(p.rec.clone),
     // 3.7: the other Orb's identity (its bots' home), once its hello said it.
-    orb: p.rec.orb?.orbId ?? null });
+    orb: p.rec.orb?.orbId ?? null,
+    // 3.7 (WS2): this is the user's Orb Server (linked with «Añadir Orb Server»); the link this device had before a handoff.
+    server: Boolean(p.rec.server), handedFrom: p.rec.handedFrom ?? null });
   // What the other side said of itself and of whom it counts this link as (hello and /api/me answers).
   const learn = (p, r) => {
     if (!r || typeof r !== 'object') return;
@@ -162,7 +182,10 @@ export function createLink({ file, secret, identity = () => ({}), onRequest = nu
     if (!Number.isFinite(d.now)) return false;
     p.skew = d.now - Date.now(); return true;
   };
-  const box = (p, kind, body) => C.seal(p.key, { t: stamp(p), m: kind, b: body }, C.AAD.request(p.rec.id));
+  const box = (p, kind, body) => {
+    if (TRACE) { try { fs.appendFileSync(TRACE, `${JSON.stringify({ to: p.rec.id, kind, body })}\n`); } catch { /* tests */ } }
+    return C.seal(p.key, { t: stamp(p), m: kind, b: body }, C.AAD.request(p.rec.id));
+  };
   const postBox = (p, pathname, b) => f(`${baseOf(p)}${pathname}`, { method: 'POST', credentials: 'omit', headers: { 'X-Orb-Device': p.rec.id, 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
   function revoked(p) {
     if (p.rec.revoked) return;
@@ -216,6 +239,7 @@ export function createLink({ file, secret, identity = () => ({}), onRequest = nu
           let ev; try { ev = C.openText(p.key, data, C.AAD.event(p.rec.id)); } catch { continue; }
           if (ev.e === 'link:request') handleRequest(p, ev.p).catch((e) => log(`enlace: petición: ${e.message}`));
           else if (ev.e === 'link:rehello') { p.hello = helloAfterConnect(p); p.hello.catch((e) => log(`enlace: hola: ${e.message}`)); }
+          else if (HANDOFF_EVENTS.has(ev.e)) handoff(p, ev.e, ev.p).catch((e) => log(`enlace: traspaso: ${e.message}`));
           else fire(ev.e, ev.p, view(p));
         }
       }
@@ -234,7 +258,7 @@ export function createLink({ file, secret, identity = () => ({}), onRequest = nu
     if (me.kind !== 'orb') return;
     // 3.6: what this side speaks (v, min, features) goes with it; the answer says the same of the other and whom it counts
     // this link as.
-    const r = await request(p, '/api/link', 'link', { op: 'hello', ...me, v: protocol, min, features: FEATURES });
+    const r = await request(p, '/api/link', 'link', { op: 'hello', ...me, v: protocol, min, features: features() });
     if (r.ok) learn(p, r.result);
     if (r.ok && r.result?.role && r.result.role !== p.rec.role) { p.rec.role = r.result.role; save(); changed(); }
     if (r.ok && typeof r.result?.wantsEvents === 'boolean') p.wantsEvents = r.result.wantsEvents;
@@ -257,24 +281,39 @@ export function createLink({ file, secret, identity = () => ({}), onRequest = nu
     } catch (e) { out = { ok: false, error: String(e?.message ?? e).slice(0, 1000), status: e?.status, ...(e?.reason ? { reason: e.reason } : {}) }; }
     await request(p, '/api/link', 'link', { op: 'reply', id: req.id, ...out });
   }
+  // 3.7 (WS2, Q1): the Orb this device is linked to hands it to its Orb Server (or back): link there with the one-time
+  // offer it sealed for this device, then say goodbye to the old one. Only a phone, a browser or a terminal; never an Orb.
+  const handing = new Set();
+  async function handoff(p, event, h) {
+    if ((identity()?.kind ?? 'orb') === 'orb' || !h?.offer || handing.has(p.rec.id)) return;
+    handing.add(p.rec.id);
+    try {
+      const to = await link.connect({ qr: h.offer, person: p.rec.person ?? null });
+      const np = peers.get(to.id); if (np) { np.rec.handedFrom = p.rec.id; save(); }
+      fire('link:handedOff', { from: view(p), to, back: event === 'link:handback', hub: h.hub ?? null }, view(p));
+      await link.disconnect(p.rec.id).catch(() => {});
+    } finally { handing.delete(p.rec.id); }
+  }
   async function flushOutbox() {
     flushTimer = null;
     const boxes = outbox; outbox = new Map();
     for (const [id, list] of boxes) {
       const p = peers.get(id);
-      if (!list.length || !p || !p.online || !hostsBots(p.rec.role ?? 'taller') || p.wantsEvents === false) continue;
-      request(p, '/api/link', 'link', { op: 'events', list }).catch(() => {});
+      if (!list.length || !p || !p.online || !hostsBots(p.rec.role ?? 'taller')) continue;
+      // 3.7: the bots' events go to any Orb of 3.7 that keeps bots; the rest only where this Orb is the one that programs.
+      const send = p.wantsEvents === false ? list.filter((x) => BOT_RELAY_EVENTS.has(x.e)) : list;
+      if (send.length) request(p, '/api/link', 'link', { op: 'events', list: send }).catch(() => {});
     }
   }
 
   // ---- linking
-  async function pairAt(base, pcPub, code, via) {
+  async function pairAt(base, pcPub, code, via, h = null) {
     const { priv, pub } = C.newKeyPair();
     const me = identity() ?? {};
     let skew = 0;
     // 3.5.1: the short code is stretched and tied to the key the other side gave (code3); the QR's code goes as it is.
     const secret = via === 'code3' ? await C.shortSecretAsync(normalCode(code), C.b64.enc(pcPub)) : code;
-    const body = () => ({ via, pub: C.b64.enc(pub), proof: C.seal(C.pairingKey(priv, pcPub, secret), { ...me, pub: C.b64.enc(pub), name: me.name, t: Date.now() + skew, v: protocol, min }, C.AAD.pair) });
+    const body = () => ({ via, ...(h ? { h } : {}), pub: C.b64.enc(pub), proof: C.seal(C.pairingKey(priv, pcPub, secret), { ...me, pub: C.b64.enc(pub), name: me.name, t: Date.now() + skew, v: protocol, min }, C.AAD.pair) });
     const send = () => f(`${base}/api/pair`, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body()) });
     let res = await send(); let data = null;
     if (res.status === 409) { const d = await res.json().catch(() => ({})); if (Number.isFinite(d.now)) { skew = d.now - Date.now(); res = await send(); } else data = d; }
@@ -305,7 +344,8 @@ export function createLink({ file, secret, identity = () => ({}), onRequest = nu
     async connect({ qr, code, address, fp, person = null } = {}) {
       if (!started) link.start();
       let urls; let pcPub; let secretCode; let via;
-      if (qr) { const q = parseQr(qr); urls = q.urls; pcPub = C.b64.dec(q.pc); secretCode = q.code; via = 'qr'; }
+      let h = null;
+      if (qr) { const q = parseQr(qr); urls = q.urls; pcPub = C.b64.dec(q.pc); secretCode = q.code; via = 'qr'; h = q.h; }
       else if (code) {
         const h = await hello(address, { fetch: f });
         // 3.5.1: only an Orb that ties the code to its key (short ≥ 3); an older one, or an answer changed on the way, is
@@ -319,7 +359,7 @@ export function createLink({ file, secret, identity = () => ({}), onRequest = nu
       let last = null;
       for (const base of urls) {
         try {
-          const { rec, key } = await pairAt(base, pcPub, secretCode, via);
+          const { rec, key } = await pairAt(base, pcPub, secretCode, via, h);
           rec.urls = [base, ...urls.filter((u) => u !== base)]; rec.at = 0;
           if (person) rec.person = String(person).slice(0, 40);
           const p = { rec, key, skew: 0, online: false, wait: 1000 };
@@ -333,6 +373,7 @@ export function createLink({ file, secret, identity = () => ({}), onRequest = nu
     // Forget a link (and ask the other side to forget it too, if it can be reached).
     async disconnect(id) {
       const p = peerOf(id);
+      if (beforeDisconnect && !p.rec.revoked) { try { await beforeDisconnect(view(p)); } catch (e) { log(`enlace: antes de desenlazar: ${e.message}`); } }
       if (!p.rec.revoked) await request(p, '/api/link', 'link', { op: 'bye' }).catch(() => {});
       p.ctrl?.abort(); p.ctrl = null; clearTimeout(p.timer);
       peers.delete(p.rec.id); save(); changed();
@@ -349,7 +390,7 @@ export function createLink({ file, secret, identity = () => ({}), onRequest = nu
     // 3.6: with what this side speaks (v, min): the other says whom it counts this link as and its own versions.
     async me(id) {
       const p = peerOf(id);
-      const r = await request(p, '/api/me', 'me', { v: protocol, min, features: FEATURES });
+      const r = await request(p, '/api/me', 'me', { v: protocol, min, features: features() });
       if (!r.ok) throw err(r.error, { status: r.status, update: r.update ?? null });
       learn(p, r.result);
       return r.result;
@@ -357,17 +398,32 @@ export function createLink({ file, secret, identity = () => ({}), onRequest = nu
     // Live events of this Orb for the centre it works for (batched every 150 ms).
     // 3.6: reaches(person): whether the event is for that person of this Orb; each centre gets only the events of the
     // person its link belongs to here (the centre filters again by the person of the device).
+    // 3.7 (WS2): also the events of the bots run here (BOT_RELAY_EVENTS, to an Orb of 3.7 that keeps bots, whether or not
+    // this one programs for it), and those of the persons mapped to a person there (to: who that is there).
     relay(event, payload, reaches = null) {
-      if (!RELAY_EVENTS.has(event)) return;
-      if (!doesDev(identity()?.role ?? 'todo')) return;
+      const bot = BOT_RELAY_EVENTS.has(event);
+      if (!RELAY_EVENTS.has(event) && !bot) return;
+      if (!bot && !doesDev(identity()?.role ?? 'todo')) return;
       for (const p of peers.values()) {
-        if (!p.online || !hostsBots(p.rec.role ?? 'taller') || p.wantsEvents === false) continue;
-        if (reaches && !reaches(p.rec.person ?? null)) continue;
-        const list = outbox.get(p.rec.id) ?? []; outbox.set(p.rec.id, list);
-        list.push({ e: event, p: event === 'config:changed' ? null : payload });
-        if (list.length > 200) list.splice(0, list.length - 200);
-        flushTimer ??= setTimeout(() => { flushOutbox().catch(() => {}); }, 150);
+        if (!p.online || !hostsBots(p.rec.role ?? 'taller') || p.rec.revoked || p.rec.clone) continue;
+        if (bot ? !(p.rec.remote?.features ?? []).includes('bots.home.v1') : p.wantsEvents === false) continue;
+        let targets = [{ local: p.rec.person ?? null, to: null }];
+        if (mapped) { try { targets = targets.concat((mapped(view(p)) ?? []).filter((m) => m.local && m.remote && m.local !== (p.rec.person ?? null)).map((m) => ({ local: m.local, to: String(m.remote) }))); } catch { /* none */ } }
+        for (const t of targets) {
+          if (reaches && !reaches(t.local)) continue;
+          const list = outbox.get(p.rec.id) ?? []; outbox.set(p.rec.id, list);
+          list.push({ e: event, p: event === 'config:changed' ? null : payload, ...(t.to ? { to: t.to } : {}) });
+          if (list.length > 200) list.splice(0, list.length - 200);
+          flushTimer ??= setTimeout(() => { flushOutbox().catch(() => {}); }, 150);
+        }
       }
+    },
+    // 3.7 (WS2): mark a link (server: it is the user's Orb Server, linked with «Añadir Orb Server»).
+    mark(id, patch = {}) {
+      const p = peerOf(id);
+      if ('server' in patch) p.rec.server = Boolean(patch.server);
+      save(); changed();
+      return view(p);
     },
     // 3.6: a backup of this Orb (an .orbbak, encrypted already) kept on the other one, in pieces of 1.5 MB. → { stored, size }
     async putBackup(id, filePath) {

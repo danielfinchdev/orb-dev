@@ -28,6 +28,7 @@ import ws1 from './en/ws1.mjs';
 import ws2 from './en/ws2.mjs';
 import ws3 from './en/ws3.mjs';
 import hogar from './en/hogar.mjs';
+import enlaceServer from './en/enlace-server.mjs';
 import ws4 from './en/ws4.mjs';
 import ws5 from './en/ws5.mjs';
 import ws6 from './en/ws6.mjs';
@@ -67,6 +68,7 @@ export default {
   ...ws2,
   ...ws3,
   ...hogar,
+  ...enlaceServer,
   ...ws4,
   ...ws5,
   ...ws6,

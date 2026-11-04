@@ -25,7 +25,10 @@ import { IS_WIN } from '../agents/common.mjs';
 import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal, open, sealText, openText, openBytes, AAD, CLOCK_SKEW_MS, shortSecret } from '../core/mobile-crypto.mjs';
 import { newVapidKeys, checkSubscription, sendPush } from './webpush.mjs';
 import { wake, normalMac } from '../core/wol.mjs';
-import { PROTOCOL, MIN_PROTOCOL, FORWARD_MIN, FEATURES, versionOfProtocol, CODE_ALPHABET, RELAY_EVENTS, shortCodeLabel } from '../core/link.mjs';
+import { PROTOCOL, MIN_PROTOCOL, FORWARD_MIN, capsFor, versionOfProtocol, versionGap, CODE_ALPHABET, RELAY_EVENTS, BOT_RELAY_EVENTS, shortCodeLabel, normalCode, parseQr } from '../core/link.mjs';
+import { SERVER_CODE_MINUTES, SERVER_CODE_LENGTH, serverSecret, openServerProof, sealServerAnswer, serverSkew } from '../core/server-pair.mjs';
+import { mappedPerson } from '../core/link-persons.mjs';
+import { createPerson, listPersons } from '../core/persons.mjs';
 import { PHONE_SET as ALLOWED, BOTS_OWNER, ORB_SET, CONSOLE_SET, CENTRO_PHONE } from '../core/policy.mjs';
 import { principalOf, reaches, audienceOf, ownerOfBoard, peopleWith, audit } from '../core/authz.mjs';
 import { checkTicket, getPerson } from '../core/persons.mjs';
@@ -106,6 +109,13 @@ const FORWARD_MS = Number(process.env.ORB_FAKE_AGENTS && process.env.ORB_FORWARD
 const BACKUP_PUT_MAX = Number(process.env.ORB_FAKE_AGENTS && process.env.ORB_BACKUP_PUT_MAX) || 2 * 1024 * 1024 * 1024;
 const BACKUP_PUT_KEEP = 3;
 const PAIR_FAILS_MAX = 20; // wrong attempts (all addresses together) that cancel the code on screen
+// 3.7 (WS2): «Añadir Orb Server»: the code of the install command is cancelled after a few wrong tries; the one-time
+// offers an Orb makes for a device it hands to another (link:handoff, 10 min) or back (link:handback, a few days: the
+// device may be off when the Server is unlinked).
+const SERVER_FAILS_MAX = 5;
+const HANDOFF_MS = 10 * 60_000;
+const HANDBACK_MS = 3 * 86_400_000;
+const HANDOFF_KINDS = ['phone', 'browser', 'terminal'];
 
 // The checks of a call coming from outside (a phone, or the centre forwarding a phone's call): null when it may run, or
 // why not. `uploadsDir`: the pictures that may go with it (none when forwarded).
@@ -258,7 +268,8 @@ e.waitUntil(fetch('/api/note-action',{method:'POST',credentials:'omit',headers:{
 .then(r=>r.ok?r.json():null).then(x=>{if(!x||!x.ok)return openApp(d.route)}).catch(()=>openApp(d.route)));return}
 e.waitUntil(openApp(d.route,a==='allow'&&def&&def.open?d.card:null))});`;
 
-export function createRemote({ board, api, log, emit = () => {}, version = null }) {
+// 3.7 (WS2): features(): what this Orb says it can do (src/core/link.mjs › capsFor).
+export function createRemote({ board, api, log, emit = () => {}, version = null, features = () => capsFor({ server: ctx.product === 'server' }) }) {
   let servers = []; // http servers (one per address)
   let state = { running: false, routes: [], error: null };
   let generation = 0; // moved by stop(): a start() still waiting for Tailscale gives up
@@ -266,6 +277,11 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   let watcher = null;
   let served = null; // the https port `tailscale serve` is forwarding for us (turned off on stop)
   let pairing = null; // { code, short, expires, route, fails }
+  // 3.7 (WS2): the install command's code («Añadir Orb Server»): { code, secret, expires, fails, person }, one at a time.
+  let serverPairing = null;
+  // One-time offers for a device handed to this Orb (or an Orb Server linking to its app): id -> the same fields as
+  // `pairing` plus { meta } (who asked for it and for which device there).
+  const handoffs = new Map();
   const forwarded = new Map(); // 3.5: calls sent to the workshop waiting for its answer: id -> { resolve, reject, device, timer }
   let flushing = false; // the workshop's waiting calls are being sent
   const role = () => myRole();
@@ -283,7 +299,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   const uploads = (person = owner()) => path.join(uploadsRoot(), String(person ?? 'dueno').replace(/[^\w-]/g, '_'));
   const previewOf = (pid) => { try { return board.personSetting(pid, 'preview') ?? null; } catch { return null; } };
   // What this Orb says of itself on every hello and /api/me (3.6, protocol 3).
-  const versions = () => ({ v: PROTOCOL, min: MIN_PROTOCOL, version, features: FEATURES });
+  const versions = () => ({ v: PROTOCOL, min: MIN_PROTOCOL, version, features: features() });
   const metaV = (d) => Number(parseMeta(d).v ?? 2);
   // 3.6: a client too old for this Orb is told to update (in its own words: «Actualiza …»).
   const tooOld = (v) => Number.isFinite(Number(v)) && Number(v) > 0 && Number(v) < MIN_PROTOCOL;
@@ -406,10 +422,13 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     if (app) { res.setHeader('Access-Control-Allow-Origin', app); for (const [k, v] of Object.entries(APP_CORS)) res.setHeader(k, v); }
     if (req.method === 'OPTIONS') { req.resume(); return send(res, app ? 204 : 403, '', 'text/plain'); }
     if (req.method === 'GET' && p === '/api/hello') return helloInfo(res);
+    if (req.method === 'GET' && p === '/api/server-hello') return serverHello(req, res);
     if (req.method === 'GET' && !p.startsWith('/api/')) return serveStatic(req, res, p);
     if (!originOk(req)) return send(res, 403, { error: 'origen no permitido' });
 
     if (req.method === 'POST' && p === '/api/pair') return pair(req, res);
+    // 3.7 (WS2): an Orb Server installed with this app's command pairs with it.
+    if (req.method === 'POST' && p === '/api/server-pair') return serverPair(req, res);
     // 3.6 (M4): «Aprobar» / «Rechazar» from a notification of the phone's browser (its service worker has no keys).
     if (req.method === 'POST' && p === '/api/note-action') return noteAction(req, res);
 
@@ -428,6 +447,12 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       if (mine.length >= STREAMS_PER_DEVICE) { try { mine[0].res.end(); } catch { /* closed */ } clients.delete(mine[0]); }
       clients.add(client);
       if (client.kind === 'orb') linkChanged();
+      // 3.7 (WS2): a device handed to this Orb whose way back waits (its Orb Server was unlinked while it was off), or one
+      // this Orb has to hand to its Orb Server.
+      else {
+        sendPendingHandback(device.id);
+        try { remote.onDeviceOnline?.(deviceView(device)); } catch (error) { log(`enlace: ${error.message}`); }
+      }
       const ping = setInterval(() => { try { res.write(': ping\n\n'); } catch { /* closed */ } }, 25_000);
       req.on('close', () => {
         clearInterval(ping); clients.delete(client);
@@ -520,6 +545,13 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     if (device.kind !== 'orb') return no(tr('msg.remote.pcOnly'));
     const b = msg.body ?? {};
     if (op === 'backup.put') return backupPut(res, device, msg, b);
+    // 3.7 (WS2): the owner's PC asks for one-time offers for its phones (hub handoff) or sends their way back; the persons
+    // of this Orb mapped to persons of that one. Only from the owner's Orb the owner confirmed here, never a copy.
+    if (op === 'handoff' || op === 'persons') {
+      if (Number(device.kind_ok) !== 1 || parseMeta(device).clone || personOf(device) !== owner()) return no(tr('msg.remote.pcOnly'));
+      try { return ok(op === 'handoff' ? handoffOp(device, b) : personsOp(device, b)); }
+      catch (error) { return no(oneLine(error?.message ?? String(error), 500), error.status ?? 400); }
+    }
     // 3.7 (WS3): the bots' homes and copies (src/engine/replica.mjs), only with an Orb the owner confirmed, never a copy.
     if (op === 'replica') {
       if (Number(device.kind_ok) !== 1 || parseMeta(device).clone || !remote.onHomeCall) return no(tr('msg.remote.pcOnly'));
@@ -566,12 +598,22 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     if (op === 'events') {
       // Only the Orb this one sends the Orb mode to (its phones see what it does); any other is thanked and ignored.
       // 3.6: the workshop of the device's person, and its events go to that person's devices only.
+      // 3.7 (WS2): `to`: a person of this Orb mapped to one of that Orb (link_persons, confirmed); the bots' events of any
+      // confirmed Orb of 3.7 (the bots it runs), mirrored as taller:bot.* (with the bot's and the line's uid).
       const pid = personOf(device);
-      if (!doesDev(device.role ?? 'centro') || Number(device.dev_ok) !== 1 || devTargetDevice(pid)?.id !== device.id) return ok(false);
+      const workshop = (who) => doesDev(device.role ?? 'centro') && Number(device.dev_ok) === 1 && devTargetDevice(who)?.id === device.id;
+      let any = false;
       for (const ev of (Array.isArray(b.list) ? b.list : []).slice(0, 200)) {
-        if (typeof ev?.e === 'string' && RELAY_EVENTS.has(ev.e)) emit(`taller:${ev.e}`, ev.e === 'config:changed' ? null : ev.p ?? null, { person: pid });
+        if (typeof ev?.e !== 'string') continue;
+        const to = ev.to == null ? pid : String(ev.to);
+        if (to !== pid && !mappedOn(device, to)) continue;
+        if (BOT_RELAY_EVENTS.has(ev.e)) {
+          if (Number(device.kind_ok) !== 1 || parseMeta(device).clone || seenMirror(ev)) continue;
+          emit(`taller:${ev.e}`, ev.p ?? null, { person: to }); any = true;
+          try { remote.onMirror?.(orbPeer(device), ev); } catch { /* replica */ }
+        } else if (RELAY_EVENTS.has(ev.e) && workshop(to)) { emit(`taller:${ev.e}`, ev.e === 'config:changed' ? null : ev.p ?? null, { person: to }); any = true; }
       }
-      return ok();
+      return ok(any);
     }
     return no('operación desconocida', 404);
   }
@@ -624,13 +666,18 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const recent = (failures.get(who) ?? []).filter((t) => Date.now() - t < 10 * 60_000);
     failures.set(who, recent);
     if (recent.length >= 10) { req.resume(); return send(res, 429, { error: tr('msg.remote.tooMany') }); }
+    const pairingNow = pairingState();
     const fail = () => {
       recent.push(Date.now());
       // Many wrong tries in all (from any address): the code on screen is no longer good.
-      if (pairing && ++pairing.fails >= PAIR_FAILS_MAX) { pairing = null; log('enlace: demasiados intentos; código anulado'); }
+      if (pairingNow && ++pairingNow.fails >= PAIR_FAILS_MAX) { clearPairing(); log('enlace: demasiados intentos; código anulado'); }
       return send(res, 401, { error: tr('msg.remote.badQr') });
     };
     let body; try { body = await readJson(req, 10_000); } catch { return fail(); }
+    // 3.7 (WS2): a one-time offer made for one device (h: its id) instead of the QR on screen.
+    const offer = typeof body?.h === 'string' ? handoffs.get(body.h) ?? null : null;
+    if (typeof body?.h === 'string' && (!offer || Date.now() > offer.expires)) { if (offer) handoffs.delete(body.h); recent.push(Date.now()); return send(res, 401, { error: tr('msg.remote.badQr') }); }
+    const pairing = offer ?? pairingNow;
     if (!pairing || Date.now() > pairing.expires || !body || typeof body.pub !== 'string') return fail();
     // 3.5.1: a page served over the home Wi-Fi in plain http could have been changed on the way: a browser links only over
     // https (Tailscale), the Tailscale address or this PC itself, unless the user allowed it (Ajustes › Magic Link). The
@@ -653,14 +700,16 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     // 3.6: whom the QR was made for («¿Para quién?»), whatever the device says; «Puede administrar» only for the owner.
     const person = pairing.person ?? owner();
     const askedAdmin = person === owner() ? wantedAdmin : false;
-    pairing = null; // one use
+    if (offer) handoffs.delete(body.h); else clearPairing(); // one use
     const id = crypto.randomUUID();
     const name = oneLine(typeof proof.name === 'string' && proof.name ? proof.name : tr(kind === 'orb' ? 'msg.link.defaultOrb' : 'msg.remote.defaultName'), 60);
     const peerRole = kind === 'orb' && ROLES.includes(proof.role) ? proof.role : null;
     // «Puede administrar»: asked by whoever made the QR (true: the PC, `orb-server enlazar --admin` on the server itself or
     // a device that administers), or 'first': the first device of a server without a window gets it.
     const admin = askedAdmin === true || (askedAdmin === 'first' && !board.one('SELECT id FROM devices WHERE admin = 1 AND public_key IS NOT NULL'));
-    const meta = { ...(kind === 'orb' ? { host: oneLine(String(proof.host ?? ''), 80) || null, macs: (Array.isArray(proof.macs) ? proof.macs : []).map(normalMac).filter(Boolean).slice(0, 8), version: proof.version ? oneLine(String(proof.version), 40) : null } : {}), v: Number(proof.v ?? 2) || 2 };
+    const meta = { ...(kind === 'orb' ? { host: oneLine(String(proof.host ?? ''), 80) || null, macs: (Array.isArray(proof.macs) ? proof.macs : []).map(normalMac).filter(Boolean).slice(0, 8), version: proof.version ? oneLine(String(proof.version), 40) : null } : {}), v: Number(proof.v ?? 2) || 2,
+      // 3.7 (WS2): handed here by another Orb (its device there), or back from the Orb Server.
+      ...(offer?.meta?.from ? { handoff: { from: offer.meta.from, ref: offer.meta.ref ?? null, at: now() } } : {}) };
     const devOk = kind === 'orb' && dev ? 1 : 0;
     board.run('INSERT INTO devices (id, name, token_hash, created_at, last_seen, public_key, route, kind, role, ip, meta, admin, kind_ok, approve, dev_ok, person_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)',
       id, name, `clave:${id}`, now(), now(), body.pub, route, kind, peerRole, who, JSON.stringify(meta), admin ? 1 : 0, approve === false ? 0 : 1, devOk, person);
@@ -671,8 +720,149 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     // code's key too, so a device that got a key from someone in the middle finds out (nobody else has the code).
     const key = sessionKey(own.priv, devPub); keys.set(id, key);
     linkChanged();
+    // 3.7 (WS2): the Orb that handed it here learns it is done (it forgets its old link); a device back here, this Orb.
+    if (offer?.meta?.from) sendToDevice(offer.meta.from, 'hub:handoffDone', { ref: offer.meta.ref ?? null });
+    if (offer?.meta) { try { remote.onHandoff?.({ id, ref: offer.meta.ref ?? null, back: Boolean(offer.meta.back), kind, person }); } catch (error) { log(`enlace: ${error.message}`); } }
     return send(res, 200, { id, box: seal(key, { id, name: ctx.config.assistantName, orb: orbName(), role: role(), ...versions(), pc: pcFingerprint, person: { id: person, name: nameOf(person) } }, AAD.paired(id)),
       confirm: seal(pairingKey(own.priv, devPub, secretOf), { id, pc: pcFingerprint }, AAD.confirm(id)) });
+  }
+
+  // ---- 3.7 (WS2): «Añadir Orb Server» (src/core/server-pair.mjs), and the one-time offers of the hub handoff.
+  function pairingState() { return pairing; }
+  function clearPairing() { pairing = null; }
+  const serverActive = () => Boolean(serverPairing && Date.now() <= serverPairing.expires);
+  // GET /api/server-hello: this app's key, only while an install command's code is on screen.
+  function serverHello(req, res) {
+    if (!serverActive()) return send(res, 404, { error: tr('msg.server.noCode') });
+    return send(res, 200, { v: PROTOCOL, server: 1, pc: b64.enc(own.pub), fp: pcFingerprint, name: orbName(), version, features: features() });
+  }
+  // POST /api/server-pair: the Orb Server proves it has the code (sealed with it, tied to this key) and brings its own
+  // one-time offer; this app uses the code up and links to it with that offer (onServerOffer: src/engine/hub.mjs).
+  async function serverPair(req, res) {
+    const who = ipOf(req) || '?';
+    const recent = (failures.get(who) ?? []).filter((t) => Date.now() - t < 10 * 60_000);
+    failures.set(who, recent);
+    if (recent.length >= 10) { req.resume(); return send(res, 429, { error: tr('msg.remote.tooMany') }); }
+    const bad = () => {
+      recent.push(Date.now());
+      if (serverPairing && ++serverPairing.fails >= SERVER_FAILS_MAX) { serverPairing = null; log('enlace: demasiados intentos con el código del Server; anulado'); }
+      return send(res, 401, { error: tr('msg.server.badCode') });
+    };
+    let body; try { body = await readJson(req, 20_000); } catch { return bad(); }
+    if (!serverActive()) return send(res, 401, { error: tr('msg.server.noCode') });
+    const opened = openServerProof(own.priv, body, serverPairing.secret);
+    if (!opened) return bad();
+    const { pk, msg } = opened;
+    if (!(Math.abs(Date.now() - Number(msg.t)) <= CLOCK_SKEW_MS)) return clockOff(res);
+    // An Orb Server too old (or too new) for this app: nothing is linked and the code is kept.
+    const gap = versionGap({ v: PROTOCOL, min: MIN_PROTOCOL }, { v: msg.v, min: msg.min });
+    if (gap) return send(res, 426, { error: tr(gap === 'me' ? 'msg.server.skewOldApp' : 'msg.server.skewOldServer', { has: msg.version ?? '?', need: version ?? '?' }), update: gap === 'me' ? 'app' : 'server' });
+    let offer; try { offer = parseQr(msg.offer); } catch { return bad(); }
+    const person = serverPairing.person;
+    serverPairing = null; // one use: whatever happens next
+    if (!remote.onServerOffer) return send(res, 503, { error: tr('msg.link.unavailable') });
+    let peer;
+    try { peer = await remote.onServerOffer({ offer: msg.offer, server: { name: oneLine(String(msg.name ?? ''), 60) || offer.name, version: msg.version ? oneLine(String(msg.version), 40) : null, features: Array.isArray(msg.features) ? msg.features.map(String).slice(0, 20) : [] }, person }); }
+    catch (error) { return send(res, 502, { error: oneLine(error?.message ?? String(error), 300) }); }
+    board.event(null, 'usuario', 'server.paired', peer?.name ?? offer.name ?? '');
+    const skew = serverSkew({ app: version, server: msg.version, features: Array.isArray(msg.features) ? msg.features : null });
+    return send(res, 200, { box: sealServerAnswer(pk, { peer: peer?.id ?? null, name: orbName(), version, skew }) });
+  }
+  // A one-time offer for one device (the payload of a QR plus h, its id): kind and person decided here.
+  // meta: { from, ref } (the Orb that asked for it and its device there) or { back: true, ref } (a device coming back).
+  function makeOffer({ kind, person = null, approve = true, admin = false, dev = false, ms = HANDOFF_MS, meta = null }) {
+    if (!state.running) throw linkError(tr('msg.remote.enableFirst'), { status: 503 });
+    for (const [k, o] of handoffs) if (o.expires < Date.now()) handoffs.delete(k);
+    if (handoffs.size > 500) throw linkError(tr('msg.remote.tooMany'), { status: 429 });
+    const route = state.routes.find((r) => r.kind === 'tailscale') ?? state.routes[0];
+    const h = crypto.randomUUID(); const code = crypto.randomBytes(18).toString('base64url');
+    handoffs.set(h, { code, expires: Date.now() + ms, route: route.kind, fails: 0, admin: admin === 'first' && isHeadless() ? 'first' : false, device: kind, approve: approve !== false, dev: kind === 'orb' && dev === true, person: person ?? owner(), meta });
+    const others = state.routes.filter((r) => r !== route).map((r) => r.url);
+    if (state.local && !others.includes(state.local) && route.url !== state.local) others.push(state.local);
+    const frag = new URLSearchParams({ vincular: code, pc: b64.enc(own.pub), v: String(PROTOCOL), n: orbName(), r: role(), h });
+    if (others.length) frag.set('a', others.join(','));
+    return { v: PROTOCOL, urls: [route.url, ...others], pc: b64.enc(own.pub), code, h, name: orbName(), role: role(), url: `${route.url}#${frag}`, expiresAt: Date.now() + ms };
+  }
+  // A sealed event for every live stream of one device. → whether one got it.
+  function sendToDevice(deviceId, event, payload) {
+    let sent = false;
+    for (const c of [...clients]) {
+      if (c.device !== deviceId) continue;
+      try { c.res.write(`data: ${sealText(c.key, { e: event, p: payload }, AAD.event(c.device))}\n\n`); sent = true; } catch { clients.delete(c); }
+    }
+    return sent;
+  }
+  // Whether a person of this Orb is mapped (and confirmed) to a person of the Orb of that device (link_persons).
+  const mappedOn = (d, person) => { try { return person != null && mappedPerson(board, orbPeer(d), String(person)) != null; } catch { return false; } };
+  // The same line mirrored twice (sent again after a reconnect) reaches the phones once.
+  const mirrored = new Map();
+  function seenMirror(ev) {
+    const uid = ev?.p?.uid ?? null;
+    if (!uid || ev.e !== 'bot.message' || ev.p?.updated) return false;
+    const k = `${ev.to ?? ''}:${uid}`; const at = Date.now();
+    for (const [x, t] of mirrored) if (at - t > 10 * 60_000) mirrored.delete(x);
+    if (mirrored.has(k)) return true;
+    mirrored.set(k, at); if (mirrored.size > 5000) mirrored.delete(mirrored.keys().next().value);
+    return false;
+  }
+  // link op 'handoff' from the owner's PC: offers for its devices ({ action: 'offers', list: [{ ref, kind, person, name,
+  // approve }] }, person: who that is here, the PC's own person or one mapped for it), or their way back ({ action:
+  // 'back', list: [{ ref, offer, hub }] }: to the devices it handed here, now or when they connect).
+  function handoffOp(device, b) {
+    const list = (Array.isArray(b.list) ? b.list : []).slice(0, 100);
+    if (b.action === 'offers') {
+      return list.map((it) => {
+        const ref = String(it?.ref ?? '').slice(0, 64);
+        const person = it?.person == null ? personOf(device) : String(it.person);
+        if (!ref || !HANDOFF_KINDS.includes(it?.kind)) return { ref, error: 'kind' };
+        if (person !== personOf(device) && !mappedOn(device, person)) return { ref, error: 'unmapped' };
+        if (!getPerson(board, person)) return { ref, error: 'unmapped' };
+        return { ref, offer: makeOffer({ kind: it.kind, person, approve: it.approve !== false, meta: { from: device.id, ref } }), hub: { name: orbName(), fp: pcFingerprint } };
+      });
+    }
+    if (b.action === 'back') {
+      const pending = board.settingJson('handback_pending') ?? {};
+      let sent = 0; let queued = 0;
+      const mine = board.all('SELECT * FROM devices WHERE public_key IS NOT NULL').filter((d) => parseMeta(d).handoff?.from === device.id);
+      for (const it of list) {
+        const d = mine.find((x) => parseMeta(x).handoff?.ref === String(it?.ref ?? ''));
+        if (!d || !it?.offer) continue;
+        const p = { offer: it.offer, hub: it.hub ?? null, back: true };
+        if (sendToDevice(d.id, 'link:handback', p)) sent++;
+        else { pending[d.id] = { ...p, until: Date.now() + HANDBACK_MS }; queued++; }
+      }
+      board.settingJson('handback_pending', pending);
+      return { sent, queued };
+    }
+    throw linkError('operación desconocida', { status: 404 });
+  }
+  function sendPendingHandback(deviceId) {
+    const pending = board.settingJson('handback_pending');
+    if (!pending?.[deviceId]) return;
+    const p = pending[deviceId]; delete pending[deviceId];
+    board.settingJson('handback_pending', pending);
+    if (p.until > Date.now()) setTimeout(() => sendToDevice(deviceId, 'link:handback', { offer: p.offer, hub: p.hub, back: true }), 50).unref?.();
+  }
+  // link op 'persons' from the owner's PC: who is who on both Orbs. list → this Orb's persons and the mapping with that
+  // PC; map { remote, local | create } (local: a person here; create: a name, someone new here); unmap { remote }.
+  function personsOp(device, b) {
+    const peerKey = parseMeta(device).orb?.orbId ?? device.id;
+    const rowsFor = () => board.all('SELECT local_person AS local, remote_person AS remote, confirmed_at AS confirmedAt FROM link_persons WHERE peer IN (?, ?)', peerKey, device.id);
+    if (b.action === 'list') return { persons: listPersons(board).map((p) => ({ id: p.id, name: p.name, role: p.role })), mapped: rowsFor(), person: personOf(device) };
+    const remotePerson = oneLine(String(b.remote ?? ''), 40);
+    if (!remotePerson) throw linkError(tr('msg.persons.noPerson'), { status: 400 });
+    if (b.action === 'unmap') { board.run('DELETE FROM link_persons WHERE peer IN (?, ?) AND remote_person = ?', peerKey, device.id, remotePerson); return { ok: true }; }
+    if (b.action === 'map') {
+      let local = b.local != null ? String(b.local) : null;
+      if (!local && b.create) { local = createPerson(board, { name: oneLine(String(b.create), 40) }).id; board.changed('persons'); }
+      if (!local || !getPerson(board, local)) throw linkError(tr('msg.persons.noPerson'), { status: 404 });
+      if (local === personOf(device)) throw linkError(tr('msg.server.mapOwner'), { status: 409 });
+      board.run('DELETE FROM link_persons WHERE peer IN (?, ?) AND (remote_person = ? OR local_person = ?)', peerKey, device.id, remotePerson, local);
+      board.run('INSERT INTO link_persons (peer, local_person, remote_person, confirmed_at) VALUES (?, ?, ?, ?)', peerKey, local, remotePerson, now());
+      audit(board, principalOf(board, { device }), 'link.persons.map', { type: 'person', id: local }, 'allow', 'owner');
+      return { ok: true, local, name: getPerson(board, local)?.name ?? null };
+    }
+    throw linkError('operación desconocida', { status: 404 });
   }
 
   // 3.5.1: a request from a browser's page that came over plain http on the home network (not this PC, not Tailscale's
@@ -968,7 +1158,8 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   // (null); else the linked one that does (the one on right now, or else the last one seen).
   // 3.6: each person's own: the workshops linked for them (the owner's also chooses with «Orb para programar»).
   const devTargetDevice = (person = owner()) => {
-    const list = tallers().filter((d) => personOf(d) === person);
+    // 3.7 (WS2): and the workshop of the owner where this person is mapped to someone there (link_persons, confirmed).
+    const list = tallers().filter((d) => personOf(d) === person || mappedOn(d, person));
     if (person === owner()) { const pick = String(ctx.config?.devTarget ?? ''); if (pick && pick !== 'local') { const d = list.find((x) => x.id === pick); if (d) return d; } }
     if (programs() && (person === owner() || !list.length)) return null;
     const on = onlineIds(); return list.find((d) => on.has(d.id)) ?? list[0] ?? null;
@@ -1020,7 +1211,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     if (!principal || principal.channel === 'system') return;
     const res = { type: 'device', id: d.id };
     const deny = (reason, message) => { audit(board, principal, `taller.${method}`, res, 'deny', reason); throw linkError(message, { status: reason === 'oldWorkshop' ? 426 : 403, reason }); };
-    if (principal.person !== personOf(d)) deny('notYourTaller', tr('msg.link.notYourTaller'));
+    if (principal.person !== personOf(d) && !mappedOn(d, principal.person)) deny('notYourTaller', tr('msg.link.notYourTaller'));
     if (metaV(d) < FORWARD_MIN && principal.person !== owner()) deny('oldWorkshop', tr('msg.link.updateOrb', { name: d.name, has: parseMeta(d).version ?? versionOfProtocol(metaV(d)), need: versionOfProtocol(FORWARD_MIN) }));
     audit(board, principal, `taller.${method}`, res, 'allow', 'forward');
   }
@@ -1082,7 +1273,8 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       const value = { e: event, p: event === 'config:changed' || event === 'taller:config:changed' ? null : payload };
       // 3.5: the events of the Orb that programs for this one's phones (only that one sends them, see linkOp 'events') also
       // reach them under their own name, for their Orb mode (which goes there).
-      const plain = event.startsWith('taller:') ? { e: event.slice(7), p: value.p } : null;
+      // 3.7 (WS2): not the mirrored bots' events (taller:bot.*): their ids are of the other Orb.
+      const plain = event.startsWith('taller:') && !event.startsWith('taller:bot.') ? { e: event.slice(7), p: value.p } : null;
       for (const c of clients) {
         if (!isFor(c.person)) continue;
         if (c.kind === 'orb' && !(BOT_EVENTS.has(event) && keepsBots())) continue;
@@ -1163,6 +1355,25 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     },
     // ---- 3.5 Magic Link
     devices,
+    // ---- 3.7 (WS2): «Añadir Orb Server» and the hub handoff (src/engine/hub.mjs sets the callbacks).
+    // onServerOffer({ offer, server, person }) → the link made; onHandoff({ id, ref, back, kind, person }) a device paired
+    // with one of this Orb's offers; onDeviceOnline(device) a phone or terminal connected; onMirror(peer, ev) a mirrored
+    // bot event arrived.
+    onServerOffer: null, onHandoff: null, onDeviceOnline: null, onMirror: null,
+    // The install command's code: 10 minutes, one use, tied to this app's key. → { code, expiresAt, fp, address, urls }
+    serverCode({ kind = null, person = null } = {}) {
+      if (!state.running) throw new Error(tr('msg.remote.enableFirst'));
+      const route = state.routes.find((r) => r.kind === kind) ?? state.routes.find((r) => r.kind === 'tailscale') ?? state.routes[0];
+      const code = Array.from({ length: SERVER_CODE_LENGTH }, () => CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)]).join('');
+      serverPairing = { code, secret: serverSecret(code, b64.enc(own.pub)), expires: Date.now() + (Number(process.env.ORB_FAKE_AGENTS && process.env.ORB_SERVER_CODE_MS) || SERVER_CODE_MINUTES * 60_000), fails: 0, person: person ?? owner() };
+      return { code: shortCodeLabel(code), expiresAt: serverPairing.expires, fp: pcFingerprint, address: route.url.replace(/\/$/, ''), kind: route.kind, urls: state.routes.map((r) => r.url) };
+    },
+    serverCodeState: () => (serverActive() ? { active: true, expiresAt: serverPairing.expires } : { active: false }),
+    cancelServerCode() { serverPairing = null; return true; },
+    handoffOffer: (opts) => makeOffer(opts),
+    sendToDevice,
+    fingerprint: () => pcFingerprint,
+    features: () => features(), version: () => version,
     // 3.7 (WS3): the confirmed Orbs linked here, and a call to one of them down its live stream (its answer comes back
     // as a reply). onHomeCall / onOrbGone are set by the engine (src/engine/replica.mjs).
     onHomeCall: null, onOrbGone: null,
