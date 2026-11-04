@@ -128,7 +128,7 @@ export function createLive(o) {
     // 3.5.1: o.bot is the bot's guard (its folder, what it read this turn): patterns and the address are checked too.
     const patterns = [toolInput?.pattern, toolInput?.glob].filter((x) => typeof x === 'string' && x);
     const url = typeof toolInput?.url === 'string' ? toolInput.url : null;
-    const verdict = decide({ permission, tool: toolName, command, paths, patterns: toolName === 'Grep' ? patterns.slice(1) : patterns, url, internalDir: o.internalDir, lang: o.lang, bot: o.bot || false });
+    const verdict = decide({ permission, tool: toolName, command, paths, patterns: toolName === 'Grep' ? patterns.slice(1) : patterns, url, internalDir: o.internalDir, lang: o.lang, bot: o.bot || false, confine: o.confine || null });
     if (verdict.decision === 'allow') return { behavior: 'allow', updatedInput: toolInput };
     if (verdict.decision === 'deny') return { behavior: 'deny', message: `Orb no lo permite: ${verdict.reason}.` };
     // 3.1: summary: what the agent itself says the command is for (Claude's Bash tool asks it for a description).

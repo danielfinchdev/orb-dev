@@ -3,7 +3,7 @@
 //   and only the caller's own approvals, conversations at work, task counts and sidebar marks (the owner too: the owner
 //   sees the others' names and numbers, never their content);
 // - lists: every item the caller has no right on is left out (a safety net under the lists' own filters, authz.scopeSql);
-// - rows that say whose they are (person_id) and are someone else's, left out.
+// - the activity feed: only the caller's rows.
 // With one person nothing changes (as 3.5.1). No engine imports: authz.mjs calls it from shapeFor.
 import { rightOn, ownerOf, scopeSql } from './authz.mjs';
 import { personsCount } from './persons.mjs';
@@ -50,8 +50,8 @@ export function shapeGateway(board, principal, method, result) {
       states: items(result.states, (s) => (s.conversation != null ? conv(s.conversation) : { type: 'bot', id: s.bot })) };
   }
   if (method === 'conversations.search' && result.conversations) return { ...result, conversations: result.conversations.filter((id) => keep(conv(id))), sessions: (result.sessions ?? []).filter((id) => keep(sess(id))) };
-  // Rows that say whose they are (the activity feed, for instance).
-  if (Array.isArray(result) && result.length && result.every((x) => x && typeof x === 'object' && 'person_id' in x)) return result.filter((x) => (x.person_id ?? (owner ? pid : null)) === pid);
+  // The activity feed: its rows say whose they are (none: the owner's), or their task does.
+  if (method === 'activity.list' && Array.isArray(result)) return result.filter((x) => (x.person_id != null ? x.person_id === pid : x.task_id != null ? keep(task(x.task_id)) : owner));
   return result;
 }
 

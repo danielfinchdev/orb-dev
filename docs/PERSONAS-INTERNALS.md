@@ -94,11 +94,45 @@ rules end in `*` (`centro:*`). The test scans `src/` for every `emit('…')` and
 3. A new event: its rule in your section of `EVENTS`, and ids in the payload (never rely on content to route).
 4. Texts go in `src/core/locales/{es,en}/ws<n>.mjs` (already registered).
 
-## Accounts (stubs until WS3)
+## Accounts, loans and caps (WS3)
 
-`src/core/budget.mjs`: `pickAccount(board, { person, agent, bot, preferred })` (today: the preferred account of that agent,
-else `defaultAccount`), `checkSpend(board, { person, account, bot })` → `{ ok: true }`, `recordSpend(board, { person,
-account, bot, conversation, session, task, usage })` → a `usage_ledger` row, day in the person's time zone.
+`src/core/budget.mjs`. An account is its person's (`accounts[].person`; none = the owner's). A person adds their own
+(`accounts.add`, folder `<home>/.orb/cuentas/<person>/<id>`) and signs it in from any channel (`agents.login*`; the
+console only on this PC, for the owner). Another person spends it only through a loan (`account_loans`).
+
+- `accountsFor(board, person, agent, { purpose: 'dev' | 'bot' | 'orbe', usable })`: own accounts first, then valid loans
+  for that purpose (`loan.dev` for Orb mode and the assistant, `loan.bots` for bots). `mayUseAccount(board, person, id)`.
+- `pickAccount(board, { person, agent, bot, preferred, purpose })`: the preferred one if that person may use it (else
+  `null`: the caller refuses), else their first own usable account, else a lent one with room today.
+- `checkSpend(board, { person, account, bot })` → `{ ok: true }` | `{ ok: false, reason: 'botCap' | 'noLoan' | 'expired' |
+  'loanCap' | 'reserve', resetsAt }`. Bot caps (`bots.caps`) count that bot's turns/tokens/dollars of the day; a loan's
+  caps count the borrower's on that account; the reserve blocks borrowers (never the lender) when the account's real
+  usage is ≥ 100 − `reserve_pct` %. `spendText(check, { account })` says it in words.
+- `recordSpend(board, { person, account, bot, conversation, session, task, usage })`: one `usage_ledger` row per turn
+  (`usage` as the agents report it), day in the spender's time zone (`tz.localDay`).
+- Called before/after every turn by `Sessions.send` (direct conversations and tasks), the assistant's lane
+  (`orchestrator.mjs`) and, for bots, `engine/bots.mjs` (WS4). The scheduler only offers a task the accounts its person
+  may spend now. A refused turn: a line in that conversation, a notice and a push to that person only
+  (`sessions.onBlocked`, `orchestrator.onBlocked`, `remote.push({ person })`).
+- API: `accounts.lend { id, person, daily_turns?, daily_tokens?, daily_usd?, reserve_pct = 20, bots = true, dev = false,
+  expires_at? }` and `accounts.unlend { id, person }` (the account's person only), `accounts.loans` (given and got, with
+  what is left today), `usage.get` (own and borrowed accounts), `usage.byPerson` (owner: totals only).
+
+## Orb mode per person (WS3)
+
+- Lists filter with `scopeSql`: conversations, chat lines of no conversation, tasks, sessions, projects, schedules, logs,
+  mentions, approvals, `app.state` counts. Creates stamp the caller (`createTask({ person })` defaults to its
+  conversation's, parent task's or schedule's person). Each person has their active project and brain
+  (`person_settings`), sidebar lists and general log (`general-<person>.md`; the owner keeps `GENERAL.md`).
+- A9: Orb mode needs `caps.dev`, or a project shared to talk (then only there): `policy.mayDev`. A session of anyone
+  but the owner is confined by the guard (`confineFor` / `confineCheck`): paths, patterns and commands must stay inside
+  its folder, on the real path, never another project, Orb's folder or a secret.
+- Sharing: `shares.set { type, id, person, right }`, `shares.remove`, `shares.list` (the resource's person, or «edit»
+  to share to view or talk; never to oneself). Removing a project share stops that person's running sessions in it;
+  `bots.unshared(res, person)` is called when present (WS4).
+- MCP (`src/mcp/server.mjs`): the worker's token signs `{ agent, task, person }` (`agentToken(board, agent, task,
+  person)`); the coordinator's conversation is signed with its key (`ORB_CONVERSATION_TOKEN`, `conversationSig`). Every
+  tool checks the right with `authz.must` or filters with `scopeSql`; an unsigned agent works for nobody.
 
 ## The gateway (WS2)
 

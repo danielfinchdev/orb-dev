@@ -8,8 +8,8 @@
 // Orb Núcleo's local socket (control) cannot call content methods at all.
 //
 // GAPS (owned by other workstreams; the coordinator runs the full matrix after merging):
-// - WS3/WS4: creating a resource does not stamp the person yet, so Leo's resources are made by Ana and given to Leo in
-//   the database (person_id), as WS3/WS4 will do at creation.
+// - WS4: creating a bot, a group or a reminder does not stamp the person yet, so Leo's are made by Ana and given to Leo
+//   in the database (person_id). His Orb-mode things (WS3) he makes himself.
 // - WS4: bots.memory.get { id: 'global' } reads the owner's global memory for anyone (per-person global memory, A5);
 //   Ana's global memory is left without her mark here.
 // - WS3: the scheduler's notices about a task (finished, failed) carry no person: they go to the owner. Tasks stay paused
@@ -93,17 +93,27 @@ async function pushDevice(person, tag) {
 const pushes = () => { try { return fs.readFileSync(pushLog, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)); } catch { return []; } };
 
 // Ana makes the resources of `who` (marked with its word); for Leo they are then given to him in the database.
+// Each one makes their own Orb-mode things from this PC's window (WS3 stamps them with the caller); the bots, groups and
+// reminders are made by Ana and given to Leo in the database (see GAPS, WS4).
 async function seed(who) {
   const w = `qz${who}`; const r = R[who];
   r.project = `${w}-proyecto`;
-  await A.call('projects.create', { name: r.project });
-  const c = await A.call('chat.send', { text: `${w} hola Orbe` });
-  r.conv = c.conversation;
-  await until(async () => (await A.call('chat.list', { conversation: r.conv })).some((l) => l.role === 'orb'), `respuesta de Orbe (${who})`);
-  await A.call('conversations.update', { id: r.conv, title: `${w} conversación` });
-  r.line = (await A.call('chat.list', { conversation: r.conv })).find((l) => l.role === 'orb').id;
-  r.task = (await A.call('tasks.create', { project: r.project, title: `${w} tarea`, description: `${w} hacer algo` })).id;
-  r.schedule = (await A.call('schedules.create', { project: r.project, title: `${w} programada`, description: `${w} cada día`, every: 'daily' })).id;
+  if (who === 'leo') {
+    // Ana lends Leo her Claude account for Orb mode (WS3 loans), then Leo sits at the window.
+    await A.call('accounts.lend', { id: 'claude', person: leo.id, daily_turns: 500, dev: true });
+    assert.equal((await A.call('persons.switch', { id: leo.id })).ok, true);
+  }
+  try {
+    await A.call('projects.create', { name: r.project });
+    const c = await A.call('chat.send', { text: `${w} hola Orbe` });
+    r.conv = c.conversation;
+    await until(async () => (await A.call('chat.list', { conversation: r.conv })).some((l) => l.role === 'orb'), `respuesta de Orbe (${who})`);
+    await A.call('conversations.update', { id: r.conv, title: `${w} conversación` });
+    r.line = (await A.call('chat.list', { conversation: r.conv })).find((l) => l.role === 'orb').id;
+    r.task = (await A.call('tasks.create', { project: r.project, title: `${w} tarea`, description: `${w} hacer algo` })).id;
+    r.schedule = (await A.call('schedules.create', { project: r.project, title: `${w} programada`, description: `${w} cada día`, every: 'daily' })).id;
+    r.session = (await A.call('sessions.create', { agent: 'claude', project: r.project, title: `${w} sesión` })).id;
+  } finally { if (who === 'leo') assert.equal((await A.call('persons.switch', { id: ana.id })).ok, true); }
   const bot = await A.call('bots.create', { name: `${w}bot`, role_text: `${w} ayuda` });
   r.bot = bot.id;
   r.group = (await A.call('bots.groups.create', { name: `${w} grupo`, members: [bot.id] })).id;
@@ -114,20 +124,16 @@ async function seed(who) {
   await until(async () => { const x = await A.call('bots.chat', { id: bot.id }); return x.lines.some((l) => l.role === 'bot') && !x.state?.busy && x; }, `respuesta del bot (${who})`, 30_000);
   const chat = await A.call('bots.chat', { id: bot.id });
   r.botConv = chat.conversation; r.botLine = chat.lines[0].id;
-  r.session = (await A.call('sessions.create', { agent: 'claude', title: `${w} sesión` })).id;
   if (who === 'leo') {
+    // GAP(WS4): bots, groups, reminders and their conversations are not stamped with the caller yet.
     const p = leo.id;
-    sql('UPDATE projects SET person_id = ? WHERE name = ?', p, r.project);
-    sql('UPDATE conversations SET person_id = ? WHERE id IN (?, ?)', p, r.conv, r.botConv);
-    sql('UPDATE chat SET person_id = ? WHERE conversation_id IN (?, ?)', p, r.conv, r.botConv);
-    sql('UPDATE tasks SET person_id = ? WHERE id = ? OR project = ?', p, r.task, r.project);
-    sql('UPDATE schedules SET person_id = ? WHERE id = ?', p, r.schedule);
+    sql('UPDATE conversations SET person_id = ? WHERE id = ?', p, r.botConv);
+    sql('UPDATE chat SET person_id = ? WHERE conversation_id = ?', p, r.botConv);
     sql('UPDATE bots SET person_id = ? WHERE id = ?', p, r.bot);
     sql('UPDATE bot_groups SET person_id = ? WHERE id = ?', p, r.group);
     sql('UPDATE bot_reminders SET person_id = ? WHERE id = ?', p, r.reminder);
-    // GAP(WS3): a task's session made later does not take the task's person yet.
-    sql("UPDATE sessions SET person_id = ? WHERE id = ? OR title LIKE '%qzleo%' OR project = ? OR task_id = ?", p, r.session, r.project, r.task);
-    sql("UPDATE events SET person_id = ? WHERE task_id = ? OR detail LIKE '%qzleo%'", p, r.task);
+    sql("UPDATE sessions SET person_id = ? WHERE title LIKE '%qzleobot%'", p); // a bot's own session, if any
+    sql("UPDATE events SET person_id = ? WHERE detail LIKE '%qzleobot%' OR detail LIKE '%qzleo grupo%'", p);
     const gconv = all('SELECT id FROM conversations WHERE group_id = ?', r.group).map((x) => x.id);
     for (const g of gconv) sql('UPDATE conversations SET person_id = ? WHERE id = ?', p, g);
   }
@@ -142,7 +148,7 @@ before(async () => {
   A = await startEngine(tA.home, { env: { ORB_REMOTE_BIND: '127.0.0.1', ORB_PUSH_LOG: pushLog } });
   await until(async () => (await A.call('remote.status')).running, 'acceso');
   await A.call('control.pause'); // no task runs (see GAPS)
-  leo = await A.call('persons.create', { name: 'Leo' });
+  leo = await A.call('persons.create', { name: 'Leo', caps: { dev: true } }); // Orb mode for Leo (A9)
   ana = (await A.call('persons.list')).find((p) => p.role === 'owner');
   await seed('ana'); await seed('leo');
   board = new Board(); // this test's own connection to the same database (for the in-process channels)
