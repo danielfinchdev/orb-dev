@@ -60,8 +60,6 @@ export default {
   // Users
   'persons.actions': 'Actions for {name}',
   'persons.edit': 'Edit name',
-  // Welcome wizard
-  'wizard.addPerson': 'Add another user',
   // Texts that pointed to the old sections
   'help.faq.10.a': 'The Professional theme hides the robot and animations; change it in Settings › General, where the floating robot is also turned on or off.',
   // Pie de la barra lateral en un navegador enlazado: el engranaje abre este dispositivo y Magic Link

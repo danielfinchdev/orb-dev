@@ -60,8 +60,6 @@ export default {
   // Usuarios
   'persons.actions': 'Acciones de {name}',
   'persons.edit': 'Editar nombre',
-  // Asistente de bienvenida
-  'wizard.addPerson': 'Añadir otro usuario',
   // Textos que apuntaban a las secciones de antes
   'help.faq.10.a': 'El tema Profesional no muestra el robot ni animaciones; cámbialo en Ajustes › General, donde también se activa o desactiva el robot flotante.',
   // Pie de la barra lateral en un navegador enlazado: el engranaje abre este dispositivo y Magic Link

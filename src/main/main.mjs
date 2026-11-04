@@ -304,9 +304,9 @@ ipcMain.handle('app:updateInstall', guard(async () => {
   return updater.install();
 }));
 // First run: creates <base>/<name> (or reuses an existing assistant folder), remembers it and starts the engine.
-ipcMain.handle('app:setup', guard(async ({ base, assistantName, userName } = {}) => {
+ipcMain.handle('app:setup', guard(async ({ base, assistantName, userName, language } = {}) => {
   if (home) throw new Error(T('sys.main.alreadySetup'));
-  const { home: h } = createHome(String(base ?? ''), { assistantName: String(assistantName ?? PRODUCT.assistant), userName: String(userName ?? '') });
+  const { home: h } = createHome(String(base ?? ''), { assistantName: String(assistantName ?? PRODUCT.assistant), userName: String(userName ?? ''), language: language === 'en' ? 'en' : 'es' });
   saveLocation(h);
   await startEngine(h);
   cachedConfig = null;
