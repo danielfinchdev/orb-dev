@@ -22,7 +22,11 @@
 //   TABLA_MARKDOWN     answers in GFM: a table, a task list and strikethrough
 //   CIERRA_Y_CUELGA    closes its task (orb_update_task done) and then never ends its turn
 //   MANDA_MENSAJE <agente> <texto>   sends a message to another agent through Orb (orb_send_message)
+//   LEE <ruta>         (3.6, one per line) reads a file: the real guard decides, with the session's confinement
 //   BOT_CALL <tool> <json>           (3.5, one per line) calls a tool of the bot's own MCP server (src/mcp/bot.mjs)
+//   ORB_FAKE_SCRIPT=<file.json>     (3.6, screenshots) [{ "when": "text", "reply": "…", "calls": [["tool", {args}]] }]: a
+//                      message containing «when» gets that natural reply (and makes those bot tool calls, silently),
+//                      so the screenshots show real-looking conversations instead of the test keywords.
 //   Task Review        a review prompt: answers "VEREDICTO: CORRECTO" (or "CON FALLOS" when the reviewed work says FALLOS)
 //
 // Every turn also emits streamed text (delta), a tool call (Bash ls) and the context meter, and logs what it received to
@@ -35,6 +39,8 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { Turn, Approvals } from '../../src/agents/live.mjs';
 import { decide } from '../../src/core/guard.mjs';
+
+const SCRIPT = (() => { try { return process.env.ORB_FAKE_SCRIPT ? JSON.parse(fs.readFileSync(process.env.ORB_FAKE_SCRIPT, 'utf8')) : []; } catch { return []; } })();
 
 
 // One call to a tool of the "orb" MCP server, started exactly as the real agents start it (command, args, env).
@@ -73,7 +79,8 @@ export function fakeAdapter(id, real) {
       // 2.7: models of every kind (light, balanced, most capable), to test how Orb chooses for each task.
       if (process.env.ORB_FAKE_TIERED === '1' && id === 'claude') return [{ id: 'claude-haiku-4-5', label: 'Haiku 4.5' }, { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5', default: true }, { id: 'claude-sonnet-5', label: 'Sonnet 5' }, { id: 'claude-opus-5-5', label: 'Opus 5.5' }, { id: 'claude-opus-4-8', label: 'Opus 4.8' }, { id: 'claude-fable-5-1', label: 'Fable 5.1' }];
       if (process.env.ORB_FAKE_MODELS_LOG) { try { fs.appendFileSync(process.env.ORB_FAKE_MODELS_LOG, `${id}\n`); } catch { /* log unavailable */ } }
-      return [1, 2, 3].map((n) => ({ id: `fake-${id}-${n}`, label: `Modelo de prueba ${n}`, ...(n === 1 ? { default: true } : {}) }));
+      // 3.6: the first model of each takes the «Extra» reasoning too (xhigh); the others the usual three.
+      return [1, 2, 3].map((n) => ({ id: `fake-${id}-${n}`, label: `Modelo de prueba ${n}`, ...(n === 1 ? { default: true, efforts: ['low', 'medium', 'high', 'xhigh'] } : {}) }));
     }
   };
 }
@@ -187,12 +194,25 @@ function createFakeLive(agent, label, caps, o) {
     // 3.1: a message to another agent through Orb (orb_send_message), as a worker would send it.
     const say = scan.match(/MANDA_MENSAJE (\w+) (.+)/);
     if (say) notes.push(`mensaje: ${await mcpCall(orb, 'orb_send_message', { to: say[1], body: say[2].trim() })}`);
+    // 3.6: a scripted, natural answer for the screenshots (ORB_FAKE_SCRIPT); its tool calls leave no notes in the reply.
+    const scripted = SCRIPT.find((x) => x.when && text.includes(x.when)) ?? null;
+    for (const [tool, args] of scripted?.calls ?? []) {
+      await mcpCall(o.mcpServers?.bot, tool, args ?? {});
+      item('tool', 'tool', { id: `t${++seq}`, name: `bot:${tool}`, input: JSON.stringify(args ?? {}) });
+    }
     // 3.5: a bot uses its own tools (the real src/mcp/bot.mjs, started as the real agents start it).
     for (const m of scan.matchAll(/^BOT_CALL (\w+) (\{.*\})\s*$/gm)) {
       let args = {}; try { args = JSON.parse(m[2]); } catch { /* bad test json */ }
       const out = await mcpCall(o.mcpServers?.bot, m[1], args);
       item('tool', 'tool', { id: `t${++seq}`, name: `bot:${m[1]}`, input: m[2] });
       notes.push(`${m[1]}: ${out}`);
+    }
+    // 3.6: LEE <ruta> (one per line): reading a file, as the real guard decides it (with the session's confinement).
+    for (const m of scan.matchAll(/^LEE (.+)$/gm)) {
+      const file = m[1].trim();
+      const verdict = decide({ permission, tool: 'Read', paths: [file], internalDir: o.internalDir, confine: o.confine || null });
+      record({ read: file, decision: verdict.decision, confined: Boolean(o.confine), addDirs: o.addDirs ?? [] });
+      notes.push(`LEE ${verdict.decision}`);
     }
     if (/PIDE_PERMISO/.test(scan)) {
       const command = 'git push origin main';
@@ -234,11 +254,12 @@ function createFakeLive(agent, label, caps, o) {
       item('assistant', 'text', reply); current.addText(reply);
       return current.finish({ usage: { inputTokens: 10, outputTokens: 5 }, stopReason: 'end_turn' });
     }
-    const reply = [`${agent === 'codex' ? `Codex ${continued ? 'sigue' : 'empieza'}` : 'Recibido'}: ${first}`, ...steers.map((s) => `corrección: ${s}`), ...notes].join(' | ');
+    const reply = scripted?.reply ?? [`${agent === 'codex' ? `Codex ${continued ? 'sigue' : 'empieza'}` : 'Recibido'}: ${first}`, ...steers.map((s) => `corrección: ${s}`), ...notes].join(' | ');
     for (const piece of reply.match(/.{1,20}/gs) ?? []) onEvent({ type: 'delta', text: piece });
     item('assistant', 'text', reply);
     current.addText(reply);
-    onEvent({ type: 'context', used: 1000 * turns, size: 200_000 });
+    // 3.6: CONTEXTO_LLENO leaves the conversation at 80 % of its context (the «Compactar» suggestion).
+    onEvent({ type: 'context', used: /CONTEXTO_LLENO/.test(scan) ? 160_000 : 1000 * turns, size: 200_000 });
     current.finish({ usage: { inputTokens: 10, outputTokens: 5 }, stopReason: 'end_turn' });
   }
 
@@ -267,6 +288,16 @@ function createFakeLive(agent, label, caps, o) {
     if (slowStop) setTimeout(end, 800); else end();
   };
   live.respond = (requestId, decision) => approvals.respond(requestId, decision);
+  // 3.6: the agent's own compaction (Claude's /compact, Codex's thread/compact/start): the context drops, same session.
+  if (caps.compact) live.compact = async ({ instructions = '' } = {}) => {
+    if (closed) throw new Error(`la sesión de ${label} se ha cerrado`);
+    if (turn && !turn.done) throw new Error('el agente sigue trabajando');
+    record({ compact: true, instructions });
+    if (process.env.ORB_FAKE_COMPACT_FAILS === '1') return { ok: false, error: 'no se pudo compactar' };
+    onEvent({ type: 'compacted', before: 160_000, after: 12_000 });
+    onEvent({ type: 'context', used: 12_000, size: 200_000 });
+    return { ok: true, error: null };
+  };
   live.setModel = (m) => { model = m || null; record({ setModel: model }); };
   live.setPermission = (p) => { permission = p; record({ setPermission: p }); };
   live.close = () => {

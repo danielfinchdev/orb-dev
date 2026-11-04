@@ -14,7 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openLinks, readPrefs, writePrefs, pickPeer } from './store.mjs';
 import { painter, translator, columns, wrap, spinner } from './render.mjs';
-import { createClient, answerText } from './client.mjs';
+import { createClient, answerText, versionNotice } from './client.mjs';
 import { statusView, devicesView, linksView, extraLine, roleLabel } from './views.mjs';
 import { runTui, waitOnline, findBot } from './tui.mjs';
 import { parseLinkPayload, parseManual } from '../core/link-payload.mjs';
@@ -130,8 +130,10 @@ export async function main(argv = process.argv.slice(2), { env = process.env, st
       try { st = await client.status(); } catch (error) { fail(explain(error)); return codeOf(error); }
       if (o.command === 'dispositivos') { if (o.json) say(JSON.stringify(st.devices, null, 2)); else say(devicesView(st.devices, { t, p })); return EXIT.ok; }
       const taller = st.dev === 'remote' ? await client.taller().catch(() => null) : null;
+      const who = await client.me().catch(() => null);
       const me = link.peers().find((x) => x.id === current.id) ?? current;
-      if (o.json) say(JSON.stringify({ orb: me, status: st, taller }, null, 2)); else say(statusView({ peer: me, st, taller }, { t, p }));
+      if (o.json) say(JSON.stringify({ orb: me, status: st, taller, me: who }, null, 2));
+      else { say(statusView({ peer: me, st, taller, me: who }, { t, p })); const note = versionNotice(who, me.name, t); if (note) say(p.yellow(note)); }
       return EXIT.ok;
     }
     if (o.command === 'tui') return await runTui({ link, peer: current, t, p, explain: (e) => explain(e), stdin, stdout });

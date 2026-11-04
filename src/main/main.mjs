@@ -49,7 +49,9 @@ let nextId = 0;
 const pending = new Map();
 let agentBrowser = null; // the agents' browser and its little floating window (created when the app is ready)
 // New versions from GitHub Releases (src/main/updater.mjs); the window gets the state as the 'app:update' event.
-const updater = createUpdater({ send: (state) => { if (win && !win.isDestroyed()) win.webContents.send('engine:event', 'app:update', state); }, log: (line) => console.log(line) });
+// 3.6: a backup of the data before a new version installs (the engine makes it: src/engine/api-data.mjs).
+const updater = createUpdater({ send: (state) => { if (win && !win.isDestroyed()) win.webContents.send('engine:event', 'app:update', state); }, log: (line) => console.log(line),
+  beforeInstall: async () => { if (engine) await callEngine('backup.now', { kind: 'preupdate' }, 3 * 60_000); } });
 // orb.json as the engine last saved it: read once and again after each config:changed (every save goes through the engine).
 let cachedConfig = null;
 const config = () => { if (!cachedConfig && home) { try { cachedConfig = loadConfig(home); } catch { /* unreadable: defaults */ } } return cachedConfig; };
@@ -243,7 +245,7 @@ ipcMain.handle('app:runAction', guard(async (action) => {
   return true;
 }));
 ipcMain.handle('app:showBrowser', guard(async () => { agentBrowser?.show(); return agentBrowser?.state() ?? null; }));
-ipcMain.handle('app:info', guard(async () => ({ version: VERSION, home, needsSetup: !home, platform: process.platform, defaultBase: app.getPath('documents') })));
+ipcMain.handle('app:info', guard(async () => ({ version: VERSION, home, needsSetup: !home, platform: process.platform, defaultBase: process.env.ORB_DEFAULT_BASE || app.getPath('documents') })));
 
 ipcMain.handle('app:pickFolder', guard(async (title) => {
   const r = await dialog.showOpenDialog(win, { title: String(title ?? T('sys.dialog.pickFolder')).slice(0, 100), properties: ['openDirectory', 'createDirectory'] });

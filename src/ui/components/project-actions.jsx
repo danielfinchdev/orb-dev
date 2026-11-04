@@ -1,10 +1,10 @@
 // Create / link / clone a project, and the project control under the assistant's message box.
-import { FolderOpen, FolderPlus, FolderX, X, ChevronsUpDown, Check, Folder } from 'lucide-react';
+import { FolderOpen, FolderPlus, FolderX, ChevronsUpDown, Check, Folder } from 'lucide-react';
 import { toast } from 'sonner';
 import { form } from './dialogs.jsx';
 import { Field, Input, Textarea } from './ui/basic.jsx';
 import { Button } from './ui/button.jsx';
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, Select, BubbleTip } from './ui/overlay.jsx';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, Select } from './ui/overlay.jsx';
 import { call, getState, act, bridge, useStore, refresh } from '@/lib/store.js';
 import { baseName } from '@/lib/utils.js';
 import { GithubIcon } from '@/components/agent-icon.jsx';
@@ -118,7 +118,6 @@ export function ProjectPicker({ conversation = null }) {
           <DropdownMenuItem onSelect={async () => { const p = await cloneRepoFlow(); if (p) setActive(p.name); }}><GithubIcon />{t('comp.projects.cloneMenu')}</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      {active ? <BubbleTip title={t('comp.projects.clear')}><Button variant="ghost" size="icon-xs" aria-label={t('comp.projects.clear')} onClick={() => setActive('')}><X /></Button></BubbleTip> : null}
     </div>
   );
 }

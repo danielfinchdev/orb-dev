@@ -9,7 +9,7 @@ before(async () => { t = tempHome(); engine = await startEngine(t.home); ({ call
 after(async () => { await engine?.stop(); t.cleanup(); });
 
 test('Opti Bot: apagado no existe; encendido revisa Orb con sus herramientas y propone con una tarjeta', async () => {
-  await assert.rejects(call('opti.session'), /Activa el Monitoreo del equipo/);
+  await assert.rejects(call('opti.session'), /Activa el Monitoreo/);
   await call('config.save', { patch: { monitor: { enabled: true, agent: 'claude' } } });
   const s = await call('opti.session');
   assert.equal(s.permission, 'leer');

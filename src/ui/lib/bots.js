@@ -1,9 +1,10 @@
 // 3.5: the pure pieces of the «Bots» mode and of Magic Link (no React, no store): which mode a screen is in, the bot a
 // chat opens with, what a pasted link says, the order of the linked devices, the workshop's banner and the countdown of
 // a code. Tested in test/bots-ui.test.mjs.
+import { parseAvatar } from '../../core/avatar.mjs';
 
 // The screens of the «Bots» mode; any other belongs to «Orb».
-export const BOT_VIEWS = ['bot-chat', 'bot-group', 'bots', 'bot-groups', 'bot-reminders', 'bot-memory', 'bot-home', 'bot-server', 'bot-settings'];
+export const BOT_VIEWS = ['bot-chats', 'bot-chat', 'bot-group', 'bots', 'bot-groups', 'bot-reminders', 'bot-memory', 'bot-home', 'bot-server', 'bot-settings'];
 // A shared screen («Más», Magic Link) opened from the Bots mode carries mode: 'bots' and stays in it.
 export const modeOf = (route) => (BOT_VIEWS.includes(route?.view) || route?.mode === 'bots' ? 'bots' : 'orb');
 
@@ -11,8 +12,6 @@ export const modeOf = (route) => (BOT_VIEWS.includes(route?.view) || route?.mode
 export const TOOL_ORDER = ['internet', 'recordatorios', 'correo', 'calendario', 'navegador', 'casa', 'servidor', 'gestion'];
 // The reasoning levels a bot may use (src/core/bots.mjs › EFFORTS).
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh'];
-// A short list of icons to pick from; any emoji can be typed too.
-export const EMOJIS = ['🤖', '🧠', '📅', '🛒', '✉️', '🏠', '🖥️', '💡', '📚', '🩺', '💰', '✈️', '🍳', '🎵', '🐾', '⚽', '🌱', '🔧', '📝', '⭐'];
 
 // The bot a «Chat» opens with: the last one talked to (if it still exists), the chief, or the first.
 export function chatBot(bots, lastId = null) {
@@ -31,8 +30,18 @@ export function botPayload(d) {
     name: String(d.name ?? '').trim(), icon: String(d.icon ?? '').trim(), role_text: String(d.role_text ?? '').trim(),
     agent: d.agent, model: d.model || null, effort: EFFORTS.includes(d.effort) ? d.effort : 'medium',
     tools: TOOL_ORDER.filter((t) => (d.tools ?? []).includes(t)), accounts, exclusive: words(d.exclusive).map((x) => x.toLowerCase()),
-    is_chief: Boolean(d.is_chief), paused: Boolean(d.paused)
+    is_chief: Boolean(d.is_chief), paused: Boolean(d.paused),
+    // 3.6: its avatar { shape, color } (src/core/avatar.mjs), when the editor has one.
+    ...(parseAvatar(d.avatar) ? { avatar: parseAvatar(d.avatar) } : {}),
+    // 3.6: its daily caps (empty: none), only when the editor shows them.
+    ...(d.caps !== undefined ? { caps: capsPayload(d.caps) } : {})
   };
+}
+// 3.6: a bot's daily caps as the engine takes them ({ daily_turns, daily_tokens, daily_usd }), or null for none.
+export function capsPayload(c) {
+  const n = (v) => (v === '' || v == null || !Number.isFinite(Number(v)) || Number(v) < 0 ? null : Number(v));
+  const out = { daily_turns: n(c?.daily_turns), daily_tokens: n(c?.daily_tokens), daily_usd: n(c?.daily_usd) };
+  return Object.values(out).every((v) => v == null) ? null : out;
 }
 
 // What the user pasted to link with another Orb: the QR's text (its link or its JSON), or a short code and an address

@@ -82,7 +82,7 @@ function TaskDetail({ id, live }) {
       body: (v, set) => (<>
         <Field label={tr('tasks.agent')}><Select className="w-full" value={v.agent} onValueChange={(agent) => set({ agent, model: AUTO })} options={[{ value: 'any', label: tr('tasks.reassign.any') }, ...agents.map((a) => ({ value: a.id, label: a.label }))]} /></Field>
         <Field label={tr('tasks.reassign.model')} hint={tr('tasks.reassign.modelHint')}><Select className="w-full" value={v.agent === 'any' ? AUTO : v.model} disabled={v.agent === 'any'} onValueChange={(model) => set({ model })} options={modelOptions(v.agent)} data-testid="reassign-model" /></Field>
-        <Field label={tr('tasks.reassign.reasoning')}><Select className="w-full" value={v.reasoning} onValueChange={(reasoning) => set({ reasoning })} options={options(REASONING)} /></Field>
+        <Field label={tr('tasks.reassign.reasoning')}><Select className="w-full" value={v.reasoning} onValueChange={(reasoning) => set({ reasoning })} options={options(REASONING).filter((o) => o.value !== 'xhigh')} /></Field>
       </>),
       ok: tr('tasks.reassign.ok'), onOk: (v) => call('tasks.reassign', { id: t.id, agent: v.agent, model: v.agent === 'any' || v.model === AUTO ? null : v.model, reasoning: v.reasoning })
     });

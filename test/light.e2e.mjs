@@ -34,9 +34,10 @@ try {
   assert.equal(await win.evaluate(() => document.documentElement.dataset.skin ?? document.documentElement.getAttribute('data-skin')), 'orb', 'siempre el tema por defecto');
   await win.click('[data-testid=nav-settings]');
   await win.locator('[data-testid=settings-dialog]').waitFor();
-  assert.equal(await count('[data-testid=settings-nav-experto]'), 0, 'Ajustes sin God mode');
-  assert.equal(await count('[data-testid=settings-nav-monitor]'), 0, 'Ajustes sin Monitoreo');
-  await win.click('[data-testid=settings-nav-apariencia]');
+  await win.click('[data-testid=settings-nav-avanzado]');
+  assert.equal(await count('[data-testid=settings-sub-experto]'), 0, 'Ajustes sin God mode');
+  assert.equal(await count('[data-testid=settings-sub-monitor]'), 0, 'Ajustes sin Monitoreo');
+  await win.click('[data-testid=settings-nav-general]');
   assert.equal(await count('[data-testid=skin-picker]'), 0, 'sin selector de temas');
   await win.screenshot({ path: path.join(OUT, 'light-ajustes.png') });
   await win.keyboard.press('Escape');

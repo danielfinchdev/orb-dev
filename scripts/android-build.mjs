@@ -1,4 +1,5 @@
 // 3.5: builds the Android app «Orb» (android-app/, Capacitor) into dist/Orb-<version>-android.apk:
+//   0. the notifications' pictures (res/drawable-nodpi/av_*.png),
 //   1. the interface in the app's mode (vite build --mode android → android-app/www),
 //   2. cap sync (copies it into the Android project with the plugins),
 //   3. Gradle (assembleRelease, signed with this PC's own key; --debug: assembleDebug).
@@ -54,7 +55,18 @@ async function signingKey() {
   return { ORB_KEYSTORE: store, ORB_KEYSTORE_PASS: fs.readFileSync(passFile, 'utf8').trim(), ORB_KEY_ALIAS: 'orb' };
 }
 
+// 3.6 (messaging, M4): the pictures of the notifications (the app shows only its own resources): one per bot avatar
+// (av_<shape>_<color>.png, drawn from src/core/avatar.mjs) and Orb's (av_orb.png). Made on every build, not kept in git.
+async function notificationIcons() {
+  const dir = path.join(APP, 'android', 'app', 'src', 'main', 'res', 'drawable-nodpi');
+  fs.mkdirSync(dir, { recursive: true });
+  const { allAvatarPngs } = await import('../src/engine/avatar-png.mjs');
+  for (const { name, png } of allAvatarPngs(192)) fs.writeFileSync(path.join(dir, `${name}.png`), png);
+  fs.copyFileSync(path.join(ROOT, 'src', 'ui', 'public', 'icon.png'), path.join(dir, 'av_orb.png'));
+}
+
 try {
+  await notificationIcons();
   await run(process.execPath, [path.join(ROOT, 'node_modules', 'vite', 'bin', 'vite.js'), 'build', '--mode', 'android', '--logLevel', 'warn'], ROOT);
   await run(process.execPath, [path.join(ROOT, 'node_modules', '@capacitor', 'cli', 'bin', 'capacitor'), 'sync', 'android'], APP);
   const keys = debug ? {} : await signingKey();

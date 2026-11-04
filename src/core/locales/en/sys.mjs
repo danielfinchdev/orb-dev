@@ -109,8 +109,8 @@ export default {
   'sys.mcp.idsRange': 'ids: between 1 and 10 tasks',
   'sys.mcp.askNeedsOptions': 'orb_ask needs a question and between 2 and 4 options',
   'sys.mcp.boardNeedsText': 'orb_pizarra needs the advice (message)',
-  // 2.7: Opti Bot (PC Status)
-  'sys.opti.off': 'Turn on PC Status in Settings to talk to Opti Bot',
+  // 2.7: Opti Bot (Monitoring)
+  'sys.opti.off': 'Turn on Monitoring in Settings to talk to Opti Bot',
   'sys.opti.badAction': 'that action is not on Opti Bot’s list',
   'sys.opti.needsReason': 'explain why you propose the action',
   'sys.opti.needsPid': 'end_process needs the process Id',
@@ -158,6 +158,7 @@ export default {
   'sys.board.badLaunch': 'launch must be auto or manual',
   'sys.board.dependsMax': 'depends_on: at most 20 tasks',
   'sys.board.dependsMissing': 'depends_on: task #{id} does not exist',
+  'sys.board.folderOfOther': 'That folder is not available: it belongs to another project. Choose another one.',
   'sys.board.sensitivityList': 'sensitivity must be a list',
   'sys.board.badSensitivity': 'invalid sensitivity: {list}',
   'sys.board.onlyAssistant': "only {name} can change a task's agent, model, reasoning or fast",

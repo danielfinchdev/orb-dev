@@ -4,6 +4,9 @@ import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.hardware.biometrics.BiometricManager;
+import android.hardware.biometrics.BiometricPrompt;
+import android.os.CancellationSignal;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
@@ -36,7 +39,8 @@ import javax.crypto.spec.GCMParameterSpec;
  * - a small key store: values encrypted with an AES key that lives in the Android Keystore and never leaves the phone
  *   (this phone's keys for the linked Orb);
  * - «Compartir con Orb»: what another app shares (text and pictures) is handed to the page;
- * - the phone's model, for the name of the linked device.
+ * - the phone's model, for the name of the linked device;
+ * - 3.6: the app lock's fingerprint or face (Android's own BiometricPrompt, API 29+; the PIN is always the other way).
  */
 @CapacitorPlugin(name = "OrbNative")
 public class OrbNativePlugin extends Plugin {
@@ -133,6 +137,45 @@ public class OrbNativePlugin extends Plugin {
         String k = call.getString("key");
         if (k != null) prefs().edit().remove(k).apply();
         call.resolve();
+    }
+
+    // ---- 3.6: app lock with the fingerprint or the face (no extra library: the system's prompt)
+
+    private boolean biometricReady() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false;
+        BiometricManager bm = getContext().getSystemService(BiometricManager.class);
+        if (bm == null) return false;
+        int r = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ? bm.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) : bm.canAuthenticate();
+        return r == BiometricManager.BIOMETRIC_SUCCESS;
+    }
+
+    @PluginMethod
+    public void biometricAvailable(PluginCall call) {
+        JSObject out = new JSObject();
+        out.put("available", biometricReady());
+        call.resolve(out);
+    }
+
+    @PluginMethod
+    public void biometricVerify(PluginCall call) {
+        JSObject out = new JSObject();
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || !biometricReady()) { out.put("ok", false); call.resolve(out); return; }
+        String title = call.getString("title", "Orb");
+        String subtitle = call.getString("subtitle", "");
+        String cancel = call.getString("cancel", "PIN");
+        final boolean[] done = { false };
+        final java.util.function.Consumer<Boolean> finish = (ok) -> { if (done[0]) return; done[0] = true; out.put("ok", ok); call.resolve(out); };
+        getActivity().runOnUiThread(() -> {
+            try {
+                BiometricPrompt.Builder b = new BiometricPrompt.Builder(getContext()).setTitle(title);
+                if (subtitle != null && !subtitle.isEmpty()) b.setSubtitle(subtitle);
+                b.setNegativeButton(cancel, getContext().getMainExecutor(), (d, w) -> finish.accept(false));
+                b.build().authenticate(new CancellationSignal(), getContext().getMainExecutor(), new BiometricPrompt.AuthenticationCallback() {
+                    @Override public void onAuthenticationSucceeded(BiometricPrompt.AuthenticationResult result) { finish.accept(true); }
+                    @Override public void onAuthenticationError(int code, CharSequence msg) { finish.accept(false); }
+                });
+            } catch (Exception e) { finish.accept(false); }
+        });
     }
 
     // ---- share target

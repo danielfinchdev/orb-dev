@@ -14,7 +14,16 @@ import { tr } from '../core/context.mjs';
 export const id = 'codex';
 export const label = 'Codex';
 export const kind = 'app-server';
-export const caps = { images: true, steer: true, fork: true, approvals: true, models: true, context: true };
+// 3.6 (S1): a bot with Codex as its brain runs with no shell at all and no local file viewer, so a mail or a web that
+// tells it to read the user's keys has nothing to read them with (its only tools are the bot's MCP ones; its folder is its
+// working directory, read-only). The keys, as Codex's configuration reference documents them
+// (https://learn.chatgpt.com/docs/config-file/config-reference: «features.shell_tool: Enable command execution tools»,
+// «features.unified_exec», «features.view_image», «web_search: disabled | cached | indexed | live»), passed with -c.
+// An older Codex that ignored them is caught at its first command (createLive › botConfine.onBreakout) and refused.
+export const BOT_CONFINE = ['features.shell_tool=false', 'features.unified_exec=false', 'features.view_image=false'];
+export const BOT_CONFINE_DOC = 'https://learn.chatgpt.com/docs/config-file/config-reference';
+export const botConfineArgs = ({ web = false } = {}) => [...BOT_CONFINE, `web_search="${web ? 'live' : 'disabled'}"`].flatMap((kv) => ['-c', kv]);
+export const caps = { images: true, steer: true, fork: true, approvals: true, models: true, context: true, compact: true, botConfinement: { keys: BOT_CONFINE, doc: BOT_CONFINE_DOC } };
 
 export function detect(cfg = {}) {
   const vendor = (dir) => ['x86_64-pc-windows-msvc', 'aarch64-pc-windows-msvc'].flatMap((triple) => ['codex-win32-x64', 'codex-win32-arm64'].map((p) =>
@@ -86,7 +95,8 @@ function policy(permission) {
   if (permission === 'total') return { approvalPolicy: 'never', sandbox: 'danger-full-access' };
   return { approvalPolicy: 'untrusted', sandbox: 'workspace-write' };
 }
-const effort = (r) => (r === 'xhigh' ? 'high' : r || 'medium');
+// 3.6: «Extra» (xhigh) goes through as it is: Orb only offers it for the models whose model/list says they take it.
+const effort = (r) => r || 'medium';
 
 const ITEM_TOOL = (item) => {
   if (item.type === 'commandExecution') return { name: tr('sys.agents.tool.execute'), input: clip(item.command, 300) };
@@ -102,7 +112,9 @@ const ITEM_TOOL = (item) => {
 // out), with their own names, and which one Codex uses when none is chosen.
 export function codexModels(r) {
   const rows = Array.isArray(r?.data) ? r.data : Array.isArray(r?.models) ? r.models : [];
-  return rows.filter((m) => m && !m.hidden).map((m) => ({ id: m.model ?? m.id, label: m.displayName || m.model || m.id, ...(m.isDefault ? { default: true } : {}) })).filter((m) => m.id);
+  // 3.6: the reasoning levels each model takes (supportedReasoningEfforts: strings or { reasoningEffort }).
+  const effortsOf = (m) => { const list = (Array.isArray(m.supportedReasoningEfforts) ? m.supportedReasoningEfforts : []).map((e) => (typeof e === 'string' ? e : e?.reasoningEffort)).filter((e) => ['low', 'medium', 'high', 'xhigh'].includes(e)); return list.length ? { efforts: [...new Set(list)] } : {}; };
+  return rows.filter((m) => m && !m.hidden).map((m) => ({ id: m.model ?? m.id, label: m.displayName || m.model || m.id, ...(m.isDefault ? { default: true } : {}), ...effortsOf(m) })).filter((m) => m.id);
 }
 
 // 2.6: the models of this Codex before any conversation: a short app-server (no thread, no prompt, nothing is spent) asked
@@ -145,11 +157,28 @@ export function createLive(o) {
   const approvals = new Approvals(onEvent);
   let permission = o.permission ?? 'editar';
   let model = o.model || null;
-  let child = null; let peer = null; let threadId = null; let turn = null; let turnId = null; let started = null; let closed = false;
+  let child = null; let peer = null; let threadId = null; let turn = null; let turnId = null; let started = null; let closed = false; let compacting = null;
   const live = { sessionId: o.resumeId ?? null, caps, pid: null, get busy() { return Boolean(turn && !turn.done); } };
 
+  // 3.6 (S1): a confined bot (o.botConfine) must never run a command, change a file or use a tool it was not given: if
+  // Codex does (an older version that ignored the settings), the turn stops, the session closes and the engine is told.
+  const confine = o.botConfine || null;
+  const FORBIDDEN = new Set(['commandExecution', 'fileChange', 'dynamicToolCall', 'collabAgentToolCall', 'imageGeneration']);
+  const breakout = (why) => {
+    if (!confine || closed) return;
+    try { confine.onBreakout?.(why); } catch { /* the engine's business */ }
+    Promise.resolve(live.interrupt()).catch(() => {}).finally(() => live.close());
+  };
+  const confinedItem = (item) => {
+    if (!confine || !item) return false;
+    if (FORBIDDEN.has(item.type)) return true;
+    if (item.type === 'mcpToolCall' && !(confine.servers ?? []).includes(item.server)) return true;
+    if (item.type === 'webSearch' && !confine.web) return true;
+    return false;
+  };
   const guardAsk = async ({ itemId, command, paths = [], tool, kind }) => {
-    const verdict = decide({ permission, tool, kind, command, paths, internalDir: o.internalDir, lang: o.lang, bot: o.bot || false });
+    if (confine && (kind === 'execute' || kind === 'edit')) { breakout(kind); return 'deny'; }
+    const verdict = decide({ permission, tool, kind, command, paths, internalDir: o.internalDir, lang: o.lang, bot: o.bot || false, confine: o.confine || null });
     if (verdict.decision !== 'ask') return verdict.decision;
     return approvals.ask({ id: itemId, tool, title: command || paths.join(', ') || tool, reason: verdict.reason, input: clip(command || paths.join(', '), 400) });
   };
@@ -172,6 +201,7 @@ export function createLive(o) {
       return { decision: d === 'deny' ? { denied: { rejection: 'El usuario no lo ha permitido.' } } : 'approved' };
     }
     if (method === 'item/permissions/requestApproval') {
+      if (confine) { breakout('permissions'); return { permissions: {}, scope: 'turn' }; }
       // Asking for more than the sandbox gives (another folder, network…): the user decides.
       const d = await approvals.ask({ id: p.itemId, tool: tr('sys.agents.permissions'), title: p.reason || tr('sys.agents.morePermissions', { name: 'Codex' }), reason: tr('sys.agents.morePermissionsWhy'), input: clip(p.permissions, 400) });
       return { permissions: d === 'deny' ? {} : p.permissions, scope: d === 'always' ? 'session' : 'turn' };
@@ -185,8 +215,13 @@ export function createLive(o) {
     if (p.threadId && threadId && p.threadId !== threadId) return; // a subagent's own thread: its steps arrive as items of ours
     if (method === 'item/agentMessage/delta') { onEvent({ type: 'delta', text: p.delta }); return; }
     if (method === 'item/started') {
+      if (confinedItem(p.item)) { breakout(p.item.type); return; }
       const tool = ITEM_TOOL(p.item); if (tool) onEvent({ type: 'item', role: 'tool', kind: 'tool', body: { id: p.item.id, ...tool } });
       return;
+    }
+    // 3.6: the end of a compaction (thread/compact/start): the item of the summary or the thread's own notice.
+    if ((method === 'thread/compacted' || (method === 'item/completed' && p.item?.type === 'contextCompaction')) && compacting && !compacting.done) {
+      onEvent({ type: 'compacted', before: null, after: null }); compacting.finish({}); return;
     }
     if (method === 'item/completed') {
       const item = p.item;
@@ -251,7 +286,7 @@ export function createLive(o) {
   };
 
   const start = async () => {
-    const args = [...o.exe.pre, 'app-server', ...mcpArgs(o.mcpServers)];
+    const args = [...o.exe.pre, 'app-server', ...mcpArgs(o.mcpServers), ...(confine ? botConfineArgs(confine) : [])];
     child = spawnAgent(o.exe.cmd, args, { cwd: o.cwd, env: { ...(o.env ?? {}), ...mcpSecrets(o.mcpServers) }, log });
     live.pid = child.pid;
     peer = new JsonRpcPeer(child, { onNotification, onRequest, log });
@@ -263,7 +298,7 @@ export function createLive(o) {
     child.on('error', (error) => { closed = true; if (turn && !turn.done) turn.finish({ isError: true, final: tr('sys.agents.startFailed', { name: 'Codex', error: error.message }) }); });
     await peer.request('initialize', { clientInfo: { name: 'orb_dev', title: 'Orb', version: '2.4.2' }, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs: 30000 });
     peer.notify('initialized', {});
-    const common = { cwd: o.cwd, model, ...policy(permission), config: { model_reasoning_effort: effort(o.reasoning), service_tier: 'default' } };
+    const common = { cwd: o.cwd, model, ...(confine ? { approvalPolicy: 'untrusted', sandbox: 'read-only' } : policy(permission)), config: { model_reasoning_effort: effort(o.reasoning), service_tier: 'default' } };
     let res;
     if (o.resumeId && o.forkSession) res = await peer.request('thread/fork', { threadId: o.resumeId, ...common }, { timeoutMs: 60000 });
     else if (o.resumeId) res = await peer.request('thread/resume', { threadId: o.resumeId, ...common }, { timeoutMs: 60000 });
@@ -302,6 +337,23 @@ export function createLive(o) {
     if (closed || !turn || turn.done || !turnId) return false;
     peer.request('turn/steer', { threadId, input: input(text), expectedTurnId: turnId }).catch((error) => { log(`steer: ${error.message}`); try { onFail?.(error); } catch { /* caller gone */ } });
     return true;
+  };
+  // 3.6: Codex's own compaction of the thread (app-server thread/compact/start): the history is summarised and the
+  // thread goes on from the summary. An older Codex without the method answers an error, which is passed on. → { ok, error }
+  live.compact = async () => {
+    if (closed) throw new Error(tr('sys.agents.sessionClosed', { name: 'Codex' }));
+    if (turn && !turn.done) throw new Error(tr('sys.agents.busy'));
+    turn = new Turn(); compacting = turn;
+    const current = turn;
+    const timer = setTimeout(() => current.finish({ isError: true, final: tr('sys.agents.noReply', { method: 'thread/compact/start' }) }), 10 * 60_000);
+    try {
+      started ??= start().catch((error) => { live.close(); throw error; });
+      await started;
+      await peer.request('thread/compact/start', { threadId }, { timeoutMs: 60000 });
+    } catch (error) { current.finish({ isError: true, final: error.message }); }
+    const r = await current.promise;
+    clearTimeout(timer); compacting = null;
+    return { ok: !r.isError, error: r.isError ? r.final : null };
   };
   live.interrupt = async () => { approvals.clear(); if (threadId && turnId) { try { await peer.request('turn/interrupt', { threadId, turnId }, { timeoutMs: 8000 }); } catch { /* finishing anyway */ } } };
   live.respond = (requestId, decision) => approvals.respond(requestId, decision);

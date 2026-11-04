@@ -105,6 +105,10 @@ export async function runTui({ link, peer, t, p, explain, stdin = process.stdin,
       spin.stop();
       const ls = await client.status().catch(() => null);
       say(`${p.bold('Orb')} ${p.dim('·')} ${p.bold(ls?.name ?? peer.name)} ${p.dim(`· ${roleLabel(ls?.role ?? peer.role, t)}`)}`);
+      // 3.6: whom this terminal is for there, and whether one of the two has to be updated.
+      const me = await client.me().catch((error) => { if (error.status === 426) say(p.yellow(error.message)); return null; });
+      if (me?.person?.name) say(p.dim(t('term.tui.connectedAs', { name: me.person.name })));
+      const note = versionNotice(me, ls?.name ?? peer.name, t); if (note) say(p.yellow(note));
       say(p.dim(t('term.tui.hello', { name: assistant, cmd: '/ayuda' })));
     } finally { spin.stop(); mute = false; }
   }
@@ -176,7 +180,9 @@ export async function runTui({ link, peer, t, p, explain, stdin = process.stdin,
         if (!card) { say(p.yellow(t('term.approve.noSuch', { n: c.index }))); return; }
         if (!c.decision) { say(p.yellow(t('term.approve.usage', { cmd: `/aprobar ${c.index} si|no` }))); return; }
         if (c.decision === 'always' && card.kind !== 'permiso') { say(p.yellow(t('term.approve.alwaysOnlyPerm'))); return; }
-        await client.decide(card, c.decision);
+        // 3.6: a sensitive card asks the PIN (not shown while typed).
+        const askPin = () => new Promise((resolve) => { say(t('term.pin.ask')); mute = true; rl.question('', (a) => { mute = false; resolve(String(a ?? '').trim()); }); });
+        await client.decide(card, c.decision, { askPin });
         say(c.decision === 'deny' ? p.red(t('term.approve.denied')) : p.green(t('term.approve.allowed')));
         cards = await client.approvals();
         if (cards.length) say(approvalsView(cards, { t, p, width: width() }));

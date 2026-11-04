@@ -112,8 +112,8 @@ export default {
   'sys.mcp.idsRange': 'ids: entre 1 y 10 tareas',
   'sys.mcp.askNeedsOptions': 'orb_ask necesita una pregunta y entre 2 y 4 opciones',
   'sys.mcp.boardNeedsText': 'orb_pizarra necesita el consejo (message)',
-  // 2.7: Opti Bot (Monitoreo del equipo)
-  'sys.opti.off': 'Activa el Monitoreo del equipo en Ajustes para hablar con Opti Bot',
+  // 2.7: Opti Bot (Monitoreo)
+  'sys.opti.off': 'Activa el Monitoreo en Ajustes para hablar con Opti Bot',
   'sys.opti.badAction': 'esa acción no está en la lista de Opti Bot',
   'sys.opti.needsReason': 'explica por qué propones la acción',
   'sys.opti.needsPid': 'end_process necesita el Id del proceso',
@@ -161,6 +161,7 @@ export default {
   'sys.board.badLaunch': 'launch debe ser auto o manual',
   'sys.board.dependsMax': 'depends_on: como máximo 20 tareas',
   'sys.board.dependsMissing': 'depends_on: no existe la tarea #{id}',
+  'sys.board.folderOfOther': 'Esa carpeta no está disponible: es de otro proyecto. Elige otra.',
   'sys.board.sensitivityList': 'sensitivity debe ser una lista',
   'sys.board.badSensitivity': 'sensitivity no válida: {list}',
   'sys.board.onlyAssistant': 'solo {name} puede cambiar el agente, el modelo, reasoning o fast de una tarea',

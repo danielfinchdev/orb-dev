@@ -1,0 +1,11 @@
+{
+  "id": "vacio",
+  "order": 4,
+  "name": "Empezar vacío",
+  "icon": "✨",
+  "description": "Sin bots ni recordatorios: los creas tú cuando quieras.",
+  "bots": [],
+  "groups": [],
+  "reminders": [],
+  "rules": []
+}

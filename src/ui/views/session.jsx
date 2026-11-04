@@ -8,9 +8,11 @@ import { Markdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
-import { Composer, useAutoScroll, BarClock, BarHeading } from './chat.jsx';
+import { Composer, useAutoScroll, BarClock, BarHeading, CompactButton, COMPACT_AT } from './chat.jsx';
+import { BackToList } from '@/components/chat-bar.jsx';
+import { ContextSlot } from '@/components/context-slot.jsx';
 import { NotificationBell } from '@/components/notification-center.jsx';
-import { useCatalog, modelsOf, modelLabel } from '@/components/brain-picker.jsx';
+import { useCatalog, modelsOf, modelLabel, ReasoningMenu } from '@/components/brain-picker.jsx';
 import { stepText, bareTool } from '@/components/chat-live.jsx';
 import { readableInput, readableCommand } from '@/lib/tools.js';
 import { GeneratedImage } from '@/components/image-viewer.jsx';
@@ -18,7 +20,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { Badge, Input, Textarea, Empty, Spinner } from '@/components/ui/basic.jsx';
 import { Select, Collapsible, CollapsibleTrigger, CollapsibleContent, Tip, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent } from '@/components/ui/overlay.jsx';
 import { useStore, call, act, go, bridge, refresh, getState } from '@/lib/store.js';
-import { AGENT, PERMISSION, REASONING, STATUS, DECISION, CAN_STEER as AGENT_CAN_STEER, options } from '@/lib/labels.js';
+import { AGENT, PERMISSION, REASONING, STATUS, DECISION, CAN_STEER as AGENT_CAN_STEER, CAN_COMPACT, options } from '@/lib/labels.js';
 import { baseName, cn } from '@/lib/utils.js';
 import { useT, t, useLocale, currentLocale } from '@/lib/i18n.js';
 
@@ -351,6 +353,7 @@ export function SessionView({ route, embedded = false, empty = null }) {
   const scroll = useAutoScroll([blocks.length, items.at(-1)?.id, partial.length > 0, Math.floor(partial.length / 200)]);
   useEffect(() => { if (s && s.status !== 'running') setPartial(''); }, [s?.status]); // eslint-disable-line react-hooks/exhaustive-deps
   const catalog = useCatalog();
+  const [compacting, setCompacting] = useState(false);
   if (!s) return <Empty title={t('session.gone')} className="flex-1" />;
   const task = s.task_id ? tasks.find((x) => x.id === s.task_id) : null;
   const running = s.status === 'running';
@@ -385,12 +388,16 @@ export function SessionView({ route, embedded = false, empty = null }) {
   const rename = () => form(t('session.titleField'), { initial: { title: s.title }, body: (v, set) => <Input autoFocus value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={80} />, ok: t('session.save'), onOk: (v) => call('sessions.update', { id: s.id, title: v.title.trim() || s.title }) });
   const fork = async () => { const copy = await act(call('sessions.fork', { id: s.id }), t('session.forked')); if (copy) { await refresh().catch(() => {}); go({ view: 'session', id: copy.id }); } };
   const editQueued = (q, patch) => act(call('sessions.editQueued', { id: s.id, queueId: q.id, ...patch }));
+  // 3.6: «Compactar» in the composer's slot when the context is at 70 % or more and the agent can compact (Claude, Codex).
+  const compactable = !embedded && s.kind === 'chat' && CAN_COMPACT[s.agent] === true && (compacting || (!running && s.context?.size > 0 && s.context.used / s.context.size >= COMPACT_AT));
+  const compact = async () => { setCompacting(true); try { await act(call('sessions.compact', { id: s.id })); } finally { setCompacting(false); } };
+  const pictures = images.map((p) => <Badge key={p} variant="secondary" className="gap-1.5 font-normal"><ImageIcon />{baseName(p)}<button className="cursor-pointer" onClick={() => setImages(images.filter((x) => x !== p))} aria-label={t('session.remove')}><X className="size-3" /></button></Badge>);
 
   return (
     <>
       {/* 3.2: like the chat's: the clock on the left, the conversation's title (and under it its project and agent) in the
           middle, its controls on the right. */}
-      {embedded ? null : <PageHeader className="topbar-chat" title={<BarClock />}
+      {embedded ? null : <PageHeader className="topbar-chat" title={<BarClock />} back={<BackToList to={s.kind === 'chat' ? 'chats' : 'tasks'} />}
         center={<BarHeading title={s.title} project={s.project} onRename={s.kind === 'chat' ? rename : null} renameLabel={t('session.renameTip')}
           extra={<span className="bar-title-agent"><AgentIcon agent={s.agent} className="size-3.5" />{who}{s.model ? ` · ${modelName(s.model)}` : ''}</span>} />}>
         <NotificationBell />
@@ -443,7 +450,7 @@ export function SessionView({ route, embedded = false, empty = null }) {
         placeholder={running ? (AGENT_CAN_STEER[s.agent] ? t('session.phSteer', { agent: embedded ? 'Opti Bot' : AGENT[s.agent] }) : t('session.phWait', { agent: embedded ? 'Opti Bot' : AGENT[s.agent] })) : s.kind === 'task' ? t('session.phTask') : t('session.ph', { agent: embedded ? 'Opti Bot' : AGENT[s.agent] })}
         onPaste={(e) => { const f = fromTransfer(e.clipboardData); if (f.length) addImages(f); }}
         onDrop={(e) => addImages(fromTransfer(e.dataTransfer))}
-        top={images.length ? images.map((p) => <Badge key={p} variant="secondary" className="gap-1.5 font-normal"><ImageIcon />{baseName(p)}<button className="cursor-pointer" onClick={() => setImages(images.filter((x) => x !== p))}><X className="size-3" /></button></Badge>) : null}
+        top={images.length || compactable ? <>{compactable ? <ContextSlot items={[{ key: 'compact', node: <CompactButton onCompact={compact} busy={compacting} /> }]} /> : null}<div className="flex min-w-0 flex-wrap items-center gap-2">{pictures}</div></> : null}
         bottom={<>
           <Tip label={t('session.attach')}><Button variant="ghost" size="icon-sm" aria-label={t('session.attach')} onClick={async () => addImages(await bridge.pickImages())}><Paperclip /></Button></Tip>
           {/* 3.2: the model, the permissions and the reasoning under the box, like the chat's brain (the bar keeps the title). */}
@@ -453,7 +460,7 @@ export function SessionView({ route, embedded = false, empty = null }) {
               if (permission === 'total' && !(await confirm(t('permission.total'), t('session.totalBody'), { ok: t('session.yes'), danger: true }))) return;
               act(call('sessions.update', { id: s.id, permission }), t('session.permissionsChanged'));
             }} data-testid="session-permission" />
-            <Select size="sm" value={s.reasoning ?? 'medium'} title={t('session.reasoning')} options={options(REASONING).map((o) => ({ ...o, label: `${t('brain.reasoningShort')}: ${o.label.toLowerCase()}` }))} onValueChange={(reasoning) => act(call('sessions.update', { id: s.id, reasoning }))} />
+            <ReasoningMenu catalog={catalog} value={{ agent: s.agent, model: s.model ?? '', account: s.account, reasoning: s.reasoning ?? 'medium' }} onChange={(reasoning) => act(call('sessions.update', { id: s.id, reasoning }))} />
           </>) : null}
           {embedded ? <span className="flex-1" /> : <Tip label={s.cwd}><span className="text-muted-foreground hidden min-w-0 items-center gap-1 truncate text-xs xl:flex"><FolderOpen className="size-3.5 shrink-0" />{s.project ?? baseName(s.cwd)}</span></Tip>}
           {!embedded && s.context ? <span className="text-muted-foreground ml-auto text-xs"><ContextMeter context={s.context} /></span> : null}

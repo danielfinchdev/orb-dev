@@ -26,7 +26,7 @@ const ctxt = await browser.newContext({ viewport: { width: 1440, height: 900 }, 
 const page = await ctxt.newPage();
 const errors = []; page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => { if (m.type() === 'error' && !/status of (409|404)/.test(m.text())) errors.push(m.text()); });
 const shots = [];
-const shot = async (name) => { const file = path.join(OUT, `pc-${name}.png`); await page.waitForTimeout(400); await page.evaluate(() => document.querySelectorAll('[data-sonner-toast]').forEach((e) => e.remove())); await page.screenshot({ path: file }); shots.push(file); };
+const shot = async (name) => { const file = path.join(OUT, `pc-${name}.png`); await page.waitForTimeout(400); await page.evaluate(() => { const st = document.createElement('style'); st.id = 'no-toasts'; st.textContent = '[data-sonner-toaster] { visibility: hidden !important; }'; document.head.append(st); }); await page.screenshot({ path: file }); shots.push(file); await page.evaluate(() => document.getElementById('no-toasts')?.remove()); };
 let step = 'inicio';
 try {
   // The sample bots (only in this test's folder): a chief and two specialists.
@@ -53,15 +53,54 @@ try {
   assert.equal(await page.locator('[data-testid=mobile-tabs]').count(), 0, 'un navegador de PC lleva el diseño del PC');
   assert.equal(await page.locator('[data-testid=mode-switch]:visible').count(), 1, 'el selector Orb | Bots arriba del menú');
 
+  step = 'compositor de un chat nuevo';
+  // 3.6 (DESIGN-SYSTEM §2.2): project picker + slot above; model, brain button and orchestrator (icon + small switch) below.
+  await page.waitForSelector('[data-testid=reasoning-picker]');
+  await page.waitForSelector('[data-testid=orchestrator-check]');
+  assert.equal(await page.locator('[data-testid=bar-project]').count(), 0, 'el proyecto solo en el compositor');
+  await shot('00-chat-nuevo');
+  await page.click('[data-testid=reasoning-picker]');
+  await page.waitForSelector('[data-testid=reasoning-menu]');
+  assert.deepEqual(await page.locator('[data-testid=reasoning-menu] [role=menuitem]').evaluateAll((els) => els.map((e) => e.dataset.testid)), ['reasoning-low', 'reasoning-medium', 'reasoning-high'], 'los niveles del modelo (Sonnet: sin Extra)');
+  // 3.6: each option is its name, a four-bar meter and the check; no second line.
+  assert.deepEqual(await page.locator('[data-testid=reasoning-menu] [data-testid=reasoning-meter]').evaluateAll((els) => els.map((e) => Number(e.dataset.bars))), [1, 2, 3]);
+  assert.equal(await page.locator('[data-testid=reasoning-menu] >> text=/^Uso /').count(), 0, 'sin «Uso bajo/medio/alto» en el menú');
+  await page.hover('[data-testid=reasoning-high]');
+  const tip = page.locator('[data-testid=bubble-tip]').filter({ hasText: 'Problemas difíciles' });
+  await tip.waitFor();
+  assert.match(await tip.textContent(), /Uso alto\./, 'el uso, en palabras, una vez en la burbuja');
+  // The bubble sits right next to the option it explains.
+  const [opt, bub] = [await page.locator('[data-testid=reasoning-high]').boundingBox(), await tip.boundingBox()];
+  assert.ok(Math.abs(bub.x - (opt.x + opt.width)) < 24 && bub.y < opt.y + opt.height && bub.y + bub.height > opt.y, `burbuja junto a la opción (${JSON.stringify({ opt, bub })})`);
+  await page.waitForTimeout(300);
+  await shot('00b-menu-razonamiento');
+  await page.click('[data-testid=reasoning-high]');
+  await until(async () => (await page.locator('[data-testid=reasoning-menu]').count()) === 0, 'menú cerrado');
+  await until(async () => (await page.textContent('[data-testid=reasoning-level]')) === 'Alto', 'el botón dice «Alto»');
+  await page.mouse.move(600, 200);
+  await page.waitForTimeout(400);
+  await shot('00c-compositor-alto');
+
   step = 'chat de Orb';
   await page.fill('[data-testid=chat-input]', 'Hola, ¿qué tal va todo?');
-  await page.keyboard.press('Enter');
+  await page.click('[data-testid=send]');
   await page.waitForSelector('text=Recibido: ');
   await shot('01-orb-chat');
+  // 3.6: with the context almost full, «Compactar» in the slot next to the project picker.
+  step = 'compactar';
+  await page.fill('[data-testid=chat-input]', 'Repasa todo el plan CONTEXTO_LLENO');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('[data-testid=chat-compact]', { timeout: 20000 });
+  await shot('01b-compactar');
+  await page.click('[data-testid=chat-compact]');
+  await page.waitForSelector('text=Conversación compactada', { timeout: 20000 });
+  await page.waitForSelector('[data-testid=chat-compact]', { state: 'detached' });
 
   step = 'lista de bots';
   await page.click('[data-testid=mode-bots]');
   await page.waitForSelector('[data-testid=bots-nav]');
+  // 3.6 (M2): all the bots (the cards) are under «Más» of the zone's places.
+  await page.click('[data-testid=bots-places-more]');
   await page.click('[data-testid=nav-bots]');
   await page.waitForSelector('[data-testid=bot-Compras]');
   assert.ok(await page.locator('[data-testid=bot-Asistente]').count(), 'el bot inicial, sin bots hechos de nadie');
@@ -100,6 +139,11 @@ try {
   await shot('06-grupo');
 
   step = 'magic link';
+  // 3.6: the footer of a linked browser has the PC's slots and icons (Ajustes, Memorias, Tutoriales; Agentes is PC only).
+  assert.deepEqual(await page.locator('[data-testid=sidebar-footer] .side-foot-icon').evaluateAll((els) => els.map((e) => e.dataset.testid)), ['nav-settings', 'nav-memories', 'nav-tutorials']);
+  await page.click('[data-testid=nav-settings]');
+  await page.waitForSelector('[data-testid=nav-device]');
+  await shot('06b-ajustes-navegador');
   await page.click('[data-testid=nav-link]');
   await page.waitForSelector('[data-testid=magic-link]');
   await page.click('[data-testid=link-make]');
@@ -119,6 +163,23 @@ try {
   await page.waitForSelector('[data-testid=bot-chat-title] >> text=Casa');
   await page.click('[data-testid=mode-orb]');
   await page.waitForSelector('[data-testid=magic-link]');
+
+  // 3.6: with a second user, the user menu at the bottom of the sidebar, «¿Para qué usuario?» with the devices of each one, and «Mi perfil».
+  step = 'usuarios';
+  await call('persons.create', { name: 'Leo' });
+  await page.reload();
+  await page.waitForSelector('[data-testid=person-menu]');
+  await page.click('[data-testid=person-menu]');
+  await page.click('[data-testid=nav-link]');
+  await page.waitForSelector('[data-testid=link-for-who]');
+  assert.ok(await page.locator('[data-testid=link-device-group]').count() >= 1, 'los dispositivos, por usuario');
+  await shot('09-magic-link-usuarios');
+  await page.click('[data-testid=person-menu]');
+  await page.waitForSelector('[data-testid=person-profile]');
+  await shot('10-menu-usuario');
+  await page.click('[data-testid=person-profile]');
+  await page.waitForSelector('[data-testid=profile-card]');
+  await shot('11-mi-perfil');
 
   assert.deepEqual(errors.filter((e) => !/favicon/.test(e)), [], `errores: ${errors.join(' | ')}`);
   console.log(`✔ capturas a tamaño de PC:\n${shots.join('\n')}`);

@@ -8,7 +8,8 @@
 // with roomier limits, so the app no longer stops working long before the subscription would.
 import { ctx, tr } from './context.mjs';
 import { localeOf } from './i18n.mjs';
-import { account as findAccount, accounts, usableAccounts } from './accounts.mjs';
+import { localDay } from './tz.mjs';
+import { account as findAccount, accounts, accountsOf, usableAccounts } from './accounts.mjs';
 
 export const budgetConfig = () => {
   const b = ctx.config?.budget ?? {};
@@ -191,23 +192,28 @@ export function rankAccounts(board, candidates, model) {
     .sort((a, b) => a.used - b.used || a.index - b.index);
 }
 
-export function usageReport(board) {
-  return accounts().map((acc) => {
+// 3.6: person: only the accounts that person may spend (their own and the ones lent to them, with what is left today).
+export function usageReport(board, { person = null } = {}) {
+  const mine = person ? accounts().filter((a) => accountPerson(board, a) === person || loanOf(board, a.id, person)) : accounts();
+  return mine.map((acc) => {
+    const loan = person && accountPerson(board, acc) !== person ? loanOf(board, acc.id, person) : null;
     const r = rules(acc.id, board); const used = windowUsage(board, acc.id);
     const real = realRate(board, acc.id);
     // 3.2.1: why it is paused (usage, or a reason such as no login) and the models without usage of this account.
     const models = Object.entries(modelLimits(board, acc.id)).map(([model, until]) => ({ model, label: modelName(board, acc.id, model), until }));
     return { account: acc.id, agent: acc.agent, label: acc.label, plan: planOf(board, acc.id)?.label ?? null, used: used.tasks, max: r.maxTasks, heavy: used.heavy, maxHeavy: r.maxHeavy, cooldownUntil: cooldownUntil(board, acc.id) || null, cooldownReason: board.setting(`cooldown_reason:${acc.id}`) || null,
       modelLimits: models, windowHours: budgetConfig().windowHours, stopAt: budgetConfig().stopAt,
-      real: real ? { utilization: real.utilization, resetAt: real.resetAt, window: real.window } : null, windows: rateWindows(board, acc.id) };
+      real: real ? { utilization: real.utilization, resetAt: real.resetAt, window: real.window } : null, windows: rateWindows(board, acc.id),
+      ...(person ? { mine: !loan, ...(loan ? { loan: { lender: loan.lender, expires_at: loan.expires_at, left: loanLeft(board, loan), daily_turns: loan.daily_turns, daily_tokens: loan.daily_tokens, daily_usd: loan.daily_usd } } : {}) } : {}) };
   });
 }
 
 // 3.2.1: why a task for this agent (and account, and model) would wait now, when every account it could use is paused or
 // out of usage; '' when one of them can take it. For the assistant, right when it hands the task out.
-export function waitReason(board, agent, { account = null, model = null } = {}) {
+// 3.6: person: only the accounts that person may spend (their own and the ones lent to them).
+export function waitReason(board, agent, { account = null, model = null, person = null } = {}) {
   if (!agent || agent === 'any') return '';
-  const list = usableAccounts(agent).filter((a) => !account || a.id === account);
+  const list = (person ? accountsFor(board, person, agent) : usableAccounts(agent)).filter((a) => !account || a.id === account);
   if (!list.length) return '';
   const checks = list.map((a) => canLaunch(board, a.id, model));
   return checks.every((c) => !c.ok) ? checks.map((c) => c.reason).join('; ') : '';
@@ -256,4 +262,155 @@ export function pauseAccount(board, id, ms, reason) {
   board.setting(`cooldown_reason:${id}`, reason);
   board.setting(`cooldown_at:${id}`, String(Date.now()));
   return until;
+}
+
+// ---- 3.6 «Personas» (WS3): accounts per person, loans, daily caps and the lender's reserve (docs/PERSONAS-INTERNALS.md).
+// An account is its person's (accounts[].person; none = the owner's). Another person spends it only through a loan
+// (account_loans): with daily caps of turns, tokens or dollars, a reserve the lender keeps for themselves, whether bots
+// and/or Orb mode (the assistant, tasks, direct conversations) may use it, and an end date. Every turn is checked first
+// (checkSpend) and written after (recordSpend, usage_ledger); the day is the spender's, in their time zone.
+const boardOwner = (board) => { try { return board.ownerId?.() ?? board.one("SELECT id FROM persons WHERE role = 'owner' AND deleted_at IS NULL LIMIT 1")?.id ?? null; } catch { return null; } };
+const personOr = (board, person) => person ?? boardOwner(board);
+// Whose an account is (a person id; the owner when it says none).
+export const accountPerson = (board, acc) => (acc ? acc.person ?? boardOwner(board) : null);
+export function personTz(board, person) { try { return board.one('SELECT tz FROM persons WHERE id = ?', String(person ?? ''))?.tz || null; } catch { return null; } }
+// The calendar day (YYYY-MM-DD) of a moment for a person, in their time zone.
+export function dayOf(board, person, at = new Date()) { return localDay(at instanceof Date ? at : new Date(at), personTz(board, personOr(board, person))); }
+// When the person's day ends (their next midnight), as epoch ms.
+export function nextMidnight(board, person, from = Date.now()) {
+  const today = dayOf(board, person, new Date(from));
+  let lo = from; let hi = from;
+  for (let i = 0; i < 30 * 4 && dayOf(board, person, new Date(hi)) === today; i++) { lo = hi; hi += 15 * 60_000; }
+  while (hi - lo > 60_000) { const mid = Math.floor((lo + hi) / 2); if (dayOf(board, person, new Date(mid)) === today) lo = mid; else hi = mid; }
+  return Math.ceil(hi / 60_000) * 60_000;
+}
+
+// purpose: 'dev' (Orb mode), 'bot', 'orbe' (the assistant's brain: Orb mode too).
+export const LOAN_PURPOSES = ['dev', 'bot', 'orbe'];
+export function loanOf(board, account, person) {
+  try { return board.one('SELECT * FROM account_loans WHERE account_id = ? AND person_id = ?', String(account ?? ''), String(person ?? '')) ?? null; } catch { return null; }
+}
+const loanAlive = (l) => Boolean(l) && (!l.expires_at || Date.parse(l.expires_at) > Date.now());
+const loanFor = (l, purpose) => (purpose === 'bot' ? Number(l.bots) === 1 : Number(l.dev) === 1);
+// The accounts of an agent a person may spend: their own first (in the settings' order), then the ones lent to them for
+// that purpose and still valid. usable: false also lists the ones turned off (the owner's old fallback of defaultAccount).
+export function accountsFor(board, person, agent, { purpose = 'dev', usable = true } = {}) {
+  const p = personOr(board, person);
+  const list = usable ? usableAccounts(agent) : accountsOf(agent);
+  const own = list.filter((a) => accountPerson(board, a) === p);
+  const lent = list.filter((a) => { if (accountPerson(board, a) === p) return false; const l = loanOf(board, a.id, p); return loanAlive(l) && loanFor(l, purpose); });
+  return [...own, ...lent];
+}
+// Whether a person may choose that account (theirs, or lent to them for that purpose).
+export function mayUseAccount(board, person, accountId, { purpose = 'dev' } = {}) {
+  const acc = findAccount(accountId); if (!acc) return false;
+  return accountsFor(board, person, acc.agent, { purpose, usable: false }).some((a) => a.id === acc.id);
+}
+// The account a run spends: the one chosen on purpose when that person may use it (null when they may not: the caller
+// refuses), else their first usable own account, else a lent one with room today, else (one person, as 3.5.1) their
+// first own account even if turned off.
+export function pickAccount(board, { person = null, agent, bot = null, preferred = null, purpose = null } = {}) {
+  const use = purpose ?? (bot != null ? 'bot' : 'dev');
+  const p = personOr(board, person);
+  const chosen = preferred ? findAccount(preferred) : null;
+  if (chosen && chosen.agent === agent) return mayUseAccount(board, p, chosen.id, { purpose: use }) ? chosen : null;
+  const usable = accountsFor(board, p, agent, { purpose: use });
+  const own = usable.find((a) => accountPerson(board, a) === p);
+  if (own) return own;
+  const lent = usable.find((a) => checkSpend(board, { person: p, account: a.id, bot }).ok);
+  if (lent) return lent;
+  return accountsFor(board, p, agent, { purpose: use, usable: false }).find((a) => accountPerson(board, a) === p) ?? usable[0] ?? null;
+}
+
+// What was spent on one day: { turns, tokens, usd } of a person (on an account), or of a bot.
+export function spentOn(board, { person = null, account = null, bot = null, day }) {
+  const where = ['day = ?']; const args = [day];
+  if (person) { where.push('person_id = ?'); args.push(person); }
+  if (account) { where.push('account_id = ?'); args.push(account); }
+  if (bot != null) { where.push('bot_id = ?'); args.push(Number(bot)); }
+  try {
+    const r = board.one(`SELECT COALESCE(SUM(turns), 0) AS turns, COALESCE(SUM(COALESCE(tokens_in, 0) + COALESCE(tokens_out, 0)), 0) AS tokens, COALESCE(SUM(usd), 0) AS usd FROM usage_ledger WHERE ${where.join(' AND ')}`, ...args);
+    return { turns: Number(r.turns), tokens: Number(r.tokens), usd: Number(r.usd) };
+  } catch { return { turns: 0, tokens: 0, usd: 0 }; }
+}
+const capsOver = (caps, spent) => (caps.daily_turns != null && spent.turns >= Number(caps.daily_turns)) || (caps.daily_tokens != null && spent.tokens >= Number(caps.daily_tokens)) || (caps.daily_usd != null && spent.usd >= Number(caps.daily_usd));
+// A bot's own daily caps ({ daily_turns, daily_tokens, daily_usd }, bots.caps) or null.
+export function botCaps(board, bot) {
+  try { const c = JSON.parse(board.one('SELECT caps FROM bots WHERE id = ?', Number(bot))?.caps || 'null'); return c && typeof c === 'object' ? c : null; } catch { return null; }
+}
+// What is left today of a loan: { turns, tokens, usd } (null: no cap of that kind).
+export function loanLeft(board, loan) {
+  const spent = spentOn(board, { person: loan.person_id, account: loan.account_id, day: dayOf(board, loan.person_id) });
+  const left = (cap, used) => (cap == null ? null : Math.max(0, Number(cap) - used));
+  return { turns: left(loan.daily_turns, spent.turns), tokens: left(loan.daily_tokens, spent.tokens), usd: loan.daily_usd == null ? null : Math.max(0, Math.round((Number(loan.daily_usd) - spent.usd) * 100) / 100), spent };
+}
+
+// Whether a person may spend now on that account (and that bot): { ok: true } | { ok: false, reason: 'loanCap' |
+// 'botCap' | 'reserve' | 'expired' | 'noLoan', resetsAt }. The lender never waits for their own reserve.
+export function checkSpend(board, { person = null, account = null, bot = null } = {}) {
+  const p = personOr(board, person);
+  const today = dayOf(board, p);
+  if (bot != null) { const caps = botCaps(board, bot); if (caps && capsOver(caps, spentOn(board, { bot, day: today }))) return { ok: false, reason: 'botCap', resetsAt: nextMidnight(board, p) }; }
+  const acc = account ? findAccount(account) : null;
+  if (!acc || accountPerson(board, acc) === p) return { ok: true };
+  const loan = loanOf(board, acc.id, p);
+  if (!loan) return { ok: false, reason: 'noLoan', resetsAt: null };
+  if (!loanAlive(loan)) return { ok: false, reason: 'expired', resetsAt: null };
+  if (capsOver(loan, spentOn(board, { person: p, account: acc.id, day: today }))) return { ok: false, reason: 'loanCap', resetsAt: nextMidnight(board, p) };
+  const real = realRate(board, acc.id);
+  if (real?.utilization != null && real.utilization * 100 >= 100 - Number(loan.reserve_pct ?? 20)) return { ok: false, reason: 'reserve', resetsAt: real.resetAt ?? null };
+  return { ok: true, loan: true };
+}
+// The words for a refused turn (said to that person only).
+export function spendText(check, { account = null } = {}) {
+  if (!check || check.ok) return '';
+  const name = account ? nameOf(account) : '';
+  const when = check.resetsAt ? tr('msg.spend.resets', { time: untilText(check.resetsAt) }) : '';
+  return tr(`msg.spend.${check.reason}`, { name, when });
+}
+
+// What one turn spent, for the person who spent it (usage_ledger; day in that person's time zone). usage: what the agent
+// reported ({ inputTokens, outputTokens, costUsd } or the snake_case names); one turn per call unless usage.userTurns says.
+export function recordSpend(board, { person = null, account = null, bot = null, conversation = null, session = null, task = null, usage = {} } = {}) {
+  const at = new Date();
+  const p = personOr(board, person);
+  const day = dayOf(board, p, at);
+  const u = usage ?? {};
+  const n = (v) => (v != null && Number.isFinite(Number(v)) ? Number(v) : null);
+  try {
+    board.run('INSERT INTO usage_ledger (at, day, person_id, account_id, bot_id, conversation_id, session_id, task_id, turns, tokens_in, tokens_out, usd) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      at.toISOString(), day, p, account, bot == null ? null : Number(bot), conversation == null ? null : Number(conversation), session == null ? null : String(session), task == null ? null : Number(task),
+      n(u.userTurns) ?? 1, n(u.tokens_in ?? u.input_tokens ?? u.inputTokens), n(u.tokens_out ?? u.output_tokens ?? u.outputTokens), n(u.usd ?? u.cost_usd ?? u.costUsd));
+  } catch { /* a database before 3.6 */ }
+  return { day };
+}
+
+// Loans: the account's person lends it to someone else (and takes it back).
+export function lendAccount(board, { account, lender, person, daily_turns = null, daily_tokens = null, daily_usd = null, reserve_pct = 20, bots = true, dev = false, expires_at = null }) {
+  board.run(`INSERT INTO account_loans (account_id, lender, person_id, daily_turns, daily_tokens, daily_usd, reserve_pct, bots, dev, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(account_id, person_id) DO UPDATE SET daily_turns = excluded.daily_turns, daily_tokens = excluded.daily_tokens, daily_usd = excluded.daily_usd, reserve_pct = excluded.reserve_pct, bots = excluded.bots, dev = excluded.dev, expires_at = excluded.expires_at`,
+  account, lender, person, daily_turns, daily_tokens, daily_usd, reserve_pct, Number(Boolean(bots)), Number(Boolean(dev)), expires_at, new Date().toISOString());
+  return loanOf(board, account, person);
+}
+export const unlendAccount = (board, { account, person }) => board.run('DELETE FROM account_loans WHERE account_id = ? AND person_id = ?', account, person).changes > 0;
+// The loans of a person: the ones they gave (as lender) and the ones they got, with what is left today.
+export function loansOf(board, person) {
+  const p = personOr(board, person);
+  let given = []; let got = [];
+  try { given = board.all('SELECT * FROM account_loans WHERE lender = ? ORDER BY account_id, person_id', p); got = board.all('SELECT * FROM account_loans WHERE person_id = ? ORDER BY account_id', p); } catch { /* before 3.6 */ }
+  const shape = (l) => ({ account: l.account_id, label: nameOf(l.account_id), lender: l.lender, person: l.person_id, daily_turns: l.daily_turns, daily_tokens: l.daily_tokens, daily_usd: l.daily_usd,
+    reserve_pct: l.reserve_pct, bots: Number(l.bots) === 1, dev: Number(l.dev) === 1, expires_at: l.expires_at, expired: !loanAlive(l), left: loanLeft(board, l) });
+  return { given: given.map(shape), got: got.map(shape) };
+}
+// For the owner: what each person spent (totals only, never on what): today and the last 30 days.
+export function usageByPerson(board) {
+  let persons = []; try { persons = board.all("SELECT id, name FROM persons WHERE deleted_at IS NULL ORDER BY CASE role WHEN 'owner' THEN 0 ELSE 1 END, created_at"); } catch { /* before 3.6 */ }
+  const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
+  const round = (x) => Math.round(Number(x) * 100) / 100;
+  return persons.map((p) => {
+    let month = { turns: 0, tokens: 0, usd: 0 };
+    try { const r = board.one('SELECT COALESCE(SUM(turns), 0) AS turns, COALESCE(SUM(COALESCE(tokens_in, 0) + COALESCE(tokens_out, 0)), 0) AS tokens, COALESCE(SUM(usd), 0) AS usd FROM usage_ledger WHERE person_id = ? AND at >= ?', p.id, since); month = { turns: Number(r.turns), tokens: Number(r.tokens), usd: round(r.usd) }; } catch { /* none */ }
+    const today = spentOn(board, { person: p.id, day: dayOf(board, p.id) });
+    return { person: p.id, name: p.name, today: { ...today, usd: round(today.usd) }, month };
+  });
 }

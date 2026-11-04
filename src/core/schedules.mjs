@@ -5,25 +5,24 @@
 import { oneLine } from './safety.mjs';
 import { tr } from './context.mjs';
 import { AGENT_IDS as AGENTS } from './home.mjs';
+import { nextLocalRun, systemTz } from './tz.mjs';
+import { scopeSql } from './authz.mjs';
 
 export const EVERY = ['hourly', 'every_hours', 'daily', 'weekly'];
 const now = () => new Date();
 const parseRow = (r) => r && { ...r, enabled: Boolean(r.enabled), approved: Boolean(r.approved), readonly: Boolean(r.readonly), weekdays: JSON.parse(r.weekdays || '[]') };
 
 // every: hourly | every_hours (N hours, in `hours`) | daily (at at_time) | weekly (weekdays 0-6, Sunday = 0, at at_time).
-export function nextRun({ every, at_time: at = '09:00', weekdays = [], hours = 6 }, from = now()) {
-  const [h, m] = String(at || '09:00').split(':').map(Number);
-  const base = new Date(from);
-  if (every === 'hourly') { const d = new Date(base); d.setMinutes(0, 0, 0); d.setHours(d.getHours() + 1); return d; }
-  if (every === 'every_hours') return new Date(base.getTime() + Math.max(1, Math.min(168, Number(hours) || 6)) * 3_600_000);
-  const at0 = (d) => { const x = new Date(d); x.setHours(h || 0, m || 0, 0, 0); return x; };
-  if (every === 'daily') { let d = at0(base); if (d <= base) d = at0(new Date(base.getTime() + 86_400_000)); return d; }
-  if (every === 'weekly') {
-    const days = (weekdays.length ? weekdays : [1]).map(Number);
-    for (let i = 0; i <= 7; i++) { const d = at0(new Date(base.getTime() + i * 86_400_000)); if (days.includes(d.getDay()) && d > base) return d; }
-  }
-  throw new Error(tr('msg.schedules.badEvery'));
+// 3.6: the wall time is the schedule's person's (tz; default this machine's), right across daylight-saving changes.
+export function nextRun({ every, at_time: at = '09:00', weekdays = [], hours = 6 }, from = now(), tz = null) {
+  if (!EVERY.includes(every)) throw new Error(tr('msg.schedules.badEvery'));
+  const time = /^\d{1,2}:\d{2}$/.test(String(at ?? '')) ? at : '09:00';
+  const next = nextLocalRun({ every, time, weekdays: (weekdays?.length ? weekdays : every === 'weekly' ? [1] : []).map(Number), hours }, tz || systemTz(), new Date(from).getTime());
+  if (!next) throw new Error(tr('msg.schedules.badEvery'));
+  return next;
 }
+// The time zone of a schedule's person (null: this machine's).
+export const tzOf = (board, person) => { try { return (person ? board.one('SELECT tz FROM persons WHERE id = ?', String(person))?.tz : board.one("SELECT tz FROM persons WHERE role = 'owner' AND deleted_at IS NULL LIMIT 1")?.tz) || null; } catch { return null; } };
 
 export function describe(s) {
   const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'].map((d) => tr(`msg.schedules.day.${d}`));
@@ -34,7 +33,11 @@ export function describe(s) {
   return s.every;
 }
 
-export function listSchedules(board) { return board.all('SELECT * FROM schedules ORDER BY id').map(parseRow); }
+// 3.6: principal: only that person's schedules and those of the projects shared with them.
+export function listSchedules(board, { principal = null } = {}) {
+  const s = principal ? scopeSql(principal, 'schedule', 'schedules') : { where: '1=1', args: [] };
+  return board.all(`SELECT * FROM schedules WHERE ${s.where} ORDER BY id`, ...s.args).map(parseRow);
+}
 export const getSchedule = (board, id) => parseRow(board.one('SELECT * FROM schedules WHERE id = ?', Number(id)));
 
 function validate(board, a) {
@@ -51,13 +54,15 @@ export function createSchedule(board, a, actor) {
   validate(board, a);
   // every_hours keeps its N in at_time's place ("6") so the table stays simple.
   const at = a.every === 'every_hours' ? String(Math.max(1, Math.min(168, Number(a.hours) || 6))) : a.at_time || '09:00';
-  const next = nextRun({ every: a.every, at_time: a.every === 'every_hours' ? '00:00' : at, weekdays: a.weekdays ?? [], hours: Number(at) });
+  // 3.6: whose it is (a.person, given by the API or the coordinator's conversation; null: the owner).
+  const person = a.person ?? null;
+  const next = nextRun({ every: a.every, at_time: a.every === 'every_hours' ? '00:00' : at, weekdays: a.weekdays ?? [], hours: Number(at) }, now(), tzOf(board, person));
   const approved = actor === 'usuario' ? 1 : 0;
-  const { lastInsertRowid } = board.run(`INSERT INTO schedules (project, title, description, agent, model, readonly, every, at_time, weekdays, enabled, approved, next_run, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`, board.project(a.project).name, oneLine(a.title, 120), String(a.description).slice(0, 8000), a.agent || 'any', a.model || null, Number(Boolean(a.readonly)), a.every, at, JSON.stringify(a.weekdays ?? []), approved, next.toISOString(), now().toISOString());
+  const { lastInsertRowid } = board.run(`INSERT INTO schedules (project, title, description, agent, model, readonly, every, at_time, weekdays, enabled, approved, next_run, created_at, person_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`, board.project(a.project).name, oneLine(a.title, 120), String(a.description).slice(0, 8000), a.agent || 'any', a.model || null, Number(Boolean(a.readonly)), a.every, at, JSON.stringify(a.weekdays ?? []), approved, next.toISOString(), now().toISOString(), person);
   const s = getSchedule(board, Number(lastInsertRowid));
-  board.notice(tr('msg.schedules.created', { title: s.title, when: describe({ ...s, hours: at }), project: s.project }) + (approved ? '' : tr('msg.schedules.needsApproval')), 'success');
-  board.changed('schedules');
+  board.notice(tr('msg.schedules.created', { title: s.title, when: describe({ ...s, hours: at }), project: s.project }) + (approved ? '' : tr('msg.schedules.needsApproval')), 'success', { person: board.isOwnerPerson?.(person) === false ? person : null });
+  board.changed('schedules', person ? { person } : null);
   return s;
 }
 
@@ -82,7 +87,7 @@ export function runSchedule(board, s, actor = 'usuario') {
   const gone = s.agent && s.agent !== 'any' && board.availableAgents() && !board.availableAgents().includes(s.agent);
   const task = board.createTask({ project: s.project, title: tr('msg.schedules.runTitle', { title: s.title }), description: s.description, agent: gone ? 'any' : s.agent, model: gone ? null : s.model, readonly: s.readonly, schedule_id: s.id }, s.approved ? 'usuario' : actor);
   if (gone) board.event(task.id, 'orb', 'note', `${s.agent} no está disponible en este PC: la ejecución va a cualquier agente disponible`);
-  const next = nextRun({ every: s.every, at_time: s.every === 'every_hours' ? '00:00' : s.at_time, weekdays: s.weekdays, hours: Number(s.at_time) });
+  const next = nextRun({ every: s.every, at_time: s.every === 'every_hours' ? '00:00' : s.at_time, weekdays: s.weekdays, hours: Number(s.at_time) }, now(), tzOf(board, s.person_id));
   board.run('UPDATE schedules SET last_run = ?, last_task = ?, next_run = ? WHERE id = ?', now().toISOString(), task.id, next.toISOString(), s.id);
   board.changed('schedules');
   return task;
