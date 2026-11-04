@@ -17,6 +17,9 @@ import { useStore, call, act, bridge, loadCentro, setState } from '@/lib/store.j
 import { countdown, parseLinkInput, sortDevices, canManageLinks, roleKey, ROLE_CHOICES, botsLocationCard, devChoices } from '@/lib/bots.js';
 import { cn, ago, errorText } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
+import { personsOn, devicesByPerson } from '@/lib/persons.js';
+import { PersonDot } from '@/components/person-menu.jsx';
+import { loadMe } from '@/lib/store.js';
 
 const KIND_ICON = { phone: Smartphone, browser: Globe, orb: Monitor, terminal: Code2 };
 const kindIcon = (d) => (d.kind === 'orb' && d.role === 'centro' ? Server : KIND_ICON[d.kind] ?? Smartphone);
@@ -129,6 +132,13 @@ function PairCard() {
   const [device, setDevice] = useState('phone');
   const [approve, setApprove] = useState(true);
   const [dev, setDev] = useState(false);
+  // 3.6: «¿Para quién?»: the device is of the person chosen here (the owner may choose anyone, or someone new).
+  const me = useStore((s) => s.me);
+  const people = useStore((s) => s.people ?? []);
+  const [forWho, setForWho] = useState('');
+  const [newName, setNewName] = useState('');
+  const many = personsOn(me);
+  const owner = me?.role === 'owner';
   const [now, setNow] = useState(Date.now());
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -136,7 +146,9 @@ function PairCard() {
   useEffect(() => { if (!qr) return undefined; const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, [qr]);
   const make = async () => {
     setBusy(true);
-    const r = await act(call('link.qr', { device, approve, ...(device === 'orb' ? { dev } : {}) }));
+    const who = forWho === '__new' ? { newPerson: newName.trim() } : forWho && forWho !== me?.person?.id ? { person: forWho } : {};
+    const r = await act(call('link.qr', { device, approve, ...(device === 'orb' ? { dev } : {}), ...who }));
+    if (r && who.newPerson) loadMe();
     if (r) setQr({ ...r, svg: await QRCode.toString(r.url, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }) });
     setBusy(false); setNow(Date.now());
   };
@@ -164,6 +176,15 @@ function PairCard() {
           </div>
         ) : (
           <div className="grid gap-3">
+            {many || owner ? (
+              <Field label={t('link.forWho')} hint={t('link.forWhoHint')}>
+                <div className="grid gap-2 sm:flex sm:items-center">
+                  <Select className="w-full sm:w-72" value={forWho || me?.person?.id || ''} onValueChange={setForWho} data-testid="link-for-who" title={t('link.forWho')}
+                    options={[...(owner ? (many ? people : [me?.person].filter(Boolean)) : [me?.person].filter(Boolean)).map((p) => ({ value: p.id, label: p.id === me?.person?.id ? t('link.forMe', { name: p.name }) : p.name })), ...(owner ? [{ value: '__new', label: t('link.forNew') }] : [])]} />
+                  {forWho === '__new' ? <Input className="sm:w-56" value={newName} maxLength={40} onChange={(e) => setNewName(e.target.value)} placeholder={t('link.forNewPh')} data-testid="link-for-new" /> : null}
+                </div>
+              </Field>
+            ) : null}
             <Field label={t('link.forWhat')}>
               <Select className="w-full sm:w-72" value={device} onValueChange={setDevice} data-testid="link-for" title={t('link.forWhat')} options={PAIR_FOR.map((k) => ({ value: k, label: t(`link.for.${k}`) }))} />
             </Field>
@@ -171,7 +192,7 @@ function PairCard() {
             {device === 'orb' ? <label className="flex cursor-pointer items-start gap-2 text-sm"><Checkbox checked={dev} onCheckedChange={(v) => setDev(Boolean(v))} data-testid="link-for-dev" /><span>{t('link.forDev')}<span className="text-muted-foreground block text-xs">{t('link.forDevHint')}</span></span></label> : null}
             <p className="text-muted-foreground text-xs">{t('link.preferHttps')}</p>
             <div className="flex flex-wrap items-center gap-2">
-              <Button onClick={make} disabled={busy} aria-busy={busy} data-testid="link-make">{busy ? <LoaderCircle className="animate-spin" /> : <QrCode />}{expired ? t('link.again') : t('link.make')}</Button>
+              <Button onClick={make} disabled={busy || (forWho === '__new' && !newName.trim())} aria-busy={busy} data-testid="link-make">{busy ? <LoaderCircle className="animate-spin" /> : <QrCode />}{expired ? t('link.again') : t('link.make')}</Button>
               {expired ? <span className="text-muted-foreground text-xs">{t('link.expired')}</span> : null}
             </div>
           </div>
@@ -211,6 +232,10 @@ function ConnectCard({ onDone }) {
 
 function DevicesCard({ devices, readOnly, reload }) {
   const t = useT();
+  // 3.6: with two or more people, the devices of each one under their name (the owner sees everyone's).
+  const me = useStore((s) => s.me);
+  const people = useStore((s) => s.people ?? []);
+  const groups = personsOn(me) ? devicesByPerson(devices, people) : [{ person: null, name: '', devices }];
   const rename = (d) => form(t('link.renameTitle'), { initial: { name: d.name }, body: (v, set) => <Input autoFocus value={v.name} maxLength={60} onChange={(e) => set({ name: e.target.value })} />, ok: t('link.save'), onOk: async (v) => { await call('link.rename', { id: d.id, name: v.name.trim() || d.name }); reload(); return true; } });
   const revoke = async (d) => { if (await confirm(t('link.revokeTitle', { name: d.name }), t('link.revokeBody'), { ok: t('link.revoke'), danger: true })) { await act(call('link.revoke', { id: d.id }), t('link.revoked')); reload(); } };
   const admin = async (d, on) => { await act(call('link.setAdmin', { id: d.id, admin: on }), on ? t('link.adminOn', { name: d.name }) : t('link.adminOff', { name: d.name })); reload(); };
@@ -222,7 +247,10 @@ function DevicesCard({ devices, readOnly, reload }) {
     <Card data-testid="link-devices">
       <CardHeader><CardTitle>{t('link.devices')}</CardTitle><CardDescription>{t('link.devicesHint')}</CardDescription></CardHeader>
       <CardContent className="grid gap-1.5">
-        {!devices.length ? <p className="text-muted-foreground text-sm">{t('link.noDevices')}</p> : sortDevices(devices).map((d) => {
+        {!devices.length ? <p className="text-muted-foreground text-sm">{t('link.noDevices')}</p> : groups.map((g) => (
+          <div key={g.person ?? 'all'} className="grid gap-1.5" data-testid="link-device-group">
+            {g.person ? <div className="text-muted-foreground flex items-center gap-1.5 pt-1 text-xs font-medium" data-testid={`link-group-${g.name}`}><PersonDot name={g.name} size="sm" />{g.name}</div> : null}
+            {sortDevices(g.devices).map((d) => {
           const Icon = kindIcon(d);
           return (
             <div key={d.id} className="flex items-center gap-3 rounded-xl border px-3 py-2" data-testid="link-device">
@@ -249,7 +277,9 @@ function DevicesCard({ devices, readOnly, reload }) {
               </>)}
             </div>
           );
-        })}
+            })}
+          </div>
+        ))}
       </CardContent>
     </Card>
   );

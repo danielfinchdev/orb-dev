@@ -923,3 +923,34 @@ belongs to the conversation that asked for it: its report goes back there.
 - **Migration:** the first time, the old chat is split at its "New conversation" markers into conversations (the earlier
   ones completed; the last one stays open with the assistant's live session) and the assistant's tasks are distributed
   by date.
+
+## 34. People (3.6)
+
+**What it does.** Several people share one Orb: an owner, who manages it, and users. Each one has their own
+conversations, bots, projects, reminders, schedules, memories, accounts and devices, and sees only those and what is
+shared with them. With a single person all of it is hidden and Orb behaves as 3.5.1. User guide:
+[`PERSONAS.md`](PERSONAS.md); the details of the model, authorization, events and loans:
+[`PERSONAS-INTERNALS.md`](PERSONAS-INTERNALS.md).
+
+**Files.**
+- Data and rules: `src/core/db.mjs` (tables `persons`, `person_settings`, `shares`, `account_loans`, `usage_ledger`,
+  `bot_sessions`, `memory_log`, `link_seen`, `audit`; `person_id` on the person-owned tables), `src/core/persons.mjs`
+  (people, PINs, strong tickets), `src/core/authz.mjs` + `src/core/policy.mjs` (who may call what; deny by default),
+  `src/core/shape.mjs` (what each caller gets back), `src/core/budget.mjs` (own accounts, loans, caps, the ledger),
+  `src/core/tz.mjs` (wall-clock times per zone), `src/core/backup.mjs` and `src/core/export.mjs` (backups, export,
+  delete, move), `src/core/templates.mjs` (the wizard's templates).
+- Engine: `src/engine/api-persons.mjs`, `api-gateway.mjs` (window lock), `api-accounts.mjs`, `api-data.mjs`,
+  `router.mjs` (each event only to its audience), `forward.mjs` (workshop calls run as the person of the link).
+- Interface: the wizard (`src/ui/views/setup.jsx`), the person menu and the lock screen (`src/ui/components/`), Settings
+  › People / My profile / Data, the share dialog, "Lend to…" in Agents. `state.me` in the store (`persons.me`), read
+  again on `persons:switched`; the engine is the authority, the interface only hides.
+- Phone and Android: `src/ui/lib/web-bridge.js` sends its protocol (3) on `/api/me` and shows an update screen when the
+  Orb needs a newer one; `src/ui/lib/app-bridge.js` adds the fingerprint lock (`appLock`, `OrbNativePlugin.java`,
+  Android's BiometricPrompt) and schedules the next 48 h of reminders as local notifications
+  (`src/ui/lib/reminder-notes.js`).
+
+**Inside.** Every entry point (window, linked device, workshop link, Orb Núcleo's socket, agents' tools) builds a
+principal; `api.call` authorizes it before the method runs. A row without `person_id` is the owner's, so data from
+before 3.6 needs nothing. Tests: `personas-modelo`, `authz`, `migracion-36`, `personas-superficies`, `enlace-36`,
+`personas-orb`, `prestamos`, `copias`, `exportar-borrar`, `mover-orb`, `zona-horaria`, `plantillas`, `android-36`,
+`personas-ui` and the e2e `personas.e2e.mjs`.

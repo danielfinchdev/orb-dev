@@ -31,6 +31,7 @@ import ws3 from './es/ws3.mjs';
 import ws4 from './es/ws4.mjs';
 import ws5 from './es/ws5.mjs';
 import ws6 from './es/ws6.mjs';
+import ws6android from './es/ws6-android.mjs';
 
 export default {
   ...base,
@@ -64,5 +65,6 @@ export default {
   ...ws3,
   ...ws4,
   ...ws5,
-  ...ws6
+  ...ws6,
+  ...ws6android
 };

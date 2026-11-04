@@ -31,8 +31,16 @@ export function botPayload(d) {
     name: String(d.name ?? '').trim(), icon: String(d.icon ?? '').trim(), role_text: String(d.role_text ?? '').trim(),
     agent: d.agent, model: d.model || null, effort: EFFORTS.includes(d.effort) ? d.effort : 'medium',
     tools: TOOL_ORDER.filter((t) => (d.tools ?? []).includes(t)), accounts, exclusive: words(d.exclusive).map((x) => x.toLowerCase()),
-    is_chief: Boolean(d.is_chief), paused: Boolean(d.paused)
+    is_chief: Boolean(d.is_chief), paused: Boolean(d.paused),
+    // 3.6: its daily caps (empty: none), only when the editor shows them.
+    ...(d.caps !== undefined ? { caps: capsPayload(d.caps) } : {})
   };
+}
+// 3.6: a bot's daily caps as the engine takes them ({ daily_turns, daily_tokens, daily_usd }), or null for none.
+export function capsPayload(c) {
+  const n = (v) => (v === '' || v == null || !Number.isFinite(Number(v)) || Number(v) < 0 ? null : Number(v));
+  const out = { daily_turns: n(c?.daily_turns), daily_tokens: n(c?.daily_tokens), daily_usd: n(c?.daily_usd) };
+  return Object.values(out).every((v) => v == null) ? null : out;
 }
 
 // What the user pasted to link with another Orb: the QR's text (its link or its JSON), or a short code and an address

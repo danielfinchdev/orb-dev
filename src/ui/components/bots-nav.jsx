@@ -7,6 +7,7 @@ import { useStore, go } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { useBots, useCanManage, BotFace, CentroBadge } from '@/views/bots/common.jsx';
+import { SharedWithMe } from './share-dialog.jsx';
 
 export const BOT_NAV = [
   ['bot-chat', MessageSquare, 'nav.botChat'], ['bots', Bot, 'nav.bots'], ['bot-groups', Users, 'nav.botGroups'], ['bot-reminders', Bell, 'nav.botReminders'],
@@ -41,6 +42,8 @@ export function BotsNav() {
           </button>
         ))}
         {groups.length ? <div className="text-muted-foreground px-2.5 pt-4 pb-1 text-[11px] tracking-wide uppercase">{t('nav.botGroups')}</div> : null}
+        {/* 3.6: bots and groups other people shared with this one. */}
+        <SharedWithMe kinds={['bot', 'group']} />
         {groups.map((g) => (
           <button key={g.id} type="button" onClick={() => go({ view: 'bot-group', id: g.id })} data-testid={`side-group-${g.name}`}
             className={cn('flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left text-[13px]', at('bot-group', g.id) ? 'bg-accent text-accent-foreground' : 'text-foreground/75 hover:bg-accent/60 hover:text-foreground')}>

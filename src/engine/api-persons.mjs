@@ -1,8 +1,10 @@
 // 3.6 «Personas»: the people of this Orb (src/core/persons.mjs keeps them; src/core/policy.mjs says who may call what).
 // The owner sees everyone's name and numbers (persons.overview), never their content.
-import { getPerson, mustPerson, listPersons, personsCount, createPerson, renamePerson, removePerson, setPin, verifyPin, dropTickets, overview } from '../core/persons.mjs';
+import { getPerson, mustPerson, listPersons, personsCount, createPerson, renamePerson, updatePerson, setCaps, removePerson, setPin, verifyPin, dropTickets, overview, ownerId } from '../core/persons.mjs';
 import { tr } from '../core/context.mjs';
-import { fail, str } from './api-common.mjs';
+import { fail, str, oneOf } from './api-common.mjs';
+
+const PREVIEWS = ['all', 'chat', 'none'];
 
 const pin = (v) => (v == null || v === '' ? null : String(v).slice(0, 12));
 
@@ -45,6 +47,22 @@ export function personMethods(shared) {
       emit('persons:switched', { person: target.id });
       return { ok: true, person: { id: target.id, name: target.name, role: target.role } };
     },
-    'persons.overview': () => overview(board)
+    'persons.overview': () => overview(board),
+    // ---- 3.6 (WS6): what the screens need. Mi perfil: language and time zone (oneself; the owner may fix anyone's).
+    'persons.update': ({ id, language, tz, color }, who) => { const p = updatePerson(board, id ?? who.person, { language, tz, color }); changed(); return shown(p, who); },
+    // Ajustes › Personas (owner): what someone may do (program, use the house, approve the house's cards).
+    'persons.setCaps': ({ id, caps }) => { const p = setCaps(board, str(id, 'persona', 40), caps && typeof caps === 'object' ? caps : {}); changed(); return p; },
+    // The caller's own preferences kept per person: what notifications show on a locked screen.
+    'persons.prefs.get': (_, who) => ({ preview: board.personSetting(who.person, 'preview') ?? 'chat' }),
+    'persons.prefs.set': ({ preview }, who) => { board.personSetting(who.person, 'preview', oneOf(preview, PREVIEWS, 'avisos')); return { preview: board.personSetting(who.person, 'preview') }; },
+    // Ajustes › Personas (owner): pause or resume all the bots of someone (their names and content stay theirs).
+    'persons.pauseBots': ({ id, paused }) => {
+      const p = mustPerson(board, str(id, 'persona', 40));
+      const rows = p.id === ownerId(board) ? board.all('SELECT id FROM bots WHERE person_id = ? OR person_id IS NULL', p.id) : board.all('SELECT id FROM bots WHERE person_id = ?', p.id);
+      board.run(`UPDATE bots SET paused = ? WHERE id IN (${rows.map(() => '?').join(',') || 'NULL'})`, paused === false ? 0 : 1, ...rows.map((r) => r.id));
+      if (paused !== false) for (const r of rows) { try { shared.bots?.stop?.(r.id); } catch { /* not running */ } }
+      board.changed('bots', { person: p.id });
+      return { bots: rows.length, paused: paused !== false };
+    }
   };
 }

@@ -1,7 +1,7 @@
 // Settings: the assistant, its brain, how tasks run, usage caps, extra MCP connectors and the assistant's folder.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Settings, FlaskConical, FolderOpen, HeartPulse, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, LayoutGrid, UserRound, ListChecks, Wrench, RefreshCw, ChevronRight } from 'lucide-react';
+import { Users, CircleUserRound, DatabaseBackup, Settings, FlaskConical, FolderOpen, HeartPulse, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, LayoutGrid, UserRound, ListChecks, Wrench, RefreshCw, ChevronRight } from 'lucide-react';
 import { ToolIcon } from '@/components/agent-icon.jsx';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, APPEARANCE_DEFAULTS } from '../../core/appearance.mjs';
 import { PRODUCT, AUTHOR } from '../../core/product.mjs';
@@ -23,6 +23,9 @@ import { LANGUAGES } from '../../core/i18n.mjs';
 import { useUpdate, updateActions, notesUrl } from '@/components/update-card.jsx';
 import { play } from '@/lib/sounds.js';
 import { MagicLinkPanel } from './magic-link.jsx';
+import { PersonsCard, ProfileCards } from './persons.jsx';
+import { DataCards } from './data.jsx';
+import { showPersonUi, showPersonsSettings, isOwner } from '@/lib/persons.js';
 
 async function save(patch, ok = t('settings.saved')) {
   const config = await act(call('config.save', { patch }), ok);
@@ -619,6 +622,10 @@ function MoreAppsCard() {
 // Ajustes is a window over the app: sections on the left, with the developer's GitHub and the version at the bottom.
 const SECTIONS = [
   { id: 'general', icon: UserRound, cards: (c, app) => <><AssistantCard c={c} /><ChatCard c={c} />{bridge.mobile ? null : <TestCard />}<FolderCard c={c} home={app.home} /></> },
+  // 3.6 «Personas»: Mi perfil with two or more people; Personas and Datos for the owner.
+  { id: 'perfil', icon: CircleUserRound, when: (me) => showPersonUi(me), cards: () => <ProfileCards /> },
+  { id: 'personas', icon: Users, when: (me) => showPersonsSettings(me), cards: () => <PersonsCard /> },
+  { id: 'datos', icon: DatabaseBackup, when: (me) => isOwner(me), cards: () => <DataCards /> },
   { id: 'apariencia', icon: Palette, cards: (c) => <><AppearanceCard c={c} /><InterfaceCard c={c} /></> },
   { id: 'tareas', icon: ListChecks, cards: (c) => <TasksCard c={c} /> },
   { id: 'movil', icon: Smartphone, cards: () => <><MobileCard /><MagicLinkPanel /></> },
@@ -634,9 +641,10 @@ export function SettingsDialog() {
   const t = useT();
   const open = useStore((s) => s.settings);
   const app = useStore((s) => s.app);
+  const me = useStore((s) => s.me);
   if (!app) return null;
   // 2.7.3: Orb Light (the portable .exe) leaves out God mode and PC Status.
-  const sections = fullPc() ? SECTIONS : SECTIONS.filter((s) => s.id !== 'experto' && s.id !== 'monitor');
+  const sections = (fullPc() ? SECTIONS : SECTIONS.filter((s) => s.id !== 'experto' && s.id !== 'monitor')).filter((s) => !s.when || s.when(me));
   const section = sections.find((s) => s.id === open) ?? sections[0];
   const c = app.config;
   return (

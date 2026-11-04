@@ -368,7 +368,15 @@ const DATA = {
   'data.deletePerson': { check: selfOrOwner }
 };
 // ======== WS6 · interface: append entries here.
-const UI = {};
+const UI = {
+  'persons.update': { check: selfOrOwner },
+  'persons.setCaps': { ownerOnly: true },
+  'persons.prefs.get': { public: true },
+  'persons.prefs.set': { public: true },
+  'persons.pauseBots': { ownerOnly: true }
+};
+// A phone, a browser or a terminal sets its own person's language, time zone and notification preview too.
+for (const set of [PHONE_SET, CONSOLE_SET]) for (const m of ['persons.update', 'persons.prefs.get', 'persons.prefs.set', 'persons.setPin', 'shares.list']) set.add(m);
 
 export const POLICY = Object.freeze({ ...CORE, ...GATEWAY, ...ORBMODE, ...BOTSP, ...DATA, ...UI });
 export const policyOf = (method) => {
