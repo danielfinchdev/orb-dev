@@ -149,6 +149,12 @@ console only on this PC, for the owner). Another person spends it only through a
   «Puede administrar» are the owner's (and admin only for an owner's device). `link.devices`, `link.status`,
   `link.revoke`, `link.rename` are per person (the owner: everyone's devices). Pictures go to `adjuntos-movil/<person>/`.
   Notifications go to the devices of the audience with each person's `preview` (`personSetting(pid, 'preview')`).
+  3.6 (M4): `remote.mjs › deliverNote` builds one note per person (`src/core/notes.mjs`: preview, mute, PIN) and sends
+  it to the audience only: as a sealed `note` event to their open streams (the Android app shows it in the background)
+  and as Web Push to their closed devices, with one-time action tokens for that device (`POST /api/note-action
+  { token }`, run as that device's principal: same ceiling, `approverOf`, `guardCall`, authz; a sensitive card needs a
+  strong ticket, so with a PIN no «Aprobar» token is minted). `/avatars/<shape>-<color>.png` and `/avatars/g/…` hold
+  only shapes and colours.
 - **Strong tickets from afar.** A call body may carry `ticket` (from `persons.verifyPin` on that device); `remote.mjs`
   turns it into `principal.strongUntil`. A refused call answers `{ ok: false, status: 403, reason }`.
 - **Protocol 3** (`src/core/link.mjs`): `PROTOCOL = 3`, `MIN_PROTOCOL = 2` (phones, terminals), `FORWARD_MIN = 3`.
@@ -263,7 +269,7 @@ needs «view» on it (policy `INBOX`), sections are only the caller's own.
   'bot' | 'bot-to-bot' | 'orbe' | 'system', name, toName? } }`, `sharedBy?`. Sorted: pinned (pinOrder), sections
   (position), the rest by recency. Zone orb adds `projects[] { project, at, items[keys], unread, working }`.
 - `inbox.pin`, `inbox.unpin` (back to its section), `inbox.reorderPins { zone, order[] }`, `inbox.mute { muted }`
-  (no push for the bots' answers or Orbe's lines; cards, questions and reminders still push), `inbox.markRead { upTo? }`.
+  (3.6 M4: no notification at all, cards and questions included; only the person's reminders still ring), `inbox.markRead { upTo? }`.
 - `inbox.sections.list|create|rename|delete|reorder`, `inbox.sections.move { kind, id, section | null }`.
 - `inbox.search { q, zone }` → `{ items[], messages[{ key, kind, id, conversation, title, line }] }` (no case, no accents).
 - Event `inbox:changed { person, kind?, id?, conversation?, zone? }` to that person only: every new line of a conversation

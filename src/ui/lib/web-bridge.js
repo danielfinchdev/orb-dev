@@ -216,7 +216,13 @@ if (!window.orb) {
     // 3.6: what the Orb said on /api/me (the person this device is for, its versions).
     me: () => me,
     push,
-    async call(method, params) { const r = await post('/api/call', 'call', { method, params: params ?? {} }); if (!r.ok) throw new Error(r.error); return r.result; },
+    // 3.6 (M4): opts.ticket: a strong ticket (persons.verifyPin) for a call that needs the PIN; a refusal keeps its reason
+    // (error.reason: 'strong' when it needs one).
+    async call(method, params, opts = {}) {
+      const r = await post('/api/call', 'call', { method, params: params ?? {}, ...(typeof opts?.ticket === 'string' ? { ticket: opts.ticket } : {}) });
+      if (!r.ok) throw Object.assign(new Error(r.error), r.reason ? { reason: r.reason } : {});
+      return r.result;
+    },
     on(event, fn) { if (!listeners.has(event)) listeners.set(event, new Set()); listeners.get(event).add(fn); return () => listeners.get(event)?.delete(fn); },
     async info() {
       let pairError = null;
@@ -229,7 +235,11 @@ if (!window.orb) {
       const gap = r && !r.ok && (r.status === 426 || r.update) ? { has: L.PROTOCOL, need: L.PROTOCOL + 1 } : L.updateNeeded(me);
       if (gap) return { mobile: true, needsSetup: false, needsUpdate: { message: (r && !r.ok && r.error) || await tl('app.updateNeeded'), ...gap, ...(host ? { app: true } : {}) }, app: Boolean(host) };
       connect();
-      if (!host && window.isSecureContext && 'serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+      if (!host && window.isSecureContext && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+        // 3.6 (M4): a notification tapped while this page is open: the service worker says which chat (lib/notes.js).
+        navigator.serviceWorker.addEventListener('message', (e) => { if (e.data?.orbOpen) window.dispatchEvent(new CustomEvent('orb:open-note', { detail: e.data.orbOpen })); });
+      }
       return { mobile: true, needsSetup: false, platform: host ? 'android' : 'web', pc: me?.pc ?? saved?.fp ?? null };
     },
     setup: async () => { throw new Error(await tl('app.pcOnly')); },

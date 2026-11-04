@@ -340,9 +340,11 @@ export class Bots {
       let to = notify;
       if (!to) { try { to = [...peopleWith(this.board, { type: 'conversation', id: conv })]; } catch { to = []; } }
       for (const person of new Set((to.length ? to : [this.owner()]).filter(Boolean))) {
-        // 3.6 (messaging lists): a chat the person muted gets no push for the bots' answers (cards and questions still do).
-        if (role === 'bot' && !pushAlways && meta?.kind !== 'reminder') { try { if (isMuted(this.board, person, conv)) continue; } catch { /* no marks yet */ } }
-        try { this.pushNote({ title: meta?.name ?? tr('msg.bots.pushTitle'), body: oneLine(body, 200), conversation: conv, person }); } catch { /* phone off */ }
+        // 3.6 (messaging, M4): a chat the person muted says nothing (only the reminders they set still ring); the card
+        // waits in the chat and in the list of cards.
+        if (meta?.kind !== 'reminder') { try { if (isMuted(this.board, person, conv)) continue; } catch { /* no marks yet */ } }
+        // 3.6 (M4): with the line, so the phone shows it as a messaging app does (sender, chat, actions).
+        try { this.pushNote({ title: meta?.name ?? tr('msg.bots.pushTitle'), body: oneLine(body, 200), conversation: conv, person, line: { id: line.id, role, body: oneLine(body, 600), meta }, sensitive: meta?.kind === 'bot_card' && isSensitiveCard(meta) }); } catch { /* phone off */ }
       }
     }
     return line;

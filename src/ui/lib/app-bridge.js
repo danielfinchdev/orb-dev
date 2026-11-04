@@ -5,6 +5,7 @@
 // before web-bridge.js. The plugins load only inside the app.
 import * as L from './link-payload.js';
 import { upcomingReminderNotes, REMINDER_IDS } from './reminder-notes.js';
+import * as N from '../../core/notes.mjs';
 
 const native = Boolean(window.Capacitor?.isNativePlatform?.());
 if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
@@ -70,18 +71,67 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
       };
       orb.takeShared = () => { const s = shared; shared = null; return s; };
       orb.hasShared = () => shared != null;
-      // Notifications: a new message in the assistant's chat while the app is in the background. There is no push
-      // service: they come over the same live connection, so they arrive while Android keeps the app alive.
-      let n = 0;
-      orb.on('chat:new', async (payload) => {
-        if (document.visibilityState === 'visible' || localStorage.getItem(NOTIFY) !== '1' || !payload || payload.role === 'usuario') return;
-        const { LocalNotifications } = await import('@capacitor/local-notifications');
-        const name = (await pieces.record())?.name ?? 'Orb';
-        // 3.5.1: «En la pantalla de bloqueo»: 'none' shows no text of the message. 3.6: each person's own choice.
-        const preview = await previewOf();
-        const title = payload.role === 'orb' || preview === 'none' ? name : await tl('app.noticeFrom', { name });
-        const body = preview === 'none' ? await tl('app.noticeHidden') : String(payload.body ?? '').slice(0, 200);
-        LocalNotifications.schedule({ notifications: [{ id: (++n % 1000) + 1, title, body, group: 'orb-chat' }] }).catch(() => {});
+      // 3.6 (messaging, M4): the chats' notifications as a messaging app's. The Orb builds each one for this person
+      // (src/core/notes.mjs: the sender's picture, the chat's name, the text as chosen for the lock screen, muted chats
+      // none) and sends it as «note» over the live connection; shown while the app is in the background (there is no
+      // push service: they arrive while Android keeps the app alive). One per chat: new lines join it. «Responder» writes
+      // back from the notification; «Aprobar» / «Rechazar» answer a card (one that needs the PIN opens the app for it).
+      const threads = new Map(); // chat key → { lines, count }
+      const LN = async () => (await import('@capacitor/local-notifications')).LocalNotifications;
+      const slim = (n) => ({ key: n.key, route: n.route, kind: n.kind, card: n.card ?? null, actions: (n.actions ?? []).map(({ id, open }) => ({ id, ...(open ? { open: true } : {}) })) });
+      const typeOf = (n) => (n.actions?.some((a) => a.id === 'reply') ? 'orb-msg' : n.actions?.some((a) => a.id === 'deny') ? 'orb-card' : n.actions?.some((a) => a.id === 'allow') ? 'orb-task' : undefined);
+      const openNote = (detail) => window.dispatchEvent(new CustomEvent('orb:open-note', { detail }));
+      (async () => {
+        const L = await LN();
+        const [reply, allow, deny] = await Promise.all([tl('msg.notes.reply'), tl('msg.notes.allow'), tl('msg.notes.deny')]);
+        await L.registerActionTypes({ types: [
+          { id: 'orb-msg', actions: [{ id: 'reply', title: reply, input: true, inputButtonTitle: reply }] },
+          { id: 'orb-card', actions: [{ id: 'deny', title: deny }, { id: 'allow', title: allow }] },
+          { id: 'orb-task', actions: [{ id: 'allow', title: allow }] }
+        ] }).catch(() => {});
+        // Android opens the app for every action (its intents are the app's own): the answer is sent, then the chat shows.
+        L.addListener('localNotificationActionPerformed', async ({ actionId, inputValue, notification }) => {
+          const note = notification?.extra?.note;
+          if (!note?.route) return;
+          threads.delete(note.key);
+          const r = N.actionRoute(note, actionId, { text: inputValue });
+          if (r.call) {
+            try {
+              await orb.call(...r.call);
+              const done = actionId === 'reply' ? 'notes.sent' : actionId === 'allow' ? 'notes.allowed' : 'notes.denied';
+              parts.fire('notice', { body: await tl(done), tone: 'success' });
+            } catch (e) {
+              // A card that needs the PIN after all: asked in the app.
+              if (e?.reason === 'strong' && actionId === 'allow') return openNote({ route: note.route, approve: note.card });
+              parts.fire('notice', { body: await tl('notes.failed', { error: e?.message ?? String(e) }), tone: 'error' });
+            }
+            return openNote({ route: note.route });
+          }
+          return openNote({ route: r.open ?? note.route, approve: r.approve ?? null });
+        }).catch(() => {});
+      })().catch(() => {});
+      orb.on('note', async (n) => {
+        if (document.visibilityState === 'visible' || localStorage.getItem(NOTIFY) !== '1' || !n?.key) return;
+        const L = await LN();
+        const c = N.collapse(threads.get(n.key), n);
+        threads.set(n.key, { lines: c.lines, count: c.count });
+        const many = c.count > 1 && !n.hidden;
+        L.schedule({ notifications: [{
+          id: n.id, title: c.count > 1 ? `${n.title} (${c.count})` : n.title, body: n.hidden ? n.body : c.lines[c.lines.length - 1], largeBody: c.body,
+          ...(many ? { inboxList: c.lines, summaryText: await tl('notes.count', { n: c.count }) } : {}),
+          group: `orb-${n.key}`, largeIcon: n.largeIcon || undefined, actionTypeId: typeOf(n), extra: { note: slim(n) }
+        }] }).catch(() => {});
+      });
+      // Back in the app: the chats' notifications go (the app shows the chats themselves).
+      document.addEventListener('visibilitychange', async () => {
+        if (document.visibilityState !== 'visible' || !threads.size) return;
+        threads.clear();
+        try {
+          const L = await LN();
+          const shown = (await L.getDeliveredNotifications())?.notifications ?? [];
+          const ours = shown.filter((x) => x.id >= N.NOTE_IDS.first && x.id < N.NOTE_IDS.first + N.NOTE_IDS.size);
+          if (ours.length) await L.removeDeliveredNotifications({ notifications: ours });
+        } catch { /* nothing shown */ }
       });
       // 3.6: what this person chose for the lock screen (persons.prefs.get), else the Orb's setting (before 3.6).
       const previewOf = async () => {

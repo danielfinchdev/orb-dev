@@ -35,6 +35,7 @@ import ws6android from './en/ws6-android.mjs';
 import ola1 from './en/ola1.mjs';
 import mensajeria from './en/mensajeria.mjs';
 import orbchats from './en/orbchats.mjs';
+import notes from './en/notes.mjs';
 
 export default {
   ...base,
@@ -72,5 +73,6 @@ export default {
   ...ws6android,
   ...ola1,
   ...mensajeria,
-  ...orbchats
+  ...orbchats,
+  ...notes
 };

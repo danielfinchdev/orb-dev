@@ -17,6 +17,7 @@ import { Composer, useAutoScroll } from '@/views/chat.jsx';
 import { LiveActivity } from '@/components/chat-live.jsx';
 import { useStore, botCall, onBotEvent, act, go, loadBotsSoon, loadInboxSoon, inboxAct, isDark } from '@/lib/store.js';
 import { withDays, nameColor } from '@/lib/inbox.js';
+import { decideCard } from '@/lib/notes.js';
 import { useInbox, itemOfRoute } from './inbox.jsx';
 import { BotInfo, GroupInfo } from './info.jsx';
 import { chatBot, mergeLine, speakerOf } from '@/lib/bots.js';
@@ -46,7 +47,8 @@ function BotCard({ m, botsById }) {
   const status = m.meta.status ?? 'pending';
   const pending = status === 'pending';
   const who = botsById.get(m.meta.bot);
-  const decide = async (decision) => { setBusy(true); await act(botCall('bots.decide', { item: m.id, decision })); setBusy(false); };
+  // 3.6 (M4): a sensitive card asks for the PIN here when the Orb needs it (lib/notes.js › decideCard).
+  const decide = async (decision) => { setBusy(true); await act(decideCard(m.id, decision)); setBusy(false); };
   // 3.6: the card's text says what and why in plain words; the details only hold a longer text (never the raw data).
   const detail = typeof m.meta.input === 'string' && m.meta.input.length > 0 ? m.meta.input : typeof m.meta.payload?.text === 'string' && m.meta.payload.text.length > 300 ? m.meta.payload.text : null;
   const [label, tone] = STATUS[status] ?? STATUS.expired;

@@ -5,7 +5,11 @@
 // A phone is paired by scanning a one-time QR on the PC. The phone makes its own key and from then on every message is
 // encrypted end to end (src/core/mobile-crypto.mjs): whoever sees the traffic (the Wi-Fi, a proxy) reads nothing, and a
 // copied link or QR is useless. The PC can revoke any phone. What a phone may do is a subset of the PC's actions.
-import { isMuted } from '../core/inbox.mjs';
+import { isMuted, itemOfConversation } from '../core/inbox.mjs';
+import { buildNote, actionRoute } from '../core/notes.mjs';
+import { avatarOf } from '../core/avatar.mjs';
+import { groupMembers } from '../core/bots.mjs';
+import { pngForPath, avatarUrl, groupUrl, androidIconName } from './avatar-png.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -227,13 +231,30 @@ const HEADERS = {
 };
 
 // The installed app's service worker: shows the notifications the PC sends and opens the app when one is tapped.
-const SERVICE_WORKER = `self.addEventListener('install',()=>self.skipWaiting());
+// 3.6 (messaging, M4): one notification per chat (tag): new lines join it (the last five, and how many in the title);
+// the sender's picture (icon); «Responder» opens the chat; «Aprobar» / «Rechazar» answer the card right there with a
+// one-time token of this device (POST /api/note-action), or open the chat when the card needs the PIN. Tapping opens the
+// exact chat (an open window is told: postMessage { orbOpen }; else /#abrir=…).
+export const SERVICE_WORKER = `self.addEventListener('install',()=>self.skipWaiting());
 self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));
 self.addEventListener('fetch',()=>{});
 self.addEventListener('push',e=>{let d={};try{d=e.data?e.data.json():{}}catch{}
-e.waitUntil(self.registration.showNotification(d.title||'Orb',{body:d.body||'',tag:d.tag||'orb',renotify:true,icon:'/icon.png',badge:'/icon.png',data:{url:d.url||'/'}}))});
-self.addEventListener('notificationclick',e=>{e.notification.close();const u=(e.notification.data&&e.notification.data.url)||'/';
-e.waitUntil(self.clients.matchAll({type:'window',includeUncontrolled:true}).then(l=>{for(const c of l){if('focus' in c)return c.focus()}return self.clients.openWindow(u)}))});`;
+e.waitUntil((async()=>{const tag=d.tag||'orb';let lines=[],count=0;
+try{for(const n of await self.registration.getNotifications({tag})){const x=n.data||{};lines=x.lines||[];count=x.count||0;n.close()}}catch{}
+lines=lines.concat([d.body||'']).slice(-5);count+=1;
+const body=d.hidden?(d.body||''):lines.join('\\n');const title=(d.title||'Orb')+(count>1?' ('+count+')':'');
+return self.registration.showNotification(title,{body,tag,renotify:true,icon:d.icon||'/icon.png',badge:'/icon.png',
+actions:(d.actions||[]).slice(0,2).map(a=>({action:a.id,title:a.title})),
+data:{url:d.url||'/',route:d.route||null,lines,count,acts:d.acts||{},card:d.card||null,actions:d.actions||[]}})})())});
+const openApp=(route,approve)=>{const o={route:route||null,approve:approve||null};
+return self.clients.matchAll({type:'window',includeUncontrolled:true}).then(l=>{for(const c of l){if('focus' in c){c.postMessage({orbOpen:o});return c.focus()}}
+return self.clients.openWindow(route?'/#abrir='+encodeURIComponent(JSON.stringify(o)):'/')})};
+self.addEventListener('notificationclick',e=>{e.notification.close();const d=e.notification.data||{};const a=e.action||'';
+const def=(d.actions||[]).find(x=>x.id===a);
+if((a==='allow'||a==='deny')&&d.acts&&d.acts[a]&&!(def&&def.open)){
+e.waitUntil(fetch('/api/note-action',{method:'POST',credentials:'omit',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:d.acts[a]})})
+.then(r=>r.ok?r.json():null).then(x=>{if(!x||!x.ok)return openApp(d.route)}).catch(()=>openApp(d.route)));return}
+e.waitUntil(openApp(d.route,a==='allow'&&def&&def.open?d.card:null))});`;
 
 export function createRemote({ board, api, log, emit = () => {}, version = null }) {
   let servers = []; // http servers (one per address)
@@ -351,6 +372,13 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
         icons: [{ src: '/icon.png', sizes: '512x512', type: 'image/png', purpose: 'any' }, { src: '/icon.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }] }), TYPES['.webmanifest']);
     }
     if (pathname === '/sw.js') return send(res, 200, SERVICE_WORKER, TYPES['.js'], { 'Service-Worker-Allowed': '/' });
+    // 3.6 (M4): the bots' avatars for the notifications (only shapes and colours: nothing of anyone's).
+    if (pathname.startsWith('/avatars/')) {
+      const png = pngForPath(pathname);
+      if (!png) return send(res, 404, 'no encontrado', 'text/plain');
+      res.writeHead(200, { ...HEADERS, 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=604800' });
+      return res.end(png);
+    }
     let rel; try { rel = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, ''); } catch { return send(res, 404, 'no encontrado', 'text/plain'); }
     // Only what the phone's page needs (not the desktop-only pages such as the agent's browser window).
     if (!(rel === 'index.html' || rel === 'icon.png' || /^assets\/[\w.-]+$/.test(rel) || /^(robot|apps)\/[\w-]+\.png$/.test(rel) || /^juegos\/ajedrez\/rhosgfx\/[wb][KQRBNP]\.svg$/.test(rel) || /^excalidraw\/fonts\/[A-Za-z]+\/[\w.-]+\.woff2$/.test(rel))) return send(res, 404, 'no encontrado', 'text/plain');
@@ -380,6 +408,8 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     if (!originOk(req)) return send(res, 403, { error: 'origen no permitido' });
 
     if (req.method === 'POST' && p === '/api/pair') return pair(req, res);
+    // 3.6 (M4): «Aprobar» / «Rechazar» from a notification of the phone's browser (its service worker has no keys).
+    if (req.method === 'POST' && p === '/api/note-action') return noteAction(req, res);
 
     const device = deviceOf(req);
     if (!device) { req.resume(); return send(res, 401, { error: tr('msg.remote.notLinked') }); }
@@ -705,11 +735,113 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   }
   // Notifications: a new message in the assistant's chat (an answer, a task that needs approval, finished or failed work)
   // goes to the phones that turned them on and do not have the app open right now.
+  // 3.6 (M4): as a messaging app's (deliverNote): the chat's name and picture, one per chat, its actions; muted: none.
   function notify(payload, audience = null) {
     if (!payload || payload.role === 'usuario') return;
-    const name = ctx.config.assistantName;
-    const muted = payload.role === 'orb' && payload.conversation != null ? (pid) => { try { return isMuted(board, pid, payload.conversation); } catch { return false; } } : null;
-    pushTo(audience ?? audienceOf(board, 'chat:new', payload), 'chat', { title: payload.role === 'orb' ? name : tr('msg.remote.pushNotice', { name }), body: payload.body }, 'orb-chat', muted);
+    const aud = audience ?? audienceOf(board, 'chat:new', payload);
+    deliverNote({ audience: aud, conversation: payload.conversation ?? null, line: { id: payload.id ?? null, role: payload.role, body: payload.body, meta: payload.meta ?? null } });
+  }
+
+  // ---- 3.6 (messaging, M4): notifications as a messaging app's (src/core/notes.mjs builds them, per person).
+  const NOTE_TOKEN_MS = 24 * 3_600_000;
+  const noteTokens = new Map(); // one-time token → { device, person, call: [method, params], group, until }
+  const hasPinOf = (pid) => { try { return Boolean(board.one('SELECT pin_hash FROM persons WHERE id = ?', String(pid))?.pin_hash); } catch { return false; } };
+  const noteWords = () => ({ hidden: tr('msg.remote.pushHidden'), reply: tr('msg.notes.reply'), allow: tr('msg.notes.allow'), deny: tr('msg.notes.deny'), open: tr('msg.notes.open') });
+  // Which chat a conversation is: a bot's, a group's or one with the assistant (none: the assistant's main chat).
+  function chatOf(conversation) {
+    const name = ctx.config.assistantName ?? 'Orb';
+    if (conversation == null) return { kind: 'orb', id: null, name };
+    const it = itemOfConversation(board, conversation);
+    if (!it) return null;
+    if (it.kind === 'bot') { const b = board.one('SELECT id, name, avatar FROM bots WHERE id = ?', Number(it.id)); return b ? { kind: 'bot', id: it.id, name: b.name, avatar: avatarOf(b) } : null; }
+    if (it.kind === 'group') { const g = board.one('SELECT id, name FROM bot_groups WHERE id = ?', Number(it.id)); return g ? { kind: 'group', id: it.id, name: g.name, members: groupMembers(board, g.id).map(avatarOf) } : null; }
+    const c = board.one('SELECT id, title FROM conversations WHERE id = ?', Number(it.id));
+    return c ? { kind: 'conversation', id: c.id, name: c.title || name } : null;
+  }
+  // The picture: an address for the phone's browser (/avatars/…), a picture of its own for the Android app (av_…).
+  const dress = (note) => {
+    const i = note.icon;
+    const icon = typeof i === 'string' ? i : i?.avatar ? avatarUrl(i.avatar) : i?.members ? groupUrl(i.members) : '/icon.png';
+    const largeIcon = typeof i === 'string' ? 'av_orb' : i?.avatar ? androidIconName(i.avatar) : i?.members?.length ? androidIconName(i.members[0]) : 'av_orb';
+    return { ...note, icon, largeIcon };
+  };
+  // The answers a notification of the phone's browser may give right there: one token per action, only for this device,
+  // used once (either answer spends both).
+  function mintActs(device, person, note) {
+    const out = {}; const group = crypto.randomBytes(8).toString('hex');
+    for (const [k, t] of noteTokens) if (t.until <= Date.now()) noteTokens.delete(k);
+    if (noteTokens.size > 2000) noteTokens.clear();
+    for (const a of note.actions ?? []) {
+      if (a.open || (a.id !== 'allow' && a.id !== 'deny')) continue;
+      const r = actionRoute(note, a.id);
+      if (!r.call) continue;
+      const token = crypto.randomBytes(24).toString('base64url');
+      noteTokens.set(token, { device: String(device), person: String(person), call: r.call, group, until: Date.now() + NOTE_TOKEN_MS });
+      out[a.id] = token;
+    }
+    return out;
+  }
+  // One line of a chat, to everyone of the audience: each person's note (their preview, their mute, their PIN); the apps
+  // open now get it as a sealed «note» event (the Android app shows it while in the background), the others a Web Push.
+  function deliverNote({ audience, conversation = null, line, sensitive = false }) {
+    let chat; try { chat = chatOf(conversation); } catch { chat = null; }
+    if (!chat) return false;
+    const words = noteWords(); const notes = new Map();
+    const noteFor = (pid) => {
+      if (!notes.has(pid)) {
+        let muted = false; try { muted = conversation != null && isMuted(board, pid, conversation); } catch { /* no marks yet */ }
+        const n = buildNote({ chat, line, preview: previewOf(pid) ?? pushPreview(ctx.config), muted, hasPin: hasPinOf(pid), sensitive, assistantName: ctx.config.assistantName ?? 'Orb', words });
+        notes.set(pid, n ? dress(n) : null);
+      }
+      return notes.get(pid);
+    };
+    const isFor = (pid) => reaches(board, audience, pid);
+    const openNow = new Set();
+    for (const c of clients) {
+      if (c.kind === 'orb') continue;
+      openNow.add(c.device);
+      if (!isFor(c.person)) continue;
+      const n = noteFor(c.person); if (!n) continue;
+      try { c.res.write(`data: ${sealText(c.key, { e: 'note', p: n }, AAD.event(c.device))}\n\n`); } catch { /* gone */ }
+    }
+    for (const d of board.all('SELECT id, push, person_id FROM devices WHERE push IS NOT NULL')) {
+      if (openNow.has(d.id)) continue;
+      const pid = personOf(d);
+      if (!isFor(pid)) continue;
+      const n = noteFor(pid); if (!n) continue;
+      let sub; try { sub = JSON.parse(d.push); } catch { continue; }
+      const data = { title: n.title, body: n.body, hidden: n.hidden, tag: `orb-${n.key}`, icon: n.icon, url: '/', route: n.route, kind: n.kind,
+        actions: n.actions.map(({ id, title, open: o }) => ({ id, title, ...(o ? { open: true } : {}) })), card: n.card ?? null, acts: mintActs(d.id, pid, n) };
+      sendPush(sub, data, own.vapid)
+        .then((r) => { if (r === 'gone') board.run('UPDATE devices SET push = NULL WHERE id = ?', d.id); })
+        .catch(() => {});
+    }
+    return true;
+  }
+  // POST /api/note-action { token }: the answer chosen on a notification, run as that device (its person, its rights:
+  // the same checks as a call from it; a card that needs the PIN is refused and the phone opens the chat instead).
+  async function noteAction(req, res) {
+    let body; try { body = await readJson(req, 4_000); } catch (error) { return send(res, error.status ?? 400, { ok: false, error: error.message }); }
+    const t = typeof body?.token === 'string' ? noteTokens.get(body.token) : null;
+    if (!t || t.until <= Date.now()) return send(res, 401, { ok: false, error: tr('msg.notes.expired') });
+    for (const [k, x] of noteTokens) if (x.group === t.group) noteTokens.delete(k);
+    const device = board.one('SELECT * FROM devices WHERE id = ?', t.device);
+    if (!device?.public_key || !device.push || personOf(device) !== t.person) return send(res, 401, { ok: false, error: tr('msg.notes.expired') });
+    const [method, given] = t.call; const params = { ...given };
+    const admin = Boolean(device.admin) && personOf(device) === owner();
+    const allowed = allowedFor(role(), device.kind, admin, Number(device.kind_ok) === 1);
+    if (!allowed.has(method)) return send(res, 403, { ok: false, error: tr('msg.remote.pcOnly') });
+    if (method === 'bots.decide') params.by = approverOf(device, allowed);
+    const why = guardCall(board, method, params, { uploadsDir: uploads(personOf(device)), allowed });
+    if (why) return send(res, 403, { ok: false, error: why });
+    const principal = principalOf(board, { device: admin === Boolean(device.admin) ? device : { ...device, admin: 0 }, ceiling: allowed });
+    try {
+      await api.call(method, params, principal);
+      touch(device, req);
+      return send(res, 200, { ok: true });
+    } catch (error) {
+      return send(res, error.status === 403 ? 403 : 400, { ok: false, error: oneLine(error?.message ?? String(error), 300), ...(error.reason ? { reason: error.reason } : {}) });
+    }
   }
 
   // ---- listening: one http server per address; the Tailscale https name goes through `tailscale serve` to loopback.
@@ -794,10 +926,12 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   // that does not have the app open.
   // 3.6: for whom: person, else the people of its conversation (a bot's chat: its talker; a group: its people), else the
   // bot's, else the owner.
-  function pushNote({ title, body, person = null, conversation = null, bot = null } = {}) {
+  // 3.6 (M4): with the line (line: { id, role, body, meta }), as a messaging app's notification (deliverNote).
+  function pushNote({ title, body, person = null, conversation = null, bot = null, line = null, sensitive = false } = {}) {
     const audience = person ? { persons: new Set([String(person)]) }
       : conversation != null ? audienceOf(board, 'bot.message', { conversation })
         : bot != null ? { persons: peopleWith(board, { type: 'bot', id: bot }) } : { owner: true };
+    if (line && conversation != null && deliverNote({ audience, conversation, line, sensitive })) return;
     pushTo(audience, 'bots', { title, body }, 'orb-bot');
   }
 

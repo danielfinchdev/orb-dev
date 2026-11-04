@@ -53,6 +53,7 @@ import { OrbInfoHost } from '@/views/orb/info.jsx';
 import { TallerBanner } from '@/components/taller-banner.jsx';
 // 3.6 «Personas»
 import { LockScreen, PhoneLock, UpdateNeeded } from '@/components/lock-screen.jsx';
+import { NoteOpener } from '@/lib/notes.js';
 import { ShareHost } from '@/components/share-dialog.jsx';
 import { ProfileView } from '@/views/persons.jsx';
 import { RecoveryNotice } from '@/views/data.jsx';
@@ -260,7 +261,8 @@ function Root() {
   if (phase === 'app' && locked) return <LockScreen />;
   if (phase === 'error') return <div className="grid h-full place-items-center p-8 text-center">{strip}<div><Robot size={90} mood="worried" /><h1 className="mt-4 text-xl">{t('app.errorTitle')}</h1><p className="text-muted-foreground mt-1 max-w-md text-sm">{error}</p></div></div>;
   if (phase !== 'app' || !ready) return <div className="grid h-full place-items-center">{strip}<Robot size={80} mood="thinking" /></div>;
-  return bridge.mobile ? <PhoneLock><Shell /></PhoneLock> : <Shell />;
+  // 3.6 (M4): a tapped notification opens its chat once the phone is unlocked (lib/notes.js).
+  return bridge.mobile ? <PhoneLock><NoteOpener /><Shell /></PhoneLock> : <Shell />;
 }
 
 // 3.5, the Android app: link it with an Orb by scanning its QR (Ajustes › Móvil), or by hand when the camera cannot.

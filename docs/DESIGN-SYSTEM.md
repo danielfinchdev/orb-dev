@@ -197,6 +197,15 @@ sections 2.1–2.4 describe the shipped app.
   chat list (`bot-chats`), tabs Chats · Recordatorios · Casa, the conversation full screen with a back arrow; ☰ holds
   Memoria, Servidor, Bots, Grupos and the bots' settings. Unread counts on the Chats tab, on «Bots» of the zone switch
   and as a dot on ☰.
+- **Built (M4): notifications as a messaging app's.** `src/core/notes.mjs` builds each one per person: the sender's
+  picture (the bot's avatar drawn to PNG by `src/engine/avatar-png.mjs`, Orb's icon for the Orb zone, up to three
+  members together for a group; the Android app uses `res/drawable-nodpi/av_<shape>_<color>.png`, made by
+  `npm run android:build`, and the lead member for a group), the chat's name as the title, the text as chosen in
+  Mi perfil (`none`: not even who), one notification per chat (new lines join it: the last five and the count),
+  muted chats silent (only the person's own reminders ring). Actions: «Responder» (inline on Android; opens the chat in a
+  browser), «Aprobar» / «Rechazar» on a card. A sensitive card of someone with a PIN, a task (its exact version is
+  signed in the app) or a card whose text is hidden: «Aprobar» opens the chat and asks there (`lib/notes.js`,
+  `decideCard`, also used by the card in the chat). Tapping opens the exact chat.
 - **Built (M3): the Orb zone.** `views/orb/inbox.jsx` (the chat list: search over titles, projects, messages and «#id»
   of a task, with a filter by state and agent; «+» with Nuevo chat / Nuevo proyecto; on the PC the places Tareas (with
   what waits for approval) · Proyectos · Programadas · Pizarra and «Más» with God mode and Monitoreo when they are on;
