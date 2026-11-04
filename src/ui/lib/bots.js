@@ -1,6 +1,7 @@
 // 3.5: the pure pieces of the «Bots» mode and of Magic Link (no React, no store): which mode a screen is in, the bot a
 // chat opens with, what a pasted link says, the order of the linked devices, the workshop's banner and the countdown of
 // a code. Tested in test/bots-ui.test.mjs.
+import { parseAvatar } from '../../core/avatar.mjs';
 
 // The screens of the «Bots» mode; any other belongs to «Orb».
 export const BOT_VIEWS = ['bot-chat', 'bot-group', 'bots', 'bot-groups', 'bot-reminders', 'bot-memory', 'bot-home', 'bot-server', 'bot-settings'];
@@ -11,8 +12,6 @@ export const modeOf = (route) => (BOT_VIEWS.includes(route?.view) || route?.mode
 export const TOOL_ORDER = ['internet', 'recordatorios', 'correo', 'calendario', 'navegador', 'casa', 'servidor', 'gestion'];
 // The reasoning levels a bot may use (src/core/bots.mjs › EFFORTS).
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh'];
-// A short list of icons to pick from; any emoji can be typed too.
-export const EMOJIS = ['🤖', '🧠', '📅', '🛒', '✉️', '🏠', '🖥️', '💡', '📚', '🩺', '💰', '✈️', '🍳', '🎵', '🐾', '⚽', '🌱', '🔧', '📝', '⭐'];
 
 // The bot a «Chat» opens with: the last one talked to (if it still exists), the chief, or the first.
 export function chatBot(bots, lastId = null) {
@@ -32,6 +31,8 @@ export function botPayload(d) {
     agent: d.agent, model: d.model || null, effort: EFFORTS.includes(d.effort) ? d.effort : 'medium',
     tools: TOOL_ORDER.filter((t) => (d.tools ?? []).includes(t)), accounts, exclusive: words(d.exclusive).map((x) => x.toLowerCase()),
     is_chief: Boolean(d.is_chief), paused: Boolean(d.paused),
+    // 3.6: its avatar { shape, color } (src/core/avatar.mjs), when the editor has one.
+    ...(parseAvatar(d.avatar) ? { avatar: parseAvatar(d.avatar) } : {}),
     // 3.6: its daily caps (empty: none), only when the editor shows them.
     ...(d.caps !== undefined ? { caps: capsPayload(d.caps) } : {})
   };

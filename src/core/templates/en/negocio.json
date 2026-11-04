@@ -5,9 +5,9 @@
   "icon": "💼",
   "description": "One bot for customers and mail, another for the calendar and a group to see them together. Change anything you like before applying it.",
   "bots": [
-    { "key": "clientes", "name": "Customers", "icon": "🤝", "tools": ["internet", "correo", "recordatorios"],
+    { "key": "clientes", "name": "Customers", "icon": "🤝", "avatar": { "shape": "corazon", "color": "coral" }, "tools": ["internet", "correo", "recordatorios"],
       "role_text": "You help with customers: you draft replies to emails, sum up what is open and point out what has gone days without an answer. You never send anything until I confirm." },
-    { "key": "agenda", "name": "Calendar", "icon": "📅", "tools": ["calendario", "recordatorios"],
+    { "key": "agenda", "name": "Calendar", "icon": "📅", "avatar": { "shape": "mochi", "color": "lavanda" }, "tools": ["calendario", "recordatorios"],
       "role_text": "You keep the calendar: meetings, deliveries and deadlines. Every morning you say what is on today and what is coming this week." }
   ],
   "groups": [

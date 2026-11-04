@@ -92,7 +92,7 @@ export function shareRows(persons = [], shares = [], { me = null, owner = null }
 // «Compartido conmigo» (shares.list().withMe), grouped by kind and matched with the lists the store already has.
 export function sharedWithMe(withMe = [], { bots = [], groups = [], projects = [] } = {}) {
   const find = (type, id) => (type === 'bot' ? bots.find((b) => String(b.id) === String(id)) : type === 'group' ? groups.find((g) => String(g.id) === String(id)) : type === 'project' ? projects.find((p) => p.name?.toLowerCase() === String(id).toLowerCase()) : null);
-  return withMe.filter((s) => SHARE_TYPES.includes(s.type)).map((s) => { const x = find(s.type, s.id); return { ...s, name: x?.name ?? String(s.id), icon: x?.icon ?? null, found: Boolean(x) }; });
+  return withMe.filter((s) => SHARE_TYPES.includes(s.type)).map((s) => { const x = find(s.type, s.id); return { ...s, name: x?.name ?? String(s.id), icon: x?.icon ?? null, found: Boolean(x), item: x ?? null }; });
 }
 // The badge «Compartido por Ana» on a resource the caller does not own (its person field, the shares of the caller).
 export function sharedBy(withMe = [], type, id) {

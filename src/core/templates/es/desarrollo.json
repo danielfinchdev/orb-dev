@@ -5,9 +5,9 @@
   "icon": "🛠️",
   "description": "Un bot que vigila tus proyectos y el servidor y te avisa de lo importante. Las tareas de programar siguen en el modo Orb. Cámbialo todo a tu gusto antes de aplicarlo.",
   "bots": [
-    { "key": "vigia", "name": "Vigía", "icon": "🛰️", "tools": ["internet", "servidor", "recordatorios"],
+    { "key": "vigia", "name": "Vigía", "icon": "🛰️", "avatar": { "shape": "capsula", "color": "agua" }, "tools": ["internet", "servidor", "recordatorios"],
       "role_text": "Vigilas el servidor y los servicios: si algo se cae o se llena el disco, avisas con lo justo para entenderlo. No cambias nada sin permiso." },
-    { "key": "notas", "name": "Notas técnicas", "icon": "📝", "tools": ["internet", "recordatorios"],
+    { "key": "notas", "name": "Notas técnicas", "icon": "📝", "avatar": { "shape": "hoja", "color": "menta" }, "tools": ["internet", "recordatorios"],
       "role_text": "Guardas ideas, enlaces y decisiones técnicas, y los encuentras cuando te los pido." }
   ],
   "groups": [],

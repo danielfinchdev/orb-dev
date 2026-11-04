@@ -105,7 +105,7 @@ function hub({ board, bots, remoteRef }) {
         const acc = { ...(b.accounts ?? {}) };
         const mappedAccount = mapAccount(acc.account); if (mappedAccount) acc.account = mappedAccount; else delete acc.account;
         if (acc.mcp) acc.mcp = mapMcp(acc.mcp);
-        const copy = await call('bots.create', { name, icon: b.icon, role_text: b.role_text, agent: b.agent, model: b.model, effort: b.effort, tools: b.tools, accounts: acc, exclusive: b.exclusive ?? [], is_chief: Boolean(b.is_chief) && !chief, paused: Boolean(b.paused), ...(b.caps ? { caps: b.caps } : {}) }).catch(step(b, 'create'));
+        const copy = await call('bots.create', { name, icon: b.icon, ...(b.avatar ? { avatar: b.avatar } : {}), role_text: b.role_text, agent: b.agent, model: b.model, effort: b.effort, tools: b.tools, accounts: acc, exclusive: b.exclusive ?? [], is_chief: Boolean(b.is_chief) && !chief, paused: Boolean(b.paused), ...(b.caps ? { caps: b.caps } : {}) }).catch(step(b, 'create'));
         copies.push({ local: b, copy, reminders });
         board.settingJson(JOURNAL, { peer: peer.id, at: new Date().toISOString(), copies: copies.map((c) => c.copy.id) });
         taken.add(name.toLowerCase()); if (copy.is_chief) chief = true;
@@ -169,7 +169,7 @@ export function botMethods({ board, emit, remoteRef, bots }) {
       reminders: B.listReminders(board, { bot: b.id, person }).length, right: right(who, { type: 'bot', id: b.id }),
       ...(owner !== person ? { sharedBy: { person: owner, name: board.personName(owner) } } : {}) };
   };
-  const fields = (p) => Object.fromEntries(['name', 'icon', 'role_text', 'agent', 'model', 'effort', 'tools', 'accounts', 'exclusive', 'is_chief', 'paused', 'caps'].filter((k) => p[k] !== undefined).map((k) => [k, p[k]]));
+  const fields = (p) => Object.fromEntries(['name', 'icon', 'avatar', 'role_text', 'agent', 'model', 'effort', 'tools', 'accounts', 'exclusive', 'is_chief', 'paused', 'caps'].filter((k) => p[k] !== undefined).map((k) => [k, p[k]]));
   // 3.6 (S1): a brain that cannot run confined is refused when it is chosen (and again when the bot starts).
   const brainOk = (f) => { if (f.agent) { const why = botBrainProblem(board, f.agent); if (why) fail(why); } return f; };
   const VIA = new Set(['phone', 'terminal']); // 3.5: set by the link (remote.mjs) from the device's kind

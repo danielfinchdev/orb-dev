@@ -7,10 +7,10 @@ import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardF
 import { Checkbox, Select } from '@/components/ui/overlay.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { useStore, botCall, call, act, go, bridge, loadBots, setState, getState, onBotEvent } from '@/lib/store.js';
-import { EMOJIS, localWhen } from '@/lib/bots.js';
+import { localWhen } from '@/lib/bots.js';
 import { cn, errorText } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
-import { useBots, useCanManage, BotFace, NoBots, BotsDown, Loading, BotPage, CentroBadge } from './common.jsx';
+import { useBots, useCanManage, BotFace, GroupFace, NoBots, BotsDown, Loading, BotPage, CentroBadge } from './common.jsx';
 import { ShareButton, SharedBadge } from '@/components/share-dialog.jsx';
 import { Undo2, Check, ShieldCheck } from 'lucide-react';
 
@@ -32,8 +32,9 @@ export function BotGroupsView() {
   const edit = (g) => form(g ? t('bots.groups.edit') : t('bots.groups.new'), {
     initial: { name: g?.name ?? '', icon: g?.icon ?? '👥', members: g?.members ?? [] },
     body: (v, set) => (<>
-      <div className="flex gap-3">
-        <Field label={t('bots.f.icon')}><Select value={v.icon || '👥'} onValueChange={(icon) => set({ icon })} options={['👥', ...EMOJIS].map((e) => ({ value: e, label: e }))} /></Field>
+      {/* 3.6: a group's avatar is its members' together (no icon to pick). */}
+      <div className="flex items-center gap-3">
+        <GroupFace group={{ members: v.members }} bots={bots} size={48} />
         <Field label={t('bots.f.name')} className="flex-1"><Input autoFocus value={v.name} maxLength={40} onChange={(e) => set({ name: e.target.value })} placeholder={t('bots.groups.namePh')} data-testid="group-name" /></Field>
       </div>
       <Field label={t('bots.groups.members')}>
@@ -54,8 +55,8 @@ export function BotGroupsView() {
           {!groups.length ? <Empty icon={Users} title={t('bots.groups.none')}>{t('bots.groups.noneBody')}</Empty> : groups.map((g) => (
             <Card key={g.id} className="gap-3 py-4" data-testid={`group-${g.name}`}>
               <CardHeader className="flex-row items-center gap-3 px-4">
-                <span className="bg-primary/10 grid size-10 shrink-0 place-items-center rounded-xl text-xl">{g.icon || '👥'}</span>
-                <div className="min-w-0 flex-1"><CardTitle className="flex items-center gap-2">{g.name}<SharedBadge type="group" id={g.id} /></CardTitle><CardDescription className="mt-1 flex flex-wrap items-center gap-1">{g.members.map((id) => byId.get(id)).filter(Boolean).map((b) => <Badge key={b.id} variant="outline">{b.icon} {b.name}</Badge>)}</CardDescription></div>
+                <GroupFace group={g} bots={bots} size={44} label={t('bots.av.group', { name: g.name })} />
+                <div className="min-w-0 flex-1"><CardTitle className="flex items-center gap-2">{g.name}<SharedBadge type="group" id={g.id} /></CardTitle><CardDescription className="mt-1 flex flex-wrap items-center gap-1">{g.members.map((id) => byId.get(id)).filter(Boolean).map((b) => <Badge key={b.id} variant="outline" className="gap-1 ps-1"><BotFace bot={b} size={16} still />{b.name}</Badge>)}</CardDescription></div>
               </CardHeader>
               <CardFooter className="flex-wrap px-4">
                 <Button size="xs" onClick={() => go({ view: 'bot-group', id: g.id })}><MessageSquare />{t('bots.talk')}</Button>
@@ -86,7 +87,7 @@ export function BotRemindersView() {
         <Field label={t('bots.rem.when')}><Input type="datetime-local" value={v.when} onChange={(e) => set({ when: e.target.value })} data-testid="reminder-when" /></Field>
         <Field label={t('bots.rem.every')}><Select className="w-full" value={v.every} onValueChange={(every) => set({ every })} options={EVERY.map((e) => ({ value: e, label: t(`bots.every.${e}`) }))} /></Field>
       </div>
-      <Field label={t('bots.rem.bot')}><Select className="w-full" value={v.bot} onValueChange={(bot) => set({ bot })} options={bots.map((b) => ({ value: String(b.id), label: `${b.icon ? `${b.icon} ` : ''}${b.name}` }))} /></Field>
+      <Field label={t('bots.rem.bot')}><Select className="w-full" value={v.bot} onValueChange={(bot) => set({ bot })} options={bots.map((b) => ({ value: String(b.id), label: b.name }))} /></Field>
     </>),
     ok: t('bots.rem.create'),
     onOk: async (v) => { await botCall('bots.reminders.create', { id: Number(v.bot), text: v.text, when: v.when, every: v.every }); list.reload(); return true; }
@@ -110,7 +111,7 @@ export function BotRemindersView() {
               {g.items.map((r) => { const b = byId.get(r.bot_id); return (
                 <div key={r.id} className="bg-card flex items-center gap-3 rounded-xl border px-3.5 py-2.5" data-testid="reminder">
                   <span className="text-primary w-12 shrink-0 text-[15px] font-medium tabular-nums">{r.next_run ? new Date(r.next_run).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : '—'}</span>
-                  <div className="min-w-0 flex-1"><div className="truncate text-sm">{r.text}</div><div className="text-muted-foreground flex items-center gap-1.5 text-xs">{b ? <><BotFace bot={b} size="sm" className="size-4 text-[10px]" />{b.name} · </> : null}{t(`bots.every.${r.every}`)}</div></div>
+                  <div className="min-w-0 flex-1"><div className="truncate text-sm">{r.text}</div><div className="text-muted-foreground flex items-center gap-1.5 text-xs">{b ? <><BotFace bot={b} size={18} still />{b.name} · </> : null}{t(`bots.every.${r.every}`)}</div></div>
                   <Button size="icon-xs" variant="ghost" aria-label={t('bots.rem.cancel')} title={t('bots.rem.cancel')} onClick={async () => { if (await confirm(t('bots.rem.cancelTitle'), r.text, { ok: t('bots.rem.cancel'), danger: true })) { await act(botCall('bots.reminders.cancel', { id: r.id })); list.reload(); } }}><X /></Button>
                 </div>
               ); })}
@@ -136,7 +137,7 @@ export function BotMemoryView() {
   return (
     <>
       <PageHeader icon={<BookOpen className="text-primary size-5" />} title={t('nav.botMemory')} meta={t('bots.mem.hint')}>
-        <Select size="sm" value={which} onValueChange={setWhich} title={t('bots.mem.which')} options={[{ value: 'global', label: t('bots.mem.global') }, ...bots.map((b) => ({ value: String(b.id), label: `${b.icon ? `${b.icon} ` : ''}${b.name}` }))]} data-testid="memory-which" />
+        <Select size="sm" value={which} onValueChange={setWhich} title={t('bots.mem.which')} options={[{ value: 'global', label: t('bots.mem.global') }, ...bots.map((b) => ({ value: String(b.id), label: b.name }))]} data-testid="memory-which" />
         {manage ? <Button size="sm" onClick={save} disabled={!dirty} data-testid="memory-save"><Save />{t('bots.save')}</Button> : null}
       </PageHeader>
       {!loaded ? (error ? <BotsDown error={error} /> : <Loading />) : (

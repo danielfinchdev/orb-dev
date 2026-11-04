@@ -2,7 +2,7 @@
 // same message box and the same look as the chat with the assistant; the bots' cards (approve or reject) and their
 // grouped questions are answered right here. Live through bot.message and bot.state.
 import { useEffect, useMemo, useState } from 'react';
-import { Check, X, ShieldAlert, Pause, Play, Pencil, Bell, ArrowRight, Users, MessageCircleQuestion, ChevronRight } from 'lucide-react';
+import { Check, X, ShieldAlert, Pause, Play, Pencil, Bell, ArrowRight, MessageCircleQuestion, ChevronRight } from 'lucide-react';
 import { Markdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -14,7 +14,7 @@ import { botCall, onBotEvent, act, go, loadBotsSoon } from '@/lib/store.js';
 import { chatBot, mergeLine, speakerOf } from '@/lib/bots.js';
 import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
-import { useBots, useCanManage, BotFace, NoBots, BotsDown, Loading } from './common.jsx';
+import { useBots, useCanManage, BotFace, GroupFace, NoBots, BotsDown, Loading } from './common.jsx';
 
 const LAST = 'orb.ultimoBot';
 const lastBot = () => { try { return localStorage.getItem(LAST); } catch { return null; } };
@@ -46,7 +46,7 @@ function BotCard({ m, botsById }) {
       <div className="flex items-start gap-2">
         <ShieldAlert className={cn('mt-0.5 size-4 shrink-0', pending ? 'text-warning' : 'text-muted-foreground')} />
         <div className="min-w-0 flex-1">
-          <div className="text-muted-foreground mb-0.5 text-xs">{t('bots.card.title', { name: who?.name ?? m.meta.name ?? t('bots.aBot') })}</div>
+          <div className="text-muted-foreground mb-0.5 flex items-center gap-1.5 text-xs">{who ? <BotFace bot={who} size="xs" /> : null}{t('bots.card.title', { name: who?.name ?? m.meta.name ?? t('bots.aBot') })}</div>
           <div className="whitespace-pre-wrap break-words">{m.body}</div>
           {m.meta.result?.summary ? <div className="text-muted-foreground mt-1 text-xs">{m.meta.result.summary}</div> : null}
         </div>
@@ -112,7 +112,7 @@ function Line({ m, group, botsById }) {
   if (m.meta?.kind === 'bot_question') return <BotQuestions m={m} />;
   if (who.kind === 'user') return <div className="bg-bubble text-bubble-foreground ml-auto max-w-[80%] rounded-2xl rounded-br-md px-4 py-2.5 whitespace-pre-wrap break-words" data-testid="bot-line-user">{m.body}<Time at={m.at} /></div>;
   if (who.kind === 'bot') {
-    const bot = botsById.get(who.id) ?? { name: who.name, icon: who.icon };
+    const bot = botsById.get(who.id) ?? { id: who.id, name: who.name, icon: who.icon, avatar: m.meta?.avatar };
     // A message from one bot to another: small, with who it goes to.
     if (m.meta?.kind === 'relay') {
       const to = botsById.get(m.meta.to);
@@ -140,7 +140,8 @@ function Line({ m, group, botsById }) {
 // The bots or groups to switch to, at the top of the chat.
 function Switcher({ bots, groups, current }) {
   const t = useT();
-  const options = [...bots.map((b) => ({ value: `b${b.id}`, label: `${b.icon ? `${b.icon} ` : ''}${b.name}` })), ...groups.map((g) => ({ value: `g${g.id}`, label: `${g.icon ? `${g.icon} ` : ''}${g.name} · ${t('bots.group')}` }))];
+    // 3.6: names only (the avatars are in the menu beside; a select's label stays plain text).
+  const options = [...bots.map((b) => ({ value: `b${b.id}`, label: b.name })), ...groups.map((g) => ({ value: `g${g.id}`, label: `${g.name} · ${t('bots.group')}` }))];
   if (options.length < 2) return null;
   return <Select size="sm" value={current} onValueChange={(v) => go({ view: v[0] === 'g' ? 'bot-group' : 'bot-chat', id: Number(v.slice(1)) })} options={options} title={t('bots.switchTo')} data-testid="bot-switch" />;
 }
@@ -192,9 +193,8 @@ export function BotChatView({ route }) {
   const members = group ? (grp.members ?? []).map((id) => botsById.get(Number(id?.id ?? id))).filter(Boolean) : [];
   const title = (
     <span className="flex min-w-0 items-center gap-2">
-      {group ? <span className="bg-primary/10 text-primary grid size-8 shrink-0 place-items-center rounded-xl">{grp.icon || <Users className="size-4" />}</span> : <BotFace bot={bot} busy={busy} />}
+      {group ? <GroupFace group={grp} bots={bots} size={32} /> : <BotFace bot={bot} busy={busy} size={32} chief={bot.is_chief} />}
       <span className="min-w-0 truncate" data-testid="bot-chat-title">{target.name}</span>
-      {bot?.is_chief ? <Badge>{t('bots.chief')}</Badge> : null}
       {bot?.paused ? <Badge variant="secondary">{t('bots.paused')}</Badge> : null}
     </span>
   );
@@ -210,7 +210,7 @@ export function BotChatView({ route }) {
         <div className="mx-auto flex max-w-3xl flex-col gap-5 px-5 py-6" data-testid="bot-chat-lines">
           {!lines.length && !speaking.length ? (
             <div className="flex flex-col items-center gap-3 pt-10 text-center">
-              {group ? <span className="bg-primary/10 text-primary grid size-16 place-items-center rounded-3xl text-3xl">{grp.icon || <Users className="size-7" />}</span> : <BotFace bot={bot} size="lg" />}
+              {group ? <GroupFace group={grp} bots={bots} size={80} label={t('bots.av.group', { name: grp.name })} /> : <BotFace bot={bot} size={80} chief={bot.is_chief} label={t('bots.av.aria', { name: bot.name })} />}
               <h2 className="text-xl">{group ? t('bots.chat.helloGroup', { name: grp.name }) : t('bots.chat.hello', { name: bot.name })}</h2>
               <p className="text-muted-foreground max-w-md text-sm">{group ? t('bots.chat.groupHint') : bot.role_text || t('bots.chat.hint')}</p>
             </div>

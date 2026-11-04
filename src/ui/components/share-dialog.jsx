@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, Select } from '@/comp
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { PersonDot } from '@/components/person-menu.jsx';
+import { BotAvatar, GroupAvatar } from '@/components/bot-avatar.jsx';
 import { useStore, call, act, setState, go, refreshSoon, loadBotsSoon } from '@/lib/store.js';
 import { RIGHTS, personsOn, shareRows, sharedWithMe, sharedBy } from '@/lib/persons.js';
 import { cn } from '@/lib/utils.js';
@@ -98,7 +99,7 @@ export function SharedWithMe({ kinds = ['project', 'bot', 'group'], className })
       <div className="grid gap-px">
         {list.map((x) => (
           <button key={`${x.type}:${x.id}`} type="button" onClick={() => open(x)} className="hover:bg-accent/60 flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px]" data-testid={`shared-${x.type}-${x.name}`}>
-            <span className="w-4 shrink-0 text-center">{x.icon || (x.type === 'project' ? '📁' : x.type === 'group' ? '👥' : '🤖')}</span>
+            {x.type === 'bot' ? <BotAvatar bot={x.item ?? { id: x.id }} size={18} still /> : x.type === 'group' ? <GroupAvatar members={(x.item?.members ?? []).map((m) => (bots?.bots ?? []).find((b) => b.id === Number(m?.id ?? m)))} size={18} /> : <span className="w-[18px] shrink-0 text-center">{x.icon || '📁'}</span>}
             <span className="min-w-0 flex-1 truncate">{x.name}</span>
             <span className="text-muted-foreground shrink-0 text-[11px]">{t('share.by', { name: x.by })}</span>
           </button>

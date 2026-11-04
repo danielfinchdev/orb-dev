@@ -24,6 +24,7 @@ import { ActionShortcuts } from '@/components/project-tools.jsx';
 import { Scene } from '@/components/scene.jsx';
 import { GamesDialog } from '@/games/games.jsx';
 import { Robot } from '@/components/robot.jsx';
+import { avatarEvent } from '@/lib/avatar-pulse.js';
 import { useStore, setState, getState, refresh, refreshSoon, bridge, go, applyTheme, openTerminal, startTour, anyChatBusy, phoneLayout, modeOf, modeHome, loadBotsSoon, botStateChanged, loadCentro, botsVia } from '@/lib/store.js';
 import { Tour } from '@/components/tour.jsx';
 import { AGENT } from '@/lib/labels.js';
@@ -207,7 +208,7 @@ function Root() {
       // 3.5: the bots, here or on the server this PC is linked with.
       const local = !event.startsWith('centro:');
       const name = local ? event : event.slice(7);
-      if (name.startsWith('bot.') && local === !botsVia()) { if (name === 'bot.state') botStateChanged(payload); else if (name === 'bot.updated') loadBotsSoon(); }
+      if (name.startsWith('bot.') && local === !botsVia()) { if (name === 'bot.state') botStateChanged(payload); else if (name === 'bot.updated') loadBotsSoon(); else if (name === 'bot.message') avatarEvent(payload); }
       if (event === 'link:peers') loadCentro();
       // 3.6 «Personas»: someone else at this PC, the window locked or unlocked, the people changed.
       if (event === 'persons:switched') personSwitched();

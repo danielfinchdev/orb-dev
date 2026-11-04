@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr, migrateConfigPersons } from './context.mjs';
+import { avatarFor } from './avatar.mjs';
 import { titleFrom } from './titles.mjs';
 import { dbLike, ensureOwner, ownerId, systemTz } from './persons.mjs';
 
@@ -482,6 +483,8 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   ['link_queue', 'request_id', 'TEXT'],
   // 3.6: a bot's daily caps { daily_turns, daily_tokens, daily_usd }.
   ['bots', 'caps', 'TEXT'],
+  // 3.6: a bot's avatar { shape, color } (src/core/avatar.mjs); the ones before get a fixed one from their id.
+  ['bots', 'avatar', 'TEXT'],
   // 3.6: whose agent sent a message between agents (NULL: the owner's): it only reaches that person's agents.
   ['messages', 'person_id', 'TEXT']];
 export function migrate(db, { file = null } = {}) {
@@ -494,6 +497,9 @@ export function migrate(db, { file = null } = {}) {
     const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
     if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
   }
+  // 3.6: every bot has an avatar; one made before gets the fixed one of its id (the same on every run).
+  const plain = db.prepare("SELECT id FROM bots WHERE avatar IS NULL OR avatar = ''").all();
+  if (plain.length) { const set = db.prepare('UPDATE bots SET avatar = ? WHERE id = ?'); for (const r of plain) set.run(JSON.stringify(avatarFor(r.id)), r.id); }
   // 3.5.1: devices linked before: phones, browsers and terminals keep their rights; a device that said it was an «orb» is
   // asked again (the owner confirms it in Ajustes › Magic Link) and loses «Puede administrar» meanwhile.
   db.exec("UPDATE devices SET kind_ok = CASE WHEN kind = 'orb' THEN 0 ELSE 1 END, admin = CASE WHEN kind = 'orb' THEN 0 ELSE admin END, dev_ok = 0 WHERE kind_ok IS NULL");
