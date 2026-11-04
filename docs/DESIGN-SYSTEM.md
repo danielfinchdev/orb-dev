@@ -170,10 +170,11 @@ sections 2.1–2.4 describe the shipped app.
   create. Android in the glass language: the chat header is a glass pill over the colour field.
 - **Bot avatars** (`docs/diseno/maquetas/avatares.js`). Original art: soft rounded bodies (nube, gota, judía, mochi,
   flor, estrella, canto, gominola, bollo, corazón, hoja, cápsula) in ten bright, nearly flat colours with a small
-  highlight, and a simple dark face drawn for each body (dots, tall ovals, big glossy eyes, wide beans; spacing, blush
-  and a tiny smile vary), so the set is Orb's own and cute rather than robot-like. Deterministic SVG
+  highlight. Orb's face: only two short rounded dark strokes (no mouth, no blush), with a spacing, tilt and offset of
+  their own on each body, so they do not all look the same way. Blink squashes them to dashes; working lifts them;
+  paused turns them into flat lines; approved bends them into small arches. Deterministic SVG
   from shape + colour (+ seed for blink timing). States: idle (breathing, random blink, looking around), new message
-  (one bounce), working (wiggle, eyes up), paused (closed eyes, slow breathing, a «z»), approved (hop, smiling eyes).
+  (one bounce), working (wiggle, eyes up), paused (flat eyes, slow breathing, a «z»), approved (hop, arched eyes).
   Reduced motion or low power: static. Chosen at creation (big live preview, 12-shape grid, 10-colour row, name,
   «Crear bot»). The chief is marked only by a star badge on its avatar. Never emoji or third-party characters.
 

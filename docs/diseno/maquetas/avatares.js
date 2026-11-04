@@ -19,12 +19,13 @@
     hoja: { label: 'Hoja', d: 'M86 12c4 30-2 54-20 68-14 10-34 12-48 4-6-22 0-46 18-60 14-11 32-14 50-12z', face: [52, 54] },
     capsula: { label: 'Cápsula', d: 'M50 8c16 0 28 12 28 28v28c0 16-12 26-28 26S22 80 22 64V36C22 20 34 8 50 8z', face: [50, 50] }
   };
-  // Each body's own face: eye style, spacing (half the distance between the eyes), a small smile, blush.
+  // Orb's face: two short rounded strokes, nothing else. Each body sets their spacing, height, tilt (degrees, the pair
+  // mirrored or leaning the same way) and a small offset, so they do not all look the same way.
   const EYES = {
-    nube: { kind: 'dot', gap: 8, blush: true }, gota: { kind: 'oval', gap: 7 }, judia: { kind: 'big', gap: 10, smile: true },
-    mochi: { kind: 'dot', gap: 13, blush: true }, flor: { kind: 'oval', gap: 8, blush: true }, estrella: { kind: 'dot', gap: 8, smile: true },
-    canto: { kind: 'big', gap: 9 }, gominola: { kind: 'oval', gap: 10, smile: true }, bollo: { kind: 'dot', gap: 6.5, blush: true },
-    corazon: { kind: 'oval', gap: 9, smile: true }, hoja: { kind: 'bean', gap: 8 }, capsula: { kind: 'oval', gap: 7, blush: true }
+    nube: { gap: 8, len: 7, tilt: -8, dx: 1 }, gota: { gap: 6.5, len: 8, tilt: 6, dx: 0 }, judia: { gap: 9, len: 9, tilt: -12, dx: 3 },
+    mochi: { gap: 11, len: 7, tilt: 0, dx: 0 }, flor: { gap: 7.5, len: 7, tilt: 10, dx: -1 }, estrella: { gap: 7, len: 6.5, tilt: -6, dx: 0 },
+    canto: { gap: 9, len: 9, tilt: 8, dx: -2 }, gominola: { gap: 9, len: 8, tilt: -4, dx: 0 }, bollo: { gap: 6.5, len: 7, tilt: 12, dx: 1 },
+    corazon: { gap: 8.5, len: 7.5, tilt: -10, dx: 0 }, hoja: { gap: 7.5, len: 7, tilt: 18, dx: 2 }, capsula: { gap: 6.5, len: 8.5, tilt: 0, dx: 0 }
   };
   const COLORS = { coral: 25, melocoton: 50, limon: 95, lima: 135, menta: 168, agua: 200, cielo: 238, lavanda: 285, rosa: 335, frambuesa: 5 };
   const hash = (s) => { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
@@ -36,21 +37,15 @@
     const [fx, fy] = S.face; const warm = h >= 70 && h <= 140; /* yellows and limes need more light to stay bright */ const ink = `oklch(0.24 0.03 ${h})`;
     const E = EYES[shape] ?? EYES.mochi; const g = E.gap;
     const sleepy = state === 'sleepy', happy = state === 'happy', thinking = state === 'thinking';
-    // Simple dark eyes, drawn per shape (dots, tall ovals, big glossy ones, wide beans) so the set is Orb's own.
-    const open = (x) => E.kind === 'oval' ? `<ellipse cx="${x}" cy="${fy}" rx="3.6" ry="5.8" fill="${ink}"/><ellipse cx="${x + 1.2}" cy="${fy - 2.6}" rx="1.1" ry="1.5" fill="#fff" opacity=".9"/>`
-      : E.kind === 'big' ? `<circle cx="${x}" cy="${fy}" r="6.4" fill="${ink}"/><circle cx="${x + 2}" cy="${fy - 2.4}" r="2.2" fill="#fff"/>`
-        : E.kind === 'bean' ? `<ellipse cx="${x}" cy="${fy}" rx="5" ry="3.8" fill="${ink}"/>`
-          : `<circle cx="${x}" cy="${fy}" r="4.3" fill="${ink}"/>`;
-    const eye = (x) => happy
-      ? `<path d="M${x - 4.5} ${fy + 1.5}q4.5 -7 9 0" fill="none" stroke="${ink}" stroke-width="3.2" stroke-linecap="round"/>`
-      : sleepy
-        ? `<path d="M${x - 4.5} ${fy}q4.5 4 9 0" fill="none" stroke="${ink}" stroke-width="3" stroke-linecap="round"/>`
-        : `<g class="bv-eye" style="transform-origin:${x}px ${fy}px">${open(x)}</g>`;
-    const my = fy + (E.kind === 'big' ? 11 : 9);
-    const mouth = happy ? `<path d="M${fx - 5} ${my - 1}q5 6 10 0" fill="${ink}" stroke="${ink}" stroke-width="1.6" stroke-linejoin="round"/>`
-      : thinking ? `<ellipse cx="${fx + 1}" cy="${my + 1}" rx="2" ry="2.4" fill="${ink}"/>`
-        : sleepy ? '' : E.smile ? `<path d="M${fx - 3} ${my - 1}q3 3 6 0" fill="none" stroke="${ink}" stroke-width="2.2" stroke-linecap="round"/>` : '';
-    const cheeks = blush && (E.blush || happy) ? `<ellipse cx="${fx - g - 7}" cy="${fy + 6}" rx="4.2" ry="2.6" fill="oklch(0.7 0.17 5)" opacity=".42"/><ellipse cx="${fx + g + 7}" cy="${fy + 6}" rx="4.2" ry="2.6" fill="oklch(0.7 0.17 5)" opacity=".42"/>` : '';
+    const E2 = (x) => x + E.dx; const len = E.len * 1.3; const half = len / 2;
+    // open: a short rounded stroke, tilted; blinking squashes it (CSS). happy: a small arch; sleepy: a flat line.
+    const eye = (x, side) => {
+      const cx = E2(x); const tilt = side < 0 ? E.tilt : E.tilt * 0.6;
+      if (happy) return `<path d="M${cx - 3.2} ${fy + 1.8}Q${cx} ${fy - 4} ${cx + 3.2} ${fy + 1.8}" fill="none" stroke="${ink}" stroke-width="3.6" stroke-linecap="round"/>`;
+      if (sleepy) return `<path d="M${cx - 3.6} ${fy + 1}h7.2" stroke="${ink}" stroke-width="3.4" stroke-linecap="round"/>`;
+      return `<g class="bv-eye" style="transform-origin:${cx}px ${fy}px"><path d="M${cx} ${fy - half}v${len}" stroke="${ink}" stroke-width="5.2" stroke-linecap="round" transform="rotate(${tilt} ${cx} ${fy})"/></g>`;
+    };
+    const mouth = '', cheeks = '';
     const zz = sleepy ? `<text class="bv-z" x="${fx + 22}" y="${fy - 16}" font-size="13" font-weight="700" fill="${ink}" opacity=".55" font-family="system-ui">z</text>` : '';
     const style = delay == null ? `--blink:${blinkDelay}s;--look:${lookDelay}s` : `--blink:${-delay}s;--look:${-delay}s;--t:${-delay}s`;
     const L1 = warm ? 0.9 : 0.82, L2 = warm ? 0.84 : 0.74;
@@ -59,7 +54,7 @@
 <ellipse class="bv-shadow" cx="50" cy="94" rx="24" ry="3.2" fill="oklch(0.3 0.05 ${h})" opacity=".14"/>
 <g class="bv-body"><path d="${S.d}" fill="url(#${id})"/>
 <ellipse cx="${fx - 17}" cy="${fy - 19}" rx="6.5" ry="3.6" fill="#fff" opacity=".5" transform="rotate(-24 ${fx - 17} ${fy - 19})"/>
-<g class="bv-face">${cheeks}<g class="bv-eyes">${eye(fx - g)}${eye(fx + g)}</g>${mouth}</g>${zz}</g></svg>`;
+<g class="bv-face">${cheeks}<g class="bv-eyes">${eye(fx - g, -1)}${eye(fx + g, 1)}</g>${mouth}</g>${zz}</g></svg>`;
   }
   const css = `
 .bv { overflow: visible; flex: none; }
@@ -71,14 +66,14 @@
   .bv:not(.bv-still)[data-state="idle"] .bv-eyes { animation: bv-look 7s ease-in-out infinite var(--look, 0s); }
   .bv:not(.bv-still)[data-state="message"] .bv-body { animation: bv-bounce .9s cubic-bezier(.3,.7,.4,1) infinite var(--t, 0s); }
   .bv:not(.bv-still)[data-state="thinking"] .bv-body { animation: bv-wiggle 1.4s ease-in-out infinite var(--t, 0s); }
-  .bv:not(.bv-still)[data-state="thinking"] .bv-eyes { transform: translate(2px, -3px); }
+  .bv[data-state="thinking"] .bv-eyes { transform: translate(1.5px, -4px); }
   .bv:not(.bv-still)[data-state="sleepy"] .bv-body { animation: bv-breathe 6s ease-in-out infinite var(--t, 0s); }
   .bv:not(.bv-still)[data-state="sleepy"] .bv-z { animation: bv-z 3s ease-out infinite var(--t, 0s); }
   .bv:not(.bv-still)[data-state="happy"] .bv-body { animation: bv-hop 1s cubic-bezier(.3,.7,.4,1) infinite var(--t, 0s); }
   .bv-frame, .bv-frame * { animation-play-state: paused !important; }
 }
 @keyframes bv-breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.035, .965); } }
-@keyframes bv-blink { 0%, 93%, 100% { transform: scaleY(1); } 96% { transform: scaleY(.1); } }
+@keyframes bv-blink { 0%, 93%, 100% { transform: scaleY(1); } 96% { transform: scaleY(.28); } }
 @keyframes bv-look { 0%, 30%, 100% { transform: translate(0, 0); } 40%, 55% { transform: translate(-3px, -1px); } 65%, 80% { transform: translate(3px, 0); } }
 @keyframes bv-bounce { 0% { transform: translateY(0) scale(1, 1); } 25% { transform: translateY(0) scale(1.08, .9); } 50% { transform: translateY(-14px) scale(.95, 1.06); } 75% { transform: translateY(0) scale(1.05, .94); } 100% { transform: translateY(0) scale(1, 1); } }
 @keyframes bv-wiggle { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-6deg); } 75% { transform: rotate(6deg); } }

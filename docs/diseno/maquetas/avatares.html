@@ -29,7 +29,7 @@ const { SHAPES, COLORS, svg } = OrbAvatar;
 const app = document.getElementById('app');
 if ((P.get('v') ?? 'sheet') === 'sheet') {
   const rows = ['coral', 'limon', 'menta', 'cielo', 'lavanda', 'rosa'];
-  app.innerHTML = `<h1>Avatares de los bots · 12 formas × 10 colores</h1><p class="sub">Cuerpos blandos de colores vivos; cada forma con su propia cara sencilla (puntos, óvalos, ojos grandes con brillo, judías). SVG determinista.</p>
+  app.innerHTML = `<h1>Avatares de los bots · 12 formas × 10 colores</h1><p class="sub">Cuerpos blandos de colores vivos; la cara de Orb: solo dos trazos cortos y redondeados, con inclinación y posición propias en cada forma. SVG determinista.</p>
   <div class="grid"><span></span>${Object.values(SHAPES).map((s) => `<span class="h">${s.label}</span>`).join('')}
   ${rows.map((c) => `<span class="c">${c}</span>${Object.keys(SHAPES).map((s) => `<span class="cell">${svg(s, c, { size: 78, still: true })}</span>`).join('')}`).join('')}</div>
   <div style="display:flex;gap:14px;margin-top:18px;align-items:center"><span class="c" style="width:110px;color:var(--muted);font-size:12.5px">10 colores</span>${Object.keys(COLORS).map((c) => `<span style="display:grid;justify-items:center;gap:2px">${svg('mochi', c, { size: 60, still: true })}<small style="color:var(--muted);font-size:11px">${c}</small></span>`).join('')}</div>`;

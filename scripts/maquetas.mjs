@@ -37,6 +37,14 @@ for (const d of ['desktop', 'phone', 'glass']) {
 {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, locale: 'es-ES' });
   const page = await ctx.newPage();
+  const orch = pathToFileURL(path.join(ROOT, 'docs', 'diseno', 'maquetas', 'orquestador.html')).href;
+  for (const t of ['light', 'dark']) {
+    await page.goto(`${orch}?t=${t}`);
+    await page.evaluate(() => document.fonts.ready);
+    const file = path.join(OUT, `orquestador-iconos-${t}.png`);
+    await page.screenshot({ path: file, fullPage: true });
+    shots.push(file);
+  }
   for (const v of ['sheet', 'states']) for (const t of ['light', 'dark']) {
     await page.goto(`${avatars}?v=${v}&t=${t}`);
     await page.evaluate(() => document.fonts.ready);
