@@ -2,10 +2,22 @@
 // methods and limits as a phone (remote.mjs › ALLOWED): talk to Orbe or to a bot (streamed), tasks, the approval cards,
 // and the workshop seen from a centre.
 
+import { PROTOCOL, MIN_PROTOCOL, versionGap, versionOfProtocol } from '../core/link.mjs';
+
 const isUser = (l) => l.role === 'usuario';
 
+// 3.6: what to tell about the versions after /api/me: this terminal is too old for that Orb, or that Orb for this
+// terminal (null: they understand each other).
+export function versionNotice(me, name, t) {
+  if (!me) return null;
+  const gap = versionGap({ v: PROTOCOL, min: MIN_PROTOCOL }, me);
+  if (gap === 'me') return t('term.version.updateTerminal', { has: versionOfProtocol(PROTOCOL), need: versionOfProtocol(me.min) });
+  if (gap === 'them') return t('term.version.updateOrb', { name, has: me.version ?? versionOfProtocol(me.v ?? 2), need: versionOfProtocol(MIN_PROTOCOL) });
+  return null;
+}
+
 export function createClient({ link, peer }) {
-  const call = (method, params = {}) => link.call(peer.id, method, params);
+  const call = (method, params = {}, opts = {}) => link.call(peer.id, method, params, opts);
   const maxId = (lines) => lines.reduce((m, l) => Math.max(m, Number(l.id) || 0), 0);
 
   // Waits for the answer to a message: streams the partial text (onPartial gets the whole text so far) and resolves with
@@ -59,6 +71,8 @@ export function createClient({ link, peer }) {
   const client = {
     peer, call, follow,
     status: () => call('link.status'),
+    // 3.6: whom this terminal is for on that Orb ({ person: { id, name }, v, min, version }).
+    me: () => link.me(peer.id),
     state: () => call('app.state'),
     // A message to Orbe: in the conversation given, or a new one. → { conversation, sinceId }
     async sendOrb(text, conversation = null) {
@@ -89,13 +103,25 @@ export function createClient({ link, peer }) {
       return out;
     },
     // decision: 'allow' | 'deny' | 'always' (always only for an agent's permission).
-    async decide(card, decision) {
-      if (card.kind === 'permiso') return call('sessions.approve', { id: card.session, request: card.request, decision });
-      if (card.kind === 'tarea') {
-        const full = await call('tasks.get', { id: card.id });
-        return call('tasks.approve', { id: card.id, decision: decision === 'deny' ? 'rejected' : 'approved', hash: full.previewHash });
+    // 3.6: a sensitive card asks the person's PIN (askPin) once: it gives a ticket for this terminal for a few minutes.
+    async decide(card, decision, { askPin = null } = {}) {
+      const run = async (opts) => {
+        if (card.kind === 'permiso') return call('sessions.approve', { id: card.session, request: card.request, decision }, opts);
+        if (card.kind === 'tarea') {
+          const full = await call('tasks.get', { id: card.id });
+          return call('tasks.approve', { id: card.id, decision: decision === 'deny' ? 'rejected' : 'approved', hash: full.previewHash }, opts);
+        }
+        return call('bots.decide', { item: card.id, decision: decision === 'deny' ? 'deny' : 'allow' }, opts);
+      };
+      try { return await run(client.ticket ? { ticket: client.ticket } : {}); }
+      catch (error) {
+        if (error.reason !== 'strong' || !askPin) throw error;
+        const pin = await askPin();
+        const r = await call('persons.verifyPin', { pin });
+        if (!r?.ok) throw Object.assign(new Error(r?.reason ?? 'wrong'), { key: r?.reason === 'locked' ? 'term.pin.locked' : 'term.pin.wrong' });
+        client.ticket = r.ticket;
+        return run({ ticket: r.ticket });
       }
-      return call('bots.decide', { item: card.id, decision: decision === 'deny' ? 'deny' : 'allow' });
     },
     taller: () => call('taller.status'),
     wake: () => call('taller.wake')

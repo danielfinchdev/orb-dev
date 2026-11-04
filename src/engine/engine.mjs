@@ -4,6 +4,7 @@
 // There is no HTTP server: nothing on the network or in a browser can reach it.
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import crypto from 'node:crypto';
 import { useHome, ctx, tr, role, isHeadless } from '../core/context.mjs';
 import { isHome, ensureLayout, hostsBots } from '../core/home.mjs';
@@ -18,12 +19,19 @@ const transport = (() => {
 let remote = null; // phone access (src/engine/remote.mjs), when turned on
 let link = null; // 3.5: Magic Link to other Orbs (src/core/link.mjs)
 let devControl = null; // 3.1: the developer's control line (src/engine/dev-control.mjs), only in Orb.dev
-const emit = (event, payload) => {
-  try { transport.send({ type: 'event', event, payload }); } catch { /* window gone */ }
-  remote?.broadcast(event, payload);
-  link?.relay(event, payload); // a workshop passes its live events on to its centre
-  devControl?.broadcast(event, payload);
-};
+// 3.6 «Personas»: every event goes through the router (src/engine/router.mjs), which works out once who it is for and
+// gives each sink only what its person may see: this PC's window (whoever sits at it), the phones and browsers, the
+// centre a workshop reports to, and the developer's control line (the owner's). Before the engine has started (no
+// router yet), straight to the window.
+let router = null;
+const toWindow = (event, payload) => { try { transport.send({ type: 'event', event, payload }); } catch { /* window gone */ } };
+const emit = (event, payload, hint = null) => { if (router) router.route(event, payload, hint); else toWindow(event, payload); };
+// What the app itself (the main process) needs whoever sits at the window: the settings (menu language) and the agents'
+// browser; while the window is locked, only the lock's own events.
+const APP_EVENTS = new Set(['config:changed', 'agentBrowser:closeTask']);
+const LOCK_EVENTS = /^(persons:|app:lock)/;
+// While locked, this PC's window may only unlock (and see who may unlock it).
+const LOCKED_OK = new Set(['persons.unlock', 'app.lockState', 'app.state']);
 
 let api = null;
 let bridge = null; // 2.7: the files shared with Open Control Edge (engine/bridge.mjs)
@@ -64,6 +72,24 @@ async function start(home, version, secret, browser, headless) {
   const { Scheduler } = await import('./scheduler.mjs');
   const { buildApi } = await import('./api.mjs');
   const board = new Board();
+  {
+    const { createRouter } = await import('./router.mjs');
+    const { ownerOfBoard } = await import('../core/authz.mjs');
+    const { phoneConfig } = await import('./remote.mjs');
+    router = createRouter({ board, log });
+    router.add('window', (event, payload, audience, to) => {
+      const d = api?.desktop ?? { person: null, locked: false };
+      const person = d.person ?? ownerOfBoard(board);
+      if (d.locked && !LOCK_EVENTS.test(event) && !APP_EVENTS.has(event)) return;
+      if (!APP_EVENTS.has(event) && !to(person)) return;
+      // Someone other than the owner at the window: the settings without secrets (as a phone gets them).
+      toWindow(event, event === 'config:changed' && person !== ownerOfBoard(board) ? phoneConfig(payload) : payload);
+    });
+    router.add('remote', (event, payload, audience, to) => remote?.broadcast(event, payload, audience, to));
+    // A workshop passes its live events on to the centre of the person each one is for.
+    router.add('link', (event, payload, audience, to) => link?.relay(event, payload, (pid) => to(pid ?? ownerOfBoard(board))));
+    router.add('dev', (event, payload, audience, to) => { if (devControl && to(ownerOfBoard(board))) devControl.broadcast(event, payload); });
+  }
   // Only the coordinator's chat process gets this key; the MCP accepts the identity "orb" only with it.
   const orchKey = crypto.randomBytes(24).toString('hex');
   board.setting('orchestrator_key_hash', crypto.createHash('sha256').update(orchKey).digest('hex'));
@@ -86,8 +112,10 @@ async function start(home, version, secret, browser, headless) {
     const shown = summary && !(ctx.config.language !== 'en' && looksEnglish(summary)) ? (summary.length > 160 ? `${summary.slice(0, 160).replace(/\s+\S*$/, '')}…` : summary) : '';
     const says = shown ? tr('msg.engine.agentSays', { text: shown }) : '';
     let agent = s.agent; try { agent = adapter(s.agent).label; } catch { /* id */ }
+    // 3.6: the line is for the task's person (a task of no conversation is still somebody's).
+    const person = board.one('SELECT person_id FROM tasks WHERE id = ?', Number(s.task_id))?.person_id ?? null;
     board.addChat('system', tr(wait > 0 ? 'msg.engine.taskNeedsPermissionWait' : 'msg.engine.taskNeedsPermission', { id: s.task_id, agent, what, reason: item.body?.reason ?? '', min: wait }) + says,
-      { kind: 'task-approval', session: s.id, task: s.task_id, request: item.body?.id, detail: String(item.body?.title ?? '').slice(0, 2000) });
+      { kind: 'task-approval', session: s.id, task: s.task_id, request: item.body?.id, detail: String(item.body?.title ?? '').slice(0, 2000) }, undefined, { person });
   };
   // 3.1: the chat line of a task's permission shows how it ended (answered here or in the task, nobody answered, the task
   // stopped), instead of staying «pending» with buttons that no longer work.
@@ -100,7 +128,8 @@ async function start(home, version, secret, browser, headless) {
   };
   sessions.onApprovalExpired = (s, item) => {
     if (s?.kind !== 'task') return;
-    board.notice(tr('msg.engine.permissionTimedOut', { id: s.task_id, title: plainAction(item.body?.title ?? '', { lang: ctx.config.language }), min: Number(ctx.config.approvalWaitMinutes ?? 10) }), 'warning');
+    const person = board.one('SELECT person_id FROM tasks WHERE id = ?', Number(s.task_id))?.person_id ?? null;
+    board.notice(tr('msg.engine.permissionTimedOut', { id: s.task_id, title: plainAction(item.body?.title ?? '', { lang: ctx.config.language }), min: Number(ctx.config.approvalWaitMinutes ?? 10) }), 'warning', { person });
   };
   // 3.2: a new conversation gets its title from Orb (the lightest model of its agent), once; the quick one stays if not.
   const { autoTitle } = await import('./titles.mjs');
@@ -118,31 +147,51 @@ async function start(home, version, secret, browser, headless) {
   const { Bots } = await import('./bots.mjs');
   const bots = new Bots(board, { emit, log, push: (note) => remoteRef.current?.push?.(note) }).start();
   api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, bots });
-  remote = remoteRef.current = createRemote({ board, api, log, emit });
+  remote = remoteRef.current = createRemote({ board, api, log, emit, version });
   // 3.5 Magic Link: the links this Orb made to other Orbs (keys sealed with the app's secret). A workshop linked to a
   // centre runs the calls the centre forwards to it, with the same checks as a phone's.
   {
     const { createLink, orbIdentity } = await import('../core/link.mjs');
     const { macAddresses } = await import('../core/wol.mjs');
     const { guardCall, shapeResult, orbNameOf } = await import('./remote.mjs');
-    const { principalOf } = await import('../core/authz.mjs');
+    const { audit, ownerOfBoard } = await import('../core/authz.mjs');
+    const { whoAsks, once } = await import('./forward.mjs');
     const { readKey } = await import('../core/home.mjs');
+    const { orbIdOf } = await import('../core/backup.mjs');
+    const { cloneVerdict } = await import('../core/export.mjs');
     let macs = { at: 0, list: [] }; // the network cards, looked at once a minute at most
     const myMacs = () => { if (Date.now() - macs.at > 60_000) macs = { at: Date.now(), list: macAddresses() }; return macs.list; };
+    // Tests make an Orb of an older protocol with ORB_LINK_PROTOCOL (only with the test agents).
+    const testProtocol = process.env.ORB_FAKE_AGENTS && Number(process.env.ORB_LINK_PROTOCOL) ? Number(process.env.ORB_LINK_PROTOCOL) : null;
     link = remoteRef.link = createLink({
       file: path.join(ctx.paths.data, 'enlaces.json'), secret: ctx.secret ?? readKey(home), log,
-      identity: () => orbIdentity({ name: orbNameOf(ctx.config), role: role(), version, macs: myMacs() }),
-      onRequest: async (method, params) => {
+      ...(testProtocol ? { protocol: testProtocol, min: Math.min(2, testProtocol) } : {}),
+      // 3.6: with this Orb's identity (orbId, incarnation): the other side tells a moved Orb from a copy of it.
+      identity: () => { const id = orbIdOf(home); return { ...orbIdentity({ name: orbNameOf(ctx.config), role: role(), version, macs: myMacs() }), orb: { orbId: id.orbId, incarnation: id.incarnation, host: os.hostname().slice(0, 80) } }; },
+      verdict: cloneVerdict,
+      // 3.6 (A13, A12): the centre says who asked there; the call runs here as the person this link belongs to, once per
+      // request_id, audited.
+      onRequest: async (method, params, peer, { principal = null, requestId = null } = {}) => {
+        const who = whoAsks(board, peer, principal);
         const why = guardCall(board, method, params);
-        if (why) throw Object.assign(new Error(why), { status: 403 });
-        // 3.6: a call the centre forwards runs as the owner here (WS2: as the person the link maps to).
-        return shapeResult(method, (await api.call(method, params, principalOf(board, { forwarded: true }))) ?? null);
+        if (why) { audit(board, who, method, { type: 'link', id: peer?.id ?? '' }, 'deny', 'guard'); throw Object.assign(new Error(why), { status: 403 }); }
+        audit(board, who, method, { type: 'link', id: peer?.id ?? '' }, 'allow', 'forward');
+        return once(board, requestId, peer?.id, async () => {
+          // Tests: a workshop that takes its time (only with the test agents).
+          const delay = process.env.ORB_FAKE_AGENTS ? Number(params.__testDelayMs) || 0 : 0;
+          if (delay) { delete params.__testDelayMs; await new Promise((r) => setTimeout(r, Math.min(delay, 10_000))); }
+          return shapeResult(method, (await api.call(method, params, who)) ?? null);
+        });
       },
       onChange: (peers) => emit('link:peers', peers)
     });
     if (!ctx.moved) link.start();
     // 3.5: the bots live on the centre: what its bots say comes to this Orb's window as centro:<event>.
-    link.on('*', (event, payload, peer) => { if (hostsBots(peer?.role ?? 'taller') && /^bot\./.test(event)) emit(`centro:${event}`, payload); });
+    // 3.6: only to the person this link belongs to here (the centre already sends only that person's bots).
+    link.on('*', (event, payload, peer) => { if (hostsBots(peer?.role ?? 'taller') && /^bot\./.test(event)) emit(`centro:${event}`, payload, { person: peer?.person ?? ownerOfBoard(board) }); });
+    // 3.6 (moving an Orb): a linked Orb that looks like a copy of another is not served; the person of that link is told.
+    link.on('link:clone', (p, peer) => board.notice(tr('msg.link.clone', { name: p?.name ?? '' }), 'warning', { person: peer?.person ?? null }));
+    link.on('link:moved', (p, peer) => board.notice(tr('msg.link.moved', { name: p?.name ?? '' }), 'info', { person: peer?.person ?? null }));
   }
   // 3.1: only an unpacked Orb.dev started with ORB_DEV_CONTROL=1 (main.mjs decides; never an installed Orb).
   if (process.env.ORB_DEV_CONTROL === '1') {
@@ -153,8 +202,29 @@ async function start(home, version, secret, browser, headless) {
 
   // Changes made by this process are pushed right away; changes made by MCP processes (other connections) are found with
   // PRAGMA data_version, which only moves when another connection commits.
-  let pending = new Set(); let flush = null;
-  const changed = (what) => { pending.add(what); flush ??= setTimeout(() => { flush = null; const list = [...pending]; pending = new Set(); emit('board:changed', list); api.notifyNewChat(); }, 120); };
+  // 3.6: a change that names its person ({ person } or { res }) is told only to them; any other, to everyone (the list
+  // says what changed, never its content).
+  const { peopleWith } = await import('../core/authz.mjs');
+  let pending = new Map(); let flush = null; // what -> 'all' | Set(person)
+  const changed = (what, hints = null) => {
+    let who = pending.get(what);
+    if (who !== 'all') {
+      const named = [];
+      if (hints?.person) named.push(String(hints.person));
+      if (hints?.res) { try { named.push(...peopleWith(board, hints.res)); } catch { /* gone */ } }
+      if (!named.length) who = 'all'; else { who ??= new Set(); for (const p of named) who.add(p); }
+      pending.set(what, who);
+    }
+    flush ??= setTimeout(() => {
+      flush = null; const batch = pending; pending = new Map();
+      const all = [...batch].filter(([, w]) => w === 'all').map(([k]) => k);
+      if (all.length) emit('board:changed', all);
+      const byPerson = new Map();
+      for (const [k, w] of batch) if (w !== 'all') for (const p of w) { if (!byPerson.has(p)) byPerson.set(p, []); byPerson.get(p).push(k); }
+      for (const [p, list] of byPerson) emit('board:changed', list, { person: p });
+      api.notifyNewChat();
+    }, 120);
+  };
   board.onChange(changed);
   let dataVersion = board.one('PRAGMA data_version').data_version;
   const { syncProjects } = await import('../core/projects.mjs');
@@ -223,8 +293,14 @@ transport.on(async (msg) => {
   if (msg.type !== 'call') return;
   try {
     if (!api) throw new Error(tr('sys.engine.notStarted', { name: PRODUCT.name }));
-    // 3.6: this PC's window calls as the person sitting at it (the owner until persons.switch).
-    const result = await api.call(String(msg.method), msg.params ?? {}, api.desktopPrincipal());
+    // 3.6: this PC's window calls as the person sitting at it (the owner until persons.switch); Orb Núcleo's local socket
+    // (as: 'control', src/server/control.mjs) as the owner. A locked window may only unlock (engine-enforced).
+    const method = String(msg.method);
+    let result;
+    if (msg.as === 'control') result = await api.call(method, msg.params ?? {}, api.controlPrincipal());
+    else if (api.desktop.locked && method === 'app.state') result = api.lockState();
+    else if (api.desktop.locked && !LOCKED_OK.has(method)) throw Object.assign(new Error(tr('msg.persons.lockedWindow')), { userFacing: true });
+    else result = await api.call(method, msg.params ?? {}, api.desktopPrincipal());
     transport.send({ type: 'reply', id: msg.id, ok: true, result: result === undefined ? null : result });
   } catch (error) {
     if (!error?.userFacing) log(`${msg.method}: ${error?.stack ?? error}`);

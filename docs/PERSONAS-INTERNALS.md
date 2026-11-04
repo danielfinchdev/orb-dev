@@ -99,3 +99,43 @@ rules end in `*` (`centro:*`). The test scans `src/` for every `emit('…')` and
 `src/core/budget.mjs`: `pickAccount(board, { person, agent, bot, preferred })` (today: the preferred account of that agent,
 else `defaultAccount`), `checkSpend(board, { person, account, bot })` → `{ ok: true }`, `recordSpend(board, { person,
 account, bot, conversation, session, task, usage })` → a `usage_ledger` row, day in the person's time zone.
+
+## The gateway (WS2)
+
+- **Events.** `emit(event, payload, hint?)` in `src/engine/engine.mjs` goes to `src/engine/router.mjs`, which works out
+  the audience once (`audienceOf`, or the hint: `{ person }` / `{ persons }`) and gives it to each sink: this PC's window
+  (the person sitting at it; while locked only `persons:*`), every live stream of `remote.mjs` (`client.person`), its
+  notifications, the centre of a workshop (`link.relay(event, payload, reaches)`: only the centre whose link belongs to
+  that person here) and dev-control (owner). `board.changed(what, { person } | { res })` becomes a `board:changed` for
+  those people only; without a hint, for everyone (table names, never content). A workshop's events arrive as
+  `taller:<event>` for the person of that workshop's device; the centre's bots as `centro:<event>` for the person of the
+  link.
+- **Devices.** `devices.person_id` is set when pairing, from the QR («¿Para quién?»: `link.qr { person | newPerson }`),
+  never from what the device says. A user makes QRs for themselves only; `newPerson`, a QR for someone else and
+  «Puede administrar» are the owner's (and admin only for an owner's device). `link.devices`, `link.status`,
+  `link.revoke`, `link.rename` are per person (the owner: everyone's devices). Pictures go to `adjuntos-movil/<person>/`.
+  Notifications go to the devices of the audience with each person's `preview` (`personSetting(pid, 'preview')`).
+- **Strong tickets from afar.** A call body may carry `ticket` (from `persons.verifyPin` on that device); `remote.mjs`
+  turns it into `principal.strongUntil`. A refused call answers `{ ok: false, status: 403, reason }`.
+- **Protocol 3** (`src/core/link.mjs`): `PROTOCOL = 3`, `MIN_PROTOCOL = 2` (phones, terminals), `FORWARD_MIN = 3`.
+  Hello and `/api/me` carry `{ v, min, version, features }`, the person the link is for (`person`) and the Orb's identity
+  (`orb: { orbId, incarnation, host }`, checked with `cloneVerdict`: a copy is refused, a move followed). `versionGap()`
+  says who must update. Link records keep `person` (whose link here) and `remotePerson` (whom the other side counts it as).
+- **Forwarding (A13, A12).** The centre forwards only to the person's own workshop (`remote.mjs › devTargetDevice(person)`,
+  `mayForward`: audited); a workshop of protocol 2 gets the owner's calls only («Actualiza …»). `link:request` carries
+  `principal` and `request_id`; the workshop (`src/engine/forward.mjs`) runs it as the person of its link only if the
+  principal is the link's `remotePerson`, once per `request_id` (`link_seen`). No answer in time is `desconocido`
+  (kept in `link_queue` with its `request_id`); `taller.retry { id }` sends the same request again. The queue is per
+  person (`taller.queued`).
+- **Shaping (B1/B2)** (`src/core/shape.mjs`, called by `shapeFor(principal, method, result, board)`): with more than one
+  person, `app.state` keeps only the caller's approvals, conversations at work, counts and sidebar marks (someone other
+  than the owner also gets the settings without others' accounts, connectors or paths), and every list drops what the
+  caller has no right on.
+- **This PC's window.** `api.desktop = { person, locked }`. `persons.lock` / `persons.unlock { id?, pin }` /
+  `app.lockState`; while locked, `engine.mjs` refuses every call of the window but those (and a minimal `app.state`).
+- **Orb Núcleo.** `host.call(method, params, { as: 'control' })` runs as the owner on the control channel (ceiling
+  `CONTROL_SET`, with `persons.list/create/setPin/overview`). Commands: `orb-nucleo personas`, `persona nueva <nombre>`,
+  `pin-reset <persona>`, `enlazar --persona <nombre> [--admin]`.
+- **Backups of a linked Orb.** Link op `backup.put` (`link.putBackup(id, file)` sends 1.5 MB pieces): only from a
+  confirmed Orb of the owner, an `.orbbak` (magic checked), at most 2 GB; kept in `<backups>/de-otros-orbs/<device>/`, the
+  last 3.

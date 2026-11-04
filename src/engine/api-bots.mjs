@@ -7,6 +7,7 @@ import { oneLine } from '../core/safety.mjs';
 import * as B from '../core/bots.mjs';
 import { serverStatus, haFetch } from '../core/server-admin.mjs';
 import { CENTRO_FORWARD } from './remote.mjs';
+import { ownerOfBoard } from '../core/authz.mjs';
 import { fail, str, int, oneOf } from './api-common.mjs';
 
 // The linked Orbs that keep bots and «Llevar mis bots» (shared by bots.where/moveTo and centro.*).
@@ -16,8 +17,10 @@ function hub({ board, bots, remoteRef }) {
   // Orb's own bots are the ones shown (active: false).
   const hubPeers = () => (remoteRef.link?.peers() ?? []).filter((p) => hostsBots(p.role ?? 'taller') && !p.revoked);
   const botsLocation = () => String(ctx.config.bots?.location || 'local');
-  const centroPeer = () => {
-    const list = hubPeers(); const loc = botsLocation();
+  // 3.6 (WS2): who: only the links of that person here (a link without a person is the owner's).
+  const centroPeer = (who = null) => {
+    const owner = who ? ownerOfBoard(board) : null;
+    const list = hubPeers().filter((p) => !who || (p.person ?? owner) === who.person); const loc = botsLocation();
     return (loc !== 'local' && list.find((p) => p.id === loc)) || list.find((p) => p.online) || list[0] || null;
   };
   // The Orbs already asked about (the card after linking is shown once for each).
@@ -157,8 +160,8 @@ export function botMethods({ board, emit, remoteRef, bots }) {
 // 3.5: centro.<method> on a workshop: the bots of the centre it is linked with.
 export function centroApi({ board, bots, remoteRef }) {
   const { centroPeer, botsLocation } = hub({ board, bots, remoteRef });
-  async function centroCall(sub, params) {
-    const peer = centroPeer();
+  async function centroCall(sub, params, who = null) {
+    const peer = centroPeer(who);
     if (sub === 'status') return peer ? { linked: true, id: peer.id, name: peer.name, online: peer.online, lastSeen: peer.lastSeen, active: botsLocation() === peer.id } : { linked: false };
     if (!peer) fail(tr('msg.link.noCentro'));
     if (!CENTRO_FORWARD.has(sub)) fail(tr('msg.remote.pcOnly'));

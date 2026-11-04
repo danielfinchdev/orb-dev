@@ -46,6 +46,11 @@ function parse(argv) {
     else if (a === '--taller' || a === '--workshop') o.taller = true;
     else if (a === '--tipo' || a === '--kind') { o.kind = KIND_WORDS[String(argv[++i] ?? '').toLowerCase()]; if (!o.kind) throw new Error('tipo: movil, navegador, orb o terminal'); }
     else if (a === 'dispositivos' || a === 'devices') o.command = 'devices';
+    // 3.6 «Personas»: the people of this server, a new one, a PIN taken away, a QR for someone.
+    else if (a === 'personas' || a === 'persons') o.command = 'persons';
+    else if (a === 'persona' || a === 'person') { const sub = String(argv[++i] ?? '').toLowerCase(); if (!['nueva', 'new'].includes(sub)) throw new Error('orb-nucleo persona nueva <nombre>'); o.command = 'personNew'; o.target = argv.slice(i + 1).join(' ').trim(); i = argv.length; if (!o.target) throw new Error('falta el nombre: orb-nucleo persona nueva <nombre>'); }
+    else if (a === 'pin-reset') { o.command = 'pinReset'; o.target = argv[++i]; if (!o.target) throw new Error('falta la persona: orb-nucleo pin-reset <persona>'); }
+    else if (a === '--persona' || a === '--person') { o.person = argv[++i]; if (!o.person) throw new Error('falta la persona: --persona <nombre>'); }
     // 3.6: backups and moving the Orb.
     else if (a === 'copia' || a === 'backup') {
       o.command = 'backup'; o.sub = { ahora: 'now', now: 'now', lista: 'list', list: 'list', restaurar: 'restore', restore: 'restore', clave: 'code', code: 'code' }[String(argv[++i] ?? '').toLowerCase()];
@@ -78,9 +83,43 @@ async function withEngine(home, version, fn) {
     console.log(p.dim(t('term.nucleo.ownEngine')));
     own = createHost({ home, version, echo: false });
     await own.start();
-    call = (m, params) => own.call(m, params);
+    call = (m, params) => own.call(m, params, { as: 'control' });
   }
   try { return await fn(call); } finally { if (own) await own.stop(); }
+}
+// 3.6 «Personas»: who uses this server (names and numbers only), a new person, and a PIN taken away (a forgotten PIN: the
+// person chooses a new one).
+const personByName = (list, name) => { const q = String(name ?? '').trim().toLowerCase(); return list.find((x) => x.id === name || x.name.toLowerCase() === q) ?? null; };
+async function personsCommand(home, version) {
+  const t = translator(); const p = painter();
+  return withEngine(home, version, async (call) => {
+    const list = await call('persons.overview');
+    for (const x of list) {
+      const marks = [x.role === 'owner' ? t('term.nucleo.isOwner') : null, x.hasPin ? t('term.nucleo.hasPin') : null].filter(Boolean).join(', ');
+      console.log(`${p.bold(x.name)}  ${p.dim(t('term.nucleo.personDevices', { n: x.devices }))}${marks ? `  ${p.yellow(marks)}` : ''}`);
+    }
+    console.log(p.dim(t('term.nucleo.personsHint', { cmd: 'orb-nucleo enlazar --persona <nombre>' })));
+    return 0;
+  });
+}
+async function personNewCommand(home, version, name) {
+  const t = translator(); const p = painter();
+  return withEngine(home, version, async (call) => {
+    const x = await call('persons.create', { name });
+    console.log(p.green(t('term.nucleo.personCreated', { name: x.name })));
+    console.log(p.dim(t('term.nucleo.personsHint', { cmd: `orb-nucleo enlazar --persona "${x.name}"` })));
+    return 0;
+  });
+}
+async function pinResetCommand(home, version, name) {
+  const t = translator(); const p = painter();
+  return withEngine(home, version, async (call) => {
+    const x = personByName(await call('persons.list'), name);
+    if (!x) { console.error(t('term.nucleo.noPerson', { name })); return 1; }
+    await call('persons.setPin', { id: x.id, pin: null });
+    console.log(p.green(t('term.nucleo.pinReset', { name: x.name })));
+    return 0;
+  });
 }
 // 3.5.1: the linked devices, and closing one's link, from the server itself.
 async function devicesCommand(home, version) {
@@ -162,7 +201,7 @@ async function linkDevice(home, o, version) {
     console.log(p.dim(t('term.nucleo.ownEngine')));
     own = createHost({ home, version, echo: false });
     await own.start();
-    call = (m, params) => own.call(m, params);
+    call = (m, params) => own.call(m, params, { as: 'control' });
   }
   let code = 0;
   const stop = async () => { if (own) { const h = own; own = null; await h.stop(); } };
@@ -172,7 +211,12 @@ async function linkDevice(home, o, version) {
     const known = new Set((await call('link.devices')).map((d) => d.id));
     // 3.5.1: what it is for is chosen here; «Puede administrar» goes to the first device, or to this one with --admin
     // (whoever runs this on the server is its owner: a lost phone is replaced so).
-    const q = await call('link.qr', { admin: o.admin ? true : 'first', ...(o.kind ? { device: o.kind } : {}), ...(o.taller ? { dev: true } : {}) });
+    // 3.6: --persona: whom the device is for (default the owner); «Puede administrar» only for the owner's.
+    let forPerson = null;
+    if (o.person) { forPerson = personByName(await call('persons.list'), o.person); if (!forPerson) { console.error(t('term.nucleo.noPerson', { name: o.person })); return 1; } }
+    const ownerDevice = !forPerson || forPerson.role === 'owner';
+    const q = await call('link.qr', { admin: ownerDevice ? (o.admin ? true : 'first') : false, ...(forPerson ? { person: forPerson.id } : {}), ...(o.kind ? { device: o.kind } : {}), ...(o.taller ? { dev: true } : {}) });
+    if (forPerson) console.log(p.dim(t('term.nucleo.forPerson', { name: forPerson.name })));
     console.log(`\n${p.bold(t('term.nucleo.title', { name: q.name }))}\n`);
     console.log(qrTerminal(q.url, { color: p.on }));
     console.log(`\n${t('term.nucleo.scan')}`);
@@ -202,7 +246,7 @@ async function main() {
   const o = parse(process.argv.slice(2));
   const version = packageVersion();
   if (o.command === 'version') { console.log(version); return; }
-  if (o.command === 'help') { console.log('orb-nucleo [--home <carpeta>] [--papel centro|todo|taller] | estado | entrar <claude|codex|cuenta> | enlazar [--tipo movil|navegador|orb|terminal] [--admin] [--taller] [--no-esperar] | dispositivos | quitar <id> | copia ahora|lista|restaurar <archivo>|clave [--clave <código>] | mover exportar|importar <archivo> --clave <código> | --version'); return; }
+  if (o.command === 'help') { console.log('orb-nucleo [--home <carpeta>] [--papel centro|todo|taller] | estado | entrar <claude|codex|cuenta> | enlazar [--tipo movil|navegador|orb|terminal] [--admin] [--taller] [--no-esperar] | dispositivos | quitar <id> | personas | persona nueva <nombre> | pin-reset <persona> | enlazar --persona <nombre> | copia ahora|lista|restaurar <archivo>|clave [--clave <código>] | mover exportar|importar <archivo> --clave <código> | --version'); return; }
   // 3.6: importing a moved Orb goes into a folder that is not an Orb yet (nothing is prepared there first).
   if (o.command === 'move' && o.sub === 'import') { process.exit(await moveCommand(null, version, o, path.resolve(o.home ? o.home : defaultHome()))); }
   const home = prepareHome(o.home ? o.home : defaultHome(), { profile: o.profile });
@@ -210,6 +254,9 @@ async function main() {
   if (o.command === 'move') { process.exit(await moveCommand(home, version, o)); }
   if (o.command === 'link') { process.exit(await linkDevice(home, o, version)); }
   if (o.command === 'devices') { process.exit(await devicesCommand(home, version)); }
+  if (o.command === 'persons') { process.exit(await personsCommand(home, version)); }
+  if (o.command === 'personNew') { process.exit(await personNewCommand(home, version, o.target)); }
+  if (o.command === 'pinReset') { process.exit(await pinResetCommand(home, version, o.target)); }
   if (o.command === 'revoke') { process.exit(await revokeCommand(home, version, o.target)); }
   let onLogin = () => {};
   const host = createHost({ home, version, echo: o.command === 'run', onEvent: (event, payload) => { if (event === 'agents:login') onLogin(payload); } });
@@ -235,7 +282,7 @@ async function main() {
   }
   if (o.command === 'run') {
     // The local door for «orb-nucleo enlazar» while the service runs.
-    control = serveControl({ home, call: (m, params) => host.call(m, params), log: host.log });
+    control = serveControl({ home, call: (m, params) => host.call(m, params, { as: 'control' }), log: host.log });
     const where = await control.ready;
     if (where) host.log(`control local en ${where}`);
     return;

@@ -267,7 +267,31 @@ const CORE = {
 };
 
 // ======== WS2 · gateway (remote, link, terminal): append entries here.
-const GATEWAY = {};
+// Devices and links are each person's: a person manages their own (api-link.mjs filters and checks the device), the owner
+// everyone's. A QR for someone else, a new person or «Puede administrar»: the owner only.
+const qrRule = (board, principal, params) => (principal.role === 'owner' || ((params.person == null || params.person === '' || params.person === principal.person) && !params.newPerson && !params.admin) ? true : 'notYours');
+const GATEWAY = {
+  'link.qr': { admin: true, check: qrRule },
+  'link.devices': { public: true }, // own devices; the owner's: everyone's
+  'link.revoke': { public: true }, // a device of one's own (api-link.mjs › mineDevice); the owner: any
+  'link.rename': { public: true },
+  'link.status': { public: true }, // shaped per person (remote.mjs › linkStatus)
+  'link.connect': { public: true }, // the link is of whoever makes it
+  'link.peers': { public: true }, // own links only
+  'link.disconnect': { public: true }, // own links only
+  'taller.*': { public: true }, // forwarding (A13): only to the person's own workshop (remote.mjs › mayForward), audited
+  'centro.*': { public: true }, // the centre link of the person (api-bots.mjs › centroPeer)
+  // this PC's window: the lock screen (engine-enforced, engine.mjs) and who may unlock it
+  'persons.lock': { desktop: true },
+  'persons.unlock': { desktop: true },
+  'app.lockState': { desktop: true }
+};
+// What a phone, a browser, a terminal or another Orb may also call: who it is for (persons.me, the names to share with)
+// and the PIN check that gives a strong ticket for sensitive cards (bound to that device).
+for (const set of [PHONE_SET, ORB_SET, CONSOLE_SET]) for (const m of ['persons.me', 'persons.list', 'persons.verifyPin']) set.add(m);
+// Orb Núcleo's local socket: the people of the server and their PINs (orb-nucleo personas, persona nueva, pin-reset,
+// enlazar --persona).
+for (const m of ['persons.list', 'persons.create', 'persons.setPin', 'persons.overview']) CONTROL_SET.add(m);
 // ======== WS3 · Orb mode + accounts: append entries here.
 const ORBMODE = {};
 // ======== WS4 · bots: append entries here.
@@ -328,7 +352,15 @@ const EVENTS_CORE = {
   'taller:*': 'owner' // WS2: per person
 };
 // WS2 … WS6 append their event rules in their own objects, like POLICY.
-const EVENTS_GATEWAY = {};
+const EVENTS_GATEWAY = {
+  // A line of no conversation is for its person (person on the payload), else the owner's.
+  'chat:new': (p) => (p?.conversation != null ? conv(p.conversation) : p?.person ? { person: p.person } : 'owner'),
+  'persons:locked': 'all', // only this PC's window gets it (no phone listens to it)
+  'persons:unlocked': 'all',
+  // A workshop's events and the centre's bots: the router gives them the person of their link (engine.mjs, remote.mjs).
+  'taller:*': 'owner',
+  'centro:*': 'owner'
+};
 const EVENTS_ORBMODE = {};
 const EVENTS_BOTSP = {};
 const EVENTS_DATA = { 'backup:done': 'owner', 'backup:restoreReady': 'owner', 'data:moved': 'owner', 'data:personExported': (p) => (p?.person ? { person: p.person } : 'owner') };
