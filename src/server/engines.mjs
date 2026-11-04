@@ -94,7 +94,8 @@ BIN='${String(bin).replace(/'/g, "'\\''")}'
 echo 500 > /proc/self/oom_score_adj 2>/dev/null || true
 NNP=''
 if command -v setpriv >/dev/null 2>&1; then NNP='setpriv --no-new-privs --'
-elif [ -e /etc/sudoers.d/orb-server ]; then echo "orb-server: setpriv is missing (util-linux): the agent does not start without no_new_privs" >&2; exit 126
+# The admin helper, not /etc/sudoers.d (that folder is root's only: the user cannot see into it).
+elif [ -e /usr/local/libexec/orb-server-admin ]; then echo "orb-server: setpriv is missing (util-linux): the agent does not start without no_new_privs" >&2; exit 126
 fi
 if [ -S "\${XDG_RUNTIME_DIR:-/nonexistent}/bus" ] && command -v systemd-run >/dev/null 2>&1; then
   # shellcheck disable=SC2086
