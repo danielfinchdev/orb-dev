@@ -18,6 +18,7 @@ if (!home || !isHome(home)) { process.stderr.write('ORB_HOME no apunta a la carp
 useHome(home);
 const { Board } = await import('../core/board.mjs');
 const B = await import('../core/bots.mjs');
+const R = await import('../core/replica.mjs');
 const S = await import('../core/server-admin.mjs');
 const { personName } = await import('../core/persons.mjs');
 const { rightOn, rank } = await import('../core/authz.mjs');
@@ -208,6 +209,8 @@ readline.createInterface({ input: process.stdin }).on('line', async (line) => {
         if (extra.length) throw new Error(tr('sys.mcp.extraArgs', { list: extra.join(', ') }));
         // A bot paused meanwhile does nothing more.
         if (me()?.paused) throw new Error(tr('sys.botmcp.paused', { name: me().name }));
+        // 3.7 (WS3): nor one that now runs on another Orb (it was moved, or that Orb took it over).
+        if (me() && !R.isHomeHere(board, me())) throw new Error(tr('msg.home.runsElsewhere', { name: me().name }));
         // 3.6: nor one whose share with this person was removed meanwhile.
         if (TALKER !== OWNER && !B.mayTalkTo(board, TALKER, ME)) throw new Error(tr('msg.authz.denied'));
         return reply(msg.id, { result: text(await tool.run(args)) });

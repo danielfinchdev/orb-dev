@@ -6,6 +6,7 @@ import { ctx, tr, migrateConfigPersons } from './context.mjs';
 import { avatarFor } from './avatar.mjs';
 import { titleFrom } from './titles.mjs';
 import { dbLike, ensureOwner, ownerId, systemTz } from './persons.mjs';
+import { migrateHome } from './replica-db.mjs';
 
 // node:sqlite may print an ExperimentalWarning; it would pollute the MCP stdout/stderr and the logs.
 const emitWarning = process.emitWarning;
@@ -510,7 +511,17 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   // 3.6: a bot's avatar { shape, color } (src/core/avatar.mjs); the ones before get a fixed one from their id.
   ['bots', 'avatar', 'TEXT'],
   // 3.6: whose agent sent a message between agents (NULL: the owner's): it only reaches that person's agents.
-  ['messages', 'person_id', 'TEXT']];
+  ['messages', 'person_id', 'TEXT'],
+  // 3.7 (Orb Server, WS3): one home per bot. uid: the bot's id on every Orb (UUIDv7; local ids and folders stay as they
+  // are); home: the identity (orbId) of the Orb that runs it; home_epoch: grows by one at every change of home (the
+  // higher one wins after a crash or a split); home_state: active | pending (a move is copying it here) | moving (its
+  // home is handing it over) | archived (a frozen copy after unlinking); home_fork: { from, seq } after a forced
+  // takeover (where the old home's lines start); needs: what is missing on this Orb after a move ({ connectors, ha }).
+  ['bots', 'uid', 'TEXT'], ['bots', 'home', 'TEXT'], ['bots', 'home_epoch', 'INTEGER NOT NULL DEFAULT 0'], ['bots', 'home_state', "TEXT NOT NULL DEFAULT 'active'"],
+  ['bots', 'home_fork', 'TEXT'], ['bots', 'needs', 'TEXT'],
+  ['bot_groups', 'uid', 'TEXT'], ['bot_groups', 'home', 'TEXT'], ['bot_groups', 'home_epoch', 'INTEGER NOT NULL DEFAULT 0'],
+  // The rows a replica copies are known by uid everywhere (the local ids differ from one Orb to another).
+  ['bot_reminders', 'uid', 'TEXT'], ['chat', 'uid', 'TEXT'], ['memory_log', 'uid', 'TEXT'], ['bot_requests', 'uid', 'TEXT']];
 export function migrate(db, { file = null } = {}) {
   // 3.2: whether a direct conversation already has its title (Orb names a new one from its first message); the ones made
   // before keep theirs.
@@ -563,6 +574,8 @@ export function migrate(db, { file = null } = {}) {
   }
   migrateConversations(db);
   migratePersons(db, { file });
+  // 3.7 (WS3): uids, this Orb as the home of its bots, the change log and the replicas' cursors (src/core/replica-db.mjs).
+  migrateHome(db, { file });
   // 2.7.3: the notices saved as grey system lines before 2.7 (working folder, mode, brain, new conversation…) become
   // notices too, so the old ones leave the chat like the new ones. Only system lines with those exact openings. 3.0: once
   // per database (no grey line of those is written any more), not at every start of the engine and of each MCP server.

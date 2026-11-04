@@ -24,7 +24,11 @@ const doesDev = (role) => role !== 'centro';
 export const PROTOCOL = 3;
 export const MIN_PROTOCOL = 2;
 export const FORWARD_MIN = 3;
-export const FEATURES = ['persons'];
+// 3.7 (WS3): bots.home.v1 (one home per bot, moves by uid) and replica.v1 (live copies pulled from the home).
+export const FEATURES = ['persons', 'bots.home.v1', 'replica.v1'];
+// 3.7: the calls between two Orbs about their bots' homes and copies (src/engine/replica.mjs): any linked Orb of the user,
+// whatever its role (the other side checks who it is and whose bots it may see).
+export const isHomeCall = (method) => /^(replica|home)\.[a-zA-Z]+$/.test(String(method ?? ''));
 // Who has to update, given what this side speaks and what the other says: null (they understand each other), 'me' (this
 // side is too old for the other) or 'them' (the other is too old for this one). An answer without v is protocol 2 (3.5).
 export function versionGap(mine = {}, theirs = {}) {
@@ -103,7 +107,9 @@ export function createLink({ file, secret, identity = () => ({}), onRequest = nu
   // other side counts it as ({ id, name }, learned from its hello or /api/me); remote: { v, min, version, features }.
   const view = (p) => ({ id: p.rec.id, name: p.rec.name, role: p.rec.role ?? null, fp: p.rec.fp ?? null, url: p.rec.urls[p.rec.at ?? 0] ?? p.rec.urls[0], urls: p.rec.urls,
     online: Boolean(p.online), revoked: Boolean(p.rec.revoked), linkedAt: p.rec.linkedAt, lastSeen: p.rec.lastSeen ?? null,
-    person: p.rec.person ?? null, remotePerson: p.rec.remotePerson ?? null, remote: p.rec.remote ?? null, clone: Boolean(p.rec.clone) });
+    person: p.rec.person ?? null, remotePerson: p.rec.remotePerson ?? null, remote: p.rec.remote ?? null, clone: Boolean(p.rec.clone),
+    // 3.7: the other Orb's identity (its bots' home), once its hello said it.
+    orb: p.rec.orb?.orbId ?? null });
   // What the other side said of itself and of whom it counts this link as (hello and /api/me answers).
   const learn = (p, r) => {
     if (!r || typeof r !== 'object') return;
@@ -241,7 +247,7 @@ export function createLink({ file, secret, identity = () => ({}), onRequest = nu
     if (!req || typeof req.id !== 'string') return;
     let out;
     try {
-      if (!hostsBots(p.rec.role ?? 'taller') || !doesDev(identity()?.role ?? 'todo') || !onRequest) throw err('este Orb no programa para ese Orb');
+      if (!onRequest || (!isHomeCall(req.method) && (!hostsBots(p.rec.role ?? 'taller') || !doesDev(identity()?.role ?? 'todo')))) throw err('este Orb no programa para ese Orb');
       if (p.rec.clone) throw err('ese Orb parece una copia de otro: no se atiende', { status: 409 });
       // Whom the other side counts this link as comes with the hello: wait for it if it is on its way.
       if (!p.rec.remotePerson && p.hello) await p.hello.catch(() => {});
@@ -381,6 +387,13 @@ export function createLink({ file, secret, identity = () => ({}), onRequest = nu
         } while (offset < total);
         return last.result;
       } finally { await fh.close(); }
+    },
+    // 3.7 (WS3): an operation of the link itself on the other Orb (/api/link, op: e.g. 'replica'). → its result
+    async op(id, op, body = {}) {
+      const p = peerOf(id);
+      const r = await request(p, '/api/link', 'link', { ...body, op });
+      if (!r.ok) throw err(r.error ?? 'error', { status: r.status, ...(r.notHome ? { notHome: true } : {}) });
+      return r.result;
     },
     // Low level, for tests: seal and post a request exactly as this link does.
     raw(id) { const p = peerOf(id); return { id: p.rec.id, key: p.key, base: baseOf(p), box: (kind, body) => box(p, kind, body), post: (pathname, b) => postBox(p, pathname, b) }; }

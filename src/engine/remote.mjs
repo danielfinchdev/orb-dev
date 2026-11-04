@@ -69,7 +69,7 @@ export const ORB_ALLOWED = ORB_SET;
 export const CENTRO_FORWARD = new Set([...ORB_ALLOWED].filter((m) => m.startsWith('bots.') || m.startsWith('inbox.')));
 export const CONSOLE_ALLOWED = CONSOLE_SET;
 // What a centre sends to the Orbs linked with it (their Bots mode shows the centre's bots, live).
-const BOT_EVENTS = new Set(['bot.updated', 'bot.message', 'bot.state']);
+const BOT_EVENTS = new Set(['bot.updated', 'bot.message', 'bot.state', 'bot.home']);
 // What the access of a device allows on this Orb (role: this Orb's): everything of the console for a device marked
 // «Puede administrar», the bots for another Orb of the user when this one keeps bots («centro» or «todo»), else a phone's.
 // 3.5.1: «orb» counts only when this Orb's owner chose it when making the QR (confirmed); what a device says it is never
@@ -88,6 +88,8 @@ const EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'notice', 'se
   'link:status', 'link:queue',
   // 3.5 (bots)
   'bot.updated', 'bot.message', 'bot.state',
+  // 3.7 (WS3): a bot changed home (or is being moved)
+  'bot.home', 'bots.move',
   // 3.6 (messaging lists): a chat list changed (only to its person)
   'inbox:changed']);
 // 3.5 «Solo Orb»: the server (Orb Núcleo, without a window) has no screen of its own, so a linked phone signs its agents in: it gets the
@@ -518,6 +520,12 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     if (device.kind !== 'orb') return no(tr('msg.remote.pcOnly'));
     const b = msg.body ?? {};
     if (op === 'backup.put') return backupPut(res, device, msg, b);
+    // 3.7 (WS3): the bots' homes and copies (src/engine/replica.mjs), only with an Orb the owner confirmed, never a copy.
+    if (op === 'replica') {
+      if (Number(device.kind_ok) !== 1 || parseMeta(device).clone || !remote.onHomeCall) return no(tr('msg.remote.pcOnly'));
+      try { return ok((await remote.onHomeCall(orbPeer(device), String(b.method ?? ''), b.params && typeof b.params === 'object' ? b.params : {})) ?? null); }
+      catch (error) { return reply(res, device, msg.nonce, { ok: false, status: error.status ?? 400, error: oneLine(error?.message ?? String(error), 1000), ...(error.notHome ? { notHome: true } : {}) }); }
+    }
     if (op === 'hello') {
       const before = parseMeta(device);
       // 3.6: the other Orb's identity: a newer incarnation is the same Orb moved; an older one, or the same one on another
@@ -950,6 +958,9 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       approve: Number(d.approve ?? 1) === 1, confirmed: kind !== 'orb' || Number(d.kind_ok) === 1, devOk: Number(d.dev_ok) === 1, devPending: kind === 'orb' && ['taller', 'todo'].includes(d.role) && Number(d.dev_ok) !== 1 };
   }
   const devices = () => { const on = onlineIds(); return board.all('SELECT * FROM devices WHERE public_key IS NOT NULL ORDER BY created_at DESC').map((d) => deviceView(d, on)); };
+  // 3.7 (WS3): a linked Orb as the bots' homes see it (src/core/link-persons.mjs › peer): its identity, whose link it is
+  // here and whether it is on.
+  const orbPeer = (d, on = onlineIds()) => { const meta = parseMeta(d); return { via: 'device', id: d.id, key: meta.orb?.orbId ?? null, name: d.name, online: on.has(d.id), person: personOf(d), remotePerson: null, features: meta.features ?? [], role: d.role ?? null }; };
   // The linked Orbs that program («taller» or «todo»).
   // 3.5.1: only the ones the owner confirmed here (an Orb cannot make itself the workshop by saying so).
   const tallers = () => board.all("SELECT * FROM devices WHERE kind = 'orb' AND kind_ok = 1 AND dev_ok = 1 AND role IN ('taller', 'todo') AND public_key IS NOT NULL ORDER BY COALESCE(last_seen, created_at) DESC");
@@ -1142,6 +1153,8 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       const d = board.one('SELECT * FROM devices WHERE id = ?', String(id)); if (!d) throw new Error(tr('msg.remote.noDevice'));
       board.run('DELETE FROM devices WHERE id = ?', d.id);
       keys.delete(d.id); seen.delete(d.id);
+      // 3.7 (WS3): an Orb unlinked: the copies of its bots here are kept, frozen (Restaurar aquí).
+      if (d.kind === 'orb') { try { remote.onOrbGone?.(orbPeer(d, new Set())); } catch (error) { log(`enlace: ${error.message}`); } }
       for (const c of clients) if (c.device === d.id) { try { c.res.end(); } catch { /* closed */ } clients.delete(c); }
       for (const [fid, f] of forwarded) if (f.device === d.id) { forwarded.delete(fid); clearTimeout(f.timer); f.reject(offline(d)); }
       board.event(null, 'usuario', quiet ? 'device.unlinked' : 'device.revoked', d.name);
@@ -1150,6 +1163,15 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     },
     // ---- 3.5 Magic Link
     devices,
+    // 3.7 (WS3): the confirmed Orbs linked here, and a call to one of them down its live stream (its answer comes back
+    // as a reply). onHomeCall / onOrbGone are set by the engine (src/engine/replica.mjs).
+    onHomeCall: null, onOrbGone: null,
+    orbPeers() { const on = onlineIds(); return board.all("SELECT * FROM devices WHERE kind = 'orb' AND kind_ok = 1 AND public_key IS NOT NULL").filter((d) => !parseMeta(d).clone).map((d) => orbPeer(d, on)); },
+    callOrb(id, method, params = {}) {
+      const d = board.one("SELECT * FROM devices WHERE id = ? AND kind = 'orb' AND kind_ok = 1", String(id));
+      if (!d) return Promise.reject(linkError(tr('msg.remote.noDevice'), { status: 404 }));
+      return forward(d, method, params, { principal: null });
+    },
     rename(id, name) {
       const d = board.one('SELECT id FROM devices WHERE id = ?', String(id)); if (!d) throw new Error(tr('msg.remote.noDevice'));
       const clean = oneLine(String(name ?? ''), 60).trim(); if (!clean) throw new Error(tr('msg.link.needName'));

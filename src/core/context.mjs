@@ -32,7 +32,9 @@ export function useHome(home) {
 // the row. Keys: language, tz (also columns of persons), preview (notifications on a locked phone), brain (the
 // assistant's agent/model/account), active_project, rules (personal golden rules), protected (personal additions),
 // bots.location, bots_location_asked.
-export const PERSON_KEYS = ['language', 'tz', 'preview', 'brain', 'active_project', 'rules', 'protected', 'bots.location', 'bots_location_asked'];
+export const PERSON_KEYS = ['language', 'tz', 'preview', 'brain', 'active_project', 'rules', 'protected', 'bots.location', 'bots_location_asked',
+  // 3.7 (WS3, Q3): «Copia en el PC»: this person's bots also keep a live copy on the owner's other Orbs (default off).
+  'replica.pc'];
 const LEGACY = {
   language: () => ctx.config?.language,
   preview: () => ctx.config?.mobile?.preview,

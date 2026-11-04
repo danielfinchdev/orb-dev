@@ -635,12 +635,14 @@ export class Board {
   // meta: extra data of a chat line, e.g. { kind: 'report', tasks: [ids] } for the assistant's report that waits for the user's OK.
   // 3.2: conversation: the one the line belongs to; when not given, the one of the task the line is about (meta.task).
   // 3.6: person: who wrote the line (in a shared group, its author; the window's notices: whom they are for).
-  addChat(role, body, meta = null, conversation = undefined, { person = null } = {}) {
+  // 3.7 (WS3): uid: the line's own uid when it was made on another Orb first (a message written on a copy of a bot and sent
+  // to its home keeps its uid, so the copy does not get it twice); otherwise the database gives one.
+  addChat(role, body, meta = null, conversation = undefined, { person = null, uid = null } = {}) {
     const conv = conversation !== undefined ? conversation : meta?.task ? this.conversationOfTask(meta.task) : null;
     const at = now();
     // 3.6: a line about a task outside any conversation (made by hand or by a schedule) is for that task's person.
     const who = person ?? (conv == null && meta?.task ? this.one('SELECT person_id FROM tasks WHERE id = ?', Number(meta.task))?.person_id ?? null : null);
-    const { lastInsertRowid } = this.run('INSERT INTO chat (role, body, meta, at, conversation_id, person_id) VALUES (?, ?, ?, ?, ?, ?)', role, String(body), meta ? JSON.stringify(meta) : null, at, conv ?? null, who);
+    const { lastInsertRowid } = this.run('INSERT INTO chat (role, body, meta, at, conversation_id, person_id, uid) VALUES (?, ?, ?, ?, ?, ?, ?)', role, String(body), meta ? JSON.stringify(meta) : null, at, conv ?? null, who, uid ?? null);
     if (conv && role !== 'notice') this.run('UPDATE conversations SET updated_at = ? WHERE id = ?', at, Number(conv));
     // 3.6 (messaging lists): which conversation got which line (the lists count unread lines and tell its people).
     this.changed('chat', conv != null && role !== 'notice' ? { conversation: Number(conv), line: Number(lastInsertRowid), role, author: who } : null);
