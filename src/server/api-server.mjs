@@ -62,6 +62,7 @@ export function buildServerApi({ board, emit, log, version, remoteRef = { curren
     ...personMethods(shared),
     ...gatewayMethods(shared),
     ...inboxMethods(shared),
+    ...browserMethods(shared), // 3.7: «Ver navegador del Server» (live view) on the server too
     ...data.methods,
     ...shares.methods,
     // 3.7 (WS6): the person's password vault (vault_fill types from it; nothing of it is ever returned).
