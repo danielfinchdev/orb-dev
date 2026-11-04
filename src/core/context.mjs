@@ -94,7 +94,7 @@ export function checkAccountHome(home, c = ctx.config, projects = []) {
   const norm = (p) => path.resolve(p).toLowerCase().replace(/[\\/]+$/, '');
   const target = norm(raw);
   const inside = (dir) => { const d = norm(dir); return target === d || target.startsWith(d + path.sep); };
-  if (ctx.home && inside(ctx.home) && !inside(path.join(ctx.home, '.orb', 'cuentas'))) throw new Error(tr('msg.ctx.accountInHome'));
+  if (ctx.home && inside(ctx.home) && !inside(path.join(ctx.paths?.internal ?? path.join(ctx.home, '.orb'), 'cuentas'))) throw new Error(tr('msg.ctx.accountInHome'));
   for (const dir of [...(c?.projectRoots ?? []), ...projects]) if (dir && inside(dir)) throw new Error(tr('msg.ctx.accountInDir', { dir }));
 }
 

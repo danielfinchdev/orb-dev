@@ -253,7 +253,7 @@ export function confineFor({ roots = [], others = [] } = {}) {
   const realOf = (p) => { try { return fs.realpathSync.native(p); } catch { return path.resolve(p); } };
   const list = roots.filter(Boolean).map((r) => path.resolve(r));
   return { roots: [...new Set([...list, ...list.map(realOf)])], others: others.filter(Boolean).map((r) => path.resolve(r)).filter((o) => !list.some((r) => inside(r, o) || inside(o, r))),
-    secrets: [...botSecretDirs(), ...(ctx.home ? [path.join(ctx.home, '.orb')] : [])] };
+    secrets: [...botSecretDirs(), ...(ctx.home ? [path.join(ctx.home, '.orb')] : []), ...(ctx.paths?.internal ? [ctx.paths.internal] : [])] };
 }
 const UP_TOKEN = /(?:^|[\s"'=(])((?:[^\s"'|;&<>()]*[\\/])?\.\.(?:[\\/][^\s"'|;&<>()]*)?)(?=$|[\s"'|;&<>()])/g;
 const ABS_TOKEN = /(?:^|[\s"'=(])((?:[a-zA-Z]:[\\/]|\\\\|\/|~[\\/])[^\s"'|;&<>()]*)/g;
@@ -314,11 +314,17 @@ export function confineCheck({ paths = [], patterns = [], command = '', confine,
 // connector tool that sends, buys, books or deletes asks first, even in read-only mode. 3.5.1: bot may be the bot's guard
 // ({ dir, tainted, hosts }, src/engine/bots.mjs): its folder only, no secrets, care after reading from outside (botCheck);
 // patterns (Glob/Grep) and url (WebFetch, the browser) are checked too.
+// 3.7 (Orb Server): no agent and no bot ever raises its privileges, whatever its permission (also «total»): sudo, doas,
+// pkexec, su, run0 or the server's admin helper. The only way to root is the engine itself, after an approval card,
+// through the root-owned helper (src/core/server-admin.mjs); the agents' processes run with no_new_privs anyway.
+const ESCALATE = /\b(sudo|doas|pkexec|run0)\b|(^|[;&|(`]|\$\()\s*su(\s|$)|orb-server-admin|\/etc\/sudoers/i;
+export const escalates = (command) => ESCALATE.test(String(command ?? ''));
 export function decide({ permission = 'editar', tool, kind, command = '', paths = [], patterns = [], url = null, internalDir, lang = 'es', bot = false, confine = null }) {
   const T = (k) => translate(lang, `msg.guard.${k}`);
   const cls = toolClass(tool, kind);
   const text = [command, ...paths, ...patterns].join(' ');
   if (touchesInternal(text, internalDir)) return { decision: 'deny', reason: T('internal') };
+  if (escalates(command)) return { decision: 'deny', reason: T('sudo') };
   const confined = confineCheck({ paths, patterns, command, confine, lang });
   if (confined) return confined;
   const hit = protectedHit(text);
