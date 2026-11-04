@@ -202,10 +202,10 @@ console only on this PC, for the owner). Another person spends it only through a
   prompt says «Mensaje de <name>» and each bot answers in the author's lane; members must be bots the group's person may
   talk to (`mayTalkTo` also lets a talker of a shared group use its bots' tools).
 - **Cards.** `approversFor(kind, payload, bot, talker)`: the talker by default (purchases, questions, tools, own
-  memory); `admin`/`srv`: whoever may edit the bot (srv also needs `talk` on `integration:srv`); `ha`: the talker with
+  memory); `admin`/`srv`/`pc`: whoever may edit the bot (srv and pc, 3.7, also need `talk` on `integration:srv` / `integration:pc`); `ha`: the talker with
   `caps.approveHouse` or `edit` on `integration:ha`, else the integration's editors. Stored in `bot_requests.approvers` and
   the card's meta; only they get the push; `bots.cards` lists the ones waiting for the caller. `bots.decide` (policy
-  `BOTSP`): yes only by an approver, no also by the conversation's person; sensitive cards (`ha`, `srv`, `admin` except
+  `BOTSP`): yes only by an approver, no also by the conversation's person; sensitive cards (`ha`, `srv`, `pc`, `admin` except
   pause, `confirm`) need a strong ticket when the approver has a PIN; `bot_requests.answered_by`.
 - **A5.** `memory_log` keeps every change (`applied` with `before`, `pending`, `rejected`, `undone`; scope `bot:<id>`,
   `bot:<id>:<person>`, `global:<person>`). From the bot: its own file of the talker at once; bot-wide only in a turn of

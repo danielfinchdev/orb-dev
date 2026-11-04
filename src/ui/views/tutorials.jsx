@@ -25,16 +25,17 @@ const TUTORIALS = [
   { id: 'usage', icon: Gauge, lines: 3, go: () => openSettings('tareas'), pc: true },
   { id: 'schedules', icon: CalendarClock, lines: 3, go: () => go('schedules') },
   { id: 'logs', icon: BookOpen, lines: 3, go: () => go('logs') },
-  { id: 'monitor', icon: HeartPulse, lines: 3, go: () => openSettings('monitor'), pc: true },
+  // 3.7: «Monitoreo del equipo» is gone; looking after the PC is a bot with the «Equipo» tools.
+  { id: 'pccare', icon: HeartPulse, lines: 3, go: () => go({ view: 'bots' }) },
   { id: 'phone', icon: Smartphone, lines: 3, go: () => openSettings('movil'), pc: true },
   { id: 'expert', icon: SquareTerminal, lines: 2, go: () => openSettings('experto'), pc: true },
   { id: 'games', icon: Gamepad2, lines: 2, go: () => openGames(), pc: true },
   { id: 'looks', icon: Palette, lines: 3, go: () => openSettings('apariencia'), pc: true },
   { id: 'privacy', icon: ShieldCheck, lines: 5 }
 ];
-const PC_ONLY = new Set(['agents', 'usage', 'monitor', 'expert', 'games', 'looks']);
+const PC_ONLY = new Set(['agents', 'usage', 'expert', 'games', 'looks']);
 // 2.7.3: what Orb Light (the portable .exe) does not have.
-const NOT_LIGHT = new Set(['monitor', 'expert', 'games']);
+const NOT_LIGHT = new Set(['expert', 'games']);
 const KEYS = 8; // help.key.1…8
 const FAQS = 16; // help.faq.1…16
 const range = (n) => Array.from({ length: n }, (_, i) => i + 1);

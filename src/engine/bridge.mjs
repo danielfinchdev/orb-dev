@@ -22,7 +22,7 @@ const windowLabel = (w) => { const m = windowMinutes(w); if (m >= 100000) return
 
 // What OCE says now, or null (not installed, closed, sharing off on either side, or a stale or broken file).
 export function readOce() {
-  if (ctx.config?.monitor?.shareWithOce === false) return null; // off means off both ways, as in OCE
+  if (ctx.config?.oce?.share === false) return null; // off means off both ways, as in OCE (3.7: oce.share; before, monitor.shareWithOce)
   const file = path.join(bridgeDir(), 'oce.json');
   try {
     const st = fs.statSync(file); if (st.size > 256 * 1024) return null;
@@ -41,7 +41,7 @@ export function readOce() {
   } catch { return null; }
 }
 
-// Writes orb.json every 5 s while sharing is on (Ajustes › Monitoreo del equipo) and Open Control Edge is there (a fresh
+// Writes orb.json every 5 s while sharing is on (Ajustes › Avanzado › Herramientas › Open Control Edge) and Open Control Edge is there (a fresh
 // oce.json: nothing is written for nobody); removes it when off, when OCE goes away and on closing.
 export function startBridge({ board, version, busy: isBusy = () => false, log = () => {} }) {
   const file = path.join(bridgeDir(), 'orb.json');
@@ -50,7 +50,7 @@ export function startBridge({ board, version, busy: isBusy = () => false, log = 
   const write = async () => {
     if (busy) return; busy = true;
     try {
-      if (ctx.config?.monitor?.shareWithOce === false || !readOce()) { remove(); return; }
+      if (ctx.config?.oce?.share === false || !readOce()) { remove(); return; }
       // A reading that never answers (a disk that does not respond) must not stop the bridge: 10 s at most, then retry.
       const s = await Promise.race([quickStats(), new Promise((_, reject) => setTimeout(() => reject(new Error('la lectura del PC no responde')), 10_000).unref?.())]);
       // 3.0: each account's shortest window (the 5-hour session before the week), with a short name and when it was read.

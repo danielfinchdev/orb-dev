@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { Field, Input, Spinner } from '@/components/ui/basic.jsx';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/overlay.jsx';
 import { BotAvatar } from '@/components/bot-avatar.jsx';
-import { useStore, botCall, act, go, loadBots, phoneLayout } from '@/lib/store.js';
+import { useStore, botCall, call, act, go, loadBots, phoneLayout, botsVia, uiLanguage } from '@/lib/store.js';
 import { newBotDraft, botPayload } from '@/lib/bots.js';
 import { useT } from '@/lib/i18n.js';
 import { SHAPE_IDS, COLOR_IDS, avatarFor, avatarParts, parseAvatar } from '../../../core/avatar.mjs';
@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils.js';
 const swatch = (c) => { const p = avatarParts('mochi', c); return { background: `linear-gradient(${p.top}, ${p.bottom})` }; };
 
 const BOT_BRAINS = ['claude', 'codex'];
+const hereTz = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; } };
 
 // A moment of joy each time the avatar changes (the preview hops), then back to idle.
 export function useHop() {
@@ -120,19 +121,19 @@ export function CreateBot({ onClose }) {
   );
 }
 
-// The templates with bots (not «Empezar vacío»), folded under one button. «Usar» applies it as it is.
-const tz = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined; } catch { return undefined; } };
+// The templates with bots (not «Empezar vacío»; also «Mantenimiento del PC»), folded under one button. «Usar» applies it
+// as it is. Only for bots that live in this Orb (templates.apply makes them here, not on a linked one).
 function Templates({ disabled }) {
   const t = useT();
-  const lang = useStore((s) => s.app?.config?.language);
+  const lang = useStore(uiLanguage);
   const [open, setOpen] = useState(false);
   const [list, setList] = useState(null);
   const [busy, setBusy] = useState(null);
-  useEffect(() => { botCall('templates.list', { lang }).then((l) => setList((l ?? []).filter((x) => x.bots?.length))).catch(() => setList([])); }, [lang]);
+  useEffect(() => { if (botsVia()) { setList([]); return; } call('templates.list', { lang }).then((l) => setList((l ?? []).filter((x) => x.bots?.length))).catch(() => setList([])); }, [lang]);
   if (!list?.length) return null;
   const use = async (tpl) => {
     setBusy(tpl.id);
-    const r = await act(botCall('templates.apply', { id: tpl.id, tz: tz() }), t('bots.tpl.done'));
+    const r = await act(call('templates.apply', { id: tpl.id, tz: hereTz() }), t('bots.templateMade', { name: tpl.name }));
     setBusy(null);
     if (r) { await loadBots(); go(r.bots?.[0] ? { view: 'bot-chat', id: r.bots[0] } : { view: 'bots' }); }
   };

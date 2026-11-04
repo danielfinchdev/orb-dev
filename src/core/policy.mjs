@@ -15,7 +15,7 @@
 //   strong: (params) => bool   the call needs a strong ticket (a PIN typed in the last minutes) when the caller has a PIN
 //   check: (board, principal, params) => true | 'reason'   anything else
 // Resource types: person, conversation, chat (a line), bot, group, project, task, session, schedule, reminder, request,
-// device, account, integration ('ha' | 'srv'), log (a project's or 'general'), owner (only the owner passes).
+// device, account, integration ('ha' | 'pc' | 'srv'), log (a project's or 'general'), owner (only the owner passes).
 //
 // Each workstream appends ITS OWN section below (WS2 … WS6) and adds it to POLICY / EVENTS at the bottom: one section per
 // workstream, so merges do not conflict. A later section may replace an entry of an earlier one on purpose.
@@ -114,7 +114,6 @@ const CORE = {
   'android.status': { ownerOnly: true }, 'android.install': { ownerOnly: true }, 'android.devices': { ownerOnly: true }, 'android.pair': { ownerOnly: true }, 'android.connect': { ownerOnly: true }, 'android.info': { ownerOnly: true },
   'net.wifi': { ownerOnly: true }, 'net.nearby': { ownerOnly: true }, 'net.devices': { ownerOnly: true }, 'net.rename': { ownerOnly: true }, 'net.remote': { ownerOnly: true },
   'github.status': { ownerOnly: true }, 'github.contributions': { ownerOnly: true }, 'github.login': { ownerOnly: true },
-  'opti.session': { ownerOnly: true }, 'opti.stats': { ownerOnly: true }, 'opti.act': { ownerOnly: true },
   'expert.tree': { ownerOnly: true }, 'expert.read': { ownerOnly: true }, 'expert.status': { ownerOnly: true }, 'expert.diff': { ownerOnly: true }, 'expert.log': { ownerOnly: true }, 'expert.system': { ownerOnly: true },
   'actions.list': { ownerOnly: true }, 'actions.save': { ownerOnly: true }, 'actions.remove': { ownerOnly: true },
   'images.read': { public: true }, // WS3: only pictures of the caller's projects and accounts
@@ -365,7 +364,7 @@ const ORBMODE = {
 const memRes = (p, wide) => (p.id == null || p.id === '' || p.id === 'global' ? null : { ...bot(p.id), right: p.which === 'mine' ? 'talk' : wide });
 // A card (a chat line of a bot's conversation): its meta, to see who may answer it and whether it is sensitive.
 const cardMeta = (board, item) => { try { return JSON.parse(dbOne(board, 'SELECT meta FROM chat WHERE id = ?', Number(item))?.meta || 'null'); } catch { return null; } };
-export const SENSITIVE_CARDS = new Set(['ha', 'srv', 'admin', 'confirm']);
+export const SENSITIVE_CARDS = new Set(['ha', 'pc', 'srv', 'admin', 'confirm']);
 const sensitiveCard = (m) => Boolean(m && m.kind === 'bot_card' && SENSITIVE_CARDS.has(m.card) && !(m.card === 'admin' && m.payload?.action === 'pause'));
 // Saying yes: only the card's approvers. Saying no: also anyone who may talk in that conversation. A card without
 // approvers (made before 3.6) is answered by the conversation's person.

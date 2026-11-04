@@ -12,12 +12,12 @@ import { ctx } from '../src/core/context.mjs';
 import { listTemplates, applyTemplate, getTemplate } from '../src/core/templates.mjs';
 import { utcToZoned } from '../src/core/tz.mjs';
 
-test('the four templates exist in es and en with the same shape, and say nothing personal', () => {
+test('the five templates (3.7: plus the optional «Mantenimiento del PC») exist in es and en with the same shape, and say nothing personal', () => {
   const es = listTemplates('es'); const en = listTemplates('en');
-  assert.deepEqual(es.map((t) => t.id), ['negocio', 'casa', 'desarrollo', 'vacio']);
+  assert.deepEqual(es.map((t) => t.id), ['negocio', 'casa', 'desarrollo', 'vacio', 'mantenimiento']);
   assert.deepEqual(en.map((t) => t.id), es.map((t) => t.id));
-  assert.deepEqual(es.map((t) => t.name), ['Mi negocio', 'Mi casa', 'Desarrollo', 'Empezar vacío']);
-  assert.deepEqual(en.map((t) => t.name), ['My business', 'My home', 'Development', 'Start empty']);
+  assert.deepEqual(es.map((t) => t.name), ['Mi negocio', 'Mi casa', 'Desarrollo', 'Empezar vacío', 'Mantenimiento del PC']);
+  assert.deepEqual(en.map((t) => t.name), ['My business', 'My home', 'Development', 'Start empty', 'PC maintenance']);
   for (let i = 0; i < es.length; i++) {
     const [a, b] = [es[i], en[i]];
     assert.deepEqual(a.bots.map((x) => [x.key, x.tools]), b.bots.map((x) => [x.key, x.tools]));

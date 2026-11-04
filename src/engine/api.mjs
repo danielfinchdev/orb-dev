@@ -30,9 +30,6 @@ import { spawn } from 'node:child_process';
 import { mcpFolder } from './mcp-folder.mjs';
 import { modelCatalog, chooseModel, LEVELS, REASONING_LEVELS, levelsOf } from './catalog.mjs';
 import { whiteboard } from './whiteboard.mjs';
-import { opti } from './opti.mjs';
-import { readOce } from './bridge.mjs';
-import { quickStats } from '../core/pc-health.mjs';
 import { titleFrom } from '../core/titles.mjs';
 import { autoTitle } from './titles.mjs';
 import { projectIcon, setProjectIcon, clearProjectIcon, renameProjectIcon } from './project-icons.mjs';
@@ -50,10 +47,10 @@ import { inboxMethods } from './api-inbox.mjs';
 
 export { fail, str, int, oneOf } from './api-common.mjs';
 // 3.5: what a server without a window (Orb Server) does not do, whatever its role: the PC's development tools (God mode and expert view,
-// Opti Bot, which is all Windows, and opening Remote Desktop or a console). Conversations, tasks, schedules, the phone
+// and opening Remote Desktop or a console). Conversations, tasks, schedules, the phone
 // access and the MCP servers stay.
 // 3.5: the agents' sign-in no longer needs a console (agents.login gives the link and code), so it works on the server too.
-const CENTRO_OFF = /^(expert.|opti.|actions.|net.remote$|installer.start$|github.login$)/;
+const CENTRO_OFF = /^(expert.|actions.|net.remote$|installer.start$|github.login$)/;
 export const centroAllows = (method) => !CENTRO_OFF.test(String(method));
 const SHARE_TYPES = ['project', 'bot', 'group', 'integration'];
 const SHARE_RANK = { view: 1, talk: 2, edit: 3, own: 4 };
@@ -67,7 +64,6 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   let lastChat = board.one('SELECT MAX(id) AS id FROM chat')?.id ?? 0;
   const conversationId = (id) => { const c = board.conversation(int(id, 'conversación')); if (!c) fail(tr('msg.board.noConversation')); return c.id; };
   const wb = whiteboard(board);
-  const optiApi = opti({ board, sessions });
   // 2.7: a picture the window may show: an image file inside Orb's folder, a project, or an agent account's own folder
   // (Codex keeps what it makes in <CODEX_HOME>/generated_images). 25 MB at most.
   // 3.6: someone other than the owner: only their projects (and the ones shared with them), their own accounts' folders
@@ -184,7 +180,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       approvals: visibleApprovals(who).map((a) => ({ id: a.id, session_id: a.session_id, body: { title: a.body?.title, reason: a.body?.reason }, session: a.session })),
       counts: (() => { const s = scopeOf(who) ? scopeSql(who, 'task', 'tasks') : { where: '1=1', args: [] }; return Object.fromEntries(board.all(`SELECT status, COUNT(*) AS n FROM tasks WHERE ${s.where} GROUP BY status`, ...s.args).map((r) => [r.status, r.n])); })(),
       // 3.2: what each conversation with the assistant is doing now (only the ones answering or waiting their turn).
-      chats: orchestrator.states().filter((x) => !scopeOf(who) || can(board, who, 'view', { type: 'conversation', id: x.conversation })), assistant: orchestrator.info(null, personOf(who)), optiSession: personOf(who) ? null : board.setting('opti_session') ?? null,
+      chats: orchestrator.states().filter((x) => !scopeOf(who) || can(board, who, 'view', { type: 'conversation', id: x.conversation })), assistant: orchestrator.info(null, personOf(who)),
       // 2.6: the tasks («t<id>») and direct conversations («s<id>») the user put away in «Completadas» of the sidebar;
       // 3.2: kept, the finished tasks the user brought back (a finished task goes to «Completadas» by itself).
       completed: board.settingJson(sideKey('sidebar_completed', who)) ?? [], kept: board.settingJson(sideKey('sidebar_kept', who)) ?? [],
@@ -394,12 +390,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const found = board.all(`SELECT DISTINCT s.id FROM sessions s LEFT JOIN session_items i ON i.session_id = s.id AND i.kind = 'text' WHERE s.kind = 'chat' AND ${ss.where} AND (lower(s.title) LIKE ? ESCAPE '!' OR lower(i.body) LIKE ? ESCAPE '!') LIMIT 100`, ...ss.args, like, like).map((r) => r.id);
       return { conversations, sessions: found };
     },
-    // 2.7: Monitoreo del equipo (src/engine/opti.mjs): Opti Bot's conversation, the PC's quick numbers and the answer to
-    // one of its action cards. PC only (not in the phone's list).
-    'opti.session': () => optiApi.session(),
-    'opti.stats': async () => ({ ...(await quickStats()), oce: readOce() }),
     ...botMethods(shared),
-    'opti.act': ({ item, decision }) => optiApi.act({ item: int(item, 'tarjeta'), decision: oneOf(decision, ['allow', 'deny'], 'decisión') }),
     // 2.7: pictures the agents make (Codex image_gen): shown in the conversation, a zone marked to change, saved in the
     // project. Read only from the agents' own picture folders, Orb's folder and the projects; written only into Orb's
     // folder (the marked copy) and <project>/imagenes.
@@ -614,7 +605,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       }
       const t = str(text, 'mensaje', 20000);
       // 3.2: a new direct conversation is named by Orb from its first message (at once a quick title, then a better one).
-      if (s.kind === 'chat' && !s.titled && !sessions.isOpti(s)) {
+      if (s.kind === 'chat' && !s.titled) {
         const quick = titleFrom(t) || s.title;
         sessions.update(s.id, { title: quick, titled: true });
         autoTitle(board, { agent: s.agent, account: s.account, text: t }).then((better) => { if (better && sessions.get(s.id)?.title === quick) sessions.update(s.id, { title: better }); }).catch(() => {});
@@ -825,7 +816,6 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     lockState: () => methods['app.lockState'](),
     // New chat lines since the last call, sent to the window as 'chat:new' (corner robot, robot notices) or 'notice' (toasts).
     notifyNewChat() {
-      try { optiApi.flush(); } catch { /* Opti Bot off or its conversation gone */ }
       const rows = board.all('SELECT id, role, body, meta, conversation_id, person_id FROM chat WHERE id > ? ORDER BY id LIMIT 20', lastChat);
       if (!rows.length) return;
       lastChat = rows[rows.length - 1].id;

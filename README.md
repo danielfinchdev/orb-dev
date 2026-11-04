@@ -17,8 +17,8 @@ From [**Releases → latest**](https://github.com/danielfinchdev/orb-dev/release
 
 - **`Orb-3.2.1-instalador.exe`** (recommended): the full app. It installs for your user, without administrator
   rights, and updates itself.
-- **`Orb-3.2.1-light-portable.exe`**: **Orb Light**, the essentials with nothing to install (no minigames, God mode,
-  PC monitoring or themes). It tells you about new versions.
+- **`Orb-3.2.1-light-portable.exe`**: **Orb Light**, the essentials with nothing to install (no minigames, God mode
+  or themes). It tells you about new versions.
 
 Windows 10 and 11. Since the app is not signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
 On first launch, Orb installs any missing agents with their official installers.
@@ -87,7 +87,7 @@ D:\Orb\                   (always <chosen folder>\Orb, the same for everyone)
   with usage left and only waits when the limit is reached.
 - **A whiteboard per project** to draw, write and attach references that Orb·e takes into account when planning.
 - **From your phone**, with nothing to install: chat, approvals and task tracking, with end-to-end encryption.
-- **PC monitoring** with Opti Bot: health, security and network of the PC; any change needs your approval.
+- **Look after your PC with a bot**: give it the "Computer" tools (or start from the "PC maintenance" template) and it checks the PC's health, security, network and Orb's backups; any change needs your approval.
 - **GitHub integration** through `gh`: publish projects, push branches and create pull requests.
 - **God mode** for those who want to see more: files, git changes, history and activity around the chat.
 - **In Spanish and English**, with themes, light and dark mode, and MCP connectors to extend the agents' tools.

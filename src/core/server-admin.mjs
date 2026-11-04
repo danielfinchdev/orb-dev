@@ -70,7 +70,7 @@ export async function serverLogs({ kind = 'docker', name, lines = 80, user = fal
 export function checkServerAction(a) {
   if (!SERVER_ACTIONS.includes(a?.action)) throw new Error(tr('sys.srv.badAction', { list: SERVER_ACTIONS.join(', ') }));
   const reason = oneLine(String(a.reason ?? ''), 300).trim();
-  if (!reason) throw new Error(tr('sys.opti.needsReason'));
+  if (!reason) throw new Error(tr('sys.pc.needsReason'));
   const p = { action: a.action, reason };
   if (a.action === 'docker_restart' || a.action === 'systemd_restart') {
     const target = String(a.target ?? '').trim();
