@@ -44,8 +44,9 @@ try {
   assert.equal(await page.evaluate(() => window.orb.zoom()), 1);
   assert.equal(await page.evaluate(() => window.orb.zoom(1.15)), 1.15);
   await page.evaluate(() => window.orb.zoom(1));
-  // Folders menu and a switch of Ajustes (applied at once, also clicking its text)
-  await page.waitForSelector('[data-testid=sidebar-folders]'); // 2.6: «Proyectos» (before, «Carpetas»)
+  // The chat list (3.6: one group per project, «+» for a new chat or project) and a switch of Ajustes (applied at once,
+  // also clicking its text)
+  await page.waitForSelector('[data-testid=orb-inbox] [data-testid=chats-new]');
   await page.click('[data-testid=nav-settings]');
   await page.click('[data-testid=settings-nav-agentes]');
   await page.click('text=Iniciar las tareas automáticamente');
@@ -63,7 +64,7 @@ try {
   await until(() => out.includes('\n'), 'respuesta del servidor MCP', 20000);
   mcp.kill();
   assert.equal(JSON.parse(out.split('\n')[0]).result.serverInfo.name, 'orb');
-  console.log('✔ app empaquetada: arranca, asistente «Nova» en Orb, motor, tamaño, ajustes, menú de carpetas y servidor MCP');
+  console.log('✔ app empaquetada: arranca, asistente «Nova» en Orb, motor, tamaño, ajustes, lista de chats y servidor MCP');
 } catch (error) {
   console.error(`✖ prueba de humo: ${error.stack ?? error}`);
   process.exitCode = 1;

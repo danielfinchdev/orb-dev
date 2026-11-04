@@ -547,11 +547,19 @@ export function migrate(db, { file = null } = {}) {
   try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS bots_person_name ON bots (person_id, name COLLATE NOCASE)'); } catch { /* duplicates from before */ }
   // 3.6: the direct conversations with an agent get marks too (pinned, muted): an inbox_items made before that only took
   // bots, groups and conversations is rebuilt with the wider check (same rows).
-  const inbox = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'inbox_items'").get();
-  if (inbox && !inbox.sql.includes("'session'")) {
-    db.exec(`BEGIN; ALTER TABLE inbox_items RENAME TO inbox_items_old;
-      ${inbox.sql.replace("'conversation')", "'conversation', 'session')")};
-      INSERT INTO inbox_items SELECT * FROM inbox_items_old; DROP TABLE inbox_items_old; COMMIT;`);
+  // Inside a write lock and checked again there: the engine and the MCP servers may open the database at the same moment.
+  const inboxSql = () => db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'inbox_items'").get()?.sql;
+  if (inboxSql() && !inboxSql().includes("'session'")) {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const sql = inboxSql();
+      if (sql && !sql.includes("'session'")) {
+        db.exec(`ALTER TABLE inbox_items RENAME TO inbox_items_old;
+          ${sql.replace("'conversation')", "'conversation', 'session')")};
+          INSERT INTO inbox_items SELECT * FROM inbox_items_old; DROP TABLE inbox_items_old;`);
+      }
+      db.exec('COMMIT');
+    } catch (error) { db.exec('ROLLBACK'); throw error; }
   }
   migrateConversations(db);
   migratePersons(db, { file });
