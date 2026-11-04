@@ -18,13 +18,14 @@ export function inboxMethods({ board, emit, bots, orchestrator }) {
   const zoneOf = (v) => oneOf(v, I.ZONES, 'zona', 'bots');
   const kindOf = (v) => oneOf(v ?? '', I.KINDS, 'tipo') ?? fail(tr('msg.api.missing', { name: 'kind' }));
   const notFound = (who, method, res) => { audit(board, who, method, res, 'deny', 'notFound'); throw new AuthzError('notFound', { method, resource: res }); };
-  const RES = { bot: 'bot', group: 'group', conversation: 'conversation' };
+  const RES = { bot: 'bot', group: 'group', conversation: 'conversation', session: 'session' };
   // The item as the caller names it ({ kind, id }); a bot by its name too. The policy already checked «view» on it.
   function itemOf(p, who, method) {
     const kind = kindOf(p.kind);
     let id = p.id ?? fail(tr('msg.api.missing', { name: 'id' }));
     if (kind === 'bot') id = B.mustBot(board, id, scoped(who) ? { person: who.person } : {}).id;
     else if (kind === 'group') id = (B.getGroup(board, int(id, 'grupo')) ?? fail(tr('msg.bots.noGroup'))).id;
+    else if (kind === 'session') { const s = board.one("SELECT id FROM sessions WHERE id = ? AND kind = 'chat'", String(id)); if (!s) fail(tr('msg.board.noConversation')); id = s.id; }
     else { const c = board.conversation(int(id, 'conversación')); if (!c || c.bot_id != null || c.group_id != null) fail(tr('msg.board.noConversation')); id = c.id; }
     const res = { type: RES[kind], id };
     if (scoped(who) && !rightOn(board, who.person, res)) notFound(who, method, res);
@@ -73,6 +74,14 @@ export function inboxMethods({ board, emit, bots, orchestrator }) {
         const busy = Boolean(orchestrator?.state?.(c.id)?.busy) || running.has(c.id);
         add('conversation', c.id, { title: c.title, project: c.project ?? null, done: c.status === 'done', avatar: c.project ? { type: 'project', project: c.project } : { type: 'orbe' },
           state: busy ? 'working' : paused ? 'paused' : 'idle', at: c.updated_at }, c.id);
+      }
+      // 3.6: the marks of the direct conversations with an agent (pinned, muted); their rows are built by the window.
+      for (const [key, m] of marks) {
+        if (!key.startsWith('session:')) continue;
+        const id = key.slice(8);
+        const s = board.one("SELECT id, person_id FROM sessions WHERE id = ? AND kind = 'chat'", id);
+        if (!s || (scoped(who) && !rightOn(board, who.person, { type: 'session', id: s.id }))) continue;
+        out.push({ key, kind: 'session', id: s.id, conversation: null, pinned: m.pinned, pinOrder: m.pinned ? m.pinOrder : null, section: m.section, muted: m.muted, lastMessage: null, unread: 0, at: null });
       }
     }
     return out;

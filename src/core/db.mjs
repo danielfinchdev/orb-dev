@@ -341,7 +341,7 @@ CREATE TABLE IF NOT EXISTS audit (
 -- line read (0: none yet, the person's starting point in settings «inbox_since:<person>» counts instead).
 CREATE TABLE IF NOT EXISTS inbox_items (
   person_id TEXT NOT NULL,
-  kind TEXT NOT NULL CHECK (kind IN ('bot', 'group', 'conversation')),
+  kind TEXT NOT NULL CHECK (kind IN ('bot', 'group', 'conversation', 'session')),
   item_id TEXT NOT NULL,
   pinned INTEGER NOT NULL DEFAULT 0,
   pin_order INTEGER,
@@ -545,6 +545,14 @@ export function migrate(db, { file = null } = {}) {
     CREATE UNIQUE INDEX IF NOT EXISTS link_queue_request ON link_queue (request_id) WHERE request_id IS NOT NULL;`);
   // 3.6 (B6): a bot's name is unique for its person (an old database with two bots of the same name keeps working).
   try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS bots_person_name ON bots (person_id, name COLLATE NOCASE)'); } catch { /* duplicates from before */ }
+  // 3.6: the direct conversations with an agent get marks too (pinned, muted): an inbox_items made before that only took
+  // bots, groups and conversations is rebuilt with the wider check (same rows).
+  const inbox = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'inbox_items'").get();
+  if (inbox && !inbox.sql.includes("'session'")) {
+    db.exec(`BEGIN; ALTER TABLE inbox_items RENAME TO inbox_items_old;
+      ${inbox.sql.replace("'conversation')", "'conversation', 'session')")};
+      INSERT INTO inbox_items SELECT * FROM inbox_items_old; DROP TABLE inbox_items_old; COMMIT;`);
+  }
   migrateConversations(db);
   migratePersons(db, { file });
   // 2.7.3: the notices saved as grey system lines before 2.7 (working folder, mode, brain, new conversation…) become

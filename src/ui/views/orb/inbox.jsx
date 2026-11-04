@@ -45,7 +45,7 @@ export function useOrbItems() {
 }
 export const openOrbItem = (x) => go(x.kind === 'session' ? { view: 'session', id: x.id } : { view: 'chat', id: x.id });
 const isOpen = (route, x) => (x.kind === 'session' ? route.view === 'session' : route.view === 'chat') && route.id === x.id;
-const conversationRef = (x) => ({ kind: 'conversation', id: x.id });
+const conversationRef = (x) => ({ kind: x.kind === 'session' ? 'session' : 'conversation', id: x.id });
 
 // Orbe's head with the project's badge; a direct conversation: its agent's mark in a soft circle.
 export function OrbAvatar({ item, size = 40 }) {
@@ -68,7 +68,10 @@ export function OrbAvatar({ item, size = 40 }) {
 export function useOrbActions(item) {
   const t = useT();
   if (!item) return [];
+  // 3.6: a direct conversation with an agent: pinned and muted like the others; completed through the sidebar's mark.
   if (item.kind === 'session') return [
+    item.pinned ? { id: 'unpin', icon: PinOff, label: t('chats.unpin'), run: () => orbAct('inbox.unpin', conversationRef(item)) } : { id: 'pin', icon: Pin, label: t('chats.pin'), run: () => orbAct('inbox.pin', conversationRef(item)) },
+    item.muted ? { id: 'unmute', icon: Bell, label: t('chats.unmute'), run: () => orbAct('inbox.mute', { ...conversationRef(item), muted: false }) } : { id: 'mute', icon: BellOff, label: t('chats.mute'), run: () => orbAct('inbox.mute', { ...conversationRef(item), muted: true }) },
     item.done
       ? { id: 'reopen', icon: Undo2, label: t('orbchats.reopen'), run: () => act(call('sidebar.complete', { key: `s${item.id}`, done: false })).then(refreshSoon) }
       : { id: 'complete', icon: CircleCheck, label: t('orbchats.complete'), run: () => act(call('sidebar.complete', { key: `s${item.id}`, done: true })).then(refreshSoon) }

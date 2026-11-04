@@ -297,3 +297,25 @@ test('M2: «Eliminar chat» vacía sus mensajes (no la tarjeta pendiente); el ch
   assert.equal(board.all('SELECT id FROM chat WHERE conversation_id = ?', gconv).length, 0);
   await assert.rejects(call(asAna, 'inbox.clear', { kind: 'conversation', id: gconv }));
 });
+
+test('3.6: una conversación directa con un agente se fija y se silencia como las demás, y solo para quien la tiene', async () => {
+  const s = await call(asAna, 'sessions.create', { agent: 'claude', permission: 'leer', title: 'Directo' });
+  await call(asAna, 'inbox.pin', { kind: 'session', id: s.id });
+  await call(asAna, 'inbox.mute', { kind: 'session', id: s.id, muted: true });
+  const row = (await call(asAna, 'inbox.list', { zone: 'orb' })).items.find((x) => x.kind === 'session' && String(x.id) === String(s.id));
+  assert.ok(row?.pinned, 'fijada'); assert.equal(row.muted, true, 'silenciada');
+  await denied(call(asLeo, 'inbox.pin', { kind: 'session', id: s.id }));
+  await call(asAna, 'inbox.unpin', { kind: 'session', id: s.id });
+  assert.equal((await call(asAna, 'inbox.list', { zone: 'orb' })).items.find((x) => x.kind === 'session' && String(x.id) === String(s.id))?.pinned, false);
+});
+
+test('3.6: las tarjetas de los bots dicen qué y por qué con palabras normales, sin datos en bruto', () => {
+  const jefe = B.getBot(board, ids.jefe);
+  const say = (kind, p) => bots.describeCard(kind, p, jefe);
+  assert.equal(say('admin', { action: 'pause', id: ids.agenda, fields: { paused: true }, reason: 'de vacaciones' }), 'Jefe quiere pausar a Agenda. Motivo: de vacaciones.');
+  assert.equal(say('admin', { action: 'pause', id: ids.agenda, fields: { paused: false } }), 'Jefe quiere reanudar a Agenda.');
+  assert.equal(say('admin', { action: 'update', id: ids.agenda, fields: { role_text: 'x', tools: ['internet'] } }), 'Jefe quiere cambiar el papel y las herramientas de Agenda.');
+  assert.equal(say('ha', { domain: 'light', service: 'turn_on', body: { entity_id: 'light.salon' } }), 'Jefe quiere encender salon.');
+  assert.equal(say('srv', { action: 'docker_restart', target: 'nextcloud', reason: 'no responde' }), 'Jefe quiere reiniciar un contenedor en el servidor: nextcloud. Motivo: no responde.');
+  for (const text of [say('admin', { action: 'create', fields: { name: 'Nuevo', role_text: 'Ayuda' } }), say('admin', { action: 'delete', id: ids.casa })]) assert.doesNotMatch(text, /[{}]|true|false|role_text/);
+});

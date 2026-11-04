@@ -129,7 +129,8 @@ function ChatInfo({ conv }) {
         <p className="text-muted-foreground px-1 pt-1.5 text-[12px]">{item?.muted ? t('chats.notifyOff') : t('chats.notifyOn')}</p>
       </div>
       <List testid="info-actions">
-        {conv.project ? <Row icon={Paperclip} label={t('orbchats.files')} value={t('orbchats.filesWhere')} onClick={async () => { await act(call('projects.setActive', { name: conv.project })); leave({ view: 'board' }); }} testid="info-files" /> : null}
+        {/* 3.6: no «Archivos adjuntos» row: a chat with Orbe takes no attachments of its own (the project's Pizarra is in the
+            project's info), so the row only sent people somewhere else. */}
         {context?.size ? <Row icon={Shrink} label={t('orbchats.compact')} value={busy === 'compact' ? <Spinner className="size-3" /> : `${pct} %`} onClick={busy ? null : compact} testid="info-compact" /> : null}
         <Row icon={Download} label={t('orbchats.export')} value={busy === 'export' ? <Spinner className="size-3" /> : null} onClick={busy ? null : exportIt} testid="info-export" />
         {item?.pinned

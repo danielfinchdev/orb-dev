@@ -15,6 +15,7 @@ export default {
   'reasoning.tasks.xhigh': 'Lo más complejo: arquitectura, fallos difíciles de localizar y análisis largos.',
   // Orquestador: icono e interruptor pequeño
   'chat.orchestratorTip': 'Orquestador: {name} reparte el trabajo entre varios agentes',
+  'chat.orchestratorLocked': 'En esta conversación {name} coordina a los agentes. Para hablar directamente con un agente, empieza un chat nuevo con el Orquestador desactivado.',
   'chat.orchestratorOn': 'Activado. Desactívalo para hablar directamente con el agente elegido.',
   'chat.orchestratorOff': 'Desactivado: hablas directamente con el agente elegido.',
   'chat.orchestratorHint': 'Activado, {name} coordina a los agentes y reparte el trabajo. Desactivado, hablas directamente con el agente elegido.',

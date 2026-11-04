@@ -5,9 +5,10 @@
 import { ownerOfBoard } from './authz.mjs';
 import { oneLine } from './safety.mjs';
 
-export const KINDS = ['bot', 'group', 'conversation'];
+// 3.6: session = a direct conversation with an agent (Orb list): it can be pinned and muted like the others.
+export const KINDS = ['bot', 'group', 'conversation', 'session'];
 export const ZONES = ['bots', 'orb'];
-export const zoneOf = (kind) => (kind === 'conversation' ? 'orb' : 'bots');
+export const zoneOf = (kind) => (kind === 'conversation' || kind === 'session' ? 'orb' : 'bots');
 export const keyOf = (kind, id) => `${kind}:${id}`;
 const has = (board, table) => { try { return Boolean(board.one("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", table)); } catch { return false; } };
 const owner = (board) => ownerOfBoard(board);

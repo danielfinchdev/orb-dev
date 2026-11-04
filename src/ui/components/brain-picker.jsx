@@ -46,7 +46,8 @@ export function BrainPicker({ catalog, value, onChange, className }) {
   const agent = catalog?.find((a) => a.id === value.agent);
   const model = modelOf(catalog, value);
   // On the button, the agent's default reads as the model it stands for (Codex · GPT-6-Luna), without «Predeterminado».
-  const label = model && agent ? (model.id === '' && model.defaultOf ? model.defaultOf : labelOf(agent, model, t)) : (value.model || t('brain.defaultModel'));
+  // 3.6: with no model chosen and none the agent names, just the agent («Claude»), never «predeterminado».
+  const label = !value.model ? (model?.defaultOf ?? '') : model && agent ? labelOf(agent, model, t) : modelLabel(catalog, value.agent, value.model);
   // 3.1: with several accounts of one agent (Codex Go and Codex Pro), the button names the account in use.
   const who = agent?.accounts?.length > 1 ? agent.accounts.find((x) => x.id === value.account)?.label ?? agent.label : agent?.label;
   return (
@@ -56,7 +57,7 @@ export function BrainPicker({ catalog, value, onChange, className }) {
           <Button variant="outline" size="sm" className={cn('max-w-64 gap-1.5', className)} data-testid="brain-picker" aria-label={t('brain.title')}>
             <AgentIcon agent={value.agent} className="size-4" />
             {/* 3.6: on a phone, the model only (the icon says the agent), so the row stays on one line. */}
-            <span className="truncate"><span className="max-sm:hidden">{who ?? value.agent} · </span>{label}</span>
+            <span className="truncate">{label ? <><span className="max-sm:hidden">{who ?? value.agent} · </span>{label}</> : <span className="max-sm:hidden">{who ?? value.agent}</span>}</span>
             <ChevronDown className="size-3.5 opacity-60" />
           </Button>
         </DropdownMenuTrigger>

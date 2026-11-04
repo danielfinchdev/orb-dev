@@ -317,7 +317,9 @@ function TaskApprovalLine({ m }) {
   const [busy, setBusy] = useState(false);
   const waiting = task?.status === 'awaiting_approval';
   const run = async (fn) => { setBusy(true); try { await fn(task); } finally { setBusy(false); } };
-  const why = whyOf(m.body);
+  // 3.6: why it waits, in plain words from the task's own data (its sensitivity), not the short labels of the log.
+  const reasons = (task?.sensitivity ?? []).map((k) => t(`orbchats.why.${k}`)).filter((x) => x && !x.startsWith('orbchats.why.'));
+  const why = reasons.length ? reasons.join(t('orbchats.whyAnd')) : whyOf(m.body);
   return (
     <div className={cn('mx-auto w-full max-w-[92%] rounded-xl border px-3.5 py-3 text-[13.5px] shadow-xs', waiting ? 'bg-card border-warning/45' : 'bg-muted/50')} data-testid="chat-task-approval" data-status={task?.status ?? 'gone'}>
       <div className="flex items-start gap-2">
@@ -399,14 +401,15 @@ export function CompactButton({ onCompact, busy }) {
     </BubbleTip>
   );
 }
-// The orchestrator under a new conversation: its icon and a small switch; the tooltip explains it.
-function OrchestratorSwitch({ on, onChange, name, cursor }) {
+// The orchestrator in the composer: its icon and a small switch; the tooltip explains it. A conversation keeps the way it
+// started (locked): the switch shows it, and the tooltip says how to talk to an agent directly.
+function OrchestratorSwitch({ on, onChange, name, cursor, locked = false }) {
   const t = useT();
   return (
-    <BubbleTip title={t('chat.orchestratorTip', { name })} text={cursor ? t('chat.orchestratorCursor', { name }) : on ? t('chat.orchestratorOn') : t('chat.orchestratorOff')} side="top">
-      <label className="hover:bg-accent/60 flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2" data-testid="orchestrator">
+    <BubbleTip title={t('chat.orchestratorTip', { name })} text={locked ? t('chat.orchestratorLocked', { name }) : cursor ? t('chat.orchestratorCursor', { name }) : on ? t('chat.orchestratorOn') : t('chat.orchestratorOff')} side="top">
+      <label className={cn('flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2', locked ? 'cursor-default' : 'hover:bg-accent/60 cursor-pointer')} data-testid="orchestrator">
         <OrchestratorIcon className={cn('size-4', on ? 'text-primary' : 'text-muted-foreground')} aria-hidden="true" />
-        <Switch size="sm" checked={on} onCheckedChange={(v) => onChange(v === true)} aria-label={t('chat.orchestrator')} data-testid="orchestrator-check" />
+        <Switch size="sm" checked={on} disabled={locked} onCheckedChange={(v) => onChange(v === true)} aria-label={t('chat.orchestrator')} data-testid="orchestrator-check" />
       </label>
     </BubbleTip>
   );
@@ -636,7 +639,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
           <ReasoningMenu catalog={catalog} value={brain} onChange={(reasoning) => settings({ reasoning })} />
           {/* 3.2: whether a NEW conversation is with the assistant or directly with the agent chosen; a conversation keeps
               the way it started. 3.6: an icon and a small switch; the tooltip explains it. */}
-          {id == null ? <OrchestratorSwitch on={orchestrate} onChange={toggleOrchestrator} name={name} cursor={brain.agent === 'cursor'} /> : null}
+          <OrchestratorSwitch on={orchestrate} onChange={toggleOrchestrator} name={name} cursor={brain.agent === 'cursor'} locked={id != null} />
           {context ? <span className="text-muted-foreground ml-auto shrink-0 text-xs"><ContextMeter context={context} /></span> : null}
         </>} />
     </>

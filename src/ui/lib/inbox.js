@@ -138,8 +138,9 @@ export function orbItems({ inbox = null, conversations = [], sessions = [], task
     if (s?.kind !== 'chat' || (skip != null && s.id === skip)) continue;
     const asks = (approvals ?? []).some((a) => a.session_id === s.id);
     const stalled = ['interrupted', 'limited', 'error'].includes(s.status);
+    const m = marks.get(`session:${s.id}`) ?? {};
     out.push({ key: `session:${s.id}`, kind: 'session', id: s.id, title: s.title, project: s.project ?? null, agent: s.agent ?? null, model: s.model ?? null,
-      pinned: false, pinOrder: null, muted: false, unread: 0, lastMessage: null, at: s.updated_at ?? null,
+      pinned: Boolean(m.pinned), pinOrder: m.pinOrder ?? null, muted: Boolean(m.muted), unread: 0, lastMessage: null, at: s.updated_at ?? null,
       done: Boolean(s.settled) || done.has(`s${s.id}`), busy: s.status === 'running', asks, stalled: stalled && !asks, tasks: [], open: 0 });
   }
   return out;
