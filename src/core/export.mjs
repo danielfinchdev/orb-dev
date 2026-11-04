@@ -70,11 +70,11 @@ export function personFiles(board, pid, { home }) {
   add('person.json', JSON.stringify(person, null, 2));
   add('settings.json', JSON.stringify(Object.fromEntries((has(board, 'person_settings') ? board.all('SELECT key, value FROM person_settings WHERE person_id = ?', pid) : []).map((r) => [r.key, r.value])), null, 2));
   // Conversations: their own whole; in a group of someone else, only their lines and the bots' answers right after them.
-  for (const c of ownRows(board, 'conversations', pid)) add(`conversations/${c.id}.jsonl`, jsonl([{ conversation: c }, ...board.all('SELECT id, role, body, meta, created_at, person_id FROM chat WHERE conversation_id = ? ORDER BY id', c.id)]));
+  for (const c of ownRows(board, 'conversations', pid)) add(`conversations/${c.id}.jsonl`, jsonl([{ conversation: c }, ...board.all('SELECT id, role, body, meta, at, person_id FROM chat WHERE conversation_id = ? ORDER BY id', c.id)]));
   if (cols(board, 'chat').has('person_id')) {
     const theirs = board.all('SELECT DISTINCT c.id FROM chat l JOIN conversations c ON c.id = l.conversation_id WHERE l.person_id = ? AND (c.person_id IS NULL OR c.person_id != ?)', pid, pid);
     for (const { id } of theirs) {
-      const lines = board.all('SELECT id, role, body, created_at, person_id FROM chat WHERE conversation_id = ? ORDER BY id', id);
+      const lines = board.all('SELECT id, role, body, at, person_id FROM chat WHERE conversation_id = ? ORDER BY id', id);
       const keep = []; let after = false;
       for (const l of lines) { if (l.role === 'usuario') after = l.person_id === pid; if (l.person_id === pid || (after && l.role !== 'usuario')) keep.push(l); }
       add(`conversations/grupo-${id}.jsonl`, jsonl(keep));
@@ -183,7 +183,7 @@ export function deletePerson(board, pid, { home, onBot = () => {} } = {}) {
     // The spending stays in the totals, without who.
     if (T('usage_ledger')) board.run("UPDATE usage_ledger SET person_id = 'deleted' WHERE person_id = ?", pid);
     if (T('audit')) board.run("UPDATE audit SET person_id = 'deleted' WHERE person_id = ?", pid);
-    board.run("UPDATE persons SET name = 'deleted', pin_hash = NULL, pin_salt = NULL, color = NULL, caps = '{}', deleted_at = ? WHERE id = ?", new Date().toISOString(), pid);
+    board.run('DELETE FROM persons WHERE id = ?', pid); // their export in the trash keeps who they were
   });
   for (const id of bots) onBot(id);
   return { id: pid, deleted: true, trash, bots: bots.length };
