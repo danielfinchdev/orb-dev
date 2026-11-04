@@ -9,6 +9,14 @@
 
 Windows 10/11. Since it isn't signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
 
+## What's new in 3.7.0 (draft)
+
+- **PC Monitoring and Opti Bot are now a bot's tools:** the "Monitoring" screen is gone. Give any bot the new
+  "Computer" tools (or create one from the "PC maintenance" template) to check the PC's health, temperatures, network,
+  startup programs, antivirus and Orb's backups; scans, cleaning, closing a program or removing it from startup are
+  still proposed on a card and only run if you approve (Windows asks for administrator rights for that action alone).
+  Opti Bot's old conversation stays, archived; sharing with Open Control Edge moves to Settings › Advanced › Tools.
+
 ## What's new in 3.6.0
 
 **Users.** One Orb for the whole household or a small team: each user has their own conversations, bots, projects,

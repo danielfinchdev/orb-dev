@@ -18,6 +18,7 @@ const transport = (() => {
 })();
 let remote = null; // phone access (src/engine/remote.mjs), when turned on
 let link = null; // 3.5: Magic Link to other Orbs (src/core/link.mjs)
+let replica = null; // 3.7 (WS3): the bots' homes and live copies between linked Orbs (src/engine/replica.mjs)
 let devControl = null; // 3.1: the developer's control line (src/engine/dev-control.mjs), only in Orb.dev
 // 3.6 «Personas»: every event goes through the router (src/engine/router.mjs), which works out once who it is for and
 // gives each sink only what its person may see: this PC's window (whoever sits at it), the phones and browsers, the
@@ -152,6 +153,8 @@ async function start(home, version, secret, browser, headless) {
   const bots = new Bots(board, { emit, log, push: (note) => remoteRef.current?.push?.(note) }).start();
   // 3.6 (WS4): a bot or a group no longer shared with someone: their lanes stop (bots.unshared) and they reload.
   bots.onRevoke = (person) => router?.revoke([person]);
+  // 3.7: Monitoreo del equipo and Opti Bot are gone: their settings and conversation are tidied once (engine/retired.mjs).
+  { const { tidyRetired } = await import('./retired.mjs'); tidyRetired(board, log); }
   api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, bots });
   // 3.6: a turn refused by a loan's limits (or a bot's caps): a notice and a push to the person who spends, and only them.
   const blocked = (person, why) => {
@@ -166,32 +169,14 @@ async function start(home, version, secret, browser, headless) {
   // launched only when a bot needs it. Same pipe and tools as the app's. Not on a PC with the app (ctx.browser is set).
   if (!ctx.browser && (isHeadless() || process.env.ORB_SERVER_BROWSER === '1') && ctx.config.browser?.enabled !== false && (process.platform === 'linux' || process.env.ORB_SERVER_BROWSER === '1')) {
     try {
-      const { createServerBrowser } = await import('../server/browser.mjs');
-      const { ownerOfBoard } = await import('../core/authz.mjs');
-      const sb = createServerBrowser({
-        language: () => ctx.config.language, ownerId: () => ownerOfBoard(board), config: () => ctx.config.browser ?? {}, log,
-        root: process.env.ORB_SERVER_BROWSER_DIR || ctx.paths.browser || path.join(os.homedir(), 'orb-server', 'browser'),
-        display: process.env.ORB_SERVER_BROWSER_DISPLAY || ctx.config.browser?.server?.display || 'auto',
-        // «Necesito que lo hagas tú»: a CAPTCHA or a code, to the person whose browser it is (a notice, a push and an
-        // event the app and the phone open the live view with).
-        onHuman: ({ person, kind, url }) => {
-          const site = (() => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; } })();
-          const who = person && !board.isOwnerPerson(person) ? person : null;
-          const body = tr(kind === 'captcha' ? 'msg.browser.human.captcha' : 'msg.browser.human.code', { site });
-          board.notice(body, 'warning', { person: who });
-          emit('browser:human', { person: person ?? ownerOfBoard(board), kind, site, open: 'browser.live' });
-          try { remoteRef.current?.push?.({ title: tr('msg.browser.human.title'), body, person: person ?? ownerOfBoard(board) }); } catch { /* no phones */ }
-        }
-      });
-      await sb.ready;
-      ctx.serverBrowser = sb;
-      ctx.browser = { pipe: sb.pipe, token: sb.token, server: true };
+      const { startServerBrowser } = await import('../server/browser.mjs');
+      await startServerBrowser({ board, emit, log, push: (note) => remoteRef.current?.push?.(note) });
     } catch (error) { log(`navegador del Server: ${error.message}`); }
   }
   // 3.5 Magic Link: the links this Orb made to other Orbs (keys sealed with the app's secret). A workshop linked to a
   // centre runs the calls the centre forwards to it, with the same checks as a phone's.
   {
-    const { createLink, orbIdentity } = await import('../core/link.mjs');
+    const { createLink, orbIdentity, isHomeCall } = await import('../core/link.mjs');
     const { macAddresses } = await import('../core/wol.mjs');
     const { guardCall, shapeResult, orbNameOf } = await import('./remote.mjs');
     const { audit, ownerOfBoard } = await import('../core/authz.mjs');
@@ -212,6 +197,11 @@ async function start(home, version, secret, browser, headless) {
       // 3.6 (A13, A12): the centre says who asked there; the call runs here as the person this link belongs to, once per
       // request_id, audited.
       onRequest: async (method, params, peer, { principal = null, requestId = null } = {}) => {
+        // 3.7 (WS3): the bots' homes and copies: the other Orb's identity and this link's persons decide (replica.mjs).
+        if (isHomeCall(method)) {
+          if (!replica) throw Object.assign(new Error('este Orb aún no está listo'), { status: 503 });
+          return replica.serve(peer, method, params);
+        }
         const who = whoAsks(board, peer, principal);
         const why = guardCall(board, method, params);
         if (why) { audit(board, who, method, { type: 'link', id: peer?.id ?? '' }, 'deny', 'guard'); throw Object.assign(new Error(why), { status: 403 }); }
@@ -226,6 +216,14 @@ async function start(home, version, secret, browser, headless) {
       onChange: (peers) => emit('link:peers', peers)
     });
     if (!ctx.moved) link.start();
+    // 3.7 (WS3): one home per bot, a live copy on the other linked Orbs (pulled whenever both are on).
+    {
+      const { createReplica } = await import('./replica.mjs');
+      replica = remoteRef.replica = createReplica({ board, bots, emit, log, link: () => link, remote: () => remote, api });
+      remote.onHomeCall = (peer, method, params) => { if (!isHomeCall(method)) throw Object.assign(new Error('operación desconocida'), { status: 404 }); return replica.serve(peer, method, params); };
+      remote.onOrbGone = (peer) => replica.onOrbGone(peer);
+      if (!ctx.moved) replica.start();
+    }
     // 3.5: the bots live on the centre: what its bots say comes to this Orb's window as centro:<event>.
     // 3.6: only to the person this link belongs to here (the centre already sends only that person's bots).
     link.on('*', (event, payload, peer) => { if (hostsBots(peer?.role ?? 'taller') && /^bot\./.test(event)) emit(`centro:${event}`, payload, { person: peer?.person ?? ownerOfBoard(board) }); });
@@ -325,6 +323,7 @@ transport.on(async (msg) => {
     try { await Promise.race([ctx.serverBrowser?.shutdown(), new Promise((r) => setTimeout(r, 3000))]); } catch { /* closing anyway */ }
     try { bridge?.stop(); } catch { /* closing anyway */ }
     try { devControl?.stop(); } catch { /* closing anyway */ }
+    try { replica?.stop(); } catch { /* closing anyway */ }
     try { link?.stop(); } catch { /* closing anyway */ }
     // 3.2.1: if Orb started adb this session, its resident server goes too (never a server the user runs elsewhere).
     try { const { stopAdb } = await import('./android.mjs'); stopAdb(); } catch { /* not used or already gone */ }

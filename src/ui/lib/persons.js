@@ -100,16 +100,6 @@ export function sharedBy(withMe = [], type, id) {
   return s ? { by: s.by, right: s.right } : null;
 }
 
-// The welcome wizard (setup.jsx): three screens, one question each. «¿Para qué lo quieres?»: each tile applies one
-// template as it is (src/core/templates); «Más tarde» makes nothing.
-export const WIZARD_STEPS = ['nombre', 'quien', 'para'];
-export const WIZARD_USES = [
-  { id: 'dev', template: 'desarrollo' },
-  { id: 'business', template: 'negocio' },
-  { id: 'home', template: 'casa' },
-  { id: 'later', template: null }
-];
-
 // The usage table «Quién ha gastado qué» (usage.byPerson): sorted by today's spend, the total on top.
 export function usageRows(rows = []) {
   const list = [...rows].sort((a, b) => (b.today?.turns ?? 0) - (a.today?.turns ?? 0) || (b.month?.turns ?? 0) - (a.month?.turns ?? 0));

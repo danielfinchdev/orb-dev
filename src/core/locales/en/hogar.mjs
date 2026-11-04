@@ -1,0 +1,26 @@
+// 3.7 (Orb Server, WS3): where each bot runs, moving it from one Orb to another and its copy on the others.
+export default {
+  'msg.home.runsElsewhere': '“{name}” runs on another Orb. Change it there or move it here.',
+  'msg.home.thisOrb': 'This PC',
+  'msg.home.otherOrb': 'Another Orb',
+  'msg.home.sentAgo': '(sent {when})',
+  'msg.home.agoMin': '{n} min ago',
+  'msg.home.agoH': '{n} h ago',
+  'msg.home.agoDays': '{n} days ago',
+  'msg.home.homeGone': 'The Orb where “{name}” ran is no longer linked. Restore it here or on another Orb.',
+  'msg.home.homeOffline': '{name} is not connected right now. Try again when it is back.',
+  'msg.home.notMapped': 'That person is not linked with this Orb.',
+  'msg.home.noIdentity': 'That Orb has not said who it is yet. Wait for it to connect.',
+  'msg.home.noTarget': 'That Orb cannot run bots yet: it needs Orb 3.7 or later.',
+  'msg.home.forceWarn': '{name} does not answer. If {name} is still on, both could act until they reconnect.',
+  'msg.home.takenOver': 'This bot now runs on this PC ({name} did not answer).',
+  'msg.home.restored': 'This bot was restored from its copy. If asked, sign in to its agent again.',
+  'msg.home.turnCut': 'The answer in progress was cut to move the bot to another Orb.',
+  'msg.home.cardsCancelled': '{n} pending cards were cancelled when the bot moved. It will ask again if they are still needed.',
+  'msg.home.rangOffline': '⏰ “{text}” rang on {name} while it was disconnected.',
+  'msg.home.reconciled': '{name} is back: {lines} messages from while it was disconnected were added, and {proposals} memory changes are waiting for review.',
+  'msg.home.claimRefused': 'That Orb is not the one running this bot now.',
+  'msg.home.bothHere': 'Both bots already run on this PC.',
+  'msg.home.archivedName': 'archived',
+  'msg.home.offlineMark': 'on {name} while it was disconnected'
+};

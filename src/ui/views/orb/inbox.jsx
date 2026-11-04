@@ -1,13 +1,13 @@
 // 3.6 (messaging, step M3): the Orb zone's chat list (docs/DESIGN-SYSTEM.md › 2.5, mockup mensajeria.html ?z=orb). On the
 // PC it is the left pane under «Orb | Bots»; on the phone the «Chats» tab. From the top: search (titles, projects, the
 // messages and «#12» for a task) with its filter, «+» (Nuevo chat, Nuevo proyecto), the zone's other places (PC: Tareas,
-// Proyectos, Programadas, Pizarra, and «Más» with God mode and Monitoreo when they are on), what others shared, the pinned
+// Proyectos, Programadas, Pizarra, and «Más» with God mode when it is on), what others shared, the pinned
 // chats, then one group per project (its coloured initials, folding) with its chats. Each row: Orbe's head with the
 // project's badge (a direct conversation: its agent's mark), the title, the time, its latest progress (a running task,
 // «Esperando tu aprobación», how its last task ended, else its last line) and the unread count. Right click or ⋯ (PC) and
 // a long press (phone) open the chat's menu: info, pin, mute, mark read, complete or reopen, delete.
 import { useEffect, useMemo, useState } from 'react';
-import { Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ListTodo, FolderKanban, CalendarClock, PenTool, SquareTerminal, HeartPulse, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, Sparkles } from 'lucide-react';
+import { Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ListTodo, FolderKanban, CalendarClock, PenTool, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
@@ -39,9 +39,8 @@ export function useOrbItems() {
   const chats = useStore((s) => s.app?.chats);
   const approvals = useStore((s) => s.app?.approvals);
   const completed = useStore((s) => s.app?.completed);
-  const skip = useStore((s) => s.app?.optiSession ?? null);
-  return useMemo(() => orbItems({ inbox, conversations, sessions, tasks, chats, approvals, completed, skip }).map((x) => ({ ...x, agentName: AGENT[x.agent] ?? x.agent })),
-    [inbox, conversations, sessions, tasks, chats, approvals, completed, skip]);
+  return useMemo(() => orbItems({ inbox, conversations, sessions, tasks, chats, approvals, completed }).map((x) => ({ ...x, agentName: AGENT[x.agent] ?? x.agent })),
+    [inbox, conversations, sessions, tasks, chats, approvals, completed]);
 }
 export const openOrbItem = (x) => go(x.kind === 'session' ? { view: 'session', id: x.id } : { view: 'chat', id: x.id });
 const isOpen = (route, x) => (x.kind === 'session' ? route.view === 'session' : route.view === 'chat') && route.id === x.id;
@@ -241,7 +240,7 @@ export function OrbNewMenu({ fab = false }) {
 }
 
 // ---- the zone's other places (PC): Tareas (with what waits for approval), Proyectos, Programadas, Pizarra, and «Más»
-// with God mode and Monitoreo when they are on (PC only).
+// with God mode when it is on (PC only).
 function Places() {
   const t = useT();
   const view = useStore((s) => s.route.view);
@@ -249,10 +248,7 @@ function Places() {
   const running = useStore((s) => s.tasks.filter((x) => x.status === 'running').length);
   const config = useStore((s) => s.app?.config);
   const places = [['tasks', ListTodo, 'nav.tasks'], ['projects', FolderKanban, 'nav.projects'], ['schedules', CalendarClock, 'nav.schedules'], ['board', PenTool, 'nav.board']];
-  const more = [
-    ...(config?.expert?.enabled && fullPc() ? [['expert', SquareTerminal, 'nav.expert']] : []),
-    ...(config?.monitor?.enabled && fullPc() ? [['monitor', HeartPulse, 'nav.monitor']] : [])
-  ];
+  const more = config?.expert?.enabled && fullPc() ? [['expert', SquareTerminal, 'nav.expert']] : [];
   const cls = (on) => cn('press relative flex min-w-0 cursor-pointer flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-[11.5px] transition-colors', on ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground');
   return (
     <nav className={cn('grid gap-0.5 px-2 pb-1', more.length ? 'grid-cols-5' : 'grid-cols-4')} aria-label={t('orbchats.places')} data-testid="orb-places">

@@ -69,14 +69,22 @@ try {
     const base = path.join(tmp, 'PrimerPC'); fs.mkdirSync(base);
     const { app, page, errors, close } = await open(userData, { ORB_DEFAULT_BASE: base });
     const shot = shooter(app, page);
-    // 3.6: the welcome wizard, three screens (the folder goes in Documents: here a throwaway one).
-    await page.waitForSelector('[data-testid=setup-name]');
+    // 3.7: the 3.5.1 welcome: the assistant's name, what to call you, the folder; on Windows «Preparando tu PC».
+    await page.waitForSelector('[data-testid=setup-datos]');
     note(`ventana inicial: ${(await page.evaluate(() => [innerWidth, innerHeight])).join('x')}`);
-    await page.fill('[data-testid=setup-name]', 'Ana');
+    await page.fill('[data-testid=setup-user]', 'Ana');
     await shot('00-bienvenida');
-    await page.click('[data-testid=setup-create]');
-    await page.click('[data-testid=wizard-only-me]');
-    await page.click('[data-testid=wizard-use-later]');
+    if (app) {
+      await app.evaluate(({ dialog }, folder) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] }); }, base);
+      await page.click('[data-testid=setup-folder]');
+      await page.click('[data-testid=setup-create]');
+      await page.getByTestId('sidebar-home').or(page.getByTestId('setup-prepare')).first().waitFor({ timeout: 30000 });
+      if (await page.isVisible('[data-testid=setup-prepare]')) { await shot('00b-preparo-equipo'); await page.click('[data-testid=setup-continue]'); }
+    } else {
+      // A packaged build: Windows' folder dialog cannot be answered from here, so the same call the button makes.
+      await page.evaluate((folder) => window.orb.setup({ base: folder, assistantName: 'Orbe', userName: 'Ana' }), base);
+      await page.reload();
+    }
     await page.waitForSelector('[data-testid=sidebar-home]', { timeout: 30000 });
     await shot('01c-primer-chat');
     note(`errores en bienvenida: ${errors.join(' | ') || 'ninguno'}`);

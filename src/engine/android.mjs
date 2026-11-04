@@ -17,6 +17,9 @@ let state = { state: 'idle', error: null };
 let running = null;
 
 export const adbPath = () => path.join(ctx.paths.adb, exe('adb'));
+// 3.7: adb never runs in tests or when switched off (ORB_NO_ADB=1): every new copy of adb.exe that starts its server makes
+// Windows ask for permission, and the tests make a fresh folder each time.
+export const adbDisabled = () => process.env.ORB_NO_ADB === '1' || Boolean(process.env.ORB_FAKE_AGENTS);
 export const adbStatus = () => ({ ...state, dir: ctx.paths.adb, ready: fs.existsSync(adbPath()) });
 
 // 3.2.1: the first adb command starts a server that stays resident. Orb notes when it used adb this session, so it can
@@ -24,7 +27,7 @@ export const adbStatus = () => ({ ...state, dir: ctx.paths.adb, ready: fs.exists
 let adbUsed = false;
 export const markAdbUsed = () => { adbUsed = true; };
 export function stopAdb() {
-  if (!adbUsed || !fs.existsSync(adbPath())) return;
+  if (!adbUsed || adbDisabled() || !fs.existsSync(adbPath())) return;
   adbUsed = false;
   try { spawnSync(adbPath(), ['kill-server'], { windowsHide: true, timeout: 5000 }); } catch { /* already gone */ }
 }
@@ -39,6 +42,7 @@ export function addAdbToPath() {
 // Downloads and unpacks platform-tools when adb is not there yet. Never throws: the result is in adbStatus().
 // Tests (fake agents) and ORB_NO_ADB=1 never download.
 export function ensureAdb({ log = () => {}, force = false } = {}) {
+  if (adbDisabled()) { state = { state: 'off', error: null }; return Promise.resolve({ ...adbStatus(), ready: false }); }
   if (fs.existsSync(adbPath())) { state = { state: 'ready', error: null }; return Promise.resolve(adbStatus()); }
   if (!force && (process.env.ORB_NO_ADB === '1' || process.env.ORB_FAKE_AGENTS)) { state = { state: 'off', error: null }; return Promise.resolve(adbStatus()); }
   const url = URLS[process.platform];

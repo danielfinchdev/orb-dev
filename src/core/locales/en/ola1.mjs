@@ -42,7 +42,7 @@ export default {
   'settings.sectionDesc.general': 'Assistant, language, working folder, appearance and updates.',
   'settings.sectionDesc.magiclink': 'Who can enter this Orb: its users, their devices and the linked Orbs.',
   'settings.sectionDesc.agentes': 'How conversations and tasks work, and how much usage they may spend.',
-  'settings.sectionDesc.avanzado': 'Agent tools, God mode and Monitoring.',
+  'settings.sectionDesc.avanzado': 'Agent tools and God mode.',
   'settings.sectionDesc.acerca': 'Version, feedback and other apps.',
   'settings.group.apariencia': 'Appearance',
   'settings.group.actualizaciones': 'Updates',
@@ -51,7 +51,6 @@ export default {
   'settings.group.orbs': 'Linked Orbs',
   'settings.group.herramientas': 'Tools',
   'settings.group.experto': 'God mode',
-  'settings.group.monitor': 'Monitoring',
   'settings.group.contribuye': 'Contribute',
   'settings.group.apps': 'More apps',
   'settings.mobile': 'Access from other devices',
@@ -60,8 +59,6 @@ export default {
   // Users
   'persons.actions': 'Actions for {name}',
   'persons.edit': 'Edit name',
-  // Welcome wizard
-  'wizard.addPerson': 'Add another user',
   // Texts that pointed to the old sections
   'help.faq.10.a': 'The Professional theme hides the robot and animations; change it in Settings › General, where the floating robot is also turned on or off.',
   // Pie de la barra lateral en un navegador enlazado: el engranaje abre este dispositivo y Magic Link

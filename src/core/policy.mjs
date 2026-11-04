@@ -15,7 +15,7 @@
 //   strong: (params) => bool   the call needs a strong ticket (a PIN typed in the last minutes) when the caller has a PIN
 //   check: (board, principal, params) => true | 'reason'   anything else
 // Resource types: person, conversation, chat (a line), bot, group, project, task, session, schedule, reminder, request,
-// device, account, integration ('ha' | 'srv'), log (a project's or 'general'), owner (only the owner passes).
+// device, account, integration ('ha' | 'pc' | 'srv'), log (a project's or 'general'), owner (only the owner passes).
 //
 // Each workstream appends ITS OWN section below (WS2 … WS6) and adds it to POLICY / EVENTS at the bottom: one section per
 // workstream, so merges do not conflict. A later section may replace an entry of an earlier one on purpose.
@@ -114,7 +114,6 @@ const CORE = {
   'android.status': { ownerOnly: true }, 'android.install': { ownerOnly: true }, 'android.devices': { ownerOnly: true }, 'android.pair': { ownerOnly: true }, 'android.connect': { ownerOnly: true }, 'android.info': { ownerOnly: true },
   'net.wifi': { ownerOnly: true }, 'net.nearby': { ownerOnly: true }, 'net.devices': { ownerOnly: true }, 'net.rename': { ownerOnly: true }, 'net.remote': { ownerOnly: true },
   'github.status': { ownerOnly: true }, 'github.contributions': { ownerOnly: true }, 'github.login': { ownerOnly: true },
-  'opti.session': { ownerOnly: true }, 'opti.stats': { ownerOnly: true }, 'opti.act': { ownerOnly: true },
   'expert.tree': { ownerOnly: true }, 'expert.read': { ownerOnly: true }, 'expert.status': { ownerOnly: true }, 'expert.diff': { ownerOnly: true }, 'expert.log': { ownerOnly: true }, 'expert.system': { ownerOnly: true },
   'actions.list': { ownerOnly: true }, 'actions.save': { ownerOnly: true }, 'actions.remove': { ownerOnly: true },
   'images.read': { public: true }, // WS3: only pictures of the caller's projects and accounts
@@ -365,7 +364,7 @@ const ORBMODE = {
 const memRes = (p, wide) => (p.id == null || p.id === '' || p.id === 'global' ? null : { ...bot(p.id), right: p.which === 'mine' ? 'talk' : wide });
 // A card (a chat line of a bot's conversation): its meta, to see who may answer it and whether it is sensitive.
 const cardMeta = (board, item) => { try { return JSON.parse(dbOne(board, 'SELECT meta FROM chat WHERE id = ?', Number(item))?.meta || 'null'); } catch { return null; } };
-export const SENSITIVE_CARDS = new Set(['ha', 'srv', 'admin', 'confirm']);
+export const SENSITIVE_CARDS = new Set(['ha', 'pc', 'srv', 'admin', 'confirm']);
 const sensitiveCard = (m) => Boolean(m && m.kind === 'bot_card' && SENSITIVE_CARDS.has(m.card) && !(m.card === 'admin' && m.payload?.action === 'pause'));
 // Saying yes: only the card's approvers. Saying no: also anyone who may talk in that conversation. A card without
 // approvers (made before 3.6) is answered by the conversation's person.
@@ -452,6 +451,33 @@ for (const set of [PHONE_SET, ORB_SET, CONSOLE_SET]) for (const m of [...INBOX_M
 for (const set of [ORB_SET, CONSOLE_SET]) for (const m of ['bots.groups.members.add', 'bots.groups.members.remove']) set.add(m);
 BOTS_OWNER.push('bots.groups.members.add', 'bots.groups.members.remove');
 
+// ---- 3.7 (Orb Server, WS3): one home per bot (src/engine/replica.mjs). Moving, restoring, merging: the bot's own person.
+// The calls between two Orbs about it (replica.*, home.*) are not API methods: link ops checked in replica.mjs.
+const HOME = {
+  'bots.homes': { public: true },
+  'bots.move': { res: (p) => bot(p.id), right: 'own' },
+  'bots.restore': { res: (p) => bot(p.id), right: 'own' },
+  'bots.merge': { res: (p) => [bot(p.survivor), bot(p.other)], right: 'own' },
+  'bots.sameBot': { res: (p) => bot(p.id), right: 'own' },
+  'bots.unlink': { ownerOnly: true },
+  'replica.status': { ownerOnly: true },
+  'replica.sync': { ownerOnly: true }
+};
+// From a phone (linked to the Orb that is the hub, 3.7 Q1): where bots run and «Pasar al …» of one's own bots.
+for (const set of [PHONE_SET, ORB_SET, CONSOLE_SET]) for (const m of ['bots.homes', 'bots.move', 'bots.restore']) set.add(m);
+for (const set of [ORB_SET, CONSOLE_SET]) for (const m of ['bots.merge', 'bots.sameBot']) set.add(m);
+BOTS_OWNER.push('bots.merge', 'bots.sameBot');
+
+// ---- 3.7 (WS1): Orb Server's own methods (src/server/api-server.mjs): its state, the agent engines it downloads and its
+// self-update. Only the owner, and from afar only a device with «Puede administrar» (or the server's own console).
+export const SERVER_METHODS = ['server.status', 'server.engines', 'server.engines.install', 'server.update.status', 'server.update.check', 'server.update.apply'];
+const SERVERP = {
+  'server.status': { ownerOnly: true }, 'server.engines': { ownerOnly: true }, 'server.update.status': { ownerOnly: true },
+  'server.engines.install': { ownerOnly: true, admin: true }, 'server.update.check': { ownerOnly: true, admin: true }, 'server.update.apply': { ownerOnly: true, admin: true }
+};
+for (const set of [CONSOLE_SET, CONTROL_SET]) for (const m of SERVER_METHODS) set.add(m);
+CONTROL_SET.add('link.connect'); // the installer pairs the server with the app from the server's own console
+
 // ======== 3.7 · WS5 Orb Server's browser: «Ver navegador del Server» (src/engine/api-browser.mjs). Each person views and
 // uses only their own browser profile: a person named on purpose that is not the caller is refused, even for the owner
 // (the method audits every start and every refusal). From any screen of the person (phone, browser, app linked to the
@@ -464,7 +490,7 @@ const BROWSERP = {
 };
 for (const set of [PHONE_SET, ORB_SET, CONSOLE_SET]) for (const m of Object.keys(BROWSERP)) set.add(m);
 
-export const POLICY = Object.freeze({ ...CORE, ...GATEWAY, ...ORBMODE, ...BOTSP, ...DATA, ...INBOX, ...UI, ...BROWSERP });
+export const POLICY = Object.freeze({ ...CORE, ...GATEWAY, ...ORBMODE, ...BOTSP, ...DATA, ...INBOX, ...UI, ...HOME, ...SERVERP, ...BROWSERP });
 export const policyOf = (method) => {
   const m = String(method);
   if (Object.hasOwn(POLICY, m)) return POLICY[m];
@@ -530,7 +556,12 @@ const EVENTS_INBOX = { 'inbox:changed': (p) => (p?.person ? { person: p.person }
 const EVENTS_UI = {};
 // 3.7 (WS5): the live view's pictures and state: only the person whose browser it is (remote.mjs: only to that device).
 const EVENTS_BROWSER = { 'browser:live': (p) => (p?.person ? { person: p.person } : 'owner'), 'browser:human': (p) => (p?.person ? { person: p.person } : 'owner') };
-export const EVENTS = Object.freeze({ ...EVENTS_CORE, ...EVENTS_GATEWAY, ...EVENTS_ORBMODE, ...EVENTS_BOTSP, ...EVENTS_DATA, ...EVENTS_INBOX, ...EVENTS_UI, ...EVENTS_BROWSER });
+// 3.7 (WS3): a bot's home changed (or its move moved on a phase): whoever sees the bot / the bot's person.
+const EVENTS_HOME = {
+  'bot.home': (p) => (p?.id ? bot(p.id) : 'owner'),
+  'bots.move': (p) => (p?.person ? { person: p.person } : p?.id ? bot(p.id) : 'owner')
+};
+export const EVENTS = Object.freeze({ ...EVENTS_CORE, ...EVENTS_GATEWAY, ...EVENTS_ORBMODE, ...EVENTS_BOTSP, ...EVENTS_DATA, ...EVENTS_INBOX, ...EVENTS_UI, ...EVENTS_HOME, ...EVENTS_BROWSER });
 export function eventRule(event) {
   const e = String(event);
   if (Object.hasOwn(EVENTS, e)) return EVENTS[e];

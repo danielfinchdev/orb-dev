@@ -273,6 +273,7 @@ export default {
   "msg.guard.runs": "runs a command",
   "msg.guard.sendData": "sends data to the internet",
   "msg.guard.ssh": "connects to another PC or server",
+  "msg.guard.sudo": "nobody raises their privileges (sudo and the like): server changes go through an approval card",
   "msg.guard.system": "changes the system",
   "msg.guard.tool": "tool",
   "msg.home.absolute": "the folder must be an absolute path",

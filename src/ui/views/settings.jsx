@@ -16,7 +16,6 @@ import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea, Kbd, PathText, Spinner } from '@/components/ui/basic.jsx';
 import { Select, Switch, Checkbox, Dialog, DialogContent, DialogTitle, BubbleTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
 import { ModelGuide } from '@/components/model-guide.jsx';
-import { useCatalog } from '@/components/brain-picker.jsx';
 import { AGENT } from '@/lib/labels.js';
 import { useStore, call, act, bridge, setState, getState, applyTheme, applyAppearance, go, openTerminal, openSettings, closeSettings, fullPc, runTest } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
@@ -474,30 +473,16 @@ function InterfaceCard({ c }) {
 }
 
 // Expert mode: an IDE-like view (PC only) with the panels the user picks.
-// 2.7: Monitoreo del equipo: Opti Bot on or off (then it appears in the menu) and its brain: any installed agent and model.
-function MonitorCard({ c }) {
+// 2.7: the bridge with Open Control Edge (engine/bridge.mjs): on unless turned off. 3.7: its own card (it was part of
+// «Monitoreo del equipo», which is gone), config oce.share.
+function OceCard({ c }) {
   const t = useT();
-  const catalog = useCatalog();
-  const m = c.monitor ?? {};
-  const agent = m.agent || 'claude';
-  const DEFAULT = '__default';
-  const agents = (catalog ?? []).filter((a) => a.id !== 'cursor'); // Cursor cannot keep Opti Bot to its own tools
-  const models = (agents.find((a) => a.id === agent)?.models ?? []).filter((x) => x.id);
   return (
-    <Card data-testid="monitor-card">
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><HeartPulse className="text-success size-5" /><div><CardTitle>{t('settings.monitor')}</CardTitle><CardDescription>{t('settings.monitorDesc')}</CardDescription></div></CardHeader>
-      <CardContent className="grid gap-4">
-        <Row label={t('settings.monitorOn')} hint={t('settings.monitorOnHint')}><Switch checked={m.enabled === true} onCheckedChange={(enabled) => save({ monitor: { enabled, agent } }, enabled ? t('settings.monitorEnabled') : t('settings.monitorDisabled'))} data-testid="monitor-switch" /></Row>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label={t('settings.monitorAgent')}><Select className="w-full" value={agent} disabled={!agents.length} onValueChange={(next) => save({ monitor: { agent: next, model: null } })} options={(agents.length ? agents : [{ id: agent, label: AGENT[agent] ?? agent }]).map((a) => ({ value: a.id, label: a.label }))} /></Field>
-          <Field label={t('settings.monitorModel')} hint={t('settings.monitorModelHint')}><Select className="w-full" value={m.model || DEFAULT} onValueChange={(model) => save({ monitor: { model: model === DEFAULT ? null : model } })} options={[{ value: DEFAULT, label: t('settings.monitorModelDefault') }, ...models.map((x) => ({ value: x.id, label: x.tier ? `${x.label} · ${t(`brain.tier.${x.tier}`)}` : x.label }))]} /></Field>
-        </div>
-        <Row label={t('settings.monitorOce')} hint={t('settings.monitorOceHint')}><Switch checked={m.shareWithOce !== false} onCheckedChange={(shareWithOce) => save({ monitor: { shareWithOce } })} data-testid="monitor-oce" /></Row>
-        <ul className="text-muted-foreground grid list-disc gap-1 pl-4 text-xs leading-snug">
-          {[1, 2, 3].map((n) => <li key={n}>{t(`settings.monitorNote${n}`)}</li>)}
-        </ul>
+    <Card data-testid="oce-card">
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><HeartPulse className="text-success size-5" /><div><CardTitle>{t('settings.oce')}</CardTitle><CardDescription>{t('settings.oceDesc')}</CardDescription></div></CardHeader>
+      <CardContent>
+        <Row label={t('settings.oceShare')}><Switch checked={c.oce?.share !== false} onCheckedChange={(share) => save({ oce: { share } }, share ? t('settings.oceShared') : t('settings.oceNotShared'))} data-testid="oce-share" /></Row>
       </CardContent>
-      {m.enabled ? <CardFooter><Button size="sm" variant="outline" onClick={() => { closeSettings(); go('monitor'); }}><HeartPulse />{t('settings.monitorOpen')}</Button></CardFooter> : null}
     </Card>
   );
 }
@@ -649,16 +634,17 @@ const SECTIONS = [
     cards: (c, app, me) => <MagicLinkPanel grouped users={showPersonsSettings(me) ? <PersonsCard /> : null} phoneAccess={<MobileCard />} /> },
   { id: 'agentes', icon: Cpu, cards: (c) => <><ChatCard c={c} /><TasksCard c={c} />{bridge.mobile ? null : <TestCard />}</> },
   { id: 'datos', icon: DatabaseBackup, when: (me) => isOwner(me), cards: () => <DataCards /> },
-  { id: 'avanzado', icon: Wrench, groups: () => ['herramientas', ...(fullPc() ? ['experto', 'monitor'] : [])],
-    cards: (c) => <><SubSection id="herramientas" title={t('settings.group.herramientas')}><BrowserCard c={c} /><McpCard c={c} /><AndroidCard /></SubSection>
-      {/* 2.7.3: Orb Light (the portable .exe) leaves out God mode and Monitoreo. */}
-      {fullPc() ? <><SubSection id="experto" title={t('settings.group.experto')}><ExpertCard c={c} /></SubSection><SubSection id="monitor" title={t('settings.group.monitor')}><MonitorCard c={c} /></SubSection></> : null}</> },
+  // 3.7: «Monitoreo» is no longer here (a bot with the «Equipo» tools does it); sharing with Open Control Edge stays.
+  { id: 'avanzado', icon: Wrench, groups: () => ['herramientas', ...(fullPc() ? ['experto'] : [])],
+    cards: (c) => <><SubSection id="herramientas" title={t('settings.group.herramientas')}><BrowserCard c={c} /><McpCard c={c} /><AndroidCard />{fullPc() ? <OceCard c={c} /> : null}</SubSection>
+      {/* 2.7.3: Orb Light (the portable .exe) leaves out God mode. */}
+      {fullPc() ? <SubSection id="experto" title={t('settings.group.experto')}><ExpertCard c={c} /></SubSection> : null}</> },
   { id: 'acerca', icon: Info, groups: ['contribuye', 'apps'],
     cards: (c, app) => <><AboutCard version={app.version} /><SubSection id="contribuye" title={t('settings.group.contribuye')}><SupportCard /><FeedbackCard /></SubSection><SubSection id="apps" title={t('settings.group.apps')}><MoreAppsCard /></SubSection></> }
 ];
 // The names of before 3.6 (links in tutorials, notices and the sidebar) → [section, part].
 const ALIASES = { personas: ['magiclink', 'usuarios'], movil: ['magiclink', 'dispositivos'], apariencia: ['general', 'apariencia'], actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'],
-  herramientas: ['avanzado', 'herramientas'], experto: ['avanzado', 'experto'], monitor: ['avanzado', 'monitor'], contribuye: ['acerca', 'contribuye'], apps: ['acerca', 'apps'] };
+  herramientas: ['avanzado', 'herramientas'], experto: ['avanzado', 'experto'], monitor: ['avanzado', 'herramientas'], contribuye: ['acerca', 'contribuye'], apps: ['acerca', 'apps'] };
 export function resolveSection(open) {
   if (!open || open === true) return ['general', null];
   const [id, part = null] = String(open).split(':');

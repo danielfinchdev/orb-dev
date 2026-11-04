@@ -1,7 +1,7 @@
 // 3.5: «Bots»: the user's bots (as many as they want, none made beforehand beyond the starter «Asistente») and the
 // editor of one (route { view: 'bots', id }: a bot's id, or 'new'). Its brain is chosen like the assistant's.
 import { useEffect, useState } from 'react';
-import { Bot, Plus, MessageSquare, Pencil, Pause, Play, Trash2, Crown, Globe, Bell, Mail, CalendarDays, Compass, Home, Server, Settings2, ArrowLeft } from 'lucide-react';
+import { Bot, Plus, MessageSquare, Pencil, Pause, Play, Trash2, Crown, Globe, Bell, Mail, CalendarDays, Compass, Home, Server, Settings2, ArrowLeft, HeartPulse } from 'lucide-react';
 import { PageHeader } from '@/components/page.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea } from '@/components/ui/basic.jsx';
@@ -22,7 +22,7 @@ import { personsOn, botAccountChoices } from '@/lib/persons.js';
 
 // 3.6: a bot thinks with Claude or Codex (Orb refuses the other agents as a bot's brain).
 const BOT_BRAINS = ['claude', 'codex'];
-export const TOOL_ICON = { internet: Globe, recordatorios: Bell, correo: Mail, calendario: CalendarDays, navegador: Compass, casa: Home, servidor: Server, gestion: Settings2 };
+export const TOOL_ICON = { internet: Globe, recordatorios: Bell, correo: Mail, calendario: CalendarDays, navegador: Compass, casa: Home, equipo: HeartPulse, servidor: Server, gestion: Settings2 };
 
 export function BotsView({ route }) {
   const manage = useCanManage();

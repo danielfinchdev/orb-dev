@@ -1,0 +1,26 @@
+// 3.7 (Orb Server, WS3): dónde se ejecuta cada bot, pasarlo de un Orb a otro y su copia en los demás.
+export default {
+  'msg.home.runsElsewhere': '«{name}» se ejecuta en otro Orb. Cámbialo allí o pásalo aquí.',
+  'msg.home.thisOrb': 'Este PC',
+  'msg.home.otherOrb': 'Otro Orb',
+  'msg.home.sentAgo': '(enviado {when})',
+  'msg.home.agoMin': 'hace {n} min',
+  'msg.home.agoH': 'hace {n} h',
+  'msg.home.agoDays': 'hace {n} días',
+  'msg.home.homeGone': 'El Orb donde se ejecutaba «{name}» ya no está enlazado. Restáuralo aquí o en otro Orb.',
+  'msg.home.homeOffline': '{name} no está conectado ahora. Inténtalo cuando vuelva.',
+  'msg.home.notMapped': 'Esa persona no está enlazada con este Orb.',
+  'msg.home.noIdentity': 'Ese Orb aún no ha dicho quién es. Espera a que se conecte.',
+  'msg.home.noTarget': 'Ese Orb no puede ejecutar bots todavía: necesita Orb 3.7 o posterior.',
+  'msg.home.forceWarn': '{name} no responde. Si {name} sigue encendido, los dos podrían actuar hasta que se reconecten.',
+  'msg.home.takenOver': 'Ahora este bot se ejecuta en este PC ({name} no respondía).',
+  'msg.home.restored': 'Este bot se ha restaurado desde su copia. Si te lo pide, vuelve a iniciar sesión en su agente.',
+  'msg.home.turnCut': 'Se ha cortado la respuesta en curso para pasar el bot a otro Orb.',
+  'msg.home.cardsCancelled': 'Se han cancelado {n} tarjetas pendientes al pasar el bot. Las volverá a pedir si hacen falta.',
+  'msg.home.rangOffline': '⏰ «{text}» sonó en {name} mientras estaba desconectado.',
+  'msg.home.reconciled': '{name} ha vuelto: se han añadido {lines} mensajes de cuando estaba desconectado y {proposals} cambios de memoria para revisar.',
+  'msg.home.claimRefused': 'Ese Orb no es el que ejecuta ahora este bot.',
+  'msg.home.bothHere': 'Los dos bots se ejecutan ya en este PC.',
+  'msg.home.archivedName': 'archivado',
+  'msg.home.offlineMark': 'en {name} mientras estaba desconectado'
+};

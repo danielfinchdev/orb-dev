@@ -347,3 +347,28 @@ export function createServerBrowser({ language = () => 'es', ownerId = () => 'ow
     }
   };
 }
+
+// The engine's side (src/server/engine-server.mjs, and src/engine/engine.mjs headless): the browser started with the
+// engine (Chromium itself only when a bot needs it), «Necesito que lo hagas tú» as a notice, a push and an event.
+export async function startServerBrowser({ board, emit, push = () => {}, log = () => {} }) {
+  const { ctx, tr } = await import('../core/context.mjs');
+  const { ownerOfBoard } = await import('../core/authz.mjs');
+  const sb = createServerBrowser({
+    language: () => ctx.config.language, ownerId: () => ownerOfBoard(board), config: () => ctx.config.browser ?? {}, log,
+    root: process.env.ORB_SERVER_BROWSER_DIR || ctx.paths.browser || path.join(os.homedir(), 'orb-server', 'browser'),
+    enginesRoot: ctx.paths.engines || process.env.ORB_ENGINES || null,
+    display: process.env.ORB_SERVER_BROWSER_DISPLAY || ctx.config.browser?.server?.display || 'auto',
+    onHuman: ({ person, kind, url }) => {
+      const site = (() => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; } })();
+      const whose = person ?? ownerOfBoard(board);
+      const body = tr(kind === 'captcha' ? 'msg.browser.human.captcha' : 'msg.browser.human.code', { site });
+      board.notice(body, 'warning', { person: whose && !board.isOwnerPerson(whose) ? whose : null });
+      emit('browser:human', { person: whose, kind, site, open: 'browser.live' });
+      try { push({ title: tr('msg.browser.human.title'), body, person: whose }); } catch { /* no phones */ }
+    }
+  });
+  await sb.ready;
+  ctx.serverBrowser = sb;
+  ctx.browser = { pipe: sb.pipe, token: sb.token, server: true };
+  return sb;
+}

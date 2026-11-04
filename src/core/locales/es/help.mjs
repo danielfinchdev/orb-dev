@@ -90,11 +90,11 @@ export default {
   'help.tut.logs.l3': 'Actividad registra cada acción del tablero (quién, qué y cuándo), con buscador.',
   'help.tut.logs.go': 'Ir a Bitácoras',
 
-  'help.tut.monitor.title': 'Monitoreo',
-  'help.tut.monitor.l1': 'Actívalo en Ajustes › Avanzado. Opti Bot revisa el rendimiento, la seguridad, los programas de inicio y el estado de Orb.',
-  'help.tut.monitor.l2': 'Opti Bot solo consulta. Cualquier cambio (limpiar temporales, cerrar un proceso, analizar con el antivirus) te lo propone y solo se aplica si lo apruebas.',
-  'help.tut.monitor.l3': 'La pestaña Red muestra tu wifi, los equipos conectados y los Android o TV que puedes vincular por adb.',
-  'help.tut.monitor.go': 'Abrir el Monitoreo',
+  'help.tut.pccare.title': 'Cuidar el PC con un bot',
+  'help.tut.pccare.l1': 'Dale a un bot la herramienta «Equipo» (o usa la plantilla «Mantenimiento del PC» al crear un bot): revisa el rendimiento, la red, el antivirus, los programas de inicio y las copias de Orb.',
+  'help.tut.pccare.l2': 'Solo consulta. Cualquier cambio (limpiar temporales, cerrar un programa, analizar con el antivirus) te lo propone en una tarjeta y solo se hace si lo apruebas.',
+  'help.tut.pccare.l3': 'Si una acción necesita permisos de administrador, Windows te los pide en ese momento y solo para esa acción.',
+  'help.tut.pccare.go': 'Ir a los bots',
 
   'help.tut.phone.title': 'Móvil',
   'help.tut.phone.l1': 'Activa «Móvil» en Ajustes y escanea el QR con el teléfono: por tu wifi, sin instalar nada, o por Tailscale, también fuera de casa.',

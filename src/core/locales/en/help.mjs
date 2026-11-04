@@ -89,11 +89,11 @@ export default {
   'help.tut.logs.l3': 'Activity records every action on the board (who, what and when), with search.',
   'help.tut.logs.go': 'Go to Logs',
 
-  'help.tut.monitor.title': 'Monitoring',
-  'help.tut.monitor.l1': 'Turn it on in Settings › Advanced. Opti Bot checks performance, security, startup programs and Orb’s health.',
-  'help.tut.monitor.l2': 'Opti Bot only looks. Any change (clearing temp files, ending a process, an antivirus scan) is proposed to you and only applied if you approve it.',
-  'help.tut.monitor.l3': 'The Network tab shows your Wi-Fi, connected devices and the Android phones or TVs you can link over adb.',
-  'help.tut.monitor.go': 'Open Monitoring',
+  'help.tut.pccare.title': 'Look after the PC with a bot',
+  'help.tut.pccare.l1': 'Give a bot the “Computer” tools (or use the “PC maintenance” template when you create a bot): it checks performance, the network, the antivirus, startup programs and Orb’s backups.',
+  'help.tut.pccare.l2': 'It only looks. Any change (clearing temp files, closing a program, an antivirus scan) is proposed to you on a card and only happens if you approve it.',
+  'help.tut.pccare.l3': 'If an action needs administrator rights, Windows asks you then, for that action alone.',
+  'help.tut.pccare.go': 'Go to the bots',
 
   'help.tut.phone.title': 'Phone',
   'help.tut.phone.l1': 'Turn on "Phone" in Settings and scan the QR code with your phone: over your Wi-Fi, with nothing to install, or via Tailscale, even away from home.',
