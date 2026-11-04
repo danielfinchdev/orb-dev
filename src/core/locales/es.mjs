@@ -37,6 +37,7 @@ import mensajeria from './es/mensajeria.mjs';
 import orbchats from './es/orbchats.mjs';
 import notes from './es/notes.mjs';
 import navegadorServer from './es/navegador-server.mjs';
+import oce from './es/oce.mjs';
 
 export default {
   ...base,
@@ -76,5 +77,6 @@ export default {
   ...mensajeria,
   ...orbchats,
   ...notes,
-  ...navegadorServer
+  ...navegadorServer,
+  ...oce
 };

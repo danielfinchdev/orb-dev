@@ -36,6 +36,7 @@ const LOCKED_OK = new Set(['persons.unlock', 'app.lockState', 'app.state']);
 
 let api = null;
 let bridge = null; // 2.7: the files shared with Open Control Edge (engine/bridge.mjs)
+let oce = null; // 3.7 (WS8): Open Control Edge on this and the linked Orbs, and Optimus (engine/oce.mjs)
 let logFile = null;
 const log = (line) => { try { if (logFile) { rotateIfBig(logFile); fs.appendFileSync(logFile, `${new Date().toISOString()} ${line}\n`); } } catch { /* never fatal */ } };
 process.on('uncaughtException', (error) => log(`uncaughtException: ${error?.stack ?? error}`));
@@ -176,7 +177,7 @@ async function start(home, version, secret, browser, headless) {
   // 3.5 Magic Link: the links this Orb made to other Orbs (keys sealed with the app's secret). A workshop linked to a
   // centre runs the calls the centre forwards to it, with the same checks as a phone's.
   {
-    const { createLink, orbIdentity, isHomeCall } = await import('../core/link.mjs');
+    const { createLink, orbIdentity, isHomeCall, isOceCall } = await import('../core/link.mjs');
     const { macAddresses } = await import('../core/wol.mjs');
     const { guardCall, shapeResult, orbNameOf } = await import('./remote.mjs');
     const { audit, ownerOfBoard } = await import('../core/authz.mjs');
@@ -199,6 +200,8 @@ async function start(home, version, secret, browser, headless) {
       onRequest: async (method, params, peer, { principal = null, requestId = null } = {}) => {
         // 3.7 (WS3): the bots' homes and copies: the other Orb's identity and this link's persons decide (replica.mjs).
         if (isHomeCall(method)) {
+          // 3.7 (WS8): read-only Open Control Edge readings (oce.status / oce.values), only for the owner's Orbs.
+          if (isOceCall(method)) { if (!oce) throw Object.assign(new Error('este Orb aún no está listo'), { status: 503 }); return oce.serve(peer, method, params); }
           if (!replica) throw Object.assign(new Error('este Orb aún no está listo'), { status: 503 });
           return replica.serve(peer, method, params);
         }
@@ -220,9 +223,19 @@ async function start(home, version, secret, browser, headless) {
     {
       const { createReplica } = await import('./replica.mjs');
       replica = remoteRef.replica = createReplica({ board, bots, emit, log, link: () => link, remote: () => remote, api });
-      remote.onHomeCall = (peer, method, params) => { if (!isHomeCall(method)) throw Object.assign(new Error('operación desconocida'), { status: 404 }); return replica.serve(peer, method, params); };
+      remote.onHomeCall = (peer, method, params) => {
+        if (!isHomeCall(method)) throw Object.assign(new Error('operación desconocida'), { status: 404 });
+        if (isOceCall(method)) { if (!oce) throw Object.assign(new Error('este Orb aún no está listo'), { status: 503 }); return oce.serve(peer, method, params); }
+        return replica.serve(peer, method, params);
+      };
       remote.onOrbGone = (peer) => replica.onOrbGone(peer);
       if (!ctx.moved) replica.start();
+    }
+    // 3.7 (WS8): Open Control Edge here and on the owner's linked Orbs (read-only), and its bot Optimus, made once.
+    {
+      const { createOce } = await import('./oce.mjs');
+      oce = createOce({ board, bots, log, link: () => link, remote: () => remote, replica: () => replica });
+      if (!ctx.moved) oce.start();
     }
     // 3.5: the bots live on the centre: what its bots say comes to this Orb's window as centro:<event>.
     // 3.6: only to the person this link belongs to here (the centre already sends only that person's bots).
@@ -323,6 +336,7 @@ transport.on(async (msg) => {
     try { await Promise.race([ctx.serverBrowser?.shutdown(), new Promise((r) => setTimeout(r, 3000))]); } catch { /* closing anyway */ }
     try { bridge?.stop(); } catch { /* closing anyway */ }
     try { devControl?.stop(); } catch { /* closing anyway */ }
+    try { oce?.stop(); } catch { /* closing anyway */ }
     try { replica?.stop(); } catch { /* closing anyway */ }
     try { link?.stop(); } catch { /* closing anyway */ }
     // 3.2.1: if Orb started adb this session, its resident server goes too (never a server the user runs elsewhere).

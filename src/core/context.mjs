@@ -170,6 +170,7 @@ export function validateConfig(c) {
   // 2.7: the bridge with Open Control Edge (on unless turned off). 3.7: oce.share (it was monitor.shareWithOce, with the
   // Monitoreo del equipo that 3.7 removed: home.mjs › loadConfig moves it).
   bool(c.oce?.share, 'oce.share');
+  bool(c.oce?.optimus, 'oce.optimus'); // 3.7 (WS8): «Crear Optimus automáticamente» when Open Control Edge is found (on unless off)
   bool(c.ui?.tourDone, 'ui.tourDone');
   bool(c.ui?.recoveryNoticed, 'ui.recoveryNoticed'); // 3.6: the one notice about the recovery code was shown // 2.6: the guided tour was seen (or skipped) in this assistant folder
   if (c.delegation?.maxPerTask !== undefined) int(c.delegation.maxPerTask, 0, 20, 'delegation.maxPerTask');
