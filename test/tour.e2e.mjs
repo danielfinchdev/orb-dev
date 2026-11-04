@@ -250,24 +250,18 @@ try {
     meta.get(pc).dark = dark;
     await pc.emulateMedia({ colorScheme: dark ? 'dark' : 'light' }); // before the setup the theme follows the system
     await pc.goto(pcUrl);
-    // 3.6: three screens, one question each (name; anyone else?; what for).
-    await pc.waitForSelector('[data-testid=wizard-nombre]', { timeout: 20000 });
+    // 3.7: the 3.5.1 welcome: the assistant's name, what to call you and the folder; then «Preparando tu PC» (Windows).
+    await pc.waitForSelector('[data-testid=setup-datos]', { timeout: 20000 });
     const W = 'src/ui/views/setup.jsx';
-    await pc.fill('[data-testid=setup-name]', 'Ana');
-    await shot(pc, { area: 'wizard', screen: 'nombre', state: 'filled', src: W, desc: 'Welcome wizard 1/3: «¿Cómo te llamas?»' });
-    if (await pc.locator('[data-testid=setup-folder]').count()) await pc.click('[data-testid=setup-folder]');
+    await shot(pc, { area: 'wizard', screen: 'datos', state: 'default', src: W, desc: 'Welcome: assistant name, what to call you, folder' });
+    await pc.fill('[data-testid=setup-user]', 'Ana');
+    await pc.click('[data-testid=setup-folder]');
+    await shot(pc, { area: 'wizard', screen: 'datos', state: 'filled', src: W, desc: 'Welcome, filled in (the folder chosen)' });
     await pc.click('[data-testid=setup-create]');
-    await pc.waitForSelector('[data-testid=wizard-quien]', { timeout: 20000 });
-    await shot(pc, { area: 'wizard', screen: 'quien', state: 'default', src: W, desc: 'Welcome wizard 2/3: «¿Lo usará alguien más?»' });
-    await attempt(pc, 'wizard more people', async () => {
-      await pc.click('[data-testid=wizard-more-people]');
-      await pc.fill('[data-testid=wizard-person-0]', 'Leo');
-      await shot(pc, { area: 'wizard', screen: 'quien', state: 'several-users', src: W, desc: 'Welcome wizard 2/3 with one more user' });
-    });
-    await pc.click('[data-testid=wizard-only-me]');
-    await pc.waitForSelector('[data-testid=wizard-para]', { timeout: 20000 });
-    await shot(pc, { area: 'wizard', screen: 'para', state: 'default', src: W, desc: 'Welcome wizard 3/3: «¿Para qué lo quieres?»' });
-    await pc.click('[data-testid=wizard-use-later]');
+    await pc.waitForSelector('[data-testid=setup-prepare]', { timeout: 20000 });
+    await pc.waitForTimeout(800);
+    await shot(pc, { area: 'wizard', screen: 'prepare', state: 'default', src: W, desc: 'Welcome: «Preparando tu PC» (official installers, then sign in)' });
+    await pc.click('[data-testid=setup-continue]');
     await loaded(pc);
     if (!dark) {
       // The guided tour, the first time the app opens.

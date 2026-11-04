@@ -1,25 +1,26 @@
 // 3.6: a bot's avatar is chosen when it is made (docs/DESIGN-SYSTEM.md › 2.5, mockup mensajeria.html ?s=create): a big
 // live preview, the name, the twelve shapes and the ten colours, and «Crear bot». A dialog on the PC; on the phone it
-// takes the whole screen (on Android a glass sheet). The rest (role, brain, tools) is set later in «Editar». 3.7: or, in one
-// click, the optional template «Mantenimiento del PC» (a bot with the «Equipo» tools; src/core/templates/<lang>/mantenimiento.json).
+// takes the whole screen (on Android a glass sheet). The rest (role, brain, tools) is set later in «Editar».
 // AvatarPicker is shared with the bot's editor.
+// 3.7: «Empezar con una plantilla» (optional, folded): the starting templates that were in the 3.6 welcome wizard
+// (src/core/templates), each one applied as it is; then the first bot it made opens.
 import { useEffect, useRef, useState } from 'react';
-import { X, HeartPulse } from 'lucide-react';
+import { X, LayoutTemplate, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
-import { Field, Input } from '@/components/ui/basic.jsx';
+import { Field, Input, Spinner } from '@/components/ui/basic.jsx';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/overlay.jsx';
 import { BotAvatar } from '@/components/bot-avatar.jsx';
-import { useStore, botCall, call, act, go, loadBots, phoneLayout, botsVia, getState, uiLanguage } from '@/lib/store.js';
+import { useStore, botCall, call, act, go, loadBots, phoneLayout, botsVia, uiLanguage } from '@/lib/store.js';
 import { newBotDraft, botPayload } from '@/lib/bots.js';
 import { useT } from '@/lib/i18n.js';
-import { SHAPE_IDS, COLOR_IDS, avatarFor, avatarParts } from '../../../core/avatar.mjs';
+import { SHAPE_IDS, COLOR_IDS, avatarFor, avatarParts, parseAvatar } from '../../../core/avatar.mjs';
 import { useBots } from './common.jsx';
+import { cn } from '@/lib/utils.js';
 
 // A colour swatch painted like the avatar's own body (avatar.mjs › avatarParts), so the dot and the bot match.
 const swatch = (c) => { const p = avatarParts('mochi', c); return { background: `linear-gradient(${p.top}, ${p.bottom})` }; };
 
 const BOT_BRAINS = ['claude', 'codex'];
-const PC_TEMPLATE = 'mantenimiento';
 const hereTz = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; } };
 
 // A moment of joy each time the avatar changes (the preview hops), then back to idle.
@@ -81,21 +82,6 @@ export function CreateBot({ onClose }) {
   const [saving, setSaving] = useState(false);
   const preview = useHop();
   const change = (a) => { setAvatar(a); preview.hop(); };
-  // The template only for bots that live in this Orb (not on a linked one: templates.apply makes them here).
-  const [tpl, setTpl] = useState(null);
-  useEffect(() => {
-    if (botsVia()) return undefined;
-    let alive = true;
-    call('templates.list', { lang: uiLanguage(getState()) }).then((list) => { if (alive) setTpl((list ?? []).find((x) => x.id === PC_TEMPLATE) ?? null); }).catch(() => {});
-    return () => { alive = false; };
-  }, []);
-  const fromTemplate = async () => {
-    if (!tpl || saving) return;
-    setSaving(true);
-    const r = await act(call('templates.apply', { id: tpl.id, tz: hereTz() }), t('bots.templateMade', { name: tpl.name }));
-    setSaving(false);
-    if (r) { await loadBots(); if (r.bots?.[0]) go({ view: 'bot-chat', id: r.bots[0] }); else onClose(); }
-  };
   const create = async (e) => {
     e?.preventDefault();
     if (!name.trim() || saving) return;
@@ -108,7 +94,7 @@ export function CreateBot({ onClose }) {
   const button = <Button type="submit" disabled={saving || !name.trim()} className={phone ? 'h-12 w-full rounded-[14px] text-[15px]' : undefined} data-testid="bot-create-ok">{t('bots.create')}</Button>;
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent data-sheet="full" showClose={!phone} className={phone ? 'flex flex-col gap-5' : 'gap-5 sm:max-w-[460px]'} data-testid="bot-create">
+      <DialogContent data-sheet="full" showClose={!phone} className={phone ? 'flex flex-col gap-5 overflow-y-auto' : 'max-h-[92vh] gap-5 overflow-y-auto sm:max-w-[460px]'} data-testid="bot-create">
         <form onSubmit={create} className="contents">
           {phone ? (
             <div className="-mx-1 grid grid-cols-[40px_1fr_40px] items-center">
@@ -125,17 +111,49 @@ export function CreateBot({ onClose }) {
           </Field>
           <AvatarPicker value={avatar} onChange={change} size={phone ? 40 : 42} />
           <p className="text-muted-foreground text-xs">{t('bots.createHint')}</p>
-          {tpl ? (
-            <button type="button" disabled={saving} onClick={fromTemplate} title={tpl.description} data-testid="bot-create-template"
-              className="text-muted-foreground hover:text-foreground -mt-2 inline-flex cursor-pointer items-center gap-1.5 self-start text-left text-xs underline-offset-2 hover:underline">
-              <HeartPulse className="size-3.5 shrink-0" />{t('bots.fromTemplate', { name: tpl.name })}
-            </button>
-          ) : null}
+          <Templates disabled={saving} />
           {phone ? <><div className="flex-1" />{button}</> : (
             <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={onClose}>{t('bots.cancel')}</Button>{button}</div>
           )}
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// The templates with bots (not «Empezar vacío»; also «Mantenimiento del PC»), folded under one button. «Usar» applies it
+// as it is. Only for bots that live in this Orb (templates.apply makes them here, not on a linked one).
+function Templates({ disabled }) {
+  const t = useT();
+  const lang = useStore(uiLanguage);
+  const [open, setOpen] = useState(false);
+  const [list, setList] = useState(null);
+  const [busy, setBusy] = useState(null);
+  useEffect(() => { if (botsVia()) { setList([]); return; } call('templates.list', { lang }).then((l) => setList((l ?? []).filter((x) => x.bots?.length))).catch(() => setList([])); }, [lang]);
+  if (!list?.length) return null;
+  const use = async (tpl) => {
+    setBusy(tpl.id);
+    const r = await act(call('templates.apply', { id: tpl.id, tz: hereTz() }), t('bots.templateMade', { name: tpl.name }));
+    setBusy(null);
+    if (r) { await loadBots(); go(r.bots?.[0] ? { view: 'bot-chat', id: r.bots[0] } : { view: 'bots' }); }
+  };
+  return (
+    <div className="grid gap-2" data-testid="bot-templates">
+      <Button type="button" variant="ghost" size="sm" className="w-fit" aria-expanded={open} onClick={() => setOpen(!open)} data-testid="bot-templates-open">
+        <LayoutTemplate />{t('bots.tpl.start')}<ChevronDown className={cn('transition-transform', open && 'rotate-180')} />
+      </Button>
+      {open ? (
+        <div className="animate-in fade-in-0 grid gap-2 duration-200">
+          <p className="text-muted-foreground text-xs">{t('bots.tpl.hint')}</p>
+          {list.map((tpl) => (
+            <div key={tpl.id} className="flex items-center gap-3 rounded-xl border px-3 py-2" data-testid={`bot-template-${tpl.id}`}>
+              <span className="flex shrink-0 -space-x-2" aria-hidden="true">{tpl.bots.slice(0, 3).map((b, i) => { const a = parseAvatar(b.avatar) ?? avatarFor(b.name); return <BotAvatar key={i} shape={a.shape} color={a.color} size={28} still />; })}</span>
+              <div className="min-w-0 flex-1"><div className="text-sm font-medium">{tpl.name}</div><div className="text-muted-foreground text-xs">{tpl.bots.map((b) => b.name).join(' · ')}</div></div>
+              <Button type="button" size="sm" variant="outline" disabled={disabled || Boolean(busy)} onClick={() => use(tpl)} data-testid={`bot-template-use-${tpl.id}`}>{busy === tpl.id ? <Spinner /> : null}{t('bots.tpl.use')}</Button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
