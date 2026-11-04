@@ -4,12 +4,13 @@ import { SidebarToggle } from './theme-toggle.jsx';
 import { MobileMenu } from './mobile-menu.jsx';
 import { phoneLayout } from '@/lib/store.js';
 
-export function PageHeader({ icon, title, meta, center, children, className }) {
+export function PageHeader({ icon, title, meta, center, children, className, back }) {
   // 2.6: with the sidebar folded away, the button that brings it back starts the bar.
   const folded = useStore((s) => s.sidebarCollapsed);
   // 3.6, the phone: the menu ☰ starts every bar, clear of the status bar (the bar is the top of the screen now).
   const phone = phoneLayout();
-  const menu = phone ? <MobileMenu /> : null;
+  // 3.6 (M3): a screen that takes the whole phone (a conversation) has its back arrow there instead.
+  const menu = phone ? back ?? <MobileMenu /> : null;
   const top = phone ? 'pt-[max(0.625rem,env(safe-area-inset-top))]' : null;
   // 3.2: something in the very middle of the bar (the chat's working folder): three columns, the sides of equal width,
   // so it stays centred whatever is on each side.

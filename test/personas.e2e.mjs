@@ -198,7 +198,7 @@ try {
   let greeting = '';
   for (let i = 0; i < 12 && !greeting.includes('Leo'); i++) {
     if (i) { await pc.reload(); await pc.waitForSelector('[data-testid=chat-input]'); }
-    await pc.click('[data-testid=new-conversation]');
+    await pc.click('[data-testid=chats-new]'); await pc.click('[data-testid=new-conversation]'); // 3.6 (M3): «+» › Nuevo chat
     greeting = await pc.textContent('[data-testid=chat-greeting]');
     assert.doesNotMatch(greeting, /Ana/, 'el saludo de Leo no dice Ana');
   }

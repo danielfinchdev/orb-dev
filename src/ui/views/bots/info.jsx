@@ -25,7 +25,7 @@ export function InfoFrame({ title, onClose, children }) {
   const t = useT();
   if (phoneLayout()) return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent data-sheet="full" showClose={false} className="flex flex-col gap-3 overflow-y-auto" data-testid="chat-info">
+      <DialogContent data-sheet="full" showClose={false} className="flex flex-col gap-3 overflow-y-auto *:shrink-0" data-testid="chat-info">
         <div className="grid grid-cols-[40px_1fr_40px] items-center">
           <Button type="button" size="icon" variant="ghost" onClick={onClose} aria-label={t('comp.close')} data-testid="chat-info-close"><X /></Button>
           <DialogTitle className="text-center text-base font-semibold">{title}</DialogTitle>
@@ -47,8 +47,8 @@ export function InfoFrame({ title, onClose, children }) {
 }
 
 // A group of rows (DESIGN-SYSTEM §4: list group) and a row: icon, label, value, chevron when it opens something.
-const List = ({ children, testid }) => <div className="bg-card divide-y overflow-hidden rounded-2xl border" data-testid={testid}>{children}</div>;
-function Row({ icon: Icon, label, value, onClick, danger, testid, children }) {
+export const List = ({ children, testid }) => <div className="bg-card divide-y overflow-hidden rounded-2xl border" data-testid={testid}>{children}</div>;
+export function Row({ icon: Icon, label, value, onClick, danger, testid, children }) {
   const inner = (<>
     {Icon ? <Icon className={cn('size-[18px] shrink-0', danger ? 'text-destructive' : 'text-muted-foreground')} /> : null}
     <span className={cn('truncate', value != null ? 'shrink-0' : 'min-w-0 flex-1')}>{label}</span>

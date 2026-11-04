@@ -49,12 +49,17 @@ try {
   const { url } = await call('remote.pair');
   const link = `http://127.0.0.1:${port}/${new URL(url).hash}`;
   await page.goto(link);
+  // 3.6 (M3): the phone opens on the Orb zone's chat list; «+» › Nuevo chat opens a conversation full screen.
+  await page.waitForSelector('[data-testid=orb-inbox]');
+  await page.click('[data-testid=chats-new]'); await page.click('[data-testid=new-conversation]');
   await page.waitForSelector('[data-testid=chat-input]');
   await page.fill('[data-testid=chat-input]', 'Hola desde el móvil');
   await page.keyboard.press('Enter');
   await page.waitForSelector('text=Recibido: ');
   await page.waitForTimeout(500);
   await noSideScroll('chat'); await shot('01-chat');
+  assert.equal(await page.locator('[data-testid=mobile-tabs]').count(), 0, '3.6 (M3): una conversación a pantalla completa');
+  await page.click('[data-testid=chat-back]'); await page.waitForSelector('[data-testid=orb-inbox]');
 
   // 2.7: a simpler app on the phone, with tabs at the bottom (Orbe, Chats, Tareas, Proyectos, Más); the screens of «Más»
   // open from its list.
@@ -90,7 +95,7 @@ try {
   step = 'nueva conversación';
   await page.click('[data-testid=nav-chats]');
   // 3.0: «Nuevo chat» opens a clean conversation with the assistant.
-  await page.locator('[data-testid=new-conversation]:visible').click();
+  await page.click('[data-testid=chats-new]'); await page.locator('[data-testid=new-conversation]:visible').click();
   await page.waitForSelector('[data-testid=chat-input]');
   await page.waitForTimeout(300);
   await noSideScroll('nuevo chat'); await shot('08-nueva-conversacion');
@@ -102,7 +107,7 @@ try {
   assert.equal(await page.locator('[data-testid=orchestrator-check]:visible').count(), 1, 'el orquestador en el chat nuevo');
   // A direct conversation with an agent (started on the PC): the phone opens it from «Chats» and answers in it.
   const direct = await call('sessions.create', { agent: 'claude', project: 'webviaproject', permission: 'editar', title: 'Charla con Claude' });
-  await page.click('[data-testid=nav-chats]');
+  await page.click('[data-testid=chat-back]');
   await page.getByText('Charla con Claude').first().click();
   await page.waitForSelector('[data-testid=session-input]');
   await page.fill('[data-testid=session-input]', 'Hola Claude');
@@ -112,6 +117,7 @@ try {
   await page.waitForTimeout(400);
   await noSideScroll('conversación'); await shot('09-conversacion');
   step = 'este móvil';
+  await page.click('[data-testid=chat-back]'); await page.waitForSelector('[data-testid=orb-inbox]');
   await nav('nav-phone');
   await page.waitForSelector('[data-testid=phone-card]');
   await noSideScroll('este móvil'); await shot('10-este-movil');

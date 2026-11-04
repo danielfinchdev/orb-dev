@@ -7,15 +7,15 @@
 // same message box and the same look as the chat with the assistant; the bots' cards (approve or reject) and their
 // grouped questions are answered right here. Live through bot.message and bot.state.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, X, ShieldAlert, Pause, Play, Pencil, Bell, MessageCircleQuestion, ChevronRight, ChevronLeft, Ellipsis, Plus, Forward, Info, AtSign, BellOff, CircleAlert } from 'lucide-react';
+import { Check, X, ShieldAlert, Pause, Play, Pencil, Bell, MessageCircleQuestion, ChevronRight, Ellipsis, Plus, Forward, Info, AtSign, BellOff, CircleAlert } from 'lucide-react';
 import { Markdown } from '@/components/markdown.jsx';
-import { SidebarToggle } from '@/components/theme-toggle.jsx';
+import { ChatBar, BackToList } from '@/components/chat-bar.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Spinner, Input } from '@/components/ui/basic.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, Tip } from '@/components/ui/overlay.jsx';
 import { Composer, useAutoScroll } from '@/views/chat.jsx';
 import { LiveActivity } from '@/components/chat-live.jsx';
-import { useStore, botCall, onBotEvent, act, go, loadBotsSoon, loadInboxSoon, inboxAct, phoneLayout, isDark } from '@/lib/store.js';
+import { useStore, botCall, onBotEvent, act, go, loadBotsSoon, loadInboxSoon, inboxAct, isDark } from '@/lib/store.js';
 import { withDays, nameColor } from '@/lib/inbox.js';
 import { useInbox, itemOfRoute } from './inbox.jsx';
 import { BotInfo, GroupInfo } from './info.jsx';
@@ -180,7 +180,6 @@ function useMarkRead(item, lines) {
 export function BotChatView({ route }) {
   const t = useT();
   const locale = useLocale();
-  const phone = phoneLayout();
   const group = route.view === 'bot-group';
   const { bots, groups, loaded, error, states } = useBots();
   const manage = useCanManage();
@@ -218,7 +217,7 @@ export function BotChatView({ route }) {
   const memberKey = members.map((b) => b.id).join(',');
   const mentionOptions = useMemo(() => members.map((b) => ({ token: `@${b.name}`, label: b.name, hint: b.is_chief ? t('bots.f.chief') : '', icon: <BotFace bot={b} size={20} still /> })), [memberKey, t]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const back = phone ? <Button size="icon" variant="ghost" className="-ml-2 shrink-0" onClick={() => go({ view: 'bot-chats' })} aria-label={t('chats.backToList')} data-testid="chat-back"><ChevronLeft className="size-6" /></Button> : null;
+  const back = <BackToList to="bot-chats" />;
   const bare = (title, body) => <div className="flex min-h-0 min-w-0 flex-1 flex-col"><ChatBar back={back} title={<span className="truncate text-[16px] font-medium">{title}</span>} />{body}</div>;
   if (!loaded) return bare(t('nav.botChat'), error ? <BotsDown error={error} /> : <Loading />);
   if (!bots.length) return bare(t('nav.botChat'), <NoBots />);
@@ -309,17 +308,3 @@ export function BotChatView({ route }) {
     </div>
   );
 }
-
-// The conversation's bar: (phone: back) the pill, and its buttons on the right.
-function ChatBar({ back, title, children }) {
-  const phone = phoneLayout();
-  const folded = useStore((s) => s.sidebarCollapsed);
-  return (
-    <header className={cn('topbar chat-bar theme-band app-titlebar wco-pad-md bg-background/80 flex min-h-14 shrink-0 items-center gap-2 border-b px-3 py-1.5 backdrop-blur sm:px-4', phone && 'pt-[max(0.375rem,env(safe-area-inset-top))]')} data-testid="bot-chat-bar">
-      {back}{folded && !phone ? <SidebarToggle collapsed className="-ml-1" /> : null}
-      <div className="no-drag flex min-w-0 flex-1 items-center">{title}</div>
-      <div className="no-drag flex shrink-0 items-center gap-1">{children}</div>
-    </header>
-  );
-}
-
