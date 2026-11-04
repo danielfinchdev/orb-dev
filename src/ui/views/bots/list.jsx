@@ -5,20 +5,29 @@ import { Bot, Plus, MessageSquare, Pencil, Pause, Play, Trash2, Crown, Globe, Be
 import { PageHeader } from '@/components/page.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea } from '@/components/ui/basic.jsx';
-import { Switch, Checkbox, Select, Popover, PopoverTrigger, PopoverContent } from '@/components/ui/overlay.jsx';
-import { BrainPicker, useCatalog, modelLabel } from '@/components/brain-picker.jsx';
+import { Switch, Checkbox, Select } from '@/components/ui/overlay.jsx';
+import { BrainPicker, useCatalog, modelLabel, ReasoningMenu, levelsFor } from '@/components/brain-picker.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { confirm } from '@/components/dialogs.jsx';
-import { useStore, botCall, act, go, loadBots } from '@/lib/store.js';
+import { useStore, botCall, act, go, loadBots, call, personNameOf } from '@/lib/store.js';
 import { AGENT } from '@/lib/labels.js';
-import { TOOL_ORDER, EFFORTS, EMOJIS, newBotDraft, botPayload } from '@/lib/bots.js';
+import { TOOL_ORDER, EFFORTS, newBotDraft, botPayload } from '@/lib/bots.js';
+import { avatarOf } from '../../../core/avatar.mjs';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { useBots, useCanManage, BotFace, NoBots, BotsDown, Loading, BotPage } from './common.jsx';
+import { CreateBot, AvatarPicker, useHop } from './create.jsx';
+import { ShareButton, SharedBadge } from '@/components/share-dialog.jsx';
+import { personsOn, botAccountChoices } from '@/lib/persons.js';
 
+// 3.6: a bot thinks with Claude or Codex (Orb refuses the other agents as a bot's brain).
+const BOT_BRAINS = ['claude', 'codex'];
 export const TOOL_ICON = { internet: Globe, recordatorios: Bell, correo: Mail, calendario: CalendarDays, navegador: Compass, casa: Home, servidor: Server, gestion: Settings2 };
 
 export function BotsView({ route }) {
+  const manage = useCanManage();
+  // 3.6: «Nuevo bot» is a dialog over the list (the whole screen on the phone); an existing bot opens its editor.
+  if (route.id === 'new') return <><BotList />{manage ? <CreateBot onClose={() => go({ view: 'bots' })} /> : null}</>;
   if (route.id != null) return <BotEditor id={route.id} />;
   return <BotList />;
 }
@@ -41,9 +50,9 @@ function BotList() {
               return (
                 <Card key={b.id} className={cn('gap-3 py-4', b.paused && 'opacity-75')} data-testid={`bot-${b.name}`}>
                   <CardHeader className="flex-row items-start gap-3 px-4">
-                    <BotFace bot={b} busy={Boolean(s?.busy)} size="lg" />
+                    <BotFace bot={b} busy={Boolean(s?.busy)} size="lg" chief={b.is_chief} />
                     <div className="min-w-0 flex-1">
-                      <CardTitle className="flex flex-wrap items-center gap-1.5">{b.name}{b.is_chief ? <Badge><Crown />{t('bots.chief')}</Badge> : null}{b.paused ? <Badge variant="secondary">{t('bots.paused')}</Badge> : null}</CardTitle>
+                      <CardTitle className="flex flex-wrap items-center gap-1.5">{b.name}{b.paused ? <Badge variant="secondary">{t('bots.paused')}</Badge> : null}</CardTitle>
                       <CardDescription className="mt-1 line-clamp-2">{b.role_text || t('bots.noRole')}</CardDescription>
                     </div>
                   </CardHeader>
@@ -67,22 +76,6 @@ function BotList() {
   );
 }
 
-function EmojiPicker({ value, onChange }) {
-  const t = useT();
-  const [open, setOpen] = useState(false);
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button type="button" className="bg-primary/10 hover:bg-primary/15 grid size-14 shrink-0 cursor-pointer place-items-center rounded-2xl text-3xl" aria-label={t('bots.f.icon')} data-testid="bot-icon">{value || <Bot className="text-primary size-7" />}</button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-64">
-        <div className="grid grid-cols-5 gap-1">{EMOJIS.map((e) => <button key={e} type="button" className={cn('hover:bg-accent grid h-10 cursor-pointer place-items-center rounded-lg text-xl', value === e && 'bg-accent ring-primary ring-2')} onClick={() => { onChange(e); setOpen(false); }}>{e}</button>)}</div>
-        <Input className="mt-2" value={value} maxLength={8} onChange={(e) => onChange(e.target.value)} placeholder={t('bots.f.iconOwn')} aria-label={t('bots.f.iconOwn')} />
-      </PopoverContent>
-    </Popover>
-  );
-}
-
 function BotEditor({ id }) {
   const t = useT();
   const isNew = id === 'new';
@@ -93,8 +86,13 @@ function BotEditor({ id }) {
   const connectors = (app.config?.mcpServers ?? []).map((m) => m.name).filter(Boolean);
   const [d, setD] = useState(null);
   const [saving, setSaving] = useState(false);
+  const hop = useHop();
+  // 3.6: the accounts this person may spend on bots (their own, and the ones lent to them for bots).
+  const me = useStore((s) => s.me);
+  const [loans, setLoans] = useState(null);
+  useEffect(() => { if (personsOn(me)) call('accounts.loans').then(setLoans).catch(() => setLoans(null)); }, [me?.person?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (isNew) { setD(newBotDraft(app.assistant?.agent ?? 'claude')); return undefined; }
+    if (isNew) { setD(newBotDraft(BOT_BRAINS.includes(app.assistant?.agent) ? app.assistant.agent : 'claude')); return undefined; }
     let alive = true;
     botCall('bots.get', { id: Number(id) }).then((b) => alive && setD({ ...b, model: b.model ?? '', exclusive: (b.exclusive ?? []).join(', '), accounts: { mcp: b.accounts?.mcp ?? [], account: b.accounts?.account ?? '' } })).catch(() => alive && setD(false));
     return () => { alive = false; };
@@ -104,9 +102,14 @@ function BotEditor({ id }) {
   if (d === false) return <><PageHeader title={t('bots.edit')} /><p className="text-muted-foreground p-8 text-center text-sm">{t('bots.gone')}</p></>;
   if (!d || !loaded) return <><PageHeader title={isNew ? t('bots.new') : t('bots.edit')} /><Loading /></>;
   const set = (patch) => setD((x) => ({ ...x, ...patch }));
+  const avatar = avatarOf(d);
   const toggleTool = (tool, on) => set({ tools: on ? [...new Set([...d.tools, tool])] : d.tools.filter((x) => x !== tool) });
   const toggleMcp = (name, on) => set({ accounts: { ...d.accounts, mcp: on ? [...new Set([...(d.accounts.mcp ?? []), name])] : (d.accounts.mcp ?? []).filter((x) => x !== name) } });
   const otherChief = bots.find((b) => b.is_chief && b.id !== d.id);
+  const many = personsOn(me);
+  const choices = many ? botAccountChoices({ accounts: app.config?.accounts ?? [], loans, me, agent: d.agent }) : [];
+  const spending = choices.find((c) => c.id === d.accounts?.account) ?? null;
+  const cap = (k) => ({ value: d.caps?.[k] ?? '', inputMode: 'decimal', onChange: (e) => set({ caps: { ...(d.caps ?? {}), [k]: e.target.value.replace(/[^\d.]/g, '') } }) });
   const save = async () => {
     setSaving(true);
     const body = botPayload(d);
@@ -121,24 +124,29 @@ function BotEditor({ id }) {
   return (
     <>
       <PageHeader icon={<Button size="icon-sm" variant="ghost" onClick={back} aria-label={t('bots.back')}><ArrowLeft /></Button>} title={isNew ? t('bots.new') : t('bots.editName', { name: d.name })}>
+        {isNew ? null : <SharedBadge type="bot" id={d.id} />}
+        {isNew ? null : <ShareButton type="bot" id={d.id} name={d.name} owner={d.person_id ?? null} />}
         {isNew ? null : <Button size="sm" variant="danger" onClick={remove} data-testid="bot-delete"><Trash2 />{t('bots.delete')}</Button>}
         <Button size="sm" onClick={save} disabled={saving || !d.name.trim()} data-testid="bot-save">{t('bots.save')}</Button>
       </PageHeader>
       <BotPage>
         <Card data-testid="bot-editor">
           <CardContent className="grid gap-4">
-            <div className="flex items-start gap-4">
-              <EmojiPicker value={d.icon} onChange={(icon) => set({ icon })} />
+            {/* 3.6: its avatar: a live preview next to the name, then the shapes and the colours. */}
+            <div className="flex items-center gap-4">
+              <span className="grid size-24 shrink-0 place-items-center" data-testid="bot-avatar-preview"><BotFace key={hop.key} bot={{ ...d, avatar }} size={88} state={hop.state === 'happy' ? 'happy' : undefined} chief={d.is_chief} label={t('bots.av.aria', { name: d.name })} /></span>
               <Field label={t('bots.f.name')} className="flex-1"><Input autoFocus={isNew} value={d.name} maxLength={40} onChange={(e) => set({ name: e.target.value })} placeholder={t('bots.f.namePh')} data-testid="bot-name" /></Field>
             </div>
+            <div className="max-w-md"><AvatarPicker value={avatar} onChange={(a) => { set({ avatar: a }); hop.hop(); }} /></div>
             <Field label={t('bots.f.role')} hint={t('bots.f.roleHint')}><Textarea rows={4} maxLength={4000} value={d.role_text} onChange={(e) => set({ role_text: e.target.value })} placeholder={t('bots.f.rolePh')} data-testid="bot-role" /></Field>
           </CardContent>
         </Card>
         <Card>
           <CardHeader><CardTitle>{t('bots.f.brain')}</CardTitle><CardDescription>{t('bots.f.brainHint')}</CardDescription></CardHeader>
           <CardContent className="flex flex-wrap items-center gap-2">
-            <BrainPicker catalog={catalog} value={{ agent: d.agent, model: d.model ?? '', account: d.account ?? d.agent }} onChange={(b) => set({ agent: b.agent, model: b.model, account: b.account })} />
-            <Select size="sm" value={d.effort} onValueChange={(effort) => set({ effort })} title={t('bots.f.effort')} options={EFFORTS.map((e) => ({ value: e, label: `${t('bots.f.effort')}: ${t(`bots.effort.${e}`).toLowerCase()}` }))} data-testid="bot-effort" />
+            <BrainPicker catalog={catalog?.filter((a) => BOT_BRAINS.includes(a.id))} value={{ agent: d.agent, model: d.model ?? '', account: d.account ?? d.agent }} onChange={(b) => set({ agent: b.agent, model: b.model, account: b.account })} />
+            {/* 3.6 (M2): the same reasoning control as the chat's composer (brain pill with the level, menu with usage bars). */}
+            <span data-testid="bot-effort" className="contents"><ReasoningMenu catalog={catalog?.filter((a) => BOT_BRAINS.includes(a.id))} value={{ agent: d.agent, model: d.model ?? '', account: d.account ?? d.agent, reasoning: d.effort }} levels={levelsFor(catalog, { agent: d.agent, model: d.model ?? '' }).filter((l) => EFFORTS.includes(l))} onChange={(effort) => set({ effort })} /></span>
           </CardContent>
         </Card>
         <Card>
@@ -162,6 +170,22 @@ function BotEditor({ id }) {
               : <p className="text-muted-foreground text-xs">{t('bots.f.noConnectors')}</p>}
             <Field label={t('bots.f.account')} hint={t('bots.f.accountHint')}><Input value={d.accounts.account ?? ''} maxLength={120} onChange={(e) => set({ accounts: { ...d.accounts, account: e.target.value } })} placeholder={t('bots.f.accountPh')} /></Field>
             <Field label={t('bots.f.exclusive')} hint={t('bots.f.exclusiveHint')}><Input value={d.exclusive} maxLength={400} onChange={(e) => set({ exclusive: e.target.value })} placeholder={t('bots.f.exclusivePh')} data-testid="bot-exclusive" /></Field>
+          </CardContent>
+        </Card>
+        {/* 3.6: what it spends: the account (with more people: own or lent for bots) and its caps per day. */}
+        <Card data-testid="bot-spend">
+          <CardHeader><CardTitle>{t('botsp.spendTitle')}</CardTitle></CardHeader>
+          <CardContent className="grid gap-3">
+            {many ? (
+              <Field label={t('botsp.account')} hint={spending ? (spending.lent ? t('botsp.spendsLent', { name: personNameOf(spending.lender) }) : t('botsp.spendsOwn')) : t('botsp.spendsAuto')}>
+                <Select className="w-full sm:w-80" value={spending?.id ?? '__auto'} onValueChange={(v) => set({ accounts: { ...d.accounts, account: v === '__auto' ? '' : v } })} title={t('botsp.account')} data-testid="bot-account"
+                  options={[{ value: '__auto', label: t('botsp.accountAuto') }, ...choices.map((c) => ({ value: c.id, label: c.lent ? t('botsp.accountLent', { label: c.label, name: personNameOf(c.lender) }) : c.label }))]} />
+              </Field>
+            ) : null}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={t('botsp.capTurns')}><Input {...cap('daily_turns')} placeholder={t('botsp.noCap')} data-testid="bot-cap-turns" /></Field>
+              <Field label={t('botsp.capUsd')}><Input {...cap('daily_usd')} placeholder={t('botsp.noCap')} data-testid="bot-cap-usd" /></Field>
+            </div>
           </CardContent>
         </Card>
         <Card>

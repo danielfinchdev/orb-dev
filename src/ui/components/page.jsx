@@ -1,10 +1,17 @@
 import { cn } from '@/lib/utils.js';
 import { useStore } from '@/lib/store.js';
 import { SidebarToggle } from './theme-toggle.jsx';
+import { MobileMenu } from './mobile-menu.jsx';
+import { phoneLayout } from '@/lib/store.js';
 
-export function PageHeader({ icon, title, meta, center, children, className }) {
+export function PageHeader({ icon, title, meta, center, children, className, back }) {
   // 2.6: with the sidebar folded away, the button that brings it back starts the bar.
   const folded = useStore((s) => s.sidebarCollapsed);
+  // 3.6, the phone: the menu ☰ starts every bar, clear of the status bar (the bar is the top of the screen now).
+  const phone = phoneLayout();
+  // 3.6 (M3): a screen that takes the whole phone (a conversation) has its back arrow there instead.
+  const menu = phone ? back ?? <MobileMenu /> : null;
+  const top = phone ? 'pt-[max(0.625rem,env(safe-area-inset-top))]' : null;
   // 3.2: something in the very middle of the bar (the chat's working folder): three columns, the sides of equal width,
   // so it stays centred whatever is on each side.
   // 3.2.1: by the width of the bar itself, not of the window (a container query): the chat inside God mode is narrow in
@@ -12,9 +19,9 @@ export function PageHeader({ icon, title, meta, center, children, className }) {
   // drawing over the clock or the buttons.
   if (center) return (
     <div className="@container shrink-0">
-      <header className={cn('topbar theme-band app-titlebar wco-pad-md bg-background/80 flex min-h-14 flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2.5 backdrop-blur @2xl:grid @2xl:flex-nowrap @2xl:grid-cols-[minmax(max-content,1fr)_minmax(0,auto)_minmax(max-content,1fr)] @2xl:px-5', className)}>
+      <header className={cn('topbar theme-band app-titlebar wco-pad-md bg-background/80 flex min-h-14 flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2.5 backdrop-blur @2xl:grid @2xl:flex-nowrap @2xl:grid-cols-[minmax(max-content,1fr)_minmax(0,auto)_minmax(max-content,1fr)] @2xl:px-5', top, className)}>
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          {folded ? <SidebarToggle collapsed className="-ml-1.5" /> : null}
+          {menu}{folded && !phone ? <SidebarToggle collapsed className="-ml-1.5" /> : null}
           {icon}
           <h1 className="min-w-0 text-[16px] leading-tight">{title}</h1>
         </div>
@@ -25,9 +32,9 @@ export function PageHeader({ icon, title, meta, center, children, className }) {
     </div>
   );
   return (
-    <header className={cn('topbar theme-band app-titlebar wco-pad-md bg-background/80 flex min-h-14 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2.5 backdrop-blur sm:px-5', className)}>
-      {folded ? <SidebarToggle collapsed className="-ml-1.5" /> : null}
-      {icon}
+    <header className={cn('topbar theme-band app-titlebar wco-pad-md bg-background/80 flex min-h-14 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2.5 backdrop-blur sm:px-5', top, className)}>
+      {menu}{folded && !phone ? <SidebarToggle collapsed className="-ml-1.5" /> : null}
+      {phone ? null : icon}
       {/* On a phone the buttons go under the title instead of squeezing it. */}
       <div className="min-w-[9rem] flex-1">
         <h1 className="truncate text-[16px] leading-tight">{title}</h1>

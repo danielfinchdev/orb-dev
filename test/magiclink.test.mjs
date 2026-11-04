@@ -64,7 +64,7 @@ test('el portátil se enlaza como taller del servidor con el código corto (un s
   const q = await centro.call('link.qr', { device: 'orb', dev: true });
   assert.match(q.code, /^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
   assert.equal(q.role, 'centro');
-  assert.equal(q.payload.v, 2);
+  assert.equal(q.payload.v, 3, 'protocolo 3 (3.6)');
   assert.equal(new URLSearchParams(new URL(q.url).hash.slice(1)).get('r'), 'centro', 'el QR dice el papel');
   await assert.rejects(taller.call('link.connect', { code: 'AAAA-AAAA', address: `127.0.0.1:${port}` }), 'un código inventado no sirve');
   const peer = await taller.call('link.connect', { code: q.code.toLowerCase(), address: `127.0.0.1:${port}` });

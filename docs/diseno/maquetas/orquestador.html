@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Orb · iconos para «Orquestador» (maqueta)</title>
+<!-- Design mockup only: 8 original icon options for the composer's «Orquestador» (Orbe plans and hands the work to
+     several agents). Stroke style of the app's icons (24 px grid, 2 px stroke, round caps). ?t=light|dark. -->
+<style>
+@font-face { font-family: "Outfit Variable"; src: url("../../../node_modules/@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; }
+:root { --bg: oklch(0.985 0.003 268); --fg: oklch(0.21 0.02 268); --muted: oklch(0.5 0.02 268); --card: #fff; --border: oklch(0.915 0.008 268); --primary: oklch(0.57 0.19 264); --input: oklch(0.88 0.01 268); }
+.dark { --bg: oklch(0.155 0.008 268); --fg: oklch(0.95 0.005 268); --muted: oklch(0.7 0.015 268); --card: oklch(0.195 0.01 268); --border: oklch(0.27 0.012 268); --primary: oklch(0.72 0.14 264); --input: oklch(0.34 0.012 268); }
+* { box-sizing: border-box; margin: 0; }
+body { font: 14px/1.4 "Outfit Variable", system-ui, sans-serif; background: var(--bg); color: var(--fg); padding: 24px 28px; }
+h1 { font-size: 19px; font-weight: 600; } p.sub { color: var(--muted); margin: 2px 0 14px; font-size: 13px; }
+svg.i { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.opt { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 12px 14px; display: grid; gap: 10px; }
+.opt h2 { font-size: 14px; font-weight: 600; display: flex; gap: 8px; align-items: baseline; } .opt h2 small { color: var(--muted); font-weight: 400; font-size: 12px; }
+.sizes { display: flex; align-items: flex-end; gap: 16px; }
+.sizes .big { width: 64px; height: 64px; color: var(--primary); stroke-width: 1.6; }
+.comp { display: flex; align-items: center; gap: 6px; padding: 7px 8px; overflow: hidden; border: 1px solid var(--border); border-radius: 14px; font-size: 12.5px; }
+.pill { flex: none; display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border); white-space: nowrap; font-weight: 500; }
+.ib { display: grid; place-items: center; width: 26px; height: 26px; color: var(--muted); }
+.orch { display: inline-flex; align-items: center; gap: 5px; }
+.orch.on { color: var(--primary); } .orch.off { color: var(--muted); }
+.sw { width: 26px; height: 16px; border-radius: 99px; background: var(--primary); position: relative; }
+.sw::after { content: ""; position: absolute; top: 2px; right: 2px; width: 12px; height: 12px; border-radius: 99px; background: #fff; }
+.sw.off { background: var(--input); } .sw.off::after { right: auto; left: 2px; }
+.send { margin-left: auto; flex: none; width: 26px; height: 26px; border-radius: 99px; background: var(--primary); }
+</style>
+</head>
+<body>
+<h1>«Orquestador» · 8 propuestas de icono</h1>
+<p class="sub">Orbe planifica y reparte el trabajo entre varios agentes. Trazo de 2 px como el resto de iconos; 16, 20 y 24 px, grande, y dentro del compositor (activado / desactivado).</p>
+<div class="grid" id="g"></div>
+<script>
+if (new URLSearchParams(location.search).get('t') === 'dark') document.documentElement.classList.add('dark');
+// 24×24 grid, strokes only. All drawn for Orb.
+const ICONS = [
+  ['Batuta', 'dirige', '<path d="M4 20 15 9"/><circle cx="16.5" cy="7.5" r="2"/><path d="M19 3.5v2M21 5.5h-2M20.5 10.5l-1-1M13 3l1 1"/>'],
+  ['Centro con nodos', 'uno coordina, varios trabajan', '<circle cx="12" cy="12" r="3"/><circle cx="4.5" cy="5" r="1.8"/><circle cx="19.5" cy="5" r="1.8"/><circle cx="12" cy="20.5" r="1.8"/><path d="M9.8 9.9 5.8 6.3M14.2 9.9l4-3.6M12 15v3.7"/>'],
+  ['Orbe con satélites', 'Orbe y sus agentes', '<circle cx="12" cy="12" r="4"/><ellipse cx="12" cy="12" rx="10" ry="4.2" transform="rotate(-25 12 12)"/><circle cx="20.2" cy="7.3" r="1.4" fill="currentColor"/><circle cx="3.8" cy="16.7" r="1.4" fill="currentColor"/>'],
+  ['Ramas desde un punto', 'reparte en tareas', '<circle cx="4.5" cy="12" r="2"/><path d="M6.5 12h4"/><path d="M10.5 12c3 0 3-6 6.5-6H20M10.5 12H20M10.5 12c3 0 3 6 6.5 6H20"/><path d="m18 4 2 2-2 2M18 10l2 2-2 2M18 16l2 2-2 2"/>'],
+  ['Equipo con guía', 'un agente al frente', '<circle cx="12" cy="6.5" r="2.6"/><path d="M8 13.5a4 4 0 0 1 8 0"/><circle cx="5" cy="13" r="2"/><circle cx="19" cy="13" r="2"/><path d="M2 20a3 3 0 0 1 6 0M16 20a3 3 0 0 1 6 0M9 20a3 3 0 0 1 6 0"/><circle cx="12" cy="17" r="2"/>'],
+  ['Red de destellos', 'ideas conectadas', '<path d="M12 3.5 13.3 7l3.5 1.3-3.5 1.3L12 13l-1.3-3.4L7.2 8.3 10.7 7z"/><path d="M12 13v3M9 18.5 6 20.5M15 18.5l3 2"/><circle cx="12" cy="17.5" r="1.4"/><circle cx="5" cy="21" r="1.2"/><circle cx="19" cy="21" r="1.2"/>'],
+  ['Estrella del director', 'quien dirige', '<path d="m12 6.5 1.6 3.3 3.6.5-2.6 2.5.6 3.6L12 14.7l-3.2 1.7.6-3.6-2.6-2.5 3.6-.5z"/><path d="M12 2v1.5M4.2 5.2l1.1 1.1M19.8 5.2l-1.1 1.1M2 12h1.5M20.5 12H22M7 21l1.5-3M17 21l-1.5-3"/>'],
+  ['Plan en pasos', 'planifica y delega', '<rect x="3" y="3.5" width="7" height="6" rx="1.5"/><path d="M6.5 9.5v3.5a2 2 0 0 0 2 2H14"/><path d="M6.5 13v4a2 2 0 0 0 2 2H14"/><rect x="14" y="12.5" width="7" height="5" rx="1.5"/><path d="m16 15 1 1 2-2"/><circle cx="17.5" cy="19.5" r="0" /><path d="M14 19h7"/>']
+];
+const svg = (p, s, cls = '') => `<svg class="i ${cls}" width="${s}" height="${s}" viewBox="0 0 24 24">${p}</svg>`;
+const brain = '<path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24A2.5 2.5 0 0 0 14.5 2Z"/>';
+const comp = (p, on) => `<div class="comp"><span class="pill">✳ Claude · Sonnet 5.5</span><span class="pill">${svg(brain, 14)}Medio</span><span class="orch ${on ? 'on' : 'off'}">${svg(p, 16)}<span class="sw ${on ? '' : 'off'}"></span></span><span class="send"></span></div>`;
+document.getElementById('g').innerHTML = ICONS.map(([name, hint, p], i) => `<div class="opt"><h2>${i + 1}. ${name} <small>${hint}</small></h2>
+  <div class="sizes">${svg(p, 16)}${svg(p, 20)}${svg(p, 24)}${svg(p, 64, 'big')}</div>${comp(p, true)}${comp(p, false)}</div>`).join('');
+</script>
+</body>
+</html>

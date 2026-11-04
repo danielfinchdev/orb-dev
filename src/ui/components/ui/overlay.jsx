@@ -21,7 +21,7 @@ export function DialogContent({ className, children, showClose = true, ...props 
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay data-slot="dialog-overlay" className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/45 backdrop-blur-[2px]" />
-      <DialogPrimitive.Content className={cn('bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-2xl border p-6 shadow-xl duration-200 sm:max-w-lg max-h-[90vh] overflow-y-auto', className)} {...props}>
+      <DialogPrimitive.Content data-slot="dialog-content" className={cn('bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-2xl border p-6 shadow-xl duration-200 sm:max-w-lg max-h-[90vh] overflow-y-auto', className)} {...props}>
         {children}
         {showClose ? <DialogPrimitive.Close className="ring-offset-background focus:ring-ring absolute top-4 right-4 rounded-md p-1 opacity-60 transition-opacity hover:opacity-100 focus:ring-2 focus:outline-hidden cursor-pointer"><XIcon className="size-4" /><span className="sr-only">{t('comp.close')}</span></DialogPrimitive.Close> : null}
       </DialogPrimitive.Content>
@@ -35,10 +35,16 @@ export function DialogDescription({ className, ...props }) { return <DialogPrimi
 
 // ---- select
 // title: what the control is for, shown as the app's bubble on hover (and as its accessible name).
+// 3.6 (M2): the trigger shows the chosen option itself (SelectPrimitive.Value with children). Without them, Radix copies the
+// option's text into the trigger through a portal into the same <span> React also writes the placeholder in, and with the
+// list kept in a detached fragment while closed, React 19 could fail with «insertBefore… is not a child of this node» when
+// the screen changed (seen going from a bot's chat to its editor). With children there is one writer: options may carry
+// an icon (an avatar) again. o.icon: drawn before the label in the list and in the trigger.
 export function Select({ value, onValueChange, options, placeholder, className, size = 'default', disabled, title, 'data-testid': testid, ...props }) {
+  const chosen = options.find((o) => o.value === value) ?? null;
   const trigger = (
     <SelectPrimitive.Trigger aria-label={title} data-testid={testid} className={cn("border-input data-[placeholder]:text-muted-foreground dark:bg-input/30 dark:hover:bg-input/50 flex w-fit items-center justify-between gap-2 rounded-lg border bg-transparent px-3 text-sm whitespace-nowrap shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/40 focus-visible:ring-[3px] disabled:opacity-50 cursor-pointer *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4", size === 'sm' ? 'h-8 text-[13px]' : 'h-9', className)}>
-      <SelectPrimitive.Value data-slot="select-value" placeholder={placeholder} />
+      <SelectPrimitive.Value data-slot="select-value" placeholder={placeholder}>{chosen ? <>{chosen.icon ?? null}<span className="truncate">{chosen.label}</span></> : null}</SelectPrimitive.Value>
       <SelectPrimitive.Icon asChild><ChevronDownIcon className="size-4 opacity-50" /></SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   );
@@ -46,12 +52,12 @@ export function Select({ value, onValueChange, options, placeholder, className, 
     <SelectPrimitive.Root value={value ?? undefined} onValueChange={onValueChange} disabled={disabled} {...props}>
       {title ? <BubbleTip title={title}>{trigger}</BubbleTip> : trigger}
       <SelectPrimitive.Portal>
-        <SelectPrimitive.Content position="popper" sideOffset={4} className="bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 origin-(--radix-select-content-transform-origin) relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] min-w-(--radix-select-trigger-width) overflow-x-hidden overflow-y-auto rounded-lg border shadow-md">
+        <SelectPrimitive.Content data-slot="select-content" position="popper" sideOffset={4} className="bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 origin-(--radix-select-content-transform-origin) relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] min-w-(--radix-select-trigger-width) overflow-x-hidden overflow-y-auto rounded-lg border shadow-md">
           <SelectPrimitive.Viewport className="p-1">
             {options.map((o) => (
               <SelectPrimitive.Item key={o.value} value={o.value} disabled={o.disabled} className="focus:bg-accent focus:text-accent-foreground relative flex w-full cursor-pointer items-center gap-2 rounded-md py-1.5 pr-8 pl-2 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg:not([class*='size-'])]:size-4">
                 <span className="absolute right-2 flex size-3.5 items-center justify-center"><SelectPrimitive.ItemIndicator><CheckIcon className="size-4" /></SelectPrimitive.ItemIndicator></span>
-                <SelectPrimitive.ItemText>{o.label}</SelectPrimitive.ItemText>
+                {o.icon ?? null}<SelectPrimitive.ItemText>{o.label}</SelectPrimitive.ItemText>
               </SelectPrimitive.Item>
             ))}
           </SelectPrimitive.Viewport>
@@ -120,7 +126,7 @@ export function PopoverContent({ className, children, side = 'bottom', align = '
 export const DropdownMenu = DropdownPrimitive.Root;
 export const DropdownMenuTrigger = DropdownPrimitive.Trigger;
 export function DropdownMenuContent({ className, align = 'end', ...props }) {
-  return <DropdownPrimitive.Portal><DropdownPrimitive.Content align={align} sideOffset={4} className={cn('bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 origin-(--radix-dropdown-menu-content-transform-origin) z-50 min-w-[11rem] overflow-hidden rounded-lg border p-1 shadow-md', className)} {...props} /></DropdownPrimitive.Portal>;
+  return <DropdownPrimitive.Portal><DropdownPrimitive.Content data-slot="menu-content" align={align} sideOffset={4} className={cn('bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 origin-(--radix-dropdown-menu-content-transform-origin) z-50 min-w-[11rem] overflow-hidden rounded-lg border p-1 shadow-md', className)} {...props} /></DropdownPrimitive.Portal>;
 }
 export function DropdownMenuItem({ className, variant, ...props }) {
   return <DropdownPrimitive.Item className={cn("focus:bg-accent focus:text-accent-foreground relative flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:text-muted-foreground", variant === 'destructive' && 'text-destructive focus:text-destructive [&_svg]:text-destructive', className)} {...props} />;
@@ -140,10 +146,12 @@ export function DropdownMenuSeparator() { return <DropdownPrimitive.Separator cl
 export function DropdownMenuLabel({ className, ...props }) { return <DropdownPrimitive.Label className={cn('text-muted-foreground px-2 py-1.5 text-xs', className)} {...props} />; }
 
 // ---- switch and checkbox
-export function Switch({ className, ...props }) {
+// size="sm" (28×16, thumb 12): for inline toolbars such as the composer (DESIGN-SYSTEM §4); the regular one elsewhere.
+export function Switch({ className, size = 'default', ...props }) {
+  const sm = size === 'sm';
   return (
-    <SwitchPrimitive.Root className={cn('peer data-[state=checked]:bg-primary data-[state=unchecked]:bg-input focus-visible:ring-ring/50 dark:data-[state=unchecked]:bg-input/80 inline-flex h-[1.15rem] w-8 shrink-0 cursor-pointer items-center rounded-full border border-transparent shadow-xs transition-[background-color,box-shadow] duration-150 outline-none focus-visible:ring-[3px] disabled:opacity-50', className)} {...props}>
-      <SwitchPrimitive.Thumb className="bg-background dark:data-[state=unchecked]:bg-foreground dark:data-[state=checked]:bg-primary-foreground pointer-events-none block size-4 rounded-full ring-0 transition-transform duration-200 ease-(--ease-out) data-[state=checked]:translate-x-[calc(100%-2px)] data-[state=unchecked]:translate-x-0" />
+    <SwitchPrimitive.Root data-size={size} className={cn('peer data-[state=checked]:bg-primary data-[state=unchecked]:bg-input focus-visible:ring-ring/50 dark:data-[state=unchecked]:bg-input/80 inline-flex shrink-0 cursor-pointer items-center rounded-full border border-transparent shadow-xs transition-[background-color,box-shadow] duration-150 outline-none focus-visible:ring-[3px] disabled:opacity-50', sm ? 'h-4 w-7' : 'h-[1.15rem] w-8', className)} {...props}>
+      <SwitchPrimitive.Thumb className={cn('bg-background dark:data-[state=unchecked]:bg-foreground dark:data-[state=checked]:bg-primary-foreground pointer-events-none block rounded-full ring-0 transition-transform duration-200 ease-(--ease-out) data-[state=unchecked]:translate-x-0', sm ? 'size-3 data-[state=checked]:translate-x-[calc(100%+0px)] ml-px' : 'size-4 data-[state=checked]:translate-x-[calc(100%-2px)]')} />
     </SwitchPrimitive.Root>
   );
 }

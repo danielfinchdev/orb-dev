@@ -12,6 +12,7 @@ import { Checkbox, BubbleTip } from '@/components/ui/overlay.jsx';
 import { useStore, call, act, go, bridge, refresh } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { GithubIcon } from '@/components/agent-icon.jsx';
+import { ShareButton, SharedBadge } from '@/components/share-dialog.jsx';
 import { useT, useLocale } from '@/lib/i18n.js';
 
 function GithubCard() {
@@ -92,7 +93,7 @@ function ProjectDetail({ p, onRenamed }) {
     <Card className="gap-5">
       <CardHeader className="flex-row items-start gap-3">
         <Folder className="text-primary mt-0.5 size-5 shrink-0" />
-        <div className="min-w-0 flex-1"><CardTitle className="text-[17px]">{p.name}</CardTitle><CardDescription className="mt-1 font-mono text-xs break-all">{p.path}</CardDescription></div>
+        <div className="min-w-0 flex-1"><CardTitle className="flex items-center gap-2 text-[17px]">{p.name}<SharedBadge type="project" id={p.name} /></CardTitle><CardDescription className="mt-1 font-mono text-xs break-all">{p.path}</CardDescription></div>
         {p.active ? <Badge><Pin />{t('projects.workProject')}</Badge> : null}
       </CardHeader>
       <CardContent className="flex flex-wrap gap-2">
@@ -102,6 +103,7 @@ function ProjectDetail({ p, onRenamed }) {
         <BubbleTip title={t('projects.review')} text={t('projects.reviewTip')}><Button size="sm" variant="outline" onClick={() => askReview({ project: p.name })} data-testid="project-review"><ScanSearch />{t('projects.review')}</Button></BubbleTip>
         <BubbleTip title={t('projects.security')} text={t('projects.securityTip')}><Button size="sm" variant="outline" onClick={() => askSecurityReview({ project: p.name })} data-testid="project-security"><ShieldCheck />{t('projects.security')}</Button></BubbleTip>
         <Button size="sm" variant="outline" onClick={() => go({ view: 'logs', name: p.name })}><BookOpen />{t('projects.log')}</Button>
+        <ShareButton type="project" id={p.name} name={p.name} owner={p.person_id ?? null} />
         <BubbleTip title={t('projects.rename.title')} text={p.open ? t('projects.rename.busy') : undefined}><span><Button size="sm" variant="outline" disabled={Boolean(p.open)} onClick={rename} data-testid="project-rename"><PencilLine />{t('projects.rename.title')}</Button></span></BubbleTip>
         {!p.inHome ? <Button size="sm" variant="danger" onClick={async () => { if (await confirm(t('projects.unlink.title'), t('projects.unlink.body', { name: p.name }), { ok: t('projects.unlink.ok'), danger: true })) act(call('projects.remove', { name: p.name }), t('projects.unlink.done')); }}><Unlink />{t('projects.unlink.ok')}</Button> : null}
       </CardContent>

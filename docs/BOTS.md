@@ -35,6 +35,7 @@ Always: `bot_list`, `bot_send`, `bot_memory_read`, `bot_memory_write`, `bot_ask_
 | `bots.answer` | `item` (question card), `text` | `{ conversation, bot }` |
 | `bots.groups.list` / `create` / `update` / `delete` | `name`, `icon`, `members[]` (ids or names), `id` | group `{ id, name, icon, members[] }` |
 | `bots.groups.chat` / `bots.groups.send` | `id` (+ `text`) | `{ conversation, lines[] }` / `{ conversation, group, members }` |
+| `bots.groups.get` / `bots.groups.members.add` / `bots.groups.members.remove` (3.6) | `id`, `bot` or `person` | group with `members[]`, `people[]`, `owner`. In `bots.groups.send`, `@Name` addresses only those bots (answer: `mentioned[]`); without @ the chief first. Lists, pins, unread: `inbox.*` (docs/PERSONAS-INTERNALS.md) |
 | `bots.memory.get` / `bots.memory.set` | `id` (or `"global"`), `text` (replaces) | `{ id, text }` |
 | `bots.rules.get` / `bots.rules.set` | `rules[]` | list of rules |
 | `bots.reminders.list` / `create` / `cancel` | `id?` (bot), `all?` / `id`, `text`, `when` (`YYYY-MM-DDTHH:MM`), `every` (`once`, `daily`, `weekly`, `monthly`, `yearly`), `weekdays[]` / `id` (reminder) | reminders |

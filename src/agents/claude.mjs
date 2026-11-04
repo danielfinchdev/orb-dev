@@ -16,7 +16,7 @@ export const id = 'claude';
 export const label = 'Claude Code';
 export const kind = 'sdk';
 // What this agent can do live: pictures in the message, steer the running turn, native fork, approval requests, models.
-export const caps = { images: true, steer: true, fork: true, approvals: true, models: true, context: true };
+export const caps = { images: true, steer: true, fork: true, approvals: true, models: true, context: true, compact: true };
 
 // The assistant's coordinator process never runs commands or edits (that is the agents' work).
 export const COORDINATOR_DENIED = ['Bash', 'Edit', 'Write', 'NotebookEdit', 'MultiEdit', 'WebFetch', 'WebSearch', 'Task', 'Skill'];
@@ -92,7 +92,9 @@ export async function discoverModels(exe, cfg = {}, env = {}) {
     return rows.filter((m) => m?.value && m.value !== 'default').map((m) => {
       const isDefault = !marked && usual && (m.resolvedModel ?? m.value) === usual;
       if (isDefault) marked = true;
-      return { id: m.value, label: m.displayName || m.value, ...(m.resolvedModel && m.resolvedModel !== m.value ? { resolved: m.resolvedModel } : {}), ...(isDefault ? { default: true } : {}) };
+      // 3.6: the reasoning levels the model takes (Orb offers low, medium, high and, when the model has it, xhigh).
+      const efforts = Array.isArray(m.supportedEffortLevels) ? m.supportedEffortLevels.filter((e) => ['low', 'medium', 'high', 'xhigh'].includes(e)) : null;
+      return { id: m.value, label: m.displayName || m.value, ...(m.resolvedModel && m.resolvedModel !== m.value ? { resolved: m.resolvedModel } : {}), ...(isDefault ? { default: true } : {}), ...(efforts?.length ? { efforts } : {}) };
     });
   } catch { return null; } finally { release?.(); try { q?.close(); } catch { /* gone */ } try { abort.abort(); } catch { /* gone */ } }
 }
@@ -114,10 +116,10 @@ export function createLive(o) {
   const input = inputQueue();
   const abort = new AbortController();
   let permission = o.permission ?? 'editar';
-  let turn = null; let query = null; let closed = false; let started = null; let child = null;
+  let turn = null; let query = null; let closed = false; let started = null; let child = null; let compactResult = null;
   const live = {
     sessionId: o.resumeId ?? o.newSessionId ?? null,
-    caps: { steer: true, approvals: true, fork: true, interrupt: true, context: true, models: true },
+    caps: { steer: true, approvals: true, fork: true, interrupt: true, context: true, models: true, compact: true },
     pid: null,
     get busy() { return Boolean(turn && !turn.done); }
   };
@@ -125,10 +127,12 @@ export function createLive(o) {
   const canUseTool = async (toolName, toolInput, ctx = {}) => {
     const command = toolInput?.command ?? '';
     const paths = [toolInput?.file_path, toolInput?.path, toolInput?.notebook_path].filter(Boolean);
+    // 3.6: a confined session: Grep and Glob without a path search the working folder, which is checked too.
+    if (o.confine && !paths.length && (toolName === 'Grep' || toolName === 'Glob') && o.cwd) paths.push(o.cwd);
     // 3.5.1: o.bot is the bot's guard (its folder, what it read this turn): patterns and the address are checked too.
     const patterns = [toolInput?.pattern, toolInput?.glob].filter((x) => typeof x === 'string' && x);
     const url = typeof toolInput?.url === 'string' ? toolInput.url : null;
-    const verdict = decide({ permission, tool: toolName, command, paths, patterns: toolName === 'Grep' ? patterns.slice(1) : patterns, url, internalDir: o.internalDir, lang: o.lang, bot: o.bot || false });
+    const verdict = decide({ permission, tool: toolName, command, paths, patterns: toolName === 'Grep' ? patterns.slice(1) : patterns, url, internalDir: o.internalDir, lang: o.lang, bot: o.bot || false, confine: o.confine || null });
     if (verdict.decision === 'allow') return { behavior: 'allow', updatedInput: toolInput };
     if (verdict.decision === 'deny') return { behavior: 'deny', message: `Orb no lo permite: ${verdict.reason}.` };
     // 3.1: summary: what the agent itself says the command is for (Claude's Bash tool asks it for a description).
@@ -140,6 +144,9 @@ export function createLive(o) {
   const handle = (m) => {
     if (m.session_id && m.session_id !== live.sessionId) { live.sessionId = m.session_id; onEvent({ type: 'session', id: m.session_id }); }
     if (m.type === 'system' && m.subtype === 'init') onEvent({ type: 'item', role: 'system', kind: 'status', body: `${label} · ${m.model ?? ''}`.trim() });
+    // 3.6: how a compaction went (/compact): the status line says whether it worked, the boundary how much was left.
+    if (m.type === 'system' && m.subtype === 'status' && m.compact_result) compactResult = { ok: m.compact_result === 'success', error: m.compact_error ?? null };
+    if (m.type === 'system' && m.subtype === 'compact_boundary') { compactResult ??= { ok: true, error: null }; onEvent({ type: 'compacted', before: m.compact_metadata?.pre_tokens ?? null, after: m.compact_metadata?.post_tokens ?? null }); }
     if (m.type === 'stream_event' && !m.parent_tool_use_id) {
       const e = m.event;
       if (e?.type === 'content_block_delta' && e.delta?.type === 'text_delta') onEvent({ type: 'delta', text: e.delta.text });
@@ -261,6 +268,20 @@ export function createLive(o) {
   // A message for the running turn: Claude reads it at its next step (between tool calls) and it stays the same turn
   // ('now' would interrupt the turn instead).
   live.steer = ({ text }) => { if (closed || !turn || turn.done) return false; input.push({ ...userMessage(text), priority: 'next' }); return true; };
+  // 3.6: Claude Code's own compaction (/compact): the conversation is summarised and goes on from the summary, with the
+  // same session id. → { ok, error }
+  live.compact = async ({ instructions = '' } = {}) => {
+    if (closed) throw new Error(tr('sys.agents.sessionClosed', { name: label }));
+    if (turn && !turn.done) throw new Error(tr('sys.agents.busy'));
+    turn = new Turn(); compactResult = null;
+    const current = turn;
+    started ??= start().catch((error) => { closed = true; current.finish({ isError: true, final: tr('sys.agents.startFailed', { name: label, error: error.message }) }); });
+    await started;
+    if (!closed) input.push(userMessage(instructions ? `/compact ${instructions}` : '/compact'));
+    const r = await current.promise;
+    const ok = !r.isError && compactResult?.ok !== false;
+    return { ok, error: ok ? null : compactResult?.error || r.final || null };
+  };
   live.interrupt = async () => { approvals.clear(); try { await query?.interrupt(); } catch { /* not running */ } };
   live.respond = (requestId, decision) => approvals.respond(requestId, decision);
   live.setModel = async (model) => { o.model = model; try { await query?.setModel(model || undefined); } catch { /* next start */ } };

@@ -1,0 +1,11 @@
+{
+  "id": "vacio",
+  "order": 4,
+  "name": "Start empty",
+  "icon": "✨",
+  "description": "No bots or reminders: you make them yourself whenever you want.",
+  "bots": [],
+  "groups": [],
+  "reminders": [],
+  "rules": []
+}

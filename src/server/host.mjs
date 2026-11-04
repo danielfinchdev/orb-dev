@@ -7,7 +7,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fork } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { isHome, createHome, paths, writeJson, ROLES } from '../core/home.mjs';
+import { isHome, createHome, paths, writeJson, ROLES, readKey, loadConfig } from '../core/home.mjs';
+import { createBackup, pruneBackups, backupDir } from '../core/backup.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -42,11 +43,34 @@ export function prepareHome(dir, { profile = null } = {}) {
   return home;
 }
 
+// 3.6: before a new version of Orb Núcleo touches the data (its engine may migrate the database), a backup of what the
+// old one left: the version that ran last is kept in .orb/datos/nucleo-version; a different one (or none, with a
+// database already there: an Orb from before 3.6) makes a «preupdate» copy first. A failed copy is logged, never fatal.
+export async function backupOnUpgrade(home, version, log = () => {}) {
+  const p = paths(home);
+  const mark = path.join(p.data, 'nucleo-version');
+  let before = null; try { before = fs.readFileSync(mark, 'utf8').trim() || null; } catch { /* first run */ }
+  if (before === version) return null;
+  let made = null;
+  if (fs.existsSync(p.db) && (before !== null || fs.existsSync(p.config))) {
+    try {
+      let config = null; try { config = loadConfig(home); } catch { /* default folder */ }
+      const r = await createBackup({ home, secret: readKey(home), kind: 'preupdate', version: before, folder: backupDir(home, config), log });
+      await pruneBackups(backupDir(home, config)).catch(() => {});
+      log(`copia antes de actualizar (${before ?? 'anterior'} → ${version}): ${path.basename(r.file)}`);
+      made = r.file;
+    } catch (error) { log(`no se pudo hacer la copia antes de actualizar: ${error.message}`); }
+  }
+  try { fs.mkdirSync(p.data, { recursive: true }); fs.writeFileSync(mark, `${version}
+`); } catch { /* next time */ }
+  return made;
+}
+
 // The host: start() → { home, name, role, headless }, call(method, params) → result, stop() (clean shutdown). Events of the
 // engine go to onEvent; restarts are logged and counted (host.restarts).
 // backoff: wait before the n-th restart in a row = min(max, base · 2^(n-1)); a run longer than stableMs resets it.
 export function createHost({ home, version = packageVersion(), engine = ENGINE, env = {}, onEvent = () => {}, logFile = null,
-  backoff = { base: 1000, max: 60_000, stableMs: 60_000 }, echo = false, callTimeoutMs = 10 * 60_000 } = {}) {
+  backoff = { base: 1000, max: 60_000, stableMs: 60_000 }, echo = false, callTimeoutMs = 10 * 60_000, preUpdateBackup = true } = {}) {
   const logPath = logFile ?? path.join(paths(home).runs, 'nucleo.log');
   fs.mkdirSync(path.dirname(logPath), { recursive: true });
   const log = (line) => {
@@ -106,9 +130,10 @@ export function createHost({ home, version = packageVersion(), engine = ENGINE, 
     return ready;
   };
 
-  host.start = () => { stopping = false; log(`Orb Núcleo ${version}: arrancando el motor en ${home}`); return spawnEngine(); };
+  host.start = async () => { stopping = false; log(`Orb Núcleo ${version}: arrancando el motor en ${home}`); if (preUpdateBackup) await backupOnUpgrade(home, version, log); return spawnEngine(); };
   // Waits for the engine (also while it is being started again) and calls it.
-  host.call = async (method, params = {}) => {
+  // 3.6: as: 'control' (Orb Núcleo's own commands and local socket: the owner, who is on the server itself).
+  host.call = async (method, params = {}, { as = null } = {}) => {
     if (!child) throw new Error('el motor no está en marcha');
     await ready;
     const me = child; if (!me) throw new Error('el motor no está en marcha');
@@ -116,7 +141,7 @@ export function createHost({ home, version = packageVersion(), engine = ENGINE, 
     return new Promise((resolve, reject) => {
       const t = setTimeout(() => { pending.delete(id); reject(new Error('el motor no contesta')); }, callTimeoutMs);
       pending.set(id, { resolve, reject, timer: t });
-      try { me.send({ type: 'call', id, method, params }); } catch (error) { clearTimeout(t); pending.delete(id); reject(error); }
+      try { me.send({ type: 'call', id, method, params, ...(as ? { as } : {}) }); } catch (error) { clearTimeout(t); pending.delete(id); reject(error); }
     });
   };
   // Clean stop: the engine closes the phone access (and `tailscale serve`) and its agents; after waitMs it is killed.

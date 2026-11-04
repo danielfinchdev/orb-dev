@@ -87,7 +87,7 @@ test('la interfaz registra las pantallas de los bots en los dos diseños y el me
   const main = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'main.jsx'), 'utf8');
   for (const v of U.BOT_VIEWS) assert.ok(main.includes(`'${v}'`) || main.includes(` ${v}:`), `VIEWS sin ${v}`);
   const side = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'components', 'sidebar.jsx'), 'utf8');
-  assert.match(side, /ModeSwitch/); assert.match(side, /BotsNav/);
+  assert.match(side, /ModeSwitch/); assert.match(side, /BotsInbox/);
   const tabs = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'components', 'mobile-tabs.jsx'), 'utf8');
   assert.match(tabs, /nav-bot-chat/);
 });

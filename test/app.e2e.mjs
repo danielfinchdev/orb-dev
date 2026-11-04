@@ -23,7 +23,7 @@ process.on('unhandledRejection', (e) => { if (/No dialog is showing/.test(String
 // ORB_E2E_EXE: test a packaged build instead of the sources (e.g. dist/linux-unpacked/orb).
 const packaged = process.env.ORB_E2E_EXE;
 // 2.3: the fake agents live inside the engine (ORB_FAKE_AGENTS), so nothing is launched as a program (also on Windows).
-const app = await electron.launch({ executablePath: packaged || electronBin, args: [...(packaged ? [] : [ROOT]), ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], env: { ...process.env, ORB_NO_BRIDGE: '1', ORB_USER_DATA: path.join(tmp, 'datos-app'), ORB_FAKE_AGENTS: fake('fake-live.mjs'), ORB_FAKE_UPDATE: '9.9.9' } });
+const app = await electron.launch({ executablePath: packaged || electronBin, args: [...(packaged ? [] : [ROOT]), ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], env: { ...process.env, ORB_NO_BRIDGE: '1', ORB_USER_DATA: path.join(tmp, 'datos-app'), ORB_DEFAULT_BASE: base, ORB_FAKE_AGENTS: fake('fake-live.mjs'), ORB_FAKE_UPDATE: '9.9.9' } });
 const errors = [];
 const win = await app.firstWindow();
 win.on('pageerror', (e) => errors.push(e.message));
@@ -38,18 +38,13 @@ try {
   step = 'primer arranque';
   const button = (name) => win.getByRole('button', { name, exact: true });
   const dialogButton = (name) => win.getByRole('dialog').getByRole('button', { name, exact: true });
-  await win.waitForSelector('text=Crear y empezar');
-  await app.evaluate(({ dialog }, folder) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] }); }, base);
-  await win.locator('input').nth(0).fill('Orb');
-  await win.locator('input').nth(1).fill('Ana');
-  await win.click('text=Elegir ubicación');
-  await win.locator('[data-testid=setup-target]', { hasText: path.join(base, 'Orb') }).waitFor();
-  await win.waitForTimeout(500);
+  // 3.6: three screens: the name (the folder goes in Documents: here a throwaway one), «Solo yo», «Más tarde».
+  await win.waitForSelector('[data-testid=setup-name]');
+  await win.fill('[data-testid=setup-name]', 'Ana');
   await shot('01-bienvenida');
-  await win.click('text=Crear y empezar');
-  // On Windows the first run also offers to install the agents ("Preparando tu PC") before the chat.
-  await win.getByTestId('chat-greeting').or(win.getByText('Preparando tu PC')).first().waitFor();
-  if (await win.isVisible('text=Preparando tu PC')) { await shot('01b-preparo-equipo'); await win.click('text=Continuar'); }
+  await win.click('[data-testid=setup-create]');
+  await win.click('[data-testid=wizard-only-me]');
+  await win.click('[data-testid=wizard-use-later]');
   await win.waitForSelector('[data-testid=chat-greeting]');
   const home = path.join(base, 'Orb');
   for (const f of ['orb.json', '.orb/datos/orb.db', 'bitacora/GENERAL.md', 'mcp-servers', 'windows', 'ios', 'android', 'web']) assert.ok(fs.existsSync(path.join(home, f)), `falta ${f}`);
@@ -139,8 +134,10 @@ try {
   // ---- direct conversation with Codex
   step = 'conversación directa';
   // 3.0: «Nuevo chat» opens a clean conversation with the assistant, no pop-up (clicked twice: still one view).
-  await win.click('[data-testid=new-conversation]');
-  await win.click('[data-testid=new-conversation]');
+  // 3.6: from the «+» of the chat list.
+  const newChat = async () => { await win.click('[data-testid=chats-new]'); await win.click('[data-testid=new-conversation]'); await win.locator('[data-testid=new-conversation]').waitFor({ state: 'detached' }); await win.waitForTimeout(200); };
+  await newChat();
+  await newChat();
   await win.waitForSelector('[data-testid=chat-input]');
   assert.equal(await win.locator('[role=dialog]').count(), 0, 'sin ventana emergente');
   await win.click('[data-testid=brain-picker]');
@@ -213,12 +210,21 @@ try {
   step = 'ajustes';
   await win.click('[data-testid=nav-settings]');
   await win.locator('[data-testid=settings-dialog]').getByText('Nombre del asistente', { exact: true }).waitFor();
-  await win.locator('[data-testid=settings-about]', { hasText: '@danielfinchdev' }).waitFor();
-  await win.locator('[data-testid=settings-about]', { hasText: /Orb \d+\.\d+\.\d+/ }).waitFor();
   await win.waitForTimeout(400);
   await shot('10-ajustes');
-  const section = async (id) => { await win.click(`[data-testid=settings-nav-${id}]`); await win.waitForTimeout(250); };
-  await section('apariencia');
+  // 3.6: six sections; some of the old ones are now a part of one (clicked under its name in the menu).
+  const PARTS = { apariencia: ['general', 'apariencia'], actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'], experto: ['avanzado', 'experto'], contribuye: ['acerca', 'contribuye'], apps: ['acerca', 'apps'] };
+  const section = async (name) => {
+    const [id, part] = PARTS[name] ?? [name];
+    await win.click(`[data-testid=settings-nav-${id}]`);
+    if (part) await win.click(`[data-testid=settings-sub-${part}]`);
+    await win.waitForTimeout(250);
+  };
+  // 3.6: the version and the developer's GitHub are in «Acerca de».
+  await section('acerca');
+  await win.locator('[data-testid=settings-about]', { hasText: '@danielfinchdev' }).waitFor();
+  await win.locator('[data-testid=settings-about]', { hasText: /Orb \d+\.\d+\.\d+/ }).waitFor();
+  await section('general');
   await win.locator('[data-testid=skin-picker]').waitFor();
   await shot('10e-ajustes-apariencia');
   // A visual theme applies at once to the whole app; the professional one has no robot.
@@ -309,32 +315,37 @@ try {
   await win.locator('[data-testid=update-card]').getByRole('button', { name: 'Cerrar' }).click();
   await until(async () => (await win.locator('[data-testid=update-card]').count()) === 0, 'tarjeta cerrada');
 
-  // ---- left menu (3.2): projects with their conversations and active tasks, the conversations, and «Completadas» with
-  // what finished by itself (a done task, a conversation with the OK); each one can be brought back or put away by hand.
+  // ---- the chat list (3.6): one group per project with its chats; a finished chat goes under «Ver completados»; a task is
+  // found by its number in the search; each chat can be brought back or put away by hand from its menu.
   step = 'proyectos del menú';
-  const folder = win.locator('[data-testid=folder-webviaproject]');
+  const folder = win.locator('[data-testid=orb-group-webviaproject]');
   await folder.waitFor();
   const firstTask = (await call('tasks.list')).find((x) => x.project === 'webviaproject' && x.status === 'done');
-  const doneItem = win.locator(`[data-testid=item-t${firstTask.id}]`);
-  if (!(await doneItem.isVisible())) await win.click('[data-testid=sidebar-completed]');
-  await doneItem.click();
-  await win.waitForSelector('[data-testid=task-detail]');
+  await win.fill('[data-testid=sidebar-search-input]', `#${firstTask.id}`);
+  await win.click(`[data-testid=sidebar-results] [data-testid=item-t${firstTask.id}]`);
   await win.locator('[data-testid=task-detail]', { hasText: `Tarea #${firstTask.id}` }).waitFor();
+  await win.fill('[data-testid=sidebar-search-input]', '');
+  // The conversation of the first request is done after the OK (nothing of it is still open): only under «Ver completados».
+  assert.equal((await call('conversations.list')).find((c) => c.id === task.conversation_id).status, 'done', 'conversación completada con el OK');
+  const doneItem = win.locator(`[data-testid=item-c${task.conversation_id}]`);
+  assert.equal(await doneItem.count(), 0, 'la conversación completada no está en la lista');
+  await win.click('[data-testid=sidebar-completed]');
+  await doneItem.waitFor();
   await shot('12b-menu-completados');
   // Brought back to its project, and put away again.
-  await doneItem.hover();
-  await win.click(`[data-testid=complete-t${firstTask.id}]`);
-  await until(async () => (await call('app.state')).kept?.includes(`t${firstTask.id}`), 'devuelta a su proyecto');
-  const inFolder = win.locator(`[data-testid=folder-items-webviaproject] [data-testid=item-t${firstTask.id}]`);
-  await win.waitForTimeout(800);
-  if (await win.getByRole('button', { name: 'Desplegar webviaproject' }).count()) await win.getByRole('button', { name: 'Desplegar webviaproject' }).click();
-  await inFolder.waitFor();
-  await inFolder.hover();
-  await win.click(`[data-testid=complete-t${firstTask.id}]`);
-  await until(async () => (await call('app.state')).completed?.includes(`t${firstTask.id}`), 'completada otra vez');
-  // The conversation of the first request is done after the OK (nothing of it is still open).
-  assert.equal((await call('conversations.list')).find((c) => c.id === task.conversation_id).status, 'done', 'conversación completada con el OK');
-  await folder.click();
+  await doneItem.click({ button: 'right' });
+  await win.click('[data-testid=chat-menu-list] [data-testid=chat-reopen]');
+  await until(async () => (await call('conversations.list')).find((c) => c.id === task.conversation_id).status !== 'done', 'devuelta a su proyecto');
+  await win.click('[data-testid=sidebar-completed]').catch(() => {}); // «Ocultar completados» (gone if nothing is done)
+  await win.locator(`[data-testid=orb-group-webviaproject] [data-testid=item-c${task.conversation_id}]`).waitFor();
+  await doneItem.click({ button: 'right' });
+  await win.click('[data-testid=chat-menu-list] [data-testid=chat-complete]');
+  await until(async () => (await call('conversations.list')).find((c) => c.id === task.conversation_id).status === 'done', 'completada otra vez');
+  await until(async () => (await doneItem.count()) === 0, 'fuera de la lista');
+  // The project's ⋯ starts a new chat in that project.
+  await folder.locator('[data-testid=project-head-webviaproject]').hover();
+  await win.click('[data-testid=project-menu-webviaproject]');
+  await win.click('[data-testid=project-new-chat]');
   await win.locator('[data-testid=chat-greeting]').waitFor();
   assert.equal((await call('app.state')).activeProject?.name, 'webviaproject', 'un clic empieza una conversación en el proyecto');
 
@@ -345,6 +356,7 @@ try {
   await win.click('[data-testid=expert-switch]');
   await until(async () => (await call('app.state')).config.expert.enabled === true, 'modo experto activado');
   await win.keyboard.press('Escape');
+  await win.click('[data-testid=orb-places-more]'); // 3.6: under «Más» of the places
   await win.click('[data-testid=nav-expert]');
   await win.waitForSelector('[data-testid=expert-view]');
   await win.locator('[data-testid=expert-tree]').getByText('navegador.txt').click();
@@ -397,7 +409,7 @@ try {
   await until(async () => (await call('usage.get')).find((u) => u.account === 'claude')?.real?.utilization === 0.6, 'uso real de Claude');
   await until(async () => (await call('sessions.list')).find((s) => s.id === rateSession.id)?.status !== 'running', 'sesión del uso parada').catch(() => {});
   await call('sessions.remove', { id: rateSession.id }).catch(() => {});
-  await win.click('[data-testid=new-conversation]');
+  await newChat();
   // 60 % with the default model: no bubble (before, it came out for the model alone).
   await win.waitForTimeout(600);
   assert.equal(await win.locator('[data-testid=usage-bubble]').count(), 0, 'sin globo con uso medio y modelo normal');
@@ -419,11 +431,11 @@ try {
   await call('chat.settings', { model: 'sonnet' }); await call('chat.settings', { model: 'claude-opus-5-5' });
   await win.waitForTimeout(800);
   assert.equal(await win.locator('[data-testid=usage-bubble]').count(), 0, 'el globo no se repite');
-  // 2.6: a clean top bar: the clock, the working folder in the middle and icon buttons with their bubble.
-  assert.equal(await win.locator('main header').evaluate((h) => h.innerText.replace(h.querySelector('h1')?.innerText ?? '', '').replace(h.querySelector('[data-testid=bar-project]')?.innerText ?? '', '').trim()), '', 'sin nombre, modo ni modelo en la barra');
-  // 3.2: the folder in the middle of the bar, centred between the clock and the buttons.
-  const centre = await win.locator('main header').evaluate((h) => { const a = h.getBoundingClientRect(); const p = h.querySelector('[data-testid=bar-project]').getBoundingClientRect(); const cs = getComputedStyle(h); const left = a.left + parseFloat(cs.paddingLeft); const right = a.right - parseFloat(cs.paddingRight); return Math.abs((p.left + p.right) / 2 - (left + right) / 2); });
-  assert.ok(centre < 3, `carpeta centrada en la barra (desvío ${centre}px)`);
+  // 2.6: a clean top bar: the clock and icon buttons with their bubble. 3.6: in a new chat nothing in the middle (the
+  // project is chosen and shown in the composer only).
+  // 3.6: the chat's pill (its title, project and who answers; it opens the chat's info) is all there is besides the buttons.
+  assert.equal(await win.locator('main header').evaluate((h) => [h.querySelector('[data-testid=orb-chat-head]'), h.querySelector('h1')].reduce((txt, e) => txt.replace(e?.innerText ?? '', ''), h.innerText).trim()), '', 'sin modo, modelo ni carpeta en la barra');
+  assert.doesNotMatch(await win.locator('[data-testid=orb-chat-head]').innerText(), /Opus|Sonnet|Documentos/, 'el modelo y la carpeta, en el compositor');
   await win.hover('[data-testid=bar-pause]');
   // The bubble that is open (another one may still be closing for a moment: seen on the CI's Linux machine).
   await win.locator('[data-testid=bubble-tip]:not([data-state=closed])').first().waitFor();

@@ -7,6 +7,7 @@ import { bumpNav, navTicket, stillHere } from './nav.js';
 import { t } from './i18n.js';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from '../../core/appearance.mjs';
 import { modeOf, botsPrefix } from './bots.js';
+import { fallbackInbox } from './inbox.js';
 
 // The bridge to the PC: Electron's preload, or the phone's web bridge (src/ui/lib/web-bridge.js). Read when used, not when
 // this module loads: the bundler may load this module before the phone's bridge has defined window.orb.
@@ -91,7 +92,9 @@ const KEEPS_ID = new Set(['session', 'chat', 'bot-chat', 'bot-group', 'bots']);
 const MODES_KEY = 'orb.modos';
 const lastOf = () => { try { return JSON.parse(localStorage.getItem(MODES_KEY) || '{}') ?? {}; } catch { return {}; } };
 function rememberMode(route) { try { localStorage.setItem(MODES_KEY, JSON.stringify({ ...lastOf(), [modeOf(route)]: route })); } catch { /* storage unavailable */ } }
-export const modeHome = (mode) => lastOf()[mode] ?? (mode === 'bots' ? { view: 'bot-chat' } : { view: 'chat' });
+// 3.6 (M2): the phone opens the Bots zone on its chat list («bot-chats»); the PC on the last chat (its list is beside).
+// 3.6 (M3): the same for the Orb zone: the phone on its chat list («chats»), the PC on the last conversation.
+export const modeHome = (mode) => lastOf()[mode] ?? (mode === 'bots' ? { view: phoneLayout() ? 'bot-chats' : 'bot-chat' } : { view: phoneLayout() ? 'chats' : 'chat' });
 export function setMode(mode) {
   const next = mode === 'bots' ? 'bots' : 'orb';
   if (modeOf(state.route) !== next) go(modeHome(next));
@@ -117,7 +120,7 @@ export async function loadCentro() {
   const before = getState().centro;
   let centro; try { centro = await call('centro.status'); } catch { centro = { linked: false }; }
   setState({ centro });
-  if (botsPrefix(before) !== botsPrefix(centro) || before?.id !== centro.id) { setState({ bots: null }); loadBots(); }
+  if (botsPrefix(before) !== botsPrefix(centro) || before?.id !== centro.id) { setState({ bots: null, inbox: null }); loadBots(); loadInbox(); }
   return centro;
 }
 let botsTimer = null;
@@ -126,13 +129,58 @@ export async function loadBots() {
   catch (error) { setState({ botsError: errorText(error) }); return null; }
 }
 export function loadBotsSoon() { clearTimeout(botsTimer); botsTimer = setTimeout(() => { loadBots(); }, 150); }
+// 3.6 (messaging, M2): the Bots zone's chat list (inbox.list: pins, sections, unread, last message), read again when it
+// changes (inbox:changed, a bot's line or state). An Orb that does not answer inbox.list gets the same shape from
+// bots.list (no pins, sections or unread). The changes (pin, mute, sections…) go through inboxAct.
+let inboxTimer = null;
+export async function loadInbox() {
+  try { const inbox = await botCall('inbox.list', { zone: 'bots' }); setState({ inbox }); return inbox; }
+  catch {
+    const b = getState().bots ?? await loadBots();
+    const inbox = fallbackInbox(b?.bots ?? [], b?.groups ?? [], getState().botStates ?? {});
+    setState({ inbox }); return inbox;
+  }
+}
+export function loadInboxSoon(ms = 200) { clearTimeout(inboxTimer); inboxTimer = setTimeout(() => { loadInbox(); }, ms); }
+export async function inboxAct(method, params, okText) { const r = await act(botCall(method, params), okText); loadInboxSoon(0); return r; }
+// 3.6 (messaging, M3): the Orb zone's chat list (inbox.list zone «orb»: pins, mutes, unread and the last line of each
+// conversation with Orbe). Always this Orb's (the conversations live here, never on a linked server). An Orb without
+// inbox.list leaves it empty: the list is then made from the conversations alone (lib/inbox.js › orbItems).
+let orbTimer = null;
+export async function loadOrbInbox() {
+  try { const orbInbox = await call('inbox.list', { zone: 'orb' }); setState({ orbInbox }); return orbInbox; }
+  catch { setState({ orbInbox: { zone: 'orb', items: [], sections: [], unread: 0, fallback: true } }); return null; }
+}
+export function loadOrbInboxSoon(ms = 200) { clearTimeout(orbTimer); orbTimer = setTimeout(() => { loadOrbInbox(); }, ms); }
+export async function orbAct(method, params, okText) { const r = await act(call(method, params), okText); loadOrbInboxSoon(0); return r; }
+// The info pane of the Orb zone (views/orb/info.jsx): { type: 'chat' } (the conversation on screen) or { type: 'project',
+// name }; null: closed.
+export const openOrbInfo = (info) => setState({ orbInfo: info });
+export const closeOrbInfo = () => setState({ orbInfo: null });
 export function botStateChanged(p) {
   if (p?.bot == null) return;
   setState((s) => ({ botStates: { ...(s.botStates ?? {}), [p.bot]: p } }));
 }
 
+// 3.6 «Personas»: who is using this window or device (persons.me: { person, role, rights, personsCount }). An Orb before
+// 3.6 has no persons.me: then it is one person, the owner (nothing of people shows). The server decides what each one
+// sees; this only picks what to draw. What was shared with the caller (shares.list) comes along when there are several.
+export async function loadMe() {
+  let me = null; try { me = await call('persons.me'); } catch { me = null; }
+  let shared = null; let people = [];
+  if (Number(me?.personsCount ?? 1) > 1) {
+    [shared, people] = await Promise.all([call('shares.list').catch(() => null), call('persons.list').catch(() => [])]);
+  }
+  setState({ me, shared, people });
+  return me;
+}
+// A person's name by id (the names everyone may see: persons.list).
+export const personNameOf = (id) => (state.people ?? []).find((p) => p.id === id)?.name ?? '';
 export async function refresh() {
-  const [app, sessions, projects, tasks, conversations] = await Promise.all([call('app.state'), call('sessions.list'), call('projects.list'), call('tasks.list', { limit: 200 }), call('conversations.list')]);
+  // 3.6: this PC's window locked (persons.lock): the engine answers only the lock's minimal app.state.
+  const first = bridge.mobile ? null : await call('app.state');
+  if (first?.locked === true && !first.config) { setState({ locked: first, ready: true }); return; }
+  const [app, sessions, projects, tasks, conversations] = await Promise.all([first ?? call('app.state'), call('sessions.list'), call('projects.list'), call('tasks.list', { limit: 200 }), call('conversations.list'), loadMe()]);
   setState((s) => ({ app, sessions, projects, tasks, conversations, ready: true, version: s.version + 1 })); // version: views refetch their own data when it moves
   // 3.2: the projects' icons, again only when the list of projects changes (or one is set by hand: loadProjectIcons).
   const names = projects.map((p) => p.name).join('|');
@@ -141,7 +189,18 @@ export async function refresh() {
   applyTheme(phoneTheme || app.config.ui?.theme);
   applyAppearance(app.config.ui);
   document.title = app.config.assistantName;
-  document.documentElement.lang = app.config.language === 'en' ? 'en' : 'es';
+  document.documentElement.lang = uiLanguage(getState()) === 'en' ? 'en' : 'es';
+}
+// 3.6: the language of the person at the window (Mi perfil), else the Orb's.
+export const uiLanguage = (s) => (Number(s.me?.personsCount ?? 1) > 1 && s.me?.person?.language) || s.app?.config?.language || 'es';
+// 3.6: someone else sat down (persons.switch / persons.unlock): everything is read again as them; what was on screen
+// (a conversation, a bot) may not be theirs, so the window goes back to the start of its mode.
+export async function personSwitched() {
+  setState({ route: { view: 'chat' }, bots: null, botStates: {}, inbox: null, orbInbox: null, orbInfo: null, settings: null, share: null });
+  try { localStorage.removeItem('orb.route'); localStorage.removeItem(MODES_KEY); } catch { /* storage unavailable */ }
+  await refresh().catch(() => {});
+  if (getState().app?.config) setState({ locked: false });
+  loadBots(); loadInbox(); loadOrbInbox();
 }
 
 let iconsFor = null;

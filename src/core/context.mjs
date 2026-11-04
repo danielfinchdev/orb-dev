@@ -22,11 +22,57 @@ export const isHeadless = () => (ctx.headless ?? process.env.ORB_NUCLEO === '1')
 
 export function useHome(home) {
   ctx.home = home; ctx.paths = paths(home); ctx.config = loadConfig(home);
+  ctx.owner = null; ctx.personStore = null; // 3.6: set when this home's database is opened (db.mjs)
   return ctx;
 }
 
+// ---- 3.6 «Personas»: settings of each person (table person_settings) and the settings' migration.
+// What is each person's own (the rest of orb.json stays global, the owner's). For the owner, a key with no row yet reads
+// where 3.5.1 kept it (legacy), so one person behaves exactly as before; the first write through personSetting makes
+// the row. Keys: language, tz (also columns of persons), preview (notifications on a locked phone), brain (the
+// assistant's agent/model/account), active_project, rules (personal golden rules), protected (personal additions),
+// bots.location, bots_location_asked.
+export const PERSON_KEYS = ['language', 'tz', 'preview', 'brain', 'active_project', 'rules', 'protected', 'bots.location', 'bots_location_asked'];
+const LEGACY = {
+  language: () => ctx.config?.language,
+  preview: () => ctx.config?.mobile?.preview,
+  brain: () => { const o = ctx.config?.orchestrator; return o ? { agent: o.agent ?? 'claude', model: o.model ?? null, account: o.account ?? null } : undefined; },
+  active_project: (store) => store?.prepare("SELECT value FROM settings WHERE key = 'active_project'").get()?.value,
+  'bots.location': () => ctx.config?.bots?.location,
+  bots_location_asked: (store) => { try { return JSON.parse(store?.prepare("SELECT value FROM settings WHERE key = 'bots_location_asked'").get()?.value || 'null') ?? undefined; } catch { return undefined; } }
+};
+// personSetting(pid, key) → the value (parsed JSON) or undefined; personSetting(pid, key, value) saves it (null removes
+// the row). store: a node:sqlite database (default: this home's, opened by db.mjs); a Board passes its own.
+export function personSetting(pid, key, value, store = ctx.personStore) {
+  if (!PERSON_KEYS.includes(key)) throw new Error(`unknown person setting: ${key}`);
+  if (!store) throw new Error('no database for person settings');
+  const id = String(pid ?? ctx.owner ?? '');
+  if (value === undefined) {
+    const row = store.prepare('SELECT value FROM person_settings WHERE person_id = ? AND key = ?').get(id, key);
+    if (row) { try { return JSON.parse(row.value); } catch { return row.value; } }
+    const owner = store.prepare("SELECT id FROM persons WHERE role = 'owner' AND deleted_at IS NULL LIMIT 1").get()?.id;
+    return id === owner ? LEGACY[key]?.(store) ?? undefined : undefined;
+  }
+  if (value === null) store.prepare('DELETE FROM person_settings WHERE person_id = ? AND key = ?').run(id, key);
+  else store.prepare('INSERT INTO person_settings (person_id, key, value) VALUES (?, ?, ?) ON CONFLICT(person_id, key) DO UPDATE SET value = excluded.value').run(id, key, JSON.stringify(value));
+  return value;
+}
+// The accounts and the connectors of orb.json are the owner's (accounts[].person, mcpServers[].person). Only what is
+// missing is filled. Once, at the migration; the file is read again right before (another process may have just saved
+// it). An account or connector without person (added later by older code) is the owner's.
+export function migrateConfigPersons(owner) {
+  if (!owner || !ctx.paths?.config || !fs.existsSync(ctx.paths.config)) return false;
+  let raw; try { raw = JSON.parse(fs.readFileSync(ctx.paths.config, 'utf8')); } catch { return false; }
+  const missing = (list) => Array.isArray(list) && list.some((x) => x && typeof x === 'object' && !x.person);
+  const stamp = (list) => (Array.isArray(list) ? list.map((x) => (x && typeof x === 'object' && !x.person ? { ...x, person: owner } : x)) : list);
+  if (!missing(raw.accounts) && !missing(raw.mcpServers)) return false;
+  writeJson(ctx.paths.config, { ...raw, ...(raw.accounts ? { accounts: stamp(raw.accounts) } : {}), ...(raw.mcpServers ? { mcpServers: stamp(raw.mcpServers) } : {}) });
+  if (ctx.config) ctx.config = { ...ctx.config, accounts: stamp(ctx.config.accounts ?? []), mcpServers: stamp(ctx.config.mcpServers ?? []) };
+  return true;
+}
+
 // Settings saved from the app. Only known top-level keys are accepted.
-const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'monitor', 'oneAtATime', 'approvalWaitMinutes', 'bots', 'role', 'devTarget', 'protected'];
+const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'monitor', 'oneAtATime', 'approvalWaitMinutes', 'bots', 'role', 'devTarget', 'protected', 'backup', 'tz'];
 export function saveConfig(patch) {
   const unknown = Object.keys(patch ?? {}).filter((k) => !EDITABLE.includes(k));
   if (unknown.length) throw new Error(tr('msg.ctx.unknownSettings', { unknown: unknown.join(', ') }));
@@ -76,7 +122,7 @@ export function validateConfig(c) {
   if (!AGENT_IDS.includes(brain)) throw new Error(tr('msg.ctx.missingAgentCfg', { id: brain }));
   if (brain === 'claude' && !o.models.some((m) => m.id === o.model) && !/^(sonnet|opus|haiku)$/.test(o.model ?? '')) throw new Error(tr('msg.ctx.assistantModelOneOf', { labels: o.models.map((m) => m.label).join(', ') }));
   if (brain !== 'claude' && o.model && !/^[A-Za-z0-9][\w.:\-/[\]=,@]{0,79}$/.test(o.model)) throw new Error(tr('msg.ctx.badModels', { id: brain }));
-  if (!['low', 'medium', 'high'].includes(o.reasoning)) throw new Error(tr('msg.ctx.badReasoning'));
+  if (!['low', 'medium', 'high', 'xhigh'].includes(o.reasoning)) throw new Error(tr('msg.ctx.badReasoning'));
   if (typeof o.orchestrate !== 'boolean') throw new Error(tr('msg.ctx.orchestrateBool'));
   int(o.maxTurns, 2, 200, 'maxTurns');
   if (o.parallel !== undefined) int(o.parallel, 1, 6, 'parallel'); // 3.2: conversations answered at the same time
@@ -124,7 +170,8 @@ export function validateConfig(c) {
   bool(c.monitor?.shareWithOce, 'monitor.shareWithOce'); // 2.7: the bridge with Open Control Edge (on unless turned off)
   if (c.monitor?.agent != null && !AGENT_IDS.includes(c.monitor.agent)) throw new Error(tr('msg.ctx.badAppearance', { name: 'monitor.agent' }));
   if (c.monitor?.model != null && (typeof c.monitor.model !== 'string' || c.monitor.model.length > 80)) throw new Error(tr('msg.ctx.badAppearance', { name: 'monitor.model' })); // 2.7: Orb chooses each task's model (true / missing) or the agents' defaults
-  bool(c.ui?.tourDone, 'ui.tourDone'); // 2.6: the guided tour was seen (or skipped) in this assistant folder
+  bool(c.ui?.tourDone, 'ui.tourDone');
+  bool(c.ui?.recoveryNoticed, 'ui.recoveryNoticed'); // 3.6: the one notice about the recovery code was shown // 2.6: the guided tour was seen (or skipped) in this assistant folder
   if (c.delegation?.maxPerTask !== undefined) int(c.delegation.maxPerTask, 0, 20, 'delegation.maxPerTask');
   // 3.1: «Una tarea cada vez» (no parallel work, not even in isolated copies) and how long a task's permission waits for
   // an answer before it is denied (0 = for ever).
@@ -141,6 +188,14 @@ export function validateConfig(c) {
   }
   // 3.5: «Cosas que nadie toca»: up to 50 names, paths or containers (2-200 characters each).
   if (c.protected !== undefined && (!Array.isArray(c.protected) || c.protected.length > 50 || c.protected.some((x) => typeof x !== 'string' || x.trim().length < 2 || x.length > 200))) throw new Error(tr('msg.ctx.badAppearance', { name: 'protected' }));
+  // 3.6: backups (src/core/backup.mjs): on/off, another folder (absolute), and whether project folders and the agents'
+  // login folders go in too (both off). tz: this Orb's time zone until each person has their own (src/core/tz.mjs).
+  if (c.backup !== undefined) {
+    if (!c.backup || typeof c.backup !== 'object' || Array.isArray(c.backup)) throw new Error(tr('msg.ctx.badAppearance', { name: 'backup' }));
+    bool(c.backup.enabled, 'backup.enabled'); bool(c.backup.projects, 'backup.projects'); bool(c.backup.accounts, 'backup.accounts');
+    if (c.backup.folder !== undefined && c.backup.folder !== '' && (typeof c.backup.folder !== 'string' || !path.isAbsolute(c.backup.folder) || c.backup.folder.length > 500)) throw new Error(tr('msg.ctx.badAppearance', { name: 'backup.folder' }));
+  }
+  if (c.tz !== undefined && c.tz !== '' && !(typeof c.tz === 'string' && c.tz.length <= 64 && (() => { try { new Intl.DateTimeFormat('en', { timeZone: c.tz }); return true; } catch { return false; } })())) throw new Error(tr('msg.ctx.badAppearance', { name: 'tz' }));
   if (c.approvalWaitMinutes !== undefined) int(c.approvalWaitMinutes, 0, 240, 'approvalWaitMinutes');
   if (c.budget?.stopAt != null && !(Number(c.budget.stopAt) >= 0.5 && Number(c.budget.stopAt) <= 1)) throw new Error(tr('msg.ctx.stopAt'));
   if (c.budget?.profile != null && ![0, 1, 2, 3, 4].includes(c.budget.profile)) throw new Error(tr('msg.ctx.profile'));

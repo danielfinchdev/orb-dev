@@ -93,3 +93,12 @@ export function pickBridge({ hasOrb = false, native = false } = {}) {
   if (hasOrb) return 'electron';
   return native ? 'app' : 'web';
 }
+
+// 3.6: the protocol of the page and the Android app (the Orb's own is src/core/link.mjs › PROTOCOL). /api/me says the
+// oldest client the Orb still serves (min): a page or an app older than that is asked to update.
+export const PROTOCOL = 3;
+// → null (fine) or { has, need } (the protocols: this client's and the one the Orb needs).
+export function updateNeeded(me, mine = PROTOCOL) {
+  const need = Number(me?.min);
+  return Number.isFinite(need) && need > mine ? { has: mine, need } : null;
+}

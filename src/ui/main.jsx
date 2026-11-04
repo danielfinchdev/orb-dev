@@ -2,14 +2,15 @@
 import './lib/app-bridge.js'; // first: in the Android app it tells the web bridge where the linked Orb is
 import './lib/web-bridge.js'; // then: in a phone's browser (or the app) it provides window.orb
 import './app.css';
+// 3.6: the Android app's «glass» look, only in the Android build (the other builds drop this line and its CSS).
+if (import.meta.env.MODE === 'android') (await import('./lib/glass.js')).enableGlass();
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Toaster } from 'sonner';
 import { notify } from '@/lib/notify.js';
-import { Menu, Smartphone, MessagesSquare, ScanLine, Link2 } from 'lucide-react';
+import { Menu, Smartphone, ScanLine, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
-import { PageHeader } from '@/components/page.jsx';
 import { MobileTabs, MoreView } from '@/components/mobile-tabs.jsx';
 import { TooltipProvider } from '@/components/ui/overlay.jsx';
 import { DialogHost } from '@/components/dialogs.jsx';
@@ -22,7 +23,8 @@ import { ActionShortcuts } from '@/components/project-tools.jsx';
 import { Scene } from '@/components/scene.jsx';
 import { GamesDialog } from '@/games/games.jsx';
 import { Robot } from '@/components/robot.jsx';
-import { useStore, setState, getState, refresh, refreshSoon, bridge, go, applyTheme, openTerminal, startTour, anyChatBusy, phoneLayout, modeOf, modeHome, loadBotsSoon, botStateChanged, loadCentro, botsVia } from '@/lib/store.js';
+import { avatarEvent } from '@/lib/avatar-pulse.js';
+import { useStore, setState, getState, refresh, refreshSoon, bridge, go, applyTheme, openTerminal, startTour, anyChatBusy, phoneLayout, modeOf, modeHome, loadBotsSoon, botStateChanged, loadCentro, botsVia, loadInbox, loadInboxSoon, loadOrbInbox, loadOrbInboxSoon } from '@/lib/store.js';
 import { Tour } from '@/components/tour.jsx';
 import { AGENT } from '@/lib/labels.js';
 import { WindowControls } from '@/components/window-controls.jsx';
@@ -41,19 +43,32 @@ import { TutorialsView } from '@/views/tutorials.jsx';
 import { WhiteboardView } from '@/views/whiteboard.jsx';
 import { MonitorView } from '@/views/monitor.jsx';
 import { BotChatView } from '@/views/bots/chat.jsx';
+import { BotChatsView } from '@/views/bots/inbox.jsx';
+import { NewGroupHost } from '@/views/bots/new-group.jsx';
 import { BotsView } from '@/views/bots/list.jsx';
 import { BotGroupsView, BotRemindersView, BotMemoryView, BotHomeView, BotServerView, BotSettingsView } from '@/views/bots/more.jsx';
 import { MagicLinkView } from '@/views/magic-link.jsx';
-import { ModeSwitch } from '@/components/mode-switch.jsx';
+import { OrbChatsView } from '@/views/orb/inbox.jsx';
+import { OrbInfoHost } from '@/views/orb/info.jsx';
 import { TallerBanner } from '@/components/taller-banner.jsx';
+// 3.6 «Personas»
+import { LockScreen, PhoneLock, UpdateNeeded } from '@/components/lock-screen.jsx';
+import { NoteOpener } from '@/lib/notes.js';
+import { ShareHost } from '@/components/share-dialog.jsx';
+import { ProfileView } from '@/views/persons.jsx';
+import { RecoveryNotice } from '@/views/data.jsx';
+import { personSwitched } from '@/lib/store.js';
 
 const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
 // 2.7, the phone: the conversations («Chats») and «Más» are screens of their own; Agentes and Modo experto are PC only.
-function ChatsView() { const t = useT(); return <><PageHeader icon={<MessagesSquare className="text-primary size-5" />} title={t('nav.chats')} /><Sidebar page /></>; }
+// 3.6 (M3): «Chats» is the Orb zone's chat list (views/orb/inbox.jsx); the PC has it in the sidebar.
+const ChatsView = OrbChatsView;
 // 3.5: the screens of the Bots mode (both layouts) and Magic Link as a screen of a linked device.
-const BOT_SCREENS = { 'bot-chat': BotChatView, 'bot-group': BotChatView, bots: BotsView, 'bot-groups': BotGroupsView, 'bot-reminders': BotRemindersView, 'bot-memory': BotMemoryView, 'bot-home': BotHomeView, 'bot-server': BotServerView, 'bot-settings': BotSettingsView };
+// 3.6 (M2): «bot-chats» is the phone's chat list (the PC has it beside: there it opens the last chat).
+function BotChatsScreen({ route }) { return phoneLayout() ? <BotChatsView /> : <BotChatView route={{ view: 'bot-chat' }} key={route.view} />; }
+const BOT_SCREENS = { 'bot-chats': BotChatsScreen, 'bot-chat': BotChatView, 'bot-group': BotChatView, bots: BotsView, 'bot-groups': BotGroupsView, 'bot-reminders': BotRemindersView, 'bot-memory': BotMemoryView, 'bot-home': BotHomeView, 'bot-server': BotServerView, 'bot-settings': BotSettingsView };
 const VIEWS = bridge.mobile
-  ? { ...BOT_SCREENS, link: MagicLinkView, chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
+  ? { ...BOT_SCREENS, link: MagicLinkView, chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, profile: ProfileView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
   : { ...BOT_SCREENS, chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView,
     // 2.7.3: Orb Light (the portable .exe) has no God mode nor PC Status.
     ...(bridge.light ? {} : { expert: ExpertView, monitor: MonitorView }) };
@@ -63,17 +78,22 @@ function MobileShell() {
   const route = useStore((s) => s.route);
   const View = VIEWS[route.view] ?? ChatView;
   const bots = modeOf(route) === 'bots';
+  // 3.6 (M2): a conversation of the Bots zone takes the whole screen (with its back arrow); the tabs are on the list.
+  // 3.6 (M3): the same for the Orb zone's (with Orbe, new or not, or directly with an agent).
+  const fullChat = ((route.view === 'bot-chat' || route.view === 'bot-group') && route.id != null) || route.view === 'chat' || route.view === 'session';
   return (
-    <div className="flex h-full flex-col">
-      {/* 3.5: «Orb | Bots» at the top; in Orb mode, how the PC that does the work is (when linked with the server). */}
-      <div className="mobile-mode bg-sidebar shrink-0 border-b px-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2"><ModeSwitch className="mx-auto max-w-xs" /></div>
+    <div className="mobile-shell flex h-full flex-col">
+      {/* 3.6: no «Orb | Bots» bar on top: it lives in the menu ☰ of each screen's bar (components/mobile-menu.jsx). */}
       {bots ? null : <TallerBanner />}
       <main className="theme-scene flex min-h-0 min-w-0 flex-1 flex-col">
         <Scene />
         <View key={`${route.view}:${route.id ?? ''}:${route.project ?? ''}`} route={route} />
       </main>
-      <MobileTabs />
+      {fullChat ? null : <MobileTabs />}
       <Notices />
+      <ShareHost />
+      <NewGroupHost />
+      <OrbInfoHost />
     </div>
   );
 }
@@ -112,16 +132,20 @@ function Shell() {
         <Scene />
         <div className="topbar theme-band app-titlebar wco-pad bg-sidebar flex h-14 shrink-0 items-center gap-2 border-b px-3 md:hidden">
           <button className="hover:bg-accent grid size-9 cursor-pointer place-items-center rounded-lg" onClick={() => setDrawer(true)} aria-label={t('app.menu')}><Menu className="size-5" /></button>
-          <Robot size={26} mood={mood} /><span className="truncate text-[15px] font-medium">{app.config.assistantName}</span>
+          <Robot size={26} mood={mood} /><span className="min-w-0 flex-1 truncate text-[15px] font-medium">{app.config.assistantName}</span>
         </div>
         {bridge.mobile && modeOf(route) !== 'bots' ? <TallerBanner /> : null}
         <View key={`${route.view}:${route.id ?? ''}:${route.project ?? ''}`} route={route} />
       </main>
+      {/* 3.6 (M3): the Orb zone's info pane on the right (a chat, a project). */}
+      {modeOf(route) === 'orb' ? <OrbInfoHost /> : null}
       {/* The floating robot only where there is room for it: never over forms or conversations (it covered the switches of
           Ajustes and took their clicks), and those views leave room at the bottom so nothing stays under it. */}
       {/* 3.5: a browser linked with an Orb gets the PC's layout, not what only the PC itself does. */}
-      {bridge.mobile ? null : <><UpdateCard /><SettingsDialog /><GamesDialog /></>}
+      {bridge.mobile ? null : <><UpdateCard /><SettingsDialog /><GamesDialog /><RecoveryNotice /></>}
       <Notices />
+      <ShareHost />
+      <NewGroupHost />
       {bridge.mobile ? null : <ActionShortcuts project={shortcutProject} />}
       <div className="hidden md:contents"><Companion name={app.config.assistantName} base={mood} hidden={app.config.ui?.companion === false || !COMPANION_VIEWS.has(route.view) || bridge.mobile || Boolean(tour)} /></div>
       {tour ? <Tour key={tour.key} /> : null}
@@ -132,6 +156,7 @@ function Shell() {
 function Root() {
   const t = useT();
   const ready = useStore((s) => s.ready);
+  const locked = useStore((s) => s.locked);
   const [phase, setPhase] = useState('loading'); // loading | setup | app | error
   const [error, setError] = useState('');
   useEffect(() => {
@@ -141,6 +166,8 @@ function Root() {
       setState({ info });
       if (info.needsSetup) return alive && setPhase('setup');
       if (info.needsPairing) return alive && setPhase('pair');
+      // 3.6: this app is older than what the Orb asks for (protocol of the link): update first.
+      if (info.needsUpdate) return alive && setPhase('update');
       // The engine may still be starting: retry for a few seconds.
       for (let i = 0; i < 40 && alive; i++) {
         try {
@@ -149,11 +176,14 @@ function Root() {
             const saved = JSON.parse(localStorage.getItem('orb.route') || 'null');
             const exists = saved?.view === 'session' ? getState().sessions.some((s) => s.id === saved.id) : saved?.view === 'chat' && saved.id != null ? getState().conversations.some((c) => c.id === saved.id) : true;
             if (saved?.view && VIEWS[saved.view] && exists) setState({ route: saved });
+            // 3.6 (M3): the phone opens on the Orb zone's chat list (or where it was left).
+            else if (phoneLayout()) setState({ route: { view: 'chats' } });
             // 3.5: the PC opens in the mode it was left in (Ajustes of the assistant's folder: ui.mode).
             const mode = getState().app?.config?.ui?.mode;
             if (!bridge.mobile && (mode === 'bots' || mode === 'orb') && modeOf(getState().route) !== mode) setState({ route: modeHome(mode) });
           } catch { /* default */ }
           loadCentro();
+          loadInbox(); loadOrbInbox(); // 3.6 (M2, M3): the unread badges show in both zones
           return setPhase('app');
         } catch (e) { setError(String(e?.message ?? e)); await new Promise((r) => setTimeout(r, 250)); }
       }
@@ -196,8 +226,19 @@ function Root() {
       // 3.5: the bots, here or on the server this PC is linked with.
       const local = !event.startsWith('centro:');
       const name = local ? event : event.slice(7);
-      if (name.startsWith('bot.') && local === !botsVia()) { if (name === 'bot.state') botStateChanged(payload); else if (name === 'bot.updated') loadBotsSoon(); }
+      if (name.startsWith('bot.') && local === !botsVia()) {
+        if (name === 'bot.state') botStateChanged(payload); else if (name === 'bot.updated') loadBotsSoon(); else if (name === 'bot.message') avatarEvent(payload);
+        // 3.6 (M2): the chat list follows: a new line, a bot that starts or stops, a bot changed.
+        if (name !== 'bot.state' || !payload?.partial) loadInboxSoon(name === 'bot.state' ? 400 : 200);
+      }
+      if (event === 'inbox:changed') { loadInboxSoon(120); loadOrbInboxSoon(120); }
+      // 3.6 (M3): the Orb zone's list follows what its conversations do (a new line comes with inbox:changed).
+      if (event === 'chat:state' && !payload?.partial) loadOrbInboxSoon(400);
       if (event === 'link:peers') loadCentro();
+      // 3.6 «Personas»: someone else at this PC, the window locked or unlocked, the people changed.
+      if (event === 'persons:switched') personSwitched();
+      if (event === 'persons:locked') setState((st) => ({ locked: st.locked || { locked: true } })); // keeps «Cambiar de usuario»
+      if (event === 'persons:unlocked' && getState().locked) refresh().then(() => { if (getState().app?.config) setState({ locked: false }); }).catch(() => {});
       if (event === 'engine:stopped') notify({ body: tNow('app.engineStopped'), tone: 'error' });
       if (event === 'engine:restarted') { notify({ body: tNow('app.engineRestarted'), tone: 'warning' }); refreshSoon(); }
     });
@@ -216,9 +257,12 @@ function Root() {
       </div>
     </div>
   );
+  if (phase === 'update') return <>{strip}<UpdateNeeded info={getState().info} /></>;
+  if (phase === 'app' && locked) return <LockScreen />;
   if (phase === 'error') return <div className="grid h-full place-items-center p-8 text-center">{strip}<div><Robot size={90} mood="worried" /><h1 className="mt-4 text-xl">{t('app.errorTitle')}</h1><p className="text-muted-foreground mt-1 max-w-md text-sm">{error}</p></div></div>;
   if (phase !== 'app' || !ready) return <div className="grid h-full place-items-center">{strip}<Robot size={80} mood="thinking" /></div>;
-  return <Shell />;
+  // 3.6 (M4): a tapped notification opens its chat once the phone is unlocked (lib/notes.js).
+  return bridge.mobile ? <PhoneLock><NoteOpener /><Shell /></PhoneLock> : <Shell />;
 }
 
 // 3.5, the Android app: link it with an Orb by scanning its QR (Ajustes › Móvil), or by hand when the camera cannot.

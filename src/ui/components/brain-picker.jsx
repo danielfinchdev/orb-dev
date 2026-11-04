@@ -3,11 +3,11 @@
 import { useEffect, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Flame, Lightbulb, Star, X } from 'lucide-react';
 import { AgentIcon } from './agent-icon.jsx';
+import { BrainIcon } from './brain-icon.jsx';
 import { Button } from './ui/button.jsx';
-import { Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, BubbleTip } from './ui/overlay.jsx';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, BubbleTip } from './ui/overlay.jsx';
 import { call, useStore } from '@/lib/store.js';
 import { notify } from '@/lib/notify.js';
-import { REASONING, options } from '@/lib/labels.js';
 import { prettyModel } from '@/lib/tools.js';
 import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
@@ -46,7 +46,8 @@ export function BrainPicker({ catalog, value, onChange, className }) {
   const agent = catalog?.find((a) => a.id === value.agent);
   const model = modelOf(catalog, value);
   // On the button, the agent's default reads as the model it stands for (Codex · GPT-6-Luna), without «Predeterminado».
-  const label = model && agent ? (model.id === '' && model.defaultOf ? model.defaultOf : labelOf(agent, model, t)) : (value.model || t('brain.defaultModel'));
+  // 3.6: with no model chosen and none the agent names, just the agent («Claude»), never «predeterminado».
+  const label = !value.model ? (model?.defaultOf ?? '') : model && agent ? labelOf(agent, model, t) : modelLabel(catalog, value.agent, value.model);
   // 3.1: with several accounts of one agent (Codex Go and Codex Pro), the button names the account in use.
   const who = agent?.accounts?.length > 1 ? agent.accounts.find((x) => x.id === value.account)?.label ?? agent.label : agent?.label;
   return (
@@ -55,7 +56,8 @@ export function BrainPicker({ catalog, value, onChange, className }) {
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm" className={cn('max-w-64 gap-1.5', className)} data-testid="brain-picker" aria-label={t('brain.title')}>
             <AgentIcon agent={value.agent} className="size-4" />
-            <span className="truncate">{who ?? value.agent} · {label}</span>
+            {/* 3.6: on a phone, the model only (the icon says the agent), so the row stays on one line. */}
+            <span className="truncate">{label ? <><span className="max-sm:hidden">{who ?? value.agent} · </span>{label}</> : <span className="max-sm:hidden">{who ?? value.agent}</span>}</span>
             <ChevronDown className="size-3.5 opacity-60" />
           </Button>
         </DropdownMenuTrigger>
@@ -131,9 +133,58 @@ function BrainGroups({ catalog, value, onChange }) {
   </>);
 }
 
-export function ReasoningPicker({ value, onChange }) {
+// 3.6: the reasoning levels Orb offers; «Extra» (xhigh) only for the models whose agent says they take it.
+export const REASONING_LEVELS = ['low', 'medium', 'high', 'xhigh'];
+const USUAL_LEVELS = ['low', 'medium', 'high'];
+export function levelsFor(catalog, value) {
+  const m = modelOf(catalog, value);
+  return m?.efforts?.length ? REASONING_LEVELS.filter((l) => m.efforts.includes(l)) : USUAL_LEVELS;
+}
+
+// 3.6 (DESIGN-SYSTEM §2.2): the reasoning as a brain button that opens Bajo · Medio · Alto · Extra (the levels the model
+// takes), the current one ticked. Each option says its relative usage under its name and, on hover, the usual tasks for
+// it. value: { agent, model, account, reasoning }; levels: to give the list instead of reading it from the catalog.
+export function ReasoningMenu({ catalog, value, onChange, levels, disabled }) {
   const t = useT();
-  return <Select size="sm" value={value} onValueChange={onChange} title={t('brain.reasoning')} options={options(REASONING).map((o) => ({ ...o, label: `${t('brain.reasoningShort')}: ${o.label.toLowerCase()}` }))} data-testid="reasoning-picker" />;
+  const list = levels ?? levelsFor(catalog, value);
+  const current = list.includes(value.reasoning) ? value.reasoning : value.reasoning === 'xhigh' ? 'high' : (value.reasoning ?? 'medium');
+  const name = t(`reasoning.${current}`);
+  return (
+    <DropdownMenu>
+      <BubbleTip title={t('reasoning.title', { level: name })} text={t('reasoning.titleText')} side="top">
+        <DropdownMenuTrigger asChild>
+          {/* 3.6: a pill with the brain and the chosen level («Alto»), as tall as the model picker. */}
+          <Button variant="outline" size="sm" className="shrink-0 gap-1.5" disabled={disabled} aria-label={t('reasoning.title', { level: name })} data-testid="reasoning-picker" data-level={current}>
+            <BrainIcon className="size-4" /><span data-testid="reasoning-level">{name}</span>
+          </Button>
+        </DropdownMenuTrigger>
+      </BubbleTip>
+      <DropdownMenuContent align="start" side="top" className="w-48" onCloseAutoFocus={(e) => e.preventDefault()} data-testid="reasoning-menu">
+        <DropdownMenuLabel>{t('brain.reasoning')}</DropdownMenuLabel>
+        {list.map((level) => (
+          // The bubble right next to the option: what it suits and, once, how much it uses.
+          <BubbleTip key={level} title={t(`reasoning.${level}`)} text={`${t(`reasoning.tasks.${level}`)} ${t(`reasoning.use.${level}`)}.`} side="right" align="center" offset={10}>
+            <DropdownMenuItem onSelect={() => onChange(level)} data-testid={`reasoning-${level}`} data-selected={current === level || undefined}>
+              <span className="min-w-0 flex-1">{t(`reasoning.${level}`)}</span>
+              <UsageMeter level={level} />
+              <Check className={cn('text-primary!', current === level ? null : 'invisible')} />
+            </DropdownMenuItem>
+          </BubbleTip>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// 3.6: four small bars, as many filled as the level uses (Bajo 1 … Extra 4); the words are in the option's bubble.
+const METER = { low: 1, medium: 2, high: 3, xhigh: 4 };
+function UsageMeter({ level }) {
+  const n = METER[level] ?? 2;
+  return (
+    <span className="flex h-3 items-end gap-[2px]" aria-hidden="true" data-testid="reasoning-meter" data-bars={n}>
+      {[0, 1, 2, 3].map((i) => <span key={i} className={cn('w-[3px] rounded-[1px]', i < n ? 'bg-primary' : 'bg-muted-foreground/25')} style={{ height: `${5 + i * 2.3}px` }} />)}
+    </span>
+  );
 }
 
 // 3.2: why the account may run out soon (or null). Only from its real usage (what the agent reports): 75 % or more, or

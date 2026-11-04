@@ -12,11 +12,14 @@ export function initials(name) {
   return text.toUpperCase();
 }
 
-export function ProjectIcon({ name, className }) {
+// 3.6 (M3): size: in px, for the bigger ones (the chat list, a project's info); the .project-icon rule is not a utility,
+// so a size class would not win over it.
+export function ProjectIcon({ name, className, size }) {
   const icon = useStore((s) => s.projectIcons?.[name] ?? null);
   if (!name) return null;
-  if (icon) return <img src={icon} alt="" aria-hidden="true" draggable={false} className={cn('project-icon is-image', className)} />;
+  const dims = size ? { width: size, height: size, fontSize: Math.max(7, Math.round(size * 0.38)), borderRadius: Math.round(size * 0.3) } : null;
+  if (icon) return <img src={icon} alt="" aria-hidden="true" draggable={false} className={cn('project-icon is-image', className)} style={dims ?? undefined} />;
   return (
-    <span className={cn('project-icon', className)} style={{ '--pi-hue': HUES[hash(name) % HUES.length] }} aria-hidden="true">{initials(name)}</span>
+    <span className={cn('project-icon', className)} style={{ '--pi-hue': HUES[hash(name) % HUES.length], ...dims }} aria-hidden="true">{initials(name)}</span>
   );
 }

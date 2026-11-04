@@ -6,9 +6,12 @@ const STATUS_KEYS = { queued: 'term.task.queued', running: 'term.task.running', 
 
 export function roleLabel(role, t) { return role === 'centro' ? t('term.role.centro') : role === 'taller' ? t('term.role.taller') : t('term.role.todo'); }
 
-export function statusView({ peer, st, taller }, { t, p }) {
+export function statusView({ peer, st, taller, me = null }, { t, p }) {
   const out = [];
   out.push(`${p.bold(st?.name ?? peer.name)} ${p.dim(`· ${roleLabel(st?.role ?? peer.role, t)} · ${peer.url}`)}`);
+  // 3.6: whom this terminal is for there.
+  const who = me?.person?.name ?? peer.remotePerson?.name;
+  if (who) out.push(`  ${t('term.tui.connectedAs', { name: who })}`);
   out.push(`  ${p.green('●')} ${t('term.status.linked', { when: ago(peer.linkedAt, t) })}`);
   const devices = st?.devices ?? [];
   out.push(`  ${t('term.status.devices', { n: devices.length, on: devices.filter((d) => d.online).length })}`);
@@ -30,7 +33,7 @@ export function devicesView(devices, { t, p }) {
 
 export function linksView(peers, current, { t, p }) {
   if (!peers.length) return t('term.links.none');
-  return peers.map((x, i) => `  ${i + 1}. ${x.revoked ? p.red('×') : x.online ? p.green('●') : p.gray('○')} ${p.bold(x.name)} ${p.dim(`· ${roleLabel(x.role, t)} · ${x.url}${x.revoked ? ` · ${t('term.links.closed')}` : ''}${x.id === current ? ` · ${t('term.links.current')}` : ''}`)}`).join('\n');
+  return peers.map((x, i) => `  ${i + 1}. ${x.revoked ? p.red('×') : x.online ? p.green('●') : p.gray('○')} ${p.bold(x.name)} ${p.dim(`· ${roleLabel(x.role, t)} · ${x.url}${x.remotePerson?.name ? ` · ${t('term.links.as', { name: x.remotePerson.name })}` : ''}${x.revoked ? ` · ${t('term.links.closed')}` : ''}${x.id === current ? ` · ${t('term.links.current')}` : ''}`)}`).join('\n');
 }
 
 export function tasksView(tasks, { t, p, width = 80 }) {

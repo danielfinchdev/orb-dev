@@ -52,7 +52,7 @@ export default {
   'agents.check': 'Comprobar',
   'agents.modelsSettings': 'Modelos y ajustes',
   'agents.defaultModel': 'Modelo predeterminado',
-  'agents.defaultModelHint': 'Se usa en sus chats directos. En las tareas, solo si desactivas «Orb elige el modelo de cada tarea» (Ajustes › Tareas y usos).',
+  'agents.defaultModelHint': 'Se usa en sus chats directos. En las tareas, solo si desactivas «Orb elige el modelo de cada tarea» (Ajustes › Agentes y uso).',
   'agents.defaultOfAgent': 'El predeterminado del agente',
   'agents.strengths': 'Puntos fuertes',
   'agents.strengthsHint': 'El asistente los tiene en cuenta para repartir el trabajo.',
