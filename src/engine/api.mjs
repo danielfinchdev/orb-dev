@@ -47,6 +47,7 @@ import { renamePerson } from '../core/persons.mjs';
 import { gatewayMethods } from './api-gateway.mjs';
 import { dataApi, MOVED_OK } from './api-data.mjs';
 import { inboxMethods } from './api-inbox.mjs';
+import { browserMethods } from './api-browser.mjs';
 
 export { fail, str, int, oneOf } from './api-common.mjs';
 // 3.5: what a server without a window (Orb Server) does not do, whatever its role: the PC's development tools (God mode and expert view,
@@ -725,6 +726,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     ...personMethods(shared),
     ...gatewayMethods(shared),
     ...inboxMethods(shared),
+    ...browserMethods(shared), // 3.7 (WS5): «Ver navegador del Server»
     ...data.methods
   };
   // 3.6: the approval cards a person may answer (of their own sessions and tasks, and those of projects shared with them).

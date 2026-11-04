@@ -452,7 +452,19 @@ for (const set of [PHONE_SET, ORB_SET, CONSOLE_SET]) for (const m of [...INBOX_M
 for (const set of [ORB_SET, CONSOLE_SET]) for (const m of ['bots.groups.members.add', 'bots.groups.members.remove']) set.add(m);
 BOTS_OWNER.push('bots.groups.members.add', 'bots.groups.members.remove');
 
-export const POLICY = Object.freeze({ ...CORE, ...GATEWAY, ...ORBMODE, ...BOTSP, ...DATA, ...INBOX, ...UI });
+// ======== 3.7 · WS5 Orb Server's browser: «Ver navegador del Server» (src/engine/api-browser.mjs). Each person views and
+// uses only their own browser profile: a person named on purpose that is not the caller is refused, even for the owner
+// (the method audits every start and every refusal). From any screen of the person (phone, browser, app linked to the
+// Server).
+const ownProfile = (board, principal, params) => (params.person == null || params.person === '' || params.person === principal.person ? true : 'notYours');
+const BROWSERP = {
+  'browser.live.start': { check: ownProfile },
+  'browser.live.input': { public: true }, // the method checks the view is the caller's (person and device)
+  'browser.live.stop': { public: true }
+};
+for (const set of [PHONE_SET, ORB_SET, CONSOLE_SET]) for (const m of Object.keys(BROWSERP)) set.add(m);
+
+export const POLICY = Object.freeze({ ...CORE, ...GATEWAY, ...ORBMODE, ...BOTSP, ...DATA, ...INBOX, ...UI, ...BROWSERP });
 export const policyOf = (method) => {
   const m = String(method);
   if (Object.hasOwn(POLICY, m)) return POLICY[m];
@@ -516,7 +528,9 @@ const EVENTS_DATA = { 'backup:done': 'owner', 'backup:restoreReady': 'owner', 'd
 // 3.6 (messaging lists): a chat of someone's list changed (a new line, a pin, read): only that person, ids only.
 const EVENTS_INBOX = { 'inbox:changed': (p) => (p?.person ? { person: p.person } : 'owner') };
 const EVENTS_UI = {};
-export const EVENTS = Object.freeze({ ...EVENTS_CORE, ...EVENTS_GATEWAY, ...EVENTS_ORBMODE, ...EVENTS_BOTSP, ...EVENTS_DATA, ...EVENTS_INBOX, ...EVENTS_UI });
+// 3.7 (WS5): the live view's pictures and state: only the person whose browser it is (remote.mjs: only to that device).
+const EVENTS_BROWSER = { 'browser:live': (p) => (p?.person ? { person: p.person } : 'owner'), 'browser:human': (p) => (p?.person ? { person: p.person } : 'owner') };
+export const EVENTS = Object.freeze({ ...EVENTS_CORE, ...EVENTS_GATEWAY, ...EVENTS_ORBMODE, ...EVENTS_BOTSP, ...EVENTS_DATA, ...EVENTS_INBOX, ...EVENTS_UI, ...EVENTS_BROWSER });
 export function eventRule(event) {
   const e = String(event);
   if (Object.hasOwn(EVENTS, e)) return EVENTS[e];

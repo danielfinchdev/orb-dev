@@ -82,6 +82,8 @@ async function start(home, version, secret, browser, headless) {
       const person = d.person ?? ownerOfBoard(board);
       if (d.locked && !LOCK_EVENTS.test(event) && !APP_EVENTS.has(event)) return;
       if (!APP_EVENTS.has(event) && !to(person)) return;
+      // 3.7 (WS5): the live view's pictures only go to the device that opened it.
+      if (event === 'browser:live' && payload?.device !== 'desktop') return;
       // Someone other than the owner at the window: the settings without secrets (as a phone gets them).
       toWindow(event, event === 'config:changed' && person !== ownerOfBoard(board) ? phoneConfig(payload) : payload);
     });
@@ -89,6 +91,8 @@ async function start(home, version, secret, browser, headless) {
     // A workshop passes its live events on to the centre of the person each one is for.
     router.add('link', (event, payload, audience, to) => link?.relay(event, payload, (pid) => to(pid ?? ownerOfBoard(board))));
     router.add('dev', (event, payload, audience, to) => { if (devControl && to(ownerOfBoard(board))) devControl.broadcast(event, payload); });
+    // 3.7 (WS5): Orb Server's own browser closes the pages of a task that ended (the app's does it in its main process).
+    router.add('serverBrowser', (event, payload) => { if (event === 'agentBrowser:closeTask') ctx.serverBrowser?.closeTask(payload?.task); });
   }
   // Only the coordinator's chat process gets this key; the MCP accepts the identity "orb" only with it.
   const orchKey = crypto.randomBytes(24).toString('hex');
@@ -158,6 +162,32 @@ async function start(home, version, secret, browser, headless) {
   sessions.onBlocked = (s, why) => blocked(s?.person_id ?? null, why);
   orchestrator.onBlocked = (c, why) => blocked(c?.person_id ?? null, why);
   remote = remoteRef.current = createRemote({ board, api, log, emit, version });
+  // 3.7 (WS5): Orb Server has no app to draw the agents' pages: its own browser (src/server/browser.mjs), a real Chromium
+  // launched only when a bot needs it. Same pipe and tools as the app's. Not on a PC with the app (ctx.browser is set).
+  if (!ctx.browser && (isHeadless() || process.env.ORB_SERVER_BROWSER === '1') && ctx.config.browser?.enabled !== false && (process.platform === 'linux' || process.env.ORB_SERVER_BROWSER === '1')) {
+    try {
+      const { createServerBrowser } = await import('../server/browser.mjs');
+      const { ownerOfBoard } = await import('../core/authz.mjs');
+      const sb = createServerBrowser({
+        language: () => ctx.config.language, ownerId: () => ownerOfBoard(board), config: () => ctx.config.browser ?? {}, log,
+        root: process.env.ORB_SERVER_BROWSER_DIR || ctx.paths.browser || path.join(os.homedir(), 'orb-server', 'browser'),
+        display: process.env.ORB_SERVER_BROWSER_DISPLAY || ctx.config.browser?.server?.display || 'auto',
+        // «Necesito que lo hagas tú»: a CAPTCHA or a code, to the person whose browser it is (a notice, a push and an
+        // event the app and the phone open the live view with).
+        onHuman: ({ person, kind, url }) => {
+          const site = (() => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; } })();
+          const who = person && !board.isOwnerPerson(person) ? person : null;
+          const body = tr(kind === 'captcha' ? 'msg.browser.human.captcha' : 'msg.browser.human.code', { site });
+          board.notice(body, 'warning', { person: who });
+          emit('browser:human', { person: person ?? ownerOfBoard(board), kind, site, open: 'browser.live' });
+          try { remoteRef.current?.push?.({ title: tr('msg.browser.human.title'), body, person: person ?? ownerOfBoard(board) }); } catch { /* no phones */ }
+        }
+      });
+      await sb.ready;
+      ctx.serverBrowser = sb;
+      ctx.browser = { pipe: sb.pipe, token: sb.token, server: true };
+    } catch (error) { log(`navegador del Server: ${error.message}`); }
+  }
   // 3.5 Magic Link: the links this Orb made to other Orbs (keys sealed with the app's secret). A workshop linked to a
   // centre runs the calls the centre forwards to it, with the same checks as a phone's.
   {
@@ -292,6 +322,7 @@ transport.on(async (msg) => {
   if (msg.type === 'shutdown') {
     // The phone access may have to turn off `tailscale serve` first (a few seconds at most).
     try { api?.shutdown(); } catch { /* closing anyway */ }
+    try { await Promise.race([ctx.serverBrowser?.shutdown(), new Promise((r) => setTimeout(r, 3000))]); } catch { /* closing anyway */ }
     try { bridge?.stop(); } catch { /* closing anyway */ }
     try { devControl?.stop(); } catch { /* closing anyway */ }
     try { link?.stop(); } catch { /* closing anyway */ }

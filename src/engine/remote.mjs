@@ -89,7 +89,9 @@ const EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'notice', 'se
   // 3.5 (bots)
   'bot.updated', 'bot.message', 'bot.state',
   // 3.6 (messaging lists): a chat list changed (only to its person)
-  'inbox:changed']);
+  'inbox:changed',
+  // 3.7 (WS5): «Ver navegador del Server» (its pictures only to the device that opened it) and «Necesito que lo hagas tú»
+  'browser:live', 'browser:human']);
 // 3.5 «Solo Orb»: the server (Orb Server, without a window) has no screen of its own, so a linked phone signs its agents in: it gets the
 // link and the code, and pastes Claude's code back. On a PC the sign-in stays on the PC.
 // (CENTRO_PHONE, in src/core/policy.mjs)
@@ -1074,7 +1076,8 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       const plain = event.startsWith('taller:') ? { e: event.slice(7), p: value.p } : null;
       for (const c of clients) {
         if (!isFor(c.person)) continue;
-        if (c.kind === 'orb' && !(BOT_EVENTS.has(event) && keepsBots())) continue;
+        if (event === 'browser:live' && payload?.device && c.device !== payload.device) continue;
+        if (c.kind === 'orb' && !(BOT_EVENTS.has(event) && keepsBots()) && !event.startsWith('browser:')) continue;
         if (c.res.writableLength > STREAM_BACKLOG) { try { c.res.destroy(); } catch { /* gone */ } clients.delete(c); continue; }
         try {
           c.res.write(`data: ${sealText(c.key, value, AAD.event(c.device))}\n\n`);
