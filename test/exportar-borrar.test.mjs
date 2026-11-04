@@ -52,7 +52,7 @@ board.run('UPDATE conversations SET person_id = ? WHERE id = ?', leo, lconv);
 line(lconv, 'usuario', 'CHAT-PRIVADO-DE-LEO', leo);
 board.run("INSERT INTO devices (id, name, token_hash, created_at, person_id) VALUES ('dev-leo', 'MOVIL-DE-LEO', 'h1', ?, ?)", now(), leo);
 const spend = (pid, usd) => board.run('INSERT INTO usage_ledger (at, day, person_id, account_id, turns, tokens_in, tokens_out, usd) VALUES (?, ?, ?, ?, 1, 10, 20, ?)', now(), now().slice(0, 10), pid, 'claude', usd);
-spend(ana, 1.5); spend(leo, 2.25); spend(leo, 0.25);
+spend(ana, 13.37); spend(leo, 2.25); spend(leo, 0.25);
 
 const dumpDb = () => board.all("SELECT name FROM sqlite_master WHERE type = 'table'").map(({ name }) => JSON.stringify(board.all(`SELECT * FROM "${name}"`))).join('\n');
 const dumpFiles = (skip) => walkFiles(ctx.home, (n, full) => full.startsWith(skip) || n === 'exportaciones').filter((f) => !f.endsWith('.db') && !f.includes(`${path.sep}orb.db`)).map((f) => fs.readFileSync(f, 'utf8')).join('\n');
@@ -65,7 +65,7 @@ test('Leo exports his data: all of Leo, nothing of Ana; nobody exports someone e
   const all = files.map((f) => f.data.toString('utf8')).join('\n');
   for (const want of ['person.json', 'settings.json', 'projects.json', 'usage.csv', 'memoria-global.md', `bots/${leoBot.id}/memoria.md`, `bots/${leoBot.id}/reminders.json`, `bots-shared/${casa.id}/my-memory.md`]) assert.ok(names.includes(want), `falta ${want}`);
   for (const mine of ['NOTA-DE-LEO', 'RECORDATORIO-DE-LEO', 'LEO-EN-CASA', 'GLOBAL-DE-LEO', 'LEO-ESCRIBE', 'RESPUESTA-A-LEO', 'CHAT-PRIVADO-DE-LEO', '2.25']) assert.ok(all.includes(mine), `falta ${mine}`);
-  for (const theirs of ['SECRETO-DE-ANA', 'ANA-EN-BOT-DE-LEO', 'ANA-ESCRIBE', 'respuesta-a-ana', '1.5', 'pin_hash']) assert.ok(!all.includes(theirs), `sobra ${theirs}`);
+  for (const theirs of ['SECRETO-DE-ANA', 'ANA-EN-BOT-DE-LEO', 'ANA-ESCRIBE', 'respuesta-a-ana', '13.37', 'pin_hash']) assert.ok(!all.includes(theirs), `sobra ${theirs}`);
   // The owner cannot take Leo's export; Leo cannot delete Ana.
   await assert.rejects(api.call('data.exportPerson', { id: leo }, asAna), (e) => e instanceof AuthzError);
   await assert.rejects(api.call('data.deletePerson', { id: ana }, asLeo), (e) => e instanceof AuthzError);
