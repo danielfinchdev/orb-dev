@@ -55,6 +55,9 @@ try {
   step = 'vincular';
   const { url } = await call('remote.pair');
   await page.goto(`http://127.0.0.1:${port}/${new URL(url).hash}`);
+  // 3.6 (M3): the phone opens on the Orb zone's chat list; «+» › Nuevo chat.
+  await page.waitForSelector('[data-testid=orb-inbox]');
+  await page.click('[data-testid=chats-new]'); await page.click('[data-testid=new-conversation]');
   await page.waitForSelector('[data-testid=chat-input]');
   const cls = await page.evaluate(() => document.documentElement.className);
   assert.match(cls, /\bglass\b/, 'la app de Android lleva el aspecto de cristal');
@@ -65,7 +68,7 @@ try {
 
   for (scheme of ['light', 'dark']) {
     step = `${scheme}: tema`;
-    await page.evaluate((s) => localStorage.setItem('orb.theme', s === 'dark' ? 'oscuro' : 'claro'), scheme);
+    await page.evaluate((s) => { localStorage.setItem('orb.theme', s === 'dark' ? 'oscuro' : 'claro'); localStorage.removeItem('orb.route'); }, scheme);
     await page.reload();
     await page.waitForSelector('[data-testid=mobile-tabs]');
     assert.equal(await page.evaluate(() => document.documentElement.classList.contains('dark')), scheme === 'dark', `modo ${scheme}`);
@@ -75,9 +78,9 @@ try {
     await page.getByText('Desde el móvil').first().click();
     await page.waitForSelector('[data-testid=chat-input]');
     await shot('01-chat');
+    // 3.6 (M3): a conversation takes the whole screen (no tab bar): at most its bar.
     const rest = await blurred();
     assert.ok(rest.length <= 1, `capas con desenfoque en reposo: ${rest.join(', ')}`);
-    if (!lite) assert.equal(rest.length, 1, 'la barra de pestañas flota con desenfoque');
 
     step = `${scheme}: menú`;
     await page.locator('[data-testid=project-picker]:visible').click();
@@ -87,13 +90,18 @@ try {
     await page.keyboard.press('Escape');
 
     step = `${scheme}: nuevo chat`;
-    await tab('nav-chats');
+    await page.click('[data-testid=chat-back]');
+    await page.waitForSelector('[data-testid=orb-inbox]');
     await shot('03-chats');
-    await page.locator('[data-testid=new-conversation]:visible').click();
+    const list = await blurred();
+    assert.ok(list.length <= 1, `la lista: capas con desenfoque ${list.join(', ')}`);
+    if (!lite) assert.equal(list.length, 1, 'la barra de pestañas flota con desenfoque');
+    await page.click('[data-testid=chats-new]'); await page.locator('[data-testid=new-conversation]:visible').click();
     await page.waitForSelector('[data-testid=chat-greeting]');
     await shot('04-chat-nuevo');
 
     step = `${scheme}: tareas`;
+    await page.click('[data-testid=chat-back]');
     await tab('nav-tasks');
     await page.getByRole('tab', { name: /Todas/ }).click();
     await shot('05-tareas');

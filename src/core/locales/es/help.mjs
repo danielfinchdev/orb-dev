@@ -199,11 +199,9 @@ export default {
   'help.tour.context.title': 'Contexto y uso',
   'help.tour.context.text': 'Este círculo se llena con la conversación. Púlsalo para ver los tokens y el uso de tus planes.',
   'help.tour.bar.title': 'Barra del chat',
-  'help.tour.bar.text': 'Arriba, el título de la conversación y su proyecto. Las notificaciones, pausar las tareas y los minijuegos, a la derecha.',
+  'help.tour.bar.text': 'Arriba, el chat y su proyecto: púlsalo para ver su información (modelo, tareas, exportar…). Las notificaciones, pausar las tareas y los minijuegos, a la derecha.',
   'help.tour.newchat.title': 'Nuevo chat',
-  'help.tour.newchat.text': 'Cada «Nuevo chat» es una conversación propia, con su título y su proyecto. Puedes tener varias a la vez y volver a cualquiera.',
-  'help.tour.folders.title': 'Tus proyectos',
-  'help.tour.folders.text': 'Un clic empieza una conversación en ese proyecto; la flecha muestra sus tareas activas.',
+  'help.tour.newchat.text': 'Con «+» empiezas un chat nuevo o un proyecto. Cada chat es una conversación propia, con su título y su proyecto; puedes tener varios a la vez.',
   'help.tour.tasks.title': 'Tareas',
   'help.tour.tasks.text': 'Todo el trabajo de los agentes: en curso, por aprobar, completado e incidencias. Puedes deshacer cualquier tarea.',
   'help.tour.schedules.title': 'Programadas',
@@ -225,8 +223,8 @@ export default {
   // 3.2: conversaciones, menú lateral, buscador y globito
   'help.tour.search.title': 'Buscar',
   'help.tour.search.text': 'Encuentra cualquier conversación, tarea o proyecto, también por lo que se dijo. Con el filtro, solo lo que está en curso o requiere tu atención.',
-  'help.tour.conversations.title': 'Conversaciones',
-  'help.tour.conversations.text': 'Todas tus conversaciones, la más reciente arriba. Al pasar el ratón ves su proyecto, quién responde y cómo van sus tareas; lo terminado pasa solo a «Completadas».',
+  'help.tour.conversations.title': 'Tus chats',
+  'help.tour.conversations.text': 'Agrupados por proyecto, con lo último de cada uno: una tarea en curso, algo que espera tu aprobación… Con clic derecho los fijas, silencias o completas.',
   // 3.2: pie del menú
   'help.tour.feedback.title': 'Enviar comentarios',
   'help.tour.feedback.text': 'Si algo falla o se te ocurre una mejora, cuéntamelo desde aquí. Al lado, la versión de Orb.'

@@ -23,11 +23,10 @@ export const TOUR_STEPS = [
   { id: 'orchestrator', target: 'orchestrator-check', view: 'chat', wrap: 'label' },
   { id: 'context', target: 'context-meter', view: 'chat', optional: true },
   // 3.2.1: the whole bar (its text speaks of the title, the project, the notifications, pause and the games), not the last button.
-  { id: 'bar', target: 'bar-clock', view: 'chat', wrap: 'header' },
-  { id: 'newchat', target: 'new-conversation', sidebar: true },
+  { id: 'bar', target: 'orb-chat-bar', view: 'chat' },
+  { id: 'newchat', target: 'chats-new', sidebar: true },
   { id: 'search', target: 'sidebar-search', sidebar: true },
-  { id: 'folders', target: 'sidebar-folders', sidebar: true },
-  { id: 'conversations', target: 'sidebar-conversations', sidebar: true },
+  { id: 'conversations', target: 'mobile-chats', sidebar: true },
   { id: 'tasks', target: 'nav-tasks', view: 'tasks', sidebar: true },
   { id: 'schedules', target: 'nav-schedules', view: 'schedules', sidebar: true },
   { id: 'board', target: 'nav-board', sidebar: true },
@@ -54,7 +53,7 @@ function findTarget(step) {
 function knownMissing() {
   const out = new Set();
   const { app } = getState();
-  if (!visible(document.querySelector('[data-testid="new-conversation"]'))) for (const s of TOUR_STEPS) if (s.sidebar) out.add(s.id);
+  if (!visible(document.querySelector('[data-testid="chats-new"]'))) for (const s of TOUR_STEPS) if (s.sidebar) out.add(s.id);
   // 3.2: the tour shows a new conversation, whose ring only appears after an answer.
   if (!visible(document.querySelector('[data-testid="context-meter"]')) && !(app?.assistant?.context)?.size) out.add('context');
   // 3.2: other optional steps whose control is not there (the conversations without a project, when there are none).

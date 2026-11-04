@@ -37,7 +37,7 @@ export function ItemAvatar({ item, size = 44, bots, botsById }) {
 }
 
 // ---- a long press (touch) or a right click (mouse) opens the menu; the click that follows a long press is swallowed.
-function usePress(onMenu, ms = 480) {
+export function usePress(onMenu, ms = 480) {
   const timer = useRef(null); const start = useRef(null); const fired = useRef(false);
   const clear = () => { clearTimeout(timer.current); timer.current = null; };
   return {

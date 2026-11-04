@@ -66,8 +66,8 @@ export function MobileMenu() {
   const t = useT();
   const [open, setOpen] = useState(false);
   const name = useStore((s) => s.app?.config?.assistantName ?? 'Orb');
-  // 3.6 (M2): new messages of the bots while in the Orb zone: a dot on ☰ (the switch inside says how many).
-  const otherUnread = useStore((s) => modeOf(s.route) !== 'bots' && unreadOf(s.inbox) > 0);
+  // 3.6 (M2, M3): new messages of the other zone: a dot on ☰ (the switch inside says how many).
+  const otherUnread = useStore((s) => (modeOf(s.route) !== 'bots' ? unreadOf(s.inbox) : unreadOf(s.orbInbox)) > 0);
   const close = (e) => { if (e.target.closest('button:not([role=switch]), a')) setTimeout(() => setOpen(false), 60); };
   return (
     <DialogPrimitive.Root open={open} onOpenChange={setOpen}>

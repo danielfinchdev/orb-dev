@@ -196,7 +196,7 @@ try {
     if (kind === 'glass') { const cdp = await pctx.newCDPSession(p); await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'no-preference' }] }); }
     const { url: purl } = await ph.call('remote.pair');
     await p.goto(`http://127.0.0.1:${ph.port}/${new URL(purl).hash}`);
-    await p.waitForSelector('[data-testid=chat-input]');
+    await p.waitForSelector('[data-testid=orb-inbox]'); // 3.6 (M3): the phone opens on the Orb zone's chat list
     const dev = (await ph.call('link.devices')).find((d) => d.kind !== 'browser') ?? (await ph.call('link.devices'))[0];
     await ph.call('link.setAdmin', { id: dev.id, admin: true });
     for (const dark of kind === 'glass' ? [false, true] : [false]) {

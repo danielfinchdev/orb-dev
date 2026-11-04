@@ -4,12 +4,15 @@
 // small switch: on = with the assistant, who coordinates the agents; off = directly with the agent chosen).
 // 3.2: each conversation is its own (route.id), several at once.
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowUp, Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign, ChevronLeft, ChevronRight, PenTool, History, FlaskConical, Folder, Mic, Shrink } from 'lucide-react';
+import { ArrowUp, Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign, ChevronLeft, ChevronRight, PenTool, History, FlaskConical, Folder, Mic, Shrink, ListChecks, Ellipsis, Info, BellOff, MessageSquare } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Markdown } from '@/components/markdown.jsx';
-import { PageHeader } from '@/components/page.jsx';
 import { ProjectPicker } from '@/components/project-actions.jsx';
-import { LiveTasksStrip } from '@/components/live-tasks.jsx';
+import { useLiveTasks, liveOf, ProgressBar, elapsed } from '@/components/live-tasks.jsx';
+import { AgentIcon } from '@/components/agent-icon.jsx';
+import { ChatBar, BackToList } from '@/components/chat-bar.jsx';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
+import { useOrbInbox, useOrbActions } from '@/views/orb/inbox.jsx';
 import { NotificationBell } from '@/components/notification-center.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
@@ -17,7 +20,7 @@ import { Input, Spinner } from '@/components/ui/basic.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { Switch, Tip, BubbleTip, Popover, PopoverTrigger, PopoverContent } from '@/components/ui/overlay.jsx';
-import { bridge, useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere } from '@/lib/store.js';
+import { bridge, useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere, openOrbInfo, closeOrbInfo, loadOrbInboxSoon, phoneLayout } from '@/lib/store.js';
 import { userNameOf } from '@/lib/persons.js';
 import { notify } from '@/lib/notify.js';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
@@ -305,35 +308,72 @@ function ChatApproval({ m }) {
 }
 
 // 3.2.1: a task that waits for the user's approval, with «Aprobar» and «Rechazar» right in the chat (before, only in
-// Tareas). Once answered, how it ended.
+// Tareas). Once answered, how it ended. 3.6 (M3): a card, as in the Bots zone: «"Publicar la web" necesita tu aprobación»,
+// the reason in words and Rechazar · Ver la tarea · Aprobar.
+const whyOf = (body) => /\(([^()]*)\)\.?\s*$/.exec(String(body ?? ''))?.[1]?.trim() || null;
 function TaskApprovalLine({ m }) {
   const t = useT();
   const task = useStore((s) => s.tasks.find((x) => x.id === m.meta.task) ?? null);
   const [busy, setBusy] = useState(false);
   const waiting = task?.status === 'awaiting_approval';
   const run = async (fn) => { setBusy(true); try { await fn(task); } finally { setBusy(false); } };
+  const why = whyOf(m.body);
   return (
-    <div className={cn('mx-auto w-full max-w-[88%] rounded-xl border px-3.5 py-2.5 text-[13px]', waiting ? 'border-warning/50 bg-warning/10' : 'bg-muted/50')} data-testid="chat-task-approval">
-      <div className="flex items-start gap-2"><ShieldAlert className={cn('mt-0.5 size-4 shrink-0', waiting ? 'text-warning' : 'text-muted-foreground')} /><div className="min-w-0 flex-1 whitespace-pre-wrap break-words">{m.body.replace(/^⚠️\s*/u, '')}</div></div>
-      <div className="chat-actions mt-2 flex flex-wrap items-center gap-2 pl-6">
+    <div className={cn('mx-auto w-full max-w-[92%] rounded-xl border px-3.5 py-3 text-[13.5px] shadow-xs', waiting ? 'bg-card border-warning/45' : 'bg-muted/50')} data-testid="chat-task-approval" data-status={task?.status ?? 'gone'}>
+      <div className="flex items-start gap-2">
+        <ListChecks className={cn('mt-0.5 size-4 shrink-0', waiting ? 'text-warning' : 'text-muted-foreground')} />
+        <div className="min-w-0 flex-1">
+          {task ? <div className="font-medium">{t('orbchats.cardTitle', { title: task.title })}</div> : <div className="whitespace-pre-wrap break-words">{m.body.replace(/^⚠️\s*/u, '')}</div>}
+          {task && why ? <div className="text-muted-foreground mt-0.5 text-[13px]">{t('orbchats.cardWhy', { why })}</div> : null}
+        </div>
+      </div>
+      <div className="chat-actions mt-2.5 flex flex-wrap items-center gap-2 sm:pl-6">
         {waiting ? (<>
-          <Button size="xs" className="px-2.5" disabled={busy} onClick={() => run(approveTask)} data-testid="chat-task-approve"><Check />{t('tasks.approve.ok')}</Button>
-          <Button size="xs" className="px-2.5" variant="outline" disabled={busy} onClick={() => run(rejectTask)} data-testid="chat-task-reject"><X />{t('tasks.reject')}</Button>
-        </>) : task ? <Badge variant={STATUS[task.status]?.[1]}>{STATUS[task.status]?.[0] ?? task.status}</Badge> : null}
-        <Button size="xs" className="px-2.5" variant="ghost" onClick={() => go({ view: 'tasks', id: m.meta.task })}><ExternalLink />{t('chat.viewTask')}</Button>
+          <Button size="xs" className="px-2" variant="ghost" onClick={() => go({ view: 'tasks', id: m.meta.task })} data-testid="chat-task-open">{t('orbchats.taskOpen')}</Button>
+          <span className="flex-1" />
+          <Button size="xs" className="px-3" variant="outline" disabled={busy} onClick={() => run(rejectTask)} data-testid="chat-task-reject">{t('tasks.reject')}</Button>
+          <Button size="xs" className="px-3" disabled={busy} onClick={() => run(approveTask)} data-testid="chat-task-approve"><Check />{t('tasks.approve.ok')}</Button>
+        </>) : (<>
+          {task ? <Badge variant={STATUS[task.status]?.[1]}>{STATUS[task.status]?.[0] ?? task.status}</Badge> : null}
+          <Button size="xs" className="px-2.5" variant="ghost" onClick={() => go({ view: 'tasks', id: m.meta.task })}><ExternalLink />{t('chat.viewTask')}</Button>
+        </>)}
       </div>
     </div>
   );
 }
 
-// 3.2: the title of the conversation in the middle of the bar, in big, and under it, small, its project with its icon.
-// A click on the title renames it.
-function BarTitle({ conversation }) {
-  const t = useT();
-  const rename = () => form(t('chat.renameTitle'), { initial: { title: conversation.title }, body: (v, set) => <Input autoFocus value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={80} data-testid="rename-input" />, ok: t('session.save'), onOk: (v) => call('conversations.update', { id: conversation.id, title: v.title.trim() || conversation.title }) });
-  // 3.6: the title only; the project is chosen (and shown) in the composer, not twice.
-  return <BarHeading title={conversation.title} project={conversation.project} showProject={false} onRename={rename} renameLabel={t('chat.rename')} />;
+// 3.6 (M3): the tasks of this conversation that are running or waiting their turn, each as one live line in the
+// conversation (agent, «Tarea #3», what it is doing now, a small bar and the time); a click opens it in Tareas. The
+// agent's own conversation and «Cancelar» stay a click away, as in the block they replace.
+function TaskLines({ conversation }) {
+  const live = useLiveTasks();
+  const tasks = useStore((s) => (conversation == null ? [] : s.tasks.filter((x) => x.conversation_id === conversation && (x.status === 'running' || x.status === 'queued'))));
+  if (!tasks.length) return null;
+  return <div className="grid gap-2" data-testid="task-lines">{[...tasks].sort((a, b) => a.id - b.id).map((x) => <TaskLine key={x.id} task={x} live={liveOf(live, x.id)} />)}</div>;
 }
+function TaskLine({ task, live }) {
+  const t = useT();
+  const running = task.status === 'running';
+  const agent = live?.agent ?? task.assigned_to ?? (task.agent !== 'any' ? task.agent : null);
+  const now = live?.note || live?.last || task.title;
+  const cancel = async () => { if (await confirm(t('comp.live.cancelTask'), t('comp.live.cancelBody', { agent: AGENT[agent] ?? agent ?? '' }), { ok: t('comp.live.cancelTask'), cancel: t('comp.live.back'), danger: true })) act(call('tasks.cancel', { id: task.id }), t('comp.live.cancelled')); };
+  return (
+    <div className="group/task bg-card/85 mx-auto flex w-full max-w-[92%] items-center gap-2.5 rounded-xl border px-3 py-2 text-[13px]" data-testid="task-line" data-status={task.status}>
+      {agent ? <AgentIcon agent={agent} className={cn('size-4', running && 'animate-pulse')} /> : <ListChecks className="text-muted-foreground size-4 shrink-0" />}
+      <button type="button" className="min-w-0 flex-1 cursor-pointer truncate text-left hover:underline" onClick={() => go({ view: 'tasks', id: task.id })} title={task.title}>
+        <span className="font-semibold">{t('orbchats.taskN', { id: task.id })}</span>
+        <span className="text-muted-foreground">{agent ? ` · ${AGENT[agent] ?? agent}` : ''} · </span>{now}
+      </button>
+      {running ? <ProgressBar percent={live?.percent ?? null} quiet={live?.quietMin >= 5} className="w-16 shrink-0 sm:w-24" /> : <span className="text-muted-foreground shrink-0 text-xs">{t('orbchats.taskQueued')}</span>}
+      {running && live?.startedAt ? <span className="text-muted-foreground shrink-0 text-xs tabular-nums">{elapsed(Date.now() - live.startedAt)}</span> : null}
+      {live?.sessionId ? <BubbleTip title={t('comp.live.viewConv')}><Button size="icon-xs" variant="ghost" className="opacity-60 group-hover/task:opacity-100" aria-label={t('comp.live.viewConv')} onClick={() => go({ view: 'session', id: live.sessionId })}><MessageSquare /></Button></BubbleTip> : null}
+      <BubbleTip title={t('comp.live.cancelTitle')}><Button size="icon-xs" variant="ghost" className="opacity-60 group-hover/task:opacity-100" aria-label={t('comp.live.cancelTitle')} onClick={cancel} data-testid="task-line-cancel"><Square className="size-3 fill-current" /></Button></BubbleTip>
+    </div>
+  );
+}
+
+// The title of a conversation in the middle of a bar, and under it, small, its project with its icon (direct
+// conversations, views/session.jsx).
 export function BarHeading({ title, project, onRename, renameLabel, extra, showProject = true }) {
   const t = useT();
   return (
@@ -411,6 +451,17 @@ export function ChatView({ route, onConversation, project: inProject }) {
     setLoading(false);
   };
   useEffect(() => { initTestOfTheDay(); }, []);
+  // 3.6 (M3): its marks in the Orb zone's list (pinned, muted, unread); what is on screen is marked read.
+  useOrbInbox();
+  const item = useStore((s) => (id == null ? null : (s.orbInbox?.items ?? []).find((x) => x.key === `conversation:${id}`) ?? null));
+  const unread = item?.unread ?? 0;
+  useEffect(() => {
+    if (id == null || !unread) return undefined;
+    const run = () => { if (document.visibilityState === 'visible') call('inbox.markRead', { kind: 'conversation', id }).then(() => loadOrbInboxSoon(0)).catch(() => {}); };
+    const timer = setTimeout(run, 350);
+    document.addEventListener('visibilitychange', run);
+    return () => { clearTimeout(timer); document.removeEventListener('visibilitychange', run); };
+  }, [id, unread, rows.length]);
   const showTest = useStore((s) => s.testToday) === true && id == null;
   const scroll = useAutoScroll([rows.length, chat.partial, chat.busy, id]);
   const catalog = useCatalog();
@@ -496,18 +547,51 @@ export function ChatView({ route, onConversation, project: inProject }) {
     finally { setCompacting(false); }
   };
 
+  const embedded = Boolean(onConversation);
+  const slim = phoneLayout() && Boolean(conv);
+  const infoOpen = useStore((s) => s.orbInfo?.type === 'chat') && !embedded;
+  const headProject = conv ? conv.project ?? null : workProject?.name ?? null;
+  const waitingYou = useStore((s) => id != null && s.tasks.some((x) => x.conversation_id === id && x.status === 'awaiting_approval'));
+  const rename = () => form(t('chat.renameTitle'), { initial: { title: conv.title }, body: (v, set) => <Input autoFocus value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={80} data-testid="rename-input" />, ok: t('session.save'), onOk: async (v) => { const r = await call('conversations.update', { id: conv.id, title: v.title.trim() || conv.title }); refreshSoon(); return r; } });
+  const chatActions = useOrbActions(conv ? { kind: 'conversation', id: conv.id, title: conv.title, done: conv.status === 'done', pinned: Boolean(item?.pinned), muted: Boolean(item?.muted), unread: 0 } : null);
+
   return (
     <>
-      {/* 2.6: a clean bar: the clock, (3.2) the conversation's title and project in the middle, and icon buttons, each with
-          its bubble. */}
-      <PageHeader className="topbar-chat" title={<><span className="sr-only">{name}</span><BarClock /></>}
-        center={conv ? <BarTitle conversation={conv} /> : null}>
-        <NotificationBell />
-        {app.paused
+      {/* 3.6 (M3): the bar of a messaging app: (phone: back to the list) the pill with Orbe, the title and, small, the
+          project and what it is doing; a click opens the chat's info. On the right: notifications, pause, games and ⋯. */}
+      <ChatBar back={embedded ? null : <BackToList to="chats" />} testid="orb-chat-bar" className="topbar-chat" title={<>
+        <h1 className="sr-only">{conv?.title ?? t('orbchats.newChatTitle')}</h1>
+        <button type="button" disabled={!conv || embedded} onClick={() => (infoOpen ? closeOrbInfo() : openOrbInfo({ type: 'chat' }))}
+          className={cn('press flex min-w-0 items-center gap-2.5 rounded-xl py-1 pr-3 pl-1 text-left', conv && !embedded && 'cursor-pointer', infoOpen ? 'bg-accent' : conv && !embedded ? 'hover:bg-accent/60' : '')}
+          aria-expanded={conv ? infoOpen : undefined} aria-label={conv ? t('chats.openInfo', { name: conv.title }) : undefined} data-testid="orb-chat-head">
+          <Robot size={36} mood={chat.busy ? 'thinking' : 'idle'} still={!chat.busy} />
+          <span className="min-w-0">
+            <span className="flex items-center gap-1.5"><span className="truncate text-[15px] font-semibold" data-testid="bar-title-text">{conv?.title ?? t('orbchats.newChatTitle')}</span>{item?.muted ? <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label={t('chats.muted')} /> : null}</span>
+            <span className={cn('flex min-w-0 items-center gap-1 text-[12.5px]', chat.busy ? 'text-primary' : waitingYou ? 'text-warning-foreground dark:text-warning' : 'text-muted-foreground')} data-testid="orb-chat-status">
+              {headProject ? <ProjectIcon name={headProject} size={14} /> : <Folder className="size-3 shrink-0" aria-hidden="true" />}
+              <span className="truncate">{headProject ?? t('orbchats.noProject')} · {chat.busy ? t('chats.working') : waitingYou ? t('orbchats.awaiting') : name}</span>
+            </span>
+          </span>
+        </button>
+      </>}>
+        {/* The phone keeps the bar light: the bell is the system's notifications there, and «Pausar» goes into ⋯. */}
+        {slim ? null : <NotificationBell />}
+        {slim ? null : app.paused
           ? <BubbleTip title={t('bar.resume')} text={t('bar.resumeText')}><Button variant="soft" size="icon-sm" onClick={() => act(call('control.resume'), t('chat.resumed'))} aria-label={t('bar.resume')} data-testid="bar-resume"><Play /></Button></BubbleTip>
           : <BubbleTip title={t('bar.pause')} text={t('bar.pauseText')}><Button variant="ghost" size="icon-sm" onClick={() => act(call('control.pause'), t('chat.paused'))} aria-label={t('bar.pause')} data-testid="bar-pause"><Pause /></Button></BubbleTip>}
         {!fullPc() ? null : <BubbleTip title={t('bar.games')} text={t('bar.gamesText')}><Button variant="ghost" size="icon-sm" onClick={openGames} aria-label={t('bar.games')} data-testid="bar-games"><Gamepad2 /></Button></BubbleTip>}
-      </PageHeader>
+        {conv ? (
+          <DropdownMenu modal={false}>
+            <BubbleTip title={t('chats.more')}><DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" aria-label={t('chats.more')} data-testid="orb-chat-more"><Ellipsis /></Button></DropdownMenuTrigger></BubbleTip>
+            <DropdownMenuContent align="end" className="w-56">
+              {embedded ? null : <DropdownMenuItem onSelect={() => openOrbInfo({ type: 'chat' })} data-testid="more-info"><Info />{t('orbchats.info')}</DropdownMenuItem>}
+              <DropdownMenuItem onSelect={rename} data-testid="more-rename"><PencilLine />{t('orbchats.rename')}</DropdownMenuItem>
+              {slim ? <DropdownMenuItem onSelect={() => (app.paused ? act(call('control.resume'), t('chat.resumed')) : act(call('control.pause'), t('chat.paused')))} data-testid={app.paused ? 'bar-resume' : 'bar-pause'}>{app.paused ? <Play /> : <Pause />}{app.paused ? t('bar.resume') : t('bar.pause')}</DropdownMenuItem> : null}
+              {chatActions.filter((a) => a.id !== 'info').map((a) => <div key={a.id}>{a.danger ? <DropdownMenuSeparator /> : null}<DropdownMenuItem variant={a.danger ? 'destructive' : undefined} onSelect={a.run} data-testid={`more-${a.id}`}><a.icon />{a.label}</DropdownMenuItem></div>)}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
+      </ChatBar>
       <div ref={scroll.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-3xl flex-col gap-5 px-5 py-6" data-testid="chat-lines">
           {more ? <Button variant="ghost" size="sm" className="text-muted-foreground mx-auto" onClick={loadOlder} disabled={loading} data-testid="chat-older"><History />{t('chat.older')}</Button> : null}
@@ -521,6 +605,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
               <div className="mt-3 flex max-w-xl flex-wrap justify-center gap-2">{suggestionsFor(workProject?.name).map((s) => <Button key={s} variant="outline" size="sm" className="h-auto max-w-full shrink rounded-full py-1.5 whitespace-normal" onClick={() => setText(t(s))}>{t(s)}</Button>)}</div>
             </div>
           ) : lines.map((m) => <Message key={m.id} m={m} name={name} onChanges={askChanges} />)}
+          <TaskLines conversation={id} />
           {chat.busy || chat.waiting || sending ? (
             <div className="flex gap-3">
               <Robot size={32} mood={chat.partial ? 'talking' : 'thinking'} className="mt-0.5" />
@@ -533,7 +618,6 @@ export function ChatView({ route, onConversation, project: inProject }) {
           ) : null}
         </div>
       </div>
-      <LiveTasksStrip conversation={id} />
       <Composer value={text} onChange={setText} onSend={send} onStop={id != null ? () => act(call('chat.stop', { conversation: id })) : undefined} busy={chat.busy} disabled={sending} testid="chat-input"
         placeholder={chat.busy ? t('chat.placeholderBusy', { name }) : orchestrate ? t('chat.placeholder', { name }) : t('chat.placeholderDirect', { agent: AGENT[brain.agent] ?? brain.agent })}
         top={<>

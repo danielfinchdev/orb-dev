@@ -198,11 +198,9 @@ export default {
   'help.tour.context.title': 'Context and quota',
   'help.tour.context.text': 'This ring fills up as the conversation grows. Click it to see tokens and your plans’ usage.',
   'help.tour.bar.title': 'Chat bar',
-  'help.tour.bar.text': 'At the top, the conversation\'s title and its project. Notifications, pausing tasks and the mini-games, on the right.',
+  'help.tour.bar.text': 'At the top, the chat and its project: click it to see its info (model, tasks, export…). Notifications, pausing tasks and the mini-games, on the right.',
   'help.tour.newchat.title': 'New chat',
-  'help.tour.newchat.text': 'Each «New chat» is a conversation of its own, with its title and project. You can have several at once and go back to any of them.',
-  'help.tour.folders.title': 'Your projects',
-  'help.tour.folders.text': 'A click starts a conversation in that project; its arrow shows its active tasks.',
+  'help.tour.newchat.text': 'With «+» you start a new chat or a project. Each chat is a conversation of its own, with its title and project; you can have several at once.',
   'help.tour.tasks.title': 'Tasks',
   'help.tour.tasks.text': 'All the agents’ work: in progress, to approve, completed and issues. You can undo any task.',
   'help.tour.schedules.title': 'Scheduled',
@@ -224,8 +222,8 @@ export default {
   // 3.2: conversaciones, menú lateral, buscador y globito
   'help.tour.search.title': 'Search',
   'help.tour.search.text': 'Find any conversation, task or project, also by what was said. With the filter, only what is in progress or needs you.',
-  'help.tour.conversations.title': 'Conversations',
-  'help.tour.conversations.text': 'All your conversations, the latest on top. On hover you see its project, who answers and how its tasks go; what is finished goes to «Completed» by itself.',
+  'help.tour.conversations.title': 'Your chats',
+  'help.tour.conversations.text': 'Grouped by project, with the latest of each one: a task in progress, something waiting for your approval… Right-click to pin, mute or complete them.',
   // 3.2: sidebar foot
   'help.tour.feedback.title': 'Send feedback',
   'help.tour.feedback.text': 'If something fails or you think of an improvement, tell me from here. Next to it, Orb\'s version.'

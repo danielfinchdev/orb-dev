@@ -196,7 +196,26 @@ sections 2.1–2.4 describe the shipped app.
   `views/bots/new-group.jsx` (pick bots and users, then name with the composite avatar). Phone: the zone opens on its
   chat list (`bot-chats`), tabs Chats · Recordatorios · Casa, the conversation full screen with a back arrow; ☰ holds
   Memoria, Servidor, Bots, Grupos and the bots' settings. Unread counts on the Chats tab, on «Bots» of the zone switch
-  and as a dot on ☰. The Orb zone keeps today's screens inside the same shell until M3.
+  and as a dot on ☰.
+- **Built (M3): the Orb zone.** `views/orb/inbox.jsx` (the chat list: search over titles, projects, messages and «#id»
+  of a task, with a filter by state and agent; «+» with Nuevo chat / Nuevo proyecto; on the PC the places Tareas (with
+  what waits for approval) · Proyectos · Programadas · Pizarra and «Más» with God mode and Monitoreo when they are on;
+  what others shared; pinned chats on top; one collapsible group per project with its coloured initials and a ⋯ (new
+  chat there, project info), «Sin proyecto» last; completed chats behind «Ver completados». Each row: Orbe's head with
+  the project's badge (a direct conversation: its agent's mark), title, time, its latest progress (`orbProgress` in
+  `lib/inbox.js`: waiting for approval / a question / a permission first, then a running task, then how its last task
+  ended, else its last line) and unread; right click or ⋯ (PC) and a long press (phone) open its menu: info, pin, mute,
+  mark read, complete or reopen, delete). The conversation (`views/chat.jsx`): the header pill (Orbe, title, project ·
+  what it is doing) opens the info; bell, pause, games and ⋯ on the right (the phone: only ⋯); running and queued tasks
+  as one line each in the conversation (agent, «Tarea #n», what it is doing, a bar, the time, the agent's conversation
+  and cancel); approval cards («"…" necesita tu aprobación», the reason, Ver la tarea · Rechazar · Aprobar); the wave-1
+  composer; what is on screen is marked read. `views/orb/info.jsx` (`OrbInfoHost`, opened through `openOrbInfo`): a
+  chat (project with its picker and the arrow to the project's info, model, reasoning, orchestrator, «Tareas de este
+  chat», notifications, attachments on the whiteboard, Compactar, Exportar as Markdown, Fijar, Completar, Eliminar) and a
+  project (new chat there, chats, tasks, Programadas, Pizarra, Bitácora, Compartir with 2+ users, Ajustes del proyecto,
+  God mode on the PC). Phone: the Orb zone opens on its list (`chats`), tabs Chats · Tareas · Proyectos, a conversation
+  (also a direct one) full screen with its back arrow; ☰ keeps Programadas, Pizarra, Memorias and Tutoriales. The
+  standalone screens (Tareas, Proyectos, Programadas, Pizarra, God mode, Monitoreo) stay as they were.
 
 ## 3. Tokens
 

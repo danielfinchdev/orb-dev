@@ -1,7 +1,7 @@
-// 2.7, the phone: a simpler app. The sections are tabs at the bottom (3.6: Orbe, Chats, Tareas, Proyectos; the rest is in
+// 2.7, the phone: a simpler app. The sections are tabs at the bottom (3.6 M3: Chats, Tareas, Proyectos; the rest is in
 // the menu ☰ of each screen's bar, components/mobile-menu.jsx) instead of the sidebar. What only makes sense on the PC
 // (Agentes, Ajustes, Modo experto, minijuegos, the themes) is not here.
-import { Sparkles, MessagesSquare, ListTodo, FolderKanban, Ellipsis, MessageSquare, Bot, Bell, Home } from 'lucide-react';
+import { MessagesSquare, ListTodo, FolderKanban, Ellipsis, Bell, Home } from 'lucide-react';
 import { PageHeader } from './page.jsx';
 import { useStore, go, modeOf } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
@@ -10,7 +10,8 @@ import { MoreContent } from './mobile-menu.jsx';
 import { unreadOf } from '@/lib/inbox.js';
 
 // Which tab a screen belongs to.
-const TAB_OF = { chat: 'chat', session: 'chats', new: 'chats', chats: 'chats', tasks: 'tasks', projects: 'projects',
+// 3.6 (M3): the Orb zone: Chats · Tareas · Proyectos (a conversation belongs to Chats).
+const TAB_OF = { chat: 'chats', session: 'chats', new: 'chats', chats: 'chats', tasks: 'tasks', projects: 'projects',
   // 3.5: the Bots mode has its own tabs (Chat, Bots, Recordatorios, Casa, Más)
   // 3.6 (M2): Chats · Recordatorios · Casa
   'bot-chats': 'bot-chats', 'bot-chat': 'bot-chats', 'bot-group': 'bot-chats', 'bot-reminders': 'bot-reminders', 'bot-home': 'bot-home' };
@@ -23,8 +24,8 @@ export function MobileTabs() {
   const tasks = useStore((s) => s.tasks);
   const sessions = useStore((s) => s.sessions);
   const approvals = tasks.filter((x) => x.status === 'awaiting_approval').length;
-  const permissions = (app.approvals ?? []).length;
-  const working = sessions.some((s) => s.kind === 'chat' && s.status === 'running');
+  const working = sessions.some((s) => s.kind === 'chat' && s.status === 'running') || (app.chats ?? []).some((c) => c.busy);
+  const orbUnread = useStore((s) => unreadOf(s.orbInbox));
   const current = tabOf(route.view);
   const botsBusy = useStore((s) => Object.values(s.botStates ?? {}).some((x) => x.busy));
   const unread = useStore((s) => unreadOf(s.inbox));
@@ -33,13 +34,12 @@ export function MobileTabs() {
     { id: 'bot-reminders', icon: Bell, label: t('nav.botReminders'), testid: 'nav-bot-reminders' },
     { id: 'bot-home', icon: Home, label: t('nav.botHome'), testid: 'nav-bot-home' }
   ] : [
-    { id: 'chat', icon: Sparkles, label: app.config.assistantName, testid: 'nav-chat', dot: (app.chats ?? []).some((c) => c.busy) },
-    { id: 'chats', icon: MessagesSquare, label: t('nav.chats'), testid: 'nav-chats', count: permissions, dot: working },
+    { id: 'chats', icon: MessagesSquare, label: t('nav.chats'), testid: 'nav-chats', count: orbUnread, tone: 'primary', dot: working },
     { id: 'tasks', icon: ListTodo, label: t('nav.tasks'), testid: 'nav-tasks', count: approvals },
     { id: 'projects', icon: FolderKanban, label: t('nav.projects'), testid: 'nav-projects' }
   ];
   return (
-    <nav className={cn('mobile-tabs theme-band bg-sidebar grid shrink-0 border-t', tabs.length === 3 ? 'grid-cols-3' : 'grid-cols-4')} aria-label={t('app.menu')} data-testid="mobile-tabs">
+    <nav className="mobile-tabs theme-band bg-sidebar grid shrink-0 grid-cols-3 border-t" aria-label={t('app.menu')} data-testid="mobile-tabs">
       {tabs.map(({ id, icon: Icon, label, testid, count, dot, tone }) => {
         const active = current === id;
         return (
