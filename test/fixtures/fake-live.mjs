@@ -22,6 +22,7 @@
 //   TABLA_MARKDOWN     answers in GFM: a table, a task list and strikethrough
 //   CIERRA_Y_CUELGA    closes its task (orb_update_task done) and then never ends its turn
 //   MANDA_MENSAJE <agente> <texto>   sends a message to another agent through Orb (orb_send_message)
+//   LEE <ruta>         (3.6, one per line) reads a file: the real guard decides, with the session's confinement
 //   BOT_CALL <tool> <json>           (3.5, one per line) calls a tool of the bot's own MCP server (src/mcp/bot.mjs)
 //   Task Review        a review prompt: answers "VEREDICTO: CORRECTO" (or "CON FALLOS" when the reviewed work says FALLOS)
 //
@@ -193,6 +194,13 @@ function createFakeLive(agent, label, caps, o) {
       const out = await mcpCall(o.mcpServers?.bot, m[1], args);
       item('tool', 'tool', { id: `t${++seq}`, name: `bot:${m[1]}`, input: m[2] });
       notes.push(`${m[1]}: ${out}`);
+    }
+    // 3.6: LEE <ruta> (one per line): reading a file, as the real guard decides it (with the session's confinement).
+    for (const m of scan.matchAll(/^LEE (.+)$/gm)) {
+      const file = m[1].trim();
+      const verdict = decide({ permission, tool: 'Read', paths: [file], internalDir: o.internalDir, confine: o.confine || null });
+      record({ read: file, decision: verdict.decision, confined: Boolean(o.confine), addDirs: o.addDirs ?? [] });
+      notes.push(`LEE ${verdict.decision}`);
     }
     if (/PIDE_PERMISO/.test(scan)) {
       const command = 'git push origin main';

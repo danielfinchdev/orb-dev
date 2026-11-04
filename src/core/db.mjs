@@ -481,7 +481,9 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   // 3.6: a forwarded call's own id (the same id twice runs once; status may also be 'desconocido').
   ['link_queue', 'request_id', 'TEXT'],
   // 3.6: a bot's daily caps { daily_turns, daily_tokens, daily_usd }.
-  ['bots', 'caps', 'TEXT']];
+  ['bots', 'caps', 'TEXT'],
+  // 3.6: whose agent sent a message between agents (NULL: the owner's): it only reaches that person's agents.
+  ['messages', 'person_id', 'TEXT']];
 export function migrate(db, { file = null } = {}) {
   // 3.2: whether a direct conversation already has its title (Orb names a new one from its first message); the ones made
   // before keep theirs.

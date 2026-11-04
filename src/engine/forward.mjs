@@ -29,6 +29,8 @@ export function whoAsks(board, peer, principal) {
 const KEEP_DAYS = 7;
 export async function once(board, requestId, peerId, fn) {
   if (!requestId) return fn();
+  // 3.6: the id is the centre's, so it is kept per link: another link naming the same id never gets this answer.
+  requestId = `${peerId ?? ''}:${String(requestId).slice(0, 200)}`;
   try { board.run('DELETE FROM link_seen WHERE at < ?', new Date(Date.now() - KEEP_DAYS * 86_400_000).toISOString()); } catch { /* no table */ }
   const seen = board.one('SELECT result FROM link_seen WHERE request_id = ?', requestId);
   if (seen) {

@@ -85,7 +85,8 @@ export function personFiles(board, pid, { home }) {
     add(`bots/${b.id}/bot.json`, JSON.stringify(b, null, 2));
     // Not the files other people keep in this bot (their own memory of it).
     for (const f of walkFiles(path.join(p.bots, String(b.id)), (n, full) => path.basename(path.dirname(full)) === 'personas' && n !== `${pid}.md`)) add(`bots/${b.id}/${path.relative(path.join(p.bots, String(b.id)), f).split(path.sep).join('/')}`, fs.readFileSync(f));
-    add(`bots/${b.id}/reminders.json`, JSON.stringify(board.all('SELECT * FROM bot_reminders WHERE bot_id = ?', b.id), null, 2));
+    // Only their own reminders (on a shared bot, the others' are theirs).
+    add(`bots/${b.id}/reminders.json`, JSON.stringify(board.all('SELECT * FROM bot_reminders WHERE bot_id = ? AND person_id = ?', b.id, pid), null, 2));
   }
   // Bots of others they talk to: only their own memory file there.
   for (const dir of (() => { try { return fs.readdirSync(p.bots); } catch { return []; } })()) {

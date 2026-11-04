@@ -221,5 +221,29 @@ console only on this PC, for the owner). Another person spends it only through a
   or unknown tool anyway (`botConfine.onBreakout`) stops the lane and sets `bot_unconfined:<agent>` (refused from then on).
   Any other agent is refused as a bot's brain. Residual risk: an MCP connector the person gave the bot runs with its own
   rights.
-- **Browser profiles.** `src/main/browser.mjs` keeps one (in-memory) session per person (`orb-web-<person>`; the owner
-  keeps `navegador-agente`); the person is signed in the page key (`browserKey({ …, person })`); a bot uses its person's.
+- **Browser profiles.** `src/main/browser.mjs` keeps one session per person on disk (`persist:orb-web-<person>`; the owner
+  `persist:navegador-agente`): sign-ins stay for that person between runs and never reach another person's pages; the
+  person is signed in the page key (`browserKey({ …, person })`); a bot uses its person's.
+
+## Audit (3.6, `test/auditoria-36.test.mjs`)
+
+Every policy method with crafted params (the other person's ids in every slot, names for ids, @ mentions, searches,
+dependencies, members, paths), from the window and a phone, both ways. What it made stricter:
+
+- **Messages between agents** carry the sender's person (`messages.person_id`, from its signed token or its task):
+  `board.send`/`inbox({ person })` and `scheduler.deliverMessages` only reach that person's agents; a line «to the user»
+  is that person's.
+- **The assistant reads files** (Read/Glob/Grep) confined like a session: someone other than the owner from
+  `<runs>/personas/<person>` with only their visible projects (`confineFor`); the owner's with `{ exclude, cwd }`: other
+  people's project folders and assistants' folders. Grep/Glob without a path check the working folder; a command's
+  relative path that climbs out (`..`) is checked too (`confineCheck`).
+- **Folders and names.** `addProject` refuses a folder inside (or around) another person's project; a dependency must be
+  a task its person may see; a project name, folder or multiplatform group of someone else answers
+  `msg.projects.nameUnavailable` (never whose or where).
+- **Files from the window** (`whiteboard.attach`, `projects.setIcon`, pictures of `sessions.send`/`tasks.followup`,
+  `images.read`/`save`): never inside someone else's project (and, for a user, nothing else of Orb's folder).
+- `bots.where`/`bots.moveTo` see and use only the caller's links; a person's export takes only their reminders; a
+  forwarded call's `request_id` is kept per link (`link_seen`); the owner's assistant notices go to the conversation's
+  person.
+- Left as designed: backups (owner only) and the 30-day trash of a removed person hold everyone's data; the owner's
+  sessions with write access and this PC's account can read the disk.

@@ -328,6 +328,7 @@ export default {
   "msg.orch.writeMessage": "escribe un mensaje",
   "msg.projects.badCategory": "categoría no válida: {category}. Categorías disponibles: {list}",
   "msg.projects.exists": "ya existe un proyecto llamado {name}",
+  "msg.projects.nameUnavailable": "Ese nombre no está disponible. Elige otro.",
   "msg.projects.commonReadme": "# {name} — carpeta común\n\nLo que comparten los proyectos del grupo ({list}): la API y los datos, el diseño (colores, tipografías, componentes), los textos y las imágenes. Lo que se decida aquí vale para todos.\n",
   "msg.projects.folderNotEmpty": "la carpeta {folder} ya existe y no está vacía. Impórtala como proyecto",
   "msg.projects.needName": "el proyecto necesita un nombre",
