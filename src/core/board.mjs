@@ -144,7 +144,8 @@ export class Board {
 
   // ---- projects
   // Agents (MCP) can only create projects; moving one to another folder is a user action (fromUser).
-  addProject({ name, path: folder, notes = '' }, actor, { fromUser = false } = {}) {
+  // 3.6: person: whose a new project is (default: the owner's); an existing one keeps its person.
+  addProject({ name, path: folder, notes = '' }, actor, { fromUser = false, person = null } = {}) {
     name = oneLine(name, 60);
     if (!name || !folder) throw new Error(tr('sys.board.nameAndPath'));
     const existing = this.project(name);
@@ -153,21 +154,29 @@ export class Board {
     // One folder, one project: the same folder under another name is the project that already exists.
     const twin = !existing && this.projects().find((p) => same(p.path, checked));
     if (twin) return twin;
-    this.run(`INSERT INTO projects (name, path, notes, created_at) VALUES (?, ?, ?, ?)
-              ON CONFLICT(name) DO UPDATE SET path = excluded.path, notes = excluded.notes`, name, checked, String(notes ?? '').slice(0, 2000), now());
+    this.run(`INSERT INTO projects (name, path, notes, created_at, person_id) VALUES (?, ?, ?, ?, ?)
+              ON CONFLICT(name) DO UPDATE SET path = excluded.path, notes = excluded.notes`, name, checked, String(notes ?? '').slice(0, 2000), now(), existing ? existing.person_id ?? null : person ?? null);
     this.ensureProjectLog(name);
     this.event(null, actor, 'project.saved', `${name} -> ${checked}`);
     this.changed('projects');
     return this.project(name);
   }
   project(name) { return this.one('SELECT * FROM projects WHERE name = ?', String(name ?? '')); }
-  projects() { return this.all('SELECT * FROM projects ORDER BY name'); }
+  // 3.6: principal: only that person's projects and the ones shared with them.
+  projects({ principal = null } = {}) {
+    if (!principal) return this.all('SELECT * FROM projects ORDER BY name');
+    const s = scopeSql(principal, 'project', 'p');
+    return this.all(`SELECT * FROM projects p WHERE ${s.where} ORDER BY name`, ...s.args);
+  }
+  // 3.6: whether a person is the owner (null: the owner, as everywhere).
+  isOwnerPerson(person) { return !person || person === this.ownerId(); }
   removeProject(name, actor) {
     const project = this.project(name); if (!project) throw new Error(tr('msg.board.noProject', { name }));
     const open = this.one("SELECT COUNT(*) AS n FROM tasks WHERE project = ? AND status IN ('queued', 'awaiting_approval', 'running')", project.name).n;
     if (open) throw new Error(tr('msg.board.projectOpenTasks', { open }));
     this.run('DELETE FROM projects WHERE name = ?', project.name);
     if (this.setting('active_project') === project.name) this.setting('active_project', '');
+    try { this.run("DELETE FROM person_settings WHERE key = 'active_project' AND value = ?", JSON.stringify(project.name)); this.run("DELETE FROM shares WHERE resource_type = 'project' AND resource_id = ? COLLATE NOCASE", project.name); } catch { /* before 3.6 */ }
     this.event(null, actor, 'project.removed', `${project.name} (la carpeta no se borra)`);
     this.changed('projects');
   }
@@ -181,16 +190,21 @@ export class Board {
   }
 
   // Working folder of the session ("today we work on X"): every new task goes there.
-  activeProject() { const name = this.setting('active_project'); return name ? this.project(name) ?? null : null; }
-  setActiveProject(name, actor) {
-    if (!name) { this.setting('active_project', ''); this.event(null, actor, 'project.active', 'ninguno'); this.changed('projects'); return null; }
+  // 3.6: each person has their own (person null: the owner's, kept where 3.5.1 kept it).
+  activeName(person = null) { return this.isOwnerPerson(person) ? this.setting('active_project') || '' : this.personSetting(person, 'active_project') || ''; }
+  activeProject(person = null) { const name = this.activeName(person); return name ? this.project(name) ?? null : null; }
+  setActiveProject(name, actor, person = null) {
+    const own = this.isOwnerPerson(person);
+    const save = (v) => (own ? this.setting('active_project', v) : this.personSetting(person, 'active_project', v || null));
+    const hints = own ? null : { person };
+    if (!name) { save(''); this.event(null, actor, 'project.active', 'ninguno', { person: own ? null : person }); this.changed('projects', hints); return null; }
     const project = this.project(name); if (!project) throw new Error(tr('sys.board.unknownProject', { name }));
     // 3.2: the same folder again (the assistant sets it on each request) says nothing: the notice came out again and again.
-    if (this.setting('active_project') === project.name) return project;
-    this.setting('active_project', project.name);
-    this.event(null, actor, 'project.active', `${project.name} -> ${project.path}`);
-    this.notice(tr('msg.board.activeFolder', { name: project.name, path: project.path }), 'info');
-    this.changed('projects');
+    if (this.activeName(person) === project.name) return project;
+    save(project.name);
+    this.event(null, actor, 'project.active', `${project.name} -> ${project.path}`, { person: own ? null : person });
+    this.notice(tr('msg.board.activeFolder', { name: project.name, path: project.path }), 'info', { person: own ? null : person });
+    this.changed('projects', hints);
     return project;
   }
 
@@ -219,9 +233,11 @@ export class Board {
   }
 
   // Open tasks however old (so none disappears) plus the last `finished` closed ones.
-  panelTasks(finished = 100) {
-    const open = this.all("SELECT * FROM tasks WHERE status NOT IN ('done', 'cancelled') ORDER BY id DESC");
-    const closed = this.all("SELECT * FROM tasks WHERE status IN ('done', 'cancelled') ORDER BY id DESC LIMIT ?", Number(finished));
+  // 3.6: principal: only the tasks that person may see (theirs and those of the projects shared with them).
+  panelTasks(finished = 100, { principal = null } = {}) {
+    const s = principal ? scopeSql(principal, 'task', 'tasks') : { where: '1=1', args: [] };
+    const open = this.all(`SELECT * FROM tasks WHERE status NOT IN ('done', 'cancelled') AND ${s.where} ORDER BY id DESC`, ...s.args);
+    const closed = this.all(`SELECT * FROM tasks WHERE status IN ('done', 'cancelled') AND ${s.where} ORDER BY id DESC LIMIT ?`, ...s.args, Number(finished));
     return [...open, ...closed].sort((a, b) => b.id - a.id).map(parse);
   }
 
@@ -229,7 +245,7 @@ export class Board {
   // readonly: the task only reads (research, review): it may run at the same time as others in the same folder.
   // 3.2: conversation_id: the conversation that asked for it (its report goes back there); a subtask, a review or a join
   // task belongs to the one of the task it comes from.
-  createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null, level = null, fixedBrief = false, internal = false, conversation_id = null }, actor) {
+  createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null, level = null, fixedBrief = false, internal = false, conversation_id = null, person = null }, actor) {
     if (!MODES.includes(mode)) throw new Error(tr('sys.board.badMode'));
     // 3.5: the server (role «centro») has no isolated copies: every task works in the folder, in turn.
     if (mode === 'aislada' && isHeadless()) mode = 'carpeta';
@@ -240,7 +256,10 @@ export class Board {
     const conversation = convId ? this.conversation(convId) : null;
     // The folder the work must stay in: the conversation's project (3.2: several conversations work at once, each in its
     // own), else the working folder of the app.
-    const active = conversation ? (conversation.project ? this.project(conversation.project) : null) : this.activeProject();
+    // 3.6: whose the task is: given, else its conversation's, the task it comes from or its schedule's (null: the owner).
+    const from = parent_id ?? review_of;
+    const who = person ?? conversation?.person_id ?? (from ? this.task(from)?.person_id : null) ?? (schedule_id ? this.one('SELECT person_id FROM schedules WHERE id = ?', Number(schedule_id))?.person_id : null) ?? null;
+    const active = conversation ? (conversation.project ? this.project(conversation.project) : null) : this.activeProject(who);
     // 2.7: the projects of a multiplatform group work together: a task may go to a sister of the active project.
     // 3.1: internal: a task the engine itself needs in that project (joining a copy), whatever project is active now.
     if (!internal && active && proj.name !== active.name && actor !== 'usuario' && !(active.grupo && proj.grupo === active.grupo)) throw new Error(tr('sys.board.otherFolder', { name: active.name, path: active.path, user: userName() }));
@@ -292,9 +311,9 @@ export class Board {
     if (actor !== 'orb' && actor !== 'usuario' && !trusted) { tags.push('creada_por_agente'); reasons.push(tr('msg.board.reasonByAgent', { actor, name: assistantName() })); }
     const status = tags.length ? 'awaiting_approval' : 'queued';
     const at = now();
-    const { lastInsertRowid } = this.run(`INSERT INTO tasks (project, title, description, agent, account, model, reasoning, fast, launch, priority, depends_on, sensitivity, status, created_by, project_path, created_at, updated_at, mode, readonly, parent_id, review_of, schedule_id, level, conversation_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, proj.name, title, String(description), agent, account || null, model, reasoning, Number(fast), launch, Math.min(Math.max(Number(priority) || 2, 1), 3),
-      JSON.stringify(depends_on.map(Number)), JSON.stringify([...new Set(tags)]), status, String(actor), proj.path, at, at, mode, Number(Boolean(readonly)), parent_id ? Number(parent_id) : null, review_of ? Number(review_of) : null, schedule_id ? Number(schedule_id) : null, ['simple', 'normal', 'complejo'].includes(level) ? level : null, convId ?? null);
+    const { lastInsertRowid } = this.run(`INSERT INTO tasks (project, title, description, agent, account, model, reasoning, fast, launch, priority, depends_on, sensitivity, status, created_by, project_path, created_at, updated_at, mode, readonly, parent_id, review_of, schedule_id, level, conversation_id, person_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, proj.name, title, String(description), agent, account || null, model, reasoning, Number(fast), launch, Math.min(Math.max(Number(priority) || 2, 1), 3),
+      JSON.stringify(depends_on.map(Number)), JSON.stringify([...new Set(tags)]), status, String(actor), proj.path, at, at, mode, Number(Boolean(readonly)), parent_id ? Number(parent_id) : null, review_of ? Number(review_of) : null, schedule_id ? Number(schedule_id) : null, ['simple', 'normal', 'complejo'].includes(level) ? level : null, convId ?? null, who);
     const id = Number(lastInsertRowid);
     this.event(id, actor, 'task.created', status);
     if (askedNote) this.event(id, 'orb', 'note', askedNote);
@@ -578,7 +597,7 @@ export class Board {
     const project = name ? this.project(name) : null;
     if (name && !project) throw new Error(tr('sys.board.unknownProject', { name }));
     if ((c.project ?? null) !== (project?.name ?? null)) this.updateConversation(c.id, { project: project?.name ?? null });
-    this.setActiveProject(project?.name ?? '', actor);
+    this.setActiveProject(project?.name ?? '', actor, c.person_id ?? null);
     return project;
   }
   // The conversation a task belongs to: its own, or the one of the task it comes from (a subtask, a review, a join).
@@ -603,7 +622,9 @@ export class Board {
   addChat(role, body, meta = null, conversation = undefined, { person = null } = {}) {
     const conv = conversation !== undefined ? conversation : meta?.task ? this.conversationOfTask(meta.task) : null;
     const at = now();
-    const { lastInsertRowid } = this.run('INSERT INTO chat (role, body, meta, at, conversation_id, person_id) VALUES (?, ?, ?, ?, ?, ?)', role, String(body), meta ? JSON.stringify(meta) : null, at, conv ?? null, person ?? null);
+    // 3.6: a line about a task outside any conversation (made by hand or by a schedule) is for that task's person.
+    const who = person ?? (conv == null && meta?.task ? this.one('SELECT person_id FROM tasks WHERE id = ?', Number(meta.task))?.person_id ?? null : null);
+    const { lastInsertRowid } = this.run('INSERT INTO chat (role, body, meta, at, conversation_id, person_id) VALUES (?, ?, ?, ?, ?, ?)', role, String(body), meta ? JSON.stringify(meta) : null, at, conv ?? null, who);
     if (conv && role !== 'notice') this.run('UPDATE conversations SET updated_at = ? WHERE id = ?', at, Number(conv));
     this.changed('chat');
     return { id: Number(lastInsertRowid), conversation: conv ?? null };
@@ -617,9 +638,11 @@ export class Board {
   patchChatMeta(id, meta) { this.run('UPDATE chat SET meta = ? WHERE id = ?', JSON.stringify(meta), Number(id)); this.changed('chat'); }
   // The chat lines of a conversation (not the notices), oldest first: the last `limit`, or only those before a line id.
   // conversation null: the lines of no conversation (about tasks made outside one: by hand, by a schedule).
-  chat(conversation, limit = 200, { before = null } = {}) {
-    const where = conversation == null ? 'conversation_id IS NULL' : 'conversation_id = ?';
-    return this.all(`SELECT * FROM (SELECT * FROM chat WHERE role != 'notice' AND ${where}${before ? ' AND id < ?' : ''} ORDER BY id DESC LIMIT ?) ORDER BY id`, ...(conversation == null ? [] : [Number(conversation)]), ...(before ? [Number(before)] : []), limit)
+  // 3.6: principal: for the lines of no conversation, only that person's (the owner's: theirs and the ones without a person).
+  chat(conversation, limit = 200, { before = null, principal = null } = {}) {
+    const s = conversation == null && principal ? scopeSql(principal, 'chat', 'chat') : null;
+    const where = conversation == null ? `conversation_id IS NULL${s ? ` AND ${s.where}` : ''}` : 'conversation_id = ?';
+    return this.all(`SELECT * FROM (SELECT * FROM chat WHERE role != 'notice' AND ${where}${before ? ' AND id < ?' : ''} ORDER BY id DESC LIMIT ?) ORDER BY id`, ...(conversation == null ? s?.args ?? [] : [Number(conversation)]), ...(before ? [Number(before)] : []), limit)
       .map((r) => { let meta = null; try { meta = r.meta ? JSON.parse(r.meta) : null; } catch { /* ignore */ } return { ...r, meta }; });
   }
   // One chat line by its id (any conversation), with its extra data.
@@ -647,17 +670,19 @@ export class Board {
   }
 
   // 3.2: conversation: the coordinator's, whose project is the one it works in (others may have set the app's folder).
-  summary(agent, conversation = null) {
-    const counts = Object.fromEntries(this.all('SELECT status, COUNT(*) AS n FROM tasks GROUP BY status').map((r) => [r.status, r.n]));
-    const active = this.all("SELECT * FROM tasks WHERE status NOT IN ('done', 'cancelled') ORDER BY priority, id LIMIT 50").map(parse);
+  // 3.6: principal: only what that person may see (their tasks and projects and the ones shared with them).
+  summary(agent, conversation = null, { principal = null } = {}) {
+    const s = principal ? scopeSql(principal, 'task', 'tasks') : { where: '1=1', args: [] };
+    const counts = Object.fromEntries(this.all(`SELECT status, COUNT(*) AS n FROM tasks WHERE ${s.where} GROUP BY status`, ...s.args).map((r) => [r.status, r.n]));
+    const active = this.all(`SELECT * FROM tasks WHERE status NOT IN ('done', 'cancelled') AND ${s.where} ORDER BY priority, id LIMIT 50`, ...s.args).map(parse);
     const conv = conversation ? this.conversation(conversation) : null;
-    const project = conv ? (conv.project ? this.project(conv.project) : null) : this.activeProject();
+    const project = conv ? (conv.project ? this.project(conv.project) : null) : this.activeProject(principal?.person ?? null);
     return {
       paused: this.setting('paused') === '1',
-      activeProject: project ? `${project.name} — ${project.path}` : `ninguno (pregunta a ${userName()} en qué proyecto se trabaja)`,
+      activeProject: project ? `${project.name} — ${project.path}` : `ninguno (pregunta a ${principal ? this.personName(principal.person) : userName()} en qué proyecto se trabaja)`,
       projectsFolder: ctx.paths.projects,
       categories: CATEGORIES.map((c) => `${c} — ${ctx.paths.categories[c]}`),
-      projects: this.projects().map((p) => `${p.name} — ${p.path}`),
+      projects: this.projects({ principal }).map((p) => `${p.name} — ${p.path}`),
       counts,
       active: active.map((t) => ({ id: t.id, project: t.project, title: t.title, agent: t.assigned_to ?? t.agent, launch: t.launch, status: t.status, depends_on: t.depends_on })),
       unreadForYou: agent ? this.inbox(agent, false).length : undefined

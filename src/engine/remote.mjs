@@ -672,10 +672,13 @@ export function createRemote({ board, api, log, emit = () => {} }) {
 
   // 3.5: a notification of the bots (a reminder, a bot's answer, a card waiting): to every phone with notifications on
   // that does not have the app open.
-  function pushNote({ title, body } = {}) {
+  // 3.6: person: only that person's devices (a device without a person is the owner's).
+  function pushNote({ title, body, person = null } = {}) {
     const openNow = new Set([...clients].map((c) => c.device));
     const note = pushContent('bots', { title, body }, ctx.config);
-    for (const d of board.all('SELECT id, push FROM devices WHERE push IS NOT NULL')) {
+    const owner = board.ownerId?.() ?? null;
+    for (const d of board.all('SELECT id, push, person_id FROM devices WHERE push IS NOT NULL')) {
+      if (person && (d.person_id ?? owner) !== person) continue;
       if (openNow.has(d.id)) continue;
       let sub; try { sub = JSON.parse(d.push); } catch { continue; }
       sendPush(sub, { ...note, tag: 'orb-bot', url: '/' }, own.vapid)

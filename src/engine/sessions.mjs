@@ -14,7 +14,10 @@ import { CURSOR_FILES } from '../agents/cursor.mjs';
 import { optiPersona } from './opti.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { git, isGitRepo, repoRoot } from '../core/workspace.mjs';
-import { account as findAccount, defaultAccount, accountEnv } from '../core/accounts.mjs';
+import { account as findAccount, accountEnv } from '../core/accounts.mjs';
+import { pickAccount, checkSpend, recordSpend, spendText } from '../core/budget.mjs';
+import { scopeSql } from '../core/authz.mjs';
+import { confineFor } from '../core/guard.mjs';
 import { browserKey } from '../core/browser-key.mjs';
 import { PERMISSIONS, plainAction, pidKills, unwrapShell } from '../core/guard.mjs';
 import { processList, taskProcesses } from '../core/procs.mjs';
@@ -43,23 +46,26 @@ export const browserEnv = (agent, session, task = '') => (browserOn() ? { ORB_BR
 // Orb's signature of who a worker's MCP process is (agent and task): made with a key that lives only in the engine's
 // memory (a new one each start, which retires the old signatures); the database keeps just the hash, for the MCP to look
 // it up. The same agent and task always get the same signature, so the table does not grow with every turn.
-export function agentToken(board, agent, taskId = '') {
+// 3.6: and the person it works for (a task's, a direct conversation's): its tools see only what that person may see.
+export function agentToken(board, agent, taskId = '', person = null) {
   if (!agentKey) { agentKey = crypto.randomBytes(32); board.run("DELETE FROM settings WHERE key LIKE 'agent_id:%'"); }
-  const token = crypto.createHmac('sha256', agentKey).update(`${agent}|${taskId}`).digest('hex');
-  board.settingJson(`agent_id:${crypto.createHash('sha256').update(token).digest('hex')}`, { agent, task: taskId ? Number(taskId) : null });
+  const token = crypto.createHmac('sha256', agentKey).update(`${agent}|${taskId}|${person ?? ''}`).digest('hex');
+  board.settingJson(`agent_id:${crypto.createHash('sha256').update(token).digest('hex')}`, { agent, task: taskId ? Number(taskId) : null, person: person ?? null });
   return token;
 }
+// 3.6: the coordinator's conversation, signed with its key (its MCP process checks it was not changed).
+export const conversationSig = (orchKey, conversation) => crypto.createHmac('sha256', String(orchKey)).update(`conversation|${conversation}`).digest('hex');
 let agentKey = null;
 
 // MCP servers handed to an agent: the assistant's board (with the browser tools when the app offers them) plus the
 // user's own connectors enabled for that agent. session: which conversation, so its next turn reuses the same page.
 // 3.2: conversation: the coordinator's conversation (its questions, tasks and project are that conversation's).
-export function mcpServersFor(agent, { board, taskId = '', orchestrator = false, browser = !orchestrator, session = '', orchKey = '', conversation = null } = {}) {
+export function mcpServersFor(agent, { board, taskId = '', orchestrator = false, browser = !orchestrator, session = '', orchKey = '', conversation = null, person = null } = {}) {
   const who = orchestrator ? 'orb' : agent;
   const env = { ORB_HOME: ctx.home, ORB_AGENT: who, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}), ...(orchestrator && conversation ? { ORB_CONVERSATION: String(conversation) } : {}) };
-  if (!orchestrator && board) env.ORB_AGENT_TOKEN = agentToken(board, who, taskId);
+  if (!orchestrator && board) env.ORB_AGENT_TOKEN = agentToken(board, who, taskId, person);
   // The coordinator's key goes to its own MCP process only (handed in memory by the SDK, never written to a file).
-  if (orchestrator && orchKey) env.ORB_ORCH_KEY = orchKey;
+  if (orchestrator && orchKey) { env.ORB_ORCH_KEY = orchKey; if (conversation) env.ORB_CONVERSATION_TOKEN = conversationSig(orchKey, conversation); }
   if (browser && session && browserOn()) {
     env.ORB_BROWSER_PIPE = ctx.browser.pipe;
     env.ORB_SESSION = String(session);
@@ -67,8 +73,11 @@ export function mcpServersFor(agent, { board, taskId = '', orchestrator = false,
   }
   const servers = { orb: orbMcpServer(env) };
   if (!orchestrator) {
+    const owner = board?.ownerId?.() ?? null;
     for (const s of ctx.config.mcpServers ?? []) {
       if (s.enabled === false || (s.agents?.length && !s.agents.includes(agent))) continue;
+      // 3.6: a connector is its person's (mcpServers[].person; none = the owner's): only their own agents get it.
+      if ((s.person ?? owner) !== (person ?? owner)) continue;
       servers[s.name] = { command: s.command, args: s.args ?? [], ...(s.env ? { env: s.env } : {}) };
     }
   }
@@ -133,6 +142,7 @@ export class Sessions {
     this.onApprovalDone = () => {}; // set by the engine: that notice shows how it ended (allowed, denied, nobody answered)
     this.onApprovalExpired = () => {};
     this.onRate = () => {};     // set by the engine: the real usage each account reports (budget)
+    this.onBlocked = () => {};  // 3.6: set by the engine: a turn refused by a loan's limits (a line + a push to that person)
     // Sessions left "running" by a closed app: their process is gone. Marked "interrupted" so they can continue.
     board.run("UPDATE sessions SET status = 'interrupted' WHERE status = 'running'");
     // Approval cards left open by a closed app can no longer be answered.
@@ -143,15 +153,20 @@ export class Sessions {
     this.sweeper.unref?.();
   }
 
-  list({ archived = false, kind } = {}) {
-    return this.board.all(`SELECT * FROM sessions WHERE archived = ? ${kind ? 'AND kind = ?' : ''} ORDER BY updated_at DESC LIMIT 300`, Number(archived), ...(kind ? [kind] : [])).map(parseRow);
+  // 3.6: principal: only that person's (a task's session is its task's person's).
+  list({ archived = false, kind, principal = null } = {}) {
+    const s = principal ? scopeSql(principal, 'session', 'sessions') : { where: '1=1', args: [] };
+    return this.board.all(`SELECT * FROM sessions WHERE archived = ? ${kind ? 'AND kind = ?' : ''} AND ${s.where} ORDER BY updated_at DESC LIMIT 300`, Number(archived), ...(kind ? [kind] : []), ...s.args).map(parseRow);
   }
   get(id) { return parseRow(this.board.one('SELECT * FROM sessions WHERE id = ?', String(id))); }
   must(id) { const s = this.get(id); if (!s) throw new Error(tr('msg.sessions.noConversation')); return s; }
 
-  create({ kind = 'chat', agent, account = null, model = null, reasoning = 'medium', permission = 'editar', project = null, cwd, title, taskId = null, parentId = null }) {
+  // 3.6: person: whose it is (a task's: its task's person); the account must be one that person may spend.
+  create({ kind = 'chat', agent, account = null, model = null, reasoning = 'medium', permission = 'editar', project = null, cwd, title, taskId = null, parentId = null, person = null }) {
     adapter(agent);
-    const acc = account ? findAccount(account) : defaultAccount(agent);
+    if (account && findAccount(account) && findAccount(account).agent !== agent) throw new Error(tr('msg.sessions.accountNotOf', { account, agent }));
+    const acc = pickAccount(this.board, { person, agent, preferred: account });
+    if (!acc && account && findAccount(account)?.agent === agent) throw Object.assign(new Error(tr('msg.spend.notYours')), { userFacing: true });
     if (!acc || acc.agent !== agent) throw new Error(tr('msg.sessions.accountNotOf', { account, agent }));
     if (!PERMISSIONS.includes(permission)) throw new Error(tr('msg.sessions.badPermission'));
     if (!cwd || !fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) throw new Error(tr('msg.sessions.noCwd', { cwd }));
@@ -159,8 +174,8 @@ export class Sessions {
     // No model chosen = the agent's default from Agentes (Sonnet for Claude), never its CLI's own default (which can be the
     // most expensive one).
     const chosen = model || ctx.config.agents[agent]?.defaultModel || null;
-    this.board.run(`INSERT INTO sessions (id, kind, agent, account, model, reasoning, permission, project, cwd, task_id, title, status, parent_id, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'idle', ?, ?, ?)`, id, kind, agent, acc.id, chosen, reasoning, permission, project, cwd, taskId, oneLine(title || tr('msg.sessions.defaultTitle'), 80), parentId, at, at);
+    this.board.run(`INSERT INTO sessions (id, kind, agent, account, model, reasoning, permission, project, cwd, task_id, title, status, parent_id, created_at, updated_at, person_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'idle', ?, ?, ?, ?)`, id, kind, agent, acc.id, chosen, reasoning, permission, project, cwd, taskId, oneLine(title || tr('msg.sessions.defaultTitle'), 80), parentId, at, at, person ?? null);
     const s = this.get(id); this.emit('session:update', s); return s;
   }
 
@@ -189,7 +204,7 @@ export class Sessions {
     this.board.run('DELETE FROM session_items WHERE session_id = ?', id);
     this.board.run('DELETE FROM session_queue WHERE session_id = ?', id);
     this.board.run('DELETE FROM sessions WHERE id = ?', id);
-    this.emit('session:removed', { id });
+    this.emit('session:removed', { id, ...(s.person_id ? { person: s.person_id } : {}) });
   }
 
   // History in pages: the newest `limit` items, or those before `before` (older pages) / after `after` (new ones).
@@ -301,7 +316,9 @@ export class Sessions {
       exe, cwd: s.cwd, model: s.model, reasoning: s.reasoning, permission: s.permission,
       resumeId: forkFrom || s.cli_session || null, forkSession: Boolean(forkFrom), newSessionId,
       // 2.7: Opti Bot (Monitoreo del equipo) gets only its own tools (diagnosis, copy of Orb and proposals) and reads only.
-      mcpServers: this.isOpti(s) ? { opti: optiMcpServer({ ORB_HOME: ctx.home, ORB_AGENT: 'opti' }) } : mcpServersFor(s.agent, { board: this.board, taskId, session: s.id }), budgetUsd,
+      mcpServers: this.isOpti(s) ? { opti: optiMcpServer({ ORB_HOME: ctx.home, ORB_AGENT: 'opti' }) } : mcpServersFor(s.agent, { board: this.board, taskId, session: s.id, person: s.person_id ?? null }), budgetUsd,
+      // 3.6 (A9): someone else's than the owner's works only inside its project's folder (no other project, no secrets).
+      ...(this.board.isOwnerPerson(s.person_id) ? {} : { confine: confineFor({ roots: [s.cwd], others: this.board.projects().filter((p) => p.name !== s.project).map((p) => p.path) }) }),
       ...(this.isOpti(s) && s.agent === 'claude' ? { systemPrompt: optiPersona(), tools: { allowed: ['mcp__opti'], disallowed: COORDINATOR_DENIED } } : {}),
       env: { ...accountEnv(acc), ...browserEnv(s.agent, s.id, taskId), ORB_HOME: ctx.home, ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
       internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog, cfg: ctx.config.agents[s.agent] ?? {},
@@ -481,8 +498,17 @@ export class Sessions {
     if (this.running.has(id)) throw new Error(tr('msg.sessions.stillWorking'));
     if (!String(text ?? '').trim() && !images.length) throw new Error(tr('msg.sessions.writeMessage'));
     // The conversation's own account: if it was removed, the turn does not silently move to another subscription.
-    const acc = s.account ? findAccount(s.account) : defaultAccount(s.agent);
+    const acc = s.account ? findAccount(s.account) : pickAccount(this.board, { person: s.person_id ?? null, agent: s.agent });
     if (!acc) throw new Error(tr('msg.sessions.accountGone', { account: s.account }));
+    // 3.6: a borrowed account within its loan (caps, reserve, end date); refused, the person who spends is told.
+    const spend = checkSpend(this.board, { person: s.person_id ?? null, account: acc.id });
+    if (!spend.ok) {
+      const why = spendText(spend, { account: acc.id });
+      this.addItem(id, 'error', 'text', why);
+      try { this.onBlocked(s, why); } catch (error) { this.log(`aviso de uso: ${error.message}`); }
+      onFinish?.({ code: -1, state: { final: why, text: '', isError: true }, stderr: why, logFile: null, stopped: false, blocked: spend });
+      return null;
+    }
     const a = adapter(s.agent);
     const attached = placeAttachments(images, s.cwd);
     if (showUser) this.addItem(id, 'user', 'text', attached.length ? { text, images: attached } : text);
@@ -531,6 +557,7 @@ export class Sessions {
       const limited = Boolean(result.limit);
       this.update(id, { status: limited ? 'limited' : failed ? 'error' : 'idle' });
       if (before) { try { logDirect(this.board, this.get(id) ?? s, { before, request: text, answer: result.text || result.final }); } catch (error) { this.log(`bitácora de la conversación ${id}: ${error.message}`); } }
+      try { recordSpend(this.board, { person: s.person_id ?? null, account: acc.id, session: s.id, task: taskId ?? null, usage: result.usage ?? {} }); } catch (error) { this.log(`uso ${id}: ${error.message}`); }
       const state = { final: result.final, text: result.text, isError: result.isError, usage: result.usage, cliSession: this.get(id)?.cli_session };
       finished = true;
       try { onFinish?.({ code: result.isError ? 1 : 0, state, stderr: result.isError ? result.final : '', logFile: entry.logFile, stopped: run.stopped, timedOut: Boolean(run.timedOut), limit: result.limit }); }
@@ -573,7 +600,7 @@ export class Sessions {
     if (this.running.has(id)) throw new Error(tr('msg.sessions.forkWait'));
     const a = adapter(s.agent);
     const copy = this.create({ kind: 'chat', agent: s.agent, account: s.account, model: s.model, reasoning: s.reasoning, permission: s.permission,
-      project: s.project, cwd: s.cwd, title: title || tr('msg.sessions.forkTitle', { title: s.title }), parentId: s.id });
+      project: s.project, cwd: s.cwd, title: title || tr('msg.sessions.forkTitle', { title: s.title }), parentId: s.id, person: s.person_id ?? null });
     this.board.run('UPDATE sessions SET titled = 1 WHERE id = ?', copy.id); // 3.2: its title stays (not renamed by its next message)
     const old = this.board.all("SELECT role, kind, body, at FROM session_items WHERE session_id = ? AND kind = 'text' AND role IN ('user', 'assistant') ORDER BY id DESC LIMIT 40", s.id).reverse();
     for (const it of old) this.board.run('INSERT INTO session_items (session_id, role, kind, body, at) VALUES (?, ?, ?, ?, ?)', copy.id, it.role, it.kind, it.body, it.at);

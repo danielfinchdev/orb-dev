@@ -21,7 +21,7 @@ export function checkProjectName(name) {
   return String(name).normalize('NFC').trim();
 }
 
-export function createProject(board, { name, notes = '', category }, actor) {
+export function createProject(board, { name, notes = '', category, person = null }, actor) {
   const clean = String(name ?? '').normalize('NFC').trim();
   checkProjectName(clean);
   if (board.project(clean)) throw new Error(tr('msg.projects.exists', { name: clean }));
@@ -40,7 +40,7 @@ export function createProject(board, { name, notes = '', category }, actor) {
     git(folder, 'add', '.gitignore');
     git(folder, ...ORB_GIT, 'commit', '-q', '-m', tr('sys.projects.firstCommit'));
   }
-  return board.addProject({ name: clean, path: folder, notes }, actor);
+  return board.addProject({ name: clean, path: folder, notes }, actor, { person });
 }
 
 // 3.2.1: renames a project and, when it is a project folder of a category, its folder too (name = folder). Only when
@@ -97,13 +97,13 @@ export function renameProject(board, { name, to }, actor) {
 // 2.7: a project for one platform or for several. Several = a multiplatform group: one project per platform in its own
 // category, named <name>-<platform> (tienda-android, tienda-ios…), linked by their group, plus a shared folder
 // <home>/comun/<name> for what they have in common (API, design, texts, images) that every one of them reads.
-export function createProjects(board, { name, notes = '', categories }, actor) {
+export function createProjects(board, { name, notes = '', categories, person = null }, actor) {
   const cats = [...new Set((Array.isArray(categories) && categories.length ? categories : [undefined]).map(checkCategory))];
-  if (cats.length === 1) return [createProject(board, { name, notes, category: cats[0] }, actor)];
+  if (cats.length === 1) return [createProject(board, { name, notes, category: cats[0], person }, actor)];
   const base = checkProjectName(name);
   const names = cats.map((c) => `${base}-${c}`);
   for (const n of names) if (board.project(n)) throw new Error(tr('msg.projects.exists', { name: n }));
-  const made = names.map((n, i) => createProject(board, { name: n, notes, category: cats[i] }, actor));
+  const made = names.map((n, i) => createProject(board, { name: n, notes, category: cats[i], person }, actor));
   const common = commonFolder(base);
   fs.mkdirSync(common, { recursive: true });
   const readme = path.join(common, 'LEEME.md');

@@ -217,17 +217,68 @@ export function botCheck({ tool, paths = [], patterns = [], url = null, bot, lan
   return null;
 }
 
+// ---- 3.6 (A9): a session of someone other than the owner works only inside its project's folder. confine: { roots,
+// others, secrets } (confineFor): every path and pattern must fall inside a root, on its real path too (a link or «..»
+// does not get round it); never another project's folder, Orb's own folder or a secret. A command that names a folder of
+// this PC's user outside its roots is refused too.
+export function confineFor({ roots = [], others = [] } = {}) {
+  const realOf = (p) => { try { return fs.realpathSync.native(p); } catch { return path.resolve(p); } };
+  const list = roots.filter(Boolean).map((r) => path.resolve(r));
+  return { roots: [...new Set([...list, ...list.map(realOf)])], others: others.filter(Boolean).map((r) => path.resolve(r)).filter((o) => !list.some((r) => inside(r, o) || inside(o, r))),
+    secrets: [...botSecretDirs(), ...(ctx.home ? [path.join(ctx.home, '.orb')] : [])] };
+}
+const ABS_TOKEN = /(?:^|[\s"'=(])((?:[a-zA-Z]:[\\/]|\\\\|\/|~[\\/])[^\s"'|;&<>()]*)/g;
+// The real path of a path that may not exist yet: its nearest existing folder resolved (links included), plus the rest.
+const realDeep = (p) => {
+  let cur = path.resolve(p); const rest = [];
+  for (let i = 0; i < 64; i++) {
+    try { return path.join(fs.realpathSync.native(cur), ...rest.reverse()); } catch { /* not there yet */ }
+    const up = path.dirname(cur); if (up === cur) break;
+    rest.push(path.basename(cur)); cur = up;
+  }
+  return path.resolve(p);
+};
+export function confineCheck({ paths = [], patterns = [], command = '', confine, lang = 'es' }) {
+  const real = realDeep;
+  if (!confine || typeof confine !== 'object') return null;
+  const T = (k) => translate(lang, `msg.guard.${k}`);
+  const roots = confine.roots ?? []; const base = roots[0] ?? process.cwd();
+  const at = (p) => (path.isAbsolute(p) ? path.resolve(p) : path.resolve(base, p));
+  const within = (p) => roots.some((r) => inside(p, r));
+  const blocked = (p) => (confine.secrets ?? []).some((d) => inside(p, d)) || (confine.others ?? []).some((d) => inside(p, d));
+  for (const raw of [...paths, ...patterns].filter(Boolean).map(String)) {
+    if (SECRET_NAME.test(raw.replace(/\\/g, '/'))) return { decision: 'deny', reason: T('confinedSecret') };
+    const p = at(paths.includes(raw) ? raw : globBase(raw)); const r = real(p);
+    if (!within(p) || !within(r)) return { decision: 'deny', reason: T('confined') };
+  }
+  const text = String(command ?? '');
+  if (text) {
+    if (SECRET_NAME.test(text.replace(/\\/g, '/'))) return { decision: 'deny', reason: T('confinedSecret') };
+    const home = os.homedir();
+    for (const m of text.matchAll(ABS_TOKEN)) {
+      const tok = m[1].replace(/^~(?=[\\/])/, home);
+      const p = path.resolve(tok); const r = real(p);
+      if (within(p) && within(r)) continue;
+      if (blocked(p) || blocked(r)) return { decision: 'deny', reason: T('confined') };
+      if (inside(p, home) || (ctx.home && inside(p, ctx.home))) return { decision: 'deny', reason: T('confined') };
+    }
+  }
+  return null;
+}
+
 // decide({ permission, tool, kind, command, paths, internalDir, lang, bot }) → (lang: language of the reasons, default 'es')
 //  { decision: 'allow' | 'ask' | 'deny', reason }
 // bot (3.5): the session is one of the user's bots: its own tools (mcp__bot, the agents' browser) are allowed, and any
 // connector tool that sends, buys, books or deletes asks first, even in read-only mode. 3.5.1: bot may be the bot's guard
 // ({ dir, tainted, hosts }, src/engine/bots.mjs): its folder only, no secrets, care after reading from outside (botCheck);
 // patterns (Glob/Grep) and url (WebFetch, the browser) are checked too.
-export function decide({ permission = 'editar', tool, kind, command = '', paths = [], patterns = [], url = null, internalDir, lang = 'es', bot = false }) {
+export function decide({ permission = 'editar', tool, kind, command = '', paths = [], patterns = [], url = null, internalDir, lang = 'es', bot = false, confine = null }) {
   const T = (k) => translate(lang, `msg.guard.${k}`);
   const cls = toolClass(tool, kind);
   const text = [command, ...paths, ...patterns].join(' ');
   if (touchesInternal(text, internalDir)) return { decision: 'deny', reason: T('internal') };
+  const confined = confineCheck({ paths, patterns, command, confine, lang });
+  if (confined) return confined;
   const hit = protectedHit(text);
   if (hit) return { decision: 'deny', reason: translate(lang, 'msg.guard.protected', { name: hit }) };
   const botVerdict = botCheck({ tool, paths, patterns, url, bot, lang });

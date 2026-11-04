@@ -80,7 +80,8 @@ test('lo de cada persona es suyo: ni el otro ni el dueño lo leen, y queda en la
   assert.doesNotThrow(() => authorize(board, asLeo, 'chat.list', { conversation: his.id }));
   denied(() => authorize(board, asLeo, 'chat.list', { conversation: mine.id }), 'right');
   denied(() => authorize(board, asAna, 'chat.list', { conversation: his.id }), 'right');
-  denied(() => authorize(board, asLeo, 'chat.list', {}), 'right'); // the lines of no conversation are the owner's
+  // WS3: the lines of no conversation are each person's own (chat.list filters them by person)
+  assert.doesNotThrow(() => authorize(board, asLeo, 'chat.list', {}));
   const row = board.one("SELECT * FROM audit WHERE method = 'chat.list' AND person_id = ? ORDER BY id DESC LIMIT 1", ana);
   assert.deepEqual([row.decision, row.reason, row.resource, row.channel], ['deny', 'right', `conversation:${his.id}`, 'desktop']);
   assert.ok(!JSON.stringify(board.all('SELECT * FROM audit')).includes('De Leo'), 'la auditoría no guarda contenido');

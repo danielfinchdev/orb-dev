@@ -16,7 +16,7 @@ const SHAREABLE = new Set(['bot', 'group', 'project', 'integration']);
 const DEVICE_CHANNEL = { phone: 'phone', browser: 'browser', terminal: 'terminal', orb: 'orb' };
 
 // A refused call: 403, with a message the user may read (never what exists or whose it is).
-const REASON_KEY = { ceiling: 'msg.remote.pcOnly', ownerOnly: 'msg.authz.ownerOnly', admin: 'msg.authz.ownerOnly', strong: 'msg.authz.needPin', desktop: 'msg.remote.pcOnly' };
+const REASON_KEY = { noDev: 'msg.authz.noDev', ceiling: 'msg.remote.pcOnly', ownerOnly: 'msg.authz.ownerOnly', admin: 'msg.authz.ownerOnly', strong: 'msg.authz.needPin', desktop: 'msg.remote.pcOnly' };
 export class AuthzError extends Error {
   constructor(reason = 'denied', { method = null, resource = null } = {}) {
     super(tr(REASON_KEY[reason] ?? 'msg.authz.denied'));
@@ -94,7 +94,7 @@ function resolve(board, res) {
     case 'device': { const r = one(board, 'SELECT person_id FROM devices WHERE id = ?', String(id)); return { owner: who(r), parents: [] }; }
     case 'account': { const a = (ctx.config?.accounts ?? []).find((x) => x.id === String(id)); return { owner: a ? a.person ?? owner : null, parents: [] }; }
     case 'integration': return { owner: ['ha', 'srv'].includes(String(id)) ? owner : null, parents: [], key: String(id) };
-    case 'log': return String(id) === 'general' ? { owner, parents: [] } : resolve(board, { type: 'project', id });
+    case 'log': return String(id) === 'general' ? { owner, parents: [] } : { ...resolve(board, { type: 'project', id }), via: { type: 'project', id } };
     default: return { owner: null, parents: [] };
   }
 }

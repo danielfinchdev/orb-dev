@@ -118,6 +118,14 @@ async function start(home, version, secret, browser, headless) {
   const { Bots } = await import('./bots.mjs');
   const bots = new Bots(board, { emit, log, push: (note) => remoteRef.current?.push?.(note) }).start();
   api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, bots });
+  // 3.6: a turn refused by a loan's limits (or a bot's caps): a notice and a push to the person who spends, and only them.
+  const blocked = (person, why) => {
+    const who = person && !board.isOwnerPerson(person) ? person : null;
+    board.notice(why, 'warning', { person: who });
+    try { remoteRef.current?.push?.({ title: ctx.config.assistantName, body: why, person: person ?? board.ownerId() }); } catch { /* no phones */ }
+  };
+  sessions.onBlocked = (s, why) => blocked(s?.person_id ?? null, why);
+  orchestrator.onBlocked = (c, why) => blocked(c?.person_id ?? null, why);
   remote = remoteRef.current = createRemote({ board, api, log, emit });
   // 3.5 Magic Link: the links this Orb made to other Orbs (keys sealed with the app's secret). A workshop linked to a
   // centre runs the calls the centre forwards to it, with the same checks as a phone's.

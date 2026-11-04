@@ -19,7 +19,6 @@
 //
 // Each workstream appends ITS OWN section below (WS2 … WS6) and adds it to POLICY / EVENTS at the bottom: one section per
 // workstream, so merges do not conflict. A later section may replace an entry of an earlier one on purpose.
-import { isHeadless } from './context.mjs';
 
 // ---- ceilings: what each channel may call at most (the person's rights on the resource decide inside that).
 // What a phone (and a browser, a terminal, a forwarded call) may call. Everything that changes settings, accounts,
@@ -65,7 +64,8 @@ export const withinCeiling = (set, method) => {
   if (set === '*') return true;
   if (!set) return false;
   const prefix = /^(taller|centro)\./.exec(String(method))?.[1];
-  return set.has(method) || Boolean(prefix && set.has(`${prefix}.*`)) || (isHeadless() && CENTRO_PHONE.has(method));
+  // 3.6 (WS3): signing in one's own account works from any channel (the method checks it is the caller's own account).
+  return set.has(method) || Boolean(prefix && set.has(`${prefix}.*`)) || CENTRO_PHONE.has(method);
 };
 
 // ---- small helpers for the rules
@@ -269,7 +269,64 @@ const CORE = {
 // ======== WS2 · gateway (remote, link, terminal): append entries here.
 const GATEWAY = {};
 // ======== WS3 · Orb mode + accounts: append entries here.
-const ORBMODE = {};
+// 3.6 (A9): Orb mode (tasks, direct conversations with an agent, schedules and new projects) needs «dev» among the
+// person's caps, or a project shared with them to «talk» or more (then in that project only). The owner always may.
+const dbOne = (board, sql, ...args) => { try { return board.one(sql, ...args); } catch { return undefined; } };
+const hasDevCap = (board, person) => { try { return JSON.parse(dbOne(board, 'SELECT caps FROM persons WHERE id = ?', String(person))?.caps || '{}')?.dev === true; } catch { return false; } };
+export function mayDev(board, principal, project = null) {
+  if (!principal || principal.channel === 'system' || principal.role === 'owner') return true;
+  if (project) {
+    const row = dbOne(board, 'SELECT name, person_id FROM projects WHERE name = ? COLLATE NOCASE', String(project));
+    if (!row) return true; // no such project: the method says so (and authorize refuses what is not theirs)
+    const shared = dbOne(board, "SELECT right FROM shares WHERE resource_type = 'project' AND resource_id = ? COLLATE NOCASE AND person_id = ?", row.name, String(principal.person))?.right;
+    if (shared === 'talk' || shared === 'edit') return true;
+    // not theirs and not shared to talk: the right on the project refuses it (with its own reason)
+    if (row.person_id !== principal.person) return true;
+    return hasDevCap(board, principal.person);
+  }
+  return hasDevCap(board, principal.person);
+}
+const devCheck = (pick) => (board, principal, params) => (mayDev(board, principal, pick(params)) ? true : 'noDev');
+const account = (v) => ({ type: 'account', id: id(v) });
+// sessions.fork makes a session of the same project.
+const sessionProject = (board, sid) => dbOne(board, 'SELECT project FROM sessions WHERE id = ?', String(sid ?? ''))?.project ?? null;
+const ORBMODE = {
+  // the lines of no conversation (tasks made by hand or by a schedule): each person their own (the method filters)
+  'chat.list': { res: (p) => (p.conversation == null ? null : conv(p.conversation)), right: 'view' },
+  // the brain new conversations start with is each person's own
+  'chat.settings': { res: (p) => (p.conversation == null ? null : conv(p.conversation)), right: 'own' },
+  'tasks.create': { res: (p) => ({ ...proj(p.project), right: 'talk' }), create: 'task', check: devCheck((p) => p.project ?? null) },
+  'sessions.create': { res: (p) => (p.project ? { ...proj(p.project), right: 'talk' } : null), create: 'session', check: devCheck((p) => p.project ?? null) },
+  'sessions.fork': { res: (p) => sess(p.id), right: 'talk', create: 'session', check: (board, principal, p) => (mayDev(board, principal, sessionProject(board, p.id)) ? true : 'noDev') },
+  'schedules.create': { res: (p) => ({ ...proj(p.project), right: 'talk' }), create: 'schedule', check: devCheck((p) => p.project ?? null) },
+  'projects.create': { create: 'project', check: devCheck(() => null) },
+  'projects.review': { res: (p) => proj(p.name), right: 'talk', check: devCheck((p) => p.name ?? null) },
+  'projects.securityReview': { res: (p) => proj(p.name), right: 'talk', check: devCheck((p) => p.name ?? null) },
+  'tasks.review': { res: (p) => task(p.id), right: 'talk' },
+  // a person's own general log ('general') or a project's
+  'logs.read': { res: (p) => (String(p.project ?? '').toLowerCase() === 'general' ? null : { type: 'log', id: id(p.project) }), right: 'view' },
+  // pictures: only from the caller's projects, own accounts and own marked copies (the method checks)
+  'images.read': { public: true },
+  'mentions.options': { public: true, list: 'project' },
+  // accounts: each person their own; the agents' sign-in for one's own account from any channel (the console only on
+  // this PC, for the owner: the method checks)
+  'accounts.add': { create: 'account' },
+  'accounts.update': { res: (p) => account(p.id), right: 'own' },
+  'accounts.remove': { res: (p) => account(p.id), right: 'own' },
+  'accounts.clearCooldown': { res: (p) => account(p.account), right: 'own' },
+  'accounts.lend': { res: (p) => account(p.id), right: 'own' },
+  'accounts.unlend': { res: (p) => account(p.id), right: 'own' },
+  'accounts.loans': { public: true },
+  'agents.login': { res: (p) => account(p.account ?? p.agent), right: 'own' },
+  'agents.loginCode': { public: true }, // the method checks the sign-in is of the caller's own account
+  'agents.loginCancel': { public: true },
+  'agents.loginState': { public: true },
+  'usage.byPerson': { ownerOnly: true },
+  // sharing (the method checks: the resource's person, or «edit» to share it to view or talk; never to oneself)
+  'shares.list': { public: true },
+  'shares.set': { public: true },
+  'shares.remove': { public: true }
+};
 // ======== WS4 · bots: append entries here.
 const BOTSP = {};
 // ======== WS5 · data + time (backup, export, templates): append entries here.
@@ -329,7 +386,12 @@ const EVENTS_CORE = {
 };
 // WS2 … WS6 append their event rules in their own objects, like POLICY.
 const EVENTS_GATEWAY = {};
-const EVENTS_ORBMODE = {};
+const EVENTS_ORBMODE = {
+  // a sign-in: to the person of that account
+  'agents:login': (p) => (p?.account ? { type: 'account', id: p.account } : 'owner'),
+  // a line of no conversation (a task made by hand or by a schedule): its task's person
+  'chat:new': (p) => (p?.conversation != null ? conv(p.conversation) : p?.person ? { person: p.person } : 'owner')
+};
 const EVENTS_BOTSP = {};
 const EVENTS_DATA = { 'backup:done': 'owner', 'backup:restoreReady': 'owner', 'data:moved': 'owner', 'data:personExported': (p) => (p?.person ? { person: p.person } : 'owner') };
 const EVENTS_UI = {};
