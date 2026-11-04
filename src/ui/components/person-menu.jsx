@@ -69,7 +69,7 @@ export function PersonMenu({ list = false, active = false }) {
   const items = [...(bridge.mobile ? [] : [{ id: 'nav-settings', icon: Settings, label: t('nav.settings'), run: () => openSettings() }]), ...actions];
   const trigger = list ? (
     <button type="button" className={cn('hover:bg-accent/60 flex w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[14px]', active && 'bg-accent text-accent-foreground')} aria-label={label} data-testid="person-menu">
-      <PersonDot name={me.person.name} color={me.person.color} size="sm" /><span className="min-w-0 flex-1 truncate" data-testid="person-menu-name">{me.person.name}</span>
+      <PersonDot name={me.person.name} color={me.person.color} size="sm" /><span className="min-w-0 flex-1 truncate">{bridge.mobile ? me.person.name : t('nav.settings')}</span><span className="sr-only" data-testid="person-menu-name">{me.person.name}</span>
     </button>
   ) : (
     <button type="button" className={cn('side-foot-icon', active && 'is-active')} aria-label={label} data-testid="person-menu">

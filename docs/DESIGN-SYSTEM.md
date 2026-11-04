@@ -144,6 +144,34 @@ depending on state, Eliminar in red after a separator).
 - PC-only things (Ajustes dialog, Agentes, God mode, games, themes) never appear on the phone.
 - Dialogs become bottom sheets on the phone (Android glass) and full-width dialogs in a phone browser.
 
+### 2.5 Next: Orb as a messaging app (approved direction, mockups only)
+
+The approved direction for the next version: the whole app works like a messaging app with two zones, **Bots**
+(everyday tasks) and **Orb** (programming). The terminal stays a terminal. The mockups are in
+`docs/diseno/maquetas/mensajeria.html` (`node scripts/maquetas.mjs` saves them as screenshots); until it is built,
+sections 2.1–2.4 describe the shipped app.
+
+- **Desktop and wide browser, three panes.** Left: the head and `Orb | Bots` as today, search + new (bot or chat),
+  the zone's other places as four labelled icons (Bots: Recordatorios, Casa, Memoria, Servidor; Orb: Tareas,
+  Proyectos, Programadas, Pizarra), then the chat list; the sidebar footer exactly as in 2.1. Center: the conversation.
+  Right: the info panel, opened by clicking the name in the chat header and closed with ✕.
+- **Chat list.** Bots: pinned bots as big avatars on top (chief with a star badge, unread dot), then user-made
+  sections («Trabajo», «Casa»…, collapsible, «Nueva sección») and «Sin asignar»; each row avatar, name, last message
+  (a forward icon when one bot wrote to another), time and unread dot. Orb: chats with Orbe grouped by project, each
+  row with its latest progress (a live task, «Esperando tu aprobación», «Completada · 4 archivos»).
+- **Conversation.** Bubbles with time; day separators; inline system lines for routines and reminders; approval cards
+  with Rechazar / Aprobar; Orb: a running task as one live line, and the wave-1 composer.
+- **Info panel / profile.** Bot: big avatar, name, role, Editar; Cerebro, Herramientas, Apps conectadas, Rutinas,
+  Biblioteca; Notificaciones switch with one line; Pausar, Compartir, Eliminar (red, last). Orb chat: Proyecto, Modelo,
+  Razonamiento, Orquestador; «Tareas de este chat» with their state; Archivos, Exportar, Eliminar. Projects and groups
+  get the same kind of profile.
+- **Phone.** Opens on the zone's chat list; ☰ top left (zone switch, user, Ajustes and the places that are not tabs);
+  three tabs per zone (Bots: Chats · Recordatorios · Casa; Orb: Chats · Tareas · Proyectos); a floating button to
+  create. Android in the glass language: the chat header is a glass pill over the colour field.
+- **Bot avatars.** An original family derived from Orb·e: an orb with its dark visor and two pill eyes, plus one
+  detail (plain, ear pods, antenna, ring, wide visor, drop) in eight colours; SVG, deterministic, chosen when the bot is
+  created (big live preview, shape grid, colour row, one «Crear bot» button). Never emoji as the bot's identity.
+
 ## 3. Tokens
 
 All values come from CSS variables in `app.css` (light `:root`, dark `.dark`), redefined per visual theme in

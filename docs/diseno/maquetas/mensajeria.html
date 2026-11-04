@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Orb · maqueta «mensajería» (encargo 9)</title>
+<!--
+  Design MOCKUP only (ENCARGOS item 9): Orb as a messaging app with two zones, Bots and Orb. Not part of the product:
+  nothing imports this page and it is not built. Open it from the repo (it borrows the Outfit font and the robot picture
+  from the source tree) with ?d=desktop|phone|glass &z=bots|orb &s=list|chat|info|create &t=light|dark.
+  scripts/maquetas.mjs shoots every combination headless into test-results/maquetas/.
+  Example data only (generic bots and projects).
+-->
+<style>
+@font-face { font-family: "Outfit Variable"; src: url("../../../node_modules/@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; }
+:root {
+  --radius: 12.8px;
+  --background: oklch(0.985 0.003 268); --foreground: oklch(0.21 0.02 268);
+  --card: oklch(1 0 0); --popover: oklch(1 0 0);
+  --primary: oklch(0.57 0.19 264); --primary-foreground: oklch(0.985 0.005 268);
+  --muted: oklch(0.955 0.008 268); --muted-foreground: oklch(0.5 0.02 268);
+  --accent: oklch(0.945 0.03 268); --accent-foreground: oklch(0.32 0.1 264);
+  --destructive: oklch(0.56 0.2 25); --success: oklch(0.55 0.15 155); --warning: oklch(0.72 0.15 70); --warning-foreground: oklch(0.25 0.05 70);
+  --border: oklch(0.915 0.008 268); --input: oklch(0.88 0.01 268); --sidebar: oklch(0.975 0.004 268);
+  --bubble: oklch(0.57 0.19 264); --bubble-foreground: #fff;
+  --chat-bg: oklch(0.97 0.006 268);
+  --glass-thin: rgb(255 255 255 / 0.58); --glass-regular: rgb(255 255 255 / 0.66); --glass-thick: rgb(250 251 255 / 0.86);
+  --glass-edge: rgb(255 255 255 / 0.85); --glass-stroke: rgb(30 36 90 / 0.09); --glass-blur: blur(22px) saturate(180%);
+  --glass-shadow: 0 1px 1px rgb(30 36 90 / 0.04), 0 10px 28px -14px rgb(40 50 130 / 0.32);
+  --glass-field: radial-gradient(70% 45% at 10% 0%, #c7cdfd 0%, transparent 70%), radial-gradient(60% 40% at 100% 28%, #ecd5fb 0%, transparent 72%), radial-gradient(80% 45% at 40% 100%, #cfe3ff 0%, transparent 70%), var(--background);
+}
+.dark {
+  --background: oklch(0.155 0.008 268); --foreground: oklch(0.95 0.005 268);
+  --card: oklch(0.195 0.01 268); --popover: oklch(0.205 0.012 268);
+  --primary: oklch(0.72 0.14 264); --primary-foreground: oklch(0.17 0.03 268);
+  --muted: oklch(0.24 0.01 268); --muted-foreground: oklch(0.7 0.015 268);
+  --accent: oklch(0.28 0.05 266); --accent-foreground: oklch(0.9 0.05 264);
+  --destructive: oklch(0.68 0.19 22); --success: oklch(0.72 0.15 155);
+  --border: oklch(0.27 0.012 268); --input: oklch(0.34 0.012 268); --sidebar: oklch(0.175 0.009 268);
+  --bubble: oklch(0.47 0.16 264);
+  --chat-bg: oklch(0.135 0.008 268);
+  --glass-thin: rgb(34 36 52 / 0.56); --glass-regular: rgb(36 38 54 / 0.6); --glass-thick: rgb(30 32 46 / 0.86);
+  --glass-edge: rgb(255 255 255 / 0.1); --glass-stroke: rgb(255 255 255 / 0.07);
+  --glass-shadow: 0 1px 1px rgb(0 0 0 / 0.2), 0 12px 30px -14px rgb(0 0 0 / 0.7);
+  --glass-field: radial-gradient(70% 45% at 10% 0%, #262c6e 0%, transparent 70%), radial-gradient(60% 40% at 100% 28%, #3a1f5c 0%, transparent 72%), radial-gradient(80% 45% at 40% 100%, #12305a 0%, transparent 70%), var(--background);
+}
+* { box-sizing: border-box; margin: 0; }
+html, body { height: 100%; }
+body { font: 14.5px/1.45 "Outfit Variable", "Segoe UI", system-ui, sans-serif; color: var(--foreground); background: var(--background); -webkit-font-smoothing: antialiased; overflow: hidden; }
+svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.muted { color: var(--muted-foreground); }
+.row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.grow { flex: 1; min-width: 0; }
+.trunc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--card); color: var(--foreground); font: inherit; font-size: 13.5px; font-weight: 500; }
+.btn.primary { background: var(--primary); color: var(--primary-foreground); border-color: transparent; }
+.btn.soft { background: color-mix(in oklch, var(--primary) 12%, transparent); color: var(--primary); border-color: transparent; }
+.btn.ghost { background: transparent; border-color: transparent; }
+.btn.sm { height: 30px; padding: 0 10px; font-size: 12.5px; border-radius: 9px; }
+.icon-btn { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; color: var(--muted-foreground); }
+.icon-btn.on { color: var(--primary); background: var(--accent); }
+.badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 500; background: color-mix(in oklch, var(--primary) 12%, transparent); color: var(--primary); }
+.badge.ok { background: color-mix(in oklch, var(--success) 14%, transparent); color: var(--success); }
+.badge.warn { background: color-mix(in oklch, var(--warning) 22%, transparent); color: var(--warning-foreground); }
+.dark .badge.warn { color: var(--warning); }
+.dot { width: 9px; height: 9px; border-radius: 999px; background: var(--primary); flex: none; }
+.switch { width: 34px; height: 20px; border-radius: 999px; background: var(--primary); position: relative; flex: none; }
+.switch::after { content: ""; position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; border-radius: 999px; background: #fff; }
+.switch.off { background: var(--input); } .switch.off::after { right: auto; left: 2px; }
+.switch.sm { width: 26px; height: 16px; } .switch.sm::after { width: 12px; height: 12px; }
+.seg { display: flex; padding: 3px; gap: 2px; border-radius: 10px; background: var(--muted); }
+.seg > span { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; height: 28px; border-radius: 8px; font-size: 13px; font-weight: 500; color: var(--muted-foreground); }
+.seg > span.on { background: var(--card); color: var(--foreground); box-shadow: 0 1px 2px rgb(0 0 0 / .08); }
+.seg > span.on svg { color: var(--primary); }
+.search { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--border); background: color-mix(in oklch, var(--card) 70%, transparent); color: var(--muted-foreground); font-size: 13.5px; }
+.label { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted-foreground); }
+
+/* ---- chat list ---- */
+.pins { display: flex; gap: 14px; padding: 4px 4px 2px; overflow: hidden; }
+.pin { display: grid; justify-items: center; gap: 4px; width: 64px; font-size: 12px; position: relative; }
+.pin .star { position: absolute; top: 34px; left: 38px; width: 18px; height: 18px; border-radius: 999px; background: var(--warning); color: var(--warning-foreground); display: grid; place-items: center; box-shadow: 0 0 0 2px var(--background); }
+.pin .star svg { width: 11px; height: 11px; fill: currentColor; stroke: none; }
+.pin .unread { position: absolute; top: 0; right: 6px; width: 12px; height: 12px; border-radius: 999px; background: var(--primary); box-shadow: 0 0 0 2px var(--background); }
+.sect { display: flex; align-items: center; gap: 6px; padding: 12px 8px 4px; }
+.sect svg { width: 14px; height: 14px; color: var(--muted-foreground); }
+.item { display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 12px; min-width: 0; }
+.item.sel { background: var(--accent); }
+.item .t { font-weight: 500; font-size: 14.5px; }
+.item .p { font-size: 13px; color: var(--muted-foreground); display: flex; align-items: center; gap: 4px; min-width: 0; }
+.item .p svg { width: 13px; height: 13px; }
+.item .meta { display: grid; justify-items: end; gap: 4px; font-size: 11.5px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.item.unr .meta .tm { color: var(--primary); font-weight: 600; }
+.pi { display: inline-grid; place-items: center; flex: none; border-radius: 12px; font-weight: 700; color: #fff; }
+.live { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--primary); }
+.live::before { content: ""; width: 7px; height: 7px; border-radius: 99px; background: currentColor; box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 20%, transparent); }
+
+/* ---- conversation ---- */
+.chat { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--chat-bg); }
+.chat-head { display: flex; align-items: center; gap: 10px; height: 60px; padding: 0 14px 0 16px; border-bottom: 1px solid var(--border); background: color-mix(in oklch, var(--background) 85%, transparent); flex: none; }
+.chat-head .who { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 4px 8px 4px 4px; margin-left: -4px; border-radius: 12px; }
+.chat-head .who.on { background: var(--accent); }
+.chat-head .n { font-weight: 600; font-size: 15px; }
+.chat-head .s { font-size: 12px; color: var(--muted-foreground); }
+.msgs { flex: 1; min-height: 0; overflow: hidden; padding: 18px 22px; display: flex; flex-direction: column; gap: 10px; }
+.day { align-self: center; font-size: 11.5px; padding: 3px 10px; border-radius: 999px; background: var(--muted); color: var(--muted-foreground); }
+.sys { align-self: center; display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted-foreground); padding: 4px 12px; border-radius: 999px; border: 1px dashed var(--border); background: color-mix(in oklch, var(--card) 60%, transparent); }
+.sys svg { width: 14px; height: 14px; }
+.b { max-width: 74%; padding: 8px 12px 6px; border-radius: 16px; font-size: 14.5px; position: relative; box-shadow: 0 1px 1px rgb(0 0 0 / .04); }
+.b.me { align-self: flex-end; background: var(--bubble); color: var(--bubble-foreground); border-bottom-right-radius: 6px; }
+.b.it { align-self: flex-start; background: var(--card); border-bottom-left-radius: 6px; border: 1px solid var(--border); }
+.b .tm { float: right; margin: 6px 0 -2px 10px; font-size: 10.5px; opacity: .65; font-variant-numeric: tabular-nums; }
+.card { align-self: flex-start; width: min(360px, 86%); background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 12px 14px; display: grid; gap: 8px; box-shadow: 0 6px 20px -14px rgb(40 50 130 / .4); }
+.card .h { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13.5px; }
+.card .acts { display: flex; gap: 8px; }
+.card .acts .btn { flex: 1; }
+.liveline { align-self: stretch; display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 14px; background: var(--card); border: 1px solid var(--border); font-size: 13px; }
+.liveline .bar { height: 4px; border-radius: 99px; background: var(--muted); flex: 0 0 64px; overflow: hidden; }
+.liveline .bar i { display: block; height: 100%; width: 40%; background: var(--primary); border-radius: 99px; }
+.composer { margin: 0 18px 16px; border: 1px solid var(--border); border-radius: 20px; background: var(--card); box-shadow: 0 4px 16px -10px rgb(40 50 130 / .35); padding: 8px 10px 8px 12px; flex: none; }
+.composer .ph { color: var(--muted-foreground); padding: 6px 4px 10px; font-size: 14.5px; }
+.composer .tools { display: flex; align-items: center; gap: 6px; }
+.send { width: 34px; height: 34px; border-radius: 999px; background: var(--primary); color: var(--primary-foreground); display: grid; place-items: center; }
+.pill { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--border); font-size: 12.5px; font-weight: 500; background: var(--card); }
+.pill.soft { border-color: transparent; background: color-mix(in oklch, var(--primary) 12%, transparent); color: var(--primary); }
+.pill svg { width: 14px; height: 14px; }
+
+/* ---- profile / info ---- */
+.info { display: flex; flex-direction: column; min-height: 0; overflow: hidden; background: var(--sidebar); border-left: 1px solid var(--border); }
+.info .top { display: grid; justify-items: center; gap: 6px; padding: 22px 18px 16px; text-align: center; }
+.info .top .n { font-size: 19px; font-weight: 600; letter-spacing: -.01em; }
+.group { margin: 0 14px 12px; border-radius: 16px; background: var(--card); border: 1px solid var(--border); overflow: hidden; }
+.group .r { display: flex; align-items: center; gap: 12px; padding: 11px 14px; min-height: 46px; font-size: 14px; }
+.group .r + .r { border-top: 1px solid var(--border); }
+.group .r .v { color: var(--muted-foreground); font-size: 13px; }
+.group .r svg.i { color: var(--muted-foreground); }
+.group .r.danger, .group .r.danger svg.i { color: var(--destructive); }
+.group .r .chev { width: 15px; height: 15px; color: var(--muted-foreground); }
+.ghint { margin: -6px 18px 12px; font-size: 12px; color: var(--muted-foreground); }
+
+/* ---- create bot ---- */
+.shapes { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.shapes > span { display: grid; place-items: center; aspect-ratio: 1; border-radius: 14px; border: 1px solid var(--border); background: var(--card); }
+.shapes > span.on { border: 2px solid var(--primary); background: var(--accent); }
+.colors { display: flex; gap: 10px; flex-wrap: wrap; }
+.colors > span { width: 30px; height: 30px; border-radius: 999px; box-shadow: inset 0 0 0 2px rgb(255 255 255 / .35); }
+.colors > span.on { outline: 2.5px solid var(--foreground); outline-offset: 2px; }
+.field { display: grid; gap: 6px; }
+.field .in { height: 44px; display: flex; align-items: center; padding: 0 14px; border-radius: 12px; border: 1px solid var(--input); background: var(--card); font-size: 16px; }
+.field .in.ph { color: var(--muted-foreground); }
+
+/* ================= DESKTOP ================= */
+.desk { display: grid; grid-template-columns: 340px minmax(0, 1fr); height: 100vh; }
+.desk.withinfo { grid-template-columns: 340px minmax(0, 1fr) 340px; }
+.left { display: flex; flex-direction: column; min-height: 0; background: var(--sidebar); border-right: 1px solid var(--border); }
+.left .head { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 12px 0 16px; flex: none; }
+.wordmark { display: inline-flex; align-items: center; gap: 0; font-weight: 600; font-size: 17px; letter-spacing: .16em; }
+.wordmark b { width: 5px; height: 5px; border-radius: 99px; background: var(--primary); margin: 0 .2em 0 .06em; display: inline-block; }
+.places { display: flex; gap: 6px; padding: 0 12px 6px; }
+.places > span { flex: 1; display: grid; justify-items: center; gap: 2px; padding: 7px 0 6px; border-radius: 10px; font-size: 11.5px; color: var(--muted-foreground); }
+.places > span svg { width: 17px; height: 17px; }
+.places > span:hover { background: var(--accent); }
+.list { flex: 1; min-height: 0; overflow: hidden; padding: 4px 8px; }
+.foot { position: relative; border-top: 1px solid var(--border); padding: 10px 12px 8px; display: flex; align-items: center; gap: 2px; flex: none; }
+.foot .tog { position: absolute; top: 0; left: 50%; transform: translate(-50%, -50%); width: 26px; height: 16px; border-radius: 99px; border: 1px solid var(--border); background: var(--sidebar); display: grid; place-items: center; color: var(--muted-foreground); }
+.foot .tog svg { width: 12px; height: 12px; }
+.foot .fi { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; color: var(--muted-foreground); }
+.foot .fi svg { width: 16px; height: 16px; }
+.foot .v { font-size: 11px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.wincontrols { display: flex; gap: 2px; margin-left: 6px; color: var(--muted-foreground); }
+.wincontrols span { width: 34px; height: 34px; display: grid; place-items: center; }
+.wincontrols svg { width: 15px; height: 15px; }
+.modal-scrim { position: fixed; inset: 0; background: rgb(10 12 30 / .42); display: grid; place-items: center; }
+.modal { width: 460px; background: var(--popover); border-radius: 22px; border: 1px solid var(--border); box-shadow: 0 30px 80px -20px rgb(0 0 0 / .45); padding: 22px 24px 20px; display: grid; gap: 16px; }
+
+/* ================= PHONE ================= */
+.phone { position: relative; height: 100vh; display: flex; flex-direction: column; background: var(--background); }
+.ph-head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 6px; flex: none; }
+.ph-head .ttl { font-size: 24px; font-weight: 600; letter-spacing: -.015em; }
+.ph-body { flex: 1; min-height: 0; overflow: hidden; padding: 4px 12px 12px; }
+.tabs { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--border); background: var(--sidebar); padding: 6px 4px 10px; flex: none; }
+.tabs span { display: grid; justify-items: center; gap: 2px; font-size: 11px; font-weight: 500; color: var(--muted-foreground); position: relative; }
+.tabs span i { display: grid; place-items: center; width: 52px; height: 30px; border-radius: 999px; font-style: normal; }
+.tabs span.on { color: var(--primary); }
+.tabs span.on i { background: color-mix(in oklch, var(--primary) 14%, transparent); }
+.tabs .cnt { position: absolute; top: -2px; left: calc(50% + 8px); min-width: 17px; height: 17px; padding: 0 5px; border-radius: 99px; background: var(--warning); color: var(--warning-foreground); font-size: 10.5px; font-weight: 700; display: grid; place-items: center; }
+.phone .chat { flex: 1; }
+.phone .chat-head { height: 56px; padding: 0 8px; }
+.phone .msgs { padding: 14px 12px; }
+.phone .composer { margin: 0 10px 10px; }
+.phone .info { border: 0; background: var(--background); flex: 1; }
+.fab { position: absolute; right: 18px; bottom: 86px; width: 54px; height: 54px; border-radius: 18px; background: var(--primary); color: var(--primary-foreground); display: grid; place-items: center; box-shadow: 0 10px 24px -10px color-mix(in oklch, var(--primary) 80%, transparent); }
+
+/* ================= GLASS (Android only) ================= */
+.glass .phone { background: var(--glass-field); }
+.glass .ph-head, .glass .chat, .glass .chat-head, .glass .info { background: transparent; border-color: transparent; }
+.glass .tabs { position: absolute; left: 12px; right: 12px; bottom: 10px; height: 62px; border: 0; border-radius: 999px; padding: 0 6px; align-items: center; background: var(--glass-thin); backdrop-filter: var(--glass-blur); box-shadow: inset 0 1px 0 var(--glass-edge), 0 0 0 1px var(--glass-stroke), var(--glass-shadow); }
+.glass .ph-body { padding-bottom: 90px; }
+.glass .fab { bottom: 88px; border-radius: 20px; }
+.glass .search { background: var(--glass-regular); border: 0; border-radius: 999px; box-shadow: inset 0 1px 0 var(--glass-edge), 0 0 0 1px var(--glass-stroke); }
+.glass .listcard, .glass .group, .glass .composer, .glass .card, .glass .liveline, .glass .b.it { background: var(--glass-regular); border: 0; box-shadow: inset 0 1px 0 var(--glass-edge), 0 0 0 1px var(--glass-stroke), var(--glass-shadow); }
+.glass .group { border-radius: 22px; }
+.glass .composer { border-radius: 26px; margin-bottom: 14px; }
+.glass .chat-head .who { background: var(--glass-regular); box-shadow: inset 0 1px 0 var(--glass-edge), 0 0 0 1px var(--glass-stroke); border-radius: 999px; padding: 4px 14px 4px 4px; }
+.glass .msgs { padding-top: 8px; }
+.glass .day, .glass .sys { background: var(--glass-regular); border: 0; }
+.listcard { border-radius: 18px; padding: 4px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const P = new URLSearchParams(location.search);
+const D = P.get('d') ?? 'desktop', Z = P.get('z') ?? 'bots', S = P.get('s') ?? 'chat';
+if (P.get('t') === 'dark') document.documentElement.classList.add('dark');
+if (D === 'glass') document.documentElement.classList.add('glass');
+
+// ---- icons (simple strokes in the style of lucide; mockup only) ----
+const I = {
+  menu: '<path d="M4 6h16M4 12h16M4 18h16"/>', plus: '<path d="M12 5v14M5 12h14"/>', search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  bell: '<path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>', home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+  chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>', chats: '<path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/>',
+  folder: '<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9L9.6 3.9A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>',
+  tasks: '<rect x="3" y="5" width="6" height="6" rx="1"/><path d="m3 17 2 2 4-4M13 6h8M13 12h8M13 18h8"/>', star: '<path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>', x: '<path d="M18 6 6 18M6 6l12 12"/>', right: '<path d="m9 18 6-6-6-6"/>', left: '<path d="m15 18-6-6 6-6"/>', down: '<path d="m6 9 6 6 6-6"/>', up: '<path d="m18 15-6-6-6 6"/>',
+  more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>', mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5"/>',
+  send: '<path d="M12 19V5M5 12l7-7 7 7"/>', pin: '<path d="M12 17v5M9 10.8V4h6v6.8l2 2.2v2H7v-2z"/>', gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-2.82-1.17l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 3 15.08H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.17-2.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 20.91 9H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  bot: '<rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V4M8 14h.01M16 14h.01"/>', book: '<path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2zM22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/>',
+  server: '<rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01"/>', cal: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M12 14v3l2 1"/>',
+  pen: '<path d="m15 5 4 4L8 20H4v-4z"/><path d="m13.5 6.5 4 4"/>', user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>', lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 1 1 8 0v4"/>',
+  share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/>', trash: '<path d="M3 6h18M8 6V4h8v2M6 6l1 15h10l1-15"/>',
+  pause: '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>', globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  brain: '<path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24A2.5 2.5 0 0 0 14.5 2Z"/>',
+  flow: '<rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/>', link: '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
+  repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>', file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
+  compact: '<path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"/>', fwd: '<path d="m15 17 5-5-5-5"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/>',
+  bug: '<rect x="8" y="6" width="8" height="14" rx="4"/><path d="M12 20v-9M19 7l-3 2M5 7l3 2M19 19l-3-2M5 19l3-2M20 13h-4M4 13h4M9 2l1.5 2M15 2l-1.5 2"/>', cap: '<path d="M22 10 12 5 2 10l10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>', side: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/>',
+  sparkles: '<path d="M9.9 2.6 11 7l4.4 1.1L11 9.2 9.9 13.6 8.8 9.2 4.4 8.1 8.8 7z"/><path d="M18 14v6M15 17h6"/>', export: '<path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/>',
+  apps: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  min: '<path d="M5 12h14"/>', max: '<rect x="5" y="5" width="14" height="14" rx="1"/>', branch: '<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M6 8.5v7M18 10.5a6 6 0 0 1-6 6H8.5"/>'
+};
+const ic = (n, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24">${I[n]}</svg>`;
+
+// ---- the bot avatar family (original, derived from Orb·e: an orb, its visor and pill eyes, plus one detail) ----
+const HUES = { azul: 264, lila: 300, rosa: 350, coral: 28, ambar: 75, verde: 150, menta: 180, cielo: 225 };
+const SHAPES = ['esfera', 'cascos', 'antena', 'anillo', 'visera', 'gota'];
+function avatar(shape = 'esfera', color = 'azul', size = 44) {
+  const h = HUES[color] ?? 264; const id = `g${shape}${color}${size}${Math.random().toString(36).slice(2, 6)}`;
+  const body = shape === 'gota' ? '<path d="M50 10c19 18 32 33 32 50a32 32 0 0 1-64 0c0-17 13-32 32-50z" fill="url(#B)"/>' : '<circle cx="50" cy="54" r="34" fill="url(#B)"/>';
+  const cy = shape === 'gota' ? 60 : 54;
+  const extra = {
+    cascos: `<rect x="9" y="${cy - 12}" width="12" height="24" rx="6" fill="oklch(0.62 0.13 ${h})"/><rect x="79" y="${cy - 12}" width="12" height="24" rx="6" fill="oklch(0.62 0.13 ${h})"/>`,
+    antena: `<path d="M50 20V8" stroke="oklch(0.5 0.12 ${h})" stroke-width="4" stroke-linecap="round"/><circle cx="50" cy="8" r="6" fill="oklch(0.75 0.16 ${(h + 40) % 360})"/>`,
+    anillo: `<ellipse cx="50" cy="${cy + 4}" rx="47" ry="11" fill="none" stroke="oklch(0.78 0.12 ${(h + 30) % 360})" stroke-width="5" transform="rotate(-14 50 ${cy})"/>`,
+    visera: '', esfera: '', gota: ''
+  }[shape];
+  const visor = shape === 'visera'
+    ? `<rect x="22" y="${cy - 13}" width="56" height="26" rx="13" fill="oklch(0.22 0.06 ${h})"/>`
+    : `<ellipse cx="50" cy="${cy}" rx="22" ry="16" fill="oklch(0.22 0.06 ${h})"/>`;
+  const eyes = `<rect x="38" y="${cy - 7}" width="7" height="14" rx="3.5" fill="#8cf6ff"/><rect x="55" y="${cy - 7}" width="7" height="14" rx="3.5" fill="#8cf6ff"/>`;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true" style="flex:none"><defs><radialGradient id="B" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="oklch(0.93 0.06 ${h})"/><stop offset=".55" stop-color="oklch(0.74 0.14 ${h})"/><stop offset="1" stop-color="oklch(0.55 0.16 ${h})"/></radialGradient></defs>${shape === 'anillo' ? '' : ''}${extra && shape !== 'anillo' ? extra : ''}${body}${shape === 'anillo' ? extra : ''}${visor}${eyes}<ellipse cx="38" cy="${cy - 22}" rx="10" ry="5" fill="#fff" opacity=".45"/></svg>`.replaceAll('url(#B)', `url(#${id})`).replace('id="B"', `id="${id}"`);
+}
+const pi = (txt, hue, s = 44) => `<span class="pi" style="width:${s}px;height:${s}px;font-size:${s * .32}px;background:oklch(0.6 0.14 ${hue})">${txt}</span>`;
+const robot = (s = 28) => `<img src="../../../src/ui/public/robot/cabeza.png" width="${s}" height="${s}" alt="" style="flex:none;object-fit:contain">`;
+
+// ---- example data ----
+const BOTS = [
+  { n: 'Jefe', sh: 'cascos', c: 'azul', chief: true, p: 'Hecho: Compras tiene la lista de la semana.', t: '9:41', un: 2, pin: true },
+  { n: 'Agenda', sh: 'antena', c: 'ambar', p: 'Mañana a las 10:00: dentista.', t: '9:30', pin: true },
+  { n: 'Compras', sh: 'anillo', c: 'verde', p: 'Le escribió a Jefe: lista lista, falta aprobar el pedido', bot: true, t: '9:12', un: 1, pin: true },
+  { n: 'Casa', group: true, p: 'Termostato a 21 °C hasta las 23:00.', t: 'Ayer', pin: true },
+  { n: 'Correo', sh: 'visera', c: 'cielo', p: '3 correos importantes resumidos.', t: '8:05', sec: 'Trabajo' },
+  { n: 'Viajes', sh: 'gota', c: 'coral', p: 'Tu vuelo del viernes sale a las 7:15.', t: 'Lun', sec: 'Trabajo' },
+  { n: 'Recetas', sh: 'esfera', c: 'rosa', p: 'Para 4 personas: 500 g de pasta…', t: 'Dom', sec: 'Casa' },
+  { n: 'Gimnasio', sh: 'cascos', c: 'menta', p: 'Rutina «Piernas» marcada como hecha.', t: 'Sáb', sec: 'Casa' },
+  { n: 'Lector', sh: 'antena', c: 'lila', p: 'Resumen del artículo guardado en la biblioteca.', t: '2 nov', sec: null }
+];
+const groupAv = (s) => `<span style="position:relative;width:${s}px;height:${s}px;flex:none">${avatar('esfera', 'menta', s * .7).replace('<svg', '<svg style="position:absolute;left:0;top:0"')}${avatar('antena', 'ambar', s * .7).replace('<svg', '<svg style="position:absolute;right:0;bottom:0"')}</span>`;
+const botAv = (b, s) => (b.group ? groupAv(s) : avatar(b.sh, b.c, s));
+const PROJ = [
+  { n: 'mi-web', hue: 330, ini: 'MW', items: [
+    { t: 'Revisar los enlaces rotos', p: 'Tarea #3 en curso · 2 de 5 pasos', live: true, tm: '9:40', un: 1, sel: true },
+    { t: 'Publicar la web', p: 'Esperando tu aprobación', warn: true, tm: '9:12' },
+    { t: 'Formulario de contacto', p: 'Completada · 4 archivos cambiados', tm: 'Ayer' }] },
+  { n: 'app-tienda', hue: 25, ini: 'AT', items: [
+    { t: 'Carrito con cupones', p: 'Plan listo: 3 tareas', tm: 'Lun' },
+    { t: 'Errores del pago', p: 'Completada · pruebas en verde', tm: '2 nov' }] },
+  { n: 'Sin proyecto', hue: 264, ini: '·', items: [{ t: 'Ideas para el blog', p: 'Orbe: Aquí tienes 5 títulos…', tm: '1 nov' }] }
+];
+
+// ---- pieces ----
+const botRow = (b, sel) => `<div class="item ${sel ? 'sel' : ''} ${b.un ? 'unr' : ''}">${botAv(b, 46)}<div class="grow"><div class="row"><span class="t trunc">${b.n}</span>${b.chief ? `<span class="badge" style="padding:0 6px">${ic('star').replace('class="i ', 'class="i " style="width:11px;height:11px" ')}Jefe</span>` : ''}</div><div class="p trunc">${b.bot ? ic('fwd') : ''}<span class="trunc">${b.p}</span></div></div><div class="meta"><span class="tm">${b.t}</span>${b.un ? `<span class="dot"></span>` : '<span style="height:9px"></span>'}</div></div>`;
+function botsList(phone) {
+  const pins = BOTS.filter((b) => b.pin);
+  const secs = ['Trabajo', 'Casa'];
+  return `${phone ? '' : ''}<div class="pins">${pins.map((b) => `<div class="pin">${botAv(b, 56)}${b.chief ? `<span class="star">${ic('star')}</span>` : ''}${b.un ? '<span class="unread"></span>' : ''}<span class="trunc" style="max-width:64px">${b.n}</span></div>`).join('')}</div>
+  <div class="listcard">${pins.map((b, i) => botRow(b, !phone && i === 2)).join('')}</div>
+  ${secs.map((s) => `<div class="sect">${ic('down')}<span class="label">${s}</span><span class="grow"></span><span class="muted" style="font-size:12px">${BOTS.filter((b) => b.sec === s).length}</span></div><div class="listcard">${BOTS.filter((b) => b.sec === s).map((b) => botRow(b)).join('')}</div>`).join('')}
+  <div class="sect">${ic('down')}<span class="label">Sin asignar</span></div><div class="listcard">${BOTS.filter((b) => !b.pin && !b.sec).map((b) => botRow(b)).join('')}</div>
+  <div class="sect" style="color:var(--primary);font-size:13px">${ic('plus')}<span>Nueva sección</span></div>`;
+}
+function orbList(phone) {
+  return PROJ.map((p) => `<div class="sect">${pi(p.ini, p.hue, 18).replace('border-radius:', '')}<span class="label">${p.n}</span><span class="grow"></span>${ic('more').replace('class="i ', 'class="i " style="width:15px;height:15px;color:var(--muted-foreground)" ')}</div><div class="listcard">${p.items.map((c) => `<div class="item ${c.sel && !phone ? 'sel' : ''} ${c.un ? 'unr' : ''}">${robot(40)}<div class="grow"><div class="t trunc">${c.t}</div><div class="p trunc">${c.live ? `<span class="live">${c.p}</span>` : c.warn ? `<span class="badge warn">${c.p}</span>` : `<span class="trunc">${c.p}</span>`}</div></div><div class="meta"><span class="tm">${c.tm}</span>${c.un ? '<span class="dot"></span>' : '<span style="height:9px"></span>'}</div></div>`).join('')}</div>`).join('');
+}
+const composerBots = () => `<div class="composer"><div class="ph">Escribe a Compras…</div><div class="tools"><span class="icon-btn">${ic('plus')}</span><span class="grow"></span><span class="icon-btn">${ic('mic')}</span><span class="send">${ic('send')}</span></div></div>`;
+const composerOrb = (phone) => `<div class="composer"><div class="tools" style="padding:2px 0 0"><span class="pill soft">${ic('folder')}mi-web ${ic('down').replace('class="i ', 'class="i " style="width:12px;height:12px" ')}</span><span class="pill soft">${ic('compact')}Compactar</span></div><div class="ph">Escribe a Orbe…</div><div class="tools"><span class="pill">✳ ${phone ? 'Sonnet 5.5' : 'Claude · Sonnet 5.5'} ${ic('down').replace('class="i ', 'class="i " style="width:12px;height:12px" ')}</span><span class="icon-btn">${ic('brain')}</span><span class="row" style="gap:6px;color:var(--primary)">${ic('flow')}<span class="switch sm"></span></span><span class="grow"></span><span class="muted" style="font-size:11.5px">72 %</span><span class="send">${ic('send')}</span></div></div>`;
+function botsChat(phone) {
+  return `<div class="msgs">
+    <span class="day">Hoy</span>
+    <div class="b me">Prepara la compra de la semana, como siempre<span class="tm">9:02</span></div>
+    <div class="b it">Hecho. He mirado lo que queda en la despensa y he quitado lo que ya tienes. ¿Hago el pedido en el súper de siempre?<span class="tm">9:03</span></div>
+    <span class="sys">${ic('repeat')}Rutina «Compra semanal» · cada lunes a las 9:00</span>
+    <div class="card"><div class="h">${ic('check').replace('class="i ', 'class="i " style="color:var(--primary)" ')}Compras quiere hacer un pedido</div><div class="muted" style="font-size:13px">Supermercado · 18 productos · entrega mañana de 10 a 12</div><div class="acts"><span class="btn">Rechazar</span><span class="btn primary">Aprobar</span></div></div>
+    <span class="sys">${ic('bell')}Recordatorio · Revisar la entrega mañana a las 12:00</span>
+    <div class="b it">${ic('fwd').replace('class="i ', 'class="i " style="width:13px;height:13px;vertical-align:-2px;color:var(--muted-foreground)" ')} <span class="muted">A Jefe:</span> lista preparada, falta tu aprobación.<span class="tm">9:12</span></div>
+  </div>${composerBots()}`;
+}
+function orbChat(phone) {
+  return `<div class="msgs">
+    <span class="day">Hoy</span>
+    <div class="b me">Revisa los enlaces rotos de la web y arréglalos<span class="tm">9:31</span></div>
+    <div class="b it">Lo reparto en una tarea para Claude en mi-web: buscar los enlaces, corregirlos y comprobar que la web compila. Te aviso al terminar.<span class="tm">9:31</span></div>
+    <div class="liveline">${ic('sparkles').replace('class="i ', 'class="i " style="color:var(--primary)" ')}<span class="grow trunc"><b style="font-weight:600">Tarea #3</b> · Claude · Corrigiendo enlaces en <span style="font-family:monospace;font-size:12px">blog/</span></span><span class="bar"><i></i></span><span class="muted" style="font-variant-numeric:tabular-nums">1:12</span></div>
+    <div class="card"><div class="h">${ic('tasks').replace('class="i ', 'class="i " style="color:var(--warning)" ')}Publicar la web necesita tu aprobación</div><div class="muted" style="font-size:13px">Codex quiere hacer push a producción.</div><div class="acts"><span class="btn">Ver la tarea</span><span class="btn primary">Aprobar</span></div></div>
+  </div>${composerOrb(phone)}`;
+}
+const chatHead = (zone, phone, on) => zone === 'bots'
+  ? `<div class="chat-head">${phone ? `<span class="icon-btn" style="margin-left:-4px">${ic('left')}</span>` : ''}<div class="who ${on ? 'on' : ''}">${avatar('anillo', 'verde', 38)}<div class="grid" style="display:grid;line-height:1.2"><span class="n">Compras</span><span class="s">Claude · Medio · en línea</span></div></div><span class="grow"></span><span class="icon-btn">${ic('search')}</span><span class="icon-btn">${ic('more')}</span></div>`
+  : `<div class="chat-head">${phone ? `<span class="icon-btn" style="margin-left:-4px">${ic('left')}</span>` : ''}<div class="who ${on ? 'on' : ''}">${robot(36)}<div style="display:grid;line-height:1.2;min-width:0"><span class="n trunc">Revisar los enlaces rotos</span><span class="s row" style="gap:4px">${pi('MW', 330, 13)} mi-web · Orbe</span></div></div><span class="grow"></span>${phone ? '' : `<span class="icon-btn">${ic('bell')}</span><span class="icon-btn">${ic('pause')}</span>`}<span class="icon-btn">${ic('more')}</span></div>`;
+const r = (icon, label, value = '', chev = true, extra = '') => `<div class="r ${extra}">${ic(icon)}<span class="grow">${label}</span><span class="v">${value}</span>${chev ? ic('right', 'chev') : ''}</div>`;
+function botInfo(phone) {
+  return `${phone ? `<div class="chat-head" style="border:0">${'<span class="icon-btn">' + ic('left') + '</span>'}<span class="grow"></span><span class="icon-btn">${ic('share')}</span><span class="icon-btn">${ic('more')}</span></div>` : `<div class="chat-head" style="background:transparent"><span class="n" style="font-weight:600">Información del bot</span><span class="grow"></span><span class="icon-btn">${ic('x')}</span></div>`}
+  <div style="overflow:hidden;flex:1">
+  <div class="top">${avatar('anillo', 'verde', phone ? 104 : 92)}<span class="n">Compras</span><span class="muted" style="font-size:13px;max-width:280px">Compara precios y prepara la compra. Nunca compra sin tu aprobación.</span><span class="btn sm" style="margin-top:6px">${ic('pen')}Editar</span></div>
+  <div class="group">${r('brain', 'Cerebro', 'Claude · Medio')}${r('globe', 'Herramientas', 'Internet, Navegador')}${r('apps', 'Apps conectadas', '2')}${r('repeat', 'Rutinas', '1 activada')}${r('file', 'Biblioteca', '12 archivos')}</div>
+  <div class="group"><div class="r">${ic('bell')}<span class="grow">Notificaciones</span><span class="switch"></span></div></div>
+  <p class="ghint">Te avisa cuando termina algo o necesita tu aprobación.</p>
+  <div class="group">${r('pause', 'Pausar el bot', '', false)}${r('share', 'Compartir con otro usuario', '', true)}${r('trash', 'Eliminar el bot', '', false, 'danger')}</div>
+  </div>`;
+}
+function orbInfo(phone) {
+  return `${phone ? `<div class="chat-head" style="border:0"><span class="icon-btn">${ic('left')}</span><span class="grow"></span><span class="icon-btn">${ic('more')}</span></div>` : `<div class="chat-head" style="background:transparent"><span class="n" style="font-weight:600">Información del chat</span><span class="grow"></span><span class="icon-btn">${ic('x')}</span></div>`}
+  <div style="overflow:hidden;flex:1">
+  <div class="top">${robot(phone ? 96 : 84)}<span class="n">Revisar los enlaces rotos</span><span class="muted" style="font-size:13px">Con Orbe · empezado hoy a las 9:31</span></div>
+  <div class="group">${r('folder', 'Proyecto', 'mi-web')}${r('sparkles', 'Modelo', 'Claude · Sonnet 5.5')}${r('brain', 'Razonamiento', 'Medio')}${r('flow', 'Orquestador', 'Activado', false)}</div>
+  <div class="sect" style="padding-top:2px"><span class="label">Tareas de este chat</span></div>
+  <div class="group"><div class="r">${ic('sparkles')}<span class="grow trunc">#3 Revisar los enlaces rotos</span><span class="badge">En curso</span></div><div class="r">${ic('tasks')}<span class="grow trunc">#2 Publicar la web</span><span class="badge warn">Por aprobar</span></div><div class="r">${ic('check')}<span class="grow trunc">#1 Formulario de contacto</span><span class="badge ok">Completada</span></div></div>
+  <div class="group">${r('file', 'Archivos', '5')}${r('export', 'Exportar el chat', '', false)}${r('trash', 'Eliminar el chat', '', false, 'danger')}</div>
+  </div>`;
+}
+function createBot(phone) {
+  const shape = 'cascos', color = 'lila';
+  return `<div style="display:grid;justify-items:center;gap:6px;padding:${phone ? '6px 0 4px' : '0'}">${avatar(shape, color, phone ? 150 : 132)}<span class="muted" style="font-size:12px">Vista previa</span></div>
+  <div class="field"><span class="label" style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--foreground)">Nombre</span><span class="in">Lector</span></div>
+  <div class="field"><span style="font-size:13px;font-weight:500">Forma</span><div class="shapes">${SHAPES.map((s) => `<span class="${s === shape ? 'on' : ''}">${avatar(s, color, phone ? 40 : 44)}</span>`).join('')}</div></div>
+  <div class="field"><span style="font-size:13px;font-weight:500">Color</span><div class="colors">${Object.keys(HUES).map((c) => `<span class="${c === color ? 'on' : ''}" style="background:radial-gradient(circle at 35% 30%,oklch(0.9 0.06 ${HUES[c]}),oklch(0.62 0.15 ${HUES[c]}))"></span>`).join('')}</div></div>
+  <div class="field"><span style="font-size:13px;font-weight:500">Qué hará <span class="muted" style="font-weight:400">(opcional)</span></span><span class="in ph" style="height:64px;align-items:flex-start;padding-top:10px">Resume los artículos que le envío…</span></div>`;
+}
+
+// ---- layouts ----
+const app = document.getElementById('app');
+const zoneSeg = (z) => `<div class="seg"><span class="${z === 'orb' ? 'on' : ''}">${ic('sparkles')}Orb</span><span class="${z === 'bots' ? 'on' : ''}">${ic('bot')}Bots</span></div>`;
+function desktop() {
+  const info = S === 'info';
+  const places = Z === 'bots' ? [['bell', 'Recordatorios'], ['home', 'Casa'], ['book', 'Memoria'], ['server', 'Servidor']] : [['tasks', 'Tareas'], ['folder', 'Proyectos'], ['cal', 'Programadas'], ['pen', 'Pizarra']];
+  const left = `<aside class="left"><div class="head"><span class="row" style="gap:8px">${robot(26)}<span class="wordmark">ORB<b></b>E</span></span><span class="grow"></span><span class="icon-btn">${ic('sun')}</span><span class="icon-btn">${ic('side')}</span></div>
+    <div style="padding:0 12px 10px">${zoneSeg(Z)}</div>
+    <div class="row" style="padding:0 12px 8px;gap:8px"><div class="search grow">${ic('search')}Buscar</div><span class="btn primary" style="width:36px;padding:0">${ic(Z === 'bots' ? 'plus' : 'chat')}</span></div>
+    <div class="places">${places.map(([i, l]) => `<span>${ic(i)}${l}</span>`).join('')}</div>
+    <div class="list">${Z === 'bots' ? botsList(false) : orbList(false)}</div>
+    <div class="foot"><span class="tog">${ic('up')}</span><span class="fi">${ic('gear')}</span><span class="fi">${ic('bot')}</span><span class="fi">${ic('book')}</span><span class="fi">${ic('cap')}</span><span class="grow"></span><span class="fi">${ic('bug')}</span><span class="v">v3.6.0</span></div></aside>`;
+  const head = chatHead(Z, false, info).replace('<span class="icon-btn">' + ic('more') + '</span></div>', `<span class="icon-btn">${ic('more')}</span><span class="wincontrols">${info ? '' : `<span>${ic('min')}</span><span>${ic('max')}</span><span>${ic('x')}</span>`}</span></div>`);
+  const center = `<section class="chat">${head}${Z === 'bots' ? botsChat(false) : orbChat(false)}</section>`;
+  const right = info ? `<aside class="info" style="position:relative"><div class="wincontrols" style="position:absolute;top:12px;right:8px;z-index:1"><span>${ic('min')}</span><span>${ic('max')}</span><span>${ic('x')}</span></div>${Z === 'bots' ? botInfo(false).replace(`<span class="icon-btn">${ic('x')}</span>`, '') : orbInfo(false).replace(`<span class="icon-btn">${ic('x')}</span>`, '')}</aside>` : '';
+  app.innerHTML = `<div class="desk ${info ? 'withinfo' : ''}">${left}${center}${right}</div>`;
+  if (S === 'create') app.innerHTML += `<div class="modal-scrim"><div class="modal"><div class="row"><span style="font-size:18px;font-weight:600" class="grow">Nuevo bot</span><span class="icon-btn">${ic('x')}</span></div>${createBot(false)}<div class="row" style="justify-content:flex-end"><span class="btn ghost">Cancelar</span><span class="btn primary">Crear bot</span></div></div></div>`;
+}
+function phone() {
+  const tabs = Z === 'bots' ? [['chats', 'Chats', true], ['bell', 'Recordatorios'], ['home', 'Casa']] : [['chats', 'Chats', true], ['tasks', 'Tareas', false, 1], ['folder', 'Proyectos']];
+  const tabbar = `<nav class="tabs">${tabs.map(([i, l, on, n]) => `<span class="${on ? 'on' : ''}"><i>${ic(i)}</i>${l}${n ? `<b class="cnt">${n}</b>` : ''}</span>`).join('')}</nav>`;
+  let body;
+  if (S === 'list') body = `<div class="ph-head"><span class="icon-btn" style="color:var(--foreground)">${ic('menu')}</span><span class="ttl grow">${Z === 'bots' ? 'Bots' : 'Orb'}</span></div>
+    <div class="ph-body"><div class="search" style="margin:2px 2px 10px">${ic('search')}${Z === 'bots' ? 'Buscar bots y mensajes' : 'Buscar chats y proyectos'}</div>${Z === 'bots' ? botsList(true) : orbList(true)}</div>
+    <span class="fab">${ic(Z === 'bots' ? 'plus' : 'chat')}</span>${tabbar}`;
+  else if (S === 'chat') body = `<section class="chat">${chatHead(Z, true)}${Z === 'bots' ? botsChat(true) : orbChat(true)}</section>`;
+  else if (S === 'info') body = `<aside class="info">${Z === 'bots' ? botInfo(true) : orbInfo(true)}</aside>`;
+  else body = `<div class="chat-head" style="border:0;background:transparent"><span class="icon-btn">${ic('x')}</span><span class="grow" style="text-align:center;font-weight:600">Nuevo bot</span><span style="width:36px"></span></div><div style="flex:1;padding:4px 18px;display:grid;gap:16px;align-content:start;overflow:hidden">${createBot(true)}</div><div style="padding:0 18px 22px"><span class="btn primary" style="width:100%;height:48px;border-radius:14px;font-size:15px">Crear bot</span></div>`;
+  app.innerHTML = `<div class="phone">${body}</div>`;
+}
+(D === 'desktop' ? desktop : phone)();
+</script>
+</body>
+</html>
