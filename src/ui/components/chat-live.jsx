@@ -17,7 +17,10 @@ const KIND = [
   [/^orb_read_log$/, 'readLog'], [/^orb_write_log$/, 'writeLog'], [/^orb_ask$/, 'ask'], [/^orb_(set_project|create_project|add_project)$/, 'project'],
   [/^orb_schedule$/, 'schedule'], [/^orb_browser_/, 'browser'], [/^orb_(send_message|read_messages)$/, 'messages'], [/^(todowrite|todo)/i, 'plan'], [/^(task|agent|delegate)/i, 'delegate'],
   // 3.2.1: the agent looking up its own tools, and Opti Bot's
-  [/^tool_?search$/i, 'tools'], [/^opti_propose$/, 'propose'], [/^opti_/, 'pc']
+  [/^tool_?search$/i, 'tools'], [/^opti_propose$/, 'propose'], [/^opti_/, 'pc'],
+  // 3.5: the tools of the user's bots
+  [/^bot_(remind|list_reminders|cancel_reminder)$/, 'reminder'], [/^bot_memory_/, 'memory'], [/^bot_(send|list)$/, 'bots'], [/^bot_ask_user$/, 'ask'],
+  [/^bot_confirm$/, 'confirm'], [/^bot_(create|update|pause)$/, 'manage'], [/^ha_/, 'home'], [/^srv_/, 'server']
 ];
 const WITH_TARGET = new Set(['read', 'search', 'run', 'edit', 'web']);
 // «mcp__orb__orb_ask», «orb:orb_ask», «orb-orb_ask» → «orb_ask» (how each agent names the tools of a server).
@@ -38,7 +41,7 @@ const elapsed = (t, ms) => {
   return t('chat.act.hour', { h: Math.floor(s / 3600), m: Math.floor((s % 3600) / 60) });
 };
 
-export function LiveActivity({ chat }) {
+export function LiveActivity({ chat, testid = 'chat-activity' }) {
   const t = useT();
   const [now, setNow] = useState(Date.now());
   const [open, setOpen] = useState(false);
@@ -47,7 +50,7 @@ export function LiveActivity({ chat }) {
   const last = steps.at(-1);
   const label = last ? stepText(t, last) : chat.partial ? t('chat.act.writing') : t('chat.thinking');
   return (
-    <div className="text-muted-foreground mt-1 grid gap-1 text-[13px]" data-testid="chat-activity">
+    <div className="text-muted-foreground mt-1 grid gap-1 text-[13px]" data-testid={testid}>
       <button type="button" className="hover:text-foreground flex min-w-0 cursor-pointer items-center gap-2 text-left" onClick={() => setOpen(!open)} aria-expanded={open} disabled={!steps.length}>
         <Spinner className="size-3.5 shrink-0" />
         <span className="text-foreground/85 min-w-0 truncate">{label}</span>

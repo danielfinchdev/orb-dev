@@ -46,7 +46,7 @@ export function Select({ value, onValueChange, options, placeholder, className, 
     <SelectPrimitive.Root value={value ?? undefined} onValueChange={onValueChange} disabled={disabled} {...props}>
       {title ? <BubbleTip title={title}>{trigger}</BubbleTip> : trigger}
       <SelectPrimitive.Portal>
-        <SelectPrimitive.Content position="popper" sideOffset={4} className="bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] min-w-(--radix-select-trigger-width) overflow-x-hidden overflow-y-auto rounded-lg border shadow-md">
+        <SelectPrimitive.Content position="popper" sideOffset={4} className="bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 origin-(--radix-select-content-transform-origin) relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] min-w-(--radix-select-trigger-width) overflow-x-hidden overflow-y-auto rounded-lg border shadow-md">
           <SelectPrimitive.Viewport className="p-1">
             {options.map((o) => (
               <SelectPrimitive.Item key={o.value} value={o.value} disabled={o.disabled} className="focus:bg-accent focus:text-accent-foreground relative flex w-full cursor-pointer items-center gap-2 rounded-md py-1.5 pr-8 pl-2 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg:not([class*='size-'])]:size-4">
@@ -120,7 +120,7 @@ export function PopoverContent({ className, children, side = 'bottom', align = '
 export const DropdownMenu = DropdownPrimitive.Root;
 export const DropdownMenuTrigger = DropdownPrimitive.Trigger;
 export function DropdownMenuContent({ className, align = 'end', ...props }) {
-  return <DropdownPrimitive.Portal><DropdownPrimitive.Content align={align} sideOffset={4} className={cn('bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 z-50 min-w-[11rem] overflow-hidden rounded-lg border p-1 shadow-md', className)} {...props} /></DropdownPrimitive.Portal>;
+  return <DropdownPrimitive.Portal><DropdownPrimitive.Content align={align} sideOffset={4} className={cn('bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 origin-(--radix-dropdown-menu-content-transform-origin) z-50 min-w-[11rem] overflow-hidden rounded-lg border p-1 shadow-md', className)} {...props} /></DropdownPrimitive.Portal>;
 }
 export function DropdownMenuItem({ className, variant, ...props }) {
   return <DropdownPrimitive.Item className={cn("focus:bg-accent focus:text-accent-foreground relative flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:text-muted-foreground", variant === 'destructive' && 'text-destructive focus:text-destructive [&_svg]:text-destructive', className)} {...props} />;
@@ -142,8 +142,8 @@ export function DropdownMenuLabel({ className, ...props }) { return <DropdownPri
 // ---- switch and checkbox
 export function Switch({ className, ...props }) {
   return (
-    <SwitchPrimitive.Root className={cn('peer data-[state=checked]:bg-primary data-[state=unchecked]:bg-input focus-visible:ring-ring/50 dark:data-[state=unchecked]:bg-input/80 inline-flex h-[1.15rem] w-8 shrink-0 cursor-pointer items-center rounded-full border border-transparent shadow-xs transition-all outline-none focus-visible:ring-[3px] disabled:opacity-50', className)} {...props}>
-      <SwitchPrimitive.Thumb className="bg-background dark:data-[state=unchecked]:bg-foreground dark:data-[state=checked]:bg-primary-foreground pointer-events-none block size-4 rounded-full ring-0 transition-transform data-[state=checked]:translate-x-[calc(100%-2px)] data-[state=unchecked]:translate-x-0" />
+    <SwitchPrimitive.Root className={cn('peer data-[state=checked]:bg-primary data-[state=unchecked]:bg-input focus-visible:ring-ring/50 dark:data-[state=unchecked]:bg-input/80 inline-flex h-[1.15rem] w-8 shrink-0 cursor-pointer items-center rounded-full border border-transparent shadow-xs transition-[background-color,box-shadow] duration-150 outline-none focus-visible:ring-[3px] disabled:opacity-50', className)} {...props}>
+      <SwitchPrimitive.Thumb className="bg-background dark:data-[state=unchecked]:bg-foreground dark:data-[state=checked]:bg-primary-foreground pointer-events-none block size-4 rounded-full ring-0 transition-transform duration-200 ease-(--ease-out) data-[state=checked]:translate-x-[calc(100%-2px)] data-[state=unchecked]:translate-x-0" />
     </SwitchPrimitive.Root>
   );
 }
@@ -159,7 +159,7 @@ export function Checkbox({ className, ...props }) {
 export const Tabs = TabsPrimitive.Root;
 export function TabsList({ className, ...props }) { return <TabsPrimitive.List className={cn('bg-muted text-muted-foreground inline-flex h-9 w-fit max-w-full items-center justify-start overflow-x-auto rounded-lg p-[3px] [scrollbar-width:none]', className)} {...props} />; }
 export function TabsTrigger({ className, ...props }) {
-  return <TabsPrimitive.Trigger className={cn("data-[state=active]:bg-background dark:data-[state=active]:bg-input/40 data-[state=active]:text-foreground data-[state=active]:shadow-sm inline-flex h-full flex-1 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 text-[13px] font-medium whitespace-nowrap transition-all disabled:opacity-50 [&_svg:not([class*='size-'])]:size-4", className)} {...props} />;
+  return <TabsPrimitive.Trigger className={cn("data-[state=active]:bg-background dark:data-[state=active]:bg-input/40 data-[state=active]:text-foreground data-[state=active]:shadow-sm inline-flex h-full flex-1 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 text-[13px] font-medium whitespace-nowrap transition-[color,background-color,box-shadow] duration-150 disabled:opacity-50 [&_svg:not([class*='size-'])]:size-4", className)} {...props} />;
 }
 
 // ---- collapsible

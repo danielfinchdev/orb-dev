@@ -5,8 +5,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { useHome, ctx, tr } from '../core/context.mjs';
-import { isHome, ensureLayout } from '../core/home.mjs';
+import { useHome, ctx, tr, role, isHeadless } from '../core/context.mjs';
+import { isHome, ensureLayout, hostsBots } from '../core/home.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { PRODUCT } from '../core/product.mjs';
 
@@ -16,10 +16,12 @@ const transport = (() => {
   throw new Error('el motor debe arrancarse desde la app');
 })();
 let remote = null; // phone access (src/engine/remote.mjs), when turned on
+let link = null; // 3.5: Magic Link to other Orbs (src/core/link.mjs)
 let devControl = null; // 3.1: the developer's control line (src/engine/dev-control.mjs), only in Orb.dev
 const emit = (event, payload) => {
   try { transport.send({ type: 'event', event, payload }); } catch { /* window gone */ }
   remote?.broadcast(event, payload);
+  link?.relay(event, payload); // a workshop passes its live events on to its centre
   devControl?.broadcast(event, payload);
 };
 
@@ -30,10 +32,14 @@ const log = (line) => { try { if (logFile) { rotateIfBig(logFile); fs.appendFile
 process.on('uncaughtException', (error) => log(`uncaughtException: ${error?.stack ?? error}`));
 process.on('unhandledRejection', (error) => log(`unhandledRejection: ${error?.stack ?? error}`));
 
-async function start(home, version, secret, browser) {
+async function start(home, version, secret, browser, headless) {
   if (!home || !isHome(home)) throw new Error(tr('sys.engine.notHome', { home }));
   ensureLayout(home); // the fixed folders, and folders made by older versions put in order
   useHome(home);
+  // 3.5: the role is the user's choice (orb.json «role», Ajustes › Magic Link); whoever starts the engine only says
+  // whether it has a window (Orb Núcleo, src/server/host.mjs: headless). Its children learn it from ORB_NUCLEO.
+  ctx.headless = headless === true || process.env.ORB_NUCLEO === '1';
+  if (ctx.headless) process.env.ORB_NUCLEO = '1';
   // The approval secret comes from the app (kept encrypted by Windows); without it, the file fallback is used.
   if (typeof secret === 'string' && /^[0-9a-f]{64}$/.test(secret)) ctx.secret = Buffer.from(secret, 'hex');
   // The agents' browser lives in the app (main process): its pipe and token go to the agents' MCP servers.
@@ -42,7 +48,8 @@ async function start(home, version, secret, browser) {
   fs.mkdirSync(ctx.paths.runs, { recursive: true });
   // Android's adb: in the PATH of every agent, downloaded in the background the first time.
   const { addAdbToPath, ensureAdb } = await import('./android.mjs');
-  addAdbToPath(); ensureAdb({ log });
+  // 3.5: not on the server (Orb Núcleo): nothing is downloaded there unless the user asks for it (android.install).
+  addAdbToPath(); if (!isHeadless()) ensureAdb({ log });
   const { Board } = await import('../core/board.mjs');
   const { Sessions } = await import('./sessions.mjs');
   const { Orchestrator } = await import('./orchestrator.mjs');
@@ -99,8 +106,34 @@ async function start(home, version, secret, browser) {
   const scheduler = new Scheduler(board, sessions, { log, orchestrator, emit });
   const { createRemote } = await import('./remote.mjs');
   const remoteRef = { current: null };
-  api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef });
-  remote = remoteRef.current = createRemote({ board, api, log });
+  // 3.5: the user's bots (their reminders and messages are looked at every second).
+  const { Bots } = await import('./bots.mjs');
+  const bots = new Bots(board, { emit, log, push: (note) => remoteRef.current?.push?.(note) }).start();
+  api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, bots });
+  remote = remoteRef.current = createRemote({ board, api, log, emit });
+  // 3.5 Magic Link: the links this Orb made to other Orbs (keys sealed with the app's secret). A workshop linked to a
+  // centre runs the calls the centre forwards to it, with the same checks as a phone's.
+  {
+    const { createLink, orbIdentity } = await import('../core/link.mjs');
+    const { macAddresses } = await import('../core/wol.mjs');
+    const { guardCall, shapeResult, orbNameOf } = await import('./remote.mjs');
+    const { readKey } = await import('../core/home.mjs');
+    let macs = { at: 0, list: [] }; // the network cards, looked at once a minute at most
+    const myMacs = () => { if (Date.now() - macs.at > 60_000) macs = { at: Date.now(), list: macAddresses() }; return macs.list; };
+    link = remoteRef.link = createLink({
+      file: path.join(ctx.paths.data, 'enlaces.json'), secret: ctx.secret ?? readKey(home), log,
+      identity: () => orbIdentity({ name: orbNameOf(ctx.config), role: role(), version, macs: myMacs() }),
+      onRequest: async (method, params) => {
+        const why = guardCall(board, method, params);
+        if (why) throw Object.assign(new Error(why), { status: 403 });
+        return shapeResult(method, (await api.call(method, params)) ?? null);
+      },
+      onChange: (peers) => emit('link:peers', peers)
+    });
+    link.start();
+    // 3.5: the bots live on the centre: what its bots say comes to this Orb's window as centro:<event>.
+    link.on('*', (event, payload, peer) => { if (hostsBots(peer?.role ?? 'taller') && /^bot\./.test(event)) emit(`centro:${event}`, payload); });
+  }
   // 3.1: only an unpacked Orb.dev started with ORB_DEV_CONTROL=1 (main.mjs decides; never an installed Orb).
   if (process.env.ORB_DEV_CONTROL === '1') {
     const { startDevControl } = await import('./dev-control.mjs');
@@ -129,7 +162,7 @@ async function start(home, version, secret, browser) {
   };
   setInterval(loop, 1500);
   board.onChange((what) => { if (what === 'tasks') setImmediate(loop); });
-  log(`motor arrancado (versión ${version}) en ${home}`);
+  log(`motor arrancado (versión ${version}, papel ${role()}) en ${home}`);
   // Which agents this PC has, as the engine sees them (with the app's environment): first thing to look at if «Agentes»
   // says one is missing.
   const { ADAPTERS } = await import('../agents/index.mjs');
@@ -147,20 +180,20 @@ async function start(home, version, secret, browser) {
   }
   // 2.7: the bridge with Open Control Edge (engine/bridge.mjs). Only on Windows, only for the app's own engine (main.mjs
   // sets ORB_BRIDGE) and never with the test agents: made-up runs must not reach OCE as real data.
-  if (process.platform === 'win32' && process.env.ORB_BRIDGE === '1' && !process.env.ORB_FAKE_AGENTS) {
+  if (process.platform === 'win32' && process.env.ORB_BRIDGE === '1' && !process.env.ORB_FAKE_AGENTS && !isHeadless()) {
     const { startBridge } = await import('./bridge.mjs');
     bridge = startBridge({ board, version, busy: () => orchestrator.busy, log });
   }
   // 2.6: the reports the assistant still owed when the app was closed come back.
   const owed = orchestrator.resume();
   if (owed) log(`asistente: ${owed} aviso(s) pendientes recuperados`);
-  return { home, name: ctx.config.assistantName };
+  return { home, name: ctx.config.assistantName, role: role(), headless: ctx.headless };
 }
 
 transport.on(async (msg) => {
   if (!msg || typeof msg !== 'object') return;
   if (msg.type === 'start') {
-    try { transport.send({ type: 'started', ok: true, result: await start(msg.home, msg.version, msg.secret, msg.browser) }); }
+    try { transport.send({ type: 'started', ok: true, result: await start(msg.home, msg.version, msg.secret, msg.browser, msg.headless) }); }
     catch (error) { transport.send({ type: 'started', ok: false, error: error.message }); }
     return;
   }
@@ -169,6 +202,7 @@ transport.on(async (msg) => {
     try { api?.shutdown(); } catch { /* closing anyway */ }
     try { bridge?.stop(); } catch { /* closing anyway */ }
     try { devControl?.stop(); } catch { /* closing anyway */ }
+    try { link?.stop(); } catch { /* closing anyway */ }
     // 3.2.1: if Orb started adb this session, its resident server goes too (never a server the user runs elsewhere).
     try { const { stopAdb } = await import('./android.mjs'); stopAdb(); } catch { /* not used or already gone */ }
     Promise.race([Promise.resolve(remote?.stop()).catch(() => {}), new Promise((r) => setTimeout(r, 4000))]).finally(() => setTimeout(() => process.exit(0), 300));

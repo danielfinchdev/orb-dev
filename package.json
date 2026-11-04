@@ -1,7 +1,7 @@
 {
   "name": "orb-dev",
   "productName": "Orb",
-  "version": "3.2.1",
+  "version": "3.5.0",
   "description": "Orb·e: tu director de bolsillo. Planifica tu proyecto por fases y escribe un encargo claro para cada agente (Claude Code, Codex, Cursor, Gemini, OpenCode, Qwen, Copilot), sin gastar tokens de más. Te entrega resultados comprobados.",
   "private": true,
   "type": "module",
@@ -17,13 +17,27 @@
     "test:app": "vite build && node test/app.e2e.mjs",
     "icon": "node scripts/icono.mjs",
     "dist": "vite build && electron-builder --win nsis portable",
+    "dist:servidor": "node scripts/dist-servidor.mjs",
+    "dist:terminal": "node scripts/dist-terminal.mjs",
+    "terminal": "node src/terminal/orb-cli.mjs",
+    "servidor:instalar": "node scripts/instalar-servidor.mjs",
+    "nucleo": "node src/server/orb-nucleo.mjs",
     "test:movil": "vite build && node test/mobile.e2e.mjs",
-    "icon:ico": "electron scripts/icono-ico.cjs"
+    "test:capturas": "vite build && node test/capturas.e2e.mjs",
+    "icon:ico": "electron scripts/icono-ico.cjs",
+    "android:build": "node scripts/android-build.mjs",
+    "android:build:debug": "node scripts/android-build.mjs --debug"
   },
   "engines": {
     "node": ">=22.13"
   },
   "devDependencies": {
+    "@capacitor-community/speech-recognition": "^7.0.1",
+    "@capacitor-mlkit/barcode-scanning": "^8.2.2",
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/cli": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/local-notifications": "^8.3.1",
     "@excalidraw/excalidraw": "^0.18.1",
     "@fontsource-variable/fira-code": "^5.3.0",
     "@fontsource-variable/fredoka": "^5.3.0",
@@ -90,6 +104,7 @@
     "files": [
       "src/**/*",
       "!src/ui/**",
+      "!android-app/**",
       "build/icon.png",
       "build/icon.ico",
       "package.json",

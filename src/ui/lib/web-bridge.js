@@ -2,8 +2,12 @@
 // (/api/call, live events on /api/events), every message encrypted end to end (src/core/mobile-crypto.mjs). It must be
 // imported before anything else. Not imported statically: i18n.js needs the store, which reads window.orb when it loads
 // (and this file defines it); the encryption code is loaded only on the phone.
+import * as L from './link-payload.js'; // tiny and pure: what a QR or a typed code says (also the Android app's)
 const tl = async (key, vars) => (await import('./i18n.js')).t(key, vars);
 const crypto$ = () => import('../../core/mobile-crypto.mjs');
+// 3.5: the Android app (src/ui/lib/app-bridge.js, loaded first) gives this bridge its own host: where the Orb is (the
+// page is not served by it), a key store backed by the Android Keystore, and the app's extras. In a browser, this page.
+const host = window.__orbHost ?? null;
 if (!window.orb) {
   const listeners = new Map();
   const fire = (event, payload) => {
@@ -13,19 +17,32 @@ if (!window.orb) {
   // This phone's pairing with the PC: its id, its own private key and the PC's public key. Kept by this page only (this
   // exact address and port), never sent anywhere: the PC only ever sees the public half.
   const KEY = 'orb.movil';
-  const store = {
-    get: () => { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch { return null; } },
-    set: (v) => { try { if (v) localStorage.setItem(KEY, JSON.stringify(v)); else localStorage.removeItem(KEY); localStorage.removeItem('orb.dispositivo'); } catch { /* storage unavailable */ } }
+  const store = host?.store ?? {
+    get: async () => { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch { return null; } },
+    set: async (v) => { try { if (v) localStorage.setItem(KEY, JSON.stringify(v)); else localStorage.removeItem(KEY); localStorage.removeItem('orb.dispositivo'); } catch { /* storage unavailable */ } }
   };
+  let saved; // what the store holds, read once
+  const record = async () => { if (saved === undefined) saved = await store.get(); return saved; };
+  const keep = async (v) => { saved = v; await store.set(v); };
   let session = null; // { id, key }
   const ready = async () => {
     if (session) return session;
-    const s = store.get(); if (!s) return null;
+    const s = await record(); if (!s) return null;
     const C = await crypto$();
     session = { id: s.id, key: C.sessionKey(C.b64.dec(s.priv), C.b64.dec(s.pc)) };
     return session;
   };
-  const unpaired = () => { store.set(null); session = null; window.dispatchEvent(new Event('orb:unpaired')); };
+  const unpaired = () => { keep(null); session = null; window.dispatchEvent(new Event('orb:unpaired')); };
+  // Where the Orb answers: this page's own server in a browser; in the app, the linked Orb's addresses (urls), the one
+  // that answered last first. A network error moves to the next one.
+  const at = (p) => (host ? `${saved?.urls?.[saved.at ?? 0] ?? ''}${p}` : p);
+  const reach = async (p, init) => {
+    const n = host ? Math.max(1, saved?.urls?.length ?? 1) : 1;
+    for (let i = 0; ; i++) {
+      try { return await fetch(at(p), init); }
+      catch (e) { if (i + 1 >= n || init?.signal?.aborted) throw e; saved.at = ((saved.at ?? 0) + 1) % n; store.set(saved); }
+    }
+  };
   const headersOf = (s) => ({ 'X-Orb-Device': s.id });
   // The PC refuses requests stamped too far from its own time (they could be replays). A phone whose clock is off gets
   // the PC's time in that answer (409) and stamps its requests with it from then on.
@@ -53,7 +70,7 @@ if (!window.orb) {
     const s = await ready(); if (!s) { unpaired(); throw new Error(await tl('app.notLinked')); }
     const C = await crypto$();
     const box = C.seal(s.key, { t: stamp(), m: kind, b: body }, C.AAD.request(s.id));
-    const res = await fetch(url, { method: 'POST', credentials: 'omit', headers: { ...headersOf(s), 'Content-Type': 'application/json' }, body: JSON.stringify(box) });
+    const res = await reach(url, { method: 'POST', credentials: 'omit', headers: { ...headersOf(s), 'Content-Type': 'application/json' }, body: JSON.stringify(box) });
     if (retry && await clockFixed(res)) return post(url, kind, body, false);
     return answer(res, s, box.n);
   };
@@ -67,7 +84,7 @@ if (!window.orb) {
     try {
       const s = await ready(); if (!s) return;
       const C = await crypto$();
-      const res = await fetch('/api/events', { headers: { ...headersOf(s), 'X-Orb-Auth': await authHeader(s, 'events') }, credentials: 'omit', signal: ctrl.signal });
+      const res = await reach('/api/events', { headers: { ...headersOf(s), 'X-Orb-Auth': await authHeader(s, 'events') }, credentials: 'omit', signal: ctrl.signal });
       if (res.status === 401) return unpaired();
       if (await clockFixed(res)) wait = 100; // again at once, with the PC's time
       if (!res.ok) throw new Error(res.status); // retried with the growing pause, not every second
@@ -95,7 +112,7 @@ if (!window.orb) {
     const C = await crypto$();
     const auth = await authHeader(s, 'upload');
     const body = C.sealBytes(s.key, new Uint8Array(await file.arrayBuffer()), C.AAD.upload(s.id));
-    const res = await fetch('/api/upload', { method: 'POST', credentials: 'omit', headers: { ...headersOf(s), 'X-Orb-Auth': auth, 'Content-Type': 'application/octet-stream' }, body });
+    const res = await reach('/api/upload', { method: 'POST', credentials: 'omit', headers: { ...headersOf(s), 'X-Orb-Auth': auth, 'Content-Type': 'application/octet-stream' }, body });
     if (retry && await clockFixed(res)) return uploadOne(file, false);
     const msg = await answer(res, s, auth.split('.')[0]);
     if (!msg.ok) throw new Error(msg.error);
@@ -112,31 +129,53 @@ if (!window.orb) {
     input.click();
   });
 
-  // Pairing from the QR: #vincular=<one-time code>&pc=<the PC's public key>. The code leaves the address bar at once and
-  // never travels: the phone proves it read it by sealing its own public key with a key derived from it.
+  // Pairing from the QR: #vincular=<one-time code>&pc=<the PC's public key> (or what the app scanned or was typed in,
+  // src/ui/lib/link-payload.js). The code never travels: the phone proves it read it by sealing its own public key with
+  // a key derived from it.
   const pairFromHash = async () => {
     const h = new URLSearchParams(location.hash.slice(1));
-    const code = h.get('vincular'); const pc = h.get('pc');
-    if (!code) return;
+    if (!h.get('vincular')) return;
     history.replaceState(null, '', location.pathname);
-    if (!pc) throw new Error(await tl('app.oldQr'));
+    if (!h.get('pc')) throw new Error(await tl('app.oldQr'));
+    await pairWith({ urls: [''], code: h.get('vincular'), pc: h.get('pc'), via: 'qr' }); // in a browser: this page's own server
+  };
+  const pairWith = async (link) => {
     const C = await crypto$();
+    let p = link; let pc = p.pc;
+    // The short code does not carry the Orb's key: the Orb gives it (GET /api/hello, Magic Link); a wrong one fails below.
+    if (!pc) {
+      const r = await fetch(`${p.urls[0]}/api/hello`, { credentials: 'omit' }).catch(() => null);
+      if (!r) throw new Error(await tl('app.linkOffline'));
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || typeof d?.pc !== 'string') throw new Error(await tl('app.linkNoShortCode'));
+      pc = d.pc;
+      if (Array.isArray(d.urls)) p = { ...p, urls: [p.urls[0], ...L.orderBases(d.urls).filter((u) => u !== p.urls[0])] };
+    }
     let pcPub; try { pcPub = C.b64.dec(pc); } catch { pcPub = null; }
     if (pcPub?.length !== 32) throw new Error(await tl('app.oldQr'));
     const { priv, pub } = C.newKeyPair();
-    const name = /iPhone/.test(navigator.userAgent) ? 'iPhone' : /iPad/.test(navigator.userAgent) ? 'iPad' : /Android/.test(navigator.userAgent) ? 'Android' : await tl('app.browser');
-    const proof = () => C.seal(C.pairingKey(priv, pcPub, code), { pub: C.b64.enc(pub), name, t: stamp() }, C.AAD.pair);
-    const send = () => fetch('/api/pair', { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pub: C.b64.enc(pub), proof: proof() }) });
-    let res = await send();
-    if (await clockFixed(res)) res = await send();
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error ?? await tl('app.httpError', { n: res.status }));
-    // The PC answers with the new session key: if it opens, this is really the PC of the QR.
-    const key = C.sessionKey(priv, pcPub);
-    let ok; try { ok = C.open(key, data.box, C.AAD.paired(data.id)); } catch { ok = null; }
-    if (!ok || ok.id !== data.id) throw new Error(await tl('app.badAnswer'));
-    store.set({ id: data.id, priv: C.b64.enc(priv), pc, fp: ok.pc });
-    session = { id: data.id, key };
+    const name = (await host?.deviceName?.()) ?? (/iPhone/.test(navigator.userAgent) ? 'iPhone' : /iPad/.test(navigator.userAgent) ? 'iPad' : /Android/.test(navigator.userAgent) ? 'Android' : await tl('app.browser'));
+    const secret = L.pairingSecret(p);
+    // 3.5 (Magic Link): it also says what it is (a phone or a computer's browser), for the list of linked devices.
+    const kind = host || /iPhone|iPad|Android|Mobile/.test(navigator.userAgent) ? 'phone' : 'browser';
+    const proof = () => C.seal(C.pairingKey(priv, pcPub, secret), { pub: C.b64.enc(pub), name, kind, t: stamp(), role: 'ventana' }, C.AAD.pair);
+    let last = null;
+    for (const base of p.urls) {
+      const send = () => fetch(`${base}/api/pair`, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ via: p.via, pub: C.b64.enc(pub), proof: proof() }) });
+      let res;
+      try { res = await send(); if (await clockFixed(res)) res = await send(); }
+      catch { last = new Error(await tl('app.linkOffline')); continue; } // not reachable this way: the next address
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? await tl('app.httpError', { n: res.status }));
+      // The PC answers with the new session key: if it opens, this is really the PC of the QR.
+      const key = C.sessionKey(priv, pcPub);
+      let ok; try { ok = C.open(key, data.box, C.AAD.paired(data.id)); } catch { ok = null; }
+      if (!ok || ok.id !== data.id) throw new Error(await tl('app.badAnswer'));
+      await keep({ id: data.id, priv: C.b64.enc(priv), pc, fp: ok.pc, ...(host ? { urls: [base, ...p.urls.filter((u) => u !== base)], at: 0, name: ok.name ?? p.name ?? null } : {}) });
+      session = { id: data.id, key };
+      return true;
+    }
+    throw last ?? new Error(await tl('app.linkOffline'));
   };
 
   // Notifications (https only: Tailscale with HTTPS). On an iPhone they work once the app is on the home screen.
@@ -173,12 +212,12 @@ if (!window.orb) {
     async info() {
       let pairError = null;
       try { await pairFromHash(); } catch (e) { pairError = e.message; }
-      if (!store.get()) return { mobile: true, needsPairing: true, needsSetup: false, pairError };
+      if (!await record()) return { mobile: true, needsPairing: true, needsSetup: false, pairError, app: Boolean(host) };
       try { me = (await post('/api/me', 'me', null)).result; }
-      catch { if (!store.get()) return { mobile: true, needsPairing: true, needsSetup: false, pairError }; }
+      catch { if (!await record()) return { mobile: true, needsPairing: true, needsSetup: false, pairError, app: Boolean(host) }; }
       connect();
-      if (window.isSecureContext && 'serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
-      return { mobile: true, needsSetup: false, platform: 'web', pc: me?.pc ?? store.get()?.fp ?? null };
+      if (!host && window.isSecureContext && 'serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+      return { mobile: true, needsSetup: false, platform: host ? 'android' : 'web', pc: me?.pc ?? saved?.fp ?? null };
     },
     setup: async () => { throw new Error(await tl('app.pcOnly')); },
     switchHome: async () => { throw new Error(await tl('app.pcOnly')); },
@@ -188,4 +227,6 @@ if (!window.orb) {
     openExternal: async (url) => { if (/^https:\/\//.test(url)) window.open(url, '_blank', 'noopener'); },
     pathForFile: () => null
   };
+  // The app's extras (scan the QR, dictate, share, notifications): they need the bridge's own pieces.
+  host?.extend?.(window.orb, { tl, fire, pairWith, uploadOne, unpaired, record });
 }

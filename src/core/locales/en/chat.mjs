@@ -1,5 +1,6 @@
 // chat.*
 export default {
+  'chat.dictate': "Dictate",
   'chat.suggestion1': 'Create a project called “my-site” with a simple home page',
   'chat.suggestion2': 'How are the tasks going?',
   'chat.suggestion3': 'Review the project and suggest improvements',
@@ -85,6 +86,13 @@ export default {
   'chat.act.tools': 'Getting its tools ready',
   'chat.act.pc': 'Checking the PC',
   'chat.act.propose': 'Preparing a proposal',
+  'chat.act.reminder': 'Checking reminders',
+  'chat.act.memory': 'Checking its memory',
+  'chat.act.bots': 'Talking to other bots',
+  'chat.act.confirm': 'Asking for your approval',
+  'chat.act.manage': 'Preparing a change to the bots',
+  'chat.act.home': 'Checking the home',
+  'chat.act.server': 'Checking the server',
   'chat.act.writing': 'Writing…',
   'chat.act.sec': '{s} s',
   'chat.act.min': '{m} min {s} s',

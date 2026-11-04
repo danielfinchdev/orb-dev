@@ -81,7 +81,7 @@ try {
 
   // ---- 2. an assistant already created: every view
   const base = path.join(tmp, 'Documentos'); fs.mkdirSync(base);
-  const { home } = createHome(base, { assistantName: 'Orb', userName: 'Dani' });
+  const { home } = createHome(base, { assistantName: 'Orb', userName: 'Alex' });
   writeJson(path.join(home, 'orb.json'), merge(loadConfig(home), { ui: { tourDone: true } })); // 2.6: no guided tour in the tests
   fs.mkdirSync(path.join(home, 'web', 'webviaproject', 'src'), { recursive: true });
   fs.writeFileSync(path.join(home, 'web', 'webviaproject', 'src', 'index.html'), '<h1>hola</h1>\n');

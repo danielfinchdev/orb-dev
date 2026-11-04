@@ -1,6 +1,6 @@
 // Agents: which CLIs are installed, their login, models and how much of each subscription window is used.
 import { useEffect, useState } from 'react';
-import { Bot, RefreshCw, LogIn, ChevronRight, ChevronDown, ExternalLink, UserPlus, Trash2, FolderOpen, ScanSearch } from 'lucide-react';
+import { Bot, RefreshCw, LogIn, ChevronRight, ChevronDown, ExternalLink, UserPlus, Trash2, FolderOpen, ScanSearch, Copy, Download, SquareTerminal, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCatalog } from '@/components/brain-picker.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
@@ -26,6 +26,99 @@ async function save(agent, patch) {
   const config = await act(call('config.save', { patch: { agents: { [agent]: patch } } }), t('agents.saved'));
   if (config) setState({ app: { ...getState().app, config } });
   return config;
+}
+
+// 3.5 «Solo Orb»: the sign-in of Claude Code and Codex runs hidden: Orb gets the link (and the code, when there is one),
+// shows them in a card and opens the link in the browser; the card follows the 'agents:login' events until it ends.
+// Cursor and the other agents still open their own console ({ console: true }).
+let showLogin = () => {};
+async function signIn(acc, label, extra = {}) {
+  const r = await act(call('agents.login', { account: acc.id, ...extra }));
+  if (!r) return;
+  if (r.console) { toast.info(t('agents.followSteps')); return; }
+  showLogin({ ...r, label });
+  // Claude opens the browser itself on a PC; the others' link is opened here (the main process' shell, https only).
+  if (!r.opened && r.url) bridge.openExternal(r.url).catch(() => {});
+}
+
+function LoginCard({ reload, windows }) {
+  const t = useT();
+  const [login, setLogin] = useState(null);
+  const [code, setCode] = useState('');
+  useEffect(() => { showLogin = (l) => { setCode(''); setLogin(l); }; return () => { showLogin = () => {}; }; }, []);
+  useEffect(() => bridge.on('agents:login', (p) => {
+    setLogin((cur) => {
+      if (!cur || cur.id !== p.id) return cur;
+      if (p.state === 'hecho') { toast.success(t('agents.loginDone', { label: cur.label })); reload(); return null; }
+      if (p.state === 'error') { toast.error(p.message ?? t('agents.loginWaiting')); return null; }
+      if (p.state === 'cancelado') return null;
+      if (p.message) toast.warning(p.message);
+      return { ...cur, ...p, message: null };
+    });
+  }), []); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!login) return null;
+  const copy = (text) => navigator.clipboard?.writeText(text).then(() => toast.success(t('agents.loginCopied'))).catch(() => {});
+  const send = async () => { if (await act(call('agents.loginCode', { id: login.id, code: code.trim() }))) setCode(''); };
+  const cancel = () => { call('agents.loginCancel', { id: login.id }).catch(() => {}); setLogin(null); };
+  return (
+    <Card className="border-primary/50" data-testid="agent-login-card">
+      <CardHeader className="flex-row items-start gap-3">
+        <AgentIcon agent={login.agent} className="mt-0.5 size-6 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <CardTitle>{t('agents.loginTitle', { label: login.label })}</CardTitle>
+          <CardDescription>{login.code ? t('agents.loginDevice') : login.opened ? t('agents.loginOpened') : t('agents.loginOpen')}</CardDescription>
+        </div>
+        <BubbleTip title={t('agents.loginCancel')}><Button size="icon-xs" variant="ghost" aria-label={t('agents.loginCancel')} onClick={cancel}><X /></Button></BubbleTip>
+      </CardHeader>
+      <CardContent className="grid gap-3">
+        {login.code ? (
+          <div className="flex items-center gap-2">
+            <span className="bg-muted rounded-lg px-3 py-1.5 font-mono text-lg tracking-widest select-all" data-testid="agent-login-code">{login.code}</span>
+            <Button size="sm" variant="ghost" onClick={() => copy(login.code)}><Copy />{t('agents.loginCopyCode')}</Button>
+          </div>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" onClick={() => act(bridge.openExternal(login.url))} data-testid="agent-login-open"><ExternalLink />{t('agents.loginOpenBrowser')}</Button>
+          <Button size="sm" variant="ghost" onClick={() => copy(login.url)}><Copy />{t('agents.loginCopy')}</Button>
+          <span className="text-muted-foreground flex items-center gap-2 text-xs"><Spinner className="size-3" />{t('agents.loginWaiting')}</span>
+        </div>
+        {login.needsCode ? (
+          <Field label={t('agents.loginPasteHint')}>
+            <div className="flex gap-2">
+              <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder={t('agents.loginPastePh')} onKeyDown={(e) => { if (e.key === 'Enter' && code.trim()) send(); }} data-testid="agent-login-paste" />
+              <Button size="sm" variant="outline" disabled={!code.trim()} onClick={send}>{t('agents.loginSend')}</Button>
+            </div>
+          </Field>
+        ) : null}
+        {/* The old way, for a sign-in the hidden one cannot do: the agent's own console (Windows only). */}
+        {windows ? <Button size="xs" variant="ghost" className="text-muted-foreground w-fit" onClick={() => { cancel(); act(call('agents.login', { account: login.account, console: true }), t('agents.followSteps')); }}><SquareTerminal />{t('agents.loginConsole')}</Button> : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+// 3.5: install or update Claude Code and Codex with one button (hidden, for this user only); 'agents:install' events.
+const INSTALLABLE = ['claude', 'codex'];
+function InstallButton({ a, reload }) {
+  const t = useT();
+  const [st, setSt] = useState(null);
+  useEffect(() => { call('agents.installState', { agent: a.id }).then((s) => { if (s?.state === 'instalando') setSt(s); }).catch(() => {}); }, [a.id]);
+  useEffect(() => bridge.on('agents:install', (p) => {
+    if (p.agent !== a.id) return;
+    setSt(p);
+    if (p.state === 'hecho') { toast.success(p.version ? t('agents.installDone', { label: a.label, version: p.version }) : t('agents.installDoneNoVersion', { label: a.label })); reload(); }
+    if (p.state === 'error') toast.error(p.message);
+  }), [a.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!INSTALLABLE.includes(a.id)) return null;
+  const busy = st?.state === 'instalando';
+  return (
+    <>
+      <Button size="sm" variant={a.installed ? 'ghost' : 'default'} disabled={busy} onClick={async () => { const r = await act(call('agents.install', { agent: a.id })); if (r) setSt(r); }} data-testid={`agent-install-${a.id}`}>
+        {busy ? <Spinner className="size-3.5" /> : <Download />}{busy ? t('agents.installing') : a.installed ? t('agents.update') : t('agents.install')}
+      </Button>
+      {busy && st.line ? <span className="text-muted-foreground w-full truncate text-[11px]">{st.line}</span> : null}
+    </>
+  );
 }
 
 // The subscriptions of one agent: each with its own login folder, so two Codex or three Claude accounts never mix.
@@ -58,7 +151,7 @@ function Accounts({ a, reload }) {
     if (!r) return;
     reload();
     // A new folder has no login yet: the sign-in opens straight away.
-    if (/[\\/]cuentas[\\/][^\\/]+$/.test(r.home ?? '') && r.home.endsWith(r.id)) act(call('agents.login', { account: r.id }), t('agents.followSteps'));
+    if (/[\\/]cuentas[\\/][^\\/]+$/.test(r.home ?? '') && r.home.endsWith(r.id)) signIn(r, r.label);
   };
   // 2.7: «Buscar y añadir»: saved logins of this agent elsewhere on the PC become accounts (Orb only checks that the
   // login file is there; it never opens it). One found: added at once. Several: ticked in a list. None: a new account.
@@ -112,7 +205,7 @@ function Accounts({ a, reload }) {
             <div className="flex items-center gap-1.5">
               <div className="min-w-0 flex-1 truncate text-[13px] font-medium">{acc.label}</div>
               <Badge variant={login[1]}>{login[0]}</Badge>
-              <BubbleTip title={t('agents.login')}><Button size="icon-xs" variant="ghost" aria-label={t('agents.login')} onClick={() => act(call('agents.login', { account: acc.id }), t('agents.followSteps'))}><LogIn /></Button></BubbleTip>
+              <BubbleTip title={t('agents.login')}><Button size="icon-xs" variant="ghost" aria-label={t('agents.login')} onClick={() => signIn(acc, acc.label)} data-testid={`agent-login-${acc.id}`}><LogIn /></Button></BubbleTip>
               {acc.id !== acc.agent ? <BubbleTip title={t('agents.removeTitle')} text={t('agents.removeTip')}><Button size="icon-xs" variant="danger" aria-label={t('agents.removeTitle')} onClick={async () => { if (await confirm(t('agents.removeTitle'), t('agents.removeBody', { label: acc.label }), { ok: t('agents.remove'), danger: true })) act(call('accounts.remove', { id: acc.id }), t('agents.accountRemoved')).then(reload); }}><Trash2 /></Button></BubbleTip> : null}
               {/* The bubble wraps a span: on the switch itself, the bubble's data-state hid «checked» and it looked off. */}
               <BubbleTip title={t('agents.useAccount')}><span className="inline-flex shrink-0"><Switch checked={acc.enabled !== false} onCheckedChange={(enabled) => act(call('accounts.update', { id: acc.id, enabled })).then(reload)} aria-label={t('agents.useAccount')} /></span></BubbleTip>
@@ -194,7 +287,8 @@ function AgentCard({ a, reload }) {
         {a.installed && KIND[a.kind] ? <Badge variant="outline" className="text-muted-foreground font-normal">{t(KIND[a.kind])}</Badge> : null}
       </CardContent>
       <CardContent className="flex flex-wrap gap-2">
-        {!a.installed ? <Button size="sm" variant="outline" onClick={() => bridge.openExternal(INSTALL[a.id])}><ExternalLink />{t('agents.howInstall')}</Button> : null}
+        <InstallButton a={a} reload={reload} />
+        {!a.installed && !INSTALLABLE.includes(a.id) ? <Button size="sm" variant="outline" onClick={() => bridge.openExternal(INSTALL[a.id])}><ExternalLink />{t('agents.howInstall')}</Button> : null}
         {/* 2.7: the paths are not shown (they say too much on a shared screen): a button opens the program's folder. */}
         {a.where ? <Button size="sm" variant="ghost" onClick={() => act(bridge.openPath(dirOf(a.where)))} data-testid={`agent-open-${a.id}`}><FolderOpen />{t('agents.openFolder')}</Button> : null}
         <Button size="sm" variant="ghost" onClick={() => act(call('agents.check', { agent: a.id })).then(reload)}><RefreshCw />{t('agents.check')}</Button>
@@ -242,6 +336,7 @@ export function AgentsView() {
       </PageHeader>
       <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 py-5">
         <div className="grid gap-4">
+          <LoginCard reload={() => load(true)} windows={system?.platform === 'win32'} />
           {system?.platform === 'win32' ? (
             <Card>
               <CardHeader><CardTitle>{t('agents.installTitle')}</CardTitle><CardDescription>{t('agents.installDesc')}</CardDescription></CardHeader>

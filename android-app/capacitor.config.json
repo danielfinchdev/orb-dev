@@ -1,0 +1,19 @@
+{
+  "appId": "dev.orb.app",
+  "appName": "Orb",
+  "webDir": "www",
+  "android": {
+    "path": "android",
+    "allowMixedContent": false,
+    "captureInput": false,
+    "webContentsDebuggingEnabled": false
+  },
+  "server": {
+    "androidScheme": "http",
+    "hostname": "localhost",
+    "cleartext": true
+  },
+  "plugins": {
+    "LocalNotifications": { "smallIcon": "ic_stat_orb", "iconColor": "#5B6EE8" }
+  }
+}

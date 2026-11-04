@@ -6,6 +6,7 @@ import { errorText } from './utils.js';
 import { bumpNav, navTicket, stillHere } from './nav.js';
 import { t } from './i18n.js';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from '../../core/appearance.mjs';
+import { modeOf, botsPrefix } from './bots.js';
 
 // The bridge to the PC: Electron's preload, or the phone's web bridge (src/ui/lib/web-bridge.js). Read when used, not when
 // this module loads: the bundler may load this module before the phone's bridge has defined window.orb.
@@ -14,6 +15,11 @@ export const call = (method, params) => bridge.call(method, params);
 // 2.7.3: the whole PC app (the installer), not the phone nor Orb Light (the portable .exe): mini-games, God mode, PC Status
 // and the themes live only here.
 export const fullPc = () => !bridge.mobile && !bridge.light;
+// 3.5: a computer's browser linked with an Orb (above all the server's, which has no window): the PC's layout, with what
+// a linked device may do. Decided once, when the page opens (a phone, or the Android app, keeps the phone's layout).
+let wide = null;
+export const wideBrowser = () => (wide ??= Boolean(bridge.mobile) && !window.__orbHost && !/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) && window.innerWidth >= 1024);
+export const phoneLayout = () => Boolean(bridge.mobile) && !wideBrowser();
 
 // 3.0: «Iniciar test» shows on the first opening of the day (on the PC), until the user writes to the assistant.
 function firstOpenToday() {
@@ -74,7 +80,55 @@ export function go(route) {
   if (next.view === 'settings') { openSettings(next.section); return; }
   bumpNav(); // even to the same screen («Nuevo chat» while on a new chat): the user chose where to be
   setState({ route: next });
-  try { localStorage.setItem('orb.route', JSON.stringify(next.view === 'session' || next.view === 'chat' ? next : { view: next.view })); } catch { /* storage unavailable */ }
+  const keep = KEEPS_ID.has(next.view) ? next : { view: next.view, ...(next.mode === 'bots' ? { mode: 'bots' } : {}) };
+  try { localStorage.setItem('orb.route', JSON.stringify(keep)); } catch { /* storage unavailable */ }
+  rememberMode(keep);
+}
+
+// 3.5: the two modes, «Orb» (the app as always) and «Bots». Each one remembers its last screen (on this device) and the
+// mode in use is kept in the settings of the assistant's folder (ui.mode), so the PC opens in the same one.
+const KEEPS_ID = new Set(['session', 'chat', 'bot-chat', 'bot-group', 'bots']);
+const MODES_KEY = 'orb.modos';
+const lastOf = () => { try { return JSON.parse(localStorage.getItem(MODES_KEY) || '{}') ?? {}; } catch { return {}; } };
+function rememberMode(route) { try { localStorage.setItem(MODES_KEY, JSON.stringify({ ...lastOf(), [modeOf(route)]: route })); } catch { /* storage unavailable */ } }
+export const modeHome = (mode) => lastOf()[mode] ?? (mode === 'bots' ? { view: 'bot-chat' } : { view: 'chat' });
+export function setMode(mode) {
+  const next = mode === 'bots' ? 'bots' : 'orb';
+  if (modeOf(state.route) !== next) go(modeHome(next));
+  if (!bridge.mobile && state.app?.config?.ui?.mode !== next) call('config.save', { patch: { ui: { mode: next } } }).then((config) => setState((s) => ({ app: s.app ? { ...s.app, config } : s.app }))).catch(() => {});
+}
+export { modeOf };
+
+// 3.5: the bots (bots.list), shared by the menu and the screens of the Bots mode; read again when a bot changes
+// (bot.updated) and when the screens move on (version). What each bot is doing now comes live (bot.state).
+// Where the bots live is the user's choice (Ajustes › Magic Link › «¿Dónde quieres tus bots?», bots.location): in this
+// Orb, or in a linked Orb that keeps bots (centro.<method>, live as centro:bot.*). A phone talks to the bots of the Orb it
+// is linked with.
+export const botsVia = () => botsPrefix(getState().centro);
+export const botCall = (method, params) => call(`${botsVia()}${method}`, params);
+// A live event of the bots in use (bot.message, bot.state, bot.updated), wherever they live.
+export function onBotEvent(name, fn) {
+  const offLocal = bridge.on(name, (p) => { if (!botsVia()) fn(p); });
+  const offCentro = bridge.on(`centro:${name}`, (p) => { if (botsVia()) fn(p); });
+  return () => { offLocal(); offCentro(); };
+}
+export async function loadCentro() {
+  if (bridge.mobile) return null;
+  const before = getState().centro;
+  let centro; try { centro = await call('centro.status'); } catch { centro = { linked: false }; }
+  setState({ centro });
+  if (botsPrefix(before) !== botsPrefix(centro) || before?.id !== centro.id) { setState({ bots: null }); loadBots(); }
+  return centro;
+}
+let botsTimer = null;
+export async function loadBots() {
+  try { const bots = await botCall('bots.list'); setState((s) => ({ bots, botsError: null, botStates: Object.fromEntries((bots.states ?? []).map((x) => [x.bot, x])) })); return bots; }
+  catch (error) { setState({ botsError: errorText(error) }); return null; }
+}
+export function loadBotsSoon() { clearTimeout(botsTimer); botsTimer = setTimeout(() => { loadBots(); }, 150); }
+export function botStateChanged(p) {
+  if (p?.bot == null) return;
+  setState((s) => ({ botStates: { ...(s.botStates ?? {}), [p.bot]: p } }));
 }
 
 export async function refresh() {

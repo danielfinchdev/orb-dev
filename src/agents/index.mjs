@@ -8,7 +8,8 @@ import * as cursor from './cursor.mjs';
 import { acpAgent, ACP_SPECS } from './acp.mjs';
 import { cleanEnv, IS_WIN } from './common.mjs';
 import fs from 'node:fs';
-import { ctx, tr } from '../core/context.mjs';
+import { ctx, tr, isHeadless } from '../core/context.mjs';
+import { startLogin } from './login.mjs';
 import { accountsOf, account, accountDir, accountEnv, defaultAccount, loginState as accountLogin, MULTI } from '../core/accounts.mjs';
 
 export const ADAPTERS = { claude, codex, cursor, ...Object.fromEntries(Object.entries(ACP_SPECS).map(([id, spec]) => [id, acpAgent(id, spec)])) };
@@ -94,6 +95,20 @@ export function openLogin(accountId) {
   if (acc.home) fs.mkdirSync(acc.home, { recursive: true });
   const { cmd, args } = adapter(acc.agent).loginCommand(exe);
   openConsole(cmd, args, accountEnv(acc));
+}
+
+// 3.5 «Solo Orb»: the sign-in of Claude Code and Codex without a console (src/agents/login.mjs). Resolves with
+// { id, url, code?, opened, needsCode, mode }; how it ends comes as 'agents:login' events. The other agents (Cursor, the
+// ACP ones) keep their own console sign-in: { console: true }. mode: 'web' or 'device' (by default 'device' on the server,
+// whose browser is on another device).
+export async function startAccountLogin(accountId, { mode, emit = () => {}, onEnd = null } = {}) {
+  const acc = account(accountId); if (!acc) throw new Error(tr('sys.agents.noAccount'));
+  const a = adapter(acc.agent);
+  if (!a.windowlessLogin) { openLogin(accountId); return { console: true, account: acc.id, agent: acc.agent }; }
+  const exe = a.loginExe?.() ?? executable(acc.agent);
+  if (acc.home) fs.mkdirSync(acc.home, { recursive: true });
+  const how = mode === 'device' || mode === 'web' ? mode : (isHeadless() ? 'device' : 'web');
+  return startLogin({ agent: acc.agent, account: acc.id, exe, env: accountEnv(acc), mode: how, emit, onEnd, verify: () => (MULTI[acc.agent] ? accountLogin(acc) === 'si' : true) });
 }
 
 // A program in a console window of its own. Started directly (a detached console program gets its own window on Windows):

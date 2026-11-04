@@ -1,8 +1,7 @@
 // Settings: the assistant, its brain, how tasks run, usage caps, extra MCP connectors and the assistant's folder.
 import { useEffect, useState } from 'react';
-import QRCode from 'qrcode';
 import { toast } from 'sonner';
-import { Settings, FlaskConical, FolderOpen, HeartPulse, Plus, Trash2, ArrowLeftRight, Smartphone, QrCode, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, LayoutGrid, UserRound, ListChecks, Wrench, RefreshCw, ChevronRight } from 'lucide-react';
+import { Settings, FlaskConical, FolderOpen, HeartPulse, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, LayoutGrid, UserRound, ListChecks, Wrench, RefreshCw, ChevronRight } from 'lucide-react';
 import { ToolIcon } from '@/components/agent-icon.jsx';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, APPEARANCE_DEFAULTS } from '../../core/appearance.mjs';
 import { PRODUCT, AUTHOR } from '../../core/product.mjs';
@@ -23,6 +22,7 @@ import { t, useT, useLocale } from '@/lib/i18n.js';
 import { LANGUAGES } from '../../core/i18n.mjs';
 import { useUpdate, updateActions, notesUrl } from '@/components/update-card.jsx';
 import { play } from '@/lib/sounds.js';
+import { MagicLinkPanel } from './magic-link.jsx';
 
 async function save(patch, ok = t('settings.saved')) {
   const config = await act(call('config.save', { patch }), ok);
@@ -352,20 +352,13 @@ function FolderCard({ c, home }) {
   );
 }
 
-// Phone access: on/off, the address, a one-time QR to pair a phone, and the paired devices (each can be removed).
+// Phone access: on/off and the addresses (wifi, Tailscale). 3.5: the QR and the linked devices are in Magic Link.
 function MobileCard() {
   const t = useT();
-  const locale = useLocale();
   const [st, setSt] = useState(null);
-  const [qr, setQr] = useState(null);
   const load = () => call('remote.status').then(setSt).catch(() => {});
   useEffect(() => { load(); }, []);
-  useEffect(() => { if (!qr) return undefined; const timer = setInterval(() => { if (Date.now() > qr.expiresAt) setQr(null); }, 1000); return () => clearInterval(timer); }, [qr]);
-  const pair = async (kind) => {
-    const r = await act(call('remote.pair', { kind }));
-    if (r) setQr({ ...r, svg: await QRCode.toString(r.url, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }) });
-  };
-  const configure = async (patch) => { setQr(null); const r = await act(call('remote.configure', patch)); if (r) setSt(r); };
+  const configure = async (patch) => { const r = await act(call('remote.configure', patch)); if (r) setSt(r); };
   if (!st) return null;
   const route = (kind) => st.routes?.find((r) => r.kind === kind);
   const via = (kind) => {
@@ -381,39 +374,11 @@ function MobileCard() {
     <Card data-testid="mobile-card">
       <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Smartphone className="text-primary size-5" /><div><CardTitle>{t('settings.mobile')}</CardTitle><CardDescription>{t('settings.mobileDesc')}</CardDescription></div></CardHeader>
       <CardContent className="grid gap-4">
-        <Row label={t('settings.mobileAccess')} hint={st.running ? t('settings.mobileOn') : st.error ?? t('settings.disabled')}><Switch checked={st.enabled} onCheckedChange={async (enabled) => { setQr(null); const r = await act(call('remote.enable', { enabled })); if (r) setSt(r); }} /></Row>
+        <Row label={t('settings.mobileAccess')} hint={st.running ? t('settings.mobileOn') : st.error ?? t('settings.disabled')}><Switch checked={st.enabled} onCheckedChange={async (enabled) => { const r = await act(call('remote.enable', { enabled })); if (r) setSt(r); }} /></Row>
         {st.enabled ? <div className="grid gap-1">{via('wifi')}{via('tailscale')}</div> : null}
         {st.enabled && st.error && st.running ? <p className="text-muted-foreground text-xs">{st.error}</p> : null}
-        {st.running ? (
-          <div className="grid gap-3">
-            {qr ? (
-              <div className="grid justify-items-center gap-2 rounded-xl border p-4 text-center" data-testid="mobile-qr">
-                <img alt={t('settings.qrAlt')} className="size-52 rounded-lg bg-white p-2" src={`data:image/svg+xml;utf8,${encodeURIComponent(qr.svg)}`} />
-                <p className="text-sm">{t(qr.kind === 'wifi' ? 'settings.qrScanWifi' : 'settings.qrScanTs')}</p>
-                <p className="text-muted-foreground text-xs">{t(qr.secure ? 'settings.qrInstallSecure' : 'settings.qrInstall')}</p>
-                <p className="text-muted-foreground font-mono text-[11px]">{t('settings.qrPc', { pc: qr.pc })}</p>
-                <Button size="sm" variant="ghost" onClick={() => setQr(null)}>{t('settings.close')}</Button>
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {route('wifi') ? <Button size="sm" onClick={() => pair('wifi')}><QrCode />{t('settings.pairWifi')}</Button> : null}
-                {route('tailscale') ? <Button size="sm" variant={route('wifi') ? 'outline' : 'default'} onClick={() => pair('tailscale')}><QrCode />{t('settings.pairTs')}</Button> : null}
-              </div>
-            )}
-            {route('wifi') ? <p className="text-muted-foreground text-xs">{t('settings.mobileWifiNote')}</p> : null}
-            <div className="grid gap-1.5">
-              <div className="text-muted-foreground text-xs">{t('settings.devices')}</div>
-              {st.devices.length ? st.devices.map((d) => (
-                <div key={d.id} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-                  <Smartphone className="text-muted-foreground size-4" />
-                  <div className="min-w-0 flex-1"><div className="truncate">{d.name}</div><div className="text-muted-foreground text-xs">{[d.route === 'tailscale' ? 'Tailscale' : d.route === 'wifi' ? t('settings.mobileWifiShort') : null, d.push ? t('settings.mobilePushOn') : null].filter(Boolean).join(' · ')}</div></div>
-                  <span className="text-muted-foreground text-xs">{d.last_seen ? new Date(d.last_seen).toLocaleString(locale, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</span>
-                  <BubbleTip title={t('settings.revokeTip')}><Button size="icon-sm" variant="danger" aria-label={t('settings.revokeTip')} onClick={async () => { if (await confirm(t('settings.revokeTitle'), t('settings.revokeBody', { name: d.name }), { ok: t('settings.remove'), danger: true })) { await act(call('remote.revoke', { id: d.id }), t('settings.revoked')); load(); } }}><Trash2 /></Button></BubbleTip>
-                </div>
-              )) : <p className="text-muted-foreground text-sm">{t('settings.none')}</p>}
-            </div>
-          </div>
-        ) : null}
+        {/* 3.5: the QR, the short code and the linked devices are in Magic Link, below. */}
+        {st.running && route('wifi') ? <p className="text-muted-foreground text-xs">{t('settings.mobileWifiNote')}</p> : null}
       </CardContent>
     </Card>
   );
@@ -646,7 +611,7 @@ const SECTIONS = [
   { id: 'general', icon: UserRound, cards: (c, app) => <><AssistantCard c={c} /><ChatCard c={c} />{bridge.mobile ? null : <TestCard />}<FolderCard c={c} home={app.home} /></> },
   { id: 'apariencia', icon: Palette, cards: (c) => <><AppearanceCard c={c} /><InterfaceCard c={c} /></> },
   { id: 'tareas', icon: ListChecks, cards: (c) => <TasksCard c={c} /> },
-  { id: 'movil', icon: Smartphone, cards: () => <MobileCard /> },
+  { id: 'movil', icon: Smartphone, cards: () => <><MobileCard /><MagicLinkPanel /></> },
   { id: 'herramientas', icon: Wrench, cards: (c) => <><BrowserCard c={c} /><McpCard c={c} /><AndroidCard /></> },
   { id: 'experto', icon: SquareTerminal, cards: (c) => <ExpertCard c={c} /> },
   { id: 'monitor', icon: HeartPulse, cards: (c) => <MonitorCard c={c} /> },

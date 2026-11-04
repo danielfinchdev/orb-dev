@@ -1,11 +1,14 @@
 // Entry of the window: first-run setup or the app (sidebar + current view), live refresh from the engine's events.
-import './lib/web-bridge.js'; // first: in a phone's browser it provides window.orb
+import './lib/app-bridge.js'; // first: in the Android app it tells the web bridge where the linked Orb is
+import './lib/web-bridge.js'; // then: in a phone's browser (or the app) it provides window.orb
 import './app.css';
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Toaster } from 'sonner';
 import { notify } from '@/lib/notify.js';
-import { Menu, Smartphone, MessagesSquare } from 'lucide-react';
+import { Menu, Smartphone, MessagesSquare, ScanLine, Link2 } from 'lucide-react';
+import { Button } from '@/components/ui/button.jsx';
+import { Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { MobileTabs, MoreView } from '@/components/mobile-tabs.jsx';
 import { TooltipProvider } from '@/components/ui/overlay.jsx';
@@ -19,7 +22,7 @@ import { ActionShortcuts } from '@/components/project-tools.jsx';
 import { Scene } from '@/components/scene.jsx';
 import { GamesDialog } from '@/games/games.jsx';
 import { Robot } from '@/components/robot.jsx';
-import { useStore, setState, getState, refresh, refreshSoon, bridge, go, applyTheme, openTerminal, startTour, anyChatBusy } from '@/lib/store.js';
+import { useStore, setState, getState, refresh, refreshSoon, bridge, go, applyTheme, openTerminal, startTour, anyChatBusy, phoneLayout, modeOf, modeHome, loadBotsSoon, botStateChanged, loadCentro, botsVia } from '@/lib/store.js';
 import { Tour } from '@/components/tour.jsx';
 import { AGENT } from '@/lib/labels.js';
 import { WindowControls } from '@/components/window-controls.jsx';
@@ -37,13 +40,21 @@ import { ExpertView } from '@/views/expert.jsx';
 import { TutorialsView } from '@/views/tutorials.jsx';
 import { WhiteboardView } from '@/views/whiteboard.jsx';
 import { MonitorView } from '@/views/monitor.jsx';
+import { BotChatView } from '@/views/bots/chat.jsx';
+import { BotsView } from '@/views/bots/list.jsx';
+import { BotGroupsView, BotRemindersView, BotMemoryView, BotHomeView, BotServerView, BotSettingsView } from '@/views/bots/more.jsx';
+import { MagicLinkView } from '@/views/magic-link.jsx';
+import { ModeSwitch } from '@/components/mode-switch.jsx';
+import { TallerBanner } from '@/components/taller-banner.jsx';
 
 const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
 // 2.7, the phone: the conversations («Chats») and «Más» are screens of their own; Agentes and Modo experto are PC only.
 function ChatsView() { const t = useT(); return <><PageHeader icon={<MessagesSquare className="text-primary size-5" />} title={t('nav.chats')} /><Sidebar page /></>; }
+// 3.5: the screens of the Bots mode (both layouts) and Magic Link as a screen of a linked device.
+const BOT_SCREENS = { 'bot-chat': BotChatView, 'bot-group': BotChatView, bots: BotsView, 'bot-groups': BotGroupsView, 'bot-reminders': BotRemindersView, 'bot-memory': BotMemoryView, 'bot-home': BotHomeView, 'bot-server': BotServerView, 'bot-settings': BotSettingsView };
 const VIEWS = bridge.mobile
-  ? { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
-  : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView,
+  ? { ...BOT_SCREENS, link: MagicLinkView, chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
+  : { ...BOT_SCREENS, chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView,
     // 2.7.3: Orb Light (the portable .exe) has no God mode nor PC Status.
     ...(bridge.light ? {} : { expert: ExpertView, monitor: MonitorView }) };
 
@@ -51,8 +62,12 @@ const VIEWS = bridge.mobile
 function MobileShell() {
   const route = useStore((s) => s.route);
   const View = VIEWS[route.view] ?? ChatView;
+  const bots = modeOf(route) === 'bots';
   return (
     <div className="flex h-full flex-col">
+      {/* 3.5: «Orb | Bots» at the top; in Orb mode, how the PC that does the work is (when linked with the server). */}
+      <div className="mobile-mode bg-sidebar shrink-0 border-b px-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2"><ModeSwitch className="mx-auto max-w-xs" /></div>
+      {bots ? null : <TallerBanner />}
       <main className="theme-scene flex min-h-0 min-w-0 flex-1 flex-col">
         <Scene />
         <View key={`${route.view}:${route.id ?? ''}:${route.project ?? ''}`} route={route} />
@@ -86,7 +101,7 @@ function Shell() {
     const id = setTimeout(startTour, 900);
     return () => clearTimeout(id);
   }, []);
-  if (bridge.mobile) return <MobileShell />;
+  if (phoneLayout()) return <MobileShell />;
   return (
     <div className="flex h-full">
       {/* 2.6: folded away (its button next to day / night), the screens take the whole width. */}
@@ -99,15 +114,15 @@ function Shell() {
           <button className="hover:bg-accent grid size-9 cursor-pointer place-items-center rounded-lg" onClick={() => setDrawer(true)} aria-label={t('app.menu')}><Menu className="size-5" /></button>
           <Robot size={26} mood={mood} /><span className="truncate text-[15px] font-medium">{app.config.assistantName}</span>
         </div>
+        {bridge.mobile && modeOf(route) !== 'bots' ? <TallerBanner /> : null}
         <View key={`${route.view}:${route.id ?? ''}:${route.project ?? ''}`} route={route} />
       </main>
       {/* The floating robot only where there is room for it: never over forms or conversations (it covered the switches of
           Ajustes and took their clicks), and those views leave room at the bottom so nothing stays under it. */}
-      <UpdateCard />
-      <SettingsDialog />
-      <GamesDialog />
+      {/* 3.5: a browser linked with an Orb gets the PC's layout, not what only the PC itself does. */}
+      {bridge.mobile ? null : <><UpdateCard /><SettingsDialog /><GamesDialog /></>}
       <Notices />
-      <ActionShortcuts project={shortcutProject} />
+      {bridge.mobile ? null : <ActionShortcuts project={shortcutProject} />}
       <div className="hidden md:contents"><Companion name={app.config.assistantName} base={mood} hidden={app.config.ui?.companion === false || !COMPANION_VIEWS.has(route.view) || bridge.mobile || Boolean(tour)} /></div>
       {tour ? <Tour key={tour.key} /> : null}
     </div>
@@ -134,7 +149,11 @@ function Root() {
             const saved = JSON.parse(localStorage.getItem('orb.route') || 'null');
             const exists = saved?.view === 'session' ? getState().sessions.some((s) => s.id === saved.id) : saved?.view === 'chat' && saved.id != null ? getState().conversations.some((c) => c.id === saved.id) : true;
             if (saved?.view && VIEWS[saved.view] && exists) setState({ route: saved });
+            // 3.5: the PC opens in the mode it was left in (Ajustes of the assistant's folder: ui.mode).
+            const mode = getState().app?.config?.ui?.mode;
+            if (!bridge.mobile && (mode === 'bots' || mode === 'orb') && modeOf(getState().route) !== mode) setState({ route: modeHome(mode) });
           } catch { /* default */ }
+          loadCentro();
           return setPhase('app');
         } catch (e) { setError(String(e?.message ?? e)); await new Promise((r) => setTimeout(r, 250)); }
       }
@@ -151,6 +170,14 @@ function Root() {
     return () => { window.removeEventListener('keydown', key); off(); };
   }, [phase]);
   useEffect(() => { const off = () => setPhase('pair'); window.addEventListener('orb:unpaired', off); return () => window.removeEventListener('orb:unpaired', off); }, []);
+  // 3.5, the Android app: something shared from another app («Compartir con Orb») opens the chat, which takes it.
+  useEffect(() => {
+    if (phase !== 'app' || !bridge.takeShared) return undefined;
+    const open = () => { if (getState().route?.view !== 'chat') go({ view: 'chat' }); };
+    if (bridge.hasShared?.()) open();
+    window.addEventListener('orb:shared', open);
+    return () => window.removeEventListener('orb:shared', open);
+  }, [phase]);
   // Screens without a top bar of their own (welcome, loading, error): a strip at the top still moves the window.
   const strip = <div className="app-titlebar fixed inset-x-0 top-0 z-40 h-14" aria-hidden="true" />;
   useEffect(() => {
@@ -166,11 +193,17 @@ function Root() {
       // 3.2: through lib/notify.js: one at a time, never repeated, kept under the bell.
       if (event === 'notice' && payload?.body) notify({ body: payload.body, tone: payload.tone });
       if (event === 'ui:navigate') go(payload);
+      // 3.5: the bots, here or on the server this PC is linked with.
+      const local = !event.startsWith('centro:');
+      const name = local ? event : event.slice(7);
+      if (name.startsWith('bot.') && local === !botsVia()) { if (name === 'bot.state') botStateChanged(payload); else if (name === 'bot.updated') loadBotsSoon(); }
+      if (event === 'link:peers') loadCentro();
       if (event === 'engine:stopped') notify({ body: tNow('app.engineStopped'), tone: 'error' });
       if (event === 'engine:restarted') { notify({ body: tNow('app.engineRestarted'), tone: 'warning' }); refreshSoon(); }
     });
   }, [phase]);
   if (phase === 'setup') return <>{strip}<Setup onDone={async () => { await refresh(); setPhase('app'); }} /></>;
+  if (phase === 'pair' && bridge.link) return <>{strip}<AppLink /></>;
   if (phase === 'pair') return (
     <div className="brand-sky grid h-full place-items-center p-6 text-center">
       {strip}
@@ -186,6 +219,43 @@ function Root() {
   if (phase === 'error') return <div className="grid h-full place-items-center p-8 text-center">{strip}<div><Robot size={90} mood="worried" /><h1 className="mt-4 text-xl">{t('app.errorTitle')}</h1><p className="text-muted-foreground mt-1 max-w-md text-sm">{error}</p></div></div>;
   if (phase !== 'app' || !ready) return <div className="grid h-full place-items-center">{strip}<Robot size={80} mood="thinking" /></div>;
   return <Shell />;
+}
+
+// 3.5, the Android app: link it with an Orb by scanning its QR (Ajustes › Móvil), or by hand when the camera cannot.
+function AppLink() {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(getState().info?.pairError ?? '');
+  const [manual, setManual] = useState(false);
+  const [form, setForm] = useState({ text: '', code: '', address: '' });
+  const run = async (get) => {
+    setBusy(true); setError('');
+    try { const input = await get(); if (input == null) return; await bridge.link(input); location.reload(); }
+    catch (e) { setError(String(e?.message ?? e)); }
+    finally { setBusy(false); }
+  };
+  const field = (k) => ({ value: form[k], onChange: (e) => setForm({ ...form, [k]: e.target.value }) });
+  return (
+    <div className="brand-sky grid h-full place-items-center overflow-y-auto p-6 text-center" data-testid="app-link">
+      <div className="bg-card/95 grid w-full max-w-sm gap-3 rounded-3xl p-7 shadow-2xl">
+        <div className="-mt-16 flex justify-center"><Robot size={110} mood={busy ? 'thinking' : 'idle'} /></div>
+        <h1 className="text-xl">{t('app.linkTitle')}</h1>
+        <p className="text-muted-foreground text-sm">{t('app.linkBody')}</p>
+        <Button size="lg" disabled={busy} onClick={() => run(() => bridge.scanLink())} data-testid="app-link-scan">{busy ? <Spinner /> : <ScanLine />}{t('app.linkScan')}</Button>
+        {manual ? (
+          <form className="grid gap-2 text-left" onSubmit={(e) => { e.preventDefault(); run(() => (form.text.trim() ? form.text : { code: form.code, address: form.address })); }}>
+            <Textarea rows={2} placeholder={t('app.linkPastePh')} aria-label={t('app.linkPaste')} {...field('text')} />
+            <p className="text-muted-foreground text-center text-xs">{t('app.linkOr')}</p>
+            <Input placeholder={t('app.linkCodePh')} aria-label={t('app.linkCode')} autoCapitalize="characters" autoCorrect="off" spellCheck={false} autoComplete="off" {...field('code')} />
+            <Input placeholder={t('app.linkAddressPh')} aria-label={t('app.linkAddress')} inputMode="url" autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint="go" {...field('address')} />
+            <Button type="submit" variant="outline" disabled={busy}><Link2 />{t('app.linkGo')}</Button>
+          </form>
+        ) : <Button variant="ghost" size="sm" onClick={() => setManual(true)} data-testid="app-link-manual">{t('app.linkManual')}</Button>}
+        {error ? <p className="text-destructive text-sm" role="alert">{error}</p> : null}
+        <p className="text-muted-foreground flex items-center justify-center gap-1.5 text-xs"><Smartphone className="size-3.5" />{t('app.pairPrivate')}</p>
+      </div>
+    </div>
+  );
 }
 
 // 2.7: the notifications follow the app's day / night (not the system's): more of them now that the notices pass by here.

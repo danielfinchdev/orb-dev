@@ -17,7 +17,7 @@ before(async () => {
   port = 20000 + Math.floor(Math.random() * 20000);
   t = tempHome({ mobile: { enabled: true, port } });
   if (!fs.existsSync(path.join(ROOT, 'src', 'renderer', 'index.html'))) throw new Error('compila antes la interfaz (npm run build)');
-  engine = fork(path.join(ROOT, 'src', 'engine', 'engine.mjs'), [], { stdio: ['ignore', 'inherit', 'inherit', 'ipc'], env: { ...process.env, ORB_REMOTE_BIND: '127.0.0.1' } });
+  engine = fork(path.join(ROOT, 'src', 'engine', 'engine.mjs'), [], { stdio: ['ignore', 'inherit', 'inherit', 'ipc'], env: { ...process.env, ORB_REMOTE_BIND: '127.0.0.1', ORB_FAKE_LOG: path.join(t.base, 'fake.jsonl') } });
   engine.on('message', (m) => { if (m.type === 'reply') { const p = pending.get(m.id); pending.delete(m.id); m.ok ? p.resolve(m.result) : p.reject(new Error(m.error)); } });
   await new Promise((resolve, reject) => { engine.once('message', (m) => (m.type === 'started' && m.ok ? resolve() : reject(new Error(m.error)))); engine.send({ type: 'start', home: t.home, version: 'test' }); });
   base = `http://127.0.0.1:${port}`;
@@ -142,7 +142,7 @@ test('el móvil hace lo suyo y nada más (acciones del PC, acceso total, archivo
   const total = await call('sessions.create', { agent: 'claude', project: 'desde-el-pc', permission: 'total' });
   const denied = async (method, params) => { const r = await p.call(method, params); assert.equal(r.ok, false, method); assert.equal(r.status, 403, method); };
   await denied('sessions.send', { id: total.id, text: 'hola' });
-  for (const method of ['config.save', 'accounts.add', 'installer.start', 'remote.pair', 'remote.configure', 'projects.import', 'projects.createPr', 'agents.login']) await denied(method, {});
+  for (const method of ['config.save', 'accounts.add', 'installer.start', 'remote.pair', 'remote.configure', 'projects.import', 'projects.createPr', 'agents.login', 'agents.loginCode', 'agents.install']) await denied(method, {});
   await denied('sessions.create', { agent: 'codex', permission: 'total' });
   await denied('sessions.send', { id: 'x', text: 'hola', images: [path.join(t.home, 'orb.json')] });
   // A picture uploaded from the phone: encrypted, and checked by its bytes.
@@ -157,6 +157,17 @@ test('el móvil hace lo suyo y nada más (acciones del PC, acceso total, archivo
   assert.ok(up.result.path.includes(path.join('.orb', 'adjuntos-movil')));
   assert.equal(fs.readFileSync(up.result.path).equals(png), true);
   assert.equal((await upload(new Uint8Array(Buffer.from('MZ ejecutable')))).status, 415);
+});
+
+test('3.5: un bot sabe que le escriben desde el móvil por el tipo del dispositivo, no por lo que este mande', async () => {
+  const p = globalThis.phone1;
+  const { bots } = await call('bots.list');
+  const r = await p.call('bots.send', { id: bots[0].id, text: 'Hola desde el móvil', via: 'browser' });
+  assert.equal(r.ok, true, r.error);
+  const file = path.join(t.base, 'fake.jsonl');
+  const turn = () => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)).find((l) => /Hola desde el móvil/.test(l.text ?? '')) : null);
+  await until(() => turn(), 'el bot recibe el mensaje', 20000);
+  assert.match(turn().text, /te escribe desde el móvil/);
 });
 
 test('avisos: solo servicios de avisos conocidos', async () => {

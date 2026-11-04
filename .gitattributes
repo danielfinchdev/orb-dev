@@ -1,0 +1,3 @@
+# Shell launchers keep Unix line ends on every checkout (they run on Linux).
+bin/orb text eol=lf
+*.cmd text eol=crlf

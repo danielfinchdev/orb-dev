@@ -66,7 +66,14 @@ export function killTree(child) {
   if (!child?.pid || child.exitCode !== null) return;
   try {
     if (IS_WIN) { const k = spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }); k.on('error', () => {}); }
-    else child.kill('SIGTERM');
+    else {
+      // 3.5 (Linux, Orb Núcleo): the agents start as leaders of their own process group (spawnAgent), so the whole group
+      // goes, as taskkill /T does on Windows; a process that is not a leader (the SDK's own) only by itself. If the group
+      // ignores the request, it is killed a few seconds later.
+      const pid = child.pid;
+      let group = true; try { process.kill(-pid, 'SIGTERM'); } catch { group = false; child.kill('SIGTERM'); }
+      if (group) setTimeout(() => { try { process.kill(-pid, 'SIGKILL'); } catch { /* gone */ } }, 4000).unref?.();
+    }
   } catch { /* already gone */ }
 }
 
@@ -108,6 +115,12 @@ export function orbMcpServer(env = {}) {
 // 2.7: Opti Bot's own tools (Monitoreo del equipo): diagnosis of the PC, a copy of Orb and proposals the user approves.
 export function optiMcpServer(env = {}) {
   const script = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'mcp', 'opti.mjs');
+  return { command: process.execPath, args: [script], env: { ELECTRON_RUN_AS_NODE: '1', ...env } };
+}
+
+// 3.5: the tools of one of the user's bots (src/mcp/bot.mjs).
+export function botMcpServer(env = {}) {
+  const script = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'mcp', 'bot.mjs');
   return { command: process.execPath, args: [script], env: { ELECTRON_RUN_AS_NODE: '1', ...env } };
 }
 

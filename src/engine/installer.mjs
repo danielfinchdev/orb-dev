@@ -8,7 +8,7 @@ import path from 'node:path';
 import { ctx, tr } from '../core/context.mjs';
 import { spawn } from 'node:child_process';
 import { ADAPTERS, quickRun } from '../agents/index.mjs';
-import { IS_WIN, cleanEnv, inPath } from '../agents/common.mjs';
+import { IS_WIN, cleanEnv, inPath, killTree } from '../agents/common.mjs';
 
 const winget = (id) => `winget install --id ${id} -e --source winget --accept-package-agreements --accept-source-agreements --silent --disable-interactivity`;
 
@@ -132,4 +132,63 @@ export function progress() {
   }
   const finished = /^FIN$/m.test(text) || current.closed; // closing its window early also ends it
   return { running: !finished, finished, ...(current.closed && !/^FIN$/m.test(text) ? { interrupted: true } : {}), steps: current.ids.map((id) => ({ id, label: ITEMS.find((i) => i.id === id)?.label ?? id, ...(steps[id] ?? { state: 'pendiente', detail: '' }) })) };
+}
+
+// ---- 3.5 «Solo Orb»: install or update Claude Code and Codex from Ajustes › Agentes, with one button and no window.
+// Each one with its official method, for this user only (no administrator): Claude Code with its native installer
+// (install.ps1 / install.sh, into ~/.local/bin), Codex with npm (on Windows the user's own global folder, %APPDATA%\npm;
+// on Linux and macOS --prefix ~/.local, where codex.mjs looks for it). Hidden, its output piped; progress comes as
+// 'agents:install' events { agent, state: 'instalando' | 'hecho' | 'error', line, version, message }.
+export const AGENT_INSTALL = ['claude', 'codex'];
+const agentJobs = new Map(); // agent -> job
+const AGENT_MAX_MS = 15 * 60_000;
+const lastLine = (text) => String(text).replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '').split(/\r?\n|\r/).map((l) => l.trim()).filter(Boolean).pop()?.slice(0, 200) ?? '';
+const userHomeDir = () => process.env.USERPROFILE || process.env.HOME || '';
+
+// The command for an agent on this system: { cmd, args } (fixed text only), or an error in words.
+export function agentInstallCommand(agent, { platform = process.platform, npm = null } = {}) {
+  const win = platform === 'win32';
+  const powershell = path.join(process.env.SystemRoot || 'C:\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  const ps = (script) => ({ cmd: powershell, args: ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', `$ProgressPreference = 'SilentlyContinue'; [Console]::OutputEncoding = [Text.Encoding]::UTF8; ${script}`] });
+  if (agent === 'claude') return win ? ps('irm https://claude.ai/install.ps1 | iex') : { cmd: 'bash', args: ['-c', 'curl -fsSL https://claude.ai/install.sh | bash'] };
+  if (agent === 'codex') {
+    if (win) return ps('npm install -g @openai/codex@latest');
+    const npmCmd = npm ?? (inPath('npm')[0] || null);
+    if (!npmCmd) return { error: tr('msg.installer.agentNoNpm') };
+    return { cmd: npmCmd, args: ['install', '-g', '--prefix', path.join(userHomeDir(), '.local'), '@openai/codex@latest'] };
+  }
+  return { error: tr('msg.installer.agentUnsupported') };
+}
+
+export const agentInstallState = (agent) => { const j = agentJobs.get(agent); return j ? { agent, state: j.state, line: j.line, version: j.version ?? null, message: j.message ?? null, startedAt: j.startedAt } : { agent, state: 'nada' }; };
+
+// Starts it; resolves at once with the first state. onDone(state) runs after it ends (the engine refreshes the agents).
+export function installAgent(agent, emit, { onDone = null, command = null, version = null } = {}) {
+  if (!AGENT_INSTALL.includes(agent)) throw new Error(tr('msg.installer.agentUnsupported'));
+  if (agentJobs.get(agent)?.state === 'instalando') throw new Error(tr('msg.installer.alreadyRunning'));
+  if (IS_WIN && agent === 'codex' && !command && !inPath('npm').length && !inPath('node').length) throw new Error(tr('msg.installer.agentNoNpm'));
+  const how = command ?? agentInstallCommand(agent);
+  if (how.error) throw new Error(how.error);
+  const job = { state: 'instalando', line: '', startedAt: Date.now(), out: '' };
+  agentJobs.set(agent, job);
+  const send = () => emit('agents:install', agentInstallState(agent));
+  const end = async (state, message) => {
+    if (job.state !== 'instalando') return;
+    clearTimeout(job.timer);
+    if (state === 'hecho') { try { job.version = await (version ?? (() => null))(); } catch { job.version = null; } }
+    job.state = state; job.message = message; send();
+    try { onDone?.(agentInstallState(agent)); } catch { /* the caller's own work */ }
+  };
+  let child;
+  try { child = spawn(how.cmd, how.args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: cleanEnv(), cwd: userHomeDir() || undefined }); } catch (error) { end('error', tr('msg.installer.agentFailed', { why: error.message })); return agentInstallState(agent); }
+  job.child = child;
+  const read = (c) => { job.out = (job.out + c).slice(-20_000); const l = lastLine(c); if (l) { job.line = l; send(); } };
+  child.stdout.setEncoding('utf8'); child.stdout.on('data', read);
+  child.stderr.setEncoding('utf8'); child.stderr.on('data', read);
+  child.on('error', (error) => end('error', error.code === 'ENOENT' ? tr('msg.installer.agentNoTool') : tr('msg.installer.agentFailed', { why: error.message })));
+  child.on('close', (code) => (code === 0 ? end('hecho', tr('msg.installer.agentDone')) : end('error', tr('msg.installer.agentFailed', { why: lastLine(job.out) || `${tr('msg.installer.exitCode')} ${code}` }))));
+  job.timer = setTimeout(() => { killTree(child); end('error', tr('msg.installer.agentTimeout')); }, AGENT_MAX_MS);
+  job.timer.unref?.();
+  send();
+  return agentInstallState(agent);
 }

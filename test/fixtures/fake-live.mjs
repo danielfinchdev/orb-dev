@@ -22,6 +22,7 @@
 //   TABLA_MARKDOWN     answers in GFM: a table, a task list and strikethrough
 //   CIERRA_Y_CUELGA    closes its task (orb_update_task done) and then never ends its turn
 //   MANDA_MENSAJE <agente> <texto>   sends a message to another agent through Orb (orb_send_message)
+//   BOT_CALL <tool> <json>           (3.5, one per line) calls a tool of the bot's own MCP server (src/mcp/bot.mjs)
 //   Task Review        a review prompt: answers "VEREDICTO: CORRECTO" (or "CON FALLOS" when the reviewed work says FALLOS)
 //
 // Every turn also emits streamed text (delta), a tool call (Bash ls) and the context meter, and logs what it received to
@@ -31,6 +32,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { Turn, Approvals } from '../../src/agents/live.mjs';
 import { decide } from '../../src/core/guard.mjs';
 
@@ -58,6 +60,8 @@ export function fakeAdapter(id, real) {
     detect: () => ({ cmd: process.execPath, pre: [] }),
     loginState: () => 'si',
     loginCommand: (exe) => ({ cmd: exe.cmd, args: ['--version'] }),
+    // 3.5: the windowless sign-in of Claude and Codex runs test/fixtures/fake-login.mjs (link, code and outcome).
+    windowlessLogin: real?.windowlessLogin, loginExe: () => ({ cmd: process.execPath, pre: [fileURLToPath(new URL('./fake-login.mjs', import.meta.url))] }),
     createLive: (o) => createFakeLive(id, real?.label ?? id, caps, o),
     // 2.6: the models it offers. Fixed test models (clearly marked as such) unless ORB_FAKE_REAL_MODELS=1: then the real
     // agent of this PC is asked (a demo with fake agents shows the real names), if it is installed.
@@ -183,6 +187,13 @@ function createFakeLive(agent, label, caps, o) {
     // 3.1: a message to another agent through Orb (orb_send_message), as a worker would send it.
     const say = scan.match(/MANDA_MENSAJE (\w+) (.+)/);
     if (say) notes.push(`mensaje: ${await mcpCall(orb, 'orb_send_message', { to: say[1], body: say[2].trim() })}`);
+    // 3.5: a bot uses its own tools (the real src/mcp/bot.mjs, started as the real agents start it).
+    for (const m of scan.matchAll(/^BOT_CALL (\w+) (\{.*\})\s*$/gm)) {
+      let args = {}; try { args = JSON.parse(m[2]); } catch { /* bad test json */ }
+      const out = await mcpCall(o.mcpServers?.bot, m[1], args);
+      item('tool', 'tool', { id: `t${++seq}`, name: `bot:${m[1]}`, input: m[2] });
+      notes.push(`${m[1]}: ${out}`);
+    }
     if (/PIDE_PERMISO/.test(scan)) {
       const command = 'git push origin main';
       const verdict = decide({ permission, tool: 'Bash', command, internalDir: o.internalDir });
@@ -235,7 +246,7 @@ function createFakeLive(agent, label, caps, o) {
     if (closed) throw new Error(`la sesión de ${label} se ha cerrado`);
     if (turn && !turn.done) throw new Error('el agente sigue trabajando');
     turn = new Turn(); const current = turn; turns++; steers = []; slowStop = /PARA_LENTO/.test(text);
-    record({ turn: turns, text });
+    record({ turn: turns, text, ...(turns === 1 && o.systemPrompt ? { systemPrompt: o.systemPrompt } : {}), ...(turns === 1 && o.tools ? { tools: o.tools } : {}), ...(turns === 1 ? { mcp: Object.keys(o.mcpServers ?? {}), bot: Boolean(o.bot) } : {}) });
     if (/REVIENTA/.test(text)) { turn = null; throw new Error('el adaptador falso revienta'); }
     if (turns === 1) { onEvent({ type: 'session', id: sessionId }); item('system', 'status', `${label} (falso)${model ? ` · ${model}` : ''}`); }
     work(text, current).catch((error) => { if (!current.done) { item('error', 'text', error.message); current.finish({ isError: true, final: `${label}: ${error.message}` }); } });

@@ -291,19 +291,40 @@ function browser(action, args = {}) {
   }));
 }
 const ref = { type: 'integer', minimum: 1, description: 'Número del elemento en la última orb_browser_snapshot' };
+// 3.5: a bot's browser (ORB_BROWSER_ONLY): only the browser tools, and a click or an Enter that would buy, book, pay or send
+// a form needs the user's OK first (bot_confirm, approved in the app in the last 15 minutes).
+const BROWSER_ONLY = process.env.ORB_BROWSER_ONLY === '1';
+const BOT_ID = (() => {
+  if (!BROWSER_ONLY) return null;
+  const m = String(process.env.ORB_AGENT ?? '').match(/^bot:(\d+)$/); const token = process.env.ORB_AGENT_TOKEN ?? '';
+  const signed = m && /^[0-9a-f]{64}$/.test(token) ? board.settingJson(`agent_id:${crypto.createHash('sha256').update(token).digest('hex')}`) : null;
+  return signed?.agent === process.env.ORB_AGENT ? Number(m[1]) : 0;
+})();
+if (BROWSER_ONLY) tools.length = 0;
+const RISKY_LABEL = /(comprar|compra ya|pagar|pago|reservar|reserva|confirmar|tramitar|finalizar|realizar pedido|enviar|suscrib|buy|purchase|pay\b|checkout|place order|order now|book|reserve|confirm|submit|send|subscribe)/i;
+let lastElements = [];
+const remember = (out) => { if (Array.isArray(out?.elements)) lastElements = out.elements; return out; };
+const granted = () => { const g = board.settingJson(`bot_grant:${BOT_ID}`); return Boolean(g?.until && g.until > Date.now()); };
+async function botBrowser(action, a = {}) {
+  if (!BROWSER_ONLY) return browser(action, a);
+  const label = a.ref !== undefined ? String(lastElements.find((e) => String(e).startsWith(`[${a.ref}]`)) ?? '') : '';
+  const risky = (action === 'click' && (a.ref === undefined || RISKY_LABEL.test(label))) || (action === 'type' && a.submit === true) || (action === 'press' && a.key === 'Enter');
+  if (risky && !granted()) throw new Error(tr('sys.botmcp.browserNeedsOk'));
+  return remember(await browser(action, a));
+}
 if (PIPE && PIPE_TOKEN) tools.push(
   { name: 'orb_browser_open', description: `Abre una página web en el navegador del agente (la app la muestra en directo a ${USER}) y devuelve su texto y elementos numerados. Sirve para probar webs (también http://localhost:puerto) o consultar páginas. No tiene sesiones iniciadas de nadie.`,
-    inputSchema: { type: 'object', required: ['url'], properties: { url: str('Dirección (https://… o localhost:puerto)') } }, run: (a) => browser('open', a) },
+    inputSchema: { type: 'object', required: ['url'], properties: { url: str('Dirección (https://… o localhost:puerto)') } }, run: (a) => botBrowser('open', a) },
   { name: 'orb_browser_snapshot', description: 'Vuelve a leer la página abierta: texto visible y elementos numerados para pulsar o escribir.', readOnly: true,
-    inputSchema: { type: 'object', properties: {} }, run: () => browser('snapshot') },
+    inputSchema: { type: 'object', properties: {} }, run: () => botBrowser('snapshot') },
   { name: 'orb_browser_screenshot', description: 'Captura de pantalla de la página abierta (para ver diseño, colores o algo que el texto no cuenta).', readOnly: true,
     inputSchema: { type: 'object', properties: {} }, run: async () => { const r = await browser('screenshot'); return { content: [{ type: 'text', text: r.text }, { type: 'image', data: r.image, mimeType: 'image/jpeg' }] }; } },
   { name: 'orb_browser_click', description: 'Pulsa un elemento (por su número) o un punto x,y de la página (1280x800). Devuelve cómo queda la página.',
-    inputSchema: { type: 'object', properties: { ref, x: { type: 'number' }, y: { type: 'number' } } }, run: (a) => browser('click', a) },
+    inputSchema: { type: 'object', properties: { ref, x: { type: 'number' }, y: { type: 'number' } } }, run: (a) => botBrowser('click', a) },
   { name: 'orb_browser_type', description: 'Escribe en un campo (por su número). clear (por defecto true) borra lo que hubiera; submit pulsa Intro al final.',
-    inputSchema: { type: 'object', required: ['text'], properties: { ref, text: str('Texto'), clear: { type: 'boolean' }, submit: { type: 'boolean' } } }, run: (a) => browser('type', a) },
+    inputSchema: { type: 'object', required: ['text'], properties: { ref, text: str('Texto'), clear: { type: 'boolean' }, submit: { type: 'boolean' } } }, run: (a) => botBrowser('type', a) },
   { name: 'orb_browser_press', description: 'Pulsa una tecla en la página.',
-    inputSchema: { type: 'object', required: ['key'], properties: { key: { type: 'string', enum: ['Enter', 'Tab', 'Escape', 'Backspace', 'Delete', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End'] } } }, run: (a) => browser('press', a) },
+    inputSchema: { type: 'object', required: ['key'], properties: { key: { type: 'string', enum: ['Enter', 'Tab', 'Escape', 'Backspace', 'Delete', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End'] } } }, run: (a) => botBrowser('press', a) },
   { name: 'orb_browser_scroll', description: 'Desplaza la página hacia abajo o arriba.',
     inputSchema: { type: 'object', properties: { direction: { type: 'string', enum: ['down', 'up'] }, amount: { type: 'integer', minimum: 50, maximum: 5000, description: 'Píxeles (600 por defecto)' } } }, run: (a) => browser('scroll', a) },
   // 3.2.1: the page's dialogs and console (a check that says «sin errores en la consola» now can look at it).

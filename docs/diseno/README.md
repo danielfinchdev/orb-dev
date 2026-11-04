@@ -1,18 +1,18 @@
-# Diseño de Orb.dev
+# Orb.dev design
 
-Aquí van las referencias visuales y los diagramas de cada funcionalidad, para implementarlas.
+This is where the visual references and diagrams for each feature go, so they can be implemented.
 
-| Qué | Dónde | Formato |
+| What | Where | Format |
 |---|---|---|
-| Una funcionalidad concreta (qué quieres, cómo se ve, cuándo está terminada) | Un **issue** en GitHub con la plantilla «Funcionalidad» | Texto, con capturas, GIF y vídeos arrastrados dentro del issue |
-| Diagramas de flujo o de pantallas | `docs/diseno/diagramas/` | `.excalidraw` (el archivo de Excalidraw) y su exportación `.png` |
-| Capturas, maquetas de pantallas, estética (colores, tipografías) | `docs/diseno/referencias/<funcionalidad>/` | `.png`, `.jpg`, `.webp`, `.svg` |
-| Animaciones | `docs/diseno/animaciones/` | `.gif`, `.mp4` (cortos), `.json` de Lottie |
-| Capturas de las pantallas actuales, con código (A1, B2…) | `docs/diseno/capturas/` (índice en `INDICE.md`) | `.jpg`; solo en el PC, no se suben a GitHub |
-| Archivos muy grandes (vídeos largos, exportaciones de Figma) | Una carpeta compartida de Google Drive y su enlace en el issue | Lo que sea |
+| A specific feature (what you want, what it looks like, when it is done) | A GitHub **issue** with the "Feature" template | Text, with screenshots, GIFs and videos dragged into the issue |
+| Flow or screen diagrams | `docs/diseno/diagramas/` | `.excalidraw` (the Excalidraw file) and its `.png` export |
+| Screenshots, screen mockups, look and feel (colours, typefaces) | `docs/diseno/referencias/<feature>/` | `.png`, `.jpg`, `.webp`, `.svg` |
+| Animations | `docs/diseno/animaciones/` | `.gif`, `.mp4` (short), Lottie `.json` |
+| Screenshots of the current screens, with a code (A1, B2…) | `docs/diseno/capturas/` (index in `INDICE.md`) | `.jpg`; only on the PC, not pushed to GitHub |
+| Very large files (long videos, Figma exports) | A shared Google Drive folder, linked in the issue | Anything |
 
-Normas:
-- Un issue por funcionalidad. Si es grande, se divide en issues pequeños.
-- Nombres de archivo con la funcionalidad delante: `chat-tarjeta-permiso.png`, `bandeja-animacion.gif`.
-- La estética de la app es la referencia (shadcn/ui, Tailwind, fuente Outfit y el robot). Un cambio de diseño debe seguir lo que
-  ya hay, salvo que el issue diga lo contrario.
+Rules:
+- One issue per feature. If it is big, split it into small issues.
+- File names start with the feature: `chat-tarjeta-permiso.png`, `bandeja-animacion.gif`.
+- The app's look is the reference (shadcn/ui, Tailwind, the Outfit typeface and the robot). A design change should follow
+  what is already there, unless the issue says otherwise.

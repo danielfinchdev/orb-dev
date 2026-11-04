@@ -1,3 +1,5 @@
+> Historical document, kept in Spanish for reference. It does not describe the current app.
+
 # Segunda auditoría de seguridad y optimización — Orb.dev 2.0
 
 2026-10-04, rama `orb-2`. Revisión de todo lo añadido después de la primera auditoría

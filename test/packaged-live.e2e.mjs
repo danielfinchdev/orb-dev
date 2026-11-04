@@ -13,7 +13,7 @@ const exe = process.env.ORB_E2E_EXE;
 if (!exe || !fs.existsSync(exe)) { console.error('ORB_E2E_EXE debe apuntar a la app empaquetada'); process.exit(2); }
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-empaquetada-'));
 const base = path.join(tmp, 'Documentos'); fs.mkdirSync(base);
-const { home } = createHome(base, { assistantName: 'Orb', userName: 'Dani' });
+const { home } = createHome(base, { assistantName: 'Orb', userName: 'Alex' });
 writeJson(path.join(home, 'orb.json'), merge(loadConfig(home), { ui: { tourDone: true } })); // 2.6: no guided tour in the tests
 const userData = path.join(tmp, 'datos'); fs.mkdirSync(userData);
 fs.writeFileSync(path.join(userData, 'ubicacion.json'), JSON.stringify({ home }));

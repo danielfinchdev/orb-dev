@@ -89,7 +89,7 @@ jobs:
           target_commitish: ${{ github.sha }}
           name: Orb ${{ needs.version.outputs.version }}
           make_latest: true
-          body_path: docs/NOVEDADES.md
+          body_path: docs/CHANGELOG.md
           files: |
             dist/Orb-*.exe
             dist/Orb-*.blockmap

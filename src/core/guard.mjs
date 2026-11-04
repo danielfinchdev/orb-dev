@@ -10,6 +10,8 @@
 //   total      no checks at all (asked once when chosen; never from the phone)
 import path from 'node:path';
 import { translate } from './i18n.mjs';
+import { ctx } from './context.mjs';
+import { DEFAULT_PROTECTED } from './home.mjs';
 
 //   probar     (3.1, read-only tasks: reviews, verification) read and run commands (tests, the build, a dev server to
 //              open in the browser), but change no file; risky commands ask first
@@ -138,13 +140,43 @@ export function writesProjectFile(command) {
   return to.map(unq).some((t) => t && !NULLISH.test(t) && !BUILD_DIR.test(t));
 }
 
-// decide({ permission, tool, kind, command, paths, internalDir, lang }) → (lang: language of the reasons, default 'es')
+// 3.5: «Cosas que nadie toca» (config.protected, Ajustes › Bots): names, paths or containers that are nobody's business,
+// whatever the permission. A path, a command, a container or a memory that names one is denied. By default the usual
+// password managers and secret stores (DEFAULT_PROTECTED); the user adds or removes entries. Matched without case, with
+// \ read as / and a name is a whole word (keepass does not match keepassxc, but both are on the list).
+export const protectedList = () => {
+  const list = ctx.config?.protected;
+  return (Array.isArray(list) ? list : DEFAULT_PROTECTED).map((x) => String(x ?? '').trim()).filter((x) => x.length >= 2);
+};
+const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const entryRe = (e) => new RegExp(`${/^[a-z0-9]/i.test(e) ? '(?<![a-z0-9])' : ''}${esc(e.replace(/\\/g, '/'))}${/[a-z0-9]$/i.test(e) ? '(?![a-z0-9])' : ''}`, 'i');
+// The first protected entry that the text names, or null.
+export function protectedHit(text, list = protectedList()) {
+  const t = String(text ?? '').replace(/\\/g, '/');
+  if (!t) return null;
+  return list.find((e) => entryRe(e).test(t)) ?? null;
+}
+export const touchesProtected = (text, list) => protectedHit(text, list) !== null;
+// 3.5: what a bot never does without the user's click: send (mail, messages), buy, book, pay, submit, share, create or
+// delete calendar events. Matched on the tool's own name (connectors: send_message, create_event…).
+export const OUTWARD = /(^|[_.:-])(send|reply|forward|share|post|publish|submit|purchase|buy|checkout|order|book|reserve|pay|transfer|create_event|update_event|delete_event|respond_to_event|trash|delete)/i;
+
+// decide({ permission, tool, kind, command, paths, internalDir, lang, bot }) → (lang: language of the reasons, default 'es')
 //  { decision: 'allow' | 'ask' | 'deny', reason }
-export function decide({ permission = 'editar', tool, kind, command = '', paths = [], internalDir, lang = 'es' }) {
+// bot (3.5): the session is one of the user's bots: its own tools (mcp__bot, the agents' browser) are allowed, and any
+// connector tool that sends, buys, books or deletes asks first, even in read-only mode.
+export function decide({ permission = 'editar', tool, kind, command = '', paths = [], internalDir, lang = 'es', bot = false }) {
   const T = (k) => translate(lang, `msg.guard.${k}`);
   const cls = toolClass(tool, kind);
   const text = [command, ...paths].join(' ');
   if (touchesInternal(text, internalDir)) return { decision: 'deny', reason: T('internal') };
+  const hit = protectedHit(text);
+  if (hit) return { decision: 'deny', reason: translate(lang, 'msg.guard.protected', { name: hit }) };
+  if (bot && (cls === 'mcp' || cls === 'orb')) {
+    if (/^mcp__bot__/.test(String(tool))) return { decision: 'allow', reason: T('connector') };
+    if (OUTWARD.test(String(tool ?? '').replace(/^mcp__[^_]+__/, ''))) return { decision: 'ask', reason: T('outward') };
+    return { decision: 'allow', reason: T('connector') };
+  }
   if (permission === 'total') return { decision: 'allow', reason: T('full') };
   if (cls === 'read' || cls === 'orb') return { decision: 'allow', reason: T('readOnlyTool') };
   if (permission === 'leer') return { decision: 'deny', reason: T('readOnlyChat') };

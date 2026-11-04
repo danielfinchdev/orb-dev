@@ -1,3 +1,5 @@
+> Historical document, kept in Spanish for reference. It does not describe the current app.
+
 # Auditoría de optimización y seguridad — Orb.dev 2.0
 
 2026-10-04, rama `orb-2`. Revisión del código completo (motor, núcleo, agentes, MCP, proceso

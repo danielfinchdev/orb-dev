@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Smartphone, MessageSquarePlus, ListTodo, FolderKanban, Bot, BookOpen, Bug, ChevronUp, ChevronDown, Settings, SquareTerminal, ChevronRight, FolderPlus, ShieldAlert, CalendarClock, CircleCheck, Undo2, GraduationCap, PenTool, HeartPulse, Layers, Search, SlidersHorizontal, X, Sparkles, GitBranch, ListChecks, Clock, MessageCircleQuestion, CirclePause, Folder } from 'lucide-react';
+import { Link2, Smartphone, MessageSquarePlus, ListTodo, FolderKanban, Bot, BookOpen, Bug, ChevronUp, ChevronDown, Settings, SquareTerminal, ChevronRight, FolderPlus, ShieldAlert, CalendarClock, CircleCheck, Undo2, GraduationCap, PenTool, HeartPulse, Layers, Search, SlidersHorizontal, X, Sparkles, GitBranch, ListChecks, Clock, MessageCircleQuestion, CirclePause, Folder } from 'lucide-react';
 import { Robot } from './robot.jsx';
 import { ThemeToggle, SidebarToggle } from './theme-toggle.jsx';
 import { Button } from './ui/button.jsx';
@@ -13,6 +13,9 @@ import { cn, ago } from '@/lib/utils.js';
 import { AgentIcon } from './agent-icon.jsx';
 import { useT } from '@/lib/i18n.js';
 import { PRODUCT } from '../../core/product.mjs';
+import { ModeSwitch } from './mode-switch.jsx';
+import { BotsNav } from './bots-nav.jsx';
+import { modeOf } from '@/lib/store.js';
 
 // The assistant's wordmark ORB·E, drawn its own way in each theme (app.css .wordmark): spaced capitals with a dot of the
 // theme's colour in Orb, a techno one underlined in Vaporwave…
@@ -230,6 +233,8 @@ function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
   const items = [
     ...(bridge.mobile ? [{ icon: Smartphone, label: t('nav.phone'), active: is('phone'), onClick: () => go('phone'), testid: 'nav-phone' }]
       : [{ icon: Settings, label: t('nav.settings'), active: settingsOpen, onClick: () => openSettings(), testid: 'nav-settings' }]),
+    // 3.5: a linked device (a browser with the PC's layout) has Magic Link as a screen; on the PC it is in Ajustes.
+    ...(bridge.mobile ? [{ icon: Link2, label: t('link.title'), active: is('link'), onClick: () => go('link'), testid: 'nav-link' }] : []),
     ...(bridge.mobile ? [] : [{ icon: Bot, label: t('nav.agents'), active: is('agents'), onClick: () => go('agents'), testid: 'nav-agents' }]),
     { icon: BookOpen, label: t('nav.memories'), hint: t('nav.memoriesHint'), active: memories, onClick: () => go('logs'), testid: 'nav-memories' },
     // 2.6: how the app works, the FAQ and the button that replays the guided tour.
@@ -439,8 +444,11 @@ export function Sidebar({ mood, page = false }) {
           <SidebarToggle />
         </div>
       </div>
+      {/* 3.5: «Orb | Bots»: the app as always, or the user's bots with their own menu. */}
+      <div className="px-3 pt-3 pb-1"><ModeSwitch /></div>
+      {modeOf(route) === 'bots' ? <BotsNav /> : (<>
       {/* 3.2: one button: a new conversation (with the assistant, or directly with an agent when «Orquestador» is off). */}
-      <div className="flex gap-2 px-3 pt-3 pb-2">{newButton}</div>
+      <div className="flex gap-2 px-3 pt-2 pb-2">{newButton}</div>
       <SearchBox query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} agents={agents} />
       <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-x-hidden overflow-y-auto px-3 pb-3">
         <NavItem icon={ListTodo} label={t('nav.tasks')} active={is('tasks')} onClick={() => go('tasks')} testid="nav-tasks">
@@ -457,6 +465,7 @@ export function Sidebar({ mood, page = false }) {
         {app.config.monitor?.enabled && fullPc() ? <NavItem icon={HeartPulse} label={t('nav.monitor')} active={is('monitor')} onClick={() => go('monitor')} testid="nav-monitor" /> : null}
         {lists}
       </nav>
+      </>)}
       <SidebarFooter version={app.version} is={is} settingsOpen={settingsOpen} open={sections.footer === true} onOpen={(v) => setSection('footer', v)} />
     </aside>
   );
