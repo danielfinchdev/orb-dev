@@ -34,7 +34,7 @@ test('Orb Núcleo arranca el motor sin ventana como centro, se reinicia si se ca
     assert.ok(Array.isArray(await host.call('schedules.list')));
     await until(async () => (await host.call('remote.status')).running, 'acceso remoto del centro');
     await assert.rejects(host.call('expert.tree', {}), /servidor/);
-    await assert.rejects(host.call('opti.stats', {}), /servidor/);
+    await assert.rejects(host.call('actions.list', {}), /servidor/);
     // The secret of the approvals, without Windows' encryption: a file only its owner can read.
     const key = path.join(home, '.orb', 'datos', 'clave.bin');
     assert.ok(fs.existsSync(key));

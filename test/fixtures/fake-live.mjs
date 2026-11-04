@@ -135,14 +135,6 @@ function createFakeLive(agent, label, caps, o) {
       item('tool', 'tool', { id: `t${++seq}`, name: 'orb:orb_create_task', input: proj[1] });
       item('tool', 'tool_result', { id: `t${seq}`, output: out.slice(0, 300), error: false });
     }
-    // 2.7: Opti Bot: reads the Orb folder with its own tools and proposes cleaning the temporary files.
-    if (/OPTI_REVISA/.test(scan) && o.mcpServers?.opti) {
-      const check = await mcpCall(o.mcpServers.opti, 'opti_orb_check', {});
-      item('tool', 'tool', { id: `t${++seq}`, name: 'opti:opti_orb_check', input: '' });
-      item('tool', 'tool_result', { id: `t${seq}`, output: check.slice(0, 300), error: false });
-      await mcpCall(o.mcpServers.opti, 'opti_propose', { action: 'clean_temp', reason: 'Hay temporales viejos que ocupan sitio' });
-      notes.push(/"database":\s*"ok"/.test(check) ? 'Orb está bien.' : 'Orb tiene un problema.');
-    }
     // 2.7: a picture the agent made (as Codex's image_gen leaves it: a PNG file and an image item).
     if (/CREA_IMAGEN/.test(scan) && o.internalDir) {
       const dir = path.join(o.internalDir, 'imagenes'); fs.mkdirSync(dir, { recursive: true });

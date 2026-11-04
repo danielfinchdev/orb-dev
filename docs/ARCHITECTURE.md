@@ -71,6 +71,13 @@ Data: <assistant folder>/.orb/datos/orb.db (SQLite, src/core/db.mjs)
   2. `src/agents` are the adapters.
   3. `src/engine` puts the pieces together.
   4. `src/ui` is the interface.
+- **The PC's own health (3.7)** has no screen of its own any more: «Monitoreo del equipo» and Opti Bot (2.7–3.6) were
+  removed, and what they did is the bots' **«Equipo» / "Computer"** tool group (docs/BOTS.md): `src/core/pc-health.mjs`
+  and `src/core/network.mjs` read (fixed PowerShell, Windows parts behind `process.platform === 'win32'`),
+  `src/core/pc-actions.mjs` runs an approved `pc` card (same closed list; UAC only for that action), `src/mcp/bot.mjs`
+  offers `pc_*`. Sharing with Open Control Edge (`engine/bridge.mjs`) is `orb.json › oce.share` (it was
+  `monitor.shareWithOce`; `loadConfig` and `engine/retired.mjs` move it once, archive Opti Bot's old conversation and
+  expire its waiting proposals, deleting nothing).
 
 ## 2. First launch and the assistant folder
 
@@ -595,7 +602,7 @@ app open. On iPhone they work with Orb added to the home screen.
 - **Roles** (`orb.json › role`, chosen by the user in Settings › Magic Link on any Orb): `todo` (hub and workshop at
   once; the default when unset), `centro` (keeps the bots) or `taller` (codes). Orb Núcleo (Orb Core) writes `centro`
   only if the folder has no role (`--papel` changes it on purpose). What a windowless server lacks (God mode, expert
-  view, Opti, isolated copies, console) depends on `ctx.headless` (`ORB_NUCLEO=1`), never on the role. A coding Orb
+  view, isolated copies, console) depends on `ctx.headless` (`ORB_NUCLEO=1`), never on the role. A coding Orb
   linked to a bot-keeping one tells it who it is on connect (`POST /api/link`, `op: 'hello'`, with its MACs for
   Wake-on-LAN; the reply says whether it wants its events), runs the calls the other passes it over its live feed
   (`link:request` → `op: 'reply'`) with the same checks as a phone (`guardCall`), and sends it its events

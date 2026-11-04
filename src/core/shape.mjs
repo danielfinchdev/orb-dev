@@ -88,7 +88,7 @@ function shapeState(board, principal, s, keep) {
   if (s.activeProject && !keep(proj(s.activeProject.name ?? s.activeProject))) out.activeProject = null;
   if (!owner) {
     out.config = personConfig(s.config, pid, personName(board, pid));
-    out.home = null; out.paths = {}; out.optiSession = null;
+    out.home = null; out.paths = {};
   }
   return out;
 }

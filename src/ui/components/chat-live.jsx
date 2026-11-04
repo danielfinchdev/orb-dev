@@ -16,8 +16,8 @@ const KIND = [
   [/^(webfetch|websearch|fetch|web_search|browse)/i, 'web'], [/^orb_create_task$/, 'task'], [/^orb_(board|list_tasks|get_task|wait_tasks)$/, 'board'],
   [/^orb_read_log$/, 'readLog'], [/^orb_write_log$/, 'writeLog'], [/^orb_ask$/, 'ask'], [/^orb_(set_project|create_project|add_project)$/, 'project'],
   [/^orb_schedule$/, 'schedule'], [/^orb_browser_/, 'browser'], [/^orb_(send_message|read_messages)$/, 'messages'], [/^(todowrite|todo)/i, 'plan'], [/^(task|agent|delegate)/i, 'delegate'],
-  // 3.2.1: the agent looking up its own tools, and Opti Bot's
-  [/^tool_?search$/i, 'tools'], [/^opti_propose$/, 'propose'], [/^opti_/, 'pc'],
+  // 3.2.1: the agent looking up its own tools; 3.7: a bot's «Equipo» tools (pc_*; opti_* in Opti Bot's old conversation)
+  [/^tool_?search$/i, 'tools'], [/^(opti|pc)_propose$/, 'propose'], [/^(opti|pc)_/, 'pc'],
   // 3.5: the tools of the user's bots
   [/^bot_(remind|list_reminders|cancel_reminder)$/, 'reminder'], [/^bot_memory_/, 'memory'], [/^bot_(send|list)$/, 'bots'], [/^bot_ask_user$/, 'ask'],
   [/^bot_confirm$/, 'confirm'], [/^bot_(create|update|pause)$/, 'manage'], [/^ha_/, 'home'], [/^srv_/, 'server']

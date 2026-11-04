@@ -1,4 +1,4 @@
-// 2.7: Monitoreo del equipo › Red. The Wi-Fi this PC is on, the networks around, the devices of the same network and
+// 2.7: the network (3.7: read by the bots' «Equipo» tools, pc_network / pc_android; until 3.6 the «Red» tab of Monitoreo del equipo). The Wi-Fi this PC is on, the networks around, the devices of the same network and
 // the Android phones and TVs reachable by adb. Read only and real: Windows' own answers (netsh, the neighbour table);
 // a value Windows does not give is null. Finding devices sends one ping to each address of this PC's own /24 network
 // (never other networks, never ports); the Android side runs fixed adb commands on devices the user paired.

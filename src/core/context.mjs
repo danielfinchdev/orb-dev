@@ -16,7 +16,7 @@ export const role = () => (ROLES.includes(ctx.config?.role) ? ctx.config.role : 
 export const keepsBots = () => hostsBots(role()); // «centro» or «todo»: the Orbs linked with it may use its bots
 export const programs = () => doesDev(role()); // «taller» or «todo»
 // 3.5: an engine without a window of its own (Orb Núcleo, src/server/host.mjs). What a server cannot do (God mode, the
-// expert view, Opti Bot, isolated copies, a console…) depends on this, never on the role: a PC can be a centre too.
+// expert view, isolated copies, a console…) depends on this, never on the role: a PC can be a centre too.
 // The MCP servers (other processes) see it through ORB_NUCLEO, which the host sets for the engine and its children.
 export const isHeadless = () => (ctx.headless ?? process.env.ORB_NUCLEO === '1') === true;
 
@@ -72,7 +72,7 @@ export function migrateConfigPersons(owner) {
 }
 
 // Settings saved from the app. Only known top-level keys are accepted.
-const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'monitor', 'oneAtATime', 'approvalWaitMinutes', 'bots', 'role', 'devTarget', 'protected', 'backup', 'tz'];
+const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'oce', 'oneAtATime', 'approvalWaitMinutes', 'bots', 'role', 'devTarget', 'protected', 'backup', 'tz'];
 export function saveConfig(patch) {
   const unknown = Object.keys(patch ?? {}).filter((k) => !EDITABLE.includes(k));
   if (unknown.length) throw new Error(tr('msg.ctx.unknownSettings', { unknown: unknown.join(', ') }));
@@ -164,12 +164,10 @@ export function validateConfig(c) {
   bool(c.continuity?.resumeAfterRestart, 'continuity.resumeAfterRestart'); bool(c.continuity?.resumeAtReset, 'continuity.resumeAtReset');
   bool(c.delegation?.enabled, 'delegation.enabled'); bool(c.delegation?.trusted, 'delegation.trusted');
   bool(c.ui?.menuBar, 'ui.menuBar');
-  bool(c.budget?.autoModel, 'budget.autoModel');
-  // 2.7: Monitoreo del equipo (Opti Bot): on/off and its brain (an installed agent and, optionally, one of its models).
-  bool(c.monitor?.enabled, 'monitor.enabled');
-  bool(c.monitor?.shareWithOce, 'monitor.shareWithOce'); // 2.7: the bridge with Open Control Edge (on unless turned off)
-  if (c.monitor?.agent != null && !AGENT_IDS.includes(c.monitor.agent)) throw new Error(tr('msg.ctx.badAppearance', { name: 'monitor.agent' }));
-  if (c.monitor?.model != null && (typeof c.monitor.model !== 'string' || c.monitor.model.length > 80)) throw new Error(tr('msg.ctx.badAppearance', { name: 'monitor.model' })); // 2.7: Orb chooses each task's model (true / missing) or the agents' defaults
+  bool(c.budget?.autoModel, 'budget.autoModel'); // 2.7: Orb chooses each task's model (true / missing) or the agents' defaults
+  // 2.7: the bridge with Open Control Edge (on unless turned off). 3.7: oce.share (it was monitor.shareWithOce, with the
+  // Monitoreo del equipo that 3.7 removed: home.mjs › loadConfig moves it).
+  bool(c.oce?.share, 'oce.share');
   bool(c.ui?.tourDone, 'ui.tourDone');
   bool(c.ui?.recoveryNoticed, 'ui.recoveryNoticed'); // 3.6: the one notice about the recovery code was shown // 2.6: the guided tour was seen (or skipped) in this assistant folder
   if (c.delegation?.maxPerTask !== undefined) int(c.delegation.maxPerTask, 0, 20, 'delegation.maxPerTask');
