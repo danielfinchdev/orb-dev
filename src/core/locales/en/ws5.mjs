@@ -1,5 +1,6 @@
-// data.* — 3.6: backups, the first-run templates, moving the Orb and time zones
+// 3.6 "Personas", WS5: backups, templates, moving the Orb, exporting and deleting a person, time zones
 export default {
+  'data.person.deletedLine': '(message deleted)',
   'data.tz.late': '{n} min late',
 
   'data.templates.unknown': 'There is no template called "{id}".',

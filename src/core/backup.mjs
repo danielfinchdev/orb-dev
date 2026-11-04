@@ -30,7 +30,7 @@ export const MAGIC = Buffer.from('ORBBAK1\n');
 export const FORMAT = 1;
 export const CHUNK = 1 << 20;
 export const EXT = '.orbbak';
-export const KINDS = ['manual', 'daily', 'preupdate', 'premigration', 'move'];
+export const KINDS = ['manual', 'daily', 'preupdate', 'premigration', 'move', 'export'];
 const SCRYPT = { N: 2 ** 15, r: 8, p: 1 };
 const MAX_HEADER = 64 * 1024;
 
@@ -107,7 +107,7 @@ export const backupDir = (home, config = null) => (config?.backup?.folder && pat
 const stamp = (d = new Date()) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z').replace('T', '-');
 
 // ---- what goes in (archive paths are relative to the Orb folder, with /)
-const walkFiles = (dir, skip = () => false) => {
+export const walkFiles = (dir, skip = () => false) => {
   const out = [];
   const go = (d) => {
     let list; try { list = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
@@ -439,3 +439,15 @@ export async function restoreInto(target, file, keys = {}) {
   const applied = applyPendingRestore(target);
   return { ...r, aside: applied?.aside ?? null };
 }
+
+// A few files sealed with a passphrase in the same format (a person's export with a passphrase). → header
+export async function sealFiles(out, files, { passphrase, meta = {} }) {
+  const stage = await fsp.mkdtemp(path.join(path.dirname(out), '.preparando-'));
+  try {
+    const manifest = { format: FORMAT, files: [] };
+    for (const f of files) { const dest = path.join(stage, ...f.name.split('/')); await fsp.mkdir(path.dirname(dest), { recursive: true }); await fsp.writeFile(dest, f.data); manifest.files.push({ p: f.name, s: f.data.length, h: sha256(f.data) }); }
+    return await writeOrbbak(out, stage, manifest, { passphrase, meta: { kind: 'export', created: new Date().toISOString(), move: false, ...meta } });
+  } finally { await fsp.rm(stage, { recursive: true, force: true }); }
+}
+// Unseals such a file into a folder (and checks every file).
+export const unsealInto = (file, dir, keys) => walkBackup(file, keys, dir);

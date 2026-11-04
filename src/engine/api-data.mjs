@@ -3,21 +3,25 @@
 // from the engine's loop (tick). Desktop and the server's local socket only: no phone or linked Orb calls these.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx, tr } from '../core/context.mjs';
-import { readKey } from '../core/home.mjs';
+import { ctx, tr, saveConfig } from '../core/context.mjs';
+import { readKey, paths } from '../core/home.mjs';
+import { ownerId, getPerson, mustPerson, dropTickets } from '../core/persons.mjs';
 import * as K from '../core/backup.mjs';
 import { listTemplates, applyTemplate } from '../core/templates.mjs';
-import { moveExport, moveUndo, moveKeepBoth, movedAway } from '../core/export.mjs';
+import { moveExport, moveUndo, moveKeepBoth, movedAway, exportPerson, deletePerson, purgePersonsTrash } from '../core/export.mjs';
 import { utcToZoned, localDay, isValidTz, systemTz } from '../core/tz.mjs';
 
 // 3.6: what an Orb that moved away still answers (the rest is refused until the move is undone or both are kept).
 export const MOVED_OK = /^(app\.state|data\.move(Status|Undo|KeepBoth)|backup\.(status|list|verify)|templates\.list)$/;
 const fail = (message) => { const e = new Error(message); e.userFacing = true; throw e; };
-// 3.6: the owner's zone. Until persons (WS1) land, the Orb's own setting or this machine's.
-export const ownerTz = () => (isValidTz(ctx.config?.tz) ? ctx.config.tz : systemTz());
+// 3.6: the owner's zone (persons.tz), else the Orb's own setting, else this machine's.
+export const ownerTz = (board = null) => {
+  let tz = null; try { tz = board ? getPerson(board, ownerId(board))?.tz : null; } catch { tz = null; }
+  return isValidTz(tz) ? tz : isValidTz(ctx.config?.tz) ? ctx.config.tz : systemTz();
+};
 export const DAILY_HOUR = 3;
 
-export function dataApi({ board, emit = () => {}, log = () => {}, version = null }) {
+export function dataApi({ board, emit = () => {}, log = () => {}, version = null, bots = null }) {
   const secret = () => ctx.secret ?? readKey(ctx.home);
   const folder = () => K.backupDir(ctx.home, ctx.config);
   const opts = () => ({ includeProjects: ctx.config.backup?.projects === true, includeAccounts: ctx.config.backup?.accounts === true });
@@ -56,13 +60,14 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
   const tick = (now = Date.now()) => {
     if (ctx.config.backup?.enabled === false || running || now - lastLook < 60_000 || now - startedAt < firstAfter) return false;
     lastLook = now;
-    const tz = ownerTz();
+    const tz = ownerTz(board);
     if (utcToZoned(now, tz).hour < DAILY_HOUR) return false;
     const today = localDay(now, tz);
     if (board.setting('backup_daily_day') === today) return false;
     const tried = Number(board.setting('backup_daily_try') ?? 0);
     if (now - tried < 3_600_000) return false; // a failed one is tried again an hour later
     board.setting('backup_daily_try', String(now));
+    try { const gone = purgePersonsTrash(ctx.home, now); if (gone) log(`personas borradas hace más de 30 días: ${gone} carpetas quitadas`); } catch { /* next day */ }
     run('daily').then(() => board.setting('backup_daily_day', today)).catch((error) => board.notice(tr('data.backup.dailyFailed', { error: error.message }), 'warning'));
     return true;
   };
@@ -71,7 +76,7 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
     'backup.status': () => {
       let last = null; try { last = JSON.parse(board.setting('backup_last') ?? 'null'); } catch { last = null; }
       const rec = K.recoveryOf(ctx.home, secret());
-      return { enabled: ctx.config.backup?.enabled !== false, folder: folder(), recovery: Boolean(rec), recoveryAt: rec?.at ?? null, last, running: Boolean(running), tz: ownerTz(), hour: DAILY_HOUR, ...opts() };
+      return { enabled: ctx.config.backup?.enabled !== false, folder: folder(), recovery: Boolean(rec), recoveryAt: rec?.at ?? null, last, running: Boolean(running), tz: ownerTz(board), hour: DAILY_HOUR, ...opts() };
     },
     'backup.list': async () => (await K.listBackups(folder())).map(({ file, ...b }) => ({ ...b, path: file })),
     // kind: manual (Ajustes › Datos, orb-nucleo copia ahora) or preupdate (the app, before installing a new version).
@@ -92,8 +97,11 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
       return { code: code ? null : value, at: new Date().toISOString() };
     },
     'templates.list': ({ lang }) => listTemplates(['es', 'en'].includes(lang) ? lang : ctx.config.language),
-    'templates.apply': ({ id, edits, tz, person }) => {
-      const made = applyTemplate(board, { id: String(id ?? ''), edits: edits && typeof edits === 'object' && !Array.isArray(edits) ? edits : null, tz: isValidTz(tz) ? tz : null, person: person ?? null });
+    'templates.apply': ({ id, edits, tz, person }, who) => {
+      // For the caller (person: only the owner names someone else; POLICY checks it); the zone: theirs if none is sent.
+      const pid = person ? mustPerson(board, person).id : who?.person ?? null;
+      const zone = isValidTz(tz) ? tz : (() => { try { return getPerson(board, pid)?.tz ?? null; } catch { return null; } })();
+      const made = applyTemplate(board, { id: String(id ?? ''), edits: edits && typeof edits === 'object' && !Array.isArray(edits) ? edits : null, tz: isValidTz(zone) ? zone : null, person: pid });
       board.changed?.('bots');
       return made;
     },
@@ -107,10 +115,31 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
       emit('data:moved', { moved: ctx.moved });
       return { file: path.basename(r.file), path: r.file, created: r.header.created, orbId: r.header.orbId, incarnation: r.header.incarnation };
     },
+    // One person's data: their own export (a .zip, or sealed with a passphrase), into Orb's exports folder.
+    'data.exportPerson': async ({ id, passphrase }, who) => {
+      const pid = mustPerson(board, id ?? who?.person ?? ownerId(board)).id;
+      const r = await exportPerson(board, pid, { home: ctx.home, folder: path.join(paths(ctx.home).internal, 'exportaciones'), passphrase: pass(passphrase) });
+      emit('data:personExported', { person: pid, file: path.basename(r.file) });
+      return { file: path.basename(r.file), path: r.file, files: r.files };
+    },
+    // Deleting a person (themselves, or the owner deleting someone): their export and files wait 30 days in the trash.
+    'data.deletePerson': ({ id }, who) => removePersonData(id ?? who?.person),
     'data.moveStatus': () => ({ moved: movedAway(ctx.home) }),
     'data.moveUndo': () => { moveUndo(ctx.home); ctx.moved = null; emit('data:moved', { moved: null }); return { moved: null, restartNeeded: true }; },
     // «Mantener ambos»: this one becomes a new Orb (the links it had are with the one that moved: they are made again).
     'data.moveKeepBoth': () => { const id = moveKeepBoth(ctx.home); ctx.moved = null; emit('data:moved', { moved: null }); return { orbId: id.orbId, restartNeeded: true }; }
   };
-  return { methods, tick, run };
+  // persons.remove (src/engine/api-persons.mjs) does the same.
+  function removePersonData(id) {
+    const p = mustPerson(board, id);
+    const r = deletePerson(board, p.id, { home: ctx.home, onBot: (b) => { try { bots?.drop?.(b); } catch { /* not running */ } } });
+    dropTickets(p.id);
+    // Their accounts in orb.json (their login folders went to the trash with the rest).
+    const accounts = (ctx.config.accounts ?? []).filter((a) => a.person !== p.id);
+    if (accounts.length !== (ctx.config.accounts ?? []).length) saveConfig({ accounts });
+    board.changed?.('persons'); board.changed?.('bots');
+    log(`persona borrada: ${p.id} (${r.bots} bots; papelera ${path.basename(r.trash)})`);
+    return { id: p.id, deleted: true, bots: r.bots };
+  }
+  return { methods, tick, run, removePersonData };
 }

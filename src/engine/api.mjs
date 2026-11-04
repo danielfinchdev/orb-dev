@@ -1,21 +1,21 @@
 // Every action the window can ask the engine for. Parameters are validated here (the window is trusted UI, but its
 // inputs come from people and agents' text, so nothing is passed on unchecked). Actions marked as the user's ("usuario")
 // are the only ones that sign approvals or publish.
+// 3.6: the dispatcher authorizes every call first (src/core/authz.mjs with the rules of src/core/policy.mjs) and the
+// methods live in several files: here the conversations, chat, tasks, sessions, projects, schedules, logs, whiteboard and
+// usage; api-bots.mjs, api-link.mjs, api-accounts.mjs, api-persons.mjs and api-data.mjs the rest. Each method gets
+// (params, principal).
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx, saveConfig, checkAccountHome, tr, role, isHeadless } from '../core/context.mjs';
-import { hostsBots } from '../core/home.mjs';
-import { protectedList } from '../core/guard.mjs';
+import { ctx, saveConfig, tr, role, isHeadless } from '../core/context.mjs';
 import { AGENT_IDS, categoryOf, CATEGORIES } from '../core/home.mjs';
-import { MULTI, newAccountId, findAccountFolders, accountsOf, accountDir, accountLabel } from '../core/accounts.mjs';
-import { accountInfo as codexAccountInfo } from '../agents/codex.mjs';
-import { usageReport, clearCooldown, modelName } from '../core/budget.mjs';
+import { accountsOf, accountDir, accountLabel } from '../core/accounts.mjs';
+import { usageReport, modelName } from '../core/budget.mjs';
 import { createProjects, syncProjects, checkProjectName, renameProject } from '../core/projects.mjs';
 import { PRODUCT } from '../core/product.mjs';
 import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../core/schedules.mjs';
 import { oneLine, redactSecrets, localStamp } from '../core/safety.mjs';
-import { statusAll, status as agentStatus, openLogin, startAccountLogin, quickRun, forgetInstalled, executable } from '../agents/index.mjs';
-import { sendCode as loginSendCode, cancelLogin, loginInfo, allLogins } from '../agents/login.mjs';
+import { quickRun } from '../agents/index.mjs';
 import { PERMISSIONS } from './sessions.mjs';
 import { readLog, writeLog, logFiles } from './logs.mjs';
 import { expandMentions, mentionOptions } from './mentions.mjs';
@@ -27,44 +27,30 @@ import { adbStatus, ensureAdb, adbPath, markAdbUsed } from './android.mjs';
 import * as net from '../core/network.mjs';
 import { spawn } from 'node:child_process';
 import { mcpFolder } from './mcp-folder.mjs';
-import { modelCatalog, refreshModels, refreshAllModels, chooseModel, LEVELS } from './catalog.mjs';
+import { modelCatalog, chooseModel, LEVELS } from './catalog.mjs';
 import { whiteboard } from './whiteboard.mjs';
 import { opti } from './opti.mjs';
 import { readOce } from './bridge.mjs';
 import { quickStats } from '../core/pc-health.mjs';
-import { translate } from '../core/i18n.mjs';
 import { titleFrom } from '../core/titles.mjs';
 import { autoTitle } from './titles.mjs';
 import { projectIcon, setProjectIcon, clearProjectIcon, renameProjectIcon } from './project-icons.mjs';
 import { git, slug } from '../core/workspace.mjs';
-import * as B from '../core/bots.mjs';
-import { serverStatus, haFetch } from '../core/server-admin.mjs';
-import { CENTRO_FORWARD, PAIR_KINDS, PREVIEWS } from './remote.mjs';
+import { authorize, principalOf, shapeFor } from '../core/authz.mjs';
+import { fld, fail, str, int, oneOf, images, DECISION } from './api-common.mjs';
+import { botMethods, centroApi } from './api-bots.mjs';
+import { linkMethods } from './api-link.mjs';
+import { accountMethods } from './api-accounts.mjs';
+import { personMethods } from './api-persons.mjs';
 import { dataApi, MOVED_OK } from './api-data.mjs';
 
-// Names of the fields in the messages (Spanish as they were; the key is the Spanish word).
-const fld = (name) => { const key = `msg.api.f.${String(name).replace(/ /g, '_')}`; const t = tr(key); return t === key ? name : t; };
-const fail = (message) => { const e = new Error(message); e.userFacing = true; throw e; };
-const str = (v, name, max = 2000, { optional = false } = {}) => {
-  if (v == null || v === '') { if (optional) return ''; fail(tr('msg.api.missing', { name: fld(name) })); }
-  if (typeof v !== 'string') fail(tr('msg.api.invalid', { name: fld(name) }));
-  if (v.length > max) fail(tr('msg.api.tooLong', { name: fld(name), max }));
-  return v;
-};
-const int = (v, name) => { const n = Number(v); if (!Number.isInteger(n) || n < 1) fail(tr('msg.api.invalid', { name: fld(name) })); return n; };
-const oneOf = (v, list, name, fallback) => { if (v == null || v === '') return fallback; if (!list.includes(v)) fail(tr('msg.api.invalid', { name: fld(name) })); return v; };
-const DECISION = ['allow', 'always', 'deny'];
+export { fail, str, int, oneOf } from './api-common.mjs';
 // 3.5: what a server without a window (Orb Núcleo) does not do, whatever its role: the PC's development tools (God mode and expert view,
 // Opti Bot, which is all Windows, and opening Remote Desktop or a console). Conversations, tasks, schedules, the phone
 // access and the MCP servers stay.
 // 3.5: the agents' sign-in no longer needs a console (agents.login gives the link and code), so it works on the server too.
-const CENTRO_OFF = /^(expert\.|opti\.|actions\.|net\.remote$|installer\.start$|github\.login$)/;
+const CENTRO_OFF = /^(expert.|opti.|actions.|net.remote$|installer.start$|github.login$)/;
 export const centroAllows = (method) => !CENTRO_OFF.test(String(method));
-const images = (list) => {
-  if (list == null) return [];
-  if (!Array.isArray(list) || list.length > 10 || list.some((f) => typeof f !== 'string' || !path.isAbsolute(f))) fail(tr('msg.api.badAttachments'));
-  return list;
-};
 
 export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef = { current: null }, bots = null }) {
   const realHome = (() => { try { return fs.realpathSync(ctx.home); } catch { return ctx.home; } })();
@@ -75,7 +61,6 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   const conversationId = (id) => { const c = board.conversation(int(id, 'conversación')); if (!c) fail(tr('msg.board.noConversation')); return c.id; };
   const wb = whiteboard(board);
   const optiApi = opti({ board, sessions });
-  const data = dataApi({ board, emit, log, version }); // 3.6: backups, templates, moving the Orb
   // 2.7: a picture the window may show: an image file inside Orb's folder, a project, or an agent account's own folder
   // (Codex keeps what it makes in <CODEX_HOME>/generated_images). 25 MB at most.
   const allowedImage = (file) => {
@@ -142,80 +127,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     try { writeLog(board, 'general', { ...entry, tema: tr('sys.logs.okGeneralTopic', { project: where, ids: done.map((t) => `#${t.id}`).join(', ') }) }, author); } catch (error) { log(`bitácora general del OK: ${error.message}`); }
     return done.map((t) => t.id);
   };
-
-  // 3.5: the bots' API (src/engine/bots.mjs does the work; src/core/bots.mjs keeps the data).
-  function botMethods() {
-    const need = () => bots ?? fail(tr('msg.bots.off'));
-    const botId = (id) => B.mustBot(board, id ?? fail(tr('msg.api.missing', { name: 'bot' }))).id;
-    const groupId = (id) => (B.getGroup(board, int(id, 'grupo')) ?? fail(tr('msg.bots.noGroup'))).id;
-    const view = (b) => ({ ...b, effectiveTools: B.effectiveTools(board, b), conversation: B.botConversation(board, b), state: bots?.state(b.id) ?? null,
-      reminders: board.one('SELECT COUNT(*) AS n FROM bot_reminders WHERE bot_id = ? AND enabled = 1', b.id).n });
-    const fields = (p) => Object.fromEntries(['name', 'icon', 'role_text', 'agent', 'model', 'effort', 'tools', 'accounts', 'exclusive', 'is_chief', 'paused'].filter((k) => p[k] !== undefined).map((k) => [k, p[k]]));
-    const VIA = new Set(['phone', 'terminal']); // 3.5: set by the link (remote.mjs) from the device's kind
-    const lines = (conv, p) => board.chat(conv, Math.min(Number(p.limit) || 200, 500), { before: p.before ? int(p.before, 'línea') : null });
-    const changed = (id) => { bots?.updated(id); return true; };
-    return {
-      'bots.list': () => ({ bots: B.listBots(board).map(view), groups: B.listGroups(board), states: bots?.states() ?? [], tools: B.TOOL_GROUPS }),
-      'bots.get': ({ id }) => { const b = B.mustBot(board, botId(id)); return { ...view(b), memory: B.readMemory(b.id), reminderList: B.listReminders(board, { bot: b.id }) }; },
-      'bots.create': (p) => { const b = B.createBot(board, fields(p)); changed(b.id); return view(b); },
-      'bots.update': ({ id, ...p }) => { const b = B.updateBot(board, botId(id), fields(p)); if (b.paused) bots?.stop(b.id); changed(b.id); return view(b); },
-      'bots.delete': ({ id }) => { const b = B.deleteBot(board, botId(id)); bots?.drop(b.id); changed(b.id); return true; },
-      'bots.pause': ({ id, paused }) => { const b = B.updateBot(board, botId(id), { paused: paused !== false }); if (b.paused) bots?.stop(b.id); changed(b.id); return view(b); },
-      'bots.chat': ({ id, ...p }) => { const b = B.mustBot(board, botId(id)); const conv = B.botConversation(board, b); return { conversation: conv, lines: lines(conv, p), state: bots?.state(b.id) ?? null }; },
-      'bots.send': ({ id, text, via }) => { const r = need().send(botId(id), str(text, 'mensaje', 20000), { via: VIA.has(via) ? via : null }); return { conversation: r.conversation, bot: r.bot }; },
-      'bots.stop': ({ id }) => { need().stop(botId(id)); return true; },
-      // 3.5.1: by: who answers (a linked device, set by remote.mjs from its own record; null: this PC).
-      'bots.decide': ({ item, decision, by }) => need().decide(int(item, 'tarjeta'), oneOf(decision, ['allow', 'deny'], 'decisión'), { by: by && typeof by === 'object' ? by : null }),
-      'bots.answer': ({ item, text }) => { const r = need().answer(int(item, 'tarjeta'), str(text, 'respuesta', 4000)); return { conversation: r.conversation, bot: r.bot }; },
-      'bots.groups.list': () => B.listGroups(board),
-      'bots.groups.create': ({ name, icon, members }) => { const g = B.createGroup(board, { name, icon, members: members ?? [] }); changed(null); return g; },
-      'bots.groups.update': ({ id, name, icon, members }) => { const g = B.updateGroup(board, groupId(id), { name, icon, members }); changed(null); return g; },
-      'bots.groups.delete': ({ id }) => { B.deleteGroup(board, groupId(id)); changed(null); return true; },
-      'bots.groups.chat': ({ id, ...p }) => { const conv = B.groupConversation(board, groupId(id)); return { conversation: conv, lines: lines(conv, p) }; },
-      'bots.groups.send': ({ id, text, via }) => { const r = need().sendGroup(groupId(id), str(text, 'mensaje', 20000), { via: VIA.has(via) ? via : null }); return { conversation: r.conversation, group: r.group, members: r.members }; },
-      'bots.memory.get': ({ id }) => ({ id: id === 'global' ? 'global' : botId(id), text: B.readMemory(id === 'global' ? 'global' : botId(id)) }),
-      'bots.memory.set': ({ id, text }) => { const which = id === 'global' ? 'global' : botId(id); B.writeMemory(which, str(text, 'memoria', 64 * 1024, { optional: true }), { mode: 'replace' }); return { id: which, text: B.readMemory(which) }; },
-      'bots.rules.get': () => B.goldenRules(),
-      'bots.rules.set': ({ rules }) => {
-        if (!Array.isArray(rules)) fail(tr('msg.api.invalid', { name: 'rules' }));
-        const c = saveConfig({ bots: { rules: rules.map((r) => oneLine(String(r ?? ''), 400).trim()).filter(Boolean) } }); emit('config:changed', c); changed(null);
-        return B.goldenRules();
-      },
-      // 3.5: «Cosas que nadie toca» (config.protected): names, paths or containers no agent and no bot touches.
-      'bots.protected.get': () => protectedList(),
-      'bots.protected.set': ({ items }) => {
-        if (!Array.isArray(items)) fail(tr('msg.api.invalid', { name: 'items' }));
-        const seen = new Set(); const list = [];
-        for (const x of items) { const v = oneLine(String(x ?? ''), 200).trim(); if (v.length >= 2 && !seen.has(v.toLowerCase())) { seen.add(v.toLowerCase()); list.push(v); } }
-        const c = saveConfig({ protected: list.slice(0, 50) }); emit('config:changed', c); changed(null);
-        return protectedList();
-      },
-      'bots.reminders.list': ({ id, all }) => B.listReminders(board, { bot: id ? botId(id) : null, all: all === true }),
-      'bots.reminders.create': ({ id, text, when, every, weekdays }) => { const r = B.createReminder(board, { bot_id: botId(id), text, when, every: every ?? 'once', weekdays: weekdays ?? [] }, 'usuario'); changed(r.bot_id); return r; },
-      'bots.reminders.cancel': ({ id }) => { const r = B.cancelReminder(board, int(id, 'recordatorio')); changed(r.bot_id); return r; },
-      // Home Assistant: its address in the settings, its token in the database (PC only: not in the phone's list).
-      'bots.ha.get': () => { const h = B.haConfig(board); return { url: h.url, hasToken: Boolean(h.token) }; },
-      // 3.5 (interface): «Casa» and «Servidor» of the Bots mode, read only. Home Assistant not set: { configured: false }.
-      'bots.ha.states': async () => {
-        const h = B.haConfig(board);
-        if (!h.url || !h.token) return { configured: false, states: [] };
-        const out = await haFetch(h, 'GET', 'states');
-        const states = (Array.isArray(out) ? out : []).slice(0, 400).map((s) => ({ entity_id: String(s.entity_id ?? ''), state: oneLine(String(s.state ?? ''), 60), name: oneLine(String(s.attributes?.friendly_name ?? s.entity_id ?? ''), 80), unit: s.attributes?.unit_of_measurement ? oneLine(String(s.attributes.unit_of_measurement), 12) : null, changed: s.last_changed ?? null }));
-        return { configured: true, states };
-      },
-      'bots.srv.status': () => serverStatus(),
-      // 3.5.1: the token belongs to the address it was given for: a new address without a new token leaves no token.
-      'bots.ha.set': ({ url, token }) => {
-        if (url !== undefined) {
-          const next = str(url, 'dirección', 300, { optional: true }).trim().replace(/\/+$/, '');
-          if (next !== B.haConfig(board).url) B.setHaToken(board, '', next);
-          const c = saveConfig({ bots: { homeAssistant: { url: next } } }); emit('config:changed', c);
-        }
-        if (token !== undefined) B.setHaToken(board, str(token, 'token', 4000, { optional: true }).trim(), B.haConfig(board).url);
-        const h = B.haConfig(board); return { url: h.url, hasToken: Boolean(h.token) };
-      }
-    };
-  }
+  // 3.6: who sits at this PC's window (the owner until persons.switch; the lock screen is WS2's).
+  const desktop = { person: null };
+  const desktopPrincipal = () => principalOf(board, { desktop: true, person: desktop.person });
+  // What the other parts of the API share.
+  const shared = { board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, bots, project, conversationId, desktop };
+  const data = dataApi(shared); shared.removePersonData = data.removePersonData; // 3.6 (WS5): backups, templates, moving the Orb, exporting and deleting a person
 
   const methods = {
     'app.state': () => ({
@@ -261,105 +178,6 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return c;
     },
 
-    // «Comprobar» / «Comprobar todo» also ask the agents again for their models (in the background).
-    'agents.status': ({ refresh }) => {
-      if (refresh) {
-        forgetInstalled(); refreshAllModels(board, { force: true, log });
-        if (!process.env.ORB_FAKE_AGENTS) import('./plans.mjs').then(({ refreshPlans }) => refreshPlans(board, { force: true, log })).catch(() => {});
-      }
-      return statusAll({ refresh: Boolean(refresh) });
-    },
-    'agents.check': ({ agent }) => { const a = oneOf(agent, AGENT_IDS, 'agente'); forgetInstalled(); refreshModels(board, a, { force: true, log }); return agentStatus(a, { refresh: true }); },
-    // 3.5 «Solo Orb»: Claude Code and Codex sign in without a console: { id, url, code?, opened, needsCode, mode } and
-    // 'agents:login' events until it ends (src/agents/login.mjs). console: true opens the old console (Windows only), the
-    // way left for a sign-in the CLI cannot do without a terminal. Cursor and the ACP agents keep their console.
-    'agents.login': async ({ account: id, agent, mode, console: inConsole }) => {
-      const acc = str(id ?? agent, 'cuenta', 40);
-      const how = oneOf(mode, ['web', 'device'], 'modo', undefined);
-      // A pause because it had no login is lifted: the user is signing in now.
-      const liftPause = () => { if ([translate('es', 'msg.budget.noLogin'), translate('en', 'msg.budget.noLogin')].includes(board.setting(`cooldown_reason:${acc}`))) { board.setting(`cooldown:${acc}`, ''); board.setting(`cooldown_reason:${acc}`, ''); } };
-      if (inConsole) { if (isHeadless()) fail(tr('msg.login.noConsoleHere')); openLogin(acc); liftPause(); return { console: true, account: acc }; }
-      let r;
-      try {
-        r = await startAccountLogin(acc, { mode: how, emit, onEnd: (l) => {
-          if (l.state !== 'hecho') return;
-          liftPause(); forgetInstalled();
-          const agentId = ctx.config.accounts.find((a) => a.id === acc)?.agent;
-          if (agentId) refreshModels(board, agentId, { force: true, log });
-          if (!process.env.ORB_FAKE_AGENTS) import('./plans.mjs').then(({ refreshPlans }) => refreshPlans(board, { force: true, log })).catch(() => {});
-          emit('config:changed', ctx.config);
-        } });
-      } catch (error) { fail(error.message); }
-      if (r.console) liftPause();
-      return r;
-    },
-    'agents.loginCode': ({ id, code }) => { try { return loginSendCode(str(id, 'inicio de sesión', 80), str(code, 'código', 2000)); } catch (error) { fail(error.message); } },
-    'agents.loginCancel': ({ id }) => cancelLogin(str(id, 'inicio de sesión', 80)),
-    'agents.loginState': ({ id }) => (id ? loginInfo(str(id, 'inicio de sesión', 80)) : allLogins()),
-    // 3.5: install or update Claude Code or Codex with one button, hidden and for this user only (installer.mjs).
-    'agents.install': ({ agent }) => {
-      const a = oneOf(agent, installer.AGENT_INSTALL, 'agente');
-      try {
-        return installer.installAgent(a, emit, {
-          version: async () => { forgetInstalled(); return (await agentStatus(a, { refresh: true })).version; },
-          onDone: (st) => { if (st.state === 'hecho') { refreshModels(board, a, { force: true, log }); emit('config:changed', ctx.config); } }
-        });
-      } catch (error) { fail(error.message); }
-    },
-    'agents.installState': ({ agent }) => installer.agentInstallState(oneOf(agent, installer.AGENT_INSTALL, 'agente')),
-    // ---- accounts: several subscriptions of the same agent
-    'accounts.add': ({ agent, label, home }) => {
-      agent = oneOf(agent, AGENT_IDS, 'agente');
-      if (!MULTI[agent]) fail(tr('msg.api.oneAccountOnly', { agent }));
-      const before = board.all("SELECT run_account AS a FROM tasks WHERE run_account IS NOT NULL UNION SELECT account FROM tasks WHERE account IS NOT NULL UNION SELECT account FROM sessions WHERE account IS NOT NULL").map((r) => r.a);
-      const id = newAccountId(agent, before);
-      // Without a folder chosen by the user, the account gets its own inside the assistant's folder.
-      const dir = str(home, 'carpeta', 1000, { optional: true }) || path.join(ctx.paths.internal, 'cuentas', id);
-      if (!path.isAbsolute(dir)) fail(tr('msg.api.accountAbs'));
-      try { checkAccountHome(dir, ctx.config, board.projects().map((p) => p.path)); } catch (error) { fail(error.message); }
-      // 3.0: the folder of an account this agent already has (also the default one, ~/.codex, through a link or another
-      // spelling) would count the same subscription twice: its quota and its parallel runs.
-      const real = (p) => { try { return fs.realpathSync.native(p).toLowerCase(); } catch { return path.resolve(p).toLowerCase(); } };
-      if (accountsOf(agent).some((a) => real(accountDir(a)) === real(dir))) fail(tr('msg.ctx.sameHome'));
-      fs.mkdirSync(dir, { recursive: true });
-      const c = saveConfig({ accounts: [...ctx.config.accounts, { id, agent, label: oneLine(str(label, 'nombre', 60), 60), home: dir, enabled: true }] });
-      emit('config:changed', c);
-      return c.accounts.find((a) => a.id === id);
-    },
-    // 2.7: saved logins of this agent elsewhere on the PC that are not accounts yet (only presence is checked).
-    'accounts.scan': async ({ agent }) => {
-      agent = oneOf(agent, AGENT_IDS, 'agente');
-      if (!MULTI[agent]) fail(tr('msg.api.oneAccountOnly', { agent }));
-      const found = await findAccountFolders(agent);
-      if (agent !== 'codex' || !found.length) return found;
-      // Codex says whose account each folder holds: a folder with an account Orb already has, or a copy of another
-      // folder found (the most recent is kept), is not offered. Each one gets its plan (Go, Plus, Pro…) for its name.
-      let exe = null; try { exe = executable('codex'); } catch { /* not installed: offered as found */ }
-      if (!exe) return found;
-      // 3.0: three questions at a time (each one starts Codex for a moment), every account and folder compared.
-      const limited = async (items, fn, n = 3) => { const out = new Array(items.length); let next = 0; await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (next < items.length) { const i = next++; out[i] = await fn(items[i]); } })); return out; };
-      const mine = await limited(accountsOf('codex'), (a) => codexAccountInfo(exe, accountDir(a)));
-      const theirs = await limited(found, (f) => codexAccountInfo(exe, f.dir));
-      const seen = new Set(mine.map((i) => i?.who).filter(Boolean));
-      const out = [];
-      // A folder Codex could not say about is offered but never added by itself (unchecked: it may be a copy).
-      found.forEach((f, i) => { const info = theirs[i]; if (info?.who && seen.has(info.who)) return; if (info?.who) seen.add(info.who); out.push({ ...f, plan: info?.plan ?? null, checked: Boolean(info?.who) }); });
-      return out;
-    },
-    'accounts.update': ({ id, label, enabled }) => {
-      const acc = ctx.config.accounts.find((a) => a.id === str(id, 'cuenta', 40)) ?? fail(tr('msg.api.noAccount'));
-      const next = ctx.config.accounts.map((a) => (a.id === acc.id ? { ...a, ...(label !== undefined ? { label: oneLine(str(label, 'nombre', 60), 60) } : {}), ...(enabled !== undefined ? { enabled: Boolean(enabled) } : {}) } : a));
-      const c = saveConfig({ accounts: next }); emit('config:changed', c); return true;
-    },
-    'accounts.remove': ({ id }) => {
-      const acc = ctx.config.accounts.find((a) => a.id === str(id, 'cuenta', 40)) ?? fail(tr('msg.api.noAccount'));
-      if (acc.id === acc.agent) fail(tr('msg.api.mainAccount'));
-      if (board.one("SELECT COUNT(*) AS n FROM tasks WHERE status = 'running' AND run_account = ?", acc.id).n) fail(tr('msg.api.accountRunning'));
-      if (board.one("SELECT COUNT(*) AS n FROM sessions WHERE status = 'running' AND account = ?", acc.id).n) fail(tr('msg.api.accountBusy'));
-      if (ctx.config.orchestrator.account === acc.id) fail(tr('msg.api.accountAssistant'));
-      // The folder (and its login) stays on disk: removing an account from the app never signs anyone out.
-      const c = saveConfig({ accounts: ctx.config.accounts.filter((a) => a.id !== acc.id) }); emit('config:changed', c); return true;
-    },
     // Git is needed for undo with history, isolated copies and GitHub: the Agents screen warns when it is missing.
     'installer.check': () => installer.check(),
     'installer.start': ({ ids }) => { if (!Array.isArray(ids) || ids.some((x) => typeof x !== 'string')) fail(tr('msg.api.badList')); return installer.start(ids, emit); },
@@ -518,10 +336,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     // one of its action cards. PC only (not in the phone's list).
     'opti.session': () => optiApi.session(),
     'opti.stats': async () => ({ ...(await quickStats()), oce: readOce() }),
-    // ---- 3.5: the user's bots (docs/BOTS.md). The user's own changes need no card; the bots' proposals do.
-    ...botMethods(),
-    // ---- 3.6: backups, the wizard's templates and moving the Orb (src/engine/api-data.mjs).
-    ...data.methods,
+    ...botMethods(shared),
     'opti.act': ({ item, decision }) => optiApi.act({ item: int(item, 'tarjeta'), decision: oneOf(decision, ['allow', 'deny'], 'decisión') }),
     // 2.7: pictures the agents make (Codex image_gen): shown in the conversation, a zone marked to change, saved in the
     // project. Read only from the agents' own picture folders, Orb's folder and the projects; written only into Orb's
@@ -768,13 +583,6 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     },
     // 3.2.1: only the accounts of the agents this PC can run (not every agent Orb knows).
     'usage.get': () => { const avail = board.availableAgents(); return usageReport(board).filter((u) => !avail || avail.includes(u.agent)); },
-    // 3.2.1: the user lifts an account's usage pause (and its models without usage) by hand.
-    'accounts.clearCooldown': ({ account: id }) => {
-      const acc = str(id, 'cuenta', 40);
-      if (!ctx.config.accounts.some((a) => a.id === acc)) fail(tr('msg.api.noAccount'));
-      clearCooldown(board, acc);
-      return true;
-    },
     // 2.6: the accounts working right now (the assistant's brain and the agents' running sessions), with the windows of
     // their plan the agents reported (session, weekly…), for the panel of the context ring.
     'usage.now': () => {
@@ -794,158 +602,30 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'expert.diff': ({ project: name, path: file }) => expert.gitDiff(project(name).path, str(file, 'archivo', 1000, { optional: true })),
     'expert.log': ({ project: name, limit }) => expert.gitLog(project(name).path, limit),
     'expert.system': () => ({ ...expert.systemStats(ctx.home), running: sessions.runningCount(), byAgent: Object.fromEntries(AGENT_IDS.map((a) => [a, sessions.runningCount(a)])) }),
-    // ---- phone access (PC only: these are not in the phone's allowed list)
-    'remote.status': () => remoteRef.current.status(),
-    'remote.enable': async ({ enabled }) => {
-      const c = saveConfig({ mobile: { enabled: Boolean(enabled) } }); emit('config:changed', c);
-      if (enabled) await remoteRef.current.start(); else await remoteRef.current.stop();
-      return remoteRef.current.status();
-    },
-    // The ways in: home Wi-Fi and/or Tailscale (the servers reopen with the new choice).
-    // 3.5.1: lanHttp: browsers may link over the home Wi-Fi in plain http (off by default); preview: what notifications
-    // show on a locked phone ('all', 'chat' or 'none').
-    'remote.configure': async ({ wifi, tailscale, lanHttp, preview }) => {
-      const patch = {};
-      if (typeof wifi === 'boolean') patch.wifi = wifi;
-      if (typeof tailscale === 'boolean') patch.tailscale = tailscale;
-      if (typeof lanHttp === 'boolean') patch.lanHttp = lanHttp;
-      if (preview !== undefined) patch.preview = oneOf(preview, PREVIEWS, 'avisos');
-      if (wifi === undefined && tailscale === undefined) { const c = saveConfig({ mobile: patch }); emit('config:changed', c); return remoteRef.current.status(); }
-      const c = saveConfig({ mobile: patch }); emit('config:changed', c);
-      if (c.mobile.enabled) await remoteRef.current.restart();
-      return remoteRef.current.status();
-    },
-    'remote.pair': ({ kind }) => remoteRef.current.pair(oneOf(kind, ['wifi', 'tailscale'], 'vía', undefined)),
-    'remote.revoke': ({ id }) => remoteRef.current.revoke(str(id, 'dispositivo', 64)),
-    // ---- 3.5 Magic Link (PC only; a phone may ask link.status and taller.* through remote.mjs)
-    // A QR (and a short code) to link a phone, a browser or another Orb. Turns the access on if it was off.
-    // admin: (Orb Núcleo's «orb-nucleo enlazar») the device that uses it may administer this server, if it is the first.
-    // 3.5.1: device: what it is for (phone, browser, orb, terminal), chosen here, never by the device; approve: it may
-    // answer the bots' cards (default yes); dev: an Orb that may program for this one; admin: true (the owner gives it) or
-    // 'first' (`orb-nucleo enlazar`: only while no device administers this server).
-    'link.qr': async ({ kind, admin, device, approve, dev }) => {
-      const via = oneOf(kind, ['wifi', 'tailscale'], 'vía', undefined);
-      const forKind = device == null || device === '' ? null : oneOf(device, PAIR_KINDS, 'dispositivo');
-      if (!remoteRef.current.status().running) {
-        if (!ctx.config.mobile?.enabled) { const c = saveConfig({ mobile: { enabled: true } }); emit('config:changed', c); }
-        await remoteRef.current.start();
-      }
-      return remoteRef.current.pair(via, { admin: admin === true ? true : admin === 'first' ? 'first' : false, device: forKind, approve: approve !== false, dev: dev === true });
-    },
-    // 3.5.1: «Puede aprobar» (the bots' cards) for a linked device, and the owner's confirmation that a linked device is
-    // one of their Orbs (what 'orb') or the Orb that programs for this one (what 'taller').
-    'link.setApprove': ({ id, approve }) => remoteRef.current.setApprove(str(id, 'dispositivo', 64), approve === true),
-    'link.confirm': ({ id, what }) => remoteRef.current.confirm(str(id, 'dispositivo', 64), oneOf(what ?? 'orb', ['orb', 'taller'], 'qué')),
-    // 3.5: «Puede administrar» for a linked device (its bots and links from afar).
-    'link.setAdmin': ({ id, admin }) => remoteRef.current.setAdmin(str(id, 'dispositivo', 64), admin === true),
-    // 3.5: where this Orb's bots live ('local' or a linked Orb that keeps bots) and the Orbs that could keep them.
-    'bots.where': () => botsWhere(),
-    // 3.5: move the bots: location 'local' or a linked Orb's id; bring: copy the bots of this Orb there (with their memories
-    // and reminders) and pause them here. Without bring, this Orb's bots stay as they are (paused or not).
-    'bots.moveTo': async ({ location, bring }) => {
-      const loc = str(location, 'lugar', 64);
-      const peer = loc === 'local' ? null : (hubPeers().find((p) => p.id === loc) ?? fail(tr('msg.link.noCentro')));
-      asked(peer?.id ?? null);
-      const result = peer && bring === true ? await bringBots(peer) : { moved: 0, skipped: [] };
-      const c = saveConfig({ bots: { location: loc } }); emit('config:changed', c);
-      return { ...botsWhere(), ...result };
-    },
-    'link.devices': () => remoteRef.current.devices(),
-    'link.revoke': ({ id }) => remoteRef.current.revoke(str(id, 'dispositivo', 64)),
-    'link.rename': ({ id, name }) => remoteRef.current.rename(str(id, 'dispositivo', 64), str(name, 'nombre', 60)),
-    'link.status': () => ({ ...remoteRef.current.linkStatus(), peers: remoteRef.link?.peers() ?? [] }),
-    // This Orb links to another one: with its QR (the text or the object), or with the short code and its address.
-    'link.connect': async ({ qr, code, address, fp }) => {
-      if (!remoteRef.link) fail(tr('msg.link.unavailable'));
-      if (qr != null && qr !== '') {
-        if (typeof qr === 'string') str(qr, 'QR', 4000);
-        else if (typeof qr !== 'object' || JSON.stringify(qr).length > 4000) fail(tr('msg.api.invalid', { name: 'QR' }));
-        return remoteRef.link.connect({ qr });
-      }
-      return remoteRef.link.connect({ code: str(code, 'código', 20), address: str(address, 'dirección', 300), fp: fp ? str(fp, 'huella', 40) : null });
-    },
-    'link.peers': () => remoteRef.link?.peers() ?? [],
-    'link.disconnect': ({ id }) => { if (!remoteRef.link) fail(tr('msg.link.unavailable')); return remoteRef.link.disconnect(str(id, 'enlace', 64)); },
     'control.pause': () => { board.setting('paused', '1'); board.changed('settings'); return true; },
-    'control.resume': () => { board.setting('paused', '0'); board.changed('settings'); return true; }
+    'control.resume': () => { board.setting('paused', '0'); board.changed('settings'); return true; },
+    ...accountMethods(shared),
+    ...linkMethods(shared),
+    ...personMethods(shared),
+    ...data.methods
   };
-
-  // 3.5: the linked Orbs that keep bots («centro» or «todo»), the one chosen in «¿Dónde quieres tus bots?» (bots.location)
-  // and a call to its bots. Without a choice, centro.* still reaches the first of them (the one on now first), but this
-  // Orb's own bots are the ones shown (active: false).
-  const hubPeers = () => (remoteRef.link?.peers() ?? []).filter((p) => hostsBots(p.role ?? 'taller') && !p.revoked);
-  const botsLocation = () => String(ctx.config.bots?.location || 'local');
-  const centroPeer = () => {
-    const list = hubPeers(); const loc = botsLocation();
-    return (loc !== 'local' && list.find((p) => p.id === loc)) || list.find((p) => p.online) || list[0] || null;
-  };
-  // The Orbs already asked about (the card after linking is shown once for each).
-  const askedList = () => board.settingJson('bots_location_asked') ?? [];
-  const asked = (id) => { if (id && !askedList().includes(id)) board.settingJson('bots_location_asked', [...askedList(), id].slice(-50)); };
-  function botsWhere() {
-    const loc = botsLocation(); const peers = hubPeers();
-    const here = board.one('SELECT COUNT(*) AS n FROM bots WHERE paused = 0').n;
-    const ask = loc === 'local' ? peers.find((p) => !askedList().includes(p.id)) ?? null : null;
-    return { location: loc, peer: loc === 'local' ? null : peers.find((p) => p.id === loc) ?? null, peers: peers.map(({ id, name, role: r, online }) => ({ id, name, role: r, online })),
-      localBots: here, ask: ask ? { id: ask.id, name: ask.name } : null };
-  }
-  // «Llevar mis bots»: each bot of this Orb is made again on the other one (an untouched «Asistente» of the same name is
-  // not), with its memory and its reminders; then it is paused here and its reminders here are cancelled (they would ring
-  // twice). The global memory is added to the other one's.
-  async function bringBots(peer) {
-    const call = (m, p) => remoteRef.link.call(peer.id, m, p);
-    const there = await call('bots.list', {}).catch((error) => { const e = new Error(tr('msg.link.centroOffline', { name: peer.name })); e.userFacing = true; e.cause = error; throw e; });
-    const taken = new Set((there.bots ?? []).map((b) => String(b.name).toLowerCase()));
-    let chief = (there.bots ?? []).some((b) => b.is_chief);
-    let moved = 0; const skipped = [];
-    for (const b of B.listBots(board)) {
-      const memory = B.readMemory(b.id).trim();
-      const reminders = B.listReminders(board, { bot: b.id });
-      const untouched = !b.role_text && !memory && !reminders.length;
-      let name = b.name;
-      if (taken.has(name.toLowerCase())) {
-        if (untouched) { skipped.push(b.name); continue; }
-        for (let n = 2; taken.has(name.toLowerCase()); n++) name = `${b.name.slice(0, 36)} ${n}`;
-      }
-      const copy = await call('bots.create', { name, icon: b.icon, role_text: b.role_text, agent: b.agent, model: b.model, effort: b.effort, tools: b.tools, accounts: b.accounts ?? {}, exclusive: b.exclusive ?? [], is_chief: Boolean(b.is_chief) && !chief, paused: Boolean(b.paused) });
-      taken.add(name.toLowerCase()); if (copy.is_chief) chief = true;
-      if (memory) await call('bots.memory.set', { id: copy.id, text: B.readMemory(b.id) });
-      for (const r of reminders) {
-        await call('bots.reminders.create', { id: copy.id, text: r.text, when: r.every === 'once' ? r.next_run : r.start_at, every: r.every, weekdays: r.weekdays ?? [] }).catch(() => {});
-        try { B.cancelReminder(board, r.id); } catch { /* gone */ }
-      }
-      if (!b.paused) { B.updateBot(board, b.id, { paused: true }); bots?.stop(b.id); }
-      bots?.updated(b.id); moved++;
-    }
-    const global = B.readMemory('global').trim();
-    if (global) {
-      const theirs = (await call('bots.memory.get', { id: 'global' }).catch(() => ({ text: '' }))).text ?? '';
-      if (!theirs.includes(global)) await call('bots.memory.set', { id: 'global', text: `${theirs.trim()}${theirs.trim() ? '\n\n' : ''}${global}` });
-    }
-    return { moved, skipped };
-  }
-  async function centroCall(sub, params) {
-    const peer = centroPeer();
-    if (sub === 'status') return peer ? { linked: true, id: peer.id, name: peer.name, online: peer.online, lastSeen: peer.lastSeen, active: botsLocation() === peer.id } : { linked: false };
-    if (!peer) fail(tr('msg.link.noCentro'));
-    if (!CENTRO_FORWARD.has(sub)) fail(tr('msg.remote.pcOnly'));
-    try { return await remoteRef.link.call(peer.id, sub, params); }
-    catch (error) {
-      if (error.offline || error.status === 0) { const e = new Error(tr('msg.link.centroOffline', { name: peer.name })); e.userFacing = true; e.offline = true; throw e; }
-      error.userFacing = true; throw error;
-    }
-  }
+  const centroCall = centroApi(shared);
 
   return {
-    async call(method, params) {
+    // 3.6: principal: who calls, built only by the entry points (engine.mjs for this PC's window, remote.mjs for a linked
+    // device, the link for a forwarded call, dev-control). Without one, a call from inside the engine itself (system).
+    async call(method, params, principal) {
+      const who = principal ?? principalOf(board, { system: true });
       // 3.5: taller.<method> on a centre: its workshop (status, wake, queue, queued, or a call forwarded to it).
       if (typeof method === 'string' && method.startsWith('taller.')) {
         if (params === null || typeof params !== 'object' || Array.isArray(params)) fail(tr('msg.api.badParams'));
+        authorize(board, who, method, params);
         try { return await remoteRef.current.taller(method.slice(7), params); } catch (error) { error.userFacing = true; throw error; }
       }
       // 3.5: centro.<method> on a workshop: the bots of the centre it is linked with (one Orb per user: its bots live there).
       if (typeof method === 'string' && method.startsWith('centro.')) {
         if (params === null || typeof params !== 'object' || Array.isArray(params)) fail(tr('msg.api.badParams'));
+        authorize(board, who, method, params);
         return centroCall(method.slice(7), params);
       }
       const fn = Object.hasOwn(methods, method) ? methods[method] : null;
@@ -953,19 +633,23 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       if (ctx.moved && !MOVED_OK.test(method)) fail(tr('data.move.movedAway'));
       if (isHeadless() && !centroAllows(method)) fail(tr('msg.api.centroOff'));
       if (params === null || typeof params !== 'object' || Array.isArray(params)) fail(tr('msg.api.badParams'));
-      const out = await fn(params);
+      authorize(board, who, method, params);
+      const out = await fn(params, who);
       // 3.1: an agent turned on or off, checked again, or an account added or removed: the list of available agents is
       // updated at once (the next task may already be for it).
       if (/^(config\.save|agents\.(status|check)|accounts\.(add|update|remove))$/.test(method)) { try { scheduler.refreshAvailable(true); } catch { /* next tick */ } }
-      return out;
+      return shapeFor(who, method, out);
     },
+    // 3.6: the method names (the policy test checks each one has its rule) and this PC's window's principal.
+    methodNames: () => Object.keys(methods),
+    desktopPrincipal,
     // New chat lines since the last call, sent to the window as 'chat:new' (corner robot, robot notices) or 'notice' (toasts).
     notifyNewChat() {
       try { optiApi.flush(); } catch { /* Opti Bot off or its conversation gone */ }
       const rows = board.all('SELECT id, role, body, meta, conversation_id FROM chat WHERE id > ? ORDER BY id LIMIT 20', lastChat);
       if (!rows.length) return;
       lastChat = rows[rows.length - 1].id;
-      for (const r of rows) if (r.role === 'notice') { let tone = 'info'; try { tone = JSON.parse(r.meta)?.tone ?? 'info'; } catch { /* plain */ } emit('notice', { body: oneLine(r.body, 300), tone }); } // 2.7: a passing notification, not a chat line
+      for (const r of rows) if (r.role === 'notice') { let m = null; try { m = JSON.parse(r.meta); } catch { /* plain */ } emit('notice', { body: oneLine(r.body, 300), tone: m?.tone ?? 'info', ...(m?.person ? { person: m.person } : {}) }); } // 2.7: a passing notification, not a chat line (3.6: with whom it is for)
       else if (r.conversation_id != null && bots?.owns(r.conversation_id)) continue;
       else if (r.role !== 'usuario') {
         let meta = null; try { meta = r.meta ? JSON.parse(r.meta) : null; } catch { /* plain */ }
@@ -974,9 +658,10 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
         else emit('chat:new', { role: r.role, body: oneLine(r.body, 240), meta, conversation: r.conversation_id ?? null });
       }
     },
-    // 3.6: the daily backup (03:00 in the owner's zone), looked at from the engine's loop.
+    // 3.6: the daily backup (03:00 in the owner's zone) and the persons' trash, looked at from the engine's loop.
     dataTick: () => data.tick(),
     // Running tasks stay "running": the next start continues them (scheduler.finish does not close them while closing).
     shutdown() { bots?.shutdown(); scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stopAll(); orchestrator.closeLive(); log('motor detenido'); }
   };
 }
+

@@ -164,7 +164,10 @@ export function effectiveTools(board, bot) {
 // ---- memories: <home>\bots\<id>\memoria.md and <home>\bots\memoria-global.md
 export const botsDir = () => ctx.paths.bots ?? path.join(ctx.home, 'bots');
 export const botDir = (id) => path.join(botsDir(), String(Number(id)));
-export const memoryFile = (id) => (id === 'global' ? path.join(botsDir(), 'memoria-global.md') : path.join(botDir(id), 'memoria.md'));
+// 3.6: the global memory is a person's: <home>\bots\personas\<person>\memoria-global.md (the owner's by default; the
+// migration moved the 3.5 file there). Before this home's database is opened (ctx.owner unknown), the old place.
+export const personDir = (person) => path.join(botsDir(), 'personas', String(person).replace(/[^\w-]/g, '_'));
+export const memoryFile = (id, { person = ctx.owner } = {}) => (id === 'global' ? (person ? path.join(personDir(person), 'memoria-global.md') : path.join(botsDir(), 'memoria-global.md')) : path.join(botDir(id), 'memoria.md'));
 export function ensureMemory(id) {
   const file = memoryFile(id);
   fs.mkdirSync(path.dirname(file), { recursive: true });

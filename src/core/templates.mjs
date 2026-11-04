@@ -97,6 +97,10 @@ export function applyTemplate(board, { id, lang = ctx.config?.language ?? 'es', 
     for (const b of made.bots) { try { B.deleteBot(board, b); } catch { /* gone */ } }
     throw error;
   }
+  // 3.6: what was made is that person's (a row without person_id is the owner's).
+  if (person) {
+    for (const [table, ids] of [['bots', made.bots], ['bot_groups', made.groups], ['bot_reminders', made.reminders]]) for (const id of ids) board.run(`UPDATE ${table} SET person_id = ? WHERE id = ?`, person, id);
+  }
   const rules = (t.rules ?? []).map((x) => x.trim()).filter(Boolean);
   if (rules.length) {
     const current = B.goldenRules();

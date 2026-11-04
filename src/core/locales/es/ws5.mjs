@@ -1,5 +1,6 @@
-// data.* — 3.6: copias de seguridad, plantillas del asistente de inicio, mover el Orb y zonas horarias
+// 3.6 «Personas», WS5: copias de seguridad, plantillas, mover el Orb, exportar y borrar una persona, zonas horarias
 export default {
+  'data.person.deletedLine': '(mensaje borrado)',
   'data.tz.late': 'con {n} min de retraso',
 
   'data.templates.unknown': 'No hay ninguna plantilla «{id}».',
