@@ -17,7 +17,7 @@ import { PRODUCT_SERVER } from './server-product.mjs';
 
 // One engine per process. send(message) takes what the engine says (the host's side of the protocol).
 export function createServerEngine({ send }) {
-  let api = null; let remote = null; let link = null; let router = null; let bots = null; let engines = null; let updater = null;
+  let api = null; let remote = null; let link = null; let router = null; let bots = null; let engines = null; let updater = null; let vault = null;
   let logFile = null; let loopTimer = null;
   const toHost = (event, payload) => { try { send({ type: 'event', event, payload }); } catch { /* host gone */ } };
   const emit = (event, payload, hint = null) => { if (router) router.route(event, payload, hint); else toHost(event, payload); };
@@ -60,8 +60,22 @@ export function createServerEngine({ send }) {
     engines = createEngines({ dir: ctx.paths.engines ?? path.join(home, 'engines'), log, wanted, offline: Boolean(process.env.ORB_FAKE_AGENTS) && !process.env.ORB_NPM_REGISTRY });
     const { createUpdater } = await import('./update.mjs');
     updater = createUpdater({ home, version, log });
+    // 3.7 (WS6): the password vault: its own process (keys in its memory only), sign-ins sealed with the server's key in
+    // data/vault/. ctx.vaultFill is the hook of the browser's vault_fill (src/server/vault/fill.mjs; WS5's browser takes it).
+    {
+      const { createVaultService } = await import('./vault/worker.mjs');
+      const { vaultSealKey } = await import('./vault/crypto.mjs');
+      const { createVaultFillHook } = await import('./vault/fill.mjs');
+      const { mayUseVault } = await import('../core/persons.mjs');
+      const B = await import('../core/bots.mjs');
+      const secret = ctx.secret ?? readKey(home);
+      if (secret?.length >= 32) {
+        vault = ctx.vault = createVaultService({ dir: path.join(ctx.paths.internal, 'vault'), sealKey: vaultSealKey(secret), log });
+        ctx.vaultFill = createVaultFillHook({ vault, board, addRequest: B.addRequest, allowed: (p) => mayUseVault(board, p) });
+      }
+    }
     const { buildServerApi } = await import('./api-server.mjs');
-    api = buildServerApi({ board, emit, log, version, remoteRef, bots, engines, updater });
+    api = buildServerApi({ board, emit, log, version, remoteRef, bots, engines, updater, vault });
     const { createRemote } = await import('../engine/remote.mjs');
     remote = remoteRef.current = createRemote({ board, api, log, emit, version });
     // 3.7 (WS5): the bots' browser (src/server/browser.mjs): its pipe now, Chromium only when a bot needs it.
@@ -150,6 +164,7 @@ export function createServerEngine({ send }) {
     if (loopTimer) { clearInterval(loopTimer); loopTimer = null; }
     try { api?.shutdown(); } catch { /* closing anyway */ }
     try { await Promise.race([ctx.serverBrowser?.shutdown(), new Promise((r) => setTimeout(r, 3000))]); } catch { /* closing anyway */ }
+    try { vault?.close(); } catch { /* closing anyway */ }
     try { link?.stop(); } catch { /* closing anyway */ }
     await Promise.race([Promise.resolve(remote?.stop()).catch(() => {}), new Promise((r) => setTimeout(r, 4000))]);
   }

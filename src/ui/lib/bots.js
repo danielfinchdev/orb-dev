@@ -9,7 +9,7 @@ export const BOT_VIEWS = ['bot-chats', 'bot-chat', 'bot-group', 'bots', 'bot-gro
 export const modeOf = (route) => (BOT_VIEWS.includes(route?.view) || route?.mode === 'bots' ? 'bots' : 'orb');
 
 // The tool groups a bot may have, in the order the editor shows them (the engine's list: src/core/bots.mjs › TOOL_GROUPS).
-export const TOOL_ORDER = ['internet', 'recordatorios', 'correo', 'calendario', 'navegador', 'casa', 'equipo', 'oce', 'servidor', 'gestion'];
+export const TOOL_ORDER = ['internet', 'recordatorios', 'correo', 'calendario', 'navegador', 'casa', 'equipo', 'oce', 'servidor', 'contrasenas', 'gestion'];
 // The reasoning levels a bot may use (src/core/bots.mjs › EFFORTS).
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh'];
 

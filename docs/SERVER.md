@@ -82,6 +82,49 @@ times), it goes back to the previous one by itself.
 
 By hand: `orb-server actualizar --comprobar` (check) or `orb-server actualizar` (update now).
 
+## Password vault (Bitwarden or Vaultwarden)
+
+Bots with the «Passwords» tool (and the browser) can sign in to websites with `vault_fill`: Orb Server types the
+username, password and one-time code into the page itself; the AI only ever gets `ok` or `failed: <reason>`.
+
+1. In your vault, create an account just for Orb (for example «orb-server»), invite it to an organization and share with
+   it only a collection named «Orb» holding the sign-ins you want to give it. A free Bitwarden organization allows
+   2 members: you and the Orb account.
+2. In the web vault of that account: Settings › Security › Keys › View API key (`client_id` and `client_secret`).
+3. Connect it with `vault.setup` (server address: your Vaultwarden, `https://…` or an IP address on your network, or
+   `https://vault.bitwarden.com`; the API key; the master password of the Orb account; the collection).
+
+How it is kept safe:
+
+- **One account per person.** The owner may use a vault; anyone else when the owner turns on «Can use their password
+  vault on Orb Server» for them.
+- **Only the shared collection.** Only login items in that collection are opened. Payment cards, identities and notes
+  are dropped before anything of them is decrypted. To cut Orb off, remove its account from the organization or rotate
+  its API key.
+- **A process of its own.** The vault's keys and the decrypted items live only in the memory of a separate worker
+  (`src/server/vault/worker.mjs`). The engine's API, the agents, the MCP servers and the logs never get a value; the
+  worker hands the values of one item, for one matching page, to the filler, which types them and drops them.
+- **Sealed on disk.** The API key and master password, and a cache of the last sync (still encrypted by Bitwarden; used
+  for 24 h at most when the vault is unreachable) are sealed with a key derived from the server key in
+  `~/orb-server/data/vault/`. This protects against someone who copies the files, not against someone who signs in to
+  the server as your user.
+- **Anti-phishing.** A sign-in is typed only into a page whose address matches one of the item's URIs: the exact host by
+  default, the base domain only when the item says «Base domain» (with a bundled list of public suffixes), never a
+  regular expression, never over plain http (except an item whose URI is itself `http://` on a private IP address, on
+  exactly that address and port), only into visible fields of the page's own origin (never a cross-origin frame).
+- **First use asks.** The first time a bot signs in to a site with an item, the person gets an approval card; after
+  that, just a notice.
+- **Vault down.** `vault_fill` answers `failed: vault_unavailable` and the person gets one notice a day.
+- **Nobody reaches the vault's files.** «Things nobody touches» includes `vaultwarden`, `bitwarden`, `vw-data`, `bwdata`
+  and `orb-server/data/vault` (always), and the containers and data folders of a Vaultwarden/Bitwarden found by docker
+  when you connect a vault.
+- **Bitwarden cloud is not 100 % local**: Orb Server connects to the Bitwarden servers to read the collection. With a
+  Vaultwarden on your network everything stays at home.
+- **Argon2id accounts** need Orb Server running on Node 24.7 or later (`crypto.argon2`). With an older Node, connecting
+  such an account fails with a clear message; switch the Orb account to PBKDF2 in the web vault.
+
+The browser's hook contract (for `vault_fill`) is written at the top of `src/server/vault/fill.mjs`.
+
 ## Useful commands
 
 - `systemctl --user status orb-server` and `journalctl --user -u orb-server -f`

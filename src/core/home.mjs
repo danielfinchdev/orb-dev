@@ -23,7 +23,10 @@ export const hostsBots = (role) => role !== 'taller'; // «centro» and «todo»
 export const doesDev = (role) => role !== 'centro'; // «taller» and «todo» program and build
 
 // 3.5: what nobody touches by default: the usual password managers and secret stores (the user edits the list).
-export const DEFAULT_PROTECTED = Object.freeze(['vaultwarden', 'bitwarden', 'keepass', 'keepassxc', '.kdbx', '1password', 'lastpass', '.password-store', '.gnupg', '.ssh/id_']);
+// 3.7 (WS6): and the usual data folders of a Vaultwarden / Bitwarden self-host (vw-data, bwdata) and Orb Server's own
+// sealed vault sign-ins (~/orb-server/data/vault*): only the vault's official API, through Orb Server, reaches a vault.
+export const VAULT_PROTECTED = Object.freeze(['vaultwarden', 'bitwarden', 'vw-data', 'bwdata', 'orb-server/data/vault']);
+export const DEFAULT_PROTECTED = Object.freeze(['vaultwarden', 'bitwarden', 'keepass', 'keepassxc', '.kdbx', '1password', 'lastpass', '.password-store', '.gnupg', '.ssh/id_', 'vw-data', 'bwdata', 'orb-server/data/vault']);
 
 export const DEFAULT_CONFIG = Object.freeze({
   version: 5,

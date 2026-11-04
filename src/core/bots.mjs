@@ -15,13 +15,15 @@ import { scopeSql, rightOn, rank, ownerOfBoard } from './authz.mjs';
 import { parseAvatar, avatarFor, avatarOf } from './avatar.mjs';
 import { nextLocalRun, zonedToUtc, minutesLate, shouldFireLate, isValidTz, systemTz, utcToZoned } from './tz.mjs';
 import { uuidv7 } from './replica-db.mjs';
+import { mayUseVault } from './persons.mjs';
 // 3.7 (WS3): the bots this Orb runs (its home is this Orb); the others in the lists are live copies of bots run on another
 // Orb (src/core/replica.mjs). A bot being copied here by a move (home_state 'pending') is not listed yet.
 const HOME_HERE = "(home IS NULL OR home = (SELECT value FROM settings WHERE key = 'orb_self'))";
 
 // The tool groups a bot can have (casillas). Memory, messages to other bots, the list of bots and questions to the user
 // are always there. gestion: create, change and pause bots (always with the user's approval); the chief has it.
-export const TOOL_GROUPS = ['internet', 'recordatorios', 'correo', 'calendario', 'navegador', 'casa', 'equipo', 'oce', 'servidor', 'gestion'];
+// 3.7 (WS6): contrasenas: «Contraseñas», sign in on sites with the person's vault (Orb Server; vault_fill).
+export const TOOL_GROUPS = ['internet', 'recordatorios', 'correo', 'calendario', 'navegador', 'casa', 'equipo', 'oce', 'servidor', 'contrasenas', 'gestion'];
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh'];
 export const EVERY = ['once', 'daily', 'weekly', 'monthly', 'yearly'];
 const STARTER_TOOLS = ['internet', 'recordatorios'];
@@ -232,6 +234,8 @@ export function effectiveTools(board, bot) {
   const who = botPerson(board, bot) ?? ownerOf(board);
   const others = listBots(board, who ? { person: who } : {}).filter((b) => b.id !== bot.id && !b.paused).flatMap((b) => b.exclusive);
   const tools = (bot.tools ?? []).filter((t) => !others.includes(t)).filter((t) => !INTEGRATION_TOOLS[t] || !who || mayUseIntegration(board, who, INTEGRATION_TOOLS[t]));
+  // 3.7 (WS6): «Contraseñas» only when its person may use a vault (the owner, or with the «vault» capability).
+  if (tools.includes('contrasenas') && !(who && mayUseVault(board, who))) tools.splice(tools.indexOf('contrasenas'), 1);
   if (bot.is_chief && !tools.includes('gestion')) tools.push('gestion');
   return tools;
 }

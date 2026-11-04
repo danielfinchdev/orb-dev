@@ -150,13 +150,15 @@ export const protectedList = () => {
   const list = ctx.config?.protected;
   return (Array.isArray(list) ? list : DEFAULT_PROTECTED).map((x) => String(x ?? '').trim()).filter((x) => x.length >= 2);
 };
+// 3.7 (WS6): Orb Server's own vault folder is always checked, whatever the list says.
+const ALWAYS_PROTECTED = ['orb-server/data/vault'];
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const entryRe = (e) => new RegExp(`${/^[a-z0-9]/i.test(e) ? '(?<![a-z0-9])' : ''}${esc(e.replace(/\\/g, '/'))}${/[a-z0-9]$/i.test(e) ? '(?![a-z0-9])' : ''}`, 'i');
 // The first protected entry that the text names, or null.
 export function protectedHit(text, list = protectedList()) {
   const t = String(text ?? '').replace(/\\/g, '/');
   if (!t) return null;
-  return list.find((e) => entryRe(e).test(t)) ?? null;
+  return list.find((e) => entryRe(e).test(t)) ?? ALWAYS_PROTECTED.find((e) => entryRe(e).test(t)) ?? null;
 }
 export const touchesProtected = (text, list) => protectedHit(text, list) !== null;
 // 3.5: what a bot never does without the user's click: send (mail, messages), buy, book, pay, submit, share, create or

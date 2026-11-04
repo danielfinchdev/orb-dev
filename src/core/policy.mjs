@@ -507,7 +507,22 @@ const BROWSERP = {
 };
 for (const set of [PHONE_SET, ORB_SET, CONSOLE_SET]) for (const m of Object.keys(BROWSERP)) set.add(m);
 
-export const POLICY = Object.freeze({ ...CORE, ...GATEWAY, ...ORBMODE, ...BOTSP, ...DATA, ...INBOX, ...UI, ...HOME, ...SERVERP, ...BROWSERP });
+// ---- 3.7 (WS6): Orb Server's password vault (src/server/api-vault.mjs). Each person's own account only (the methods act
+// on the caller's person); the method itself checks the owner or the «vault» capability. Setting it up needs the PIN
+// (when the person has one). From a phone, a browser or the app linked to the Server; never relayed to a workshop.
+export const VAULT_METHODS = ['vault.status', 'vault.setup', 'vault.test', 'vault.forget'];
+const VAULTP = {
+  'vault.status': { public: true },
+  'vault.setup': { public: true, strong: () => true },
+  'vault.test': { public: true },
+  'vault.forget': { public: true, strong: () => true }
+};
+SERVER_METHODS.push(...VAULT_METHODS);
+for (const set of [PHONE_SET, ORB_SET, CONSOLE_SET]) for (const m of VAULT_METHODS) set.add(m);
+// Calls that carry a secret in their parameters: never kept in a queue or a log of calls (remote.mjs).
+export const SECRET_PARAMS = new Set(['vault.setup']);
+
+export const POLICY = Object.freeze({ ...CORE, ...GATEWAY, ...ORBMODE, ...BOTSP, ...DATA, ...INBOX, ...UI, ...HOME, ...SERVERP, ...BROWSERP, ...VAULTP });
 export const policyOf = (method) => {
   const m = String(method);
   if (Object.hasOwn(POLICY, m)) return POLICY[m];

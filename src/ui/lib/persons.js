@@ -3,7 +3,7 @@
 
 export const ROLES = ['owner', 'user'];
 export const RIGHTS = ['view', 'talk', 'edit'];
-export const CAPS = ['dev', 'house', 'approveHouse'];
+export const CAPS = ['dev', 'house', 'approveHouse', 'vault'];
 export const PREVIEWS = ['all', 'chat', 'none'];
 export const SHARE_TYPES = ['bot', 'group', 'project'];
 

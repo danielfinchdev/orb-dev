@@ -39,6 +39,7 @@ import orbchats from './en/orbchats.mjs';
 import notes from './en/notes.mjs';
 import navegadorServer from './en/navegador-server.mjs';
 import oce from './en/oce.mjs';
+import vault from './en/vault.mjs';
 
 export default {
   ...base,
@@ -80,5 +81,6 @@ export default {
   ...orbchats,
   ...notes,
   ...navegadorServer,
-  ...oce
+  ...oce,
+  ...vault
 };
