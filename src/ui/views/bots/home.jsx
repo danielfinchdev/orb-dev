@@ -99,7 +99,7 @@ export function ReplicaBar({ bot, homes }) {
       {a.restore ? <ArchiveRestore className="text-muted-foreground size-4 shrink-0" /> : !h.online ? <CloudOff className="text-warning size-4 shrink-0" /> : h.kind === 'server' ? <Server className="text-primary size-4 shrink-0" /> : <Monitor className="text-primary size-4 shrink-0" />}
       <div className="min-w-0 flex-1">
         <div className="truncate font-medium">{a.restore ? t('home.archived', { name: where }) : t('home.runsOn', { name: where })}</div>
-        <div className="text-muted-foreground truncate text-[12px]">
+        <div className="text-muted-foreground line-clamp-2 text-[12px]">
           {a.restore ? t('home.archivedHint') : h.online ? t('home.copyHint') : h.queued ? tn(t, 'home.queued', h.queued) : t('home.offlineHint', { name: where })}
         </div>
       </div>

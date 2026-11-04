@@ -91,7 +91,7 @@ function Row({ row, others, busy, onAction }) {
           <span className="truncate text-sm font-medium" title={row.name}>{row.name}</span>
           {row.status === 'attention' ? <Badge variant="warning">{t('conn.status.attention')}</Badge> : null}
         </div>
-        <div className="text-muted-foreground truncate text-xs" data-testid="conn-meta">{metaOf(row, t, bytes, many)}</div>
+        <div className="text-muted-foreground line-clamp-2 text-xs" data-testid="conn-meta">{metaOf(row, t, bytes, many)}</div>
       </div>
       {actions.map((a) => {
         const spec = ACTIONS[a]; if (!spec) return null;
@@ -105,7 +105,8 @@ function Row({ row, others, busy, onAction }) {
 
 // The list, for Ajustes and for the phone's screen. The engine sends connections:changed when something changes; the
 // list also asks again every 20 s while it is open (states like «visto hace 3 min» move on).
-export function ConnectionsPanel() {
+// standalone: on its own screen (the bar already says «Conexiones»): the card keeps the summary, not the title again.
+export function ConnectionsPanel({ standalone = false }) {
   const t = useT();
   const me = useStore((s) => s.me);
   const many = Number(me?.personsCount ?? 1) > 1;
@@ -155,7 +156,7 @@ export function ConnectionsPanel() {
       <CardHeader className="flex-row items-start gap-3">
         <PlugZap className="text-primary mt-0.5 size-5 shrink-0" />
         <div className="min-w-0 flex-1">
-          <CardTitle>{t('conn.title')}</CardTitle>
+          {standalone ? null : <CardTitle>{t('conn.title')}</CardTitle>}
           <CardDescription data-testid="conn-summary">{data ? [t(online === 1 ? 'conn.summary.online.one' : 'conn.summary.online.other', { n: online }), attention ? t(attention === 1 ? 'conn.summary.attention.one' : 'conn.summary.attention.other', { n: attention }) : null].filter(Boolean).join(' · ') : t('conn.loading')}</CardDescription>
         </div>
         <BubbleTip title={t('conn.refresh')}><Button size="icon-sm" variant="ghost" aria-label={t('conn.refresh')} onClick={refresh} disabled={refreshing} data-testid="conn-refresh">{refreshing ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}</Button></BubbleTip>
@@ -184,7 +185,7 @@ export function ConnectionsView() {
   return (
     <>
       <PageHeader icon={<PlugZap className="text-primary size-5" />} title={t('conn.title')} />
-      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-5 sm:px-5"><div className="mx-auto grid max-w-3xl gap-4"><ConnectionsPanel /></div></div>
+      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-5 sm:px-5"><div className="mx-auto grid max-w-3xl gap-4"><ConnectionsPanel standalone /></div></div>
     </>
   );
 }
