@@ -635,6 +635,36 @@ app open. On iPhone they work with Orb added to the home screen.
   `link.status` sums up who is on.
 - **Home network only:** any connection not coming from 127/8, 10/8, 172.16/12, 192.168/16, 100.64/10 or the Tailscale
   IPv6 is rejected, as are those arriving through Tailscale Funnel. Tests: `test/magiclink.test.mjs`.
+- **«Añadir Orb Server» (3.7):** `link.server.code({ kind? })` gives a one-time code (10 min, one use, 5 wrong tries)
+  bound to this app's key and the one-line install command (`src/core/server-install.mjs › serverInstallCommand`:
+  `curl … install.sh` + `sha256sum -c` + `bash … --pair 'code@address#fingerprint'`; the sha256 comes from
+  `src/core/server-release.mjs`, written by the release step, a placeholder until then, `ready: false`). On the server
+  `link.pairApp({ pair })` (also `link.connect({ code, address, fp })` on a server, which `orb-server emparejar` calls)
+  runs `src/core/server-pair.mjs › pairWithApp`: `GET /api/server-hello` (the app's key; its fingerprint is computed and
+  must be the command's), `POST /api/server-pair` with a proof sealed with the code stretched and tied to that key,
+  carrying the server's own one-time offer; the app uses the code up and links to the server with it (it is a confirmed
+  Orb there that codes for it), marks the link `server: true` and answers sealed with the same key. If the server cannot
+  reach the app, it prints the short code for `link.connect({ code, address })` here.
+- **Capabilities and versions (3.7):** hello and `/api/me` carry `features` (`link.mjs › capsFor`: `persons`,
+  `bots.home.v1`, `replica.v1`, plus `server`, `browser.live.v1`, `vault.v1`). `server-pair.mjs › serverSkew` says who
+  has to update (the server serves app N and N-1; a 3.6 server gets the in-place upgrade command,
+  `link.server.install`); `missingCap` the text when the server lacks something. `link.server.status` shows both.
+- **Who is who (3.7):** `link_persons` on both Orbs, only confirmed by the owner (`link.server.persons`,
+  `link.server.map({ remote, local } | { remote, create } | { local, createThere })`, `link.server.unmap`; link op
+  `persons` on the server). `forward.mjs › whoAsks` runs a forwarded call as the mapped person; anyone else is refused
+  and audited (`unmappedPerson`). The server sends a mapped person's Orb mode to the owner's PC (`devTargetDevice`,
+  `mayForward`) and the PC's events for them carry `to`.
+- **Hub handoff (3.7):** with a server linked, the app asks it for one-time offers for its phones and terminals (link op
+  `handoff`, `offers`) and sends each one `link:handoff` on its own link; the device (Node link, Android app; a
+  browser's page gets `orb:handoff` with the address) links there and drops the old link; the server tells the app
+  (`hub:handoffDone`). Unmapped persons' devices wait. Unlinking the server sends them `link:handback` (offers of the
+  app, kept a few days on the server for devices that are off). State: `link.server.status().handoffs`.
+- **Bots' events mirrored (3.7):** the events of the bots run here (`bot.*` with `botUid` and the line's `uid`) go to an
+  Orb of 3.7 that keeps bots, which gives them to its phones as `taller:bot.*` (repeats dropped by uid).
+- **Guide after pairing (3.7):** `link.server.guide()` → steps `agents` (the server's Claude / Codex:
+  `link.server.login({ agent, mode })`, `loginCode`, `loginState`, `loginCancel`, the server's own windowless sign-in),
+  `bots` (`bots.move` to the server's key), `vault`, `browser`. Nothing of this app's accounts is sent. Tests:
+  `test/enlace-server.test.mjs`.
 
 ## 23. Expert mode
 

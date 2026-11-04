@@ -288,6 +288,22 @@ const GATEWAY = {
   'link.disconnect': { public: true }, // own links only
   'taller.*': { public: true }, // forwarding (A13): only to the person's own workshop (remote.mjs › mayForward), audited
   'centro.*': { public: true }, // the centre link of the person (api-bots.mjs › centroPeer)
+  // 3.7 (WS2): «Añadir Orb Server» and the app's Orb Server (src/engine/hub.mjs): the owner's, from this PC's window.
+  'link.server.code': { ownerOnly: true },
+  'link.server.cancelCode': { ownerOnly: true },
+  'link.server.status': { ownerOnly: true },
+  'link.server.install': { ownerOnly: true },
+  'link.server.persons': { ownerOnly: true },
+  'link.server.map': { ownerOnly: true },
+  'link.server.unmap': { ownerOnly: true },
+  'link.server.handoff': { ownerOnly: true },
+  'link.server.guide': { ownerOnly: true },
+  'link.server.login': { ownerOnly: true },
+  'link.server.loginCode': { ownerOnly: true },
+  'link.server.loginState': { ownerOnly: true },
+  'link.server.loginCancel': { ownerOnly: true },
+  // on the server: pairing with the app of the install command (its own console)
+  'link.pairApp': { ownerOnly: true },
   // this PC's window: the lock screen (engine-enforced, engine.mjs) and who may unlock it
   'persons.lock': { desktop: true },
   'persons.unlock': { desktop: true },
@@ -477,6 +493,7 @@ const SERVERP = {
 };
 for (const set of [CONSOLE_SET, CONTROL_SET]) for (const m of SERVER_METHODS) set.add(m);
 CONTROL_SET.add('link.connect'); // the installer pairs the server with the app from the server's own console
+CONTROL_SET.add('link.pairApp'); // 3.7 (WS2): the same, explicitly
 
 // ======== 3.7 · WS5 Orb Server's browser: «Ver navegador del Server» (src/engine/api-browser.mjs). Each person views and
 // uses only their own browser profile: a person named on purpose that is not the caller is refused, even for the owner
