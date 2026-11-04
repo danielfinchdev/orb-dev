@@ -59,8 +59,9 @@ rules come from), `src/ui/app.css` (tokens), `src/ui/themes.css` (visual themes)
   problem) and the version; unfolded, the same as a list with names. No separate user block. **With 2+ users** the gear
   shows the current user's initial and opens a small menu upwards (header: avatar, name, `Admin` badge): `Ajustes`,
   `Mi perfil`, `Cambiar de usuario`, separator, `Bloquear`. With one user the gear opens Ajustes directly. A linked
-  browser with the PC layout has no Ajustes: there the initial is the first icon and its menu has `Mi perfil` and
-  `Bloquear`.
+  browser with the PC layout shows the **same slots and icons** in the same order; what it lacks is hidden, never
+  swapped (no `Agentes`, no bug). Its gear opens a small menu `Este dispositivo · Magic Link` (with 2+ users the
+  initial's menu holds those two, `Mi perfil` and `Bloquear`).
 - **Top bar** (56 px): left, the screen title (chat: the clock); center, the context (chat: the conversation title and
   its project, or the working project); right, at most three icon buttons of that screen, then the window controls.
   A screen's primary action may be a labelled button at the right (`Nuevo bot`, `Nuevo proyecto`); secondary actions go
@@ -87,13 +88,15 @@ rules come from), `src/ui/app.css` (tokens), `src/ui/themes.css` (visual themes)
   2. `Iniciar test` on a new chat at the first opening of the day, until the user writes (existing rule).
   3. Empty otherwise. Future suggestions plug into the same slot with their own priority; never two at once.
   The slot appears with a 150 ms fade + 2 px rise and leaves with a fade; it never pushes the text field.
-- **Bottom row**, left to right: the **model picker** (agent icon + model name); the **reasoning button**, a brain icon
-  button (`icon-sm`, ghost) opening a menu `Bajo · Medio · Alto · Extra` with only the levels the chosen model
-  supports, the current one ticked, and a tooltip per option with typical tasks and a relative usage cost
-  ("Uso bajo / medio / alto / muy alto"; no invented numbers); the **orchestrator**: an icon (Workflow) + a small switch,
-  only on a new conversation, with a tooltip that explains it. Right side: the context meter (only when known),
+- **Bottom row**, left to right: the **model picker** (agent icon + model name); the **reasoning pill**, the brain
+  icon + the chosen level (`Alto`), outline `sm` like the model picker, opening a menu `Bajo · Medio · Alto · Extra`
+  with only the levels the chosen model supports: each option is one line, its name, a 4-bar usage meter (1–4 bars
+  filled) and the check on the current one; its tooltip sits right next to it with typical tasks and the relative usage
+  in words once ("Uso bajo / medio / alto / muy alto"; no invented numbers); the **orchestrator**: its icon
+  (`components/orchestrator-icon.jsx`, «branches from one point») + a small switch, only on a new conversation; tooltip
+  «Orquestador: Orbe reparte el trabajo entre varios agentes» plus its state. Right side: the context meter (only when known),
   dictation (Android), stop (while busy), send.
-- On the phone the bottom row keeps one line: model picker shows the model only, brain and orchestrator are icons.
+- On the phone the bottom row keeps one line: model picker shows the model only, the reasoning pill keeps its level, the orchestrator is an icon.
 - The bot chat uses the same component without the project picker, brain or orchestrator.
 
 ### 2.3 Settings (dialog on the PC, screens on the phone)
@@ -273,8 +276,8 @@ All in `src/ui/components/ui/` unless noted. Do not build a one-off when one of 
 
 - One family: **lucide-react**, stroke 2 (1.75 at 20 px+), sizes 14 (inline, small buttons), 16 (buttons, menus), 20
   (tabs, headers), 24 (empty states inside a 44 px tile).
-- One icon = one meaning across the app (e.g. `FolderKanban` = projects, `ListTodo` = tasks, `Brain` = reasoning,
-  `Workflow` = orchestrator, `Radar` = Magic Link, `Bot` = bots). No two meanings for one icon, no two icons for one
+- One icon = one meaning across the app (e.g. `FolderKanban` = projects, `ListTodo` = tasks, `BrainIcon` = reasoning,
+  `OrchestratorIcon` = orchestrator, `Radar` = Magic Link, `Bot` = bots). No two meanings for one icon, no two icons for one
   meaning.
 - Icons support a label; they replace it only for universal actions (close, send, search, more, day/night) or in dense
   toolbars where a tooltip names them.

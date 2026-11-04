@@ -61,12 +61,25 @@ try {
   await shot('00-chat-nuevo');
   await page.click('[data-testid=reasoning-picker]');
   await page.waitForSelector('[data-testid=reasoning-menu]');
-  assert.deepEqual(await page.locator('[data-testid^=reasoning-]:not([data-testid=reasoning-menu]):not([data-testid=reasoning-picker])').evaluateAll((els) => els.map((e) => e.dataset.testid)), ['reasoning-low', 'reasoning-medium', 'reasoning-high'], 'los niveles del modelo (Sonnet: sin Extra)');
+  assert.deepEqual(await page.locator('[data-testid=reasoning-menu] [role=menuitem]').evaluateAll((els) => els.map((e) => e.dataset.testid)), ['reasoning-low', 'reasoning-medium', 'reasoning-high'], 'los niveles del modelo (Sonnet: sin Extra)');
+  // 3.6: each option is its name, a four-bar meter and the check; no second line.
+  assert.deepEqual(await page.locator('[data-testid=reasoning-menu] [data-testid=reasoning-meter]').evaluateAll((els) => els.map((e) => Number(e.dataset.bars))), [1, 2, 3]);
+  assert.equal(await page.locator('[data-testid=reasoning-menu] >> text=/^Uso /').count(), 0, 'sin «Uso bajo/medio/alto» en el menú');
   await page.hover('[data-testid=reasoning-high]');
-  await page.waitForTimeout(500);
+  const tip = page.locator('[data-testid=bubble-tip]').filter({ hasText: 'Problemas difíciles' });
+  await tip.waitFor();
+  assert.match(await tip.textContent(), /Uso alto\./, 'el uso, en palabras, una vez en la burbuja');
+  // The bubble sits right next to the option it explains.
+  const [opt, bub] = [await page.locator('[data-testid=reasoning-high]').boundingBox(), await tip.boundingBox()];
+  assert.ok(Math.abs(bub.x - (opt.x + opt.width)) < 24 && bub.y < opt.y + opt.height && bub.y + bub.height > opt.y, `burbuja junto a la opción (${JSON.stringify({ opt, bub })})`);
+  await page.waitForTimeout(300);
   await shot('00b-menu-razonamiento');
-  // Escape closes the option's tooltip first, then the menu.
-  await until(async () => { await page.keyboard.press('Escape'); await page.waitForTimeout(200); return (await page.locator('[data-testid=reasoning-menu]').count()) === 0; }, 'menú cerrado');
+  await page.click('[data-testid=reasoning-high]');
+  await until(async () => (await page.locator('[data-testid=reasoning-menu]').count()) === 0, 'menú cerrado');
+  await until(async () => (await page.textContent('[data-testid=reasoning-level]')) === 'Alto', 'el botón dice «Alto»');
+  await page.mouse.move(600, 200);
+  await page.waitForTimeout(400);
+  await shot('00c-compositor-alto');
 
   step = 'chat de Orb';
   await page.fill('[data-testid=chat-input]', 'Hola, ¿qué tal va todo?');
@@ -124,6 +137,11 @@ try {
   await shot('06-grupo');
 
   step = 'magic link';
+  // 3.6: the footer of a linked browser has the PC's slots and icons (Ajustes, Memorias, Tutoriales; Agentes is PC only).
+  assert.deepEqual(await page.locator('[data-testid=sidebar-footer] .side-foot-icon').evaluateAll((els) => els.map((e) => e.dataset.testid)), ['nav-settings', 'nav-memories', 'nav-tutorials']);
+  await page.click('[data-testid=nav-settings]');
+  await page.waitForSelector('[data-testid=nav-device]');
+  await shot('06b-ajustes-navegador');
   await page.click('[data-testid=nav-link]');
   await page.waitForSelector('[data-testid=magic-link]');
   await page.click('[data-testid=link-make]');
@@ -149,6 +167,7 @@ try {
   await call('persons.create', { name: 'Leo' });
   await page.reload();
   await page.waitForSelector('[data-testid=person-menu]');
+  await page.click('[data-testid=person-menu]');
   await page.click('[data-testid=nav-link]');
   await page.waitForSelector('[data-testid=link-for-who]');
   assert.ok(await page.locator('[data-testid=link-device-group]').count() >= 1, 'los dispositivos, por usuario');

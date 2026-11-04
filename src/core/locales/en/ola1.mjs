@@ -14,8 +14,9 @@ export default {
   'reasoning.tasks.high': 'Hard problems, multi-step plans and thorough reviews.',
   'reasoning.tasks.xhigh': 'The most complex work: architecture, hard-to-find bugs and long analyses.',
   // Orchestrator: icon and small switch
-  'chat.orchestratorOn': 'Orchestrator on',
-  'chat.orchestratorOff': 'Orchestrator off',
+  'chat.orchestratorTip': 'Orchestrator: {name} distributes the work across several agents',
+  'chat.orchestratorOn': 'On. Turn it off to talk directly to the chosen agent.',
+  'chat.orchestratorOff': 'Off: you talk directly to the chosen agent.',
   'chat.orchestratorHint': 'On, {name} coordinates the agents and hands out the work. Off, you talk directly to the chosen agent.',
   // Compact
   'compact.button': 'Compact',
@@ -61,5 +62,7 @@ export default {
   // Welcome wizard
   'wizard.addPerson': 'Add another user',
   // Texts that pointed to the old sections
-  'help.faq.10.a': 'The Professional theme hides the robot and animations; change it in Settings › General, where the floating robot is also turned on or off.'
+  'help.faq.10.a': 'The Professional theme hides the robot and animations; change it in Settings › General, where the floating robot is also turned on or off.',
+  // Pie de la barra lateral en un navegador enlazado: el engranaje abre este dispositivo y Magic Link
+  'nav.thisDevice': 'This device'
 };

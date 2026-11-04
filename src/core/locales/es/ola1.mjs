@@ -14,8 +14,9 @@ export default {
   'reasoning.tasks.high': 'Problemas difíciles, planes de varios pasos y revisiones a fondo.',
   'reasoning.tasks.xhigh': 'Lo más complejo: arquitectura, fallos difíciles de localizar y análisis largos.',
   // Orquestador: icono e interruptor pequeño
-  'chat.orchestratorOn': 'Orquestador activado',
-  'chat.orchestratorOff': 'Orquestador desactivado',
+  'chat.orchestratorTip': 'Orquestador: {name} reparte el trabajo entre varios agentes',
+  'chat.orchestratorOn': 'Activado. Desactívalo para hablar directamente con el agente elegido.',
+  'chat.orchestratorOff': 'Desactivado: hablas directamente con el agente elegido.',
   'chat.orchestratorHint': 'Activado, {name} coordina a los agentes y reparte el trabajo. Desactivado, hablas directamente con el agente elegido.',
   // Compactar
   'compact.button': 'Compactar',
@@ -61,5 +62,7 @@ export default {
   // Asistente de bienvenida
   'wizard.addPerson': 'Añadir otro usuario',
   // Textos que apuntaban a las secciones de antes
-  'help.faq.10.a': 'El tema Profesional no muestra el robot ni animaciones; cámbialo en Ajustes › General, donde también se activa o desactiva el robot flotante.'
+  'help.faq.10.a': 'El tema Profesional no muestra el robot ni animaciones; cámbialo en Ajustes › General, donde también se activa o desactiva el robot flotante.',
+  // Pie de la barra lateral en un navegador enlazado: el engranaje abre este dispositivo y Magic Link
+  'nav.thisDevice': 'Este dispositivo'
 };

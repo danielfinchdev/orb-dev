@@ -67,7 +67,7 @@ try {
   assert.equal(await page.locator('[data-testid=chat-play], [data-testid=bar-games]').count(), 0, 'sin minijuegos en el móvil');
   assert.equal(await page.evaluate(() => document.documentElement.dataset.skin), 'orb', 'el móvil lleva el tema predeterminado');
   await page.click('[data-testid=nav-menu]:visible'); await page.waitForSelector('[data-testid=mobile-menu]'); await page.waitForTimeout(400);
-  assert.equal(await page.locator('[data-testid=nav-settings], [data-testid=nav-agents], [data-testid=nav-expert]').count(), 0, 'Ajustes, Agentes y modo experto solo en el PC');
+  assert.equal(await page.locator('[data-testid=nav-settings]:visible, [data-testid=nav-agents]:visible, [data-testid=nav-expert]:visible').count(), 0, 'Ajustes, Agentes y modo experto solo en el PC');
   assert.equal(await page.locator('[data-testid=nav-phone]:visible').count(), 1, '«Este móvil» solo en el móvil');
   await noSideScroll('menú'); await shot('02-menu');
   await page.keyboard.press('Escape'); await page.waitForTimeout(300);
@@ -94,6 +94,8 @@ try {
   await page.waitForSelector('[data-testid=chat-input]');
   await page.waitForTimeout(300);
   await noSideScroll('nuevo chat'); await shot('08-nueva-conversacion');
+  // 3.6: the brain pill says the level (Medio by default).
+  assert.equal(await page.locator('[data-testid=reasoning-level]:visible').textContent(), 'Medio');
   // 3.6 (DESIGN-SYSTEM §2.2): on the phone the composer's bottom row (model, brain, orchestrator) stays on one line.
   const bottom = await page.locator('[data-testid=composer-bottom]:visible').evaluate((el) => el.getBoundingClientRect().height);
   assert.ok(bottom < 48, `el pie del compositor en una línea (${bottom}px)`);

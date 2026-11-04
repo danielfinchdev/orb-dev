@@ -4,7 +4,7 @@
 // small switch: on = with the assistant, who coordinates the agents; off = directly with the agent chosen).
 // 3.2: each conversation is its own (route.id), several at once.
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowUp, Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign, ChevronLeft, ChevronRight, PenTool, History, FlaskConical, Folder, Mic, Workflow, Shrink } from 'lucide-react';
+import { ArrowUp, Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign, ChevronLeft, ChevronRight, PenTool, History, FlaskConical, Folder, Mic, Shrink } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Markdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
@@ -24,6 +24,7 @@ import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { pickGreeting, pickSubtitle, suggestionsFor } from '@/lib/greeting.js';
 import { LiveActivity, QuestionCard } from '@/components/chat-live.jsx';
 import { ContextMeter } from './session.jsx';
+import { OrchestratorIcon } from '@/components/orchestrator-icon.jsx';
 import { BrainPicker, ReasoningMenu, UsageBubble, useCatalog, useUsageBubble } from '@/components/brain-picker.jsx';
 import { ContextSlot } from '@/components/context-slot.jsx';
 import { cn } from '@/lib/utils.js';
@@ -343,12 +344,12 @@ export function CompactButton({ onCompact, busy }) {
   );
 }
 // The orchestrator under a new conversation: its icon and a small switch; the tooltip explains it.
-function OrchestratorSwitch({ on, onChange, text }) {
+function OrchestratorSwitch({ on, onChange, name, cursor }) {
   const t = useT();
   return (
-    <BubbleTip title={on ? t('chat.orchestratorOn') : t('chat.orchestratorOff')} text={text} side="top">
+    <BubbleTip title={t('chat.orchestratorTip', { name })} text={cursor ? t('chat.orchestratorCursor', { name }) : on ? t('chat.orchestratorOn') : t('chat.orchestratorOff')} side="top">
       <label className="hover:bg-accent/60 flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2" data-testid="orchestrator">
-        <Workflow className={cn('size-4', on ? 'text-primary' : 'text-muted-foreground')} aria-hidden="true" />
+        <OrchestratorIcon className={cn('size-4', on ? 'text-primary' : 'text-muted-foreground')} aria-hidden="true" />
         <Switch size="sm" checked={on} onCheckedChange={(v) => onChange(v === true)} aria-label={t('chat.orchestrator')} data-testid="orchestrator-check" />
       </label>
     </BubbleTip>
@@ -535,7 +536,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
           <ReasoningMenu catalog={catalog} value={brain} onChange={(reasoning) => settings({ reasoning })} />
           {/* 3.2: whether a NEW conversation is with the assistant or directly with the agent chosen; a conversation keeps
               the way it started. 3.6: an icon and a small switch; the tooltip explains it. */}
-          {id == null ? <OrchestratorSwitch on={orchestrate} onChange={toggleOrchestrator} text={brain.agent === 'cursor' ? t('chat.orchestratorCursor', { name }) : t('chat.orchestratorHint', { name })} /> : null}
+          {id == null ? <OrchestratorSwitch on={orchestrate} onChange={toggleOrchestrator} name={name} cursor={brain.agent === 'cursor'} /> : null}
           {context ? <span className="text-muted-foreground ml-auto shrink-0 text-xs"><ContextMeter context={context} /></span> : null}
         </>} />
     </>

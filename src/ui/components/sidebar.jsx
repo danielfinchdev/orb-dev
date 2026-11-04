@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link2, Smartphone, MessageSquarePlus, ListTodo, FolderKanban, Bot, BookOpen, Bug, ChevronUp, ChevronDown, Settings, SquareTerminal, ChevronRight, FolderPlus, ShieldAlert, CalendarClock, CircleCheck, Undo2, GraduationCap, PenTool, HeartPulse, Layers, Search, SlidersHorizontal, X, Sparkles, GitBranch, ListChecks, Clock, MessageCircleQuestion, CirclePause, Folder } from 'lucide-react';
+import { MessageSquarePlus, ListTodo, FolderKanban, Bot, BookOpen, Bug, ChevronUp, ChevronDown, Settings, SquareTerminal, ChevronRight, FolderPlus, ShieldAlert, CalendarClock, CircleCheck, Undo2, GraduationCap, PenTool, HeartPulse, Layers, Search, SlidersHorizontal, X, Sparkles, GitBranch, ListChecks, Clock, MessageCircleQuestion, CirclePause, Folder } from 'lucide-react';
 import { Robot } from './robot.jsx';
 import { ThemeToggle, SidebarToggle } from './theme-toggle.jsx';
 import { Button } from './ui/button.jsx';
@@ -14,7 +14,7 @@ import { AgentIcon } from './agent-icon.jsx';
 import { useT } from '@/lib/i18n.js';
 import { PRODUCT } from '../../core/product.mjs';
 import { ModeSwitch } from './mode-switch.jsx';
-import { PersonMenu } from './person-menu.jsx';
+import { PersonMenu, BrowserSettingsMenu } from './person-menu.jsx';
 import { personsOn } from '@/lib/persons.js';
 import { SharedWithMe } from './share-dialog.jsx';
 import { BotsNav } from './bots-nav.jsx';
@@ -232,12 +232,11 @@ function SearchBox({ query, setQuery, filter, setFilter, agents }) {
 function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
   const t = useT();
   const memories = is('logs') || is('activity');
-  // Ajustes first (the phone screen on the phone), then the rest in alphabetical order.
+  // 3.6: the same slots and icons on the PC and in a linked browser (Ajustes, Agentes, Memorias, Tutoriales); what a
+  // browser does not have is left out (Agentes, the bug), never swapped for other icons. Its gear opens this device and
+  // Magic Link (person-menu.jsx).
   const items = [
-    ...(bridge.mobile ? [{ icon: Smartphone, label: t('nav.phone'), active: is('phone'), onClick: () => go('phone'), testid: 'nav-phone' }]
-      : [{ icon: Settings, label: t('nav.settings'), active: settingsOpen, onClick: () => openSettings(), testid: 'nav-settings' }]),
-    // 3.5: a linked device (a browser with the PC's layout) has Magic Link as a screen; on the PC it is in Ajustes.
-    ...(bridge.mobile ? [{ icon: Link2, label: t('link.title'), active: is('link'), onClick: () => go('link'), testid: 'nav-link' }] : []),
+    { icon: Settings, label: t('nav.settings'), active: settingsOpen || is('phone') || is('link'), onClick: () => openSettings(), testid: 'nav-settings' },
     ...(bridge.mobile ? [] : [{ icon: Bot, label: t('nav.agents'), active: is('agents'), onClick: () => go('agents'), testid: 'nav-agents' }]),
     { icon: BookOpen, label: t('nav.memories'), hint: t('nav.memoriesHint'), active: memories, onClick: () => go('logs'), testid: 'nav-memories' },
     // 2.6: how the app works, the FAQ and the button that replays the guided tour.
@@ -246,10 +245,10 @@ function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
   const toggle = open ? t('nav.footerFold') : t('nav.footerUnfold');
   // 3.6: with two or more users the gear is the user's initial and opens a small menu (person-menu.jsx); with one, the gear.
   const me = useStore((s) => s.me);
-  // A linked browser (no Ajustes there) gets the initial as the first icon instead.
   const users = personsOn(me) && Boolean(me?.person);
-  if (users && bridge.mobile) items.unshift({ testid: 'nav-settings' });
-  const row = (i) => (users && i.testid === 'nav-settings' ? <PersonMenu key={i.testid} list={open} active={i.active} /> : null);
+  const row = (i) => (i.testid !== 'nav-settings' ? null
+    : users ? <PersonMenu key={i.testid} list={open} active={i.active} />
+      : bridge.mobile ? <BrowserSettingsMenu key={i.testid} list={open} active={i.active} /> : null);
   return (
     <div className="side-foot relative border-t px-3 pt-2.5 pb-2" data-testid="sidebar-footer" data-open={open}>
       <Tip label={toggle}>

@@ -1,8 +1,9 @@
 // 2.6: what the chat runs on, chosen under the message box: the brain (agent + model, one list grouped by agent), the
 // reasoning and, for a direct chat, the permissions. A bubble warns when the account's usage runs high.
 import { useEffect, useState } from 'react';
-import { Brain, Check, ChevronDown, ChevronRight, Flame, Lightbulb, Star, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Flame, Lightbulb, Star, X } from 'lucide-react';
 import { AgentIcon } from './agent-icon.jsx';
+import { BrainIcon } from './brain-icon.jsx';
 import { Button } from './ui/button.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, BubbleTip } from './ui/overlay.jsx';
 import { call, useStore } from '@/lib/store.js';
@@ -151,24 +152,37 @@ export function ReasoningMenu({ catalog, value, onChange, levels, disabled }) {
     <DropdownMenu>
       <BubbleTip title={t('reasoning.title', { level: name })} text={t('reasoning.titleText')} side="top">
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon-sm" disabled={disabled} aria-label={t('reasoning.title', { level: name })} data-testid="reasoning-picker" data-level={current}><Brain /></Button>
+          {/* 3.6: a pill with the brain and the chosen level («Alto»), as tall as the model picker. */}
+          <Button variant="outline" size="sm" className="shrink-0 gap-1.5" disabled={disabled} aria-label={t('reasoning.title', { level: name })} data-testid="reasoning-picker" data-level={current}>
+            <BrainIcon className="size-4" /><span data-testid="reasoning-level">{name}</span>
+          </Button>
         </DropdownMenuTrigger>
       </BubbleTip>
-      <DropdownMenuContent align="start" side="top" className="w-56" onCloseAutoFocus={(e) => e.preventDefault()} data-testid="reasoning-menu">
+      <DropdownMenuContent align="start" side="top" className="w-48" onCloseAutoFocus={(e) => e.preventDefault()} data-testid="reasoning-menu">
         <DropdownMenuLabel>{t('brain.reasoning')}</DropdownMenuLabel>
         {list.map((level) => (
-          <BubbleTip key={level} title={t(`reasoning.${level}`)} text={t(`reasoning.tasks.${level}`)} side="right" align="start">
-            <DropdownMenuItem onSelect={() => onChange(level)} data-testid={`reasoning-${level}`}>
-              <span className="grid min-w-0 flex-1 leading-tight">
-                <span>{t(`reasoning.${level}`)}</span>
-                <span className="text-muted-foreground text-[11px]">{t(`reasoning.use.${level}`)}</span>
-              </span>
-              {current === level ? <Check className="text-primary!" /> : null}
+          // The bubble right next to the option: what it suits and, once, how much it uses.
+          <BubbleTip key={level} title={t(`reasoning.${level}`)} text={`${t(`reasoning.tasks.${level}`)} ${t(`reasoning.use.${level}`)}.`} side="right" align="center" offset={10}>
+            <DropdownMenuItem onSelect={() => onChange(level)} data-testid={`reasoning-${level}`} data-selected={current === level || undefined}>
+              <span className="min-w-0 flex-1">{t(`reasoning.${level}`)}</span>
+              <UsageMeter level={level} />
+              <Check className={cn('text-primary!', current === level ? null : 'invisible')} />
             </DropdownMenuItem>
           </BubbleTip>
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+// 3.6: four small bars, as many filled as the level uses (Bajo 1 … Extra 4); the words are in the option's bubble.
+const METER = { low: 1, medium: 2, high: 3, xhigh: 4 };
+function UsageMeter({ level }) {
+  const n = METER[level] ?? 2;
+  return (
+    <span className="flex h-3 items-end gap-[2px]" aria-hidden="true" data-testid="reasoning-meter" data-bars={n}>
+      {[0, 1, 2, 3].map((i) => <span key={i} className={cn('w-[3px] rounded-[1px]', i < n ? 'bg-primary' : 'bg-muted-foreground/25')} style={{ height: `${5 + i * 2.3}px` }} />)}
+    </span>
   );
 }
 
