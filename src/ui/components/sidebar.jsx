@@ -436,7 +436,7 @@ export function Sidebar({ mood, page = false }) {
     </div>
   );
   return (
-    <aside className="bg-sidebar relative flex h-full shrink-0 flex-col border-r" style={{ width: modeOf(route) === 'bots' ? Math.max(width, 320) : width }}>
+    <aside className="bg-sidebar relative flex h-full shrink-0 flex-col border-r" style={{ width: modeOf(route) === 'bots' ? Math.max(width, 340) : width }}>
       {bridge.mobile ? null : <div className="sidebar-resize" role="separator" aria-orientation="vertical" aria-label={t('comp.sidebar.resize')} onPointerDown={startResize} onDoubleClick={() => setWidth(SIDEBAR_DEFAULT)} data-testid="sidebar-resize" />}
       <div className="theme-band side-band app-titlebar flex h-14 shrink-0 items-center gap-2 border-b px-4">
         {/* 3.0: the robot goes back to the conversation in progress (3.2: the last one opened). */}

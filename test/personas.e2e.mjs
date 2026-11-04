@@ -144,7 +144,7 @@ try {
   // 3.6: «Mi perfil» opens on its own (it is not a section of Ajustes); Usuarios is inside Magic Link.
   assert.equal(await pc.locator('[data-testid=profile-dialog] [data-testid^=settings-nav-]').count(), 0, 'Mi perfil, sin las secciones de Ajustes');
   await pc.keyboard.press('Escape');
-  await pc.click('[data-testid=nav-settings]');
+  await menu('nav-settings'); // with 2+ users the gear is the user's initial (its menu has Ajustes)
   await pc.waitForSelector('[data-testid=settings-dialog]');
   assert.deepEqual(await pc.locator('[data-testid^=settings-nav-]').evaluateAll((els) => els.map((e) => e.dataset.testid.slice(13))), ['general', 'magiclink', 'agentes', 'datos', 'avanzado', 'acerca'], 'seis secciones');
   await shot('08a-ajustes-secciones');

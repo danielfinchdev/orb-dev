@@ -154,7 +154,7 @@ try {
       await p.waitForSelector('[data-testid=mobile-tabs]');
       if (kind === 'glass') assert.match(await p.evaluate(() => document.documentElement.className), /\bglass\b/, 'la app de Android, con cristal');
       await p.click('[data-testid=nav-menu]:visible'); await p.click('[data-testid=mode-bots]');
-      await p.waitForSelector('[data-testid=bot-inbox]'); await p.waitForTimeout(400);
+      await p.locator('[data-testid=nav-bot-chats]:visible').click(); await p.waitForSelector('[data-testid=bot-inbox]'); await p.waitForTimeout(400);
       await p.click('[data-testid=nav-menu]:visible'); await p.click('[data-testid=nav-bots]:visible');
       await p.waitForSelector('[data-testid=bot-Compras]');
       const s = shooter(p, `${kind}-${scheme}`);
