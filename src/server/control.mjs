@@ -7,8 +7,18 @@ import net from 'node:net';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
-export const CONTROL_METHODS = new Set(['link.qr', 'link.devices', 'link.status', 'app.state']);
+// 3.5.1: also closing a device's link (orb-nucleo quitar): whoever is on the server itself is its owner, so a lost or
+// stolen phone that administers it can be taken out from here.
+export const CONTROL_METHODS = new Set(['link.qr', 'link.devices', 'link.status', 'link.revoke', 'app.state']);
 
+// 3.5.1 (orb-nucleo quitar): the device named by its id (or the start of it, 4+ characters) or its exact name.
+export function pickDevice(list, target) {
+  const q = String(target ?? '').trim().toLowerCase();
+  if (!q) return { error: 'none' };
+  const byId = list.filter((d) => d.id.toLowerCase() === q || (q.length >= 4 && d.id.toLowerCase().startsWith(q)));
+  const found = byId.length ? byId : list.filter((d) => String(d.name).toLowerCase() === q);
+  return found.length === 1 ? { device: found[0] } : { error: found.length ? 'many' : 'none' };
+}
 export function controlPath(home) {
   const dir = path.join(path.resolve(home), '.orb');
   if (process.platform === 'win32') return `\\\\.\\pipe\\orb-nucleo-${crypto.createHash('sha256').update(path.resolve(home).toLowerCase()).digest('hex').slice(0, 16)}`;

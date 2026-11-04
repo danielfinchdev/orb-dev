@@ -10,6 +10,7 @@ import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
 import { x25519 } from '@noble/curves/ed25519.js';
 import { hkdf } from '@noble/hashes/hkdf.js';
 import { sha256 } from '@noble/hashes/sha2.js';
+import { scrypt, scryptAsync } from '@noble/hashes/scrypt.js';
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -42,6 +43,14 @@ const derive = (priv, peerPub, salt, info) => hkdf(sha256, x25519.getSharedSecre
 export const pairingKey = (priv, peerPub, code) => derive(priv, peerPub, `orb-vincular:${code}`, 'orb movil vincular v1');
 // The key of every later message between this phone and this PC.
 export const sessionKey = (priv, peerPub) => derive(priv, peerPub, 'orb-movil', 'orb movil sesion v1');
+
+// 3.5.1: the short code typed by hand is stretched with scrypt and tied to the key the other side says it has, so a
+// stranger in the middle who swaps the key cannot try every code fast enough. Both sides derive the same secret; the
+// answer to the pairing is sealed with it too, so the device knows the other side really had the code.
+const SHORT_KDF = { N: 2 ** 14, r: 8, p: 1, dkLen: 32 };
+const shortSalt = (pcPubB64) => `orb-corto-v3:${pcPubB64}`;
+export const shortSecret = (code, pcPubB64) => `corto3:${b64.enc(scrypt(String(code), shortSalt(pcPubB64), SHORT_KDF))}`;
+export const shortSecretAsync = async (code, pcPubB64) => `corto3:${b64.enc(await scryptAsync(String(code), shortSalt(pcPubB64), SHORT_KDF))}`;
 
 // A short, readable fingerprint of a public key (shown on the PC and the phone to compare by eye).
 export const fingerprint = (pub) => Array.from(sha256(pub).slice(0, 6), (b) => b.toString(16).padStart(2, '0')).join('').match(/.{4}/g).join('-');
@@ -80,6 +89,7 @@ export function openBytes(key, bytes, aad) {
 export const AAD = {
   pair: 'orb:vincular',
   paired: (id) => `orb:vinculado:${id}`,
+  confirm: (id) => `orb:confirmado:${id}`,
   request: (id) => `orb:peticion:${id}`,
   response: (id) => `orb:respuesta:${id}`,
   event: (id) => `orb:evento:${id}`,

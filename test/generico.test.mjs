@@ -73,7 +73,7 @@ test('dónde viven los bots: se pregunta al enlazar y «Llevar mis bots» los ll
   const p2 = (x) => String(x).padStart(2, '0'); const d = new Date(Date.now() + 3 * 86_400_000);
   await laptop.call('bots.reminders.create', { id: agenda.id, text: 'Cita con el dentista', when: `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T10:00` });
 
-  const q = await hub.call('link.qr');
+  const q = await hub.call('link.qr', { device: 'orb', dev: true });
   const peer = await laptop.call('link.connect', { code: q.code, address: `127.0.0.1:${port}` });
   assert.equal(peer.role, 'todo');
   await until(async () => (await laptop.call('centro.status')).online, 'el sobremesa en línea');
@@ -118,7 +118,7 @@ test('«Puede administrar»: un navegador enlazado no gestiona nada hasta que se
   const b = await browser.call(null, 'bots.create', { name: 'Desde el navegador', tools: ['recordatorios'] });
   assert.ok(b.id);
   assert.ok((await browser.call(null, 'link.devices')).length >= 1, 'y los enlaces');
-  assert.deepEqual((await browser.call(null, 'app.state')).access, { admin: true, bots: true, links: true });
+  assert.deepEqual((await browser.call(null, 'app.state')).access, { admin: true, bots: true, links: true, approve: true });
   await assert.rejects(browser.call(null, 'sessions.create', { agent: 'claude', permission: 'total' }), (e) => e.status === 403, 'nunca acceso total');
 
   await hub.call('link.setAdmin', { id: me.id, admin: false });
@@ -171,9 +171,9 @@ test('Orb Núcleo: el primer dispositivo de «orb-nucleo enlazar» puede adminis
     await until(async () => (await e.call('remote.status')).running, 'acceso del servidor');
     await assert.rejects(e.call('expert.status', {}), /servidor/);
     const first = newClient('Primer navegador');
-    const a = await first.connect({ qr: (await e.call('link.qr', { admin: true })).url });
+    const a = await first.connect({ qr: (await e.call('link.qr', { admin: 'first' })).url });
     const second = newClient('Segundo navegador');
-    const b = await second.connect({ qr: (await e.call('link.qr', { admin: true })).url });
+    const b = await second.connect({ qr: (await e.call('link.qr', { admin: 'first' })).url });
     const third = newClient('Móvil');
     const c = await third.connect({ qr: (await e.call('link.qr')).url });
     const list = await e.call('link.devices');

@@ -295,6 +295,11 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   ['devices', 'kind', 'TEXT'], ['devices', 'role', 'TEXT'], ['devices', 'ip', 'TEXT'], ['devices', 'meta', 'TEXT'],
   // 3.5: «Puede administrar» (Ajustes › Magic Link): the device manages this Orb's bots and links from afar.
   ['devices', 'admin', 'INTEGER NOT NULL DEFAULT 0'],
+  // 3.5.1: the rights chosen by whoever made the QR: kind_ok (the device is the kind the QR was made for; an «orb» that
+  // only said so is 0 until the owner confirms it), approve (may answer the bots' cards), dev_ok (an Orb the owner
+  // confirmed as the one that programs for this one). Who answered each bot's card.
+  ['devices', 'kind_ok', 'INTEGER'], ['devices', 'approve', 'INTEGER NOT NULL DEFAULT 1'], ['devices', 'dev_ok', 'INTEGER NOT NULL DEFAULT 0'],
+  ['bot_requests', 'decided_by', 'TEXT'],
   // 3.2: the conversation a chat line belongs to and the one that asked for a task.
   ['chat', 'conversation_id', 'INTEGER'], ['tasks', 'conversation_id', 'INTEGER'],
   // 3.5: a bot's own conversation (bot_id) and a group's (group_id); the assistant's conversations have neither.
@@ -309,6 +314,9 @@ export function migrate(db) {
     const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
     if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
   }
+  // 3.5.1: devices linked before: phones, browsers and terminals keep their rights; a device that said it was an «orb» is
+  // asked again (the owner confirms it in Ajustes › Magic Link) and loses «Puede administrar» meanwhile.
+  db.exec("UPDATE devices SET kind_ok = CASE WHEN kind = 'orb' THEN 0 ELSE 1 END, admin = CASE WHEN kind = 'orb' THEN 0 ELSE admin END, dev_ok = 0 WHERE kind_ok IS NULL");
   // 3.0: indexes for lookups that run on every refresh of an open task or at start (on columns that may have just been
   // added above, so not in SCHEMA).
   db.exec(`CREATE INDEX IF NOT EXISTS messages_task ON messages (task_id, id);

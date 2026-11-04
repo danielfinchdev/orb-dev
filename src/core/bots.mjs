@@ -105,8 +105,26 @@ export function updateBot(board, id, fields) {
     return getBot(board, bot.id);
   });
 }
-// A bot removed: its row, its groups' places, its reminders, its waiting requests and its conversation. Its memory file
-// stays in bots\<id> (the user may want it; it is never reused: ids are not given twice).
+// A bot removed: its row, its groups' places, its reminders, its waiting requests and its conversation. 3.5.1: its folder
+// (memory and anything it kept) leaves bots\ too: it goes to Orb's own data (bots-borrados, where no agent or bot reads)
+// and is deleted for good after 30 days.
+export const TRASH_DAYS = 30;
+export const botsTrash = () => path.join(ctx.paths.internal ?? path.join(ctx.home, '.orb', 'datos'), 'bots-borrados');
+export function trashBotFolder(id, at = Date.now()) {
+  const from = botDir(id);
+  const trash = botsTrash();
+  try {
+    fs.mkdirSync(trash, { recursive: true });
+    for (const name of fs.readdirSync(trash)) {
+      const m = name.match(/-(\d{13})$/);
+      if (m && at - Number(m[1]) > TRASH_DAYS * 86_400_000) fs.rmSync(path.join(trash, name), { recursive: true, force: true });
+    }
+  } catch { /* the trash is best effort */ }
+  if (!fs.existsSync(from)) return null;
+  const to = path.join(trash, `${Number(id)}-${at}`);
+  try { fs.renameSync(from, to); } catch { fs.cpSync(from, to, { recursive: true }); fs.rmSync(from, { recursive: true, force: true }); }
+  return to;
+}
 export function deleteBot(board, id) {
   const bot = mustBot(board, id);
   board.transaction(() => {
@@ -117,6 +135,7 @@ export function deleteBot(board, id) {
     board.run("UPDATE bot_requests SET status = 'failed', result = 'bot borrado' WHERE bot_id = ? AND status IN ('pending', 'waiting')", bot.id);
     board.run('DELETE FROM bots WHERE id = ?', bot.id);
   });
+  trashBotFolder(bot.id);
   return bot;
 }
 
@@ -313,11 +332,40 @@ export function setRequest(board, id, status, result = null) {
   board.run('UPDATE bot_requests SET status = ?, result = ?, updated_at = ? WHERE id = ?', status, result == null ? null : typeof result === 'string' ? result : JSON.stringify(result), now(), Number(id));
 }
 
+// 3.5.1: the user's OK for a bot's risky click in the browser (bot_confirm, src/mcp/server.mjs): once, on its site.
+export const siteOf = (url) => { try { return new URL(String(url)).hostname.toLowerCase().replace(/^www\./, ''); } catch { return ''; } };
+const sameSite = (host, granted) => Boolean(host && granted && (host === granted || host.endsWith(`.${granted}`)));
+const plainText = (s) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+// The user's OK for this one action: on this site, this button (when the bot named one), not used yet, not too old. It is
+// spent here (taken out of the database) before the action runs. → null or why not.
+export function takeGrant(boardRef, botId, { url, label }) {
+  const key = `bot_grant:${botId}`;
+  const g = boardRef.settingJson(key);
+  if (!g?.until || g.until <= Date.now() || Number(g.uses ?? 1) < 1) return 'sys.botmcp.browserNeedsOk';
+  if (!g.host) return 'sys.botmcp.browserNeedsSite';
+  if (!sameSite(siteOf(url), g.host)) return 'sys.botmcp.browserOtherSite';
+  if (g.button && label && !plainText(label).includes(plainText(g.button))) return 'sys.botmcp.browserOtherButton';
+  boardRef.run('DELETE FROM settings WHERE key = ?', key);
+  return null;
+}
+
 // ---- Home Assistant: its address in the settings, its long-lived token in the database (never in orb.json).
+// 3.5.1: the token is kept with the address it was given for, and only goes to that address: changing the address
+// (here, in orb.json or from another device) leaves Orb without a token until the user gives it again.
 export const HA_TOKEN_KEY = 'secret:ha_token';
+export const HA_TOKEN_URL_KEY = 'secret:ha_token_url';
+const haUrl = () => String(ctx.config.bots?.homeAssistant?.url ?? '').trim().replace(/\/+$/, '');
 export function haConfig(board) {
-  const url = String(ctx.config.bots?.homeAssistant?.url ?? '').replace(/\/+$/, '');
-  return { url, token: board.setting(HA_TOKEN_KEY) || '' };
+  const url = haUrl();
+  const token = board.setting(HA_TOKEN_KEY) || '';
+  let bound = board.setting(HA_TOKEN_URL_KEY);
+  // A token saved by 3.5.0 (no address with it): it belongs to the address set now.
+  if (token && bound == null) { board.setting(HA_TOKEN_URL_KEY, url); bound = url; }
+  return { url, token: token && bound === url ? token : '' };
+}
+export function setHaToken(board, token, url) {
+  board.setting(HA_TOKEN_KEY, String(token ?? ''));
+  board.setting(HA_TOKEN_URL_KEY, String(token ? url ?? '' : ''));
 }
 // Domains whose services always wait for the user's approval (locks, the alarm, blinds and doors).
 export const HA_SENSITIVE = ['lock', 'alarm_control_panel', 'cover'];

@@ -99,7 +99,7 @@ export async function main(argv = process.argv.slice(2), { env = process.env, st
       }
       writePrefs(dir, { last: peer.id });
       if (o.json) say(JSON.stringify(peer, null, 2));
-      else { say(p.green(t('term.link.done', { name: peer.name, role: roleLabel(peer.role, t) }))); say(p.dim(t('term.link.next', { cmd: 'orb' }))); }
+      else { say(p.green(t('term.link.done', { name: peer.name, role: roleLabel(peer.role, t) }))); if (peer.fp) say(t('term.link.fp', { fp: peer.fp })); say(p.dim(t('term.link.next', { cmd: 'orb' }))); }
       return EXIT.ok;
     }
 

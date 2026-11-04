@@ -148,20 +148,23 @@ if (!window.orb) {
       if (!r) throw new Error(await tl('app.linkOffline'));
       const d = await r.json().catch(() => ({}));
       if (!r.ok || typeof d?.pc !== 'string') throw new Error(await tl('app.linkNoShortCode'));
-      pc = d.pc;
+      // 3.5.1: only an Orb that ties the code to its own key (an older one, or an answer changed on the way: the QR).
+      if (!(Number(d.short) >= 3)) throw new Error(await tl('app.linkOldOrb'));
+      pc = d.pc; p = { ...p, fp: d.fp ?? null };
       if (Array.isArray(d.urls)) p = { ...p, urls: [p.urls[0], ...L.orderBases(d.urls).filter((u) => u !== p.urls[0])] };
     }
     let pcPub; try { pcPub = C.b64.dec(pc); } catch { pcPub = null; }
     if (pcPub?.length !== 32) throw new Error(await tl('app.oldQr'));
     const { priv, pub } = C.newKeyPair();
     const name = (await host?.deviceName?.()) ?? (/iPhone/.test(navigator.userAgent) ? 'iPhone' : /iPad/.test(navigator.userAgent) ? 'iPad' : /Android/.test(navigator.userAgent) ? 'Android' : await tl('app.browser'));
-    const secret = L.pairingSecret(p);
+    const secret = p.via === 'code' ? await C.shortSecretAsync(L.normalCode(p.code), pc) : L.pairingSecret(p);
+    const via = p.via === 'code' ? 'code3' : p.via;
     // 3.5 (Magic Link): it also says what it is (a phone or a computer's browser), for the list of linked devices.
     const kind = host || /iPhone|iPad|Android|Mobile/.test(navigator.userAgent) ? 'phone' : 'browser';
     const proof = () => C.seal(C.pairingKey(priv, pcPub, secret), { pub: C.b64.enc(pub), name, kind, t: stamp(), role: 'ventana' }, C.AAD.pair);
     let last = null;
     for (const base of p.urls) {
-      const send = () => fetch(`${base}/api/pair`, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ via: p.via, pub: C.b64.enc(pub), proof: proof() }) });
+      const send = () => fetch(`${base}/api/pair`, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ via, pub: C.b64.enc(pub), proof: proof() }) });
       let res;
       try { res = await send(); if (await clockFixed(res)) res = await send(); }
       catch { last = new Error(await tl('app.linkOffline')); continue; } // not reachable this way: the next address
@@ -171,6 +174,9 @@ if (!window.orb) {
       const key = C.sessionKey(priv, pcPub);
       let ok; try { ok = C.open(key, data.box, C.AAD.paired(data.id)); } catch { ok = null; }
       if (!ok || ok.id !== data.id) throw new Error(await tl('app.badAnswer'));
+      // 3.5.1: with the short code, the Orb proves it had the code too (a key swapped on the way cannot).
+      let sure; try { sure = data.confirm ? C.open(C.pairingKey(priv, pcPub, secret), data.confirm, C.AAD.confirm(data.id)) : null; } catch { sure = null; }
+      if (via === 'code3' && sure?.id !== data.id) throw new Error(await tl('app.badAnswer'));
       await keep({ id: data.id, priv: C.b64.enc(priv), pc, fp: ok.pc, ...(host ? { urls: [base, ...p.urls.filter((u) => u !== base)], at: 0, name: ok.name ?? p.name ?? null } : {}) });
       session = { id: data.id, key };
       return true;

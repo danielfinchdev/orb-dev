@@ -8,6 +8,8 @@
 //   editar     (default) edit files and run commands in its folder; risky commands ask first
 //   preguntar  edit files; every command asks first (for when you want to watch closely)
 //   total      no checks at all (asked once when chosen; never from the phone)
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { translate } from './i18n.mjs';
 import { ctx } from './context.mjs';
@@ -161,17 +163,75 @@ export const touchesProtected = (text, list) => protectedHit(text, list) !== nul
 // delete calendar events. Matched on the tool's own name (connectors: send_message, create_event…).
 export const OUTWARD = /(^|[_.:-])(send|reply|forward|share|post|publish|submit|purchase|buy|checkout|order|book|reserve|pay|transfer|create_event|update_event|delete_event|respond_to_event|trash|delete)/i;
 
+// ---- 3.5.1: what a bot may read and where it may go. A bot has no files but its own folder (bots\<id>, where its memory
+// is); the secrets of the agents, of Orb and of the browsers are named here too, fixed, whatever the user's list says
+// (and checked on the real path, so a link or «..» does not get round it). After it read something from outside in a
+// turn (a web, the browser, a mail or any connector, a server log), opening another site or a connector tool that changes
+// something asks the user first: what it read could be telling it to send the user's data away.
+const SECRET_NAME = /(^|[\\/])(\.claude|\.claude\.json|\.codex|\.ssh|\.gnupg|\.aws|\.azure|\.kube|\.docker|\.netrc|\.npmrc|\.git-credentials|\.orb-terminal|\.orb|\.password-store|\.mozilla|\.credentials\.json|auth\.json|clave\.bin|enlaces\.json|orb\.db|id_rsa|id_ecdsa|id_ed25519|\.env|login data|cookies|key4\.db|logins\.json|user data)([\\/.]|$)/i;
+export function botSecretDirs() {
+  const h = os.homedir();
+  const under = (...p) => path.join(h, ...p);
+  const list = [under('.claude'), under('.codex'), under('.ssh'), under('.gnupg'), under('.aws'), under('.orb-terminal'), under('.config', 'gcloud'), under('.config', 'gh'),
+    under('.mozilla'), under('.config', 'google-chrome'), under('.config', 'chromium'), under('.config', 'microsoft-edge'), under('.config', 'BraveSoftware'),
+    under('Library', 'Application Support', 'Google', 'Chrome'), under('Library', 'Application Support', 'Firefox'),
+    under('AppData', 'Local', 'Google', 'Chrome', 'User Data'), under('AppData', 'Local', 'Microsoft', 'Edge', 'User Data'), under('AppData', 'Roaming', 'Mozilla'),
+    under('AppData', 'Local', 'BraveSoftware'), under('AppData', 'Roaming', 'Orb'), under('.config', 'Orb')];
+  for (const k of ['CLAUDE_CONFIG_DIR', 'CODEX_HOME']) if (process.env[k]) list.push(process.env[k]);
+  for (const a of ctx.config?.accounts ?? []) if (a?.home) list.push(String(a.home));
+  if (ctx.home) list.push(path.join(ctx.home, '.orb'));
+  if (ctx.paths?.internal) list.push(ctx.paths.internal);
+  return list.map((d) => path.resolve(d));
+}
+// The rules Claude Code itself applies to the bots (deny wins over everything): the secrets under the home folder.
+export const botDenyRules = () => ['.claude', '.codex', '.ssh', '.gnupg', '.aws', '.orb-terminal', '.config/gcloud', '.config/gh', '.mozilla'].map((d) => `Read(~/${d}/**)`).concat('Read(~/.claude.json)');
+// The tools whose answer comes from outside (the rest of the turn is careful).
+export const taintsBot = (name) => /^(webfetch|websearch|fetch|web_search)$/i.test(String(name ?? '')) || /orb_browser_/.test(String(name ?? '')) || /^mcp__(?!bot__)/.test(String(name ?? '')) || /^mcp__bot__srv_logs$/.test(String(name ?? ''));
+const READ_NAME = /^(get|list|search|read|find|fetch|query|view|lookup|count|describe|download|export)([_-]|$)/i;
+const lower = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
+const inside = (p, dir) => { const a = lower(path.resolve(p)); const d = lower(path.resolve(dir)); return a === d || a.startsWith(d.endsWith(path.sep) ? d : d + path.sep); };
+const real = (p) => { try { return fs.realpathSync.native(p); } catch { return p; } };
+// The fixed part of a glob pattern («../../**/x» → «../..»), to see where it reaches.
+const globBase = (pattern) => { const parts = String(pattern).replace(/\\/g, '/').split('/'); const i = parts.findIndex((x) => /[*?[{]/.test(x)); return (i < 0 ? parts : parts.slice(0, i)).join('/') || '.'; };
+const hostOfUrl = (url) => { try { return new URL(/^[a-z][\w+.-]*:\/\//i.test(String(url)) ? String(url) : `https://${url}`).hostname.toLowerCase().replace(/^www\./, ''); } catch { return ''; } };
+export function botCheck({ tool, paths = [], patterns = [], url = null, bot, lang = 'es' }) {
+  if (!bot || typeof bot !== 'object') return null;
+  const T = (k) => translate(lang, `msg.guard.${k}`);
+  const dir = bot.dir ? path.resolve(bot.dir) : null;
+  const secrets = botSecretDirs();
+  const at = (p) => (dir && !path.isAbsolute(p) ? path.resolve(dir, p) : path.resolve(p));
+  const wanted = [...paths.filter(Boolean).map(String).map((p) => at(p)), ...patterns.filter(Boolean).map(String).map((p) => at(globBase(p)))];
+  for (const raw of [...paths, ...patterns].filter(Boolean)) if (SECRET_NAME.test(String(raw).replace(/\\/g, '/'))) return { decision: 'deny', reason: T('botSecret') };
+  for (const p of wanted) {
+    const r = real(p);
+    if (secrets.some((d) => inside(p, d) || inside(r, d))) return { decision: 'deny', reason: T('botSecret') };
+    if (dir && !inside(p, dir) && !inside(r, dir)) return { decision: 'deny', reason: T('botOwnFolder') };
+  }
+  const name = String(tool ?? '');
+  if (url) {
+    const host = hostOfUrl(url);
+    if (bot.tainted && !bot.hosts?.has(host)) return { decision: 'ask', reason: T('botOutside') };
+    bot.hosts?.add?.(host);
+  }
+  if (bot.tainted && /^mcp__(?!bot__|orb__)/.test(name) && !READ_NAME.test(name.replace(/^mcp__[^_]+__/, ''))) return { decision: 'ask', reason: T('botOutsideWrite') };
+  return null;
+}
+
 // decide({ permission, tool, kind, command, paths, internalDir, lang, bot }) → (lang: language of the reasons, default 'es')
 //  { decision: 'allow' | 'ask' | 'deny', reason }
 // bot (3.5): the session is one of the user's bots: its own tools (mcp__bot, the agents' browser) are allowed, and any
-// connector tool that sends, buys, books or deletes asks first, even in read-only mode.
-export function decide({ permission = 'editar', tool, kind, command = '', paths = [], internalDir, lang = 'es', bot = false }) {
+// connector tool that sends, buys, books or deletes asks first, even in read-only mode. 3.5.1: bot may be the bot's guard
+// ({ dir, tainted, hosts }, src/engine/bots.mjs): its folder only, no secrets, care after reading from outside (botCheck);
+// patterns (Glob/Grep) and url (WebFetch, the browser) are checked too.
+export function decide({ permission = 'editar', tool, kind, command = '', paths = [], patterns = [], url = null, internalDir, lang = 'es', bot = false }) {
   const T = (k) => translate(lang, `msg.guard.${k}`);
   const cls = toolClass(tool, kind);
-  const text = [command, ...paths].join(' ');
+  const text = [command, ...paths, ...patterns].join(' ');
   if (touchesInternal(text, internalDir)) return { decision: 'deny', reason: T('internal') };
   const hit = protectedHit(text);
   if (hit) return { decision: 'deny', reason: translate(lang, 'msg.guard.protected', { name: hit }) };
+  const botVerdict = botCheck({ tool, paths, patterns, url, bot, lang });
+  if (botVerdict) return botVerdict;
   if (bot && (cls === 'mcp' || cls === 'orb')) {
     if (/^mcp__bot__/.test(String(tool))) return { decision: 'allow', reason: T('connector') };
     if (OUTWARD.test(String(tool ?? '').replace(/^mcp__[^_]+__/, ''))) return { decision: 'ask', reason: T('outward') };

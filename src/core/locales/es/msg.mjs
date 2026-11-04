@@ -513,5 +513,15 @@ export default {
   "msg.installer.agentFailed": "No se pudo instalar: {why}",
   "msg.installer.agentNoTool": "No se pudo instalar: falta el programa que hace la instalación (PowerShell, bash o npm)",
   "msg.installer.agentDone": "Instalado",
-  "msg.installer.agentTimeout": "No se pudo instalar: pasaron 15 minutos sin terminar"
+  "msg.installer.agentTimeout": "No se pudo instalar: pasaron 15 minutos sin terminar",
+  "msg.link.httpBrowser": "Por la wifi sin cifrar, un navegador no se enlaza: usa la dirección segura de Tailscale (https), la app de Android o la terminal. Si lo necesitas, actívalo en Ajustes › Acceso desde el móvil.",
+  "msg.link.wantsOrb": "Este código es para enlazar otro Orb. Para un móvil, un navegador o una terminal, haz otro código.",
+  "msg.link.notForOrb": "Este código no es para un Orb. En el otro Orb, elige «Otro Orb mío» al hacer el código.",
+  "msg.link.confirmTaller": "{name} quiere programar para este Orb. Si es tuyo, confírmalo en Ajustes › Magic Link.",
+  "msg.link.notAnOrb": "Ese dispositivo no es un Orb.",
+  "msg.remote.pushHidden": "Tienes un mensaje nuevo",
+  "msg.guard.botSecret": "un bot nunca lee contraseñas, claves ni datos de otros programas",
+  "msg.guard.botOwnFolder": "un bot solo lee su propia carpeta",
+  "msg.guard.botOutside": "acaba de leer algo de fuera (una web, un correo) y ahora quiere abrir otra dirección",
+  "msg.guard.botOutsideWrite": "acaba de leer algo de fuera (una web, un correo) y ahora quiere cambiar algo en tu cuenta"
 };

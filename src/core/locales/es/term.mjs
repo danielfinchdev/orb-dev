@@ -119,5 +119,16 @@ export default {
   'term.nucleo.waiting': 'Esperando al dispositivo… (Ctrl+C para cancelar)',
   'term.nucleo.linked': 'Enlazado: {name}.',
   'term.nucleo.expired': 'El código ha caducado. Vuelve a ejecutar orb-nucleo enlazar.',
-  'term.nucleo.ownEngine': 'Orb Núcleo no está en marcha: lo arranco solo mientras enlazas.'
+  'term.nucleo.ownEngine': 'Orb Núcleo no está en marcha: lo arranco solo mientras enlazas.',
+  "term.link.fp": "Huella del otro Orb: {fp} (debe coincidir con la que muestra).",
+  "term.nucleo.fp": "Huella: {fp} (el otro aparato debe mostrar la misma)",
+  "term.nucleo.givesAdmin": "Quien use este código podrá administrar este servidor.",
+  "term.nucleo.noDevices": "No hay ningún dispositivo enlazado.",
+  "term.nucleo.onNow": "conectado",
+  "term.nucleo.isAdmin": "administra",
+  "term.nucleo.unconfirmed": "Orb sin confirmar",
+  "term.nucleo.revokeHint": "Para quitar uno (un móvil perdido): {cmd}",
+  "term.nucleo.ambiguous": "Hay varios que encajan con «{name}»: usa más letras del id.",
+  "term.nucleo.noSuch": "No hay ningún dispositivo «{name}».",
+  "term.nucleo.removed": "Quitado: {name}. Ya no puede entrar."
 };

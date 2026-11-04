@@ -301,5 +301,14 @@ export default {
   // 3.2: conversaciones a la vez
   'settings.parallelChats': 'Conversaciones con Orbe a la vez',
   'settings.parallelChatsHint': 'Cuántas conversaciones contesta Orbe al mismo tiempo (de 1 a 6). Las demás esperan su turno.',
-  'guide.readOnly': 'Revisiones y pruebas (solo lectura): {list}'
+  'guide.readOnly': 'Revisiones y pruebas (solo lectura): {list}',
+  "settings.mobileLanHttp": "Enlazar navegadores por la wifi sin cifrar",
+  "settings.mobileLanHttpHint": "Desactivado es más seguro: alguien en tu wifi podría cambiar la página. La app de Android y la terminal se enlazan igual.",
+  "settings.mobilePreview": "En la pantalla de bloqueo",
+  "settings.mobilePreview.all": "Mostrar todo",
+  "settings.mobilePreview.chat": "Ocultar lo de los bots",
+  "settings.mobilePreview.none": "No mostrar nada",
+  "settings.mobilePreview.allHint": "Los avisos muestran el principio de cada mensaje.",
+  "settings.mobilePreview.chatHint": "Los avisos de los bots y sus tarjetas solo dicen «Tienes un mensaje nuevo».",
+  "settings.mobilePreview.noneHint": "Ningún aviso muestra el texto del mensaje."
 };

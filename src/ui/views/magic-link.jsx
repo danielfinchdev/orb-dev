@@ -7,11 +7,11 @@
 // Orb mode of a phone goes) and «Puede administrar» for each linked device are the user's choices.
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { Link2, QrCode, Smartphone, Globe, Monitor, Server, Pencil, Trash2, X, Unplug, Copy, Check, LoaderCircle, Bot, Code2, Layers } from 'lucide-react';
+import { Link2, QrCode, Smartphone, Globe, Monitor, Server, Pencil, Trash2, X, Unplug, Copy, Check, LoaderCircle, Bot, Code2, Layers, ShieldCheck, TriangleAlert } from 'lucide-react';
 import { PageHeader } from '@/components/page.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea } from '@/components/ui/basic.jsx';
-import { BubbleTip, Select, Switch } from '@/components/ui/overlay.jsx';
+import { BubbleTip, Select, Switch, Checkbox } from '@/components/ui/overlay.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { useStore, call, act, bridge, loadCentro, setState } from '@/lib/store.js';
 import { countdown, parseLinkInput, sortDevices, canManageLinks, roleKey, ROLE_CHOICES, botsLocationCard, devChoices } from '@/lib/bots.js';
@@ -120,10 +120,15 @@ function DevTargetCard({ status }) {
 }
 function Dot({ on }) { const t = useT(); return <span className={cn('size-2 shrink-0 rounded-full', on ? 'bg-success' : 'bg-muted-foreground/40')} role="img" aria-label={on ? t('link.online') : t('link.offline')} />; }
 
-// The QR with its short code and how long it lasts.
+// The QR with its short code and how long it lasts. 3.5.1: first, what it is for (a phone, a browser, another Orb of the
+// user's or a terminal) and whether that device may answer the bots' cards: decided here, the device cannot change it.
+const PAIR_FOR = ['phone', 'browser', 'orb', 'terminal'];
 function PairCard() {
   const t = useT();
   const [qr, setQr] = useState(null);
+  const [device, setDevice] = useState('phone');
+  const [approve, setApprove] = useState(true);
+  const [dev, setDev] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -131,7 +136,7 @@ function PairCard() {
   useEffect(() => { if (!qr) return undefined; const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, [qr]);
   const make = async () => {
     setBusy(true);
-    const r = await act(call('link.qr', {}));
+    const r = await act(call('link.qr', { device, approve, ...(device === 'orb' ? { dev } : {}) }));
     if (r) setQr({ ...r, svg: await QRCode.toString(r.url, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }) });
     setBusy(false); setNow(Date.now());
   };
@@ -151,14 +156,24 @@ function PairCard() {
                 {navigator.clipboard ? <Button size="icon-sm" variant="ghost" aria-label={copied ? t('link.copied') : t('link.copy')} title={copied ? t('link.copied') : t('link.copy')} onClick={() => navigator.clipboard.writeText(`${qr.code} ${qr.address}`).then(() => setCopied(true)).catch(() => {})} data-testid="link-copy">{copied ? <Check className="text-success animate-in fade-in-0 zoom-in-95" /> : <Copy />}</Button> : null}
               </div>
               <div className="text-muted-foreground font-mono text-xs break-all">{qr.address}</div>
+              <div className="flex items-center justify-center gap-1.5 text-xs sm:justify-start" data-testid="link-fp"><ShieldCheck className="text-success size-3.5 shrink-0" />{t('link.fp', { fp: qr.pc })}</div>
+              {qr.device === 'browser' && !qr.browserOk ? <div className="text-warning flex items-start gap-1.5 text-xs" role="alert" data-testid="link-http-warn"><TriangleAlert className="mt-0.5 size-3.5 shrink-0" />{t('link.httpBrowserWarn')}</div> : null}
               <div className="text-sm">{t('link.expires')} <span className="font-medium tabular-nums" data-testid="link-countdown">{countdown(qr.expiresAt, now)}</span></div>
               <div><Button size="sm" variant="ghost" onClick={() => setQr(null)}><X />{t('link.close')}</Button></div>
             </div>
           </div>
         ) : (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={make} disabled={busy} aria-busy={busy} data-testid="link-make">{busy ? <LoaderCircle className="animate-spin" /> : <QrCode />}{expired ? t('link.again') : t('link.make')}</Button>
-            {expired ? <span className="text-muted-foreground text-xs">{t('link.expired')}</span> : null}
+          <div className="grid gap-3">
+            <Field label={t('link.forWhat')}>
+              <Select className="w-full sm:w-72" value={device} onValueChange={setDevice} data-testid="link-for" title={t('link.forWhat')} options={PAIR_FOR.map((k) => ({ value: k, label: t(`link.for.${k}`) }))} />
+            </Field>
+            <label className="flex cursor-pointer items-start gap-2 text-sm"><Checkbox checked={approve} onCheckedChange={(v) => setApprove(Boolean(v))} data-testid="link-for-approve" /><span>{t('link.forApprove')}<span className="text-muted-foreground block text-xs">{t('link.forApproveHint')}</span></span></label>
+            {device === 'orb' ? <label className="flex cursor-pointer items-start gap-2 text-sm"><Checkbox checked={dev} onCheckedChange={(v) => setDev(Boolean(v))} data-testid="link-for-dev" /><span>{t('link.forDev')}<span className="text-muted-foreground block text-xs">{t('link.forDevHint')}</span></span></label> : null}
+            <p className="text-muted-foreground text-xs">{t('link.preferHttps')}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button onClick={make} disabled={busy} aria-busy={busy} data-testid="link-make">{busy ? <LoaderCircle className="animate-spin" /> : <QrCode />}{expired ? t('link.again') : t('link.make')}</Button>
+              {expired ? <span className="text-muted-foreground text-xs">{t('link.expired')}</span> : null}
+            </div>
           </div>
         )}
       </CardContent>
@@ -199,6 +214,10 @@ function DevicesCard({ devices, readOnly, reload }) {
   const rename = (d) => form(t('link.renameTitle'), { initial: { name: d.name }, body: (v, set) => <Input autoFocus value={v.name} maxLength={60} onChange={(e) => set({ name: e.target.value })} />, ok: t('link.save'), onOk: async (v) => { await call('link.rename', { id: d.id, name: v.name.trim() || d.name }); reload(); return true; } });
   const revoke = async (d) => { if (await confirm(t('link.revokeTitle', { name: d.name }), t('link.revokeBody'), { ok: t('link.revoke'), danger: true })) { await act(call('link.revoke', { id: d.id }), t('link.revoked')); reload(); } };
   const admin = async (d, on) => { await act(call('link.setAdmin', { id: d.id, admin: on }), on ? t('link.adminOn', { name: d.name }) : t('link.adminOff', { name: d.name })); reload(); };
+  // 3.5.1: may it answer the bots' cards; and the owner's confirmation of an Orb that only said it was one (linked before
+  // 3.5.1) or that wants to program for this one.
+  const approveOn = async (d, on) => { await act(call('link.setApprove', { id: d.id, approve: on }), on ? t('link.approveOn', { name: d.name }) : t('link.approveOff', { name: d.name })); reload(); };
+  const confirmIt = async (d, what) => { if (await confirm(t(what === 'taller' ? 'link.confirmTallerTitle' : 'link.confirmOrbTitle', { name: d.name }), t(what === 'taller' ? 'link.confirmTallerBody' : 'link.confirmOrbBody'), { ok: t('link.confirmOk') })) { await act(call('link.confirm', { id: d.id, what }), t('link.confirmed', { name: d.name })); reload(); } };
   return (
     <Card data-testid="link-devices">
       <CardHeader><CardTitle>{t('link.devices')}</CardTitle><CardDescription>{t('link.devicesHint')}</CardDescription></CardHeader>
@@ -209,10 +228,16 @@ function DevicesCard({ devices, readOnly, reload }) {
             <div key={d.id} className="flex items-center gap-3 rounded-xl border px-3 py-2" data-testid="link-device">
               <Icon className="text-muted-foreground size-5 shrink-0" />
               <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 items-center gap-2"><Dot on={d.online} /><span className="truncate text-sm font-medium">{d.name}</span>{d.kind === 'orb' ? <Badge variant="outline">{t(roleKey(d.role))}</Badge> : null}{readOnly && d.admin ? <Badge variant="outline">{t('link.admin')}</Badge> : null}</div>
+                <div className="flex min-w-0 items-center gap-2"><Dot on={d.online} /><span className="truncate text-sm font-medium">{d.name}</span>{d.kind === 'orb' ? <Badge variant="outline">{t(roleKey(d.role))}</Badge> : null}{readOnly && d.admin ? <Badge variant="outline">{t('link.admin')}</Badge> : null}{d.confirmed === false ? <Badge variant="warning">{t('link.unconfirmed')}</Badge> : null}</div>
                 <div className="text-muted-foreground truncate text-xs">{[t(`link.kind.${d.kind}`), d.online ? t('link.onNow') : d.lastSeen ? t('link.seen', { when: ago(d.lastSeen) }) : t('link.never'), d.host].filter(Boolean).join(' · ')}</div>
               </div>
               {readOnly ? null : (<>
+                {d.confirmed === false ? <Button size="xs" variant="outline" onClick={() => confirmIt(d, 'orb')} data-testid="link-confirm-orb">{t('link.confirmOrb')}</Button> : null}
+                {d.confirmed !== false && d.devPending ? <Button size="xs" variant="outline" onClick={() => confirmIt(d, 'taller')} data-testid="link-confirm-taller">{t('link.confirmTaller')}</Button> : null}
+                <label className="text-muted-foreground flex shrink-0 cursor-pointer items-center gap-1.5 text-xs" title={t('link.approveHint')}>
+                  <Switch checked={d.approve !== false} onCheckedChange={(on) => approveOn(d, on)} aria-label={t('link.approve')} data-testid="link-approve" />
+                  <span className="hidden sm:inline">{t('link.approve')}</span>
+                </label>
                 {d.kind !== 'orb' ? (
                   <label className="text-muted-foreground flex shrink-0 cursor-pointer items-center gap-1.5 text-xs" title={t('link.adminHint')}>
                     <Switch checked={Boolean(d.admin)} onCheckedChange={(on) => admin(d, on)} aria-label={t('link.admin')} data-testid="link-admin" />

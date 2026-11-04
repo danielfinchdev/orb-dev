@@ -99,9 +99,10 @@ const tools = !ME ? [] : [
       if (!qs.length) throw new Error(tr('sys.botmcp.needsText'));
       return card('ask', { questions: qs });
     } },
-  { name: 'bot_confirm', description: `Pide a ${USER} permiso (una tarjeta) antes de enviar, comprar, reservar, pagar o enviar un formulario. Sin su OK no lo hagas. No espera: su respuesta te llega como un mensaje nuevo, y con el OK tienes 15 minutos para hacerlo.`,
-    inputSchema: { type: 'object', required: ['action', 'detail'], properties: { action: { type: 'string', enum: ['enviar', 'comprar', 'reservar', 'pagar', 'formulario', 'otro'] }, detail: str('Qué exactamente: tienda, producto y precio, destinatario y texto, fecha y sitio…') } },
-    run: (a) => card('confirm', { action: a.action, detail: oneLine(String(a.detail ?? ''), 1500) }) },
+  { name: 'bot_confirm', description: `Pide a ${USER} permiso (una tarjeta) antes de enviar, comprar, reservar, pagar o enviar un formulario. Sin su OK no lo hagas. No espera: su respuesta te llega como un mensaje nuevo. Con el OK puedes hacerlo una sola vez, en la web que digas (url) y con el botón que digas (button), en los 10 minutos siguientes; para otra cosa, pide otro permiso.`,
+    inputSchema: { type: 'object', required: ['action', 'detail'], properties: { action: { type: 'string', enum: ['enviar', 'comprar', 'reservar', 'pagar', 'formulario', 'otro'] }, detail: str('Qué exactamente: tienda, producto y precio, destinatario y texto, fecha y sitio…'),
+      url: str('La web donde lo harás (obligatoria si es en el navegador), p. ej. https://tienda.example'), button: str('El texto del botón que pulsarás (p. ej. «Confirmar pedido»)') } },
+    run: (a) => card('confirm', { action: a.action, detail: oneLine(String(a.detail ?? ''), 1500), ...(a.url ? { url: oneLine(String(a.url), 300) } : {}), ...(a.button ? { button: oneLine(String(a.button), 80) } : {}) }) },
   ...(has('recordatorios') ? [
     { name: 'bot_remind', description: `Crea un recordatorio: llega a tu chat y al móvil de ${USER} a su hora. every: once (una vez), daily, weekly (con weekdays 0 domingo…6 sábado), monthly o yearly. when: la primera vez, fecha y hora local (AAAA-MM-DDTHH:MM).`,
       inputSchema: { type: 'object', required: ['text', 'when'], properties: { text: str('Qué recordar'), when: str('AAAA-MM-DDTHH:MM (hora local)'), every: { type: 'string', enum: B.EVERY }, weekdays: { type: 'array', items: { type: 'integer', minimum: 0, maximum: 6 } } } },

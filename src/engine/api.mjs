@@ -39,7 +39,7 @@ import { projectIcon, setProjectIcon, clearProjectIcon, renameProjectIcon } from
 import { git, slug } from '../core/workspace.mjs';
 import * as B from '../core/bots.mjs';
 import { serverStatus, haFetch } from '../core/server-admin.mjs';
-import { CENTRO_FORWARD } from './remote.mjs';
+import { CENTRO_FORWARD, PAIR_KINDS, PREVIEWS } from './remote.mjs';
 
 // Names of the fields in the messages (Spanish as they were; the key is the Spanish word).
 const fld = (name) => { const key = `msg.api.f.${String(name).replace(/ /g, '_')}`; const t = tr(key); return t === key ? name : t; };
@@ -162,7 +162,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       'bots.chat': ({ id, ...p }) => { const b = B.mustBot(board, botId(id)); const conv = B.botConversation(board, b); return { conversation: conv, lines: lines(conv, p), state: bots?.state(b.id) ?? null }; },
       'bots.send': ({ id, text, via }) => { const r = need().send(botId(id), str(text, 'mensaje', 20000), { via: VIA.has(via) ? via : null }); return { conversation: r.conversation, bot: r.bot }; },
       'bots.stop': ({ id }) => { need().stop(botId(id)); return true; },
-      'bots.decide': ({ item, decision }) => need().decide(int(item, 'tarjeta'), oneOf(decision, ['allow', 'deny'], 'decisión')),
+      // 3.5.1: by: who answers (a linked device, set by remote.mjs from its own record; null: this PC).
+      'bots.decide': ({ item, decision, by }) => need().decide(int(item, 'tarjeta'), oneOf(decision, ['allow', 'deny'], 'decisión'), { by: by && typeof by === 'object' ? by : null }),
       'bots.answer': ({ item, text }) => { const r = need().answer(int(item, 'tarjeta'), str(text, 'respuesta', 4000)); return { conversation: r.conversation, bot: r.bot }; },
       'bots.groups.list': () => B.listGroups(board),
       'bots.groups.create': ({ name, icon, members }) => { const g = B.createGroup(board, { name, icon, members: members ?? [] }); changed(null); return g; },
@@ -201,9 +202,14 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
         return { configured: true, states };
       },
       'bots.srv.status': () => serverStatus(),
+      // 3.5.1: the token belongs to the address it was given for: a new address without a new token leaves no token.
       'bots.ha.set': ({ url, token }) => {
-        if (url !== undefined) { const c = saveConfig({ bots: { homeAssistant: { url: str(url, 'dirección', 300, { optional: true }).trim().replace(/\/+$/, '') } } }); emit('config:changed', c); }
-        if (token !== undefined) board.setting(B.HA_TOKEN_KEY, str(token, 'token', 4000, { optional: true }).trim());
+        if (url !== undefined) {
+          const next = str(url, 'dirección', 300, { optional: true }).trim().replace(/\/+$/, '');
+          if (next !== B.haConfig(board).url) B.setHaToken(board, '', next);
+          const c = saveConfig({ bots: { homeAssistant: { url: next } } }); emit('config:changed', c);
+        }
+        if (token !== undefined) B.setHaToken(board, str(token, 'token', 4000, { optional: true }).trim(), B.haConfig(board).url);
         const h = B.haConfig(board); return { url: h.url, hasToken: Boolean(h.token) };
       }
     };
@@ -790,10 +796,15 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return remoteRef.current.status();
     },
     // The ways in: home Wi-Fi and/or Tailscale (the servers reopen with the new choice).
-    'remote.configure': async ({ wifi, tailscale }) => {
+    // 3.5.1: lanHttp: browsers may link over the home Wi-Fi in plain http (off by default); preview: what notifications
+    // show on a locked phone ('all', 'chat' or 'none').
+    'remote.configure': async ({ wifi, tailscale, lanHttp, preview }) => {
       const patch = {};
       if (typeof wifi === 'boolean') patch.wifi = wifi;
       if (typeof tailscale === 'boolean') patch.tailscale = tailscale;
+      if (typeof lanHttp === 'boolean') patch.lanHttp = lanHttp;
+      if (preview !== undefined) patch.preview = oneOf(preview, PREVIEWS, 'avisos');
+      if (wifi === undefined && tailscale === undefined) { const c = saveConfig({ mobile: patch }); emit('config:changed', c); return remoteRef.current.status(); }
       const c = saveConfig({ mobile: patch }); emit('config:changed', c);
       if (c.mobile.enabled) await remoteRef.current.restart();
       return remoteRef.current.status();
@@ -803,14 +814,22 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     // ---- 3.5 Magic Link (PC only; a phone may ask link.status and taller.* through remote.mjs)
     // A QR (and a short code) to link a phone, a browser or another Orb. Turns the access on if it was off.
     // admin: (Orb Núcleo's «orb-nucleo enlazar») the device that uses it may administer this server, if it is the first.
-    'link.qr': async ({ kind, admin }) => {
+    // 3.5.1: device: what it is for (phone, browser, orb, terminal), chosen here, never by the device; approve: it may
+    // answer the bots' cards (default yes); dev: an Orb that may program for this one; admin: true (the owner gives it) or
+    // 'first' (`orb-nucleo enlazar`: only while no device administers this server).
+    'link.qr': async ({ kind, admin, device, approve, dev }) => {
       const via = oneOf(kind, ['wifi', 'tailscale'], 'vía', undefined);
+      const forKind = device == null || device === '' ? null : oneOf(device, PAIR_KINDS, 'dispositivo');
       if (!remoteRef.current.status().running) {
         if (!ctx.config.mobile?.enabled) { const c = saveConfig({ mobile: { enabled: true } }); emit('config:changed', c); }
         await remoteRef.current.start();
       }
-      return remoteRef.current.pair(via, { admin: admin === true });
+      return remoteRef.current.pair(via, { admin: admin === true ? true : admin === 'first' ? 'first' : false, device: forKind, approve: approve !== false, dev: dev === true });
     },
+    // 3.5.1: «Puede aprobar» (the bots' cards) for a linked device, and the owner's confirmation that a linked device is
+    // one of their Orbs (what 'orb') or the Orb that programs for this one (what 'taller').
+    'link.setApprove': ({ id, approve }) => remoteRef.current.setApprove(str(id, 'dispositivo', 64), approve === true),
+    'link.confirm': ({ id, what }) => remoteRef.current.confirm(str(id, 'dispositivo', 64), oneOf(what ?? 'orb', ['orb', 'taller'], 'qué')),
     // 3.5: «Puede administrar» for a linked device (its bots and links from afar).
     'link.setAdmin': ({ id, admin }) => remoteRef.current.setAdmin(str(id, 'dispositivo', 64), admin === true),
     // 3.5: where this Orb's bots live ('local' or a linked Orb that keeps bots) and the Orbs that could keep them.
@@ -830,14 +849,14 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'link.rename': ({ id, name }) => remoteRef.current.rename(str(id, 'dispositivo', 64), str(name, 'nombre', 60)),
     'link.status': () => ({ ...remoteRef.current.linkStatus(), peers: remoteRef.link?.peers() ?? [] }),
     // This Orb links to another one: with its QR (the text or the object), or with the short code and its address.
-    'link.connect': async ({ qr, code, address }) => {
+    'link.connect': async ({ qr, code, address, fp }) => {
       if (!remoteRef.link) fail(tr('msg.link.unavailable'));
       if (qr != null && qr !== '') {
         if (typeof qr === 'string') str(qr, 'QR', 4000);
         else if (typeof qr !== 'object' || JSON.stringify(qr).length > 4000) fail(tr('msg.api.invalid', { name: 'QR' }));
         return remoteRef.link.connect({ qr });
       }
-      return remoteRef.link.connect({ code: str(code, 'código', 20), address: str(address, 'dirección', 300) });
+      return remoteRef.link.connect({ code: str(code, 'código', 20), address: str(address, 'dirección', 300), fp: fp ? str(fp, 'huella', 40) : null });
     },
     'link.peers': () => remoteRef.link?.peers() ?? [],
     'link.disconnect': ({ id }) => { if (!remoteRef.link) fail(tr('msg.link.unavailable')); return remoteRef.link.disconnect(str(id, 'enlace', 64)); },

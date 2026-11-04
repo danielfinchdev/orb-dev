@@ -17,7 +17,7 @@ import { ROLES, hostsBots, doesDev } from '../core/home.mjs';
 import { oneLine } from '../core/safety.mjs';
 import { quickRun } from '../agents/index.mjs';
 import { IS_WIN } from '../agents/common.mjs';
-import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal, open, sealText, openText, openBytes, AAD, CLOCK_SKEW_MS } from '../core/mobile-crypto.mjs';
+import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal, open, sealText, openText, openBytes, AAD, CLOCK_SKEW_MS, shortSecret } from '../core/mobile-crypto.mjs';
 import { newVapidKeys, checkSubscription, sendPush } from './webpush.mjs';
 import { wake, normalMac } from '../core/wol.mjs';
 import { PROTOCOL, CODE_ALPHABET, RELAY_EVENTS, shortCodeLabel } from '../core/link.mjs';
@@ -42,7 +42,7 @@ export function phoneConfig(c) {
     mcpServers: (c.mcpServers ?? []).map((m) => ({ name: m.name, enabled: m.enabled, agents: m.agents })),
     accounts: (c.accounts ?? []).map(({ home: _home, ...a }) => a),
     agents: Object.fromEntries(Object.entries(c.agents ?? {}).map(([k, a]) => { const { path: _path, ...rest } = a ?? {}; return [k, rest]; })),
-    projectRoots: [], mobile: { enabled: c.mobile?.enabled }
+    projectRoots: [], mobile: { enabled: c.mobile?.enabled, preview: pushPreview(c) }
   };
 }
 
@@ -68,12 +68,19 @@ export const BOTS_OWNER = ['bots.create', 'bots.update', 'bots.delete', 'bots.gr
 export const ORB_ALLOWED = new Set([...ALLOWED, ...BOTS_OWNER]);
 // What a workshop passes on to its centre (centro.<method>): the bots, nothing else.
 export const CENTRO_FORWARD = new Set([...ORB_ALLOWED].filter((m) => m.startsWith('bots.')));
-export const CONSOLE_ALLOWED = new Set([...ORB_ALLOWED, 'link.qr', 'link.devices', 'link.rename', 'link.revoke', 'link.setAdmin', 'link.peers', 'link.connect', 'link.disconnect']);
+export const CONSOLE_ALLOWED = new Set([...ORB_ALLOWED, 'link.qr', 'link.devices', 'link.rename', 'link.revoke', 'link.setAdmin', 'link.setApprove', 'link.confirm', 'link.peers', 'link.connect', 'link.disconnect']);
 // What a centre sends to the Orbs linked with it (their Bots mode shows the centre's bots, live).
 const BOT_EVENTS = new Set(['bot.updated', 'bot.message', 'bot.state']);
 // What the access of a device allows on this Orb (role: this Orb's): everything of the console for a device marked
 // «Puede administrar», the bots for another Orb of the user when this one keeps bots («centro» or «todo»), else a phone's.
-export const allowedFor = (role, kind, admin = false) => (admin ? CONSOLE_ALLOWED : kind === 'orb' && hostsBots(role) ? ORB_ALLOWED : ALLOWED);
+// 3.5.1: «orb» counts only when this Orb's owner chose it when making the QR (confirmed); what a device says it is never
+// gives it more.
+export const allowedFor = (role, kind, admin = false, confirmed = true) => (admin ? CONSOLE_ALLOWED : kind === 'orb' && confirmed && hostsBots(role) ? ORB_ALLOWED : ALLOWED);
+// 3.5.1: what the owner may choose when making a QR (the kind of device it is for); the device's rights are decided there.
+export const PAIR_KINDS = ['phone', 'browser', 'orb', 'terminal'];
+// The rights of a device to answer a bot's card: «approve» for any card (a lock, a purchase, a tool that sends…);
+// changing bots and the server also need the rights of the bots' owner (the PC, «Puede administrar» or a confirmed Orb).
+export const approverOf = (device, allowed) => ({ device: device.id, name: device.name, approve: Number(device.approve ?? 1) === 1, owner: allowed.has('bots.update') });
 // 3.5: what a phone or a terminal does in the Orb mode: it goes to the Orb that programs (Ajustes › Magic Link › «Orb
 // para programar») when it is not this one. The bots, the links and this Orb's own state stay here.
 export const devForwards = (method) => ALLOWED.has(method) && !/^(bots\.|app\.state$)/.test(method);
@@ -110,6 +117,17 @@ export function guardCall(board, method, params, { allowed = ALLOWED, uploadsDir
   }
   return null;
 }
+// 3.5.1: what a notification shows on a locked phone: 'all', 'chat' (the default: the bots' messages and cards hidden) or
+// 'none' (only «Tienes un mensaje nuevo»).
+export const PREVIEWS = ['all', 'chat', 'none'];
+export const pushPreview = (config) => (PREVIEWS.includes(config?.mobile?.preview) ? config.mobile.preview : 'chat');
+// What a notification says: what ('chat': the assistant's chat, 'bots': a bot's message, card or reminder) with its own
+// title and text, or only the assistant's name and «Tienes un mensaje nuevo».
+export function pushContent(what, { title, body }, config) {
+  const v = pushPreview(config); const name = config?.assistantName ?? 'Orb';
+  const shown = v === 'all' || (v === 'chat' && what === 'chat');
+  return shown ? { title: String(title ?? name).slice(0, 80), body: String(body ?? '').slice(0, 200) } : { title: name, body: tr('msg.remote.pushHidden') };
+}
 // What a call from outside gets back (the settings without secrets).
 export const shapeResult = (method, result) => (method === 'app.state' && result ? { ...result, config: phoneConfig(result.config) } : result);
 
@@ -128,6 +146,25 @@ export function privateSource(address) {
 export const orbNameOf = (config) => oneLine(String(config?.mobile?.name || os.hostname() || config?.assistantName || 'Orb'), 60);
 const ipOf = (req) => String(req.socket?.remoteAddress ?? '').replace(/^::ffff:/, '');
 const kindOf = (proof) => (KINDS.includes(proof?.kind) ? proof.kind : /iphone|ipad|android/i.test(String(proof?.name ?? '')) ? 'phone' : 'browser');
+// 3.5.1: the kind of a new device: the one the QR was made for. A QR made without saying takes what a phone, a browser
+// or a terminal says it is (they have the same rights), never «orb»; null: the device does not match the QR.
+export function kindForPairing(issued, claimed) {
+  if (issued === 'orb') return claimed === 'orb' ? 'orb' : null;
+  if (claimed === 'orb') return null;
+  if (PAIR_KINDS.includes(issued)) return issued;
+  return ['phone', 'browser', 'terminal'].includes(claimed) ? claimed : 'phone';
+}
+const isLoopback = (ip) => /^(127\.|::1$)/.test(String(ip ?? '').replace(/^::ffff:/, ''));
+// 3.5.1: whether a pairing comes from a browser's page over plain http on the home network: not a program (no Origin: the
+// terminal, another Orb), not the Android app, not this PC (or Tailscale's https, which arrives through loopback), not the
+// Tailscale address; and the user did not allow it (lanHttp).
+export function plainHttpBrowser({ origin, app = false, localAddress, routes = [], lanHttp = false }) {
+  if (lanHttp || !origin || app) return false;
+  const local = String(localAddress ?? '').replace(/^::ffff:/, '');
+  if (isLoopback(local)) return false;
+  const r = (routes ?? []).find((x) => x.address === local);
+  return !(r && r.kind === 'tailscale');
+}
 const parseMeta = (d) => { try { return d?.meta ? JSON.parse(d.meta) : {}; } catch { return {}; } };
 const linkError = (message, extra = {}) => Object.assign(new Error(message), { userFacing: true, extra });
 // 3.5: the Android app's page (Capacitor) is not served by this PC but by the app itself (http://localhost): it may call
@@ -396,13 +433,15 @@ export function createRemote({ board, api, log, emit = () => {} }) {
     if (method === 'chat.settings' && params.account !== undefined) delete params.account;
     // 3.5: a bot learns that the user writes from a phone or a terminal (from the device's kind, never from what it sends).
     if (method === 'bots.send' || method === 'bots.groups.send') { delete params.via; if (device.kind === 'phone' || device.kind === 'terminal') params.via = device.kind; }
-    const allowed = allowedFor(role(), device.kind, Boolean(device.admin));
+    const allowed = allowedFor(role(), device.kind, Boolean(device.admin), Number(device.kind_ok) === 1);
+    // 3.5.1: who answers a bot's card (kept with the card) and with which rights: set here, never by what the device sends.
+    if (method === 'bots.decide') { delete params.by; params.by = approverOf(device, allowed); }
     const why = guardCall(board, method, params, { uploadsDir: uploads(), allowed });
     if (why) return deny(why);
     try {
       let result = shapeResult(method, (await api.call(method, params)) ?? null);
       // What this device may do here (the interface shows or hides the buttons for it).
-      if (method === 'app.state' && result) result = { ...result, access: { admin: Boolean(device.admin), bots: allowed.has('bots.create'), links: allowed.has('link.qr') } };
+      if (method === 'app.state' && result) result = { ...result, access: { admin: Boolean(device.admin), bots: allowed.has('bots.create'), links: allowed.has('link.qr'), approve: Number(device.approve ?? 1) === 1 } };
       return reply(res, device, msg.nonce, { ok: true, result });
     }
     catch (error) { return reply(res, device, msg.nonce, { ok: false, error: oneLine(error?.message ?? String(error), 1000) }); }
@@ -423,6 +462,9 @@ export function createRemote({ board, api, log, emit = () => {} }) {
       const r = ROLES.includes(b.role) ? b.role : device.role;
       board.run('UPDATE devices SET meta = ?, role = ? WHERE id = ?', JSON.stringify(meta), r ?? null, device.id);
       for (const c of clients) if (c.device === device.id) c.role = r;
+      // 3.5.1: an Orb that says it programs is not the Orb mode of this one's phones until the owner confirms it here
+      // (Ajustes › Magic Link); the owner is told when it starts saying so.
+      if (doesDev(r ?? 'centro') && Number(device.dev_ok) !== 1 && device.role !== r) board.notice(tr('msg.link.confirmTaller', { name: device.name }), 'warning');
       // wantsEvents: whether this Orb wants its live events (only from the one its phones' Orb mode goes to).
       ok({ role: role(), name: orbName(), v: PROTOCOL, wantsEvents: devTargetDevice()?.id === device.id });
       linkChanged();
@@ -438,7 +480,7 @@ export function createRemote({ board, api, log, emit = () => {} }) {
     }
     if (op === 'events') {
       // Only the Orb this one sends the Orb mode to (its phones see what it does); any other is thanked and ignored.
-      if (!doesDev(device.role ?? 'centro') || devTargetDevice()?.id !== device.id) return ok(false);
+      if (!doesDev(device.role ?? 'centro') || Number(device.dev_ok) !== 1 || devTargetDevice()?.id !== device.id) return ok(false);
       for (const ev of (Array.isArray(b.list) ? b.list : []).slice(0, 200)) {
         if (typeof ev?.e === 'string' && RELAY_EVENTS.has(ev.e)) emit(`taller:${ev.e}`, ev.e === 'config:changed' ? null : ev.p ?? null);
       }
@@ -450,7 +492,8 @@ export function createRemote({ board, api, log, emit = () => {} }) {
   // 3.5: what a device that has only the short code needs to know (only while a code is on screen).
   function helloInfo(res) {
     if (!pairing || Date.now() > pairing.expires) return send(res, 404, { error: tr('msg.link.noCode') });
-    return send(res, 200, { v: PROTOCOL, pc: b64.enc(own.pub), fp: pcFingerprint, name: orbName(), role: role(), urls: (state.routes ?? []).map((r) => r.url) });
+    // short: 3 (3.5.1): the short code is tied to this key (link.mjs › connect refuses an Orb without it).
+    return send(res, 200, { v: PROTOCOL, short: 3, pc: b64.enc(own.pub), fp: pcFingerprint, name: orbName(), role: role(), urls: (state.routes ?? []).map((r) => r.url) });
   }
 
   // Pairing: the phone sends its public key and a proof sealed with the key of this QR (the one-time code never travels).
@@ -468,31 +511,47 @@ export function createRemote({ board, api, log, emit = () => {} }) {
     };
     let body; try { body = await readJson(req, 10_000); } catch { return fail(); }
     if (!pairing || Date.now() > pairing.expires || !body || typeof body.pub !== 'string') return fail();
+    // 3.5.1: a page served over the home Wi-Fi in plain http could have been changed on the way: a browser links only over
+    // https (Tailscale), the Tailscale address or this PC itself, unless the user allowed it (Ajustes › Magic Link). The
+    // Android app and the terminal bring their own code and check the key, so they may.
+    if (plainBrowser(req)) return send(res, 403, { error: tr('msg.link.httpBrowser') });
     let devPub; try { devPub = b64.dec(body.pub); } catch { return fail(); }
     if (devPub.length !== 32) return fail();
-    const secretOf = body.via === 'code' ? `corto:${pairing.short}` : pairing.code;
+    // The short code: code3 (3.5.1, stretched and tied to this key); code (3.5.0) still opens, for older apps.
+    const secretOf = body.via === 'code3' ? pairing.short3 : body.via === 'code' ? `corto:${pairing.short}` : pairing.code;
     let proof; try { proof = open(pairingKey(own.priv, devPub, secretOf), body.proof, AAD.pair); } catch { return fail(); }
     if (!proof || proof.pub !== body.pub) return fail();
     // The QR was right but the phone's clock is off: it tries again with the PC's time (the QR is not used up).
     if (!(Math.abs(Date.now() - Number(proof.t)) <= CLOCK_SKEW_MS)) return clockOff(res);
-    const route = pairing.route; const askedAdmin = Boolean(pairing.admin);
+    // 3.5.1: what the device is was chosen when the QR was made; a device that says otherwise is refused (the QR stays).
+    const kind = kindForPairing(pairing.device, KINDS.includes(proof.kind) ? proof.kind : kindOf({ name: proof.name }));
+    if (!kind) return send(res, 403, { error: tr(pairing.device === 'orb' ? 'msg.link.wantsOrb' : 'msg.link.notForOrb') });
+    const { route, admin: askedAdmin, approve, dev } = pairing;
     pairing = null; // one use
     const id = crypto.randomUUID();
-    const kind = kindOf(proof);
     const name = oneLine(typeof proof.name === 'string' && proof.name ? proof.name : tr(kind === 'orb' ? 'msg.link.defaultOrb' : 'msg.remote.defaultName'), 60);
     const peerRole = kind === 'orb' && ROLES.includes(proof.role) ? proof.role : null;
-    // «Puede administrar»: only the first device of a server without a window linked with `orb-nucleo enlazar` gets it.
-    const admin = askedAdmin && !board.one('SELECT id FROM devices WHERE admin = 1 AND public_key IS NOT NULL');
+    // «Puede administrar»: asked by whoever made the QR (true: the PC, `orb-nucleo enlazar --admin` on the server itself or
+    // a device that administers), or 'first': the first device of a server without a window gets it.
+    const admin = askedAdmin === true || (askedAdmin === 'first' && !board.one('SELECT id FROM devices WHERE admin = 1 AND public_key IS NOT NULL'));
     const meta = kind === 'orb' ? { host: oneLine(String(proof.host ?? ''), 80) || null, macs: (Array.isArray(proof.macs) ? proof.macs : []).map(normalMac).filter(Boolean).slice(0, 8), version: proof.version ? oneLine(String(proof.version), 40) : null } : {};
-    board.run('INSERT INTO devices (id, name, token_hash, created_at, last_seen, public_key, route, kind, role, ip, meta, admin) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      id, name, `clave:${id}`, now(), now(), body.pub, route, kind, peerRole, who, JSON.stringify(meta), admin ? 1 : 0);
+    const devOk = kind === 'orb' && dev ? 1 : 0;
+    board.run('INSERT INTO devices (id, name, token_hash, created_at, last_seen, public_key, route, kind, role, ip, meta, admin, kind_ok, approve, dev_ok) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)',
+      id, name, `clave:${id}`, now(), now(), body.pub, route, kind, peerRole, who, JSON.stringify(meta), admin ? 1 : 0, approve === false ? 0 : 1, devOk);
     board.event(null, 'usuario', 'device.paired', name);
-    board.notice(tr(peerRole && doesDev(peerRole) && !programs() ? 'msg.link.tallerLinked' : 'msg.remote.deviceLinked', { name }), 'success');
-    // The answer is sealed with the new session key: the phone checks it really is the PC of the QR.
+    const wantsDev = Boolean(peerRole && doesDev(peerRole) && !programs());
+    board.notice(tr(wantsDev ? (devOk ? 'msg.link.tallerLinked' : 'msg.link.confirmTaller') : 'msg.remote.deviceLinked', { name }), wantsDev && !devOk ? 'warning' : 'success');
+    // The answer is sealed with the new session key: the phone checks it really is the PC of the QR. 3.5.1: and with the
+    // code's key too, so a device that got a key from someone in the middle finds out (nobody else has the code).
     const key = sessionKey(own.priv, devPub); keys.set(id, key);
     linkChanged();
-    return send(res, 200, { id, box: seal(key, { id, name: ctx.config.assistantName, orb: orbName(), role: role(), v: PROTOCOL, pc: pcFingerprint }, AAD.paired(id)) });
+    return send(res, 200, { id, box: seal(key, { id, name: ctx.config.assistantName, orb: orbName(), role: role(), v: PROTOCOL, pc: pcFingerprint }, AAD.paired(id)),
+      confirm: seal(pairingKey(own.priv, devPub, secretOf), { id, pc: pcFingerprint }, AAD.confirm(id)) });
   }
+
+  // 3.5.1: a request from a browser's page that came over plain http on the home network (not this PC, not Tailscale's
+  // https through loopback, not the Tailscale address), while the user did not allow it.
+  const plainBrowser = (req) => plainHttpBrowser({ origin: req.headers.origin, app: Boolean(appOrigin(req)), localAddress: req.socket?.localAddress, routes: state.routes, lanHttp: ctx.config.mobile?.lanHttp === true });
 
   // A picture from the phone (encrypted): checked by its first bytes (not its name), stored in the app's folder, path returned.
   let uploading = 0;
@@ -536,10 +595,11 @@ export function createRemote({ board, api, log, emit = () => {} }) {
     if (!payload || payload.role === 'usuario') return;
     const openNow = new Set([...clients].map((c) => c.device));
     const name = ctx.config.assistantName;
+    const note = pushContent('chat', { title: payload.role === 'orb' ? name : tr('msg.remote.pushNotice', { name }), body: payload.body }, ctx.config);
     for (const d of board.all('SELECT id, push FROM devices WHERE push IS NOT NULL')) {
       if (openNow.has(d.id)) continue;
       let sub; try { sub = JSON.parse(d.push); } catch { continue; }
-      sendPush(sub, { title: payload.role === 'orb' ? name : tr('msg.remote.pushNotice', { name }), body: String(payload.body ?? '').slice(0, 200), tag: 'orb-chat', url: '/' }, own.vapid)
+      sendPush(sub, { ...note, tag: 'orb-chat', url: '/' }, own.vapid)
         .then((r) => { if (r === 'gone') board.run('UPDATE devices SET push = NULL WHERE id = ?', d.id); })
         .catch(() => {});
     }
@@ -623,10 +683,11 @@ export function createRemote({ board, api, log, emit = () => {} }) {
   // that does not have the app open.
   function pushNote({ title, body } = {}) {
     const openNow = new Set([...clients].map((c) => c.device));
+    const note = pushContent('bots', { title, body }, ctx.config);
     for (const d of board.all('SELECT id, push FROM devices WHERE push IS NOT NULL')) {
       if (openNow.has(d.id)) continue;
       let sub; try { sub = JSON.parse(d.push); } catch { continue; }
-      sendPush(sub, { title: String(title ?? ctx.config.assistantName).slice(0, 80), body: String(body ?? '').slice(0, 200), tag: 'orb-bot', url: '/' }, own.vapid)
+      sendPush(sub, { ...note, tag: 'orb-bot', url: '/' }, own.vapid)
         .then((r) => { if (r === 'gone') board.run('UPDATE devices SET push = NULL WHERE id = ?', d.id); }).catch(() => {});
     }
   }
@@ -635,12 +696,17 @@ export function createRemote({ board, api, log, emit = () => {} }) {
   const onlineIds = () => new Set([...clients].map((c) => c.device));
   function deviceView(d, on = onlineIds()) {
     const meta = parseMeta(d);
-    return { id: d.id, name: d.name, kind: d.kind ?? kindOf({ name: d.name }), role: d.role ?? null, createdAt: d.created_at, lastSeen: d.last_seen ?? null, ip: d.ip ?? null,
-      route: d.route ?? null, push: Boolean(d.push), online: on.has(d.id), host: meta.host ?? null, version: meta.version ?? null, canWake: Boolean(meta.macs?.length), admin: Boolean(d.admin) };
+    const kind = d.kind ?? kindOf({ name: d.name });
+    // 3.5.1: approve (may answer the bots' cards), confirmed (an Orb the owner chose when making its QR or confirmed
+    // after), devOk (may be the Orb that programs for this one) and devPending (says it programs, not confirmed yet).
+    return { id: d.id, name: d.name, kind, role: d.role ?? null, createdAt: d.created_at, lastSeen: d.last_seen ?? null, ip: d.ip ?? null,
+      route: d.route ?? null, push: Boolean(d.push), online: on.has(d.id), host: meta.host ?? null, version: meta.version ?? null, canWake: Boolean(meta.macs?.length), admin: Boolean(d.admin),
+      approve: Number(d.approve ?? 1) === 1, confirmed: kind !== 'orb' || Number(d.kind_ok) === 1, devOk: Number(d.dev_ok) === 1, devPending: kind === 'orb' && ['taller', 'todo'].includes(d.role) && Number(d.dev_ok) !== 1 };
   }
   const devices = () => { const on = onlineIds(); return board.all('SELECT * FROM devices WHERE public_key IS NOT NULL ORDER BY created_at DESC').map((d) => deviceView(d, on)); };
   // The linked Orbs that program («taller» or «todo»).
-  const tallers = () => board.all("SELECT * FROM devices WHERE kind = 'orb' AND role IN ('taller', 'todo') AND public_key IS NOT NULL ORDER BY COALESCE(last_seen, created_at) DESC");
+  // 3.5.1: only the ones the owner confirmed here (an Orb cannot make itself the workshop by saying so).
+  const tallers = () => board.all("SELECT * FROM devices WHERE kind = 'orb' AND kind_ok = 1 AND dev_ok = 1 AND role IN ('taller', 'todo') AND public_key IS NOT NULL ORDER BY COALESCE(last_seen, created_at) DESC");
   // 3.5: where the Orb mode of this Orb's phones goes: the Orb chosen in «Orb para programar»; else this one if it programs
   // (null); else the linked one that does (the one on right now, or else the last one seen).
   const devTargetDevice = () => {
@@ -751,6 +817,7 @@ export function createRemote({ board, api, log, emit = () => {} }) {
     status() {
       return { enabled: Boolean(ctx.config.mobile?.enabled), running: Boolean(state.running), routes: state.routes ?? [], error: state.error ?? null, pc: pcFingerprint,
         wifi: ctx.config.mobile?.wifi !== false, tailscale: ctx.config.mobile?.tailscale !== false, role: role(), name: orbName(),
+        lanHttp: ctx.config.mobile?.lanHttp === true, preview: pushPreview(ctx.config),
         devices: board.all('SELECT id, name, created_at, last_seen, route, kind, role, ip, push IS NOT NULL AS push FROM devices ORDER BY created_at DESC').map((d) => ({ ...d, push: Boolean(d.push) })) };
     },
     // A one-time QR for 5 minutes, for one of the ways in (Wi-Fi or Tailscale). The code and this PC's key travel in the
@@ -758,17 +825,24 @@ export function createRemote({ board, api, log, emit = () => {} }) {
     // 3.5 (protocol v2): the fragment also names this Orb, its role and its other addresses; and a short code (8 letters
     // and digits) can be typed by hand instead, together with the address.
     // admin: the device that uses it may administer this Orb (only for a server without a window, only its first one).
-    pair(kind, { admin = false } = {}) {
+    // 3.5.1: device: what it is for (phone, browser, orb, terminal), chosen here by the owner, never by the device;
+    // approve: whether it may answer the bots' cards (default yes); dev: for an Orb, whether it may be the one that
+    // programs for this one; admin: true (whoever makes the QR is the owner: the PC, the server's own terminal or a device
+    // that administers) or 'first' (only while no device administers, on a server without a window).
+    pair(kind, { admin = false, device = null, approve = true, dev = false } = {}) {
       if (!state.running) throw new Error(tr('msg.remote.enableFirst'));
       const route = state.routes.find((r) => r.kind === kind) ?? state.routes[0];
       const code = crypto.randomBytes(18).toString('base64url');
       const short = Array.from({ length: 8 }, () => CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)]).join('');
-      pairing = { code, short, expires: Date.now() + PAIR_MINUTES * 60_000, route: route.kind, fails: 0, admin: Boolean(admin) && isHeadless() };
+      const forKind = PAIR_KINDS.includes(device) ? device : null;
+      pairing = { code, short, short3: shortSecret(short, b64.enc(own.pub)), expires: Date.now() + PAIR_MINUTES * 60_000, route: route.kind, fails: 0,
+        admin: admin === true && isHeadless() ? true : admin === 'first' && isHeadless() ? 'first' : false, device: forKind, approve: approve !== false, dev: forKind === 'orb' && dev === true };
       const others = state.routes.filter((r) => r !== route).map((r) => r.url);
       const frag = new URLSearchParams({ vincular: code, pc: b64.enc(own.pub), v: String(PROTOCOL), n: orbName(), r: role() });
       if (others.length) frag.set('a', others.join(','));
       return { url: `${route.url}#${frag}`, payload: { v: PROTOCOL, urls: [route.url, ...others], pc: b64.enc(own.pub), code, name: orbName(), role: role(), expiresAt: pairing.expires },
-        code: shortCodeLabel(short), address: route.url, expiresAt: pairing.expires, kind: route.kind, secure: route.secure, pc: pcFingerprint, name: orbName(), role: role() };
+        code: shortCodeLabel(short), address: route.url, expiresAt: pairing.expires, kind: route.kind, secure: route.secure, pc: pcFingerprint, name: orbName(), role: role(),
+        device: forKind, admin: pairing.admin === true, approve: pairing.approve, browserOk: Boolean(route.secure) || route.address === '127.0.0.1' || route.kind === 'tailscale' || ctx.config.mobile?.lanHttp === true };
     },
     revoke(id, { quiet = false } = {}) {
       const d = board.one('SELECT * FROM devices WHERE id = ?', String(id)); if (!d) throw new Error(tr('msg.remote.noDevice'));
@@ -802,6 +876,24 @@ export function createRemote({ board, api, log, emit = () => {} }) {
       board.run('UPDATE devices SET admin = ? WHERE id = ?', admin ? 1 : 0, d.id);
       board.event(null, 'usuario', admin ? 'device.admin' : 'device.noAdmin', d.name);
       linkChanged();
+      return deviceView(board.one('SELECT * FROM devices WHERE id = ?', d.id));
+    },
+    // 3.5.1: whether a linked device may answer the bots' cards.
+    setApprove(id, on) {
+      const d = board.one('SELECT id, name FROM devices WHERE id = ?', String(id)); if (!d) throw new Error(tr('msg.remote.noDevice'));
+      board.run('UPDATE devices SET approve = ? WHERE id = ?', on ? 1 : 0, d.id);
+      board.event(null, 'usuario', on ? 'device.approve' : 'device.noApprove', d.name);
+      linkChanged();
+      return deviceView(board.one('SELECT * FROM devices WHERE id = ?', d.id));
+    },
+    // 3.5.1: the owner confirms here that a linked device is one of their Orbs (what: 'orb'), or that it may be the Orb
+    // that programs for this one (what: 'taller', which confirms it is an Orb too).
+    confirm(id, what) {
+      const d = board.one('SELECT * FROM devices WHERE id = ?', String(id)); if (!d) throw new Error(tr('msg.remote.noDevice'));
+      if (d.kind !== 'orb') throw new Error(tr('msg.link.notAnOrb'));
+      board.run(what === 'taller' ? 'UPDATE devices SET kind_ok = 1, dev_ok = 1 WHERE id = ?' : 'UPDATE devices SET kind_ok = 1 WHERE id = ?', d.id);
+      board.event(null, 'usuario', what === 'taller' ? 'device.tallerOk' : 'device.orbOk', d.name);
+      if (what === 'taller') remote.relinkOrbs(); else linkChanged();
       return deviceView(board.one('SELECT * FROM devices WHERE id = ?', d.id));
     },
     // Who is linked and who is on. For a phone, without the addresses.

@@ -119,5 +119,16 @@ export default {
   'term.nucleo.waiting': 'Waiting for the device… (Ctrl+C to cancel)',
   'term.nucleo.linked': 'Linked: {name}.',
   'term.nucleo.expired': 'The code has expired. Run orb-nucleo enlazar again.',
-  'term.nucleo.ownEngine': 'The Orb engine is not running: starting it just while you link.'
+  'term.nucleo.ownEngine': 'The Orb engine is not running: starting it just while you link.',
+  "term.link.fp": "The other Orb’s fingerprint: {fp} (it must match the one it shows).",
+  "term.nucleo.fp": "Fingerprint: {fp} (the other device must show the same one)",
+  "term.nucleo.givesAdmin": "Whoever uses this code can manage this server.",
+  "term.nucleo.noDevices": "No device is linked.",
+  "term.nucleo.onNow": "online",
+  "term.nucleo.isAdmin": "manages",
+  "term.nucleo.unconfirmed": "Orb not confirmed",
+  "term.nucleo.revokeHint": "To remove one (a lost phone): {cmd}",
+  "term.nucleo.ambiguous": "Several match “{name}”: use more letters of the id.",
+  "term.nucleo.noSuch": "There is no device “{name}”.",
+  "term.nucleo.removed": "Removed: {name}. It can no longer get in."
 };

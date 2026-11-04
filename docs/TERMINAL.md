@@ -6,7 +6,9 @@ The fourth way to use Orb, next to the PC app, the phone and the browser: the `o
 
 Like a phone, with Magic Link:
 
-1. On the Orb you want to reach: Settings › Magic Link › "Link device". On a headless server: `orb-nucleo enlazar` (it draws the QR in the terminal and gives the short code and the address; it waits until someone links).
+1. On the Orb you want to reach: Settings › Magic Link › "Link device" (choose "A terminal"). On a headless server: `orb-nucleo enlazar --tipo terminal` (it draws the QR in the terminal and gives the short code, the address and the fingerprint; it waits until someone links). After linking, `orb enlazar` prints the other Orb's fingerprint: it must match.
+
+On the server itself (3.5.1): `orb-nucleo dispositivos` lists the linked devices, `orb-nucleo quitar <id>` closes one's link (a lost phone) and `orb-nucleo enlazar --admin` links a new device that may administer the server even if another one already does.
 2. In the terminal: `orb enlazar ABCD-EFGH 100.64.1.2:3131` (the code and the address, in any order) or `orb enlazar "<QR link>"`.
 
 The terminal shows up in "Linked devices" as `terminal`, with the same permissions as a browser (those of `remote.mjs › ALLOWED`), and can be closed from there. It only works on your Wi-Fi, on Tailscale or on the same machine.
