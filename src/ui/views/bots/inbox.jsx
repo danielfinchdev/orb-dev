@@ -279,22 +279,25 @@ export function NewMenu({ fab = false }) {
   );
 }
 
-// ---- the zone's other places (PC): four labelled icons and «Más» (all bots, groups, the bots' settings)
+// ---- the zone's other places (PC): a row of icon buttons, each with its name in a bubble (the names did not fit the
+// list's width), and «Más» (all bots, groups, the bots' settings). The name is also each button's accessible name.
 export const BOT_PLACES = [['bot-reminders', Bell, 'nav.botReminders'], ['bot-home', Home, 'nav.botHome'], ['bot-memory', BookOpen, 'nav.botMemory'], ['bot-server', Server, 'nav.botServer']];
 function Places() {
   const t = useT();
   const view = useStore((s) => s.route.view);
   const more = [['bots', Bot, 'nav.bots'], ['bot-groups', Users, 'nav.botGroups'], ['bot-settings', Settings2, 'nav.botSettings']];
-  const cls = (on) => cn('press flex min-w-0 cursor-pointer flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-[11.5px] transition-colors', on ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground');
+  const cls = (on) => cn('press grid h-9 min-w-0 cursor-pointer place-items-center rounded-lg transition-colors', on ? 'bg-accent text-primary' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground');
   return (
-    <nav className="grid grid-cols-5 gap-0.5 px-2 pb-1" aria-label={t('chats.places')} data-testid="bots-places">
+    <nav className="grid grid-cols-5 gap-1 px-3 pb-1.5" aria-label={t('chats.places')} data-testid="bots-places">
       {BOT_PLACES.map(([id, Icon, label]) => (
-        <button key={id} type="button" className={cls(view === id)} onClick={() => go({ view: id })} data-testid={`nav-${id}`}><Icon className={cn('size-4', view === id && 'text-primary')} /><span className="max-w-full truncate">{t(label)}</span></button>
+        <Tip key={id} label={t(label)} side="bottom"><button type="button" className={cls(view === id)} onClick={() => go({ view: id })} aria-label={t(label)} data-testid={`nav-${id}`}><Icon className="size-[18px]" /></button></Tip>
       ))}
       <DropdownMenu modal={false}>
-        <DropdownMenuTrigger asChild>
-          <button type="button" className={cls(more.some(([id]) => id === view))} data-testid="bots-places-more"><Ellipsis className="size-4" /><span className="max-w-full truncate">{t('nav.more')}</span></button>
-        </DropdownMenuTrigger>
+        <Tip label={t('nav.more')} side="bottom">
+          <DropdownMenuTrigger asChild>
+            <button type="button" className={cls(more.some(([id]) => id === view))} aria-label={t('nav.more')} data-testid="bots-places-more"><Ellipsis className="size-[18px]" /></button>
+          </DropdownMenuTrigger>
+        </Tip>
         <DropdownMenuContent align="end">
           {more.map(([id, Icon, label]) => <DropdownMenuItem key={id} onSelect={() => go({ view: id })} data-testid={`nav-${id}`}><Icon />{t(label)}</DropdownMenuItem>)}
         </DropdownMenuContent>

@@ -21,7 +21,7 @@ const engines = [];
 async function engineWith(env = {}) {
   const port = 20000 + Math.floor(Math.random() * 20000);
   const t = tempHome({ mobile: { enabled: true, port } });
-  const child = fork(path.join(ROOT, 'src', 'engine', 'engine.mjs'), [], { stdio: ['ignore', 'inherit', 'inherit', 'ipc'], env: { ...process.env, ORB_REMOTE_BIND: '127.0.0.1', ...env }, windowsHide: true });
+  const child = fork(path.join(ROOT, 'src', 'engine', 'engine.mjs'), [], { stdio: ['ignore', 'inherit', 'inherit', 'ipc'], env: { ...process.env, ORB_REMOTE_BIND: '127.0.0.1', ORB_FAKE_SCRIPT: path.join(ROOT, 'test', 'fixtures', 'guion-mensajeria.json'), ...env }, windowsHide: true });
   let n = 0; const pending = new Map();
   child.on('message', (m) => { if (m.type === 'reply') { const p = pending.get(m.id); pending.delete(m.id); m.ok ? p.resolve(m.result) : p.reject(new Error(m.error)); } });
   const call = (method, params = {}) => new Promise((resolve, reject) => { const id = ++n; pending.set(id, { resolve, reject }); child.send({ type: 'call', id, method, params }); });
@@ -35,12 +35,17 @@ async function sample(call) {
   const jefe = await call('bots.create', { name: 'Jefe', avatar: { shape: 'gota', color: 'cielo' }, role_text: 'Reparte lo que pido y me avisa cuando está.', is_chief: true, tools: ['internet', 'recordatorios'] });
   const agenda = await call('bots.create', { name: 'Agenda', avatar: { shape: 'capsula', color: 'melocoton' }, role_text: 'Llevas mi calendario y mis citas.', tools: ['recordatorios', 'calendario'] });
   const compras = await call('bots.create', { name: 'Compras', avatar: { shape: 'mochi', color: 'menta' }, role_text: 'Comparas precios y preparas la compra. Nunca compras sin mi aprobación.', tools: ['internet', 'navegador'] });
-  await call('bots.create', { name: 'Correo', avatar: { shape: 'nube', color: 'agua' }, role_text: 'Me resumes el correo.', tools: ['correo'] });
+  const correo = await call('bots.create', { name: 'Correo', avatar: { shape: 'nube', color: 'agua' }, role_text: 'Me resumes el correo.', tools: ['correo'] });
   const casa = await call('bots.groups.create', { name: 'Casa', members: [jefe.id, agenda.id] });
   const trabajo = await call('inbox.sections.create', { zone: 'bots', name: 'Trabajo' });
   await call('inbox.sections.move', { kind: 'bot', id: compras.id, section: trabajo.id });
   await call('inbox.pin', { kind: 'bot', id: jefe.id });
   await call('inbox.pin', { kind: 'group', id: casa.id });
+  // 3.6: real-looking conversations (the fake agents answer from test/fixtures/guion-mensajeria.json).
+  for (const [id, text] of [[compras.id, 'Prepara la lista de la compra de la semana'], [jefe.id, 'Hazme el plan de la semana'], [correo.id, '¿Hay algo importante en el correo?']]) {
+    await call('bots.send', { id, text });
+    await until(async () => (await call('inbox.list', { zone: 'bots' })).items.find((x) => x.kind === 'bot' && x.id === id)?.unread > 0, 'respuesta de ejemplo', 30000);
+  }
   await call('bots.send', { id: agenda.id, text: 'Recuérdame la cita del dentista' });
   await until(async () => (await call('inbox.list', { zone: 'bots' })).items.find((x) => x.title === 'Agenda')?.unread > 0, 'Agenda tiene un mensaje sin leer', 30000);
   return { jefe, agenda, compras, casa, trabajo };
@@ -101,7 +106,7 @@ try {
     await page.click('[data-testid=pinned-Jefe] button >> nth=0');
     await page.waitForSelector('[data-testid=bot-chat-input]');
     if (!dark) {
-      await page.fill('[data-testid=bot-chat-input]', 'Pausa a Correo unos días\nBOT_CALL bot_pause {"name":"Correo","reason":"de vacaciones"}');
+      await page.fill('[data-testid=bot-chat-input]', 'Pausa a Correo unos días, me voy de vacaciones');
       await page.click('[data-testid=send]');
     }
     await page.waitForSelector('[data-testid=bot-card][data-status=pending]', { timeout: 30000 });
@@ -229,7 +234,7 @@ try {
       await p.waitForSelector('[data-testid=bot-chat-input]');
       assert.equal(await p.locator('[data-testid=mobile-tabs]').count(), 0, 'sin pestañas en una conversación');
       if (!dark) {
-        await p.fill('[data-testid=bot-chat-input]', 'Pausa a Correo\nBOT_CALL bot_pause {"name":"Correo","reason":"de vacaciones"}');
+        await p.fill('[data-testid=bot-chat-input]', 'Pausa a Correo, me voy de vacaciones');
         await p.click('[data-testid=send]');
       }
       await p.waitForSelector('[data-testid=bot-card][data-status=pending]', { timeout: 30000 });

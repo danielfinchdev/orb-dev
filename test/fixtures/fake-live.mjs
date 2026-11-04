@@ -24,6 +24,9 @@
 //   MANDA_MENSAJE <agente> <texto>   sends a message to another agent through Orb (orb_send_message)
 //   LEE <ruta>         (3.6, one per line) reads a file: the real guard decides, with the session's confinement
 //   BOT_CALL <tool> <json>           (3.5, one per line) calls a tool of the bot's own MCP server (src/mcp/bot.mjs)
+//   ORB_FAKE_SCRIPT=<file.json>     (3.6, screenshots) [{ "when": "text", "reply": "…", "calls": [["tool", {args}]] }]: a
+//                      message containing «when» gets that natural reply (and makes those bot tool calls, silently),
+//                      so the screenshots show real-looking conversations instead of the test keywords.
 //   Task Review        a review prompt: answers "VEREDICTO: CORRECTO" (or "CON FALLOS" when the reviewed work says FALLOS)
 //
 // Every turn also emits streamed text (delta), a tool call (Bash ls) and the context meter, and logs what it received to
@@ -36,6 +39,8 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { Turn, Approvals } from '../../src/agents/live.mjs';
 import { decide } from '../../src/core/guard.mjs';
+
+const SCRIPT = (() => { try { return process.env.ORB_FAKE_SCRIPT ? JSON.parse(fs.readFileSync(process.env.ORB_FAKE_SCRIPT, 'utf8')) : []; } catch { return []; } })();
 
 
 // One call to a tool of the "orb" MCP server, started exactly as the real agents start it (command, args, env).
@@ -189,6 +194,12 @@ function createFakeLive(agent, label, caps, o) {
     // 3.1: a message to another agent through Orb (orb_send_message), as a worker would send it.
     const say = scan.match(/MANDA_MENSAJE (\w+) (.+)/);
     if (say) notes.push(`mensaje: ${await mcpCall(orb, 'orb_send_message', { to: say[1], body: say[2].trim() })}`);
+    // 3.6: a scripted, natural answer for the screenshots (ORB_FAKE_SCRIPT); its tool calls leave no notes in the reply.
+    const scripted = SCRIPT.find((x) => x.when && text.includes(x.when)) ?? null;
+    for (const [tool, args] of scripted?.calls ?? []) {
+      await mcpCall(o.mcpServers?.bot, tool, args ?? {});
+      item('tool', 'tool', { id: `t${++seq}`, name: `bot:${tool}`, input: JSON.stringify(args ?? {}) });
+    }
     // 3.5: a bot uses its own tools (the real src/mcp/bot.mjs, started as the real agents start it).
     for (const m of scan.matchAll(/^BOT_CALL (\w+) (\{.*\})\s*$/gm)) {
       let args = {}; try { args = JSON.parse(m[2]); } catch { /* bad test json */ }
@@ -243,7 +254,7 @@ function createFakeLive(agent, label, caps, o) {
       item('assistant', 'text', reply); current.addText(reply);
       return current.finish({ usage: { inputTokens: 10, outputTokens: 5 }, stopReason: 'end_turn' });
     }
-    const reply = [`${agent === 'codex' ? `Codex ${continued ? 'sigue' : 'empieza'}` : 'Recibido'}: ${first}`, ...steers.map((s) => `corrección: ${s}`), ...notes].join(' | ');
+    const reply = scripted?.reply ?? [`${agent === 'codex' ? `Codex ${continued ? 'sigue' : 'empieza'}` : 'Recibido'}: ${first}`, ...steers.map((s) => `corrección: ${s}`), ...notes].join(' | ');
     for (const piece of reply.match(/.{1,20}/gs) ?? []) onEvent({ type: 'delta', text: piece });
     item('assistant', 'text', reply);
     current.addText(reply);

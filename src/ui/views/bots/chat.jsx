@@ -47,7 +47,8 @@ function BotCard({ m, botsById }) {
   const pending = status === 'pending';
   const who = botsById.get(m.meta.bot);
   const decide = async (decision) => { setBusy(true); await act(botCall('bots.decide', { item: m.id, decision })); setBusy(false); };
-  const detail = m.meta.payload ?? (m.meta.input ? { input: m.meta.input } : null);
+  // 3.6: the card's text says what and why in plain words; the details only hold a longer text (never the raw data).
+  const detail = typeof m.meta.input === 'string' && m.meta.input.length > 0 ? m.meta.input : typeof m.meta.payload?.text === 'string' && m.meta.payload.text.length > 300 ? m.meta.payload.text : null;
   const [label, tone] = STATUS[status] ?? STATUS.expired;
   return (
     <div className={cn('mx-auto w-full max-w-[92%] rounded-xl border px-3.5 py-2.5 text-[13.5px]', pending ? 'border-warning/50 bg-warning/10' : 'bg-muted/50')} data-testid="bot-card" data-status={status}>
@@ -62,7 +63,7 @@ function BotCard({ m, botsById }) {
       {detail ? (
         <div className="pl-6">
           <button type="button" className="text-muted-foreground hover:text-foreground mt-1 inline-flex cursor-pointer items-center gap-1 text-xs" onClick={() => setOpen(!open)} aria-expanded={open}><ChevronRight className={cn('size-3 transition-transform', open && 'rotate-90')} />{t('bots.card.details')}</button>
-          {open ? <pre className="bg-muted mt-1.5 max-h-48 overflow-auto rounded-md px-2.5 py-1.5 font-mono text-[11px] whitespace-pre-wrap break-all">{typeof detail === 'string' ? detail : JSON.stringify(detail, null, 2)}</pre> : null}
+          {open ? <p className="bg-muted mt-1.5 max-h-48 overflow-auto rounded-md px-2.5 py-1.5 text-[12.5px] whitespace-pre-wrap break-words">{detail}</p> : null}
         </div>
       ) : null}
       <div className="chat-actions mt-2 flex flex-wrap items-center gap-2 pl-6">

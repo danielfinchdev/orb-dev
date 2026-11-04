@@ -103,7 +103,7 @@ export function BotInfo({ bot, item, onClose }) {
         <Row icon={Globe} label={t('bots.f.tools')} value={tools.length ? tools.join(', ') : t('chats.none')} onClick={edit} testid="info-tools" />
         <Row icon={AppWindow} label={t('chats.apps')} value={full == null ? <Spinner className="size-3" /> : String(apps)} onClick={edit} testid="info-apps" />
         <Row icon={Repeat} label={t('chats.routines')} value={full == null ? null : String(reminders)} onClick={() => go({ view: 'bot-reminders' })} testid="info-routines" />
-        <Row icon={BookOpen} label={t('chats.library')} value={t('nav.botMemory')} onClick={() => go({ view: 'bot-memory', bot: bot.id })} testid="info-library" />
+        <Row icon={BookOpen} label={t('nav.botMemory')} onClick={() => go({ view: 'bot-memory', bot: bot.id })} testid="info-library" />
       </List>
       <NotifyRow item={item} />
       <List>

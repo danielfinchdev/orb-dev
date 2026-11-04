@@ -37,6 +37,9 @@ const TURN_LIMIT_MS = 20 * 60_000;
 // 3.5.1: an approved bot_confirm lets the bot do that one thing once, on the site it named, within this time.
 export const GRANT_MS = 10 * 60_000;
 // 3.6: the cards that need a typed PIN (a strong ticket) when their approver has one.
+// The bot fields a card may change, in the user's words (msg.bots.field.*).
+const FIELD_LABEL = { name: 'name', role_text: 'role', tools: 'tools', agent: 'brain', model: 'brain', reasoning: 'brain', account: 'brain', accounts: 'apps', icon: 'look', avatar: 'look', is_chief: 'chief', paused: 'state', caps: 'limits', sharing: 'sharing' };
+const listWords = (items) => (items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')}${tr('msg.bots.and')}${items.at(-1)}`);
 export const SENSITIVE_CARDS = new Set(['ha', 'srv', 'admin', 'confirm']);
 export const isSensitiveCard = (meta) => Boolean(meta && SENSITIVE_CARDS.has(meta.card) && !(meta.card === 'admin' && meta.payload?.action === 'pause'));
 const hostOf = (url) => { try { return new URL(/^[a-z][\w+.-]*:\/\//i.test(String(url)) ? String(url) : `https://${url}`).hostname.toLowerCase().replace(/^www\./, ''); } catch { return ''; } };
@@ -479,13 +482,25 @@ export class Bots {
     B.setRequest(this.board, r.id, 'waiting');
   }
   describeCard(kind, p, from) {
+    // 3.6: in plain words, from the card's data: never field names, JSON or true/false. The reason, when there is one.
+    const why = (r) => (r ? tr('msg.bots.card.reason', { reason: oneLine(r, 200) }) : '');
     if (kind === 'admin') {
       const target = p.id ? B.getBot(this.board, p.id)?.name ?? `#${p.id}` : p.fields?.name;
-      const fields = Object.entries(p.fields ?? {}).map(([k, v]) => `${k}: ${typeof v === 'string' ? oneLine(v, 120) : JSON.stringify(v)}`).join(' · ');
-      return tr(`msg.bots.card.${p.action}`, { bot: from.name, name: target ?? '', fields });
+      const f = p.fields ?? {};
+      if (p.action === 'pause') return tr(f.paused === false ? 'msg.bots.card.resume' : 'msg.bots.card.pause', { bot: from.name, name: target ?? '' }) + why(p.reason);
+      if (p.action === 'create') return tr('msg.bots.card.create', { bot: from.name, name: target ?? '' }) + (f.role_text ? tr('msg.bots.card.role', { role: oneLine(f.role_text, 160) }) : '');
+      if (p.action === 'update') {
+        const names = [...new Set(Object.keys(f).map((k) => tr(`msg.bots.field.${FIELD_LABEL[k] ?? 'other'}`)))];
+        return tr('msg.bots.card.update', { bot: from.name, name: target ?? '', fields: listWords(names) }) + (f.name && f.name !== target ? tr('msg.bots.card.rename', { name: f.name }) : '');
+      }
+      return tr(`msg.bots.card.${p.action}`, { bot: from.name, name: target ?? '' }) + why(p.reason);
     }
-    if (kind === 'srv') return tr('msg.bots.card.srv', { bot: from.name, action: p.action, target: p.target ?? '', reason: p.reason });
-    if (kind === 'ha') return tr('msg.bots.card.ha', { bot: from.name, what: `${p.domain}.${p.service}${p.body?.entity_id ? ` ${p.body.entity_id}` : ''}` });
+    if (kind === 'srv') return tr('msg.bots.card.srv', { bot: from.name, action: tr(`msg.bots.srv.${p.action}`), target: p.target ?? '' }) + why(p.reason);
+    if (kind === 'ha') {
+      const verb = { turn_on: 'on', turn_off: 'off', toggle: 'toggle', open_cover: 'open', close_cover: 'close', lock: 'lock', unlock: 'unlock' }[p.service];
+      const thing = String(p.body?.entity_id ?? '').split('.').pop().replace(/_/g, ' ').trim();
+      return tr('msg.bots.card.ha', { bot: from.name, what: verb ? tr(`msg.bots.ha.${verb}`, { thing: thing || p.domain }) : `${p.service.replace(/_/g, ' ')} ${thing || p.domain}`.trim() });
+    }
     if (kind === 'memory') return tr(`msg.bots.card.memory.${p.which === 'bot' ? 'bot' : p.which === 'global' ? 'global' : 'mine'}`, { bot: from.name, text: oneLine(p.text ?? '', 300) });
     return tr('msg.bots.card.confirm', { bot: from.name, action: p.action, detail: p.detail });
   }
