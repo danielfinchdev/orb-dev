@@ -1,7 +1,7 @@
 // 3.6 «Personas»: the people of this Orb (src/core/persons.mjs keeps them; src/core/policy.mjs says who may call what).
 // The owner sees everyone's name and numbers (persons.overview), never their content.
 import { getPerson, mustPerson, listPersons, personsCount, createPerson, renamePerson, updatePerson, setCaps, removePerson, setPin, verifyPin, dropTickets, overview, ownerId } from '../core/persons.mjs';
-import { tr } from '../core/context.mjs';
+import { tr, ctx, saveConfig } from '../core/context.mjs';
 import { fail, str, oneOf } from './api-common.mjs';
 
 const PREVIEWS = ['all', 'chat', 'none'];
@@ -12,7 +12,7 @@ export function personMethods(shared) {
   const { board, emit, desktop } = shared;
   const changed = () => board.changed('persons');
   const shown = (p, who) => (who.role === 'owner' || p.id === who.person
-    ? { id: p.id, name: p.name, role: p.role, color: p.color, language: p.language, tz: p.tz, caps: p.caps, hasPin: p.hasPin, locked: p.locked, me: p.id === who.person }
+    ? { id: p.id, name: p.name, role: p.role, color: p.color, language: p.language, tz: p.tz, caps: p.caps, hasPin: p.hasPin, locked: p.locked, created_at: p.created_at, me: p.id === who.person }
     : { id: p.id, name: p.name, role: p.role, color: p.color, me: false });
   return {
     // Everyone sees the names (to share with them); the owner, also their settings and whether they have a PIN.
@@ -22,7 +22,12 @@ export function personMethods(shared) {
       return { person: p ? shown(p, who) : null, role: who.role, channel: who.channel, rights: who.rights, personsCount: personsCount(board) };
     },
     'persons.create': ({ name, language, tz, color, caps }) => { const p = createPerson(board, { name: str(name, 'nombre', 40), language, tz, color, caps }); changed(); return p; },
-    'persons.rename': ({ id, name }, who) => { const p = renamePerson(board, id ?? who.person, str(name, 'nombre', 40)); changed(); return p; },
+    'persons.rename': ({ id, name }, who) => {
+      const p = renamePerson(board, id ?? who.person, str(name, 'nombre', 40)); changed();
+      // The admin's name is also the settings' userName (what the assistant calls them): both stay the same.
+      if (p.role === 'owner' && ctx.config?.userName !== p.name) { try { emit('config:changed', saveConfig({ userName: p.name })); } catch { /* kept in the person */ } }
+      return p;
+    },
     // WS1: marked as removed only (WS5 removes the person's data, with the export first).
     // 3.6 (WS5): the full removal (rows, files, 30-day trash: src/core/export.mjs › deletePerson).
     'persons.remove': ({ id }, who) => { if (shared.removePersonData) return shared.removePersonData(id ?? who.person); const r = removePerson(board, id ?? who.person); dropTickets(r.id); changed(); return r; },

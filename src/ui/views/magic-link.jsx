@@ -7,7 +7,7 @@
 // Orb mode of a phone goes) and «Puede administrar» for each linked device are the user's choices.
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { Link2, QrCode, Smartphone, Globe, Monitor, Server, Pencil, Trash2, X, Unplug, Copy, Check, LoaderCircle, Bot, Code2, Layers, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { Link2, QrCode, Smartphone, Globe, Monitor, Server, Pencil, Trash2, X, Unplug, Copy, Check, LoaderCircle, Bot, Code2, Layers, ShieldCheck, TriangleAlert, ChevronDown, ExternalLink } from 'lucide-react';
 import { PageHeader } from '@/components/page.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea } from '@/components/ui/basic.jsx';
@@ -173,11 +173,13 @@ function PairCard() {
               <div className="text-sm">{t('link.expires')} <span className="font-medium tabular-nums" data-testid="link-countdown">{countdown(qr.expiresAt, now)}</span></div>
               <div><Button size="sm" variant="ghost" onClick={() => setQr(null)}><X />{t('link.close')}</Button></div>
             </div>
+            {/* 3.6: reaching this PC from outside home, explained where it is needed: when linking a phone. */}
+            {qr.device === 'phone' ? <OutsideGuide /> : null}
           </div>
         ) : (
           <div className="grid gap-3">
             {many || owner ? (
-              <Field label={t('link.forWho')} hint={t('link.forWhoHint')}>
+              <Field label={t('link.forWho')}>
                 <div className="grid gap-2 sm:flex sm:items-center">
                   <Select className="w-full sm:w-72" value={forWho || me?.person?.id || ''} onValueChange={setForWho} data-testid="link-for-who" title={t('link.forWho')}
                     options={[...(owner ? (many ? people : [me?.person].filter(Boolean)) : [me?.person].filter(Boolean)).map((p) => ({ value: p.id, label: p.id === me?.person?.id ? t('link.forMe', { name: p.name }) : p.name })), ...(owner ? [{ value: '__new', label: t('link.forNew') }] : [])]} />
@@ -199,6 +201,21 @@ function PairCard() {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// «Usar fuera de casa»: Tailscale on both, switched on in Ajustes › Móvil; the PC has to be on.
+function OutsideGuide() {
+  const t = useT();
+  return (
+    <details className="group w-full rounded-lg border px-3 py-2 text-sm sm:col-span-2" data-testid="link-outside">
+      <summary className="flex cursor-pointer list-none items-center gap-2 font-medium"><Globe className="text-muted-foreground size-4" />{t('link.outTitle')}<ChevronDown className="text-muted-foreground ml-auto size-4 transition-transform duration-200 group-open:rotate-180" /></summary>
+      <ol className="mt-2 grid list-decimal gap-1 pl-5 text-[13px]"><li>{t('link.out1')}</li><li>{t('link.out2')}</li><li>{t('link.out3')}</li></ol>
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        <Button size="xs" variant="outline" onClick={() => bridge.openExternal('https://tailscale.com/download').catch(() => {})}><ExternalLink />{t('link.outGet')}</Button>
+        <span className="text-muted-foreground text-xs">{t('link.outPcOn')}</span>
+      </div>
+    </details>
   );
 }
 

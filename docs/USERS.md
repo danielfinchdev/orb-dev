@@ -11,7 +11,7 @@ How it works inside (for people working on Orb's code): [`PERSONAS-INTERNALS.md`
 
 ## Two kinds of user
 
-| | Owner | User |
+| | Admin | User |
 |---|---|---|
 | Who | The user who installed Orb and manages it. One per Orb. | Everyone else. |
 | Their own things | Yes | Yes |
@@ -25,41 +25,48 @@ There are no age levels and no guests: just these two.
 
 ## The welcome wizard
 
-The first time Orb opens it asks:
+The first time Orb opens it asks three questions, one per screen:
 
-1. Your name, language and time zone.
-2. **Who will use this Orb?** "Only me" (nothing else changes) or "Several users" (you can add them now or later in
-   **Settings › Users**).
-3. **Templates (optional):** "My business", "My home", "Development" or "Start empty". Each one is a starting set of
-   bots, reminders and settings. You can see what it makes and change anything (names, texts, times) before applying
-   it; nothing is applied until you say so. They are generic: nothing in them is about anyone in particular.
-4. **Reaching your Orb from outside:** a short guide to Tailscale. Your reminders only ring while this PC is on.
-5. **Backups:** where they go, and your recovery code (write it down: it opens your backups on another computer).
+1. **What is your name?** Language and time zone are taken from this PC (change them later in **Settings › My
+   profile**, or **Settings › General** if only you use Orb). Orb's folder goes in your Documents.
+2. **Will anyone else use it?** "Just me" (nothing else changes) or "Yes", with their names. You can add users later in
+   **Settings › Users**.
+3. **What will you use it for?** "Coding", "Business", "Home" or "Later". Each of the first three creates a starting
+   set of bots and reminders, which you can change at any time in **Bots**; "Later" creates nothing. The templates are
+   generic: nothing in them is about anyone in particular.
 
-To bring an Orb you already have on another computer: on the old one, **Settings › Data › Move** (or
-`orb-nucleo mover exportar` on a server); on the new one, `orb-nucleo mover importar`. Importing from the desktop
-wizard is not available yet: the wizard says so under "Bring my Orb from another PC".
+Then Orb opens. What used to be in the wizard now appears where it is needed:
+
+- **Backups** are on from the first day, encrypted with this PC's key. A few days later Orb suggests, once, creating a
+  **recovery code** in **Settings › Data** (it opens your backups on another computer).
+- **Using Orb away from home** (Tailscale) is explained in **Magic Link** when you link a phone. Your reminders only
+  ring while this PC is on.
+- To bring an Orb you already have on another computer: on the old one, **Settings › Data › Move** (or
+  `orb-nucleo mover exportar` on a server); on the new one, `orb-nucleo mover importar`.
 
 ## Who is at the PC
 
-With two or more users, the top bar shows who is at the PC ("Ana ▾"). From that menu you can:
+With two or more users, the bottom of the sidebar shows who is at the PC (their initial and name). Clicking it opens:
 
-- **Switch user:** pick someone; if they have a PIN, they type it.
+- **My profile.**
+- **Switch user:** the lock screen opens with the users to choose from; whoever has a PIN types it.
 - **Lock:** nothing of anyone shows until someone unlocks it with their PIN. The lock is Orb's own, not just a cover
   over the window.
-- Open **My profile**.
 
-Five wrong PINs in a row block that PIN for a while, and the wait grows with each new mistake. The owner can reset a
+On a phone, the same is at the top of **More** (a phone belongs to one user: it has **My profile** and, with a PIN,
+**Lock**).
+
+Five wrong PINs in a row block that PIN for a while, and the wait grows with each new mistake. The admin can reset a
 forgotten PIN (Settings › Users, or `orb-nucleo pin-reset <usuario>` on a server). On a server, `orb-nucleo usuarios`
 lists the users, `orb-nucleo usuario nuevo <nombre>` adds one and `orb-nucleo enlazar --usuario <nombre>` makes a QR for
 them.
 
-## Settings › Users (owner)
+## Settings › Users (admin)
 
 A list with each user's name, role, devices, when they were last seen, how many bots, projects, conversations and
 reminders they have, and how much they used today. **Numbers only: never titles, texts or names of their things.**
 
-From there the owner adds a user, renames them, chooses what they may do (program in Orb mode, use the home
+From there the admin adds a user, renames them, chooses what they may do (program in Orb mode, use the home
 integration, approve home actions), resets a PIN, pauses their bots, signs out their devices or removes them.
 Removing a user offers to export their data first; their things go to a 30-day bin.
 
@@ -73,7 +80,7 @@ data** / **Delete my data**.
 
 Magic Link first asks **For which user?** (you, a user already in the Orb, or someone new) and then the kind of device and
 what it may do. The device belongs to that user: it sees only their things, whatever it says about itself. Only the
-owner makes links for other users. The list of linked devices is grouped by user.
+admin makes links for other users. The list of linked devices is grouped by user.
 
 The phone and the Android app show at the top who they are signed in as ("Signed in as Leo").
 
@@ -110,11 +117,11 @@ only the user who hit it gets a message. Bots can also have their own daily caps
 
 ## Usage: who spent what
 
-The owner sees, in Agents ("Who spent what"), each user's totals for today and the last 30 days. Totals only: never on what.
+The admin sees, in Agents ("Who spent what"), each user's totals for today and the last 30 days. Totals only: never on what.
 
 ## Settings › Data
 
-- **Backups:** encrypted, every day at 03:00 (the owner's time zone) and before every update. You choose the folder.
+- **Backups:** encrypted, every day at 03:00 (the admin's time zone) and before every update. You choose the folder.
 - **Recovery code:** opens your backups on another computer. Shown once: write it down and keep it away from this PC.
 - **Restore** a backup (it is checked first and applied when Orb starts again).
 - **Move:** take your whole Orb to another computer; the old one stops serving until you undo the move or keep both.
@@ -129,4 +136,4 @@ The owner sees, in Agents ("Who spent what"), each user's totals for today and t
 ## Older Orbs and apps
 
 Update every Orb, the Android app and the terminal to 3.6. Phones and terminals of 3.5 keep working; a linked Orb of
-3.5 only carries the owner's requests and shows "Update …".
+3.5 only carries the admin's requests and shows "Update …".

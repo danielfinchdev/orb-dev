@@ -1,19 +1,20 @@
-// 3.6 «Personas»: who is using Orb here. With two or more people, the top of the menu says who («Ana ▾»): switch to
-// someone else on this PC (their PIN, if they have one), open «Mi perfil» or lock. On a phone or a browser the device is
-// of one person: the menu only says who and locks it. With one person, nothing of this shows.
-import { Lock, UserRound, ChevronDown, Check, ArrowLeftRight } from 'lucide-react';
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel } from '@/components/ui/overlay.jsx';
+// 3.6 «Personas»: who is using Orb here. With two or more users, the bottom of the sidebar shows them (avatar and name,
+// like most apps); a click opens «Mi perfil», «Cambiar de usuario» and «Bloquear». On a phone the same is at the top of
+// «Más». A phone or a browser is of one user: it cannot change user, only lock (with a PIN). With one user, nothing shows.
+import { Lock, UserRound, ChevronsUpDown, ArrowLeftRight } from 'lucide-react';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/overlay.jsx';
 import { Input } from '@/components/ui/basic.jsx';
 import { form } from '@/components/dialogs.jsx';
-import { useStore, call, bridge, setState, go, openSettings, personSwitched } from '@/lib/store.js';
+import { NavItem } from '@/components/sidebar.jsx';
+import { useStore, call, bridge, setState, getState, go, openSettings, modeOf } from '@/lib/store.js';
 import { personsOn, initials, pinRefusal } from '@/lib/persons.js';
 import { cn } from '@/lib/utils.js';
 import { t, useT } from '@/lib/i18n.js';
-import { useEffect, useState } from 'react';
 
-// A round badge with the person's initials (and their colour, if they chose one).
+// A round badge with the user's initials (and their colour, if they chose one).
 export function PersonDot({ name, color, size = 'md', className }) {
-  return <span className={cn('bg-primary/15 text-primary grid shrink-0 place-items-center rounded-full font-medium', size === 'sm' ? 'size-5 text-[9.5px]' : 'size-7 text-[11px]', className)} style={color ? { background: color, color: '#fff' } : undefined} aria-hidden>{initials(name)}</span>;
+  const sizes = { sm: 'size-5 text-[9.5px]', md: 'size-7 text-[11px]', lg: 'size-10 text-sm' };
+  return <span className={cn('bg-primary/15 text-primary grid shrink-0 place-items-center rounded-full font-medium', sizes[size] ?? sizes.md, className)} style={color ? { background: color, color: '#fff' } : undefined} aria-hidden>{initials(name)}</span>;
 }
 
 // The PIN of someone (4–12 digits), asked in a dialog; send(pin) answers like persons.verifyPin (ok, or why not).
@@ -32,61 +33,59 @@ export function askPin({ title, description, send }) {
   });
 }
 
-// This PC's window changes person: with their PIN when they have one (the engine checks it).
-export async function switchTo(p) {
-  const send = (pin) => call('persons.switch', { id: p.id, pin });
-  const r = p.hasPin ? await askPin({ title: t('persons.switchTitle', { name: p.name }), description: t('persons.switchPin'), send }) : await send(null).catch((e) => ({ ok: false, error: e }));
-  if (r?.ok) await personSwitched();
-  return r;
+// Locking this PC shows who may come in (the engine keeps it locked); «Cambiar de usuario» is the same screen with
+// someone else chosen. A phone only locks itself.
+export function lockNow(switching = false) {
+  if (bridge.mobile) return setState({ phoneLocked: true });
+  // The screen first (the engine's «locked» event may come before the answer), then the engine's lock.
+  setState({ locked: { locked: true, switching } });
+  return call('persons.lock').catch(() => setState({ locked: false }));
 }
-export const lockNow = () => (bridge.mobile ? setState({ phoneLocked: true }) : call('persons.lock').then(() => setState({ locked: { locked: true } })).catch(() => {}));
 
-export function PersonMenu({ className, compact = false }) {
-  const tr = useT();
+// What the menu holds, for the sidebar and for the phone's «Más».
+function useActions() {
   const me = useStore((s) => s.me);
-  const [people, setPeople] = useState([]);
-  useEffect(() => { if (personsOn(me) && !bridge.mobile) call('persons.list').then(setPeople).catch(() => setPeople([])); }, [me?.person?.id, me?.personsCount]);
   if (!personsOn(me) || !me.person) return null;
-  const others = people.filter((p) => p.id !== me.person.id);
+  return [
+    { id: 'person-profile', icon: UserRound, label: t('persons.myProfile'), run: () => (bridge.mobile ? go({ view: 'profile', ...(modeOf(getState().route) === 'bots' ? { mode: 'bots' } : {}) }) : openSettings('perfil')) },
+    ...(bridge.mobile ? [] : [{ id: 'person-switch', icon: ArrowLeftRight, label: t('persons.switchUser'), run: () => lockNow(true) }]),
+    // Without a PIN a phone has nothing to unlock with.
+    ...(!bridge.mobile || me.person.hasPin ? [{ id: 'person-lock', icon: Lock, label: t('persons.lock'), run: () => lockNow() }] : [])
+  ];
+}
+
+// The sidebar's footer: avatar and name; the menu opens upwards.
+export function PersonMenu({ className }) {
+  useT();
+  const me = useStore((s) => s.me);
+  const actions = useActions();
+  if (!actions) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" className={cn('no-drag hover:bg-accent flex min-w-0 cursor-pointer items-center gap-1.5 rounded-lg px-1.5 py-1 text-[13px]', className)} aria-label={tr('persons.menu', { name: me.person.name })} data-testid="person-menu">
-          <PersonDot name={me.person.name} color={me.person.color} size="sm" />
-          {compact ? null : <span className="max-w-24 truncate font-medium" data-testid="person-menu-name">{me.person.name}</span>}
-          <ChevronDown className="text-muted-foreground size-3.5 shrink-0" />
+        <button type="button" className={cn('side-user hover:bg-accent/60 flex w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-left text-[14px]', className)} aria-label={t('persons.menu', { name: me.person.name })} data-testid="person-menu">
+          <PersonDot name={me.person.name} color={me.person.color} />
+          <span className="min-w-0 flex-1 truncate font-medium" data-testid="person-menu-name">{me.person.name}</span>
+          <ChevronsUpDown className="text-muted-foreground size-4 shrink-0" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-56">
-        <DropdownMenuLabel>{tr('persons.connectedAs', { name: me.person.name })}</DropdownMenuLabel>
-        {/* Switching person is this PC's own: a phone or a browser is of one person. */}
-        {!bridge.mobile && others.length ? <>
-          <DropdownMenuSeparator />
-          {others.map((p) => (
-            <DropdownMenuItem key={p.id} onSelect={() => switchTo(p)} data-testid={`person-switch-${p.name}`}>
-              <ArrowLeftRight className="size-4" />{tr('persons.switchTo', { name: p.name })}{p.hasPin ? <Lock className="text-muted-foreground ml-auto size-3.5" /> : null}
-            </DropdownMenuItem>
-          ))}
-        </> : null}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => (bridge.mobile ? go('profile') : openSettings('perfil'))} data-testid="person-profile"><UserRound className="size-4" />{tr('persons.myProfile')}</DropdownMenuItem>
-        {/* A phone locks only with a PIN (without one there is nothing to unlock with). */}
-        {!bridge.mobile || me.person.hasPin ? <DropdownMenuItem onSelect={lockNow} data-testid="person-lock"><Lock className="size-4" />{tr('persons.lock')}</DropdownMenuItem> : null}
-        {me.role === 'owner' ? <DropdownMenuItem disabled><Check className="size-4" />{tr('persons.role.owner')}</DropdownMenuItem> : null}
+      <DropdownMenuContent side="top" align="start" className="w-(--radix-dropdown-menu-trigger-width) min-w-52">
+        {actions.map((a) => <DropdownMenuItem key={a.id} onSelect={a.run} data-testid={a.id}><a.icon className="size-4" />{a.label}</DropdownMenuItem>)}
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
-// On a phone, at the top: «Conectado como Ana» (the device is hers; the server says whose).
-export function ConnectedAs({ className }) {
-  const tr = useT();
+// The phone's «Más», at the top: who this device is of, and the same actions.
+export function PersonCard() {
+  useT();
   const me = useStore((s) => s.me);
-  if (!personsOn(me) || !me.person) return null;
+  const actions = useActions();
+  if (!actions) return null;
   return (
-    <div className={cn('text-muted-foreground flex items-center justify-center gap-1.5 text-[11.5px]', className)} data-testid="connected-as">
-      <span className="truncate">{tr('persons.connectedAs', { name: me.person.name })}</span>
-      <PersonMenu compact className="px-1 py-0.5" />
+    <div className="bg-card/80 grid gap-0.5 rounded-2xl border p-2" data-testid="person-card">
+      <div className="flex min-w-0 items-center gap-3 px-2 pt-1 pb-2"><PersonDot name={me.person.name} color={me.person.color} size="lg" /><span className="min-w-0 truncate text-[16px] font-medium" data-testid="person-card-name">{me.person.name}</span></div>
+      {actions.map((a) => <NavItem key={a.id} icon={a.icon} label={a.label} onClick={a.run} testid={a.id === 'person-profile' ? 'nav-profile' : a.id} />)}
     </div>
   );
 }

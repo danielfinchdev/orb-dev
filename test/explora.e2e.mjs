@@ -20,8 +20,8 @@ const until = async (fn, what, ms = 30000) => { const end = Date.now() + ms; whi
 const notes = [];
 const note = (s) => { notes.push(s); console.log(`  · ${s}`); };
 
-async function open(userData) {
-  const app = await electron.launch({ executablePath: exe || electronBin, args: exe ? [] : [ROOT], env: { ...process.env, ORB_NO_BRIDGE: '1', ORB_USER_DATA: userData } });
+async function open(userData, env = {}) {
+  const app = await electron.launch({ executablePath: exe || electronBin, args: exe ? [] : [ROOT], env: { ...process.env, ORB_NO_BRIDGE: '1', ORB_USER_DATA: userData, ...env } });
   const page = await app.firstWindow();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -48,31 +48,20 @@ const closeSettings = async (page, where) => {
 const overflow = (page) => page.evaluate(() => [...document.querySelectorAll('main *, [role=dialog] *')].filter((e) => e.scrollWidth > e.clientWidth + 2 && getComputedStyle(e).overflowX !== 'visible' && e.clientWidth > 0 && !e.classList.contains('truncate') && !e.closest('.truncate, .sr-only') && !e.closest('pre, .overflow-x-auto, [data-slot=scroll-area-viewport]')).slice(0, 4).map((e) => `${e.tagName.toLowerCase()}.${String(e.className).slice(0, 70)} ${e.scrollWidth}>${e.clientWidth}`));
 
 try {
-  // ---- 1. a brand-new PC: the welcome screen and, on Windows, «Preparando tu PC» with the installer (nothing is installed:
-  // the list is only looked at, then «Continuar»). The folder dialog is replaced by a fixed answer.
+  // ---- 1. a brand-new PC: the welcome wizard, straight into the app.
   {
     const userData = path.join(tmp, 'nuevo'); fs.mkdirSync(userData);
     const base = path.join(tmp, 'PrimerPC'); fs.mkdirSync(base);
-    const { app, page, errors, close } = await open(userData);
+    const { app, page, errors, close } = await open(userData, { ORB_DEFAULT_BASE: base });
     const shot = shooter(app, page);
-    await page.waitForSelector('text=Crear y empezar');
+    // 3.6: the welcome wizard, three screens (the folder goes in Documents: here a throwaway one).
+    await page.waitForSelector('[data-testid=setup-name]');
     note(`ventana inicial: ${(await page.evaluate(() => [innerWidth, innerHeight])).join('x')}`);
+    await page.fill('[data-testid=setup-name]', 'Ana');
     await shot('00-bienvenida');
-    await app.evaluate(({ dialog }, folder) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] }); }, base);
-    await page.getByRole('button', { name: /Elegir ubicación|Choose location/ }).click();
-    await until(async () => (await page.locator('[data-testid=setup-target]').innerText()).includes('PrimerPC'), 'carpeta elegida');
-    await page.click('text=Crear y empezar');
-    const prepared = await page.waitForSelector('[data-testid=prepare-title]', { timeout: 20000 }).catch(() => null);
-    if (prepared) {
-      await shot('01-preparo-equipo');
-      await until(async () => (await page.getByText(/Instalar seleccionados|Todo está instalado|Install selected|Everything is installed/).count()) > 0, 'instalador comprobado', 60000).catch(() => note('el instalador no terminó de comprobar en 60 s'));
-      const missing = await page.evaluate(() => [...document.querySelectorAll('label')].filter((l) => l.querySelector('button[role=checkbox]')).map((l) => l.innerText.split('\n')[0]));
-      note(`primer arranque, no instalados según la app: ${missing.join(', ') || 'ninguno'}`);
-      await shot('01b-preparo-equipo-comprobado');
-      const wide = await overflow(page);
-      if (wide.length) note(`preparo equipo: contenido más ancho que su caja → ${wide.join(' | ')}`);
-      await page.click('text=/^(Continuar|Continue)$/');
-    } else note('sin pantalla «Preparando tu PC» (no es Windows o ya se pasó)');
+    await page.click('[data-testid=setup-create]');
+    await page.click('[data-testid=wizard-only-me]');
+    await page.click('[data-testid=wizard-use-later]');
     await page.waitForSelector('[data-testid=sidebar-home]', { timeout: 30000 });
     await shot('01c-primer-chat');
     note(`errores en bienvenida: ${errors.join(' | ') || 'ninguno'}`);

@@ -10,7 +10,7 @@ export default {
   'msg.spend.notYours': 'That account is not yours and nobody lent it to you.',
   'msg.spend.noAccount': 'You have no account for this agent. Add yours or ask someone to lend you one.',
   'msg.spend.needProject': 'Choose a project to talk to the agent.',
-  'msg.spend.consoleOwner': 'Signing in with a console is only done on this PC, by the owner.',
+  'msg.spend.consoleOwner': 'Signing in with a console is only done on this PC, by the admin.',
   'msg.spend.ownFolderOnly': 'Your account goes in your own Orb folder: you cannot choose another one.',
   'msg.spend.lendYourself': 'That account already belongs to that user.',
   'msg.spend.lendNothing': 'Choose what you lend it for: bots, programming or both.',

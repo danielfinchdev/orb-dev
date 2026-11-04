@@ -170,7 +170,8 @@ export function validateConfig(c) {
   bool(c.monitor?.shareWithOce, 'monitor.shareWithOce'); // 2.7: the bridge with Open Control Edge (on unless turned off)
   if (c.monitor?.agent != null && !AGENT_IDS.includes(c.monitor.agent)) throw new Error(tr('msg.ctx.badAppearance', { name: 'monitor.agent' }));
   if (c.monitor?.model != null && (typeof c.monitor.model !== 'string' || c.monitor.model.length > 80)) throw new Error(tr('msg.ctx.badAppearance', { name: 'monitor.model' })); // 2.7: Orb chooses each task's model (true / missing) or the agents' defaults
-  bool(c.ui?.tourDone, 'ui.tourDone'); // 2.6: the guided tour was seen (or skipped) in this assistant folder
+  bool(c.ui?.tourDone, 'ui.tourDone');
+  bool(c.ui?.recoveryNoticed, 'ui.recoveryNoticed'); // 3.6: the one notice about the recovery code was shown // 2.6: the guided tour was seen (or skipped) in this assistant folder
   if (c.delegation?.maxPerTask !== undefined) int(c.delegation.maxPerTask, 0, 20, 'delegation.maxPerTask');
   // 3.1: «Una tarea cada vez» (no parallel work, not even in isolated copies) and how long a task's permission waits for
   // an answer before it is denied (0 = for ever).

@@ -180,7 +180,7 @@ function BotEditor({ id }) {
         </Card>
         {/* 3.6: what it spends: the account (with more people: own or lent for bots) and its caps per day. */}
         <Card data-testid="bot-spend">
-          <CardHeader><CardTitle>{t('botsp.spendTitle')}</CardTitle><CardDescription>{t('botsp.spendHint')}</CardDescription></CardHeader>
+          <CardHeader><CardTitle>{t('botsp.spendTitle')}</CardTitle></CardHeader>
           <CardContent className="grid gap-3">
             {many ? (
               <Field label={t('botsp.account')} hint={spending ? (spending.lent ? t('botsp.spendsLent', { name: personNameOf(spending.lender) }) : t('botsp.spendsOwn')) : t('botsp.spendsAuto')}>

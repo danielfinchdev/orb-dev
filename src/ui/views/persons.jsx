@@ -26,11 +26,10 @@ export const TzSelect = ({ value, onChange, testid }) => {
 // ---- Ajustes › Personas (the owner)
 async function addPerson(reload) {
   const r = await form(tNow('persons.addTitle'), {
-    description: tNow('persons.addDesc'),
     initial: { name: '', dev: false },
     body: (v, set) => (<>
       <Field label={tNow('persons.name')}><Input autoFocus value={v.name} maxLength={40} onChange={(e) => set({ name: e.target.value })} placeholder={tNow('persons.namePh')} data-testid="person-new-name" /></Field>
-      <label className="flex cursor-pointer items-start gap-2 text-sm"><Checkbox checked={v.dev} onCheckedChange={(on) => set({ dev: Boolean(on) })} /><span>{tNow('persons.cap.dev')}<span className="text-muted-foreground block text-xs">{tNow('persons.capAbout.dev')}</span></span></label>
+      <label className="flex cursor-pointer items-start gap-2 text-sm"><Checkbox checked={v.dev} onCheckedChange={(on) => set({ dev: Boolean(on) })} /><span>{tNow('persons.cap.dev')}</span></label>
     </>),
     ok: tNow('persons.add'),
     onOk: (v) => call('persons.create', { name: v.name.trim(), caps: { dev: v.dev }, tz: hereTz() })
@@ -44,7 +43,7 @@ function PersonRow({ p, devices, reload }) {
   const rename = () => form(t('persons.renameTitle'), { initial: { name: p.name }, body: (v, set) => <Input autoFocus value={v.name} maxLength={40} onChange={(e) => set({ name: e.target.value })} />, ok: t('persons.save'), onOk: async (v) => { await call('persons.rename', { id: p.id, name: v.name.trim() }); reload(); return true; } });
   const caps = () => form(t('persons.capsTitle', { name: p.name }), {
     initial: { ...p.caps },
-    body: (v, set) => CAPS.map((k) => <label key={k} className="flex cursor-pointer items-start gap-2 text-sm"><Checkbox checked={Boolean(v[k])} onCheckedChange={(on) => set({ [k]: Boolean(on) })} data-testid={`person-cap-${k}`} /><span>{t(`persons.cap.${k}`)}<span className="text-muted-foreground block text-xs">{t(`persons.capAbout.${k}`)}</span></span></label>),
+    body: (v, set) => CAPS.map((k) => <label key={k} className="flex cursor-pointer items-start gap-2 text-sm"><Checkbox checked={Boolean(v[k])} onCheckedChange={(on) => set({ [k]: Boolean(on) })} data-testid={`person-cap-${k}`} /><span>{t(`persons.cap.${k}`)}</span></label>),
     ok: t('persons.save'), onOk: async (v) => { await call('persons.setCaps', { id: p.id, caps: v }); reload(); return true; }
   });
   const resetPin = async () => { if (await confirm(t('persons.resetPinTitle', { name: p.name }), t('persons.resetPinBody'), { ok: t('persons.resetPin') })) { await act(call('persons.setPin', { id: p.id, pin: null }), t('persons.pinReset', { name: p.name })); reload(); } };
@@ -59,20 +58,21 @@ function PersonRow({ p, devices, reload }) {
     if (await act(call('persons.remove', { id: p.id }), t('persons.removed', { name: p.name }))) reload();
   };
   const c = p.counts ?? {};
+  const count = (key, n) => t(n === 1 ? `${key}One` : key, { n });
   return (
     <div className="grid gap-2 rounded-xl border px-3 py-2.5" data-testid={`person-row-${p.name}`}>
       <div className="flex min-w-0 items-center gap-3">
         <PersonDot name={p.name} />
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2"><span className="truncate text-sm font-medium">{p.name}</span><Badge variant={owner ? 'default' : 'outline'}>{t(`persons.role.${p.role}`)}</Badge>{p.hasPin ? <Badge variant="secondary" className="font-normal">{t('persons.hasPin')}</Badge> : null}</div>
-          <div className="text-muted-foreground truncate text-xs">{[t('persons.devicesN', { n: p.devices ?? 0 }), p.lastSeen ? t('persons.seen', { when: ago(p.lastSeen) }) : null, t('persons.todayTurns', { n: p.today?.turns ?? 0 })].filter(Boolean).join(' · ')}</div>
+          <div className="text-muted-foreground truncate text-xs">{[count('persons.devicesN', p.devices ?? 0), p.lastSeen ? t('persons.seen', { when: ago(p.lastSeen) }) : null, count('persons.todayTurns', p.today?.turns ?? 0)].filter(Boolean).join(' · ')}</div>
         </div>
         <BubbleTip title={t('persons.rename')}><Button size="icon-sm" variant="ghost" aria-label={t('persons.rename')} onClick={rename}><Pencil /></Button></BubbleTip>
         {owner ? null : <BubbleTip title={t('persons.remove')}><Button size="icon-sm" variant="danger" aria-label={t('persons.remove')} onClick={remove} data-testid={`person-remove-${p.name}`}><Trash2 /></Button></BubbleTip>}
       </div>
       {/* Numbers only: how many, never what. */}
       <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5 text-[11.5px]" data-testid="person-counts">
-        {['bots', 'groups', 'conversations', 'tasks', 'projects', 'schedules', 'reminders'].map((k) => <span key={k}>{t(`persons.count.${k}`, { n: c[k] ?? 0 })}</span>)}
+        {['bots', 'groups', 'conversations', 'tasks', 'projects', 'schedules', 'reminders'].filter((k) => c[k]).map((k) => <span key={k}>{count(`persons.count.${k}`, c[k])}</span>)}
       </div>
       {owner ? null : (
         <div className="flex flex-wrap gap-1.5">
@@ -100,9 +100,8 @@ export function PersonsCard() {
   const owner = list.find((p) => p.role === 'owner')?.id;
   return (
     <Card data-testid="persons-card">
-      <CardHeader><CardTitle>{t('persons.title')}</CardTitle><CardDescription>{list.length > 1 ? t('persons.hint') : t('persons.onlyYou')}</CardDescription></CardHeader>
-      <CardContent className="grid gap-2">{list.length > 1 ? list.map((p) => <PersonRow key={p.id} p={p} devices={devices.filter((d) => (d.person ?? owner) === p.id)} reload={load} />) : null}</CardContent>
-      <CardFooter className="flex-wrap"><Button size="sm" onClick={() => addPerson(load)} data-testid="person-add"><UserPlus />{t('persons.add')}</Button><span className="text-muted-foreground text-xs">{t('persons.addNote')}</span></CardFooter>
+      <CardContent className="grid gap-2">{list.map((p) => <PersonRow key={p.id} p={p} devices={devices.filter((d) => (d.person ?? owner) === p.id)} reload={load} />)}</CardContent>
+      <CardFooter><Button size="sm" onClick={() => addPerson(load)} data-testid="person-add"><UserPlus />{t('persons.add')}</Button></CardFooter>
     </Card>
   );
 }
@@ -117,14 +116,13 @@ function ProfileCard() {
   const update = async (patch, ok) => { if (await act(call('persons.update', patch), ok ?? t('profile.saved'))) await refresh().catch(() => {}); };
   return (
     <Card data-testid="profile-card">
-      <CardHeader><CardTitle>{t('profile.title')}</CardTitle><CardDescription>{t(me.role === 'owner' ? 'profile.hintOwner' : 'profile.hintUser')}</CardDescription></CardHeader>
       <CardContent className="grid gap-4">
         <Field label={t('profile.name')}>
           <div className="flex gap-2"><Input value={name} maxLength={40} onChange={(e) => setName(e.target.value)} className="sm:w-72" data-testid="profile-name" />
             <Button size="sm" variant="outline" disabled={!name.trim() || name.trim() === p.name} onClick={async () => { if (await act(call('persons.rename', { name: name.trim() }), t('profile.saved'))) loadMe(); }}>{t('persons.save')}</Button></div>
         </Field>
         <Field label={t('profile.language')}><Select className="w-full sm:w-72" value={p.language ?? 'es'} onValueChange={(language) => update({ language })} options={Object.entries(LANGUAGES).map(([value, label]) => ({ value, label }))} title={t('profile.language')} data-testid="profile-language" /></Field>
-        <Field label={t('profile.tz')} hint={t('profile.tzHint')}><TzSelect value={p.tz} onChange={(tz) => update({ tz })} testid="profile-tz" /></Field>
+        <Field label={t('profile.tz')}><TzSelect value={p.tz} onChange={(tz) => update({ tz })} testid="profile-tz" /></Field>
       </CardContent>
     </Card>
   );
@@ -137,7 +135,6 @@ function PinCard() {
   if (!p) return null;
   const setPin = async () => {
     const r = await form(p.hasPin ? t('profile.pinChange') : t('profile.pinSet'), {
-      description: t('profile.pinDesc'),
       initial: { current: '', pin: '', again: '' },
       body: (v, set) => {
         const digits = (k) => ({ value: v[k], type: 'password', inputMode: 'numeric', autoComplete: 'off', maxLength: 12, onChange: (e) => set({ [k]: e.target.value.replace(/\D/g, '') }) });
@@ -179,7 +176,7 @@ function PrivacyCard() {
   const save = async (v) => { const r = await act(call('persons.prefs.set', { preview: v }), t('profile.saved')); if (r) setPreview(r.preview); };
   return (
     <Card data-testid="privacy-card">
-      <CardHeader><CardTitle>{t('profile.previewTitle')}</CardTitle><CardDescription>{t('profile.previewHint')}</CardDescription></CardHeader>
+      <CardHeader><CardTitle>{t('profile.previewTitle')}</CardTitle></CardHeader>
       <CardContent><Select className="w-full sm:w-80" value={preview} onValueChange={save} options={PREVIEWS.map((v) => ({ value: v, label: t(`profile.preview.${v}`) }))} title={t('profile.previewTitle')} data-testid="profile-preview" /></CardContent>
     </Card>
   );
@@ -225,7 +222,7 @@ function MyAccountsCard() {
   };
   return (
     <Card data-testid="my-accounts">
-      <CardHeader><CardTitle>{t('profile.accountsTitle')}</CardTitle><CardDescription>{t('profile.accountsHint')}</CardDescription></CardHeader>
+      <CardHeader><CardTitle>{t('profile.accountsTitle')}</CardTitle></CardHeader>
       <CardContent className="grid gap-1.5">
         {!mine.length ? <p className="text-muted-foreground text-sm">{t('profile.noAccounts')}</p> : mine.map((a) => (
           <div key={a.id} className="flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2"><span className="min-w-0 flex-1 truncate text-[13px] font-medium">{a.label}</span><SignIn acc={a} onDone={() => refresh().catch(() => {})} /></div>
@@ -249,7 +246,7 @@ function MyDevicesCard() {
   const revoke = async (d) => { if (await confirm(t('link.revokeTitle', { name: d.name }), t('link.revokeBody'), { ok: t('link.revoke'), danger: true })) { await act(call('link.revoke', { id: d.id }), t('link.revoked')); load(); } };
   return (
     <Card data-testid="my-devices">
-      <CardHeader><CardTitle>{t('profile.devicesTitle')}</CardTitle><CardDescription>{t('profile.devicesHint')}</CardDescription></CardHeader>
+      <CardHeader><CardTitle>{t('profile.devicesTitle')}</CardTitle></CardHeader>
       <CardContent className="grid gap-1.5">
         {!list.length ? <p className="text-muted-foreground text-sm">{t('link.noDevices')}</p> : list.map((d) => (
           <div key={d.id} className="flex items-center gap-3 rounded-lg border px-3 py-2"><Smartphone className="text-muted-foreground size-4 shrink-0" /><span className="min-w-0 flex-1 truncate text-[13px]">{d.name}</span>
@@ -267,7 +264,6 @@ function MyDataCard() {
   const [busy, setBusy] = useState(false);
   const exportIt = async () => {
     const r = await form(t('profile.exportTitle'), {
-      description: t('profile.exportDesc'),
       initial: { passphrase: '' },
       body: (v, set) => <Field label={t('profile.exportPass')} hint={t('profile.exportPassHint')}><Input type="password" autoComplete="new-password" value={v.passphrase} onChange={(e) => set({ passphrase: e.target.value })} /></Field>,
       ok: t('profile.export'),
@@ -282,10 +278,11 @@ function MyDataCard() {
   };
   return (
     <Card data-testid="my-data">
-      <CardHeader><CardTitle>{t('profile.dataTitle')}</CardTitle><CardDescription>{t('profile.dataHint')}</CardDescription></CardHeader>
+      <CardHeader><CardTitle>{t('profile.dataTitle')}</CardTitle></CardHeader>
       <CardFooter className="flex-wrap">
         <Button size="sm" variant="outline" onClick={exportIt} disabled={busy} data-testid="profile-export">{busy ? <LoaderCircle className="animate-spin" /> : <Download />}{t('profile.export')}</Button>
-        {me?.role === 'owner' ? <span className="text-muted-foreground text-xs">{t('profile.ownerStays')}</span> : <Button size="sm" variant="danger" onClick={remove} data-testid="profile-delete"><Trash2 />{t('profile.delete')}</Button>}
+        {/* The admin cannot leave their own Orb: no button to. */}
+        {me?.role === 'owner' ? null : <Button size="sm" variant="danger" onClick={remove} data-testid="profile-delete"><Trash2 />{t('profile.delete')}</Button>}
       </CardFooter>
     </Card>
   );

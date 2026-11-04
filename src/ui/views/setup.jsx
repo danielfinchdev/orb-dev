@@ -1,272 +1,157 @@
-// First run: the assistant's name, what to call the user, their language and time zone, and where its folder goes.
-// Everything lives in that folder. 3.6: then a short wizard (who will use this Orb, an optional template, reaching it from
-// outside, backups), every step skippable; on Windows, installing what is missing comes last.
-import { useEffect, useState } from 'react';
-import { FolderOpen, ArrowRight, ArrowLeft, Plus, ExternalLink, KeyRound, HardDriveDownload, Truck } from 'lucide-react';
+// First run: three screens, one question each. 1) «¿Cómo te llamas?» (the folder goes in Documents; language and time
+// zone are this PC's: both change later in Ajustes), 2) «¿Lo usará alguien más?» and 3) «¿Para qué lo quieres?» (a
+// template, applied as it is: its bots change later in Bots). Then straight into the app. Backups are on from the start;
+// the recovery code is suggested later in the app; reaching Orb from outside is explained when linking a phone.
+import { useEffect, useRef, useState } from 'react';
+import { ArrowRight, ArrowLeft, Plus, FolderOpen, Code, Briefcase, House, Compass } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
-import { Installer, InstallProgress, useFunPhrase } from '@/components/installer.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Input, Textarea, Field, Spinner } from '@/components/ui/basic.jsx';
-import { Select, Checkbox } from '@/components/ui/overlay.jsx';
-import { bridge, call, act, useStore, refresh } from '@/lib/store.js';
-import { WIZARD_STEPS, nextStep, prevStep, templateSummary, templateEdits } from '@/lib/persons.js';
-import { newRecoveryCode } from './data.jsx';
-import { TzSelect } from './persons.jsx';
-import { cn } from '@/lib/utils.js';
-import { LANGUAGES } from '../../core/i18n.mjs';
+import { Input, Spinner } from '@/components/ui/basic.jsx';
+import { bridge, call, refresh } from '@/lib/store.js';
+import { WIZARD_STEPS, WIZARD_USES } from '@/lib/persons.js';
+import { cn, errorText } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { toast } from 'sonner';
-import { errorText } from '@/lib/utils.js';
 import { PRODUCT } from '../../core/product.mjs';
 
 const hereTz = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; } };
+const hereLanguage = () => (/^en/i.test(navigator.language ?? '') ? 'en' : 'es');
+const ICONS = { dev: Code, business: Briefcase, home: House, later: Compass };
 
 export function Setup({ onDone }) {
-  const t = useT();
-  const [name, setName] = useState(PRODUCT.assistant);
-  const [user, setUser] = useState('');
-  const [base, setBase] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [mood, setMood] = useState('happy');
-  const [step, setStep] = useState('datos'); // datos → quien → plantilla → fuera → copias → equipo (Windows) → app
-  const [language, setLanguage] = useState(/^en/i.test(navigator.language ?? '') ? 'en' : 'es');
-  const [tz, setTz] = useState(hereTz());
-  const [win, setWin] = useState(false);
-  const shown = name.trim() || PRODUCT.assistant;
-  const sep = base?.includes('\\') ? '\\' : '/';
-  // The same rule the app uses (homeFor): always <base>/Orb, whatever the assistant is called, unless the base already is it.
-  const target = base ? (/^orb$/i.test(base.split(/[\\/]/).filter(Boolean).pop() ?? '') ? base : `${base}${base.endsWith(sep) ? '' : sep}${PRODUCT.folder}`) : null;
-  const create = async (e) => {
-    e.preventDefault();
-    setBusy(true); setMood('thinking');
-    try {
-      await bridge.setup({ base, assistantName: shown, userName: user.trim() });
-      setMood('happy');
-      const info = await bridge.info();
-      setWin(info.platform === 'win32');
-      // 3.6: the owner's language and time zone (the engine is running in the new folder now).
-      await call('config.save', { patch: { language } }).catch(() => {});
-      await call('persons.update', { language, tz }).catch(() => {});
-      await refresh().catch(() => {});
-      setBusy(false); setStep('quien');
-    }
-    catch (error) { setMood('worried'); toast.error(errorText(error)); setBusy(false); }
-  };
-  if (step === 'equipo') return <Prepare name={shown} onDone={onDone} />;
-  const move = (to) => setStep(to === 'fin' ? (win ? 'equipo' : 'fin') : to);
-  if (step === 'fin') { setTimeout(onDone, 0); return null; }
-  if (step === 'quien') return <WhoStep onNext={() => move(nextStep('quien'))} />;
-  if (step === 'plantilla') return <TemplateStep onNext={() => move(nextStep('plantilla'))} onBack={() => setStep(prevStep('plantilla'))} />;
-  if (step === 'fuera') return <OutsideStep onNext={() => move(nextStep('fuera'))} onBack={() => setStep(prevStep('fuera'))} />;
-  if (step === 'copias') return <BackupStep onNext={() => move(nextStep('copias'))} onBack={() => setStep(prevStep('copias'))} />;
-  return (
-    <div className="brand-sky flex h-full overflow-auto px-6 pt-24 pb-6">
-      <form onSubmit={create} className="bg-card/95 text-card-foreground m-auto grid w-full max-w-[460px] gap-5 rounded-3xl border border-white/40 p-8 shadow-2xl backdrop-blur">
-        <div className="-mt-20 flex justify-center"><Robot size={128} mood={mood} title={shown} /></div>
-        <div className="text-center">
-          <h1 className="text-2xl">{t('setup.hello', { name: shown })}</h1>
-          <p className="mt-1 text-sm font-medium" data-testid="setup-tagline">{t('setup.tagline')}</p>
-          <p className="text-muted-foreground mt-2 text-sm leading-relaxed">{t('setup.intro')}</p>
-        </div>
-        <Field label={t('setup.nameLabel')}><Input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} autoFocus /></Field>
-        <Field label={t('setup.userLabel')}><Input value={user} onChange={(e) => setUser(e.target.value)} placeholder={t('setup.userPlaceholder')} maxLength={40} /></Field>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label={t('profile.language')}><Select className="w-full" value={language} onValueChange={setLanguage} options={Object.entries(LANGUAGES).map(([value, label]) => ({ value, label }))} title={t('profile.language')} data-testid="setup-language" /></Field>
-          <Field label={t('profile.tz')}><TzSelect value={tz} onChange={setTz} testid="setup-tz" /></Field>
-        </div>
-        <div className="grid gap-2">
-          <span className="text-[13px] font-medium">{t('setup.whereFolder')}</span>
-          <Button type="button" variant="outline" className="justify-start" onClick={async () => { const f = await bridge.pickFolder(t('setup.whereFolder')); if (f) setBase(f); }}><FolderOpen />{base ? t('setup.changeLocation') : t('setup.pickLocation')}</Button>
-          <div className="bg-muted rounded-lg px-3 py-2 font-mono text-xs break-all" data-testid="setup-target">{target ?? t('setup.example', { name: PRODUCT.folder })}</div>
-          <p className="text-muted-foreground text-xs leading-relaxed">{t('setup.folderNote')}</p>
-        </div>
-        {/* 3.6: bringing an Orb from another PC: the copy made with Ajustes › Datos › «Mover a otro PC». */}
-        <div className="text-muted-foreground flex items-start gap-2 rounded-xl border border-dashed px-3 py-2 text-xs" data-testid="setup-move-import"><Truck className="mt-0.5 size-4 shrink-0" /><span><b className="text-foreground font-medium">{t('wizard.moveTitle')}</b> · {t('wizard.moveUnavailable')}</span></div>
-        <Button type="submit" size="lg" disabled={!base || busy} data-testid="setup-create">{busy ? <Spinner className="border-white/40 border-t-white" /> : null}{t('setup.create')}<ArrowRight /></Button>
-      </form>
-    </div>
-  );
+  const [step, setStep] = useState(WIZARD_STEPS[0]);
+  const [made, setMade] = useState(false); // the Orb folder exists (going back to the first screen only renames)
+  const go = (to) => setStep(to);
+  if (step === 'quien') return <WhoStep onNext={() => go('para')} onBack={() => go('nombre')} />;
+  if (step === 'para') return <UseStep onDone={onDone} onBack={() => go('quien')} />;
+  return <NameStep made={made} onNext={() => { setMade(true); go('quien'); }} />;
 }
 
-// Windows, after the folder: install what is missing. While it installs, the title is a light phrase that changes every
-// few seconds, the bar goes under it and the explanation under the bar.
-export function Prepare({ name, onDone }) {
-  const t = useT();
-  const [progress, setProgress] = useState(null);
-  const running = Boolean(progress?.running);
-  const { n, phrase } = useFunPhrase(running);
-  const finished = progress?.finished && !progress.interrupted;
-  const title = running ? `${phrase}…` : finished ? t('install.ready') : progress?.interrupted ? t('install.interrupted') : t('setup.prepareTitle');
-  return (
-    <div className="brand-sky flex h-full overflow-auto px-6 pt-24 pb-6">
-      <div className="bg-card/95 text-card-foreground m-auto grid w-full max-w-[520px] gap-5 rounded-3xl border border-white/40 p-8 shadow-2xl backdrop-blur">
-        <div className="-mt-20 flex justify-center"><Robot size={120} mood={running ? 'thinking' : finished ? 'happy' : 'hello'} title={name} live /></div>
-        <div className="grid gap-3 text-center">
-          <h1 key={running ? n : title} className="animate-in fade-in slide-in-from-bottom-1 text-2xl duration-500" aria-live="polite" data-testid="prepare-title">{title}</h1>
-          {progress?.steps.length ? <InstallProgress progress={progress} fun={false} /> : null}
-          <p className="text-muted-foreground text-sm">{t('setup.prepareDesc')}</p>
-        </div>
-        <Installer bar={false} onProgress={setProgress} />
-        <Button size="lg" onClick={onDone}>{t('setup.continue')}<ArrowRight /></Button>
-      </div>
-    </div>
-  );
-}
-
-// ---- 3.6: the welcome wizard after the folder: who will use this Orb, an optional template, reaching it from outside
-// and backups. Every step can be skipped; nothing here is needed to start.
-function Steps({ step }) {
+// The frame of every screen: the robot, the progress dots, one question and its answer.
+function Panel({ step, title, children, mood = 'happy' }) {
   const t = useT();
   const i = WIZARD_STEPS.indexOf(step);
-  return <div className="text-muted-foreground flex items-center justify-center gap-1.5 text-xs" data-testid="wizard-steps" aria-label={t('wizard.stepOf', { n: i + 1, total: WIZARD_STEPS.length })}>{WIZARD_STEPS.map((s, n) => <span key={s} className={cn('h-1.5 rounded-full transition-all', n <= i ? 'bg-primary w-6' : 'bg-muted w-3')} />)}</div>;
-}
-function Panel({ step, children, wide }) {
   return (
     <div className="brand-sky flex h-full overflow-auto px-6 pt-24 pb-6">
-      <div className={cn('bg-card/95 text-card-foreground m-auto grid w-full gap-5 rounded-3xl border border-white/40 p-8 shadow-2xl backdrop-blur', wide ? 'max-w-[720px]' : 'max-w-[520px]')} data-testid={`wizard-${step}`}>
-        <div className="-mt-20 flex justify-center"><Robot size={112} mood="happy" /></div>
-        <Steps step={step} />
+      <div className="bg-card/95 text-card-foreground animate-in fade-in-0 zoom-in-95 m-auto grid w-full max-w-[480px] gap-6 rounded-3xl border border-white/40 p-8 shadow-2xl backdrop-blur duration-300" data-testid={`wizard-${step}`}>
+        <div className="-mt-20 flex justify-center"><Robot size={120} mood={mood} /></div>
+        <div className="flex items-center justify-center gap-1.5" data-testid="wizard-steps" role="img" aria-label={t('wizard.stepOf', { n: i + 1, total: WIZARD_STEPS.length })}>
+          {WIZARD_STEPS.map((s, n) => <span key={s} className={cn('h-1.5 rounded-full transition-[width,background-color] duration-200', n <= i ? 'bg-primary w-6' : 'bg-muted w-3')} />)}
+        </div>
+        <h1 className="text-center text-[26px] leading-tight">{title}</h1>
         {children}
       </div>
     </div>
   );
 }
-const Nav = ({ onNext, onBack, next, busy, skip, testid }) => {
-  const t = useT();
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      {onBack ? <Button type="button" variant="ghost" onClick={onBack}><ArrowLeft />{t('wizard.back')}</Button> : <span />}
-      <div className="flex gap-2">
-        {skip ? <Button type="button" variant="outline" onClick={skip}>{t('wizard.skip')}</Button> : null}
-        <Button type="button" size="lg" onClick={onNext} disabled={busy} data-testid={testid ?? 'wizard-next'}>{busy ? <Spinner className="border-white/40 border-t-white" /> : null}{next ?? t('wizard.next')}<ArrowRight /></Button>
-      </div>
-    </div>
-  );
-};
+const Back = ({ onBack }) => { const t = useT(); return <Button type="button" variant="ghost" onClick={onBack} data-testid="wizard-back"><ArrowLeft />{t('wizard.back')}</Button>; };
 
-function WhoStep({ onNext }) {
+// 1. The name. The folder is <Documents>/Orb; only if that cannot be used is a folder asked for.
+function NameStep({ made, onNext }) {
+  const t = useT();
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [base, setBase] = useState(null);
+  const [needFolder, setNeedFolder] = useState(false);
+  useEffect(() => { if (!made) bridge.info().then((i) => setBase(i?.defaultBase ?? null)).catch(() => {}); }, [made]);
+  const next = async (e) => {
+    e.preventDefault();
+    const user = name.trim(); if (!user) return;
+    setBusy(true);
+    try {
+      if (made) await call('config.save', { patch: { userName: user } });
+      else {
+        const folder = base ?? await bridge.pickFolder(t('setup.whereFolder'));
+        if (!folder) { setNeedFolder(true); return; }
+        await bridge.setup({ base: folder, assistantName: PRODUCT.assistant, userName: user });
+        // The engine runs in the new folder now: this PC's language and time zone for the admin.
+        const language = hereLanguage();
+        await call('config.save', { patch: { language } }).catch(() => {});
+        await call('persons.update', { language, tz: hereTz() }).catch(() => {});
+        await refresh().catch(() => {});
+      }
+      onNext();
+    } catch (error) { toast.error(errorText(error)); setNeedFolder(true); setBase(null); }
+    finally { setBusy(false); }
+  };
+  const pick = async () => { const f = await bridge.pickFolder(t('setup.whereFolder')); if (f) { setBase(f); setNeedFolder(false); } };
+  return (
+    <Panel step="nombre" title={t('wizard.nameTitle')} mood="hello">
+      <form onSubmit={next} className="grid gap-4">
+        <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder={t('wizard.namePh')} aria-label={t('wizard.namePh')} autoComplete="given-name" enterKeyHint="next" className="h-12 text-center text-lg" data-testid="setup-name" />
+        {needFolder ? <Button type="button" variant="outline" onClick={pick} data-testid="setup-folder"><FolderOpen />{base ?? t('setup.pickLocation')}</Button> : null}
+        <Button type="submit" size="lg" disabled={!name.trim() || busy || (needFolder && !base)} data-testid="setup-create">{busy ? <Spinner className="border-white/40 border-t-white" /> : null}{t('wizard.next')}<ArrowRight /></Button>
+      </form>
+    </Panel>
+  );
+}
+
+// 2. Anyone else? «Solo yo» goes on; «Sí» asks their names.
+function WhoStep({ onNext, onBack }) {
   const t = useT();
   const [many, setMany] = useState(false);
   const [names, setNames] = useState(['']);
   const [busy, setBusy] = useState(false);
+  const created = useRef(new Set()); // going back and on again does not add them twice
+  const last = useRef(null);
   const go = async () => {
-    if (!many) return onNext();
     setBusy(true);
     try {
-      for (const n of names.map((x) => x.trim()).filter(Boolean)) await call('persons.create', { name: n, tz: hereTz() });
+      for (const n of names.map((x) => x.trim()).filter(Boolean)) {
+        if (created.current.has(n.toLowerCase())) continue;
+        await call('persons.create', { name: n, tz: hereTz(), language: hereLanguage() });
+        created.current.add(n.toLowerCase());
+      }
+      await refresh().catch(() => {});
       onNext();
     } catch (error) { toast.error(errorText(error)); }
     finally { setBusy(false); }
   };
-  const choice = (on, title, body, testid) => (
-    <button type="button" onClick={() => setMany(on)} aria-pressed={many === on} data-testid={testid}
-      className={cn('grid cursor-pointer gap-1 rounded-2xl border p-4 text-left', many === on ? 'border-primary bg-primary/5' : 'hover:bg-accent/50')}>
-      <span className="font-medium">{title}</span><span className="text-muted-foreground text-xs">{body}</span>
-    </button>
+  const add = () => { setNames([...names, '']); setTimeout(() => last.current?.focus(), 0); };
+  const choice = (on, label, testid) => (
+    <button type="button" onClick={() => (on ? setMany(true) : onNext())} aria-pressed={many === on && on} data-testid={testid}
+      className={cn('press grid h-20 cursor-pointer place-items-center rounded-2xl border text-lg font-medium transition-colors', on && many ? 'border-primary bg-primary/5' : 'hover:bg-accent/50')}>{label}</button>
   );
   return (
-    <Panel step="quien">
-      <div className="text-center"><h1 className="text-2xl">{t('wizard.whoTitle')}</h1><p className="text-muted-foreground mt-1 text-sm">{t('wizard.whoIntro')}</p></div>
-      <div className="grid gap-2 sm:grid-cols-2">{choice(false, t('wizard.onlyMe'), t('wizard.onlyMeHint'), 'wizard-only-me')}{choice(true, t('wizard.morePeople'), t('wizard.morePeopleHint'), 'wizard-more-people')}</div>
+    <Panel step="quien" title={t('wizard.whoTitle')}>
+      <div className="grid grid-cols-2 gap-3">{choice(false, t('wizard.onlyMe'), 'wizard-only-me')}{choice(true, t('wizard.yes'), 'wizard-more-people')}</div>
       {many ? (
-        <div className="grid gap-2">
-          {names.map((n, i) => <Input key={i} value={n} maxLength={40} onChange={(e) => setNames(names.map((x, j) => (j === i ? e.target.value : x)))} placeholder={t('wizard.personPh')} aria-label={t('wizard.personPh')} data-testid={`wizard-person-${i}`} />)}
-          <Button type="button" size="sm" variant="ghost" className="w-fit" onClick={() => setNames([...names, ''])}><Plus />{t('wizard.addPerson')}</Button>
-          <p className="text-muted-foreground text-xs">{t('wizard.peopleNote')}</p>
-        </div>
-      ) : null}
-      <Nav onNext={go} busy={busy} />
+        <form className="animate-in fade-in-0 grid gap-2 duration-200" onSubmit={(e) => { e.preventDefault(); go(); }}>
+          {names.map((n, i) => <Input key={i} ref={i === names.length - 1 ? last : undefined} autoFocus={i === 0} value={n} maxLength={40} onChange={(e) => setNames(names.map((x, j) => (j === i ? e.target.value : x)))} placeholder={t('wizard.personPh')} aria-label={t('wizard.personPh')} data-testid={`wizard-person-${i}`} />)}
+          <Button type="button" size="sm" variant="ghost" className="w-fit" onClick={add} data-testid="wizard-add-person"><Plus />{t('wizard.addPerson')}</Button>
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <Back onBack={onBack} />
+            <Button type="submit" size="lg" disabled={busy || !names.some((x) => x.trim())} data-testid="wizard-next">{busy ? <Spinner className="border-white/40 border-t-white" /> : null}{t('wizard.next')}<ArrowRight /></Button>
+          </div>
+        </form>
+      ) : <div><Back onBack={onBack} /></div>}
     </Panel>
   );
 }
 
-function TemplateStep({ onNext, onBack }) {
+// 3. What for: one tile, one template, applied as it is; «Más tarde» makes nothing. Then the app.
+function UseStep({ onDone, onBack }) {
   const t = useT();
-  const lang = useStore((s) => s.app?.config?.language) ?? 'es';
-  const [list, setList] = useState(null);
-  const [pick, setPick] = useState(null);
-  const [edit, setEdit] = useState({});
-  const [busy, setBusy] = useState(false);
-  useEffect(() => { call('templates.list', { lang }).then(setList).catch(() => setList([])); }, [lang]);
-  const tpl = list?.find((x) => x.id === pick) ?? null;
-  const apply = async () => {
-    if (!tpl || templateSummary(tpl).empty) return onNext();
-    setBusy(true);
-    try { await call('templates.apply', { id: tpl.id, edits: templateEdits(tpl, edit), tz: hereTz() }); toast.success(t('wizard.applied', { name: tpl.name })); onNext(); }
-    catch (error) { toast.error(errorText(error)); }
-    finally { setBusy(false); }
+  const [busy, setBusy] = useState(null);
+  const pick = async (use) => {
+    setBusy(use.id);
+    try { if (use.template) await call('templates.apply', { id: use.template, tz: hereTz() }); onDone(); }
+    catch (error) { toast.error(errorText(error)); setBusy(null); }
   };
-  const field = (k, fallback) => ({ value: edit[k] ?? fallback ?? '', onChange: (e) => setEdit({ ...edit, [k]: e.target.value }) });
   return (
-    <Panel step="plantilla" wide>
-      <div className="text-center"><h1 className="text-2xl">{t('wizard.tplTitle')}</h1><p className="text-muted-foreground mt-1 text-sm">{t('wizard.tplIntro')}</p></div>
-      {list == null ? <Spinner className="mx-auto" /> : (
-        <div className="grid gap-2 sm:grid-cols-2">
-          {list.map((x) => (
-            <button key={x.id} type="button" onClick={() => { setPick(x.id); setEdit({}); }} aria-pressed={pick === x.id} data-testid={`wizard-tpl-${x.id}`}
-              className={cn('grid cursor-pointer gap-1 rounded-2xl border p-4 text-left', pick === x.id ? 'border-primary bg-primary/5' : 'hover:bg-accent/50')}>
-              <span className="font-medium">{x.icon ? `${x.icon} ` : ''}{x.name}</span><span className="text-muted-foreground text-xs">{x.description}</span>
+    <Panel step="para" title={t('wizard.useTitle')}>
+      <div className="grid grid-cols-2 gap-3">
+        {WIZARD_USES.map((u) => {
+          const Icon = ICONS[u.id];
+          return (
+            <button key={u.id} type="button" onClick={() => pick(u)} disabled={Boolean(busy)} data-testid={`wizard-use-${u.id}`}
+              className="press hover:bg-accent/50 grid h-28 cursor-pointer place-items-center content-center gap-2 rounded-2xl border text-[17px] font-medium transition-colors disabled:cursor-default disabled:opacity-60">
+              {busy === u.id ? <Spinner className="size-7" /> : <Icon className="text-primary size-7" strokeWidth={1.75} />}{t(`wizard.use.${u.id}`)}
             </button>
-          ))}
-        </div>
-      )}
-      {tpl && !templateSummary(tpl).empty ? (
-        <div className="grid gap-3 rounded-2xl border p-4" data-testid="wizard-tpl-preview">
-          <p className="text-sm font-medium">{t('wizard.tplPreview', { bots: tpl.bots.length, reminders: tpl.reminders?.length ?? 0 })}</p>
-          {tpl.bots.map((b, i) => (
-            <div key={b.key ?? i} className={cn('grid gap-1.5', edit[`skip${i}`] && 'opacity-50')}>
-              <div className="flex items-center gap-2">
-                <Checkbox checked={!edit[`skip${i}`]} onCheckedChange={(on) => setEdit({ ...edit, [`skip${i}`]: !on })} aria-label={t('wizard.tplKeep')} />
-                <span className="text-lg">{b.icon}</span>
-                <Input className="flex-1" maxLength={40} {...field(`name${i}`, b.name)} aria-label={t('wizard.tplBotName')} data-testid={`wizard-bot-name-${i}`} />
-              </div>
-              <Textarea rows={2} maxLength={4000} className="text-[13px]" {...field(`role${i}`, b.role_text)} aria-label={t('wizard.tplBotRole')} />
-            </div>
-          ))}
-          {(tpl.reminders ?? []).length ? <div className="grid gap-1.5"><span className="text-muted-foreground text-xs">{t('wizard.tplReminders')}</span>
-            {tpl.reminders.map((r, i) => <div key={i} className="flex items-center gap-2"><Checkbox checked={!edit[`remSkip${i}`]} onCheckedChange={(on) => setEdit({ ...edit, [`remSkip${i}`]: !on })} aria-label={t('wizard.tplKeep')} /><Input className="flex-1 text-[13px]" maxLength={300} {...field(`rem${i}`, r.text)} /></div>)}
-          </div> : null}
-          <p className="text-muted-foreground text-xs">{t('wizard.tplLater')}</p>
-        </div>
-      ) : null}
-      <Nav onBack={onBack} onNext={apply} busy={busy} skip={onNext} next={tpl && !templateSummary(tpl).empty ? t('wizard.tplApply') : undefined} testid="wizard-tpl-apply" />
-    </Panel>
-  );
-}
-
-function OutsideStep({ onNext, onBack }) {
-  const t = useT();
-  return (
-    <Panel step="fuera">
-      <div className="text-center"><h1 className="text-2xl">{t('wizard.outTitle')}</h1><p className="text-muted-foreground mt-1 text-sm">{t('wizard.outIntro')}</p></div>
-      <ol className="grid list-decimal gap-1.5 pl-5 text-sm">
-        <li>{t('wizard.out1')}</li><li>{t('wizard.out2')}</li><li>{t('wizard.out3')}</li>
-      </ol>
-      <Button type="button" variant="outline" className="w-fit" onClick={() => bridge.openExternal('https://tailscale.com/download')}><ExternalLink />{t('wizard.outGet')}</Button>
-      <p className="bg-muted rounded-xl px-3 py-2 text-xs" data-testid="wizard-pc-on">{t('wizard.outPcOn')}</p>
-      <Nav onBack={onBack} onNext={onNext} />
-    </Panel>
-  );
-}
-
-function BackupStep({ onNext, onBack }) {
-  const t = useT();
-  const [st, setSt] = useState(null);
-  const [made, setMade] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const load = () => call('backup.status').then(setSt).catch(() => setSt(null));
-  useEffect(() => { load(); }, []);
-  const first = async () => { setBusy(true); const r = await act(call('backup.now', {}), t('datos.made')); setBusy(false); if (r) setMade(true); };
-  return (
-    <Panel step="copias">
-      <div className="text-center"><h1 className="text-2xl">{t('wizard.bakTitle')}</h1><p className="text-muted-foreground mt-1 text-sm">{t('wizard.bakIntro')}</p></div>
-      {st ? <div className="bg-muted rounded-lg px-3 py-2 font-mono text-xs break-all">{st.folder}</div> : null}
-      <div className="grid gap-2">
-        <Button type="button" variant="outline" onClick={async () => { if (await newRecoveryCode()) load(); }} data-testid="wizard-code"><KeyRound />{st?.recovery ? t('datos.codeAgain') : t('datos.codeMake')}</Button>
-        <p className="text-muted-foreground text-xs">{t('wizard.bakCodeNote')}</p>
-        <Button type="button" variant="outline" onClick={first} disabled={busy || made} data-testid="wizard-first-backup">{busy ? <Spinner /> : <HardDriveDownload />}{made ? t('wizard.bakMade') : t('wizard.bakFirst')}</Button>
+          );
+        })}
       </div>
-      <Nav onBack={onBack} onNext={onNext} next={t('wizard.finish')} testid="wizard-finish" />
+      <div><Back onBack={onBack} /></div>
     </Panel>
   );
 }

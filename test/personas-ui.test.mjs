@@ -91,33 +91,37 @@ test('uso por persona: ordenado por hoy, con el total', () => {
   assert.deepEqual(total, { today: 11, month: 70, usd: 1.75 });
 });
 
-test('el asistente: pasos en orden y «Mi casa» con cambios (sin un bot, sus recordatorios y su grupo se van)', async () => {
-  assert.deepEqual(P.WIZARD_STEPS, ['datos', 'quien', 'plantilla', 'fuera', 'copias']);
-  assert.equal(P.nextStep('quien'), 'plantilla'); assert.equal(P.nextStep('quien', { skipTemplates: true }), 'fuera'); assert.equal(P.nextStep('copias'), 'fin'); assert.equal(P.prevStep('plantilla'), 'quien');
+test('el asistente: tres pantallas, y cada uso aplica su plantilla tal cual («Más tarde», nada)', async () => {
+  assert.deepEqual(P.WIZARD_STEPS, ['nombre', 'quien', 'para']);
+  assert.deepEqual(P.WIZARD_USES.map((u) => u.id), ['dev', 'business', 'home', 'later']);
+  assert.equal(P.WIZARD_USES.find((u) => u.id === 'later').template, null);
   const t = tempHome();
   try {
     const { listTemplates, applyTemplate } = await import('../src/core/templates.mjs');
     for (const lang of ['es', 'en']) {
       const list = listTemplates(lang);
       assert.deepEqual(list.map((x) => x.id).sort(), ['casa', 'desarrollo', 'negocio', 'vacio'], lang);
-      assert.ok(P.templateSummary(list.find((x) => x.id === 'vacio')).empty);
+      for (const u of P.WIZARD_USES) if (u.template) assert.ok(list.some((x) => x.id === u.template), `${u.template} (${lang})`);
       // genéricas: ningún nombre de persona ni de casa concreta
       assert.doesNotMatch(JSON.stringify(list), /Dani|María|Ana|Leo/, `plantillas genéricas (${lang})`);
     }
     const casa = listTemplates('es').find((x) => x.id === 'casa');
-    const edits = P.templateEdits(casa, { name0: 'Mi hogar', skip1: true, rem0: 'Mirar la nevera' });
-    assert.deepEqual(edits.bots.map((b) => b.name), ['Mi hogar']);
-    assert.ok(edits.groups.every((g) => g.members.every((k) => edits.bots.some((b) => b.key === k))));
-    assert.equal(edits.reminders[0].text, 'Mirar la nevera');
     const { Board } = await import('../src/core/board.mjs');
     const board = new Board();
-    const made = applyTemplate(board, { id: 'casa', lang: 'es', edits, tz: 'Europe/Madrid' });
-    assert.equal(made.bots.length, 1);
+    const made = applyTemplate(board, { id: 'casa', lang: 'es', tz: 'Europe/Madrid' });
+    assert.equal(made.bots.length, casa.bots.length);
     assert.equal(made.reminders.length, casa.reminders.length);
-    const names = board.all('SELECT name FROM bots').map((r) => r.name);
-    assert.ok(names.includes('Mi hogar') && !names.includes('Casa conectada'), names.join(','));
     board.close?.();
   } finally { t.cleanup(); }
+});
+
+test('el saludo y los avisos usan el nombre de quien está, no el del admin', async () => {
+  const config = { userName: 'Ana' };
+  assert.equal(P.userNameOf({ person: { id: 'p1', name: 'Ana' }, role: 'owner', personsCount: 2 }, config), 'Ana');
+  assert.equal(P.userNameOf({ person: { id: 'p2', name: 'Leo' }, role: 'user', personsCount: 2 }, config), 'Leo');
+  assert.equal(P.userNameOf(null, config), 'Ana');
+  const { personConfig } = await import('../src/core/shape.mjs');
+  assert.equal(personConfig({ userName: 'Ana', accounts: [] }, 'p2', 'Leo').userName, 'Leo');
 });
 
 test('los métodos nuevos tienen su regla y el móvil puede cambiar lo suyo', () => {
@@ -134,8 +138,8 @@ test('todos los textos de las pantallas nuevas existen en los dos idiomas (tambi
     const code = fs.readFileSync(path.join(ROOT, 'src', 'ui', f), 'utf8');
     for (const m of code.matchAll(/\btr?\(\s*'([a-zA-Z]+(?:\.[\w]+)+)'/g)) used.add(m[1]);
   }
-  const dynamic = [...P.CAPS.flatMap((k) => [`persons.cap.${k}`, `persons.capAbout.${k}`]), ...['bots', 'groups', 'conversations', 'tasks', 'projects', 'schedules', 'reminders'].map((k) => `persons.count.${k}`),
-    ...P.ROLES.map((r) => `persons.role.${r}`), ...P.RIGHTS.flatMap((r) => [`share.right.${r}`, `share.rightAbout.${r}`]), ...P.SHARE_TYPES.map((x) => `share.about.${x}`), ...P.PREVIEWS.map((x) => `profile.preview.${x}`),
+  const dynamic = [...P.CAPS.map((k) => `persons.cap.${k}`), ...P.WIZARD_USES.map((u) => `wizard.use.${u.id}`), ...['bots', 'groups', 'conversations', 'tasks', 'projects', 'schedules', 'reminders'].flatMap((k) => [`persons.count.${k}`, `persons.count.${k}One`]), 'persons.devicesNOne', 'persons.todayTurnsOne',
+    ...P.ROLES.map((r) => `persons.role.${r}`), ...P.RIGHTS.map((r) => `share.right.${r}`), ...P.PREVIEWS.map((x) => `profile.preview.${x}`),
     ...['daily', 'manual', 'preupdate', 'premigration', 'move', 'other'].map((k) => `datos.kind.${k}`), ...['applied', 'pending', 'rejected', 'undone'].map((k) => `botsp.memStatus.${k}`), 'botsp.memOp.add', 'botsp.memOp.replace',
     'persons.pin.wrong', 'persons.pin.wrongLeft', 'persons.pin.locked', 'persons.loan.leftTurns', 'persons.loan.leftTokens', 'persons.loan.leftUsd', 'persons.loan.noCap', 'persons.loan.expired',
     ...['perfil', 'personas', 'datos'].flatMap((s) => [`settings.section.${s}`, `settings.sectionDesc.${s}`])];

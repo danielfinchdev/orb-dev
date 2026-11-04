@@ -16,6 +16,8 @@ export const isOwner = (me) => !me || me.role === 'owner';
 export const showPersonUi = (me) => personsOn(me);
 export const showPersonsSettings = (me, { mobile = false } = {}) => !mobile && isOwner(me);
 export const myName = (me) => me?.person?.name ?? '';
+// What the app calls the person using it (the greeting): their own name; the admin's is the settings' userName.
+export const userNameOf = (me, config) => (me?.person && !isOwner(me) ? me.person.name : config?.userName?.trim() || '');
 export const initials = (name) => String(name ?? '').trim().split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?';
 
 // A PIN: 4 to 12 digits (src/core/persons.mjs checks it again).
@@ -98,32 +100,15 @@ export function sharedBy(withMe = [], type, id) {
   return s ? { by: s.by, right: s.right } : null;
 }
 
-// The welcome wizard: its steps (the first, on the PC only, is the folder; Windows adds «equipo» after it, setup.jsx).
-export const WIZARD_STEPS = ['datos', 'quien', 'plantilla', 'fuera', 'copias'];
-export const nextStep = (step, { skipTemplates = false } = {}) => {
-  const i = WIZARD_STEPS.indexOf(step);
-  let next = WIZARD_STEPS[i + 1] ?? 'fin';
-  if (next === 'plantilla' && skipTemplates) next = WIZARD_STEPS[i + 2];
-  return next;
-};
-export const prevStep = (step) => WIZARD_STEPS[Math.max(0, WIZARD_STEPS.indexOf(step) - 1)];
-// A template as the wizard shows it: what it makes, in a few words (templates.list gives { id, name, icon, description,
-// bots, groups, reminders, rules }). The edits are the template itself with the user's changes (templates.apply).
-export function templateSummary(tpl) {
-  const bots = (tpl?.bots ?? []).map((b) => b.name).filter(Boolean);
-  return { bots, groups: (tpl?.groups ?? []).length, reminders: (tpl?.reminders ?? []).length, rules: (tpl?.rules ?? []).length, empty: !bots.length };
-}
-// The user's edits in the wizard: names and roles of its bots, their reminders' texts; a bot unticked is left out with
-// its reminders, and its groups lose it (a group left with no one goes too).
-export function templateEdits(tpl, form = {}) {
-  const bots = (tpl?.bots ?? []).map((b, i) => ({ b: { ...b, name: String(form[`name${i}`] ?? b.name).trim() || b.name, role_text: String(form[`role${i}`] ?? b.role_text ?? '').trim() || b.role_text }, skip: form[`skip${i}`] === true }));
-  const kept = bots.filter((x) => !x.skip).map((x) => x.b);
-  const keys = new Set(kept.map((b) => b.key).filter(Boolean));
-  const groups = (tpl?.groups ?? []).map((g) => ({ ...g, members: (g.members ?? []).filter((k) => keys.has(k)) })).filter((g) => g.members.length);
-  const reminders = (tpl?.reminders ?? []).map((r, i) => ({ r: { ...r, text: String(form[`rem${i}`] ?? r.text).trim() || r.text }, skip: form[`remSkip${i}`] === true }))
-    .filter((x) => !x.skip && (!x.r.bot || keys.has(x.r.bot))).map((x) => x.r);
-  return { bots: kept, groups, reminders, rules: tpl?.rules ?? [] };
-}
+// The welcome wizard (setup.jsx): three screens, one question each. «¿Para qué lo quieres?»: each tile applies one
+// template as it is (src/core/templates); «Más tarde» makes nothing.
+export const WIZARD_STEPS = ['nombre', 'quien', 'para'];
+export const WIZARD_USES = [
+  { id: 'dev', template: 'desarrollo' },
+  { id: 'business', template: 'negocio' },
+  { id: 'home', template: 'casa' },
+  { id: 'later', template: null }
+];
 
 // The usage table «Quién ha gastado qué» (usage.byPerson): sorted by today's spend, the total on top.
 export function usageRows(rows = []) {

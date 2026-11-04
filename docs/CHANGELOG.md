@@ -15,14 +15,14 @@ Windows 10/11. Since it isn't signed yet, SmartScreen warns you the first time: 
 reminders and accounts, and sees only their own things and what others share with them. If only you use your Orb,
 nothing changes and there is nothing to set up.
 
-- **Two kinds of user:** the **Owner** (manages the Orb) and **Users**. The owner sees everyone's name and how much
+- **Two kinds of user:** the **Admin** (manages the Orb) and **Users**. The admin sees everyone's name and how much
   they used, never what they wrote or what their bots do.
-- **Welcome wizard:** "Who will use this Orb?" (only me / several users), optional starting templates you can edit before
-  applying ("My business", "My home", "Development", "Start empty"), reaching your Orb from outside with Tailscale, and
-  where backups go with a recovery code.
-- **Switch user and lock:** with two or more users, the top bar shows who is at the PC. Switching asks for that
-  user's PIN, and you can lock the window. The phone and the Android app can ask for the PIN too (or the fingerprint).
-- **Settings › Users** (owner): add users, rename them, choose what they may do, reset a PIN, sign out their devices.
+- **Welcome wizard:** three questions, one per screen: your name, whether anyone else will use it, and what for
+  ("Coding", "Business", "Home" or "Later", each with its starting bots). Backups are on from the start; the recovery
+  code is suggested later in the app, and using Orb away from home is explained when linking a phone.
+- **Switch user and lock:** with two or more users, the bottom of the sidebar shows who is at the PC (on the phone,
+  the top of "More"). Switching asks for that user's PIN, and you can lock the window. The phone and the Android app can ask for the PIN too (or the fingerprint).
+- **Settings › Users** (admin): add users, rename them, choose what they may do, reset a PIN, sign out their devices.
   **Settings › My profile:** name, language, time zone, PIN, what notifications show, your accounts, your devices, and
   exporting or deleting your data.
 - **Magic Link asks "For which user?"**: a phone or browser is linked to one user, and the list of devices is grouped
@@ -32,7 +32,7 @@ nothing changes and there is nothing to set up.
 - **Own accounts:** each user signs in to their own Claude or Codex account by default. The owner of an account can
   lend it to someone with daily caps, a reserve, an end date, and for bots, Orb mode or both. Personal subscriptions
   may not allow serving other people: check your plan's terms before lending.
-- **Usage:** "Who spent what" shows the owner each user's totals for today and the last 30 days.
+- **Usage:** "Who spent what" shows the admin each user's totals for today and the last 30 days.
 - **Settings › Data:** encrypted backups every day (and before every update), the recovery code, restoring a backup,
   and moving your Orb to another computer.
 - **Time zones:** reminders and scheduled tasks ring at the wall-clock time of each user's zone, also across summer
@@ -42,7 +42,7 @@ nothing changes and there is nothing to set up.
   phone itself.
 - **Security:** every request is checked against the user who makes it, on every channel (window, phone, browser,
   terminal, linked Orbs and agents' tools); notifications and live updates reach only the users they are for.
-  Update every Orb, the Android app and the terminal: older ones keep working only for the owner.
+  Update every Orb, the Android app and the terminal: older ones keep working only for the admin.
 
 ## What's new in 3.5.1
 

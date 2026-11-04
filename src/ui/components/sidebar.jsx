@@ -266,6 +266,8 @@ function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
         )}
         {version ? <span className="side-foot-version" data-testid="app-version">v{version}</span> : null}
       </div>
+      {/* 3.6: with two or more users, who is here, at the very bottom (profile, change user, lock). */}
+      <PersonMenu className="mt-1" />
     </div>
   );
 }
@@ -444,8 +446,6 @@ export function Sidebar({ mood, page = false }) {
             on the band's middle; the working folder is in the middle of the chat's top bar. */}
         <div className="flex min-w-0 flex-1 items-center">{name === PRODUCT.assistant ? <Wordmark /> : <div className="truncate text-[15px] font-medium">{name}</div>}</div>
         <div className="flex shrink-0 items-center gap-0.5">
-          {/* 3.6: with two or more people, who is here (switch, profile, lock). */}
-          <PersonMenu compact />
           <ThemeToggle />
           <SidebarToggle />
         </div>

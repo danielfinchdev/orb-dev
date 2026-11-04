@@ -3,7 +3,7 @@
 // «Compartido por Ana» and the list «Compartido conmigo».
 import { useEffect, useState } from 'react';
 import { Share2, LoaderCircle, Users } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Select } from '@/components/ui/overlay.jsx';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, Select } from '@/components/ui/overlay.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { PersonDot } from '@/components/person-menu.jsx';
@@ -53,10 +53,9 @@ export function ShareHost() {
   const options = [{ value: 'none', label: t('share.right.none') }, ...RIGHTS.map((r) => ({ value: r, label: t(`share.right.${r}`) }))];
   return (
     <Dialog open onOpenChange={(o) => { if (!o) setState({ share: null }); }}>
-      <DialogContent data-testid="share-dialog">
+      <DialogContent data-testid="share-dialog" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>{t('share.title', { name: res.name ?? '' })}</DialogTitle>
-          <DialogDescription>{t(`share.about.${res.type}`)}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-1.5">
           {people == null ? <LoaderCircle className="text-muted-foreground mx-auto size-5 animate-spin" />
@@ -69,9 +68,6 @@ export function ShareHost() {
                   <Select className="w-40" value={p.right ?? 'none'} onValueChange={(v) => change(p.id, v)} options={options} title={t('share.rightFor', { name: p.name })} data-testid={`share-right-${p.name}`} />
                 </div>
               ))}
-        </div>
-        <div className="text-muted-foreground grid gap-1 text-xs">
-          {RIGHTS.map((r) => <p key={r}><b className="text-foreground font-medium">{t(`share.right.${r}`)}</b>: {t(`share.rightAbout.${r}`)}</p>)}
         </div>
       </DialogContent>
     </Dialog>

@@ -6,7 +6,9 @@ import { HardDriveDownload, KeyRound, RotateCcw, Truck, LoaderCircle, ShieldChec
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input } from '@/components/ui/basic.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
-import { call, act, bridge } from '@/lib/store.js';
+import { call, act, bridge, useStore, getState, setState, openSettings } from '@/lib/store.js';
+import { notify } from '@/lib/notify.js';
+import { isOwner } from '@/lib/persons.js';
 import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
 
 const size = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
@@ -57,7 +59,7 @@ function BackupsCard() {
   };
   return (
     <Card data-testid="backups-card">
-      <CardHeader className="flex-row items-start gap-3"><HardDriveDownload className="text-primary mt-0.5 size-5 shrink-0" /><div><CardTitle>{t('datos.backupsTitle')}</CardTitle><CardDescription>{t('datos.backupsHint', { hour: String(st.hour).padStart(2, '0') })}</CardDescription></div></CardHeader>
+      <CardHeader className="flex-row items-start gap-3"><HardDriveDownload className="text-primary mt-0.5 size-5 shrink-0" /><CardTitle className="mt-1">{t('datos.backupsTitle')}</CardTitle></CardHeader>
       <CardContent className="grid gap-3">
         <div className="text-muted-foreground grid gap-1 text-xs">
           <span>{t('datos.folder')}: <span className="text-foreground font-mono break-all">{st.folder}</span></span>
@@ -108,7 +110,7 @@ function MoveCard() {
   };
   return (
     <Card data-testid="move-card" className={moved ? 'border-warning/60' : undefined}>
-      <CardHeader className="flex-row items-start gap-3"><Truck className="text-primary mt-0.5 size-5 shrink-0" /><div><CardTitle>{t('datos.moveCardTitle')}</CardTitle><CardDescription>{moved ? t('datos.movedAway') : t('datos.moveHint')}</CardDescription></div></CardHeader>
+      <CardHeader className="flex-row items-start gap-3"><Truck className="text-primary mt-0.5 size-5 shrink-0" /><div><CardTitle>{t('datos.moveCardTitle')}</CardTitle>{moved ? <CardDescription className="mt-1">{t('datos.movedAway')}</CardDescription> : null}</div></CardHeader>
       <CardContent className="text-muted-foreground text-xs">{t('datos.moveImportNote')}</CardContent>
       <CardFooter className="flex-wrap">
         {moved ? <>
@@ -121,3 +123,26 @@ function MoveCard() {
 }
 
 export function DataCards() { return <><BackupsCard /><MoveCard /></>; }
+
+// 3.6: backups are on from the first day, sealed with this PC's key. A few days later, once, a quiet suggestion to make
+// the recovery code (Ajustes › Datos), so a copy also opens on another PC. Never on a phone, only for the admin.
+export const RECOVERY_AFTER_MS = 3 * 86_400_000;
+export function RecoveryNotice() {
+  const me = useStore((s) => s.me);
+  const done = useStore((s) => s.app?.config?.ui?.recoveryNoticed === true);
+  useEffect(() => {
+    if (bridge.mobile || done || !isOwner(me)) return undefined;
+    const since = Date.parse(me?.person?.created_at ?? '');
+    if (!Number.isFinite(since) || Date.now() - since < RECOVERY_AFTER_MS) return undefined;
+    const id = setTimeout(async () => {
+      const st = await call('backup.status').catch(() => null);
+      if (!st) return;
+      const config = await call('config.save', { patch: { ui: { recoveryNoticed: true } } }).catch(() => null);
+      if (config) setState({ app: { ...getState().app, config } });
+      if (st.recovery) return;
+      notify({ title: tNow('datos.codeNoticeTitle'), body: tNow('datos.codeNoticeBody'), tone: 'info', action: { label: tNow('datos.codeNoticeOpen'), onClick: () => openSettings('datos') } }, { ms: 15000 });
+    }, 20_000);
+    return () => clearTimeout(id);
+  }, [me?.person?.id, done]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}

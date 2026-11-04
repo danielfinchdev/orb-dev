@@ -45,7 +45,7 @@ test('personas: crear, nombre único, renombrar, quitar (el dueño no) y nunca e
   const eva = P.createPerson(board, { name: 'Eva' });
   P.removePerson(board, eva.id);
   assert.ok(!P.listPersons(board).some((p) => p.id === eva.id), 'quitada (de momento, marcada)');
-  assert.throws(() => P.removePerson(board, owner), /dueño/);
+  assert.throws(() => P.removePerson(board, owner), /admin/);
   assert.ok(!('pin_hash' in P.getPerson(board, leo.id)) && !('pin_salt' in P.getPerson(board, leo.id)));
 });
 
@@ -146,9 +146,9 @@ test('API de personas: crear solo el dueño, cambiar de persona con su PIN, y ca
   const asMia = api.desktopPrincipal();
   assert.equal(asMia.person, mia.id);
   assert.equal(asMia.rights.admin, false);
-  await assert.rejects(api.call('persons.create', { name: 'Otro' }, asMia), /solo lo puede hacer el dueño/);
-  await assert.rejects(api.call('config.save', { patch: {} }, asMia), /solo lo puede hacer el dueño/);
-  await assert.rejects(api.call('persons.overview', {}, asMia), /dueño/);
+  await assert.rejects(api.call('persons.create', { name: 'Otro' }, asMia), /solo lo puede hacer el admin/);
+  await assert.rejects(api.call('config.save', { patch: {} }, asMia), /solo lo puede hacer el admin/);
+  await assert.rejects(api.call('persons.overview', {}, asMia), /admin/);
   const seen = await api.call('persons.list', {}, asMia);
   assert.ok(seen.find((p) => p.id === owner) && !('caps' in seen.find((p) => p.id === owner)), 'los demás, solo su nombre');
   assert.equal((await api.call('persons.me', {}, asMia)).person.name, 'Mia');

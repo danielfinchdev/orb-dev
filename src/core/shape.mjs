@@ -6,7 +6,7 @@
 // - the activity feed: only the caller's rows.
 // With one person nothing changes (as 3.5.1). No engine imports: authz.mjs calls it from shapeFor.
 import { rightOn, ownerOf, scopeSql } from './authz.mjs';
-import { personsCount } from './persons.mjs';
+import { personsCount, personName } from './persons.mjs';
 
 const conv = (id) => ({ type: 'conversation', id });
 const proj = (id) => ({ type: 'project', id });
@@ -56,11 +56,12 @@ export function shapeGateway(board, principal, method, result) {
 }
 
 // The settings a person other than the owner gets: what the interface shows, with only their own accounts and connectors
-// and none of the paths, folders, tokens or the owner's Home Assistant.
-export function personConfig(c, pid) {
+// and none of the paths, folders, tokens or the owner's Home Assistant. userName is theirs (the greeting, the prompts).
+export function personConfig(c, pid, name = null) {
   if (!c || typeof c !== 'object') return c;
   return {
     ...c,
+    userName: name ?? '',
     mcpServers: (c.mcpServers ?? []).filter((m) => m.person === pid).map((m) => ({ name: m.name, enabled: m.enabled, agents: m.agents })),
     accounts: (c.accounts ?? []).filter((a) => a.person === pid).map(({ home: _home, ...a }) => a),
     agents: Object.fromEntries(Object.entries(c.agents ?? {}).map(([k, a]) => { const { path: _path, ...rest } = a ?? {}; return [k, rest]; })),
@@ -82,7 +83,7 @@ function shapeState(board, principal, s, keep) {
   } catch { /* as it was */ }
   if (s.activeProject && !keep(proj(s.activeProject.name ?? s.activeProject))) out.activeProject = null;
   if (!owner) {
-    out.config = personConfig(s.config, pid);
+    out.config = personConfig(s.config, pid, personName(board, pid));
     out.home = null; out.paths = {}; out.optiSession = null;
   }
   return out;

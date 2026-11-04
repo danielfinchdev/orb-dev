@@ -350,7 +350,6 @@ export const loadLoans = () => call('accounts.loans').then((loans) => setState({
 async function lendDialog(acc, people) {
   if (!people.length) { toast.info(t('lend.nobody')); return; }
   const r = await form(t('lend.title', { label: acc.label }), {
-    description: t('lend.desc'),
     initial: { person: people[0].id, turns: '', tokens: '', usd: '', reserve: '20', bots: true, dev: false, days: '' },
     body: (v, set) => {
       const num = (k) => ({ value: v[k], inputMode: 'decimal', onChange: (e) => set({ [k]: e.target.value.replace(/[^\d.]/g, '') }) });
@@ -389,7 +388,7 @@ function UsageByPerson() {
   const max = Math.max(1, ...list.map((r) => r.month?.turns ?? 0));
   return (
     <Card data-testid="usage-by-person">
-      <CardHeader><CardTitle className="flex items-center gap-2"><UsersIcon className="text-primary size-4" />{t('whoSpent.title')}</CardTitle><CardDescription>{t('whoSpent.hint')}</CardDescription></CardHeader>
+      <CardHeader><CardTitle className="flex items-center gap-2"><UsersIcon className="text-primary size-4" />{t('whoSpent.title')}</CardTitle></CardHeader>
       <CardContent className="grid gap-2.5">
         {list.map((r) => (
           <div key={r.person} className="grid gap-1" data-testid={`usage-person-${r.name}`}>

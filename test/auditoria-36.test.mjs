@@ -255,7 +255,7 @@ test('el uso por persona son números; Leo no lo ve', async () => {
   const rows = await A.call('usage.byPerson');
   for (const r of rows) assert.deepEqual(Object.keys(r).sort(), ['month', 'name', 'person', 'today']);
   assert.equal((await A.call('persons.switch', { id: leo.id })).ok, true);
-  try { await assert.rejects(A.call('usage.byPerson'), (e) => /dueñ|owner|No tienes/i.test(e.message)); } finally { assert.equal((await A.call('persons.switch', { id: ana.id })).ok, true); }
+  try { await assert.rejects(A.call('usage.byPerson'), (e) => /admin|No tienes/i.test(e.message)); } finally { assert.equal((await A.call('persons.switch', { id: ana.id })).ok, true); }
 });
 
 test('la respuesta guardada de una llamada reenviada es de su enlace', async () => {

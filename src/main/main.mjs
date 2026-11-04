@@ -245,7 +245,7 @@ ipcMain.handle('app:runAction', guard(async (action) => {
   return true;
 }));
 ipcMain.handle('app:showBrowser', guard(async () => { agentBrowser?.show(); return agentBrowser?.state() ?? null; }));
-ipcMain.handle('app:info', guard(async () => ({ version: VERSION, home, needsSetup: !home, platform: process.platform, defaultBase: app.getPath('documents') })));
+ipcMain.handle('app:info', guard(async () => ({ version: VERSION, home, needsSetup: !home, platform: process.platform, defaultBase: process.env.ORB_DEFAULT_BASE || app.getPath('documents') })));
 
 ipcMain.handle('app:pickFolder', guard(async (title) => {
   const r = await dialog.showOpenDialog(win, { title: String(title ?? T('sys.dialog.pickFolder')).slice(0, 100), properties: ['openDirectory', 'createDirectory'] });

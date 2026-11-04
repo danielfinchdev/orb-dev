@@ -10,12 +10,12 @@ export default {
   'msg.spend.notYours': 'Esa cuenta no es tuya ni te la han prestado.',
   'msg.spend.noAccount': 'No tienes ninguna cuenta para este agente. Añade la tuya o pide que te presten una.',
   'msg.spend.needProject': 'Elige un proyecto para hablar con el agente.',
-  'msg.spend.consoleOwner': 'El inicio de sesión con consola solo se hace en este PC y lo hace el dueño.',
+  'msg.spend.consoleOwner': 'El inicio de sesión con consola solo se hace en este PC y lo hace el admin.',
   'msg.spend.ownFolderOnly': 'Tu cuenta va en tu propia carpeta de Orb: no se puede elegir otra.',
   'msg.spend.lendYourself': 'Esa cuenta ya es de ese usuario.',
   'msg.spend.lendNothing': 'Elige para qué la prestas: bots, programar o las dos cosas.',
   'msg.share.notYourself': 'No puedes compartir algo contigo.',
-  'msg.share.alreadyOwner': 'Ese usuario ya es el dueño.',
+  'msg.share.alreadyOwner': 'Ya es de ese usuario.',
   'msg.guard.confined': 'solo puede trabajar dentro de la carpeta de su proyecto',
   'msg.guard.confinedSecret': 'quiere leer contraseñas o datos de acceso, y eso no se toca'
 };

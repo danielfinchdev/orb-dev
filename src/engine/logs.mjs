@@ -9,6 +9,9 @@ import { git, isGitRepo } from '../core/workspace.mjs';
 import { assistantName, ofUserLabel, personName } from '../core/board.mjs';
 import { groupOf } from '../core/projects.mjs';
 
+// «Pedido de Leo»: whose request it was (3.6: the person of the task or the conversation; none: the admin).
+const ofWho = (board, pid) => (pid && board?.ownerId?.() !== pid ? tr('msg.board.ofName', { name: personName(board, pid) }) : ofUserLabel());
+
 export const stamp = (d = new Date()) => { const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 const clean = (v, n) => redactSecrets(String(v ?? '').trim()).slice(0, n);
 
@@ -53,7 +56,7 @@ export function writeLog(board, project, { tema, pedido, hecho, revertir, estado
   if (!clean(tema, 120) || !clean(hecho, 6000)) throw new Error(tr('sys.logs.required'));
   // The fields in the language of the settings: the user reads these files.
   const entry = `\n### ${stamp()} — ${oneLine(author, 80)} — ${oneLine(tema, 120)}
-- ${tr('sys.logs.request', { user: ofUserLabel() })}: ${clean(pedido, 2000) || tr('sys.logs.byAssistant', { name: assistantName() })}
+- ${tr('sys.logs.request', { user: ofWho(board, person) })}: ${clean(pedido, 2000) || tr('sys.logs.byAssistant', { name: assistantName() })}
 - ${tr('sys.logs.done')}: ${clean(hecho, 6000)}
 - ${tr('sys.logs.revert')}: ${clean(revertir, 1000) || tr('sys.logs.revertDefault')}
 - ${tr('sys.logs.status')}: ${clean(estado, 2000) || tr('sys.logs.noPending')}
@@ -82,7 +85,7 @@ export function logTask(board, task, { revert }) {
   const result = cutWords(redactSecrets(task.result ?? ''), 900) || tr('sys.logs.noSummary');
   const file = board.ensureProjectLog(task.project);
   fs.appendFileSync(file, `\n### ${stamp()} — ${agentAuthor(task.assigned_to, { model: task.model, via: tr('sys.logs.viaTask', { id: task.id }) })} — ${tr('sys.logs.task', { id: task.id, title: oneLine(task.title) })}
-- ${tr('sys.logs.request', { user: ofUserLabel() })}: ${tr('sys.logs.createdBy', { who: oneLine(task.created_by, 40) })}
+- ${tr('sys.logs.request', { user: ofWho(board, task.person_id) })}: ${tr('sys.logs.createdBy', { who: oneLine(task.created_by, 40) })}
 - ${tr('sys.logs.done')}: ${result}${task.branch ? tr('sys.logs.branch', { branch: task.branch }) : ''}
 - ${tr('sys.logs.revert')}: ${revert}
 - ${tr('sys.logs.status')}: ${tr(`status.${task.status}`)}${task.branch ? tr('sys.logs.toMerge') : '.'}
@@ -112,7 +115,7 @@ export function logDirect(board, session, { before, request, answer }) {
   const file = board.ensureProjectLog(session.project);
   const list = files.slice(0, 15).join(', ') + (files.length > 15 ? tr('sys.logs.andMore', { n: files.length - 15 }) : '');
   fs.appendFileSync(file, `\n### ${stamp()} — ${agentAuthor(session.agent, { model: session.model, via: tr('sys.logs.viaDirect') })} — ${tr('sys.logs.directTopic', { title: oneLine(session.title, 80) })}
-- ${tr('sys.logs.request', { user: ofUserLabel() })}: ${cutWords(redactSecrets(request), 300) || '—'}
+- ${tr('sys.logs.request', { user: ofWho(board, session.person_id ?? session.person ?? null) })}: ${cutWords(redactSecrets(request), 300) || '—'}
 - ${tr('sys.logs.done')}: ${tr('sys.logs.directFiles', { list })}${answer ? ` ${cutWords(redactSecrets(answer), 400)}` : ''}
 - ${tr('sys.logs.revert')}: ${tr('sys.logs.directRevert')}
 - ${tr('sys.logs.status')}: ${tr('sys.logs.noPending')}

@@ -20,7 +20,7 @@ import { quickRun } from '../agents/index.mjs';
 import { PERMISSIONS } from './sessions.mjs';
 import { readLog, writeLog, logFiles } from './logs.mjs';
 import { expandMentions, mentionOptions } from './mentions.mjs';
-import { ofUserLabel, userLabel, assistantName, userName } from '../core/board.mjs';
+import { ofUserLabel, userLabel, assistantName } from '../core/board.mjs';
 import * as github from './github.mjs';
 import * as installer from './installer.mjs';
 import * as expert from './expert.mjs';
@@ -43,6 +43,7 @@ import { botMethods, centroApi } from './api-bots.mjs';
 import { linkMethods } from './api-link.mjs';
 import { accountMethods } from './api-accounts.mjs';
 import { personMethods } from './api-persons.mjs';
+import { renamePerson } from '../core/persons.mjs';
 import { gatewayMethods } from './api-gateway.mjs';
 import { dataApi, MOVED_OK } from './api-data.mjs';
 
@@ -111,7 +112,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     const line = tr('msg.api.taskRejected', { id: task.id, title: oneLine(task.title, 120) });
     if (!conv || task.created_by !== 'orb' || !orchestrator) { board.addChat('system', line, { task: task.id }, conv ?? null); return; }
     if ((board.settingJson(`report_queue:c${conv}`) ?? []).length) { board.addChat('system', line, { task: task.id }, conv); scheduler?.queueReport?.(task); return; }
-    orchestrator.internal(`AVISO DEL SISTEMA (no es ${userName()}): ${userName()} ha rechazado la tarea #${task.id} «${oneLine(task.title)}». No se hará y no se ha tocado ningún archivo. No la vuelvas a crear salvo que te lo pida. Díselo en una línea y sigue con el resto del pedido, si lo hay.`, line, null, { conversation: conv, project: task.project, person: task.person_id ?? null });
+    orchestrator.internal(`AVISO DEL SISTEMA (no es ${board.personName(task.person_id ?? null)}): ${board.personName(task.person_id ?? null)} ha rechazado la tarea #${task.id} «${oneLine(task.title)}». No se hará y no se ha tocado ningún archivo. No la vuelvas a crear salvo que te lo pida. Díselo en una línea y sigue con el resto del pedido, si lo hay.`, line, null, { conversation: conv, project: task.project, person: task.person_id ?? null });
   };
   // 3.2.1: a model by the name the selector shows (its agent's list, or the account's own), else the agent's own name for it.
   const modelLabelOf = (agent, account, id) => {
@@ -212,6 +213,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'config.save': ({ patch }) => {
       const before = [role(), ctx.config.devTarget];
       const c = saveConfig(patch ?? {}); emit('config:changed', c);
+      // 3.6: the settings' userName is the admin's name: the admin's person follows it.
+      if (typeof patch?.userName === 'string' && patch.userName.trim()) { try { const o = board.ownerId(); if (o) { renamePerson(board, o, patch.userName.trim()); board.changed('persons'); } } catch { /* a name taken by someone else: the settings keep it */ } }
       // 3.5: a new role (or «Orb para programar») is told at once to the Orbs linked both ways, and to the phones.
       if (role() !== before[0] || ctx.config.devTarget !== before[1]) {
         try { remoteRef.link?.refresh(); } catch { /* next connection */ }

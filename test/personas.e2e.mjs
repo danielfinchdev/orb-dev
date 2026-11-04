@@ -1,7 +1,7 @@
 // 3.6 «Personas», end to end without any window: the PC's own interface (the built renderer in headless Edge, with a
 // stand-in for Electron's bridge that talks to the engine like the app does), Leo's phone and Leo's browser (linked with
-// a QR made «para Leo») and Leo's terminal client. Ana (the owner) goes through the welcome wizard (adds Leo, applies
-// «Mi casa» with changes), has her own bot, project and chat; Leo, on every channel, sees nothing of hers. Also the person
+// a QR made «para Leo») and Leo's terminal client. Ana (the admin) goes through the welcome wizard (adds Leo, applies
+// «Casa»), has her own bot, project and chat; Leo, on every channel, sees nothing of hers. Also the person
 // menu, switching with a PIN, the engine's lock, Ajustes › Personas / Mi perfil / Datos, «¿Para quién?», the share dialog
 // and «Prestar a…». Screenshots: test-results/personas-*.png. The engine runs with the fake agents in a throwaway folder.
 // Run: npm run build && node test/personas.e2e.mjs
@@ -41,8 +41,9 @@ const shim = http.createServer(async (req, res) => {
     return;
   }
   if (url.pathname === '/__events') { res.writeHead(200, { 'Content-Type': 'text/event-stream' }); res.write(': hola\n\n'); streams.add(res); req.on('close', () => streams.delete(res)); return; }
-  if (url.pathname === '/__info') { res.end(JSON.stringify({ version: 'test', home: setupDone ? t.home : null, needsSetup: !setupDone, platform: 'linux' })); return; }
-  if (url.pathname === '/__setup') { setupDone = true; res.end('{}'); return; }
+  if (url.pathname === '/__info') { res.end(JSON.stringify({ version: 'test', home: setupDone ? t.home : null, needsSetup: !setupDone, platform: 'linux', defaultBase: 'C:\\Users\\ana\\Documentos' })); return; }
+  // createHome() of the real app keeps the name in the settings (userName): the same here.
+  if (url.pathname === '/__setup') { let body = ''; for await (const c of req) body += c; const { userName } = JSON.parse(body || '{}'); if (userName) await call('config.save', { patch: { userName } }); setupDone = true; res.end('{}'); return; }
   const file = path.join(RENDERER, decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname));
   if (!file.startsWith(RENDERER) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.statusCode = 404; res.end(); return; }
   res.setHeader('Content-Type', TYPES[path.extname(file)] ?? 'application/octet-stream');
@@ -59,7 +60,7 @@ const desktopBridge = () => {
     call: async (method, params) => { const r = await post('/__call', { method, params: params ?? {} }); if (!r.ok) throw new Error(r.error); return r.result; },
     on: (event, fn) => { if (!listeners.has(event)) listeners.set(event, new Set()); listeners.get(event).add(fn); return () => listeners.get(event)?.delete(fn); },
     info: async () => (await fetch('/__info')).json(),
-    setup: async () => post('/__setup'),
+    setup: async (p) => post('/__setup', p),
     pickFolder: async () => 'C:\\Users\\ana\\Documentos', pickImages: async () => [], pickFiles: async () => null, pickProgram: async () => null,
     openPath: async () => {}, openExternal: async () => {}, showBrowser: async () => {}, zoom: async () => 1, openTerminal: async () => 'terminal',
     editors: async () => ({}), moreApps: async () => [], pathForFile: () => null,
@@ -74,8 +75,9 @@ const errors = [];
 const watch = (page, who) => { page.on('pageerror', (e) => errors.push(`${who}: ${e.message} ${String(e.stack).split(String.fromCharCode(10)).slice(1, 4).join(' / ')}`)); page.on('console', (m) => { if (m.type() === 'error' && !/status of (409|404|426)|Failed to load resource/.test(m.text())) errors.push(`${who}: ${m.text()}`); }); };
 const shots = [];
 const shotOf = (page) => async (name) => { const file = path.join(OUT, `personas-${name}.png`); await page.waitForTimeout(350); await page.addStyleTag({ content: '[data-sonner-toaster] { visibility: hidden !important; }' }); await page.screenshot({ path: file }); shots.push(file); };
-// Ana's things: none of these words may reach Leo, on any channel.
-const ANA = ['ana-web-secreta', 'Diario de Ana', 'Mensaje privado de Ana', 'Mi hogar', 'Regar las plantas de Ana'];
+// Ana's things: none of these words may reach Leo, on any channel (also the bots «Casa» made for her in the wizard).
+const CASA = JSON.parse(fs.readFileSync(path.join(ROOT, 'src', 'core', 'templates', 'es', 'casa.json'), 'utf8')).bots.map((b) => b.name);
+const ANA = ['ana-web-secreta', 'Diario de Ana', 'Mensaje privado de Ana', 'Regar las plantas de Ana', ...CASA];
 const leaks = (text) => ANA.filter((w) => String(text).includes(w));
 const p2 = (x) => String(x).padStart(2, '0');
 const at = (d, h, m) => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(h)}:${p2(m)}`;
@@ -92,40 +94,29 @@ const menu = async (item) => {
   await pc.click(`[data-testid=${item}]`);
 };
 try {
-  // ---- 1. the welcome wizard: folder, «¿Quién usará este Orb?» (Ana adds Leo), «Mi casa» with changes, outside, backups.
+  // ---- 1. the welcome wizard: three screens. Her name, «¿Lo usará alguien más?» (Ana adds Leo), «Casa».
   step = 'asistente';
   await pc.goto(pcUrl);
-  await pc.waitForSelector('[data-testid=setup-create]');
-  await pc.getByRole('button', { name: /Elegir|Elige|ubicación/i }).first().click();
-  await pc.waitForSelector('[data-testid=setup-move-import]');
-  await shot('01-asistente-datos');
+  await pc.waitForSelector('[data-testid=wizard-nombre]');
+  await pc.fill('[data-testid=setup-name]', 'Ana');
+  await shot('01-asistente-nombre');
   await pc.click('[data-testid=setup-create]');
   await pc.waitForSelector('[data-testid=wizard-quien]');
   await pc.click('[data-testid=wizard-more-people]');
   await pc.fill('[data-testid=wizard-person-0]', 'Leo');
   await shot('02-asistente-quien');
   await pc.click('[data-testid=wizard-next]');
-  await pc.waitForSelector('[data-testid=wizard-plantilla]');
-  await pc.click('[data-testid=wizard-tpl-casa]');
-  await pc.waitForSelector('[data-testid=wizard-tpl-preview]');
-  await pc.fill('[data-testid=wizard-bot-name-0]', 'Mi hogar');
-  await shot('03-asistente-plantilla');
-  await pc.click('[data-testid=wizard-tpl-apply]');
-  await pc.waitForSelector('[data-testid=wizard-fuera]');
-  await shot('04-asistente-fuera');
-  await pc.click('[data-testid=wizard-next]');
-  await pc.waitForSelector('[data-testid=wizard-copias]');
-  await pc.click('[data-testid=wizard-code]');
-  await pc.waitForSelector('[data-testid=recovery-code]');
-  await shot('05-asistente-codigo');
-  await pc.getByRole('button', { name: 'Lo he guardado' }).click();
-  await pc.click('[data-testid=wizard-finish]');
+  await pc.waitForSelector('[data-testid=wizard-para]');
+  await shot('03-asistente-para');
+  await pc.click('[data-testid=wizard-use-home]');
   await pc.waitForSelector('[data-testid=chat-input]', { timeout: 30000 });
   const people = await call('persons.list');
   const leo = people.find((p) => p.name === 'Leo'); const ana = people.find((p) => p.role === 'owner');
   assert.ok(leo && ana, 'Leo creado desde el asistente');
-  assert.ok((await call('bots.list')).bots.some((b) => b.name === 'Mi hogar'), 'la plantilla con el cambio');
-  assert.ok((await call('backup.status')).recovery, 'código de recuperación puesto');
+  assert.equal(ana.name, 'Ana', 'el nombre de la primera pantalla es el del admin');
+  const botNames = (await call('bots.list')).bots.map((b) => b.name);
+  assert.ok(CASA.every((n) => botNames.includes(n)), `la plantilla «Casa», tal cual: ${botNames.join(', ')}`);
+  assert.ok((await call('backup.status')).enabled, 'copias activas sin preguntar');
 
   // ---- 2. Ana's own things (this window is Ana's).
   step = 'cosas de Ana';
@@ -137,10 +128,13 @@ try {
   await until(async () => (await call('conversations.list')).length > 0, 'conversación de Ana');
   await pc.reload(); await pc.waitForSelector('[data-testid=person-menu]');
 
-  step = 'menú de persona';
+  step = 'menú de usuario';
+  // Nothing of the user next to the robot at the top; the user is at the bottom of the sidebar.
+  assert.equal(await pc.locator('.side-band [data-testid=person-menu]').count(), 0, 'nada del usuario en la cabecera');
+  assert.match(await pc.textContent('[data-testid=sidebar-footer] [data-testid=person-menu]'), /Ana/);
   await pc.click('[data-testid=person-menu]');
-  await pc.waitForSelector('[data-testid=person-switch-Leo]');
-  await shot('06-menu-persona');
+  await pc.waitForSelector('[data-testid=person-switch]');
+  await shot('06-menu-usuario');
   await pc.keyboard.press('Escape');
 
   step = 'ajustes';
@@ -183,9 +177,25 @@ try {
   // ---- 3. Leo sits at this PC (no PIN yet), gets his own things and a PIN; he sees nothing of Ana.
   step = 'cambiar a Leo';
   await call('persons.setCaps', { id: leo.id, caps: { dev: true } }); // Ana lets Leo program (Ajustes › Usuarios › Permisos)
-  await menu('person-switch-Leo');
-  await pc.waitForSelector('[data-testid=person-menu-name] >> text=Leo').catch(() => {});
+  await menu('person-switch');
+  await pc.waitForSelector('[data-testid=lock-screen]');
+  await pc.waitForSelector('[data-testid=lock-person-Leo][aria-checked=true]');
+  await shot('13-cambiar-usuario');
+  await pc.click('[data-testid=lock-unlock]');
   await until(async () => (await call('persons.me')).person?.id === leo.id, 'la ventana es de Leo');
+  // The home greeting says Leo, never Ana (the phrase changes each time: some have no name).
+  step = 'saludo de Leo';
+  await pc.waitForSelector('[data-testid=person-menu-name] >> text=Leo');
+  let greeting = '';
+  for (let i = 0; i < 12 && !greeting.includes('Leo'); i++) {
+    if (i) { await pc.reload(); await pc.waitForSelector('[data-testid=chat-input]'); }
+    await pc.click('[data-testid=new-conversation]');
+    greeting = await pc.textContent('[data-testid=chat-greeting]');
+    assert.doesNotMatch(greeting, /Ana/, 'el saludo de Leo no dice Ana');
+  }
+  assert.match(greeting, /Leo/, 'el saludo nombra a Leo');
+  assert.equal((await pc.evaluate(() => window.orb.call('app.state'))).config.userName, 'Leo', 'userName de la ventana de Leo');
+  await shot('13b-saludo-leo');
   await call('persons.setPin', { pin: '2468' });
   await call('projects.create', { name: 'leo-deberes' });
   await call('bots.create', { name: 'Agenda de Leo', icon: '📅', role_text: 'Mi agenda.' });
@@ -197,7 +207,7 @@ try {
     const r = JSON.stringify(await pc.evaluate((x) => window.orb.call(x).catch((e) => ({ error: e.message })), m));
     assert.deepEqual(leaks(r), [], `${m} en el PC como Leo`);
   }
-  await shot('13-pc-leo');
+  await shot('13c-pc-leo');
   await pc.click('[data-testid=mode-bots]'); await pc.click('[data-testid=nav-bots]');
   await pc.waitForSelector('[data-testid="bot-Agenda de Leo"]');
   assert.deepEqual(leaks(await pc.textContent('body')), [], 'los bots de Leo');
@@ -215,18 +225,18 @@ try {
   await pc.waitForSelector('[data-testid=chat-input]');
   await until(async () => (await call('persons.me')).person?.id === ana.id, 'vuelve Ana');
   step = 'cambiar con PIN';
-  await menu('person-switch-Leo');
-  await pc.waitForSelector('[data-testid=pin-input]');
-  await pc.fill('[data-testid=pin-input]', '1111'); await pc.keyboard.press('Enter');
-  await pc.waitForTimeout(500);
-  assert.equal((await call('persons.me')).person.id, ana.id, 'un PIN mal no cambia');
+  await menu('person-switch');
+  await pc.waitForSelector('[data-testid=lock-pin]');
+  await pc.fill('[data-testid=lock-pin]', '1111'); await pc.keyboard.press('Enter');
+  await pc.waitForSelector('[data-testid=lock-error]');
+  await assert.rejects(call('projects.list'), /bloquead/i, 'un PIN mal no entra');
   await shot('16-pin');
-  await pc.fill('[data-testid=pin-input]', '2468'); await pc.keyboard.press('Enter');
+  await pc.fill('[data-testid=lock-pin]', '2468'); await pc.keyboard.press('Enter');
   await until(async () => (await call('persons.me')).person?.id === leo.id, 'con su PIN, Leo');
   await call('persons.switch', { id: ana.id });
   await pc.waitForTimeout(500);
 
-  // ---- 4. Leo's phone (a QR «para Leo»): its PIN first, «Conectado como Leo», nothing of Ana.
+  // ---- 4. Leo's phone (a QR «para Leo»): its PIN first, Leo at the top of «Más», nothing of Ana.
   step = 'móvil de Leo';
   const qr = await call('link.qr', { person: leo.id });
   const phoneCtx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'es-ES' });
@@ -236,14 +246,17 @@ try {
   await phone.waitForSelector('[data-testid=phone-lock]');
   await pshot('17-movil-pin');
   await phone.fill('[data-testid=lock-pin]', '2468'); await phone.click('[data-testid=lock-unlock]');
-  await phone.waitForSelector('[data-testid=connected-as]');
-  assert.match(await phone.textContent('[data-testid=connected-as]'), /Leo/);
+  await phone.waitForSelector('[data-testid=mobile-tabs]');
   const dev = (await call('link.devices')).find((d) => d.person === leo.id);
   assert.ok(dev, 'el móvil es de Leo');
   await phone.click('[data-testid=nav-chats]'); await phone.waitForTimeout(500);
   assert.deepEqual(leaks(await phone.textContent('body')), [], 'los chats del móvil de Leo');
   await pshot('18-movil-leo');
-  await phone.click('[data-testid=nav-more]'); await phone.click('[data-testid=nav-profile]');
+  await phone.click('[data-testid=nav-more]');
+  await phone.waitForSelector('[data-testid=person-card]');
+  assert.equal((await phone.textContent('[data-testid=person-card-name]')).trim(), 'Leo');
+  await pshot('18b-movil-mas');
+  await phone.click('[data-testid=nav-profile]');
   await phone.waitForSelector('[data-testid=profile-card]');
   await pshot('19-movil-perfil');
   await phone.click('[data-testid=mode-bots]'); await phone.click('[data-testid=nav-bots]');

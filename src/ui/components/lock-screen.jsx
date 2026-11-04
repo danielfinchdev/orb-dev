@@ -45,7 +45,9 @@ export function LockScreen() {
   const [pick, setPick] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  useEffect(() => { call('app.lockState').then((s) => { setSt(s); setPick(s?.person?.id ?? s?.persons?.[0]?.id ?? null); }).catch(() => {}); }, []);
+  // «Cambiar de usuario»: the same screen, with someone other than who was here chosen first.
+  const switching = useStore((s) => Boolean(s.locked?.switching));
+  useEffect(() => { call('app.lockState').then((s) => { setSt(s); setPick((switching ? s?.persons?.find((p) => p.id !== s?.person?.id)?.id : null) ?? s?.person?.id ?? s?.persons?.[0]?.id ?? null); }).catch(() => {}); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const who = st?.persons?.find((p) => p.id === pick) ?? null;
   const unlock = async (pin) => {
     setBusy(true); setError('');
@@ -61,14 +63,13 @@ export function LockScreen() {
   return (
     <Frame testid="lock-screen">
       <div className="-mt-16 flex justify-center"><Robot size={104} mood="idle" /></div>
-      <h1 className="text-xl">{t('persons.lockedTitle')}</h1>
-      <p className="text-muted-foreground text-sm">{t('persons.lockedBody')}</p>
+      <h1 className="text-xl">{t(st?.persons?.length > 1 ? 'persons.whoTitle' : 'persons.lockedTitle')}</h1>
       {st?.persons?.length > 1 ? (
-        <div className="flex flex-wrap justify-center gap-2" role="radiogroup" aria-label={t('persons.whoUnlocks')}>
+        <div className="flex flex-wrap justify-center gap-3" role="radiogroup" aria-label={t('persons.whoTitle')}>
           {st.persons.map((p) => (
             <button key={p.id} type="button" role="radio" aria-checked={pick === p.id} onClick={() => { setPick(p.id); setError(''); }} data-testid={`lock-person-${p.name}`}
-              className={cn('flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-sm', pick === p.id ? 'border-primary bg-primary/10 font-medium' : 'hover:bg-accent')}>
-              <PersonDot name={p.name} size="sm" />{p.name}
+              className={cn('press grid w-20 cursor-pointer justify-items-center gap-1.5 rounded-2xl border p-2.5 text-sm transition-colors', pick === p.id ? 'border-primary bg-primary/10 font-medium' : 'border-transparent hover:bg-accent')}>
+              <PersonDot name={p.name} color={p.color} size="lg" /><span className="max-w-full truncate">{p.name}</span>
             </button>
           ))}
         </div>
@@ -116,8 +117,7 @@ export function PhoneLock({ children }) {
   return (
     <Frame testid="phone-lock">
       <div className="-mt-16 flex justify-center"><Robot size={104} mood="idle" /></div>
-      <div className="flex items-center justify-center gap-2"><PersonDot name={me.person.name} color={me.person.color} /><h1 className="text-xl">{me.person.name}</h1></div>
-      <p className="text-muted-foreground text-sm">{t('persons.phoneLockedBody')}</p>
+      <div className="grid justify-items-center gap-2"><PersonDot name={me.person.name} color={me.person.color} size="lg" /><h1 className="text-xl">{me.person.name}</h1></div>
       <PinPad onSubmit={byPin} busy={busy} error={error} />
       {bio ? <Button variant="outline" onClick={byFinger} data-testid="lock-finger"><Fingerprint />{t('persons.useFinger')}</Button> : null}
     </Frame>

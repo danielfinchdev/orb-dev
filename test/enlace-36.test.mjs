@@ -73,14 +73,14 @@ test('8: el QR para Leo da un dispositivo de Leo; Leo no hace QR para otros ni d
   assert.equal(me.person.name, 'Leo');
   assert.equal(me.v, PROTOCOL);
   // «Puede administrar» only on a device of the owner.
-  await assert.rejects(centro.call('link.setAdmin', { id: peer.id, admin: true }), /dueño/);
-  await assert.rejects(centro.call('link.qr', { person: leo.id, admin: true }), /dueño/);
+  await assert.rejects(centro.call('link.setAdmin', { id: peer.id, admin: true }), /admin/);
+  await assert.rejects(centro.call('link.qr', { person: leo.id, admin: true }), /admin/);
   // Leo at this PC's window: a QR for himself only.
   assert.equal((await centro.call('persons.switch', { id: leo.id })).ok, true);
   try {
-    await assert.rejects(centro.call('link.qr', { person: ana.id }), /acceso|dueño/);
-    await assert.rejects(centro.call('link.qr', { newPerson: 'Otra' }), /acceso|dueño/);
-    await assert.rejects(centro.call('link.qr', { admin: true }), /acceso|dueño/);
+    await assert.rejects(centro.call('link.qr', { person: ana.id }), /acceso|admin/);
+    await assert.rejects(centro.call('link.qr', { newPerson: 'Otra' }), /acceso|admin/);
+    await assert.rejects(centro.call('link.qr', { admin: true }), /acceso|admin/);
     const mine = await centro.call('link.qr', {});
     assert.equal(mine.person.id, leo.id);
     // His devices only.
@@ -265,7 +265,7 @@ test('21: móvil de administrar perdido: quitar, pin-reset y enlazar --persona <
     const d = (await ctl('link.devices')).find((x) => x.id === fp.id);
     assert.equal(d.admin, true); assert.equal(d.person, owner.id);
     // For someone else, never «Puede administrar».
-    await assert.rejects(ctl('link.qr', { person: 'Leo', admin: true }), /dueño/);
+    await assert.rejects(ctl('link.qr', { person: 'Leo', admin: true }), /admin/);
     const lq = await ctl('link.qr', { person: 'leo' });
     assert.equal(lq.person.id, leoN.id);
     // What the control socket may call stays short.

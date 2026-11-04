@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { Switch, Tip, BubbleTip, Popover, PopoverTrigger, PopoverContent } from '@/components/ui/overlay.jsx';
 import { bridge, useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere } from '@/lib/store.js';
+import { userNameOf } from '@/lib/persons.js';
 import { notify } from '@/lib/notify.js';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { pickGreeting, pickSubtitle, suggestionsFor } from '@/lib/greeting.js';
@@ -385,6 +386,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const orchestrate = conv ? true : defaults.orchestrate !== false;
   const bubble = useUsageBubble(catalog, brain);
   const greeting = useGreeting();
+  const userName = useStore((st) => userNameOf(st.me, st.app?.config));
   const [sending, setSending] = useState(false);
   // 3.2.1: in God mode, a new conversation goes to the project chosen there, and the bar says that one.
   const projects = useStore((s) => s.projects);
@@ -470,7 +472,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
             <div className="flex flex-col items-center gap-3 pt-10 text-center">
               <Robot size={130} mood="hello" live />
               <div className="chat-glass chat-hero flex flex-col items-center gap-3">
-                <h2 className="hero-title mt-2 text-2xl" data-testid="chat-greeting">{app.config.userName ? t(greeting.key, { ...greeting, user: app.config.userName, name }) : t('chat.hello', { name })}</h2>
+                <h2 className="hero-title mt-2 text-2xl" data-testid="chat-greeting">{userName ? t(greeting.key, { ...greeting, user: userName, name }) : t('chat.hello', { name })}</h2>
                 <p className="text-muted-foreground max-w-md">{t(greeting.sub)}</p>
               </div>
               <div className="mt-3 flex max-w-xl flex-wrap justify-center gap-2">{suggestionsFor(workProject?.name).map((s) => <Button key={s} variant="outline" size="sm" className="h-auto max-w-full shrink rounded-full py-1.5 whitespace-normal" onClick={() => setText(t(s))}>{t(s)}</Button>)}</div>

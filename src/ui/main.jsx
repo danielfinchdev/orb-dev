@@ -47,10 +47,10 @@ import { MagicLinkView } from '@/views/magic-link.jsx';
 import { ModeSwitch } from '@/components/mode-switch.jsx';
 import { TallerBanner } from '@/components/taller-banner.jsx';
 // 3.6 «Personas»
-import { PersonMenu, ConnectedAs } from '@/components/person-menu.jsx';
 import { LockScreen, PhoneLock, UpdateNeeded } from '@/components/lock-screen.jsx';
 import { ShareHost } from '@/components/share-dialog.jsx';
 import { ProfileView } from '@/views/persons.jsx';
+import { RecoveryNotice } from '@/views/data.jsx';
 import { personSwitched } from '@/lib/store.js';
 
 const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
@@ -72,7 +72,7 @@ function MobileShell() {
   return (
     <div className="flex h-full flex-col">
       {/* 3.5: «Orb | Bots» at the top; in Orb mode, how the PC that does the work is (when linked with the server). */}
-      <div className="mobile-mode bg-sidebar shrink-0 border-b px-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2"><ModeSwitch className="mx-auto max-w-xs" /><ConnectedAs className="pt-1.5" /></div>
+      <div className="mobile-mode bg-sidebar shrink-0 border-b px-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2"><ModeSwitch className="mx-auto max-w-xs" /></div>
       {bots ? null : <TallerBanner />}
       <main className="theme-scene flex min-h-0 min-w-0 flex-1 flex-col">
         <Scene />
@@ -120,7 +120,6 @@ function Shell() {
         <div className="topbar theme-band app-titlebar wco-pad bg-sidebar flex h-14 shrink-0 items-center gap-2 border-b px-3 md:hidden">
           <button className="hover:bg-accent grid size-9 cursor-pointer place-items-center rounded-lg" onClick={() => setDrawer(true)} aria-label={t('app.menu')}><Menu className="size-5" /></button>
           <Robot size={26} mood={mood} /><span className="min-w-0 flex-1 truncate text-[15px] font-medium">{app.config.assistantName}</span>
-          <PersonMenu compact />
         </div>
         {bridge.mobile && modeOf(route) !== 'bots' ? <TallerBanner /> : null}
         <View key={`${route.view}:${route.id ?? ''}:${route.project ?? ''}`} route={route} />
@@ -128,7 +127,7 @@ function Shell() {
       {/* The floating robot only where there is room for it: never over forms or conversations (it covered the switches of
           Ajustes and took their clicks), and those views leave room at the bottom so nothing stays under it. */}
       {/* 3.5: a browser linked with an Orb gets the PC's layout, not what only the PC itself does. */}
-      {bridge.mobile ? null : <><UpdateCard /><SettingsDialog /><GamesDialog /></>}
+      {bridge.mobile ? null : <><UpdateCard /><SettingsDialog /><GamesDialog /><RecoveryNotice /></>}
       <Notices />
       <ShareHost />
       {bridge.mobile ? null : <ActionShortcuts project={shortcutProject} />}
@@ -212,7 +211,7 @@ function Root() {
       if (event === 'link:peers') loadCentro();
       // 3.6 «Personas»: someone else at this PC, the window locked or unlocked, the people changed.
       if (event === 'persons:switched') personSwitched();
-      if (event === 'persons:locked') setState({ locked: { locked: true } });
+      if (event === 'persons:locked') setState((st) => ({ locked: st.locked || { locked: true } })); // keeps «Cambiar de usuario»
       if (event === 'persons:unlocked' && getState().locked) refresh().then(() => { if (getState().app?.config) setState({ locked: false }); }).catch(() => {});
       if (event === 'engine:stopped') notify({ body: tNow('app.engineStopped'), tone: 'error' });
       if (event === 'engine:restarted') { notify({ body: tNow('app.engineRestarted'), tone: 'warning' }); refreshSoon(); }

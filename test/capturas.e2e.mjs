@@ -120,7 +120,7 @@ try {
   await page.click('[data-testid=mode-orb]');
   await page.waitForSelector('[data-testid=magic-link]');
 
-  // 3.6: with a second user, the person menu, «¿Para qué usuario?» with the devices of each one, and «Mi perfil».
+  // 3.6: with a second user, the user menu at the bottom of the sidebar, «¿Para qué usuario?» with the devices of each one, and «Mi perfil».
   step = 'usuarios';
   await call('persons.create', { name: 'Leo' });
   await page.reload();
@@ -130,9 +130,11 @@ try {
   assert.ok(await page.locator('[data-testid=link-device-group]').count() >= 1, 'los dispositivos, por usuario');
   await shot('09-magic-link-usuarios');
   await page.click('[data-testid=person-menu]');
+  await page.waitForSelector('[data-testid=person-profile]');
+  await shot('10-menu-usuario');
   await page.click('[data-testid=person-profile]');
   await page.waitForSelector('[data-testid=profile-card]');
-  await shot('10-mi-perfil');
+  await shot('11-mi-perfil');
 
   assert.deepEqual(errors.filter((e) => !/favicon/.test(e)), [], `errores: ${errors.join(' | ')}`);
   console.log(`✔ capturas a tamaño de PC:\n${shots.join('\n')}`);
