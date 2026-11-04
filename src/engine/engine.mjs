@@ -42,6 +42,12 @@ async function start(home, version, secret, browser, headless) {
   if (ctx.headless) process.env.ORB_NUCLEO = '1';
   // The approval secret comes from the app (kept encrypted by Windows); without it, the file fallback is used.
   if (typeof secret === 'string' && /^[0-9a-f]{64}$/.test(secret)) ctx.secret = Buffer.from(secret, 'hex');
+  // 3.6: a backup restored from Ajustes › Datos or «orb-nucleo copia restaurar» replaces the data now, before the database
+  // opens (what was there goes to .orb/antes-de-restaurar-<fecha>). Its secret (links, approvals) comes with it.
+  const { applyPendingRestore } = await import('../core/backup.mjs');
+  let restored = null;
+  try { restored = applyPendingRestore(home); } catch (error) { console.error(`restaurar: ${error.message}`); }
+  if (restored) { useHome(home); if (restored.secretChanged && restored.secret?.length >= 32) ctx.secret = Buffer.from(restored.secret.subarray(0, 32)); }
   // The agents' browser lives in the app (main process): its pipe and token go to the agents' MCP servers.
   if (typeof browser?.pipe === 'string' && /^[0-9a-f]{48}$/.test(browser.token ?? '') && /orb-navegador-[0-9a-f]{16}(\.sock)?$/.test(browser.pipe)) ctx.browser = { pipe: browser.pipe, token: browser.token };
   logFile = path.join(ctx.paths.runs, 'motor.log');
@@ -158,11 +164,13 @@ async function start(home, version, secret, browser, headless) {
       const v = board.one('PRAGMA data_version').data_version;
       if (v !== dataVersion) { dataVersion = v; changed('external'); }
       scheduler.tick();
+      api.dataTick?.();
     } catch (error) { log(`tick: ${error.stack}`); } finally { ticking = false; }
   };
   setInterval(loop, 1500);
   board.onChange((what) => { if (what === 'tasks') setImmediate(loop); });
   log(`motor arrancado (versión ${version}, papel ${role()}) en ${home}`);
+  if (restored) { log(`copia restaurada: ${restored.from} (lo anterior está en ${restored.aside})`); board.notice(tr('data.backup.restored', { created: String(restored.header?.created ?? '').slice(0, 16).replace('T', ' ') }), 'success'); }
   // Which agents this PC has, as the engine sees them (with the app's environment): first thing to look at if «Agentes»
   // says one is missing.
   const { ADAPTERS } = await import('../agents/index.mjs');

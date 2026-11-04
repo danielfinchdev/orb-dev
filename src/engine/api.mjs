@@ -40,6 +40,7 @@ import { git, slug } from '../core/workspace.mjs';
 import * as B from '../core/bots.mjs';
 import { serverStatus, haFetch } from '../core/server-admin.mjs';
 import { CENTRO_FORWARD, PAIR_KINDS, PREVIEWS } from './remote.mjs';
+import { dataApi } from './api-data.mjs';
 
 // Names of the fields in the messages (Spanish as they were; the key is the Spanish word).
 const fld = (name) => { const key = `msg.api.f.${String(name).replace(/ /g, '_')}`; const t = tr(key); return t === key ? name : t; };
@@ -74,6 +75,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   const conversationId = (id) => { const c = board.conversation(int(id, 'conversación')); if (!c) fail(tr('msg.board.noConversation')); return c.id; };
   const wb = whiteboard(board);
   const optiApi = opti({ board, sessions });
+  const data = dataApi({ board, emit, log, version }); // 3.6: backups, templates, moving the Orb
   // 2.7: a picture the window may show: an image file inside Orb's folder, a project, or an agent account's own folder
   // (Codex keeps what it makes in <CODEX_HOME>/generated_images). 25 MB at most.
   const allowedImage = (file) => {
@@ -516,6 +518,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'opti.stats': async () => ({ ...(await quickStats()), oce: readOce() }),
     // ---- 3.5: the user's bots (docs/BOTS.md). The user's own changes need no card; the bots' proposals do.
     ...botMethods(),
+    // ---- 3.6: backups, the wizard's templates and moving the Orb (src/engine/api-data.mjs).
+    ...data.methods,
     'opti.act': ({ item, decision }) => optiApi.act({ item: int(item, 'tarjeta'), decision: oneOf(decision, ['allow', 'deny'], 'decisión') }),
     // 2.7: pictures the agents make (Codex image_gen): shown in the conversation, a zone marked to change, saved in the
     // project. Read only from the agents' own picture folders, Orb's folder and the projects; written only into Orb's
@@ -967,6 +971,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
         else emit('chat:new', { role: r.role, body: oneLine(r.body, 240), meta, conversation: r.conversation_id ?? null });
       }
     },
+    // 3.6: the daily backup (03:00 in the owner's zone), looked at from the engine's loop.
+    dataTick: () => data.tick(),
     // Running tasks stay "running": the next start continues them (scheduler.finish does not close them while closing).
     shutdown() { bots?.shutdown(); scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stopAll(); orchestrator.closeLive(); log('motor detenido'); }
   };

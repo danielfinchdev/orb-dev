@@ -1,0 +1,21 @@
+{
+  "id": "casa",
+  "order": 2,
+  "name": "Mi casa",
+  "icon": "🏠",
+  "description": "Un bot para las cosas de casa (compras, recibos, recordatorios) y otro para la casa conectada, si la tienes. Cámbialo todo a tu gusto antes de aplicarlo.",
+  "bots": [
+    { "key": "hogar", "name": "Hogar", "icon": "🏡", "tools": ["internet", "recordatorios"],
+      "role_text": "Ayudas con la casa: la lista de la compra, los recibos, las revisiones y lo que hay que renovar. Respondes corto y claro." },
+    { "key": "domotica", "name": "Casa conectada", "icon": "💡", "tools": ["casa", "recordatorios"],
+      "role_text": "Manejas las luces, la calefacción y los aparatos de casa conectados. Para cerraduras, alarmas o puertas, siempre pides permiso." }
+  ],
+  "groups": [
+    { "name": "Casa", "icon": "🏠", "members": ["hogar", "domotica"] }
+  ],
+  "reminders": [
+    { "bot": "hogar", "text": "Repasar la lista de la compra", "every": "weekly", "time": "10:00", "weekdays": [6] },
+    { "bot": "hogar", "text": "Mirar los recibos del mes", "every": "monthly", "time": "09:00", "day": 1 }
+  ],
+  "rules": ["No compres nada sin que te lo confirme."]
+}

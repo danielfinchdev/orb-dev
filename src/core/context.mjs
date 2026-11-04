@@ -26,7 +26,7 @@ export function useHome(home) {
 }
 
 // Settings saved from the app. Only known top-level keys are accepted.
-const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'monitor', 'oneAtATime', 'approvalWaitMinutes', 'bots', 'role', 'devTarget', 'protected'];
+const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'monitor', 'oneAtATime', 'approvalWaitMinutes', 'bots', 'role', 'devTarget', 'protected', 'backup', 'tz'];
 export function saveConfig(patch) {
   const unknown = Object.keys(patch ?? {}).filter((k) => !EDITABLE.includes(k));
   if (unknown.length) throw new Error(tr('msg.ctx.unknownSettings', { unknown: unknown.join(', ') }));
@@ -141,6 +141,14 @@ export function validateConfig(c) {
   }
   // 3.5: «Cosas que nadie toca»: up to 50 names, paths or containers (2-200 characters each).
   if (c.protected !== undefined && (!Array.isArray(c.protected) || c.protected.length > 50 || c.protected.some((x) => typeof x !== 'string' || x.trim().length < 2 || x.length > 200))) throw new Error(tr('msg.ctx.badAppearance', { name: 'protected' }));
+  // 3.6: backups (src/core/backup.mjs): on/off, another folder (absolute), and whether project folders and the agents'
+  // login folders go in too (both off). tz: this Orb's time zone until each person has their own (src/core/tz.mjs).
+  if (c.backup !== undefined) {
+    if (!c.backup || typeof c.backup !== 'object' || Array.isArray(c.backup)) throw new Error(tr('msg.ctx.badAppearance', { name: 'backup' }));
+    bool(c.backup.enabled, 'backup.enabled'); bool(c.backup.projects, 'backup.projects'); bool(c.backup.accounts, 'backup.accounts');
+    if (c.backup.folder !== undefined && c.backup.folder !== '' && (typeof c.backup.folder !== 'string' || !path.isAbsolute(c.backup.folder) || c.backup.folder.length > 500)) throw new Error(tr('msg.ctx.badAppearance', { name: 'backup.folder' }));
+  }
+  if (c.tz !== undefined && c.tz !== '' && !(typeof c.tz === 'string' && c.tz.length <= 64 && (() => { try { new Intl.DateTimeFormat('en', { timeZone: c.tz }); return true; } catch { return false; } })())) throw new Error(tr('msg.ctx.badAppearance', { name: 'tz' }));
   if (c.approvalWaitMinutes !== undefined) int(c.approvalWaitMinutes, 0, 240, 'approvalWaitMinutes');
   if (c.budget?.stopAt != null && !(Number(c.budget.stopAt) >= 0.5 && Number(c.budget.stopAt) <= 1)) throw new Error(tr('msg.ctx.stopAt'));
   if (c.budget?.profile != null && ![0, 1, 2, 3, 4].includes(c.budget.profile)) throw new Error(tr('msg.ctx.profile'));

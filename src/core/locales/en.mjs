@@ -25,6 +25,7 @@ import monitor from './en/monitor.mjs';
 import bots from './en/bots.mjs';
 import term from './en/term.mjs';
 import botsui from './en/botsui.mjs';
+import data from './en/data.mjs';
 
 export default {
   ...base,
@@ -52,5 +53,6 @@ export default {
   ...monitor,
   ...bots,
   ...term,
-  ...botsui
+  ...botsui,
+  ...data
 };

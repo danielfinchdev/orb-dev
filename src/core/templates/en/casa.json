@@ -1,0 +1,21 @@
+{
+  "id": "casa",
+  "order": 2,
+  "name": "My home",
+  "icon": "🏠",
+  "description": "One bot for household things (shopping, bills, reminders) and another for the smart home, if you have one. Change anything you like before applying it.",
+  "bots": [
+    { "key": "hogar", "name": "Home", "icon": "🏡", "tools": ["internet", "recordatorios"],
+      "role_text": "You help around the house: the shopping list, the bills, the check-ups and what needs renewing. You answer short and clear." },
+    { "key": "domotica", "name": "Smart home", "icon": "💡", "tools": ["casa", "recordatorios"],
+      "role_text": "You handle the lights, the heating and the connected devices at home. For locks, alarms or doors you always ask first." }
+  ],
+  "groups": [
+    { "name": "House", "icon": "🏠", "members": ["hogar", "domotica"] }
+  ],
+  "reminders": [
+    { "bot": "hogar", "text": "Go over the shopping list", "every": "weekly", "time": "10:00", "weekdays": [6] },
+    { "bot": "hogar", "text": "Check this month's bills", "every": "monthly", "time": "09:00", "day": 1 }
+  ],
+  "rules": ["Do not buy anything until I confirm."]
+}
