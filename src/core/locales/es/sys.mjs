@@ -161,6 +161,7 @@ export default {
   'sys.board.badLaunch': 'launch debe ser auto o manual',
   'sys.board.dependsMax': 'depends_on: como máximo 20 tareas',
   'sys.board.dependsMissing': 'depends_on: no existe la tarea #{id}',
+  'sys.board.folderOfOther': 'Esa carpeta no está disponible: es de otro proyecto. Elige otra.',
   'sys.board.sensitivityList': 'sensitivity debe ser una lista',
   'sys.board.badSensitivity': 'sensitivity no válida: {list}',
   'sys.board.onlyAssistant': 'solo {name} puede cambiar el agente, el modelo, reasoning o fast de una tarea',

@@ -98,14 +98,14 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
   const queues = new Map(); // page key -> last queued action (one action at a time per page)
 
   // 3.6: one browser profile per person (the owner keeps the 3.5 one): cookies and sign-ins of one person's agents and
-  // bots never reach another person's pages. A bot uses its own person's. In memory, as before: nothing is kept between
-  // runs.
+  // bots never reach another person's pages. A bot uses its own person's. Kept on disk (persist:), each person's apart:
+  // a sign-in made in one person's browser is still there next time, and only for that person.
   const profiles = new Map();
   const sessionFor = (person = '') => {
     const key = String(person || '');
     let ses = profiles.get(key);
     if (ses) return ses;
-    ses = session.fromPartition(key ? `orb-web-${key}` : 'navegador-agente');
+    ses = session.fromPartition(key ? `persist:orb-web-${key.replace(/[^\w-]/g, '_')}` : 'persist:navegador-agente');
     ses.setPermissionRequestHandler((_wc, _p, cb) => cb(false));
     ses.setPermissionCheckHandler(() => false);
     ses.setDevicePermissionHandler(() => false);

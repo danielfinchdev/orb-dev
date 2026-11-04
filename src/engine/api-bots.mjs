@@ -22,8 +22,9 @@ function hub({ board, bots, remoteRef }) {
   // and a call to its bots. Without a choice, centro.* still reaches the first of them (the one on now first), but this
   // Orb's own bots are the ones shown (active: false). 3.6: the choice is each person's (person_settings; the owner's
   // reads orb.json as before).
-  const hubPeers = () => (remoteRef.link?.peers() ?? []).filter((p) => hostsBots(p.role ?? 'taller') && !p.revoked);
+  // 3.6: person: only that person's links (a link without a person is the owner's): nobody sees or uses another's.
   const owner = () => board.ownerId();
+  const hubPeers = (person = null) => (remoteRef.link?.peers() ?? []).filter((p) => hostsBots(p.role ?? 'taller') && !p.revoked && (!person || (p.person ?? owner()) === person));
   const botsLocation = (person = null) => {
     const p = person ?? owner();
     let v; try { v = board.personSetting(p, 'bots.location'); } catch { v = undefined; }
@@ -35,14 +36,14 @@ function hub({ board, bots, remoteRef }) {
   };
   // 3.6 (WS2): person: only that person's links here (a link without a person is the owner's).
   const centroPeer = (person = null) => {
-    const list = hubPeers().filter((p) => !person || (p.person ?? owner()) === person); const loc = botsLocation(person);
+    const list = hubPeers(person); const loc = botsLocation(person);
     return (loc !== 'local' && list.find((p) => p.id === loc)) || list.find((p) => p.online) || list[0] || null;
   };
   // The Orbs already asked about (the card after linking is shown once for each).
   const askedList = () => board.settingJson('bots_location_asked') ?? [];
   const asked = (id) => { if (id && !askedList().includes(id)) board.settingJson('bots_location_asked', [...askedList(), id].slice(-50)); };
   function botsWhere(person = null) {
-    const loc = botsLocation(person); const peers = hubPeers();
+    const loc = botsLocation(person); const peers = hubPeers(person ?? owner());
     const s = B.listBots(board, { person: person ?? owner() });
     const here = s.filter((b) => !b.paused).length;
     const ask = loc === 'local' ? peers.find((p) => !askedList().includes(p.id)) ?? null : null;
@@ -332,7 +333,7 @@ export function botMethods({ board, emit, remoteRef, bots }) {
     // place changes only when the copy went well. Without bring, the bots here stay as they are.
     'bots.moveTo': async ({ location, bring, mapping, history }, who) => {
       const loc = str(location, 'lugar', 64);
-      const peer = loc === 'local' ? null : (hubPeers().find((p) => p.id === loc) ?? fail(tr('msg.link.noCentro')));
+      const peer = loc === 'local' ? null : (hubPeers(me(who)).find((p) => p.id === loc) ?? fail(tr('msg.link.noCentro')));
       asked(peer?.id ?? null);
       let result = { moved: 0, skipped: [] };
       if (peer && bring === true) {

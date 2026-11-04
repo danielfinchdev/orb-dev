@@ -9,7 +9,7 @@ import crypto from 'node:crypto';
 import net from 'node:net';
 import { useHome, ctx, tr } from '../core/context.mjs';
 import { isHome, CATEGORIES, AGENT_LABELS } from '../core/home.mjs';
-import { budgetConfig, waitReason, modelLimits } from '../core/budget.mjs';
+import { budgetConfig, waitReason, modelLimits, accountsFor } from '../core/budget.mjs';
 import { accountLabel } from '../core/accounts.mjs';
 import { oneLine } from '../core/safety.mjs';
 import { git, copyIntoWorkdir } from '../core/workspace.mjs';
@@ -107,7 +107,7 @@ function giveFiles({ task_id, files, from_task }) {
   if (!Array.isArray(files) || !files.length || files.length > 50) throw new Error(tr('sys.mcp.filesRange'));
   const out = copyIntoWorkdir(source, inCopy(task.workdir), files);
   board.event(task.id, ME, 'files.given', `${out.copied.join(', ') || 'nada'}${out.skipped.length ? ` · no copiados: ${out.skipped.join('; ')}` : ''}`);
-  if (out.copied.length) board.notice(tr('msg.mcp.filesCopied', { name: NAME, n: out.copied.length, id: task.id, list: oneLine(out.copied.join(', '), 200) }), 'info');
+  if (out.copied.length) board.notice(tr('msg.mcp.filesCopied', { name: NAME, n: out.copied.length, id: task.id, list: oneLine(out.copied.join(', '), 200) }), 'info', { person: OTHER ? task.person_id ?? null : null });
   return out;
 }
 
@@ -191,6 +191,8 @@ function taskBrief(id) {
     messages: d.messages.slice(-20).map((m) => ({ ...m, body: oneLine(m.body, 600) })),
     dependencies: d.dependencies.map((x) => x && { ...x, result: oneLine(x.result, 1500) }) };
 }
+// 3.6: only the accounts the person this process works for may spend (never the names of anyone else's).
+const myAccounts = () => { try { return [...new Map(AGENTS.flatMap((a) => accountsFor(board, P.person, a, { purpose: 'dev', usable: false })).map((a) => [a.id, a])).values()]; } catch { return []; } };
 const modelsHelp = () => AVAILABLE.map((a) => `${a}: ${modelsOf(a).join(', ') || 'predeterminado'}`).join(' | ');
 const tools = [
   ...(TASK_ID && !BOSS ? [
@@ -234,9 +236,10 @@ const tools = [
     inputSchema: { type: 'object', required: ['to', 'body'], properties: { to: str(`${AVAILABLE.join(', ')}, all, orb o usuario`), body: str('Mensaje'), task_id: { type: 'integer' } } },
     // 3.1: a worker's message carries its own task when it names none, so Orb knows who sent it (and does not hand it
     // back to the same task).
-    run: (a) => { if (a.task_id != null) seeTask(a.task_id); return board.send({ ...a, task_id: a.task_id ?? TASK_ID ?? undefined, from: ME }); } },
+    // 3.6: signed with the person this process works for: it only reaches that person's agents and chat.
+    run: (a) => { if (a.task_id != null) seeTask(a.task_id); return board.send({ ...a, task_id: a.task_id ?? TASK_ID ?? undefined, from: ME, person: logPerson() }); } },
   { name: 'orb_read_messages', description: 'Lee tus mensajes sin leer (y los marca como leídos).', inputSchema: { type: 'object', properties: {} },
-    run: () => { const rows = board.inbox(ME); return rows.length ? rows : 'Sin mensajes nuevos.'; } },
+    run: () => { const rows = board.inbox(ME, true, { person: logPerson() }); return rows.length ? rows : 'Sin mensajes nuevos.'; } },
   { name: 'orb_add_project', description: `Registra una carpeta existente como proyecto (dentro de una categoría de ${ctx.paths.projects}: windows, ios, android o web; o en las carpetas permitidas).`,
     inputSchema: { type: 'object', required: ['name', 'path'], properties: { name: str('Nombre corto'), path: str('Ruta absoluta de la carpeta'), notes: str('Notas opcionales') } },
     run: (a) => { const known = board.project(a.name); if (known) seeProject(known.name, 'edit'); else devIn(null); return board.addProject(a, ME, { person: OTHER ? PERSON : null }); } },
@@ -252,7 +255,7 @@ const tools = [
         project: str('Nombre del proyecto registrado'), title: str('Título corto'),
         description: str('Instrucciones autocontenidas: qué hacer, dónde y criterio de terminado'),
         agent: { type: 'string', enum: [...AVAILABLE, 'any'] }, model: str(`Modelo concreto (opcional; requiere agent). ${modelsHelp()}`),
-        account: str(`Solo si ${USER} pide una cuenta concreta (si no, se reparte sola entre las que tienen uso disponible). Cuentas: ${(ctx.config.accounts ?? []).map((a) => `${a.id} (${a.label})`).join(', ')}`),
+        account: str(`Solo si ${USER} pide una cuenta concreta (si no, se reparte sola entre las que tienen uso disponible). Cuentas: ${myAccounts().map((a) => `${a.id} (${a.label})`).join(', ')}`),
         nivel: { type: 'string', enum: ['simple', 'normal', 'complejo'], description: 'Lo difícil que es: simple (un cambio pequeño, un texto, una pregunta), normal (lo habitual) o complejo (diseño, un fallo difícil, mucho código). ' + (ctx.config.budget?.autoModel !== false ? 'Con esto Orb elige solo el modelo y el razonamiento más eficientes: no pongas model ni reasoning salvo que ' + USER + ' pida uno concreto.' : 'Ayuda a elegir modelo y razonamiento.') }, 
         reasoning: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Por defecto medium. high solo para algo muy complicado.' },
         launch: { type: 'string', enum: ['auto', 'manual'] }, priority: { type: 'integer', minimum: 1, maximum: 3, description: '1 alta, 2 normal, 3 baja' },
@@ -346,7 +349,7 @@ async function botBrowser(action, a = {}) {
   return remember(await browser(action, a));
 }
 if (PIPE && PIPE_TOKEN) tools.push(
-  { name: 'orb_browser_open', description: `Abre una página web en el navegador del agente (la app la muestra en directo a ${USER}) y devuelve su texto y elementos numerados. Sirve para probar webs (también http://localhost:puerto) o consultar páginas. No tiene sesiones iniciadas de nadie.`,
+  { name: 'orb_browser_open', description: `Abre una página web en el navegador del agente (la app la muestra en directo a ${USER}) y devuelve su texto y elementos numerados. Sirve para probar webs (también http://localhost:puerto) o consultar páginas. Solo tiene las sesiones iniciadas en este navegador por ${USER} (nunca las de otra persona).`,
     inputSchema: { type: 'object', required: ['url'], properties: { url: str('Dirección (https://… o localhost:puerto)') } }, run: (a) => botBrowser('open', a) },
   { name: 'orb_browser_snapshot', description: 'Vuelve a leer la página abierta: texto visible y elementos numerados para pulsar o escribir.', readOnly: true,
     inputSchema: { type: 'object', properties: {} }, run: () => botBrowser('snapshot') },

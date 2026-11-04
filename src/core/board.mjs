@@ -4,7 +4,7 @@ import path from 'node:path';
 import { openDb, taskOptions, checkPolicy } from './db.mjs';
 import { ctx, tr, isHeadless, personSetting as personSettingOf } from './context.mjs';
 import { ownerId as findOwner, personName as nameOf } from './persons.mjs';
-import { scopeSql } from './authz.mjs';
+import { scopeSql, rightOn } from './authz.mjs';
 import { AGENT_IDS, AGENT_LABELS, folderName, projectLogHeader, isConfigName, categoryOf, CATEGORIES } from './home.mjs';
 import { oneLine, MAX_DESCRIPTION } from './safety.mjs';
 import { contentHash, sign, verify, detectSensitivity, deletionAskedByUser, defaultApprovalKey } from './approval.mjs';
@@ -151,6 +151,12 @@ export class Board {
     const existing = this.project(name);
     if (existing && !same(existing.path, folder) && !fromUser) throw new Error(tr('sys.board.projectElsewhere', { name: existing.name }));
     const checked = existing && same(existing.path, folder) ? existing.path : checkProjectPath(folder, { fromUser });
+    // 3.6: a folder is one person's: never inside (or around) the folder of someone else's project, nor that same
+    // folder under another name (it would open that person's files to whoever registers it).
+    const owner = this.ownerId(); const whose = (p) => p.person_id ?? owner;
+    const me = existing ? whose(existing) : person ?? owner;
+    const nested = (a, b) => { const rel = path.relative(path.resolve(a), path.resolve(b)); return !rel || (!rel.startsWith('..') && !path.isAbsolute(rel)); };
+    if (this.projects().some((p) => whose(p) !== me && (nested(p.path, checked) || nested(checked, p.path)))) throw new Error(tr('sys.board.folderOfOther'));
     // One folder, one project: the same folder under another name is the project that already exists.
     const twin = !existing && this.projects().find((p) => same(p.path, checked));
     if (twin) return twin;
@@ -276,7 +282,8 @@ export class Board {
     this.checkAvailable(agent);
     if (!['auto', 'manual'].includes(launch)) throw new Error(tr('sys.board.badLaunch'));
     if (!Array.isArray(depends_on) || depends_on.length > 20) throw new Error(tr('sys.board.dependsMax'));
-    for (const dep of depends_on) if (!this.task(dep)) throw new Error(tr('sys.board.dependsMissing', { id: dep }));
+    // 3.6: a dependency hands its result to this task: only a task its person may see (another person's is «missing»).
+    for (const dep of depends_on) if (!this.task(dep) || !rightOn(this, who ?? this.ownerId(), { type: 'task', id: dep })) throw new Error(tr('sys.board.dependsMissing', { id: dep }));
     if (!Array.isArray(sensitivity)) throw new Error(tr('sys.board.sensitivityList'));
     const unknown = sensitivity.filter((s) => !ctx.config.sensitive.includes(s));
     if (unknown.length) throw new Error(tr('sys.board.badSensitivity', { list: unknown.join(', ') }));
@@ -536,21 +543,29 @@ export class Board {
   }
 
   // ---- messages between agents, the assistant and the user
-  send({ from, to, body, task_id }) {
+  // 3.6: person: whose agent sends it (default: its task's; none: the owner's). It reaches only that person's agents and
+  // chat (an agent never talks into another person's work).
+  send({ from, to, body, task_id, person = null }) {
     if (!body) throw new Error(tr('sys.board.bodyRequired'));
     if (![...AGENTS, 'all', 'usuario', 'orb'].includes(to)) throw new Error(tr('sys.board.badRecipient', { to, list: AGENTS.join(', ') }));
     body = String(body).slice(0, 8000);
     // 3.2.1: the agent by its name («Cursor», not «cursor»).
     const who = from === 'orb' ? assistantName() : AGENT_LABELS[from] ?? from;
-    if (to === 'usuario') this.addChat('system', `💬 ${who}${task_id ? tr('msg.board.taskRef', { id: task_id }) : ''}: ${body}`, task_id ? { task: Number(task_id) } : null);
-    const { lastInsertRowid } = this.run('INSERT INTO messages (from_agent, to_agent, task_id, body, at) VALUES (?, ?, ?, ?, ?)', String(from), to, task_id ?? null, body, now());
+    const owner = this.ownerId();
+    const whose = person ?? (task_id ? this.one('SELECT person_id FROM tasks WHERE id = ?', Number(task_id))?.person_id ?? null : null);
+    const pid = whose && whose !== owner ? whose : null;
+    if (to === 'usuario') this.addChat('system', `💬 ${who}${task_id ? tr('msg.board.taskRef', { id: task_id }) : ''}: ${body}`, task_id ? { task: Number(task_id) } : null, undefined, { person: pid });
+    const { lastInsertRowid } = this.run('INSERT INTO messages (from_agent, to_agent, task_id, body, at, person_id) VALUES (?, ?, ?, ?, ?, ?)', String(from), to, task_id ?? null, body, now(), pid);
     this.changed('messages');
     return { id: Number(lastInsertRowid), from, to, task_id: task_id ?? null };
   }
 
-  inbox(agent, markRead = true) {
-    const rows = this.all(`SELECT m.* FROM messages m WHERE (m.to_agent = ? OR m.to_agent = 'all') AND m.from_agent != ?
-      AND NOT EXISTS (SELECT 1 FROM message_reads r WHERE r.message_id = m.id AND r.agent = ?) ORDER BY m.id LIMIT 100`, agent, agent, agent);
+  // 3.6: person: whose agent reads (null: the owner's): only the messages of that person's agents.
+  inbox(agent, markRead = true, { person = null } = {}) {
+    const other = person && person !== this.ownerId() ? person : null;
+    const mine = other ? 'm.person_id = ?' : 'm.person_id IS NULL';
+    const rows = this.all(`SELECT m.* FROM messages m WHERE (m.to_agent = ? OR m.to_agent = 'all') AND m.from_agent != ? AND ${mine}
+      AND NOT EXISTS (SELECT 1 FROM message_reads r WHERE r.message_id = m.id AND r.agent = ?) ORDER BY m.id LIMIT 100`, agent, agent, ...(other ? [other] : []), agent);
     if (markRead) for (const m of rows) this.run('INSERT OR IGNORE INTO message_reads (message_id, agent) VALUES (?, ?)', m.id, agent);
     return rows;
   }
@@ -686,7 +701,7 @@ export class Board {
       projects: this.projects({ principal }).map((p) => `${p.name} — ${p.path}`),
       counts,
       active: active.map((t) => ({ id: t.id, project: t.project, title: t.title, agent: t.assigned_to ?? t.agent, launch: t.launch, status: t.status, depends_on: t.depends_on })),
-      unreadForYou: agent ? this.inbox(agent, false).length : undefined
+      unreadForYou: agent ? this.inbox(agent, false, { person: principal?.person ?? null }).length : undefined
     };
   }
 

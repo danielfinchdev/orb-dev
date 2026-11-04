@@ -255,6 +255,7 @@ export function confineFor({ roots = [], others = [] } = {}) {
   return { roots: [...new Set([...list, ...list.map(realOf)])], others: others.filter(Boolean).map((r) => path.resolve(r)).filter((o) => !list.some((r) => inside(r, o) || inside(o, r))),
     secrets: [...botSecretDirs(), ...(ctx.home ? [path.join(ctx.home, '.orb')] : [])] };
 }
+const UP_TOKEN = /(?:^|[\s"'=(])((?:[^\s"'|;&<>()]*[\\/])?\.\.(?:[\\/][^\s"'|;&<>()]*)?)(?=$|[\s"'|;&<>()])/g;
 const ABS_TOKEN = /(?:^|[\s"'=(])((?:[a-zA-Z]:[\\/]|\\\\|\/|~[\\/])[^\s"'|;&<>()]*)/g;
 // The real path of a path that may not exist yet: its nearest existing folder resolved (links included), plus the rest.
 const realDeep = (p) => {
@@ -270,6 +271,14 @@ export function confineCheck({ paths = [], patterns = [], command = '', confine,
   const real = realDeep;
   if (!confine || typeof confine !== 'object') return null;
   const T = (k) => translate(lang, `msg.guard.${k}`);
+  // 3.6: { exclude, cwd } (the owner's assistant): everything stays as it was but other people's folders.
+  if (Array.isArray(confine.exclude)) {
+    const hit = (p) => confine.exclude.some((d) => inside(p, d) || inside(real(p), d));
+    const at = (p) => (path.isAbsolute(p) ? path.resolve(p) : path.resolve(confine.cwd ?? process.cwd(), p));
+    for (const raw of [...paths, ...patterns].filter(Boolean).map(String)) if (hit(at(paths.includes(raw) ? raw : globBase(raw)))) return { decision: 'deny', reason: T('confined') };
+    for (const m of String(command ?? '').matchAll(ABS_TOKEN)) if (hit(path.resolve(m[1]))) return { decision: 'deny', reason: T('confined') };
+    return null;
+  }
   const roots = confine.roots ?? []; const base = roots[0] ?? process.cwd();
   const at = (p) => (path.isAbsolute(p) ? path.resolve(p) : path.resolve(base, p));
   const within = (p) => roots.some((r) => inside(p, r));
@@ -289,6 +298,11 @@ export function confineCheck({ paths = [], patterns = [], command = '', confine,
       if (within(p) && within(r)) continue;
       if (blocked(p) || blocked(r)) return { decision: 'deny', reason: T('confined') };
       if (inside(p, home) || (ctx.home && inside(p, ctx.home))) return { decision: 'deny', reason: T('confined') };
+    }
+    // 3.6: a relative path that climbs out («../otro-proyecto/archivo»), from the working folder.
+    for (const m of text.matchAll(UP_TOKEN)) {
+      const p = path.resolve(base, m[1]); const r = real(p);
+      if (!within(p) || !within(r)) return { decision: 'deny', reason: T('confined') };
     }
   }
   return null;

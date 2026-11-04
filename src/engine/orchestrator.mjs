@@ -13,7 +13,8 @@ import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { titleFrom } from '../core/titles.mjs';
 import { mcpServersFor } from './sessions.mjs';
 import { accountEnv } from '../core/accounts.mjs';
-import { briefing } from './logs.mjs';
+import { briefing, personScope } from './logs.mjs';
+import { confineFor } from '../core/guard.mjs';
 import { rememberModels } from './catalog.mjs';
 import { recordRate, pickAccount, checkSpend, recordSpend, spendText, accountsFor } from '../core/budget.mjs';
 import { AGENT_LABELS } from '../core/home.mjs';
@@ -211,7 +212,7 @@ class Lane {
     }
     this.orch.keep(item, true);
     const waitMs = outcome.limit?.resetAt && outcome.limit.resetAt > Date.now() ? outcome.limit.resetAt - Date.now() + 60_000 : [60_000, 180_000, 360_000][item.attempts - 1] ?? 360_000;
-    if (item.attempts === 1) this.board.notice(tr('msg.orch.noticeRetry', { name: assistantName(), min: Math.max(1, Math.round(waitMs / 60_000)) }), 'warning');
+    if (item.attempts === 1) this.board.notice(tr('msg.orch.noticeRetry', { name: assistantName(), min: Math.max(1, Math.round(waitMs / 60_000)) }), 'warning', { person: this.board.isOwnerPerson(this.person) ? null : this.person });
     // To the conversation's lane as it is then (this one may have been closed meanwhile, or the conversation removed).
     const timer = setTimeout(() => {
       if (this.orch.closing || !this.board.conversation(this.id)) return;
@@ -268,12 +269,20 @@ class Lane {
     const agent = c.agent || o.agent || 'claude';
     const acc = this.account(c);
     const isClaude = agent === 'claude';
-    const cwd = ctx.paths.runs;
+    // 3.6: the assistant of someone other than the owner reads only that person's projects (and the ones shared with
+    // them), from a folder of its own: never the runs of everyone's tasks, Orb's folder or another person's projects.
+    const other = !this.board.isOwnerPerson(c.person_id);
+    const cwd = other ? path.join(ctx.paths.runs, 'personas', String(c.person_id).replace(/[^\w-]/g, '_')) : ctx.paths.runs;
+    // The owner's keeps its reach, but never the folders of other people's projects nor their assistants' folders.
+    const visible = this.board.projects({ principal: personScope(this.board, c.person_id ?? this.board.ownerId()) });
+    const hidden = this.board.projects().filter((p) => !visible.some((v) => v.name === p.name)).map((p) => p.path);
+    const confine = other ? confineFor({ roots: [cwd, ...visible.map((p) => p.path)], others: hidden }) : { exclude: [...hidden, path.join(ctx.paths.runs, 'personas')], cwd };
     const model = c.model || (isClaude ? 'claude-sonnet-5-5' : null);
-    const key = [agent, cwd, model, c.reasoning, acc.id].join('|');
+    const key = [agent, cwd, model, c.reasoning, acc.id, ...visible.map((p) => p.path)].join('|');
     if (this.live && this.liveKey === key && !this.live.isClosed()) return;
     this.closeLive();
-    const dirs = [...Object.values(ctx.paths.categories), ...(ctx.config.projectRoots ?? []), ...this.board.projects().map((p) => p.path)].filter((d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
+    const dirs = (other ? visible.map((p) => p.path) : [...Object.values(ctx.paths.categories), ...(ctx.config.projectRoots ?? []), ...visible.map((p) => p.path)]).filter((d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
+    fs.mkdirSync(cwd, { recursive: true });
     fs.mkdirSync(ctx.paths.runs, { recursive: true });
     rotateIfBig(this.orch.logFile);
     const writeLog = (line) => { try { fs.appendFileSync(this.orch.logFile, `[${this.id}] ${String(line).replace(/\r?\n/g, ' ')}\n`); } catch { /* log unavailable */ } };
@@ -291,7 +300,7 @@ class Lane {
       env: { ...accountEnv(acc), ORB_HOME: ctx.home, ORB_AGENT: 'orb' },
       ...(isClaude ? { systemPrompt: persona(this.board, c.person_id ?? null) } : {}),
       tools: isClaude ? { allowed: ['mcp__orb', 'Read', 'Glob', 'Grep'], disallowed: claude.COORDINATOR_DENIED } : undefined,
-      addDirs: [...new Set(dirs)].filter((d) => d !== cwd).slice(0, 40), internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog,
+      addDirs: [...new Set(dirs)].filter((d) => d !== cwd).slice(0, 40), internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog, confine,
       onEvent: (ev) => this.onEvent(ev)
     });
     this.liveKey = key;
@@ -355,7 +364,7 @@ class Lane {
     // Renewed when its context is filling up (or after many turns): cheaper than dragging a long conversation along.
     if (c.session_id && ((c.context?.size && c.context.used / c.context.size >= (o.renewAt ?? 0.6)) || c.turns >= (o.maxTurns ?? 60))) {
       this.forget();
-      this.board.notice(tr('msg.orch.renewed'), 'info');
+      this.board.notice(tr('msg.orch.renewed'), 'info', { person: this.board.isOwnerPerson(c.person_id) ? null : c.person_id });
       c = this.conv();
     }
     // 3.2: taken up again after hours: afresh, with the logs and its last lines (not the whole conversation reloaded).

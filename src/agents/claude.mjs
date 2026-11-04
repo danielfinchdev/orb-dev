@@ -125,6 +125,8 @@ export function createLive(o) {
   const canUseTool = async (toolName, toolInput, ctx = {}) => {
     const command = toolInput?.command ?? '';
     const paths = [toolInput?.file_path, toolInput?.path, toolInput?.notebook_path].filter(Boolean);
+    // 3.6: a confined session: Grep and Glob without a path search the working folder, which is checked too.
+    if (o.confine && !paths.length && (toolName === 'Grep' || toolName === 'Glob') && o.cwd) paths.push(o.cwd);
     // 3.5.1: o.bot is the bot's guard (its folder, what it read this turn): patterns and the address are checked too.
     const patterns = [toolInput?.pattern, toolInput?.glob].filter((x) => typeof x === 'string' && x);
     const url = typeof toolInput?.url === 'string' ? toolInput.url : null;

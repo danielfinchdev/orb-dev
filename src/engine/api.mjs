@@ -79,10 +79,31 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       : [ctx.home, ...board.projects({ principal: who?.channel === 'system' ? null : who }).map((p) => p.path), ...accs.map((a) => accountDir(a))];
     const inside = (root) => { try { const r = fs.realpathSync(root); return real.toLowerCase().startsWith(`${r.toLowerCase()}${path.sep}`); } catch { return false; } };
     if (!roots.some(inside)) fail(tr('msg.api.badImage'));
+    // 3.6: never a picture inside someone else's project (the owner's roots include Orb's whole folder).
+    if (who?.channel !== 'system') { const mine = new Set(board.projects({ principal: who }).map((p) => p.path)); if (board.projects().some((p) => !mine.has(p.path) && inside(p.path))) fail(tr('msg.api.badImage')); }
     if (fs.statSync(real).size > 25 * 1024 * 1024) fail(tr('msg.api.badImage'));
     return real;
   };
 
+  // 3.6: files a person names from the window (attachments, pictures, an icon): never inside a project of someone else
+  // and, for someone other than the owner, nothing else of Orb's folder (everyone's data) but their own projects (and
+  // the ones shared with them), their phone's pictures and their marked copies.
+  const ownFiles = (list, who) => {
+    if (!scopeOf(who) || !Array.isArray(list)) return list;
+    const user = Boolean(personOf(who));
+    const realOr = (f) => { try { return fs.realpathSync(String(f)); } catch { return path.resolve(String(f)); } };
+    const under = (f, dir) => { const rel = path.relative(realOr(dir), f); return !rel || (!rel.startsWith('..') && !path.isAbsolute(rel)); };
+    // their projects, their phone's pictures (remote.mjs › uploads) and their own marked copies (images.mark)
+    const mine = [...board.projects({ principal: who }).map((p) => p.path), path.join(ctx.paths.internal, 'adjuntos-movil', String(who.person).replace(/[^\w-]/g, '_')), markDir(who)];
+    const others = board.projects().map((p) => p.path).filter((d) => !mine.includes(d));
+    // (the owner: anything of this PC but the projects of other people)
+    for (const f of list) {
+      const r = realOr(f);
+      if (mine.some((d) => under(r, d))) continue;
+      if ((user && under(r, ctx.home)) || others.some((d) => under(r, d))) fail(tr('msg.api.badAttachments'));
+    }
+    return list;
+  };
   // 3.2.1: a task the user rejects says so in its conversation, and the assistant hears it (it used to keep saying the
   // task was waiting for approval). If other tasks of the request already finished, their report now comes with it.
   const taskRejected = (task) => {
@@ -224,16 +245,16 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'projects.import': ({ name, folder }) => board.addProject({ name: checkProjectName(str(name, 'nombre', 60)), path: str(folder, 'carpeta', 1000) }, 'usuario', { fromUser: true }),
     'projects.remove': ({ name }) => board.removeProject(project(name).name, 'usuario'),
     // 3.2.1: a new name (and folder) for a project with nothing working in it (core/projects.mjs renameProject).
-    'projects.rename': ({ name, to }) => {
+    'projects.rename': ({ name, to }, who) => {
       const from = project(name).name;
-      const p = renameProject(board, { name: from, to: str(to, 'nombre', 60) }, 'usuario');
+      const p = renameProject(board, { name: from, to: str(to, 'nombre', 60), person: who?.channel === 'system' ? null : who?.person ?? null }, 'usuario');
       renameProjectIcon(from, p.name);
       return p;
     },
     'projects.setActive': ({ name }, who) => board.setActiveProject(name ? project(name).name : '', 'usuario', personOf(who)),
     // 3.2: the projects' icons (their favicon or app icon, or one chosen here) for the sidebar: { name: dataUrl | null }.
     'projects.icons': (p, who) => Object.fromEntries(board.projects({ principal: scopeOf(who) }).map((x) => [x.name, projectIcon(x)])),
-    'projects.setIcon': ({ name, path: file }) => { const p = project(name); const icon = setProjectIcon(p, str(file, 'imagen', 1000)); board.changed('projects'); return icon; },
+    'projects.setIcon': ({ name, path: file }, who) => { const p = project(name); const icon = setProjectIcon(p, ownFiles([str(file, 'imagen', 1000)], who)[0]); board.changed('projects'); return icon; },
     // 3.2: only the current branch (the hover card of a conversation): one quick git call, nothing from the network.
     'projects.branch': ({ name }) => { const p = project(name); const r = git(p.path, 'rev-parse', '--abbrev-ref', 'HEAD'); return { branch: r.status === 0 ? r.stdout.trim() || null : null }; },
     // 3.2, God mode: the project's actions (commands of the user's own, run in a terminal window from the bar or with their
@@ -406,7 +427,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     // 2.7: the Pizarra of each project (src/engine/whiteboard.mjs), saved in <project>/pizarra.
     'whiteboard.load': ({ project }) => wb.load({ project: str(project, 'proyecto', 200) }),
     'whiteboard.save': ({ project, elements, appState, files, png }) => wb.save({ project: str(project, 'proyecto', 200), elements, appState, files, png }),
-    'whiteboard.attach': ({ project, paths }) => wb.attach({ project: str(project, 'proyecto', 200), paths }),
+    'whiteboard.attach': ({ project, paths }, who) => wb.attach({ project: str(project, 'proyecto', 200), paths: ownFiles(paths, who) }),
     'whiteboard.note': ({ project, file, note }) => wb.note({ project: str(project, 'proyecto', 200), file: str(file, 'archivo', 200), note }),
     'whiteboard.remove': ({ project, file }) => wb.remove({ project: str(project, 'proyecto', 200), file: str(file, 'archivo', 200) }),
     'whiteboard.folder': ({ project }) => wb.folder({ project: str(project, 'proyecto', 200) }),
@@ -543,7 +564,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'tasks.retry': ({ id }) => board.retry(int(id, 'tarea'), 'usuario'),
     'tasks.cancel': ({ id }) => scheduler.cancel(int(id, 'tarea'), 'usuario'),
     'tasks.reassign': ({ id, agent, model, reasoning }) => board.reassign(int(id, 'tarea'), { agent: oneOf(agent, [...AGENT_IDS, 'any'], 'agente'), model: str(model, 'modelo', 80, { optional: true }) || null, reasoning: oneOf(reasoning, ['low', 'medium', 'high'], 'razonamiento') }, 'usuario'),
-    'tasks.followup': ({ id, text, images: files }) => scheduler.followup(int(id, 'tarea'), str(text, 'mensaje', 20000), images(files)),
+    'tasks.followup': ({ id, text, images: files }, who) => scheduler.followup(int(id, 'tarea'), str(text, 'mensaje', 20000), ownFiles(images(files), who)),
     'tasks.undo': ({ id }) => scheduler.undo(int(id, 'tarea')),
     'tasks.launchAnyway': ({ id }) => { const t = board.task(int(id, 'tarea')); if (t?.status !== 'queued') fail(tr('msg.api.onlyQueued')); board.setting(`budget_ok:${t.id}`, '1'); board.event(t.id, 'usuario', 'budget.authorised', 'lanzar aunque supere el límite de uso'); return true; },
     'tasks.accept': ({ id }, who) => accept([int(id, 'tarea')], undefined, who),
@@ -574,7 +595,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
           const out = sessions.message(s.id, str(text, 'mensaje', 20000), { mode: 'steer' });
           if (out.steered) return out;
         }
-        scheduler.followup(s.task_id, str(text, 'mensaje', 20000), images(files));
+        scheduler.followup(s.task_id, str(text, 'mensaje', 20000), ownFiles(images(files), who));
         return { queued: true };
       }
       const t = str(text, 'mensaje', 20000);
@@ -584,7 +605,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
         sessions.update(s.id, { title: quick, titled: true });
         autoTitle(board, { agent: s.agent, account: s.account, text: t }).then((better) => { if (better && sessions.get(s.id)?.title === quick) sessions.update(s.id, { title: better }); }).catch(() => {});
       }
-      return sessions.message(s.id, t, { images: images(files), mode: oneOf(mode, ['auto', 'steer', 'queue'], 'modo', 'auto'), context: expandMentions(board, sessions, t, { principal: scopeOf(who) }) });
+      return sessions.message(s.id, t, { images: ownFiles(images(files), who), mode: oneOf(mode, ['auto', 'steer', 'queue'], 'modo', 'auto'), context: expandMentions(board, sessions, t, { principal: scopeOf(who) }) });
     },
     'sessions.queue': ({ id }) => sessions.queue(str(id, 'conversación', 64)),
     'sessions.editQueued': ({ id, queueId, text, remove, move }) => sessions.editQueued(str(id, 'conversación', 64), int(queueId, 'mensaje'), { text: text === undefined ? undefined : str(text, 'mensaje', 20000), remove: Boolean(remove), move: oneOf(move, ['up', 'down'], 'mover', undefined) }),
