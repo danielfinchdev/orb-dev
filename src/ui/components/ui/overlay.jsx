@@ -140,10 +140,12 @@ export function DropdownMenuSeparator() { return <DropdownPrimitive.Separator cl
 export function DropdownMenuLabel({ className, ...props }) { return <DropdownPrimitive.Label className={cn('text-muted-foreground px-2 py-1.5 text-xs', className)} {...props} />; }
 
 // ---- switch and checkbox
-export function Switch({ className, ...props }) {
+// size="sm" (28×16, thumb 12): for inline toolbars such as the composer (DESIGN-SYSTEM §4); the regular one elsewhere.
+export function Switch({ className, size = 'default', ...props }) {
+  const sm = size === 'sm';
   return (
-    <SwitchPrimitive.Root className={cn('peer data-[state=checked]:bg-primary data-[state=unchecked]:bg-input focus-visible:ring-ring/50 dark:data-[state=unchecked]:bg-input/80 inline-flex h-[1.15rem] w-8 shrink-0 cursor-pointer items-center rounded-full border border-transparent shadow-xs transition-[background-color,box-shadow] duration-150 outline-none focus-visible:ring-[3px] disabled:opacity-50', className)} {...props}>
-      <SwitchPrimitive.Thumb className="bg-background dark:data-[state=unchecked]:bg-foreground dark:data-[state=checked]:bg-primary-foreground pointer-events-none block size-4 rounded-full ring-0 transition-transform duration-200 ease-(--ease-out) data-[state=checked]:translate-x-[calc(100%-2px)] data-[state=unchecked]:translate-x-0" />
+    <SwitchPrimitive.Root data-size={size} className={cn('peer data-[state=checked]:bg-primary data-[state=unchecked]:bg-input focus-visible:ring-ring/50 dark:data-[state=unchecked]:bg-input/80 inline-flex shrink-0 cursor-pointer items-center rounded-full border border-transparent shadow-xs transition-[background-color,box-shadow] duration-150 outline-none focus-visible:ring-[3px] disabled:opacity-50', sm ? 'h-4 w-7' : 'h-[1.15rem] w-8', className)} {...props}>
+      <SwitchPrimitive.Thumb className={cn('bg-background dark:data-[state=unchecked]:bg-foreground dark:data-[state=checked]:bg-primary-foreground pointer-events-none block rounded-full ring-0 transition-transform duration-200 ease-(--ease-out) data-[state=unchecked]:translate-x-0', sm ? 'size-3 data-[state=checked]:translate-x-[calc(100%+0px)] ml-px' : 'size-4 data-[state=checked]:translate-x-[calc(100%-2px)]')} />
     </SwitchPrimitive.Root>
   );
 }

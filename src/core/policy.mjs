@@ -26,6 +26,8 @@
 export const PHONE_SET = new Set(['app.state', 'chat.list', 'chat.send', 'conversations.list', 'conversations.update', 'conversations.search', 'projects.securityReview', 'chat.stop', 'chat.accept', 'chat.answer', 'chat.settings', 'whiteboard.load', 'whiteboard.save', 'whiteboard.note',
   'tasks.list', 'tasks.live', 'tasks.get', 'tasks.create', 'tasks.approve', 'tasks.retry', 'tasks.cancel', 'tasks.reassign', 'tasks.followup', 'tasks.undo', 'tasks.launchAnyway', 'tasks.accept',
   'sessions.list', 'sessions.create', 'sessions.items', 'sessions.send', 'sessions.stop', 'sessions.update',
+  // 3.6: «Compactar» in the composer (the agent's own compaction of a long conversation).
+  'chat.compact', 'sessions.compact',
   'projects.list', 'projects.icons', 'projects.branch', 'projects.info', 'projects.setActive', 'projects.create', 'logs.list', 'logs.read', 'activity.list', 'usage.get', 'usage.now', 'agents.status', 'models.catalog', 'models.guide',
   'control.pause', 'control.resume', 'sidebar.complete',
   // 2.3: answer permission requests, the queue, continue, fork, settle, Task Review, scheduled tasks and @ (all of it
@@ -126,6 +128,7 @@ const CORE = {
   'chat.list': { res: (p) => (p.conversation == null ? OWNER : conv(p.conversation)), right: 'view' },
   'chat.send': { res: (p) => [conv(p.conversation), ...(p.project ? [{ ...proj(p.project), right: 'talk' }] : [])], right: 'talk', create: 'conversation' },
   'chat.stop': { res: (p) => conv(p.conversation), right: 'talk' },
+  'chat.compact': { res: (p) => conv(p.conversation), right: 'talk' }, // 3.6: «Compactar» in the composer
   'chat.answer': { res: (p) => line(p.id), right: 'talk' },
   'chat.accept': { res: (p) => line(p.id), right: 'talk' },
   'chat.settings': { res: (p) => (p.conversation == null ? OWNER : conv(p.conversation)), right: 'own' }, // WS3: the default brain per person
@@ -184,6 +187,7 @@ const CORE = {
   'sessions.fork': { res: (p) => sess(p.id), right: 'talk', create: 'session' },
   'sessions.settle': { res: (p) => sess(p.id), right: 'edit' },
   'sessions.stop': { res: (p) => sess(p.id), right: 'talk' },
+  'sessions.compact': { res: (p) => sess(p.id), right: 'talk' }, // 3.6: «Compactar» in the composer
   'sessions.update': { res: (p) => sess(p.id), right: 'edit' },
   'sessions.remove': { res: (p) => sess(p.id), right: 'own' },
   // scheduled tasks (follow their project)

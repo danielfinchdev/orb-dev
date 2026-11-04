@@ -324,8 +324,22 @@ function PeersCard({ peers, reload }) {
   );
 }
 
+// 3.6: a part of a settings section, with its heading (Ajustes › Magic Link › Usuarios…); id: the anchor the menu jumps to.
+// Without a title (a phone's own screen), only its cards.
+export function SubSection({ id, title, children }) {
+  if (!title) return children;
+  return (
+    <section id={`settings-${id}`} className="grid scroll-mt-4 gap-4 [&>*]:min-w-0" data-testid={`settings-group-${id}`} aria-labelledby={`settings-${id}-title`}>
+      <h3 id={`settings-${id}-title`} className="text-muted-foreground px-1 pt-3 text-[13px] font-medium">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
 // Everything of Magic Link. A device that may not manage the links (a phone) sees the list only.
-export function MagicLinkPanel() {
+// 3.6: in Ajustes (grouped) it is «who can enter this Orb»: Usuarios (users, given by Ajustes), Dispositivos (access
+// from the phone, linking one and the linked ones) and Orbs enlazados.
+export function MagicLinkPanel({ grouped = false, users = null, phoneAccess = null }) {
   const t = useT();
   const [data, setData] = useState(null);
   const access = useStore((s) => s.app?.access);
@@ -350,16 +364,26 @@ export function MagicLinkPanel() {
     return () => { clearInterval(id); off(); };
   }, []);
   if (!data) return null;
+  const title = (id) => (grouped ? t(`settings.group.${id}`) : null);
+  const orbs = !bridge.mobile || manage;
   return (
-    <div className="grid gap-4" data-testid="magic-link">
-      {!bridge.mobile ? <RoleCard /> : null}
-      {!bridge.mobile ? <BotsPlaceCard refresh={tick} /> : null}
-      {manage && data.status ? <DevTargetCard status={data.status} /> : null}
-      {manage ? <PairCard /> : <Card><CardContent className="text-muted-foreground text-sm">{t('link.onlyThere')}</CardContent></Card>}
-      {data.error ? <p className="text-destructive text-sm">{data.error}</p> : null}
-      <DevicesCard devices={data.devices} readOnly={!manage} reload={load} />
-      {manage ? <ConnectCard onDone={load} /> : null}
-      {manage ? <PeersCard peers={data.peers} reload={load} /> : null}
+    <div className="grid gap-4 [&>*]:min-w-0" data-testid="magic-link">
+      {users ? <SubSection id="usuarios" title={title('usuarios')}>{users}</SubSection> : null}
+      <SubSection id="dispositivos" title={title('dispositivos')}>
+        {phoneAccess}
+        {manage ? <PairCard /> : <Card><CardContent className="text-muted-foreground text-sm">{t('link.onlyThere')}</CardContent></Card>}
+        {data.error ? <p className="text-destructive text-sm">{data.error}</p> : null}
+        <DevicesCard devices={data.devices} readOnly={!manage} reload={load} />
+      </SubSection>
+      {orbs ? (
+        <SubSection id="orbs" title={title('orbs')}>
+          {!bridge.mobile ? <RoleCard /> : null}
+          {!bridge.mobile ? <BotsPlaceCard refresh={tick} /> : null}
+          {manage && data.status ? <DevTargetCard status={data.status} /> : null}
+          {manage ? <ConnectCard onDone={load} /> : null}
+          {manage ? <PeersCard peers={data.peers} reload={load} /> : null}
+        </SubSection>
+      ) : null}
     </div>
   );
 }

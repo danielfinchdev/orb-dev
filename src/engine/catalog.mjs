@@ -12,6 +12,16 @@ import { usableAccounts } from '../core/accounts.mjs';
 import { usageReport, HEAVY_FAMILY, canLaunch, modelLimits } from '../core/budget.mjs';
 import { cursorShownName } from '../agents/cursor.mjs';
 const MODEL_ID = /^[A-Za-z0-9][\w.:\-/[\]=,@]{0,79}$/;
+// 3.6: the reasoning levels Orb offers (Bajo, Medio, Alto, Extra); Extra only for the models that take it.
+export const REASONING_LEVELS = ['low', 'medium', 'high', 'xhigh'];
+const USUAL_LEVELS = ['low', 'medium', 'high'];
+// The levels a model takes, from the catalog (what its agent listed); without a figure, the usual three.
+export function levelsOf(catalog, agent, model, account = null) {
+  const a = (catalog ?? []).find((x) => x.id === agent);
+  const list = [...((account && a?.accountModels?.[account]) || []), ...(a?.models ?? [])];
+  const m = list.find((x) => x.id === (model ?? '')) ?? (model ? null : list.find((x) => x.id === ''));
+  return m?.efforts?.length ? m.efforts : USUAL_LEVELS;
+}
 // 2.7: the light models (fast and cheap) by their names; heavy ones by HEAVY_FAMILY; everything else is «balanced».
 const LIGHT = /haiku|mini\b|nano|flash|lite\b|small|spark/i;
 export const MODELS_EVERY = 12 * 3_600_000; // how often an agent is asked again for its models
@@ -36,6 +46,8 @@ export function rememberModels(board, agent, list, account = agent) {
     const item = { id: m.id, label };
     if (m.default && !marked) { item.default = true; marked = true; }
     if (typeof m.resolved === 'string' && m.resolved !== m.id && MODEL_ID.test(m.resolved)) item.resolved = m.resolved;
+    // 3.6: the reasoning levels the agent says the model takes (only Orb's four).
+    if (Array.isArray(m.efforts)) { const e = REASONING_LEVELS.filter((x) => m.efforts.includes(x)); if (e.length) item.efforts = e; }
     clean.push(item);
     if (clean.length >= 40) break;
   }
@@ -132,7 +144,7 @@ function buildModels(agent, cfg, known) {
   const labelled = agent === 'claude' ? (ctx.config.orchestrator?.models ?? []) : [];
   const usual = known.find((m) => m.default);
   const seen = new Set(); const stands = new Set();
-  const models = agent === 'claude' ? [] : [{ id: '', label: usual?.label ?? '', defaultOf: usual?.label ?? null, heavy: false }];
+  const models = agent === 'claude' ? [] : [{ id: '', label: usual?.label ?? '', defaultOf: usual?.label ?? null, heavy: false, ...(usual?.efforts ? { efforts: usual.efforts } : {}) }];
   for (const m of [...labelled, ...known, ...(cfg.models ?? []).map((id) => ({ id }))]) {
     // An alias (sonnet, opus…) already offered by its full id is not listed twice.
     if (!m?.id || seen.has(m.id) || (/^(sonnet|opus|haiku)$/.test(m.id) && labelled.some((l) => l.id.includes(m.id)))) continue;
@@ -142,7 +154,10 @@ function buildModels(agent, cfg, known) {
     // 2.6: «Recomendados» at the top of the selector: the assistant's own Claude models and the model Codex uses by default.
     const recommended = agent === 'claude' ? labelled.some((l) => l.id === m.id) : agent === 'codex' && Boolean(usual) && m.id === usual.id;
     const name = m.label ?? (/^[a-z]+$/.test(m.id) ? m.id[0].toUpperCase() + m.id.slice(1) : m.id);
-    models.push({ id: m.id, label: name, heavy, tier: heavy ? 'heavy' : LIGHT.test(`${m.id} ${name}`) ? 'light' : 'balanced', ...(recommended ? { recommended: true } : {}) });
+    // 3.6: the reasoning levels of the model (as the agent listed it, also under its full id); unknown: the usual three.
+    const listed = known.find((k) => k.id === m.id || (m.resolved && k.resolved === m.resolved) || k.resolved === m.id || (k.id && m.resolved === k.id));
+    const efforts = m.efforts ?? listed?.efforts ?? null;
+    models.push({ id: m.id, label: name, heavy, tier: heavy ? 'heavy' : LIGHT.test(`${m.id} ${name}`) ? 'light' : 'balanced', ...(recommended ? { recommended: true } : {}), ...(efforts ? { efforts } : {}) });
   }
   return models;
 }

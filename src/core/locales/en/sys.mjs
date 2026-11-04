@@ -109,8 +109,8 @@ export default {
   'sys.mcp.idsRange': 'ids: between 1 and 10 tasks',
   'sys.mcp.askNeedsOptions': 'orb_ask needs a question and between 2 and 4 options',
   'sys.mcp.boardNeedsText': 'orb_pizarra needs the advice (message)',
-  // 2.7: Opti Bot (PC Status)
-  'sys.opti.off': 'Turn on PC Status in Settings to talk to Opti Bot',
+  // 2.7: Opti Bot (Monitoring)
+  'sys.opti.off': 'Turn on Monitoring in Settings to talk to Opti Bot',
   'sys.opti.badAction': 'that action is not on Opti Bot’s list',
   'sys.opti.needsReason': 'explain why you propose the action',
   'sys.opti.needsPid': 'end_process needs the process Id',

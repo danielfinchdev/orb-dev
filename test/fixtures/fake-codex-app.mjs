@@ -52,6 +52,17 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
   if (method === 'thread/resume') { threadId = params.threadId; return write({ id, result: { thread: { id: threadId }, model: 'gpt-falso' } }); }
   if (method === 'thread/fork') { threadId = `copia-de-${params.threadId}`; return write({ id, result: { thread: { id: threadId }, model: 'gpt-falso' } }); }
   if (method === 'turn/start') { const turnId = `turno-${++n}`; write({ id, result: { turn: { id: turnId } } }); return void turn(turnId, params.input?.[0]?.text ?? ''); }
+  // 3.6: compaction of the thread: answers at once, then works as a turn of its own with a contextCompaction item.
+  if (method === 'thread/compact/start') {
+    if (process.env.FAKE_NO_COMPACT === '1') return write({ id, error: { code: -32601, message: 'method not found: thread/compact/start' } });
+    write({ id, result: {} });
+    const turnId = `compacta-${++n}`;
+    notify('turn/started', { threadId, turn: { id: turnId } });
+    notify('item/started', { threadId, item: { id: 'cc1', type: 'contextCompaction' } });
+    notify('thread/tokenUsage/updated', { threadId, tokenUsage: { last: { inputTokens: 300 }, total: { inputTokens: 300, outputTokens: 0 }, modelContextWindow: 272000 } });
+    notify('item/completed', { threadId, item: { id: 'cc1', type: 'contextCompaction' } });
+    return void notify('turn/completed', { threadId, turn: { id: turnId, status: 'completed' } });
+  }
   if (method === 'turn/steer') { write({ id, result: {} }); return void wake?.(params.input?.[0]?.text ?? ''); }
   if (method === 'turn/interrupt') { write({ id, result: {} }); return void wake?.('interrupt'); }
   if (id != null) write({ id, error: { code: -32601, message: `método no soportado: ${method}` } });

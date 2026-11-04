@@ -22,9 +22,16 @@ nothing changes and there is nothing to set up.
   code is suggested later in the app, and using Orb away from home is explained when linking a phone.
 - **Switch user and lock:** with two or more users, the bottom of the sidebar shows who is at the PC (on the phone,
   the top of "More"). Switching asks for that user's PIN, and you can lock the window. The phone and the Android app can ask for the PIN too (or the fingerprint).
-- **Settings › Users** (admin): add users, rename them, choose what they may do, reset a PIN, sign out their devices.
-  **Settings › My profile:** name, language, time zone, PIN, what notifications show, your accounts, your devices, and
-  exporting or deleting your data.
+- **Settings › Magic Link › Users** (admin): add users, rename them, choose what they may do, reset a PIN, pause their
+  bots, sign out their devices. **My profile** (from the user menu): name, language, time zone, PIN, what notifications
+  show, your accounts, your devices, and exporting or deleting your data.
+- **Simpler Settings:** six sections — General (with Appearance and Updates), Magic Link (Users, Devices, Linked Orbs),
+  Agents and usage, Data, Advanced (Tools, God mode, Monitoring) and About.
+- **Message box:** the project picker with one suggestion next to it at a time ("Compact" when the conversation is
+  getting full, "Start test" on the day's first new chat); the reasoning is a brain button (Low, Medium, High and, for
+  models that support it, Extra), and the orchestrator is an icon with a small switch. On the phone it fits on one line.
+- **Compact:** a long conversation can be summarised to continue with more room, with the agent's own compaction
+  (Claude Code and Codex); the history in Orb is kept.
 - **Magic Link asks "For which user?"**: a phone or browser is linked to one user, and the list of devices is grouped
   by user.
 - **Sharing:** share a bot, a group or a project with someone to view, to talk or to edit. What others share with you is

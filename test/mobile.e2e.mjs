@@ -92,6 +92,10 @@ try {
   await page.waitForSelector('[data-testid=chat-input]');
   await page.waitForTimeout(300);
   await noSideScroll('nuevo chat'); await shot('08-nueva-conversacion');
+  // 3.6 (DESIGN-SYSTEM §2.2): on the phone the composer's bottom row (model, brain, orchestrator) stays on one line.
+  const bottom = await page.locator('[data-testid=composer-bottom]:visible').evaluate((el) => el.getBoundingClientRect().height);
+  assert.ok(bottom < 48, `el pie del compositor en una línea (${bottom}px)`);
+  assert.equal(await page.locator('[data-testid=orchestrator-check]:visible').count(), 1, 'el orquestador en el chat nuevo');
   // A direct conversation with an agent (started on the PC): the phone opens it from «Chats» and answers in it.
   const direct = await call('sessions.create', { agent: 'claude', project: 'webviaproject', permission: 'editar', title: 'Charla con Claude' });
   await page.click('[data-testid=nav-chats]');

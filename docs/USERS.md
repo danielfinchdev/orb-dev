@@ -30,7 +30,7 @@ The first time Orb opens it asks three questions, one per screen:
 1. **What is your name?** Language and time zone are taken from this PC (change them later in **Settings › My
    profile**, or **Settings › General** if only you use Orb). Orb's folder goes in your Documents.
 2. **Will anyone else use it?** "Just me" (nothing else changes) or "Yes", with their names. You can add users later in
-   **Settings › Users**.
+   **Settings › Magic Link › Users**.
 3. **What will you use it for?** "Coding", "Business", "Home" or "Later". Each of the first three creates a starting
    set of bots and reminders, which you can change at any time in **Bots**; "Later" creates nothing. The templates are
    generic: nothing in them is about anyone in particular.
@@ -57,20 +57,20 @@ On a phone, the same is at the top of **More** (a phone belongs to one user: it 
 **Lock**).
 
 Five wrong PINs in a row block that PIN for a while, and the wait grows with each new mistake. The admin can reset a
-forgotten PIN (Settings › Users, or `orb-nucleo pin-reset <usuario>` on a server). On a server, `orb-nucleo usuarios`
+forgotten PIN (Settings › Magic Link › Users, or `orb-nucleo pin-reset <usuario>` on a server). On a server, `orb-nucleo usuarios`
 lists the users, `orb-nucleo usuario nuevo <nombre>` adds one and `orb-nucleo enlazar --usuario <nombre>` makes a QR for
 them.
 
-## Settings › Users (admin)
+## Settings › Magic Link › Users (admin)
 
-A list with each user's name, role, devices, when they were last seen, how many bots, projects, conversations and
-reminders they have, and how much they used today. **Numbers only: never titles, texts or names of their things.**
+A list with each user's name, the Admin badge, their devices, when they were last seen and how many bots, chats and
+projects they have. **Numbers only: never titles, texts or names of their things.** The actions are in each row's menu.
 
 From there the admin adds a user, renames them, chooses what they may do (program in Orb mode, use the home
 integration, approve home actions), resets a PIN, pauses their bots, signs out their devices or removes them.
 Removing a user offers to export their data first; their things go to a 30-day bin.
 
-## Settings › My profile
+## My profile (user menu)
 
 Everyone has their own: name, language, time zone, PIN, what notifications show on a locked phone (everything, chat
 only or nothing), their accounts (signing in without opening any console), their linked devices, and **Export my

@@ -515,7 +515,7 @@ export default {
   "msg.installer.agentNoTool": "No se pudo instalar: falta el programa que hace la instalación (PowerShell, bash o npm)",
   "msg.installer.agentDone": "Instalado",
   "msg.installer.agentTimeout": "No se pudo instalar: pasaron 15 minutos sin terminar",
-  "msg.link.httpBrowser": "Por la wifi sin cifrar, un navegador no se enlaza: usa la dirección segura de Tailscale (https), la app de Android o la terminal. Si lo necesitas, actívalo en Ajustes › Acceso desde el móvil.",
+  "msg.link.httpBrowser": "Por la wifi sin cifrar, un navegador no se enlaza: usa la dirección segura de Tailscale (https), la app de Android o la terminal. Si lo necesitas, actívalo en Ajustes › Magic Link.",
   "msg.link.wantsOrb": "Este código es para enlazar otro Orb. Para un móvil, un navegador o una terminal, haz otro código.",
   "msg.link.notForOrb": "Este código no es para un Orb. En el otro Orb, elige «Otro Orb mío» al hacer el código.",
   "msg.link.confirmTaller": "{name} quiere programar para este Orb. Si es tuyo, confírmalo en Ajustes › Magic Link.",

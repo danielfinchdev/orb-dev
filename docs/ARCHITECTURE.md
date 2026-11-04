@@ -406,7 +406,7 @@ From the header you can change the model, permissions and reasoning. Without a p
   `account/rateLimits/updated`.
 
 **2.6: saving or power.** `budget.profile` (0 = max saving … 4 = max usage; `null` = manual). The slider in
-Settings › Tasks and usage (`SPEND_PRESETS` in `settings.jsx`) sets the limits, and `persona()` (`orchestrator.mjs`,
+Settings › Agents and usage (`SPEND_PRESETS` in `settings.jsx`) sets the limits, and `persona()` (`orchestrator.mjs`,
 `SPEND`) tells the brain how cautious to be. "Advanced options" save with `profile: null`.
 
 **2.6: each agent's real models.** `discoverModels(agent)` (`src/agents/index.mjs`, one per adapter: Agent SDK

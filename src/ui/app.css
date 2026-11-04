@@ -26,6 +26,7 @@
   --destructive: oklch(0.6 0.2 25);
   --success: oklch(0.62 0.15 155);
   --warning: oklch(0.72 0.15 70);
+  --warning-foreground: oklch(0.22 0.04 70);
   --info: oklch(0.62 0.14 245);
   --border: oklch(0.915 0.008 268);
   --input: oklch(0.905 0.01 268);
@@ -53,6 +54,7 @@
   --destructive: oklch(0.68 0.19 22);
   --success: oklch(0.72 0.15 155);
   --warning: oklch(0.8 0.14 75);
+  --warning-foreground: oklch(0.22 0.04 70);
   --info: oklch(0.72 0.12 245);
   --border: oklch(0.29 0.012 268);
   --input: oklch(0.32 0.014 268);
@@ -87,6 +89,7 @@
   --color-destructive: var(--destructive);
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-info: var(--info);
   --color-border: var(--border);
   --color-input: var(--input);
@@ -478,3 +481,13 @@ html[data-skin="retro"] .tour-bubble { width: 25rem; }
 }
 html[data-motion="minima"] :is(.animate-in, .animate-out) { --tw-enter-translate-x: 0; --tw-enter-translate-y: 0; --tw-enter-scale: 1; --tw-exit-translate-x: 0; --tw-exit-translate-y: 0; --tw-exit-scale: 1; }
 html[data-motion="minima"] .mode-thumb { transition: none; }
+
+/* 3.6: the composer's contextual action slot (components/context-slot.jsx, DESIGN-SYSTEM §2.2): one suggestion at a
+   time, in with a 150 ms fade and a 2 px rise, out with a fade; reduced motion keeps the fade only. */
+.context-slot { display: inline-flex; min-width: 0; }
+.context-slot-item { display: inline-flex; min-width: 0; animation: slot-in 150ms var(--ease-out) both; }
+.context-slot.is-leaving .context-slot-item { opacity: 0; transition: opacity 120ms var(--ease-out); }
+@keyframes slot-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+@keyframes slot-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .context-slot-item { animation-name: slot-fade; } }
+html[data-motion="minima"] .context-slot-item { animation-name: slot-fade; }

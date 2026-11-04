@@ -1,8 +1,10 @@
-// The star view: a conversation with the assistant. Under the message box: its project, the brain (agent and model), the
-// reasoning and, for a new conversation, the «Orquestador» switch (on = with the assistant, who coordinates the agents;
-// off = directly with the agent chosen). 3.2: each conversation is its own (route.id), several at once.
+// The star view: a conversation with the assistant. 3.6 (DESIGN-SYSTEM §2.2): above the text, the project picker and the
+// contextual action slot («Compactar» when the context is filling up, «Iniciar test» on the day's first new chat); under
+// it, the brain (agent and model), the reasoning (brain button) and, for a new conversation, the orchestrator (icon and a
+// small switch: on = with the assistant, who coordinates the agents; off = directly with the agent chosen).
+// 3.2: each conversation is its own (route.id), several at once.
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowUp, Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign, ChevronLeft, ChevronRight, PenTool, History, FlaskConical, Folder, Mic } from 'lucide-react';
+import { ArrowUp, Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign, ChevronLeft, ChevronRight, PenTool, History, FlaskConical, Folder, Mic, Workflow, Shrink } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Markdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
@@ -11,7 +13,7 @@ import { LiveTasksStrip } from '@/components/live-tasks.jsx';
 import { NotificationBell } from '@/components/notification-center.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
-import { Input } from '@/components/ui/basic.jsx';
+import { Input, Spinner } from '@/components/ui/basic.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { Switch, Tip, BubbleTip, Popover, PopoverTrigger, PopoverContent } from '@/components/ui/overlay.jsx';
@@ -22,7 +24,8 @@ import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { pickGreeting, pickSubtitle, suggestionsFor } from '@/lib/greeting.js';
 import { LiveActivity, QuestionCard } from '@/components/chat-live.jsx';
 import { ContextMeter } from './session.jsx';
-import { BrainPicker, ReasoningPicker, UsageBubble, useCatalog, useUsageBubble } from '@/components/brain-picker.jsx';
+import { BrainPicker, ReasoningMenu, UsageBubble, useCatalog, useUsageBubble } from '@/components/brain-picker.jsx';
+import { ContextSlot } from '@/components/context-slot.jsx';
 import { cn } from '@/lib/utils.js';
 import { DECISION, AGENT, STATUS } from '@/lib/labels.js';
 import { useT, useLocale } from '@/lib/i18n.js';
@@ -90,13 +93,13 @@ export function Composer({ value, onChange, onSend, onStop, busy, placeholder, t
             ))}
           </div>
         ) : null}
-        {top ? <div className="flex flex-wrap items-center gap-2 px-3 pt-3">{top}</div> : null}
+        {top ? <div className="flex min-w-0 items-center gap-2 px-3 pt-3" data-testid="composer-top">{top}</div> : null}
         <textarea ref={ta} data-testid={testid} value={value} disabled={disabled} rows={2} placeholder={placeholder} onPaste={onPaste}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => { if (mentions && m.onKey(e)) return; if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); onSend({ alt: e.ctrlKey || e.metaKey }); } }}
           className="placeholder:text-muted-foreground block w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[14.5px] leading-relaxed outline-none" />
         <div className="flex items-center gap-2 px-3 pb-3">
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{bottom}</div>
+          <div className="flex min-w-0 flex-1 items-center gap-1.5" data-testid="composer-bottom">{bottom}</div>
           {bridge.dictate ? <Tip label={t('chat.dictate')}><Button size="icon-sm" variant="ghost" className="rounded-full" onClick={dictate} disabled={disabled || hearing} aria-label={t('chat.dictate')} data-testid="dictate"><Mic className={hearing ? 'text-primary animate-pulse' : undefined} /></Button></Tip> : null}
           {busy && onStop ? <Tip label={t('chat.stop')}><Button size="icon-sm" variant="secondary" onClick={onStop} aria-label={t('chat.stop')}><Square className="size-3.5 fill-current" /></Button></Tip> : null}
           <Button size="icon-sm" className="rounded-full" onClick={() => onSend({ alt: false })} disabled={disabled || !(canSend ?? value.trim())} aria-label={t('chat.send')} data-testid="send"><ArrowUp /></Button>
@@ -139,18 +142,6 @@ export function BarClock() {
       </PopoverTrigger>
       <PopoverContent side="bottom" align="start" className="orb-cal" data-testid="bar-calendar"><MonthCalendar today={now} /></PopoverContent>
     </Popover>
-  );
-}
-// 3.2: the working folder in the middle of the bar (it was under the wordmark of the sidebar).
-function BarProject({ project }) {
-  const t = useT();
-  return (
-    <BubbleTip title={project ? project.path : t('bar.project')} text={t('bar.projectText')} wide={Boolean(project)}>
-      <span className={cn('bar-project', !project && 'is-empty')} tabIndex={0} data-testid="bar-project">
-        <Folder className="size-3.5 shrink-0" aria-hidden="true" />
-        <span className="truncate">{project ? project.name : t('bar.noProject')}</span>
-      </span>
-    </BubbleTip>
   );
 }
 // A month at a glance: the days of the week from the language's first day (Monday in Spanish), today marked, arrows to
@@ -323,18 +314,44 @@ function TaskApprovalLine({ m }) {
 function BarTitle({ conversation }) {
   const t = useT();
   const rename = () => form(t('chat.renameTitle'), { initial: { title: conversation.title }, body: (v, set) => <Input autoFocus value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={80} data-testid="rename-input" />, ok: t('session.save'), onOk: (v) => call('conversations.update', { id: conversation.id, title: v.title.trim() || conversation.title }) });
-  return <BarHeading title={conversation.title} project={conversation.project} onRename={rename} renameLabel={t('chat.rename')} />;
+  // 3.6: the title only; the project is chosen (and shown) in the composer, not twice.
+  return <BarHeading title={conversation.title} project={conversation.project} showProject={false} onRename={rename} renameLabel={t('chat.rename')} />;
 }
-export function BarHeading({ title, project, onRename, renameLabel, extra }) {
+export function BarHeading({ title, project, onRename, renameLabel, extra, showProject = true }) {
   const t = useT();
   return (
     <div className="bar-title" data-testid="bar-title">
       {onRename ? <BubbleTip title={renameLabel}><button type="button" className="bar-title-main" onClick={onRename} data-testid="bar-title-text">{title}</button></BubbleTip> : <span className="bar-title-main">{title}</span>}
-      <span className="bar-title-sub" data-testid="bar-title-project">
-        {project ? <ProjectIcon name={project} className="size-3.5" /> : <Folder className="size-3 shrink-0" aria-hidden="true" />}
-        <span className="truncate">{project ?? t('bar.noProject')}</span>{extra}
-      </span>
+      {showProject || extra ? (
+        <span className="bar-title-sub" data-testid="bar-title-project">
+          {showProject ? <>{project ? <ProjectIcon name={project} className="size-3.5" /> : <Folder className="size-3 shrink-0" aria-hidden="true" />}<span className="truncate">{project ?? t('bar.noProject')}</span></> : null}{extra}
+        </span>
+      ) : null}
     </div>
+  );
+}
+
+// 3.6: the share of the context at which the composer suggests «Compactar» (DESIGN-SYSTEM §2.2).
+export const COMPACT_AT = 0.7;
+// «Compactar» in the contextual slot: the conversation goes on from a summary; nothing of the history is lost.
+export function CompactButton({ onCompact, busy }) {
+  const t = useT();
+  return (
+    <BubbleTip title={t('compact.title')} text={t('compact.tip')} side="top">
+      <Button size="xs" variant="soft" onClick={onCompact} disabled={busy} data-testid="chat-compact">{busy ? <Spinner /> : <Shrink />}{busy ? t('compact.busy') : t('compact.button')}</Button>
+    </BubbleTip>
+  );
+}
+// The orchestrator under a new conversation: its icon and a small switch; the tooltip explains it.
+function OrchestratorSwitch({ on, onChange, text }) {
+  const t = useT();
+  return (
+    <BubbleTip title={on ? t('chat.orchestratorOn') : t('chat.orchestratorOff')} text={text} side="top">
+      <label className="hover:bg-accent/60 flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2" data-testid="orchestrator">
+        <Workflow className={cn('size-4', on ? 'text-primary' : 'text-muted-foreground')} aria-hidden="true" />
+        <Switch size="sm" checked={on} onCheckedChange={(v) => onChange(v === true)} aria-label={t('chat.orchestrator')} data-testid="orchestrator-check" />
+      </label>
+    </BubbleTip>
   );
 }
 
@@ -452,13 +469,22 @@ export function ChatView({ route, onConversation, project: inProject }) {
     settings({ agent: b.agent, model: b.model, account: b.account });
   };
   const lines = [...older, ...rows];
+  // 3.6: «Compactar» when the conversation's context is at 70 % or more (never while it answers).
+  const context = chat.context ?? conv?.context ?? null;
+  const [compacting, setCompacting] = useState(false);
+  const compactable = id != null && !chat.waiting && (compacting || (!chat.busy && context?.size > 0 && context.used / context.size >= COMPACT_AT));
+  const compact = async () => {
+    setCompacting(true);
+    try { const r = await act(call('chat.compact', { conversation: id })); if (r) refreshSoon(); }
+    finally { setCompacting(false); }
+  };
 
   return (
     <>
       {/* 2.6: a clean bar: the clock, (3.2) the conversation's title and project in the middle, and icon buttons, each with
           its bubble. */}
       <PageHeader className="topbar-chat" title={<><span className="sr-only">{name}</span><BarClock /></>}
-        center={conv ? <BarTitle conversation={conv} /> : <BarProject project={workProject} />}>
+        center={conv ? <BarTitle conversation={conv} /> : null}>
         <NotificationBell />
         {app.paused
           ? <BubbleTip title={t('bar.resume')} text={t('bar.resumeText')}><Button variant="soft" size="icon-sm" onClick={() => act(call('control.resume'), t('chat.resumed'))} aria-label={t('bar.resume')} data-testid="bar-resume"><Play /></Button></BubbleTip>
@@ -493,26 +519,24 @@ export function ChatView({ route, onConversation, project: inProject }) {
       <LiveTasksStrip conversation={id} />
       <Composer value={text} onChange={setText} onSend={send} onStop={id != null ? () => act(call('chat.stop', { conversation: id })) : undefined} busy={chat.busy} disabled={sending} testid="chat-input"
         placeholder={chat.busy ? t('chat.placeholderBusy', { name }) : orchestrate ? t('chat.placeholder', { name }) : t('chat.placeholderDirect', { agent: AGENT[brain.agent] ?? brain.agent })}
-        top={<div className="flex flex-col items-start gap-2">
-          {/* 3.0: the test of the day (first opening of the day, until the user writes; always in Ajustes › General). */}
-          {showTest ? <BubbleTip title={t('test.button')} text={t('test.tip')} side="top"><Button size="xs" variant="soft" onClick={() => runTest(t('test.prompt'))} data-testid="chat-test"><FlaskConical />{t('test.button')}</Button></BubbleTip> : null}
+        top={<>
           {/* 3.2.1: in God mode a new conversation takes the project chosen at the top of God mode. */}
           {inProject && id == null ? null : <ProjectPicker conversation={id} />}
-        </div>}
+          <ContextSlot items={[
+            // 3.6: the context is filling up: compact it (the history stays; the assistant goes on from a summary).
+            compactable ? { key: 'compact', node: <CompactButton onCompact={compact} busy={compacting} /> } : null,
+            // 3.0: the test of the day (first opening of the day, until the user writes; always in Ajustes › Agentes y uso).
+            showTest ? { key: 'test', node: <BubbleTip title={t('test.button')} text={t('test.tip')} side="top"><Button size="xs" variant="soft" onClick={() => runTest(t('test.prompt'))} data-testid="chat-test"><FlaskConical />{t('test.button')}</Button></BubbleTip> } : null
+          ]} />
+        </>}
         notice={<UsageBubble text={bubble.text} onClose={bubble.close} />}
         bottom={<>
-          <BrainPicker catalog={catalog} value={brain} onChange={pickBrain} />
-          <ReasoningPicker value={brain.reasoning} onChange={(reasoning) => settings({ reasoning })} />
+          <BrainPicker catalog={catalog} value={brain} onChange={pickBrain} className="min-w-0 shrink" />
+          <ReasoningMenu catalog={catalog} value={brain} onChange={(reasoning) => settings({ reasoning })} />
           {/* 3.2: whether a NEW conversation is with the assistant or directly with the agent chosen; a conversation keeps
-              the way it started. */}
-          {id == null ? (
-            <BubbleTip title={t('chat.orchestrator')} text={brain.agent === 'cursor' ? t('chat.orchestratorCursor', { name }) : t('chat.orchestratorHint')} side="top">
-              <label className="flex cursor-pointer items-center gap-2 text-[13px]">
-                <Switch checked={orchestrate} onCheckedChange={(v) => toggleOrchestrator(v === true)} data-testid="orchestrator-check" />{t('chat.orchestrator')}
-              </label>
-            </BubbleTip>
-          ) : null}
-          {(chat.context ?? conv?.context) ? <span className="text-muted-foreground ml-auto text-xs"><ContextMeter context={chat.context ?? conv?.context} /></span> : null}
+              the way it started. 3.6: an icon and a small switch; the tooltip explains it. */}
+          {id == null ? <OrchestratorSwitch on={orchestrate} onChange={toggleOrchestrator} text={brain.agent === 'cursor' ? t('chat.orchestratorCursor', { name }) : t('chat.orchestratorHint', { name })} /> : null}
+          {context ? <span className="text-muted-foreground ml-auto shrink-0 text-xs"><ContextMeter context={context} /></span> : null}
         </>} />
     </>
   );

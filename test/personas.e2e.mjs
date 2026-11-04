@@ -141,15 +141,24 @@ try {
   await menu('person-profile');
   await pc.waitForSelector('[data-testid=profile-card]');
   await shot('07-mi-perfil');
-  await pc.click('[data-testid=settings-nav-personas]');
+  // 3.6: «Mi perfil» opens on its own (it is not a section of Ajustes); Usuarios is inside Magic Link.
+  assert.equal(await pc.locator('[data-testid=profile-dialog] [data-testid^=settings-nav-]').count(), 0, 'Mi perfil, sin las secciones de Ajustes');
+  await pc.keyboard.press('Escape');
+  await pc.click('[data-testid=nav-settings]');
+  await pc.waitForSelector('[data-testid=settings-dialog]');
+  assert.deepEqual(await pc.locator('[data-testid^=settings-nav-]').evaluateAll((els) => els.map((e) => e.dataset.testid.slice(13))), ['general', 'magiclink', 'agentes', 'datos', 'avanzado', 'acerca'], 'seis secciones');
+  await shot('08a-ajustes-secciones');
+  await pc.click('[data-testid=settings-nav-magiclink]');
+  await pc.waitForSelector('[data-testid=settings-sub-usuarios]');
   await pc.waitForSelector('[data-testid=person-row-Leo]');
   const row = await pc.textContent('[data-testid=person-row-Leo]');
-  assert.ok(!leaks(row).length, 'Ajustes › Personas: solo números');
+  assert.ok(!leaks(row).length, 'Ajustes › Magic Link › Usuarios: solo números');
+  assert.doesNotMatch(row, /turno|Dueño|1 (bots|chats|proyectos|grupos)/, 'sin jerga ni plurales mal');
   await shot('08-personas');
   await pc.click('[data-testid=settings-nav-datos]');
   await pc.waitForSelector('[data-testid=backups-card]');
   await shot('09-datos');
-  await pc.click('[data-testid=settings-nav-movil]');
+  await pc.click('[data-testid=settings-nav-magiclink]');
   await pc.waitForSelector('[data-testid=link-for-who]');
   await pc.click('[data-testid=link-for-who]'); await pc.getByRole('option', { name: 'Leo' }).click();
   await pc.click('[data-testid=link-make]');

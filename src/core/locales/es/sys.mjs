@@ -112,8 +112,8 @@ export default {
   'sys.mcp.idsRange': 'ids: entre 1 y 10 tareas',
   'sys.mcp.askNeedsOptions': 'orb_ask necesita una pregunta y entre 2 y 4 opciones',
   'sys.mcp.boardNeedsText': 'orb_pizarra necesita el consejo (message)',
-  // 2.7: Opti Bot (Monitoreo del equipo)
-  'sys.opti.off': 'Activa el Monitoreo del equipo en Ajustes para hablar con Opti Bot',
+  // 2.7: Opti Bot (Monitoreo)
+  'sys.opti.off': 'Activa el Monitoreo en Ajustes para hablar con Opti Bot',
   'sys.opti.badAction': 'esa acción no está en la lista de Opti Bot',
   'sys.opti.needsReason': 'explica por qué propones la acción',
   'sys.opti.needsPid': 'end_process necesita el Id del proceso',

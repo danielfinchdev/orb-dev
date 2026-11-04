@@ -208,12 +208,14 @@ try {
   step = 'ajustes';
   await win.click('[data-testid=nav-settings]');
   await win.locator('[data-testid=settings-dialog]').getByText('Nombre del asistente', { exact: true }).waitFor();
-  await win.locator('[data-testid=settings-about]', { hasText: '@danielfinchdev' }).waitFor();
-  await win.locator('[data-testid=settings-about]', { hasText: /Orb \d+\.\d+\.\d+/ }).waitFor();
   await win.waitForTimeout(400);
   await shot('10-ajustes');
   const section = async (id) => { await win.click(`[data-testid=settings-nav-${id}]`); await win.waitForTimeout(250); };
-  await section('apariencia');
+  // 3.6: the version and the developer's GitHub are in «Acerca de».
+  await section('acerca');
+  await win.locator('[data-testid=settings-about]', { hasText: '@danielfinchdev' }).waitFor();
+  await win.locator('[data-testid=settings-about]', { hasText: /Orb \d+\.\d+\.\d+/ }).waitFor();
+  await section('general');
   await win.locator('[data-testid=skin-picker]').waitFor();
   await shot('10e-ajustes-apariencia');
   // A visual theme applies at once to the whole app; the professional one has no robot.
@@ -414,11 +416,9 @@ try {
   await call('chat.settings', { model: 'sonnet' }); await call('chat.settings', { model: 'claude-opus-5-5' });
   await win.waitForTimeout(800);
   assert.equal(await win.locator('[data-testid=usage-bubble]').count(), 0, 'el globo no se repite');
-  // 2.6: a clean top bar: the clock, the working folder in the middle and icon buttons with their bubble.
-  assert.equal(await win.locator('main header').evaluate((h) => h.innerText.replace(h.querySelector('h1')?.innerText ?? '', '').replace(h.querySelector('[data-testid=bar-project]')?.innerText ?? '', '').trim()), '', 'sin nombre, modo ni modelo en la barra');
-  // 3.2: the folder in the middle of the bar, centred between the clock and the buttons.
-  const centre = await win.locator('main header').evaluate((h) => { const a = h.getBoundingClientRect(); const p = h.querySelector('[data-testid=bar-project]').getBoundingClientRect(); const cs = getComputedStyle(h); const left = a.left + parseFloat(cs.paddingLeft); const right = a.right - parseFloat(cs.paddingRight); return Math.abs((p.left + p.right) / 2 - (left + right) / 2); });
-  assert.ok(centre < 3, `carpeta centrada en la barra (desvío ${centre}px)`);
+  // 2.6: a clean top bar: the clock and icon buttons with their bubble. 3.6: in a new chat nothing in the middle (the
+  // project is chosen and shown in the composer only).
+  assert.equal(await win.locator('main header').evaluate((h) => h.innerText.replace(h.querySelector('h1')?.innerText ?? '', '').trim()), '', 'sin nombre, modo, modelo ni carpeta en la barra');
   await win.hover('[data-testid=bar-pause]');
   // The bubble that is open (another one may still be closing for a moment: seen on the CI's Linux machine).
   await win.locator('[data-testid=bubble-tip]:not([data-state=closed])').first().waitFor();

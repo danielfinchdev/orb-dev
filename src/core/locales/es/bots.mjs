@@ -67,7 +67,7 @@ export default {
   'sys.botmcp.saved': 'Guardado en la memoria',
   'sys.botmcp.cancelled': 'Recordatorio cancelado',
   'sys.botmcp.browserNeedsOk': 'Esto puede comprar, reservar, pagar o enviar un formulario: pide antes permiso con bot_confirm',
-  "msg.bots.tooManyTurns": "Los bots ya han dado {n} turnos por este mensaje: paro aquí. Escríbeles de nuevo si quieres seguir.",
+  "msg.bots.tooManyTurns": "Los bots ya han dado {n} respuestas a este mensaje: paro aquí. Escríbeles de nuevo si quieres seguir.",
   "msg.bots.card.send": "{bot} leyó algo de fuera y quiere pasárselo a {to}: {text}",
   "msg.bots.cannotApprove": "Este dispositivo no puede aprobar lo que piden los bots. Cámbialo en Ajustes › Magic Link del Orb.",
   "msg.bots.ownerApproves": "Esta tarjeta cambia los bots o el servidor: apruébala en el PC o desde un dispositivo que puede administrar.",

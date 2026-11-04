@@ -90,7 +90,7 @@ export default {
   'bots.f.toolsHint': 'What it may use. Sending, buying, booking or changing anything always asks for your OK.',
   'bots.f.accounts': 'Accounts and exclusive topics',
   'bots.f.accountsHint': 'The connectors it uses and the topics only it handles.',
-  'bots.f.noConnectors': 'No MCP connectors added. Add them in Settings › Tools.',
+  'bots.f.noConnectors': 'No MCP connectors added. Add them in Settings › Advanced.',
   'bots.f.account': 'Specific account',
   'bots.f.accountHint': 'Optional: the only account it may use (an email address, for example).',
   'bots.f.accountPh': 'For example, home@example.com',

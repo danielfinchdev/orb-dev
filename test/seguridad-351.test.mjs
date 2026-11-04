@@ -262,7 +262,7 @@ test('el bot sabe que lo de fuera son datos; lo que reenvía tras leerlo espera 
   await until(() => lines(b).some((l) => /cita del martes/.test(l.body)), 'llega a Agenda', 20000);
   // The cap of turns per message.
   bots.lane(b.id).enqueue({ text: 'otra vuelta', conv: B.botConversation(board, b), from: a.id, tree: { turns: MAX_TREE } });
-  await until(() => lines(b).some((l) => l.role === 'system' && /turnos/.test(l.body)), 'se para y lo dice', 20000);
+  await until(() => lines(b).some((l) => l.role === 'system' && /respuestas a este mensaje/.test(l.body)), 'se para y lo dice', 20000);
 });
 
 test('borrar un bot se lleva su carpeta a la papelera de Orb', () => {

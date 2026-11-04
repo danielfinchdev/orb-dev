@@ -1,13 +1,15 @@
 // 3.6 «Personas»: who is using Orb here. With two or more users, the bottom of the sidebar shows them (avatar and name,
 // like most apps); a click opens «Mi perfil», «Cambiar de usuario» and «Bloquear». On a phone the same is at the top of
 // «Más». A phone or a browser is of one user: it cannot change user, only lock (with a PIN). With one user, nothing shows.
-import { Lock, UserRound, ChevronsUpDown, ArrowLeftRight } from 'lucide-react';
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/overlay.jsx';
+import { Fragment } from 'react';
+import { Lock, UserRound, ChevronsUpDown, ArrowLeftRight, ChevronRight } from 'lucide-react';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
+import { Badge } from '@/components/ui/basic.jsx';
 import { Input } from '@/components/ui/basic.jsx';
 import { form } from '@/components/dialogs.jsx';
 import { NavItem } from '@/components/sidebar.jsx';
 import { useStore, call, bridge, setState, getState, go, openSettings, modeOf } from '@/lib/store.js';
-import { personsOn, initials, pinRefusal } from '@/lib/persons.js';
+import { personsOn, initials, pinRefusal, isOwner } from '@/lib/persons.js';
 import { cn } from '@/lib/utils.js';
 import { t, useT } from '@/lib/i18n.js';
 
@@ -70,7 +72,14 @@ export function PersonMenu({ className }) {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-(--radix-dropdown-menu-trigger-width) min-w-52">
-        {actions.map((a) => <DropdownMenuItem key={a.id} onSelect={a.run} data-testid={a.id}><a.icon className="size-4" />{a.label}</DropdownMenuItem>)}
+        {/* 3.6: who is here and whether they are the admin, as the menu's header. */}
+        <DropdownMenuLabel className="flex min-w-0 items-center gap-2.5 py-2 text-foreground" data-testid="person-menu-header">
+          <PersonDot name={me.person.name} color={me.person.color} />
+          <span className="min-w-0 flex-1 truncate text-sm font-medium">{me.person.name}</span>
+          {isOwner(me) ? <Badge variant="secondary">{t('persons.role.owner')}</Badge> : null}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {actions.map((a) => (<Fragment key={a.id}>{a.id === 'person-lock' ? <DropdownMenuSeparator /> : null}<DropdownMenuItem onSelect={a.run} data-testid={a.id}><a.icon className="size-4" />{a.label}</DropdownMenuItem></Fragment>))}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -82,10 +91,17 @@ export function PersonCard() {
   const me = useStore((s) => s.me);
   const actions = useActions();
   if (!actions) return null;
+  const profile = actions.find((a) => a.id === 'person-profile');
+  const rest = actions.filter((a) => a !== profile);
   return (
     <div className="bg-card/80 grid gap-0.5 rounded-2xl border p-2" data-testid="person-card">
-      <div className="flex min-w-0 items-center gap-3 px-2 pt-1 pb-2"><PersonDot name={me.person.name} color={me.person.color} size="lg" /><span className="min-w-0 truncate text-[16px] font-medium" data-testid="person-card-name">{me.person.name}</span></div>
-      {actions.map((a) => <NavItem key={a.id} icon={a.icon} label={a.label} onClick={a.run} testid={a.id === 'person-profile' ? 'nav-profile' : a.id} />)}
+      {/* 3.6: the name row opens «Mi perfil»; below it, only what else applies (Bloquear). */}
+      <button type="button" onClick={profile.run} className="hover:bg-accent/60 flex min-w-0 cursor-pointer items-center gap-3 rounded-xl px-2 py-2 text-left" data-testid="nav-profile" aria-label={t('persons.myProfile')}>
+        <PersonDot name={me.person.name} color={me.person.color} size="lg" />
+        <span className="grid min-w-0 flex-1 leading-tight"><span className="truncate text-[16px] font-medium" data-testid="person-card-name">{me.person.name}</span><span className="text-muted-foreground text-xs">{t('persons.myProfile')}</span></span>
+        <ChevronRight className="text-muted-foreground size-4 shrink-0" />
+      </button>
+      {rest.map((a) => <NavItem key={a.id} icon={a.icon} label={a.label} onClick={a.run} testid={a.id} />)}
     </div>
   );
 }

@@ -32,6 +32,7 @@ import ws4 from './es/ws4.mjs';
 import ws5 from './es/ws5.mjs';
 import ws6 from './es/ws6.mjs';
 import ws6android from './es/ws6-android.mjs';
+import ola1 from './es/ola1.mjs';
 
 export default {
   ...base,
@@ -66,5 +67,6 @@ export default {
   ...ws4,
   ...ws5,
   ...ws6,
-  ...ws6android
+  ...ws6android,
+  ...ola1
 };

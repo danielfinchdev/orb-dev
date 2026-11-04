@@ -56,8 +56,9 @@ rules come from), `src/ui/app.css` (tokens), `src/ui/themes.css` (visual themes)
 - **Mode switch** `Orb | Bots` below the head. Then the mode's primary action (`Nuevo chat` / `Nuevo bot`), search, the
   navigation and the collapsible lists (Por aprobar, Proyectos, Conversaciones / Tus bots, Grupos).
 - **Sidebar footer**: a row of icon buttons (Ajustes, Agentes, Bitácoras, Tutoriales, Reportar un problema) with
-  tooltips, and the version. Below it, **only with 2+ users**, the user row: avatar + name + `⇕`, opening the user menu
-  upwards: `Mi perfil`, `Cambiar de usuario`, separator, `Bloquear`.
+  tooltips (the version is in Ajustes › Acerca de). Below it, **only with 2+ users**, the user row: avatar + name + `⇕`,
+  opening the user menu upwards: a header (avatar, name, `Admin` badge), `Mi perfil`, `Cambiar de usuario`, separator,
+  `Bloquear`.
 - **Top bar** (56 px): left, the screen title (chat: the clock); center, the context (chat: the conversation title and
   its project, or the working project); right, at most three icon buttons of that screen, then the window controls.
   A screen's primary action may be a labelled button at the right (`Nuevo bot`, `Nuevo proyecto`); secondary actions go

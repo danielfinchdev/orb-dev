@@ -53,11 +53,35 @@ try {
   assert.equal(await page.locator('[data-testid=mobile-tabs]').count(), 0, 'un navegador de PC lleva el diseño del PC');
   assert.equal(await page.locator('[data-testid=mode-switch]:visible').count(), 1, 'el selector Orb | Bots arriba del menú');
 
+  step = 'compositor de un chat nuevo';
+  // 3.6 (DESIGN-SYSTEM §2.2): project picker + slot above; model, brain button and orchestrator (icon + small switch) below.
+  await page.waitForSelector('[data-testid=reasoning-picker]');
+  await page.waitForSelector('[data-testid=orchestrator-check]');
+  assert.equal(await page.locator('[data-testid=bar-project]').count(), 0, 'el proyecto solo en el compositor');
+  await shot('00-chat-nuevo');
+  await page.click('[data-testid=reasoning-picker]');
+  await page.waitForSelector('[data-testid=reasoning-menu]');
+  assert.deepEqual(await page.locator('[data-testid^=reasoning-]:not([data-testid=reasoning-menu]):not([data-testid=reasoning-picker])').evaluateAll((els) => els.map((e) => e.dataset.testid)), ['reasoning-low', 'reasoning-medium', 'reasoning-high'], 'los niveles del modelo (Sonnet: sin Extra)');
+  await page.hover('[data-testid=reasoning-high]');
+  await page.waitForTimeout(500);
+  await shot('00b-menu-razonamiento');
+  // Escape closes the option's tooltip first, then the menu.
+  await until(async () => { await page.keyboard.press('Escape'); await page.waitForTimeout(200); return (await page.locator('[data-testid=reasoning-menu]').count()) === 0; }, 'menú cerrado');
+
   step = 'chat de Orb';
   await page.fill('[data-testid=chat-input]', 'Hola, ¿qué tal va todo?');
-  await page.keyboard.press('Enter');
+  await page.click('[data-testid=send]');
   await page.waitForSelector('text=Recibido: ');
   await shot('01-orb-chat');
+  // 3.6: with the context almost full, «Compactar» in the slot next to the project picker.
+  step = 'compactar';
+  await page.fill('[data-testid=chat-input]', 'Repasa todo el plan CONTEXTO_LLENO');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('[data-testid=chat-compact]', { timeout: 20000 });
+  await shot('01b-compactar');
+  await page.click('[data-testid=chat-compact]');
+  await page.waitForSelector('text=Conversación compactada', { timeout: 20000 });
+  await page.waitForSelector('[data-testid=chat-compact]', { state: 'detached' });
 
   step = 'lista de bots';
   await page.click('[data-testid=mode-bots]');
