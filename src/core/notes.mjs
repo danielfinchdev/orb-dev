@@ -73,21 +73,28 @@ export function buildNote({ chat, line, preview = 'chat', muted = false, hasPin 
   if (line.id != null) note.line = Number(line.id);
   // The actions: a card is answered right there (unless it needs the PIN or its text is hidden: then «Aprobar» opens the
   // app); a message or a question gets «Responder»; a reminder, none.
+  // 3.6 (M4): the app lock (the person's PIN, and the fingerprint with it) is never skipped: with it, every action opens
+  // the app (lock first, then the chat); without it, a card is answered there only when it is not sensitive and its text
+  // shows.
+  const locked = Boolean(hasPin);
+  if (locked) note.locked = true;
   if (kind === 'card') {
     note.card = { method: 'bots.decide', item: Number(line.id) };
     note.sensitive = Boolean(sensitive);
-    const needsApp = !shown || (sensitive && hasPin);
-    note.actions = [{ id: 'deny', title: w.deny }, { id: 'allow', title: w.allow, ...(needsApp ? { open: true } : {}) }];
+    const needsApp = locked || !shown || sensitive;
+    note.actions = [{ id: 'deny', title: w.deny }, { id: 'allow', title: w.allow }].map((a) => (needsApp ? { ...a, open: true } : a));
     if (sensitive && hasPin) note.pin = true;
   } else if (kind === 'approval') {
     note.card = { method: 'sessions.approve', id: String(line.meta.session), request: String(line.meta.request) };
-    note.actions = [{ id: 'deny', title: w.deny }, { id: 'allow', title: w.allow, ...(!shown ? { open: true } : {}) }];
+    const needsApp = locked || !shown;
+    note.actions = [{ id: 'deny', title: w.deny }, { id: 'allow', title: w.allow }].map((a) => (needsApp ? { ...a, open: true } : a));
   } else if (kind === 'task') {
     // Approving a task signs its exact version (what, where, why): always in the app, with its confirmation.
     note.card = { method: 'tasks.approve', task: Number(line.meta.task) };
     note.actions = [{ id: 'allow', title: w.allow, open: true }];
   } else if (kind === 'message' || kind === 'question') {
-    note.actions = [{ id: 'reply', title: w.reply, input: true }];
+    // Locked: «Responder» opens the app (no text typed on the notification).
+    note.actions = [locked ? { id: 'reply', title: w.reply, open: true } : { id: 'reply', title: w.reply, input: true }];
   }
   return note;
 }
@@ -104,6 +111,7 @@ export function collapse(previous, note, { max = 5 } = {}) {
 export function actionRoute(note, actionId, { text = null } = {}) {
   const open = { open: note.route };
   if (actionId === 'reply') {
+    if (note.locked || note.actions?.find((x) => x.id === 'reply')?.open) return open;
     const body = String(text ?? '').trim();
     if (!body || note.kind === 'reminder') return open;
     const r = note.route;

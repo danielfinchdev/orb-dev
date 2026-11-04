@@ -827,6 +827,8 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     for (const [k, x] of noteTokens) if (x.group === t.group) noteTokens.delete(k);
     const device = board.one('SELECT * FROM devices WHERE id = ?', t.device);
     if (!device?.public_key || !device.push || personOf(device) !== t.person) return send(res, 401, { ok: false, error: tr('msg.notes.expired') });
+    // The app lock (a PIN set since the notification went out) is never skipped: open the app instead.
+    if (hasPinOf(t.person)) return send(res, 403, { ok: false, reason: 'locked', error: tr('msg.notes.expired') });
     const [method, given] = t.call; const params = { ...given };
     const admin = Boolean(device.admin) && personOf(device) === owner();
     const allowed = allowedFor(role(), device.kind, admin, Number(device.kind_ok) === 1);

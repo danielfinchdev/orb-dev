@@ -78,14 +78,16 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
       // back from the notification; «Aprobar» / «Rechazar» answer a card (one that needs the PIN opens the app for it).
       const threads = new Map(); // chat key → { lines, count }
       const LN = async () => (await import('@capacitor/local-notifications')).LocalNotifications;
-      const slim = (n) => ({ key: n.key, route: n.route, kind: n.kind, card: n.card ?? null, actions: (n.actions ?? []).map(({ id, open }) => ({ id, ...(open ? { open: true } : {}) })) });
-      const typeOf = (n) => (n.actions?.some((a) => a.id === 'reply') ? 'orb-msg' : n.actions?.some((a) => a.id === 'deny') ? 'orb-card' : n.actions?.some((a) => a.id === 'allow') ? 'orb-task' : undefined);
+      const slim = (n) => ({ key: n.key, route: n.route, kind: n.kind, card: n.card ?? null, ...(n.locked ? { locked: true } : {}), actions: (n.actions ?? []).map(({ id, open }) => ({ id, ...(open ? { open: true } : {}) })) });
+      // With the app lock on (note.locked), «Responder» has no text box: it opens the app (lock, then the chat).
+      const typeOf = (n) => (n.actions?.some((a) => a.id === 'reply') ? (n.actions.find((a) => a.id === 'reply').input ? 'orb-msg' : 'orb-msg-open') : n.actions?.some((a) => a.id === 'deny') ? 'orb-card' : n.actions?.some((a) => a.id === 'allow') ? 'orb-task' : undefined);
       const openNote = (detail) => window.dispatchEvent(new CustomEvent('orb:open-note', { detail }));
       (async () => {
         const L = await LN();
         const [reply, allow, deny] = await Promise.all([tl('msg.notes.reply'), tl('msg.notes.allow'), tl('msg.notes.deny')]);
         await L.registerActionTypes({ types: [
           { id: 'orb-msg', actions: [{ id: 'reply', title: reply, input: true, inputButtonTitle: reply }] },
+          { id: 'orb-msg-open', actions: [{ id: 'reply', title: reply }] },
           { id: 'orb-card', actions: [{ id: 'deny', title: deny }, { id: 'allow', title: allow }] },
           { id: 'orb-task', actions: [{ id: 'allow', title: allow }] }
         ] }).catch(() => {});

@@ -153,7 +153,8 @@ console only on this PC, for the owner). Another person spends it only through a
   it to the audience only: as a sealed `note` event to their open streams (the Android app shows it in the background)
   and as Web Push to their closed devices, with one-time action tokens for that device (`POST /api/note-action
   { token }`, run as that device's principal: same ceiling, `approverOf`, `guardCall`, authz; a sensitive card needs a
-  strong ticket, so with a PIN no «Aprobar» token is minted). `/avatars/<shape>-<color>.png` and `/avatars/g/…` hold
+  strong ticket; no token is minted for a sensitive card or for a person with a PIN — the app lock — and a token used
+  after a PIN was set is refused with reason `locked`). `/avatars/<shape>-<color>.png` and `/avatars/g/…` hold
   only shapes and colours.
 - **Strong tickets from afar.** A call body may carry `ticket` (from `persons.verifyPin` on that device); `remote.mjs`
   turns it into `principal.strongUntil`. A refused call answers `{ ok: false, status: 403, reason }`.

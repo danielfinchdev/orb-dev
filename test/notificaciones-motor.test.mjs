@@ -71,32 +71,46 @@ test('silenciado: sin aviso', async () => {
   await A.call('inbox.mute', { kind: 'bot', id: botId, muted: false });
 });
 
-test('una tarjeta: Aprobar desde el aviso (una vez, como ese móvil); con PIN, «Aprobar» abre la app', async () => {
+test('una tarjeta no sensible y sin bloqueo: Aprobar desde el aviso (una vez, como ese móvil)', async () => {
+  const jefe = await A.call('bots.create', { name: 'Jefe', role_text: 'Reparte', is_chief: true });
+  await A.call('bots.create', { name: 'Otro', role_text: 'Nada' });
   const n = pushes(ana.endpoint).length;
-  await A.call('bots.send', { id: botId, text: 'BOT_CALL bot_confirm {"action":"comprar","detail":"Leche","url":"https://tienda.example"}' });
+  await A.call('bots.send', { id: jefe.id, text: 'BOT_CALL bot_pause {"name":"Otro","reason":"no se usa"}' });
   const p = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.kind === 'card'), 'el aviso de la tarjeta', 30_000);
-  assert.deepEqual(p.data.actions.map((a) => [a.id, Boolean(a.open)]), [['deny', false], ['allow', false]], 'sin PIN: se aprueba ahí');
+  assert.deepEqual(p.data.actions.map((a) => [a.id, Boolean(a.open)]), [['deny', false], ['allow', false]], 'se contesta ahí');
   assert.ok(p.data.acts.allow && p.data.acts.deny);
   const res = await noteAction(p.data.acts.allow);
   assert.equal(res.status, 200, await res.clone().text());
-  const card = (await A.call('bots.chat', { id: botId })).lines.find((l) => l.id === p.data.card.item);
-  assert.equal(card.meta.status === 'pending', false, 'contestada');
+  const card = (await A.call('bots.chat', { id: jefe.id })).lines.find((l) => l.id === p.data.card.item);
+  assert.notEqual(card.meta.status, 'pending', 'contestada');
   assert.equal(card.meta.by?.device, ana.id, 'como ese móvil');
   assert.equal((await noteAction(p.data.acts.allow)).status, 401, 'una sola vez');
   assert.equal((await noteAction(p.data.acts.deny)).status, 401, 'la otra respuesta también se gasta');
   assert.equal((await noteAction('inventado')).status, 401);
-  // Con PIN: la tarjeta sensible no se aprueba desde el aviso (sin token), se abre la app; rechazar sí.
+});
+
+test('una tarjeta sensible: Aprobar y Rechazar abren la app (sin tokens)', async () => {
+  const n = pushes(ana.endpoint).length;
+  await A.call('bots.send', { id: botId, text: 'BOT_CALL bot_confirm {"action":"comprar","detail":"Leche","url":"https://tienda.example"}' });
+  const p = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.kind === 'card'), 'el aviso de la tarjeta', 30_000);
+  assert.deepEqual(p.data.actions.map((a) => [a.id, Boolean(a.open)]), [['deny', true], ['allow', true]]);
+  assert.deepEqual(p.data.acts, {});
+});
+
+test('con el bloqueo de la app (PIN): nada se hace desde el aviso; Responder abre la app', async () => {
   await A.call('persons.setPin', { pin: '2468' });
-  const m = pushes(ana.endpoint).length;
-  await A.call('bots.send', { id: botId, text: 'BOT_CALL bot_confirm {"action":"comprar","detail":"Pan","url":"https://tienda.example"}' });
-  const q = await until(() => pushes(ana.endpoint).slice(m).find((x) => x.data.kind === 'card'), 'la segunda tarjeta', 30_000);
-  const allow = q.data.actions.find((a) => a.id === 'allow');
-  assert.equal(allow.open, true); assert.equal(q.data.acts.allow, undefined, 'sin token para aprobar');
-  assert.ok(q.data.acts.deny);
-  assert.equal((await noteAction(q.data.acts.deny)).status, 200);
-  const card2 = (await A.call('bots.chat', { id: botId })).lines.find((l) => l.id === q.data.card.item);
-  assert.equal(card2.meta.status, 'denied');
-  await A.call('persons.setPin', { pin: null, current: '2468' });
+  try {
+    const n = pushes(ana.endpoint).length;
+    await A.call('bots.send', { id: botId, text: 'hola con candado' });
+    const m = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.kind === 'message'), 'el mensaje', 30_000);
+    assert.deepEqual(m.data.actions.map((a) => [a.id, Boolean(a.open), Boolean(a.input)]), [['reply', true, false]], 'sin escribir en el aviso');
+    const k = pushes(ana.endpoint).length;
+    const jefe = (await A.call('bots.list')).bots.find((b) => b.name === 'Jefe');
+    await A.call('bots.send', { id: jefe.id, text: 'BOT_CALL bot_pause {"name":"Agenda","reason":"vacaciones"}' });
+    const c = await until(() => pushes(ana.endpoint).slice(k).find((x) => x.data.kind === 'card'), 'la tarjeta', 30_000);
+    assert.ok(c.data.actions.every((a) => a.open), 'aprobar y rechazar, en la app');
+    assert.deepEqual(c.data.acts, {}, 'sin tokens');
+  } finally { await A.call('persons.setPin', { pin: null, current: '2468' }); }
 });
 
 test('la app abierta recibe el aviso como evento «note» (lo muestra Android en segundo plano)', async () => {
@@ -119,4 +133,20 @@ test('zona Orb: la respuesta de Orbe avisa con su dibujo y abre esa conversació
   assert.equal(p.data.icon, '/icon.png');
   assert.deepEqual(p.data.route, { view: 'chat', id: r.conversation });
   assert.ok(!pushes(leoPhone.endpoint).length, 'nada al móvil de Leo');
+});
+
+test('un PIN puesto después del aviso: su token ya no aprueba (abre la app)', async () => {
+  const jefe = (await A.call('bots.list')).bots.find((b) => b.name === 'Jefe');
+  await A.call('bots.create', { name: 'Tercero', role_text: 'Nada' });
+  const n = pushes(ana.endpoint).length;
+  await A.call('bots.send', { id: jefe.id, text: 'BOT_CALL bot_pause {"name":"Tercero","reason":"no se usa"}' });
+  const p = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.kind === 'card'), 'la tarjeta', 30_000);
+  assert.ok(p.data.acts.allow);
+  await A.call('persons.setPin', { pin: '1357' });
+  try {
+    const r = await noteAction(p.data.acts.allow);
+    assert.equal(r.status, 403); assert.equal((await r.json()).reason, 'locked');
+    const card = (await A.call('bots.chat', { id: jefe.id })).lines.find((l) => l.id === p.data.card.item);
+    assert.equal(card.meta.status, 'pending', 'sin contestar');
+  } finally { await A.call('persons.setPin', { pin: null, current: '1357' }); }
 });

@@ -67,14 +67,13 @@ test('una tarjeta: Aprobar y Rechazar desde el aviso; sensible con PIN, «Aproba
   assert.deepEqual(n.actions.map((a) => [a.id, Boolean(a.open)]), [['deny', false], ['allow', false]]);
   assert.deepEqual(actionRoute(n, 'allow'), { call: ['bots.decide', { item: 55, decision: 'allow' }] });
   assert.deepEqual(actionRoute(n, 'deny'), { call: ['bots.decide', { item: 55, decision: 'deny' }] });
-  // Sensible y la persona tiene PIN: rechazar sigue siendo directo; aprobar, en la app (con el PIN).
+  // Sensible: Aprobar y Rechazar abren la app (con PIN, allí se pide).
   const s = buildNote({ chat: bot, line: { ...card, meta: { ...card.meta, card: 'confirm' } }, preview: 'all', sensitive: true, hasPin: true, words });
   assert.equal(s.pin, true);
   assert.deepEqual(actionRoute(s, 'allow'), { open: { view: 'bot-chat', id: '7' }, approve: { method: 'bots.decide', item: 55 } });
-  assert.deepEqual(actionRoute(s, 'deny'), { call: ['bots.decide', { item: 55, decision: 'deny' }] });
-  // Sensible sin PIN: no hay nada que pedir (el motor lo comprueba igual: authz › strong).
+  assert.deepEqual(actionRoute(s, 'deny'), { open: { view: 'bot-chat', id: '7' }, approve: null });
   const noPin = buildNote({ chat: bot, line: card, preview: 'all', sensitive: true, hasPin: false, words });
-  assert.ok(actionRoute(noPin, 'allow').call);
+  assert.ok(!actionRoute(noPin, 'allow').call && !actionRoute(noPin, 'deny').call, 'sensible: nunca desde el aviso');
   // Con el texto oculto no se aprueba a ciegas: abre el chat.
   const blind = buildNote({ chat: bot, line: card, preview: 'chat', words });
   assert.ok(actionRoute(blind, 'allow').open && !actionRoute(blind, 'allow').call);
@@ -91,6 +90,16 @@ test('zona Orb: el permiso de un agente se contesta (sessions.approve); una tare
   assert.equal(task.kind, 'task');
   assert.deepEqual(actionRoute(task, 'allow'), { open: { view: 'chat', id: 12 }, approve: { method: 'tasks.approve', task: 8 } });
   assert.equal(lineKind({ meta: { kind: 'approval', session: 's', request: 'r', status: 'allowed' } }), null);
+});
+
+test('bloqueo de la app (PIN): Responder, Aprobar y Rechazar abren la app; nada se hace desde el aviso', () => {
+  const m = buildNote({ chat: bot, line: msg('hola'), preview: 'all', hasPin: true, words });
+  assert.deepEqual(m.actions, [{ id: 'reply', title: 'Responder', open: true }], 'sin caja de texto');
+  assert.deepEqual(actionRoute(m, 'reply', { text: 'escrito igual' }), { open: { view: 'bot-chat', id: '7' } });
+  const card = buildNote({ chat: bot, line: { id: 5, role: 'system', body: 'x', meta: { kind: 'bot_card', card: 'send', status: 'pending' } }, preview: 'all', hasPin: true, words });
+  for (const a of ['allow', 'deny']) assert.ok(!actionRoute(card, a).call, a);
+  const ap = buildNote({ chat: orbChat, line: { role: 'system', body: 'x', meta: { kind: 'approval', session: 's', request: 'r', status: 'pending' } }, preview: 'all', hasPin: true, words });
+  for (const a of ['allow', 'deny']) assert.ok(!actionRoute(ap, a).call, a);
 });
 
 test('Responder: cada chat a su método; sin texto, abre el chat', () => {

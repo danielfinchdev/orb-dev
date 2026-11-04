@@ -203,8 +203,10 @@ sections 2.1–2.4 describe the shipped app.
   `npm run android:build`, and the lead member for a group), the chat's name as the title, the text as chosen in
   Mi perfil (`none`: not even who), one notification per chat (new lines join it: the last five and the count),
   muted chats silent (only the person's own reminders ring). Actions: «Responder» (inline on Android; opens the chat in a
-  browser), «Aprobar» / «Rechazar» on a card. A sensitive card of someone with a PIN, a task (its exact version is
-  signed in the app) or a card whose text is hidden: «Aprobar» opens the chat and asks there (`lib/notes.js`,
+  browser), «Aprobar» / «Rechazar» on a card. The app lock is never skipped: with a PIN (and the fingerprint with it)
+  every action opens the app (lock, then the chat). Without it, a card is answered there only when it is not sensitive
+  and its text shows; a sensitive card, a task (its exact version is signed in the app) or a hidden card opens the chat
+  and asks there (`lib/notes.js`,
   `decideCard`, also used by the card in the chat). Tapping opens the exact chat.
 - **Built (M3): the Orb zone.** `views/orb/inbox.jsx` (the chat list: search over titles, projects, messages and «#id»
   of a task, with a filter by state and agent; «+» with Nuevo chat / Nuevo proyecto; on the PC the places Tareas (with
