@@ -178,8 +178,9 @@ export function deletePerson(board, pid, { home, onBot = () => {} } = {}) {
     for (const t of ownRows(board, 'tasks', pid)) { if (T('messages')) board.run('DELETE FROM messages WHERE task_id = ?', t.id); board.run('DELETE FROM events WHERE task_id = ?', t.id); board.run('DELETE FROM tasks WHERE id = ?', t.id); }
     for (const pr of ownRows(board, 'projects', pid)) { if (T('shares')) board.run("DELETE FROM shares WHERE resource_type = 'project' AND resource_id = ?", pr.name); board.run('DELETE FROM projects WHERE name = ?', pr.name); }
     for (const t of ['schedules', 'link_queue', 'events', 'devices', 'bot_reminders', 'bot_requests']) if (T(t) && cols(board, t).has('person_id')) board.run(`DELETE FROM ${t} WHERE person_id = ?`, pid);
-    for (const t of ['person_settings', 'bot_sessions', 'memory_log']) if (T(t)) board.run(`DELETE FROM ${t} WHERE person_id = ?`, pid);
+    for (const t of ['person_settings', 'bot_sessions', 'memory_log', 'inbox_items', 'inbox_sections']) if (T(t)) board.run(`DELETE FROM ${t} WHERE person_id = ?`, pid);
     if (T('shares')) board.run('DELETE FROM shares WHERE person_id = ? OR granted_by = ?', pid, pid);
+    board.run('DELETE FROM settings WHERE key = ?', `inbox_since:${pid}`);
     if (T('account_loans')) board.run('DELETE FROM account_loans WHERE person_id = ? OR lender = ?', pid, pid);
     // The spending stays in the totals, without who.
     if (T('usage_ledger')) board.run("UPDATE usage_ledger SET person_id = 'deleted' WHERE person_id = ?", pid);

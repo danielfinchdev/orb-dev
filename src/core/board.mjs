@@ -642,7 +642,8 @@ export class Board {
     const who = person ?? (conv == null && meta?.task ? this.one('SELECT person_id FROM tasks WHERE id = ?', Number(meta.task))?.person_id ?? null : null);
     const { lastInsertRowid } = this.run('INSERT INTO chat (role, body, meta, at, conversation_id, person_id) VALUES (?, ?, ?, ?, ?, ?)', role, String(body), meta ? JSON.stringify(meta) : null, at, conv ?? null, who);
     if (conv && role !== 'notice') this.run('UPDATE conversations SET updated_at = ? WHERE id = ?', at, Number(conv));
-    this.changed('chat');
+    // 3.6 (messaging lists): which conversation got which line (the lists count unread lines and tell its people).
+    this.changed('chat', conv != null && role !== 'notice' ? { conversation: Number(conv), line: Number(lastInsertRowid), role, author: who } : null);
     return { id: Number(lastInsertRowid), conversation: conv ?? null };
   }
   // 2.7: a notice that only informs (the working folder changed, the brain in use, a schedule created…): the window shows

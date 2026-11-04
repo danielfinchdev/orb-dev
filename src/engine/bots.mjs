@@ -25,6 +25,7 @@ import { personName as nameOfPerson, getPerson } from '../core/persons.mjs';
 import { answerOf, toolStep } from './orchestrator.mjs';
 import { agentToken, browserOn, browserEnv } from './sessions.mjs';
 import * as B from '../core/bots.mjs';
+import { isMuted } from '../core/inbox.mjs';
 import { runServerAction, haFetch } from '../core/server-admin.mjs';
 
 const MAX_HOPS = 6; // messages in a row between bots without the user (no endless ping-pong)
@@ -336,6 +337,8 @@ export class Bots {
       let to = notify;
       if (!to) { try { to = [...peopleWith(this.board, { type: 'conversation', id: conv })]; } catch { to = []; } }
       for (const person of new Set((to.length ? to : [this.owner()]).filter(Boolean))) {
+        // 3.6 (messaging lists): a chat the person muted gets no push for the bots' answers (cards and questions still do).
+        if (role === 'bot' && !pushAlways && meta?.kind !== 'reminder') { try { if (isMuted(this.board, person, conv)) continue; } catch { /* no marks yet */ } }
         try { this.pushNote({ title: meta?.name ?? tr('msg.bots.pushTitle'), body: oneLine(body, 200), conversation: conv, person }); } catch { /* phone off */ }
       }
     }
@@ -360,6 +363,8 @@ export class Bots {
   }
   // The group gets the message; its bots answer one after another (the chief first), each seeing the answers before it.
   // 3.6 (M4): the line carries its author and the bots are told who wrote; each bot answers in that person's lane.
+  // 3.6 (messaging lists): a message that names members with @ («@Casa @Agenda») goes only to them, in that order, and
+  // each of them answers; without @, the chief first and the others only if they add something (as before).
   sendGroup(groupId, text, { via = null, person = null } = {}) {
     const g = B.getGroup(this.board, groupId);
     if (!g) throw userError(tr('msg.bots.noGroup'));
@@ -369,19 +374,21 @@ export class Bots {
     const groupOwner = B.personOf(this.board, g);
     const conv = B.groupConversation(this.board, g.id);
     this.say('usuario', body, null, conv, { author: who });
-    const members = B.groupMembers(this.board, g.id).filter((b) => !b.paused && rank(rightOn(this.board, groupOwner, { type: 'bot', id: b.id })) >= rank('talk'));
+    const active = B.groupMembers(this.board, g.id).filter((b) => !b.paused && rank(rightOn(this.board, groupOwner, { type: 'bot', id: b.id })) >= rank('talk'));
+    const mentioned = B.mentionedMembers(body, active);
+    const members = mentioned.length ? mentioned : active;
     const author = nameOf(this.board, who);
     const done = (async () => {
       const replies = [];
       for (const m of members) {
         const before = replies.length ? `\n\nYa han contestado en el grupo:\n${replies.map((r) => `- ${r.name}: ${oneLine(r.text, 800)}`).join('\n')}` : '';
-        const how = m.is_chief ? 'Eres el jefe: contesta tú primero y reparte con bot_send si hace falta.' : 'Contesta solo si aportas algo de tu papel que no esté ya dicho; si no, responde exactamente PASO.';
+        const how = mentioned.length ? `Te han nombrado con @${m.name}: contesta tú${mentioned.length > 1 ? ' (también han nombrado a otros; di solo lo tuyo)' : ''}.` : m.is_chief ? 'Eres el jefe: contesta tú primero y reparte con bot_send si hace falta.' : 'Contesta solo si aportas algo de tu papel que no esté ya dicho; si no, responde exactamente PASO.';
         const answer = await this.lane(m.id, who).enqueue({ text: `[Grupo «${g.name}»] Mensaje de ${author}: ${body}${before}\n\n(${how})`, conv, from: 'usuario', group: g.id, via });
         if (answer) replies.push({ name: m.name, text: answer });
       }
       return replies;
     })().catch((error) => { this.log(`grupo ${g.id}: ${error.stack}`); return []; });
-    return { conversation: conv, group: g.id, members: members.map((m) => m.id), done };
+    return { conversation: conv, group: g.id, members: members.map((m) => m.id), mentioned: mentioned.map((m) => m.id), done };
   }
   // person: that person's turn only (default: every lane of the bot).
   stop(botId, person = null) { for (const l of this.lanesOf(botId)) if (!person || l.person === person) l.stop(); }

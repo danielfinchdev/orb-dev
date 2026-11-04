@@ -46,6 +46,7 @@ import { personMethods } from './api-persons.mjs';
 import { renamePerson } from '../core/persons.mjs';
 import { gatewayMethods } from './api-gateway.mjs';
 import { dataApi, MOVED_OK } from './api-data.mjs';
+import { inboxMethods } from './api-inbox.mjs';
 
 export { fail, str, int, oneOf } from './api-common.mjs';
 // 3.5: what a server without a window (Orb Núcleo) does not do, whatever its role: the PC's development tools (God mode and expert view,
@@ -172,7 +173,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   const desktop = { person: null, locked: false };
   const desktopPrincipal = () => principalOf(board, { desktop: true, person: desktop.person });
   // What the other parts of the API share.
-  const shared = { board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, bots, project, conversationId, desktop };
+  const shared = { board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, bots, project, conversationId, desktop, setShare, removeShare };
   const data = dataApi(shared); shared.removePersonData = data.removePersonData; // 3.6 (WS5): backups, templates, moving the Orb, exporting and deleting a person
 
   const methods = {
@@ -717,7 +718,27 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const byMe = board.all('SELECT resource_type AS type, resource_id AS id, person_id AS person, right FROM shares WHERE granted_by = ? ORDER BY resource_type, resource_id', me).map((s) => ({ ...s, name: board.personName(s.person) }));
       return { withMe, byMe };
     },
-    'shares.set': ({ type, id, person, right }, who) => {
+    'shares.set': (p, who) => setShare(p, who),
+    'shares.remove': (p, who) => removeShare(p, who),
+    ...accountMethods(shared),
+    ...linkMethods(shared),
+    ...personMethods(shared),
+    ...gatewayMethods(shared),
+    ...inboxMethods(shared),
+    ...data.methods
+  };
+  // 3.6: the approval cards a person may answer (of their own sessions and tasks, and those of projects shared with them).
+  function visibleApprovals(who) {
+    const list = sessions.allPendingApprovals();
+    return scopeOf(who) ? list.filter((a) => can(board, who, 'talk', { type: 'session', id: a.session_id })) : list;
+  }
+  // 3.6: an account chosen on purpose must be one the caller may spend (theirs or lent to them for Orb mode).
+  function ownAccount(who, id) {
+    if (!id || !scopeOf(who) || mayUseAccount(board, who.person, id, { purpose: 'dev' })) return id;
+    return fail(tr('msg.spend.notYours'));
+  }
+  // 3.6: sharing (shares.set / shares.remove, and a group's people: bots.groups.create, bots.groups.members.*).
+  function setShare({ type, id, person, right }, who) {
       const res = { type: oneOf(type, SHARE_TYPES, 'tipo'), id: str(String(id ?? ''), 'id', 200) };
       const r = oneOf(right, RIGHTS, 'permiso');
       const to = str(person, 'persona', 40);
@@ -729,8 +750,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       board.changed('shares', { person: to, res });
       board.changed(res.type === 'project' ? 'projects' : res.type === 'bot' || res.type === 'group' ? 'bots' : 'settings', { person: to });
       return { type: res.type, id: key, person: to, right: r };
-    },
-    'shares.remove': ({ type, id, person }, who) => {
+  }
+  function removeShare({ type, id, person }, who) {
       const res = { type: oneOf(type, SHARE_TYPES, 'tipo'), id: str(String(id ?? ''), 'id', 200) };
       const to = str(person, 'persona', 40);
       const key = shareKey(res);
@@ -745,22 +766,6 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       board.changed('shares', { person: to, res });
       board.changed(res.type === 'project' ? 'projects' : res.type === 'bot' || res.type === 'group' ? 'bots' : 'settings', { person: to });
       return { ok: true };
-    },
-    ...accountMethods(shared),
-    ...linkMethods(shared),
-    ...personMethods(shared),
-    ...gatewayMethods(shared),
-    ...data.methods
-  };
-  // 3.6: the approval cards a person may answer (of their own sessions and tasks, and those of projects shared with them).
-  function visibleApprovals(who) {
-    const list = sessions.allPendingApprovals();
-    return scopeOf(who) ? list.filter((a) => can(board, who, 'talk', { type: 'session', id: a.session_id })) : list;
-  }
-  // 3.6: an account chosen on purpose must be one the caller may spend (theirs or lent to them for Orb mode).
-  function ownAccount(who, id) {
-    if (!id || !scopeOf(who) || mayUseAccount(board, who.person, id, { purpose: 'dev' })) return id;
-    return fail(tr('msg.spend.notYours'));
   }
   // Sharing: the canonical id of a resource (a project's name as written, a bot's number) and who may share it.
   function shareKey(res) {

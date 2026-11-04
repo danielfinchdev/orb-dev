@@ -335,6 +335,30 @@ CREATE TABLE IF NOT EXISTS audit (
   decision TEXT,
   reason TEXT
 );
+-- 3.6 (messaging lists): each person's own marks on a chat of the lists (a bot, a group, a conversation with Orbe):
+-- pinned and its order, the section it is in (kept while pinned: unpinning puts it back), muted, and the last chat
+-- line read (0: none yet, the person's starting point in settings «inbox_since:<person>» counts instead).
+CREATE TABLE IF NOT EXISTS inbox_items (
+  person_id TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('bot', 'group', 'conversation')),
+  item_id TEXT NOT NULL,
+  pinned INTEGER NOT NULL DEFAULT 0,
+  pin_order INTEGER,
+  section_id INTEGER,
+  muted INTEGER NOT NULL DEFAULT 0,
+  last_read INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (person_id, kind, item_id)
+);
+-- The sections a person makes in each zone's list («Casa», «Trabajo»…).
+CREATE TABLE IF NOT EXISTS inbox_sections (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  person_id TEXT NOT NULL,
+  zone TEXT NOT NULL CHECK (zone IN ('bots', 'orb')),
+  name TEXT NOT NULL,
+  position INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS inbox_sections_person ON inbox_sections (person_id, zone, position);
 CREATE INDEX IF NOT EXISTS bot_requests_status ON bot_requests (status, id);
 CREATE INDEX IF NOT EXISTS bot_reminders_next ON bot_reminders (enabled, next_run);
 CREATE INDEX IF NOT EXISTS conversations_updated ON conversations (status, updated_at);

@@ -367,6 +367,27 @@ export function listGroups(board, { principal = null } = {}) {
   const s = principal ? scopeSql(principal, 'group', 'g') : { where: '1=1', args: [] };
   return board.all(`SELECT id FROM bot_groups g WHERE ${s.where} ORDER BY id`, ...s.args).map((r) => getGroup(board, r.id));
 }
+// 3.6 (messaging lists): the members a group message names with @ («@Casa», «@agenda», «@Bot dos»: without case or
+// accents, several at once), in the order they are named. A name only counts whole (@Ana is not @Anabel); the longest
+// name wins where two start alike. None named: [] (the chief answers first, as always).
+const foldName = (s) => String(s ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+export function mentionedMembers(text, members) {
+  const t = foldName(text);
+  if (!t.includes('@')) return [];
+  const taken = []; const found = [];
+  for (const b of [...members].sort((x, y) => String(y.name).length - String(x.name).length)) {
+    const name = foldName(b.name).trim(); if (!name) continue;
+    for (let i = t.indexOf(`@${name}`); i >= 0; i = t.indexOf(`@${name}`, i + 1)) {
+      const end = i + name.length + 1;
+      if (/[\p{L}\p{N}_]/u.test(t[end] ?? '') || (i > 0 && /[\p{L}\p{N}_]/u.test(t[i - 1]))) continue;
+      if (taken.some(([a, z]) => i < z && end > a)) continue;
+      taken.push([i, end]);
+      if (!found.some((f) => f.bot.id === b.id)) found.push({ at: i, bot: b });
+      break;
+    }
+  }
+  return found.sort((a, b) => a.at - b.at).map((f) => f.bot);
+}
 function setMembers(board, id, members, person) {
   if (!Array.isArray(members) || members.length > 30) throw bad('msg.bots.badField', { name: 'members' });
   const ids = [...new Set(members.map((m) => mustBot(board, m, { person }).id))];

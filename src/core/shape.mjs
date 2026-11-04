@@ -49,6 +49,10 @@ export function shapeGateway(board, principal, method, result) {
     return { ...result, bots: items(result.bots, (b) => ({ type: 'bot', id: b.id })), groups: items(result.groups, (g) => ({ type: 'group', id: g.id })),
       states: items(result.states, (s) => (s.conversation != null ? conv(s.conversation) : { type: 'bot', id: s.bot })) };
   }
+  // 3.6 (messaging lists): each chat of a list, and each message found, by what it is.
+  const inboxRes = (x) => ({ type: x.kind, id: x.id });
+  if (method === 'inbox.list' && Array.isArray(result.items)) return { ...result, items: items(result.items, inboxRes) };
+  if (method === 'inbox.search' && Array.isArray(result.items)) return { ...result, items: items(result.items, inboxRes), messages: items(result.messages, inboxRes) };
   if (method === 'conversations.search' && result.conversations) return { ...result, conversations: result.conversations.filter((id) => keep(conv(id))), sessions: (result.sessions ?? []).filter((id) => keep(sess(id))) };
   // The activity feed: its rows say whose they are (none: the owner's), or their task does.
   if (method === 'activity.list' && Array.isArray(result)) return result.filter((x) => (x.person_id != null ? x.person_id === pid : x.task_id != null ? keep(task(x.task_id)) : owner));

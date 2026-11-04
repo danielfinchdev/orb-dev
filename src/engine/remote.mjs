@@ -5,6 +5,7 @@
 // A phone is paired by scanning a one-time QR on the PC. The phone makes its own key and from then on every message is
 // encrypted end to end (src/core/mobile-crypto.mjs): whoever sees the traffic (the Wi-Fi, a proxy) reads nothing, and a
 // copied link or QR is useless. The PC can revoke any phone. What a phone may do is a subset of the PC's actions.
+import { isMuted } from '../core/inbox.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -684,12 +685,14 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
 
   // 3.6: a notification goes to the devices of the people it is for, with each person's own preview (Mi perfil), never
   // to a device whose app is open right now.
-  function pushTo(audience, what, { title, body }, tag) {
+  // 3.6 (messaging lists): skip(person): someone it is not for after all (a chat they muted).
+  function pushTo(audience, what, { title, body }, tag, skip = null) {
     const openNow = new Set([...clients].map((c) => c.device));
     for (const d of board.all('SELECT id, push, person_id FROM devices WHERE push IS NOT NULL')) {
       if (openNow.has(d.id)) continue;
       const pid = personOf(d);
       if (!reaches(board, audience, pid)) continue;
+      if (skip?.(pid)) continue;
       let sub; try { sub = JSON.parse(d.push); } catch { continue; }
       const note = pushContent(what, { title, body }, ctx.config, previewOf(pid));
       sendPush(sub, { ...note, tag, url: '/' }, own.vapid)
@@ -702,7 +705,8 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   function notify(payload, audience = null) {
     if (!payload || payload.role === 'usuario') return;
     const name = ctx.config.assistantName;
-    pushTo(audience ?? audienceOf(board, 'chat:new', payload), 'chat', { title: payload.role === 'orb' ? name : tr('msg.remote.pushNotice', { name }), body: payload.body }, 'orb-chat');
+    const muted = payload.role === 'orb' && payload.conversation != null ? (pid) => { try { return isMuted(board, pid, payload.conversation); } catch { return false; } } : null;
+    pushTo(audience ?? audienceOf(board, 'chat:new', payload), 'chat', { title: payload.role === 'orb' ? name : tr('msg.remote.pushNotice', { name }), body: payload.body }, 'orb-chat', muted);
   }
 
   // ---- listening: one http server per address; the Tailscale https name goes through `tailscale serve` to loopback.

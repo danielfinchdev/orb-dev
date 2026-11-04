@@ -248,3 +248,27 @@ dependencies, members, paths), from the window and a phone, both ways. What it m
   person.
 - Left as designed: backups (owner only) and the 30-day trash of a removed person hold everyone's data; the owner's
   sessions with write access and this PC's account can read the disk.
+
+## Messaging lists (3.6, `src/engine/api-inbox.mjs`, `src/core/inbox.mjs`)
+
+Each person's own chat lists. Tables `inbox_items (person_id, kind, item_id, pinned, pin_order, section_id, muted,
+last_read)` and `inbox_sections (id, person_id, zone, name, position)`; where a person starts counting unread lines:
+settings `inbox_since:<person>`. A chat is `{ kind: 'bot' | 'group' | 'conversation', id }`; a method that names one
+needs «view» on it (policy `INBOX`), sections are only the caller's own.
+
+- `inbox.list { zone: 'bots' | 'orb' }` → `{ zone, items[], sections[], unread, projects? }`. Item: `key, kind, id,
+  conversation, title, avatar ({ type: 'bot', id, icon } | { type: 'group', members[] } | { type: 'project' } |
+  { type: 'orbe' }), pinned, pinOrder, section, muted, unread, state ('working' | 'paused' | 'idle'), at, lastMessage
+  { id, text (short, plain), at, kind (text | card | question | reminder | report | system), from { type: 'user' |
+  'bot' | 'bot-to-bot' | 'orbe' | 'system', name, toName? } }`, `sharedBy?`. Sorted: pinned (pinOrder), sections
+  (position), the rest by recency. Zone orb adds `projects[] { project, at, items[keys], unread, working }`.
+- `inbox.pin`, `inbox.unpin` (back to its section), `inbox.reorderPins { zone, order[] }`, `inbox.mute { muted }`
+  (no push for the bots' answers or Orbe's lines; cards, questions and reminders still push), `inbox.markRead { upTo? }`.
+- `inbox.sections.list|create|rename|delete|reorder`, `inbox.sections.move { kind, id, section | null }`.
+- `inbox.search { q, zone }` → `{ items[], messages[{ key, kind, id, conversation, title, line }] }` (no case, no accents).
+- Event `inbox:changed { person, kind?, id?, conversation?, zone? }` to that person only: every new line of a conversation
+  (to each person who sees it; the author's own line marks it read for them), and every change of their marks.
+- Groups: `bots.groups.create { people[] }` (shared to talk, the rules of `shares.set`), `bots.groups.get`,
+  `bots.groups.members.add|remove { id, bot | person }` («edit»; anyone may leave). In a group message, `@Name` (no case or
+  accents, several, whole names) addresses only those members, in that order (`B.mentionedMembers`); without @, the chief
+  first as before. `bots.groups.send` answers `{ members, mentioned }`.

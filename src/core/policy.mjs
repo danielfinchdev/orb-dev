@@ -412,6 +412,29 @@ const DATA = {
   'data.exportPerson': { check: selfOnly },
   'data.deletePerson': { check: selfOrOwner }
 };
+// ======== 3.6 · messaging lists (src/engine/api-inbox.mjs): each person's own lists. A chat named by { kind, id } needs
+// «view» on it; sections are checked by the method (only the caller's own); the rest is the caller's own marks.
+const inboxItem = (p) => (p.kind === 'bot' ? bot(p.id) : p.kind === 'group' ? group(p.id) : p.kind === 'conversation' ? conv(p.id) : null);
+const INBOX = {
+  'inbox.list': { list: 'inbox' },
+  'inbox.search': { list: 'inbox' },
+  'inbox.pin': { res: inboxItem, right: 'view' },
+  'inbox.unpin': { res: inboxItem, right: 'view' },
+  'inbox.reorderPins': { public: true },
+  'inbox.mute': { res: inboxItem, right: 'view' },
+  'inbox.markRead': { res: inboxItem, right: 'view' },
+  'inbox.sections.list': { public: true },
+  'inbox.sections.create': { public: true },
+  'inbox.sections.rename': { public: true },
+  'inbox.sections.delete': { public: true },
+  'inbox.sections.reorder': { public: true },
+  'inbox.sections.move': { res: inboxItem, right: 'view' },
+  // groups like a messaging app: the info screen, and adding or removing a bot or a person (leaving: the method checks)
+  'bots.groups.get': { res: (p) => group(p.id), right: 'view' },
+  'bots.groups.members.add': { res: (p) => group(p.id), right: 'edit' },
+  'bots.groups.members.remove': { res: (p) => group(p.id), right: 'view' }
+};
+export const INBOX_METHODS = Object.keys(INBOX).filter((m) => m.startsWith('inbox.'));
 // ======== WS6 · interface: append entries here.
 const UI = {
   'persons.update': { check: selfOrOwner },
@@ -422,8 +445,13 @@ const UI = {
 };
 // A phone, a browser or a terminal sets its own person's language, time zone and notification preview too.
 for (const set of [PHONE_SET, CONSOLE_SET]) for (const m of ['persons.update', 'persons.prefs.get', 'persons.prefs.set', 'persons.setPin', 'shares.list']) set.add(m);
+// 3.6 (messaging lists): the lists are the same on every screen (a phone, a browser); a group's info too. Changing a
+// group's bots or people stays with the bots' owner from afar, like creating the group.
+for (const set of [PHONE_SET, ORB_SET, CONSOLE_SET]) for (const m of [...INBOX_METHODS, 'bots.groups.get']) set.add(m);
+for (const set of [ORB_SET, CONSOLE_SET]) for (const m of ['bots.groups.members.add', 'bots.groups.members.remove']) set.add(m);
+BOTS_OWNER.push('bots.groups.members.add', 'bots.groups.members.remove');
 
-export const POLICY = Object.freeze({ ...CORE, ...GATEWAY, ...ORBMODE, ...BOTSP, ...DATA, ...UI });
+export const POLICY = Object.freeze({ ...CORE, ...GATEWAY, ...ORBMODE, ...BOTSP, ...DATA, ...INBOX, ...UI });
 export const policyOf = (method) => {
   const m = String(method);
   if (Object.hasOwn(POLICY, m)) return POLICY[m];
@@ -484,8 +512,10 @@ const EVENTS_BOTSP = {
   'bot.updated': (p) => (p?.id ? bot(p.id) : 'all')
 };
 const EVENTS_DATA = { 'backup:done': 'owner', 'backup:restoreReady': 'owner', 'data:moved': 'owner', 'data:personExported': (p) => (p?.person ? { person: p.person } : 'owner') };
+// 3.6 (messaging lists): a chat of someone's list changed (a new line, a pin, read): only that person, ids only.
+const EVENTS_INBOX = { 'inbox:changed': (p) => (p?.person ? { person: p.person } : 'owner') };
 const EVENTS_UI = {};
-export const EVENTS = Object.freeze({ ...EVENTS_CORE, ...EVENTS_GATEWAY, ...EVENTS_ORBMODE, ...EVENTS_BOTSP, ...EVENTS_DATA, ...EVENTS_UI });
+export const EVENTS = Object.freeze({ ...EVENTS_CORE, ...EVENTS_GATEWAY, ...EVENTS_ORBMODE, ...EVENTS_BOTSP, ...EVENTS_DATA, ...EVENTS_INBOX, ...EVENTS_UI });
 export function eventRule(event) {
   const e = String(event);
   if (Object.hasOwn(EVENTS, e)) return EVENTS[e];

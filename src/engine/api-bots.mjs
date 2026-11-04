@@ -153,7 +153,7 @@ function hub({ board, bots, remoteRef }) {
   return { hubPeers, botsLocation, setLocation, centroPeer, asked, botsWhere, bringBots };
 }
 
-export function botMethods({ board, emit, remoteRef, bots }) {
+export function botMethods({ board, emit, remoteRef, bots, setShare, removeShare }) {
   const { hubPeers, asked, botsWhere, bringBots, setLocation } = hub({ board, bots, remoteRef });
   const need = () => bots ?? fail(tr('msg.bots.off'));
   const scoped = (who) => (who && who.channel !== 'system' ? who : null);
@@ -203,6 +203,13 @@ export function botMethods({ board, emit, remoteRef, bots }) {
       if (row && row.meta.status === 'pending') bots?.patch(row, { status: status === 'applied' ? 'done' : 'denied' });
     }
   };
+  const groupView = (gid, who) => {
+    const g = B.getGroup(board, gid);
+    const owner = B.personOf(board, g);
+    const people = board.all("SELECT person_id AS person, right FROM shares WHERE resource_type = 'group' AND resource_id = ? ORDER BY created_at, person_id", String(g.id)).map((x) => ({ ...x, name: board.personName(x.person) }));
+    return { id: g.id, name: g.name, icon: g.icon, owner: { person: owner, name: board.personName(owner) }, right: right(who, { type: 'group', id: g.id }),
+      members: B.groupMembers(board, g.id).map((b) => ({ id: b.id, name: b.name, icon: b.icon, is_chief: Boolean(b.is_chief), paused: Boolean(b.paused) })), people };
+  };
   return {
     'bots.list': (p, who) => {
       const person = me(who);
@@ -232,11 +239,37 @@ export function botMethods({ board, emit, remoteRef, bots }) {
     },
     'bots.answer': ({ item, text }, who) => { const r = need().answer(int(item, 'tarjeta'), str(text, 'respuesta', 4000), { person: scoped(who) ? who.person : null }); return { conversation: r.conversation, bot: r.bot }; },
     'bots.groups.list': (p, who) => B.listGroups(board, { principal: scoped(who) }),
-    'bots.groups.create': ({ name, icon, members }, who) => { const g = B.createGroup(board, { name, icon, members: members ?? [] }, { person: me(who) }); changed(null); return g; },
+    // 3.6 (messaging lists): people: persons the group is shared with to talk (the same rules as shares.set).
+    'bots.groups.create': ({ name, icon, members, people }, who) => {
+      if (people != null && (!Array.isArray(people) || people.length > 30)) fail(tr('msg.api.invalid', { name: 'people' }));
+      const g = B.createGroup(board, { name, icon, members: members ?? [] }, { person: me(who) });
+      try { for (const p of new Set(people ?? [])) setShare({ type: 'group', id: String(g.id), person: p, right: 'talk' }, who); }
+      catch (error) { B.deleteGroup(board, g.id); throw error; }
+      changed(null); return g;
+    },
+    // 3.6 (messaging lists): a group as its info screen shows it: its bots (the chief first), its people and whose it is.
+    'bots.groups.get': ({ id }, who) => groupView(groupId(id), who),
+    // Add or remove one bot (bot) or one person (person; to talk, or right 'view'). Anyone in the group may leave it.
+    'bots.groups.members.add': ({ id, bot, person, right: r }, who) => {
+      const g = B.getGroup(board, groupId(id));
+      if (bot != null) B.updateGroup(board, g.id, { members: [...g.members, B.mustBot(board, bot, { person: B.personOf(board, g) }).id] });
+      else setShare({ type: 'group', id: String(g.id), person, right: oneOf(r, ['view', 'talk'], 'permiso', 'talk') }, who);
+      changed(null); return groupView(g.id, who);
+    },
+    'bots.groups.members.remove': ({ id, bot, person }, who) => {
+      const g = B.getGroup(board, groupId(id));
+      const res = { type: 'group', id: g.id };
+      const leaving = bot == null && person === me(who);
+      if (!leaving && rank(right(who, res)) < rank('edit')) deny(who, 'bots.groups.members.remove', res);
+      if (bot != null) { const b = B.mustBot(board, bot, { person: B.personOf(board, g) }).id; B.updateGroup(board, g.id, { members: g.members.filter((m) => m !== b) }); }
+      else removeShare({ type: 'group', id: String(g.id), person }, who);
+      changed(null); return leaving ? { ok: true } : groupView(g.id, who);
+    },
     'bots.groups.update': ({ id, name, icon, members }) => { const g = B.updateGroup(board, groupId(id), { name, icon, members }); changed(null); return g; },
     'bots.groups.delete': ({ id }) => { B.deleteGroup(board, groupId(id)); changed(null); return true; },
     'bots.groups.chat': ({ id, ...p }) => { const conv = B.groupConversation(board, groupId(id)); return { conversation: conv, lines: lines(conv, p) }; },
-    'bots.groups.send': ({ id, text, via }, who) => { const r = need().sendGroup(groupId(id), str(text, 'mensaje', 20000), { via: VIA.has(via) ? via : null, person: me(who) }); return { conversation: r.conversation, group: r.group, members: r.members }; },
+    // 3.6 (messaging lists): members: who answers (with @Name in the text, only those named: mentioned).
+    'bots.groups.send': ({ id, text, via }, who) => { const r = need().sendGroup(groupId(id), str(text, 'mensaje', 20000), { via: VIA.has(via) ? via : null, person: me(who) }); return { conversation: r.conversation, group: r.group, members: r.members, mentioned: r.mentioned ?? [] }; },
     // 3.6: id 'global': the caller's global memory; which: 'bot' (the bot's, as 3.5) or 'mine' (the caller's file of it).
     'bots.memory.get': ({ id, which: w }, who) => { const t = memTarget(id, w, who); return { id: t.id, which: t.which, text: B.readMemory(t.id, { person: t.person, which: t.which }) }; },
     'bots.memory.set': ({ id, text, which: w }, who) => {
