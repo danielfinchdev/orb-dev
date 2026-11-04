@@ -13,7 +13,7 @@ const OUT = path.join(ROOT, 'test-results', 'real'); fs.mkdirSync(OUT, { recursi
 const AGENTS = (process.argv[2] ?? 'claude,codex,cursor').split(',');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-real-'));
 const base = path.join(tmp, 'Documentos'); fs.mkdirSync(base);
-const { home } = createHome(base, { assistantName: 'Orb', userName: 'Dani' });
+const { home } = createHome(base, { assistantName: 'Orb', userName: 'Alex' });
 writeJson(path.join(home, 'orb.json'), merge(loadConfig(home), { ui: { tourDone: true } })); // 2.6: no guided tour in the tests
 const userData = path.join(tmp, 'datos'); fs.mkdirSync(userData);
 fs.writeFileSync(path.join(userData, 'ubicacion.json'), JSON.stringify({ home }));
@@ -65,7 +65,7 @@ try {
   if (AGENTS.includes('claude')) {
     const t0 = Date.now();
     await page.click('[data-testid=sidebar-home]');
-    const { conversation } = await call('chat.send', { text: 'En el proyecto prueba-real, encarga a cualquier agente crear un archivo saludo.md con una línea que diga "Hola Dani". Es una prueba: tarea mínima, modelo barato.' });
+    const { conversation } = await call('chat.send', { text: 'En el proyecto prueba-real, encarga a cualquier agente crear un archivo saludo.md con una línea que diga "Hola Alex". Es una prueba: tarea mínima, modelo barato.' });
     const task = await until(async () => (await call('tasks.list')).find((t) => t.project === 'prueba-real'), 'tarea creada por el asistente');
     note(`asistente creó tarea #${task.id} «${task.title}» para ${task.agent} (${task.status}) en ${Math.round((Date.now() - t0) / 1000)} s`);
     await shot('chat-tarea-creada');

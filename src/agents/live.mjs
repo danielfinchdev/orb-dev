@@ -102,7 +102,8 @@ export class JsonRpcPeer {
 
 // Starts an agent's process for a live session: no shell, clean environment, stderr kept for error messages.
 export function spawnAgent(cmd, args, { cwd, env = {}, log = () => {} } = {}) {
-  const child = spawn(cmd, args, { cwd, env: cleanEnv(env), windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  // 3.5: on Linux and macOS in a process group of its own (detached), so killTree stops its children too.
+  const child = spawn(cmd, args, { cwd, env: cleanEnv(env), windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
   let stderr = '';
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', (c) => { stderr = (stderr + c).slice(-8000); log(`stderr: ${c}`); });

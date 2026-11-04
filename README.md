@@ -1,118 +1,121 @@
-<p align="center"><img src="docs/portada.png" alt="Orb·e, tu director de bolsillo" /></p>
+<p align="center"><img src="docs/portada.png" alt="Orb·e, your pocket director" /></p>
 
-# Orb·e: Tu director de bolsillo
+# Orb·e: Your pocket director
 
-**Orb** es una aplicación de escritorio para Windows que coordina tus agentes de IA desde un solo chat. Le cuentas qué
-necesitas y su asistente, **Orb·e**, planifica el trabajo, lo reparte entre Claude Code, Codex, Cursor, Gemini CLI,
-OpenCode, Qwen Code y GitHub Copilot, elige el modelo adecuado para cada tarea y revisa el resultado antes de pedirte el OK.
+**Orb** is a Windows desktop app that coordinates your AI agents from a single chat. You tell it what you need and its
+assistant, **Orb·e**, plans the work, splits it between Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Qwen Code and
+GitHub Copilot, picks the right model for each task and reviews the result before asking for your OK.
 
-Todo funciona en tu PC, con tus propias cuentas: Orb no tiene servidor en la nube ni ve tus contraseñas.
+Everything runs on your PC, with your own accounts: Orb has no cloud server and never sees your passwords.
 
-Este repositorio es **Orb.dev**, el código de la app. Funcionamiento detallado: [`docs/FUNCIONAMIENTO.md`](docs/FUNCIONAMIENTO.md).
-Novedades de cada versión: [`docs/NOVEDADES.md`](docs/NOVEDADES.md).
+This repository is **Orb.dev**, the app's source code. How it works, in detail: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+What's new in each version: [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
 
-## Descargar
+## Download
 
-Desde [**Releases → última versión**](https://github.com/danielfinchdev/orb-dev/releases/latest):
+From [**Releases → latest**](https://github.com/danielfinchdev/orb-dev/releases/latest):
 
-- **`Orb-3.2.1-instalador.exe`** (recomendado): la app completa. Se instala para tu usuario, sin permisos de
-  administrador, y se actualiza sola.
-- **`Orb-3.2.1-light-portable.exe`**: **Orb Light**, lo esencial sin instalar nada (sin minijuegos, God mode, Monitoreo
-  del equipo ni temas). Avisa de las versiones nuevas.
+- **`Orb-3.2.1-instalador.exe`** (recommended): the full app. It installs for your user, without administrator
+  rights, and updates itself.
+- **`Orb-3.2.1-light-portable.exe`**: **Orb Light**, the essentials with nothing to install (no minigames, God mode,
+  PC monitoring or themes). It tells you about new versions.
 
-Windows 10 y 11. Al ser una app sin firmar, SmartScreen avisa la primera vez: «Más información» → «Ejecutar de todas
-formas». En el primer arranque, Orb instala los agentes que falten con sus instaladores oficiales. El repositorio es
-privado: para descargar hace falta acceso en GitHub.
+Windows 10 and 11. Since the app is not signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
+On first launch, Orb installs any missing agents with their official installers.
 
-Cada versión se publica automáticamente: al cambiar `version` en `package.json` en `main`, la integración continua la
-prueba en Windows, construye el instalador y Orb Light, y los publica en Releases (`.github/workflows/release.yml`).
+Every version is published automatically: when `version` changes in `package.json` on `main`, CI tests it on Windows,
+builds the installer and Orb Light, and publishes them to Releases (`.github/workflows/release.yml`).
 
-## Usarla desde el código (para desarrollar)
+## Run it from source (for development)
 
-1. Instala [Git](https://git-scm.com/) y [Node.js 22.13 o superior](https://nodejs.org/).
-2. Descárgalo y arráncalo:
+1. Install [Git](https://git-scm.com/) and [Node.js 22.13 or later](https://nodejs.org/).
+2. Clone and start it:
    ```bash
    git clone https://github.com/danielfinchdev/orb-dev.git
    cd orb-dev
    npm install
    npm start
    ```
-3. En el primer arranque te ofrece instalar lo que falte (Claude Code, Codex, Cursor…). Necesitas **tu propia cuenta** de
-   al menos uno de ellos; el inicio de sesión lo hace su programa oficial, la app nunca ve tus contraseñas.
-4. Para abrirla otra vez: en la carpeta `orb-dev`, `npm start`. Para tener la última versión: `git pull` y `npm install`
-   antes de `npm start` (mejor que un zip: así recibes los arreglos).
+3. On first launch it offers to install whatever is missing (Claude Code, Codex, Cursor…). You need **your own account**
+   for at least one of them; sign-in is done by its official program, so the app never sees your passwords.
+4. To open it again: `npm start` in the `orb-dev` folder. To get the latest version: `git pull` and `npm install`
+   before `npm start` (better than a zip: that way you get the fixes).
 
-El `.exe` no está dentro del código: se descarga de Releases (arriba) o lo generas tú en Windows con `npm run dist`
-(deja en `dist\` el instalador y Orb Light).
+The `.exe` is not in the source: download it from Releases (above) or build it yourself on Windows with `npm run dist`
+(it leaves the installer and Orb Light in `dist\`).
 
-**Cursor:** su plan gratuito no permite usar el agente desde otras aplicaciones. Si una tarea falla por ese motivo, Orb
-lo indica, pausa Cursor durante un día y, si la tarea era para «cualquier agente», la asigna a otro.
+**Cursor:** its free plan does not allow using the agent from other apps. If a task fails for that reason, Orb says so,
+pauses Cursor for a day and, if the task was for "any agent", assigns it to another one.
 
-## Empezar
+## Getting started
 
-1. Abre Orb desde el menú Inicio (o `Orb-3.2.1-light-portable.exe`, o `npm start` si la usas desde el código).
-2. Elige su nombre, cómo te llama y dónde crear su carpeta. La carpeta se llama como el asistente: con `D:\` y el nombre
-   «Nova» se crea `D:\Nova`; si dejas el nombre por defecto, `D:\Orb`.
-3. En **Agentes**, comprueba qué agentes encuentra (Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Qwen Code, Copilot) y
-   que tienen la sesión iniciada. Si ya iniciaste sesión en su programa (por ejemplo Codex con tu cuenta de ChatGPT), no
-   hace falta nada más; si no, el botón abre el login oficial (la app nunca ve tus contraseñas).
-4. Crea un proyecto desde el chat (botón de proyecto bajo el cuadro de texto) y pídele algo.
+1. Open Orb from the Start menu (or `Orb-3.2.1-light-portable.exe`, or `npm start` if you run it from source).
+2. Choose its name, what it calls you and where to create its folder. The folder is named after the assistant: with `D:\`
+   and the name "Nova" it creates `D:\Nova`; if you keep the default name, `D:\Orb`.
+3. In **Agents**, check which agents it finds (Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Qwen Code, Copilot) and
+   that they are signed in. If you already signed in to their program (for example Codex with your ChatGPT account),
+   nothing else is needed; if not, the button opens the official login (the app never sees your passwords).
+4. Create a project from the chat (project button under the text box) and ask it for something.
 
-## La carpeta del asistente
+## The assistant's folder
 
 ```
-D:\Orb\                   (siempre <carpeta elegida>\Orb, igual para todos)
-  orb.json                ajustes
+D:\Orb\                   (always <chosen folder>\Orb, the same for everyone)
+  orb.json                settings
   windows\ ios\ android\ web\
-                          categorías: cada carpeta dentro de una de ellas es un proyecto
-                          (las que crea la app y las que crees tú en el Explorador)
-  android\adb-tools\      adb y fastboot de Google, los descarga la app (no es un proyecto)
-  bitacora\               configuración de Orb: GENERAL.md (memoria general) y proyectos\ (una por proyecto)
-  mcp-servers\            configuración de Orb: los servidores MCP; no sale como proyecto, se gestiona en Ajustes
-  .orb\                   datos de la app (oculta): base de datos, clave cifrada, registros, copias para deshacer
+                          categories: each folder inside one of them is a project
+                          (the ones the app creates and the ones you create in Explorer)
+  android\adb-tools\      Google's adb and fastboot, downloaded by the app (not a project)
+  bitacora\               Orb configuration: GENERAL.md (general memory) and proyectos\ (one per project)
+  mcp-servers\            Orb configuration: the MCP servers; not shown as a project, managed in Settings
+  .orb\                   app data (hidden): database, encrypted key, logs, undo copies
 ```
 
-## Lo principal
+## Highlights
 
-- **Conversaciones para dirigirlo todo.** Con el Orquestador activado, Orb·e planifica, reparte y supervisa, en varias
-  conversaciones a la vez, cada una con su proyecto y su título. Desactivado, hablas directamente con el agente que
-  elijas, en tantas conversaciones como quieras. Nunca hace push ni publica sin ti.
-- **El modelo justo para cada tarea.** Orb elige un modelo rápido para lo sencillo y el más capaz solo cuando hace falta,
-  según el nivel de gasto que fijes.
-- **Tareas con control.** Lo delicado (publicar, borrar, credenciales, pagos, razonamiento alto) espera tu aprobación.
-  Cada tarea se puede deshacer, trabajar en una copia aislada con su propia rama y terminar con un informe «OK / Pedir
-  cambios».
-- **Revisión independiente.** Task Review pide a otro modelo, de otro proveedor si es posible, que audite el trabajo;
-  Security Review busca vulnerabilidades y secretos expuestos en todo el proyecto. Ninguno modifica nada.
-- **Varias cuentas por agente.** Cada cuenta con su sesión, sus modelos y su uso; el trabajo se reparte entre las que
-  tienen uso disponible y espera solo al llegar al límite.
-- **Pizarra por proyecto** para dibujar, escribir y adjuntar referencias que Orb·e tiene en cuenta al planificar.
-- **Desde el móvil**, sin instalar nada: chat, aprobaciones y seguimiento de tareas, con cifrado de extremo a extremo.
-- **Monitoreo del equipo** con Opti Bot: salud, seguridad y red del PC; cualquier cambio requiere tu aprobación.
-- **Integración con GitHub** mediante `gh`: publicar proyectos, subir ramas y crear pull requests.
-- **God mode** para quien quiera ver más: archivos, cambios de git, historial y actividad alrededor del chat.
-- **En español e inglés**, con temas, modo claro y oscuro, y conectores MCP para ampliar las herramientas de los agentes.
+- **Conversations to run everything.** With the Orchestrator on, Orb·e plans, delegates and supervises, in several
+  conversations at once, each with its own project and title. With it off, you talk directly to the agent you choose,
+  in as many conversations as you like. It never pushes or publishes without you.
+- **The right model for each task.** Orb picks a fast model for simple things and the most capable one only when
+  needed, according to the spending level you set.
+- **Tasks under control.** Sensitive actions (publishing, deleting, credentials, payments, high reasoning) wait for your
+  approval. Every task can be undone, run in an isolated copy with its own branch and end with an "OK" / "Request
+  changes" report.
+- **Independent review.** Task Review asks another model, from another provider when possible, to audit the work;
+  Security Review looks for vulnerabilities and exposed secrets across the whole project. Neither changes anything.
+- **Several accounts per agent.** Each account with its own session, models and usage; work is spread across the ones
+  with usage left and only waits when the limit is reached.
+- **A whiteboard per project** to draw, write and attach references that Orb·e takes into account when planning.
+- **From your phone**, with nothing to install: chat, approvals and task tracking, with end-to-end encryption.
+- **PC monitoring** with Opti Bot: health, security and network of the PC; any change needs your approval.
+- **GitHub integration** through `gh`: publish projects, push branches and create pull requests.
+- **God mode** for those who want to see more: files, git changes, history and activity around the chat.
+- **In Spanish and English**, with themes, light and dark mode, and MCP connectors to extend the agents' tools.
 
 
-## Desarrollo
+## Development
 
 ```bash
 npm install
-npm start            # compila la interfaz y abre la app
-npm test             # pruebas del motor (agentes falsos, sin cuentas)
-npm run test:app     # la app entera con Electron (en Linux: xvfb-run -a npm run test:app)
-npm run test:movil   # la web app del móvil a tamaño de teléfono
-ORB_E2E_EXE=dist/win-unpacked/Orb.exe node test/smoke.e2e.mjs   # prueba la app ya empaquetada
-npm run dist         # Orb-3.2.1-instalador.exe y Orb-3.2.1-light-portable.exe (en Windows)
-npm run icon         # vuelve a sacar el icono del art work (docs/diseno/art work); luego npm run icon:ico
+npm start            # builds the UI and opens the app
+npm test             # engine tests (fake agents, no accounts)
+npm run test:app     # the whole app with Electron (on Linux: xvfb-run -a npm run test:app)
+npm run test:movil   # the mobile web app at phone size
+ORB_E2E_EXE=dist/win-unpacked/Orb.exe node test/smoke.e2e.mjs   # tests the packaged app
+npm run dist         # Orb-3.2.1-instalador.exe and Orb-3.2.1-light-portable.exe (on Windows)
+npm run icon         # regenerates the icon from the artwork (docs/diseno/art work); then npm run icon:ico
 ```
 
-| Carpeta | Qué hay |
+| Folder | Contents |
 |---|---|
-| `src/main/` | Electron: ventana, primer arranque, puente seguro, arranque del motor y navegador de los agentes con su ventanita |
-| `src/engine/` | Motor (proceso aparte): API, sesiones en directo, planificador, orquestador, bitácoras, GitHub, móvil, instalador, modo experto |
-| `src/core/` | Tablero, aprobaciones, seguridad, uso, carpetas y deshacer |
-| `src/agents/` | Un adaptador por agente: detectarlo, lanzarlo e interpretar sus eventos |
-| `src/mcp/` | Servidor MCP que usan los agentes y el asistente |
-| `src/ui/` | Interfaz (React + componentes shadcn/ui + Tailwind, tipografía Outfit) |
-| `docs/` | Toda la documentación: índice en [`docs/README.md`](docs/README.md) |
+| `src/main/` | Electron: window, first launch, secure bridge, engine startup and the agents' browser with its mini window |
+| `src/engine/` | Engine (separate process): API, live sessions, scheduler, orchestrator, logbooks, GitHub, mobile, installer, expert mode |
+| `src/core/` | Board, approvals, security, usage, folders and undo |
+| `src/agents/` | One adapter per agent: detect it, launch it and parse its events |
+| `src/mcp/` | MCP server used by the agents and the assistant |
+| `src/ui/` | UI (React + shadcn/ui components + Tailwind, Outfit typeface) |
+| `docs/` | All the documentation: index in [`docs/README.md`](docs/README.md) |
+
+## License
+
+[MIT](LICENSE)

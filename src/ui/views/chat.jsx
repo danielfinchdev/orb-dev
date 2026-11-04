@@ -2,7 +2,7 @@
 // reasoning and, for a new conversation, the «Orquestador» switch (on = with the assistant, who coordinates the agents;
 // off = directly with the agent chosen). 3.2: each conversation is its own (route.id), several at once.
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowUp, Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign, ChevronLeft, ChevronRight, PenTool, History, FlaskConical, Folder } from 'lucide-react';
+import { ArrowUp, Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign, ChevronLeft, ChevronRight, PenTool, History, FlaskConical, Folder, Mic } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Markdown } from '@/components/markdown.jsx';
 import { PageHeader } from '@/components/page.jsx';
@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/basic.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { Switch, Tip, BubbleTip, Popover, PopoverTrigger, PopoverContent } from '@/components/ui/overlay.jsx';
-import { useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere } from '@/lib/store.js';
+import { bridge, useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere } from '@/lib/store.js';
 import { notify } from '@/lib/notify.js';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { pickGreeting, pickSubtitle, suggestionsFor } from '@/lib/greeting.js';
@@ -67,6 +67,13 @@ export function Composer({ value, onChange, onSend, onStop, busy, placeholder, t
   useEffect(() => { const el = ta.current; if (!el) return; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 260)}px`; }, [value]);
   const [dropping, setDropping] = useState(false);
   const m = useMentions(value, onChange, ta);
+  // 3.5, the Android app: dictate with the phone's own speech recognition (what is said is added to the text).
+  const [hearing, setHearing] = useState(false);
+  const dictate = async () => {
+    setHearing(true);
+    try { const said = await act(bridge.dictate(getState().app?.config?.language ?? 'es')); if (said) onChange(value.trim() ? `${value.trimEnd()} ${said}` : said); }
+    finally { setHearing(false); }
+  };
   return (
     <div className="shrink-0 px-5 pb-5">
       <div data-slot="composer" className={cn('bg-card relative mx-auto max-w-3xl rounded-2xl border shadow-sm transition-shadow focus-within:shadow-md focus-within:ring-[3px] focus-within:ring-ring/25', dropping && 'ring-primary ring-2')}
@@ -89,6 +96,7 @@ export function Composer({ value, onChange, onSend, onStop, busy, placeholder, t
           className="placeholder:text-muted-foreground block w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[14.5px] leading-relaxed outline-none" />
         <div className="flex items-center gap-2 px-3 pb-3">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{bottom}</div>
+          {bridge.dictate ? <Tip label={t('chat.dictate')}><Button size="icon-sm" variant="ghost" className="rounded-full" onClick={dictate} disabled={disabled || hearing} aria-label={t('chat.dictate')} data-testid="dictate"><Mic className={hearing ? 'text-primary animate-pulse' : undefined} /></Button></Tip> : null}
           {busy && onStop ? <Tip label={t('chat.stop')}><Button size="icon-sm" variant="secondary" onClick={onStop} aria-label={t('chat.stop')}><Square className="size-3.5 fill-current" /></Button></Tip> : null}
           <Button size="icon-sm" className="rounded-full" onClick={() => onSend({ alt: false })} disabled={disabled || !(canSend ?? value.trim())} aria-label={t('chat.send')} data-testid="send"><ArrowUp /></Button>
         </div>
@@ -338,6 +346,14 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const conv = useStore((s) => (id == null ? null : s.conversations.find((c) => c.id === id) ?? null));
   const [rows, setRows] = useState([]);
   const [text, setText] = useState('');
+  // 3.5, the Android app: what was shared from another app («Compartir con Orb») is waiting in the text box to be sent.
+  useEffect(() => {
+    if (!bridge.takeShared) return undefined;
+    const take = () => { const got = bridge.takeShared(); if (got) setText((prev) => (prev.trim() ? `${prev.trimEnd()}\n${got}` : got)); };
+    take();
+    window.addEventListener('orb:shared', take);
+    return () => window.removeEventListener('orb:shared', take);
+  }, []);
   const name = app.config.assistantName;
   const chat = chatOf(app, id) ?? {};
   const defaults = app.assistant ?? {};

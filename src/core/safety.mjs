@@ -76,6 +76,18 @@ export function looksSecretText(text) {
   const m = ASSIGN_RE.exec(t);
   return Boolean(m && /[A-Za-z]/.test(m[1]) && /\d/.test(m[1]) && !PLACEHOLDER.test(m[1]));
 }
+// 3.5: what a bot's memory never keeps: keys (looksSecretText), passwords and PINs written out, card numbers (Luhn),
+// IBANs and Spanish DNI/NIE numbers.
+const luhn = (digits) => { let sum = 0; for (let i = 0; i < digits.length; i++) { let d = Number(digits[digits.length - 1 - i]); if (i % 2) { d *= 2; if (d > 9) d -= 9; } sum += d; } return sum % 10 === 0; };
+export function looksPrivateText(text) {
+  const t = String(text ?? '');
+  if (looksSecretText(t)) return true;
+  if (/\b(contrase(ñ|n)a|password|passwd|clave|pin|cvv|cvc)\b\s*(de\s+\S+\s*)?[:=]\s*\S{3,}/i.test(t)) return true;
+  if (/\b[A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){3,7}(?:\s?[A-Z0-9]{1,4})?\b/.test(t)) return true; // IBAN
+  if (/\b(\d{8}|[XYZ]\d{7})[-\s]?[A-HJ-NP-TV-Z]\b/i.test(t)) return true; // DNI / NIE
+  for (const m of t.matchAll(/\b(?:\d[ -]?){13,19}\b/g)) { const digits = m[0].replace(/\D/g, ''); if (digits.length >= 13 && luhn(digits)) return true; }
+  return false;
+}
 // Files whose ADDED lines look like a secret, from a unified diff ("git diff --cached -U0" or "git log -p"). Removed
 // lines do not count (taking a key out must always be possible), nor .env.example files. At most 5 MB are read.
 export function secretsInDiff(diff) {

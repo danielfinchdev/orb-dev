@@ -1,4 +1,4 @@
-// Español (España). Tono: profesional, claro y sin jerga (docs/TEXTOS.md). Las claves se agrupan por pantalla; cada área tiene su archivo en es/.
+// Español (España). Tono: profesional, claro y sin jerga (docs/WRITING-GUIDE.md). Las claves se agrupan por pantalla; cada área tiene su archivo en es/.
 import base from './es/base.mjs';
 import labels from './es/labels.mjs';
 import chat from './es/chat.mjs';
@@ -22,6 +22,9 @@ import help from './es/help.mjs';
 import greet from './es/greet.mjs';
 import whiteboard from './es/whiteboard.mjs';
 import monitor from './es/monitor.mjs';
+import bots from './es/bots.mjs';
+import term from './es/term.mjs';
+import botsui from './es/botsui.mjs';
 
 export default {
   ...base,
@@ -46,5 +49,8 @@ export default {
   ...help,
   ...greet,
   ...whiteboard,
-  ...monitor
+  ...monitor,
+  ...bots,
+  ...term,
+  ...botsui
 };

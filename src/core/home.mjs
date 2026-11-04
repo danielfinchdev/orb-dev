@@ -14,6 +14,17 @@ export const CONFIG_FILE = 'orb.json';
 export const AGENT_IDS = ['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot'];
 export const AGENT_LABELS = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor', gemini: 'Gemini', opencode: 'OpenCode', qwen: 'Qwen Code', copilot: 'GitHub Copilot' };
 
+// 3.5: the role of this Orb (orb.json «role»), chosen by the user in Ajustes › Magic Link on any Orb: «todo» (centre and
+// workshop at once: the default of a PC on its own, also when the key is missing), «centro» (always on: keeps the bots) or
+// «taller» (programs and builds). Orb Núcleo (src/server/host.mjs) starts a new folder as «centro»; whether there is a
+// window or not is a different thing (ctx.headless), never the role.
+export const ROLES = ['todo', 'centro', 'taller'];
+export const hostsBots = (role) => role !== 'taller'; // «centro» and «todo» keep bots for the Orbs linked with them
+export const doesDev = (role) => role !== 'centro'; // «taller» and «todo» program and build
+
+// 3.5: what nobody touches by default: the usual password managers and secret stores (the user edits the list).
+export const DEFAULT_PROTECTED = Object.freeze(['vaultwarden', 'bitwarden', 'keepass', 'keepassxc', '.kdbx', '1password', 'lastpass', '.password-store', '.gnupg', '.ssh/id_']);
+
 export const DEFAULT_CONFIG = Object.freeze({
   version: 5,
   assistantName: PRODUCT.assistant,
@@ -77,7 +88,17 @@ export const DEFAULT_CONFIG = Object.freeze({
   expert: { enabled: false, panels: { explorer: true, git: true, history: true, running: true, usage: true, system: true, activity: true } },
   browser: { enabled: true }, // the agents' browser (pages drawn by the app, driven through the MCP tools)
   // Phone access (off until the user turns it on): through the home Wi-Fi and/or Tailscale (https when the tailnet has it).
-  mobile: { enabled: false, port: 3131, wifi: true, tailscale: true }
+  mobile: { enabled: false, port: 3131, wifi: true, tailscale: true },
+  // 3.5: the user's bots (src/engine/bots.mjs). rules: the golden rules every bot gets (Ajustes › Bots); by default only
+  // «nothing is sent, bought or booked without my OK». homeAssistant: the address of the user's Home Assistant (its token
+  // is kept in the database, never here). idleMinutes: a bot's process closes after this long without use.
+  bots: { rules: ['Nada se envía, compra ni reserva sin mi aprobación.'], homeAssistant: { url: '' }, idleMinutes: 10, location: 'local' },
+  // 3.5: where the Orb mode of a phone or a terminal linked with this Orb goes: '' (by itself: here when this Orb programs,
+  // else the linked Orb that does), 'local' or the id of a linked Orb (Ajustes › Magic Link › «Orb para programar»).
+  devTarget: '',
+  // 3.5: «Cosas que nadie toca» (Ajustes › Bots): names, paths or containers that no agent and no bot touches, whatever
+  // the permission (a command, a path, a server action or a bot's memory that names one is denied).
+  protected: [...DEFAULT_PROTECTED]
 });
 
 // Layout of the assistant's folder: always <chosen folder>\Orb, the same for every user (e.g. D:\Orb):
@@ -91,12 +112,13 @@ export const INTERNAL_DIR = '.orb';
 export const LOGS_DIR = 'bitacora';
 export const MCP_DIR = 'mcp-servers';
 export const OLD_LOGS_DIR = 'bitacoras'; // 2.3.0 and older
+export const BOTS_DIR = 'bots'; // 3.5: the bots' memories (bots\<id>\memoria.md and bots\memoria-global.md)
 export const CATEGORIES = ['windows', 'ios', 'android', 'web'];
 export const DEFAULT_CATEGORY = 'web';
 export const ADB_DIR = 'adb-tools';
 const lower = (name) => String(name ?? '').toLowerCase();
 // Top-level folders that belong to Orb itself (configuration), never to the user's projects.
-export const isConfigName = (name) => /^\./.test(String(name)) || [LOGS_DIR, MCP_DIR, OLD_LOGS_DIR, 'node_modules', '$recycle.bin', 'system volume information'].includes(lower(name));
+export const isConfigName = (name) => /^\./.test(String(name)) || [LOGS_DIR, MCP_DIR, OLD_LOGS_DIR, BOTS_DIR, 'node_modules', '$recycle.bin', 'system volume information'].includes(lower(name));
 export const isCategory = (name) => CATEGORIES.includes(lower(name));
 // Folders inside a category that are never projects (hidden ones, the Android tools).
 export const isReservedInCategory = (category, name) => /^\./.test(String(name)) || ['node_modules', '$recycle.bin'].includes(lower(name)) || (lower(category) === 'android' && lower(name) === ADB_DIR);
@@ -111,7 +133,7 @@ export function paths(home) {
   return {
     home, internal, config: path.join(home, CONFIG_FILE), data, db: path.join(data, 'orb.db'), key: path.join(data, 'clave.bin'),
     logs, generalLog: path.join(logs, 'GENERAL.md'), projectLogs: path.join(logs, 'proyectos'),
-    mcp: path.join(home, MCP_DIR), adb: path.join(home, 'android', ADB_DIR),
+    mcp: path.join(home, MCP_DIR), bots: path.join(home, BOTS_DIR), adb: path.join(home, 'android', ADB_DIR),
     projects: home, categories: Object.fromEntries(CATEGORIES.map((c) => [c, path.join(home, c)])),
     runs: path.join(internal, 'ejecuciones'),
     copies, worktrees: path.join(copies, 'aisladas'), checkpoints: path.join(copies, 'fotos')
@@ -250,6 +272,10 @@ export function loadConfig(home) {
     if (config.assistantName.trim() === 'Orb·e') config.assistantName = PRODUCT.assistant;
     config.version = 5;
   }
+  // 3.5: an Orb without a role (every folder before 3.5) is «todo» (context.mjs › role()): centre and workshop at once,
+  // nothing to set up; Orb Núcleo writes «centro» in a folder without one (src/server/host.mjs). A value Orb does not know
+  // is dropped (so it is «todo» too).
+  if (config.role !== undefined && !ROLES.includes(config.role)) delete config.role;
   // Folders made by older versions: agents added later get their default account and their place in the order.
   for (const a of AGENT_IDS) {
     if (!config.accounts.some((x) => x.agent === a)) config.accounts.push({ id: a, agent: a, label: AGENT_LABELS[a], home: '', enabled: true });
@@ -267,7 +293,11 @@ export function writeJson(file, value) {
 
 export function readKey(home) {
   const file = paths(home).key;
-  try { const key = fs.readFileSync(file); if (key.length >= 32) return key; } catch { /* created below */ }
+  try {
+    const key = fs.readFileSync(file);
+    // 3.5: on Linux (Orb Núcleo) this file is the secret itself: readable by its owner only, also when copied from elsewhere.
+    if (key.length >= 32) { if (process.platform !== 'win32') { try { if ((fs.statSync(file).mode & 0o077) !== 0) fs.chmodSync(file, 0o600); } catch { /* best effort */ } } return key; }
+  } catch { /* created below */ }
   const key = crypto.randomBytes(32);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, key, { mode: 0o600 });

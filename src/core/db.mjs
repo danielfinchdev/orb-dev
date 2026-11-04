@@ -117,6 +117,17 @@ CREATE TABLE IF NOT EXISTS devices (
   created_at TEXT NOT NULL,
   last_seen TEXT
 );
+-- 3.5 (Magic Link): calls for the linked workshop Orb left waiting while it was off (sent when it comes back).
+CREATE TABLE IF NOT EXISTS link_queue (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  method TEXT NOT NULL,
+  params TEXT NOT NULL DEFAULT '{}',
+  from_device TEXT,
+  created_at TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pendiente',
+  result TEXT,
+  done_at TEXT
+);
 -- 2.3: messages waiting for a running turn (sent in order when it ends, or steered into it).
 CREATE TABLE IF NOT EXISTS session_queue (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -164,6 +175,68 @@ CREATE TABLE IF NOT EXISTS conversations (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+-- 3.5: the user's own bots (none fixed in the code: only an empty «Asistente» on the first run). Each one has its brain
+-- (any installed agent, model and effort), its tool groups and accounts, the topics only it handles (exclusive) and whether
+-- it is the chief. Its live conversation id (session_id) continues after a restart.
+CREATE TABLE IF NOT EXISTS bots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  icon TEXT NOT NULL DEFAULT '',
+  role_text TEXT NOT NULL DEFAULT '',
+  agent TEXT NOT NULL DEFAULT 'claude',
+  model TEXT,
+  effort TEXT NOT NULL DEFAULT 'medium',
+  tools TEXT NOT NULL DEFAULT '[]',
+  accounts TEXT NOT NULL DEFAULT '{}',
+  exclusive TEXT NOT NULL DEFAULT '[]',
+  is_chief INTEGER NOT NULL DEFAULT 0,
+  paused INTEGER NOT NULL DEFAULT 0,
+  session_id TEXT,
+  turns INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS bot_groups (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  icon TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS bot_group_members (
+  group_id INTEGER NOT NULL,
+  bot_id INTEGER NOT NULL,
+  position INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (group_id, bot_id)
+);
+-- 3.5: what a bot's tools (src/mcp/bot.mjs, another process) ask the engine to do: a message to another bot, a card the
+-- user approves (create/change/pause a bot, a change on the server, Home Assistant, a purchase…), grouped questions.
+CREATE TABLE IF NOT EXISTS bot_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  bot_id INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  payload TEXT NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL DEFAULT 'pending',
+  result TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+-- 3.5: the bots' reminders: once, daily, weekly, monthly or yearly; each one goes to its bot's chat and to the phone.
+CREATE TABLE IF NOT EXISTS bot_reminders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  bot_id INTEGER NOT NULL,
+  text TEXT NOT NULL,
+  every TEXT NOT NULL DEFAULT 'once',
+  start_at TEXT NOT NULL,
+  weekdays TEXT NOT NULL DEFAULT '[]',
+  next_run TEXT,
+  last_run TEXT,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_by TEXT NOT NULL DEFAULT 'usuario',
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS bot_requests_status ON bot_requests (status, id);
+CREATE INDEX IF NOT EXISTS bot_reminders_next ON bot_reminders (enabled, next_run);
 CREATE INDEX IF NOT EXISTS conversations_updated ON conversations (status, updated_at);
 CREATE INDEX IF NOT EXISTS session_queue_session ON session_queue (session_id, position, id);
 CREATE INDEX IF NOT EXISTS events_task ON events (task_id, id);
@@ -217,8 +290,15 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   ['projects', 'grupo', 'TEXT'],
   // 2.3.3: each phone has its own key (end-to-end encryption), the way it was paired and its notifications.
   ['devices', 'public_key', 'TEXT'], ['devices', 'route', 'TEXT'], ['devices', 'push', 'TEXT'],
+  // 3.5 (Magic Link): what was linked (phone, browser or another Orb), the role of a linked Orb, its last address and
+  // what it told about itself (hostname, MAC addresses for Wake-on-LAN, version).
+  ['devices', 'kind', 'TEXT'], ['devices', 'role', 'TEXT'], ['devices', 'ip', 'TEXT'], ['devices', 'meta', 'TEXT'],
+  // 3.5: «Puede administrar» (Ajustes › Magic Link): the device manages this Orb's bots and links from afar.
+  ['devices', 'admin', 'INTEGER NOT NULL DEFAULT 0'],
   // 3.2: the conversation a chat line belongs to and the one that asked for a task.
-  ['chat', 'conversation_id', 'INTEGER'], ['tasks', 'conversation_id', 'INTEGER']];
+  ['chat', 'conversation_id', 'INTEGER'], ['tasks', 'conversation_id', 'INTEGER'],
+  // 3.5: a bot's own conversation (bot_id) and a group's (group_id); the assistant's conversations have neither.
+  ['conversations', 'bot_id', 'INTEGER'], ['conversations', 'group_id', 'INTEGER']];
 export function migrate(db) {
   // 3.2: whether a direct conversation already has its title (Orb names a new one from its first message); the ones made
   // before keep theirs.
@@ -236,7 +316,8 @@ export function migrate(db) {
     CREATE INDEX IF NOT EXISTS tasks_review ON tasks (review_of);
     CREATE INDEX IF NOT EXISTS session_items_approval ON session_items (id) WHERE kind = 'approval';
     CREATE INDEX IF NOT EXISTS chat_conversation ON chat (conversation_id, id);
-    CREATE INDEX IF NOT EXISTS tasks_conversation ON tasks (conversation_id);`);
+    CREATE INDEX IF NOT EXISTS tasks_conversation ON tasks (conversation_id);
+    CREATE INDEX IF NOT EXISTS conversations_bot ON conversations (bot_id, group_id);`);
   migrateConversations(db);
   // 2.7.3: the notices saved as grey system lines before 2.7 (working folder, mode, brain, new conversation…) become
   // notices too, so the old ones leave the chat like the new ones. Only system lines with those exact openings. 3.0: once

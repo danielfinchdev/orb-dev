@@ -100,7 +100,7 @@ const SETTLE_MS = 24 * 3_600_000; // a quiet conversation with nothing open is d
 
 // 2.7: a step of the assistant for the chat's live line: the tool, what it works on (only a file's name, never its folder;
 // the first words of a command) and when it started.
-function toolStep(body) {
+export function toolStep(body) {
   const name = String(body?.name ?? '').replace(/^orb:/, '');
   let target = String(body?.input ?? '').replace(/\s+/g, ' ').trim();
   if (/^([a-z]:)?[\\/]|^\.{0,2}[\\/]|[\\/][^\\/\s]+\.[\w]{1,8}$/i.test(target) && !/\s/.test(target)) target = target.split(/[\\/]/).filter(Boolean).pop() ?? '';
@@ -462,8 +462,8 @@ export class Orchestrator {
   // For work that belongs to no conversation (made before 3.2, or by a schedule): the latest conversation of that project
   // (without a project, the latest one), or a new one for it.
   conversationFor(project) {
-    const found = project ? this.board.one('SELECT id FROM conversations WHERE project = ? COLLATE NOCASE ORDER BY updated_at DESC, id DESC LIMIT 1', project)?.id
-      : this.board.one('SELECT id FROM conversations ORDER BY updated_at DESC, id DESC LIMIT 1')?.id;
+    const found = project ? this.board.one('SELECT id FROM conversations WHERE project = ? COLLATE NOCASE AND bot_id IS NULL AND group_id IS NULL ORDER BY updated_at DESC, id DESC LIMIT 1', project)?.id
+      : this.board.one('SELECT id FROM conversations WHERE bot_id IS NULL AND group_id IS NULL ORDER BY updated_at DESC, id DESC LIMIT 1')?.id;
     if (found) return found;
     const c = this.board.createConversation({ title: project ? tr('msg.orch.workOf', { project }) : tr('msg.board.newConversation'), project: project && this.board.project(project) ? project : null,
       agent: ctx.config.orchestrator?.agent || 'claude', account: ctx.config.orchestrator?.account || null, model: ctx.config.orchestrator?.model || null, reasoning: ctx.config.orchestrator?.reasoning || 'medium' });
@@ -487,7 +487,7 @@ export class Orchestrator {
     for (const q of list) {
       if (!q?.id || queued.has(q.id) || typeof q.text !== 'string') continue;
       // Saved before 3.2 (without its conversation): the latest one.
-      const id = (q.conversation && this.board.conversation(q.conversation)?.id) || this.board.one('SELECT id FROM conversations ORDER BY updated_at DESC LIMIT 1')?.id || this.conversationFor(null);
+      const id = (q.conversation && this.board.conversation(q.conversation)?.id) || this.board.one('SELECT id FROM conversations WHERE bot_id IS NULL AND group_id IS NULL ORDER BY updated_at DESC LIMIT 1')?.id || this.conversationFor(null);
       const item = { ...q, conversation: id, internal: true };
       this.lane(id).queue.push(item);
       if (!q.conversation) this.keep(item, true);
@@ -516,7 +516,7 @@ export class Orchestrator {
   // done by itself; written in again, it opens.
   settleIdle() {
     const since = new Date(Date.now() - SETTLE_MS).toISOString();
-    for (const { id } of this.board.all("SELECT id FROM conversations WHERE status = 'open' AND updated_at < ?", since)) {
+    for (const { id } of this.board.all("SELECT id FROM conversations WHERE status = 'open' AND updated_at < ? AND bot_id IS NULL AND group_id IS NULL", since)) {
       const l = this.lanes.get(id);
       if (l?.busy || l?.inflight || l?.queue.length || this.board.openTasksOf(id)) continue;
       if (this.board.one(`SELECT 1 AS x FROM chat WHERE conversation_id = ? AND meta LIKE '%"kind":"question"%' AND meta LIKE '%"status":"pending"%' LIMIT 1`, id)) continue;

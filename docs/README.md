@@ -1,38 +1,43 @@
-# Documentación de Orb.dev
+# Orb.dev documentation
 
-Textos de la app (tono, nombres y palabras): [`TEXTOS.md`](TEXTOS.md).
+App copy (tone, names and wording): [`WRITING-GUIDE.md`](WRITING-GUIDE.md).
 
-Toda la documentación del proyecto está en esta carpeta. Dos archivos viven fuera porque GitHub los necesita en su sitio:
-el [`README.md`](../README.md) de la raíz (la portada del repositorio) y la plantilla de issue
-[`.github/ISSUE_TEMPLATE/funcionalidad.md`](../.github/ISSUE_TEMPLATE/funcionalidad.md), que está copiada en
-[`FUNCIONALIDADES.md`](FUNCIONALIDADES.md).
+All the project's documentation lives in this folder. Two files live elsewhere because GitHub needs them in place:
+the root [`README.md`](../README.md) (the repository's front page) and the issue template
+[`.github/ISSUE_TEMPLATE/feature.md`](../.github/ISSUE_TEMPLATE/feature.md), which is copied in
+[`FEATURE-REQUESTS.md`](FEATURE-REQUESTS.md).
 
-## Para usar y entender Orb
+## Using and understanding Orb
 
-| Documento | Qué cuenta |
+| Document | What it covers |
 |---|---|
-| [`FUNCIONAMIENTO.md`](FUNCIONAMIENTO.md) | Cómo funciona Orb, funcionalidad por funcionalidad: qué hace, qué archivos la implementan y cómo cambiarla. |
-| [`NOVEDADES.md`](NOVEDADES.md) | Qué trae cada versión. Es también el texto de cada release en GitHub. |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | How Orb works, feature by feature: what it does, which files implement it and how to change it. |
+| [`CHANGELOG.md`](CHANGELOG.md) | What each version brings. It is also the text of each GitHub release. |
+| [`BOTS.md`](BOTS.md) | Bots mode: your own bots, their tools, routines and approvals. |
+| [`TERMINAL.md`](TERMINAL.md) | Orb in the terminal (`orb`). |
+| [`ANDROID.md`](ANDROID.md) | The Android app: linking, features and how to build it. |
+| [`ROADMAP-3.5.md`](ROADMAP-3.5.md) | The plan for version 3.5. |
+| [`LEARNINGS-3.5.md`](LEARNINGS-3.5.md) | Ideas taken from two outside projects for 3.5: what was applied and what was left out. |
 
-## Ideas en espera
+## Ideas on hold
 
-| Documento | Qué cuenta |
+| Document | What it covers |
 |---|---|
-| [`MOVIL-PUENTE.md`](MOVIL-PUENTE.md) | Usar el móvil desde cualquier sitio sin Tailscale, con un puente propio en Cloudflare (gratis). En espera. |
+| [`MOBILE-RELAY.md`](MOBILE-RELAY.md) | Using the phone from anywhere without Tailscale, with your own relay on Cloudflare (free). On hold. |
 
-## Para pedir cambios
+## Requesting changes
 
-| Documento | Qué cuenta |
+| Document | What it covers |
 |---|---|
-| [`FUNCIONALIDADES.md`](FUNCIONALIDADES.md) | Cómo pedir una funcionalidad nueva o un cambio: la plantilla y qué poner en cada parte. |
-| [`diseno/`](diseno/README.md) | Dónde van los diseños: referencias visuales, diagramas, animaciones y capturas. |
-| `diseno/capturas/` | Capturas de todas las pantallas con su código (A1, B2…). Solo en el PC: no se suben a GitHub. Índice en `diseno/capturas/INDICE.md`. |
+| [`FEATURE-REQUESTS.md`](FEATURE-REQUESTS.md) | How to request a new feature or a change: the template and what to put in each part. |
+| [`diseno/`](diseno/README.md) | Where designs go: visual references, diagrams, animations and screenshots. |
+| `diseno/capturas/` | Screenshots of every screen with its code (A1, B2…). Only on the PC: not pushed to GitHub. Index in `diseno/capturas/INDICE.md`. |
 
-## Histórico
+## History
 
-Planes y auditorías de versiones anteriores, guardados como referencia. No describen la app actual.
+Plans and audits from earlier versions, kept for reference. They do not describe the current app (in Spanish).
 
-| Documento | Qué cuenta |
+| Document | What it covers |
 |---|---|
-| [`historico/AUDITORIA-v2.md`](historico/AUDITORIA-v2.md) | Primera auditoría de la versión 2. |
-| [`historico/AUDITORIA-v2-segunda.md`](historico/AUDITORIA-v2-segunda.md) | Segunda auditoría de la versión 2. |
+| [`historico/AUDITORIA-v2.md`](historico/AUDITORIA-v2.md) | First audit of version 2. |
+| [`historico/AUDITORIA-v2-segunda.md`](historico/AUDITORIA-v2-segunda.md) | Second audit of version 2. |

@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, describeInput, cleanEnv, within, discoverDir, killTree } from './common.mjs';
 import { Turn, Approvals } from './live.mjs';
 import { decide, describeAction } from '../core/guard.mjs';
@@ -26,6 +27,8 @@ export function detect(cfg = {}) {
   const home = userHome();
   const pkg = (dir) => path.join(dir, 'node_modules', '@anthropic-ai', 'claude-code', 'bin', IS_WIN ? 'claude.exe' : 'claude');
   const candidates = [cfg.path, ...inPath('claude'), path.join(home, '.local', 'bin', IS_WIN ? 'claude.exe' : 'claude'), ...npmPrefixes('claude').map(pkg)];
+  // 3.5: Orb Núcleo (the server, ORB_NUCLEO) brings the Agent SDK's own Claude Code for Linux: used when none is installed.
+  if (process.env.ORB_NUCLEO === '1' && !IS_WIN) candidates.push(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'node_modules', '@anthropic-ai', `claude-agent-sdk-${process.platform}-${process.arch}`, 'claude'));
   const cmd = firstFile(candidates);
   return cmd ? { cmd, pre: [] } : null;
 }
@@ -38,6 +41,8 @@ export function loginState() {
 }
 
 export const loginCommand = (exe) => ({ cmd: exe.cmd, args: [...exe.pre] });
+// 3.5: signs in without a console (src/agents/login.mjs: `claude auth login`, hidden).
+export const windowlessLogin = true;
 
 const textOf = (content) => Array.isArray(content) ? content.map((c) => c.text ?? (c.type === 'image' ? '[imagen]' : '')).join('\n') : String(content ?? '');
 const IMAGE_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };
@@ -120,7 +125,7 @@ export function createLive(o) {
   const canUseTool = async (toolName, toolInput, ctx = {}) => {
     const command = toolInput?.command ?? '';
     const paths = [toolInput?.file_path, toolInput?.path, toolInput?.notebook_path].filter(Boolean);
-    const verdict = decide({ permission, tool: toolName, command, paths, internalDir: o.internalDir, lang: o.lang });
+    const verdict = decide({ permission, tool: toolName, command, paths, internalDir: o.internalDir, lang: o.lang, bot: Boolean(o.bot) });
     if (verdict.decision === 'allow') return { behavior: 'allow', updatedInput: toolInput };
     if (verdict.decision === 'deny') return { behavior: 'deny', message: `Orb no lo permite: ${verdict.reason}.` };
     // 3.1: summary: what the agent itself says the command is for (Claude's Bash tool asks it for a description).
@@ -210,7 +215,7 @@ export function createLive(o) {
       // ends — otherwise its background shells (bash.exe) can outlive the turn, holding an isolated copy's folder open and
       // leaving test servers behind. The signal is forwarded by the SDK after its own graceful stdin-close window.
       spawnClaudeCodeProcess: (opts) => {
-        child = spawn(opts.command, opts.args, { cwd: opts.cwd, env: opts.env, signal: opts.signal, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+        child = spawn(opts.command, opts.args, { cwd: opts.cwd, env: opts.env, signal: opts.signal, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], detached: !IS_WIN }); // 3.5: own process group on Linux (killTree)
         live.pid = child.pid ?? null;
         try { child.stderr?.setEncoding('utf8'); child.stderr?.on('data', (d) => log(`stderr: ${d}`)); child.stderr?.on('error', () => {}); } catch { /* best effort */ }
         return child;

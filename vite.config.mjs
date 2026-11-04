@@ -18,10 +18,23 @@ const excalidrawFonts = () => ({
   }
 });
 
-export default defineConfig({
-  root: 'src/ui',
-  base: './',
-  plugins: [react(), tailwindcss(), excalidrawFonts()],
-  resolve: { alias: { '@': path.resolve('src/ui') } },
-  build: { rollupOptions: { input: { index: path.resolve('src/ui/index.html'), pip: path.resolve('src/ui/pip.html') } }, outDir: '../renderer', emptyOutDir: true, target: 'chrome140', sourcemap: false, chunkSizeWarningLimit: 2000, assetsInlineLimit: 0 }
+// 3.5: `vite build --mode android` builds the Android app's page (android-app/www, scripts/android-build.mjs): the same pages,
+// but this one may talk to the linked Orb at its own address (connect-src).
+const androidCsp = () => ({
+  name: 'orb-android-csp',
+  transformIndexHtml: (html) => html.replace("worker-src 'self' blob:;", "worker-src 'self' blob:; connect-src 'self' http: https:;")
+});
+
+export default defineConfig(({ mode }) => {
+  const android = mode === 'android';
+  return {
+    root: 'src/ui',
+    base: './',
+    plugins: [react(), tailwindcss(), excalidrawFonts(), ...(android ? [androidCsp()] : [])],
+    resolve: { alias: { '@': path.resolve('src/ui') } },
+    build: {
+      rollupOptions: { input: { index: path.resolve('src/ui/index.html'), pip: path.resolve('src/ui/pip.html') } },
+      outDir: android ? path.resolve('android-app/www') : '../renderer', emptyOutDir: true, target: 'chrome140', sourcemap: false, chunkSizeWarningLimit: 2000, assetsInlineLimit: 0
+    }
+  };
 });

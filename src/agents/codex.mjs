@@ -21,7 +21,8 @@ export function detect(cfg = {}) {
     path.join(dir, 'node_modules', '@openai', 'codex', 'node_modules', '@openai', p, 'vendor', triple, 'bin', 'codex.exe')));
   // The Codex app also leaves its CLI in <Local>\OpenAI\Codex\bin\<build>\codex.exe (the newest build wins).
   const appBuilds = (local) => { const base = path.join(local, 'OpenAI', 'Codex', 'bin'); try { return fs.readdirSync(base).map((b) => path.join(base, b, 'codex.exe')).filter((f) => firstFile([f])).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs); } catch { return []; } };
-  const candidates = [cfg.path, ...inPath('codex'), ...(IS_WIN ? [...npmPrefixes('codex').flatMap(vendor), ...appDataDirs().flatMap((d) => appBuilds(d.local))] : [])];
+  // 3.5: on Linux and macOS Orb installs it for the user only (npm --prefix ~/.local): its bin folder may not be in PATH.
+  const candidates = [cfg.path, ...inPath('codex'), ...(IS_WIN ? [...npmPrefixes('codex').flatMap(vendor), ...appDataDirs().flatMap((d) => appBuilds(d.local))] : [path.join(userHome(), '.local', 'bin', 'codex')])];
   const cmd = firstFile(candidates);
   return cmd ? { cmd, pre: [] } : null;
 }
@@ -29,6 +30,8 @@ export function detect(cfg = {}) {
 export const codexHome = () => process.env.CODEX_HOME || path.join(userHome(), '.codex');
 export function loginState() { return firstFile([path.join(codexHome(), 'auth.json')]) ? 'si' : 'no'; }
 export const loginCommand = (exe) => ({ cmd: exe.cmd, args: [...exe.pre, 'login'] });
+// 3.5: signs in without a console (src/agents/login.mjs: account/login/start over app-server).
+export const windowlessLogin = true;
 
 // 2.7: whose account a session folder holds, asked to Codex itself (account/read; auth.json is never opened): the plan
 // and a short fingerprint of the account, so «Buscar y añadir» does not offer the same subscription twice. The e-mail
@@ -146,7 +149,7 @@ export function createLive(o) {
   const live = { sessionId: o.resumeId ?? null, caps, pid: null, get busy() { return Boolean(turn && !turn.done); } };
 
   const guardAsk = async ({ itemId, command, paths = [], tool, kind }) => {
-    const verdict = decide({ permission, tool, kind, command, paths, internalDir: o.internalDir, lang: o.lang });
+    const verdict = decide({ permission, tool, kind, command, paths, internalDir: o.internalDir, lang: o.lang, bot: Boolean(o.bot) });
     if (verdict.decision !== 'ask') return verdict.decision;
     return approvals.ask({ id: itemId, tool, title: command || paths.join(', ') || tool, reason: verdict.reason, input: clip(command || paths.join(', '), 400) });
   };

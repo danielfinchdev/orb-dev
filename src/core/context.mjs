@@ -2,14 +2,23 @@
 // The engine, the MCP server and the tests call useHome() once; every core module reads ctx.
 import fs from 'node:fs';
 import path from 'node:path';
-import { paths, loadConfig, writeJson, merge, AGENT_IDS, relabelEmptyLogs } from './home.mjs';
+import { paths, loadConfig, writeJson, merge, AGENT_IDS, relabelEmptyLogs, ROLES, hostsBots, doesDev } from './home.mjs';
 import { translate } from './i18n.mjs';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from './appearance.mjs';
 
-export const ctx = { home: null, paths: null, config: null, secret: null }; // secret: approval secret handed by the app (memory only)
+export const ctx = { home: null, paths: null, config: null, secret: null, headless: null }; // secret: approval secret handed by the app (memory only)
 
 // Message in the language of the settings (Spanish until a configuration is loaded).
 export const tr = (key, vars) => translate(ctx.config?.language ?? 'es', key, vars);
+
+// 3.5: this Orb's role (see ROLES in home.mjs). Every process reads it from orb.json, so the MCP servers agree with the engine.
+export const role = () => (ROLES.includes(ctx.config?.role) ? ctx.config.role : 'todo');
+export const keepsBots = () => hostsBots(role()); // «centro» or «todo»: the Orbs linked with it may use its bots
+export const programs = () => doesDev(role()); // «taller» or «todo»
+// 3.5: an engine without a window of its own (Orb Núcleo, src/server/host.mjs). What a server cannot do (God mode, the
+// expert view, Opti Bot, isolated copies, a console…) depends on this, never on the role: a PC can be a centre too.
+// The MCP servers (other processes) see it through ORB_NUCLEO, which the host sets for the engine and its children.
+export const isHeadless = () => (ctx.headless ?? process.env.ORB_NUCLEO === '1') === true;
 
 export function useHome(home) {
   ctx.home = home; ctx.paths = paths(home); ctx.config = loadConfig(home);
@@ -17,7 +26,7 @@ export function useHome(home) {
 }
 
 // Settings saved from the app. Only known top-level keys are accepted.
-const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'monitor', 'oneAtATime', 'approvalWaitMinutes'];
+const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'monitor', 'oneAtATime', 'approvalWaitMinutes', 'bots', 'role', 'devTarget', 'protected'];
 export function saveConfig(patch) {
   const unknown = Object.keys(patch ?? {}).filter((k) => !EDITABLE.includes(k));
   if (unknown.length) throw new Error(tr('msg.ctx.unknownSettings', { unknown: unknown.join(', ') }));
@@ -77,6 +86,8 @@ export function validateConfig(c) {
     int(c.mobile.port, 1024, 65535, tr('msg.ctx.mobilePort'));
     for (const k of ['wifi', 'tailscale']) if (c.mobile[k] !== undefined && typeof c.mobile[k] !== 'boolean') throw new Error(tr('msg.ctx.mobileBool'));
   }
+  if (c.devTarget !== undefined && (typeof c.devTarget !== 'string' || !/^(|local|[\w-]{1,64})$/.test(c.devTarget))) throw new Error(tr('msg.ctx.badAppearance', { name: 'devTarget' }));
+  if (c.role !== undefined && !ROLES.includes(c.role)) throw new Error(tr('msg.ctx.badRole', { roles: ROLES.join(', ') }));
   if (!Array.isArray(c.accounts)) throw new Error(tr('msg.ctx.accountsList'));
   const ids = new Set();
   for (const a of c.accounts) {
@@ -118,6 +129,18 @@ export function validateConfig(c) {
   // 3.1: «Una tarea cada vez» (no parallel work, not even in isolated copies) and how long a task's permission waits for
   // an answer before it is denied (0 = for ever).
   bool(c.oneAtATime, 'oneAtATime');
+  // 3.5: the bots' golden rules (up to 30 short sentences) and Home Assistant's address.
+  if (c.bots) {
+    const rules = c.bots.rules ?? [];
+    if (!Array.isArray(rules) || rules.length > 30 || rules.some((r) => typeof r !== 'string' || r.length > 400)) throw new Error(tr('msg.ctx.badAppearance', { name: 'bots.rules' }));
+    const url = c.bots.homeAssistant?.url ?? '';
+    if (typeof url !== 'string' || (url && !/^https?:\/\/[^\s]+$/i.test(url))) throw new Error(tr('msg.ctx.badAppearance', { name: 'bots.homeAssistant.url' }));
+    if (c.bots.idleMinutes !== undefined) int(c.bots.idleMinutes, 1, 1440, 'bots.idleMinutes');
+    // 3.5: where the bots live: 'local' or the id of a linked Orb (a centre).
+    if (c.bots.location !== undefined && (typeof c.bots.location !== 'string' || !/^(local|[\w-]{1,64})$/.test(c.bots.location))) throw new Error(tr('msg.ctx.badAppearance', { name: 'bots.location' }));
+  }
+  // 3.5: «Cosas que nadie toca»: up to 50 names, paths or containers (2-200 characters each).
+  if (c.protected !== undefined && (!Array.isArray(c.protected) || c.protected.length > 50 || c.protected.some((x) => typeof x !== 'string' || x.trim().length < 2 || x.length > 200))) throw new Error(tr('msg.ctx.badAppearance', { name: 'protected' }));
   if (c.approvalWaitMinutes !== undefined) int(c.approvalWaitMinutes, 0, 240, 'approvalWaitMinutes');
   if (c.budget?.stopAt != null && !(Number(c.budget.stopAt) >= 0.5 && Number(c.budget.stopAt) <= 1)) throw new Error(tr('msg.ctx.stopAt'));
   if (c.budget?.profile != null && ![0, 1, 2, 3, 4].includes(c.budget.profile)) throw new Error(tr('msg.ctx.profile'));

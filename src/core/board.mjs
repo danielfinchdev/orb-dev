@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { openDb, taskOptions, checkPolicy } from './db.mjs';
-import { ctx, tr } from './context.mjs';
+import { ctx, tr, isHeadless } from './context.mjs';
 import { AGENT_IDS, AGENT_LABELS, folderName, projectLogHeader, isConfigName, categoryOf, CATEGORIES } from './home.mjs';
 import { oneLine, MAX_DESCRIPTION } from './safety.mjs';
 import { contentHash, sign, verify, detectSensitivity, deletionAskedByUser, defaultApprovalKey } from './approval.mjs';
@@ -217,6 +217,8 @@ export class Board {
   // task belongs to the one of the task it comes from.
   createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null, level = null, fixedBrief = false, internal = false, conversation_id = null }, actor) {
     if (!MODES.includes(mode)) throw new Error(tr('sys.board.badMode'));
+    // 3.5: the server (role «centro») has no isolated copies: every task works in the folder, in turn.
+    if (mode === 'aislada' && isHeadless()) mode = 'carpeta';
     const proj = this.project(project);
     if (!proj) throw new Error(tr('sys.board.unknownProject', { name: project }));
     const convId = (conversation_id ? this.conversation(conversation_id)?.id : null) ?? (parent_id ? this.conversationOfTask(parent_id) : review_of ? this.conversationOfTask(review_of) : null);
@@ -527,7 +529,7 @@ export class Board {
     return { ...r, titled: Boolean(r.titled), context };
   }
   conversations({ limit = 300 } = {}) {
-    return this.all('SELECT * FROM conversations ORDER BY updated_at DESC, id DESC LIMIT ?', Math.min(Math.max(Number(limit) || 300, 1), 2000)).map((r) => this.conversation(r.id) ?? r);
+    return this.all('SELECT * FROM conversations WHERE bot_id IS NULL AND group_id IS NULL ORDER BY updated_at DESC, id DESC LIMIT ?', Math.min(Math.max(Number(limit) || 300, 1), 2000)).map((r) => this.conversation(r.id) ?? r);
   }
   createConversation({ title = '', project = null, agent = 'claude', account = null, model = null, reasoning = 'medium' } = {}) {
     if (project && !this.project(project)) throw new Error(tr('sys.board.unknownProject', { name: project }));

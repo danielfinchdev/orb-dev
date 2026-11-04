@@ -246,7 +246,7 @@ html[data-skin="retro"] { --font-title: "Bungee", "IBM Plex Mono", var(--font-sa
 html[data-skin="nube"] { --font-title: "Fredoka Variable", var(--font-sans); }
 html[data-skin="profesional"] { --font-title: "Inter Variable", var(--font-sans); }
 
-/* 2.6: the assistant's wordmark ORB·E at the top of the sidebar when it keeps its default name, chosen by Dani per theme.
+/* 2.6: the assistant's wordmark ORB·E at the top of the sidebar when it keeps its default name, chosen per theme.
    Orb (and the others for now): «WALL·E» style, spaced capitals and a round dot of the theme's colour. */
 /* 3.2: --wm-track is the spacing between letters and --wm-gap the extra room on each side of the dot: the dot sits exactly
    halfway between B and E, and the last letter gives back its spacing (it pushed the wordmark off its centre). */
@@ -443,3 +443,38 @@ html[data-motion="minima"] :is(.tour-panel, .tour-spot), html[data-skin="profesi
 @media (prefers-reduced-motion: reduce) { .tour-panel, .tour-spot { animation: none; transition: none; } }
 @media (max-width: 640px) { .tour-robot { display: none; } .tour-bubble { width: calc(100vw - 2rem); } }
 html[data-skin="retro"] .tour-bubble { width: 25rem; }
+
+/* 3.5: motion and touch (ideas from Emil Kowalski's «skills», MIT; re-written for Orb, see docs/LEARNINGS-3.5.md).
+   - Strong ease-out for what appears or leaves (never ease-in on the interface); ease-in-out for what moves on screen.
+   - What appears starts at 95-97 % and transparent, never from nothing; popovers grow from their trigger, dialogs from the centre.
+   - Press feedback on pointer-down (scale 0.97), not on release; touch gets no sticky hover (Tailwind's hover: already
+     waits for a real pointer) and no grey flash.
+   - Reduced motion (the system's or Ajustes › Apariencia «mínima»): fades stay, movement and scaling go. */
+:root {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+@layer base {
+  html { -webkit-tap-highlight-color: transparent; }
+  html, body { overscroll-behavior: none; }
+  :is(button, [role="button"], [role="tab"], a) { touch-action: manipulation; }
+  :is(button, [role="tab"]) { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  /* tw-animate-css enters and leaves with plain «ease»: a stronger ease-out unless a component asks for another. */
+  .animate-in, .animate-out { --tw-ease: var(--ease-out); }
+}
+/* On a phone, a field under 16 px makes the page zoom in when it gets the focus (and it stays zoomed). */
+@media (pointer: coarse) {
+  :is(input:not([type="checkbox"], [type="radio"], [type="range"]), textarea, select) { font-size: max(16px, 1em); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  html:not([data-motion="minima"]) :is([data-slot="button"], .press):not(:disabled):active { transform: scale(0.97); }
+  .mobile-tab-icon { transition: background-color 150ms ease, color 150ms ease, transform 120ms var(--ease-out); }
+  html:not([data-motion="minima"]) .mobile-tab:active .mobile-tab-icon { transform: scale(0.94); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-in, .animate-out { --tw-enter-translate-x: 0; --tw-enter-translate-y: 0; --tw-enter-scale: 1; --tw-exit-translate-x: 0; --tw-exit-translate-y: 0; --tw-exit-scale: 1; }
+  .mode-thumb { transition: none; }
+}
+html[data-motion="minima"] :is(.animate-in, .animate-out) { --tw-enter-translate-x: 0; --tw-enter-translate-y: 0; --tw-enter-scale: 1; --tw-exit-translate-x: 0; --tw-exit-translate-y: 0; --tw-exit-scale: 1; }
+html[data-motion="minima"] .mode-thumb { transition: none; }
