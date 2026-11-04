@@ -169,8 +169,9 @@ sections 2.1–2.4 describe the shipped app.
   three tabs per zone (Bots: Chats · Recordatorios · Casa; Orb: Chats · Tareas · Proyectos); a floating button to
   create. Android in the glass language: the chat header is a glass pill over the colour field.
 - **Bot avatars** (`docs/diseno/maquetas/avatares.js`). Original art: soft rounded bodies (nube, gota, judía, mochi,
-  flor, estrella, canto, gominola, bollo, corazón, hoja, cápsula) in ten pastel colours, a soft gradient and highlight,
-  and Orb's own face: round glossy eyes with a white highlight (like Orb·e's), blush and a tiny mouth. Deterministic SVG
+  flor, estrella, canto, gominola, bollo, corazón, hoja, cápsula) in ten bright, nearly flat colours with a small
+  highlight, and a simple dark face drawn for each body (dots, tall ovals, big glossy eyes, wide beans; spacing, blush
+  and a tiny smile vary), so the set is Orb's own and cute rather than robot-like. Deterministic SVG
   from shape + colour (+ seed for blink timing). States: idle (breathing, random blink, looking around), new message
   (one bounce), working (wiggle, eyes up), paused (closed eyes, slow breathing, a «z»), approved (hop, smiling eyes).
   Reduced motion or low power: static. Chosen at creation (big live preview, 12-shape grid, 10-colour row, name,

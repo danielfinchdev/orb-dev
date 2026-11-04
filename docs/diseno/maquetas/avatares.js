@@ -19,6 +19,13 @@
     hoja: { label: 'Hoja', d: 'M86 12c4 30-2 54-20 68-14 10-34 12-48 4-6-22 0-46 18-60 14-11 32-14 50-12z', face: [52, 54] },
     capsula: { label: 'Cápsula', d: 'M50 8c16 0 28 12 28 28v28c0 16-12 26-28 26S22 80 22 64V36C22 20 34 8 50 8z', face: [50, 50] }
   };
+  // Each body's own face: eye style, spacing (half the distance between the eyes), a small smile, blush.
+  const EYES = {
+    nube: { kind: 'dot', gap: 8, blush: true }, gota: { kind: 'oval', gap: 7 }, judia: { kind: 'big', gap: 10, smile: true },
+    mochi: { kind: 'dot', gap: 13, blush: true }, flor: { kind: 'oval', gap: 8, blush: true }, estrella: { kind: 'dot', gap: 8, smile: true },
+    canto: { kind: 'big', gap: 9 }, gominola: { kind: 'oval', gap: 10, smile: true }, bollo: { kind: 'dot', gap: 6.5, blush: true },
+    corazon: { kind: 'oval', gap: 9, smile: true }, hoja: { kind: 'bean', gap: 8 }, capsula: { kind: 'oval', gap: 7, blush: true }
+  };
   const COLORS = { coral: 25, melocoton: 50, limon: 95, lima: 135, menta: 168, agua: 200, cielo: 238, lavanda: 285, rosa: 335, frambuesa: 5 };
   const hash = (s) => { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
   let n = 0;
@@ -26,26 +33,33 @@
   function svg(shape = 'mochi', color = 'cielo', { size = 48, state = 'idle', seed = '', still = false, delay = null, blush = true } = {}) {
     const S = SHAPES[shape] ?? SHAPES.mochi; const h = COLORS[color] ?? 238; const id = `bv${n++}`;
     const r = hash(`${shape}${color}${seed}`); const blinkDelay = -((r % 4000) / 1000); const lookDelay = -(((r >> 8) % 7000) / 1000);
-    const [fx, fy] = S.face; const warm = h >= 70 && h <= 140; /* yellows and limes go muddy when dark */ const ink = `oklch(0.26 0.04 ${h})`;
+    const [fx, fy] = S.face; const warm = h >= 70 && h <= 140; /* yellows and limes need more light to stay bright */ const ink = `oklch(0.24 0.03 ${h})`;
+    const E = EYES[shape] ?? EYES.mochi; const g = E.gap;
     const sleepy = state === 'sleepy', happy = state === 'happy', thinking = state === 'thinking';
+    // Simple dark eyes, drawn per shape (dots, tall ovals, big glossy ones, wide beans) so the set is Orb's own.
+    const open = (x) => E.kind === 'oval' ? `<ellipse cx="${x}" cy="${fy}" rx="3.6" ry="5.8" fill="${ink}"/><ellipse cx="${x + 1.2}" cy="${fy - 2.6}" rx="1.1" ry="1.5" fill="#fff" opacity=".9"/>`
+      : E.kind === 'big' ? `<circle cx="${x}" cy="${fy}" r="6.4" fill="${ink}"/><circle cx="${x + 2}" cy="${fy - 2.4}" r="2.2" fill="#fff"/>`
+        : E.kind === 'bean' ? `<ellipse cx="${x}" cy="${fy}" rx="5" ry="3.8" fill="${ink}"/>`
+          : `<circle cx="${x}" cy="${fy}" r="4.3" fill="${ink}"/>`;
     const eye = (x) => happy
-      ? `<path d="M${x - 5} ${fy + 1}q5 -7 10 0" fill="none" stroke="${ink}" stroke-width="3.2" stroke-linecap="round"/>`
+      ? `<path d="M${x - 4.5} ${fy + 1.5}q4.5 -7 9 0" fill="none" stroke="${ink}" stroke-width="3.2" stroke-linecap="round"/>`
       : sleepy
-        ? `<path d="M${x - 5} ${fy}q5 4 10 0" fill="none" stroke="${ink}" stroke-width="3" stroke-linecap="round"/>`
-        : `<g class="bv-eye" style="transform-origin:${x}px ${fy}px"><circle cx="${x}" cy="${fy}" r="5.6" fill="${ink}"/><circle cx="${x + 1.8}" cy="${fy - 2}" r="1.9" fill="#fff"/><circle cx="${x - 1.6}" cy="${fy + 2.2}" r=".8" fill="#fff" opacity=".7"/></g>`;
-    const mouth = happy ? `<path d="M${fx - 5} ${fy + 8}q5 6 10 0" fill="none" stroke="${ink}" stroke-width="2.6" stroke-linecap="round"/>`
-      : thinking ? `<circle cx="${fx + 1}" cy="${fy + 10}" r="2" fill="${ink}"/>`
-        : sleepy ? `<path d="M${fx - 3} ${fy + 9}h6" stroke="${ink}" stroke-width="2.4" stroke-linecap="round"/>`
-          : `<path d="M${fx - 3.5} ${fy + 8}q3.5 3.5 7 0" fill="none" stroke="${ink}" stroke-width="2.4" stroke-linecap="round"/>`;
-    const cheeks = blush ? `<ellipse cx="${fx - 15}" cy="${fy + 7}" rx="5" ry="3" fill="oklch(0.72 0.14 10)" opacity=".38"/><ellipse cx="${fx + 15}" cy="${fy + 7}" rx="5" ry="3" fill="oklch(0.72 0.14 10)" opacity=".38"/>` : '';
+        ? `<path d="M${x - 4.5} ${fy}q4.5 4 9 0" fill="none" stroke="${ink}" stroke-width="3" stroke-linecap="round"/>`
+        : `<g class="bv-eye" style="transform-origin:${x}px ${fy}px">${open(x)}</g>`;
+    const my = fy + (E.kind === 'big' ? 11 : 9);
+    const mouth = happy ? `<path d="M${fx - 5} ${my - 1}q5 6 10 0" fill="${ink}" stroke="${ink}" stroke-width="1.6" stroke-linejoin="round"/>`
+      : thinking ? `<ellipse cx="${fx + 1}" cy="${my + 1}" rx="2" ry="2.4" fill="${ink}"/>`
+        : sleepy ? '' : E.smile ? `<path d="M${fx - 3} ${my - 1}q3 3 6 0" fill="none" stroke="${ink}" stroke-width="2.2" stroke-linecap="round"/>` : '';
+    const cheeks = blush && (E.blush || happy) ? `<ellipse cx="${fx - g - 7}" cy="${fy + 6}" rx="4.2" ry="2.6" fill="oklch(0.7 0.17 5)" opacity=".42"/><ellipse cx="${fx + g + 7}" cy="${fy + 6}" rx="4.2" ry="2.6" fill="oklch(0.7 0.17 5)" opacity=".42"/>` : '';
     const zz = sleepy ? `<text class="bv-z" x="${fx + 22}" y="${fy - 16}" font-size="13" font-weight="700" fill="${ink}" opacity=".55" font-family="system-ui">z</text>` : '';
     const style = delay == null ? `--blink:${blinkDelay}s;--look:${lookDelay}s` : `--blink:${-delay}s;--look:${-delay}s;--t:${-delay}s`;
+    const L1 = warm ? 0.9 : 0.82, L2 = warm ? 0.84 : 0.74;
     return `<svg class="bv${still ? ' bv-still' : ''}${delay != null ? ' bv-frame' : ''}" data-state="${state}" width="${size}" height="${size}" viewBox="0 0 100 100" style="${style}" role="img" aria-label="${S.label}">
-<defs><radialGradient id="${id}" cx="32%" cy="26%" r="85%"><stop offset="0" stop-color="oklch(0.97 0.05 ${h})"/><stop offset=".5" stop-color="oklch(${warm ? 0.9 : 0.84} 0.12 ${h})"/><stop offset="1" stop-color="oklch(${warm ? 0.8 : 0.7} 0.15 ${h})"/></radialGradient></defs>
-<ellipse class="bv-shadow" cx="50" cy="94" rx="26" ry="3.5" fill="oklch(0.3 0.05 ${h})" opacity=".16"/>
-<g class="bv-body"><path d="${S.d}" fill="url(#${id})"/><path d="${S.d}" fill="none" stroke="oklch(0.62 0.12 ${h})" stroke-opacity=".35" stroke-width="1.2"/>
-<ellipse cx="${fx - 16}" cy="${fy - 20}" rx="9" ry="5" fill="#fff" opacity=".55" transform="rotate(-22 ${fx - 16} ${fy - 20})"/>
-<g class="bv-face">${cheeks}<g class="bv-eyes">${eye(fx - 9)}${eye(fx + 9)}</g>${mouth}</g>${zz}</g></svg>`;
+<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="oklch(${L1} 0.16 ${h})"/><stop offset="1" stop-color="oklch(${L2} 0.17 ${h})"/></linearGradient></defs>
+<ellipse class="bv-shadow" cx="50" cy="94" rx="24" ry="3.2" fill="oklch(0.3 0.05 ${h})" opacity=".14"/>
+<g class="bv-body"><path d="${S.d}" fill="url(#${id})"/>
+<ellipse cx="${fx - 17}" cy="${fy - 19}" rx="6.5" ry="3.6" fill="#fff" opacity=".5" transform="rotate(-24 ${fx - 17} ${fy - 19})"/>
+<g class="bv-face">${cheeks}<g class="bv-eyes">${eye(fx - g)}${eye(fx + g)}</g>${mouth}</g>${zz}</g></svg>`;
   }
   const css = `
 .bv { overflow: visible; flex: none; }
