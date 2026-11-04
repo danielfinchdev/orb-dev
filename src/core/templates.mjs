@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as B from './bots.mjs';
+import { parseAvatar } from './avatar.mjs';
 import { ctx, saveConfig, tr } from './context.mjs';
 import { nextLocalRun, utcToZoned, isValidTz, systemTz } from './tz.mjs';
 
@@ -40,6 +41,7 @@ export function checkTemplate(t) {
   const keys = new Set();
   for (const b of t.bots) {
     if (!b || !plain(b.key ?? '', 40) || !plain(b.name, 40) || !b.name.trim()) throw bad('data.templates.bad', { what: 'bots' });
+    if (b.avatar !== undefined && !parseAvatar(b.avatar)) throw bad('data.templates.bad', { what: 'bots' });
     if (b.key) { if (keys.has(b.key)) throw bad('data.templates.bad', { what: 'bots' }); keys.add(b.key); }
   }
   if (!Array.isArray(t.groups ?? []) || (t.groups ?? []).length > 10) throw bad('data.templates.bad', { what: 'groups' });
@@ -77,7 +79,7 @@ export function applyTemplate(board, { id, lang = ctx.config?.language ?? 'es', 
   const freeName = (name) => { let n = name.trim(); for (let i = 2; taken.has(n.toLowerCase()); i++) n = `${name.trim().slice(0, 36)} ${i}`; taken.add(n.toLowerCase()); return n; };
   try {
     for (const b of t.bots) {
-      const bot = B.createBot(board, { name: freeName(b.name), icon: b.icon ?? '', role_text: b.role_text ?? '', tools: b.tools ?? undefined, ...(b.effort ? { effort: b.effort } : {}) });
+      const bot = B.createBot(board, { name: freeName(b.name), icon: b.icon ?? '', ...(parseAvatar(b.avatar) ? { avatar: parseAvatar(b.avatar) } : {}), role_text: b.role_text ?? '', tools: b.tools ?? undefined, ...(b.effort ? { effort: b.effort } : {}) });
       made.bots.push(bot.id); if (b.key) byKey.set(b.key, bot.id);
     }
     const groupNames = new Set(B.listGroups(board).map((g) => g.name.toLowerCase()));

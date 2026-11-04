@@ -1,12 +1,14 @@
-// 3.5: what the screens of the Bots mode share: the list of bots from the store, a bot's face (its icon), whether this
+// 3.5: what the screens of the Bots mode share: the list of bots from the store, a bot's face (3.6: its avatar), whether this
 // device may change bots, and the cards for «no bots yet» and «the bots do not answer».
 import { useEffect } from 'react';
-import { Bot, RefreshCw, Plus, ServerOff, Server } from 'lucide-react';
+import { RefreshCw, Plus, ServerOff, Server } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Spinner } from '@/components/ui/basic.jsx';
 import { useStore, bridge, go, loadBots, loadCentro } from '@/lib/store.js';
 import { botsPrefix, canManageBots } from '@/lib/bots.js';
 import { cn } from '@/lib/utils.js';
+import { BotAvatar, GroupAvatar } from '@/components/bot-avatar.jsx';
+import { useAvatarPulse, avatarState } from '@/lib/avatar-pulse.js';
 import { useT } from '@/lib/i18n.js';
 
 // The bots, their groups and what each one is doing; loaded once by the first screen that needs them.
@@ -26,14 +28,21 @@ export function useCanManage() {
   return canManageBots({ mobile: bridge.mobile, access });
 }
 
-export function BotFace({ bot, size = 'md', busy = false, className }) {
-  const box = size === 'lg' ? 'size-12 text-2xl rounded-2xl' : size === 'sm' ? 'size-6 text-[13px] rounded-md' : 'size-9 text-lg rounded-xl';
-  return (
-    <span className={cn('bg-primary/10 relative grid shrink-0 place-items-center select-none', box, className)} aria-hidden="true">
-      {bot?.icon ? <span className="leading-none">{bot.icon}</span> : <Bot className="text-primary size-[60%]" />}
-      {busy ? <span className="bg-primary absolute -right-0.5 -bottom-0.5 size-2.5 animate-pulse rounded-full ring-2 ring-[var(--background)]" /> : null}
-    </span>
-  );
+// 3.6: a bot's face is its avatar (components/bot-avatar.jsx): working while its turn runs, paused when paused, a bounce
+// on a new message and a hop when its card is approved (lib/avatar-pulse.js). size: xs 20, sm 24, md 36, lg 48, or px.
+const FACE = { xs: 20, sm: 24, md: 36, lg: 48, xl: 64 };
+export function BotFace({ bot, size = 'md', busy = false, state, still, chief = false, className, label }) {
+  const pulse = useAvatarPulse(bot?.id);
+  const px = typeof size === 'number' ? size : FACE[size] ?? FACE.md;
+  return <BotAvatar bot={bot} size={px} state={state ?? avatarState({ pulse, paused: bot?.paused, busy })} still={still} chief={chief} label={label} className={className} data-testid="bot-avatar" />;
+}
+// A group's face: up to three of its members together.
+export function GroupFace({ group, bots, size = 'md', className, label }) {
+  const states = useStore((s) => s.botStates) ?? {};
+  const byId = new Map((bots ?? []).map((b) => [b.id, b]));
+  const members = (group?.members ?? []).map((m) => byId.get(Number(m?.id ?? m))).filter(Boolean);
+  const px = typeof size === 'number' ? size : FACE[size] ?? FACE.md;
+  return <GroupAvatar members={members} states={states} size={px} label={label} className={className} />;
 }
 
 // No bots at all: an invitation to make the first one (nothing comes made beyond the starter «Asistente»).
@@ -42,7 +51,7 @@ export function NoBots() {
   const manage = useCanManage();
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-14 text-center" data-testid="bots-empty">
-      <div className="bg-primary/10 text-primary grid size-14 place-items-center rounded-2xl"><Bot className="size-7" /></div>
+      <BotAvatar shape="mochi" color="cielo" size={72} />
       <h2 className="text-xl">{t('bots.empty.title')}</h2>
       <p className="text-muted-foreground max-w-md text-sm">{t('bots.empty.body')}</p>
       {manage ? <Button onClick={() => go({ view: 'bots', id: 'new' })} data-testid="bots-create-first"><Plus />{t('bots.empty.create')}</Button>

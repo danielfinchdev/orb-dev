@@ -6,7 +6,7 @@ import { Button } from './ui/button.jsx';
 import { useStore, go } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
-import { useBots, useCanManage, BotFace, CentroBadge } from '@/views/bots/common.jsx';
+import { useBots, useCanManage, BotFace, GroupFace, CentroBadge } from '@/views/bots/common.jsx';
 import { SharedWithMe } from './share-dialog.jsx';
 
 export const BOT_NAV = [
@@ -37,8 +37,7 @@ export function BotsNav() {
         {bots.map((b) => (
           <button key={b.id} type="button" onClick={() => go({ view: 'bot-chat', id: b.id })} data-testid={`side-bot-${b.name}`}
             className={cn('flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left text-[13px]', at('bot-chat', b.id) ? 'bg-accent text-accent-foreground' : 'text-foreground/75 hover:bg-accent/60 hover:text-foreground', b.paused && 'opacity-60')}>
-            <BotFace bot={b} size="sm" busy={Boolean(states[b.id]?.busy)} /><span className="min-w-0 flex-1 truncate">{b.name}</span>
-            {b.is_chief ? <span className="text-muted-foreground text-[10.5px]">{t('bots.chief')}</span> : null}
+            <BotFace bot={b} size="sm" busy={Boolean(states[b.id]?.busy)} chief={b.is_chief} /><span className="min-w-0 flex-1 truncate">{b.name}</span>
           </button>
         ))}
         {groups.length ? <div className="text-muted-foreground px-2.5 pt-4 pb-1 text-[11px] tracking-wide uppercase">{t('nav.botGroups')}</div> : null}
@@ -47,7 +46,7 @@ export function BotsNav() {
         {groups.map((g) => (
           <button key={g.id} type="button" onClick={() => go({ view: 'bot-group', id: g.id })} data-testid={`side-group-${g.name}`}
             className={cn('flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left text-[13px]', at('bot-group', g.id) ? 'bg-accent text-accent-foreground' : 'text-foreground/75 hover:bg-accent/60 hover:text-foreground')}>
-            <span className="bg-primary/10 grid size-6 shrink-0 place-items-center rounded-md text-[13px]">{g.icon || '👥'}</span><span className="min-w-0 flex-1 truncate">{g.name}</span>
+            <GroupFace group={g} bots={bots} size="sm" /><span className="min-w-0 flex-1 truncate">{g.name}</span>
           </button>
         ))}
       </nav>

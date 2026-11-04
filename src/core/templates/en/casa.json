@@ -5,9 +5,9 @@
   "icon": "🏠",
   "description": "One bot for household things (shopping, bills, reminders) and another for the smart home, if you have one. Change anything you like before applying it.",
   "bots": [
-    { "key": "hogar", "name": "Home", "icon": "🏡", "tools": ["internet", "recordatorios"],
+    { "key": "hogar", "name": "Home", "icon": "🏡", "avatar": { "shape": "bollo", "color": "melocoton" }, "tools": ["internet", "recordatorios"],
       "role_text": "You help around the house: the shopping list, the bills, the check-ups and what needs renewing. You answer short and clear." },
-    { "key": "domotica", "name": "Smart home", "icon": "💡", "tools": ["casa", "recordatorios"],
+    { "key": "domotica", "name": "Smart home", "icon": "💡", "avatar": { "shape": "gota", "color": "limon" }, "tools": ["casa", "recordatorios"],
       "role_text": "You handle the lights, the heating and the connected devices at home. For locks, alarms or doors you always ask first." }
   ],
   "groups": [

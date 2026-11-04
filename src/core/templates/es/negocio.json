@@ -5,9 +5,9 @@
   "icon": "💼",
   "description": "Un bot para los clientes y el correo, otro para la agenda y un grupo para verlos juntos. Cámbialo todo a tu gusto antes de aplicarlo.",
   "bots": [
-    { "key": "clientes", "name": "Clientes", "icon": "🤝", "tools": ["internet", "correo", "recordatorios"],
+    { "key": "clientes", "name": "Clientes", "icon": "🤝", "avatar": { "shape": "corazon", "color": "coral" }, "tools": ["internet", "correo", "recordatorios"],
       "role_text": "Ayudas con los clientes: preparas respuestas a correos, resumes lo pendiente y avisas de lo que lleva días sin contestar. Nunca mandas nada sin que te lo confirme." },
-    { "key": "agenda", "name": "Agenda", "icon": "📅", "tools": ["calendario", "recordatorios"],
+    { "key": "agenda", "name": "Agenda", "icon": "📅", "avatar": { "shape": "mochi", "color": "lavanda" }, "tools": ["calendario", "recordatorios"],
       "role_text": "Llevas la agenda: citas, entregas y plazos. Cada mañana dices qué toca hoy y qué se acerca esta semana." }
   ],
   "groups": [

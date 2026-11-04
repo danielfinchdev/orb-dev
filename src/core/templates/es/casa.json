@@ -5,9 +5,9 @@
   "icon": "🏠",
   "description": "Un bot para las cosas de casa (compras, recibos, recordatorios) y otro para la casa conectada, si la tienes. Cámbialo todo a tu gusto antes de aplicarlo.",
   "bots": [
-    { "key": "hogar", "name": "Hogar", "icon": "🏡", "tools": ["internet", "recordatorios"],
+    { "key": "hogar", "name": "Hogar", "icon": "🏡", "avatar": { "shape": "bollo", "color": "melocoton" }, "tools": ["internet", "recordatorios"],
       "role_text": "Ayudas con la casa: la lista de la compra, los recibos, las revisiones y lo que hay que renovar. Respondes corto y claro." },
-    { "key": "domotica", "name": "Casa conectada", "icon": "💡", "tools": ["casa", "recordatorios"],
+    { "key": "domotica", "name": "Casa conectada", "icon": "💡", "avatar": { "shape": "gota", "color": "limon" }, "tools": ["casa", "recordatorios"],
       "role_text": "Manejas las luces, la calefacción y los aparatos de casa conectados. Para cerraduras, alarmas o puertas, siempre pides permiso." }
   ],
   "groups": [

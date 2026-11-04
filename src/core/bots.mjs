@@ -12,6 +12,7 @@ import { AGENT_IDS } from './home.mjs';
 import { oneLine, looksPrivateText } from './safety.mjs';
 import { protectedHit } from './guard.mjs';
 import { scopeSql, rightOn, rank, ownerOfBoard } from './authz.mjs';
+import { parseAvatar, avatarFor, avatarOf } from './avatar.mjs';
 import { nextLocalRun, zonedToUtc, minutesLate, shouldFireLate, isValidTz, systemTz, utcToZoned } from './tz.mjs';
 
 // The tool groups a bot can have (casillas). Memory, messages to other bots, the list of bots and questions to the user
@@ -37,7 +38,7 @@ const talks = (board, person, res) => rank(rightOn(board, person, res)) >= rank(
 
 export function parseBot(r) {
   if (!r) return null;
-  return { ...r, tools: json(r.tools, []), accounts: json(r.accounts, {}), exclusive: json(r.exclusive, []), is_chief: Boolean(r.is_chief), paused: Boolean(r.paused), caps: json(r.caps, null) };
+  return { ...r, avatar: avatarOf(r), tools: json(r.tools, []), accounts: json(r.accounts, {}), exclusive: json(r.exclusive, []), is_chief: Boolean(r.is_chief), paused: Boolean(r.paused), caps: json(r.caps, null) };
 }
 // principal: only the bots that person may see (their own and the ones shared with them); person: only that person's own.
 export function listBots(board, { principal = null, person = null } = {}) {
@@ -84,6 +85,11 @@ export function checkBotFields(board, f, { partial = false, id = null, person = 
     out.name = name;
   }
   if (has('icon')) { const icon = String(f.icon ?? '').trim(); if (icon.length > 16) throw bad('msg.bots.badField', { name: 'icon' }); out.icon = icon; }
+  // 3.6: its avatar { shape, color } (src/core/avatar.mjs); null: the fixed one of its id.
+  if (has('avatar')) {
+    if (f.avatar === null) out.avatar = null;
+    else { const a = parseAvatar(f.avatar); if (!a || typeof f.avatar === 'string') throw bad('msg.bots.badField', { name: 'avatar' }); out.avatar = a; }
+  }
   if (has('role_text')) { const role = String(f.role_text ?? '').trim(); if (role.length > 4000) throw bad('msg.bots.badField', { name: 'role_text' }); out.role_text = role; }
   if (!partial || has('agent')) {
     const agent = f.agent ?? ctx.config.orchestrator?.agent ?? 'claude';
@@ -130,8 +136,8 @@ export function checkBotFields(board, f, { partial = false, id = null, person = 
 }
 export const topicKey = (s) => oneLine(String(s ?? ''), 40).trim().toLowerCase();
 
-const COLUMNS = ['name', 'icon', 'role_text', 'agent', 'model', 'effort', 'tools', 'accounts', 'exclusive', 'is_chief', 'paused', 'caps'];
-const dbValue = (k, v) => (['tools', 'accounts', 'exclusive'].includes(k) ? JSON.stringify(v) : k === 'caps' ? (v == null ? null : JSON.stringify(v)) : ['is_chief', 'paused'].includes(k) ? Number(Boolean(v)) : v ?? null);
+const COLUMNS = ['name', 'icon', 'avatar', 'role_text', 'agent', 'model', 'effort', 'tools', 'accounts', 'exclusive', 'is_chief', 'paused', 'caps'];
+const dbValue = (k, v) => (['tools', 'accounts', 'exclusive'].includes(k) ? JSON.stringify(v) : k === 'caps' || k === 'avatar' ? (v == null ? null : JSON.stringify(v)) : ['is_chief', 'paused'].includes(k) ? Number(Boolean(v)) : v ?? null);
 
 // 3.6: person: whose bot it is (default: the owner). The chief is one among that person's bots.
 export function createBot(board, fields, { person = null } = {}) {
@@ -141,6 +147,8 @@ export function createBot(board, fields, { person = null } = {}) {
     if (f.is_chief) { const s = mineSql(board, who); board.run(`UPDATE bots SET is_chief = 0 WHERE ${s.where}`, ...s.args); }
     const at = now(); const cols = COLUMNS.filter((k) => f[k] !== undefined);
     const { lastInsertRowid } = board.run(`INSERT INTO bots (${cols.join(', ')}, created_at, updated_at, person_id) VALUES (${cols.map(() => '?').join(', ')}, ?, ?, ?)`, ...cols.map((k) => dbValue(k, f[k])), at, at, who);
+    // 3.6: without an avatar of its own, the fixed one of its id (kept, so it never changes).
+    if (!f.avatar) board.run('UPDATE bots SET avatar = ? WHERE id = ?', JSON.stringify(avatarFor(Number(lastInsertRowid))), Number(lastInsertRowid));
     const bot = getBot(board, Number(lastInsertRowid));
     ensureMemory(bot.id);
     return bot;
@@ -153,7 +161,7 @@ export function updateBot(board, id, fields) {
   if (!cols.length) return bot;
   return board.transaction(() => {
     if (f.is_chief) { const s = mineSql(board, personOf(board, bot)); board.run(`UPDATE bots SET is_chief = 0 WHERE id != ? AND ${s.where}`, bot.id, ...s.args); }
-    board.run(`UPDATE bots SET ${cols.map((k) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`, ...cols.map((k) => dbValue(k, f[k])), now(), bot.id);
+    board.run(`UPDATE bots SET ${cols.map((k) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`, ...cols.map((k) => dbValue(k, k === 'avatar' && f[k] === null ? avatarFor(bot.id) : f[k])), now(), bot.id);
     return getBot(board, bot.id);
   });
 }
@@ -197,7 +205,7 @@ export function seedStarter(board) {
   if (board.setting('bots_seeded')) return null;
   board.setting('bots_seeded', '1');
   if (board.one('SELECT COUNT(*) AS n FROM bots').n) return null;
-  return createBot(board, { name: tr('msg.bots.starterName'), icon: '🤖', role_text: '', tools: STARTER_TOOLS });
+  return createBot(board, { name: tr('msg.bots.starterName'), icon: '🤖', avatar: { shape: 'mochi', color: 'cielo' }, role_text: '', tools: STARTER_TOOLS });
 }
 
 // ---- exclusives: «only this bot touches the calendar». A topic (or tool group) exclusive to an active bot belongs to it.

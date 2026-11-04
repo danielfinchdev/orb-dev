@@ -180,6 +180,12 @@ sections 2.1–2.4 describe the shipped app.
   (one bounce), working (wiggle, eyes up), paused (flat eyes, slow breathing, a «z»), approved (hop, arched eyes).
   Reduced motion or low power: static. Chosen at creation (big live preview, 12-shape grid, 10-colour row, name,
   «Crear bot»). The chief is marked only by a star badge on its avatar. Never emoji or third-party characters.
+  **Built (M1):** `src/core/avatar.mjs` (shapes, colours, eyes, `avatarFor(id)`, checks; also `avatarSvg` for places
+  without React), `components/bot-avatar.jsx` (`BotAvatar`, `GroupAvatar`: up to three members together, `chief` star),
+  `views/bots/create.jsx` (the «Nuevo bot» dialog, full screen on the phone, glass sheet on Android; `AvatarPicker` is
+  also in the editor). Bots store `avatar` { shape, color }; older bots got the fixed one of their id. States are wired
+  through `BotFace`: working while its turn runs, paused, a bounce on a new message and a hop when its card is approved
+  (`lib/avatar-pulse.js`). Selects show names only (plain-text labels).
 
 ## 3. Tokens
 

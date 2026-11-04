@@ -322,7 +322,7 @@ export class Bots {
   // person: only that person's lanes (what a list shows to each one).
   states(person = null) { return [...this.lanes.values()].filter((l) => (l.busy || l.queue.length) && (!person || l.person === person)).map((l) => l.state()); }
   state(id, person = null) { const p = this.talkerOr(person); return this.lanes.get(`${Number(id)}:${p}`)?.state() ?? { bot: Number(id), person: p, busy: false, partial: '', queued: 0, conversation: null }; }
-  botMeta(bot, extra = {}) { return { bot: bot.id, name: bot.name, icon: bot.icon || undefined, ...extra }; }
+  botMeta(bot, extra = {}) { return { bot: bot.id, name: bot.name, icon: bot.icon || undefined, avatar: bot.avatar ?? undefined, ...extra }; }
   owns(conversation) { return Boolean(B.conversationOwner(this.board, conversation)); }
 
   // A chat line in a bot's or a group's conversation: stored, sent (by WS2's router: to the people who see that
