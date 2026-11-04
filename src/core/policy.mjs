@@ -451,7 +451,24 @@ for (const set of [PHONE_SET, ORB_SET, CONSOLE_SET]) for (const m of [...INBOX_M
 for (const set of [ORB_SET, CONSOLE_SET]) for (const m of ['bots.groups.members.add', 'bots.groups.members.remove']) set.add(m);
 BOTS_OWNER.push('bots.groups.members.add', 'bots.groups.members.remove');
 
-export const POLICY = Object.freeze({ ...CORE, ...GATEWAY, ...ORBMODE, ...BOTSP, ...DATA, ...INBOX, ...UI });
+// ---- 3.7 (Orb Server, WS3): one home per bot (src/engine/replica.mjs). Moving, restoring, merging: the bot's own person.
+// The calls between two Orbs about it (replica.*, home.*) are not API methods: link ops checked in replica.mjs.
+const HOME = {
+  'bots.homes': { public: true },
+  'bots.move': { res: (p) => bot(p.id), right: 'own' },
+  'bots.restore': { res: (p) => bot(p.id), right: 'own' },
+  'bots.merge': { res: (p) => [bot(p.survivor), bot(p.other)], right: 'own' },
+  'bots.sameBot': { res: (p) => bot(p.id), right: 'own' },
+  'bots.unlink': { ownerOnly: true },
+  'replica.status': { ownerOnly: true },
+  'replica.sync': { ownerOnly: true }
+};
+// From a phone (linked to the Orb that is the hub, 3.7 Q1): where bots run and «Pasar al …» of one's own bots.
+for (const set of [PHONE_SET, ORB_SET, CONSOLE_SET]) for (const m of ['bots.homes', 'bots.move', 'bots.restore']) set.add(m);
+for (const set of [ORB_SET, CONSOLE_SET]) for (const m of ['bots.merge', 'bots.sameBot']) set.add(m);
+BOTS_OWNER.push('bots.merge', 'bots.sameBot');
+
+export const POLICY = Object.freeze({ ...CORE, ...GATEWAY, ...ORBMODE, ...BOTSP, ...DATA, ...INBOX, ...UI, ...HOME });
 export const policyOf = (method) => {
   const m = String(method);
   if (Object.hasOwn(POLICY, m)) return POLICY[m];
@@ -515,7 +532,12 @@ const EVENTS_DATA = { 'backup:done': 'owner', 'backup:restoreReady': 'owner', 'd
 // 3.6 (messaging lists): a chat of someone's list changed (a new line, a pin, read): only that person, ids only.
 const EVENTS_INBOX = { 'inbox:changed': (p) => (p?.person ? { person: p.person } : 'owner') };
 const EVENTS_UI = {};
-export const EVENTS = Object.freeze({ ...EVENTS_CORE, ...EVENTS_GATEWAY, ...EVENTS_ORBMODE, ...EVENTS_BOTSP, ...EVENTS_DATA, ...EVENTS_INBOX, ...EVENTS_UI });
+// 3.7 (WS3): a bot's home changed (or its move moved on a phase): whoever sees the bot / the bot's person.
+const EVENTS_HOME = {
+  'bot.home': (p) => (p?.id ? bot(p.id) : 'owner'),
+  'bots.move': (p) => (p?.person ? { person: p.person } : p?.id ? bot(p.id) : 'owner')
+};
+export const EVENTS = Object.freeze({ ...EVENTS_CORE, ...EVENTS_GATEWAY, ...EVENTS_ORBMODE, ...EVENTS_BOTSP, ...EVENTS_DATA, ...EVENTS_INBOX, ...EVENTS_UI, ...EVENTS_HOME });
 export function eventRule(event) {
   const e = String(event);
   if (Object.hasOwn(EVENTS, e)) return EVENTS[e];

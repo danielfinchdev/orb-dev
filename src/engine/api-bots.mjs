@@ -15,6 +15,7 @@ import { serverStatus, haFetch } from '../core/server-admin.mjs';
 import { CENTRO_FORWARD } from './remote.mjs';
 import { botBrainProblem, isSensitiveCard } from './bots.mjs';
 import { fail, str, int, oneOf } from './api-common.mjs';
+import { isHomeHere } from '../core/replica.mjs';
 
 // The linked Orbs that keep bots and «Llevar mis bots» (shared by bots.where/moveTo and centro.*).
 function hub({ board, bots, remoteRef }) {
@@ -162,13 +163,25 @@ export function botMethods({ board, emit, remoteRef, bots, setShare, removeShare
   const groupId = (id) => (B.getGroup(board, int(id, 'grupo')) ?? fail(tr('msg.bots.noGroup'))).id;
   const right = (who, res) => (scoped(who) ? rightOn(board, who.person, res) : 'own');
   const deny = (who, method, res) => { audit(board, who, method, res, 'deny', 'right'); throw new AuthzError('right', { method, resource: res }); };
+  // 3.7 (WS3): where each bot runs (src/engine/replica.mjs › homeView): homeHere, homeKind ('here' | 'server' | 'orb'),
+  // homeName, homeOnline, readOnly (a copy of a bot run on another Orb), queued (messages waiting for that Orb).
+  const replica = () => remoteRef.replica ?? null;
+  const homeOf = (b) => { try { return replica()?.homeView(board.one('SELECT * FROM bots WHERE id = ?', b.id) ?? b) ?? {}; } catch { return {}; } };
   const view = (b, who) => {
     const person = me(who);
     const owner = B.personOf(board, b);
     return { ...b, effectiveTools: B.effectiveTools(board, b), conversation: B.botConversation(board, b, { person }), state: bots?.state(b.id, person) ?? null,
       reminders: B.listReminders(board, { bot: b.id, person }).length, right: right(who, { type: 'bot', id: b.id }),
-      ...(owner !== person ? { sharedBy: { person: owner, name: board.personName(owner) } } : {}) };
+      ...(owner !== person ? { sharedBy: { person: owner, name: board.personName(owner) } } : {}), ...homeOf(b) };
   };
+  // 3.7: a write on a copy of a bot run on another Orb goes to that Orb (or waits for it): never applied here.
+  const rowOf = (id) => board.one('SELECT * FROM bots WHERE id = ?', Number(id));
+  const elsewhere = (row) => Boolean(row?.uid && !isHomeHere(board, row));
+  const viaHome = async (row, method, params, who, refs = null) => {
+    if (!replica()) fail(tr('msg.home.runsElsewhere', { name: row.name }));
+    return replica().forwardWrite(row, method, params, scoped(who) ?? { person: board.ownerId() }, { refs });
+  };
+  const cardBot = (item) => { const r = board.chatRow(int(item, 'tarjeta')); return r?.meta?.bot ? { line: r, row: rowOf(r.meta.bot) } : { line: r, row: null }; };
   const fields = (p) => Object.fromEntries(['name', 'icon', 'avatar', 'role_text', 'agent', 'model', 'effort', 'tools', 'accounts', 'exclusive', 'is_chief', 'paused', 'caps'].filter((k) => p[k] !== undefined).map((k) => [k, p[k]]));
   // 3.6 (S1): a brain that cannot run confined is refused when it is chosen (and again when the bot starts).
   const brainOk = (f) => { if (f.agent) { const why = botBrainProblem(board, f.agent); if (why) fail(why); } return f; };
@@ -220,15 +233,48 @@ export function botMethods({ board, emit, remoteRef, bots, setShare, removeShare
       const person = me(who);
       return { ...view(b, who), memory: B.readMemory(b.id), mine: B.readMemory(b.id, { person, which: 'mine' }), reminderList: B.listReminders(board, { bot: b.id, person }) };
     },
-    'bots.create': (p, who) => { const b = B.createBot(board, brainOk(fields(p)), { person: me(who) }); changed(b.id); return view(b, who); },
-    'bots.update': ({ id, ...p }, who) => { const b = B.updateBot(board, botId(id, who), brainOk(fields(p))); if (b.paused) bots?.stop(b.id); changed(b.id); return view(b, who); },
-    'bots.delete': ({ id }, who) => { const b = B.deleteBot(board, botId(id, who)); bots?.drop(b.id); changed(b.id); return true; },
-    'bots.pause': ({ id, paused }, who) => { const b = B.updateBot(board, botId(id, who), { paused: paused !== false }); if (b.paused) bots?.stop(b.id); changed(b.id); return view(b, who); },
-    'bots.chat': ({ id, ...p }, who) => { const b = B.mustBot(board, botId(id, who)); const conv = B.botConversation(board, b, { person: me(who) }); return { conversation: conv, lines: lines(conv, p), state: bots?.state(b.id, me(who)) ?? null }; },
-    'bots.send': ({ id, text, via }, who) => { const r = need().send(botId(id, who), str(text, 'mensaje', 20000), { via: VIA.has(via) ? via : null, person: me(who) }); return { conversation: r.conversation, bot: r.bot }; },
-    'bots.stop': ({ id }, who) => { need().stop(botId(id, who), scoped(who) ? who.person : null); return true; },
+    // 3.7: home: where it runs («¿Dónde se ejecuta?»: a linked Orb's identity; default this one). Made here, then moved.
+    'bots.create': async ({ home, ...p }, who) => {
+      const b = B.createBot(board, brainOk(fields(p)), { person: me(who) }); changed(b.id);
+      if (home && home !== 'here' && replica()) { const moved = await replica().move(b.id, String(home), {}); return { ...view(B.getBot(board, b.id), who), move: moved }; }
+      return view(b, who);
+    },
+    'bots.update': async ({ id, ...p }, who) => {
+      const row = rowOf(botId(id, who));
+      if (elsewhere(row)) { const f = brainOk(fields(p)); const r = await viaHome(row, 'bots.update', f, who); return { ...view(B.getBot(board, row.id), who), forwarded: r }; }
+      const b = B.updateBot(board, row.id, brainOk(fields(p))); if (b.paused) bots?.stop(b.id); changed(b.id); return view(b, who);
+    },
+    'bots.delete': async ({ id }, who) => {
+      const row = rowOf(botId(id, who));
+      if (elsewhere(row)) { await viaHome(row, 'bots.delete', {}, who); return true; }
+      const b = B.deleteBot(board, row.id); bots?.drop(b.id); changed(b.id); return true;
+    },
+    'bots.pause': async ({ id, paused }, who) => {
+      const row = rowOf(botId(id, who));
+      if (elsewhere(row)) { const r = await viaHome(row, 'bots.pause', { paused: paused !== false }, who); return { ...view(B.getBot(board, row.id), who), forwarded: r }; }
+      const b = B.updateBot(board, row.id, { paused: paused !== false }); if (b.paused) bots?.stop(b.id); changed(b.id); return view(b, who);
+    },
+    'bots.chat': ({ id, ...p }, who) => { const b = B.mustBot(board, botId(id, who)); const conv = B.botConversation(board, b, { person: me(who) }); return { conversation: conv, lines: lines(conv, p), state: bots?.state(b.id, me(who)) ?? null, ...homeOf(b) }; },
+    'bots.send': async ({ id, text, via }, who) => {
+      const row = rowOf(botId(id, who));
+      if (elsewhere(row)) {
+        const r = await viaHome(row, 'bots.send', { text: str(text, 'mensaje', 20000), via: VIA.has(via) ? via : null }, who);
+        return { conversation: B.botConversation(board, B.getBot(board, row.id), { person: me(who) }), bot: row.id, forwarded: Boolean(r.forwarded), queued: Boolean(r.queued) };
+      }
+      const r = need().send(row.id, str(text, 'mensaje', 20000), { via: VIA.has(via) ? via : null, person: me(who) }); return { conversation: r.conversation, bot: r.bot };
+    },
+    'bots.stop': async ({ id }, who) => {
+      const row = rowOf(botId(id, who));
+      if (elsewhere(row)) { await viaHome(row, 'bots.stop', {}, who); return true; }
+      need().stop(row.id, scoped(who) ? who.person : null); return true;
+    },
     // 3.5.1: by: who answers (a linked device, set by remote.mjs from its own record; null: this PC). 3.6: who: the person.
-    'bots.decide': ({ item, decision, by }, who) => need().decide(int(item, 'tarjeta'), oneOf(decision, ['allow', 'deny'], 'decisión'), { by: by && typeof by === 'object' ? by : null, principal: scoped(who) }),
+    'bots.decide': async ({ item, decision, by }, who) => {
+      const { line, row } = cardBot(item);
+      // 3.7: a card of a bot run on another Orb is answered there (its approvers are that Orb's people).
+      if (elsewhere(row)) { const r = await viaHome(row, 'bots.decide', { decision: oneOf(decision, ['allow', 'deny'], 'decisión') }, who, { item: line.uid }); return { ok: r.result?.ok !== false, status: r.result?.status ?? (r.queued ? 'queued' : null), forwarded: true }; }
+      return need().decide(int(item, 'tarjeta'), oneOf(decision, ['allow', 'deny'], 'decisión'), { by: by && typeof by === 'object' ? by : null, principal: scoped(who) });
+    },
     // 3.6: the cards waiting for the caller's answer, wherever they are (a card of someone else's turn that only the
     // caller may approve: the house, the server, a change of the caller's bot).
     'bots.cards': (p, who) => {
@@ -237,7 +283,11 @@ export function botMethods({ board, emit, remoteRef, bots, setShare, removeShare
         .filter((r) => r?.meta?.status === 'pending' && (Array.isArray(r.meta.approvers) ? r.meta.approvers : [r.meta.talker ?? board.ownerId()]).includes(person))
         .slice(0, 50).map((r) => ({ id: r.id, conversation: r.conversation_id, body: r.body, at: r.at, card: r.meta.card, bot: r.meta.bot, sensitive: isSensitiveCard(r.meta), by: r.meta.talker && r.meta.talker !== person ? board.personName(r.meta.talker) : null }));
     },
-    'bots.answer': ({ item, text }, who) => { const r = need().answer(int(item, 'tarjeta'), str(text, 'respuesta', 4000), { person: scoped(who) ? who.person : null }); return { conversation: r.conversation, bot: r.bot }; },
+    'bots.answer': async ({ item, text }, who) => {
+      const { line, row } = cardBot(item);
+      if (elsewhere(row)) { await viaHome(row, 'bots.answer', { text: str(text, 'respuesta', 4000) }, who, { item: line.uid }); return { conversation: line.conversation_id, bot: row.id, forwarded: true }; }
+      const r = need().answer(int(item, 'tarjeta'), str(text, 'respuesta', 4000), { person: scoped(who) ? who.person : null }); return { conversation: r.conversation, bot: r.bot };
+    },
     'bots.groups.list': (p, who) => B.listGroups(board, { principal: scoped(who) }),
     // 3.6 (messaging lists): people: persons the group is shared with to talk (the same rules as shares.set).
     'bots.groups.create': ({ name, icon, members, people }, who) => {
@@ -269,11 +319,16 @@ export function botMethods({ board, emit, remoteRef, bots, setShare, removeShare
     'bots.groups.delete': ({ id }) => { B.deleteGroup(board, groupId(id)); changed(null); return true; },
     'bots.groups.chat': ({ id, ...p }) => { const conv = B.groupConversation(board, groupId(id)); return { conversation: conv, lines: lines(conv, p) }; },
     // 3.6 (messaging lists): members: who answers (with @Name in the text, only those named: mentioned).
-    'bots.groups.send': ({ id, text, via }, who) => { const r = need().sendGroup(groupId(id), str(text, 'mensaje', 20000), { via: VIA.has(via) ? via : null, person: me(who) }); return { conversation: r.conversation, group: r.group, members: r.members, mentioned: r.mentioned ?? [] }; },
+    'bots.groups.send': async ({ id, text, via }, who) => {
+      const g = board.one('SELECT * FROM bot_groups WHERE id = ?', groupId(id));
+      if (elsewhere(g)) { const r = await viaHome(g, 'bots.groups.send', { text: str(text, 'mensaje', 20000), via: VIA.has(via) ? via : null }, who); return { conversation: B.groupConversation(board, g.id), group: g.id, members: [], mentioned: [], forwarded: Boolean(r.forwarded), queued: Boolean(r.queued) }; }
+      const r = need().sendGroup(g.id, str(text, 'mensaje', 20000), { via: VIA.has(via) ? via : null, person: me(who) }); return { conversation: r.conversation, group: r.group, members: r.members, mentioned: r.mentioned ?? [] };
+    },
     // 3.6: id 'global': the caller's global memory; which: 'bot' (the bot's, as 3.5) or 'mine' (the caller's file of it).
     'bots.memory.get': ({ id, which: w }, who) => { const t = memTarget(id, w, who); return { id: t.id, which: t.which, text: B.readMemory(t.id, { person: t.person, which: t.which }) }; },
-    'bots.memory.set': ({ id, text, which: w }, who) => {
+    'bots.memory.set': async ({ id, text, which: w }, who) => {
       const t = memTarget(id, w, who);
+      if (t.id !== 'global' && elsewhere(rowOf(t.id))) { await viaHome(rowOf(t.id), 'bots.memory.set', { text: str(text, 'memoria', 64 * 1024, { optional: true }), which: t.which }, who); return { id: t.id, which: t.which, text: str(text, 'memoria', 64 * 1024, { optional: true }), forwarded: true }; }
       B.writeMemory(t.id, str(text, 'memoria', 64 * 1024, { optional: true }), { mode: 'replace', person: t.person, which: t.which, board, actor: me(who) });
       if (t.id !== 'global') changed(t.id);
       return { id: t.id, which: t.which, text: B.readMemory(t.id, { person: t.person, which: t.which }) };
@@ -314,12 +369,21 @@ export function botMethods({ board, emit, remoteRef, bots, setShare, removeShare
       return protectedList();
     },
     // 3.6: each person's own reminders (of their bots and of the ones shared with them).
-    'bots.reminders.list': ({ id, all }, who) => B.listReminders(board, { bot: id ? botId(id, who) : null, all: all === true, person: scoped(who) ? who.person : null }),
-    'bots.reminders.create': ({ id, text, when, every, weekdays, tz, skip_missed }, who) => {
+    // 3.7: each reminder with its uid (the phone keeps one per uid) and executor: whether this Orb rings it (only the home
+    // of its bot does; the phone schedules only those).
+    'bots.reminders.list': ({ id, all }, who) => B.listReminders(board, { bot: id ? botId(id, who) : null, all: all === true, person: scoped(who) ? who.person : null })
+      .map((r) => { const row = rowOf(r.bot_id); return { ...r, executor: Boolean(row && isHomeHere(board, row) && (row.home_state ?? 'active') === 'active') }; }),
+    'bots.reminders.create': async ({ id, text, when, every, weekdays, tz, skip_missed }, who) => {
+      const row = rowOf(botId(id, who));
+      if (elsewhere(row)) { const r = await viaHome(row, 'bots.reminders.create', { text, when, every: every ?? 'once', weekdays: weekdays ?? [], tz: typeof tz === 'string' ? tz : null, skip_missed: skip_missed !== false }, who); return { forwarded: Boolean(r.forwarded), queued: Boolean(r.queued), bot_id: row.id }; }
       const r = B.createReminder(board, { bot_id: botId(id, who), text, when, every: every ?? 'once', weekdays: weekdays ?? [], tz: typeof tz === 'string' ? tz : null, skip_missed: skip_missed !== false }, 'usuario', { person: me(who) });
       changed(r.bot_id); return r;
     },
-    'bots.reminders.cancel': ({ id }, who) => { const r = B.cancelReminder(board, int(id, 'recordatorio'), { person: scoped(who) ? who.person : null }); changed(r.bot_id); return r; },
+    'bots.reminders.cancel': async ({ id }, who) => {
+      const rem = B.getReminder(board, int(id, 'recordatorio')); const row = rem ? rowOf(rem.bot_id) : null;
+      if (elsewhere(row)) { if (scoped(who) && B.personOf(board, rem) !== who.person) fail(tr('msg.bots.noReminder')); const r = await viaHome(row, 'bots.reminders.cancel', {}, who, { reminder: rem.uid }); return { ...rem, forwarded: Boolean(r.forwarded), queued: Boolean(r.queued) }; }
+      const r = B.cancelReminder(board, int(id, 'recordatorio'), { person: scoped(who) ? who.person : null }); changed(r.bot_id); return r;
+    },
     // Home Assistant: its address in the settings, its token in the database (PC only: not in the phone's list).
     'bots.ha.get': () => { const h = B.haConfig(board); return { url: h.url, hasToken: Boolean(h.token) }; },
     // 3.5 (interface): «Casa» and «Servidor» of the Bots mode, read only. Home Assistant not set: { configured: false }.
@@ -358,6 +422,34 @@ export function botMethods({ board, emit, remoteRef, bots, setShare, removeShare
       }
       return { conversation: conv, lines: n };
     },
+    // ---- 3.7 (WS3): one home per bot (src/engine/replica.mjs)
+    // Where a bot can run: this Orb and every linked Orb of 3.7 ({ key, name, here, online, server, brains }).
+    'bots.homes': () => replica()?.homes() ?? [],
+    // «Pasar al PC» / «Pasar al Server»: id, to (an Orb's identity from bots.homes, or 'here'), force (its home is off:
+    // take it over here), group ('group' | 'leave'), brain ({ agent, model }). → { ok, step?: 'group' | 'brain' | 'confirm', … }
+    'bots.move': async ({ id, to, force, group, brain }, who) => {
+      if (!replica()) fail(tr('msg.bots.off'));
+      const row = rowOf(botId(id, who));
+      const r = await replica().move(row.id, str(to ?? 'here', 'lugar', 64), { force: force === true, group: group == null ? null : oneOf(group, ['group', 'leave'], 'grupo'), brain: brain && typeof brain === 'object' ? { agent: str(brain.agent, 'cerebro', 40), model: brain.model ? str(brain.model, 'modelo', 80) : null } : null });
+      changed(row.id); return r;
+    },
+    // A copy whose home is gone (unlinked, a server reinstalled): it runs here (to: here) or on a new Orb.
+    'bots.restore': async ({ id, to }, who) => { if (!replica()) fail(tr('msg.bots.off')); const row = rowOf(botId(id, who)); const r = await replica().restore(row.id, to ? str(to, 'lugar', 64) : null); changed(row.id); return r; },
+    // Two bots of the same name after a move: survivor keeps its memory; the other's becomes proposals, it is archived.
+    'bots.merge': async ({ survivor, other }, who) => {
+      if (!replica()) fail(tr('msg.bots.off'));
+      const a = rowOf(botId(survivor, who)); const b = rowOf(botId(other, who));
+      if (elsewhere(a)) { await viaHome(a, 'bots.merge', {}, who, { other: b.uid }); return { ok: true, forwarded: true }; }
+      const r = replica().merge(a.id, b.id); changed(a.id); return r;
+    },
+    // «Es el mismo bot»: a bot here (left paused by «Llevar mis bots» of 3.6) is the copy of one run on a linked Orb (uid).
+    'bots.sameBot': ({ id, uid }, who) => { if (!replica()) fail(tr('msg.bots.off')); const r = replica().sameBot(botId(id, who), str(uid, 'uid', 40)); changed(null); return r; },
+    // Unlink an Orb that runs bots: mode 'bring' (every bot of the caller comes here first), 'leave' (they stay there;
+    // frozen copies here, «Restaurar aquí»), 'cancel'.
+    'bots.unlink': async ({ peer, mode }, who) => { if (!replica()) fail(tr('msg.bots.off')); const r = await replica().unlink(str(peer, 'enlace', 80), oneOf(mode, ['bring', 'leave', 'cancel'], 'modo'), scoped(who)); changed(null); return r; },
+    // The sync of the copies with each linked Orb (owner): peers, the moves' journal, what waits.
+    'replica.status': () => replica()?.status() ?? { peers: [], moves: [], queued: 0 },
+    'replica.sync': async () => replica()?.syncNow() ?? { peers: [] },
     // 3.5: where this person's bots live ('local' or a linked Orb that keeps bots) and the Orbs that could keep them.
     'bots.where': (p, who) => botsWhere(me(who)),
     // 3.5: move the bots: location 'local' or a linked Orb's id; bring: copy the bots there (with their memories and

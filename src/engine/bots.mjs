@@ -28,6 +28,7 @@ import * as B from '../core/bots.mjs';
 import { isMuted } from '../core/inbox.mjs';
 import { runServerAction, haFetch } from '../core/server-admin.mjs';
 import { runPcAction } from '../core/pc-actions.mjs';
+import { isHomeHere, takesTurns, HOME_SQL } from '../core/replica.mjs';
 
 const MAX_HOPS = 6; // messages in a row between bots without the user (no endless ping-pong)
 // 3.5.1: and all the turns that one message of the user (or a reminder, or a card's answer) may set off among the bots,
@@ -40,6 +41,8 @@ export const GRANT_MS = 10 * 60_000;
 // 3.6: the cards that need a typed PIN (a strong ticket) when their approver has one.
 // The bot fields a card may change, in the user's words (msg.bots.field.*).
 const FIELD_LABEL = { name: 'name', role_text: 'role', tools: 'tools', agent: 'brain', model: 'brain', reasoning: 'brain', account: 'brain', accounts: 'apps', icon: 'look', avatar: 'look', is_chief: 'chief', paused: 'state', caps: 'limits', sharing: 'sharing' };
+// «hace 3 h» / «hace 20 min» / «hace 2 días» for a message that waited.
+const agoWords = (ms) => { const m = Math.round(ms / 60_000); return m < 60 ? tr('msg.home.agoMin', { n: m }) : m < 48 * 60 ? tr('msg.home.agoH', { n: Math.round(m / 60) }) : tr('msg.home.agoDays', { n: Math.round(m / 1440) }); };
 const listWords = (items) => (items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')}${tr('msg.bots.and')}${items.at(-1)}`);
 export const SENSITIVE_CARDS = new Set(['ha', 'pc', 'srv', 'admin', 'confirm']);
 export const isSensitiveCard = (meta) => Boolean(meta && SENSITIVE_CARDS.has(meta.card) && !(meta.card === 'admin' && meta.payload?.action === 'pause'));
@@ -264,7 +267,12 @@ class Lane {
   async run(item) {
     let bot = this.bot();
     if (!bot) return null;
+    // 3.7 (WS3): only the bot's home runs it. A copy of a bot run on another Orb never thinks here (its messages went
+    // there); one being handed over keeps what came now for its new home (Bots.hold).
+    if (!isHomeHere(this.board, bot)) { this.mgr.log(`bot ${bot.id}: no se ejecuta aquí (${bot.home})`); return null; }
+    if (!takesTurns(this.board, bot)) { this.mgr.hold(bot, item, this.person); return null; }
     const notify = [this.person];
+    const handoff = this.mgr.takeHandoff(bot.id, this.person);
     // 3.5.1: one message of the user may set off at most MAX_TREE turns among the bots, however they branch out.
     if (item.tree && ++item.tree.turns > MAX_TREE) { if (!item.tree.told) { item.tree.told = true; this.mgr.say('system', tr('msg.bots.tooManyTurns', { n: MAX_TREE }), { bot: this.id }, item.conv, { notify }); } return null; }
     if (bot.paused) { this.mgr.say('system', tr('msg.bots.isPaused', { name: bot.name }), { bot: bot.id }, item.conv, { notify }); return null; }
@@ -286,7 +294,8 @@ class Lane {
     const intro = fresh && this.liveAgent !== 'claude' ? `${botPersona(this.board, bot, { person: this.person })}\n\n` : '';
     const recent = fresh ? this.recent(item.conv) : '';
     const where = viaNote(item.via, nameOf(this.board, this.person));
-    const prompt = `${intro}${recent ? `## Lo último de esta conversación\n${recent}\n\n## Mensaje\n` : ''}${where ? `${where}\n\n` : ''}${item.text}`;
+    // 3.7: a bot that just moved here starts a new live session, told what was said before and what it remembers.
+    const prompt = `${intro}${handoff ? `${handoff}\n\n## Mensaje\n` : recent ? `## Lo último de esta conversación\n${recent}\n\n## Mensaje\n` : ''}${where ? `${where}\n\n` : ''}${item.text}`;
     this.setSession({ turns: (sess.turns ?? 0) + 1 });
     const generation = this.generation;
     const live = this.live;
@@ -314,6 +323,9 @@ export class Bots {
     this.board = board; this.emit = emit; this.log = log; this.pushNote = push;
     this.lanes = new Map(); this.toolCards = new Map(); this.closing = false;
     this.onRevoke = null; // 3.6: set by the engine (WS2's router): a person's streams of a resource end when it is unshared
+    // 3.7 (WS3), set by the engine (src/engine/replica.mjs): a message to a bot run on another Orb goes there (or waits in
+    // the link's queue); onHeld: a bot being moved got a message (kept for its new home).
+    this.crossSend = null; this.onHeld = null;
   }
   start() {
     try { B.seedStarter(this.board); } catch (error) { this.log(`bots: ${error.message}`); }
@@ -334,8 +346,8 @@ export class Bots {
   // conversation) and, for the bots' own lines, cards and questions, pushed to the phones. 3.6: author: who wrote it
   // (person_id of the line); notify: who gets the push (default: everyone who sees the conversation; cards: their
   // approvers only).
-  say(role, body, meta, conv, { author = null, notify = null, pushAlways = false } = {}) {
-    const line = this.board.addChat(role, body, meta, conv, { person: author });
+  say(role, body, meta, conv, { author = null, notify = null, pushAlways = false, uid = null } = {}) {
+    const line = this.board.addChat(role, body, meta, conv, { person: author, uid });
     const payload = { id: line.id, conversation: conv, role, body: oneLine(body, 600), meta };
     this.emit('bot.message', payload);
     if (pushAlways || (role === 'bot' && meta?.kind !== 'relay') || meta?.kind === 'bot_card' || meta?.kind === 'bot_question') {
@@ -355,17 +367,25 @@ export class Bots {
   updated(id = null) { this.emit('bot.updated', { id }); }
 
   // ---- people talk. 3.6: person: who writes (their own conversation with this bot; default: the bot's person).
-  send(botId, text, { conversation = null, via = null, person = null } = {}) {
+  // 3.7 (WS3): uid / sentAt: a message written on a copy of this bot on another Orb (forwarded here, maybe hours later):
+  // the line keeps its uid and the bot is told when it was sent.
+  send(botId, text, { conversation = null, via = null, person = null, uid = null, sentAt = null } = {}) {
     const bot = B.mustBot(this.board, botId, person ? { person } : {});
     const who = this.talkerOr(person);
     const body = String(text ?? '').trim();
     if (!body) throw userError(tr('msg.orch.writeMessage'));
     if (body.length > 20000) throw userError(tr('msg.orch.tooLong'));
     if (bot.paused) throw userError(tr('msg.bots.isPaused', { name: bot.name }));
+    if (!isHomeHere(this.board, bot)) throw userError(tr('msg.home.runsElsewhere', { name: bot.name }));
     const own = B.botConversation(this.board, bot, { person: who });
     const conv = conversation && B.conversationOwner(this.board, conversation)?.person === who ? conversation : own;
-    this.say('usuario', body, null, conv, { author: who });
-    this.lane(bot.id, who).enqueue({ text: body, conv, from: 'usuario', via });
+    // The same message sent again (its home did not answer in time the first time): taken once.
+    const have = uid ? this.board.one('SELECT id FROM chat WHERE uid = ?', String(uid)) : null;
+    if (have) return { conversation: conv, bot: bot.id, again: true };
+    this.say('usuario', body, null, conv, { author: who, uid });
+    const ago = sentAt ? Date.now() - Date.parse(sentAt) : 0;
+    const late = ago > 120_000 ? `${tr('msg.home.sentAgo', { when: agoWords(ago) })} ` : '';
+    this.lane(bot.id, who).enqueue({ text: `${late}${body}`, conv, from: 'usuario', via });
     return { conversation: conv, bot: bot.id };
   }
   // The group gets the message; its bots answer one after another (the chief first), each seeing the answers before it.
@@ -381,7 +401,9 @@ export class Bots {
     const groupOwner = B.personOf(this.board, g);
     const conv = B.groupConversation(this.board, g.id);
     this.say('usuario', body, null, conv, { author: who });
-    const active = B.groupMembers(this.board, g.id).filter((b) => !b.paused && rank(rightOn(this.board, groupOwner, { type: 'bot', id: b.id })) >= rank('talk'));
+    // 3.7: a group lives on one home; only its members run there answer.
+    if (!isHomeHere(this.board, g)) throw userError(tr('msg.home.runsElsewhere', { name: g.name }));
+    const active = B.groupMembers(this.board, g.id).filter((b) => !b.paused && isHomeHere(this.board, b) && rank(rightOn(this.board, groupOwner, { type: 'bot', id: b.id })) >= rank('talk'));
     const mentioned = B.mentionedMembers(body, active);
     const members = mentioned.length ? mentioned : active;
     const author = nameOf(this.board, who);
@@ -416,6 +438,13 @@ export class Bots {
     const who = this.talkerOr(person);
     if (!to || to.paused) throw new Error(tr('sys.botmcp.paused', { name: to?.name ?? String(p.to) }));
     if (!reachableBots(this.board, from, who).some((b) => b.id === to.id)) throw new Error(tr('msg.bots.noBot', { name: to.name }));
+    // 3.7: a bot run on another Orb gets it there (queued in the link while that Orb is off); its answer stays in its chat.
+    if (!isHomeHere(this.board, to)) {
+      if (!this.crossSend) throw new Error(tr('msg.home.runsElsewhere', { name: to.name }));
+      this.say('bot', p.text, this.botMeta(from, { kind: 'relay', to: to.id, topic: p.topic ?? undefined, crossHome: true }), conv);
+      this.crossSend(from, to, { text: p.text, topic: p.topic ?? null }, who);
+      return to;
+    }
     const target = B.botConversation(this.board, to, { person: who });
     this.say('bot', p.text, this.botMeta(from, { kind: 'relay', to: to.id, topic: p.topic ?? undefined }), target);
     this.lane(to.id, who).enqueue({ text: `MENSAJE DE ${from.name} (otro bot${p.topic ? `, tema: ${p.topic}` : ''}). Hazlo según tu papel y contesta: tu respuesta le llegará.\n${p.text}`, conv: target, from: from.id, hops,
@@ -442,7 +471,8 @@ export class Bots {
 
   // ---- requests from the bots' tools (another process): messages to deliver and cards to show
   processRequests() {
-    for (const r of this.board.all("SELECT * FROM bot_requests WHERE status = 'pending' ORDER BY id LIMIT 50")) {
+    // 3.7: only the requests of the bots run here (a replica's copies of its home's requests are never handled here).
+    for (const r of this.board.all(`SELECT r.* FROM bot_requests r JOIN bots b ON b.id = r.bot_id WHERE r.status = 'pending' AND ${HOME_SQL('b')} ORDER BY r.id LIMIT 50`)) {
       let payload = {}; try { payload = JSON.parse(r.payload); } catch { /* empty */ }
       try { this.handle(r, payload); } catch (error) { B.setRequest(this.board, r.id, 'failed', oneLine(error.message, 500)); this.log(`bots: petición ${r.id}: ${error.message}`); }
     }
@@ -530,6 +560,8 @@ export class Bots {
     const row = this.board.chatRow(chatId);
     const m = row?.meta;
     if (!m || m.kind !== 'bot_card' || m.status !== 'pending') throw userError(tr('msg.bots.cardGone'));
+    // 3.7: a card of a bot run on another Orb is answered there (the API forwards it; never run here).
+    { const cb = B.getBot(this.board, m.bot); if (cb && !isHomeHere(this.board, cb)) throw userError(tr('msg.home.runsElsewhere', { name: cb.name })); }
     const allow = decision === 'allow';
     if (allow && this.mayAnswer(m, principal) !== true) throw userError(tr('msg.bots.notApprover'));
     if (allow && by && !by.approve) throw userError(tr('msg.bots.cannotApprove'));
@@ -600,7 +632,7 @@ export class Bots {
   }
   // An engine notice to a bot (a card was decided): a turn of its own, in the conversation of the card, for that person.
   tell(botId, conv, text, person = null) {
-    const bot = B.getBot(this.board, botId); if (!bot || bot.paused) return;
+    const bot = B.getBot(this.board, botId); if (!bot || bot.paused || !isHomeHere(this.board, bot)) return;
     const who = this.talkerOr(person);
     this.lane(bot.id, who).enqueue({ text: `AVISO DEL SISTEMA (no es ${nameOf(this.board, who)}): ${text}`, conv, from: 'sistema' });
   }
@@ -649,5 +681,78 @@ export class Bots {
     this.closeIdle();
   }
   drop(id) { for (const l of this.lanesOf(id)) { l.stop(); l.closeLive(); this.lanes.delete(`${l.id}:${l.person}`); } }
+
+  // ---- 3.7 (WS3): moving a bot to another Orb
+  // Whether a turn of the bot is running (any person's lane).
+  busyWith(id) { return this.lanesOf(id).some((l) => l.busy); }
+  // A message that came while the bot is being handed over: kept (in the database, so a crash loses nothing) for its
+  // new home, which runs it after the move.
+  hold(bot, item, person) {
+    if (!item?.text || item.from !== 'usuario') { item?.resolve?.(null); return; }
+    const key = `bot_held:${bot.uid}`;
+    const list = this.board.settingJson(key) ?? [];
+    list.push({ person: person ?? this.owner(), text: String(item.text).slice(0, 20000), via: item.via ?? null, group: item.group ?? null, at: new Date().toISOString() });
+    this.board.settingJson(key, list.slice(-50));
+    try { this.onHeld?.(bot, person); } catch { /* best effort */ }
+  }
+  // The messages already waiting in its lanes when the move starts: kept the same way (stopping a lane drops its queue).
+  holdQueued(id) {
+    const bot = B.getBot(this.board, id); if (!bot) return 0;
+    let n = 0;
+    for (const l of this.lanesOf(id)) {
+      const keep = l.queue.filter((q) => q.from === 'usuario');
+      l.queue = l.queue.filter((q) => q.from !== 'usuario');
+      for (const q of keep) { this.hold(bot, q, l.person); q.resolve?.(null); n++; }
+    }
+    return n;
+  }
+  takeHeld(uid) { const key = `bot_held:${uid}`; const list = this.board.settingJson(key) ?? []; this.board.run('DELETE FROM settings WHERE key = ?', key); return list; }
+  // The note a bot that moved here gets on its first turn with each person: where it comes from, its last 30 lines with
+  // that person and that its pending cards were cancelled (its memories already go in its prompt as notes).
+  takeHandoff(id, person) {
+    const key = `bot_handoff:${Number(id)}`;
+    const h = this.board.settingJson(key); if (!h) return '';
+    const done = new Set(h.done ?? []); if (done.has(person)) return '';
+    done.add(person); this.board.settingJson(key, { ...h, done: [...done] });
+    const bot = B.getBot(this.board, id); if (!bot) return '';
+    const conv = B.botConversation(this.board, bot, { person });
+    const lines = this.board.all("SELECT role, body, meta, person_id FROM chat WHERE conversation_id = ? AND role IN ('usuario', 'bot') ORDER BY id DESC LIMIT 31", conv).reverse().slice(0, -1)
+      .map((r) => `${r.role === 'usuario' ? nameOf(this.board, r.person_id ?? person) : bot.name}: ${oneLine(r.body, 300)}`);
+    return [`AVISO DEL SISTEMA: te han pasado de ${h.from || 'otro Orb'} a este Orb. Empiezas una conversación nueva con tu cerebro, así que aquí tienes lo último que se habló (tus memorias siguen en tus notas).`,
+      lines.length ? `## Lo último de esta conversación\n${lines.join('\n')}` : '',
+      h.cancelled ? 'Las tarjetas que tenías pendientes se cancelaron al pasar: si aún hacen falta, vuelve a pedirlas.' : ''].filter(Boolean).join('\n\n');
+  }
+  // 3.7: a turn for a message whose line is already in the chat (it came with a move, or was sent to this home from a
+  // copy of the bot on another Orb).
+  turn(botId, text, { person = null, via = null, sentAt = null } = {}) {
+    const bot = B.getBot(this.board, botId); if (!bot || bot.paused || !isHomeHere(this.board, bot)) return null;
+    const who = this.talkerOr(person);
+    const conv = B.botConversation(this.board, bot, { person: who });
+    const ago = sentAt ? Date.now() - Date.parse(sentAt) : 0;
+    this.lane(bot.id, who).enqueue({ text: `${ago > 120_000 ? `${tr('msg.home.sentAgo', { when: agoWords(ago) })} ` : ''}${text}`, conv, from: 'usuario', via });
+    return conv;
+  }
+  // 3.7: a message from a bot run on another Orb (bot_send across homes): a line in this bot's chat and a turn of its own.
+  relayIn(botId, { from, text, topic = null, person = null }) {
+    const bot = B.getBot(this.board, botId); if (!bot || bot.paused || !isHomeHere(this.board, bot)) throw userError(tr('sys.botmcp.paused', { name: bot?.name ?? '' }));
+    const who = this.talkerOr(person);
+    const conv = B.botConversation(this.board, bot, { person: who });
+    this.say('bot', String(text), { kind: 'relay', name: oneLine(String(from ?? ''), 60), to: bot.id, topic: topic ?? undefined, crossHome: true }, conv);
+    this.lane(bot.id, who).enqueue({ text: `MENSAJE DE ${oneLine(String(from ?? ''), 60)} (otro bot, de otro Orb${topic ? `, tema: ${topic}` : ''}). Hazlo según tu papel; tu respuesta queda en tu chat.\n${text}`, conv, from: 'bot', tree: { turns: 0 } });
+    return conv;
+  }
+  // The cards of a bot that is leaving: cancelled (its new home asks again), its one-time OKs dropped. → how many
+  cancelCards(id) {
+    let n = 0;
+    const rows = this.board.all("SELECT id FROM chat WHERE meta LIKE '%bot_card%' AND meta LIKE '%pending%' ORDER BY id DESC LIMIT 500").map((x) => this.board.chatRow(x.id));
+    for (const r of rows) {
+      if (r?.meta?.kind !== 'bot_card' || r.meta.status !== 'pending' || Number(r.meta.bot) !== Number(id)) continue;
+      this.patch(r, { status: 'expired', moved: true }); n++;
+    }
+    this.board.run("UPDATE bot_requests SET status = 'expired', result = 'bot movido' WHERE bot_id = ? AND status IN ('pending', 'waiting')", Number(id));
+    this.board.run('DELETE FROM settings WHERE key = ?', `bot_grant:${Number(id)}`);
+    for (const k of [...this.toolCards.keys()]) if (k.startsWith(`${Number(id)}:`)) this.toolCards.delete(k);
+    return n;
+  }
   shutdown() { this.closing = true; clearInterval(this.timer); for (const l of this.lanes.values()) { l.stop(); l.closeLive(); } }
 }
