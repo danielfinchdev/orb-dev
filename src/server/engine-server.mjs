@@ -54,6 +54,8 @@ export function createServerEngine({ send }) {
       router.add('link', (event, payload, audience, to) => { const p = botRelay(board, event, payload); if (p) link?.relay(event, p, (pid) => to(pid ?? ownerOfBoard(board))); });
       // 3.7 (WS5): the browser closes the pages of a task that ended.
       router.add('serverBrowser', (event, payload) => { if (event === 'agentBrowser:closeTask') ctx.serverBrowser?.closeTask(payload?.task); });
+      // 3.7 (WS9): «Conexiones» follows the links' own events (one connections:changed a moment later).
+      { const { connectionsSink } = await import('../engine/api-connections.mjs'); router.add('connections', connectionsSink(emit)); }
     }
     const remoteRef = { current: null };
     const { Bots } = await import('../engine/bots.mjs');

@@ -90,6 +90,12 @@ export async function adbConnect(adb, hostport) {
   const r = await run(adb, ['connect', hostport], 20000);
   return { ok: /connected to/i.test(r.out) && !/fail|unable|cannot/i.test(r.out), detail: (r.out || r.err).trim().slice(0, 300) };
 }
+// 3.7 (WS9): «Desconectar ADB» in Conexiones (only while the adb of the user's session is running; never in tests).
+export async function adbDisconnect(adb, serial) {
+  if (!SERIAL.test(serial)) throw new Error('bad device');
+  const r = await run(adb, ['disconnect', serial], 10000);
+  return { ok: r.ok && !/error|no such/i.test(r.out), detail: (r.out || r.err).trim().slice(0, 300) };
+}
 // How a paired device is: model, Android, battery, memory, storage and the apps using the most memory.
 export async function adbInfo(adb, serial) {
   if (!SERIAL.test(serial)) throw new Error('bad device');
