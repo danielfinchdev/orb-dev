@@ -3,17 +3,17 @@
 // sign-in without a console, their devices, and exporting or deleting their data). On a phone, «Mi perfil» is a screen.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { UserPlus, Pencil, Trash2, KeyRound, PauseCircle, PlayCircle, Unplug, ShieldCheck, LogIn, Download, Smartphone, UserRound, ExternalLink, Plus, LoaderCircle } from 'lucide-react';
+import { UserPlus, Pencil, Trash2, KeyRound, PauseCircle, PlayCircle, Unplug, ShieldCheck, LogIn, Download, Smartphone, UserRound, ExternalLink, Plus, LoaderCircle, MoreHorizontal } from 'lucide-react';
 import { PageHeader } from '@/components/page.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input } from '@/components/ui/basic.jsx';
-import { Select, Checkbox, BubbleTip } from '@/components/ui/overlay.jsx';
+import { Select, Checkbox, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { PersonDot, askPin } from '@/components/person-menu.jsx';
 import { useStore, call, act, bridge, loadMe, refresh, personNameOf } from '@/lib/store.js';
 import { CAPS, PREVIEWS, pinOk } from '@/lib/persons.js';
 import { ago } from '@/lib/utils.js';
-import { t as tNow, useT } from '@/lib/i18n.js';
+import { t as tNow, useT, useLocale } from '@/lib/i18n.js';
 import { LANGUAGES } from '../../core/i18n.mjs';
 
 const zones = () => { try { return Intl.supportedValuesOf('timeZone'); } catch { return ['UTC', 'Europe/Madrid', 'Europe/London', 'America/New_York']; } };
@@ -37,9 +37,16 @@ async function addPerson(reload) {
   if (r) { toast.success(tNow('persons.added', { name: r.name })); reload(); }
 }
 
+// 3.6 (DESIGN-SYSTEM §2.3): one row per user: avatar, name, «Admin» for the admin, one summary line and at most three
+// counts that matter (bots, chats, projects; numbers only, never what). The actions in one menu: Editar, Permisos,
+// Quitar PIN, Pausar bots or Reanudar bots (the one that applies), and Eliminar after a separator.
+export const ROW_COUNTS = ['bots', 'conversations', 'projects'];
+export function plural(locale, key, n) { let form = 'other'; try { form = new Intl.PluralRules(locale).select(n); } catch { /* other */ } return form === 'one' ? `${key}One` : key; }
 function PersonRow({ p, devices, reload }) {
   const t = useT();
+  const locale = useLocale();
   const owner = p.role === 'owner';
+  const [paused, setPaused] = useState(() => (p.counts?.bots ?? 0) > 0 && (p.counts?.botsPaused ?? 0) >= (p.counts?.bots ?? 0));
   const rename = () => form(t('persons.renameTitle'), { initial: { name: p.name }, body: (v, set) => <Input autoFocus value={v.name} maxLength={40} onChange={(e) => set({ name: e.target.value })} />, ok: t('persons.save'), onOk: async (v) => { await call('persons.rename', { id: p.id, name: v.name.trim() }); reload(); return true; } });
   const caps = () => form(t('persons.capsTitle', { name: p.name }), {
     initial: { ...p.caps },
@@ -47,7 +54,7 @@ function PersonRow({ p, devices, reload }) {
     ok: t('persons.save'), onOk: async (v) => { await call('persons.setCaps', { id: p.id, caps: v }); reload(); return true; }
   });
   const resetPin = async () => { if (await confirm(t('persons.resetPinTitle', { name: p.name }), t('persons.resetPinBody'), { ok: t('persons.resetPin') })) { await act(call('persons.setPin', { id: p.id, pin: null }), t('persons.pinReset', { name: p.name })); reload(); } };
-  const pause = async (paused) => { const r = await act(call('persons.pauseBots', { id: p.id, paused })); if (r) toast.success(t(paused ? 'persons.botsPaused' : 'persons.botsResumed', { n: r.bots, name: p.name })); };
+  const pause = async (next) => { const r = await act(call('persons.pauseBots', { id: p.id, paused: next })); if (r) { setPaused(next); toast.success(t(next ? 'persons.botsPaused' : 'persons.botsResumed', { n: r.bots, name: p.name })); } };
   const revokeAll = async () => {
     if (!devices.length || !(await confirm(t('persons.revokeTitle', { name: p.name }), t('persons.revokeBody', { n: devices.length }), { ok: t('persons.revoke'), danger: true }))) return;
     for (const d of devices) await call('link.revoke', { id: d.id }).catch(() => {});
@@ -58,31 +65,34 @@ function PersonRow({ p, devices, reload }) {
     if (await act(call('persons.remove', { id: p.id }), t('persons.removed', { name: p.name }))) reload();
   };
   const c = p.counts ?? {};
-  const count = (key, n) => t(n === 1 ? `${key}One` : key, { n });
+  const count = (key, n) => t(plural(locale, key, n), { n });
+  const summary = [count('persons.devicesN', p.devices ?? 0), p.lastSeen ? t('persons.seen', { when: ago(p.lastSeen) }) : null].filter(Boolean).join(' · ');
+  const counts = ROW_COUNTS.filter((k) => c[k]).map((k) => count(`persons.count.${k}`, c[k]));
+  const hasBots = (c.bots ?? 0) > 0;
   return (
-    <div className="grid gap-2 rounded-xl border px-3 py-2.5" data-testid={`person-row-${p.name}`}>
-      <div className="flex min-w-0 items-center gap-3">
-        <PersonDot name={p.name} />
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-2"><span className="truncate text-sm font-medium">{p.name}</span><Badge variant={owner ? 'default' : 'outline'}>{t(`persons.role.${p.role}`)}</Badge>{p.hasPin ? <Badge variant="secondary" className="font-normal">{t('persons.hasPin')}</Badge> : null}</div>
-          <div className="text-muted-foreground truncate text-xs">{[count('persons.devicesN', p.devices ?? 0), p.lastSeen ? t('persons.seen', { when: ago(p.lastSeen) }) : null, count('persons.todayTurns', p.today?.turns ?? 0)].filter(Boolean).join(' · ')}</div>
-        </div>
-        <BubbleTip title={t('persons.rename')}><Button size="icon-sm" variant="ghost" aria-label={t('persons.rename')} onClick={rename}><Pencil /></Button></BubbleTip>
-        {owner ? null : <BubbleTip title={t('persons.remove')}><Button size="icon-sm" variant="danger" aria-label={t('persons.remove')} onClick={remove} data-testid={`person-remove-${p.name}`}><Trash2 /></Button></BubbleTip>}
+    <div className="flex min-w-0 items-center gap-3 rounded-xl border px-3 py-2.5" data-testid={`person-row-${p.name}`}>
+      <PersonDot name={p.name} color={p.color} />
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-2"><span className="truncate text-sm font-medium">{p.name}</span>{owner ? <Badge variant="secondary">{t('persons.role.owner')}</Badge> : null}</div>
+        <div className="text-muted-foreground truncate text-xs tabular-nums" data-testid="person-summary">{summary}</div>
+        {/* Numbers only: how many, never what. */}
+        {counts.length ? <div className="text-muted-foreground truncate text-xs tabular-nums" data-testid="person-counts">{counts.join(' · ')}</div> : null}
       </div>
-      {/* Numbers only: how many, never what. */}
-      <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5 text-[11.5px]" data-testid="person-counts">
-        {['bots', 'groups', 'conversations', 'tasks', 'projects', 'schedules', 'reminders'].filter((k) => c[k]).map((k) => <span key={k}>{count(`persons.count.${k}`, c[k])}</span>)}
-      </div>
-      {owner ? null : (
-        <div className="flex flex-wrap gap-1.5">
-          <Button size="xs" variant="outline" onClick={caps} data-testid={`person-caps-${p.name}`}><ShieldCheck />{t('persons.caps')}</Button>
-          {p.hasPin ? <Button size="xs" variant="outline" onClick={resetPin}><KeyRound />{t('persons.resetPin')}</Button> : null}
-          <Button size="xs" variant="outline" onClick={() => pause(true)}><PauseCircle />{t('persons.pauseBots')}</Button>
-          <Button size="xs" variant="ghost" onClick={() => pause(false)}><PlayCircle />{t('persons.resumeBots')}</Button>
-          {devices.length ? <Button size="xs" variant="outline" onClick={revokeAll}><Unplug />{t('persons.revokeDevices')}</Button> : null}
-        </div>
-      )}
+      <DropdownMenu>
+        <BubbleTip title={t('persons.actions', { name: p.name })}>
+          <DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" aria-label={t('persons.actions', { name: p.name })} data-testid={`person-menu-${p.name}`}><MoreHorizontal /></Button></DropdownMenuTrigger>
+        </BubbleTip>
+        <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuItem onSelect={rename} data-testid={`person-rename-${p.name}`}><Pencil />{t('persons.edit')}</DropdownMenuItem>
+          {owner ? null : <DropdownMenuItem onSelect={caps} data-testid={`person-caps-${p.name}`}><ShieldCheck />{t('persons.caps')}</DropdownMenuItem>}
+          {!owner && p.hasPin ? <DropdownMenuItem onSelect={resetPin} data-testid={`person-pin-${p.name}`}><KeyRound />{t('persons.resetPin')}</DropdownMenuItem> : null}
+          {!owner && hasBots ? (paused
+            ? <DropdownMenuItem onSelect={() => pause(false)} data-testid={`person-resume-${p.name}`}><PlayCircle />{t('persons.resumeBots')}</DropdownMenuItem>
+            : <DropdownMenuItem onSelect={() => pause(true)} data-testid={`person-pause-${p.name}`}><PauseCircle />{t('persons.pauseBots')}</DropdownMenuItem>) : null}
+          {!owner && devices.length ? <DropdownMenuItem onSelect={revokeAll}><Unplug />{t('persons.revokeDevices')}</DropdownMenuItem> : null}
+          {owner ? null : <><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onSelect={remove} data-testid={`person-remove-${p.name}`}><Trash2 />{t('persons.remove')}</DropdownMenuItem></>}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

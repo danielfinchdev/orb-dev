@@ -28,7 +28,7 @@ import { adbStatus, ensureAdb, adbPath, markAdbUsed } from './android.mjs';
 import * as net from '../core/network.mjs';
 import { spawn } from 'node:child_process';
 import { mcpFolder } from './mcp-folder.mjs';
-import { modelCatalog, chooseModel, LEVELS } from './catalog.mjs';
+import { modelCatalog, chooseModel, LEVELS, REASONING_LEVELS, levelsOf } from './catalog.mjs';
 import { whiteboard } from './whiteboard.mjs';
 import { opti } from './opti.mjs';
 import { readOce } from './bridge.mjs';
@@ -352,6 +352,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return orchestrator.ask(t, expandMentions(board, sessions, t, { principal: scopeOf(who) }), { conversation: id, project: proj, person: who?.channel === 'system' ? null : who?.person ?? null });
     },
     'chat.stop': ({ conversation }) => orchestrator.stop(conversationId(conversation)),
+    // 3.6: «Compactar»: the conversation's coordinator compacts its own context (or starts afresh with the briefing and
+    // its last lines when its agent cannot). → { ok, how: 'compacted' | 'renewed' }
+    'chat.compact': ({ conversation }) => orchestrator.compact(conversationId(conversation)),
     // 3.2: rename, change the project of a conversation, mark it done or open it again.
     'conversations.update': ({ id, title, project: name, done }) => {
       const c = conversationId(id);
@@ -490,7 +493,14 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
         if (m && !/^[A-Za-z0-9][\w.:\-/[\]=,@]{0,79}$/.test(m)) fail(tr('msg.api.modelUnavailable'));
         patch.model = m || (brain === 'claude' ? 'claude-sonnet-5-5' : '');
       } else if (patch.agent && patch.agent !== (base.agent ?? 'claude')) patch.model = brain === 'claude' ? 'claude-sonnet-5-5' : '';
-      if (reasoning !== undefined) patch.reasoning = oneOf(reasoning, ['low', 'medium', 'high'], 'razonamiento');
+      if (reasoning !== undefined) patch.reasoning = oneOf(reasoning, REASONING_LEVELS, 'razonamiento');
+      // 3.6: «Extra» (xhigh) only with a model that takes it; changing to a model without it leaves «Alto».
+      if ((patch.reasoning ?? base.reasoning) === 'xhigh' && (reasoning !== undefined || patch.model !== undefined || patch.agent !== undefined)) {
+        if (!levelsOf(modelCatalog(board), brain, patch.model ?? base.model, patch.account ?? base.account).includes('xhigh')) {
+          if (reasoning === 'xhigh') fail(tr('msg.api.reasoningUnavailable'));
+          patch.reasoning = 'high';
+        }
+      }
       if (orchestrate !== undefined && !conv) patch.orchestrate = Boolean(orchestrate);
       // Cursor's command line cannot take Orb's tools (MCP): it can talk directly, not coordinate the agents.
       if (brain === 'cursor' && (conv || (patch.orchestrate ?? o.orchestrate !== false))) fail(tr('msg.api.cursorNoCoordinate'));
@@ -511,7 +521,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
         board.changed('settings', { person: other });
       } else { const c = saveConfig({ orchestrator: patch }); emit('config:changed', c); }
       const info = orchestrator.info(conv?.id ?? null, other);
-      const level = { low: tr('msg.api.reasoningLow'), medium: tr('msg.api.reasoningMedium'), high: tr('msg.api.reasoningHigh') }[info.reasoning] ?? info.reasoning;
+      const level = { low: tr('msg.api.reasoningLow'), medium: tr('msg.api.reasoningMedium'), high: tr('msg.api.reasoningHigh'), xhigh: tr('msg.api.reasoningXhigh') }[info.reasoning] ?? info.reasoning;
       if ((patch.model !== undefined && patch.model !== before.model) || (patch.agent && patch.agent !== (before.agent ?? 'claude')) || (patch.reasoning && patch.reasoning !== before.reasoning)) board.notice(tr('msg.api.assistantBrain', { name: assistantName(), agent: info.agentLabel, label: info.modelLabel, reasoning: level }), 'info', { person: other });
       return info;
     },
@@ -582,7 +592,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       // 3.6: there it would see everyone's projects: someone other than the owner always picks a project.
       if (!proj && personOf(who)) fail(tr('msg.spend.needProject'));
       const created = sessions.create({ person: who?.channel === 'system' ? null : who?.person ?? null, kind: 'chat', agent: oneOf(p.agent, AGENT_IDS, 'agente'), account: ownAccount(who, str(p.account, 'cuenta', 40, { optional: true }) || null), model: str(p.model, 'modelo', 80, { optional: true }) || null,
-        reasoning: oneOf(p.reasoning, ['low', 'medium', 'high'], 'razonamiento', 'medium'), permission: proj ? oneOf(p.permission, PERMISSIONS, 'permiso', 'editar') : 'leer',
+        reasoning: oneOf(p.reasoning, REASONING_LEVELS, 'razonamiento', 'medium'), permission: proj ? oneOf(p.permission, PERMISSIONS, 'permiso', 'editar') : 'leer',
         project: proj?.name ?? null, cwd, title: str(p.title, 'título', 80, { optional: true }) || tr('msg.api.chatWith', { agent: p.agent }) });
       // 3.2: a title given here stays; without one, Orb names it from its first message.
       return p.title ? sessions.update(created.id, { titled: true }) : created;
@@ -627,6 +637,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'tasks.review': ({ id, agent, focus }, who) => scheduler.createReview(board.task(int(id, 'tarea')) ?? fail(tr('msg.api.noTaskThat')), { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null), focus: str(focus, 'foco', 500, { optional: true }), person: personOf(who) }),
     'projects.review': ({ name, agent, focus }, who) => scheduler.reviewProject(project(name).name, { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null), focus: str(focus, 'foco', 500, { optional: true }), person: personOf(who) }),
     'projects.securityReview': ({ name, agent }, who) => scheduler.securityReview(project(name).name, { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null), person: personOf(who) }),
+    // 3.6: «Compactar» in a direct conversation: the agent's own compaction (Claude /compact, Codex thread/compact/start).
+    'sessions.compact': ({ id }) => sessions.compact(sessions.must(str(id, 'conversación', 64)).id),
     'sessions.stop': ({ id }) => { const s = sessions.must(str(id, 'conversación', 64)); if (s.kind === 'task') return scheduler.cancel(s.task_id, 'usuario'); return sessions.stop(s.id); },
     'sessions.update': ({ id, title, model, reasoning, permission, archived }) => {
       const s = sessions.must(str(id, 'conversación', 64));
@@ -634,7 +646,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const fields = {};
       if (title !== undefined) fields.title = oneLine(str(title, 'título', 80), 80);
       if (model !== undefined) fields.model = str(model, 'modelo', 80, { optional: true }) || null;
-      if (reasoning !== undefined) fields.reasoning = oneOf(reasoning, ['low', 'medium', 'high'], 'razonamiento');
+      if (reasoning !== undefined) fields.reasoning = oneOf(reasoning, REASONING_LEVELS, 'razonamiento');
+      // 3.6: «Extra» only with a model that takes it (the conversation's, or the one chosen now).
+      if ((fields.reasoning ?? s.reasoning) === 'xhigh' && (reasoning !== undefined || model !== undefined) && !levelsOf(modelCatalog(board), s.agent, fields.model !== undefined ? fields.model : s.model, s.account).includes('xhigh')) {
+        if (reasoning === 'xhigh') fail(tr('msg.api.reasoningUnavailable'));
+        fields.reasoning = 'high';
+      }
       if (permission !== undefined) { fields.permission = oneOf(permission, PERMISSIONS, 'permiso'); if (!s.project && fields.permission !== 'leer') fail(tr('msg.api.readOnlyNoProject2')); }
       if (archived !== undefined) fields.archived = Boolean(archived);
       return sessions.update(s.id, fields);

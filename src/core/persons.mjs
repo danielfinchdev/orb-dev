@@ -156,7 +156,7 @@ export function overview(board) {
     const usage = board.one('SELECT COALESCE(SUM(turns), 0) AS turns, COALESCE(SUM(tokens_in), 0) + COALESCE(SUM(tokens_out), 0) AS tokens, COALESCE(SUM(usd), 0) AS usd FROM usage_ledger WHERE person_id = ? AND day = ?', p.id, day);
     const seen = board.one('SELECT MAX(last_seen) AS at FROM devices WHERE person_id = ?', p.id)?.at ?? null;
     return { id: p.id, name: p.name, role: p.role, hasPin: p.hasPin, caps: p.caps, devices: c('devices'), lastSeen: seen,
-      counts: { bots: c('bots'), groups: c('bot_groups'), conversations: c('conversations', ' AND bot_id IS NULL AND group_id IS NULL'), tasks: c('tasks'), schedules: c('schedules'), projects: c('projects'), reminders: c('bot_reminders', ' AND enabled = 1') },
+      counts: { bots: c('bots'), botsPaused: c('bots', ' AND paused = 1'), groups: c('bot_groups'), conversations: c('conversations', ' AND bot_id IS NULL AND group_id IS NULL'), tasks: c('tasks'), schedules: c('schedules'), projects: c('projects'), reminders: c('bot_reminders', ' AND enabled = 1') },
       today: { turns: Number(usage?.turns ?? 0), tokens: Number(usage?.tokens ?? 0), usd: Number(usage?.usd ?? 0) } };
   });
 }

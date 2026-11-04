@@ -1,0 +1,65 @@
+// 3.6, ola 1 de diseño: el compositor (hueco de acción, razonamiento y orquestador), Ajustes en seis secciones, la pantalla
+// Usuarios y la compactación de conversaciones. Va la última: también corrige algunos textos anteriores.
+export default {
+  // Razonamiento: botón del cerebro con su menú
+  'reasoning.xhigh': 'Extra',
+  'reasoning.title': 'Razonamiento: {level}',
+  'reasoning.titleText': 'Cuánto piensa antes de responder. A más razonamiento, respuestas más cuidadas y más uso.',
+  'reasoning.use.low': 'Uso bajo',
+  'reasoning.use.medium': 'Uso medio',
+  'reasoning.use.high': 'Uso alto',
+  'reasoning.use.xhigh': 'Uso muy alto',
+  'reasoning.tasks.low': 'Preguntas rápidas, textos cortos y cambios pequeños.',
+  'reasoning.tasks.medium': 'El trabajo habitual: explicar, redactar y programar.',
+  'reasoning.tasks.high': 'Problemas difíciles, planes de varios pasos y revisiones a fondo.',
+  'reasoning.tasks.xhigh': 'Lo más complejo: arquitectura, fallos difíciles de localizar y análisis largos.',
+  // Orquestador: icono e interruptor pequeño
+  'chat.orchestratorOn': 'Orquestador activado',
+  'chat.orchestratorOff': 'Orquestador desactivado',
+  'chat.orchestratorHint': 'Activado, {name} coordina a los agentes y reparte el trabajo. Desactivado, hablas directamente con el agente elegido.',
+  // Compactar
+  'compact.button': 'Compactar',
+  'compact.busy': 'Compactando…',
+  'compact.title': 'Compactar la conversación',
+  'compact.tip': 'El contexto está casi lleno. Se resume lo hablado para continuar con más margen; el historial se conserva.',
+  'msg.orch.compactBusy': 'Espera a que termine la respuesta en curso para compactar la conversación.',
+  'msg.orch.compacted': 'Conversación compactada. Continúa a partir de un resumen; el historial se conserva.',
+  'msg.orch.compactRenewed': 'Conversación compactada. La próxima respuesta parte de un resumen de lo hablado; el historial se conserva.',
+  'msg.sessions.compactNotHere': 'Solo se pueden compactar las conversaciones directas.',
+  'msg.sessions.cannotCompact': '{label} no permite compactar la conversación.',
+  'msg.sessions.compacting': 'Compactando la conversación',
+  'msg.sessions.compacted': 'Conversación compactada. Continúa a partir de un resumen; el historial se conserva.',
+  'msg.sessions.compactFailed': '{label} no ha podido compactar la conversación. Puedes seguir escribiendo con normalidad.',
+  'msg.api.reasoningXhigh': 'extra',
+  'msg.api.reasoningUnavailable': 'Este modelo no admite el razonamiento Extra.',
+  // Ajustes en seis secciones
+  'settings.section.magiclink': 'Magic Link',
+  'settings.section.agentes': 'Agentes y uso',
+  'settings.section.avanzado': 'Avanzado',
+  'settings.section.acerca': 'Acerca de',
+  'settings.sectionDesc.general': 'Asistente, idioma, carpeta de trabajo, apariencia y actualizaciones.',
+  'settings.sectionDesc.magiclink': 'Quién puede entrar en este Orb: sus usuarios, sus dispositivos y los Orbs enlazados.',
+  'settings.sectionDesc.agentes': 'Cómo trabajan las conversaciones y las tareas, y cuánto uso pueden gastar.',
+  'settings.sectionDesc.avanzado': 'Herramientas de los agentes, God mode y Monitoreo.',
+  'settings.sectionDesc.acerca': 'Versión, comentarios y otras aplicaciones.',
+  'settings.group.apariencia': 'Apariencia',
+  'settings.group.actualizaciones': 'Actualizaciones',
+  'settings.group.usuarios': 'Usuarios',
+  'settings.group.dispositivos': 'Dispositivos',
+  'settings.group.orbs': 'Orbs enlazados',
+  'settings.group.herramientas': 'Herramientas',
+  'settings.group.experto': 'God mode',
+  'settings.group.monitor': 'Monitoreo',
+  'settings.group.contribuye': 'Contribuye',
+  'settings.group.apps': 'Más aplicaciones',
+  'settings.mobile': 'Acceso desde otros dispositivos',
+  'about.developer': 'Desarrollador',
+  'about.license': 'Licencia',
+  // Usuarios
+  'persons.actions': 'Acciones de {name}',
+  'persons.edit': 'Editar nombre',
+  // Asistente de bienvenida
+  'wizard.addPerson': 'Añadir otro usuario',
+  // Textos que apuntaban a las secciones de antes
+  'help.faq.10.a': 'El tema Profesional no muestra el robot ni animaciones; cámbialo en Ajustes › General, donde también se activa o desactiva el robot flotante.'
+};

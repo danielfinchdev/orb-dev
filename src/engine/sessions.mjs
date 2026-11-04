@@ -438,7 +438,7 @@ export class Sessions {
     if (!this.running.has(id)) { this.send(id, text, { images, prompt: context ? `${text}${context}` : undefined }); return { sent: true }; }
     const entry = this.lives.get(id);
     const onFail = () => { this.addItem(id, 'system', 'status', tr('msg.sessions.steerLate')); this.enqueue(id, text, []); };
-    if (mode !== 'queue' && !images.length && entry?.live.caps.steer && entry.live.steer({ text: context ? `${text}${context}` : text, onFail })) {
+    if (mode !== 'queue' && !images.length && !this.running.get(id)?.compacting && entry?.live.caps.steer && entry.live.steer({ text: context ? `${text}${context}` : text, onFail })) {
       this.addItem(id, 'user', 'text', { text, steer: true });
       return { steered: true };
     }
@@ -583,6 +583,38 @@ export class Sessions {
       }
     });
     return run;
+  }
+
+  // 3.6: «Compactar»: the agent's own compaction of a long direct conversation (Claude /compact, Codex's thread
+  // compaction). The history in Orb stays as it is; the agent goes on from its summary. While it works the conversation
+  // is busy (what is written waits in the queue). → { ok }
+  async compact(id) {
+    const s = this.must(id);
+    if (s.kind !== 'chat') throw new Error(tr('msg.sessions.compactNotHere'));
+    if (this.running.has(id)) throw new Error(tr('msg.sessions.stillWorking'));
+    const a = adapter(s.agent);
+    if (!a.caps?.compact) throw new Error(tr('msg.sessions.cannotCompact', { label: a.label }));
+    if (!s.cli_session) return { ok: true, how: 'none' };
+    const acc = s.account ? findAccount(s.account) : pickAccount(this.board, { person: s.person_id ?? null, agent: s.agent });
+    if (!acc) throw new Error(tr('msg.sessions.accountGone', { account: s.account }));
+    const spend = checkSpend(this.board, { person: s.person_id ?? null, account: acc.id });
+    if (!spend.ok) throw new Error(spendText(spend, { account: acc.id }));
+    const entry = this.getLive(s, acc);
+    if (typeof entry.live.compact !== 'function') throw new Error(tr('msg.sessions.cannotCompact', { label: a.label }));
+    const run = { agent: s.agent, stopped: false, startedAt: Date.now(), lastAt: Date.now(), steps: 0, last: tr('msg.sessions.compacting'), live: entry.live, waitMs: 0, pausedAt: null, compacting: true };
+    this.running.set(id, run);
+    this.update(id, { status: 'running', settled: false });
+    let r;
+    try { r = await entry.live.compact({}); }
+    catch (error) { r = { ok: false, error: error.message }; }
+    finally { entry.lastUsed = Date.now(); if (this.running.get(id) === run) this.running.delete(id); }
+    this.update(id, { status: 'idle' });
+    this.addItem(id, 'system', 'status', r?.ok ? tr('msg.sessions.compacted') : tr('msg.sessions.compactFailed', { label: a.label }));
+    if (!r?.ok) this.log(`compactar ${id}: ${r?.error ?? 'sin respuesta'}`);
+    // What was written meanwhile goes now.
+    const next = this.takeQueued(id);
+    if (next) { try { this.send(id, next.text, { images: next.images }); } catch (error) { this.addItem(id, 'error', 'text', error.message); } }
+    return { ok: Boolean(r?.ok), how: r?.ok ? 'compacted' : 'failed' };
   }
 
   // Continue a conversation stopped by a closed app or a usage limit: the agent resumes its own conversation.

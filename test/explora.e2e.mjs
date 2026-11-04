@@ -86,7 +86,7 @@ try {
   const dark = () => page.evaluate(() => document.documentElement.classList.contains('dark'));
   const setDark = async (on) => { if (on !== (await dark())) await page.getByRole('button', { name: /claro y oscuro|day and night|light and dark/i }).click(); };
   const views = [['sidebar-home', 'chat'], ['nav-tasks', 'tareas'], ['nav-projects', 'proyectos'], ['nav-agents', 'agentes'], ['nav-memories', 'bitacoras'], ['memories-activity', 'actividad'], ['nav-settings', 'ajustes']];
-  const SECTIONS = ['apariencia', 'tareas', 'movil', 'herramientas', 'experto', 'actualizaciones', 'contribuye', 'apps'];
+  const SECTIONS = ['general', 'magiclink', 'agentes', 'avanzado', 'acerca'];
   for (const theme of ['dia', 'noche']) {
     await setDark(theme === 'noche');
     for (const [nav, name] of views) {
@@ -133,7 +133,7 @@ try {
       await setDark(theme === 'noche');
       await page.click('[data-testid=sidebar-home]'); await shot(`tema-${skin}-${theme}-chat`);
       await page.click('[data-testid=nav-tasks]'); await shot(`tema-${skin}-${theme}-tareas`);
-      await page.click('[data-testid=nav-settings]'); await page.click('[data-testid=settings-nav-apariencia]'); await shot(`tema-${skin}-${theme}-ajustes`);
+      await page.click('[data-testid=nav-settings]'); await page.click('[data-testid=settings-nav-general]'); await shot(`tema-${skin}-${theme}-ajustes`);
       if (theme === 'dia') {
         const wide = await overflow(page);
         if (wide.length) note(`tema ${skin}: contenido más ancho que su caja → ${wide.join(' | ')}`);
@@ -156,7 +156,7 @@ try {
       if (sw > iw + 1) note(`${name}/${view}: se sale por los lados (${sw} > ${iw})`);
       await shot(`${name}-${view}`);
       if (view === 'ajustes') {
-        for (const id of ['apariencia', 'tareas', 'contribuye']) { await page.click(`[data-testid=settings-nav-${id}]`); await shot(`${name}-ajustes-${id}`); }
+        for (const id of ['general', 'agentes', 'acerca']) { await page.click(`[data-testid=settings-nav-${id}]`); await shot(`${name}-ajustes-${id}`); }
         await closeSettings(page, `${name}/ajustes`);
       }
     }

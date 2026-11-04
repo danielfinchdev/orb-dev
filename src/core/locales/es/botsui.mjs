@@ -90,7 +90,7 @@ export default {
   'bots.f.toolsHint': 'Lo que puede usar. Enviar, comprar, reservar o cambiar algo siempre pide tu OK.',
   'bots.f.accounts': 'Cuentas y exclusivas',
   'bots.f.accountsHint': 'Los conectores que usa y los temas que solo lleva él.',
-  'bots.f.noConnectors': 'No hay conectores MCP añadidos. Se añaden en Ajustes › Herramientas.',
+  'bots.f.noConnectors': 'No hay conectores MCP añadidos. Se añaden en Ajustes › Avanzado.',
   'bots.f.account': 'Cuenta concreta',
   'bots.f.accountHint': 'Opcional: la única cuenta que puede usar (por ejemplo, un correo).',
   'bots.f.accountPh': 'Por ejemplo, casa@ejemplo.com',

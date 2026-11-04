@@ -52,7 +52,7 @@ export function MobileTabs() {
               <Icon className="size-5" />
             </span>
             <span className="max-w-full truncate">{label}</span>
-            {count ? <span className="bg-warning absolute top-1 left-1/2 ml-2 min-w-4 rounded-full px-1 text-[10px] leading-4 text-white tabular-nums" aria-label={String(count)}>{count}</span>
+            {count ? <span className="bg-warning absolute top-1 left-1/2 ml-2 min-w-4 rounded-full px-1 text-[10px] leading-4 font-semibold text-warning-foreground tabular-nums" aria-label={String(count)}>{count}</span>
               : dot ? <span className="bg-primary absolute top-2 left-1/2 ml-3 size-2 animate-pulse rounded-full" /> : null}
           </button>
         );

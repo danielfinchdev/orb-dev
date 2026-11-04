@@ -258,13 +258,12 @@ function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
           </BubbleTip>
         ))}
         <span className="flex-1" />
-        {/* The bug: straight to «Enviar comentarios» (Ajustes › Contribuye), with the version next to it. */}
+        {/* The bug: straight to «Enviar comentarios» (Ajustes › Acerca de). 3.6: the version is in Acerca de. */}
         {bridge.mobile ? null : (
           <BubbleTip title={t('nav.feedback')} side="top">
             <button type="button" onClick={() => openSettings('contribuye')} aria-label={t('nav.feedback')} data-testid="nav-feedback" className="side-foot-icon"><Bug className="size-4" /></button>
           </BubbleTip>
         )}
-        {version ? <span className="side-foot-version" data-testid="app-version">v{version}</span> : null}
       </div>
       {/* 3.6: with two or more users, who is here, at the very bottom (profile, change user, lock). */}
       <PersonMenu className="mt-1" />
@@ -458,7 +457,7 @@ export function Sidebar({ mood, page = false }) {
       <SearchBox query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} agents={agents} />
       <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-x-hidden overflow-y-auto px-3 pb-3">
         <NavItem icon={ListTodo} label={t('nav.tasks')} active={is('tasks')} onClick={() => go('tasks')} testid="nav-tasks">
-          {approvals ? <span className="bg-warning text-white rounded-full px-1.5 text-[11px] font-medium" aria-label={t('comp.sidebar.waitApproval')}>{approvals}</span>
+          {approvals ? <span className="bg-warning text-warning-foreground rounded-full px-1.5 text-[11px] font-medium" aria-label={t('comp.sidebar.waitApproval')}>{approvals}</span>
             : running ? <span className="bg-muted text-muted-foreground rounded-full px-1.5 text-[11px]">{running}</span> : null}
         </NavItem>
         <NavItem icon={FolderKanban} label={t('nav.projects')} active={is('projects')} onClick={() => go('projects')} testid="nav-projects" />

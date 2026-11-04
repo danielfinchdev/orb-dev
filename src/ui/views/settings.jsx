@@ -1,7 +1,9 @@
 // Settings: the assistant, its brain, how tasks run, usage caps, extra MCP connectors and the assistant's folder.
+// 3.6 (DESIGN-SYSTEM §2.3): six sections — General, Magic Link (Usuarios, Dispositivos, Orbs enlazados), Agentes y uso,
+// Datos, Avanzado and Acerca de. «Mi perfil» is not a section: the user menu opens it in this same window, on its own.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Users, CircleUserRound, DatabaseBackup, Settings, FlaskConical, FolderOpen, HeartPulse, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, LayoutGrid, UserRound, ListChecks, Wrench, RefreshCw, ChevronRight } from 'lucide-react';
+import { DatabaseBackup, Settings, FlaskConical, FolderOpen, HeartPulse, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, Wrench, ChevronRight, SlidersHorizontal, Radar, Cpu, Info, ExternalLink } from 'lucide-react';
 import { ToolIcon } from '@/components/agent-icon.jsx';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, APPEARANCE_DEFAULTS } from '../../core/appearance.mjs';
 import { PRODUCT, AUTHOR } from '../../core/product.mjs';
@@ -22,7 +24,7 @@ import { t, useT, useLocale } from '@/lib/i18n.js';
 import { LANGUAGES } from '../../core/i18n.mjs';
 import { useUpdate, updateActions, notesUrl } from '@/components/update-card.jsx';
 import { play } from '@/lib/sounds.js';
-import { MagicLinkPanel } from './magic-link.jsx';
+import { MagicLinkPanel, SubSection } from './magic-link.jsx';
 import { PersonsCard, ProfileCards } from './persons.jsx';
 import { DataCards } from './data.jsx';
 import { showPersonUi, showPersonsSettings, isOwner } from '@/lib/persons.js';
@@ -621,67 +623,111 @@ function MoreAppsCard() {
   );
 }
 
-// Ajustes is a window over the app: sections on the left, with the developer's GitHub and the version at the bottom.
+// 3.6: «Acerca de»: the version, the developer's GitHub and the licence (they were at the foot of the sections list).
+function AboutCard({ version }) {
+  const t = useT();
+  return (
+    <Card data-testid="settings-about">
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Robot size={40} /><div><CardTitle>{PRODUCT.name} {version}</CardTitle></div></CardHeader>
+      <CardContent className="grid gap-1 text-sm">
+        <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">{t('about.developer')}</span>
+          <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="hover:text-primary inline-flex cursor-pointer items-center gap-1.5 font-medium" data-testid="about-github"><ToolIcon tool="gh" className="size-4" />@{AUTHOR.github}<ExternalLink className="text-muted-foreground size-3.5" /></button>
+        </div>
+        <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">{t('about.license')}</span><span>MIT</span></div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Ajustes is a window over the app: six sections on the left (DESIGN-SYSTEM §2.3). groups: the parts of a section, each
+// with its heading; the active section lists them under its name in the menu, to jump to one.
 const SECTIONS = [
-  { id: 'general', icon: UserRound, cards: (c, app) => <><AssistantCard c={c} /><ChatCard c={c} />{bridge.mobile ? null : <TestCard />}<FolderCard c={c} home={app.home} /></> },
-  // 3.6 «Personas»: Mi perfil with two or more people; Personas and Datos for the owner.
-  { id: 'perfil', icon: CircleUserRound, when: (me) => showPersonUi(me), cards: () => <ProfileCards /> },
-  { id: 'personas', icon: Users, when: (me) => showPersonsSettings(me), cards: () => <PersonsCard /> },
+  { id: 'general', icon: SlidersHorizontal, groups: ['apariencia', 'actualizaciones'],
+    cards: (c, app) => <><AssistantCard c={c} /><FolderCard c={c} home={app.home} /><SubSection id="apariencia" title={t('settings.group.apariencia')}><AppearanceCard c={c} /><InterfaceCard c={c} /></SubSection><SubSection id="actualizaciones" title={t('settings.group.actualizaciones')}><UpdatesCard /></SubSection></> },
+  // Who can enter this Orb: its users, their devices and the Orbs linked with it.
+  { id: 'magiclink', icon: Radar, groups: (me) => [...(showPersonsSettings(me) ? ['usuarios'] : []), 'dispositivos', 'orbs'],
+    cards: (c, app, me) => <MagicLinkPanel grouped users={showPersonsSettings(me) ? <PersonsCard /> : null} phoneAccess={<MobileCard />} /> },
+  { id: 'agentes', icon: Cpu, cards: (c) => <><ChatCard c={c} /><TasksCard c={c} />{bridge.mobile ? null : <TestCard />}</> },
   { id: 'datos', icon: DatabaseBackup, when: (me) => isOwner(me), cards: () => <DataCards /> },
-  { id: 'apariencia', icon: Palette, cards: (c) => <><AppearanceCard c={c} /><InterfaceCard c={c} /></> },
-  { id: 'tareas', icon: ListChecks, cards: (c) => <TasksCard c={c} /> },
-  { id: 'movil', icon: Smartphone, cards: () => <><MobileCard /><MagicLinkPanel /></> },
-  { id: 'herramientas', icon: Wrench, cards: (c) => <><BrowserCard c={c} /><McpCard c={c} /><AndroidCard /></> },
-  { id: 'experto', icon: SquareTerminal, cards: (c) => <ExpertCard c={c} /> },
-  { id: 'monitor', icon: HeartPulse, cards: (c) => <MonitorCard c={c} /> },
-  { id: 'actualizaciones', icon: RefreshCw, cards: () => <UpdatesCard /> },
-  { id: 'contribuye', icon: HeartHandshake, cards: () => <><SupportCard /><FeedbackCard /></> },
-  { id: 'apps', icon: LayoutGrid, cards: () => <MoreAppsCard /> }
+  { id: 'avanzado', icon: Wrench, groups: () => ['herramientas', ...(fullPc() ? ['experto', 'monitor'] : [])],
+    cards: (c) => <><SubSection id="herramientas" title={t('settings.group.herramientas')}><BrowserCard c={c} /><McpCard c={c} /><AndroidCard /></SubSection>
+      {/* 2.7.3: Orb Light (the portable .exe) leaves out God mode and Monitoreo. */}
+      {fullPc() ? <><SubSection id="experto" title={t('settings.group.experto')}><ExpertCard c={c} /></SubSection><SubSection id="monitor" title={t('settings.group.monitor')}><MonitorCard c={c} /></SubSection></> : null}</> },
+  { id: 'acerca', icon: Info, groups: ['contribuye', 'apps'],
+    cards: (c, app) => <><AboutCard version={app.version} /><SubSection id="contribuye" title={t('settings.group.contribuye')}><SupportCard /><FeedbackCard /></SubSection><SubSection id="apps" title={t('settings.group.apps')}><MoreAppsCard /></SubSection></> }
 ];
+// The names of before 3.6 (links in tutorials, notices and the sidebar) → [section, part].
+const ALIASES = { personas: ['magiclink', 'usuarios'], movil: ['magiclink', 'dispositivos'], apariencia: ['general', 'apariencia'], actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'],
+  herramientas: ['avanzado', 'herramientas'], experto: ['avanzado', 'experto'], monitor: ['avanzado', 'monitor'], contribuye: ['acerca', 'contribuye'], apps: ['acerca', 'apps'] };
+export function resolveSection(open) {
+  if (!open || open === true) return ['general', null];
+  const [id, part = null] = String(open).split(':');
+  return ALIASES[id] ? [ALIASES[id][0], part ?? ALIASES[id][1] ?? null] : [id, part];
+}
+const groupsOf = (section, me) => (typeof section.groups === 'function' ? section.groups(me) : section.groups ?? []);
 
 export function SettingsDialog() {
   const t = useT();
   const open = useStore((s) => s.settings);
   const app = useStore((s) => s.app);
   const me = useStore((s) => s.me);
+  const [wanted, part] = resolveSection(open);
+  // The part asked for (a link to «Usuarios», a notice about updates…): scrolled into view once the section is drawn.
+  useEffect(() => {
+    if (!open || !part) return undefined;
+    const id = requestAnimationFrame(() => document.getElementById(`settings-${part}`)?.scrollIntoView({ block: 'start' }));
+    return () => cancelAnimationFrame(id);
+  }, [open, part]);
   if (!app) return null;
-  // 2.7.3: Orb Light (the portable .exe) leaves out God mode and PC Status.
-  const sections = (fullPc() ? SECTIONS : SECTIONS.filter((s) => s.id !== 'experto' && s.id !== 'monitor')).filter((s) => !s.when || s.when(me));
-  const section = sections.find((s) => s.id === open) ?? sections[0];
+  // «Mi perfil» (the user menu, with two or more users): this same window, on its own, without the sections.
+  const profile = wanted === 'perfil' && showPersonUi(me);
+  const sections = SECTIONS.filter((s) => !s.when || s.when(me));
+  const section = sections.find((s) => s.id === wanted) ?? sections[0];
   const c = app.config;
   return (
     <Dialog open={Boolean(open)} onOpenChange={(o) => { if (!o) closeSettings(); }}>
-      <DialogContent className="flex h-[min(780px,90vh)] w-[min(1080px,94vw)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none" data-testid="settings-dialog" aria-describedby={undefined}>
+      <DialogContent className={cn('flex h-[min(780px,90vh)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none', profile ? 'w-[min(760px,94vw)]' : 'w-[min(1080px,94vw)]')} data-testid={profile ? 'profile-dialog' : 'settings-dialog'} aria-describedby={undefined}>
         <div className="flex h-16 shrink-0 items-center border-b px-6 pr-14">
-          <DialogTitle className="text-lg font-medium">{t('settings.title')}</DialogTitle>
+          <DialogTitle className="text-lg font-medium">{profile ? t('persons.myProfile') : t('settings.title')}</DialogTitle>
         </div>
-        <div className="flex min-h-0 flex-1">
-          <nav className="flex w-56 shrink-0 flex-col max-sm:w-16" aria-label={t('settings.title')}>
-            <div className="grid min-h-0 flex-1 content-start gap-1 overflow-y-auto px-3 pt-4">
-              {sections.map(({ id, icon: Icon }) => (
-                <button key={id} type="button" onClick={() => openSettings(id)} data-testid={`settings-nav-${id}`} aria-label={t(`settings.section.${id}`)} aria-current={section.id === id ? 'page' : undefined}
-                  className={cn('flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm', section.id === id ? 'bg-accent text-accent-foreground font-medium' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground')}>
-                  <Icon className="size-[18px] shrink-0" /><span className="truncate max-sm:hidden">{t(`settings.section.${id}`)}</span>
-                </button>
-              ))}
-            </div>
-            <div className="grid gap-0.5 px-6 pt-3 pb-5 max-sm:px-3" data-testid="settings-about">
-              <BubbleTip title={`@${AUTHOR.github}`} text={AUTHOR.url.replace('https://', '')} side="top" align="start">
-                <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="hover:text-primary flex w-fit cursor-pointer items-center gap-1.5 text-[13px] font-medium" aria-label={AUTHOR.url.replace('https://', '')}>
-                  <ToolIcon tool="gh" className="size-4" /><span className="max-sm:hidden">@{AUTHOR.github}</span>
-                </button>
-              </BubbleTip>
-              <span className="text-muted-foreground text-xs max-sm:hidden">{PRODUCT.name} {app.version}</span>
-            </div>
-          </nav>
-          <div key={section.id} className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 pt-6 pb-8">
-            {/* min-w-0 on the cards: a long one-line text inside (a path, a wide control) must not widen the column in a narrow window */}
-            <div className="mx-auto grid max-w-3xl gap-4 [&>*]:min-w-0">
-              <div className="grid gap-1 pb-1"><h2 className="text-2xl font-medium">{t(`settings.section.${section.id}`)}</h2><p className="text-muted-foreground text-sm">{t(`settings.sectionDesc.${section.id}`)}</p></div>
-              {section.cards(c, app)}
+        {profile ? (
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 pt-6 pb-8"><div className="mx-auto grid max-w-2xl gap-4 [&>*]:min-w-0"><ProfileCards /></div></div>
+        ) : (
+          <div className="flex min-h-0 flex-1">
+            <nav className="flex w-56 shrink-0 flex-col max-sm:w-16" aria-label={t('settings.title')}>
+              <div className="grid min-h-0 flex-1 content-start gap-1 overflow-y-auto px-3 pt-4 pb-4">
+                {sections.map((sec) => {
+                  const { id, icon: Icon } = sec;
+                  const on = section.id === id;
+                  const groups = on ? groupsOf(sec, me) : [];
+                  return (
+                    <div key={id} className="grid gap-0.5">
+                      <button type="button" onClick={() => openSettings(id)} data-testid={`settings-nav-${id}`} aria-label={t(`settings.section.${id}`)} aria-current={on ? 'page' : undefined}
+                        className={cn('flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm', on ? 'bg-accent text-accent-foreground font-medium' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground')}>
+                        <Icon className="size-[18px] shrink-0" /><span className="truncate max-sm:hidden">{t(`settings.section.${id}`)}</span>
+                      </button>
+                      {groups.length ? (
+                        <div className="grid gap-0.5 pb-1 pl-[42px] max-sm:hidden">
+                          {groups.map((g) => (
+                            <button key={g} type="button" onClick={() => openSettings(`${id}:${g}`)} data-testid={`settings-sub-${g}`} aria-current={part === g ? 'location' : undefined}
+                              className={cn('cursor-pointer truncate rounded-lg px-2 py-1 text-left text-[13px]', part === g ? 'text-foreground font-medium' : 'text-muted-foreground hover:text-foreground')}>{t(`settings.group.${g}`)}</button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </nav>
+            <div key={section.id} className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 pt-6 pb-8">
+              {/* min-w-0 on the cards: a long one-line text inside (a path, a wide control) must not widen the column in a narrow window */}
+              <div className="mx-auto grid max-w-3xl gap-4 [&>*]:min-w-0">
+                <div className="grid gap-1 pb-1"><h2 className="text-2xl font-medium">{t(`settings.section.${section.id}`)}</h2><p className="text-muted-foreground text-sm">{t(`settings.sectionDesc.${section.id}`)}</p></div>
+                {section.cards(c, app, me)}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </DialogContent>
     </Dialog>
   );

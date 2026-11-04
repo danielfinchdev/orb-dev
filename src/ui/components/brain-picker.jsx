@@ -1,13 +1,12 @@
 // 2.6: what the chat runs on, chosen under the message box: the brain (agent + model, one list grouped by agent), the
 // reasoning and, for a direct chat, the permissions. A bubble warns when the account's usage runs high.
 import { useEffect, useState } from 'react';
-import { Check, ChevronDown, ChevronRight, Flame, Lightbulb, Star, X } from 'lucide-react';
+import { Brain, Check, ChevronDown, ChevronRight, Flame, Lightbulb, Star, X } from 'lucide-react';
 import { AgentIcon } from './agent-icon.jsx';
 import { Button } from './ui/button.jsx';
-import { Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, BubbleTip } from './ui/overlay.jsx';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, BubbleTip } from './ui/overlay.jsx';
 import { call, useStore } from '@/lib/store.js';
 import { notify } from '@/lib/notify.js';
-import { REASONING, options } from '@/lib/labels.js';
 import { prettyModel } from '@/lib/tools.js';
 import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
@@ -55,7 +54,8 @@ export function BrainPicker({ catalog, value, onChange, className }) {
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm" className={cn('max-w-64 gap-1.5', className)} data-testid="brain-picker" aria-label={t('brain.title')}>
             <AgentIcon agent={value.agent} className="size-4" />
-            <span className="truncate">{who ?? value.agent} · {label}</span>
+            {/* 3.6: on a phone, the model only (the icon says the agent), so the row stays on one line. */}
+            <span className="truncate"><span className="max-sm:hidden">{who ?? value.agent} · </span>{label}</span>
             <ChevronDown className="size-3.5 opacity-60" />
           </Button>
         </DropdownMenuTrigger>
@@ -131,9 +131,45 @@ function BrainGroups({ catalog, value, onChange }) {
   </>);
 }
 
-export function ReasoningPicker({ value, onChange }) {
+// 3.6: the reasoning levels Orb offers; «Extra» (xhigh) only for the models whose agent says they take it.
+export const REASONING_LEVELS = ['low', 'medium', 'high', 'xhigh'];
+const USUAL_LEVELS = ['low', 'medium', 'high'];
+export function levelsFor(catalog, value) {
+  const m = modelOf(catalog, value);
+  return m?.efforts?.length ? REASONING_LEVELS.filter((l) => m.efforts.includes(l)) : USUAL_LEVELS;
+}
+
+// 3.6 (DESIGN-SYSTEM §2.2): the reasoning as a brain button that opens Bajo · Medio · Alto · Extra (the levels the model
+// takes), the current one ticked. Each option says its relative usage under its name and, on hover, the usual tasks for
+// it. value: { agent, model, account, reasoning }; levels: to give the list instead of reading it from the catalog.
+export function ReasoningMenu({ catalog, value, onChange, levels, disabled }) {
   const t = useT();
-  return <Select size="sm" value={value} onValueChange={onChange} title={t('brain.reasoning')} options={options(REASONING).map((o) => ({ ...o, label: `${t('brain.reasoningShort')}: ${o.label.toLowerCase()}` }))} data-testid="reasoning-picker" />;
+  const list = levels ?? levelsFor(catalog, value);
+  const current = list.includes(value.reasoning) ? value.reasoning : value.reasoning === 'xhigh' ? 'high' : (value.reasoning ?? 'medium');
+  const name = t(`reasoning.${current}`);
+  return (
+    <DropdownMenu>
+      <BubbleTip title={t('reasoning.title', { level: name })} text={t('reasoning.titleText')} side="top">
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon-sm" disabled={disabled} aria-label={t('reasoning.title', { level: name })} data-testid="reasoning-picker" data-level={current}><Brain /></Button>
+        </DropdownMenuTrigger>
+      </BubbleTip>
+      <DropdownMenuContent align="start" side="top" className="w-56" onCloseAutoFocus={(e) => e.preventDefault()} data-testid="reasoning-menu">
+        <DropdownMenuLabel>{t('brain.reasoning')}</DropdownMenuLabel>
+        {list.map((level) => (
+          <BubbleTip key={level} title={t(`reasoning.${level}`)} text={t(`reasoning.tasks.${level}`)} side="right" align="start">
+            <DropdownMenuItem onSelect={() => onChange(level)} data-testid={`reasoning-${level}`}>
+              <span className="grid min-w-0 flex-1 leading-tight">
+                <span>{t(`reasoning.${level}`)}</span>
+                <span className="text-muted-foreground text-[11px]">{t(`reasoning.use.${level}`)}</span>
+              </span>
+              {current === level ? <Check className="text-primary!" /> : null}
+            </DropdownMenuItem>
+          </BubbleTip>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 // 3.2: why the account may run out soon (or null). Only from its real usage (what the agent reports): 75 % or more, or

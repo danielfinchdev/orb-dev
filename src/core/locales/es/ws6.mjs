@@ -76,7 +76,7 @@ export default {
 
   // préstamos
   'persons.loan.from': 'de {name}',
-  'persons.loan.leftTurns': 'te quedan {n} turnos hoy',
+  'persons.loan.leftTurns': 'te quedan {n} respuestas hoy',
   'persons.loan.leftTokens': 'te quedan {n} tokens hoy',
   'persons.loan.leftUsd': 'te quedan {n} $ hoy',
   'persons.loan.noCap': 'sin tope diario',
@@ -84,7 +84,7 @@ export default {
   'lend.button': 'Prestar a…',
   'lend.title': 'Prestar {label}',
   'lend.person': 'A quién',
-  'lend.turns': 'Turnos al día',
+  'lend.turns': 'Respuestas al día',
   'lend.tokens': 'Tokens al día',
   'lend.usd': 'Dólares al día',
   'lend.noCap': 'Sin tope',
@@ -108,7 +108,7 @@ export default {
   'whoSpent.today': '{n} hoy',
   'whoSpent.month': '{n} en 30 días',
   'whoSpent.usd': '{n} $',
-  'whoSpent.total': 'Todo el Orb: {today} turnos hoy, {month} en 30 días.',
+  'whoSpent.total': 'Todo el Orb: {today} respuestas hoy, {month} en 30 días.',
 
   // compartir
   'share.button': 'Compartir',
@@ -233,7 +233,7 @@ export default {
   'botsp.spendsOwn': 'Este bot gasta tu cuenta.',
   'botsp.spendsLent': 'Este bot gasta la cuenta de {name}.',
   'botsp.spendsAuto': 'Usa una de tus cuentas, o una prestada si las tuyas no pueden.',
-  'botsp.capTurns': 'Turnos al día',
+  'botsp.capTurns': 'Respuestas al día',
   'botsp.capUsd': 'Dólares al día',
   'botsp.noCap': 'Sin tope',
   'botsp.memTitle': 'Cambios de la memoria',
@@ -270,7 +270,7 @@ export default {
   'datos.codeNoticeOpen': 'Crear código',
   'link.outTitle': 'Usar fuera de casa',
   'link.out1': 'Instala Tailscale en este PC y en el móvil, con la misma cuenta.',
-  'link.out2': 'En Ajustes › Móvil, activa Tailscale.',
+  'link.out2': 'En Ajustes › Magic Link, activa Tailscale.',
   'link.out3': 'Enlaza el móvil con el QR.',
   'link.outGet': 'Descargar Tailscale',
   'link.outPcOn': 'El PC tiene que estar encendido.',

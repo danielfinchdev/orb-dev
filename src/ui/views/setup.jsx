@@ -45,6 +45,9 @@ function Panel({ step, title, children, mood = 'happy' }) {
   );
 }
 const Back = ({ onBack }) => { const t = useT(); return <Button type="button" variant="ghost" onClick={onBack} data-testid="wizard-back"><ArrowLeft />{t('wizard.back')}</Button>; };
+// 3.6: the same foot on the three screens: «Atrás» on the left (its place kept, empty, on the first) and the way on
+// («Siguiente») on the right.
+const Foot = ({ onBack, children }) => <div className="flex min-h-10 items-center justify-between gap-2 pt-1">{onBack ? <Back onBack={onBack} /> : <span aria-hidden="true" />}{children}</div>;
 
 // 1. The name. The folder is <Documents>/Orb; only if that cannot be used is a folder asked for.
 function NameStep({ made, onNext }) {
@@ -78,9 +81,9 @@ function NameStep({ made, onNext }) {
   return (
     <Panel step="nombre" title={t('wizard.nameTitle')} mood="hello">
       <form onSubmit={next} className="grid gap-4">
-        <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder={t('wizard.namePh')} aria-label={t('wizard.namePh')} autoComplete="given-name" enterKeyHint="next" className="h-12 text-center text-lg" data-testid="setup-name" />
+        <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder={t('wizard.namePh')} aria-label={t('wizard.namePh')} autoComplete="given-name" enterKeyHint="next" className="h-12 text-center text-base" data-testid="setup-name" />
         {needFolder ? <Button type="button" variant="outline" onClick={pick} data-testid="setup-folder"><FolderOpen />{base ?? t('setup.pickLocation')}</Button> : null}
-        <Button type="submit" size="lg" disabled={!name.trim() || busy || (needFolder && !base)} data-testid="setup-create">{busy ? <Spinner className="border-white/40 border-t-white" /> : null}{t('wizard.next')}<ArrowRight /></Button>
+        <Foot><Button type="submit" size="lg" disabled={!name.trim() || busy || (needFolder && !base)} data-testid="setup-create">{busy ? <Spinner className="border-white/40 border-t-white" /> : null}{t('wizard.next')}<ArrowRight /></Button></Foot>
       </form>
     </Panel>
   );
@@ -117,14 +120,13 @@ function WhoStep({ onNext, onBack }) {
       <div className="grid grid-cols-2 gap-3">{choice(false, t('wizard.onlyMe'), 'wizard-only-me')}{choice(true, t('wizard.yes'), 'wizard-more-people')}</div>
       {many ? (
         <form className="animate-in fade-in-0 grid gap-2 duration-200" onSubmit={(e) => { e.preventDefault(); go(); }}>
-          {names.map((n, i) => <Input key={i} ref={i === names.length - 1 ? last : undefined} autoFocus={i === 0} value={n} maxLength={40} onChange={(e) => setNames(names.map((x, j) => (j === i ? e.target.value : x)))} placeholder={t('wizard.personPh')} aria-label={t('wizard.personPh')} data-testid={`wizard-person-${i}`} />)}
+          {names.map((n, i) => <Input key={i} ref={i === names.length - 1 ? last : undefined} autoFocus={i === 0} value={n} maxLength={40} onChange={(e) => setNames(names.map((x, j) => (j === i ? e.target.value : x)))} placeholder={t('wizard.personPh')} aria-label={t('wizard.personPh')} className="h-12 text-base" data-testid={`wizard-person-${i}`} />)}
           <Button type="button" size="sm" variant="ghost" className="w-fit" onClick={add} data-testid="wizard-add-person"><Plus />{t('wizard.addPerson')}</Button>
-          <div className="flex items-center justify-between gap-2 pt-1">
-            <Back onBack={onBack} />
+          <Foot onBack={onBack}>
             <Button type="submit" size="lg" disabled={busy || !names.some((x) => x.trim())} data-testid="wizard-next">{busy ? <Spinner className="border-white/40 border-t-white" /> : null}{t('wizard.next')}<ArrowRight /></Button>
-          </div>
+          </Foot>
         </form>
-      ) : <div><Back onBack={onBack} /></div>}
+      ) : <Foot onBack={onBack} />}
     </Panel>
   );
 }
@@ -151,7 +153,7 @@ function UseStep({ onDone, onBack }) {
           );
         })}
       </div>
-      <div><Back onBack={onBack} /></div>
+      <Foot onBack={onBack} />
     </Panel>
   );
 }

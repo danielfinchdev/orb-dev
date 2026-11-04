@@ -109,6 +109,8 @@ const IDLE_CLOSE_MS = 10 * 60_000;
 // 3.2: a conversation taken up again after this long starts afresh with the logs and its last lines (cheaper than loading
 // a long conversation back; the logs are the assistant's memory).
 const STALE_MS = 6 * 3_600_000;
+// 3.6: what the summary of a compaction must keep (the coordinator's work lives in tasks, the board and the logs).
+const COMPACT_FOCUS = 'Conserva lo que el usuario ha pedido, las decisiones tomadas, las tareas lanzadas con su número y estado, y lo que queda pendiente.';
 const SETTLE_MS = 24 * 3_600_000; // a quiet conversation with nothing open is done after this long
 
 // 2.7: a step of the assistant for the chat's live line: the tool, what it works on (only a file's name, never its folder;
@@ -164,6 +166,31 @@ class Lane {
   say(role, body, meta = null) { return this.board.addChat(role, body, meta, this.id); }
 
   closeLive() { try { this.live?.close(); } catch { /* gone */ } this.live = null; this.liveKey = ''; }
+  // 3.6: «Compactar»: the brain's own compaction when its agent has one (Claude /compact, Codex's thread compaction): the
+  // same conversation goes on from a summary. Otherwise (or if it fails) it is renewed: the next message starts afresh
+  // with the briefing, the logs and its last lines, as when the context fills up by itself. → { ok, how }
+  async compact() {
+    if (this.busy || this.inflight || this.queue.length) throw new Error(tr('msg.orch.compactBusy'));
+    const c = this.conv();
+    if (!c) throw new Error(tr('msg.board.noConversation'));
+    if (!c.session_id) return { ok: true, how: 'none' };
+    this.busy = true; this.since = Date.now(); this.usedAt = Date.now(); this.push();
+    let how = 'renewed';
+    try {
+      let live = null;
+      try { this.ensureLive(); live = this.live; } catch { live = null; }
+      const spend = live ? checkSpend(this.board, { person: c.person_id ?? null, account: this.liveAccount }) : { ok: true };
+      if (!spend.ok) throw Object.assign(new Error(spendText(spend, { account: this.liveAccount })), { userFacing: true });
+      if (typeof live?.compact === 'function') {
+        const r = await live.compact({ instructions: COMPACT_FOCUS }).catch((error) => ({ ok: false, error: error.message }));
+        if (r?.ok) how = 'compacted'; else this.orch.log(`compactar la conversación ${this.id}: ${r?.error ?? 'sin respuesta'}`);
+      }
+      if (how !== 'compacted') this.forget();
+    } finally { this.busy = false; this.partial = ''; this.tools = []; this.usedAt = Date.now(); this.push(); }
+    this.say('system', tr(how === 'compacted' ? 'msg.orch.compacted' : 'msg.orch.compactRenewed'), { kind: 'compacted' });
+    if (!this.orch.closing) { this.next(); this.orch.kick(); }
+    return { ok: true, how };
+  }
   forget() { this.closeLive(); this.board.updateConversation(this.id, { session_id: null, turns: 0, context: null }); }
 
   // The chat is free at once, but the agent's turn takes a moment to wind down: a new message waits for it in next()
@@ -548,6 +575,7 @@ export class Orchestrator {
   // The conversations waiting their turn start as others finish.
   kick() { for (const l of this.lanes.values()) { if (this.busyCount() >= this.maxBusy) return; if (!l.busy && !l.inflight && l.queue.length) l.next(); } }
   stop(id) { this.lanes.get(Number(id))?.stop(); }
+  compact(id) { if (!this.board.conversation(id)) throw new Error(tr('msg.board.noConversation')); return this.lane(id).compact(); }
   stopAll() { for (const l of this.lanes.values()) l.stop({ quiet: true }); }
   forget(id) { this.lane(id).forget(); }
   closeLive() { for (const l of this.lanes.values()) l.closeLive(); }

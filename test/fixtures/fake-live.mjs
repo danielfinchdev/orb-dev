@@ -74,7 +74,8 @@ export function fakeAdapter(id, real) {
       // 2.7: models of every kind (light, balanced, most capable), to test how Orb chooses for each task.
       if (process.env.ORB_FAKE_TIERED === '1' && id === 'claude') return [{ id: 'claude-haiku-4-5', label: 'Haiku 4.5' }, { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5', default: true }, { id: 'claude-sonnet-5', label: 'Sonnet 5' }, { id: 'claude-opus-5-5', label: 'Opus 5.5' }, { id: 'claude-opus-4-8', label: 'Opus 4.8' }, { id: 'claude-fable-5-1', label: 'Fable 5.1' }];
       if (process.env.ORB_FAKE_MODELS_LOG) { try { fs.appendFileSync(process.env.ORB_FAKE_MODELS_LOG, `${id}\n`); } catch { /* log unavailable */ } }
-      return [1, 2, 3].map((n) => ({ id: `fake-${id}-${n}`, label: `Modelo de prueba ${n}`, ...(n === 1 ? { default: true } : {}) }));
+      // 3.6: the first model of each takes the «Extra» reasoning too (xhigh); the others the usual three.
+      return [1, 2, 3].map((n) => ({ id: `fake-${id}-${n}`, label: `Modelo de prueba ${n}`, ...(n === 1 ? { default: true, efforts: ['low', 'medium', 'high', 'xhigh'] } : {}) }));
     }
   };
 }
@@ -246,7 +247,8 @@ function createFakeLive(agent, label, caps, o) {
     for (const piece of reply.match(/.{1,20}/gs) ?? []) onEvent({ type: 'delta', text: piece });
     item('assistant', 'text', reply);
     current.addText(reply);
-    onEvent({ type: 'context', used: 1000 * turns, size: 200_000 });
+    // 3.6: CONTEXTO_LLENO leaves the conversation at 80 % of its context (the «Compactar» suggestion).
+    onEvent({ type: 'context', used: /CONTEXTO_LLENO/.test(scan) ? 160_000 : 1000 * turns, size: 200_000 });
     current.finish({ usage: { inputTokens: 10, outputTokens: 5 }, stopReason: 'end_turn' });
   }
 
@@ -275,6 +277,16 @@ function createFakeLive(agent, label, caps, o) {
     if (slowStop) setTimeout(end, 800); else end();
   };
   live.respond = (requestId, decision) => approvals.respond(requestId, decision);
+  // 3.6: the agent's own compaction (Claude's /compact, Codex's thread/compact/start): the context drops, same session.
+  if (caps.compact) live.compact = async ({ instructions = '' } = {}) => {
+    if (closed) throw new Error(`la sesión de ${label} se ha cerrado`);
+    if (turn && !turn.done) throw new Error('el agente sigue trabajando');
+    record({ compact: true, instructions });
+    if (process.env.ORB_FAKE_COMPACT_FAILS === '1') return { ok: false, error: 'no se pudo compactar' };
+    onEvent({ type: 'compacted', before: 160_000, after: 12_000 });
+    onEvent({ type: 'context', used: 12_000, size: 200_000 });
+    return { ok: true, error: null };
+  };
   live.setModel = (m) => { model = m || null; record({ setModel: model }); };
   live.setPermission = (p) => { permission = p; record({ setPermission: p }); };
   live.close = () => {
