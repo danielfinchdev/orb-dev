@@ -18,6 +18,9 @@ export default {
   'data.backup.err.missing': 'No encuentro esa copia.',
   'data.backup.err.shortPassphrase': 'El código tiene que tener al menos 12 caracteres.',
 
+  'data.move.notMove': 'Esa copia no es para mover un Orb: usa «Restaurar».',
+  'data.move.movedAway': 'Este Orb se ha movido a otro equipo y ya no se usa aquí. En Ajustes › Datos puedes deshacerlo o mantener los dos.',
+
   'data.nucleo.backupDone': 'Copia hecha: {file} ({files} archivos).',
   'data.nucleo.noBackups': 'Todavía no hay copias.',
   'data.nucleo.backupsIn': 'Copias en {folder}',

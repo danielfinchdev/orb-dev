@@ -7,8 +7,11 @@ import { ctx, tr } from '../core/context.mjs';
 import { readKey } from '../core/home.mjs';
 import * as K from '../core/backup.mjs';
 import { listTemplates, applyTemplate } from '../core/templates.mjs';
+import { moveExport, moveUndo, moveKeepBoth, movedAway } from '../core/export.mjs';
 import { utcToZoned, localDay, isValidTz, systemTz } from '../core/tz.mjs';
 
+// 3.6: what an Orb that moved away still answers (the rest is refused until the move is undone or both are kept).
+export const MOVED_OK = /^(app\.state|data\.move(Status|Undo|KeepBoth)|backup\.(status|list|verify)|templates\.list)$/;
 const fail = (message) => { const e = new Error(message); e.userFacing = true; throw e; };
 // 3.6: the owner's zone. Until persons (WS1) land, the Orb's own setting or this machine's.
 export const ownerTz = () => (isValidTz(ctx.config?.tz) ? ctx.config.tz : systemTz());
@@ -94,11 +97,20 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
       board.changed?.('bots');
       return made;
     },
-    // Moving the Orb: a copy that opens only with the passphrase, made to be imported on the new machine.
+    // Moving the Orb: a copy that opens only with the passphrase, made to be imported on the new machine (orb-nucleo
+    // mover importar, or the wizard). This Orb then stops serving (ctx.moved) until the move is undone or both are kept.
     'data.moveExport': async ({ passphrase }) => {
       const p = pass(passphrase); if (!p || p.length < 12) fail(tr('data.backup.err.shortPassphrase'));
-      return run('move', { passphrase: p, move: true });
-    }
+      if (running) await running.catch(() => {});
+      const r = await moveExport({ home: ctx.home, secret: secret(), passphrase: p, version, folder: folder(), log });
+      ctx.moved = movedAway(ctx.home);
+      emit('data:moved', { moved: ctx.moved });
+      return { file: path.basename(r.file), path: r.file, created: r.header.created, orbId: r.header.orbId, incarnation: r.header.incarnation };
+    },
+    'data.moveStatus': () => ({ moved: movedAway(ctx.home) }),
+    'data.moveUndo': () => { moveUndo(ctx.home); ctx.moved = null; emit('data:moved', { moved: null }); return { moved: null, restartNeeded: true }; },
+    // «Mantener ambos»: this one becomes a new Orb (the links it had are with the one that moved: they are made again).
+    'data.moveKeepBoth': () => { const id = moveKeepBoth(ctx.home); ctx.moved = null; emit('data:moved', { moved: null }); return { orbId: id.orbId, restartNeeded: true }; }
   };
   return { methods, tick, run };
 }

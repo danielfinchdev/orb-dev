@@ -47,6 +47,8 @@ async function start(home, version, secret, browser, headless) {
   const { applyPendingRestore } = await import('../core/backup.mjs');
   let restored = null;
   try { restored = applyPendingRestore(home); } catch (error) { console.error(`restaurar: ${error.message}`); }
+  // 3.6: an Orb moved to another machine does not serve phones or linked Orbs (src/core/export.mjs).
+  { const { movedAway } = await import('../core/export.mjs'); ctx.moved = movedAway(home); }
   if (restored) { useHome(home); if (restored.secretChanged && restored.secret?.length >= 32) ctx.secret = Buffer.from(restored.secret.subarray(0, 32)); }
   // The agents' browser lives in the app (main process): its pipe and token go to the agents' MCP servers.
   if (typeof browser?.pipe === 'string' && /^[0-9a-f]{48}$/.test(browser.token ?? '') && /orb-navegador-[0-9a-f]{16}(\.sock)?$/.test(browser.pipe)) ctx.browser = { pipe: browser.pipe, token: browser.token };
@@ -136,7 +138,7 @@ async function start(home, version, secret, browser, headless) {
       },
       onChange: (peers) => emit('link:peers', peers)
     });
-    link.start();
+    if (!ctx.moved) link.start();
     // 3.5: the bots live on the centre: what its bots say comes to this Orb's window as centro:<event>.
     link.on('*', (event, payload, peer) => { if (hostsBots(peer?.role ?? 'taller') && /^bot\./.test(event)) emit(`centro:${event}`, payload); });
   }
@@ -145,7 +147,7 @@ async function start(home, version, secret, browser, headless) {
     const { startDevControl } = await import('./dev-control.mjs');
     devControl = startDevControl({ api, board, sessions, log, home, internalDir: ctx.paths.internal });
   }
-  if (ctx.config.mobile?.enabled) remote.start().catch((error) => log(`móvil: ${error.message}`));
+  if (ctx.config.mobile?.enabled && !ctx.moved) remote.start().catch((error) => log(`móvil: ${error.message}`));
 
   // Changes made by this process are pushed right away; changes made by MCP processes (other connections) are found with
   // PRAGMA data_version, which only moves when another connection commits.

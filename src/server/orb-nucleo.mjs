@@ -12,17 +12,26 @@
 //                                                           program for this one
 //   orb-nucleo dispositivos [--home …]                      3.5.1: the linked devices (id, kind, administers, last seen)
 //   orb-nucleo quitar <id|nombre> [--home …]                3.5.1: close a device's link (a lost or stolen phone)
+//   orb-nucleo copia ahora|lista|clave [--clave <código>]  3.6: a backup now, the list, a new recovery code (or yours)
+//   orb-nucleo copia restaurar <archivo> [--clave <código>] check and restore a backup (the service applies it when it
+//                                                           starts again; stopped, it is applied at once)
+//   orb-nucleo mover exportar --clave <código>              a copy to move this Orb to another machine (this one stops)
+//   orb-nucleo mover importar <archivo> --clave <código> [--home <carpeta nueva>]  the moved Orb, on the new machine
 //   orb-nucleo --version
 // The Orb folder: --home, else ORB_HOME, else ~/orb. Its log: <home>/.orb/ejecuciones/nucleo.log (and the console).
 // While it runs, the same user's commands reach it through a local socket (src/server/control.mjs).
 import readline from 'node:readline';
 import { createHost, prepareHome, defaultHome, packageVersion } from './host.mjs';
 import { serveControl, controlCall, pickDevice } from './control.mjs';
+import path from 'node:path';
 import { qrTerminal } from '../core/qr.mjs';
+import { readKey } from '../core/home.mjs';
+import { stageRestore, applyPendingRestore } from '../core/backup.mjs';
+import { moveImport } from '../core/export.mjs';
 import { translator, painter } from '../terminal/render.mjs';
 
 function parse(argv) {
-  const o = { command: 'run', home: null, profile: null, account: null, wait: true, admin: false, kind: null, taller: false, target: null };
+  const o = { command: 'run', home: null, profile: null, account: null, wait: true, admin: false, kind: null, taller: false, target: null, sub: null, file: null, code: process.env.ORB_BACKUP_CODE || null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--home') o.home = argv[++i];
@@ -37,6 +46,18 @@ function parse(argv) {
     else if (a === '--taller' || a === '--workshop') o.taller = true;
     else if (a === '--tipo' || a === '--kind') { o.kind = KIND_WORDS[String(argv[++i] ?? '').toLowerCase()]; if (!o.kind) throw new Error('tipo: movil, navegador, orb o terminal'); }
     else if (a === 'dispositivos' || a === 'devices') o.command = 'devices';
+    // 3.6: backups and moving the Orb.
+    else if (a === 'copia' || a === 'backup') {
+      o.command = 'backup'; o.sub = { ahora: 'now', now: 'now', lista: 'list', list: 'list', restaurar: 'restore', restore: 'restore', clave: 'code', code: 'code' }[String(argv[++i] ?? '').toLowerCase()];
+      if (!o.sub) throw new Error('orb-nucleo copia ahora|lista|restaurar <archivo>|clave');
+      if (o.sub === 'restore') { o.file = argv[++i]; if (!o.file) throw new Error('falta el archivo: orb-nucleo copia restaurar <archivo>'); }
+    }
+    else if (a === 'mover' || a === 'move') {
+      o.command = 'move'; o.sub = { exportar: 'export', export: 'export', importar: 'import', import: 'import' }[String(argv[++i] ?? '').toLowerCase()];
+      if (!o.sub) throw new Error('orb-nucleo mover exportar|importar <archivo>');
+      if (o.sub === 'import') { o.file = argv[++i]; if (!o.file) throw new Error('falta el archivo: orb-nucleo mover importar <archivo>'); }
+    }
+    else if (a === '--clave' || a === '--code') o.code = argv[++i] ?? null;
     else if (a === 'quitar' || a === 'revoke' || a === 'remove') { o.command = 'revoke'; o.target = argv[++i]; if (!o.target) throw new Error('falta el dispositivo: orb-nucleo quitar <id>'); }
     // 3.5 «Solo Orb»: the sign-in without a screen: the link and the code are printed, Claude's code is pasted here.
     else if (a === 'entrar' || a === 'login') { o.command = 'login'; o.account = argv[++i]; if (!o.account) throw new Error('falta la cuenta: orb-nucleo entrar claude'); }
@@ -85,6 +106,50 @@ async function revokeCommand(home, version, target) {
     console.log(p.green(t('term.nucleo.removed', { name: pick.device.name })));
     return 0;
   });
+}
+
+// 3.6: backups from the server itself. With the service running they go through its local socket.
+const serviceRunning = async (home) => { try { await controlCall(home, 'app.state', {}, { timeoutMs: 5000 }); return true; } catch { return false; } };
+async function backupCommand(home, version, o) {
+  const t = translator(); const p = painter();
+  if (o.sub === 'restore') {
+    const file = path.resolve(o.file);
+    if (await serviceRunning(home)) {
+      const r = await controlCall(home, 'backup.restore', { file, passphrase: o.code ?? undefined }, { timeoutMs: 30 * 60_000 });
+      console.log(p.green(t('data.nucleo.restoreReady', { files: r.files })));
+      console.log(t('data.nucleo.restartService'));
+      return 0;
+    }
+    const r = await stageRestore(home, file, { secret: readKey(home), passphrase: o.code });
+    const applied = applyPendingRestore(home);
+    console.log(p.green(t('data.nucleo.restoreReady', { files: r.files })));
+    console.log(t('data.nucleo.restoreDone', { aside: applied?.aside ?? '-' }));
+    return 0;
+  }
+  return withEngine(home, version, async (call) => {
+    if (o.sub === 'now') { const r = await call('backup.now', {}); console.log(p.green(t('data.nucleo.backupDone', { file: r.path, files: r.files }))); return 0; }
+    if (o.sub === 'code') {
+      const r = await call('backup.recovery', { code: o.code ?? '' });
+      if (r.code) { console.log(t('data.nucleo.recoveryCode')); console.log(`\n  ${p.bold(r.code)}\n`); } else console.log(p.green(t('data.nucleo.recoverySet')));
+      return 0;
+    }
+    const st = await call('backup.status', {});
+    const list = await call('backup.list', {});
+    console.log(p.dim(t('data.nucleo.backupsIn', { folder: st.folder })));
+    if (!list.length) { console.log(t('data.nucleo.noBackups')); return 0; }
+    for (const b of list) console.log(`${String(b.created ?? '?').slice(0, 16).replace('T', ' ')}  ${String(b.kind).padEnd(12)} ${String(Math.round(b.size / 1024)).padStart(8)} KB  ${b.name}${b.damaged ? `  ${p.yellow('!')}` : ''}`);
+    return 0;
+  });
+}
+async function moveCommand(home, version, o, target = null) {
+  const t = translator(); const p = painter();
+  if (!o.code) { console.error(t('data.nucleo.needCode')); return 1; }
+  if (o.sub === 'export') {
+    return withEngine(home, version, async (call) => { const r = await call('data.moveExport', { passphrase: o.code }); console.log(p.green(t('data.nucleo.moveDone', { file: r.path }))); return 0; });
+  }
+  await moveImport({ target, file: path.resolve(o.file), passphrase: o.code });
+  console.log(p.green(t('data.nucleo.moveImported', { home: target })));
+  return 0;
 }
 
 // The QR, the short code and the address of this server, and the wait for a device to use them. With the service
@@ -137,8 +202,12 @@ async function main() {
   const o = parse(process.argv.slice(2));
   const version = packageVersion();
   if (o.command === 'version') { console.log(version); return; }
-  if (o.command === 'help') { console.log('orb-nucleo [--home <carpeta>] [--papel centro|todo|taller] | estado | entrar <claude|codex|cuenta> | enlazar [--tipo movil|navegador|orb|terminal] [--admin] [--taller] [--no-esperar] | dispositivos | quitar <id> | --version'); return; }
+  if (o.command === 'help') { console.log('orb-nucleo [--home <carpeta>] [--papel centro|todo|taller] | estado | entrar <claude|codex|cuenta> | enlazar [--tipo movil|navegador|orb|terminal] [--admin] [--taller] [--no-esperar] | dispositivos | quitar <id> | copia ahora|lista|restaurar <archivo>|clave [--clave <código>] | mover exportar|importar <archivo> --clave <código> | --version'); return; }
+  // 3.6: importing a moved Orb goes into a folder that is not an Orb yet (nothing is prepared there first).
+  if (o.command === 'move' && o.sub === 'import') { process.exit(await moveCommand(null, version, o, path.resolve(o.home ? o.home : defaultHome()))); }
   const home = prepareHome(o.home ? o.home : defaultHome(), { profile: o.profile });
+  if (o.command === 'backup') { process.exit(await backupCommand(home, version, o)); }
+  if (o.command === 'move') { process.exit(await moveCommand(home, version, o)); }
   if (o.command === 'link') { process.exit(await linkDevice(home, o, version)); }
   if (o.command === 'devices') { process.exit(await devicesCommand(home, version)); }
   if (o.command === 'revoke') { process.exit(await revokeCommand(home, version, o.target)); }

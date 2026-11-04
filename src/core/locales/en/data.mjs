@@ -18,6 +18,9 @@ export default {
   'data.backup.err.missing': 'I cannot find that backup.',
   'data.backup.err.shortPassphrase': 'The code must be at least 12 characters long.',
 
+  'data.move.notMove': 'That backup is not for moving an Orb: use "Restore".',
+  'data.move.movedAway': 'This Orb was moved to another computer and is no longer used here. In Settings › Data you can undo it or keep both.',
+
   'data.nucleo.backupDone': 'Backup made: {file} ({files} files).',
   'data.nucleo.noBackups': 'No backups yet.',
   'data.nucleo.backupsIn': 'Backups in {folder}',

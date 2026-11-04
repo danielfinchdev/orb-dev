@@ -9,7 +9,9 @@ import crypto from 'node:crypto';
 
 // 3.5.1: also closing a device's link (orb-nucleo quitar): whoever is on the server itself is its owner, so a lost or
 // stolen phone that administers it can be taken out from here.
-export const CONTROL_METHODS = new Set(['link.qr', 'link.devices', 'link.status', 'link.revoke', 'app.state']);
+// 3.6: backups and moving the Orb (orb-nucleo copia … / mover exportar) while the service runs.
+export const CONTROL_METHODS = new Set(['link.qr', 'link.devices', 'link.status', 'link.revoke', 'app.state',
+  'backup.status', 'backup.list', 'backup.now', 'backup.verify', 'backup.restore', 'backup.recovery', 'data.moveExport', 'data.moveStatus', 'data.moveUndo', 'data.moveKeepBoth']);
 
 // 3.5.1 (orb-nucleo quitar): the device named by its id (or the start of it, 4+ characters) or its exact name.
 export function pickDevice(list, target) {

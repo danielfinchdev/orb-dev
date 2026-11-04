@@ -40,7 +40,7 @@ import { git, slug } from '../core/workspace.mjs';
 import * as B from '../core/bots.mjs';
 import { serverStatus, haFetch } from '../core/server-admin.mjs';
 import { CENTRO_FORWARD, PAIR_KINDS, PREVIEWS } from './remote.mjs';
-import { dataApi } from './api-data.mjs';
+import { dataApi, MOVED_OK } from './api-data.mjs';
 
 // Names of the fields in the messages (Spanish as they were; the key is the Spanish word).
 const fld = (name) => { const key = `msg.api.f.${String(name).replace(/ /g, '_')}`; const t = tr(key); return t === key ? name : t; };
@@ -229,7 +229,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       // 3.2: kept, the finished tasks the user brought back (a finished task goes to «Completadas» by itself).
       completed: board.settingJson('sidebar_completed') ?? [], kept: board.settingJson('sidebar_kept') ?? [],
       // 3.2.1: the agents this PC can run now (installed, on, with an account): the lists of the window offer only these.
-      agentsAvailable: board.availableAgents()
+      agentsAvailable: board.availableAgents(),
+      // 3.6: this Orb was moved to another machine (Ajustes › Datos): it serves nothing until the user decides.
+      moved: ctx.moved ?? null
     }),
     'conversations.list': () => conversationList(),
     // 3.2: completed by hand (or open again): a task («t<id>»), a direct conversation («s<id>») or a conversation with the
@@ -948,6 +950,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       }
       const fn = Object.hasOwn(methods, method) ? methods[method] : null;
       if (!fn) fail(tr('msg.api.unknownAction', { method }));
+      if (ctx.moved && !MOVED_OK.test(method)) fail(tr('data.move.movedAway'));
       if (isHeadless() && !centroAllows(method)) fail(tr('msg.api.centroOff'));
       if (params === null || typeof params !== 'object' || Array.isArray(params)) fail(tr('msg.api.badParams'));
       const out = await fn(params);

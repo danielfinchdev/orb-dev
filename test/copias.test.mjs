@@ -205,3 +205,28 @@ test('engine: backup.now, list, verify, recovery code and restore staged for the
     } finally { await again.stop(); }
   } finally { if (!stopped) await e.stop(); cleanup(); }
 });
+
+test('Orb Núcleo: a copy before a new version, and orb-nucleo copia ahora | lista | restaurar', async () => {
+  const { backupOnUpgrade } = await import('../src/server/host.mjs');
+  const { execFileSync } = await import('node:child_process');
+  const { ROOT } = await import('./helpers.mjs');
+  const s = seed();
+  s.board.db.close();
+  try {
+    const first = await backupOnUpgrade(s.home, '3.6.0');
+    assert.ok(first && first.endsWith('-preupdate.orbbak'), 'an Orb from before 3.6 gets a copy');
+    assert.equal(await backupOnUpgrade(s.home, '3.6.0'), null);
+    const next = await backupOnUpgrade(s.home, '3.6.1');
+    assert.equal((await K.readHeader(next)).header.version, '3.6.0');
+    const env = { ...process.env, ORB_LANG: 'es', LANG: 'es_ES.UTF-8', NO_COLOR: '1' };
+    const run = (...args) => execFileSync(process.execPath, [path.join(ROOT, 'src', 'server', 'orb-nucleo.mjs'), ...args, '--home', s.home], { env, encoding: 'utf8', windowsHide: true, timeout: 120_000 });
+    assert.match(run('copia', 'ahora'), /orbbak/);
+    const list = run('copia', 'lista');
+    assert.match(list, /manual/); assert.match(list, /preupdate/);
+    const manual = K.listBackups(K.backupDir(s.home));
+    const file = (await manual).find((b) => b.kind === 'manual').file;
+    B.writeMemory(s.bot.id, 'Otro texto.', { mode: 'replace' });
+    run('copia', 'restaurar', file);
+    assert.match(fs.readFileSync(B.memoryFile(s.bot.id), 'utf8'), /té verde/);
+  } finally { s.cleanup(); }
+});
