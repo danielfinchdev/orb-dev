@@ -33,8 +33,9 @@ function hub({ board, bots, remoteRef }) {
     if (board.isOwnerPerson(person)) { const c = saveConfig({ bots: { location: loc } }); emit?.('config:changed', c); }
     else board.personSetting(person, 'bots.location', loc);
   };
+  // 3.6 (WS2): person: only that person's links here (a link without a person is the owner's).
   const centroPeer = (person = null) => {
-    const list = hubPeers(); const loc = botsLocation(person);
+    const list = hubPeers().filter((p) => !person || (p.person ?? owner()) === person); const loc = botsLocation(person);
     return (loc !== 'local' && list.find((p) => p.id === loc)) || list.find((p) => p.online) || list[0] || null;
   };
   // The Orbs already asked about (the card after linking is shown once for each).

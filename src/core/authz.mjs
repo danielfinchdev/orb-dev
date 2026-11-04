@@ -7,6 +7,7 @@
 import { ctx, tr, keepsBots } from './context.mjs';
 import { ownerId as findOwner } from './persons.mjs';
 import { policyOf, ceilingFor, withinCeiling, eventRule } from './policy.mjs';
+import { shapeGateway } from './shape.mjs';
 
 export const RIGHTS = ['view', 'talk', 'edit'];
 const RANK = { view: 1, talk: 2, edit: 3, own: 4 };
@@ -76,7 +77,9 @@ function resolve(board, res) {
   switch (t) {
     case 'owner': return { owner, parents: [] };
     case 'person': { const r = one(board, 'SELECT id FROM persons WHERE id = ? AND deleted_at IS NULL', String(id)); return { owner: r ? r.id : null, parents: [] }; }
-    case 'conversation': { const r = one(board, 'SELECT person_id, group_id FROM conversations WHERE id = ?', Number(id)); return { owner: who(r), parents: r?.group_id ? [{ type: 'group', id: r.group_id }] : [] }; }
+    // 3.6 (WS2): a row without a person that belongs to a parent (a group's conversation, a task's session) is the
+    // parent's person's, not the owner's: children inherit (plan §1), also when they were made before anyone stamped them.
+    case 'conversation': { const r = one(board, 'SELECT person_id, group_id FROM conversations WHERE id = ?', Number(id)); return { owner: r && r.person_id == null && r.group_id ? resolve(board, { type: 'group', id: r.group_id }).owner ?? owner : who(r), parents: r?.group_id ? [{ type: 'group', id: r.group_id }] : [] }; }
     case 'chat': {
       const r = one(board, 'SELECT person_id, conversation_id FROM chat WHERE id = ?', Number(id));
       if (!r) return { owner: null, parents: [] };
@@ -87,7 +90,7 @@ function resolve(board, res) {
     case 'group': { const r = one(board, 'SELECT id, person_id FROM bot_groups WHERE id = ?', Number(id)); return { owner: who(r), parents: [], key: r ? String(r.id) : null }; }
     case 'project': { const r = one(board, 'SELECT name, person_id FROM projects WHERE name = ? COLLATE NOCASE', String(id)); return { owner: who(r), parents: [], key: r?.name ?? null }; }
     case 'task': { const r = one(board, 'SELECT person_id, project FROM tasks WHERE id = ?', Number(id)); return { owner: who(r), parents: r ? [{ type: 'project', id: r.project }] : [] }; }
-    case 'session': { const r = one(board, 'SELECT person_id, kind, task_id FROM sessions WHERE id = ?', String(id)); return { owner: who(r), parents: r?.kind === 'task' && r.task_id ? [{ type: 'task', id: r.task_id }] : [] }; }
+    case 'session': { const r = one(board, 'SELECT person_id, kind, task_id FROM sessions WHERE id = ?', String(id)); const task = r?.kind === 'task' && r.task_id; return { owner: r && r.person_id == null && task ? resolve(board, { type: 'task', id: r.task_id }).owner ?? owner : who(r), parents: task ? [{ type: 'task', id: r.task_id }] : [] }; }
     case 'schedule': { const r = one(board, 'SELECT person_id, project FROM schedules WHERE id = ?', Number(id)); return { owner: who(r), parents: r ? [{ type: 'project', id: r.project }] : [] }; }
     case 'reminder': { const r = one(board, 'SELECT person_id, bot_id FROM bot_reminders WHERE id = ?', Number(id)); return { owner: who(r), parents: r ? [{ type: 'bot', id: r.bot_id }] : [] }; }
     case 'request': { const r = one(board, 'SELECT person_id, bot_id FROM bot_requests WHERE id = ?', Number(id)); return { owner: who(r), parents: r ? [{ type: 'bot', id: r.bot_id }] : [] }; }
@@ -214,8 +217,12 @@ export const reaches = (board, audience, person) => Boolean(audience?.all || (au
 // ---- what a caller gets back: never secrets, never another person's PIN data. (WS2 adds the per-channel shaping of
 // app.state and the other people's metadata.)
 const SECRET_KEYS = new Set(['pin_hash', 'pin_salt', 'token_hash']);
-export function shapeFor(principal, method, result) {
-  if (isSystem(principal) || principal?.channel === 'desktop' || result == null || typeof result !== 'object') return result;
+// 3.6 (WS2): with the board, also what each person may see of the result (src/core/shape.mjs; every channel, this PC's
+// window too, once there is more than one person).
+export function shapeFor(principal, method, result, board = null) {
+  if (isSystem(principal) || result == null || typeof result !== 'object') return result;
+  if (board) result = shapeGateway(board, principal, method, result);
+  if (principal?.channel === 'desktop') return result;
   if (!String(method).startsWith('persons.')) return result;
   const strip = (v) => (Array.isArray(v) ? v.map(strip) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).filter(([k]) => !SECRET_KEYS.has(k)).map(([k, x]) => [k, strip(x)])) : v);
   return strip(result);

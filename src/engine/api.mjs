@@ -43,6 +43,7 @@ import { botMethods, centroApi } from './api-bots.mjs';
 import { linkMethods } from './api-link.mjs';
 import { accountMethods } from './api-accounts.mjs';
 import { personMethods } from './api-persons.mjs';
+import { gatewayMethods } from './api-gateway.mjs';
 import { dataApi, MOVED_OK } from './api-data.mjs';
 
 export { fail, str, int, oneOf } from './api-common.mjs';
@@ -145,7 +146,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     return done.map((t) => t.id);
   };
   // 3.6: who sits at this PC's window (the owner until persons.switch; the lock screen is WS2's).
-  const desktop = { person: null };
+  // 3.6 (WS2): locked: the lock screen is up (engine.mjs refuses every call but the unlock).
+  const desktop = { person: null, locked: false };
   const desktopPrincipal = () => principalOf(board, { desktop: true, person: desktop.person });
   // What the other parts of the API share.
   const shared = { board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, bots, project, conversationId, desktop };
@@ -706,6 +708,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     ...accountMethods(shared),
     ...linkMethods(shared),
     ...personMethods(shared),
+    ...gatewayMethods(shared),
     ...data.methods
   };
   // 3.6: the approval cards a person may answer (of their own sessions and tasks, and those of projects shared with them).
@@ -746,7 +749,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       if (typeof method === 'string' && method.startsWith('taller.')) {
         if (params === null || typeof params !== 'object' || Array.isArray(params)) fail(tr('msg.api.badParams'));
         authorize(board, who, method, params);
-        try { return await remoteRef.current.taller(method.slice(7), params); } catch (error) { error.userFacing = true; throw error; }
+        try { return await remoteRef.current.taller(method.slice(7), params, { principal: who }); } catch (error) { error.userFacing = true; throw error; }
       }
       // 3.5: centro.<method> on a workshop: the bots of the centre it is linked with (one Orb per user: its bots live there).
       if (typeof method === 'string' && method.startsWith('centro.')) {
@@ -764,18 +767,25 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       // 3.1: an agent turned on or off, checked again, or an account added or removed: the list of available agents is
       // updated at once (the next task may already be for it).
       if (/^(config\.save|agents\.(status|check)|accounts\.(add|update|remove))$/.test(method)) { try { scheduler.refreshAvailable(true); } catch { /* next tick */ } }
-      return shapeFor(who, method, out);
+      return shapeFor(who, method, out, board);
     },
     // 3.6: the method names (the policy test checks each one has its rule) and this PC's window's principal.
     methodNames: () => Object.keys(methods),
     desktopPrincipal,
+    // 3.6 (WS2): the window's state (who sits there, locked), Orb Núcleo's local socket (the owner, who is on the server
+    // itself: no PIN asked) and what a locked window may see.
+    desktop,
+    controlPrincipal: () => principalOf(board, { control: true, strongUntil: Date.now() + 60_000 }),
+    lockState: () => methods['app.lockState'](),
     // New chat lines since the last call, sent to the window as 'chat:new' (corner robot, robot notices) or 'notice' (toasts).
     notifyNewChat() {
       try { optiApi.flush(); } catch { /* Opti Bot off or its conversation gone */ }
       const rows = board.all('SELECT id, role, body, meta, conversation_id, person_id FROM chat WHERE id > ? ORDER BY id LIMIT 20', lastChat);
       if (!rows.length) return;
       lastChat = rows[rows.length - 1].id;
-      for (const r of rows) if (r.role === 'notice') { let m = null; try { m = JSON.parse(r.meta); } catch { /* plain */ } emit('notice', { body: oneLine(r.body, 300), tone: m?.tone ?? 'info', ...(m?.person ? { person: m.person } : {}) }); } // 2.7: a passing notification, not a chat line (3.6: with whom it is for)
+      // 3.6 (WS2): a notice for a person (and the owner too when it says so: owner: true).
+      const noticeHint = (m) => (m?.person && m?.owner ? { persons: new Set([String(m.person), principalOf(board, { system: true }).person]) } : null);
+      for (const r of rows) if (r.role === 'notice') { let m = null; try { m = JSON.parse(r.meta); } catch { /* plain */ } emit('notice', { body: oneLine(r.body, 300), tone: m?.tone ?? 'info', ...(m?.person ? { person: m.person } : {}) }, noticeHint(m)); } // 2.7: a passing notification, not a chat line (3.6: with whom it is for)
       else if (r.conversation_id != null && bots?.owns(r.conversation_id)) continue;
       else if (r.role !== 'usuario') {
         let meta = null; try { meta = r.meta ? JSON.parse(r.meta) : null; } catch { /* plain */ }

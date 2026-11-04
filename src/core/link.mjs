@@ -18,7 +18,23 @@ import * as C from './mobile-crypto.mjs';
 const hostsBots = (role) => role !== 'taller';
 const doesDev = (role) => role !== 'centro';
 
-export const PROTOCOL = 2;
+// 3.6 «Personas»: protocol 3. Each side says { v, min, version, features } (hello, /api/me): v what it speaks, min the
+// oldest it still accepts. Phones and terminals of protocol 2 keep working (MIN_PROTOCOL); forwarding calls of people
+// other than the owner needs a workshop of protocol 3 (FORWARD_MIN: it must know who asks, A13).
+export const PROTOCOL = 3;
+export const MIN_PROTOCOL = 2;
+export const FORWARD_MIN = 3;
+export const FEATURES = ['persons'];
+// Who has to update, given what this side speaks and what the other says: null (they understand each other), 'me' (this
+// side is too old for the other) or 'them' (the other is too old for this one). An answer without v is protocol 2 (3.5).
+export function versionGap(mine = {}, theirs = {}) {
+  const tv = Number(theirs?.v ?? 2); const tmin = Number(theirs?.min ?? 1);
+  if (Number(mine.v ?? PROTOCOL) < tmin) return 'me';
+  if (tv < Number(mine.min ?? MIN_PROTOCOL)) return 'them';
+  return null;
+}
+// The app version an Orb of a protocol has at least (for «tiene 3.5, hace falta 3.6»).
+export const versionOfProtocol = (v) => (Number(v) >= 3 ? '3.6' : Number(v) === 2 ? '3.5' : '3.4');
 // Live events of a workshop the centre passes on to its phones (the same ones a phone gets from its own PC).
 export const RELAY_EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'notice', 'session:item', 'session:update', 'session:removed', 'config:changed', 'session:delta', 'session:queue', 'approval:changed']);
 // The short code typed by hand: 8 letters and digits that cannot be confused (no 0/O, 1/I/L, U).
@@ -68,19 +84,48 @@ export async function hello(address, { fetch: f = globalThis.fetch } = {}) {
 
 const storeKey = (secret) => new Uint8Array(nodeCrypto.createHmac('sha256', Buffer.from(secret)).update('orb-enlaces-v1').digest());
 
-export function createLink({ file, secret, identity = () => ({}), onRequest = null, onChange = () => {}, log = () => {}, fetch: f = globalThis.fetch } = {}) {
+// protocol / min: what this side says it speaks (tests make an older Orb with them).
+// verdict(known, seen): what to make of the other Orb's identity ({ orbId, incarnation, host }): 'new' | 'same' | 'moved' |
+// 'clone' (src/core/export.mjs › cloneVerdict; not imported: the terminal ships this file alone). A clone is not trusted:
+// its link is marked and the event 'link:clone' fires.
+export function createLink({ file, secret, identity = () => ({}), onRequest = null, onChange = () => {}, log = () => {}, fetch: f = globalThis.fetch, protocol = PROTOCOL, min = MIN_PROTOCOL, verdict = null } = {}) {
   if (!file || !secret) throw new Error('createLink: falta el archivo o la clave');
   const peers = new Map(); // id -> { rec, key, skew, ctrl, online, wait, at }
   const listeners = new Map();
   let started = false;
-  let outbox = []; let flushTimer = null; // events waiting to go to the centre
+  let outbox = new Map(); let flushTimer = null; // events waiting to go to each centre: peer id -> [{ e, p }]
 
   const fire = (event, payload, peer) => {
     for (const fn of listeners.get(event) ?? []) { try { fn(payload, peer); } catch (e) { log(`enlace: ${e.message}`); } }
     for (const fn of listeners.get('*') ?? []) { try { fn(event, payload, peer); } catch (e) { log(`enlace: ${e.message}`); } }
   };
+  // 3.6: person: whose link this is on this side (who made it; null = the owner, as before 3.6); remotePerson: whom the
+  // other side counts it as ({ id, name }, learned from its hello or /api/me); remote: { v, min, version, features }.
   const view = (p) => ({ id: p.rec.id, name: p.rec.name, role: p.rec.role ?? null, fp: p.rec.fp ?? null, url: p.rec.urls[p.rec.at ?? 0] ?? p.rec.urls[0], urls: p.rec.urls,
-    online: Boolean(p.online), revoked: Boolean(p.rec.revoked), linkedAt: p.rec.linkedAt, lastSeen: p.rec.lastSeen ?? null });
+    online: Boolean(p.online), revoked: Boolean(p.rec.revoked), linkedAt: p.rec.linkedAt, lastSeen: p.rec.lastSeen ?? null,
+    person: p.rec.person ?? null, remotePerson: p.rec.remotePerson ?? null, remote: p.rec.remote ?? null, clone: Boolean(p.rec.clone) });
+  // What the other side said of itself and of whom it counts this link as (hello and /api/me answers).
+  const learn = (p, r) => {
+    if (!r || typeof r !== 'object') return;
+    let dirty = false;
+    if (r.person && typeof r.person === 'object' && r.person.id) {
+      const rp = { id: String(r.person.id).slice(0, 40), name: String(r.person.name ?? '').slice(0, 60) };
+      if (JSON.stringify(rp) !== JSON.stringify(p.rec.remotePerson ?? null)) { p.rec.remotePerson = rp; dirty = true; }
+    }
+    if (r.v != null) {
+      const rv = { v: Number(r.v) || 2, min: Number(r.min ?? 1) || 1, version: r.version ? String(r.version).slice(0, 40) : null, features: Array.isArray(r.features) ? r.features.map(String).slice(0, 20) : [] };
+      if (JSON.stringify(rv) !== JSON.stringify(p.rec.remote ?? null)) { p.rec.remote = rv; dirty = true; }
+    }
+    // 3.6 (moving an Orb): the other Orb's identity; a newer incarnation is followed, an older one or the same one from
+    // another machine is a clone.
+    if (verdict && r.orb && typeof r.orb === 'object' && /^[0-9a-f]{32}$/.test(String(r.orb.orbId ?? ''))) {
+      const seen = { orbId: String(r.orb.orbId), incarnation: Number(r.orb.incarnation) || 1, host: r.orb.host ? String(r.orb.host).slice(0, 80) : null };
+      const v = verdict(p.rec.orb ?? null, seen);
+      if (v === 'clone') { if (!p.rec.clone) { p.rec.clone = true; dirty = true; fire('link:clone', { id: p.rec.id, name: p.rec.name }, view(p)); } }
+      else if (JSON.stringify(seen) !== JSON.stringify(p.rec.orb ?? null) || p.rec.clone) { if (v === 'moved') fire('link:moved', { id: p.rec.id, name: p.rec.name }, view(p)); p.rec.orb = seen; p.rec.clone = false; dirty = true; }
+    }
+    if (dirty) { try { save(); } catch { /* disk */ } changed(); }
+  };
   const changed = () => { try { onChange(list()); } catch { /* listener */ } fire('link:peers', list()); };
   const list = () => [...peers.values()].map(view);
 
@@ -152,7 +197,7 @@ export function createLink({ file, secret, identity = () => ({}), onRequest = nu
       if (!res.ok) throw new Error(String(res.status));
       opened = true; p.online = true; p.wait = 1000; p.rec.lastSeen = new Date().toISOString();
       changed();
-      helloAfterConnect(p).catch((e) => log(`enlace: hola: ${e.message}`));
+      p.hello = helloAfterConnect(p); p.hello.catch((e) => log(`enlace: hola: ${e.message}`));
       const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = '';
       for (;;) {
         const { value, done } = await reader.read(); if (done) break;
@@ -164,7 +209,7 @@ export function createLink({ file, secret, identity = () => ({}), onRequest = nu
           if (!data) continue;
           let ev; try { ev = C.openText(p.key, data, C.AAD.event(p.rec.id)); } catch { continue; }
           if (ev.e === 'link:request') handleRequest(p, ev.p).catch((e) => log(`enlace: petición: ${e.message}`));
-          else if (ev.e === 'link:rehello') helloAfterConnect(p).catch((e) => log(`enlace: hola: ${e.message}`));
+          else if (ev.e === 'link:rehello') { p.hello = helloAfterConnect(p); p.hello.catch((e) => log(`enlace: hola: ${e.message}`)); }
           else fire(ev.e, ev.p, view(p));
         }
       }
@@ -181,27 +226,37 @@ export function createLink({ file, secret, identity = () => ({}), onRequest = nu
   async function helloAfterConnect(p) {
     const me = identity() ?? {};
     if (me.kind !== 'orb') return;
-    const r = await request(p, '/api/link', 'link', { op: 'hello', ...me });
+    // 3.6: what this side speaks (v, min, features) goes with it; the answer says the same of the other and whom it counts
+    // this link as.
+    const r = await request(p, '/api/link', 'link', { op: 'hello', ...me, v: protocol, min, features: FEATURES });
+    if (r.ok) learn(p, r.result);
     if (r.ok && r.result?.role && r.result.role !== p.rec.role) { p.rec.role = r.result.role; save(); changed(); }
     if (r.ok && typeof r.result?.wantsEvents === 'boolean') p.wantsEvents = r.result.wantsEvents;
     if (r.ok && r.result?.name && r.result.name !== p.rec.name) { p.rec.name = r.result.name; save(); changed(); }
   }
   // A call the centre forwards to this workshop (only from a centre, only as a workshop).
+  // 3.6 (A13, A12): it carries who asks there (principal: { person, device, channel, rights }) and a request_id the
+  // workshop remembers, so a call sent twice runs once. onRequest maps the link to a person here and decides.
   async function handleRequest(p, req) {
     if (!req || typeof req.id !== 'string') return;
     let out;
     try {
       if (!hostsBots(p.rec.role ?? 'taller') || !doesDev(identity()?.role ?? 'todo') || !onRequest) throw err('este Orb no programa para ese Orb');
-      out = { ok: true, result: (await onRequest(String(req.method ?? ''), req.params && typeof req.params === 'object' ? req.params : {}, view(p))) ?? null };
-    } catch (e) { out = { ok: false, error: String(e?.message ?? e).slice(0, 1000), status: e?.status }; }
+      if (p.rec.clone) throw err('ese Orb parece una copia de otro: no se atiende', { status: 409 });
+      // Whom the other side counts this link as comes with the hello: wait for it if it is on its way.
+      if (!p.rec.remotePerson && p.hello) await p.hello.catch(() => {});
+      const principal = req.principal && typeof req.principal === 'object' ? req.principal : null;
+      out = { ok: true, result: (await onRequest(String(req.method ?? ''), req.params && typeof req.params === 'object' ? req.params : {}, view(p),
+        { principal, requestId: typeof req.request_id === 'string' ? req.request_id.slice(0, 80) : null, v: Number(req.v ?? 2) })) ?? null };
+    } catch (e) { out = { ok: false, error: String(e?.message ?? e).slice(0, 1000), status: e?.status, ...(e?.reason ? { reason: e.reason } : {}) }; }
     await request(p, '/api/link', 'link', { op: 'reply', id: req.id, ...out });
   }
   async function flushOutbox() {
     flushTimer = null;
-    const list = outbox; outbox = [];
-    if (!list.length) return;
-    for (const p of peers.values()) {
-      if (!p.online || !hostsBots(p.rec.role ?? 'taller') || p.wantsEvents === false) continue;
+    const boxes = outbox; outbox = new Map();
+    for (const [id, list] of boxes) {
+      const p = peers.get(id);
+      if (!list.length || !p || !p.online || !hostsBots(p.rec.role ?? 'taller') || p.wantsEvents === false) continue;
       request(p, '/api/link', 'link', { op: 'events', list }).catch(() => {});
     }
   }
@@ -213,7 +268,7 @@ export function createLink({ file, secret, identity = () => ({}), onRequest = nu
     let skew = 0;
     // 3.5.1: the short code is stretched and tied to the key the other side gave (code3); the QR's code goes as it is.
     const secret = via === 'code3' ? await C.shortSecretAsync(normalCode(code), C.b64.enc(pcPub)) : code;
-    const body = () => ({ via, pub: C.b64.enc(pub), proof: C.seal(C.pairingKey(priv, pcPub, secret), { ...me, pub: C.b64.enc(pub), name: me.name, t: Date.now() + skew, v: PROTOCOL }, C.AAD.pair) });
+    const body = () => ({ via, pub: C.b64.enc(pub), proof: C.seal(C.pairingKey(priv, pcPub, secret), { ...me, pub: C.b64.enc(pub), name: me.name, t: Date.now() + skew, v: protocol, min }, C.AAD.pair) });
     const send = () => f(`${base}/api/pair`, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body()) });
     let res = await send(); let data = null;
     if (res.status === 409) { const d = await res.json().catch(() => ({})); if (Number.isFinite(d.now)) { skew = d.now - Date.now(); res = await send(); } else data = d; }
@@ -225,18 +280,23 @@ export function createLink({ file, secret, identity = () => ({}), onRequest = nu
     // 3.5.1: the other side proves it had the code too (a key swapped on the way cannot make this one).
     let sure; try { sure = data.confirm ? C.open(C.pairingKey(priv, pcPub, secret), data.confirm, C.AAD.confirm(data.id)) : null; } catch { sure = null; }
     if (via === 'code3' && sure?.id !== data.id) throw err('el otro Orb no es el del código');
-    return { rec: { id: data.id, priv: C.b64.enc(priv), pc: C.b64.enc(pcPub), name: String(ok.orb ?? ok.name ?? 'Orb').slice(0, 60), role: ok.role ?? null, fp: ok.pc ?? C.fingerprint(pcPub), linkedAt: new Date().toISOString(), lastSeen: new Date().toISOString() }, key };
+    const rec = { id: data.id, priv: C.b64.enc(priv), pc: C.b64.enc(pcPub), name: String(ok.orb ?? ok.name ?? 'Orb').slice(0, 60), role: ok.role ?? null, fp: ok.pc ?? C.fingerprint(pcPub), linkedAt: new Date().toISOString(), lastSeen: new Date().toISOString() };
+    // 3.6: whom the other side made this link for (the QR's «¿Para quién?») and what it speaks.
+    if (ok.person?.id) rec.remotePerson = { id: String(ok.person.id).slice(0, 40), name: String(ok.person.name ?? '').slice(0, 60) };
+    if (ok.v != null) rec.remote = { v: Number(ok.v) || 2, min: Number(ok.min ?? 1) || 1, version: ok.version ? String(ok.version).slice(0, 40) : null, features: Array.isArray(ok.features) ? ok.features.map(String).slice(0, 20) : [] };
+    return { rec, key };
   }
 
   const link = {
     on(event, fn) { if (!listeners.has(event)) listeners.set(event, new Set()); listeners.get(event).add(fn); return () => listeners.get(event)?.delete(fn); },
     start() { if (started) return; started = true; load(); for (const p of peers.values()) if (!p.rec.revoked) stream(p); },
-    stop() { started = false; for (const p of peers.values()) { p.ctrl?.abort(); p.ctrl = null; clearTimeout(p.timer); p.online = false; } clearTimeout(flushTimer); flushTimer = null; outbox = []; },
+    stop() { started = false; for (const p of peers.values()) { p.ctrl?.abort(); p.ctrl = null; clearTimeout(p.timer); p.online = false; } clearTimeout(flushTimer); flushTimer = null; outbox = new Map(); },
     peers: () => list(),
     // 3.5: say again who this Orb is to every linked Orb on now (after its role changed in Ajustes).
     refresh() { for (const p of peers.values()) if (p.online && !p.rec.revoked) helloAfterConnect(p).catch((e) => log(`enlace: hola: ${e.message}`)); },
     // Link with the QR (its text) or with the short code and the other Orb's address.
-    async connect({ qr, code, address, fp } = {}) {
+    // 3.6: person: whose link it is on this side (the person who links; null = the owner).
+    async connect({ qr, code, address, fp, person = null } = {}) {
       if (!started) link.start();
       let urls; let pcPub; let secretCode; let via;
       if (qr) { const q = parseQr(qr); urls = q.urls; pcPub = C.b64.dec(q.pc); secretCode = q.code; via = 'qr'; }
@@ -255,6 +315,7 @@ export function createLink({ file, secret, identity = () => ({}), onRequest = nu
         try {
           const { rec, key } = await pairAt(base, pcPub, secretCode, via);
           rec.urls = [base, ...urls.filter((u) => u !== base)]; rec.at = 0;
+          if (person) rec.person = String(person).slice(0, 40);
           const p = { rec, key, skew: 0, online: false, wait: 1000 };
           peers.set(rec.id, p); save();
           stream(p); changed();
@@ -272,20 +333,54 @@ export function createLink({ file, secret, identity = () => ({}), onRequest = nu
       return true;
     },
     // A call to the other Orb (as a phone would make it). With target 'taller', the centre forwards it to its workshop.
-    async call(id, method, params = {}, { target } = {}) {
+    // 3.6: ticket: a strong ticket of this device (persons.verifyPin) for a call that needs the PIN.
+    async call(id, method, params = {}, { target, ticket } = {}) {
       const p = peerOf(id);
-      const r = await request(p, '/api/call', 'call', { method, params: params ?? {}, ...(target ? { target } : {}) });
-      if (!r.ok) throw err(r.error ?? 'error', { status: r.status, offline: r.offline, lastSeen: r.lastSeen, canWake: r.canWake });
+      const r = await request(p, '/api/call', 'call', { method, params: params ?? {}, ...(target ? { target } : {}), ...(ticket ? { ticket } : {}) });
+      if (!r.ok) throw err(r.error ?? 'error', { status: r.status, offline: r.offline, lastSeen: r.lastSeen, canWake: r.canWake, reason: r.reason, unknown: r.unknown, queueId: r.queueId, requestId: r.requestId });
       return r.result;
     },
-    async me(id) { const r = await request(peerOf(id), '/api/me', 'me', null); if (!r.ok) throw err(r.error); return r.result; },
+    // 3.6: with what this side speaks (v, min): the other says whom it counts this link as and its own versions.
+    async me(id) {
+      const p = peerOf(id);
+      const r = await request(p, '/api/me', 'me', { v: protocol, min, features: FEATURES });
+      if (!r.ok) throw err(r.error, { status: r.status, update: r.update ?? null });
+      learn(p, r.result);
+      return r.result;
+    },
     // Live events of this Orb for the centre it works for (batched every 150 ms).
-    relay(event, payload) {
-      if (!RELAY_EVENTS.has(event) || ![...peers.values()].some((p) => p.online && hostsBots(p.rec.role ?? 'taller') && p.wantsEvents !== false)) return;
+    // 3.6: reaches(person): whether the event is for that person of this Orb; each centre gets only the events of the
+    // person its link belongs to here (the centre filters again by the person of the device).
+    relay(event, payload, reaches = null) {
+      if (!RELAY_EVENTS.has(event)) return;
       if (!doesDev(identity()?.role ?? 'todo')) return;
-      outbox.push({ e: event, p: event === 'config:changed' ? null : payload });
-      if (outbox.length > 200) outbox.splice(0, outbox.length - 200);
-      flushTimer ??= setTimeout(() => { flushOutbox().catch(() => {}); }, 150);
+      for (const p of peers.values()) {
+        if (!p.online || !hostsBots(p.rec.role ?? 'taller') || p.wantsEvents === false) continue;
+        if (reaches && !reaches(p.rec.person ?? null)) continue;
+        const list = outbox.get(p.rec.id) ?? []; outbox.set(p.rec.id, list);
+        list.push({ e: event, p: event === 'config:changed' ? null : payload });
+        if (list.length > 200) list.splice(0, list.length - 200);
+        flushTimer ??= setTimeout(() => { flushOutbox().catch(() => {}); }, 150);
+      }
+    },
+    // 3.6: a backup of this Orb (an .orbbak, encrypted already) kept on the other one, in pieces of 1.5 MB. → { stored, size }
+    async putBackup(id, filePath) {
+      const p = peerOf(id);
+      const name = path.basename(String(filePath));
+      const total = fs.statSync(filePath).size;
+      const fh = await fs.promises.open(filePath, 'r');
+      try {
+        let offset = 0; const piece = Buffer.alloc(1_500_000); let last = null;
+        const upload = `${Date.now().toString(36)}${nodeCrypto.randomBytes(4).toString('hex')}`;
+        do {
+          const { bytesRead } = await fh.read(piece, 0, piece.length, offset);
+          const done = offset + bytesRead >= total;
+          last = await request(p, '/api/link', 'link', { op: 'backup.put', upload, name, total, offset, data: piece.subarray(0, bytesRead).toString('base64'), done });
+          if (!last.ok) throw err(last.error ?? 'error', { status: last.status });
+          offset += bytesRead;
+        } while (offset < total);
+        return last.result;
+      } finally { await fh.close(); }
     },
     // Low level, for tests: seal and post a request exactly as this link does.
     raw(id) { const p = peerOf(id); return { id: p.rec.id, key: p.key, base: baseOf(p), box: (kind, body) => box(p, kind, body), post: (pathname, b) => postBox(p, pathname, b) }; }

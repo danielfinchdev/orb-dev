@@ -3,6 +3,7 @@
 // and signed with this PC's VAPID key (RFC 8292). Works when the phone's page is HTTPS (Tailscale), which browsers need
 // for push.
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import { tr } from '../core/context.mjs';
 
 const PUSH_HOSTS = [/(^|\.)fcm\.googleapis\.com$/, /(^|\.)android\.googleapis\.com$/, /(^|\.)push\.apple\.com$/, /(^|\.)push\.services\.mozilla\.com$/, /(^|\.)notify\.windows\.com$/];
@@ -55,6 +56,10 @@ export function encryptPayload(sub, payload) {
 
 // Sends one notification. Returns 'ok', 'gone' (the phone dropped the subscription: forget it) or 'error'.
 export async function sendPush(sub, data, vapid) {
+  // Tests (only with the test agents): the notification is written to a file instead of going to the push service.
+  if (process.env.ORB_FAKE_AGENTS && process.env.ORB_PUSH_LOG) {
+    try { fs.appendFileSync(process.env.ORB_PUSH_LOG, `${JSON.stringify({ endpoint: sub.endpoint, data })}\n`); return 'ok'; } catch { return 'error'; }
+  }
   try {
     const res = await fetch(sub.endpoint, {
       method: 'POST',

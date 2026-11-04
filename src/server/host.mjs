@@ -132,7 +132,8 @@ export function createHost({ home, version = packageVersion(), engine = ENGINE, 
 
   host.start = async () => { stopping = false; log(`Orb Núcleo ${version}: arrancando el motor en ${home}`); if (preUpdateBackup) await backupOnUpgrade(home, version, log); return spawnEngine(); };
   // Waits for the engine (also while it is being started again) and calls it.
-  host.call = async (method, params = {}) => {
+  // 3.6: as: 'control' (Orb Núcleo's own commands and local socket: the owner, who is on the server itself).
+  host.call = async (method, params = {}, { as = null } = {}) => {
     if (!child) throw new Error('el motor no está en marcha');
     await ready;
     const me = child; if (!me) throw new Error('el motor no está en marcha');
@@ -140,7 +141,7 @@ export function createHost({ home, version = packageVersion(), engine = ENGINE, 
     return new Promise((resolve, reject) => {
       const t = setTimeout(() => { pending.delete(id); reject(new Error('el motor no contesta')); }, callTimeoutMs);
       pending.set(id, { resolve, reject, timer: t });
-      try { me.send({ type: 'call', id, method, params }); } catch (error) { clearTimeout(t); pending.delete(id); reject(error); }
+      try { me.send({ type: 'call', id, method, params, ...(as ? { as } : {}) }); } catch (error) { clearTimeout(t); pending.delete(id); reject(error); }
     });
   };
   // Clean stop: the engine closes the phone access (and `tailscale serve`) and its agents; after waitMs it is killed.

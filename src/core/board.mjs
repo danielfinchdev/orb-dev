@@ -157,7 +157,8 @@ export class Board {
     this.run(`INSERT INTO projects (name, path, notes, created_at, person_id) VALUES (?, ?, ?, ?, ?)
               ON CONFLICT(name) DO UPDATE SET path = excluded.path, notes = excluded.notes`, name, checked, String(notes ?? '').slice(0, 2000), now(), existing ? existing.person_id ?? null : person ?? null);
     this.ensureProjectLog(name);
-    this.event(null, actor, 'project.saved', `${name} -> ${checked}`);
+    // 3.6 (WS2): the activity line is the project's person's (not everyone's feed).
+    this.event(null, actor, 'project.saved', `${name} -> ${checked}`, { person: existing ? existing.person_id ?? null : person ?? null });
     this.changed('projects');
     return this.project(name);
   }

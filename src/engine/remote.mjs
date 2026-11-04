@@ -20,9 +20,12 @@ import { IS_WIN } from '../agents/common.mjs';
 import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal, open, sealText, openText, openBytes, AAD, CLOCK_SKEW_MS, shortSecret } from '../core/mobile-crypto.mjs';
 import { newVapidKeys, checkSubscription, sendPush } from './webpush.mjs';
 import { wake, normalMac } from '../core/wol.mjs';
-import { PROTOCOL, CODE_ALPHABET, RELAY_EVENTS, shortCodeLabel } from '../core/link.mjs';
+import { PROTOCOL, MIN_PROTOCOL, FORWARD_MIN, FEATURES, versionOfProtocol, CODE_ALPHABET, RELAY_EVENTS, shortCodeLabel } from '../core/link.mjs';
 import { PHONE_SET as ALLOWED, BOTS_OWNER, ORB_SET, CONSOLE_SET, CENTRO_PHONE } from '../core/policy.mjs';
-import { principalOf } from '../core/authz.mjs';
+import { principalOf, reaches, audienceOf, ownerOfBoard, peopleWith, audit } from '../core/authz.mjs';
+import { checkTicket, getPerson } from '../core/persons.mjs';
+import { MAGIC as BACKUP_MAGIC, backupDir } from '../core/backup.mjs';
+import { cloneVerdict } from '../core/export.mjs';
 
 const RENDERER = path.resolve(process.env.ORB_RENDERER || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'renderer'));
 const SESSION_DAYS = 30; // a phone unused for this long has to be paired again
@@ -88,7 +91,10 @@ const LINK_ALLOWED = new Set(['link.status']);
 export const ROLE_FORWARD = { taller: ALLOWED };
 // 3.5: «terminal» is the orb command-line client (src/terminal): the same rights as a browser.
 export const KINDS = ['phone', 'browser', 'orb', 'terminal'];
-const FORWARD_MS = 60_000; // a forwarded call the workshop does not answer in a minute fails
+const FORWARD_MS = Number(process.env.ORB_FAKE_AGENTS && process.env.ORB_FORWARD_MS) || 60_000; // a forwarded call the workshop does not answer in a minute fails
+// 3.6: backups another Orb keeps here (link op backup.put): at most this size each, and the last few of each Orb.
+const BACKUP_PUT_MAX = Number(process.env.ORB_FAKE_AGENTS && process.env.ORB_BACKUP_PUT_MAX) || 2 * 1024 * 1024 * 1024;
+const BACKUP_PUT_KEEP = 3;
 const PAIR_FAILS_MAX = 20; // wrong attempts (all addresses together) that cancel the code on screen
 
 // The checks of a call coming from outside (a phone, or the centre forwarding a phone's call): null when it may run, or
@@ -113,8 +119,9 @@ export const PREVIEWS = ['all', 'chat', 'none'];
 export const pushPreview = (config) => (PREVIEWS.includes(config?.mobile?.preview) ? config.mobile.preview : 'chat');
 // What a notification says: what ('chat': the assistant's chat, 'bots': a bot's message, card or reminder) with its own
 // title and text, or only the assistant's name and «Tienes un mensaje nuevo».
-export function pushContent(what, { title, body }, config) {
-  const v = pushPreview(config); const name = config?.assistantName ?? 'Orb';
+// 3.6: preview: the person's own choice (Mi perfil), else the settings' (as in 3.5.1).
+export function pushContent(what, { title, body }, config, preview = null) {
+  const v = PREVIEWS.includes(preview) ? preview : pushPreview(config); const name = config?.assistantName ?? 'Orb';
   const shown = v === 'all' || (v === 'chat' && what === 'chat');
   return shown ? { title: String(title ?? name).slice(0, 80), body: String(body ?? '').slice(0, 200) } : { title: name, body: tr('msg.remote.pushHidden') };
 }
@@ -144,6 +151,8 @@ export function kindForPairing(issued, claimed) {
   if (PAIR_KINDS.includes(issued)) return issued;
   return ['phone', 'browser', 'terminal'].includes(claimed) ? claimed : 'phone';
 }
+// 3.6 (A11): «<computer>.local» when the computer's name is a valid host name (letters, digits and dashes).
+export const localName = (host = os.hostname()) => { const h = String(host ?? '').toLowerCase().replace(/\.local$/, ''); return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(h) ? `${h}.local` : null; };
 const isLoopback = (ip) => /^(127\.|::1$)/.test(String(ip ?? '').replace(/^::ffff:/, ''));
 // 3.5.1: whether a pairing comes from a browser's page over plain http on the home network: not a program (no Origin: the
 // terminal, another Orb), not the Android app, not this PC (or Tailscale's https, which arrives through loopback), not the
@@ -222,7 +231,7 @@ e.waitUntil(self.registration.showNotification(d.title||'Orb',{body:d.body||'',t
 self.addEventListener('notificationclick',e=>{e.notification.close();const u=(e.notification.data&&e.notification.data.url)||'/';
 e.waitUntil(self.clients.matchAll({type:'window',includeUncontrolled:true}).then(l=>{for(const c of l){if('focus' in c)return c.focus()}return self.clients.openWindow(u)}))});`;
 
-export function createRemote({ board, api, log, emit = () => {} }) {
+export function createRemote({ board, api, log, emit = () => {}, version = null }) {
   let servers = []; // http servers (one per address)
   let state = { running: false, routes: [], error: null };
   let generation = 0; // moved by stop(): a start() still waiting for Tailscale gives up
@@ -235,10 +244,22 @@ export function createRemote({ board, api, log, emit = () => {} }) {
   const role = () => myRole();
   const orbName = () => orbNameOf(ctx.config);
   const failures = new Map(); // address -> timestamps of wrong pairing attempts (one noisy device cannot lock out the others)
-  const clients = new Set(); // live-event streams: { res, device, key }
+  const clients = new Set(); // live-event streams: { res, device, key, person }
   const seen = new Map(); // device id -> Map(nonce -> expiry): requests already answered (replays are refused)
   const keys = new Map(); // device id -> session key
-  const uploads = () => path.join(ctx.paths.internal, 'adjuntos-movil');
+  // 3.6: whose a device is (a row from before 3.6, without a person, is the owner's), and each person's own folder of
+  // pictures (a phone may only attach the ones its person uploaded).
+  const owner = () => ownerOfBoard(board);
+  const personOf = (d) => d?.person_id ?? owner();
+  const nameOf = (pid) => getPerson(board, pid)?.name ?? null;
+  const uploadsRoot = () => path.join(ctx.paths.internal, 'adjuntos-movil');
+  const uploads = (person = owner()) => path.join(uploadsRoot(), String(person ?? 'dueno').replace(/[^\w-]/g, '_'));
+  const previewOf = (pid) => { try { return board.personSetting(pid, 'preview') ?? null; } catch { return null; } };
+  // What this Orb says of itself on every hello and /api/me (3.6, protocol 3).
+  const versions = () => ({ v: PROTOCOL, min: MIN_PROTOCOL, version, features: FEATURES });
+  const metaV = (d) => Number(parseMeta(d).v ?? 2);
+  // 3.6: a client too old for this Orb is told to update (in its own words: «Actualiza …»).
+  const tooOld = (v) => Number.isFinite(Number(v)) && Number(v) > 0 && Number(v) < MIN_PROTOCOL;
 
   // This PC's own keys: X25519 for the phones, VAPID for notifications. Made once, kept in the database.
   const own = (() => {
@@ -366,7 +387,7 @@ export function createRemote({ board, api, log, emit = () => {} }) {
       touch(device, req);
       res.writeHead(200, { ...HEADERS, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
       res.write(': hola\n\n');
-      const client = { res, device: device.id, key: keyOf(device), kind: device.kind ?? kindOf({ name: device.name }), role: device.role ?? null, at: Date.now() };
+      const client = { res, device: device.id, key: keyOf(device), kind: device.kind ?? kindOf({ name: device.name }), role: device.role ?? null, at: Date.now(), person: personOf(device) };
       const mine = [...clients].filter((c) => c.device === device.id);
       if (mine.length >= STREAMS_PER_DEVICE) { try { mine[0].res.end(); } catch { /* closed */ } clients.delete(mine[0]); }
       clients.add(client);
@@ -393,7 +414,15 @@ export function createRemote({ board, api, log, emit = () => {} }) {
     if (msg.clock) return clockOff(res);
     touch(device, req);
 
-    if (what === 'me') return reply(res, device, msg.nonce, { ok: true, result: { device: device.name, name: ctx.config.assistantName, orb: orbName(), role: role(), v: PROTOCOL, pc: pcFingerprint, push: Boolean(device.push), vapid: own.vapid.publicKey } });
+    if (what === 'me') {
+      // 3.6: who this device is for here, and the versions of both sides (the client says its own).
+      const cv = Number(msg.body?.v);
+      if (Number.isFinite(cv) && cv > 0 && cv !== metaV(device)) board.run('UPDATE devices SET meta = ? WHERE id = ?', JSON.stringify({ ...parseMeta(device), v: cv }), device.id);
+      if (tooOld(cv)) return reply(res, device, msg.nonce, { ok: false, status: 426, update: 'me', error: tr('msg.link.updateClient', { has: versionOfProtocol(cv), need: versionOfProtocol(MIN_PROTOCOL) }) });
+      const pid = personOf(device);
+      return reply(res, device, msg.nonce, { ok: true, result: { device: device.name, name: ctx.config.assistantName, orb: orbName(), role: role(), ...versions(), pc: pcFingerprint, push: Boolean(device.push), vapid: own.vapid.publicKey,
+        person: { id: pid, name: nameOf(pid) } } });
+    }
     if (what === 'push') {
       // Turn notifications on (a subscription made by this phone's browser) or off (null).
       try {
@@ -409,33 +438,40 @@ export function createRemote({ board, api, log, emit = () => {} }) {
     // 3.5: { method, target: 'taller' } is the same as taller.<method>: the centre passes it on to its workshop.
     if (msg.body?.target === 'taller' && !method.startsWith('taller.')) method = `taller.${method}`;
     const deny = (error) => reply(res, device, msg.nonce, { ok: false, status: 403, error });
+    // 3.6: «Puede administrar» counts only on a device of the owner; a strong ticket (a PIN typed on this device in the
+    // last minutes, persons.verifyPin) goes with the call that needs it.
+    const admin = Boolean(device.admin) && personOf(device) === owner();
+    const allowed = allowedFor(role(), device.kind, admin, Number(device.kind_ok) === 1);
+    const strongUntil = checkTicket(typeof msg.body?.ticket === 'string' ? msg.body.ticket : null, personOf(device), device.id) || null;
+    const principal = principalOf(board, { device: admin === Boolean(device.admin) ? device : { ...device, admin: 0 }, ceiling: allowed, strongUntil });
+    const failed = (error) => reply(res, device, msg.nonce, { ok: false, status: error.extra?.status ?? error.status ?? 400, error: oneLine(error?.message ?? String(error), 1000), ...(error.reason ? { reason: error.reason } : {}), ...(error.extra ?? {}) });
     if (method.startsWith('taller.')) {
-      try { return reply(res, device, msg.nonce, { ok: true, result: (await remote.taller(method.slice(7), params, { from: device.id })) ?? null }); }
-      catch (error) { return reply(res, device, msg.nonce, { ok: false, status: error.extra?.status ?? 400, error: oneLine(error?.message ?? String(error), 1000), ...(error.extra ?? {}) }); }
+      try { return reply(res, device, msg.nonce, { ok: true, result: (await remote.taller(method.slice(7), params, { from: device.id, principal })) ?? null }); }
+      catch (error) { return failed(error); }
     }
-    if (LINK_ALLOWED.has(method)) return reply(res, device, msg.nonce, { ok: true, result: remote.linkStatus({ forPhone: true }) });
+    if (LINK_ALLOWED.has(method)) return reply(res, device, msg.nonce, { ok: true, result: remote.linkStatus({ forPhone: true, person: personOf(device) }) });
     // 3.5: the Orb mode of a phone or a terminal is the work of the Orb that programs: there it goes, when it is another one.
-    if (device.kind !== 'orb' && devForwards(method) && devTargetDevice()) {
-      try { return reply(res, device, msg.nonce, { ok: true, result: (await remote.taller(method, params, { from: device.id })) ?? null }); }
-      catch (error) { return reply(res, device, msg.nonce, { ok: false, status: error.extra?.status ?? 400, error: oneLine(error?.message ?? String(error), 1000), ...(error.extra ?? {}) }); }
+    // 3.6: the one of this device's person.
+    if (device.kind !== 'orb' && devForwards(method) && devTargetDevice(personOf(device))) {
+      try { return reply(res, device, msg.nonce, { ok: true, result: (await remote.taller(method, params, { from: device.id, principal })) ?? null }); }
+      catch (error) { return failed(error); }
     }
     // 2.6: which account the assistant spends is chosen on the PC (the brain's agent and model, also from the phone).
     if (method === 'chat.settings' && params.account !== undefined) delete params.account;
     // 3.5: a bot learns that the user writes from a phone or a terminal (from the device's kind, never from what it sends).
     if (method === 'bots.send' || method === 'bots.groups.send') { delete params.via; if (device.kind === 'phone' || device.kind === 'terminal') params.via = device.kind; }
-    const allowed = allowedFor(role(), device.kind, Boolean(device.admin), Number(device.kind_ok) === 1);
     // 3.5.1: who answers a bot's card (kept with the card) and with which rights: set here, never by what the device sends.
     if (method === 'bots.decide') { delete params.by; params.by = approverOf(device, allowed); }
-    const why = guardCall(board, method, params, { uploadsDir: uploads(), allowed });
+    const why = guardCall(board, method, params, { uploadsDir: uploads(personOf(device)), allowed });
     if (why) return deny(why);
     try {
       // 3.6: as the device's person, within what this device may call (WS2: the router and per-person shaping).
-      let result = shapeResult(method, (await api.call(method, params, principalOf(board, { device, ceiling: allowed }))) ?? null);
+      let result = shapeResult(method, (await api.call(method, params, principal)) ?? null);
       // What this device may do here (the interface shows or hides the buttons for it).
-      if (method === 'app.state' && result) result = { ...result, access: { admin: Boolean(device.admin), bots: allowed.has('bots.create'), links: allowed.has('link.qr'), approve: Number(device.approve ?? 1) === 1 } };
+      if (method === 'app.state' && result) result = { ...result, access: { admin, bots: allowed.has('bots.create'), links: allowed.has('link.qr'), approve: Number(device.approve ?? 1) === 1 } };
       return reply(res, device, msg.nonce, { ok: true, result });
     }
-    catch (error) { return reply(res, device, msg.nonce, { ok: false, error: oneLine(error?.message ?? String(error), 1000) }); }
+    catch (error) { return reply(res, device, msg.nonce, { ok: false, error: oneLine(error?.message ?? String(error), 1000), ...(error?.reason ? { reason: error.reason, status: error.status ?? 403 } : {}) }); }
   }
 
   // 3.5: what another Orb sends on its link: who it is (hello), answers to forwarded calls (reply), its live events
@@ -447,9 +483,22 @@ export function createRemote({ board, api, log, emit = () => {} }) {
     if (op === 'bye') { remote.revoke(device.id, { quiet: true }); return ok(); }
     if (device.kind !== 'orb') return no(tr('msg.remote.pcOnly'));
     const b = msg.body ?? {};
+    if (op === 'backup.put') return backupPut(res, device, msg, b);
     if (op === 'hello') {
-      const meta = { ...parseMeta(device), host: oneLine(String(b.host ?? ''), 80) || null, macs: (Array.isArray(b.macs) ? b.macs : []).map(normalMac).filter(Boolean).slice(0, 8),
-        version: b.version ? oneLine(String(b.version), 40) : null, platform: b.platform ? oneLine(String(b.platform), 20) : null };
+      const before = parseMeta(device);
+      // 3.6: the other Orb's identity: a newer incarnation is the same Orb moved; an older one, or the same one on another
+      // machine, a copy: not served, and its person is told.
+      const seen = b.orb && /^[0-9a-f]{32}$/.test(String(b.orb.orbId ?? '')) ? { orbId: String(b.orb.orbId), incarnation: Number(b.orb.incarnation) || 1, host: b.orb.host ? oneLine(String(b.orb.host), 80) : null } : null;
+      const verdict = seen ? cloneVerdict(before.orb ?? null, seen) : 'new';
+      if (verdict === 'clone') {
+        if (!before.clone) { board.run('UPDATE devices SET meta = ? WHERE id = ?', JSON.stringify({ ...before, clone: true }), device.id); board.notice(tr('msg.link.clone', { name: device.name }), 'warning', { person: personOf(device), owner: personOf(device) !== owner() }); }
+        return no(tr('msg.link.cloneRefused'), 409);
+      }
+      if (verdict === 'moved') board.notice(tr('msg.link.moved', { name: device.name }), 'info', { person: personOf(device) });
+      const meta = { ...before, host: oneLine(String(b.host ?? ''), 80) || null, macs: (Array.isArray(b.macs) ? b.macs : []).map(normalMac).filter(Boolean).slice(0, 8),
+        version: b.version ? oneLine(String(b.version), 40) : null, platform: b.platform ? oneLine(String(b.platform), 20) : null,
+        // 3.6: the protocol it speaks (an Orb of 3.5 says none: 2) and its identity.
+        v: Number(b.v ?? 2) || 2, min: Number(b.min ?? 1) || 1, features: Array.isArray(b.features) ? b.features.map(String).slice(0, 20) : [], ...(seen ? { orb: seen, clone: false } : {}) };
       const r = ROLES.includes(b.role) ? b.role : device.role;
       board.run('UPDATE devices SET meta = ?, role = ? WHERE id = ?', JSON.stringify(meta), r ?? null, device.id);
       for (const c of clients) if (c.device === device.id) c.role = r;
@@ -457,9 +506,12 @@ export function createRemote({ board, api, log, emit = () => {} }) {
       // (Ajustes › Magic Link); the owner is told when it starts saying so.
       if (doesDev(r ?? 'centro') && Number(device.dev_ok) !== 1 && device.role !== r) board.notice(tr('msg.link.confirmTaller', { name: device.name }), 'warning');
       // wantsEvents: whether this Orb wants its live events (only from the one its phones' Orb mode goes to).
-      ok({ role: role(), name: orbName(), v: PROTOCOL, wantsEvents: devTargetDevice()?.id === device.id });
+      // 3.6: whom this link is for here, the versions, and this Orb's identity (the other side checks it the same way).
+      const pid = personOf(device);
+      let myId = null; try { const { orbIdOf } = await import('../core/backup.mjs'); const x = orbIdOf(ctx.home); myId = { orbId: x.orbId, incarnation: x.incarnation, host: os.hostname().slice(0, 80) }; } catch { /* none */ }
+      ok({ role: role(), name: orbName(), ...versions(), person: { id: pid, name: nameOf(pid) }, ...(myId ? { orb: myId } : {}), wantsEvents: devTargetDevice(pid)?.id === device.id });
       linkChanged();
-      if (devTargetDevice()?.id === device.id) flushQueue().catch((error) => log(`enlace: cola: ${error.message}`));
+      if (devTargetDevice(pid)?.id === device.id) flushQueue().catch((error) => log(`enlace: cola: ${error.message}`));
       return undefined;
     }
     if (op === 'reply') {
@@ -471,13 +523,49 @@ export function createRemote({ board, api, log, emit = () => {} }) {
     }
     if (op === 'events') {
       // Only the Orb this one sends the Orb mode to (its phones see what it does); any other is thanked and ignored.
-      if (!doesDev(device.role ?? 'centro') || Number(device.dev_ok) !== 1 || devTargetDevice()?.id !== device.id) return ok(false);
+      // 3.6: the workshop of the device's person, and its events go to that person's devices only.
+      const pid = personOf(device);
+      if (!doesDev(device.role ?? 'centro') || Number(device.dev_ok) !== 1 || devTargetDevice(pid)?.id !== device.id) return ok(false);
       for (const ev of (Array.isArray(b.list) ? b.list : []).slice(0, 200)) {
-        if (typeof ev?.e === 'string' && RELAY_EVENTS.has(ev.e)) emit(`taller:${ev.e}`, ev.e === 'config:changed' ? null : ev.p ?? null);
+        if (typeof ev?.e === 'string' && RELAY_EVENTS.has(ev.e)) emit(`taller:${ev.e}`, ev.e === 'config:changed' ? null : ev.p ?? null, { person: pid });
       }
       return ok();
     }
     return no('operación desconocida', 404);
+  }
+
+  // 3.6: a backup another Orb keeps here (it stays encrypted: this Orb cannot open it), sent in pieces. Only from an Orb
+  // of the owner that the owner confirmed; at most BACKUP_PUT_MAX bytes; the last BACKUP_PUT_KEEP of each Orb are kept.
+  const putting = new Map(); // upload id -> { device, file, size, total, name }
+  async function backupPut(res, device, msg, b) {
+    const ok = (result = true) => reply(res, device, msg.nonce, { ok: true, result });
+    const no = (error, status = 403) => reply(res, device, msg.nonce, { ok: false, status, error });
+    if (Number(device.kind_ok) !== 1 || personOf(device) !== owner()) return no(tr('msg.link.backupNotYours'));
+    const name = String(b.name ?? '');
+    const total = Number(b.total); const offset = Number(b.offset);
+    if (!/^orb-[\w-]{1,80}\.orbbak$/.test(name) || !Number.isInteger(total) || total < BACKUP_MAGIC.length || !Number.isInteger(offset) || offset < 0) return no(tr('msg.link.backupBad'), 400);
+    if (total > BACKUP_PUT_MAX) return no(tr('msg.link.backupTooBig', { mb: Math.round(BACKUP_PUT_MAX / 1048576) }), 413);
+    let data; try { data = Buffer.from(String(b.data ?? ''), 'base64'); } catch { return no(tr('msg.link.backupBad'), 400); }
+    const upload = String(b.upload ?? '').replace(/[^\w]/g, '').slice(0, 40);
+    const dir = path.join(backupDir(ctx.home, ctx.config), 'de-otros-orbs', device.id.replace(/[^\w-]/g, ''));
+    let u = putting.get(upload);
+    if (offset === 0) {
+      if (!data.subarray(0, BACKUP_MAGIC.length).equals(BACKUP_MAGIC)) return no(tr('msg.link.backupBad'), 400);
+      await fs.promises.mkdir(dir, { recursive: true });
+      u = { device: device.id, file: path.join(dir, `${name}.parcial`), final: path.join(dir, name), size: 0, total };
+      await fs.promises.writeFile(u.file, Buffer.alloc(0));
+      putting.set(upload, u);
+    }
+    if (!u || u.device !== device.id || u.total !== total || offset !== u.size || u.size + data.length > total) return no(tr('msg.link.backupBad'), 409);
+    await fs.promises.appendFile(u.file, data); u.size += data.length;
+    if (u.size < total) return ok({ stored: false, size: u.size });
+    putting.delete(upload);
+    await fs.promises.rename(u.file, u.final);
+    // Only the last few of this Orb stay.
+    const mine = (await fs.promises.readdir(dir)).filter((f) => f.endsWith('.orbbak')).sort();
+    for (const f of mine.slice(0, Math.max(0, mine.length - BACKUP_PUT_KEEP))) await fs.promises.rm(path.join(dir, f), { force: true }).catch(() => {});
+    board.event(null, 'usuario', 'backup.fromOrb', device.name);
+    return ok({ stored: true, size: u.size, name });
   }
 
   // 3.5: what a device that has only the short code needs to know (only while a code is on screen).
@@ -514,10 +602,15 @@ export function createRemote({ board, api, log, emit = () => {} }) {
     if (!proof || proof.pub !== body.pub) return fail();
     // The QR was right but the phone's clock is off: it tries again with the PC's time (the QR is not used up).
     if (!(Math.abs(Date.now() - Number(proof.t)) <= CLOCK_SKEW_MS)) return clockOff(res);
+    // 3.6: a device too old for this Orb is told to update first (the QR is not used up).
+    if (tooOld(proof.v)) return send(res, 426, { error: tr('msg.link.updateClient', { has: versionOfProtocol(proof.v), need: versionOfProtocol(MIN_PROTOCOL) }), update: 'me' });
     // 3.5.1: what the device is was chosen when the QR was made; a device that says otherwise is refused (the QR stays).
     const kind = kindForPairing(pairing.device, KINDS.includes(proof.kind) ? proof.kind : kindOf({ name: proof.name }));
     if (!kind) return send(res, 403, { error: tr(pairing.device === 'orb' ? 'msg.link.wantsOrb' : 'msg.link.notForOrb') });
-    const { route, admin: askedAdmin, approve, dev } = pairing;
+    const { route, admin: wantedAdmin, approve, dev } = pairing;
+    // 3.6: whom the QR was made for («¿Para quién?»), whatever the device says; «Puede administrar» only for the owner.
+    const person = pairing.person ?? owner();
+    const askedAdmin = person === owner() ? wantedAdmin : false;
     pairing = null; // one use
     const id = crypto.randomUUID();
     const name = oneLine(typeof proof.name === 'string' && proof.name ? proof.name : tr(kind === 'orb' ? 'msg.link.defaultOrb' : 'msg.remote.defaultName'), 60);
@@ -525,18 +618,18 @@ export function createRemote({ board, api, log, emit = () => {} }) {
     // «Puede administrar»: asked by whoever made the QR (true: the PC, `orb-nucleo enlazar --admin` on the server itself or
     // a device that administers), or 'first': the first device of a server without a window gets it.
     const admin = askedAdmin === true || (askedAdmin === 'first' && !board.one('SELECT id FROM devices WHERE admin = 1 AND public_key IS NOT NULL'));
-    const meta = kind === 'orb' ? { host: oneLine(String(proof.host ?? ''), 80) || null, macs: (Array.isArray(proof.macs) ? proof.macs : []).map(normalMac).filter(Boolean).slice(0, 8), version: proof.version ? oneLine(String(proof.version), 40) : null } : {};
+    const meta = { ...(kind === 'orb' ? { host: oneLine(String(proof.host ?? ''), 80) || null, macs: (Array.isArray(proof.macs) ? proof.macs : []).map(normalMac).filter(Boolean).slice(0, 8), version: proof.version ? oneLine(String(proof.version), 40) : null } : {}), v: Number(proof.v ?? 2) || 2 };
     const devOk = kind === 'orb' && dev ? 1 : 0;
-    board.run('INSERT INTO devices (id, name, token_hash, created_at, last_seen, public_key, route, kind, role, ip, meta, admin, kind_ok, approve, dev_ok) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)',
-      id, name, `clave:${id}`, now(), now(), body.pub, route, kind, peerRole, who, JSON.stringify(meta), admin ? 1 : 0, approve === false ? 0 : 1, devOk);
+    board.run('INSERT INTO devices (id, name, token_hash, created_at, last_seen, public_key, route, kind, role, ip, meta, admin, kind_ok, approve, dev_ok, person_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)',
+      id, name, `clave:${id}`, now(), now(), body.pub, route, kind, peerRole, who, JSON.stringify(meta), admin ? 1 : 0, approve === false ? 0 : 1, devOk, person);
     board.event(null, 'usuario', 'device.paired', name);
     const wantsDev = Boolean(peerRole && doesDev(peerRole) && !programs());
-    board.notice(tr(wantsDev ? (devOk ? 'msg.link.tallerLinked' : 'msg.link.confirmTaller') : 'msg.remote.deviceLinked', { name }), wantsDev && !devOk ? 'warning' : 'success');
+    board.notice(tr(wantsDev ? (devOk ? 'msg.link.tallerLinked' : 'msg.link.confirmTaller') : 'msg.remote.deviceLinked', { name }), wantsDev && !devOk ? 'warning' : 'success', person === owner() ? {} : { person, owner: true });
     // The answer is sealed with the new session key: the phone checks it really is the PC of the QR. 3.5.1: and with the
     // code's key too, so a device that got a key from someone in the middle finds out (nobody else has the code).
     const key = sessionKey(own.priv, devPub); keys.set(id, key);
     linkChanged();
-    return send(res, 200, { id, box: seal(key, { id, name: ctx.config.assistantName, orb: orbName(), role: role(), v: PROTOCOL, pc: pcFingerprint }, AAD.paired(id)),
+    return send(res, 200, { id, box: seal(key, { id, name: ctx.config.assistantName, orb: orbName(), role: role(), ...versions(), pc: pcFingerprint, person: { id: person, name: nameOf(person) } }, AAD.paired(id)),
       confirm: seal(pairingKey(own.priv, devPub, secretOf), { id, pc: pcFingerprint }, AAD.confirm(id)) });
   }
 
@@ -547,6 +640,7 @@ export function createRemote({ board, api, log, emit = () => {} }) {
   // A picture from the phone (encrypted): checked by its first bytes (not its name), stored in the app's folder, path returned.
   let uploading = 0;
   async function upload(req, res, device) {
+    const mine = uploads(personOf(device));
     const auth = openHeader(req, device, 'upload');
     if (!auth) { req.resume(); return send(res, 401, { error: tr('msg.remote.notLinked') }); }
     if (auth.clock) { req.resume(); return clockOff(res); }
@@ -558,42 +652,57 @@ export function createRemote({ board, api, log, emit = () => {} }) {
       const ext = b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) ? 'png'
         : b[0] === 0xff && b[1] === 0xd8 ? 'jpg' : b.subarray(0, 4).toString() === 'RIFF' && b.subarray(8, 12).toString() === 'WEBP' ? 'webp' : b.subarray(0, 3).toString() === 'GIF' ? 'gif' : null;
       if (!ext) return reply(res, device, auth.nonce, { ok: false, status: 415, error: tr('msg.remote.imageTypes') });
-      await fs.promises.mkdir(uploads(), { recursive: true });
+      await fs.promises.mkdir(mine, { recursive: true });
       await pruneUploads(b.length);
-      const file = path.join(uploads(), `${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${ext}`);
+      const file = path.join(mine, `${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${ext}`);
       await fs.promises.writeFile(file, b);
       return reply(res, device, auth.nonce, { ok: true, result: { path: file } });
     } catch (error) { log(`móvil: subida: ${error.message}`); return reply(res, device, auth.nonce, { ok: false, error: tr('msg.remote.cannotSaveImage') }); }
     finally { uploading--; }
   }
   // Old pictures go (7 days), and the oldest ones too while the folder would pass its quota.
+  // 3.6: the pictures of every person (each in its folder; the ones of 3.5 at the top too), the oldest first.
   async function pruneUploads(incoming = 0) {
-    let files; try { files = await fs.promises.readdir(uploads()); } catch { return; }
     const list = [];
-    for (const f of files) { try { const st = await fs.promises.stat(path.join(uploads(), f)); list.push({ f, at: st.mtimeMs, size: st.size }); } catch { /* gone */ } }
+    const walk = async (dir, depth) => {
+      let files; try { files = await fs.promises.readdir(dir, { withFileTypes: true }); } catch { return; }
+      for (const f of files) {
+        const full = path.join(dir, f.name);
+        if (f.isDirectory()) { if (depth === 0) await walk(full, 1); continue; }
+        try { const st = await fs.promises.stat(full); list.push({ f: full, at: st.mtimeMs, size: st.size }); } catch { /* gone */ }
+      }
+    };
+    await walk(uploadsRoot(), 0);
     list.sort((a, b) => a.at - b.at);
     let total = list.reduce((n, x) => n + x.size, 0) + incoming;
     for (const x of list) {
       if (Date.now() - x.at < UPLOADS_DAYS * 86_400_000 && total <= UPLOADS_TOTAL) break;
-      await fs.promises.rm(path.join(uploads(), x.f), { force: true }).catch(() => {});
+      await fs.promises.rm(x.f, { force: true }).catch(() => {});
       total -= x.size;
     }
   }
 
-  // Notifications: a new message in the assistant's chat (an answer, a task that needs approval, finished or failed work)
-  // goes to the phones that turned them on and do not have the app open right now.
-  function notify(payload) {
-    if (!payload || payload.role === 'usuario') return;
+  // 3.6: a notification goes to the devices of the people it is for, with each person's own preview (Mi perfil), never
+  // to a device whose app is open right now.
+  function pushTo(audience, what, { title, body }, tag) {
     const openNow = new Set([...clients].map((c) => c.device));
-    const name = ctx.config.assistantName;
-    const note = pushContent('chat', { title: payload.role === 'orb' ? name : tr('msg.remote.pushNotice', { name }), body: payload.body }, ctx.config);
-    for (const d of board.all('SELECT id, push FROM devices WHERE push IS NOT NULL')) {
+    for (const d of board.all('SELECT id, push, person_id FROM devices WHERE push IS NOT NULL')) {
       if (openNow.has(d.id)) continue;
+      const pid = personOf(d);
+      if (!reaches(board, audience, pid)) continue;
       let sub; try { sub = JSON.parse(d.push); } catch { continue; }
-      sendPush(sub, { ...note, tag: 'orb-chat', url: '/' }, own.vapid)
+      const note = pushContent(what, { title, body }, ctx.config, previewOf(pid));
+      sendPush(sub, { ...note, tag, url: '/' }, own.vapid)
         .then((r) => { if (r === 'gone') board.run('UPDATE devices SET push = NULL WHERE id = ?', d.id); })
         .catch(() => {});
     }
+  }
+  // Notifications: a new message in the assistant's chat (an answer, a task that needs approval, finished or failed work)
+  // goes to the phones that turned them on and do not have the app open right now.
+  function notify(payload, audience = null) {
+    if (!payload || payload.role === 'usuario') return;
+    const name = ctx.config.assistantName;
+    pushTo(audience ?? audienceOf(board, 'chat:new', payload), 'chat', { title: payload.role === 'orb' ? name : tr('msg.remote.pushNotice', { name }), body: payload.body }, 'orb-chat');
   }
 
   // ---- listening: one http server per address; the Tailscale https name goes through `tailscale serve` to loopback.
@@ -618,7 +727,7 @@ export function createRemote({ board, api, log, emit = () => {} }) {
     const mine = generation;
     const m = ctx.config.mobile ?? {};
     const port = m.port ?? 3131;
-    const routes = []; const hosts = []; const origins = []; const errors = [];
+    const routes = []; const hosts = []; const origins = []; const errors = []; let localUrl = null;
     const bind = async (address) => {
       const r = await listen(address, port);
       if (r.error) { errors.push(tr('msg.remote.portBusy', { address, port, error: r.error.message })); return false; }
@@ -637,6 +746,10 @@ export function createRemote({ board, api, log, emit = () => {} }) {
           if (mine !== generation) return gaveUp();
           if (await bind(address)) { hosts.push(`${address}:${port}`); origins.push(`http://${address}:${port}`); if (!routes.some((r) => r.kind === 'wifi')) routes.push({ kind: 'wifi', url: `http://${address}:${port}/`, secure: false, address }); }
         }
+        // 3.6 (A11): this computer's name on the home network (<name>.local, answered by the system's mDNS), so a phone
+        // still finds it when the Wi-Fi address changes.
+        const local = localName();
+        if (local && routes.some((r) => r.kind === 'wifi')) { hosts.push(`${local}:${port}`); origins.push(`http://${local}:${port}`); localUrl = `http://${local}:${port}/`; }
       }
       if (m.tailscale !== false) {
         const ts = await tailscaleAddress();
@@ -656,7 +769,7 @@ export function createRemote({ board, api, log, emit = () => {} }) {
       }
     }
     if (mine !== generation) return gaveUp();
-    state = { running: routes.length > 0, routes, hosts, origins, lan: lanAddresses().join(','), error: routes.length ? (errors[0] ?? null) : (errors.join(' ') || tr('msg.remote.noNetwork')) };
+    state = { running: routes.length > 0, routes, hosts, origins, local: localUrl, lan: lanAddresses().join(','), error: routes.length ? (errors[0] ?? null) : (errors.join(' ') || tr('msg.remote.noNetwork')) };
     for (const r of routes) log(`acceso móvil (${r.kind}) en ${r.url}`);
     pruneUploads().catch(() => {});
     return state;
@@ -672,18 +785,13 @@ export function createRemote({ board, api, log, emit = () => {} }) {
 
   // 3.5: a notification of the bots (a reminder, a bot's answer, a card waiting): to every phone with notifications on
   // that does not have the app open.
-  // 3.6: person: only that person's devices (a device without a person is the owner's).
-  function pushNote({ title, body, person = null } = {}) {
-    const openNow = new Set([...clients].map((c) => c.device));
-    const note = pushContent('bots', { title, body }, ctx.config);
-    const owner = board.ownerId?.() ?? null;
-    for (const d of board.all('SELECT id, push, person_id FROM devices WHERE push IS NOT NULL')) {
-      if (person && (d.person_id ?? owner) !== person) continue;
-      if (openNow.has(d.id)) continue;
-      let sub; try { sub = JSON.parse(d.push); } catch { continue; }
-      sendPush(sub, { ...note, tag: 'orb-bot', url: '/' }, own.vapid)
-        .then((r) => { if (r === 'gone') board.run('UPDATE devices SET push = NULL WHERE id = ?', d.id); }).catch(() => {});
-    }
+  // 3.6: for whom: person, else the people of its conversation (a bot's chat: its talker; a group: its people), else the
+  // bot's, else the owner.
+  function pushNote({ title, body, person = null, conversation = null, bot = null } = {}) {
+    const audience = person ? { persons: new Set([String(person)]) }
+      : conversation != null ? audienceOf(board, 'bot.message', { conversation })
+        : bot != null ? { persons: peopleWith(board, { type: 'bot', id: bot }) } : { owner: true };
+    pushTo(audience, 'bots', { title, body }, 'orb-bot');
   }
 
   // ---- 3.5 Magic Link: linked devices, the workshop seen from the centre, forwarding, Wake-on-LAN and the waiting queue.
@@ -693,7 +801,8 @@ export function createRemote({ board, api, log, emit = () => {} }) {
     const kind = d.kind ?? kindOf({ name: d.name });
     // 3.5.1: approve (may answer the bots' cards), confirmed (an Orb the owner chose when making its QR or confirmed
     // after), devOk (may be the Orb that programs for this one) and devPending (says it programs, not confirmed yet).
-    return { id: d.id, name: d.name, kind, role: d.role ?? null, createdAt: d.created_at, lastSeen: d.last_seen ?? null, ip: d.ip ?? null,
+    const pid = personOf(d);
+    return { id: d.id, name: d.name, kind, role: d.role ?? null, createdAt: d.created_at, lastSeen: d.last_seen ?? null, ip: d.ip ?? null, person: pid, personName: nameOf(pid), v: Number(meta.v ?? 2), clone: Boolean(meta.clone),
       route: d.route ?? null, push: Boolean(d.push), online: on.has(d.id), host: meta.host ?? null, version: meta.version ?? null, canWake: Boolean(meta.macs?.length), admin: Boolean(d.admin),
       approve: Number(d.approve ?? 1) === 1, confirmed: kind !== 'orb' || Number(d.kind_ok) === 1, devOk: Number(d.dev_ok) === 1, devPending: kind === 'orb' && ['taller', 'todo'].includes(d.role) && Number(d.dev_ok) !== 1 };
   }
@@ -703,21 +812,28 @@ export function createRemote({ board, api, log, emit = () => {} }) {
   const tallers = () => board.all("SELECT * FROM devices WHERE kind = 'orb' AND kind_ok = 1 AND dev_ok = 1 AND role IN ('taller', 'todo') AND public_key IS NOT NULL ORDER BY COALESCE(last_seen, created_at) DESC");
   // 3.5: where the Orb mode of this Orb's phones goes: the Orb chosen in «Orb para programar»; else this one if it programs
   // (null); else the linked one that does (the one on right now, or else the last one seen).
-  const devTargetDevice = () => {
-    const list = tallers(); const pick = String(ctx.config?.devTarget ?? '');
-    if (pick && pick !== 'local') { const d = list.find((x) => x.id === pick); if (d) return d; }
-    if (programs()) return null;
+  // 3.6: each person's own: the workshops linked for them (the owner's also chooses with «Orb para programar»).
+  const devTargetDevice = (person = owner()) => {
+    const list = tallers().filter((d) => personOf(d) === person);
+    if (person === owner()) { const pick = String(ctx.config?.devTarget ?? ''); if (pick && pick !== 'local') { const d = list.find((x) => x.id === pick); if (d) return d; } }
+    if (programs() && (person === owner() || !list.length)) return null;
     const on = onlineIds(); return list.find((d) => on.has(d.id)) ?? list[0] ?? null;
   };
-  const tallerDevice = devTargetDevice;
-  const pendingCount = () => board.one("SELECT COUNT(*) AS n FROM link_queue WHERE status = 'pendiente'")?.n ?? 0;
-  const tallerView = (d) => ({ ...deviceView(d), queued: pendingCount() });
+  // The queue of one person (rows of 3.5, without a person, are the owner's).
+  const queueScope = (person) => (person === owner() ? { where: '(person_id = ? OR person_id IS NULL)', args: [person] } : { where: 'person_id = ?', args: [person] });
+  const pendingCount = (person = owner()) => { const q = queueScope(person); return board.one(`SELECT COUNT(*) AS n FROM link_queue WHERE status = 'pendiente' AND ${q.where}`, ...q.args)?.n ?? 0; };
+  const tallerView = (d) => ({ ...deviceView(d), queued: pendingCount(personOf(d)) });
   const offline = (d) => linkError(tr('msg.link.tallerOffline', { name: d?.name ?? tr('msg.link.defaultOrb') }), { status: 503, offline: true, lastSeen: d?.last_seen ?? null, canWake: Boolean(parseMeta(d).macs?.length) });
   let changeTimer = null;
   function linkChanged() {
     changeTimer ??= setTimeout(() => {
       changeTimer = null;
-      try { emit('link:devices', devices()); emit('link:status', remote.linkStatus({ forPhone: true })); } catch (error) { log(`enlace: ${error.message}`); }
+      // 3.6: each person gets the state of their own devices; the owner, everyone's.
+      try {
+        emit('link:devices', devices());
+        const people = new Set([owner(), ...[...clients].map((c) => c.person)]);
+        for (const pid of people) emit('link:status', remote.linkStatus({ forPhone: true, person: pid }), { person: pid });
+      } catch (error) { log(`enlace: ${error.message}`); }
     }, 80);
     changeTimer.unref?.();
   }
@@ -729,40 +845,72 @@ export function createRemote({ board, api, log, emit = () => {} }) {
   }
   // A call for the workshop goes down its own live stream (it may be behind a router or asleep: the centre never has to
   // reach it); its answer comes back as a 'reply' on /api/link.
-  function forward(d, method, params) {
+  // 3.6 (A13, A12): with who asked here ({ person, device, channel, rights }) and a request_id the workshop remembers (the
+  // same request sent again runs once there). A timeout is «desconocido»: the workshop may have done it.
+  const asSent = (principal) => (principal ? { person: principal.person, device: principal.device ?? null, channel: principal.channel, rights: { approve: Boolean(principal.rights?.approve) } } : null);
+  function forward(d, method, params, { principal = null, requestId = crypto.randomUUID() } = {}) {
     const streams = [...clients].filter((c) => c.device === d.id).sort((a, b) => b.at - a.at);
     if (!streams.length) return Promise.reject(offline(d));
     const id = crypto.randomUUID();
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { forwarded.delete(id); reject(linkError(tr('msg.link.tallerTimeout', { name: d.name }), { status: 504 })); }, FORWARD_MS);
+      const timer = setTimeout(() => { forwarded.delete(id); reject(linkError(tr('msg.link.tallerUnknown', { name: d.name }), { status: 504, unknown: true, requestId })); }, FORWARD_MS);
       timer.unref?.();
       forwarded.set(id, { resolve, reject, device: d.id, timer });
-      try { streams[0].res.write(`data: ${sealText(streams[0].key, { e: 'link:request', p: { id, method, params } }, AAD.event(d.id))}\n\n`); }
+      try { streams[0].res.write(`data: ${sealText(streams[0].key, { e: 'link:request', p: { id, method, params, request_id: requestId, principal: asSent(principal), v: PROTOCOL } }, AAD.event(d.id))}\n\n`); }
       catch { forwarded.delete(id); clearTimeout(timer); reject(offline(d)); }
     });
   }
+  // 3.6 (A13): whether this person's call may go to that workshop: only to a workshop linked for them; a workshop of 3.5
+  // (protocol 2) does not know people, so it gets the owner's calls only. Audited either way.
+  function mayForward(d, principal, method) {
+    if (!principal || principal.channel === 'system') return;
+    const res = { type: 'device', id: d.id };
+    const deny = (reason, message) => { audit(board, principal, `taller.${method}`, res, 'deny', reason); throw linkError(message, { status: reason === 'oldWorkshop' ? 426 : 403, reason }); };
+    if (principal.person !== personOf(d)) deny('notYourTaller', tr('msg.link.notYourTaller'));
+    if (metaV(d) < FORWARD_MIN && principal.person !== owner()) deny('oldWorkshop', tr('msg.link.updateOrb', { name: d.name, has: parseMeta(d).version ?? versionOfProtocol(metaV(d)), need: versionOfProtocol(FORWARD_MIN) }));
+    audit(board, principal, `taller.${method}`, res, 'allow', 'forward');
+  }
+  // The principal of a queued call when it is sent (its person, and the device that asked, if it is still linked).
+  const queuedPrincipal = (row) => {
+    const dev = row.from_device ? board.one('SELECT * FROM devices WHERE id = ?', row.from_device) : null;
+    const pid = row.person_id ?? owner();
+    if (dev && personOf(dev) === pid) return principalOf(board, { device: dev });
+    return principalOf(board, { forwarded: true, person: pid });
+  };
   // The calls left for the workshop while it was off, sent in order as soon as it says hello.
   async function flushQueue() {
     if (flushing) return;
     flushing = true;
-    let done = 0; let d = null;
+    const done = new Map(); // person -> { n, name }
+    const skip = new Set(); // people whose workshop is off now
     try {
       for (;;) {
-        d = tallerDevice(); if (!d || !onlineIds().has(d.id)) break;
-        const row = board.one("SELECT * FROM link_queue WHERE status = 'pendiente' ORDER BY id LIMIT 1"); if (!row) break;
+        const rows = board.all("SELECT * FROM link_queue WHERE status = 'pendiente' ORDER BY id LIMIT 200");
+        const row = rows.find((r) => !skip.has(r.person_id ?? owner())); if (!row) break;
+        const pid = row.person_id ?? owner();
+        const d = devTargetDevice(pid);
+        if (!d || !onlineIds().has(d.id)) { skip.add(pid); continue; }
         let params = {}; try { params = JSON.parse(row.params); } catch { /* none */ }
+        // 3.6 (A12): every queued call has its request_id (one of 3.5 gets one now, kept).
+        let requestId = row.request_id;
+        if (!requestId) { requestId = crypto.randomUUID(); board.run('UPDATE link_queue SET request_id = ? WHERE id = ?', requestId, row.id); }
         try {
-          const result = await forward(d, row.method, params);
+          const principal = queuedPrincipal(row);
+          mayForward(d, principal, row.method);
+          const result = await forward(d, row.method, params, { principal, requestId });
           board.run("UPDATE link_queue SET status = 'hecho', result = ?, done_at = ? WHERE id = ?", JSON.stringify(result ?? null).slice(0, 20_000), now(), row.id);
-          emit('link:queue', { id: row.id, status: 'hecho', method: row.method }); done++;
+          emit('link:queue', { id: row.id, status: 'hecho', method: row.method, person: pid });
+          const c = done.get(pid) ?? { n: 0, name: d.name }; c.n++; done.set(pid, c);
         } catch (error) {
-          if (error.extra?.offline) break; // it went away again: the rest waits
-          board.run("UPDATE link_queue SET status = 'error', result = ?, done_at = ? WHERE id = ?", JSON.stringify({ error: oneLine(error.message, 500) }), now(), row.id);
-          emit('link:queue', { id: row.id, status: 'error', method: row.method, error: oneLine(error.message, 300) });
+          if (error.extra?.offline) { skip.add(pid); continue; } // it went away again: the rest waits
+          // A timeout leaves it «desconocido» (it may have run there): «comprobar» sends the same request_id again.
+          const status = error.extra?.unknown ? 'desconocido' : 'error';
+          board.run('UPDATE link_queue SET status = ?, result = ?, done_at = ? WHERE id = ?', status, JSON.stringify({ error: oneLine(error.message, 500) }), now(), row.id);
+          emit('link:queue', { id: row.id, status, method: row.method, error: oneLine(error.message, 300), person: pid });
         }
       }
     } finally { flushing = false; }
-    if (done) board.notice(tr('msg.link.queueDone', { n: done, name: d?.name ?? '' }), 'success');
+    for (const [pid, c] of done) board.notice(tr('msg.link.queueDone', { n: c.n, name: c.name }), 'success', pid === owner() ? {} : { person: pid });
   }
 
   const remote = {
@@ -770,8 +918,11 @@ export function createRemote({ board, api, log, emit = () => {} }) {
     // Engine events go to the paired phones too (only the ones the interface needs), each sealed for its phone.
     // 3.5: a linked Orb gets only what is meant for it (the calls it is asked to run), never the interface's events; the
     // workshop's own events reach the phones as taller:<event>.
-    broadcast(event, payload) {
-      if (event === 'chat:new') notify(payload);
+    // 3.6: audience (from the router, src/engine/router.mjs): each stream gets the event only if it is for its person.
+    broadcast(event, payload, audience = null, to = null) {
+      const aud = audience ?? audienceOf(board, event, payload);
+      const isFor = to ?? ((pid) => reaches(board, aud, pid));
+      if (event === 'chat:new') notify(payload, aud);
       if (!clients.size || !(EVENTS.has(event) || event.startsWith('taller:') || (event === 'agents:login' && isHeadless()))) return;
       // The settings themselves never travel to a phone (the page just reloads what it is allowed to see).
       const value = { e: event, p: event === 'config:changed' || event === 'taller:config:changed' ? null : payload };
@@ -779,6 +930,7 @@ export function createRemote({ board, api, log, emit = () => {} }) {
       // reach them under their own name, for their Orb mode (which goes there).
       const plain = event.startsWith('taller:') ? { e: event.slice(7), p: value.p } : null;
       for (const c of clients) {
+        if (!isFor(c.person)) continue;
         if (c.kind === 'orb' && !(BOT_EVENTS.has(event) && keepsBots())) continue;
         if (c.res.writableLength > STREAM_BACKLOG) { try { c.res.destroy(); } catch { /* gone */ } clients.delete(c); continue; }
         try {
@@ -812,7 +964,7 @@ export function createRemote({ board, api, log, emit = () => {} }) {
       return { enabled: Boolean(ctx.config.mobile?.enabled), running: Boolean(state.running), routes: state.routes ?? [], error: state.error ?? null, pc: pcFingerprint,
         wifi: ctx.config.mobile?.wifi !== false, tailscale: ctx.config.mobile?.tailscale !== false, role: role(), name: orbName(),
         lanHttp: ctx.config.mobile?.lanHttp === true, preview: pushPreview(ctx.config),
-        devices: board.all('SELECT id, name, created_at, last_seen, route, kind, role, ip, push IS NOT NULL AS push FROM devices ORDER BY created_at DESC').map((d) => ({ ...d, push: Boolean(d.push) })) };
+        devices: board.all('SELECT id, name, created_at, last_seen, route, kind, role, ip, person_id, push IS NOT NULL AS push FROM devices ORDER BY created_at DESC').map(({ person_id: pid, ...d }) => ({ ...d, person: pid ?? owner(), push: Boolean(d.push) })) };
     },
     // A one-time QR for 5 minutes, for one of the ways in (Wi-Fi or Tailscale). The code and this PC's key travel in the
     // URL fragment (#), which the browser never sends to any server.
@@ -823,20 +975,25 @@ export function createRemote({ board, api, log, emit = () => {} }) {
     // approve: whether it may answer the bots' cards (default yes); dev: for an Orb, whether it may be the one that
     // programs for this one; admin: true (whoever makes the QR is the owner: the PC, the server's own terminal or a device
     // that administers) or 'first' (only while no device administers, on a server without a window).
-    pair(kind, { admin = false, device = null, approve = true, dev = false } = {}) {
+    // 3.6: person: whom the device is for (the QR's «¿Para quién?»; api-link.mjs checks who may choose it).
+    pair(kind, { admin = false, device = null, approve = true, dev = false, person = null } = {}) {
       if (!state.running) throw new Error(tr('msg.remote.enableFirst'));
       const route = state.routes.find((r) => r.kind === kind) ?? state.routes[0];
       const code = crypto.randomBytes(18).toString('base64url');
       const short = Array.from({ length: 8 }, () => CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)]).join('');
       const forKind = PAIR_KINDS.includes(device) ? device : null;
       pairing = { code, short, short3: shortSecret(short, b64.enc(own.pub)), expires: Date.now() + PAIR_MINUTES * 60_000, route: route.kind, fails: 0,
-        admin: admin === true && isHeadless() ? true : admin === 'first' && isHeadless() ? 'first' : false, device: forKind, approve: approve !== false, dev: forKind === 'orb' && dev === true };
+        admin: admin === true && isHeadless() ? true : admin === 'first' && isHeadless() ? 'first' : false, device: forKind, approve: approve !== false, dev: forKind === 'orb' && dev === true,
+        person: person ?? owner() };
       const others = state.routes.filter((r) => r !== route).map((r) => r.url);
+      // 3.6 (A11): the name of this computer on the home network (name.local) too, for when the Wi-Fi address changes.
+      if (state.local && !others.includes(state.local) && route.url !== state.local) others.push(state.local);
       const frag = new URLSearchParams({ vincular: code, pc: b64.enc(own.pub), v: String(PROTOCOL), n: orbName(), r: role() });
       if (others.length) frag.set('a', others.join(','));
       return { url: `${route.url}#${frag}`, payload: { v: PROTOCOL, urls: [route.url, ...others], pc: b64.enc(own.pub), code, name: orbName(), role: role(), expiresAt: pairing.expires },
         code: shortCodeLabel(short), address: route.url, expiresAt: pairing.expires, kind: route.kind, secure: route.secure, pc: pcFingerprint, name: orbName(), role: role(),
-        device: forKind, admin: pairing.admin === true, approve: pairing.approve, browserOk: Boolean(route.secure) || route.address === '127.0.0.1' || route.kind === 'tailscale' || ctx.config.mobile?.lanHttp === true };
+        device: forKind, admin: pairing.admin === true, approve: pairing.approve, person: { id: pairing.person, name: nameOf(pairing.person) },
+        browserOk: Boolean(route.secure) || route.address === '127.0.0.1' || route.kind === 'tailscale' || ctx.config.mobile?.lanHttp === true };
     },
     revoke(id, { quiet = false } = {}) {
       const d = board.one('SELECT * FROM devices WHERE id = ?', String(id)); if (!d) throw new Error(tr('msg.remote.noDevice'));
@@ -866,7 +1023,9 @@ export function createRemote({ board, api, log, emit = () => {} }) {
     },
     // 3.5: «Puede administrar» on or off for a linked device (its next call already has it or not).
     setAdmin(id, admin) {
-      const d = board.one('SELECT id, name FROM devices WHERE id = ?', String(id)); if (!d) throw new Error(tr('msg.remote.noDevice'));
+      const d = board.one('SELECT id, name, person_id FROM devices WHERE id = ?', String(id)); if (!d) throw new Error(tr('msg.remote.noDevice'));
+      // 3.6: «Puede administrar» only on a device of the owner.
+      if (admin && personOf(d) !== owner()) throw Object.assign(new Error(tr('msg.link.adminOwnerOnly')), { userFacing: true });
       board.run('UPDATE devices SET admin = ? WHERE id = ?', admin ? 1 : 0, d.id);
       board.event(null, 'usuario', admin ? 'device.admin' : 'device.noAdmin', d.name);
       linkChanged();
@@ -891,21 +1050,47 @@ export function createRemote({ board, api, log, emit = () => {} }) {
       return deviceView(board.one('SELECT * FROM devices WHERE id = ?', d.id));
     },
     // Who is linked and who is on. For a phone, without the addresses.
-    linkStatus({ forPhone = false } = {}) {
-      const list = devices();
-      const t = devTargetDevice();
+    // 3.6 (B2): person: whose state it is. A person sees their own devices; the owner sees the names of everyone's (who is
+    // on and when is not told to the others).
+    linkStatus({ forPhone = false, person = owner() } = {}) {
+      const all = devices();
+      const list = person === owner() ? all : all.filter((d) => d.person === person);
+      const t = devTargetDevice(person);
       // dev: where the Orb mode of a phone goes: 'local' (this Orb programs), 'remote' (to «taller») or 'none'.
-      return { role: role(), name: orbName(), v: PROTOCOL, running: Boolean(state.running), dev: t ? 'remote' : programs() ? 'local' : 'none',
-        ...(forPhone ? {} : { devTarget: String(ctx.config?.devTarget ?? ''), tallers: tallers().map((d) => deviceView(d)) }),
-        devices: forPhone ? list.map(({ id, name, kind, role: r, online, lastSeen }) => ({ id, name, kind, role: r, online, lastSeen })) : list,
+      return { role: role(), name: orbName(), ...versions(), running: Boolean(state.running), dev: t ? 'remote' : programs() ? 'local' : 'none',
+        ...(forPhone ? {} : { devTarget: person === owner() ? String(ctx.config?.devTarget ?? '') : '', tallers: tallers().filter((d) => person === owner() || personOf(d) === person).map((d) => deviceView(d)) }),
+        devices: forPhone ? list.map(({ id, name, kind, role: r, online, lastSeen, person: p, personName }) => ({ id, name, kind, role: r, online, lastSeen, person: p, personName })) : list,
         taller: t ? (forPhone ? (({ ip: _ip, ...rest }) => rest)(tallerView(t)) : tallerView(t)) : null };
     },
     // taller.<sub> on the centre: status, wake, queue and queued are answered here; anything else goes to the workshop.
-    async taller(sub, params = {}, { from = null } = {}) {
+    // 3.6: principal: who asks (a device here, or this Orb's window); the workshop is that person's, the queue too.
+    async taller(sub, params = {}, { from = null, principal = null } = {}) {
       sub = String(sub ?? '');
-      const d = devTargetDevice();
+      const pid = principal && principal.channel !== 'system' ? principal.person : owner();
+      const d = devTargetDevice(pid);
       if (sub === 'status') return d ? tallerView(d) : { linked: false, online: false, local: programs() };
-      if (!d) throw programs() ? linkError(tr('msg.link.notCentro'), { status: 409 }) : linkError(tr('msg.link.noTaller'), { status: 404 });
+      if (sub === 'queued') {
+        const q = queueScope(pid);
+        return board.all(`SELECT * FROM link_queue WHERE ${q.where} ORDER BY id DESC LIMIT 50`, ...q.args).map((r) => { let result = null; try { result = r.result ? JSON.parse(r.result) : null; } catch { /* plain */ } return { id: r.id, method: r.method, status: r.status, createdAt: r.created_at, doneAt: r.done_at, result }; });
+      }
+      // 3.6 (A12): «comprobar / reintentar» a call left «desconocido» or failed: the same request_id goes again (if the
+      // workshop did it, it answers what it answered then).
+      if (sub === 'retry') {
+        const q = queueScope(pid);
+        const row = board.one(`SELECT * FROM link_queue WHERE id = ? AND ${q.where}`, Number(params.id), ...q.args);
+        if (!row) throw linkError(tr('msg.link.noQueued'), { status: 404 });
+        if (!['desconocido', 'error'].includes(row.status)) return { id: row.id, status: row.status };
+        board.run("UPDATE link_queue SET status = 'pendiente', done_at = NULL WHERE id = ?", row.id);
+        emit('link:queue', { id: row.id, status: 'pendiente', method: row.method, person: pid });
+        if (d && onlineIds().has(d.id)) await flushQueue().catch((error) => log(`enlace: cola: ${error.message}`));
+        const after = board.one('SELECT status FROM link_queue WHERE id = ?', row.id);
+        return { id: row.id, status: after?.status ?? 'pendiente' };
+      }
+      if (!d) {
+        // Someone else's workshop is not for this person (and is not named: they learn nothing of it).
+        if (principal && tallers().some((x) => personOf(x) !== pid)) audit(board, principal, `taller.${sub}`, null, 'deny', 'noOwnTaller');
+        throw programs() ? linkError(tr('msg.link.notCentro'), { status: 409 }) : linkError(tr('msg.link.noTaller'), { status: 404 });
+      }
       if (sub === 'wake') {
         const macs = parseMeta(d).macs ?? [];
         if (!macs.length) throw linkError(tr('msg.link.noMacs', { name: d.name }), { status: 409 });
@@ -917,17 +1102,28 @@ export function createRemote({ board, api, log, emit = () => {} }) {
       if (sub === 'queue') {
         const method = String(params.method ?? ''); const inner = params.params && typeof params.params === 'object' ? params.params : {};
         forwardCheck(method, inner);
-        const id = board.run('INSERT INTO link_queue (method, params, from_device, created_at) VALUES (?, ?, ?, ?)', method, JSON.stringify(inner).slice(0, 200_000), from, now()).lastInsertRowid;
-        emit('link:queue', { id: Number(id), status: 'pendiente', method });
+        mayForward(d, principal, method);
+        const requestId = crypto.randomUUID();
+        const id = board.run('INSERT INTO link_queue (method, params, from_device, created_at, person_id, request_id) VALUES (?, ?, ?, ?, ?, ?)', method, JSON.stringify(inner).slice(0, 200_000), from, now(), pid, requestId).lastInsertRowid;
+        emit('link:queue', { id: Number(id), status: 'pendiente', method, person: pid });
         if (onlineIds().has(d.id)) flushQueue().catch((error) => log(`enlace: cola: ${error.message}`));
         return { id: Number(id), queued: true, online: onlineIds().has(d.id) };
       }
-      if (sub === 'queued') {
-        return board.all('SELECT * FROM link_queue ORDER BY id DESC LIMIT 50').map((r) => { let result = null; try { result = r.result ? JSON.parse(r.result) : null; } catch { /* plain */ } return { id: r.id, method: r.method, status: r.status, createdAt: r.created_at, doneAt: r.done_at, result }; });
-      }
       forwardCheck(sub, params);
+      mayForward(d, principal, sub);
       if (!onlineIds().has(d.id)) throw offline(d);
-      return forward(d, sub, params);
+      const requestId = crypto.randomUUID();
+      try { return await forward(d, sub, params, { principal, requestId }); }
+      catch (error) {
+        // 3.6 (A12): no answer in time: kept in the queue as «desconocido», to check (or retry) with the same request_id.
+        if (error.extra?.unknown) {
+          const qid = board.run("INSERT INTO link_queue (method, params, from_device, created_at, person_id, request_id, status, done_at) VALUES (?, ?, ?, ?, ?, ?, 'desconocido', ?)",
+            sub, JSON.stringify(params ?? {}).slice(0, 200_000), from, now(), pid, requestId, now()).lastInsertRowid;
+          error.extra.queueId = Number(qid);
+          emit('link:queue', { id: Number(qid), status: 'desconocido', method: sub, person: pid });
+        }
+        throw error;
+      }
     }
   };
   return remote;
