@@ -35,9 +35,13 @@ export const PHONE_SET = new Set(['app.state', 'chat.list', 'chat.send', 'conver
   // 3.5: talking to the bots, answering their cards and questions, pausing one and its reminders. Creating, changing or
   // deleting bots, their memories, the golden rules, what nobody touches and Home Assistant's token are set on the PC.
   'bots.list', 'bots.get', 'bots.chat', 'bots.send', 'bots.stop', 'bots.decide', 'bots.answer', 'bots.pause', 'bots.groups.list', 'bots.groups.chat', 'bots.groups.send',
-  'bots.memory.get', 'bots.rules.get', 'bots.protected.get', 'bots.reminders.list', 'bots.reminders.create', 'bots.reminders.cancel', 'bots.ha.states', 'bots.srv.status']);
+  'bots.memory.get', 'bots.rules.get', 'bots.protected.get', 'bots.reminders.list', 'bots.reminders.create', 'bots.reminders.cancel', 'bots.ha.states', 'bots.srv.status',
+  // 3.6 (WS4): the cards waiting for one's answer, and the memory changes a bot wanted (see, approve, undo).
+  'bots.cards', 'bots.memory.pending', 'bots.memory.approve', 'bots.memory.history', 'bots.memory.undo', 'bots.ha.allow.get']);
 // 3.5: what the bots' owner manages from afar (a confirmed Orb of theirs, or a device with «Puede administrar»).
-export const BOTS_OWNER = ['bots.create', 'bots.update', 'bots.delete', 'bots.groups.create', 'bots.groups.update', 'bots.groups.delete', 'bots.memory.set', 'bots.rules.set', 'bots.protected.set', 'bots.ha.get', 'bots.ha.set'];
+export const BOTS_OWNER = ['bots.create', 'bots.update', 'bots.delete', 'bots.groups.create', 'bots.groups.update', 'bots.groups.delete', 'bots.memory.set', 'bots.rules.set', 'bots.protected.set', 'bots.ha.get', 'bots.ha.set',
+  // 3.6 (WS4): what Home Assistant does without a card, and a bot's conversation brought by «Llevar mis bots».
+  'bots.ha.allow.set', 'bots.history.import'];
 export const ORB_SET = new Set([...PHONE_SET, ...BOTS_OWNER]);
 export const CONSOLE_SET = new Set([...ORB_SET, 'link.qr', 'link.devices', 'link.rename', 'link.revoke', 'link.setAdmin', 'link.setApprove', 'link.confirm', 'link.peers', 'link.connect', 'link.disconnect']);
 // 3.5 «Solo Orb»: on a server without a window a linked device signs its agents in.
@@ -328,7 +332,44 @@ const ORBMODE = {
   'shares.remove': { public: true }
 };
 // ======== WS4 · bots: append entries here.
-const BOTSP = {};
+// 3.6 (WS4): a memory of a bot: the bot-wide one (which 'bot', the default) is read with «view» and written with «edit»;
+// the caller's own file of that bot (which 'mine') needs «talk»; 'global' is always the caller's own.
+const memRes = (p, wide) => (p.id == null || p.id === '' || p.id === 'global' ? null : { ...bot(p.id), right: p.which === 'mine' ? 'talk' : wide });
+// A card (a chat line of a bot's conversation): its meta, to see who may answer it and whether it is sensitive.
+const cardMeta = (board, item) => { try { return JSON.parse(dbOne(board, 'SELECT meta FROM chat WHERE id = ?', Number(item))?.meta || 'null'); } catch { return null; } };
+export const SENSITIVE_CARDS = new Set(['ha', 'srv', 'admin', 'confirm']);
+const sensitiveCard = (m) => Boolean(m && m.kind === 'bot_card' && SENSITIVE_CARDS.has(m.card) && !(m.card === 'admin' && m.payload?.action === 'pause'));
+// Saying yes: only the card's approvers. Saying no: also anyone who may talk in that conversation. A card without
+// approvers (made before 3.6) is answered by the conversation's person.
+const cardAnswer = (board, principal, p) => {
+  const m = cardMeta(board, p.item);
+  // No such card: the owner hears it from the method (as before 3.6), anyone else learns nothing.
+  if (!m || m.kind !== 'bot_card') return principal.role === 'owner' ? true : 'notFound';
+  const approvers = Array.isArray(m.approvers) ? m.approvers : null;
+  if (approvers?.includes(principal.person)) return true;
+  const talksThere = (() => { const r = dbOne(board, 'SELECT conversation_id FROM chat WHERE id = ?', Number(p.item)); const c = r?.conversation_id != null ? dbOne(board, 'SELECT person_id FROM conversations WHERE id = ?', r.conversation_id) : null; return c ? (c.person_id ?? dbOne(board, "SELECT id FROM persons WHERE role = 'owner' AND deleted_at IS NULL LIMIT 1")?.id) === principal.person : false; })();
+  if (!approvers && talksThere) return true;
+  if (p.decision !== 'allow' && talksThere) return true;
+  return 'notApprover';
+};
+const questionOf = (board, principal, p) => { const m = cardMeta(board, p.item); if (m?.kind !== 'bot_question') return principal.role === 'owner' ? true : 'notFound'; return m.talker == null || m.talker === principal.person ? true : 'notApprover'; };
+const BOTSP = {
+  'bots.memory.get': { res: (p) => memRes(p, 'view') },
+  'bots.memory.set': { res: (p) => memRes(p, 'edit') },
+  'bots.memory.history': { res: (p) => memRes(p, 'view') },
+  'bots.memory.pending': { public: true }, // the caller's own pending changes (and their bots' bot-wide ones)
+  'bots.memory.approve': { public: true }, // the method checks the change is of a memory the caller keeps
+  'bots.memory.undo': { public: true },
+  // a card: its approvers (not the line's conversation: a card of someone else's turn may be the caller's to answer)
+  'bots.decide': { check: cardAnswer, strong: (p, board) => p.decision === 'allow' && sensitiveCard(cardMeta(board, p.item)) },
+  'bots.answer': { check: questionOf },
+  'bots.cards': { public: true }, // the cards waiting for the caller
+  'bots.reminders.cancel': { res: (p) => ({ type: 'reminder', id: id(p.id) }), right: 'own' },
+  'bots.ha.allow.get': { public: true },
+  'bots.ha.allow.set': { res: () => ({ type: 'integration', id: 'ha' }), right: 'talk' },
+  'bots.history.import': { res: (p) => bot(p.id), right: 'talk' },
+  'bots.where': { public: true } // each person's own place
+};
 // ======== WS5 · data + time (backup, export, templates): append entries here.
 const DATA = {
   // Backups hold everyone's data: only the owner makes, lists, checks or restores them.
@@ -392,7 +433,13 @@ const EVENTS_ORBMODE = {
   // a line of no conversation (a task made by hand or by a schedule): its task's person
   'chat:new': (p) => (p?.conversation != null ? conv(p.conversation) : p?.person ? { person: p.person } : 'owner')
 };
-const EVENTS_BOTSP = {};
+// 3.6 (WS4): a bot's live state is of one person's lane (its partial text): that person only. A bot's or a group's line:
+// whoever sees that conversation (a bot's is always private).
+const EVENTS_BOTSP = {
+  'bot.state': (p) => (p?.person ? { person: p.person } : p?.conversation ? conv(p.conversation) : 'owner'),
+  'bot.message': (p) => conv(p?.conversation),
+  'bot.updated': (p) => (p?.id ? bot(p.id) : 'all')
+};
 const EVENTS_DATA = { 'backup:done': 'owner', 'backup:restoreReady': 'owner', 'data:moved': 'owner', 'data:personExported': (p) => (p?.person ? { person: p.person } : 'owner') };
 const EVENTS_UI = {};
 export const EVENTS = Object.freeze({ ...EVENTS_CORE, ...EVENTS_GATEWAY, ...EVENTS_ORBMODE, ...EVENTS_BOTSP, ...EVENTS_DATA, ...EVENTS_UI });

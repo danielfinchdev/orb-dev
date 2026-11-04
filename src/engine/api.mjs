@@ -752,7 +752,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       if (typeof method === 'string' && method.startsWith('centro.')) {
         if (params === null || typeof params !== 'object' || Array.isArray(params)) fail(tr('msg.api.badParams'));
         authorize(board, who, method, params);
-        return centroCall(method.slice(7), params);
+        return centroCall(method.slice(7), params, who);
       }
       const fn = Object.hasOwn(methods, method) ? methods[method] : null;
       if (!fn) fail(tr('msg.api.unknownAction', { method }));
