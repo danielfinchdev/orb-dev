@@ -20,6 +20,7 @@ import { useT } from '@/lib/i18n.js';
 import { personsOn, devicesByPerson } from '@/lib/persons.js';
 import { PersonDot } from '@/components/person-menu.jsx';
 import { loadMe } from '@/lib/store.js';
+import { ServerLinkSection, askUnlinkServer } from './server.jsx';
 
 const KIND_ICON = { phone: Smartphone, browser: Globe, orb: Monitor, terminal: Code2 };
 const kindIcon = (d) => (d.kind === 'orb' && d.role === 'centro' ? Server : KIND_ICON[d.kind] ?? Smartphone);
@@ -57,7 +58,9 @@ function BotsPlaceCard({ refresh }) {
   const [busy, setBusy] = useState(false);
   const load = () => call('bots.where').then(setWhere).catch(() => setWhere(null));
   useEffect(() => { load(); }, [refresh]);
-  if (!where?.peers?.length) return null;
+  // 3.7: with an Orb Server, each bot has its own home (Magic Link › Orb Server › Configurar, and each bot's info).
+  const server = useStore((s) => s.server);
+  if (!where?.peers?.length || server?.linked) return null;
   const card = botsLocationCard(where);
   const nameOf = (id) => where.peers.find((p) => p.id === id)?.name ?? '';
   const move = async (location, bring = false) => {
@@ -304,7 +307,11 @@ function DevicesCard({ devices, readOnly, reload }) {
 
 function PeersCard({ peers, reload }) {
   const t = useT();
-  const drop = async (p) => { if (await confirm(t('link.unlinkTitle', { name: p.name }), t('link.unlinkBody'), { ok: t('link.unlink'), danger: true })) { await act(call('link.disconnect', { id: p.id })); reload(); loadCentro(); } };
+  const server = useStore((s) => s.server);
+  const drop = async (p) => {
+    // 3.7: the Orb Server: its bots come back first, stay there, or nothing (the same three choices as Magic Link › Orb Server).
+    if (server?.linked && server.peer?.id === p.id) { await askUnlinkServer(p); reload(); return; }
+    if (await confirm(t('link.unlinkTitle', { name: p.name }), t('link.unlinkBody'), { ok: t('link.unlink'), danger: true })) { await act(call('link.disconnect', { id: p.id })); reload(); loadCentro(); } };
   return (
     <Card data-testid="link-peers">
       <CardHeader><CardTitle>{t('link.peers')}</CardTitle><CardDescription>{t('link.peersHint')}</CardDescription></CardHeader>
@@ -375,6 +382,8 @@ export function MagicLinkPanel({ grouped = false, users = null, phoneAccess = nu
         {data.error ? <p className="text-destructive text-sm">{data.error}</p> : null}
         <DevicesCard devices={data.devices} readOnly={!manage} reload={load} />
       </SubSection>
+      {/* 3.7: «Añadir Orb Server» and, once linked, the Server (the PC, or a browser that may manage). */}
+      {!bridge.mobile && manage ? <SubSection id="server" title={title('server')}><ServerLinkSection /></SubSection> : null}
       {orbs ? (
         <SubSection id="orbs" title={title('orbs')}>
           {!bridge.mobile ? <RoleCard /> : null}

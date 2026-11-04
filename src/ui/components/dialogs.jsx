@@ -24,6 +24,10 @@ function open(dialog) {
 function close(id, value) { setState((s) => { const d = (s.dialogs ?? []).find((x) => x.id === id); d?.resolve(value); return { dialogs: (s.dialogs ?? []).filter((x) => x.id !== id) }; }); }
 
 export const confirm = (title, description, { ok = t('comp.dialogs.ok'), cancel = t('comp.dialogs.cancel'), danger = false } = {}) => open({ kind: 'confirm', title, description, ok, cancel, danger });
+// 3.7: one of a few answers (each { value, label, hint?, variant? }); resolves with the value chosen, or null when closed.
+// With hints, each answer is a full-width button with its one line under it (the first one is the default).
+// cancel: false when one of the answers already is «leave it as it is».
+export const choose = (title, description, options, { testid, cancel = true } = {}) => open({ kind: 'choice', title, description, options, testid, cancel });
 // body: (values, set) => JSX; onOk(values) may throw (shown as a toast, the dialog stays open) or return the result.
 export const form = (title, { description, initial = {}, body, ok = t('comp.dialogs.ok'), onOk, wide = false }) => open({ kind: 'form', title, description, initial, body, ok, onOk, wide });
 
@@ -47,6 +51,32 @@ function FormDialog({ d }) {
   );
 }
 
+function ChoiceDialog({ d }) {
+  const rich = d.options.some((o) => o.hint);
+  return (
+    <div className="grid gap-4" data-testid={d.testid ?? 'choice-dialog'}>
+      <DialogHeader><DialogTitle>{d.title}</DialogTitle>{d.description ? <DialogDescription className="whitespace-pre-wrap">{d.description}</DialogDescription> : <DialogDescription className="sr-only">{d.title}</DialogDescription>}</DialogHeader>
+      {rich ? (
+        <div className="grid gap-2">
+          {d.options.map((o, i) => (
+            <button key={o.value} type="button" onClick={() => close(d.id, o.value)} data-testid={`choice-${o.value}`}
+              className={`press grid cursor-pointer gap-0.5 rounded-xl border px-4 py-3 text-left transition-colors ${i === 0 ? 'border-primary/60 bg-primary/5 hover:bg-primary/10' : 'hover:bg-accent/60'} ${o.variant === 'danger' ? 'text-destructive' : ''}`}>
+              <span className="text-[14px] font-medium">{o.label}</span>
+              {o.hint ? <span className="text-muted-foreground text-[12.5px]">{o.hint}</span> : null}
+            </button>
+          ))}
+          <div className="flex justify-end pt-1"><Button variant="ghost" onClick={() => close(d.id, null)} data-testid="choice-cancel">{t('comp.dialogs.cancel')}</Button></div>
+        </div>
+      ) : (
+        <DialogFooter>
+          {d.cancel ? <Button variant="ghost" onClick={() => close(d.id, null)} data-testid="choice-cancel">{t('comp.dialogs.cancel')}</Button> : null}
+          {d.options.map((o, i) => <Button key={o.value} variant={o.variant ?? (i === d.options.length - 1 ? 'default' : 'outline')} onClick={() => close(d.id, o.value)} data-testid={`choice-${o.value}`}>{o.label}</Button>)}
+        </DialogFooter>
+      )}
+    </div>
+  );
+}
+
 export function DialogHost() {
   const dialogs = useStore((s) => s.dialogs ?? []);
   return dialogs.map((d) => (
@@ -60,7 +90,7 @@ export function DialogHost() {
               <Button variant={d.danger ? 'destructive' : 'default'} onClick={() => close(d.id, true)}>{d.ok}</Button>
             </DialogFooter>
           </>
-        ) : <FormDialog d={d} />}
+        ) : d.kind === 'choice' ? <ChoiceDialog d={d} /> : <FormDialog d={d} />}
       </DialogContent>
     </Dialog>
   ));

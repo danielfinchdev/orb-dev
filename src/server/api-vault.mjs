@@ -58,7 +58,7 @@ export function vaultMethods({ board, log = () => {}, vault = null }) {
       const base = { allowed, available: Boolean(vault), argon2: argon2Available() };
       if (!allowed || !vault) return { ...base, configured: false };
       if (!vault.configured(p)) return { ...base, configured: false };
-      try { return { ...base, ...(await vault.status(p)) }; } catch (error) { return { ...base, configured: true, error: CODE.test(String(error?.code)) ? error.code : 'error' }; }
+      try { return { ...base, ...(await vault.status(p)), approvals: approvals.list(p) }; } catch (error) { return { ...base, configured: true, error: CODE.test(String(error?.code)) ? error.code : 'error' }; }
     },
     // { server, clientId, clientSecret, password, collection } → the state. Tried at once; nothing is kept if it fails.
     'vault.setup': async (params, who) => {

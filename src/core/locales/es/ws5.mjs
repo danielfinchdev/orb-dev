@@ -27,7 +27,7 @@ export default {
   'data.server.backupsIn': 'Copias en {folder}',
   'data.server.restoreReady': 'Copia comprobada ({files} archivos). Se pone en marcha al arrancar Orb otra vez.',
   'data.server.restoreDone': 'Copia restaurada. Lo que había antes está en {aside}.',
-  'data.server.restartService': 'Reinicia el servicio para usarla: systemctl --user restart orb-nucleo',
+  'data.server.restartService': 'Reinicia el servicio para usarla: systemctl --user restart orb-server',
   'data.server.recoveryCode': 'Tu código de recuperación (apúntalo y guárdalo fuera de este equipo; no se vuelve a mostrar):',
   'data.server.recoverySet': 'Código de recuperación guardado. Las copias nuevas se abren con él en otro equipo.',
   'data.server.moveDone': 'Copia para mover hecha: {file}. Llévala al equipo nuevo con su código.',

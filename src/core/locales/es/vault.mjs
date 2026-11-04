@@ -10,8 +10,8 @@ export default {
   'msg.vault.needsOk': 'Se ha pedido iniciar sesión en {host} con tu bóveda. Solo un bot con la herramienta «Contraseñas» puede pedírtelo con una tarjeta.',
   'msg.vault.filled': 'Orb Server ha iniciado sesión en {host} con tu bóveda.',
   'msg.vault.down': 'No se puede abrir tu bóveda de contraseñas porque su servidor no responde. Los bots no podrán iniciar sesión hasta que vuelva.',
-  'msg.vault.revoked': 'Tu bóveda ya no acepta la clave de API de Orb Server. Si la cambiaste, vuelve a conectarla en Ajustes › Contraseñas.',
-  'msg.vault.notConfigured': 'Un bot ha intentado iniciar sesión con tu bóveda, pero aún no la has conectado. Hazlo en Ajustes › Contraseñas.',
+  'msg.vault.revoked': 'Tu bóveda ya no acepta la clave de API de Orb Server. Si la cambiaste, vuelve a conectarla en Ajustes › Orb Server › Contraseñas.',
+  'msg.vault.notConfigured': 'Un bot ha intentado iniciar sesión con tu bóveda, pero aún no la has conectado. Hazlo en Ajustes › Orb Server › Contraseñas.',
   'msg.vault.notAllowed': 'El administrador de este Orb no ha activado la bóveda de contraseñas para ti.',
 
   // Motivos (cortos, sin datos de la bóveda)

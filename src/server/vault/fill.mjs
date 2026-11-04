@@ -131,6 +131,19 @@ export function boardApprovals(board, { addRequest = null, noticeEveryMs = 10 * 
   return {
     has: (person, uid, host) => Boolean(board.settingJson(okKey(person, uid, host))),
     grant: (person, uid, host) => grantVault(board, person, uid, host),
+    // 3.7 (WS4): the sites this person approved (Ajustes › Orb Server › Contraseñas): [{ host, at }], newest first, one per
+    // host (several items on one site count once). Nothing of the vault itself: only the host and when.
+    list(person) {
+      const prefix = `vault_ok:${person}:`;
+      const rows = board.all("SELECT key, value FROM settings WHERE key LIKE ? ESCAPE '\\'", `${prefix.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
+      const byHost = new Map();
+      for (const r of rows) {
+        const host = r.key.slice(prefix.length).split(':').slice(1).join(':'); if (!host) continue;
+        let at = null; try { at = JSON.parse(r.value)?.at ?? null; } catch { /* old value */ }
+        if (!byHost.has(host) || String(at ?? '') > String(byHost.get(host) ?? '')) byHost.set(host, at);
+      }
+      return [...byHost].map(([host, at]) => ({ host, at })).sort((a, b) => String(b.at ?? '').localeCompare(String(a.at ?? '')));
+    },
     forget: (person) => board.run("DELETE FROM settings WHERE key LIKE ? ESCAPE '\\'", `${`vault_ok:${person}:`.replace(/[\\%_]/g, (c) => `\\${c}`)}%`),
     // A bot asks: a card in its conversation (one at a time per item and host). Anyone else: a notice for the person.
     ask({ person, agent, host, uid }) {

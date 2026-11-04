@@ -19,6 +19,8 @@ import { useBots, useCanManage, BotFace, NoBots, BotsDown, Loading, BotPage } fr
 import { CreateBot, AvatarPicker, useHop } from './create.jsx';
 import { ShareButton, SharedBadge } from '@/components/share-dialog.jsx';
 import { personsOn, botAccountChoices } from '@/lib/persons.js';
+import { replicaActions, homeOf } from '@/lib/homes.js';
+import { HomeBadge } from './home.jsx';
 
 // 3.6: a bot thinks with Claude or Codex (Orb refuses the other agents as a bot's brain).
 const BOT_BRAINS = ['claude', 'codex'];
@@ -106,6 +108,9 @@ function BotEditor({ id }) {
   const toggleTool = (tool, on) => set({ tools: on ? [...new Set([...d.tools, tool])] : d.tools.filter((x) => x !== tool) });
   const toggleMcp = (name, on) => set({ accounts: { ...d.accounts, mcp: on ? [...new Set([...(d.accounts.mcp ?? []), name])] : (d.accounts.mcp ?? []).filter((x) => x !== name) } });
   const otherChief = bots.find((b) => b.is_chief && b.id !== d.id);
+  // 3.7: a bot run on another Orb is changed there (sent to it); while that Orb does not answer, only read here.
+  const locked = !isNew && !replicaActions(d).change;
+  const where = homeOf(d);
   const many = personsOn(me);
   const choices = many ? botAccountChoices({ accounts: app.config?.accounts ?? [], loans, me, agent: d.agent }) : [];
   const spending = choices.find((c) => c.id === d.accounts?.account) ?? null;
@@ -126,10 +131,16 @@ function BotEditor({ id }) {
       <PageHeader icon={<Button size="icon-sm" variant="ghost" onClick={back} aria-label={t('bots.back')}><ArrowLeft /></Button>} title={isNew ? t('bots.new') : t('bots.editName', { name: d.name })}>
         {isNew ? null : <SharedBadge type="bot" id={d.id} />}
         {isNew ? null : <ShareButton type="bot" id={d.id} name={d.name} owner={d.person_id ?? null} />}
-        {isNew ? null : <Button size="sm" variant="danger" onClick={remove} data-testid="bot-delete"><Trash2 />{t('bots.delete')}</Button>}
-        <Button size="sm" onClick={save} disabled={saving || !d.name.trim()} data-testid="bot-save">{t('bots.save')}</Button>
+        {isNew ? null : <Button size="sm" variant="danger" onClick={remove} disabled={locked} data-testid="bot-delete"><Trash2 />{t('bots.delete')}</Button>}
+        <Button size="sm" onClick={save} disabled={saving || !d.name.trim() || locked} data-testid="bot-save">{t('bots.save')}</Button>
       </PageHeader>
       <BotPage>
+        {!isNew && !where.here ? (
+          <div className={cn('flex items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-[13px]', locked ? 'border-warning/40 bg-warning/10' : 'bg-muted/40')} data-testid="editor-home">
+            <HomeBadge bot={d} />
+            <span className="min-w-0 flex-1">{locked ? t('home.changeWhenOnline', { name: where.kind === 'server' ? t('home.badge.server') : where.name }) : t('home.changesThere', { name: where.kind === 'server' ? t('home.badge.server') : where.name })}</span>
+          </div>
+        ) : null}
         <Card data-testid="bot-editor">
           <CardContent className="grid gap-4">
             {/* 3.6: its avatar: a live preview next to the name, then the shapes and the colours. */}
@@ -200,7 +211,7 @@ function BotEditor({ id }) {
             </label>
           </CardContent>
         </Card>
-        <div className="flex justify-end gap-2 pb-4"><Button variant="ghost" onClick={back}>{t('bots.cancel')}</Button><Button onClick={save} disabled={saving || !d.name.trim()}>{t('bots.save')}</Button></div>
+        <div className="flex justify-end gap-2 pb-4"><Button variant="ghost" onClick={back}>{t('bots.cancel')}</Button><Button onClick={save} disabled={saving || !d.name.trim() || locked}>{t('bots.save')}</Button></div>
       </BotPage>
     </>
   );

@@ -16,6 +16,8 @@ import { useT } from '@/lib/i18n.js';
 import { SHAPE_IDS, COLOR_IDS, avatarFor, avatarParts, parseAvatar } from '../../../core/avatar.mjs';
 import { useBots } from './common.jsx';
 import { cn } from '@/lib/utils.js';
+import { useHomes, serverHome, homesChanged } from '@/lib/server.js';
+import { Server, Monitor } from 'lucide-react';
 
 // A colour swatch painted like the avatar's own body (avatar.mjs › avatarParts), so the dot and the bot match.
 const swatch = (c) => { const p = avatarParts('mochi', c); return { background: `linear-gradient(${p.top}, ${p.bottom})` }; };
@@ -81,15 +83,22 @@ export function CreateBot({ onClose }) {
   const [avatar, setAvatar] = useState(() => avatarFor(`nuevo-${bots.length}`));
   const [saving, setSaving] = useState(false);
   const preview = useHop();
+  // 3.7: «¿Dónde se ejecuta?»: on the Orb Server (always on; the default once one is linked) or on this PC.
+  const homes = useHomes();
+  const srv = botsVia() ? null : serverHome(homes);
+  const [where, setWhere] = useState(null);
+  const home = where ?? (srv ? 'server' : 'here');
   const change = (a) => { setAvatar(a); preview.hop(); };
   const create = async (e) => {
     e?.preventDefault();
     if (!name.trim() || saving) return;
     setSaving(true);
     const agent = BOT_BRAINS.includes(app?.assistant?.agent) ? app.assistant.agent : 'claude';
-    const r = await act(botCall('bots.create', { ...botPayload(newBotDraft(agent)), name: name.trim(), avatar }), t('bots.created'));
+    const r = await act(botCall('bots.create', { ...botPayload(newBotDraft(agent)), name: name.trim(), avatar, ...(home === 'server' && srv ? { home: srv.key } : {}) }), home === 'server' && srv ? t('home.createdOn', { name: srv.name }) : t('bots.created'));
     setSaving(false);
-    if (r) { await loadBots(); go({ view: 'bot-chat', id: r.id }); }
+    // Made here, then moved: if the Server did not take it, it stays here (and says so).
+    if (r?.move && r.move.ok === false) act(Promise.reject(new Error(t('home.createdHere', { name: srv?.name ?? 'Orb Server' }))));
+    if (r) { await loadBots(); homesChanged(); go({ view: 'bot-chat', id: r.id }); }
   };
   const button = <Button type="submit" disabled={saving || !name.trim()} className={phone ? 'h-12 w-full rounded-[14px] text-[15px]' : undefined} data-testid="bot-create-ok">{t('bots.create')}</Button>;
   return (
@@ -110,8 +119,21 @@ export function CreateBot({ onClose }) {
             <Input autoFocus={!phone} value={name} maxLength={40} onChange={(e) => setName(e.target.value)} placeholder={t('bots.f.namePh')} className="h-11 text-base" data-testid="bot-create-name" />
           </Field>
           <AvatarPicker value={avatar} onChange={change} size={phone ? 40 : 42} />
+          {srv ? (
+            <Field label={t('home.whereAsk')}>
+              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={t('home.whereAsk')} data-testid="bot-create-where">
+                {[['server', Server, t('home.badge.server'), t('home.whereServerHint')], ['here', Monitor, t('home.badge.here'), t('home.wherePcHint')]].map(([value, Icon, label, hint]) => (
+                  <button key={value} type="button" role="radio" aria-checked={home === value} onClick={() => setWhere(value)} data-testid={`bot-create-where-${value}`}
+                    className={cn('press grid cursor-pointer gap-0.5 rounded-xl border px-3 py-2.5 text-left transition-colors', home === value ? 'border-primary bg-primary/5' : 'hover:bg-accent/50')}>
+                    <span className="flex items-center gap-1.5 text-[14px] font-medium"><Icon className={cn('size-4', home === value ? 'text-primary' : 'text-muted-foreground')} /><span className="truncate">{label}</span></span>
+                    <span className="text-muted-foreground text-[12px] leading-snug">{hint}</span>
+                  </button>
+                ))}
+              </div>
+            </Field>
+          ) : null}
           <p className="text-muted-foreground text-xs">{t('bots.createHint')}</p>
-          <Templates disabled={saving} />
+          {home === 'here' ? <Templates disabled={saving} /> : null}
           {phone ? <><div className="flex-1" />{button}</> : (
             <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={onClose}>{t('bots.cancel')}</Button>{button}</div>
           )}

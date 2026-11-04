@@ -16,6 +16,10 @@ import { splitInbox, shortTime, previewOf } from '@/lib/inbox.js';
 import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { useBots, useCanManage, BotFace, GroupFace, NoBots, BotsDown, Loading, CentroBadge } from './common.jsx';
+import { HomeBadge, LoginExpiredBanner, moveBot } from './home.jsx';
+import { useHomes, onServer } from '@/lib/server.js';
+import { showHomeBadges, homeOf, moveTargets, moveLabel, replicaActions, tn } from '@/lib/homes.js';
+import { ArrowRightLeft, Clock } from 'lucide-react';
 
 // ---- data: the list of the zone, loaded once and kept fresh by main.jsx (inbox:changed, bot.message, bot.state)
 export function useInbox() {
@@ -58,9 +62,13 @@ export function usePress(onMenu, ms = 480) {
 function useChatActions(item, inbox) {
   const t = useT();
   const me = useStore((s) => s.me?.person?.id ?? null);
-  const { groups } = useBots();
+  const { groups, bots } = useBots();
+  const homes = useHomes();
   if (!item) return [];
   const ref = { kind: item.kind, id: item.id };
+  // 3.7: «Pasar al Server» / «Pasar a este PC» of a bot (its own person's).
+  const bot = item.kind === 'bot' ? bots.find((b) => b.id === item.id) : null;
+  const moves = bot && replicaActions(bot).move && (bot.person_id == null || me == null || bot.person_id === me) ? moveTargets(bot, homes) : [];
   const group = item.kind === 'group' ? groups.find((g) => g.id === item.id) : null;
   // A group's chat is one for everyone in it: only whose the group is may empty it (the engine checks it too).
   const canClear = item.kind === 'bot' || !group || group.person_id == null || me == null || group.person_id === me;
@@ -72,6 +80,7 @@ function useChatActions(item, inbox) {
       { id: 'none', label: t('chats.noSection'), checked: item.section == null, run: () => inboxAct('inbox.sections.move', { ...ref, section: null }) },
       { id: 'new', icon: FolderPlus, label: t('chats.newSection'), run: async () => { const s = await newSection(t); if (s) await inboxAct('inbox.sections.move', { ...ref, section: s.id }); } }
     ] },
+    ...moves.map((x) => ({ id: `move-${x.here ? 'here' : x.key}`, icon: ArrowRightLeft, label: moveLabel(x, t, { serverHere: onServer() }), run: () => moveBot(bot, x) })),
     item.muted ? { id: 'unmute', icon: Bell, label: t('chats.unmute'), run: () => inboxAct('inbox.mute', { ...ref, muted: false }) } : { id: 'mute', icon: BellOff, label: t('chats.mute'), run: () => inboxAct('inbox.mute', { ...ref, muted: true }) },
     ...(item.unread ? [{ id: 'read', icon: CheckCheck, label: t('chats.markRead'), run: () => inboxAct('inbox.markRead', ref) }] : []),
     ...(canClear ? [{ id: 'clear', icon: Trash2, label: t('chats.clear'), danger: true, run: async () => {
@@ -146,8 +155,11 @@ function ChatSheet({ item, inbox, bots, botsById, onClose }) {
 }
 
 // ---- a row of the list
-function ChatRow({ item, inbox, bots, botsById, phone, onSheet }) {
+function ChatRow({ item, inbox, bots, botsById, phone, onSheet, badges }) {
   const t = useT();
+  // 3.7: where its bot runs (a badge, once bots can run in two places), and what waits for an Orb that does not answer.
+  const bot = item.kind === 'bot' ? botsById.get(item.id) : null;
+  const home = bot ? homeOf(bot) : null;
   const locale = useLocale();
   const route = useStore((s) => s.route);
   const me = useStore((s) => s.me?.person?.id ?? null);
@@ -162,14 +174,17 @@ function ChatRow({ item, inbox, bots, botsById, phone, onSheet }) {
         <ItemAvatar item={item} size={phone ? 48 : 42} bots={bots} botsById={botsById} />
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2">
-            <span className={cn('min-w-0 flex-1 truncate text-[15px]', item.unread && !item.muted ? 'font-semibold' : 'font-medium')}>{item.title}</span>
+            <span className={cn('min-w-0 truncate text-[15px]', item.unread && !item.muted ? 'font-semibold' : 'font-medium')}>{item.title}</span>
+            {badges && bot ? <HomeBadge bot={bot} /> : null}
+            <span className="flex-1" />
             <span className={cn('shrink-0 text-[12px] tabular-nums', item.unread && !item.muted ? 'text-primary font-medium' : 'text-muted-foreground')}>{time}</span>
           </span>
           <span className="mt-0.5 flex items-center gap-1.5">
+            {home?.queued ? <span className="text-muted-foreground flex min-w-0 flex-1 items-center gap-1 truncate text-[13px]" data-testid="chat-queued"><Clock className="size-3.5 shrink-0" />{tn(t, 'home.queuedShort', home.queued)}</span> : (
             <span className={cn('min-w-0 flex-1 truncate text-[13px]', p.tone === 'live' ? 'text-primary' : 'text-muted-foreground')} data-testid="chat-preview">
               {p.relay ? <Forward className="mr-1 inline size-3.5 -translate-y-px" aria-label={t('chats.relay')} /> : null}
               {p.prefix ? <span className="text-foreground/70">{p.prefix}</span> : null}{p.text}
-            </span>
+            </span>)}
             {item.muted ? <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label={t('chats.muted')} /> : null}
             {item.unread ? <span className={cn('min-w-5 shrink-0 rounded-full px-1.5 text-center text-[11px] leading-5 font-semibold tabular-nums', item.muted ? 'bg-muted-foreground/25 text-foreground/70' : 'bg-primary text-primary-foreground')} data-testid="chat-unread" aria-label={t('chats.unread', { n: item.unread })}>{item.unread > 99 ? '99+' : item.unread}</span> : null}
           </span>
@@ -330,7 +345,8 @@ export function BotsInbox({ page = false }) {
   const [sheet, setSheet] = useState(null);
   const sheetItem = sheet ? (inbox?.items ?? []).find((x) => x.key === sheet) ?? null : null;
   const parts = useMemo(() => splitInbox(inbox), [inbox]);
-  const rowProps = { inbox, bots, botsById, phone, onSheet: (x) => setSheet(x.key) };
+  const server = useStore((s) => s.server);
+  const rowProps = { inbox, bots, botsById, phone, onSheet: (x) => setSheet(x.key), badges: showHomeBadges(bots, server?.linked) };
 
   const q = query.trim().toLowerCase();
   const searching = q.length > 0;
@@ -399,6 +415,7 @@ export function BotsInbox({ page = false }) {
       <div className={cn('grid gap-2 pb-2', phone ? 'px-4 pt-3' : 'px-3 pt-1')}>{search}</div>
       {phone ? null : <Places />}
       <CentroBadge className="px-4 pb-1" />
+      <LoginExpiredBanner bots={bots} compact={!phone} className={phone ? 'mx-4 mb-2' : 'mx-3 mb-2'} />
       <nav className={cn('flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto', phone ? 'px-2 pb-28' : 'px-1.5 pb-3')} aria-label={t('chats.list')} data-testid="bots-nav">{body}</nav>
       {phone ? <NewMenu fab /> : null}
       {sheetItem ? <ChatSheet item={sheetItem} {...rowProps} onClose={() => setSheet(null)} /> : null}

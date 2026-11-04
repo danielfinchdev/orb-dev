@@ -108,6 +108,7 @@ Six sections. Each section is a vertical stack of cards; each card = title, at m
 | General | `SlidersHorizontal` | Assistant (name, your name, language), working folder, Apariencia (theme, day/night, motion, font), Actualizaciones |
 | Magic Link | `Radar` (wifi/radar style) | Usuarios (admin only, 2+ users or to add one), Dispositivos (link a device with QR, linked devices), Orbs enlazados |
 | Agentes y uso | `Cpu` | Agents and accounts, tasks and spending (the "ahorro ↔ uso" slider), conversation reset, test of the day |
+| Orb Server (only with one linked, 3.7) | `Server` | Estado (version, memory, engines, update, «Crear Optimus automáticamente»), Navegador («Ver navegador del Server»), Contraseñas (the vault) |
 | Datos | `DatabaseBackup` | Backups, recovery code, restore, move Orb (admin only) |
 | Avanzado | `Wrench` | Herramientas (browser, MCP, Android, Open Control Edge), God mode (3.7: no Monitoreo; a bot with «Equipo» does it) |
 | Acerca de | `Info` | Version, Contribuye (support, report a problem), Más aplicaciones, licence |
@@ -227,6 +228,18 @@ sections 2.1–2.4 describe the shipped app.
   God mode on the PC). Phone: the Orb zone opens on its list (`chats`), tabs Chats · Tareas · Proyectos, a conversation
   (also a direct one) full screen with its back arrow; ☰ keeps Programadas, Pizarra, Memorias and Tutoriales. The
   standalone screens (Tareas, Proyectos, Programadas, Pizarra, God mode) stay as they were.
+
+- **Built (3.7, WS4): Orb Server in the app.** `views/server.jsx`: Magic Link › Orb Server («Añadir Orb Server»: one
+  command with «Copiar orden», its one line, «Hacerlo a mano» and the pairing live; once linked, the Server card with
+  «Configurar», «Ver navegador del Server» and ⋯ › Desenlazar with its three choices, `choose()` in `dialogs.jsx`), the
+  guide after pairing (a stepper of pills: Claude o ChatGPT · Bots · Usuarios (2+ users) · Contraseñas · Navegador; the
+  bots step offers «Pasar todos al Server» (recommended) / «Elegir cuáles» / «Dejarlos en el PC», then progress and a
+  report), Ajustes › Orb Server and «Ver navegador del Server» (a dialog on the PC, the whole screen on a phone).
+  `views/bots/home.jsx`: the home badge of the list (`Server` in primary, `Este PC` / another Orb muted, grey with a
+  cloud-off icon when that Orb does not answer), the bar over the composer of a copy («Se ejecuta en Server» + «Pasar
+  aquí», or «Restaurar aquí»), «Pendiente» under lines waiting for an Orb that is off, «Pasar al Server» / «Pasar a este
+  PC» (info pane and the chat's menu) and «Reconectar Claude en el Server». Pure logic in `lib/homes.js`, the Server's
+  calls in `lib/server.js`. Screenshots: `node test/servidor-ui.e2e.mjs` → `test-results/ws4/`.
 
 ## 3. Tokens
 

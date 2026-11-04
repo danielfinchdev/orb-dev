@@ -367,7 +367,7 @@ export async function startServerBrowser({ board, emit, push = () => {}, log = (
       const body = tr(kind === 'captcha' ? 'msg.browser.human.captcha' : 'msg.browser.human.code', { site });
       board.notice(body, 'warning', { person: whose && !board.isOwnerPerson(whose) ? whose : null });
       emit('browser:human', { person: whose, kind, site, open: 'browser.live' });
-      try { push({ title: tr('msg.browser.human.title'), body, person: whose }); } catch { /* no phones */ }
+      try { push({ title: tr('msg.browser.human.title'), body, person: whose, route: { view: 'browser-live' } }); } catch { /* no phones */ }
     },
     ...testing
   });

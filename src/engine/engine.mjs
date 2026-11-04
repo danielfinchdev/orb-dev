@@ -253,7 +253,8 @@ async function start(home, version, secret, browser, headless) {
     }
     // 3.5: the bots live on the centre: what its bots say comes to this Orb's window as centro:<event>.
     // 3.6: only to the person this link belongs to here (the centre already sends only that person's bots).
-    link.on('*', (event, payload, peer) => { if (hostsBots(peer?.role ?? 'taller') && /^bot\./.test(event)) emit(`centro:${event}`, payload, { person: peer?.person ?? ownerOfBoard(board) }); });
+    // 3.7 (WS4): and the Server's browser: the live view's pictures (only this app's own view) and «Necesito que lo hagas tú».
+    link.on('*', (event, payload, peer) => { if (hostsBots(peer?.role ?? 'taller') && /^(bot\.|browser:(live|human)$)/.test(event)) emit(`centro:${event}`, payload, { person: peer?.person ?? ownerOfBoard(board) }); });
     // 3.6 (moving an Orb): a linked Orb that looks like a copy of another is not served; the person of that link is told.
     link.on('hub:handoffDone', (p, peer) => hub.onHandoffDone(p, peer));
     link.on('link:clone', (p, peer) => board.notice(tr('msg.link.clone', { name: p?.name ?? '' }), 'warning', { person: peer?.person ?? null }));

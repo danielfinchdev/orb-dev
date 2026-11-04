@@ -30,7 +30,9 @@ test('lo que puede cada dispositivo: el móvil habla con los bots; el Orb del us
   assert.ok(!allowedFor('centro', 'browser').has('link.qr') && !allowedFor('centro', 'browser').has('bots.rules.set'), 'ser un navegador no da permiso de administrar');
   assert.ok(allowedFor('centro', 'browser', true).has('link.qr') && allowedFor('centro', 'phone', true).has('bots.rules.set'), '«Puede administrar» sí');
   assert.ok(!allowedFor('taller', 'browser').has('bots.create'), 'en un PC, el navegador enlazado es como un móvil');
-  assert.ok([...CENTRO_FORWARD].every((m) => m.startsWith('bots.') || m.startsWith('inbox.')), 'al centro solo van los bots (y, 3.6 M2, su lista de chats)');
+  // 3.7 (WS4): and the Orb Server's own state, its vault (the caller's account) and its browser's live view.
+  assert.ok([...CENTRO_FORWARD].every((m) => /^(bots|inbox|server|vault|browser\.live)\./.test(m)), 'al centro solo van los bots (y, 3.6 M2, su lista de chats; 3.7, el Server)');
+  assert.ok(!CENTRO_FORWARD.has('server.engines.uninstall') && !CENTRO_FORWARD.has('link.qr') && !CENTRO_FORWARD.has('chat.send'), 'nada más');
 });
 
 test('sin centro, los bots son los de este Orb', async () => {

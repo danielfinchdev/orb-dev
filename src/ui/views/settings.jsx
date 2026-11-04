@@ -3,7 +3,7 @@
 // Datos, Avanzado and Acerca de. «Mi perfil» is not a section: the user menu opens it in this same window, on its own.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { DatabaseBackup, Settings, FlaskConical, FolderOpen, HeartPulse, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, Wrench, ChevronRight, SlidersHorizontal, Radar, Cpu, Info, ExternalLink } from 'lucide-react';
+import { DatabaseBackup, Server, Settings, FlaskConical, FolderOpen, HeartPulse, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, Wrench, ChevronRight, SlidersHorizontal, Radar, Cpu, Info, ExternalLink } from 'lucide-react';
 import { ToolIcon } from '@/components/agent-icon.jsx';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, APPEARANCE_DEFAULTS } from '../../core/appearance.mjs';
 import { PRODUCT, AUTHOR } from '../../core/product.mjs';
@@ -27,6 +27,7 @@ import { MagicLinkPanel, SubSection } from './magic-link.jsx';
 import { PersonsCard, ProfileCards } from './persons.jsx';
 import { DataCards } from './data.jsx';
 import { showPersonUi, showPersonsSettings, isOwner } from '@/lib/persons.js';
+import { ServerSettingsCards } from './server.jsx';
 
 async function save(patch, ok = t('settings.saved')) {
   const config = await act(call('config.save', { patch }), ok);
@@ -635,9 +636,11 @@ const SECTIONS = [
   { id: 'general', icon: SlidersHorizontal, groups: ['apariencia', 'actualizaciones'],
     cards: (c, app) => <><AssistantCard c={c} /><FolderCard c={c} home={app.home} /><SubSection id="apariencia" title={t('settings.group.apariencia')}><AppearanceCard c={c} /><InterfaceCard c={c} /></SubSection><SubSection id="actualizaciones" title={t('settings.group.actualizaciones')}><UpdatesCard /></SubSection></> },
   // Who can enter this Orb: its users, their devices and the Orbs linked with it.
-  { id: 'magiclink', icon: Radar, groups: (me) => [...(showPersonsSettings(me) ? ['usuarios'] : []), 'dispositivos', 'orbs'],
+  { id: 'magiclink', icon: Radar, groups: (me) => [...(showPersonsSettings(me) ? ['usuarios'] : []), 'dispositivos', ...(bridge.mobile ? [] : ['server']), 'orbs'],
     cards: (c, app, me) => <MagicLinkPanel grouped users={showPersonsSettings(me) ? <PersonsCard /> : null} phoneAccess={<MobileCard />} /> },
   { id: 'agentes', icon: Cpu, cards: (c) => <><ChatCard c={c} /><TasksCard c={c} />{bridge.mobile ? null : <TestCard />}</> },
+  // 3.7: Orb Server, once one is linked: its state and update, its browser and «Contraseñas» (its password vault).
+  { id: 'servidor', icon: Server, when: (me, server) => Boolean(server?.linked), groups: () => ['estado', 'navegador', 'contrasenas'], cards: () => <ServerSettingsCards /> },
   { id: 'datos', icon: DatabaseBackup, when: (me) => isOwner(me), cards: () => <DataCards /> },
   // 3.7: «Monitoreo» is no longer here (a bot with the «Equipo» tools does it); sharing with Open Control Edge stays.
   { id: 'avanzado', icon: Wrench, groups: () => ['herramientas', ...(fullPc() ? ['experto'] : [])],
@@ -649,7 +652,7 @@ const SECTIONS = [
 ];
 // The names of before 3.6 (links in tutorials, notices and the sidebar) → [section, part].
 const ALIASES = { personas: ['magiclink', 'usuarios'], movil: ['magiclink', 'dispositivos'], apariencia: ['general', 'apariencia'], actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'],
-  herramientas: ['avanzado', 'herramientas'], experto: ['avanzado', 'experto'], monitor: ['avanzado', 'herramientas'], contribuye: ['acerca', 'contribuye'], apps: ['acerca', 'apps'] };
+  herramientas: ['avanzado', 'herramientas'], contrasenas: ['servidor', 'contrasenas'], experto: ['avanzado', 'experto'], monitor: ['avanzado', 'herramientas'], contribuye: ['acerca', 'contribuye'], apps: ['acerca', 'apps'] };
 export function resolveSection(open) {
   if (!open || open === true) return ['general', null];
   const [id, part = null] = String(open).split(':');
@@ -662,6 +665,7 @@ export function SettingsDialog() {
   const open = useStore((s) => s.settings);
   const app = useStore((s) => s.app);
   const me = useStore((s) => s.me);
+  const server = useStore((s) => s.server);
   const [wanted, part] = resolveSection(open);
   // The part asked for (a link to «Usuarios», a notice about updates…): scrolled into view once the section is drawn.
   useEffect(() => {
@@ -672,7 +676,7 @@ export function SettingsDialog() {
   if (!app) return null;
   // «Mi perfil» (the user menu, with two or more users): this same window, on its own, without the sections.
   const profile = wanted === 'perfil' && showPersonUi(me);
-  const sections = SECTIONS.filter((s) => !s.when || s.when(me));
+  const sections = SECTIONS.filter((s) => !s.when || s.when(me, server));
   const section = sections.find((s) => s.id === wanted) ?? sections[0];
   const c = app.config;
   return (

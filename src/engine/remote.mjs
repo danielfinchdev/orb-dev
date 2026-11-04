@@ -70,6 +70,10 @@ export const ORB_ALLOWED = ORB_SET;
 // What a workshop passes on to its centre (centro.<method>): the bots, nothing else.
 // 3.6 (M2): and the chat list of the Bots zone (inbox.*), so the bots of a centre keep their pins, sections and unread.
 export const CENTRO_FORWARD = new Set([...ORB_ALLOWED].filter((m) => m.startsWith('bots.') || m.startsWith('inbox.')));
+// 3.7 (WS4): the app's Ajustes › Orb Server: its state and update, its password vault (the caller's own account there)
+// and «Ver navegador del Server». The Server checks each one again (owner, «Puede administrar», own profile).
+for (const m of ['server.status', 'server.engines', 'server.engines.install', 'server.update.status', 'server.update.check', 'server.update.apply',
+  'vault.status', 'vault.setup', 'vault.test', 'vault.forget', 'browser.live.start', 'browser.live.input', 'browser.live.stop']) CENTRO_FORWARD.add(m);
 export const CONSOLE_ALLOWED = CONSOLE_SET;
 // What a centre sends to the Orbs linked with it (their Bots mode shows the centre's bots, live).
 const BOT_EVENTS = new Set(['bot.updated', 'bot.message', 'bot.state', 'bot.home']);
@@ -919,7 +923,8 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
   // 3.6: a notification goes to the devices of the people it is for, with each person's own preview (Mi perfil), never
   // to a device whose app is open right now.
   // 3.6 (messaging lists): skip(person): someone it is not for after all (a chat they muted).
-  function pushTo(audience, what, { title, body }, tag, skip = null) {
+  // 3.7 (WS4): route: what a tap opens (the page reads /#abrir=…, src/ui/lib/notes.js), e.g. «Ver navegador del Server».
+  function pushTo(audience, what, { title, body }, tag, skip = null, route = null) {
     const openNow = new Set([...clients].map((c) => c.device));
     for (const d of board.all('SELECT id, push, person_id FROM devices WHERE push IS NOT NULL')) {
       if (openNow.has(d.id)) continue;
@@ -928,7 +933,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
       if (skip?.(pid)) continue;
       let sub; try { sub = JSON.parse(d.push); } catch { continue; }
       const note = pushContent(what, { title, body }, ctx.config, previewOf(pid));
-      sendPush(sub, { ...note, tag, url: '/' }, own.vapid)
+      sendPush(sub, { ...note, tag, url: route ? `/#abrir=${encodeURIComponent(JSON.stringify({ route }))}` : '/' }, own.vapid)
         .then((r) => { if (r === 'gone') board.run('UPDATE devices SET push = NULL WHERE id = ?', d.id); })
         .catch(() => {});
     }
@@ -1129,12 +1134,12 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
   // 3.6: for whom: person, else the people of its conversation (a bot's chat: its talker; a group: its people), else the
   // bot's, else the owner.
   // 3.6 (M4): with the line (line: { id, role, body, meta }), as a messaging app's notification (deliverNote).
-  function pushNote({ title, body, person = null, conversation = null, bot = null, line = null, sensitive = false } = {}) {
+  function pushNote({ title, body, person = null, conversation = null, bot = null, line = null, sensitive = false, route = null } = {}) {
     const audience = person ? { persons: new Set([String(person)]) }
       : conversation != null ? audienceOf(board, 'bot.message', { conversation })
         : bot != null ? { persons: peopleWith(board, { type: 'bot', id: bot }) } : { owner: true };
     if (line && conversation != null && deliverNote({ audience, conversation, line, sensitive })) return;
-    pushTo(audience, 'bots', { title, body }, 'orb-bot');
+    pushTo(audience, 'bots', { title, body }, 'orb-bot', null, route && typeof route === 'object' && typeof route.view === 'string' ? { view: route.view } : null);
   }
 
   // ---- 3.5 Magic Link: linked devices, the workshop seen from the centre, forwarding, Wake-on-LAN and the waiting queue.

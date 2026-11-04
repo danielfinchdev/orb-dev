@@ -27,7 +27,7 @@ export default {
   'data.server.backupsIn': 'Backups in {folder}',
   'data.server.restoreReady': 'Backup checked ({files} files). It takes over the next time Orb starts.',
   'data.server.restoreDone': 'Backup restored. What was there before is in {aside}.',
-  'data.server.restartService': 'Restart the service to use it: systemctl --user restart orb-nucleo',
+  'data.server.restartService': 'Restart the service to use it: systemctl --user restart orb-server',
   'data.server.recoveryCode': 'Your recovery code (write it down and keep it off this computer; it is not shown again):',
   'data.server.recoverySet': 'Recovery code saved. New backups open with it on another computer.',
   'data.server.moveDone': 'Move backup made: {file}. Take it to the new computer with its code.',
