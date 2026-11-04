@@ -192,10 +192,11 @@ test('1a: Leo, por cada canal, no llega a nada de Ana (todas las reglas de POLIC
   const audit = all("SELECT * FROM audit WHERE person_id = ? AND decision = 'deny'", leo.id);
   assert.ok(audit.length > 100, `auditoría: ${audit.length}`);
   assert.ok(audit.every((a) => !String(a.resource ?? '').includes('qzana hola')), 'sin contenido en la auditoría');
-  // His own things, he does reach.
-  assert.ok((await phone.call('bots.list')).bots.some((b) => b.id === R.leo.bot));
-  assert.ok((await phone.call('conversations.list')).some((c) => c.id === R.leo.conv));
-  assert.ok((await phone.call('chat.list', { conversation: R.leo.conv })).length > 0);
+  // His own things, he does reach. (Read-only calls: one retry if the loopback connection drops under CI load.)
+  const read = async (m, p) => { try { return await phone.call(m, p); } catch (e) { if (!e.offline) throw e; return phone.call(m, p); } };
+  assert.ok((await read('bots.list')).bots.some((b) => b.id === R.leo.bot));
+  assert.ok((await read('conversations.list')).some((c) => c.id === R.leo.conv));
+  assert.ok((await read('chat.list', { conversation: R.leo.conv })).length > 0);
 });
 
 test('1b: Ana (la dueña) tampoco lee nada de Leo; solo ve nombres y números', async (t) => {
