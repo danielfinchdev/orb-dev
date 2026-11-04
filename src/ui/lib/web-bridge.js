@@ -212,6 +212,9 @@ if (!window.orb) {
 
   window.orb = {
     mobile: true,
+    protocol: L.PROTOCOL,
+    // 3.6: what the Orb said on /api/me (the person this device is for, its versions).
+    me: () => me,
     push,
     async call(method, params) { const r = await post('/api/call', 'call', { method, params: params ?? {} }); if (!r.ok) throw new Error(r.error); return r.result; },
     on(event, fn) { if (!listeners.has(event)) listeners.set(event, new Set()); listeners.get(event).add(fn); return () => listeners.get(event)?.delete(fn); },
@@ -219,8 +222,12 @@ if (!window.orb) {
       let pairError = null;
       try { await pairFromHash(); } catch (e) { pairError = e.message; }
       if (!await record()) return { mobile: true, needsPairing: true, needsSetup: false, pairError, app: Boolean(host) };
-      try { me = (await post('/api/me', 'me', null)).result; }
+      // 3.6: the page says its protocol; an Orb that needs a newer one answers 426 (or a min above ours): update first.
+      let r = null;
+      try { r = await post('/api/me', 'me', { v: L.PROTOCOL }); me = r.ok ? r.result : null; }
       catch { if (!await record()) return { mobile: true, needsPairing: true, needsSetup: false, pairError, app: Boolean(host) }; }
+      const gap = r && !r.ok && (r.status === 426 || r.update) ? { has: L.PROTOCOL, need: L.PROTOCOL + 1 } : L.updateNeeded(me);
+      if (gap) return { mobile: true, needsSetup: false, needsUpdate: { message: (r && !r.ok && r.error) || await tl('app.updateNeeded'), ...gap, ...(host ? { app: true } : {}) }, app: Boolean(host) };
       connect();
       if (!host && window.isSecureContext && 'serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
       return { mobile: true, needsSetup: false, platform: host ? 'android' : 'web', pc: me?.pc ?? saved?.fp ?? null };

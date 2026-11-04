@@ -9,13 +9,17 @@ import { Switch, Checkbox, Select, Popover, PopoverTrigger, PopoverContent } fro
 import { BrainPicker, useCatalog, modelLabel } from '@/components/brain-picker.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { confirm } from '@/components/dialogs.jsx';
-import { useStore, botCall, act, go, loadBots } from '@/lib/store.js';
+import { useStore, botCall, act, go, loadBots, call, personNameOf } from '@/lib/store.js';
 import { AGENT } from '@/lib/labels.js';
 import { TOOL_ORDER, EFFORTS, EMOJIS, newBotDraft, botPayload } from '@/lib/bots.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { useBots, useCanManage, BotFace, NoBots, BotsDown, Loading, BotPage } from './common.jsx';
+import { ShareButton, SharedBadge } from '@/components/share-dialog.jsx';
+import { personsOn, botAccountChoices } from '@/lib/persons.js';
 
+// 3.6: a bot thinks with Claude or Codex (Orb refuses the other agents as a bot's brain).
+const BOT_BRAINS = ['claude', 'codex'];
 export const TOOL_ICON = { internet: Globe, recordatorios: Bell, correo: Mail, calendario: CalendarDays, navegador: Compass, casa: Home, servidor: Server, gestion: Settings2 };
 
 export function BotsView({ route }) {
@@ -93,8 +97,12 @@ function BotEditor({ id }) {
   const connectors = (app.config?.mcpServers ?? []).map((m) => m.name).filter(Boolean);
   const [d, setD] = useState(null);
   const [saving, setSaving] = useState(false);
+  // 3.6: the accounts this person may spend on bots (their own, and the ones lent to them for bots).
+  const me = useStore((s) => s.me);
+  const [loans, setLoans] = useState(null);
+  useEffect(() => { if (personsOn(me)) call('accounts.loans').then(setLoans).catch(() => setLoans(null)); }, [me?.person?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (isNew) { setD(newBotDraft(app.assistant?.agent ?? 'claude')); return undefined; }
+    if (isNew) { setD(newBotDraft(BOT_BRAINS.includes(app.assistant?.agent) ? app.assistant.agent : 'claude')); return undefined; }
     let alive = true;
     botCall('bots.get', { id: Number(id) }).then((b) => alive && setD({ ...b, model: b.model ?? '', exclusive: (b.exclusive ?? []).join(', '), accounts: { mcp: b.accounts?.mcp ?? [], account: b.accounts?.account ?? '' } })).catch(() => alive && setD(false));
     return () => { alive = false; };
@@ -107,6 +115,10 @@ function BotEditor({ id }) {
   const toggleTool = (tool, on) => set({ tools: on ? [...new Set([...d.tools, tool])] : d.tools.filter((x) => x !== tool) });
   const toggleMcp = (name, on) => set({ accounts: { ...d.accounts, mcp: on ? [...new Set([...(d.accounts.mcp ?? []), name])] : (d.accounts.mcp ?? []).filter((x) => x !== name) } });
   const otherChief = bots.find((b) => b.is_chief && b.id !== d.id);
+  const many = personsOn(me);
+  const choices = many ? botAccountChoices({ accounts: app.config?.accounts ?? [], loans, me, agent: d.agent }) : [];
+  const spending = choices.find((c) => c.id === d.accounts?.account) ?? null;
+  const cap = (k) => ({ value: d.caps?.[k] ?? '', inputMode: 'decimal', onChange: (e) => set({ caps: { ...(d.caps ?? {}), [k]: e.target.value.replace(/[^\d.]/g, '') } }) });
   const save = async () => {
     setSaving(true);
     const body = botPayload(d);
@@ -121,6 +133,8 @@ function BotEditor({ id }) {
   return (
     <>
       <PageHeader icon={<Button size="icon-sm" variant="ghost" onClick={back} aria-label={t('bots.back')}><ArrowLeft /></Button>} title={isNew ? t('bots.new') : t('bots.editName', { name: d.name })}>
+        {isNew ? null : <SharedBadge type="bot" id={d.id} />}
+        {isNew ? null : <ShareButton type="bot" id={d.id} name={d.name} owner={d.person_id ?? null} />}
         {isNew ? null : <Button size="sm" variant="danger" onClick={remove} data-testid="bot-delete"><Trash2 />{t('bots.delete')}</Button>}
         <Button size="sm" onClick={save} disabled={saving || !d.name.trim()} data-testid="bot-save">{t('bots.save')}</Button>
       </PageHeader>
@@ -137,7 +151,7 @@ function BotEditor({ id }) {
         <Card>
           <CardHeader><CardTitle>{t('bots.f.brain')}</CardTitle><CardDescription>{t('bots.f.brainHint')}</CardDescription></CardHeader>
           <CardContent className="flex flex-wrap items-center gap-2">
-            <BrainPicker catalog={catalog} value={{ agent: d.agent, model: d.model ?? '', account: d.account ?? d.agent }} onChange={(b) => set({ agent: b.agent, model: b.model, account: b.account })} />
+            <BrainPicker catalog={catalog?.filter((a) => BOT_BRAINS.includes(a.id))} value={{ agent: d.agent, model: d.model ?? '', account: d.account ?? d.agent }} onChange={(b) => set({ agent: b.agent, model: b.model, account: b.account })} />
             <Select size="sm" value={d.effort} onValueChange={(effort) => set({ effort })} title={t('bots.f.effort')} options={EFFORTS.map((e) => ({ value: e, label: `${t('bots.f.effort')}: ${t(`bots.effort.${e}`).toLowerCase()}` }))} data-testid="bot-effort" />
           </CardContent>
         </Card>
@@ -162,6 +176,22 @@ function BotEditor({ id }) {
               : <p className="text-muted-foreground text-xs">{t('bots.f.noConnectors')}</p>}
             <Field label={t('bots.f.account')} hint={t('bots.f.accountHint')}><Input value={d.accounts.account ?? ''} maxLength={120} onChange={(e) => set({ accounts: { ...d.accounts, account: e.target.value } })} placeholder={t('bots.f.accountPh')} /></Field>
             <Field label={t('bots.f.exclusive')} hint={t('bots.f.exclusiveHint')}><Input value={d.exclusive} maxLength={400} onChange={(e) => set({ exclusive: e.target.value })} placeholder={t('bots.f.exclusivePh')} data-testid="bot-exclusive" /></Field>
+          </CardContent>
+        </Card>
+        {/* 3.6: what it spends: the account (with more people: own or lent for bots) and its caps per day. */}
+        <Card data-testid="bot-spend">
+          <CardHeader><CardTitle>{t('botsp.spendTitle')}</CardTitle><CardDescription>{t('botsp.spendHint')}</CardDescription></CardHeader>
+          <CardContent className="grid gap-3">
+            {many ? (
+              <Field label={t('botsp.account')} hint={spending ? (spending.lent ? t('botsp.spendsLent', { name: personNameOf(spending.lender) }) : t('botsp.spendsOwn')) : t('botsp.spendsAuto')}>
+                <Select className="w-full sm:w-80" value={spending?.id ?? '__auto'} onValueChange={(v) => set({ accounts: { ...d.accounts, account: v === '__auto' ? '' : v } })} title={t('botsp.account')} data-testid="bot-account"
+                  options={[{ value: '__auto', label: t('botsp.accountAuto') }, ...choices.map((c) => ({ value: c.id, label: c.lent ? t('botsp.accountLent', { label: c.label, name: personNameOf(c.lender) }) : c.label }))]} />
+              </Field>
+            ) : null}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={t('botsp.capTurns')}><Input {...cap('daily_turns')} placeholder={t('botsp.noCap')} data-testid="bot-cap-turns" /></Field>
+              <Field label={t('botsp.capUsd')}><Input {...cap('daily_usd')} placeholder={t('botsp.noCap')} data-testid="bot-cap-usd" /></Field>
+            </div>
           </CardContent>
         </Card>
         <Card>

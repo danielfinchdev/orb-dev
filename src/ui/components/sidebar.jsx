@@ -14,6 +14,8 @@ import { AgentIcon } from './agent-icon.jsx';
 import { useT } from '@/lib/i18n.js';
 import { PRODUCT } from '../../core/product.mjs';
 import { ModeSwitch } from './mode-switch.jsx';
+import { PersonMenu } from './person-menu.jsx';
+import { SharedWithMe } from './share-dialog.jsx';
 import { BotsNav } from './bots-nav.jsx';
 import { modeOf } from '@/lib/store.js';
 
@@ -393,6 +395,8 @@ export function Sidebar({ mood, page = false }) {
         </div>
       </div>
     ) : null}
+    {/* 3.6: what other people shared with this one (projects; bots and groups are in the Bots mode). */}
+    <SharedWithMe kinds={['project']} />
     <Section title={t('nav.folders')} open={sections.projects !== false} onOpen={(v) => setSection('projects', v)} testid="sidebar-folders"
       action={bridge.mobile ? null : <Tip label={t('comp.projects.newTitle')}><button className="hover:text-foreground grid size-6 cursor-pointer place-items-center rounded-md hover:bg-accent/60" aria-label={t('comp.projects.newTitle')} onClick={newProject} data-testid="sidebar-new-project"><FolderPlus className="size-3.5" /></button></Tip>}>
       {folders.length ? folders.map((f) => <ProjectFolder key={f.project.name} project={f.project} convs={f.convs} tasks={f.tasks} open={isOpen(f)} onOpen={(v) => setOpenFolder(f.project.name, v)} route={route} active={f.project.active} modelName={modelName} />)
@@ -440,6 +444,8 @@ export function Sidebar({ mood, page = false }) {
             on the band's middle; the working folder is in the middle of the chat's top bar. */}
         <div className="flex min-w-0 flex-1 items-center">{name === PRODUCT.assistant ? <Wordmark /> : <div className="truncate text-[15px] font-medium">{name}</div>}</div>
         <div className="flex shrink-0 items-center gap-0.5">
+          {/* 3.6: with two or more people, who is here (switch, profile, lock). */}
+          <PersonMenu compact />
           <ThemeToggle />
           <SidebarToggle />
         </div>

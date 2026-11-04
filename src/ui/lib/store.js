@@ -131,8 +131,25 @@ export function botStateChanged(p) {
   setState((s) => ({ botStates: { ...(s.botStates ?? {}), [p.bot]: p } }));
 }
 
+// 3.6 «Personas»: who is using this window or device (persons.me: { person, role, rights, personsCount }). An Orb before
+// 3.6 has no persons.me: then it is one person, the owner (nothing of people shows). The server decides what each one
+// sees; this only picks what to draw. What was shared with the caller (shares.list) comes along when there are several.
+export async function loadMe() {
+  let me = null; try { me = await call('persons.me'); } catch { me = null; }
+  let shared = null; let people = [];
+  if (Number(me?.personsCount ?? 1) > 1) {
+    [shared, people] = await Promise.all([call('shares.list').catch(() => null), call('persons.list').catch(() => [])]);
+  }
+  setState({ me, shared, people });
+  return me;
+}
+// A person's name by id (the names everyone may see: persons.list).
+export const personNameOf = (id) => (state.people ?? []).find((p) => p.id === id)?.name ?? '';
 export async function refresh() {
-  const [app, sessions, projects, tasks, conversations] = await Promise.all([call('app.state'), call('sessions.list'), call('projects.list'), call('tasks.list', { limit: 200 }), call('conversations.list')]);
+  // 3.6: this PC's window locked (persons.lock): the engine answers only the lock's minimal app.state.
+  const first = bridge.mobile ? null : await call('app.state');
+  if (first?.locked === true && !first.config) { setState({ locked: first, ready: true }); return; }
+  const [app, sessions, projects, tasks, conversations] = await Promise.all([first ?? call('app.state'), call('sessions.list'), call('projects.list'), call('tasks.list', { limit: 200 }), call('conversations.list'), loadMe()]);
   setState((s) => ({ app, sessions, projects, tasks, conversations, ready: true, version: s.version + 1 })); // version: views refetch their own data when it moves
   // 3.2: the projects' icons, again only when the list of projects changes (or one is set by hand: loadProjectIcons).
   const names = projects.map((p) => p.name).join('|');
@@ -141,7 +158,18 @@ export async function refresh() {
   applyTheme(phoneTheme || app.config.ui?.theme);
   applyAppearance(app.config.ui);
   document.title = app.config.assistantName;
-  document.documentElement.lang = app.config.language === 'en' ? 'en' : 'es';
+  document.documentElement.lang = uiLanguage(getState()) === 'en' ? 'en' : 'es';
+}
+// 3.6: the language of the person at the window (Mi perfil), else the Orb's.
+export const uiLanguage = (s) => (Number(s.me?.personsCount ?? 1) > 1 && s.me?.person?.language) || s.app?.config?.language || 'es';
+// 3.6: someone else sat down (persons.switch / persons.unlock): everything is read again as them; what was on screen
+// (a conversation, a bot) may not be theirs, so the window goes back to the start of its mode.
+export async function personSwitched() {
+  setState({ route: { view: 'chat' }, bots: null, botStates: {}, settings: null, share: null });
+  try { localStorage.removeItem('orb.route'); localStorage.removeItem(MODES_KEY); } catch { /* storage unavailable */ }
+  await refresh().catch(() => {});
+  if (getState().app?.config) setState({ locked: false });
+  loadBots();
 }
 
 let iconsFor = null;

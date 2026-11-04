@@ -46,6 +46,12 @@ import { BotGroupsView, BotRemindersView, BotMemoryView, BotHomeView, BotServerV
 import { MagicLinkView } from '@/views/magic-link.jsx';
 import { ModeSwitch } from '@/components/mode-switch.jsx';
 import { TallerBanner } from '@/components/taller-banner.jsx';
+// 3.6 «Personas»
+import { PersonMenu, ConnectedAs } from '@/components/person-menu.jsx';
+import { LockScreen, PhoneLock, UpdateNeeded } from '@/components/lock-screen.jsx';
+import { ShareHost } from '@/components/share-dialog.jsx';
+import { ProfileView } from '@/views/persons.jsx';
+import { personSwitched } from '@/lib/store.js';
 
 const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
 // 2.7, the phone: the conversations («Chats») and «Más» are screens of their own; Agentes and Modo experto are PC only.
@@ -53,7 +59,7 @@ function ChatsView() { const t = useT(); return <><PageHeader icon={<MessagesSqu
 // 3.5: the screens of the Bots mode (both layouts) and Magic Link as a screen of a linked device.
 const BOT_SCREENS = { 'bot-chat': BotChatView, 'bot-group': BotChatView, bots: BotsView, 'bot-groups': BotGroupsView, 'bot-reminders': BotRemindersView, 'bot-memory': BotMemoryView, 'bot-home': BotHomeView, 'bot-server': BotServerView, 'bot-settings': BotSettingsView };
 const VIEWS = bridge.mobile
-  ? { ...BOT_SCREENS, link: MagicLinkView, chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
+  ? { ...BOT_SCREENS, link: MagicLinkView, chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, profile: ProfileView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
   : { ...BOT_SCREENS, chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView,
     // 2.7.3: Orb Light (the portable .exe) has no God mode nor PC Status.
     ...(bridge.light ? {} : { expert: ExpertView, monitor: MonitorView }) };
@@ -66,7 +72,7 @@ function MobileShell() {
   return (
     <div className="flex h-full flex-col">
       {/* 3.5: «Orb | Bots» at the top; in Orb mode, how the PC that does the work is (when linked with the server). */}
-      <div className="mobile-mode bg-sidebar shrink-0 border-b px-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2"><ModeSwitch className="mx-auto max-w-xs" /></div>
+      <div className="mobile-mode bg-sidebar shrink-0 border-b px-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2"><ModeSwitch className="mx-auto max-w-xs" /><ConnectedAs className="pt-1.5" /></div>
       {bots ? null : <TallerBanner />}
       <main className="theme-scene flex min-h-0 min-w-0 flex-1 flex-col">
         <Scene />
@@ -74,6 +80,7 @@ function MobileShell() {
       </main>
       <MobileTabs />
       <Notices />
+      <ShareHost />
     </div>
   );
 }
@@ -112,7 +119,8 @@ function Shell() {
         <Scene />
         <div className="topbar theme-band app-titlebar wco-pad bg-sidebar flex h-14 shrink-0 items-center gap-2 border-b px-3 md:hidden">
           <button className="hover:bg-accent grid size-9 cursor-pointer place-items-center rounded-lg" onClick={() => setDrawer(true)} aria-label={t('app.menu')}><Menu className="size-5" /></button>
-          <Robot size={26} mood={mood} /><span className="truncate text-[15px] font-medium">{app.config.assistantName}</span>
+          <Robot size={26} mood={mood} /><span className="min-w-0 flex-1 truncate text-[15px] font-medium">{app.config.assistantName}</span>
+          <PersonMenu compact />
         </div>
         {bridge.mobile && modeOf(route) !== 'bots' ? <TallerBanner /> : null}
         <View key={`${route.view}:${route.id ?? ''}:${route.project ?? ''}`} route={route} />
@@ -122,6 +130,7 @@ function Shell() {
       {/* 3.5: a browser linked with an Orb gets the PC's layout, not what only the PC itself does. */}
       {bridge.mobile ? null : <><UpdateCard /><SettingsDialog /><GamesDialog /></>}
       <Notices />
+      <ShareHost />
       {bridge.mobile ? null : <ActionShortcuts project={shortcutProject} />}
       <div className="hidden md:contents"><Companion name={app.config.assistantName} base={mood} hidden={app.config.ui?.companion === false || !COMPANION_VIEWS.has(route.view) || bridge.mobile || Boolean(tour)} /></div>
       {tour ? <Tour key={tour.key} /> : null}
@@ -132,6 +141,7 @@ function Shell() {
 function Root() {
   const t = useT();
   const ready = useStore((s) => s.ready);
+  const locked = useStore((s) => s.locked);
   const [phase, setPhase] = useState('loading'); // loading | setup | app | error
   const [error, setError] = useState('');
   useEffect(() => {
@@ -141,6 +151,8 @@ function Root() {
       setState({ info });
       if (info.needsSetup) return alive && setPhase('setup');
       if (info.needsPairing) return alive && setPhase('pair');
+      // 3.6: this app is older than what the Orb asks for (protocol of the link): update first.
+      if (info.needsUpdate) return alive && setPhase('update');
       // The engine may still be starting: retry for a few seconds.
       for (let i = 0; i < 40 && alive; i++) {
         try {
@@ -198,6 +210,10 @@ function Root() {
       const name = local ? event : event.slice(7);
       if (name.startsWith('bot.') && local === !botsVia()) { if (name === 'bot.state') botStateChanged(payload); else if (name === 'bot.updated') loadBotsSoon(); }
       if (event === 'link:peers') loadCentro();
+      // 3.6 «Personas»: someone else at this PC, the window locked or unlocked, the people changed.
+      if (event === 'persons:switched') personSwitched();
+      if (event === 'persons:locked') setState({ locked: { locked: true } });
+      if (event === 'persons:unlocked' && getState().locked) refresh().then(() => { if (getState().app?.config) setState({ locked: false }); }).catch(() => {});
       if (event === 'engine:stopped') notify({ body: tNow('app.engineStopped'), tone: 'error' });
       if (event === 'engine:restarted') { notify({ body: tNow('app.engineRestarted'), tone: 'warning' }); refreshSoon(); }
     });
@@ -216,9 +232,11 @@ function Root() {
       </div>
     </div>
   );
+  if (phase === 'update') return <>{strip}<UpdateNeeded info={getState().info} /></>;
+  if (phase === 'app' && locked) return <LockScreen />;
   if (phase === 'error') return <div className="grid h-full place-items-center p-8 text-center">{strip}<div><Robot size={90} mood="worried" /><h1 className="mt-4 text-xl">{t('app.errorTitle')}</h1><p className="text-muted-foreground mt-1 max-w-md text-sm">{error}</p></div></div>;
   if (phase !== 'app' || !ready) return <div className="grid h-full place-items-center">{strip}<Robot size={80} mood="thinking" /></div>;
-  return <Shell />;
+  return bridge.mobile ? <PhoneLock><Shell /></PhoneLock> : <Shell />;
 }
 
 // 3.5, the Android app: link it with an Orb by scanning its QR (Ajustes › Móvil), or by hand when the camera cannot.

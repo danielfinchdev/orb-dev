@@ -1,13 +1,48 @@
 ## Download
 
-- **`Orb-3.5.1-instalador.exe`** (recommended, the full Windows app): installs for your user, without administrator
+- **`Orb-3.6.0-instalador.exe`** (recommended, the full Windows app): installs for your user, without administrator
   rights, and updates itself.
-- **`Orb-3.5.1-light-portable.exe`** (Orb Light, no install needed).
-- **`Orb-3.5.1-android.apk`** (new): the Orb app for Android. Links to your Orb by scanning a QR code.
-- **`orb-nucleo-3.5.1-linux-x64.tar.gz`** (new): windowless Orb for an always-on Linux server.
-- **`orb-terminal-3.5.1`** (new): Orb in the terminal (Windows and Linux, requires Node 22).
+- **`Orb-3.6.0-light-portable.exe`** (Orb Light, no install needed).
+- **`Orb-3.6.0-android.apk`**: the Orb app for Android. Links to your Orb by scanning a QR code.
+- **`orb-nucleo-3.6.0-linux-x64.tar.gz`**: windowless Orb for an always-on Linux server.
+- **`orb-terminal-3.6.0`**: Orb in the terminal (Windows and Linux, requires Node 22).
 
 Windows 10/11. Since it isn't signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
+
+## What's new in 3.6.0
+
+**Users.** One Orb for the whole household or a small team: each user has their own conversations, bots, projects,
+reminders and accounts, and sees only their own things and what others share with them. If only you use your Orb,
+nothing changes and there is nothing to set up.
+
+- **Two kinds of user:** the **Owner** (manages the Orb) and **Users**. The owner sees everyone's name and how much
+  they used, never what they wrote or what their bots do.
+- **Welcome wizard:** "Who will use this Orb?" (only me / several users), optional starting templates you can edit before
+  applying ("My business", "My home", "Development", "Start empty"), reaching your Orb from outside with Tailscale, and
+  where backups go with a recovery code.
+- **Switch user and lock:** with two or more users, the top bar shows who is at the PC. Switching asks for that
+  user's PIN, and you can lock the window. The phone and the Android app can ask for the PIN too (or the fingerprint).
+- **Settings › Users** (owner): add users, rename them, choose what they may do, reset a PIN, sign out their devices.
+  **Settings › My profile:** name, language, time zone, PIN, what notifications show, your accounts, your devices, and
+  exporting or deleting your data.
+- **Magic Link asks "For which user?"**: a phone or browser is linked to one user, and the list of devices is grouped
+  by user.
+- **Sharing:** share a bot, a group or a project with someone to view, to talk or to edit. What others share with you is
+  under "Shared with me".
+- **Own accounts:** each user signs in to their own Claude or Codex account by default. The owner of an account can
+  lend it to someone with daily caps, a reserve, an end date, and for bots, Orb mode or both. Personal subscriptions
+  may not allow serving other people: check your plan's terms before lending.
+- **Usage:** "Who spent what" shows the owner each user's totals for today and the last 30 days.
+- **Settings › Data:** encrypted backups every day (and before every update), the recovery code, restoring a backup,
+  and moving your Orb to another computer.
+- **Time zones:** reminders and scheduled tasks ring at the wall-clock time of each user's zone, also across summer
+  time changes; a late one says how late it is.
+- **Android app:** speaks the new protocol and asks you to update when the Orb needs a newer app, shows who it is
+  signed in as, can lock with your PIN or fingerprint, and schedules notifications for your upcoming reminders on the
+  phone itself.
+- **Security:** every request is checked against the user who makes it, on every channel (window, phone, browser,
+  terminal, linked Orbs and agents' tools); notifications and live updates reach only the users they are for.
+  Update every Orb, the Android app and the terminal: older ones keep working only for the owner.
 
 ## What's new in 3.5.1
 

@@ -97,12 +97,24 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
   let pip = null; let pipTab = null; let mode = 'normal';
   const queues = new Map(); // page key -> last queued action (one action at a time per page)
 
-  const ses = session.fromPartition('navegador-agente'); // in memory: nothing is kept between runs
-  ses.setPermissionRequestHandler((_wc, _p, cb) => cb(false));
-  ses.setPermissionCheckHandler(() => false);
-  ses.setDevicePermissionHandler(() => false);
-  ses.on('will-download', (e) => e.preventDefault());
-  ses.setUserAgent(ses.getUserAgent().replace(/\s(orb[\w.-]*|Electron)\/\S+/gi, ''));
+  // 3.6: one browser profile per person (the owner keeps the 3.5 one): cookies and sign-ins of one person's agents and
+  // bots never reach another person's pages. A bot uses its own person's. Kept on disk (persist:), each person's apart:
+  // a sign-in made in one person's browser is still there next time, and only for that person.
+  const profiles = new Map();
+  const sessionFor = (person = '') => {
+    const key = String(person || '');
+    let ses = profiles.get(key);
+    if (ses) return ses;
+    ses = session.fromPartition(key ? `persist:orb-web-${key.replace(/[^\w-]/g, '_')}` : 'persist:navegador-agente');
+    ses.setPermissionRequestHandler((_wc, _p, cb) => cb(false));
+    ses.setPermissionCheckHandler(() => false);
+    ses.setDevicePermissionHandler(() => false);
+    ses.on('will-download', (e) => e.preventDefault());
+    ses.setUserAgent(ses.getUserAgent().replace(/\s(orb[\w.-]*|Electron)\/\S+/gi, ''));
+    profiles.set(key, ses);
+    return ses;
+  };
+  sessionFor('');
 
   // ---- the little window
   function placePip(size = SIZES[mode]) {
@@ -182,7 +194,7 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
   ipcMain.on('pip:action', onPipAction);
 
   // ---- pages
-  function newTab(key, { agent, task }) {
+  function newTab(key, { agent, task, person = '' }) {
     if (tabs.size >= MAX_TABS) {
       // Only a page no agent is using makes room; pages in use are never taken away.
       const idle = [...tabs.values()].filter((t) => t.users <= 0).sort((a, b) => a.used - b.used)[0];
@@ -191,7 +203,7 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
     }
     const win = new BrowserWindow({
       show: false, width: VIEW.width, height: VIEW.height, useContentSize: true, paintWhenInitiallyHidden: true,
-      webPreferences: { offscreen: true, session: ses, sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, devTools: false, spellcheck: false, disableDialogs: true, autoplayPolicy: 'document-user-activation-required' }
+      webPreferences: { offscreen: true, session: sessionFor(person), sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, devTools: false, spellcheck: false, disableDialogs: true, autoplayPolicy: 'document-user-activation-required' }
     });
     const tab = { key, agent, task, win, users: 0, timer: null, painting: true, url: '', title: '', loading: false, used: Date.now(), dismissed: false, action: '' };
     const wc = win.webContents;
@@ -382,11 +394,12 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
         const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
         let msg; try { msg = JSON.parse(line); } catch { socket.destroy(); return; }
         if (!who) {
-          const agent = String(msg?.agent ?? ''); const session = String(msg?.session ?? ''); const task = String(msg?.task ?? '');
-          if (!/^[a-z0-9_-]{1,30}$/i.test(agent) || !/^[\w-]{1,80}$/.test(session) || !/^\d{0,9}$/.test(task)) { socket.destroy(); return; }
-          const given = Buffer.from(String(msg.hello ?? '')); const want = Buffer.from(browserKey(token, { agent, session, task }));
+          // 3.6: person: whose browser profile (signed in the key; empty: the owner's). A bot's agent is «bot:<id>».
+          const agent = String(msg?.agent ?? ''); const session = String(msg?.session ?? ''); const task = String(msg?.task ?? ''); const person = String(msg?.person ?? '');
+          if (!/^[a-z0-9_:-]{1,30}$/i.test(agent) || !/^[\w-]{1,80}$/.test(session) || !/^\d{0,9}$/.test(task) || !/^[\w-]{0,40}$/.test(person)) { socket.destroy(); return; }
+          const given = Buffer.from(String(msg.hello ?? '')); const want = Buffer.from(browserKey(token, { agent, session, task, person }));
           if (given.length !== want.length || !crypto.timingSafeEqual(given, want)) { socket.destroy(); return; }
-          who = { agent, task }; key = `${agent}:${session}`;
+          who = { agent, task, person }; key = `${agent}:${session}${person ? `:${person}` : ''}`;
           clearTimeout(helloTimer);
           send({ ok: true });
           continue;

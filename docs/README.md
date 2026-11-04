@@ -16,6 +16,8 @@ the root [`README.md`](../README.md) (the repository's front page) and the issue
 | [`BOTS.md`](BOTS.md) | Bots mode: your own bots, their tools, routines and approvals. |
 | [`TERMINAL.md`](TERMINAL.md) | Orb in the terminal (`orb`). |
 | [`ANDROID.md`](ANDROID.md) | The Android app: linking, features and how to build it. |
+| [`USERS.md`](USERS.md) | Users (3.6): several users on one Orb, sharing, lending accounts, backups. |
+| [`PERSONAS-INTERNALS.md`](PERSONAS-INTERNALS.md) | Users (3.6) inside: the model, authorization, events and loans. |
 | [`ROADMAP-3.5.md`](ROADMAP-3.5.md) | The plan for version 3.5. |
 | [`LEARNINGS-3.5.md`](LEARNINGS-3.5.md) | Ideas taken from two outside projects for 3.5: what was applied and what was left out. |
 

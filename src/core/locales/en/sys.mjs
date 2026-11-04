@@ -158,6 +158,7 @@ export default {
   'sys.board.badLaunch': 'launch must be auto or manual',
   'sys.board.dependsMax': 'depends_on: at most 20 tasks',
   'sys.board.dependsMissing': 'depends_on: task #{id} does not exist',
+  'sys.board.folderOfOther': 'That folder is not available: it belongs to another project. Choose another one.',
   'sys.board.sensitivityList': 'sensitivity must be a list',
   'sys.board.badSensitivity': 'invalid sensitivity: {list}',
   'sys.board.onlyAssistant': "only {name} can change a task's agent, model, reasoning or fast",

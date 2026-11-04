@@ -11,6 +11,8 @@ import { EMOJIS, localWhen } from '@/lib/bots.js';
 import { cn, errorText } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { useBots, useCanManage, BotFace, NoBots, BotsDown, Loading, BotPage, CentroBadge } from './common.jsx';
+import { ShareButton, SharedBadge } from '@/components/share-dialog.jsx';
+import { Undo2, Check, ShieldCheck } from 'lucide-react';
 
 // What a screen loads from the bots (read again with «Actualizar» and when a bot changes).
 function useLoad(method, params, deps = []) {
@@ -53,11 +55,12 @@ export function BotGroupsView() {
             <Card key={g.id} className="gap-3 py-4" data-testid={`group-${g.name}`}>
               <CardHeader className="flex-row items-center gap-3 px-4">
                 <span className="bg-primary/10 grid size-10 shrink-0 place-items-center rounded-xl text-xl">{g.icon || '👥'}</span>
-                <div className="min-w-0 flex-1"><CardTitle>{g.name}</CardTitle><CardDescription className="mt-1 flex flex-wrap items-center gap-1">{g.members.map((id) => byId.get(id)).filter(Boolean).map((b) => <Badge key={b.id} variant="outline">{b.icon} {b.name}</Badge>)}</CardDescription></div>
+                <div className="min-w-0 flex-1"><CardTitle className="flex items-center gap-2">{g.name}<SharedBadge type="group" id={g.id} /></CardTitle><CardDescription className="mt-1 flex flex-wrap items-center gap-1">{g.members.map((id) => byId.get(id)).filter(Boolean).map((b) => <Badge key={b.id} variant="outline">{b.icon} {b.name}</Badge>)}</CardDescription></div>
               </CardHeader>
               <CardFooter className="flex-wrap px-4">
                 <Button size="xs" onClick={() => go({ view: 'bot-group', id: g.id })}><MessageSquare />{t('bots.talk')}</Button>
                 {manage ? <><Button size="xs" variant="outline" onClick={() => edit(g)}><Pencil />{t('bots.edit')}</Button><Button size="xs" variant="danger" onClick={() => remove(g)}><Trash2 />{t('bots.delete')}</Button></> : null}
+                <ShareButton type="group" id={g.id} name={g.name} owner={g.person_id ?? null} size="xs" />
               </CardFooter>
             </Card>
           ))}
@@ -147,9 +150,84 @@ export function BotMemoryView() {
               <p className="text-muted-foreground mt-2 text-xs">{t('bots.mem.private')}</p>
             </CardContent>
           </Card>
+          <MemoryChanges which={which} onChange={mem.reload} />
         </BotPage>
       )}
     </>
+  );
+}
+
+// 3.6: what the bots want to write in a memory and waits for an OK (a bot that read something from outside, or one
+// that is not the chief), and the last changes of the memory on screen, each one with «Deshacer».
+function MemoryChanges({ which, onChange }) {
+  const t = useT();
+  const locale = useLocale();
+  const id = which === 'global' ? 'global' : Number(which);
+  const [pending, setPending] = useState(null);
+  const [history, setHistory] = useState(null);
+  const load = () => {
+    botCall('bots.memory.pending').then(setPending).catch(() => setPending(null));
+    botCall('bots.memory.history', { id, limit: 10 }).then(setHistory).catch(() => setHistory(null));
+  };
+  useEffect(() => { load(); return onBotEvent('bot.updated', () => load()); }, [which]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (pending == null && history == null) return null;
+  const when = (iso) => (iso ? new Date(iso).toLocaleString(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
+  const settle = async (e, approve) => { if (await act(botCall('bots.memory.approve', { id: e.id, approve }), approve ? t('botsp.memApproved') : t('botsp.memRejected'))) { load(); onChange?.(); } };
+  const undo = async (e) => { if (await act(botCall('bots.memory.undo', { id: e.id }), t('botsp.memUndone'))) { load(); onChange?.(); } };
+  const list = Array.isArray(history) ? history : history?.list ?? [];
+  return (
+    <Card data-testid="memory-changes">
+      <CardHeader><CardTitle>{t('botsp.memTitle')}</CardTitle><CardDescription>{t('botsp.memHint')}</CardDescription></CardHeader>
+      <CardContent className="grid gap-3">
+        {pending?.length ? (
+          <div className="grid gap-1.5" data-testid="memory-pending">
+            <div className="text-warning text-xs font-medium">{t('botsp.memPending', { n: pending.length })}</div>
+            {pending.map((e) => (
+              <div key={e.id} className="grid gap-1.5 rounded-lg border px-3 py-2">
+                <div className="text-muted-foreground text-xs">{[e.actor, when(e.at)].filter(Boolean).join(' · ')}</div>
+                <div className="text-[13px] whitespace-pre-wrap">{e.text}</div>
+                <div className="flex gap-1.5"><Button size="xs" onClick={() => settle(e, true)} data-testid="memory-approve"><Check />{t('botsp.memApprove')}</Button><Button size="xs" variant="ghost" onClick={() => settle(e, false)}><X />{t('botsp.memReject')}</Button></div>
+              </div>
+            ))}
+          </div>
+        ) : <p className="text-muted-foreground text-sm">{t('botsp.memNone')}</p>}
+        {list.length ? (
+          <div className="grid gap-1">
+            <div className="text-muted-foreground text-xs">{t('botsp.memHistory')}</div>
+            {list.map((e) => (
+              <div key={e.id} className="flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[13px]">
+                <span className="min-w-0 flex-1 truncate">{e.text || t(`botsp.memOp.${e.op === 'replace' ? 'replace' : 'add'}`)}</span>
+                <Badge variant="outline" className="font-normal">{t(`botsp.memStatus.${['applied', 'pending', 'rejected', 'undone'].includes(e.status) ? e.status : 'applied'}`)}</Badge>
+                <span className="text-muted-foreground shrink-0 text-xs">{when(e.at)}</span>
+                {e.status === 'applied' ? <Button size="xs" variant="ghost" onClick={() => undo(e)} data-testid="memory-undo"><Undo2 />{t('botsp.memUndo')}</Button> : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+// 3.6: the Home Assistant calls this person's bots make without a card («light.turn_on light.salon», «light.turn_on *»);
+// everything else asks, and locks, alarms, doors, scripts and the like always ask.
+function HaAllowCard() {
+  const t = useT();
+  const [data, setData] = useState(null);
+  const [text, setText] = useState('');
+  const lines = (d) => (d.list ?? []).join('\n');
+  useEffect(() => { botCall('bots.ha.allow.get').then((d) => { setData(d); setText(lines(d)); }).catch(() => setData(null)); }, []);
+  if (!data) return null;
+  const save = async () => { const d = await act(botCall('bots.ha.allow.set', { list: text.split('\n').map((x) => x.trim()).filter(Boolean) }), t('botsp.haSaved')); if (d) { setData(d); setText(lines(d)); } };
+  return (
+    <Card className="w-full" data-testid="ha-allow">
+      <CardHeader className="flex-row items-start gap-3"><ShieldCheck className="text-primary mt-0.5 size-5 shrink-0" /><div><CardTitle>{t('botsp.haTitle')}</CardTitle><CardDescription>{t('botsp.haHint')}</CardDescription></div></CardHeader>
+      <CardContent className="grid gap-2">
+        <Textarea rows={4} className="font-mono text-[13px]" value={text} onChange={(e) => setText(e.target.value)} placeholder="light.turn_on light.salon" data-testid="ha-allow-text" />
+        {data.always?.length ? <p className="text-muted-foreground text-xs">{t('botsp.haAlways', { list: data.always.join(', ') })}</p> : null}
+      </CardContent>
+      <CardFooter><Button size="sm" onClick={save} data-testid="ha-allow-save"><Save />{t('bots.save')}</Button></CardFooter>
+    </Card>
   );
 }
 
@@ -175,7 +253,7 @@ export function BotHomeView() {
             <CardContent className="text-muted-foreground grid gap-1 text-sm"><p>1. {t('bots.home.step1')}</p><p>2. {t('bots.home.step2')}</p><p>3. {t('bots.home.step3')}</p></CardContent>
             {manage ? <CardFooter><Button size="sm" onClick={() => go('bot-settings')}><Settings2 />{t('bots.home.openSettings')}</Button></CardFooter> : null}
           </Card>
-        ) : !states.length ? <Empty icon={Home} title={t('bots.home.none')} /> : domains.map((dm) => (
+        ) : !states.length ? <Empty icon={Home} title={t('bots.home.none')} /> : <><HaAllowCard />{domains.map((dm) => (
           <section key={dm} className="grid gap-2">
             <h2 className="text-muted-foreground text-[12px] font-medium tracking-wide uppercase">{t(`bots.home.domain.${DOMAIN_ORDER.includes(dm) ? dm : 'other'}`)} <span className="opacity-60">· {dm}</span></h2>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -188,7 +266,7 @@ export function BotHomeView() {
               ))}
             </div>
           </section>
-        ))}
+        ))}</>}
       </BotPage>
     </>
   );

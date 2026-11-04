@@ -1,0 +1,18 @@
+{
+  "id": "desarrollo",
+  "order": 3,
+  "name": "Development",
+  "icon": "🛠️",
+  "description": "A bot that watches your projects and your server and tells you what matters. Coding work stays in Orb mode. Change anything you like before applying it.",
+  "bots": [
+    { "key": "vigia", "name": "Watcher", "icon": "🛰️", "tools": ["internet", "servidor", "recordatorios"],
+      "role_text": "You watch the server and its services: if something goes down or the disk fills up, you say just enough to understand it. You change nothing without permission." },
+    { "key": "notas", "name": "Tech notes", "icon": "📝", "tools": ["internet", "recordatorios"],
+      "role_text": "You keep ideas, links and technical decisions, and find them when I ask." }
+  ],
+  "groups": [],
+  "reminders": [
+    { "bot": "vigia", "text": "Server and disk status", "every": "daily", "time": "09:00" }
+  ],
+  "rules": []
+}

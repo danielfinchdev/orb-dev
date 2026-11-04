@@ -25,6 +25,13 @@ import monitor from './es/monitor.mjs';
 import bots from './es/bots.mjs';
 import term from './es/term.mjs';
 import botsui from './es/botsui.mjs';
+import ws1 from './es/ws1.mjs';
+import ws2 from './es/ws2.mjs';
+import ws3 from './es/ws3.mjs';
+import ws4 from './es/ws4.mjs';
+import ws5 from './es/ws5.mjs';
+import ws6 from './es/ws6.mjs';
+import ws6android from './es/ws6-android.mjs';
 
 export default {
   ...base,
@@ -52,5 +59,12 @@ export default {
   ...monitor,
   ...bots,
   ...term,
-  ...botsui
+  ...botsui,
+  ...ws1,
+  ...ws2,
+  ...ws3,
+  ...ws4,
+  ...ws5,
+  ...ws6,
+  ...ws6android
 };

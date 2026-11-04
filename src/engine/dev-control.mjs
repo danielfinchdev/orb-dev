@@ -40,12 +40,12 @@ export function startDevControl({ api, board, sessions, log = () => {}, home, in
         clients.add(res); req.on('close', () => clients.delete(res));
         return;
       }
-      if (req.method === 'GET' && req.url === '/snapshot') return send(res, 200, { ok: true, result: { ...snapshot(), live: await api.call('tasks.live', {}).catch(() => []) } });
+      if (req.method === 'GET' && req.url === '/snapshot') return send(res, 200, { ok: true, result: { ...snapshot(), live: await api.call('tasks.live', {}, api.desktopPrincipal?.()).catch(() => []) } });
       if (req.method === 'POST' && req.url === '/call') {
         let raw = ''; for await (const chunk of req) { raw += chunk; if (raw.length > 1_000_000) throw new Error('petición demasiado grande'); }
         const { method, params } = JSON.parse(raw || '{}');
         log(`control de desarrollo: ${method}`);
-        return send(res, 200, { ok: true, result: (await api.call(String(method), params ?? {})) ?? null });
+        return send(res, 200, { ok: true, result: (await api.call(String(method), params ?? {}, api.desktopPrincipal?.())) ?? null });
       }
       send(res, 404, { ok: false, error: 'no existe' });
     } catch (error) { send(res, 200, { ok: false, error: error.message }); }

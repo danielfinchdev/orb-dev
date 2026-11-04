@@ -24,7 +24,11 @@ export function newer(a, b) {
 
 const short = (error) => String(error?.message ?? error).split('\n')[0].slice(0, 300);
 
-export function createUpdater({ send, log = () => {} }) {
+// 3.6: beforeInstall(version) makes a backup of the data before a new version touches it (src/core/backup.mjs, kind
+// «preupdate»). It runs when the download ends (an update installed when the app closes is covered too) and, if that one
+// failed, again on «Reiniciar y actualizar». It never blocks the update for long (BACKUP_WAIT) and a failure is logged.
+const BACKUP_WAIT = 3 * 60_000;
+export function createUpdater({ send, log = () => {}, beforeInstall = null }) {
   const current = app.getVersion();
   // ORB_FAKE_UPDATE=<version>: tests and screenshots see a new version without the network (nothing is downloaded).
   const fake = process.env.ORB_FAKE_UPDATE || '';
@@ -37,6 +41,14 @@ export function createUpdater({ send, log = () => {} }) {
   let state = { state: enabled ? 'idle' : 'off', current, version: null, percent: 0, error: null, portable, url: RELEASES_URL };
   const set = (patch) => { state = { ...state, ...patch }; send(state); };
   let timer = null;
+  let backedUp = null; // the version a backup was made for
+  const backup = async (version) => {
+    if (!beforeInstall || backedUp === version) return;
+    try {
+      await Promise.race([beforeInstall(version), new Promise((_, reject) => setTimeout(() => reject(new Error('la copia tarda demasiado')), BACKUP_WAIT).unref?.())]);
+      backedUp = version; log(`actualizar: copia de seguridad hecha antes de la ${version}`);
+    } catch (error) { log(`actualizar: no se pudo hacer la copia antes de actualizar: ${short(error)}`); }
+  };
 
   if (enabled && !fake && !portable) {
     autoUpdater.autoDownload = false; // the user decides with «Actualizar»
@@ -49,7 +61,7 @@ export function createUpdater({ send, log = () => {} }) {
     autoUpdater.on('update-available', (info) => set({ state: 'available', version: info.version }));
     autoUpdater.on('update-not-available', () => set({ state: 'none', version: null }));
     autoUpdater.on('download-progress', (p) => set({ state: 'downloading', percent: Math.round(p.percent ?? 0) }));
-    autoUpdater.on('update-downloaded', (info) => set({ state: 'downloaded', version: info.version, percent: 100 }));
+    autoUpdater.on('update-downloaded', (info) => { set({ state: 'downloaded', version: info.version, percent: 100 }); backup(info.version); });
     // A failed download goes back to «Actualizar» (with the reason) so it can be tried again.
     autoUpdater.on('error', (error) => set({ state: state.state === 'downloading' ? 'available' : 'error', error: short(error) }));
   }
@@ -80,9 +92,10 @@ export function createUpdater({ send, log = () => {} }) {
     return state;
   }
 
-  // Closes the app, installs silently and opens the new version.
-  function install() {
+  // Closes the app, installs silently and opens the new version (3.6: after the backup of the data).
+  async function install() {
     if (state.state !== 'downloaded') return false;
+    await backup(state.version);
     // quitAndInstall says nothing when the downloaded installer cannot be started (deleted, quarantined by the antivirus):
     // then the app simply does not quit. It stays, says so and offers to download it again.
     let quitting = false;
@@ -103,5 +116,5 @@ export function createUpdater({ send, log = () => {} }) {
     timer.unref?.();
   }
 
-  return { get: () => state, check, download, install, start, stop: () => clearInterval(timer) };
+  return { get: () => state, check, download, install, start, stop: () => clearInterval(timer), backup };
 }

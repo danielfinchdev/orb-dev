@@ -328,6 +328,7 @@ export default {
   "msg.orch.writeMessage": "enter a message",
   "msg.projects.badCategory": "invalid category: {category}. Available categories: {list}",
   "msg.projects.exists": "a project named {name} already exists",
+  "msg.projects.nameUnavailable": "That name is not available. Choose another one.",
   "msg.projects.commonReadme": "# {name} — shared folder\n\nWhat the projects of the group ({list}) share: the API and data, the design (colours, fonts, components), the texts and the images. What is decided here applies to all of them.\n",
   "msg.projects.folderNotEmpty": "the folder {folder} already exists and is not empty. Import it as a project",
   "msg.projects.needName": "the project needs a name",

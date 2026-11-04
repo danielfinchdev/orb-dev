@@ -14,7 +14,16 @@ import { tr } from '../core/context.mjs';
 export const id = 'codex';
 export const label = 'Codex';
 export const kind = 'app-server';
-export const caps = { images: true, steer: true, fork: true, approvals: true, models: true, context: true };
+// 3.6 (S1): a bot with Codex as its brain runs with no shell at all and no local file viewer, so a mail or a web that
+// tells it to read the user's keys has nothing to read them with (its only tools are the bot's MCP ones; its folder is its
+// working directory, read-only). The keys, as Codex's configuration reference documents them
+// (https://learn.chatgpt.com/docs/config-file/config-reference: «features.shell_tool: Enable command execution tools»,
+// «features.unified_exec», «features.view_image», «web_search: disabled | cached | indexed | live»), passed with -c.
+// An older Codex that ignored them is caught at its first command (createLive › botConfine.onBreakout) and refused.
+export const BOT_CONFINE = ['features.shell_tool=false', 'features.unified_exec=false', 'features.view_image=false'];
+export const BOT_CONFINE_DOC = 'https://learn.chatgpt.com/docs/config-file/config-reference';
+export const botConfineArgs = ({ web = false } = {}) => [...BOT_CONFINE, `web_search="${web ? 'live' : 'disabled'}"`].flatMap((kv) => ['-c', kv]);
+export const caps = { images: true, steer: true, fork: true, approvals: true, models: true, context: true, botConfinement: { keys: BOT_CONFINE, doc: BOT_CONFINE_DOC } };
 
 export function detect(cfg = {}) {
   const vendor = (dir) => ['x86_64-pc-windows-msvc', 'aarch64-pc-windows-msvc'].flatMap((triple) => ['codex-win32-x64', 'codex-win32-arm64'].map((p) =>
@@ -148,8 +157,25 @@ export function createLive(o) {
   let child = null; let peer = null; let threadId = null; let turn = null; let turnId = null; let started = null; let closed = false;
   const live = { sessionId: o.resumeId ?? null, caps, pid: null, get busy() { return Boolean(turn && !turn.done); } };
 
+  // 3.6 (S1): a confined bot (o.botConfine) must never run a command, change a file or use a tool it was not given: if
+  // Codex does (an older version that ignored the settings), the turn stops, the session closes and the engine is told.
+  const confine = o.botConfine || null;
+  const FORBIDDEN = new Set(['commandExecution', 'fileChange', 'dynamicToolCall', 'collabAgentToolCall', 'imageGeneration']);
+  const breakout = (why) => {
+    if (!confine || closed) return;
+    try { confine.onBreakout?.(why); } catch { /* the engine's business */ }
+    Promise.resolve(live.interrupt()).catch(() => {}).finally(() => live.close());
+  };
+  const confinedItem = (item) => {
+    if (!confine || !item) return false;
+    if (FORBIDDEN.has(item.type)) return true;
+    if (item.type === 'mcpToolCall' && !(confine.servers ?? []).includes(item.server)) return true;
+    if (item.type === 'webSearch' && !confine.web) return true;
+    return false;
+  };
   const guardAsk = async ({ itemId, command, paths = [], tool, kind }) => {
-    const verdict = decide({ permission, tool, kind, command, paths, internalDir: o.internalDir, lang: o.lang, bot: o.bot || false });
+    if (confine && (kind === 'execute' || kind === 'edit')) { breakout(kind); return 'deny'; }
+    const verdict = decide({ permission, tool, kind, command, paths, internalDir: o.internalDir, lang: o.lang, bot: o.bot || false, confine: o.confine || null });
     if (verdict.decision !== 'ask') return verdict.decision;
     return approvals.ask({ id: itemId, tool, title: command || paths.join(', ') || tool, reason: verdict.reason, input: clip(command || paths.join(', '), 400) });
   };
@@ -172,6 +198,7 @@ export function createLive(o) {
       return { decision: d === 'deny' ? { denied: { rejection: 'El usuario no lo ha permitido.' } } : 'approved' };
     }
     if (method === 'item/permissions/requestApproval') {
+      if (confine) { breakout('permissions'); return { permissions: {}, scope: 'turn' }; }
       // Asking for more than the sandbox gives (another folder, network…): the user decides.
       const d = await approvals.ask({ id: p.itemId, tool: tr('sys.agents.permissions'), title: p.reason || tr('sys.agents.morePermissions', { name: 'Codex' }), reason: tr('sys.agents.morePermissionsWhy'), input: clip(p.permissions, 400) });
       return { permissions: d === 'deny' ? {} : p.permissions, scope: d === 'always' ? 'session' : 'turn' };
@@ -185,6 +212,7 @@ export function createLive(o) {
     if (p.threadId && threadId && p.threadId !== threadId) return; // a subagent's own thread: its steps arrive as items of ours
     if (method === 'item/agentMessage/delta') { onEvent({ type: 'delta', text: p.delta }); return; }
     if (method === 'item/started') {
+      if (confinedItem(p.item)) { breakout(p.item.type); return; }
       const tool = ITEM_TOOL(p.item); if (tool) onEvent({ type: 'item', role: 'tool', kind: 'tool', body: { id: p.item.id, ...tool } });
       return;
     }
@@ -251,7 +279,7 @@ export function createLive(o) {
   };
 
   const start = async () => {
-    const args = [...o.exe.pre, 'app-server', ...mcpArgs(o.mcpServers)];
+    const args = [...o.exe.pre, 'app-server', ...mcpArgs(o.mcpServers), ...(confine ? botConfineArgs(confine) : [])];
     child = spawnAgent(o.exe.cmd, args, { cwd: o.cwd, env: { ...(o.env ?? {}), ...mcpSecrets(o.mcpServers) }, log });
     live.pid = child.pid;
     peer = new JsonRpcPeer(child, { onNotification, onRequest, log });
@@ -263,7 +291,7 @@ export function createLive(o) {
     child.on('error', (error) => { closed = true; if (turn && !turn.done) turn.finish({ isError: true, final: tr('sys.agents.startFailed', { name: 'Codex', error: error.message }) }); });
     await peer.request('initialize', { clientInfo: { name: 'orb_dev', title: 'Orb', version: '2.4.2' }, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs: 30000 });
     peer.notify('initialized', {});
-    const common = { cwd: o.cwd, model, ...policy(permission), config: { model_reasoning_effort: effort(o.reasoning), service_tier: 'default' } };
+    const common = { cwd: o.cwd, model, ...(confine ? { approvalPolicy: 'untrusted', sandbox: 'read-only' } : policy(permission)), config: { model_reasoning_effort: effort(o.reasoning), service_tier: 'default' } };
     let res;
     if (o.resumeId && o.forkSession) res = await peer.request('thread/fork', { threadId: o.resumeId, ...common }, { timeoutMs: 60000 });
     else if (o.resumeId) res = await peer.request('thread/resume', { threadId: o.resumeId, ...common }, { timeoutMs: 60000 });

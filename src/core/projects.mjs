@@ -21,15 +21,23 @@ export function checkProjectName(name) {
   return String(name).normalize('NFC').trim();
 }
 
-export function createProject(board, { name, notes = '', category }, actor) {
+// 3.6: a name (or a folder) taken by someone else's project: the caller only hears that it is not available, never whose
+// it is nor where its folder is. existing: the project with that name (null: only the folder is taken).
+const notMine = (board, person, existing) => {
+  const me = person ?? board.ownerId();
+  return existing ? (existing.person_id ?? board.ownerId()) !== me : !board.isOwnerPerson(person);
+};
+const taken = (board, person, existing, key, vars) => new Error(notMine(board, person, existing) ? tr('msg.projects.nameUnavailable') : tr(key, vars));
+
+export function createProject(board, { name, notes = '', category, person = null }, actor) {
   const clean = String(name ?? '').normalize('NFC').trim();
   checkProjectName(clean);
-  if (board.project(clean)) throw new Error(tr('msg.projects.exists', { name: clean }));
+  if (board.project(clean)) throw taken(board, person, board.project(clean), 'msg.projects.exists', { name: clean });
   const cat = checkCategory(category);
   const dir = folderName(clean, 'proyecto');
   if (isReservedName(dir)) throw new Error(tr('msg.projects.reserved', { dir, name: ctx.config.assistantName }));
   const folder = path.join(ctx.paths.categories[cat], dir);
-  if (fs.existsSync(folder) && fs.readdirSync(folder).length) throw new Error(tr('msg.projects.folderNotEmpty', { folder }));
+  if (fs.existsSync(folder) && fs.readdirSync(folder).length) throw taken(board, person, null, 'msg.projects.folderNotEmpty', { folder });
   fs.mkdirSync(folder, { recursive: true });
   // "-b" needs git 2.28+; older versions get the default branch renamed instead. Without git the project still works
   // (undo then uses a copy of the folder), it just has no branches or GitHub.
@@ -40,19 +48,19 @@ export function createProject(board, { name, notes = '', category }, actor) {
     git(folder, 'add', '.gitignore');
     git(folder, ...ORB_GIT, 'commit', '-q', '-m', tr('sys.projects.firstCommit'));
   }
-  return board.addProject({ name: clean, path: folder, notes }, actor);
+  return board.addProject({ name: clean, path: folder, notes }, actor, { person });
 }
 
 // 3.2.1: renames a project and, when it is a project folder of a category, its folder too (name = folder). Only when
 // nothing of it is working (no open tasks, no running conversation): the folder moves first and, if the database update
 // fails, it moves back. Its tasks, conversations, direct conversations, schedules, working folder, whiteboard marks and
 // log file follow it. A linked folder outside Orb's folder keeps its place: only the name changes.
-export function renameProject(board, { name, to }, actor) {
+export function renameProject(board, { name, to, person = null }, actor) {
   const project = board.project(name); if (!project) throw new Error(tr('msg.board.noProject', { name }));
   const next = checkProjectName(to);
   if (next === project.name) return project;
   const other = board.project(next);
-  if (other && other.name !== project.name) throw new Error(tr('msg.projects.exists', { name: next }));
+  if (other && other.name !== project.name) throw taken(board, person, other, 'msg.projects.exists', { name: next });
   const open = board.one("SELECT COUNT(*) AS n FROM tasks WHERE project = ? AND status IN ('queued', 'awaiting_approval', 'running')", project.name).n;
   const live = board.one("SELECT COUNT(*) AS n FROM sessions WHERE project = ? AND status = 'running'", project.name).n;
   if (open || live) throw new Error(tr('msg.projects.renameBusy', { name: project.name }));
@@ -64,7 +72,7 @@ export function renameProject(board, { name, to }, actor) {
     const dir = folderName(next, 'proyecto');
     if (isReservedName(dir)) throw new Error(tr('msg.projects.reserved', { dir, name: ctx.config.assistantName }));
     target = path.join(path.dirname(project.path), dir);
-    if (target.toLowerCase() !== project.path.toLowerCase() && fs.existsSync(target)) throw new Error(tr('msg.github.folderExists', { folder: target }));
+    if (target.toLowerCase() !== project.path.toLowerCase() && fs.existsSync(target)) throw taken(board, person, null, 'msg.github.folderExists', { folder: target });
     try { fs.renameSync(project.path, target); } catch { throw new Error(tr('msg.projects.renameInUse', { folder: project.path })); }
     git(target, 'worktree', 'repair'); // isolated copies of old tasks keep pointing at the moved repository
   }
@@ -97,13 +105,16 @@ export function renameProject(board, { name, to }, actor) {
 // 2.7: a project for one platform or for several. Several = a multiplatform group: one project per platform in its own
 // category, named <name>-<platform> (tienda-android, tienda-ios…), linked by their group, plus a shared folder
 // <home>/comun/<name> for what they have in common (API, design, texts, images) that every one of them reads.
-export function createProjects(board, { name, notes = '', categories }, actor) {
+export function createProjects(board, { name, notes = '', categories, person = null }, actor) {
   const cats = [...new Set((Array.isArray(categories) && categories.length ? categories : [undefined]).map(checkCategory))];
-  if (cats.length === 1) return [createProject(board, { name, notes, category: cats[0] }, actor)];
+  if (cats.length === 1) return [createProject(board, { name, notes, category: cats[0], person }, actor)];
   const base = checkProjectName(name);
   const names = cats.map((c) => `${base}-${c}`);
-  for (const n of names) if (board.project(n)) throw new Error(tr('msg.projects.exists', { name: n }));
-  const made = names.map((n, i) => createProject(board, { name: n, notes, category: cats[i] }, actor));
+  for (const n of names) if (board.project(n)) throw taken(board, person, board.project(n), 'msg.projects.exists', { name: n });
+  // 3.6: the group (and its common folder) of someone else's projects is not joined.
+  const sister = board.one('SELECT * FROM projects WHERE grupo = ? COLLATE NOCASE LIMIT 1', base);
+  if (sister && notMine(board, person, sister)) throw taken(board, person, sister, 'msg.projects.exists', { name: base });
+  const made = names.map((n, i) => createProject(board, { name: n, notes, category: cats[i], person }, actor));
   const common = commonFolder(base);
   fs.mkdirSync(common, { recursive: true });
   const readme = path.join(common, 'LEEME.md');

@@ -1,7 +1,7 @@
 // 2.7, the phone: a simpler app. The sections are tabs at the bottom (Orbe, Chats, Tareas, Proyectos, Más) instead of the
 // sidebar; «Más» holds the screens to look things up and the phone's own options. What only makes sense on the PC
 // (Agentes, Ajustes, Modo experto, minijuegos, the themes) is not here.
-import { Sparkles, MessagesSquare, ListTodo, FolderKanban, Ellipsis, CalendarClock, PenTool, BookOpen, GraduationCap, Smartphone, Moon, MessageSquare, Bot, Bell, Home, Users, Server, Settings2, Link2 } from 'lucide-react';
+import { Sparkles, MessagesSquare, ListTodo, FolderKanban, Ellipsis, CalendarClock, PenTool, BookOpen, GraduationCap, Smartphone, Moon, MessageSquare, Bot, Bell, Home, Users, Server, Settings2, Link2, CircleUserRound } from 'lucide-react';
 import { NavItem } from './sidebar.jsx';
 import { PageHeader } from './page.jsx';
 import { Switch } from './ui/overlay.jsx';
@@ -9,6 +9,7 @@ import { useStore, go, applyTheme, isDark, modeOf } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { useState } from 'react';
+import { showPersonUi } from '@/lib/persons.js';
 
 // Which tab a screen belongs to.
 const TAB_OF = { chat: 'chat', session: 'chats', new: 'chats', chats: 'chats', tasks: 'tasks', projects: 'projects',
@@ -67,6 +68,7 @@ export function MoreView() {
   const bots = useStore((s) => modeOf(s.route)) === 'bots';
   const mode = bots ? { mode: 'bots' } : {};
   const [dark, setDark] = useState(isDark);
+  const me = useStore((s) => s.me);
   const night = (on) => { const next = on ? 'oscuro' : 'claro'; applyTheme(next); setDark(on); try { localStorage.setItem('orb.theme', next); } catch { /* storage unavailable */ } };
   return (
     <>
@@ -90,6 +92,8 @@ export function MoreView() {
           </div>
           )}
           <div className="bg-card/80 grid gap-0.5 rounded-2xl border p-2">
+            {/* 3.6: with two or more people, this device's person and their settings. */}
+            {showPersonUi(me) ? <NavItem icon={CircleUserRound} label={t('profile.title')} onClick={() => go({ view: 'profile', ...mode })} testid="nav-profile" /> : null}
             <NavItem icon={Smartphone} label={t('nav.phone')} onClick={() => go({ view: 'phone', ...mode })} testid="nav-phone" />
             <NavItem icon={Link2} label={t('link.title')} onClick={() => go({ view: 'link', ...mode })} testid="nav-link" />
             <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[14px]">
