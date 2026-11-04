@@ -21,7 +21,6 @@ import sys from './en/sys.mjs';
 import help from './en/help.mjs';
 import greet from './en/greet.mjs';
 import whiteboard from './en/whiteboard.mjs';
-import monitor from './en/monitor.mjs';
 import bots from './en/bots.mjs';
 import term from './en/term.mjs';
 import botsui from './en/botsui.mjs';
@@ -60,7 +59,6 @@ export default {
   ...help,
   ...greet,
   ...whiteboard,
-  ...monitor,
   ...bots,
   ...term,
   ...botsui,

@@ -100,7 +100,7 @@ test('el asistente: tres pantallas, y cada uso aplica su plantilla tal cual («M
     const { listTemplates, applyTemplate } = await import('../src/core/templates.mjs');
     for (const lang of ['es', 'en']) {
       const list = listTemplates(lang);
-      assert.deepEqual(list.map((x) => x.id).sort(), ['casa', 'desarrollo', 'negocio', 'vacio'], lang);
+      assert.deepEqual(list.map((x) => x.id).sort(), ['casa', 'desarrollo', 'mantenimiento', 'negocio', 'vacio'], lang); // 3.7: «Mantenimiento del PC», opcional (no está en el asistente)
       for (const u of P.WIZARD_USES) if (u.template) assert.ok(list.some((x) => x.id === u.template), `${u.template} (${lang})`);
       // genéricas: ningún nombre de persona ni de casa concreta
       assert.doesNotMatch(JSON.stringify(list), /Dani|María|Ana|Leo/, `plantillas genéricas (${lang})`);

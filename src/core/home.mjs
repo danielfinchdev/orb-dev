@@ -276,6 +276,13 @@ export function loadConfig(home) {
   // nothing to set up; Orb Server writes «centro» in a folder without one (src/server/host.mjs). A value Orb does not know
   // is dropped (so it is «todo» too).
   if (config.role !== undefined && !ROLES.includes(config.role)) delete config.role;
+  // 3.7: «Monitoreo del equipo» and Opti Bot are gone (what they did is a bot's «Equipo» tools now): their settings go,
+  // except the one that is not theirs, sharing with Open Control Edge (monitor.shareWithOce → oce.share). The file loses
+  // the old key at the next save (or at once, migrateRetiredConfig in engine/retired.mjs).
+  if (config.monitor !== undefined) {
+    if (config.monitor?.shareWithOce === false && config.oce?.share === undefined) config.oce = { ...(config.oce ?? {}), share: false };
+    delete config.monitor;
+  }
   // Folders made by older versions: agents added later get their default account and their place in the order.
   for (const a of AGENT_IDS) {
     if (!config.accounts.some((x) => x.agent === a)) config.accounts.push({ id: a, agent: a, label: AGENT_LABELS[a], home: '', enabled: true });

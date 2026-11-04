@@ -192,7 +192,7 @@ const SRC = {
   logs: ['Bitácoras (project logs)', 'src/ui/views/memories.jsx + logs.jsx'], activity: ['Activity', 'src/ui/views/memories.jsx + activity.jsx'],
   schedules: ['Scheduled tasks', 'src/ui/views/schedules.jsx'], phone: ['This phone / mobile access', 'src/ui/views/settings.jsx (PhoneView)'],
   tutorials: ['Tutorials and help', 'src/ui/views/tutorials.jsx'], board: ['Whiteboard (Pizarra)', 'src/ui/views/whiteboard.jsx'],
-  expert: ['God mode (expert)', 'src/ui/views/expert.jsx'], monitor: ['PC status / Opti', 'src/ui/views/monitor.jsx'],
+  expert: ['God mode (expert)', 'src/ui/views/expert.jsx'],
   link: ['Magic Link', 'src/ui/views/magic-link.jsx'], profile: ['My profile', 'src/ui/views/persons.jsx (ProfileView)'],
   chats: ['Chats list', 'src/ui/main.jsx (ChatsView) + components/sidebar.jsx'], more: ['More menu', 'src/ui/components/mobile-tabs.jsx (MoreView)'],
   'bot-chat': ['Bots chat', 'src/ui/views/bots/chat.jsx'], 'bot-group': ['Bot group chat', 'src/ui/views/bots/chat.jsx'], bots: ['Bots list', 'src/ui/views/bots/list.jsx'],
@@ -200,11 +200,11 @@ const SRC = {
   'bot-memory': ['Bots memory', 'src/ui/views/bots/more.jsx (BotMemoryView)'], 'bot-home': ['Home (Home Assistant)', 'src/ui/views/bots/more.jsx (BotHomeView)'],
   'bot-server': ['Bots server', 'src/ui/views/bots/more.jsx (BotServerView)'], 'bot-settings': ['Bots settings', 'src/ui/views/bots/more.jsx (BotSettingsView)']
 };
-const PC_VIEWS = ['chat', 'tasks', 'projects', 'agents', 'logs', 'activity', 'schedules', 'phone', 'tutorials', 'board', 'expert', 'monitor', 'bot-chat', 'bots', 'bot-groups', 'bot-reminders', 'bot-memory', 'bot-home', 'bot-server', 'bot-settings'];
+const PC_VIEWS = ['chat', 'tasks', 'projects', 'agents', 'logs', 'activity', 'schedules', 'phone', 'tutorials', 'board', 'expert', 'bot-chat', 'bots', 'bot-groups', 'bot-reminders', 'bot-memory', 'bot-home', 'bot-server', 'bot-settings'];
 const PHONE_VIEWS = ['chat', 'chats', 'more', 'tasks', 'projects', 'logs', 'activity', 'schedules', 'phone', 'profile', 'tutorials', 'board', 'link', 'bot-chat', 'bots', 'bot-reminders', 'bot-home', 'bot-groups', 'bot-memory', 'bot-server', 'bot-settings'];
 const WEB_VIEWS = ['chat', 'tasks', 'projects', 'link', 'logs', 'bot-chat', 'bots', 'bot-reminders'];
 // 3.6: six sections (their parts are taken scrolling); «Mi perfil» is a window of its own (the user menu, 2+ users).
-const SETTINGS = [['general', 'General (assistant, folder, appearance, updates)'], ['magiclink', 'Magic Link (users, devices, linked Orbs)'], ['agentes', 'Agents (chat, tasks, test)'], ['datos', 'Data and backups'], ['avanzado', 'Advanced (tools, God mode, PC status)'], ['acerca', 'About (contribute, more apps)'], ['perfil', 'My profile']];
+const SETTINGS = [['general', 'General (assistant, folder, appearance, updates)'], ['magiclink', 'Magic Link (users, devices, linked Orbs)'], ['agentes', 'Agents (chat, tasks, test)'], ['datos', 'Data and backups'], ['avanzado', 'Advanced (tools, God mode)'], ['acerca', 'About (contribute, more apps)'], ['perfil', 'My profile']];
 
 async function views(page, list, state, { scroll = true } = {}) {
   for (const v of list) {
@@ -289,7 +289,7 @@ try {
   }
 
   // ================= 2. a fresh, empty Orb =================
-  await call('config.save', { patch: { expert: { enabled: true }, monitor: { enabled: true } } });
+  await call('config.save', { patch: { expert: { enabled: true } } });
   const phone = (!ONLY || ONLY.has('phone')) ? await newPage('phone') : null;
   const web = (!ONLY || ONLY.has('web')) ? await newPage('web') : null;
   const linkDevice = async (page, device) => {

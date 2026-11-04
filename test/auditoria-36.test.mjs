@@ -33,12 +33,12 @@ const all = (q, ...args) => { const d = db(); try { return d.prepare(q).all(...a
 // touches this PC (installs, Remote Desktop, the phone access, restoring a backup, moving the Orb).
 const SKIP = new Set(['persons.switch', 'persons.lock', 'persons.unlock', 'app.lockState', 'persons.remove', 'persons.rename', 'persons.setPin', 'data.deletePerson',
   'templates.apply', 'installer.start', 'agents.install', 'net.remote', 'github.login', 'backup.restore', 'backup.now', 'data.moveExport', 'data.moveUndo', 'data.moveKeepBoth',
-  'remote.enable', 'remote.configure', 'remote.revoke', 'config.save', 'control.pause', 'control.resume', 'link.revoke', 'link.qr', 'link.connect', 'opti.act',
+  'remote.enable', 'remote.configure', 'remote.revoke', 'config.save', 'control.pause', 'control.resume', 'link.revoke', 'link.qr', 'link.connect',
   'agents.login', 'agents.loginCode', 'agents.loginCancel', 'agents.check', 'accounts.scan', 'backup.verify', 'backup.recovery',
   // creates that would make the caller's own things named with the other person's word (each one checked on its own below)
   'bots.create', 'bots.groups.create', 'persons.create', 'accounts.add', 'images.mark', 'actions.save', 'projects.create', 'inbox.sections.create', 'inbox.sections.rename']);
-// This PC's own tools (the owner's, no person's content): network, Android, GitHub, expert view, Opti Bot.
-const PC_TOOL = /^(net|android|github|expert|opti)\./;
+// This PC's own tools (the owner's, no person's content): network, Android, GitHub, expert view.
+const PC_TOOL = /^(net|android|github|expert)\./;
 const methods = () => Object.keys(POLICY).filter((m) => !m.endsWith('.*') && !SKIP.has(m) && !PC_TOOL.test(m));
 const word = (who) => (who === 'ana' ? 'qzana' : 'qzleo');
 // What may not show up for the other person: the mark and their folders (as text and as JSON).

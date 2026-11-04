@@ -96,7 +96,7 @@ function resolve(board, res) {
     case 'request': { const r = one(board, 'SELECT person_id, bot_id FROM bot_requests WHERE id = ?', Number(id)); return { owner: who(r), parents: r ? [{ type: 'bot', id: r.bot_id }] : [] }; }
     case 'device': { const r = one(board, 'SELECT person_id FROM devices WHERE id = ?', String(id)); return { owner: who(r), parents: [] }; }
     case 'account': { const a = (ctx.config?.accounts ?? []).find((x) => x.id === String(id)); return { owner: a ? a.person ?? owner : null, parents: [] }; }
-    case 'integration': return { owner: ['ha', 'srv'].includes(String(id)) ? owner : null, parents: [], key: String(id) };
+    case 'integration': return { owner: ['ha', 'pc', 'srv'].includes(String(id)) ? owner : null, parents: [], key: String(id) };
     case 'log': return String(id) === 'general' ? { owner, parents: [] } : { ...resolve(board, { type: 'project', id }), via: { type: 'project', id } };
     default: return { owner: null, parents: [] };
   }

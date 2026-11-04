@@ -41,7 +41,6 @@ import { SchedulesView } from '@/views/schedules.jsx';
 import { ExpertView } from '@/views/expert.jsx';
 import { TutorialsView } from '@/views/tutorials.jsx';
 import { WhiteboardView } from '@/views/whiteboard.jsx';
-import { MonitorView } from '@/views/monitor.jsx';
 import { BotChatView } from '@/views/bots/chat.jsx';
 import { BotChatsView } from '@/views/bots/inbox.jsx';
 import { NewGroupHost } from '@/views/bots/new-group.jsx';
@@ -70,8 +69,8 @@ const BOT_SCREENS = { 'bot-chats': BotChatsScreen, 'bot-chat': BotChatView, 'bot
 const VIEWS = bridge.mobile
   ? { ...BOT_SCREENS, link: MagicLinkView, chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, profile: ProfileView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
   : { ...BOT_SCREENS, chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView,
-    // 2.7.3: Orb Light (the portable .exe) has no God mode nor PC Status.
-    ...(bridge.light ? {} : { expert: ExpertView, monitor: MonitorView }) };
+    // 2.7.3: Orb Light (the portable .exe) has no God mode. (3.7: «Monitoreo del equipo» is gone: a bot with «Equipo».)
+    ...(bridge.light ? {} : { expert: ExpertView }) };
 
 // The phone's frame: the screen (each with its own header) and the tabs at the bottom.
 function MobileShell() {

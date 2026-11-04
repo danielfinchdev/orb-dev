@@ -1,14 +1,15 @@
 // 3.6: a bot's avatar is chosen when it is made (docs/DESIGN-SYSTEM.md › 2.5, mockup mensajeria.html ?s=create): a big
 // live preview, the name, the twelve shapes and the ten colours, and «Crear bot». A dialog on the PC; on the phone it
-// takes the whole screen (on Android a glass sheet). The rest (role, brain, tools) is set later in «Editar».
+// takes the whole screen (on Android a glass sheet). The rest (role, brain, tools) is set later in «Editar». 3.7: or, in one
+// click, the optional template «Mantenimiento del PC» (a bot with the «Equipo» tools; src/core/templates/<lang>/mantenimiento.json).
 // AvatarPicker is shared with the bot's editor.
 import { useEffect, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { X, HeartPulse } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Field, Input } from '@/components/ui/basic.jsx';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/overlay.jsx';
 import { BotAvatar } from '@/components/bot-avatar.jsx';
-import { useStore, botCall, act, go, loadBots, phoneLayout } from '@/lib/store.js';
+import { useStore, botCall, call, act, go, loadBots, phoneLayout, botsVia, getState, uiLanguage } from '@/lib/store.js';
 import { newBotDraft, botPayload } from '@/lib/bots.js';
 import { useT } from '@/lib/i18n.js';
 import { SHAPE_IDS, COLOR_IDS, avatarFor, avatarParts } from '../../../core/avatar.mjs';
@@ -18,6 +19,8 @@ import { useBots } from './common.jsx';
 const swatch = (c) => { const p = avatarParts('mochi', c); return { background: `linear-gradient(${p.top}, ${p.bottom})` }; };
 
 const BOT_BRAINS = ['claude', 'codex'];
+const PC_TEMPLATE = 'mantenimiento';
+const hereTz = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; } };
 
 // A moment of joy each time the avatar changes (the preview hops), then back to idle.
 export function useHop() {
@@ -78,6 +81,21 @@ export function CreateBot({ onClose }) {
   const [saving, setSaving] = useState(false);
   const preview = useHop();
   const change = (a) => { setAvatar(a); preview.hop(); };
+  // The template only for bots that live in this Orb (not on a linked one: templates.apply makes them here).
+  const [tpl, setTpl] = useState(null);
+  useEffect(() => {
+    if (botsVia()) return undefined;
+    let alive = true;
+    call('templates.list', { lang: uiLanguage(getState()) }).then((list) => { if (alive) setTpl((list ?? []).find((x) => x.id === PC_TEMPLATE) ?? null); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  const fromTemplate = async () => {
+    if (!tpl || saving) return;
+    setSaving(true);
+    const r = await act(call('templates.apply', { id: tpl.id, tz: hereTz() }), t('bots.templateMade', { name: tpl.name }));
+    setSaving(false);
+    if (r) { await loadBots(); if (r.bots?.[0]) go({ view: 'bot-chat', id: r.bots[0] }); else onClose(); }
+  };
   const create = async (e) => {
     e?.preventDefault();
     if (!name.trim() || saving) return;
@@ -107,6 +125,12 @@ export function CreateBot({ onClose }) {
           </Field>
           <AvatarPicker value={avatar} onChange={change} size={phone ? 40 : 42} />
           <p className="text-muted-foreground text-xs">{t('bots.createHint')}</p>
+          {tpl ? (
+            <button type="button" disabled={saving} onClick={fromTemplate} title={tpl.description} data-testid="bot-create-template"
+              className="text-muted-foreground hover:text-foreground -mt-2 inline-flex cursor-pointer items-center gap-1.5 self-start text-left text-xs underline-offset-2 hover:underline">
+              <HeartPulse className="size-3.5 shrink-0" />{t('bots.fromTemplate', { name: tpl.name })}
+            </button>
+          ) : null}
           {phone ? <><div className="flex-1" />{button}</> : (
             <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={onClose}>{t('bots.cancel')}</Button>{button}</div>
           )}
