@@ -37,7 +37,7 @@ export function InfoFrame({ title, onClose, children }) {
   );
   return (
     <aside className="bg-sidebar/60 flex w-[340px] shrink-0 flex-col border-l" aria-label={title} data-testid="chat-info">
-      <div className="app-titlebar flex h-14 shrink-0 items-center gap-2 border-b px-4">
+      <div className="app-titlebar wco-pad flex h-14 shrink-0 items-center gap-2 border-b px-4">
         <h2 className="min-w-0 flex-1 truncate text-[15px] font-semibold">{title}</h2>
         <Button size="icon-sm" variant="ghost" className="no-drag" onClick={onClose} aria-label={t('comp.close')} data-testid="chat-info-close"><X /></Button>
       </div>

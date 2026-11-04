@@ -2,7 +2,7 @@
 // chosen in Settings: file explorer and viewer, git changes with their diff, commit history, what is running, account
 // usage, the machine's load and live activity. Everything here only reads; the work is still done by the agents.
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronRight, File, FileLock2, Folder, FolderOpen, GitBranch, GitCommitHorizontal, RefreshCw, X, LayoutPanelLeft, Cpu, Activity, Gauge, Play, SquareTerminal, MessageSquare, FileDiff, Monitor, ImageIcon } from 'lucide-react';
+import { ChevronRight, File, FileLock2, Folder, FolderOpen, GitBranch, GitCommitHorizontal, RefreshCw, X, LayoutPanelLeft, Cpu, Activity, Gauge, Play, SquareTerminal, MessageSquare, FileDiff, Monitor, ImageIcon, Settings } from 'lucide-react';
 import { ChatView } from './chat.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Empty, Spinner } from '@/components/ui/basic.jsx';
@@ -263,12 +263,12 @@ function ActivityPanel({ version }) {
   );
 }
 
-export function PanelsMenu() {
+export function PanelsMenu({ labelClassName }) {
   const t = useT();
   const panels = useStore((s) => s.app.config.expert?.panels) ?? {};
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild><Button variant="outline" size="sm" data-testid="expert-panels"><LayoutPanelLeft />{t('expert.panels')}</Button></DropdownMenuTrigger>
+      <DropdownMenuTrigger asChild><Button variant="outline" size="sm" aria-label={t('expert.panels')} title={labelClassName ? t('expert.panels') : undefined} data-testid="expert-panels"><LayoutPanelLeft /><span className={labelClassName}>{t('expert.panels')}</span></Button></DropdownMenuTrigger>
       <DropdownMenuContent className="w-64">
         <DropdownMenuLabel>{t('expert.panelsWhich')}</DropdownMenuLabel>
         {Object.entries(PANELS).map(([id, label]) => (
@@ -314,16 +314,18 @@ export function ExpertView() {
     <>
       <div className="m-auto max-w-sm p-6 lg:hidden"><Empty icon={Monitor} title={t('expert.tooNarrow')}>{t('expert.tooNarrowBody')}</Empty></div>
       <div className="hidden min-h-0 flex-1 flex-col lg:flex" data-testid="expert-view">
-        <header className="topbar theme-band app-titlebar wco-pad-md flex h-14 shrink-0 items-center gap-2 border-b px-3">
+        {/* 3.6: the bar is a container: it leaves room for the window's buttons (wco-pad) and, the narrower it is, the more
+            of its buttons show only their icon (with a tooltip), so nothing ever slides under the minimise / close. */}
+        <header className="topbar theme-band app-titlebar wco-pad @container/bar flex h-14 shrink-0 items-center gap-2 overflow-hidden border-b px-3" data-testid="expert-bar">
           {folded ? <SidebarToggle collapsed /> : null}
-          <SquareTerminal className="text-primary size-4 shrink-0" /><span className="shrink-0 text-[15px] whitespace-nowrap">{t('nav.expert')}</span>
-          <Select size="sm" value={project} onValueChange={setProject} title={t('expert.project')} className="ml-2 w-56" placeholder={t('expert.pickProject')} options={projects.map((p) => ({ value: p.name, label: p.name }))} />
+          <SquareTerminal className="text-primary size-4 shrink-0" /><span className="hidden shrink-0 text-[15px] whitespace-nowrap @2xl/bar:inline">{t('nav.expert')}</span>
+          <Select size="sm" value={project} onValueChange={setProject} title={t('expert.project')} className="ml-2 w-40 min-w-24 shrink @4xl/bar:w-56" placeholder={t('expert.pickProject')} options={projects.map((p) => ({ value: p.name, label: p.name }))} />
           {/* 3.2: the project in an editor, and its actions (commands of the user's own, with their shortcut). */}
-          <OpenInMenu project={info} />
-          <ActionsMenu project={info} />
+          <OpenInMenu project={info} labelClassName="hidden @6xl/bar:inline" />
+          <ActionsMenu project={info} labelClassName="hidden @4xl/bar:inline" />
           <div className="flex-1" />
-          <Button variant="ghost" size="sm" onClick={() => go('settings')}>{t('nav.settings')}</Button>
-          <PanelsMenu />
+          <Button variant="ghost" size="sm" onClick={() => go('settings')} aria-label={t('nav.settings')} title={t('nav.settings')} data-testid="expert-settings"><Settings className="@4xl/bar:hidden" /><span className="hidden @4xl/bar:inline">{t('nav.settings')}</span></Button>
+          <PanelsMenu labelClassName="hidden @4xl/bar:inline" />
         </header>
         <div className="flex min-h-0 flex-1">
           {left.length && project ? (
