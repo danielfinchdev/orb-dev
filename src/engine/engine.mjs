@@ -146,6 +146,8 @@ async function start(home, version, secret, browser, headless) {
   // 3.5: the user's bots (their reminders and messages are looked at every second).
   const { Bots } = await import('./bots.mjs');
   const bots = new Bots(board, { emit, log, push: (note) => remoteRef.current?.push?.(note) }).start();
+  // 3.6 (WS4): a bot or a group no longer shared with someone: their lanes stop (bots.unshared) and they reload.
+  bots.onRevoke = (person) => router?.revoke([person]);
   api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, bots });
   // 3.6: a turn refused by a loan's limits (or a bot's caps): a notice and a push to the person who spends, and only them.
   const blocked = (person, why) => {

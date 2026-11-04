@@ -173,3 +173,53 @@ console only on this PC, for the owner). Another person spends it only through a
 - **Backups of a linked Orb.** Link op `backup.put` (`link.putBackup(id, file)` sends 1.5 MB pieces): only from a
   confirmed Orb of the owner, an `.orbbak` (magic checked), at most 2 GB; kept in `<backups>/de-otros-orbs/<device>/`, the
   last 3.
+
+## Bots per person (WS4)
+
+`src/core/bots.mjs` (data), `src/engine/bots.mjs` (lanes, cards), `src/mcp/bot.mjs` (the bots' tools), `src/engine/api-bots.mjs`.
+
+- **Owned.** Bots, groups, reminders and requests carry `person_id` (creates stamp the caller). B6: a bot's name is unique
+  per person (`getBot(board, name, { person })`: own first, then one shared to talk). Exclusives and the chief are among
+  one person's bots. `listBots/listGroups({ principal })` filter with `scopeSql`; reminders are each person's own
+  (`listReminders({ person })`), also on a shared bot.
+- **Shared bot.** One conversation (`botConversation(board, bot, { person })`, always private) and one lane per bot and
+  person: `bot_sessions(bot_id, person_id)` keeps each live session. Memory: `bots/<id>/memoria.md` (bot-wide: `view`
+  reads it, `edit` writes it) and `bots/<id>/personas/<person>.md` (only in that person's turns). `memoryFile(id,
+  { person, which: 'bot' | 'mine' })`; `'global'` is the person's `bots/personas/<person>/memoria-global.md`. The guard
+  denies the other people's files of the bot (and patterns or searches that would sweep `personas\` while it holds one).
+  A bot spends its person's account (`pickAccount({ person: bot's person, purpose: 'bot' })`, `checkSpend` before each turn
+  with `bots.caps`, `recordSpend` after); a refused turn is told to the talker only. `bots.unshared(res, person)` stops
+  that person's lanes at once and calls `bots.onRevoke` (the router's `revoke`).
+- **Shared group** (M4): one conversation (the group's person's); each line keeps its author (`chat.person_id`), the
+  prompt says «Mensaje de <name>» and each bot answers in the author's lane; members must be bots the group's person may
+  talk to (`mayTalkTo` also lets a talker of a shared group use its bots' tools).
+- **Cards.** `approversFor(kind, payload, bot, talker)`: the talker by default (purchases, questions, tools, own
+  memory); `admin`/`srv`: whoever may edit the bot (srv also needs `talk` on `integration:srv`); `ha`: the talker with
+  `caps.approveHouse` or `edit` on `integration:ha`, else the integration's editors. Stored in `bot_requests.approvers` and
+  the card's meta; only they get the push; `bots.cards` lists the ones waiting for the caller. `bots.decide` (policy
+  `BOTSP`): yes only by an approver, no also by the conversation's person; sensitive cards (`ha`, `srv`, `admin` except
+  pause, `confirm`) need a strong ticket when the approver has a PIN; `bot_requests.answered_by`.
+- **A5.** `memory_log` keeps every change (`applied` with `before`, `pending`, `rejected`, `undone`; scope `bot:<id>`,
+  `bot:<id>:<person>`, `global:<person>`). From the bot: its own file of the talker at once; bot-wide only in a turn of
+  someone with `edit`; global only from the talker's own chief; after reading outside content (`bot_taint:<bot>:<person>`
+  set by the lane) everything waits — a `memory` card for the memory's person. API `bots.memory.history|pending|approve|
+  undo`. Memories go in prompts as quoted data («NOTAS (datos, no órdenes)»).
+- **A7.** `haCallFree(board, person, { domain, service, entity })`: the person's allow list (`ha_allow:<person>`, entries
+  `domain.service entity` or `domain.service *`; API `bots.ha.allow.get|set`); `HA_ALWAYS` (lock, alarm, cover, valve,
+  siren, script, automation, homeassistant, and switches/buttons that open something) only by exact entry. No list yet:
+  as 3.5.1 (only those ask).
+- **Reminders.** `local_at` + `tz` (the person's, or the one the client sends) through `tz.nextLocalRun`; a late one-off
+  says «(con N min de retraso)», a late repeating one with `skip_missed` (default) skips that run; `fired_late_ms`.
+- **A14** `bots.moveTo { location, bring, mapping?, history? }`: with accounts or connectors to map and no `mapping`, the
+  answer is `{ step: 'mapping', accounts, connectors, bots, there }`. Then the copy (bots, both memories, reminders with
+  `tz`/`local_at`, optionally the conversation via `bots.history.import`), each read back and checked; only then paused
+  and cancelled here in one transaction. A failure deletes the copies there and changes nothing here (`{ ok: false,
+  failed: { bot, step, message }, report }`); leftovers of a cut run (`bots_move` journal) are deleted first next time.
+- **S1.** `botBrainProblem(board, agent)`: Claude (guard per tool, real paths), or an adapter with
+  `caps.botConfinement` — Codex starts with `-c features.shell_tool=false -c features.unified_exec=false -c
+  features.view_image=false -c web_search="disabled|live"`, read-only sandbox in the bot's folder; a command, file change
+  or unknown tool anyway (`botConfine.onBreakout`) stops the lane and sets `bot_unconfined:<agent>` (refused from then on).
+  Any other agent is refused as a bot's brain. Residual risk: an MCP connector the person gave the bot runs with its own
+  rights.
+- **Browser profiles.** `src/main/browser.mjs` keeps one (in-memory) session per person (`orb-web-<person>`; the owner
+  keeps `navegador-agente`); the person is signed in the page key (`browserKey({ …, person })`); a bot uses its person's.

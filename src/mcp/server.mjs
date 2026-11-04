@@ -301,7 +301,7 @@ function browser(action, args = {}) {
       const socket = net.connect(PIPE);
       let buf = ''; let hello = false;
       socket.setEncoding('utf8');
-      socket.on('connect', () => socket.write(`${JSON.stringify({ hello: PIPE_TOKEN, agent: process.env.ORB_AGENT ?? '', task: process.env.ORB_TASK_ID ?? '', session: process.env.ORB_SESSION ?? '' })}\n`));
+      socket.on('connect', () => socket.write(`${JSON.stringify({ hello: PIPE_TOKEN, agent: process.env.ORB_AGENT ?? '', task: process.env.ORB_TASK_ID ?? '', session: process.env.ORB_SESSION ?? '', ...(process.env.ORB_BROWSER_PERSON ? { person: process.env.ORB_BROWSER_PERSON } : {}) })}\n`));
       socket.on('data', (chunk) => {
         buf += chunk; let nl;
         while ((nl = buf.indexOf('\n')) >= 0) {

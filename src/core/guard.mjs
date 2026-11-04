@@ -202,10 +202,38 @@ export function botCheck({ tool, paths = [], patterns = [], url = null, bot, lan
   const at = (p) => (dir && !path.isAbsolute(p) ? path.resolve(dir, p) : path.resolve(p));
   const wanted = [...paths.filter(Boolean).map(String).map((p) => at(p)), ...patterns.filter(Boolean).map(String).map((p) => at(globBase(p)))];
   for (const raw of [...paths, ...patterns].filter(Boolean)) if (SECRET_NAME.test(String(raw).replace(/\\/g, '/'))) return { decision: 'deny', reason: T('botSecret') };
+  // 3.6 (S1): the real path counts on its own (a link inside the bot's folder that points outside is outside), also for a
+  // file that does not exist yet (its nearest existing folder, resolved).
+  const realDir = dir ? realDeep(dir) : null;
+  const inDir = (x) => inside(x, dir) || inside(x, realDir);
   for (const p of wanted) {
-    const r = real(p);
+    const r = realDeep(p);
     if (secrets.some((d) => inside(p, d) || inside(r, d))) return { decision: 'deny', reason: T('botSecret') };
-    if (dir && !inside(p, dir) && !inside(r, dir)) return { decision: 'deny', reason: T('botOwnFolder') };
+    if (dir && (!inDir(p) || !inDir(r))) return { decision: 'deny', reason: T('botOwnFolder') };
+  }
+  // 3.6: a shared bot keeps each person's memory of it in personas/<person>.md: in one person's turn the others' files
+  // are not its business (on the real path too), nor a search or a pattern that would sweep that folder while it holds
+  // someone else's file.
+  if (dir) {
+    const people = path.join(dir, 'personas');
+    const own = bot.person ? path.join(people, `${String(bot.person).replace(/[^\w-]/g, '_')}.md`) : null;
+    const isOwn = (p) => own && lower(path.resolve(p)) === lower(own);
+    const others = (() => { try { return fs.readdirSync(people).filter((n) => !own || lower(n) !== lower(path.basename(own))).length > 0; } catch { return false; } })();
+    for (const p of paths.filter(Boolean).map(String).map(at)) {
+      const r = real(p);
+      if ((inside(p, people) && !isOwn(p)) || (inside(r, people) && !isOwn(r))) return { decision: 'deny', reason: T('botOtherPerson') };
+      if (others && /^(grep|glob|search|find)$/i.test(String(tool ?? '')) && (inside(people, p) || inside(people, r))) return { decision: 'deny', reason: T('botOtherPerson') };
+    }
+    for (const raw of others ? patterns.filter(Boolean).map(String) : []) {
+      const base = at(globBase(raw)); const rb = real(base);
+      if (inside(base, people) || inside(rb, people)) return { decision: 'deny', reason: T('botOtherPerson') };
+      if (!inside(people, base) && !inside(people, rb)) continue;
+      // The pattern starts above personas\: refused when it can go down into it (** or a first part that matches it).
+      const rest = String(raw).replace(/\\/g, '/').slice(globBase(raw).replace(/\\/g, '/').length).replace(/^\/+/, '');
+      const first = rest.split('/')[0] ?? '';
+      let re = null; try { re = new RegExp(`^${first.replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.').replace(/\[!/g, '[^')}$`, 'i'); } catch { re = null; }
+      if (!re || rest.includes('**') || (rest.includes('/') && re.test('personas'))) return { decision: 'deny', reason: T('botOtherPerson') };
+    }
   }
   const name = String(tool ?? '');
   if (url) {

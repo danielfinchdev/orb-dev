@@ -41,7 +41,8 @@ const bodyText = (body) => (typeof body === 'string' ? body : body?.text ?? '');
 
 export const browserOn = () => Boolean(ctx.browser) && ctx.config.browser?.enabled !== false;
 // What the agent process needs in its environment for the browser tools: the key of this conversation's page only.
-export const browserEnv = (agent, session, task = '') => (browserOn() ? { ORB_BROWSER_TOKEN: browserKey(ctx.browser.token, { agent, session: String(session), task: String(task || '') }) } : {});
+// 3.6 (WS4): person: whose browser profile the pages use (src/main/browser.mjs: one per person; none = the owner's).
+export const browserEnv = (agent, session, task = '', person = null) => (browserOn() ? { ORB_BROWSER_TOKEN: browserKey(ctx.browser.token, { agent, session: String(session), task: String(task || ''), person: person ? String(person) : '' }), ...(person ? { ORB_BROWSER_PERSON: String(person) } : {}) } : {});
 
 // Orb's signature of who a worker's MCP process is (agent and task): made with a key that lives only in the engine's
 // memory (a new one each start, which retires the old signatures); the database keeps just the hash, for the MCP to look
@@ -69,7 +70,7 @@ export function mcpServersFor(agent, { board, taskId = '', orchestrator = false,
   if (browser && session && browserOn()) {
     env.ORB_BROWSER_PIPE = ctx.browser.pipe;
     env.ORB_SESSION = String(session);
-    env.ORB_BROWSER_TOKEN = browserEnv(who, session, taskId).ORB_BROWSER_TOKEN;
+    Object.assign(env, browserEnv(who, session, taskId, person && board && !board.isOwnerPerson?.(person) ? person : null));
   }
   const servers = { orb: orbMcpServer(env) };
   if (!orchestrator) {
@@ -320,7 +321,7 @@ export class Sessions {
       // 3.6 (A9): someone else's than the owner's works only inside its project's folder (no other project, no secrets).
       ...(this.board.isOwnerPerson(s.person_id) ? {} : { confine: confineFor({ roots: [s.cwd], others: this.board.projects().filter((p) => p.name !== s.project).map((p) => p.path) }) }),
       ...(this.isOpti(s) && s.agent === 'claude' ? { systemPrompt: optiPersona(), tools: { allowed: ['mcp__opti'], disallowed: COORDINATOR_DENIED } } : {}),
-      env: { ...accountEnv(acc), ...browserEnv(s.agent, s.id, taskId), ORB_HOME: ctx.home, ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
+      env: { ...accountEnv(acc), ...browserEnv(s.agent, s.id, taskId, this.board.isOwnerPerson(s.person_id) ? null : s.person_id), ORB_HOME: ctx.home, ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
       internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog, cfg: ctx.config.agents[s.agent] ?? {},
       onEvent: (ev) => this.onLiveEvent(s.id, ev)
     });
