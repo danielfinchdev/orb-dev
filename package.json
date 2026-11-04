@@ -7,7 +7,7 @@
   "type": "module",
   "main": "src/main/main.mjs",
   "author": "Orb",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "scripts": {
     "build": "vite build",
     "start": "vite build && electron .",

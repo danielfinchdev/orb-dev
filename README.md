@@ -115,3 +115,7 @@ npm run icon         # regenerates the icon from the artwork (docs/diseno/art wo
 | `src/mcp/` | MCP server used by the agents and the assistant |
 | `src/ui/` | UI (React + shadcn/ui components + Tailwind, Outfit typeface) |
 | `docs/` | All the documentation: index in [`docs/README.md`](docs/README.md) |
+
+## License
+
+[MIT](LICENSE)
