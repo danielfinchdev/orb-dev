@@ -149,7 +149,7 @@ export function createLive(o) {
   const live = { sessionId: o.resumeId ?? null, caps, pid: null, get busy() { return Boolean(turn && !turn.done); } };
 
   const guardAsk = async ({ itemId, command, paths = [], tool, kind }) => {
-    const verdict = decide({ permission, tool, kind, command, paths, internalDir: o.internalDir, lang: o.lang, bot: Boolean(o.bot) });
+    const verdict = decide({ permission, tool, kind, command, paths, internalDir: o.internalDir, lang: o.lang, bot: o.bot || false });
     if (verdict.decision !== 'ask') return verdict.decision;
     return approvals.ask({ id: itemId, tool, title: command || paths.join(', ') || tool, reason: verdict.reason, input: clip(command || paths.join(', '), 400) });
   };

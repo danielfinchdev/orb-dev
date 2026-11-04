@@ -37,7 +37,7 @@ export default {
   'msg.bots.done.update': 'Bot «{name}» cambiado',
   'msg.bots.done.pause': 'Bot «{name}» actualizado',
   'msg.bots.done.delete': 'Bot «{name}» borrado',
-  'msg.bots.granted': 'Tienes {min} minutos para hacerlo',
+  'msg.bots.granted': "Tienes {min} minutos para hacerlo, una sola vez y en esa web",
   'sys.srv.reduced': 'Versión reducida: los contenedores y los servicios solo se ven en Linux',
   'sys.srv.badName': 'Nombre no válido',
   'sys.srv.protected': 'Eso toca algo protegido ({name}), que nunca se toca',
@@ -66,5 +66,13 @@ export default {
   'sys.botmcp.globalChief': 'La memoria global la lleva el jefe: pásale lo que haya que guardar',
   'sys.botmcp.saved': 'Guardado en la memoria',
   'sys.botmcp.cancelled': 'Recordatorio cancelado',
-  'sys.botmcp.browserNeedsOk': 'Esto puede comprar, reservar, pagar o enviar un formulario: pide antes permiso con bot_confirm'
+  'sys.botmcp.browserNeedsOk': 'Esto puede comprar, reservar, pagar o enviar un formulario: pide antes permiso con bot_confirm',
+  "msg.bots.tooManyTurns": "Los bots ya han dado {n} turnos por este mensaje: paro aquí. Escríbeles de nuevo si quieres seguir.",
+  "msg.bots.card.send": "{bot} leyó algo de fuera y quiere pasárselo a {to}: {text}",
+  "msg.bots.cannotApprove": "Este dispositivo no puede aprobar lo que piden los bots. Cámbialo en Ajustes › Magic Link del Orb.",
+  "msg.bots.ownerApproves": "Esta tarjeta cambia los bots o el servidor: apruébala en el PC o desde un dispositivo que puede administrar.",
+  "msg.bots.byPc": "este PC",
+  "sys.botmcp.browserNeedsSite": "Ese permiso no dice en qué web: pide otro con bot_confirm y su dirección (url)",
+  "sys.botmcp.browserOtherSite": "El permiso era para otra web: pide otro con bot_confirm para esta",
+  "sys.botmcp.browserOtherButton": "El permiso era para otro botón: pide otro con bot_confirm para este"
 };

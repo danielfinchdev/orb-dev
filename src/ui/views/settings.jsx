@@ -379,6 +379,16 @@ function MobileCard() {
         {st.enabled && st.error && st.running ? <p className="text-muted-foreground text-xs">{st.error}</p> : null}
         {/* 3.5: the QR, the short code and the linked devices are in Magic Link, below. */}
         {st.running && route('wifi') ? <p className="text-muted-foreground text-xs">{t('settings.mobileWifiNote')}</p> : null}
+        {/* 3.5.1: browsers over the home Wi-Fi (plain http) only if the user allows it; what notifications show when locked. */}
+        {st.enabled && st.wifi ? (
+          <Row label={t('settings.mobileLanHttp')} hint={t('settings.mobileLanHttpHint')}><Switch data-testid="mobile-lan-http" checked={Boolean(st.lanHttp)} onCheckedChange={(on) => configure({ lanHttp: on })} /></Row>
+        ) : null}
+        {st.enabled ? (
+          <Row label={t('settings.mobilePreview')} hint={t(`settings.mobilePreview.${st.preview ?? 'chat'}Hint`)}>
+            <Select value={st.preview ?? 'chat'} onValueChange={(preview) => configure({ preview })} data-testid="mobile-preview" title={t('settings.mobilePreview')}
+              options={['all', 'chat', 'none'].map((v) => ({ value: v, label: t(`settings.mobilePreview.${v}`) }))} />
+          </Row>
+        ) : null}
       </CardContent>
     </Card>
   );

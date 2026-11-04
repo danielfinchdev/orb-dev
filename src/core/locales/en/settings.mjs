@@ -301,5 +301,14 @@ export default {
   // 3.2: conversations at once
   'settings.parallelChats': 'Conversations with Orbe at once',
   'settings.parallelChatsHint': 'How many conversations Orbe answers at the same time (1 to 6). The rest wait their turn.',
-  'guide.readOnly': 'Reviews and checks (read-only): {list}'
+  'guide.readOnly': 'Reviews and checks (read-only): {list}',
+  "settings.mobileLanHttp": "Link browsers over plain Wi-Fi",
+  "settings.mobileLanHttpHint": "Off is safer: someone on your Wi-Fi could change the page. The Android app and the terminal link either way.",
+  "settings.mobilePreview": "On the lock screen",
+  "settings.mobilePreview.all": "Show everything",
+  "settings.mobilePreview.chat": "Hide the bots’ messages",
+  "settings.mobilePreview.none": "Show nothing",
+  "settings.mobilePreview.allHint": "Notifications show the start of each message.",
+  "settings.mobilePreview.chatHint": "The bots’ notifications and cards only say “You have a new message”.",
+  "settings.mobilePreview.noneHint": "No notification shows the text of the message."
 };

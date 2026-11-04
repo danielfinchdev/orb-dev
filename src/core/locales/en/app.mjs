@@ -60,5 +60,7 @@ export default {
   'update.failed': 'Could not download: {error}',
   'update.installFailed': 'The installer could not be opened. Your antivirus may have removed it; download it again.',
   'update.notes': 'What’s new',
-  'update.close': 'Close'
+  'update.close': 'Close',
+  "app.linkOldOrb": "That Orb is from an older version: update it or scan its QR code.",
+  "app.noticeHidden": "You have a new message"
 };

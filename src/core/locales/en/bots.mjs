@@ -37,7 +37,7 @@ export default {
   'msg.bots.done.update': 'Bot “{name}” changed',
   'msg.bots.done.pause': 'Bot “{name}” updated',
   'msg.bots.done.delete': 'Bot “{name}” removed',
-  'msg.bots.granted': 'You have {min} minutes to do it',
+  'msg.bots.granted': "You have {min} minutes to do it, once and on that website",
   'sys.srv.reduced': 'Reduced version: containers and services are only shown on Linux',
   'sys.srv.badName': 'Invalid name',
   'sys.srv.protected': 'That touches something protected ({name}), which is never touched',
@@ -66,5 +66,13 @@ export default {
   'sys.botmcp.globalChief': 'The chief keeps the shared memory: pass on what should be saved',
   'sys.botmcp.saved': 'Saved in memory',
   'sys.botmcp.cancelled': 'Reminder cancelled',
-  'sys.botmcp.browserNeedsOk': 'This may buy, book, pay or send a form: ask for permission with bot_confirm first'
+  'sys.botmcp.browserNeedsOk': 'This may buy, book, pay or send a form: ask for permission with bot_confirm first',
+  "msg.bots.tooManyTurns": "The bots already took {n} turns for this message: stopping here. Write to them again to go on.",
+  "msg.bots.card.send": "{bot} read something from outside and wants to pass it on to {to}: {text}",
+  "msg.bots.cannotApprove": "This device cannot approve what the bots ask for. Change it in Settings › Magic Link on the Orb.",
+  "msg.bots.ownerApproves": "This card changes the bots or the server: approve it on the PC or from a device that can manage this Orb.",
+  "msg.bots.byPc": "this PC",
+  "sys.botmcp.browserNeedsSite": "That permission does not say on which website: ask again with bot_confirm and its address (url)",
+  "sys.botmcp.browserOtherSite": "The permission was for another website: ask again with bot_confirm for this one",
+  "sys.botmcp.browserOtherButton": "The permission was for another button: ask again with bot_confirm for this one"
 };

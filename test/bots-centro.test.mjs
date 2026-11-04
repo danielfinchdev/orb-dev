@@ -41,7 +41,7 @@ test('sin centro, los bots son los de este Orb', async () => {
 });
 
 test('enlazado con el centro: crear un bot desde el portátil lo crea en el servidor y sus mensajes llegan en directo', async () => {
-  const q = await centro.call('link.qr');
+  const q = await centro.call('link.qr', { device: 'orb' });
   await taller.call('link.connect', { code: q.code, address: `127.0.0.1:${port}` });
   await until(async () => (await taller.call('centro.status')).online, 'el centro en línea');
   const st = await taller.call('centro.status');

@@ -62,6 +62,7 @@ function BotCard({ m, botsById }) {
           <Button size="xs" className="px-2.5" disabled={busy} onClick={() => decide('allow')} data-testid="bot-card-allow"><Check />{t('bots.card.allow')}</Button>
           <Button size="xs" className="px-2.5" variant="outline" disabled={busy} onClick={() => decide('deny')} data-testid="bot-card-deny"><X />{t('bots.card.deny')}</Button>
         </>) : <Badge variant={tone}>{t(label)}</Badge>}
+        {!pending && m.meta.by?.name ? <span className="text-muted-foreground text-xs" data-testid="bot-card-by">{t('bots.card.by', { name: m.meta.by.name })}</span> : null}
       </div>
     </div>
   );

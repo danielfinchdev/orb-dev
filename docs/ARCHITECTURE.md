@@ -604,8 +604,23 @@ app open. On iPhone they work with Orb added to the home screen.
   and terminals goes. If unset, to this Orb if it codes; otherwise, to the linked Orb that codes. When it goes to another
   one, the engine forwards only the Orb mode calls (`devForwards`: what is in `ALLOWED` minus `bots.*` and `app.state`).
 - **Can administer** (`devices.admin`, `link.setAdmin`): a marked device manages bots and links from outside
-  (`CONSOLE_ALLOWED`); being a browser is not enough. `link.qr({ admin: true })` (used by `orb-nucleo enlazar`) only
-  grants it on a windowless server and to the first one. A device's `app.state` carries `access: { admin, bots, links }`.
+  (`CONSOLE_ALLOWED`); being a browser is not enough. `link.qr({ admin: 'first' })` (used by `orb-nucleo enlazar`) only
+  grants it on a windowless server and to the first one; `link.qr({ admin: true })` (`orb-nucleo enlazar --admin`, run on
+  the server itself) grants it anyway, to replace a lost device. A device's `app.state` carries
+  `access: { admin, bots, links, approve }`.
+- **Rights chosen when making the QR (3.5.1):** `link.qr({ device, approve, dev })`: what the code is for (`phone`,
+  `browser`, `orb`, `terminal`), whether the device may answer the bots' cards (`devices.approve`, `link.setApprove`) and,
+  for an Orb, whether it may code for this one (`devices.dev_ok`). The device's own description never changes them; a
+  code made for an Orb only links an Orb and the other way round. Orbs linked before 3.5.1 are asked again
+  (`devices.kind_ok = 0`, `link.confirm({ id, what: 'orb' | 'taller' })`). Only confirmed Orbs count as workshops.
+- **Short code (3.5.1):** `GET /api/hello` says `short: 3`; both sides stretch the code with scrypt, tied to the Orb's
+  public key (`mobile-crypto.mjs › shortSecret`), and the pairing answer carries a second box sealed with that key
+  (`confirm`), so the device knows the other side had the code. The fingerprint is shown on both screens.
+- **Browsers over plain http (3.5.1):** pairing from a browser's page over the home Wi-Fi (http) is refused unless
+  `mobile.lanHttp` is on (Settings › Phone access); the Android app, the terminal, loopback (Tailscale https) and the
+  Tailscale address are not affected.
+- **Notifications (3.5.1):** `mobile.preview` (`all`, `chat` by default, `none`): what a notification shows on a locked
+  phone (`remote.mjs › pushContent`).
 - **To another Orb:** `taller.<method>` (or `{ method, target: 'taller' }`) is forwarded to the coding Orb if it is in
   `ALLOWED` (no settings, accounts, full access or images). If the workshop is off: error with `offline: true`,
   `lastSeen` and `canWake`; `taller.status`, `taller.wake` (UDP magic packet to the stored MACs, `src/core/wol.mjs`),

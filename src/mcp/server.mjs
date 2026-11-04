@@ -21,6 +21,7 @@ if (!home || !isHome(home)) { process.stderr.write('ORB_HOME no apunta a la carp
 useHome(home);
 const { Board, AGENTS, STATUSES, assistantName, userName, ofUser } = await import('../core/board.mjs');
 const { readLog, writeLog } = await import('../engine/logs.mjs');
+const { takeGrant } = await import('../core/bots.mjs');
 const board = new Board(undefined, { noKey: true }); // the MCP never holds the approval secret
 
 // A worker is who Orb signed it as (agent and task, see agentToken in engine/sessions.mjs), not what its environment
@@ -292,7 +293,8 @@ function browser(action, args = {}) {
 }
 const ref = { type: 'integer', minimum: 1, description: 'Número del elemento en la última orb_browser_snapshot' };
 // 3.5: a bot's browser (ORB_BROWSER_ONLY): only the browser tools, and a click or an Enter that would buy, book, pay or send
-// a form needs the user's OK first (bot_confirm, approved in the app in the last 15 minutes).
+// a form needs the user's OK first (bot_confirm, approved in the app). 3.5.1: that OK is good once, on the site the bot
+// named (and on the button it named, if any), within 10 minutes; anything else asks again.
 const BROWSER_ONLY = process.env.ORB_BROWSER_ONLY === '1';
 const BOT_ID = (() => {
   if (!BROWSER_ONLY) return null;
@@ -302,14 +304,13 @@ const BOT_ID = (() => {
 })();
 if (BROWSER_ONLY) tools.length = 0;
 const RISKY_LABEL = /(comprar|compra ya|pagar|pago|reservar|reserva|confirmar|tramitar|finalizar|realizar pedido|enviar|suscrib|buy|purchase|pay\b|checkout|place order|order now|book|reserve|confirm|submit|send|subscribe)/i;
-let lastElements = [];
-const remember = (out) => { if (Array.isArray(out?.elements)) lastElements = out.elements; return out; };
-const granted = () => { const g = board.settingJson(`bot_grant:${BOT_ID}`); return Boolean(g?.until && g.until > Date.now()); };
+let lastElements = []; let lastUrl = '';
+const remember = (out) => { if (Array.isArray(out?.elements)) lastElements = out.elements; if (typeof out?.url === 'string') lastUrl = out.url; return out; };
 async function botBrowser(action, a = {}) {
   if (!BROWSER_ONLY) return browser(action, a);
   const label = a.ref !== undefined ? String(lastElements.find((e) => String(e).startsWith(`[${a.ref}]`)) ?? '') : '';
   const risky = (action === 'click' && (a.ref === undefined || RISKY_LABEL.test(label))) || (action === 'type' && a.submit === true) || (action === 'press' && a.key === 'Enter');
-  if (risky && !granted()) throw new Error(tr('sys.botmcp.browserNeedsOk'));
+  if (risky) { const why = takeGrant(board, BOT_ID, { url: lastUrl, label }); if (why) throw new Error(tr(why)); }
   return remember(await browser(action, a));
 }
 if (PIPE && PIPE_TOKEN) tools.push(

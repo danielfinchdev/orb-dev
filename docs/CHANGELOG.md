@@ -1,13 +1,26 @@
 ## Download
 
-- **`Orb-3.5.0-instalador.exe`** (recommended, the full Windows app): installs for your user, without administrator
+- **`Orb-3.5.1-instalador.exe`** (recommended, the full Windows app): installs for your user, without administrator
   rights, and updates itself.
-- **`Orb-3.5.0-light-portable.exe`** (Orb Light, no install needed).
-- **`Orb-3.5.0-android.apk`** (new): the Orb app for Android. Links to your Orb by scanning a QR code.
-- **`orb-nucleo-3.5.0-linux-x64.tar.gz`** (new): windowless Orb for an always-on Linux server.
-- **`orb-terminal-3.5.0`** (new): Orb in the terminal (Windows and Linux, requires Node 22).
+- **`Orb-3.5.1-light-portable.exe`** (Orb Light, no install needed).
+- **`Orb-3.5.1-android.apk`** (new): the Orb app for Android. Links to your Orb by scanning a QR code.
+- **`orb-nucleo-3.5.1-linux-x64.tar.gz`** (new): windowless Orb for an always-on Linux server.
+- **`orb-terminal-3.5.1`** (new): Orb in the terminal (Windows and Linux, requires Node 22).
 
 Windows 10/11. Since it isn't signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
+
+## What's new in 3.5.1
+
+A security update. Update every Orb, the Android app and the terminal.
+
+- **Security hardening of linking, approvals and bot tools.** When you make a link code you now choose what it is for
+  (your phone, a browser, another Orb of yours or a terminal) and whether that device may approve what the bots ask
+  for. Each card shows who answered it.
+- Linking by short code shows the Orb's fingerprint on both screens. For browsers, use the Tailscale (https) address;
+  plain Wi-Fi is for the Android app and the terminal unless you allow it in Settings.
+- If you had linked another Orb before, confirm it once in Settings › Magic Link.
+- On the server: `orb-nucleo dispositivos`, `orb-nucleo quitar <id>` and `orb-nucleo enlazar --admin`.
+- Deleting a bot also removes its memory. Notifications can hide their text on the lock screen (by default, the bots').
 
 ## What's new in 3.5.0
 

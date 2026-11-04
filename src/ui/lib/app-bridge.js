@@ -76,8 +76,11 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
         if (document.visibilityState === 'visible' || localStorage.getItem(NOTIFY) !== '1' || !payload || payload.role === 'usuario') return;
         const { LocalNotifications } = await import('@capacitor/local-notifications');
         const name = (await pieces.record())?.name ?? 'Orb';
-        const title = payload.role === 'orb' ? name : await tl('app.noticeFrom', { name });
-        LocalNotifications.schedule({ notifications: [{ id: (++n % 1000) + 1, title, body: String(payload.body ?? '').slice(0, 200), group: 'orb-chat' }] }).catch(() => {});
+        // 3.5.1: Ajustes › Magic Link › «En la pantalla de bloqueo»: 'none' shows no text of the message.
+        const preview = (await orb.call('app.state').catch(() => null))?.config?.mobile?.preview ?? 'chat';
+        const title = payload.role === 'orb' || preview === 'none' ? name : await tl('app.noticeFrom', { name });
+        const body = preview === 'none' ? await tl('app.noticeHidden') : String(payload.body ?? '').slice(0, 200);
+        LocalNotifications.schedule({ notifications: [{ id: (++n % 1000) + 1, title, body, group: 'orb-chat' }] }).catch(() => {});
       });
       orb.push = {
         supported: () => true,

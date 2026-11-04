@@ -61,7 +61,7 @@ test('solo redes privadas, Tailscale y este PC; QR v1 y v2; código corto', () =
 });
 
 test('el portátil se enlaza como taller del servidor con el código corto (un solo uso)', async () => {
-  const q = await centro.call('link.qr');
+  const q = await centro.call('link.qr', { device: 'orb', dev: true });
   assert.match(q.code, /^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
   assert.equal(q.role, 'centro');
   assert.equal(q.payload.v, 2);

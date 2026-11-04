@@ -211,15 +211,20 @@ export function createLink({ file, secret, identity = () => ({}), onRequest = nu
     const { priv, pub } = C.newKeyPair();
     const me = identity() ?? {};
     let skew = 0;
-    const body = () => ({ via, pub: C.b64.enc(pub), proof: C.seal(C.pairingKey(priv, pcPub, via === 'code' ? `corto:${normalCode(code)}` : code), { ...me, pub: C.b64.enc(pub), name: me.name, t: Date.now() + skew, v: PROTOCOL }, C.AAD.pair) });
+    // 3.5.1: the short code is stretched and tied to the key the other side gave (code3); the QR's code goes as it is.
+    const secret = via === 'code3' ? await C.shortSecretAsync(normalCode(code), C.b64.enc(pcPub)) : code;
+    const body = () => ({ via, pub: C.b64.enc(pub), proof: C.seal(C.pairingKey(priv, pcPub, secret), { ...me, pub: C.b64.enc(pub), name: me.name, t: Date.now() + skew, v: PROTOCOL }, C.AAD.pair) });
     const send = () => f(`${base}/api/pair`, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body()) });
-    let res = await send();
-    if (res.status === 409) { const d = await res.json().catch(() => ({})); if (Number.isFinite(d.now)) { skew = d.now - Date.now(); res = await send(); } }
-    const data = await res.json().catch(() => ({}));
+    let res = await send(); let data = null;
+    if (res.status === 409) { const d = await res.json().catch(() => ({})); if (Number.isFinite(d.now)) { skew = d.now - Date.now(); res = await send(); } else data = d; }
+    data ??= await res.json().catch(() => ({}));
     if (!res.ok) throw err(data.error ?? `error ${res.status}`, { status: res.status });
     const key = C.sessionKey(priv, pcPub);
     let ok; try { ok = C.open(key, data.box, C.AAD.paired(data.id)); } catch { ok = null; }
     if (!ok || ok.id !== data.id) throw err('el otro Orb no es el del código');
+    // 3.5.1: the other side proves it had the code too (a key swapped on the way cannot make this one).
+    let sure; try { sure = data.confirm ? C.open(C.pairingKey(priv, pcPub, secret), data.confirm, C.AAD.confirm(data.id)) : null; } catch { sure = null; }
+    if (via === 'code3' && sure?.id !== data.id) throw err('el otro Orb no es el del código');
     return { rec: { id: data.id, priv: C.b64.enc(priv), pc: C.b64.enc(pcPub), name: String(ok.orb ?? ok.name ?? 'Orb').slice(0, 60), role: ok.role ?? null, fp: ok.pc ?? C.fingerprint(pcPub), linkedAt: new Date().toISOString(), lastSeen: new Date().toISOString() }, key };
   }
 
@@ -231,11 +236,18 @@ export function createLink({ file, secret, identity = () => ({}), onRequest = nu
     // 3.5: say again who this Orb is to every linked Orb on now (after its role changed in Ajustes).
     refresh() { for (const p of peers.values()) if (p.online && !p.rec.revoked) helloAfterConnect(p).catch((e) => log(`enlace: hola: ${e.message}`)); },
     // Link with the QR (its text) or with the short code and the other Orb's address.
-    async connect({ qr, code, address } = {}) {
+    async connect({ qr, code, address, fp } = {}) {
       if (!started) link.start();
       let urls; let pcPub; let secretCode; let via;
       if (qr) { const q = parseQr(qr); urls = q.urls; pcPub = C.b64.dec(q.pc); secretCode = q.code; via = 'qr'; }
-      else if (code) { const h = await hello(address, { fetch: f }); urls = [...new Set([h.base, ...(h.urls ?? []).filter((u) => /^https?:\/\//.test(u)).map(normalAddress)])]; pcPub = C.b64.dec(h.pc); secretCode = code; via = 'code'; }
+      else if (code) {
+        const h = await hello(address, { fetch: f });
+        // 3.5.1: only an Orb that ties the code to its key (short ≥ 3); an older one, or an answer changed on the way, is
+        // refused (the QR still works). fp: the fingerprint the user read on the other screen, when given.
+        if (!(Number(h.short) >= 3)) throw err('ese Orb es de una versión anterior: actualízalo o enlaza con su QR');
+        if (fp && String(fp).toLowerCase() !== String(h.fp ?? '').toLowerCase()) throw err('la huella no coincide: no lo enlaces');
+        urls = [...new Set([h.base, ...(h.urls ?? []).filter((u) => /^https?:\/\//.test(u)).map(normalAddress)])]; pcPub = C.b64.dec(h.pc); secretCode = code; via = 'code3';
+      }
       else throw err('falta el QR o el código');
       if (pcPub.length !== 32) throw err('el QR no es válido');
       let last = null;
