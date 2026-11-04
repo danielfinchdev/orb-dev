@@ -155,7 +155,8 @@ const p2 = (x) => String(x).padStart(2, '0');
 const at = (d, h, m) => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(h)}:${p2(m)}`;
 
 // ---- moving around
-const READY = '[data-testid=sidebar-footer], [data-testid=mobile-tabs], [data-testid=lock-screen], [data-testid=phone-lock]';
+// 3.6: on the phone a conversation is a full screen of its own (a back arrow, no tabs).
+const READY = '[data-testid=sidebar-footer], [data-testid=mobile-tabs], [data-testid=chat-back], [data-testid=lock-screen], [data-testid=phone-lock]';
 async function loaded(page) { await page.waitForSelector(READY, { timeout: 20000 }); await page.waitForTimeout(500); }
 // PC window: the engine's own ui:navigate. Linked devices: the route the page restores on load (localStorage orb.route).
 async function nav(page, route) {
@@ -202,7 +203,8 @@ const SRC = {
 const PC_VIEWS = ['chat', 'tasks', 'projects', 'agents', 'logs', 'activity', 'schedules', 'phone', 'tutorials', 'board', 'expert', 'monitor', 'bot-chat', 'bots', 'bot-groups', 'bot-reminders', 'bot-memory', 'bot-home', 'bot-server', 'bot-settings'];
 const PHONE_VIEWS = ['chat', 'chats', 'more', 'tasks', 'projects', 'logs', 'activity', 'schedules', 'phone', 'profile', 'tutorials', 'board', 'link', 'bot-chat', 'bots', 'bot-reminders', 'bot-home', 'bot-groups', 'bot-memory', 'bot-server', 'bot-settings'];
 const WEB_VIEWS = ['chat', 'tasks', 'projects', 'link', 'logs', 'bot-chat', 'bots', 'bot-reminders'];
-const SETTINGS = [['general', 'General'], ['perfil', 'My profile'], ['personas', 'Users'], ['datos', 'Data and backups'], ['apariencia', 'Appearance (skins, fonts)'], ['tareas', 'Tasks'], ['movil', 'Mobile and Magic Link'], ['herramientas', 'Tools (browser, MCP, Android)'], ['experto', 'God mode'], ['monitor', 'PC status'], ['actualizaciones', 'Updates'], ['contribuye', 'Contribute / feedback'], ['apps', 'More apps']];
+// 3.6: six sections (their parts are taken scrolling); «Mi perfil» is a window of its own (the user menu, 2+ users).
+const SETTINGS = [['general', 'General (assistant, folder, appearance, updates)'], ['magiclink', 'Magic Link (users, devices, linked Orbs)'], ['agentes', 'Agents (chat, tasks, test)'], ['datos', 'Data and backups'], ['avanzado', 'Advanced (tools, God mode, PC status)'], ['acerca', 'About (contribute, more apps)'], ['perfil', 'My profile']];
 
 async function views(page, list, state, { scroll = true } = {}) {
   for (const v of list) {
@@ -218,6 +220,15 @@ async function settings(page, state) {
   await nav(page, { view: 'chat' });
   for (const [id, label] of SETTINGS) {
     await attempt(page, `settings ${id} ${state}`, async () => {
+      if (id === 'perfil') {
+        await page.keyboard.press('Escape');
+        if (!(await page.locator('[data-testid=person-menu]:visible').count())) { misses.push(`settings perfil ${state} (${themeOf(meta.get(page))}, ${meta.get(page).device}): only with several users`); return; }
+        await menuItem(page, 'person-profile');
+        await page.waitForSelector('[data-testid=profile-dialog]');
+        await shot(page, { area: 'settings', screen: id, state, src: 'src/ui/views/settings.jsx (SettingsDialog, profile)', desc: `${label} — ${state}`, scroll: true });
+        await page.keyboard.press('Escape');
+        return;
+      }
       if (!(await page.locator('[data-testid=settings-dialog]').isVisible().catch(() => false))) await page.evaluate(() => window.__orbFire('ui:navigate', { view: 'settings' }));
       await page.waitForSelector('[data-testid=settings-dialog]');
       const item = page.locator(`[data-testid=settings-nav-${id}]`);
@@ -257,12 +268,6 @@ try {
     await pc.waitForSelector('[data-testid=wizard-para]', { timeout: 20000 });
     await shot(pc, { area: 'wizard', screen: 'para', state: 'default', src: W, desc: 'Welcome wizard 3/3: «¿Para qué lo quieres?»' });
     await pc.click('[data-testid=wizard-use-later]');
-    await attempt(pc, 'wizard prepare', async () => {
-      await pc.waitForSelector('[data-testid=prepare-title]', { timeout: 15000 });
-      await pc.waitForTimeout(1500);
-      await shot(pc, { area: 'wizard', screen: 'equipo', state: 'installer', src: 'src/ui/views/setup.jsx (Prepare) + components/installer.jsx', desc: 'Wizard, last step on Windows: preparing the agents (installer check)', scroll: true });
-      await pc.getByRole('button', { name: /Continuar|Seguir/ }).click();
-    });
     await loaded(pc);
     if (!dark) {
       // The guided tour, the first time the app opens.
@@ -403,13 +408,13 @@ try {
       await attempt(P, 'share dialog', async () => { await P.click('[data-testid=share-project]'); await P.waitForSelector('[data-testid=share-dialog]'); await shot(P, { area: 'dialog', screen: 'share', state: 'project', src: 'src/ui/components/share-dialog.jsx', desc: 'Share dialog (view / talk / edit per user)' }); await P.keyboard.press('Escape'); });
       await attempt(P, 'rename dialog', async () => { await P.locator('main').getByText('notas', { exact: true }).first().click(); await P.click('[data-testid=project-rename]'); await dialog(P); await shot(P, { area: 'dialog', screen: 'rename-project', state: 'open', src: 'src/ui/views/projects.jsx + components/dialogs.jsx (form)', desc: 'Rename project form' }); await P.keyboard.press('Escape'); });
       await attempt(P, 'review dialog', async () => { await P.locator('main').getByText('mi-web', { exact: true }).first().click(); await P.click('[data-testid=project-review]'); await dialog(P); await shot(P, { area: 'dialog', screen: 'project-review', state: 'open', src: 'src/ui/views/projects.jsx (askReview) + components/dialogs.jsx', desc: 'Task Review of a project, who reviews' }); await P.keyboard.press('Escape'); });
-      await attempt(P, 'new project dialog', async () => { await nav(P, { view: 'chat' }); await P.click('[data-testid=sidebar-new-project]'); await dialog(P); await shot(P, { area: 'dialog', screen: 'new-project', state: 'empty', src: 'src/ui/components/project-actions.jsx (createProjectFlow)', desc: 'New project dialog (platforms, name, about)' });
+      await attempt(P, 'new project dialog', async () => { await nav(P, { view: 'chat' }); await P.click('[data-testid=chats-new]'); await P.click('[data-testid=sidebar-new-project]'); await dialog(P); await shot(P, { area: 'dialog', screen: 'new-project', state: 'empty', src: 'src/ui/components/project-actions.jsx (createProjectFlow)', desc: 'New project dialog (platforms, name, about)' });
         await P.locator('[role=dialog] input').first().fill('mi-web'); await P.waitForTimeout(300);
         await shot(P, { area: 'dialog', screen: 'new-project', state: 'name-taken', src: 'src/ui/components/project-actions.jsx', desc: 'New project dialog with a name that already exists (inline error)' });
         await P.locator('[role=dialog] button[type=submit]').click(); await P.waitForTimeout(600);
         await shot(P, { area: 'toast', screen: 'error', state: 'project-exists', src: 'src/ui/main.jsx (ThemedToaster, sonner) + lib/notify.js', desc: 'Error toast after trying to create a project that exists', toasts: true });
         await P.keyboard.press('Escape'); });
-      await attempt(P, 'project picker', async () => { await nav(P, { view: 'chat' }); await P.click('[data-testid=bar-project]'); await P.waitForTimeout(400); await shot(P, { area: 'menu', screen: 'project-picker', state: 'open', src: 'src/ui/components/project-actions.jsx (ProjectPicker)', desc: 'Working-project picker in the chat bar' }); await P.keyboard.press('Escape'); });
+      await attempt(P, 'project picker', async () => { await nav(P, { view: 'chat' }); await P.click('[data-testid=project-picker]'); await P.waitForTimeout(400); await shot(P, { area: 'menu', screen: 'project-picker', state: 'open', src: 'src/ui/components/project-actions.jsx (ProjectPicker)', desc: 'Working-project picker in the composer' }); await P.keyboard.press('Escape'); });
       await attempt(P, 'notice center', async () => { await P.click('[data-testid=bar-notices]'); await P.waitForSelector('[data-testid=notice-center]'); await shot(P, { area: 'menu', screen: 'notice-center', state: 'open', src: 'src/ui/components/notification-center.jsx', desc: 'Notification bell, past notices' }); await P.keyboard.press('Escape'); });
       await attempt(P, 'person menu', async () => { await P.click('[data-testid=person-menu]:visible'); await P.waitForSelector('[data-testid=person-profile]'); await shot(P, { area: 'menu', screen: 'person-menu', state: 'open', src: 'src/ui/components/person-menu.jsx', desc: 'User menu (switch user, my profile, lock)' }); await P.keyboard.press('Escape'); });
       await attempt(P, 'sidebar footer', async () => { await footerOpen(P); await shot(P, { area: 'menu', screen: 'sidebar-footer', state: 'expanded', src: 'src/ui/components/sidebar.jsx (footer)', desc: 'Sidebar footer expanded (settings, agents, bitácoras, tutorials)' }); await P.click('[data-testid=sidebar-footer-toggle]'); });
@@ -430,7 +435,7 @@ try {
       await attempt(P, 'new reminder', async () => { await nav(P, { view: 'bot-reminders' }); await P.click('[data-testid=reminder-new]'); await P.waitForTimeout(400); await shot(P, { area: 'dialog', screen: 'new-reminder', state: 'open', src: 'src/ui/views/bots/more.jsx (BotRemindersView)', desc: 'New reminder' }); await P.keyboard.press('Escape'); });
       await attempt(P, 'new schedule', async () => { await nav(P, { view: 'schedules' }); await P.click('[data-testid=new-schedule]'); await dialog(P); await shot(P, { area: 'dialog', screen: 'new-schedule', state: 'open', src: 'src/ui/views/schedules.jsx', desc: 'New scheduled task', scroll: true }); await P.keyboard.press('Escape'); });
       await attempt(P, 'lend dialog', async () => { await nav(P, { view: 'agents' }); const lend = P.locator('[data-testid^=lend-]').filter({ hasText: 'Prestar' }).first(); await lend.click(); await P.waitForSelector('[data-testid=lend-terms]'); await shot(P, { area: 'dialog', screen: 'lend', state: 'open', src: 'src/ui/views/agents.jsx (lendDialog)', desc: '«Prestar a…» an account to another user, with caps and terms' }); await P.keyboard.press('Escape'); });
-      await attempt(P, 'magic link qr', async () => { await P.evaluate(() => window.__orbFire('ui:navigate', { view: 'settings', section: 'movil' })); await P.waitForSelector('[data-testid=settings-dialog]'); await P.click('[data-testid=settings-nav-movil]'); await P.click('[data-testid=link-make]'); await P.waitForSelector('[data-testid=link-qr]'); await shot(P, { area: 'dialog', screen: 'magic-link', state: 'qr', src: 'src/ui/views/magic-link.jsx (MagicLinkPanel)', desc: 'Magic Link QR and code, «¿Para qué usuario?»', scroll: true }); await P.keyboard.press('Escape'); });
+      await attempt(P, 'magic link qr', async () => { await P.evaluate(() => window.__orbFire('ui:navigate', { view: 'settings', section: 'magiclink' })); await P.waitForSelector('[data-testid=settings-dialog]'); await P.click('[data-testid=settings-nav-magiclink]'); await P.click('[data-testid=link-make]'); await P.waitForSelector('[data-testid=link-qr]'); await shot(P, { area: 'dialog', screen: 'magic-link', state: 'qr', src: 'src/ui/views/magic-link.jsx (MagicLinkPanel)', desc: 'Magic Link QR and code, «¿Para qué usuario?»', scroll: true }); await P.keyboard.press('Escape'); });
       await attempt(P, 'whiteboard panel', async () => { await nav(P, { view: 'board' }); await P.waitForTimeout(1500); if (await P.locator('[data-testid=whiteboard-show-panel]').isVisible().catch(() => false)) await P.click('[data-testid=whiteboard-show-panel]'); await shot(P, { area: 'orb', screen: 'board', state: 'panel', src: 'src/ui/views/whiteboard.jsx + components/excalidraw-board.jsx', desc: 'Whiteboard with its side panel' }); });
       await attempt(P, 'expert populated', async () => { await nav(P, { view: 'expert' }); await P.waitForTimeout(1200); await shot(P, { area: 'orb', screen: 'expert', state: 'project-mi-web', src: 'src/ui/views/expert.jsx', desc: 'God mode with mi-web (tree, git, system)' }); });
       await attempt(P, 'tutorials faq', async () => { await nav(P, { view: 'tutorials' }); await P.locator('[data-testid^=faq-]').first().click(); await shot(P, { area: 'orb', screen: 'tutorials', state: 'faq-open', src: 'src/ui/views/tutorials.jsx', desc: 'Tutorials, a question opened', scroll: true }); });
@@ -440,14 +445,16 @@ try {
       await attempt(P, 'lock screen', async () => { await nav(P, { view: 'chat' }); await menuItem(P, 'person-lock'); await P.waitForSelector('[data-testid=lock-screen]'); await shot(P, { area: 'lock', screen: 'lock-screen', state: 'locked', src: 'src/ui/components/lock-screen.jsx (LockScreen)', desc: 'PC window locked: who unlocks' });
         await quiet(P.click('[data-testid=lock-person-Leo]')); await P.waitForTimeout(300); await shot(P, { area: 'lock', screen: 'lock-screen', state: 'pin-leo', src: 'src/ui/components/lock-screen.jsx', desc: 'Lock screen, Leo chosen: his PIN' });
         await P.click('[data-testid=lock-person-Ana]'); await P.click('[data-testid=lock-unlock]'); await loaded(P); });
-      await attempt(P, 'pin prompt', async () => { await menuItem(P, 'person-switch-Leo'); await P.waitForSelector('[data-testid=pin-input]'); await P.fill('[data-testid=pin-input]', '1111'); await P.keyboard.press('Enter'); await P.waitForTimeout(600); await shot(P, { area: 'lock', screen: 'pin', state: 'wrong-pin', src: 'src/ui/components/person-menu.jsx (PinDialog)', desc: 'Switch user: PIN asked, a wrong PIN', toasts: true }); await P.keyboard.press('Escape'); });
+      // 3.6: «Cambiar de usuario» locks the window; the lock screen asks who and, with a PIN, for it.
+      await attempt(P, 'pin prompt', async () => { await menuItem(P, 'person-switch'); await P.waitForSelector('[data-testid=lock-screen]'); await P.click('[data-testid=lock-person-Leo]'); await P.fill('[data-testid=lock-screen] input[type=password]', '1111'); await P.click('[data-testid=lock-unlock]'); await P.waitForSelector('[data-testid=lock-error]'); await shot(P, { area: 'lock', screen: 'pin', state: 'wrong-pin', src: 'src/ui/components/lock-screen.jsx (LockScreen)', desc: 'Switch user: PIN asked, a wrong PIN', toasts: true });
+        await P.click('[data-testid=lock-person-Ana]'); await P.click('[data-testid=lock-unlock]'); await loaded(P); });
       // The other visual themes.
       for (const skin of SKINS.slice(1)) {
         step = `tema ${skin}`;
         await setLook(P, { ...look, skin });
         await views(P, ['chat', 'tasks', 'projects', 'bot-chat', 'bots'], st, { scroll: false });
         await attempt(P, `conversation ${skin}`, async () => { await nav(P, { view: 'chat', id: conv.id }); await shot(P, { area: 'orb', screen: 'chat', state: 'conversation', src: 'src/ui/views/chat.jsx + themes.css', desc: `Orb chat, conversation, skin ${skin}` }); });
-        await attempt(P, `settings ${skin}`, async () => { await P.evaluate(() => window.__orbFire('ui:navigate', { view: 'settings', section: 'apariencia' })); await P.waitForSelector('[data-testid=settings-dialog]'); await P.click('[data-testid=settings-nav-apariencia]'); await shot(P, { area: 'settings', screen: 'apariencia', state: st, src: 'src/ui/views/settings.jsx + components/skin-preview.jsx', desc: `Settings › Appearance, skin ${skin}` }); await P.keyboard.press('Escape'); });
+        await attempt(P, `settings ${skin}`, async () => { await P.evaluate(() => window.__orbFire('ui:navigate', { view: 'settings', section: 'apariencia' })); await P.waitForSelector('[data-testid=settings-dialog]'); await P.click('[data-testid=settings-nav-general]'); await P.click('[data-testid=settings-sub-apariencia]'); await shot(P, { area: 'settings', screen: 'apariencia', state: st, src: 'src/ui/views/settings.jsx + components/skin-preview.jsx', desc: `Settings › Appearance, skin ${skin}` }); await P.keyboard.press('Escape'); });
       }
       await setLook(P, { ...look, skin: 'orb' });
     }
@@ -457,7 +464,7 @@ try {
       const M = phone;
       await setLook(M, look);
       await views(M, PHONE_VIEWS, st);
-      await attempt(M, 'phone more bots', async () => { await nav(M, { view: 'bot-chat' }); await M.click('[data-testid=nav-menu]:visible'); await M.waitForSelector('[data-testid=mobile-more-bots]'); await M.waitForTimeout(400); await shot(M, { area: 'bots', screen: 'menu', state: st, src: 'src/ui/components/mobile-menu.jsx', desc: 'The phone menu ☰ in Bots mode' }); await M.keyboard.press('Escape'); });
+      await attempt(M, 'phone more bots', async () => { await nav(M, { view: 'bot-chats' }); await M.click('[data-testid=nav-menu]:visible'); await M.waitForSelector('[data-testid=mobile-more-bots]'); await M.waitForTimeout(400); await shot(M, { area: 'bots', screen: 'menu', state: st, src: 'src/ui/components/mobile-menu.jsx', desc: 'The phone menu ☰ in Bots mode' }); await M.keyboard.press('Escape'); });
       await attempt(M, 'phone conversation', async () => { await nav(M, { view: 'chat', id: conv.id }); await shot(M, { area: 'orb', screen: 'chat', state: 'conversation-long-code-table', src: 'src/ui/views/chat.jsx', desc: 'Orb chat on the phone, long text, code and table', scroll: true }); });
       await attempt(M, 'phone session', async () => { await nav(M, { view: 'session', id: s1.id }); await shot(M, { area: 'orb', screen: 'session', state: 'image-and-table', src: 'src/ui/views/session.jsx', desc: 'Conversation with Claude on the phone', scroll: true }); });
       await attempt(M, 'phone approval', async () => { await nav(M, { view: 'session', id: s2.id }); await M.waitForSelector('[data-testid=approval-card]'); await shot(M, { area: 'orb', screen: 'session', state: 'approval-card-pending', src: 'src/ui/views/session.jsx (ApprovalCard)', desc: 'Permission card on the phone' }); });
@@ -465,7 +472,7 @@ try {
       await attempt(M, 'phone group', async () => { await nav(M, { view: 'bot-group', id: casa.id }); await shot(M, { area: 'bots', screen: 'bot-group', state: 'casa', src: 'src/ui/views/bots/chat.jsx', desc: 'Group chat on the phone' }); });
       await attempt(M, 'phone bot detail', async () => { await nav(M, { view: 'bots', id: agenda.id }); await shot(M, { area: 'bots', screen: 'bot-editor', state: 'agenda-readonly', src: 'src/ui/views/bots/list.jsx', desc: 'A bot opened on the phone (changes are made on the PC)', scroll: true }); });
       await tasksDetail(M, st);
-      await attempt(M, 'phone person menu', async () => { await nav(M, { view: 'chat' }); await M.click('[data-testid=nav-menu]:visible'); await M.waitForSelector('[data-testid=mobile-menu]'); await M.waitForTimeout(400); await shot(M, { area: 'menu', screen: 'menu', state: 'with-users', src: 'src/ui/components/mobile-menu.jsx + components/person-menu.jsx', desc: 'The phone menu ☰ with several users' }); await M.keyboard.press('Escape'); });
+      await attempt(M, 'phone person menu', async () => { await nav(M, { view: 'chats' }); await M.click('[data-testid=nav-menu]:visible'); await M.waitForSelector('[data-testid=mobile-menu]'); await M.waitForTimeout(400); await shot(M, { area: 'menu', screen: 'menu', state: 'with-users', src: 'src/ui/components/mobile-menu.jsx + components/person-menu.jsx', desc: 'The phone menu ☰ with several users' }); await M.keyboard.press('Escape'); });
     }
     if (web) {
       step = `navegador ${look.dark ? 'oscuro' : 'claro'}`;
@@ -486,8 +493,13 @@ try {
       await L.fill('[data-testid=lock-pin]', '1111'); await L.click('[data-testid=lock-unlock]'); await L.waitForTimeout(700);
       await shot(L, { area: 'lock', screen: 'phone-lock', state: 'wrong-pin', src: 'src/ui/components/lock-screen.jsx (PhoneLock)', desc: 'Phone lock with a wrong PIN' });
       await L.fill('[data-testid=lock-pin]', '2468'); await L.click('[data-testid=lock-unlock]');
-      await L.waitForSelector('[data-testid=connected-as]');
-      await shot(L, { area: 'orb', screen: 'chat', state: 'leo-connected-as', src: 'src/ui/components/person-menu.jsx (ConnectedAs)', desc: 'Leo\'s phone: «Conectado como Leo», his own empty chat' });
+      // 3.6: who is connected shows in the ☰ menu's user card (no «Conectado como» line any more).
+      await loaded(L);
+      await shot(L, { area: 'orb', screen: 'chats', state: 'leo-own-list', src: 'src/ui/views/orb/inbox.jsx', desc: 'Leo\'s phone: his own chat list' });
+      await L.click('[data-testid=nav-menu]:visible');
+      await L.waitForSelector('[data-testid=mobile-menu] [data-testid=person-card-name] >> text=Leo');
+      await shot(L, { area: 'menu', screen: 'menu', state: 'leo-person-card', src: 'src/ui/components/mobile-menu.jsx + components/person-menu.jsx (PersonCard)', desc: 'Leo\'s phone: the ☰ menu with his user card' });
+      await L.keyboard.press('Escape');
       await nav(L, { view: 'bots' });
       await shot(L, { area: 'bots', screen: 'bots', state: 'leo-shared-with-me', src: 'src/ui/views/bots/list.jsx + components/share-dialog.jsx (SharedWithMe)', desc: 'Leo\'s bots: Agenda shared with him' });
       await nav(L, { view: 'profile' });

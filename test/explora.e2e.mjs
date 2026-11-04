@@ -2,7 +2,8 @@
 // every view in day and night, each section of Ajustes, the five visual themes, a narrow window and the settings'
 // switches and checks, with screenshots in test-results/explora/ (explora-en/ with ORB_LANG=en) and the page errors
 // collected. Not an assertion test: it is for looking at.   ORB_E2E_EXE=dist/win-unpacked/Orb.exe node test/explora.e2e.mjs
-import { _electron as electron } from 'playwright-core';
+import { _electron as electron, chromium } from 'playwright-core';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -20,18 +21,32 @@ const until = async (fn, what, ms = 30000) => { const end = Date.now() + ms; whi
 const notes = [];
 const note = (s) => { notes.push(s); console.log(`  · ${s}`); };
 
+// The sources run under Playwright's Electron driver; a packaged build refuses --inspect (a security fuse), so it is
+// driven through the window's DevTools port instead (as smoke.e2e): then `app` is null and the pictures and the window
+// size go through the page.
 async function open(userData, env = {}) {
-  const app = await electron.launch({ executablePath: exe || electronBin, args: exe ? [] : [ROOT], env: { ...process.env, ORB_NO_BRIDGE: '1', ORB_USER_DATA: userData, ...env } });
-  const page = await app.firstWindow();
+  let app = null; let page; let stop;
+  if (exe) {
+    const port = 9300 + Math.floor(Math.random() * 500);
+    const child = spawn(exe, [`--remote-debugging-port=${port}`], { env: { ...process.env, ORB_NO_BRIDGE: '1', ORB_USER_DATA: userData, ...env }, stdio: 'ignore' });
+    const browser = await until(() => chromium.connectOverCDP(`http://127.0.0.1:${port}`), 'la ventana de la app');
+    page = await until(() => browser.contexts().flatMap((c) => c.pages()).find((p) => p.url().endsWith('index.html')), 'la página principal');
+    stop = async () => { await browser.close().catch(() => {}); try { if (process.platform === 'win32') spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' }); else child.kill(); } catch { /* gone */ } await new Promise((r) => setTimeout(r, 1500)); };
+  } else {
+    app = await electron.launch({ executablePath: electronBin, args: [ROOT], env: { ...process.env, ORB_NO_BRIDGE: '1', ORB_USER_DATA: userData, ...env } });
+    page = await app.firstWindow();
+    stop = async () => { await app.close().catch(() => {}); };
+  }
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`${m.type()}: ${m.text()}`); });
-  const close = async () => { await app.close().catch(() => {}); };
-  return { app, page, errors, close };
+  return { app, page, errors, close: stop };
 }
-// The window's own capture (what the user sees, with the interface zoom and the screen scaling).
+// The window's own capture (what the user sees, with the interface zoom and the screen scaling); the page's with a
+// packaged build.
 const shooter = (app, page) => async (name) => {
   await page.waitForTimeout(500);
+  if (!app) { await page.screenshot({ path: path.join(OUT, `${name}.png`) }); return; }
   const png = await app.evaluate(async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().endsWith('index.html')).webContents.capturePage()).toPNG().toString('base64'));
   fs.writeFileSync(path.join(OUT, `${name}.png`), Buffer.from(png, 'base64'));
 };
@@ -85,12 +100,18 @@ try {
   if (await page.isVisible('text=Preparando tu PC')) { await shot('01-preparo-equipo'); await page.click('text=Continuar'); }
   const dark = () => page.evaluate(() => document.documentElement.classList.contains('dark'));
   const setDark = async (on) => { if (on !== (await dark())) await page.getByRole('button', { name: /claro y oscuro|day and night|light and dark/i }).click(); };
+  // The robot at the top goes back to the chat; the professional theme has no robot (nothing drawn): there, a new chat
+  // from the list's «+».
+  const goChat = async () => {
+    if (await page.locator('[data-testid=sidebar-home]').isVisible()) await page.click('[data-testid=sidebar-home]');
+    else { await page.click('[data-testid=chats-new]'); await page.click('[data-testid=new-conversation]'); }
+  };
   const views = [['sidebar-home', 'chat'], ['nav-tasks', 'tareas'], ['nav-projects', 'proyectos'], ['nav-agents', 'agentes'], ['nav-memories', 'bitacoras'], ['memories-activity', 'actividad'], ['nav-settings', 'ajustes']];
   const SECTIONS = ['general', 'magiclink', 'agentes', 'avanzado', 'acerca'];
   for (const theme of ['dia', 'noche']) {
     await setDark(theme === 'noche');
     for (const [nav, name] of views) {
-      await page.click(`[data-testid=${nav}]`);
+      if (nav === 'sidebar-home') await goChat(); else await page.click(`[data-testid=${nav}]`);
       await shot(`${theme}-${name}`);
       if (theme === 'dia') {
         const wide = await overflow(page);
@@ -110,9 +131,13 @@ try {
       }
     }
     // the dialogs and menus of the chat
-    await page.click('[data-testid=sidebar-home]');
+    await goChat();
     await page.click('[data-testid=project-picker]'); await shot(`${theme}-chat-menu-proyecto`); await page.keyboard.press('Escape');
-    await page.click('[data-testid=new-conversation]').catch(() => note('sin botón nueva conversación visible'));
+    await page.waitForSelector('[role=menu]', { state: 'detached' }).catch(() => {}); await page.waitForTimeout(300);
+    // 3.6: the list's «+» (Nuevo chat, Nuevo proyecto).
+    await page.click('[data-testid=chats-new]').catch(() => note('sin botón «+» en la lista de chats'));
+    await shot(`${theme}-menu-nuevo`);
+    await page.click('[data-testid=new-conversation]', { timeout: 5000 }).catch(() => note('sin «Nuevo chat» en el menú «+»'));
     await shot(`${theme}-nueva-conversacion`); await page.keyboard.press('Escape');
   }
   // checks and switches in the night theme: their computed colors
@@ -131,7 +156,7 @@ try {
     await until(async () => (await page.evaluate(() => document.documentElement.dataset.skin)) === skin, `tema ${skin}`);
     for (const theme of ['dia', 'noche']) {
       await setDark(theme === 'noche');
-      await page.click('[data-testid=sidebar-home]'); await shot(`tema-${skin}-${theme}-chat`);
+      await goChat(); await shot(`tema-${skin}-${theme}-chat`);
       await page.click('[data-testid=nav-tasks]'); await shot(`tema-${skin}-${theme}-tareas`);
       await page.click('[data-testid=nav-settings]'); await page.click('[data-testid=settings-nav-general]'); await shot(`tema-${skin}-${theme}-ajustes`);
       if (theme === 'dia') {
@@ -149,9 +174,10 @@ try {
 
   // ---- 4. narrow window and a small laptop height
   for (const [w, h, name] of [[420, 860, 'estrecha'], [1280, 640, 'portatil-bajo']]) {
-    await app.evaluate(({ BrowserWindow }, [w, h]) => BrowserWindow.getAllWindows().find((b) => b.webContents.getURL().endsWith('index.html')).setContentSize(w, h), [w, h]);
+    if (app) await app.evaluate(({ BrowserWindow }, [w, h]) => BrowserWindow.getAllWindows().find((b) => b.webContents.getURL().endsWith('index.html')).setContentSize(w, h), [w, h]);
+    else await page.setViewportSize({ width: w, height: h });
     for (const [nav, view] of [['sidebar-home', 'chat'], ['nav-tasks', 'tareas'], ['nav-settings', 'ajustes']]) {
-      if (w < 700) { await page.getByRole('button', { name: /^(Menú|Menu)$/ }).click(); await page.locator(`[data-testid=${nav}]:visible`).click(); } else await page.click(`[data-testid=${nav}]`);
+      if (w < 700) { await page.getByRole('button', { name: /^(Menú|Menu)$/ }).click(); await page.locator(`[data-testid=${nav}]:visible`).click(); } else if (nav === 'sidebar-home') await goChat(); else await page.click(`[data-testid=${nav}]`);
       const [sw, iw] = await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);
       if (sw > iw + 1) note(`${name}/${view}: se sale por los lados (${sw} > ${iw})`);
       await shot(`${name}-${view}`);
