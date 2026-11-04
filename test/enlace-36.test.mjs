@@ -276,5 +276,5 @@ test('21: móvil de administrar perdido: quitar, pin-reset y enlazar --persona <
   // The commands exist.
   const { spawnSync } = await import('node:child_process');
   const help = spawnSync(process.execPath, [path.join(ROOT, 'src', 'server', 'orb-nucleo.mjs'), '--help'], { encoding: 'utf8', windowsHide: true });
-  for (const c of ['personas', 'persona nueva', 'pin-reset', '--persona']) assert.ok(help.stdout.includes(c), c);
+  for (const c of ['usuarios', 'usuario nuevo', 'pin-reset', '--usuario']) assert.ok(help.stdout.includes(c), c);
 });

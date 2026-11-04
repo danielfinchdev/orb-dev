@@ -924,12 +924,12 @@ belongs to the conversation that asked for it: its report goes back there.
   ones completed; the last one stays open with the assistant's live session) and the assistant's tasks are distributed
   by date.
 
-## 34. People (3.6)
+## 34. Users (3.6)
 
-**What it does.** Several people share one Orb: an owner, who manages it, and users. Each one has their own
+**What it does.** Several users share one Orb: an owner, who manages it, and the other users. Each one has their own
 conversations, bots, projects, reminders, schedules, memories, accounts and devices, and sees only those and what is
-shared with them. With a single person all of it is hidden and Orb behaves as 3.5.1. User guide:
-[`PERSONAS.md`](PERSONAS.md); the details of the model, authorization, events and loans:
+shared with them. With a single user all of it is hidden and Orb behaves as 3.5.1. User guide:
+[`USERS.md`](USERS.md); the details of the model, authorization, events and loans:
 [`PERSONAS-INTERNALS.md`](PERSONAS-INTERNALS.md).
 
 **Files.**
@@ -941,8 +941,8 @@ shared with them. With a single person all of it is hidden and Orb behaves as 3.
   delete, move), `src/core/templates.mjs` (the wizard's templates).
 - Engine: `src/engine/api-persons.mjs`, `api-gateway.mjs` (window lock), `api-accounts.mjs`, `api-data.mjs`,
   `router.mjs` (each event only to its audience), `forward.mjs` (workshop calls run as the person of the link).
-- Interface: the wizard (`src/ui/views/setup.jsx`), the person menu and the lock screen (`src/ui/components/`), Settings
-  › People / My profile / Data, the share dialog, "Lend to…" in Agents. `state.me` in the store (`persons.me`), read
+- Interface: the wizard (`src/ui/views/setup.jsx`), the user menu and the lock screen (`src/ui/components/`), Settings
+  › Users / My profile / Data, the share dialog, "Lend to…" in Agents. `state.me` in the store (`persons.me`), read
   again on `persons:switched`; the engine is the authority, the interface only hides.
 - Phone and Android: `src/ui/lib/web-bridge.js` sends its protocol (3) on `/api/me` and shows an update screen when the
   Orb needs a newer one; `src/ui/lib/app-bridge.js` adds the fingerprint lock (`appLock`, `OrbNativePlugin.java`,

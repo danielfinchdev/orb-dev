@@ -47,10 +47,10 @@ function parse(argv) {
     else if (a === '--tipo' || a === '--kind') { o.kind = KIND_WORDS[String(argv[++i] ?? '').toLowerCase()]; if (!o.kind) throw new Error('tipo: movil, navegador, orb o terminal'); }
     else if (a === 'dispositivos' || a === 'devices') o.command = 'devices';
     // 3.6 «Personas»: the people of this server, a new one, a PIN taken away, a QR for someone.
-    else if (a === 'personas' || a === 'persons') o.command = 'persons';
-    else if (a === 'persona' || a === 'person') { const sub = String(argv[++i] ?? '').toLowerCase(); if (!['nueva', 'new'].includes(sub)) throw new Error('orb-nucleo persona nueva <nombre>'); o.command = 'personNew'; o.target = argv.slice(i + 1).join(' ').trim(); i = argv.length; if (!o.target) throw new Error('falta el nombre: orb-nucleo persona nueva <nombre>'); }
-    else if (a === 'pin-reset') { o.command = 'pinReset'; o.target = argv[++i]; if (!o.target) throw new Error('falta la persona: orb-nucleo pin-reset <persona>'); }
-    else if (a === '--persona' || a === '--person') { o.person = argv[++i]; if (!o.person) throw new Error('falta la persona: --persona <nombre>'); }
+    else if (a === 'usuarios' || a === 'users' || a === 'personas' || a === 'persons') o.command = 'persons'; // «personas»: hidden alias (3.6 betas)
+    else if (a === 'usuario' || a === 'user' || a === 'persona' || a === 'person') { const sub = String(argv[++i] ?? '').toLowerCase(); if (!['nuevo', 'nueva', 'new'].includes(sub)) throw new Error('orb-nucleo usuario nuevo <nombre>'); o.command = 'personNew'; o.target = argv.slice(i + 1).join(' ').trim(); i = argv.length; if (!o.target) throw new Error('falta el nombre: orb-nucleo usuario nuevo <nombre>'); }
+    else if (a === 'pin-reset') { o.command = 'pinReset'; o.target = argv[++i]; if (!o.target) throw new Error('falta el usuario: orb-nucleo pin-reset <usuario>'); }
+    else if (a === '--usuario' || a === '--user' || a === '--persona' || a === '--person') { o.person = argv[++i]; if (!o.person) throw new Error('falta el usuario: --usuario <nombre>'); }
     // 3.6: backups and moving the Orb.
     else if (a === 'copia' || a === 'backup') {
       o.command = 'backup'; o.sub = { ahora: 'now', now: 'now', lista: 'list', list: 'list', restaurar: 'restore', restore: 'restore', clave: 'code', code: 'code' }[String(argv[++i] ?? '').toLowerCase()];
@@ -98,7 +98,7 @@ async function personsCommand(home, version) {
       const marks = [x.role === 'owner' ? t('term.nucleo.isOwner') : null, x.hasPin ? t('term.nucleo.hasPin') : null].filter(Boolean).join(', ');
       console.log(`${p.bold(x.name)}  ${p.dim(t('term.nucleo.personDevices', { n: x.devices }))}${marks ? `  ${p.yellow(marks)}` : ''}`);
     }
-    console.log(p.dim(t('term.nucleo.personsHint', { cmd: 'orb-nucleo enlazar --persona <nombre>' })));
+    console.log(p.dim(t('term.nucleo.personsHint', { cmd: 'orb-nucleo enlazar --usuario <nombre>' })));
     return 0;
   });
 }
@@ -107,7 +107,7 @@ async function personNewCommand(home, version, name) {
   return withEngine(home, version, async (call) => {
     const x = await call('persons.create', { name });
     console.log(p.green(t('term.nucleo.personCreated', { name: x.name })));
-    console.log(p.dim(t('term.nucleo.personsHint', { cmd: `orb-nucleo enlazar --persona "${x.name}"` })));
+    console.log(p.dim(t('term.nucleo.personsHint', { cmd: `orb-nucleo enlazar --usuario "${x.name}"` })));
     return 0;
   });
 }
@@ -246,7 +246,7 @@ async function main() {
   const o = parse(process.argv.slice(2));
   const version = packageVersion();
   if (o.command === 'version') { console.log(version); return; }
-  if (o.command === 'help') { console.log('orb-nucleo [--home <carpeta>] [--papel centro|todo|taller] | estado | entrar <claude|codex|cuenta> | enlazar [--tipo movil|navegador|orb|terminal] [--admin] [--taller] [--no-esperar] | dispositivos | quitar <id> | personas | persona nueva <nombre> | pin-reset <persona> | enlazar --persona <nombre> | copia ahora|lista|restaurar <archivo>|clave [--clave <código>] | mover exportar|importar <archivo> --clave <código> | --version'); return; }
+  if (o.command === 'help') { console.log('orb-nucleo [--home <carpeta>] [--papel centro|todo|taller] | estado | entrar <claude|codex|cuenta> | enlazar [--tipo movil|navegador|orb|terminal] [--admin] [--taller] [--no-esperar] | dispositivos | quitar <id> | usuarios | usuario nuevo <nombre> | pin-reset <usuario> | enlazar --usuario <nombre> | copia ahora|lista|restaurar <archivo>|clave [--clave <código>] | mover exportar|importar <archivo> --clave <código> | --version'); return; }
   // 3.6: importing a moved Orb goes into a folder that is not an Orb yet (nothing is prepared there first).
   if (o.command === 'move' && o.sub === 'import') { process.exit(await moveCommand(null, version, o, path.resolve(o.home ? o.home : defaultHome()))); }
   const home = prepareHome(o.home ? o.home : defaultHome(), { profile: o.profile });

@@ -85,7 +85,6 @@ export function ConnectedAs({ className }) {
   if (!personsOn(me) || !me.person) return null;
   return (
     <div className={cn('text-muted-foreground flex items-center justify-center gap-1.5 text-[11.5px]', className)} data-testid="connected-as">
-      <PersonDot name={me.person.name} color={me.person.color} size="sm" />
       <span className="truncate">{tr('persons.connectedAs', { name: me.person.name })}</span>
       <PersonMenu compact className="px-1 py-0.5" />
     </div>

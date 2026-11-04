@@ -18,6 +18,8 @@ import { useBots, useCanManage, BotFace, NoBots, BotsDown, Loading, BotPage } fr
 import { ShareButton, SharedBadge } from '@/components/share-dialog.jsx';
 import { personsOn, botAccountChoices } from '@/lib/persons.js';
 
+// 3.6: a bot thinks with Claude or Codex (Orb refuses the other agents as a bot's brain).
+const BOT_BRAINS = ['claude', 'codex'];
 export const TOOL_ICON = { internet: Globe, recordatorios: Bell, correo: Mail, calendario: CalendarDays, navegador: Compass, casa: Home, servidor: Server, gestion: Settings2 };
 
 export function BotsView({ route }) {
@@ -100,7 +102,7 @@ function BotEditor({ id }) {
   const [loans, setLoans] = useState(null);
   useEffect(() => { if (personsOn(me)) call('accounts.loans').then(setLoans).catch(() => setLoans(null)); }, [me?.person?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (isNew) { setD(newBotDraft(app.assistant?.agent ?? 'claude')); return undefined; }
+    if (isNew) { setD(newBotDraft(BOT_BRAINS.includes(app.assistant?.agent) ? app.assistant.agent : 'claude')); return undefined; }
     let alive = true;
     botCall('bots.get', { id: Number(id) }).then((b) => alive && setD({ ...b, model: b.model ?? '', exclusive: (b.exclusive ?? []).join(', '), accounts: { mcp: b.accounts?.mcp ?? [], account: b.accounts?.account ?? '' } })).catch(() => alive && setD(false));
     return () => { alive = false; };
@@ -149,7 +151,7 @@ function BotEditor({ id }) {
         <Card>
           <CardHeader><CardTitle>{t('bots.f.brain')}</CardTitle><CardDescription>{t('bots.f.brainHint')}</CardDescription></CardHeader>
           <CardContent className="flex flex-wrap items-center gap-2">
-            <BrainPicker catalog={catalog} value={{ agent: d.agent, model: d.model ?? '', account: d.account ?? d.agent }} onChange={(b) => set({ agent: b.agent, model: b.model, account: b.account })} />
+            <BrainPicker catalog={catalog?.filter((a) => BOT_BRAINS.includes(a.id))} value={{ agent: d.agent, model: d.model ?? '', account: d.account ?? d.agent }} onChange={(b) => set({ agent: b.agent, model: b.model, account: b.account })} />
             <Select size="sm" value={d.effort} onValueChange={(effort) => set({ effort })} title={t('bots.f.effort')} options={EFFORTS.map((e) => ({ value: e, label: `${t('bots.f.effort')}: ${t(`bots.effort.${e}`).toLowerCase()}` }))} data-testid="bot-effort" />
           </CardContent>
         </Card>

@@ -1,7 +1,7 @@
 # People (3.6): internals
 
 How Orb knows who is calling and what they may see. This page is for people working on Orb's code; the user guide is
-`docs/PERSONAS.md`.
+`docs/USERS.md` (in the interface the feature is called "Users" / "Usuarios"; the code keeps `persons`).
 
 ## Model
 
@@ -168,8 +168,9 @@ console only on this PC, for the owner). Another person spends it only through a
 - **This PC's window.** `api.desktop = { person, locked }`. `persons.lock` / `persons.unlock { id?, pin }` /
   `app.lockState`; while locked, `engine.mjs` refuses every call of the window but those (and a minimal `app.state`).
 - **Orb Núcleo.** `host.call(method, params, { as: 'control' })` runs as the owner on the control channel (ceiling
-  `CONTROL_SET`, with `persons.list/create/setPin/overview`). Commands: `orb-nucleo personas`, `persona nueva <nombre>`,
-  `pin-reset <persona>`, `enlazar --persona <nombre> [--admin]`.
+  `CONTROL_SET`, with `persons.list/create/setPin/overview`). Commands: `orb-nucleo usuarios`, `usuario nuevo <nombre>`,
+  `pin-reset <usuario>`, `enlazar --usuario <nombre> [--admin]` (the older `personas`, `persona nueva` and `--persona`
+  still work).
 - **Backups of a linked Orb.** Link op `backup.put` (`link.putBackup(id, file)` sends 1.5 MB pieces): only from a
   confirmed Orb of the owner, an `.orbbak` (magic checked), at most 2 GB; kept in `<backups>/de-otros-orbs/<device>/`, the
   last 3.

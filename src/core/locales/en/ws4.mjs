@@ -13,5 +13,5 @@ export default {
   'msg.bots.badHaAllow': 'I don\'t understand "{entry}". Write domain.service and the entity, for example: light.turn_on light.living_room',
   'msg.bots.moveMismatch': 'The copy of {name} didn\'t come out the same.',
   'sys.botmcp.memoryPending': 'Saved as pending: {user} has to approve it first.',
-  'msg.guard.botOtherPerson': 'wants to read what another person keeps in this bot'
+  'msg.guard.botOtherPerson': 'wants to read what another user keeps in this bot'
 };

@@ -164,7 +164,7 @@ test('API de personas: crear solo el dueño, cambiar de persona con su PIN, y ca
   assert.equal((await api.call('persons.switch', { id: mia.id, pin: '1357' }, api.desktopPrincipal())).ok, true);
   await api.call('persons.switch', { id: owner }, api.desktopPrincipal());
   // El dueño solo puede quitar el PIN de otra persona, no ponérselo.
-  await assert.rejects(api.call('persons.setPin', { id: mia.id, pin: '1111' }, api.desktopPrincipal()), /Solo esa persona/);
+  await assert.rejects(api.call('persons.setPin', { id: mia.id, pin: '1111' }, api.desktopPrincipal()), /Solo ese usuario/);
   assert.deepEqual(await api.call('persons.setPin', { id: mia.id, pin: null }, api.desktopPrincipal()), { hasPin: false });
   await assert.rejects(api.call('persons.switch', { id: mia.id }, principalOf(board, { device: { id: 'd1', kind: 'phone', person_id: owner } })), /solo se puede hacer desde el PC/);
 });

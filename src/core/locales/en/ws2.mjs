@@ -28,7 +28,7 @@ export default {
   'term.nucleo.personDevices': '{n} devices',
   'term.nucleo.personsHint': 'To link a device for someone: {cmd}',
   'term.nucleo.personCreated': 'Done: {name} now uses this Orb.',
-  'term.nucleo.noPerson': 'There is nobody called "{name}" on this Orb (see orb-nucleo personas).',
+  'term.nucleo.noPerson': 'There is nobody called "{name}" on this Orb (see orb-nucleo usuarios).',
   'term.nucleo.pinReset': 'Done: {name} has no PIN now. They can choose another one in their profile.',
   'term.nucleo.forPerson': 'This code is for {name}.'
 };

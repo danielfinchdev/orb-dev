@@ -14,6 +14,9 @@ import { cn, baseName } from '@/lib/utils.js';
 import { useStore, call, act, bridge, setState, getState } from '@/lib/store.js';
 import { LOGIN } from '@/lib/labels.js';
 import { t, useT, useLocale } from '@/lib/i18n.js';
+import { personsOn, accountRole, loanLeftText, lendPayload, usageRows } from '@/lib/persons.js';
+import { personNameOf } from '@/lib/store.js';
+import { HandCoins, Users as UsersIcon } from 'lucide-react';
 
 const INSTALL = { claude: 'https://docs.claude.com/en/docs/claude-code/setup', codex: 'https://developers.openai.com/codex/cli', cursor: 'https://cursor.com/cli',
   gemini: 'https://github.com/google-gemini/gemini-cli', opencode: 'https://opencode.ai', qwen: 'https://github.com/QwenLM/qwen-code', copilot: 'https://github.com/github/copilot-cli' };
@@ -193,12 +196,22 @@ function Accounts({ a, reload }) {
     });
     if (r) { toast.success(t('agents.scanAddedMany', { n: r })); reload(); }
   };
+  // 3.6: with two or more people, each one sees their own accounts (to lend them) and the ones lent to them.
+  const me = useStore((s) => s.me);
+  const loans = useStore((s) => s.loans);
+  const people = useStore((s) => s.people ?? []);
+  const many = personsOn(me);
+  const ownerId = people.find((p) => p.role === 'owner')?.id ?? null;
   if (!a.installed) return null;
+  const shown = many ? a.accounts.filter((acc) => accountRole(acc, me, loans, ownerId) !== 'other') : a.accounts;
   return (
     <div className="grid gap-1.5">
       <div className="text-muted-foreground text-xs">{t('agents.accounts')}</div>
-      {a.accounts.map((acc) => {
+      {shown.map((acc) => {
         const login = LOGIN[acc.login] ?? LOGIN.desconocido;
+        const role = many ? accountRole(acc, me, loans, ownerId) : 'own';
+        const got = role === 'borrowed' ? loans.got.find((l) => l.account === acc.id) : null;
+        const given = role === 'own' ? (loans?.given ?? []).filter((l) => l.account === acc.id) : [];
         return (
           // One line: the name with its state, what can be done with it and its switch (2.7: no folder path).
           <div key={acc.id} className={cn('rounded-lg border px-3 py-2', acc.enabled === false && 'opacity-60')}>
@@ -208,8 +221,20 @@ function Accounts({ a, reload }) {
               <BubbleTip title={t('agents.login')}><Button size="icon-xs" variant="ghost" aria-label={t('agents.login')} onClick={() => signIn(acc, acc.label)} data-testid={`agent-login-${acc.id}`}><LogIn /></Button></BubbleTip>
               {acc.id !== acc.agent ? <BubbleTip title={t('agents.removeTitle')} text={t('agents.removeTip')}><Button size="icon-xs" variant="danger" aria-label={t('agents.removeTitle')} onClick={async () => { if (await confirm(t('agents.removeTitle'), t('agents.removeBody', { label: acc.label }), { ok: t('agents.remove'), danger: true })) act(call('accounts.remove', { id: acc.id }), t('agents.accountRemoved')).then(reload); }}><Trash2 /></Button></BubbleTip> : null}
               {/* The bubble wraps a span: on the switch itself, the bubble's data-state hid «checked» and it looked off. */}
-              <BubbleTip title={t('agents.useAccount')}><span className="inline-flex shrink-0"><Switch checked={acc.enabled !== false} onCheckedChange={(enabled) => act(call('accounts.update', { id: acc.id, enabled })).then(reload)} aria-label={t('agents.useAccount')} /></span></BubbleTip>
+              {role === 'own' ? <BubbleTip title={t('agents.useAccount')}><span className="inline-flex shrink-0"><Switch checked={acc.enabled !== false} onCheckedChange={(enabled) => act(call('accounts.update', { id: acc.id, enabled })).then(reload)} aria-label={t('agents.useAccount')} /></span></BubbleTip> : null}
             </div>
+            {got ? <div className="mt-1 flex flex-wrap items-center gap-1.5" data-testid={`borrowed-${acc.id}`}><Badge variant="secondary" className="font-normal">{t('persons.loan.from', { name: personNameOf(got.lender) })} · {(({ key, vars }) => t(key, vars))(loanLeftText(got))}</Badge></div> : null}
+            {many && role === 'own' ? (
+              <div className="mt-1.5 grid gap-1">
+                {given.map((l) => (
+                  <div key={l.person} className="text-muted-foreground flex items-center gap-1.5 text-xs" data-testid={`lent-${acc.id}-${personNameOf(l.person)}`}>
+                    <HandCoins className="size-3.5" /><span className="min-w-0 flex-1 truncate">{t('lend.lentTo', { name: personNameOf(l.person) })} · {(({ key, vars }) => t(key, vars))(loanLeftText(l))}</span>
+                    <Button size="xs" variant="ghost" onClick={async () => { if (await act(call('accounts.unlend', { id: acc.id, person: l.person }), t('lend.stopped', { name: personNameOf(l.person) }))) loadLoans(); }}>{t('lend.stop')}</Button>
+                  </div>
+                ))}
+                <Button size="xs" variant="ghost" className="w-fit" onClick={() => lendDialog(acc, people.filter((p) => p.id !== me?.person?.id))} data-testid={`lend-${acc.id}`}><HandCoins />{t('lend.button')}</Button>
+              </div>
+            ) : null}
           </div>
         );
       })}
@@ -318,6 +343,67 @@ function AgentCard({ a, reload }) {
   );
 }
 
+// 3.6: the caller's loans (given and got), kept in the store for the accounts and the bot editor.
+export const loadLoans = () => call('accounts.loans').then((loans) => setState({ loans })).catch(() => setState({ loans: null }));
+// «Prestar a…»: someone else may spend this account, with caps per day, a reserve for its owner, for bots and/or to
+// program, until a date. Personal subscriptions may not allow it: the dialog says so.
+async function lendDialog(acc, people) {
+  if (!people.length) { toast.info(t('lend.nobody')); return; }
+  const r = await form(t('lend.title', { label: acc.label }), {
+    description: t('lend.desc'),
+    initial: { person: people[0].id, turns: '', tokens: '', usd: '', reserve: '20', bots: true, dev: false, days: '' },
+    body: (v, set) => {
+      const num = (k) => ({ value: v[k], inputMode: 'decimal', onChange: (e) => set({ [k]: e.target.value.replace(/[^\d.]/g, '') }) });
+      return (<>
+        <Field label={t('lend.person')}><Select className="w-full" value={v.person} onValueChange={(person) => set({ person })} options={people.map((p) => ({ value: p.id, label: p.name }))} title={t('lend.person')} data-testid="lend-person" /></Field>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label={t('lend.turns')}><Input {...num('turns')} placeholder={t('lend.noCap')} data-testid="lend-turns" /></Field>
+          <Field label={t('lend.tokens')}><Input {...num('tokens')} placeholder={t('lend.noCap')} /></Field>
+          <Field label={t('lend.usd')}><Input {...num('usd')} placeholder={t('lend.noCap')} /></Field>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label={t('lend.reserve')} hint={t('lend.reserveHint')}><Input {...num('reserve')} data-testid="lend-reserve" /></Field>
+          <Field label={t('lend.days')} hint={t('lend.daysHint')}><Input {...num('days')} placeholder={t('lend.forever')} /></Field>
+        </div>
+        <label className="flex cursor-pointer items-start gap-2 text-sm"><Checkbox checked={v.bots} onCheckedChange={(on) => set({ bots: Boolean(on) })} /><span>{t('lend.bots')}</span></label>
+        <label className="flex cursor-pointer items-start gap-2 text-sm"><Checkbox checked={v.dev} onCheckedChange={(on) => set({ dev: Boolean(on) })} data-testid="lend-dev" /><span>{t('lend.dev')}</span></label>
+        <p className="text-warning bg-warning/10 rounded-lg px-3 py-2 text-xs" role="note" data-testid="lend-terms">{t('lend.terms')}</p>
+      </>);
+    },
+    ok: t('lend.ok'),
+    onOk: (v) => call('accounts.lend', lendPayload(acc.id, v))
+  });
+  if (r) { toast.success(t('lend.done', { name: personNameOf(r.person_id ?? r.person) })); loadLoans(); }
+}
+
+// «Quién ha gastado qué» (the owner, with two or more people): turns and dollars of each one, never on what.
+function UsageByPerson() {
+  const t = useT();
+  const me = useStore((s) => s.me);
+  const version = useStore((s) => s.version);
+  const [rows, setRows] = useState(null);
+  const show = personsOn(me) && me.role === 'owner';
+  useEffect(() => { if (show) call('usage.byPerson').then(setRows).catch(() => setRows(null)); }, [show, version]);
+  if (!show || !rows) return null;
+  const { list, total } = usageRows(rows);
+  const max = Math.max(1, ...list.map((r) => r.month?.turns ?? 0));
+  return (
+    <Card data-testid="usage-by-person">
+      <CardHeader><CardTitle className="flex items-center gap-2"><UsersIcon className="text-primary size-4" />{t('whoSpent.title')}</CardTitle><CardDescription>{t('whoSpent.hint')}</CardDescription></CardHeader>
+      <CardContent className="grid gap-2.5">
+        {list.map((r) => (
+          <div key={r.person} className="grid gap-1" data-testid={`usage-person-${r.name}`}>
+            <div className="flex flex-wrap items-baseline gap-2 text-sm"><span className="min-w-28 font-medium">{r.name}</span>
+              <span className="text-muted-foreground text-xs tabular-nums">{t('whoSpent.today', { n: r.today?.turns ?? 0 })} · {t('whoSpent.month', { n: r.month?.turns ?? 0 })}{r.month?.usd ? ` · ${t('whoSpent.usd', { n: r.month.usd })}` : ''}</span></div>
+            <div className="bg-muted h-1.5 overflow-hidden rounded-full"><div className="bg-primary h-full rounded-full" style={{ width: `${((r.month?.turns ?? 0) / max) * 100}%` }} /></div>
+          </div>
+        ))}
+        <p className="text-muted-foreground text-xs">{t('whoSpent.total', { today: total.today, month: total.month })}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function AgentsView() {
   const t = useT();
   const locale = useLocale();
@@ -329,6 +415,7 @@ export function AgentsView() {
   const load = (refresh = false) => { call('agents.status', { refresh }).then(setAgents).catch(() => setAgents([])); };
   useEffect(() => load(), []);
   useEffect(() => { call('usage.get').then(setUsage).catch(() => {}); }, [version]);
+  useEffect(() => { loadLoans(); }, [version]);
   return (
     <>
       <PageHeader icon={<Bot className="text-primary size-5" />} title={t('agents.title')} meta={t('agents.meta')}>
@@ -351,6 +438,7 @@ export function AgentsView() {
           ) : null}
           {/* Two cards per row from 1024 px, three on very wide windows: each card needs room for its account rows. */}
           <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3 [&>*]:min-w-0">{agents ? agents.map((a) => <AgentCard key={a.id} a={a} reload={() => load(true)} />) : <Card className="items-center"><Spinner /></Card>}</div>
+          <UsageByPerson />
           <Card>
             <CardHeader><CardTitle>{t('agents.usageTitle')}</CardTitle><CardDescription>{t('agents.usageDesc', { pct: Math.round((usage[0]?.stopAt ?? 0.92) * 100), hours: usage[0]?.windowHours ?? 5 })}</CardDescription></CardHeader>
             <CardContent className="grid gap-4">

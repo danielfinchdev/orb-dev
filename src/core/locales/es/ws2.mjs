@@ -14,7 +14,7 @@ export default {
   'msg.link.backupBad': 'La copia no llegó bien. Vuelve a enviarla.',
   'msg.link.backupTooBig': 'La copia es demasiado grande (el máximo son {mb} MB).',
   'msg.link.adminOwnerOnly': '«Puede administrar» solo se da a un dispositivo del dueño.',
-  'msg.link.qrForOthers': 'Solo el dueño puede enlazar dispositivos para otra persona.',
+  'msg.link.qrForOthers': 'Solo el dueño puede enlazar dispositivos para otro usuario.',
   'msg.link.noPeer': 'Ese enlace no existe.',
   'term.tui.connectedAs': 'Conectado como {name}',
   'term.links.as': 'como {name}',
@@ -28,7 +28,7 @@ export default {
   'term.nucleo.personDevices': '{n} dispositivos',
   'term.nucleo.personsHint': 'Para enlazar un dispositivo de alguien: {cmd}',
   'term.nucleo.personCreated': 'Listo: {name} ya usa este Orb.',
-  'term.nucleo.noPerson': 'No hay nadie llamado «{name}» en este Orb (mira orb-nucleo personas).',
+  'term.nucleo.noPerson': 'No hay nadie llamado «{name}» en este Orb (mira orb-nucleo usuarios).',
   'term.nucleo.pinReset': 'Listo: {name} ya no tiene PIN. Puede elegir otro desde su perfil.',
   'term.nucleo.forPerson': 'Este código es para {name}.'
 };

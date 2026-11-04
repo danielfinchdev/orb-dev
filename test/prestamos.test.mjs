@@ -101,7 +101,7 @@ test('un préstamo vencido o retirado ya no sirve; solo para bots no vale para p
   assert.equal(pickAccount(board, { person: leo, agent: 'claude', bot: 1 })?.id, 'claude', 'para sus bots, sí');
   await call(asAna, 'accounts.unlend', { id: 'claude', person: leo });
   assert.equal(checkSpend(board, { person: leo, account: 'claude' }).reason, 'noLoan');
-  await assert.rejects(call(asAna, 'accounts.lend', { id: 'claude', person: ana }), /ya es de esa persona/);
+  await assert.rejects(call(asAna, 'accounts.lend', { id: 'claude', person: ana }), /ya es de ese usuario/);
 });
 
 test('los topes de un bot lo paran al llegar; el día es el de quien gasta', () => {
