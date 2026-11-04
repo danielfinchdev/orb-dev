@@ -45,12 +45,12 @@ async function start(home, version, secret, browser, headless) {
   ensureLayout(home); // the fixed folders, and folders made by older versions put in order
   useHome(home);
   // 3.5: the role is the user's choice (orb.json «role», Ajustes › Magic Link); whoever starts the engine only says
-  // whether it has a window (Orb Núcleo, src/server/host.mjs: headless). Its children learn it from ORB_NUCLEO.
+  // whether it has a window (Orb Server, src/server/host.mjs: headless). Its children learn it from ORB_NUCLEO.
   ctx.headless = headless === true || process.env.ORB_NUCLEO === '1';
   if (ctx.headless) process.env.ORB_NUCLEO = '1';
   // The approval secret comes from the app (kept encrypted by Windows); without it, the file fallback is used.
   if (typeof secret === 'string' && /^[0-9a-f]{64}$/.test(secret)) ctx.secret = Buffer.from(secret, 'hex');
-  // 3.6: a backup restored from Ajustes › Datos or «orb-nucleo copia restaurar» replaces the data now, before the database
+  // 3.6: a backup restored from Ajustes › Datos or «orb-server copia restaurar» replaces the data now, before the database
   // opens (what was there goes to .orb/antes-de-restaurar-<fecha>). Its secret (links, approvals) comes with it.
   const { applyPendingRestore } = await import('../core/backup.mjs');
   let restored = null;
@@ -64,7 +64,7 @@ async function start(home, version, secret, browser, headless) {
   fs.mkdirSync(ctx.paths.runs, { recursive: true });
   // Android's adb: in the PATH of every agent, downloaded in the background the first time.
   const { addAdbToPath, ensureAdb } = await import('./android.mjs');
-  // 3.5: not on the server (Orb Núcleo): nothing is downloaded there unless the user asks for it (android.install).
+  // 3.5: not on the server (Orb Server): nothing is downloaded there unless the user asks for it (android.install).
   addAdbToPath(); if (!isHeadless()) ensureAdb({ log });
   const { Board } = await import('../core/board.mjs');
   const { Sessions } = await import('./sessions.mjs');
@@ -303,7 +303,7 @@ transport.on(async (msg) => {
   if (msg.type !== 'call') return;
   try {
     if (!api) throw new Error(tr('sys.engine.notStarted', { name: PRODUCT.name }));
-    // 3.6: this PC's window calls as the person sitting at it (the owner until persons.switch); Orb Núcleo's local socket
+    // 3.6: this PC's window calls as the person sitting at it (the owner until persons.switch); Orb Server's local socket
     // (as: 'control', src/server/control.mjs) as the owner. A locked window may only unlock (engine-enforced).
     const method = String(msg.method);
     let result;

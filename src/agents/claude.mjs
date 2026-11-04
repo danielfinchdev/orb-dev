@@ -27,7 +27,7 @@ export function detect(cfg = {}) {
   const home = userHome();
   const pkg = (dir) => path.join(dir, 'node_modules', '@anthropic-ai', 'claude-code', 'bin', IS_WIN ? 'claude.exe' : 'claude');
   const candidates = [cfg.path, ...inPath('claude'), path.join(home, '.local', 'bin', IS_WIN ? 'claude.exe' : 'claude'), ...npmPrefixes('claude').map(pkg)];
-  // 3.5: Orb Núcleo (the server, ORB_NUCLEO) brings the Agent SDK's own Claude Code for Linux: used when none is installed.
+  // 3.5: Orb Server (the server, ORB_NUCLEO) brings the Agent SDK's own Claude Code for Linux: used when none is installed.
   if (process.env.ORB_NUCLEO === '1' && !IS_WIN) candidates.push(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'node_modules', '@anthropic-ai', `claude-agent-sdk-${process.platform}-${process.arch}`, 'claude'));
   const cmd = firstFile(candidates);
   return cmd ? { cmd, pre: [] } : null;

@@ -42,7 +42,7 @@ Then Orb opens. What used to be in the wizard now appears where it is needed:
 - **Using Orb away from home** (Tailscale) is explained in **Magic Link** when you link a phone. Your reminders only
   ring while this PC is on.
 - To bring an Orb you already have on another computer: on the old one, **Settings › Data › Move** (or
-  `orb-nucleo mover exportar` on a server); on the new one, `orb-nucleo mover importar`.
+  `orb-server mover exportar` on a server); on the new one, `orb-server mover importar`.
 
 ## Who is at the PC
 
@@ -57,8 +57,8 @@ On a phone, the same is at the top of **More** (a phone belongs to one user: it 
 **Lock**).
 
 Five wrong PINs in a row block that PIN for a while, and the wait grows with each new mistake. The admin can reset a
-forgotten PIN (Settings › Magic Link › Users, or `orb-nucleo pin-reset <usuario>` on a server). On a server, `orb-nucleo usuarios`
-lists the users, `orb-nucleo usuario nuevo <nombre>` adds one and `orb-nucleo enlazar --usuario <nombre>` makes a QR for
+forgotten PIN (Settings › Magic Link › Users, or `orb-server pin-reset <usuario>` on a server). On a server, `orb-server usuarios`
+lists the users, `orb-server usuario nuevo <nombre>` adds one and `orb-server enlazar --usuario <nombre>` makes a QR for
 them.
 
 ## Settings › Magic Link › Users (admin)

@@ -1,10 +1,10 @@
-// 3.5, `npm run dist:servidor`: Orb Núcleo for the Linux server, made on the Windows PC. The server compiles nothing: it
-// only unpacks dist/orb-nucleo-<version>-linux-x64.tar.gz, which carries
-//   orb-nucleo-<version>/node/bin/node          the official Node 22 LTS for linux-x64 (checked against nodejs.org's SHA-256)
-//   orb-nucleo-<version>/src/…                  engine, core, agents, mcp, server and the built interface (renderer)
-//   orb-nucleo-<version>/node_modules/…         the production modules for linux-x64 (with the Agent SDK's Linux package)
-//   orb-nucleo-<version>/orb-nucleo             the launcher; orb-nucleo.service (systemd --user); INSTALAR.md; VERSION
-//   orb-nucleo-<version>/bin/orb                the terminal client (src/terminal), with the same Node
+// 3.5, `npm run dist:servidor`: Orb Server for the Linux server, made on the Windows PC. The server compiles nothing: it
+// only unpacks dist/orb-server-<version>-linux-x64.tar.gz, which carries
+//   orb-server-<version>/node/bin/node          the official Node 22 LTS for linux-x64 (checked against nodejs.org's SHA-256)
+//   orb-server-<version>/src/…                  engine, core, agents, mcp, server and the built interface (renderer)
+//   orb-server-<version>/node_modules/…         the production modules for linux-x64 (with the Agent SDK's Linux package)
+//   orb-server-<version>/orb-server             the launcher (and orb-nucleo, its old name); orb-nucleo.service (systemd --user); INSTALAR.md; VERSION
+//   orb-server-<version>/bin/orb                the terminal client (src/terminal), with the same Node
 // The tar is written here (ustar with pax names), so the Linux permissions (the executables) are exact on any PC.
 // Options: --skip-build (the interface is already built), --node <22.x.y>, --out <folder>, --keep (keep the staging folder).
 import fs from 'node:fs';
@@ -47,14 +47,14 @@ export function appFiles(root = ROOT) {
 // The package.json of the server: its name and version, and only the production modules it uses.
 export function serverPackage(pkg) {
   const deps = Object.fromEntries(Object.entries(pkg.dependencies ?? {}).filter(([k]) => !DEPS_EXCLUDE.includes(k)));
-  return { name: 'orb-nucleo', version: pkg.version, private: true, type: 'module', description: 'Orb Núcleo: el motor de Orb sin ventana, para el servidor.', engines: { node: '>=22.13' }, dependencies: deps };
+  return { name: 'orb-server', version: pkg.version, private: true, type: 'module', description: 'Orb Server: el motor de Orb sin ventana, para el servidor.', engines: { node: '>=22.13' }, dependencies: deps };
 }
 
 export const launcher = () => `#!/bin/sh
-# Orb Núcleo: arranca el motor de Orb con el Node que viene dentro (no hace falta instalar Node).
+# Orb Server: arranca el motor de Orb con el Node que viene dentro (no hace falta instalar Node).
 set -e
 DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
-exec "$DIR/node/bin/node" --max-old-space-size=512 "$DIR/src/server/orb-nucleo.mjs" "$@"
+exec "$DIR/node/bin/node" --max-old-space-size=512 "$DIR/src/server/orb-server.mjs" "$@"
 `;
 
 // 3.5: «orb», the terminal client (src/terminal/orb-cli.mjs), with the Node of the package.
@@ -67,12 +67,12 @@ exec "$DIR/node/bin/node" "$DIR/src/terminal/orb-cli.mjs" "$@"
 
 // systemd --user: always on, 1 GB of RAM at most, a little behind the rest of the server.
 export const serviceUnit = () => `[Unit]
-Description=Orb Núcleo (el motor de Orb, siempre encendido)
+Description=Orb Server (el motor de Orb, siempre encendido)
 StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-ExecStart=%h/orb-nucleo/current/orb-nucleo
+ExecStart=%h/orb-nucleo/current/orb-server
 Environment=ORB_HOME=%h/orb
 Restart=always
 RestartSec=5
@@ -87,7 +87,7 @@ NoNewPrivileges=true
 WantedBy=default.target
 `;
 
-export const installGuide = (version) => `# Orb Núcleo ${version} (servidor Linux)
+export const installGuide = (version) => `# Orb Server ${version} (servidor Linux)
 
 El motor de Orb sin ventana, siempre encendido. Trae su propio Node: en el servidor no se compila ni se instala nada más.
 
@@ -102,8 +102,8 @@ Copia este paquete por SSH, lo descomprime en \`~/orb-nucleo/${version}\`, apunt
 ## A mano, en el servidor
 
 \`\`\`
-mkdir -p ~/orb-nucleo && tar -xzf orb-nucleo-${version}-linux-x64.tar.gz -C ~/orb-nucleo
-mv ~/orb-nucleo/orb-nucleo-${version} ~/orb-nucleo/${version}
+mkdir -p ~/orb-nucleo && tar -xzf orb-server-${version}-linux-x64.tar.gz -C ~/orb-nucleo
+mv ~/orb-nucleo/orb-server-${version} ~/orb-nucleo/${version}
 ln -sfn ~/orb-nucleo/${version} ~/orb-nucleo/current
 mkdir -p ~/.config/systemd/user && cp ~/orb-nucleo/current/orb-nucleo.service ~/.config/systemd/user/
 systemctl --user daemon-reload && systemctl --user enable --now orb-nucleo
@@ -121,9 +121,9 @@ systemctl --user daemon-reload && systemctl --user enable --now orb-nucleo
 
 ## Enlazar un móvil, otro Orb o una terminal (sin pantalla)
 
-- \`~/orb-nucleo/current/orb-nucleo enlazar\` dibuja el QR en la terminal y da el código corto y la dirección.
+- \`~/orb-nucleo/current/orb-server enlazar\` dibuja el QR en la terminal y da el código corto y la dirección.
 - Orb en la terminal: \`~/orb-nucleo/current/bin/orb\` (a mano siempre con \`ln -sfn ~/orb-nucleo/current/bin/orb ~/.local/bin/orb\`).
-- Comprobación rápida (con el servicio parado): \`~/orb-nucleo/current/orb-nucleo estado\`
+- Comprobación rápida (con el servicio parado): \`~/orb-nucleo/current/orb-server estado\`
 
 Tus datos están en \`~/orb\`. Las copias de antes de cada actualización, en \`~/orb-nucleo/copias\`.
 `;
@@ -252,11 +252,13 @@ export function installModules(stage, pkg) {
 }
 
 // Everything that goes in the tar, under top/.
-export function manifest({ root = ROOT, version, top = `orb-nucleo-${version}`, modules = null, node = null }) {
+export function manifest({ root = ROOT, version, top = `orb-server-${version}`, modules = null, node = null }) {
   const entries = [{ name: top, dir: true }];
   for (const [rel, abs] of appFiles(root)) entries.push({ name: `${top}/${rel}`, file: abs, mode: 0o644 });
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   entries.push({ name: `${top}/package.json`, data: Buffer.from(JSON.stringify(serverPackage(pkg), null, 2)), mode: 0o644 });
+  entries.push({ name: `${top}/orb-server`, data: Buffer.from(launcher()), mode: 0o755 });
+  // 3.7: its old name, so what an older install runs (the systemd unit, aliases) still works.
   entries.push({ name: `${top}/orb-nucleo`, data: Buffer.from(launcher()), mode: 0o755 });
   entries.push({ name: `${top}/bin`, dir: true });
   entries.push({ name: `${top}/bin/orb`, data: Buffer.from(terminalLauncher()), mode: 0o755 });
@@ -298,7 +300,7 @@ async function main() {
   const version = pkg.version;
   const outDir = path.resolve(opt('--out') ?? path.join(ROOT, 'dist'));
   const started = Date.now();
-  console.log(`Orb Núcleo ${version} para linux-x64`);
+  console.log(`Orb Server ${version} para linux-x64`);
   if (!args.includes('--skip-build')) {
     console.log('1/4 interfaz (vite build)');
     run(process.execPath, [path.join(ROOT, 'node_modules', 'vite', 'bin', 'vite.js'), 'build', '--logLevel', 'warn'], { cwd: ROOT });
@@ -313,7 +315,7 @@ async function main() {
   fs.rmSync(stage, { recursive: true, force: true });
   installModules(stage, pkg);
   console.log('4/4 paquete');
-  const out = path.join(outDir, `orb-nucleo-${version}-linux-x64.tar.gz`);
+  const out = path.join(outDir, `orb-server-${version}-linux-x64.tar.gz`);
   const entries = manifest({ version, modules: path.join(stage, 'node_modules'), node });
   await writeTarGz(out, entries);
   if (!args.includes('--keep')) fs.rmSync(stage, { recursive: true, force: true });

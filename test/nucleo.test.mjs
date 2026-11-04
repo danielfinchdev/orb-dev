@@ -1,4 +1,4 @@
-// 3.5, Orb Núcleo: the engine without Electron (src/server/host.mjs) as the server's «centro», its packaging
+// 3.5, Orb Server: the engine without Electron (src/server/host.mjs) as the server's «centro», its packaging
 // (scripts/dist-servidor.mjs, without downloading Node) and the SSH installer in simulation (scripts/instalar-servidor.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,7 +12,7 @@ import { createHost, prepareHome } from '../src/server/host.mjs';
 import { manifest, appFiles, serverPackage, serviceUnit, launcher, writeTarGz, readTarGz } from '../scripts/dist-servidor.mjs';
 import { plan, remoteScript, explain } from '../scripts/instalar-servidor.mjs';
 
-test('Orb Núcleo arranca el motor sin ventana como centro, se reinicia si se cae y se cierra limpio', async () => {
+test('Orb Server arranca el motor sin ventana como centro, se reinicia si se cae y se cierra limpio', async () => {
   const port = 20000 + Math.floor(Math.random() * 20000);
   const t = tempHome({ mobile: { port } });
   const home = prepareHome(t.home, { profile: 'centro' });
@@ -71,7 +71,7 @@ test('el motor de la app lo hace todo sin papel y prepareHome crea la carpeta de
     await assert.doesNotReject(e.call('expert.status', {}).catch((error) => { if (/servidor/.test(error.message)) throw error; }));
     await assert.rejects(e.call('config.save', { patch: { role: 'raro' } }), /role/);
   } finally { await e.stop(); }
-  // The role chosen by the user stays when Orb Núcleo starts that folder again; a folder without one becomes «centro».
+  // The role chosen by the user stays when Orb Server starts that folder again; a folder without one becomes «centro».
   assert.equal(prepareHome(t.home), t.home);
   assert.equal(JSON.parse(fs.readFileSync(path.join(t.home, 'orb.json'), 'utf8')).role, 'centro');
   prepareHome(t.home, { profile: 'todo' });
@@ -90,19 +90,19 @@ test('el motor de la app lo hace todo sin papel y prepareHome crea la carpeta de
 
 test('el paquete del servidor lleva el motor y la interfaz compilada, nunca src/ui ni la app de Electron', () => {
   const files = appFiles(ROOT).map(([rel]) => rel);
-  for (const must of ['src/engine/engine.mjs', 'src/core/home.mjs', 'src/agents/claude.mjs', 'src/mcp/server.mjs', 'src/server/host.mjs', 'src/server/orb-nucleo.mjs', 'src/renderer/index.html']) assert.ok(files.includes(must), must);
+  for (const must of ['src/engine/engine.mjs', 'src/core/home.mjs', 'src/agents/claude.mjs', 'src/mcp/server.mjs', 'src/server/host.mjs', 'src/server/orb-server.mjs', 'src/server/orb-nucleo.mjs', 'src/renderer/index.html']) assert.ok(files.includes(must), must);
   assert.ok(!files.some((f) => f.startsWith('src/ui/') || f.startsWith('src/main/')), 'ni fuentes de la interfaz ni Electron');
   const entries = manifest({ root: ROOT, version: '9.9.9' });
   const names = entries.map((e) => e.name);
-  for (const must of ['orb-nucleo', 'orb-nucleo.service', 'INSTALAR.md', 'package.json', 'VERSION']) assert.ok(names.includes(`orb-nucleo-9.9.9/${must}`), must);
-  assert.ok(names.every((n) => n.startsWith('orb-nucleo-9.9.9')));
-  assert.equal(entries.find((e) => e.name.endsWith('/orb-nucleo')).mode, 0o755);
+  for (const must of ['orb-server', 'orb-nucleo', 'orb-nucleo.service', 'INSTALAR.md', 'package.json', 'VERSION']) assert.ok(names.includes(`orb-server-9.9.9/${must}`), must);
+  assert.ok(names.every((n) => n.startsWith('orb-server-9.9.9')));
+  for (const bin of ['/orb-server', '/orb-nucleo']) assert.equal(entries.find((e) => e.name.endsWith(bin)).mode, 0o755, bin);
   const pkg = serverPackage(JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')));
   assert.ok(pkg.dependencies['@anthropic-ai/claude-agent-sdk']);
   assert.ok(!pkg.dependencies['electron-updater'] && !pkg.devDependencies, 'sin el actualizador de la app ni dependencias de desarrollo');
   const unit = serviceUnit();
-  for (const line of ['Restart=always', 'MemoryMax=1G', 'Nice=5', 'KillMode=mixed', 'ExecStart=%h/orb-nucleo/current/orb-nucleo']) assert.ok(unit.includes(line), line);
-  assert.match(launcher(), /node\/bin\/node.*src\/server\/orb-nucleo\.mjs/);
+  for (const line of ['Restart=always', 'MemoryMax=1G', 'Nice=5', 'KillMode=mixed', 'ExecStart=%h/orb-nucleo/current/orb-server']) assert.ok(unit.includes(line), line);
+  assert.match(launcher(), /node\/bin\/node.*src\/server\/orb-server\.mjs/);
 });
 
 test('el tar del servidor guarda los permisos de Linux y los nombres largos', async () => {
@@ -124,7 +124,7 @@ test('el tar del servidor guarda los permisos de Linux y los nombres largos', as
 });
 
 test('el instalador por SSH, en simulación: sin preguntas, copia antes de actualizar y linger solo con sudo -n', () => {
-  const steps = plan({ host: 'mi-servidor', version: '3.5.0', tarball: 'C:\\x\\orb-nucleo-3.5.0-linux-x64.tar.gz' });
+  const steps = plan({ host: 'mi-servidor', version: '3.5.0', tarball: 'C:\\x\\orb-server-3.5.0-linux-x64.tar.gz' });
   assert.equal(steps.length, 3);
   for (const s of steps) assert.ok(s.args.includes('BatchMode=yes'), `${s.what}: BatchMode`);
   const script = steps[2].input;

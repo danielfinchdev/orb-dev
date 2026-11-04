@@ -1,7 +1,7 @@
-// 3.5, Orb Núcleo: the engine without Electron and without a window, for the always-on server (role «centro»). It does in
+// 3.5, Orb Server: the engine without Electron and without a window, for the always-on server (role «centro»). It does in
 // plain Node what src/main/main.mjs does with Electron: prepares the Orb folder, starts src/engine/engine.mjs in its own
 // process (child_process.fork), relays calls to it and starts it again when it falls (with a growing wait). Nothing here
-// is Windows-only; the CLI is src/server/orb-nucleo.mjs and systemd runs it on Linux (scripts/dist-servidor.mjs).
+// is Windows-only; the CLI is src/server/orb-server.mjs (orb-nucleo.mjs: its old name) and systemd runs it on Linux (scripts/dist-servidor.mjs).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -43,7 +43,7 @@ export function prepareHome(dir, { profile = null } = {}) {
   return home;
 }
 
-// 3.6: before a new version of Orb Núcleo touches the data (its engine may migrate the database), a backup of what the
+// 3.6: before a new version of Orb Server touches the data (its engine may migrate the database), a backup of what the
 // old one left: the version that ran last is kept in .orb/datos/nucleo-version; a different one (or none, with a
 // database already there: an Orb from before 3.6) makes a «preupdate» copy first. A failed copy is logged, never fatal.
 export async function backupOnUpgrade(home, version, log = () => {}) {
@@ -130,9 +130,9 @@ export function createHost({ home, version = packageVersion(), engine = ENGINE, 
     return ready;
   };
 
-  host.start = async () => { stopping = false; log(`Orb Núcleo ${version}: arrancando el motor en ${home}`); if (preUpdateBackup) await backupOnUpgrade(home, version, log); return spawnEngine(); };
+  host.start = async () => { stopping = false; log(`Orb Server ${version}: arrancando el motor en ${home}`); if (preUpdateBackup) await backupOnUpgrade(home, version, log); return spawnEngine(); };
   // Waits for the engine (also while it is being started again) and calls it.
-  // 3.6: as: 'control' (Orb Núcleo's own commands and local socket: the owner, who is on the server itself).
+  // 3.6: as: 'control' (Orb Server's own commands and local socket: the owner, who is on the server itself).
   host.call = async (method, params = {}, { as = null } = {}) => {
     if (!child) throw new Error('el motor no está en marcha');
     await ready;

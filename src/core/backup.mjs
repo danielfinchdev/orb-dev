@@ -1,5 +1,5 @@
 // 3.6: encrypted backups of an Orb (.orbbak), their check, their restore and their retention. No engine imports: the
-// engine (backup.* calls and the 03:00 copy), Orb Núcleo (orb-nucleo copia …, the copy before an update) and the tests use
+// engine (backup.* calls and the 03:00 copy), Orb Server (orb-server copia …, the copy before an update) and the tests use
 // it directly.
 //
 // File format (.orbbak, format 1):
@@ -405,7 +405,7 @@ function unitOf(name) {
   return i > 0 ? s.slice(0, i + 1).join('/') : s.slice(0, Math.min(2, s.length - 1)).join('/');
 }
 
-// Called by the engine (and Orb Núcleo) before the database is opened: a restore that is ready replaces what it holds;
+// Called by the engine (and Orb Server) before the database is opened: a restore that is ready replaces what it holds;
 // what was there before goes to .orb/antes-de-restaurar-<fecha>. → null, or { from, header, secretChanged }.
 export function applyPendingRestore(home) {
   const ready = pendingDir(home);

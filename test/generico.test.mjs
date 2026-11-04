@@ -163,7 +163,7 @@ test('Orb para programar: el modo Orb del móvil va al Orb que programa, o al el
   assert.ok(!(await names()).includes('del-portatil'), 'de vuelta aquí');
 });
 
-test('Orb Núcleo: el primer dispositivo de «orb-nucleo enlazar» puede administrar, el resto no; sin ventana no hay God mode', async () => {
+test('Orb Server: el primer dispositivo de «orb-server enlazar» puede administrar, el resto no; sin ventana no hay God mode', async () => {
   const p2 = port + 7;
   const t = tempHome({ role: 'centro', mobile: { enabled: true, port: p2, name: 'Servidor' } });
   const e = await startEngine(t.home, { env: { ...env, ORB_NUCLEO: '1' } });

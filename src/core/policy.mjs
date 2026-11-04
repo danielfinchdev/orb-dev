@@ -50,9 +50,9 @@ export const CONSOLE_SET = new Set([...ORB_SET, 'link.qr', 'link.devices', 'link
 export const CENTRO_PHONE = new Set(['agents.login', 'agents.loginCode', 'agents.loginCancel', 'agents.loginState']);
 // What the centre may forward to its workshop (the same work a phone may do there).
 export const FORWARD_SET = PHONE_SET;
-// Orb Núcleo's control socket (src/server/control.mjs).
+// Orb Server's control socket (src/server/control.mjs).
 export const CONTROL_SET = new Set(['link.qr', 'link.devices', 'link.status', 'link.revoke', 'app.state',
-  // WS5: orb-nucleo copia … / mover exportar (src/server/control.mjs › CONTROL_METHODS)
+  // WS5: orb-server copia … / mover exportar (src/server/control.mjs › CONTROL_METHODS)
   'backup.status', 'backup.list', 'backup.now', 'backup.verify', 'backup.restore', 'backup.recovery', 'data.moveExport', 'data.moveStatus', 'data.moveUndo', 'data.moveKeepBoth']);
 // '*': no ceiling; null: nothing (an agent's tool process uses authz.can / scopeSql directly, never the API).
 export const CEILING = { desktop: '*', system: '*', phone: PHONE_SET, browser: PHONE_SET, terminal: PHONE_SET, orb: ORB_SET, forward: FORWARD_SET, control: CONTROL_SET, agent: null };
@@ -297,7 +297,7 @@ const GATEWAY = {
 // What a phone, a browser, a terminal or another Orb may also call: who it is for (persons.me, the names to share with)
 // and the PIN check that gives a strong ticket for sensitive cards (bound to that device).
 for (const set of [PHONE_SET, ORB_SET, CONSOLE_SET]) for (const m of ['persons.me', 'persons.list', 'persons.verifyPin']) set.add(m);
-// Orb Núcleo's local socket: the people of the server and their PINs (orb-nucleo personas, persona nueva, pin-reset,
+// Orb Server's local socket: the people of the server and their PINs (orb-server personas, persona nueva, pin-reset,
 // enlazar --persona).
 for (const m of ['persons.list', 'persons.create', 'persons.setPin', 'persons.overview']) CONTROL_SET.add(m);
 // ======== WS3 · Orb mode + accounts: append entries here.

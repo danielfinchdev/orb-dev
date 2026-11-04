@@ -58,7 +58,7 @@ export function phoneConfig(c) {
 
 // What a phone may call (ALLOWED): src/core/policy.mjs PHONE_SET (3.6: the ceiling of phones, browsers and terminals).
 // 3.5: a device the user marked «Puede administrar» (Ajustes › Magic Link › Dispositivos enlazados) manages this Orb's
-// bots and links from afar (a server without a window needs one; `orb-nucleo enlazar` gives it to the first device it
+// bots and links from afar (a server without a window needs one; `orb-server enlazar` gives it to the first device it
 // links). Never by the kind a device says it is, and still nothing with total access.
 // The bots of a centre are the user's: their own Orb linked to it (a device of kind «orb») manages them too.
 // 3.6: the lists live in src/core/policy.mjs (the ceilings of each channel); these names stay for the rest of the code.
@@ -90,7 +90,7 @@ const EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'notice', 'se
   'bot.updated', 'bot.message', 'bot.state',
   // 3.6 (messaging lists): a chat list changed (only to its person)
   'inbox:changed']);
-// 3.5 «Solo Orb»: the server (Orb Núcleo, without a window) has no screen of its own, so a linked phone signs its agents in: it gets the
+// 3.5 «Solo Orb»: the server (Orb Server, without a window) has no screen of its own, so a linked phone signs its agents in: it gets the
 // link and the code, and pastes Claude's code back. On a PC the sign-in stays on the PC.
 // (CENTRO_PHONE, in src/core/policy.mjs)
 // 3.5: what a phone may also ask: the links' state and its workshop through the centre (taller.*).
@@ -649,7 +649,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const id = crypto.randomUUID();
     const name = oneLine(typeof proof.name === 'string' && proof.name ? proof.name : tr(kind === 'orb' ? 'msg.link.defaultOrb' : 'msg.remote.defaultName'), 60);
     const peerRole = kind === 'orb' && ROLES.includes(proof.role) ? proof.role : null;
-    // «Puede administrar»: asked by whoever made the QR (true: the PC, `orb-nucleo enlazar --admin` on the server itself or
+    // «Puede administrar»: asked by whoever made the QR (true: the PC, `orb-server enlazar --admin` on the server itself or
     // a device that administers), or 'first': the first device of a server without a window gets it.
     const admin = askedAdmin === true || (askedAdmin === 'first' && !board.one('SELECT id FROM devices WHERE admin = 1 AND public_key IS NOT NULL'));
     const meta = { ...(kind === 'orb' ? { host: oneLine(String(proof.host ?? ''), 80) || null, macs: (Array.isArray(proof.macs) ? proof.macs : []).map(normalMac).filter(Boolean).slice(0, 8), version: proof.version ? oneLine(String(proof.version), 40) : null } : {}), v: Number(proof.v ?? 2) || 2 };

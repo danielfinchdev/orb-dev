@@ -16,7 +16,7 @@ export const AGENT_LABELS = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor'
 
 // 3.5: the role of this Orb (orb.json «role»), chosen by the user in Ajustes › Magic Link on any Orb: «todo» (centre and
 // workshop at once: the default of a PC on its own, also when the key is missing), «centro» (always on: keeps the bots) or
-// «taller» (programs and builds). Orb Núcleo (src/server/host.mjs) starts a new folder as «centro»; whether there is a
+// «taller» (programs and builds). Orb Server (src/server/host.mjs) starts a new folder as «centro»; whether there is a
 // window or not is a different thing (ctx.headless), never the role.
 export const ROLES = ['todo', 'centro', 'taller'];
 export const hostsBots = (role) => role !== 'taller'; // «centro» and «todo» keep bots for the Orbs linked with them
@@ -273,7 +273,7 @@ export function loadConfig(home) {
     config.version = 5;
   }
   // 3.5: an Orb without a role (every folder before 3.5) is «todo» (context.mjs › role()): centre and workshop at once,
-  // nothing to set up; Orb Núcleo writes «centro» in a folder without one (src/server/host.mjs). A value Orb does not know
+  // nothing to set up; Orb Server writes «centro» in a folder without one (src/server/host.mjs). A value Orb does not know
   // is dropped (so it is «todo» too).
   if (config.role !== undefined && !ROLES.includes(config.role)) delete config.role;
   // Folders made by older versions: agents added later get their default account and their place in the order.
@@ -295,7 +295,7 @@ export function readKey(home) {
   const file = paths(home).key;
   try {
     const key = fs.readFileSync(file);
-    // 3.5: on Linux (Orb Núcleo) this file is the secret itself: readable by its owner only, also when copied from elsewhere.
+    // 3.5: on Linux (Orb Server) this file is the secret itself: readable by its owner only, also when copied from elsewhere.
     if (key.length >= 32) { if (process.platform !== 'win32') { try { if ((fs.statSync(file).mode & 0o077) !== 0) fs.chmodSync(file, 0o600); } catch { /* best effort */ } } return key; }
   } catch { /* created below */ }
   const key = crypto.randomBytes(32);

@@ -201,7 +201,7 @@ export default {
   'datos.restoreReady': 'Copia comprobada. Reinicia Orb para usarla.',
   'datos.moveCardTitle': 'Mover este Orb a otro PC',
   'datos.movedAway': 'Este Orb se ha movido a otro PC y ya no se usa aquí.',
-  'datos.moveImportNote': 'En el PC nuevo, impórtalo con «orb-nucleo mover importar».',
+  'datos.moveImportNote': 'En el PC nuevo, impórtalo con «orb-server mover importar».',
   'datos.moveTitle': 'Mover a otro PC',
   'datos.moveBody': 'Al terminar, este Orb deja de funcionar aquí hasta que lo deshagas. Los dispositivos enlazados siguen con el Orb nuevo.',
   'datos.moveGo': 'Preparar el archivo',

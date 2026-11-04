@@ -1,4 +1,4 @@
-// 3.6 «Personas» (WS1, núcleo): personas, PIN y permisos.
+// 3.6 «Personas» (WS1, base): personas, PIN y permisos.
 export default {
   'msg.persons.ownerName': 'Admin',
   'msg.persons.needName': 'Escribe un nombre.',

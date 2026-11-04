@@ -15,7 +15,7 @@ export function linkMethods({ board, emit, remoteRef }) {
     return d.id;
   };
   const minePeer = (p, who) => (p.person ?? owner()) === who.person;
-  // «¿Para quién?»: a person by id or by name (Orb Núcleo's `enlazar --persona <nombre>`).
+  // «¿Para quién?»: a person by id or by name (Orb Server's `enlazar --persona <nombre>`).
   const personFor = (ref) => {
     const q = String(ref).trim().toLowerCase();
     const p = listPersons(board).find((x) => x.id === ref || x.name.toLowerCase() === q);
@@ -48,10 +48,10 @@ export function linkMethods({ board, emit, remoteRef }) {
     'remote.revoke': ({ id }) => remoteRef.current.revoke(str(id, 'dispositivo', 64)),
     // ---- 3.5 Magic Link (PC only; a phone may ask link.status and taller.* through remote.mjs)
     // A QR (and a short code) to link a phone, a browser or another Orb. Turns the access on if it was off.
-    // admin: (Orb Núcleo's «orb-nucleo enlazar») the device that uses it may administer this server, if it is the first.
+    // admin: (Orb Server's «orb-server enlazar») the device that uses it may administer this server, if it is the first.
     // 3.5.1: device: what it is for (phone, browser, orb, terminal), chosen here, never by the device; approve: it may
     // answer the bots' cards (default yes); dev: an Orb that may program for this one; admin: true (the owner gives it) or
-    // 'first' (`orb-nucleo enlazar`: only while no device administers this server).
+    // 'first' (`orb-server enlazar`: only while no device administers this server).
     // 3.6: person (id or name): whom the device is for; newPerson: a name, for someone new (the owner makes them now).
     // Everyone makes QRs for themselves; for someone else, and «Puede administrar», only the owner (and admin only for a
     // device of the owner).

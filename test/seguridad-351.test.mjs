@@ -290,7 +290,7 @@ test('avisos: por defecto los de los bots no muestran el texto en la pantalla de
   assert.equal(phoneConfig(cfg('none')).mobile.preview, 'none', 'la app lo sabe');
 });
 
-test('Orb Núcleo: desde el propio servidor se ven y se quitan dispositivos, y se recupera la administración', async () => {
+test('Orb Server: desde el propio servidor se ven y se quitan dispositivos, y se recupera la administración', async () => {
   assert.ok(CONTROL_METHODS.has('link.revoke') && CONTROL_METHODS.has('link.devices'));
   const list = [{ id: 'a1b2c3d4-0000-0000-0000-000000000001', name: 'Móvil' }, { id: 'a1b2ffff-0000-0000-0000-000000000002', name: 'Tablet' }];
   assert.equal(pickDevice(list, 'a1b2c3').device.name, 'Móvil');

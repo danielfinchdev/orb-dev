@@ -1,5 +1,5 @@
-// 3.5, Orb Núcleo: a local door into the running engine for the commands of the same user on the same machine
-// («orb-nucleo enlazar» while systemd runs the server). A Unix socket in <home>/.orb (0600) or, on Windows, a named pipe.
+// 3.5, Orb Server: a local door into the running engine for the commands of the same user on the same machine
+// («orb-server enlazar» while systemd runs the server). A Unix socket in <home>/.orb (0600) or, on Windows, a named pipe.
 // One JSON per line: { id, method, params } → { id, ok, result | error }. Only a short list of methods: making a link
 // code and seeing the devices; everything else stays with the engine's own interfaces.
 import fs from 'node:fs';
@@ -7,15 +7,15 @@ import net from 'node:net';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
-// 3.5.1: also closing a device's link (orb-nucleo quitar): whoever is on the server itself is its owner, so a lost or
+// 3.5.1: also closing a device's link (orb-server quitar): whoever is on the server itself is its owner, so a lost or
 // stolen phone that administers it can be taken out from here.
-// 3.6: backups and moving the Orb (orb-nucleo copia … / mover exportar) while the service runs.
+// 3.6: backups and moving the Orb (orb-server copia … / mover exportar) while the service runs.
 export const CONTROL_METHODS = new Set(['link.qr', 'link.devices', 'link.status', 'link.revoke', 'app.state',
   'backup.status', 'backup.list', 'backup.now', 'backup.verify', 'backup.restore', 'backup.recovery', 'data.moveExport', 'data.moveStatus', 'data.moveUndo', 'data.moveKeepBoth',
-  // 3.6 (WS2): orb-nucleo personas / persona nueva / pin-reset / enlazar --persona
+  // 3.6 (WS2): orb-server personas / persona nueva / pin-reset / enlazar --persona
   'persons.list', 'persons.create', 'persons.setPin', 'persons.overview']);
 
-// 3.5.1 (orb-nucleo quitar): the device named by its id (or the start of it, 4+ characters) or its exact name.
+// 3.5.1 (orb-server quitar): the device named by its id (or the start of it, 4+ characters) or its exact name.
 export function pickDevice(list, target) {
   const q = String(target ?? '').trim().toLowerCase();
   if (!q) return { error: 'none' };
@@ -63,7 +63,7 @@ export function serveControl({ home, call, log = () => {} }) {
   return { where, ready, close: () => new Promise((r) => { server.close(() => r()); if (process.platform !== 'win32') { try { fs.unlinkSync(where); } catch { /* gone */ } } }) };
 }
 
-// A call to the running Orb Núcleo of this home. Rejects with { code: 'ENOENT' | 'ECONNREFUSED' } when it is not running.
+// A call to the running Orb Server of this home. Rejects with { code: 'ENOENT' | 'ECONNREFUSED' } when it is not running.
 export function controlCall(home, method, params = {}, { timeoutMs = 15_000 } = {}) {
   return new Promise((resolve, reject) => {
     const sock = net.connect(controlPath(home));

@@ -593,7 +593,7 @@ app open. On iPhone they work with Orb added to the home screen.
   `link.peers`, `link.disconnect`. The keys are in `.orb/datos/enlaces.json`, sealed with a key derived from the app
   secret. Live feed with reconnection (1 s … 30 s) and address switching if one does not answer.
 - **Roles** (`orb.json › role`, chosen by the user in Settings › Magic Link on any Orb): `todo` (hub and workshop at
-  once; the default when unset), `centro` (keeps the bots) or `taller` (codes). Orb Núcleo (Orb Core) writes `centro`
+  once; the default when unset), `centro` (keeps the bots) or `taller` (codes). Orb Server writes `centro`
   only if the folder has no role (`--papel` changes it on purpose). What a windowless server lacks (God mode, expert
   view, Opti, isolated copies, console) depends on `ctx.headless` (`ORB_NUCLEO=1`), never on the role. A coding Orb
   linked to a bot-keeping one tells it who it is on connect (`POST /api/link`, `op: 'hello'`, with its MACs for
@@ -604,8 +604,8 @@ app open. On iPhone they work with Orb added to the home screen.
   and terminals goes. If unset, to this Orb if it codes; otherwise, to the linked Orb that codes. When it goes to another
   one, the engine forwards only the Orb mode calls (`devForwards`: what is in `ALLOWED` minus `bots.*` and `app.state`).
 - **Can administer** (`devices.admin`, `link.setAdmin`): a marked device manages bots and links from outside
-  (`CONSOLE_ALLOWED`); being a browser is not enough. `link.qr({ admin: 'first' })` (used by `orb-nucleo enlazar`) only
-  grants it on a windowless server and to the first one; `link.qr({ admin: true })` (`orb-nucleo enlazar --admin`, run on
+  (`CONSOLE_ALLOWED`); being a browser is not enough. `link.qr({ admin: 'first' })` (used by `orb-server enlazar`) only
+  grants it on a windowless server and to the first one; `link.qr({ admin: true })` (`orb-server enlazar --admin`, run on
   the server itself) grants it anyway, to replace a lost device. A device's `app.state` carries
   `access: { admin, bots, links, approve }`.
 - **Rights chosen when making the QR (3.5.1):** `link.qr({ device, approve, dev })`: what the code is for (`phone`,
@@ -677,7 +677,7 @@ launched hidden, with its output read by Orb, and it stores the session in the a
   `console: true` opens the old console (Windows only, "Open console" button). Cursor and the ACP agents keep their
   console.
 - On the hub (server), `agents.login` is no longer blocked and the linked phone can use those four methods
-  (`CENTRO_PHONE` in `remote.mjs`). From the terminal: `orb-nucleo entrar claude|codex|<account>`.
+  (`CENTRO_PHONE` in `remote.mjs`). From the terminal: `orb-server entrar claude|codex|<account>`.
 - Installing or updating from Agents (`agents.install`, `agents.installState`, `agents:install` events): Claude with its
   native installer (`install.ps1` / `install.sh`, into `~/.local/bin`) and Codex with
   `npm install -g @openai/codex@latest` (on Windows, the user's npm folder; on Linux and macOS, `--prefix ~/.local`). It
@@ -949,7 +949,7 @@ shared with them. With a single user all of it is hidden and Orb behaves as 3.5.
   Android's BiometricPrompt) and schedules the next 48 h of reminders as local notifications
   (`src/ui/lib/reminder-notes.js`).
 
-**Inside.** Every entry point (window, linked device, workshop link, Orb Núcleo's socket, agents' tools) builds a
+**Inside.** Every entry point (window, linked device, workshop link, Orb Server's socket, agents' tools) builds a
 principal; `api.call` authorizes it before the method runs. A row without `person_id` is the owner's, so data from
 before 3.6 needs nothing. Tests: `personas-modelo`, `authz`, `migracion-36`, `personas-superficies`, `enlace-36`,
 `personas-orb`, `prestamos`, `copias`, `exportar-borrar`, `mover-orb`, `zona-horaria`, `plantillas`, `android-36`,

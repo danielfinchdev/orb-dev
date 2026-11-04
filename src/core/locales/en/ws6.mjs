@@ -193,7 +193,7 @@ export default {
   'datos.restoreReady': 'Backup checked. Restart Orb to use it.',
   'datos.moveCardTitle': 'Move this Orb to another PC',
   'datos.movedAway': 'This Orb has moved to another PC and is no longer used here.',
-  'datos.moveImportNote': 'On the new PC, import it with "orb-nucleo mover importar".',
+  'datos.moveImportNote': 'On the new PC, import it with "orb-server mover importar".',
   'datos.moveTitle': 'Move to another PC',
   'datos.moveBody': 'When it finishes, this Orb stops working here until you undo it. Linked devices go on with the new Orb.',
   'datos.moveGo': 'Prepare the file',

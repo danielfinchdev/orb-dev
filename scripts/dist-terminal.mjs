@@ -26,7 +26,7 @@ export const readme = (version) => `# Orb en la terminal ${version}
 
 Habla con tu Orb desde cualquier terminal (Windows Terminal, PowerShell, Linux, macOS). Necesita Node 22 o más nuevo.
 
-1. En tu Orb: Ajustes › Magic Link › «Enlazar dispositivo» (en un servidor sin pantalla: \`orb-nucleo enlazar\`).
+1. En tu Orb: Ajustes › Magic Link › «Enlazar dispositivo» (en un servidor sin pantalla: \`orb-server enlazar\`).
 2. Aquí: \`bin/orb enlazar <código> <dirección>\` (en Windows, \`bin\\orb.cmd\`).
 3. \`bin/orb\` abre el chat; \`bin/orb "mensaje"\` manda uno y escribe la respuesta; \`bin/orb ayuda\` lo cuenta todo.
 

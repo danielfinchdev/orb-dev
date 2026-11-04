@@ -174,8 +174,8 @@ console only on this PC, for the owner). Another person spends it only through a
   caller has no right on.
 - **This PC's window.** `api.desktop = { person, locked }`. `persons.lock` / `persons.unlock { id?, pin }` /
   `app.lockState`; while locked, `engine.mjs` refuses every call of the window but those (and a minimal `app.state`).
-- **Orb Núcleo.** `host.call(method, params, { as: 'control' })` runs as the owner on the control channel (ceiling
-  `CONTROL_SET`, with `persons.list/create/setPin/overview`). Commands: `orb-nucleo usuarios`, `usuario nuevo <nombre>`,
+- **Orb Server.** `host.call(method, params, { as: 'control' })` runs as the owner on the control channel (ceiling
+  `CONTROL_SET`, with `persons.list/create/setPin/overview`). Commands: `orb-server usuarios`, `usuario nuevo <nombre>`,
   `pin-reset <usuario>`, `enlazar --usuario <nombre> [--admin]` (the older `personas`, `persona nueva` and `--persona`
   still work).
 - **Backups of a linked Orb.** Link op `backup.put` (`link.putBackup(id, file)` sends 1.5 MB pieces): only from a

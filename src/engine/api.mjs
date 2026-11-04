@@ -49,7 +49,7 @@ import { dataApi, MOVED_OK } from './api-data.mjs';
 import { inboxMethods } from './api-inbox.mjs';
 
 export { fail, str, int, oneOf } from './api-common.mjs';
-// 3.5: what a server without a window (Orb Núcleo) does not do, whatever its role: the PC's development tools (God mode and expert view,
+// 3.5: what a server without a window (Orb Server) does not do, whatever its role: the PC's development tools (God mode and expert view,
 // Opti Bot, which is all Windows, and opening Remote Desktop or a console). Conversations, tasks, schedules, the phone
 // access and the MCP servers stay.
 // 3.5: the agents' sign-in no longer needs a console (agents.login gives the link and code), so it works on the server too.
@@ -818,7 +818,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     // 3.6: the method names (the policy test checks each one has its rule) and this PC's window's principal.
     methodNames: () => Object.keys(methods),
     desktopPrincipal,
-    // 3.6 (WS2): the window's state (who sits there, locked), Orb Núcleo's local socket (the owner, who is on the server
+    // 3.6 (WS2): the window's state (who sits there, locked), Orb Server's local socket (the owner, who is on the server
     // itself: no PIN asked) and what a locked window may see.
     desktop,
     controlPrincipal: () => principalOf(board, { control: true, strongUntil: Date.now() + 60_000 }),

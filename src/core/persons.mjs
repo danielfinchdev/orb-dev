@@ -104,7 +104,7 @@ export function removePerson(board, id) {
 // ---- PIN
 const checkPinFormat = (pin) => { if (typeof pin !== 'string' || !/^\d{4,12}$/.test(pin)) throw bad('msg.persons.badPin'); return pin; };
 const hashPin = (pin, salt) => crypto.scryptSync(pin, Buffer.from(salt, 'hex'), 32, SCRYPT).toString('hex');
-// pin null: no PIN any more (the owner's reset, orb-nucleo pin-reset).
+// pin null: no PIN any more (the owner's reset, orb-server pin-reset).
 export function setPin(board, id, pin) {
   const p = mustPerson(board, id);
   if (pin == null || pin === '') { board.run('UPDATE persons SET pin_hash = NULL, pin_salt = NULL, pin_fails = 0, pin_locked_until = NULL WHERE id = ?', p.id); return { hasPin: false }; }

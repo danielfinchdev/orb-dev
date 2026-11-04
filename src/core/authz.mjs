@@ -42,7 +42,7 @@ const roleOf = (board, person) => {
 // ---- principals
 // { person, role, channel, device?, rights: { approve, dev, admin }, strongUntil?, via?, remote?, confirmed?, ceiling? }
 // desktop: this PC's window (person: who sits there; the owner by default). device: a row of devices (a linked phone,
-// browser, terminal or Orb). forwarded: a call the centre passed to this workshop. control: Orb Núcleo's socket.
+// browser, terminal or Orb). forwarded: a call the centre passed to this workshop. control: Orb Server's socket.
 // agentToken: an agent's tool process ({ agent, task, conversation, bot, person }). system: the engine itself.
 // ceiling: a Set given by an entry point that already knows the device's (remote.mjs allowedFor).
 export function principalOf(board, { device = null, desktop = false, person = null, forwarded = false, control = false, agentToken = null, system = false, ceiling = null, strongUntil = null, via = null } = {}) {

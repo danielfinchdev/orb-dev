@@ -1,5 +1,5 @@
 // 3.6 "People" (WS2, the gateway): each person's devices and links, versions, the window's lock, the terminal and Orb
-// Núcleo.
+// Server.
 export default {
   'msg.persons.lockedWindow': 'The window is locked. Unlock it with your PIN.',
   'msg.link.clone': '{name} looks like a copy of another Orb. It is not served until you check it in Settings › Magic Link.',
@@ -23,12 +23,12 @@ export default {
   'term.pin.ask': 'This card asks for your PIN. Type it and press Enter (it is not shown):',
   'term.pin.wrong': 'The PIN is not right.',
   'term.pin.locked': 'Too many tries. Wait a little and try again.',
-  'term.nucleo.isOwner': 'admin',
-  'term.nucleo.hasPin': 'with PIN',
-  'term.nucleo.personDevices': '{n} devices',
-  'term.nucleo.personsHint': 'To link a device for someone: {cmd}',
-  'term.nucleo.personCreated': 'Done: {name} now uses this Orb.',
-  'term.nucleo.noPerson': 'There is nobody called "{name}" on this Orb (see orb-nucleo usuarios).',
-  'term.nucleo.pinReset': 'Done: {name} has no PIN now. They can choose another one in their profile.',
-  'term.nucleo.forPerson': 'This code is for {name}.'
+  'term.server.isOwner': 'admin',
+  'term.server.hasPin': 'with PIN',
+  'term.server.personDevices': '{n} devices',
+  'term.server.personsHint': 'To link a device for someone: {cmd}',
+  'term.server.personCreated': 'Done: {name} now uses this Orb.',
+  'term.server.noPerson': 'There is nobody called "{name}" on this Orb (see orb-server usuarios).',
+  'term.server.pinReset': 'Done: {name} has no PIN now. They can choose another one in their profile.',
+  'term.server.forPerson': 'This code is for {name}.'
 };

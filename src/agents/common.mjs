@@ -67,7 +67,7 @@ export function killTree(child) {
   try {
     if (IS_WIN) { const k = spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }); k.on('error', () => {}); }
     else {
-      // 3.5 (Linux, Orb Núcleo): the agents start as leaders of their own process group (spawnAgent), so the whole group
+      // 3.5 (Linux, Orb Server): the agents start as leaders of their own process group (spawnAgent), so the whole group
       // goes, as taskkill /T does on Windows; a process that is not a leader (the SDK's own) only by itself. If the group
       // ignores the request, it is killed a few seconds later.
       const pid = child.pid;

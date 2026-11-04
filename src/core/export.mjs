@@ -28,7 +28,7 @@ export const moveKeepBoth = (home) => setOrbId(home, { orbId: crypto.randomBytes
 export const movedAway = (home) => orbIdOf(home).moved ?? null;
 
 export async function moveImport({ target, file, passphrase }) {
-  if (fs.existsSync(target) && (isHome(target) || fs.readdirSync(target).length)) fail('data.nucleo.notEmpty');
+  if (fs.existsSync(target) && (isHome(target) || fs.readdirSync(target).length)) fail('data.server.notEmpty');
   const { header } = await readHeader(file);
   if (!header.move) fail('data.move.notMove');
   openKey(header, { passphrase }); // a wrong passphrase leaves nothing behind
