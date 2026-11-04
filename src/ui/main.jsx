@@ -47,6 +47,7 @@ import { NewGroupHost } from '@/views/bots/new-group.jsx';
 import { BotsView } from '@/views/bots/list.jsx';
 import { BotGroupsView, BotRemindersView, BotMemoryView, BotHomeView, BotServerView, BotSettingsView } from '@/views/bots/more.jsx';
 import { MagicLinkView } from '@/views/magic-link.jsx';
+import { ConnectionsView } from '@/views/connections.jsx';
 import { OrbChatsView } from '@/views/orb/inbox.jsx';
 import { OrbInfoHost } from '@/views/orb/info.jsx';
 import { TallerBanner } from '@/components/taller-banner.jsx';
@@ -70,7 +71,7 @@ const ChatsView = OrbChatsView;
 function BotChatsScreen({ route }) { return phoneLayout() ? <BotChatsView /> : <BotChatView route={{ view: 'bot-chat' }} key={route.view} />; }
 const BOT_SCREENS = { 'bot-chats': BotChatsScreen, 'bot-chat': BotChatView, 'bot-group': BotChatView, bots: BotsView, 'bot-groups': BotGroupsView, 'bot-reminders': BotRemindersView, 'bot-memory': BotMemoryView, 'bot-home': BotHomeView, 'bot-server': BotServerView, 'bot-settings': BotSettingsView };
 const VIEWS = bridge.mobile
-  ? { ...BOT_SCREENS, link: MagicLinkView, server: ServerView, chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, profile: ProfileView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
+  ? { ...BOT_SCREENS, link: MagicLinkView, connections: ConnectionsView, server: ServerView, chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, profile: ProfileView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
   : { ...BOT_SCREENS, chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView,
     // 2.7.3: Orb Light (the portable .exe) has no God mode. (3.7: «Monitoreo del equipo» is gone: a bot with «Equipo».)
     ...(bridge.light ? {} : { expert: ExpertView }) };

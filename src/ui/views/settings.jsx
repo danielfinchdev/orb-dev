@@ -3,7 +3,7 @@
 // Datos, Avanzado and Acerca de. «Mi perfil» is not a section: the user menu opens it in this same window, on its own.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { DatabaseBackup, Server, Settings, FlaskConical, FolderOpen, HeartPulse, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, Wrench, ChevronRight, SlidersHorizontal, Radar, Cpu, Info, ExternalLink } from 'lucide-react';
+import { DatabaseBackup, Settings, FlaskConical, FolderOpen, HeartPulse, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, Wrench, ChevronRight, SlidersHorizontal, Radar, Cpu, Info, ExternalLink } from 'lucide-react';
 import { ToolIcon } from '@/components/agent-icon.jsx';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, APPEARANCE_DEFAULTS } from '../../core/appearance.mjs';
 import { PRODUCT, AUTHOR } from '../../core/product.mjs';
@@ -24,10 +24,10 @@ import { LANGUAGES } from '../../core/i18n.mjs';
 import { useUpdate, updateActions, notesUrl } from '@/components/update-card.jsx';
 import { play } from '@/lib/sounds.js';
 import { MagicLinkPanel, SubSection } from './magic-link.jsx';
+import { ConnectionsPanel } from './connections.jsx';
 import { PersonsCard, ProfileCards } from './persons.jsx';
 import { DataCards } from './data.jsx';
 import { showPersonUi, showPersonsSettings, isOwner } from '@/lib/persons.js';
-import { ServerSettingsCards } from './server.jsx';
 
 async function save(patch, ok = t('settings.saved')) {
   const config = await act(call('config.save', { patch }), ok);
@@ -636,11 +636,10 @@ const SECTIONS = [
   { id: 'general', icon: SlidersHorizontal, groups: ['apariencia', 'actualizaciones'],
     cards: (c, app) => <><AssistantCard c={c} /><FolderCard c={c} home={app.home} /><SubSection id="apariencia" title={t('settings.group.apariencia')}><AppearanceCard c={c} /><InterfaceCard c={c} /></SubSection><SubSection id="actualizaciones" title={t('settings.group.actualizaciones')}><UpdatesCard /></SubSection></> },
   // Who can enter this Orb: its users, their devices and the Orbs linked with it.
-  { id: 'magiclink', icon: Radar, groups: (me) => [...(showPersonsSettings(me) ? ['usuarios'] : []), 'dispositivos', ...(bridge.mobile ? [] : ['server']), 'orbs'],
-    cards: (c, app, me) => <MagicLinkPanel grouped users={showPersonsSettings(me) ? <PersonsCard /> : null} phoneAccess={<MobileCard />} /> },
+  // 3.7 (WS9): and «Conexiones», everything connected to it in one list.
+  { id: 'magiclink', icon: Radar, groups: (me) => [...(showPersonsSettings(me) ? ['usuarios'] : []), 'dispositivos', ...(bridge.mobile ? [] : ['server']), 'orbs', 'conexiones'],
+    cards: (c, app, me) => <><MagicLinkPanel grouped users={showPersonsSettings(me) ? <PersonsCard /> : null} phoneAccess={<MobileCard />} /><SubSection id="conexiones" title={t('settings.group.conexiones')}><ConnectionsPanel /></SubSection></> },
   { id: 'agentes', icon: Cpu, cards: (c) => <><ChatCard c={c} /><TasksCard c={c} />{bridge.mobile ? null : <TestCard />}</> },
-  // 3.7: Orb Server, once one is linked: its state and update, its browser and «Contraseñas» (its password vault).
-  { id: 'servidor', icon: Server, when: (me, server) => Boolean(server?.linked), groups: () => ['estado', 'navegador', 'contrasenas'], cards: () => <ServerSettingsCards /> },
   { id: 'datos', icon: DatabaseBackup, when: (me) => isOwner(me), cards: () => <DataCards /> },
   // 3.7: «Monitoreo» is no longer here (a bot with the «Equipo» tools does it); sharing with Open Control Edge stays.
   { id: 'avanzado', icon: Wrench, groups: () => ['herramientas', ...(fullPc() ? ['experto'] : [])],
@@ -651,8 +650,8 @@ const SECTIONS = [
     cards: (c, app) => <><AboutCard version={app.version} /><SubSection id="contribuye" title={t('settings.group.contribuye')}><SupportCard /><FeedbackCard /></SubSection><SubSection id="apps" title={t('settings.group.apps')}><MoreAppsCard /></SubSection></> }
 ];
 // The names of before 3.6 (links in tutorials, notices and the sidebar) → [section, part].
-const ALIASES = { personas: ['magiclink', 'usuarios'], movil: ['magiclink', 'dispositivos'], apariencia: ['general', 'apariencia'], actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'],
-  herramientas: ['avanzado', 'herramientas'], contrasenas: ['servidor', 'contrasenas'], experto: ['avanzado', 'experto'], monitor: ['avanzado', 'herramientas'], contribuye: ['acerca', 'contribuye'], apps: ['acerca', 'apps'] };
+const ALIASES = { personas: ['magiclink', 'usuarios'], conexiones: ['magiclink', 'conexiones'], servidor: ['magiclink', 'server'], contrasenas: ['magiclink', 'contrasenas'], movil: ['magiclink', 'dispositivos'], apariencia: ['general', 'apariencia'], actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'],
+  herramientas: ['avanzado', 'herramientas'], experto: ['avanzado', 'experto'], monitor: ['avanzado', 'herramientas'], contribuye: ['acerca', 'contribuye'], apps: ['acerca', 'apps'] };
 export function resolveSection(open) {
   if (!open || open === true) return ['general', null];
   const [id, part = null] = String(open).split(':');

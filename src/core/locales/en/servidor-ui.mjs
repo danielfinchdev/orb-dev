@@ -2,12 +2,7 @@
 // (badge, copy, "Move to Server" / "Move to this PC"), Settings › Orb Server and "Passwords".
 export default {
   // ---- Settings
-  'settings.section.servidor': 'Orb Server',
-  'settings.sectionDesc.servidor': "The server's state, its browser and your bots' password vault.",
   'settings.group.server': 'Orb Server',
-  'settings.group.estado': 'Status',
-  'settings.group.navegador': 'Browser',
-  'settings.group.contrasenas': 'Passwords',
 
   // ---- Magic Link › Orb Server
   'server.title': 'Orb Server',
@@ -29,7 +24,6 @@ export default {
   'server.devicesMoved': '{n} devices connect to the Server',
   'server.devicesMoved.one': '1 device connects to the Server',
   'server.more': 'More Server options',
-  'server.settings': 'Server settings',
   'server.setup': 'Set up',
 
   // ---- Unlink
@@ -112,7 +106,7 @@ export default {
   'server.browserHint': "Open the Server's browser and sign in yourself to the websites your bots will use. The sessions are kept.",
 
   // ---- Settings › Orb Server › Status
-  'server.statusTitle': 'Orb Server',
+  'server.statusTitle': 'Status',
   'server.statusLine': 'Version {v} · running for {uptime}',
   'server.loading': 'Loading…',
   'server.refresh': 'Refresh',

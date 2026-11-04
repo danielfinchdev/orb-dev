@@ -5,7 +5,7 @@
 // - The guide after pairing (a stepper): the Server's own Claude / ChatGPT sign-in (windowless, from here), «¿Dónde
 //   quieres que se ejecuten tus bots?» (all to the Server, recommended / pick / leave them here, with progress and a
 //   report), who is who when there are other users, and the optional password vault and browser logins.
-// - Ajustes › Orb Server: its state (version, memory, engines, update), Optimus, its browser and «Contraseñas» (the vault:
+// - Under the Server card (still Magic Link): its state (version, memory, engines, update), Optimus, its browser and «Contraseñas» (the vault:
 //   a Bitwarden-compatible account made for Orb; secrets are typed once and never shown again).
 // - «Ver navegador del Server»: the live view (components/browser-live.jsx), a dialog on the PC, the whole screen on a phone.
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -137,8 +137,6 @@ function ServerCard({ server }) {
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" aria-label={t('server.more')} data-testid="server-more"><Ellipsis /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuItem onSelect={() => openSettings('servidor')}><Settings2 />{t('server.settings')}</DropdownMenuItem>
-            <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onSelect={() => askUnlinkServer({ id: p.id, name: p.name })} data-testid="server-unlink"><Unplug />{t('link.unlink')}</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -168,7 +166,7 @@ export function ServerLinkSection() {
     loadServerGuide(); setState({ serverGuideOpen: { step: null, first: true } });
   }, [server?.linked]); // eslint-disable-line react-hooks/exhaustive-deps
   if (bridge.mobile || server === undefined) return null;
-  return server?.linked ? <ServerCard server={server} /> : <AddServerCard />;
+  return server?.linked ? <><ServerCard server={server} /><ServerSettingsCards inline /></> : <AddServerCard />;
 }
 
 // «Desenlazar»: the bots that run there come back first (default), stay there (here a frozen copy with «Restaurar aquí»),
@@ -486,7 +484,7 @@ function BrowserStep() {
   );
 }
 
-// ---------------------------------------------------------------- Ajustes › Orb Server
+// ---------------------------------------------------------------- the Server's state and vault (Magic Link › Orb Server)
 function useServerStatus() {
   const [st, setSt] = useState(null);
   const [error, setError] = useState('');
@@ -664,13 +662,9 @@ function SitesList({ sites }) {
   );
 }
 
-// A part of the section with its heading (Ajustes on the PC); the phone's screen shows the cards only.
-function Group({ id, title, grouped, children }) {
-  if (!grouped) return children;
-  return <section id={`settings-${id}`} className="grid scroll-mt-4 gap-4 [&>*]:min-w-0" data-testid={`settings-group-${id}`}><h3 className="text-muted-foreground px-1 pt-3 text-[13px] font-medium">{title}</h3>{children}</section>;
-}
-// The cards of Ajustes › Orb Server (also the phone's screen of a device linked to the Server).
-export function ServerSettingsCards({ grouped = true }) {
+// Its state, Optimus, its browser (the phone; on the PC the Server card has the button) and «Contraseñas» (the Server's vault):
+// under the Server card in Ajustes › Magic Link › Orb Server (inline), or the phone's own screen.
+export function ServerSettingsCards({ inline = false }) {
   const t = useT();
   const server = useServer();
   if (server === undefined) return <Spinner />;
@@ -678,9 +672,9 @@ export function ServerSettingsCards({ grouped = true }) {
   const vault = hasCap(server, 'vault.v1') || server.direct;
   return (
     <>
-      <Group grouped={grouped} id="estado" title={t('settings.group.estado')}><StatusCard /><OptimusCard /></Group>
-      {hasCap(server, 'browser.live.v1') ? <Group grouped={grouped} id="navegador" title={t('settings.group.navegador')}><BrowserCard /></Group> : null}
-      {vault ? <Group grouped={grouped} id="contrasenas" title={t('settings.group.contrasenas')}><VaultCard /></Group> : null}
+      <StatusCard />
+      {inline ? <OptimusCard /> : <BrowserCard />}
+      {vault ? <div id="settings-contrasenas" className="grid scroll-mt-4 [&>*]:min-w-0" data-testid="settings-group-contrasenas"><VaultCard /></div> : null}
     </>
   );
 }
@@ -690,7 +684,7 @@ export function ServerView() {
   return (
     <>
       <PageHeader icon={<Server className="text-primary size-5" />} title={t('server.title')} />
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5"><div className="mx-auto grid max-w-xl gap-4"><ServerSettingsCards grouped={false} /></div></div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5"><div className="mx-auto grid max-w-xl gap-4"><ServerSettingsCards /></div></div>
     </>
   );
 }

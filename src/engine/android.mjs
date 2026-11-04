@@ -26,6 +26,8 @@ export const adbStatus = () => ({ ...state, dir: ctx.paths.adb, ready: fs.exists
 // stop that server when it closes (`adb kill-server`) without touching a server the user runs for Android Studio.
 let adbUsed = false;
 export const markAdbUsed = () => { adbUsed = true; };
+// 3.7 (WS9): whether the adb server of this session is Orb's (the user used an Android feature since Orb started).
+export const adbInUse = () => adbUsed && !adbDisabled();
 export function stopAdb() {
   if (!adbUsed || adbDisabled() || !fs.existsSync(adbPath())) return;
   adbUsed = false;

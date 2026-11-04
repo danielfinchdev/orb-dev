@@ -2,12 +2,7 @@
 // ejecuta cada bot (insignia, copia, «Pasar al Server» / «Pasar a este PC»), Ajustes › Orb Server y «Contraseñas».
 export default {
   // ---- Ajustes
-  'settings.section.servidor': 'Orb Server',
-  'settings.sectionDesc.servidor': 'Estado del servidor, su navegador y la bóveda de contraseñas de tus bots.',
   'settings.group.server': 'Orb Server',
-  'settings.group.estado': 'Estado',
-  'settings.group.navegador': 'Navegador',
-  'settings.group.contrasenas': 'Contraseñas',
 
   // ---- Magic Link › Orb Server
   'server.title': 'Orb Server',
@@ -29,7 +24,6 @@ export default {
   'server.devicesMoved': '{n} dispositivos se conectan al Server',
   'server.devicesMoved.one': '1 dispositivo se conecta al Server',
   'server.more': 'Más opciones del Server',
-  'server.settings': 'Ajustes del Server',
   'server.setup': 'Configurar',
 
   // ---- Desenlazar
@@ -112,7 +106,7 @@ export default {
   'server.browserHint': 'Abre el navegador del Server e inicia sesión tú en las webs que usarán tus bots. Las sesiones se quedan guardadas.',
 
   // ---- Ajustes › Orb Server › Estado
-  'server.statusTitle': 'Orb Server',
+  'server.statusTitle': 'Estado',
   'server.statusLine': 'Versión {v} · en marcha desde hace {uptime}',
   'server.loading': 'Cargando…',
   'server.refresh': 'Actualizar',

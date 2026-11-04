@@ -10,8 +10,8 @@ export default {
   'msg.vault.needsOk': 'A sign-in to {host} with your vault was requested. Only a bot with the «Passwords» tool can ask you with a card.',
   'msg.vault.filled': 'Orb Server signed in to {host} with your vault.',
   'msg.vault.down': 'Your password vault cannot be opened because its server is not responding. Bots will not be able to sign in until it is back.',
-  'msg.vault.revoked': 'Your vault no longer accepts the API key of Orb Server. If you changed it, connect it again in Settings › Orb Server › Passwords.',
-  'msg.vault.notConfigured': 'A bot tried to sign in with your vault, but you have not connected it yet. Do it in Settings › Orb Server › Passwords.',
+  'msg.vault.revoked': 'Your vault no longer accepts the API key of Orb Server. If you changed it, connect it again in Settings › Magic Link › Orb Server.',
+  'msg.vault.notConfigured': 'A bot tried to sign in with your vault, but you have not connected it yet. Do it in Settings › Magic Link › Orb Server.',
   'msg.vault.notAllowed': 'The administrator of this Orb has not turned on the password vault for you.',
 
   // Reasons (short, nothing from the vault)

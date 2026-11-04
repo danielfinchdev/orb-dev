@@ -89,7 +89,8 @@ export const PAIR_KINDS = ['phone', 'browser', 'orb', 'terminal'];
 export const approverOf = (device, allowed) => ({ device: device.id, name: device.name, approve: Number(device.approve ?? 1) === 1, owner: allowed.has('bots.update') });
 // 3.5: what a phone or a terminal does in the Orb mode: it goes to the Orb that programs (Ajustes › Magic Link › «Orb
 // para programar») when it is not this one. The bots, the links and this Orb's own state stay here.
-export const devForwards = (method) => ALLOWED.has(method) && !/^(bots\.|app\.state$)/.test(method);
+// 3.7 (WS9): «Conexiones» is always of the Orb the device is linked to.
+export const devForwards = (method) => ALLOWED.has(method) && !/^(bots\.|app\.state$|connections\.)/.test(method);
 const EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'notice', 'session:item', 'session:update', 'session:removed', 'config:changed', 'session:delta', 'session:queue', 'approval:changed',
   // 3.5 (Magic Link): which linked Orbs are on, and the calls left waiting for the workshop.
   'link:status', 'link:queue',
@@ -100,7 +101,9 @@ const EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'notice', 'se
   // 3.6 (messaging lists): a chat list changed (only to its person)
   'inbox:changed',
   // 3.7 (WS5): «Ver navegador del Server» (its pictures only to the device that opened it) and «Necesito que lo hagas tú»
-  'browser:live', 'browser:human']);
+  'browser:live', 'browser:human',
+  // 3.7 (WS9): «Conexiones» changed (no content)
+  'connections:changed']);
 // 3.5 «Solo Orb»: the server (Orb Server, without a window) has no screen of its own, so a linked phone signs its agents in: it gets the
 // link and the code, and pastes Claude's code back. On a PC the sign-in stays on the PC.
 // (CENTRO_PHONE, in src/core/policy.mjs)

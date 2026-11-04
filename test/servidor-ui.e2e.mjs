@@ -230,7 +230,7 @@ try {
     await page.getByTestId('choice-cancel').click();
 
     step = `${tag}: Ajustes › Orb Server`;
-    await navigate(page, { view: 'settings', section: 'servidor' });
+    await navigate(page, { view: 'settings', section: 'magiclink:server' });
     await page.getByTestId('server-status').waitFor();
     await page.getByTestId('server-update-available').waitFor();
     await shot(page, `${tag}-10-ajustes-server`);
