@@ -11,8 +11,11 @@ import { BotAvatar } from '@/components/bot-avatar.jsx';
 import { useStore, botCall, act, go, loadBots, phoneLayout } from '@/lib/store.js';
 import { newBotDraft, botPayload } from '@/lib/bots.js';
 import { useT } from '@/lib/i18n.js';
-import { SHAPE_IDS, COLOR_IDS, COLORS, avatarFor } from '../../../core/avatar.mjs';
+import { SHAPE_IDS, COLOR_IDS, avatarFor, avatarParts } from '../../../core/avatar.mjs';
 import { useBots } from './common.jsx';
+
+// A colour swatch painted like the avatar's own body (avatar.mjs › avatarParts), so the dot and the bot match.
+const swatch = (c) => { const p = avatarParts('mochi', c); return { background: `linear-gradient(${p.top}, ${p.bottom})` }; };
 
 const BOT_BRAINS = ['claude', 'codex'];
 
@@ -56,7 +59,7 @@ export function AvatarPicker({ value, onChange, size = 40 }) {
           {COLOR_IDS.map((c) => (
             <button key={c} type="button" role="radio" aria-checked={value.color === c} tabIndex={value.color === c ? 0 : -1} className="avatar-color" data-value={c}
               aria-label={t(`bots.av.c.${c}`)} title={t(`bots.av.c.${c}`)} onClick={() => pick({ color: c })} data-testid={`avatar-color-${c}`}
-              style={{ background: `radial-gradient(circle at 35% 30%, oklch(0.96 0.05 ${COLORS[c]}), oklch(0.78 0.12 ${COLORS[c]}))` }} />
+              style={swatch(c)} />
           ))}
         </div>
       </Field>
