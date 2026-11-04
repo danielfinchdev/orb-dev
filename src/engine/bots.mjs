@@ -203,7 +203,10 @@ class Lane {
     const page = `bot-${bot.id}-${String(this.person ?? '').replace(/[^\w-]/g, '')}`.slice(0, 80);
     const browserPage = () => ({ ORB_BROWSER_PIPE: ctx.browser.pipe, ORB_SESSION: page, ...browserEnv(who, page, '', this.board.isOwnerPerson?.(owner) ? null : owner) });
     // 3.7 (WS6): «Contraseñas» reaches the same page of the bot's browser (vault_fill, typed by Orb Server, never seen).
-    const vaultPage = tools.includes('contrasenas') && tools.includes('navegador') && browserOn() ? browserPage() : {};
+    // Only when the one talking is the bot's own person: a bot shared with someone else never fills its owner's passwords
+    // for them (their turns, and whatever a page or a mail says in them, get no vault_fill).
+    const talker = this.person ?? ownerOf(this.board);
+    const vaultPage = tools.includes('contrasenas') && tools.includes('navegador') && browserOn() && talker === owner ? browserPage() : {};
     const servers = { bot: botMcpServer({ ORB_HOME: ctx.home, ORB_AGENT: who, ORB_AGENT_TOKEN: token, ...vaultPage }) };
     this.guard.dir = cwd; this.guard.botsDir = B.botsDir();
     // 3.6: the browser's pages of a bot live in its person's own browser profile.

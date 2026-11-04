@@ -76,6 +76,14 @@ export function createReplica({ board, bots, emit = () => {}, log = () => {}, li
       && (forPerson === linkPerson(board, peer) || (remote != null && mappedPerson(board, peer, forPerson) === String(remote)))) return forPerson;
     return null;
   };
+  // Whether that Orb may touch this bot or group here (sync, move, takeover): only when its person is one this Orb serves
+  // to it (or the bot is shared with one of them). Knowing a uid is never enough.
+  const mayTouch = (peer, row, persons = servedPersons(board, peer)) => {
+    if (!row) return false;
+    if (persons.has(row.person_id ?? owner())) return true;
+    const type = 'agent' in row ? 'bot' : 'group'; // bot_groups rows have no agent
+    try { return board.all('SELECT person_id FROM shares WHERE resource_type = ? AND resource_id = ?', type, String(row.id)).some((s) => persons.has(s.person_id)); } catch { return false; }
+  };
   const resolve = (idOrUid) => (R.isUid(String(idOrUid ?? '')) ? R.botByUid(board, idOrUid) : board.one('SELECT * FROM bots WHERE id = ?', Number(idOrUid))) ?? null;
   const parsed = (row) => (row ? B.getBot(board, row.id) : null);
   const homeEvent = (row, extra = {}) => { const b = board.one('SELECT * FROM bots WHERE id = ?', row.id) ?? row; emit('bot.home', { id: b.id, uid: b.uid, home: b.home, epoch: Number(b.home_epoch) || 0, state: b.home_state, here: R.isHomeHere(board, b), ...extra }); bots?.updated(b.id); };
@@ -153,6 +161,8 @@ export function createReplica({ board, bots, emit = () => {}, log = () => {}, li
     const group = e.kind === 'group';
     const local = group ? R.groupByUid(board, e.uid) : R.botByUid(board, e.uid);
     const lepoch = Number(local?.home_epoch) || 0; const epoch = Number(e.epoch) || 0;
+    // Another person's bot (or one this Orb does not share with that one): its entry changes nothing here.
+    if (local && !mayTouch(peer, local)) return;
     if (local && R.isHomeHere(board, local, me)) {
       if (e.home === me) return; // its copy of a bot run here
       if (group) return;
@@ -167,7 +177,7 @@ export function createReplica({ board, bots, emit = () => {}, log = () => {}, li
     }
     if (e.home === me) {
       // It says this Orb is the home (a move whose commit did not arrive): it runs here now.
-      if (local && epoch >= lepoch && !group) { if (e.uid) await pull(peer, { ...e, home: peer.key }, map, { quiet: true }).catch(() => {}); promote(local, epoch); }
+      if (local && local.home === peer.key && epoch >= lepoch && !group) { if (e.uid) await pull(peer, { ...e, home: peer.key }, map, { quiet: true }).catch(() => {}); promote(local, epoch); }
       return;
     }
     if (e.home === peer.key) {
@@ -285,8 +295,11 @@ export function createReplica({ board, bots, emit = () => {}, log = () => {}, li
     }
   }
   // Target of a move: a full copy now (files too). → what this Orb can run of it
+  // A copy here that this Orb may take from that one: none yet, or one of a person served to it whose home is that Orb.
+  const fromItsHome = (peer, row) => !row || (mayTouch(peer, row) && (row.home === peer.key || R.isHomeHere(board, row)));
   async function prepareHere(peer, { uid }) {
     const e = { uid: String(uid ?? ''), home: peer.key };
+    if (!fromItsHome(peer, R.botByUid(board, e.uid))) return { ok: false, reason: 'unmapped' };
     const r = await pull(peer, e, mapFrom(peer), { quiet: true });
     const row = R.botByUid(board, e.uid);
     if (!row || r?.unmapped) return { ok: false, reason: 'unmapped' };
@@ -300,6 +313,7 @@ export function createReplica({ board, bots, emit = () => {}, log = () => {}, li
   }
   async function verifyHere(peer, { uid }) {
     const e = { uid: String(uid ?? ''), home: peer.key };
+    if (!fromItsHome(peer, R.botByUid(board, e.uid))) return { ok: false };
     await pull(peer, e, mapFrom(peer), { quiet: true });
     const row = R.botByUid(board, e.uid); if (!row) return { ok: false };
     return { ok: true, ...R.verifyCounts(board, row), seq: cursors.get(peer.key, e.uid).seq };
@@ -307,14 +321,17 @@ export function createReplica({ board, bots, emit = () => {}, log = () => {}, li
   async function commitHere(peer, { uid, epoch, tail = null, brain = null, held = [], from = null, cancelled = 0, kind = 'bot' }) {
     const map = mapFrom(peer);
     if (kind === 'group') {
-      const g = R.groupByUid(board, String(uid ?? '')); if (!g) throw err(tr('msg.bots.noGroup'), { status: 404 });
+      const g = R.groupByUid(board, String(uid ?? '')); if (!g || !mayTouch(peer, g)) throw err(tr('msg.bots.noGroup'), { status: 404 });
+      if (!R.isHomeHere(board, g) && g.home !== peer.key) throw err(tr('msg.home.claimRefused'), { status: 409 });
       if (R.isHomeHere(board, g) && Number(g.home_epoch) >= Number(epoch)) return { ok: true, already: true };
       if (tail) R.applyPage(board, tail, { map });
       promote(g, Number(epoch) || 0, { group: true }); bots?.updated(null);
       return { ok: true };
     }
-    const row = R.botByUid(board, String(uid ?? '')); if (!row) throw err(tr('msg.bots.noBot', { name: '' }), { status: 404 });
+    const row = R.botByUid(board, String(uid ?? '')); if (!row || !mayTouch(peer, row)) throw err(tr('msg.bots.noBot', { name: '' }), { status: 404 });
     if (R.isHomeHere(board, row) && Number(row.home_epoch) >= Number(epoch)) return { ok: true, already: true };
+    // Only the bot's home hands it over (its source in a move): never a third Orb.
+    if (!R.isHomeHere(board, row) && row.home !== peer.key) throw err(tr('msg.home.claimRefused'), { status: 409 });
     if (tail) R.applyPage(board, tail, { map });
     promote(row, Number(epoch) || 0);
     board.settingJson(`bot_handoff:${row.id}`, { from: from ?? peer.name, at: now(), cancelled: Number(cancelled) || 0, done: [] });
@@ -335,6 +352,8 @@ export function createReplica({ board, bots, emit = () => {}, log = () => {}, li
   // its last look, while this one still ran it)
   function claimHere(peer, { uid, home, epoch, since = 0 }) {
     const row = R.botByUid(board, String(uid ?? '')); if (!row) return { ok: true };
+    // Only an Orb this bot's person is served to (one that holds its copy) may claim it.
+    if (!mayTouch(peer, row)) return { ok: true };
     const lepoch = Number(row.home_epoch) || 0;
     if (!R.isHomeHere(board, row)) { if (Number(epoch) > lepoch) board.run('UPDATE bots SET home = ?, home_epoch = ? WHERE id = ?', home, Number(epoch), row.id); return { ok: true }; }
     if (home !== peer.key || Number(epoch) <= lepoch) throw err(tr('msg.home.claimRefused'), { status: 409 });

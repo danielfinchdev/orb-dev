@@ -135,6 +135,8 @@ NotifyAccess=all
 # Only the main process gets SIGTERM (it closes the engine in order); whatever is left, after TimeoutStopSec.
 KillMode=mixed
 TimeoutStopSec=20
+# Its files are for this user only (another user of the machine reads nothing).
+UMask=0077
 MemoryMax=512M
 MemoryHigh=448M
 Nice=5

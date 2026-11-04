@@ -36,6 +36,10 @@ import { moveImport } from '../core/export.mjs';
 import { translator, painter } from '../terminal/render.mjs';
 import { startWatchdog } from './watchdog.mjs';
 
+// 3.7: what Orb Server writes (its database, settings, logs, the vault) is for this user only, whatever the umask of the
+// shell or of systemd is (another user of the machine reads nothing).
+if (process.platform !== 'win32') process.umask(0o077);
+
 function parse(argv) {
   const o = { command: 'run', home: null, profile: null, account: null, wait: true, admin: false, kind: null, taller: false, target: null, sub: null, file: null, code: process.env.ORB_BACKUP_CODE || null };
   for (let i = 0; i < argv.length; i++) {

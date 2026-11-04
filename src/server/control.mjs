@@ -31,11 +31,26 @@ export function controlPath(home) {
   if (process.platform === 'win32') return `\\\\.\\pipe\\orb-nucleo-${crypto.createHash('sha256').update(path.resolve(home).toLowerCase()).digest('hex').slice(0, 16)}`;
   const file = path.join(dir, 'nucleo.sock');
   // Unix sockets have a short path limit (about 104 bytes): a long home gets a socket in the temp folder, by its hash.
-  return Buffer.byteLength(file) < 100 ? file : path.join('/tmp', `orb-nucleo-${crypto.createHash('sha256').update(path.resolve(home)).digest('hex').slice(0, 16)}.sock`);
+  // 3.7: in a folder of this user only (XDG_RUNTIME_DIR, else /tmp/orb-server-<uid>, 0700 and checked), never a name in
+  // /tmp itself that another user of the machine could take first.
+  if (Buffer.byteLength(file) < 100) return file;
+  const name = `orb-nucleo-${crypto.createHash('sha256').update(path.resolve(home)).digest('hex').slice(0, 16)}.sock`;
+  const run = process.env.XDG_RUNTIME_DIR;
+  if (run && path.isAbsolute(run) && Buffer.byteLength(path.join(run, name)) < 100 && privateDir(run)) return path.join(run, name);
+  return path.join('/tmp', `orb-server-${process.getuid?.() ?? 'u'}`, name);
+}
+// A folder that only this user can enter (created 0700 when missing). → whether it is so.
+export function privateDir(dir, { create = false } = {}) {
+  if (create) { try { fs.mkdirSync(dir, { mode: 0o700 }); } catch { /* there already */ } }
+  try { const st = fs.lstatSync(dir); return st.isDirectory() && !st.isSymbolicLink() && (process.getuid ? st.uid === process.getuid() : true) && (st.mode & 0o077) === 0; } catch { return false; }
 }
 
 export function serveControl({ home, call, log = () => {} }) {
   const where = controlPath(home);
+  if (process.platform !== 'win32' && where.startsWith(`/tmp${path.sep}orb-server-`) && !privateDir(path.dirname(where), { create: true })) {
+    log('control: la carpeta temporal del control no es solo de este usuario: no se abre');
+    return { where, ready: Promise.resolve(null), close: async () => {} };
+  }
   if (process.platform !== 'win32') { try { fs.unlinkSync(where); } catch { /* none left */ } }
   const server = net.createServer((sock) => {
     let buf = '';
@@ -57,10 +72,14 @@ export function serveControl({ home, call, log = () => {} }) {
   });
   server.on('error', (error) => log(`control: ${error.message}`));
   const ready = new Promise((resolve) => {
-    server.listen(where, () => {
-      if (process.platform !== 'win32') { try { fs.chmodSync(where, 0o600); } catch { /* best effort */ } }
-      resolve(where);
-    });
+    // The socket is born 0600 (no moment in which another user could connect before the chmod).
+    const old = process.platform !== 'win32' ? process.umask(0o177) : null;
+    try {
+      server.listen(where, () => {
+        if (process.platform !== 'win32') { try { fs.chmodSync(where, 0o600); } catch { /* best effort */ } }
+        resolve(where);
+      });
+    } finally { if (old != null) process.umask(old); }
     server.once('error', () => resolve(null));
   });
   return { where, ready, close: () => new Promise((r) => { server.close(() => r()); if (process.platform !== 'win32') { try { fs.unlinkSync(where); } catch { /* gone */ } } }) };
