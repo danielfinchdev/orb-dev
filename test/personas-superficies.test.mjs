@@ -33,7 +33,7 @@ const R = { ana: {}, leo: {} }; // each one's resources
 const links = [];
 const SKIP = new Set(['persons.switch', 'persons.lock', 'persons.unlock', 'app.lockState']); // the window's own (enlace-36, test 11)
 // The owner manages the people (rename, remove, PIN reset, templates for them): not content, and it would undo the test.
-const SKIP_OWNER = new Set(['persons.remove', 'persons.rename', 'persons.setPin', 'data.deletePerson', 'templates.apply']);
+const SKIP_OWNER = new Set(['persons.remove', 'persons.rename', 'persons.setPin', 'data.deletePerson', 'templates.apply', 'persons.pauseBots', 'persons.setCaps', 'persons.update']); // the owner's own admin actions on someone (no content)
 // Known gaps of other workstreams, reported (not failed): the method echoes a name the caller typed.
 const KNOWN = { 'projects.create': 'WS3: «ese nombre ya existe» nombra el proyecto (B6: mensaje neutro)' };
 const db = () => new DatabaseSync(paths(tA.home).db);
