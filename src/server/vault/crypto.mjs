@@ -155,6 +155,9 @@ export function unlock(password, account) {
 // ---- sealing what Orb Server keeps (the vault's sign-in and the sync cache) with the server's own key.
 // The worker never gets the server key itself: only this key, derived from it for the vault alone.
 export const vaultSealKey = (serverSecret) => crypto.createHmac('sha256', Buffer.from(serverSecret)).update('orb-vault-v1').digest();
+// 3.7: with the vault's own key file (keyfile.mjs, outside the data folder) mixed in: both are needed to open the seal.
+// The v1 key (server key alone) is only used to read, once, what an earlier build sealed, which is sealed again with this.
+export const vaultSealKeyV2 = (serverSecret, fileKey) => crypto.createHmac('sha256', Buffer.from(serverSecret)).update('orb-vault-v2').update(Buffer.from(fileKey)).digest();
 export function seal(key, value, aad) {
   const n = crypto.randomBytes(12);
   const c = crypto.createCipheriv('aes-256-gcm', key, n); c.setAAD(Buffer.from(String(aad)));

@@ -201,15 +201,18 @@ class Lane {
     const who = `bot:${bot.id}`;
     const token = agentToken(this.board, who, '', this.person);
     const page = `bot-${bot.id}-${String(this.person ?? '').replace(/[^\w-]/g, '')}`.slice(0, 80);
-    const browserPage = () => ({ ORB_BROWSER_PIPE: ctx.browser.pipe, ORB_SESSION: page, ...browserEnv(who, page, '', this.board.isOwnerPerson?.(owner) ? null : owner) });
+    // 3.7: the browser profile is the one of the person TALKING, not the bot's owner: a bot the Admin shares with María
+    // browses with María's own sign-ins (cookies) in her turns, never with the Admin's.
+    const talker = this.person ?? ownerOf(this.board);
+    const access = botBrowserAccess(this.board, { owner, talker });
+    const browserPage = () => ({ ORB_BROWSER_PIPE: ctx.browser.pipe, ORB_SESSION: page, ...browserEnv(who, page, '', access.profile) });
     // 3.7 (WS6): «Contraseñas» reaches the same page of the bot's browser (vault_fill, typed by Orb Server, never seen).
     // Only when the one talking is the bot's own person: a bot shared with someone else never fills its owner's passwords
     // for them (their turns, and whatever a page or a mail says in them, get no vault_fill).
-    const talker = this.person ?? ownerOf(this.board);
-    const vaultPage = tools.includes('contrasenas') && tools.includes('navegador') && browserOn() && talker === owner ? browserPage() : {};
+    const vaultPage = tools.includes('contrasenas') && tools.includes('navegador') && browserOn() && access.vault ? browserPage() : {};
     const servers = { bot: botMcpServer({ ORB_HOME: ctx.home, ORB_AGENT: who, ORB_AGENT_TOKEN: token, ...vaultPage }) };
     this.guard.dir = cwd; this.guard.botsDir = B.botsDir();
-    // 3.6: the browser's pages of a bot live in its person's own browser profile.
+    // 3.6: the browser's pages of a bot live in a person's own browser profile (3.7: the talker's, see above).
     if (tools.includes('navegador') && browserOn()) {
       servers.orb = orbMcpServer({ ORB_HOME: ctx.home, ORB_AGENT: who, ORB_AGENT_TOKEN: token, ORB_BROWSER_ONLY: '1', ...browserPage() });
     }
@@ -768,4 +771,11 @@ export class Bots {
     return n;
   }
   shutdown() { this.closing = true; clearInterval(this.timer); for (const l of this.lanes.values()) { l.stop(); l.closeLive(); } }
+}
+
+// 3.7: whose browser profile a bot's turn uses and whether «Contraseñas» (vault_fill) is offered. The profile is always
+// the talker's own (null = the owner of this Orb, the default profile); the vault only when the talker is the bot's person.
+export function botBrowserAccess(board, { owner, talker }) {
+  const who = talker ?? owner;
+  return { profile: who && !(board.isOwnerPerson?.(who) ?? false) ? String(who) : null, vault: Boolean(who) && who === owner };
 }

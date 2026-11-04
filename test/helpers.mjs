@@ -12,6 +12,7 @@ import { useHome } from '../src/core/context.mjs';
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const fake = (name) => path.join(ROOT, 'test', 'fixtures', name);
 process.env.ORB_FAKE_AGENTS ??= fake('fake-live.mjs');
+process.env.ORB_VAULT_KEY_DIR ??= path.join(os.tmpdir(), 'orb-test-vault-keys'); // 3.7: never the real ~/.config/orb-server
 process.env.ORB_NO_ADB = '1'; // 3.7: tests never start adb (each new adb.exe makes Windows ask for permission)
 
 // Cursor and the ACP agents are off by default so "any" tasks and reviews go to Claude or Codex (as in the old tests).

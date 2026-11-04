@@ -2,7 +2,7 @@
 //   · it signs in to the person's Bitwarden-compatible vault (client.mjs), keeps the decrypted keys and the login items of
 //     the shared collection in its memory only, and drops them when told to forget (or when it ends);
 //   · on disk it keeps two files per person in <data>/vault/, both sealed (AES-256-GCM) with a key derived from the
-//     server's key (clave.bin): the sign-in (server, API key, master password, collection) and a cache of the last sync
+//     server's key (clave.bin) AND the vault's own key file outside the data folder (keyfile.mjs): the sign-in (server, API key, master password, collection) and a cache of the last sync
 //     (still encrypted by Bitwarden, usable for 24 h when the vault cannot be reached);
 //   · it answers the engine with states and short codes; the only values that ever leave it are the user name, password
 //     and current TOTP code of ONE item, handed to the filler (fill.mjs) for the page whose address matches that item,
@@ -24,10 +24,12 @@ const safe = (person) => String(person ?? '').replace(/[^\w-]/g, '_').slice(0, 6
 // ======================================================================================================================
 // The engine's side.
 // ======================================================================================================================
-// dir: <data>/vault; sealKey: vaultSealKey(server secret) (crypto.mjs) — the worker never sees the server key itself.
-export function createVaultService({ dir, sealKey, log = () => {}, timeoutMs = 60_000, env = null } = {}) {
+// dir: <data>/vault; sealKey: vaultSealKeyV2(server secret, vault key file) (crypto.mjs) — the worker never sees the
+// server key itself. legacyKey: the v1 key (server key alone), only to read and seal again what an earlier build left.
+export function createVaultService({ dir, sealKey, legacyKey = null, log = () => {}, timeoutMs = 60_000, env = null } = {}) {
   let child = null; let seq = 0; const waiting = new Map();
   const keyHex = Buffer.from(sealKey).toString('hex');
+  const legacyHex = legacyKey ? Buffer.from(legacyKey).toString('hex') : null;
   function start() {
     if (child) return child;
     const base = env ?? Object.fromEntries(['PATH', 'SystemRoot', 'TEMP', 'TMP', 'HOME', 'LANG'].filter((k) => process.env[k]).map((k) => [k, process.env[k]]));
@@ -39,7 +41,7 @@ export function createVaultService({ dir, sealKey, log = () => {}, timeoutMs = 6
       for (const [id, w] of waiting) { clearTimeout(w.timer); w.reject(Object.assign(new Error('vault_unavailable'), { code: 'vault_unavailable' })); waiting.delete(id); }
     });
     child.on('error', () => {});
-    child.send({ id: 0, op: 'init', key: keyHex, dir });
+    child.send({ id: 0, op: 'init', key: keyHex, ...(legacyHex ? { legacy: legacyHex } : {}), dir });
     return child;
   }
   function request(op, params = {}) {
@@ -75,12 +77,20 @@ async function workerMain() {
   const V = await import('./client.mjs');
   const M = await import('./match.mjs');
   const { totp, secondsLeft } = await import('./totp.mjs');
-  let sealKey = null; let dir = null;
+  let sealKey = null; let legacyKey = null; let dir = null;
   const open = new Map(); // person -> { items, syncedAt, token }
   const fetchImpl = globalThis.fetch;
 
   const file = (p, kind) => path.join(dir, `vault-${safe(p)}.${kind}`);
-  const readSealed = (p, kind) => { try { return C.open(sealKey, JSON.parse(fs.readFileSync(file(p, kind), 'utf8')), `vault:${kind}:${p}`); } catch { return null; } };
+  const readSealed = (p, kind) => {
+    let box; try { box = JSON.parse(fs.readFileSync(file(p, kind), 'utf8')); } catch { return null; }
+    try { return C.open(sealKey, box, `vault:${kind}:${p}`); } catch { /* maybe sealed by an earlier build */ }
+    if (!legacyKey) return null;
+    // 3.7: sealed with the server key alone (before the vault key file): read once and sealed again with both keys.
+    let value; try { value = C.open(legacyKey, box, `vault:${kind}:${p}`); } catch { return null; }
+    try { writeSealed(p, kind, value); } catch { /* read-only: next time again */ }
+    return value;
+  };
   const writeSealed = (p, kind, value) => {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     const f = file(p, kind); const tmp = `${f}.${process.pid}.tmp`;
@@ -136,7 +146,11 @@ async function workerMain() {
   }
 
   const ops = {
-    init(m) { sealKey = Buffer.from(String(m.key), 'hex'); dir = String(m.dir); if (sealKey.length !== 32) throw new V.VaultError('bad_key'); return true; },
+    init(m) {
+      sealKey = Buffer.from(String(m.key), 'hex'); dir = String(m.dir); if (sealKey.length !== 32) throw new V.VaultError('bad_key');
+      legacyKey = m.legacy ? Buffer.from(String(m.legacy), 'hex') : null; if (legacyKey && legacyKey.length !== 32) legacyKey = null;
+      return true;
+    },
     async setup(m) {
       const cfg = cleanCfg(m.cfg);
       V.endpoints(cfg.server);

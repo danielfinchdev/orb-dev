@@ -20,6 +20,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { translate } from '../core/i18n.mjs';
 import { VIEW, MAX_TABS, allowed, normalizeUrl, createActions, servePipe } from '../core/browser-protocol.mjs';
 import { ensureChromium } from './browser-engine.mjs';
+import { confineArgs } from '../agents/common.mjs';
 import { createScreencast } from './screencast.mjs';
 
 export const SERVER_BROWSER = Object.freeze({ minMemMB: 1200, instances: 1, maxInstances: 2, idleMs: 3 * 60_000, pageIdleMs: 10 * 60_000, queueMs: 45_000,
@@ -60,22 +61,36 @@ export function systemdScope(check = () => spawnSync('systemd-run', ['--user', '
   if (scopeOk == null) { try { const r = check(); scopeOk = !r.error && r.status === 0; } catch { scopeOk = false; } }
   return scopeOk;
 }
-export function scopeWrapper(exe, dir, { memoryMax = SERVER_BROWSER.memoryMax, oomScore = SERVER_BROWSER.oomScore } = {}) {
+// The script Chromium is started through on Linux: its own systemd scope (memory cap) when there is one, and
+// no_new_privs (setpriv) when the admin helper is installed, like the agents (src/agents/common.mjs › confineArgs): a
+// Chromium bug that escapes its sandbox must not reach `sudo -n orb-server-admin`. confine: { setpriv } | null.
+// Residual: under no_new_privs a setuid chrome-sandbox cannot work; Orb's own Chromium (an unpacked zip) never has one
+// and uses the user-namespace sandbox, and where the kernel/AppArmor denies that, the launch falls back without it (logged).
+export function scopeWrapper(exe, dir, { memoryMax = SERVER_BROWSER.memoryMax, oomScore = SERVER_BROWSER.oomScore, scope = true, confine = null } = {}) {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const file = path.join(dir, 'chromium-en-su-scope.sh');
   const q = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
+  const nnp = confine?.setpriv ? `${q(confine.setpriv)} --no-new-privs -- ` : '';
+  const run = scope ? `systemd-run --user --scope --quiet --collect -p MemoryMax=${memoryMax} -- ${q(exe)}` : q(exe);
   // The OOM score is raised here too (it is inherited, and only lowering it needs privileges).
-  fs.writeFileSync(file, `#!/bin/sh\necho ${Number(oomScore)} > /proc/self/oom_score_adj 2>/dev/null\nexec systemd-run --user --scope --quiet --collect -p MemoryMax=${memoryMax} -- ${q(exe)} "$@"\n`, { mode: 0o700 });
+  fs.writeFileSync(file, `#!/bin/sh\necho ${Number(oomScore)} > /proc/self/oom_score_adj 2>/dev/null\nexec ${nnp}${run} "$@"\n`, { mode: 0o700 });
   return file;
+}
+
+// no_new_privs for Chromium: only on Linux with the admin helper installed (then setpriv is required, as for agents).
+export function chromiumConfine({ platform = process.platform, helper, setpriv } = {}) {
+  if (platform !== 'linux') return null;
+  const c = confineArgs('chromium', [], { platform, ...(helper !== undefined ? { helper } : {}), ...(setpriv !== undefined ? { setpriv } : {}) });
+  return c.cmd === 'chromium' ? null : { setpriv: c.cmd };
 }
 
 const safeName = (s) => String(s || 'owner').replace(/[^\w-]/g, '_').slice(0, 60) || 'owner';
 
 // options: language(); ownerId() (whose profile an empty person is); root: the profiles' folder; config(): orb.json's
 // «browser»; display: 'xvfb' | 'headless' | 'auto'; onHuman({ person, kind, url, title }) (a CAPTCHA or a code);
-// vaultFill (WS6); for the tests: readMeminfo, launchContext(dir, options), executable, scope (bool).
+// vaultFill (WS6); for the tests: readMeminfo, launchContext(dir, options), executable, scope (bool), confine ({ setpriv } | null).
 export function createServerBrowser({ language = () => 'es', ownerId = () => 'owner', root = path.join(os.homedir(), 'orb-server', 'browser'), enginesRoot = null, config = () => ({}), display = 'auto',
-  onHuman = null, vaultFill = null, log = () => {}, readMeminfo, launchContext = null, executable = null, scope = null, timings = {} } = {}) {
+  onHuman = null, vaultFill = null, log = () => {}, readMeminfo, launchContext = null, executable = null, scope = null, confine = undefined, timings = {} } = {}) {
   const T = (key, vars) => translate(language() === 'en' ? 'en' : 'es', key, vars);
   const token = crypto.randomBytes(24).toString('hex');
   const opt = () => { const c = config()?.server ?? {}; return { ...SERVER_BROWSER, ...timings, instances: Math.min(SERVER_BROWSER.maxInstances, Math.max(1, Number(c.instances ?? timings.instances) || SERVER_BROWSER.instances)) }; };
@@ -102,7 +117,9 @@ export function createServerBrowser({ language = () => 'es', ownerId = () => 'ow
       const cfg = config() ?? {};
       let exe = executable ?? await ensureChromium({ config: cfg, log, ...(enginesRoot ? { dir: enginesRoot } : {}) });
       const scoped = scope ?? systemdScope();
-      if (scoped && exe) exe = scopeWrapper(exe, path.join(root, '.orb'));
+      const confined = confine === undefined ? chromiumConfine() : confine;
+      if ((scoped || confined) && exe) exe = scopeWrapper(exe, path.join(root, '.orb'), { scope: Boolean(scoped), confine: confined });
+      else if (confined && !exe) throw new Error('Chromium del Server: hace falta su ruta para arrancarlo con no_new_privs');
       // Chromium gets only what it needs of the environment (never Orb's keys or tokens).
       const env = Object.fromEntries(['PATH', 'HOME', 'LANG', 'LC_ALL', 'TZ', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS', 'SystemRoot', 'TEMP', 'TMP', 'LOCALAPPDATA', 'APPDATA', 'USERPROFILE', 'ProgramFiles', 'ProgramFiles(x86)'].filter((k) => process.env[k] != null).map((k) => [k, process.env[k]]));
       if (inst.xvfb) env.DISPLAY = inst.xvfb.display;

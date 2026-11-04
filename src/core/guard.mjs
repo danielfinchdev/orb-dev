@@ -178,8 +178,8 @@ export function botSecretDirs() {
     under('.mozilla'), under('.config', 'google-chrome'), under('.config', 'chromium'), under('.config', 'microsoft-edge'), under('.config', 'BraveSoftware'),
     under('Library', 'Application Support', 'Google', 'Chrome'), under('Library', 'Application Support', 'Firefox'),
     under('AppData', 'Local', 'Google', 'Chrome', 'User Data'), under('AppData', 'Local', 'Microsoft', 'Edge', 'User Data'), under('AppData', 'Roaming', 'Mozilla'),
-    under('AppData', 'Local', 'BraveSoftware'), under('AppData', 'Roaming', 'Orb'), under('.config', 'Orb')];
-  for (const k of ['CLAUDE_CONFIG_DIR', 'CODEX_HOME']) if (process.env[k]) list.push(process.env[k]);
+    under('AppData', 'Local', 'BraveSoftware'), under('AppData', 'Roaming', 'Orb'), under('.config', 'Orb'), under('.config', 'orb-server')];
+  for (const k of ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'ORB_VAULT_KEY_DIR']) if (process.env[k]) list.push(process.env[k]);
   for (const a of ctx.config?.accounts ?? []) if (a?.home) list.push(String(a.home));
   if (ctx.home) list.push(path.join(ctx.home, '.orb'));
   if (ctx.paths?.internal) list.push(ctx.paths.internal);

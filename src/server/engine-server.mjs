@@ -71,13 +71,18 @@ export function createServerEngine({ send }) {
     // data/vault/. ctx.vaultFill is the hook of the browser's vault_fill (src/server/vault/fill.mjs; WS5's browser takes it).
     {
       const { createVaultService } = await import('./vault/worker.mjs');
-      const { vaultSealKey } = await import('./vault/crypto.mjs');
+      const { vaultSealKey, vaultSealKeyV2 } = await import('./vault/crypto.mjs');
+      const { vaultKeyFile, loadVaultFileKey } = await import('./vault/keyfile.mjs');
       const { createVaultFillHook } = await import('./vault/fill.mjs');
       const { mayUseVault } = await import('../core/persons.mjs');
       const B = await import('../core/bots.mjs');
       const secret = ctx.secret ?? readKey(home);
-      if (secret?.length >= 32) {
-        vault = ctx.vault = createVaultService({ dir: path.join(ctx.paths.internal, 'vault'), sealKey: vaultSealKey(secret), log });
+      // 3.7: the seal also needs the vault's key file, outside ~/orb-server (keyfile.mjs): a copy of the data folder alone
+      // does not open it. A broken key file leaves the vault off (logged), never replaced.
+      let fileKey = null;
+      try { fileKey = secret?.length >= 32 ? loadVaultFileKey(vaultKeyFile(home)) : null; } catch (error) { log(`bóveda: no puedo usar su clave (${error.message}); la bóveda queda apagada`); }
+      if (fileKey) {
+        vault = ctx.vault = createVaultService({ dir: path.join(ctx.paths.internal, 'vault'), sealKey: vaultSealKeyV2(secret, fileKey), legacyKey: vaultSealKey(secret), log });
         ctx.vaultFill = createVaultFillHook({ vault, board, addRequest: B.addRequest, allowed: (p) => mayUseVault(board, p) });
       }
     }

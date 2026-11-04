@@ -5,6 +5,7 @@
 import crypto from 'node:crypto';
 import { ctx, tr } from './context.mjs';
 import { oneLine } from './safety.mjs';
+import { localDay } from './tz.mjs';
 
 export const ROLES = ['owner', 'user'];
 // 3.7 (WS6): vault: may use a password vault on Orb Server (vault_fill). The owner always may; others when the owner allows.
@@ -148,13 +149,16 @@ export const dropTickets = (person) => { for (const [k, t] of tickets) if (t.per
 
 // ---- the owner's overview: numbers only, never titles, names of things or content.
 export function overview(board) {
-  const day = new Date().toISOString().slice(0, 10);
+  // 3.7: «today» is each person's own day (the ledger stamps it in their time zone, budget.mjs › dayOf), not UTC's: from
+  // midnight to 1 a.m. in Madrid the overview showed 0.
+  const now = new Date();
+  const dayFor = (pid) => { let tz = null; try { tz = board.one('SELECT tz FROM persons WHERE id = ?', String(pid))?.tz || null; } catch { /* no column */ } return localDay(now, tz); };
   const count = (table, pid, extra = '') => { try { return board.one(`SELECT COUNT(*) AS n FROM ${table} WHERE person_id = ?${extra}`, pid).n; } catch { return 0; } };
   const owner = ownerId(board);
   return listPersons(board).map((p) => {
     // Rows from before 3.6 code stamped them (person_id NULL) are the owner's.
     const c = (table, extra = '') => count(table, p.id, extra) + (p.id === owner ? (board.one(`SELECT COUNT(*) AS n FROM ${table} WHERE person_id IS NULL${extra}`)?.n ?? 0) : 0);
-    const usage = board.one('SELECT COALESCE(SUM(turns), 0) AS turns, COALESCE(SUM(tokens_in), 0) + COALESCE(SUM(tokens_out), 0) AS tokens, COALESCE(SUM(usd), 0) AS usd FROM usage_ledger WHERE person_id = ? AND day = ?', p.id, day);
+    const usage = board.one('SELECT COALESCE(SUM(turns), 0) AS turns, COALESCE(SUM(tokens_in), 0) + COALESCE(SUM(tokens_out), 0) AS tokens, COALESCE(SUM(usd), 0) AS usd FROM usage_ledger WHERE person_id = ? AND day = ?', p.id, dayFor(p.id));
     const seen = board.one('SELECT MAX(last_seen) AS at FROM devices WHERE person_id = ?', p.id)?.at ?? null;
     return { id: p.id, name: p.name, role: p.role, hasPin: p.hasPin, caps: p.caps, devices: c('devices'), lastSeen: seen,
       counts: { bots: c('bots'), botsPaused: c('bots', ' AND paused = 1'), groups: c('bot_groups'), conversations: c('conversations', ' AND bot_id IS NULL AND group_id IS NULL'), tasks: c('tasks'), schedules: c('schedules'), projects: c('projects'), reminders: c('bot_reminders', ' AND enabled = 1') },
