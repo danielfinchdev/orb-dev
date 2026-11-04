@@ -7,7 +7,7 @@
 // Orb mode of a phone goes) and «Puede administrar» for each linked device are the user's choices.
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { Link2, QrCode, Smartphone, Globe, Monitor, Server, Pencil, Trash2, X, Unplug, Copy, Check, LoaderCircle, Bot, Code2, Layers, ShieldCheck, TriangleAlert, ChevronDown, ExternalLink } from 'lucide-react';
+import { Link2, Radar, QrCode, Smartphone, Globe, Monitor, Server, Pencil, Trash2, X, Unplug, Copy, Check, LoaderCircle, Bot, Code2, Layers, ShieldCheck, TriangleAlert, ChevronDown, ExternalLink } from 'lucide-react';
 import { PageHeader } from '@/components/page.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea } from '@/components/ui/basic.jsx';
@@ -392,7 +392,7 @@ export function MagicLinkView() {
   const t = useT();
   return (
     <>
-      <PageHeader icon={<Link2 className="text-primary size-5" />} title={t('link.title')} meta={t('link.titleHint')} />
+      <PageHeader icon={<Radar className="text-primary size-5" />} title={t('link.title')} meta={t('link.titleHint')} />
       <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-5 sm:px-5"><div className="mx-auto grid max-w-3xl gap-4"><MagicLinkPanel /></div></div>
     </>
   );

@@ -78,8 +78,10 @@ svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor;
 /* ---- chat list ---- */
 .pins { display: flex; gap: 14px; padding: 4px 4px 2px; overflow: hidden; }
 .pin { display: grid; justify-items: center; gap: 4px; width: 64px; font-size: 12px; position: relative; }
-.pin .star { position: absolute; top: 34px; left: 38px; width: 18px; height: 18px; border-radius: 999px; background: var(--warning); color: var(--warning-foreground); display: grid; place-items: center; box-shadow: 0 0 0 2px var(--background); }
-.pin .star svg { width: 11px; height: 11px; fill: currentColor; stroke: none; }
+.star { position: absolute; bottom: -2px; right: -4px; width: 18px; height: 18px; border-radius: 999px; background: var(--warning); color: var(--warning-foreground); display: grid; place-items: center; box-shadow: 0 0 0 2px var(--background); }
+.star svg { width: 11px; height: 11px; fill: currentColor; stroke: none; }
+.pin { padding: 6px 0 4px; border-radius: 14px; }
+.pin.sel { background: var(--accent); }
 .pin .unread { position: absolute; top: 0; right: 6px; width: 12px; height: 12px; border-radius: 999px; background: var(--primary); box-shadow: 0 0 0 2px var(--background); }
 .sect { display: flex; align-items: center; gap: 6px; padding: 12px 8px 4px; }
 .sect svg { width: 14px; height: 14px; color: var(--muted-foreground); }
@@ -141,8 +143,8 @@ svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor;
 .shapes { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
 .shapes > span { display: grid; place-items: center; aspect-ratio: 1; border-radius: 14px; border: 1px solid var(--border); background: var(--card); }
 .shapes > span.on { border: 2px solid var(--primary); background: var(--accent); }
-.colors { display: flex; gap: 10px; flex-wrap: wrap; }
-.colors > span { width: 30px; height: 30px; border-radius: 999px; box-shadow: inset 0 0 0 2px rgb(255 255 255 / .35); }
+.colors { display: flex; gap: 6px; justify-content: space-between; }
+.colors > span { width: 28px; height: 28px; border-radius: 999px; box-shadow: inset 0 0 0 2px rgb(255 255 255 / .35); }
 .colors > span.on { outline: 2.5px solid var(--foreground); outline-offset: 2px; }
 .field { display: grid; gap: 6px; }
 .field .in { height: 44px; display: flex; align-items: center; padding: 0 14px; border-radius: 12px; border: 1px solid var(--input); background: var(--card); font-size: 16px; }
@@ -208,6 +210,7 @@ svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor;
 </head>
 <body>
 <div id="app"></div>
+<script src="avatares.js"></script>
 <script>
 const P = new URLSearchParams(location.search);
 const D = P.get('d') ?? 'desktop', Z = P.get('z') ?? 'bots', S = P.get('s') ?? 'chat';
@@ -241,42 +244,29 @@ const I = {
 };
 const ic = (n, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24">${I[n]}</svg>`;
 
-// ---- the bot avatar family (original, derived from Orb·e: an orb, its visor and pill eyes, plus one detail) ----
-const HUES = { azul: 264, lila: 300, rosa: 350, coral: 28, ambar: 75, verde: 150, menta: 180, cielo: 225 };
-const SHAPES = ['esfera', 'cascos', 'antena', 'anillo', 'visera', 'gota'];
-function avatar(shape = 'esfera', color = 'azul', size = 44) {
-  const h = HUES[color] ?? 264; const id = `g${shape}${color}${size}${Math.random().toString(36).slice(2, 6)}`;
-  const body = shape === 'gota' ? '<path d="M50 10c19 18 32 33 32 50a32 32 0 0 1-64 0c0-17 13-32 32-50z" fill="url(#B)"/>' : '<circle cx="50" cy="54" r="34" fill="url(#B)"/>';
-  const cy = shape === 'gota' ? 60 : 54;
-  const extra = {
-    cascos: `<rect x="9" y="${cy - 12}" width="12" height="24" rx="6" fill="oklch(0.62 0.13 ${h})"/><rect x="79" y="${cy - 12}" width="12" height="24" rx="6" fill="oklch(0.62 0.13 ${h})"/>`,
-    antena: `<path d="M50 20V8" stroke="oklch(0.5 0.12 ${h})" stroke-width="4" stroke-linecap="round"/><circle cx="50" cy="8" r="6" fill="oklch(0.75 0.16 ${(h + 40) % 360})"/>`,
-    anillo: `<ellipse cx="50" cy="${cy + 4}" rx="47" ry="11" fill="none" stroke="oklch(0.78 0.12 ${(h + 30) % 360})" stroke-width="5" transform="rotate(-14 50 ${cy})"/>`,
-    visera: '', esfera: '', gota: ''
-  }[shape];
-  const visor = shape === 'visera'
-    ? `<rect x="22" y="${cy - 13}" width="56" height="26" rx="13" fill="oklch(0.22 0.06 ${h})"/>`
-    : `<ellipse cx="50" cy="${cy}" rx="22" ry="16" fill="oklch(0.22 0.06 ${h})"/>`;
-  const eyes = `<rect x="38" y="${cy - 7}" width="7" height="14" rx="3.5" fill="#8cf6ff"/><rect x="55" y="${cy - 7}" width="7" height="14" rx="3.5" fill="#8cf6ff"/>`;
-  return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true" style="flex:none"><defs><radialGradient id="B" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="oklch(0.93 0.06 ${h})"/><stop offset=".55" stop-color="oklch(0.74 0.14 ${h})"/><stop offset="1" stop-color="oklch(0.55 0.16 ${h})"/></radialGradient></defs>${shape === 'anillo' ? '' : ''}${extra && shape !== 'anillo' ? extra : ''}${body}${shape === 'anillo' ? extra : ''}${visor}${eyes}<ellipse cx="38" cy="${cy - 22}" rx="10" ry="5" fill="#fff" opacity=".45"/></svg>`.replaceAll('url(#B)', `url(#${id})`).replace('id="B"', `id="${id}"`);
-}
+// ---- the bot avatars: docs/diseno/maquetas/avatares.js (soft bodies with Orb's face) ----
+const SHAPES = Object.keys(OrbAvatar.SHAPES);
+const HUES = OrbAvatar.COLORS;
+const avatar = (shape, color, size = 44, state = 'idle', seed = '') => OrbAvatar.svg(shape, color, { size, state, seed });
 const pi = (txt, hue, s = 44) => `<span class="pi" style="width:${s}px;height:${s}px;font-size:${s * .32}px;background:oklch(0.6 0.14 ${hue})">${txt}</span>`;
 const robot = (s = 28) => `<img src="../../../src/ui/public/robot/cabeza.png" width="${s}" height="${s}" alt="" style="flex:none;object-fit:contain">`;
 
 // ---- example data ----
 const BOTS = [
-  { n: 'Jefe', sh: 'cascos', c: 'azul', chief: true, p: 'Hecho: Compras tiene la lista de la semana.', t: '9:41', un: 2, pin: true },
-  { n: 'Agenda', sh: 'antena', c: 'ambar', p: 'Mañana a las 10:00: dentista.', t: '9:30', pin: true },
-  { n: 'Compras', sh: 'anillo', c: 'verde', p: 'Le escribió a Jefe: lista lista, falta aprobar el pedido', bot: true, t: '9:12', un: 1, pin: true },
+  { n: 'Jefe', sh: 'bollo', c: 'cielo', chief: true, p: 'Hecho: Compras tiene la lista de la semana.', t: '9:41', un: 2, pin: true },
+  { n: 'Agenda', sh: 'capsula', c: 'melocoton', p: 'Mañana a las 10:00: dentista.', t: '9:30', pin: true },
+  { n: 'Compras', sh: 'mochi', c: 'menta', p: 'Le escribió a Jefe: lista lista, falta aprobar el pedido', bot: true, t: '9:12', un: 1, pin: true, st: 'message' },
   { n: 'Casa', group: true, p: 'Termostato a 21 °C hasta las 23:00.', t: 'Ayer', pin: true },
-  { n: 'Correo', sh: 'visera', c: 'cielo', p: '3 correos importantes resumidos.', t: '8:05', sec: 'Trabajo' },
+  { n: 'Correo', sh: 'nube', c: 'agua', p: '3 correos importantes resumidos.', t: '8:05', sec: 'Trabajo', st: 'thinking' },
   { n: 'Viajes', sh: 'gota', c: 'coral', p: 'Tu vuelo del viernes sale a las 7:15.', t: 'Lun', sec: 'Trabajo' },
-  { n: 'Recetas', sh: 'esfera', c: 'rosa', p: 'Para 4 personas: 500 g de pasta…', t: 'Dom', sec: 'Casa' },
-  { n: 'Gimnasio', sh: 'cascos', c: 'menta', p: 'Rutina «Piernas» marcada como hecha.', t: 'Sáb', sec: 'Casa' },
-  { n: 'Lector', sh: 'antena', c: 'lila', p: 'Resumen del artículo guardado en la biblioteca.', t: '2 nov', sec: null }
+  { n: 'Recetas', sh: 'flor', c: 'rosa', p: 'Para 4 personas: 500 g de pasta…', t: 'Dom', sec: 'Casa' },
+  { n: 'Gimnasio', sh: 'estrella', c: 'lima', p: 'Rutina «Piernas» marcada como hecha.', t: 'Sáb', sec: 'Casa' },
+  { n: 'Lector', sh: 'judia', c: 'lavanda', p: 'En pausa', t: '2 nov', sec: null, st: 'sleepy' }
 ];
-const groupAv = (s) => `<span style="position:relative;width:${s}px;height:${s}px;flex:none">${avatar('esfera', 'menta', s * .7).replace('<svg', '<svg style="position:absolute;left:0;top:0"')}${avatar('antena', 'ambar', s * .7).replace('<svg', '<svg style="position:absolute;right:0;bottom:0"')}</span>`;
-const botAv = (b, s) => (b.group ? groupAv(s) : avatar(b.sh, b.c, s));
+const groupAv = (s) => `<span style="position:relative;width:${s}px;height:${s}px;flex:none">${avatar('canto', 'limon', s * .66).replace('<svg', '<svg style="position:absolute;left:0;top:0"')}${avatar('corazon', 'frambuesa', s * .66).replace('<svg', '<svg style="position:absolute;right:0;bottom:0"')}</span>`;
+const botAv = (b, s) => (b.group ? groupAv(s) : avatar(b.sh, b.c, s, b.st ?? 'idle', b.n));
+// The chief: only a star badge on its avatar.
+const withStar = (b, s, html) => (b.chief ? `<span style="position:relative;display:inline-grid;flex:none">${html}<span class="star" style="width:${s > 50 ? 20 : 17}px;height:${s > 50 ? 20 : 17}px">${ic('star')}</span></span>` : html);
 const PROJ = [
   { n: 'mi-web', hue: 330, ini: 'MW', items: [
     { t: 'Revisar los enlaces rotos', p: 'Tarea #3 en curso · 2 de 5 pasos', live: true, tm: '9:40', un: 1, sel: true },
@@ -289,12 +279,12 @@ const PROJ = [
 ];
 
 // ---- pieces ----
-const botRow = (b, sel) => `<div class="item ${sel ? 'sel' : ''} ${b.un ? 'unr' : ''}">${botAv(b, 46)}<div class="grow"><div class="row"><span class="t trunc">${b.n}</span>${b.chief ? `<span class="badge" style="padding:0 6px">${ic('star').replace('class="i ', 'class="i " style="width:11px;height:11px" ')}Jefe</span>` : ''}</div><div class="p trunc">${b.bot ? ic('fwd') : ''}<span class="trunc">${b.p}</span></div></div><div class="meta"><span class="tm">${b.t}</span>${b.un ? `<span class="dot"></span>` : '<span style="height:9px"></span>'}</div></div>`;
+const botRow = (b, sel) => `<div class="item ${sel ? 'sel' : ''} ${b.un ? 'unr' : ''}">${withStar(b, 46, botAv(b, 46))}<div class="grow"><div class="t trunc">${b.n}</div><div class="p trunc">${b.bot ? ic('fwd') : ''}<span class="trunc">${b.p}</span></div></div><div class="meta"><span class="tm">${b.t}</span>${b.un ? `<span class="dot"></span>` : '<span style="height:9px"></span>'}</div></div>`;
 function botsList(phone) {
+  // Pinned bots: only the big row on top (not repeated in the list below); unread dot and, for the chief, a star.
   const pins = BOTS.filter((b) => b.pin);
   const secs = ['Trabajo', 'Casa'];
-  return `${phone ? '' : ''}<div class="pins">${pins.map((b) => `<div class="pin">${botAv(b, 56)}${b.chief ? `<span class="star">${ic('star')}</span>` : ''}${b.un ? '<span class="unread"></span>' : ''}<span class="trunc" style="max-width:64px">${b.n}</span></div>`).join('')}</div>
-  <div class="listcard">${pins.map((b, i) => botRow(b, !phone && i === 2)).join('')}</div>
+  return `<div class="pins">${pins.map((b, i) => `<div class="pin ${!phone && i === 2 ? 'sel' : ''}">${withStar(b, 58, botAv(b, 58))}${b.un ? '<span class="unread"></span>' : ''}<span class="trunc" style="max-width:66px">${b.n}</span></div>`).join('')}</div>
   ${secs.map((s) => `<div class="sect">${ic('down')}<span class="label">${s}</span><span class="grow"></span><span class="muted" style="font-size:12px">${BOTS.filter((b) => b.sec === s).length}</span></div><div class="listcard">${BOTS.filter((b) => b.sec === s).map((b) => botRow(b)).join('')}</div>`).join('')}
   <div class="sect">${ic('down')}<span class="label">Sin asignar</span></div><div class="listcard">${BOTS.filter((b) => !b.pin && !b.sec).map((b) => botRow(b)).join('')}</div>
   <div class="sect" style="color:var(--primary);font-size:13px">${ic('plus')}<span>Nueva sección</span></div>`;
@@ -325,13 +315,13 @@ function orbChat(phone) {
   </div>${composerOrb(phone)}`;
 }
 const chatHead = (zone, phone, on) => zone === 'bots'
-  ? `<div class="chat-head">${phone ? `<span class="icon-btn" style="margin-left:-4px">${ic('left')}</span>` : ''}<div class="who ${on ? 'on' : ''}">${avatar('anillo', 'verde', 38)}<div class="grid" style="display:grid;line-height:1.2"><span class="n">Compras</span><span class="s">Claude · Medio · en línea</span></div></div><span class="grow"></span><span class="icon-btn">${ic('search')}</span><span class="icon-btn">${ic('more')}</span></div>`
+  ? `<div class="chat-head">${phone ? `<span class="icon-btn" style="margin-left:-4px">${ic('left')}</span>` : ''}<div class="who ${on ? 'on' : ''}">${avatar('mochi', 'menta', 40, 'thinking', 'Compras')}<div class="grid" style="display:grid;line-height:1.2"><span class="n">Compras</span><span class="s">Preparando el pedido…</span></div></div><span class="grow"></span><span class="icon-btn">${ic('search')}</span><span class="icon-btn">${ic('more')}</span></div>`
   : `<div class="chat-head">${phone ? `<span class="icon-btn" style="margin-left:-4px">${ic('left')}</span>` : ''}<div class="who ${on ? 'on' : ''}">${robot(36)}<div style="display:grid;line-height:1.2;min-width:0"><span class="n trunc">Revisar los enlaces rotos</span><span class="s row" style="gap:4px">${pi('MW', 330, 13)} mi-web · Orbe</span></div></div><span class="grow"></span>${phone ? '' : `<span class="icon-btn">${ic('bell')}</span><span class="icon-btn">${ic('pause')}</span>`}<span class="icon-btn">${ic('more')}</span></div>`;
 const r = (icon, label, value = '', chev = true, extra = '') => `<div class="r ${extra}">${ic(icon)}<span class="grow">${label}</span><span class="v">${value}</span>${chev ? ic('right', 'chev') : ''}</div>`;
 function botInfo(phone) {
   return `${phone ? `<div class="chat-head" style="border:0">${'<span class="icon-btn">' + ic('left') + '</span>'}<span class="grow"></span><span class="icon-btn">${ic('share')}</span><span class="icon-btn">${ic('more')}</span></div>` : `<div class="chat-head" style="background:transparent"><span class="n" style="font-weight:600">Información del bot</span><span class="grow"></span><span class="icon-btn">${ic('x')}</span></div>`}
   <div style="overflow:hidden;flex:1">
-  <div class="top">${avatar('anillo', 'verde', phone ? 104 : 92)}<span class="n">Compras</span><span class="muted" style="font-size:13px;max-width:280px">Compara precios y prepara la compra. Nunca compra sin tu aprobación.</span><span class="btn sm" style="margin-top:6px">${ic('pen')}Editar</span></div>
+  <div class="top">${avatar('mochi', 'menta', phone ? 112 : 100, 'idle', 'Compras')}<span class="n">Compras</span><span class="muted" style="font-size:13px;max-width:280px">Compara precios y prepara la compra. Nunca compra sin tu aprobación.</span><span class="btn sm" style="margin-top:6px">${ic('pen')}Editar</span></div>
   <div class="group">${r('brain', 'Cerebro', 'Claude · Medio')}${r('globe', 'Herramientas', 'Internet, Navegador')}${r('apps', 'Apps conectadas', '2')}${r('repeat', 'Rutinas', '1 activada')}${r('file', 'Biblioteca', '12 archivos')}</div>
   <div class="group"><div class="r">${ic('bell')}<span class="grow">Notificaciones</span><span class="switch"></span></div></div>
   <p class="ghint">Te avisa cuando termina algo o necesita tu aprobación.</p>
@@ -349,12 +339,11 @@ function orbInfo(phone) {
   </div>`;
 }
 function createBot(phone) {
-  const shape = 'cascos', color = 'lila';
-  return `<div style="display:grid;justify-items:center;gap:6px;padding:${phone ? '6px 0 4px' : '0'}">${avatar(shape, color, phone ? 150 : 132)}<span class="muted" style="font-size:12px">Vista previa</span></div>
-  <div class="field"><span class="label" style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--foreground)">Nombre</span><span class="in">Lector</span></div>
-  <div class="field"><span style="font-size:13px;font-weight:500">Forma</span><div class="shapes">${SHAPES.map((s) => `<span class="${s === shape ? 'on' : ''}">${avatar(s, color, phone ? 40 : 44)}</span>`).join('')}</div></div>
-  <div class="field"><span style="font-size:13px;font-weight:500">Color</span><div class="colors">${Object.keys(HUES).map((c) => `<span class="${c === color ? 'on' : ''}" style="background:radial-gradient(circle at 35% 30%,oklch(0.9 0.06 ${HUES[c]}),oklch(0.62 0.15 ${HUES[c]}))"></span>`).join('')}</div></div>
-  <div class="field"><span style="font-size:13px;font-weight:500">Qué hará <span class="muted" style="font-weight:400">(opcional)</span></span><span class="in ph" style="height:64px;align-items:flex-start;padding-top:10px">Resume los artículos que le envío…</span></div>`;
+  const shape = 'gota', color = 'lavanda';
+  return `<div style="display:grid;justify-items:center;padding:${phone ? '0 0 2px' : '0'}">${avatar(shape, color, phone ? 150 : 128, 'happy', 'nuevo')}</div>
+  <div class="field"><span style="font-size:13px;font-weight:500">Nombre</span><span class="in">Lector</span></div>
+  <div class="field"><span style="font-size:13px;font-weight:500">Forma</span><div class="shapes">${SHAPES.map((s) => `<span class="${s === shape ? 'on' : ''}">${OrbAvatar.svg(s, color, { size: phone ? 40 : 42, still: true, blush: false })}</span>`).join('')}</div></div>
+  <div class="field"><span style="font-size:13px;font-weight:500">Color</span><div class="colors">${Object.keys(HUES).map((c) => `<span class="${c === color ? 'on' : ''}" style="background:radial-gradient(circle at 35% 30%,oklch(0.96 0.05 ${HUES[c]}),oklch(0.78 0.12 ${HUES[c]}))"></span>`).join('')}</div></div>`;
 }
 
 // ---- layouts ----

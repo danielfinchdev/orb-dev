@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link2, Smartphone, MessageSquarePlus, ListTodo, FolderKanban, Bot, BookOpen, Bug, ChevronUp, ChevronDown, Settings, SquareTerminal, ChevronRight, FolderPlus, ShieldAlert, CalendarClock, CircleCheck, Undo2, GraduationCap, PenTool, HeartPulse, Layers, Search, SlidersHorizontal, X, Sparkles, GitBranch, ListChecks, Clock, MessageCircleQuestion, CirclePause, Folder } from 'lucide-react';
+import { Radar, Smartphone, MessageSquarePlus, ListTodo, FolderKanban, Bot, BookOpen, Bug, ChevronUp, ChevronDown, Settings, SquareTerminal, ChevronRight, FolderPlus, ShieldAlert, CalendarClock, CircleCheck, Undo2, GraduationCap, PenTool, HeartPulse, Layers, Search, SlidersHorizontal, X, Sparkles, GitBranch, ListChecks, Clock, MessageCircleQuestion, CirclePause, Folder } from 'lucide-react';
 import { Robot } from './robot.jsx';
 import { ThemeToggle, SidebarToggle } from './theme-toggle.jsx';
 import { Button } from './ui/button.jsx';
@@ -237,7 +237,7 @@ function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
     ...(bridge.mobile ? [{ icon: Smartphone, label: t('nav.phone'), active: is('phone'), onClick: () => go('phone'), testid: 'nav-phone' }]
       : [{ icon: Settings, label: t('nav.settings'), active: settingsOpen, onClick: () => openSettings(), testid: 'nav-settings' }]),
     // 3.5: a linked device (a browser with the PC's layout) has Magic Link as a screen; on the PC it is in Ajustes.
-    ...(bridge.mobile ? [{ icon: Link2, label: t('link.title'), active: is('link'), onClick: () => go('link'), testid: 'nav-link' }] : []),
+    ...(bridge.mobile ? [{ icon: Radar, label: t('link.title'), active: is('link'), onClick: () => go('link'), testid: 'nav-link' }] : []),
     ...(bridge.mobile ? [] : [{ icon: Bot, label: t('nav.agents'), active: is('agents'), onClick: () => go('agents'), testid: 'nav-agents' }]),
     { icon: BookOpen, label: t('nav.memories'), hint: t('nav.memoriesHint'), active: memories, onClick: () => go('logs'), testid: 'nav-memories' },
     // 2.6: how the app works, the FAQ and the button that replays the guided tour.

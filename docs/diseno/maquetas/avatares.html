@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Orb · familia de avatares de bots (maqueta)</title>
+<!-- Design mockup only. ?v=sheet|states &t=light|dark. scripts/maquetas.mjs shoots it. -->
+<style>
+@font-face { font-family: "Outfit Variable"; src: url("../../../node_modules/@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; }
+:root { --bg: oklch(0.985 0.003 268); --fg: oklch(0.21 0.02 268); --muted: oklch(0.5 0.02 268); --card: #fff; --border: oklch(0.915 0.008 268); }
+.dark { --bg: oklch(0.155 0.008 268); --fg: oklch(0.95 0.005 268); --muted: oklch(0.7 0.015 268); --card: oklch(0.195 0.01 268); --border: oklch(0.27 0.012 268); }
+* { box-sizing: border-box; margin: 0; }
+body { font: 14px/1.4 "Outfit Variable", system-ui, sans-serif; background: var(--bg); color: var(--fg); padding: 28px 32px; }
+h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; } p.sub { color: var(--muted); margin-bottom: 18px; }
+.grid { display: grid; grid-template-columns: 110px repeat(12, 1fr); gap: 6px 4px; align-items: center; }
+.grid .h { font-size: 12px; color: var(--muted); text-align: center; }
+.grid .c { font-size: 12.5px; color: var(--muted); }
+.cell { display: grid; place-items: center; }
+.strip { display: grid; grid-template-columns: 150px repeat(8, 1fr); gap: 8px; align-items: center; margin-bottom: 10px; padding: 8px 12px; border-radius: 16px; background: var(--card); border: 1px solid var(--border); }
+.strip b { font-weight: 600; } .strip small { display: block; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="avatares.js"></script>
+<script>
+const P = new URLSearchParams(location.search);
+if (P.get('t') === 'dark') document.documentElement.classList.add('dark');
+const { SHAPES, COLORS, svg } = OrbAvatar;
+const app = document.getElementById('app');
+if ((P.get('v') ?? 'sheet') === 'sheet') {
+  const rows = ['coral', 'limon', 'menta', 'cielo', 'lavanda', 'rosa'];
+  app.innerHTML = `<h1>Avatares de los bots · 12 formas × 10 colores</h1><p class="sub">Cuerpos blandos con la cara de Orb (ojos redondos con brillo, mofletes, boca pequeña). SVG determinista.</p>
+  <div class="grid"><span></span>${Object.values(SHAPES).map((s) => `<span class="h">${s.label}</span>`).join('')}
+  ${rows.map((c) => `<span class="c">${c}</span>${Object.keys(SHAPES).map((s) => `<span class="cell">${svg(s, c, { size: 78, still: true })}</span>`).join('')}`).join('')}</div>
+  <div style="display:flex;gap:14px;margin-top:18px;align-items:center"><span class="c" style="width:110px;color:var(--muted);font-size:12.5px">10 colores</span>${Object.keys(COLORS).map((c) => `<span style="display:grid;justify-items:center;gap:2px">${svg('mochi', c, { size: 60, still: true })}<small style="color:var(--muted);font-size:11px">${c}</small></span>`).join('')}</div>`;
+} else {
+  const STATES = [['idle', 'Reposo', 'respira, parpadea y mira', 7], ['message', 'Mensaje nuevo', 'un bote', .9], ['thinking', 'Trabajando', 'se balancea, mira arriba', 1.4], ['sleepy', 'En pausa', 'ojos cerrados, respira lento', 6], ['happy', 'Aprobado', 'salta contento', 1]];
+  const who = [['mochi', 'cielo'], ['gota', 'menta'], ['nube', 'lavanda'], ['bollo', 'melocoton'], ['estrella', 'limon']];
+  app.innerHTML = `<h1>Estados y animaciones</h1><p class="sub">8 fotogramas de cada animación. Con «reducir movimiento» o en ahorro de energía, el avatar queda quieto.</p>
+  ${STATES.map(([st, name, hint, dur], i) => `<div class="strip"><span><b>${name}</b><small>${hint}</small></span>${Array.from({ length: 8 }, (_, k) => `<span class="cell">${svg(who[i][0], who[i][1], { size: 92, state: st, delay: (dur * k) / 8 + (st === 'idle' ? 4.03 : 0) })}</span>`).join('')}</div>`).join('')}`;
+}
+</script>
+</body>
+</html>

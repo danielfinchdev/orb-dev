@@ -155,7 +155,7 @@ sections 2.1–2.4 describe the shipped app.
   the zone's other places as four labelled icons (Bots: Recordatorios, Casa, Memoria, Servidor; Orb: Tareas,
   Proyectos, Programadas, Pizarra), then the chat list; the sidebar footer exactly as in 2.1. Center: the conversation.
   Right: the info panel, opened by clicking the name in the chat header and closed with ✕.
-- **Chat list.** Bots: pinned bots as big avatars on top (chief with a star badge, unread dot), then user-made
+- **Chat list.** Bots: pinned bots as big avatars on top only (not repeated below; chief with a star badge, unread dot), then user-made
   sections («Trabajo», «Casa»…, collapsible, «Nueva sección») and «Sin asignar»; each row avatar, name, last message
   (a forward icon when one bot wrote to another), time and unread dot. Orb: chats with Orbe grouped by project, each
   row with its latest progress (a live task, «Esperando tu aprobación», «Completada · 4 archivos»).
@@ -168,9 +168,13 @@ sections 2.1–2.4 describe the shipped app.
 - **Phone.** Opens on the zone's chat list; ☰ top left (zone switch, user, Ajustes and the places that are not tabs);
   three tabs per zone (Bots: Chats · Recordatorios · Casa; Orb: Chats · Tareas · Proyectos); a floating button to
   create. Android in the glass language: the chat header is a glass pill over the colour field.
-- **Bot avatars.** An original family derived from Orb·e: an orb with its dark visor and two pill eyes, plus one
-  detail (plain, ear pods, antenna, ring, wide visor, drop) in eight colours; SVG, deterministic, chosen when the bot is
-  created (big live preview, shape grid, colour row, one «Crear bot» button). Never emoji as the bot's identity.
+- **Bot avatars** (`docs/diseno/maquetas/avatares.js`). Original art: soft rounded bodies (nube, gota, judía, mochi,
+  flor, estrella, canto, gominola, bollo, corazón, hoja, cápsula) in ten pastel colours, a soft gradient and highlight,
+  and Orb's own face: round glossy eyes with a white highlight (like Orb·e's), blush and a tiny mouth. Deterministic SVG
+  from shape + colour (+ seed for blink timing). States: idle (breathing, random blink, looking around), new message
+  (one bounce), working (wiggle, eyes up), paused (closed eyes, slow breathing, a «z»), approved (hop, smiling eyes).
+  Reduced motion or low power: static. Chosen at creation (big live preview, 12-shape grid, 10-colour row, name,
+  «Crear bot»). The chief is marked only by a star badge on its avatar. Never emoji or third-party characters.
 
 ## 3. Tokens
 

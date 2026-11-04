@@ -9,6 +9,7 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'test-results', 'maquetas'); fs.mkdirSync(OUT, { recursive: true });
 const page0 = pathToFileURL(path.join(ROOT, 'docs', 'diseno', 'maquetas', 'mensajeria.html')).href;
+const avatars = pathToFileURL(path.join(ROOT, 'docs', 'diseno', 'maquetas', 'avatares.html')).href;
 const exe = ['/opt/pw-browsers/chromium/chrome-linux/chrome'].find((f) => fs.existsSync(f));
 const browser = await chromium.launch(exe ? { executablePath: exe, args: ['--no-sandbox'] } : { channel: process.platform === 'win32' ? 'msedge' : 'chrome', headless: true });
 const SIZE = { desktop: { width: 1440, height: 900, deviceScaleFactor: 1 }, phone: { width: 390, height: 844, deviceScaleFactor: 2 }, glass: { width: 390, height: 844, deviceScaleFactor: 2 } };
@@ -29,6 +30,19 @@ for (const d of ['desktop', 'phone', 'glass']) {
       await page.screenshot({ path: file });
       shots.push(file);
     }
+  }
+  await ctx.close();
+}
+// The avatar family: the sheet (shapes × colours) and the frames of each state's animation.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, locale: 'es-ES' });
+  const page = await ctx.newPage();
+  for (const v of ['sheet', 'states']) for (const t of ['light', 'dark']) {
+    await page.goto(`${avatars}?v=${v}&t=${t}`);
+    await page.evaluate(() => document.fonts.ready);
+    const file = path.join(OUT, `avatares-${v}-${t}.png`);
+    await page.screenshot({ path: file, fullPage: true });
+    shots.push(file);
   }
   await ctx.close();
 }
