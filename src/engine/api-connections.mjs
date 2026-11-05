@@ -268,8 +268,11 @@ export function connectionMethods({ board, emit, remoteRef, version = null }) {
     if (!isAdmin(who)) deny(who, method, 'server');
     const p = serverPeer();
     if (!p) fail(tr('conn.noServer'));
-    if (!p.online) fail(tr('conn.serverOffline', { name: p.name }));
-    const out = await link().call(p.id, method, params);
+    if (!p.online || !link()) fail(tr('conn.serverOffline', { name: p.name }));
+    let out;
+    // 3.7: the Server going away in the middle of the call: the same plain words as when it was already offline.
+    try { out = await link().call(p.id, method, params); }
+    catch (error) { if (error?.offline || error?.status === 0) fail(tr('conn.serverOffline', { name: p.name })); throw error; }
     changed();
     return out;
   }

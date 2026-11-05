@@ -118,6 +118,7 @@ test('resumen de personas: «hoy» es el día de cada persona, como el que apunt
       recordSpend(board, { person: owner, account: 'claude', usage: { input_tokens: 7, output_tokens: 3 } });
       assert.equal(P.overview(board).find((p) => p.id === owner).today.tokens, 10, tz);
     }
+    board.db.close();
   } finally { t.cleanup(); }
 });
 
