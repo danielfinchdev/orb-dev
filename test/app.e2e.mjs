@@ -335,7 +335,7 @@ try {
   // ---- a new version (ORB_FAKE_UPDATE: no network): the card in the corner and the Updates card in Ajustes
   step = 'actualización';
   await win.evaluate(() => window.orb.update.check()); // the app also checks by itself 15 s after opening
-  await win.waitForSelector('[data-testid=update-card] >> text=Hay una versión nueva de Orb: 9.9.9.');
+  await win.waitForSelector('[data-testid=update-card] >> text=Nueva versión disponible 9.9.9');
   await section('actualizaciones');
   await win.waitForSelector('[data-testid=updates-card] >> text=Nueva versión disponible: 9.9.9');
   await win.waitForTimeout(500); // the card fades in
