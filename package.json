@@ -18,7 +18,7 @@
     "test": "vite build --logLevel warn && node --test test/*.test.mjs",
     "test:app": "vite build && node test/app.e2e.mjs",
     "icon": "node scripts/icono.mjs",
-    "dist": "vite build && electron-builder --win nsis portable",
+    "dist": "vite build && electron-builder --win nsis",
     "dist:linux": "vite build && electron-builder --linux AppImage deb",
     "dist:server": "node scripts/dist-servidor.mjs",
     "dist:servidor": "node scripts/dist-servidor.mjs",
