@@ -839,7 +839,8 @@ launched hidden, with its output read by Orb, and it stores the session in the a
 - **Windows installer and Orb Light (portable):** `npm run dist`, or CI when `version` changes on `main` (`.github/workflows/release.yml`).
 - The Claude SDK and `zod` go in `app.asar.unpacked`, next to the engine (`build.asarUnpack`).
 - The SDK's copy of Claude Code (238 MB) **is not packaged**: the user's is used.
-- `build/icon.ico` holds 10 sizes (`npm run icon:ico`).
+- The app icon is drawn in `build/icon-src/*.svg`; `npm run icon` renders `build/icon.ico` (10 sizes, the short «o•»
+  version up to 32 px), `build/icons/` (Linux), `build/icon.png` and `src/ui/public/icon.png`.
 - **Tests on every push and PR**, on Windows and Linux: `.github/workflows/pruebas.yml`.
 - **Installer** (NSIS, per user, no admin): desktop and Start menu shortcut. The release also publishes `latest.yml` and
   the `.blockmap` files, which the updater uses.
