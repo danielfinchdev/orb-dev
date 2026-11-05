@@ -178,6 +178,8 @@ const uniqueName = (board, person, name, uid) => {
 export function upsertBot(board, b, { person, home, epoch, state = null }) {
   const local = botByUid(board, b.uid);
   const st = state ?? (b.home_state === 'pending' ? 'active' : b.home_state) ?? 'active';
+  // A copy frozen here (its Orb unlinked) stays frozen whatever a page still on its way says; relinking revives it first.
+  const frozen = !state && local?.home_state === 'archived';
   const fields = { icon: b.icon ?? '', avatar: b.avatar, role_text: b.role_text ?? '', agent: b.agent ?? 'claude', model: b.model, effort: b.effort ?? 'medium', tools: b.tools ?? '[]', accounts: b.accounts ?? '{}', exclusive: b.exclusive ?? '[]',
     is_chief: Number(b.is_chief) ? 1 : 0, paused: Number(b.paused) ? 1 : 0, caps: b.caps, needs: b.needs, updated_at: b.updated_at ?? now() };
   if (local) {
@@ -185,7 +187,7 @@ export function upsertBot(board, b, { person, home, epoch, state = null }) {
     // A chief is one per person: the copy's flag does not take it from the bots run here.
     const name = uniqueName(board, local.person_id ?? board.ownerId?.(), b.name, b.uid);
     const cols = Object.keys(fields);
-    board.run(`UPDATE bots SET ${cols.map((k) => `${k} = ?`).join(', ')}, name = ?, home = ?, home_epoch = ?, home_state = ? WHERE id = ?`, ...cols.map((k) => fields[k] ?? null), name, home, Number(epoch) || 0, st, local.id);
+    board.run(`UPDATE bots SET ${cols.map((k) => `${k} = ?`).join(', ')}, name = ?, home = ?, home_epoch = ?, home_state = ? WHERE id = ?`, ...cols.map((k) => fields[k] ?? null), name, home, Number(epoch) || 0, frozen ? 'archived' : st, local.id);
     return { id: local.id, created: false, renamed: name !== b.name ? name : null };
   }
   if (!person) return null;

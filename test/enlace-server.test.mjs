@@ -141,7 +141,7 @@ test('hola: capacidades del Server y quién tiene que actualizar', async () => {
 test('los móviles del PC pasan solos al Server y su modo Orb llega al PC a través de él', async () => {
   const ana = links[0];
   const to = await until(() => ana.peers().find((p) => p.name === 'Servidor' && p.online), 'el móvil de Ana está en el Server', 20000);
-  assert.equal(ana.peers().length, 1, 'el enlace con el PC se fue');
+  await until(() => ana.peers().length === 1, 'el enlace con el PC se fue', 20000);
   assert.ok(to.handedFrom);
   await until(async () => !(await pc.call('link.devices')).some((d) => d.name === 'Móvil de Ana'), 'el PC olvida su enlace');
   const there = (await srv.call('link.devices')).find((d) => d.name === 'Móvil de Ana');

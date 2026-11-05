@@ -32,7 +32,7 @@ function hub({ board, bots, remoteRef }) {
     return String(v || (board.isOwnerPerson(p) ? ctx.config.bots?.location : '') || 'local');
   };
   const setLocation = (person, loc, emit) => {
-    if (board.isOwnerPerson(person)) { const c = saveConfig({ bots: { location: loc } }); emit?.('config:changed', c); }
+    if (board.isOwnerPerson(person)) { const c = saveConfig({ bots: { location: loc } }); try { board.personSetting(person, 'bots.location', null); } catch { /* no row */ } emit?.('config:changed', c); } // a stale row would win over orb.json
     else board.personSetting(person, 'bots.location', loc);
   };
   // 3.6 (WS2): person: only that person's links here (a link without a person is the owner's).
