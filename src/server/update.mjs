@@ -126,12 +126,11 @@ export function createUpdater({ home, version, log = () => {}, fetchImpl = fetch
       const p = readPending(appDir);
       if (!p || p.to !== version) return null;
       return new Promise((resolve) => {
-        const t = setTimeout(async () => {
+        setTimeout(async () => { // not unref: whoever awaits the verdict must get it
           let ok = false; try { ok = await healthy(); } catch { ok = false; }
           if (ok) { markHealthy(appDir, log); resolve('kept'); return; }
           const back = rollback(appDir, log); resolve(back ? 'rolledBack' : 'none'); if (back) restart();
         }, healthMs);
-        t.unref?.();
       });
     }
   };
