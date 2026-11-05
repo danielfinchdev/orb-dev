@@ -1,10 +1,12 @@
-# The Windows downloads, built and checked on a real Windows machine and published as a GitHub release:
+# The desktop downloads, built and checked on a real machine of each system and published together as a GitHub release:
 #   Orb-<versión>-instalador.exe      the whole app: installs for the user and updates itself (recommended)
 #   Orb-<versión>-light-portable.exe  Orb Light: the essentials, nothing to install (it only tells of new versions)
+#   Orb-<versión>-linux-<arch>.AppImage  3.7: Linux, nothing to install, updates itself (latest-linux*.yml)
+#   Orb-<versión>-linux-<arch>.deb       3.7: Linux (Debian, Ubuntu…), installed with the system; it tells of new versions
 # Publishing a version = changing "version" in package.json on main: when that version has no release yet, this builds it,
-# tests it (also the packaged app on Windows) and publishes it as release v<version>, creating the tag. From the Actions
+# tests it (also the packaged app on Windows and Linux) and publishes it as release v<version>, creating the tag. From the Actions
 # tab ("Run workflow") it does the same; a version already published is only built and checked (files kept in the run).
-name: Versión para Windows
+name: Versión para Windows y Linux
 
 on:
   push:
@@ -89,6 +91,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: La app nunca sale con la suma de install.sh de relleno
+        run: node scripts/release.mjs check-server-release
       - name: Construir el instalador y Orb Light (portable)
         run: npx vite build && npx electron-builder --win nsis portable --x64 --publish never
       - name: Probar la app empaquetada en Windows
@@ -101,10 +105,52 @@ jobs:
           name: orb-dev-windows
           path: |
             dist/*.exe
+            dist/*.blockmap
             dist/latest.yml
             test-results/
+
+  # 3.7: the Linux app (AppImage and .deb, x64 and arm64), built on Ubuntu; the x64 one is opened and checked like on Windows.
+  linux:
+    needs: [version, pruebas]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: La app nunca sale con la suma de install.sh de relleno
+        run: node scripts/release.mjs check-server-release
+      - name: Construir la AppImage y el .deb
+        run: npx vite build && npx electron-builder --linux AppImage deb --x64 --arm64 --publish never
+      - run: sudo apt-get update && sudo apt-get install -y xvfb
+      - name: Probar la app empaquetada en Linux
+        run: xvfb-run -a node test/smoke.e2e.mjs
+        env:
+          ORB_E2E_EXE: dist/linux-unpacked/orb-dev
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: orb-dev-linux
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+            dist/latest-linux*.yml
+            test-results/
+
+  # One release with every file, once both systems are built and checked.
+  publicar:
+    needs: [version, windows, linux]
+    if: needs.version.outputs.new == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: orb-dev-*
+          merge-multiple: true
       - name: Publicar la versión
-        if: needs.version.outputs.new == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.version.outputs.version }}
@@ -116,3 +162,6 @@ jobs:
             dist/Orb-*.exe
             dist/Orb-*.blockmap
             dist/latest.yml
+            dist/Orb-*.AppImage
+            dist/Orb-*.deb
+            dist/latest-linux*.yml

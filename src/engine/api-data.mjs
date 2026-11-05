@@ -79,7 +79,7 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
       return { enabled: ctx.config.backup?.enabled !== false, folder: folder(), recovery: Boolean(rec), recoveryAt: rec?.at ?? null, last, running: Boolean(running), tz: ownerTz(board), hour: DAILY_HOUR, ...opts() };
     },
     'backup.list': async () => (await K.listBackups(folder())).map(({ file, ...b }) => ({ ...b, path: file })),
-    // kind: manual (Ajustes › Datos, orb-nucleo copia ahora) or preupdate (the app, before installing a new version).
+    // kind: manual (Ajustes › Datos, orb-server copia ahora) or preupdate (the app, before installing a new version).
     'backup.now': ({ kind }) => run(['preupdate', 'premigration'].includes(kind) ? kind : 'manual'),
     'backup.verify': async ({ file, passphrase }) => { const r = await K.verifyBackup(fileOf(file), { secret: secret(), passphrase: pass(passphrase) }); return { ok: true, files: r.files, bytes: r.bytes, created: r.header.created, version: r.header.version }; },
     // The copy is checked and unpacked now; it replaces the data at the next start of the engine (restartNeeded).

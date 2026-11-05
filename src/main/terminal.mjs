@@ -7,6 +7,32 @@ import { spawn } from 'node:child_process';
 import { translate } from '../core/i18n.mjs';
 
 export const TERMINALS = { auto: 'Automática', warp: 'Warp', wt: 'Windows Terminal', powershell: 'PowerShell', cmd: 'Símbolo del sistema (CMD)' };
+// 3.7 (Linux): the usual terminals, in the order «Automática» tries them (x-terminal-emulator is the one the system chose
+// on Debian / Ubuntu). Each one is told the folder its own way; those without a way (xterm) start in it (cwd).
+// open: the arguments to open it in dir; run: to run a command there (bash -lc …, the window stays open afterwards).
+export const LINUX_TERMINALS = {
+  'x-terminal-emulator': { open: () => [], run: (dir, sh) => ['-e', ...sh] },
+  'gnome-terminal': { open: (dir) => [`--working-directory=${dir}`], run: (dir, sh) => [`--working-directory=${dir}`, '--', ...sh] },
+  konsole: { open: (dir) => ['--workdir', dir], run: (dir, sh) => ['--workdir', dir, '-e', ...sh] },
+  'xfce4-terminal': { open: (dir) => [`--working-directory=${dir}`], run: (dir, sh) => [`--working-directory=${dir}`, '-x', ...sh] },
+  kitty: { open: (dir) => ['--directory', dir], run: (dir, sh) => ['--directory', dir, ...sh] },
+  alacritty: { open: (dir) => ['--working-directory', dir], run: (dir, sh) => ['--working-directory', dir, '-e', ...sh] },
+  xterm: { open: () => [], run: (dir, sh) => ['-e', ...sh] }
+};
+// The terminals a user can force in Ajustes → Interfaz on each system (the window shows the same list).
+export const terminalChoices = (platform = process.platform) => (platform === 'win32' ? Object.keys(TERMINALS) : ['auto', 'warp', ...(platform === 'linux' ? Object.keys(LINUX_TERMINALS) : [])]);
+// The Linux terminal for a choice: the one chosen when it is installed, otherwise the first one found. Pure (tested).
+export function linuxTerminal(choice, found) {
+  if (LINUX_TERMINALS[choice] && found.installed?.includes(choice)) return choice;
+  return found.linux ?? null;
+}
+// Programs started from an AppImage must not think they are the AppImage (its updater reads APPIMAGE).
+export function externalEnv(env = process.env) {
+  if (!env.APPIMAGE) return env;
+  const rest = { ...env };
+  for (const k of ['APPIMAGE', 'APPDIR', 'ARGV0', 'OWD']) delete rest[k];
+  return rest;
+}
 
 const exists = (file) => Boolean(file) && fs.existsSync(file);
 function inPath(name, env) {
@@ -26,10 +52,8 @@ export function findTerminals(platform = process.platform, env = process.env) {
     return { warp, wt, powershell: inPath('powershell', env) ?? 'powershell.exe', cmd: env.ComSpec || 'cmd.exe' };
   }
   if (platform === 'darwin') return { warp: exists('/Applications/Warp.app') ? '/Applications/Warp.app' : null, terminal: 'Terminal' };
-  return {
-    warp: inPath('warp-terminal', env) ?? inPath('warp', env),
-    linux: ['x-terminal-emulator', 'gnome-terminal', 'konsole', 'xfce4-terminal', 'kitty', 'alacritty', 'xterm'].map((n) => inPath(n, env) && n).find(Boolean) ?? null
-  };
+  const installed = Object.keys(LINUX_TERMINALS).filter((n) => inPath(n, env));
+  return { warp: inPath('warp-terminal', env) ?? inPath('warp', env), linux: installed[0] ?? null, installed };
 }
 
 // The program to start for the chosen terminal: { url } (Warp's own link) or { cmd, args, cwd }. Pure, so it is tested.
@@ -51,8 +75,10 @@ export function terminalPlan(choice, dir, found, platform = process.platform, la
   }
   if ((choice === 'warp' || choice === 'auto') && found.warp) return { name: 'Warp', cmd: found.warp, args: [], cwd: dir };
   if (choice === 'warp') throw missing('Warp');
-  if (!found.linux) throw new Error(translate(language, 'sys.terminal.none'));
-  return { name: found.linux, cmd: found.linux, args: [], cwd: dir };
+  if (LINUX_TERMINALS[choice] && found.installed && !found.installed.includes(choice)) throw missing(choice);
+  const name = linuxTerminal(choice, found);
+  if (!name) throw new Error(translate(language, 'sys.terminal.none'));
+  return { name, cmd: name, args: LINUX_TERMINALS[name]?.open(dir) ?? [], cwd: dir };
 }
 
 // Starts it detached: a console program gets its own window on Windows and outlives the app.
@@ -60,12 +86,12 @@ export async function openTerminal(dir, choice = 'auto', { openExternal, languag
   const T = (key, vars) => translate(language, key, vars);
   let st; try { st = fs.statSync(dir); } catch { throw new Error(T('sys.main.folderMissing')); }
   if (!st.isDirectory()) throw new Error(T('sys.terminal.folderOnly'));
-  const plan = terminalPlan(TERMINALS[choice] ? choice : 'auto', dir, findTerminals(), process.platform, language);
+  const plan = terminalPlan(terminalChoices().includes(choice) ? choice : 'auto', dir, findTerminals(), process.platform, language);
   if (plan.url) {
     try { await openExternal(plan.url); return plan.name; } catch (error) { if (!plan.fallback) throw error; Object.assign(plan, plan.fallback); }
   }
   await new Promise((resolve, reject) => {
-    const child = spawn(plan.cmd, plan.args, { cwd: plan.cwd, detached: true, stdio: 'ignore', windowsHide: false });
+    const child = spawn(plan.cmd, plan.args, { cwd: plan.cwd, detached: true, stdio: 'ignore', windowsHide: false, env: externalEnv() });
     child.once('error', (error) => reject(new Error(T('sys.terminal.openFailed', { name: plan.name, error: error.message }))));
     child.once('spawn', () => { child.unref(); resolve(); });
   });

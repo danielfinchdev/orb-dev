@@ -1,6 +1,6 @@
 // 3.5, Orb en la terminal: the «orb» client (src/terminal) against a real engine on loopback with the fake agents:
 // linking with the short code (kind «terminal»), a one-shot message with Orbe's answer, «orb estado» and «dispositivos»,
-// the interactive mode fed through a pipe, revoking from the engine, «orb-nucleo enlazar» (QR, code and address on a
+// the interactive mode fed through a pipe, revoking from the engine, «orb-server enlazar» (QR, code and address on a
 // server without a screen), the local control socket, the QR encoder and the command parsers.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -21,7 +21,7 @@ import { terminalEntries, writeZip } from '../scripts/dist-terminal.mjs';
 import { manifest, writeTarGz, readTarGz, appFiles } from '../scripts/dist-servidor.mjs';
 
 const CLI = path.join(ROOT, 'src', 'terminal', 'orb-cli.mjs');
-const NUCLEO = path.join(ROOT, 'src', 'server', 'orb-nucleo.mjs');
+const NUCLEO = path.join(ROOT, 'src', 'server', 'orb-server.mjs');
 let engine; let t; let port; let termDir;
 
 // Runs a command; input (optional) goes to its stdin. → { code, out, err }
@@ -177,7 +177,7 @@ test('cerrar sesión desde el Orb: la terminal dice que ya no está enlazada', a
   assert.equal((await orb(['estado'])).code, 4, 'sin enlaces');
 });
 
-test('el control local del núcleo solo deja unos pocos métodos', async () => {
+test('el control local de Orb Server solo deja unos pocos métodos', async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-control-'));
   fs.mkdirSync(path.join(home, '.orb'), { recursive: true });
   const control = serveControl({ home, call: async (m) => ({ m }) });
@@ -191,7 +191,7 @@ test('el control local del núcleo solo deja unos pocos métodos', async () => {
 
 test('paquetes: bin/orb en el del servidor y el cliente solo (zip y tar) funciona descomprimido', async () => {
   const names = manifest({ root: ROOT, version: '9.9.9' });
-  const orbBin = names.find((e) => e.name === 'orb-nucleo-9.9.9/bin/orb');
+  const orbBin = names.find((e) => e.name === 'orb-server-9.9.9/bin/orb');
   assert.equal(orbBin?.mode, 0o755);
   assert.match(String(orbBin.data), /node\/bin\/node.*src\/terminal\/orb-cli\.mjs/);
   const files = appFiles(ROOT).map(([rel]) => rel);
@@ -218,7 +218,7 @@ test('paquetes: bin/orb en el del servidor y el cliente solo (zip y tar) funcion
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('orb-nucleo enlazar: QR, código y dirección en la terminal; una terminal se enlaza con ellos', async () => {
+test('orb-server enlazar: QR, código y dirección en la terminal; una terminal se enlaza con ellos', async () => {
   const port2 = port + 1;
   const t2 = tempHome({ mobile: { enabled: true, port: port2, name: 'Servidor' } });
   try {

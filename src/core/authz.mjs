@@ -42,7 +42,7 @@ const roleOf = (board, person) => {
 // ---- principals
 // { person, role, channel, device?, rights: { approve, dev, admin }, strongUntil?, via?, remote?, confirmed?, ceiling? }
 // desktop: this PC's window (person: who sits there; the owner by default). device: a row of devices (a linked phone,
-// browser, terminal or Orb). forwarded: a call the centre passed to this workshop. control: Orb Núcleo's socket.
+// browser, terminal or Orb). forwarded: a call the centre passed to this workshop. control: Orb Server's socket.
 // agentToken: an agent's tool process ({ agent, task, conversation, bot, person }). system: the engine itself.
 // ceiling: a Set given by an entry point that already knows the device's (remote.mjs allowedFor).
 export function principalOf(board, { device = null, desktop = false, person = null, forwarded = false, control = false, agentToken = null, system = false, ceiling = null, strongUntil = null, via = null } = {}) {
@@ -96,7 +96,7 @@ function resolve(board, res) {
     case 'request': { const r = one(board, 'SELECT person_id, bot_id FROM bot_requests WHERE id = ?', Number(id)); return { owner: who(r), parents: r ? [{ type: 'bot', id: r.bot_id }] : [] }; }
     case 'device': { const r = one(board, 'SELECT person_id FROM devices WHERE id = ?', String(id)); return { owner: who(r), parents: [] }; }
     case 'account': { const a = (ctx.config?.accounts ?? []).find((x) => x.id === String(id)); return { owner: a ? a.person ?? owner : null, parents: [] }; }
-    case 'integration': return { owner: ['ha', 'srv'].includes(String(id)) ? owner : null, parents: [], key: String(id) };
+    case 'integration': return { owner: ['ha', 'pc', 'srv'].includes(String(id)) ? owner : null, parents: [], key: String(id) };
     case 'log': return String(id) === 'general' ? { owner, parents: [] } : { ...resolve(board, { type: 'project', id }), via: { type: 'project', id } };
     default: return { owner: null, parents: [] };
   }

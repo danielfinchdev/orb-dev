@@ -56,7 +56,8 @@ export function useStore(select = whole) {
 }
 
 // Ajustes is a window over the current view: open on a section (general, apariencia, contribuye…) or close it.
-export function openSettings(section = 'general') { setState({ settings: section }); }
+// settingsAt: each open (also of the same part again) scrolls that part into view (SettingsDialog).
+export function openSettings(section = 'general') { setState({ settings: section, settingsAt: Date.now() }); }
 // 2.6: the mini-games window (while the agents work).
 export function openGames() { setState({ games: true }); }
 // 2.6: the sidebar folded away (remembered on this PC). Its button is next to day / night; folded, the top bar shows one

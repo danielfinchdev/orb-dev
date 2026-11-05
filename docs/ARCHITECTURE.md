@@ -71,6 +71,13 @@ Data: <assistant folder>/.orb/datos/orb.db (SQLite, src/core/db.mjs)
   2. `src/agents` are the adapters.
   3. `src/engine` puts the pieces together.
   4. `src/ui` is the interface.
+- **The PC's own health (3.7)** has no screen of its own any more: «Monitoreo del equipo» and Opti Bot (2.7–3.6) were
+  removed, and what they did is the bots' **«Equipo» / "Computer"** tool group (docs/BOTS.md): `src/core/pc-health.mjs`
+  and `src/core/network.mjs` read (fixed PowerShell, Windows parts behind `process.platform === 'win32'`),
+  `src/core/pc-actions.mjs` runs an approved `pc` card (same closed list; UAC only for that action), `src/mcp/bot.mjs`
+  offers `pc_*`. Sharing with Open Control Edge (`engine/bridge.mjs`) is `orb.json › oce.share` (it was
+  `monitor.shareWithOce`; `loadConfig` and `engine/retired.mjs` move it once, archive Opti Bot's old conversation and
+  expire its waiting proposals, deleting nothing).
 
 ## 2. First launch and the assistant folder
 
@@ -593,9 +600,9 @@ app open. On iPhone they work with Orb added to the home screen.
   `link.peers`, `link.disconnect`. The keys are in `.orb/datos/enlaces.json`, sealed with a key derived from the app
   secret. Live feed with reconnection (1 s … 30 s) and address switching if one does not answer.
 - **Roles** (`orb.json › role`, chosen by the user in Settings › Magic Link on any Orb): `todo` (hub and workshop at
-  once; the default when unset), `centro` (keeps the bots) or `taller` (codes). Orb Núcleo (Orb Core) writes `centro`
+  once; the default when unset), `centro` (keeps the bots) or `taller` (codes). Orb Server writes `centro`
   only if the folder has no role (`--papel` changes it on purpose). What a windowless server lacks (God mode, expert
-  view, Opti, isolated copies, console) depends on `ctx.headless` (`ORB_NUCLEO=1`), never on the role. A coding Orb
+  view, isolated copies, console) depends on `ctx.headless` (`ORB_NUCLEO=1`), never on the role. A coding Orb
   linked to a bot-keeping one tells it who it is on connect (`POST /api/link`, `op: 'hello'`, with its MACs for
   Wake-on-LAN; the reply says whether it wants its events), runs the calls the other passes it over its live feed
   (`link:request` → `op: 'reply'`) with the same checks as a phone (`guardCall`), and sends it its events
@@ -604,8 +611,8 @@ app open. On iPhone they work with Orb added to the home screen.
   and terminals goes. If unset, to this Orb if it codes; otherwise, to the linked Orb that codes. When it goes to another
   one, the engine forwards only the Orb mode calls (`devForwards`: what is in `ALLOWED` minus `bots.*` and `app.state`).
 - **Can administer** (`devices.admin`, `link.setAdmin`): a marked device manages bots and links from outside
-  (`CONSOLE_ALLOWED`); being a browser is not enough. `link.qr({ admin: 'first' })` (used by `orb-nucleo enlazar`) only
-  grants it on a windowless server and to the first one; `link.qr({ admin: true })` (`orb-nucleo enlazar --admin`, run on
+  (`CONSOLE_ALLOWED`); being a browser is not enough. `link.qr({ admin: 'first' })` (used by `orb-server enlazar`) only
+  grants it on a windowless server and to the first one; `link.qr({ admin: true })` (`orb-server enlazar --admin`, run on
   the server itself) grants it anyway, to replace a lost device. A device's `app.state` carries
   `access: { admin, bots, links, approve }`.
 - **Rights chosen when making the QR (3.5.1):** `link.qr({ device, approve, dev })`: what the code is for (`phone`,
@@ -628,6 +635,36 @@ app open. On iPhone they work with Orb added to the home screen.
   `link.status` sums up who is on.
 - **Home network only:** any connection not coming from 127/8, 10/8, 172.16/12, 192.168/16, 100.64/10 or the Tailscale
   IPv6 is rejected, as are those arriving through Tailscale Funnel. Tests: `test/magiclink.test.mjs`.
+- **«Añadir Orb Server» (3.7):** `link.server.code({ kind? })` gives a one-time code (10 min, one use, 5 wrong tries)
+  bound to this app's key and the one-line install command (`src/core/server-install.mjs › serverInstallCommand`:
+  `curl … install.sh` + `sha256sum -c` + `bash … --pair 'code@address#fingerprint'`; the sha256 comes from
+  `src/core/server-release.mjs`, written by the release step, a placeholder until then, `ready: false`). On the server
+  `link.pairApp({ pair })` (also `link.connect({ code, address, fp })` on a server, which `orb-server emparejar` calls)
+  runs `src/core/server-pair.mjs › pairWithApp`: `GET /api/server-hello` (the app's key; its fingerprint is computed and
+  must be the command's), `POST /api/server-pair` with a proof sealed with the code stretched and tied to that key,
+  carrying the server's own one-time offer; the app uses the code up and links to the server with it (it is a confirmed
+  Orb there that codes for it), marks the link `server: true` and answers sealed with the same key. If the server cannot
+  reach the app, it prints the short code for `link.connect({ code, address })` here.
+- **Capabilities and versions (3.7):** hello and `/api/me` carry `features` (`link.mjs › capsFor`: `persons`,
+  `bots.home.v1`, `replica.v1`, plus `server`, `browser.live.v1`, `vault.v1`). `server-pair.mjs › serverSkew` says who
+  has to update (the server serves app N and N-1; a 3.6 server gets the in-place upgrade command,
+  `link.server.install`); `missingCap` the text when the server lacks something. `link.server.status` shows both.
+- **Who is who (3.7):** `link_persons` on both Orbs, only confirmed by the owner (`link.server.persons`,
+  `link.server.map({ remote, local } | { remote, create } | { local, createThere })`, `link.server.unmap`; link op
+  `persons` on the server). `forward.mjs › whoAsks` runs a forwarded call as the mapped person; anyone else is refused
+  and audited (`unmappedPerson`). The server sends a mapped person's Orb mode to the owner's PC (`devTargetDevice`,
+  `mayForward`) and the PC's events for them carry `to`.
+- **Hub handoff (3.7):** with a server linked, the app asks it for one-time offers for its phones and terminals (link op
+  `handoff`, `offers`) and sends each one `link:handoff` on its own link; the device (Node link, Android app; a
+  browser's page gets `orb:handoff` with the address) links there and drops the old link; the server tells the app
+  (`hub:handoffDone`). Unmapped persons' devices wait. Unlinking the server sends them `link:handback` (offers of the
+  app, kept a few days on the server for devices that are off). State: `link.server.status().handoffs`.
+- **Bots' events mirrored (3.7):** the events of the bots run here (`bot.*` with `botUid` and the line's `uid`) go to an
+  Orb of 3.7 that keeps bots, which gives them to its phones as `taller:bot.*` (repeats dropped by uid).
+- **Guide after pairing (3.7):** `link.server.guide()` → steps `agents` (the server's Claude / Codex:
+  `link.server.login({ agent, mode })`, `loginCode`, `loginState`, `loginCancel`, the server's own windowless sign-in),
+  `bots` (`bots.move` to the server's key), `vault`, `browser`. Nothing of this app's accounts is sent. Tests:
+  `test/enlace-server.test.mjs`.
 
 ## 23. Expert mode
 
@@ -677,7 +714,7 @@ launched hidden, with its output read by Orb, and it stores the session in the a
   `console: true` opens the old console (Windows only, "Open console" button). Cursor and the ACP agents keep their
   console.
 - On the hub (server), `agents.login` is no longer blocked and the linked phone can use those four methods
-  (`CENTRO_PHONE` in `remote.mjs`). From the terminal: `orb-nucleo entrar claude|codex|<account>`.
+  (`CENTRO_PHONE` in `remote.mjs`). From the terminal: `orb-server entrar claude|codex|<account>`.
 - Installing or updating from Agents (`agents.install`, `agents.installState`, `agents:install` events): Claude with its
   native installer (`install.ps1` / `install.sh`, into `~/.local/bin`) and Codex with
   `npm install -g @openai/codex@latest` (on Windows, the user's npm folder; on Linux and macOS, `--prefix ~/.local`). It
@@ -949,7 +986,7 @@ shared with them. With a single user all of it is hidden and Orb behaves as 3.5.
   Android's BiometricPrompt) and schedules the next 48 h of reminders as local notifications
   (`src/ui/lib/reminder-notes.js`).
 
-**Inside.** Every entry point (window, linked device, workshop link, Orb Núcleo's socket, agents' tools) builds a
+**Inside.** Every entry point (window, linked device, workshop link, Orb Server's socket, agents' tools) builds a
 principal; `api.call` authorizes it before the method runs. A row without `person_id` is the owner's, so data from
 before 3.6 needs nothing. Tests: `personas-modelo`, `authz`, `migracion-36`, `personas-superficies`, `enlace-36`,
 `personas-orb`, `prestamos`, `copias`, `exportar-borrar`, `mover-orb`, `zona-horaria`, `plantillas`, `android-36`,

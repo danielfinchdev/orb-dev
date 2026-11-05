@@ -1,5 +1,5 @@
 // 3.2.1: fixes from the user tests of 2026-10-14 (secrets in commits, project names and renaming, local times and sizes,
-// the whiteboard summary, Opti Bot's cards, the one rule for deletions, translated Activity, logs and the build contract).
+// the whiteboard summary, the names on a PC change's cards, the one rule for deletions, translated Activity, logs and the build contract).
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -16,7 +16,7 @@ import { git } from '../src/core/workspace.mjs';
 import { commitAll, unpushedSecrets } from '../src/engine/github.mjs';
 import { Scheduler, contractNote } from '../src/engine/scheduler.mjs';
 import { drawingContents } from '../src/engine/whiteboard.mjs';
-import { opti } from '../src/engine/opti.mjs';
+import { checkPcAction } from '../src/core/pc-actions.mjs';
 import { cutWords, agentAuthor, changedFiles, logDirect } from '../src/engine/logs.mjs';
 
 const GHP = `ghp_${'a1B2c3D4e5'.repeat(4)}`;
@@ -121,24 +121,13 @@ test('22 y 27: horas locales y tamaños legibles en las copias y la pizarra', ()
   assert.equal(drawingContents([{ type: 'rectangle' }, { type: 'rectangle' }, { type: 'text' }, { type: 'arrow', isDeleted: true }]), 'Contiene: 1 texto, 2 rectángulos.');
 });
 
-test('31: Opti Bot: «Rechazar» devuelve datos que cruzan a la ventana, y la tarjeta enseña el nombre del programa', async () => {
+// 3.7: Opti Bot is gone; its proposals are a bot's pc_propose cards now (test/equipo.test.mjs), with the same names.
+test('31: la tarjeta de un cambio en el PC enseña el nombre del programa, no el interno', () => {
   assert.equal(programLabel('MicrosoftEdgeAutoLaunch_60E4EE12BF689B5262806EAC5AE6112E'), 'Microsoft Edge');
   assert.equal(programLabel('OneDrive'), 'OneDrive');
   assert.equal(programLabel('Teams.exe'), 'Teams');
-  saveConfig({ monitor: { enabled: true } });
-  const sent = [];
-  const fakeSession = { id: 'opti-1', agent: 'claude' };
-  const sessions = {
-    get: (id) => (id === 'opti-1' ? fakeSession : null), isRunning: () => false,
-    send: (id, text) => { sent.push(text); return { promise: Promise.resolve(), stop: () => {} }; }, // like the real run object: not cloneable
-    updateItem: (id, body) => board.run('UPDATE session_items SET body = ? WHERE id = ?', JSON.stringify(body), id)
-  };
-  board.setting('opti_session', 'opti-1');
-  const { lastInsertRowid } = board.run('INSERT INTO session_items (session_id, role, kind, body, at) VALUES (?, ?, ?, ?, ?)', 'opti-1', 'system', 'opti_action', JSON.stringify({ action: 'clean_temp', reason: 'x', status: 'pending' }), new Date().toISOString());
-  const r = await opti({ board, sessions }).act({ item: Number(lastInsertRowid), decision: 'deny' });
-  assert.deepEqual(structuredClone(r), { ok: true, denied: true });
-  assert.equal(sent.length, 1, 'Opti Bot se entera');
-  assert.equal(JSON.parse(board.one('SELECT body FROM session_items WHERE id = ?', Number(lastInsertRowid)).body).status, 'denied');
+  assert.equal(checkPcAction({ action: 'disable_startup', name: 'MicrosoftEdgeAutoLaunch_60E4EE12BF689B5262806EAC5AE6112E', reason: 'arranca solo' }).label, 'Microsoft Edge');
+  assert.equal(checkPcAction({ action: 'end_process', pid: 4321, name: 'Teams.exe', reason: 'colgado' }).label, 'Teams');
 });
 
 test('58: una sola regla para los borrados: el pedido actual pide borrar y nombra los archivos que borra la tarea', () => {

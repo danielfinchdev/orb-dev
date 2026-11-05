@@ -23,26 +23,26 @@ How it works inside (for people working on Orb's code): [`PERSONAS-INTERNALS.md`
 
 There are no age levels and no guests: just these two.
 
-## The welcome wizard
+## The first run
 
-The first time Orb opens it asks three questions, one per screen:
+The first time Orb opens it shows the same welcome as 3.5.1, on one screen: **What would you like to call me?** (the
+assistant's name, "Orbe" by default), **And what should I call you?** (optional) and **Where would you like me to create
+my folder?**. On Windows, **Preparing your PC** follows: it installs any missing agents and tools with their official
+installers, and then you sign in to each one.
 
-1. **What is your name?** Language and time zone are taken from this PC (change them later in **Settings › My
-   profile**, or **Settings › General** if only you use Orb). Orb's folder goes in your Documents.
-2. **Will anyone else use it?** "Just me" (nothing else changes) or "Yes", with their names. You can add users later in
-   **Settings › Magic Link › Users**.
-3. **What will you use it for?** "Coding", "Business", "Home" or "Later". Each of the first three creates a starting
-   set of bots and reminders, which you can change at any time in **Bots**; "Later" creates nothing. The templates are
-   generic: nothing in them is about anyone in particular.
+Nothing is asked about people or uses: whoever sets Orb up is its admin, with this PC's language and time zone (change
+them later in **Settings**). Add more users in **Settings › Magic Link › Users**. Starting sets of bots ("Business",
+"Home", "Coding") are in **New bot › Start from a template** (optional); they are generic: nothing in them is about anyone
+in particular.
 
-Then Orb opens. What used to be in the wizard now appears where it is needed:
+Then Orb opens. The rest appears where it is needed:
 
 - **Backups** are on from the first day, encrypted with this PC's key. A few days later Orb suggests, once, creating a
   **recovery code** in **Settings › Data** (it opens your backups on another computer).
 - **Using Orb away from home** (Tailscale) is explained in **Magic Link** when you link a phone. Your reminders only
   ring while this PC is on.
 - To bring an Orb you already have on another computer: on the old one, **Settings › Data › Move** (or
-  `orb-nucleo mover exportar` on a server); on the new one, `orb-nucleo mover importar`.
+  `orb-server mover exportar` on a server); on the new one, `orb-server mover importar`.
 
 ## Who is at the PC
 
@@ -57,8 +57,8 @@ On a phone, the same is at the top of **More** (a phone belongs to one user: it 
 **Lock**).
 
 Five wrong PINs in a row block that PIN for a while, and the wait grows with each new mistake. The admin can reset a
-forgotten PIN (Settings › Magic Link › Users, or `orb-nucleo pin-reset <usuario>` on a server). On a server, `orb-nucleo usuarios`
-lists the users, `orb-nucleo usuario nuevo <nombre>` adds one and `orb-nucleo enlazar --usuario <nombre>` makes a QR for
+forgotten PIN (Settings › Magic Link › Users, or `orb-server pin-reset <usuario>` on a server). On a server, `orb-server usuarios`
+lists the users, `orb-server usuario nuevo <nombre>` adds one and `orb-server enlazar --usuario <nombre>` makes a QR for
 them.
 
 ## Settings › Magic Link › Users (admin)

@@ -19,6 +19,10 @@ import { AGENT } from '@/lib/labels.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { useBots, useCanManage, BotFace, GroupFace } from './common.jsx';
+import { moveBot, offerMerge, HomeBadge } from './home.jsx';
+import { useHomes, hasCap, openBrowserLive, onServer } from '@/lib/server.js';
+import { homeOf, replicaActions, moveTargets, moveLabel } from '@/lib/homes.js';
+import { ArrowRightLeft, Compass, Server, Monitor, CopyPlus } from 'lucide-react';
 
 // The frame: a pane (PC) or a full sheet (phone).
 export function InfoFrame({ title, onClose, children }) {
@@ -80,7 +84,17 @@ export function BotInfo({ bot, item, onClose }) {
   const me = useStore((s) => s.me);
   const [full, setFull] = useState(null);
   useEffect(() => { let alive = true; botCall('bots.get', { id: bot.id }).then((b) => alive && setFull(b)).catch(() => alive && setFull(false)); return () => { alive = false; }; }, [bot.id, bot.updated_at]); // eslint-disable-line react-hooks/exhaustive-deps
-  const edit = manage ? () => go({ view: 'bots', id: bot.id }) : null;
+  // 3.7: where it runs, and what may be done from here (a bot run elsewhere changes there, while that Orb answers).
+  const homes = useHomes();
+  const server = useStore((s) => s.server);
+  const { bots } = useBots();
+  const home = homeOf(bot);
+  const ra = replicaActions(bot);
+  const edit = manage && ra.change ? () => go({ view: 'bots', id: bot.id }) : null;
+  const moves = ra.move ? moveTargets(bot, homes) : [];
+  const live = (home.kind === 'server' || (home.here && onServer())) && home.online && hasCap(server, 'browser.live.v1');
+  // Two bots of the same name in the same place (one came with a move): merge them.
+  const twin = bots.find((b) => b.id !== bot.id && b.homeState !== 'archived' && String(b.name).trim().toLowerCase() === String(bot.name).trim().toLowerCase() && (b.home ?? null) === (bot.home ?? null));
   const tools = (full?.effectiveTools ?? full?.tools ?? bot.effectiveTools ?? bot.tools ?? []).map((x) => t(`bots.tool.${x}`));
   const apps = full?.accounts?.mcp?.length ?? 0;
   const reminders = (full?.reminderList ?? []).length;
@@ -97,7 +111,19 @@ export function BotInfo({ bot, item, onClose }) {
         <h3 className="mt-1 text-xl font-semibold" data-testid="info-name">{bot.name}</h3>
         <p className="text-muted-foreground max-w-[30ch] text-[13px] leading-snug">{bot.role_text || t('bots.noRole')}</p>
         {edit ? <Button size="sm" variant="outline" className="mt-1" onClick={edit} data-testid="bot-chat-edit"><Pencil />{t('bots.edit')}</Button> : null}
+        {!ra.change && !home.here ? <p className="text-muted-foreground max-w-[30ch] text-[12px]" data-testid="info-readonly">{ra.restore ? t('home.archivedHint') : t('home.changeWhenOnline', { name: home.kind === 'server' ? t('home.badge.server') : home.name })}</p> : null}
       </div>
+      {twin && mine ? (
+        <div className="flex items-center gap-2 rounded-xl border px-3 py-2 text-[13px]" data-testid="info-twin">
+          <CopyPlus className="text-muted-foreground size-4 shrink-0" /><span className="min-w-0 flex-1">{t('home.twin', { name: twin.name })}</span>
+          <Button size="xs" variant="outline" onClick={() => offerMerge({ id: bot.id, name: bot.name }, { uid: twin.uid, name: twin.name })} data-testid="info-merge">{t('home.sameMerge')}</Button>
+        </div>
+      ) : null}
+      <List testid="info-home">
+        <Row icon={home.kind === 'server' || (home.here && onServer()) ? Server : Monitor} label={t('home.where')} testid="info-where"><span className="min-w-0 flex-1" /><HomeBadge bot={bot} /></Row>
+        {mine ? moves.map((x) => <Row key={x.key} icon={ArrowRightLeft} label={moveLabel(x, t, { serverHere: onServer() })} onClick={() => moveBot(bot, x)} testid={`info-move-${x.here ? 'here' : 'server'}`} />) : null}
+        {live ? <Row icon={Compass} label={t('browserLive.open')} onClick={() => openBrowserLive()} testid="info-browser-live" /> : null}
+      </List>
       <List testid="info-bot-parts">
         <Row icon={BrainIcon} label={t('chats.brain')} value={`${AGENT[bot.agent] ?? bot.agent}${bot.model ? ` ${modelLabel(catalog, bot.agent, bot.model)}` : ''} · ${t(`bots.effort.${bot.effort ?? 'medium'}`)}`} onClick={edit} testid="info-brain" />
         <Row icon={Globe} label={t('bots.f.tools')} value={tools.length ? tools.join(', ') : t('chats.none')} onClick={edit} testid="info-tools" />
@@ -107,9 +133,9 @@ export function BotInfo({ bot, item, onClose }) {
       </List>
       <NotifyRow item={item} />
       <List>
-        <Row icon={bot.paused ? Play : Pause} label={bot.paused ? t('chats.resumeBot') : t('chats.pauseBot')} onClick={pause} testid="bot-chat-pause"><span /></Row>
+        {ra.change ? <Row icon={bot.paused ? Play : Pause} label={bot.paused ? t('chats.resumeBot') : t('chats.pauseBot')} onClick={pause} testid="bot-chat-pause"><span /></Row> : null}
         {personsOn(me) && mine ? <Row icon={Share2} label={t('chats.shareBot')} onClick={() => openShare({ type: 'bot', id: bot.id, name: bot.name, owner: bot.person_id ?? null })} testid="info-share" /> : null}
-        {manage && mine ? <Row icon={Trash2} label={t('chats.deleteBot')} onClick={remove} danger testid="info-delete" /> : null}
+        {manage && mine && ra.change ? <Row icon={Trash2} label={t('chats.deleteBot')} onClick={remove} danger testid="info-delete" /> : null}
       </List>
     </InfoFrame>
   );

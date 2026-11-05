@@ -1,13 +1,72 @@
 ## Download
 
-- **`Orb-3.6.0-instalador.exe`** (recommended, the full Windows app): installs for your user, without administrator
+- **`Orb-3.7.0-instalador.exe`** (recommended, the full Windows app): installs for your user, without administrator
   rights, and updates itself.
-- **`Orb-3.6.0-light-portable.exe`** (Orb Light, no install needed).
-- **`Orb-3.6.0-android.apk`**: the Orb app for Android. Links to your Orb by scanning a QR code.
-- **`orb-nucleo-3.6.0-linux-x64.tar.gz`**: windowless Orb for an always-on Linux server.
-- **`orb-terminal-3.6.0`**: Orb in the terminal (Windows and Linux, requires Node 22).
+- **`Orb-3.7.0-light-portable.exe`** (Orb Light, no install needed).
+- **`Orb-3.7.0-android.apk`**: the Orb app for Android. Links to your Orb by scanning a QR code.
+- **`Orb-3.7.0-linux-x86_64.AppImage`** / **`Orb-3.7.0-linux-amd64.deb`** (also arm64): the Orb app for a Linux
+  desktop.
+- **`orb-server-3.7.0-linux-x64.tar.gz`** / **`…-linux-arm64.tar.gz`** and **`install.sh`**: Orb Server, for an
+  always-on Linux machine. You don't need to download them by hand: the app gives you a one-line install command.
+- **`orb-terminal-3.7.0`**: Orb in the terminal (Windows and Linux, requires Node 22).
 
 Windows 10/11. Since it isn't signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
+
+## What's new in 3.7.0
+
+**Orb Server.** The always-on side of Orb is now **Orb Server**: a small, separate Linux product that keeps your bots running around
+the clock, while projects and coding agents stay in the app on your PC. How it works: `docs/SERVER.md`.
+
+- **Add it with one command:** Magic Link › «Añadir Orb Server» shows one line to paste in the server's terminal. It
+  checks what it downloads, installs a service that starts with the machine, and links the server with your app. A guide
+  then walks you through the rest: the server's Claude or ChatGPT sign-in, where each bot runs, who is who, passwords and
+  the browser.
+- **Small and on demand:** a ~50 MB download and one process when idle. Claude and Codex are fetched from their official
+  packages the first time a bot needs them, and the browser only while a bot is using it.
+- **Upgrading from 3.6 or earlier:** the installer makes a backup and moves everything to `~/orb-server` in place; your bots,
+  linked phones and Orbs stay as they were.
+- **One home per bot:** every bot lives either on your PC or on the Server, with a read-only live copy on the other
+  side. «Pasar al PC» / «Pasar al Server» moves it with its memory, routines and reminders. If the Server is off, the PC
+  can take over and catches up when it is back.
+- **Phones follow the Server:** once the Server is linked, your phones talk to it directly and come back to the PC if
+  you unlink it. Unlinking asks what to do with the bots that live there.
+- **The Server's browser:** bots on the Server can browse with a real browser, one profile per user. «Ver navegador del
+  Server» shows it live, and when a page needs a person (a CAPTCHA, a code) the bot asks you with «Necesito que lo
+  hagas tú». Bots browse at a human pace and ask before repeating the same risky action many times. Password and
+  one-time-code fields never reach the AI.
+- **Password vault:** connect a Bitwarden or Vaultwarden account made for Orb (Magic Link › Orb Server ›
+  Contraseñas). Bots with the «Contraseñas» tool sign in to websites without ever seeing a password: Orb Server types
+  it only into the matching site and asks you the first time.
+- **Server administration:** a short list of actions (restart a container or service, clean logs or the package cache)
+  that bots can only propose and run after you approve the card.
+- **Self-updates:** Orb Server updates itself within 3.7.x from signed releases, with a backup first and an automatic
+  return to the previous version if the new one is not healthy.
+
+**Everything else.**
+
+- **Conexiones:** one list of everything linked to your Orb (Server, other Orbs, phones, browsers, terminals, SSH tunnels,
+  Android over Wi-Fi, the vault, Tailscale, accounts and live browser views), each with a status dot and actions.
+- **Orb for Linux desktops:** the same app as on Windows, as an AppImage (updates itself) or a `.deb` (tells you about
+  new versions), for x64 and arm64. Ctrl+J opens your system's terminal or the one you choose, and «Abrir en» finds
+  Cursor and VS Code. How to install, update and uninstall: `docs/LINUX.md`.
+- **PC Monitoring and Opti Bot are now a bot's tools:** the "Monitoring" screen is gone. Give any bot the new
+  "Computer" tools (or create one from the "PC maintenance" template) to check the PC's health, temperatures, network,
+  startup programs, antivirus and Orb's backups; scans, cleaning, closing a program or removing it from startup are
+  still proposed on a card and only run if you approve (Windows asks for administrator rights for that action alone).
+  Opti Bot's old conversation stays, archived.
+- **Open Control Edge and Optimus:** if Open Control Edge is installed on a Windows PC, Orb creates the «Optimus» bot
+  once, with read-only access to its readings on every linked PC and alerts when a limit is crossed. Delete it and it
+  doesn't come back; turn it off in Settings › Advanced › Tools.
+- **The 3.5.1 welcome is back:** the assistant's name, what to call you, the install folder and «Preparando tu PC»
+  with each agent's official installer. Templates ("My business", "My home", "Development", "PC maintenance") move to
+  «Nuevo bot».
+- **Security:** linked Orbs only touch the bots of the users they serve; a shared bot browses with the profile of the
+  person talking to it and only its owner's passwords can fill it; agents on Linux run without the ability to gain
+  privileges.
+
+**Before the first signed release:** the release key must exist (`npm run release:keygen`, once, on the maintainer's
+PC). Until it is built into Orb Server, Orb Server doesn't update itself: update it with the app's install command or
+`npm run servidor:instalar`.
 
 ## What's new in 3.6.0
 

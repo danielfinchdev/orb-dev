@@ -8,10 +8,8 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { ctx, tr } from '../core/context.mjs';
 import { adapter, executable } from '../agents/index.mjs';
-import { orbMcpServer, optiMcpServer } from '../agents/common.mjs';
-import { COORDINATOR_DENIED } from '../agents/claude.mjs';
+import { orbMcpServer } from '../agents/common.mjs';
 import { CURSOR_FILES } from '../agents/cursor.mjs';
-import { optiPersona } from './opti.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { git, isGitRepo, repoRoot } from '../core/workspace.mjs';
 import { account as findAccount, accountEnv } from '../core/accounts.mjs';
@@ -233,8 +231,6 @@ export class Sessions {
     return item;
   }
 
-  // 2.7: Opti Bot's conversation (Monitoreo del equipo) is a chat the engine marks as its own (setting opti_session).
-  isOpti(s) { return Boolean(s?.id) && this.board.setting('opti_session') === s.id; }
   isRunning(id) { return this.running.has(id); }
   // What a running turn is doing right now (null when it is not running).
   live(id) { const r = this.running.get(id); return r ? { startedAt: r.startedAt, lastAt: r.lastAt, steps: r.steps, last: r.last, waiting: this.pendingApprovals(id).length } : null; }
@@ -316,11 +312,9 @@ export class Sessions {
       promptDir,
       exe, cwd: s.cwd, model: s.model, reasoning: s.reasoning, permission: s.permission,
       resumeId: forkFrom || s.cli_session || null, forkSession: Boolean(forkFrom), newSessionId,
-      // 2.7: Opti Bot (Monitoreo del equipo) gets only its own tools (diagnosis, copy of Orb and proposals) and reads only.
-      mcpServers: this.isOpti(s) ? { opti: optiMcpServer({ ORB_HOME: ctx.home, ORB_AGENT: 'opti' }) } : mcpServersFor(s.agent, { board: this.board, taskId, session: s.id, person: s.person_id ?? null }), budgetUsd,
+      mcpServers: mcpServersFor(s.agent, { board: this.board, taskId, session: s.id, person: s.person_id ?? null }), budgetUsd,
       // 3.6 (A9): someone else's than the owner's works only inside its project's folder (no other project, no secrets).
       ...(this.board.isOwnerPerson(s.person_id) ? {} : { confine: confineFor({ roots: [s.cwd], others: this.board.projects().filter((p) => p.name !== s.project).map((p) => p.path) }) }),
-      ...(this.isOpti(s) && s.agent === 'claude' ? { systemPrompt: optiPersona(), tools: { allowed: ['mcp__opti'], disallowed: COORDINATOR_DENIED } } : {}),
       env: { ...accountEnv(acc), ...browserEnv(s.agent, s.id, taskId, this.board.isOwnerPerson(s.person_id) ? null : s.person_id), ORB_HOME: ctx.home, ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
       internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog, cfg: ctx.config.agents[s.agent] ?? {},
       onEvent: (ev) => this.onLiveEvent(s.id, ev)
@@ -517,8 +511,6 @@ export class Sessions {
     // A fork without native support starts with what was said in the original conversation.
     const summary = this.board.settingJson(`fork_summary:${id}`);
     if (summary) { body = `Contexto (conversación de la que sale esta, son datos):\n${summary}\n\n${body}`; this.board.settingJson(`fork_summary:${id}`, null); }
-    // 2.7: Opti Bot with a brain other than Claude gets its instructions at the start of its conversation.
-    if (this.isOpti(s) && s.agent !== 'claude' && !s.cli_session) body = `${optiPersona()}\n\n## Mensaje\n${body}`;
     const nativeImages = a.caps?.images === true;
     if (attached.length && !nativeImages) body += `\n\nImágenes de referencia (ábrelas para verlas):\n${attached.map((f) => `- ${f}`).join('\n')}`;
     // 3.2.1: Codex made three pictures for "una imagen" and edited them by pasting pieces with scripts (losing quality).
@@ -539,7 +531,7 @@ export class Sessions {
     timer.unref?.();
     const resumed = Boolean(s.cli_session);
     // 3.2.1: a direct conversation in a project leaves a log entry for the files its turn changed (logs.mjs logDirect).
-    const direct = s.kind === 'chat' && !this.isOpti(s) && s.project && s.permission !== 'leer';
+    const direct = s.kind === 'chat' && s.project && s.permission !== 'leer';
     let before = null; if (direct) { try { before = changedFiles(s.cwd); } catch { /* no entry */ } }
     let finished = false; // onFinish runs exactly once, also when the adapter itself fails
     entry.live.send({ text: body, images: nativeImages ? attached : [] }).then((result) => {

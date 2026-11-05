@@ -1,7 +1,7 @@
 // 3.6 «Personas», end to end without any window: the PC's own interface (the built renderer in headless Edge, with a
 // stand-in for Electron's bridge that talks to the engine like the app does), Leo's phone and Leo's browser (linked with
-// a QR made «para Leo») and Leo's terminal client. Ana (the admin) goes through the welcome wizard (adds Leo, applies
-// «Casa»), has her own bot, project and chat; Leo, on every channel, sees nothing of hers. Also the person
+// a QR made «para Leo») and Leo's terminal client. Ana (the admin) goes through the welcome (3.5.1's), adds Leo in Ajustes,
+// applies «Casa» from «Nuevo bot», has her own bot, project and chat; Leo, on every channel, sees nothing of hers. Also the person
 // menu, switching with a PIN, the engine's lock, Ajustes › Personas / Mi perfil / Datos, «¿Para quién?», the share dialog
 // and «Prestar a…». Screenshots: test-results/personas-*.png. The engine runs with the fake agents in a throwaway folder.
 // Run: npm run build && node test/personas.e2e.mjs
@@ -94,33 +94,56 @@ const menu = async (item) => {
   await pc.click(`[data-testid=${item}]`);
 };
 try {
-  // ---- 1. the welcome wizard: three screens. Her name, «¿Lo usará alguien más?» (Ana adds Leo), «Casa».
-  step = 'asistente';
+  // ---- 1. the welcome (as 3.5.1): the assistant's name, what to call her, the folder. Nothing about people or uses:
+  // Ana becomes the admin without being asked. Leo is added in Ajustes › Magic Link › Usuarios, and «Casa» is a
+  // template of «Nuevo bot».
+  step = 'bienvenida';
   await pc.goto(pcUrl);
-  await pc.waitForSelector('[data-testid=wizard-nombre]');
-  await pc.fill('[data-testid=setup-name]', 'Ana');
-  await shot('01-asistente-nombre');
+  await pc.waitForSelector('[data-testid=setup-datos]');
+  await pc.fill('[data-testid=setup-user]', 'Ana');
+  await pc.click('[data-testid=setup-folder]');
+  await shot('01-bienvenida');
   await pc.click('[data-testid=setup-create]');
-  await pc.waitForSelector('[data-testid=wizard-quien]');
-  await pc.click('[data-testid=wizard-more-people]');
-  await pc.fill('[data-testid=wizard-person-0]', 'Leo');
-  await shot('02-asistente-quien');
-  await pc.click('[data-testid=wizard-next]');
-  await pc.waitForSelector('[data-testid=wizard-para]');
-  await shot('03-asistente-para');
-  await pc.click('[data-testid=wizard-use-home]');
   await pc.waitForSelector('[data-testid=chat-input]', { timeout: 30000 });
-  const people = await call('persons.list');
+  for (const sel of ['wizard-quien', 'wizard-para']) assert.equal(await pc.locator(`[data-testid=${sel}]`).count(), 0, sel);
+  let people = await call('persons.list');
+  assert.equal(people.length, 1, 'solo Ana');
+  assert.equal(people[0].role, 'owner'); assert.equal(people[0].name, 'Ana', 'quien prepara Orb es su admin');
+
+  step = 'añadir a Leo en Ajustes';
+  await call('config.save', { patch: { ui: { tourDone: true } } }); // the guided tour, seen
+  await pc.reload(); await pc.waitForSelector('[data-testid=chat-input]');
+  await pc.click('[data-testid=nav-settings]');
+  await pc.click('[data-testid=settings-nav-magiclink]');
+  await pc.click('[data-testid=person-add]');
+  await pc.fill('[data-testid=person-new-name]', 'Leo');
+  await shot('02-anadir-usuario');
+  await pc.getByRole('dialog').getByRole('button', { name: 'Añadir usuario', exact: true }).last().click();
+  await pc.waitForSelector('[data-testid=person-row-Leo]');
+  await pc.keyboard.press('Escape');
+
+  step = 'plantilla en Nuevo bot';
+  await pc.click('[data-testid=mode-bots]');
+  await pc.waitForSelector('[data-testid=bots-nav]');
+  await pc.click('[data-testid=bots-places-more]'); await pc.click('[data-testid=nav-bots]');
+  await pc.locator('[data-testid=bots-new], [data-testid=bots-create-first]').first().click();
+  await pc.waitForSelector('[data-testid=bot-create]');
+  await pc.click('[data-testid=bot-templates-open]');
+  await pc.waitForSelector('[data-testid=bot-template-casa]');
+  assert.equal(await pc.locator('[data-testid=bot-template-vacio]').count(), 0, 'sin «Empezar vacío»');
+  await shot('03-nuevo-bot-plantilla');
+  await pc.click('[data-testid=bot-template-use-casa]');
+  await pc.waitForSelector('[data-testid=bot-create]', { state: 'detached' });
+  await pc.click('[data-testid=mode-orb]');
+  people = await call('persons.list');
   const leo = people.find((p) => p.name === 'Leo'); const ana = people.find((p) => p.role === 'owner');
-  assert.ok(leo && ana, 'Leo creado desde el asistente');
-  assert.equal(ana.name, 'Ana', 'el nombre de la primera pantalla es el del admin');
+  assert.ok(leo && ana, 'Leo añadido desde Ajustes');
   const botNames = (await call('bots.list')).bots.map((b) => b.name);
   assert.ok(CASA.every((n) => botNames.includes(n)), `la plantilla «Casa», tal cual: ${botNames.join(', ')}`);
   assert.ok((await call('backup.status')).enabled, 'copias activas sin preguntar');
 
   // ---- 2. Ana's own things (this window is Ana's).
   step = 'cosas de Ana';
-  await call('config.save', { patch: { ui: { tourDone: true } } }); // the guided tour, seen
   await call('projects.create', { name: 'ana-web-secreta' });
   const diario = await call('bots.create', { name: 'Diario de Ana', icon: '📓', role_text: 'Llevas mi diario.', tools: ['recordatorios'] });
   await call('bots.reminders.create', { id: diario.id, text: 'Regar las plantas de Ana', when: at(new Date(Date.now() + 26 * 3_600_000), 10, 0) });

@@ -16,7 +16,6 @@ import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea, Kbd, PathText, Spinner } from '@/components/ui/basic.jsx';
 import { Select, Switch, Checkbox, Dialog, DialogContent, DialogTitle, BubbleTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
 import { ModelGuide } from '@/components/model-guide.jsx';
-import { useCatalog } from '@/components/brain-picker.jsx';
 import { AGENT } from '@/lib/labels.js';
 import { useStore, call, act, bridge, setState, getState, applyTheme, applyAppearance, go, openTerminal, openSettings, closeSettings, fullPc, runTest } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
@@ -25,6 +24,7 @@ import { LANGUAGES } from '../../core/i18n.mjs';
 import { useUpdate, updateActions, notesUrl } from '@/components/update-card.jsx';
 import { play } from '@/lib/sounds.js';
 import { MagicLinkPanel, SubSection } from './magic-link.jsx';
+import { ConnectionsPanel } from './connections.jsx';
 import { PersonsCard, ProfileCards } from './persons.jsx';
 import { DataCards } from './data.jsx';
 import { showPersonUi, showPersonsSettings, isOwner } from '@/lib/persons.js';
@@ -290,7 +290,7 @@ function UpdatesCard() {
   }[st.state] ?? '';
   return (
     <Card data-testid="updates-card">
-      <CardHeader><CardTitle>{t('settings.updates')}</CardTitle><CardDescription>{st.portable ? t('settings.update.portable') : t('settings.updatesDesc')}</CardDescription></CardHeader>
+      <CardHeader><CardTitle>{t('settings.updates')}</CardTitle><CardDescription>{st.portable ? t(st.linux === 'package' ? 'settings.update.linuxPackage' : 'settings.update.portable') : t('settings.updatesDesc')}</CardDescription></CardHeader>
       <CardContent className="grid gap-1">
         <div className="text-sm">{t('settings.update.current', { version: st.current })}</div>
         {line ? <div className={cn('text-xs', st.state === 'error' ? 'text-destructive' : 'text-muted-foreground')}>{line}</div> : null}
@@ -443,7 +443,11 @@ export const sizes = () => [{ value: '0.87', label: t('settings.size.small') }, 
 function InterfaceCard({ c }) {
   const t = useT();
   const [zoom, setZoom] = useState(null);
-  const terminals = { auto: t('settings.term.auto'), warp: 'Warp', wt: 'Windows Terminal', powershell: 'PowerShell', cmd: t('settings.term.cmd') };
+  // 3.7: on Linux, its usual terminals (src/main/terminal.mjs LINUX_TERMINALS) instead of Windows' ones.
+  const linux = window.orb?.platform === 'linux';
+  const terminals = linux ? { auto: t('settings.term.auto'), warp: 'Warp', 'x-terminal-emulator': t('settings.term.system'), 'gnome-terminal': 'GNOME Terminal', konsole: 'Konsole', 'xfce4-terminal': 'Xfce Terminal', kitty: 'kitty', alacritty: 'Alacritty', xterm: 'XTerm' }
+    : window.orb?.platform && window.orb.platform !== 'win32' ? { auto: t('settings.term.auto'), warp: 'Warp' }
+      : { auto: t('settings.term.auto'), warp: 'Warp', wt: 'Windows Terminal', powershell: 'PowerShell', cmd: t('settings.term.cmd') };
   useEffect(() => { bridge.zoom?.().then(setZoom).catch(() => {}); return bridge.on('ui:zoom', (p) => setZoom(p.zoom)); }, []);
   if (!bridge.zoom) return null; // phone: the browser has its own zoom
   const SIZES = sizes();
@@ -474,30 +478,17 @@ function InterfaceCard({ c }) {
 }
 
 // Expert mode: an IDE-like view (PC only) with the panels the user picks.
-// 2.7: Monitoreo del equipo: Opti Bot on or off (then it appears in the menu) and its brain: any installed agent and model.
-function MonitorCard({ c }) {
+// 2.7: the bridge with Open Control Edge (engine/bridge.mjs): on unless turned off. 3.7: its own card (it was part of
+// «Monitoreo del equipo», which is gone), config oce.share. 3.7 (WS8): «Crear Optimus automáticamente», oce.optimus.
+function OceCard({ c }) {
   const t = useT();
-  const catalog = useCatalog();
-  const m = c.monitor ?? {};
-  const agent = m.agent || 'claude';
-  const DEFAULT = '__default';
-  const agents = (catalog ?? []).filter((a) => a.id !== 'cursor'); // Cursor cannot keep Opti Bot to its own tools
-  const models = (agents.find((a) => a.id === agent)?.models ?? []).filter((x) => x.id);
   return (
-    <Card data-testid="monitor-card">
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><HeartPulse className="text-success size-5" /><div><CardTitle>{t('settings.monitor')}</CardTitle><CardDescription>{t('settings.monitorDesc')}</CardDescription></div></CardHeader>
-      <CardContent className="grid gap-4">
-        <Row label={t('settings.monitorOn')} hint={t('settings.monitorOnHint')}><Switch checked={m.enabled === true} onCheckedChange={(enabled) => save({ monitor: { enabled, agent } }, enabled ? t('settings.monitorEnabled') : t('settings.monitorDisabled'))} data-testid="monitor-switch" /></Row>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label={t('settings.monitorAgent')}><Select className="w-full" value={agent} disabled={!agents.length} onValueChange={(next) => save({ monitor: { agent: next, model: null } })} options={(agents.length ? agents : [{ id: agent, label: AGENT[agent] ?? agent }]).map((a) => ({ value: a.id, label: a.label }))} /></Field>
-          <Field label={t('settings.monitorModel')} hint={t('settings.monitorModelHint')}><Select className="w-full" value={m.model || DEFAULT} onValueChange={(model) => save({ monitor: { model: model === DEFAULT ? null : model } })} options={[{ value: DEFAULT, label: t('settings.monitorModelDefault') }, ...models.map((x) => ({ value: x.id, label: x.tier ? `${x.label} · ${t(`brain.tier.${x.tier}`)}` : x.label }))]} /></Field>
-        </div>
-        <Row label={t('settings.monitorOce')} hint={t('settings.monitorOceHint')}><Switch checked={m.shareWithOce !== false} onCheckedChange={(shareWithOce) => save({ monitor: { shareWithOce } })} data-testid="monitor-oce" /></Row>
-        <ul className="text-muted-foreground grid list-disc gap-1 pl-4 text-xs leading-snug">
-          {[1, 2, 3].map((n) => <li key={n}>{t(`settings.monitorNote${n}`)}</li>)}
-        </ul>
+    <Card data-testid="oce-card">
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><HeartPulse className="text-success size-5" /><div><CardTitle>{t('settings.oce')}</CardTitle><CardDescription>{t('settings.oceDesc')}</CardDescription></div></CardHeader>
+      <CardContent>
+        <Row label={t('settings.oceShare')}><Switch checked={c.oce?.share !== false} onCheckedChange={(share) => save({ oce: { share } }, share ? t('settings.oceShared') : t('settings.oceNotShared'))} data-testid="oce-share" /></Row>
+        <Row label={t('settings.oceOptimus')} hint={t('settings.oceOptimusHint')}><Switch checked={c.oce?.optimus !== false} onCheckedChange={(optimus) => save({ oce: { optimus } }, optimus ? t('settings.oceOptimusOn') : t('settings.oceOptimusOff'))} data-testid="oce-optimus" /></Row>
       </CardContent>
-      {m.enabled ? <CardFooter><Button size="sm" variant="outline" onClick={() => { closeSettings(); go('monitor'); }}><HeartPulse />{t('settings.monitorOpen')}</Button></CardFooter> : null}
     </Card>
   );
 }
@@ -645,20 +636,22 @@ const SECTIONS = [
   { id: 'general', icon: SlidersHorizontal, groups: ['apariencia', 'actualizaciones'],
     cards: (c, app) => <><AssistantCard c={c} /><FolderCard c={c} home={app.home} /><SubSection id="apariencia" title={t('settings.group.apariencia')}><AppearanceCard c={c} /><InterfaceCard c={c} /></SubSection><SubSection id="actualizaciones" title={t('settings.group.actualizaciones')}><UpdatesCard /></SubSection></> },
   // Who can enter this Orb: its users, their devices and the Orbs linked with it.
-  { id: 'magiclink', icon: Radar, groups: (me) => [...(showPersonsSettings(me) ? ['usuarios'] : []), 'dispositivos', 'orbs'],
-    cards: (c, app, me) => <MagicLinkPanel grouped users={showPersonsSettings(me) ? <PersonsCard /> : null} phoneAccess={<MobileCard />} /> },
+  // 3.7 (WS9): and «Conexiones», everything connected to it in one list.
+  { id: 'magiclink', icon: Radar, groups: (me) => [...(showPersonsSettings(me) ? ['usuarios'] : []), 'dispositivos', ...(bridge.mobile ? [] : ['server']), 'orbs', 'conexiones'],
+    cards: (c, app, me) => <><MagicLinkPanel grouped users={showPersonsSettings(me) ? <PersonsCard /> : null} phoneAccess={<MobileCard />} /><SubSection id="conexiones" title={t('settings.group.conexiones')}><ConnectionsPanel /></SubSection></> },
   { id: 'agentes', icon: Cpu, cards: (c) => <><ChatCard c={c} /><TasksCard c={c} />{bridge.mobile ? null : <TestCard />}</> },
   { id: 'datos', icon: DatabaseBackup, when: (me) => isOwner(me), cards: () => <DataCards /> },
-  { id: 'avanzado', icon: Wrench, groups: () => ['herramientas', ...(fullPc() ? ['experto', 'monitor'] : [])],
-    cards: (c) => <><SubSection id="herramientas" title={t('settings.group.herramientas')}><BrowserCard c={c} /><McpCard c={c} /><AndroidCard /></SubSection>
-      {/* 2.7.3: Orb Light (the portable .exe) leaves out God mode and Monitoreo. */}
-      {fullPc() ? <><SubSection id="experto" title={t('settings.group.experto')}><ExpertCard c={c} /></SubSection><SubSection id="monitor" title={t('settings.group.monitor')}><MonitorCard c={c} /></SubSection></> : null}</> },
+  // 3.7: «Monitoreo» is no longer here (a bot with the «Equipo» tools does it); sharing with Open Control Edge stays.
+  { id: 'avanzado', icon: Wrench, groups: () => ['herramientas', ...(fullPc() ? ['experto'] : [])],
+    cards: (c) => <><SubSection id="herramientas" title={t('settings.group.herramientas')}><BrowserCard c={c} /><McpCard c={c} /><AndroidCard />{fullPc() ? <OceCard c={c} /> : null}</SubSection>
+      {/* 2.7.3: Orb Light (the portable .exe) leaves out God mode. */}
+      {fullPc() ? <SubSection id="experto" title={t('settings.group.experto')}><ExpertCard c={c} /></SubSection> : null}</> },
   { id: 'acerca', icon: Info, groups: ['contribuye', 'apps'],
     cards: (c, app) => <><AboutCard version={app.version} /><SubSection id="contribuye" title={t('settings.group.contribuye')}><SupportCard /><FeedbackCard /></SubSection><SubSection id="apps" title={t('settings.group.apps')}><MoreAppsCard /></SubSection></> }
 ];
 // The names of before 3.6 (links in tutorials, notices and the sidebar) → [section, part].
-const ALIASES = { personas: ['magiclink', 'usuarios'], movil: ['magiclink', 'dispositivos'], apariencia: ['general', 'apariencia'], actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'],
-  herramientas: ['avanzado', 'herramientas'], experto: ['avanzado', 'experto'], monitor: ['avanzado', 'monitor'], contribuye: ['acerca', 'contribuye'], apps: ['acerca', 'apps'] };
+const ALIASES = { personas: ['magiclink', 'usuarios'], conexiones: ['magiclink', 'conexiones'], servidor: ['magiclink', 'server'], contrasenas: ['magiclink', 'contrasenas'], movil: ['magiclink', 'dispositivos'], apariencia: ['general', 'apariencia'], actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'],
+  herramientas: ['avanzado', 'herramientas'], experto: ['avanzado', 'experto'], monitor: ['avanzado', 'herramientas'], contribuye: ['acerca', 'contribuye'], apps: ['acerca', 'apps'] };
 export function resolveSection(open) {
   if (!open || open === true) return ['general', null];
   const [id, part = null] = String(open).split(':');
@@ -671,17 +664,31 @@ export function SettingsDialog() {
   const open = useStore((s) => s.settings);
   const app = useStore((s) => s.app);
   const me = useStore((s) => s.me);
+  const server = useStore((s) => s.server);
   const [wanted, part] = resolveSection(open);
+  const openedAt = useStore((s) => s.settingsAt);
   // The part asked for (a link to «Usuarios», a notice about updates…): scrolled into view once the section is drawn.
+  // Some parts appear only after their data loads (Orb Server, Conexiones): it waits for them for a moment, and the
+  // sections above them may still grow, so it follows for a second. Clicking the same part again scrolls again.
   useEffect(() => {
     if (!open || !part) return undefined;
-    const id = requestAnimationFrame(() => document.getElementById(`settings-${part}`)?.scrollIntoView({ block: 'start' }));
-    return () => cancelAnimationFrame(id);
-  }, [open, part]);
+    let frame = 0; const until = performance.now() + 1500;
+    const tick = () => {
+      document.getElementById(`settings-${part}`)?.scrollIntoView({ block: 'start' });
+      if (performance.now() < until) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    // The person scrolls on their own: stop following.
+    const stop = () => cancelAnimationFrame(frame);
+    window.addEventListener('wheel', stop, { once: true, passive: true });
+    window.addEventListener('touchmove', stop, { once: true, passive: true });
+    window.addEventListener('keydown', stop, { once: true });
+    return () => { stop(); window.removeEventListener('wheel', stop); window.removeEventListener('touchmove', stop); window.removeEventListener('keydown', stop); };
+  }, [open, part, openedAt]);
   if (!app) return null;
   // «Mi perfil» (the user menu, with two or more users): this same window, on its own, without the sections.
   const profile = wanted === 'perfil' && showPersonUi(me);
-  const sections = SECTIONS.filter((s) => !s.when || s.when(me));
+  const sections = SECTIONS.filter((s) => !s.when || s.when(me, server));
   const section = sections.find((s) => s.id === wanted) ?? sections[0];
   const c = app.config;
   return (

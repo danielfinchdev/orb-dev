@@ -15,7 +15,7 @@ import { Badge, Spinner, Input } from '@/components/ui/basic.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, Tip } from '@/components/ui/overlay.jsx';
 import { Composer, useAutoScroll } from '@/views/chat.jsx';
 import { LiveActivity } from '@/components/chat-live.jsx';
-import { useStore, botCall, onBotEvent, act, go, loadBotsSoon, loadInboxSoon, inboxAct, isDark } from '@/lib/store.js';
+import { useStore, botCall, onBotEvent, act, go, loadBotsSoon, loadInboxSoon, inboxAct, isDark, phoneLayout } from '@/lib/store.js';
 import { withDays, nameColor } from '@/lib/inbox.js';
 import { decideCard } from '@/lib/notes.js';
 import { useInbox, itemOfRoute } from './inbox.jsx';
@@ -24,6 +24,9 @@ import { chatBot, mergeLine, speakerOf } from '@/lib/bots.js';
 import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { useBots, useCanManage, BotFace, GroupFace, NoBots, BotsDown, Loading } from './common.jsx';
+import { ReplicaBar, PendingMark, LoginExpiredBanner } from './home.jsx';
+import { useHomes } from '@/lib/server.js';
+import { homeOf, replicaActions } from '@/lib/homes.js';
 
 const LAST = 'orb.ultimoBot';
 const lastBot = () => { try { return localStorage.getItem(LAST); } catch { return null; } };
@@ -135,6 +138,8 @@ function Line({ m, group, botsById, first, me, dark }) {
     if (group && m.person_id != null && me != null && m.person_id !== me) return (
       <div className="flex max-w-[80%] flex-col" data-testid="bot-line-person"><span className="text-muted-foreground mb-0.5 px-1 text-xs font-medium">{m.author}</span><div className="bg-card rounded-2xl rounded-bl-md border px-4 py-2.5 whitespace-pre-wrap break-words">{m.body}<Time at={m.at} /></div></div>
     );
+    // 3.7: written while the bot's home did not answer: «Pendiente» until that Orb has it.
+    if (m.meta?.pending) return <div className="ml-auto flex max-w-[80%] flex-col items-end"><div className="bg-bubble text-bubble-foreground rounded-2xl rounded-br-md px-4 py-2.5 whitespace-pre-wrap break-words opacity-80" data-testid="bot-line-user">{m.body}<Time at={m.at} /></div><PendingMark /></div>;
     return <div className="bg-bubble text-bubble-foreground ml-auto max-w-[80%] rounded-2xl rounded-br-md px-4 py-2.5 whitespace-pre-wrap break-words" data-testid="bot-line-user">{m.body}<Time at={m.at} /></div>;
   }
   if (who.kind === 'bot') {
@@ -199,6 +204,7 @@ export function BotChatView({ route }) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [info, setInfo] = useState(false);
+  const homes = useHomes();
   useEffect(() => { if (bot && !group) try { localStorage.setItem(LAST, String(bot.id)); } catch { /* storage unavailable */ } }, [bot?.id, group]); // eslint-disable-line react-hooks/exhaustive-deps
   const key = target ? `${group ? 'g' : 'b'}${target.id}` : null;
   useEffect(() => {
@@ -237,9 +243,12 @@ export function BotChatView({ route }) {
     loadInboxSoon();
   };
   const busy = speaking.some((s) => s.busy);
+  // 3.7: a bot that runs on an Orb that does not answer now.
+  const home = bot ? homeOf(bot) : null;
+  const ra = bot ? replicaActions(bot) : null;
   const status = group
     ? (speaking.length ? t('chats.typing', { name: speaking[0].who.name }) : members.map((b) => b.name).join(', '))
-    : bot.paused ? t('bots.paused') : busy ? t('chats.working') : speaking.length ? t('bots.chat.queued') : bot.role_text || t('bots.noRole');
+    : home && !home.online ? t('home.offlineStatus', { name: home.kind === 'server' ? t('home.badge.server') : home.name }) : bot.paused ? t('bots.paused') : busy ? t('chats.working') : speaking.length ? t('bots.chat.queued') : bot.role_text || t('bots.noRole');
   const pill = (
     <button type="button" onClick={() => setInfo(!info)} className={cn('press flex min-w-0 cursor-pointer items-center gap-2.5 rounded-xl py-1 pr-3 pl-1 text-left', info ? 'bg-accent' : 'hover:bg-accent/60')} aria-expanded={info} aria-label={t('chats.openInfo', { name: target.name })} data-testid="bot-chat-head">
       {group ? <GroupFace group={grp} bots={bots} size={36} /> : <BotFace bot={bot} busy={busy} size={36} chief={bot.is_chief} />}
@@ -255,8 +264,8 @@ export function BotChatView({ route }) {
       <DropdownMenuContent align="end" className="w-52">
         <DropdownMenuItem onSelect={() => setInfo(true)} data-testid="more-info"><Info />{group ? t('chats.groupInfo') : t('chats.botInfo')}</DropdownMenuItem>
         {item ? <DropdownMenuItem onSelect={() => inboxAct('inbox.mute', { kind: item.kind, id: item.id, muted: !item.muted })} data-testid="more-mute">{item.muted ? <Bell /> : <BellOff />}{item.muted ? t('chats.unmute') : t('chats.mute')}</DropdownMenuItem> : null}
-        {bot ? <DropdownMenuItem onSelect={async () => { await act(botCall('bots.pause', { id: bot.id, paused: !bot.paused })); loadBotsSoon(); loadInboxSoon(); }} data-testid="more-pause">{bot.paused ? <Play /> : <Pause />}{bot.paused ? t('chats.resumeBot') : t('chats.pauseBot')}</DropdownMenuItem> : null}
-        {bot && manage ? <DropdownMenuItem onSelect={() => go({ view: 'bots', id: bot.id })} data-testid="more-edit"><Pencil />{t('bots.edit')}</DropdownMenuItem> : null}
+        {bot && ra?.change ? <DropdownMenuItem onSelect={async () => { await act(botCall('bots.pause', { id: bot.id, paused: !bot.paused })); loadBotsSoon(); loadInboxSoon(); }} data-testid="more-pause">{bot.paused ? <Play /> : <Pause />}{bot.paused ? t('chats.resumeBot') : t('chats.pauseBot')}</DropdownMenuItem> : null}
+        {bot && manage && ra?.change ? <DropdownMenuItem onSelect={() => go({ view: 'bots', id: bot.id })} data-testid="more-edit"><Pencil />{t('bots.edit')}</DropdownMenuItem> : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -303,9 +312,14 @@ export function BotChatView({ route }) {
             ))}
           </div>
         </div>
-        <Composer value={text} onChange={setText} onSend={send} onStop={bot && busy ? () => act(botCall('bots.stop', { id: bot.id })) : undefined} busy={busy} disabled={sending} testid="bot-chat-input"
+        <div className="px-4 sm:px-5">
+          {/* The PC shows it in the chat list beside; the phone, here. */}
+          {bot && home?.kind === 'server' && phoneLayout() ? <LoginExpiredBanner bots={[bot]} className="mx-auto mb-2 w-full max-w-3xl" /> : null}
+          {bot ? <ReplicaBar bot={bot} homes={homes} /> : null}
+        </div>
+        <Composer value={text} onChange={setText} onSend={send} onStop={bot && busy ? () => act(botCall('bots.stop', { id: bot.id })) : undefined} busy={busy} disabled={sending || (ra && !ra.talk)} testid="bot-chat-input"
           mentions={group ? mentionOptions : false} bottom={plus}
-          placeholder={group ? t('bots.chat.placeholderGroup', { name: grp.name }) : bot.paused ? t('bots.chat.placeholderPaused', { name: bot.name }) : t('bots.chat.placeholder', { name: bot.name })} />
+          placeholder={group ? t('bots.chat.placeholderGroup', { name: grp.name }) : ra && !ra.talk ? t('home.cannotTalk') : home && !home.online ? t('home.placeholderOffline', { name: bot.name }) : bot.paused ? t('bots.chat.placeholderPaused', { name: bot.name }) : t('bots.chat.placeholder', { name: bot.name })} />
       </div>
       {info ? (group ? <GroupInfo group={grp} item={item} onClose={close} /> : <BotInfo bot={bot} item={item} onClose={close} />) : null}
     </div>

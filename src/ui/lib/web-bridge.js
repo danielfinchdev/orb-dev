@@ -97,11 +97,25 @@ if (!window.orb) {
         while ((i = buf.indexOf('\n\n')) >= 0) {
           const block = buf.slice(0, i); buf = buf.slice(i + 2);
           const data = block.split('\n').filter((l) => l.startsWith('data: ')).map((l) => l.slice(6)).join('');
-          if (data) { try { const { e, p } = C.openText(s.key, data, C.AAD.event(s.id)); fire(e, p); } catch { /* not for us */ } }
+          if (data) { try { const { e, p } = C.openText(s.key, data, C.AAD.event(s.id)); if (e === 'link:handoff' || e === 'link:handback') handoff(p); else fire(e, p); } catch { /* not for us */ } }
         }
       }
     } catch { if (ctrl.signal.aborted) return; }
     if (stream === ctrl) setTimeout(() => { if (stream === ctrl) connect(Math.min(wait * 2, 30_000)); }, wait);
+  };
+  // 3.7 (WS2, Q1): the Orb this device is linked to hands it to its Orb Server (or back): the Android app links there by
+  // itself with the one-time offer (sealed for this device on its link) and from then on talks to it; a browser's page
+  // (served by the old Orb) cannot move: the interface gets 'orb:handoff' with the address that links it there.
+  let handing = false;
+  const handoff = async (h) => {
+    const o = h?.offer; if (!o || handing) return;
+    if (!host) { window.dispatchEvent(new CustomEvent('orb:handoff', { detail: { url: o.url ?? null, hub: h.hub ?? null, back: Boolean(h.back) } })); return; }
+    handing = true;
+    try {
+      await pairWith({ urls: L.orderBases(o.urls), pc: o.pc, code: o.code, h: o.h, name: o.name ?? null, via: 'qr' });
+      fire('link:handedOff', { hub: h.hub ?? null, back: Boolean(h.back) });
+      connect();
+    } catch (e) { console.error(e); } finally { handing = false; }
   };
   // Back from the background (phones pause pages): reconnect at once.
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && session) connect(); });
@@ -137,7 +151,7 @@ if (!window.orb) {
     if (!h.get('vincular')) return;
     history.replaceState(null, '', location.pathname);
     if (!h.get('pc')) throw new Error(await tl('app.oldQr'));
-    await pairWith({ urls: [''], code: h.get('vincular'), pc: h.get('pc'), via: 'qr' }); // in a browser: this page's own server
+    await pairWith({ urls: [''], code: h.get('vincular'), pc: h.get('pc'), via: 'qr', h: h.get('h') }); // in a browser: this page's own server
   };
   const pairWith = async (link) => {
     const C = await crypto$();
@@ -164,7 +178,7 @@ if (!window.orb) {
     const proof = () => C.seal(C.pairingKey(priv, pcPub, secret), { pub: C.b64.enc(pub), name, kind, t: stamp(), role: 'ventana' }, C.AAD.pair);
     let last = null;
     for (const base of p.urls) {
-      const send = () => fetch(`${base}/api/pair`, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ via, pub: C.b64.enc(pub), proof: proof() }) });
+      const send = () => fetch(`${base}/api/pair`, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ via, ...(p.h ? { h: p.h } : {}), pub: C.b64.enc(pub), proof: proof() }) });
       let res;
       try { res = await send(); if (await clockFixed(res)) res = await send(); }
       catch { last = new Error(await tl('app.linkOffline')); continue; } // not reachable this way: the next address

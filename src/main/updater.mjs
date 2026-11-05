@@ -2,12 +2,15 @@
 // version in the background (electron-updater, NSIS) and installs it on «Reiniciar y actualizar» or when the app closes.
 // A copy that was not installed (Orb Light, the portable .exe, or the program folder copied elsewhere) cannot replace
 // itself: it only says there is a new version and opens the download page.
+// 3.7, Linux: the AppImage updates itself like the installer (electron-updater, latest-linux.yml); the .deb (or any other
+// copy, such as the unpacked folder) only says there is a new version and opens the download page, like Orb Light.
 // The window gets the state as the 'app:update' event and asks through app:update* (src/main/main.mjs).
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
 import pkg from 'electron-updater';
 import { AUTHOR } from '../core/product.mjs';
+import { linuxKind } from './linux.mjs';
 
 const { autoUpdater } = pkg;
 export const RELEASES_URL = `https://github.com/${AUTHOR.repo}/releases/latest`;
@@ -35,10 +38,11 @@ export function createUpdater({ send, log = () => {}, beforeInstall = null }) {
   // Not installed: the portable .exe (PORTABLE_EXECUTABLE_FILE), or the packaged app without the installer's uninstaller
   // next to it (its folder copied somewhere else).
   const installed = () => { try { return fs.existsSync(path.join(path.dirname(process.execPath), `Uninstall ${path.basename(process.execPath, '.exe')}.exe`)); } catch { return true; } };
-  const portable = !fake && (Boolean(process.env.PORTABLE_EXECUTABLE_FILE) || (app.isPackaged && process.platform === 'win32' && !installed()));
+  const linuxPackage = linuxKind(process.platform, process.env);
+  const portable = !fake && (Boolean(process.env.PORTABLE_EXECUTABLE_FILE) || (app.isPackaged && process.platform === 'win32' && !installed()) || (app.isPackaged && linuxPackage !== null && linuxPackage !== 'appimage'));
   // Only the packaged app updates (from the code there is nothing to replace); ORB_NO_UPDATE=1 turns it off.
   const enabled = Boolean(fake) || (app.isPackaged && process.env.ORB_NO_UPDATE !== '1');
-  let state = { state: enabled ? 'idle' : 'off', current, version: null, percent: 0, error: null, portable, url: RELEASES_URL };
+  let state = { state: enabled ? 'idle' : 'off', current, version: null, percent: 0, error: null, portable, linux: linuxPackage, url: RELEASES_URL };
   const set = (patch) => { state = { ...state, ...patch }; send(state); };
   let timer = null;
   let backedUp = null; // the version a backup was made for

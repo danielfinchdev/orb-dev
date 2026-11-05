@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('orb', {
     return () => listeners.get(event)?.delete(fn);
   },
   info: () => ipcRenderer.invoke('app:info'),
+  // 3.7: the system the app runs on (win32, linux, darwin): the window offers the terminals and names of that system.
+  platform: process.platform,
   // 2.7.3: Orb Light (the portable .exe): the window shows the essentials only (main.mjs passes --orb-light).
   light: process.argv.includes('--orb-light'),
   setup: (data) => ipcRenderer.invoke('app:setup', data),

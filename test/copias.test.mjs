@@ -206,7 +206,7 @@ test('engine: backup.now, list, verify, recovery code and restore staged for the
   } finally { if (!stopped) await e.stop(); cleanup(); }
 });
 
-test('Orb Núcleo: a copy before a new version, and orb-nucleo copia ahora | lista | restaurar', async () => {
+test('Orb Server: a copy before a new version, and orb-server copia ahora | lista | restaurar', async () => {
   const { backupOnUpgrade } = await import('../src/server/host.mjs');
   const { execFileSync } = await import('node:child_process');
   const { ROOT } = await import('./helpers.mjs');
@@ -219,7 +219,7 @@ test('Orb Núcleo: a copy before a new version, and orb-nucleo copia ahora | lis
     const next = await backupOnUpgrade(s.home, '3.6.1');
     assert.equal((await K.readHeader(next)).header.version, '3.6.0');
     const env = { ...process.env, ORB_LANG: 'es', LANG: 'es_ES.UTF-8', NO_COLOR: '1' };
-    const run = (...args) => execFileSync(process.execPath, [path.join(ROOT, 'src', 'server', 'orb-nucleo.mjs'), ...args, '--home', s.home], { env, encoding: 'utf8', windowsHide: true, timeout: 120_000 });
+    const run = (...args) => execFileSync(process.execPath, [path.join(ROOT, 'src', 'server', 'orb-server.mjs'), ...args, '--home', s.home], { env, encoding: 'utf8', windowsHide: true, timeout: 120_000 });
     assert.match(run('copia', 'ahora'), /orbbak/);
     const list = run('copia', 'lista');
     assert.match(list, /manual/); assert.match(list, /preupdate/);

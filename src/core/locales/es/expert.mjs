@@ -61,6 +61,7 @@ export default {
   'expert.close': 'Cerrar',
   // 3.2: God mode: abrir en y acciones
   'tools.explorer': 'Explorador de archivos',
+  'tools.files': 'Gestor de archivos',
   'tools.openIn': 'Abrir en {app}',
   'tools.openWith': 'Abrir con…',
   'tools.actions': 'Acciones',

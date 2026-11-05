@@ -58,8 +58,13 @@ export function personMethods(shared) {
     // Ajustes › Personas (owner): what someone may do (program, use the house, approve the house's cards).
     'persons.setCaps': ({ id, caps }) => { const p = setCaps(board, str(id, 'persona', 40), caps && typeof caps === 'object' ? caps : {}); changed(); return p; },
     // The caller's own preferences kept per person: what notifications show on a locked screen.
-    'persons.prefs.get': (_, who) => ({ preview: board.personSetting(who.person, 'preview') ?? 'chat' }),
-    'persons.prefs.set': ({ preview }, who) => { board.personSetting(who.person, 'preview', oneOf(preview, PREVIEWS, 'avisos')); return { preview: board.personSetting(who.person, 'preview') }; },
+    // 3.7 (WS3, Q3): replicaPc «Copia en el PC»: this person's bots also keep a live copy on the owner's other Orbs.
+    'persons.prefs.get': (_, who) => ({ preview: board.personSetting(who.person, 'preview') ?? 'chat', replicaPc: board.personSetting(who.person, 'replica.pc') === true }),
+    'persons.prefs.set': ({ preview, replicaPc }, who) => {
+      if (preview !== undefined) board.personSetting(who.person, 'preview', oneOf(preview, PREVIEWS, 'avisos'));
+      if (replicaPc !== undefined) board.personSetting(who.person, 'replica.pc', replicaPc === true);
+      return { preview: board.personSetting(who.person, 'preview') ?? 'chat', replicaPc: board.personSetting(who.person, 'replica.pc') === true };
+    },
     // Ajustes › Personas (owner): pause or resume all the bots of someone (their names and content stay theirs).
     'persons.pauseBots': ({ id, paused }) => {
       const p = mustPerson(board, str(id, 'persona', 40));

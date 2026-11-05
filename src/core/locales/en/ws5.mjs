@@ -22,16 +22,16 @@ export default {
   'data.move.notMove': 'That backup is not for moving an Orb: use "Restore".',
   'data.move.movedAway': 'This Orb was moved to another computer and is no longer used here. In Settings › Data you can undo it or keep both.',
 
-  'data.nucleo.backupDone': 'Backup made: {file} ({files} files).',
-  'data.nucleo.noBackups': 'No backups yet.',
-  'data.nucleo.backupsIn': 'Backups in {folder}',
-  'data.nucleo.restoreReady': 'Backup checked ({files} files). It takes over the next time Orb starts.',
-  'data.nucleo.restoreDone': 'Backup restored. What was there before is in {aside}.',
-  'data.nucleo.restartService': 'Restart the service to use it: systemctl --user restart orb-nucleo',
-  'data.nucleo.recoveryCode': 'Your recovery code (write it down and keep it off this computer; it is not shown again):',
-  'data.nucleo.recoverySet': 'Recovery code saved. New backups open with it on another computer.',
-  'data.nucleo.moveDone': 'Move backup made: {file}. Take it to the new computer with its code.',
-  'data.nucleo.moveImported': 'Orb imported into {home}. This is now the Orb in charge; the old one stops working.',
-  'data.nucleo.needCode': 'The code is missing: --clave <code> (or the ORB_BACKUP_CODE variable).',
-  'data.nucleo.notEmpty': 'That folder already holds an Orb. Pick a new folder.'
+  'data.server.backupDone': 'Backup made: {file} ({files} files).',
+  'data.server.noBackups': 'No backups yet.',
+  'data.server.backupsIn': 'Backups in {folder}',
+  'data.server.restoreReady': 'Backup checked ({files} files). It takes over the next time Orb starts.',
+  'data.server.restoreDone': 'Backup restored. What was there before is in {aside}.',
+  'data.server.restartService': 'Restart the service to use it: systemctl --user restart orb-server',
+  'data.server.recoveryCode': 'Your recovery code (write it down and keep it off this computer; it is not shown again):',
+  'data.server.recoverySet': 'Recovery code saved. New backups open with it on another computer.',
+  'data.server.moveDone': 'Move backup made: {file}. Take it to the new computer with its code.',
+  'data.server.moveImported': 'Orb imported into {home}. This is now the Orb in charge; the old one stops working.',
+  'data.server.needCode': 'The code is missing: --clave <code> (or the ORB_BACKUP_CODE variable).',
+  'data.server.notEmpty': 'That folder already holds an Orb. Pick a new folder.'
 };

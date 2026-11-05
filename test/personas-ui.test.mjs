@@ -91,17 +91,20 @@ test('uso por persona: ordenado por hoy, con el total', () => {
   assert.deepEqual(total, { today: 11, month: 70, usd: 1.75 });
 });
 
-test('el asistente: tres pantallas, y cada uso aplica su plantilla tal cual («Más tarde», nada)', async () => {
-  assert.deepEqual(P.WIZARD_STEPS, ['nombre', 'quien', 'para']);
-  assert.deepEqual(P.WIZARD_USES.map((u) => u.id), ['dev', 'business', 'home', 'later']);
-  assert.equal(P.WIZARD_USES.find((u) => u.id === 'later').template, null);
+test('la bienvenida es la de la 3.5.1 (nombre del asistente, cómo te llamo, carpeta, preparar el PC) y las plantillas están en «Nuevo bot»', async () => {
+  const setup = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'views', 'setup.jsx'), 'utf8');
+  for (const k of ['setup.nameLabel', 'setup.userLabel', 'setup.whereFolder', 'setup.prepareTitle', 'setup.prepareDesc']) assert.ok(setup.includes(`'${k}'`), k);
+  assert.match(setup, /<Installer[ >]/, 'preparar el PC con los instaladores oficiales');
+  assert.doesNotMatch(setup, /wizard\.|persons\.create|templates\.apply/, 'sin las pantallas de la 3.6');
+  assert.ok(!Object.keys(es).some((k) => k.startsWith('wizard.')) && !Object.keys(en).some((k) => k.startsWith('wizard.')), 'sin textos del asistente de la 3.6');
+  const create = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'views', 'bots', 'create.jsx'), 'utf8');
+  assert.match(create, /'templates\.list'/); assert.match(create, /'templates\.apply'/);
   const t = tempHome();
   try {
     const { listTemplates, applyTemplate } = await import('../src/core/templates.mjs');
     for (const lang of ['es', 'en']) {
       const list = listTemplates(lang);
-      assert.deepEqual(list.map((x) => x.id).sort(), ['casa', 'desarrollo', 'negocio', 'vacio'], lang);
-      for (const u of P.WIZARD_USES) if (u.template) assert.ok(list.some((x) => x.id === u.template), `${u.template} (${lang})`);
+      assert.deepEqual(list.map((x) => x.id).sort(), ['casa', 'desarrollo', 'mantenimiento', 'negocio', 'vacio'], lang); // 3.7: «Mantenimiento del PC», opcional (no está en el asistente)
       // genéricas: ningún nombre de persona ni de casa concreta
       assert.doesNotMatch(JSON.stringify(list), /Dani|María|Ana|Leo/, `plantillas genéricas (${lang})`);
     }
@@ -132,13 +135,13 @@ test('los métodos nuevos tienen su regla y el móvil puede cambiar lo suyo', ()
 });
 
 test('todos los textos de las pantallas nuevas existen en los dos idiomas (también los compuestos)', () => {
-  const files = ['components/person-menu.jsx', 'components/lock-screen.jsx', 'components/share-dialog.jsx', 'views/persons.jsx', 'views/data.jsx', 'views/setup.jsx', 'views/agents.jsx', 'views/bots/more.jsx', 'views/bots/list.jsx', 'views/magic-link.jsx'];
+  const files = ['components/person-menu.jsx', 'components/lock-screen.jsx', 'components/share-dialog.jsx', 'views/persons.jsx', 'views/data.jsx', 'views/setup.jsx', 'views/agents.jsx', 'views/bots/more.jsx', 'views/bots/list.jsx', 'views/bots/create.jsx', 'views/magic-link.jsx'];
   const used = new Set();
   for (const f of files) {
     const code = fs.readFileSync(path.join(ROOT, 'src', 'ui', f), 'utf8');
     for (const m of code.matchAll(/\btr?\(\s*'([a-zA-Z]+(?:\.[\w]+)+)'/g)) used.add(m[1]);
   }
-  const dynamic = [...P.CAPS.map((k) => `persons.cap.${k}`), ...P.WIZARD_USES.map((u) => `wizard.use.${u.id}`), ...['bots', 'groups', 'conversations', 'tasks', 'projects', 'schedules', 'reminders'].flatMap((k) => [`persons.count.${k}`, `persons.count.${k}One`]), 'persons.devicesNOne', 'persons.todayTurnsOne',
+  const dynamic = [...P.CAPS.map((k) => `persons.cap.${k}`), ...['bots', 'groups', 'conversations', 'tasks', 'projects', 'schedules', 'reminders'].flatMap((k) => [`persons.count.${k}`, `persons.count.${k}One`]), 'persons.devicesNOne', 'persons.todayTurnsOne',
     ...P.ROLES.map((r) => `persons.role.${r}`), ...P.RIGHTS.map((r) => `share.right.${r}`), ...P.PREVIEWS.map((x) => `profile.preview.${x}`),
     ...['daily', 'manual', 'preupdate', 'premigration', 'move', 'other'].map((k) => `datos.kind.${k}`), ...['applied', 'pending', 'rejected', 'undone'].map((k) => `botsp.memStatus.${k}`), 'botsp.memOp.add', 'botsp.memOp.replace',
     'persons.pin.wrong', 'persons.pin.wrongLeft', 'persons.pin.locked', 'persons.loan.leftTurns', 'persons.loan.leftTokens', 'persons.loan.leftUsd', 'persons.loan.noCap', 'persons.loan.expired',
