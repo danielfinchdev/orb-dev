@@ -678,12 +678,13 @@ export function SettingsDialog() {
       if (performance.now() < until) frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
-    // The person scrolls on their own: stop following.
+    // The person scrolls or clicks on their own (a menu opening must not jump away): stop following.
     const stop = () => cancelAnimationFrame(frame);
     window.addEventListener('wheel', stop, { once: true, passive: true });
     window.addEventListener('touchmove', stop, { once: true, passive: true });
     window.addEventListener('keydown', stop, { once: true });
-    return () => { stop(); window.removeEventListener('wheel', stop); window.removeEventListener('touchmove', stop); window.removeEventListener('keydown', stop); };
+    window.addEventListener('pointerdown', stop, { once: true, capture: true });
+    return () => { stop(); window.removeEventListener('wheel', stop); window.removeEventListener('touchmove', stop); window.removeEventListener('keydown', stop); window.removeEventListener('pointerdown', stop, { capture: true }); };
   }, [open, part, openedAt]);
   if (!app) return null;
   // «Mi perfil» (the user menu, with two or more users): this same window, on its own, without the sections.
