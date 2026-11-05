@@ -17,7 +17,7 @@ import { DialogHost } from '@/components/dialogs.jsx';
 import { ImagePreviewHost } from '@/components/image-viewer.jsx';
 import { Sidebar } from '@/components/sidebar.jsx';
 import { Companion } from '@/components/companion.jsx';
-import { UpdateCard } from '@/components/update-card.jsx';
+import { UpdateCards } from '@/components/update-card.jsx';
 import { Notices } from '@/components/notices.jsx';
 import { ActionShortcuts } from '@/components/project-tools.jsx';
 import { Scene } from '@/components/scene.jsx';
@@ -146,7 +146,7 @@ function Shell() {
       {/* The floating robot only where there is room for it: never over forms or conversations (it covered the switches of
           Ajustes and took their clicks), and those views leave room at the bottom so nothing stays under it. */}
       {/* 3.5: a browser linked with an Orb gets the PC's layout, not what only the PC itself does. */}
-      {bridge.mobile ? null : <><UpdateCard /><SettingsDialog /><GamesDialog /><RecoveryNotice /></>}
+      {bridge.mobile ? null : <><UpdateCards /><SettingsDialog /><GamesDialog /><RecoveryNotice /></>}
       <Notices />
       <ShareHost />
       <NewGroupHost />
