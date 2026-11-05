@@ -5,9 +5,11 @@
 import crypto from 'node:crypto';
 import { ctx, tr } from './context.mjs';
 import { oneLine } from './safety.mjs';
+import { localDay } from './tz.mjs';
 
 export const ROLES = ['owner', 'user'];
-export const CAPS = ['dev', 'house', 'approveHouse'];
+// 3.7 (WS6): vault: may use a password vault on Orb Server (vault_fill). The owner always may; others when the owner allows.
+export const CAPS = ['dev', 'house', 'approveHouse', 'vault'];
 // PIN: 4 to 12 digits, kept as scrypt(pin, salt). 5 wrong tries lock it; each further wrong try doubles the wait.
 export const PIN_TRIES = 5;
 const LOCK_FIRST_S = 30; const LOCK_MAX_S = 3600;
@@ -104,7 +106,7 @@ export function removePerson(board, id) {
 // ---- PIN
 const checkPinFormat = (pin) => { if (typeof pin !== 'string' || !/^\d{4,12}$/.test(pin)) throw bad('msg.persons.badPin'); return pin; };
 const hashPin = (pin, salt) => crypto.scryptSync(pin, Buffer.from(salt, 'hex'), 32, SCRYPT).toString('hex');
-// pin null: no PIN any more (the owner's reset, orb-nucleo pin-reset).
+// pin null: no PIN any more (the owner's reset, orb-server pin-reset).
 export function setPin(board, id, pin) {
   const p = mustPerson(board, id);
   if (pin == null || pin === '') { board.run('UPDATE persons SET pin_hash = NULL, pin_salt = NULL, pin_fails = 0, pin_locked_until = NULL WHERE id = ?', p.id); return { hasPin: false }; }
@@ -147,16 +149,28 @@ export const dropTickets = (person) => { for (const [k, t] of tickets) if (t.per
 
 // ---- the owner's overview: numbers only, never titles, names of things or content.
 export function overview(board) {
-  const day = new Date().toISOString().slice(0, 10);
+  // 3.7: «today» is each person's own day (the ledger stamps it in their time zone, budget.mjs › dayOf), not UTC's: from
+  // midnight to 1 a.m. in Madrid the overview showed 0.
+  const now = new Date();
+  const dayFor = (pid) => { let tz = null; try { tz = board.one('SELECT tz FROM persons WHERE id = ?', String(pid))?.tz || null; } catch { /* no column */ } return localDay(now, tz); };
   const count = (table, pid, extra = '') => { try { return board.one(`SELECT COUNT(*) AS n FROM ${table} WHERE person_id = ?${extra}`, pid).n; } catch { return 0; } };
   const owner = ownerId(board);
   return listPersons(board).map((p) => {
     // Rows from before 3.6 code stamped them (person_id NULL) are the owner's.
     const c = (table, extra = '') => count(table, p.id, extra) + (p.id === owner ? (board.one(`SELECT COUNT(*) AS n FROM ${table} WHERE person_id IS NULL${extra}`)?.n ?? 0) : 0);
-    const usage = board.one('SELECT COALESCE(SUM(turns), 0) AS turns, COALESCE(SUM(tokens_in), 0) + COALESCE(SUM(tokens_out), 0) AS tokens, COALESCE(SUM(usd), 0) AS usd FROM usage_ledger WHERE person_id = ? AND day = ?', p.id, day);
+    const usage = board.one('SELECT COALESCE(SUM(turns), 0) AS turns, COALESCE(SUM(tokens_in), 0) + COALESCE(SUM(tokens_out), 0) AS tokens, COALESCE(SUM(usd), 0) AS usd FROM usage_ledger WHERE person_id = ? AND day = ?', p.id, dayFor(p.id));
     const seen = board.one('SELECT MAX(last_seen) AS at FROM devices WHERE person_id = ?', p.id)?.at ?? null;
     return { id: p.id, name: p.name, role: p.role, hasPin: p.hasPin, caps: p.caps, devices: c('devices'), lastSeen: seen,
       counts: { bots: c('bots'), botsPaused: c('bots', ' AND paused = 1'), groups: c('bot_groups'), conversations: c('conversations', ' AND bot_id IS NULL AND group_id IS NULL'), tasks: c('tasks'), schedules: c('schedules'), projects: c('projects'), reminders: c('bot_reminders', ' AND enabled = 1') },
       today: { turns: Number(usage?.turns ?? 0), tokens: Number(usage?.tokens ?? 0), usd: Number(usage?.usd ?? 0) } };
   });
+}
+
+// 3.7 (Orb Server, WS6): who may connect a password vault and let bots sign in with it: the owner, or a person the owner
+// gave the «vault» capability.
+export function mayUseVault(board, person) {
+  if (!person) return false;
+  const r = board.one('SELECT role, caps FROM persons WHERE id = ? AND deleted_at IS NULL', String(person));
+  if (!r) return false;
+  return r.role === 'owner' || parseCaps(r.caps).vault === true;
 }

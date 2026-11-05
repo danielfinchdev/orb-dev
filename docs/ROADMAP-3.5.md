@@ -14,10 +14,10 @@ Status: **proposal, no code changed**. Written on 2026-11-04 by Claude (Opus 5.5
 
 **One Orb of your own and many windows.** Each thing works where it fits best. Orb is generic: "laptop + Linux server + phone" is just an example, and everything below is chosen by the user in Settings › Magic Link, with defaults that ask nothing of someone with a single PC.
 
-- **Role of each Orb** (`orb.json › role`, on any Orb, also on a Windows PC): **Everything on this Orb** (default: hub and workshop at once), **Hub** (`centro`, always on: keeps the bots, their memory, the reminders and receives the devices) or **Workshop** (`taller`: programs, builds and runs the heavy agents). Orb Núcleo starts a new folder as a hub. An Orb having no window (Orb Núcleo) is a separate thing (`headless`): only that removes God mode, the expert view, Opti and isolated copies.
+- **Role of each Orb** (`orb.json › role`, on any Orb, also on a Windows PC): **Everything on this Orb** (default: hub and workshop at once), **Hub** (`centro`, always on: keeps the bots, their memory, the reminders and receives the devices) or **Workshop** (`taller`: programs, builds and runs the heavy agents). Orb Server starts a new folder as a hub. An Orb having no window (Orb Server) is a separate thing (`headless`): only that removes God mode, the expert view, Opti and isolated copies.
 - **Where the bots live** (`bots.location`: `local` or a linked Orb that keeps bots): when linking to one, Orb asks "Where do you want your bots?" and, if they go there and there are bots here, offers "Bring my bots" (they are copied with their memory and reminders and paused here) or "Leave them here". Nothing is hidden without warning.
 - **Orb for programming** (`devTarget`): the Orb mode of a phone or terminal goes to the Orb that programs (workshop or everything); if there are several, the user picks one. If it is off, wake it and queue (`taller.*`).
-- **Windows**: the Windows app, the Android app, the browser and the terminal (`orb`). All of them link through Magic Link. A linked device only manages (bots and links) if marked **Can manage**; `orb-nucleo enlazar` grants it to the first one, because a headless server needs it.
+- **Windows**: the Windows app, the Android app, the browser and the terminal (`orb`). All of them link through Magic Link. A linked device only manages (bots and links) if marked **Can manage**; `orb-server enlazar` grants it to the first one, because a headless server needs it.
 - Example (one possible setup): a home server is "Hub", the laptop "Workshop" with the bots on the server, and the phone programs on the laptop through the server. With a single PC, everything stays on "Everything on this Orb" without touching anything.
 
 ## 2. What already exists (3.2.1)
@@ -93,7 +93,7 @@ Status: **proposal, no code changed**. Written on 2026-11-04 by Claude (Opus 5.5
 
 | Device | What is installed | Role | Footprint |
 |---|---|---|---|
-| **Server** (Linux tower, 24/7) | **Orb Núcleo** (Orb Core): just the Node engine, no Electron and no window | **Hub**: the Bot, the message inbox, reminders, phone notifications and the entry door for the others | about 150 MB on disk and 120 MB of RAM idle |
+| **Server** (Linux tower, 24/7) | **Orb Server**: just the Node engine, no Electron and no window | **Hub**: the Bot, the message inbox, reminders, phone notifications and the entry door for the others | about 150 MB on disk and 120 MB of RAM idle |
 | **Laptop** (Windows) | **Full Orb** (Electron, as now) | **Workshop**: building, programming, heavy tasks, Claude Code and Codex | as always |
 | **Phone** (Android) | **Orb app**: the same React UI packaged with Capacitor | **Window**: talk, approve and get notifications | that of an app |
 

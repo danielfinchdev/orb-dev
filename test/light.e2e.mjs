@@ -14,7 +14,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'test-results'); fs.mkdirSync(OUT, { recursive: true });
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-light-'));
 const { home } = createHome(tmp, { assistantName: 'Orb', userName: 'Ana' });
-writeJson(path.join(home, 'orb.json'), merge(loadConfig(home), { ui: { tourDone: true, skin: 'vaporwave' }, expert: { enabled: true }, monitor: { enabled: true } }));
+writeJson(path.join(home, 'orb.json'), merge(loadConfig(home), { ui: { tourDone: true, skin: 'vaporwave' }, expert: { enabled: true } }));
 const userData = path.join(tmp, 'datos-app'); fs.mkdirSync(userData);
 fs.writeFileSync(path.join(userData, 'ubicacion.json'), JSON.stringify({ home }));
 const electronBin = (await import('electron')).default;

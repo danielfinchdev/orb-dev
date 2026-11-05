@@ -192,7 +192,7 @@ const SRC = {
   logs: ['Bitácoras (project logs)', 'src/ui/views/memories.jsx + logs.jsx'], activity: ['Activity', 'src/ui/views/memories.jsx + activity.jsx'],
   schedules: ['Scheduled tasks', 'src/ui/views/schedules.jsx'], phone: ['This phone / mobile access', 'src/ui/views/settings.jsx (PhoneView)'],
   tutorials: ['Tutorials and help', 'src/ui/views/tutorials.jsx'], board: ['Whiteboard (Pizarra)', 'src/ui/views/whiteboard.jsx'],
-  expert: ['God mode (expert)', 'src/ui/views/expert.jsx'], monitor: ['PC status / Opti', 'src/ui/views/monitor.jsx'],
+  expert: ['God mode (expert)', 'src/ui/views/expert.jsx'],
   link: ['Magic Link', 'src/ui/views/magic-link.jsx'], profile: ['My profile', 'src/ui/views/persons.jsx (ProfileView)'],
   chats: ['Chats list', 'src/ui/main.jsx (ChatsView) + components/sidebar.jsx'], more: ['More menu', 'src/ui/components/mobile-tabs.jsx (MoreView)'],
   'bot-chat': ['Bots chat', 'src/ui/views/bots/chat.jsx'], 'bot-group': ['Bot group chat', 'src/ui/views/bots/chat.jsx'], bots: ['Bots list', 'src/ui/views/bots/list.jsx'],
@@ -200,11 +200,11 @@ const SRC = {
   'bot-memory': ['Bots memory', 'src/ui/views/bots/more.jsx (BotMemoryView)'], 'bot-home': ['Home (Home Assistant)', 'src/ui/views/bots/more.jsx (BotHomeView)'],
   'bot-server': ['Bots server', 'src/ui/views/bots/more.jsx (BotServerView)'], 'bot-settings': ['Bots settings', 'src/ui/views/bots/more.jsx (BotSettingsView)']
 };
-const PC_VIEWS = ['chat', 'tasks', 'projects', 'agents', 'logs', 'activity', 'schedules', 'phone', 'tutorials', 'board', 'expert', 'monitor', 'bot-chat', 'bots', 'bot-groups', 'bot-reminders', 'bot-memory', 'bot-home', 'bot-server', 'bot-settings'];
+const PC_VIEWS = ['chat', 'tasks', 'projects', 'agents', 'logs', 'activity', 'schedules', 'phone', 'tutorials', 'board', 'expert', 'bot-chat', 'bots', 'bot-groups', 'bot-reminders', 'bot-memory', 'bot-home', 'bot-server', 'bot-settings'];
 const PHONE_VIEWS = ['chat', 'chats', 'more', 'tasks', 'projects', 'logs', 'activity', 'schedules', 'phone', 'profile', 'tutorials', 'board', 'link', 'bot-chat', 'bots', 'bot-reminders', 'bot-home', 'bot-groups', 'bot-memory', 'bot-server', 'bot-settings'];
 const WEB_VIEWS = ['chat', 'tasks', 'projects', 'link', 'logs', 'bot-chat', 'bots', 'bot-reminders'];
 // 3.6: six sections (their parts are taken scrolling); «Mi perfil» is a window of its own (the user menu, 2+ users).
-const SETTINGS = [['general', 'General (assistant, folder, appearance, updates)'], ['magiclink', 'Magic Link (users, devices, linked Orbs)'], ['agentes', 'Agents (chat, tasks, test)'], ['datos', 'Data and backups'], ['avanzado', 'Advanced (tools, God mode, PC status)'], ['acerca', 'About (contribute, more apps)'], ['perfil', 'My profile']];
+const SETTINGS = [['general', 'General (assistant, folder, appearance, updates)'], ['magiclink', 'Magic Link (users, devices, linked Orbs)'], ['agentes', 'Agents (chat, tasks, test)'], ['datos', 'Data and backups'], ['avanzado', 'Advanced (tools, God mode)'], ['acerca', 'About (contribute, more apps)'], ['perfil', 'My profile']];
 
 async function views(page, list, state, { scroll = true } = {}) {
   for (const v of list) {
@@ -250,24 +250,18 @@ try {
     meta.get(pc).dark = dark;
     await pc.emulateMedia({ colorScheme: dark ? 'dark' : 'light' }); // before the setup the theme follows the system
     await pc.goto(pcUrl);
-    // 3.6: three screens, one question each (name; anyone else?; what for).
-    await pc.waitForSelector('[data-testid=wizard-nombre]', { timeout: 20000 });
+    // 3.7: the 3.5.1 welcome: the assistant's name, what to call you and the folder; then «Preparando tu PC» (Windows).
+    await pc.waitForSelector('[data-testid=setup-datos]', { timeout: 20000 });
     const W = 'src/ui/views/setup.jsx';
-    await pc.fill('[data-testid=setup-name]', 'Ana');
-    await shot(pc, { area: 'wizard', screen: 'nombre', state: 'filled', src: W, desc: 'Welcome wizard 1/3: «¿Cómo te llamas?»' });
-    if (await pc.locator('[data-testid=setup-folder]').count()) await pc.click('[data-testid=setup-folder]');
+    await shot(pc, { area: 'wizard', screen: 'datos', state: 'default', src: W, desc: 'Welcome: assistant name, what to call you, folder' });
+    await pc.fill('[data-testid=setup-user]', 'Ana');
+    await pc.click('[data-testid=setup-folder]');
+    await shot(pc, { area: 'wizard', screen: 'datos', state: 'filled', src: W, desc: 'Welcome, filled in (the folder chosen)' });
     await pc.click('[data-testid=setup-create]');
-    await pc.waitForSelector('[data-testid=wizard-quien]', { timeout: 20000 });
-    await shot(pc, { area: 'wizard', screen: 'quien', state: 'default', src: W, desc: 'Welcome wizard 2/3: «¿Lo usará alguien más?»' });
-    await attempt(pc, 'wizard more people', async () => {
-      await pc.click('[data-testid=wizard-more-people]');
-      await pc.fill('[data-testid=wizard-person-0]', 'Leo');
-      await shot(pc, { area: 'wizard', screen: 'quien', state: 'several-users', src: W, desc: 'Welcome wizard 2/3 with one more user' });
-    });
-    await pc.click('[data-testid=wizard-only-me]');
-    await pc.waitForSelector('[data-testid=wizard-para]', { timeout: 20000 });
-    await shot(pc, { area: 'wizard', screen: 'para', state: 'default', src: W, desc: 'Welcome wizard 3/3: «¿Para qué lo quieres?»' });
-    await pc.click('[data-testid=wizard-use-later]');
+    await pc.waitForSelector('[data-testid=setup-prepare]', { timeout: 20000 });
+    await pc.waitForTimeout(800);
+    await shot(pc, { area: 'wizard', screen: 'prepare', state: 'default', src: W, desc: 'Welcome: «Preparando tu PC» (official installers, then sign in)' });
+    await pc.click('[data-testid=setup-continue]');
     await loaded(pc);
     if (!dark) {
       // The guided tour, the first time the app opens.
@@ -289,7 +283,7 @@ try {
   }
 
   // ================= 2. a fresh, empty Orb =================
-  await call('config.save', { patch: { expert: { enabled: true }, monitor: { enabled: true } } });
+  await call('config.save', { patch: { expert: { enabled: true } } });
   const phone = (!ONLY || ONLY.has('phone')) ? await newPage('phone') : null;
   const web = (!ONLY || ONLY.has('web')) ? await newPage('web') : null;
   const linkDevice = async (page, device) => {

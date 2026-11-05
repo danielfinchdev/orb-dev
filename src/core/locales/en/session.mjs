@@ -14,6 +14,7 @@ export default {
   'session.stepsOther': '{n} steps',
   'session.noOutput': '(no output)',
   'session.working': 'In progress…',
+  'session.optiOld': 'Opti Bot’s proposal: {action}',
   'session.steered': 'Mid-run correction',
   'session.seeFullTask': 'view full instructions',
   'session.tokensIn': '{n} input tokens',

@@ -38,14 +38,34 @@ try {
   step = 'primer arranque';
   const button = (name) => win.getByRole('button', { name, exact: true });
   const dialogButton = (name) => win.getByRole('dialog').getByRole('button', { name, exact: true });
-  // 3.6: three screens: the name (the folder goes in Documents: here a throwaway one), «Solo yo», «Más tarde».
-  await win.waitForSelector('[data-testid=setup-name]');
-  await win.fill('[data-testid=setup-name]', 'Ana');
+  // 3.7: the 3.5.1 welcome again: the assistant's name, what to call you, where its folder goes; on Windows then
+  // «Preparando tu PC» (the official installers of what is missing). No questions about people or uses.
+  await win.waitForSelector('[data-testid=setup-datos]');
+  await app.evaluate(({ dialog }, folder) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] }); }, base);
+  await win.fill('[data-testid=setup-assistant]', 'Orbe');
+  await win.fill('[data-testid=setup-user]', 'Ana');
+  assert.ok(await win.isDisabled('[data-testid=setup-create]'), 'sin carpeta no se puede seguir');
+  await win.click('[data-testid=setup-folder]');
+  await win.locator('[data-testid=setup-target]', { hasText: path.join(base, 'Orb') }).waitFor();
+  await win.waitForTimeout(500);
   await shot('01-bienvenida');
   await win.click('[data-testid=setup-create]');
-  await win.click('[data-testid=wizard-only-me]');
-  await win.click('[data-testid=wizard-use-later]');
+  await win.getByTestId('chat-greeting').or(win.getByTestId('setup-prepare')).first().waitFor();
+  if (await win.isVisible('[data-testid=setup-prepare]')) {
+    await win.getByText('Preparando tu PC').waitFor();
+    await win.waitForTimeout(800);
+    await shot('01b-preparo-equipo');
+    await win.click('[data-testid=setup-continue]');
+  }
   await win.waitForSelector('[data-testid=chat-greeting]');
+  for (const sel of ['wizard-quien', 'wizard-para']) assert.equal(await win.locator(`[data-testid=${sel}]`).count(), 0, sel);
+  // What 3.6 asked is done without asking: Ana is the admin, with this PC's time zone; backups on.
+  assert.equal((await call('app.state')).config.assistantName, 'Orbe');
+  const people = await call('persons.list');
+  assert.equal(people.length, 1, 'una sola persona');
+  assert.equal(people[0].role, 'owner'); assert.equal(people[0].name, 'Ana');
+  assert.ok(people[0].tz, 'zona horaria del PC');
+  assert.ok((await call('backup.status')).enabled, 'copias activas sin preguntar');
   const home = path.join(base, 'Orb');
   for (const f of ['orb.json', '.orb/datos/orb.db', 'bitacora/GENERAL.md', 'mcp-servers', 'windows', 'ios', 'android', 'web']) assert.ok(fs.existsSync(path.join(home, f)), `falta ${f}`);
   // The approval secret is kept encrypted by the system when it can be (then the plain file is gone).
@@ -135,7 +155,18 @@ try {
   step = 'conversación directa';
   // 3.0: «Nuevo chat» opens a clean conversation with the assistant, no pop-up (clicked twice: still one view).
   // 3.6: from the «+» of the chat list.
-  const newChat = async () => { await win.click('[data-testid=chats-new]'); await win.click('[data-testid=new-conversation]'); await win.locator('[data-testid=new-conversation]').waitFor({ state: 'detached' }); await win.waitForTimeout(200); };
+  // The menu animates in (and may close on a late re-render on slow CI screens): reopen and retry.
+  const newChat = async () => {
+    for (let i = 0; ; i++) {
+      try {
+        if (!(await win.locator('[data-testid=new-conversation]').isVisible())) await win.click('[data-testid=chats-new]');
+        await win.click('[data-testid=new-conversation]', { timeout: 5000 });
+        break;
+      } catch (e) { if (i >= 3) throw e; await win.keyboard.press('Escape'); await win.waitForTimeout(300); }
+    }
+    await win.locator('[data-testid=new-conversation]').waitFor({ state: 'detached' });
+    await win.waitForTimeout(200);
+  };
   await newChat();
   await newChat();
   await win.waitForSelector('[data-testid=chat-input]');

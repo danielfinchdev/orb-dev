@@ -1,12 +1,14 @@
 {
   "name": "orb-dev",
   "productName": "Orb",
-  "version": "3.6.0",
+  "version": "3.7.0",
   "description": "Orb·e: tu director de bolsillo. Planifica tu proyecto por fases y escribe un encargo claro para cada agente (Claude Code, Codex, Cursor, Gemini, OpenCode, Qwen, Copilot), sin gastar tokens de más. Te entrega resultados comprobados.",
   "private": true,
   "type": "module",
   "main": "src/main/main.mjs",
+  "desktopName": "orb-dev.desktop",
   "author": "Orb",
+  "homepage": "https://github.com/danielfinchdev/orb-dev",
   "license": "MIT",
   "scripts": {
     "build": "vite build",
@@ -17,11 +19,16 @@
     "test:app": "vite build && node test/app.e2e.mjs",
     "icon": "node scripts/icono.mjs",
     "dist": "vite build && electron-builder --win nsis portable",
+    "dist:linux": "vite build && electron-builder --linux AppImage deb",
+    "dist:server": "node scripts/dist-servidor.mjs",
     "dist:servidor": "node scripts/dist-servidor.mjs",
+    "release:keygen": "node scripts/release.mjs keygen",
+    "release:sign": "node scripts/release.mjs sign",
     "dist:terminal": "node scripts/dist-terminal.mjs",
     "terminal": "node src/terminal/orb-cli.mjs",
     "servidor:instalar": "node scripts/instalar-servidor.mjs",
-    "nucleo": "node src/server/orb-nucleo.mjs",
+    "server": "node src/server/orb-server.mjs",
+    "nucleo": "node src/server/orb-server.mjs",
     "test:movil": "vite build && node test/mobile.e2e.mjs",
     "test:capturas": "vite build && node test/capturas.e2e.mjs",
     "test:glass": "node test/glass.e2e.mjs",
@@ -74,7 +81,6 @@
     "highlight.js": "~11.11.2",
     "lowlight": "^3.3.0",
     "lucide-react": "^1.52.0",
-    "playwright-core": "1.63.0",
     "qrcode": "^1.5.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
@@ -109,6 +115,7 @@
       "build/icon.png",
       "build/icon.ico",
       "package.json",
+      "!node_modules/playwright-core/**",
       "!node_modules/@anthropic-ai/claude-agent-sdk-*/**",
       "!node_modules/@anthropic-ai/sdk/**",
       "!node_modules/@modelcontextprotocol/**",
@@ -149,7 +156,46 @@
       "grantFileProtocolExtraPrivileges": false
     },
     "linux": {
-      "executableName": "orb-dev"
+      "executableName": "orb-dev",
+      "icon": "build/icon.png",
+      "artifactName": "Orb-${version}-linux-${arch}.${ext}",
+      "category": "Development",
+      "synopsis": "Your pocket director: one chat for your AI coding agents",
+      "description": "Orb coordinates your AI agents (Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Qwen Code, GitHub Copilot) from a single chat. Everything runs on your computer, with your own accounts.",
+      "maintainer": "danielfinchdev <danielfinchdev@users.noreply.github.com>",
+      "vendor": "Orb",
+      "desktop": {
+        "entry": {
+          "Name": "Orb",
+          "GenericName": "AI agents director",
+          "Comment": "One chat for your AI coding agents",
+          "Comment[es]": "Un chat para tus agentes de IA",
+          "Keywords": "AI;agents;Claude;Codex;Cursor;chat;IA;agentes;",
+          "StartupWMClass": "Orb",
+          "StartupNotify": "true"
+        }
+      },
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "deb": {
+      "recommends": [
+        "gnome-keyring | kwalletmanager"
+      ]
     }
   },
   "allowScripts": {
@@ -161,6 +207,7 @@
     "@noble/curves": "2.4.0",
     "@noble/hashes": "2.4.0",
     "electron-updater": "6.8.10",
+    "playwright-core": "1.63.0",
     "zod": "^4.6.5"
   }
 }

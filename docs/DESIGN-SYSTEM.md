@@ -109,7 +109,7 @@ Six sections. Each section is a vertical stack of cards; each card = title, at m
 | Magic Link | `Radar` (wifi/radar style) | Usuarios (admin only, 2+ users or to add one), Dispositivos (link a device with QR, linked devices), Orbs enlazados |
 | Agentes y uso | `Cpu` | Agents and accounts, tasks and spending (the "ahorro ↔ uso" slider), conversation reset, test of the day |
 | Datos | `DatabaseBackup` | Backups, recovery code, restore, move Orb (admin only) |
-| Avanzado | `Wrench` | Herramientas (browser, MCP, Android), God mode, Monitoreo |
+| Avanzado | `Wrench` | Herramientas (browser, MCP, Android, Open Control Edge), God mode (3.7: no Monitoreo; a bot with «Equipo» does it) |
 | Acerca de | `Info` | Version, Contribuye (support, report a problem), Más aplicaciones, licence |
 
 `Mi perfil` is **not** a settings section: it opens from the initial in the sidebar footer and from the phone's
@@ -210,7 +210,7 @@ sections 2.1–2.4 describe the shipped app.
   `decideCard`, also used by the card in the chat). Tapping opens the exact chat.
 - **Built (M3): the Orb zone.** `views/orb/inbox.jsx` (the chat list: search over titles, projects, messages and «#id»
   of a task, with a filter by state and agent; «+» with Nuevo chat / Nuevo proyecto; on the PC the places Tareas (with
-  what waits for approval) · Proyectos · Programadas · Pizarra and «Más» with God mode and Monitoreo when they are on;
+  what waits for approval) · Proyectos · Programadas · Pizarra and «Más» with God mode when it is on;
   what others shared; pinned chats on top; one collapsible group per project with its coloured initials and a ⋯ (new
   chat there, project info), «Sin proyecto» last; completed chats behind «Ver completados». Each row: Orbe's head with
   the project's badge (a direct conversation: its agent's mark), title, time, its latest progress (`orbProgress` in
@@ -226,7 +226,19 @@ sections 2.1–2.4 describe the shipped app.
   project (new chat there, chats, tasks, Programadas, Pizarra, Bitácora, Compartir with 2+ users, Ajustes del proyecto,
   God mode on the PC). Phone: the Orb zone opens on its list (`chats`), tabs Chats · Tareas · Proyectos, a conversation
   (also a direct one) full screen with its back arrow; ☰ keeps Programadas, Pizarra, Memorias and Tutoriales. The
-  standalone screens (Tareas, Proyectos, Programadas, Pizarra, God mode, Monitoreo) stay as they were.
+  standalone screens (Tareas, Proyectos, Programadas, Pizarra, God mode) stay as they were.
+
+- **Built (3.7, WS4): Orb Server in the app.** `views/server.jsx`: Magic Link › Orb Server (still six settings sections; «Añadir Orb Server»: one
+  command with «Copiar orden», its one line, «Hacerlo a mano» and the pairing live; once linked, the Server card with
+  «Configurar», «Ver navegador del Server» and ⋯ › Desenlazar with its three choices, `choose()` in `dialogs.jsx`), the
+  guide after pairing (a stepper of pills: Claude o ChatGPT · Bots · Usuarios (2+ users) · Contraseñas · Navegador; the
+  bots step offers «Pasar todos al Server» (recommended) / «Elegir cuáles» / «Dejarlos en el PC», then progress and a
+  report), under the Server card its state (engines, update, «Crear Optimus automáticamente») and «Contraseñas» (its vault), and «Ver navegador del Server» (a dialog on the PC, the whole screen on a phone).
+  `views/bots/home.jsx`: the home badge of the list (`Server` in primary, `Este PC` / another Orb muted, grey with a
+  cloud-off icon when that Orb does not answer), the bar over the composer of a copy («Se ejecuta en Server» + «Pasar
+  aquí», or «Restaurar aquí»), «Pendiente» under lines waiting for an Orb that is off, «Pasar al Server» / «Pasar a este
+  PC» (info pane and the chat's menu) and «Reconectar Claude en el Server». Pure logic in `lib/homes.js`, the Server's
+  calls in `lib/server.js`. Screenshots: `node test/servidor-ui.e2e.mjs` → `test-results/ws4/`.
 
 ## 3. Tokens
 
@@ -387,7 +399,8 @@ Full rules in [WRITING-GUIDE.md](WRITING-GUIDE.md). The essentials for reviewers
 | The bots mode and items | Bots / bot | Bots / bot |
 | Linking devices and Orbs | Magic Link | Magic Link |
 | Expert view | God mode | God mode |
-| PC health | Monitoreo | Monitoring |
+| The bots' PC tool group (3.7; «Monitoreo» is gone) | Equipo | Computer |
+| The optional PC template | Mantenimiento del PC | PC maintenance |
 | Agent instructions | instrucciones | instructions |
 | Delete | Eliminar | Delete |
 

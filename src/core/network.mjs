@@ -1,4 +1,4 @@
-// 2.7: Monitoreo del equipo › Red. The Wi-Fi this PC is on, the networks around, the devices of the same network and
+// 2.7: the network (3.7: read by the bots' «Equipo» tools, pc_network / pc_android; until 3.6 the «Red» tab of Monitoreo del equipo). The Wi-Fi this PC is on, the networks around, the devices of the same network and
 // the Android phones and TVs reachable by adb. Read only and real: Windows' own answers (netsh, the neighbour table);
 // a value Windows does not give is null. Finding devices sends one ping to each address of this PC's own /24 network
 // (never other networks, never ports); the Android side runs fixed adb commands on devices the user paired.
@@ -89,6 +89,12 @@ export async function adbConnect(adb, hostport) {
   if (!HOSTPORT.test(hostport)) throw new Error('bad address');
   const r = await run(adb, ['connect', hostport], 20000);
   return { ok: /connected to/i.test(r.out) && !/fail|unable|cannot/i.test(r.out), detail: (r.out || r.err).trim().slice(0, 300) };
+}
+// 3.7 (WS9): «Desconectar ADB» in Conexiones (only while the adb of the user's session is running; never in tests).
+export async function adbDisconnect(adb, serial) {
+  if (!SERIAL.test(serial)) throw new Error('bad device');
+  const r = await run(adb, ['disconnect', serial], 10000);
+  return { ok: r.ok && !/error|no such/i.test(r.out), detail: (r.out || r.err).trim().slice(0, 300) };
 }
 // How a paired device is: model, Android, battery, memory, storage and the apps using the most memory.
 export async function adbInfo(adb, serial) {

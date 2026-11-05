@@ -17,13 +17,15 @@ import { createProjects } from '../core/projects.mjs';
 import { createSchedule, EVERY } from '../core/schedules.mjs';
 import { principalOf, can, must } from '../core/authz.mjs';
 import { mayDev } from '../core/policy.mjs';
+import { parseSnapshot, normalizeUrl } from '../core/browser-protocol.mjs';
+import { createPace, createMassGuard, boardStore, hostOf, actionKind } from '../core/browser-limits.mjs';
 
 const home = process.env.ORB_HOME;
 if (!home || !isHome(home)) { process.stderr.write('ORB_HOME no apunta a la carpeta de un asistente\n'); process.exit(1); }
 useHome(home);
 const { Board, AGENTS, STATUSES, assistantName, userName, ofUser } = await import('../core/board.mjs');
 const { readLog, writeLog } = await import('../engine/logs.mjs');
-const { takeGrant } = await import('../core/bots.mjs');
+const { takeGrant, addRequest, getRequest } = await import('../core/bots.mjs');
 const board = new Board(undefined, { noKey: true }); // the MCP never holds the approval secret
 
 // A worker is who Orb signed it as (agent and task, see agentToken in engine/sessions.mjs), not what its environment
@@ -340,13 +342,59 @@ const BOT_ID = (() => {
 if (BROWSER_ONLY) tools.length = 0;
 const RISKY_LABEL = /(comprar|compra ya|pagar|pago|reservar|reserva|confirmar|tramitar|finalizar|realizar pedido|enviar|suscrib|buy|purchase|pay\b|checkout|place order|order now|book|reserve|confirm|submit|send|subscribe)/i;
 let lastElements = []; let lastUrl = '';
-const remember = (out) => { if (Array.isArray(out?.elements)) lastElements = out.elements; if (typeof out?.url === 'string') lastUrl = out.url; return out; };
+// 3.7: the browser answers with the page as text (src/core/browser-protocol.mjs › formatSnapshot): its address and its
+// elements are read back from it (before, only an object was looked at, so a bot's click on «Comprar» by its number was
+// never seen as risky).
+const remember = (out) => {
+  const s = typeof out === 'string' ? parseSnapshot(out) : out;
+  if (Array.isArray(s?.elements)) lastElements = s.elements;
+  if (typeof s?.url === 'string') lastUrl = s.url;
+  return out;
+};
+// 3.7 (WS5): a human pace on real sites (orb.json browser.sites: a pause of 2–5 s between actions on a site, 300 an hour)
+// for the bots, and for every agent on Orb Server (its browser is a person's real one). Pages of this machine or the home
+// network: no pace (an agent testing its own web). Shared by every MCP process of this Orb (the database).
+const PACED = BROWSER_ONLY || process.env.ORB_NUCLEO === '1';
+const PACE_ACTIONS = new Set(['open', 'click', 'type', 'press', 'scroll', 'back', 'vault_fill']);
+const pace = createPace({ store: boardStore(board), sites: () => ctx.config.browser?.sites ?? {} });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function paced(action, a) {
+  if (!PACED || !PACE_ACTIONS.has(action)) return;
+  let host = '';
+  try { host = action === 'open' ? hostOf(normalizeUrl(a.url ?? '')) : hostOf(lastUrl); } catch { return; } // a bad address: the browser says so
+  if (!host) return;
+  const r = pace.take(host);
+  if (r.refuse) throw new Error(tr('sys.browser.paceRefused', { host, min: Math.max(1, Math.ceil(r.retryMs / 60_000)) }));
+  if (r.wait > 0) await sleep(Math.min(r.wait, 30_000));
+}
+// 3.7 (WS5): a bot repeating a destructive click on a site (delete, unfollow…): after 50 the next ones wait for the
+// person's OK on a card that warns about the site's terms (and that it is not legal advice).
+const mass = BROWSER_ONLY && BOT_ID ? createMassGuard({ store: boardStore(board), who: `bot:${BOT_ID}`, approval: { get: (id) => getRequest(board, id)?.status ?? null } }) : null;
+const BOT_USER = (() => { try { return board.personName(process.env.ORB_BROWSER_PERSON || board.ownerId()) || USER; } catch { return USER; } })();
+function massCheck(action, label) {
+  if (!mass || action !== 'click' || !label) return null;
+  const host = hostOf(lastUrl);
+  const r = mass.check(host, label);
+  const words = { host, label: oneLine(actionKind(label), 60), user: BOT_USER };
+  if (r.ok) return host;
+  if (r.waiting) throw new Error(tr('sys.browser.massWaiting', words));
+  if (r.denied) throw new Error(tr('sys.browser.massDenied', words));
+  const request = addRequest(board, BOT_ID, 'confirm', { action: 'otro', detail: tr('sys.browser.massCard', { ...words, n: r.count }), url: `https://${host}`, button: words.label, mass: true }, { person: process.env.ORB_BROWSER_PERSON || null });
+  mass.asked(host, label, request);
+  throw new Error(tr('sys.browser.massAsked', { ...words, n: r.count }));
+}
 async function botBrowser(action, a = {}) {
-  if (!BROWSER_ONLY) return browser(action, a);
   const label = a.ref !== undefined ? String(lastElements.find((e) => String(e).startsWith(`[${a.ref}]`)) ?? '') : '';
-  const risky = (action === 'click' && (a.ref === undefined || RISKY_LABEL.test(label))) || (action === 'type' && a.submit === true) || (action === 'press' && a.key === 'Enter');
-  if (risky) { const why = takeGrant(board, BOT_ID, { url: lastUrl, label }); if (why) throw new Error(tr(why)); }
-  return remember(await browser(action, a));
+  let massHost = null;
+  if (BROWSER_ONLY) {
+    const risky = (action === 'click' && (a.ref === undefined || RISKY_LABEL.test(label))) || (action === 'type' && a.submit === true) || (action === 'press' && a.key === 'Enter');
+    massHost = massCheck(action, label);
+    if (risky) { const why = takeGrant(board, BOT_ID, { url: lastUrl, label }); if (why) throw new Error(tr(why)); }
+  }
+  await paced(action, a);
+  const out = remember(await browser(action, a));
+  if (massHost) mass.done(massHost, label);
+  return out;
 }
 if (PIPE && PIPE_TOKEN) tools.push(
   { name: 'orb_browser_open', description: `Abre una página web en el navegador del agente (la app la muestra en directo a ${USER}) y devuelve su texto y elementos numerados. Sirve para probar webs (también http://localhost:puerto) o consultar páginas. Solo tiene las sesiones iniciadas en este navegador por ${USER} (nunca las de otra persona).`,
@@ -362,17 +410,19 @@ if (PIPE && PIPE_TOKEN) tools.push(
   { name: 'orb_browser_press', description: 'Pulsa una tecla en la página.',
     inputSchema: { type: 'object', required: ['key'], properties: { key: { type: 'string', enum: ['Enter', 'Tab', 'Escape', 'Backspace', 'Delete', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End'] } } }, run: (a) => botBrowser('press', a) },
   { name: 'orb_browser_scroll', description: 'Desplaza la página hacia abajo o arriba.',
-    inputSchema: { type: 'object', properties: { direction: { type: 'string', enum: ['down', 'up'] }, amount: { type: 'integer', minimum: 50, maximum: 5000, description: 'Píxeles (600 por defecto)' } } }, run: (a) => browser('scroll', a) },
+    inputSchema: { type: 'object', properties: { direction: { type: 'string', enum: ['down', 'up'] }, amount: { type: 'integer', minimum: 50, maximum: 5000, description: 'Píxeles (600 por defecto)' } } }, run: (a) => botBrowser('scroll', a) },
   // 3.2.1: the page's dialogs and console (a check that says «sin errores en la consola» now can look at it).
   { name: 'orb_browser_dialog', description: 'Decide cómo se responden los alert(), confirm() y prompt() de la página abierta a partir de ahora (por defecto se cancelan): accept true para aceptarlos, false para cancelarlos; text, la respuesta de prompt(). Úsalo antes de pulsar el botón que los muestra. Devuelve los diálogos que ya mostró.',
     inputSchema: { type: 'object', properties: { accept: { type: 'boolean' }, text: str('Respuesta para prompt()') } }, run: (a) => browser('dialog', a) },
   { name: 'orb_browser_console', description: 'Lee los errores y avisos de la consola de la página abierta (y los recursos que no cargaron) desde la última lectura. clear false los conserva para la siguiente.', readOnly: true,
     inputSchema: { type: 'object', properties: { clear: { type: 'boolean' } } }, run: (a) => browser('console', a) },
-  { name: 'orb_browser_back', description: 'Vuelve a la página anterior.', inputSchema: { type: 'object', properties: {} }, run: () => browser('back') },
+  { name: 'orb_browser_back', description: 'Vuelve a la página anterior.', inputSchema: { type: 'object', properties: {} }, run: () => botBrowser('back') },
   { name: 'orb_browser_wait', description: 'Espera unos milisegundos (máx. 15000) o hasta que aparezca un texto en la página.',
-    inputSchema: { type: 'object', properties: { ms: { type: 'integer', minimum: 100, maximum: 15000 }, text: str('Texto que esperar') } }, run: (a) => browser('wait', a) },
+    inputSchema: { type: 'object', properties: { ms: { type: 'integer', minimum: 100, maximum: 15000 }, text: str('Texto que esperar') } }, run: (a) => botBrowser('wait', a) },
   { name: 'orb_browser_close', description: 'Cierra el navegador del agente cuando ya no lo necesites.', inputSchema: { type: 'object', properties: {} }, run: () => browser('close') }
 );
+// 3.7: the vault's sign-in is one tool only, vault_fill in the bots' «Contraseñas» group (src/mcp/bot.mjs): it talks to
+// the same browser page and gives the model only «ok» or «failed: reason».
 
 const reply = (id, payload) => process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id, ...payload })}\n`);
 

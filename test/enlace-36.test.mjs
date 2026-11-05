@@ -5,7 +5,7 @@
 //     gets only the owner's calls and says «Actualiza»; a request sent again runs once; no answer in time is «desconocido»;
 // 11  this PC's window: switching to someone with a PIN asks it; a locked window refuses everything but unlocking;
 // 17  version messages (an app too old, a terminal too old, an Orb too old);
-// 21  a lost administrator phone: orb-nucleo quitar, pin-reset and enlazar --persona <owner> --admin (local socket);
+// 21  a lost administrator phone: orb-server quitar, pin-reset and enlazar --persona <owner> --admin (local socket);
 // plus a linked Orb's backups kept here (link op backup.put) and a copy of an Orb detected on hello.
 // Ana is the owner of every Orb here; Leo, a person of the centre.
 import { test, before, after } from 'node:test';
@@ -236,7 +236,7 @@ test('11: cambiar de persona en la ventana pide el PIN; bloqueada solo deja desb
   assert.ok(centro.events.some((m) => m.event === 'persons:locked'));
 });
 
-test('21: móvil de administrar perdido: quitar, pin-reset y enlazar --persona <dueño> --admin (Orb Núcleo)', async () => {
+test('21: móvil de administrar perdido: quitar, pin-reset y enlazar --persona <dueño> --admin (Orb Server)', async () => {
   const p2 = 20000 + Math.floor(Math.random() * 20000);
   const t = tempHome({ mobile: { port: p2 } }); tmp.push(t);
   const home = prepareHome(t.home, { profile: 'centro' });
@@ -244,22 +244,22 @@ test('21: móvil de administrar perdido: quitar, pin-reset y enlazar --persona <
   const ctl = (m, p = {}) => host.call(m, p, { as: 'control' });
   try {
     await host.start();
-    await until(async () => (await host.call('remote.status')).running, 'acceso del núcleo');
+    await until(async () => (await host.call('remote.status')).running, 'acceso del Server');
     const leoN = await ctl('persons.create', { name: 'Leo' });
     const owner = (await ctl('persons.list')).find((p) => p.role === 'owner');
-    // The first device administers (orb-nucleo enlazar), then it is lost.
+    // The first device administers (orb-server enlazar), then it is lost.
     const lost = device('Móvil perdido');
     const lp = await lost.connect({ qr: (await ctl('link.qr', { admin: 'first' })).url });
     assert.equal((await ctl('link.devices')).find((d) => d.id === lp.id).admin, true);
     await host.call('persons.setPin', { pin: '2468' });
-    // orb-nucleo quitar <id>
+    // orb-server quitar <id>
     await ctl('link.revoke', { id: lp.id });
     assert.ok(!(await ctl('link.devices')).some((d) => d.id === lp.id));
     await assert.rejects(lost.call(lp.id, 'link.status'), (e) => e.revoked);
-    // orb-nucleo pin-reset <dueño>: the owner on the server itself, no PIN asked.
+    // orb-server pin-reset <dueño>: the owner on the server itself, no PIN asked.
     await ctl('persons.setPin', { id: owner.id, pin: null });
     assert.equal((await ctl('persons.list')).find((p) => p.id === owner.id).hasPin, false);
-    // orb-nucleo enlazar --persona <dueño> --admin: a new administrator phone, even with another one there.
+    // orb-server enlazar --persona <dueño> --admin: a new administrator phone, even with another one there.
     const fresh = device('Móvil nuevo');
     const fp = await fresh.connect({ qr: (await ctl('link.qr', { person: owner.name, admin: true })).url });
     const d = (await ctl('link.devices')).find((x) => x.id === fp.id);
@@ -275,6 +275,6 @@ test('21: móvil de administrar perdido: quitar, pin-reset y enlazar --persona <
   } finally { await host.stop(); }
   // The commands exist.
   const { spawnSync } = await import('node:child_process');
-  const help = spawnSync(process.execPath, [path.join(ROOT, 'src', 'server', 'orb-nucleo.mjs'), '--help'], { encoding: 'utf8', windowsHide: true });
+  const help = spawnSync(process.execPath, [path.join(ROOT, 'src', 'server', 'orb-server.mjs'), '--help'], { encoding: 'utf8', windowsHide: true });
   for (const c of ['usuarios', 'usuario nuevo', 'pin-reset', '--usuario']) assert.ok(help.stdout.includes(c), c);
 });

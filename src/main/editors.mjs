@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { findTerminals } from './terminal.mjs';
+import { findTerminals, linuxTerminal, externalEnv, LINUX_TERMINALS } from './terminal.mjs';
 import { translate } from '../core/i18n.mjs';
 
 const exists = (file) => Boolean(file) && fs.existsSync(file);
@@ -25,11 +25,13 @@ export function findEditors(platform = process.platform, env = process.env) {
     };
   }
   if (platform === 'darwin') return { cursor: exists('/Applications/Cursor.app') ? '/Applications/Cursor.app' : null, vscode: exists('/Applications/Visual Studio Code.app') ? '/Applications/Visual Studio Code.app' : null };
-  return { cursor: inPath(['cursor'], env), vscode: inPath(['code'], env) };
+  // Linux: the PATH, and the usual places that an app started from the desktop menu may not have in it (snap, ~/.local).
+  const extra = { ...env, PATH: [env.PATH ?? '', '/usr/bin', '/usr/local/bin', '/snap/bin', '/var/lib/flatpak/exports/bin', env.HOME ? path.join(env.HOME, '.local', 'bin') : ''].filter(Boolean).join(path.delimiter) };
+  return { cursor: inPath(['cursor'], extra), vscode: inPath(['code', 'com.visualstudio.code'], extra) };
 }
 
 const start = (cmd, args, cwd) => new Promise((resolve, reject) => {
-  const child = spawn(cmd, args, { cwd, detached: true, stdio: 'ignore', windowsHide: false });
+  const child = spawn(cmd, args, { cwd, detached: true, stdio: 'ignore', windowsHide: false, env: externalEnv() });
   child.once('error', reject);
   child.once('spawn', () => { child.unref(); resolve(); });
 });
@@ -55,7 +57,9 @@ export function actionPlan(command, dir, found, choice = 'auto', platform = proc
     if (found.wt && choice !== 'powershell') return { cmd: found.wt, args: ['-d', dir.replace(/;/g, '\\;'), found.powershell, '-NoExit', '-NoLogo', '-Command', command.replace(/;/g, '\\;')], cwd: dir };
     return { cmd: found.powershell, args: ['-NoExit', '-NoLogo', '-Command', command], cwd: dir };
   }
-  if (platform === 'linux' && found.linux) return { cmd: found.linux, args: ['-e', 'bash', '-lc', `${command}; exec bash`], cwd: dir };
+  // Linux: the chosen terminal (Ajustes → Interfaz) or the first one found, told the folder its own way (terminal.mjs).
+  const linux = platform === 'linux' ? linuxTerminal(choice, found) : null;
+  if (linux) return { cmd: linux, args: (LINUX_TERMINALS[linux]?.run ?? LINUX_TERMINALS.xterm.run)(dir, ['bash', '-lc', `${command}; exec bash`]), cwd: dir };
   throw new Error(translate(language, 'sys.terminal.none'));
 }
 

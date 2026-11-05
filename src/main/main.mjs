@@ -1,7 +1,7 @@
 // Electron main process: one window, the first-run setup, the engine process and a narrow, checked bridge between them.
 // The window has no Node access (sandbox + context isolation); it can only call the engine's actions and a few
 // file dialogs exposed by the preload script.
-import { app, BrowserWindow, ipcMain, dialog, shell, Notification, Menu, protocol, net, utilityProcess, session, nativeTheme, safeStorage } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell, Notification, Menu, protocol, net, utilityProcess, session, nativeTheme, safeStorage, nativeImage } from 'electron';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,6 +14,7 @@ import { createUpdater, RELEASES_URL } from './updater.mjs';
 import { MAX_IMAGES, captureWindow, readImage, sendFeedback, moreApps } from './feedback.mjs';
 import { PRODUCT } from '../core/product.mjs';
 import { translate } from '../core/i18n.mjs';
+import { keyringWeak } from './linux.mjs';
 
 const SRC = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 // Packaged: the code lives in app.asar.unpacked (agents start the MCP server from there with the app's own executable).
@@ -36,7 +37,10 @@ app.setPath('userData', process.env.ORB_USER_DATA || path.join(app.getPath('appD
 if (!app.requestSingleInstanceLock()) app.quit();
 // Windows takes the taskbar icon from the Start menu shortcut with this id: running from the code (electron.exe, tests)
 // uses its own id, or Windows may give the installed Orb Electron's icon.
-app.setAppUserModelId(app.isPackaged ? PRODUCT.appId : `${PRODUCT.appId}.dev`);
+if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? PRODUCT.appId : `${PRODUCT.appId}.dev`);
+// The app's icon (window, notifications), read through Electron so it also works from inside app.asar (Linux notices get
+// the picture itself: the notification service cannot open a file inside the package).
+const ICON = path.join(SRC, '..', 'build', 'icon.png');
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'orb', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
 
@@ -69,7 +73,8 @@ function saveLocation(h) { fs.mkdirSync(path.dirname(LOCATION()), { recursive: t
 // running from the code (ORB_USER_DATA or not packaged), so they never pick up a real folder.
 function findExistingHome() {
   if (!app.isPackaged || process.env.ORB_USER_DATA) return null;
-  const drives = 'CDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((l) => `${l}:\\`).filter((d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
+  // Drive letters only exist on Windows; on Linux / macOS, Documents/Orb and ~/Orb.
+  const drives = process.platform !== 'win32' ? [] : 'CDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((l) => `${l}:\\`).filter((d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
   const candidates = new Set([...drives.map((d) => path.join(d, PRODUCT.folder)), path.join(app.getPath('documents'), PRODUCT.folder), path.join(app.getPath('home'), PRODUCT.folder)]);
   const used = (h) => { try { return fs.statSync(path.join(h, 'orb.json')).mtimeMs; } catch { return 0; } };
   return [...candidates].filter((h) => isHome(h)).sort((a, b) => used(b) - used(a))[0] ?? null;
@@ -94,13 +99,23 @@ function zoomKey(input) {
 }
 const zoomBy = (dir) => setZoom(dir === 'reset' ? 1 : zoom + (dir === 'in' ? ZOOM_STEP : -ZOOM_STEP));
 
-// The approval secret, encrypted by Windows (DPAPI via safeStorage) in .orb/datos/clave.enc. The plain clave.bin that the
-// first run writes is converted and removed, so no agent can read the secret from disk. Returns the secret as hex, or null
+// 3.7, Linux: true when the desktop has no keyring (safeStorage would only use a fixed key): the window is told once.
+let weakKeyring = false;
+// The approval secret, encrypted by the system (Windows: DPAPI via safeStorage; Linux: the desktop's keyring) in
+// .orb/datos/clave.enc. The plain clave.bin that the first run writes is converted and removed, so no agent can read the
+// secret from disk. Returns the secret as hex, or null
 // when encryption is not available (then the engine uses clave.bin).
 function approvalSecret(h) {
-  if (!safeStorage.isEncryptionAvailable()) return null;
+  const available = safeStorage.isEncryptionAvailable();
+  let backend = null; try { backend = process.platform === 'linux' ? safeStorage.getSelectedStorageBackend() : null; } catch { /* older Electron */ }
   const dir = path.join(h, '.orb', 'datos');
   const enc = path.join(dir, 'clave.enc'); const plain = path.join(dir, 'clave.bin');
+  if (keyringWeak(process.platform, available, backend)) {
+    weakKeyring = process.platform === 'linux';
+    // A key already kept that way (Orb run from the code on Linux) is still read, so links and approvals stay.
+    if (available) { try { const hex = safeStorage.decryptString(fs.readFileSync(enc)); if (/^[0-9a-f]{64}$/.test(hex)) return hex; } catch { /* none */ } }
+    return null;
+  }
   try {
     if (fs.existsSync(enc)) {
       const hex = safeStorage.decryptString(fs.readFileSync(enc));
@@ -196,7 +211,7 @@ function onEngineEvent(event, payload) {
   // Notices while the window is in the background: finished tasks, approvals, the assistant's answers.
   if (event === 'chat:new' && !win.isFocused() && Notification.isSupported()) {
     const name = config()?.assistantName ?? PRODUCT.name;
-    const n = new Notification({ icon: path.join(SRC, '..', 'build', 'icon.png'), title: payload.role === 'orb' ? name : T('sys.main.notice', { name }), body: String(payload.body ?? '').slice(0, 240), silent: false });
+    const n = new Notification({ icon: nativeImage.createFromPath(ICON), title: payload.role === 'orb' ? name : T('sys.main.notice', { name }), body: String(payload.body ?? '').slice(0, 240), silent: false });
     n.on('click', () => { win.show(); win.focus(); win.webContents.send('engine:event', 'ui:navigate', payload.conversation ? { view: 'chat', id: payload.conversation } : { view: 'chat' }); }); // 3.2: its conversation
     n.show();
   }
@@ -217,7 +232,8 @@ ipcMain.handle('engine:call', guard(async (method, params) => {
 }));
 
 ipcMain.handle('app:zoom', guard(async (value) => (value === undefined || value === null ? zoom : setZoom(value))));
-// Ctrl+J: a terminal (Warp, Windows Terminal, PowerShell…) in the folder the window is showing.
+// Ctrl+J: a terminal (Warp, Windows Terminal, PowerShell…; on Linux the system's one or the chosen one) in the folder the
+// window is showing.
 ipcMain.handle('app:openTerminal', guard(async (target) => {
   const dir = typeof target === 'string' && path.isAbsolute(target) ? target : home;
   if (!dir) throw new Error(T('sys.main.noFolderYet'));
@@ -304,9 +320,9 @@ ipcMain.handle('app:updateInstall', guard(async () => {
   return updater.install();
 }));
 // First run: creates <base>/<name> (or reuses an existing assistant folder), remembers it and starts the engine.
-ipcMain.handle('app:setup', guard(async ({ base, assistantName, userName } = {}) => {
+ipcMain.handle('app:setup', guard(async ({ base, assistantName, userName, language } = {}) => {
   if (home) throw new Error(T('sys.main.alreadySetup'));
-  const { home: h } = createHome(String(base ?? ''), { assistantName: String(assistantName ?? PRODUCT.assistant), userName: String(userName ?? '') });
+  const { home: h } = createHome(String(base ?? ''), { assistantName: String(assistantName ?? PRODUCT.assistant), userName: String(userName ?? ''), language: language === 'en' ? 'en' : 'es' });
   saveLocation(h);
   await startEngine(h);
   cachedConfig = null;
@@ -321,6 +337,14 @@ ipcMain.handle('app:switchHome', guard(async (target) => {
   quitting = true; agentBrowser?.shutdown(); try { engine?.postMessage({ type: 'shutdown' }); } catch { /* gone */ }
   app.relaunch(); app.exit(0);
 }));
+
+// 3.7, Linux without a keyring: said once on this PC (a notice under the bell), not at every start.
+const KEYRING_TOLD = () => path.join(app.getPath('userData'), 'aviso-llavero.json');
+function tellKeyring() {
+  if (!win || win.isDestroyed() || fs.existsSync(KEYRING_TOLD())) return;
+  win.webContents.send('engine:event', 'notice', { body: T('sys.main.keyringWeak'), tone: 'warning' });
+  try { writeJson(KEYRING_TOLD(), { told: new Date().toISOString() }); } catch { /* told again next time */ }
+}
 
 function setTitle() { win?.setTitle(config()?.assistantName ?? PRODUCT.name); }
 
@@ -341,12 +365,12 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1360, height: 880, minWidth: 400, minHeight: 560, show: false, backgroundColor: dark ? '#16151d' : '#fbfbfe', title: PRODUCT.name, autoHideMenuBar: true,
     titleBarStyle: 'hidden',
-    icon: path.join(SRC, '..', 'build', 'icon.png'),
+    icon: ICON,
     webPreferences: { preload: path.join(SRC, 'main', 'preload.cjs'), additionalArguments: LIGHT ? ['--orb-light'] : [], contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, spellcheck: true, devTools: isDev || process.env.ORB_DEVTOOLS === '1' }
   });
   win.once('ready-to-show', () => win.show());
   for (const e of ['maximize', 'unmaximize', 'restore', 'enter-full-screen', 'leave-full-screen']) win.on(e, sendWindowState);
-  win.webContents.on('did-finish-load', () => win?.webContents.setZoomFactor(zoom * ZOOM_BASE));
+  win.webContents.on('did-finish-load', () => { win?.webContents.setZoomFactor(zoom * ZOOM_BASE); if (weakKeyring) setTimeout(tellKeyring, 8000).unref?.(); });
   win.webContents.on('before-input-event', (e, input) => { const dir = zoomKey(input); if (dir) { e.preventDefault(); zoomBy(dir); } });
   win.webContents.on('zoom-changed', (_e, dir) => zoomBy(dir)); // Ctrl + mouse wheel
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https:\/\//.test(url)) shell.openExternal(url); return { action: 'deny' }; });

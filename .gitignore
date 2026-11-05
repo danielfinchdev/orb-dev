@@ -29,3 +29,7 @@ android-app/android/app/src/main/res/drawable-nodpi/av_*.png
 *.keystore
 *.apk
 *.aab
+
+# Clave de firma de las versiones de Orb Server (vive fuera del repo, en %USERPROFILE%\.orb-release)
+.orb-release/
+release.key

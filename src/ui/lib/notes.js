@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { bridge, botsVia, call, act, go } from './store.js';
 import { t } from './i18n.js';
 import { askPin } from '@/components/person-menu.jsx';
+import { openBrowserLive } from './server.js';
 
 // Answers a bot's card. A sensitive card of someone with a PIN needs it (the Orb refuses with reason «strong»): asked
 // here, then the same answer again with the ticket it gives (valid on this device only, for a few minutes).
@@ -24,6 +25,8 @@ export async function decideCard(item, decision) {
 // Open what a notification is for: { route, approve? } (approve: the card or task to approve, from src/core/notes.mjs).
 export async function openFromNote({ route, approve } = {}) {
   if (!route?.view) return;
+  // 3.7 (WS4): «Necesito que lo hagas tú»: the Server's browser, live, over whatever is on screen.
+  if (route.view === 'browser-live') { openBrowserLive(); return; }
   go(route);
   if (!approve) return;
   if (approve.method === 'bots.decide') await act(decideCard(Number(approve.item), 'allow'), t('notes.allowed'));

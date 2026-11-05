@@ -14,10 +14,16 @@ import { protectedHit } from './guard.mjs';
 import { scopeSql, rightOn, rank, ownerOfBoard } from './authz.mjs';
 import { parseAvatar, avatarFor, avatarOf } from './avatar.mjs';
 import { nextLocalRun, zonedToUtc, minutesLate, shouldFireLate, isValidTz, systemTz, utcToZoned } from './tz.mjs';
+import { uuidv7 } from './replica-db.mjs';
+import { mayUseVault } from './persons.mjs';
+// 3.7 (WS3): the bots this Orb runs (its home is this Orb); the others in the lists are live copies of bots run on another
+// Orb (src/core/replica.mjs). A bot being copied here by a move (home_state 'pending') is not listed yet.
+const HOME_HERE = "(home IS NULL OR home = (SELECT value FROM settings WHERE key = 'orb_self'))";
 
 // The tool groups a bot can have (casillas). Memory, messages to other bots, the list of bots and questions to the user
 // are always there. gestion: create, change and pause bots (always with the user's approval); the chief has it.
-export const TOOL_GROUPS = ['internet', 'recordatorios', 'correo', 'calendario', 'navegador', 'casa', 'servidor', 'gestion'];
+// 3.7 (WS6): contrasenas: «Contraseñas», sign in on sites with the person's vault (Orb Server; vault_fill).
+export const TOOL_GROUPS = ['internet', 'recordatorios', 'correo', 'calendario', 'navegador', 'casa', 'equipo', 'oce', 'servidor', 'contrasenas', 'gestion'];
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh'];
 export const EVERY = ['once', 'daily', 'weekly', 'monthly', 'yearly'];
 const STARTER_TOOLS = ['internet', 'recordatorios'];
@@ -43,7 +49,7 @@ export function parseBot(r) {
 // principal: only the bots that person may see (their own and the ones shared with them); person: only that person's own.
 export function listBots(board, { principal = null, person = null } = {}) {
   const s = principal ? scopeSql(principal, 'bot', 'b') : person ? mineSql(board, person, 'b') : { where: '1=1', args: [] };
-  return board.all(`SELECT * FROM bots b WHERE ${s.where} ORDER BY is_chief DESC, id`, ...s.args).map(parseBot);
+  return board.all(`SELECT * FROM bots b WHERE ${s.where} AND b.home_state != 'pending' ORDER BY is_chief DESC, id`, ...s.args).map(parseBot);
 }
 // 3.6 (B6): a bot's name is unique for its person. By name: the person's own first, then one shared with them to talk.
 export function getBot(board, idOrName, { person = null } = {}) {
@@ -144,9 +150,11 @@ export function createBot(board, fields, { person = null } = {}) {
   const who = person ?? ownerOf(board);
   const f = checkBotFields(board, fields, { person: who });
   return board.transaction(() => {
-    if (f.is_chief) { const s = mineSql(board, who); board.run(`UPDATE bots SET is_chief = 0 WHERE ${s.where}`, ...s.args); }
+    // 3.7: one chief per person among the bots run on this Orb (a copy of a bot run elsewhere keeps its home's flag).
+    if (f.is_chief) { const s = mineSql(board, who); board.run(`UPDATE bots SET is_chief = 0 WHERE ${s.where} AND ${HOME_HERE}`, ...s.args); }
     const at = now(); const cols = COLUMNS.filter((k) => f[k] !== undefined);
-    const { lastInsertRowid } = board.run(`INSERT INTO bots (${cols.join(', ')}, created_at, updated_at, person_id) VALUES (${cols.map(() => '?').join(', ')}, ?, ?, ?)`, ...cols.map((k) => dbValue(k, f[k])), at, at, who);
+    // 3.7: its uid (UUIDv7) for every Orb; its home (this Orb) is set by the database (src/core/replica-db.mjs).
+    const { lastInsertRowid } = board.run(`INSERT INTO bots (${cols.join(', ')}, created_at, updated_at, person_id, uid) VALUES (${cols.map(() => '?').join(', ')}, ?, ?, ?, ?)`, ...cols.map((k) => dbValue(k, f[k])), at, at, who, uuidv7());
     // 3.6: without an avatar of its own, the fixed one of its id (kept, so it never changes).
     if (!f.avatar) board.run('UPDATE bots SET avatar = ? WHERE id = ?', JSON.stringify(avatarFor(Number(lastInsertRowid))), Number(lastInsertRowid));
     const bot = getBot(board, Number(lastInsertRowid));
@@ -160,7 +168,7 @@ export function updateBot(board, id, fields) {
   const cols = COLUMNS.filter((k) => f[k] !== undefined);
   if (!cols.length) return bot;
   return board.transaction(() => {
-    if (f.is_chief) { const s = mineSql(board, personOf(board, bot)); board.run(`UPDATE bots SET is_chief = 0 WHERE id != ? AND ${s.where}`, bot.id, ...s.args); }
+    if (f.is_chief) { const s = mineSql(board, personOf(board, bot)); board.run(`UPDATE bots SET is_chief = 0 WHERE id != ? AND ${s.where} AND ${HOME_HERE}`, bot.id, ...s.args); }
     board.run(`UPDATE bots SET ${cols.map((k) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`, ...cols.map((k) => dbValue(k, k === 'avatar' && f[k] === null ? avatarFor(bot.id) : f[k])), now(), bot.id);
     return getBot(board, bot.id);
   });
@@ -215,8 +223,10 @@ export function exclusiveOwner(board, topic, { except = null, person = null } = 
   return listBots(board, person ? { person } : {}).find((b) => !b.paused && b.id !== except && b.exclusive.includes(key)) ?? null;
 }
 // 3.6: Home Assistant (integration:ha) and the server (integration:srv) are the owner's; a bot gets «casa» / «servidor»
-// only when its person may talk on that integration (the owner, or someone it was shared with to talk or more).
-export const INTEGRATION_TOOLS = { casa: 'ha', servidor: 'srv' };
+// only when its person may talk on that integration (the owner, or someone it was shared with to talk or more). 3.7: the
+// same for «equipo» (integration:pc, this computer: what Opti Bot did until 3.6).
+// 3.7 (WS8): «oce» (Open Control Edge) reads this computer and the owner's linked ones: integration:pc too.
+export const INTEGRATION_TOOLS = { casa: 'ha', equipo: 'pc', oce: 'pc', servidor: 'srv' };
 export const mayUseIntegration = (board, person, id, right = 'talk') => rank(rightOn(board, person, { type: 'integration', id })) >= rank(right);
 // The tool groups a bot really gets: its own, minus the ones another active bot of its person has as exclusive, minus the
 // integrations its person may not use; the chief also manages bots.
@@ -224,6 +234,8 @@ export function effectiveTools(board, bot) {
   const who = botPerson(board, bot) ?? ownerOf(board);
   const others = listBots(board, who ? { person: who } : {}).filter((b) => b.id !== bot.id && !b.paused).flatMap((b) => b.exclusive);
   const tools = (bot.tools ?? []).filter((t) => !others.includes(t)).filter((t) => !INTEGRATION_TOOLS[t] || !who || mayUseIntegration(board, who, INTEGRATION_TOOLS[t]));
+  // 3.7 (WS6): «Contraseñas» only when its person may use a vault (the owner, or with the «vault» capability).
+  if (tools.includes('contrasenas') && !(who && mayUseVault(board, who))) tools.splice(tools.indexOf('contrasenas'), 1);
   if (bot.is_chief && !tools.includes('gestion')) tools.push('gestion');
   return tools;
 }
@@ -516,8 +528,9 @@ export function cancelReminder(board, id, { bot = null, person = null } = {}) {
 }
 // The reminders due at `at` (ms): each one moves to its next run (or ends, for «once»). → the ones that fire, each with
 // late (whole minutes, 0 when on time). A repeating one that is late and skips missed runs only moves on.
+// 3.7 (WS3): only the reminders of the bots this Orb runs (a replica's copy never rings: its home rings it).
 export function takeDueReminders(board, at = Date.now()) {
-  const due = board.all('SELECT * FROM bot_reminders WHERE enabled = 1 AND next_run IS NOT NULL AND next_run <= ? ORDER BY next_run', new Date(at).toISOString()).map(parseReminder);
+  const due = board.all(`SELECT * FROM bot_reminders WHERE enabled = 1 AND next_run IS NOT NULL AND next_run <= ? AND bot_id IN (SELECT id FROM bots WHERE ${HOME_HERE} AND home_state = 'active') ORDER BY next_run`, new Date(at).toISOString()).map(parseReminder);
   const fired = [];
   for (const r of due) {
     const next = nextRun(r, at);

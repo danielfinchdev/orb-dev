@@ -1,11 +1,14 @@
 // The phone access and Magic Link part of the engine's API (split out of api.mjs in 3.6, unchanged).
-import { ctx, saveConfig, tr } from '../core/context.mjs';
+import { ctx, saveConfig, tr, isHeadless } from '../core/context.mjs';
+import { normalAddress } from '../core/link.mjs';
+import { pairWithApp } from '../core/server-pair.mjs';
+import { serverInstallCommand, parsePairTarget } from '../core/server-install.mjs';
 import { PAIR_KINDS, PREVIEWS } from './remote.mjs';
 import { fail, str, oneOf } from './api-common.mjs';
 import { ownerOfBoard } from '../core/authz.mjs';
 import { createPerson, listPersons } from '../core/persons.mjs';
 
-export function linkMethods({ board, emit, remoteRef }) {
+export function linkMethods({ board, emit, remoteRef, version = null }) {
   // 3.6 (WS2): a person sees and manages their own devices and links; the owner, everyone's devices (names, not content).
   const owner = () => ownerOfBoard(board);
   const mineDevice = (id, who) => {
@@ -15,14 +18,60 @@ export function linkMethods({ board, emit, remoteRef }) {
     return d.id;
   };
   const minePeer = (p, who) => (p.person ?? owner()) === who.person;
-  // «¿Para quién?»: a person by id or by name (Orb Núcleo's `enlazar --persona <nombre>`).
+  // «¿Para quién?»: a person by id or by name (Orb Server's `enlazar --persona <nombre>`).
   const personFor = (ref) => {
     const q = String(ref).trim().toLowerCase();
     const p = listPersons(board).find((x) => x.id === ref || x.name.toLowerCase() === q);
     if (!p) fail(tr('msg.persons.noPerson'));
     return p;
   };
+  // 3.7 (WS2): the phone access on (as link.qr does), for a code or an offer that the other side has to reach.
+  const accessOn = async () => {
+    if (remoteRef.current.status().running) return;
+    if (!ctx.config.mobile?.enabled) { const c = saveConfig({ mobile: { enabled: true } }); emit('config:changed', c); }
+    await remoteRef.current.start();
+    if (!remoteRef.current.status().running) fail(remoteRef.current.status().error ?? tr('msg.remote.enableFirst'));
+  };
+  const hub = () => remoteRef.hub ?? fail(tr('msg.link.unavailable'));
+  // 3.7 (WS2), on the server: pair with the app that gave the install command (src/core/server-pair.mjs). The app links to
+  // this server with a one-time offer made here (an Orb of the owner, that may program for it and, if it is the first,
+  // administer it).
+  async function pairApp({ code, address, fp }) {
+    await accessOn();
+    const r = remoteRef.current;
+    const offer = r.handoffOffer({ kind: 'orb', dev: true, admin: 'first' });
+    const me = { name: r.status().name, version: r.version?.() ?? version, features: r.features?.() ?? [], v: 3, min: 2 };
+    const { url: _u, expiresAt: _e, ...payload } = offer;
+    return pairWithApp({ code, address, fp, offer: payload, me });
+  }
   return {
+    // ---- 3.7 (WS2): «Añadir Orb Server» and the app's Orb Server (src/engine/hub.mjs)
+    // The install command with a one-time code (10 min, one use, tied to this app's key) and the same by hand.
+    'link.server.code': async ({ kind }) => { await accessOn(); return hub().code({ kind: kind == null ? null : oneOf(kind, ['wifi', 'tailscale'], 'vía') }); },
+    'link.server.cancelCode': () => remoteRef.current.cancelServerCode(),
+    // Is a server linked, its version and capabilities, who has to update (skew, with the upgrade command), the handoff.
+    'link.server.status': () => hub().status(),
+    // The plain install command (an upgrade in place of an Orb Server or a 3.6 Orb Núcleo; keeps data and pairing).
+    'link.server.install': () => serverInstallCommand({ version }),
+    // Who is who: { here: [...], there: [...] } with mappedTo; map { remote, local } | { remote, create: true } |
+    // { local, createThere: true }; unmap { remote } | { local }.
+    'link.server.persons': () => hub().persons(),
+    'link.server.map': ({ remote, local, create, createThere }, who) => hub().map({ remote: remote == null ? null : str(remote, 'persona', 40), local: local == null ? null : str(local, 'persona', 40), create: create === true, createThere: createThere === true }, who),
+    'link.server.unmap': ({ remote, local }) => hub().unmap({ remote: remote == null ? null : str(remote, 'persona', 40), local: local == null ? null : str(local, 'persona', 40) }),
+    // The phones and terminals of this app go to the server now (also done by itself after pairing and mapping).
+    'link.server.handoff': () => hub().handoffAll(),
+    // The steps after pairing: the server's Claude / Codex, the bots to move, vault and browser (if the server can).
+    'link.server.guide': (_, who) => hub().guide(who),
+    // The server's own sign-in, windowless (its link and code; the code typed by the user goes there).
+    'link.server.login': ({ agent, account, mode }) => hub().login({ agent: agent == null ? null : oneOf(agent, ['claude', 'codex'], 'agente'), account: account == null ? null : str(account, 'cuenta', 40), mode: mode == null ? null : oneOf(mode, ['web', 'device'], 'modo') }),
+    'link.server.loginCode': ({ id, code }) => hub().loginCode({ id: str(id, 'inicio de sesión', 80), code: str(code, 'código', 2000) }),
+    'link.server.loginState': ({ id }) => hub().loginState({ id: str(id, 'inicio de sesión', 80) }),
+    'link.server.loginCancel': ({ id }) => hub().loginCancel({ id: str(id, 'inicio de sesión', 80) }),
+    // On the server: pair with the app of the command (pair: «code@address#fp», or its parts).
+    'link.pairApp': async ({ pair, code, address, fp }) => {
+      const t = pair != null ? parsePairTarget(str(pair, 'emparejado', 400)) : { code: str(code, 'código', 40), address: str(address, 'dirección', 300), fp: str(fp, 'huella', 128) };
+      try { return await pairApp(t); } catch (error) { fail(error.message); }
+    },
     // ---- phone access (PC only: these are not in the phone's allowed list)
     'remote.status': () => remoteRef.current.status(),
     'remote.enable': async ({ enabled }) => {
@@ -48,10 +97,10 @@ export function linkMethods({ board, emit, remoteRef }) {
     'remote.revoke': ({ id }) => remoteRef.current.revoke(str(id, 'dispositivo', 64)),
     // ---- 3.5 Magic Link (PC only; a phone may ask link.status and taller.* through remote.mjs)
     // A QR (and a short code) to link a phone, a browser or another Orb. Turns the access on if it was off.
-    // admin: (Orb Núcleo's «orb-nucleo enlazar») the device that uses it may administer this server, if it is the first.
+    // admin: (Orb Server's «orb-server enlazar») the device that uses it may administer this server, if it is the first.
     // 3.5.1: device: what it is for (phone, browser, orb, terminal), chosen here, never by the device; approve: it may
     // answer the bots' cards (default yes); dev: an Orb that may program for this one; admin: true (the owner gives it) or
-    // 'first' (`orb-nucleo enlazar`: only while no device administers this server).
+    // 'first' (`orb-server enlazar`: only while no device administers this server).
     // 3.6: person (id or name): whom the device is for; newPerson: a name, for someone new (the owner makes them now).
     // Everyone makes QRs for themselves; for someone else, and «Puede administrar», only the owner (and admin only for a
     // device of the owner).
@@ -91,6 +140,13 @@ export function linkMethods({ board, emit, remoteRef }) {
         if (typeof qr === 'string') str(qr, 'QR', 4000);
         else if (typeof qr !== 'object' || JSON.stringify(qr).length > 4000) fail(tr('msg.api.invalid', { name: 'QR' }));
         return remoteRef.link.connect({ qr, person });
+      }
+      // 3.7 (WS2): on a server, the install command's code («code@address#fp» of an app with a code on screen): the
+      // pairing of «Añadir Orb Server» (orb-server emparejar calls this).
+      if (fp && (isHeadless() || ctx.product === 'server')) {
+        const base = normalAddress(str(address, 'dirección', 300));
+        const h = await fetch(`${base}/api/server-hello`, { credentials: 'omit' }).then((r) => r.ok).catch(() => false);
+        if (h) { try { return await pairApp({ code: str(code, 'código', 40), address: base, fp: str(fp, 'huella', 128) }); } catch (error) { fail(error.message); } }
       }
       return remoteRef.link.connect({ code: str(code, 'código', 20), address: str(address, 'dirección', 300), fp: fp ? str(fp, 'huella', 40) : null, person });
     },

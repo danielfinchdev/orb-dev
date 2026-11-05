@@ -3,7 +3,7 @@
 
 export const ROLES = ['owner', 'user'];
 export const RIGHTS = ['view', 'talk', 'edit'];
-export const CAPS = ['dev', 'house', 'approveHouse'];
+export const CAPS = ['dev', 'house', 'approveHouse', 'vault'];
 export const PREVIEWS = ['all', 'chat', 'none'];
 export const SHARE_TYPES = ['bot', 'group', 'project'];
 
@@ -99,16 +99,6 @@ export function sharedBy(withMe = [], type, id) {
   const s = withMe.find((x) => x.type === type && String(x.id).toLowerCase() === String(id).toLowerCase());
   return s ? { by: s.by, right: s.right } : null;
 }
-
-// The welcome wizard (setup.jsx): three screens, one question each. «¿Para qué lo quieres?»: each tile applies one
-// template as it is (src/core/templates); «Más tarde» makes nothing.
-export const WIZARD_STEPS = ['nombre', 'quien', 'para'];
-export const WIZARD_USES = [
-  { id: 'dev', template: 'desarrollo' },
-  { id: 'business', template: 'negocio' },
-  { id: 'home', template: 'casa' },
-  { id: 'later', template: null }
-];
 
 // The usage table «Quién ha gastado qué» (usage.byPerson): sorted by today's spend, the total on top.
 export function usageRows(rows = []) {

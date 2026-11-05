@@ -1,7 +1,8 @@
-// 2.7: Monitoreo del equipo (Opti Bot). What the PC is like now, read only: load, memory, disks, the processes that use
-// the most, the programs that start with Windows, the antivirus' state, and whether the assistant's folder is healthy.
-// The PowerShell commands are fixed here (nothing an agent writes is ever run) and answer in JSON. The changes (scan,
-// clean, close a process, stop a program from starting) are separate actions the user approves: see engine/opti.mjs.
+// 2.7: what the PC is like now, read only: load, memory, disks, the processes that use the most, the programs that start
+// with Windows, the antivirus' state, and whether the assistant's folder is healthy. 3.7: read by the bots' «Equipo» tools
+// (src/mcp/bot.mjs, pc_*; until 3.6 by Opti Bot) and by the bridge with Open Control Edge. The PowerShell commands are
+// fixed here (nothing an agent writes is ever run) and answer in JSON. The changes (scan, clean, close a process, stop a
+// program from starting) are separate actions someone approves on a card: see core/pc-actions.mjs.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,7 +11,7 @@ import { localStamp, localText, sizeText } from './safety.mjs';
 
 const IS_WIN = process.platform === 'win32';
 
-// 3.2.1: the name a person knows a program by, for Opti Bot's cards: "MicrosoftEdgeAutoLaunch_60E4EE12…" → "Microsoft
+// 3.2.1: the name a person knows a program by, for the cards of a change on the PC: "MicrosoftEdgeAutoLaunch_60E4EE12…" → "Microsoft
 // Edge", "Teams.exe" → "Teams". Words are split only when an internal suffix was taken off, so "OneDrive" stays as it is.
 export function programLabel(name) {
   const raw = String(name ?? '').trim();
@@ -50,7 +51,7 @@ export async function quickStats() {
   return { cpu: await cpuLoad(), memory: { usedPct: Math.round(100 * (1 - mem.free / mem.total)), totalGb: +(mem.total / GB).toFixed(1) }, disk: disk ? { usedPct: Math.round(100 * (1 - disk.free / disk.total)), freeGb: +(disk.free / GB).toFixed(1), totalGb: +(disk.total / GB).toFixed(1) } : null, uptimeH: +(os.uptime() / 3600).toFixed(1) };
 }
 
-// The whole picture for Opti Bot: system, disks, the 15 processes using the most memory and the most CPU time.
+// The whole picture for a bot's pc_health: system, disks, the 15 processes using the most memory and the most CPU time.
 export async function health() {
   const quick = await quickStats();
   const disks = await powershell("Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | Select-Object DeviceID, @{n='FreeGB';e={[math]::Round($_.FreeSpace/1GB,1)}}, @{n='SizeGB';e={[math]::Round($_.Size/1GB,1)}} | ConvertTo-Json -Compress");
@@ -66,7 +67,7 @@ export async function startup() {
 }
 
 // The antivirus (Windows Defender): on or off, signatures, last scans and what it found lately; plus processes running
-// from places programs do not usually live (Temp, Downloads), for Opti Bot to look at with the user.
+// from places programs do not usually live (Temp, Downloads), for the bot to look at with the user.
 export async function security() {
   const defender = await powershell("Get-MpComputerStatus | Select-Object AMServiceEnabled, AntivirusEnabled, RealTimeProtectionEnabled, BehaviorMonitorEnabled, IsTamperProtected, @{n='SignaturesUpdated';e={$_.AntivirusSignatureLastUpdated.ToString('s')}}, QuickScanAge, FullScanAge | ConvertTo-Json -Compress");
   const threats = await powershell("Get-MpThreatDetection | Sort-Object InitialDetectionTime -Descending | Select-Object -First 10 ThreatID, @{n='When';e={$_.InitialDetectionTime.ToString('s')}}, ActionSuccess, Resources | ConvertTo-Json -Compress -Depth 3");

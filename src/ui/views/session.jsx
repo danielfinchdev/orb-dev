@@ -79,31 +79,6 @@ function ToolBlock({ b }) {
   );
 }
 
-// 3.2.1: Opti Bot's conversation is for anyone: its steps go folded in one line («5 pasos · Revisando el PC»).
-function ToolGroup({ blocks }) {
-  const t = useT();
-  const last = blocks.at(-1);
-  return (
-    <Collapsible className="text-muted-foreground text-[12.5px]" data-testid="tool-group">
-      <CollapsibleTrigger className="group hover:text-foreground flex cursor-pointer items-center gap-1.5 text-left">
-        <ChevronRight className="size-3.5 transition-transform group-data-[state=open]:rotate-90" />
-        <span>{t(blocks.length === 1 ? 'session.stepsOne' : 'session.stepsOther', { n: blocks.length })} · {toolName(t, last.call?.name)}</span>
-      </CollapsibleTrigger>
-      <CollapsibleContent className="mt-2 grid gap-2">{blocks.map((b) => <ToolBlock key={b.key} b={b} />)}</CollapsibleContent>
-    </Collapsible>
-  );
-}
-const groupTools = (blocks) => {
-  const out = [];
-  for (const b of blocks) {
-    const last = out.at(-1);
-    if (b.type === 'tool' && last?.type === 'tools') last.blocks.push(b);
-    else if (b.type === 'tool') out.push({ type: 'tools', key: `g${b.key}`, blocks: [b] });
-    else out.push(b);
-  }
-  return out;
-};
-
 // 3.2.1: «Claude Code · claude-sonnet-5-5», «Codex · gpt-6-luna» (the line an agent writes when it starts) with the names
 // the rest of the app uses.
 function statusText(body, agent, catalog) {
@@ -115,10 +90,9 @@ const FILE_ICON = { add: FilePlus2, delete: FileMinus2 };
 function Block({ b, agent, brain, sessionId, project, catalog }) {
   const t = useT();
   const locale = useLocale();
-  if (b.type === 'tools') return <ToolGroup blocks={b.blocks} />;
   if (b.type === 'tool') return <ToolBlock b={b} />;
   if (b.type === 'item' && b.item.kind === 'approval') return <ApprovalCard sessionId={sessionId} body={b.item.body} />;
-  if (b.type === 'item' && b.item.kind === 'opti_action') return <OptiActionCard item={b.item} />;
+  if (b.type === 'item' && b.item.kind === 'opti_action') return <OptiOldCard body={b.item.body} />;
   if (b.type === 'item' && b.item.kind === 'image') return <div className="flex gap-3"><AgentIcon agent={agent} className="mt-1 size-5" /><GeneratedImage body={b.item.body} sessionId={sessionId} project={project} /></div>;
   if (b.type === 'files') return <div className="flex flex-wrap gap-1.5">{b.files.map((f, i) => { const I = FILE_ICON[f?.change] ?? FileEdit; return <Badge key={i} variant="info" className="font-mono font-normal"><I />{f?.path}</Badge>; })}</div>;
   const it = b.item; const body = it.body;
@@ -145,33 +119,24 @@ function Block({ b, agent, brain, sessionId, project, catalog }) {
   return <div className="text-muted-foreground text-center text-xs">{typeof body === 'string' ? body : JSON.stringify(body)}</div>;
 }
 
-// 2.7: a change Opti Bot proposes on the PC (scan, clean, close a process, startup): it only runs if the user approves it,
-// and the ones that need administrator rights say so (Windows asks then, for that action alone).
-function OptiActionCard({ item }) {
+// 3.7: a proposal Opti Bot left in its conversation before «Monitoreo del equipo» was removed (2.7–3.6): read only, as it
+// ended. The same changes are proposed now by a bot with the «Equipo» tools (src/mcp/bot.mjs › pc_propose).
+const OLD_STATUS = { done: ['done', 'success'], running: ['expired', 'secondary'], pending: ['expired', 'secondary'], failed: ['failed', 'secondary'], cancelled: ['failed', 'secondary'], denied: ['denied', 'secondary'], expired: ['expired', 'secondary'] };
+function OptiOldCard({ body = {} }) {
   const t = useT();
-  const body = item.body ?? {};
-  const [busy, setBusy] = useState(false);
-  const answer = async (decision) => { setBusy(true); await act(call('opti.act', { item: item.id, decision })); setBusy(false); };
-  const pending = body.status === 'pending';
+  const [label, tone] = OLD_STATUS[body.status] ?? OLD_STATUS.expired;
   const target = body.action === 'end_process' ? `${body.label || body.name || ''} (${body.pid})` : body.action === 'disable_startup' ? body.label || body.name : '';
   return (
-    <div className={cn('rounded-xl border px-3.5 py-3 text-[13px]', pending ? 'border-primary/40 bg-primary/5' : 'bg-card')} data-testid="opti-action">
+    <div className="bg-card rounded-xl border px-3.5 py-3 text-[13px]" data-testid="opti-old">
       <div className="flex items-start gap-2.5">
-        <ShieldAlert className={cn('mt-0.5 size-4 shrink-0', pending ? 'text-primary' : 'text-muted-foreground')} />
+        <ShieldAlert className="text-muted-foreground mt-0.5 size-4 shrink-0" />
         <div className="min-w-0 flex-1">
-          <div className="font-medium">{t(`opti.action.${body.action}`)}{target ? <span className="text-muted-foreground font-normal"> · {target}</span> : null}</div>
-          <div className="text-muted-foreground mt-0.5">{body.reason}</div>
-          {body.admin && pending ? <div className="text-warning mt-1 text-xs">{t('opti.needsAdmin')}</div> : null}
+          <div className="font-medium">{t('session.optiOld', { action: t(`msg.bots.pc.${body.action}`) })}{target ? <span className="text-muted-foreground font-normal"> · {target}</span> : null}</div>
+          {body.reason ? <div className="text-muted-foreground mt-0.5">{body.reason}</div> : null}
           {body.result ? <div className="mt-1.5 whitespace-pre-wrap">{body.result}</div> : null}
         </div>
-        {!pending ? <Badge variant={body.status === 'done' ? 'success' : body.status === 'running' ? 'info' : 'secondary'}>{t(`opti.status.${body.status}`)}</Badge> : null}
+        <Badge variant={tone}>{t(`bots.card.${label}`)}</Badge>
       </div>
-      {pending ? (
-        <div className="mt-2.5 flex justify-end gap-2">
-          <Button size="sm" variant="ghost" disabled={busy} onClick={() => answer('deny')} data-testid="opti-deny">{t('opti.deny')}</Button>
-          <Button size="sm" disabled={busy} onClick={() => answer('allow')} data-testid="opti-allow">{busy ? <Spinner className="size-3.5" /> : <Check />}{t('opti.allow')}</Button>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -313,8 +278,7 @@ async function showDetails(s, task) {
   });
 }
 
-// embedded: inside another page with its own header (Opti Bot's, 2.7): no header here, its own face and empty text.
-export function SessionView({ route, embedded = false, empty = null }) {
+export function SessionView({ route }) {
   const t = useT();
   const sessions = useStore((s) => s.sessions);
   const tasks = useStore((s) => s.tasks);
@@ -389,7 +353,7 @@ export function SessionView({ route, embedded = false, empty = null }) {
   const fork = async () => { const copy = await act(call('sessions.fork', { id: s.id }), t('session.forked')); if (copy) { await refresh().catch(() => {}); go({ view: 'session', id: copy.id }); } };
   const editQueued = (q, patch) => act(call('sessions.editQueued', { id: s.id, queueId: q.id, ...patch }));
   // 3.6: «Compactar» in the composer's slot when the context is at 70 % or more and the agent can compact (Claude, Codex).
-  const compactable = !embedded && s.kind === 'chat' && CAN_COMPACT[s.agent] === true && (compacting || (!running && s.context?.size > 0 && s.context.used / s.context.size >= COMPACT_AT));
+  const compactable = s.kind === 'chat' && CAN_COMPACT[s.agent] === true && (compacting || (!running && s.context?.size > 0 && s.context.used / s.context.size >= COMPACT_AT));
   const compact = async () => { setCompacting(true); try { await act(call('sessions.compact', { id: s.id })); } finally { setCompacting(false); } };
   const pictures = images.map((p) => <Badge key={p} variant="secondary" className="gap-1.5 font-normal"><ImageIcon />{baseName(p)}<button className="cursor-pointer" onClick={() => setImages(images.filter((x) => x !== p))} aria-label={t('session.remove')}><X className="size-3" /></button></Badge>);
 
@@ -397,7 +361,7 @@ export function SessionView({ route, embedded = false, empty = null }) {
     <>
       {/* 3.2: like the chat's: the clock on the left, the conversation's title (and under it its project and agent) in the
           middle, its controls on the right. */}
-      {embedded ? null : <PageHeader className="topbar-chat" title={<BarClock />} back={<BackToList to={s.kind === 'chat' ? 'chats' : 'tasks'} />}
+      <PageHeader className="topbar-chat" title={<BarClock />} back={<BackToList to={s.kind === 'chat' ? 'chats' : 'tasks'} />}
         center={<BarHeading title={s.title} project={s.project} onRename={s.kind === 'chat' ? rename : null} renameLabel={t('session.renameTip')}
           extra={<span className="bar-title-agent"><AgentIcon agent={s.agent} className="size-3.5" />{who}{s.model ? ` · ${modelName(s.model)}` : ''}</span>} />}>
         <NotificationBell />
@@ -413,13 +377,13 @@ export function SessionView({ route, embedded = false, empty = null }) {
           <BubbleTip title={t('session.fork')} text={t('session.forkTaskTip')}><Button variant="ghost" size="icon-sm" disabled={running} onClick={fork} aria-label={t('session.fork')}><GitFork /></Button></BubbleTip>
           <Button variant="outline" size="sm" onClick={() => go({ view: 'tasks', id: s.task_id })}><ListTodo />{t('session.viewTask', { id: s.task_id })}</Button>
         </>)}
-      </PageHeader>}
+      </PageHeader>
       <div ref={scroll.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-3xl flex-col gap-3.5 px-5 py-6">
           {more ? <Button variant="ghost" size="sm" className="self-center" onClick={loadOlder}><ChevronUp />{t('session.older')}</Button> : null}
-          {blocks.length ? (embedded ? groupTools(blocks) : blocks).map((b) => <Block key={b.key} b={b} agent={embedded ? 'opti' : s.agent} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />)
-            : embedded && empty ? empty : <Empty title={t('session.emptyTitle', { agent: AGENT[s.agent] })}>{t('session.workIn')} <span className="font-mono text-xs">{s.cwd}</span> {t('session.withPerm', { perm: PERMISSION[s.permission] })}</Empty>}
-          {partial ? <div className="flex gap-3" data-testid="partial"><AgentIcon agent={embedded ? 'opti' : s.agent} className="mt-1 size-5" /><div className="min-w-0 flex-1 opacity-90"><Markdown>{partial}</Markdown></div></div> : null}
+          {blocks.length ? blocks.map((b) => <Block key={b.key} b={b} agent={s.agent} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />)
+            : <Empty title={t('session.emptyTitle', { agent: AGENT[s.agent] })}>{t('session.workIn')} <span className="font-mono text-xs">{s.cwd}</span> {t('session.withPerm', { perm: PERMISSION[s.permission] })}</Empty>}
+          {partial ? <div className="flex gap-3" data-testid="partial"><AgentIcon agent={s.agent} className="mt-1 size-5" /><div className="min-w-0 flex-1 opacity-90"><Markdown>{partial}</Markdown></div></div> : null}
           {running && !partial ? <div className="text-muted-foreground flex items-center gap-2 text-[13px]"><span className="bg-info size-2 animate-pulse rounded-full" />{t('session.agentWorking', { agent: AGENT[s.agent] })}</div> : null}
           {stalled ? (
             <div className="bg-card flex flex-wrap items-center gap-3 rounded-xl border px-3.5 py-3 text-[13px]">
@@ -447,14 +411,14 @@ export function SessionView({ route, embedded = false, empty = null }) {
         </div>
       ) : null}
       <Composer value={text} onChange={setText} onSend={send} canSend={Boolean(text.trim() || images.length)} onStop={() => act(call('sessions.stop', { id: s.id }))} busy={running} testid="session-input"
-        placeholder={running ? (AGENT_CAN_STEER[s.agent] ? t('session.phSteer', { agent: embedded ? 'Opti Bot' : AGENT[s.agent] }) : t('session.phWait', { agent: embedded ? 'Opti Bot' : AGENT[s.agent] })) : s.kind === 'task' ? t('session.phTask') : t('session.ph', { agent: embedded ? 'Opti Bot' : AGENT[s.agent] })}
+        placeholder={running ? (AGENT_CAN_STEER[s.agent] ? t('session.phSteer', { agent: AGENT[s.agent] }) : t('session.phWait', { agent: AGENT[s.agent] })) : s.kind === 'task' ? t('session.phTask') : t('session.ph', { agent: AGENT[s.agent] })}
         onPaste={(e) => { const f = fromTransfer(e.clipboardData); if (f.length) addImages(f); }}
         onDrop={(e) => addImages(fromTransfer(e.dataTransfer))}
         top={images.length || compactable ? <>{compactable ? <ContextSlot items={[{ key: 'compact', node: <CompactButton onCompact={compact} busy={compacting} /> }]} /> : null}<div className="flex min-w-0 flex-wrap items-center gap-2">{pictures}</div></> : null}
         bottom={<>
           <Tip label={t('session.attach')}><Button variant="ghost" size="icon-sm" aria-label={t('session.attach')} onClick={async () => addImages(await bridge.pickImages())}><Paperclip /></Button></Tip>
           {/* 3.2: the model, the permissions and the reasoning under the box, like the chat's brain (the bar keeps the title). */}
-          {!embedded && s.kind === 'chat' ? (<>
+          {s.kind === 'chat' ? (<>
             {models.length ? <Select size="sm" value={s.model || models[0].value} title={t('session.model')} options={models} onValueChange={(model) => act(call('sessions.update', { id: s.id, model }), t('session.modelSet', { model: modelName(model) }))} data-testid="session-model" /> : null}
             <Select size="sm" value={s.permission} title={s.project ? t('session.permissions') : t('session.noProjectReadOnly')} disabled={!s.project} options={options(PERMISSION).filter((o) => !bridge.mobile || o.value !== 'total')} onValueChange={async (permission) => {
               if (permission === 'total' && !(await confirm(t('permission.total'), t('session.totalBody'), { ok: t('session.yes'), danger: true }))) return;
@@ -462,8 +426,8 @@ export function SessionView({ route, embedded = false, empty = null }) {
             }} data-testid="session-permission" />
             <ReasoningMenu catalog={catalog} value={{ agent: s.agent, model: s.model ?? '', account: s.account, reasoning: s.reasoning ?? 'medium' }} onChange={(reasoning) => act(call('sessions.update', { id: s.id, reasoning }))} />
           </>) : null}
-          {embedded ? <span className="flex-1" /> : <Tip label={s.cwd}><span className="text-muted-foreground hidden min-w-0 items-center gap-1 truncate text-xs xl:flex"><FolderOpen className="size-3.5 shrink-0" />{s.project ?? baseName(s.cwd)}</span></Tip>}
-          {!embedded && s.context ? <span className="text-muted-foreground ml-auto text-xs"><ContextMeter context={s.context} /></span> : null}
+          <Tip label={s.cwd}><span className="text-muted-foreground hidden min-w-0 items-center gap-1 truncate text-xs xl:flex"><FolderOpen className="size-3.5 shrink-0" />{s.project ?? baseName(s.cwd)}</span></Tip>
+          {s.context ? <span className="text-muted-foreground ml-auto text-xs"><ContextMeter context={s.context} /></span> : null}
         </>} />
     </>
   );

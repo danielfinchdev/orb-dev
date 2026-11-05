@@ -1,5 +1,5 @@
 // 3.6 «Personas» (WS2, la puerta): dispositivos y enlaces de cada persona, versiones, bloqueo de la ventana, terminal y
-// Orb Núcleo.
+// Orb Server.
 export default {
   'msg.persons.lockedWindow': 'La ventana está bloqueada. Desbloquéala con tu PIN.',
   'msg.link.clone': '{name} parece una copia de otro Orb. No lo atiendo hasta que lo revises en Ajustes › Magic Link.',
@@ -23,12 +23,12 @@ export default {
   'term.pin.ask': 'Esta tarjeta pide tu PIN. Escríbelo y pulsa Intro (no se ve al escribir):',
   'term.pin.wrong': 'El PIN no es correcto.',
   'term.pin.locked': 'Demasiados intentos. Espera un poco y vuelve a probar.',
-  'term.nucleo.isOwner': 'admin',
-  'term.nucleo.hasPin': 'con PIN',
-  'term.nucleo.personDevices': '{n} dispositivos',
-  'term.nucleo.personsHint': 'Para enlazar un dispositivo de alguien: {cmd}',
-  'term.nucleo.personCreated': 'Listo: {name} ya usa este Orb.',
-  'term.nucleo.noPerson': 'No hay nadie llamado «{name}» en este Orb (mira orb-nucleo usuarios).',
-  'term.nucleo.pinReset': 'Listo: {name} ya no tiene PIN. Puede elegir otro desde su perfil.',
-  'term.nucleo.forPerson': 'Este código es para {name}.'
+  'term.server.isOwner': 'admin',
+  'term.server.hasPin': 'con PIN',
+  'term.server.personDevices': '{n} dispositivos',
+  'term.server.personsHint': 'Para enlazar un dispositivo de alguien: {cmd}',
+  'term.server.personCreated': 'Listo: {name} ya usa este Orb.',
+  'term.server.noPerson': 'No hay nadie llamado «{name}» en este Orb (mira orb-server usuarios).',
+  'term.server.pinReset': 'Listo: {name} ya no tiene PIN. Puede elegir otro desde su perfil.',
+  'term.server.forPerson': 'Este código es para {name}.'
 };

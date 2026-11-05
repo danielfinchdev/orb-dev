@@ -5,6 +5,7 @@
 // before web-bridge.js. The plugins load only inside the app.
 import * as L from './link-payload.js';
 import { upcomingReminderNotes, REMINDER_IDS } from './reminder-notes.js';
+import { dedupeReminders } from './homes.js';
 import * as N from '../../core/notes.mjs';
 
 const native = Boolean(window.Capacitor?.isNativePlatform?.());
@@ -163,7 +164,8 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
         if (!Array.isArray(reminders)) return;
         const bots = await orb.call('bots.list').catch(() => null);
         const names = new Map((bots?.bots ?? []).map((b) => [b.id, b.name]));
-        const notes = upcomingReminderNotes(reminders, Date.now(), {
+        // 3.7 (WS4): one per reminder (its uid: the same one may come as a bot's copy), and only those this Orb rings.
+        const notes = upcomingReminderNotes(dedupeReminders(reminders), Date.now(), {
           preview: await previewOf(),
           titleFor: (r) => names.get(r.bot_id) ?? '',
           hidden: { title: await tl('app.reminderTitle'), body: await tl('app.reminderHidden') }

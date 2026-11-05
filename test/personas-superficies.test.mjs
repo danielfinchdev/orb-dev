@@ -5,7 +5,7 @@
 // tool process) every POLICY method is called with Ana's ids: refused when it touches her things (audited), and nothing
 // of hers in what comes back. Leo's live events (window, phone, his Orb) and his phone's notifications (push mock) get
 // nothing of Ana while she uses every resource; and the other way round, Ana (the owner) gets nothing of Leo's content.
-// Orb Núcleo's local socket (control) cannot call content methods at all.
+// Orb Server's local socket (control) cannot call content methods at all.
 //
 // GAPS (owned by other workstreams; the coordinator runs the full matrix after merging):
 // - (WS4 closed its gaps: Leo makes his own bot, group and reminder, stamped with him, and each one's global memory is
@@ -260,7 +260,7 @@ test('1c: los directos, la ventana y los avisos de cada uno no llevan nada del o
   assert.ok(after2.some((x) => x.endpoint === leoPush.endpoint), 'Leo sí recibe sus avisos');
 });
 
-test('1d: el socket local de Orb Núcleo (control) no llega al contenido de nadie', () => {
+test('1d: el socket local de Orb Server (control) no llega al contenido de nadie', () => {
   const ctl = principalOf(board, { control: true });
   for (const m of ['chat.list', 'bots.list', 'conversations.list', 'tasks.list', 'sessions.items', 'bots.memory.get', 'projects.list'])
     assert.throws(() => authorize(board, ctl, m, paramsFor(m, R.leo, leo.id)), (e) => e.status === 403 && e.reason === 'ceiling', m);

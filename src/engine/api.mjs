@@ -24,15 +24,12 @@ import { ofUserLabel, userLabel, assistantName } from '../core/board.mjs';
 import * as github from './github.mjs';
 import * as installer from './installer.mjs';
 import * as expert from './expert.mjs';
-import { adbStatus, ensureAdb, adbPath, markAdbUsed } from './android.mjs';
+import { adbStatus, ensureAdb, adbPath, markAdbUsed, adbDisabled } from './android.mjs';
 import * as net from '../core/network.mjs';
 import { spawn } from 'node:child_process';
 import { mcpFolder } from './mcp-folder.mjs';
 import { modelCatalog, chooseModel, LEVELS, REASONING_LEVELS, levelsOf } from './catalog.mjs';
 import { whiteboard } from './whiteboard.mjs';
-import { opti } from './opti.mjs';
-import { readOce } from './bridge.mjs';
-import { quickStats } from '../core/pc-health.mjs';
 import { titleFrom } from '../core/titles.mjs';
 import { autoTitle } from './titles.mjs';
 import { projectIcon, setProjectIcon, clearProjectIcon, renameProjectIcon } from './project-icons.mjs';
@@ -47,17 +44,17 @@ import { renamePerson } from '../core/persons.mjs';
 import { gatewayMethods } from './api-gateway.mjs';
 import { dataApi, MOVED_OK } from './api-data.mjs';
 import { inboxMethods } from './api-inbox.mjs';
+import { browserMethods } from './api-browser.mjs';
+import { shareApi } from './api-shares.mjs';
+import { connectionMethods, sshOpen, noteAdbDevices } from './api-connections.mjs';
 
 export { fail, str, int, oneOf } from './api-common.mjs';
-// 3.5: what a server without a window (Orb Núcleo) does not do, whatever its role: the PC's development tools (God mode and expert view,
-// Opti Bot, which is all Windows, and opening Remote Desktop or a console). Conversations, tasks, schedules, the phone
+// 3.5: what a server without a window (Orb Server) does not do, whatever its role: the PC's development tools (God mode and expert view,
+// and opening Remote Desktop or a console). Conversations, tasks, schedules, the phone
 // access and the MCP servers stay.
 // 3.5: the agents' sign-in no longer needs a console (agents.login gives the link and code), so it works on the server too.
-const CENTRO_OFF = /^(expert.|opti.|actions.|net.remote$|installer.start$|github.login$)/;
+const CENTRO_OFF = /^(expert.|actions.|net.remote$|installer.start$|github.login$)/;
 export const centroAllows = (method) => !CENTRO_OFF.test(String(method));
-const SHARE_TYPES = ['project', 'bot', 'group', 'integration'];
-const SHARE_RANK = { view: 1, talk: 2, edit: 3, own: 4 };
-const rank = (r) => SHARE_RANK[r] ?? 0;
 
 export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef = { current: null }, bots = null }) {
   const realHome = (() => { try { return fs.realpathSync(ctx.home); } catch { return ctx.home; } })();
@@ -67,7 +64,6 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   let lastChat = board.one('SELECT MAX(id) AS id FROM chat')?.id ?? 0;
   const conversationId = (id) => { const c = board.conversation(int(id, 'conversación')); if (!c) fail(tr('msg.board.noConversation')); return c.id; };
   const wb = whiteboard(board);
-  const optiApi = opti({ board, sessions });
   // 2.7: a picture the window may show: an image file inside Orb's folder, a project, or an agent account's own folder
   // (Codex keeps what it makes in <CODEX_HOME>/generated_images). 25 MB at most.
   // 3.6: someone other than the owner: only their projects (and the ones shared with them), their own accounts' folders
@@ -172,6 +168,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   // 3.6 (WS2): locked: the lock screen is up (engine.mjs refuses every call but the unlock).
   const desktop = { person: null, locked: false };
   const desktopPrincipal = () => principalOf(board, { desktop: true, person: desktop.person });
+  // 3.6: sharing (src/engine/api-shares.mjs, also Orb Server's).
+  const shares = shareApi({ board, sessions, bots, log });
+  const { setShare, removeShare } = shares;
   // What the other parts of the API share.
   const shared = { board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, bots, project, conversationId, desktop, setShare, removeShare };
   const data = dataApi(shared); shared.removePersonData = data.removePersonData; // 3.6 (WS5): backups, templates, moving the Orb, exporting and deleting a person
@@ -184,7 +183,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       approvals: visibleApprovals(who).map((a) => ({ id: a.id, session_id: a.session_id, body: { title: a.body?.title, reason: a.body?.reason }, session: a.session })),
       counts: (() => { const s = scopeOf(who) ? scopeSql(who, 'task', 'tasks') : { where: '1=1', args: [] }; return Object.fromEntries(board.all(`SELECT status, COUNT(*) AS n FROM tasks WHERE ${s.where} GROUP BY status`, ...s.args).map((r) => [r.status, r.n])); })(),
       // 3.2: what each conversation with the assistant is doing now (only the ones answering or waiting their turn).
-      chats: orchestrator.states().filter((x) => !scopeOf(who) || can(board, who, 'view', { type: 'conversation', id: x.conversation })), assistant: orchestrator.info(null, personOf(who)), optiSession: personOf(who) ? null : board.setting('opti_session') ?? null,
+      chats: orchestrator.states().filter((x) => !scopeOf(who) || can(board, who, 'view', { type: 'conversation', id: x.conversation })), assistant: orchestrator.info(null, personOf(who)),
       // 2.6: the tasks («t<id>») and direct conversations («s<id>») the user put away in «Completadas» of the sidebar;
       // 3.2: kept, the finished tasks the user brought back (a finished task goes to «Completadas» by itself).
       completed: board.settingJson(sideKey('sidebar_completed', who)) ?? [], kept: board.settingJson(sideKey('sidebar_kept', who)) ?? [],
@@ -319,21 +318,22 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     },
     // Another computer of the network, without Orb on it: Windows' own Remote Desktop, or SSH in a terminal (each asks for
     // its own login; Orb never sees it).
-    'net.remote': ({ ip, kind, user }) => {
+    'net.remote': ({ ip, kind, user }, principal) => {
       if (process.platform !== 'win32') fail(tr('msg.api.windowsOnly'));
       const host = str(ip, 'ip', 15); if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) fail(tr('msg.api.invalid', { name: 'ip' }));
       const how = oneOf(kind, ['rdp', 'ssh'], 'tipo');
       if (how === 'rdp') { spawn('mstsc.exe', [`/v:${host}`], { detached: true, stdio: 'ignore', windowsHide: false }).unref(); return true; }
       const who = str(user, 'usuario', 32); if (!/^[\w.-]{1,32}$/.test(who)) fail(tr('msg.api.invalid', { name: 'usuario' }));
-      spawn('cmd.exe', ['/c', 'start', 'SSH', 'cmd.exe', '/k', 'ssh', `${who}@${host}`], { detached: true, stdio: 'ignore' }).unref();
-      return true;
+      // 3.7 (WS9): its own console, tracked, so Conexiones lists it and «Cerrar túnel» ends it.
+      return sshOpen({ host, user: who, person: principal?.channel === 'system' ? null : principal?.person ?? null });
     },
     // Android phones and TVs by adb (wireless pairing with the code the device shows). Each use notes that Orb started
     // adb, so the engine stops its server when it closes (android.stopAdb).
-    'android.devices': async () => (adbStatus().ready ? (markAdbUsed(), { ready: true, devices: await net.adbDevices(adbPath()) }) : { ready: false, devices: [] }),
-    'android.pair': ({ host, code }) => (markAdbUsed(), net.adbPair(adbPath(), str(host, 'dirección', 21), str(code, 'código', 6))),
-    'android.connect': ({ host }) => (markAdbUsed(), net.adbConnect(adbPath(), str(host, 'dirección', 21))),
-    'android.info': ({ serial }) => (markAdbUsed(), net.adbInfo(adbPath(), str(serial, 'dispositivo', 80))),
+    // 3.7 (WS9): what it found is kept for Conexiones (which never asks adb itself).
+    'android.devices': async () => { if (adbDisabled() || !adbStatus().ready) return { ready: false, devices: [] }; markAdbUsed(); const devices = await net.adbDevices(adbPath()); noteAdbDevices(board, devices); return { ready: true, devices }; },
+    'android.pair': ({ host, code }) => (adbDisabled() ? fail(tr('msg.android.off')) : markAdbUsed(), net.adbPair(adbPath(), str(host, 'dirección', 21), str(code, 'código', 6))),
+    'android.connect': ({ host }) => (adbDisabled() ? fail(tr('msg.android.off')) : markAdbUsed(), net.adbConnect(adbPath(), str(host, 'dirección', 21))),
+    'android.info': ({ serial }) => (adbDisabled() ? fail(tr('msg.android.off')) : markAdbUsed(), net.adbInfo(adbPath(), str(serial, 'dispositivo', 80))),
 
     'github.status': () => github.status(),
     'github.contributions': () => github.contributions(),
@@ -394,12 +394,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const found = board.all(`SELECT DISTINCT s.id FROM sessions s LEFT JOIN session_items i ON i.session_id = s.id AND i.kind = 'text' WHERE s.kind = 'chat' AND ${ss.where} AND (lower(s.title) LIKE ? ESCAPE '!' OR lower(i.body) LIKE ? ESCAPE '!') LIMIT 100`, ...ss.args, like, like).map((r) => r.id);
       return { conversations, sessions: found };
     },
-    // 2.7: Monitoreo del equipo (src/engine/opti.mjs): Opti Bot's conversation, the PC's quick numbers and the answer to
-    // one of its action cards. PC only (not in the phone's list).
-    'opti.session': () => optiApi.session(),
-    'opti.stats': async () => ({ ...(await quickStats()), oce: readOce() }),
     ...botMethods(shared),
-    'opti.act': ({ item, decision }) => optiApi.act({ item: int(item, 'tarjeta'), decision: oneOf(decision, ['allow', 'deny'], 'decisión') }),
     // 2.7: pictures the agents make (Codex image_gen): shown in the conversation, a zone marked to change, saved in the
     // project. Read only from the agents' own picture folders, Orb's folder and the projects; written only into Orb's
     // folder (the marked copy) and <project>/imagenes.
@@ -614,7 +609,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       }
       const t = str(text, 'mensaje', 20000);
       // 3.2: a new direct conversation is named by Orb from its first message (at once a quick title, then a better one).
-      if (s.kind === 'chat' && !s.titled && !sessions.isOpti(s)) {
+      if (s.kind === 'chat' && !s.titled) {
         const quick = titleFrom(t) || s.title;
         sessions.update(s.id, { title: quick, titled: true });
         autoTitle(board, { agent: s.agent, account: s.account, text: t }).then((better) => { if (better && sessions.get(s.id)?.title === quick) sessions.update(s.id, { title: better }); }).catch(() => {});
@@ -700,31 +695,14 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'expert.system': () => ({ ...expert.systemStats(ctx.home), running: sessions.runningCount(), byAgent: Object.fromEntries(AGENT_IDS.map((a) => [a, sessions.runningCount(a)])) }),
     'control.pause': () => { board.setting('paused', '1'); board.changed('settings'); return true; },
     'control.resume': () => { board.setting('paused', '0'); board.changed('settings'); return true; },
-    // ---- 3.6: sharing a project (and, with the same rules, a bot, a group or an integration): view, talk or edit.
-    // Who may share: the resource's person; someone with «edit» may share it to view or talk. Never to oneself; an
-    // integration (Home Assistant, the server) only the owner.
-    'shares.list': ({ type, id }, who) => {
-      const me = who?.person;
-      if (type != null) {
-        const res = { type: oneOf(type, SHARE_TYPES, 'tipo'), id: str(String(id ?? ''), 'id', 200) };
-        if (who?.channel !== 'system' && !can(board, who, 'view', res)) throw new AuthzError('right', { method: 'shares.list', resource: res });
-        const key = shareKey(res);
-        const mine = who?.channel === 'system' || rank(rightOn(board, me, res)) >= rank('edit');
-        return board.all('SELECT resource_type AS type, resource_id AS id, person_id AS person, right, granted_by, created_at FROM shares WHERE resource_type = ? AND resource_id = ?', res.type, key)
-          .filter((s) => mine || s.person === me).map((s) => ({ ...s, name: board.personName(s.person) }));
-      }
-      // Everything shared with the caller, and everything they shared.
-      const withMe = board.all('SELECT resource_type AS type, resource_id AS id, right, granted_by FROM shares WHERE person_id = ? ORDER BY resource_type, resource_id', me).map((s) => ({ ...s, by: board.personName(s.granted_by) }));
-      const byMe = board.all('SELECT resource_type AS type, resource_id AS id, person_id AS person, right FROM shares WHERE granted_by = ? ORDER BY resource_type, resource_id', me).map((s) => ({ ...s, name: board.personName(s.person) }));
-      return { withMe, byMe };
-    },
-    'shares.set': (p, who) => setShare(p, who),
-    'shares.remove': (p, who) => removeShare(p, who),
+    ...shares.methods,
     ...accountMethods(shared),
     ...linkMethods(shared),
     ...personMethods(shared),
     ...gatewayMethods(shared),
     ...inboxMethods(shared),
+    ...browserMethods(shared), // 3.7 (WS5): «Ver navegador del Server»
+    ...connectionMethods(shared), // 3.7 (WS9): «Conexiones»
     ...data.methods
   };
   // 3.6: the approval cards a person may answer (of their own sessions and tasks, and those of projects shared with them).
@@ -736,53 +714,6 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   function ownAccount(who, id) {
     if (!id || !scopeOf(who) || mayUseAccount(board, who.person, id, { purpose: 'dev' })) return id;
     return fail(tr('msg.spend.notYours'));
-  }
-  // 3.6: sharing (shares.set / shares.remove, and a group's people: bots.groups.create, bots.groups.members.*).
-  function setShare({ type, id, person, right }, who) {
-      const res = { type: oneOf(type, SHARE_TYPES, 'tipo'), id: str(String(id ?? ''), 'id', 200) };
-      const r = oneOf(right, RIGHTS, 'permiso');
-      const to = str(person, 'persona', 40);
-      mayShare(who, res, r, to, 'shares.set');
-      const key = shareKey(res);
-      board.run(`INSERT INTO shares (resource_type, resource_id, person_id, right, granted_by, created_at) VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(resource_type, resource_id, person_id) DO UPDATE SET right = excluded.right, granted_by = excluded.granted_by`, res.type, key, to, r, who?.person ?? board.ownerId(), new Date().toISOString());
-      audit(board, who, 'shares.set', res, 'allow', `${to}:${r}`);
-      board.changed('shares', { person: to, res });
-      board.changed(res.type === 'project' ? 'projects' : res.type === 'bot' || res.type === 'group' ? 'bots' : 'settings', { person: to });
-      return { type: res.type, id: key, person: to, right: r };
-  }
-  function removeShare({ type, id, person }, who) {
-      const res = { type: oneOf(type, SHARE_TYPES, 'tipo'), id: str(String(id ?? ''), 'id', 200) };
-      const to = str(person, 'persona', 40);
-      const key = shareKey(res);
-      const row = board.one('SELECT right FROM shares WHERE resource_type = ? AND resource_id = ? AND person_id = ?', res.type, key, to);
-      // One may always give up what was shared with them; otherwise the same rule as sharing it.
-      if (to !== who?.person) mayShare(who, res, row?.right ?? 'view', to, 'shares.remove');
-      board.run('DELETE FROM shares WHERE resource_type = ? AND resource_id = ? AND person_id = ?', res.type, key, to);
-      // What that person had open of it stops (their own conversations and tasks stay theirs).
-      if (res.type === 'project') for (const s of board.all("SELECT id FROM sessions WHERE person_id = ? AND project = ? COLLATE NOCASE AND status = 'running'", to, key)) { try { sessions.stop(s.id); } catch { /* gone */ } }
-      try { bots?.unshared?.(res, to); } catch (error) { log(`dejar de compartir: ${error.message}`); }
-      audit(board, who, 'shares.remove', res, 'allow', to);
-      board.changed('shares', { person: to, res });
-      board.changed(res.type === 'project' ? 'projects' : res.type === 'bot' || res.type === 'group' ? 'bots' : 'settings', { person: to });
-      return { ok: true };
-  }
-  // Sharing: the canonical id of a resource (a project's name as written, a bot's number) and who may share it.
-  function shareKey(res) {
-    if (res.type === 'project') return board.one('SELECT name FROM projects WHERE name = ? COLLATE NOCASE', res.id)?.name ?? res.id;
-    if (res.type === 'bot') return String(board.one('SELECT id FROM bots WHERE id = ? OR name = ? COLLATE NOCASE', Number(res.id) || -1, res.id)?.id ?? res.id);
-    return String(res.id);
-  }
-  function mayShare(who, res, right, to, method) {
-    const deny = (reason) => { audit(board, who, method, res, 'deny', reason); throw new AuthzError(reason === 'notFound' ? 'notFound' : 'right', { method, resource: res }); };
-    if (!board.one('SELECT id FROM persons WHERE id = ? AND deleted_at IS NULL', to)) fail(tr('msg.persons.noPerson'));
-    if (ownerOf(board, res) == null) deny('notFound');
-    if (who?.channel === 'system') return;
-    if (res.type === 'integration' && who.role !== 'owner') deny('right');
-    const mine = rightOn(board, who.person, res);
-    if (!(mine === 'own' || (mine === 'edit' && right !== 'edit'))) deny('right');
-    if (to === who?.person) fail(tr('msg.share.notYourself'));
-    if (to === ownerOf(board, res)) fail(tr('msg.share.alreadyOwner'));
   }
   const centroCall = centroApi(shared);
 
@@ -818,14 +749,13 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     // 3.6: the method names (the policy test checks each one has its rule) and this PC's window's principal.
     methodNames: () => Object.keys(methods),
     desktopPrincipal,
-    // 3.6 (WS2): the window's state (who sits there, locked), Orb Núcleo's local socket (the owner, who is on the server
+    // 3.6 (WS2): the window's state (who sits there, locked), Orb Server's local socket (the owner, who is on the server
     // itself: no PIN asked) and what a locked window may see.
     desktop,
     controlPrincipal: () => principalOf(board, { control: true, strongUntil: Date.now() + 60_000 }),
     lockState: () => methods['app.lockState'](),
     // New chat lines since the last call, sent to the window as 'chat:new' (corner robot, robot notices) or 'notice' (toasts).
     notifyNewChat() {
-      try { optiApi.flush(); } catch { /* Opti Bot off or its conversation gone */ }
       const rows = board.all('SELECT id, role, body, meta, conversation_id, person_id FROM chat WHERE id > ? ORDER BY id LIMIT 20', lastChat);
       if (!rows.length) return;
       lastChat = rows[rows.length - 1].id;

@@ -8,6 +8,19 @@ import { fileURLToPath } from 'node:url';
 
 export const IS_WIN = process.platform === 'win32';
 
+// 3.7 (Orb Server): when the root-owned admin helper is installed (sudoers lets this user run it), every agent process
+// starts with no_new_privs (setpriv), whatever program it is (the engines' run script, a Claude or Codex found in PATH,
+// the SDK's own), so a bot can never reach sudo. Without the helper, and on Windows and macOS, the command is left as is.
+const ADMIN_HELPER = '/usr/local/libexec/orb-server-admin';
+const SETPRIV = ['/usr/bin/setpriv', '/bin/setpriv', '/usr/sbin/setpriv', '/sbin/setpriv'];
+export function confineArgs(cmd, args = [], { platform = process.platform, helper = null, setpriv } = {}) {
+  if (platform !== 'linux') return { cmd, args };
+  if (!(helper ?? fs.existsSync(ADMIN_HELPER))) return { cmd, args };
+  const sp = setpriv === undefined ? SETPRIV.find((f) => fs.existsSync(f)) ?? null : setpriv;
+  if (!sp) throw new Error('setpriv (util-linux) is missing: the agent does not start without no_new_privs');
+  return { cmd: sp, args: ['--no-new-privs', '--', cmd, ...args] };
+}
+
 // First existing file of a list (null if none).
 export const firstFile = (list) => list.find((f) => { try { return f && fs.statSync(f).isFile(); } catch { return false; } }) ?? null;
 
@@ -67,7 +80,7 @@ export function killTree(child) {
   try {
     if (IS_WIN) { const k = spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }); k.on('error', () => {}); }
     else {
-      // 3.5 (Linux, Orb Núcleo): the agents start as leaders of their own process group (spawnAgent), so the whole group
+      // 3.5 (Linux, Orb Server): the agents start as leaders of their own process group (spawnAgent), so the whole group
       // goes, as taskkill /T does on Windows; a process that is not a leader (the SDK's own) only by itself. If the group
       // ignores the request, it is killed a few seconds later.
       const pid = child.pid;
@@ -109,12 +122,6 @@ export const within = (promise, ms) => Promise.race([promise, new Promise((resol
 // "run as node" mode when packaged), the server script and the assistant folder. Nothing secret goes in here.
 export function orbMcpServer(env = {}) {
   const script = process.env.ORB_MCP_SCRIPT || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'mcp', 'server.mjs');
-  return { command: process.execPath, args: [script], env: { ELECTRON_RUN_AS_NODE: '1', ...env } };
-}
-
-// 2.7: Opti Bot's own tools (Monitoreo del equipo): diagnosis of the PC, a copy of Orb and proposals the user approves.
-export function optiMcpServer(env = {}) {
-  const script = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'mcp', 'opti.mjs');
   return { command: process.execPath, args: [script], env: { ELECTRON_RUN_AS_NODE: '1', ...env } };
 }
 
