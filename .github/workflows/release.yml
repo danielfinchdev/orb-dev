@@ -50,6 +50,7 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm test
+        timeout-minutes: 20
 
   # The whole desktop app with Electron, on Windows and on Linux (Linux with a virtual screen).
   app:

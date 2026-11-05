@@ -1,5 +1,5 @@
 // Updates: Orb looks at GitHub Releases when it opens and every few hours. Installed with the installer, it downloads the new
-// version in the background (electron-updater, NSIS) and installs it on «Reiniciar y actualizar» or when the app closes.
+// version in the background (electron-updater, NSIS) and installs it on «Reiniciar e instalar» or when the app closes.
 // A copy that was not installed (Orb Light, the portable .exe, or the program folder copied elsewhere) cannot replace
 // itself: it only says there is a new version and opens the download page.
 // 3.7, Linux: the AppImage updates itself like the installer (electron-updater, latest-linux.yml); the .deb (or any other
@@ -29,7 +29,7 @@ const short = (error) => String(error?.message ?? error).split('\n')[0].slice(0,
 
 // 3.6: beforeInstall(version) makes a backup of the data before a new version touches it (src/core/backup.mjs, kind
 // «preupdate»). It runs when the download ends (an update installed when the app closes is covered too) and, if that one
-// failed, again on «Reiniciar y actualizar». It never blocks the update for long (BACKUP_WAIT) and a failure is logged.
+// failed, again on «Reiniciar e instalar». It never blocks the update for long (BACKUP_WAIT) and a failure is logged.
 const BACKUP_WAIT = 3 * 60_000;
 export function createUpdater({ send, log = () => {}, beforeInstall = null }) {
   const current = app.getVersion();

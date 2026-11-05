@@ -108,7 +108,7 @@ npm run test:app     # the whole app with Electron (on Linux: xvfb-run -a npm ru
 npm run test:movil   # the mobile web app at phone size
 ORB_E2E_EXE=dist/win-unpacked/Orb.exe node test/smoke.e2e.mjs   # tests the packaged app
 npm run dist         # Orb-3.2.1-instalador.exe and Orb-3.2.1-light-portable.exe (on Windows)
-npm run icon         # regenerates the icon from the artwork (docs/diseno/art work); then npm run icon:ico
+npm run icon         # renders every app icon (.ico, PNGs, favicon) from build/icon-src/*.svg
 ```
 
 | Folder | Contents |
