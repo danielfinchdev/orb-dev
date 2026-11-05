@@ -14,6 +14,9 @@ import { VAULT_PROTECTED } from '../core/home.mjs';
 
 const CODE = /^[a-z_]{2,40}$/;
 export const reasonText = (code) => { const c = CODE.test(String(code)) ? code : 'error'; const k = `msg.vault.err.${c}`; const t = tr(k); return t === k ? tr('msg.vault.err.error') : t; };
+// 3.7: a code the screen can name (msg.vault.err.<code> exists), else 'error': the app never shows a raw key such as
+// «msg.vault.err.not_ready».
+export const knownCode = (code) => { const c = CODE.test(String(code)) ? code : 'error'; const k = `msg.vault.err.${c}`; return tr(k) === k ? 'error' : c; };
 
 // The containers and data folders of a Vaultwarden/Bitwarden on this machine, added to «Cosas que nadie toca» so no
 // agent reaches them except through the official API above. Best effort (Linux with docker); never in the tests.
@@ -58,7 +61,7 @@ export function vaultMethods({ board, log = () => {}, vault = null }) {
       const base = { allowed, available: Boolean(vault), argon2: argon2Available() };
       if (!allowed || !vault) return { ...base, configured: false };
       if (!vault.configured(p)) return { ...base, configured: false };
-      try { return { ...base, ...(await vault.status(p)), approvals: approvals.list(p) }; } catch (error) { return { ...base, configured: true, error: CODE.test(String(error?.code)) ? error.code : 'error' }; }
+      try { return { ...base, ...(await vault.status(p)), approvals: approvals.list(p) }; } catch (error) { return { ...base, configured: true, error: knownCode(error?.code) }; }
     },
     // { server, clientId, clientSecret, password, collection } → the state. Tried at once; nothing is kept if it fails.
     'vault.setup': async (params, who) => {

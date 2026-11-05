@@ -323,6 +323,17 @@ async function main() {
   // 3.6: importing a moved Orb goes into a folder that is not an Orb yet (nothing is prepared there first).
   if (o.command === 'move' && o.sub === 'import') { process.exit(await moveCommand(null, version, o, path.resolve(o.home ? o.home : defaultHome()))); }
   if (o.command === 'migrate') { process.exit(await migrateCommand(o.home ? path.resolve(o.home) : null)); }
+  // 3.7: a migration from before 3.7 that was cut in the middle (power cut, kill) is finished before anything starts on
+  // a half-moved folder (src/server/migrate.mjs › MIGRATING).
+  {
+    const { legacyPaths, MIGRATING } = await import('./migrate.mjs');
+    const { existsSync } = await import('node:fs');
+    const where = { ...legacyPaths(), ...(o.home ? { home: path.resolve(o.home) } : {}) };
+    if (existsSync(path.join(where.home, MIGRATING)) || existsSync(path.join(where.oldHome, MIGRATING))) {
+      const code = await migrateCommand(o.home ? path.resolve(o.home) : null);
+      if (code) process.exit(code);
+    }
+  }
   const home = prepareHome(o.home ? o.home : defaultHome(), { profile: o.profile });
   if (o.command === 'backup') { process.exit(await backupCommand(home, version, o)); }
   if (o.command === 'move') { process.exit(await moveCommand(home, version, o)); }

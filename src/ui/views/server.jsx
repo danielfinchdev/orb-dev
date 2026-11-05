@@ -608,7 +608,7 @@ export function VaultCard() {
           {st.error ? <TriangleAlert className="text-warning mt-0.5 size-4 shrink-0" /> : <CircleCheck className="text-success mt-0.5 size-4 shrink-0" />}
           <div className="min-w-0 text-[13.5px]">
             <div className="font-medium">{t('vault.connected', { server: st.server ?? '', n: st.items ?? 0, collection: st.collection ?? 'Orb' })}</div>
-            <div className="text-muted-foreground text-[12px]">{st.error ? t(`msg.vault.err.${st.error}`) : st.syncedAt ? t('vault.lastSync', { when: ago(st.syncedAt) }) : t('vault.notSynced')}</div>
+            <div className="text-muted-foreground text-[12px]">{st.error ? (t(`msg.vault.err.${st.error}`) === `msg.vault.err.${st.error}` ? t('msg.vault.err.error') : t(`msg.vault.err.${st.error}`)) : st.syncedAt ? t('vault.lastSync', { when: ago(st.syncedAt) }) : t('vault.notSynced')}</div>
           </div>
         </div>
         <SitesList sites={st.approvals ?? st.sites ?? []} />

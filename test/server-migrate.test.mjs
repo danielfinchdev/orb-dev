@@ -99,3 +99,39 @@ test('no mezcla dos carpetas con datos ni una ~/orb-server con cosas ajenas', as
     await assert.rejects(migrateLegacy(f), /no se mezclan/);
   } finally { try { fs.rmSync(f.base, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch { /* temp */ } }
 });
+
+test('una migración que se cortó a medias (corte de luz) sigue sola la próxima vez, sin perder nada', async () => {
+  const { MIGRATING } = await import('../src/server/migrate.mjs');
+  // Cut in the middle of moving ~/orb into an ~/orb-server that already had app/: part moved, part still in ~/orb.
+  const f = legacyFixture();
+  try {
+    fs.mkdirSync(path.join(f.home, 'app', '3.7.0'), { recursive: true });
+    for (const d of [f.oldHome, f.home]) fs.writeFileSync(path.join(d, MIGRATING), 'x');
+    fs.renameSync(path.join(f.oldHome, '.orb'), path.join(f.home, '.orb'));
+    fs.renameSync(path.join(f.oldHome, 'bots'), path.join(f.home, 'bots'));
+    assert.equal(migrationState(f), 'migrate');
+    let backups = 0;
+    const r = await migrateLegacy({ ...f, backup: async () => { backups++; return null; } });
+    assert.equal(r.state, 'migrated'); assert.equal(backups, 0, 'sin otra copia a medias');
+    forgetLayout();
+    const p = paths(f.home);
+    assert.ok(isServerLayout(f.home));
+    assert.deepEqual(fs.readFileSync(p.key), f.key);
+    assert.ok(fs.existsSync(p.db));
+    assert.equal(fs.readFileSync(path.join(f.home, 'bots', '1', 'memoria.md'), 'utf8'), 'Riega las plantas.');
+    assert.ok(!fs.existsSync(path.join(f.home, MIGRATING)), 'la marca se quita al acabar');
+    assert.ok(fs.lstatSync(f.oldHome).isSymbolicLink());
+    assert.equal(migrationState(f), 'done');
+  } finally { try { fs.rmSync(f.base, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch { /* temp */ } }
+  // Cut after ~/orb had moved whole but before the server's layout: it is finished, not run in the old layout.
+  const g = legacyFixture();
+  try {
+    fs.writeFileSync(path.join(g.oldHome, MIGRATING), 'x');
+    fs.renameSync(g.oldHome, g.home);
+    assert.equal(migrationState(g), 'migrate');
+    assert.equal((await migrateLegacy(g)).state, 'migrated');
+    forgetLayout();
+    assert.ok(isServerLayout(g.home));
+    assert.ok(fs.existsSync(paths(g.home).db));
+  } finally { try { fs.rmSync(g.base, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch { /* temp */ } }
+});

@@ -30,8 +30,17 @@ function moveInto(from, to) {
   fs.renameSync(from, `${to}.anterior`);
 }
 
-// Is there something to migrate? → 'none' | 'migrate' | 'done'
+// 3.7: a migration in progress leaves this mark in ~/orb-server (and in ~/orb while it is there): if the server stops in
+// the middle (power cut, kill), the next start finishes the same migration instead of refusing a half-moved folder or
+// running on it in the old layout.
+export const MIGRATING = '.migrando-a-orb-server';
+const marked = (dir) => exists(path.join(dir, MIGRATING));
+const mark = (dir) => { try { fs.writeFileSync(path.join(dir, MIGRATING), `${new Date().toISOString()}
+`); } catch { /* the folder may not exist yet */ } };
+
+// Is there something to migrate? → 'none' | 'migrate' | 'done' | 'conflict'
 export function migrationState({ home, oldHome }) {
+  if (marked(home) || (exists(oldHome) && !isLink(oldHome) && marked(oldHome))) return 'migrate';
   if (isHome(oldHome) && !isLink(oldHome) && path.resolve(oldHome) !== path.resolve(home)) return isHome(home) ? 'conflict' : 'migrate';
   return isHome(home) && isServerLayout(home) ? 'done' : 'none';
 }
@@ -44,16 +53,24 @@ export async function migrateLegacy({ home, oldHome, oldApp, backup = null, link
   const state = migrationState({ home, oldHome });
   if (state === 'conflict') throw new Error(`hay datos en ${oldHome} y en ${home}: no se mezclan solos`);
   if (state !== 'migrate') return { state, steps };
-  // 1. a backup of the data as they are, before anything moves
-  if (backup) { const file = await backup(oldHome); if (file) step(`copia antes de migrar: ${path.basename(file)}`); }
+  const resuming = marked(home) || (exists(oldHome) && !isLink(oldHome) && marked(oldHome));
+  if (resuming) step('sigo con la migración que quedó a medias');
+  // 1. a backup of the data as they are, before anything moves (not again when resuming: part of it has moved already)
+  if (backup && !resuming) { const file = await backup(oldHome); if (file) step(`copia antes de migrar: ${path.basename(file)}`); }
   // 2. the folder: ~/orb → ~/orb-server (the installer may have unpacked the program in ~/orb-server/app already)
-  if (exists(home)) {
-    const extra = fs.readdirSync(home).filter((n) => !Object.values(SERVER_DIRS).includes(n));
-    if (extra.length) throw new Error(`${home} ya tiene otras cosas (${extra.slice(0, 3).join(', ')}): no se migra`);
-    for (const name of fs.readdirSync(oldHome)) moveInto(path.join(oldHome, name), path.join(home, name));
-    fs.rmdirSync(oldHome);
-  } else { fs.mkdirSync(path.dirname(home), { recursive: true }); fs.renameSync(oldHome, home); }
-  step(`${oldHome} → ${home}`);
+  if (exists(oldHome) && !isLink(oldHome)) {
+    if (exists(home)) {
+      const extra = fs.readdirSync(home).filter((n) => !Object.values(SERVER_DIRS).includes(n) && n !== MIGRATING);
+      if (extra.length && !resuming) throw new Error(`${home} ya tiene otras cosas (${extra.slice(0, 3).join(', ')}): no se migra`);
+    }
+    mark(oldHome); if (exists(home)) mark(home);
+    if (exists(home)) {
+      for (const name of fs.readdirSync(oldHome)) if (name !== MIGRATING) moveInto(path.join(oldHome, name), path.join(home, name));
+      fs.rmSync(path.join(oldHome, MIGRATING), { force: true });
+      fs.rmdirSync(oldHome);
+    } else { fs.mkdirSync(path.dirname(home), { recursive: true }); fs.renameSync(oldHome, home); }
+    step(`${oldHome} → ${home}`);
+  }
   // 3. the server's layout: .orb → data/, its runs → logs/, the bitácora → logs/bitacora, the MCP servers → data/
   const data = path.join(home, SERVER_DIRS.data); const logs = path.join(home, SERVER_DIRS.logs);
   moveInto(path.join(home, INTERNAL_DIR), data);
@@ -81,8 +98,10 @@ export async function migrateLegacy({ home, oldHome, oldApp, backup = null, link
     if (links) { linkDir(app, oldApp); step(`${oldApp} queda como enlace a ${app} (hasta la próxima versión)`); }
   }
   // 5. ~/orb keeps working for a minor version
-  if (links) { linkDir(home, oldHome); step(`${oldHome} queda como enlace a ${home} (hasta la próxima versión)`); }
+  if (links && !exists(oldHome)) { linkDir(home, oldHome); step(`${oldHome} queda como enlace a ${home} (hasta la próxima versión)`); }
   // What the engine reads at start must be there: the settings and the secret.
   loadConfig(home); readKey(home);
+  fs.rmSync(path.join(home, MIGRATING), { force: true });
+  forgetLayout(home);
   return { state: 'migrated', steps };
 }

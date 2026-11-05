@@ -56,13 +56,16 @@ function useBytes() {
 // when it was seen.
 function metaOf(row, t, bytes, many) {
   const d = row.detail ?? {};
+  // 3.7: a kind or reason this app has no words for (a newer Orb Server) is left out, never shown as a raw key.
+  const known = (k) => { const v = t(k); return v === k ? null : v; };
+  const kind = known(`conn.kind.${row.kind}`);
   // (Tailscale and Home Assistant are their own name: no kind repeated)
-  const parts = [row.name === t(`conn.kind.${row.kind}`) ? null : t(`conn.kind.${row.kind}`)];
+  const parts = [row.name === kind ? null : kind];
   if (row.where === 'server') parts.push(t('conn.onServer'));
   if (many && row.personName) parts.push(row.personName);
   if (d.version) parts.push(t('conn.version', { v: d.version }));
   if (d.memory?.total) parts.push(t('conn.ram', { free: bytes(d.memory.free), total: bytes(d.memory.total) }));
-  if (d.why) parts.push(t(`conn.why.${d.why}`));
+  if (d.why) parts.push(known(`conn.why.${d.why}`));
   else if (row.kind === 'agent') parts.push(t(row.status === 'online' ? 'conn.signedIn' : 'conn.signedUnknown'));
   else if (row.kind === 'tailscale' && d.dns) parts.push(d.dns);
   else if (row.kind === 'vault' && d.server) parts.push(d.server);

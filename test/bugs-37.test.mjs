@@ -120,3 +120,19 @@ test('resumen de personas: «hoy» es el día de cada persona, como el que apunt
     }
   } finally { t.cleanup(); }
 });
+
+test('la bóveda nunca enseña una clave de texto en bruto, y un bot no arranca adb si el usuario no ha usado Android', async () => {
+  const t = tempHome();
+  try {
+    const { knownCode, reasonText } = await import('../src/server/api-vault.mjs');
+    assert.equal(knownCode('not_ready'), 'error');
+    assert.equal(knownCode('vault_unavailable'), 'vault_unavailable');
+    assert.equal(knownCode('x y'), 'error');
+    assert.doesNotMatch(reasonText('not_ready'), /^msg\./);
+  } finally { t.cleanup(); }
+  // pc_android (the «Equipo» tools) only runs adb after the user listed devices in Orb (connections.adb).
+  const src = fs.readFileSync(new URL('../src/mcp/bot.mjs', import.meta.url), 'utf8');
+  const i = src.indexOf("name: 'pc_android'");
+  const body = src.slice(i, src.indexOf("name: 'pc_orb_check'"));
+  assert.ok(body.indexOf("settingJson('connections.adb')") > 0 && body.indexOf("settingJson('connections.adb')") < body.indexOf('N.adbDevices('), 'mira antes de arrancar adb');
+});
