@@ -155,7 +155,18 @@ try {
   step = 'conversación directa';
   // 3.0: «Nuevo chat» opens a clean conversation with the assistant, no pop-up (clicked twice: still one view).
   // 3.6: from the «+» of the chat list.
-  const newChat = async () => { await win.click('[data-testid=chats-new]'); await win.click('[data-testid=new-conversation]'); await win.locator('[data-testid=new-conversation]').waitFor({ state: 'detached' }); await win.waitForTimeout(200); };
+  // The menu animates in (and may close on a late re-render on slow CI screens): reopen and retry.
+  const newChat = async () => {
+    for (let i = 0; ; i++) {
+      try {
+        if (!(await win.locator('[data-testid=new-conversation]').isVisible())) await win.click('[data-testid=chats-new]');
+        await win.click('[data-testid=new-conversation]', { timeout: 5000 });
+        break;
+      } catch (e) { if (i >= 3) throw e; await win.keyboard.press('Escape'); await win.waitForTimeout(300); }
+    }
+    await win.locator('[data-testid=new-conversation]').waitFor({ state: 'detached' });
+    await win.waitForTimeout(200);
+  };
   await newChat();
   await newChat();
   await win.waitForSelector('[data-testid=chat-input]');
