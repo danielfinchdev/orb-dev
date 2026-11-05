@@ -133,8 +133,7 @@
       "icon": "build/icon.ico",
       "artifactName": "Orb-${version}-windows.${ext}",
       "target": [
-        "nsis",
-        "portable"
+        "nsis"
       ]
     },
     "portable": {
