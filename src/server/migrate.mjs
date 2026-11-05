@@ -35,8 +35,7 @@ function moveInto(from, to) {
 // running on it in the old layout.
 export const MIGRATING = '.migrando-a-orb-server';
 const marked = (dir) => exists(path.join(dir, MIGRATING));
-const mark = (dir) => { try { fs.writeFileSync(path.join(dir, MIGRATING), `${new Date().toISOString()}
-`); } catch { /* the folder may not exist yet */ } };
+const mark = (dir) => { try { fs.writeFileSync(path.join(dir, MIGRATING), `${new Date().toISOString()}\n`); } catch { /* the folder may not exist yet */ } };
 
 // Is there something to migrate? → 'none' | 'migrate' | 'done' | 'conflict'
 export function migrationState({ home, oldHome }) {
