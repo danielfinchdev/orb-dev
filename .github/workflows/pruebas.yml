@@ -27,6 +27,7 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm test
+        timeout-minutes: 20
       # 3.7: the whole app with Electron on both systems (Linux has no screen: a virtual one).
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y xvfb
