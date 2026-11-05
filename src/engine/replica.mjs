@@ -152,7 +152,7 @@ export function createReplica({ board, bots, emit = () => {}, log = () => {}, li
     return state.promise;
   }
   async function syncPeer(peer) {
-    if (!peer.online || !capable(peer)) return { skipped: true };
+    if (!peer.online || !capable(peer) || (peer.id && unlinkedLinks.has(peer.id))) return { skipped: true };
     const idx = await peer.call('replica.index', {});
     const map = mapFrom(peer);
     for (const e of idx?.bots ?? []) { try { await syncEntry(peer, e, map); } catch (error) { if (isOffline(error)) throw error; log(`hogar: ${e.name ?? e.uid}: ${error.message}`); } }
@@ -164,6 +164,7 @@ export function createReplica({ board, bots, emit = () => {}, log = () => {}, li
       try { const page = await peer.call('replica.pull', { uid: row.uid, since: cursors.get(peer.key, row.uid).seq }); if (page?.deleted) { dropReplica(row.uid); cursors.set(peer.key, row.uid, page.seq, null); log(`hogar: ${row.uid} se eliminó en ${peer.name ?? peer.key}`); } }
       catch (error) { if (isOffline(error)) throw error; }
     }
+    if (peer.id && unlinkedLinks.has(peer.id)) return { skipped: true }; // unlinked meanwhile
     await finishMoves(peer);
     await flushQueue(peer);
     // Just back: it is told to pull from here too (it may not see this Orb's changes otherwise).
@@ -687,6 +688,10 @@ export function createReplica({ board, bots, emit = () => {}, log = () => {}, li
       await until(() => theirs.every((b) => R.isHomeHere(board, R.botByUid(board, b.uid))), 15_000);
     }
     if (peer.id) unlinkedLinks.add(peer.id);
+    // A sync with that Orb still on its way (a page, a move's commit) would undo the freeze: let it end first (it stops
+    // at its next step now that the link is marked), for a few seconds at most.
+    const inflight = syncing.get(peer.key)?.promise;
+    if (inflight) await Promise.race([Promise.resolve(inflight).catch(() => {}), new Promise((r) => setTimeout(r, 5000))]);
     const archived = archiveFrom(peer.key);
     // Whatever was on its way with that Orb is over: linked again later, its sync starts afresh.
     syncing.delete(peer.key); wasOnline.delete(peer.key); lastSync.delete(peer.key);
