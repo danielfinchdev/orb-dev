@@ -15,5 +15,6 @@ export default {
   'msg.server.step.download': 'Download the installer:',
   'msg.server.step.check': 'Check it is the official one:',
   'msg.server.step.run': 'Install it and link it with this app:',
+  'msg.server.step.installed': 'Already has Orb Server? Then just link it:',
   'msg.server.step.fallback': 'If the server cannot reach this PC, it shows a code: type it here with its address.'
 };

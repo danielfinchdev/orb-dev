@@ -56,6 +56,8 @@ export function serverInstallSteps(opts = {}) {
     { key: 'msg.server.step.download', cmd: `curl -fsSL ${c.url} -o ${TMP}` },
     { key: 'msg.server.step.check', cmd: `echo "${c.sha256}  ${TMP}" | sha256sum -c` },
     { key: 'msg.server.step.run', cmd: `bash ${TMP}${c.pair ? ` --pair '${c.pair}'` : ''}` },
+    // 3.7: a server that already has Orb Server 3.7 (reinstalled app, a second PC) only needs the link.
+    ...(c.pair ? [{ key: 'msg.server.step.installed', cmd: `orb-server emparejar '${c.pair}'` }] : []),
     { key: 'msg.server.step.fallback' }
   ];
 }

@@ -38,5 +38,9 @@ export default {
   'browserLive.giveBack': 'Devolver a los bots',
   'browserLive.keys': 'Teclas',
   'browserLive.error': 'No se pudo abrir la vista: {error}',
+  'browserLive.address': 'Dirección de la web',
+  'browserLive.addressHint': 'Escribe una web, por ejemplo correo.example.com',
+  'browserLive.go': 'Ir',
+  'browserLive.back': 'Atrás',
   'browserLive.private': 'Solo tú ves tu navegador. Las imágenes no se guardan.'
 };

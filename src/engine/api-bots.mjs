@@ -246,7 +246,11 @@ export function botMethods({ board, emit, remoteRef, bots, setShare, removeShare
     },
     'bots.delete': async ({ id }, who) => {
       const row = rowOf(botId(id, who));
-      if (elsewhere(row)) { await viaHome(row, 'bots.delete', {}, who); return true; }
+      // A frozen copy (its Orb was unlinked, or is no longer linked): only the copy here goes; the bot, if it still
+      // runs there, is not touched.
+      if (elsewhere(row) && (row.home_state === 'archived' || !replica()?.peers().some((p) => p.key === row.home))) { B.deleteBot(board, row.id); bots?.drop(row.id); changed(row.id); return true; }
+      // Deleted at its home: the copy here goes at once (the other Orbs' copies, at their next sync).
+      if (elsewhere(row)) { const r = await viaHome(row, 'bots.delete', {}, who); if (r?.forwarded) { try { B.deleteBot(board, row.id); } catch { /* gone */ } changed(row.id); } return true; }
       const b = B.deleteBot(board, row.id); bots?.drop(b.id); changed(b.id); return true;
     },
     'bots.pause': async ({ id, paused }, who) => {

@@ -1,7 +1,8 @@
 // 3.7 (WS5): «Ver navegador del Server» in the engine's API: a person sees and uses their own page of Orb Server's
 // browser (src/server/browser.mjs) from their phone, a browser or the app linked to the Server.
 //   browser.live.start({ width, dpr, url?, quality? }) → { sid, width, height, url, title }
-//   browser.live.input({ sid, ack?, pause?, release?, events? })   ack: the picture seq the device got (flow control);
+//   browser.live.input({ sid, ack?, pause?, release?, events?, go?, back? })   ack: the picture seq the device got (flow control);
+//                                go: an address to open (the view's address bar), back: the page before; → { ok, using, url };
 //                                pause: the device's app went to the background; release: «Devolver a los bots»;
 //                                events: [{ type: 'tap'|'mouse'|'wheel'|'text'|'key', … }] (src/server/screencast.mjs)
 //   browser.live.stop({ sid })
@@ -38,9 +39,10 @@ export function browserMethods({ board, emit }) {
       audit(board, who, 'browser.live.start', { type: 'person', id: me }, 'allow', device);
       return r;
     },
-    'browser.live.input': ({ sid, ack, pause, release, events }, who) => {
+    'browser.live.input': ({ sid, ack, pause, release, events, go, back }, who) => {
       const id = str(sid, 'id', 64);
-      return guarded(who, 'browser.live.input', id, () => sb().live.input(id, { person: who?.person, device: deviceOf(who) }, { ack, pause, release, events }));
+      const to = go == null || go === '' ? null : str(go, 'dirección', 2000);
+      return guarded(who, 'browser.live.input', id, () => sb().live.input(id, { person: who?.person, device: deviceOf(who) }, { ack, pause, release, events, go: to, back: back === true }));
     },
     'browser.live.stop': async ({ sid }, who) => {
       const id = str(sid, 'id', 64);

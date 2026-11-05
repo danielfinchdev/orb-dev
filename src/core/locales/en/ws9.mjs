@@ -45,7 +45,7 @@ export default {
   'conn.why.clone': 'looks like a copy of another Orb',
   'conn.why.skew': 'needs an update',
   'conn.why.vault': 'could not be opened',
-  'conn.why.signedOut': 'sign in again',
+  'conn.why.signedOut': 'not signed in',
   'conn.why.unauthorized': 'allow debugging on the device',
   'conn.why.tailscaleLogin': 'sign in to Tailscale',
   'conn.why.noToken': 'token missing',

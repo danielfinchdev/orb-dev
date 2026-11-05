@@ -100,8 +100,10 @@ systemctl --user daemon-reload
 ADMIN=no
 if [ -n "$SUDO" ]; then
   say "5/6 Una sola vez con sudo: encendido al arrancar el servidor y las acciones de administración aprobadas"
+  # Over SSH there is no terminal for the password: sudo -n never waits for one (it fails instead).
+  if [ -t 0 ]; then ASK=sudo; else ASK='sudo -n'; fi
   if [ -t 0 ] || sudo -n true 2>/dev/null; then
-    if sudo sh "$APP/current/admin-setup.sh" "$(id -un)" "$NEW" | grep -q '^ADMIN=si$'; then ADMIN=si; fi
+    if $ASK sh "$APP/current/admin-setup.sh" "$(id -un)" "$NEW" | grep -q '^ADMIN=si$'; then ADMIN=si; fi
   else
     say "   (sin terminal para la contraseña) Hazlo luego una vez: sudo sh $APP/current/admin-setup.sh $(id -un) $NEW"
   fi

@@ -38,5 +38,9 @@ export default {
   'browserLive.giveBack': 'Give back to the bots',
   'browserLive.keys': 'Keys',
   'browserLive.error': 'Could not open the view: {error}',
+  'browserLive.address': 'Website address',
+  'browserLive.addressHint': 'Type a website, for example mail.example.com',
+  'browserLive.go': 'Go',
+  'browserLive.back': 'Back',
   'browserLive.private': 'Only you see your browser. The pictures are not saved.'
 };

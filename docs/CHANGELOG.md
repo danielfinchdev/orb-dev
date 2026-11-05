@@ -14,7 +14,7 @@ Windows 10/11. Since it isn't signed yet, SmartScreen warns you the first time: 
 
 ## What's new in 3.7.0
 
-**Orb Server.** Orb Núcleo becomes **Orb Server**: a small, separate Linux product that keeps your bots running around
+**Orb Server.** The always-on side of Orb is now **Orb Server**: a small, separate Linux product that keeps your bots running around
 the clock, while projects and coding agents stay in the app on your PC. How it works: `docs/SERVER.md`.
 
 - **Add it with one command:** Magic Link › «Añadir Orb Server» shows one line to paste in the server's terminal. It
@@ -23,7 +23,7 @@ the clock, while projects and coding agents stay in the app on your PC. How it w
   the browser.
 - **Small and on demand:** a ~50 MB download and one process when idle. Claude and Codex are fetched from their official
   packages the first time a bot needs them, and the browser only while a bot is using it.
-- **Upgrading from Orb Núcleo:** the installer makes a backup and moves everything to `~/orb-server` in place; your bots,
+- **Upgrading from 3.6 or earlier:** the installer makes a backup and moves everything to `~/orb-server` in place; your bots,
   linked phones and Orbs stay as they were.
 - **One home per bot:** every bot lives either on your PC or on the Server, with a read-only live copy on the other
   side. «Pasar al PC» / «Pasar al Server» moves it with its memory, routines and reminders. If the Server is off, the PC

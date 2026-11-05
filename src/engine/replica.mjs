@@ -36,6 +36,10 @@ export const QUEUE_STATUS = 'pendiente-hogar';
 const now = () => new Date().toISOString();
 const json = (v, d) => { try { return v == null ? d : JSON.parse(v); } catch { return d; } };
 const err = (message, extra = {}) => Object.assign(new Error(message), { userFacing: true }, extra);
+// A call to a linked Orb that never answers (the link went away while it waited) ends as «offline» instead of holding
+// that Orb's sync forever (a later sync, after linking it again, would wait on it).
+const CALL_MS = Number(process.env.ORB_REPLICA_CALL_MS) || 120_000;
+const patient = (p) => { let t; return Promise.race([p, new Promise((_, reject) => { t = setTimeout(() => reject(Object.assign(new Error('sin respuesta'), { offline: true })), CALL_MS); t.unref?.(); })]).finally(() => clearTimeout(t)); };
 const isOffline = (e) => Boolean(e?.offline || e?.extra?.offline || e?.status === 0 || e?.status === 503 || e?.extra?.status === 503);
 
 export function createReplica({ board, bots, emit = () => {}, log = () => {}, link: getLink = () => null, remote: getRemote = () => null, api = null, product = () => ctx.product ?? process.env.ORB_PRODUCT ?? 'app' }) {
@@ -52,13 +56,13 @@ export function createReplica({ board, bots, emit = () => {}, log = () => {}, li
     for (const p of getLink()?.peers?.() ?? []) {
       if (p.revoked || p.clone || !p.orb) continue;
       out.set(p.orb, { via: 'link', id: p.id, key: p.orb, name: p.name, online: Boolean(p.online), person: p.person ?? null, remotePerson: p.remotePerson ?? null, features: p.remote?.features ?? [], role: p.role ?? null,
-        call: (method, params) => getLink().op(p.id, 'replica', { method, params }) });
+        call: (method, params) => patient(getLink().op(p.id, 'replica', { method, params })) });
     }
     for (const d of getRemote()?.orbPeers?.() ?? []) {
       if (!d.key) continue;
       const have = out.get(d.key);
       if (have && (have.online || !d.online)) continue;
-      out.set(d.key, { ...d, call: (method, params) => getRemote().callOrb(d.id, method, params) });
+      out.set(d.key, { ...d, call: (method, params) => patient(getRemote().callOrb(d.id, method, params)) });
     }
     return [...out.values()];
   }
@@ -126,6 +130,8 @@ export function createReplica({ board, bots, emit = () => {}, log = () => {}, li
 
   // ---- sync with one Orb
   const syncing = new Map(); const timers = new Map(); const lastSync = new Map(); const wasOnline = new Map();
+  // The links unlinked here: a sync of theirs still on its way never wakes their frozen copies (only a new link does).
+  const unlinkedLinks = new Set();
   function schedule(key, delay = 60) {
     if (!key || timers.has(key)) return;
     const t = setTimeout(() => { timers.delete(key); syncKey(key).catch((e) => log(`hogar: sync ${key.slice(0, 8)}: ${e.message}`)); }, delay); t.unref?.();
@@ -133,11 +139,14 @@ export function createReplica({ board, bots, emit = () => {}, log = () => {}, li
   }
   async function syncKey(key) {
     const run = syncing.get(key);
-    if (run) { run.again = true; return run.promise; }
-    const state = { again: false };
+    // A sync of an older link with that Orb (unlinked and linked again meanwhile) may still wait on a call that link
+    // will never answer: the new link gets its own.
+    const now_ = peerByKey(key)?.id ?? null;
+    if (run && (!now_ || run.peer === now_)) { run.again = true; return run.promise; }
+    const state = { again: false, peer: now_ };
     state.promise = (async () => {
       try { do { state.again = false; const p = peerByKey(key); if (p) await syncPeer(p); } while (state.again); }
-      finally { syncing.delete(key); }
+      finally { if (syncing.get(key) === state) syncing.delete(key); }
     })();
     syncing.set(key, state);
     return state.promise;
@@ -148,6 +157,13 @@ export function createReplica({ board, bots, emit = () => {}, log = () => {}, li
     const map = mapFrom(peer);
     for (const e of idx?.bots ?? []) { try { await syncEntry(peer, e, map); } catch (error) { if (isOffline(error)) throw error; log(`hogar: ${e.name ?? e.uid}: ${error.message}`); } }
     for (const e of idx?.groups ?? []) { try { await syncEntry(peer, e, map); } catch (error) { if (isOffline(error)) throw error; log(`hogar: grupo ${e.uid}: ${error.message}`); } }
+    // A copy here of a bot that no longer is in that Orb's list: deleted there (its log says so) → it goes here too.
+    const listed = new Set((idx?.bots ?? []).map((e) => e.uid));
+    for (const row of board.all("SELECT uid FROM bots WHERE home = ? AND uid IS NOT NULL AND COALESCE(home_state, 'active') != 'archived'", peer.key)) {
+      if (listed.has(row.uid)) continue;
+      try { const page = await peer.call('replica.pull', { uid: row.uid, since: cursors.get(peer.key, row.uid).seq }); if (page?.deleted) { dropReplica(row.uid); cursors.set(peer.key, row.uid, page.seq, null); log(`hogar: ${row.uid} se eliminó en ${peer.name ?? peer.key}`); } }
+      catch (error) { if (isOffline(error)) throw error; }
+    }
     await finishMoves(peer);
     await flushQueue(peer);
     // Just back: it is told to pull from here too (it may not see this Orb's changes otherwise).
@@ -182,6 +198,14 @@ export function createReplica({ board, bots, emit = () => {}, log = () => {}, li
     }
     if (e.home === peer.key) {
       if (local && epoch < lepoch) return; // stale: a newer home is known
+      // A copy frozen when that Orb was unlinked («Dejarlos en el Server»): linked again and still its home, the copy is a
+      // live one again (it pulls what changed meanwhile). A copy restored here has a newer epoch and never gets here.
+      if (local?.home_state === 'archived' && epoch <= lepoch && !group && e.state !== 'archived' && !unlinkedLinks.has(peer.id)) {
+        board.run("UPDATE bots SET home_state = 'active' WHERE id = ? AND home_state = 'archived'", local.id);
+        bots?.updated(local.id);
+        log(`hogar: «${local.name}» vuelve a ser la copia de ${peer.name ?? peer.key}`);
+        return pull(peer, e, map);
+      }
       if (local?.home_state === 'archived' && epoch <= lepoch) return; // frozen copy (unlinked)
       return pull(peer, e, map);
     }
@@ -199,6 +223,7 @@ export function createReplica({ board, bots, emit = () => {}, log = () => {}, li
     let since = cur.seq; let files = cur.files; let page; let changed = false; let id = null;
     do {
       page = await peer.call('replica.pull', { uid: e.uid, since });
+      if (peer.id && unlinkedLinks.has(peer.id)) return null; // unlinked while it waited: its copies stay as they were frozen
       if (page?.deleted) { dropReplica(e.uid); cursors.set(peer.key, e.uid, page.seq, null); return null; }
       const r = R.applyPage(board, page, { map });
       if (r.unmapped || r.here) return r;
@@ -661,7 +686,10 @@ export function createReplica({ board, bots, emit = () => {}, log = () => {}, li
       }
       await until(() => theirs.every((b) => R.isHomeHere(board, R.botByUid(board, b.uid))), 15_000);
     }
+    if (peer.id) unlinkedLinks.add(peer.id);
     const archived = archiveFrom(peer.key);
+    // Whatever was on its way with that Orb is over: linked again later, its sync starts afresh.
+    syncing.delete(peer.key); wasOnline.delete(peer.key); lastSync.delete(peer.key);
     if (peer.via === 'link') await getLink()?.disconnect(peer.id).catch(() => {});
     else getRemote()?.revoke(peer.id);
     return { ok: true, mode, report, archived };

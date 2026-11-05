@@ -320,7 +320,7 @@ function PeersCard({ peers, reload }) {
           <div key={p.id} className="flex items-center gap-3 rounded-xl border px-3 py-2" data-testid="link-peer">
             {p.role === 'centro' ? <Server className="text-muted-foreground size-5 shrink-0" /> : <Monitor className="text-muted-foreground size-5 shrink-0" />}
             <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 items-center gap-2"><Dot on={p.online && !p.revoked} /><span className="truncate text-sm font-medium">{p.name}</span><Badge variant="outline">{t(roleKey(p.role))}</Badge>{p.revoked ? <Badge variant="destructive">{t('link.closed')}</Badge> : null}</div>
+              <div className="flex min-w-0 items-center gap-2"><Dot on={p.online && !p.revoked} /><span className="truncate text-sm font-medium">{p.name}</span><Badge variant="outline">{p.server || (server?.linked && server.peer?.id === p.id) ? t('link.role.server') : t(roleKey(p.role))}</Badge>{p.revoked ? <Badge variant="destructive">{t('link.closed')}</Badge> : null}</div>
               <div className="text-muted-foreground truncate text-xs">{[p.url, p.online ? t('link.onNow') : p.lastSeen ? t('link.seen', { when: ago(p.lastSeen) }) : null].filter(Boolean).join(' · ')}</div>
             </div>
             <BubbleTip title={t('link.unlink')}><Button size="icon-sm" variant="danger" aria-label={t('link.unlink')} onClick={() => drop(p)}><Unplug /></Button></BubbleTip>

@@ -262,6 +262,7 @@ export default {
   'link.role.todo': 'Todo',
   'link.role.taller': 'Taller',
   'link.role.centro': 'Centro',
+  'link.role.server': 'Orb Server',
   'link.roleTitle': 'Papel de este Orb',
   'link.roleHint': 'Qué hace este Orb cuando está enlazado con otros. Con un solo Orb, déjalo en «Todo en este Orb».',
   'link.roleChoice.todo': 'Todo en este Orb',

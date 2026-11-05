@@ -166,6 +166,10 @@ On the development PC (Windows, Node 24, test agents, idle after start): the eng
 restarts it, and a hang stops the watchdog heartbeat (`WatchdogSec`), so systemd restarts it too. `ORB_SERVER_MODE=fork`
 brings back the two-process mode. Measure on the real server with `orb-server estado` / `server.status` (memory.rss).
 
+On a real server (Linux Mint 22.3, x64, 8 GB; 3.7.0 upgraded in place from 3.6.0): **97 MB** RSS after 5 minutes
+idle (the service cgroup: 38 MB), no restarts. The browser (Chromium + Xvfb) started on demand for the live view and closed
+by itself about 4 minutes after it was left.
+
 ### Manual checks on Linux (not covered by the automated tests on Windows)
 
 Run these on a real server (or an Ubuntu 24.04 VM) before a release:

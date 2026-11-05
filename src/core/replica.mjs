@@ -167,7 +167,11 @@ export function buildFile(board, uid, rel, offset = 0, { persons = null } = {}) 
 const uniqueName = (board, person, name, uid) => {
   const owner = board.ownerId?.();
   const taken = (n) => board.one(`SELECT id FROM bots WHERE name = ? COLLATE NOCASE AND ${person === owner ? '(person_id = ? OR person_id IS NULL)' : 'person_id = ?'} AND (uid IS NULL OR uid != ?)`, n, person, uid);
-  let n = String(name).slice(0, 40); for (let k = 2; taken(n) && k < 100; k++) n = `${String(name).slice(0, 36)} · ${k}`;
+  let n = String(name).slice(0, 40);
+  if (!taken(n)) return n;
+  // «Asistente · 2» taken here too: «Asistente · 3», never «Asistente · 2 · 2».
+  const base = String(name).replace(/ · \d+$/, '').slice(0, 36);
+  for (let k = 2; taken(n) && k < 100; k++) n = `${base} · ${k}`;
   return n;
 };
 // The bot's row as the home sent it, here (created when it is new). → { id, created, renamed } or null (not mapped).

@@ -22,6 +22,7 @@ import { paths } from '../src/core/home.mjs';
 import { orbIdOf } from '../src/core/backup.mjs';
 import { serverSkew, missingCap, CAPS } from '../src/core/server-pair.mjs';
 import { serverInstallCommand, parsePairTarget, pairTarget, PLACEHOLDER_SHA256 } from '../src/core/server-install.mjs';
+import { SERVER_RELEASE } from '../src/core/server-release.mjs';
 import { createHost, prepareHome } from '../src/server/host.mjs';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
@@ -76,10 +77,13 @@ test('la orden de instalar: descarga oficial, suma comprobada y el código de un
   assert.ok(c.expiresAt - Date.now() <= 4000 + 500);
   assert.equal(c.pair, `${c.code}@http://127.0.0.1:${pPc}#${st.pc}`);
   assert.match(c.command, /^curl -fsSL https:\/\/github\.com\/.+\/install\.sh -o \/tmp\/orb-install\.sh && echo "[0-9a-f]{64}  \/tmp\/orb-install\.sh" \| sha256sum -c && bash \/tmp\/orb-install\.sh --pair '.+'$/);
-  assert.equal(c.ready, false, 'sin la suma de WS1 el hash es de relleno (sha256sum lo rechaza)');
-  assert.equal(c.sha256, PLACEHOLDER_SHA256);
+  // A release build carries the real sum of install.sh (npm run dist:server writes it); a development build a
+  // placeholder that sha256sum refuses.
+  if (SERVER_RELEASE.sha256) { assert.equal(c.ready, true); assert.equal(c.sha256, SERVER_RELEASE.sha256); }
+  else { assert.equal(c.ready, false, 'sin la suma de WS1 el hash es de relleno (sha256sum lo rechaza)'); assert.equal(c.sha256, PLACEHOLDER_SHA256); }
   assert.deepEqual(parsePairTarget(c.pair), { code: c.code, address: `http://127.0.0.1:${pPc}`, fp: st.pc });
-  assert.equal(c.steps.length, 4);
+  assert.equal(c.steps.length, 5);
+  assert.equal(c.steps[3].cmd, `orb-server emparejar '${c.pair}'`);
   // With the release's sum (WS1 writes it; here by the environment).
   const real = serverInstallCommand({ code: 'ABCD-EFGH-JK', address: '100.64.1.2:3131', fp: 'ab12-cd34-ef56', env: { ORB_SERVER_INSTALL_SHA256: 'a'.repeat(64) } });
   assert.equal(real.ready, true); assert.match(real.command, /echo "a{64}  /);

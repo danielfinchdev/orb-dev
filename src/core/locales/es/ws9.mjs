@@ -45,7 +45,7 @@ export default {
   'conn.why.clone': 'parece una copia de otro Orb',
   'conn.why.skew': 'hay que actualizar',
   'conn.why.vault': 'no se pudo abrir',
-  'conn.why.signedOut': 'hay que volver a iniciar sesión',
+  'conn.why.signedOut': 'sin sesión iniciada',
   'conn.why.unauthorized': 'acepta la depuración en el dispositivo',
   'conn.why.tailscaleLogin': 'hay que iniciar sesión en Tailscale',
   'conn.why.noToken': 'falta el token',

@@ -15,5 +15,6 @@ export default {
   'msg.server.step.download': 'Descarga el instalador:',
   'msg.server.step.check': 'Comprueba que es el oficial:',
   'msg.server.step.run': 'Instálalo y enlázalo con esta app:',
+  'msg.server.step.installed': '¿Ya tiene Orb Server? Entonces solo enlázalo:',
   'msg.server.step.fallback': 'Si el servidor no llega a este PC, te enseñará un código: escríbelo aquí con su dirección.'
 };

@@ -237,6 +237,46 @@ test('desenlazar: cancelar no hace nada; traer todos los devuelve al PC antes de
   await until(() => one(tSrv.home, 'SELECT home_state FROM bots WHERE uid = ?', v.uid)?.home_state === 'archived', 'en el Server queda como copia congelada');
 });
 
+test('desenlazar dejándolos en el Server y volver a enlazarlo: las copias vuelven a estar al día', async () => {
+  const t4 = tempHome({ mobile: { name: 'Portátil 4' } }); tmp.push(t4);
+  const pc4 = await engine('pc4', t4);
+  let peer = await link(pc4, srv, portSrv);
+  await homesReady(pc4, key(tSrv)); await homesReady(srv, key(t4));
+  const v = await pc4.call('bots.create', { name: 'Recados', tools: [] });
+  assert.equal((await pc4.call('bots.move', { id: v.id, to: key(tSrv) })).ok, true);
+  const r = await pc4.call('bots.unlink', { peer: peer.id, mode: 'leave' });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.equal((await byUid(pc4, v.uid)).homeState, 'archived');
+  // Meanwhile the Server keeps it running: a message there.
+  const there = await byUid(srv, v.uid);
+  await srv.call('bots.send', { id: there.id, text: 'Apunta comprar pan' });
+  await until(() => linesOf(tSrv, v.uid).length >= 2, 'la respuesta en el Server', 30000);
+  // The same Server linked again: the frozen copy is a live one again and gets what was said.
+  peer = await link(pc4, srv, portSrv);
+  await homesReady(pc4, key(tSrv));
+  await until(async () => (await pc4.call('replica.sync').catch(() => null), (await byUid(pc4, v.uid))?.homeState === 'active'), 'la copia vuelve a estar activa', 30000);
+  await until(async () => (await pc4.call('replica.sync').catch(() => null), linesOf(t4, v.uid).some((l) => /comprar pan/.test(l.body))), 'con lo nuevo', 30000);
+  const copy = await byUid(pc4, v.uid);
+  assert.equal(copy.homeHere, false); assert.equal(copy.readOnly, true);
+  // Deleted on the Server: its copy here goes too.
+  await srv.call('bots.delete', { id: there.id });
+  await until(async () => (await pc4.call('replica.sync').catch(() => null), !(await byUid(pc4, v.uid))), 'la copia se va al eliminarlo en el Server', 30000);
+  // «Eliminar el bot» on the PC for one that runs on the Server: gone there and here at once.
+  const w = await pc4.call('bots.create', { name: 'Para borrar', tools: [], home: key(tSrv) });
+  await until(async () => (await byUid(pc4, w.uid))?.homeHere === false && Boolean(await byUid(srv, w.uid)), 'en el Server', 20000);
+  assert.equal(await pc4.call('bots.delete', { id: (await byUid(pc4, w.uid)).id }), true);
+  assert.equal(await byUid(pc4, w.uid), undefined);
+  await until(async () => !(await byUid(srv, w.uid)), 'y en el Server');
+  // A frozen copy (unlinked) can be deleted here: the bot on the Server stays.
+  const z = await pc4.call('bots.create', { name: 'Se queda', tools: [], home: key(tSrv) });
+  await until(async () => (await byUid(pc4, z.uid))?.homeHere === false && Boolean(await byUid(srv, z.uid)), 'en el Server', 20000);
+  await pc4.call('bots.unlink', { peer: peer.id, mode: 'leave' });
+  assert.equal((await byUid(pc4, z.uid)).homeState, 'archived');
+  assert.equal(await pc4.call('bots.delete', { id: (await byUid(pc4, z.uid)).id }), true);
+  assert.equal(await byUid(pc4, z.uid), undefined);
+  assert.ok(await byUid(srv, z.uid), 'sigue en el Server');
+});
+
 test('desenlazar dejándolos en el Server; restaurar una copia en un Server nuevo', async () => {
   const agenda = await homeOf(pc, 'Agenda');
   assert.equal(agenda.homeHere, false);

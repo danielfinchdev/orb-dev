@@ -666,12 +666,25 @@ export function SettingsDialog() {
   const me = useStore((s) => s.me);
   const server = useStore((s) => s.server);
   const [wanted, part] = resolveSection(open);
+  const openedAt = useStore((s) => s.settingsAt);
   // The part asked for (a link to «Usuarios», a notice about updates…): scrolled into view once the section is drawn.
+  // Some parts appear only after their data loads (Orb Server, Conexiones): it waits for them for a moment, and the
+  // sections above them may still grow, so it follows for a second. Clicking the same part again scrolls again.
   useEffect(() => {
     if (!open || !part) return undefined;
-    const id = requestAnimationFrame(() => document.getElementById(`settings-${part}`)?.scrollIntoView({ block: 'start' }));
-    return () => cancelAnimationFrame(id);
-  }, [open, part]);
+    let frame = 0; const until = performance.now() + 1500;
+    const tick = () => {
+      document.getElementById(`settings-${part}`)?.scrollIntoView({ block: 'start' });
+      if (performance.now() < until) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    // The person scrolls on their own: stop following.
+    const stop = () => cancelAnimationFrame(frame);
+    window.addEventListener('wheel', stop, { once: true, passive: true });
+    window.addEventListener('touchmove', stop, { once: true, passive: true });
+    window.addEventListener('keydown', stop, { once: true });
+    return () => { stop(); window.removeEventListener('wheel', stop); window.removeEventListener('touchmove', stop); window.removeEventListener('keydown', stop); };
+  }, [open, part, openedAt]);
   if (!app) return null;
   // «Mi perfil» (the user menu, with two or more users): this same window, on its own, without the sections.
   const profile = wanted === 'perfil' && showPersonUi(me);

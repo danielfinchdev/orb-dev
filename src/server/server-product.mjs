@@ -25,6 +25,9 @@ export const SERVER_SETS = Object.freeze({
 export function serverCeiling(principal) {
   const ch = principal?.channel;
   if (ch === 'desktop' || ch === 'system' || ch === 'agent') return null; // the engine itself: its own rules
+  // A write a linked Orb of that person sends to the bot's home (src/engine/replica.mjs › forwardHere: «Editar» or «Eliminar»
+  // a bot that runs here, from the PC): the ceiling it carries (an Orb's), without programming. Without one: a centre's.
+  if (ch === 'forward' && principal.ceiling) return principal.ceiling === ORB_SET ? SERVER_SETS.orb : stripProgramming(principal.ceiling);
   if (['phone', 'browser', 'terminal', 'orb'].includes(ch) && principal.rights?.admin) return SERVER_SETS.console;
   if (ch === 'orb') return principal.confirmed !== false ? SERVER_SETS.orb : SERVER_SETS.phone;
   return SERVER_SETS[ch] ?? null;

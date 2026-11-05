@@ -338,14 +338,20 @@ export function createServerBrowser({ language = () => 'es', ownerId = () => 'ow
       if (l.person !== personOf(person) || l.device !== String(device ?? '')) throw Object.assign(new Error(T('sys.browser.liveNotYours')), { code: 'NOT_YOURS' });
       return l;
     },
-    // { ack: seq } | { pause: bool } | { release: true } | { events: [...] }
-    async input(sid, who, { ack, pause, release, events } = {}) {
+    // { ack: seq } | { pause: bool } | { release: true } | { events: [...] } | { go: address } | { back: true }
+    async input(sid, who, { ack, pause, release, events, go = null, back = false } = {}) {
       const l = live.mine(sid, who);
       if (ack != null) l.cast.ack(ack);
       if (pause != null) await l.cast.pause(pause === true);
       if (release === true) l.lastTouch = 0; // «Devolver al bot»
       if (Array.isArray(events)) { if (events.length > 20) throw new Error(T('sys.browser.liveTooMany')); for (const ev of events) await l.cast.input(ev); }
-      return { ok: true, using: Date.now() - l.lastTouch < opt().userLockMs };
+      // The view's address bar (http and https only, as the bots' browser) and «Atrás»: the person is using it.
+      if (go || back) {
+        l.lastTouch = Date.now(); if (l.tab.inst) l.tab.inst.lastUsed = Date.now();
+        if (go) await driver.load(l.tab, normalizeUrl(go, language() === 'en' ? 'en' : 'es'));
+        else await l.tab.page.goBack({ timeout: 15_000 }).catch(() => null);
+      }
+      return { ok: true, using: Date.now() - l.lastTouch < opt().userLockMs, url: l.tab.closed ? '' : l.tab.page.url() };
     },
     async stop(sid, who) { const l = live.mine(sid, who); await l.cast.stop('stopped'); return { ok: true }; },
     using: (person) => userActive(personOf(person)),

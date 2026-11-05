@@ -50,6 +50,10 @@ export function explain(output, host) {
   const val = (k) => String(output).match(new RegExp(`^${k}=(.*)$`, 'm'))?.[1]?.trim() ?? null;
   lines.push(val('SERVICIO') === 'active' ? 'Orb Server está en marcha y arranca solo con el servidor.' : `El servicio no ha arrancado (${val('SERVICIO') ?? '?'}). Míralo con: ssh ${host} journalctl --user -u orb-server -n 50`);
   const by = String(output).match(/sudo sh (\S+admin-setup\.sh) (\S+) (\S+)/);
+  // Step 6 of install.sh made a code to link it (orb-server enlazar --no-esperar): say it, it is not shown otherwise.
+  const plain = String(output).replace(/\x1b\[[0-9;]*m/g, '');
+  const code = plain.match(/Código: (\S+)/)?.[1]; const address = plain.match(/Dirección: (\S+)/)?.[1];
+  if (code) lines.push(`Para enlazarlo con tu Orb: Magic Link › «Enlazar con otro Orb», código ${code}${address ? ` y dirección ${address}` : ''} (vale unos minutos). O en «Añadir Orb Server» › «Hacerlo a mano», la orden «orb-server emparejar …» por SSH: ssh ${host} '<esa orden>'.`);
   if (val('ADMIN') !== 'si') lines.push(by ? `Falta un paso con sudo, una sola vez (encendido sin tu sesión y las acciones de administración). En el servidor escribe:\n  sudo sh ${by[1]} ${by[2]} ${by[3]}` : 'Sin acciones de administración (instalado sin sudo).');
   return lines.join('\n');
 }

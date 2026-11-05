@@ -5,7 +5,7 @@
 // a slow connection gets fewer pictures, never a queue. Nothing is stored. Placed by the Bots / Magic Link views (WS4):
 // <BrowserLive onClose={…} url={optional address} />.
 import { useEffect, useRef, useState } from 'react';
-import { X, Send, Hand, RotateCw, CornerDownLeft, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Delete } from 'lucide-react';
+import { X, Send, Hand, RotateCw, CornerDownLeft, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Delete, Globe } from 'lucide-react';
 import { Button } from './ui/button.jsx';
 import { Input } from './ui/basic.jsx';
 import { call as storeCall, bridge } from '@/lib/store.js';
@@ -24,6 +24,9 @@ export function BrowserLive({ onClose, url = null, className, call = storeCall, 
   const [using, setUsing] = useState(false);
   const [text, setText] = useState('');
   const [attempt, setAttempt] = useState(0);
+  // The address bar: where the page is (as the Server last said) and what the person types to go somewhere else.
+  const [address, setAddress] = useState(url ?? '');
+  const [going, setGoing] = useState(false);
   const img = useRef(null); const box = useRef(null); const sidRef = useRef(null); const down = useRef(null);
 
   // Open the view (again with «Volver a abrir»), at the width of this screen.
@@ -32,7 +35,7 @@ export function BrowserLive({ onClose, url = null, className, call = storeCall, 
     setState('connecting'); setError(''); setReason('');
     const width = Math.round(box.current?.clientWidth || window.innerWidth || 390);
     call('browser.live.start', { width, dpr: window.devicePixelRatio || 1, ...(url ? { url } : {}) })
-      .then((r) => { if (!alive) { call('browser.live.stop', { sid: r.sid }).catch(() => {}); return; } sidRef.current = r.sid; setSid(r.sid); setState('live'); })
+      .then((r) => { if (!alive) { call('browser.live.stop', { sid: r.sid }).catch(() => {}); return; } sidRef.current = r.sid; setSid(r.sid); setState('live'); if (r.url && r.url !== 'about:blank') setAddress(r.url); })
       .catch((e) => { if (alive) { setError(String(e?.message ?? e)); setState('error'); } });
     return () => { alive = false; const s = sidRef.current; sidRef.current = null; if (s) call('browser.live.stop', { sid: s }).catch(() => {}); };
   }, [attempt]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -55,8 +58,14 @@ export function BrowserLive({ onClose, url = null, className, call = storeCall, 
 
   const send = async (payload) => {
     const s = sidRef.current; if (!s) return;
-    try { const r = await call('browser.live.input', { sid: s, ...payload }); if (r && typeof r.using === 'boolean') setUsing(r.using); } catch (e) { setError(String(e?.message ?? e)); }
+    try {
+      const r = await call('browser.live.input', { sid: s, ...payload });
+      if (r && typeof r.using === 'boolean') setUsing(r.using);
+      if (r?.url && r.url !== 'about:blank' && (payload.go || payload.back || payload.events)) setAddress(r.url);
+      setError('');
+    } catch (e) { setError(String(e?.message ?? e)); }
   };
+  const go = async (e) => { e?.preventDefault?.(); const to = address.trim(); if (!to || going) return; setGoing(true); try { await send({ go: to }); } finally { setGoing(false); } };
   const at = (e) => { const r = img.current.getBoundingClientRect(); return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)), h: r.height }; };
   const onDown = (e) => { if (!img.current) return; down.current = { ...at(e), t: Date.now() }; };
   const onUp = (e) => {
@@ -78,6 +87,16 @@ export function BrowserLive({ onClose, url = null, className, call = storeCall, 
         {using ? <Button size="xs" variant="outline" onClick={() => send({ release: true }).then(() => setUsing(false))} data-testid="browser-live-release"><Hand />{t('browserLive.giveBack')}</Button> : null}
         <Button size="icon-xs" variant="ghost" onClick={stop} aria-label={t('browserLive.close')} data-testid="browser-live-close"><X /></Button>
       </div>
+      <form className="flex items-center gap-1.5 px-2" onSubmit={go} data-testid="browser-live-address">
+        <Button size="icon-sm" variant="ghost" type="button" disabled={!sid} onClick={() => send({ back: true })} aria-label={t('browserLive.back')} data-testid="browser-live-back"><ArrowLeft /></Button>
+        <div className="relative min-w-0 flex-1">
+          <Globe className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
+          <Input value={address} onChange={(e) => setAddress(e.target.value)} onFocus={(e) => e.target.select()} placeholder={t('browserLive.addressHint')} aria-label={t('browserLive.address')}
+            className="pl-8" inputMode="url" autoCapitalize="off" autoCorrect="off" spellCheck={false} disabled={!sid} data-testid="browser-live-url" />
+        </div>
+        <Button size="sm" variant="outline" type="submit" disabled={!sid || !address.trim() || going} data-testid="browser-live-go">{t('browserLive.go')}</Button>
+      </form>
+      {error && state === 'live' ? <div className="px-2 text-xs text-destructive" role="alert" data-testid="browser-live-error">{error}</div> : null}
       {using ? <div className="px-2 text-xs text-muted-foreground">{t('browserLive.using')}</div> : null}
       <div ref={box} className="relative min-h-0 flex-1 overflow-hidden bg-black/80">
         <img ref={img} alt="" draggable={false} className={cn('block w-full select-none touch-none', state !== 'live' && 'opacity-30')}

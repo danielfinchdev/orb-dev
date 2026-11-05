@@ -179,7 +179,9 @@ test('install.sh lleva las sumas de los paquetes y de Node, y las comprueba ante
   assert.ok(out.indexOf('NODE_SUM') < out.indexOf('migrar'), 'Node comprobado antes de tocar nada');
   for (const s of ['--pair', '--no-sudo', 'orb-server" migrar', 'enable --now orb-server.service', 'disable orb-nucleo.service', 'admin-setup.sh', 'emparejar']) assert.ok(out.includes(s), s);
   // one sudo, for admin-setup.sh only
-  assert.equal(out.split('\n').filter((l) => /\bsudo sh\b/.test(l) && !/say /.test(l)).length, 1);
+  assert.equal(out.split('\n').filter((l) => /(\bsudo|\$ASK) sh\b/.test(l) && !/say /.test(l)).length, 1);
+  // over SSH (no terminal) it never waits for a password
+  assert.match(out, /ASK='sudo -n'/);
   assert.throws(() => renderInstall(tmpl, { version: '3.7.1; rm -rf ~', packages: sums }), /versión/);
   assert.throws(() => renderInstall('@@OTRA@@', { version: '3.7.1', packages: sums }), /falta OTRA/);
   assert.throws(() => renderInstall(tmpl, { version: '3.7.1', packages: { x64: { sha256: "a'; rm", node: '' } } }), /no válido/);
