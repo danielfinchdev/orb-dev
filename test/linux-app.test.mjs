@@ -75,9 +75,9 @@ test('el empaquetado para Linux y su publicación con las de Windows', () => {
   assert.equal(linux.desktop.entry.StartupWMClass, pkg.productName, 'el dock agrupa la ventana con su icono');
   assert.equal(pkg.desktopName, `${linux.executableName}.desktop`);
   assert.ok(pkg.homepage && /<.+@.+>/.test(linux.maintainer), 'el .deb necesita página y responsable');
+  // 3.7: the release publishes only the Windows installer (Linux app builds stay in the config, not published).
   const release = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'release.yml'), 'utf8');
-  assert.match(release, /electron-builder --linux AppImage deb --x64 --arm64 --publish never/);
-  for (const f of ['dist/Orb-*.AppImage', 'dist/Orb-*.deb', 'dist/latest-linux*.yml', 'dist/Orb-*.exe', 'dist/latest.yml']) assert.ok(release.includes(f), f);
+  for (const f of ['dist/Orb-*.exe', 'dist/latest.yml']) assert.ok(release.includes(f), f);
   const pruebas = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'pruebas.yml'), 'utf8');
   assert.match(pruebas, /windows-latest, ubuntu-latest/);
   assert.match(pruebas, /npm run test:app/);

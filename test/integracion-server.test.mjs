@@ -114,7 +114,7 @@ test('la suma real de install.sh se escribe al empaquetar y la de relleno nunca 
     if (!cmd.ready) assert.match(cmd.command, new RegExp(PLACEHOLDER_SHA256));
     // The release workflow checks it before building the app.
     const wf = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'release.yml'), 'utf8');
-    assert.equal((wf.match(/release\.mjs check-server-release/g) ?? []).length, 2, 'Windows y Linux');
+    assert.equal((wf.match(/release\.mjs check-server-release/g) ?? []).length, 1, 'Windows');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

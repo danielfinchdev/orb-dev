@@ -1,12 +1,8 @@
-# The desktop downloads, built and checked on a real machine of each system and published together as a GitHub release:
-#   Orb-<versión>-instalador.exe      the whole app: installs for the user and updates itself (recommended)
-#   Orb-<versión>-light-portable.exe  Orb Light: the essentials, nothing to install (it only tells of new versions)
-#   Orb-<versión>-linux-<arch>.AppImage  3.7: Linux, nothing to install, updates itself (latest-linux*.yml)
-#   Orb-<versión>-linux-<arch>.deb       3.7: Linux (Debian, Ubuntu…), installed with the system; it tells of new versions
-# Publishing a version = changing "version" in package.json on main: when that version has no release yet, this builds it,
-# tests it (also the packaged app on Windows and Linux) and publishes it as release v<version>, creating the tag. From the Actions
-# tab ("Run workflow") it does the same; a version already published is only built and checked (files kept in the run).
-name: Versión para Windows y Linux
+# The Windows download, published as a GitHub release when "version" in package.json changes on main:
+#   Orb-<versión>-instalador.exe   installs for the user and updates itself (latest.yml)
+# Tests run on pull requests (pruebas.yml), not here. The Android APK, Orb Server (Linux) and the terminal client are built
+# and signed on the owner's PC and added to the same release (Orb Server's manifest is signed with the offline key).
+name: Versión para Windows
 
 on:
   push:
@@ -37,53 +33,10 @@ jobs:
           echo "version=$V" >> "$GITHUB_OUTPUT"
           if gh release view "v$V" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "new=false" >> "$GITHUB_OUTPUT"; else echo "new=true" >> "$GITHUB_OUTPUT"; fi
 
-  pruebas:
-    needs: version
-    if: needs.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run check
-      - run: npm test
-        timeout-minutes: 20
-
-  # The whole desktop app with Electron, on Windows and on Linux (Linux with a virtual screen).
-  app:
-    needs: version
-    if: needs.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y xvfb
-      - name: La app entera con Electron (Linux)
-        if: runner.os == 'Linux'
-        run: xvfb-run -a -s "-screen 0 1920x1080x24" npm run test:app
-      - name: La app entera con Electron (Windows)
-        if: runner.os == 'Windows'
-        run: npm run test:app
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: capturas-pruebas-${{ matrix.os }}
-          path: test-results/
 
   windows:
-    needs: [version, pruebas, app]
+    needs: version
+    if: needs.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -94,55 +47,18 @@ jobs:
       - run: npm ci
       - name: La app nunca sale con la suma de install.sh de relleno
         run: node scripts/release.mjs check-server-release
-      - name: Construir el instalador y Orb Light (portable)
-        run: npx vite build && npx electron-builder --win nsis portable --x64 --publish never
-      - name: Probar la app empaquetada en Windows
-        run: node test/smoke.e2e.mjs
-        env:
-          ORB_E2E_EXE: dist/win-unpacked/Orb.exe
+      - name: Construir el instalador
+        run: npx vite build && npx electron-builder --win nsis --x64 --publish never
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: orb-dev-windows
           path: |
             dist/*.exe
             dist/*.blockmap
             dist/latest.yml
-            test-results/
 
-  # 3.7: the Linux app (AppImage and .deb, x64 and arm64), built on Ubuntu; the x64 one is opened and checked like on Windows.
-  linux:
-    needs: [version, pruebas]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: La app nunca sale con la suma de install.sh de relleno
-        run: node scripts/release.mjs check-server-release
-      - name: Construir la AppImage y el .deb
-        run: npx vite build && npx electron-builder --linux AppImage deb --x64 --arm64 --publish never
-      - run: sudo apt-get update && sudo apt-get install -y xvfb
-      - name: Probar la app empaquetada en Linux
-        run: xvfb-run -a node test/smoke.e2e.mjs
-        env:
-          ORB_E2E_EXE: dist/linux-unpacked/orb-dev
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: orb-dev-linux
-          path: |
-            dist/*.AppImage
-            dist/*.deb
-            dist/latest-linux*.yml
-            test-results/
-
-  # One release with every file, once both systems are built and checked.
   publicar:
-    needs: [version, windows, linux]
+    needs: [version, windows]
     if: needs.version.outputs.new == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -163,6 +79,3 @@ jobs:
             dist/Orb-*.exe
             dist/Orb-*.blockmap
             dist/latest.yml
-            dist/Orb-*.AppImage
-            dist/Orb-*.deb
-            dist/latest-linux*.yml
