@@ -1,7 +1,7 @@
 {
   "name": "orb-dev",
   "productName": "Orb",
-  "version": "3.6.0",
+  "version": "3.7.0",
   "description": "Orb·e: tu director de bolsillo. Planifica tu proyecto por fases y escribe un encargo claro para cada agente (Claude Code, Codex, Cursor, Gemini, OpenCode, Qwen, Copilot), sin gastar tokens de más. Te entrega resultados comprobados.",
   "private": true,
   "type": "module",
@@ -176,12 +176,26 @@
         }
       },
       "target": [
-        { "target": "AppImage", "arch": ["x64", "arm64"] },
-        { "target": "deb", "arch": ["x64", "arm64"] }
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ]
     },
     "deb": {
-      "recommends": ["gnome-keyring | kwalletmanager"]
+      "recommends": [
+        "gnome-keyring | kwalletmanager"
+      ]
     }
   },
   "allowScripts": {
