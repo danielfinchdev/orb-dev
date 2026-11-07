@@ -10,8 +10,6 @@ import { tr } from './context.mjs';
 import { redactSecrets, oneLine } from './safety.mjs';
 import { protectedHit } from './guard.mjs';
 
-import { HELPER_PATH, UNITS_ALLOW, parseUnits, checkVerb } from '../server/admin-verbs.mjs';
-
 const IS_LINUX = process.platform === 'linux';
 const NAME = /^[A-Za-z0-9][\w.@-]{0,99}$/;
 export const SERVER_ACTIONS = ['docker_restart', 'docker_update', 'systemd_restart', 'clean_journal', 'clean_apt'];
@@ -88,38 +86,13 @@ export function checkServerAction(a) {
   return p;
 }
 
-// 3.7 (Orb Server): the root-owned helper the installer puts in place (src/server/admin-helper.sh) with its sudoers
-// drop-in. Usable when it is there and `sudo -n -l` says this user may run it (an install with --no-sudo has neither).
-// Looked at once a minute at most. → { helper, sudo, units }
-let adminCache = { at: 0, value: null };
-export async function adminState({ fresh = false } = {}) {
-  if (!IS_LINUX) return { helper: false, sudo: false, units: [] };
-  if (!fresh && adminCache.value && Date.now() - adminCache.at < 60_000) return adminCache.value;
-  let units = []; try { units = parseUnits(fs.readFileSync(UNITS_ALLOW, 'utf8')); } catch { /* none allowed */ }
-  const helper = (() => { try { const st = fs.statSync(HELPER_PATH); return st.isFile() && st.uid === 0 && (st.mode & 0o022) === 0; } catch { return false; } })();
-  const sudo = helper ? (await run('sudo', ['-n', '-l', HELPER_PATH], { timeoutMs: 10_000 })).ok : false;
-  adminCache = { at: Date.now(), value: { helper, sudo, units } };
-  return adminCache.value;
-}
-// Runs one of the helper's actions (after the card): checked here first, and again by the helper itself.
-export async function helperRun(verb, args = [], { timeoutMs = 120_000 } = {}) {
-  const st = await adminState();
-  const c = checkVerb([verb, ...args], { units: st.units });
-  if (!c.ok) return { ok: false, out: c.error };
-  return run('sudo', ['-n', HELPER_PATH, c.verb, ...c.args], { timeoutMs });
-}
-
 // Runs an approved action (engine only). → { ok, summary, sudo? }
 export async function runServerAction(a) {
   const p = checkServerAction(a);
   if (!IS_LINUX) return { ok: false, summary: tr('sys.srv.linuxOnly') };
   const done = (r, what) => ({ ok: r.ok, summary: r.ok ? tr('sys.srv.done', { what }) : `${tr('sys.srv.failed', { what })} ${oneLine(redactSecrets(r.out), 600)}` });
-  // 3.7: with the admin helper (Orb Server installed with sudo), the system's containers, units, journal and apt cache.
-  const admin = await adminState();
-  const viaHelper = admin.helper && admin.sudo;
-  if (p.action === 'docker_restart') return viaHelper ? done(await helperRun('docker-restart', [p.target]), `docker restart ${p.target}`) : done(await run('docker', ['restart', p.target], { timeoutMs: 120_000 }), `docker restart ${p.target}`);
+  if (p.action === 'docker_restart') return done(await run('docker', ['restart', p.target], { timeoutMs: 120_000 }), `docker restart ${p.target}`);
   if (p.action === 'systemd_restart') {
-    if (viaHelper && admin.units.includes(p.target)) return done(await helperRun('systemctl-restart', [p.target]), `systemctl restart ${p.target}`);
     return done(await run('systemctl', ['--user', 'restart', p.target], { timeoutMs: 120_000 }), `systemctl --user restart ${p.target}`);
   }
   if (p.action === 'docker_update') {
@@ -129,11 +102,9 @@ export async function runServerAction(a) {
     return done(await run('docker', ['compose', 'up', '-d'], { cwd: p.target, timeoutMs: 10 * 60_000 }), `docker compose pull + up -d (${p.target})`);
   }
   if (p.action === 'clean_journal') {
-    if (viaHelper) return done(await helperRun('journal-vacuum', ['500M']), 'journalctl --vacuum-size=500M');
     return done(await run('journalctl', ['--user', '--vacuum-time=14d'], { timeoutMs: 120_000 }), 'journalctl --user --vacuum-time=14d');
   }
   if (p.action === 'clean_apt') {
-    if (viaHelper) return done(await helperRun('apt-clean'), 'apt-get clean');
     // The package cache belongs to root: without sudo Orb only says how to do it.
     try { fs.accessSync('/var/cache/apt/archives', fs.constants.W_OK); } catch { return { ok: false, sudo: true, summary: tr('sys.srv.needsSudo', { command: 'sudo apt-get clean' }) }; }
     return done(await run('apt-get', ['clean'], { timeoutMs: 120_000 }), 'apt-get clean');

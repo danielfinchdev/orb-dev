@@ -53,7 +53,6 @@ export default {
   'link.role.todo': 'All',
   'link.role.taller': 'Workshop',
   'link.role.centro': 'Hub',
-  'link.role.server': 'Orb Server',
   'link.roleTitle': 'Role of this Orb',
   'link.roleHint': 'What this Orb does when it is linked with others. With a single Orb, leave it on «Everything on this Orb».',
   'link.roleChoice.todo': 'Everything on this Orb',

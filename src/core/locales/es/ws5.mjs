@@ -22,16 +22,5 @@ export default {
   'data.move.notMove': 'Esa copia no es para mover un Orb: usa «Restaurar».',
   'data.move.movedAway': 'Este Orb se ha movido a otro equipo y ya no se usa aquí. En Ajustes › Datos puedes deshacerlo o mantener los dos.',
 
-  'data.server.backupDone': 'Copia hecha: {file} ({files} archivos).',
-  'data.server.noBackups': 'Todavía no hay copias.',
-  'data.server.backupsIn': 'Copias en {folder}',
-  'data.server.restoreReady': 'Copia comprobada ({files} archivos). Se pone en marcha al arrancar Orb otra vez.',
-  'data.server.restoreDone': 'Copia restaurada. Lo que había antes está en {aside}.',
-  'data.server.restartService': 'Reinicia el servicio para usarla: systemctl --user restart orb-server',
-  'data.server.recoveryCode': 'Tu código de recuperación (apúntalo y guárdalo fuera de este equipo; no se vuelve a mostrar):',
-  'data.server.recoverySet': 'Código de recuperación guardado. Las copias nuevas se abren con él en otro equipo.',
-  'data.server.moveDone': 'Copia para mover hecha: {file}. Llévala al equipo nuevo con su código.',
-  'data.server.moveImported': 'Orb importado en {home}. Este es ya el Orb que manda; el de antes deja de funcionar.',
-  'data.server.needCode': 'Falta el código: --clave <código> (o la variable ORB_BACKUP_CODE).',
   'data.server.notEmpty': 'Esa carpeta ya tiene un Orb. Elige una carpeta nueva.'
 };

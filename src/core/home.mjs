@@ -23,10 +23,8 @@ export const hostsBots = (role) => role !== 'taller'; // «centro» and «todo»
 export const doesDev = (role) => role !== 'centro'; // «taller» and «todo» program and build
 
 // 3.5: what nobody touches by default: the usual password managers and secret stores (the user edits the list).
-// 3.7 (WS6): and the usual data folders of a Vaultwarden / Bitwarden self-host (vw-data, bwdata) and Orb Server's own
-// sealed vault sign-ins (~/orb-server/data/vault*): only the vault's official API, through Orb Server, reaches a vault.
-export const VAULT_PROTECTED = Object.freeze(['vaultwarden', 'bitwarden', 'vw-data', 'bwdata', 'orb-server/data/vault']);
-export const DEFAULT_PROTECTED = Object.freeze(['vaultwarden', 'bitwarden', 'keepass', 'keepassxc', '.kdbx', '1password', 'lastpass', '.password-store', '.gnupg', '.ssh/id_', 'vw-data', 'bwdata', 'orb-server/data/vault']);
+// 3.7: and the usual data folders of a Vaultwarden / Bitwarden self-host (vw-data, bwdata).
+export const DEFAULT_PROTECTED = Object.freeze(['vaultwarden', 'bitwarden', 'keepass', 'keepassxc', '.kdbx', '1password', 'lastpass', '.password-store', '.gnupg', '.ssh/id_', 'vw-data', 'bwdata']);
 
 export const DEFAULT_CONFIG = Object.freeze({
   version: 5,
@@ -128,47 +126,13 @@ export const isReservedInCategory = (category, name) => /^\./.test(String(name))
 // Names a project can never take (they would read as one of Orb's own folders).
 export const isReservedName = (name) => isConfigName(name) || lower(name) === ADB_DIR;
 
-// 3.7 (Orb Server): the server's own folder (~/orb-server, ORB_HOME) has another layout, made for a machine without
-// projects: app/<version> + current (the program), bots/, browser/<person>/, data/ (what .orb is on a PC: database,
-// secret, links, copies), engines/ (Claude, Codex, Chromium, downloaded on demand), logs/ (the runs and the bitácora).
-//   paths(home)                 the layout found on disk (a folder with data/datos and no .orb is a server's)
-//   paths(home, { layout })     'pc' or 'server' on purpose (createHome of a new server folder)
-export const SERVER_DIRS = Object.freeze({ app: 'app', bots: BOTS_DIR, browser: 'browser', data: 'data', engines: 'engines', logs: 'logs' });
-const layouts = new Map(); // home -> 'pc' | 'server', looked at once per folder (forgetLayout after a migration)
-export function layoutOf(home) {
-  const key = path.resolve(String(home ?? ''));
-  if (layouts.has(key)) return layouts.get(key);
-  const server = !fs.existsSync(path.join(key, INTERNAL_DIR)) && fs.existsSync(path.join(key, SERVER_DIRS.data, 'datos'));
-  const found = server ? 'server' : 'pc';
-  if (server || fs.existsSync(path.join(key, INTERNAL_DIR))) layouts.set(key, found); // a folder not made yet is looked at again
-  return found;
-}
-export const forgetLayout = (home) => { if (home) layouts.delete(path.resolve(home)); else layouts.clear(); };
-export const isServerLayout = (home) => layoutOf(home) === 'server';
-
-export function paths(home, { layout = null } = {}) {
-  if ((layout ?? layoutOf(home)) === 'server') {
-    const internal = path.join(home, SERVER_DIRS.data);
-    const data = path.join(internal, 'datos');
-    const runs = path.join(home, SERVER_DIRS.logs);
-    const logs = path.join(runs, LOGS_DIR);
-    const copies = path.join(internal, 'copias');
-    return {
-      layout: 'server', home, internal, config: path.join(home, CONFIG_FILE), data, db: path.join(data, 'orb.db'), key: path.join(data, 'clave.bin'),
-      logs, generalLog: path.join(logs, 'GENERAL.md'), projectLogs: path.join(logs, 'proyectos'),
-      mcp: path.join(internal, MCP_DIR), bots: path.join(home, SERVER_DIRS.bots), adb: path.join(home, SERVER_DIRS.engines, ADB_DIR),
-      // No projects on a server: no categories are made (the API that would use them is not there either).
-      projects: home, categories: {},
-      runs, copies, worktrees: path.join(copies, 'aisladas'), checkpoints: path.join(copies, 'fotos'),
-      app: path.join(home, SERVER_DIRS.app), browser: path.join(home, SERVER_DIRS.browser), engines: path.join(home, SERVER_DIRS.engines)
-    };
-  }
+export function paths(home) {
   const internal = path.join(home, INTERNAL_DIR);
   const data = path.join(internal, 'datos');
   const logs = path.join(home, LOGS_DIR);
   const copies = path.join(internal, 'copias');
   return {
-    layout: 'pc', home, internal, config: path.join(home, CONFIG_FILE), data, db: path.join(data, 'orb.db'), key: path.join(data, 'clave.bin'),
+    home, internal, config: path.join(home, CONFIG_FILE), data, db: path.join(data, 'orb.db'), key: path.join(data, 'clave.bin'),
     logs, generalLog: path.join(logs, 'GENERAL.md'), projectLogs: path.join(logs, 'proyectos'),
     mcp: path.join(home, MCP_DIR), bots: path.join(home, BOTS_DIR), adb: path.join(home, 'android', ADB_DIR),
     projects: home, categories: Object.fromEntries(CATEGORIES.map((c) => [c, path.join(home, c)])),
@@ -209,21 +173,17 @@ export function homeFor(base) {
 }
 
 // First run: <base>\Orb with its folders, config, secret and the general log. An existing home is reused as is.
-export function createHome(base, { assistantName = PRODUCT.assistant, userName = '', language = 'es', layout = 'pc' } = {}) {
+export function createHome(base, { assistantName = PRODUCT.assistant, userName = '', language = 'es' } = {}) {
   const T = (key, vars) => translate(language, key, vars);
   if (!base || !path.isAbsolute(base)) throw new Error(T('msg.home.absolute'));
   let stat; try { stat = fs.statSync(base); } catch { throw new Error(T('msg.home.noFolder', { base })); }
   if (!stat.isDirectory()) throw new Error(T('msg.home.notFolder', { base }));
   // A drive root is fine as a base: the home is always a subfolder of it.
-  // 3.7: a server's folder is the one given (~/orb-server), never <base>/Orb.
-  const home = layout === 'server' ? base : homeFor(base);
+  const home = homeFor(base);
   if (isHome(home)) { ensureLayout(home); return { home, created: false }; }
-  // (a server's folder may already hold the program the installer unpacked in app/, and the rest of its own folders)
-  const own = (n) => layout === 'server' && Object.values(SERVER_DIRS).includes(n);
-  if (fs.existsSync(home) && fs.readdirSync(home).filter((n) => !own(n)).length) throw new Error(T('msg.home.notEmpty', { home }));
-  const p = paths(home, { layout });
-  for (const dir of [p.data, p.runs, p.worktrees, p.checkpoints, ...(layout === 'server' ? [p.app, p.bots, p.browser, p.engines] : [])]) fs.mkdirSync(dir, { recursive: true });
-  forgetLayout(home);
+  if (fs.existsSync(home) && fs.readdirSync(home).length) throw new Error(T('msg.home.notEmpty', { home }));
+  const p = paths(home);
+  for (const dir of [p.data, p.runs, p.worktrees, p.checkpoints]) fs.mkdirSync(dir, { recursive: true });
   const config = merge(DEFAULT_CONFIG, { assistantName: String(assistantName || PRODUCT.assistant).trim().slice(0, 40) || PRODUCT.assistant, userName: String(userName ?? '').trim().slice(0, 40), language: language === 'en' ? 'en' : 'es' });
   writeJson(p.config, config);
   fs.writeFileSync(p.key, crypto.randomBytes(32), { mode: 0o600 });

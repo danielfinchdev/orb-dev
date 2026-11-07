@@ -7,7 +7,7 @@ import path from 'node:path';
 import { tempHome, ROOT } from './helpers.mjs';
 import { Board } from '../src/core/board.mjs';
 import { createPerson, setPin, verifyPin } from '../src/core/persons.mjs';
-import { POLICY, PHONE_SET, ORB_SET, CONSOLE_SET, policyOf, SERVER_METHODS } from '../src/core/policy.mjs';
+import { POLICY, PHONE_SET, ORB_SET, CONSOLE_SET, policyOf } from '../src/core/policy.mjs';
 import { authorize, principalOf, audienceOf, hasAudienceRule, rightOn, can, must, scopeSql, ownerOf, AuthzError, reaches, shapeFor } from '../src/core/authz.mjs';
 import { allowedFor } from '../src/engine/remote.mjs';
 import { buildApi } from '../src/engine/api.mjs';
@@ -27,8 +27,7 @@ test('cada método de la API tiene su regla en POLICY, y ninguna regla sobra', (
   assert.ok(names.length > 150);
   const missing = names.filter((m) => !Object.hasOwn(POLICY, m));
   assert.deepEqual(missing, [], `sin regla: ${missing.join(', ')}`);
-  // 3.7: Orb Server's own methods live in its API (src/server/api-server.mjs; test/server-product.test.mjs checks them).
-  const stale = Object.keys(POLICY).filter((k) => !k.endsWith('.*') && !names.includes(k) && !SERVER_METHODS.includes(k));
+  const stale = Object.keys(POLICY).filter((k) => !k.endsWith('.*') && !names.includes(k));
   assert.deepEqual(stale, [], `reglas de métodos que no existen: ${stale.join(', ')}`);
   assert.ok(policyOf('taller.tasks.list') && policyOf('centro.bots.list'), 'taller.* y centro.*');
   for (const [m, r] of Object.entries(POLICY)) {
@@ -45,7 +44,7 @@ test('un método sin regla se niega; un evento sin regla va solo al dueño', () 
 
 test('cada evento que el motor emite tiene su regla de público', () => {
   const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)]));
-  const files = ['engine', 'core', 'agents', 'server', 'mcp'].flatMap((d) => walk(path.join(ROOT, 'src', d))).filter((f) => f.endsWith('.mjs'));
+  const files = ['engine', 'core', 'agents', 'mcp'].flatMap((d) => walk(path.join(ROOT, 'src', d))).filter((f) => f.endsWith('.mjs'));
   const found = new Set();
   for (const f of files) for (const m of fs.readFileSync(f, 'utf8').matchAll(/emit\??\.?\(?\s*(['`])([a-zA-Z][\w:.]*)(\$\{[^}]+\})?\1/g)) found.add(m[3] ? `${m[2]}x` : m[2]);
   assert.ok(found.size > 15, `eventos encontrados: ${[...found].join(', ')}`);

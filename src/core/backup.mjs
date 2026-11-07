@@ -1,6 +1,5 @@
 // 3.6: encrypted backups of an Orb (.orbbak), their check, their restore and their retention. No engine imports: the
-// engine (backup.* calls and the 03:00 copy), Orb Server (orb-server copia …, the copy before an update) and the tests use
-// it directly.
+// engine (backup.* calls and the 03:00 copy) and the tests use it directly.
 //
 // File format (.orbbak, format 1):
 //   'ORBBAK1\n' · u32 header length · header JSON (plain: what it is, never what it holds)
@@ -123,23 +122,9 @@ export const walkFiles = (dir, skip = () => false) => {
 const NO_COPY = new Set(['node_modules', '.git', '.venv', '__pycache__', 'dist', 'build', '.next', '.cache']);
 const DATA_FILES = ['enlaces.json', 'clave.bin', 'copia-clave.json', 'orb-id.json'];
 const rel = (home, file) => path.relative(home, file).split(path.sep).join('/');
-// 3.7: the names inside a backup are always the PC's (.orb/…, bitacora/…), whatever the folder's layout (Orb Server keeps
-// .orb in data/ and the bitácora in logs/bitacora): a backup made on one restores on the other.
-const under = (root, f) => { const r = path.relative(root, f); return r && !r.startsWith('..') && !path.isAbsolute(r) ? r.split(path.sep).join('/') : null; };
-export function archiveName(home, file) {
-  const p = paths(home);
-  if (p.layout === 'server') {
-    const i = under(p.internal, file); if (i) return `${INTERNAL_DIR}/${i}`;
-    const l = under(p.logs, file); if (l) return `${LOGS_DIR}/${l}`;
-  }
-  return rel(home, file);
-}
-export function homePath(home, name) {
-  const p = paths(home); const s = String(name).split('/');
-  if (p.layout === 'server' && s[0] === INTERNAL_DIR) return path.join(p.internal, ...s.slice(1));
-  if (p.layout === 'server' && s[0] === LOGS_DIR) return path.join(p.logs, ...s.slice(1));
-  return path.join(home, ...s);
-}
+// The names inside a backup are relative to the Orb folder (.orb/…, bitacora/…).
+export const archiveName = (home, file) => rel(home, file);
+export const homePath = (home, name) => path.join(home, ...String(name).split('/'));
 const insideOf = (root, p) => { const r = path.relative(root, p); return Boolean(r) && !r.startsWith('..') && !path.isAbsolute(r); };
 
 // Copies what goes in to `stage` (a mini Orb folder) and returns the manifest.

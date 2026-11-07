@@ -29,7 +29,6 @@ import { isMuted } from '../core/inbox.mjs';
 import { runServerAction, haFetch } from '../core/server-admin.mjs';
 import { runPcAction } from '../core/pc-actions.mjs';
 import { isHomeHere, takesTurns, HOME_SQL } from '../core/replica.mjs';
-import { grantVault } from '../server/vault/fill.mjs';
 
 const MAX_HOPS = 6; // messages in a row between bots without the user (no endless ping-pong)
 // 3.5.1: and all the turns that one message of the user (or a reminder, or a card's answer) may set off among the bots,
@@ -45,7 +44,7 @@ const FIELD_LABEL = { name: 'name', role_text: 'role', tools: 'tools', agent: 'b
 // «hace 3 h» / «hace 20 min» / «hace 2 días» for a message that waited.
 const agoWords = (ms) => { const m = Math.round(ms / 60_000); return m < 60 ? tr('msg.home.agoMin', { n: m }) : m < 48 * 60 ? tr('msg.home.agoH', { n: Math.round(m / 60) }) : tr('msg.home.agoDays', { n: Math.round(m / 1440) }); };
 const listWords = (items) => (items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')}${tr('msg.bots.and')}${items.at(-1)}`);
-export const SENSITIVE_CARDS = new Set(['ha', 'pc', 'srv', 'admin', 'confirm', 'vault']);
+export const SENSITIVE_CARDS = new Set(['ha', 'pc', 'srv', 'admin', 'confirm']);
 export const isSensitiveCard = (meta) => Boolean(meta && SENSITIVE_CARDS.has(meta.card) && !(meta.card === 'admin' && meta.payload?.action === 'pause'));
 const hostOf = (url) => { try { return new URL(/^[a-z][\w+.-]*:\/\//i.test(String(url)) ? String(url) : `https://${url}`).hostname.toLowerCase().replace(/^www\./, ''); } catch { return ''; } };
 const userError = (message) => Object.assign(new Error(message), { userFacing: true });
@@ -205,11 +204,7 @@ class Lane {
     const talker = this.person ?? ownerOf(this.board);
     const access = botBrowserAccess(this.board, { owner, talker });
     const browserPage = () => ({ ORB_BROWSER_PIPE: ctx.browser.pipe, ORB_SESSION: page, ...browserEnv(who, page, '', access.profile) });
-    // 3.7 (WS6): «Contraseñas» reaches the same page of the bot's browser (vault_fill, typed by Orb Server, never seen).
-    // Only when the one talking is the bot's own person: a bot shared with someone else never fills its owner's passwords
-    // for them (their turns, and whatever a page or a mail says in them, get no vault_fill).
-    const vaultPage = tools.includes('contrasenas') && tools.includes('navegador') && browserOn() && access.vault ? browserPage() : {};
-    const servers = { bot: botMcpServer({ ORB_HOME: ctx.home, ORB_AGENT: who, ORB_AGENT_TOKEN: token, ...vaultPage }) };
+    const servers = { bot: botMcpServer({ ORB_HOME: ctx.home, ORB_AGENT: who, ORB_AGENT_TOKEN: token }) };
     this.guard.dir = cwd; this.guard.botsDir = B.botsDir();
     // 3.6: the browser's pages of a bot live in a person's own browser profile (3.7: the talker's, see above).
     if (tools.includes('navegador') && browserOn()) {
@@ -476,8 +471,6 @@ export class Bots {
       return canHouse(talker) ? [talker] : editors({ type: 'integration', id: 'ha' });
     }
     if (kind === 'memory') return [p.person ?? talker];
-    // 3.7 (WS6): a vault's first use on a site: only the vault's own person.
-    if (kind === 'vault') return [p.person ?? talker];
     return [talker];
   }
 
@@ -519,7 +512,7 @@ export class Bots {
       B.setRequest(this.board, r.id, 'waiting');
       return;
     }
-    if (['admin', 'srv', 'pc', 'ha', 'confirm', 'memory', 'vault'].includes(r.kind)) { this.card(r, r.kind, p, from, talker, conv, this.describeCard(r.kind, p, from)); return; }
+    if (['admin', 'srv', 'pc', 'ha', 'confirm', 'memory'].includes(r.kind)) { this.card(r, r.kind, p, from, talker, conv, this.describeCard(r.kind, p, from)); return; }
     throw new Error(`petición desconocida: ${r.kind}`);
   }
   card(r, kind, payload, from, talker, conv, body) {
@@ -552,7 +545,6 @@ export class Bots {
       const thing = String(p.body?.entity_id ?? '').split('.').pop().replace(/_/g, ' ').trim();
       return tr('msg.bots.card.ha', { bot: from.name, what: verb ? tr(`msg.bots.ha.${verb}`, { thing: thing || p.domain }) : `${p.service.replace(/_/g, ' ')} ${thing || p.domain}`.trim() });
     }
-    if (kind === 'vault') return tr('msg.vault.card', { bot: from.name, host: oneLine(String(p.host ?? ''), 120) });
     if (kind === 'memory') return tr(`msg.bots.card.memory.${p.which === 'bot' ? 'bot' : p.which === 'global' ? 'global' : 'mine'}`, { bot: from.name, text: oneLine(p.text ?? '', 300) });
     return tr('msg.bots.card.confirm', { bot: from.name, action: p.action, detail: p.detail });
   }
@@ -631,8 +623,6 @@ export class Bots {
     }
     // 3.6 (A5): a memory change that waited (read from outside, or not that bot's to keep).
     if (card === 'memory') { B.settleMemory(this.board, p.log, true); return { ok: true, summary: tr('sys.botmcp.saved') }; }
-    // 3.7 (WS6): the vault may now sign in on that site for that person with that item (later uses: just a notice).
-    if (card === 'vault') { grantVault(this.board, p.person ?? talker, p.uid, p.host); return { ok: true, summary: tr('msg.vault.granted', { host: oneLine(String(p.host ?? ''), 120) }) }; }
     return { ok: false, summary: 'tarjeta desconocida' };
   }
   // The answer to a bot's grouped questions: the card is marked and the answer goes to that bot as the talker's message.
@@ -772,9 +762,9 @@ export class Bots {
   shutdown() { this.closing = true; clearInterval(this.timer); for (const l of this.lanes.values()) { l.stop(); l.closeLive(); } }
 }
 
-// 3.7: whose browser profile a bot's turn uses and whether «Contraseñas» (vault_fill) is offered. The profile is always
-// the talker's own (null = the owner of this Orb, the default profile); the vault only when the talker is the bot's person.
+// 3.7: whose browser profile a bot's turn uses: always the talker's own (null = the owner of this Orb, the default
+// profile).
 export function botBrowserAccess(board, { owner, talker }) {
   const who = talker ?? owner;
-  return { profile: who && !(board.isOwnerPerson?.(who) ?? false) ? String(who) : null, vault: Boolean(who) && who === owner };
+  return { profile: who && !(board.isOwnerPerson?.(who) ?? false) ? String(who) : null };
 }

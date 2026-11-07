@@ -57,9 +57,7 @@ import { ShareHost } from '@/components/share-dialog.jsx';
 import { ProfileView } from '@/views/persons.jsx';
 import { RecoveryNotice } from '@/views/data.jsx';
 import { personSwitched } from '@/lib/store.js';
-// 3.7 (WS4): Orb Server (Magic Link's guide, «Ver navegador del Server», its screen on a phone linked to it)
-import { ServerGuideHost, BrowserLiveHost, ServerView } from '@/views/server.jsx';
-import { loadServer, loadServerGuide, loadHomes, openBrowserLive } from '@/lib/server.js';
+import { loadHomes } from '@/lib/bot-homes.js';
 
 const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
 // 2.7, the phone: the conversations («Chats») and «Más» are screens of their own; Agentes and Modo experto are PC only.
@@ -70,7 +68,7 @@ const ChatsView = OrbChatsView;
 function BotChatsScreen({ route }) { return phoneLayout() ? <BotChatsView /> : <BotChatView route={{ view: 'bot-chat' }} key={route.view} />; }
 const BOT_SCREENS = { 'bot-chats': BotChatsScreen, 'bot-chat': BotChatView, 'bot-group': BotChatView, bots: BotsView, 'bot-groups': BotGroupsView, 'bot-reminders': BotRemindersView, 'bot-memory': BotMemoryView, 'bot-home': BotHomeView, 'bot-server': BotServerView, 'bot-settings': BotSettingsView };
 const VIEWS = bridge.mobile
-  ? { ...BOT_SCREENS, link: MagicLinkView, server: ServerView, chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, profile: ProfileView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
+  ? { ...BOT_SCREENS, link: MagicLinkView, chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, profile: ProfileView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
   : { ...BOT_SCREENS, chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView,
     // 2.7.3: Orb Light (the portable .exe) has no God mode. (3.7: «Monitoreo del equipo» is gone: a bot with «Equipo».)
     ...(bridge.light ? {} : { expert: ExpertView }) };
@@ -96,7 +94,6 @@ function MobileShell() {
       <ShareHost />
       <NewGroupHost />
       <OrbInfoHost />
-      <BrowserLiveHost />
     </div>
   );
 }
@@ -149,8 +146,6 @@ function Shell() {
       <Notices />
       <ShareHost />
       <NewGroupHost />
-      <ServerGuideHost />
-      <BrowserLiveHost />
       {bridge.mobile ? null : <ActionShortcuts project={shortcutProject} />}
       <div className="hidden md:contents"><Companion name={app.config.assistantName} base={mood} hidden={app.config.ui?.companion === false || !COMPANION_VIEWS.has(route.view) || bridge.mobile || Boolean(tour)} /></div>
       {tour ? <Tour key={tour.key} /> : null}
@@ -189,7 +184,7 @@ function Root() {
           } catch { /* default */ }
           loadCentro();
           loadInbox(); loadOrbInbox(); // 3.6 (M2, M3): the unread badges show in both zones
-          loadServer().then((s) => { if (s?.linked) loadServerGuide(); }); loadHomes(); // 3.7: the Orb Server and the bots' homes
+          loadHomes(); // 3.7: the bots' homes
           return setPhase('app');
         } catch (e) { setError(String(e?.message ?? e)); await new Promise((r) => setTimeout(r, 250)); }
       }
@@ -204,12 +199,6 @@ function Root() {
     window.addEventListener('keydown', key);
     const off = bridge.on('ui:terminal', () => openTerminal());
     return () => { window.removeEventListener('keydown', key); off(); };
-  }, [phase]);
-  // 3.7 (WS4): the Server's Claude / Codex may sign out: its state now and then («Reconectar Claude en el Server»).
-  useEffect(() => {
-    if (phase !== 'app' || bridge.mobile) return undefined;
-    const id = setInterval(() => { if (getState().server?.linked) loadServerGuide(); }, 5 * 60_000);
-    return () => clearInterval(id);
   }, [phase]);
   useEffect(() => { const off = () => setPhase('pair'); window.addEventListener('orb:unpaired', off); return () => window.removeEventListener('orb:unpaired', off); }, []);
   // 3.5, the Android app: something shared from another app («Compartir con Orb») opens the chat, which takes it.
@@ -246,11 +235,9 @@ function Root() {
       if (event === 'inbox:changed') { loadInboxSoon(120); loadOrbInboxSoon(120); }
       // 3.6 (M3): the Orb zone's list follows what its conversations do (a new line comes with inbox:changed).
       if (event === 'chat:state' && !payload?.partial) loadOrbInboxSoon(400);
-      if (event === 'link:peers') { loadCentro(); loadServer(); loadHomes(); }
+      if (event === 'link:peers') { loadCentro(); loadHomes(); }
       // 3.7 (WS4): a bot changed home (or moved on a step): its badge, its bar and «Pasar al …» follow.
       if (event === 'bot.home' || event === 'bots.move' || event === 'centro:bot.home') { loadBotsSoon(); loadHomes(); loadInboxSoon(300); }
-      // «Necesito que lo hagas tú»: a page of the Server's browser asks for a person (a CAPTCHA, a code).
-      if (event === 'browser:human' || event === 'centro:browser:human') notify({ title: tNow('msg.browser.human.title'), body: tNow(payload?.kind === 'captcha' ? 'msg.browser.human.captcha' : 'msg.browser.human.code', { site: payload?.site ?? '' }), tone: 'warning', action: { label: tNow('browserLive.open'), onClick: () => openBrowserLive() } });
       // 3.6 «Personas»: someone else at this PC, the window locked or unlocked, the people changed.
       if (event === 'persons:switched') personSwitched();
       if (event === 'persons:locked') setState((st) => ({ locked: st.locked || { locked: true } })); // keeps «Cambiar de usuario»

@@ -1,7 +1,7 @@
 # Orb on Linux (desktop app)
 
 Since 3.7 the Orb app (the same one as on Windows) has Linux downloads. It is for a Linux **desktop** (GNOME, KDE,
-Xfce…). For a server with no screen there is [Orb Server](SERVER.md), a separate product.
+Xfce…).
 
 From [**Releases → latest**](https://github.com/danielfinchdev/orb-dev/releases/latest), x64 (most PCs) or arm64:
 

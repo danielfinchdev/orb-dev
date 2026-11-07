@@ -15,7 +15,7 @@ import { Badge, Spinner, Input } from '@/components/ui/basic.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, Tip } from '@/components/ui/overlay.jsx';
 import { Composer, useAutoScroll } from '@/views/chat.jsx';
 import { LiveActivity } from '@/components/chat-live.jsx';
-import { useStore, botCall, onBotEvent, act, go, loadBotsSoon, loadInboxSoon, inboxAct, isDark, phoneLayout } from '@/lib/store.js';
+import { useStore, botCall, onBotEvent, act, go, loadBotsSoon, loadInboxSoon, inboxAct, isDark } from '@/lib/store.js';
 import { withDays, nameColor } from '@/lib/inbox.js';
 import { decideCard } from '@/lib/notes.js';
 import { useInbox, itemOfRoute } from './inbox.jsx';
@@ -24,8 +24,8 @@ import { chatBot, mergeLine, speakerOf } from '@/lib/bots.js';
 import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { useBots, useCanManage, BotFace, GroupFace, NoBots, BotsDown, Loading } from './common.jsx';
-import { ReplicaBar, PendingMark, LoginExpiredBanner } from './home.jsx';
-import { useHomes } from '@/lib/server.js';
+import { ReplicaBar, PendingMark } from './home.jsx';
+import { useHomes } from '@/lib/bot-homes.js';
 import { homeOf, replicaActions } from '@/lib/homes.js';
 
 const LAST = 'orb.ultimoBot';
@@ -314,7 +314,6 @@ export function BotChatView({ route }) {
         </div>
         <div className="px-4 sm:px-5">
           {/* The PC shows it in the chat list beside; the phone, here. */}
-          {bot && home?.kind === 'server' && phoneLayout() ? <LoginExpiredBanner bots={[bot]} className="mx-auto mb-2 w-full max-w-3xl" /> : null}
           {bot ? <ReplicaBar bot={bot} homes={homes} /> : null}
         </div>
         <Composer value={text} onChange={setText} onSend={send} onStop={bot && busy ? () => act(botCall('bots.stop', { id: bot.id })) : undefined} busy={busy} disabled={sending || (ra && !ra.talk)} testid="bot-chat-input"

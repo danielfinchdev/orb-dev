@@ -150,15 +150,13 @@ export const protectedList = () => {
   const list = ctx.config?.protected;
   return (Array.isArray(list) ? list : DEFAULT_PROTECTED).map((x) => String(x ?? '').trim()).filter((x) => x.length >= 2);
 };
-// 3.7 (WS6): Orb Server's own vault folder is always checked, whatever the list says.
-const ALWAYS_PROTECTED = ['orb-server/data/vault'];
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const entryRe = (e) => new RegExp(`${/^[a-z0-9]/i.test(e) ? '(?<![a-z0-9])' : ''}${esc(e.replace(/\\/g, '/'))}${/[a-z0-9]$/i.test(e) ? '(?![a-z0-9])' : ''}`, 'i');
 // The first protected entry that the text names, or null.
 export function protectedHit(text, list = protectedList()) {
   const t = String(text ?? '').replace(/\\/g, '/');
   if (!t) return null;
-  return list.find((e) => entryRe(e).test(t)) ?? ALWAYS_PROTECTED.find((e) => entryRe(e).test(t)) ?? null;
+  return list.find((e) => entryRe(e).test(t)) ?? null;
 }
 export const touchesProtected = (text, list) => protectedHit(text, list) !== null;
 // 3.5: what a bot never does without the user's click: send (mail, messages), buy, book, pay, submit, share, create or
@@ -179,7 +177,7 @@ export function botSecretDirs() {
     under('Library', 'Application Support', 'Google', 'Chrome'), under('Library', 'Application Support', 'Firefox'),
     under('AppData', 'Local', 'Google', 'Chrome', 'User Data'), under('AppData', 'Local', 'Microsoft', 'Edge', 'User Data'), under('AppData', 'Roaming', 'Mozilla'),
     under('AppData', 'Local', 'BraveSoftware'), under('AppData', 'Roaming', 'Orb'), under('.config', 'Orb'), under('.config', 'orb-server')];
-  for (const k of ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'ORB_VAULT_KEY_DIR']) if (process.env[k]) list.push(process.env[k]);
+  for (const k of ['CLAUDE_CONFIG_DIR', 'CODEX_HOME']) if (process.env[k]) list.push(process.env[k]);
   for (const a of ctx.config?.accounts ?? []) if (a?.home) list.push(String(a.home));
   if (ctx.home) list.push(path.join(ctx.home, '.orb'));
   if (ctx.paths?.internal) list.push(ctx.paths.internal);
@@ -316,10 +314,9 @@ export function confineCheck({ paths = [], patterns = [], command = '', confine,
 // connector tool that sends, buys, books or deletes asks first, even in read-only mode. 3.5.1: bot may be the bot's guard
 // ({ dir, tainted, hosts }, src/engine/bots.mjs): its folder only, no secrets, care after reading from outside (botCheck);
 // patterns (Glob/Grep) and url (WebFetch, the browser) are checked too.
-// 3.7 (Orb Server): no agent and no bot ever raises its privileges, whatever its permission (also «total»): sudo, doas,
-// pkexec, su, run0 or the server's admin helper. The only way to root is the engine itself, after an approval card,
-// through the root-owned helper (src/core/server-admin.mjs); the agents' processes run with no_new_privs anyway.
-const ESCALATE = /\b(sudo|doas|pkexec|run0)\b|(^|[;&|(`]|\$\()\s*su(\s|$)|orb-server-admin|\/etc\/sudoers/i;
+// 3.7: no agent and no bot ever raises its privileges, whatever its permission (also «total»): sudo, doas, pkexec, su or
+// run0.
+const ESCALATE = /\b(sudo|doas|pkexec|run0)\b|(^|[;&|(`]|\$\()\s*su(\s|$)|\/etc\/sudoers/i;
 export const escalates = (command) => ESCALATE.test(String(command ?? ''));
 export function decide({ permission = 'editar', tool, kind, command = '', paths = [], patterns = [], url = null, internalDir, lang = 'es', bot = false, confine = null }) {
   const T = (k) => translate(lang, `msg.guard.${k}`);

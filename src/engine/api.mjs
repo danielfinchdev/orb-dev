@@ -7,7 +7,7 @@
 // (params, principal).
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx, saveConfig, tr, role, isHeadless } from '../core/context.mjs';
+import { ctx, saveConfig, tr, role } from '../core/context.mjs';
 import { AGENT_IDS, categoryOf, CATEGORIES } from '../core/home.mjs';
 import { accountsOf, accountDir, accountLabel, accounts as allAccounts } from '../core/accounts.mjs';
 import { usageReport, modelName, mayUseAccount, accountPerson, usageByPerson } from '../core/budget.mjs';
@@ -42,16 +42,9 @@ import { renamePerson } from '../core/persons.mjs';
 import { gatewayMethods } from './api-gateway.mjs';
 import { dataApi, MOVED_OK } from './api-data.mjs';
 import { inboxMethods } from './api-inbox.mjs';
-import { browserMethods } from './api-browser.mjs';
 import { shareApi } from './api-shares.mjs';
 
 export { fail, str, int, oneOf } from './api-common.mjs';
-// 3.5: what a server without a window (Orb Server) does not do, whatever its role: the PC's development tools (God mode and expert view,
-// and opening Remote Desktop or a console). Conversations, tasks, schedules, the phone
-// access and the MCP servers stay.
-// 3.5: the agents' sign-in no longer needs a console (agents.login gives the link and code), so it works on the server too.
-const CENTRO_OFF = /^(expert.|actions.|installer.start$|github.login$)/;
-export const centroAllows = (method) => !CENTRO_OFF.test(String(method));
 
 export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef = { current: null }, bots = null }) {
   const realHome = (() => { try { return fs.realpathSync(ctx.home); } catch { return ctx.home; } })();
@@ -666,7 +659,6 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     ...personMethods(shared),
     ...gatewayMethods(shared),
     ...inboxMethods(shared),
-    ...browserMethods(shared), // 3.7 (WS5): «Ver navegador del Server»
     ...data.methods
   };
   // 3.6: the approval cards a person may answer (of their own sessions and tasks, and those of projects shared with them).
@@ -701,7 +693,6 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const fn = Object.hasOwn(methods, method) ? methods[method] : null;
       if (!fn) fail(tr('msg.api.unknownAction', { method }));
       if (ctx.moved && !MOVED_OK.test(method)) fail(tr('data.move.movedAway'));
-      if (isHeadless() && !centroAllows(method)) fail(tr('msg.api.centroOff'));
       if (params === null || typeof params !== 'object' || Array.isArray(params)) fail(tr('msg.api.badParams'));
       authorize(board, who, method, params);
       const out = await fn(params, who);
@@ -713,10 +704,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     // 3.6: the method names (the policy test checks each one has its rule) and this PC's window's principal.
     methodNames: () => Object.keys(methods),
     desktopPrincipal,
-    // 3.6 (WS2): the window's state (who sits there, locked), Orb Server's local socket (the owner, who is on the server
-    // itself: no PIN asked) and what a locked window may see.
+    // 3.6 (WS2): the window's state (who sits there, locked) and what a locked window may see.
     desktop,
-    controlPrincipal: () => principalOf(board, { control: true, strongUntil: Date.now() + 60_000 }),
     lockState: () => methods['app.lockState'](),
     // New chat lines since the last call, sent to the window as 'chat:new' (corner robot, robot notices) or 'notice' (toasts).
     notifyNewChat() {

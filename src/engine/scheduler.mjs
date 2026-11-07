@@ -3,7 +3,7 @@
 // result, automatic commit on isolated copies, safety checks, project log and notices.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx, enabledAgents, tr, isHeadless } from '../core/context.mjs';
+import { ctx, enabledAgents, tr } from '../core/context.mjs';
 import { chooseModel } from './catalog.mjs';
 import { groupOf } from '../core/projects.mjs';
 
@@ -291,7 +291,7 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
         // Orb joins its work into the folder when it ends. «Una tarea cada vez», a read-only task or a folder without git:
         // it waits its turn, as before.
         // A task that joins two pieces of work by hand works in the folder itself, so it always waits for it.
-        if (ctx.config.oneAtATime || isHeadless() || task.readonly || board.setting(`join_task:${task.id}`) || !others.some((t) => !t.readonly) || !isGitRepo(project.path)) continue;
+        if (ctx.config.oneAtATime || task.readonly || board.setting(`join_task:${task.id}`) || !others.some((t) => !t.readonly) || !isGitRepo(project.path)) continue;
         isolate = true;
       }
       this.launch(task, pick.agent, pick.account, { isolate });

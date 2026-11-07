@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { openDb, taskOptions, checkPolicy } from './db.mjs';
-import { ctx, tr, isHeadless, personSetting as personSettingOf } from './context.mjs';
+import { ctx, tr, personSetting as personSettingOf } from './context.mjs';
 import { ownerId as findOwner, personName as nameOf } from './persons.mjs';
 import { scopeSql, rightOn } from './authz.mjs';
 import { AGENT_IDS, AGENT_LABELS, folderName, projectLogHeader, isConfigName, categoryOf, CATEGORIES } from './home.mjs';
@@ -254,8 +254,6 @@ export class Board {
   // task belongs to the one of the task it comes from.
   createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null, level = null, fixedBrief = false, internal = false, conversation_id = null, person = null }, actor) {
     if (!MODES.includes(mode)) throw new Error(tr('sys.board.badMode'));
-    // 3.5: the server (role «centro») has no isolated copies: every task works in the folder, in turn.
-    if (mode === 'aislada' && isHeadless()) mode = 'carpeta';
     const proj = this.project(project);
     if (!proj) throw new Error(tr('sys.board.unknownProject', { name: project }));
     const convId = (conversation_id ? this.conversation(conversation_id)?.id : null) ?? (parent_id ? this.conversationOfTask(parent_id) : review_of ? this.conversationOfTask(review_of) : null);

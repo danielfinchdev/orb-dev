@@ -1,5 +1,4 @@
-// 3.6 "People" (WS2, the gateway): each person's devices and links, versions, the window's lock and Orb
-// Server.
+// 3.6 "People" (WS2, the gateway): each person's devices and links, versions and the window's lock.
 export default {
   'msg.persons.lockedWindow': 'The window is locked. Unlock it with your PIN.',
   'msg.link.clone': '{name} looks like a copy of another Orb. It is not served until you check it in Settings › Magic Link.',
@@ -15,13 +14,5 @@ export default {
   'msg.link.backupTooBig': 'The backup is too big (the most is {mb} MB).',
   'msg.link.adminOwnerOnly': '"Can manage" is only for a device of the admin.',
   'msg.link.qrForOthers': 'Only the admin can link devices for another user.',
-  'msg.link.noPeer': 'That link does not exist.',
-  'term.server.isOwner': 'admin',
-  'term.server.hasPin': 'with PIN',
-  'term.server.personDevices': '{n} devices',
-  'term.server.personsHint': 'To link a device for someone: {cmd}',
-  'term.server.personCreated': 'Done: {name} now uses this Orb.',
-  'term.server.noPerson': 'There is nobody called "{name}" on this Orb (see orb-server usuarios).',
-  'term.server.pinReset': 'Done: {name} has no PIN now. They can choose another one in their profile.',
-  'term.server.forPerson': 'This code is for {name}.'
+  'msg.link.noPeer': 'That link does not exist.'
 };

@@ -17,8 +17,8 @@ import { splitInbox, shortTime, previewOf } from '@/lib/inbox.js';
 import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { useBots, useCanManage, BotFace, GroupFace, NoBots, BotsDown, Loading, CentroBadge } from './common.jsx';
-import { HomeBadge, LoginExpiredBanner, moveBot } from './home.jsx';
-import { useHomes, onServer } from '@/lib/server.js';
+import { HomeBadge, moveBot } from './home.jsx';
+import { useHomes } from '@/lib/bot-homes.js';
 import { showHomeBadges, homeOf, moveTargets, moveLabel, replicaActions, tn } from '@/lib/homes.js';
 import { ArrowRightLeft, Clock } from 'lucide-react';
 
@@ -63,7 +63,7 @@ function useChatActions(item, inbox) {
       { id: 'none', label: t('chats.noSection'), checked: item.section == null, run: () => inboxAct('inbox.sections.move', { ...ref, section: null }) },
       { id: 'new', icon: FolderPlus, label: t('chats.newSection'), run: async () => { const s = await newSection(t); if (s) await inboxAct('inbox.sections.move', { ...ref, section: s.id }); } }
     ] },
-    ...moves.map((x) => ({ id: `move-${x.here ? 'here' : x.key}`, icon: ArrowRightLeft, label: moveLabel(x, t, { serverHere: onServer() }), run: () => moveBot(bot, x) })),
+    ...moves.map((x) => ({ id: `move-${x.here ? 'here' : x.key}`, icon: ArrowRightLeft, label: moveLabel(x, t), run: () => moveBot(bot, x) })),
     item.muted ? { id: 'unmute', icon: Bell, label: t('chats.unmute'), run: () => inboxAct('inbox.mute', { ...ref, muted: false }) } : { id: 'mute', icon: BellOff, label: t('chats.mute'), run: () => inboxAct('inbox.mute', { ...ref, muted: true }) },
     ...(item.unread ? [{ id: 'read', icon: CheckCheck, label: t('chats.markRead'), run: () => inboxAct('inbox.markRead', ref) }] : []),
     ...(canClear ? [{ id: 'clear', icon: Trash2, label: t('chats.clear'), danger: true, run: async () => {
@@ -328,8 +328,7 @@ export function BotsInbox({ page = false }) {
   const [sheet, setSheet] = useState(null);
   const sheetItem = sheet ? (inbox?.items ?? []).find((x) => x.key === sheet) ?? null : null;
   const parts = useMemo(() => splitInbox(inbox), [inbox]);
-  const server = useStore((s) => s.server);
-  const rowProps = { inbox, bots, botsById, phone, onSheet: (x) => setSheet(x.key), badges: showHomeBadges(bots, server?.linked) };
+  const rowProps = { inbox, bots, botsById, phone, onSheet: (x) => setSheet(x.key), badges: showHomeBadges(bots) };
 
   const q = query.trim().toLowerCase();
   const searching = q.length > 0;
@@ -398,7 +397,6 @@ export function BotsInbox({ page = false }) {
       <div className={cn('grid gap-2 pb-2', phone ? 'px-4 pt-3' : 'px-3 pt-1')}>{search}</div>
       {phone ? null : <Places />}
       <CentroBadge className="px-4 pb-1" />
-      <LoginExpiredBanner bots={bots} compact={!phone} className={phone ? 'mx-4 mb-2' : 'mx-3 mb-2'} />
       <nav className={cn('flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto', phone ? 'px-2 pb-28' : 'px-1.5 pb-3')} aria-label={t('chats.list')} data-testid="bots-nav">{body}</nav>
       {phone ? <NewMenu fab /> : null}
       {sheetItem ? <ChatSheet item={sheetItem} {...rowProps} onClose={() => setSheet(null)} /> : null}

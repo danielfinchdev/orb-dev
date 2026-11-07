@@ -51,71 +51,6 @@ export function replicaActions(bot) {
   return { talk: true, change: h.online && !h.moving, move: !h.moving, restore: false, takeover: !h.online, queued: !h.online };
 }
 
-// ---- the migration wizard («¿Dónde quieres que se ejecuten tus bots?»)
-// The bots of this person that run here and could go (not archived; the copies of other Orbs' bots are not theirs to move).
-export const movableHere = (bots, me = null) => (Array.isArray(bots) ? bots : []).filter((b) => homeOf(b).here && b.homeState !== 'archived' && (me == null || b.person_id == null || b.person_id === me || b.right === 'own'));
-// choice: 'all' | 'pick' | 'none'; picked: ids chosen in «Elegir cuáles». → the ids to move, in the list's order.
-export function planMove(bots, choice, picked = []) {
-  if (choice === 'none') return [];
-  const ids = (Array.isArray(bots) ? bots : []).map((b) => b.id);
-  if (choice === 'all') return ids;
-  const set = new Set((Array.isArray(picked) ? picked : []).map(Number));
-  return ids.filter((id) => set.has(Number(id)));
-}
-// The report after moving: what went, what failed, sites to sign in again on the Server, connectors missing there and
-// same-name bots to merge. results: [{ id, name, ...bots.move answer }].
-export function moveReport(results = []) {
-  const ok = []; const failed = []; const sites = new Set(); const missing = new Set(); const sameName = []; let ha = false;
-  for (const r of Array.isArray(results) ? results : []) {
-    if (r?.ok) ok.push(r.name); else failed.push({ name: r?.name ?? '', why: r?.failed ?? r?.error ?? null });
-    for (const s of r?.sites ?? []) sites.add(String(s));
-    for (const c of r?.missing?.connectors ?? []) missing.add(String(c));
-    if (r?.missing?.ha) ha = true;
-    if (r?.ok && r.sameName?.uid) sameName.push({ id: r.id, uid: r.uid, name: r.name, other: r.sameName.uid, otherName: r.sameName.name });
-  }
-  return { ok, failed, sites: [...sites].sort(), missing: [...missing].sort(), ha, sameName };
-}
-
-// ---- who is who (link.server.persons → { here: [...], there: [...] })
-// One row per user of this app other than the admin, with the person there they are (or null) and the choices.
-export function mappingRows(persons) {
-  const there = persons?.there ?? [];
-  return (persons?.here ?? []).filter((p) => !p.fixed).map((p) => ({
-    id: p.id, name: p.name, mappedTo: p.mappedTo ?? null,
-    choices: there.filter((x) => !x.fixed && (x.mappedTo == null || x.mappedTo === p.id)).map((x) => ({ value: x.id, label: x.name }))
-  }));
-}
-
-// ---- the steps after pairing (link.server.guide → { peer, steps: [{ id, done, optional, available, ... }] })
-export const GUIDE_ORDER = ['agents', 'bots', 'persons', 'vault', 'browser'];
-// The steps to show, in order: «persons» only with two or more users here; the optional ones only when the Server can.
-export function guideSteps(guide, { personsCount = 1 } = {}) {
-  const byId = new Map((guide?.steps ?? []).map((s) => [s.id, s]));
-  const out = [];
-  for (const id of GUIDE_ORDER) {
-    if (id === 'persons') { if (Number(personsCount) > 1) out.push({ id, done: false, optional: false }); continue; }
-    const s = byId.get(id); if (!s) continue;
-    if (s.optional && s.available === false) continue;
-    out.push({ ...s, done: Boolean(s.done) });
-  }
-  return out;
-}
-// The first step still to do (or the last one when all are done).
-export function firstOpenStep(steps) { const i = (steps ?? []).findIndex((s) => !s.done && !s.optional); return i === -1 ? 0 : i; }
-
-// «Reconectar Claude en el Server»: the agents the Server's bots think with that are not signed in there.
-// agents: the guide's [{ agent, signedIn, installed }]; bots: bots.list's bots.
-export function expiredOnServer(agents, bots) {
-  const out = new Set(); const signed = new Map((Array.isArray(agents) ? agents : []).map((a) => [a.agent, Boolean(a.signedIn)]));
-  if (!signed.size) return [];
-  for (const b of Array.isArray(bots) ? bots : []) {
-    const h = homeOf(b);
-    if (h.kind !== 'server' || h.archived) continue;
-    if (signed.has(b.agent) && !signed.get(b.agent)) out.add(b.agent);
-  }
-  return [...out];
-}
-
 // ---- the phone: one reminder per uid, only those the connected Orb rings (executor), on a stable id.
 const hash = (s) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) | 0; return Math.abs(h); };
 export function dedupeReminders(list) {
@@ -129,11 +64,5 @@ export function dedupeReminders(list) {
   }
   return out;
 }
-// A notification seen once (by its uid) is not shown again (the same bot's line coming from two Orbs).
-export function onceByUid(max = 300) {
-  const seen = [];
-  return (uid) => { if (!uid) return true; if (seen.includes(uid)) return false; seen.push(uid); if (seen.length > max) seen.shift(); return true; };
-}
-
 // A count in words: key for many, `${key}.one` for one («1 bot», «2 bots»).
 export const tn = (t, key, n, vars = {}) => t(Number(n) === 1 ? `${key}.one` : key, { n, ...vars });

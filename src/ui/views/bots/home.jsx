@@ -3,12 +3,12 @@
 // when that Orb does not answer), the bar of a chat whose bot runs elsewhere («Se ejecuta en Server» + «Pasar aquí»),
 // «Pasar al Server» / «Pasar a este PC» with the steps the move may ask for (a group, a brain, a takeover), the merge of
 // two bots of the same name and the banner when the Server's Claude or Codex has signed out.
-import { Server, Monitor, ArrowRightLeft, CloudOff, Clock, ArchiveRestore, KeyRound } from 'lucide-react';
+import { Server, Monitor, ArrowRightLeft, CloudOff, Clock, ArchiveRestore } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { confirm, choose } from '@/components/dialogs.jsx';
-import { useStore, botCall, act, setState, getState } from '@/lib/store.js';
-import { homeOf, badgeOf, replicaActions, moveTargets, expiredOnServer, tn } from '@/lib/homes.js';
-import { homesChanged, onServer } from '@/lib/server.js';
+import { botCall, act, getState } from '@/lib/store.js';
+import { homeOf, badgeOf, replicaActions, moveTargets, tn } from '@/lib/homes.js';
+import { homesChanged } from '@/lib/bot-homes.js';
 import { AGENT } from '@/lib/labels.js';
 import { cn } from '@/lib/utils.js';
 import { t as tNow, useT } from '@/lib/i18n.js';
@@ -17,8 +17,8 @@ import { toast } from 'sonner';
 // The badge next to a chat's name: where its bot runs. Only once bots can run in two places (lib/homes.js › showHomeBadges).
 export function HomeBadge({ bot, className }) {
   const t = useT();
-  const b = badgeOf(bot, t, { serverHere: onServer() });
-  const Icon = b.kind === 'here' || (b.kind === 'orb' && onServer()) ? Monitor : Server;
+  const b = badgeOf(bot, t);
+  const Icon = b.kind === 'server' ? Server : Monitor;
   return (
     <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-px text-[10.5px] leading-4 font-medium', b.offline ? 'bg-muted text-muted-foreground' : b.kind === 'server' ? 'bg-primary/12 text-primary' : 'bg-muted text-foreground/70', className)}
       data-testid="home-badge" data-home={b.kind} data-offline={b.offline ? '1' : '0'} title={b.offline ? t('home.offlineTip', { name: b.text }) : t('home.runsOn', { name: b.text })}>
@@ -36,7 +36,7 @@ export async function moveBot(bot, target, { quiet = false } = {}) {
   const opts = {};
   for (let i = 0; i < 4; i++) {
     let r;
-    const id = toast.loading(t('home.moving', { name: bot.name, to: target.here ? t(onServer() ? 'home.badge.server' : 'home.badge.here') : target.name }));
+    const id = toast.loading(t('home.moving', { name: bot.name, to: target.here ? t('home.badge.here') : target.name }));
     try { r = await botCall('bots.move', { id: bot.id, to, ...opts }); } catch (e) { toast.dismiss(id); toast.error(String(e?.message ?? e)); return null; }
     toast.dismiss(id);
     if (r?.step === 'group') {
@@ -58,7 +58,7 @@ export async function moveBot(bot, target, { quiet = false } = {}) {
     }
     homesChanged();
     if (!r?.ok) { toast.error(t('home.moveFailed', { name: bot.name })); return r; }
-    if (!quiet) toast.success(target.here && !onServer() ? t('home.movedHere', { name: bot.name }) : t('home.movedTo', { name: bot.name, to: target.here ? t('home.badge.server') : target.name }));
+    if (!quiet) toast.success(target.here ? t('home.movedHere', { name: bot.name }) : t('home.movedTo', { name: bot.name, to: target.here ? t('home.badge.server') : target.name }));
     if (!quiet && r.sameName?.uid) offerMerge({ id: r.id ?? bot.id, name: bot.name }, { uid: r.sameName.uid, name: r.sameName.name });
     if (!quiet && (r.sites?.length || r.missing?.connectors?.length || r.missing?.ha)) {
       const parts = [r.sites?.length ? t('home.reportSites', { list: r.sites.join(', ') }) : null, r.missing?.connectors?.length ? t('home.reportMissing', { list: r.missing.connectors.join(', ') }) : null, r.missing?.ha ? t('home.reportHa') : null].filter(Boolean);
@@ -91,7 +91,7 @@ export function ReplicaBar({ bot, homes }) {
   if (h.here) return null;
   const a = replicaActions(bot);
   const where = h.kind === 'server' ? t('home.badge.server') : h.name || t('home.badge.orb');
-  const hereName = onServer() ? t('home.badge.server') : t('home.badge.here');
+  const hereName = t('home.badge.here');
   const here = moveTargets(bot, homes).find((x) => x.here) ?? { here: true, key: 'here', name: hereName };
   const restore = async () => { if (await act(botCall('bots.restore', { id: bot.id }), t('home.restored', { name: bot.name }))) homesChanged(); };
   return (
@@ -115,21 +115,3 @@ export function PendingMark() {
   return <span className="text-muted-foreground mt-1 flex items-center justify-end gap-1 text-[11.5px]" data-testid="line-pending"><Clock className="size-3" />{t('home.pending')}</span>;
 }
 
-// «Reconectar Claude en el Server»: the Server's Claude (or Codex) signed out, so its bots wait. Opens the sign-in step.
-export function LoginExpiredBanner({ bots, className, compact = false }) {
-  const t = useT();
-  const guide = useStore((s) => s.serverGuide);
-  const agents = guide?.steps?.find((s) => s.id === 'agents')?.agents ?? [];
-  const expired = expiredOnServer(agents, bots);
-  if (!expired.length) return null;
-  const agent = expired[0];
-  const label = agent === 'codex' ? 'ChatGPT' : AGENT[agent] ?? agent;
-  const fix = <Button size="xs" className={compact ? 'w-full' : undefined} onClick={() => setState({ serverGuideOpen: { step: 'agents', agent } })} data-testid="login-expired-fix">{t('home.reconnect', { agent: label })}</Button>;
-  // compact: the PC's chat list (narrow): the words, then the button under them.
-  return (
-    <div className={cn('border-warning/40 bg-warning/10 rounded-xl border px-3 py-2 text-[13px]', compact ? 'grid gap-2' : 'flex items-center gap-2.5', className)} role="status" data-testid="login-expired">
-      <span className="flex min-w-0 flex-1 items-start gap-2.5"><KeyRound className="text-warning mt-0.5 size-4 shrink-0" /><span className="min-w-0">{t(compact ? 'home.loginExpiredShort' : 'home.loginExpired', { agent: label })}</span></span>
-      {fix}
-    </div>
-  );
-}

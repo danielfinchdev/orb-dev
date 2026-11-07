@@ -6,8 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, describeInput, cleanEnv, within, discoverDir, killTree, confineArgs } from './common.mjs';
+import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, describeInput, cleanEnv, within, discoverDir, killTree } from './common.mjs';
 import { Turn, Approvals } from './live.mjs';
 import { decide, describeAction } from '../core/guard.mjs';
 import { tr } from '../core/context.mjs';
@@ -26,12 +25,7 @@ export const LEAN_SOURCES = ['project', 'local'];
 export function detect(cfg = {}) {
   const home = userHome();
   const pkg = (dir) => path.join(dir, 'node_modules', '@anthropic-ai', 'claude-code', 'bin', IS_WIN ? 'claude.exe' : 'claude');
-  // 3.7: Orb Server downloads its own Claude on demand (src/server/engines.mjs) and runs it through engines/claude/run,
-  // in its own systemd scope and with no_new_privs: that one first.
-  const engine = process.env.ORB_ENGINES && !IS_WIN ? [path.join(process.env.ORB_ENGINES, 'claude', 'run')] : [];
-  const candidates = [cfg.path, ...engine, ...inPath('claude'), path.join(home, '.local', 'bin', IS_WIN ? 'claude.exe' : 'claude'), ...npmPrefixes('claude').map(pkg)];
-  // 3.5: Orb Server (the server, ORB_NUCLEO) brings the Agent SDK's own Claude Code for Linux: used when none is installed.
-  if (process.env.ORB_NUCLEO === '1' && !IS_WIN) candidates.push(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'node_modules', '@anthropic-ai', `claude-agent-sdk-${process.platform}-${process.arch}`, 'claude'));
+  const candidates = [cfg.path, ...inPath('claude'), path.join(home, '.local', 'bin', IS_WIN ? 'claude.exe' : 'claude'), ...npmPrefixes('claude').map(pkg)];
   const cmd = firstFile(candidates);
   return cmd ? { cmd, pre: [] } : null;
 }
@@ -228,8 +222,7 @@ export function createLive(o) {
       // ends — otherwise its background shells (bash.exe) can outlive the turn, holding an isolated copy's folder open and
       // leaving test servers behind. The signal is forwarded by the SDK after its own graceful stdin-close window.
       spawnClaudeCodeProcess: (opts) => {
-        const c = confineArgs(opts.command, opts.args); // 3.7: no_new_privs on Orb Server with the admin helper
-        child = spawn(c.cmd, c.args, { cwd: opts.cwd, env: opts.env, signal: opts.signal, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], detached: !IS_WIN }); // 3.5: own process group on Linux (killTree)
+        child = spawn(opts.command, opts.args, { cwd: opts.cwd, env: opts.env, signal: opts.signal, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], detached: !IS_WIN }); // 3.5: own process group on Linux (killTree)
         live.pid = child.pid ?? null;
         try { child.stderr?.setEncoding('utf8'); child.stderr?.on('data', (d) => log(`stderr: ${d}`)); child.stderr?.on('error', () => {}); } catch { /* best effort */ }
         return child;

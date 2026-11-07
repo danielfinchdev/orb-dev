@@ -354,8 +354,8 @@ const remember = (out) => {
 // 3.7 (WS5): a human pace on real sites (orb.json browser.sites: a pause of 2–5 s between actions on a site, 300 an hour)
 // for the bots, and for every agent on Orb Server (its browser is a person's real one). Pages of this machine or the home
 // network: no pace (an agent testing its own web). Shared by every MCP process of this Orb (the database).
-const PACED = BROWSER_ONLY || process.env.ORB_NUCLEO === '1';
-const PACE_ACTIONS = new Set(['open', 'click', 'type', 'press', 'scroll', 'back', 'vault_fill']);
+const PACED = BROWSER_ONLY;
+const PACE_ACTIONS = new Set(['open', 'click', 'type', 'press', 'scroll', 'back']);
 const pace = createPace({ store: boardStore(board), sites: () => ctx.config.browser?.sites ?? {} });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function paced(action, a) {
@@ -421,8 +421,6 @@ if (PIPE && PIPE_TOKEN) tools.push(
     inputSchema: { type: 'object', properties: { ms: { type: 'integer', minimum: 100, maximum: 15000 }, text: str('Texto que esperar') } }, run: (a) => botBrowser('wait', a) },
   { name: 'orb_browser_close', description: 'Cierra el navegador del agente cuando ya no lo necesites.', inputSchema: { type: 'object', properties: {} }, run: () => browser('close') }
 );
-// 3.7: the vault's sign-in is one tool only, vault_fill in the bots' «Contraseñas» group (src/mcp/bot.mjs): it talks to
-// the same browser page and gives the model only «ok» or «failed: reason».
 
 const reply = (id, payload) => process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id, ...payload })}\n`);
 

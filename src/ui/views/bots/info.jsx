@@ -20,9 +20,9 @@ import { useT } from '@/lib/i18n.js';
 import { useBots, useCanManage, BotFace, GroupFace } from './common.jsx';
 import { InfoFrame, List, Row } from '@/components/info-frame.jsx';
 import { moveBot, offerMerge, HomeBadge } from './home.jsx';
-import { useHomes, hasCap, openBrowserLive, onServer } from '@/lib/server.js';
+import { useHomes } from '@/lib/bot-homes.js';
 import { homeOf, replicaActions, moveTargets, moveLabel } from '@/lib/homes.js';
-import { ArrowRightLeft, Compass, Server, Monitor, CopyPlus } from 'lucide-react';
+import { ArrowRightLeft, Server, Monitor, CopyPlus } from 'lucide-react';
 
 function NotifyRow({ item }) {
   const t = useT();
@@ -46,13 +46,11 @@ export function BotInfo({ bot, item, onClose }) {
   useEffect(() => { let alive = true; botCall('bots.get', { id: bot.id }).then((b) => alive && setFull(b)).catch(() => alive && setFull(false)); return () => { alive = false; }; }, [bot.id, bot.updated_at]); // eslint-disable-line react-hooks/exhaustive-deps
   // 3.7: where it runs, and what may be done from here (a bot run elsewhere changes there, while that Orb answers).
   const homes = useHomes();
-  const server = useStore((s) => s.server);
   const { bots } = useBots();
   const home = homeOf(bot);
   const ra = replicaActions(bot);
   const edit = manage && ra.change ? () => go({ view: 'bots', id: bot.id }) : null;
   const moves = ra.move ? moveTargets(bot, homes) : [];
-  const live = (home.kind === 'server' || (home.here && onServer())) && home.online && hasCap(server, 'browser.live.v1');
   // Two bots of the same name in the same place (one came with a move): merge them.
   const twin = bots.find((b) => b.id !== bot.id && b.homeState !== 'archived' && String(b.name).trim().toLowerCase() === String(bot.name).trim().toLowerCase() && (b.home ?? null) === (bot.home ?? null));
   const tools = (full?.effectiveTools ?? full?.tools ?? bot.effectiveTools ?? bot.tools ?? []).map((x) => t(`bots.tool.${x}`));
@@ -80,9 +78,8 @@ export function BotInfo({ bot, item, onClose }) {
         </div>
       ) : null}
       <List testid="info-home">
-        <Row icon={home.kind === 'server' || (home.here && onServer()) ? Server : Monitor} label={t('home.where')} testid="info-where"><span className="min-w-0 flex-1" /><HomeBadge bot={bot} /></Row>
-        {mine ? moves.map((x) => <Row key={x.key} icon={ArrowRightLeft} label={moveLabel(x, t, { serverHere: onServer() })} onClick={() => moveBot(bot, x)} testid={`info-move-${x.here ? 'here' : 'server'}`} />) : null}
-        {live ? <Row icon={Compass} label={t('browserLive.open')} onClick={() => openBrowserLive()} testid="info-browser-live" /> : null}
+        <Row icon={home.kind === 'server' ? Server : Monitor} label={t('home.where')} testid="info-where"><span className="min-w-0 flex-1" /><HomeBadge bot={bot} /></Row>
+        {mine ? moves.map((x) => <Row key={x.key} icon={ArrowRightLeft} label={moveLabel(x, t)} onClick={() => moveBot(bot, x)} testid={`info-move-${x.here ? 'here' : 'server'}`} />) : null}
       </List>
       <List testid="info-bot-parts">
         <Row icon={BrainIcon} label={t('chats.brain')} value={`${AGENT[bot.agent] ?? bot.agent}${bot.model ? ` ${modelLabel(catalog, bot.agent, bot.model)}` : ''} · ${t(`bots.effort.${bot.effort ?? 'medium'}`)}`} onClick={edit} testid="info-brain" />

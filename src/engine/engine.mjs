@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
-import { useHome, ctx, tr, role, isHeadless } from '../core/context.mjs';
+import { useHome, ctx, tr, role } from '../core/context.mjs';
 import { isHome, ensureLayout, hostsBots } from '../core/home.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { PRODUCT } from '../core/product.mjs';
@@ -43,17 +43,13 @@ const log = (line) => { try { if (logFile) { rotateIfBig(logFile); fs.appendFile
 process.on('uncaughtException', (error) => log(`uncaughtException: ${error?.stack ?? error}`));
 process.on('unhandledRejection', (error) => log(`unhandledRejection: ${error?.stack ?? error}`));
 
-async function start(home, version, secret, browser, headless) {
+async function start(home, version, secret, browser) {
   if (!home || !isHome(home)) throw new Error(tr('sys.engine.notHome', { home }));
   ensureLayout(home); // the fixed folders, and folders made by older versions put in order
   useHome(home);
-  // 3.5: the role is the user's choice (orb.json «role», Ajustes › Magic Link); whoever starts the engine only says
-  // whether it has a window (Orb Server, src/server/host.mjs: headless). Its children learn it from ORB_NUCLEO.
-  ctx.headless = headless === true || process.env.ORB_NUCLEO === '1';
-  if (ctx.headless) process.env.ORB_NUCLEO = '1';
   // The approval secret comes from the app (kept encrypted by Windows); without it, the file fallback is used.
   if (typeof secret === 'string' && /^[0-9a-f]{64}$/.test(secret)) ctx.secret = Buffer.from(secret, 'hex');
-  // 3.6: a backup restored from Ajustes › Datos or «orb-server copia restaurar» replaces the data now, before the database
+  // 3.6: a backup restored from Ajustes › Datos replaces the data now, before the database
   // opens (what was there goes to .orb/antes-de-restaurar-<fecha>). Its secret (links, approvals) comes with it.
   const { applyPendingRestore } = await import('../core/backup.mjs');
   let restored = null;
@@ -67,8 +63,7 @@ async function start(home, version, secret, browser, headless) {
   fs.mkdirSync(ctx.paths.runs, { recursive: true });
   // Android's adb: in the PATH of every agent, downloaded in the background the first time.
   const { addAdbToPath, ensureAdb } = await import('./android.mjs');
-  // 3.5: not on the server (Orb Server): nothing is downloaded there unless the user asks for it (android.install).
-  addAdbToPath(); if (!isHeadless()) ensureAdb({ log });
+  addAdbToPath(); ensureAdb({ log });
   const { Board } = await import('../core/board.mjs');
   const { Sessions } = await import('./sessions.mjs');
   const { Orchestrator } = await import('./orchestrator.mjs');
@@ -85,8 +80,6 @@ async function start(home, version, secret, browser, headless) {
       const person = d.person ?? ownerOfBoard(board);
       if (d.locked && !LOCK_EVENTS.test(event) && !APP_EVENTS.has(event)) return;
       if (!APP_EVENTS.has(event) && !to(person)) return;
-      // 3.7 (WS5): the live view's pictures only go to the device that opened it.
-      if (event === 'browser:live' && payload?.device !== 'desktop') return;
       // Someone other than the owner at the window: the settings without secrets (as a phone gets them).
       toWindow(event, event === 'config:changed' && person !== ownerOfBoard(board) ? phoneConfig(payload) : payload);
     });
@@ -95,8 +88,6 @@ async function start(home, version, secret, browser, headless) {
     // 3.7 (WS2): the events of the bots run here go with their uids (never those of a copy: its home sends its own).
     router.add('link', (event, payload, audience, to) => { const p = botRelay(board, event, payload); if (p) link?.relay(event, p, (pid) => to(pid ?? ownerOfBoard(board))); });
     router.add('dev', (event, payload, audience, to) => { if (devControl && to(ownerOfBoard(board))) devControl.broadcast(event, payload); });
-    // 3.7 (WS5): Orb Server's own browser closes the pages of a task that ended (the app's does it in its main process).
-    router.add('serverBrowser', (event, payload) => { if (event === 'agentBrowser:closeTask') ctx.serverBrowser?.closeTask(payload?.task); });
   }
   // Only the coordinator's chat process gets this key; the MCP accepts the identity "orb" only with it.
   const orchKey = crypto.randomBytes(24).toString('hex');
@@ -167,26 +158,12 @@ async function start(home, version, secret, browser, headless) {
   };
   sessions.onBlocked = (s, why) => blocked(s?.person_id ?? null, why);
   orchestrator.onBlocked = (c, why) => blocked(c?.person_id ?? null, why);
-  // 3.7 (WS2): what this Orb says it can do (browser.live.v1 / vault.v1 when WS5 / WS6 set ctx.browserLive / ctx.vault).
+  // 3.7 (WS2): what this Orb says it can do.
   const { capsFor } = await import('../core/link.mjs');
   const testCaps = process.env.ORB_FAKE_AGENTS && process.env.ORB_LINK_CAPS ? process.env.ORB_LINK_CAPS.split(',').filter(Boolean) : null;
-  const caps = () => testCaps ?? capsFor({ server: ctx.product === 'server', browserLive: Boolean(ctx.browserLive), vault: Boolean(ctx.vault) });
+  const caps = () => testCaps ?? capsFor();
   remote = remoteRef.current = createRemote({ board, api, log, emit, version, features: caps });
-  // 3.7 (WS2): «Añadir Orb Server», who is who on it and the hub handoff of the phones (src/engine/hub.mjs).
-  const { createHub } = await import('./hub.mjs');
-  const hub = remoteRef.hub = createHub({ board, remote: () => remote, link: () => link, log, version });
-  remote.onServerOffer = (o) => hub.onServerOffer(o);
-  remote.onHandoff = (o) => hub.onHandoff(o);
-  remote.onDeviceOnline = (d) => hub.onDeviceOnline(d);
   { let t = null; remote.onMirror = (peer, ev) => { if (ev?.e !== 'bot.message') return; clearTimeout(t); t = setTimeout(() => { replica?.syncNow?.().catch?.(() => {}); }, 500); t.unref?.(); }; }
-  // 3.7 (WS5): Orb Server has no app to draw the agents' pages: its own browser (src/server/browser.mjs), a real Chromium
-  // launched only when a bot needs it. Same pipe and tools as the app's. Not on a PC with the app (ctx.browser is set).
-  if (!ctx.browser && (isHeadless() || process.env.ORB_SERVER_BROWSER === '1') && ctx.config.browser?.enabled !== false && (process.platform === 'linux' || process.env.ORB_SERVER_BROWSER === '1')) {
-    try {
-      const { startServerBrowser } = await import('../server/browser.mjs');
-      await startServerBrowser({ board, emit, log, push: (note) => remoteRef.current?.push?.(note) });
-    } catch (error) { log(`navegador del Server: ${error.message}`); }
-  }
   // 3.5 Magic Link: the links this Orb made to other Orbs (keys sealed with the app's secret). A workshop linked to a
   // centre runs the calls the centre forwards to it, with the same checks as a phone's.
   {
@@ -208,7 +185,7 @@ async function start(home, version, secret, browser, headless) {
       // 3.6: with this Orb's identity (orbId, incarnation): the other side tells a moved Orb from a copy of it.
       identity: () => { const id = orbIdOf(home); return { ...orbIdentity({ name: orbNameOf(ctx.config), role: role(), version, macs: myMacs() }), orb: { orbId: id.orbId, incarnation: id.incarnation, host: os.hostname().slice(0, 80) } }; },
       verdict: cloneVerdict,
-      features: caps, mapped: (p) => hub.mapped(p), beforeDisconnect: (p) => hub.handback(p),
+      features: caps,
       // 3.6 (A13, A12): the centre says who asked there; the call runs here as the person this link belongs to, once per
       // request_id, audited.
       onRequest: async (method, params, peer, { principal = null, requestId = null } = {}) => {
@@ -253,10 +230,8 @@ async function start(home, version, secret, browser, headless) {
     }
     // 3.5: the bots live on the centre: what its bots say comes to this Orb's window as centro:<event>.
     // 3.6: only to the person this link belongs to here (the centre already sends only that person's bots).
-    // 3.7 (WS4): and the Server's browser: the live view's pictures (only this app's own view) and «Necesito que lo hagas tú».
-    link.on('*', (event, payload, peer) => { if (hostsBots(peer?.role ?? 'taller') && /^(bot\.|browser:(live|human)$)/.test(event)) emit(`centro:${event}`, payload, { person: peer?.person ?? ownerOfBoard(board) }); });
+    link.on('*', (event, payload, peer) => { if (hostsBots(peer?.role ?? 'taller') && /^bot\./.test(event)) emit(`centro:${event}`, payload, { person: peer?.person ?? ownerOfBoard(board) }); });
     // 3.6 (moving an Orb): a linked Orb that looks like a copy of another is not served; the person of that link is told.
-    link.on('hub:handoffDone', (p, peer) => hub.onHandoffDone(p, peer));
     link.on('link:clone', (p, peer) => board.notice(tr('msg.link.clone', { name: p?.name ?? '' }), 'warning', { person: peer?.person ?? null }));
     link.on('link:moved', (p, peer) => board.notice(tr('msg.link.moved', { name: p?.name ?? '' }), 'info', { person: peer?.person ?? null }));
   }
@@ -329,27 +304,26 @@ async function start(home, version, secret, browser, headless) {
   }
   // 2.7: the bridge with Open Control Edge (engine/bridge.mjs). Only on Windows, only for the app's own engine (main.mjs
   // sets ORB_BRIDGE) and never with the test agents: made-up runs must not reach OCE as real data.
-  if (process.platform === 'win32' && process.env.ORB_BRIDGE === '1' && !process.env.ORB_FAKE_AGENTS && !isHeadless()) {
+  if (process.platform === 'win32' && process.env.ORB_BRIDGE === '1' && !process.env.ORB_FAKE_AGENTS) {
     const { startBridge } = await import('./bridge.mjs');
     bridge = startBridge({ board, version, busy: () => orchestrator.busy, log });
   }
   // 2.6: the reports the assistant still owed when the app was closed come back.
   const owed = orchestrator.resume();
   if (owed) log(`asistente: ${owed} aviso(s) pendientes recuperados`);
-  return { home, name: ctx.config.assistantName, role: role(), headless: ctx.headless };
+  return { home, name: ctx.config.assistantName, role: role() };
 }
 
 transport.on(async (msg) => {
   if (!msg || typeof msg !== 'object') return;
   if (msg.type === 'start') {
-    try { transport.send({ type: 'started', ok: true, result: await start(msg.home, msg.version, msg.secret, msg.browser, msg.headless) }); }
+    try { transport.send({ type: 'started', ok: true, result: await start(msg.home, msg.version, msg.secret, msg.browser) }); }
     catch (error) { transport.send({ type: 'started', ok: false, error: error.message }); }
     return;
   }
   if (msg.type === 'shutdown') {
     // The phone access may have to turn off `tailscale serve` first (a few seconds at most).
     try { api?.shutdown(); } catch { /* closing anyway */ }
-    try { await Promise.race([ctx.serverBrowser?.shutdown(), new Promise((r) => setTimeout(r, 3000))]); } catch { /* closing anyway */ }
     try { bridge?.stop(); } catch { /* closing anyway */ }
     try { devControl?.stop(); } catch { /* closing anyway */ }
     try { oce?.stop(); } catch { /* closing anyway */ }
@@ -361,12 +335,11 @@ transport.on(async (msg) => {
   if (msg.type !== 'call') return;
   try {
     if (!api) throw new Error(tr('sys.engine.notStarted', { name: PRODUCT.name }));
-    // 3.6: this PC's window calls as the person sitting at it (the owner until persons.switch); Orb Server's local socket
-    // (as: 'control', src/server/control.mjs) as the owner. A locked window may only unlock (engine-enforced).
+    // 3.6: this PC's window calls as the person sitting at it (the owner until persons.switch). A locked window may only
+    // unlock (engine-enforced).
     const method = String(msg.method);
     let result;
-    if (msg.as === 'control') result = await api.call(method, msg.params ?? {}, api.controlPrincipal());
-    else if (api.desktop.locked && method === 'app.state') result = api.lockState();
+    if (api.desktop.locked && method === 'app.state') result = api.lockState();
     else if (api.desktop.locked && !LOCKED_OK.has(method)) throw Object.assign(new Error(tr('msg.persons.lockedWindow')), { userFacing: true });
     else result = await api.call(method, msg.params ?? {}, api.desktopPrincipal());
     transport.send({ type: 'reply', id: msg.id, ok: true, result: result === undefined ? null : result });
@@ -376,5 +349,3 @@ transport.on(async (msg) => {
   }
 });
 
-// 3.7 (WS2): a bot's live event as it is mirrored to a linked Orb (src/engine/bot-relay.mjs, shared with Orb Server).
-export { botRelay };

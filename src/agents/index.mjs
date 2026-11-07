@@ -8,7 +8,7 @@ import * as cursor from './cursor.mjs';
 import { acpAgent, ACP_SPECS } from './acp.mjs';
 import { cleanEnv, IS_WIN } from './common.mjs';
 import fs from 'node:fs';
-import { ctx, tr, isHeadless } from '../core/context.mjs';
+import { ctx, tr } from '../core/context.mjs';
 import { startLogin } from './login.mjs';
 import { accountsOf, account, accountDir, accountEnv, defaultAccount, loginState as accountLogin, MULTI } from '../core/accounts.mjs';
 
@@ -107,7 +107,7 @@ export async function startAccountLogin(accountId, { mode, emit = () => {}, onEn
   if (!a.windowlessLogin) { openLogin(accountId); return { console: true, account: acc.id, agent: acc.agent }; }
   const exe = a.loginExe?.() ?? executable(acc.agent);
   if (acc.home) fs.mkdirSync(acc.home, { recursive: true });
-  const how = mode === 'device' || mode === 'web' ? mode : (isHeadless() ? 'device' : 'web');
+  const how = mode === 'device' ? 'device' : 'web';
   return startLogin({ agent: acc.agent, account: acc.id, exe, env: accountEnv(acc), mode: how, emit, onEnd, verify: () => (MULTI[acc.agent] ? accountLogin(acc) === 'si' : true) });
 }
 

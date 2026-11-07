@@ -6,7 +6,7 @@ import { paths, loadConfig, writeJson, merge, AGENT_IDS, relabelEmptyLogs, ROLES
 import { translate } from './i18n.mjs';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from './appearance.mjs';
 
-export const ctx = { home: null, paths: null, config: null, secret: null, headless: null }; // secret: approval secret handed by the app (memory only)
+export const ctx = { home: null, paths: null, config: null, secret: null }; // secret: approval secret handed by the app (memory only)
 
 // Message in the language of the settings (Spanish until a configuration is loaded).
 export const tr = (key, vars) => translate(ctx.config?.language ?? 'es', key, vars);
@@ -15,10 +15,6 @@ export const tr = (key, vars) => translate(ctx.config?.language ?? 'es', key, va
 export const role = () => (ROLES.includes(ctx.config?.role) ? ctx.config.role : 'todo');
 export const keepsBots = () => hostsBots(role()); // «centro» or «todo»: the Orbs linked with it may use its bots
 export const programs = () => doesDev(role()); // «taller» or «todo»
-// 3.5: an engine without a window of its own (Orb Server, src/server/host.mjs). What a server cannot do (God mode, the
-// expert view, isolated copies, a console…) depends on this, never on the role: a PC can be a centre too.
-// The MCP servers (other processes) see it through ORB_NUCLEO, which the host sets for the engine and its children.
-export const isHeadless = () => (ctx.headless ?? process.env.ORB_NUCLEO === '1') === true;
 
 export function useHome(home) {
   ctx.home = home; ctx.paths = paths(home); ctx.config = loadConfig(home);

@@ -18,9 +18,8 @@ import * as C from '../src/core/mobile-crypto.mjs';
 import { allowedFor, kindForPairing, plainHttpBrowser, pushContent, pushPreview, phoneConfig, approverOf, CONSOLE_ALLOWED } from '../src/engine/remote.mjs';
 import { openDb } from '../src/core/db.mjs';
 import { decide, botCheck, taintsBot, botDenyRules } from '../src/core/guard.mjs';
-import { CONTROL_METHODS, pickDevice } from '../src/server/control.mjs';
 
-const env = { ORB_REMOTE_BIND: '127.0.0.1', ORB_WOL_DRY: '1', ORB_NUCLEO: '1' };
+const env = { ORB_REMOTE_BIND: '127.0.0.1', ORB_WOL_DRY: '1' };
 let srv; let tSrv; let port; let base; let dir;
 const links = [];
 const client = (name, kind) => { const l = createLink({ file: path.join(dir, `${crypto.randomUUID()}.json`), secret: crypto.randomBytes(32), identity: () => ({ name, kind, ...(kind === 'orb' ? { role: 'taller' } : {}) }) }); links.push(l); return l; };
@@ -291,22 +290,3 @@ test('avisos: por defecto los de los bots no muestran el texto en la pantalla de
   assert.equal(phoneConfig(cfg('none')).mobile.preview, 'none', 'la app lo sabe');
 });
 
-test('Orb Server: desde el propio servidor se ven y se quitan dispositivos, y se recupera la administración', async () => {
-  assert.ok(CONTROL_METHODS.has('link.revoke') && CONTROL_METHODS.has('link.devices'));
-  const list = [{ id: 'a1b2c3d4-0000-0000-0000-000000000001', name: 'Móvil' }, { id: 'a1b2ffff-0000-0000-0000-000000000002', name: 'Tablet' }];
-  assert.equal(pickDevice(list, 'a1b2c3').device.name, 'Móvil');
-  assert.equal(pickDevice(list, 'a1b2').error, 'many');
-  assert.equal(pickDevice(list, 'tablet').device.id, list[1].id);
-  assert.equal(pickDevice(list, 'nadie').error, 'none');
-
-  const lost = client('Móvil perdido', 'phone');
-  const a = await lost.connect({ qr: (await srv.call('link.qr', { admin: 'first' })).url });
-  const b = await client('Móvil nuevo', 'phone').connect({ qr: (await srv.call('link.qr', { admin: 'first' })).url });
-  let devs = await srv.call('link.devices');
-  assert.deepEqual([a, b].map((x) => devs.find((d) => d.id === x.id).admin), [true, false], 'sin --admin, solo el primero');
-  const c = await client('Móvil de repuesto', 'phone').connect({ qr: (await srv.call('link.qr', { admin: true })).url });
-  devs = await srv.call('link.devices');
-  assert.equal(devs.find((d) => d.id === c.id).admin, true, '--admin: aunque otro ya administre');
-  await srv.call('link.revoke', { id: a.id });
-  await assert.rejects(lost.call(null, 'link.status'), (e) => e.revoked === true, 'el perdido ya no entra');
-});

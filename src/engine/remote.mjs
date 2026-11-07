@@ -17,7 +17,7 @@ import http from 'node:http';
 import { execFile } from 'node:child_process';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { ctx, tr, isHeadless, role as myRole, keepsBots, programs } from '../core/context.mjs';
+import { ctx, tr, role as myRole, keepsBots, programs } from '../core/context.mjs';
 import { ROLES, hostsBots, doesDev } from '../core/home.mjs';
 import { oneLine } from '../core/safety.mjs';
 import { quickRun } from '../agents/index.mjs';
@@ -25,12 +25,11 @@ import { IS_WIN } from '../agents/common.mjs';
 import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal, open, sealText, openText, openBytes, AAD, CLOCK_SKEW_MS, shortSecret } from '../core/mobile-crypto.mjs';
 import { newVapidKeys, checkSubscription, sendPush } from './webpush.mjs';
 import { wake, normalMac } from '../core/wol.mjs';
-import { FORWARD_MIN, capsFor, versionGap, RELAY_EVENTS, BOT_RELAY_EVENTS, normalCode, parseQr } from '../core/link.mjs';
+import { FORWARD_MIN, capsFor, RELAY_EVENTS, BOT_RELAY_EVENTS } from '../core/link.mjs';
 import { PROTOCOL, MIN_PROTOCOL, versionOfProtocol, CODE_ALPHABET, shortCodeLabel } from '../core/link-payload.mjs';
-import { SERVER_CODE_MINUTES, SERVER_CODE_LENGTH, serverSecret, openServerProof, sealServerAnswer, serverSkew } from '../core/server-pair.mjs';
 import { mappedPerson } from '../core/link-persons.mjs';
 import { createPerson, listPersons } from '../core/persons.mjs';
-import { PHONE_SET as ALLOWED, BOTS_OWNER, ORB_SET, CONSOLE_SET, CENTRO_PHONE, SECRET_PARAMS } from '../core/policy.mjs';
+import { PHONE_SET as ALLOWED, BOTS_OWNER, ORB_SET, CONSOLE_SET } from '../core/policy.mjs';
 import { principalOf, reaches, audienceOf, ownerOfBoard, peopleWith, audit } from '../core/authz.mjs';
 import { checkTicket, getPerson } from '../core/persons.mjs';
 import { MAGIC as BACKUP_MAGIC, backupDir } from '../core/backup.mjs';
@@ -71,10 +70,6 @@ export const ORB_ALLOWED = ORB_SET;
 // What a workshop passes on to its centre (centro.<method>): the bots, nothing else.
 // 3.6 (M2): and the chat list of the Bots zone (inbox.*), so the bots of a centre keep their pins, sections and unread.
 export const CENTRO_FORWARD = new Set([...ORB_ALLOWED].filter((m) => m.startsWith('bots.') || m.startsWith('inbox.')));
-// 3.7 (WS4): the app's Ajustes › Orb Server: its state and update, its password vault (the caller's own account there)
-// and «Ver navegador del Server». The Server checks each one again (owner, «Puede administrar», own profile).
-for (const m of ['server.status', 'server.engines', 'server.engines.install', 'server.update.status', 'server.update.check', 'server.update.apply',
-  'vault.status', 'vault.setup', 'vault.test', 'vault.forget', 'browser.live.start', 'browser.live.input', 'browser.live.stop']) CENTRO_FORWARD.add(m);
 export const CONSOLE_ALLOWED = CONSOLE_SET;
 // What a centre sends to the Orbs linked with it (their Bots mode shows the centre's bots, live).
 const BOT_EVENTS = new Set(['bot.updated', 'bot.message', 'bot.state', 'bot.home']);
@@ -99,12 +94,7 @@ const EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'notice', 'se
   // 3.7 (WS3): a bot changed home (or is being moved)
   'bot.home', 'bots.move',
   // 3.6 (messaging lists): a chat list changed (only to its person)
-  'inbox:changed',
-  // 3.7 (WS5): «Ver navegador del Server» (its pictures only to the device that opened it) and «Necesito que lo hagas tú»
-  'browser:live', 'browser:human']);
-// 3.5 «Solo Orb»: the server (Orb Server, without a window) has no screen of its own, so a linked phone signs its agents in: it gets the
-// link and the code, and pastes Claude's code back. On a PC the sign-in stays on the PC.
-// (CENTRO_PHONE, in src/core/policy.mjs)
+  'inbox:changed']);
 // 3.5: what a phone may also ask: the links' state and its workshop through the centre (taller.*).
 const LINK_ALLOWED = new Set(['link.status']);
 // What may be forwarded to each role (the workshop checks it again on its side): the same work a phone may do there.
@@ -115,10 +105,8 @@ const FORWARD_MS = Number(process.env.ORB_FAKE_AGENTS && process.env.ORB_FORWARD
 const BACKUP_PUT_MAX = Number(process.env.ORB_FAKE_AGENTS && process.env.ORB_BACKUP_PUT_MAX) || 2 * 1024 * 1024 * 1024;
 const BACKUP_PUT_KEEP = 3;
 const PAIR_FAILS_MAX = 20; // wrong attempts (all addresses together) that cancel the code on screen
-// 3.7 (WS2): «Añadir Orb Server»: the code of the install command is cancelled after a few wrong tries; the one-time
-// offers an Orb makes for a device it hands to another (link:handoff, 10 min) or back (link:handback, a few days: the
-// device may be off when the Server is unlinked).
-const SERVER_FAILS_MAX = 5;
+// 3.7 (WS2): the one-time offers an Orb makes for a device it hands to another (link:handoff, 10 min) or back
+// (link:handback, a few days: the device may be off when the hub is unlinked).
 const HANDOFF_MS = 10 * 60_000;
 const HANDBACK_MS = 3 * 86_400_000;
 const HANDOFF_KINDS = ['phone', 'browser'];
@@ -126,7 +114,7 @@ const HANDOFF_KINDS = ['phone', 'browser'];
 // The checks of a call coming from outside (a phone, or the centre forwarding a phone's call): null when it may run, or
 // why not. `uploadsDir`: the pictures that may go with it (none when forwarded).
 export function guardCall(board, method, params, { allowed = ALLOWED, uploadsDir = null } = {}) {
-  if (!allowed.has(method) && !(isHeadless() && CENTRO_PHONE.has(method))) return tr('msg.remote.pcOnly');
+  if (!allowed.has(method)) return tr('msg.remote.pcOnly');
   if (method === 'agents.login' && params.console) return tr('msg.remote.pcOnly');
   if (params.permission === 'total') return tr('msg.remote.totalPcOnly');
   // A conversation the PC gave total access to is driven from the PC only.
@@ -275,7 +263,7 @@ e.waitUntil(fetch('/api/note-action',{method:'POST',credentials:'omit',headers:{
 e.waitUntil(openApp(d.route,a==='allow'&&def&&def.open?d.card:null))});`;
 
 // 3.7 (WS2): features(): what this Orb says it can do (src/core/link.mjs › capsFor).
-export function createRemote({ board, api, log, emit = () => {}, version = null, features = () => capsFor({ server: ctx.product === 'server' }) }) {
+export function createRemote({ board, api, log, emit = () => {}, version = null, features = () => capsFor() }) {
   let servers = []; // http servers (one per address)
   let state = { running: false, routes: [], error: null };
   let generation = 0; // moved by stop(): a start() still waiting for Tailscale gives up
@@ -283,8 +271,6 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
   let watcher = null;
   let served = null; // the https port `tailscale serve` is forwarding for us (turned off on stop)
   let pairing = null; // { code, short, expires, route, fails }
-  // 3.7 (WS2): the install command's code («Añadir Orb Server»): { code, secret, expires, fails, person }, one at a time.
-  let serverPairing = null;
   // One-time offers for a device handed to this Orb (or an Orb Server linking to its app): id -> the same fields as
   // `pairing` plus { meta } (who asked for it and for which device there).
   const handoffs = new Map();
@@ -428,13 +414,10 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
     if (app) { res.setHeader('Access-Control-Allow-Origin', app); for (const [k, v] of Object.entries(APP_CORS)) res.setHeader(k, v); }
     if (req.method === 'OPTIONS') { req.resume(); return send(res, app ? 204 : 403, '', 'text/plain'); }
     if (req.method === 'GET' && p === '/api/hello') return helloInfo(res);
-    if (req.method === 'GET' && p === '/api/server-hello') return serverHello(req, res);
     if (req.method === 'GET' && !p.startsWith('/api/')) return serveStatic(req, res, p);
     if (!originOk(req)) return send(res, 403, { error: 'origen no permitido' });
 
     if (req.method === 'POST' && p === '/api/pair') return pair(req, res);
-    // 3.7 (WS2): an Orb Server installed with this app's command pairs with it.
-    if (req.method === 'POST' && p === '/api/server-pair') return serverPair(req, res);
     // 3.6 (M4): «Aprobar» / «Rechazar» from a notification of the phone's browser (its service worker has no keys).
     if (req.method === 'POST' && p === '/api/note-action') return noteAction(req, res);
 
@@ -733,56 +716,18 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
       confirm: seal(pairingKey(own.priv, devPub, secretOf), { id, pc: pcFingerprint }, AAD.confirm(id)) });
   }
 
-  // ---- 3.7 (WS2): «Añadir Orb Server» (src/core/server-pair.mjs), and the one-time offers of the hub handoff.
+  // ---- 3.7 (WS2): the one-time offers of the hub handoff.
   function pairingState() { return pairing; }
   function clearPairing() { pairing = null; }
-  const serverActive = () => Boolean(serverPairing && Date.now() <= serverPairing.expires);
-  // GET /api/server-hello: this app's key, only while an install command's code is on screen.
-  function serverHello(req, res) {
-    if (!serverActive()) return send(res, 404, { error: tr('msg.server.noCode') });
-    return send(res, 200, { v: PROTOCOL, server: 1, pc: b64.enc(own.pub), fp: pcFingerprint, name: orbName(), version, features: features() });
-  }
-  // POST /api/server-pair: the Orb Server proves it has the code (sealed with it, tied to this key) and brings its own
-  // one-time offer; this app uses the code up and links to it with that offer (onServerOffer: src/engine/hub.mjs).
-  async function serverPair(req, res) {
-    const who = ipOf(req) || '?';
-    const recent = (failures.get(who) ?? []).filter((t) => Date.now() - t < 10 * 60_000);
-    failures.set(who, recent);
-    if (recent.length >= 10) { req.resume(); return send(res, 429, { error: tr('msg.remote.tooMany') }); }
-    const bad = () => {
-      recent.push(Date.now());
-      if (serverPairing && ++serverPairing.fails >= SERVER_FAILS_MAX) { serverPairing = null; log('enlace: demasiados intentos con el código del Server; anulado'); }
-      return send(res, 401, { error: tr('msg.server.badCode') });
-    };
-    let body; try { body = await readJson(req, 20_000); } catch { return bad(); }
-    if (!serverActive()) return send(res, 401, { error: tr('msg.server.noCode') });
-    const opened = openServerProof(own.priv, body, serverPairing.secret);
-    if (!opened) return bad();
-    const { pk, msg } = opened;
-    if (!(Math.abs(Date.now() - Number(msg.t)) <= CLOCK_SKEW_MS)) return clockOff(res);
-    // An Orb Server too old (or too new) for this app: nothing is linked and the code is kept.
-    const gap = versionGap({ v: PROTOCOL, min: MIN_PROTOCOL }, { v: msg.v, min: msg.min });
-    if (gap) return send(res, 426, { error: tr(gap === 'me' ? 'msg.server.skewOldApp' : 'msg.server.skewOldServer', { has: msg.version ?? '?', need: version ?? '?' }), update: gap === 'me' ? 'app' : 'server' });
-    let offer; try { offer = parseQr(msg.offer); } catch { return bad(); }
-    const person = serverPairing.person;
-    serverPairing = null; // one use: whatever happens next
-    if (!remote.onServerOffer) return send(res, 503, { error: tr('msg.link.unavailable') });
-    let peer;
-    try { peer = await remote.onServerOffer({ offer: msg.offer, server: { name: oneLine(String(msg.name ?? ''), 60) || offer.name, version: msg.version ? oneLine(String(msg.version), 40) : null, features: Array.isArray(msg.features) ? msg.features.map(String).slice(0, 20) : [] }, person }); }
-    catch (error) { return send(res, 502, { error: oneLine(error?.message ?? String(error), 300) }); }
-    board.event(null, 'usuario', 'server.paired', peer?.name ?? offer.name ?? '');
-    const skew = serverSkew({ app: version, server: msg.version, features: Array.isArray(msg.features) ? msg.features : null });
-    return send(res, 200, { box: sealServerAnswer(pk, { peer: peer?.id ?? null, name: orbName(), version, skew }) });
-  }
   // A one-time offer for one device (the payload of a QR plus h, its id): kind and person decided here.
   // meta: { from, ref } (the Orb that asked for it and its device there) or { back: true, ref } (a device coming back).
-  function makeOffer({ kind, person = null, approve = true, admin = false, dev = false, ms = HANDOFF_MS, meta = null }) {
+  function makeOffer({ kind, person = null, approve = true, dev = false, ms = HANDOFF_MS, meta = null }) {
     if (!state.running) throw linkError(tr('msg.remote.enableFirst'), { status: 503 });
     for (const [k, o] of handoffs) if (o.expires < Date.now()) handoffs.delete(k);
     if (handoffs.size > 500) throw linkError(tr('msg.remote.tooMany'), { status: 429 });
     const route = state.routes.find((r) => r.kind === 'tailscale') ?? state.routes[0];
     const h = crypto.randomUUID(); const code = crypto.randomBytes(18).toString('base64url');
-    handoffs.set(h, { code, expires: Date.now() + ms, route: route.kind, fails: 0, admin: admin === 'first' && isHeadless() ? 'first' : false, device: kind, approve: approve !== false, dev: kind === 'orb' && dev === true, person: person ?? owner(), meta });
+    handoffs.set(h, { code, expires: Date.now() + ms, route: route.kind, fails: 0, admin: false, device: kind, approve: approve !== false, dev: kind === 'orb' && dev === true, person: person ?? owner(), meta });
     const others = state.routes.filter((r) => r !== route).map((r) => r.url);
     if (state.local && !others.includes(state.local) && route.url !== state.local) others.push(state.local);
     const frag = new URLSearchParams({ vincular: code, pc: b64.enc(own.pub), v: String(PROTOCOL), n: orbName(), r: role(), h });
@@ -1275,7 +1220,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
       const aud = audience ?? audienceOf(board, event, payload);
       const isFor = to ?? ((pid) => reaches(board, aud, pid));
       if (event === 'chat:new') notify(payload, aud);
-      if (!clients.size || !(EVENTS.has(event) || event.startsWith('taller:') || (event === 'agents:login' && isHeadless()))) return;
+      if (!clients.size || !(EVENTS.has(event) || event.startsWith('taller:'))) return;
       // The settings themselves never travel to a phone (the page just reloads what it is allowed to see).
       const value = { e: event, p: event === 'config:changed' || event === 'taller:config:changed' ? null : payload };
       // 3.5: the events of the Orb that programs for this one's phones (only that one sends them, see linkOp 'events') also
@@ -1284,8 +1229,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
       const plain = event.startsWith('taller:') && !event.startsWith('taller:bot.') ? { e: event.slice(7), p: value.p } : null;
       for (const c of clients) {
         if (!isFor(c.person)) continue;
-        if (event === 'browser:live' && payload?.device && c.device !== payload.device) continue;
-        if (c.kind === 'orb' && !(BOT_EVENTS.has(event) && keepsBots()) && !event.startsWith('browser:')) continue;
+        if (c.kind === 'orb' && !(BOT_EVENTS.has(event) && keepsBots())) continue;
         if (c.res.writableLength > STREAM_BACKLOG) { try { c.res.destroy(); } catch { /* gone */ } clients.delete(c); continue; }
         try {
           c.res.write(`data: ${sealText(c.key, value, AAD.event(c.device))}\n\n`);
@@ -1330,14 +1274,14 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
     // programs for this one; admin: true (whoever makes the QR is the owner: the PC, the server's own console or a device
     // that administers) or 'first' (only while no device administers, on a server without a window).
     // 3.6: person: whom the device is for (the QR's «¿Para quién?»; api-link.mjs checks who may choose it).
-    pair(kind, { admin = false, device = null, approve = true, dev = false, person = null } = {}) {
+    pair(kind, { device = null, approve = true, dev = false, person = null } = {}) {
       if (!state.running) throw new Error(tr('msg.remote.enableFirst'));
       const route = state.routes.find((r) => r.kind === kind) ?? state.routes[0];
       const code = crypto.randomBytes(18).toString('base64url');
       const short = Array.from({ length: 8 }, () => CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)]).join('');
       const forKind = PAIR_KINDS.includes(device) ? device : null;
       pairing = { code, short, short3: shortSecret(short, b64.enc(own.pub)), expires: Date.now() + PAIR_MINUTES * 60_000, route: route.kind, fails: 0,
-        admin: admin === true && isHeadless() ? true : admin === 'first' && isHeadless() ? 'first' : false, device: forKind, approve: approve !== false, dev: forKind === 'orb' && dev === true,
+        admin: false, device: forKind, approve: approve !== false, dev: forKind === 'orb' && dev === true,
         person: person ?? owner() };
       const others = state.routes.filter((r) => r !== route).map((r) => r.url);
       // 3.6 (A11): the name of this computer on the home network (name.local) too, for when the Wi-Fi address changes.
@@ -1363,21 +1307,10 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
     },
     // ---- 3.5 Magic Link
     devices,
-    // ---- 3.7 (WS2): «Añadir Orb Server» and the hub handoff (src/engine/hub.mjs sets the callbacks).
-    // onServerOffer({ offer, server, person }) → the link made; onHandoff({ id, ref, back, kind, person }) a device paired
+    // ---- 3.7 (WS2): the hub handoff. onHandoff({ id, ref, back, kind, person }) a device paired
     // with one of this Orb's offers; onDeviceOnline(device) a phone connected; onMirror(peer, ev) a mirrored
     // bot event arrived.
-    onServerOffer: null, onHandoff: null, onDeviceOnline: null, onMirror: null,
-    // The install command's code: 10 minutes, one use, tied to this app's key. → { code, expiresAt, fp, address, urls }
-    serverCode({ kind = null, person = null } = {}) {
-      if (!state.running) throw new Error(tr('msg.remote.enableFirst'));
-      const route = state.routes.find((r) => r.kind === kind) ?? state.routes.find((r) => r.kind === 'tailscale') ?? state.routes[0];
-      const code = Array.from({ length: SERVER_CODE_LENGTH }, () => CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)]).join('');
-      serverPairing = { code, secret: serverSecret(code, b64.enc(own.pub)), expires: Date.now() + (Number(process.env.ORB_FAKE_AGENTS && process.env.ORB_SERVER_CODE_MS) || SERVER_CODE_MINUTES * 60_000), fails: 0, person: person ?? owner() };
-      return { code: shortCodeLabel(code), expiresAt: serverPairing.expires, fp: pcFingerprint, address: route.url.replace(/\/$/, ''), kind: route.kind, urls: state.routes.map((r) => r.url) };
-    },
-    serverCodeState: () => (serverActive() ? { active: true, expiresAt: serverPairing.expires } : { active: false }),
-    cancelServerCode() { serverPairing = null; return true; },
+    onHandoff: null, onDeviceOnline: null, onMirror: null,
     handoffOffer: (opts) => makeOffer(opts),
     sendToDevice,
     fingerprint: () => pcFingerprint,
@@ -1485,8 +1418,6 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
       }
       if (sub === 'queue') {
         const method = String(params.method ?? ''); const inner = params.params && typeof params.params === 'object' ? params.params : {};
-        // 3.7 (WS6): the vault is the Server's own; a call with a secret in it is never kept in a queue.
-        if (/^vault\./.test(method) || SECRET_PARAMS.has(method)) throw linkError(tr('msg.remote.pcOnly'), { status: 403 });
         forwardCheck(method, inner);
         mayForward(d, principal, method);
         const requestId = crypto.randomUUID();
@@ -1495,7 +1426,6 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
         if (onlineIds().has(d.id)) flushQueue().catch((error) => log(`enlace: cola: ${error.message}`));
         return { id: Number(id), queued: true, online: onlineIds().has(d.id) };
       }
-      if (/^vault\./.test(sub) || SECRET_PARAMS.has(sub)) throw linkError(tr('msg.remote.pcOnly'), { status: 403 });
       forwardCheck(sub, params);
       mayForward(d, principal, sub);
       if (!onlineIds().has(d.id)) throw offline(d);

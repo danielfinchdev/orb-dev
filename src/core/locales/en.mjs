@@ -22,14 +22,12 @@ import help from './en/help.mjs';
 import greet from './en/greet.mjs';
 import whiteboard from './en/whiteboard.mjs';
 import bots from './en/bots.mjs';
-import term from './en/term.mjs';
 import botsui from './en/botsui.mjs';
 import link from './en/link.mjs';
 import ws1 from './en/ws1.mjs';
 import ws2 from './en/ws2.mjs';
 import ws3 from './en/ws3.mjs';
 import hogar from './en/hogar.mjs';
-import enlaceServer from './en/enlace-server.mjs';
 import ws4 from './en/ws4.mjs';
 import ws5 from './en/ws5.mjs';
 import ws6 from './en/ws6.mjs';
@@ -38,10 +36,8 @@ import ola1 from './en/ola1.mjs';
 import mensajeria from './en/mensajeria.mjs';
 import orbchats from './en/orbchats.mjs';
 import notes from './en/notes.mjs';
-import navegadorServer from './en/navegador-server.mjs';
+import navegadorLimites from './en/navegador-limites.mjs';
 import oce from './en/oce.mjs';
-import vault from './en/vault.mjs';
-import servidorUi from './en/servidor-ui.mjs';
 
 export default {
   ...base,
@@ -67,14 +63,12 @@ export default {
   ...greet,
   ...whiteboard,
   ...bots,
-  ...term,
   ...botsui,
   ...link,
   ...ws1,
   ...ws2,
   ...ws3,
   ...hogar,
-  ...enlaceServer,
   ...ws4,
   ...ws5,
   ...ws6,
@@ -83,8 +77,6 @@ export default {
   ...mensajeria,
   ...orbchats,
   ...notes,
-  ...navegadorServer,
-  ...oce,
-  ...vault,
-  ...servidorUi
+  ...navegadorLimites,
+  ...oce
 };

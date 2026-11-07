@@ -9,7 +9,6 @@
 // memory that is not this bot's to keep, waits for its person (memory_log pending + a card).
 import readline from 'node:readline';
 import crypto from 'node:crypto';
-import net from 'node:net';
 import { useHome, tr } from '../core/context.mjs';
 import { isHome } from '../core/home.mjs';
 import { oneLine } from '../core/safety.mjs';
@@ -199,38 +198,6 @@ async function oceTools() {
   ];
 }
 const OCE_TOOLS = ME && has('oce') ? await oceTools() : [];
-// 3.7 (Orb Server, WS6): «Contraseñas»: the Server types the sign-in of the open site from the person's vault into the
-// page of this bot's browser (the same page as its orb_browser_* tools). The model never sees a user name, a password or
-// a code: the answer is «ok» or «failed: <reason>», nothing else (src/server/vault/fill.mjs).
-const VAULT_PIPE = process.env.ORB_BROWSER_PIPE; const VAULT_TOKEN = process.env.ORB_BROWSER_TOKEN;
-const VAULT_ANSWER = /^(ok|failed: [a-z_]{2,40})$/;
-function vaultFillCall(site) {
-  return new Promise((resolve) => {
-    let done = false; let buf = ''; let hello = false;
-    const end = (answer) => { if (done) return; done = true; clearTimeout(timer); try { socket.destroy(); } catch { /* gone */ } resolve(VAULT_ANSWER.test(answer) ? answer : 'failed: error'); };
-    const timer = setTimeout(() => end('failed: timeout'), 120_000);
-    const socket = net.connect(VAULT_PIPE);
-    socket.setEncoding('utf8');
-    socket.on('connect', () => socket.write(`${JSON.stringify({ hello: VAULT_TOKEN, agent: process.env.ORB_AGENT ?? '', task: '', session: process.env.ORB_SESSION ?? '', ...(process.env.ORB_BROWSER_PERSON ? { person: process.env.ORB_BROWSER_PERSON } : {}) })}\n`));
-    socket.on('data', (chunk) => {
-      buf += chunk; let nl;
-      while ((nl = buf.indexOf('\n')) >= 0) {
-        let m; try { m = JSON.parse(buf.slice(0, nl)); } catch { m = {}; } buf = buf.slice(nl + 1);
-        if (!hello) { hello = true; if (!m.ok) return end('failed: vault_off'); socket.write(`${JSON.stringify({ id: 1, action: 'vault_fill', args: { site } })}\n`); continue; }
-        if (m.id !== 1) continue;
-        // Only the browser's own «ok» / «failed: reason» goes back; an error of the browser is not passed on (no text).
-        return end(m.ok ? String(m.result ?? '') : /no hay ninguna página|no page|noPage/i.test(String(m.error ?? '')) ? 'failed: no_page' : 'failed: vault_off');
-      }
-    });
-    socket.on('error', () => end('failed: vault_off'));
-    socket.on('close', () => end('failed: vault_off'));
-  });
-}
-const VAULT_TOOLS = ME && has('contrasenas') && VAULT_PIPE && VAULT_TOKEN ? [
-  { name: 'vault_fill', description: `Inicia sesión en la web abierta en tu navegador con la cuenta que ${USER} compartió en su bóveda de contraseñas: Orb escribe el usuario, la contraseña y el código de un solo uso en la página sin que tú los veas. Devuelve solo «ok» o «failed: motivo». La primera vez en cada web, ${USER} tiene que aprobarlo (failed: needs_approval): díselo y vuelve a intentarlo cuando lo apruebe. Después pulsa tú el botón de entrar. Nunca pidas, leas ni escribas contraseñas tú.`,
-    inputSchema: { type: 'object', properties: { site: str('La web (opcional; por defecto, la que está abierta), p. ej. tienda.example') } },
-    run: (a) => vaultFillCall(typeof a.site === 'string' ? a.site.slice(0, 300) : '') }
-] : [];
 const tools = !ME ? [] : [
   { name: 'bot_list', description: 'Los bots a los que puedes escribir: nombre, papel, quién es el jefe, quién está en pausa y los temas exclusivos de cada uno.', readOnly: true, inputSchema: { type: 'object', properties: {} }, run: () => listForBot() },
   { name: 'bot_send', description: 'Manda un mensaje a otro bot (por nombre). Su respuesta te llega como un mensaje nuevo; no esperes. Si el tema es exclusivo de un bot, va a ese bot.',
@@ -270,7 +237,6 @@ const tools = !ME ? [] : [
   ] : []),
   ...PC_TOOLS,
   ...OCE_TOOLS,
-  ...VAULT_TOOLS,
   ...(has('servidor') ? [
     { name: 'srv_status', description: 'Cómo está el servidor: CPU, memoria, discos, tiempo encendido; en Linux también los contenedores (docker ps) y los servicios con fallos.', readOnly: true, inputSchema: { type: 'object', properties: {} }, run: () => S.serverStatus() },
     { name: 'srv_logs', description: 'Últimas líneas del registro de un contenedor (kind docker) o de un servicio (kind journal; user true para los del usuario).', readOnly: true,

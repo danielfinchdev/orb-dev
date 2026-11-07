@@ -12,7 +12,7 @@ import { shapeGateway } from './shape.mjs';
 export const RIGHTS = ['view', 'talk', 'edit'];
 const RANK = { view: 1, talk: 2, edit: 3, own: 4 };
 export const rank = (right) => RANK[right] ?? 0;
-export const CHANNELS = ['desktop', 'phone', 'browser', 'orb', 'forward', 'control', 'agent', 'system'];
+export const CHANNELS = ['desktop', 'phone', 'browser', 'orb', 'forward', 'agent', 'system'];
 const SHAREABLE = new Set(['bot', 'group', 'project', 'integration']);
 const DEVICE_CHANNEL = { phone: 'phone', browser: 'browser', orb: 'orb' };
 
@@ -42,16 +42,15 @@ const roleOf = (board, person) => {
 // ---- principals
 // { person, role, channel, device?, rights: { approve, dev, admin }, strongUntil?, via?, remote?, confirmed?, ceiling? }
 // desktop: this PC's window (person: who sits there; the owner by default). device: a row of devices (a linked phone,
-// browser or Orb). forwarded: a call the centre passed to this workshop. control: Orb Server's socket.
+// browser or Orb). forwarded: a call the centre passed to this workshop.
 // agentToken: an agent's tool process ({ agent, task, conversation, bot, person }). system: the engine itself.
 // ceiling: a Set given by an entry point that already knows the device's (remote.mjs allowedFor).
-export function principalOf(board, { device = null, desktop = false, person = null, forwarded = false, control = false, agentToken = null, system = false, ceiling = null, strongUntil = null, via = null } = {}) {
+export function principalOf(board, { device = null, desktop = false, person = null, forwarded = false, agentToken = null, system = false, ceiling = null, strongUntil = null, via = null } = {}) {
   const owner = ownerOfBoard(board);
   const alive = (pid) => (pid && roleOf(board, pid) ? pid : null);
   let p;
   if (system) p = { person: owner, channel: 'system', rights: { approve: true, dev: true, admin: true } };
   else if (desktop) p = { person: alive(person) ?? owner, channel: 'desktop', rights: { approve: true, dev: true, admin: true } };
-  else if (control) p = { person: owner, channel: 'control', rights: { approve: true, dev: true, admin: true } };
   else if (device) {
     p = { person: alive(device.person_id) ?? owner, channel: forwarded ? 'forward' : DEVICE_CHANNEL[device.kind] ?? 'browser', device: String(device.id ?? ''), remote: true,
       confirmed: device.kind !== 'orb' || Number(device.kind_ok ?? 1) === 1,

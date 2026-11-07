@@ -22,7 +22,7 @@
 //   { type: 'exit', code, stderr }            the process ended
 // TurnResult: { final, text, isError, stopReason, usage, limit }
 import { spawn } from 'node:child_process';
-import { killTree, cleanEnv, confineArgs } from './common.mjs';
+import { killTree, cleanEnv } from './common.mjs';
 import { tr } from '../core/context.mjs';
 
 export const DECISIONS = ['allow', 'always', 'deny'];
@@ -103,8 +103,7 @@ export class JsonRpcPeer {
 // Starts an agent's process for a live session: no shell, clean environment, stderr kept for error messages.
 export function spawnAgent(cmd, args, { cwd, env = {}, log = () => {} } = {}) {
   // 3.5: on Linux and macOS in a process group of its own (detached), so killTree stops its children too.
-  const c = confineArgs(cmd, args); // 3.7: no_new_privs on Orb Server with the admin helper
-  const child = spawn(c.cmd, c.args, { cwd, env: cleanEnv(env), windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
+  const child = spawn(cmd, args, { cwd, env: cleanEnv(env), windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
   let stderr = '';
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', (c) => { stderr = (stderr + c).slice(-8000); log(`stderr: ${c}`); });

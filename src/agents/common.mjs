@@ -8,19 +8,6 @@ import { fileURLToPath } from 'node:url';
 
 export const IS_WIN = process.platform === 'win32';
 
-// 3.7 (Orb Server): when the root-owned admin helper is installed (sudoers lets this user run it), every agent process
-// starts with no_new_privs (setpriv), whatever program it is (the engines' run script, a Claude or Codex found in PATH,
-// the SDK's own), so a bot can never reach sudo. Without the helper, and on Windows and macOS, the command is left as is.
-const ADMIN_HELPER = '/usr/local/libexec/orb-server-admin';
-const SETPRIV = ['/usr/bin/setpriv', '/bin/setpriv', '/usr/sbin/setpriv', '/sbin/setpriv'];
-export function confineArgs(cmd, args = [], { platform = process.platform, helper = null, setpriv } = {}) {
-  if (platform !== 'linux') return { cmd, args };
-  if (!(helper ?? fs.existsSync(ADMIN_HELPER))) return { cmd, args };
-  const sp = setpriv === undefined ? SETPRIV.find((f) => fs.existsSync(f)) ?? null : setpriv;
-  if (!sp) throw new Error('setpriv (util-linux) is missing: the agent does not start without no_new_privs');
-  return { cmd: sp, args: ['--no-new-privs', '--', cmd, ...args] };
-}
-
 // First existing file of a list (null if none).
 export const firstFile = (list) => list.find((f) => { try { return f && fs.statSync(f).isFile(); } catch { return false; } }) ?? null;
 

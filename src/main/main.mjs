@@ -165,7 +165,7 @@ function startEngine(h) {
   });
   let secret = null; try { secret = approvalSecret(h); } catch { /* falls back to the file */ }
   const browser = agentBrowser ? { pipe: agentBrowser.pipe, token: agentBrowser.token } : null;
-  engine.postMessage({ type: 'start', home: h, version: VERSION, secret, browser, headless: false }); // 3.5: the PC app has a window; its role is the user's choice (orb.json)
+  engine.postMessage({ type: 'start', home: h, version: VERSION, secret, browser });
   return engineReady;
 }
 

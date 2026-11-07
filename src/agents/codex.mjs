@@ -31,9 +31,7 @@ export function detect(cfg = {}) {
   // The Codex app also leaves its CLI in <Local>\OpenAI\Codex\bin\<build>\codex.exe (the newest build wins).
   const appBuilds = (local) => { const base = path.join(local, 'OpenAI', 'Codex', 'bin'); try { return fs.readdirSync(base).map((b) => path.join(base, b, 'codex.exe')).filter((f) => firstFile([f])).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs); } catch { return []; } };
   // 3.5: on Linux and macOS Orb installs it for the user only (npm --prefix ~/.local): its bin folder may not be in PATH.
-  // 3.7: Orb Server's own Codex (src/server/engines.mjs), in its scope and with no_new_privs, first.
-  const engine = process.env.ORB_ENGINES && !IS_WIN ? [path.join(process.env.ORB_ENGINES, 'codex', 'run')] : [];
-  const candidates = [cfg.path, ...engine, ...inPath('codex'), ...(IS_WIN ? [...npmPrefixes('codex').flatMap(vendor), ...appDataDirs().flatMap((d) => appBuilds(d.local))] : [path.join(userHome(), '.local', 'bin', 'codex')])];
+  const candidates = [cfg.path, ...inPath('codex'), ...(IS_WIN ? [...npmPrefixes('codex').flatMap(vendor), ...appDataDirs().flatMap((d) => appBuilds(d.local))] : [path.join(userHome(), '.local', 'bin', 'codex')])];
   const cmd = firstFile(candidates);
   return cmd ? { cmd, pre: [] } : null;
 }

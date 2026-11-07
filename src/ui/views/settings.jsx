@@ -635,7 +635,7 @@ const SECTIONS = [
   { id: 'general', icon: SlidersHorizontal, groups: ['apariencia', 'actualizaciones'],
     cards: (c, app) => <><AssistantCard c={c} /><FolderCard c={c} home={app.home} /><SubSection id="apariencia" title={t('settings.group.apariencia')}><AppearanceCard c={c} /><InterfaceCard c={c} /></SubSection><SubSection id="actualizaciones" title={t('settings.group.actualizaciones')}><UpdatesCard /></SubSection></> },
   // Who can enter this Orb: its users, their devices and the Orbs linked with it.
-  { id: 'magiclink', icon: Radar, groups: (me) => [...(showPersonsSettings(me) ? ['usuarios'] : []), 'dispositivos', ...(bridge.mobile ? [] : ['server']), 'orbs'],
+  { id: 'magiclink', icon: Radar, groups: (me) => [...(showPersonsSettings(me) ? ['usuarios'] : []), 'dispositivos', 'orbs'],
     cards: (c, app, me) => <><MagicLinkPanel grouped users={showPersonsSettings(me) ? <PersonsCard /> : null} phoneAccess={<MobileCard />} /></> },
   { id: 'agentes', icon: Cpu, cards: (c) => <><ChatCard c={c} /><TasksCard c={c} />{bridge.mobile ? null : <TestCard />}</> },
   { id: 'datos', icon: DatabaseBackup, when: (me) => isOwner(me), cards: () => <DataCards /> },
@@ -648,7 +648,7 @@ const SECTIONS = [
     cards: (c, app) => <><AboutCard version={app.version} /><SubSection id="contribuye" title={t('settings.group.contribuye')}><SupportCard /><FeedbackCard /></SubSection><SubSection id="apps" title={t('settings.group.apps')}><MoreAppsCard /></SubSection></> }
 ];
 // The names of before 3.6 (links in tutorials, notices and the sidebar) → [section, part].
-const ALIASES = { personas: ['magiclink', 'usuarios'], conexiones: ['magiclink', 'dispositivos'], servidor: ['magiclink', 'server'], contrasenas: ['magiclink', 'contrasenas'], movil: ['magiclink', 'dispositivos'], apariencia: ['general', 'apariencia'], actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'],
+const ALIASES = { personas: ['magiclink', 'usuarios'], conexiones: ['magiclink', 'dispositivos'], movil: ['magiclink', 'dispositivos'], apariencia: ['general', 'apariencia'], actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'],
   herramientas: ['avanzado', 'herramientas'], experto: ['avanzado', 'experto'], monitor: ['avanzado', 'herramientas'], contribuye: ['acerca', 'contribuye'], apps: ['acerca', 'apps'] };
 export function resolveSection(open) {
   if (!open || open === true) return ['general', null];
@@ -662,12 +662,11 @@ export function SettingsDialog() {
   const open = useStore((s) => s.settings);
   const app = useStore((s) => s.app);
   const me = useStore((s) => s.me);
-  const server = useStore((s) => s.server);
   const [wanted, part] = resolveSection(open);
   const openedAt = useStore((s) => s.settingsAt);
   // The part asked for (a link to «Usuarios», a notice about updates…): scrolled into view once the section is drawn.
-  // Some parts appear only after their data loads (Orb Server): it waits for them for a moment, and the
-  // sections above them may still grow, so it follows for a second. Clicking the same part again scrolls again.
+  // Some parts appear only after their data loads: it waits for them for a moment, and the sections above them may
+  // still grow, so it follows for a second. Clicking the same part again scrolls again.
   useEffect(() => {
     if (!open || !part) return undefined;
     let frame = 0; const until = performance.now() + 1500;
@@ -686,7 +685,7 @@ export function SettingsDialog() {
   if (!app) return null;
   // «Mi perfil» (the user menu, with two or more users): this same window, on its own, without the sections.
   const profile = wanted === 'perfil' && showPersonUi(me);
-  const sections = SECTIONS.filter((s) => !s.when || s.when(me, server));
+  const sections = SECTIONS.filter((s) => !s.when || s.when(me));
   const section = sections.find((s) => s.id === wanted) ?? sections[0];
   const c = app.config;
   return (

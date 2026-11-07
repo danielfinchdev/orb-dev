@@ -1,5 +1,5 @@
 // 3.7 security review: a linked Orb only touches the bots of the persons this Orb serves to it (knowing a uid is not
-// enough), and the agents of Orb Server never reach the admin helper without no_new_privs.
+// enough).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { tempHome } from './helpers.mjs';
@@ -46,27 +46,3 @@ test('replica: otro Orb no puede tomar, reclamar ni pisar un bot de otra persona
   } finally { t.cleanup(); }
 });
 
-test('motores: sin no_new_privs no arranca si está el ayudante de administración', async () => {
-  const { runScript } = await import('../src/server/engines.mjs');
-  const s = runScript({ bin: '/x/claude' });
-  // /etc/sudoers.d is not readable by the user: the check must look at the helper itself.
-  assert.match(s, /\/usr\/local\/libexec\/orb-server-admin/);
-  assert.doesNotMatch(s, /-e \/etc\/sudoers\.d/);
-  const { confineArgs } = await import('../src/agents/common.mjs');
-  assert.deepEqual(confineArgs('/bin/claude', ['-p'], { platform: 'win32' }), { cmd: '/bin/claude', args: ['-p'] });
-  assert.deepEqual(confineArgs('/bin/claude', ['-p'], { platform: 'linux', helper: false }), { cmd: '/bin/claude', args: ['-p'] });
-  assert.deepEqual(confineArgs('/bin/claude', ['-p'], { platform: 'linux', helper: true, setpriv: '/usr/bin/setpriv' }), { cmd: '/usr/bin/setpriv', args: ['--no-new-privs', '--', '/bin/claude', '-p'] });
-  assert.throws(() => confineArgs('/bin/claude', [], { platform: 'linux', helper: true, setpriv: null }), /no_new_privs/);
-});
-
-test('control: el socket de reserva va en una carpeta solo de este usuario, nunca suelto en /tmp', { skip: process.platform === 'win32' }, async () => {
-  const { controlPath, privateDir } = await import('../src/server/control.mjs');
-  const fs = await import('node:fs'); const os = await import('node:os'); const path = await import('node:path');
-  const long = path.join(os.tmpdir(), 'x'.repeat(120));
-  const p = controlPath(long);
-  assert.notEqual(path.dirname(p), '/tmp');
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-ctl-'));
-  fs.chmodSync(d, 0o755); assert.equal(privateDir(d), false);
-  fs.chmodSync(d, 0o700); assert.equal(privateDir(d), true);
-  fs.rmSync(d, { recursive: true, force: true });
-});

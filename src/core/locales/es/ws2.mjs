@@ -1,5 +1,4 @@
-// 3.6 «Personas» (WS2, la puerta): dispositivos y enlaces de cada persona, versiones, bloqueo de la ventana y
-// Orb Server.
+// 3.6 «Personas» (WS2, la puerta): dispositivos y enlaces de cada persona, versiones y bloqueo de la ventana.
 export default {
   'msg.persons.lockedWindow': 'La ventana está bloqueada. Desbloquéala con tu PIN.',
   'msg.link.clone': '{name} parece una copia de otro Orb. No lo atiendo hasta que lo revises en Ajustes › Magic Link.',
@@ -15,13 +14,5 @@ export default {
   'msg.link.backupTooBig': 'La copia es demasiado grande (el máximo son {mb} MB).',
   'msg.link.adminOwnerOnly': '«Puede administrar» solo se da a un dispositivo del admin.',
   'msg.link.qrForOthers': 'Solo el admin puede enlazar dispositivos para otro usuario.',
-  'msg.link.noPeer': 'Ese enlace no existe.',
-  'term.server.isOwner': 'admin',
-  'term.server.hasPin': 'con PIN',
-  'term.server.personDevices': '{n} dispositivos',
-  'term.server.personsHint': 'Para enlazar un dispositivo de alguien: {cmd}',
-  'term.server.personCreated': 'Listo: {name} ya usa este Orb.',
-  'term.server.noPerson': 'No hay nadie llamado «{name}» en este Orb (mira orb-server usuarios).',
-  'term.server.pinReset': 'Listo: {name} ya no tiene PIN. Puede elegir otro desde su perfil.',
-  'term.server.forPerson': 'Este código es para {name}.'
+  'msg.link.noPeer': 'Ese enlace no existe.'
 };

@@ -2,7 +2,7 @@
 // agents, signing in, and several subscriptions of the same agent. (WS3 adds loans and per-person accounts here.)
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx, saveConfig, checkAccountHome, tr, isHeadless } from '../core/context.mjs';
+import { ctx, saveConfig, checkAccountHome, tr } from '../core/context.mjs';
 import { AGENT_IDS } from '../core/home.mjs';
 import { MULTI, newAccountId, findAccountFolders, accountsOf, accountDir } from '../core/accounts.mjs';
 import { accountInfo as codexAccountInfo } from '../agents/codex.mjs';
@@ -42,7 +42,7 @@ export function accountMethods({ board, emit, log }) {
       if (inConsole && who && who.channel !== 'system' && (who.channel !== 'desktop' || who.role !== 'owner')) fail(tr('msg.spend.consoleOwner'));
       // A pause because it had no login is lifted: the user is signing in now.
       const liftPause = () => { if ([translate('es', 'msg.budget.noLogin'), translate('en', 'msg.budget.noLogin')].includes(board.setting(`cooldown_reason:${acc}`))) { board.setting(`cooldown:${acc}`, ''); board.setting(`cooldown_reason:${acc}`, ''); } };
-      if (inConsole) { if (isHeadless()) fail(tr('msg.login.noConsoleHere')); openLogin(acc); liftPause(); return { console: true, account: acc }; }
+      if (inConsole) { openLogin(acc); liftPause(); return { console: true, account: acc }; }
       let r;
       try {
         r = await startAccountLogin(acc, { mode: how, emit, onEnd: (l) => {

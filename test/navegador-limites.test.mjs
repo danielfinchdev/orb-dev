@@ -1,21 +1,15 @@
-// 3.7 (WS5): the Server's browser without a Chromium: the human pace per site, the warning before mass actions (also
-// through the MCP server of a bot), the live view's flow control with a slow link, its input and idle stop, the memory
-// check before launching, the queue and idle close, Xvfb missing, the systemd scope and Chromium's checked download.
+// 3.7 (WS5): the bots' browser limits: the human pace per site and the warning before mass actions (also through the
+// MCP server of a bot), and the page as text read back.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
-import { EventEmitter } from 'node:events';
 import { tempHome, ROOT } from './helpers.mjs';
 import { createPace, createMassGuard, memoryStore, siteRules, isDestructive, actionKind, isLocalHost } from '../src/core/browser-limits.mjs';
 import { parseSnapshot, formatSnapshot } from '../src/core/browser-protocol.mjs';
-import { createScreencast, frameWidth } from '../src/server/screencast.mjs';
-import { createServerBrowser, memAvailableMB, startXvfb, scopeWrapper, FLAGS } from '../src/server/browser.mjs';
-import { downloadChromium, CHROMIUM, ensureChromium } from '../src/server/browser-engine.mjs';
 
 test('ritmo humano por web: pausa de 2–5 s, 300 acciones por hora, reglas por sitio y nada en las páginas locales', () => {
   let t = 1_000_000; const store = memoryStore();
@@ -126,18 +120,6 @@ test('MCP de un bot: el clic de riesgo por número se reconoce, y la tarjeta de 
 
 // 3.7: one sign-in tool only, vault_fill of the bots' «Contraseñas» group (src/mcp/bot.mjs; test/boveda.test.mjs): the
 // general MCP server never offers a second one, whatever the environment says.
-test('MCP: la bóveda tiene una sola herramienta (vault_fill de los bots), nunca orb_browser_vault_fill', async () => {
-  const h = tempHome();
-  const stub = stubPipe(() => 'ok'); await stub.ready;
-  const c = mcp(h.home, { ORB_AGENT: 'claude', ORB_BROWSER_PIPE: stub.pipe, ORB_BROWSER_TOKEN: 'a'.repeat(64), ORB_SESSION: 's2', ORB_BROWSER_VAULT: '1' });
-  try {
-    await c.rpc('initialize', {});
-    const names = (await c.rpc('tools/list', {})).result.tools.map((x) => x.name);
-    assert.ok(names.includes('orb_browser_open'), 'el navegador sí está');
-    assert.ok(!names.some((x) => /vault/.test(x)), names.filter((x) => /vault/.test(x)).join());
-  } finally { await c.close(); stub.close(); h.cleanup(); }
-});
-
 test('la página como texto se lee de vuelta (dirección y elementos)', () => {
   const s = parseSnapshot(formatSnapshot({ title: 'T', url: 'https://a.example/x', text: 'hola', cut: false, scroll: { y: 0, height: 1, view: 1 }, elements: ['[1] button "Pagar"', '[2] a "Más"'] }, { notes: ['AVISO'] }));
   assert.deepEqual(s, { url: 'https://a.example/x', elements: ['[1] button "Pagar"', '[2] a "Más"'] });
@@ -145,162 +127,3 @@ test('la página como texto se lee de vuelta (dirección y elementos)', () => {
 });
 
 // ---- the live view against a stand-in CDP session: Chromium makes a picture each time the last one was acknowledged.
-function stubCdp({ frameBytes = 30_000 } = {}) {
-  const ev = new EventEmitter(); const sent = []; let on = false; let n = 0;
-  const data = 'A'.repeat(Math.ceil(frameBytes * 4 / 3));
-  const frame = () => { if (on) setTimeout(() => on && ev.emit('Page.screencastFrame', { data, sessionId: ++n, metadata: { deviceWidth: 1280, deviceHeight: 800 } }), 5); };
-  return {
-    sent,
-    on: (e, fn) => ev.on(e, fn), off: (e, fn) => ev.off(e, fn),
-    async send(method, params) {
-      sent.push({ method, params });
-      if (method === 'Page.startScreencast') { on = true; frame(); }
-      if (method === 'Page.stopScreencast') on = false;
-      if (method === 'Page.screencastFrameAck') frame();
-      return {};
-    }
-  };
-}
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-test('vista en directo: con 400 ms de ida y vuelta no pasa de 150 KB/s y nunca hay cola', async () => {
-  const cdp = stubCdp({ frameBytes: 30_000 });
-  let bytes = 0; let inflight = 0; let maxInflight = 0;
-  const cast = createScreencast({ cdp, width: 390, dpr: 3, send: (f) => { bytes += f.data.length * 3 / 4; inflight++; maxInflight = Math.max(maxInflight, inflight); setTimeout(() => { inflight--; cast.ack(f.seq); }, 400); } });
-  const size = await cast.start();
-  assert.equal(size.width, 585, '390 × 1,5');
-  const t0 = Date.now(); await sleep(2500); const secs = (Date.now() - t0) / 1000;
-  await cast.stop();
-  assert.equal(maxInflight, 1, 'una imagen en camino cada vez');
-  assert.ok(bytes / secs <= 150 * 1024, `${Math.round(bytes / secs / 1024)} KB/s`);
-  assert.ok(cast.stats().frames >= 4, 'llegan imágenes');
-});
-
-test('vista en directo: con enlace rápido y fotos grandes, el presupuesto de bytes manda y baja la calidad', async () => {
-  const cdp = stubCdp({ frameBytes: 60_000 });
-  let bytes = 0;
-  const cast = createScreencast({ cdp, width: 1280, send: (f) => { bytes += f.data.length * 3 / 4; setTimeout(() => cast.ack(f.seq), 5); } });
-  await cast.start();
-  const t0 = Date.now(); await sleep(3000); const secs = (Date.now() - t0) / 1000;
-  const st = cast.stats(); await cast.stop();
-  // A full bucket (one second's worth) may go at the start; after that, the budget.
-  assert.ok(bytes <= 150 * 1024 * (secs + 1), `${Math.round(bytes / 1024)} KB en ${secs.toFixed(1)} s`);
-  assert.ok(st.quality < 50, 'calidad rebajada');
-  assert.ok(cdp.sent.some((m) => m.method === 'Page.startScreencast' && m.params.quality === 40));
-});
-
-test('vista en directo: toques, texto y teclas llegan a la página; en segundo plano se para; a los 10 min sin uso, se cierra', async () => {
-  const cdp = stubCdp(); let stopped = null;
-  const cast = createScreencast({ cdp, width: 400, send: (f) => setTimeout(() => cast.ack(f.seq), 1), idleMs: 300, onStop: (r) => { stopped = r; } });
-  await cast.start(); await sleep(50);
-  await cast.input({ type: 'tap', x: 0.5, y: 0.25 });
-  const mouse = cdp.sent.filter((m) => m.method === 'Input.dispatchMouseEvent');
-  assert.deepEqual(mouse.map((m) => [m.params.type, m.params.x, m.params.y]), [['mouseMoved', 640, 200], ['mousePressed', 640, 200], ['mouseReleased', 640, 200]], 'en píxeles de la página');
-  await cast.input({ type: 'text', text: 'código 123' });
-  assert.deepEqual(cdp.sent.at(-1), { method: 'Input.insertText', params: { text: 'código 123' } });
-  await cast.input({ type: 'key', key: 'Enter' });
-  assert.equal(cdp.sent.at(-2).params.windowsVirtualKeyCode, 13);
-  await assert.rejects(() => cast.input({ type: 'key', key: 'F12' }), /tecla/);
-  await assert.rejects(() => cast.input({ type: 'tap', x: 2, y: 0 }), /posición/);
-  await assert.rejects(() => cast.input({ type: 'text', text: 'x'.repeat(3000) }), /texto/);
-  await cast.pause(true);
-  const before = cast.stats().frames; await sleep(120);
-  assert.equal(cast.stats().frames, before, 'en segundo plano, ninguna imagen');
-  await cast.pause(false); await sleep(60);
-  assert.ok(cast.stats().frames > before, 'al volver, sigue');
-  await sleep(500);
-  assert.equal(stopped, 'idle', 'sin usarla, se cierra sola');
-  assert.equal(frameWidth(2000, 2), 1280, 'nunca más ancho que la página');
-});
-
-test('Server: sin 1,2 GB libres no abre Chromium (aviso claro); sin Xvfb, el error dice cómo instalarlo', async () => {
-  assert.equal(memAvailableMB(() => 'MemTotal: 4000000 kB\nMemAvailable:    819200 kB\n'), 800);
-  assert.equal(memAvailableMB(() => { throw new Error('no /proc'); }), null);
-  const h = tempHome();
-  let launched = 0;
-  const sb = createServerBrowser({ root: path.join(h.base, 'b'), display: 'headless', executable: 'chrome', scope: false, readMeminfo: () => 'MemAvailable:   819200 kB', launchContext: async () => { launched++; throw new Error('no'); } });
-  await sb.ready;
-  const { browserKey } = await import('../src/core/browser-key.mjs');
-  const s = net.connect(sb.pipe); s.setEncoding('utf8');
-  const lines = []; s.on('data', (c) => lines.push(...c.split('\n').filter(Boolean).map((l) => JSON.parse(l))));
-  const who = { agent: 'bot:1', session: 'b1', task: '' };
-  await new Promise((r) => s.on('connect', r));
-  s.write(`${JSON.stringify({ hello: browserKey(sb.token, who), ...who })}\n${JSON.stringify({ id: 1, action: 'open', args: { url: 'https://x.example' } })}\n`);
-  const deadline = Date.now() + 5000; while (lines.length < 2 && Date.now() < deadline) await sleep(20);
-  assert.equal(lines[1].ok, false);
-  assert.match(lines[1].error, /poca memoria libre \(800 MB; hacen falta 1200 MB\)/);
-  assert.equal(launched, 0, 'ni lo intenta');
-  s.end(); await sb.shutdown();
-  const T = (k) => k;
-  await assert.rejects(() => startXvfb({ T, spawnImpl: () => { const e = new EventEmitter(); e.stdio = []; e.kill = () => {}; setImmediate(() => e.emit('error', Object.assign(new Error('spawn Xvfb ENOENT'), { code: 'ENOENT' }))); return e; } }), (e) => e.code === 'NO_XVFB' && e.message === 'sys.browser.noXvfb');
-  h.cleanup();
-});
-
-test('Server: un Chromium a la vez con cola, cierre tras los minutos sin uso, banderas y su propio scope de systemd', async () => {
-  const h = tempHome();
-  const opened = []; const closedAt = [];
-  // A stand-in Chromium (each launch, a context with pages and a CDP session).
-  const launchContext = async (dir, options) => {
-    opened.push({ dir: path.basename(dir), options });
-    const ctxEv = new EventEmitter();
-    const mkPage = () => { const p = new EventEmitter(); let closed = false; p.url = () => 'about:blank'; p.isClosed = () => closed; p.close = async () => { closed = true; p.emit('close'); }; p.title = async () => ''; p.goto = async () => {}; return p; };
-    const pages = [mkPage()];
-    return { pages: () => pages, newPage: async () => mkPage(), newCDPSession: async () => ({ send: async (m) => (m === 'Page.getFrameTree' ? { frameTree: { frame: { id: 'f' } } } : m === 'Page.createIsolatedWorld' ? { executionContextId: 1 } : m === 'Runtime.evaluate' ? { result: { value: { title: 'x', url: 'about:blank', text: '', cut: false, elements: [], scroll: { y: 0, height: 0, view: 0 } } } } : {}), on() {}, off() {} }),
-      on: (e, fn) => ctxEv.on(e, fn), close: async () => { closedAt.push(path.basename(dir)); ctxEv.emit('close'); } };
-  };
-  const sb = createServerBrowser({ root: path.join(h.base, 'b'), display: 'headless', executable: 'chrome', scope: false, ownerId: () => 'dueno', readMeminfo: () => 'MemAvailable: 8000000 kB', launchContext, timings: { idleMs: 300, queueMs: 4000 } });
-  await sb.ready;
-  const { browserKey } = await import('../src/core/browser-key.mjs');
-  const conn = async (who) => {
-    const s = net.connect(sb.pipe); s.setEncoding('utf8'); const got = [];
-    s.on('data', (c) => got.push(...c.split('\n').filter(Boolean).map((l) => JSON.parse(l))));
-    await new Promise((r) => s.on('connect', r));
-    s.write(`${JSON.stringify({ hello: browserKey(sb.token, who), ...who })}\n`);
-    return { got, send: (m) => s.write(`${JSON.stringify(m)}\n`), end: () => s.end() };
-  };
-  const waitFor = async (fn, ms = 5000) => { const end = Date.now() + ms; while (!fn() && Date.now() < end) await sleep(20); return fn(); };
-  try {
-    const a = await conn({ agent: 'bot:1', session: 'a', task: '' });
-    a.send({ id: 1, action: 'open', args: { url: 'https://uno.example' } });
-    assert.ok(await waitFor(() => a.got.some((m) => m.id === 1)), 'Ana abre');
-    assert.equal(a.got.find((m) => m.id === 1).ok, true);
-    const b = await conn({ agent: 'bot:2', session: 'b', task: '', person: 'leo' });
-    b.send({ id: 1, action: 'open', args: { url: 'https://dos.example' } });
-    await sleep(400);
-    assert.ok(!b.got.some((m) => m.id === 1), 'Leo espera su turno mientras el del dueño está en uso');
-    assert.deepEqual(sb.state().instances.map((i) => i.person), ['dueno'], 'un solo Chromium');
-    a.end();
-    assert.ok(await waitFor(() => b.got.some((m) => m.id === 1)), 'en cuanto queda libre, le toca a Leo');
-    assert.deepEqual(closedAt, ['dueno']);
-    assert.deepEqual(sb.state().instances.map((i) => i.person), ['leo']);
-    b.end();
-    assert.ok(await waitFor(() => sb.state().instances.length === 0, 3000), 'tras los minutos sin uso, se cierra');
-    assert.deepEqual(opened.map((o) => o.dir), ['dueno', 'leo'], 'un perfil por persona');
-    for (const f of ['--renderer-process-limit=2', '--disable-dev-shm-usage', '--disable-gpu']) assert.ok(opened[0].options.args.includes(f), f);
-    assert.deepEqual(FLAGS, ['--renderer-process-limit=2', '--disable-dev-shm-usage', '--disable-gpu']);
-    assert.equal(opened[0].options.acceptDownloads, false);
-    assert.ok(!Object.keys(opened[0].options.env).some((k) => /^ORB_/.test(k)), 'Chromium no recibe las claves de Orb');
-  } finally { await sb.shutdown(); }
-  const w = scopeWrapper('/opt/chrome dir/chrome', path.join(h.base, 'w'));
-  const body = fs.readFileSync(w, 'utf8');
-  assert.match(body, /systemd-run --user --scope --quiet --collect -p MemoryMax=1536M -- '\/opt\/chrome dir\/chrome' "\$@"/);
-  assert.match(body, /echo 500 > \/proc\/self\/oom_score_adj/);
-  h.cleanup();
-});
-
-test('Chromium del Server: la versión fijada y su huella; una descarga que no coincide nunca se usa', async () => {
-  assert.equal(CHROMIUM.playwright, JSON.parse(fs.readFileSync(path.join(ROOT, 'node_modules', 'playwright-core', 'package.json'), 'utf8')).version, 'la de playwright-core');
-  const pinned = JSON.parse(fs.readFileSync(path.join(ROOT, 'node_modules', 'playwright-core', 'browsers.json'), 'utf8')).browsers.find((b) => b.name === 'chromium');
-  assert.equal(CHROMIUM.revision, pinned.revision); assert.equal(CHROMIUM.version, pinned.browserVersion);
-  for (const b of Object.values(CHROMIUM.builds)) assert.match(b.sha256, /^[0-9a-f]{64}$/);
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-chromium-'));
-  const body = Buffer.from('no soy chromium');
-  const fetchImpl = async () => new Response(body);
-  await assert.rejects(() => downloadChromium({ dir, key: 'linux-x64', fetchImpl, build: { ...CHROMIUM.builds['linux-x64'], size: body.length } }), (e) => e.code === 'BAD_HASH');
-  assert.deepEqual(fs.readdirSync(dir), [], 'nada se queda ni se descomprime');
-  await assert.rejects(() => downloadChromium({ dir, key: 'linux-x64', fetchImpl, build: { ...CHROMIUM.builds['linux-x64'], sha256: '' } }), (e) => e.code === 'NO_HASH');
-  // A Chromium the owner names wins (and must exist).
-  assert.equal(await ensureChromium({ config: { executablePath: process.execPath }, engines: {} }), process.execPath);
-  await assert.rejects(() => ensureChromium({ config: { executablePath: path.join(dir, 'nada') }, engines: {} }), /no encuentro/);
-  fs.rmSync(dir, { recursive: true, force: true });
-});
