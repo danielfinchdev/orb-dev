@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
 import { MobileTabs, MoreView } from '@/components/mobile-tabs.jsx';
 import { TooltipProvider, Checkbox } from '@/components/ui/overlay.jsx';
-import { DialogHost } from '@/components/dialogs.jsx';
+import { DialogHost, confirm } from '@/components/dialogs.jsx';
 import { ImagePreviewHost } from '@/components/image-viewer.jsx';
 import { Sidebar } from '@/components/sidebar.jsx';
 import { Companion } from '@/components/companion.jsx';
@@ -27,7 +27,7 @@ import { Robot } from '@/components/robot.jsx';
 import { useStore, setState, getState, refresh, refreshSoon, bridge, act, go, goBack, resetRoute, setViews, applyTheme, openTerminal, startTour, anyChatBusy, phoneLayout, loadOrbInbox, loadOrbInboxSoon } from '@/lib/store.js';
 import { restoreRoute, keyboardOpen } from '@/lib/phone-nav.js';
 import { startupPhase } from '@/lib/startup.js';
-import { isOffline, retryDelay } from '@/lib/net.js';
+import { isOffline, retryLoop } from '@/lib/net.js';
 import { ago } from '@/lib/utils.js';
 import { ErrorBoundary } from '@/components/error-boundary.jsx';
 import { Tour } from '@/components/tour.jsx';
@@ -180,6 +180,21 @@ function Shell() {
 }
 
 let coreLost = false;
+// The linking screen's own «back» (AppLink): true when it took the press.
+const linkBack = { current: null };
+// 3.8 (F5b): right after linking, the phone's notifications (off until turned on) are offered once, saying what they do.
+const OFFER_NOTIFY = 'orb.ofrecerAvisos';
+const offerNotify = () => { try { localStorage.setItem(OFFER_NOTIFY, '1'); } catch { /* storage unavailable */ } };
+function NotifyOffer() {
+  useEffect(() => {
+    let flag = null; try { flag = localStorage.getItem(OFFER_NOTIFY); localStorage.removeItem(OFFER_NOTIFY); } catch { /* storage unavailable */ }
+    const p = bridge.push;
+    if (flag !== '1' || !p || p.enabled() || !p.supported() || (p.ios() && !p.installed())) return;
+    toast(tNow(p.whenClosed?.() === false ? 'app.notifyOfferApp' : 'app.notifyOffer'), { duration: 20000,
+      action: { label: tNow('app.notifyOfferOk'), onClick: async () => { if (await act(p.enable()) !== undefined) toast.success(tNow('app.notifyOn')); } } });
+  }, []);
+  return null;
+}
 function Root() {
   const t = useT();
   const ready = useStore((s) => s.ready);
@@ -251,6 +266,8 @@ function Root() {
     let lastExit = 0;
     const back = () => {
       const overlay = document.querySelector(OVERLAYS);
+      // 3.8 (F5b): linking the app has steps of its own (the password back to scanning, «Enlazar sin cámara» closed).
+      if (phaseRef.current !== 'app' && !overlay && linkBack.current?.()) return 'stay';
       const step = phaseRef.current === 'app' ? goBack({ overlay: Boolean(overlay) }) : overlay ? { close: true } : { exit: true };
       if (step?.close) { (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true })); return 'stay'; }
       if (!step?.exit) return 'stay';
@@ -301,7 +318,7 @@ function Root() {
       if (event === 'engine:restarted') { if (coreLost) { location.reload(); return; } notify({ body: tNow('app.engineRestarted'), tone: 'warning' }); refreshSoon(); }
     });
   }, [phase]);
-  if (phase === 'setup') return <>{strip}<Setup resume={resume} onDone={async () => { await refresh(); setPhase('app'); }} /></>;
+  if (phase === 'setup') return <>{strip}<Setup resume={resume} onDone={async (route) => { await refresh(); setPhase('app'); if (route) go(route); }} /></>;
   if (phase === 'pair' && bridge.link) return <>{strip}<AppLink /></>;
   // 3.8: a browser opened from the QR: the master password before linking.
   if (phase === 'pair' && getState().info?.pairLink && bridge.pairPending) return <>{strip}<BrowserPair /></>;
@@ -324,10 +341,19 @@ function Root() {
   if (phase === 'unlock') return <>{strip}<MasterLocked state={masterState} onDone={() => location.reload()} /></>;
   if (phase === 'layout') return <>{strip}<LayoutReview plan={layout} onDone={() => location.reload()} /></>;
   if (phase === 'migration') return <>{strip}<MigrationFailed state={migration} /></>;
-  if (phase === 'error') return <div className="grid h-full place-items-center p-8 text-center">{strip}<div><Robot size={90} mood="worried" /><h1 className="mt-4 text-xl">{t('app.errorTitle')}</h1><p className="text-muted-foreground mt-1 max-w-md text-sm">{error}</p></div></div>;
+  // 3.8 (F5b): on the phone, a way out: try again, or link with another PC.
+  if (phase === 'error') return (
+    <div className="grid h-full place-items-center overflow-y-auto p-8 text-center" data-testid="app-error">{strip}
+      <div className="grid max-w-md justify-items-center gap-3">
+        <Robot size={90} mood="worried" /><h1 className="mt-1 text-xl">{t('app.errorTitle')}</h1><p className="text-muted-foreground text-sm break-words">{error}</p>
+        {bridge.mobile ? <Button size="lg" onClick={() => location.reload()} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
+        {bridge.mobile && bridge.unlink ? <Button variant="ghost" size="sm" onClick={async () => { if (await relinkPhone(getState().info?.pcName)) setPhase('pair'); }} data-testid="app-error-relink"><Link2 />{t('app.offlineRelink')}</Button> : null}
+      </div>
+    </div>
+  );
   if (phase !== 'app' || !ready) return <div className="grid h-full place-items-center">{strip}<Robot size={80} mood="thinking" /></div>;
   // 3.6 (M4): a tapped notification opens its chat (lib/notes.js).
-  return bridge.mobile ? <><NoteOpener /><Shell /></> : <Shell />;
+  return bridge.mobile ? <><NoteOpener /><NotifyOffer /><Shell /></> : <Shell />;
 }
 
 // What counts as «something open over the screen» for back: a dialog or sheet, the menu ☰, a menu or a list.
@@ -335,30 +361,34 @@ const OVERLAYS = '[data-slot="dialog-content"], [data-slot="drawer-content"], [d
 
 // 3.8: the phone cannot reach its PC. It keeps trying (3 s, 6 s, 12 s… up to 30 s, and at once when the phone comes back
 // to the app or to a network) and opens Orb as soon as the PC answers.
+// One loop of tries (lib/net.js › retryLoop): never two at once, none while the app is hidden.
+// 3.8 (F5b): «Vincular con otro PC» forgets this phone's keys for its PC: asked first (with the PC off, linking again
+// needs it on). → whether it was done.
+async function relinkPhone(name) {
+  if (!bridge.unlink) return false;
+  if (!await confirm(tNow('app.relinkTitle'), tNow(name ? 'app.relinkBodyNamed' : 'app.relinkBody', { name }), { ok: tNow('app.offlineRelink'), danger: true })) return false;
+  await bridge.unlink();
+  return true;
+}
 function PcOffline({ info, onRelink }) {
   const t = useT();
   const [busy, setBusy] = useState(false);
   const [wait, setWait] = useState(null); // seconds to the next try
-  const tries = useRef(0);
-  const timer = useRef(null);
-  const tryNow = useRef(null);
-  tryNow.current = async () => {
-    clearInterval(timer.current); setBusy(true); setWait(null);
-    let back = false;
-    try { const r = await bridge.info(); back = !r.offline; } catch { /* still away */ }
-    if (back) { location.reload(); return; }
-    setBusy(false);
-    let left = Math.round(retryDelay(tries.current++) / 1000);
-    setWait(left);
-    timer.current = setInterval(() => { left -= 1; if (left <= 0) tryNow.current(); else setWait(left); }, 1000);
-  };
+  const loop = useRef(null);
   useEffect(() => {
-    tryNow.current();
-    const soon = () => { if (document.visibilityState === 'visible') { tries.current = 0; tryNow.current(); } };
-    document.addEventListener('visibilitychange', soon); window.addEventListener('online', soon);
-    return () => { clearInterval(timer.current); document.removeEventListener('visibilitychange', soon); window.removeEventListener('online', soon); };
+    const l = retryLoop({
+      attempt: async () => { const r = await bridge.info(); if (r.offline) return false; location.reload(); return true; },
+      onWait: (s, b) => { setWait(s); setBusy(b); },
+      hidden: () => document.visibilityState === 'hidden'
+    });
+    loop.current = l;
+    l.now();
+    const seen = () => { if (document.visibilityState === 'visible') l.now({ reset: true }); else l.pause(); };
+    const online = () => l.now({ reset: true });
+    document.addEventListener('visibilitychange', seen); window.addEventListener('online', online);
+    return () => { l.stop(); document.removeEventListener('visibilitychange', seen); window.removeEventListener('online', online); };
   }, []);
-  const relink = async () => { clearInterval(timer.current); await bridge.unlink?.(); onRelink(); };
+  const relink = async () => { if (await relinkPhone(info?.pcName)) { loop.current.stop(); onRelink(); } };
   return (
     <div className="brand-sky flex h-full overflow-y-auto p-6 pt-20" data-testid="pc-offline">
       <div className="bg-card/95 m-auto grid w-full max-w-sm gap-3 rounded-3xl p-7 text-center shadow-2xl">
@@ -366,7 +396,7 @@ function PcOffline({ info, onRelink }) {
         <h1 className="text-xl">{info?.pcName ? t('app.offlineTitleNamed', { name: info.pcName }) : t('app.offlineTitle')}</h1>
         <p className="text-muted-foreground text-sm">{t('app.offlineBody')}</p>
         {info?.seenAt ? <p className="text-muted-foreground text-xs">{t('app.offlineSeen', { when: ago(info.seenAt) })}</p> : null}
-        <Button size="lg" disabled={busy} onClick={() => { tries.current = 0; tryNow.current(); }} data-testid="pc-offline-retry">{busy ? <Spinner /> : <RotateCw />}{t('app.offlineRetry')}</Button>
+        <Button size="lg" disabled={busy} onClick={() => loop.current?.now({ reset: true })} data-testid="pc-offline-retry">{busy ? <Spinner /> : <RotateCw />}{t('app.offlineRetry')}</Button>
         <p className="text-muted-foreground min-h-4 text-xs" aria-live="polite">{wait ? t('app.offlineNext', { s: wait }) : ''}</p>
         {bridge.unlink ? <Button variant="ghost" size="sm" onClick={relink} data-testid="pc-offline-relink"><Link2 />{t('app.offlineRelink')}</Button> : null}
       </div>
@@ -446,7 +476,7 @@ function BrowserPair() {
   const link = getState().info?.pairLink;
   const submit = async (password) => {
     setBusy(true); setError('');
-    try { await bridge.pairPending(password); location.reload(); }
+    try { await bridge.pairPending(password); offerNotify(); location.reload(); }
     catch (e) { setError(String(e?.message ?? e)); if (e?.reason === 'newCode' || e?.status === 426) setGone(true); }
     finally { setBusy(false); }
   };
@@ -480,11 +510,15 @@ function AppLink() {
   };
   const pair = async (password) => {
     setBusy(true); setError('');
-    try { await bridge.link(link.input, { password }); location.reload(); }
+    try { await bridge.link(link.input, { password }); offerNotify(); location.reload(); }
     catch (e) { setError(String(e?.message ?? e)); if (e?.reason === 'newCode' || e?.status === 426) setLink(null); }
     finally { setBusy(false); }
   };
   const field = (k) => ({ value: form[k], onChange: (e) => setForm({ ...form, [k]: e.target.value }) });
+  useEffect(() => {
+    linkBack.current = () => { if (link) { setLink(null); setError(''); return true; } if (manual) { setManual(false); return true; } return false; };
+    return () => { linkBack.current = null; };
+  }, [link, manual]);
   if (link) return (
     <div className="brand-sky flex h-full overflow-y-auto p-6 pt-20" data-testid="app-link">
       <div className="bg-card/95 m-auto grid w-full max-w-sm gap-3 rounded-3xl p-7 shadow-2xl">

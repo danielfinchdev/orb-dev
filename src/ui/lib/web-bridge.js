@@ -43,6 +43,8 @@ if (!window.orb) {
     if (ok) { try { if (Date.now() - Number(localStorage.getItem('orb.visto') ?? 0) > 60_000) localStorage.setItem('orb.visto', String(Date.now())); } catch { /* storage unavailable */ } }
     if (ok === reachable) return;
     reachable = ok; fire(ok ? 'link:online' : 'link:offline', {});
+    // 3.8 (F5b): the PC answers again: the live events too, if their stream is not running.
+    if (ok && session && !live && !connecting) connect();
   };
   // once: a request that changes something on the PC (a call, an upload) that ran out of time is not sent again to the
   // next address (the PC may have done it); the next request starts there.
@@ -94,21 +96,27 @@ if (!window.orb) {
   const authHeader = async (s, kind) => { const C = await crypto$(); return C.sealText(s.key, { t: stamp(), m: kind }, C.AAD.request(s.id)); };
 
   // Live events over a streamed fetch (EventSource cannot send headers); reconnects with a growing pause.
-  let stream = null;
+  // 3.8 (F5b): the PC writes a ping every 25 s; nothing at all for TIMEOUTS.eventsIdle (the PC asleep, the Wi-Fi gone
+  // without a word) means a dead stream: it is dropped, the window hears link:offline and it connects again.
+  let stream = null; let live = false; let connecting = false;
   const connect = async (wait = 1000) => {
     stream?.abort(); const ctrl = new AbortController(); stream = ctrl;
+    let idle = false; let watchdog = null;
+    const arm = () => { clearTimeout(watchdog); watchdog = setTimeout(() => { idle = true; ctrl.abort(); }, TIMEOUTS.eventsIdle); };
+    connecting = true;
     try {
-      const s = await ready(); if (!s) return;
+      const s = await ready(); if (!s) { connecting = false; return; }
       const C = await crypto$();
       // The time limit is for the answer's headers only: the stream itself stays open as long as the PC keeps it.
       const res = await reach('/api/events', { headers: { ...headersOf(s), 'X-Orb-Auth': await authHeader(s, 'events') }, credentials: 'omit', signal: ctrl.signal }, TIMEOUTS.events);
-      if (res.status === 401) return unpaired();
+      if (res.status === 401) { connecting = false; return unpaired(); }
       if (await clockFixed(res)) wait = 100; // again at once, with the PC's time
       if (!res.ok) throw new Error(res.status); // retried with the growing pause, not every second
       const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = '';
-      wait = 1000;
+      wait = 1000; live = true; connecting = false; arm();
       for (;;) {
         const { value, done } = await reader.read(); if (done) break;
+        arm();
         buf += dec.decode(value, { stream: true });
         let i;
         while ((i = buf.indexOf('\n\n')) >= 0) {
@@ -117,7 +125,10 @@ if (!window.orb) {
           if (data) { try { const { e, p } = C.openText(s.key, data, C.AAD.event(s.id)); fire(e, p); } catch { /* not for us */ } }
         }
       }
-    } catch { if (ctrl.signal.aborted) return; }
+    } catch { if (ctrl.signal.aborted && !idle) { clearTimeout(watchdog); if (stream === ctrl) { live = false; connecting = false; } return; } }
+    clearTimeout(watchdog);
+    if (stream === ctrl) { live = false; connecting = false; }
+    if (idle) seen(false);
     if (stream === ctrl) setTimeout(() => { if (stream === ctrl) connect(Math.min(wait * 2, 30_000)); }, wait);
   };
   // Back from the background (phones pause pages): reconnect at once.
@@ -213,6 +224,7 @@ if (!window.orb) {
     supported: () => window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window,
     installed: () => Boolean(window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true),
     ios: () => /iPhone|iPad/.test(navigator.userAgent),
+    whenClosed: () => true, // Web Push: also with the page closed
     enabled: () => Boolean(me?.push) && typeof Notification !== 'undefined' && Notification.permission === 'granted',
     async enable() {
       if (!push.supported()) throw new Error(await tl('app.pushNeedsHttps'));

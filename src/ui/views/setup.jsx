@@ -6,7 +6,7 @@
 // config.setupPending is on from the folder's creation to the last step: a welcome closed halfway goes on where it
 // stopped (resume: { step, plan, name }, lib/startup.js), never with the words of an Orb updated from 3.7.
 import { useState } from 'react';
-import { FolderOpen, ArrowRight } from 'lucide-react';
+import { FolderOpen, ArrowRight, LogIn } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Installer, InstallProgress, useFunPhrase } from '@/components/installer.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -52,13 +52,13 @@ export function Setup({ onDone, resume = null }) {
     catch (error) { setMood('worried'); toast.error(errorText(error)); setBusy(false); }
   };
   // The welcome is over: the next start opens Orb.
-  const finish = async () => { await call('config.save', { patch: { setupPending: false } }).catch(() => {}); onDone(); };
+  const finish = async (route) => { await call('config.save', { patch: { setupPending: false } }).catch(() => {}); onDone(route); };
   const afterMaster = async () => { const info = await bridge.info(); if (info.platform === 'win32') setStep('equipo'); else await finish(); };
   // A welcome that goes on may already have its master password (it stopped at «Ordenar carpetas» after making it).
   const afterFolders = async () => { const ms = await call('master.state').catch(() => null); if (ms?.exists) await afterMaster(); else setStep('maestra'); };
   if (step === 'carpetas') return <LayoutReview plan={plan} onDone={afterFolders} />;
   if (step === 'maestra') return <MasterCreate onDone={afterMaster} />;
-  if (step === 'equipo') return <Prepare name={shown} onDone={finish} />;
+  if (step === 'equipo') return <Prepare name={shown} onDone={() => finish()} onAgents={() => finish({ view: 'agents' })} />;
   return (
     <div className="brand-sky flex h-full overflow-auto px-6 pt-24 pb-6">
       <form onSubmit={create} data-testid="setup-datos" className="bg-card/95 text-card-foreground m-auto grid w-full max-w-[460px] gap-5 rounded-3xl border border-white/40 p-8 shadow-2xl backdrop-blur">
@@ -84,7 +84,7 @@ export function Setup({ onDone, resume = null }) {
 
 // Windows, after the folder: install what is missing. While it installs, the title is a light phrase that changes every
 // few seconds, the bar goes under it and the explanation under the bar.
-export function Prepare({ name, onDone }) {
+export function Prepare({ name, onDone, onAgents = null }) {
   const t = useT();
   const [progress, setProgress] = useState(null);
   const running = Boolean(progress?.running);
@@ -101,7 +101,11 @@ export function Prepare({ name, onDone }) {
           <p className="text-muted-foreground text-sm">{t('setup.prepareDesc')}</p>
         </div>
         <Installer bar={false} onProgress={setProgress} />
-        <Button size="lg" onClick={onDone} data-testid="setup-continue">{t('setup.continue')}<ArrowRight /></Button>
+        <div className="grid gap-2">
+          <Button size="lg" onClick={onDone} data-testid="setup-continue">{t('setup.continue')}<ArrowRight /></Button>
+          {/* 3.8 (F5b): where to sign in to the agents, one click away. */}
+          {onAgents ? <Button variant="ghost" onClick={onAgents} data-testid="setup-agents"><LogIn />{t('setup.signIn')}</Button> : null}
+        </div>
       </div>
     </div>
   );

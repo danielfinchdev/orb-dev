@@ -47,7 +47,9 @@ export function backStep({ route, overlay = false, phone = true } = {}) {
   const r = asRoute(route) ?? { view: 'chats' };
   const v = r.view;
   if (v === 'chat' || v === 'session') return { go: { view: 'chats' } };
-  // A task or a project open over its list: back to the list (the same filter of a project's tasks).
+  // A task opened from a chat: back to that chat. A task or a project open over its list: back to the list (the same
+  // filter of a project's tasks).
+  if (v === 'tasks' && r.id != null && (r.from?.view === 'chat' || r.from?.view === 'session')) return { go: r.from };
   if (v === 'tasks' && r.id != null) return { go: r.project ? { view: 'tasks', project: r.project } : { view: 'tasks' } };
   if (v === 'tasks' && r.project) return { go: { view: 'projects', name: r.project } };
   if (v === 'projects' && r.name) return { go: { view: 'projects' } };

@@ -81,8 +81,11 @@ export function endTour() {
 let views = null;
 export const setViews = (names) => { views = names; };
 export function go(route) {
-  const next = cleanRoute(route, { views, phone: phoneLayout() }) ?? { view: phoneLayout() ? 'chats' : 'chat' };
+  let next = cleanRoute(route, { views, phone: phoneLayout() }) ?? { view: phoneLayout() ? 'chats' : 'chat' };
   if (next.view === 'settings') { openSettings(next.section); return; }
+  // 3.8 (F5b): a task opened from a chat remembers it, so that «back» on the phone returns there (phone-nav.js › backStep).
+  const here = state.route;
+  if (next.view === 'tasks' && next.id != null && !next.from && (here?.view === 'chat' || here?.view === 'session')) next = { ...next, from: { view: here.view, ...(here.id != null ? { id: here.id } : {}) } };
   bumpNav(); // even to the same screen («Nuevo chat» while on a new chat): the user chose where to be
   setState({ route: next });
   const keep = KEEPS_ID.has(next.view) ? next : { view: next.view };

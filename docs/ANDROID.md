@@ -37,20 +37,24 @@ linked in 3.7 are unlinked once when the PC first opens 3.8; link them again wit
 
 ## Using it
 
-- **Back button**: closes the open sheet or menu, then goes back to the list, then to Chats; on Chats, press it twice
-  to leave.
-- **PC off or unreachable**: the app says so, shows when it last connected and retries on its own (and when you come
-  back to the app or the network returns).
+- **Back button**: closes the open sheet or menu, then goes back to the list (or to the chat a task was opened from),
+  then to Chats; on Chats, press it twice to leave. While linking, it goes from the password back to scanning.
+- **PC off or unreachable**: the app says so, shows when it last connected and retries on its own (3 s, 6 s, 12 s… up
+  to 30 s; not while the app is in the background, and at once when you come back to it or the network returns).
+  «Vincular con otro PC» asks first: linking again needs that PC on. With the app open, a connection that goes silent
+  for a minute is taken for lost («Sin conexión con tu PC…») and comes back by itself. If Orb cannot start, the screen
+  offers «Reintentar» and «Vincular con otro PC».
 - PC-only things (Settings, agents' accounts, backups, `core`) are not on the phone.
 
 ## Notifications, dictation and sharing
 
-- **Notifications**: turn them on in the app, in **More → This phone**. They arrive while Android keeps the app open in
-  the background; if Android closes it, you see them when you open it again.
+- **Notifications**: the app offers them right after linking; later, in **More → This phone**. They arrive while
+  Android keeps the app open in the background; if Android closes it, you see them when you open it again.
 - **Messages**: each chat's notification shows Orb's picture, the chat's
   name and the text as chosen in **Settings › Magic Link** (on the lock screen); new messages of the same chat join one
   notification. **Reply** writes back from the notification; on a card, **Approve** and **Reject** answer it (a
-  sensitive card opens the app instead). Muted chats do not notify. Tapping opens that chat.
+  sensitive card opens the app instead), also when they start the app. Muted chats do not notify. Tapping opens that
+  chat.
 - **No app lock**: the phone is protected by its encrypted link with the PC and by the phone's own screen lock.
 - **Updates**: when your Orb needs a newer app, the app says so instead of failing.
 - **Dictation**: the microphone button, next to **Send**. It uses the phone's own speech recognition.

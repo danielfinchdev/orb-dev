@@ -1,8 +1,9 @@
 // setup.*
 export default {
   'setup.prepareTitle': 'Preparing your PC',
-  'setup.prepareDesc': 'I’ll install any missing agents and tools with their official installers. Then sign in to each one.',
+  'setup.prepareDesc': 'I’ll install any missing agents and tools with their official installers. Then sign in to each one from Agents.',
   'setup.continue': 'Continue',
+  'setup.signIn': 'Sign in to the agents',
   'setup.hello': 'Hello, I’m {name}',
   'setup.tagline': 'Your pocket director',
   'setup.intro': 'I plan your projects in phases, give each agent precise instructions and keep token usage low. You get verified results. You can also talk to any agent directly.',

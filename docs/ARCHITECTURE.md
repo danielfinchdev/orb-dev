@@ -600,14 +600,23 @@ only):
 - **PC off or out of reach:** every request of the phone has its own time limit (`src/ui/lib/net.js`: quick checks
   8 s, calls 45 s, uploads 60 s, the live stream only until its headers). No answer moves to the PC's next address; a
   call or an upload that ran out of time is not sent again elsewhere (the PC may have done it). When no address answers,
-  the app opens on «Tu PC está apagado o no se puede alcanzar» and keeps trying (3 s, 6 s… up to 30 s, and at once when
-  the phone comes back to the app or to a network); a drop while the app is open shows a thin line at the top
-  (`link:offline` / `link:online`).
+  the app opens on «Tu PC está apagado o no se puede alcanzar» and keeps trying in one loop (`retryLoop`: never two
+  tries at once, 3 s, 6 s… up to 30 s, none while the app is hidden, and at once when the phone comes back to the app or
+  to a network); «Vincular con otro PC» asks before forgetting the phone's keys. A drop while the app is open shows a
+  thin line at the top (`link:offline` / `link:online`): the PC writes a ping on the live stream every 25 s, and a stream
+  silent for `TIMEOUTS.eventsIdle` (60 s) is dropped and connected again, as it is when any request reaches the PC again.
+  If Orb cannot start on the phone, its error screen offers «Reintentar» and «Vincular con otro PC».
+- **Notifications offered at the right time:** right after linking, the phone offers them once (`NotifyOffer` in
+  `main.jsx`), saying what they do: in the Android app only while it stays alive in the background (no push service:
+  `push.whenClosed()` is false), in a browser with Web Push also with the page closed.
 - **Navigation on the phone (`src/ui/lib/phone-nav.js`):** the app opens on its chat list unless it was left in a chat
   that still exists or on one of its tabs; routes of screens that are gone (such as the bots of 3.7) fall back to the
   chats; a screen that fails to draw forgets the saved route (`ErrorBoundary`). Android's back (handed over by
-  `OrbNativePlugin`) and a phone browser's back close what is open, then go up one level, and only leave from the chats
-  (twice; the app goes to the background).
+  `OrbNativePlugin`) and a phone browser's back close what is open, then go up one level (a task opened from a chat
+  back to that chat: its route keeps `from`), and only leave from the chats (twice; the app goes to the background).
+  While linking the app, back goes from the password to scanning and closes «Enlazar sin cámara». `OrbNativePlugin`
+  replaces the launch intent only after a share, so a notification's action that starts the app reaches the
+  notifications plugin.
 - Removing a device deletes its key: it is locked out immediately. Devices linked before 3.8 never proved the master
   password and are unlinked once at the first start of 3.8 (`relink_38`, section 37); phones from 2.3.2 or earlier (no
   own key) are dropped at start.
@@ -1240,8 +1249,11 @@ One password, made once, protects what Orb keeps for itself and the actions that
   (`MasterLocked`), the phone access does not start, and a right password opens the data key and wraps it for this PC.
 
 **Making it** (welcome after the folder; an Orb updated to 3.8 shows the same screen once and cannot skip it): at least
-10 characters (12 or more advised, with a strength hint), typed twice, and a box to tick under «Si la olvidas, no se
-puede recuperar» with what that means.
+10 characters (12 or more advised, with a strength hint), typed twice, and a box to tick under «Orb no la guarda:
+apúntala» with what that means (the recovery code, or starting from scratch). The first screen of the window is decided
+by `src/ui/lib/startup.js` (core, the 3.7 migration, the password, a pending welcome, the folders); the welcome keeps
+`setupPending` in orb.json until its last step, so one closed halfway resumes where it stopped, and the «updated to
+3.8» wording shows only when the data came from 3.7 (`master.state().upgraded`).
 
 **Guarded actions.** `needsUnlock` (`src/core/permissions.mjs`) lists them: restoring a backup, checking one
 (`backup.verify`, which would otherwise test recovery codes for free; a code typed there also has the `recovery`

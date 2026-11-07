@@ -419,7 +419,7 @@ function PhoneCard() {
       <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Smartphone className="text-primary size-5" /><div><CardTitle>{t('settings.phone')}</CardTitle><CardDescription>{installed ? t('settings.phoneInstalled') : t(p.ios() ? 'settings.phoneInstallIos' : 'settings.phoneInstallAndroid')}</CardDescription></div></CardHeader>
       <CardContent className="grid gap-2">
         {p.supported() && (installed || !p.ios()) ? (
-          <Row label={t('settings.phonePush')} hint={t('settings.phonePushHint')}>
+          <Row label={t('settings.phonePush')} hint={t(p.whenClosed?.() === false ? 'settings.phonePushHintApp' : 'settings.phonePushHint')}>
             <Switch checked={on} onCheckedChange={async (next) => { const r = await act(next ? p.enable() : p.disable()); if (r !== undefined) setOn(r); }} />
           </Row>
         ) : <p className="text-muted-foreground text-sm">{t(p.supported() ? 'settings.phonePushInstallFirst' : 'settings.phonePushNeedsHttps')}</p>}

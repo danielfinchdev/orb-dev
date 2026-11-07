@@ -51,7 +51,9 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
         const { BarcodeScanner, BarcodeFormat } = await import('@capacitor-mlkit/barcode-scanning');
         const { available } = await BarcodeScanner.isGoogleBarcodeScannerModuleAvailable().catch(() => ({ available: true }));
         if (!available) { await BarcodeScanner.installGoogleBarcodeScannerModule().catch(() => {}); throw new Error(await tl('app.scanPreparing')); }
-        const { barcodes } = await BarcodeScanner.scan({ formats: [BarcodeFormat.QrCode] });
+        // Closed without reading (back, «cancel»): nothing to say.
+        let barcodes = [];
+        try { ({ barcodes } = await BarcodeScanner.scan({ formats: [BarcodeFormat.QrCode] })); } catch (e) { if (/cancel/i.test(String(e?.message ?? e))) return null; throw e; }
         return barcodes?.[0]?.rawValue ?? null;
       };
       // Link with what was scanned or typed: the QR's text, a pasted link, or the short code and the address. 3.8: read
@@ -166,6 +168,7 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
         supported: () => true,
         installed: () => true,
         ios: () => false,
+        whenClosed: () => false, // no push service: only while Android keeps the app alive in the background
         enabled: () => localStorage.getItem(NOTIFY) === '1',
         async enable() {
           const { LocalNotifications } = await import('@capacitor/local-notifications');

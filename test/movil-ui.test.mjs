@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT } from './helpers.mjs';
 import { cleanRoute, restoreRoute, backStep, keyboardOpen, PHONE_TABS } from '../src/ui/lib/phone-nav.js';
-import { timedFetch, fetchWithin, isOffline, retryDelay, TIMEOUTS } from '../src/ui/lib/net.js';
+import { timedFetch, fetchWithin, isOffline, retryDelay, retryLoop, TIMEOUTS } from '../src/ui/lib/net.js';
 
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const PHONE_VIEWS = ['chat', 'session', 'tasks', 'projects', 'logs', 'activity', 'schedules', 'phone', 'tutorials', 'chats', 'more', 'board'];
@@ -137,8 +137,8 @@ test('PC apagado: pantalla tranquila que reintenta, nunca «No se pudo iniciar O
   assert.match(main, /if \(info\.offline\) return alive && setPhase\('offline'\)/);
   assert.match(main, /if \(bridge\.mobile && isOffline\(e\)\)/, 'también si se cae mientras arranca');
   assert.match(main, /<PcOffline info=/);
-  assert.match(main, /retryDelay\(tries\.current\+\+\)/);
-  assert.match(main, /window\.addEventListener\('online', soon\)/);
+  assert.match(read('src/ui/lib/net.js'), /delay\(tries\+\+\)/);
+  assert.match(main, /window\.addEventListener\('online', online\)/);
   assert.match(main, /data-testid="link-down"/, 'y un aviso fino si se cae con la app abierta');
 });
 
@@ -192,4 +192,70 @@ test('«Cosas que nadie toca»: quitar uno de serie pide confirmación y se pued
   assert.match(s, /if \(isDefault\(x\) && !await confirm\(t\('settings\.protectedRemoveTitle', \{ name: x \}\)/);
   assert.match(s, /store\(\[\.\.\.list, \.\.\.missing\]\)/);
   assert.match(s, /settings\.protectedDefaults/);
+});
+
+// ---- F5b: the global review (orb-3.8-revision-global.md)
+test('M1: los reintentos del «PC apagado» son un solo bucle: nunca dos a la vez, con pausa creciente y ninguno con la app oculta', async () => {
+  const intervals = new Map(); let n = 0;
+  const timers = { setInterval: (fn) => { intervals.set(++n, fn); return n; }, clearInterval: (id) => intervals.delete(id) };
+  const tick = (times = 1) => { for (let i = 0; i < times; i++) for (const fn of [...intervals.values()]) fn(); };
+  let calls = 0; let answer = null; let hidden = false; const waits = [];
+  const attempt = () => { calls++; return new Promise((resolve) => { answer = resolve; }); };
+  const loop = retryLoop({ attempt, timers, hidden: () => hidden, onWait: (s, busy) => waits.push([s, busy]) });
+  const first = loop.now();
+  loop.now(); loop.now({ reset: true }); // the screen comes back, the network too, while it tries
+  assert.equal(calls, 1, 'una sola petición a la vez');
+  answer(false); await first;
+  assert.deepEqual(waits.at(-1), [3, false], 'la primera pausa: 3 s');
+  assert.equal(intervals.size, 1);
+  tick(3); assert.equal(calls, 2); assert.equal(intervals.size, 0, 'el contador se para antes de reintentar');
+  answer(false); await Promise.resolve(); await Promise.resolve();
+  assert.deepEqual(waits.at(-1), [6, false], 'la pausa crece');
+  assert.equal(intervals.size, 1);
+  // Hidden: the countdown stops and no new try is planned.
+  hidden = true; loop.pause();
+  assert.equal(intervals.size, 0);
+  const again = loop.now(); answer(false); await again;
+  assert.equal(intervals.size, 0, 'con la app oculta no queda nada programado');
+  assert.deepEqual(waits.at(-1), [null, false]);
+  // Back: from 3 s again; the PC answers and nothing is left.
+  hidden = false;
+  const back = loop.now({ reset: true }); answer(true); await back;
+  assert.equal(intervals.size, 0);
+  loop.stop(); await loop.now(); assert.equal(calls, 4, 'parado: no vuelve a intentarlo');
+  const main = read('src/ui/main.jsx');
+  assert.match(main, /retryLoop\(\{/); assert.doesNotMatch(main, /tryNow/);
+});
+
+test('M2/M3: la pantalla de error del móvil tiene salida y «Vincular con otro PC» pregunta antes de desvincular', () => {
+  const main = read('src/ui/main.jsx');
+  assert.match(main, /data-testid="app-error-retry"/);
+  assert.match(main, /data-testid="app-error-relink"/);
+  assert.match(main, /async function relinkPhone\(name\) \{\n\s*if \(!bridge\.unlink\) return false;\n\s*if \(!await confirm\(/);
+  assert.equal((main.match(/bridge\.unlink\(\)/g) ?? []).length, 1, 'solo relinkPhone desvincula');
+});
+
+test('M4: el flujo de eventos del móvil detecta una conexión colgada y vuelve a conectar', () => {
+  const web = read('src/ui/lib/web-bridge.js');
+  assert.ok(TIMEOUTS.eventsIdle > 25_000 * 2, 'más que dos pings del PC');
+  assert.match(web, /setTimeout\(\(\) => \{ idle = true; ctrl\.abort\(\); \}, TIMEOUTS\.eventsIdle\)/);
+  assert.match(web, /if \(idle\) seen\(false\);/);
+  assert.match(web, /if \(ok && session && !live && !connecting\) connect\(\);/, 'al volver el PC, los eventos también');
+  assert.match(read('src/engine/remote.mjs'), /res\.write\(': ping\\n\\n'\)[^\n]*25_000/);
+});
+
+test('M5: los avisos del móvil se ofrecen al enlazar y dicen la verdad (en la app, solo con la app viva en segundo plano)', () => {
+  assert.match(read('src/ui/lib/app-bridge.js'), /whenClosed: \(\) => false/);
+  assert.match(read('src/ui/lib/web-bridge.js'), /whenClosed: \(\) => true/);
+  assert.match(read('src/ui/views/settings.jsx'), /p\.whenClosed\?\.\(\) === false \? 'settings\.phonePushHintApp' : 'settings\.phonePushHint'/);
+  const main = read('src/ui/main.jsx');
+  assert.equal((main.match(/offerNotify\(\); location\.reload\(\);/g) ?? []).length, 2, 'la app y el navegador, tras enlazar');
+  assert.match(main, /<NoteOpener \/><NotifyOffer \/>/);
+});
+
+test('B3: atrás desde una tarea abierta en un chat vuelve a ese chat', () => {
+  assert.deepEqual(backStep({ route: { view: 'tasks', id: 4, from: { view: 'chat', id: 9 } } }), { go: { view: 'chat', id: 9 } });
+  assert.deepEqual(backStep({ route: { view: 'tasks', id: 4, from: { view: 'session', id: 's1' } } }), { go: { view: 'session', id: 's1' } });
+  assert.deepEqual(backStep({ route: { view: 'tasks', id: 4, from: { view: 'bots' } } }), { go: { view: 'tasks' } }, 'otro origen: la lista');
+  assert.match(read('src/ui/lib/store.js'), /next = \{ \.\.\.next, from: \{ view: here\.view/);
 });
