@@ -188,3 +188,36 @@ test('conectores: la clave y la orden reales solo llegan al conector, y se para 
     assert.deepEqual(lines, ['{"name":"CONTRASENA","value":"***"}']);
   } finally { ctx.config.mcpServers = saved; agentAuth.revokeSession('sesion-conector'); }
 });
+
+// F2.6c (P4): Cursor starts its servers again every turn: it gets a function giving new tickets each turn, which may be
+// traded again during the turn and end with it (release); every other agent gets its servers once, single-use tickets.
+test('Cursor recibe tickets nuevos en cada turno y se revocan al terminarlo', async () => {
+  const { mcpServersOf } = await import('../src/engine/sessions.mjs');
+  const cursorLike = mcpServersOf({ mcpServersEachTurn: true }, 'cursor', { taskId: 3, session: 'sesion-cursor' });
+  assert.equal(typeof cursorLike, 'function');
+  const turn1 = cursorLike(); const turn2 = cursorLike();
+  const ticketOf = (s) => s.orb.env.ORB_TICKET_orb;
+  assert.notEqual(ticketOf(turn1), ticketOf(turn2));
+  assert.equal(agentAuth.grants.get(ticketOf(turn1)).reusable, true);
+  assert.ok(!Object.keys(turn1).includes('release'), 'release no es un servidor');
+  turn1.release();
+  assert.equal(agentAuth.valid(ticketOf(turn1)), false); assert.equal(agentAuth.valid(ticketOf(turn2)), true);
+  const once = mcpServersOf({}, 'claude', { taskId: 3, session: 'sesion-claude' });
+  assert.equal(agentAuth.grants.get(once.orb.env.ORB_TICKET_orb).reusable, false);
+  agentAuth.revokeSession('sesion-cursor'); agentAuth.revokeSession('sesion-claude');
+});
+
+// F2.6c (P10): two connectors whose names give the same environment variable would swap tickets: refused when saved,
+// and never both handed to an agent.
+test('conectores con nombres que chocan en las variables de entorno', async () => {
+  const { validateConfig } = await import('../src/core/context.mjs');
+  const { mcpServersFor } = await import('../src/engine/sessions.mjs');
+  const base = structuredClone(ctx.config);
+  for (const pair of [['git-hub', 'git_hub'], ['GitHub', 'github']]) {
+    assert.throws(() => validateConfig({ ...base, mcpServers: pair.map((name) => ({ name, command: 'npx' })) }), /choca|clashes/, pair.join(' / '));
+  }
+  validateConfig({ ...base, mcpServers: [{ name: 'github', command: 'npx' }, { name: 'gitlab', command: 'npx' }] });
+  const saved = ctx.config.mcpServers;
+  ctx.config.mcpServers = [{ name: 'git-hub', command: 'a' }, { name: 'git_hub', command: 'b' }];
+  try { assert.deepEqual(Object.keys(mcpServersFor('claude', { session: 'choque' })), ['orb', 'git-hub']); } finally { ctx.config.mcpServers = saved; agentAuth.revokeSession('choque'); }
+});

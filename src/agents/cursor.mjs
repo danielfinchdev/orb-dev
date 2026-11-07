@@ -14,6 +14,9 @@ export const id = 'cursor';
 export const label = 'Cursor';
 export const kind = 'cli-stream';
 export const caps = { images: false, steer: false, fork: false, approvals: false, models: true, context: false };
+// F2.6c: Cursor starts its MCP servers again every turn, so they get new tickets every turn (o.mcpServers is then a
+// function), taken back when the turn ends (src/engine/agent-auth.mjs).
+export const mcpServersEachTurn = true;
 
 // In this user's Local AppData or in one moved to another drive (appDataDirs).
 function windowsEntry() {
@@ -224,7 +227,9 @@ export function createLive(o) {
     // run (--approve-mcps), and the guard as deny rules; both only for this turn. A command left running in the background
     // (a dev server) no longer keeps the CLI waiting for ever after its answer (--background-shell-timeout).
     let restore = Object.assign(() => {}, { env: {} });
-    try { restore = prepareCursorFolder(o.cwd, { mcpServers: o.mcpServers ?? {}, deny: cursorRules(permission, o.internalDir) }); }
+    const servers = (typeof o.mcpServers === 'function' ? o.mcpServers() : o.mcpServers) ?? {};
+    current.promise.finally(() => servers.release?.());
+    try { restore = prepareCursorFolder(o.cwd, { mcpServers: servers, deny: cursorRules(permission, o.internalDir) }); }
     catch (error) { log(`preparar .cursor: ${error.message}`); }
     current.promise.finally(() => restore());
     const args = [...o.exe.pre, '-p', '--output-format', 'stream-json', '--stream-partial-output', '--trust', '--workspace', o.cwd, '--approve-mcps', '--background-shell-timeout', '60'];

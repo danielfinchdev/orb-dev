@@ -7,7 +7,7 @@ import { redeem, ticketFromArgs } from './auth-client.mjs';
 import { killTree } from '../agents/common.mjs';
 import { winPlan } from './win-spawn.mjs';
 
-const auth = await redeem(process.env.ORB_AUTH_PIPE, ticketFromArgs());
+const auth = await redeem(process.env.ORB_AUTH_PIPE, ticketFromArgs(), { reconnect: false }); // its connection closing is its grant ending
 const launch = auth?.reply?.launch;
 if (!launch?.command) { process.stderr.write('Orb no ha autorizado este conector\n'); process.exit(1); }
 

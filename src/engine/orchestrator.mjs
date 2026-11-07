@@ -11,7 +11,7 @@ import { executable, installed, adapter } from '../agents/index.mjs';
 import * as claude from '../agents/claude.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { titleFrom } from '../core/titles.mjs';
-import { mcpServersFor } from './sessions.mjs';
+import { mcpServersOf } from './sessions.mjs';
 import { agentAuth } from './agent-auth.mjs';
 import { accountEnv } from '../core/accounts.mjs';
 import { briefing } from './logs.mjs';
@@ -301,10 +301,11 @@ class Lane {
     // Through the registry (not claude.mjs directly), so ORB_FAKE_AGENTS also replaces the assistant's own Claude in tests.
     // Claude takes the persona as its system prompt and a list of tools; the other agents get the persona at the start
     // of the conversation (run()) and the coordinator is held to read-only by its permission.
-    this.live = adapter(agent).createLive({
+    const a = adapter(agent);
+    this.live = a.createLive({
       exe: executable(agent), cwd, model, reasoning: c.reasoning || 'medium',
       permission: 'leer', resumeId: c.session_id || null, newSessionId: isClaude ? newId : null,
-      mcpServers: mcpServersFor(agent, { orchestrator: true, browser: false, session: `asistente-${this.id}`, conversation: this.id }),
+      mcpServers: mcpServersOf(a, agent, { orchestrator: true, browser: false, session: `asistente-${this.id}`, conversation: this.id }),
       env: { ...accountEnv(acc), ORB_AGENT: 'orb' },
       ...(isClaude ? { systemPrompt: persona(this.board) } : {}),
       tools: isClaude ? { allowed: ['mcp__orb', 'Read', 'Glob', 'Grep'], disallowed: claude.COORDINATOR_DENIED } : undefined,
@@ -354,7 +355,8 @@ class Lane {
     if (ev.type === 'rate') { try { recordRate(this.board, this.liveAccount ?? this.liveAgent, ev); } catch { /* budget only */ } return; }
     if (ev.type === 'context' && ev.size) { this.board.updateConversation(this.id, { context: { used: ev.used, size: ev.size } }); this.push(); return; }
     // Only the process that ended is dropped: a replaced live's late exit must not detach the one in use.
-    if (ev.type === 'exit' && !this.busy && this.live?.isClosed()) this.live = null;
+    // F2.6c: the coordinator's process is gone: its tickets go with it at once (even mid-turn).
+    if (ev.type === 'exit' && this.live?.isClosed()) { agentAuth.revokeSession(`asistente-${this.id}`); if (!this.busy) this.live = null; }
   }
 
   // The last lines of the conversation before the message being answered, for a conversation taken up again afresh.

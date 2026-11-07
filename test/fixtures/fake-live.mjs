@@ -46,19 +46,29 @@ import { decide } from '../../src/core/guard.mjs';
 const SCRIPT = (() => { try { return process.env.ORB_FAKE_SCRIPT ? JSON.parse(fs.readFileSync(process.env.ORB_FAKE_SCRIPT, 'utf8')) : []; } catch { return []; } })();
 
 
-// One call to a tool of the "orb" MCP server, started exactly as the real agents start it (command, args, env).
+// One call to a tool of the "orb" MCP server, started exactly as the real agents start it (command, args, env) and, as
+// they do, once per agent process: its ticket is traded once (F2.6c), so the same server answers every call.
+const PROCS = new WeakMap();
+function mcpProc(server) {
+  let p = PROCS.get(server);
+  if (p && !p.dead) return p;
+  const child = spawn(server.command, server.args ?? [], { env: { ...process.env, ...(server.env ?? {}) }, stdio: ['pipe', 'pipe', 'inherit'], windowsHide: true });
+  const replies = new Map(); let seq = 0;
+  p = { child, dead: false, rpc: (method, params) => new Promise((r) => { const id = ++seq; replies.set(id, r); child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`); }) };
+  child.on('exit', () => { p.dead = true; for (const r of replies.values()) r({ error: { message: 'el servidor MCP se cerró' } }); });
+  readline.createInterface({ input: child.stdout }).on('line', (l) => { let m; try { m = JSON.parse(l); } catch { return; } const r = replies.get(m.id); replies.delete(m.id); r?.(m); });
+  p.ready = p.rpc('initialize', { protocolVersion: '2025-06-18' });
+  PROCS.set(server, p);
+  return p;
+}
+const closeMcp = (server) => { const p = server && PROCS.get(server); if (p) { p.dead = true; try { p.child.stdin.end(); } catch { /* gone */ } } };
 async function mcpCall(server, name, args, whole = false) {
   if (!server) throw new Error('sin servidor MCP de Orb');
-  const child = spawn(server.command, server.args ?? [], { env: { ...process.env, ...(server.env ?? {}) }, stdio: ['pipe', 'pipe', 'inherit'], windowsHide: true });
-  const replies = new Map();
-  readline.createInterface({ input: child.stdout }).on('line', (l) => { let m; try { m = JSON.parse(l); } catch { return; } replies.get(m.id)?.(m); });
-  const rpc = (id, method, params) => new Promise((r) => { replies.set(id, r); child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`); });
-  try {
-    await rpc(1, 'initialize', { protocolVersion: '2025-06-18' });
-    const out = await rpc(2, 'tools/call', { name, arguments: args });
-    if (whole) return out.result;
-    return out.result?.content?.[0]?.text ?? JSON.stringify(out);
-  } finally { child.stdin.end(); }
+  const p = mcpProc(server);
+  await p.ready;
+  const out = await p.rpc('tools/call', { name, arguments: args });
+  if (whole) return out.result;
+  return out.result?.content?.[0]?.text ?? JSON.stringify(out);
 }
 
 export function fakeAdapter(id, real) {
@@ -303,6 +313,7 @@ function createFakeLive(agent, label, caps, o) {
   live.close = () => {
     if (closed) return; closed = true;
     approvals.clear(); wake?.done();
+    for (const server of Object.values(o.mcpServers ?? {})) closeMcp(server);
     if (turn && !turn.done) turn.finish({ isError: true, final: turn.text || `${label} se cerró.` });
     onEvent({ type: 'exit', code: 0, stderr: '' });
   };

@@ -54,7 +54,13 @@ const WHO = Object.freeze({ signed: SIGNED, boss: BOSS, conversation: CONV, task
 const TASK_ID = Number(SIGNED_TASK) || null;
 // A grant ends with its task's or conversation's process (or with the conversation, or the engine): the engine is asked
 // again on every call.
-const stillSigned = async () => WHO.signed && (await AUTH.check()) && (!BOSS || Boolean(board.conversation(CONV)));
+// F2.6c: an engine too busy to answer in time is not a lost grant: the call fails with «try again», not «not signed».
+const stillSigned = async () => {
+  if (!WHO.signed) return false;
+  const held = await AUTH.check();
+  if (held === null) throw Object.assign(new Error(tr('msg.authz.busy')), { userFacing: true });
+  return held && (!BOSS || Boolean(board.conversation(CONV)));
+};
 const seeTask = (id) => mustOwnTask(board, WHO, id);
 const refuse = (key, vars) => { throw Object.assign(new Error(tr(key, vars)), { userFacing: true }); };
 // The projects the coordinator's conversation works on: its own and its tasks'.
@@ -88,6 +94,10 @@ function sendMessage(a) {
   }
   // To an agent (or all): about one of its tasks; Orb delivers it only inside that task's conversation.
   if (!['orb', 'usuario'].includes(a.to) && task == null) refuse('msg.authz.messageNeedsTask');
+  // F2.6c: a message naming another task goes to that task's agent; to another agent nobody would get it.
+  const other = task != null && Number(task) !== TASK_ID ? board.task(task) : null;
+  const owner = other ? other.assigned_to || (other.agent !== 'any' ? other.agent : null) : null;
+  if (owner && !['orb', 'usuario', 'all'].includes(a.to) && owner !== a.to) refuse('msg.authz.wrongAgent', { id: task, agent: owner });
   return board.send({ ...a, task_id: task, from: ME, from_task: TASK_ID });
 }
 // 3.8: the logs of the projects its conversation works on, and the general one.

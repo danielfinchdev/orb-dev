@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { ctx, tr } from '../core/context.mjs';
+import { ctx, tr, connectorKey } from '../core/context.mjs';
 import { adapter, executable } from '../agents/index.mjs';
 import { orbMcpServer, connectorLauncher } from '../agents/common.mjs';
 import { agentAuth } from './agent-auth.mjs';
@@ -45,25 +45,33 @@ export const browserOn = () => Boolean(ctx.browser) && ctx.config.browser?.enabl
 // carries only the pipe and a ticket per server, new for every agent process and taken back when it closes
 // (Sessions.closeLive, the coordinator's Lane.closeLive). A worker's tools act only on its task (permissions.mjs ›
 // ownsTask); two direct conversations of one agent are two identities.
-export function mcpServersFor(agent, { taskId = '', orchestrator = false, browser = !orchestrator, session = '', conversation = null } = {}) {
+// F2.6c: reusable: Cursor's tickets, new every turn (mcpServersEachTurn) and released when the turn ends (.release()).
+export function mcpServersFor(agent, { taskId = '', orchestrator = false, browser = !orchestrator, session = '', conversation = null, reusable = false } = {}) {
   const who = orchestrator ? 'orb' : agent;
   const sid = session ? String(session) : null;
   const ticketed = (name, base, reply) => {
     const variable = `ORB_TICKET_${name}`.replace(/[^A-Za-z0-9_]/g, '_');
-    return { ...base, args: [...base.args, `--ticket-env=${variable}`], env: { ...base.env, ORB_AUTH_PIPE: agentAuth.address, [variable]: agentAuth.issue({ session: sid, reply }) } };
+    const ticket = agentAuth.issue({ session: sid, reply, reusable });
+    tickets.push(ticket);
+    return { ...base, args: [...base.args, `--ticket-env=${variable}`], env: { ...base.env, ORB_AUTH_PIPE: agentAuth.address, [variable]: ticket } };
   };
+  const tickets = [];
   // The browser's key for this conversation's page only.
   const nav = browser && sid && browserOn() ? { pipe: ctx.browser.pipe, session: sid, token: browserKey(ctx.browser.token, { agent: who, session: sid, task: String(taskId || '') }) } : null;
   const servers = { orb: ticketed('orb', orbMcpServer(), { home: ctx.home, browser: nav,
     who: { agent: who, boss: orchestrator, conversation: orchestrator && conversation ? Number(conversation) : null, task: !orchestrator && taskId ? Number(taskId) : null, session: sid } }) };
   if (!orchestrator) {
+    const taken = new Set(['orb']);
     for (const s of ctx.config.mcpServers ?? []) {
-      if (s.enabled === false || (s.agents?.length && !s.agents.includes(agent)) || s.name === 'orb') continue;
+      if (s.enabled === false || (s.agents?.length && !s.agents.includes(agent)) || taken.has(connectorKey(s.name))) continue;
+      taken.add(connectorKey(s.name)); // F2.6c: never two servers on one variable name (config checks it too)
       servers[s.name] = ticketed(s.name, connectorLauncher(), { launch: { command: s.command, args: s.args ?? [], env: s.env ?? {} } });
     }
   }
-  return servers;
+  return Object.defineProperty(servers, 'release', { value: () => { for (const t of tickets) agentAuth.revoke(t); } });
 }
+// What an adapter gets: its servers, or (an agent that starts them again every turn) a function giving new ones.
+export const mcpServersOf = (a, agent, opts) => (a.mcpServersEachTurn ? () => mcpServersFor(agent, { ...opts, reusable: true }) : mcpServersFor(agent, opts));
 
 // Reference pictures: copied into <folder>/.orb-adjuntos/<stamp>/ so every agent can read them, and kept out of git.
 export function placeAttachments(files, cwd) {
@@ -291,7 +299,7 @@ export class Sessions {
       promptDir,
       exe, cwd: s.cwd, model: s.model, reasoning: s.reasoning, permission: s.permission,
       resumeId: forkFrom || s.cli_session || null, forkSession: Boolean(forkFrom), newSessionId,
-      mcpServers: mcpServersFor(s.agent, { taskId, session: s.id }), budgetUsd,
+      mcpServers: mcpServersOf(a, s.agent, { taskId, session: s.id }), budgetUsd,
       env: { ...accountEnv(acc), ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
       internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog, cfg: ctx.config.agents[s.agent] ?? {},
       onEvent: (ev) => this.onLiveEvent(s.id, ev)
@@ -351,7 +359,8 @@ export class Sessions {
     }
     if (ev.type === 'context') { if (ev.size) this.update(id, { context: { used: ev.used, size: ev.size, at: now() } }); return; }
     if (ev.type === 'rate') { const s = this.get(id); try { this.onRate(s?.account ?? s?.agent, ev); } catch { /* budget only */ } return; }
-    if (ev.type === 'exit') { if (!this.running.has(id) && this.lives.get(id)?.live.isClosed?.()) { this.lives.delete(id); agentAuth.revokeSession(id); } }
+    // F2.6c: the process is gone: its tickets go with it at once, even mid-turn (a process it left behind could trade them).
+    if (ev.type === 'exit') { if (this.lives.get(id)?.live.isClosed?.()) { agentAuth.revokeSession(id); if (!this.running.has(id)) this.lives.delete(id); } }
   }
 
   // 3.1: whether a command only stops processes this task started itself: every number it names is a process launched

@@ -176,6 +176,7 @@ export default {
   "msg.ctx.connectorName": "nombre de conector no válido: {name}",
   "msg.ctx.cursorFixed": "Cursor solo admite una cuenta",
   "msg.ctx.cursorOne": "Cursor solo admite una cuenta",
+  "msg.ctx.connectorClash": "el conector «{name}» choca con otro de nombre casi igual (mayúsculas, - o _): cámbiale el nombre",
   "msg.ctx.mcpList": "mcpServers debe ser una lista",
   "msg.ctx.missingAgentCfg": "falta la configuración de {id}",
   "msg.ctx.mobileBool": "mobile.enabled debe ser verdadero o falso",

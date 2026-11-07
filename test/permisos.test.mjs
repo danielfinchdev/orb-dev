@@ -324,6 +324,10 @@ test('MCP: un trabajador escribe a una tarea hermana de su conversación por su 
     assert.deepEqual([row.task_id, row.from_task], [b.id, a.id]);
     const refused = await worker.call('orb_send_message', { to: 'codex', body: 'x', task_id: far.id });
     assert.equal(refused.error, true); assert.match(refused.text, /no es de tu conversación/);
+    // F2.6c (P11): to a sibling of another agent, the sender is told instead of the message getting lost.
+    const d = board.createTask({ project: 'web', title: 'Hermana D', description: 'x', conversation_id: mine, agent: 'claude' }, 'orb');
+    const wrong = await worker.call('orb_send_message', { to: 'codex', body: 'x', task_id: d.id });
+    assert.equal(wrong.error, true); assert.match(wrong.text, new RegExp(`#${d.id} es de claude`));
     scheduler.deliverMessages();
     assert.equal(got.b.length, 1); assert.match(got.b[0], /MENSAJE DE CLAUDE.*\/api\/v2/);
     assert.deepEqual(got.c, [], 'la otra hermana no lo recibe');

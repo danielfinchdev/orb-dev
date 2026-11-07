@@ -176,6 +176,7 @@ export default {
   "msg.ctx.connectorName": "invalid connector name: {name}",
   "msg.ctx.cursorFixed": "Cursor supports only one account",
   "msg.ctx.cursorOne": "Cursor supports only one account",
+  "msg.ctx.connectorClash": "connector «{name}» clashes with another one with almost the same name (case, - or _): rename it",
   "msg.ctx.mcpList": "mcpServers must be a list",
   "msg.ctx.missingAgentCfg": "the configuration for {id} is missing",
   "msg.ctx.mobileBool": "mobile.enabled must be true or false",

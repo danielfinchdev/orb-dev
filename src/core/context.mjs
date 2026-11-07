@@ -18,6 +18,8 @@ export function useHome(home) {
 }
 
 // Settings saved from the app. Only known top-level keys are accepted.
+// A connector's name as it goes into environment variable names (case does not count on Windows).
+export const connectorKey = (name) => String(name ?? '').toLowerCase().replace(/[^a-z0-9_]/g, '_');
 const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'oneAtATime', 'approvalWaitMinutes', 'protected', 'backup', 'tz'];
 export function saveConfig(patch) {
   const unknown = Object.keys(patch ?? {}).filter((k) => !EDITABLE.includes(k));
@@ -93,8 +95,14 @@ export function validateConfig(c) {
   const homes = c.accounts.filter((a) => a.home).map((a) => path.resolve(a.home).toLowerCase());
   if (new Set(homes).size !== homes.length) throw new Error(tr('msg.ctx.sameHome'));
   if (!Array.isArray(c.mcpServers)) throw new Error(tr('msg.ctx.mcpList'));
+  // F2.6c: two names that give the same environment variable (git-hub and git_hub, GitHub and github on Windows) would
+  // swap their tickets: refused.
+  const envNames = new Set();
   for (const s of c.mcpServers) {
     if (!/^[a-z0-9_-]{1,40}$/i.test(s?.name ?? '') || s.name.toLowerCase() === 'orb') throw new Error(tr('msg.ctx.connectorName', { name: s?.name }));
+    const envName = connectorKey(s.name);
+    if (envNames.has(envName)) throw new Error(tr('msg.ctx.connectorClash', { name: s.name }));
+    envNames.add(envName);
     if (typeof s.command !== 'string' || !s.command.trim()) throw new Error(tr('msg.ctx.connectorCommand', { name: s.name }));
     if (s.args && (!Array.isArray(s.args) || s.args.some((x) => typeof x !== 'string'))) throw new Error(tr('msg.ctx.connectorArgs', { name: s.name }));
   }
