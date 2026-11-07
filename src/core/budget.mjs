@@ -309,35 +309,30 @@ export function mayUseAccount(board, person, accountId, { purpose = 'dev' } = {}
 // The account a run spends: the one chosen on purpose when that person may use it (null when they may not: the caller
 // refuses), else their first usable own account, else a lent one with room today, else (one person, as 3.5.1) their
 // first own account even if turned off.
-export function pickAccount(board, { person = null, agent, bot = null, preferred = null, purpose = null } = {}) {
-  const use = purpose ?? (bot != null ? 'bot' : 'dev');
+export function pickAccount(board, { person = null, agent, preferred = null, purpose = null } = {}) {
+  const use = purpose ?? 'dev';
   const p = personOr(board, person);
   const chosen = preferred ? findAccount(preferred) : null;
   if (chosen && chosen.agent === agent) return mayUseAccount(board, p, chosen.id, { purpose: use }) ? chosen : null;
   const usable = accountsFor(board, p, agent, { purpose: use });
   const own = usable.find((a) => accountPerson(board, a) === p);
   if (own) return own;
-  const lent = usable.find((a) => checkSpend(board, { person: p, account: a.id, bot }).ok);
+  const lent = usable.find((a) => checkSpend(board, { person: p, account: a.id }).ok);
   if (lent) return lent;
   return accountsFor(board, p, agent, { purpose: use, usable: false }).find((a) => accountPerson(board, a) === p) ?? usable[0] ?? null;
 }
 
-// What was spent on one day: { turns, tokens, usd } of a person (on an account), or of a bot.
-export function spentOn(board, { person = null, account = null, bot = null, day }) {
+// What was spent on one day: { turns, tokens, usd } of a person (on an account).
+export function spentOn(board, { person = null, account = null, day }) {
   const where = ['day = ?']; const args = [day];
   if (person) { where.push('person_id = ?'); args.push(person); }
   if (account) { where.push('account_id = ?'); args.push(account); }
-  if (bot != null) { where.push('bot_id = ?'); args.push(Number(bot)); }
   try {
     const r = board.one(`SELECT COALESCE(SUM(turns), 0) AS turns, COALESCE(SUM(COALESCE(tokens_in, 0) + COALESCE(tokens_out, 0)), 0) AS tokens, COALESCE(SUM(usd), 0) AS usd FROM usage_ledger WHERE ${where.join(' AND ')}`, ...args);
     return { turns: Number(r.turns), tokens: Number(r.tokens), usd: Number(r.usd) };
   } catch { return { turns: 0, tokens: 0, usd: 0 }; }
 }
 const capsOver = (caps, spent) => (caps.daily_turns != null && spent.turns >= Number(caps.daily_turns)) || (caps.daily_tokens != null && spent.tokens >= Number(caps.daily_tokens)) || (caps.daily_usd != null && spent.usd >= Number(caps.daily_usd));
-// A bot's own daily caps ({ daily_turns, daily_tokens, daily_usd }, bots.caps) or null.
-export function botCaps(board, bot) {
-  try { const c = JSON.parse(board.one('SELECT caps FROM bots WHERE id = ?', Number(bot))?.caps || 'null'); return c && typeof c === 'object' ? c : null; } catch { return null; }
-}
 // What is left today of a loan: { turns, tokens, usd } (null: no cap of that kind).
 export function loanLeft(board, loan) {
   const spent = spentOn(board, { person: loan.person_id, account: loan.account_id, day: dayOf(board, loan.person_id) });
@@ -345,12 +340,11 @@ export function loanLeft(board, loan) {
   return { turns: left(loan.daily_turns, spent.turns), tokens: left(loan.daily_tokens, spent.tokens), usd: loan.daily_usd == null ? null : Math.max(0, Math.round((Number(loan.daily_usd) - spent.usd) * 100) / 100), spent };
 }
 
-// Whether a person may spend now on that account (and that bot): { ok: true } | { ok: false, reason: 'loanCap' |
-// 'botCap' | 'reserve' | 'expired' | 'noLoan', resetsAt }. The lender never waits for their own reserve.
-export function checkSpend(board, { person = null, account = null, bot = null } = {}) {
+// Whether a person may spend now on that account: { ok: true } | { ok: false, reason: 'loanCap' | 'reserve' | 'expired' |
+// 'noLoan', resetsAt }. The lender never waits for their own reserve.
+export function checkSpend(board, { person = null, account = null } = {}) {
   const p = personOr(board, person);
   const today = dayOf(board, p);
-  if (bot != null) { const caps = botCaps(board, bot); if (caps && capsOver(caps, spentOn(board, { bot, day: today }))) return { ok: false, reason: 'botCap', resetsAt: nextMidnight(board, p) }; }
   const acc = account ? findAccount(account) : null;
   if (!acc || accountPerson(board, acc) === p) return { ok: true };
   const loan = loanOf(board, acc.id, p);
@@ -371,15 +365,15 @@ export function spendText(check, { account = null } = {}) {
 
 // What one turn spent, for the person who spent it (usage_ledger; day in that person's time zone). usage: what the agent
 // reported ({ inputTokens, outputTokens, costUsd } or the snake_case names); one turn per call unless usage.userTurns says.
-export function recordSpend(board, { person = null, account = null, bot = null, conversation = null, session = null, task = null, usage = {} } = {}) {
+export function recordSpend(board, { person = null, account = null, conversation = null, session = null, task = null, usage = {} } = {}) {
   const at = new Date();
   const p = personOr(board, person);
   const day = dayOf(board, p, at);
   const u = usage ?? {};
   const n = (v) => (v != null && Number.isFinite(Number(v)) ? Number(v) : null);
   try {
-    board.run('INSERT INTO usage_ledger (at, day, person_id, account_id, bot_id, conversation_id, session_id, task_id, turns, tokens_in, tokens_out, usd) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      at.toISOString(), day, p, account, bot == null ? null : Number(bot), conversation == null ? null : Number(conversation), session == null ? null : String(session), task == null ? null : Number(task),
+    board.run('INSERT INTO usage_ledger (at, day, person_id, account_id, conversation_id, session_id, task_id, turns, tokens_in, tokens_out, usd) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      at.toISOString(), day, p, account, conversation == null ? null : Number(conversation), session == null ? null : String(session), task == null ? null : Number(task),
       n(u.userTurns) ?? 1, n(u.tokens_in ?? u.input_tokens ?? u.inputTokens), n(u.tokens_out ?? u.output_tokens ?? u.outputTokens), n(u.usd ?? u.cost_usd ?? u.costUsd));
   } catch { /* a database before 3.6 */ }
   return { day };

@@ -6,8 +6,6 @@ export default {
   'msg.notes.deny': 'Rechazar',
   'msg.notes.open': 'Abrir',
   'msg.notes.expired': 'Este aviso ya no sirve. Ábrelo en Orb.',
-  'notes.pinTitle': 'Confirma con tu PIN',
-  'notes.pinDesc': 'Para aprobar esto, escribe tu PIN.',
   'notes.count': '{n} mensajes nuevos',
   'notes.sent': 'Respuesta enviada',
   'notes.allowed': 'Aprobado',

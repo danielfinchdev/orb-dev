@@ -3,10 +3,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr, migrateConfigPersons } from './context.mjs';
-import { avatarFor } from './avatar.mjs';
 import { titleFrom } from './titles.mjs';
 import { dbLike, ensureOwner, ownerId, systemTz } from './persons.mjs';
-import { migrateHome } from './replica-db.mjs';
 
 // node:sqlite may print an ExperimentalWarning; it would pollute the MCP stdout/stderr and the logs.
 const emitWarning = process.emitWarning;
@@ -178,6 +176,9 @@ CREATE TABLE IF NOT EXISTS conversations (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+-- 3.5–3.7: the bots' tables (bots … memory_log, and their columns in ADDED). 3.8 has no bots: they stay here only so the
+-- older migrations below (migratePersons) and a 3.7 database's home_* triggers keep working until the 3.8 migration
+-- archives and drops them.
 -- 3.5: the user's own bots (none fixed in the code: only an empty «Asistente» on the first run). Each one has its brain
 -- (any installed agent, model and effort), its tool groups and accounts, the topics only it handles (exclusive) and whether
 -- it is the chief. Its live conversation id (session_id) continues after a restart.
@@ -418,8 +419,8 @@ function preCopy(db, filename) {
 
 // 3.6 «Personas»: once per database, inside one write lock (the engine and the MCP servers open it at the same time):
 // the owner is made and becomes the person of every row; each bot's live conversation is the owner's; reminders get
-// their wall time and time zone; the global memory moves to the owner's folder and the settings' accounts and
-// connectors are the owner's. Idempotent: each step only fills what is missing.
+// their wall time and time zone; the settings' accounts and connectors are the owner's. Idempotent: each step only fills
+// what is missing. (3.8: the bots' tables stay until the 3.8 migration archives and drops them.)
 function migratePersons(db, { file }) {
   const b = dbLike(db);
   const main = Boolean(file && file !== ':memory:' && ctx.paths?.db && path.resolve(file) === path.resolve(ctx.paths.db));
@@ -443,7 +444,6 @@ function migratePersons(db, { file }) {
   }
   if (main) {
     ctx.owner = owner; ctx.personStore = db;
-    moveGlobalMemory(owner);
     if (now) { try { migrateConfigPersons(owner); } catch { /* the settings stay as they are: a missing person reads as the owner */ } }
   }
 }
@@ -454,16 +454,6 @@ export function wallTime(iso, tz) {
     const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(t)).map((p) => [p.type, p.value]));
     return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
   } catch { return null; }
-}
-// <home>/bots/memoria-global.md → <home>/bots/personas/<owner>/memoria-global.md (once; never over a newer one).
-function moveGlobalMemory(owner) {
-  const dir = ctx.paths?.bots; if (!dir) return;
-  const from = path.join(dir, 'memoria-global.md'); const to = path.join(dir, 'personas', owner, 'memoria-global.md');
-  try {
-    if (!fs.existsSync(from) || fs.existsSync(to)) return;
-    fs.mkdirSync(path.dirname(to), { recursive: true });
-    fs.renameSync(from, to);
-  } catch { /* in use by another process: the next start moves it */ }
 }
 
 // 3.6: the tables whose rows belong to a person (person_id).
@@ -511,17 +501,9 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   // 3.6: a bot's avatar { shape, color } (src/core/avatar.mjs); the ones before get a fixed one from their id.
   ['bots', 'avatar', 'TEXT'],
   // 3.6: whose agent sent a message between agents (NULL: the owner's): it only reaches that person's agents.
-  ['messages', 'person_id', 'TEXT'],
-  // 3.7 (Orb Server, WS3): one home per bot. uid: the bot's id on every Orb (UUIDv7; local ids and folders stay as they
-  // are); home: the identity (orbId) of the Orb that runs it; home_epoch: grows by one at every change of home (the
-  // higher one wins after a crash or a split); home_state: active | pending (a move is copying it here) | moving (its
-  // home is handing it over) | archived (a frozen copy after unlinking); home_fork: { from, seq } after a forced
-  // takeover (where the old home's lines start); needs: what is missing on this Orb after a move ({ connectors, ha }).
-  ['bots', 'uid', 'TEXT'], ['bots', 'home', 'TEXT'], ['bots', 'home_epoch', 'INTEGER NOT NULL DEFAULT 0'], ['bots', 'home_state', "TEXT NOT NULL DEFAULT 'active'"],
-  ['bots', 'home_fork', 'TEXT'], ['bots', 'needs', 'TEXT'],
-  ['bot_groups', 'uid', 'TEXT'], ['bot_groups', 'home', 'TEXT'], ['bot_groups', 'home_epoch', 'INTEGER NOT NULL DEFAULT 0'],
-  // The rows a replica copies are known by uid everywhere (the local ids differ from one Orb to another).
-  ['bot_reminders', 'uid', 'TEXT'], ['chat', 'uid', 'TEXT'], ['memory_log', 'uid', 'TEXT'], ['bot_requests', 'uid', 'TEXT']];
+  ['messages', 'person_id', 'TEXT']];
+// (3.7's replica columns — bots/bot_groups uid, home, home_epoch, home_state, home_fork, needs; uid of bot_reminders, chat,
+// memory_log and bot_requests — are no longer added: only a 3.7 database has them, with the home_* triggers that use them.)
 export function migrate(db, { file = null } = {}) {
   // 3.2: whether a direct conversation already has its title (Orb names a new one from its first message); the ones made
   // before keep theirs.
@@ -535,9 +517,6 @@ export function migrate(db, { file = null } = {}) {
     const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
     if (!has) addColumn(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
   }
-  // 3.6: every bot has an avatar; one made before gets the fixed one of its id (the same on every run).
-  const plain = db.prepare("SELECT id FROM bots WHERE avatar IS NULL OR avatar = ''").all();
-  if (plain.length) { const set = db.prepare('UPDATE bots SET avatar = ? WHERE id = ?'); for (const r of plain) set.run(JSON.stringify(avatarFor(r.id)), r.id); }
   // 3.5.1: devices linked before: phones, browsers and terminals keep their rights; a device that said it was an «orb» is
   // asked again (the owner confirms it in Ajustes › Magic Link) and loses «Puede administrar» meanwhile.
   db.exec("UPDATE devices SET kind_ok = CASE WHEN kind = 'orb' THEN 0 ELSE 1 END, admin = CASE WHEN kind = 'orb' THEN 0 ELSE admin END, dev_ok = 0 WHERE kind_ok IS NULL");
@@ -577,8 +556,9 @@ export function migrate(db, { file = null } = {}) {
   }
   migrateConversations(db);
   migratePersons(db, { file });
-  // 3.7 (WS3): uids, this Orb as the home of its bots, the change log and the replicas' cursors (src/core/replica-db.mjs).
-  migrateHome(db, { file });
+  // 3.8: the bots' replicas are gone. A new database gets neither their tables (bot_changes, replica_cursor, bot_moves,
+  // link_persons) nor their triggers (home_*); a 3.7 one keeps both, which still work because the bots' tables are still
+  // in SCHEMA, until the 3.8 migration drops them (triggers first).
   // 2.7.3: the notices saved as grey system lines before 2.7 (working folder, mode, brain, new conversation…) become
   // notices too, so the old ones leave the chat like the new ones. Only system lines with those exact openings. 3.0: once
   // per database (no grey line of those is written any more), not at every start of the engine and of each MCP server.

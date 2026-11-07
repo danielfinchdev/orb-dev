@@ -16,7 +16,6 @@ export default {
   'sys.menu.zoomOut': 'Zoom out',
   'sys.menu.terminal': 'Open terminal',
   'sys.menu.fullscreen': 'Full screen',
-
   // Main process dialogs and notifications
   'sys.dialog.runningTitle': 'Tasks in progress',
   'sys.dialog.closeOne': 'There is 1 task in progress. If you close now, it will stop and be marked as failed (you can retry it).',
@@ -36,7 +35,6 @@ export default {
   'sys.main.startFailed': '{name} could not start',
   'sys.main.keyringWeak': 'Your desktop has no keyring (GNOME Keyring or KWallet), so Orb’s key is kept unencrypted in a file in its folder. Everything works the same; to protect it, install gnome-keyring or kwallet and restart Orb.',
   'sys.main.notice': '{name} · Notification',
-
   // Main process errors
   'sys.main.engineStopped': '{name} has stopped',
   'sys.main.engineStartStopped': '{name} stopped while starting',
@@ -52,19 +50,16 @@ export default {
   'sys.main.httpsOnly': 'only https links can be opened',
   'sys.main.alreadySetup': 'the app is already set up',
   'sys.main.notHome': 'that folder is not an assistant folder (orb.json is missing)',
-
   // Contribute (feedback)
   'sys.feedback.empty': 'Write a message before sending it',
   'sys.feedback.timeout': 'The request timed out',
   'sys.feedback.offline': 'No connection',
   'sys.feedback.failed': 'The message could not be sent',
-
   // Terminal (Ctrl+J)
   'sys.terminal.notInstalled': '{name} is not installed on this PC',
   'sys.terminal.none': 'no terminal was found on this PC',
   'sys.terminal.folderOnly': 'a terminal can only be opened in a folder',
   'sys.terminal.openFailed': 'could not open {name}: {error}',
-
   // Agents' browser
   'sys.browser.title': 'Agent browser',
   'sys.browser.noUrl': 'the address is missing',
@@ -97,7 +92,6 @@ export default {
   'sys.browser.do.dialogAccept': 'will accept the page’s dialogs',
   'sys.browser.do.dialogCancel': 'will cancel the page’s dialogs',
   'sys.browser.do.console': 'reads the console',
-
   // Agents' MCP tools
   'sys.mcp.noTask': 'task #{id} does not exist',
   'sys.mcp.noIsolatedCopy': 'task #{id} has no isolated copy (tasks in the project folder already see every file)',
@@ -110,30 +104,10 @@ export default {
   'sys.mcp.idsRange': 'ids: between 1 and 10 tasks',
   'sys.mcp.askNeedsOptions': 'orb_ask needs a question and between 2 and 4 options',
   'sys.mcp.boardNeedsText': 'orb_pizarra needs the advice (message)',
-  // 3.7: the changes a bot with «Equipo» proposes on the PC (core/pc-actions.mjs; until 3.6, Opti Bot)
-  'sys.pc.badAction': 'That action is not on the list. Available: {list}',
-  'sys.pc.reduced': 'Reduced version: processes, startup programs and the antivirus are only shown on Windows',
-  'sys.pc.needsReason': 'explain why you propose the action',
-  'sys.pc.needsPid': 'end_process needs the process Id',
-  'sys.pc.needsName': 'disable_startup needs the exact program name',
-  'sys.pc.windowsOnly': 'This action only works on Windows.',
-  'sys.pc.uacCancelled': 'Not done: the Windows administrator prompt was cancelled.',
-  'sys.pc.done': 'Done.',
-  'sys.pc.failed': 'It could not be done.',
-  'sys.pc.cleaned': 'Temporary files removed: {n} ({mb} MB freed). {skipped} were in use and were left.',
-  'sys.pc.noProcess': 'Process {pid} no longer exists.',
-  'sys.pc.processChanged': 'Process {pid} is now another program ({name}): it was not closed.',
-  'sys.pc.protected': '{name} is part of Windows, its security or Orb: it is not closed.',
-  'sys.pc.processClosed': 'Closed {name} (process {pid}).',
-  'sys.pc.noStartup': 'There is no startup program called “{name}”.',
-  'sys.pc.startupFolder': '“{name}” starts from the Startup folder: turn it off in Task Manager › Startup apps.',
-  'sys.pc.otherUser': '“{name}” starts for another Windows user: it is not changed from here.',
-  'sys.pc.startupOff': '“{name}” will no longer start with Windows (it can be turned back on in Task Manager).',
   'sys.mcp.browserClosed': "the app's browser has closed",
   'sys.mcp.browserUnavailable': "the app's browser is not available (check that the app is open)",
   'sys.mcp.browserTimeout': 'the browser did not respond in time',
   'sys.mcp.extraArgs': 'arguments not allowed: {list}',
-
   // Board (tasks, projects and messages)
   'sys.board.outside': 'the path is outside the {name} folder ({home}): {target}. {user} can link it from the app.',
   'sys.board.nameAndPath': 'name and path are required',
@@ -167,7 +141,6 @@ export default {
   'sys.board.systemOnly': 'only the system can set tasks to pending approval',
   'sys.board.bodyRequired': 'body is required',
   'sys.board.badRecipient': 'invalid recipient: {to} (use {list}, all, usuario or orb)',
-
   // Logs
   'sys.logs.none': 'there is no log for "{project}": use "general" or a registered project',
   'sys.logs.required': 'tema and hecho are required',
@@ -201,16 +174,13 @@ export default {
   'sys.logs.directFiles': 'files changed: {list}.',
   'sys.logs.directRevert': 'from the project’s git history (God mode › Changes) or by asking the agent in the same conversation',
   'sys.logs.andMore': ' and {n} more',
-
   // Start-up
   'sys.engine.notHome': 'not an assistant folder: {home}',
   'sys.engine.notStarted': '{name} has not started yet',
-
   // Scheduled tasks
   'sys.schedules.badEvery': 'every must be {list}',
   'sys.schedules.badTime': 'at_time must use the HH:MM format',
   'sys.schedules.badWeekdays': 'weekdays: numbers from 0 (Sunday) to 6',
-
   // Agents
   'sys.agents.notSupported': 'not supported',
   'sys.agents.methodNotSupported': 'not supported: {method}',
@@ -253,7 +223,6 @@ export default {
   'sys.agents.tool.imageGen': 'Create image',
   'sys.agents.tool.subagent': 'Subagent: {tool}',
   'sys.agents.tool.action': 'action',
-
   // Running tasks
   'sys.scheduler.accountOff': 'the account {account} is turned off or no longer exists',
   'sys.scheduler.notInstalled': '{name} is not installed on this PC (install it from Agents or reassign the task)',
@@ -263,17 +232,14 @@ export default {
   'sys.scheduler.secretFiles': 'the automatic commit was not made: some files look like secrets ({list})',
   'sys.scheduler.secretFilesIn': 'the automatic commit was not made: some files look like secrets ({list}). Check {dir}',
   'sys.scheduler.commitFailed': 'the automatic commit failed ({error}); the changes are still unsaved in {dir}',
-
   // Task options and database
   'sys.db.badReasoning': 'reasoning must be low, medium, high or xhigh',
   'sys.db.badFast': 'fast must be true or false',
   'sys.db.noHome': 'there is no assistant folder',
-
   // Phone and phone notifications
   'sys.remote.tooLarge': 'the content is too large',
   'sys.push.badSubscription': 'invalid subscription',
   'sys.push.unknownService': 'unrecognised notification service',
-
   // Android tools (adb)
   'sys.android.noDownload': 'no download available for {platform}',
   'sys.android.downloadHttp': 'download: HTTP {status}',

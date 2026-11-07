@@ -343,14 +343,14 @@ function AgentCard({ a, reload }) {
   );
 }
 
-// 3.6: the caller's loans (given and got), kept in the store for the accounts and the bot editor.
+// 3.6: the caller's loans (given and got), kept in the store for the accounts.
 export const loadLoans = () => call('accounts.loans').then((loans) => setState({ loans })).catch(() => setState({ loans: null }));
-// «Prestar a…»: someone else may spend this account, with caps per day, a reserve for its owner, for bots and/or to
-// program, until a date. Personal subscriptions may not allow it: the dialog says so.
+// «Prestar a…»: someone else may spend this account to program, with caps per day, a reserve for its owner, until a
+// date. Personal subscriptions may not allow it: the dialog says so.
 async function lendDialog(acc, people) {
   if (!people.length) { toast.info(t('lend.nobody')); return; }
   const r = await form(t('lend.title', { label: acc.label }), {
-    initial: { person: people[0].id, turns: '', tokens: '', usd: '', reserve: '20', bots: true, dev: false, days: '' },
+    initial: { person: people[0].id, turns: '', tokens: '', usd: '', reserve: '20', days: '' },
     body: (v, set) => {
       const num = (k) => ({ value: v[k], inputMode: 'decimal', onChange: (e) => set({ [k]: e.target.value.replace(/[^\d.]/g, '') }) });
       return (<>
@@ -364,8 +364,6 @@ async function lendDialog(acc, people) {
           <Field label={t('lend.reserve')} hint={t('lend.reserveHint')}><Input {...num('reserve')} data-testid="lend-reserve" /></Field>
           <Field label={t('lend.days')} hint={t('lend.daysHint')}><Input {...num('days')} placeholder={t('lend.forever')} /></Field>
         </div>
-        <label className="flex cursor-pointer items-start gap-2 text-sm"><Checkbox checked={v.bots} onCheckedChange={(on) => set({ bots: Boolean(on) })} /><span>{t('lend.bots')}</span></label>
-        <label className="flex cursor-pointer items-start gap-2 text-sm"><Checkbox checked={v.dev} onCheckedChange={(on) => set({ dev: Boolean(on) })} data-testid="lend-dev" /><span>{t('lend.dev')}</span></label>
         <p className="text-warning bg-warning/10 rounded-lg px-3 py-2 text-xs" role="note" data-testid="lend-terms">{t('lend.terms')}</p>
       </>);
     },

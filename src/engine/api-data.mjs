@@ -1,5 +1,4 @@
-// 3.6 (WS5): the engine's data methods: encrypted backups (src/core/backup.mjs), the wizard's templates
-// (src/core/templates.mjs) and moving the Orb to another machine. The daily copy at 03:00 (the owner's time zone) runs
+// 3.6 (WS5): the engine's data methods: encrypted backups (src/core/backup.mjs) and moving the Orb to another machine. The daily copy at 03:00 (the owner's time zone) runs
 // from the engine's loop (tick). This PC's window only: no phone calls these.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -7,12 +6,11 @@ import { ctx, tr, saveConfig } from '../core/context.mjs';
 import { readKey, paths } from '../core/home.mjs';
 import { ownerId, getPerson, mustPerson, dropTickets } from '../core/persons.mjs';
 import * as K from '../core/backup.mjs';
-import { listTemplates, applyTemplate } from '../core/templates.mjs';
 import { moveExport, moveUndo, moveKeepBoth, movedAway, exportPerson, deletePerson, purgePersonsTrash } from '../core/export.mjs';
 import { utcToZoned, localDay, isValidTz, systemTz } from '../core/tz.mjs';
 
 // 3.6: what an Orb that moved away still answers (the rest is refused until the move is undone or both are kept).
-export const MOVED_OK = /^(app\.state|data\.move(Status|Undo|KeepBoth)|backup\.(status|list|verify)|templates\.list)$/;
+export const MOVED_OK = /^(app\.state|data\.move(Status|Undo|KeepBoth)|backup\.(status|list|verify))$/;
 const fail = (message) => { const e = new Error(message); e.userFacing = true; throw e; };
 // 3.6: the owner's zone (persons.tz), else the Orb's own setting, else this machine's.
 export const ownerTz = (board = null) => {
@@ -21,7 +19,7 @@ export const ownerTz = (board = null) => {
 };
 export const DAILY_HOUR = 3;
 
-export function dataApi({ board, emit = () => {}, log = () => {}, version = null, bots = null }) {
+export function dataApi({ board, emit = () => {}, log = () => {}, version = null }) {
   const secret = () => ctx.secret ?? readKey(ctx.home);
   const folder = () => K.backupDir(ctx.home, ctx.config);
   const opts = () => ({ includeProjects: ctx.config.backup?.projects === true, includeAccounts: ctx.config.backup?.accounts === true });
@@ -96,15 +94,6 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
       K.setRecovery(ctx.home, secret(), value);
       return { code: code ? null : value, at: new Date().toISOString() };
     },
-    'templates.list': ({ lang }) => listTemplates(['es', 'en'].includes(lang) ? lang : ctx.config.language),
-    'templates.apply': ({ id, edits, tz, person }, who) => {
-      // For the caller (person: only the owner names someone else; POLICY checks it); the zone: theirs if none is sent.
-      const pid = person ? mustPerson(board, person).id : who?.person ?? null;
-      const zone = isValidTz(tz) ? tz : (() => { try { return getPerson(board, pid)?.tz ?? null; } catch { return null; } })();
-      const made = applyTemplate(board, { id: String(id ?? ''), edits: edits && typeof edits === 'object' && !Array.isArray(edits) ? edits : null, tz: isValidTz(zone) ? zone : null, person: pid });
-      board.changed?.('bots');
-      return made;
-    },
     // Moving the Orb: a copy that opens only with the passphrase, made to be imported on the new machine (orb-nucleo
     // mover importar, or the wizard). This Orb then stops serving (ctx.moved) until the move is undone or both are kept.
     'data.moveExport': async ({ passphrase }) => {
@@ -132,14 +121,14 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
   // persons.remove (src/engine/api-persons.mjs) does the same.
   function removePersonData(id) {
     const p = mustPerson(board, id);
-    const r = deletePerson(board, p.id, { home: ctx.home, onBot: (b) => { try { bots?.drop?.(b); } catch { /* not running */ } } });
+    const r = deletePerson(board, p.id, { home: ctx.home });
     dropTickets(p.id);
     // Their accounts in orb.json (their login folders went to the trash with the rest).
     const accounts = (ctx.config.accounts ?? []).filter((a) => a.person !== p.id);
     if (accounts.length !== (ctx.config.accounts ?? []).length) saveConfig({ accounts });
-    board.changed?.('persons'); board.changed?.('bots');
-    log(`persona borrada: ${p.id} (${r.bots} bots; papelera ${path.basename(r.trash)})`);
-    return { id: p.id, deleted: true, bots: r.bots };
+    board.changed?.('persons');
+    log(`persona borrada: ${p.id} (papelera ${path.basename(r.trash)})`);
+    return { id: p.id, deleted: true };
   }
   return { methods, tick, run, removePersonData };
 }

@@ -49,7 +49,7 @@ test('el tipo lo decide quien hace el QR; otro Orb o una terminal nunca se enlaz
   const me = await phone.connect({ qr: q.url });
   const dev = (await srv.call('link.devices')).find((d) => d.id === me.id);
   assert.equal(dev.kind, 'phone', 'el QR seguía valiendo para lo que era');
-  await assert.rejects(phone.call(null, 'bots.create', { name: 'Intruso' }), (e) => e.status === 403);
+  await assert.rejects(phone.call(null, 'config.save', { patch: {} }), (e) => e.status === 403);
   // The old routes between Orbs are gone.
   for (const r of ['/api/link', '/api/server-pair']) assert.equal((await fetch(`${base}${r}`, { method: 'POST', headers: { 'X-Orb-Device': me.id, 'Content-Type': 'application/json' }, body: '{}' })).status, 404);
   assert.equal((await fetch(`${base}/api/server-hello`)).status, 401, 'nada que ver sin un dispositivo enlazado');

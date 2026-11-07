@@ -1,11 +1,7 @@
-// 3.6 «Personas», WS5: copias de seguridad, plantillas, mover el Orb, exportar y borrar una persona, zonas horarias
+// 3.6 «Personas», WS5: copias de seguridad, mover el Orb, exportar y borrar una persona, zonas horarias
 export default {
   'data.person.deletedLine': '(mensaje borrado)',
   'data.tz.late': 'con {n} min de retraso',
-
-  'data.templates.unknown': 'No hay ninguna plantilla «{id}».',
-  'data.templates.bad': 'La plantilla tiene algo que no cuadra en «{what}». Revísalo y vuelve a probar.',
-
   'data.backup.restored': 'Copia de seguridad restaurada (del {created}).',
   'data.backup.dailyFailed': 'No se pudo hacer la copia de seguridad de hoy: {error}. Se vuelve a probar dentro de una hora.',
   'data.backup.err.badKind': 'Ese tipo de copia no existe.',
@@ -18,9 +14,7 @@ export default {
   'data.backup.err.notBackup': 'Ese archivo no es una copia de Orb (.orbbak).',
   'data.backup.err.missing': 'No encuentro esa copia.',
   'data.backup.err.shortPassphrase': 'El código tiene que tener al menos 12 caracteres.',
-
   'data.move.notMove': 'Esa copia no es para mover un Orb: usa «Restaurar».',
   'data.move.movedAway': 'Este Orb se ha movido a otro equipo y ya no se usa aquí. En Ajustes › Datos puedes deshacerlo o mantener los dos.',
-
   'data.server.notEmpty': 'Esa carpeta ya tiene un Orb. Elige una carpeta nueva.'
 };

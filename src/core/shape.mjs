@@ -28,8 +28,6 @@ const ITEM = {
   'sessions.list': (x) => sess(x.id),
   'approvals.list': (x) => sess(x.session_id),
   'schedules.list': (x) => ({ type: 'schedule', id: x.id }),
-  'bots.groups.list': (x) => ({ type: 'group', id: x.id }),
-  'bots.reminders.list': (x) => ({ type: 'reminder', id: x.id }),
   'logs.list': (x) => ({ type: 'log', id: x.name }),
   'mentions.options': (x) => mentionRes(x.token)
 };
@@ -45,10 +43,6 @@ export function shapeGateway(board, principal, method, result) {
   if (method === 'app.state') return shapeState(board, principal, result, keep);
   if (ITEM[method]) return items(result, ITEM[method]);
   if (method === 'projects.icons' && !Array.isArray(result)) return Object.fromEntries(Object.entries(result).filter(([name]) => keep(proj(name))));
-  if (method === 'bots.list' && result.bots) {
-    return { ...result, bots: items(result.bots, (b) => ({ type: 'bot', id: b.id })), groups: items(result.groups, (g) => ({ type: 'group', id: g.id })),
-      states: items(result.states, (s) => (s.conversation != null ? conv(s.conversation) : { type: 'bot', id: s.bot })) };
-  }
   // 3.6 (messaging lists): each chat of a list, and each message found, by what it is.
   const inboxRes = (x) => ({ type: x.kind, id: x.id });
   if (method === 'inbox.list' && Array.isArray(result.items)) return { ...result, items: items(result.items, inboxRes) };
@@ -60,7 +54,7 @@ export function shapeGateway(board, principal, method, result) {
 }
 
 // The settings a person other than the owner gets: what the interface shows, with only their own accounts and connectors
-// and none of the paths, folders, tokens or the owner's Home Assistant. userName is theirs (the greeting, the prompts).
+// and none of the paths, folders or tokens. userName is theirs (the greeting, the prompts).
 export function personConfig(c, pid, name = null) {
   if (!c || typeof c !== 'object') return c;
   return {
@@ -69,7 +63,7 @@ export function personConfig(c, pid, name = null) {
     mcpServers: (c.mcpServers ?? []).filter((m) => m.person === pid).map((m) => ({ name: m.name, enabled: m.enabled, agents: m.agents })),
     accounts: (c.accounts ?? []).filter((a) => a.person === pid).map(({ home: _home, ...a }) => a),
     agents: Object.fromEntries(Object.entries(c.agents ?? {}).map(([k, a]) => { const { path: _path, ...rest } = a ?? {}; return [k, rest]; })),
-    projectRoots: [], mobile: { enabled: c.mobile?.enabled }, bots: { location: c.bots?.location }, protected: undefined, backup: undefined
+    projectRoots: [], mobile: { enabled: c.mobile?.enabled }, protected: undefined, backup: undefined
   };
 }
 

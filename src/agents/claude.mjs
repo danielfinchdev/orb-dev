@@ -126,10 +126,9 @@ export function createLive(o) {
     const paths = [toolInput?.file_path, toolInput?.path, toolInput?.notebook_path].filter(Boolean);
     // 3.6: a confined session: Grep and Glob without a path search the working folder, which is checked too.
     if (o.confine && !paths.length && (toolName === 'Grep' || toolName === 'Glob') && o.cwd) paths.push(o.cwd);
-    // 3.5.1: o.bot is the bot's guard (its folder, what it read this turn): patterns and the address are checked too.
+    // Glob and Grep patterns are checked too (where they reach).
     const patterns = [toolInput?.pattern, toolInput?.glob].filter((x) => typeof x === 'string' && x);
-    const url = typeof toolInput?.url === 'string' ? toolInput.url : null;
-    const verdict = decide({ permission, tool: toolName, command, paths, patterns: toolName === 'Grep' ? patterns.slice(1) : patterns, url, internalDir: o.internalDir, lang: o.lang, bot: o.bot || false, confine: o.confine || null });
+    const verdict = decide({ permission, tool: toolName, command, paths, patterns: toolName === 'Grep' ? patterns.slice(1) : patterns, internalDir: o.internalDir, lang: o.lang, confine: o.confine || null });
     if (verdict.decision === 'allow') return { behavior: 'allow', updatedInput: toolInput };
     if (verdict.decision === 'deny') return { behavior: 'deny', message: `Orb no lo permite: ${verdict.reason}.` };
     // 3.1: summary: what the agent itself says the command is for (Claude's Bash tool asks it for a description).

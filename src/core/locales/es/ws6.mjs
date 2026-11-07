@@ -1,5 +1,5 @@
 // 3.6 «Personas», WS6: las pantallas de las personas (menú, bloqueo, Ajustes › Personas, Mi perfil y Datos, compartir,
-// préstamos de cuentas, uso por persona, el asistente de bienvenida y lo nuevo del editor de bots).
+// préstamos de cuentas, uso por persona, el asistente de bienvenida).
 export default {
   'settings.section.perfil': 'Mi perfil',
   'settings.section.personas': 'Usuarios',
@@ -18,7 +18,6 @@ export default {
   'persons.pin.wrong': 'El PIN no es correcto.',
   'persons.pin.wrongLeft': 'El PIN no es correcto. Te quedan {n} intentos.',
   'persons.pin.locked': 'Demasiados intentos. Vuelve a probar dentro de {s} s.',
-
   // bloqueo
   'persons.lockedTitle': 'Orb está bloqueado',
   'persons.unlock': 'Desbloquear',
@@ -28,7 +27,6 @@ export default {
   'persons.updateTitle': 'Actualiza la app',
   'persons.updateBody': 'Este Orb necesita una versión más nueva de la app.',
   'persons.updateApp': 'Descargar la versión nueva',
-
   // Ajustes › Personas
   'persons.title': 'Usuarios de este Orb',
   'persons.add': 'Añadir usuario',
@@ -42,38 +40,28 @@ export default {
   'persons.renameTitle': 'Cambiar nombre',
   'persons.remove': 'Eliminar',
   'persons.removeTitle': '¿Eliminar a {name}?',
-  'persons.removeBody': 'Se eliminan sus bots, chats, recordatorios, cuentas y dispositivos de {name}. Se guarda una copia de sus datos 30 días.',
+  'persons.removeBody': 'Se eliminan los chats, cuentas y dispositivos de {name}. Se guarda una copia de sus datos 30 días.',
   'persons.removed': '{name} ya no está en este Orb.',
   'persons.hasPin': 'Con PIN',
   'persons.devicesN': '{n} dispositivos',
   'persons.seen': 'visto {when}',
   'persons.todayTurns': '{n} turnos hoy',
-  'persons.count.bots': '{n} bots',
-  'persons.count.groups': '{n} grupos',
   'persons.count.conversations': '{n} chats',
   'persons.count.tasks': '{n} tareas',
   'persons.count.projects': '{n} proyectos',
   'persons.count.schedules': '{n} programadas',
-  'persons.count.reminders': '{n} recordatorios',
   'persons.caps': 'Permisos',
   'persons.capsTitle': 'Qué puede hacer {name}',
   'persons.cap.dev': 'Puede programar',
-  'persons.cap.house': 'Puede usar la casa conectada',
-  'persons.cap.approveHouse': 'Puede aprobar acciones de la casa',
   'persons.resetPin': 'Quitar PIN',
   'persons.resetPinTitle': '¿Quitar el PIN de {name}?',
   'persons.resetPinBody': 'Podrá entrar sin PIN y poner uno nuevo en Mi perfil.',
   'persons.pinReset': 'PIN de {name} quitado.',
-  'persons.pauseBots': 'Pausar sus bots',
-  'persons.resumeBots': 'Reanudar sus bots',
-  'persons.botsPaused': '{n} bots de {name} en pausa.',
-  'persons.botsResumed': '{n} bots de {name} en marcha otra vez.',
   'persons.revokeDevices': 'Cerrar sus dispositivos',
   'persons.revokeTitle': '¿Cerrar los dispositivos de {name}?',
   'persons.revokeBody': 'Se cierra la sesión en {n} dispositivos. Para volver, hay que enlazarlos otra vez.',
   'persons.revoke': 'Cerrar sesión',
   'persons.revoked': 'Dispositivos de {name} cerrados.',
-
   // préstamos
   'persons.loan.from': 'de {name}',
   'persons.loan.leftTurns': 'te quedan {n} respuestas hoy',
@@ -93,8 +81,6 @@ export default {
   'lend.days': 'Durante (días)',
   'lend.daysHint': 'Vacío: sin fecha de fin.',
   'lend.forever': 'Siempre',
-  'lend.bots': 'Para sus bots',
-  'lend.dev': 'Para programar en el modo Orb',
   'lend.terms': 'Muchas suscripciones personales no permiten que la use otra persona. Revisa las condiciones de tu plan antes de prestarla.',
   'lend.ok': 'Prestar',
   'lend.done': 'Cuenta prestada a {name}.',
@@ -102,14 +88,12 @@ export default {
   'lend.lentTo': 'Prestada a {name}',
   'lend.stop': 'Dejar de prestar',
   'lend.stopped': 'Ya no se presta a {name}.',
-
   // uso por persona
   'whoSpent.title': 'Quién ha gastado qué',
   'whoSpent.today': '{n} hoy',
   'whoSpent.month': '{n} en 30 días',
   'whoSpent.usd': '{n} $',
   'whoSpent.total': 'Todo el Orb: {today} respuestas hoy, {month} en 30 días.',
-
   // compartir
   'share.button': 'Compartir',
   'share.title': 'Compartir {name}',
@@ -123,7 +107,6 @@ export default {
   'share.removed': 'Ya no se comparte.',
   'share.by': 'Compartido por {name}',
   'share.withMe': 'Compartido conmigo',
-
   // Mi perfil
   'profile.title': 'Mi perfil',
   'profile.name': 'Nombre',
@@ -144,8 +127,7 @@ export default {
   'profile.pinRemoveDesc': 'Escribe tu PIN actual para quitarlo.',
   'profile.pinRemoved': 'PIN quitado.',
   'profile.previewTitle': 'Notificaciones en la pantalla de bloqueo',
-  'profile.preview.all': 'Todo, también lo de los bots',
-  'profile.preview.chat': 'El chat con el asistente; lo de los bots, oculto',
+  'profile.preview.chat': 'El chat y el principio del mensaje',
   'profile.preview.none': 'Nada: solo que hay algo nuevo',
   'profile.accountsTitle': 'Mis cuentas',
   'profile.noAccounts': 'Todavía no tienes cuentas.',
@@ -164,9 +146,8 @@ export default {
   'profile.exported': 'Datos exportados: {file}',
   'profile.delete': 'Eliminar mis datos',
   'profile.deleteTitle': '¿Eliminar tus datos de este Orb?',
-  'profile.deleteBody': 'Se eliminan tus bots, chats, recordatorios, cuentas y dispositivos, y sales de este Orb. Se guarda una copia 30 días.',
+  'profile.deleteBody': 'Se eliminan tus chats, cuentas y dispositivos, y sales de este Orb. Se guarda una copia 30 días.',
   'profile.deleted': 'Tus datos se han eliminado.',
-
   // Ajustes › Datos
   'datos.backupsTitle': 'Copias de seguridad',
   'datos.folder': 'Carpeta',
@@ -216,40 +197,6 @@ export default {
   'datos.keepBothTitle': '¿Mantener los dos Orbs?',
   'datos.keepBothBody': 'Este pasa a ser un Orb distinto. Los dispositivos enlazados siguen con el otro: aquí hay que enlazarlos otra vez.',
   'datos.restart': 'Hecho. Reinicia Orb.',
-
-  // editor de bots
-  'botsp.spendTitle': 'Gasto',
-  'botsp.account': 'Cuenta',
-  'botsp.accountAuto': 'La mía que esté libre',
-  'botsp.accountLent': '{label} (de {name})',
-  'botsp.spendsOwn': 'Este bot gasta tu cuenta.',
-  'botsp.spendsLent': 'Este bot gasta la cuenta de {name}.',
-  'botsp.spendsAuto': 'Usa una de tus cuentas, o una prestada si las tuyas no pueden.',
-  'botsp.capTurns': 'Respuestas al día',
-  'botsp.capUsd': 'Dólares al día',
-  'botsp.noCap': 'Sin tope',
-  'botsp.memTitle': 'Cambios de la memoria',
-  'botsp.memHint': 'Los cambios que proponen los bots esperan tu aprobación.',
-  'botsp.memPending': '{n} cambios esperan tu OK',
-  'botsp.memNone': 'No hay cambios esperando.',
-  'botsp.memApprove': 'Aceptar',
-  'botsp.memReject': 'Rechazar',
-  'botsp.memApproved': 'Cambio aceptado.',
-  'botsp.memRejected': 'Cambio rechazado.',
-  'botsp.memHistory': 'Últimos cambios',
-  'botsp.memUndo': 'Deshacer',
-  'botsp.memUndone': 'Cambio deshecho.',
-  'botsp.memOp.add': 'Añadido',
-  'botsp.memOp.replace': 'Reescrita',
-  'botsp.memStatus.applied': 'Aplicado',
-  'botsp.memStatus.pending': 'Pendiente',
-  'botsp.memStatus.rejected': 'Rechazado',
-  'botsp.memStatus.undone': 'Deshecho',
-  'botsp.haTitle': 'Sin preguntar',
-  'botsp.haHint': 'Lo que tus bots pueden hacer en casa sin tarjeta, una acción por línea («light.turn_on light.salon» o «light.turn_on *»). Lo demás pregunta.',
-  'botsp.haAlways': 'Siempre preguntan: {list}.',
-  'botsp.haSaved': 'Lista guardada.',
-
   // Magic Link
   'link.forWho': '¿Para qué usuario?',
   'link.forMe': '{name} (tú)',
@@ -268,11 +215,8 @@ export default {
   'link.outPcOn': 'El PC tiene que estar encendido.',
   'persons.devicesNOne': '1 dispositivo',
   'persons.todayTurnsOne': '1 turno hoy',
-  'persons.count.botsOne': '1 bot',
-  'persons.count.groupsOne': '1 grupo',
   'persons.count.conversationsOne': '1 chat',
   'persons.count.tasksOne': '1 tarea',
   'persons.count.projectsOne': '1 proyecto',
   'persons.count.schedulesOne': '1 programada',
-  'persons.count.remindersOne': '1 recordatorio'
 };

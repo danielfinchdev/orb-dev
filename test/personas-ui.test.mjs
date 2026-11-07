@@ -1,5 +1,5 @@
 // 3.6 «Personas», the interface (src/ui/lib/persons.js and the screens): with one person nothing of people shows; the
-// devices grouped by person; loans and the bot's account picker; sharing; the welcome screen;
+// devices grouped by person; loans; sharing; the welcome screen;
 // usage per person; the phone's lock; every text the new screens use exists in both languages.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -37,7 +37,7 @@ test('los dispositivos van agrupados por persona, el dueño primero; sin persona
   assert.equal(g[1].devices.length, 1);
 });
 
-test('cuentas: propias, prestadas y lo que queda del préstamo; el selector del bot solo ofrece las suyas y las prestadas para bots', () => {
+test('cuentas: propias, prestadas y lo que queda del préstamo', () => {
   const accounts = [{ id: 'claude', agent: 'claude', label: 'Claude', person: null }, { id: 'claude-2', agent: 'claude', label: 'Claude Leo', person: 'p-leo' }, { id: 'codex', agent: 'codex', label: 'Codex', person: null }];
   const loans = { got: [{ account: 'claude', label: 'Claude', lender: 'p-ana', bots: true, dev: false, expired: false, left: { turns: 34, tokens: null, usd: null } }], given: [] };
   assert.equal(P.accountRole(accounts[0], meLeo, loans, 'p-ana'), 'borrowed');
@@ -46,10 +46,8 @@ test('cuentas: propias, prestadas y lo que queda del préstamo; el selector del 
   assert.equal(P.accountRole(accounts[0], meAna, null, 'p-ana'), 'own', 'una cuenta sin persona es del dueño');
   assert.deepEqual(P.loanLeftText(loans.got[0]), { key: 'persons.loan.leftTurns', vars: { n: 34 } });
   assert.equal(P.loanLeftText({ expired: true }).key, 'persons.loan.expired');
-  const choices = P.botAccountChoices({ accounts, loans, me: meLeo, ownerId: 'p-ana', agent: 'claude' });
-  assert.deepEqual(choices.map((c) => [c.id, c.lent]), [['claude-2', false], ['claude', true]]);
-  assert.deepEqual(P.botAccountChoices({ accounts, loans: { got: [{ ...loans.got[0], bots: false }] }, me: meLeo, ownerId: 'p-ana', agent: 'claude' }).map((c) => c.id), ['claude-2'], 'un préstamo solo para programar no sirve a los bots');
-  const lend = P.lendPayload('claude', { person: 'p-leo', turns: '40', tokens: '', usd: '', reserve: '30', bots: true, dev: false, days: '7' });
+  const lend = P.lendPayload('claude', { person: 'p-leo', turns: '40', tokens: '', usd: '', reserve: '30', days: '7' });
+  assert.deepEqual([lend.dev, lend.bots], [true, false], '3.8: solo para programar');
   assert.equal(lend.daily_turns, 40); assert.equal(lend.daily_tokens, null); assert.equal(lend.reserve_pct, 30);
   assert.ok(Date.parse(lend.expires_at) > Date.now() + 6 * 86_400_000);
   assert.equal(P.lendPayload('claude', { person: 'p-leo', reserve: '200' }).reserve_pct, 95);
@@ -59,9 +57,9 @@ test('cuentas: propias, prestadas y lo que queda del préstamo; el selector del 
 test('compartir: nunca con uno mismo ni con quien ya es el dueño; «Compartido conmigo» con sus nombres', () => {
   const rows = P.shareRows([ana, leo, { id: 'p-x', name: 'Xia' }], [{ person: 'p-leo', right: 'talk' }], { me: 'p-ana', owner: 'p-ana' });
   assert.deepEqual(rows, [{ id: 'p-leo', name: 'Leo', right: 'talk' }, { id: 'p-x', name: 'Xia', right: null }]);
-  const withMe = [{ type: 'bot', id: '3', right: 'talk', by: 'Ana' }, { type: 'project', id: 'Web', right: 'view', by: 'Ana' }, { type: 'integration', id: 'ha', right: 'talk', by: 'Ana' }];
-  const list = P.sharedWithMe(withMe, { bots: [{ id: 3, name: 'Casa', icon: '🏠' }], projects: [{ name: 'web' }] });
-  assert.deepEqual(list.map((x) => [x.type, x.name, x.found]), [['bot', 'Casa', true], ['project', 'web', true]], 'las integraciones no van a la barra');
+  const withMe = [{ type: 'bot', id: '3', right: 'talk', by: 'Ana' }, { type: 'project', id: 'Web', right: 'view', by: 'Ana' }, { type: 'project', id: 'Otro', right: 'talk', by: 'Ana' }];
+  const list = P.sharedWithMe(withMe, { projects: [{ name: 'web' }] });
+  assert.deepEqual(list.map((x) => [x.type, x.name, x.found]), [['project', 'web', true], ['project', 'Otro', false]], '3.8: lo que no es un proyecto (un bot de 3.7) no va a la barra');
   assert.deepEqual(P.sharedBy(withMe, 'project', 'WEB'), { by: 'Ana', right: 'view' });
   assert.equal(P.sharedBy(withMe, 'bot', 9), null);
 });
@@ -104,9 +102,8 @@ test('el saludo y los avisos usan el nombre de quien está, no el del admin', as
 });
 
 test('los métodos nuevos tienen su regla y el móvil puede cambiar lo suyo', () => {
-  for (const m of ['persons.update', 'persons.setCaps', 'persons.prefs.get', 'persons.prefs.set', 'persons.pauseBots']) assert.ok(POLICY[m], m);
+  for (const m of ['persons.update', 'persons.setCaps', 'persons.prefs.get', 'persons.prefs.set']) assert.ok(POLICY[m], m);
   assert.equal(POLICY['persons.setCaps'].ownerOnly, true);
-  assert.equal(POLICY['persons.pauseBots'].ownerOnly, true);
   for (const m of ['persons.update', 'persons.prefs.set', 'persons.setPin', 'persons.me']) assert.ok(PHONE_SET.has(m), m);
 });
 
@@ -117,9 +114,9 @@ test('todos los textos de las pantallas nuevas existen en los dos idiomas (tambi
     const code = fs.readFileSync(path.join(ROOT, 'src', 'ui', f), 'utf8');
     for (const m of code.matchAll(/\btr?\(\s*'([a-zA-Z]+(?:\.[\w]+)+)'/g)) used.add(m[1]);
   }
-  const dynamic = [...P.CAPS.map((k) => `persons.cap.${k}`), ...['bots', 'groups', 'conversations', 'tasks', 'projects', 'schedules', 'reminders'].flatMap((k) => [`persons.count.${k}`, `persons.count.${k}One`]), 'persons.devicesNOne', 'persons.todayTurnsOne',
+  const dynamic = [...P.CAPS.map((k) => `persons.cap.${k}`), ...['conversations', 'tasks', 'projects', 'schedules'].flatMap((k) => [`persons.count.${k}`, `persons.count.${k}One`]), 'persons.devicesNOne', 'persons.todayTurnsOne',
     ...P.ROLES.map((r) => `persons.role.${r}`), ...P.RIGHTS.map((r) => `share.right.${r}`), ...P.PREVIEWS.map((x) => `profile.preview.${x}`),
-    ...['daily', 'manual', 'preupdate', 'premigration', 'move', 'other'].map((k) => `datos.kind.${k}`), ...['applied', 'pending', 'rejected', 'undone'].map((k) => `botsp.memStatus.${k}`), 'botsp.memOp.add', 'botsp.memOp.replace',
+    ...['daily', 'manual', 'preupdate', 'premigration', 'move', 'other'].map((k) => `datos.kind.${k}`),
     'persons.pin.wrong', 'persons.pin.wrongLeft', 'persons.pin.locked', 'persons.loan.leftTurns', 'persons.loan.leftTokens', 'persons.loan.leftUsd', 'persons.loan.noCap', 'persons.loan.expired',
     ...['perfil', 'personas', 'datos'].flatMap((s) => [`settings.section.${s}`, `settings.sectionDesc.${s}`])];
   const missing = [...used, ...dynamic].filter((k) => !(k in es) || !(k in en));

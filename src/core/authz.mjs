@@ -1,6 +1,6 @@
 // 3.6 «Personas»: the one place that decides who may do what (docs/PERSONAS-INTERNALS.md).
 //   authorize(board, principal, method, params)  every API call (the dispatcher of src/engine/api.mjs calls it first)
-//   audienceOf(board, event, payload)            who receives each event, push and forwarded event
+//   audienceOf(board, event, payload)            who receives each event and push
 //   can / must / rightOn / ownerOf / scopeSql     what the methods and the agents' tools use inside
 // A principal is built only by the entry points (principalOf), never from a call's parameters. Rows written by code that
 // does not stamp a person yet (person_id NULL) are the owner's. No engine imports: the MCP processes use it too.
@@ -12,9 +12,8 @@ import { shapeGateway } from './shape.mjs';
 export const RIGHTS = ['view', 'talk', 'edit'];
 const RANK = { view: 1, talk: 2, edit: 3, own: 4 };
 export const rank = (right) => RANK[right] ?? 0;
-// forward: a call a linked Orb makes about the bots' copies (src/engine/replica.mjs).
-export const CHANNELS = ['desktop', 'phone', 'browser', 'forward', 'agent', 'system'];
-const SHAREABLE = new Set(['bot', 'group', 'project', 'integration']);
+export const CHANNELS = ['desktop', 'phone', 'browser', 'agent', 'system'];
+const SHAREABLE = new Set(['project']);
 const DEVICE_CHANNEL = { phone: 'phone', browser: 'browser' };
 
 // A refused call: 403, with a message the user may read (never what exists or whose it is).
@@ -43,20 +42,18 @@ const roleOf = (board, person) => {
 // ---- principals
 // { person, role, channel, device?, rights: { approve, dev, admin }, strongUntil?, via?, remote?, ceiling? }
 // desktop: this PC's window (person: who sits there; the owner by default). device: a row of devices (a linked phone or
-// browser). forwarded: a call a linked Orb makes about the bots' copies (src/engine/replica.mjs).
-// agentToken: an agent's tool process ({ agent, task, conversation, bot, person }). system: the engine itself.
+// browser). agentToken: an agent's tool process ({ agent, task, conversation, person }). system: the engine itself.
 // ceiling: a Set given by an entry point that already knows the device's (remote.mjs: PHONE_SET).
-export function principalOf(board, { device = null, desktop = false, person = null, forwarded = false, agentToken = null, system = false, ceiling = null, strongUntil = null, via = null } = {}) {
+export function principalOf(board, { device = null, desktop = false, person = null, agentToken = null, system = false, ceiling = null, strongUntil = null, via = null } = {}) {
   const owner = ownerOfBoard(board);
   const alive = (pid) => (pid && roleOf(board, pid) ? pid : null);
   let p;
   if (system) p = { person: owner, channel: 'system', rights: { approve: true, dev: true, admin: true } };
   else if (desktop) p = { person: alive(person) ?? owner, channel: 'desktop', rights: { approve: true, dev: true, admin: true } };
   else if (device) {
-    p = { person: alive(device.person_id) ?? owner, channel: forwarded ? 'forward' : DEVICE_CHANNEL[device.kind] ?? 'browser', device: String(device.id ?? ''), remote: true,
-      rights: { approve: Number(device.approve ?? 1) === 1, dev: false, admin: false } };
-  } else if (forwarded) p = { person: alive(person) ?? owner, channel: 'forward', remote: true, rights: { approve: true, dev: false, admin: false } };
-  else if (agentToken) p = { person: alive(agentToken.person) ?? owner, channel: 'agent', via: { agent: agentToken.agent ?? null, task: agentToken.task ?? null, conversation: agentToken.conversation ?? null, bot: agentToken.bot ?? null }, rights: { approve: false, dev: false, admin: false } };
+    p = { person: alive(device.person_id) ?? owner, channel: DEVICE_CHANNEL[device.kind] ?? 'browser', device: String(device.id ?? ''), remote: true,
+      rights: { approve: true, dev: false, admin: false } };
+  } else if (agentToken) p = { person: alive(agentToken.person) ?? owner, channel: 'agent', via: { agent: agentToken.agent ?? null, task: agentToken.task ?? null, conversation: agentToken.conversation ?? null }, rights: { approve: false, dev: false, admin: false } };
   else throw new Error('principalOf: no entry point');
   const role = roleOf(board, p.person) ?? 'user';
   // Only the owner administers; a user's device never does, whatever its flag.
@@ -76,26 +73,21 @@ function resolve(board, res) {
   switch (t) {
     case 'owner': return { owner, parents: [] };
     case 'person': { const r = one(board, 'SELECT id FROM persons WHERE id = ? AND deleted_at IS NULL', String(id)); return { owner: r ? r.id : null, parents: [] }; }
-    // 3.6 (WS2): a row without a person that belongs to a parent (a group's conversation, a task's session) is the
-    // parent's person's, not the owner's: children inherit (plan §1), also when they were made before anyone stamped them.
-    case 'conversation': { const r = one(board, 'SELECT person_id, group_id FROM conversations WHERE id = ?', Number(id)); return { owner: r && r.person_id == null && r.group_id ? resolve(board, { type: 'group', id: r.group_id }).owner ?? owner : who(r), parents: r?.group_id ? [{ type: 'group', id: r.group_id }] : [] }; }
+    // 3.6 (WS2): a row without a person that belongs to a parent (a task's session) is the parent's person's, not the
+    // owner's: children inherit (plan §1), also when they were made before anyone stamped them.
+    case 'conversation': { const r = one(board, 'SELECT person_id FROM conversations WHERE id = ?', Number(id)); return { owner: who(r), parents: [] }; }
     case 'chat': {
       const r = one(board, 'SELECT person_id, conversation_id FROM chat WHERE id = ?', Number(id));
       if (!r) return { owner: null, parents: [] };
       if (r.conversation_id != null) return { ...resolve(board, { type: 'conversation', id: r.conversation_id }), via: { type: 'conversation', id: r.conversation_id } };
       return { owner: who(r), parents: [] };
     }
-    case 'bot': { const r = one(board, 'SELECT id, person_id FROM bots WHERE id = ?', Number(id)) ?? one(board, 'SELECT id, person_id FROM bots WHERE name = ? COLLATE NOCASE', String(id)); return { owner: who(r), parents: [], key: r ? String(r.id) : null }; }
-    case 'group': { const r = one(board, 'SELECT id, person_id FROM bot_groups WHERE id = ?', Number(id)); return { owner: who(r), parents: [], key: r ? String(r.id) : null }; }
     case 'project': { const r = one(board, 'SELECT name, person_id FROM projects WHERE name = ? COLLATE NOCASE', String(id)); return { owner: who(r), parents: [], key: r?.name ?? null }; }
     case 'task': { const r = one(board, 'SELECT person_id, project FROM tasks WHERE id = ?', Number(id)); return { owner: who(r), parents: r ? [{ type: 'project', id: r.project }] : [] }; }
     case 'session': { const r = one(board, 'SELECT person_id, kind, task_id FROM sessions WHERE id = ?', String(id)); const task = r?.kind === 'task' && r.task_id; return { owner: r && r.person_id == null && task ? resolve(board, { type: 'task', id: r.task_id }).owner ?? owner : who(r), parents: task ? [{ type: 'task', id: r.task_id }] : [] }; }
     case 'schedule': { const r = one(board, 'SELECT person_id, project FROM schedules WHERE id = ?', Number(id)); return { owner: who(r), parents: r ? [{ type: 'project', id: r.project }] : [] }; }
-    case 'reminder': { const r = one(board, 'SELECT person_id, bot_id FROM bot_reminders WHERE id = ?', Number(id)); return { owner: who(r), parents: r ? [{ type: 'bot', id: r.bot_id }] : [] }; }
-    case 'request': { const r = one(board, 'SELECT person_id, bot_id FROM bot_requests WHERE id = ?', Number(id)); return { owner: who(r), parents: r ? [{ type: 'bot', id: r.bot_id }] : [] }; }
     case 'device': { const r = one(board, 'SELECT person_id FROM devices WHERE id = ?', String(id)); return { owner: who(r), parents: [] }; }
     case 'account': { const a = (ctx.config?.accounts ?? []).find((x) => x.id === String(id)); return { owner: a ? a.person ?? owner : null, parents: [] }; }
-    case 'integration': return { owner: ['ha', 'pc', 'srv'].includes(String(id)) ? owner : null, parents: [], key: String(id) };
     case 'log': return String(id) === 'general' ? { owner, parents: [] } : { ...resolve(board, { type: 'project', id }), via: { type: 'project', id } };
     default: return { owner: null, parents: [] };
   }
@@ -104,7 +96,7 @@ function resolve(board, res) {
 export const ownerOf = (board, res) => resolve(board, res).owner;
 const shareRight = (board, type, key, person) => (key == null ? null : one(board, 'SELECT right FROM shares WHERE resource_type = ? AND resource_id = ? AND person_id = ?', type, String(key), person)?.right ?? null);
 // The best right a person has on a resource: 'own' | 'edit' | 'talk' | 'view' | null. Through a share of the resource
-// itself, or of its parent (a task's project, a group's conversation…; owning the parent gives «edit» on the child).
+// itself, or of its parent (a task's project…; owning the parent gives «edit» on the child).
 export function rightOn(board, person, res, depth = 0) {
   if (!person || depth > 4) return null;
   const r = resolve(board, res);
@@ -135,12 +127,9 @@ export function scopeSql(principal, type, alias = 't') {
   const own = principal?.role === 'owner' ? `(${a}.person_id = ? OR ${a}.person_id IS NULL)` : `${a}.person_id = ?`;
   const shared = (rtype, col) => `EXISTS (SELECT 1 FROM shares s WHERE s.resource_type = '${rtype}' AND s.resource_id = ${col} AND s.person_id = ?)`;
   const extra = {
-    bot: shared('bot', `CAST(${a}.id AS TEXT)`),
-    group: shared('group', `CAST(${a}.id AS TEXT)`),
     project: shared('project', `${a}.name COLLATE NOCASE`),
     task: shared('project', `${a}.project COLLATE NOCASE`),
-    schedule: shared('project', `${a}.project COLLATE NOCASE`),
-    conversation: `(${a}.group_id IS NOT NULL AND ${shared('group', `CAST(${a}.group_id AS TEXT)`)})`
+    schedule: shared('project', `${a}.project COLLATE NOCASE`)
   }[type];
   return extra ? { where: `(${own} OR ${extra})`, args: [pid, pid] } : { where: own, args: [pid] };
 }

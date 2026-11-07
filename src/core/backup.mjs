@@ -12,9 +12,8 @@
 // cut or extended chunk does not open. The body is a plain stream of entries (u32 length · {p,s} · bytes); the first
 // entry is manifest.json (sha256 of every file), whose own hash is in the header.
 //
-// What goes in: the database (VACUUM INTO, so it is consistent while the engine runs), orb.json, bots/ (memories,
-// per-person files), bitacora/ (general and project logs), the whiteboards of the projects, the bots' trash, the app's
-// secret, the recovery wrap. Optional: the project folders and the agents' login folders (off).
+// What goes in: the database (VACUUM INTO, so it is consistent while the engine runs), orb.json, bitacora/ (general and
+// project logs), the whiteboards of the projects, the app's secret, the recovery wrap. Optional: the project folders and the agents' login folders (off).
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -149,7 +148,7 @@ async function stageFiles(home, stage, { secret, includeProjects = false, includ
   // The secret that seals the approvals and the recovery wrap: on a new machine they keep working.
   if (secret) { await fsp.writeFile(path.join(stage, INTERNAL_DIR, 'datos', 'clave.bin'), Buffer.from(secret), { mode: 0o600 }); files.push(`${INTERNAL_DIR}/datos/clave.bin`); }
   for (const name of DATA_FILES.filter((n) => n !== 'clave.bin')) { const f = path.join(p.data, name); if (fs.existsSync(f)) await put(f, `${INTERNAL_DIR}/datos/${name}`); }
-  for (const dir of [p.bots, p.logs, path.join(p.internal, 'bots-borrados')]) for (const f of walkFiles(dir)) await put(f, archiveName(home, f));
+  for (const f of walkFiles(p.logs)) await put(f, archiveName(home, f));
   // The projects: their whiteboards always, the whole folder only if asked (without dependencies and build output).
   let projects = [];
   if (fs.existsSync(dbOut)) {
@@ -398,7 +397,8 @@ export async function stageRestore(home, file, keys = {}) {
   } catch (error) { await fsp.rm(tmp, { recursive: true, force: true }); throw error; }
 }
 
-// The swap units: what is replaced as a whole (a folder of bots, a log folder, a whiteboard, a project) or one file.
+// The swap units: what is replaced as a whole (a log folder, a whiteboard, a project; the bots' folder of a 3.7 copy) or
+// one file.
 function unitOf(name) {
   const s = name.split('/');
   if (s[0] === INTERNAL_DIR) return s.slice(0, s[1] === 'datos' ? 3 : 2).join('/');

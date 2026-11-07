@@ -1,4 +1,4 @@
-// 3.6: time zones (src/core/tz.mjs). A centre in UTC runs Leo's reminders at his wall time in Europe/Madrid, also
+// 3.6: time zones (src/core/tz.mjs). A PC in UTC runs Leo's schedules at his wall time in Europe/Madrid, also
 // across both daylight-saving changes; 02:30 on the spring-forward night fires at 03:00; late runs say how late.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -29,7 +29,7 @@ test('spring forward: 02:30 does not exist and becomes 03:00; fall back: first o
   assert.equal(iso(zonedToUtc('2026-10-25T02:30', MAD)), '2026-10-25T00:30:00.000Z');
 });
 
-test('daily 09:00 in Madrid seen from a UTC centre, across both changes', () => {
+test('daily 09:00 in Madrid seen from a PC in UTC, across both changes', () => {
   const rule = { every: 'daily', start: '2026-03-01T09:00' };
   const runs = []; let at = Date.parse('2026-03-27T12:00:00Z');
   for (let i = 0; i < 4; i++) { const d = nextLocalRun(rule, MAD, at); runs.push(iso(d)); at = d.getTime(); }

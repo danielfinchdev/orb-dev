@@ -1,14 +1,16 @@
-// 3.6 (messaging lists): each person's own marks on the chats of the two lists — Bots (bots and groups) and Orb (the
-// conversations with Orbe) — and what the lists show of each chat: its last message, how many are unread. Everything here
+// 3.6 (messaging lists): each person's own marks on the chats of the list (the conversations with Orbe and the direct
+// ones with an agent) and what the list shows of each chat: its last message, how many are unread. Everything here
 // is one person's (tables inbox_items and inbox_sections, both with person_id); who may see each chat is authz's
 // (src/engine/api-inbox.mjs asks it). No engine imports: plain data.
 import { ownerOfBoard } from './authz.mjs';
 import { oneLine } from './safety.mjs';
 
-// 3.6: session = a direct conversation with an agent (Orb list): it can be pinned and muted like the others.
-export const KINDS = ['bot', 'group', 'conversation', 'session'];
-export const ZONES = ['bots', 'orb'];
-export const zoneOf = (kind) => (kind === 'conversation' || kind === 'session' ? 'orb' : 'bots');
+// 3.6: session = a direct conversation with an agent: it can be pinned and muted like the others. 3.8: the list of the
+// bots is gone; the rows of a 3.7 database with kind «bot» or «group» (zone «bots») are left out until the 3.8
+// migration removes them.
+export const KINDS = ['conversation', 'session'];
+export const ZONES = ['orb'];
+export const zoneOf = (kind) => (KINDS.includes(kind) ? 'orb' : null);
 export const keyOf = (kind, id) => `${kind}:${id}`;
 const has = (board, table) => { try { return Boolean(board.one("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", table)); } catch { return false; } };
 const owner = (board) => ownerOfBoard(board);
@@ -19,18 +21,11 @@ const mine = (board, person, a = '') => (isOwner(board, person)
 
 // ---- which chat a conversation is, and the conversation of a chat (never made here: a chat nobody opened has none yet)
 export function itemOfConversation(board, conversation) {
-  const r = conversation == null ? null : board.one('SELECT id, bot_id, group_id FROM conversations WHERE id = ?', Number(conversation));
-  if (!r) return null;
-  if (r.group_id != null) return { kind: 'group', id: String(r.group_id) };
-  if (r.bot_id != null) return { kind: 'bot', id: String(r.bot_id) };
-  return { kind: 'conversation', id: String(r.id) };
+  // A bot's or a group's conversation of a 3.7 database is in no list.
+  const r = conversation == null ? null : board.one('SELECT id FROM conversations WHERE id = ? AND bot_id IS NULL AND group_id IS NULL', Number(conversation));
+  return r ? { kind: 'conversation', id: String(r.id) } : null;
 }
-export function conversationOf(board, person, kind, id) {
-  if (kind === 'conversation') return board.one('SELECT id FROM conversations WHERE id = ? AND bot_id IS NULL AND group_id IS NULL', Number(id))?.id ?? null;
-  if (kind === 'group') return board.one('SELECT id FROM conversations WHERE group_id = ? ORDER BY id LIMIT 1', Number(id))?.id ?? null;
-  if (kind === 'bot') { const s = mine(board, person); return board.one(`SELECT id FROM conversations WHERE bot_id = ? AND group_id IS NULL AND ${s.where} ORDER BY id LIMIT 1`, Number(id), ...s.args)?.id ?? null; }
-  return null;
-}
+export const conversationOf = (board, kind, id) => (kind === 'conversation' ? board.one('SELECT id FROM conversations WHERE id = ? AND bot_id IS NULL AND group_id IS NULL', Number(id))?.id ?? null : null);
 
 // ---- the marks (a chat without a row: not pinned, no section, not muted, nothing read but the starting point)
 const DEFAULT = { pinned: false, pinOrder: null, section: null, muted: false, lastRead: 0 };
@@ -122,16 +117,13 @@ export function plain(text, max = 120) {
   return one.length > max ? `${one.slice(0, max - 1).trimEnd()}…` : one;
 }
 const parse = (m) => { try { return m ? JSON.parse(m) : null; } catch { return null; } };
-// kind of a line for the list: text, card (an approval), question, reminder, report, system
-const lineKind = (r, meta) => (meta?.kind === 'bot_card' ? 'card' : meta?.kind === 'bot_question' || meta?.kind === 'question' ? 'question' : meta?.kind === 'reminder' ? 'reminder'
-  : meta?.kind === 'report' ? 'report' : r.role === 'system' ? 'system' : 'text');
-export function describeLine(board, r, { botName = (id) => board.one('SELECT name FROM bots WHERE id = ?', Number(id))?.name ?? null, personName = (id) => id } = {}) {
+// kind of a line for the list: text, question, report, system
+const lineKind = (r, meta) => (meta?.kind === 'question' ? 'question' : meta?.kind === 'report' ? 'report' : r.role === 'system' ? 'system' : 'text');
+export function describeLine(board, r, { personName = (id) => id } = {}) {
   if (!r) return null;
   const meta = parse(r.meta);
   let from;
   if (r.role === 'usuario') { const pid = r.person_id ?? owner(board); from = { type: 'user', person: pid, name: personName(pid) }; }
-  else if (r.role === 'bot' && meta?.kind === 'relay') from = { type: 'bot-to-bot', bot: meta.bot ?? null, name: meta.name ?? botName(meta.bot), to: meta.to ?? null, toName: meta.to != null ? botName(meta.to) : null };
-  else if (r.role === 'bot') from = { type: 'bot', bot: meta?.bot ?? null, name: meta?.name ?? botName(meta?.bot) };
   else if (r.role === 'orb') from = { type: 'orbe' };
   else from = { type: 'system' };
   return { id: r.id, text: plain(r.body), at: r.at, from, kind: lineKind(r, meta) };

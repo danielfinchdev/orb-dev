@@ -1,14 +1,11 @@
 // 3.6 «Personas», acceptance test 1 for the gateway (WS2): no leaks between Ana (owner) and Leo (user) on any surface.
-// Each one has a bot, a group, a project, a conversation with Orbe, a reminder, a task, a scheduled task and a direct
+// Each one has a project, a conversation with Orbe, a task, a scheduled task and a direct
 // conversation with an agent, all marked with a word of their own (qzana… / qzleo…). Then, for each of Leo's ways in
-// (this PC's window after switching, phone, browser, a call forwarded by a linked Orb, an agent's
-// tool process) every POLICY method is called with Ana's ids: refused when it touches her things (audited), and nothing
+// (this PC's window after switching, phone, browser, an agent's tool process) every POLICY method is called with Ana's ids: refused when it touches her things (audited), and nothing
 // of hers in what comes back. Leo's live events (window, phone) and his phone's notifications (push mock) get
 // nothing of Ana while she uses every resource; and the other way round, Ana (the owner) gets nothing of Leo's content.
 //
 // GAPS (owned by other workstreams; the coordinator runs the full matrix after merging):
-// - (WS4 closed its gaps: Leo makes his own bot, group and reminder, stamped with him, and each one's global memory is
-//   their own; both carry their mark.)
 // - WS3: the scheduler's notices about a task (finished, failed) carry no person: they go to the owner. Tasks stay paused
 //   here (control.pause) so none runs.
 import { test, before, after } from 'node:test';
@@ -31,8 +28,8 @@ let ana; let leo;
 const R = { ana: {}, leo: {} }; // each one's resources
 const links = [];
 const SKIP = new Set(['persons.switch', 'persons.lock', 'persons.unlock', 'app.lockState']); // the window's own (enlace-36, test 11)
-// The owner manages the people (rename, remove, PIN reset, templates for them): not content, and it would undo the test.
-const SKIP_OWNER = new Set(['persons.remove', 'persons.rename', 'persons.setPin', 'data.deletePerson', 'templates.apply', 'persons.pauseBots', 'persons.setCaps', 'persons.update']); // the owner's own admin actions on someone (no content)
+// The owner manages the people (rename, remove, PIN reset): not content, and it would undo the test.
+const SKIP_OWNER = new Set(['persons.remove', 'persons.rename', 'persons.setPin', 'data.deletePerson', 'persons.setCaps', 'persons.update']); // the owner's own admin actions on someone (no content)
 // Known gaps of other workstreams, reported (not failed): the method echoes a name the caller typed.
 const KNOWN = { 'projects.create': 'WS3: «ese nombre ya existe» nombra el proyecto (B6: mensaje neutro)' };
 const db = () => new DatabaseSync(paths(tA.home).db);
@@ -54,12 +51,8 @@ function paramsFor(method, r, person) {
   if (/^tasks\./.test(m)) return { id: r.task, project: r.project, title: 'x', description: 'x' };
   if (/^sessions\./.test(m)) return { id: r.session, project: r.project, text: 'x' };
   if (/^schedules\./.test(m)) return { id: r.schedule, project: r.project, title: 'x', description: 'x', every: 'daily' };
-  if (/^bots\.groups\./.test(m)) return { id: r.group, text: 'x' };
-  if (m === 'bots.reminders.cancel') return { id: r.reminder };
-  if (m === 'bots.decide' || m === 'bots.answer') return { item: r.botLine, decision: 'allow' };
-  if (/^bots\./.test(m)) return { id: r.bot, text: 'x' };
   if (/^link\./.test(m)) return { id: r.devices?.[0] ?? 'x', name: 'x' };
-  if (/^(persons|data|templates)\./.test(m)) return { id: person, person, name: 'x', pin: null };
+  if (/^(persons|data)\./.test(m)) return { id: person, person, name: 'x', pin: null };
   return {};
 }
 // Whether the call aims at one of those resources (then it must be refused).
@@ -108,17 +101,6 @@ async function seed(who) {
     r.task = (await A.call('tasks.create', { project: r.project, title: `${w} tarea`, description: `${w} hacer algo` })).id;
     r.schedule = (await A.call('schedules.create', { project: r.project, title: `${w} programada`, description: `${w} cada día`, every: 'daily' })).id;
     r.session = (await A.call('sessions.create', { agent: 'claude', project: r.project, title: `${w} sesión` })).id;
-    const bot = await A.call('bots.create', { name: `${w}bot`, role_text: `${w} ayuda` });
-    r.bot = bot.id;
-    r.group = (await A.call('bots.groups.create', { name: `${w} grupo`, members: [bot.id] })).id;
-    await A.call('bots.groups.chat', { id: r.group });
-    r.reminder = (await A.call('bots.reminders.create', { id: bot.id, text: `${w} recordatorio`, when: new Date(Date.now() + 86_400_000).toISOString() })).id;
-    await A.call('bots.memory.set', { id: bot.id, text: `${w} memoria del bot` });
-    await A.call('bots.memory.set', { id: 'global', text: `${w} memoria global` });
-    await A.call('bots.send', { id: bot.id, text: `${w} hola bot` });
-    await until(async () => { const x = await A.call('bots.chat', { id: bot.id }); return x.lines.some((l) => l.role === 'bot') && !x.state?.busy && x; }, `respuesta del bot (${who})`, 30_000);
-    const chat = await A.call('bots.chat', { id: bot.id });
-    r.botConv = chat.conversation; r.botLine = chat.lines[0].id;
   } finally { if (who === 'leo') assert.equal((await A.call('persons.switch', { id: ana.id })).ok, true); }
 }
 
@@ -175,15 +157,13 @@ test('1a: Leo, por cada canal, no llega a nada de Ana (todas las reglas de POLIC
   assert.equal((await A.call('persons.switch', { id: leo.id })).ok, true);
   try { await sweep(A.call, 'ana', 'ventana (Leo)', t); }
   finally { assert.equal((await A.call('persons.switch', { id: ana.id })).ok, true); }
-  // A call forwarded to this Orb as Leo (the bots' copies), and an agent's tool process of Leo: the same rules, in process.
-  const fwd = principalOf(board, { forwarded: true, person: leo.id });
+  // An agent's tool process of Leo: the same rules, in process.
   const agent = principalOf(board, { agentToken: { person: leo.id, agent: 'claude' } });
   for (const m of methods()) {
     const params = paramsFor(m, R.ana, ana.id);
-    if (aims(m, params)) assert.throws(() => authorize(board, fwd, m, params), (e) => e.status === 403, `reenviada: ${m}`);
     assert.throws(() => authorize(board, agent, m, params), (e) => e.status === 403, `agente: ${m}`);
   }
-  for (const res of [{ type: 'bot', id: R.ana.bot }, { type: 'conversation', id: R.ana.conv }, { type: 'project', id: R.ana.project }, { type: 'task', id: R.ana.task }, { type: 'session', id: R.ana.session }, { type: 'reminder', id: R.ana.reminder }])
+  for (const res of [{ type: 'conversation', id: R.ana.conv }, { type: 'project', id: R.ana.project }, { type: 'task', id: R.ana.task }, { type: 'session', id: R.ana.session }])
     assert.equal(can(board, agent, 'view', res), false, `agente de Leo: ${res.type}`);
   // Refusals are audited (ids only, never content).
   const audit = all("SELECT * FROM audit WHERE person_id = ? AND decision = 'deny'", leo.id);
@@ -191,7 +171,6 @@ test('1a: Leo, por cada canal, no llega a nada de Ana (todas las reglas de POLIC
   assert.ok(audit.every((a) => !String(a.resource ?? '').includes('qzana hola')), 'sin contenido en la auditoría');
   // His own things, he does reach. (Read-only calls: one retry if the loopback connection drops under CI load.)
   const read = async (m, p) => { try { return await phone.call(m, p); } catch (e) { if (!e.offline) throw e; return phone.call(m, p); } };
-  assert.ok((await read('bots.list')).bots.some((b) => b.id === R.leo.bot));
   assert.ok((await read('conversations.list')).some((c) => c.id === R.leo.conv));
   assert.ok((await read('chat.list', { conversation: R.leo.conv })).length > 0);
 });
@@ -203,7 +182,7 @@ test('1b: Ana (la dueña) tampoco lee nada de Leo; solo ve nombres y números', 
   const overview = await A.call('persons.overview');
   assert.deepEqual(leaks(overview, 'leo'), []);
   const o = overview.find((x) => x.id === leo.id);
-  assert.equal(o.counts.bots, 1); assert.equal(o.counts.projects, 1); assert.ok(o.devices >= 2);
+  assert.equal(o.counts.conversations, 1); assert.equal(o.counts.projects, 1); assert.ok(o.devices >= 2);
 });
 
 test('1c: los directos, la ventana y los avisos de cada uno no llevan nada del otro', async () => {
@@ -216,13 +195,9 @@ test('1c: los directos, la ventana y los avisos de cada uno no llevan nada del o
   const activity = async (phone, who) => {
     const r = R[who]; const w = `qz${who}`;
     await phone.call('chat.send', { conversation: r.conv, text: `${w} otra vez` });
-    await phone.call('bots.send', { id: r.bot, text: `${w} dime algo` });
-    await phone.call('bots.groups.send', { id: r.group, text: `${w} al grupo` }).catch(() => {});
     await phone.call('sessions.send', { id: r.session, text: `${w} en la sesión` }).catch(() => {});
     await phone.call('tasks.cancel', { id: r.task }).catch(() => {});
-    await phone.call('bots.reminders.create', { id: r.bot, text: `${w} suena ya`, when: new Date(Date.now() + 1500).toISOString() });
-    await until(async () => (await phone.call('bots.chat', { id: r.bot })).lines.some((l) => l.body?.includes(`${w} suena ya`)), `recordatorio de ${who}`, 30_000).catch(() => {});
-    await until(async () => { const x = await phone.call('bots.chat', { id: r.bot }); return !x.state?.busy; }, `bot de ${who} libre`, 30_000);
+    await until(async () => (await phone.call('chat.list', { conversation: r.conv })).filter((l) => l.role === 'orb').length >= 2, `respuesta de Orbe (${who})`, 30_000).catch(() => {});
     await wait(1500);
   };
 

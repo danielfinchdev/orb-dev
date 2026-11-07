@@ -60,7 +60,7 @@ test('con una sola persona nada cambia: el dueño puede todo desde el PC y lo de
   const admin = principalOf(board, { device: { id: 'd2', kind: 'phone', person_id: null, admin: 1 } });
   assert.equal(admin.person, ana, 'un aparato sin persona es del dueño');
   denied(() => authorize(board, admin, 'link.qr', {}), 'ceiling');
-  denied(() => authorize(board, principalOf(board, { device: { id: 'd3', kind: 'orb', kind_ok: 1 } }), 'bots.rules.set', {}), 'ceiling');
+  denied(() => authorize(board, principalOf(board, { device: { id: 'd3', kind: 'orb', kind_ok: 1 } }), 'config.save', {}), 'ceiling');
   const agent = principalOf(board, { agentToken: { agent: 'claude', person: ana } });
   denied(() => authorize(board, agent, 'app.state', {}), 'ceiling');
   assert.doesNotThrow(() => authorize(board, principalOf(board, { system: true }), 'config.save', {}));
@@ -87,18 +87,13 @@ test('lo de cada persona es suyo: ni el otro ni el dueño lo leen, y queda en la
 });
 
 test('compartir: ver, hablar y editar, también a través del padre (las tareas de un proyecto)', () => {
-  board.run("INSERT INTO bots (name, created_at, updated_at, person_id) VALUES ('Casa', 'now', 'now', ?)", ana);
-  const bot = board.one("SELECT id FROM bots WHERE name = 'Casa'").id;
-  denied(() => authorize(board, asLeo, 'bots.send', { id: bot, text: 'hola' }), 'right');
-  board.run("INSERT INTO shares (resource_type, resource_id, person_id, right, granted_by) VALUES ('bot', ?, ?, 'talk', ?)", String(bot), leo, ana);
-  assert.equal(rightOn(board, leo, { type: 'bot', id: bot }), 'talk');
-  assert.equal(rightOn(board, leo, { type: 'bot', id: 'casa' }), 'talk', 'por nombre también');
-  assert.doesNotThrow(() => authorize(board, asLeo, 'bots.send', { id: bot, text: 'hola' }));
-  assert.doesNotThrow(() => authorize(board, asLeo, 'bots.get', { id: bot }));
-  denied(() => authorize(board, asLeo, 'bots.update', { id: bot }), 'right');
-  denied(() => authorize(board, asLeo, 'bots.delete', { id: bot }), 'right');
-  assert.ok(can(board, asLeo, 'view', { type: 'bot', id: bot }));
-  assert.throws(() => must(board, asLeo, 'edit', { type: 'bot', id: bot }), AuthzError);
+  board.run("INSERT INTO projects (name, path, created_at, person_id) VALUES ('Casa', '/c', 'now', ?)", ana);
+  assert.equal(rightOn(board, leo, { type: 'project', id: 'Casa' }), null);
+  board.run("INSERT INTO shares (resource_type, resource_id, person_id, right, granted_by) VALUES ('project', 'Casa', ?, 'talk', ?)", leo, ana);
+  assert.equal(rightOn(board, leo, { type: 'project', id: 'Casa' }), 'talk');
+  assert.equal(rightOn(board, leo, { type: 'project', id: 'casa' }), 'talk', 'sin mayúsculas también');
+  assert.ok(can(board, asLeo, 'view', { type: 'project', id: 'Casa' }));
+  assert.throws(() => must(board, asLeo, 'edit', { type: 'project', id: 'Casa' }), AuthzError);
   // A project shared to view: its tasks too, read only.
   board.run("INSERT INTO projects (name, path, created_at, person_id) VALUES ('web', '/w', 'now', ?)", ana);
   const t = Number(board.run("INSERT INTO tasks (project, title, description, status, created_by, created_at, updated_at, person_id) VALUES ('web', 't', 'd', 'done', 'usuario', 'now', 'now', ?)", ana).lastInsertRowid);
@@ -108,19 +103,17 @@ test('compartir: ver, hablar y editar, también a través del padre (las tareas 
   denied(() => authorize(board, asLeo, 'tasks.cancel', { id: t }), 'right');
   denied(() => authorize(board, asLeo, 'tasks.create', { project: 'web', title: 'x', description: 'y' }), 'right');
   // Lists: own and shared.
-  const s = scopeSql(asLeo, 'bot', 'b');
-  assert.deepEqual(board.all(`SELECT b.name FROM bots b WHERE ${s.where}`, ...s.args).map((r) => r.name), ['Casa']);
+  const s = scopeSql(asLeo, 'project', 'p');
+  assert.deepEqual(board.all(`SELECT p.name FROM projects p WHERE ${s.where} ORDER BY p.name`, ...s.args).map((r) => r.name), ['Casa', 'web']);
   const sa = scopeSql(asAna, 'conversation', 'c');
   assert.ok(board.all(`SELECT c.title FROM conversations c WHERE ${sa.where}`, ...sa.args).every((r) => r.title !== 'De Leo'));
 });
 
-test('público de los eventos: la conversación a su persona, el bot a quien lo puede ver, sin regla al dueño', () => {
+test('público de los eventos: la conversación a su persona, sin regla al dueño', () => {
   const his = board.one("SELECT id FROM conversations WHERE title = 'De Leo'").id;
   const a = audienceOf(board, 'chat:new', { conversation: his, body: 'x' });
   assert.deepEqual([...a.persons], [leo]);
   assert.ok(reaches(board, a, leo) && !reaches(board, a, ana), 'el dueño no recibe lo de Leo');
-  const bot = board.one("SELECT id FROM bots WHERE name = 'Casa'").id;
-  assert.deepEqual(new Set(audienceOf(board, 'bot.updated', { id: bot }).persons), new Set([ana, leo]));
   assert.deepEqual(audienceOf(board, 'board:changed', ['tasks']), { all: true });
   assert.deepEqual(audienceOf(board, 'notice', { body: 'x', person: leo }).persons, new Set([leo]));
   assert.deepEqual(audienceOf(board, 'notice', { body: 'x' }), { owner: true });

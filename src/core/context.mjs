@@ -22,18 +22,13 @@ export function useHome(home) {
 // What is each person's own (the rest of orb.json stays global, the owner's). For the owner, a key with no row yet reads
 // where 3.5.1 kept it (legacy), so one person behaves exactly as before; the first write through personSetting makes
 // the row. Keys: language, tz (also columns of persons), preview (notifications on a locked phone), brain (the
-// assistant's agent/model/account), active_project, rules (personal golden rules), protected (personal additions),
-// bots.location, bots_location_asked.
-export const PERSON_KEYS = ['language', 'tz', 'preview', 'brain', 'active_project', 'rules', 'protected', 'bots.location', 'bots_location_asked',
-  // 3.7 (WS3, Q3): «Copia en el PC»: this person's bots also keep a live copy on the owner's other Orbs (default off).
-  'replica.pc'];
+// assistant's agent/model/account), active_project, protected (personal additions).
+export const PERSON_KEYS = ['language', 'tz', 'preview', 'brain', 'active_project', 'protected'];
 const LEGACY = {
   language: () => ctx.config?.language,
   preview: () => ctx.config?.mobile?.preview,
   brain: () => { const o = ctx.config?.orchestrator; return o ? { agent: o.agent ?? 'claude', model: o.model ?? null, account: o.account ?? null } : undefined; },
-  active_project: (store) => store?.prepare("SELECT value FROM settings WHERE key = 'active_project'").get()?.value,
-  'bots.location': () => ctx.config?.bots?.location,
-  bots_location_asked: (store) => { try { return JSON.parse(store?.prepare("SELECT value FROM settings WHERE key = 'bots_location_asked'").get()?.value || 'null') ?? undefined; } catch { return undefined; } }
+  active_project: (store) => store?.prepare("SELECT value FROM settings WHERE key = 'active_project'").get()?.value
 };
 // personSetting(pid, key) → the value (parsed JSON) or undefined; personSetting(pid, key, value) saves it (null removes
 // the row). store: a node:sqlite database (default: this home's, opened by db.mjs); a Board passes its own.
@@ -66,7 +61,7 @@ export function migrateConfigPersons(owner) {
 }
 
 // Settings saved from the app. Only known top-level keys are accepted.
-const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'oce', 'oneAtATime', 'approvalWaitMinutes', 'bots', 'protected', 'backup', 'tz'];
+const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'oneAtATime', 'approvalWaitMinutes', 'protected', 'backup', 'tz'];
 export function saveConfig(patch) {
   const unknown = Object.keys(patch ?? {}).filter((k) => !EDITABLE.includes(k));
   if (unknown.length) throw new Error(tr('msg.ctx.unknownSettings', { unknown: unknown.join(', ') }));
@@ -157,26 +152,12 @@ export function validateConfig(c) {
   bool(c.delegation?.enabled, 'delegation.enabled'); bool(c.delegation?.trusted, 'delegation.trusted');
   bool(c.ui?.menuBar, 'ui.menuBar');
   bool(c.budget?.autoModel, 'budget.autoModel'); // 2.7: Orb chooses each task's model (true / missing) or the agents' defaults
-  // 2.7: the bridge with Open Control Edge (on unless turned off). 3.7: oce.share (it was monitor.shareWithOce, with the
-  // Monitoreo del equipo that 3.7 removed: home.mjs › loadConfig moves it).
-  bool(c.oce?.share, 'oce.share');
-  bool(c.oce?.optimus, 'oce.optimus'); // 3.7 (WS8): «Crear Optimus automáticamente» when Open Control Edge is found (on unless off)
   bool(c.ui?.tourDone, 'ui.tourDone');
   bool(c.ui?.recoveryNoticed, 'ui.recoveryNoticed'); // 3.6: the one notice about the recovery code was shown // 2.6: the guided tour was seen (or skipped) in this assistant folder
   if (c.delegation?.maxPerTask !== undefined) int(c.delegation.maxPerTask, 0, 20, 'delegation.maxPerTask');
   // 3.1: «Una tarea cada vez» (no parallel work, not even in isolated copies) and how long a task's permission waits for
   // an answer before it is denied (0 = for ever).
   bool(c.oneAtATime, 'oneAtATime');
-  // 3.5: the bots' golden rules (up to 30 short sentences) and Home Assistant's address.
-  if (c.bots) {
-    const rules = c.bots.rules ?? [];
-    if (!Array.isArray(rules) || rules.length > 30 || rules.some((r) => typeof r !== 'string' || r.length > 400)) throw new Error(tr('msg.ctx.badAppearance', { name: 'bots.rules' }));
-    const url = c.bots.homeAssistant?.url ?? '';
-    if (typeof url !== 'string' || (url && !/^https?:\/\/[^\s]+$/i.test(url))) throw new Error(tr('msg.ctx.badAppearance', { name: 'bots.homeAssistant.url' }));
-    if (c.bots.idleMinutes !== undefined) int(c.bots.idleMinutes, 1, 1440, 'bots.idleMinutes');
-    // 3.5: where the bots live: 'local' or the id of a linked Orb (a centre).
-    if (c.bots.location !== undefined && (typeof c.bots.location !== 'string' || !/^(local|[\w-]{1,64})$/.test(c.bots.location))) throw new Error(tr('msg.ctx.badAppearance', { name: 'bots.location' }));
-  }
   // 3.5: «Cosas que nadie toca»: up to 50 names, paths or containers (2-200 characters each).
   if (c.protected !== undefined && (!Array.isArray(c.protected) || c.protected.length > 50 || c.protected.some((x) => typeof x !== 'string' || x.trim().length < 2 || x.length > 200))) throw new Error(tr('msg.ctx.badAppearance', { name: 'protected' }));
   // 3.6: backups (src/core/backup.mjs): on/off, another folder (absolute), and whether project folders and the agents'

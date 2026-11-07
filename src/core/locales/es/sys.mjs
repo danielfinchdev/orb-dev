@@ -18,7 +18,6 @@ export default {
   'sys.menu.zoomOut': 'Reducir',
   'sys.menu.terminal': 'Abrir terminal',
   'sys.menu.fullscreen': 'Pantalla completa',
-
   // Diálogos y notificaciones del proceso principal
   'sys.dialog.runningTitle': 'Hay tareas en curso',
   'sys.dialog.closeOne': 'Hay 1 tarea en curso. Si cierras ahora, se detendrá y quedará como fallida (podrás reintentarla).',
@@ -38,7 +37,6 @@ export default {
   'sys.main.startFailed': 'No se pudo iniciar {name}',
   'sys.main.keyringWeak': 'Tu escritorio no tiene un llavero (GNOME Keyring o KWallet), así que la clave de Orb se guarda en un archivo de su carpeta sin cifrar. Funciona igual; para protegerla, instala gnome-keyring o kwallet y reinicia Orb.',
   'sys.main.notice': '{name} · Notificación',
-
   // Errores del proceso principal (acaban en un toast)
   'sys.main.engineStopped': '{name} se ha detenido',
   'sys.main.engineStartStopped': '{name} se detuvo al iniciarse',
@@ -54,19 +52,16 @@ export default {
   'sys.main.httpsOnly': 'solo se pueden abrir enlaces https',
   'sys.main.alreadySetup': 'la app ya está configurada',
   'sys.main.notHome': 'esa carpeta no es la de un asistente (falta orb.json)',
-
   // Contribuye (envío de comentarios)
   'sys.feedback.empty': 'Escribe un mensaje antes de enviarlo',
   'sys.feedback.timeout': 'Tiempo de espera agotado',
   'sys.feedback.offline': 'Sin conexión',
   'sys.feedback.failed': 'No se pudo enviar el mensaje',
-
   // Terminal (Ctrl+J)
   'sys.terminal.notInstalled': '{name} no está instalado en este PC',
   'sys.terminal.none': 'no se ha encontrado ninguna terminal en este PC',
   'sys.terminal.folderOnly': 'solo se puede abrir una terminal en una carpeta',
   'sys.terminal.openFailed': 'no se pudo abrir {name}: {error}',
-
   // Navegador de los agentes
   'sys.browser.title': 'Navegador del agente',
   'sys.browser.noUrl': 'falta la dirección',
@@ -100,7 +95,6 @@ export default {
   'sys.browser.do.dialogAccept': 'aceptará los avisos de la página',
   'sys.browser.do.dialogCancel': 'cancelará los avisos de la página',
   'sys.browser.do.console': 'lee la consola',
-
   // Herramientas MCP de los agentes
   'sys.mcp.noTask': 'no existe la tarea #{id}',
   'sys.mcp.noIsolatedCopy': 'la tarea #{id} no tiene copia aislada (las tareas en la carpeta del proyecto ya ven todos los archivos)',
@@ -113,30 +107,10 @@ export default {
   'sys.mcp.idsRange': 'ids: entre 1 y 10 tareas',
   'sys.mcp.askNeedsOptions': 'orb_ask necesita una pregunta y entre 2 y 4 opciones',
   'sys.mcp.boardNeedsText': 'orb_pizarra necesita el consejo (message)',
-  // 3.7: los cambios que propone en el PC un bot con «Equipo» (core/pc-actions.mjs; hasta la 3.6, Opti Bot)
-  'sys.pc.badAction': 'Esa acción no está en la lista. Las que hay: {list}',
-  'sys.pc.reduced': 'Versión reducida: los procesos, los programas de inicio y el antivirus solo se ven en Windows',
-  'sys.pc.needsReason': 'explica por qué propones la acción',
-  'sys.pc.needsPid': 'end_process necesita el Id del proceso',
-  'sys.pc.needsName': 'disable_startup necesita el nombre exacto del programa',
-  'sys.pc.windowsOnly': 'Esta acción solo funciona en Windows.',
-  'sys.pc.uacCancelled': 'No se ha hecho: el aviso de administrador de Windows se canceló.',
-  'sys.pc.done': 'Hecho.',
-  'sys.pc.failed': 'No se ha podido hacer.',
-  'sys.pc.cleaned': 'Temporales borrados: {n} ({mb} MB liberados). {skipped} estaban en uso y se han dejado.',
-  'sys.pc.noProcess': 'El proceso {pid} ya no existe.',
-  'sys.pc.processChanged': 'El proceso {pid} ahora es otro programa ({name}): no se ha cerrado.',
-  'sys.pc.protected': '{name} es parte de Windows, de su seguridad o de Orb: no se cierra.',
-  'sys.pc.processClosed': 'Cerrado {name} (proceso {pid}).',
-  'sys.pc.noStartup': 'No hay ningún programa de inicio llamado «{name}».',
-  'sys.pc.startupFolder': '«{name}» arranca desde la carpeta Inicio: desactívalo en el Administrador de tareas › Aplicaciones de arranque.',
-  'sys.pc.otherUser': '«{name}» arranca para otro usuario de Windows: no se toca desde aquí.',
-  'sys.pc.startupOff': '«{name}» ya no arrancará con Windows (se puede volver a activar en el Administrador de tareas).',
   'sys.mcp.browserClosed': 'el navegador de la app se ha cerrado',
   'sys.mcp.browserUnavailable': 'el navegador de la app no está disponible (comprueba que la app está abierta)',
   'sys.mcp.browserTimeout': 'el navegador no respondió a tiempo',
   'sys.mcp.extraArgs': 'argumentos no permitidos: {list}',
-
   // Tablero (tareas, proyectos y mensajes)
   'sys.board.outside': 'la ruta está fuera de la carpeta de {name} ({home}): {target}. {user} puede vincularla desde la app.',
   'sys.board.nameAndPath': 'name y path son obligatorios',
@@ -170,7 +144,6 @@ export default {
   'sys.board.systemOnly': 'solo el sistema puede dejar tareas pendientes de aprobación',
   'sys.board.bodyRequired': 'body es obligatorio',
   'sys.board.badRecipient': 'destinatario no válido: {to} (usa {list}, all, usuario u orb)',
-
   // Bitácoras
   'sys.logs.none': 'no hay bitácora para "{project}": usa "general" o un proyecto registrado',
   'sys.logs.required': 'faltan tema y hecho',
@@ -204,16 +177,13 @@ export default {
   'sys.logs.directFiles': 'archivos cambiados: {list}.',
   'sys.logs.directRevert': 'desde el historial de git del proyecto (God mode › Cambios) o pidiéndoselo al agente en la misma conversación',
   'sys.logs.andMore': ' y {n} más',
-
   // Inicio de Orb
   'sys.engine.notHome': 'no es la carpeta de un asistente: {home}',
   'sys.engine.notStarted': '{name} todavía no se ha iniciado',
-
   // Tareas programadas
   'sys.schedules.badEvery': 'every debe ser {list}',
   'sys.schedules.badTime': 'at_time debe tener el formato HH:MM',
   'sys.schedules.badWeekdays': 'weekdays: números del 0 (domingo) al 6',
-
   // Agentes
   'sys.agents.notSupported': 'no admitido',
   'sys.agents.methodNotSupported': 'no admitido: {method}',
@@ -257,7 +227,6 @@ export default {
   'sys.agents.tool.imageGen': 'Crear imagen',
   'sys.agents.tool.subagent': 'Subagente: {tool}',
   'sys.agents.tool.action': 'acción',
-
   // Ejecución de tareas
   'sys.scheduler.accountOff': 'la cuenta {account} está desactivada o ya no existe',
   'sys.scheduler.notInstalled': '{name} no está instalado en este PC (instálalo desde Agentes o reasigna la tarea)',
@@ -267,17 +236,14 @@ export default {
   'sys.scheduler.secretFiles': 'no se hizo el commit automático: hay archivos que parecen secretos ({list})',
   'sys.scheduler.secretFilesIn': 'no se hizo el commit automático: hay archivos que parecen secretos ({list}). Revisa {dir}',
   'sys.scheduler.commitFailed': 'el commit automático falló ({error}); los cambios siguen sin guardar en {dir}',
-
   // Opciones de las tareas y base de datos
   'sys.db.badReasoning': 'reasoning debe ser low, medium, high o xhigh',
   'sys.db.badFast': 'fast debe ser true o false',
   'sys.db.noHome': 'no hay carpeta del asistente',
-
   // Móvil y notificaciones en el móvil
   'sys.remote.tooLarge': 'el contenido es demasiado grande',
   'sys.push.badSubscription': 'suscripción no válida',
   'sys.push.unknownService': 'servicio de notificaciones no reconocido',
-
   // Herramientas de Android (adb)
   'sys.android.noDownload': 'no hay descarga para {platform}',
   'sys.android.downloadHttp': 'descarga: HTTP {status}',

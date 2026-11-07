@@ -21,14 +21,10 @@ import sys from './es/sys.mjs';
 import help from './es/help.mjs';
 import greet from './es/greet.mjs';
 import whiteboard from './es/whiteboard.mjs';
-import bots from './es/bots.mjs';
-import botsui from './es/botsui.mjs';
 import link from './es/link.mjs';
 import ws1 from './es/ws1.mjs';
 import ws2 from './es/ws2.mjs';
 import ws3 from './es/ws3.mjs';
-import hogar from './es/hogar.mjs';
-import ws4 from './es/ws4.mjs';
 import ws5 from './es/ws5.mjs';
 import ws6 from './es/ws6.mjs';
 import ws6android from './es/ws6-android.mjs';
@@ -36,8 +32,6 @@ import ola1 from './es/ola1.mjs';
 import mensajeria from './es/mensajeria.mjs';
 import orbchats from './es/orbchats.mjs';
 import notes from './es/notes.mjs';
-import navegadorLimites from './es/navegador-limites.mjs';
-import oce from './es/oce.mjs';
 
 export default {
   ...base,
@@ -62,14 +56,10 @@ export default {
   ...help,
   ...greet,
   ...whiteboard,
-  ...bots,
-  ...botsui,
   ...link,
   ...ws1,
   ...ws2,
   ...ws3,
-  ...hogar,
-  ...ws4,
   ...ws5,
   ...ws6,
   ...ws6android,
@@ -77,6 +67,4 @@ export default {
   ...mensajeria,
   ...orbchats,
   ...notes,
-  ...navegadorLimites,
-  ...oce
 };

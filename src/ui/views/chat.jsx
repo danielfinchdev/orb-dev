@@ -44,15 +44,13 @@ export function useAutoScroll(deps) {
 }
 
 // "@" picker: while typing @word, a list of tasks, conversations and logs to attach as context (token @tarea:12…).
-// 3.6 (M2): own: the options given by the caller (a group's members: «@Agenda»); else the assistant's (mentions.options).
-function useMentions(value, onChange, ta, own = null) {
-  const [fetched, setOptions] = useState(null);
-  const options = own ?? fetched;
+function useMentions(value, onChange, ta) {
+  const [options, setOptions] = useState(null);
   const [index, setIndex] = useState(0);
   const caret = ta.current?.selectionStart ?? value.length;
   const match = /(^|\s)@([\wÀ-ɏ-]*)$/.exec(value.slice(0, caret));
   const query = match ? match[2].toLowerCase() : null;
-  useEffect(() => { if (!own && query !== null && !options) call('mentions.options').then(setOptions).catch(() => setOptions([])); }, [query !== null]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (query !== null && !options) call('mentions.options').then(setOptions).catch(() => setOptions([])); }, [query !== null]); // eslint-disable-line react-hooks/exhaustive-deps
   const fold = (x) => String(x ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
   const list = query === null ? [] : (options ?? []).filter((o) => fold(`${o.label} ${o.hint ?? ''}`).includes(fold(query))).slice(0, 8);
   useEffect(() => setIndex(0), [query]);
@@ -72,8 +70,8 @@ function useMentions(value, onChange, ta, own = null) {
   return { list, index, pick, onKey };
 }
 
-// 3.6 (M2): mentions may be a list of options ({ token, label, hint, icon }) instead of the assistant's; the microphone also
-// dictates in a computer's browser that has speech recognition (not in the PC app, whose engine has none).
+// mentions: false hides the «@» picker. 3.6 (M2): the microphone also dictates in a computer's browser that has speech
+// recognition (not in the PC app, whose engine has none).
 const WebSpeech = typeof window !== 'undefined' && !/Electron/i.test(navigator.userAgent) ? (window.SpeechRecognition || window.webkitSpeechRecognition || null) : null;
 function webDictate(lang) {
   return new Promise((resolve, reject) => {
@@ -89,7 +87,7 @@ export function Composer({ value, onChange, onSend, onStop, busy, placeholder, t
   const ta = useRef(null);
   useEffect(() => { const el = ta.current; if (!el) return; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 260)}px`; }, [value]);
   const [dropping, setDropping] = useState(false);
-  const m = useMentions(value, onChange, ta, Array.isArray(mentions) ? mentions : null);
+  const m = useMentions(value, onChange, ta);
   const dictateWith = bridge.dictate ? (lang) => bridge.dictate(lang) : WebSpeech ? webDictate : null;
   // 3.5, the Android app: dictate with the phone's own speech recognition (what is said is added to the text).
   const [hearing, setHearing] = useState(false);
@@ -105,7 +103,7 @@ export function Composer({ value, onChange, onSend, onStop, busy, placeholder, t
         {mentions && m.list.length ? null : notice}
         {mentions && m.list.length ? (
           <div className="bg-popover text-popover-foreground absolute right-3 bottom-full left-3 z-20 mb-2 overflow-hidden rounded-xl border shadow-lg" data-testid="mention-list">
-            <div className="text-muted-foreground border-b px-3 py-1.5 text-[11px]">{Array.isArray(mentions) ? t('chats.mentionHeader') : t('chat.mentionHeader')}</div>
+            <div className="text-muted-foreground border-b px-3 py-1.5 text-[11px]">{t('chat.mentionHeader')}</div>
             {m.list.map((o, i) => (
               <button key={o.token} onMouseDown={(e) => { e.preventDefault(); m.pick(o); }} className={cn('flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-[13px]', i === m.index ? 'bg-accent' : 'hover:bg-accent/60')}>
                 {o.icon ?? <AtSign className="text-muted-foreground size-3.5 shrink-0" />}<span className="min-w-0 flex-1 truncate">{o.label}</span><span className="text-muted-foreground shrink-0 text-[11px]">{o.hint}</span>

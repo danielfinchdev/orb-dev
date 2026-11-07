@@ -31,18 +31,18 @@ const all = (q, ...args) => { const d = db(); try { return d.prepare(q).all(...a
 // The window's own methods (the lock screen), what would undo the test (removing or renaming people, PINs) and what
 // touches this PC (installs, Remote Desktop, the phone access, restoring a backup, moving the Orb).
 const SKIP = new Set(['persons.switch', 'persons.lock', 'persons.unlock', 'app.lockState', 'persons.remove', 'persons.rename', 'persons.setPin', 'data.deletePerson',
-  'templates.apply', 'installer.start', 'agents.install', 'github.login', 'backup.restore', 'backup.now', 'data.moveExport', 'data.moveUndo', 'data.moveKeepBoth',
+  'installer.start', 'agents.install', 'github.login', 'backup.restore', 'backup.now', 'data.moveExport', 'data.moveUndo', 'data.moveKeepBoth',
   'remote.enable', 'remote.configure', 'remote.revoke', 'config.save', 'control.pause', 'control.resume', 'link.revoke', 'link.qr',
   'agents.login', 'agents.loginCode', 'agents.loginCancel', 'agents.check', 'accounts.scan', 'backup.verify', 'backup.recovery',
   // creates that would make the caller's own things named with the other person's word (each one checked on its own below)
-  'bots.create', 'bots.groups.create', 'persons.create', 'accounts.add', 'images.mark', 'actions.save', 'projects.create', 'inbox.sections.create', 'inbox.sections.rename']);
+  'persons.create', 'accounts.add', 'images.mark', 'actions.save', 'projects.create', 'inbox.sections.create', 'inbox.sections.rename']);
 // This PC's own tools (the owner's, no person's content): network, Android, GitHub, expert view.
 const PC_TOOL = /^(net|android|github|expert)\./;
 const methods = () => Object.keys(POLICY).filter((m) => !m.endsWith('.*') && !SKIP.has(m) && !PC_TOOL.test(m));
 const word = (who) => (who === 'ana' ? 'qzana' : 'qzleo');
 // What may not show up for the other person: the mark and their folders (as text and as JSON).
 const marks = (who) => [word(who), R[who].projectPath, JSON.stringify(R[who].projectPath ?? '').slice(1, -1)].filter(Boolean);
-// An error may repeat what the caller typed («no hay ningún bot llamado …»): that is not the other person's.
+// An error may repeat what the caller typed («no hay ningún proyecto llamado …»): that is not the other person's.
 const typed = (params) => Object.values(params).flat().filter((v) => typeof v === 'string' && v.length > 3).sort((a, b) => b.length - a.length);
 const unTyped = (message, params) => typed(params).reduce((m, v) => m.split(v).join('·'), String(message));
 // A picture comes back as a data URL: its bytes count too.
@@ -52,14 +52,11 @@ const leaks = (value, who) => { let s = typeof value === 'string' ? value : JSON
 // The crafted params aimed at someone's things.
 function variants(r, person) {
   const mention = `@tarea:${r.task} @conversacion:${r.session} @bitacora:${r.project} @bitacora:general`;
-  const common = { conversation: r.conv, project: r.project, name: r.project, item: r.botLine, person, bot: r.bot, q: word(r.who), text: `hola ${mention}`, title: 'x', description: `x ${mention}`, every: 'daily', key: `c${r.conv}`, which: 'mine', type: 'project', right: 'view' };
+  const common = { conversation: r.conv, project: r.project, name: r.project, item: r.line, person, q: word(r.who), text: `hola ${mention}`, title: 'x', description: `x ${mention}`, every: 'daily', key: `c${r.conv}`, which: 'mine', type: 'project', right: 'view' };
   return [
-    { ...common, id: r.task, depends_on: [r.task], members: [r.bot], paths: [r.file], path: r.file, images: [r.image] },
+    { ...common, id: r.task, depends_on: [r.task], paths: [r.file], path: r.file, images: [r.image] },
     { ...common, id: r.session, key: `s${r.session}` },
-    { ...common, id: r.bot, key: `t${r.task}` },
-    { ...common, id: r.botName, name: r.botName },
-    { ...common, id: r.group },
-    { ...common, id: r.reminder },
+    { ...common, id: r.task, key: `t${r.task}` },
     { ...common, id: r.schedule },
     { ...common, id: r.conv, account: 'claude' },
     { ...common, id: person, project: 'general' },
@@ -115,13 +112,6 @@ async function seed(who) {
     r.task = (await A.call('tasks.create', { project: r.project, title: `${w} tarea`, description: `${w} hacer algo` })).id;
     r.schedule = (await A.call('schedules.create', { project: r.project, title: `${w} programada`, description: `${w} cada día`, every: 'daily' })).id;
     r.session = (await A.call('sessions.create', { agent: 'claude', project: r.project, title: `${w} sesión` })).id;
-    const bot = await A.call('bots.create', { name: `${w}bot`, role_text: `${w} ayuda` });
-    r.bot = bot.id; r.botName = bot.name;
-    r.group = (await A.call('bots.groups.create', { name: `${w} grupo`, members: [bot.id] })).id;
-    r.reminder = (await A.call('bots.reminders.create', { id: bot.id, text: `${w} recordatorio`, when: new Date(Date.now() + 86_400_000).toISOString() })).id;
-    await A.call('bots.memory.set', { id: bot.id, text: `${w} memoria del bot` });
-    await A.call('bots.memory.set', { id: 'global', text: `${w} memoria global` });
-    r.botLine = (await A.call('bots.chat', { id: bot.id })).conversation;
   } finally { if (who === 'leo') assert.equal((await A.call('persons.switch', { id: ana.id })).ok, true); }
   // The task's result (as if it had run), only in the database: what a dependency or a mention would hand on.
   const d = db(); try { d.prepare("UPDATE tasks SET status = 'done', result = ? WHERE id = ?").run(`${w} resultado privado`, r.task); } finally { d.close(); }
@@ -140,7 +130,7 @@ before(async () => {
   await A.call('accounts.lend', { id: 'claude', person: leo.id, daily_turns: 500, dev: true });
   await seed('ana');
   // Leo's numbers far from Ana's: a call with one of his ids never lands on another thing of hers by chance.
-  { const d = db(); try { for (const tb of ['tasks', 'schedules', 'bots', 'bot_groups', 'bot_reminders', 'conversations', 'chat']) { d.prepare('DELETE FROM sqlite_sequence WHERE name = ?').run(tb); d.prepare('INSERT INTO sqlite_sequence (name, seq) VALUES (?, 5000)').run(tb); } } finally { d.close(); } }
+  { const d = db(); try { for (const tb of ['tasks', 'schedules', 'conversations', 'chat']) { d.prepare('DELETE FROM sqlite_sequence WHERE name = ?').run(tb); d.prepare('INSERT INTO sqlite_sequence (name, seq) VALUES (?, 5000)').run(tb); } } finally { d.close(); } }
   await seed('leo');
   board = new Board();
 });
@@ -224,11 +214,7 @@ test('las herramientas del agente de Leo: ni mensajes, ni carpetas, ni cuentas d
   } finally { leoAgent.close(); anaAgent.close(); }
 });
 
-test('la exportación de Leo no lleva lo de Ana (ni sus recordatorios en un bot de Leo)', async () => {
-  // Leo shares his bot with Ana to talk; Ana sets a reminder of her own on it.
-  assert.equal((await A.call('persons.switch', { id: leo.id })).ok, true);
-  try { await A.call('shares.set', { type: 'bot', id: String(R.leo.bot), person: ana.id, right: 'talk' }); } finally { assert.equal((await A.call('persons.switch', { id: ana.id })).ok, true); }
-  await A.call('bots.reminders.create', { id: R.leo.bot, text: 'qzana en el bot de Leo', when: new Date(Date.now() + 86_400_000).toISOString() });
+test('la exportación de Leo no lleva lo de Ana', async () => {
   assert.equal((await A.call('persons.switch', { id: leo.id })).ok, true);
   let out;
   try { out = await A.call('data.exportPerson', {}); } finally { assert.equal((await A.call('persons.switch', { id: ana.id })).ok, true); }

@@ -38,7 +38,7 @@ export function DialogDescription({ className, ...props }) { return <DialogPrimi
 // 3.6 (M2): the trigger shows the chosen option itself (SelectPrimitive.Value with children). Without them, Radix copies the
 // option's text into the trigger through a portal into the same <span> React also writes the placeholder in, and with the
 // list kept in a detached fragment while closed, React 19 could fail with «insertBefore… is not a child of this node» when
-// the screen changed (seen going from a bot's chat to its editor). With children there is one writer: options may carry
+// the screen changed (seen going from one screen to another). With children there is one writer: options may carry
 // an icon (an avatar) again. o.icon: drawn before the label in the list and in the trigger.
 export function Select({ value, onValueChange, options, placeholder, className, size = 'default', disabled, title, 'data-testid': testid, ...props }) {
   const chosen = options.find((o) => o.value === value) ?? null;

@@ -112,12 +112,6 @@ export function orbMcpServer(env = {}) {
   return { command: process.execPath, args: [script], env: { ELECTRON_RUN_AS_NODE: '1', ...env } };
 }
 
-// 3.5: the tools of one of the user's bots (src/mcp/bot.mjs).
-export function botMcpServer(env = {}) {
-  const script = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'mcp', 'bot.mjs');
-  return { command: process.execPath, args: [script], env: { ELECTRON_RUN_AS_NODE: '1', ...env } };
-}
-
 // Bounded text for the UI (tool inputs and outputs can be huge).
 export const clip = (value, max = 4000) => {
   const s = typeof value === 'string' ? value : JSON.stringify(value ?? '');

@@ -3,7 +3,7 @@
 // Datos, Avanzado and Acerca de. «Mi perfil» is not a section: the user menu opens it in this same window, on its own.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { DatabaseBackup, Settings, FlaskConical, FolderOpen, HeartPulse, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, Wrench, ChevronRight, SlidersHorizontal, Radar, Cpu, Info, ExternalLink, ShieldBan } from 'lucide-react';
+import { DatabaseBackup, Settings, FlaskConical, FolderOpen, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, Wrench, ChevronRight, SlidersHorizontal, Radar, Cpu, Info, ExternalLink, ShieldBan } from 'lucide-react';
 import { ToolIcon } from '@/components/agent-icon.jsx';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, APPEARANCE_DEFAULTS } from '../../core/appearance.mjs';
 import { PRODUCT, AUTHOR } from '../../core/product.mjs';
@@ -26,7 +26,7 @@ import { play } from '@/lib/sounds.js';
 import { MagicLinkPanel, SubSection } from './magic-link.jsx';
 import { PersonsCard, ProfileCards } from './persons.jsx';
 import { DataCards } from './data.jsx';
-import { showPersonUi, showPersonsSettings, isOwner } from '@/lib/persons.js';
+import { showPersonUi, showPersonsSettings, isOwner, PREVIEWS, previewOf } from '@/lib/persons.js';
 
 async function save(patch, ok = t('settings.saved')) {
   const config = await act(call('config.save', { patch }), ok);
@@ -390,9 +390,9 @@ function MobileCard() {
           <Row label={t('settings.mobileLanHttp')} hint={t('settings.mobileLanHttpHint')}><Switch data-testid="mobile-lan-http" checked={Boolean(st.lanHttp)} onCheckedChange={(on) => configure({ lanHttp: on })} /></Row>
         ) : null}
         {st.enabled ? (
-          <Row label={t('settings.mobilePreview')} hint={t(`settings.mobilePreview.${st.preview ?? 'chat'}Hint`)}>
-            <Select value={st.preview ?? 'chat'} onValueChange={(preview) => configure({ preview })} data-testid="mobile-preview" title={t('settings.mobilePreview')}
-              options={['all', 'chat', 'none'].map((v) => ({ value: v, label: t(`settings.mobilePreview.${v}`) }))} />
+          <Row label={t('settings.mobilePreview')} hint={t(`settings.mobilePreview.${previewOf(st.preview)}Hint`)}>
+            <Select value={previewOf(st.preview)} onValueChange={(preview) => configure({ preview })} data-testid="mobile-preview" title={t('settings.mobilePreview')}
+              options={PREVIEWS.map((v) => ({ value: v, label: t(`settings.mobilePreview.${v}`) }))} />
           </Row>
         ) : null}
       </CardContent>
@@ -512,21 +512,6 @@ function InterfaceCard({ c }) {
 }
 
 // Expert mode: an IDE-like view (PC only) with the panels the user picks.
-// 2.7: the bridge with Open Control Edge (engine/bridge.mjs): on unless turned off. 3.7: its own card (it was part of
-// «Monitoreo del equipo», which is gone), config oce.share. 3.7 (WS8): «Crear Optimus automáticamente», oce.optimus.
-function OceCard({ c }) {
-  const t = useT();
-  return (
-    <Card data-testid="oce-card">
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><HeartPulse className="text-success size-5" /><div><CardTitle>{t('settings.oce')}</CardTitle><CardDescription>{t('settings.oceDesc')}</CardDescription></div></CardHeader>
-      <CardContent>
-        <Row label={t('settings.oceShare')}><Switch checked={c.oce?.share !== false} onCheckedChange={(share) => save({ oce: { share } }, share ? t('settings.oceShared') : t('settings.oceNotShared'))} data-testid="oce-share" /></Row>
-        <Row label={t('settings.oceOptimus')} hint={t('settings.oceOptimusHint')}><Switch checked={c.oce?.optimus !== false} onCheckedChange={(optimus) => save({ oce: { optimus } }, optimus ? t('settings.oceOptimusOn') : t('settings.oceOptimusOff'))} data-testid="oce-optimus" /></Row>
-      </CardContent>
-    </Card>
-  );
-}
-
 function ExpertCard({ c }) {
   const t = useT();
   const on = c.expert?.enabled === true; const panels = c.expert?.panels ?? {};
@@ -674,9 +659,8 @@ const SECTIONS = [
     cards: (c, app, me) => <><MagicLinkPanel grouped users={showPersonsSettings(me) ? <PersonsCard /> : null} phoneAccess={<MobileCard />} /></> },
   { id: 'agentes', icon: Cpu, cards: (c) => <><ChatCard c={c} /><TasksCard c={c} />{bridge.mobile ? null : <TestCard />}</> },
   { id: 'datos', icon: DatabaseBackup, when: (me) => isOwner(me), cards: () => <DataCards /> },
-  // 3.7: «Monitoreo» is no longer here (a bot with the «Equipo» tools does it); sharing with Open Control Edge stays.
   { id: 'avanzado', icon: Wrench, groups: () => ['herramientas', ...(fullPc() ? ['experto'] : [])],
-    cards: (c) => <><SubSection id="herramientas" title={t('settings.group.herramientas')}><BrowserCard c={c} /><McpCard c={c} /><ProtectedCard c={c} /><AndroidCard />{fullPc() ? <OceCard c={c} /> : null}</SubSection>
+    cards: (c) => <><SubSection id="herramientas" title={t('settings.group.herramientas')}><BrowserCard c={c} /><McpCard c={c} /><ProtectedCard c={c} /><AndroidCard /></SubSection>
       {/* 2.7.3: Orb Light (the portable .exe) leaves out God mode. */}
       {fullPc() ? <SubSection id="experto" title={t('settings.group.experto')}><ExpertCard c={c} /></SubSection> : null}</> },
   { id: 'acerca', icon: Info, groups: ['contribuye', 'apps'],

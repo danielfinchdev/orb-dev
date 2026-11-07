@@ -6,8 +6,6 @@ export default {
   'msg.notes.deny': 'Reject',
   'msg.notes.open': 'Open',
   'msg.notes.expired': 'This notification has expired. Open it in Orb.',
-  'notes.pinTitle': 'Confirm with your PIN',
-  'notes.pinDesc': 'Enter your PIN to approve this.',
   'notes.count': '{n} new messages',
   'notes.sent': 'Reply sent',
   'notes.allowed': 'Approved',

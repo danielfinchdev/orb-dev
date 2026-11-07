@@ -1,7 +1,6 @@
 // 3.7: what is left of features Orb no longer has, tidied once when the engine starts. «Monitoreo del equipo» and Opti Bot
-// (2.7–3.6) are gone: what they did is a bot's «Equipo» tools now (src/mcp/bot.mjs › pc_*, cards «pc»). Nothing of the
-// user's is deleted: Opti Bot's conversation stays as an archived chat (its proposals still waiting say they expired),
-// and its settings leave orb.json except sharing with Open Control Edge, which becomes oce.share.
+// (2.7–3.6) are gone. Nothing of the user's is deleted: Opti Bot's conversation stays as an archived chat (its proposals
+// still waiting say they expired), and its settings leave orb.json.
 import fs from 'node:fs';
 import { ctx } from '../core/context.mjs';
 import { writeJson } from '../core/home.mjs';
@@ -11,8 +10,7 @@ export function migrateRetiredConfig(file = ctx.paths?.config) {
   if (!file || !fs.existsSync(file)) return false;
   let raw; try { raw = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return false; }
   if (!raw || typeof raw !== 'object' || raw.monitor === undefined) return false;
-  const { monitor, ...rest } = raw;
-  if (monitor?.shareWithOce === false && rest.oce?.share === undefined) rest.oce = { ...(rest.oce ?? {}), share: false };
+  const { monitor: _monitor, ...rest } = raw;
   writeJson(file, rest);
   return true;
 }

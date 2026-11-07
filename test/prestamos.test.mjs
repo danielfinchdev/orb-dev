@@ -1,6 +1,6 @@
 // 3.6 «Personas» (WS3): préstamos de cuentas y topes. Ana presta su Claude a Leo con un tope diario: Leo trabaja con él
 // hasta el tope y entonces para, con un aviso solo para Leo; la reserva de Ana le corta al llegar al 80 %; sin préstamo
-// Leo no puede elegir la cuenta de Ana por ningún parámetro; los topes de un bot paran al bot; el día es el de Leo.
+// Leo no puede elegir la cuenta de Ana por ningún parámetro; el día es el de Leo.
 import { tempHome, until } from './helpers.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,7 +12,7 @@ import { Sessions } from '../src/engine/sessions.mjs';
 import { Orchestrator } from '../src/engine/orchestrator.mjs';
 import { Scheduler } from '../src/engine/scheduler.mjs';
 import { buildApi } from '../src/engine/api.mjs';
-import { checkSpend, recordSpend, pickAccount, accountsFor, usageByPerson, dayOf } from '../src/core/budget.mjs';
+import { checkSpend, recordSpend, pickAccount, accountsFor, usageByPerson, dayOf, nextMidnight } from '../src/core/budget.mjs';
 import { localDay } from '../src/core/tz.mjs';
 
 let t; let board; let sessions; let api; let ana; let leo; let asAna; let asLeo; const events = [];
@@ -98,22 +98,20 @@ test('un préstamo vencido o retirado ya no sirve; solo para bots no vale para p
   assert.equal(pickAccount(board, { person: leo, agent: 'claude' }), null);
   await call(asAna, 'accounts.lend', { id: 'claude', person: leo, daily_turns: 5, bots: true, dev: false });
   assert.equal(pickAccount(board, { person: leo, agent: 'claude' }), null, 'para programar, no');
-  assert.equal(pickAccount(board, { person: leo, agent: 'claude', bot: 1 })?.id, 'claude', 'para sus bots, sí');
+  assert.equal(pickAccount(board, { person: leo, agent: 'claude', purpose: 'bot' })?.id, 'claude', 'para lo suyo, sí');
   await call(asAna, 'accounts.unlend', { id: 'claude', person: leo });
   assert.equal(checkSpend(board, { person: leo, account: 'claude' }).reason, 'noLoan');
   await assert.rejects(call(asAna, 'accounts.lend', { id: 'claude', person: ana }), /ya es de ese usuario/);
 });
 
-test('los topes de un bot lo paran al llegar; el día es el de quien gasta', () => {
-  const bot = Number(board.run("INSERT INTO bots (name, created_at, updated_at, person_id, caps) VALUES ('Casa', 'now', 'now', ?, ?)", leo, JSON.stringify({ daily_turns: 2 })).lastInsertRowid);
-  assert.equal(checkSpend(board, { person: leo, bot }).ok, true);
-  recordSpend(board, { person: leo, bot, usage: { inputTokens: 10, outputTokens: 5, costUsd: 0.01 } });
-  recordSpend(board, { person: leo, bot, usage: {} });
-  const c = checkSpend(board, { person: leo, bot });
-  assert.equal(c.reason, 'botCap');
-  assert.ok(c.resetsAt > Date.now() && c.resetsAt - Date.now() <= 24 * 3_600_000 + 60_000, 'vuelve en su medianoche');
-  assert.equal(localDay(new Date(c.resetsAt), 'Pacific/Kiritimati') !== dayOf(board, leo), true);
-  const row = board.one('SELECT day, tokens_in, tokens_out, usd FROM usage_ledger WHERE bot_id = ? ORDER BY id LIMIT 1', bot);
+test('el día del gasto es el de quien gasta, y su medianoche la suya', () => {
+  const session = 'gasto-de-leo';
+  recordSpend(board, { person: leo, session, usage: { inputTokens: 10, outputTokens: 5, costUsd: 0.01 } });
+  recordSpend(board, { person: leo, session, usage: {} });
+  const resetsAt = nextMidnight(board, leo);
+  assert.ok(resetsAt > Date.now() && resetsAt - Date.now() <= 24 * 3_600_000 + 60_000, 'su medianoche');
+  assert.equal(localDay(new Date(resetsAt), 'Pacific/Kiritimati') !== dayOf(board, leo), true);
+  const row = board.one('SELECT day, tokens_in, tokens_out, usd FROM usage_ledger WHERE session_id = ? ORDER BY id LIMIT 1', session);
   assert.deepEqual([row.day, row.tokens_in, row.tokens_out, row.usd], [localDay(new Date(), 'Pacific/Kiritimati'), 10, 5, 0.01]);
   assert.ok(usageByPerson(board).find((p) => p.person === leo).today.turns >= 4);
 });

@@ -3,9 +3,11 @@
 
 export const ROLES = ['owner', 'user'];
 export const RIGHTS = ['view', 'talk', 'edit'];
-export const CAPS = ['dev', 'house', 'approveHouse'];
-export const PREVIEWS = ['all', 'chat', 'none'];
-export const SHARE_TYPES = ['bot', 'group', 'project'];
+export const CAPS = ['dev'];
+// 3.8: «all» (before, the bots' messages too) shows the same as «chat»: it is offered no more and reads as «chat».
+export const PREVIEWS = ['chat', 'none'];
+export const previewOf = (v) => (v === 'none' ? 'none' : 'chat');
+export const SHARE_TYPES = ['project'];
 
 // state.me: { person: { id, name, role, language, tz, hasPin }, role, personsCount } (persons.me), or null on an Orb
 // before 3.6 (then it behaves as one person).
@@ -62,7 +64,7 @@ export function loanLeftText(loan) {
   if (l.usd != null) return { key: 'persons.loan.leftUsd', vars: { n: l.usd } };
   return { key: 'persons.loan.noCap', vars: {} };
 }
-// What the «Prestar a…» form sends (accounts.lend): empty caps are no cap; at least bots or programming.
+// What the «Prestar a…» form sends (accounts.lend): empty caps are no cap; 3.8: only to program (no bots).
 export function lendPayload(account, v) {
   const n = (x) => (x === '' || x == null || !Number.isFinite(Number(x)) ? null : Number(x));
   const days = n(v.days);
@@ -70,18 +72,9 @@ export function lendPayload(account, v) {
     id: account, person: v.person,
     daily_turns: n(v.turns), daily_tokens: n(v.tokens), daily_usd: n(v.usd),
     reserve_pct: Math.min(95, Math.max(0, n(v.reserve) ?? 20)),
-    bots: v.bots !== false, dev: v.dev === true,
+    bots: false, dev: true,
     expires_at: days && days > 0 ? new Date(Date.now() + days * 86_400_000).toISOString() : null
   };
-}
-
-// The bot editor's account picker: the person's own accounts of that agent, then the ones lent to them for bots.
-export function botAccountChoices({ accounts = [], loans = null, me = null, ownerId = null, agent }) {
-  const mine = me?.person?.id ?? ownerId;
-  const own = accounts.filter((a) => a.agent === agent && accountOwner(a, ownerId) === mine && a.enabled !== false).map((a) => ({ id: a.id, label: a.label, lent: false }));
-  const got = (loans?.got ?? []).filter((l) => l.bots && !l.expired && (accounts.find((a) => a.id === l.account)?.agent ?? agent) === agent && !own.some((o) => o.id === l.account))
-    .map((l) => ({ id: l.account, label: l.label ?? l.account, lent: true, lender: l.lender }));
-  return [...own, ...got];
 }
 
 // Share dialog: who it can go to (everyone but oneself and the resource's person), with the right each one has now.
@@ -90,8 +83,8 @@ export function shareRows(persons = [], shares = [], { me = null, owner = null }
   return persons.filter((p) => p.id !== me && p.id !== owner).map((p) => ({ id: p.id, name: p.name, right: has.get(p.id) ?? null }));
 }
 // «Compartido conmigo» (shares.list().withMe), grouped by kind and matched with the lists the store already has.
-export function sharedWithMe(withMe = [], { bots = [], groups = [], projects = [] } = {}) {
-  const find = (type, id) => (type === 'bot' ? bots.find((b) => String(b.id) === String(id)) : type === 'group' ? groups.find((g) => String(g.id) === String(id)) : type === 'project' ? projects.find((p) => p.name?.toLowerCase() === String(id).toLowerCase()) : null);
+export function sharedWithMe(withMe = [], { projects = [] } = {}) {
+  const find = (type, id) => (type === 'project' ? projects.find((p) => p.name?.toLowerCase() === String(id).toLowerCase()) : null);
   return withMe.filter((s) => SHARE_TYPES.includes(s.type)).map((s) => { const x = find(s.type, s.id); return { ...s, name: x?.name ?? String(s.id), icon: x?.icon ?? null, found: Boolean(x), item: x ?? null }; });
 }
 // The badge «Compartido por Ana» on a resource the caller does not own (its person field, the shares of the caller).

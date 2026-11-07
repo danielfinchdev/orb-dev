@@ -23,9 +23,8 @@
 //   CIERRA_Y_CUELGA    closes its task (orb_update_task done) and then never ends its turn
 //   MANDA_MENSAJE <agente> <texto>   sends a message to another agent through Orb (orb_send_message)
 //   LEE <ruta>         (3.6, one per line) reads a file: the real guard decides, with the session's confinement
-//   BOT_CALL <tool> <json>           (3.5, one per line) calls a tool of the bot's own MCP server (src/mcp/bot.mjs)
 //   ORB_FAKE_SCRIPT=<file.json>     (3.6, screenshots) [{ "when": "text", "reply": "…", "calls": [["tool", {args}]] }]: a
-//                      message containing «when» gets that natural reply (and makes those bot tool calls, silently),
+//                      message containing «when» gets that natural reply (and makes those Orb tool calls, silently),
 //                      so the screenshots show real-looking conversations instead of the test keywords.
 //   Task Review        a review prompt: answers "VEREDICTO: CORRECTO" (or "CON FALLOS" when the reviewed work says FALLOS)
 //
@@ -189,15 +188,8 @@ function createFakeLive(agent, label, caps, o) {
     // 3.6: a scripted, natural answer for the screenshots (ORB_FAKE_SCRIPT); its tool calls leave no notes in the reply.
     const scripted = SCRIPT.find((x) => x.when && text.includes(x.when)) ?? null;
     for (const [tool, args] of scripted?.calls ?? []) {
-      await mcpCall(o.mcpServers?.bot, tool, args ?? {});
-      item('tool', 'tool', { id: `t${++seq}`, name: `bot:${tool}`, input: JSON.stringify(args ?? {}) });
-    }
-    // 3.5: a bot uses its own tools (the real src/mcp/bot.mjs, started as the real agents start it).
-    for (const m of scan.matchAll(/^BOT_CALL (\w+) (\{.*\})\s*$/gm)) {
-      let args = {}; try { args = JSON.parse(m[2]); } catch { /* bad test json */ }
-      const out = await mcpCall(o.mcpServers?.bot, m[1], args);
-      item('tool', 'tool', { id: `t${++seq}`, name: `bot:${m[1]}`, input: m[2] });
-      notes.push(`${m[1]}: ${out}`);
+      await mcpCall(orb, tool, args ?? {});
+      item('tool', 'tool', { id: `t${++seq}`, name: tool, input: JSON.stringify(args ?? {}) });
     }
     // 3.6: LEE <ruta> (one per line): reading a file, as the real guard decides it (with the session's confinement).
     for (const m of scan.matchAll(/^LEE (.+)$/gm)) {
@@ -259,7 +251,7 @@ function createFakeLive(agent, label, caps, o) {
     if (closed) throw new Error(`la sesión de ${label} se ha cerrado`);
     if (turn && !turn.done) throw new Error('el agente sigue trabajando');
     turn = new Turn(); const current = turn; turns++; steers = []; slowStop = /PARA_LENTO/.test(text);
-    record({ turn: turns, text, ...(turns === 1 && o.systemPrompt ? { systemPrompt: o.systemPrompt } : {}), ...(turns === 1 && o.tools ? { tools: o.tools } : {}), ...(turns === 1 ? { mcp: Object.keys(o.mcpServers ?? {}), bot: Boolean(o.bot) } : {}) });
+    record({ turn: turns, text, ...(turns === 1 && o.systemPrompt ? { systemPrompt: o.systemPrompt } : {}), ...(turns === 1 && o.tools ? { tools: o.tools } : {}), ...(turns === 1 ? { mcp: Object.keys(o.mcpServers ?? {}) } : {}) });
     if (/REVIENTA/.test(text)) { turn = null; throw new Error('el adaptador falso revienta'); }
     if (turns === 1) { onEvent({ type: 'session', id: sessionId }); item('system', 'status', `${label} (falso)${model ? ` · ${model}` : ''}`); }
     work(text, current).catch((error) => { if (!current.done) { item('error', 'text', error.message); current.finish({ isError: true, final: `${label}: ${error.message}` }); } });

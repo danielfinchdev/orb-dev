@@ -16,7 +16,6 @@ const transport = (() => {
   throw new Error('el motor debe arrancarse desde la app');
 })();
 let remote = null; // phone access (src/engine/remote.mjs), when turned on
-let replica = null; // 3.7 (WS3): the bots' homes (src/engine/replica.mjs)
 let devControl = null; // 3.1: the developer's control line (src/engine/dev-control.mjs), only in Orb.dev
 // 3.6 «Personas»: every event goes through the router (src/engine/router.mjs), which works out once who it is for and
 // gives each sink only what its person may see: this PC's window (whoever sits at it), the phones and browsers and the
@@ -33,8 +32,6 @@ const LOCK_EVENTS = /^(persons:|app:lock)/;
 const LOCKED_OK = new Set(['persons.unlock', 'app.lockState', 'app.state']);
 
 let api = null;
-let bridge = null; // 2.7: the files shared with Open Control Edge (engine/bridge.mjs)
-let oce = null; // 3.7 (WS8): Open Control Edge and Optimus (engine/oce.mjs)
 let logFile = null;
 const log = (line) => { try { if (logFile) { rotateIfBig(logFile); fs.appendFileSync(logFile, `${new Date().toISOString()} ${line}\n`); } } catch { /* never fatal */ } };
 process.on('uncaughtException', (error) => log(`uncaughtException: ${error?.stack ?? error}`));
@@ -136,15 +133,10 @@ async function start(home, version, secret, browser) {
   const scheduler = new Scheduler(board, sessions, { log, orchestrator, emit });
   const { createRemote } = await import('./remote.mjs');
   const remoteRef = { current: null };
-  // 3.5: the user's bots (their reminders and messages are looked at every second).
-  const { Bots } = await import('./bots.mjs');
-  const bots = new Bots(board, { emit, log, push: (note) => remoteRef.current?.push?.(note) }).start();
-  // 3.6 (WS4): a bot or a group no longer shared with someone: their lanes stop (bots.unshared) and they reload.
-  bots.onRevoke = (person) => router?.revoke([person]);
   // 3.7: Monitoreo del equipo and Opti Bot are gone: their settings and conversation are tidied once (engine/retired.mjs).
   { const { tidyRetired } = await import('./retired.mjs'); tidyRetired(board, log); }
-  api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, bots });
-  // 3.6: a turn refused by a loan's limits (or a bot's caps): a notice and a push to the person who spends, and only them.
+  api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef });
+  // 3.6: a turn refused by a loan's limits: a notice and a push to the person who spends, and only them.
   const blocked = (person, why) => {
     const who = person && !board.isOwnerPerson(person) ? person : null;
     board.notice(why, 'warning', { person: who });
@@ -153,19 +145,6 @@ async function start(home, version, secret, browser) {
   sessions.onBlocked = (s, why) => blocked(s?.person_id ?? null, why);
   orchestrator.onBlocked = (c, why) => blocked(c?.person_id ?? null, why);
   remote = remoteRef.current = createRemote({ board, api, log, emit, version });
-  // 3.7 (WS3): one home per bot (src/engine/replica.mjs). 3.8: Orbs no longer link with each other, so every bot runs
-  // here; the bots' step of 3.8 removes it with the bots.
-  {
-    const { createReplica } = await import('./replica.mjs');
-    replica = remoteRef.replica = createReplica({ board, bots, emit, log, api });
-    if (!ctx.moved) replica.start();
-  }
-  // 3.7 (WS8): Open Control Edge on this PC (read-only) and its bot Optimus, made once.
-  {
-    const { createOce } = await import('./oce.mjs');
-    oce = createOce({ board, bots, log, replica: () => replica });
-    if (!ctx.moved) oce.start();
-  }
   // 3.1: only an unpacked Orb.dev started with ORB_DEV_CONTROL=1 (main.mjs decides; never an installed Orb).
   if (process.env.ORB_DEV_CONTROL === '1') {
     const { startDevControl } = await import('./dev-control.mjs');
@@ -233,12 +212,6 @@ async function start(home, version, secret, browser) {
     const { refreshPlans } = await import('./plans.mjs');
     setTimeout(() => { refreshPlans(board, { log }).catch(() => {}); }, Number(process.env.ORB_MODELS_DELAY_MS ?? 3000) + 2000).unref?.();
   }
-  // 2.7: the bridge with Open Control Edge (engine/bridge.mjs). Only on Windows, only for the app's own engine (main.mjs
-  // sets ORB_BRIDGE) and never with the test agents: made-up runs must not reach OCE as real data.
-  if (process.platform === 'win32' && process.env.ORB_BRIDGE === '1' && !process.env.ORB_FAKE_AGENTS) {
-    const { startBridge } = await import('./bridge.mjs');
-    bridge = startBridge({ board, version, busy: () => orchestrator.busy, log });
-  }
   // 2.6: the reports the assistant still owed when the app was closed come back.
   const owed = orchestrator.resume();
   if (owed) log(`asistente: ${owed} aviso(s) pendientes recuperados`);
@@ -255,10 +228,7 @@ transport.on(async (msg) => {
   if (msg.type === 'shutdown') {
     // The phone access may have to turn off `tailscale serve` first (a few seconds at most).
     try { api?.shutdown(); } catch { /* closing anyway */ }
-    try { bridge?.stop(); } catch { /* closing anyway */ }
     try { devControl?.stop(); } catch { /* closing anyway */ }
-    try { oce?.stop(); } catch { /* closing anyway */ }
-    try { replica?.stop(); } catch { /* closing anyway */ }
     Promise.race([Promise.resolve(remote?.stop()).catch(() => {}), new Promise((r) => setTimeout(r, 4000))]).finally(() => setTimeout(() => process.exit(0), 300));
     return;
   }

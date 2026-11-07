@@ -154,3 +154,28 @@ test('la tarjeta de aprobación dice en una línea qué quiere hacer el agente',
   assert.equal(describeAction({ tool: 'Permisos', title: 'Salir de la carpeta' }), 'Salir de la carpeta');
   assert.equal(describeAction({ tool: 'Bash', command: 'x'.repeat(1000) }).length, 400);
 });
+
+// «Cosas que nadie toca» (config.protected): by default the password managers' folders and containers (DEFAULT_PROTECTED),
+// whatever the permission, and the user's own list replaces it.
+test('lo protegido (de serie, los gestores de contraseñas) no se toca nunca, ni con acceso total', async () => {
+  const { ctx } = await import('../src/core/context.mjs');
+  const before = ctx.config;
+  try {
+    ctx.config = { ...(before ?? {}), protected: undefined };
+    const deny = decide({ permission: 'leer', tool: 'Read', paths: ['/srv/vaultwarden/data/db.sqlite3'] });
+    assert.equal(deny.decision, 'deny'); assert.match(deny.reason, /protegido \(vaultwarden\)/);
+    assert.equal(decide({ permission: 'total', tool: 'Bash', command: 'docker exec vaultwarden ls' }).decision, 'deny', 'ni con acceso total');
+    assert.equal(decide({ permission: 'total', tool: 'Bash', command: 'docker restart bitwarden' }).decision, 'deny');
+    assert.equal(decide({ permission: 'total', tool: 'Read', paths: ['/opt/vw-data/db.sqlite3'] }).decision, 'deny');
+    assert.equal(decide({ permission: 'total', tool: 'Bash', command: 'tar czf x.tgz /srv/bwdata' }).decision, 'deny');
+    assert.equal(decide({ permission: 'total', tool: 'Read', paths: ['C:\\Users\\u\\.ssh\\id_ed25519'] }).decision, 'deny', 'las claves de .ssh');
+    assert.equal(decide({ permission: 'total', tool: 'Read', paths: ['/home/u/.ssh/known_hosts'] }).decision, 'allow', 'lo demás de .ssh sí');
+    assert.equal(decide({ permission: 'total', tool: 'Bash', command: 'cat /data/keepassxc-notes.txt' }).decision, 'deny');
+    assert.equal(decide({ permission: 'total', tool: 'Bash', command: 'npm run compass' }).decision, 'allow', 'una palabra entera, no un trozo');
+    // The user's list: an entry of theirs is kept, and removing a default one frees it.
+    ctx.config = { ...(before ?? {}), protected: ['bitwarden', '/srv/copias', 'mi-nas'] };
+    assert.equal(decide({ permission: 'total', tool: 'Bash', command: 'rm -r /srv/copias/2024' }).decision, 'deny');
+    assert.match(decide({ permission: 'total', tool: 'Bash', command: 'docker restart mi-nas' }).reason, /mi-nas/);
+    assert.equal(decide({ permission: 'total', tool: 'Bash', command: 'docker exec vaultwarden ls' }).decision, 'allow', 'ya no está en la lista');
+  } finally { ctx.config = before; }
+});

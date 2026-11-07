@@ -3,7 +3,7 @@
 // are the only ones that sign approvals or publish.
 // 3.6: the dispatcher authorizes every call first (src/core/authz.mjs with the rules of src/core/policy.mjs) and the
 // methods live in several files: here the conversations, chat, tasks, sessions, projects, schedules, logs, whiteboard and
-// usage; api-bots.mjs, api-link.mjs, api-accounts.mjs, api-persons.mjs and api-data.mjs the rest. Each method gets
+// usage; api-link.mjs, api-accounts.mjs, api-persons.mjs and api-data.mjs the rest. Each method gets
 // (params, principal).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -34,7 +34,6 @@ import { projectIcon, setProjectIcon, clearProjectIcon, renameProjectIcon } from
 import { git, slug } from '../core/workspace.mjs';
 import { authorize, principalOf, shapeFor, can, scopeSql, rightOn, ownerOf, RIGHTS, audit, AuthzError } from '../core/authz.mjs';
 import { fld, fail, str, int, oneOf, images, DECISION } from './api-common.mjs';
-import { botMethods } from './api-bots.mjs';
 import { linkMethods } from './api-link.mjs';
 import { accountMethods } from './api-accounts.mjs';
 import { personMethods } from './api-persons.mjs';
@@ -46,7 +45,7 @@ import { shareApi } from './api-shares.mjs';
 
 export { fail, str, int, oneOf } from './api-common.mjs';
 
-export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef = { current: null }, bots = null }) {
+export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef = { current: null } }) {
   const realHome = (() => { try { return fs.realpathSync(ctx.home); } catch { return ctx.home; } })();
   let catalogCache = null; // models.catalog, for a few seconds (see there)
   const insideHome = (p) => { const rel = path.relative(realHome, p); return Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel); };
@@ -159,11 +158,11 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   const desktop = { person: null, locked: false };
   const desktopPrincipal = () => principalOf(board, { desktop: true, person: desktop.person });
   // 3.6: sharing (src/engine/api-shares.mjs).
-  const shares = shareApi({ board, sessions, bots, log });
+  const shares = shareApi({ board, sessions });
   const { setShare, removeShare } = shares;
   // What the other parts of the API share.
-  const shared = { board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, bots, project, conversationId, desktop, setShare, removeShare };
-  const data = dataApi(shared); shared.removePersonData = data.removePersonData; // 3.6 (WS5): backups, templates, moving the Orb, exporting and deleting a person
+  const shared = { board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, project, conversationId, desktop, setShare, removeShare };
+  const data = dataApi(shared); shared.removePersonData = data.removePersonData; // 3.6 (WS5): backups, moving the Orb, exporting and deleting a person
 
   const methods = {
     // 3.6: what each person sees is theirs (and what is shared with them): their approvals, tasks, conversations and lists.
@@ -346,7 +345,6 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const found = board.all(`SELECT DISTINCT s.id FROM sessions s LEFT JOIN session_items i ON i.session_id = s.id AND i.kind = 'text' WHERE s.kind = 'chat' AND ${ss.where} AND (lower(s.title) LIKE ? ESCAPE '!' OR lower(i.body) LIKE ? ESCAPE '!') LIMIT 100`, ...ss.args, like, like).map((r) => r.id);
       return { conversations, sessions: found };
     },
-    ...botMethods(shared),
     // 2.7: pictures the agents make (Codex image_gen): shown in the conversation, a zone marked to change, saved in the
     // project. Read only from the agents' own picture folders, Orb's folder and the projects; written only into Orb's
     // folder (the marked copy) and <project>/imagenes.
@@ -696,7 +694,6 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       // 3.6 (WS2): a notice for a person (and the owner too when it says so: owner: true).
       const noticeHint = (m) => (m?.person && m?.owner ? { persons: new Set([String(m.person), principalOf(board, { system: true }).person]) } : null);
       for (const r of rows) if (r.role === 'notice') { let m = null; try { m = JSON.parse(r.meta); } catch { /* plain */ } emit('notice', { body: oneLine(r.body, 300), tone: m?.tone ?? 'info', ...(m?.person ? { person: m.person } : {}) }, noticeHint(m)); } // 2.7: a passing notification, not a chat line (3.6: with whom it is for)
-      else if (r.conversation_id != null && bots?.owns(r.conversation_id)) continue;
       else if (r.role !== 'usuario') {
         let meta = null; try { meta = r.meta ? JSON.parse(r.meta) : null; } catch { /* plain */ }
         // 3.2: a plain line of no conversation (a task made by hand or by a schedule) passes by as a notification.
@@ -707,7 +704,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     // 3.6: the daily backup (03:00 in the owner's zone) and the persons' trash, looked at from the engine's loop.
     dataTick: () => data.tick(),
     // Running tasks stay "running": the next start continues them (scheduler.finish does not close them while closing).
-    shutdown() { bots?.shutdown(); scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stopAll(); orchestrator.closeLive(); log('motor detenido'); }
+    shutdown() { scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stopAll(); orchestrator.closeLive(); log('motor detenido'); }
   };
 }
 

@@ -8,7 +8,7 @@ import { oneLine } from './safety.mjs';
 import { localDay } from './tz.mjs';
 
 export const ROLES = ['owner', 'user'];
-export const CAPS = ['dev', 'house', 'approveHouse'];
+export const CAPS = ['dev'];
 // PIN: 4 to 12 digits, kept as scrypt(pin, salt). 5 wrong tries lock it; each further wrong try doubles the wait.
 export const PIN_TRIES = 5;
 const LOCK_FIRST_S = 30; const LOCK_MAX_S = 3600;
@@ -42,7 +42,7 @@ export function ensureOwner(board) {
   const id = newId();
   const name = oneLine(String(ctx.config?.userName ?? '').trim(), 40) || tr('msg.persons.ownerName');
   board.run("INSERT INTO persons (id, name, role, language, tz, caps, created_at) VALUES (?, ?, 'owner', ?, ?, ?, ?)", id, name,
-    ctx.config?.language ?? 'es', systemTz(), JSON.stringify({ dev: true, house: true, approveHouse: true }), now());
+    ctx.config?.language ?? 'es', systemTz(), JSON.stringify({ dev: true }), now());
   return id;
 }
 // The owner's id without creating one (null on a database before 3.6).
@@ -160,7 +160,7 @@ export function overview(board) {
     const usage = board.one('SELECT COALESCE(SUM(turns), 0) AS turns, COALESCE(SUM(tokens_in), 0) + COALESCE(SUM(tokens_out), 0) AS tokens, COALESCE(SUM(usd), 0) AS usd FROM usage_ledger WHERE person_id = ? AND day = ?', p.id, dayFor(p.id));
     const seen = board.one('SELECT MAX(last_seen) AS at FROM devices WHERE person_id = ?', p.id)?.at ?? null;
     return { id: p.id, name: p.name, role: p.role, hasPin: p.hasPin, caps: p.caps, devices: c('devices'), lastSeen: seen,
-      counts: { bots: c('bots'), botsPaused: c('bots', ' AND paused = 1'), groups: c('bot_groups'), conversations: c('conversations', ' AND bot_id IS NULL AND group_id IS NULL'), tasks: c('tasks'), schedules: c('schedules'), projects: c('projects'), reminders: c('bot_reminders', ' AND enabled = 1') },
+      counts: { conversations: c('conversations', ' AND bot_id IS NULL AND group_id IS NULL'), tasks: c('tasks'), schedules: c('schedules'), projects: c('projects') },
       today: { turns: Number(usage?.turns ?? 0), tokens: Number(usage?.tokens ?? 0), usd: Number(usage?.usd ?? 0) } };
   });
 }

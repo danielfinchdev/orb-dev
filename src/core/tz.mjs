@@ -1,11 +1,11 @@
-// 3.6: time zones without dependencies (only Intl). Reminders and schedules keep a WALL time («every day at 09:00») and
-// the zone of the person who made them; the instant (UTC) of each run is worked out here, so a server in UTC fires a
-// Madrid reminder at 09:00 in Madrid, also across both daylight-saving changes.
+// 3.6: time zones without dependencies (only Intl). Schedules keep a WALL time («every day at 09:00») and
+// the zone of the person who made them; the instant (UTC) of each run is worked out here, so a PC in UTC fires a
+// Madrid schedule at 09:00 in Madrid, also across both daylight-saving changes.
 //   zonedToUtc('2026-03-29T02:30', 'Europe/Madrid')  → Date (spring forward: the first valid minute, 03:00; fall back:
 //                                                       the first of the two 02:30)
 //   utcToZoned(date, tz)                              → { year, month, day, hour, minute, second, weekday, iso }
 //   nextLocalRun(rule, tz, after)                     → Date of the first run after `after` (or null)
-// WS3/WS4 call nextLocalRun from core/schedules and core/bots (one function for every repeating thing).
+// core/schedules calls nextLocalRun (one function for every repeating thing).
 const FORMATTERS = new Map();
 const formatter = (tz) => {
   let f = FORMATTERS.get(tz);

@@ -3,7 +3,7 @@
 // sign-in without a console, their devices, and exporting or deleting their data). On a phone, «Mi perfil» is a screen.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { UserPlus, Pencil, Trash2, KeyRound, PauseCircle, PlayCircle, Unplug, ShieldCheck, LogIn, Download, Smartphone, UserRound, ExternalLink, Plus, LoaderCircle, MoreHorizontal } from 'lucide-react';
+import { UserPlus, Pencil, Trash2, KeyRound, Unplug, ShieldCheck, LogIn, Download, Smartphone, UserRound, ExternalLink, Plus, LoaderCircle, MoreHorizontal } from 'lucide-react';
 import { PageHeader } from '@/components/page.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input } from '@/components/ui/basic.jsx';
@@ -11,7 +11,7 @@ import { Select, Checkbox, BubbleTip, DropdownMenu, DropdownMenuTrigger, Dropdow
 import { confirm, form } from '@/components/dialogs.jsx';
 import { PersonDot, askPin } from '@/components/person-menu.jsx';
 import { useStore, call, act, bridge, loadMe, refresh, personNameOf } from '@/lib/store.js';
-import { CAPS, PREVIEWS, pinOk } from '@/lib/persons.js';
+import { CAPS, PREVIEWS, previewOf, pinOk } from '@/lib/persons.js';
 import { ago } from '@/lib/utils.js';
 import { t as tNow, useT, useLocale } from '@/lib/i18n.js';
 import { LANGUAGES } from '../../core/i18n.mjs';
@@ -38,15 +38,14 @@ async function addPerson(reload) {
 }
 
 // 3.6 (DESIGN-SYSTEM §2.3): one row per user: avatar, name, «Admin» for the admin, one summary line and at most three
-// counts that matter (bots, chats, projects; numbers only, never what). The actions in one menu: Editar, Permisos,
-// Quitar PIN, Pausar bots or Reanudar bots (the one that applies), and Eliminar after a separator.
-export const ROW_COUNTS = ['bots', 'conversations', 'projects'];
+// counts that matter (chats, projects; numbers only, never what). The actions in one menu: Editar, Permisos, Quitar PIN,
+// and Eliminar after a separator.
+export const ROW_COUNTS = ['conversations', 'projects'];
 export function plural(locale, key, n) { let form = 'other'; try { form = new Intl.PluralRules(locale).select(n); } catch { /* other */ } return form === 'one' ? `${key}One` : key; }
 function PersonRow({ p, devices, reload }) {
   const t = useT();
   const locale = useLocale();
   const owner = p.role === 'owner';
-  const [paused, setPaused] = useState(() => (p.counts?.bots ?? 0) > 0 && (p.counts?.botsPaused ?? 0) >= (p.counts?.bots ?? 0));
   const rename = () => form(t('persons.renameTitle'), { initial: { name: p.name }, body: (v, set) => <Input autoFocus value={v.name} maxLength={40} onChange={(e) => set({ name: e.target.value })} />, ok: t('persons.save'), onOk: async (v) => { await call('persons.rename', { id: p.id, name: v.name.trim() }); reload(); return true; } });
   const caps = () => form(t('persons.capsTitle', { name: p.name }), {
     initial: { ...p.caps },
@@ -54,7 +53,6 @@ function PersonRow({ p, devices, reload }) {
     ok: t('persons.save'), onOk: async (v) => { await call('persons.setCaps', { id: p.id, caps: v }); reload(); return true; }
   });
   const resetPin = async () => { if (await confirm(t('persons.resetPinTitle', { name: p.name }), t('persons.resetPinBody'), { ok: t('persons.resetPin') })) { await act(call('persons.setPin', { id: p.id, pin: null }), t('persons.pinReset', { name: p.name })); reload(); } };
-  const pause = async (next) => { const r = await act(call('persons.pauseBots', { id: p.id, paused: next })); if (r) { setPaused(next); toast.success(t(next ? 'persons.botsPaused' : 'persons.botsResumed', { n: r.bots, name: p.name })); } };
   const revokeAll = async () => {
     if (!devices.length || !(await confirm(t('persons.revokeTitle', { name: p.name }), t('persons.revokeBody', { n: devices.length }), { ok: t('persons.revoke'), danger: true }))) return;
     for (const d of devices) await call('link.revoke', { id: d.id }).catch(() => {});
@@ -68,7 +66,6 @@ function PersonRow({ p, devices, reload }) {
   const count = (key, n) => t(plural(locale, key, n), { n });
   const summary = [count('persons.devicesN', p.devices ?? 0), p.lastSeen ? t('persons.seen', { when: ago(p.lastSeen) }) : null].filter(Boolean).join(' · ');
   const counts = ROW_COUNTS.filter((k) => c[k]).map((k) => count(`persons.count.${k}`, c[k]));
-  const hasBots = (c.bots ?? 0) > 0;
   return (
     <div className="flex min-w-0 items-center gap-3 rounded-xl border px-3 py-2.5" data-testid={`person-row-${p.name}`}>
       <PersonDot name={p.name} color={p.color} />
@@ -86,9 +83,6 @@ function PersonRow({ p, devices, reload }) {
           <DropdownMenuItem onSelect={rename} data-testid={`person-rename-${p.name}`}><Pencil />{t('persons.edit')}</DropdownMenuItem>
           {owner ? null : <DropdownMenuItem onSelect={caps} data-testid={`person-caps-${p.name}`}><ShieldCheck />{t('persons.caps')}</DropdownMenuItem>}
           {!owner && p.hasPin ? <DropdownMenuItem onSelect={resetPin} data-testid={`person-pin-${p.name}`}><KeyRound />{t('persons.resetPin')}</DropdownMenuItem> : null}
-          {!owner && hasBots ? (paused
-            ? <DropdownMenuItem onSelect={() => pause(false)} data-testid={`person-resume-${p.name}`}><PlayCircle />{t('persons.resumeBots')}</DropdownMenuItem>
-            : <DropdownMenuItem onSelect={() => pause(true)} data-testid={`person-pause-${p.name}`}><PauseCircle />{t('persons.pauseBots')}</DropdownMenuItem>) : null}
           {!owner && devices.length ? <DropdownMenuItem onSelect={revokeAll}><Unplug />{t('persons.revokeDevices')}</DropdownMenuItem> : null}
           {owner ? null : <><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onSelect={remove} data-testid={`person-remove-${p.name}`}><Trash2 />{t('persons.remove')}</DropdownMenuItem></>}
         </DropdownMenuContent>
@@ -187,7 +181,7 @@ function PrivacyCard() {
   return (
     <Card data-testid="privacy-card">
       <CardHeader><CardTitle>{t('profile.previewTitle')}</CardTitle></CardHeader>
-      <CardContent><Select className="w-full sm:w-80" value={preview} onValueChange={save} options={PREVIEWS.map((v) => ({ value: v, label: t(`profile.preview.${v}`) }))} title={t('profile.previewTitle')} data-testid="profile-preview" /></CardContent>
+      <CardContent><Select className="w-full sm:w-80" value={previewOf(preview)} onValueChange={save} options={PREVIEWS.map((v) => ({ value: v, label: t(`profile.preview.${v}`) }))} title={t('profile.previewTitle')} data-testid="profile-preview" /></CardContent>
     </Card>
   );
 }

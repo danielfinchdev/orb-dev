@@ -13,8 +13,8 @@
 //   list: '<type>'          a list: the method filters it with authz.scopeSql (WS3/WS4 wire it)
 //   strong: (params) => bool   the call needs a strong ticket (a PIN typed in the last minutes) when the caller has a PIN
 //   check: (board, principal, params) => true | 'reason'   anything else
-// Resource types: person, conversation, chat (a line), bot, group, project, task, session, schedule, reminder, request,
-// device, account, integration ('ha' | 'pc' | 'srv'), log (a project's or 'general'), owner (only the owner passes).
+// Resource types: person, conversation, chat (a line), project, task, session, schedule, device, account, log (a
+// project's or 'general'), owner (only the owner passes).
 //
 // Each workstream appends ITS OWN section below (WS2 … WS6) and adds it to POLICY / EVENTS at the bottom: one section per
 // workstream, so merges do not conflict. A later section may replace an entry of an earlier one on purpose.
@@ -32,17 +32,7 @@ export const PHONE_SET = new Set(['app.state', 'chat.list', 'chat.send', 'conver
   // 2.3: answer permission requests, the queue, continue, fork, settle, Task Review, scheduled tasks and @ (all of it
   // is work the PC already allowed; nothing here changes settings or gives total access).
   'sessions.queue', 'sessions.editQueued', 'sessions.approve', 'sessions.resume', 'sessions.fork', 'sessions.settle', 'approvals.list',
-  'tasks.review', 'projects.review', 'schedules.list', 'schedules.create', 'schedules.update', 'schedules.remove', 'schedules.run', 'mentions.options',
-  // 3.5: talking to the bots, answering their cards and questions, pausing one and its reminders. Creating, changing or
-  // deleting bots, their memories, the golden rules, what nobody touches and Home Assistant's token are set on the PC.
-  'bots.list', 'bots.get', 'bots.chat', 'bots.send', 'bots.stop', 'bots.decide', 'bots.answer', 'bots.pause', 'bots.groups.list', 'bots.groups.chat', 'bots.groups.send',
-  'bots.memory.get', 'bots.rules.get', 'bots.protected.get', 'bots.reminders.list', 'bots.reminders.create', 'bots.reminders.cancel', 'bots.ha.states', 'bots.srv.status',
-  // 3.6 (WS4): the cards waiting for one's answer, and the memory changes a bot wanted (see, approve, undo).
-  'bots.cards', 'bots.memory.pending', 'bots.memory.approve', 'bots.memory.history', 'bots.memory.undo', 'bots.ha.allow.get']);
-// 3.5: what the bots' owner manages (the bots' copies on a linked Orb, src/engine/replica.mjs).
-export const BOTS_OWNER = ['bots.create', 'bots.update', 'bots.delete', 'bots.groups.create', 'bots.groups.update', 'bots.groups.delete', 'bots.memory.set', 'bots.rules.set', 'bots.protected.set', 'bots.ha.get', 'bots.ha.set',
-  // 3.6 (WS4): what Home Assistant does without a card, and a bot's conversation brought by «Llevar mis bots».
-  'bots.ha.allow.set', 'bots.history.import'];
+  'tasks.review', 'projects.review', 'schedules.list', 'schedules.create', 'schedules.update', 'schedules.remove', 'schedules.run', 'mentions.options']);
 // '*': no ceiling; null: nothing (an agent's tool process uses authz.can / scopeSql directly, never the API).
 export const CEILING = { desktop: '*', system: '*', phone: PHONE_SET, browser: PHONE_SET, agent: null };
 // The ceiling of one principal: the one its entry point gave (remote.mjs), else its channel's.
@@ -59,8 +49,6 @@ const conv = (v) => ({ type: 'conversation', id: id(v) });
 const proj = (v) => ({ type: 'project', id: id(v) });
 const task = (v) => ({ type: 'task', id: id(v) });
 const sess = (v) => ({ type: 'session', id: id(v) });
-const bot = (v) => ({ type: 'bot', id: id(v) });
-const group = (v) => ({ type: 'group', id: id(v) });
 const line = (v) => ({ type: 'chat', id: id(v) });
 const OWNER = { type: 'owner', id: 'owner' };
 // The person acting on themselves, or the owner acting on someone else.
@@ -173,37 +161,6 @@ const CORE = {
   'schedules.update': { res: (p) => ({ type: 'schedule', id: id(p.id) }), right: 'edit' },
   'schedules.remove': { res: (p) => ({ type: 'schedule', id: id(p.id) }), right: 'edit' },
   'schedules.run': { res: (p) => ({ type: 'schedule', id: id(p.id) }), right: 'talk' },
-  // bots (owned, shareable; WS4 refines conversations, memories and cards per person)
-  'bots.list': { list: 'bot' },
-  'bots.get': { res: (p) => bot(p.id), right: 'view' },
-  'bots.create': { create: 'bot' },
-  'bots.update': { res: (p) => bot(p.id), right: 'edit' },
-  'bots.delete': { res: (p) => bot(p.id), right: 'own' },
-  'bots.pause': { res: (p) => bot(p.id), right: 'edit' },
-  'bots.chat': { res: (p) => bot(p.id), right: 'talk' },
-  'bots.send': { res: (p) => bot(p.id), right: 'talk' },
-  'bots.stop': { res: (p) => bot(p.id), right: 'talk' },
-  'bots.decide': { res: (p) => line(p.item), right: 'talk' }, // WS4: the card's approvers; the device's «Puede aprobar» is checked by engine/bots.mjs
-  'bots.answer': { res: (p) => line(p.item), right: 'talk' },
-  'bots.groups.list': { list: 'group' },
-  'bots.groups.create': { create: 'group' },
-  'bots.groups.update': { res: (p) => group(p.id), right: 'edit' },
-  'bots.groups.delete': { res: (p) => group(p.id), right: 'own' },
-  'bots.groups.chat': { res: (p) => group(p.id), right: 'view' },
-  'bots.groups.send': { res: (p) => group(p.id), right: 'talk' },
-  'bots.memory.get': { res: (p) => (p.id === 'global' ? null : bot(p.id)), right: 'view' }, // 'global': the caller's own
-  'bots.memory.set': { res: (p) => (p.id === 'global' ? null : bot(p.id)), right: 'edit' },
-  'bots.rules.get': { public: true },
-  'bots.rules.set': { ownerOnly: true }, // the house's golden rules (WS4: personal ones per person)
-  'bots.protected.get': { public: true },
-  'bots.protected.set': { ownerOnly: true },
-  'bots.reminders.list': { res: (p) => (p.id ? bot(p.id) : null), right: 'view', list: 'reminder' },
-  'bots.reminders.create': { res: (p) => bot(p.id), right: 'talk', create: 'reminder' },
-  'bots.reminders.cancel': { res: (p) => ({ type: 'reminder', id: id(p.id) }), right: 'edit' },
-  'bots.ha.get': { ownerOnly: true },
-  'bots.ha.set': { ownerOnly: true },
-  'bots.ha.states': { res: () => ({ type: 'integration', id: 'ha' }), right: 'view' },
-  'bots.srv.status': { res: () => ({ type: 'integration', id: 'srv' }), right: 'view' },
   // phone access and Magic Link (this PC's)
   'remote.status': { ownerOnly: true },
   'remote.enable': { ownerOnly: true },
@@ -316,52 +273,11 @@ const ORBMODE = {
   'shares.set': { public: true },
   'shares.remove': { public: true }
 };
-// ======== WS4 · bots: append entries here.
-// 3.6 (WS4): a memory of a bot: the bot-wide one (which 'bot', the default) is read with «view» and written with «edit»;
-// the caller's own file of that bot (which 'mine') needs «talk»; 'global' is always the caller's own.
-const memRes = (p, wide) => (p.id == null || p.id === '' || p.id === 'global' ? null : { ...bot(p.id), right: p.which === 'mine' ? 'talk' : wide });
-// A card (a chat line of a bot's conversation): its meta, to see who may answer it and whether it is sensitive.
-const cardMeta = (board, item) => { try { return JSON.parse(dbOne(board, 'SELECT meta FROM chat WHERE id = ?', Number(item))?.meta || 'null'); } catch { return null; } };
-export const SENSITIVE_CARDS = new Set(['ha', 'pc', 'srv', 'admin', 'confirm']);
-const sensitiveCard = (m) => Boolean(m && m.kind === 'bot_card' && SENSITIVE_CARDS.has(m.card) && !(m.card === 'admin' && m.payload?.action === 'pause'));
-// Saying yes: only the card's approvers. Saying no: also anyone who may talk in that conversation. A card without
-// approvers (made before 3.6) is answered by the conversation's person.
-const cardAnswer = (board, principal, p) => {
-  const m = cardMeta(board, p.item);
-  // No such card: the owner hears it from the method (as before 3.6), anyone else learns nothing.
-  if (!m || m.kind !== 'bot_card') return principal.role === 'owner' ? true : 'notFound';
-  const approvers = Array.isArray(m.approvers) ? m.approvers : null;
-  if (approvers?.includes(principal.person)) return true;
-  const talksThere = (() => { const r = dbOne(board, 'SELECT conversation_id FROM chat WHERE id = ?', Number(p.item)); const c = r?.conversation_id != null ? dbOne(board, 'SELECT person_id FROM conversations WHERE id = ?', r.conversation_id) : null; return c ? (c.person_id ?? dbOne(board, "SELECT id FROM persons WHERE role = 'owner' AND deleted_at IS NULL LIMIT 1")?.id) === principal.person : false; })();
-  if (!approvers && talksThere) return true;
-  if (p.decision !== 'allow' && talksThere) return true;
-  return 'notApprover';
-};
-const questionOf = (board, principal, p) => { const m = cardMeta(board, p.item); if (m?.kind !== 'bot_question') return principal.role === 'owner' ? true : 'notFound'; return m.talker == null || m.talker === principal.person ? true : 'notApprover'; };
-const BOTSP = {
-  'bots.memory.get': { res: (p) => memRes(p, 'view') },
-  'bots.memory.set': { res: (p) => memRes(p, 'edit') },
-  'bots.memory.history': { res: (p) => memRes(p, 'view') },
-  'bots.memory.pending': { public: true }, // the caller's own pending changes (and their bots' bot-wide ones)
-  'bots.memory.approve': { public: true }, // the method checks the change is of a memory the caller keeps
-  'bots.memory.undo': { public: true },
-  // a card: its approvers (not the line's conversation: a card of someone else's turn may be the caller's to answer)
-  'bots.decide': { check: cardAnswer, strong: (p, board) => p.decision === 'allow' && sensitiveCard(cardMeta(board, p.item)) },
-  'bots.answer': { check: questionOf },
-  'bots.cards': { public: true }, // the cards waiting for the caller
-  'bots.reminders.cancel': { res: (p) => ({ type: 'reminder', id: id(p.id) }), right: 'own' },
-  'bots.ha.allow.get': { public: true },
-  'bots.ha.allow.set': { res: () => ({ type: 'integration', id: 'ha' }), right: 'talk' },
-  'bots.history.import': { res: (p) => bot(p.id), right: 'talk' }
-};
-// ======== WS5 · data + time (backup, export, templates): append entries here.
+// ======== WS5 · data + time (backup, export): append entries here.
 const DATA = {
   // Backups hold everyone's data: only the owner makes, lists, checks or restores them.
   'backup.status': { ownerOnly: true }, 'backup.list': { ownerOnly: true }, 'backup.now': { ownerOnly: true }, 'backup.verify': { ownerOnly: true },
   'backup.restore': { ownerOnly: true }, 'backup.recovery': { ownerOnly: true },
-  // Templates: anyone applies one for themselves; for someone else, only the owner.
-  'templates.list': { public: true },
-  'templates.apply': { check: (board, principal, params) => (params.person == null || params.person === principal.person || principal.role === 'owner' ? true : 'notYours') },
   // Moving the whole Orb is the owner's.
   'data.moveExport': { ownerOnly: true }, 'data.moveStatus': { ownerOnly: true }, 'data.moveUndo': { ownerOnly: true }, 'data.moveKeepBoth': { ownerOnly: true },
   // A person's export: only their own (the owner gets someone's only through deleting them).
@@ -370,7 +286,7 @@ const DATA = {
 };
 // ======== 3.6 · messaging lists (src/engine/api-inbox.mjs): each person's own lists. A chat named by { kind, id } needs
 // «view» on it; sections are checked by the method (only the caller's own); the rest is the caller's own marks.
-const inboxItem = (p) => (p.kind === 'bot' ? bot(p.id) : p.kind === 'group' ? group(p.id) : p.kind === 'conversation' ? conv(p.id) : null);
+const inboxItem = (p) => (p.kind === 'conversation' ? conv(p.id) : null);
 const INBOX = {
   'inbox.list': { list: 'inbox' },
   'inbox.search': { list: 'inbox' },
@@ -379,17 +295,12 @@ const INBOX = {
   'inbox.reorderPins': { public: true },
   'inbox.mute': { res: inboxItem, right: 'view' },
   'inbox.markRead': { res: inboxItem, right: 'view' },
-  'inbox.clear': { res: inboxItem, right: 'talk' },
   'inbox.sections.list': { public: true },
   'inbox.sections.create': { public: true },
   'inbox.sections.rename': { public: true },
   'inbox.sections.delete': { public: true },
   'inbox.sections.reorder': { public: true },
-  'inbox.sections.move': { res: inboxItem, right: 'view' },
-  // groups like a messaging app: the info screen, and adding or removing a bot or a person (leaving: the method checks)
-  'bots.groups.get': { res: (p) => group(p.id), right: 'view' },
-  'bots.groups.members.add': { res: (p) => group(p.id), right: 'edit' },
-  'bots.groups.members.remove': { res: (p) => group(p.id), right: 'view' }
+  'inbox.sections.move': { res: inboxItem, right: 'view' }
 };
 export const INBOX_METHODS = Object.keys(INBOX).filter((m) => m.startsWith('inbox.'));
 // ======== WS6 · interface: append entries here.
@@ -397,33 +308,14 @@ const UI = {
   'persons.update': { check: selfOrOwner },
   'persons.setCaps': { ownerOnly: true },
   'persons.prefs.get': { public: true },
-  'persons.prefs.set': { public: true },
-  'persons.pauseBots': { ownerOnly: true }
+  'persons.prefs.set': { public: true }
 };
 // A phone or a browser sets its own person's language, time zone and notification preview too.
 for (const m of ['persons.update', 'persons.prefs.get', 'persons.prefs.set', 'persons.setPin', 'shares.list']) PHONE_SET.add(m);
-// 3.6 (messaging lists): the lists are the same on every screen (a phone, a browser); a group's info too. Changing a
-// group's bots or people stays with the bots' owner from afar, like creating the group.
-for (const m of [...INBOX_METHODS, 'bots.groups.get']) PHONE_SET.add(m);
-BOTS_OWNER.push('bots.groups.members.add', 'bots.groups.members.remove');
+// 3.6 (messaging lists): the lists are the same on every screen (a phone, a browser).
+for (const m of INBOX_METHODS) PHONE_SET.add(m);
 
-// ---- 3.7 (Orb Server, WS3): one home per bot (src/engine/replica.mjs). Moving, restoring, merging: the bot's own person.
-// The calls between two Orbs about it (replica.*, home.*) are not API methods: link ops checked in replica.mjs.
-const HOME = {
-  'bots.homes': { public: true },
-  'bots.move': { res: (p) => bot(p.id), right: 'own' },
-  'bots.restore': { res: (p) => bot(p.id), right: 'own' },
-  'bots.merge': { res: (p) => [bot(p.survivor), bot(p.other)], right: 'own' },
-  'bots.sameBot': { res: (p) => bot(p.id), right: 'own' },
-  'bots.unlink': { ownerOnly: true },
-  'replica.status': { ownerOnly: true },
-  'replica.sync': { ownerOnly: true }
-};
-// From a phone (linked to the Orb that is the hub, 3.7 Q1): where bots run and «Pasar al …» of one's own bots.
-for (const m of ['bots.homes', 'bots.move', 'bots.restore']) PHONE_SET.add(m);
-BOTS_OWNER.push('bots.merge', 'bots.sameBot');
-
-export const POLICY = Object.freeze({ ...CORE, ...GATEWAY, ...ORBMODE, ...BOTSP, ...DATA, ...INBOX, ...UI, ...HOME });
+export const POLICY = Object.freeze({ ...CORE, ...GATEWAY, ...ORBMODE, ...DATA, ...INBOX, ...UI });
 export const policyOf = (method) => (Object.hasOwn(POLICY, String(method)) ? POLICY[String(method)] : null);
 
 // ---- events: who receives each one (authz.audienceOf). A rule is 'all' (no content in it), 'owner', or
@@ -441,11 +333,7 @@ const EVENTS_CORE = {
   'session:queue': (p) => sess(p?.id),
   'session:removed': (p) => (p?.person ? { person: p.person } : sess(p?.id)),
   'approval:changed': (p) => (p?.session ? sess(p.session) : p?.task ? task(p.task) : 'owner'),
-  'bot.updated': (p) => (p?.id ? bot(p.id) : 'all'),
-  'bot.message': (p) => conv(p?.conversation),
-  'bot.state': (p) => (p?.conversation ? conv(p.conversation) : bot(p?.bot)),
   'link:devices': 'owner',
-  'link:queue': (p) => (p?.person ? { person: p.person } : 'owner'),
   'agents:login': 'owner',
   'agents:install': 'owner',
   'installer:progress': 'owner',
@@ -464,23 +352,11 @@ const EVENTS_ORBMODE = {
   // a line of no conversation (a task made by hand or by a schedule): its task's person
   'chat:new': (p) => (p?.conversation != null ? conv(p.conversation) : p?.person ? { person: p.person } : 'owner')
 };
-// 3.6 (WS4): a bot's live state is of one person's lane (its partial text): that person only. A bot's or a group's line:
-// whoever sees that conversation (a bot's is always private).
-const EVENTS_BOTSP = {
-  'bot.state': (p) => (p?.person ? { person: p.person } : p?.conversation ? conv(p.conversation) : 'owner'),
-  'bot.message': (p) => conv(p?.conversation),
-  'bot.updated': (p) => (p?.id ? bot(p.id) : 'all')
-};
 const EVENTS_DATA = { 'backup:done': 'owner', 'backup:restoreReady': 'owner', 'data:moved': 'owner', 'data:personExported': (p) => (p?.person ? { person: p.person } : 'owner') };
 // 3.6 (messaging lists): a chat of someone's list changed (a new line, a pin, read): only that person, ids only.
 const EVENTS_INBOX = { 'inbox:changed': (p) => (p?.person ? { person: p.person } : 'owner') };
 const EVENTS_UI = {};
-// 3.7 (WS3): a bot's home changed (or its move moved on a phase): whoever sees the bot / the bot's person.
-const EVENTS_HOME = {
-  'bot.home': (p) => (p?.id ? bot(p.id) : 'owner'),
-  'bots.move': (p) => (p?.person ? { person: p.person } : p?.id ? bot(p.id) : 'owner')
-};
-export const EVENTS = Object.freeze({ ...EVENTS_CORE, ...EVENTS_GATEWAY, ...EVENTS_ORBMODE, ...EVENTS_BOTSP, ...EVENTS_DATA, ...EVENTS_INBOX, ...EVENTS_UI, ...EVENTS_HOME });
+export const EVENTS = Object.freeze({ ...EVENTS_CORE, ...EVENTS_GATEWAY, ...EVENTS_ORBMODE, ...EVENTS_DATA, ...EVENTS_INBOX, ...EVENTS_UI });
 export function eventRule(event) {
   const e = String(event);
   if (Object.hasOwn(EVENTS, e)) return EVENTS[e];

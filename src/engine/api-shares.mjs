@@ -1,15 +1,15 @@
-// 3.6: sharing a resource (a project, a bot, a group, an integration) with a person: view, talk or edit. Used by the
+// 3.6: sharing a project with a person: view, talk or edit. Used by the
 // app's API (api.mjs).
 import { tr } from '../core/context.mjs';
 import { can, rightOn, ownerOf, RIGHTS, audit, AuthzError } from '../core/authz.mjs';
 import { fail, str, oneOf } from './api-common.mjs';
 
-export const SHARE_TYPES = ['project', 'bot', 'group', 'integration'];
+export const SHARE_TYPES = ['project'];
 const SHARE_RANK = { view: 1, talk: 2, edit: 3, own: 4 };
 const rank = (r) => SHARE_RANK[r] ?? 0;
 
-export function shareApi({ board, sessions = null, bots = null, log = () => {} }) {
-  // 3.6: sharing (shares.set / shares.remove, and a group's people: bots.groups.create, bots.groups.members.*).
+export function shareApi({ board, sessions = null }) {
+  // 3.6: sharing (shares.set / shares.remove).
   function setShare({ type, id, person, right }, who) {
       const res = { type: oneOf(type, SHARE_TYPES, 'tipo'), id: str(String(id ?? ''), 'id', 200) };
       const r = oneOf(right, RIGHTS, 'permiso');
@@ -20,7 +20,7 @@ export function shareApi({ board, sessions = null, bots = null, log = () => {} }
         ON CONFLICT(resource_type, resource_id, person_id) DO UPDATE SET right = excluded.right, granted_by = excluded.granted_by`, res.type, key, to, r, who?.person ?? board.ownerId(), new Date().toISOString());
       audit(board, who, 'shares.set', res, 'allow', `${to}:${r}`);
       board.changed('shares', { person: to, res });
-      board.changed(res.type === 'project' ? 'projects' : res.type === 'bot' || res.type === 'group' ? 'bots' : 'settings', { person: to });
+      board.changed('projects', { person: to });
       return { type: res.type, id: key, person: to, right: r };
   }
   function removeShare({ type, id, person }, who) {
@@ -32,25 +32,19 @@ export function shareApi({ board, sessions = null, bots = null, log = () => {} }
       if (to !== who?.person) mayShare(who, res, row?.right ?? 'view', to, 'shares.remove');
       board.run('DELETE FROM shares WHERE resource_type = ? AND resource_id = ? AND person_id = ?', res.type, key, to);
       // What that person had open of it stops (their own conversations and tasks stay theirs).
-      if (res.type === 'project') if (sessions) for (const s of board.all("SELECT id FROM sessions WHERE person_id = ? AND project = ? COLLATE NOCASE AND status = 'running'", to, key)) { try { sessions?.stop(s.id); } catch { /* gone */ } }
-      try { bots?.unshared?.(res, to); } catch (error) { log(`dejar de compartir: ${error.message}`); }
+      if (sessions) for (const s of board.all("SELECT id FROM sessions WHERE person_id = ? AND project = ? COLLATE NOCASE AND status = 'running'", to, key)) { try { sessions?.stop(s.id); } catch { /* gone */ } }
       audit(board, who, 'shares.remove', res, 'allow', to);
       board.changed('shares', { person: to, res });
-      board.changed(res.type === 'project' ? 'projects' : res.type === 'bot' || res.type === 'group' ? 'bots' : 'settings', { person: to });
+      board.changed('projects', { person: to });
       return { ok: true };
   }
-  // Sharing: the canonical id of a resource (a project's name as written, a bot's number) and who may share it.
-  function shareKey(res) {
-    if (res.type === 'project') return board.one('SELECT name FROM projects WHERE name = ? COLLATE NOCASE', res.id)?.name ?? res.id;
-    if (res.type === 'bot') return String(board.one('SELECT id FROM bots WHERE id = ? OR name = ? COLLATE NOCASE', Number(res.id) || -1, res.id)?.id ?? res.id);
-    return String(res.id);
-  }
+  // Sharing: the canonical id of a project (its name as written) and who may share it.
+  const shareKey = (res) => board.one('SELECT name FROM projects WHERE name = ? COLLATE NOCASE', res.id)?.name ?? res.id;
   function mayShare(who, res, right, to, method) {
     const deny = (reason) => { audit(board, who, method, res, 'deny', reason); throw new AuthzError(reason === 'notFound' ? 'notFound' : 'right', { method, resource: res }); };
     if (!board.one('SELECT id FROM persons WHERE id = ? AND deleted_at IS NULL', to)) fail(tr('msg.persons.noPerson'));
     if (ownerOf(board, res) == null) deny('notFound');
     if (who?.channel === 'system') return;
-    if (res.type === 'integration' && who.role !== 'owner') deny('right');
     const mine = rightOn(board, who.person, res);
     if (!(mine === 'own' || (mine === 'edit' && right !== 'edit'))) deny('right');
     if (to === who?.person) fail(tr('msg.share.notYourself'));
@@ -58,9 +52,8 @@ export function shareApi({ board, sessions = null, bots = null, log = () => {} }
   }
 
   const methods = {
-    // ---- 3.6: sharing a project (and, with the same rules, a bot, a group or an integration): view, talk or edit.
-    // Who may share: the resource's person; someone with «edit» may share it to view or talk. Never to oneself; an
-    // integration (Home Assistant, the server) only the owner.
+    // ---- 3.6: sharing a project: view, talk or edit. Who may share: the project's person; someone with «edit» may share
+    // it to view or talk. Never to oneself.
     'shares.list': ({ type, id }, who) => {
       const me = who?.person;
       if (type != null) {

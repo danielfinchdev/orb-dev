@@ -82,12 +82,8 @@ export const DEFAULT_CONFIG = Object.freeze({
   browser: { enabled: true }, // the agents' browser (pages drawn by the app, driven through the MCP tools)
   // Phone access (off until the user turns it on): through the home Wi-Fi and/or Tailscale (https when the tailnet has it).
   mobile: { enabled: false, port: 3131, wifi: true, tailscale: true },
-  // 3.5: the user's bots (src/engine/bots.mjs). rules: the golden rules every bot gets (Ajustes › Bots); by default only
-  // «nothing is sent, bought or booked without my OK». homeAssistant: the address of the user's Home Assistant (its token
-  // is kept in the database, never here). idleMinutes: a bot's process closes after this long without use.
-  bots: { rules: ['Nada se envía, compra ni reserva sin mi aprobación.'], homeAssistant: { url: '' }, idleMinutes: 10, location: 'local' },
-  // 3.5: «Cosas que nadie toca» (Ajustes › Bots): names, paths or containers that no agent and no bot touches, whatever
-  // the permission (a command, a path, a server action or a bot's memory that names one is denied).
+  // 3.5: «Cosas que nadie toca» (Ajustes › Avanzado): names, paths or containers that no agent touches, whatever the
+  // permission (a command or a path that names one is denied).
   protected: [...DEFAULT_PROTECTED]
 });
 
@@ -102,7 +98,8 @@ export const INTERNAL_DIR = '.orb';
 export const LOGS_DIR = 'bitacora';
 export const MCP_DIR = 'mcp-servers';
 export const OLD_LOGS_DIR = 'bitacoras'; // 2.3.0 and older
-export const BOTS_DIR = 'bots'; // 3.5: the bots' memories (bots\<id>\memoria.md and bots\memoria-global.md)
+// 3.5–3.7: the bots' memories. 3.8: no bots; an old bots\ folder is never taken for a project (the 3.8 migration archives it).
+export const BOTS_DIR = 'bots';
 export const CATEGORIES = ['windows', 'ios', 'android', 'web'];
 export const DEFAULT_CATEGORY = 'web';
 export const ADB_DIR = 'adb-tools';
@@ -123,7 +120,7 @@ export function paths(home) {
   return {
     home, internal, config: path.join(home, CONFIG_FILE), data, db: path.join(data, 'orb.db'), key: path.join(data, 'clave.bin'),
     logs, generalLog: path.join(logs, 'GENERAL.md'), projectLogs: path.join(logs, 'proyectos'),
-    mcp: path.join(home, MCP_DIR), bots: path.join(home, BOTS_DIR), adb: path.join(home, 'android', ADB_DIR),
+    mcp: path.join(home, MCP_DIR), adb: path.join(home, 'android', ADB_DIR),
     projects: home, categories: Object.fromEntries(CATEGORIES.map((c) => [c, path.join(home, c)])),
     runs: path.join(internal, 'ejecuciones'),
     copies, worktrees: path.join(copies, 'aisladas'), checkpoints: path.join(copies, 'fotos')
@@ -264,13 +261,10 @@ export function loadConfig(home) {
   }
   // 3.8: Orbs no longer link with each other: this Orb's role (todo / centro / taller) and «Orb para programar» go.
   delete config.role; delete config.devTarget;
-  // 3.7: «Monitoreo del equipo» and Opti Bot are gone (what they did is a bot's «Equipo» tools now): their settings go,
-  // except the one that is not theirs, sharing with Open Control Edge (monitor.shareWithOce → oce.share). The file loses
-  // the old key at the next save (or at once, migrateRetiredConfig in engine/retired.mjs).
-  if (config.monitor !== undefined) {
-    if (config.monitor?.shareWithOce === false && config.oce?.share === undefined) config.oce = { ...(config.oce ?? {}), share: false };
-    delete config.monitor;
-  }
+  // 3.7: «Monitoreo del equipo» and Opti Bot are gone. 3.8: the bots, Open Control Edge and the «Orb | Bots» mode too.
+  // Their settings go (the file loses them at the next save).
+  delete config.monitor; delete config.bots; delete config.oce;
+  if (config.ui) delete config.ui.mode;
   // Folders made by older versions: agents added later get their default account and their place in the order.
   for (const a of AGENT_IDS) {
     if (!config.accounts.some((x) => x.agent === a)) config.accounts.push({ id: a, agent: a, label: AGENT_LABELS[a], home: '', enabled: true });

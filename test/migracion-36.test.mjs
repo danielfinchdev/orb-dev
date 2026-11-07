@@ -7,7 +7,6 @@ import { tempHome, ROOT } from './helpers.mjs';
 import { ctx, useHome } from '../src/core/context.mjs';
 import { openDb, PERSON_TABLES } from '../src/core/db.mjs';
 import { Board } from '../src/core/board.mjs';
-import { readMemory } from '../src/core/bots.mjs';
 import { buildApi } from '../src/engine/api.mjs';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
@@ -37,13 +36,14 @@ function oldDatabase(file) {
   db.close();
 }
 
-test('una base de la 3.5.1: copia previa, el dueño en todas las filas, sesiones de los bots, recordatorios y memoria', () => {
+test('una base de la 3.5.1: copia previa, el dueño en todas las filas, sesiones de los bots y recordatorios', () => {
   const file = ctx.paths.db;
   // The engine of this test home has not opened its database yet: replace it by an old one.
   for (const f of [file, `${file}-wal`, `${file}-shm`]) fs.rmSync(f, { force: true });
   oldDatabase(file);
-  fs.mkdirSync(ctx.paths.bots, { recursive: true });
-  fs.writeFileSync(path.join(ctx.paths.bots, 'memoria-global.md'), 'Ana prefiere el té.\n');
+  const botsDir = path.join(home.home, 'bots');
+  fs.mkdirSync(botsDir, { recursive: true });
+  fs.writeFileSync(path.join(botsDir, 'memoria-global.md'), 'Ana prefiere el té.\n');
   useHome(home.home);
   const board = new Board(openDb());
   const owner = board.ownerId();
@@ -70,10 +70,8 @@ test('una base de la 3.5.1: copia previa, el dueño en todas las filas, sesiones
   assert.equal(rem.tz, people[0].tz);
   assert.match(rem.local_at, /^2026-10-02T\d\d:30$/);
   assert.equal(board.one('SELECT session_id FROM bots WHERE id = 1').session_id, 'sesion-casa', 'lo de antes no se toca');
-  // Global memory: now the owner's.
-  assert.ok(!fs.existsSync(path.join(ctx.paths.bots, 'memoria-global.md')));
-  assert.ok(fs.existsSync(path.join(ctx.paths.bots, 'personas', owner, 'memoria-global.md')));
-  assert.equal(readMemory('global'), 'Ana prefiere el té.\n');
+  // 3.8: the bots' files stay where they were (the 3.8 migration archives them).
+  assert.equal(fs.readFileSync(path.join(botsDir, 'memoria-global.md'), 'utf8'), 'Ana prefiere el té.\n');
   // Settings: accounts and connectors are the owner's.
   const config = JSON.parse(fs.readFileSync(ctx.paths.config, 'utf8'));
   assert.ok(config.accounts.length && config.accounts.every((a) => a.person === owner));

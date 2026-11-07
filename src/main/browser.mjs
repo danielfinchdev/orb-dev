@@ -25,9 +25,9 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
   const tabs = new Map(); // conversation (or connection) -> tab
   let pip = null; let pipTab = null; let mode = 'normal';
 
-  // 3.6: one browser profile per person (the owner keeps the 3.5 one): cookies and sign-ins of one person's agents and
-  // bots never reach another person's pages. A bot uses its own person's. Kept on disk (persist:), each person's apart:
-  // a sign-in made in one person's browser is still there next time, and only for that person.
+  // 3.6: one browser profile per person (the owner keeps the 3.5 one): cookies and sign-ins of one person's agents
+  // never reach another person's pages. Kept on disk (persist:), each person's apart: a sign-in made in one person's
+  // browser is still there next time, and only for that person.
   const profiles = new Map();
   const sessionFor = (person = '') => {
     const key = String(person || '');

@@ -241,7 +241,6 @@ export default {
   "msg.guard.github": "usa tu cuenta de GitHub",
   "msg.guard.internal": "accede a datos internos de Orb",
   "msg.guard.protected": "toca algo protegido ({name}), que nunca se toca",
-  "msg.guard.outward": "envía, compra, reserva o borra algo fuera de Orb",
   "msg.guard.plain.stop": "cerrar un programa que está en marcha",
   "msg.guard.plain.delete": "borrar archivos o carpetas",
   "msg.guard.plain.deleteWhat": "borrar «{target}»",
@@ -504,8 +503,4 @@ export default {
   "msg.link.httpBrowser": "Por la wifi sin cifrar, un navegador no se enlaza: usa la dirección segura de Tailscale (https) o la app de Android. Si lo necesitas, actívalo en Ajustes › Magic Link.",
   "msg.link.notForOrb": "Este código no es para un Orb. En el otro Orb, elige «Otro Orb mío» al hacer el código.",
   "msg.remote.pushHidden": "Tienes un mensaje nuevo",
-  "msg.guard.botSecret": "un bot nunca lee contraseñas, claves ni datos de otros programas",
-  "msg.guard.botOwnFolder": "un bot solo lee su propia carpeta",
-  "msg.guard.botOutside": "acaba de leer algo de fuera (una web, un correo) y ahora quiere abrir otra dirección",
-  "msg.guard.botOutsideWrite": "acaba de leer algo de fuera (una web, un correo) y ahora quiere cambiar algo en tu cuenta"
 };
