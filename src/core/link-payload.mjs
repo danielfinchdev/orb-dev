@@ -1,8 +1,8 @@
 // (3.5: moved from src/ui/lib/link-payload.js, which re-exports it.) What the Android app (and the phone's browser) reads to link with an Orb: the QR's text or what is typed by hand.
 // Pure functions, no browser or crypto: kept in one small file so a change of the Magic Link format only touches this
-// (test/android.test.mjs). The same formats as src/core/link.mjs › parseQr:
+// (test/android.test.mjs). The formats:
 // - v1 QR: «http://ip:port/#vincular=<one-time code>&pc=<the Orb's public key>»
-// - v2 QR: the same plus «&v=2&n=<name>&r=<role>&a=<other addresses, comma separated>»
+// - v2 QR: the same plus «&v=2&n=<name>&a=<other addresses, comma separated>» (an Orb before 3.8 also sent r=<role>)
 // - JSON: { v, urls | url, pc, code, name, role }
 // - typed by hand: the short code (8 letters and digits) and the Orb's address; its key comes from GET /api/hello.
 

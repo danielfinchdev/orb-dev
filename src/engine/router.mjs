@@ -1,12 +1,10 @@
 // 3.6 «Personas»: every event of the engine goes through here once. The router asks authz.audienceOf who it is for and
 // hands it to each sink with that audience: this PC's window (the person sitting at it), the phones' and browsers' live
-// streams and their notifications (each device's person), the centre a workshop sends its events to (the person its link
-// belongs to here) and the window of a workshop for the centre's bots (centro:*). A sink never decides by itself who
-// may see an event: it only asks reaches(audience, its person).
+// streams and their notifications (each device's person) and the developer's control line. A sink never decides by
+// itself who may see an event: it only asks reaches(audience, its person).
 import { audienceOf, reaches } from '../core/authz.mjs';
 
-// hint: an audience the caller already knows (a workshop's events belong to the person of its link; a notice for a
-// person and the owner); otherwise the event's rule in src/core/policy.mjs decides.
+// hint: an audience the caller already knows (a notice for a person and the owner); otherwise the event's rule in src/core/policy.mjs decides.
 export function createRouter({ board, log = () => {} } = {}) {
   const sinks = [];
   const router = {

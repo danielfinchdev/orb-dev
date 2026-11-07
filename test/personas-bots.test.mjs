@@ -2,8 +2,8 @@
 // Pruebas de aceptación 4 (bot compartido: conversación y sesión de cada uno, la memoria de Ana nunca en los turnos de
 // Leo, dejar de compartir corta en menos de 1 s), 5 (grupo compartido con autores; al borrar a Leo, «(mensaje borrado)»),
 // 10 (tarjetas: solo sus aprobadores, con PIN cuando es sensible), 13 (A5: memoria pendiente hasta aprobarla, deshacer),
-// 14 (A7: Home Assistant con lista de permitidos y tarjeta siempre para lo peligroso), 15 (A14: «Llevar mis bots» en dos
-// fases, con el paso de cuentas, el informe, sin estados a medias) y que nada de los bots de Ana llega a Leo.
+// 14 (A7: Home Assistant con lista de permitidos y tarjeta siempre para lo peligroso) y que nada de los bots de Ana
+// llega a Leo.
 import { tempHome, until } from './helpers.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -23,7 +23,7 @@ import { buildApi } from '../src/engine/api.mjs';
 
 let t; let board; let bots; let api; let ana; let leo; let asAna; let asLeo;
 const events = []; const pushes = []; const logs = [];
-const remoteRef = { current: null, link: null };
+const remoteRef = { current: null };
 const ids = {};
 const call = (who, method, params = {}) => api.call(method, params, who);
 const denied = (p) => assert.rejects(p, (e) => e instanceof AuthzError || /no tienes acceso|no la puedes aprobar|no puedes/i.test(e.message));
@@ -79,7 +79,7 @@ test('lo creado lleva la persona de quien lo crea (B6: el nombre es único para 
 
 test('nada de los bots de Ana llega a Leo: listas, llamadas con sus ids y eventos', async () => {
   const seen = JSON.stringify(await Promise.all([call(asLeo, 'bots.list'), call(asLeo, 'bots.groups.list'), call(asLeo, 'bots.reminders.list', { all: true }),
-    call(asLeo, 'bots.memory.get', { id: 'global' }), call(asLeo, 'bots.cards'), call(asLeo, 'bots.memory.pending'), call(asLeo, 'bots.where')]));
+    call(asLeo, 'bots.memory.get', { id: 'global' }), call(asLeo, 'bots.cards'), call(asLeo, 'bots.memory.pending')]));
   assert.ok(!seen.includes('SECRETO-ANA'), 'nada de Ana en sus listas');
   assert.ok(!seen.includes('"Casa"'), 'Casa aún no está compartido');
   for (const [m, p] of [['bots.get', { id: ids.anaBot }], ['bots.chat', { id: ids.anaBot }], ['bots.send', { id: ids.anaBot, text: 'hola' }], ['bots.memory.get', { id: ids.anaBot }],
@@ -223,61 +223,6 @@ test('14 (A7): la casa: garaje, scripts y Home Assistant siempre con tarjeta sal
   await assert.rejects(call(asAna, 'bots.ha.allow.set', { list: ['script.*'] }), /No entiendo/);
   assert.equal(free('switch', 'turn_on', 'switch.garaje', leo), false, 'la lista es de cada persona');
   assert.deepEqual((await call(asLeo, 'bots.ha.allow.get')).list, null);
-});
-
-test('15 (A14): «Llevar mis bots»: primero las cuentas, si algo falla no se cancela nada, y nunca a medias', async () => {
-  // Ana's bots and their reminders; the other Orb is a fake that can fail on a given step.
-  const there = new Map(); let seq = 100; let failOn = null; let deleteFails = false;
-  const fakeCall = async (peer, method, p) => {
-    if (failOn && method === failOn) throw new Error(`falla ${method}`);
-    if (method === 'bots.list') return { bots: [...there.values()] };
-    if (method === 'bots.create') { const b = { ...p, id: ++seq, memory: '', mine: '', reminderList: [] }; there.set(b.id, b); return b; }
-    if (method === 'bots.memory.set') { const b = there.get(p.id); if (b) { if (p.which === 'mine') b.mine = p.text; else b.memory = p.text; } return { text: p.text }; }
-    if (method === 'bots.memory.get') return { text: '' };
-    if (method === 'bots.reminders.create') { there.get(p.id).reminderList.push(p); return p; }
-    if (method === 'bots.get') return there.get(p.id);
-    if (method === 'bots.delete') { if (deleteFails) throw new Error('sin conexión'); there.delete(p.id); return true; }
-    if (method === 'bots.history.import') return { lines: p.lines.length };
-    throw new Error(`no esperado: ${method}`);
-  };
-  remoteRef.link = { peers: () => [{ id: 'orb-2', name: 'Sobremesa', role: 'centro', online: true }], call: fakeCall };
-  await call(asAna, 'bots.update', { id: ids.anaBot, accounts: { account: 'claude' } });
-  const remBefore = () => B.getReminder(board, ids.anaReminder);
-  // 1) The mapping step first: nothing is copied, nothing changes.
-  const plan = await call(asAna, 'bots.moveTo', { location: 'orb-2', bring: true });
-  assert.equal(plan.step, 'mapping');
-  assert.ok(plan.accounts.some((a) => a.id === 'claude'));
-  assert.equal(there.size, 0); assert.equal(plan.location, 'local');
-  const mapping = { accounts: { claude: 'claude-de-alla' }, connectors: {} };
-  // 2) A failure while copying the reminders: the copies there go, the reminder here keeps ringing, a report says what.
-  failOn = 'bots.reminders.create';
-  const bad = await call(asAna, 'bots.moveTo', { location: 'orb-2', bring: true, mapping });
-  assert.equal(bad.ok, false); assert.equal(bad.failed.step, 'reminders'); assert.equal(bad.location, 'local');
-  assert.equal(there.size, 0, 'nada a medias allí');
-  assert.equal(remBefore().enabled, true, 'el recordatorio sigue aquí');
-  assert.equal(B.getBot(board, ids.anaBot).paused, false);
-  // 3) Cut half way (the copies there could not be deleted, as if the app closed): nothing changed here, and the next
-  // run cleans what was left there first.
-  failOn = 'bots.memory.set'; deleteFails = true;
-  const cut = await call(asAna, 'bots.moveTo', { location: 'orb-2', bring: true, mapping });
-  assert.equal(cut.ok, false); assert.ok(there.size >= 1, 'quedó algo allí');
-  assert.ok(board.settingJson('bots_move')?.copies?.length, 'y Orb lo apunta');
-  assert.equal(remBefore().enabled, true); assert.equal(B.getBot(board, ids.anaBot).paused, false);
-  // 4) Everything copied and checked: only then paused and cancelled here.
-  failOn = null; deleteFails = false;
-  const ok = await call(asAna, 'bots.moveTo', { location: 'orb-2', bring: true, mapping, history: true });
-  assert.equal(ok.ok, true); assert.ok(ok.cleaned >= 1, 'limpió lo que quedó');
-  assert.equal(ok.location, 'orb-2');
-  const copy = [...there.values()].find((b) => b.name === 'Privado');
-  assert.equal(copy.accounts.account, 'claude-de-alla', 'con la cuenta elegida allí');
-  assert.match(copy.memory, /SECRETO-ANA memoria del bot/);
-  assert.equal(copy.reminderList[0].tz, B.getReminder(board, ids.anaReminder).tz, 'el recordatorio con su zona');
-  assert.equal([...there.values()].filter((b) => b.name === 'Privado').length, 1, 'una sola copia');
-  assert.ok(ok.report.some((r) => r.bot === 'Privado' && r.reminders === 1 && r.history > 0), 'con su conversación');
-  assert.equal(remBefore().enabled, false, 'aquí ya no suena');
-  assert.equal(B.getBot(board, ids.anaBot).paused, true);
-  assert.equal(board.settingJson('bots_move'), null);
-  remoteRef.link = null;
 });
 
 test('recordatorios en la zona de cada uno: uno suelto que llega tarde dice cuánto; uno que se repite se salta esa vez', async () => {

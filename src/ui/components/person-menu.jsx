@@ -1,7 +1,7 @@
 // 3.6 «Personas»: who is using Orb here. With two or more users, the gear at the foot of the sidebar shows the user's
 // initial and opens Ajustes, «Mi perfil», «Cambiar de usuario» and «Bloquear». On a phone the same is in the menu ☰. A phone or a browser is of one user: it cannot change user, only lock (with a PIN). With one user, nothing shows.
 import { Fragment } from 'react';
-import { Lock, UserRound, ArrowLeftRight, ChevronRight, Settings, MonitorSmartphone, Radar } from 'lucide-react';
+import { Lock, UserRound, ArrowLeftRight, ChevronRight, Settings, MonitorSmartphone } from 'lucide-react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, BubbleTip } from '@/components/ui/overlay.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { Input } from '@/components/ui/basic.jsx';
@@ -56,11 +56,10 @@ function useActions() {
 }
 
 // 3.6: a linked browser has no Ajustes of the PC: its gear (the same slot and icon as on the PC) opens what it does have,
-// this device's settings and Magic Link.
+// this device's settings.
 function browserSettings() {
   return [
-    { id: 'nav-device', icon: MonitorSmartphone, label: t('nav.thisDevice'), run: () => go('phone') },
-    { id: 'nav-link', icon: Radar, label: t('link.title'), run: () => go('link') }
+    { id: 'nav-device', icon: MonitorSmartphone, label: t('nav.thisDevice'), run: () => go('phone') }
   ];
 }
 

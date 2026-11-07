@@ -48,7 +48,6 @@ export default {
   'settings.group.actualizaciones': 'Actualizaciones',
   'settings.group.usuarios': 'Usuarios',
   'settings.group.dispositivos': 'Dispositivos',
-  'settings.group.orbs': 'Orbs enlazados',
   'settings.group.herramientas': 'Herramientas',
   'settings.group.experto': 'God mode',
   'settings.group.contribuye': 'Contribuye',

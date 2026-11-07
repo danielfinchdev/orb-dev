@@ -10,7 +10,7 @@ import { useStore, botCall, call, act, go, bridge, loadBots, setState, getState,
 import { localWhen } from '@/lib/bots.js';
 import { cn, errorText } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
-import { useBots, useCanManage, BotFace, GroupFace, NoBots, BotsDown, Loading, BotPage, CentroBadge } from './common.jsx';
+import { useBots, useCanManage, BotFace, GroupFace, NoBots, BotsDown, Loading, BotPage } from './common.jsx';
 import { ShareButton, SharedBadge } from '@/components/share-dialog.jsx';
 import { Undo2, Check, ShieldCheck } from 'lucide-react';
 
@@ -354,7 +354,6 @@ function ProtectedCard({ manage }) {
 export function BotSettingsView() {
   const t = useT();
   const manage = useCanManage();
-  const centro = useStore((s) => s.centro);
   const app = useStore((s) => s.app);
   const rules = useLoad('bots.rules.get', {});
   const [list, setList] = useState(null);
@@ -363,13 +362,13 @@ export function BotSettingsView() {
   const [token, setToken] = useState('');
   useEffect(() => { if (manage) botCall('bots.ha.get').then(setHa).catch(() => setHa(null)); }, [manage]);
   const [idle, setIdle] = useState(String(app.config?.bots?.idleMinutes ?? 10));
-  const showIdle = !bridge.mobile && !centro?.linked;
+  const showIdle = !bridge.mobile;
   const saveRules = async () => { const r = await act(botCall('bots.rules.set', { rules: list.map((x) => x.trim()).filter(Boolean) }), t('bots.set.saved')); if (r) rules.reload(); };
   const saveHa = async () => { const r = await act(botCall('bots.ha.set', { url: ha?.url ?? '', ...(token ? { token } : {}) }), t('bots.set.saved')); if (r) { setHa(r); setToken(''); } };
   const saveIdle = async () => { const config = await act(call('config.save', { patch: { bots: { idleMinutes: Math.max(1, Math.min(240, Number(idle) || 10)) } } }), t('bots.set.saved')); if (config) setState({ app: { ...getState().app, config } }); };
   return (
     <>
-      <PageHeader icon={<Settings2 className="text-primary size-5" />} title={t('nav.botSettings')} meta={<CentroBadge />} />
+      <PageHeader icon={<Settings2 className="text-primary size-5" />} title={t('nav.botSettings')} />
       <BotPage>
         <Card data-testid="bot-rules">
           <CardHeader><CardTitle>{t('bots.set.rules')}</CardTitle><CardDescription>{t('bots.set.rulesHint')}</CardDescription></CardHeader>

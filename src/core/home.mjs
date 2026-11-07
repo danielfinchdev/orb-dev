@@ -14,14 +14,6 @@ export const CONFIG_FILE = 'orb.json';
 export const AGENT_IDS = ['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot'];
 export const AGENT_LABELS = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor', gemini: 'Gemini', opencode: 'OpenCode', qwen: 'Qwen Code', copilot: 'GitHub Copilot' };
 
-// 3.5: the role of this Orb (orb.json «role»), chosen by the user in Ajustes › Magic Link on any Orb: «todo» (centre and
-// workshop at once: the default of a PC on its own, also when the key is missing), «centro» (always on: keeps the bots) or
-// «taller» (programs and builds). Orb Server (src/server/host.mjs) starts a new folder as «centro»; whether there is a
-// window or not is a different thing (ctx.headless), never the role.
-export const ROLES = ['todo', 'centro', 'taller'];
-export const hostsBots = (role) => role !== 'taller'; // «centro» and «todo» keep bots for the Orbs linked with them
-export const doesDev = (role) => role !== 'centro'; // «taller» and «todo» program and build
-
 // 3.5: what nobody touches by default: the usual password managers and secret stores (the user edits the list).
 // 3.7: and the usual data folders of a Vaultwarden / Bitwarden self-host (vw-data, bwdata).
 export const DEFAULT_PROTECTED = Object.freeze(['vaultwarden', 'bitwarden', 'keepass', 'keepassxc', '.kdbx', '1password', 'lastpass', '.password-store', '.gnupg', '.ssh/id_', 'vw-data', 'bwdata']);
@@ -94,9 +86,6 @@ export const DEFAULT_CONFIG = Object.freeze({
   // «nothing is sent, bought or booked without my OK». homeAssistant: the address of the user's Home Assistant (its token
   // is kept in the database, never here). idleMinutes: a bot's process closes after this long without use.
   bots: { rules: ['Nada se envía, compra ni reserva sin mi aprobación.'], homeAssistant: { url: '' }, idleMinutes: 10, location: 'local' },
-  // 3.5: where the Orb mode of a phone linked with this Orb goes: '' (by itself: here when this Orb programs,
-  // else the linked Orb that does), 'local' or the id of a linked Orb (Ajustes › Magic Link › «Orb para programar»).
-  devTarget: '',
   // 3.5: «Cosas que nadie toca» (Ajustes › Bots): names, paths or containers that no agent and no bot touches, whatever
   // the permission (a command, a path, a server action or a bot's memory that names one is denied).
   protected: [...DEFAULT_PROTECTED]
@@ -273,10 +262,8 @@ export function loadConfig(home) {
     if (config.assistantName.trim() === 'Orb·e') config.assistantName = PRODUCT.assistant;
     config.version = 5;
   }
-  // 3.5: an Orb without a role (every folder before 3.5) is «todo» (context.mjs › role()): centre and workshop at once,
-  // nothing to set up; Orb Server writes «centro» in a folder without one (src/server/host.mjs). A value Orb does not know
-  // is dropped (so it is «todo» too).
-  if (config.role !== undefined && !ROLES.includes(config.role)) delete config.role;
+  // 3.8: Orbs no longer link with each other: this Orb's role (todo / centro / taller) and «Orb para programar» go.
+  delete config.role; delete config.devTarget;
   // 3.7: «Monitoreo del equipo» and Opti Bot are gone (what they did is a bot's «Equipo» tools now): their settings go,
   // except the one that is not theirs, sharing with Open Control Edge (monitor.shareWithOce → oce.share). The file loses
   // the old key at the next save (or at once, migrateRetiredConfig in engine/retired.mjs).
@@ -303,7 +290,7 @@ export function readKey(home) {
   const file = paths(home).key;
   try {
     const key = fs.readFileSync(file);
-    // 3.5: on Linux (Orb Server) this file is the secret itself: readable by its owner only, also when copied from elsewhere.
+    // 3.5: on Linux this file is the secret itself: readable by its owner only, also when copied from elsewhere.
     if (key.length >= 32) { if (process.platform !== 'win32') { try { if ((fs.statSync(file).mode & 0o077) !== 0) fs.chmodSync(file, 0o600); } catch { /* best effort */ } } return key; }
   } catch { /* created below */ }
   const key = crypto.randomBytes(32);

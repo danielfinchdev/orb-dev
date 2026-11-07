@@ -15,7 +15,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ctx, tr, role } from '../core/context.mjs';
+import { ctx, tr } from '../core/context.mjs';
 import { oneLine } from '../core/safety.mjs';
 import { readOce, bridgeDir } from './oce-reading.mjs';
 
@@ -117,7 +117,7 @@ export function createOce({ board, bots, log = () => {}, link: getLink = () => n
   })();
   const self = () => R.selfId(board);
   const owner = () => A.ownerOfBoard(board) ?? board.ownerId();
-  const selfServer = () => product() === 'server' || role() === 'centro';
+  const selfServer = () => product() === 'server';
   const timeout = (p) => Promise.race([p, new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error('sin respuesta'), { offline: true })), CALL_MS).unref?.())]);
 
   // The owner's linked Orbs (one per identity; a copy of another Orb is never asked).

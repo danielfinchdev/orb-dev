@@ -7,9 +7,8 @@ import path from 'node:path';
 import { tempHome, ROOT } from './helpers.mjs';
 import { Board } from '../src/core/board.mjs';
 import { createPerson, setPin, verifyPin } from '../src/core/persons.mjs';
-import { POLICY, PHONE_SET, ORB_SET, CONSOLE_SET, policyOf } from '../src/core/policy.mjs';
+import { POLICY, PHONE_SET } from '../src/core/policy.mjs';
 import { authorize, principalOf, audienceOf, hasAudienceRule, rightOn, can, must, scopeSql, ownerOf, AuthzError, reaches, shapeFor } from '../src/core/authz.mjs';
-import { allowedFor } from '../src/engine/remote.mjs';
 import { buildApi } from '../src/engine/api.mjs';
 
 const home = tempHome();
@@ -29,7 +28,6 @@ test('cada método de la API tiene su regla en POLICY, y ninguna regla sobra', (
   assert.deepEqual(missing, [], `sin regla: ${missing.join(', ')}`);
   const stale = Object.keys(POLICY).filter((k) => !k.endsWith('.*') && !names.includes(k));
   assert.deepEqual(stale, [], `reglas de métodos que no existen: ${stale.join(', ')}`);
-  assert.ok(policyOf('taller.tasks.list') && policyOf('centro.bots.list'), 'taller.* y centro.*');
   for (const [m, r] of Object.entries(POLICY)) {
     if (r.right) assert.ok(['view', 'talk', 'edit', 'own'].includes(r.right), `${m}: derecho desconocido`);
     if (r.res) assert.equal(typeof r.res, 'function', m);
@@ -58,16 +56,11 @@ test('con una sola persona nada cambia: el dueño puede todo desde el PC y lo de
   for (const m of PHONE_SET) assert.doesNotThrow(() => authorize(board, phone, m, {}), m);
   denied(() => authorize(board, phone, 'config.save', {}), 'ceiling');
   denied(() => authorize(board, phone, 'link.qr', {}), 'ceiling');
-  // The ceilings are the 3.5.1 allowedFor, the same sets.
-  assert.equal(allowedFor('todo', 'phone'), PHONE_SET);
-  assert.equal(allowedFor('todo', 'orb', false, true), ORB_SET);
-  assert.equal(allowedFor('todo', 'phone', true), CONSOLE_SET);
+  // 3.8: «Puede administrar» and linked Orbs are gone: a device of before 3.8 marked so gets a phone's ceiling.
   const admin = principalOf(board, { device: { id: 'd2', kind: 'phone', person_id: null, admin: 1 } });
   assert.equal(admin.person, ana, 'un aparato sin persona es del dueño');
-  assert.doesNotThrow(() => authorize(board, admin, 'link.qr', {}));
-  const orb = principalOf(board, { device: { id: 'd3', kind: 'orb', kind_ok: 1 } });
-  assert.doesNotThrow(() => authorize(board, orb, 'bots.rules.set', {}));
-  denied(() => authorize(board, principalOf(board, { device: { id: 'd4', kind: 'orb', kind_ok: 0 } }), 'bots.rules.set', {}), 'ceiling');
+  denied(() => authorize(board, admin, 'link.qr', {}), 'ceiling');
+  denied(() => authorize(board, principalOf(board, { device: { id: 'd3', kind: 'orb', kind_ok: 1 } }), 'bots.rules.set', {}), 'ceiling');
   const agent = principalOf(board, { agentToken: { agent: 'claude', person: ana } });
   denied(() => authorize(board, agent, 'app.state', {}), 'ceiling');
   assert.doesNotThrow(() => authorize(board, principalOf(board, { system: true }), 'config.save', {}));
@@ -132,7 +125,6 @@ test('público de los eventos: la conversación a su persona, el bot a quien lo 
   assert.deepEqual(audienceOf(board, 'notice', { body: 'x', person: leo }).persons, new Set([leo]));
   assert.deepEqual(audienceOf(board, 'notice', { body: 'x' }), { owner: true });
   assert.deepEqual(audienceOf(board, 'chat:new', { conversation: null }), { owner: true });
-  assert.deepEqual(audienceOf(board, 'centro:bot.message', {}), { owner: true });
   assert.deepEqual(audienceOf(board, 'session:item', { session_id: 'no-existe' }), { owner: true });
 });
 

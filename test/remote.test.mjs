@@ -1,6 +1,7 @@
 // Phone access: pairing with a one-time QR and the phone's own key, every message encrypted end to end, replays and
 // tampering refused, host/origin checks, the phone's limited actions, encrypted uploads and live events, notifications
-// and revocation. The server binds to loopback here (ORB_REMOTE_BIND) instead of the Wi-Fi or Tailscale address.
+// and revocation; the QR used once and too many tries cut. The server binds to loopback here (ORB_REMOTE_BIND) instead
+// of the Wi-Fi or Tailscale address.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -9,6 +10,9 @@ import { fork } from 'node:child_process';
 import http from 'node:http';
 import { tempHome, ROOT, until } from './helpers.mjs';
 import * as C from '../src/core/mobile-crypto.mjs';
+import { privateSource } from '../src/engine/remote.mjs';
+import { parseLinkPayload, normalCode, normalAddress } from '../src/core/link-payload.mjs';
+import { createPhone } from './fixtures/phone-client.mjs';
 
 let t; let engine; let n = 0; const pending = new Map(); let base; let port;
 const call = (method, params = {}) => new Promise((resolve, reject) => { const id = ++n; pending.set(id, { resolve, reject }); engine.send({ type: 'call', id, method, params }); });
@@ -217,4 +221,45 @@ test('reabrir el acceso (cambio de red o de vía) conserva los móviles vinculad
   assert.equal((await call('remote.enable', { enabled: false })).running, false);
   await assert.rejects(fetch(`${base}/`), 'apagado: nada escucha');
   assert.equal((await call('remote.enable', { enabled: true })).running, true);
+});
+
+test('solo redes privadas, Tailscale y este PC; QR v1 y v2; código corto', async () => {
+  for (const ip of ['127.0.0.1', '::1', '::ffff:192.168.1.20', '10.0.0.5', '172.16.3.4', '172.31.0.1', '100.64.0.1', '100.127.255.254', 'fd7a:115c:a1e0::1']) assert.ok(privateSource(ip), ip);
+  for (const ip of ['8.8.8.8', '172.32.0.1', '100.128.0.1', '192.169.0.1', '2001:db8::1', '', undefined]) assert.ok(!privateSource(ip), String(ip));
+  const pc = C.b64.enc(C.newKeyPair().pub);
+  const v1 = parseLinkPayload(`http://192.168.1.5:3131/#vincular=abc&pc=${encodeURIComponent(pc)}`);
+  assert.deepEqual([v1.v, v1.urls, v1.code, v1.pc], [1, ['http://192.168.1.5:3131'], 'abc', pc]);
+  const v2 = parseLinkPayload(`https://casa.ts.net:3131/#vincular=abc&pc=${encodeURIComponent(pc)}&v=2&n=Casa&a=${encodeURIComponent('http://100.64.0.2:3131')}`);
+  assert.deepEqual([v2.v, v2.name], [2, 'Casa']);
+  assert.deepEqual([...v2.urls].sort(), ['http://100.64.0.2:3131', 'https://casa.ts.net:3131']);
+  assert.equal(normalCode('abcd-efgh'), 'ABCDEFGH');
+  assert.equal(normalAddress('100.64.0.2'), 'http://100.64.0.2:3131');
+  // The QR names this PC and its other addresses, never a role; the short code links too (one use).
+  const q = await call('link.qr', { device: 'phone' });
+  assert.match(q.code, /^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+  assert.equal(q.payload.v, 3, 'protocolo 3 (3.6)');
+  assert.equal(new URLSearchParams(new URL(q.url).hash.slice(1)).get('r'), null);
+  const hello = await (await fetch(`${base}/api/hello`)).json();
+  assert.ok(Array.isArray(hello.urls) && hello.urls.length >= 1, 'las direcciones de este PC');
+  assert.equal(hello.role, undefined);
+  const byCode = createPhone({ name: 'Con el código', kind: 'phone' });
+  try {
+    const me = await byCode.connect({ code: q.code.toLowerCase(), address: `127.0.0.1:${port}`, fp: q.pc });
+    assert.equal(me.fp, q.pc);
+    assert.ok((await call('link.devices')).some((d) => d.id === me.id && d.kind === 'phone'));
+    await assert.rejects(createPhone().connect({ code: q.code, address: `127.0.0.1:${port}` }), 'el mismo código no sirve dos veces');
+  } finally { byCode.stop(); }
+});
+
+// Last: it leaves this address without more tries for a while.
+test('el QR ya usado no sirve y demasiados intentos se cortan', async () => {
+  const q = await call('link.qr');
+  const fresh = createPhone({ name: 'Otro', kind: 'browser' });
+  try {
+    await fresh.connect({ qr: q.url });
+    await assert.rejects(fresh.connect({ qr: q.url }), (e) => e.status === 401, 'un solo uso');
+    let last = 0;
+    for (let i = 0; i < 12; i++) { last = (await fetch(`${base}/api/pair`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"pub":"x"}' })).status; }
+    assert.equal(last, 429, 'demasiados intentos desde la misma dirección');
+  } finally { fresh.stop(); }
 });

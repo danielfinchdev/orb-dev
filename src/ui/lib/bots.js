@@ -1,5 +1,5 @@
 // 3.5: the pure pieces of the «Bots» mode (no React, no store): which mode a screen is in, the bot a chat opens with,
-// what the editor sends and the workshop's banner. Magic Link's: lib/link.js. Tested in test/bots-ui.test.mjs.
+// what the editor sends. Magic Link's: lib/link.js. Tested in test/bots-ui.test.mjs.
 import { parseAvatar } from '../../core/avatar.mjs';
 
 // The screens of the «Bots» mode; any other belongs to «Orb».
@@ -43,35 +43,8 @@ export function capsPayload(c) {
   return Object.values(out).every((v) => v == null) ? null : out;
 }
 
-// 3.5: where the bots are used from: '' (this Orb's own) or 'centro.' (those of the linked Orb chosen in «¿Dónde quieres
-// tus bots?»). Being linked with an Orb that keeps bots is not enough: the user chooses (centro.status › active).
-export const botsPrefix = (centro) => (centro?.linked && centro.active ? 'centro.' : '');
-// Whether this window may create, change and delete bots: the PC app always; a linked device only if the Orb lets it
-// (app.state › access, from «Puede administrar» in Magic Link, or another Orb of the user's).
+// Whether this window may create, change and delete bots: the PC app only (a linked phone or browser does not).
 export const canManageBots = ({ mobile, access } = {}) => !mobile || Boolean(access?.bots);
-// The role of an Orb in words (link.role.*): «todo», «centro» or «taller» (none: an Orb from before 3.5, «todo»).
-export const ROLE_CHOICES = ['todo', 'centro', 'taller'];
-export const roleKey = (role) => `link.role.${ROLE_CHOICES.includes(role) ? role : 'todo'}`;
-// The «¿Dónde quieres tus bots?» card: shown for the first linked Orb that keeps bots and was not asked yet (bots.where ›
-// ask), with «Llevar mis bots» only when this Orb has bots of its own that are not paused.
-export function botsLocationCard(where) {
-  if (!where?.ask) return null;
-  return { id: where.ask.id, name: where.ask.name ?? '', canBring: Number(where.localBots) > 0 };
-}
-// The Orbs a phone's Orb mode may go to (Ajustes › Magic Link › «Orb para programar»): this one if it programs, then the
-// linked ones that do. value '' = by itself.
-export function devChoices(status) {
-  const own = status?.role !== 'centro';
-  const list = (status?.tallers ?? []).map((d) => ({ value: d.id, name: d.name, online: Boolean(d.online) }));
-  return own ? [{ value: 'local', name: null, online: true }, ...list] : list;
-}
-// The banner of the Orb that programs for this one (when the Orb mode goes to another Orb) on a linked phone: null when
-// the work is done here or there is none.
-export function tallerBanner(status) {
-  const t = status?.taller;
-  if (!t || (status?.dev && status.dev !== 'remote')) return null;
-  return { name: t.name ?? '', online: Boolean(t.online), lastSeen: t.lastSeen ?? null, canWake: Boolean(t.canWake), queued: Number(t.queued) || 0 };
-}
 
 // A date for <input type="datetime-local"> and for bots.reminders.create (AAAA-MM-DDTHH:MM, local time).
 export function localWhen(d = new Date()) {

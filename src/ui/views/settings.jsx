@@ -634,8 +634,8 @@ function AboutCard({ version }) {
 const SECTIONS = [
   { id: 'general', icon: SlidersHorizontal, groups: ['apariencia', 'actualizaciones'],
     cards: (c, app) => <><AssistantCard c={c} /><FolderCard c={c} home={app.home} /><SubSection id="apariencia" title={t('settings.group.apariencia')}><AppearanceCard c={c} /><InterfaceCard c={c} /></SubSection><SubSection id="actualizaciones" title={t('settings.group.actualizaciones')}><UpdatesCard /></SubSection></> },
-  // Who can enter this Orb: its users, their devices and the Orbs linked with it.
-  { id: 'magiclink', icon: Radar, groups: (me) => [...(showPersonsSettings(me) ? ['usuarios'] : []), 'dispositivos', 'orbs'],
+  // Who can enter this Orb: its users and their devices.
+  { id: 'magiclink', icon: Radar, groups: (me) => [...(showPersonsSettings(me) ? ['usuarios'] : []), 'dispositivos'],
     cards: (c, app, me) => <><MagicLinkPanel grouped users={showPersonsSettings(me) ? <PersonsCard /> : null} phoneAccess={<MobileCard />} /></> },
   { id: 'agentes', icon: Cpu, cards: (c) => <><ChatCard c={c} /><TasksCard c={c} />{bridge.mobile ? null : <TestCard />}</> },
   { id: 'datos', icon: DatabaseBackup, when: (me) => isOwner(me), cards: () => <DataCards /> },

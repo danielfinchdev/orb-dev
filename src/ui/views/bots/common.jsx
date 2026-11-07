@@ -1,11 +1,11 @@
 // 3.5: what the screens of the Bots mode share: the list of bots from the store, a bot's face (3.6: its avatar), whether this
 // device may change bots, and the cards for «no bots yet» and «the bots do not answer».
 import { useEffect } from 'react';
-import { RefreshCw, Plus, ServerOff, Server } from 'lucide-react';
+import { RefreshCw, Plus, ServerOff } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Spinner } from '@/components/ui/basic.jsx';
-import { useStore, bridge, go, loadBots, loadCentro } from '@/lib/store.js';
-import { botsPrefix, canManageBots } from '@/lib/bots.js';
+import { useStore, bridge, go, loadBots } from '@/lib/store.js';
+import { canManageBots } from '@/lib/bots.js';
 import { cn } from '@/lib/utils.js';
 import { BotAvatar, GroupAvatar } from '@/components/bot-avatar.jsx';
 import { useAvatarPulse, avatarState } from '@/lib/avatar-pulse.js';
@@ -81,16 +81,3 @@ export function BotPage({ children, className, wide = false }) {
   return <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-5 sm:px-5"><div className={cn('mx-auto grid gap-4', wide ? 'max-w-5xl' : 'max-w-3xl', className)}>{children}</div></div>;
 }
 
-// Where the bots live when this PC is linked with a server: «Bots en <server>», with whether it answers now.
-export function CentroBadge({ className }) {
-  const t = useT();
-  const centro = useStore((s) => s.centro);
-  useEffect(() => { if (!bridge.mobile && centro === undefined) loadCentro(); }, [centro]);
-  if (!botsPrefix(centro)) return null;
-  return (
-    <span className={cn('text-muted-foreground inline-flex min-w-0 items-center gap-1.5 text-xs', className)} data-testid="bots-centro" title={centro.online ? t('bots.centro.on') : t('bots.centro.off')}>
-      <Server className="size-3.5 shrink-0" /><span className="truncate">{t('bots.centro.where', { name: centro.name })}</span>
-      <span className={cn('size-1.5 shrink-0 rounded-full', centro.online ? 'bg-success' : 'bg-muted-foreground/50')} aria-label={centro.online ? t('bots.centro.on') : t('bots.centro.off')} />
-    </span>
-  );
-}

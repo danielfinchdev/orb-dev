@@ -16,7 +16,7 @@ import { useStore, go, botCall, loadInbox, inboxAct, setState, phoneLayout } fro
 import { splitInbox, shortTime, previewOf } from '@/lib/inbox.js';
 import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
-import { useBots, useCanManage, BotFace, GroupFace, NoBots, BotsDown, Loading, CentroBadge } from './common.jsx';
+import { useBots, useCanManage, BotFace, GroupFace, NoBots, BotsDown, Loading } from './common.jsx';
 import { HomeBadge, moveBot } from './home.jsx';
 import { useHomes } from '@/lib/bot-homes.js';
 import { showHomeBadges, homeOf, moveTargets, moveLabel, replicaActions, tn } from '@/lib/homes.js';
@@ -396,7 +396,6 @@ export function BotsInbox({ page = false }) {
     <div className={cn('flex min-h-0 flex-1 flex-col', page && 'bg-background')} data-testid="bot-inbox">
       <div className={cn('grid gap-2 pb-2', phone ? 'px-4 pt-3' : 'px-3 pt-1')}>{search}</div>
       {phone ? null : <Places />}
-      <CentroBadge className="px-4 pb-1" />
       <nav className={cn('flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto', phone ? 'px-2 pb-28' : 'px-1.5 pb-3')} aria-label={t('chats.list')} data-testid="bots-nav">{body}</nav>
       {phone ? <NewMenu fab /> : null}
       {sheetItem ? <ChatSheet item={sheetItem} {...rowProps} onClose={() => setSheet(null)} /> : null}

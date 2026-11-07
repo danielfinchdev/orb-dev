@@ -41,13 +41,6 @@ test('el editor manda solo lo que el motor acepta, con las listas limpias', () =
   assert.equal(U.newBotDraft().icon, '🤖');
 });
 
-test('el aviso del taller solo en un centro con taller enlazado', () => {
-  assert.equal(U.tallerBanner(null), null);
-  assert.equal(U.tallerBanner({ role: 'taller', dev: 'local', taller: { name: 'X' } }), null, 'el trabajo se hace aquí');
-  assert.equal(U.tallerBanner({ role: 'centro', taller: null }), null);
-  assert.deepEqual(U.tallerBanner({ role: 'centro', dev: 'remote', taller: { name: 'Portátil', online: false, lastSeen: 't', canWake: true, queued: 2 } }), { name: 'Portátil', online: false, lastSeen: 't', canWake: true, queued: 2 });
-});
-
 test('la fecha de un recordatorio', () => {
   assert.match(U.localWhen(new Date(2026, 2, 4, 9, 5)), /^2026-03-04T09:05$/);
 });

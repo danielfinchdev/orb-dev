@@ -21,7 +21,6 @@
     "dist": "vite build && electron-builder --win nsis portable",
     "dist:linux": "vite build && electron-builder --linux AppImage deb",
     "test:movil": "vite build && node test/mobile.e2e.mjs",
-    "test:capturas": "vite build && node test/capturas.e2e.mjs",
     "test:glass": "node test/glass.e2e.mjs",
     "icon:ico": "electron scripts/icono-ico.cjs",
     "android:build": "node scripts/android-build.mjs",

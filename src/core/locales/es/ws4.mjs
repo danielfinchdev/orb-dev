@@ -11,7 +11,6 @@ export default {
   'msg.bots.reminderLate': '(con {n} min de retraso)',
   'msg.bots.memoryGone': 'Ese cambio de la memoria ya no está pendiente.',
   'msg.bots.badHaAllow': 'No entiendo «{entry}». Escribe dominio.servicio y la entidad, por ejemplo: light.turn_on light.salon',
-  'msg.bots.moveMismatch': 'La copia de {name} no ha quedado igual.',
   'sys.botmcp.memoryPending': 'Guardado como pendiente: {user} tiene que aprobarlo antes.',
   'msg.guard.botOtherPerson': 'quiere leer lo que otro usuario guarda de este bot'
 };

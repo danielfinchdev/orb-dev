@@ -3,14 +3,14 @@
 // not be done right there (a card that needs the PIN, a task whose exact version is approved here), asks here.
 // Opened only once the phone is unlocked (NoteOpener lives inside PhoneLock): what arrives before waits.
 import { useEffect } from 'react';
-import { bridge, botsVia, call, act, go } from './store.js';
+import { bridge, call, act, go } from './store.js';
 import { t } from './i18n.js';
 import { askPin } from '@/components/person-menu.jsx';
 
 // Answers a bot's card. A sensitive card of someone with a PIN needs it (the Orb refuses with reason «strong»): asked
 // here, then the same answer again with the ticket it gives (valid on this device only, for a few minutes).
 export async function decideCard(item, decision) {
-  const method = `${botsVia()}bots.decide`;
+  const method = 'bots.decide';
   try { return await bridge.call(method, { item, decision }); }
   catch (error) {
     if (error?.reason !== 'strong' || decision !== 'allow') throw error;

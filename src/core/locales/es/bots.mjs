@@ -87,7 +87,7 @@ export default {
   "msg.bots.tooManyTurns": "Los bots ya han dado {n} respuestas a este mensaje: paro aquí. Escríbeles de nuevo si quieres seguir.",
   "msg.bots.card.send": "{bot} leyó algo de fuera y quiere pasárselo a {to}: {text}",
   "msg.bots.cannotApprove": "Este dispositivo no puede aprobar lo que piden los bots. Cámbialo en Ajustes › Magic Link del Orb.",
-  "msg.bots.ownerApproves": "Esta tarjeta cambia los bots, el servidor o el PC: apruébala en el PC o desde un dispositivo que puede administrar.",
+  "msg.bots.ownerApproves": "Esta tarjeta cambia los bots, el servidor o el PC: apruébala en el PC.",
   "msg.bots.byPc": "este PC",
   "sys.botmcp.browserNeedsSite": "Ese permiso no dice en qué web: pide otro con bot_confirm y su dirección (url)",
   "sys.botmcp.browserOtherSite": "El permiso era para otra web: pide otro con bot_confirm para esta",

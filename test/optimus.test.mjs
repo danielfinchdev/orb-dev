@@ -2,15 +2,12 @@
 // archivos de %LOCALAPPDATA%\OrbPuente en una carpeta temporal; nunca el OCE real del PC que pasa las pruebas):
 // - lecturas de este PC: instalado, abierto, compartir apagado, fuera de Windows «no disponible»;
 // - Optimus se crea una vez; eliminado, no vuelve; con «Crear Optimus automáticamente» apagado, no se crea;
-// - dos Orbs enlazados en loopback (Server sin OCE y PC con OCE): un solo Optimus (en el Server), que lee el OCE del PC
-//   con oce_values por el enlace y avisa en su chat al pasar un límite; eliminado, ninguno de los dos lo vuelve a crear.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { tempHome, startEngine, until, wait, ROOT } from './helpers.mjs';
-import { orbIdOf } from '../src/core/backup.mjs';
+import { tempHome, ROOT } from './helpers.mjs';
 
 const fakeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-oce-'));
 const dirs = { unit: path.join(fakeRoot, 'unit'), pc: path.join(fakeRoot, 'pc'), srv: path.join(fakeRoot, 'srv') };
@@ -95,81 +92,3 @@ test('Optimus se crea una vez para el admin; eliminado, no vuelve; con el ajuste
   b2.db.close();
 });
 
-test('dos Orbs enlazados: un solo Optimus (en el Server), que lee el OCE del PC y avisa al pasar un límite', async () => {
-  if (!fs.existsSync(path.join(ROOT, 'src', 'renderer', 'index.html'))) throw new Error('compila antes la interfaz (npm run build)');
-  const base = { ORB_REMOTE_BIND: '127.0.0.1', ORB_WOL_DRY: '1', ORB_REPLICA_MS: '400', ORB_FORWARD_MS: '8000', ORB_OCE_FAKE: '1', ORB_OCE_MS: '500', ORB_OCE_ALERT_MS: '500' };
-  const port = 20000 + Math.floor(Math.random() * 20000);
-  const tSrv = tempHome({ role: 'centro', mobile: { enabled: true, port, name: 'Servidor' } }); tmp.push(tSrv);
-  const tPc = tempHome({ mobile: { name: 'Portátil' } }); tmp.push(tPc);
-  const srv = await startEngine(tSrv.home, { env: { ...base, LOCALAPPDATA: dirs.srv, ORB_OCE_DIR: path.join(dirs.srv, 'nada') } }); engines.push(srv);
-  const pc = await startEngine(tPc.home, { env: { ...base, LOCALAPPDATA: dirs.pc, ORB_OCE_DIR: path.join(dirs.pc, 'nada') } }); engines.push(pc);
-  await until(async () => (await srv.call('remote.status')).running, 'acceso del servidor');
-  const q = await srv.call('link.qr', { device: 'orb' });
-  await pc.call('link.connect', { code: q.code, address: `127.0.0.1:${port}` });
-  const seen = (e, k) => until(async () => (await e.call('bots.homes')).some((h) => h.key === k && h.online), 'el otro Orb se ve', 20000);
-  await seen(pc, orbIdOf(tSrv.home).orbId); await seen(srv, orbIdOf(tPc.home).orbId);
-  // Open Control Edge abre en el PC (y escribe su archivo cada 2 s, como el de verdad).
-  writeOce(dirs.pc); const beat = setInterval(() => writeOce(dirs.pc), 1500);
-  try {
-    const optimus = (e) => e.call('bots.list').then((r) => r.bots.filter((b) => b.tools.includes('oce')));
-    const onSrv = await until(async () => (await optimus(srv))[0], 'Optimus en el Server', 20000);
-    assert.equal(onSrv.homeHere, true, 'su casa es el Server');
-    const copy = await until(async () => (await optimus(pc)).find((b) => b.uid === onSrv.uid), 'su copia en el PC', 20000);
-    assert.equal(copy.homeHere, false, 'en el PC es una copia: no hay un segundo Optimus');
-    await wait(2500);
-    assert.equal((await optimus(srv)).length, 1); assert.deepEqual((await optimus(pc)).map((b) => b.uid), [onSrv.uid]);
-
-    // Lee el OCE del PC por el enlace (solo lectura) y su propio PC dice por qué no hay lectura.
-    await srv.call('bots.send', { id: onSrv.id, text: 'Temperaturas del portátil\nBOT_CALL oce_values {"machine":"Portátil"}\nBOT_CALL oce_status {"machine":"este"}' });
-    const reply = async (re) => (await srv.call('bots.chat', { id: onSrv.id })).lines.find((l) => l.role === 'bot' && re.test(l.body));
-    const r = await until(() => reply(/oce_values:/), 'Optimus contesta', 60000);
-    assert.match(r.body, /"tempC": 61/); assert.match(r.body, /"machine": "Portátil"/); assert.match(r.body, /RTX 4070/);
-    assert.match(r.body, /oce_status: \{[\s\S]*"installed": false/);
-    await srv.call('bots.send', { id: onSrv.id, text: 'Avísame si la CPU pasa de 50 grados\nBOT_CALL oce_alerts {"rules":[{"metric":"cpuTemp","above":50,"machine":"Portátil"}]}' });
-    await until(() => reply(/"saved"/), 'guarda el límite', 60000);
-    const alert = await until(async () => (await srv.call('bots.chat', { id: onSrv.id })).lines.find((l) => l.meta?.kind === 'oce_alert'), 'la notificación del límite', 20000);
-    assert.match(alert.body, /La temperatura de la CPU en Portátil está en 61 °C \(tu límite: 50 °C\)/);
-
-    // Eliminado: ni el Server ni el PC (que también tiene OCE) lo vuelven a crear.
-    await srv.call('bots.delete', { id: onSrv.id });
-    await wait(4000);
-    assert.equal((await optimus(srv)).length, 0, 'el Server no lo vuelve a crear');
-    assert.equal((await optimus(pc)).filter((b) => b.homeHere).length, 0, 'el PC no crea el suyo');
-  } finally { clearInterval(beat); }
-});
-
-test('dos Orbs con su propio Optimus (cada uno encontró OCE sin estar enlazados): al enlazarse queda uno solo', async () => {
-  const base = { ORB_REMOTE_BIND: '127.0.0.1', ORB_WOL_DRY: '1', ORB_REPLICA_MS: '400', ORB_MOVE_TURN_MS: '1500', ORB_FORWARD_MS: '8000', ORB_OCE_FAKE: '1', ORB_OCE_MS: '500' };
-  const d = { srv: path.join(fakeRoot, 'srv2'), pc: path.join(fakeRoot, 'pc2') };
-  for (const x of Object.values(d)) fs.mkdirSync(path.join(x, 'OrbPuente'), { recursive: true });
-  const beat = () => { writeOce(d.srv); writeOce(d.pc); };
-  beat(); const timer = setInterval(beat, 1500);
-  try {
-    const port = 20000 + Math.floor(Math.random() * 20000);
-    const tSrv = tempHome({ role: 'centro', mobile: { enabled: true, port, name: 'Servidor' } }); tmp.push(tSrv);
-    const tPc = tempHome({ mobile: { name: 'Sobremesa' } }); tmp.push(tPc);
-    const srv = await startEngine(tSrv.home, { env: { ...base, LOCALAPPDATA: d.srv, ORB_OCE_DIR: path.join(d.srv, 'nada') } }); engines.push(srv);
-    const pc = await startEngine(tPc.home, { env: { ...base, LOCALAPPDATA: d.pc, ORB_OCE_DIR: path.join(d.pc, 'nada') } }); engines.push(pc);
-    const active = (e) => e.call('bots.list').then((r) => r.bots.filter((b) => b.tools.includes('oce') && b.homeState !== 'archived'));
-    const mine = async (e) => (await active(e)).find((b) => b.homeHere);
-    const a = await until(() => mine(srv), 'el Server crea el suyo', 20000);
-    const b = await until(() => mine(pc), 'el PC crea el suyo', 20000);
-    assert.notEqual(a.uid, b.uid);
-    await pc.call('bots.memory.set', { id: b.id, text: 'Avisar si la GPU pasa de 80 grados' });
-    await until(async () => (await srv.call('remote.status')).running, 'acceso del servidor');
-    const q = await srv.call('link.qr', { device: 'orb' });
-    await pc.call('link.connect', { code: q.code, address: `127.0.0.1:${port}` });
-    // Se queda el del Server (siempre encendido); el del PC pasa al Server y allí se une a él.
-    await until(async () => { const s = await active(srv); const p = await active(pc); return s.length === 1 && s[0].uid === a.uid && p.length === 1 && p[0].uid === a.uid; }, 'un solo Optimus en los dos Orbs', 60000);
-    const archived = await until(async () => (await srv.call('bots.list')).bots.find((x) => x.uid === b.uid && x.homeState === 'archived'), 'el otro, archivado con su chat', 20000);
-    assert.equal(archived.homeHere, true); assert.equal(archived.paused, true);
-    assert.ok((await srv.call('bots.chat', { id: archived.id })).lines.some((l) => /Open Control Edge/.test(l.body)), 'su conversación se conserva');
-    const pending = await srv.call('bots.memory.pending');
-    assert.ok(pending.some((m) => /GPU pasa de 80/.test(m.text)), 'su memoria espera aprobación');
-    const merged = (await srv.call('bots.chat', { id: a.id })).lines.find((l) => l.meta?.kind === 'oce_merged');
-    assert.match(merged.body, /Servidor/); assert.match(merged.body, /Sobremesa/);
-    assert.deepEqual(merged.meta.sources.map((x) => x.machine).sort(), ['Servidor', 'Sobremesa'], 'los dos PC, como fuentes');
-    await wait(2500);
-    assert.equal((await active(srv)).length, 1); assert.equal((await active(pc)).length, 1, 'ninguno vuelve a crear otro');
-  } finally { clearInterval(timer); }
-});

@@ -4,13 +4,11 @@
 // There is no HTTP server: nothing on the network or in a browser can reach it.
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import crypto from 'node:crypto';
-import { useHome, ctx, tr, role } from '../core/context.mjs';
-import { isHome, ensureLayout, hostsBots } from '../core/home.mjs';
+import { useHome, ctx, tr } from '../core/context.mjs';
+import { isHome, ensureLayout } from '../core/home.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { PRODUCT } from '../core/product.mjs';
-import { botRelay } from './bot-relay.mjs';
 
 const transport = (() => {
   if (process.parentPort) return { send: (m) => process.parentPort.postMessage(m), on: (fn) => process.parentPort.on('message', (e) => fn(e.data)) };
@@ -18,12 +16,11 @@ const transport = (() => {
   throw new Error('el motor debe arrancarse desde la app');
 })();
 let remote = null; // phone access (src/engine/remote.mjs), when turned on
-let link = null; // 3.5: Magic Link to other Orbs (src/core/link.mjs)
-let replica = null; // 3.7 (WS3): the bots' homes and live copies between linked Orbs (src/engine/replica.mjs)
+let replica = null; // 3.7 (WS3): the bots' homes (src/engine/replica.mjs)
 let devControl = null; // 3.1: the developer's control line (src/engine/dev-control.mjs), only in Orb.dev
 // 3.6 «Personas»: every event goes through the router (src/engine/router.mjs), which works out once who it is for and
-// gives each sink only what its person may see: this PC's window (whoever sits at it), the phones and browsers, the
-// centre a workshop reports to, and the developer's control line (the owner's). Before the engine has started (no
+// gives each sink only what its person may see: this PC's window (whoever sits at it), the phones and browsers and the
+// developer's control line (the owner's). Before the engine has started (no
 // router yet), straight to the window.
 let router = null;
 const toWindow = (event, payload) => { try { transport.send({ type: 'event', event, payload }); } catch { /* window gone */ } };
@@ -37,7 +34,7 @@ const LOCKED_OK = new Set(['persons.unlock', 'app.lockState', 'app.state']);
 
 let api = null;
 let bridge = null; // 2.7: the files shared with Open Control Edge (engine/bridge.mjs)
-let oce = null; // 3.7 (WS8): Open Control Edge on this and the linked Orbs, and Optimus (engine/oce.mjs)
+let oce = null; // 3.7 (WS8): Open Control Edge and Optimus (engine/oce.mjs)
 let logFile = null;
 const log = (line) => { try { if (logFile) { rotateIfBig(logFile); fs.appendFileSync(logFile, `${new Date().toISOString()} ${line}\n`); } } catch { /* never fatal */ } };
 process.on('uncaughtException', (error) => log(`uncaughtException: ${error?.stack ?? error}`));
@@ -54,7 +51,7 @@ async function start(home, version, secret, browser) {
   const { applyPendingRestore } = await import('../core/backup.mjs');
   let restored = null;
   try { restored = applyPendingRestore(home); } catch (error) { console.error(`restaurar: ${error.message}`); }
-  // 3.6: an Orb moved to another machine does not serve phones or linked Orbs (src/core/export.mjs).
+  // 3.6: an Orb moved to another machine does not serve phones (src/core/export.mjs).
   { const { movedAway } = await import('../core/export.mjs'); ctx.moved = movedAway(home); }
   if (restored) { useHome(home); if (restored.secretChanged && restored.secret?.length >= 32) ctx.secret = Buffer.from(restored.secret.subarray(0, 32)); }
   // The agents' browser lives in the app (main process): its pipe and token go to the agents' MCP servers.
@@ -84,9 +81,6 @@ async function start(home, version, secret, browser) {
       toWindow(event, event === 'config:changed' && person !== ownerOfBoard(board) ? phoneConfig(payload) : payload);
     });
     router.add('remote', (event, payload, audience, to) => remote?.broadcast(event, payload, audience, to));
-    // A workshop passes its live events on to the centre of the person each one is for.
-    // 3.7 (WS2): the events of the bots run here go with their uids (never those of a copy: its home sends its own).
-    router.add('link', (event, payload, audience, to) => { const p = botRelay(board, event, payload); if (p) link?.relay(event, p, (pid) => to(pid ?? ownerOfBoard(board))); });
     router.add('dev', (event, payload, audience, to) => { if (devControl && to(ownerOfBoard(board))) devControl.broadcast(event, payload); });
   }
   // Only the coordinator's chat process gets this key; the MCP accepts the identity "orb" only with it.
@@ -158,82 +152,19 @@ async function start(home, version, secret, browser) {
   };
   sessions.onBlocked = (s, why) => blocked(s?.person_id ?? null, why);
   orchestrator.onBlocked = (c, why) => blocked(c?.person_id ?? null, why);
-  // 3.7 (WS2): what this Orb says it can do.
-  const { capsFor } = await import('../core/link.mjs');
-  const testCaps = process.env.ORB_FAKE_AGENTS && process.env.ORB_LINK_CAPS ? process.env.ORB_LINK_CAPS.split(',').filter(Boolean) : null;
-  const caps = () => testCaps ?? capsFor();
-  remote = remoteRef.current = createRemote({ board, api, log, emit, version, features: caps });
-  { let t = null; remote.onMirror = (peer, ev) => { if (ev?.e !== 'bot.message') return; clearTimeout(t); t = setTimeout(() => { replica?.syncNow?.().catch?.(() => {}); }, 500); t.unref?.(); }; }
-  // 3.5 Magic Link: the links this Orb made to other Orbs (keys sealed with the app's secret). A workshop linked to a
-  // centre runs the calls the centre forwards to it, with the same checks as a phone's.
+  remote = remoteRef.current = createRemote({ board, api, log, emit, version });
+  // 3.7 (WS3): one home per bot (src/engine/replica.mjs). 3.8: Orbs no longer link with each other, so every bot runs
+  // here; the bots' step of 3.8 removes it with the bots.
   {
-    const { createLink, orbIdentity, isHomeCall, isOceCall } = await import('../core/link.mjs');
-    const { macAddresses } = await import('../core/wol.mjs');
-    const { guardCall, shapeResult, orbNameOf } = await import('./remote.mjs');
-    const { audit, ownerOfBoard } = await import('../core/authz.mjs');
-    const { whoAsks, once } = await import('./forward.mjs');
-    const { readKey } = await import('../core/home.mjs');
-    const { orbIdOf } = await import('../core/backup.mjs');
-    const { cloneVerdict } = await import('../core/export.mjs');
-    let macs = { at: 0, list: [] }; // the network cards, looked at once a minute at most
-    const myMacs = () => { if (Date.now() - macs.at > 60_000) macs = { at: Date.now(), list: macAddresses() }; return macs.list; };
-    // Tests make an Orb of an older protocol with ORB_LINK_PROTOCOL (only with the test agents).
-    const testProtocol = process.env.ORB_FAKE_AGENTS && Number(process.env.ORB_LINK_PROTOCOL) ? Number(process.env.ORB_LINK_PROTOCOL) : null;
-    link = remoteRef.link = createLink({
-      file: path.join(ctx.paths.data, 'enlaces.json'), secret: ctx.secret ?? readKey(home), log,
-      ...(testProtocol ? { protocol: testProtocol, min: Math.min(2, testProtocol) } : {}),
-      // 3.6: with this Orb's identity (orbId, incarnation): the other side tells a moved Orb from a copy of it.
-      identity: () => { const id = orbIdOf(home); return { ...orbIdentity({ name: orbNameOf(ctx.config), role: role(), version, macs: myMacs() }), orb: { orbId: id.orbId, incarnation: id.incarnation, host: os.hostname().slice(0, 80) } }; },
-      verdict: cloneVerdict,
-      features: caps,
-      // 3.6 (A13, A12): the centre says who asked there; the call runs here as the person this link belongs to, once per
-      // request_id, audited.
-      onRequest: async (method, params, peer, { principal = null, requestId = null } = {}) => {
-        // 3.7 (WS3): the bots' homes and copies: the other Orb's identity and this link's persons decide (replica.mjs).
-        if (isHomeCall(method)) {
-          // 3.7 (WS8): read-only Open Control Edge readings (oce.status / oce.values), only for the owner's Orbs.
-          if (isOceCall(method)) { if (!oce) throw Object.assign(new Error('este Orb aún no está listo'), { status: 503 }); return oce.serve(peer, method, params); }
-          if (!replica) throw Object.assign(new Error('este Orb aún no está listo'), { status: 503 });
-          return replica.serve(peer, method, params);
-        }
-        const who = whoAsks(board, peer, principal);
-        const why = guardCall(board, method, params);
-        if (why) { audit(board, who, method, { type: 'link', id: peer?.id ?? '' }, 'deny', 'guard'); throw Object.assign(new Error(why), { status: 403 }); }
-        audit(board, who, method, { type: 'link', id: peer?.id ?? '' }, 'allow', 'forward');
-        return once(board, requestId, peer?.id, async () => {
-          // Tests: a workshop that takes its time (only with the test agents).
-          const delay = process.env.ORB_FAKE_AGENTS ? Number(params.__testDelayMs) || 0 : 0;
-          if (delay) { delete params.__testDelayMs; await new Promise((r) => setTimeout(r, Math.min(delay, 10_000))); }
-          return shapeResult(method, (await api.call(method, params, who)) ?? null);
-        });
-      },
-      onChange: (peers) => emit('link:peers', peers)
-    });
-    if (!ctx.moved) link.start();
-    // 3.7 (WS3): one home per bot, a live copy on the other linked Orbs (pulled whenever both are on).
-    {
-      const { createReplica } = await import('./replica.mjs');
-      replica = remoteRef.replica = createReplica({ board, bots, emit, log, link: () => link, remote: () => remote, api });
-      remote.onHomeCall = (peer, method, params) => {
-        if (!isHomeCall(method)) throw Object.assign(new Error('operación desconocida'), { status: 404 });
-        if (isOceCall(method)) { if (!oce) throw Object.assign(new Error('este Orb aún no está listo'), { status: 503 }); return oce.serve(peer, method, params); }
-        return replica.serve(peer, method, params);
-      };
-      remote.onOrbGone = (peer) => replica.onOrbGone(peer);
-      if (!ctx.moved) replica.start();
-    }
-    // 3.7 (WS8): Open Control Edge here and on the owner's linked Orbs (read-only), and its bot Optimus, made once.
-    {
-      const { createOce } = await import('./oce.mjs');
-      oce = createOce({ board, bots, log, link: () => link, remote: () => remote, replica: () => replica });
-      if (!ctx.moved) oce.start();
-    }
-    // 3.5: the bots live on the centre: what its bots say comes to this Orb's window as centro:<event>.
-    // 3.6: only to the person this link belongs to here (the centre already sends only that person's bots).
-    link.on('*', (event, payload, peer) => { if (hostsBots(peer?.role ?? 'taller') && /^bot\./.test(event)) emit(`centro:${event}`, payload, { person: peer?.person ?? ownerOfBoard(board) }); });
-    // 3.6 (moving an Orb): a linked Orb that looks like a copy of another is not served; the person of that link is told.
-    link.on('link:clone', (p, peer) => board.notice(tr('msg.link.clone', { name: p?.name ?? '' }), 'warning', { person: peer?.person ?? null }));
-    link.on('link:moved', (p, peer) => board.notice(tr('msg.link.moved', { name: p?.name ?? '' }), 'info', { person: peer?.person ?? null }));
+    const { createReplica } = await import('./replica.mjs');
+    replica = remoteRef.replica = createReplica({ board, bots, emit, log, api });
+    if (!ctx.moved) replica.start();
+  }
+  // 3.7 (WS8): Open Control Edge on this PC (read-only) and its bot Optimus, made once.
+  {
+    const { createOce } = await import('./oce.mjs');
+    oce = createOce({ board, bots, log, replica: () => replica });
+    if (!ctx.moved) oce.start();
   }
   // 3.1: only an unpacked Orb.dev started with ORB_DEV_CONTROL=1 (main.mjs decides; never an installed Orb).
   if (process.env.ORB_DEV_CONTROL === '1') {
@@ -285,7 +216,7 @@ async function start(home, version, secret, browser) {
   };
   setInterval(loop, 1500);
   board.onChange((what) => { if (what === 'tasks') setImmediate(loop); });
-  log(`motor arrancado (versión ${version}, papel ${role()}) en ${home}`);
+  log(`motor arrancado (versión ${version}) en ${home}`);
   if (restored) { log(`copia restaurada: ${restored.from} (lo anterior está en ${restored.aside})`); board.notice(tr('data.backup.restored', { created: String(restored.header?.created ?? '').slice(0, 16).replace('T', ' ') }), 'success'); }
   // Which agents this PC has, as the engine sees them (with the app's environment): first thing to look at if «Agentes»
   // says one is missing.
@@ -311,7 +242,7 @@ async function start(home, version, secret, browser) {
   // 2.6: the reports the assistant still owed when the app was closed come back.
   const owed = orchestrator.resume();
   if (owed) log(`asistente: ${owed} aviso(s) pendientes recuperados`);
-  return { home, name: ctx.config.assistantName, role: role() };
+  return { home, name: ctx.config.assistantName };
 }
 
 transport.on(async (msg) => {
@@ -328,7 +259,6 @@ transport.on(async (msg) => {
     try { devControl?.stop(); } catch { /* closing anyway */ }
     try { oce?.stop(); } catch { /* closing anyway */ }
     try { replica?.stop(); } catch { /* closing anyway */ }
-    try { link?.stop(); } catch { /* closing anyway */ }
     Promise.race([Promise.resolve(remote?.stop()).catch(() => {}), new Promise((r) => setTimeout(r, 4000))]).finally(() => setTimeout(() => process.exit(0), 300));
     return;
   }

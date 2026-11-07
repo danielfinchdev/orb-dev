@@ -121,7 +121,7 @@ export const MASK_OFF = `(() => { const m = globalThis.__orbMask; if (m) m.remov
 
 // 3.2.1: the page's alert/confirm/prompt (an off-screen page cannot show them) replaced in the page itself: they answer
 // what the agent chose (orb_browser_dialog) and are noted for it to read. Installed again on each page; the answer of the
-// tab is carried over. (Electron; Orb Server answers them from playwright's «dialog» event.)
+// tab is carried over (Electron).
 export const dialogsHook = (answer) => `(() => {
   window.__orbDialogAnswer = ${JSON.stringify({ accept: Boolean(answer?.accept), text: String(answer?.text ?? '') })};
   if (window.__orbDialogsOn) return; window.__orbDialogsOn = true;

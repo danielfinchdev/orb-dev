@@ -74,6 +74,5 @@ export default {
   'home.sameMerge': 'Merge them',
   'home.sameLater': "The other bot's copy has not arrived yet. Try again in a minute from its info.",
   'home.merged': 'Bots merged into "{name}"',
-  'home.twin': 'There is another bot called "{name}" in the same place.',
-  'msg.server.mapOwner': 'You are already you on both: pick someone else.'
+  'home.twin': 'There is another bot called "{name}" in the same place.'
 };

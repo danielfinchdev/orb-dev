@@ -69,7 +69,7 @@ export function personConfig(c, pid, name = null) {
     mcpServers: (c.mcpServers ?? []).filter((m) => m.person === pid).map((m) => ({ name: m.name, enabled: m.enabled, agents: m.agents })),
     accounts: (c.accounts ?? []).filter((a) => a.person === pid).map(({ home: _home, ...a }) => a),
     agents: Object.fromEntries(Object.entries(c.agents ?? {}).map(([k, a]) => { const { path: _path, ...rest } = a ?? {}; return [k, rest]; })),
-    projectRoots: [], mobile: { enabled: c.mobile?.enabled }, bots: { location: c.bots?.location }, protected: undefined, backup: undefined, devTarget: undefined
+    projectRoots: [], mobile: { enabled: c.mobile?.enabled }, bots: { location: c.bots?.location }, protected: undefined, backup: undefined
   };
 }
 

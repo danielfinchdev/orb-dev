@@ -1,5 +1,5 @@
 // 3.6: sharing a resource (a project, a bot, a group, an integration) with a person: view, talk or edit. Used by the
-// app's API (api.mjs) and by Orb Server's (src/server/api-server.mjs), which has no projects nor sessions.
+// app's API (api.mjs).
 import { tr } from '../core/context.mjs';
 import { can, rightOn, ownerOf, RIGHTS, audit, AuthzError } from '../core/authz.mjs';
 import { fail, str, oneOf } from './api-common.mjs';

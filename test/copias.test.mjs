@@ -28,7 +28,6 @@ function seed() {
   board.setting('pin_probe', 'hash-de-prueba'); // stands in for the persons' PIN hashes (same database)
   fs.mkdirSync(ctx.paths.logs, { recursive: true });
   fs.writeFileSync(path.join(ctx.paths.logs, 'GENERAL.md'), '# Bitácora\nLínea de prueba\n');
-  fs.writeFileSync(path.join(ctx.paths.data, 'enlaces.json'), JSON.stringify({ box: 'sellado' }));
   const secret = crypto.randomBytes(32);
   return { ...t, board, bot, secret };
 }
@@ -87,8 +86,7 @@ test('restore on a clean machine with the recovery code brings everything back',
     assert.ok(fs.existsSync(path.join(target, 'orb.json')));
     assert.equal(fs.readFileSync(path.join(target, 'bots', String(s.bot.id), 'memoria.md'), 'utf8').trim(), 'A Ana le gusta el té verde.');
     assert.match(fs.readFileSync(path.join(target, 'bitacora', 'GENERAL.md'), 'utf8'), /Línea de prueba/);
-    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(target, '.orb', 'datos', 'enlaces.json'), 'utf8')), { box: 'sellado' });
-    // The secret travels inside (the links and approvals keep working there).
+    // The secret travels inside (the approvals keep working there).
     assert.ok(fs.readFileSync(path.join(target, '.orb', 'datos', 'clave.bin')).equals(s.secret));
     const db = new DatabaseSync(path.join(target, '.orb', 'datos', 'orb.db'), { readOnly: true });
     try {

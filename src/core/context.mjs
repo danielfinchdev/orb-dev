@@ -2,7 +2,7 @@
 // The engine, the MCP server and the tests call useHome() once; every core module reads ctx.
 import fs from 'node:fs';
 import path from 'node:path';
-import { paths, loadConfig, writeJson, merge, AGENT_IDS, relabelEmptyLogs, ROLES, hostsBots, doesDev } from './home.mjs';
+import { paths, loadConfig, writeJson, merge, AGENT_IDS, relabelEmptyLogs } from './home.mjs';
 import { translate } from './i18n.mjs';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from './appearance.mjs';
 
@@ -11,10 +11,6 @@ export const ctx = { home: null, paths: null, config: null, secret: null }; // s
 // Message in the language of the settings (Spanish until a configuration is loaded).
 export const tr = (key, vars) => translate(ctx.config?.language ?? 'es', key, vars);
 
-// 3.5: this Orb's role (see ROLES in home.mjs). Every process reads it from orb.json, so the MCP servers agree with the engine.
-export const role = () => (ROLES.includes(ctx.config?.role) ? ctx.config.role : 'todo');
-export const keepsBots = () => hostsBots(role()); // «centro» or «todo»: the Orbs linked with it may use its bots
-export const programs = () => doesDev(role()); // «taller» or «todo»
 
 export function useHome(home) {
   ctx.home = home; ctx.paths = paths(home); ctx.config = loadConfig(home);
@@ -70,7 +66,7 @@ export function migrateConfigPersons(owner) {
 }
 
 // Settings saved from the app. Only known top-level keys are accepted.
-const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'oce', 'oneAtATime', 'approvalWaitMinutes', 'bots', 'role', 'devTarget', 'protected', 'backup', 'tz'];
+const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'oce', 'oneAtATime', 'approvalWaitMinutes', 'bots', 'protected', 'backup', 'tz'];
 export function saveConfig(patch) {
   const unknown = Object.keys(patch ?? {}).filter((k) => !EDITABLE.includes(k));
   if (unknown.length) throw new Error(tr('msg.ctx.unknownSettings', { unknown: unknown.join(', ') }));
@@ -130,8 +126,6 @@ export function validateConfig(c) {
     int(c.mobile.port, 1024, 65535, tr('msg.ctx.mobilePort'));
     for (const k of ['wifi', 'tailscale']) if (c.mobile[k] !== undefined && typeof c.mobile[k] !== 'boolean') throw new Error(tr('msg.ctx.mobileBool'));
   }
-  if (c.devTarget !== undefined && (typeof c.devTarget !== 'string' || !/^(|local|[\w-]{1,64})$/.test(c.devTarget))) throw new Error(tr('msg.ctx.badAppearance', { name: 'devTarget' }));
-  if (c.role !== undefined && !ROLES.includes(c.role)) throw new Error(tr('msg.ctx.badRole', { roles: ROLES.join(', ') }));
   if (!Array.isArray(c.accounts)) throw new Error(tr('msg.ctx.accountsList'));
   const ids = new Set();
   for (const a of c.accounts) {

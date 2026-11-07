@@ -1,4 +1,4 @@
-// 3.5, interface: the Bots mode (nav.bot*, bots.*) and the workshop from the phone. Magic Link (link.*): link.mjs.
+// 3.5, interface: the Bots mode (nav.bot*, bots.*). Magic Link (link.*): link.mjs.
 export default {
   'nav.mode': 'Mode',
   'nav.modeBots': 'Bots',
@@ -11,7 +11,6 @@ export default {
   'nav.botServer': 'Server',
   'nav.botSettings': 'Bot settings',
   'msg.link.noCentro': 'This Orb is not linked with any Orb that keeps bots',
-  'msg.link.centroOffline': '{name} is not answering: it is off or offline',
 
   'bots.aBot': 'A bot',
   'bots.chief': 'Chief',
@@ -46,9 +45,6 @@ export default {
   'bots.down.title': 'The bots are not answering',
   'bots.down.body': 'The server is off or offline. Check that it is on and try again.',
   'bots.down.retry': 'Retry',
-  'bots.centro.where': 'Bots on {name}',
-  'bots.centro.on': 'Connected',
-  'bots.centro.off': 'Offline',
 
   'bots.chat.hello': 'Talk to {name}',
   'bots.chat.helloGroup': 'Group {name}',

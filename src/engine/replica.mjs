@@ -18,7 +18,7 @@ import { ctx, tr } from '../core/context.mjs';
 import { AGENT_IDS } from '../core/home.mjs';
 import { oneLine } from '../core/safety.mjs';
 import { principalOf, authorize } from '../core/authz.mjs';
-import { ORB_SET } from '../core/policy.mjs';
+import { PHONE_SET, BOTS_OWNER } from '../core/policy.mjs';
 import { servedPersons, mappedPerson, localPersonFor, linkPerson } from '../core/link-persons.mjs';
 import * as R from '../core/replica.mjs';
 import * as B from '../core/bots.mjs';
@@ -26,6 +26,8 @@ import * as B from '../core/bots.mjs';
 const SYNC_MS = Number(process.env.ORB_REPLICA_MS) || 15_000;
 const TURN_WAIT_MS = Number(process.env.ORB_FAKE_AGENTS && process.env.ORB_MOVE_TURN_MS) || 180_000;
 // Orb Server runs only these brains (3.7 spec); an Orb with a window runs any it has.
+// What a linked Orb may ask here about the bots' copies.
+const PEER_CEILING = new Set([...PHONE_SET, ...BOTS_OWNER]);
 export const SERVER_BRAINS = ['claude', 'codex'];
 // What a copy may ask its home to do (the home checks the person's rights as for any forwarded call).
 export const FORWARDABLE = new Set(['bots.send', 'bots.stop', 'bots.pause', 'bots.update', 'bots.delete', 'bots.memory.set', 'bots.reminders.create', 'bots.reminders.cancel',
@@ -401,8 +403,8 @@ export function createReplica({ board, bots, emit = () => {}, log = () => {}, li
     if (!R.isHomeHere(board, row)) throw err(tr('msg.home.runsElsewhere', { name: row.name }), { status: 409, notHome: true });
     const person = mapFrom(peer)(p.person, p.forPerson);
     if (!person || !persons.has(person) && !board.one("SELECT 1 FROM shares WHERE resource_type = ? AND resource_id = ? AND person_id = ?", group ? 'group' : 'bot', String(row.id), person)) throw err(tr('msg.home.notMapped'), { status: 403, reason: 'notMapped' });
-    // As that person, with what an Orb of theirs may do here (the same ceiling as a confirmed Orb's calls).
-    const who = principalOf(board, { forwarded: true, person, ceiling: ORB_SET });
+    // As that person, with what an Orb of theirs may do here: a phone's calls and the bots' owner's.
+    const who = principalOf(board, { forwarded: true, person, ceiling: PEER_CEILING });
     const params = { ...(p.params ?? {}), id: row.id };
     if (p.refs?.item) { const line = board.one('SELECT id FROM chat WHERE uid = ?', String(p.refs.item)); if (!line) throw err(tr('msg.bots.cardGone'), { status: 404 }); params.item = line.id; }
     if (p.refs?.reminder) { const r = board.one('SELECT id FROM bot_reminders WHERE uid = ?', String(p.refs.reminder)); if (!r) throw err(tr('msg.bots.noReminder'), { status: 404 }); params.id = r.id; }
@@ -466,7 +468,7 @@ export function createReplica({ board, bots, emit = () => {}, log = () => {}, li
     if (!api) return null;
     const params = { ...(p.params ?? {}), id: row.id };
     if (p.refs?.reminder) { const r = board.one('SELECT id FROM bot_reminders WHERE uid = ?', String(p.refs.reminder)); if (!r) return null; params.id = r.id; }
-    return api.call(p.method, params, principalOf(board, { forwarded: true, person, ceiling: ORB_SET }));
+    return api.call(p.method, params, principalOf(board, { forwarded: true, person, ceiling: PEER_CEILING }));
   }
   async function drainQueue() {
     for (const q of board.all('SELECT * FROM link_queue WHERE status = ? ORDER BY id LIMIT 200', QUEUE_STATUS)) {

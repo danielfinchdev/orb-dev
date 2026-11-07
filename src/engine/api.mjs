@@ -7,7 +7,7 @@
 // (params, principal).
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx, saveConfig, tr, role } from '../core/context.mjs';
+import { ctx, saveConfig, tr } from '../core/context.mjs';
 import { AGENT_IDS, categoryOf, CATEGORIES } from '../core/home.mjs';
 import { accountsOf, accountDir, accountLabel, accounts as allAccounts } from '../core/accounts.mjs';
 import { usageReport, modelName, mayUseAccount, accountPerson, usageByPerson } from '../core/budget.mjs';
@@ -34,7 +34,7 @@ import { projectIcon, setProjectIcon, clearProjectIcon, renameProjectIcon } from
 import { git, slug } from '../core/workspace.mjs';
 import { authorize, principalOf, shapeFor, can, scopeSql, rightOn, ownerOf, RIGHTS, audit, AuthzError } from '../core/authz.mjs';
 import { fld, fail, str, int, oneOf, images, DECISION } from './api-common.mjs';
-import { botMethods, centroApi } from './api-bots.mjs';
+import { botMethods } from './api-bots.mjs';
 import { linkMethods } from './api-link.mjs';
 import { accountMethods } from './api-accounts.mjs';
 import { personMethods } from './api-persons.mjs';
@@ -158,7 +158,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   // 3.6 (WS2): locked: the lock screen is up (engine.mjs refuses every call but the unlock).
   const desktop = { person: null, locked: false };
   const desktopPrincipal = () => principalOf(board, { desktop: true, person: desktop.person });
-  // 3.6: sharing (src/engine/api-shares.mjs, also Orb Server's).
+  // 3.6: sharing (src/engine/api-shares.mjs).
   const shares = shareApi({ board, sessions, bots, log });
   const { setShare, removeShare } = shares;
   // What the other parts of the API share.
@@ -168,7 +168,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   const methods = {
     // 3.6: what each person sees is theirs (and what is shared with them): their approvals, tasks, conversations and lists.
     'app.state': (p, who) => ({
-      version, home: ctx.home, role: role(), paths: { projects: ctx.paths.projects, logs: ctx.paths.logs, mcp: ctx.paths.mcp, categories: ctx.paths.categories }, categories: CATEGORIES,
+      version, home: ctx.home, paths: { projects: ctx.paths.projects, logs: ctx.paths.logs, mcp: ctx.paths.mcp, categories: ctx.paths.categories }, categories: CATEGORIES,
       config: ctx.config, paused: board.setting('paused') === '1', activeProject: board.activeProject(personOf(who)),
       approvals: visibleApprovals(who).map((a) => ({ id: a.id, session_id: a.session_id, body: { title: a.body?.title, reason: a.body?.reason }, session: a.session })),
       counts: (() => { const s = scopeOf(who) ? scopeSql(who, 'task', 'tasks') : { where: '1=1', args: [] }; return Object.fromEntries(board.all(`SELECT status, COUNT(*) AS n FROM tasks WHERE ${s.where} GROUP BY status`, ...s.args).map((r) => [r.status, r.n])); })(),
@@ -201,15 +201,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return { ok: true };
     },
     'config.save': ({ patch }) => {
-      const before = [role(), ctx.config.devTarget];
       const c = saveConfig(patch ?? {}); emit('config:changed', c);
       // 3.6: the settings' userName is the admin's name: the admin's person follows it.
       if (typeof patch?.userName === 'string' && patch.userName.trim()) { try { const o = board.ownerId(); if (o) { renamePerson(board, o, patch.userName.trim()); board.changed('persons'); } } catch { /* a name taken by someone else: the settings keep it */ } }
-      // 3.5: a new role (or «Orb para programar») is told at once to the Orbs linked both ways, and to the phones.
-      if (role() !== before[0] || ctx.config.devTarget !== before[1]) {
-        try { remoteRef.link?.refresh(); } catch { /* next connection */ }
-        try { remoteRef.current?.relinkOrbs(); } catch { /* next connection */ }
-      }
       return c;
     },
 
@@ -671,25 +665,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     if (!id || !scopeOf(who) || mayUseAccount(board, who.person, id, { purpose: 'dev' })) return id;
     return fail(tr('msg.spend.notYours'));
   }
-  const centroCall = centroApi(shared);
 
   return {
     // 3.6: principal: who calls, built only by the entry points (engine.mjs for this PC's window, remote.mjs for a linked
-    // device, the link for a forwarded call, dev-control). Without one, a call from inside the engine itself (system).
+    // device, dev-control). Without one, a call from inside the engine itself (system).
     async call(method, params, principal) {
       const who = principal ?? principalOf(board, { system: true });
-      // 3.5: taller.<method> on a centre: its workshop (status, wake, queue, queued, or a call forwarded to it).
-      if (typeof method === 'string' && method.startsWith('taller.')) {
-        if (params === null || typeof params !== 'object' || Array.isArray(params)) fail(tr('msg.api.badParams'));
-        authorize(board, who, method, params);
-        try { return await remoteRef.current.taller(method.slice(7), params, { principal: who }); } catch (error) { error.userFacing = true; throw error; }
-      }
-      // 3.5: centro.<method> on a workshop: the bots of the centre it is linked with (one Orb per user: its bots live there).
-      if (typeof method === 'string' && method.startsWith('centro.')) {
-        if (params === null || typeof params !== 'object' || Array.isArray(params)) fail(tr('msg.api.badParams'));
-        authorize(board, who, method, params);
-        return centroCall(method.slice(7), params, who);
-      }
       const fn = Object.hasOwn(methods, method) ? methods[method] : null;
       if (!fn) fail(tr('msg.api.unknownAction', { method }));
       if (ctx.moved && !MOVED_OK.test(method)) fail(tr('data.move.movedAway'));

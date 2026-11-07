@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { Field, Input, Spinner } from '@/components/ui/basic.jsx';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/overlay.jsx';
 import { BotAvatar } from '@/components/bot-avatar.jsx';
-import { useStore, botCall, call, act, go, loadBots, phoneLayout, botsVia, uiLanguage } from '@/lib/store.js';
+import { useStore, botCall, call, act, go, loadBots, phoneLayout, uiLanguage } from '@/lib/store.js';
 import { newBotDraft, botPayload } from '@/lib/bots.js';
 import { useT } from '@/lib/i18n.js';
 import { SHAPE_IDS, COLOR_IDS, avatarFor, avatarParts, parseAvatar } from '../../../core/avatar.mjs';
@@ -130,7 +130,7 @@ function Templates({ disabled }) {
   const [open, setOpen] = useState(false);
   const [list, setList] = useState(null);
   const [busy, setBusy] = useState(null);
-  useEffect(() => { if (botsVia()) { setList([]); return; } call('templates.list', { lang }).then((l) => setList((l ?? []).filter((x) => x.bots?.length))).catch(() => setList([])); }, [lang]);
+  useEffect(() => { call('templates.list', { lang }).then((l) => setList((l ?? []).filter((x) => x.bots?.length))).catch(() => setList([])); }, [lang]);
   if (!list?.length) return null;
   const use = async (tpl) => {
     setBusy(tpl.id);

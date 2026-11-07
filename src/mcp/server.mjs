@@ -352,8 +352,8 @@ const remember = (out) => {
   return out;
 };
 // 3.7 (WS5): a human pace on real sites (orb.json browser.sites: a pause of 2–5 s between actions on a site, 300 an hour)
-// for the bots, and for every agent on Orb Server (its browser is a person's real one). Pages of this machine or the home
-// network: no pace (an agent testing its own web). Shared by every MCP process of this Orb (the database).
+// for the bots. Pages of this machine or the home network: no pace (an agent testing its own web). Shared by every MCP
+// process of this Orb (the database).
 const PACED = BROWSER_ONLY;
 const PACE_ACTIONS = new Set(['open', 'click', 'type', 'press', 'scroll', 'back']);
 const pace = createPace({ store: boardStore(board), sites: () => ctx.config.browser?.sites ?? {} });

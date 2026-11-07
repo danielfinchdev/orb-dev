@@ -13,8 +13,8 @@
 // entry is manifest.json (sha256 of every file), whose own hash is in the header.
 //
 // What goes in: the database (VACUUM INTO, so it is consistent while the engine runs), orb.json, bots/ (memories,
-// per-person files), bitacora/ (general and project logs), the whiteboards of the projects, the bots' trash, enlaces.json
-// and the secret that seals it, the recovery wrap. Optional: the project folders and the agents' login folders (off).
+// per-person files), bitacora/ (general and project logs), the whiteboards of the projects, the bots' trash, the app's
+// secret, the recovery wrap. Optional: the project folders and the agents' login folders (off).
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -120,7 +120,7 @@ export const walkFiles = (dir, skip = () => false) => {
   return out;
 };
 const NO_COPY = new Set(['node_modules', '.git', '.venv', '__pycache__', 'dist', 'build', '.next', '.cache']);
-const DATA_FILES = ['enlaces.json', 'clave.bin', 'copia-clave.json', 'orb-id.json'];
+const DATA_FILES = ['clave.bin', 'copia-clave.json', 'orb-id.json'];
 const rel = (home, file) => path.relative(home, file).split(path.sep).join('/');
 // The names inside a backup are relative to the Orb folder (.orb/…, bitacora/…).
 export const archiveName = (home, file) => rel(home, file);
@@ -146,7 +146,7 @@ async function stageFiles(home, stage, { secret, includeProjects = false, includ
     files.push(`${INTERNAL_DIR}/datos/orb.db`);
   }
   if (fs.existsSync(p.config)) await put(p.config, CONFIG_FILE);
-  // The secret that seals enlaces.json and the recovery wrap: on a new machine the links keep working.
+  // The secret that seals the approvals and the recovery wrap: on a new machine they keep working.
   if (secret) { await fsp.writeFile(path.join(stage, INTERNAL_DIR, 'datos', 'clave.bin'), Buffer.from(secret), { mode: 0o600 }); files.push(`${INTERNAL_DIR}/datos/clave.bin`); }
   for (const name of DATA_FILES.filter((n) => n !== 'clave.bin')) { const f = path.join(p.data, name); if (fs.existsSync(f)) await put(f, `${INTERNAL_DIR}/datos/${name}`); }
   for (const dir of [p.bots, p.logs, path.join(p.internal, 'bots-borrados')]) for (const f of walkFiles(dir)) await put(f, archiveName(home, f));
@@ -407,7 +407,7 @@ function unitOf(name) {
   return i > 0 ? s.slice(0, i + 1).join('/') : s.slice(0, Math.min(2, s.length - 1)).join('/');
 }
 
-// Called by the engine (and Orb Server) before the database is opened: a restore that is ready replaces what it holds;
+// Called by the engine before the database is opened: a restore that is ready replaces what it holds;
 // what was there before goes to .orb/antes-de-restaurar-<fecha>. → null, or { from, header, secretChanged }.
 export function applyPendingRestore(home) {
   const ready = pendingDir(home);

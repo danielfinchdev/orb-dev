@@ -5,7 +5,6 @@
 // A POLICY entry (all fields optional, but an entry must exist):
 //   public: true            anyone who reaches the method (after the channel's ceiling); no resource is checked
 //   ownerOnly: true         only the owner (role «owner»)
-//   admin: true             from a linked device, only one with «Puede administrar» (rights.admin)
 //   desktop: true           only from this PC's own window
 //   res: (params) => r      the resource(s) the call acts on: { type, id, right? } or a list of them; id null or ''
 //                           means none (a create, or a bad parameter the method itself refuses)
@@ -21,7 +20,7 @@
 // workstream, so merges do not conflict. A later section may replace an entry of an earlier one on purpose.
 
 // ---- ceilings: what each channel may call at most (the person's rights on the resource decide inside that).
-// What a phone (and a browser, a forwarded call) may call. Everything that changes settings, accounts,
+// What a phone (and a browser) may call. Everything that changes settings, accounts,
 // connectors, installs software or publishes stays on the PC. (3.5's ALLOWED of remote.mjs, moved here unchanged.)
 export const PHONE_SET = new Set(['app.state', 'chat.list', 'chat.send', 'conversations.list', 'conversations.update', 'conversations.search', 'projects.securityReview', 'chat.stop', 'chat.accept', 'chat.answer', 'chat.settings', 'whiteboard.load', 'whiteboard.save', 'whiteboard.note',
   'tasks.list', 'tasks.live', 'tasks.get', 'tasks.create', 'tasks.approve', 'tasks.retry', 'tasks.cancel', 'tasks.reassign', 'tasks.followup', 'tasks.undo', 'tasks.launchAnyway', 'tasks.accept',
@@ -40,32 +39,19 @@ export const PHONE_SET = new Set(['app.state', 'chat.list', 'chat.send', 'conver
   'bots.memory.get', 'bots.rules.get', 'bots.protected.get', 'bots.reminders.list', 'bots.reminders.create', 'bots.reminders.cancel', 'bots.ha.states', 'bots.srv.status',
   // 3.6 (WS4): the cards waiting for one's answer, and the memory changes a bot wanted (see, approve, undo).
   'bots.cards', 'bots.memory.pending', 'bots.memory.approve', 'bots.memory.history', 'bots.memory.undo', 'bots.ha.allow.get']);
-// 3.5: what the bots' owner manages from afar (a confirmed Orb of theirs, or a device with «Puede administrar»).
+// 3.5: what the bots' owner manages (the bots' copies on a linked Orb, src/engine/replica.mjs).
 export const BOTS_OWNER = ['bots.create', 'bots.update', 'bots.delete', 'bots.groups.create', 'bots.groups.update', 'bots.groups.delete', 'bots.memory.set', 'bots.rules.set', 'bots.protected.set', 'bots.ha.get', 'bots.ha.set',
   // 3.6 (WS4): what Home Assistant does without a card, and a bot's conversation brought by «Llevar mis bots».
   'bots.ha.allow.set', 'bots.history.import'];
-export const ORB_SET = new Set([...PHONE_SET, ...BOTS_OWNER]);
-export const CONSOLE_SET = new Set([...ORB_SET, 'link.qr', 'link.devices', 'link.rename', 'link.revoke', 'link.setAdmin', 'link.setApprove', 'link.confirm', 'link.peers', 'link.connect', 'link.disconnect']);
-// What the centre may forward to its workshop (the same work a phone may do there).
-export const FORWARD_SET = PHONE_SET;
 // '*': no ceiling; null: nothing (an agent's tool process uses authz.can / scopeSql directly, never the API).
-export const CEILING = { desktop: '*', system: '*', phone: PHONE_SET, browser: PHONE_SET, orb: ORB_SET, forward: FORWARD_SET, agent: null };
-// The ceiling of one principal: a device with «Puede administrar» gets the console's; an Orb of the owner the bots'
-// owner's only when confirmed and this Orb keeps bots (remote.mjs allowedFor, the same rule).
-export function ceilingFor(principal, { keepsBots = true } = {}) {
+export const CEILING = { desktop: '*', system: '*', phone: PHONE_SET, browser: PHONE_SET, agent: null };
+// The ceiling of one principal: the one its entry point gave (remote.mjs), else its channel's.
+export function ceilingFor(principal) {
   if (principal?.ceiling) return principal.ceiling;
   const ch = principal?.channel;
-  if (!Object.hasOwn(CEILING, ch)) return null;
-  if (['phone', 'browser', 'orb'].includes(ch) && principal.rights?.admin) return CONSOLE_SET;
-  if (ch === 'orb') return principal.confirmed !== false && keepsBots ? ORB_SET : PHONE_SET;
-  return CEILING[ch];
+  return Object.hasOwn(CEILING, ch) ? CEILING[ch] : null;
 }
-export const withinCeiling = (set, method) => {
-  if (set === '*') return true;
-  if (!set) return false;
-  const prefix = /^(taller|centro)\./.exec(String(method))?.[1];
-  return set.has(method) || Boolean(prefix && set.has(`${prefix}.*`));
-};
+export const withinCeiling = (set, method) => set === '*' || Boolean(set?.has(method));
 
 // ---- small helpers for the rules
 const id = (v) => (v == null || v === '' ? null : v);
@@ -218,27 +204,17 @@ const CORE = {
   'bots.ha.set': { ownerOnly: true },
   'bots.ha.states': { res: () => ({ type: 'integration', id: 'ha' }), right: 'view' },
   'bots.srv.status': { res: () => ({ type: 'integration', id: 'srv' }), right: 'view' },
-  'bots.where': { public: true }, // WS4: bots.location per person
-  'bots.moveTo': { ownerOnly: true },
-  // phone access and Magic Link (the console's: «Puede administrar» from afar)
-  'remote.status': { ownerOnly: true, admin: true },
-  'remote.enable': { ownerOnly: true, admin: true },
-  'remote.configure': { ownerOnly: true, admin: true },
-  'remote.pair': { ownerOnly: true, admin: true },
-  'remote.revoke': { ownerOnly: true, admin: true },
-  'link.qr': { ownerOnly: true, admin: true }, // WS2: a QR for oneself; for others owner only
-  'link.setApprove': { ownerOnly: true, admin: true },
-  'link.confirm': { ownerOnly: true, admin: true },
-  'link.setAdmin': { ownerOnly: true, admin: true },
-  'link.devices': { ownerOnly: true, admin: true }, // WS2: own devices for everyone
-  'link.revoke': { ownerOnly: true, admin: true },
-  'link.rename': { ownerOnly: true, admin: true },
-  'link.status': { public: true },
-  'link.connect': { ownerOnly: true, admin: true },
-  'link.peers': { ownerOnly: true, admin: true },
-  'link.disconnect': { ownerOnly: true, admin: true },
-  'taller.*': { public: true }, // WS2: forwarding rules (A13)
-  'centro.*': { public: true }, // WS2
+  // phone access and Magic Link (this PC's)
+  'remote.status': { ownerOnly: true },
+  'remote.enable': { ownerOnly: true },
+  'remote.configure': { ownerOnly: true },
+  'remote.pair': { ownerOnly: true },
+  'remote.revoke': { ownerOnly: true },
+  'link.qr': { ownerOnly: true }, // WS2: a QR for oneself; for others owner only
+  'link.setApprove': { ownerOnly: true },
+  'link.devices': { ownerOnly: true }, // WS2: own devices for everyone
+  'link.revoke': { ownerOnly: true },
+  'link.rename': { ownerOnly: true },
   // agents and accounts (WS3: own accounts for everyone, loans)
   'agents.status': { public: true },
   'agents.check': { ownerOnly: true },
@@ -266,28 +242,22 @@ const CORE = {
 };
 
 // ======== WS2 · gateway (remote, link): append entries here.
-// Devices and links are each person's: a person manages their own (api-link.mjs filters and checks the device), the owner
-// everyone's. A QR for someone else, a new person or «Puede administrar»: the owner only.
-const qrRule = (board, principal, params) => (principal.role === 'owner' || ((params.person == null || params.person === '' || params.person === principal.person) && !params.newPerson && !params.admin) ? true : 'notYours');
+// Devices are each person's: a person manages their own (api-link.mjs filters and checks the device), the owner
+// everyone's. A QR for someone else or a new person: the owner only.
+const qrRule = (board, principal, params) => (principal.role === 'owner' || ((params.person == null || params.person === '' || params.person === principal.person) && !params.newPerson) ? true : 'notYours');
 const GATEWAY = {
-  'link.qr': { admin: true, check: qrRule },
+  'link.qr': { check: qrRule },
   'link.devices': { public: true }, // own devices; the owner's: everyone's
   'link.revoke': { public: true }, // a device of one's own (api-link.mjs › mineDevice); the owner: any
   'link.rename': { public: true },
-  'link.status': { public: true }, // shaped per person (remote.mjs › linkStatus)
-  'link.connect': { public: true }, // the link is of whoever makes it
-  'link.peers': { public: true }, // own links only
-  'link.disconnect': { public: true }, // own links only
-  'taller.*': { public: true }, // forwarding (A13): only to the person's own workshop (remote.mjs › mayForward), audited
-  'centro.*': { public: true }, // the centre link of the person (api-bots.mjs › centroPeer)
   // this PC's window: the lock screen (engine-enforced, engine.mjs) and who may unlock it
   'persons.lock': { desktop: true },
   'persons.unlock': { desktop: true },
   'app.lockState': { desktop: true }
 };
-// What a phone, a browser or another Orb may also call: who it is for (persons.me, the names to share with)
-// and the PIN check that gives a strong ticket for sensitive cards (bound to that device).
-for (const set of [PHONE_SET, ORB_SET, CONSOLE_SET]) for (const m of ['persons.me', 'persons.list', 'persons.verifyPin']) set.add(m);
+// What a phone or a browser may also call: who it is for (persons.me, the names to share with) and the PIN check that
+// gives a strong ticket for sensitive cards (bound to that device).
+for (const m of ['persons.me', 'persons.list', 'persons.verifyPin']) PHONE_SET.add(m);
 // ======== WS3 · Orb mode + accounts: append entries here.
 // 3.6 (A9): Orb mode (tasks, direct conversations with an agent, schedules and new projects) needs «dev» among the
 // person's caps, or a project shared with them to «talk» or more (then in that project only). The owner always may.
@@ -383,19 +353,18 @@ const BOTSP = {
   'bots.reminders.cancel': { res: (p) => ({ type: 'reminder', id: id(p.id) }), right: 'own' },
   'bots.ha.allow.get': { public: true },
   'bots.ha.allow.set': { res: () => ({ type: 'integration', id: 'ha' }), right: 'talk' },
-  'bots.history.import': { res: (p) => bot(p.id), right: 'talk' },
-  'bots.where': { public: true } // each person's own place
+  'bots.history.import': { res: (p) => bot(p.id), right: 'talk' }
 };
 // ======== WS5 · data + time (backup, export, templates): append entries here.
 const DATA = {
   // Backups hold everyone's data: only the owner makes, lists, checks or restores them.
   'backup.status': { ownerOnly: true }, 'backup.list': { ownerOnly: true }, 'backup.now': { ownerOnly: true }, 'backup.verify': { ownerOnly: true },
-  'backup.restore': { ownerOnly: true, admin: true }, 'backup.recovery': { ownerOnly: true, admin: true },
+  'backup.restore': { ownerOnly: true }, 'backup.recovery': { ownerOnly: true },
   // Templates: anyone applies one for themselves; for someone else, only the owner.
   'templates.list': { public: true },
   'templates.apply': { check: (board, principal, params) => (params.person == null || params.person === principal.person || principal.role === 'owner' ? true : 'notYours') },
   // Moving the whole Orb is the owner's.
-  'data.moveExport': { ownerOnly: true, admin: true }, 'data.moveStatus': { ownerOnly: true }, 'data.moveUndo': { ownerOnly: true }, 'data.moveKeepBoth': { ownerOnly: true },
+  'data.moveExport': { ownerOnly: true }, 'data.moveStatus': { ownerOnly: true }, 'data.moveUndo': { ownerOnly: true }, 'data.moveKeepBoth': { ownerOnly: true },
   // A person's export: only their own (the owner gets someone's only through deleting them).
   'data.exportPerson': { check: selfOnly },
   'data.deletePerson': { check: selfOrOwner }
@@ -433,11 +402,10 @@ const UI = {
   'persons.pauseBots': { ownerOnly: true }
 };
 // A phone or a browser sets its own person's language, time zone and notification preview too.
-for (const set of [PHONE_SET, CONSOLE_SET]) for (const m of ['persons.update', 'persons.prefs.get', 'persons.prefs.set', 'persons.setPin', 'shares.list']) set.add(m);
+for (const m of ['persons.update', 'persons.prefs.get', 'persons.prefs.set', 'persons.setPin', 'shares.list']) PHONE_SET.add(m);
 // 3.6 (messaging lists): the lists are the same on every screen (a phone, a browser); a group's info too. Changing a
 // group's bots or people stays with the bots' owner from afar, like creating the group.
-for (const set of [PHONE_SET, ORB_SET, CONSOLE_SET]) for (const m of [...INBOX_METHODS, 'bots.groups.get']) set.add(m);
-for (const set of [ORB_SET, CONSOLE_SET]) for (const m of ['bots.groups.members.add', 'bots.groups.members.remove']) set.add(m);
+for (const m of [...INBOX_METHODS, 'bots.groups.get']) PHONE_SET.add(m);
 BOTS_OWNER.push('bots.groups.members.add', 'bots.groups.members.remove');
 
 // ---- 3.7 (Orb Server, WS3): one home per bot (src/engine/replica.mjs). Moving, restoring, merging: the bot's own person.
@@ -453,17 +421,11 @@ const HOME = {
   'replica.sync': { ownerOnly: true }
 };
 // From a phone (linked to the Orb that is the hub, 3.7 Q1): where bots run and «Pasar al …» of one's own bots.
-for (const set of [PHONE_SET, ORB_SET, CONSOLE_SET]) for (const m of ['bots.homes', 'bots.move', 'bots.restore']) set.add(m);
-for (const set of [ORB_SET, CONSOLE_SET]) for (const m of ['bots.merge', 'bots.sameBot']) set.add(m);
+for (const m of ['bots.homes', 'bots.move', 'bots.restore']) PHONE_SET.add(m);
 BOTS_OWNER.push('bots.merge', 'bots.sameBot');
 
 export const POLICY = Object.freeze({ ...CORE, ...GATEWAY, ...ORBMODE, ...BOTSP, ...DATA, ...INBOX, ...UI, ...HOME });
-export const policyOf = (method) => {
-  const m = String(method);
-  if (Object.hasOwn(POLICY, m)) return POLICY[m];
-  const prefix = /^(taller|centro)\./.exec(m)?.[1];
-  return prefix ? POLICY[`${prefix}.*`] : null;
-};
+export const policyOf = (method) => (Object.hasOwn(POLICY, String(method)) ? POLICY[String(method)] : null);
 
 // ---- events: who receives each one (authz.audienceOf). A rule is 'all' (no content in it), 'owner', or
 // (payload) => { type, id } (everyone with «view» on that resource) | { person } (that person) | 'all' | 'owner'.
@@ -483,26 +445,19 @@ const EVENTS_CORE = {
   'bot.updated': (p) => (p?.id ? bot(p.id) : 'all'),
   'bot.message': (p) => conv(p?.conversation),
   'bot.state': (p) => (p?.conversation ? conv(p.conversation) : bot(p?.bot)),
-  'link:peers': 'owner',
-  'link:status': 'owner',
   'link:devices': 'owner',
   'link:queue': (p) => (p?.person ? { person: p.person } : 'owner'),
   'agents:login': 'owner',
   'agents:install': 'owner',
   'installer:progress': 'owner',
   'agentBrowser:closeTask': (p) => task(p?.task),
-  'persons:switched': (p) => (p?.person ? { person: p.person } : 'owner'),
-  'centro:*': 'owner', // WS2: per person
-  'taller:*': 'owner' // WS2: per person
+  'persons:switched': (p) => (p?.person ? { person: p.person } : 'owner')
 };
 // WS2 … WS6 append their event rules in their own objects, like POLICY.
 const EVENTS_GATEWAY = {
   // chat:new of a line without conversation: EVENTS_ORBMODE (WS3).
   'persons:locked': 'all', // only this PC's window gets it (no phone listens to it)
-  'persons:unlocked': 'all',
-  // A workshop's events and the centre's bots: the router gives them the person of their link (engine.mjs, remote.mjs).
-  'taller:*': 'owner',
-  'centro:*': 'owner'
+  'persons:unlocked': 'all'
 };
 const EVENTS_ORBMODE = {
   // a sign-in: to the person of that account

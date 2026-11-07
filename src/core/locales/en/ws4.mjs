@@ -11,7 +11,6 @@ export default {
   'msg.bots.reminderLate': '({n} min late)',
   'msg.bots.memoryGone': 'That memory change isn\'t waiting anymore.',
   'msg.bots.badHaAllow': 'I don\'t understand "{entry}". Write domain.service and the entity, for example: light.turn_on light.living_room',
-  'msg.bots.moveMismatch': 'The copy of {name} didn\'t come out the same.',
   'sys.botmcp.memoryPending': 'Saved as pending: {user} has to approve it first.',
   'msg.guard.botOtherPerson': 'wants to read what another user keeps in this bot'
 };

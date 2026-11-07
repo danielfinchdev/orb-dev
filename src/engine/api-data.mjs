@@ -1,6 +1,6 @@
 // 3.6 (WS5): the engine's data methods: encrypted backups (src/core/backup.mjs), the wizard's templates
 // (src/core/templates.mjs) and moving the Orb to another machine. The daily copy at 03:00 (the owner's time zone) runs
-// from the engine's loop (tick). Desktop and the server's local socket only: no phone or linked Orb calls these.
+// from the engine's loop (tick). This PC's window only: no phone calls these.
 import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr, saveConfig } from '../core/context.mjs';
@@ -79,7 +79,7 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
       return { enabled: ctx.config.backup?.enabled !== false, folder: folder(), recovery: Boolean(rec), recoveryAt: rec?.at ?? null, last, running: Boolean(running), tz: ownerTz(board), hour: DAILY_HOUR, ...opts() };
     },
     'backup.list': async () => (await K.listBackups(folder())).map(({ file, ...b }) => ({ ...b, path: file })),
-    // kind: manual (Ajustes › Datos, orb-server copia ahora) or preupdate (the app, before installing a new version).
+    // kind: manual (Ajustes › Datos) or preupdate (the app, before installing a new version).
     'backup.now': ({ kind }) => run(['preupdate', 'premigration'].includes(kind) ? kind : 'manual'),
     'backup.verify': async ({ file, passphrase }) => { const r = await K.verifyBackup(fileOf(file), { secret: secret(), passphrase: pass(passphrase) }); return { ok: true, files: r.files, bytes: r.bytes, created: r.header.created, version: r.header.version }; },
     // The copy is checked and unpacked now; it replaces the data at the next start of the engine (restartNeeded).

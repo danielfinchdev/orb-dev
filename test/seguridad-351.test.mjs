@@ -2,9 +2,8 @@
 // its QR (never by what it says it is); the short code is tied to the Orb's key; browsers do not link over plain Wi-Fi
 // unless allowed; a bot's card records who answered and needs a device with the rights for it; the browser's OK is one
 // use on one site; Home Assistant's token belongs to its address; a bot reads only its own folder and is careful after
-// reading something from outside; the bots' turns per message are capped; a workshop needs the owner's confirmation;
-// the server's own terminal lists and removes devices and replaces a lost admin; a deleted bot's folder goes to Orb's
-// trash; notifications can hide what they say.
+// reading something from outside; the bots' turns per message are capped; a deleted bot's folder goes to Orb's trash;
+// notifications can hide what they say. 3.8: another Orb (or an Orb Terminal) is never linked.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -13,16 +12,16 @@ import path from 'node:path';
 import http from 'node:http';
 import crypto from 'node:crypto';
 import { tempHome, startEngine, until, ROOT } from './helpers.mjs';
-import { createLink } from '../src/core/link.mjs';
+import { createPhone } from './fixtures/phone-client.mjs';
 import * as C from '../src/core/mobile-crypto.mjs';
-import { allowedFor, kindForPairing, plainHttpBrowser, pushContent, pushPreview, phoneConfig, approverOf, CONSOLE_ALLOWED } from '../src/engine/remote.mjs';
+import { kindForPairing, plainHttpBrowser, pushContent, pushPreview, phoneConfig, approverOf } from '../src/engine/remote.mjs';
 import { openDb } from '../src/core/db.mjs';
 import { decide, botCheck, taintsBot, botDenyRules } from '../src/core/guard.mjs';
 
 const env = { ORB_REMOTE_BIND: '127.0.0.1', ORB_WOL_DRY: '1' };
 let srv; let tSrv; let port; let base; let dir;
 const links = [];
-const client = (name, kind) => { const l = createLink({ file: path.join(dir, `${crypto.randomUUID()}.json`), secret: crypto.randomBytes(32), identity: () => ({ name, kind, ...(kind === 'orb' ? { role: 'taller' } : {}) }) }); links.push(l); return l; };
+const client = (name, kind) => { const l = createPhone({ name, kind }); links.push(l); return l; };
 
 // The in-process part (bots, guard, memories) works on its own home, made last so this process uses it.
 let t; let board; let bots; let B; let Bots; let MAX_TREE; let botPersona;
@@ -30,7 +29,7 @@ before(async () => {
   if (!fs.existsSync(path.join(ROOT, 'src', 'renderer', 'index.html'))) throw new Error('compila antes la interfaz (npm run build)');
   port = 20000 + Math.floor(Math.random() * 20000);
   base = `http://127.0.0.1:${port}`;
-  tSrv = tempHome({ role: 'centro', mobile: { enabled: true, port, name: 'Servidor' } });
+  tSrv = tempHome({ mobile: { enabled: true, port, name: 'Servidor' } });
   srv = await startEngine(tSrv.home, { env });
   await until(async () => (await srv.call('remote.status')).running, 'acceso del servidor');
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-351-'));
@@ -49,46 +48,27 @@ after(async () => {
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* temp */ }
 });
 
-test('el tipo lo decide quien hace el QR: un aparato que dice ser un Orb no lo es', async () => {
-  assert.equal(kindForPairing(null, 'orb'), null, 'un QR normal no sirve para un Orb');
-  assert.equal(kindForPairing('orb', 'phone'), null, 'ni un QR de Orb para un móvil');
+test('el tipo lo decide quien hace el QR; otro Orb o una terminal nunca se enlazan', async () => {
+  assert.equal(kindForPairing(null, 'orb'), null, 'otro Orb no');
+  assert.equal(kindForPairing('phone', 'orb'), null, 'ni con un QR de móvil');
+  assert.equal(kindForPairing(null, 'terminal'), null, 'ni la terminal de Orb');
   assert.equal(kindForPairing('phone', 'browser'), 'phone', 'lo que se eligió al hacer el QR');
   assert.equal(kindForPairing(null, 'browser'), 'browser');
-  assert.equal(kindForPairing(null, 'terminal'), 'phone', 'la terminal de Orb ya no existe: cuenta como un móvil');
 
   const q = await srv.call('link.qr');
-  const fakeOrb = client('Falso Orb', 'orb');
-  await assert.rejects(fakeOrb.connect({ qr: q.url }), (e) => e.status === 403, 'se rechaza');
+  await assert.rejects(client('Falso Orb', 'orb').connect({ qr: q.url }), (e) => e.status === 403, 'se rechaza');
+  await assert.rejects(srv.call('link.qr', { device: 'orb' }), /dispositivo/, 'ni se hace un QR para un Orb');
   const phone = client('Móvil', 'phone');
   const me = await phone.connect({ qr: q.url });
   const dev = (await srv.call('link.devices')).find((d) => d.id === me.id);
   assert.equal(dev.kind, 'phone', 'el QR seguía valiendo para lo que era');
   await assert.rejects(phone.call(null, 'bots.create', { name: 'Intruso' }), (e) => e.status === 403);
-
-  const q2 = await srv.call('link.qr', { device: 'orb' });
-  assert.equal(q2.device, 'orb');
-  await assert.rejects(client('Móvil 2', 'phone').connect({ qr: q2.url }), (e) => e.status === 403, 'un móvil con un QR de Orb tampoco');
-  const orb = client('Mi portátil', 'orb');
-  const o = await orb.connect({ qr: q2.url });
-  const od = (await srv.call('link.devices')).find((d) => d.id === o.id);
-  assert.deepEqual([od.kind, od.confirmed, od.devOk, od.devPending], ['orb', true, false, true]);
-  const b = await orb.call(null, 'bots.create', { name: 'Desde el portátil', tools: ['recordatorios'] });
-  assert.ok(b.id, 'un Orb elegido al hacer el QR gestiona los bots');
-  await srv.call('bots.delete', { id: b.id });
+  // The old routes between Orbs are gone.
+  for (const r of ['/api/link', '/api/server-pair']) assert.equal((await fetch(`${base}${r}`, { method: 'POST', headers: { 'X-Orb-Device': me.id, 'Content-Type': 'application/json' }, body: '{}' })).status, 404);
+  assert.equal((await fetch(`${base}/api/server-hello`)).status, 401, 'nada que ver sin un dispositivo enlazado');
 });
 
-test('un Orb no se hace taller por decirlo: lo confirma el dueño en el centro', async () => {
-  const st = await srv.call('link.status');
-  assert.equal(st.tallers.length, 0, 'dice que programa, pero sin confirmar no cuenta');
-  const pending = (await srv.call('link.devices')).find((d) => d.devPending);
-  assert.ok(pending);
-  await srv.call('link.confirm', { id: pending.id, what: 'taller' });
-  const after2 = await srv.call('link.status');
-  assert.ok(after2.tallers.some((d) => d.id === pending.id), 'confirmado, ya cuenta');
-  assert.ok(CONSOLE_ALLOWED.has('link.confirm') && CONSOLE_ALLOWED.has('link.setApprove'));
-});
-
-test('los Orbs enlazados antes de la 3.5.1 se vuelven a confirmar y pierden «Puede administrar»', () => {
+test('los Orbs enlazados antes de la 3.5.1 se vuelven a confirmar y pierden «Puede administrar» en la base de datos', () => {
   const file = path.join(dir, 'vieja.db');
   const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
   const old = new DatabaseSync(file);
@@ -101,8 +81,6 @@ test('los Orbs enlazados antes de la 3.5.1 se vuelven a confirmar y pierden «Pu
   db.close();
   assert.deepEqual(rows.a, { id: 'a', kind_ok: 0, admin: 0, approve: 1, dev_ok: 0 }, 'el Orb, a confirmar y sin administrar');
   assert.deepEqual(rows.b, { id: 'b', kind_ok: 1, admin: 1, approve: 1, dev_ok: 0 }, 'el móvil sigue igual');
-  assert.ok(!allowedFor('centro', 'orb', false, false).has('bots.create'), 'sin confirmar, como un móvil');
-  assert.ok(allowedFor('centro', 'orb', false, true).has('bots.create'));
 });
 
 test('código corto: atado a la clave del Orb; un intermediario que cambia la clave no engaña', async () => {
@@ -156,9 +134,9 @@ test('tarjetas: quién aprueba queda guardado y hace falta un aparato con derech
   const lines = (b) => board.chat(B.botConversation(board, b), 200);
   bots.send(shop.id, 'Compra pan\nBOT_CALL bot_confirm {"action":"comprar","detail":"Pan, 2 €","url":"https://www.tienda.example/cesta","button":"Confirmar pedido"}');
   const card = await until(() => lines(shop).find((l) => l.meta?.kind === 'bot_card' && l.meta.card === 'confirm'), 'la tarjeta', 20000);
-  const guest = approverOf({ id: 'g', name: 'Tablet del salón', approve: 0 }, allowedFor('centro', 'phone'));
+  const guest = approverOf({ id: 'g', name: 'Tablet del salón', approve: 0 });
   await assert.rejects(() => bots.decide(card.id, 'allow', { by: guest }), /no puede aprobar/);
-  const mine = approverOf({ id: 'm', name: 'Móvil de Ana', approve: 1 }, allowedFor('centro', 'phone'));
+  const mine = approverOf({ id: 'm', name: 'Móvil de Ana', approve: 1 });
   assert.equal((await bots.decide(card.id, 'allow', { by: mine })).status, 'done');
   const row = board.chatRow(card.id);
   assert.deepEqual(row.meta.by, { device: 'm', name: 'Móvil de Ana' });
@@ -174,10 +152,10 @@ test('tarjetas: quién aprueba queda guardado y hace falta un aparato con derech
   board.settingJson(`bot_grant:${shop.id}`, { until: Date.now() + 60_000, action: 'comprar', detail: 'x', uses: 1 });
   assert.equal(B.takeGrant(board, shop.id, { url: 'https://tienda.example/', label: '' }), 'sys.botmcp.browserNeedsSite', 'sin web, no vale');
 
-  // Changing the bots: only the PC or a device that manages them.
+  // Changing the bots: only the PC.
   bots.send(chief.id, 'Crea uno\nBOT_CALL bot_create {"name":"Nuevo","tools":["internet"]}');
   const admin = await until(() => lines(chief).find((l) => l.meta?.kind === 'bot_card' && l.meta.card === 'admin'), 'la tarjeta de crear', 20000);
-  await assert.rejects(() => bots.decide(admin.id, 'allow', { by: mine }), /PC o desde un dispositivo/);
+  await assert.rejects(() => bots.decide(admin.id, 'allow', { by: mine }), /apruébala en el PC/);
   assert.equal((await bots.decide(admin.id, 'deny', { by: mine })).status, 'denied', 'decir que no siempre se puede');
   assert.equal(board.chatRow(admin.id).meta.by.name, 'Móvil de Ana');
 });

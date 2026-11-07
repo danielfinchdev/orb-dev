@@ -201,8 +201,8 @@ const SRC = {
   'bot-server': ['Bots server', 'src/ui/views/bots/more.jsx (BotServerView)'], 'bot-settings': ['Bots settings', 'src/ui/views/bots/more.jsx (BotSettingsView)']
 };
 const PC_VIEWS = ['chat', 'tasks', 'projects', 'agents', 'logs', 'activity', 'schedules', 'phone', 'tutorials', 'board', 'expert', 'bot-chat', 'bots', 'bot-groups', 'bot-reminders', 'bot-memory', 'bot-home', 'bot-server', 'bot-settings'];
-const PHONE_VIEWS = ['chat', 'chats', 'more', 'tasks', 'projects', 'logs', 'activity', 'schedules', 'phone', 'profile', 'tutorials', 'board', 'link', 'bot-chat', 'bots', 'bot-reminders', 'bot-home', 'bot-groups', 'bot-memory', 'bot-server', 'bot-settings'];
-const WEB_VIEWS = ['chat', 'tasks', 'projects', 'link', 'logs', 'bot-chat', 'bots', 'bot-reminders'];
+const PHONE_VIEWS = ['chat', 'chats', 'more', 'tasks', 'projects', 'logs', 'activity', 'schedules', 'phone', 'profile', 'tutorials', 'board', 'bot-chat', 'bots', 'bot-reminders', 'bot-home', 'bot-groups', 'bot-memory', 'bot-server', 'bot-settings'];
+const WEB_VIEWS = ['chat', 'tasks', 'projects', 'logs', 'bot-chat', 'bots', 'bot-reminders'];
 // 3.6: six sections (their parts are taken scrolling); «Mi perfil» is a window of its own (the user menu, 2+ users).
 const SETTINGS = [['general', 'General (assistant, folder, appearance, updates)'], ['magiclink', 'Magic Link (users, devices, linked Orbs)'], ['agentes', 'Agents (chat, tasks, test)'], ['datos', 'Data and backups'], ['avanzado', 'Advanced (tools, God mode)'], ['acerca', 'About (contribute, more apps)'], ['perfil', 'My profile']];
 

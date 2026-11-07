@@ -9,12 +9,12 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { tempHome, startEngine, until } from './helpers.mjs';
-import { createLink } from '../src/core/link.mjs';
+import { createPhone } from './fixtures/phone-client.mjs';
 import * as C from '../src/core/mobile-crypto.mjs';
 
 let A; let t; let port; let dir; let pushLog; let leo; let botId; let conv;
 const links = [];
-const device = (name, kind = 'phone') => { const l = createLink({ file: path.join(dir, `${crypto.randomUUID()}.json`), secret: crypto.randomBytes(32), identity: () => ({ name, kind }) }); links.push(l); return l; };
+const device = (name, kind = 'phone') => { const l = createPhone({ name, kind }); links.push(l); return l; };
 // A phone with notifications on and its app closed: its pushes go to the mock log.
 async function pushDevice(person, tag) {
   const l = device(`Avisos ${tag}`);
@@ -35,7 +35,7 @@ before(async () => {
   port = 20000 + Math.floor(Math.random() * 20000);
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-avisos-'));
   pushLog = path.join(dir, 'avisos.jsonl');
-  t = tempHome({ role: 'todo', mobile: { enabled: true, port, name: 'Casa', preview: 'all' } });
+  t = tempHome({ mobile: { enabled: true, port, name: 'Casa', preview: 'all' } });
   A = await startEngine(t.home, { env: { ORB_REMOTE_BIND: '127.0.0.1', ORB_PUSH_LOG: pushLog } });
   await until(async () => (await A.call('remote.status')).running, 'acceso');
   leo = await A.call('persons.create', { name: 'Leo' });

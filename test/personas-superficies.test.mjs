@@ -1,9 +1,9 @@
 // 3.6 «Personas», acceptance test 1 for the gateway (WS2): no leaks between Ana (owner) and Leo (user) on any surface.
 // Each one has a bot, a group, a project, a conversation with Orbe, a reminder, a task, a scheduled task and a direct
 // conversation with an agent, all marked with a word of their own (qzana… / qzleo…). Then, for each of Leo's ways in
-// (this PC's window after switching, phone, browser, his linked Orb, a call forwarded to a workshop, an agent's
+// (this PC's window after switching, phone, browser, a call forwarded by a linked Orb, an agent's
 // tool process) every POLICY method is called with Ana's ids: refused when it touches her things (audited), and nothing
-// of hers in what comes back. Leo's live events (window, phone, his Orb) and his phone's notifications (push mock) get
+// of hers in what comes back. Leo's live events (window, phone) and his phone's notifications (push mock) get
 // nothing of Ana while she uses every resource; and the other way round, Ana (the owner) gets nothing of Leo's content.
 //
 // GAPS (owned by other workstreams; the coordinator runs the full matrix after merging):
@@ -18,7 +18,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { tempHome, startEngine, until, wait, ROOT } from './helpers.mjs';
-import { createLink } from '../src/core/link.mjs';
+import { createPhone } from './fixtures/phone-client.mjs';
 import { POLICY, policyOf } from '../src/core/policy.mjs';
 import { Board } from '../src/core/board.mjs';
 import { authorize, principalOf, can } from '../src/core/authz.mjs';
@@ -66,7 +66,7 @@ function paramsFor(method, r, person) {
 const aims = (method, params) => { let list = []; try { list = [policyOf(method)?.res?.(params) ?? []].flat(); } catch { /* none */ } return list.some((x) => x && x.id != null && x.id !== '' && !['owner', 'integration'].includes(x.type)); };
 const methods = () => Object.keys(POLICY).filter((m) => !m.endsWith('.*') && !SKIP.has(m));
 
-const device = (name, kind) => { const l = createLink({ file: path.join(dir, `${crypto.randomUUID()}.json`), secret: crypto.randomBytes(32), identity: () => ({ name, kind }) }); links.push(l); return l; };
+const device = (name, kind) => { const l = createPhone({ name, kind }); links.push(l); return l; };
 async function pairFor(person, kind, name) {
   const l = device(name, kind);
   const q = await A.call('link.qr', { person, device: kind });
@@ -127,7 +127,7 @@ before(async () => {
   port = 20000 + Math.floor(Math.random() * 20000);
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-superficies-'));
   pushLog = path.join(dir, 'avisos.jsonl');
-  tA = tempHome({ role: 'todo', mobile: { enabled: true, port, name: 'Casa', preview: 'all' } });
+  tA = tempHome({ mobile: { enabled: true, port, name: 'Casa', preview: 'all' } });
   A = await startEngine(tA.home, { env: { ORB_REMOTE_BIND: '127.0.0.1', ORB_PUSH_LOG: pushLog } });
   await until(async () => (await A.call('remote.status')).running, 'acceso');
   await A.call('control.pause'); // no task runs (see GAPS)
@@ -167,8 +167,7 @@ async function sweep(call, other, label, t = null) {
 test('1a: Leo, por cada canal, no llega a nada de Ana (todas las reglas de POLICY)', async (t) => {
   const phone = await pairFor(leo.id, 'phone', 'Móvil de Leo');
   const browser = await pairFor(leo.id, 'browser', 'Navegador de Leo');
-  const orb = await pairFor(leo.id, 'orb', 'Orb de Leo');
-  for (const [d, label] of [[phone, 'móvil'], [browser, 'navegador'], [orb, 'Orb enlazado']]) {
+  for (const [d, label] of [[phone, 'móvil'], [browser, 'navegador']]) {
     assert.equal((await d.call('persons.me')).person.id, leo.id, label);
     await sweep(d.call, 'ana', label, t);
   }
@@ -176,7 +175,7 @@ test('1a: Leo, por cada canal, no llega a nada de Ana (todas las reglas de POLIC
   assert.equal((await A.call('persons.switch', { id: leo.id })).ok, true);
   try { await sweep(A.call, 'ana', 'ventana (Leo)', t); }
   finally { assert.equal((await A.call('persons.switch', { id: ana.id })).ok, true); }
-  // A call forwarded to this Orb as Leo (a workshop), and an agent's tool process of Leo: the same rules, in process.
+  // A call forwarded to this Orb as Leo (the bots' copies), and an agent's tool process of Leo: the same rules, in process.
   const fwd = principalOf(board, { forwarded: true, person: leo.id });
   const agent = principalOf(board, { agentToken: { person: leo.id, agent: 'claude' } });
   for (const m of methods()) {
@@ -204,12 +203,11 @@ test('1b: Ana (la dueña) tampoco lee nada de Leo; solo ve nombres y números', 
   const overview = await A.call('persons.overview');
   assert.deepEqual(leaks(overview, 'leo'), []);
   const o = overview.find((x) => x.id === leo.id);
-  assert.equal(o.counts.bots, 1); assert.equal(o.counts.projects, 1); assert.ok(o.devices >= 3);
+  assert.equal(o.counts.bots, 1); assert.equal(o.counts.projects, 1); assert.ok(o.devices >= 2);
 });
 
 test('1c: los directos, la ventana y los avisos de cada uno no llevan nada del otro', async () => {
   const leoPhone = await pairFor(leo.id, 'phone', 'Móvil de Leo (directo)');
-  const leoOrb = await pairFor(leo.id, 'orb', 'Orb de Leo (directo)');
   const anaPhone = await pairFor(ana.id, 'phone', 'Móvil de Ana (directo)');
   const leoPush = await pushDevice(leo.id, 'leo');
   const anaPush = await pushDevice(ana.id, 'ana');
@@ -228,9 +226,9 @@ test('1c: los directos, la ventana y los avisos de cada uno no llevan nada del o
     await wait(1500);
   };
 
-  // Ana uses everything while Leo sits at this PC's window and has his phone and his Orb open.
+  // Ana uses everything while Leo sits at this PC's window and has his phone open.
   assert.equal((await A.call('persons.switch', { id: leo.id })).ok, true);
-  const from = A.events.length; leoPhone.events.length = 0; leoOrb.events.length = 0; anaPhone.events.length = 0;
+  const from = A.events.length; leoPhone.events.length = 0; anaPhone.events.length = 0;
   try { await activity(anaPhone, 'ana'); } finally { assert.equal((await A.call('persons.switch', { id: ana.id })).ok, true); }
   const windowLeo = A.events.slice(from).filter((m) => m.event !== 'persons:switched');
   const check = (list, who, label) => {
@@ -241,7 +239,6 @@ test('1c: los directos, la ventana y los avisos de cada uno no llevan nada del o
   };
   check(windowLeo, 'ana', 'la ventana de Leo');
   check(leoPhone.events, 'ana', 'el móvil de Leo');
-  check(leoOrb.events, 'ana', 'el Orb de Leo');
   assert.ok(anaPhone.events.some((x) => leaks(x, 'ana').length), 'Ana sí recibe lo suyo');
   assert.ok(!pushes().some((x) => x.endpoint === leoPush.endpoint), 'ningún aviso al móvil de Leo');
   assert.ok(pushes().some((x) => x.endpoint === anaPush.endpoint), 'Ana sí recibe avisos');

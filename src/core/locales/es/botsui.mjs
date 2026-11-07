@@ -1,4 +1,4 @@
-// 3.5, interfaz: el modo Bots (nav.bot*, bots.*) y el taller desde el móvil. Magic Link (link.*): link.mjs.
+// 3.5, interfaz: el modo Bots (nav.bot*, bots.*). Magic Link (link.*): link.mjs.
 export default {
   'nav.mode': 'Modo',
   'nav.modeBots': 'Bots',
@@ -11,7 +11,6 @@ export default {
   'nav.botServer': 'Servidor',
   'nav.botSettings': 'Ajustes de bots',
   'msg.link.noCentro': 'Este Orb no está enlazado con ningún Orb que guarde bots',
-  'msg.link.centroOffline': '{name} no responde: está apagado o sin red',
 
   'bots.aBot': 'Un bot',
   'bots.chief': 'Jefe',
@@ -46,9 +45,6 @@ export default {
   'bots.down.title': 'Los bots no responden',
   'bots.down.body': 'El servidor está apagado o sin red. Comprueba que está encendido y vuelve a intentarlo.',
   'bots.down.retry': 'Reintentar',
-  'bots.centro.where': 'Bots en {name}',
-  'bots.centro.on': 'Conectado',
-  'bots.centro.off': 'Sin conexión',
 
   'bots.chat.hello': 'Habla con {name}',
   'bots.chat.helloGroup': 'Grupo {name}',

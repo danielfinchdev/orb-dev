@@ -1,8 +1,7 @@
 // 3.6: moving an Orb to another machine, and (with persons) exporting or deleting one person's data.
 //   moveExport: a .orbbak marked move:true that opens only with a passphrase; this Orb is then marked «moved» (it stops
-//               serving phones and linked Orbs until the user chooses «mantener ambos» or undoes the move).
+//               serving phones until the user chooses «mantener ambos» or undoes the move).
 //   moveImport: on the new machine, into a folder that is not an Orb: the same orbId with incarnation + 1.
-//   cloneVerdict: what a peer makes of an Orb it sees (same orbId: the newer incarnation wins; two at once is a clone).
 //   personFiles / exportPerson: one person's data (a .zip, or sealed with a passphrase); deletePerson: everything of them
 //               goes (rows and files) into a 30-day trash, their lines in shared groups become «(mensaje borrado)».
 import fs from 'node:fs';
@@ -38,17 +37,6 @@ export async function moveImport({ target, file, passphrase }) {
   catch (error) { if (fresh) fs.rmSync(target, { recursive: true, force: true }); throw error; }
   const id = setOrbId(target, { orbId: header.orbId, incarnation: (Number(header.incarnation) || 1) + 1, moved: null });
   return { ...r, orbId: id.orbId, incarnation: id.incarnation };
-}
-
-// known: what a peer remembers of this orbId ({ incarnation, host }); seen: what just said hello. →
-//   'new' (never seen), 'same', 'moved' (a newer incarnation: the peer follows it), 'clone' (an older incarnation, or the
-//   same incarnation from another machine: two Orbs claim to be one; the peer refuses it and tells the user).
-export function cloneVerdict(known, seen) {
-  if (!known?.orbId || !seen?.orbId || known.orbId !== seen.orbId) return 'new';
-  const [a, b] = [Number(known.incarnation) || 1, Number(seen.incarnation) || 1];
-  if (b > a) return 'moved';
-  if (b < a) return 'clone';
-  return known.host && seen.host && known.host !== seen.host ? 'clone' : 'same';
 }
 
 // ---- one person's data (3.6, persons). Export: a folder (zip) with everything that is theirs and nothing of anyone

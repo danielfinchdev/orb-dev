@@ -99,8 +99,7 @@ export function openLogin(accountId) {
 
 // 3.5 «Solo Orb»: the sign-in of Claude Code and Codex without a console (src/agents/login.mjs). Resolves with
 // { id, url, code?, opened, needsCode, mode }; how it ends comes as 'agents:login' events. The other agents (Cursor, the
-// ACP ones) keep their own console sign-in: { console: true }. mode: 'web' or 'device' (by default 'device' on the server,
-// whose browser is on another device).
+// ACP ones) keep their own console sign-in: { console: true }. mode: 'web' (the default) or 'device'.
 export async function startAccountLogin(accountId, { mode, emit = () => {}, onEnd = null } = {}) {
   const acc = account(accountId); if (!acc) throw new Error(tr('sys.agents.noAccount'));
   const a = adapter(acc.agent);

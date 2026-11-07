@@ -9,7 +9,7 @@ import { BrowserWindow, screen, session, ipcMain } from 'electron';
 import crypto from 'node:crypto';
 import { translate } from '../core/i18n.mjs';
 // 3.7 (WS5): the limits, keys, page scripts (with the secret fields left out), actions and pipe are shared with Orb
-// Server's browser (src/server/browser.mjs): src/core/browser-protocol.mjs. Here only what is Electron's.
+// src/core/browser-protocol.mjs. Here only what is Electron's.
 import { VIEW, MAX_TABS, dialogsHook, normalizeUrl, allowed, createActions, servePipe } from '../core/browser-protocol.mjs';
 import { electronDriver } from './browser-driver.mjs';
 

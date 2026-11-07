@@ -9,22 +9,20 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { tempHome, startEngine } from './helpers.mjs';
-import { ctx } from '../src/core/context.mjs';
 import { Board } from '../src/core/board.mjs';
 import * as B from '../src/core/bots.mjs';
 import * as K from '../src/core/backup.mjs';
-import { moveExport, moveImport, moveUndo, cloneVerdict, movedAway } from '../src/core/export.mjs';
+import { moveExport, moveImport, moveUndo, movedAway } from '../src/core/export.mjs';
 
 const PASS = 'una frase larga de prueba';
 
-test('move export → import on a new machine: same Orb, next incarnation, bots and links; the old one is marked', async () => {
+test('move export → import on a new machine: same Orb, next incarnation, bots; the old one is marked', async () => {
   const { home, cleanup } = tempHome();
   const board = new Board();
   const away = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-nuevo-'));
   try {
     const bot = B.createBot(board, { name: 'Leo' });
     B.writeMemory(bot.id, 'Memoria de Leo.', { mode: 'replace' });
-    fs.writeFileSync(path.join(ctx.paths.data, 'enlaces.json'), JSON.stringify({ box: 'enlaces-sellados' }));
     const secret = crypto.randomBytes(32);
     const before = K.orbIdOf(home);
     await assert.rejects(moveExport({ home, secret, passphrase: 'corta' }), /12/);
@@ -42,7 +40,6 @@ test('move export → import on a new machine: same Orb, next incarnation, bots 
     assert.equal(K.orbIdOf(target).moved, null);
     assert.equal(fs.readFileSync(path.join(target, 'bots', String(bot.id), 'memoria.md'), 'utf8').trim(), 'Memoria de Leo.');
     assert.ok(fs.readFileSync(path.join(target, '.orb', 'datos', 'clave.bin')).equals(secret));
-    assert.equal(fs.readFileSync(path.join(target, '.orb', 'datos', 'enlaces.json'), 'utf8'), JSON.stringify({ box: 'enlaces-sellados' }));
     // A normal backup is not a move.
     const plain = await K.createBackup({ home, secret, passphrase: PASS });
     await assert.rejects(moveImport({ target: path.join(away, 'Otro'), file: plain.file, passphrase: PASS }), /mover/);
@@ -52,16 +49,6 @@ test('move export → import on a new machine: same Orb, next incarnation, bots 
     const e = await startEngine(target);
     try { assert.ok((await e.call('bots.list')).bots.some((b) => b.name === 'Leo')); assert.equal((await e.call('app.state')).moved, null); } finally { await e.stop(); }
   } finally { board.db.close(); cleanup(); fs.rmSync(away, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
-});
-
-test('peers tell a move from a clone', () => {
-  const id = 'a'.repeat(32);
-  assert.equal(cloneVerdict(null, { orbId: id, incarnation: 1 }), 'new');
-  assert.equal(cloneVerdict({ orbId: id, incarnation: 1, host: 'pc-1' }, { orbId: id, incarnation: 1, host: 'pc-1' }), 'same');
-  assert.equal(cloneVerdict({ orbId: id, incarnation: 1, host: 'pc-1' }, { orbId: id, incarnation: 2, host: 'pc-2' }), 'moved');
-  assert.equal(cloneVerdict({ orbId: id, incarnation: 2, host: 'pc-2' }, { orbId: id, incarnation: 1, host: 'pc-1' }), 'clone');
-  assert.equal(cloneVerdict({ orbId: id, incarnation: 2, host: 'pc-2' }, { orbId: id, incarnation: 2, host: 'pc-3' }), 'clone');
-  assert.equal(cloneVerdict({ orbId: id, incarnation: 1 }, { orbId: 'b'.repeat(32), incarnation: 1 }), 'new');
 });
 
 test('engine: data.moveExport stops serving; the moved Orb refuses calls until «mantener ambos»', async () => {

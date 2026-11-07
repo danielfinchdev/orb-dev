@@ -250,7 +250,7 @@ function MyDevicesCard() {
   const t = useT();
   const me = useStore((s) => s.me);
   const [list, setList] = useState(null);
-  const load = () => call('link.devices').then((d) => setList(d.filter((x) => !x.person || x.person === me?.person?.id))).catch(() => call('link.status').then((s) => setList(s.devices ?? [])).catch(() => setList([])));
+  const load = () => call('link.devices').then((d) => setList(d.filter((x) => !x.person || x.person === me?.person?.id))).catch(() => setList([]));
   useEffect(() => { load(); }, []);
   if (!list) return null;
   const revoke = async (d) => { if (await confirm(t('link.revokeTitle', { name: d.name }), t('link.revokeBody'), { ok: t('link.revoke'), danger: true })) { await act(call('link.revoke', { id: d.id }), t('link.revoked')); load(); } };

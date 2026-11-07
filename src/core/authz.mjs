@@ -4,7 +4,7 @@
 //   can / must / rightOn / ownerOf / scopeSql     what the methods and the agents' tools use inside
 // A principal is built only by the entry points (principalOf), never from a call's parameters. Rows written by code that
 // does not stamp a person yet (person_id NULL) are the owner's. No engine imports: the MCP processes use it too.
-import { ctx, tr, keepsBots } from './context.mjs';
+import { ctx, tr } from './context.mjs';
 import { ownerId as findOwner } from './persons.mjs';
 import { policyOf, ceilingFor, withinCeiling, eventRule } from './policy.mjs';
 import { shapeGateway } from './shape.mjs';
@@ -12,12 +12,13 @@ import { shapeGateway } from './shape.mjs';
 export const RIGHTS = ['view', 'talk', 'edit'];
 const RANK = { view: 1, talk: 2, edit: 3, own: 4 };
 export const rank = (right) => RANK[right] ?? 0;
-export const CHANNELS = ['desktop', 'phone', 'browser', 'orb', 'forward', 'agent', 'system'];
+// forward: a call a linked Orb makes about the bots' copies (src/engine/replica.mjs).
+export const CHANNELS = ['desktop', 'phone', 'browser', 'forward', 'agent', 'system'];
 const SHAREABLE = new Set(['bot', 'group', 'project', 'integration']);
-const DEVICE_CHANNEL = { phone: 'phone', browser: 'browser', orb: 'orb' };
+const DEVICE_CHANNEL = { phone: 'phone', browser: 'browser' };
 
 // A refused call: 403, with a message the user may read (never what exists or whose it is).
-const REASON_KEY = { noDev: 'msg.authz.noDev', ceiling: 'msg.remote.pcOnly', ownerOnly: 'msg.authz.ownerOnly', admin: 'msg.authz.ownerOnly', strong: 'msg.authz.needPin', desktop: 'msg.remote.pcOnly' };
+const REASON_KEY = { noDev: 'msg.authz.noDev', ceiling: 'msg.remote.pcOnly', ownerOnly: 'msg.authz.ownerOnly', strong: 'msg.authz.needPin', desktop: 'msg.remote.pcOnly' };
 export class AuthzError extends Error {
   constructor(reason = 'denied', { method = null, resource = null } = {}) {
     super(tr(REASON_KEY[reason] ?? 'msg.authz.denied'));
@@ -40,11 +41,11 @@ const roleOf = (board, person) => {
 };
 
 // ---- principals
-// { person, role, channel, device?, rights: { approve, dev, admin }, strongUntil?, via?, remote?, confirmed?, ceiling? }
-// desktop: this PC's window (person: who sits there; the owner by default). device: a row of devices (a linked phone,
-// browser or Orb). forwarded: a call the centre passed to this workshop.
+// { person, role, channel, device?, rights: { approve, dev, admin }, strongUntil?, via?, remote?, ceiling? }
+// desktop: this PC's window (person: who sits there; the owner by default). device: a row of devices (a linked phone or
+// browser). forwarded: a call a linked Orb makes about the bots' copies (src/engine/replica.mjs).
 // agentToken: an agent's tool process ({ agent, task, conversation, bot, person }). system: the engine itself.
-// ceiling: a Set given by an entry point that already knows the device's (remote.mjs allowedFor).
+// ceiling: a Set given by an entry point that already knows the device's (remote.mjs: PHONE_SET).
 export function principalOf(board, { device = null, desktop = false, person = null, forwarded = false, agentToken = null, system = false, ceiling = null, strongUntil = null, via = null } = {}) {
   const owner = ownerOfBoard(board);
   const alive = (pid) => (pid && roleOf(board, pid) ? pid : null);
@@ -53,8 +54,7 @@ export function principalOf(board, { device = null, desktop = false, person = nu
   else if (desktop) p = { person: alive(person) ?? owner, channel: 'desktop', rights: { approve: true, dev: true, admin: true } };
   else if (device) {
     p = { person: alive(device.person_id) ?? owner, channel: forwarded ? 'forward' : DEVICE_CHANNEL[device.kind] ?? 'browser', device: String(device.id ?? ''), remote: true,
-      confirmed: device.kind !== 'orb' || Number(device.kind_ok ?? 1) === 1,
-      rights: { approve: Number(device.approve ?? 1) === 1, dev: Number(device.dev_ok ?? 0) === 1, admin: Boolean(Number(device.admin ?? 0)) } };
+      rights: { approve: Number(device.approve ?? 1) === 1, dev: false, admin: false } };
   } else if (forwarded) p = { person: alive(person) ?? owner, channel: 'forward', remote: true, rights: { approve: true, dev: false, admin: false } };
   else if (agentToken) p = { person: alive(agentToken.person) ?? owner, channel: 'agent', via: { agent: agentToken.agent ?? null, task: agentToken.task ?? null, conversation: agentToken.conversation ?? null, bot: agentToken.bot ?? null }, rights: { approve: false, dev: false, admin: false } };
   else throw new Error('principalOf: no entry point');
@@ -158,13 +158,12 @@ export function audit(board, principal, method, res, decision, reason) {
 export function authorize(board, principal, method, params = {}) {
   const deny = (reason, res = null) => { audit(board, principal, method, res, 'deny', reason); throw new AuthzError(reason, { method, resource: res }); };
   if (!principal || typeof principal !== 'object') deny('noPrincipal');
-  if (!withinCeiling(ceilingFor(principal, { keepsBots: keepsBots() }), method)) deny('ceiling');
+  if (!withinCeiling(ceilingFor(principal), method)) deny('ceiling');
   const rule = policyOf(method);
   if (!rule) deny('noPolicy');
   if (isSystem(principal)) return rule;
   if (rule.desktop && principal.channel !== 'desktop') deny('desktop');
   if (rule.ownerOnly && principal.role !== 'owner') deny('ownerOnly');
-  if (rule.admin && principal.remote && !principal.rights?.admin) deny('admin');
   if (typeof rule.check === 'function') { const ok = rule.check(board, principal, params ?? {}); if (ok !== true) deny(typeof ok === 'string' ? ok : 'check'); }
   if (typeof rule.res === 'function') {
     let list; try { list = rule.res(params ?? {}); } catch { list = null; }

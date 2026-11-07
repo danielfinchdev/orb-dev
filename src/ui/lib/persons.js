@@ -107,7 +107,7 @@ export function usageRows(rows = []) {
   return { list, total };
 }
 
-// Protocol of the links (src/core/link.mjs › PROTOCOL): an Orb that asks for more than this app speaks must be updated.
+// Protocol of the links (src/core/link-payload.mjs › PROTOCOL): an Orb that asks for more than this app speaks must be updated.
 export const PROTOCOL = 3;
 export const needsAppUpdate = (me) => Number(me?.min ?? 0) > PROTOCOL;
 

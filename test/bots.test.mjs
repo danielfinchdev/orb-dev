@@ -216,13 +216,8 @@ test('el motor: Asistente la primera vez, la API de los bots y los permisos del 
     const ha = await engine.call('bots.ha.set', { url: 'http://192.168.1.10:8123/', token: 'abc' });
     assert.deepEqual(ha, { url: 'http://192.168.1.10:8123', hasToken: true });
   } finally { await engine.stop(); t2.cleanup(); }
-  // 3.5 (interface): a phone talks to the bots; changing them is for the PC (or, on a server, its linked browser and Orb:
-  // test/bots-centro.test.mjs).
-  const { allowedFor } = await import('../src/engine/remote.mjs');
-  for (const kind of ['phone', 'browser']) {
-    const phone = allowedFor('taller', kind);
-    for (const m of ['bots.send', 'bots.decide', 'bots.chat']) assert.ok(phone.has(m), m);
-    for (const m of ['bots.create', 'bots.ha.set', 'bots.rules.set', 'bots.memory.set']) assert.ok(!phone.has(m), `${m}: solo en el PC`);
-  }
-  assert.ok(!allowedFor('centro', 'phone').has('bots.create'));
+  // 3.5 (interface): a phone or a browser talks to the bots; changing them is for the PC.
+  const { PHONE_SET } = await import('../src/core/policy.mjs');
+  for (const m of ['bots.send', 'bots.decide', 'bots.chat']) assert.ok(PHONE_SET.has(m), m);
+  for (const m of ['bots.create', 'bots.ha.set', 'bots.rules.set', 'bots.memory.set']) assert.ok(!PHONE_SET.has(m), `${m}: solo en el PC`);
 });

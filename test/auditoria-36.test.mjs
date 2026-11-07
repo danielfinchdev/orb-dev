@@ -3,7 +3,7 @@
 // crafted params: the other person's ids in every slot, names instead of ids, @ mentions, searches, dependencies,
 // members, paths into the other person's folders and climbing out of one's own. Then the places that do not go through
 // the API: the agents' tool process (messages between agents, registering a folder), the assistant's own file reading,
-// the export of a person, a forwarded call's request id and the guard's confinement of relative paths.
+// the export of a person and the guard's confinement of relative paths.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -16,9 +16,8 @@ import { tempHome, startEngine, until, wait, ROOT } from './helpers.mjs';
 import { POLICY } from '../src/core/policy.mjs';
 import { Board } from '../src/core/board.mjs';
 import { paths } from '../src/core/home.mjs';
-import { createLink } from '../src/core/link.mjs';
+import { createPhone } from './fixtures/phone-client.mjs';
 import { agentToken } from '../src/engine/sessions.mjs';
-import { once } from '../src/engine/forward.mjs';
 import { confineFor, confineCheck, decide } from '../src/core/guard.mjs';
 import { unzipFiles } from '../src/core/export.mjs';
 
@@ -33,7 +32,7 @@ const all = (q, ...args) => { const d = db(); try { return d.prepare(q).all(...a
 // touches this PC (installs, Remote Desktop, the phone access, restoring a backup, moving the Orb).
 const SKIP = new Set(['persons.switch', 'persons.lock', 'persons.unlock', 'app.lockState', 'persons.remove', 'persons.rename', 'persons.setPin', 'data.deletePerson',
   'templates.apply', 'installer.start', 'agents.install', 'github.login', 'backup.restore', 'backup.now', 'data.moveExport', 'data.moveUndo', 'data.moveKeepBoth',
-  'remote.enable', 'remote.configure', 'remote.revoke', 'config.save', 'control.pause', 'control.resume', 'link.revoke', 'link.qr', 'link.connect',
+  'remote.enable', 'remote.configure', 'remote.revoke', 'config.save', 'control.pause', 'control.resume', 'link.revoke', 'link.qr',
   'agents.login', 'agents.loginCode', 'agents.loginCancel', 'agents.check', 'accounts.scan', 'backup.verify', 'backup.recovery',
   // creates that would make the caller's own things named with the other person's word (each one checked on its own below)
   'bots.create', 'bots.groups.create', 'persons.create', 'accounts.add', 'images.mark', 'actions.save', 'projects.create', 'inbox.sections.create', 'inbox.sections.rename']);
@@ -80,7 +79,7 @@ async function sweep(call, other, label) {
   assert.deepEqual(bad, [], `${label}: ${bad.slice(0, 12).join(' · ')}`);
 }
 
-const device = () => { const l = createLink({ file: path.join(dir, `${crypto.randomUUID()}.json`), secret: crypto.randomBytes(32), identity: () => ({ name: 'Móvil de Leo', kind: 'phone' }) }); links.push(l); return l; };
+const device = () => { const l = createPhone({ name: 'Móvil de Leo', kind: 'phone' }); links.push(l); return l; };
 async function phoneFor(person) {
   const l = device();
   const peer = await l.connect({ qr: (await A.call('link.qr', { person, device: 'phone' })).url });
@@ -132,7 +131,7 @@ before(async () => {
   if (!fs.existsSync(path.join(ROOT, 'src', 'renderer', 'index.html'))) throw new Error('compila antes la interfaz (npm run build)');
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-auditoria-'));
   const port = 20000 + Math.floor(Math.random() * 20000);
-  t = tempHome({ role: 'todo', mobile: { enabled: true, port, name: 'Casa', preview: 'all' } });
+  t = tempHome({ mobile: { enabled: true, port, name: 'Casa', preview: 'all' } });
   A = await startEngine(t.home, { env: { ORB_REMOTE_BIND: '127.0.0.1', ORB_PUSH_LOG: path.join(dir, 'avisos.jsonl') } });
   await until(async () => (await A.call('remote.status')).running, 'acceso');
   await A.call('control.pause');
@@ -256,17 +255,6 @@ test('el uso por persona son números; Leo no lo ve', async () => {
   for (const r of rows) assert.deepEqual(Object.keys(r).sort(), ['month', 'name', 'person', 'today']);
   assert.equal((await A.call('persons.switch', { id: leo.id })).ok, true);
   try { await assert.rejects(A.call('usage.byPerson'), (e) => /admin|No tienes/i.test(e.message)); } finally { assert.equal((await A.call('persons.switch', { id: ana.id })).ok, true); }
-});
-
-test('la respuesta guardada de una llamada reenviada es de su enlace', async () => {
-  const b = new Board();
-  try {
-    let runs = 0;
-    const fn = async () => ({ value: ++runs });
-    assert.deepEqual(await once(b, 'req-1', 'enlace-ana', fn), { value: 1 });
-    assert.deepEqual(await once(b, 'req-1', 'enlace-ana', fn), { value: 1 }); // the same link: once
-    assert.deepEqual(await once(b, 'req-1', 'enlace-leo', fn), { value: 2 }); // another link: never the stored answer
-  } finally { b.close?.(); }
 });
 
 test('el guardia: una ruta relativa que sale de la carpeta, y la exclusión del asistente de la dueña', () => {
