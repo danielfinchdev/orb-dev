@@ -410,7 +410,7 @@ export function createReplica({ board, bots, emit = () => {}, log = () => {}, li
     // A message keeps its uid (the copy already shows it) and says when it was written.
     if (method === 'bots.send') {
       authorize(board, who, 'bots.send', { id: row.id });
-      const r = bots.send(row.id, String(params.text ?? ''), { person, uid: R.isUid(p.lineUid) ? p.lineUid : null, sentAt: p.sentAt ?? null, via: ['phone', 'terminal'].includes(params.via) ? params.via : null });
+      const r = bots.send(row.id, String(params.text ?? ''), { person, uid: R.isUid(p.lineUid) ? p.lineUid : null, sentAt: p.sentAt ?? null, via: params.via === 'phone' ? 'phone' : null });
       return { ok: true, conversation: r.conversation };
     }
     if (method === 'bots.relay') { authorize(board, who, 'bots.send', { id: row.id }); bots.relayIn(row.id, { from: params.from, text: String(params.text ?? '').slice(0, 8000), topic: params.topic ?? null, person }); return { ok: true }; }

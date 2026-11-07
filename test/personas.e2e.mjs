@@ -1,6 +1,6 @@
 // 3.6 «Personas», end to end without any window: the PC's own interface (the built renderer in headless Edge, with a
 // stand-in for Electron's bridge that talks to the engine like the app does), Leo's phone and Leo's browser (linked with
-// a QR made «para Leo») and Leo's terminal client. Ana (the admin) goes through the welcome (3.5.1's), adds Leo in Ajustes,
+// a QR made «para Leo»). Ana (the admin) goes through the welcome (3.5.1's), adds Leo in Ajustes,
 // applies «Casa» from «Nuevo bot», has her own bot, project and chat; Leo, on every channel, sees nothing of hers. Also the person
 // menu, switching with a PIN, the engine's lock, Ajustes › Personas / Mi perfil / Datos, «¿Para quién?», the share dialog
 // and «Prestar a…». Screenshots: test-results/personas-*.png. The engine runs with the fake agents in a throwaway folder.
@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { fork, spawn } from 'node:child_process';
+import { fork } from 'node:child_process';
 import { tempHome, ROOT, until } from './helpers.mjs';
 
 const OUT = path.join(ROOT, 'test-results'); fs.mkdirSync(OUT, { recursive: true });
@@ -18,7 +18,6 @@ const RENDERER = path.join(ROOT, 'src', 'renderer');
 if (!fs.existsSync(path.join(RENDERER, 'index.html'))) throw new Error('compila antes la interfaz (npm run build)');
 const port = 20000 + Math.floor(Math.random() * 20000);
 const t = tempHome({ mobile: { enabled: true, port, name: 'Portátil' } });
-const termDir = fs.mkdtempSync(path.join(t.base, 'terminal-'));
 const engine = fork(path.join(ROOT, 'src', 'engine', 'engine.mjs'), [], { stdio: ['ignore', 'inherit', 'inherit', 'ipc'], env: { ...process.env, ORB_REMOTE_BIND: '127.0.0.1', ORB_BACKUP_DELAY_MS: '999999999' }, windowsHide: true });
 let n = 0; const pending = new Map(); const streams = new Set();
 engine.on('message', (m) => {
@@ -314,28 +313,8 @@ try {
   assert.deepEqual(leaks(await web.textContent('body')), [], 'el navegador de Leo');
   await shotOf(web)('20-navegador-leo');
 
-  // ---- 6. Leo's terminal client.
-  step = 'terminal de Leo';
-  const qt = await call('link.qr', { person: leo.id, device: 'terminal' });
-  const cli = (args) => new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [path.join(ROOT, 'src', 'terminal', 'orb-cli.mjs'), ...args], { env: { ...process.env, ORB_TERMINAL_HOME: termDir, ORB_LANG: 'es', NO_COLOR: '1' }, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
-    let out = ''; child.stdout.on('data', (d) => { out += d; }); child.stderr.on('data', (d) => { out += d; });
-    const timer = setTimeout(() => { child.kill(); reject(new Error(`tiempo agotado: ${args.join(' ')}\n${out}`)); }, 60_000);
-    child.on('exit', (code) => { clearTimeout(timer); resolve({ code, out }); });
-    child.stdin.end();
-  });
-  const linked = await cli(['enlazar', qt.code, `127.0.0.1:${port}`]);
-  assert.equal(linked.code, 0, linked.out);
-  // (a message would wait for an answer: Leo has no account of his own nor a loan, so his assistant does not run)
-  for (const args of [['estado', '--json'], ['estado'], ['dispositivos'], ['enlaces']]) {
-    const r = await cli(args);
-    assert.equal(r.code, 0, r.out);
-    assert.deepEqual(leaks(r.out), [], `orb ${args.join(' ')}`);
-  }
-  assert.ok((await call('link.devices')).some((d) => d.person === leo.id && d.kind === 'terminal'), 'la terminal es de Leo');
-
   assert.deepEqual(errors, [], `errores: ${errors.join(' | ')}`);
-  console.log(`✔ personas de punta a punta (PC, móvil, navegador y terminal de Leo sin nada de Ana):\n${shots.join('\n')}`);
+  console.log(`✔ personas de punta a punta (PC, móvil y navegador de Leo sin nada de Ana):\n${shots.join('\n')}`);
 } catch (error) {
   await pc.screenshot({ path: path.join(OUT, 'personas-fallo.png') }).catch(() => {});
   console.error(`✖ falló en «${step}»: ${error.stack}\nerrores: ${errors.join(' | ')}`);

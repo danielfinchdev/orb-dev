@@ -1,5 +1,5 @@
 // 3.5: lo aprendido de otros proyectos (docs/LEARNINGS-3.5.md). Un bot enseña lo que está haciendo en una línea tranquila
-// (sus pasos, como el chat del asistente), sabe que le escriben desde el móvil o una terminal (lo dice el dispositivo
+// (sus pasos, como el chat del asistente), sabe que le escriben desde el móvil (lo dice el dispositivo
 // enlazado, nunca el mensaje) y no pide secretos por el chat.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -34,7 +34,7 @@ test('el bot enseña sus pasos mientras trabaja y los quita al terminar', async 
   assert.equal(last.since ?? null, null);
 });
 
-test('desde el móvil o una terminal, el bot recibe una línea para contestar a la medida; desde el PC, nada', async () => {
+test('desde el móvil, el bot recibe una línea para contestar a la medida; desde el PC, nada', async () => {
   const fakeLog = path.join(t.base, 'fake.jsonl'); process.env.ORB_FAKE_LOG = fakeLog;
   try {
     const bot = B.getBot(board, 'Asistente');
@@ -52,7 +52,6 @@ test('desde el móvil o una terminal, el bot recibe una línea para contestar a 
     const mine = board.chat(B.botConversation(board, bot), 200).filter((l) => l.role === 'usuario').map((l) => l.body);
     assert.ok(mine.includes('Mensaje del móvil') && !mine.some((b) => /AVISO DEL SISTEMA/.test(b)));
   } finally { delete process.env.ORB_FAKE_LOG; }
-  assert.match(viaNote('terminal'), /terminal/);
   assert.equal(viaNote('browser'), '');
   assert.equal(viaNote('nada'), '');
 });

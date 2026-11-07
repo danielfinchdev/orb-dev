@@ -3,7 +3,7 @@
 //   back with it (remote.onServerOffer: the app links to the server with the server's own offer, as with a QR).
 // - Who is who: the persons of this app mapped to persons of the server (link_persons on both sides, confirmed by the
 //   owner; never by name). Their forwarded calls and their bots' events follow the mapping (forward.mjs, link.relay).
-// - The hub handoff (3.7 Q1): with a Server linked, this app hands its phones and terminals to it (link:handoff: a one-time
+// - The hub handoff (3.7 Q1): with a Server linked, this app hands its phones to it (link:handoff: a one-time
 //   offer of the server, sealed for each device on its existing link); they link there by themselves and their Orb mode
 //   comes back here through the server's taller.* relay. Unlinking the server hands them back (link:handback).
 // - The guide after pairing: the server's own Claude / Codex sign-in (agents.login on the server, windowless; the server
@@ -17,7 +17,7 @@ import { serverSkew, missingCap, CAPS } from '../core/server-pair.mjs';
 import { HOME_SQL } from '../core/replica.mjs';
 import { oneLine } from '../core/safety.mjs';
 
-const KINDS = ['phone', 'browser', 'terminal'];
+const KINDS = ['phone', 'browser'];
 const HANDBACK_MS = 3 * 86_400_000;
 const err = (message, extra = {}) => Object.assign(new Error(message), { userFacing: true, ...extra });
 const now = () => new Date().toISOString();

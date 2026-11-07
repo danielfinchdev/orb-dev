@@ -96,7 +96,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   // «nothing is sent, bought or booked without my OK». homeAssistant: the address of the user's Home Assistant (its token
   // is kept in the database, never here). idleMinutes: a bot's process closes after this long without use.
   bots: { rules: ['Nada se envía, compra ni reserva sin mi aprobación.'], homeAssistant: { url: '' }, idleMinutes: 10, location: 'local' },
-  // 3.5: where the Orb mode of a phone or a terminal linked with this Orb goes: '' (by itself: here when this Orb programs,
+  // 3.5: where the Orb mode of a phone linked with this Orb goes: '' (by itself: here when this Orb programs,
   // else the linked Orb that does), 'local' or the id of a linked Orb (Ajustes › Magic Link › «Orb para programar»).
   devTarget: '',
   // 3.5: «Cosas que nadie toca» (Ajustes › Bots): names, paths or containers that no agent and no bot touches, whatever

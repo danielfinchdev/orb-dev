@@ -24,7 +24,6 @@ function userFacingFiles() {
   const files = [
     ...walk(path.join(ROOT, 'src', 'core', 'locales')),
     ...walk(path.join(ROOT, 'src', 'server')),
-    ...walk(path.join(ROOT, 'src', 'terminal')),
     ...walk(path.join(ROOT, 'src', 'ui')),
     ...walk(path.join(ROOT, 'scripts')),
     ...walk(path.join(ROOT, 'docs')).filter((f) => !f.includes(`${path.sep}historico${path.sep}`)),

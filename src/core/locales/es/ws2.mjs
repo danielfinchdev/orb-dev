@@ -1,4 +1,4 @@
-// 3.6 «Personas» (WS2, la puerta): dispositivos y enlaces de cada persona, versiones, bloqueo de la ventana, terminal y
+// 3.6 «Personas» (WS2, la puerta): dispositivos y enlaces de cada persona, versiones, bloqueo de la ventana y
 // Orb Server.
 export default {
   'msg.persons.lockedWindow': 'La ventana está bloqueada. Desbloquéala con tu PIN.',
@@ -16,13 +16,6 @@ export default {
   'msg.link.adminOwnerOnly': '«Puede administrar» solo se da a un dispositivo del admin.',
   'msg.link.qrForOthers': 'Solo el admin puede enlazar dispositivos para otro usuario.',
   'msg.link.noPeer': 'Ese enlace no existe.',
-  'term.tui.connectedAs': 'Conectado como {name}',
-  'term.links.as': 'como {name}',
-  'term.version.updateTerminal': 'Actualiza orb-terminal: tiene la {has} y ese Orb pide la {need}.',
-  'term.version.updateOrb': 'Actualiza {name}: tiene la {has} y hace falta la {need}.',
-  'term.pin.ask': 'Esta tarjeta pide tu PIN. Escríbelo y pulsa Intro (no se ve al escribir):',
-  'term.pin.wrong': 'El PIN no es correcto.',
-  'term.pin.locked': 'Demasiados intentos. Espera un poco y vuelve a probar.',
   'term.server.isOwner': 'admin',
   'term.server.hasPin': 'con PIN',
   'term.server.personDevices': '{n} dispositivos',

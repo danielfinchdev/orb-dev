@@ -23,7 +23,7 @@ import { PersonDot } from '@/components/person-menu.jsx';
 import { loadMe } from '@/lib/store.js';
 import { ServerLinkSection, askUnlinkServer } from './server.jsx';
 
-const KIND_ICON = { phone: Smartphone, browser: Globe, orb: Monitor, terminal: Code2 };
+const KIND_ICON = { phone: Smartphone, browser: Globe, orb: Monitor };
 const kindIcon = (d) => (d.kind === 'orb' && d.role === 'centro' ? Server : KIND_ICON[d.kind] ?? Smartphone);
 const ROLE_ICON = { todo: Layers, centro: Server, taller: Monitor };
 
@@ -107,7 +107,7 @@ function BotsPlaceCard({ refresh }) {
   );
 }
 
-// «Orb para programar»: where the Orb mode of a phone or a terminal linked with this Orb goes, when more than one Orb could
+// «Orb para programar»: where the Orb mode of a phone linked with this Orb goes, when more than one Orb could
 // take it (this one, if it programs, and the linked Orbs that do).
 function DevTargetCard({ status }) {
   const t = useT();
@@ -127,9 +127,9 @@ function DevTargetCard({ status }) {
 }
 function Dot({ on }) { const t = useT(); return <span className={cn('size-2 shrink-0 rounded-full', on ? 'bg-success' : 'bg-muted-foreground/40')} role="img" aria-label={on ? t('link.online') : t('link.offline')} />; }
 
-// The QR with its short code and how long it lasts. 3.5.1: first, what it is for (a phone, a browser, another Orb of the
-// user's or a terminal) and whether that device may answer the bots' cards: decided here, the device cannot change it.
-const PAIR_FOR = ['phone', 'browser', 'orb', 'terminal'];
+// The QR with its short code and how long it lasts. 3.5.1: first, what it is for (a phone, a browser or another Orb of
+// the user's) and whether that device may answer the bots' cards: decided here, the device cannot change it.
+const PAIR_FOR = ['phone', 'browser', 'orb'];
 function PairCard() {
   const t = useT();
   const [qr, setQr] = useState(null);

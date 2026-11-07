@@ -53,8 +53,9 @@ after(async () => {
 test('el tipo lo decide quien hace el QR: un aparato que dice ser un Orb no lo es', async () => {
   assert.equal(kindForPairing(null, 'orb'), null, 'un QR normal no sirve para un Orb');
   assert.equal(kindForPairing('orb', 'phone'), null, 'ni un QR de Orb para un móvil');
-  assert.equal(kindForPairing('phone', 'terminal'), 'phone', 'lo que se eligió al hacer el QR');
-  assert.equal(kindForPairing(null, 'terminal'), 'terminal');
+  assert.equal(kindForPairing('phone', 'browser'), 'phone', 'lo que se eligió al hacer el QR');
+  assert.equal(kindForPairing(null, 'browser'), 'browser');
+  assert.equal(kindForPairing(null, 'terminal'), 'phone', 'la terminal de Orb ya no existe: cuenta como un móvil');
 
   const q = await srv.call('link.qr');
   const fakeOrb = client('Falso Orb', 'orb');
@@ -111,12 +112,12 @@ test('código corto: atado a la clave del Orb; un intermediario que cambia la cl
   assert.notEqual(C.shortSecret('ABCD2345', pub), C.shortSecret('ABCD2345', C.b64.enc(C.newKeyPair().pub)), 'otra clave, otro secreto');
 
   // The real Orb: hello says the code is tied to its key; a wrong fingerprint is refused; the right code links.
-  const q = await srv.call('link.qr', { device: 'terminal' });
+  const q = await srv.call('link.qr', { device: 'phone' });
   const h = await (await fetch(`${base}/api/hello`)).json();
   assert.equal(h.short, 3);
   assert.equal(h.fp, q.pc, 'la huella que muestra la pantalla');
-  await assert.rejects(client('Terminal', 'terminal').connect({ code: q.code, address: `127.0.0.1:${port}`, fp: '0000-0000-0000' }), /huella/);
-  const ok = await client('Terminal', 'terminal').connect({ code: q.code, address: `127.0.0.1:${port}`, fp: q.pc });
+  await assert.rejects(client('Móvil', 'phone').connect({ code: q.code, address: `127.0.0.1:${port}`, fp: '0000-0000-0000' }), /huella/);
+  const ok = await client('Móvil', 'phone').connect({ code: q.code, address: `127.0.0.1:${port}`, fp: q.pc });
   assert.equal(ok.fp, q.pc);
 
   // Someone in the middle answers with its own key: it can seal the session but not prove it had the code.
@@ -133,9 +134,9 @@ test('código corto: atado a la clave del Orb; un intermediario que cambia la cl
   await new Promise((r) => mitm.listen(0, '127.0.0.1', r));
   const mport = mitm.address().port;
   try {
-    await assert.rejects(client('Víctima', 'terminal').connect({ code: 'ABCD-EFGH', address: `127.0.0.1:${mport}` }), /no es el del código/);
+    await assert.rejects(client('Víctima', 'phone').connect({ code: 'ABCD-EFGH', address: `127.0.0.1:${mport}` }), /no es el del código/);
     older = true;
-    await assert.rejects(client('Víctima', 'terminal').connect({ code: 'ABCD-EFGH', address: `127.0.0.1:${mport}` }), /versión anterior/, 'un Orb que no ata el código a su clave: solo con el QR');
+    await assert.rejects(client('Víctima', 'phone').connect({ code: 'ABCD-EFGH', address: `127.0.0.1:${mport}` }), /versión anterior/, 'un Orb que no ata el código a su clave: solo con el QR');
   } finally { mitm.close(); }
 });
 

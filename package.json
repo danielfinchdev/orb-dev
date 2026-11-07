@@ -24,8 +24,6 @@
     "dist:servidor": "node scripts/dist-servidor.mjs",
     "release:keygen": "node scripts/release.mjs keygen",
     "release:sign": "node scripts/release.mjs sign",
-    "dist:terminal": "node scripts/dist-terminal.mjs",
-    "terminal": "node src/terminal/orb-cli.mjs",
     "servidor:instalar": "node scripts/instalar-servidor.mjs",
     "server": "node src/server/orb-server.mjs",
     "nucleo": "node src/server/orb-server.mjs",

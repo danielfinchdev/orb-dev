@@ -21,7 +21,7 @@
 // workstream, so merges do not conflict. A later section may replace an entry of an earlier one on purpose.
 
 // ---- ceilings: what each channel may call at most (the person's rights on the resource decide inside that).
-// What a phone (and a browser, a terminal, a forwarded call) may call. Everything that changes settings, accounts,
+// What a phone (and a browser, a forwarded call) may call. Everything that changes settings, accounts,
 // connectors, installs software or publishes stays on the PC. (3.5's ALLOWED of remote.mjs, moved here unchanged.)
 export const PHONE_SET = new Set(['app.state', 'chat.list', 'chat.send', 'conversations.list', 'conversations.update', 'conversations.search', 'projects.securityReview', 'chat.stop', 'chat.accept', 'chat.answer', 'chat.settings', 'whiteboard.load', 'whiteboard.save', 'whiteboard.note',
   'tasks.list', 'tasks.live', 'tasks.get', 'tasks.create', 'tasks.approve', 'tasks.retry', 'tasks.cancel', 'tasks.reassign', 'tasks.followup', 'tasks.undo', 'tasks.launchAnyway', 'tasks.accept',
@@ -55,14 +55,14 @@ export const CONTROL_SET = new Set(['link.qr', 'link.devices', 'link.status', 'l
   // WS5: orb-server copia … / mover exportar (src/server/control.mjs › CONTROL_METHODS)
   'backup.status', 'backup.list', 'backup.now', 'backup.verify', 'backup.restore', 'backup.recovery', 'data.moveExport', 'data.moveStatus', 'data.moveUndo', 'data.moveKeepBoth']);
 // '*': no ceiling; null: nothing (an agent's tool process uses authz.can / scopeSql directly, never the API).
-export const CEILING = { desktop: '*', system: '*', phone: PHONE_SET, browser: PHONE_SET, terminal: PHONE_SET, orb: ORB_SET, forward: FORWARD_SET, control: CONTROL_SET, agent: null };
+export const CEILING = { desktop: '*', system: '*', phone: PHONE_SET, browser: PHONE_SET, orb: ORB_SET, forward: FORWARD_SET, control: CONTROL_SET, agent: null };
 // The ceiling of one principal: a device with «Puede administrar» gets the console's; an Orb of the owner the bots'
 // owner's only when confirmed and this Orb keeps bots (remote.mjs allowedFor, the same rule).
 export function ceilingFor(principal, { keepsBots = true } = {}) {
   if (principal?.ceiling) return principal.ceiling;
   const ch = principal?.channel;
   if (!Object.hasOwn(CEILING, ch)) return null;
-  if (['phone', 'browser', 'terminal', 'orb'].includes(ch) && principal.rights?.admin) return CONSOLE_SET;
+  if (['phone', 'browser', 'orb'].includes(ch) && principal.rights?.admin) return CONSOLE_SET;
   if (ch === 'orb') return principal.confirmed !== false && keepsBots ? ORB_SET : PHONE_SET;
   return CEILING[ch];
 }
@@ -273,7 +273,7 @@ const CORE = {
   'persons.overview': { ownerOnly: true }
 };
 
-// ======== WS2 · gateway (remote, link, terminal): append entries here.
+// ======== WS2 · gateway (remote, link): append entries here.
 // Devices and links are each person's: a person manages their own (api-link.mjs filters and checks the device), the owner
 // everyone's. A QR for someone else, a new person or «Puede administrar»: the owner only.
 const qrRule = (board, principal, params) => (principal.role === 'owner' || ((params.person == null || params.person === '' || params.person === principal.person) && !params.newPerson && !params.admin) ? true : 'notYours');
@@ -309,7 +309,7 @@ const GATEWAY = {
   'persons.unlock': { desktop: true },
   'app.lockState': { desktop: true }
 };
-// What a phone, a browser, a terminal or another Orb may also call: who it is for (persons.me, the names to share with)
+// What a phone, a browser or another Orb may also call: who it is for (persons.me, the names to share with)
 // and the PIN check that gives a strong ticket for sensitive cards (bound to that device).
 for (const set of [PHONE_SET, ORB_SET, CONSOLE_SET]) for (const m of ['persons.me', 'persons.list', 'persons.verifyPin']) set.add(m);
 // Orb Server's local socket: the people of the server and their PINs (orb-server personas, persona nueva, pin-reset,
@@ -459,7 +459,7 @@ const UI = {
   'persons.prefs.set': { public: true },
   'persons.pauseBots': { ownerOnly: true }
 };
-// A phone, a browser or a terminal sets its own person's language, time zone and notification preview too.
+// A phone or a browser sets its own person's language, time zone and notification preview too.
 for (const set of [PHONE_SET, CONSOLE_SET]) for (const m of ['persons.update', 'persons.prefs.get', 'persons.prefs.set', 'persons.setPin', 'shares.list']) set.add(m);
 // 3.6 (messaging lists): the lists are the same on every screen (a phone, a browser); a group's info too. Changing a
 // group's bots or people stays with the bots' owner from afar, like creating the group.

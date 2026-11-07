@@ -1,6 +1,6 @@
 // 3.7 (Orb Server, WS2): «Añadir Orb Server» and the link between the app and its server. Engines on loopback with the
-// fake agents, no windows: «srv» plays the Orb Server (role centro, without a window), «pc» the owner's app; phones and a
-// terminal are Node links (src/core/link.mjs) as the terminal client makes them.
+// fake agents, no windows: «srv» plays the Orb Server (role centro, without a window), «pc» the owner's app; the phones are
+// Node links (src/core/link.mjs).
 // - the install command's code: one use, 10 minutes (shortened here), bound to the app's key fingerprint;
 // - hello capabilities and who has to update (version skew);
 // - the hub handoff: the app's phones go to the server by themselves, their Orb mode reaches the PC through the server;

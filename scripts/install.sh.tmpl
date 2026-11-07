@@ -84,7 +84,6 @@ ln -sfn "$VERSION" "$APP/current.nuevo" && mv -Tf "$APP/current.nuevo" "$APP/cur
 rm -f "$APP/update-from" "$APP/update-tries" "$APP/update-pending.json"
 mkdir -p "$HOME/.local/bin"
 ln -sfn "$APP/current/orb-server" "$HOME/.local/bin/orb-server"
-ln -sfn "$APP/current/bin/orb" "$HOME/.local/bin/orb"
 # The old command keeps working (hidden) for one minor version.
 ln -sfn "$APP/current/orb-nucleo" "$HOME/.local/bin/orb-nucleo"
 

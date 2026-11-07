@@ -15,7 +15,6 @@ the root [`README.md`](../README.md) (the repository's front page) and the issue
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | How Orb works, feature by feature: what it does, which files implement it and how to change it. |
 | [`CHANGELOG.md`](CHANGELOG.md) | What each version brings. It is also the text of each GitHub release. |
 | [`BOTS.md`](BOTS.md) | Bots mode: your own bots, their tools, routines and approvals. |
-| [`TERMINAL.md`](TERMINAL.md) | Orb in the terminal (`orb`). |
 | [`ANDROID.md`](ANDROID.md) | The Android app: linking, features and how to build it. |
 | [`USERS.md`](USERS.md) | Users (3.6): several users on one Orb, sharing, lending accounts, backups. |
 | [`PERSONAS-INTERNALS.md`](PERSONAS-INTERNALS.md) | Users (3.6) inside: the model, authorization, events and loans. |

@@ -1,7 +1,7 @@
 // 3.6 «Personas», acceptance test 1 for the gateway (WS2): no leaks between Ana (owner) and Leo (user) on any surface.
 // Each one has a bot, a group, a project, a conversation with Orbe, a reminder, a task, a scheduled task and a direct
 // conversation with an agent, all marked with a word of their own (qzana… / qzleo…). Then, for each of Leo's ways in
-// (this PC's window after switching, phone, browser, terminal, his linked Orb, a call forwarded to a workshop, an agent's
+// (this PC's window after switching, phone, browser, his linked Orb, a call forwarded to a workshop, an agent's
 // tool process) every POLICY method is called with Ana's ids: refused when it touches her things (audited), and nothing
 // of hers in what comes back. Leo's live events (window, phone, his Orb) and his phone's notifications (push mock) get
 // nothing of Ana while she uses every resource; and the other way round, Ana (the owner) gets nothing of Leo's content.
@@ -168,9 +168,8 @@ async function sweep(call, other, label, t = null) {
 test('1a: Leo, por cada canal, no llega a nada de Ana (todas las reglas de POLICY)', async (t) => {
   const phone = await pairFor(leo.id, 'phone', 'Móvil de Leo');
   const browser = await pairFor(leo.id, 'browser', 'Navegador de Leo');
-  const terminal = await pairFor(leo.id, 'terminal', 'Terminal de Leo');
   const orb = await pairFor(leo.id, 'orb', 'Orb de Leo');
-  for (const [d, label] of [[phone, 'móvil'], [browser, 'navegador'], [terminal, 'terminal'], [orb, 'Orb enlazado']]) {
+  for (const [d, label] of [[phone, 'móvil'], [browser, 'navegador'], [orb, 'Orb enlazado']]) {
     assert.equal((await d.call('persons.me')).person.id, leo.id, label);
     await sweep(d.call, 'ana', label, t);
   }
@@ -206,7 +205,7 @@ test('1b: Ana (la dueña) tampoco lee nada de Leo; solo ve nombres y números', 
   const overview = await A.call('persons.overview');
   assert.deepEqual(leaks(overview, 'leo'), []);
   const o = overview.find((x) => x.id === leo.id);
-  assert.equal(o.counts.bots, 1); assert.equal(o.counts.projects, 1); assert.ok(o.devices >= 4);
+  assert.equal(o.counts.bots, 1); assert.equal(o.counts.projects, 1); assert.ok(o.devices >= 3);
 });
 
 test('1c: los directos, la ventana y los avisos de cada uno no llevan nada del otro', async () => {

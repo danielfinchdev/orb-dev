@@ -150,7 +150,7 @@ depending on state, Eliminar in red after a separator).
 ### 2.5 Next: Orb as a messaging app (approved direction, mockups only)
 
 The approved direction for the next version: the whole app works like a messaging app with two zones, **Bots**
-(everyday tasks) and **Orb** (programming). The terminal stays a terminal. The mockups are in
+(everyday tasks) and **Orb** (programming). The mockups are in
 `docs/diseno/maquetas/mensajeria.html` (`node scripts/maquetas.mjs` saves them as screenshots); until it is built,
 sections 2.1–2.4 describe the shipped app.
 

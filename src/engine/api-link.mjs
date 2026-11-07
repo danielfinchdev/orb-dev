@@ -58,7 +58,7 @@ export function linkMethods({ board, emit, remoteRef, version = null }) {
     'link.server.persons': () => hub().persons(),
     'link.server.map': ({ remote, local, create, createThere }, who) => hub().map({ remote: remote == null ? null : str(remote, 'persona', 40), local: local == null ? null : str(local, 'persona', 40), create: create === true, createThere: createThere === true }, who),
     'link.server.unmap': ({ remote, local }) => hub().unmap({ remote: remote == null ? null : str(remote, 'persona', 40), local: local == null ? null : str(local, 'persona', 40) }),
-    // The phones and terminals of this app go to the server now (also done by itself after pairing and mapping).
+    // The phones of this app go to the server now (also done by itself after pairing and mapping).
     'link.server.handoff': () => hub().handoffAll(),
     // The steps after pairing: the server's Claude / Codex, the bots to move, vault and browser (if the server can).
     'link.server.guide': (_, who) => hub().guide(who),
@@ -98,7 +98,7 @@ export function linkMethods({ board, emit, remoteRef, version = null }) {
     // ---- 3.5 Magic Link (PC only; a phone may ask link.status and taller.* through remote.mjs)
     // A QR (and a short code) to link a phone, a browser or another Orb. Turns the access on if it was off.
     // admin: (Orb Server's «orb-server enlazar») the device that uses it may administer this server, if it is the first.
-    // 3.5.1: device: what it is for (phone, browser, orb, terminal), chosen here, never by the device; approve: it may
+    // 3.5.1: device: what it is for (phone, browser, orb), chosen here, never by the device; approve: it may
     // answer the bots' cards (default yes); dev: an Orb that may program for this one; admin: true (the owner gives it) or
     // 'first' (`orb-server enlazar`: only while no device administers this server).
     // 3.6: person (id or name): whom the device is for; newPerson: a name, for someone new (the owner makes them now).

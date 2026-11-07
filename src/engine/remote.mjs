@@ -60,7 +60,7 @@ export function phoneConfig(c) {
   };
 }
 
-// What a phone may call (ALLOWED): src/core/policy.mjs PHONE_SET (3.6: the ceiling of phones, browsers and terminals).
+// What a phone may call (ALLOWED): src/core/policy.mjs PHONE_SET (3.6: the ceiling of phones and browsers).
 // 3.5: a device the user marked «Puede administrar» (Ajustes › Magic Link › Dispositivos enlazados) manages this Orb's
 // bots and links from afar (a server without a window needs one; `orb-server enlazar` gives it to the first device it
 // links). Never by the kind a device says it is, and still nothing with total access.
@@ -84,11 +84,11 @@ const BOT_EVENTS = new Set(['bot.updated', 'bot.message', 'bot.state', 'bot.home
 // gives it more.
 export const allowedFor = (role, kind, admin = false, confirmed = true) => (admin ? CONSOLE_ALLOWED : kind === 'orb' && confirmed && hostsBots(role) ? ORB_ALLOWED : ALLOWED);
 // 3.5.1: what the owner may choose when making a QR (the kind of device it is for); the device's rights are decided there.
-export const PAIR_KINDS = ['phone', 'browser', 'orb', 'terminal'];
+export const PAIR_KINDS = ['phone', 'browser', 'orb'];
 // The rights of a device to answer a bot's card: «approve» for any card (a lock, a purchase, a tool that sends…);
 // changing bots and the server also need the rights of the bots' owner (the PC, «Puede administrar» or a confirmed Orb).
 export const approverOf = (device, allowed) => ({ device: device.id, name: device.name, approve: Number(device.approve ?? 1) === 1, owner: allowed.has('bots.update') });
-// 3.5: what a phone or a terminal does in the Orb mode: it goes to the Orb that programs (Ajustes › Magic Link › «Orb
+// 3.5: what a phone does in the Orb mode: it goes to the Orb that programs (Ajustes › Magic Link › «Orb
 // para programar») when it is not this one. The bots, the links and this Orb's own state stay here.
 // 3.7 (WS9): «Conexiones» is always of the Orb the device is linked to.
 export const devForwards = (method) => ALLOWED.has(method) && !/^(bots\.|app\.state$|connections\.)/.test(method);
@@ -112,8 +112,7 @@ const EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'notice', 'se
 const LINK_ALLOWED = new Set(['link.status']);
 // What may be forwarded to each role (the workshop checks it again on its side): the same work a phone may do there.
 export const ROLE_FORWARD = { taller: ALLOWED };
-// 3.5: «terminal» is the orb command-line client (src/terminal): the same rights as a browser.
-export const KINDS = ['phone', 'browser', 'orb', 'terminal'];
+export const KINDS = ['phone', 'browser', 'orb'];
 const FORWARD_MS = Number(process.env.ORB_FAKE_AGENTS && process.env.ORB_FORWARD_MS) || 60_000; // a forwarded call the workshop does not answer in a minute fails
 // 3.6: backups another Orb keeps here (link op backup.put): at most this size each, and the last few of each Orb.
 const BACKUP_PUT_MAX = Number(process.env.ORB_FAKE_AGENTS && process.env.ORB_BACKUP_PUT_MAX) || 2 * 1024 * 1024 * 1024;
@@ -125,7 +124,7 @@ const PAIR_FAILS_MAX = 20; // wrong attempts (all addresses together) that cance
 const SERVER_FAILS_MAX = 5;
 const HANDOFF_MS = 10 * 60_000;
 const HANDBACK_MS = 3 * 86_400_000;
-const HANDOFF_KINDS = ['phone', 'browser', 'terminal'];
+const HANDOFF_KINDS = ['phone', 'browser'];
 
 // The checks of a call coming from outside (a phone, or the centre forwarding a phone's call): null when it may run, or
 // why not. `uploadsDir`: the pictures that may go with it (none when forwarded).
@@ -173,19 +172,19 @@ export function privateSource(address) {
 export const orbNameOf = (config) => oneLine(String(config?.mobile?.name || os.hostname() || config?.assistantName || 'Orb'), 60);
 const ipOf = (req) => String(req.socket?.remoteAddress ?? '').replace(/^::ffff:/, '');
 const kindOf = (proof) => (KINDS.includes(proof?.kind) ? proof.kind : /iphone|ipad|android/i.test(String(proof?.name ?? '')) ? 'phone' : 'browser');
-// 3.5.1: the kind of a new device: the one the QR was made for. A QR made without saying takes what a phone, a browser
-// or a terminal says it is (they have the same rights), never «orb»; null: the device does not match the QR.
+// 3.5.1: the kind of a new device: the one the QR was made for. A QR made without saying takes what a phone or a browser
+// says it is (they have the same rights), never «orb»; null: the device does not match the QR.
 export function kindForPairing(issued, claimed) {
   if (issued === 'orb') return claimed === 'orb' ? 'orb' : null;
   if (claimed === 'orb') return null;
   if (PAIR_KINDS.includes(issued)) return issued;
-  return ['phone', 'browser', 'terminal'].includes(claimed) ? claimed : 'phone';
+  return ['phone', 'browser'].includes(claimed) ? claimed : 'phone';
 }
 // 3.6 (A11): «<computer>.local» when the computer's name is a valid host name (letters, digits and dashes).
 export const localName = (host = os.hostname()) => { const h = String(host ?? '').toLowerCase().replace(/\.local$/, ''); return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(h) ? `${h}.local` : null; };
 const isLoopback = (ip) => /^(127\.|::1$)/.test(String(ip ?? '').replace(/^::ffff:/, ''));
-// 3.5.1: whether a pairing comes from a browser's page over plain http on the home network: not a program (no Origin: the
-// terminal, another Orb), not the Android app, not this PC (or Tailscale's https, which arrives through loopback), not the
+// 3.5.1: whether a pairing comes from a browser's page over plain http on the home network: not a program (no Origin: another
+// Orb), not the Android app, not this PC (or Tailscale's https, which arrives through loopback), not the
 // Tailscale address; and the user did not allow it (lanHttp).
 export function plainHttpBrowser({ origin, app = false, localAddress, routes = [], lanHttp = false }) {
   if (lanHttp || !origin || app) return false;
@@ -521,7 +520,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
       catch (error) { return failed(error); }
     }
     if (LINK_ALLOWED.has(method)) return reply(res, device, msg.nonce, { ok: true, result: remote.linkStatus({ forPhone: true, person: personOf(device) }) });
-    // 3.5: the Orb mode of a phone or a terminal is the work of the Orb that programs: there it goes, when it is another one.
+    // 3.5: the Orb mode of a phone is the work of the Orb that programs: there it goes, when it is another one.
     // 3.6: the one of this device's person.
     if (device.kind !== 'orb' && devForwards(method) && devTargetDevice(personOf(device))) {
       try { return reply(res, device, msg.nonce, { ok: true, result: (await remote.taller(method, params, { from: device.id, principal })) ?? null }); }
@@ -529,8 +528,8 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
     }
     // 2.6: which account the assistant spends is chosen on the PC (the brain's agent and model, also from the phone).
     if (method === 'chat.settings' && params.account !== undefined) delete params.account;
-    // 3.5: a bot learns that the user writes from a phone or a terminal (from the device's kind, never from what it sends).
-    if (method === 'bots.send' || method === 'bots.groups.send') { delete params.via; if (device.kind === 'phone' || device.kind === 'terminal') params.via = device.kind; }
+    // 3.5: a bot learns that the user writes from a phone (from the device's kind, never from what it sends).
+    if (method === 'bots.send' || method === 'bots.groups.send') { delete params.via; if (device.kind === 'phone') params.via = device.kind; }
     // 3.5.1: who answers a bot's card (kept with the card) and with which rights: set here, never by what the device sends.
     if (method === 'bots.decide') { delete params.by; params.by = approverOf(device, allowed); }
     const why = guardCall(board, method, params, { uploadsDir: uploads(personOf(device)), allowed });
@@ -691,7 +690,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
     if (!pairing || Date.now() > pairing.expires || !body || typeof body.pub !== 'string') return fail();
     // 3.5.1: a page served over the home Wi-Fi in plain http could have been changed on the way: a browser links only over
     // https (Tailscale), the Tailscale address or this PC itself, unless the user allowed it (Ajustes › Magic Link). The
-    // Android app and the terminal bring their own code and check the key, so they may.
+    // Android app brings its own code and checks the key, so it may.
     if (plainBrowser(req)) return send(res, 403, { error: tr('msg.link.httpBrowser') });
     let devPub; try { devPub = b64.dec(body.pub); } catch { return fail(); }
     if (devPub.length !== 32) return fail();
@@ -1329,9 +1328,9 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
     // 3.5 (protocol v2): the fragment also names this Orb, its role and its other addresses; and a short code (8 letters
     // and digits) can be typed by hand instead, together with the address.
     // admin: the device that uses it may administer this Orb (only for a server without a window, only its first one).
-    // 3.5.1: device: what it is for (phone, browser, orb, terminal), chosen here by the owner, never by the device;
+    // 3.5.1: device: what it is for (phone, browser, orb), chosen here by the owner, never by the device;
     // approve: whether it may answer the bots' cards (default yes); dev: for an Orb, whether it may be the one that
-    // programs for this one; admin: true (whoever makes the QR is the owner: the PC, the server's own terminal or a device
+    // programs for this one; admin: true (whoever makes the QR is the owner: the PC, the server's own console or a device
     // that administers) or 'first' (only while no device administers, on a server without a window).
     // 3.6: person: whom the device is for (the QR's «¿Para quién?»; api-link.mjs checks who may choose it).
     pair(kind, { admin = false, device = null, approve = true, dev = false, person = null } = {}) {
@@ -1369,7 +1368,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
     devices,
     // ---- 3.7 (WS2): «Añadir Orb Server» and the hub handoff (src/engine/hub.mjs sets the callbacks).
     // onServerOffer({ offer, server, person }) → the link made; onHandoff({ id, ref, back, kind, person }) a device paired
-    // with one of this Orb's offers; onDeviceOnline(device) a phone or terminal connected; onMirror(peer, ev) a mirrored
+    // with one of this Orb's offers; onDeviceOnline(device) a phone connected; onMirror(peer, ev) a mirrored
     // bot event arrived.
     onServerOffer: null, onHandoff: null, onDeviceOnline: null, onMirror: null,
     // The install command's code: 10 minutes, one use, tied to this app's key. → { code, expiresAt, fp, address, urls }

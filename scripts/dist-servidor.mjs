@@ -3,13 +3,12 @@
 //   orb-server-<version>/node/bin/node          the official Node 24 LTS for that processor (crypto.argon2 for
 //                                               Argon2id vault accounts) (checked against nodejs.org's SHA-256)
 //   orb-server-<version>/src/…                  only what the server engine loads (src/server/engine-server.mjs and the CLI,
-//                                               the bots' tools, the terminal client): never the interface, the Electron app
+//                                               the bots' tools): never the interface, the Electron app
 //                                               nor the programming modules (src/server/server-product.mjs)
 //   orb-server-<version>/node_modules/…         the production modules, pure JavaScript: no Agent SDK program (Claude and
 //                                               Codex are downloaded on demand by the server, src/server/engines.mjs)
 //   orb-server-<version>/orb-server             the launcher (and orb-nucleo, its old name); orb-server.service (systemd
 //                                               --user) and orb-server-nosudo.service; admin-setup.sh; INSTALAR.md; VERSION
-//   orb-server-<version>/bin/orb                the terminal client (src/terminal), with the same Node
 // and dist/install.sh (scripts/install.sh.tmpl with the packages' and Node's sums inside). The tar is written here (ustar
 // with pax names), so the Linux permissions (the executables) are exact on any PC. Target: 50 MB per package at most.
 // Then src/core/server-release.mjs gets the real version, url and sha256 of that install.sh (the app's install command;
@@ -35,7 +34,7 @@ export const NODE_ENGINES = '>=24';
 // The module the app reads to show the install command (written by main() once install.sh exists).
 export const RELEASE_MODULE = path.join(ROOT, 'src', 'core', 'server-release.mjs');
 // What the server runs (each one and everything it imports goes in), and the data files they read.
-export const SERVER_ENTRIES = ['src/server/orb-server.mjs', 'src/server/orb-nucleo.mjs', 'src/server/engine-server.mjs', 'src/mcp/server.mjs', 'src/mcp/bot.mjs', 'src/terminal/orb-cli.mjs'];
+export const SERVER_ENTRIES = ['src/server/orb-server.mjs', 'src/server/orb-nucleo.mjs', 'src/server/engine-server.mjs', 'src/mcp/server.mjs', 'src/mcp/bot.mjs'];
 export const SERVER_DATA = ['src/core/templates', 'src/server/admin-helper.sh'];
 // Never in the server's package, whatever imports them.
 export const SRC_EXCLUDE = ['ui', 'main', 'renderer'];
@@ -103,14 +102,6 @@ if [ "$#" -eq 0 ] && [ "$(basename "$APP")" = app ] && [ -f "$APP/update-from" ]
   fi
 fi
 exec "$DIR/node/bin/node" --max-old-space-size=320 "$DIR/src/server/orb-server.mjs" "$@"
-`;
-
-// 3.5: «orb», the terminal client (src/terminal/orb-cli.mjs), with the Node of the package.
-export const terminalLauncher = () => `#!/bin/sh
-# Orb en la terminal: habla con tu Orb (o con otro enlazado) desde la consola.
-set -e
-DIR="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
-exec "$DIR/node/bin/node" "$DIR/src/terminal/orb-cli.mjs" "$@"
 `;
 
 // 3.7: systemd --user, always on (linger: also at boot, without a session), restarted when it falls or hangs (watchdog).
@@ -187,10 +178,9 @@ Desde el PC, por SSH: \`npm run servidor:instalar -- <servidor-ssh>\`.
 - Registro: \`~/orb-server/logs/nucleo.log\`
 - \`orb-server estado\`, \`orb-server motores\`, \`orb-server actualizar --comprobar\`
 
-## Enlazar un móvil, otro Orb o una terminal (sin pantalla)
+## Enlazar un móvil u otro Orb (sin pantalla)
 
 - \`orb-server enlazar\` dibuja el QR en la terminal y da el código corto y la dirección.
-- Orb en la terminal: \`orb\`.
 
 Tus datos están en \`~/orb-server\` (bots, data, logs). Más en docs/SERVER.md.
 `;
@@ -271,8 +261,6 @@ export function manifest({ root = ROOT, version, top = `orb-server-${version}`, 
   entries.push({ name: `${top}/orb-server`, data: Buffer.from(launcher()), mode: 0o755 });
   // 3.7: its old name, so what an older install runs (aliases, scripts) still works.
   entries.push({ name: `${top}/orb-nucleo`, data: Buffer.from(launcher()), mode: 0o755 });
-  entries.push({ name: `${top}/bin`, dir: true });
-  entries.push({ name: `${top}/bin/orb`, data: Buffer.from(terminalLauncher()), mode: 0o755 });
   entries.push({ name: `${top}/orb-server.service`, data: Buffer.from(serviceUnit({ sudo: true })), mode: 0o644 });
   entries.push({ name: `${top}/orb-server-nosudo.service`, data: Buffer.from(serviceUnit({ sudo: false })), mode: 0o644 });
   entries.push({ name: `${top}/admin-setup.sh`, data: Buffer.from(adminSetup()), mode: 0o755 });

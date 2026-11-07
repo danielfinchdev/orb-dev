@@ -12,9 +12,9 @@ import { shapeGateway } from './shape.mjs';
 export const RIGHTS = ['view', 'talk', 'edit'];
 const RANK = { view: 1, talk: 2, edit: 3, own: 4 };
 export const rank = (right) => RANK[right] ?? 0;
-export const CHANNELS = ['desktop', 'phone', 'browser', 'terminal', 'orb', 'forward', 'control', 'agent', 'system'];
+export const CHANNELS = ['desktop', 'phone', 'browser', 'orb', 'forward', 'control', 'agent', 'system'];
 const SHAREABLE = new Set(['bot', 'group', 'project', 'integration']);
-const DEVICE_CHANNEL = { phone: 'phone', browser: 'browser', terminal: 'terminal', orb: 'orb' };
+const DEVICE_CHANNEL = { phone: 'phone', browser: 'browser', orb: 'orb' };
 
 // A refused call: 403, with a message the user may read (never what exists or whose it is).
 const REASON_KEY = { noDev: 'msg.authz.noDev', ceiling: 'msg.remote.pcOnly', ownerOnly: 'msg.authz.ownerOnly', admin: 'msg.authz.ownerOnly', strong: 'msg.authz.needPin', desktop: 'msg.remote.pcOnly' };
@@ -42,7 +42,7 @@ const roleOf = (board, person) => {
 // ---- principals
 // { person, role, channel, device?, rights: { approve, dev, admin }, strongUntil?, via?, remote?, confirmed?, ceiling? }
 // desktop: this PC's window (person: who sits there; the owner by default). device: a row of devices (a linked phone,
-// browser, terminal or Orb). forwarded: a call the centre passed to this workshop. control: Orb Server's socket.
+// browser or Orb). forwarded: a call the centre passed to this workshop. control: Orb Server's socket.
 // agentToken: an agent's tool process ({ agent, task, conversation, bot, person }). system: the engine itself.
 // ceiling: a Set given by an entry point that already knows the device's (remote.mjs allowedFor).
 export function principalOf(board, { device = null, desktop = false, person = null, forwarded = false, control = false, agentToken = null, system = false, ceiling = null, strongUntil = null, via = null } = {}) {

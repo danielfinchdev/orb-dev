@@ -15,7 +15,7 @@ import path from 'node:path';
 import nodeCrypto from 'node:crypto';
 import * as C from './mobile-crypto.mjs';
 import { PROTOCOL, MIN_PROTOCOL, versionOfProtocol, CODE_ALPHABET, shortCodeLabel } from './link-payload.mjs';
-// The same as home.mjs › hostsBots / doesDev (not imported: the terminal client ships this file without home.mjs).
+// The same as home.mjs › hostsBots / doesDev (not imported: the server package ships this file without home.mjs).
 const hostsBots = (role) => role !== 'taller';
 const doesDev = (role) => role !== 'centro';
 

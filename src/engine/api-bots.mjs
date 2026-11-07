@@ -185,7 +185,7 @@ export function botMethods({ board, emit, remoteRef, bots, setShare, removeShare
   const fields = (p) => Object.fromEntries(['name', 'icon', 'avatar', 'role_text', 'agent', 'model', 'effort', 'tools', 'accounts', 'exclusive', 'is_chief', 'paused', 'caps'].filter((k) => p[k] !== undefined).map((k) => [k, p[k]]));
   // 3.6 (S1): a brain that cannot run confined is refused when it is chosen (and again when the bot starts).
   const brainOk = (f) => { if (f.agent) { const why = botBrainProblem(board, f.agent); if (why) fail(why); } return f; };
-  const VIA = new Set(['phone', 'terminal']); // 3.5: set by the link (remote.mjs) from the device's kind
+  const VIA = new Set(['phone']); // 3.5: set by the link (remote.mjs) from the device's kind
   // 3.6 (M4): in a group, each line of a person carries its author's name.
   const lines = (conv, p) => board.chat(conv, Math.min(Number(p.limit) || 200, 500), { before: p.before ? int(p.before, 'línea') : null })
     .map((l) => (l.role === 'usuario' && l.person_id ? { ...l, author: board.personName(l.person_id) } : l));

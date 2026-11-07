@@ -1,6 +1,6 @@
 // 3.5: a small QR code encoder (byte mode, versions 1–40, levels L/M/Q/H), so a server without a screen can show its
 // Magic Link QR in the terminal (orb-server enlazar) without carrying the interface's `qrcode` module. It follows the
-// standard (ISO/IEC 18004) as Project Nayuki's qrcodegen does; test/terminal.test.mjs compares it with `qrcode`.
+// standard (ISO/IEC 18004) as Project Nayuki's qrcodegen does; test/qr-control.test.mjs compares it with `qrcode`.
 //   qrMatrix(text, { ecl: 'M', mask }) → { size, version, mask, dark(x, y) }
 //   qrTerminal(text, { color }) → the code drawn with half blocks (two rows of modules per line of text)
 

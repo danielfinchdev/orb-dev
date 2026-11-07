@@ -4,10 +4,10 @@
 //   orb-server estado [--home <carpeta>]                    start, print app.state in short and stop (a quick check)
 //   orb-server entrar <claude|codex|cuenta> [--home …]      sign an agent's account in from this terminal (link + code)
 //   orb-server enlazar [--home <carpeta>] [--no-esperar]    a Magic Link QR (drawn in the terminal), short code and address,
-//         [--tipo movil|navegador|orb|terminal]             so a phone, another Orb or a terminal can link to a server
+//         [--tipo movil|navegador|orb]                      so a phone or another Orb can link to a server
 //         [--admin] [--taller]                              without a screen; waits until one links (or the code expires).
-//                                                           3.5.1: --tipo: what it is for (default a phone, a browser or a
-//                                                           terminal); --admin: it may administer this server even if
+//                                                           3.5.1: --tipo: what it is for (default a phone or a browser);
+//                                                           --admin: it may administer this server even if
 //                                                           another device does (a lost phone); --taller: the Orb may
 //                                                           program for this one
 //   orb-server dispositivos [--home …]                      3.5.1: the linked devices (id, kind, administers, last seen)
@@ -33,7 +33,7 @@ import { qrTerminal } from '../core/qr.mjs';
 import { readKey } from '../core/home.mjs';
 import { stageRestore, applyPendingRestore } from '../core/backup.mjs';
 import { moveImport } from '../core/export.mjs';
-import { translator, painter } from '../terminal/render.mjs';
+import { translator, painter } from './console-text.mjs';
 import { startWatchdog } from './watchdog.mjs';
 
 // 3.7: what Orb Server writes (its database, settings, logs, the vault) is for this user only, whatever the umask of the
@@ -54,7 +54,7 @@ function parse(argv) {
     else if (a === 'enlazar' || a === 'link' || a === 'pair') o.command = 'link';
     else if (a === '--admin') o.admin = true;
     else if (a === '--taller' || a === '--workshop') o.taller = true;
-    else if (a === '--tipo' || a === '--kind') { o.kind = KIND_WORDS[String(argv[++i] ?? '').toLowerCase()]; if (!o.kind) throw new Error('tipo: movil, navegador, orb o terminal'); }
+    else if (a === '--tipo' || a === '--kind') { o.kind = KIND_WORDS[String(argv[++i] ?? '').toLowerCase()]; if (!o.kind) throw new Error('tipo: movil, navegador u orb'); }
     else if (a === 'dispositivos' || a === 'devices') o.command = 'devices';
     // 3.6 «Personas»: the people of this server, a new one, a PIN taken away, a QR for someone.
     else if (a === 'usuarios' || a === 'users' || a === 'personas' || a === 'persons') o.command = 'persons'; // «personas»: hidden alias (3.6 betas)
@@ -89,7 +89,7 @@ function parse(argv) {
 }
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-const KIND_WORDS = { movil: 'phone', 'móvil': 'phone', phone: 'phone', navegador: 'browser', browser: 'browser', orb: 'orb', terminal: 'terminal' };
+const KIND_WORDS = { movil: 'phone', 'móvil': 'phone', phone: 'phone', navegador: 'browser', browser: 'browser', orb: 'orb' };
 
 // The running service (through its local socket) or, when it is not running, the engine just for this command.
 async function withEngine(home, version, fn) {
@@ -239,7 +239,6 @@ async function linkDevice(home, o, version) {
     console.log(`\n${t('term.server.scan')}`);
     console.log(`  ${p.bold(t('term.server.code', { code: q.code }))}`);
     console.log(`  ${t('term.server.address', { address: q.address })}`);
-    console.log(`  ${p.dim(t('term.server.command', { cmd: `orb enlazar ${q.code} ${q.address}` }))}`);
     console.log(`  ${p.dim(q.url)}`);
     console.log(`  ${t('term.server.fp', { fp: q.pc })}`);
     if (q.admin) console.log(`  ${p.yellow(t('term.server.givesAdmin'))}`);
@@ -319,7 +318,7 @@ async function main() {
   const o = parse(process.argv.slice(2));
   const version = packageVersion();
   if (o.command === 'version') { console.log(version); return; }
-  if (o.command === 'help') { console.log('orb-server [--home <carpeta>] [--papel centro|todo|taller] | estado | migrar | emparejar <código>@<dirección>#<huella> | motores [instalar claude|codex] | actualizar [--comprobar] | entrar <claude|codex|cuenta> | enlazar [--tipo movil|navegador|orb|terminal] [--admin] [--taller] [--no-esperar] | dispositivos | quitar <id> | usuarios | usuario nuevo <nombre> | pin-reset <usuario> | enlazar --usuario <nombre> | copia ahora|lista|restaurar <archivo>|clave [--clave <código>] | mover exportar|importar <archivo> --clave <código> | --version'); return; }
+  if (o.command === 'help') { console.log('orb-server [--home <carpeta>] [--papel centro|todo|taller] | estado | migrar | emparejar <código>@<dirección>#<huella> | motores [instalar claude|codex] | actualizar [--comprobar] | entrar <claude|codex|cuenta> | enlazar [--tipo movil|navegador|orb] [--admin] [--taller] [--no-esperar] | dispositivos | quitar <id> | usuarios | usuario nuevo <nombre> | pin-reset <usuario> | enlazar --usuario <nombre> | copia ahora|lista|restaurar <archivo>|clave [--clave <código>] | mover exportar|importar <archivo> --clave <código> | --version'); return; }
   // 3.6: importing a moved Orb goes into a folder that is not an Orb yet (nothing is prepared there first).
   if (o.command === 'move' && o.sub === 'import') { process.exit(await moveCommand(null, version, o, path.resolve(o.home ? o.home : defaultHome()))); }
   if (o.command === 'migrate') { process.exit(await migrateCommand(o.home ? path.resolve(o.home) : null)); }

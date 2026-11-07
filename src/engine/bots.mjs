@@ -118,12 +118,11 @@ export function botPersona(board, bot, { person = null } = {}) {
   return lines.filter(Boolean).join('\n');
 }
 
-// 3.5: where the user writes from, when it is a phone or a terminal (the linked device says so, never the message): one
+// 3.5: where the user writes from, when it is a phone (the linked device says so, never the message): one
 // line for the bot, so that the answer fits the screen. Nothing for the PC or a browser.
 export function viaNote(via, name = null) {
   const who = name ?? (ctx.config?.userName?.trim() || 'el usuario');
   if (via === 'phone') return `AVISO DEL SISTEMA: ${who} te escribe desde el móvil. Contesta primero lo importante en una o dos frases; sin tablas anchas ni bloques de código largos, salvo que te los pida.`;
-  if (via === 'terminal') return `AVISO DEL SISTEMA: ${who} te escribe desde una terminal. Texto sencillo, sin tablas anchas ni imágenes.`;
   return '';
 }
 

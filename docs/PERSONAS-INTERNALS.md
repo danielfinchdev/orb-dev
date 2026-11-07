@@ -40,7 +40,7 @@ Built **only** by entry points with `principalOf(board, { desktop, person } | { 
 ```js
 { person, role: 'owner' | 'user', channel, device?, remote?, confirmed?, ceiling?, strongUntil?, via?,
   rights: { approve, dev, admin } }
-// channel: desktop | phone | browser | terminal | orb | forward | control | agent | system
+// channel: desktop | phone | browser | orb | forward | control | agent | system
 ```
 
 A device row without `person_id` is the owner's. A user never gets `rights.admin`.
@@ -158,7 +158,7 @@ console only on this PC, for the owner). Another person spends it only through a
   only shapes and colours.
 - **Strong tickets from afar.** A call body may carry `ticket` (from `persons.verifyPin` on that device); `remote.mjs`
   turns it into `principal.strongUntil`. A refused call answers `{ ok: false, status: 403, reason }`.
-- **Protocol 3** (`src/core/link.mjs`): `PROTOCOL = 3`, `MIN_PROTOCOL = 2` (phones, terminals), `FORWARD_MIN = 3`.
+- **Protocol 3** (`src/core/link.mjs`): `PROTOCOL = 3`, `MIN_PROTOCOL = 2` (phones), `FORWARD_MIN = 3`.
   Hello and `/api/me` carry `{ v, min, version, features }`, the person the link is for (`person`) and the Orb's identity
   (`orb: { orbId, incarnation, host }`, checked with `cloneVerdict`: a copy is refused, a move followed). `versionGap()`
   says who must update. Link records keep `person` (whose link here) and `remotePerson` (whom the other side counts it as).

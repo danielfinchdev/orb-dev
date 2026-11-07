@@ -608,7 +608,7 @@ app open. On iPhone they work with Orb added to the home screen.
   (`link:request` → `op: 'reply'`) with the same checks as a phone (`guardCall`), and sends it its events
   (`op: 'events'`), which phones receive as `taller:<event>` and under their usual name.
 - **Orb for coding** (`orb.json › devTarget`: `''` only, `local` or the id of a linked Orb): where the Orb mode of phones
-  and terminals goes. If unset, to this Orb if it codes; otherwise, to the linked Orb that codes. When it goes to another
+  goes. If unset, to this Orb if it codes; otherwise, to the linked Orb that codes. When it goes to another
   one, the engine forwards only the Orb mode calls (`devForwards`: what is in `ALLOWED` minus `bots.*` and `app.state`).
 - **Can administer** (`devices.admin`, `link.setAdmin`): a marked device manages bots and links from outside
   (`CONSOLE_ALLOWED`); being a browser is not enough. `link.qr({ admin: 'first' })` (used by `orb-server enlazar`) only
@@ -616,7 +616,7 @@ app open. On iPhone they work with Orb added to the home screen.
   the server itself) grants it anyway, to replace a lost device. A device's `app.state` carries
   `access: { admin, bots, links, approve }`.
 - **Rights chosen when making the QR (3.5.1):** `link.qr({ device, approve, dev })`: what the code is for (`phone`,
-  `browser`, `orb`, `terminal`), whether the device may answer the bots' cards (`devices.approve`, `link.setApprove`) and,
+  `browser`, `orb`), whether the device may answer the bots' cards (`devices.approve`, `link.setApprove`) and,
   for an Orb, whether it may code for this one (`devices.dev_ok`). The device's own description never changes them; a
   code made for an Orb only links an Orb and the other way round. Orbs linked before 3.5.1 are asked again
   (`devices.kind_ok = 0`, `link.confirm({ id, what: 'orb' | 'taller' })`). Only confirmed Orbs count as workshops.
@@ -624,7 +624,7 @@ app open. On iPhone they work with Orb added to the home screen.
   public key (`mobile-crypto.mjs › shortSecret`), and the pairing answer carries a second box sealed with that key
   (`confirm`), so the device knows the other side had the code. The fingerprint is shown on both screens.
 - **Browsers over plain http (3.5.1):** pairing from a browser's page over the home Wi-Fi (http) is refused unless
-  `mobile.lanHttp` is on (Settings › Phone access); the Android app, the terminal, loopback (Tailscale https) and the
+  `mobile.lanHttp` is on (Settings › Phone access); the Android app, loopback (Tailscale https) and the
   Tailscale address are not affected.
 - **Notifications (3.5.1):** `mobile.preview` (`all`, `chat` by default, `none`): what a notification shows on a locked
   phone (`remote.mjs › pushContent`).
@@ -654,7 +654,7 @@ app open. On iPhone they work with Orb added to the home screen.
   `persons` on the server). `forward.mjs › whoAsks` runs a forwarded call as the mapped person; anyone else is refused
   and audited (`unmappedPerson`). The server sends a mapped person's Orb mode to the owner's PC (`devTargetDevice`,
   `mayForward`) and the PC's events for them carry `to`.
-- **Hub handoff (3.7):** with a server linked, the app asks it for one-time offers for its phones and terminals (link op
+- **Hub handoff (3.7):** with a server linked, the app asks it for one-time offers for its phones (link op
   `handoff`, `offers`) and sends each one `link:handoff` on its own link; the device (Node link, Android app; a
   browser's page gets `orb:handoff` with the address) links there and drops the old link; the server tells the app
   (`hub:handoffDone`). Unmapped persons' devices wait. Unlinking the server sends them `link:handback` (offers of the

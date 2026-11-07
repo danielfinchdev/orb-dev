@@ -16,10 +16,8 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { tempHome, startEngine, until, ROOT } from './helpers.mjs';
 import { createLink, versionGap, PROTOCOL } from '../src/core/link.mjs';
-import { versionNotice } from '../src/terminal/client.mjs';
 import { createHost, prepareHome } from '../src/server/host.mjs';
 import { paths } from '../src/core/home.mjs';
-import { createT } from '../src/core/i18n.mjs';
 import * as C from '../src/core/mobile-crypto.mjs';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
@@ -95,13 +93,13 @@ test('8: el QR para Leo da un dispositivo de Leo; Leo no hace QR para otros ni d
   assert.ok(st.devices.every((x) => x.person === leo.id), 'Leo solo ve sus dispositivos');
 });
 
-test('17: mensajes de versión (app, terminal y Orb antiguos)', async () => {
+test('17: mensajes de versión (app y Orb antiguos)', async () => {
   // A client of protocol 1 is told to update when linking (the QR is not used up).
-  const q = await centro.call('link.qr', { person: leo.id, device: 'terminal' });
-  const old = device('Terminal vieja', 'terminal', { opts: { protocol: 1, min: 1 } });
+  const q = await centro.call('link.qr', { person: leo.id, device: 'phone' });
+  const old = device('Móvil viejo', 'phone', { opts: { protocol: 1, min: 1 } });
   await assert.rejects(old.connect({ qr: q.url }), (e) => e.status === 426 && /Actualiza/.test(e.message));
-  // A terminal of protocol 2 (3.5) still works, as the person the QR was for.
-  const t2 = device('Terminal 3.5', 'terminal', { opts: { protocol: 2, min: 2 } });
+  // A phone of protocol 2 (3.5) still works, as the person the QR was for.
+  const t2 = device('Móvil 3.5', 'phone', { opts: { protocol: 2, min: 2 } });
   const peer = await t2.connect({ qr: q.url });
   assert.equal((await t2.me(peer.id)).person.id, leo.id);
   // /api/me of a client that says protocol 1: «Actualiza».
@@ -109,11 +107,6 @@ test('17: mensajes de versión (app, terminal y Orb antiguos)', async () => {
   const r = await raw.post('/api/me', raw.box('me', { v: 1 }));
   const msg = C.open(raw.key, await r.json(), C.AAD.response(raw.id));
   assert.equal(msg.ok, false); assert.equal(msg.status, 426); assert.match(msg.error, /Actualiza/);
-  // The terminal's own messages.
-  const t = createT('es');
-  assert.match(versionNotice({ v: 4, min: 4 }, 'Servidor', t), /orb-terminal/);
-  assert.match(versionNotice({ v: 1, min: 1, version: '3.4.0' }, 'Servidor', t), /Actualiza Servidor/);
-  assert.equal(versionNotice({ v: 3, min: 2 }, 'Servidor', t), null);
   assert.equal(versionGap({ v: 3, min: 3 }, { v: 2 }), 'them');
   assert.equal(versionGap({ v: 2, min: 2 }, { v: 3, min: 3 }), 'me');
 });

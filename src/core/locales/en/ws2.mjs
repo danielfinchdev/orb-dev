@@ -1,4 +1,4 @@
-// 3.6 "People" (WS2, the gateway): each person's devices and links, versions, the window's lock, the terminal and Orb
+// 3.6 "People" (WS2, the gateway): each person's devices and links, versions, the window's lock and Orb
 // Server.
 export default {
   'msg.persons.lockedWindow': 'The window is locked. Unlock it with your PIN.',
@@ -16,13 +16,6 @@ export default {
   'msg.link.adminOwnerOnly': '"Can manage" is only for a device of the admin.',
   'msg.link.qrForOthers': 'Only the admin can link devices for another user.',
   'msg.link.noPeer': 'That link does not exist.',
-  'term.tui.connectedAs': 'Connected as {name}',
-  'term.links.as': 'as {name}',
-  'term.version.updateTerminal': 'Update orb-terminal: it has {has} and that Orb needs {need}.',
-  'term.version.updateOrb': 'Update {name}: it has {has} and {need} is needed.',
-  'term.pin.ask': 'This card asks for your PIN. Type it and press Enter (it is not shown):',
-  'term.pin.wrong': 'The PIN is not right.',
-  'term.pin.locked': 'Too many tries. Wait a little and try again.',
   'term.server.isOwner': 'admin',
   'term.server.hasPin': 'with PIN',
   'term.server.personDevices': '{n} devices',
