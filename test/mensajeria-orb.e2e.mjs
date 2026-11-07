@@ -17,6 +17,7 @@ import { fork, execFileSync } from 'node:child_process';
 import { tempHome, ROOT, until } from './helpers.mjs';
 import { Board } from '../src/core/board.mjs';
 import { openDb } from '../src/core/db.mjs';
+import { pairBrowser, TEST_MASTER } from './fixtures/e2e-flows.mjs';
 
 const OUT = path.join(ROOT, 'test-results', 'mensajeria-orb'); fs.mkdirSync(OUT, { recursive: true });
 const www = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-mensajeria-orb-'));
@@ -32,6 +33,7 @@ async function engineWith(env = {}) {
   const call = (method, params = {}) => new Promise((resolve, reject) => { const id = ++n; pending.set(id, { resolve, reject }); child.send({ type: 'call', id, method, params }); });
   await new Promise((resolve, reject) => { child.once('message', (m) => (m.type === 'started' && m.ok ? resolve() : reject(new Error(m.error)))); child.send({ type: 'start', home: t.home, version: 'test' }); });
   await until(async () => (await call('remote.status')).running, 'acceso del servidor');
+  await call('master.create', { password: TEST_MASTER }); // 3.8: phones and browsers link with the PC's master password
   const e = { port, call, child, t }; engines.push(e); return e;
 }
 
@@ -122,9 +124,8 @@ try {
   const s = await sample(pc.call);
   const ctxt = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, locale: 'es-ES' });
   const page = await ctxt.newPage(); watch(page);
-  const { url } = await pc.call('link.qr');
-  await page.goto(`http://127.0.0.1:${pc.port}/${new URL(url).hash}`);
-  await page.waitForSelector('[data-testid=orb-inbox]');
+  const { url, pc: fp } = await pc.call('link.qr', { device: 'browser' });
+  await pairBrowser(page, `http://127.0.0.1:${pc.port}/${new URL(url).hash}`, { fp, ready: '[data-testid=orb-inbox]' });
 
   for (const dark of [false, true]) {
     const scheme = dark ? 'dark' : 'light';
@@ -227,9 +228,8 @@ try {
     const pctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'es-ES' });
     const p = await pctx.newPage(); watch(p);
     if (kind === 'glass') { const cdp = await pctx.newCDPSession(p); await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'no-preference' }] }); }
-    const { url: purl } = await ph.call('remote.pair');
-    await p.goto(`http://127.0.0.1:${ph.port}/${new URL(purl).hash}`);
-    await p.waitForSelector('[data-testid=orb-inbox]');
+    const { url: purl, pc: pfp } = await ph.call('remote.pair');
+    await pairBrowser(p, `http://127.0.0.1:${ph.port}/${new URL(purl).hash}`, { fp: pfp, ready: '[data-testid=orb-inbox]' });
     for (const dark of kind === 'glass' ? [false, true] : [false]) {
       const scheme = dark ? 'dark' : 'light';
       const shot = shooter(p, `${kind}-${scheme}`);

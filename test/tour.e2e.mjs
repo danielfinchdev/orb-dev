@@ -15,6 +15,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { fork } from 'node:child_process';
 import { tempHome, ROOT, until } from './helpers.mjs';
+import { createMaster, pairBrowser, TEST_MASTER } from './fixtures/e2e-flows.mjs';
 
 const OUT = path.join(ROOT, 'test-results', 'tour');
 fs.mkdirSync(OUT, { recursive: true });
@@ -45,7 +46,10 @@ const shim = http.createServer(async (req, res) => {
   if (url.pathname === '/__call') {
     let body = ''; for await (const c of req) body += c;
     const { method, params } = JSON.parse(body);
-    try { const result = await call(method, params); res.end(JSON.stringify({ ok: true, result: result ?? null })); } catch (e) { res.end(JSON.stringify({ ok: false, error: e.message })); }
+    // The welcome runs twice (light and dark) on one engine: the second «Crea tu contraseña maestra» opens the one made
+    // the first time (the engine makes it once).
+    const run = async () => (method === 'master.create' && (await call('master.state')).exists ? call('master.unlock', params) : call(method, params));
+    try { const result = await run(); res.end(JSON.stringify({ ok: true, result: result ?? null })); } catch (e) { res.end(JSON.stringify({ ok: false, error: e.message })); }
     return;
   }
   if (url.pathname === '/__events') { res.writeHead(200, { 'Content-Type': 'text/event-stream' }); res.write(': hola\n\n'); streams.add(res); req.on('close', () => streams.delete(res)); return; }
@@ -211,7 +215,7 @@ async function settings(page, state) {
       if (!(await page.locator('[data-testid=settings-dialog]').isVisible().catch(() => false))) await page.evaluate(() => window.__orbFire('ui:navigate', { view: 'settings' }));
       await page.waitForSelector('[data-testid=settings-dialog]');
       const item = page.locator(`[data-testid=settings-nav-${id}]`);
-      if (!(await item.count())) { misses.push(`settings ${id} ${state} (${themeOf(meta.get(page))}, ${meta.get(page).device}): this section only shows with several users`); return; }
+      if (!(await item.count())) { misses.push(`settings ${id} ${state} (${themeOf(meta.get(page))}, ${meta.get(page).device}): this section is not shown here`); return; }
       await item.click();
       await shot(page, { area: 'settings', screen: id, state, src: 'src/ui/views/settings.jsx (SettingsDialog)', desc: `Settings › ${label} — ${state}`, scroll: true });
     });
@@ -229,14 +233,33 @@ try {
     meta.get(pc).dark = dark;
     await pc.emulateMedia({ colorScheme: dark ? 'dark' : 'light' }); // before the setup the theme follows the system
     await pc.goto(pcUrl);
-    // 3.7: the 3.5.1 welcome: the assistant's name, what to call you and the folder; then «Preparando tu PC» (Windows).
+    // 3.7: the 3.5.1 welcome: the assistant's name, what to call you and the folder (3.8: already chosen); 3.8: then
+    // «Ordenar carpetas» (only with folders of an earlier Orb: not in this fresh folder) and «Crea tu contraseña
+    // maestra»; then «Preparando tu PC» (Windows).
     await pc.waitForSelector('[data-testid=setup-datos]', { timeout: 20000 });
     const W = 'src/ui/views/setup.jsx';
-    await shot(pc, { area: 'wizard', screen: 'datos', state: 'default', src: W, desc: 'Welcome: assistant name, what to call you, folder' });
+    await shot(pc, { area: 'wizard', screen: 'datos', state: 'default', src: W, desc: 'Welcome: assistant name, what to call you, folder (already chosen)' });
     await pc.fill('[data-testid=setup-user]', 'Ana');
     await pc.click('[data-testid=setup-folder]');
     await shot(pc, { area: 'wizard', screen: 'datos', state: 'filled', src: W, desc: 'Welcome, filled in (the folder chosen)' });
     await pc.click('[data-testid=setup-create]');
+    await pc.locator('[data-testid=master-create], [data-testid=layout-review]').first().waitFor({ timeout: 20000 });
+    if (await pc.locator('[data-testid=layout-review]').isVisible()) {
+      await shot(pc, { area: 'wizard', screen: 'layout', state: 'default', src: 'src/ui/views/layout.jsx', desc: 'Welcome: «Ordenar carpetas» (folders of an earlier Orb)' });
+      await pc.click('[data-testid=layout-apply]');
+    }
+    const M = 'src/ui/views/master.jsx (MasterCreate)';
+    await pc.waitForSelector('[data-testid=master-create]', { timeout: 20000 });
+    await shot(pc, { area: 'wizard', screen: 'master', state: 'empty', src: M, desc: 'Welcome: «Crea tu contraseña maestra» (mandatory)' });
+    await pc.fill('[data-testid=master-new]', 'corta');
+    await pc.fill('[data-testid=master-again]', 'corto');
+    await shot(pc, { area: 'wizard', screen: 'master', state: 'weak-mismatch', src: M, desc: 'Master password: too short (strength meter) and the repeat does not match' });
+    await pc.fill('[data-testid=master-new]', TEST_MASTER);
+    await pc.fill('[data-testid=master-again]', TEST_MASTER);
+    await pc.click('[data-testid=master-ack]');
+    await shot(pc, { area: 'wizard', screen: 'master', state: 'filled', src: M, desc: 'Master password filled in, strength shown, «Si la olvidas, no se puede recuperar» ticked' });
+    await pc.click('[data-testid=master-ack]'); // createMaster ticks it again (it checks the button waits for it)
+    await createMaster(pc);
     await pc.waitForSelector('[data-testid=setup-prepare]', { timeout: 20000 });
     await pc.waitForTimeout(800);
     await shot(pc, { area: 'wizard', screen: 'prepare', state: 'default', src: W, desc: 'Welcome: «Preparando tu PC» (official installers, then sign in)' });
@@ -265,9 +288,10 @@ try {
   await call('config.save', { patch: { expert: { enabled: true } } });
   const phone = (!ONLY || ONLY.has('phone')) ? await newPage('phone') : null;
   const web = (!ONLY || ONLY.has('web')) ? await newPage('web') : null;
+  // 3.8: the QR opens the password step (the PC's fingerprint on screen); the PC's master password links it.
   const linkDevice = async (page, device) => {
-    const qr = await call('link.qr', { admin: true, ...(device === 'browser' ? { device: 'browser' } : {}) });
-    await page.goto(`http://127.0.0.1:${port}/${new URL(qr.url).hash}`);
+    const qr = await call('link.qr', { device });
+    await pairBrowser(page, `http://127.0.0.1:${port}/${new URL(qr.url).hash}`, { fp: qr.pc, onScreen: () => shot(page, { area: 'link', screen: 'pair-password', state: 'default', src: 'src/ui/main.jsx (BrowserPair, PairPassword)', desc: `Linking a ${device === 'browser' ? 'computer\'s browser' : 'phone'} from the QR: the PC's fingerprint and its master password` }) });
     await loaded(page);
   };
   if (phone) { step = 'enlazar el móvil'; await linkDevice(phone, 'phone'); }
@@ -307,7 +331,7 @@ try {
   const conv = (await call('conversations.list'))[0];
   await new Promise((r) => setTimeout(r, 1500));
   await quiet(call('chat.send', { text: 'TABLA_MARKDOWN ¿Cómo lo repartimos?', conversation: conv.id }));
-  await call('chat.send', { text: 'Recuérdame mañana llamar a Marta', conversation: null }).catch(() => {});
+  await call('chat.send', { text: 'Resume lo que llevamos hecho en mi-web', conversation: null }).catch(() => {});
   // Direct conversations with agents: one with a picture, one waiting for permission.
   const s1 = await call('sessions.create', { agent: 'claude', project: 'mi-web', permission: 'editar', title: 'Charla con Claude' });
   const img = path.join(t.home, 'captura.png'); fs.copyFileSync(path.join(ROOT, 'src', 'ui', 'public', 'icon.png'), img);
@@ -356,7 +380,7 @@ try {
       await attempt(P, 'brain picker', async () => { await P.click('[data-testid=session-model]'); await P.waitForTimeout(400); await shot(P, { area: 'orb', screen: 'session', state: 'model-picker-open', src: 'src/ui/components/brain-picker.jsx', desc: 'Conversation, the model / brain picker open' }); await P.keyboard.press('Escape'); });
       await attempt(P, 'session approval', async () => { await nav(P, { view: 'session', id: s2.id }); await P.waitForSelector('[data-testid=approval-card]', { timeout: 15000 }); await shot(P, { area: 'orb', screen: 'session', state: 'approval-card-pending', src: 'src/ui/views/session.jsx (ApprovalCard)', desc: 'Conversation with Codex waiting for permission (approval card)' }); });
       await tasksDetail(P, st);
-      await attempt(P, 'project selected', async () => { await nav(P, { view: 'projects' }); await P.locator('main').getByText('mi-web', { exact: true }).first().click(); await shot(P, { area: 'orb', screen: 'projects', state: 'selected-mi-web', src: 'src/ui/views/projects.jsx', desc: 'Projects, «mi-web» selected (git, actions, share)', scroll: true }); });
+      await attempt(P, 'project selected', async () => { await nav(P, { view: 'projects' }); await P.locator('main').getByText('mi-web', { exact: true }).first().click(); await shot(P, { area: 'orb', screen: 'projects', state: 'selected-mi-web', src: 'src/ui/views/projects.jsx', desc: 'Projects, «mi-web» selected (git, actions)', scroll: true }); });
       await attempt(P, 'rename dialog', async () => { await P.locator('main').getByText('notas', { exact: true }).first().click(); await P.click('[data-testid=project-rename]'); await dialog(P); await shot(P, { area: 'dialog', screen: 'rename-project', state: 'open', src: 'src/ui/views/projects.jsx + components/dialogs.jsx (form)', desc: 'Rename project form' }); await P.keyboard.press('Escape'); });
       await attempt(P, 'review dialog', async () => { await P.locator('main').getByText('mi-web', { exact: true }).first().click(); await P.click('[data-testid=project-review]'); await dialog(P); await shot(P, { area: 'dialog', screen: 'project-review', state: 'open', src: 'src/ui/views/projects.jsx (askReview) + components/dialogs.jsx', desc: 'Task Review of a project, who reviews' }); await P.keyboard.press('Escape'); });
       await attempt(P, 'new project dialog', async () => { await nav(P, { view: 'chat' }); await P.click('[data-testid=chats-new]'); await P.click('[data-testid=sidebar-new-project]'); await dialog(P); await shot(P, { area: 'dialog', screen: 'new-project', state: 'empty', src: 'src/ui/components/project-actions.jsx (createProjectFlow)', desc: 'New project dialog (platforms, name, about)' });
@@ -375,7 +399,7 @@ try {
         for (const g of ['snake', 'chess', 'tetris']) { await attempt(P, `game ${g}`, async () => { if (await P.getByRole('button', { name: 'Volver a los juegos' }).isVisible().catch(() => false)) await P.getByRole('button', { name: 'Volver a los juegos' }).click(); await P.click(`[data-testid=game-${g}]`); await P.waitForTimeout(1200); await shot(P, { area: 'games', screen: g, state: 'playing', src: `src/ui/games/${g}.jsx`, desc: `Game: ${g}` }); }); }
         await P.keyboard.press('Escape'); });
       await attempt(P, 'new schedule', async () => { await nav(P, { view: 'schedules' }); await P.click('[data-testid=new-schedule]'); await dialog(P); await shot(P, { area: 'dialog', screen: 'new-schedule', state: 'open', src: 'src/ui/views/schedules.jsx', desc: 'New scheduled task', scroll: true }); await P.keyboard.press('Escape'); });
-      await attempt(P, 'magic link qr', async () => { await P.evaluate(() => window.__orbFire('ui:navigate', { view: 'settings', section: 'magiclink' })); await P.waitForSelector('[data-testid=settings-dialog]'); await P.click('[data-testid=settings-nav-magiclink]'); await P.click('[data-testid=link-make]'); await P.waitForSelector('[data-testid=link-qr]'); await shot(P, { area: 'dialog', screen: 'magic-link', state: 'qr', src: 'src/ui/views/magic-link.jsx (MagicLinkPanel)', desc: 'Magic Link QR and code, «¿Para qué usuario?»', scroll: true }); await P.keyboard.press('Escape'); });
+      await attempt(P, 'magic link qr', async () => { await P.evaluate(() => window.__orbFire('ui:navigate', { view: 'settings', section: 'magiclink' })); await P.waitForSelector('[data-testid=settings-dialog]'); await P.click('[data-testid=settings-nav-magiclink]'); await P.click('[data-testid=link-make]'); await P.waitForSelector('[data-testid=link-qr]'); await shot(P, { area: 'dialog', screen: 'magic-link', state: 'qr', src: 'src/ui/views/magic-link.jsx (MagicLinkPanel)', desc: 'Magic Link QR, short code and the PC\'s fingerprint («Para qué es»)', scroll: true }); await P.keyboard.press('Escape'); });
       await attempt(P, 'whiteboard panel', async () => { await nav(P, { view: 'board' }); await P.waitForTimeout(1500); if (await P.locator('[data-testid=whiteboard-show-panel]').isVisible().catch(() => false)) await P.click('[data-testid=whiteboard-show-panel]'); await shot(P, { area: 'orb', screen: 'board', state: 'panel', src: 'src/ui/views/whiteboard.jsx + components/excalidraw-board.jsx', desc: 'Whiteboard with its side panel' }); });
       await attempt(P, 'expert populated', async () => { await nav(P, { view: 'expert' }); await P.waitForTimeout(1200); await shot(P, { area: 'orb', screen: 'expert', state: 'project-mi-web', src: 'src/ui/views/expert.jsx', desc: 'God mode with mi-web (tree, git, system)' }); });
       await attempt(P, 'tutorials faq', async () => { await nav(P, { view: 'tutorials' }); await P.locator('[data-testid^=faq-]').first().click(); await shot(P, { area: 'orb', screen: 'tutorials', state: 'faq-open', src: 'src/ui/views/tutorials.jsx', desc: 'Tutorials, a question opened', scroll: true }); });

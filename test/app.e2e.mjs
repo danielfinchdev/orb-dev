@@ -9,6 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import http from 'node:http';
+import { throughStart, sandboxEnv } from './fixtures/e2e-flows.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'test-results');
@@ -23,7 +24,7 @@ process.on('unhandledRejection', (e) => { if (/No dialog is showing/.test(String
 // ORB_E2E_EXE: test a packaged build instead of the sources (e.g. dist/linux-unpacked/orb).
 const packaged = process.env.ORB_E2E_EXE;
 // 2.3: the fake agents live inside the engine (ORB_FAKE_AGENTS), so nothing is launched as a program (also on Windows).
-const app = await electron.launch({ executablePath: packaged || electronBin, args: [...(packaged ? [] : [ROOT]), ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], env: { ...process.env, ORB_USER_DATA: path.join(tmp, 'datos-app'), ORB_DEFAULT_BASE: base, ORB_FAKE_AGENTS: fake('fake-live.mjs'), ORB_FAKE_UPDATE: '9.9.9' } });
+const app = await electron.launch({ executablePath: packaged || electronBin, args: [...(packaged ? [] : [ROOT]), ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], env: { ...process.env, ...sandboxEnv(tmp), ORB_USER_DATA: path.join(tmp, 'datos-app'), ORB_DEFAULT_BASE: base, ORB_FAKE_AGENTS: fake('fake-live.mjs'), ORB_FAKE_UPDATE: '9.9.9' } });
 const errors = [];
 const win = await app.firstWindow();
 win.on('pageerror', (e) => errors.push(e.message));
@@ -36,28 +37,41 @@ let step = 'inicio';
 try {
   // ---- first run
   step = 'primer arranque';
+  // 3.8: the welcome never sees the real C:\Orb (ORB_DEFAULT_BASE) nor this PC's backups (sandboxEnv).
+  assert.ok(base.startsWith(os.tmpdir()), 'carpeta temporal');
   const button = (name) => win.getByRole('button', { name, exact: true });
   const dialogButton = (name) => win.getByRole('dialog').getByRole('button', { name, exact: true });
-  // 3.7: the 3.5.1 welcome again: the assistant's name, what to call you, where its folder goes; on Windows then
-  // «Preparando tu PC» (the official installers of what is missing). No questions about people or uses.
+  // 3.7: the 3.5.1 welcome again: the assistant's name, what to call you, where its folder goes (3.8: already chosen,
+  // C:\Orb on a real PC: ORB_DEFAULT_BASE here); 3.8: then «Ordenar carpetas» (only with folders of an earlier Orb) and
+  // «Crea tu contraseña maestra» (mandatory); on Windows then «Preparando tu PC» (the official installers of what is
+  // missing). No questions about people or uses.
   await win.waitForSelector('[data-testid=setup-datos]');
   await app.evaluate(({ dialog }, folder) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] }); }, base);
   await win.fill('[data-testid=setup-assistant]', 'Orbe');
   await win.fill('[data-testid=setup-user]', 'Ana');
-  assert.ok(await win.isDisabled('[data-testid=setup-create]'), 'sin carpeta no se puede seguir');
-  await win.click('[data-testid=setup-folder]');
+  await win.locator('[data-testid=setup-target]', { hasText: path.join(base, 'Orb') }).waitFor();
+  assert.ok(await win.isEnabled('[data-testid=setup-create]'), '3.8: la carpeta viene ya elegida');
+  await win.click('[data-testid=setup-folder]'); // «Cambiar ubicación…» (the dialog answers the same folder)
   await win.locator('[data-testid=setup-target]', { hasText: path.join(base, 'Orb') }).waitFor();
   await win.waitForTimeout(500);
   await shot('01-bienvenida');
   await win.click('[data-testid=setup-create]');
-  await win.getByTestId('chat-greeting').or(win.getByTestId('setup-prepare')).first().waitFor();
-  if (await win.isVisible('[data-testid=setup-prepare]')) {
-    await win.getByText('Preparando tu PC').waitFor();
-    await win.waitForTimeout(800);
-    await shot('01b-preparo-equipo');
-    await win.click('[data-testid=setup-continue]');
-  }
-  await win.waitForSelector('[data-testid=chat-greeting]');
+  const screens = await throughStart(win, {
+    ready: '[data-testid=chat-greeting]', thorough: true,
+    onScreen: async (name) => {
+      if (name === 'layout') { await win.waitForTimeout(400); await shot('01a-ordenar-carpetas'); }
+      if (name === 'master') {
+        await win.getByText('Crea tu contraseña maestra').waitFor();
+        await win.locator('[data-testid=master-warning]').waitFor();
+        await win.waitForTimeout(400); await shot('01a-contrasena-maestra');
+      }
+      if (name === 'prepare') { await win.getByText('Preparando tu PC').waitFor(); await win.waitForTimeout(800); await shot('01b-preparo-equipo'); }
+    }
+  });
+  assert.ok(screens.includes('master'), `la contraseña maestra es obligatoria (pantallas: ${screens.join(' → ')})`);
+  assert.equal(screens.includes('layout'), false, 'una carpeta nueva no tiene nada que ordenar');
+  const ms = await call('master.state');
+  assert.ok(ms.exists && !ms.locked, 'contraseña maestra creada y la ventana abierta');
   for (const sel of ['wizard-quien', 'wizard-para']) assert.equal(await win.locator(`[data-testid=${sel}]`).count(), 0, sel);
   // What 3.6 asked is done without asking: the user's name and this PC's time zone in the settings; backups on.
   const config = (await call('app.state')).config;
@@ -253,6 +267,13 @@ try {
   await section('acerca');
   await win.locator('[data-testid=settings-about]', { hasText: '@danielfinchdev' }).waitFor();
   await win.locator('[data-testid=settings-about]', { hasText: /Orb \d+\.\d+\.\d+/ }).waitFor();
+  // 3.8: «Datos» has the master password's card (change it, «He olvidado la contraseña»).
+  await section('datos');
+  await win.locator('[data-testid=master-card] [data-testid=master-change]').waitFor();
+  await win.waitForTimeout(300);
+  await shot('10j-ajustes-datos');
+  // 3.8: one person per Orb: no Usuarios, PIN nor admin anywhere in Ajustes.
+  for (const id of ['usuarios', 'personas', 'conexiones', 'servidor']) assert.equal(await win.locator(`[data-testid=settings-nav-${id}]`).count(), 0, `sin la sección ${id}`);
   await section('general');
   await win.locator('[data-testid=skin-picker]').waitFor();
   await shot('10e-ajustes-apariencia');

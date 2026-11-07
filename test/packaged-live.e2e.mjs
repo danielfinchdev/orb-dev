@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { createHome, loadConfig, writeJson, merge } from '../src/core/home.mjs';
+import { throughStart, sandboxEnv } from './fixtures/e2e-flows.mjs';
 
 const exe = process.env.ORB_E2E_EXE;
 if (!exe || !fs.existsSync(exe)) { console.error('ORB_E2E_EXE debe apuntar a la app empaquetada'); process.exit(2); }
@@ -18,13 +19,14 @@ writeJson(path.join(home, 'core', 'orb.json'), merge(loadConfig(home), { ui: { t
 const userData = path.join(tmp, 'datos'); fs.mkdirSync(userData);
 fs.writeFileSync(path.join(userData, 'ubicacion.json'), JSON.stringify({ home }));
 const port = 9300 + Math.floor(Math.random() * 500);
-const app = spawn(exe, [`--remote-debugging-port=${port}`], { env: { ...process.env, ORB_USER_DATA: userData }, stdio: 'ignore' });
+const app = spawn(exe, [`--remote-debugging-port=${port}`], { env: { ...process.env, ...sandboxEnv(tmp), ORB_USER_DATA: userData }, stdio: 'ignore' });
 const until = async (fn, what, ms = 120000) => { const end = Date.now() + ms; while (Date.now() < end) { try { const v = await fn(); if (v) return v; } catch { /* not yet */ } await new Promise((r) => setTimeout(r, 500)); } throw new Error(`no llegó: ${what}`); };
 let browser;
 try {
   browser = await until(() => chromium.connectOverCDP(`http://127.0.0.1:${port}`), 'la ventana', 60000);
   const page = await until(() => browser.contexts().flatMap((c) => c.pages()).find((p) => p.url().endsWith('index.html')), 'la página', 60000);
-  await page.waitForSelector('[data-testid=chat-greeting]', { timeout: 60000 });
+  // 3.8: a folder made before the first start has no master password yet: «Crea tu contraseña maestra» once.
+  await throughStart(page, { ready: '[data-testid=chat-greeting]', timeout: 90000 });
   const call = (method, params = {}) => page.evaluate(([m, p]) => window.orb.call(m, p), [method, params]);
   const project = await call('projects.create', { name: 'empaquetada' });
   const s = await call('sessions.create', { agent: 'claude', project: project.name, model: 'haiku', permission: 'editar', title: 'Empaquetada' });

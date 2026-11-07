@@ -13,6 +13,7 @@ import path from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createHome, loadConfig, writeJson, merge } from '../src/core/home.mjs';
+import { throughStart, sandboxEnv } from './fixtures/e2e-flows.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const exe = process.env.ORB_E2E_EXE; const feed = process.env.ORB_UPDATE_FEED;
@@ -40,7 +41,7 @@ await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const feedUrl = `http://127.0.0.1:${server.address().port}/`;
 
 const port = 9300 + Math.floor(Math.random() * 500);
-const app = spawn(exe, [`--remote-debugging-port=${port}`], { env: { ...process.env, ORB_USER_DATA: userData, ORB_UPDATE_URL: feedUrl, ORB_NO_ADB: '1' }, stdio: 'ignore' });
+const app = spawn(exe, [`--remote-debugging-port=${port}`], { env: { ...process.env, ...sandboxEnv(tmp), ORB_USER_DATA: userData, ORB_UPDATE_URL: feedUrl }, stdio: 'ignore' });
 const until = async (fn, what, ms = 60000) => { const end = Date.now() + ms; while (Date.now() < end) { try { const v = await fn(); if (v) return v; } catch { /* not yet */ } await new Promise((r) => setTimeout(r, 500)); } throw new Error(`no llegó: ${what}`); };
 const killAll = () => { for (const name of new Set([path.basename(exe), 'Orb.exe'])) { try { execFileSync('taskkill', ['/IM', name, '/T', '/F'], { stdio: 'ignore' }); } catch { /* none */ } } };
 
@@ -48,7 +49,8 @@ let browser;
 try {
   browser = await until(() => chromium.connectOverCDP(`http://127.0.0.1:${port}`), 'la ventana de la app');
   const page = await until(() => browser.contexts().flatMap((c) => c.pages()).find((p) => p.url().endsWith('index.html')), 'la página principal');
-  await page.waitForSelector('[data-testid=chat-greeting]', { timeout: 60000 });
+  // 3.8: a folder made before the first start has no master password yet (an installed 3.7 shows this screen too).
+  await throughStart(page, { ready: '[data-testid=chat-greeting]', timeout: 90000 });
   const st = () => page.evaluate(() => window.orb.update.get());
   assert.equal((await st()).current, before.replace(/\.0$/, ''));
   await page.evaluate(() => window.orb.update.check());

@@ -10,6 +10,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createHome, loadConfig, writeJson, merge } from '../src/core/home.mjs';
+import { throughStart, sandboxEnv } from './fixtures/e2e-flows.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const exe = process.env.ORB_E2E_EXE;
@@ -24,7 +25,7 @@ const userData = path.join(tmp, 'datos-app'); fs.mkdirSync(userData);
 fs.writeFileSync(path.join(userData, 'ubicacion.json'), JSON.stringify({ home }));
 
 const port = 9300 + Math.floor(Math.random() * 500);
-const app = spawn(exe, [`--remote-debugging-port=${port}`, ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], { env: { ...process.env, ORB_USER_DATA: userData }, stdio: 'ignore' });
+const app = spawn(exe, [`--remote-debugging-port=${port}`, ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], { env: { ...process.env, ...sandboxEnv(tmp), ORB_USER_DATA: userData }, stdio: 'ignore' });
 const stop = () => { try { if (process.platform === 'win32') spawn('taskkill', ['/PID', String(app.pid), '/T', '/F'], { stdio: 'ignore' }); else app.kill(); } catch { /* gone */ } };
 const until = async (fn, what, ms = 30000) => { const end = Date.now() + ms; while (Date.now() < end) { try { const v = await fn(); if (v) return v; } catch { /* not yet */ } await new Promise((r) => setTimeout(r, 300)); } throw new Error(`no llegó: ${what}`); };
 
@@ -33,7 +34,10 @@ try {
   browser = await until(() => chromium.connectOverCDP(`http://127.0.0.1:${port}`), 'la ventana de la app');
   const page = await until(() => browser.contexts().flatMap((c) => c.pages()).find((p) => p.url().endsWith('index.html')), 'la página principal');
   const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+  // 3.8: a folder made before the first start has no master password yet: «Crea tu contraseña maestra» once.
+  await throughStart(page, { ready: '[data-testid=chat-greeting]' });
   await page.waitForSelector('[data-testid=chat-greeting] >> text=Nova', { timeout: 30000 });
+  assert.ok((await page.evaluate(() => window.orb.call('master.state'))).exists, 'contraseña maestra creada');
   const call = (method, params = {}) => page.evaluate(([m, p]) => window.orb.call(m, p), [method, params]);
   const state = await call('app.state');
   assert.equal(state.config.assistantName, 'Nova');

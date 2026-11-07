@@ -1,4 +1,6 @@
-// The phone's web app at phone size (390x844, touch): pairing with the QR link (encrypted from then on), then every view the phone has, with
+// The phone's web app at phone size (390x844, touch): pairing with the QR link and, 3.8, the PC's master password
+// (encrypted from then on), then every view the phone has, the back button, a saved route of a removed screen and the
+// line «sin conexión con el PC» at the end, with
 // screenshots in test-results/movil-*.png. The engine runs with fake agents and serves on loopback instead of Tailscale.
 // Run: npm run build && node test/mobile.e2e.mjs
 import { chromium } from 'playwright-core';
@@ -7,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fork } from 'node:child_process';
 import { tempHome, ROOT, until } from './helpers.mjs';
+import { pairBrowser, TEST_MASTER } from './fixtures/e2e-flows.mjs';
 
 const OUT = path.join(ROOT, 'test-results'); fs.mkdirSync(OUT, { recursive: true });
 const port = 20000 + Math.floor(Math.random() * 20000);
@@ -17,6 +20,7 @@ engine.on('message', (m) => { if (m.type === 'reply') { const p = pending.get(m.
 const call = (method, params = {}) => new Promise((resolve, reject) => { const id = ++n; pending.set(id, { resolve, reject }); engine.send({ type: 'call', id, method, params }); });
 await new Promise((resolve, reject) => { engine.once('message', (m) => (m.type === 'started' && m.ok ? resolve() : reject(new Error(m.error)))); engine.send({ type: 'start', home: t.home, version: 'test' }); });
 await until(async () => (await call('remote.status')).running, 'servidor del móvil');
+await call('master.create', { password: TEST_MASTER }); // 3.8: phones link with the PC's master password
 
 const exe = ['/opt/pw-browsers/chromium/chrome-linux/chrome', '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'].find((f) => fs.existsSync(f));
 // Linux CI: Playwright's Chromium. Windows: the Edge that comes with the system (nothing to download).
@@ -26,7 +30,7 @@ const ctxt = await browser.newContext({ viewport: { width: 390, height: 844 }, d
 // PC's time and everything works without pairing again.
 await ctxt.addInitScript(() => { const real = Date.now; Date.now = () => real() + 30 * 60_000; });
 const page = await ctxt.newPage();
-const errors = []; page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => { if (m.type() === 'error' && !/status of (409|404)/.test(m.text())) errors.push(m.text()); });
+const errors = []; page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => { if (m.type() === 'error' && !/status of (409|404)/.test(m.text()) && !(step === 'vincular' && /status of 403/.test(m.text()))) errors.push(m.text()); }); // 403: the wrong master password tried on purpose
 // A file the PC does not serve to the phone: named, so the failure says which one.
 page.on('response', (r) => { if (r.status() === 404 && !/favicon/.test(r.url())) errors.push(`404 ${new URL(r.url()).pathname}`); });
 const shot = (name) => page.screenshot({ path: path.join(OUT, `movil-${name}.png`) });
@@ -37,6 +41,7 @@ page.on('response', async (r) => { if (r.url().includes('/api/call')) sniffed.pu
 // Nothing may stick out sideways at phone width.
 const noSideScroll = async (where) => { const w = await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]); assert.ok(w[0] <= w[1] + 1, `${where}: se sale por los lados (${w[0]} > ${w[1]})`); };
 let step = 'inicio';
+let stopped = false;
 try {
   // Something to look at: a project, tasks, a conversation.
   await call('projects.create', { name: 'webviaproject' });
@@ -46,11 +51,13 @@ try {
   await until(async () => (await call('tasks.list')).some((x) => x.status === 'done'), 'tarea hecha', 30000);
 
   step = 'vincular';
-  const { url } = await call('remote.pair');
+  const { url, pc } = await call('remote.pair');
   const link = `http://127.0.0.1:${port}/${new URL(url).hash}`;
-  await page.goto(link);
+  // 3.8: the QR opens the password step (the PC's fingerprint on screen); a wrong one is refused and the code still works.
+  await pairBrowser(page, link, { fp: pc, wrongFirst: true, onScreen: () => shot('00-contrasena') });
   // 3.6 (M3): the phone opens on the Orb zone's chat list; «+» › Nuevo chat opens a conversation full screen.
-  await page.waitForSelector('[data-testid=orb-inbox]');
+  await page.waitForSelector('[data-testid=orb-inbox]', { timeout: 30000 });
+  assert.equal((await call('link.devices')).length, 1, 'enlazado una vez');
   await page.click('[data-testid=chats-new]'); await page.click('[data-testid=new-conversation]');
   await page.waitForSelector('[data-testid=chat-input]');
   await page.fill('[data-testid=chat-input]', 'Hola desde el móvil');
@@ -59,7 +66,10 @@ try {
   await page.waitForTimeout(500);
   await noSideScroll('chat'); await shot('01-chat');
   assert.equal(await page.locator('[data-testid=mobile-tabs]').count(), 0, '3.6 (M3): una conversación a pantalla completa');
-  await page.click('[data-testid=chat-back]'); await page.waitForSelector('[data-testid=orb-inbox]');
+  // 3.8: the browser's back goes up one level inside Orb (lib/phone-nav.js › backStep): from a chat to the chat list.
+  step = 'atrás';
+  await page.evaluate(() => history.back());
+  await page.waitForSelector('[data-testid=orb-inbox]');
 
   // 2.7: a simpler app on the phone, with tabs at the bottom (Orbe, Chats, Tareas, Proyectos, Más); the screens of «Más»
   // open from its list.
@@ -67,6 +77,10 @@ try {
   const nav = async (testid) => { if (MORE.has(testid)) await page.click('[data-testid=nav-menu]:visible'); await page.locator(`[data-testid=${testid}]:visible`).click(); await page.waitForTimeout(500); };
   step = 'pestañas';
   assert.equal(await page.locator('[data-testid=mobile-tabs]:visible').count(), 1, 'pestañas abajo');
+  // 3.8: the tab bar is in the flow under the screen (never over the lists), at the bottom of the window.
+  const tabs = await page.locator('[data-testid=mobile-tabs]').evaluate((el) => ({ position: getComputedStyle(el).position, bottom: el.getBoundingClientRect().bottom, h: innerHeight }));
+  assert.ok(!['absolute', 'fixed'].includes(tabs.position), `la barra de pestañas no flota encima (${tabs.position})`);
+  assert.ok(tabs.bottom <= tabs.h + 1 && tabs.bottom > tabs.h - 120, `la barra abajo (${tabs.bottom} de ${tabs.h})`);
   assert.equal(await page.locator('[data-testid=nav-menu]:visible').count(), 1, '3.6: el menú ☰ arriba a la izquierda');
     assert.equal(await page.locator('[data-testid=chat-play], [data-testid=bar-games]').count(), 0, 'sin minijuegos en el móvil');
   assert.equal(await page.evaluate(() => document.documentElement.dataset.skin), 'orb', 'el móvil lleva el tema predeterminado');
@@ -120,10 +134,24 @@ try {
   await nav('nav-phone');
   await page.waitForSelector('[data-testid=phone-card]');
   await noSideScroll('este móvil'); await shot('10-este-movil');
+  // 3.8: a saved route of a removed screen (the bots of 3.7) opens the chat list, never a blank screen.
+  step = 'ruta de una pantalla quitada';
+  await page.evaluate(() => localStorage.setItem('orb.route', JSON.stringify({ view: 'bots', id: 3 })));
+  await page.reload();
+  await page.waitForSelector('[data-testid=orb-inbox]');
   // Everything the page and the PC said to each other was encrypted: nothing readable went over the wire.
   assert.ok(sniffed.length > 5, 'hubo tráfico');
   for (const body of sniffed) assert.ok(!/webviaproject|Hola desde el móvil|Recibido/.test(body), `se lee por el camino: ${body.slice(0, 120)}`);
   assert.deepEqual(errors.filter((e) => !/favicon/.test(e)), [], `errores: ${errors.join(' | ')}`);
+  // 3.8: the PC goes away (Orb closed) while the page is open: a thin line says so (the live events reconnect and
+  // nothing answers), never «No se pudo iniciar Orb». (The full «PC apagado» screen is for an app that starts without
+  // its PC: in a browser the page itself comes from the PC, so a reload cannot show it.)
+  step = 'PC apagado';
+  const gone = new Promise((r) => engine.once('exit', r));
+  engine.send({ type: 'shutdown' }); stopped = true;
+  await gone;
+  await page.waitForSelector('[data-testid=link-down]', { timeout: 30000 });
+  await shot('11-pc-apagado');
   console.log('✔ web app del móvil a tamaño de teléfono');
 } catch (error) {
   await shot('fallo').catch(() => {});
@@ -131,6 +159,6 @@ try {
   process.exitCode = 1;
 } finally {
   await browser.close().catch(() => {});
-  engine.send({ type: 'shutdown' });
+  if (!stopped) engine.send({ type: 'shutdown' });
   setTimeout(() => { t.cleanup(); process.exit(); }, 600);
 }

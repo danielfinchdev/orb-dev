@@ -10,6 +10,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHome, loadConfig, writeJson, merge } from '../src/core/home.mjs';
 import { SKINS } from '../src/core/appearance.mjs';
+import { throughStart, sandboxEnv } from './fixtures/e2e-flows.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const exe = process.env.ORB_E2E_EXE; // optional: a packaged build instead of the sources
@@ -28,12 +29,12 @@ async function open(userData, env = {}) {
   let app = null; let page; let stop;
   if (exe) {
     const port = 9300 + Math.floor(Math.random() * 500);
-    const child = spawn(exe, [`--remote-debugging-port=${port}`], { env: { ...process.env, ORB_USER_DATA: userData, ...env }, stdio: 'ignore' });
+    const child = spawn(exe, [`--remote-debugging-port=${port}`], { env: { ...process.env, ...sandboxEnv(tmp), ORB_USER_DATA: userData, ...env }, stdio: 'ignore' });
     const browser = await until(() => chromium.connectOverCDP(`http://127.0.0.1:${port}`), 'la ventana de la app');
     page = await until(() => browser.contexts().flatMap((c) => c.pages()).find((p) => p.url().endsWith('index.html')), 'la página principal');
     stop = async () => { await browser.close().catch(() => {}); try { if (process.platform === 'win32') spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' }); else child.kill(); } catch { /* gone */ } await new Promise((r) => setTimeout(r, 1500)); };
   } else {
-    app = await electron.launch({ executablePath: electronBin, args: [ROOT], env: { ...process.env, ORB_USER_DATA: userData, ...env } });
+    app = await electron.launch({ executablePath: electronBin, args: [ROOT], env: { ...process.env, ...sandboxEnv(tmp), ORB_USER_DATA: userData, ...env } });
     page = await app.firstWindow();
     stop = async () => { await app.close().catch(() => {}); };
   }
@@ -69,23 +70,28 @@ try {
     const base = path.join(tmp, 'PrimerPC'); fs.mkdirSync(base);
     const { app, page, errors, close } = await open(userData, { ORB_DEFAULT_BASE: base });
     const shot = shooter(app, page);
-    // 3.7: the 3.5.1 welcome: the assistant's name, what to call you, the folder; on Windows «Preparando tu PC».
+    // 3.7: the 3.5.1 welcome: the assistant's name, what to call you, the folder (3.8: already chosen: ORB_DEFAULT_BASE);
+    // 3.8: «Ordenar carpetas» when there is something to move and «Crea tu contraseña maestra»; on Windows «Preparando
+    // tu PC».
     await page.waitForSelector('[data-testid=setup-datos]');
     note(`ventana inicial: ${(await page.evaluate(() => [innerWidth, innerHeight])).join('x')}`);
     await page.fill('[data-testid=setup-user]', 'Ana');
     await shot('00-bienvenida');
+    const screens = { layout: '00a-ordenar-carpetas', master: '00a-contrasena-maestra', prepare: '00b-preparo-equipo' };
+    const onScreen = (name) => shot(screens[name]);
     if (app) {
       await app.evaluate(({ dialog }, folder) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] }); }, base);
       await page.click('[data-testid=setup-folder]');
       await page.click('[data-testid=setup-create]');
-      await page.getByTestId('sidebar-home').or(page.getByTestId('setup-prepare')).first().waitFor({ timeout: 30000 });
-      if (await page.isVisible('[data-testid=setup-prepare]')) { await shot('00b-preparo-equipo'); await page.click('[data-testid=setup-continue]'); }
     } else {
-      // A packaged build: Windows' folder dialog cannot be answered from here, so the same call the button makes.
+      // A packaged build: Windows' folder dialog cannot be answered from here, so the same call the button makes; then
+      // the app shows the master password screen of an Orb that has none yet (main.jsx, phase 'master').
       await page.evaluate((folder) => window.orb.setup({ base: folder, assistantName: 'Orbe', userName: 'Ana' }), base);
       await page.reload();
     }
-    await page.waitForSelector('[data-testid=sidebar-home]', { timeout: 30000 });
+    const seen = await throughStart(page, { ready: '[data-testid=sidebar-home]', onScreen });
+    note(`pantallas de bienvenida: ${seen.join(' → ') || 'ninguna'}`);
+    if (!seen.includes('master')) note('no salió «Crea tu contraseña maestra»');
     await shot('01c-primer-chat');
     note(`errores en bienvenida: ${errors.join(' | ') || 'ninguno'}`);
     await close();
@@ -102,7 +108,8 @@ try {
   const { app, page, errors, close } = await open(userData);
   const shot = shooter(app, page);
   const call = (method, params = {}) => page.evaluate(([m, p]) => window.orb.call(m, p), [method, params]);
-  await page.waitForSelector('[data-testid=chat-greeting]', { timeout: 30000 });
+  // 3.8: a folder made before the first start has no master password yet: «Crea tu contraseña maestra» once.
+  await throughStart(page, { ready: '[data-testid=chat-greeting]' });
   // ORB_LANG=en: the same tour in English (the interface and the engine's notices follow config.language).
   if (LANG) { await call('config.save', { patch: { language: LANG } }); await page.reload(); await page.waitForSelector('[data-testid=sidebar-home]'); }
   if (await page.isVisible('text=Preparando tu PC')) { await shot('01-preparo-equipo'); await page.click('text=Continuar'); }
@@ -115,7 +122,7 @@ try {
     else { await page.click('[data-testid=chats-new]'); await page.click('[data-testid=new-conversation]'); }
   };
   const views = [['sidebar-home', 'chat'], ['nav-tasks', 'tareas'], ['nav-projects', 'proyectos'], ['nav-agents', 'agentes'], ['nav-memories', 'bitacoras'], ['memories-activity', 'actividad'], ['nav-settings', 'ajustes']];
-  const SECTIONS = ['general', 'magiclink', 'agentes', 'avanzado', 'acerca'];
+  const SECTIONS = ['general', 'magiclink', 'agentes', 'datos', 'avanzado', 'acerca'];
   for (const theme of ['dia', 'noche']) {
     await setDark(theme === 'noche');
     for (const [nav, name] of views) {

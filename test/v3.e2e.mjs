@@ -9,6 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHome, loadConfig, writeJson, merge } from '../src/core/home.mjs';
+import { throughStart, sandboxEnv } from './fixtures/e2e-flows.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'test-results'); fs.mkdirSync(OUT, { recursive: true });
@@ -19,7 +20,7 @@ fs.mkdirSync(path.join(home, 'web', 'tienda'), { recursive: true });
 const userData = path.join(tmp, 'datos-app'); fs.mkdirSync(userData);
 fs.writeFileSync(path.join(userData, 'ubicacion.json'), JSON.stringify({ home }));
 const electronBin = (await import('electron')).default;
-const app = await electron.launch({ executablePath: electronBin, args: [ROOT, ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], env: { ...process.env, ORB_NO_UPDATE: '1', ORB_USER_DATA: userData, ORB_FAKE_AGENTS: path.join(ROOT, 'test', 'fixtures', 'fake-live.mjs') } });
+const app = await electron.launch({ executablePath: electronBin, args: [ROOT, ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], env: { ...process.env, ...sandboxEnv(tmp), ORB_NO_UPDATE: '1', ORB_USER_DATA: userData, ORB_FAKE_AGENTS: path.join(ROOT, 'test', 'fixtures', 'fake-live.mjs') } });
 const win = await app.firstWindow();
 const errors = [];
 win.on('pageerror', (e) => errors.push(e.message));
@@ -30,6 +31,9 @@ const shot = (name) => win.screenshot({ path: path.join(OUT, `v3-${name}.png`) }
 const until = async (fn, what, ms = 20000) => { const end = Date.now() + ms; while (Date.now() < end) { const v = await fn(); if (v) return v; await win.waitForTimeout(200); } throw new Error(`no llegó: ${what}`); };
 let step = 'inicio';
 try {
+  // 3.8: a folder made before the first start has no master password yet: «Crea tu contraseña maestra» once.
+  step = 'contraseña maestra';
+  await throughStart(win, { ready: '[data-testid=sidebar-home]' });
   step = 'menú sin «Orbe»';
   await win.locator('[data-testid=new-conversation]').waitFor({ timeout: 30000 });
   assert.equal(await count('[data-testid=nav-chat]'), 0, 'ya no hay elemento «Orbe» en el menú');

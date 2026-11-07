@@ -9,6 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHome, loadConfig, writeJson, merge } from '../src/core/home.mjs';
+import { throughStart, sandboxEnv } from './fixtures/e2e-flows.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'test-results'); fs.mkdirSync(OUT, { recursive: true });
@@ -18,14 +19,15 @@ writeJson(path.join(home, 'core', 'orb.json'), merge(loadConfig(home), { ui: { t
 const userData = path.join(tmp, 'datos-app'); fs.mkdirSync(userData);
 fs.writeFileSync(path.join(userData, 'ubicacion.json'), JSON.stringify({ home }));
 const electronBin = (await import('electron')).default;
-const app = await electron.launch({ executablePath: electronBin, args: [ROOT, ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], env: { ...process.env, ORB_LIGHT: '1', ORB_NO_UPDATE: '1', ORB_USER_DATA: userData, ORB_FAKE_AGENTS: path.join(ROOT, 'test', 'fixtures', 'fake-live.mjs') } });
+const app = await electron.launch({ executablePath: electronBin, args: [ROOT, ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], env: { ...process.env, ...sandboxEnv(tmp), ORB_LIGHT: '1', ORB_NO_UPDATE: '1', ORB_USER_DATA: userData, ORB_FAKE_AGENTS: path.join(ROOT, 'test', 'fixtures', 'fake-live.mjs') } });
 const win = await app.firstWindow();
 const errors = [];
 win.on('pageerror', (e) => errors.push(e.message));
 await win.setViewportSize({ width: 1360, height: 860 });
 const count = (sel) => win.locator(sel).count();
 try {
-  await win.locator('[data-testid=sidebar-home]').waitFor({ timeout: 30000 });
+  // 3.8: a folder made before the first start has no master password yet: «Crea tu contraseña maestra» once.
+  await throughStart(win, { ready: '[data-testid=sidebar-home]' });
   assert.equal(await win.evaluate(() => window.orb.light), true, 'la ventana sabe que es Orb Light');
   for (const id of ['sidebar-home', 'nav-tasks', 'nav-projects', 'nav-schedules', 'nav-board', 'nav-agents', 'nav-memories', 'nav-tutorials', 'nav-settings', 'nav-feedback']) assert.equal(await count(`[data-testid=${id}]`), 1, `${id} sigue`);
   assert.equal(await count('[data-testid=nav-expert]'), 0, 'sin God mode en el menú');

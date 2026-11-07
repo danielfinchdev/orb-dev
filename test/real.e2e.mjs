@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHome, loadConfig, writeJson, merge } from '../src/core/home.mjs';
+import { throughStart, sandboxEnv } from './fixtures/e2e-flows.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'test-results', 'real'); fs.mkdirSync(OUT, { recursive: true });
@@ -20,7 +21,7 @@ fs.writeFileSync(path.join(userData, 'ubicacion.json'), JSON.stringify({ home })
 const log = [];
 const note = (s) => { const line = `[${new Date().toISOString().slice(11, 19)}] ${s}`; log.push(line); console.log(line); };
 
-const app = await electron.launch({ executablePath: (await import('electron')).default, args: [ROOT], env: { ...process.env, ORB_USER_DATA: userData } });
+const app = await electron.launch({ executablePath: (await import('electron')).default, args: [ROOT], env: { ...process.env, ...sandboxEnv(tmp), ORB_USER_DATA: userData } });
 const page = await app.firstWindow();
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
@@ -34,8 +35,8 @@ const shot = async (name) => {
 const until = async (fn, what, ms = 180000) => { const end = Date.now() + ms; while (Date.now() < end) { const v = await fn(); if (v) return v; await page.waitForTimeout(1000); } throw new Error(`no llegó: ${what}`); };
 
 try {
-  await page.waitForSelector('[data-testid=chat-greeting]', { timeout: 30000 });
-  if (await page.isVisible('text=Preparando tu PC')) await page.click('text=Continuar');
+  // 3.8: a folder made before the first start has no master password yet: «Crea tu contraseña maestra» once.
+  await throughStart(page, { ready: '[data-testid=chat-greeting]' });
   note(`agentes: ${JSON.stringify((await call('agents.status', { refresh: true })).map((a) => ({ id: a.id, installed: a.installed, login: a.login, models: a.models })))}`);
   const project = await call('projects.create', { name: 'prueba-real' });
   note(`proyecto: ${JSON.stringify(project).slice(0, 200)}`);

@@ -10,6 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fork, execFileSync } from 'node:child_process';
 import { tempHome, ROOT, until } from './helpers.mjs';
+import { pairBrowser, TEST_MASTER } from './fixtures/e2e-flows.mjs';
 
 const OUT = path.join(ROOT, 'test-results', 'diseno'); fs.mkdirSync(OUT, { recursive: true });
 const www = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-glass-'));
@@ -23,6 +24,7 @@ engine.on('message', (m) => { if (m.type === 'reply') { const p = pending.get(m.
 const call = (method, params = {}) => new Promise((resolve, reject) => { const id = ++n; pending.set(id, { resolve, reject }); engine.send({ type: 'call', id, method, params }); });
 await new Promise((resolve, reject) => { engine.once('message', (m) => (m.type === 'started' && m.ok ? resolve() : reject(new Error(m.error)))); engine.send({ type: 'start', home: t.home, version: 'test' }); });
 await until(async () => (await call('remote.status')).running, 'servidor del móvil');
+await call('master.create', { password: TEST_MASTER }); // 3.8: phones link with the PC's master password
 
 const exe = ['/opt/pw-browsers/chromium/chrome-linux/chrome', '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'].find((f) => fs.existsSync(f));
 const browser = await chromium.launch(exe ? { executablePath: exe, args: ['--no-sandbox'] } : { channel: process.platform === 'win32' ? 'msedge' : 'chrome', headless: true });
@@ -51,10 +53,11 @@ try {
   await until(async () => (await call('tasks.list')).some((x) => x.status === 'done'), 'tarea hecha', 30000);
 
   step = 'vincular';
-  const { url } = await call('remote.pair');
-  await page.goto(`http://127.0.0.1:${port}/${new URL(url).hash}`);
+  const { url, pc } = await call('remote.pair');
+  // 3.8: the QR, then the PC's master password (the Android build opened in a browser links like one).
+  await pairBrowser(page, `http://127.0.0.1:${port}/${new URL(url).hash}`, { fp: pc, onScreen: () => shot('00-contrasena') });
   // 3.6 (M3): the phone opens on the Orb zone's chat list; «+» › Nuevo chat.
-  await page.waitForSelector('[data-testid=orb-inbox]');
+  await page.waitForSelector('[data-testid=orb-inbox]', { timeout: 30000 });
   await page.click('[data-testid=chats-new]'); await page.click('[data-testid=new-conversation]');
   await page.waitForSelector('[data-testid=chat-input]');
   const cls = await page.evaluate(() => document.documentElement.className);
@@ -93,7 +96,13 @@ try {
     await shot('03-chats');
     const list = await blurred();
     assert.ok(list.length <= 1, `la lista: capas con desenfoque ${list.join(', ')}`);
-    if (!lite) assert.equal(list.length, 1, 'la barra de pestañas flota con desenfoque');
+    if (!lite) assert.equal(list.length, 1, 'la barra de pestañas lleva desenfoque');
+    // 3.8: the glass tab bar is a pill in the flow under the screen (position: relative), never over the list.
+    const bar = await page.locator('[data-testid=mobile-tabs]').evaluate((el) => ({ position: getComputedStyle(el).position, top: el.getBoundingClientRect().top, bottom: el.getBoundingClientRect().bottom, h: innerHeight }));
+    assert.equal(bar.position, 'relative', `la barra de pestañas en el flujo (${bar.position})`);
+    assert.ok(bar.bottom <= bar.h + 1, `la barra dentro de la pantalla (${bar.bottom} de ${bar.h})`);
+    const under = await page.locator('[data-testid=orb-inbox]').evaluate((el, top) => el.getBoundingClientRect().bottom <= top + 1, bar.top);
+    assert.ok(under, 'la lista termina encima de la barra, no debajo');
     await page.click('[data-testid=chats-new]'); await page.locator('[data-testid=new-conversation]:visible').click();
     await page.waitForSelector('[data-testid=chat-greeting]');
     await shot('04-chat-nuevo');
