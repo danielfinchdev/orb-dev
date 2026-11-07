@@ -112,7 +112,11 @@ export function riskOf(command, lang = 'es') {
 // Paths that are never an agent's business: the assistant's own data (database, secret, logs of runs, undo checkpoints).
 // The isolated copies (.orb\copias\aisladas) are where isolated tasks work, so those stay open.
 const OPEN_INTERNAL = '\\copias\\aisladas\\';
+// 3.8: nor by another way of writing it: the database by its name, the assistant folder through ORB_HOME ($env:ORB_HOME,
+// %ORB_HOME%, $ORB_HOME, os.environ…), or Orb's tickets and pipe for its MCP servers (agent-auth.mjs).
+const INTERNAL_NAMES = /(^|[^a-z0-9_])(orb\.db(-wal|-shm)?|orb_home|orb_ticket_\w*|orb_auth_pipe|orb_mcp_\w*)($|[^a-z0-9_])|orb-agentes-[0-9a-f]/;
 function touchesInternal(text, internalDir) {
+  if (INTERNAL_NAMES.test(String(text ?? '').toLowerCase())) return true;
   if (!internalDir) return false;
   const t = String(text ?? '').replace(/\//g, '\\').toLowerCase();
   const d = path.resolve(internalDir).replace(/\//g, '\\').toLowerCase();

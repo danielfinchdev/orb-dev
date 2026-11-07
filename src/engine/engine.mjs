@@ -4,7 +4,6 @@
 // There is no HTTP server: nothing on the network or in a browser can reach it.
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import { useHome, ctx, tr } from '../core/context.mjs';
 import { isHome, ensureLayout } from '../core/home.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
@@ -95,10 +94,9 @@ async function run(board, { home, version, restored }) {
   const { Orchestrator } = await import('./orchestrator.mjs');
   const { Scheduler } = await import('./scheduler.mjs');
   const { buildApi } = await import('./api.mjs');
-  // The coordinators' keys derive from this one, new at each start (sessions.mjs › conversationKey): the ones of before
-  // sign nothing any more.
-  const orchKey = crypto.randomBytes(24).toString('hex');
-  board.run("DELETE FROM settings WHERE key = 'orchestrator_key_hash' OR key LIKE 'orchestrator_conv:%'");
+  // 3.8: who each agent's MCP process is lives only in this process's memory (agent-auth.mjs); the signatures that
+  // earlier versions kept in the database are gone at start (they sign nothing).
+  board.run("DELETE FROM settings WHERE key = 'orchestrator_key_hash' OR key LIKE 'orchestrator_conv:%' OR key LIKE 'agent_id:%'");
   const sessions = new Sessions(board, { emit, log });
   const { plainAction, looksEnglish } = await import('../core/guard.mjs');
   const { adapter } = await import('../agents/index.mjs');
@@ -142,7 +140,7 @@ async function run(board, { home, version, restored }) {
     // Not over one the user wrote meanwhile.
     autoTitle(board, { agent: c.agent, account: c.account, text }).then((t) => { if (t && board.conversation(c.id)?.title === c.title) board.updateConversation(c.id, { title: t }); }).catch(() => {});
   };
-  const orchestrator = new Orchestrator(board, orchKey, { emit, log, title });
+  const orchestrator = new Orchestrator(board, { emit, log, title });
   const scheduler = new Scheduler(board, sessions, { log, orchestrator, emit });
   const { createRemote } = await import('./remote.mjs');
   const remoteRef = { current: null };

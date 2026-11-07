@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { IS_WIN, firstFile, inPath, npmPrefixes, appDataDirs, userHome, clip, discoverDir } from './common.mjs';
-import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree } from './live.mjs';
+import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree, hidingEnvValues } from './live.mjs';
 import { decide } from '../core/guard.mjs';
 import { tr } from '../core/context.mjs';
 
@@ -56,24 +56,32 @@ export async function accountInfo(exe, dir, { timeoutMs = 20000 } = {}) {
 
 const toml = (value) => JSON.stringify(value); // JSON strings and arrays are valid TOML values
 
-// Secrets (the coordinator's key, the agents' tokens) never go on the command line, which any process of the user can
-// read: they ride in Codex's own environment and Codex forwards them by name to the MCP server (env_vars).
-const SECRET = /KEY|TOKEN|SECRET/i;
+// 3.8: no value of an MCP server's env goes on the command line, which any process of the user can read: each one rides
+// in Codex's own environment under a name of its own (ORB_MCP_<server>_<name>, so two connectors' API_KEY never clash) and
+// the server gets it by that name (env_vars); the config names only what is plainly not secret (PLAIN). Orb's servers
+// read their ticket from the variable their --ticket-env names; connectors start through launch.mjs, which gets their
+// real keys from the engine. Codex's own commands never see any of it (shell_environment_policy, see start()).
+const PLAIN = new Set(['ELECTRON_RUN_AS_NODE', 'ORB_AUTH_PIPE']);
+const envName = (server, key) => `ORB_MCP_${server}_${key}`.replace(/[^A-Za-z0-9_]/g, '_');
 export function mcpSecrets(servers) {
-  return Object.fromEntries(Object.values(servers ?? {}).flatMap((s) => Object.entries(s.env ?? {}).filter(([k]) => SECRET.test(k)).map(([k, v]) => [k, String(v)])));
+  return Object.fromEntries(Object.entries(servers ?? {}).flatMap(([name, s]) => Object.entries(s.env ?? {}).filter(([k]) => !PLAIN.has(k)).map(([k, v]) => [envName(name, k), String(v)])));
 }
 
 // MCP servers through -c overrides (no config file is written in the user's Codex folder).
 export function mcpArgs(servers) {
   const args = [];
   for (const [name, s] of Object.entries(servers ?? {})) {
-    args.push('-c', `mcp_servers.${name}.command=${toml(s.command)}`, '-c', `mcp_servers.${name}.args=${toml(s.args ?? [])}`);
-    const env = Object.entries(s.env ?? {}).filter(([k]) => !SECRET.test(k));
-    const secret = Object.keys(s.env ?? {}).filter((k) => SECRET.test(k));
+    const secret = Object.keys(s.env ?? {}).filter((k) => !PLAIN.has(k));
+    // The secret's own name in the server's env is the renamed one: the ticket's --ticket-env follows it.
+    const rename = (a) => { const m = /^--ticket-env=(.+)$/.exec(a); return m && secret.includes(m[1]) ? `--ticket-env=${envName(name, m[1])}` : a; };
+    args.push('-c', `mcp_servers.${name}.command=${toml(s.command)}`, '-c', `mcp_servers.${name}.args=${toml((s.args ?? []).map(rename))}`);
+    const env = Object.entries(s.env ?? {}).filter(([k]) => PLAIN.has(k));
     if (env.length) args.push('-c', `mcp_servers.${name}.env={${env.map(([k, v]) => `${k}=${toml(String(v))}`).join(', ')}}`);
-    if (secret.length) args.push('-c', `mcp_servers.${name}.env_vars=${toml(secret)}`);
+    if (secret.length) args.push('-c', `mcp_servers.${name}.env_vars=${toml(secret.map((k) => envName(name, k)))}`);
     if (name === 'orb') args.push('-c', `mcp_servers.${name}.default_tools_approval_mode="approve"`, '-c', `mcp_servers.${name}.tool_timeout_sec=960`);
   }
+  // Orb's variables (tickets, the pipe) stay out of the commands Codex runs.
+  if (Object.keys(servers ?? {}).length) args.push('-c', 'shell_environment_policy.exclude=["ORB_*"]');
   return args;
 }
 
@@ -144,7 +152,7 @@ export function turnUsage(u, turn) {
 // options: exe, cwd, model, reasoning, permission, resumeId, forkSession, mcpServers, env, internalDir, log, onEvent
 export function createLive(o) {
   const onEvent = o.onEvent ?? (() => {});
-  const log = o.log ?? (() => {});
+  const log = hidingEnvValues(o.log ?? (() => {}), o.mcpServers);
   const approvals = new Approvals(onEvent);
   let permission = o.permission ?? 'editar';
   let model = o.model || null;

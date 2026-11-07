@@ -105,7 +105,7 @@ test('una subtarea se comprueba contra el proyecto de su conversación, aunque o
 
 test('una conversación vuelta a abrir no se completa sola enseguida; una con su informe sin OK, tampoco', () => {
   const board = new Board();
-  const o = new Orchestrator(board, 'clave');
+  const o = new Orchestrator(board);
   try {
     const old = new Date(Date.now() - 3 * 86_400_000).toISOString();
     const quiet = board.createConversation({ title: 'Tranquila' });

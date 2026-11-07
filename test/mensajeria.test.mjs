@@ -25,7 +25,7 @@ before(async () => {
   board = new Board();
   const emit = (event, payload) => events.push({ event, payload });
   const sessions = new Sessions(board, { emit });
-  const orchestrator = new Orchestrator(board, 'clave', { emit });
+  const orchestrator = new Orchestrator(board, { emit });
   const scheduler = new Scheduler(board, sessions, { orchestrator, emit: () => {} });
   api = buildApi({ board, sessions, orchestrator, scheduler, emit, log: () => {}, version: 'test', remoteRef: { current: null, link: null } });
   ctx.config = { ...ctx.config, userName: 'Ana' };

@@ -8,7 +8,8 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { ctx, tr } from '../core/context.mjs';
 import { adapter, executable } from '../agents/index.mjs';
-import { orbMcpServer } from '../agents/common.mjs';
+import { orbMcpServer, connectorLauncher } from '../agents/common.mjs';
+import { agentAuth } from './agent-auth.mjs';
 import { CURSOR_FILES } from '../agents/cursor.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { git, isGitRepo, repoRoot } from '../core/workspace.mjs';
@@ -36,55 +37,29 @@ const parseItem = (row) => { let body = row.body; if (/^[[{]/.test(body)) { try 
 const bodyText = (body) => (typeof body === 'string' ? body : body?.text ?? '');
 
 export const browserOn = () => Boolean(ctx.browser) && ctx.config.browser?.enabled !== false;
-// What the agent process needs in its environment for the browser tools: the key of this conversation's page only.
-export const browserEnv = (agent, session, task = '') => (browserOn() ? { ORB_BROWSER_TOKEN: browserKey(ctx.browser.token, { agent, session: String(session), task: String(task || '') }) } : {});
-
-// Orb's signature of who a worker's MCP process is (agent, task and the conversation it runs in): made with a key that
-// lives only in the engine's memory (a new one each start, which retires the old signatures); the database keeps just
-// the hash, for the MCP to look it up on every call. It ends with the agent's process (Sessions.closeLive), so a task or
-// conversation that is over leaves no valid signature behind, and two direct conversations of one agent are two
-// identities. Its tools act only on that task (src/core/permissions.mjs › ownsTask).
-export function agentToken(board, agent, taskId = '', session = '') {
-  if (!agentKey) { agentKey = crypto.randomBytes(32); board.run("DELETE FROM settings WHERE key LIKE 'agent_id:%'"); }
-  const token = crypto.createHmac('sha256', agentKey).update(`${agent}|${taskId}|${session}`).digest('hex');
-  board.settingJson(`agent_id:${crypto.createHash('sha256').update(token).digest('hex')}`, { agent, task: taskId ? Number(taskId) : null, session: session ? String(session) : null });
-  return token;
-}
-// The signatures of one conversation's (or task run's) agent process, when it closes.
-export function revokeAgentTokens(board, session) {
-  board.run("DELETE FROM settings WHERE key LIKE 'agent_id:%' AND json_extract(value, '$.session') = ?", String(session));
-}
-let agentKey = null;
-// 3.8: the coordinator of one conversation gets a key of its own, derived from the engine's (never the engine's key
-// itself): a key that leaks signs nothing but that conversation. The database keeps its hash until the conversation goes.
-export const conversationKey = (orchKey, conversation) => crypto.createHmac('sha256', String(orchKey)).update(`conv|${conversation}`).digest('hex');
-export function registerConversationKey(board, orchKey, conversation) {
-  const key = conversationKey(orchKey, conversation);
-  board.setting(`orchestrator_conv:${Number(conversation)}`, crypto.createHash('sha256').update(key).digest('hex'));
-  return key;
-}
-export const revokeConversationKey = (board, conversation) => board.run('DELETE FROM settings WHERE key = ?', `orchestrator_conv:${Number(conversation)}`);
 
 // MCP servers handed to an agent: the assistant's board (with the browser tools when the app offers them) plus the
-// user's own connectors enabled for that agent. session: which conversation, so its next turn reuses the same page.
-// 3.2: conversation: the coordinator's conversation (its questions, tasks and project are that conversation's).
-export function mcpServersFor(agent, { board, taskId = '', orchestrator = false, browser = !orchestrator, session = '', orchKey = '', conversation = null } = {}) {
+// user's own connectors enabled for that agent. session: which conversation or task run (its agent process), so its next
+// turn reuses the same page. 3.2: conversation: the coordinator's conversation (its questions, tasks and project).
+// 3.8: who each server is, and a connector's command and keys, stay in the engine's memory (agent-auth.mjs): the config
+// carries only the pipe and a ticket per server, new for every agent process and taken back when it closes
+// (Sessions.closeLive, the coordinator's Lane.closeLive). A worker's tools act only on its task (permissions.mjs ›
+// ownsTask); two direct conversations of one agent are two identities.
+export function mcpServersFor(agent, { taskId = '', orchestrator = false, browser = !orchestrator, session = '', conversation = null } = {}) {
   const who = orchestrator ? 'orb' : agent;
-  const env = { ORB_HOME: ctx.home, ORB_AGENT: who, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}), ...(orchestrator && conversation ? { ORB_CONVERSATION: String(conversation) } : {}) };
-  if (!orchestrator && board) env.ORB_AGENT_TOKEN = agentToken(board, who, taskId, session);
-  // The coordinator gets its conversation's key only (a coordinator without a conversation gets none). Secrets never go
-  // on a command line: each adapter hands the MCP server's env through the agent's own environment (see the adapters).
-  if (orchestrator && orchKey && conversation && board) env.ORB_ORCH_KEY = registerConversationKey(board, orchKey, conversation);
-  if (browser && session && browserOn()) {
-    env.ORB_BROWSER_PIPE = ctx.browser.pipe;
-    env.ORB_SESSION = String(session);
-    Object.assign(env, browserEnv(who, session, taskId));
-  }
-  const servers = { orb: orbMcpServer(env) };
+  const sid = session ? String(session) : null;
+  const ticketed = (name, base, reply) => {
+    const variable = `ORB_TICKET_${name}`.replace(/[^A-Za-z0-9_]/g, '_');
+    return { ...base, args: [...base.args, `--ticket-env=${variable}`], env: { ...base.env, ORB_AUTH_PIPE: agentAuth.address, [variable]: agentAuth.issue({ session: sid, reply }) } };
+  };
+  // The browser's key for this conversation's page only.
+  const nav = browser && sid && browserOn() ? { pipe: ctx.browser.pipe, session: sid, token: browserKey(ctx.browser.token, { agent: who, session: sid, task: String(taskId || '') }) } : null;
+  const servers = { orb: ticketed('orb', orbMcpServer(), { home: ctx.home, browser: nav,
+    who: { agent: who, boss: orchestrator, conversation: orchestrator && conversation ? Number(conversation) : null, task: !orchestrator && taskId ? Number(taskId) : null, session: sid } }) };
   if (!orchestrator) {
     for (const s of ctx.config.mcpServers ?? []) {
-      if (s.enabled === false || (s.agents?.length && !s.agents.includes(agent))) continue;
-      servers[s.name] = { command: s.command, args: s.args ?? [], ...(s.env ? { env: s.env } : {}) };
+      if (s.enabled === false || (s.agents?.length && !s.agents.includes(agent)) || s.name === 'orb') continue;
+      servers[s.name] = ticketed(s.name, connectorLauncher(), { launch: { command: s.command, args: s.args ?? [], env: s.env ?? {} } });
     }
   }
   return servers;
@@ -272,8 +247,8 @@ export class Sessions {
   liveKey(s, acc) { return [s.agent, acc.id, s.cwd, s.reasoning].join('|'); }
 
   closeLive(id) {
-    // Its agent's signature ends with its process (a new process gets a new one).
-    try { revokeAgentTokens(this.board, id); } catch { /* the database is closing */ }
+    // Its MCP servers' grants end with its process (a new process gets new tickets).
+    agentAuth.revokeSession(id);
     const entry = this.lives.get(id); if (!entry) return;
     this.lives.delete(id);
     try { entry.live.close(); } catch { /* gone */ }
@@ -316,8 +291,8 @@ export class Sessions {
       promptDir,
       exe, cwd: s.cwd, model: s.model, reasoning: s.reasoning, permission: s.permission,
       resumeId: forkFrom || s.cli_session || null, forkSession: Boolean(forkFrom), newSessionId,
-      mcpServers: mcpServersFor(s.agent, { board: this.board, taskId, session: s.id }), budgetUsd,
-      env: { ...accountEnv(acc), ...browserEnv(s.agent, s.id, taskId), ORB_HOME: ctx.home, ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
+      mcpServers: mcpServersFor(s.agent, { taskId, session: s.id }), budgetUsd,
+      env: { ...accountEnv(acc), ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
       internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog, cfg: ctx.config.agents[s.agent] ?? {},
       onEvent: (ev) => this.onLiveEvent(s.id, ev)
     });
@@ -376,7 +351,7 @@ export class Sessions {
     }
     if (ev.type === 'context') { if (ev.size) this.update(id, { context: { used: ev.used, size: ev.size, at: now() } }); return; }
     if (ev.type === 'rate') { const s = this.get(id); try { this.onRate(s?.account ?? s?.agent, ev); } catch { /* budget only */ } return; }
-    if (ev.type === 'exit') { if (!this.running.has(id) && this.lives.get(id)?.live.isClosed?.()) { this.lives.delete(id); try { revokeAgentTokens(this.board, id); } catch { /* closing */ } } }
+    if (ev.type === 'exit') { if (!this.running.has(id) && this.lives.get(id)?.live.isClosed?.()) { this.lives.delete(id); agentAuth.revokeSession(id); } }
   }
 
   // 3.1: whether a command only stops processes this task started itself: every number it names is a process launched

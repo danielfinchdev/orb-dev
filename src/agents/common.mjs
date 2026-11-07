@@ -105,12 +105,16 @@ export function readOutput(cmd, args, { env = {}, cwd = discoverDir(), timeoutMs
 // A promise that gives up after ms (with null), for the steps of a discovery that may hang.
 export const within = (promise, ms) => Promise.race([promise, new Promise((resolve) => { setTimeout(() => resolve(null), ms).unref?.(); })]);
 
-// How an agent process starts the assistant's MCP server: the same runtime as the engine (the app's own executable in
-// "run as node" mode when packaged), the server script and the assistant folder. Nothing secret goes in here.
+// How an agent process starts the assistant's MCP server (server.mjs) or one of the user's connectors (launch.mjs, which
+// gets the connector's real command and keys from the engine): the same runtime as the engine (the app's own executable
+// in "run as node" mode when packaged) and the script. Nothing secret goes in here.
+// (Packaged, ORB_MCP_SCRIPT is the server out of the app's archive; launch.mjs sits next to it.)
+const mcpDir = () => (process.env.ORB_MCP_SCRIPT ? path.dirname(process.env.ORB_MCP_SCRIPT) : path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'mcp'));
 export function orbMcpServer(env = {}) {
-  const script = process.env.ORB_MCP_SCRIPT || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'mcp', 'server.mjs');
+  const script = process.env.ORB_MCP_SCRIPT || path.join(mcpDir(), 'server.mjs');
   return { command: process.execPath, args: [script], env: { ELECTRON_RUN_AS_NODE: '1', ...env } };
 }
+export const connectorLauncher = (env = {}) => ({ command: process.execPath, args: [path.join(mcpDir(), 'launch.mjs')], env: { ELECTRON_RUN_AS_NODE: '1', ...env } });
 
 // 3.8: the MCP servers' environment (Orb's signatures, a connector's keys) never goes on a command line, which any
 // process of the user can read: each value moves to the agent's own environment under a name of its own, and the

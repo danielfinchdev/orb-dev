@@ -12,27 +12,32 @@ import { createProject } from '../src/core/projects.mjs';
 import { METHODS, REMOTE_METHODS, CHANNELS, PermissionError, principalOf, allowed, authorize, ownsTask } from '../src/core/permissions.mjs';
 import { guardCall, shapeResult } from '../src/engine/remote.mjs';
 import { ctx } from '../src/core/context.mjs';
-import { Sessions, agentToken, registerConversationKey, revokeAgentTokens } from '../src/engine/sessions.mjs';
+import crypto from 'node:crypto';
+import { Sessions, mcpServersFor } from '../src/engine/sessions.mjs';
+import { AgentAuth, agentAuth } from '../src/engine/agent-auth.mjs';
+import { decide } from '../src/core/guard.mjs';
 import { Orchestrator } from '../src/engine/orchestrator.mjs';
 import { Scheduler } from '../src/engine/scheduler.mjs';
 import { buildApi } from '../src/engine/api.mjs';
 
-let t; let board; let api; let scheduler; let sessions;
-const KEY = 'clave-de-prueba';
+let t; let board; let api; let scheduler; let sessions; let orchestrator;
 const phone = principalOf({ device: { id: 'm1', kind: 'phone' } });
 const browser = principalOf({ device: { id: 'b1', kind: 'browser' } });
 const desktop = principalOf();
 before(() => {
   t = tempHome(); board = new Board();
   sessions = new Sessions(board, { emit: () => {} });
-  const orchestrator = new Orchestrator(board, 'clave', { emit: () => {} });
+  orchestrator = new Orchestrator(board, { emit: () => {} });
   scheduler = new Scheduler(board, sessions, { orchestrator, emit: () => {} });
   api = buildApi({ board, sessions, orchestrator, scheduler, emit: () => {}, log: () => {}, version: 'test', remoteRef: { current: null } });
   createProject(board, { name: 'web' }, 'usuario');
   createProject(board, { name: 'tienda' }, 'usuario');
 });
-// The coordinator of a conversation, as the engine starts it (its conversation's own key).
-const bossEnv = (conv) => ({ ORB_AGENT: 'orb', ORB_CONVERSATION: String(conv), ORB_ORCH_KEY: registerConversationKey(board, KEY, conv) });
+// An agent's "orb" MCP server exactly as the engine hands it (with its ticket); the coordinator of a conversation; and one
+// started with only what its environment claims (no ticket, or a made-up one).
+const signed = (agent, opts = {}) => mcpServersFor(agent, opts).orb;
+const bossServer = (conv) => signed('claude', { orchestrator: true, browser: false, session: `asistente-${conv}`, conversation: conv });
+const claims = (env = {}, ticket = '') => ({ command: process.execPath, args: [path.join(ROOT, 'src', 'mcp', 'server.mjs'), '--ticket-env=ORB_TICKET_orb'], env: { ...env, ORB_AUTH_PIPE: agentAuth.address, ORB_TICKET_orb: ticket } });
 after(() => { try { board.db.close(); } catch { /* closed */ } t.cleanup(); });
 
 test('cada método de la API tiene su línea en la tabla, y ninguna línea sobra', () => {
@@ -97,8 +102,8 @@ test('agentes: sin firma nada; el coordinador, solo las tareas de su conversaci�
   assert.equal(ownsTask(board, { signed: true, boss: true, conversation: null, agent: 'orb' }, loose.id), false);
 });
 
-function mcp(env) {
-  const child = spawn(process.execPath, [path.join(ROOT, 'src', 'mcp', 'server.mjs')], { env: { ...process.env, ORB_HOME: t.home, ...env }, stdio: ['pipe', 'pipe', 'inherit'] });
+function mcp(server) {
+  const child = spawn(server.command, server.args, { env: { ...process.env, ORB_HOME: t.home, ...server.env }, stdio: ['pipe', 'pipe', 'inherit'] });
   const replies = new Map(); let n = 0;
   readline.createInterface({ input: child.stdout }).on('line', (l) => { const m = JSON.parse(l); replies.get(m.id)?.(m); });
   const rpc = (method, params) => new Promise((r) => { const id = ++n; replies.set(id, r); child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`); });
@@ -115,17 +120,23 @@ test('MCP: un agente sin firma, con la conversación falsificada o un coordinado
   const task = board.createTask({ project: 'web', title: 'SECRETO-TAREA', description: 'x', conversation_id: conv }, 'orb');
   const status = task.status;
   // Every tool a signed coordinator or worker gets (the browser's need the app).
-  const boss = mcp(bossEnv(conv)); const worker = mcp({ ORB_AGENT: 'claude', ORB_AGENT_TOKEN: agentToken(board, 'claude', task.id, 'sesion-tarea') });
-  const direct = mcp({ ORB_AGENT: 'claude', ORB_AGENT_TOKEN: agentToken(board, 'claude', '', 'sesion-directa') });
+  const boss = mcp(bossServer(conv)); const worker = mcp(signed('claude', { taskId: task.id, session: 'sesion-tarea' }));
+  const direct = mcp(signed('claude', { session: 'sesion-directa' }));
   const all = new Set();
   for (const c of [boss, worker, direct]) { await c.rpc('initialize', {}); for (const n of await c.tools()) all.add(n); c.close(); }
   for (const n of ['orb_create_task', 'orb_delegate', 'orb_claim_next', 'orb_read_log', 'orb_add_project']) assert.ok(all.has(n), n);
-  const unsigned = mcp({ ORB_AGENT: 'claude', ORB_TASK_ID: String(task.id) });
-  const madeUp = mcp({ ORB_AGENT: 'claude', ORB_AGENT_TOKEN: 'a'.repeat(64) });
-  const forged = mcp({ ...bossEnv(other), ORB_CONVERSATION: String(conv) }); // another conversation's key
-  const engineKey = mcp({ ORB_AGENT: 'orb', ORB_ORCH_KEY: KEY, ORB_CONVERSATION: String(conv) }); // the engine's own key is never a coordinator's
-  const noConversation = mcp({ ORB_AGENT: 'orb', ORB_ORCH_KEY: registerConversationKey(board, KEY, conv) });
-  const clients = [unsigned, madeUp, forged, engineKey, noConversation];
+  const unsigned = mcp(claims({ ORB_AGENT: 'claude', ORB_TASK_ID: String(task.id) }));
+  const madeUp = mcp(claims({ ORB_AGENT: 'claude' }, 'a'.repeat(64)));
+  const noConversation = mcp(signed('claude', { orchestrator: true, browser: false, session: 'asistente-sin-conversacion' }));
+  // N1: what a worker with a shell could write in orb.db (the hashes 3.8 kept there) grants nothing any more.
+  const sha = (v) => crypto.createHash('sha256').update(v).digest('hex');
+  board.setting(`orchestrator_conv:${conv}`, sha('mi-clave'));
+  board.settingJson(`agent_id:${sha('b'.repeat(64))}`, { agent: 'claude', task: task.id, session: 'falsa' });
+  const forgedBoss = mcp(claims({ ORB_AGENT: 'orb', ORB_CONVERSATION: String(conv), ORB_ORCH_KEY: 'mi-clave' }));
+  const forgedWorker = mcp(claims({ ORB_AGENT: 'claude', ORB_AGENT_TOKEN: 'b'.repeat(64) }, 'b'.repeat(64)));
+  // N6: a ticket of another engine (a run before this one) is unknown to this one.
+  const before = mcp(claims({ ORB_AGENT: 'claude' }, new AgentAuth().issue({ session: 'antes', reply: { home: t.home, who: { agent: 'claude', task: task.id, session: 'antes' } } })));
+  const clients = [unsigned, madeUp, noConversation, forgedBoss, forgedWorker, before];
   try {
     for (const c of clients) {
       await c.rpc('initialize', {});
@@ -136,15 +147,16 @@ test('MCP: un agente sin firma, con la conversación falsificada o un coordinado
       }
     }
     assert.equal(board.task(task.id).status, status);
-  } finally { for (const c of clients) c.close(); }
+    assert.match((await forgedBoss.rpc('initialize', {})).result.instructions, /Tú eres "agente-sin-clave"/);
+  } finally { for (const c of clients) c.close(); board.run("DELETE FROM settings WHERE key LIKE 'agent_id:%' OR key LIKE 'orchestrator_conv:%'"); }
 });
 
 test('MCP: el coordinador firmado solo actúa en su conversación; el trabajador, en su tarea', async () => {
   const mine = board.createConversation({ title: 'Mía' }).id; const other = board.createConversation({ title: 'Otra' }).id;
   const own = board.createTask({ project: 'web', title: 'Propia', description: 'x', conversation_id: mine }, 'orb');
   const foreign = board.createTask({ project: 'web', title: 'Ajena', description: 'x', conversation_id: other }, 'orb');
-  const boss = mcp(bossEnv(mine));
-  const worker = mcp({ ORB_AGENT: 'claude', ORB_TASK_ID: String(own.id), ORB_AGENT_TOKEN: agentToken(board, 'claude', own.id, 'sesion-propia') });
+  const boss = mcp(bossServer(mine));
+  const worker = mcp(signed('claude', { taskId: own.id, session: 'sesion-propia' }));
   try {
     for (const c of [boss, worker]) await c.rpc('initialize', {});
     assert.equal((await boss.call('orb_get_task', { id: own.id })).error, false);
@@ -169,10 +181,10 @@ test('MCP: solo una conversación directa coge una tarea manual, recibe su resum
   const conv = board.createConversation({ title: 'Con tareas' }).id;
   const own = board.createTask({ project: 'web', title: 'Del trabajador', description: 'x', conversation_id: conv }, 'orb');
   const manual = board.createTask({ project: 'web', title: 'Manual', description: 'DESCRIPCION-MANUAL', agent: 'claude', launch: 'manual' }, 'usuario');
-  const worker = mcp({ ORB_AGENT: 'claude', ORB_AGENT_TOKEN: agentToken(board, 'claude', own.id, 'sesion-trabajador') });
-  const boss = mcp(bossEnv(conv));
-  const first = mcp({ ORB_AGENT: 'claude', ORB_AGENT_TOKEN: agentToken(board, 'claude', '', 'directa-1') });
-  const second = mcp({ ORB_AGENT: 'claude', ORB_AGENT_TOKEN: agentToken(board, 'claude', '', 'directa-2') });
+  const worker = mcp(signed('claude', { taskId: own.id, session: 'sesion-trabajador' }));
+  const boss = mcp(bossServer(conv));
+  const first = mcp(signed('claude', { session: 'directa-1' }));
+  const second = mcp(signed('claude', { session: 'directa-2' }));
   try {
     for (const c of [worker, boss, first, second]) await c.rpc('initialize', {});
     for (const c of [worker, boss]) {
@@ -209,8 +221,8 @@ test('MCP: cada agente lee solo los mensajes de sus tareas y de su conversación
     toBoss: board.send({ from: 'claude', to: 'orb', body: 'al jefe de A', task_id: a.id }).id,
     toOtherBoss: board.send({ from: 'claude', to: 'orb', body: 'AL JEFE DE B', task_id: b.id }).id
   };
-  const worker = mcp({ ORB_AGENT: 'claude', ORB_AGENT_TOKEN: agentToken(board, 'claude', a.id, 'sesion-a') });
-  const boss = mcp(bossEnv(mine));
+  const worker = mcp(signed('claude', { taskId: a.id, session: 'sesion-a' }));
+  const boss = mcp(bossServer(mine));
   try {
     for (const c of [worker, boss]) await c.rpc('initialize', {});
     const read = JSON.parse((await worker.call('orb_read_messages')).text).map((m) => m.id).sort();
@@ -233,8 +245,8 @@ test('MCP: listas, bitácoras, mensajes y proyectos, confinados a lo suyo', asyn
   board.createTask({ project: 'tienda', title: 'MISMO-PROYECTO', description: 'x', conversation_id: other }, 'orb');
   const elsewhere = board.createTask({ project: 'web', title: 'OTRO-PROYECTO', description: 'x', conversation_id: other }, 'orb');
   board.setActiveProject('web', 'usuario');
-  const worker = mcp({ ORB_AGENT: 'claude', ORB_AGENT_TOKEN: agentToken(board, 'claude', a.id, 'sesion-lista') });
-  const boss = mcp(bossEnv(mine));
+  const worker = mcp(signed('claude', { taskId: a.id, session: 'sesion-lista' }));
+  const boss = mcp(bossServer(mine));
   try {
     for (const c of [worker, boss]) await c.rpc('initialize', {});
     const titles = async (c) => JSON.parse((await c.call('orb_list_tasks', { limit: 200 })).text).map((x) => x.title);
@@ -298,7 +310,7 @@ test('MCP: un trabajador escribe a una tarea hermana de su conversación por su 
   const b = board.createTask({ project: 'web', title: 'Hermana B', description: 'x', conversation_id: mine }, 'orb');
   const c = board.createTask({ project: 'web', title: 'Hermana C', description: 'x', conversation_id: mine }, 'orb');
   const far = board.createTask({ project: 'web', title: 'Lejana', description: 'x', conversation_id: other }, 'orb');
-  const worker = mcp({ ORB_AGENT: 'claude', ORB_AGENT_TOKEN: agentToken(board, 'claude', a.id, 'sesion-hermana') });
+  const worker = mcp(signed('claude', { taskId: a.id, session: 'sesion-hermana' }));
   const got = { b: [], c: [] };
   for (const [task, key] of [[b, 'b'], [c, 'c']]) {
     scheduler.running.set(task.id, { agent: 'codex', sessionId: `hermana-${key}` });
@@ -326,19 +338,51 @@ test('MCP: un trabajador escribe a una tarea hermana de su conversación por su 
 test('MCP: la firma caduca al cerrarse el proceso de la tarea o al borrarse la conversación', async () => {
   const conv = board.createConversation({ title: 'Caduca' }).id;
   const task = board.createTask({ project: 'web', title: 'Caduca', description: 'x', conversation_id: conv }, 'orb');
-  const worker = mcp({ ORB_AGENT: 'claude', ORB_AGENT_TOKEN: agentToken(board, 'claude', task.id, 'sesion-caduca') });
-  const boss = mcp(bossEnv(conv));
+  const worker = mcp(signed('claude', { taskId: task.id, session: 'sesion-caduca' }));
+  const boss = mcp(bossServer(conv));
   try {
     for (const c of [worker, boss]) await c.rpc('initialize', {});
     assert.equal((await worker.call('orb_get_task', { id: task.id })).error, false);
     assert.equal((await boss.call('orb_get_task', { id: task.id })).error, false);
     sessions.closeLive('sesion-caduca'); // the task's process closes (scheduler.finish)
-    assert.equal(board.one("SELECT COUNT(*) AS n FROM settings WHERE key LIKE 'agent_id:%' AND value LIKE '%sesion-caduca%'").n, 0);
     assert.match((await worker.call('orb_get_task', { id: task.id })).text, /no ha firmado/);
     await api.call('conversations.remove', { id: conv }, desktop);
     assert.match((await boss.call('orb_board')).text, /no ha firmado/);
   } finally { worker.close(); boss.close(); }
-  revokeAgentTokens(board, 'sesion-caduca');
+});
+
+// N7: every agent process gets new tickets; the ones of its previous process (same conversation) are worth nothing, and
+// the coordinator's ends when its process closes too (it gets a new one with the next).
+test('MCP: cada proceso tiene su ticket; el de un proceso cerrado no vuelve a valer, tampoco el del coordinador', async () => {
+  const conv = board.createConversation({ title: 'Rota' }).id;
+  const task = board.createTask({ project: 'web', title: 'Rota', description: 'x', conversation_id: conv }, 'orb');
+  const first = signed('claude', { taskId: task.id, session: 'sesion-rota' });
+  const ticket = (s) => s.env.ORB_TICKET_orb;
+  sessions.closeLive('sesion-rota');
+  const second = signed('claude', { taskId: task.id, session: 'sesion-rota' });
+  assert.notEqual(ticket(first), ticket(second), 'otro proceso, otro ticket');
+  const old = mcp(first); const now = mcp(second);
+  const boss = mcp(bossServer(conv));
+  try {
+    for (const c of [old, now, boss]) await c.rpc('initialize', {});
+    assert.match((await old.call('orb_get_task', { id: task.id })).text, /no ha firmado/);
+    assert.equal((await now.call('orb_get_task', { id: task.id })).error, false);
+    // Its ticket is bound to the server that holds it: the copy in the agent's environment (its shell) is worth nothing.
+    const copy = mcp({ ...second }); await copy.rpc('initialize', {});
+    assert.match((await copy.rpc('initialize', {})).result.instructions, /Tú eres "desconocido"/); copy.close();
+    assert.equal((await boss.call('orb_get_task', { id: task.id })).error, false);
+    orchestrator.lane(conv).closeLive(); // the coordinator's process closes
+    assert.match((await boss.call('orb_get_task', { id: task.id })).text, /no ha firmado/);
+  } finally { for (const c of [old, now, boss]) c.close(); sessions.closeLive('sesion-rota'); }
+});
+
+// N1: an agent's shell cannot reach Orb's data by another name (ORB_HOME, the database's name, its tickets and pipe).
+test('guardia: ni ORB_HOME, ni orb.db, ni los tickets de Orb en un comando', () => {
+  for (const command of ['type %ORB_HOME%\\.orb\\datos\\x', 'Get-Content $env:ORB_HOME/x', 'cat "$ORB_HOME/x"', 'python -c "import os; print(os.environ[\'ORB_HOME\'])"',
+    'sqlite3 orb.db "select 1"', 'copy C:\\x\\orb.db-wal .', 'echo $env:ORB_TICKET_orb', 'set | findstr ORB_MCP_github_TOKEN', 'node -e "net.connect(process.env.ORB_AUTH_PIPE)"']) {
+    assert.equal(decide({ permission: 'total', tool: 'Bash', command, internalDir: path.join(t.home, '.orb') }).decision, 'deny', command);
+  }
+  for (const command of ['npm test', 'cat orb.dbx', 'echo robot.db', 'git log --oneline']) assert.notEqual(decide({ permission: 'total', tool: 'Bash', command, internalDir: path.join(t.home, '.orb') }).decision, 'deny', command);
 });
 
 // B1: a call that does not say who makes it is refused (never this PC by default).

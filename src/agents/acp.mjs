@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, readOutput, discoverDir } from './common.mjs';
-import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree } from './live.mjs';
+import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree, hidingEnvValues } from './live.mjs';
 import { decide } from '../core/guard.mjs';
 import { tr } from '../core/context.mjs';
 
@@ -85,7 +85,7 @@ export function acpAgent(id, spec) {
 
   function createLive(o) {
     const onEvent = o.onEvent ?? (() => {});
-    const log = o.log ?? (() => {});
+    const log = hidingEnvValues(o.log ?? (() => {}), o.mcpServers);
     const approvals = new Approvals(onEvent);
     let permission = o.permission ?? 'editar';
     let child = null; let peer = null; let sessionId = o.resumeId ?? null; let turn = null; let started = null; let closed = false;

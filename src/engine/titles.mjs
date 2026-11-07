@@ -22,7 +22,7 @@ export async function autoTitle(board, { agent, account: accountId, text }) {
   try {
     live = adapter(agent).createLive({
       exe: executable(agent), cwd: ctx.paths.runs, model: light.model || (agent === 'claude' ? 'haiku' : null), reasoning: 'low', permission: 'leer',
-      mcpServers: {}, env: { ...accountEnv(acc), ORB_HOME: ctx.home }, internalDir: ctx.paths.internal, lang: ctx.config.language,
+      mcpServers: {}, env: accountEnv(acc), internalDir: ctx.paths.internal, lang: ctx.config.language,
       ...(agent === 'claude' ? { tools: { allowed: [], disallowed: ['Bash', 'Edit', 'Write', 'NotebookEdit', 'MultiEdit', 'WebFetch', 'WebSearch', 'Task', 'Skill', 'Read', 'Glob', 'Grep'] } } : {}),
       onEvent: () => {}
     });

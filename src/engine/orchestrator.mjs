@@ -11,7 +11,8 @@ import { executable, installed, adapter } from '../agents/index.mjs';
 import * as claude from '../agents/claude.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { titleFrom } from '../core/titles.mjs';
-import { mcpServersFor, revokeConversationKey } from './sessions.mjs';
+import { mcpServersFor } from './sessions.mjs';
+import { agentAuth } from './agent-auth.mjs';
 import { accountEnv } from '../core/accounts.mjs';
 import { briefing } from './logs.mjs';
 import { rememberModels } from './catalog.mjs';
@@ -156,7 +157,8 @@ class Lane {
   pushSoon() { if (!this.pushTimer) { this.pushTimer = setTimeout(() => this.push(), 80); this.pushTimer.unref?.(); } }
   say(role, body, meta = null) { return this.board.addChat(role, body, meta, this.id); }
 
-  closeLive() { try { this.live?.close(); } catch { /* gone */ } this.live = null; this.liveKey = ''; }
+  // 3.8: its coordinator's grant ends with its process (a new process gets a new ticket).
+  closeLive() { agentAuth.revokeSession(`asistente-${this.id}`); try { this.live?.close(); } catch { /* gone */ } this.live = null; this.liveKey = ''; }
   // 3.6: «Compactar»: the brain's own compaction when its agent has one (Claude /compact, Codex's thread compaction): the
   // same conversation goes on from a summary. Otherwise (or if it fails) it is renewed: the next message starts afresh
   // with the briefing, the logs and its last lines, as when the context fills up by itself. → { ok, how }
@@ -302,8 +304,8 @@ class Lane {
     this.live = adapter(agent).createLive({
       exe: executable(agent), cwd, model, reasoning: c.reasoning || 'medium',
       permission: 'leer', resumeId: c.session_id || null, newSessionId: isClaude ? newId : null,
-      mcpServers: mcpServersFor(agent, { board: this.board, orchestrator: true, browser: false, session: `asistente-${this.id}`, orchKey: this.orch.key, conversation: this.id }),
-      env: { ...accountEnv(acc), ORB_HOME: ctx.home, ORB_AGENT: 'orb' },
+      mcpServers: mcpServersFor(agent, { orchestrator: true, browser: false, session: `asistente-${this.id}`, conversation: this.id }),
+      env: { ...accountEnv(acc), ORB_AGENT: 'orb' },
       ...(isClaude ? { systemPrompt: persona(this.board) } : {}),
       tools: isClaude ? { allowed: ['mcp__orb', 'Read', 'Glob', 'Grep'], disallowed: claude.COORDINATOR_DENIED } : undefined,
       addDirs: [...new Set(dirs)].filter((d) => d !== cwd).slice(0, 40), internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog,
@@ -426,10 +428,10 @@ class Lane {
 // The assistant: every conversation with the user goes to its brain (Claude Code by default, on the user's own
 // subscription) with a coordinator persona. 3.2: one Lane per conversation, several at once.
 export class Orchestrator {
-  // key: the engine's secret; each conversation's coordinator gets only a key derived from it (sessions.mjs ›
-  // conversationKey), by which its MCP process recognises it. title(conversation, text): names a new conversation (engine/titles.mjs).
-  constructor(board, key, { emit = () => {}, log = () => {}, title = null } = {}) {
-    this.board = board; this.key = key; this.emit = emit; this.log = log; this.title = title;
+  // Each conversation's coordinator is recognised by its MCP process through a ticket of the engine (agent-auth.mjs).
+  // title(conversation, text): names a new conversation (engine/titles.mjs).
+  constructor(board, { emit = () => {}, log = () => {}, title = null } = {}) {
+    this.board = board; this.emit = emit; this.log = log; this.title = title;
     this.lanes = new Map(); this.closing = false;
     this.sweeper = setInterval(() => this.closeIdle(), 60_000); this.sweeper.unref?.();
   }
@@ -551,8 +553,8 @@ export class Orchestrator {
     const pending = (this.board.settingJson('orchestrator_pending') ?? []).filter((q) => q.conversation !== key);
     this.board.settingJson('orchestrator_pending', pending.length ? pending : null);
     this.board.setting(`report_queue:c${key}`, '');
-    // Its coordinator's key signs nothing any more.
-    revokeConversationKey(this.board, key);
+    // Its coordinator's grant ends with it (also with no process open now).
+    agentAuth.revokeSession(`asistente-${key}`);
   }
   // 3.2: a conversation quiet for a day with nothing of it still open (no task, no question waiting, nothing to answer) is
   // done by itself; written in again, it opens.

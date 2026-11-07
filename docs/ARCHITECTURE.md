@@ -808,26 +808,36 @@ launched hidden, with its output read by Orb, and it stores the session in the a
 - **Window:** `sandbox` and context isolation, CSP without `eval`, Markdown is rendered without HTML and every call is
   checked in the main process.
 - **Approval key:** encrypted by Windows (DPAPI). The engine receives it only in memory and the MCP never has it.
-- **Coordinator identity:** each conversation's coordinator gets a key of its own, derived from the engine's
-  (`conversationKey` in `sessions.mjs`, HMAC of the engine's key, new at every start); the database keeps its hash
-  (`orchestrator_conv:<id>`) until the conversation is deleted. A key that leaks signs only that conversation, and there
-  is no coordinator without a conversation. No secret of an MCP server (keys, tokens, a connector's environment) goes on
-  an agent's command line, which any process of the user can read: Claude gets them in its environment and
-  `--mcp-config` only names them (`${VAR}`, which Claude Code expands; `mcpEnvByRef` in `common.mjs`), Cursor's
-  `.cursor/mcp.json` names them as `${env:VAR}`, Codex passes them by name (`env_vars`, `mcpSecrets` in `codex.mjs`) and
-  the ACP agents receive them over their stdin (`session/new`). In coordinator mode Codex uses `untrusted` + `read-only`, so every command goes through the guard, which
-  denies it in `leer`.
+- **Agent identity (3.8, `src/engine/agent-auth.mjs`):** who an agent's MCP process is lives only in the engine's
+  memory, never in the database or a file an agent could write. `mcpServersFor` (`sessions.mjs`) gives every MCP
+  server of an agent process a ticket (random, new for every process) and the engine's local pipe (`ORB_AUTH_PIPE`).
+  The server trades the ticket for its grant when it starts (`src/mcp/auth-client.mjs`): who it is (agent, task,
+  conversation, or the coordinator of one conversation), the assistant folder and the browser's key; it asks the engine
+  again on every call. The ticket is bound to the connection that holds it (a second one waits up to 3 s for the first to
+  close, for Cursor, which starts its servers every turn), so the copy in the agent's environment is worth nothing while
+  the server runs. Tickets end with their agent's process (`Sessions.closeLive`, `Lane.closeLive`), with the
+  conversation and with the engine: nothing of an earlier run is valid (the hashes 3.8 kept in `settings` are deleted at
+  start). There is no coordinator without a conversation.
+- **The user's connectors (3.8):** an agent gets `src/mcp/launch.mjs` and a ticket instead of the connector; the
+  launcher gets the real command, arguments and keys from the engine and starts it (and stops its whole tree when the
+  ticket is taken back). So no connector key is on a command line, in the agent's environment (its shell) or in a session
+  log. What is in an agent's environment (tickets, the pipe) is handed by name: Claude's `--mcp-config` names
+  `${VAR}` (`mcpEnvByRef` in `common.mjs`), Cursor's `.cursor/mcp.json` `${env:VAR}`, Codex `env_vars` with a name per
+  server (`mcpSecrets` in `codex.mjs`, and `shell_environment_policy.exclude=["ORB_*"]` keeps them out of its commands),
+  and the ACP agents get them over stdin (`session/new`), with every value hidden in `registro.jsonl`
+  (`hidingEnvValues` in `live.mjs`). The guard denies commands that name the database (`orb.db`), `ORB_HOME`, the
+  tickets or the pipe. Residual: an agent that kills its own launcher can redeem that ticket from its shell and read
+  that connector's keys (the connector is one the user enabled for that agent). In coordinator mode Codex uses
+  `untrusted` + `read-only`, so every command goes through the guard, which denies it in `leer`.
 - **Pending assistant notices (2.6):** `orchestrator_pending` stores the engine notices not yet answered
   (`keep`/`resume` in `orchestrator.mjs`); when the app closes, the one in progress is repeated when it is reopened, and
   "New chat" does not discard them.
-- **Worker identity (2.5):** each agent's MCP process carries `ORB_AGENT_TOKEN`, Orb's signature of who it is and which
-  task it works on (HMAC with a key that only exists in the engine's memory and changes on every start; the database
-  keeps the hash, `agent_id:*`). The MCP takes agent and task from the signature, not from `ORB_AGENT` or `ORB_TASK_ID`:
-  an agent that starts the MCP on its own cannot impersonate another or close someone else's task (`agentToken()` in
-  `sessions.mjs`, `identity()` in `src/mcp/server.mjs`). 3.8: an unsigned process gets every tool refused, and a signed
-  one acts only on its own conversation or task (section 34). The signature also names the conversation (session) it
-  runs in, so two direct conversations of one agent are two identities, and it ends with the agent's process
-  (`Sessions.closeLive`): the MCP checks it again on every call.
+- **Worker identity:** the MCP takes agent, task and conversation from its grant (above), never from `ORB_AGENT` or
+  `ORB_TASK_ID`: an agent that starts the MCP on its own cannot impersonate another or close someone else's task
+  (`identity()` in `src/mcp/server.mjs`). 3.8: an unsigned process gets every tool refused, and a signed one acts only on
+  its own conversation or task (section 34). The grant also names the conversation (session) it runs in, so two direct
+  conversations of one agent are two identities. Workers of one conversation may message each other's tasks by number;
+  read marks are per task (`claude#3`).
 - **Agents:** clean environment (without the app's secret variables), permission guard, internal data off limits and
   warnings for pushes or mass deletions.
 - **Agent text:** when it goes back to the assistant it is marked as "data, not instructions".
@@ -945,7 +955,7 @@ belongs to the conversation that asked for it: its report goes back there.
   context is. A conversation resumed after more than 6 h starts fresh with the usual summary (logs, project,
   whiteboard) and its last messages, without loading the whole long conversation: the logs are the memory. The process
   of an unused conversation is closed after 10 minutes and resumed when you type.
-- **Orbe's tools:** its MCP server receives `ORB_CONVERSATION`: its questions go to `pending_questions:<id>`, its tasks
+- **Orbe's tools:** its MCP server's grant names its conversation: its questions go to `pending_questions:<id>`, its tasks
   to that conversation, and `orb_set_project` sets that conversation's project (and the working folder for the next
   ones). A conversation without a project takes the one from its first task.
 - **Reports:** `queueReport` waits for all of the conversation's tasks to finish and notifies in it. Whatever belongs to

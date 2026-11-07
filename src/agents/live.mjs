@@ -42,9 +42,16 @@ export class Turn {
   }
 }
 
-// Tokens Orb hands to the agents' MCP servers ({"ORB_BROWSER_TOKEN":"…"} or {"name":"ORB_…TOKEN","value":"…"}) stay out
-// of the session logs.
+// Orb's variables named like a token or a key ({"ORB_…TOKEN":"…"} or {"name":"ORB_…KEY","value":"…"}) stay out of the session logs.
 const LOGGED_SECRET = /(ORB_[A-Z_]*(?:TOKEN|KEY)"(?:\s*,\s*"value")?\s*:\s*")[^"]*/g;
+
+// 3.8: what Orb hands an agent's MCP servers in their env (tickets; a connector's keys if any reach here) never gets to a
+// session log, whatever the variable is called: the log hides those values themselves.
+export function hidingEnvValues(log, servers) {
+  const values = [...new Set(Object.values(servers ?? {}).flatMap((s) => Object.values(s?.env ?? {})).map(String).filter((v) => v.length >= 8))];
+  if (!values.length) return log;
+  return (line) => log(values.reduce((text, v) => text.split(v).join('***'), String(line)));
+}
 
 // JSON-RPC 2.0 over a child's stdin/stdout, one message per line (Codex app-server and ACP agents).
 export class JsonRpcPeer {

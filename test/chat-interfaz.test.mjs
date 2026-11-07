@@ -27,7 +27,7 @@ const tick = () => new Promise((r) => setImmediate(r));
 // An assistant whose turns are held until the test lets them finish (as in asistente.test.mjs), with a live process that
 // records any attempt to put a message into the running turn.
 function assistant(board) {
-  const o = new Orchestrator(board, 'clave');
+  const o = new Orchestrator(board);
   o.turns = []; o.steered = [];
   const make = o.lane.bind(o);
   o.lane = (id) => {
@@ -80,7 +80,7 @@ test('45: la respuesta de un turno es su mensaje final, no todos los intermedios
 
 test('55: «Detener» deja lo que ya había escrito, marcado como respuesta detenida', () => {
   const board = new Board();
-  const o = new Orchestrator(board, 'clave');
+  const o = new Orchestrator(board);
   const c = board.createConversation({ title: 'Explicación' });
   const lane = o.lane(c.id);
   lane.busy = true; lane.said = ['Primero, el motor.']; lane.partial = 'Después, la ventana';
