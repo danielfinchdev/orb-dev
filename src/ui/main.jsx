@@ -8,7 +8,7 @@ import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Toaster } from 'sonner';
 import { notify } from '@/lib/notify.js';
-import { Menu, Smartphone, ScanLine, Link2 } from 'lucide-react';
+import { Menu, Smartphone, ScanLine, Link2, RotateCw } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
 import { MobileTabs, MoreView } from '@/components/mobile-tabs.jsx';
@@ -132,8 +132,9 @@ function Shell() {
 function Root() {
   const t = useT();
   const ready = useStore((s) => s.ready);
-  const [phase, setPhase] = useState('loading'); // loading | setup | app | error
+  const [phase, setPhase] = useState('loading'); // loading | setup | migration | app | error
   const [error, setError] = useState('');
+  const [migration, setMigration] = useState(null);
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -146,6 +147,8 @@ function Root() {
       // The engine may still be starting: retry for a few seconds.
       for (let i = 0; i < 40 && alive; i++) {
         try {
+          // 3.8: the data of 3.7 could not be updated: Orb does not run on them (this PC only).
+          if (!bridge.mobile) { const m = await bridge.call('app.migrationState'); if (m?.failed) { setMigration(m); return alive && setPhase('migration'); } }
           await refresh();
           try {
             const saved = JSON.parse(localStorage.getItem('orb.route') || 'null');
@@ -216,10 +219,36 @@ function Root() {
     </div>
   );
   if (phase === 'update') return <>{strip}<UpdateNeeded info={getState().info} /></>;
+  if (phase === 'migration') return <>{strip}<MigrationFailed state={migration} /></>;
   if (phase === 'error') return <div className="grid h-full place-items-center p-8 text-center">{strip}<div><Robot size={90} mood="worried" /><h1 className="mt-4 text-xl">{t('app.errorTitle')}</h1><p className="text-muted-foreground mt-1 max-w-md text-sm">{error}</p></div></div>;
   if (phase !== 'app' || !ready) return <div className="grid h-full place-items-center">{strip}<Robot size={80} mood="thinking" /></div>;
   // 3.6 (M4): a tapped notification opens its chat (lib/notes.js).
   return bridge.mobile ? <><NoteOpener /><Shell /></> : <Shell />;
+}
+
+// 3.8: the data of Orb 3.7 could not be updated (src/core/migrate-38.mjs): why, where the copy is, and «Reintentar».
+function MigrationFailed({ state }) {
+  const t = useT();
+  const [s, setS] = useState(state);
+  const [busy, setBusy] = useState(false);
+  const retry = async () => {
+    setBusy(true);
+    try { const r = await bridge.call('app.migrationRetry'); if (r?.failed) setS(r); else location.reload(); }
+    catch (e) { setS({ ...s, reason: String(e?.message ?? e) }); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="grid h-full place-items-center overflow-y-auto p-8 text-center" data-testid="migration-failed">
+      <div className="grid max-w-md gap-3">
+        <div className="flex justify-center"><Robot size={90} mood={busy ? 'thinking' : 'worried'} /></div>
+        <h1 className="text-xl">{t('data.migration38.title')}</h1>
+        <p className="text-muted-foreground text-sm">{t('data.migration38.body')}</p>
+        <p className="text-sm" role="alert">{t('data.migration38.reason', { reason: s.reason })}</p>
+        <p className="text-muted-foreground text-xs break-all">{s.backup ? t('data.migration38.backup', { path: s.backup }) : t('data.migration38.noBackup', { path: s.data })}</p>
+        <div className="flex justify-center"><Button disabled={busy} onClick={retry} data-testid="migration-retry">{busy ? <Spinner /> : <RotateCw />}{t('data.migration38.retry')}</Button></div>
+      </div>
+    </div>
+  );
 }
 
 // 3.5, the Android app: link it with an Orb by scanning its QR (Ajustes › Móvil), or by hand when the camera cannot.

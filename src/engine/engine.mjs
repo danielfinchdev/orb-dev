@@ -53,11 +53,48 @@ async function start(home, version, secret, browser) {
   const { addAdbToPath, ensureAdb } = await import('./android.mjs');
   addAdbToPath(); ensureAdb({ log });
   const { Board } = await import('../core/board.mjs');
+  // 3.8: a data folder of 3.5–3.7 is moved to 3.8 when its database opens (src/core/migrate-38.mjs). If that could not be
+  // done, Orb does not run on the data of 3.7 (other users' conversations, schedules and devices): no scheduler, agents
+  // or phone access; the window shows why, where the copy is and «Reintentar» (blocked below).
+  const board = new Board();
+  const { isLegacy } = await import('../core/migrate-38.mjs');
+  if (isLegacy(board.db)) return blocked(board, { home, version, restored });
+  return run(board, { home, version, restored });
+}
+
+// While the data could not be updated: only the window's two calls about it. → what start() returns.
+let migration = null; // { failed: true, reason, backup, data }
+async function blocked(board, info) {
+  const { migrationFailure, isLegacy } = await import('../core/migrate-38.mjs');
+  const f = migrationFailure();
+  migration = { failed: true, reason: f?.reason ?? tr('data.migration38.blocked'), backup: f?.backup ?? null, data: ctx.paths.db };
+  log(`3.8: la migración no se pudo hacer; Orb no arranca sobre los datos de 3.7: ${migration.reason}`);
+  let retrying = null;
+  const retry = async () => {
+    try { board.db.close(); } catch { /* closed */ }
+    const { Board } = await import('../core/board.mjs');
+    const next = new Board();
+    if (isLegacy(next.db)) { await blocked(next, info); return migration; }
+    migration = null;
+    await run(next, info);
+    return { failed: false };
+  };
+  api = {
+    async call(method) {
+      if (method === 'app.migrationState') return migration;
+      if (method === 'app.migrationRetry') { retrying ??= retry().finally(() => { retrying = null; }); return retrying; }
+      throw Object.assign(new Error(tr('data.migration38.blocked')), { userFacing: true });
+    },
+    shutdown() { try { board.db.close(); } catch { /* closed */ } }
+  };
+  return { home: info.home, name: ctx.config.assistantName, migration };
+}
+
+async function run(board, { home, version, restored }) {
   const { Sessions } = await import('./sessions.mjs');
   const { Orchestrator } = await import('./orchestrator.mjs');
   const { Scheduler } = await import('./scheduler.mjs');
   const { buildApi } = await import('./api.mjs');
-  const board = new Board();
   // The coordinators' keys derive from this one, new at each start (sessions.mjs › conversationKey): the ones of before
   // sign nothing any more.
   const orchKey = crypto.randomBytes(24).toString('hex');
@@ -154,13 +191,12 @@ async function start(home, version, secret, browser) {
   if (restored) { log(`copia restaurada: ${restored.from} (lo anterior está en ${restored.aside})`); board.notice(tr('data.backup.restored', { created: String(restored.header?.created ?? '').slice(0, 16).replace('T', ' ') }), 'success'); }
   // 3.8: a data folder of 3.5–3.7 was moved to 3.8 when its database opened (src/core/migrate-38.mjs): said once.
   {
-    const { takeNotice, migrationFailure } = await import('../core/migrate-38.mjs');
+    const { takeNotice } = await import('../core/migrate-38.mjs');
     const m = takeNotice(board);
     if (m) {
       log(`3.8: datos de 3.7 migrados: ${m.bots} bots y ${m.conversations} conversaciones de bots, ${m.users.length} usuarios (${m.users.join(', ') || 'ninguno'}) archivados en ${m.archive}; copia de la base en ${m.backup}`);
       board.notice(tr('data.migrated38', { path: m.archive }), 'info');
     }
-    if (migrationFailure()) log(`3.8: la migración no se pudo hacer (se reintenta al abrir): ${migrationFailure()}`);
   }
   // Which agents this PC has, as the engine sees them (with the app's environment): first thing to look at if «Agentes»
   // says one is missing.
@@ -180,7 +216,7 @@ async function start(home, version, secret, browser) {
   // 2.6: the reports the assistant still owed when the app was closed come back.
   const owed = orchestrator.resume();
   if (owed) log(`asistente: ${owed} aviso(s) pendientes recuperados`);
-  return { home, name: ctx.config.assistantName };
+  return { home, name: ctx.config.assistantName, migration: null };
 }
 
 transport.on(async (msg) => {

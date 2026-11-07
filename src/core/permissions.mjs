@@ -17,7 +17,7 @@ const REMOTE = new Set(['phone', 'browser']);
 // A method that is not here is refused everywhere (test/permisos.test.mjs checks this table against the API).
 export const METHODS = Object.freeze({
   // the app and its settings
-  'app.state': 'remote', 'config.save': 'pc', 'sidebar.complete': 'remote', 'control.pause': 'remote', 'control.resume': 'remote',
+  'app.state': 'remote', 'app.migrationState': 'pc', 'app.migrationRetry': 'pc', 'config.save': 'pc', 'sidebar.complete': 'remote', 'control.pause': 'remote', 'control.resume': 'remote',
   'system.check': 'pc', 'installer.check': 'pc', 'installer.progress': 'pc', 'installer.start': 'pc', 'mcp.folder': 'pc',
   'activity.list': 'remote', 'usage.get': 'remote', 'usage.now': 'remote', 'models.guide': 'remote', 'models.catalog': 'remote',
   'mentions.options': 'remote', 'approvals.list': 'remote',

@@ -134,6 +134,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       // 3.2.1: the agents this PC can run now (installed, on, with an account): the lists of the window offer only these.
       agentsAvailable: board.availableAgents()
     }),
+    // 3.8: the data of 3.7 were updated (or never were 3.7): engine.mjs answers these two itself while they could not be.
+    'app.migrationState': () => ({ failed: false }),
+    'app.migrationRetry': () => ({ failed: false }),
     'conversations.list': () => conversationList(),
     // 3.2: completed by hand (or open again): a task («t<id>»), a direct conversation («s<id>») or a conversation with the
     // assistant («c<id>»).

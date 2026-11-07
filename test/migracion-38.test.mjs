@@ -544,3 +544,29 @@ test('B8: la migración solo escribe en la carpeta de datos (y el fichero del pu
     assert.equal(bridgeDir(), null, 'nunca el OrbPuente de este PC');
   } finally { if (saved === undefined) delete process.env.ORB_BRIDGE_DIR; else process.env.ORB_BRIDGE_DIR = saved; }
 });
+
+test('M2: si la migración falla, Orb no funciona sobre los datos de 3.7 (ni móvil ni tareas), dice por qué y «Reintentar» lo termina', async () => {
+  const port = 20000 + Math.floor(Math.random() * 20000);
+  const u = tempHome({ mobile: { enabled: true, port } }); homes.push(u);
+  const { ids } = build37(dbFile(u), C.newKeyPair(), { home: u.home });
+  breakTransaction(u);
+  raw37(u, (db) => db.prepare("UPDATE tasks SET status = 'queued' WHERE id = ?").run(ids.tAna));
+  const engine = await startEngine(u.home, { env: { ORB_REMOTE_BIND: '127.0.0.1' } });
+  try {
+    const m = await engine.call('app.migrationState');
+    assert.equal(m.failed, true); assert.ok(m.reason);
+    assert.equal(m.backup, path.join(datosOf(u), PRE_COPY));
+    await assert.rejects(engine.call('app.state'), /Orb no funciona hasta actualizar tus datos/);
+    await assert.rejects(engine.call('remote.status'), /Orb no funciona hasta actualizar tus datos/);
+    await assert.rejects(fetch(`http://127.0.0.1:${port}/api/me`, { method: 'POST' }), 'el acceso del móvil no se abre');
+    await wait(2000);
+    assert.equal(raw37(u, (db) => db.prepare('SELECT status FROM tasks WHERE id = ?').get(ids.tAna).status), 'queued', 'nada de los otros se ejecuta');
+    assert.match(fs.readFileSync(path.join(u.home, '.orb', 'ejecuciones', 'motor.log'), 'utf8'), /3\.8: la migración no se pudo hacer/);
+    // Fixed (space freed): «Reintentar».
+    fixTransaction(u);
+    assert.deepEqual(await engine.call('app.migrationRetry'), { failed: false });
+    assert.deepEqual(await engine.call('app.migrationState'), { failed: false });
+    assert.ok(!(await engine.call('conversations.list')).some((c) => c.title === 'Secreto de Ana'));
+    await until(async () => (await engine.call('remote.status')).running, 'el móvil, ya con los datos de 3.8');
+  } finally { await engine.stop(); }
+});
