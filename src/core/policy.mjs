@@ -97,7 +97,7 @@ const CORE = {
   'chat.answer': { res: (p) => line(p.id), right: 'talk' },
   'chat.accept': { res: (p) => line(p.id), right: 'talk' },
   'chat.settings': { res: (p) => (p.conversation == null ? OWNER : conv(p.conversation)), right: 'own' }, // WS3: the default brain per person
-  // projects (owned, shareable)
+  // projects (owned)
   'projects.list': { list: 'project' },
   'projects.icons': { list: 'project' },
   'projects.create': { create: 'project' },
@@ -211,12 +211,12 @@ const GATEWAY = {
   'persons.unlock': { desktop: true },
   'app.lockState': { desktop: true }
 };
-// What a phone or a browser may also call: who it is for (persons.me, the names to share with) and the PIN check that
+// What a phone or a browser may also call: who it is for (persons.me, the names) and the PIN check that
 // gives a strong ticket for sensitive cards (bound to that device).
 for (const m of ['persons.me', 'persons.list', 'persons.verifyPin']) PHONE_SET.add(m);
 // ======== WS3 · Orb mode + accounts: append entries here.
 // 3.6 (A9): Orb mode (tasks, direct conversations with an agent, schedules and new projects) needs «dev» among the
-// person's caps, or a project shared with them to «talk» or more (then in that project only). The owner always may.
+// person's caps. The owner always may.
 const dbOne = (board, sql, ...args) => { try { return board.one(sql, ...args); } catch { return undefined; } };
 const hasDevCap = (board, person) => { try { return JSON.parse(dbOne(board, 'SELECT caps FROM persons WHERE id = ?', String(person))?.caps || '{}')?.dev === true; } catch { return false; } };
 export function mayDev(board, principal, project = null) {
@@ -224,9 +224,7 @@ export function mayDev(board, principal, project = null) {
   if (project) {
     const row = dbOne(board, 'SELECT name, person_id FROM projects WHERE name = ? COLLATE NOCASE', String(project));
     if (!row) return true; // no such project: the method says so (and authorize refuses what is not theirs)
-    const shared = dbOne(board, "SELECT right FROM shares WHERE resource_type = 'project' AND resource_id = ? COLLATE NOCASE AND person_id = ?", row.name, String(principal.person))?.right;
-    if (shared === 'talk' || shared === 'edit') return true;
-    // not theirs and not shared to talk: the right on the project refuses it (with its own reason)
+    // not theirs: the right on the project refuses it (with its own reason)
     if (row.person_id !== principal.person) return true;
     return hasDevCap(board, principal.person);
   }
@@ -264,10 +262,6 @@ const ORBMODE = {
   'agents.loginCode': { public: true }, // the method checks the sign-in is of the caller's own account
   'agents.loginCancel': { public: true },
   'agents.loginState': { public: true },
-  // sharing (the method checks: the resource's person, or «edit» to share it to view or talk; never to oneself)
-  'shares.list': { public: true },
-  'shares.set': { public: true },
-  'shares.remove': { public: true }
 };
 // ======== WS5 · data + time (backup, export): append entries here.
 const DATA = {
@@ -307,7 +301,7 @@ const UI = {
   'persons.prefs.set': { public: true }
 };
 // A phone or a browser sets its own person's language, time zone and notification preview too.
-for (const m of ['persons.update', 'persons.prefs.get', 'persons.prefs.set', 'persons.setPin', 'shares.list']) PHONE_SET.add(m);
+for (const m of ['persons.update', 'persons.prefs.get', 'persons.prefs.set', 'persons.setPin']) PHONE_SET.add(m);
 // 3.6 (messaging lists): the lists are the same on every screen (a phone, a browser).
 for (const m of INBOX_METHODS) PHONE_SET.add(m);
 

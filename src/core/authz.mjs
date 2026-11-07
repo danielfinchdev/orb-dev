@@ -13,7 +13,6 @@ export const RIGHTS = ['view', 'talk', 'edit'];
 const RANK = { view: 1, talk: 2, edit: 3, own: 4 };
 export const rank = (right) => RANK[right] ?? 0;
 export const CHANNELS = ['desktop', 'phone', 'browser', 'agent', 'system'];
-const SHAREABLE = new Set(['project']);
 const DEVICE_CHANNEL = { phone: 'phone', browser: 'browser' };
 
 // A refused call: 403, with a message the user may read (never what exists or whose it is).
@@ -94,9 +93,8 @@ function resolve(board, res) {
 }
 // Whose a resource is (a person id), or null when there is no such resource.
 export const ownerOf = (board, res) => resolve(board, res).owner;
-const shareRight = (board, type, key, person) => (key == null ? null : one(board, 'SELECT right FROM shares WHERE resource_type = ? AND resource_id = ? AND person_id = ?', type, String(key), person)?.right ?? null);
-// The best right a person has on a resource: 'own' | 'edit' | 'talk' | 'view' | null. Through a share of the resource
-// itself, or of its parent (a task's project…; owning the parent gives «edit» on the child).
+// The best right a person has on a resource: 'own' | 'edit' | null. Owning the parent (a task's project…) gives «edit»
+// on the child.
 export function rightOn(board, person, res, depth = 0) {
   if (!person || depth > 4) return null;
   const r = resolve(board, res);
@@ -104,8 +102,6 @@ export function rightOn(board, person, res, depth = 0) {
   if (r.owner === person) return 'own';
   let best = null;
   const take = (right) => { if (rank(right) > rank(best)) best = right; };
-  const type = r.via?.type ?? res.type;
-  if (SHAREABLE.has(type)) take(shareRight(board, type, r.key ?? res.id, person));
   for (const parent of r.parents) { const pr = rightOn(board, person, parent, depth + 1); take(pr === 'own' ? 'edit' : pr); }
   return best;
 }
@@ -119,19 +115,12 @@ export function must(board, principal, right, res, { method = null } = {}) {
   throw new AuthzError('right', { method, resource: res });
 }
 
-// What a list may show: the caller's own rows and the ones shared with them. → { where, args } for a WHERE clause on
-// that table's alias (the owner's own include the rows without a person).
+// What a list may show: the caller's own rows. → { where, args } for a WHERE clause on that table's alias (the owner's
+// own include the rows without a person).
 export function scopeSql(principal, type, alias = 't') {
   if (isSystem(principal)) return { where: '1=1', args: [] };
   const a = alias; const pid = String(principal?.person ?? '');
-  const own = principal?.role === 'owner' ? `(${a}.person_id = ? OR ${a}.person_id IS NULL)` : `${a}.person_id = ?`;
-  const shared = (rtype, col) => `EXISTS (SELECT 1 FROM shares s WHERE s.resource_type = '${rtype}' AND s.resource_id = ${col} AND s.person_id = ?)`;
-  const extra = {
-    project: shared('project', `${a}.name COLLATE NOCASE`),
-    task: shared('project', `${a}.project COLLATE NOCASE`),
-    schedule: shared('project', `${a}.project COLLATE NOCASE`)
-  }[type];
-  return extra ? { where: `(${own} OR ${extra})`, args: [pid, pid] } : { where: own, args: [pid] };
+  return { where: principal?.role === 'owner' ? `(${a}.person_id = ? OR ${a}.person_id IS NULL)` : `${a}.person_id = ?`, args: [pid] };
 }
 
 // ---- the audit (ids and names only, never content)
@@ -187,14 +176,12 @@ export function audienceOf(board, event, payload) {
   return persons.size ? { persons } : { owner: true };
 }
 export const hasAudienceRule = (event) => eventRule(event) !== undefined;
-// Everyone with at least «view» on a resource: its person and the people it (or its parent) is shared with.
+// Everyone with at least «view» on a resource: its person (and its parent's).
 export function peopleWith(board, res, depth = 0) {
   const out = new Set(); if (depth > 4) return out;
   const r = resolve(board, res);
   if (r.owner == null) return out;
   out.add(r.owner);
-  const type = r.via?.type ?? res.type;
-  if (SHAREABLE.has(type)) { try { for (const s of board.all('SELECT person_id FROM shares WHERE resource_type = ? AND resource_id = ?', type, String(r.key ?? res.id))) out.add(s.person_id); } catch { /* no table */ } }
   for (const parent of r.parents) for (const p of peopleWith(board, parent, depth + 1)) out.add(p);
   return out;
 }

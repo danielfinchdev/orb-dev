@@ -86,29 +86,6 @@ test('lo de cada persona es suyo: ni el otro ni el dueño lo leen, y queda en la
   assert.doesNotThrow(() => authorize(board, asAna, 'persons.rename', { id: leo, name: 'x' }));
 });
 
-test('compartir: ver, hablar y editar, también a través del padre (las tareas de un proyecto)', () => {
-  board.run("INSERT INTO projects (name, path, created_at, person_id) VALUES ('Casa', '/c', 'now', ?)", ana);
-  assert.equal(rightOn(board, leo, { type: 'project', id: 'Casa' }), null);
-  board.run("INSERT INTO shares (resource_type, resource_id, person_id, right, granted_by) VALUES ('project', 'Casa', ?, 'talk', ?)", leo, ana);
-  assert.equal(rightOn(board, leo, { type: 'project', id: 'Casa' }), 'talk');
-  assert.equal(rightOn(board, leo, { type: 'project', id: 'casa' }), 'talk', 'sin mayúsculas también');
-  assert.ok(can(board, asLeo, 'view', { type: 'project', id: 'Casa' }));
-  assert.throws(() => must(board, asLeo, 'edit', { type: 'project', id: 'Casa' }), AuthzError);
-  // A project shared to view: its tasks too, read only.
-  board.run("INSERT INTO projects (name, path, created_at, person_id) VALUES ('web', '/w', 'now', ?)", ana);
-  const t = Number(board.run("INSERT INTO tasks (project, title, description, status, created_by, created_at, updated_at, person_id) VALUES ('web', 't', 'd', 'done', 'usuario', 'now', 'now', ?)", ana).lastInsertRowid);
-  denied(() => authorize(board, asLeo, 'tasks.get', { id: t }), 'right');
-  board.run("INSERT INTO shares (resource_type, resource_id, person_id, right) VALUES ('project', 'web', ?, 'view')", leo);
-  assert.doesNotThrow(() => authorize(board, asLeo, 'tasks.get', { id: t }));
-  denied(() => authorize(board, asLeo, 'tasks.cancel', { id: t }), 'right');
-  denied(() => authorize(board, asLeo, 'tasks.create', { project: 'web', title: 'x', description: 'y' }), 'right');
-  // Lists: own and shared.
-  const s = scopeSql(asLeo, 'project', 'p');
-  assert.deepEqual(board.all(`SELECT p.name FROM projects p WHERE ${s.where} ORDER BY p.name`, ...s.args).map((r) => r.name), ['Casa', 'web']);
-  const sa = scopeSql(asAna, 'conversation', 'c');
-  assert.ok(board.all(`SELECT c.title FROM conversations c WHERE ${sa.where}`, ...sa.args).every((r) => r.title !== 'De Leo'));
-});
-
 test('público de los eventos: la conversación a su persona, sin regla al dueño', () => {
   const his = board.one("SELECT id FROM conversations WHERE title = 'De Leo'").id;
   const a = audienceOf(board, 'chat:new', { conversation: his, body: 'x' });

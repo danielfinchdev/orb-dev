@@ -105,51 +105,11 @@ test('@ solo adjunta lo que la persona puede ver', async () => {
   assert.match(expandMentions(board, sessions, text, { principal: asAna }), /SECRETO-ANA tarea/);
 });
 
-test('compartir un proyecto: ver, hablar y editar; solo quien puede lo comparte; quitarlo lo corta', async () => {
-  await denied(call(asLeo, 'shares.set', { type: 'project', id: 'web-ana', person: leo, right: 'view' }));
-  await assert.rejects(call(asAna, 'shares.set', { type: 'project', id: 'web-ana', person: ana, right: 'view' }), /contigo/);
-  await call(asAna, 'shares.set', { type: 'project', id: 'web-ana', person: leo, right: 'view' });
-  const seen = await call(asLeo, 'projects.list');
-  const shared = seen.find((p) => p.name === 'web-ana');
-  assert.equal(shared?.shared, 'view');
-  assert.equal(shared.sharedBy, 'Ana');
-  assert.ok((await call(asLeo, 'tasks.list')).some((x) => x.id === ids.anaTask), 've las tareas del proyecto');
-  await call(asLeo, 'whiteboard.load', { project: 'web-ana' });
-  assert.match(await call(asLeo, 'logs.read', { project: 'web-ana' }), /SECRETO-ANA bitácora/);
-  await denied(call(asLeo, 'whiteboard.save', { project: 'web-ana', elements: [] }));
-  await denied(call(asLeo, 'tasks.create', { project: 'web-ana', title: 'x', description: 'y' }));
-  await denied(call(asLeo, 'tasks.cancel', { id: ids.anaTask }));
-  // Conversations are always private, even in a shared project.
-  await denied(call(asLeo, 'chat.list', { conversation: ids.anaConv }));
-  assert.ok(!JSON.stringify(await call(asLeo, 'conversations.list')).includes('SECRETO-ANA'));
-  // talk: he works in it with his own account.
-  await call(asAna, 'shares.set', { type: 'project', id: 'web-ana', person: leo, right: 'talk' });
-  const his = await call(asLeo, 'tasks.create', { project: 'web-ana', title: 'De Leo en web-ana', description: 'y' });
-  assert.equal(board.task(his.id).person_id, leo);
-  await denied(call(asLeo, 'shares.set', { type: 'project', id: 'web-ana', person: ana, right: 'view' }), 'con hablar no se comparte');
-  // edit: he may share it to view, never to edit, and never delete it.
-  await call(asAna, 'shares.set', { type: 'project', id: 'web-ana', person: leo, right: 'edit' });
-  await call(asLeo, 'whiteboard.save', { project: 'web-ana', elements: [] });
-  await denied(call(asLeo, 'projects.remove', { name: 'web-ana' }));
-  const list = await call(asAna, 'shares.list', { type: 'project', id: 'web-ana' });
-  assert.deepEqual(list.map((s) => [s.person, s.right, s.name]), [[leo, 'edit', 'Leo']]);
-  // Taken away: nothing of it is seen any more.
-  await call(asAna, 'shares.remove', { type: 'project', id: 'web-ana', person: leo });
-  assert.ok(!JSON.stringify(await call(asLeo, 'projects.list')).includes('web-ana'));
-  assert.ok(!(await call(asLeo, 'tasks.list')).some((x) => x.id === ids.anaTask));
-  await denied(call(asLeo, 'whiteboard.load', { project: 'web-ana' }));
-});
-
-test('modo Orb: sin permiso de programar ni proyecto compartido, nada; con un proyecto compartido para hablar, solo en él', async () => {
+test('modo Orb: sin permiso de programar, nada', async () => {
   const eva = createPerson(board, { name: 'Eva' }).id;
   const asEva = principalOf(board, { desktop: true, person: eva });
   await assert.rejects(call(asEva, 'projects.create', { name: 'web-eva', category: 'web' }), /programar/);
   await assert.rejects(call(asEva, 'sessions.create', { agent: 'claude' }), /programar/);
-  await call(asAna, 'shares.set', { type: 'project', id: 'web-ana', person: eva, right: 'talk' });
-  await assert.rejects(call(asEva, 'sessions.create', { agent: 'claude', project: 'web-ana' }), /cuenta/i, 'sin cuenta propia ni prestada');
-  const t2 = await call(asEva, 'tasks.create', { project: 'web-ana', title: 'De Eva', description: 'y' });
-  assert.equal(board.task(t2.id).person_id, eva);
-  await call(asAna, 'shares.remove', { type: 'project', id: 'web-ana', person: eva });
 });
 
 test('una sesión de otra persona solo trabaja dentro de la carpeta de su proyecto (ruta real)', () => {

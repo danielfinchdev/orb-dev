@@ -1,4 +1,4 @@
-// 3.6 «Personas», WS6: las pantallas de las personas (menú, bloqueo, Ajustes › Personas, Mi perfil y Datos, compartir y
+// 3.6 «Personas», WS6: las pantallas de las personas (menú, bloqueo, Ajustes › Personas, Mi perfil y Datos y
 // el asistente de bienvenida).
 export default {
   'settings.section.perfil': 'Mi perfil',
@@ -62,19 +62,6 @@ export default {
   'persons.revokeBody': 'Se cierra la sesión en {n} dispositivos. Para volver, hay que enlazarlos otra vez.',
   'persons.revoke': 'Cerrar sesión',
   'persons.revoked': 'Dispositivos de {name} cerrados.',
-  // compartir
-  'share.button': 'Compartir',
-  'share.title': 'Compartir {name}',
-  'share.right.none': 'Sin acceso',
-  'share.right.view': 'Puede ver',
-  'share.right.talk': 'Puede usarlo',
-  'share.right.edit': 'Puede editar',
-  'share.rightFor': 'Permiso de {name}',
-  'share.nobody': 'No hay nadie más con quien compartirlo.',
-  'share.saved': 'Compartido.',
-  'share.removed': 'Ya no se comparte.',
-  'share.by': 'Compartido por {name}',
-  'share.withMe': 'Compartido conmigo',
   // Mi perfil
   'profile.title': 'Mi perfil',
   'profile.name': 'Nombre',

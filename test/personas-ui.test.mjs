@@ -1,5 +1,5 @@
 // 3.6 «Personas», the interface (src/ui/lib/persons.js and the screens): with one person nothing of people shows; the
-// devices grouped by person; sharing; the welcome screen;
+// devices grouped by person; the welcome screen;
 // the phone's lock; every text the new screens use exists in both languages.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -35,16 +35,6 @@ test('los dispositivos van agrupados por persona, el dueño primero; sin persona
   assert.deepEqual(g.map((x) => x.name), ['Ana', 'Leo']);
   assert.deepEqual(g[0].devices.map((d) => d.id), ['d2', 'd3']);
   assert.equal(g[1].devices.length, 1);
-});
-
-test('compartir: nunca con uno mismo ni con quien ya es el dueño; «Compartido conmigo» con sus nombres', () => {
-  const rows = P.shareRows([ana, leo, { id: 'p-x', name: 'Xia' }], [{ person: 'p-leo', right: 'talk' }], { me: 'p-ana', owner: 'p-ana' });
-  assert.deepEqual(rows, [{ id: 'p-leo', name: 'Leo', right: 'talk' }, { id: 'p-x', name: 'Xia', right: null }]);
-  const withMe = [{ type: 'bot', id: '3', right: 'talk', by: 'Ana' }, { type: 'project', id: 'Web', right: 'view', by: 'Ana' }, { type: 'project', id: 'Otro', right: 'talk', by: 'Ana' }];
-  const list = P.sharedWithMe(withMe, { projects: [{ name: 'web' }] });
-  assert.deepEqual(list.map((x) => [x.type, x.name, x.found]), [['project', 'web', true], ['project', 'Otro', false]], '3.8: lo que no es un proyecto (un bot de 3.7) no va a la barra');
-  assert.deepEqual(P.sharedBy(withMe, 'project', 'WEB'), { by: 'Ana', right: 'view' });
-  assert.equal(P.sharedBy(withMe, 'bot', 9), null);
 });
 
 test('el PIN: 4 a 12 cifras, y los motivos de rechazo en palabras', () => {
@@ -85,14 +75,14 @@ test('los métodos nuevos tienen su regla y el móvil puede cambiar lo suyo', ()
 });
 
 test('todos los textos de las pantallas nuevas existen en los dos idiomas (también los compuestos)', () => {
-  const files = ['components/person-menu.jsx', 'components/lock-screen.jsx', 'components/share-dialog.jsx', 'views/persons.jsx', 'views/data.jsx', 'views/setup.jsx', 'views/agents.jsx', 'views/magic-link.jsx'];
+  const files = ['components/person-menu.jsx', 'components/lock-screen.jsx', 'views/persons.jsx', 'views/data.jsx', 'views/setup.jsx', 'views/agents.jsx', 'views/magic-link.jsx'];
   const used = new Set();
   for (const f of files) {
     const code = fs.readFileSync(path.join(ROOT, 'src', 'ui', f), 'utf8');
     for (const m of code.matchAll(/\btr?\(\s*'([a-zA-Z]+(?:\.[\w]+)+)'/g)) used.add(m[1]);
   }
   const dynamic = [...P.CAPS.map((k) => `persons.cap.${k}`), ...['conversations', 'tasks', 'projects', 'schedules'].flatMap((k) => [`persons.count.${k}`, `persons.count.${k}One`]), 'persons.devicesNOne', 'persons.todayTurnsOne',
-    ...P.ROLES.map((r) => `persons.role.${r}`), ...P.RIGHTS.map((r) => `share.right.${r}`), ...P.PREVIEWS.map((x) => `profile.preview.${x}`),
+    ...P.ROLES.map((r) => `persons.role.${r}`), ...P.PREVIEWS.map((x) => `profile.preview.${x}`),
     ...['daily', 'manual', 'preupdate', 'premigration', 'move', 'other'].map((k) => `datos.kind.${k}`),
     'persons.pin.wrong', 'persons.pin.wrongLeft', 'persons.pin.locked',
     ...['perfil', 'personas', 'datos'].flatMap((s) => [`settings.section.${s}`, `settings.sectionDesc.${s}`])];

@@ -1,4 +1,4 @@
-// 3.6 "People", WS6: the screens of people (menu, lock, Settings > People, My profile and Data, sharing and
+// 3.6 "People", WS6: the screens of people (menu, lock, Settings > People, My profile and Data and
 // the welcome wizard).
 export default {
   'settings.section.perfil': 'My profile',
@@ -59,18 +59,6 @@ export default {
   'persons.revokeBody': '{n} devices are signed out. To come back, they have to be linked again.',
   'persons.revoke': 'Sign out',
   'persons.revoked': 'Devices of {name} signed out.',
-  'share.button': 'Share',
-  'share.title': 'Share {name}',
-  'share.right.none': 'No access',
-  'share.right.view': 'Can view',
-  'share.right.talk': 'Can use',
-  'share.right.edit': 'Can edit',
-  'share.rightFor': 'Permission of {name}',
-  'share.nobody': 'There is nobody else to share it with.',
-  'share.saved': 'Shared.',
-  'share.removed': 'No longer shared.',
-  'share.by': 'Shared by {name}',
-  'share.withMe': 'Shared with me',
   'profile.title': 'My profile',
   'profile.name': 'Name',
   'profile.language': 'Language',

@@ -2,12 +2,10 @@
 // checks it. The server decides who may see what; these only pick what to draw. With one person nothing of this shows.
 
 export const ROLES = ['owner', 'user'];
-export const RIGHTS = ['view', 'talk', 'edit'];
 export const CAPS = ['dev'];
 // 3.8: «all» (before, the bots' messages too) shows the same as «chat»: it is offered no more and reads as «chat».
 export const PREVIEWS = ['chat', 'none'];
 export const previewOf = (v) => (v === 'none' ? 'none' : 'chat');
-export const SHARE_TYPES = ['project'];
 
 // state.me: { person: { id, name, role, language, tz, hasPin }, role, personsCount } (persons.me), or null on an Orb
 // before 3.6 (then it behaves as one person).
@@ -44,22 +42,6 @@ export function devicesByPerson(devices, persons = [], ownerId = null) {
     groups.get(pid).devices.push(d);
   }
   return [...groups.values()].sort((a, b) => (a.owner === b.owner ? a.name.localeCompare(b.name) : a.owner ? -1 : 1));
-}
-
-// Share dialog: who it can go to (everyone but oneself and the resource's person), with the right each one has now.
-export function shareRows(persons = [], shares = [], { me = null, owner = null } = {}) {
-  const has = new Map((shares ?? []).map((s) => [s.person, s.right]));
-  return persons.filter((p) => p.id !== me && p.id !== owner).map((p) => ({ id: p.id, name: p.name, right: has.get(p.id) ?? null }));
-}
-// «Compartido conmigo» (shares.list().withMe), grouped by kind and matched with the lists the store already has.
-export function sharedWithMe(withMe = [], { projects = [] } = {}) {
-  const find = (type, id) => (type === 'project' ? projects.find((p) => p.name?.toLowerCase() === String(id).toLowerCase()) : null);
-  return withMe.filter((s) => SHARE_TYPES.includes(s.type)).map((s) => { const x = find(s.type, s.id); return { ...s, name: x?.name ?? String(s.id), icon: x?.icon ?? null, found: Boolean(x), item: x ?? null }; });
-}
-// The badge «Compartido por Ana» on a resource the caller does not own (its person field, the shares of the caller).
-export function sharedBy(withMe = [], type, id) {
-  const s = withMe.find((x) => x.type === type && String(x.id).toLowerCase() === String(id).toLowerCase());
-  return s ? { by: s.by, right: s.right } : null;
 }
 
 // Protocol of the links (src/core/link-payload.mjs › PROTOCOL): an Orb that asks for more than this app speaks must be updated.

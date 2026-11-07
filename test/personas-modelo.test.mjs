@@ -116,8 +116,6 @@ test('tablero por persona: conversaciones y tareas con su persona, y las listas 
   board.run("INSERT INTO tasks (project, title, description, status, created_by, created_at, updated_at, person_id) VALUES ('web', 't', 'd', 'done', 'usuario', 'now', 'now', ?)", owner);
   assert.equal(board.tasks({ principal: asLeo }).length, 0);
   assert.equal(board.tasks({ principal: asAna }).length, 1);
-  board.run("INSERT INTO shares (resource_type, resource_id, person_id, right) VALUES ('project', 'web', ?, 'view')", leo.id);
-  assert.equal(board.tasks({ principal: asLeo }).length, 1, 'las de un proyecto compartido');
 });
 
 test('resumen del dueño: solo números, nunca títulos ni contenido', () => {

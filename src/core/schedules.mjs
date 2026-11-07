@@ -33,7 +33,7 @@ export function describe(s) {
   return s.every;
 }
 
-// 3.6: principal: only that person's schedules and those of the projects shared with them.
+// 3.6: principal: only that person's schedules.
 export function listSchedules(board, { principal = null } = {}) {
   const s = principal ? scopeSql(principal, 'schedule', 'schedules') : { where: '1=1', args: [] };
   return board.all(`SELECT * FROM schedules WHERE ${s.where} ORDER BY id`, ...s.args).map(parseRow);

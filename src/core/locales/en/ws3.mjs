@@ -6,8 +6,6 @@ export default {
   'msg.spend.needProject': 'Choose a project to talk to the agent.',
   'msg.spend.consoleOwner': 'Signing in with a console is only done on this PC, by the admin.',
   'msg.spend.ownFolderOnly': 'Your account goes in your own Orb folder: you cannot choose another one.',
-  'msg.share.notYourself': 'You cannot share something with yourself.',
-  'msg.share.alreadyOwner': 'That user already owns it.',
   'msg.guard.confined': 'may only work inside its project\'s folder',
   'msg.guard.confinedSecret': 'wants to read passwords or sign-in data, which is never touched'
 };

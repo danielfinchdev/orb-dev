@@ -22,9 +22,6 @@ export function createRouter({ board, log = () => {} } = {}) {
       for (const s of sinks) { try { s.fn(event, payload, audience, to); } catch (error) { log(`router: ${s.name}: ${error.message}`); } }
       return audience;
     },
-    // A share was removed or a device changed person: nothing to cut here (each event's audience is worked out when it
-    // is sent), but the people affected reload what they may see.
-    revoke(persons = []) { for (const p of persons) router.route('board:changed', ['shares'], { person: p }); }
   };
   return router;
 }

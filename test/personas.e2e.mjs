@@ -201,7 +201,7 @@ try {
   await pc.reload(); await pc.waitForSelector('[data-testid=chat-input]');
   await pc.waitForTimeout(800);
   assert.deepEqual(leaks(await pc.textContent('body')), [], 'el PC como Leo');
-  for (const m of ['projects.list', 'conversations.list', 'tasks.list', 'app.state', 'shares.list', 'usage.get']) {
+  for (const m of ['projects.list', 'conversations.list', 'tasks.list', 'app.state', 'usage.get']) {
     const r = JSON.stringify(await pc.evaluate((x) => window.orb.call(x).catch((e) => ({ error: e.message })), m));
     assert.deepEqual(leaks(r), [], `${m} en el PC como Leo`);
   }
@@ -252,7 +252,7 @@ try {
   await phone.click('[data-testid=nav-profile]');
   await phone.waitForSelector('[data-testid=profile-card]');
   await pshot('19-movil-perfil');
-  for (const m of ['projects.list', 'conversations.list', 'tasks.list', 'app.state', 'shares.list']) {
+  for (const m of ['projects.list', 'conversations.list', 'tasks.list', 'app.state']) {
     const r = JSON.stringify(await phone.evaluate((x) => window.orb.call(x).catch((e) => ({ error: e.message })), m));
     assert.deepEqual(leaks(r), [], `${m} desde el móvil de Leo`);
   }

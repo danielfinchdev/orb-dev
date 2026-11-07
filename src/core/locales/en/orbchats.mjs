@@ -86,7 +86,6 @@ export default {
   'orbchats.pSchedules': 'Scheduled',
   'orbchats.pBoard': 'Whiteboard',
   'orbchats.pLog': 'Log',
-  'orbchats.pShare': 'Share with another user',
   'orbchats.pSettings': 'Project settings',
   'orbchats.pGod': 'Open in God mode',
   'orbchats.pNoPath': 'No folder'

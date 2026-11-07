@@ -41,7 +41,6 @@ import { renamePerson } from '../core/persons.mjs';
 import { gatewayMethods } from './api-gateway.mjs';
 import { dataApi, MOVED_OK } from './api-data.mjs';
 import { inboxMethods } from './api-inbox.mjs';
-import { shareApi } from './api-shares.mjs';
 
 export { fail, str, int, oneOf } from './api-common.mjs';
 
@@ -55,7 +54,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   const wb = whiteboard(board);
   // 2.7: a picture the window may show: an image file inside Orb's folder, a project, or an agent account's own folder
   // (Codex keeps what it makes in <CODEX_HOME>/generated_images). 25 MB at most.
-  // 3.6: someone other than the owner: only their projects (and the ones shared with them), their own accounts' folders
+  // 3.6: someone other than the owner: only their projects, their own accounts' folders
   // and their own marked copies.
   const allowedImage = (file, who = null) => {
     const real = (() => { try { return fs.realpathSync(file); } catch { return fail(tr('msg.api.badImage')); } })();
@@ -73,8 +72,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   };
 
   // 3.6: files a person names from the window (attachments, pictures, an icon): never inside a project of someone else
-  // and, for someone other than the owner, nothing else of Orb's folder (everyone's data) but their own projects (and
-  // the ones shared with them), their phone's pictures and their marked copies.
+  // and, for someone other than the owner, nothing else of Orb's folder (everyone's data) but their own projects, their
+  // phone's pictures and their marked copies.
   const ownFiles = (list, who) => {
     if (!scopeOf(who) || !Array.isArray(list)) return list;
     const user = Boolean(personOf(who));
@@ -157,15 +156,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   // 3.6 (WS2): locked: the lock screen is up (engine.mjs refuses every call but the unlock).
   const desktop = { person: null, locked: false };
   const desktopPrincipal = () => principalOf(board, { desktop: true, person: desktop.person });
-  // 3.6: sharing (src/engine/api-shares.mjs).
-  const shares = shareApi({ board, sessions });
-  const { setShare, removeShare } = shares;
   // What the other parts of the API share.
-  const shared = { board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, project, conversationId, desktop, setShare, removeShare };
+  const shared = { board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, project, conversationId, desktop };
   const data = dataApi(shared); shared.removePersonData = data.removePersonData; // 3.6 (WS5): backups, moving the Orb, exporting and deleting a person
 
   const methods = {
-    // 3.6: what each person sees is theirs (and what is shared with them): their approvals, tasks, conversations and lists.
+    // 3.6: what each person sees is theirs: their approvals, tasks, conversations and lists.
     'app.state': (p, who) => ({
       version, home: ctx.home, paths: { projects: ctx.paths.projects, logs: ctx.paths.logs, mcp: ctx.paths.mcp, categories: ctx.paths.categories }, categories: CATEGORIES,
       config: ctx.config, paused: board.setting('paused') === '1', activeProject: board.activeProject(personOf(who)),
@@ -212,15 +208,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'installer.progress': () => installer.progress(),
     'system.check': async () => { const r = await quickRun('git', ['--version'], { timeoutMs: 8000 }); return { platform: process.platform, git: r.ok ? r.out.replace(/^git version\s*/, '') : null }; },
 
-    // 3.6: each person's own projects and the ones shared with them («shared»: with which right; their active one).
+    // 3.6: each person's own projects (and their active one).
     'projects.list': (params, who) => {
       syncSoon();
       const active = board.activeName(personOf(who));
-      return board.projects({ principal: scopeOf(who) }).map((p) => {
-        const right = scopeOf(who) ? rightOn(board, who.person, { type: 'project', id: p.name }) : 'own';
-        return { ...p, inHome: insideHome(p.path), category: categoryOf(realHome, p.path), active: active === p.name, open: board.one("SELECT COUNT(*) AS n FROM tasks WHERE project = ? AND status IN ('queued', 'awaiting_approval', 'running')", p.name).n,
-          ...(right && right !== 'own' ? { shared: right, sharedBy: board.personName(p.person_id) } : {}) };
-      });
+      return board.projects({ principal: scopeOf(who) }).map((p) => ({ ...p, inHome: insideHome(p.path), category: categoryOf(realHome, p.path), active: active === p.name,
+        open: board.one("SELECT COUNT(*) AS n FROM tasks WHERE project = ? AND status IN ('queued', 'awaiting_approval', 'running')", p.name).n }));
     },
     // 2.7: several platforms at once (categories) = a multiplatform group; returns the first project and the whole list.
     'projects.create': ({ name, notes, category, categories }, who) => {
@@ -643,7 +636,6 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'expert.system': () => ({ ...expert.systemStats(ctx.home), running: sessions.runningCount(), byAgent: Object.fromEntries(AGENT_IDS.map((a) => [a, sessions.runningCount(a)])) }),
     'control.pause': () => { board.setting('paused', '1'); board.changed('settings'); return true; },
     'control.resume': () => { board.setting('paused', '0'); board.changed('settings'); return true; },
-    ...shares.methods,
     ...accountMethods(shared),
     ...linkMethods(shared),
     ...personMethods(shared),
@@ -651,7 +643,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     ...inboxMethods(shared),
     ...data.methods
   };
-  // 3.6: the approval cards a person may answer (of their own sessions and tasks, and those of projects shared with them).
+  // 3.6: the approval cards a person may answer (of their own sessions and tasks).
   function visibleApprovals(who) {
     const list = sessions.allPendingApprovals();
     return scopeOf(who) ? list.filter((a) => can(board, who, 'talk', { type: 'session', id: a.session_id })) : list;

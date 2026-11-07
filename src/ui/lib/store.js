@@ -104,14 +104,12 @@ export const closeOrbInfo = () => setState({ orbInfo: null });
 
 // 3.6 «Personas»: who is using this window or device (persons.me: { person, role, rights, personsCount }). An Orb before
 // 3.6 has no persons.me: then it is one person, the owner (nothing of people shows). The server decides what each one
-// sees; this only picks what to draw. What was shared with the caller (shares.list) comes along when there are several.
+// sees; this only picks what to draw.
 export async function loadMe() {
   let me = null; try { me = await call('persons.me'); } catch { me = null; }
-  let shared = null; let people = [];
-  if (Number(me?.personsCount ?? 1) > 1) {
-    [shared, people] = await Promise.all([call('shares.list').catch(() => null), call('persons.list').catch(() => [])]);
-  }
-  setState({ me, shared, people });
+  let people = [];
+  if (Number(me?.personsCount ?? 1) > 1) people = await call('persons.list').catch(() => []);
+  setState({ me, people });
   return me;
 }
 // A person's name by id (the names everyone may see: persons.list).

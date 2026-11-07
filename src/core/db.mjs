@@ -239,7 +239,7 @@ CREATE TABLE IF NOT EXISTS bot_reminders (
   created_by TEXT NOT NULL DEFAULT 'usuario',
   created_at TEXT NOT NULL
 );
--- 3.6 «Personas» (docs/PERSONAS-INTERNALS.md): the people of this Orb, their own settings, what they share,
+-- 3.6 «Personas» (docs/PERSONAS-INTERNALS.md): the people of this Orb, their own settings,
 -- what each one spent, each bot's live conversation per person, the history of the memories, the forwarded calls
 -- already answered and the audit of refused calls (ids and names only, never content).
 CREATE TABLE IF NOT EXISTS persons (
@@ -263,15 +263,6 @@ CREATE TABLE IF NOT EXISTS person_settings (
   key TEXT NOT NULL,
   value TEXT NOT NULL,
   PRIMARY KEY (person_id, key)
-);
-CREATE TABLE IF NOT EXISTS shares (
-  resource_type TEXT NOT NULL CHECK (resource_type IN ('bot', 'group', 'project', 'integration')),
-  resource_id TEXT NOT NULL,
-  person_id TEXT NOT NULL,
-  right TEXT NOT NULL CHECK (right IN ('view', 'talk', 'edit')),
-  granted_by TEXT,
-  created_at TEXT,
-  PRIMARY KEY (resource_type, resource_id, person_id)
 );
 CREATE TABLE IF NOT EXISTS usage_ledger (
   id INTEGER PRIMARY KEY,
@@ -520,7 +511,6 @@ export function migrate(db, { file = null } = {}) {
     CREATE INDEX IF NOT EXISTS sessions_person ON sessions (person_id);
     CREATE INDEX IF NOT EXISTS bots_person ON bots (person_id);
     CREATE INDEX IF NOT EXISTS devices_person ON devices (person_id);
-    CREATE INDEX IF NOT EXISTS shares_person ON shares (person_id, resource_type);
     CREATE UNIQUE INDEX IF NOT EXISTS link_queue_request ON link_queue (request_id) WHERE request_id IS NOT NULL;`);
   // 3.6 (B6): a bot's name is unique for its person (an old database with two bots of the same name keeps working).
   try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS bots_person_name ON bots (person_id, name COLLATE NOCASE)'); } catch { /* duplicates from before */ }

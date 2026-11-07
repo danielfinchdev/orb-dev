@@ -45,7 +45,6 @@ import { OrbInfoHost } from '@/views/orb/info.jsx';
 // 3.6 «Personas»
 import { LockScreen, PhoneLock, UpdateNeeded } from '@/components/lock-screen.jsx';
 import { NoteOpener } from '@/lib/notes.js';
-import { ShareHost } from '@/components/share-dialog.jsx';
 import { ProfileView } from '@/views/persons.jsx';
 import { RecoveryNotice } from '@/views/data.jsx';
 import { personSwitched } from '@/lib/store.js';
@@ -76,7 +75,6 @@ function MobileShell() {
       </main>
       {fullChat ? null : <MobileTabs />}
       <Notices />
-      <ShareHost />
       <OrbInfoHost />
     </div>
   );
@@ -127,7 +125,6 @@ function Shell() {
       {/* 3.5: a browser linked with an Orb gets the PC's layout, not what only the PC itself does. */}
       {bridge.mobile ? null : <><UpdateCard /><SettingsDialog /><GamesDialog /><RecoveryNotice /></>}
       <Notices />
-      <ShareHost />
       {bridge.mobile ? null : <ActionShortcuts project={shortcutProject} />}
       <div className="hidden md:contents"><Companion name={app.config.assistantName} base={mood} hidden={app.config.ui?.companion === false || !COMPANION_VIEWS.has(route.view) || bridge.mobile || Boolean(tour)} /></div>
       {tour ? <Tour key={tour.key} /> : null}

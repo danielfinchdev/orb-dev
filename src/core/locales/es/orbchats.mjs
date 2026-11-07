@@ -87,7 +87,6 @@ export default {
   'orbchats.pSchedules': 'Programadas',
   'orbchats.pBoard': 'Pizarra',
   'orbchats.pLog': 'Bitácora',
-  'orbchats.pShare': 'Compartir con otro usuario',
   'orbchats.pSettings': 'Ajustes del proyecto',
   'orbchats.pGod': 'Abrir en God mode',
   'orbchats.pNoPath': 'Sin carpeta'

@@ -334,8 +334,6 @@ try {
   await quiet(call('sessions.send', { id: s1.id, text: 'TABLA_MARKDOWN' }));
   const s2 = await call('sessions.create', { agent: 'codex', project: 'mi-web', permission: 'editar', title: 'Publicar con Codex' });
   await quiet(call('sessions.send', { id: s2.id, text: 'Publica los cambios PIDE_PERMISO' }));
-  // Sharing.
-  await quiet(call('shares.set', { type: 'project', id: 'app-tienda', person: leo.id, right: 'view' }));
   await quiet(call('whiteboard.save', { project: 'mi-web', elements: [], appState: {} }));
 
   // A task that is running while the tasks screens are taken (DUERME lasts 30 s).
@@ -377,7 +375,6 @@ try {
       await attempt(P, 'session approval', async () => { await nav(P, { view: 'session', id: s2.id }); await P.waitForSelector('[data-testid=approval-card]', { timeout: 15000 }); await shot(P, { area: 'orb', screen: 'session', state: 'approval-card-pending', src: 'src/ui/views/session.jsx (ApprovalCard)', desc: 'Conversation with Codex waiting for permission (approval card)' }); });
       await tasksDetail(P, st);
       await attempt(P, 'project selected', async () => { await nav(P, { view: 'projects' }); await P.locator('main').getByText('mi-web', { exact: true }).first().click(); await shot(P, { area: 'orb', screen: 'projects', state: 'selected-mi-web', src: 'src/ui/views/projects.jsx', desc: 'Projects, «mi-web» selected (git, actions, share)', scroll: true }); });
-      await attempt(P, 'share dialog', async () => { await P.click('[data-testid=share-project]'); await P.waitForSelector('[data-testid=share-dialog]'); await shot(P, { area: 'dialog', screen: 'share', state: 'project', src: 'src/ui/components/share-dialog.jsx', desc: 'Share dialog (view / talk / edit per user)' }); await P.keyboard.press('Escape'); });
       await attempt(P, 'rename dialog', async () => { await P.locator('main').getByText('notas', { exact: true }).first().click(); await P.click('[data-testid=project-rename]'); await dialog(P); await shot(P, { area: 'dialog', screen: 'rename-project', state: 'open', src: 'src/ui/views/projects.jsx + components/dialogs.jsx (form)', desc: 'Rename project form' }); await P.keyboard.press('Escape'); });
       await attempt(P, 'review dialog', async () => { await P.locator('main').getByText('mi-web', { exact: true }).first().click(); await P.click('[data-testid=project-review]'); await dialog(P); await shot(P, { area: 'dialog', screen: 'project-review', state: 'open', src: 'src/ui/views/projects.jsx (askReview) + components/dialogs.jsx', desc: 'Task Review of a project, who reviews' }); await P.keyboard.press('Escape'); });
       await attempt(P, 'new project dialog', async () => { await nav(P, { view: 'chat' }); await P.click('[data-testid=chats-new]'); await P.click('[data-testid=sidebar-new-project]'); await dialog(P); await shot(P, { area: 'dialog', screen: 'new-project', state: 'empty', src: 'src/ui/components/project-actions.jsx (createProjectFlow)', desc: 'New project dialog (platforms, name, about)' });

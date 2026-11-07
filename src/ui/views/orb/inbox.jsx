@@ -1,7 +1,7 @@
 // 3.6 (messaging, step M3): the chat list (docs/DESIGN-SYSTEM.md › 2.5, mockup mensajeria.html ?z=orb). On the PC it is
 // the left pane; on the phone the «Chats» tab. From the top: search (titles, projects, the
 // messages and «#12» for a task) with its filter, «+» (Nuevo chat, Nuevo proyecto), the zone's other places (PC: Tareas,
-// Proyectos, Programadas, Pizarra, and «Más» with God mode when it is on), what others shared, the pinned
+// Proyectos, Programadas, Pizarra, and «Más» with God mode when it is on), the pinned
 // chats, then one group per project (its coloured initials, folding) with its chats. Each row: Orbe's head with the
 // project's badge (a direct conversation: its agent's mark), the title, the time, its latest progress (a running task,
 // «Esperando tu aprobación», how its last task ended, else its last line) and the unread count. Right click or ⋯ (PC) and
@@ -13,7 +13,6 @@ import { PageHeader } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
-import { SharedWithMe } from '@/components/share-dialog.jsx';
 import { createProjectFlow } from '@/components/project-actions.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, DropdownMenuCheckboxItem, Collapsible, CollapsibleTrigger, CollapsibleContent, Dialog, DialogContent, DialogTitle, DialogDescription, Tip } from '@/components/ui/overlay.jsx';
 import { confirm } from '@/components/dialogs.jsx';
@@ -382,7 +381,6 @@ export function OrbInbox({ page = false }) {
   );
   else body = (
     <>
-      <SharedWithMe kinds={['project']} className="px-1" />
       {parts.pinned.length ? (
         <div className="pt-2" data-testid="orb-pinned">
           <div className="text-muted-foreground flex items-center gap-1.5 px-2 py-1.5 text-[11.5px] font-semibold tracking-wide uppercase"><Pin className="size-3.5" />{t('chats.pinned')}</div>

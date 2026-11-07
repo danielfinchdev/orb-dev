@@ -169,7 +169,7 @@ export class Board {
     return this.project(name);
   }
   project(name) { return this.one('SELECT * FROM projects WHERE name = ?', String(name ?? '')); }
-  // 3.6: principal: only that person's projects and the ones shared with them.
+  // 3.6: principal: only that person's projects.
   projects({ principal = null } = {}) {
     if (!principal) return this.all('SELECT * FROM projects ORDER BY name');
     const s = scopeSql(principal, 'project', 'p');
@@ -183,7 +183,7 @@ export class Board {
     if (open) throw new Error(tr('msg.board.projectOpenTasks', { open }));
     this.run('DELETE FROM projects WHERE name = ?', project.name);
     if (this.setting('active_project') === project.name) this.setting('active_project', '');
-    try { this.run("DELETE FROM person_settings WHERE key = 'active_project' AND value = ?", JSON.stringify(project.name)); this.run("DELETE FROM shares WHERE resource_type = 'project' AND resource_id = ? COLLATE NOCASE", project.name); } catch { /* before 3.6 */ }
+    try { this.run("DELETE FROM person_settings WHERE key = 'active_project' AND value = ?", JSON.stringify(project.name)); } catch { /* before 3.6 */ }
     this.event(null, actor, 'project.removed', `${project.name} (la carpeta no se borra)`);
     this.changed('projects');
   }
@@ -218,7 +218,7 @@ export class Board {
   // ---- tasks
   task(id) { return parse(this.one('SELECT * FROM tasks WHERE id = ?', Number(id))); }
 
-  // 3.6: principal: only that person's tasks and those of the projects shared with them.
+  // 3.6: principal: only that person's tasks.
   tasks({ project, status, agent, limit = 100, principal = null } = {}) {
     const where = []; const params = [];
     if (principal) { const s = scopeSql(principal, 'task', 'tasks'); where.push(s.where); params.push(...s.args); }
@@ -240,7 +240,7 @@ export class Board {
   }
 
   // Open tasks however old (so none disappears) plus the last `finished` closed ones.
-  // 3.6: principal: only the tasks that person may see (theirs and those of the projects shared with them).
+  // 3.6: principal: only the tasks that person may see (theirs).
   panelTasks(finished = 100, { principal = null } = {}) {
     const s = principal ? scopeSql(principal, 'task', 'tasks') : { where: '1=1', args: [] };
     const open = this.all(`SELECT * FROM tasks WHERE status NOT IN ('done', 'cancelled') AND ${s.where} ORDER BY id DESC`, ...s.args);
@@ -685,7 +685,7 @@ export class Board {
   }
 
   // 3.2: conversation: the coordinator's, whose project is the one it works in (others may have set the app's folder).
-  // 3.6: principal: only what that person may see (their tasks and projects and the ones shared with them).
+  // 3.6: principal: only what that person may see (their tasks and projects).
   summary(agent, conversation = null, { principal = null } = {}) {
     const s = principal ? scopeSql(principal, 'task', 'tasks') : { where: '1=1', args: [] };
     const counts = Object.fromEntries(this.all(`SELECT status, COUNT(*) AS n FROM tasks WHERE ${s.where} GROUP BY status`, ...s.args).map((r) => [r.status, r.n]));
