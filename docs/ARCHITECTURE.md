@@ -43,6 +43,9 @@ change and which other features it connects to.
 31. [How to rework a feature without breaking the rest](#31-how-to-rework-a-feature)
 32. [The CORE: from request to report (3.1)](#32-the-core)
 33. [Conversations (3.2)](#33-conversations-32)
+34. [Permissions (3.8)](#34-permissions-38)
+35. [From 3.7 to 3.8 (migration)](#35-from-37-to-38-migration)
+36. [The workspace and core (3.8)](#36-the-workspace-and-core-38)
 
 ---
 
@@ -58,7 +61,7 @@ src/ui/**                      src/main/main.mjs + preload.cjs         src/engin
                                                                          └─ remote.mjs       mobile web
 Agents (processes)  ◄── adapters src/agents/*.mjs (live) ──┘
    └─ each agent loads Orb's MCP server: src/mcp/server.mjs (the shared board)
-Data: <assistant folder>/.orb/datos/orb.db (SQLite, src/core/db.mjs)
+Data: <workspace>/core/datos/orb.db (SQLite, src/core/db.mjs)
 ```
 
 - **There is no web server on the PC.** The window talks to the engine through Electron's internal messages. The only
@@ -95,37 +98,44 @@ same structure for everyone:
 > (`loadConfig`, `version` 4); a name chosen by hand stays.
 
 ```
-D:\Orb\                   (always <chosen folder>\Orb, the same for everyone)
-  orb.json                settings
-  windows\ ios\ android\ web\
+C:\Orb\                   (C:\Orb by default; always <chosen folder>\Orb, the same for everyone)
+  core\                   Orb's own folder, hidden: everything Orb needs to work (section 36)
+    orb.json              settings
+    datos\                database, sealed secret, identity
+    ejecuciones\ copias\  task runs; isolated copies and undo checkpoints
+    bitacora\             GENERAL.md (general memory) and proyectos\ (one per project), in the Settings language
+    skills\ mcp\          the agents' skills; the MCP servers (managed in Settings)
+    herramientas\adb\     Google's adb and fastboot, downloaded by the app
+    secretos\             reserved for the secrets sealed with the master password
+  windows\ linux\ ios\ android\ web\
                           categories: each folder inside one of them is a project
                           (the ones the app creates and the ones you create in Explorer)
-  android\adb-tools\      Google's adb and fastboot, downloaded by the app (not a project)
-  bitacora\               Orb configuration: GENERAL.md (general memory) and proyectos\ (one per project), in the
-                          Settings language; when it changes, the ones with no entries yet change their header
-  mcp-servers\            Orb configuration: the MCP servers; not shown as a project, managed in Settings
-  .orb\                   app data (hidden): database, encrypted key, logs, undo copies
+  multi\<project>\        a multiplatform project: one repository, a folder per platform and compartido\
 ```
 
-- **Categories** (`windows`, `ios`, `android`, `web`): projects are their subfolders. When creating or cloning a project
-  you pick the category (web by default); the assistant sets it in `orb_create_project`.
-- **Orb configuration** (`bitacora`, `mcp-servers`, `.orb`): never projects, and cannot be linked as such.
-- **adb**: at startup, if `android\adb-tools\adb.exe` is missing, the engine downloads Google's platform-tools there
+- **Categories** (`windows`, `linux`, `ios`, `android`, `web`, `multi`; `src/core/layout.mjs`): projects are their
+  subfolders. When creating or cloning a project you pick the category (web by default); the assistant sets it in
+  `orb_create_project`. **Multiplatform** (`multi`): one folder and one git repository, `multi\<name>\<platform>\` for
+  each platform chosen plus `compartido\` and a `LEEME.md` (`createProject` with `platforms`). The 2.7–3.7 groups
+  (`<name>-android`, `<name>-ios`… with `comun\<name>`) are no longer made; existing ones still work together.
+- **core** is never a project and cannot be linked as one; nothing else at the top is Orb's.
+- **adb**: at startup, if `core\herramientas\adb\adb.exe` is missing, the engine downloads Google's platform-tools there
   (`src/engine/android.mjs`) and puts that folder first in the agents' PATH. Settings → Android shows the status.
-- **2.3.0 folders**: `ensureLayout` creates whatever is missing and moves `bitacoras\` to `bitacora\` (if a file exists
-  in both, the old entries are appended at the end). It only discards the empty logs that 2.3.0 created for the
-  categories and configuration folders it mistook for projects; those "projects" go away on their own (`syncProjects`).
+- **Older folders**: `ensureLayout` (every start) moves what Orb 3.7 kept at the top into core (section 36), creates
+  whatever is missing and moves 2.3.0's `bitacoras\` into the log folder (if a file exists in both, the old entries are
+  appended at the end). It only discards the empty logs that 2.3.0 created for the categories and configuration folders
+  it mistook for projects; those "projects" go away on their own (`syncProjects`).
 
 On Windows, it then offers to install whatever is missing (section 24).
 
 **Files.**
 - Interface: `src/ui/views/setup.jsx`.
-- Creating and organizing the folder: `src/core/home.mjs` (`createHome`, `homeFor`, `ensureLayout`, `categoryOf`, `DEFAULT_CONFIG`, `loadConfig`).
+- Creating and organizing the folder: `src/core/home.mjs` (`createHome`, `homeFor`, `ensureLayout`, `paths`, `categoryOf`, `DEFAULT_CONFIG`, `loadConfig`), `src/core/layout.mjs` (the names), `src/core/core-folder.mjs` (core).
 - Projects by category: `src/core/projects.mjs` (`createProject`, `syncProjects`).
 - Remembering where it is: `src/main/main.mjs` (`ubicacion.json` in the app data).
 
 **Inside.**
-- `loadConfig` merges `orb.json` with the defaults. It adds new things to an old folder on its own:
+- `loadConfig` merges `core\orb.json` with the defaults. It adds new things to an old folder on its own:
   - accounts for new agents;
   - in version 3, the new usage caps (section 12).
 - `ORB_USER_DATA` lets you separate the app data (another copy or the tests). `ORB_LIGHT=1` opens Orb Light from source.
@@ -309,7 +319,7 @@ events: item · delta · session · approval · approval_done · context · rate
 - **allow** the normal stuff: reading, editing in its folder and ordinary commands;
 - **ask** about risky things with an Allow, Always allow or Deny card: push, `gh`, publishing packages, download and
   run, sending data, deleting folders, changing the system, killing processes, ssh, rewriting git or Docker;
-- **deny** what is never OK: touching the assistant's internal data (`.orb/datos`, `.orb/copias`).
+- **deny** what is never OK: touching the assistant's internal data (all of `core`, but the isolated copies).
 
 **Permission modes.**
 
@@ -679,7 +689,7 @@ app open. On iPhone they work with Orb added to the home screen.
 **What it does.** On first launch, and in Agents, it detects what you have and installs what is missing with the
 official installers. Since 2.4.1, PowerShell runs hidden (a separate window closed without doing anything on some
 Windows 11 machines) and the app shows the progress; its output stays in
-`.orb/ejecuciones/instalacion/progreso-*-salida.txt`. At startup the engine notes in `motor.log` which agents it finds
+`core/ejecuciones/instalacion/progreso-*-salida.txt`. At startup the engine notes in `motor.log` which agents it finds
 (`agentes: claude=… · codex=…`). Since 2.4.2 it also looks for them in `AppData` copies moved to another drive
 (`appDataDirs()` and `npmPrefixes()` in `src/agents/common.mjs`: `<drive>:\AppData` or up to two folders below, like
 `D:\ComputerApps\AppData`), even if PATH still points to `C:`. It installs:
@@ -720,7 +730,7 @@ launched hidden, with its output read by Orb, and it stores the session in the a
 ## 25. MCP connectors
 
 - Extra tools for the agents (databases, Figma…), in Settings.
-- Your own servers go in `<folder>/mcp-servers`: it is Orb configuration, not shown as a project. Settings lists its
+- Your own servers go in `<folder>/core/mcp`: it is Orb configuration, not shown as a project. Settings lists its
   subfolders with the command that starts them (`src/engine/mcp-folder.mjs`: `bin`/`main` from package.json or typical
   files like `src/server.js` or `server.py`) and adds them with one click ("Use").
 - They are passed to the chosen agents along with Orb's MCP (`mcpServersFor` in `sessions.mjs`).
@@ -850,10 +860,10 @@ launched hidden, with its output read by Orb, and it stores the session in the a
   warnings for pushes or mass deletions.
 - **Orb's data folder (3.8, `isOrbData` in `guard.mjs`):** matched by RESOLVED path (against the agent's folder, any case
   or separator, symlinks followed), not by names: a project may have its own `orb.db` or talk about `ORB_HOME`. Denied,
-  and in «total» it asks. Isolated copies (`.orb/copias/aisladas`) stay open. Not a boundary: a shell of the same Windows
+  and in «total» it asks. Isolated copies (`core/copias/aisladas`) stay open. Not a boundary: a shell of the same Windows
   user can always reach the folder another way; the agents' identity does not depend on its database any more (tickets,
   above), so what is left is the integrity of Orb's data against an agent bent on it, accepted. The folder is one value
-  (`ctx.paths.internal`), so moving it (F3) moves the check.
+  (`ctx.paths.internal`): all of `core` since 3.8 (section 36).
 - **Project agent settings (3.8):** a task can write the project's agent settings that later agents (other
   conversations) would load. Claude runs without the project's hooks (`disableAllHooks`) and with
   `allowManagedPermissionRulesOnly` (managed settings), so a project's `permissions.allow` never skips Orb's guard
@@ -975,7 +985,7 @@ belongs to the conversation that asked for it: its report goes back there.
   text); up to `orchestrator.parallel` (3 by default) reply at once and the rest wait their turn.
 - Titles: `src/core/titles.mjs` (a quick one taken from the first message) and `src/engine/titles.mjs` (the lightest
   model of the conversation's agent writes one of 2 to 5 words; not with the test agents).
-- Project icons: `src/engine/project-icons.mjs` (the one chosen in Orb, stored in `.orb/datos/iconos`; otherwise, the
+- Project icons: `src/engine/project-icons.mjs` (the one chosen in Orb, stored in `core/iconos`; otherwise, the
   favicon or app icon found in the folder) and `src/ui/components/project-icon.jsx` (with no icon, its initials in a
   color fixed for that name).
 - Interface: `src/ui/components/sidebar.jsx` (search box with filter, "To approve", Projects, Conversations and
@@ -1093,3 +1103,65 @@ without sign-in folders. Tests: `test/migracion-38.test.mjs` (3.7 with two users
 access, backups without other users' keys, a failed transaction that leaves every file in place and its retry, orb.json
 that cannot be written, a broken or outdated copy, no owner, two restores, the lock, the owner's clashing pictures,
 other users' isolated copies, shared projects, the 30-day scrub, the blocked screen and the blocked engine).
+
+## 36. The workspace and core (3.8)
+
+The workspace is `C:\Orb` by default (the welcome shows it already chosen; «Cambiar ubicación…» picks another base,
+`app:info › defaultBase`, `ORB_DEFAULT_BASE` in tests). It holds `core\` and the six categories, and nothing else of
+Orb's (section 2). A folder called Orb that already has other things (notes, projects, an older Orb's folders) is used as
+it is: nothing in it is overwritten. All of Orb's own paths come from `paths()` in `src/core/home.mjs`; nothing else
+builds them.
+
+- **Moving 3.7's folders** (`migrateWorkspace`, `src/core/core-folder.mjs`, called by `ensureLayout` at every start and
+  by `createHome`, so before the database opens and before the 3.8 migration of the database, which then finds it in
+  `core\datos`): `.orb` → `core`, `orb.json` → `core\orb.json`, `bitacora` → `core\bitacora` (logs merged, never
+  overwritten), `mcp-servers` → `core\mcp`, `android\adb-tools` → `core\herramientas\adb`. Each one is renamed in one
+  step when it can be; otherwise (a file held open, another volume) entry by entry: copied beside its place, checked
+  (size and sha256), switched in by a rename, and only then the old one deleted. A file that already differs in core is
+  kept in `core\conflictos-migracion\<date>\`, never lost. `core\migracion-carpetas.json` is written before anything
+  moves (inside `.orb`, so it travels with it) and removed at the end: a run that stopped halfway is finished by the next
+  start; with nothing to move, nothing happens. Then `rewritePaths` points into core every absolute path that pointed
+  into those folders: orb.json (accounts' folders, connectors' scripts), every text column of the database (plain and
+  JSON-escaped; a project whose name only looks like an old folder is left alone) and the isolated copies' git
+  worktrees (`<repo>\.git\worktrees\<n>\gitdir`, as `git worktree repair` writes it). The app's main process reads the
+  sealed secret from `.orb\datos` until the engine has moved it, and never writes into core before the move. 3.7's
+  `bots\` stays at the top for the 3.8 migration of the database, which archives it.
+- **Backups outside core** (`src/core/backup.mjs`): `%LOCALAPPDATA%\Orb\copias\<workspace>` on Windows
+  (`~/.local/share/Orb/copias/<workspace>` elsewhere; `<workspace>` is `homeKey`, e.g. `C-Orb`): per user, never roaming
+  (copies can be big), no administrator, outside both core and the workspace, and the uninstaller leaves it, so deleting
+  core (or the whole workspace) does not take the copies with it. Ajustes › Datos can pick another folder, never inside
+  core (`validateConfig`). Wherever they go, the newest copy is noted in the default folder (`ultima.json`); that is how
+  `latestBackup` finds it without core. The copies 3.7 kept in its data folder (`core\copias-seguridad`) move there at
+  start (`adoptOldBackups`). Names inside a copy are relative to the workspace (`core/datos/orb.db`, `core/bitacora/…`,
+  plus `core/skills` and `core/mcp` without dependencies); a 3.7 copy (`.orb/…`, `orb.json`, `bitacora/…`) restores into
+  core (`legacyName`) and its paths are rewritten. The app keeps a copy of the sealed secret (`clave.enc`) in its own
+  data folder (`%APPDATA%\Orb.dev\claves\<workspace>.enc`) and puts it back when core loses it, so the copies, sealed
+  with that secret, still open on this PC.
+- **core missing** (`repairCore` in `backup.mjs`, called by `engine.mjs › start` before the database opens): when core,
+  its orb.json or its database is gone, only what is missing is put back from the newest copy (`applyPendingRestore`
+  with `onlyMissing`: a database newer than the copy stays), and the owner is told («Faltaba la carpeta core…»). A
+  database that is missing with no copy at all is a workspace made a moment ago. Without core's settings and no usable
+  copy (none, one this PC cannot open, a damaged one) the engine waits (`coreBlocked`: `app.coreState`,
+  `app.coreRepair`, PC only) and the window shows «Falta la carpeta core» (`views/core-missing.jsx`,
+  `lib/core-access.js › coreView`): the recovery code, another copy, or «Seguir sin copia» (core made again with the
+  default settings; the projects stay in their folders). While Orb runs, the engine's loop checks core every 5 s
+  (`coreHealth`); if it goes it emits `core:lost`, stops the agents and ends (exit code 75): the app starts the engine
+  again (`startEngine` restarts it) and the start restores it; the window reloads. A saved workspace whose core is gone
+  is still opened (`readLocation`); a workspace folder that is gone altogether brings the welcome back.
+- **Protection** (`protectCore`, every start): core gets the hidden and system attributes, so Explorer does not show it
+  even with «show hidden files». No access rule (ACE) is set: deleting a folder on NTFS is allowed by DELETE on the
+  folder *or* FILE_DELETE_CHILD on its parent, and the owner has full control of the workspace, so a deny-DELETE on core
+  alone does not stop a rename or a move to the recycle bin; denying FILE_DELETE_CHILD on the workspace would also stop
+  the user deleting their own top-level folders, and an inherited deny would block Orb's own writes. Measured on Windows
+  11, a deny ACE did not stop a rename by the owner. So core relies on being hidden, on the agents' guard (section 28:
+  `isOrbData` denies `paths().internal`, i.e. all of core, except the isolated copies in `core\copias\aisladas`) and on
+  the watcher and the backups above.
+- **Master password hooks** (next step): `core\secretos\` is created empty, and every window action on core (open it,
+  restore a copy, choose where copies go) goes through `unlockCore` in `src/ui/lib/core-access.js`, which lets them
+  through today.
+
+Tests: `test/core-carpeta.test.mjs` (a new workspace; a 3.7 workspace moved with its paths and a working isolated copy;
+a move cut halfway; renames that fail; core deleted with Orb closed; only orb.json missing with a newer database; core
+deleted while the engine runs; no copy, «Seguir sin copia» and a copy that needs its recovery code; the screen),
+`test/copias.test.mjs` (where copies go, old ones adopted, never inside core), `test/multiplataforma.test.mjs` and
+`test/migracion-38.test.mjs` (the engine on a 3.7-shaped workspace).

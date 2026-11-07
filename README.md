@@ -55,26 +55,27 @@ pauses Cursor for a day and, if the task was for "any agent", assigns it to anot
 ## Getting started
 
 1. Open Orb from the Start menu (or `Orb-3.2.1-light-portable.exe`, or `npm start` if you run it from source).
-2. Choose its name, what it calls you and where to create its folder. The folder is named after the assistant: with `D:\`
-   and the name "Nova" it creates `D:\Nova`; if you keep the default name, `D:\Orb`.
+2. Choose its name, what it calls you and where to create its folder: `C:\Orb` unless you pick another place (always
+   `<chosen folder>\Orb`).
 3. In **Agents**, check which agents it finds (Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Qwen Code, Copilot) and
    that they are signed in. If you already signed in to their program (for example Codex with your ChatGPT account),
    nothing else is needed; if not, the button opens the official login (the app never sees your passwords).
 4. Create a project from the chat (project button under the text box) and ask it for something.
 
-## The assistant's folder
+## The workspace
 
 ```
-D:\Orb\                   (always <chosen folder>\Orb, the same for everyone)
-  orb.json                settings
-  windows\ ios\ android\ web\
+C:\Orb\                   (C:\Orb by default; always <chosen folder>\Orb)
+  core\                   Orb's own folder, hidden: settings, database, logs, skills, MCP servers, tools (adb)
+  windows\ linux\ ios\ android\ web\
                           categories: each folder inside one of them is a project
                           (the ones the app creates and the ones you create in Explorer)
-  android\adb-tools\      Google's adb and fastboot, downloaded by the app (not a project)
-  bitacora\               Orb configuration: GENERAL.md (general memory) and proyectos\ (one per project)
-  mcp-servers\            Orb configuration: the MCP servers; not shown as a project, managed in Settings
-  .orb\                   app data (hidden): database, encrypted key, logs, undo copies
+  multi\<project>\        a multiplatform project: one repository, a folder per platform and compartido\
 ```
+
+Backups go outside the workspace (`%LOCALAPPDATA%\Orb\copias` by default, or a folder you choose in Settings › Data).
+If `core` is deleted, Orb brings back what is missing from the latest backup. A workspace of Orb 3.7 (`.orb`,
+`orb.json`, `bitacora`, `mcp-servers` at the top) is moved into `core` the first time 3.8 opens it.
 
 ## Highlights
 
