@@ -239,13 +239,18 @@ test('3.8: las copias van fuera de la carpeta de Orb, las de 3.7 se mudan allí 
   } finally { s.cleanup(); }
 });
 
-test('3.8: Ajustes › Datos elige otra carpeta de copias, nunca dentro de core', async () => {
+test('3.8: Ajustes › Datos elige otra carpeta de copias, nunca dentro del espacio (tampoco por una unión) ni una que lo contenga', async () => {
   const { home, cleanup } = tempHome();
   const e = await startEngine(home);
   try {
     assert.equal((await e.call('backup.status')).custom, false);
     const { unlock } = await e.call('master.create', { password: 'contraseña de copias' });
-    await assert.rejects(e.call('config.save', { patch: { backup: { folder: path.join(home, 'core', 'copias') } }, unlock }), /dentro de core/);
+    await assert.rejects(e.call('config.save', { patch: { backup: { folder: path.join(home, 'core', 'copias') } }, unlock }), /dentro de la carpeta de Orb/);
+    await assert.rejects(e.call('config.save', { patch: { backup: { folder: path.join(home, 'web', 'copias') } }, unlock }), /dentro de la carpeta de Orb/, 'tampoco en un proyecto');
+    await assert.rejects(e.call('config.save', { patch: { backup: { folder: path.dirname(home) } }, unlock }), /ni en una carpeta que la contenga/);
+    const link = path.join(path.dirname(home), 'enlace-a-orb');
+    fs.symlinkSync(home, link, 'junction');
+    await assert.rejects(e.call('config.save', { patch: { backup: { folder: path.join(link, 'web') } }, unlock }), /dentro de la carpeta de Orb/, 'una unión que lleva dentro');
     const mine = path.join(path.dirname(home), 'mis-copias');
     await assert.rejects(e.call('config.save', { patch: { backup: { folder: mine } } }), /contraseña maestra/, '3.8: sin desbloquear, no');
     await e.call('config.save', { patch: { backup: { folder: mine } }, unlock });

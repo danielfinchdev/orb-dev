@@ -2,11 +2,10 @@
 // The window has no Node access (sandbox + context isolation); it can only call the engine's actions and a few
 // file dialogs exposed by the preload script.
 import { app, BrowserWindow, ipcMain, dialog, shell, Notification, Menu, protocol, net, utilityProcess, session, nativeTheme, safeStorage, nativeImage, powerMonitor } from 'electron';
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createHome, isHome, loadConfig, writeJson, paths, homeKey, LEGACY } from '../core/home.mjs';
+import { createHome, isHome, loadConfig, writeJson, paths, homeKey, oldHomeKey, LEGACY } from '../core/home.mjs';
 import { createAgentBrowser } from './browser.mjs';
 import { openTerminal } from './terminal.mjs';
 import { findEditors, openInEditor, runAction } from './editors.mjs';
@@ -15,6 +14,7 @@ import { MAX_IMAGES, captureWindow, readImage, sendFeedback, moreApps } from './
 import { PRODUCT } from '../core/product.mjs';
 import { translate } from '../core/i18n.mjs';
 import { keyringWeak } from './linux.mjs';
+import { loadApprovalSecret } from './approval-secret.mjs';
 
 const SRC = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 // Packaged: the code lives in app.asar.unpacked (agents start the MCP server from there with the app's own executable).
@@ -113,36 +113,27 @@ let weakKeyring = false;
 const SECRET_COPY = (h) => path.join(app.getPath('userData'), 'claves', `${homeKey(h)}.enc`);
 // 3.8: and of the master password's files (core\secretos: the data key wrapped, the secrets sealed), kept by the engine.
 const SECRETS_COPY = (h) => path.join(app.getPath('userData'), 'claves', `${homeKey(h)}-secretos`);
+// The first 3.8 builds named them after the workspace's whole path (home.mjs › oldHomeKey): taken over once.
+function adoptOldKeyNames(h) {
+  const dir = path.join(app.getPath('userData'), 'claves');
+  for (const [from, to] of [[`${oldHomeKey(h)}.enc`, path.basename(SECRET_COPY(h))], [`${oldHomeKey(h)}-secretos`, path.basename(SECRETS_COPY(h))]]) {
+    try { if (fs.existsSync(path.join(dir, from)) && !fs.existsSync(path.join(dir, to))) fs.renameSync(path.join(dir, from), path.join(dir, to)); } catch { /* the next start */ }
+  }
+}
 function approvalSecret(h) {
+  adoptOldKeyNames(h);
   const available = safeStorage.isEncryptionAvailable();
   let backend = null; try { backend = process.platform === 'linux' ? safeStorage.getSelectedStorageBackend() : null; } catch { /* older Electron */ }
   const legacy = path.join(h, LEGACY.internal, 'datos');
   const dir = fs.existsSync(legacy) && !fs.existsSync(paths(h).core) ? legacy : paths(h).data;
-  const enc = path.join(dir, 'clave.enc'); const plain = path.join(dir, 'clave.bin'); const copy = SECRET_COPY(h);
-  const open = (file) => { try { const hex = safeStorage.decryptString(fs.readFileSync(file)); return /^[0-9a-f]{64}$/.test(hex) ? hex : null; } catch { return null; } };
-  const keep = (sealed) => { try { fs.mkdirSync(path.dirname(copy), { recursive: true }); if (!fs.existsSync(copy) || !fs.readFileSync(copy).equals(sealed)) fs.writeFileSync(copy, sealed); } catch { /* the next start */ } };
   if (keyringWeak(process.platform, available, backend)) {
     weakKeyring = process.platform === 'linux';
     // A key already kept that way (Orb run from the code on Linux) is still read, so links and approvals stay.
-    if (available) { const hex = open(enc); if (hex) return hex; }
+    if (available) { try { const hex = safeStorage.decryptString(fs.readFileSync(path.join(dir, 'clave.enc'))); if (/^[0-9a-f]{64}$/.test(hex)) return hex; } catch { /* none */ } }
     return null;
   }
-  let hex = open(enc);
-  if (hex) { fs.rmSync(plain, { force: true }); keep(fs.readFileSync(enc)); return hex; }
-  // core\datos\clave.enc is gone (core deleted or damaged; a new workspace has its clave.bin instead): the copy
-  // outside the workspace, put back.
-  hex = fs.existsSync(enc) || fs.existsSync(plain) ? null : open(copy);
-  if (!hex) {
-    // Another Windows user or another PC: a new secret (old approvals are asked again).
-    try { const b = fs.readFileSync(plain); hex = b.length >= 32 ? b.subarray(0, 32).toString('hex') : null; } catch { hex = null; }
-    hex ??= crypto.randomBytes(32).toString('hex');
-  }
-  const sealed = safeStorage.encryptString(hex);
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(enc, sealed);
-  fs.rmSync(plain, { force: true });
-  keep(sealed);
-  return hex;
+  // The rest (the copy outside, a clave.enc that cannot be read kept aside): src/main/approval-secret.mjs.
+  return loadApprovalSecret({ dir, copy: SECRET_COPY(h), seal: (hex) => safeStorage.encryptString(hex), unseal: (buf) => safeStorage.decryptString(buf) });
 }
 
 let restarts = 0;
@@ -299,7 +290,7 @@ ipcMain.handle('app:pickImages', guard(async () => {
   return r.canceled ? [] : r.filePaths.slice(0, 10);
 }));
 // 3.8: core itself (all of it at once) and its secrets open only with a fresh unlock of the master password, checked by
-// the engine. Its tool folders (MCP servers, skills, adb, logs) and the data folder a failed migration points to open as
+// the engine. Its tool folders (MCP servers, adb, logs) and the data folder a failed migration points to open as
 // before: the window offers them where they are needed, also before there is a password.
 const guardedCore = (target) => {
   if (!home) return false;

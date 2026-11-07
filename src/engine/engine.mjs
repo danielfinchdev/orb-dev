@@ -47,7 +47,9 @@ async function start(home, version, secret, browser, keep = null) {
   // and what can be done (coreBlocked). All of it before the database opens.
   if (!fs.existsSync(home)) throw new Error(tr('sys.engine.notHome', { home }));
   const { migrateWorkspace } = await import('../core/core-folder.mjs');
-  migrateWorkspace(home);
+  migrateWorkspace(home); // a folder some program is using: nothing moves and the start fails with a clear message
+  // The first 3.8 builds named this workspace's backups' folder after its whole path: taken over once.
+  { const { adoptOldBackupRoot } = await import('../core/backup.mjs'); try { adoptOldBackupRoot(home); } catch (error) { console.error(`copias: ${error.message}`); } }
   // 3.8: the master password's files come back first from their copy outside core (newer than any backup).
   { const { restoreMissing } = await import('../core/master.mjs'); try { restoreMissing(paths(home).secrets, mirror); } catch (error) { console.error(`secretos: ${error.message}`); } }
   const { repairCore } = await import('../core/backup.mjs');
@@ -60,6 +62,8 @@ const secretOf = (home) => ctx.secret ?? (() => { try { const k = fs.readFileSyn
 
 async function open({ home, version, repair = null }) {
   ensureLayout(home); // the fixed folders, and folders made by older versions put in order
+  // 3.8: a backups' folder inside the workspace (allowed by 3.7) is not used any more: dropped from the settings.
+  { const { keepBackupsOutside } = await import('../core/core-folder.mjs'); try { keepBackupsOutside(home); } catch (error) { console.error(`copias: ${error.message}`); } }
   useHome(home);
   // 3.6: a backup restored from Ajustes › Datos replaces the data now, before the database
   // opens (what was there goes to core/antes-de-restaurar-<fecha>). Its secret (links, approvals) comes with it.
@@ -69,6 +73,8 @@ async function open({ home, version, repair = null }) {
   if (restored) { useHome(home); if (restored.secretChanged && restored.secret?.length >= 32) ctx.secret = Buffer.from(restored.secret.subarray(0, 32)); }
   logFile = path.join(ctx.paths.runs, 'motor.log');
   fs.mkdirSync(ctx.paths.runs, { recursive: true });
+  // 3.8: the backups' folders and the copies of the sealed secrets are kept from the agents like core.
+  { const { guardOutside } = await import('./workspace-layout.mjs'); guardOutside({ mirror }); }
   // 3.8: the backups of 3.7 (inside the data folder, now core) go where backups go now, outside the workspace.
   try { const { adoptOldBackups } = await import('../core/backup.mjs'); const n = adoptOldBackups(home, ctx.config); if (n) log(`copias: ${n} copia(s) de 3.7 movidas fuera de core`); } catch (error) { log(`copias de 3.7: ${error.message}`); }
   // Android's adb: in the PATH of every agent, downloaded in the background the first time.
@@ -94,14 +100,18 @@ function coreBlocked({ home, version, repair }) {
   console.error(`core: falta ${repair.missing.join(', ')} y no se pudo restaurar (${repair.reason})`);
   let busy = null;
   // passphrase: the recovery code of the copy; file: another copy (.orbbak); fresh: go on without a copy (core made
-  // again with the default settings; the projects stay in their folders).
-  const repairNow = async ({ passphrase = null, file = null, fresh = false } = {}) => {
+  // again with the default settings in the window's language; the projects stay in their folders). The copies there
+  // were are put aside where nothing deletes them (src/core/backup.mjs › setAsideBackups): they may hold the only
+  // history the user has.
+  const repairNow = async ({ passphrase = null, file = null, fresh = false, language = null } = {}) => {
     let next = { ok: true, missing: [] };
     if (fresh === true) {
-      const { paths: of, DEFAULT_CONFIG, writeJson } = await import('../core/home.mjs');
+      const { paths: of, DEFAULT_CONFIG, writeJson, merge } = await import('../core/home.mjs');
+      const { setAsideBackups } = await import('../core/backup.mjs');
+      try { const n = setAsideBackups(home); if (n) console.error(`core: ${n} copia(s) apartadas antes de empezar de nuevo`); } catch (error) { console.error(`core: apartar copias: ${error.message}`); }
       const cfg = of(home).config;
       fs.mkdirSync(path.dirname(cfg), { recursive: true });
-      if (!fs.existsSync(cfg)) writeJson(cfg, DEFAULT_CONFIG);
+      if (!fs.existsSync(cfg)) writeJson(cfg, merge(DEFAULT_CONFIG, { language: language === 'en' ? 'en' : 'es' }));
     } else {
       const { repairCore } = await import('../core/backup.mjs');
       next = await repairCore(home, { secret: secretOf(home), passphrase: typeof passphrase === 'string' && passphrase ? passphrase.slice(0, 200) : null,

@@ -6,6 +6,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { tempHome } from './helpers.mjs';
 import { createHome, folderName, isHome, ensureLayout, projectLogHeader, loadConfig } from '../src/core/home.mjs';
+import { applyLayout } from '../src/core/core-folder.mjs';
 import { PRODUCT } from '../src/core/product.mjs';
 import { ctx, saveConfig } from '../src/core/context.mjs';
 import { Board, checkProjectPath } from '../src/core/board.mjs';
@@ -20,7 +21,7 @@ before(() => { t = tempHome(); board = new Board(); project = createProject(boar
 after(() => t.cleanup());
 
 test('el primer arranque crea la carpeta del asistente con todo lo necesario', () => {
-  for (const f of ['core/orb.json', 'core/datos/clave.bin', 'core/ejecuciones', 'core/copias', 'core/bitacora/GENERAL.md', 'core/bitacora/proyectos', 'core/skills', 'core/mcp', 'core/herramientas', 'core/secretos', 'windows', 'linux', 'ios', 'android', 'web', 'multi']) assert.ok(fs.existsSync(path.join(t.home, f)), f);
+  for (const f of ['core/orb.json', 'core/datos/clave.bin', 'core/ejecuciones', 'core/copias', 'core/bitacora/GENERAL.md', 'core/bitacora/proyectos', 'core/mcp', 'core/herramientas', 'core/secretos', 'windows', 'linux', 'ios', 'android', 'web', 'multi']) assert.ok(fs.existsSync(path.join(t.home, f)), f);
   assert.deepEqual(fs.readdirSync(t.home).sort(), ['android', 'core', 'ios', 'linux', 'multi', 'web', 'windows'], 'nada más arriba');
   assert.ok(!fs.existsSync(path.join(t.home, 'bitacoras')), 'una sola carpeta de bitácoras');
   assert.equal(fs.statSync(path.join(t.home, 'core/datos/clave.bin')).size, 32);
@@ -73,12 +74,15 @@ test('una carpeta de la 2.3.0 se ordena: bitacoras pasa a la bitácora de core s
   fs.writeFileSync(path.join(home, 'bitacoras', 'GENERAL.md'), '# Bitácora general de Orb\n\nCabecera.\n\n### 2026-10-01 — entrada vieja\n- Hecho: algo\n');
   fs.writeFileSync(path.join(home, 'bitacoras', 'proyectos', 'android.md'), projectLogHeader('android'));
   fs.writeFileSync(path.join(home, 'bitacoras', 'proyectos', 'galactica.md'), `${projectLogHeader('galactica')}\n### entrada\n`);
-  // And the bitacora of 3.7 at the top, which moves into core first.
+  // And the bitacora of 3.7 at the top: used where it is until the user says to move it into core (3.8).
   fs.mkdirSync(path.join(home, 'bitacora'));
   fs.writeFileSync(path.join(home, 'bitacora', 'GENERAL.md'), '# Bitácora general de Orb\n\nCabecera.\n\n### 2026-10-09 — entrada nueva\n');
   fs.writeFileSync(path.join(home, 'bitacora', 'indice.md'), 'del usuario\n');
   ensureLayout(home);
-  assert.ok(!fs.existsSync(path.join(home, 'bitacoras')) && !fs.existsSync(path.join(home, 'bitacora')) && !fs.existsSync(path.join(home, 'orb.json')));
+  assert.ok(!fs.existsSync(path.join(home, 'bitacoras')) && !fs.existsSync(path.join(home, 'orb.json')));
+  assert.match(fs.readFileSync(path.join(home, 'bitacora', 'GENERAL.md'), 'utf8'), /entrada nueva[\s\S]*entrada vieja/, 'bitacoras se une a la bitácora en uso');
+  applyLayout(home, { bitacora: 'move' });
+  assert.ok(!fs.existsSync(path.join(home, 'bitacora')));
   const general = fs.readFileSync(path.join(home, 'core', 'bitacora', 'GENERAL.md'), 'utf8');
   assert.match(general, /entrada nueva[\s\S]*entrada vieja/); assert.equal(general.match(/^# /gm).length, 1);
   assert.match(fs.readFileSync(path.join(home, 'core', 'bitacora', 'proyectos', 'galactica.md'), 'utf8'), /### entrada/);

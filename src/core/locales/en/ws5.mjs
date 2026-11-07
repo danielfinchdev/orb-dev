@@ -13,7 +13,7 @@ export default {
   'data.core.restore': 'Restore',
   'data.core.pick': 'Choose another backup…',
   'data.core.fresh': 'Go on without a backup',
-  'data.core.freshConfirm': 'Orb will create its core folder again with the default settings. Your projects stay where they are; earlier conversations and tasks do not come back.',
+  'data.core.freshConfirm': 'Orb will create its core folder again with the default settings. Your projects stay where they are; earlier conversations and tasks do not come back. Any backups there were are kept aside, not deleted.',
   'data.core.openFolder': 'Open backups folder',
   'data.core.details': 'Details',
   'data.migrated38': 'Orb 3.8 no longer has bots or users. What was there is saved in {path}.',

@@ -1,6 +1,7 @@
 // 3.8: «Falta la carpeta core»: core (or its settings) is gone and Orb could not bring it back by itself from the newest
 // backup (none, one this PC cannot open without its recovery code, or a damaged one). The engine waits
-// (engine.mjs › coreBlocked): restore with the code, pick another backup, or go on without one.
+// (engine.mjs › coreBlocked): restore with the code, pick another backup, or go on without one: offered when there is no
+// usable copy, and behind «No tengo el código» when a copy only needs its code (the copies there were are kept aside).
 import { useState } from 'react';
 import { RotateCw, FolderOpen, FileArchive, ArrowRight } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
@@ -17,6 +18,7 @@ export function CoreMissing({ state }) {
   const [s, setS] = useState(state);
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
+  const [noCode, setNoCode] = useState(false);
   const when = (iso) => (iso ? new Date(iso).toLocaleString(locale, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
   const v = coreView(s, { when });
   const repair = async (params) => {
@@ -30,7 +32,8 @@ export function CoreMissing({ state }) {
     const file = Array.isArray(files) ? files[0] : files;
     if (file) repair({ file, passphrase: code || null });
   };
-  const fresh = async () => { if (await confirm(t('data.core.fresh'), t('data.core.freshConfirm'), { ok: t('data.core.fresh') })) repair({ fresh: true }); };
+  const fresh = async () => { if (await confirm(t('data.core.fresh'), t('data.core.freshConfirm'), { ok: t('data.core.fresh') })) repair({ fresh: true, language: locale?.startsWith('en') ? 'en' : 'es' }); };
+  const offerFresh = v.fresh === 'yes' || (v.fresh === 'noCode' && noCode);
   return (
     <div className="grid h-full place-items-center overflow-y-auto p-8 text-center" data-testid="core-missing">
       <div className="grid max-w-md gap-3">
@@ -42,7 +45,8 @@ export function CoreMissing({ state }) {
           {v.restore ? <Button disabled={busy || !code.trim()} onClick={() => repair({ passphrase: code })} data-testid="core-restore">{busy ? <Spinner /> : <RotateCw />}{t('data.core.restore')}</Button> : null}
           {bridge.pickFiles ? <Button variant="outline" disabled={busy} onClick={pick} data-testid="core-pick"><FileArchive />{t('data.core.pick')}</Button> : null}
           {v.folder && bridge.openPath ? <Button variant="outline" onClick={() => act(bridge.openPath(v.folder))}><FolderOpen />{t('data.core.openFolder')}</Button> : null}
-          <Button variant="ghost" disabled={busy} onClick={fresh} data-testid="core-fresh"><ArrowRight />{t('data.core.fresh')}</Button>
+          {offerFresh ? <Button variant="ghost" disabled={busy} onClick={fresh} data-testid="core-fresh"><ArrowRight />{t('data.core.fresh')}</Button>
+            : v.fresh === 'noCode' ? <Button variant="ghost" disabled={busy} onClick={() => setNoCode(true)} data-testid="core-no-code">{t('data.core.noCode')}</Button> : null}
         </div>
         {s.error ? <details className="text-muted-foreground text-left text-xs"><summary className="cursor-pointer text-center">{t('data.core.details')}</summary><p className="mt-2 break-words">{s.error}</p></details> : null}
       </div>

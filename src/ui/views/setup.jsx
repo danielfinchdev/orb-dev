@@ -1,7 +1,8 @@
 // First run: the assistant's name, what to call the user and where its folder goes (C:\Orb unless the user picks another
 // place). Everything lives in that folder.
 // 3.7: the 3.5.1 welcome again (the owner's wish). Done without asking: this PC's language and time zone in the settings,
-// backups on (the default). 3.8: then the master password (views/master.jsx), before anything else.
+// backups on (the default). 3.8: then, when the folder has folders of an earlier Orb, what to do with them
+// (views/layout.jsx: nothing moves without the user's choice), and the master password (views/master.jsx).
 import { useState } from 'react';
 import { FolderOpen, ArrowRight } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
@@ -14,6 +15,7 @@ import { toast } from 'sonner';
 import { errorText } from '@/lib/utils.js';
 import { PRODUCT } from '../../core/product.mjs';
 import { MasterCreate } from './master.jsx';
+import { LayoutReview } from './layout.jsx';
 
 const hereTz = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; } };
 const hereLanguage = () => (/^en/i.test(navigator.language ?? '') ? 'en' : 'es');
@@ -26,7 +28,8 @@ export function Setup({ onDone }) {
   const [base, setBase] = useState(() => getState().info?.defaultBase ?? null);
   const [busy, setBusy] = useState(false);
   const [mood, setMood] = useState('happy');
-  const [step, setStep] = useState('datos'); // datos → maestra (the master password) → equipo (Windows: install what is missing) → app
+  const [step, setStep] = useState('datos'); // datos → carpetas (folders of an earlier Orb, if any) → maestra (the master password) → equipo (Windows: install what is missing) → app
+  const [plan, setPlan] = useState(null);
   const shown = name.trim() || PRODUCT.assistant;
   const sep = base?.includes('\\') ? '\\' : '/';
   // The same rule the app uses (homeFor): always <base>/Orb, whatever the assistant is called, unless the base already is it.
@@ -40,10 +43,13 @@ export function Setup({ onDone }) {
       // The engine runs in the new folder now: it gets this PC's language and time zone.
       await call('config.save', { patch: { language, tz: hereTz() } }).catch(() => {});
       setMood('happy');
-      setBusy(false); setStep('maestra');
+      const lp = await call('app.layoutPlan').catch(() => null);
+      setBusy(false);
+      if (lp?.pending) { setPlan(lp); setStep('carpetas'); } else setStep('maestra');
     }
     catch (error) { setMood('worried'); toast.error(errorText(error)); setBusy(false); }
   };
+  if (step === 'carpetas') return <LayoutReview plan={plan} onDone={() => setStep('maestra')} />;
   if (step === 'maestra') return <MasterCreate onDone={async () => { const info = await bridge.info(); if (info.platform === 'win32') setStep('equipo'); else onDone(); }} />;
   if (step === 'equipo') return <Prepare name={shown} onDone={onDone} />;
   return (

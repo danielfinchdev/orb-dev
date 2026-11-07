@@ -9,6 +9,7 @@ import { IS_WIN, firstFile, inPath, appDataDirs, userHome, clip, describeInput, 
 import { Turn, spawnAgent, killTree } from './live.mjs';
 import { tr } from '../core/context.mjs';
 import { isModelLimitText, parseReset, untilText } from '../core/budget.mjs';
+import { guardedRootsNow } from '../core/guard.mjs';
 
 export const id = 'cursor';
 export const label = 'Cursor';
@@ -145,8 +146,8 @@ export function cursorRules(permission, internalDir) {
   // «Revisar y probar»: commands yes, changing files no.
   if (permission === 'probar') deny.push('Write(**)');
   if (internalDir) {
-    for (const sub of ['datos', 'ejecuciones', path.join('copias', 'fotos')]) {
-      const dir = path.join(internalDir, sub);
+    // 3.8: and what Orb keeps about the workspace outside it (its backups, the copies of its sealed secrets).
+    for (const dir of [...['datos', 'ejecuciones', path.join('copias', 'fotos'), 'secretos'].map((sub) => path.join(internalDir, sub)), ...guardedRootsNow()]) {
       for (const p of [dir, dir.replace(/\\/g, '/')]) deny.push(`Read(${p}/**)`, `Write(${p}/**)`);
     }
   }

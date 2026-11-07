@@ -233,7 +233,7 @@ function McpCard({ c }) {
       return true;
     }
   });
-  // Orb's MCP folder (core\mcp): each subfolder is a server; one click adds it with the command that starts it.
+  // Orb's MCP folder (core\mcp) and the projects that are MCP servers: one click adds each with the command that starts it.
   const [folder, setFolder] = useState(null);
   const loadFolder = () => call('mcp.folder').then(setFolder).catch(() => setFolder(null));
   useEffect(() => { if (!bridge.mobile) loadFolder(); }, [c.mcpServers.length]);
@@ -252,11 +252,14 @@ function McpCard({ c }) {
               <div className="grid min-w-0 flex-1"><div className="text-muted-foreground text-xs">{t('settings.mcpFolder')}</div><PathText path={folder.dir} className="text-xs" /></div>
               <BubbleTip title={t('settings.open')}><Button size="icon-sm" variant="ghost" onClick={() => act(bridge.openPath(folder.dir))} aria-label={t('settings.open')}><FolderOpen /></Button></BubbleTip>
             </div>
-            {folder.servers.map((s) => (
-              <div key={s.dir} className="flex min-w-0 items-center gap-3 rounded-lg border border-dashed px-3 py-2">
-                <div className="min-w-0 flex-1"><div className="text-sm">{s.name}</div><div className="text-muted-foreground truncate font-mono text-xs">{s.command ? `${s.command} ${s.args.join(' ')}` : t('settings.mcpNoStart')}</div></div>
-                {s.configured ? <span className="text-muted-foreground text-xs">{t('settings.mcpInUse', { name: s.configured })}</span>
-                  : s.command ? <Button size="sm" variant="outline" onClick={() => use(s)}><Plus />{t('settings.mcpUse')}</Button> : null}
+            {[...folder.servers, ...(folder.projects ?? []).map((s) => ({ ...s, fromProject: true }))].map((s, i, all) => (
+              <div key={s.dir} className="grid min-w-0 gap-1">
+                {s.fromProject && !all[i - 1]?.fromProject ? <div className="text-muted-foreground mt-1 text-xs">{t('settings.mcpProjects')}</div> : null}
+                <div className="flex min-w-0 items-center gap-3 rounded-lg border border-dashed px-3 py-2" data-testid={s.fromProject ? 'mcp-project' : undefined}>
+                  <div className="min-w-0 flex-1"><div className="text-sm">{s.name}</div><div className="text-muted-foreground truncate font-mono text-xs">{s.command ? `${s.command} ${s.args.join(' ')}` : t('settings.mcpNoStart')}</div></div>
+                  {s.configured ? <span className="text-muted-foreground text-xs">{t('settings.mcpInUse', { name: s.configured })}</span>
+                    : s.command ? <Button size="sm" variant="outline" onClick={() => use(s)}><Plus />{t('settings.mcpUse')}</Button> : null}
+                </div>
               </div>
             ))}
           </div>

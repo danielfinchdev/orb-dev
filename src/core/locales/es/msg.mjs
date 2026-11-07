@@ -179,7 +179,7 @@ export default {
   "msg.ctx.connectorClash": "el conector «{name}» choca con otro de nombre casi igual (mayúsculas, - o _): cámbiale el nombre",
   "msg.ctx.mcpList": "mcpServers debe ser una lista",
   "msg.ctx.missingAgentCfg": "falta la configuración de {id}",
-  "msg.ctx.backupInCore": "las copias de seguridad no pueden ir dentro de core: si se borrara, se perderían con ella",
+  "msg.ctx.backupInHome": "las copias de seguridad no pueden ir dentro de la carpeta de Orb (si se borrara, se perderían con ella) ni en una carpeta que la contenga",
   "msg.ctx.mobileBool": "mobile.enabled debe ser verdadero o falso",
   "msg.ctx.mobilePort": "el puerto del móvil",
   "msg.ctx.needName": "el asistente necesita un nombre",

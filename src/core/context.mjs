@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { paths, loadConfig, writeJson, merge, AGENT_IDS, relabelEmptyLogs } from './home.mjs';
 import { translate } from './i18n.mjs';
+import { inside as insideOf } from './core-folder.mjs';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from './appearance.mjs';
 
 // secret: approval secret handed by the app (memory only). master: the master password and Orb's own secrets (3.8,
@@ -133,8 +134,9 @@ export function validateConfig(c) {
     if (!c.backup || typeof c.backup !== 'object' || Array.isArray(c.backup)) throw new Error(tr('msg.ctx.badAppearance', { name: 'backup' }));
     bool(c.backup.enabled, 'backup.enabled'); bool(c.backup.projects, 'backup.projects'); bool(c.backup.accounts, 'backup.accounts');
     if (c.backup.folder !== undefined && c.backup.folder !== '' && (typeof c.backup.folder !== 'string' || !path.isAbsolute(c.backup.folder) || c.backup.folder.length > 500)) throw new Error(tr('msg.ctx.badAppearance', { name: 'backup.folder' }));
-    // 3.8: never inside core: a core deleted by mistake would take its copies with it.
-    if (c.backup.folder && ctx.home) { const core = path.resolve(paths(ctx.home).core).toLowerCase(); const f = path.resolve(c.backup.folder).toLowerCase(); if (f === core || f.startsWith(core + path.sep)) throw new Error(tr('msg.ctx.backupInCore')); }
+    // 3.8: never inside the workspace (core or a project, also through a junction): deleting it would take its copies;
+    // and never a folder that holds the workspace (agents are kept out of the backups' folder).
+    if (c.backup.folder && ctx.home && (insideOf(ctx.home, c.backup.folder) || insideOf(c.backup.folder, ctx.home))) throw new Error(tr('msg.ctx.backupInHome'));
   }
   if (c.tz !== undefined && c.tz !== '' && !(typeof c.tz === 'string' && c.tz.length <= 64 && (() => { try { new Intl.DateTimeFormat('en', { timeZone: c.tz }); return true; } catch { return false; } })())) throw new Error(tr('msg.ctx.badAppearance', { name: 'tz' }));
   if (c.approvalWaitMinutes !== undefined) int(c.approvalWaitMinutes, 0, 240, 'approvalWaitMinutes');

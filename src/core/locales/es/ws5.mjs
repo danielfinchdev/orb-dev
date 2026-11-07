@@ -13,7 +13,7 @@ export default {
   'data.core.restore': 'Restaurar',
   'data.core.pick': 'Elegir otra copia…',
   'data.core.fresh': 'Seguir sin copia',
-  'data.core.freshConfirm': 'Orb creará su carpeta core de nuevo con los ajustes de fábrica. Tus proyectos se quedan donde están; las conversaciones y tareas anteriores no vuelven.',
+  'data.core.freshConfirm': 'Orb creará su carpeta core de nuevo con los ajustes de fábrica. Tus proyectos se quedan donde están; las conversaciones y tareas anteriores no vuelven. Las copias que hubiera se guardan aparte, sin borrarse.',
   'data.core.openFolder': 'Abrir carpeta de copias',
   'data.core.details': 'Detalles',
   'data.migrated38': 'Orb 3.8 ya no tiene bots ni usuarios. Hemos guardado lo anterior en {path}.',

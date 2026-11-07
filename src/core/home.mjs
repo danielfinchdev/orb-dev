@@ -93,12 +93,13 @@ export const DEFAULT_CONFIG = Object.freeze({
 //     orb.json                  settings
 //     datos\                    database, secret, identity; ejecuciones\ task runs; copias\ isolated copies and undo points
 //     bitacora\                 the general log and one per project (bitacora\proyectos)
-//     skills\  mcp\              the agents' skills and the MCP servers (each subfolder of mcp is one, managed from Ajustes)
+//     mcp\                      the MCP servers Orb manages (each subfolder is one, listed in Ajustes)
 //     herramientas\adb\         what Orb downloads to build and test (Android's adb and fastboot)
-//     secretos\                 reserved for the secrets sealed with the master password
+//     secretos\                 the secrets sealed with the master password
 //   windows\ linux\ ios\ android\ web\ multi\   categories: every subfolder of one of them is a project
-// Orb 3.7 kept .orb, orb.json, bitacora, mcp-servers and android\adb-tools at the top: src/core/core-folder.mjs moves
-// them into core once (LEGACY).
+// Orb 3.7 kept .orb, orb.json, bitacora, mcp-servers and android\adb-tools at the top (LEGACY). .orb and orb.json are
+// Orb's own data and move into core when the engine starts; the others move only when the user says so in the window
+// (src/core/core-folder.mjs › planWorkspace). A bitacora or adb-tools left at the top is used where it is (paths).
 export { CORE_DIR, CATEGORIES, PLATFORMS, MULTI, SHARED_DIR, DEFAULT_CATEGORY } from './layout.mjs';
 export const INTERNAL_DIR = CORE_DIR;
 export const LOGS_DIR = 'bitacora';
@@ -110,6 +111,7 @@ export const BOTS_DIR = 'bots';
 export const LEGACY = Object.freeze({ internal: '.orb', config: CONFIG_FILE, logs: 'bitacora', mcp: 'mcp-servers', adb: ['android', 'adb-tools'] });
 const OLD_ADB_DIR = LEGACY.adb[1];
 const lower = (name) => String(name ?? '').toLowerCase();
+const isDirSync = (p) => { try { return fs.statSync(p).isDirectory(); } catch { return false; } };
 // Top-level folders that belong to Orb itself (or did in older versions), never to the user's projects.
 export const isConfigName = (name) => /^\./.test(String(name)) || [CORE_DIR, LEGACY.logs, LEGACY.mcp, OLD_LOGS_DIR, BOTS_DIR, 'node_modules', '$recycle.bin', 'system volume information'].includes(lower(name));
 export const isCategory = (name) => CATEGORIES.includes(lower(name));
@@ -121,21 +123,32 @@ export const isReservedName = (name) => isConfigName(name) || lower(name) === OL
 export function paths(home) {
   const core = path.join(home, CORE_DIR);
   const data = path.join(core, 'datos');
-  const logs = path.join(core, LOGS_DIR);
+  // A log folder or Android tools left at the top (kept by the user, or not decided about yet) are used there.
+  const keptLogs = path.join(home, LEGACY.logs);
+  const keptAdb = path.join(home, ...LEGACY.adb);
+  const logs = isDirSync(keptLogs) ? keptLogs : path.join(core, LOGS_DIR);
   const copies = path.join(core, 'copias');
   const tools = path.join(core, 'herramientas');
   return {
     home, core, internal: core, config: path.join(core, CONFIG_FILE), data, db: path.join(data, 'orb.db'), key: path.join(data, 'clave.bin'),
     logs, generalLog: path.join(logs, 'GENERAL.md'), projectLogs: path.join(logs, 'proyectos'),
-    skills: path.join(core, 'skills'), mcp: path.join(core, MCP_DIR), tools, adb: path.join(tools, 'adb'), secrets: path.join(core, 'secretos'),
+    mcp: path.join(core, MCP_DIR), tools, adb: isDirSync(keptAdb) ? keptAdb : path.join(tools, 'adb'), secrets: path.join(core, 'secretos'),
     projects: home, categories: Object.fromEntries(CATEGORIES.map((c) => [c, path.join(home, c)])),
     runs: path.join(core, 'ejecuciones'),
     copies, worktrees: path.join(copies, 'aisladas'), checkpoints: path.join(copies, 'fotos')
   };
 }
 
-// A workspace's name for what Orb keeps about it outside it (its backups, a copy of its sealed secret): C:\Orb → C-Orb.
-export const homeKey = (home) => path.resolve(home).replace(/[:\\/]+/g, '-').replace(/^-+|-+$/g, '') || 'orb';
+// A workspace's name for what Orb keeps about it outside it (its backups, a copy of its sealed secret): the folder's name
+// and a short hash of its whole path in any case (C:\Orb → orb-<8 hex>). Two workspaces never share it, and a long path
+// does not make a long name.
+export const homeKey = (home) => {
+  const full = path.resolve(home);
+  const name = path.basename(full).toLowerCase().replace(/[^\w.-]+/g, '_').slice(0, 40) || 'orb';
+  return `${name}-${crypto.createHash('sha256').update(full.toLowerCase()).digest('hex').slice(0, 8)}`;
+};
+// The name the first 3.8 builds used (C:\Orb → C-Orb): what was kept under it is taken over once (backup.mjs, main.mjs).
+export const oldHomeKey = (home) => path.resolve(home).replace(/[:\\/]+/g, '-').replace(/^-+|-+$/g, '') || 'orb';
 
 // Category of a project folder inside Orb's folder: <home>\<category>\<project>[\…]. null for anything else (outside,
 // a category folder itself, Orb's configuration folders, 3.7's Android tools). A multiplatform project is the folder
@@ -178,7 +191,8 @@ export function homeFor(base) {
 
 // First run: <base>\Orb with core, the categories, config, secret and the general log. An existing workspace is reused as
 // it is; a folder called Orb with other things in it (projects, notes, the folders of an older Orb) keeps them: nothing
-// in it is overwritten, and what Orb 3.7 left at the top moves into core.
+// in it is overwritten or moved. Only Orb 3.7's own data (.orb, orb.json) moves into core; its logs, MCP servers and
+// Android tools stay where they are until the user decides in the window (src/core/core-folder.mjs › planWorkspace).
 export function createHome(base, { assistantName = PRODUCT.assistant, userName = '', language = 'es' } = {}) {
   const T = (key, vars) => translate(language, key, vars);
   if (!base || !path.isAbsolute(base)) throw new Error(T('msg.home.absolute'));
@@ -197,14 +211,14 @@ export function createHome(base, { assistantName = PRODUCT.assistant, userName =
   return { home, created: true };
 }
 
-// Every start: what Orb 3.7 left at the top moves into core (src/core/core-folder.mjs), and the fixed folders (core's,
-// the six categories) exist. Folders made by 2.3.0 and older are put in order: their "bitacoras" moves into the log
+// Every start: Orb 3.7's own data moves into core (src/core/core-folder.mjs), and the fixed folders (core's, the six
+// categories) exist. Folders made by 2.3.0 and older are put in order: their "bitacoras" moves into the log
 // folder, dropping only the empty logs 2.3.0 wrote for the category and configuration folders it took for projects.
 // Nothing with content is deleted. core is hidden again (src/core/core-folder.mjs › protectCore).
 export function ensureLayout(home, config = null) {
   migrateWorkspace(home);
   const p = paths(home);
-  for (const dir of [p.data, p.runs, p.logs, p.projectLogs, p.skills, p.mcp, p.tools, p.secrets, ...Object.values(p.categories)]) fs.mkdirSync(dir, { recursive: true });
+  for (const dir of [p.data, p.runs, p.logs, p.projectLogs, p.mcp, p.tools, p.secrets, ...Object.values(p.categories)]) fs.mkdirSync(dir, { recursive: true });
   const old = path.join(home, OLD_LOGS_DIR);
   if (fs.existsSync(old)) { try { moveLogs(old, p.logs); } catch { /* left as it is; tried again on the next start */ } }
   if (!fs.existsSync(p.generalLog)) {

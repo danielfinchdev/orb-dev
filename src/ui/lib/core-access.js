@@ -7,6 +7,8 @@
 //   passwordStrength: the hint under a new password.
 //   coreView: what the screen «Falta la carpeta core» shows (views/core-missing.jsx), kept apart so it can be tested
 //     without a window. state: app.coreState ({ missing, home, reason, backup, error, folder }).
+//   layoutTitle / layoutOptions: the rows of «Ordenar carpetas» (views/layout.jsx; app.layoutPlan's items).
+import { CATEGORIES } from '../../core/layout.mjs';
 
 let held = null; // { unlock, until }
 let asker = null; // (action) => Promise<{ unlock, until } | null>
@@ -37,12 +39,29 @@ export function passwordStrength(password, min = 8) {
   return Math.max(1, Math.min(4, score));
 }
 
-// → { body, vars, passphrase, restore, folder }: the text (key and values), whether the recovery code is asked, whether
-// «Restaurar» is offered (a copy that this PC could not open with its own key) and the backups' folder for «Abrir».
+// → { body, vars, passphrase, restore, fresh, folder }: the text (key and values), whether the recovery code is asked,
+// whether «Restaurar» is offered (a copy that this PC could not open with its own key), how «Seguir sin copia» is
+// offered ('yes' when there is no usable copy at all; 'noCode' behind «No tengo el código» when a copy only needs its
+// code) and the backups' folder for «Abrir».
 export function coreView(state, { when = (iso) => iso ?? '—' } = {}) {
   const s = state ?? {};
   const created = when(s.backup?.created ?? null);
-  if (s.reason === 'needsPassphrase') return { body: 'data.core.needsPassphrase', vars: { created }, passphrase: true, restore: true, folder: s.folder ?? null };
-  if (s.reason === 'damaged') return { body: 'data.core.damaged', vars: { created }, passphrase: false, restore: false, folder: s.folder ?? null };
-  return { body: 'data.core.noBackup', vars: { home: s.home ?? '' }, passphrase: false, restore: false, folder: s.folder ?? null };
+  if (s.reason === 'needsPassphrase') return { body: 'data.core.needsPassphrase', vars: { created }, passphrase: true, restore: true, fresh: 'noCode', folder: s.folder ?? null };
+  if (s.reason === 'damaged') return { body: 'data.core.damaged', vars: { created }, passphrase: false, restore: false, fresh: 'yes', folder: s.folder ?? null };
+  return { body: 'data.core.noBackup', vars: { home: s.home ?? '' }, passphrase: false, restore: false, fresh: 'yes', folder: s.folder ?? null };
+}
+
+// item: { kind: 'logs' | 'adb' | 'mcp', project, choices }. → the key of its name.
+export const layoutTitle = (item) => ({ logs: 'layout.logs', adb: 'layout.adb', mcp: 'layout.mcp' })[item?.kind] ?? 'layout.mcp';
+// → [{ value, key, vars }] in the order of the item's choices (the categories in their usual order).
+export function layoutOptions(item) {
+  const choices = item?.choices ?? [];
+  const label = (c) => {
+    if (c === 'keep') return { key: 'layout.keep' };
+    if (c === 'move') return { key: 'layout.move' };
+    if (c === 'mcp') return { key: 'layout.moveMcp' };
+    return { key: 'layout.asProject', vars: { category: c } };
+  };
+  const order = (c) => (CATEGORIES.includes(c) ? CATEGORIES.indexOf(c) : c === 'keep' ? 100 : -1);
+  return [...choices].sort((a, b) => order(a) - order(b)).map((c) => ({ value: c, ...label(c) }));
 }

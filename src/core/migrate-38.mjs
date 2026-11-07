@@ -15,7 +15,9 @@
 //      start; until it is done Orb does not run (unfinished(): engine.mjs, the MCP).
 // A run that fails before the COMMIT leaves the database and every file of 3.7 as they were (the archive and the copy are
 // extra) and the next one goes on with the same archive and copy (migracion-3.8.json). A 3.7 database restored later is a
-// new run: a dated archive and copy. 30 days after, the copies of the database lose 3.7's secrets (scrubPreCopies).
+// new run: a dated archive and copy. 30 days after, the copies of the database lose 3.7's secrets (scrubPreCopies); the
+// secrets that move into the master password's vault leave the archive and the copies as soon as they are in it
+// (scrubVaultedSecrets).
 // Nothing is written outside the data folder but the 3.7 bridge's file (insideData).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -26,6 +28,7 @@ import { paths, configFrom, writeJson, categoryOf, folderKey, IGNORED_PROJECTS, 
 import { isValidTz } from './tz.mjs';
 import { ME } from './inbox.mjs';
 import { redactSecrets } from './safety.mjs';
+import { isRef, refOf, secretId } from './connector-secrets.mjs';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
 export const MARK = 'migrated_3_8';
@@ -757,4 +760,38 @@ export function scrubPreCopies(db, { home = ctx.home, now = Date.now() } = {}) {
   }
   db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(SCRUBBED, new Date(now).toISOString());
   return files.length;
+}
+
+// 3.8, with the master password: what is in the vault (src/core/master.mjs) does not stay in clear anywhere else. The
+// owner's connectors' keys in the archived orb.json (archivo-3.7*/orb-3.7.json) become references, and the phones' keys
+// (remote_keys) leave the copies of the database (secure_delete and VACUUM, so no free page keeps them), right after
+// they are in the vault rather than 30 days later. inVault(id): whether the vault holds that secret. → files changed.
+export function scrubVaultedSecrets(home, { inVault = () => false } = {}) {
+  const p = paths(home);
+  let n = 0;
+  const { archives, copies } = legacyData(home);
+  for (const dir of archives) {
+    const file = path.join(dir, ORIGINAL_CONFIG);
+    let raw; try { raw = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { continue; }
+    let changed = false;
+    for (const s of Array.isArray(raw?.mcpServers) ? raw.mcpServers : []) {
+      if (!s || typeof s !== 'object' || !s.env || typeof s.env !== 'object') continue;
+      for (const [k, v] of Object.entries(s.env)) if (!isRef(v) && inVault(secretId(s.name, k))) { s.env[k] = refOf(s.name, k); changed = true; }
+    }
+    if (changed) { writeJson(file, raw); n++; }
+  }
+  if (inVault('remote_keys')) {
+    for (const file of copies.filter((f) => f.endsWith('.db') && path.dirname(f) === p.data)) {
+      let copy; try { copy = new DatabaseSync(file); } catch { continue; }
+      try {
+        copy.exec('PRAGMA busy_timeout = 5000');
+        if (!has(copy, 'settings') || !copy.prepare("SELECT 1 FROM settings WHERE key = 'remote_keys'").get()) continue;
+        copy.exec('PRAGMA secure_delete = ON');
+        copy.exec("DELETE FROM settings WHERE key = 'remote_keys'");
+        copy.exec('VACUUM');
+        n++;
+      } catch { /* busy: the next start */ } finally { copy.close(); }
+    }
+  }
+  return n;
 }

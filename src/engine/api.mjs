@@ -26,6 +26,7 @@ import * as installer from './installer.mjs';
 import * as expert from './expert.mjs';
 import { adbStatus, ensureAdb } from './android.mjs';
 import { mcpFolder } from './mcp-folder.mjs';
+import { layoutPlan, layoutApply, guardOutside } from './workspace-layout.mjs';
 import { modelCatalog, chooseModel, LEVELS, REASONING_LEVELS, levelsOf } from './catalog.mjs';
 import { whiteboard } from './whiteboard.mjs';
 import { titleFrom } from '../core/titles.mjs';
@@ -142,6 +143,10 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     // 3.8: core is whole (engine.mjs › coreBlocked answers these two while it is not).
     'app.coreState': () => null,
     'app.coreRepair': () => ({ missing: false }),
+    // 3.8: the folders Orb 3.7 kept at the top of the workspace: what would happen to each, and the user's choice
+    // (nothing moves before it; src/core/core-folder.mjs).
+    'app.layoutPlan': () => layoutPlan(),
+    'app.layoutApply': ({ choices }) => layoutApply(choices, { emit, log }),
     'conversations.list': () => conversationList(),
     // 3.2: completed by hand (or open again): a task («t<id>»), a direct conversation («s<id>») or a conversation with the
     // assistant («c<id>»).
@@ -165,6 +170,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const p = patch ?? {};
       const sealed = Array.isArray(p.mcpServers) ? sealConnectors(ctx.master, p.mcpServers) : null;
       const c = saveConfig(sealed ? { ...p, mcpServers: sealed } : p); emit('config:changed', c);
+      if (p.backup) guardOutside(); // the chosen backups' folder, kept from the agents
       return c;
     },
 
@@ -239,7 +245,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     },
 
     // Orb's own folders, managed only from Ajustes: the MCP servers' folder and Android's tools.
-    'mcp.folder': () => mcpFolder(),
+    'mcp.folder': () => mcpFolder(board.projects()),
     'android.status': () => adbStatus(),
     'android.install': () => ensureAdb({ log, force: true }),
 

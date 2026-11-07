@@ -13,7 +13,7 @@
 // entry is manifest.json (sha256 of every file), whose own hash is in the header.
 //
 // What goes in: the database (VACUUM INTO, so it is consistent while the engine runs), orb.json, the logs (general and
-// project), the skills and the MCP servers (without their dependencies), the whiteboards of the projects, the app's
+// project), the MCP servers Orb manages (core\mcp, without their dependencies), the whiteboards of the projects, the app's
 // secret, the recovery wrap, the master password's sealed files (core/secretos, 3.8), the archives of 3.7 (core/archivo-3.7 and dated ones, src/core/migrate-38.mjs; never sign-in
 // folders). Optional: the project folders and the agents' login folders (off). 3.8: the names inside are relative to the
 // workspace (core/datos/orb.db, core/bitacora/…); a copy made by 3.7 (.orb/…, orb.json, bitacora/… at the top) restores
@@ -25,8 +25,8 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
-import { paths, homeKey, INTERNAL_DIR, BOTS_DIR, LEGACY } from './home.mjs';
-import { rewritePaths, coreHealth } from './core-folder.mjs';
+import { paths, homeKey, oldHomeKey, INTERNAL_DIR, BOTS_DIR, LEGACY } from './home.mjs';
+import { rewritePaths, coreHealth, inside } from './core-folder.mjs';
 import { tr } from './context.mjs';
 import { ARCHIVE_DIR, forgetRun } from './migrate-38.mjs';
 import { KEPT as SECRET_FILES } from './master.mjs';
@@ -105,11 +105,19 @@ export function orbIdOf(home) {
   return id;
 }
 
+// This workspace's id without making one (a core that lost its data folder has none): from core, or else from the note
+// kept beside the backups (ultima.json).
+export function knownOrbId(home) {
+  try { const x = JSON.parse(fs.readFileSync(identityFile(home), 'utf8')); if (/^[0-9a-f]{32}$/.test(x.orbId)) return x.orbId; } catch { /* below */ }
+  const last = readLast(home);
+  return /^[0-9a-f]{32}$/.test(last.orbId ?? '') ? last.orbId : null;
+}
+
 // ---- where the copies go
 // 3.8: outside the workspace, so that deleting core (or the whole workspace) does not take its copies with it:
 // %LOCALAPPDATA%\Orb\copias\<workspace> on Windows (per user, never roaming: copies can be big; no administrator; the
 // uninstaller leaves it), ~/.local/share/Orb/copias/<workspace> elsewhere. The user may pick another folder (Ajustes ›
-// Datos), never inside core. Wherever they go, the newest copy is noted in the default folder (ultima.json), which is
+// Datos), never inside the workspace. Wherever they go, the newest copy is noted in the default folder (ultima.json), which is
 // how Orb finds it again when core is gone. ORB_BACKUP_ROOT moves the default (tests); under node --test without it, a
 // temporary folder: tests never touch this PC's real one.
 export function backupRoot() {
@@ -119,39 +127,91 @@ export function backupRoot() {
   return path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'Orb', 'copias');
 }
 export const defaultBackupDir = (home) => path.join(backupRoot(), homeKey(home));
-export const backupDir = (home, config = null) => (config?.backup?.folder && path.isAbsolute(config.backup.folder) ? config.backup.folder : defaultBackupDir(home));
+// A chosen folder inside the workspace (3.7 allowed one) is not used: deleting the workspace would take the copies.
+export const backupDir = (home, config = null) => (config?.backup?.folder && path.isAbsolute(config.backup.folder) && !inside(home, config.backup.folder) ? config.backup.folder : defaultBackupDir(home));
 // Up to 3.7 the copies lived inside the data folder (now core\copias-seguridad).
 export const oldBackupDir = (home) => path.join(paths(home).core, 'copias-seguridad');
 const LAST = 'ultima.json';
+function readLast(home) { try { return JSON.parse(fs.readFileSync(path.join(defaultBackupDir(home), LAST), 'utf8')) ?? {}; } catch { return {}; } }
+const sameDir = (a, b) => path.resolve(a).toLowerCase().replace(/[\\/]+$/, '') === path.resolve(b).toLowerCase().replace(/[\\/]+$/, '');
+const isNetwork = (p) => /^(\\\\|\/\/)/.test(String(p));
+// The newest copy is noted in the default folder, with this workspace's id and the folders copies went to, so that Orb
+// finds them with core gone.
 export function rememberBackup(home, file, header) {
   const dir = defaultBackupDir(home);
   fs.mkdirSync(dir, { recursive: true });
+  const before = readLast(home);
+  const all = [path.dirname(file), ...(Array.isArray(before.folders) ? before.folders : [])].filter((f) => typeof f === 'string');
+  const folders = all.filter((f, i) => all.findIndex((g) => sameDir(f, g)) === i).slice(0, 10);
   const tmp = path.join(dir, `${LAST}.${process.pid}.tmp`);
-  fs.writeFileSync(tmp, `${JSON.stringify({ file, created: header.created, kind: header.kind }, null, 2)}\n`);
+  fs.writeFileSync(tmp, `${JSON.stringify({ file, created: header.created, kind: header.kind, orbId: header.orbId, folders }, null, 2)}\n`);
   fs.renameSync(tmp, path.join(dir, LAST));
 }
-// The newest copy of this workspace that can be read: the one noted, the default folder and the chosen one. → entry of
-// listBackups or null.
-export async function latestBackup(home, config = null) {
+// Where this workspace's copies may be: the default folder, the chosen one, and the folders noted in ultima.json (never
+// a network path the settings do not name: listing it would hand this user's Windows sign-in to that machine).
+export function knownBackupDirs(home, config = null) {
+  const dirs = [defaultBackupDir(home), backupDir(home, config)];
+  const last = readLast(home);
+  for (const f of [...(Array.isArray(last.folders) ? last.folders : []), typeof last.file === 'string' ? path.dirname(last.file) : null]) {
+    if (typeof f === 'string' && path.isAbsolute(f) && !isNetwork(f)) dirs.push(f);
+  }
+  return dirs.filter((d, i) => dirs.findIndex((e) => sameDir(d, e)) === i);
+}
+// The copies of this workspace, newest first (by the date in their header): a copy of another workspace (another orbId)
+// is never one of them. → entries of listBackups.
+export async function backupCandidates(home, config = null) {
+  const want = knownOrbId(home);
   const found = new Map();
-  try { const last = JSON.parse(fs.readFileSync(path.join(defaultBackupDir(home), LAST), 'utf8')); if (typeof last?.file === 'string' && fs.existsSync(last.file)) for (const b of await listBackups(path.dirname(last.file))) found.set(b.file, b); } catch { /* none noted */ }
-  for (const dir of new Set([defaultBackupDir(home), backupDir(home, config)])) for (const b of await listBackups(dir)) found.set(b.file, b);
-  return [...found.values()].filter((b) => !b.damaged && b.created).sort((a, b) => b.created.localeCompare(a.created))[0] ?? null;
+  for (const dir of knownBackupDirs(home, config)) for (const b of await listBackups(dir)) found.set(b.file.toLowerCase(), b);
+  return [...found.values()].filter((b) => !b.damaged && b.created && (!want || b.orbId === want)).sort((a, b) => b.created.localeCompare(a.created));
+}
+export const latestBackup = async (home, config = null) => (await backupCandidates(home, config))[0] ?? null;
+// «Seguir sin copia» (the window, core gone): the copies there were are put aside in a folder of their own, where
+// nothing deletes them (the retention looks at the folder itself only) and nothing restores them by itself. → how many.
+export function setAsideBackups(home, config = null) {
+  let n = 0;
+  for (const dir of knownBackupDirs(home, config)) {
+    let names; try { names = fs.readdirSync(dir).filter((x) => x.endsWith(EXT)); } catch { continue; }
+    if (!names.length) continue;
+    const to = path.join(dir, `antes-de-empezar-de-nuevo-${stamp()}`);
+    fs.mkdirSync(to, { recursive: true });
+    for (const name of names) { try { fs.renameSync(path.join(dir, name), path.join(to, name)); n++; } catch { /* left where it is */ } }
+  }
+  fs.rmSync(path.join(defaultBackupDir(home), LAST), { force: true });
+  return n;
+}
+// The first 3.8 builds named this workspace's folder after its whole path (home.mjs › oldHomeKey): taken over once.
+export function adoptOldBackupRoot(home) {
+  const from = path.join(backupRoot(), oldHomeKey(home)); const to = defaultBackupDir(home);
+  if (sameDir(from, to) || !fs.existsSync(from) || fs.existsSync(to)) return false;
+  try { fs.renameSync(from, to); } catch { return false; }
+  const last = readLast(home);
+  if (typeof last.file === 'string' && last.file.toLowerCase().startsWith(from.toLowerCase() + path.sep)) {
+    last.file = path.join(to, last.file.slice(from.length + 1));
+    last.folders = (last.folders ?? []).map((f) => (sameDir(f, from) ? to : f));
+    fs.writeFileSync(path.join(to, LAST), `${JSON.stringify(last, null, 2)}\n`);
+  }
+  return true;
 }
 // The copies 3.7 left inside core move to where copies go now (renamed; copied, checked and deleted across volumes).
 // → how many moved.
 export function adoptOldBackups(home, config = null) {
   const from = oldBackupDir(home);
   let names; try { names = fs.readdirSync(from).filter((n) => n.endsWith(EXT)); } catch { return 0; }
-  const to = backupDir(home, config);
+  // A chosen folder inside the workspace (3.7 allowed it) is not where they go; one that is this very folder, nothing.
+  const chosen = backupDir(home, config);
+  const to = inside(home, chosen) ? defaultBackupDir(home) : chosen;
+  if (inside(from, to) || inside(to, from)) return 0;
   fs.mkdirSync(to, { recursive: true });
+  const hash = (f) => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
   let n = 0;
   for (const name of names) {
     const src = path.join(from, name); let dst = path.join(to, name);
-    if (fs.existsSync(dst)) { if (fs.statSync(dst).size === fs.statSync(src).size) { fs.rmSync(src, { force: true }); continue; } dst = path.join(to, name.replace(EXT, `-3.7${EXT}`)); }
+    if (fs.existsSync(dst)) { if (fs.statSync(dst).size === fs.statSync(src).size && hash(dst) === hash(src)) { fs.rmSync(src, { force: true }); continue; } dst = path.join(to, name.replace(EXT, `-3.7${EXT}`)); }
     try { fs.renameSync(src, dst); } catch {
+      // Another volume: copied, checked byte for byte (sha256), switched in, and only then the old one deleted.
       fs.copyFileSync(src, `${dst}.tmp`);
-      if (fs.statSync(`${dst}.tmp`).size !== fs.statSync(src).size) { fs.rmSync(`${dst}.tmp`, { force: true }); continue; }
+      if (fs.statSync(`${dst}.tmp`).size !== fs.statSync(src).size || hash(`${dst}.tmp`) !== hash(src)) { fs.rmSync(`${dst}.tmp`, { force: true }); continue; }
       fs.renameSync(`${dst}.tmp`, dst); fs.rmSync(src, { force: true });
     }
     n++;
@@ -219,7 +279,6 @@ async function stageFiles(home, stage, { secret, includeProjects = false, includ
   // master password (any PC) or this PC's secret. The count of wrong passwords stays on this PC.
   for (const name of SECRET_FILES) { const f = path.join(p.secrets, name); if (fs.existsSync(f)) await put(f, archiveName(home, f)); }
   for (const f of walkFiles(p.logs)) await put(f, archiveName(home, f));
-  for (const f of walkFiles(p.skills)) await put(f, archiveName(home, f));
   for (const f of walkFiles(p.mcp, (n) => NO_COPY.has(n))) await put(f, archiveName(home, f));
   // The projects: their whiteboards always, the whole folder only if asked (without dependencies and build output).
   let projects = [];
@@ -398,7 +457,7 @@ const safeName = (name) => typeof name === 'string' && name.length < 1000 && !na
 
 // Decrypts everything and checks every file against the manifest. With `into`, also writes the files there.
 async function walkBackup(file, keys, into = null) {
-  let manifest = null; let want = null; const seen = new Set(); let bytes = 0; let legacy = false;
+  let manifest = null; let want = null; const seen = new Set(); let bytes = 0; let legacy = false; let made37 = false;
   const header = await readBody(file, keys, async (name, size, pieces) => {
     if (name === 'manifest.json') {
       if (manifest) throw new BackupError('damaged');
@@ -406,13 +465,16 @@ async function walkBackup(file, keys, into = null) {
       const raw = Buffer.concat(parts);
       manifest = JSON.parse(raw.toString('utf8')); manifest.hash = sha256(raw);
       want = new Map(manifest.files.map((f) => [f.p, f]));
+      // Made by 3.7 (its own folders at the top): its names are read as 3.7 wrote them. A 3.8 copy may hold a log folder
+      // the user kept at the top (bitacora/…): that one stays there.
+      made37 = manifest.files.some((f) => f.p === LEGACY.config || f.p.startsWith(`${LEGACY.internal}/`));
       return;
     }
     const entry = want?.get(name);
     if (!entry || seen.has(name) || entry.s !== size || !safeName(name)) throw new BackupError('damaged');
     const hash = crypto.createHash('sha256');
     let out = null;
-    const to = legacyName(name); if (to !== name) legacy = true;
+    const to = made37 ? legacyName(name) : name; if (to !== name) legacy = true;
     if (into) { const dest = path.join(into, ...to.split('/')); await fsp.mkdir(path.dirname(dest), { recursive: true }); out = await fsp.open(dest, 'w', 0o600); }
     try { await pieces(async (p) => { hash.update(p); if (out) await out.write(p); }); } finally { await out?.close(); }
     if (hash.digest('hex') !== entry.h) throw new BackupError('damaged');
@@ -429,7 +491,7 @@ export async function listBackups(dir) {
   const out = [];
   for (const name of names) {
     const file = path.join(dir, name);
-    try { const { header } = await readHeader(file); out.push({ file, name, size: fs.statSync(file).size, created: header.created, kind: header.kind, version: header.version, move: Boolean(header.move), recovery: Boolean(header.wrapped?.passphrase), files: header.counts?.files ?? null }); }
+    try { const { header } = await readHeader(file); out.push({ file, name, size: fs.statSync(file).size, created: header.created, kind: header.kind, orbId: header.orbId ?? null, version: header.version, move: Boolean(header.move), recovery: Boolean(header.wrapped?.passphrase), files: header.counts?.files ?? null }); }
     catch { out.push({ file, name, size: fs.statSync(file).size, created: null, kind: 'unknown', damaged: true }); }
   }
   return out.sort((a, b) => String(b.created ?? '').localeCompare(String(a.created ?? '')));
@@ -497,7 +559,8 @@ export function applyPendingRestore(home, { onlyMissing = false } = {}) {
   // A unit inside another one (a whiteboard inside a whole project) travels with it.
   for (const u of [...units]) if ([...units].some((o) => o !== u && u.startsWith(`${o}/`))) units.delete(u);
   if (onlyMissing) {
-    for (const u of [...units]) if (fs.existsSync(homePath(home, u))) units.delete(u);
+    // Only core: a project or a whiteboard the user deleted stays deleted.
+    for (const u of [...units]) if (!u.startsWith(`${INTERNAL_DIR}/`) || fs.existsSync(homePath(home, u))) units.delete(u);
     // The secret sealed by Windows (clave.enc) is the same one: its plain copy is not put back beside it.
     if (fs.existsSync(path.join(paths(home).data, 'clave.enc'))) units.delete(`${INTERNAL_DIR}/datos/clave.bin`);
   }
@@ -522,22 +585,29 @@ export function applyPendingRestore(home, { onlyMissing = false } = {}) {
 }
 
 // ---- 3.8: core missing or damaged (src/engine/engine.mjs, before the database opens)
-// What is missing is put back from the newest copy of this workspace (latestBackup, or `file`). Without core's orb.json
+// What is missing is put back from the newest copy of this workspace that opens (backupCandidates, newest first: one
+// that this PC cannot open by itself, or a damaged one, gives way to the next), or from `file`. Without core's orb.json
 // and no copy, Orb cannot go on by itself (the window offers to start again or to pick a copy); a database that is not
 // there and no copy at all is a workspace made a moment ago. → { ok, restored?, fresh?, reason?, backup?, missing }
-// reason: 'noBackup' | 'needsPassphrase' | 'damaged'.
+// reason: 'noBackup' | 'needsPassphrase' (the newest copy that needs its recovery code) | 'damaged' (none usable).
 export async function repairCore(home, { secret = null, passphrase = null, file = null, config = null } = {}) {
   const health = coreHealth(home);
   if (health.ok) return { ok: true, missing: [] };
   const lostConfig = health.missing.includes('core') || health.missing.includes('config');
-  const backup = file ? { file, created: null } : await latestBackup(home, config);
-  if (!backup) return lostConfig ? { ok: false, reason: 'noBackup', missing: health.missing } : { ok: true, fresh: true, missing: health.missing };
-  try { await stageRestore(home, backup.file, { secret, passphrase }); } catch (error) {
-    const reason = ['needsPassphrase', 'otherMachine', 'wrongPassphrase', 'noKey'].includes(error?.code) ? 'needsPassphrase' : 'damaged';
-    return { ok: false, reason, error: error.message, backup: { file: backup.file, created: backup.created }, missing: health.missing };
+  const list = file ? [{ file, created: null }] : await backupCandidates(home, config);
+  if (!list.length) return lostConfig ? { ok: false, reason: 'noBackup', missing: health.missing } : { ok: true, fresh: true, missing: health.missing };
+  let failed = null;
+  for (const backup of list) {
+    try { await stageRestore(home, backup.file, { secret, passphrase }); } catch (error) {
+      const reason = ['needsPassphrase', 'otherMachine', 'wrongPassphrase', 'noKey'].includes(error?.code) ? 'needsPassphrase' : 'damaged';
+      // What the window says: the newest copy that only needs its code, else the newest damaged one.
+      if (!failed || (reason === 'needsPassphrase' && failed.reason !== 'needsPassphrase')) failed = { reason, error: error.message, backup: { file: backup.file, created: backup.created } };
+      continue;
+    }
+    const applied = applyPendingRestore(home, { onlyMissing: true });
+    return { ok: true, restored: { from: applied?.from, created: applied?.header?.created ?? backup.created, units: applied?.units ?? [], secret: applied?.secretChanged ? applied.secret : null }, missing: health.missing };
   }
-  const applied = applyPendingRestore(home, { onlyMissing: true });
-  return { ok: true, restored: { from: applied?.from, created: applied?.header?.created ?? backup.created, units: applied?.units ?? [], secret: applied?.secretChanged ? applied.secret : null }, missing: health.missing };
+  return { ok: false, ...failed, missing: health.missing };
 }
 
 // Restore into a folder that is not an Orb yet (a clean machine, or «Mover»): unpack and swap at once.

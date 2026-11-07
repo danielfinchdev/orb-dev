@@ -32,6 +32,7 @@ import { useT, t as tNow } from '@/lib/i18n.js';
 import { Setup } from '@/views/setup.jsx';
 import { MasterCreate, MasterLocked } from '@/views/master.jsx';
 import { CoreMissing } from '@/views/core-missing.jsx';
+import { LayoutReview } from '@/views/layout.jsx';
 import { ChatView } from '@/views/chat.jsx';
 import { SessionView } from '@/views/session.jsx';
 import { TasksView } from '@/views/tasks.jsx';
@@ -136,10 +137,11 @@ let coreLost = false;
 function Root() {
   const t = useT();
   const ready = useStore((s) => s.ready);
-  const [phase, setPhase] = useState('loading'); // loading | setup | pair | update | core | migration | master | unlock | app | error
+  const [phase, setPhase] = useState('loading'); // loading | setup | pair | update | core | migration | master | unlock | layout | app | error
   const [error, setError] = useState('');
   const [migration, setMigration] = useState(null);
   const [core, setCore] = useState(null);
+  const [layout, setLayout] = useState(null);
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -159,6 +161,8 @@ function Root() {
           // 3.8: the master password: made once (an Orb updated to 3.8 has none yet), or typed when this PC cannot open
           // Orb's keys by itself (this PC only).
           if (!bridge.mobile) { const ms = await bridge.call('master.state'); if (!ms?.exists) return alive && setPhase('master'); if (ms.locked) return alive && setPhase('unlock'); }
+          // 3.8: folders of an earlier Orb at the top of the workspace that the user has not decided about (this PC only).
+          if (!bridge.mobile) { const lp = await bridge.call('app.layoutPlan'); if (lp?.pending) { setLayout(lp); return alive && setPhase('layout'); } }
           await refresh();
           try {
             const saved = JSON.parse(localStorage.getItem('orb.route') || 'null');
@@ -236,6 +240,7 @@ function Root() {
   if (phase === 'core') return <>{strip}<CoreMissing state={core} /></>;
   if (phase === 'master') return <>{strip}<MasterCreate upgrade onDone={() => location.reload()} /></>;
   if (phase === 'unlock') return <>{strip}<MasterLocked onDone={() => location.reload()} /></>;
+  if (phase === 'layout') return <>{strip}<LayoutReview plan={layout} onDone={() => location.reload()} /></>;
   if (phase === 'migration') return <>{strip}<MigrationFailed state={migration} /></>;
   if (phase === 'error') return <div className="grid h-full place-items-center p-8 text-center">{strip}<div><Robot size={90} mood="worried" /><h1 className="mt-4 text-xl">{t('app.errorTitle')}</h1><p className="text-muted-foreground mt-1 max-w-md text-sm">{error}</p></div></div>;
   if (phase !== 'app' || !ready) return <div className="grid h-full place-items-center">{strip}<Robot size={80} mood="thinking" /></div>;

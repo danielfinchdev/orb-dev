@@ -8,6 +8,7 @@ import { Master, MasterError, mirrorTo, restoreMissing, MIN_LENGTH, UNLOCK_MS } 
 import { sealConnectors, connectorSecrets, refOf, secretId, ENV_NAME } from '../core/connector-secrets.mjs';
 import { needsUnlock } from '../core/permissions.mjs';
 import { str } from './api-common.mjs';
+import { scrubVaultedSecrets } from '../core/migrate-38.mjs';
 
 const userError = (key, vars, extra = {}) => Object.assign(new Error(tr(key, vars)), { userFacing: true, status: 403, ...extra });
 const WORDS = { short: 'msg.master.short', long: 'msg.master.long', exists: 'msg.master.exists', locked: 'msg.master.locked', damaged: 'msg.master.damaged', none: 'msg.master.none' };
@@ -48,6 +49,11 @@ export function migrateSecrets(board, master = ctx.master, { log = () => {}, emi
   const sealed = sealConnectors(master, ctx.config.mcpServers ?? []);
   if (sealed) { const c = saveConfig({ mcpServers: sealed }); emit('config:changed', c); moved.push('mcpServers'); }
   if (moved.length) log(`secretos: ${moved.join(', ')} cifrados con la clave de datos`);
+  // And they leave the archive of 3.7 and the copies of its database now (not 30 days later).
+  try {
+    const n = scrubVaultedSecrets(ctx.home, { inVault: (id) => { try { return master.get(id) != null; } catch { return false; } } });
+    if (n) log(`secretos: quitados en claro de ${n} archivo(s) de 3.7`);
+  } catch (error) { log(`secretos: archivo de 3.7: ${error.message}`); }
   return moved;
 }
 

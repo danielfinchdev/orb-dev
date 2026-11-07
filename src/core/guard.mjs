@@ -113,22 +113,32 @@ export function riskOf(command, lang = 'es') {
 
 // 3.8: Orb's data folder (core, src/core/home.mjs › paths().internal) is never an agent's business: what a tool
 // names or a command mentions is resolved (against the agent's folder) and refused when it falls inside it. The isolated
-// copies (core\copias\aisladas) are where isolated tasks work, so those stay open. Matched by RESOLVED path, not by name:
-// a project may well have its own orb.db or talk about ORB_HOME. Not a boundary: a shell of the same Windows user can
-// always reach the folder some other way (cd .. a few times, a script); the agents' identity no longer depends on its
-// database (agent-auth.mjs), so what is left is the integrity of Orb's data against an agent bent on it (accepted).
-const OPEN_INTERNAL = ['copias', 'aisladas'];
+// copies (core\copias\aisladas) are where isolated tasks work, and core\herramientas holds the tools agents run (adb by
+// its full path), so those stay open. The same goes for what Orb keeps about the workspace outside it (setGuardedRoots:
+// the backups' folders and the copies of its sealed secrets), with nothing open there. Matched by RESOLVED path, not by
+// name: a project may well have its own orb.db or talk about ORB_HOME. Not a boundary: a shell of the same Windows user
+// can always reach the folder some other way (cd .. a few times, a script); the agents' identity no longer depends on
+// its database (agent-auth.mjs), so what is left is the integrity of Orb's data against an agent bent on it (accepted).
+const OPEN_INTERNAL = [['copias', 'aisladas'], ['herramientas']];
 const norm = (p) => path.resolve(p).replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
+const openInCore = (rest) => OPEN_INTERNAL.some((o) => o.every((part, i) => rest[i] === part));
+let guardedRoots = []; let guardedAsGiven = [];
+// The engine names them once it knows them (src/engine/engine.mjs › open). guardedRootsNow: as given (Cursor's rules).
+export function setGuardedRoots(list) {
+  guardedAsGiven = [...new Set((list ?? []).filter((d) => typeof d === 'string' && path.isAbsolute(d)).map((d) => path.resolve(d)))];
+  guardedRoots = [...new Set(guardedAsGiven.map(norm))];
+}
+export const guardedRootsNow = () => [...guardedAsGiven];
 export function isOrbData(target, internalDir, cwd) {
   if (!internalDir || !target) return false;
   let p = String(target).trim().replace(/^~(?=[\\/]|$)/, os.homedir());
   if (!path.isAbsolute(p) && !path.win32.isAbsolute(p)) { if (!cwd) return false; p = path.resolve(cwd, p); }
   let full = norm(p);
   try { full = norm(fs.realpathSync.native(p)); } catch { /* not there (yet): as written */ }
+  const within = (root) => full === root || full.startsWith(`${root}\\`);
   const root = norm(internalDir);
-  if (full !== root && !full.startsWith(`${root}\\`)) return false;
-  const rest = full.slice(root.length + 1).split('\\');
-  return !(rest[0] === OPEN_INTERNAL[0] && rest[1] === OPEN_INTERNAL[1]);
+  if (within(root)) return !openInCore(full.slice(root.length + 1).split('\\'));
+  return guardedRoots.some(within);
 }
 // The words of a command that may be paths (a=b and --opt=b give b), without quotes.
 const pathWords = (command) => String(command ?? '').split(/[\s|&;<>()`]+/).map((w) => w.replace(/^["']+|["',]+$/g, '').replace(/^[^=]*=(?=.*[\\/~.])/, '')).filter((w) => /[\\/]|^~|^\.\.?$/.test(w));
@@ -138,10 +148,12 @@ function touchesInternal({ command, paths, patterns, internalDir, cwd }) {
   // The folder written out anywhere in the command (in a script's string too), with either separator or case.
   const t = String(command ?? '').replace(/\//g, '\\').toLowerCase();
   const root = norm(internalDir);
-  for (let i = t.indexOf(root); i >= 0; i = t.indexOf(root, i + 1)) {
-    const after = t.slice(i + root.length);
-    if (/^[^\\]/.test(after) && !/^["'\s;|&)]/.test(after)) continue; // .orbx is another folder
-    if (!/^\\+copias\\+aisladas(\\|$|["'\s])/.test(after)) return true;
+  for (const r of [root, ...guardedRoots]) {
+    for (let i = t.indexOf(r); i >= 0; i = t.indexOf(r, i + 1)) {
+      const after = t.slice(i + r.length);
+      if (/^[^\\]/.test(after) && !/^["'\s;|&)]/.test(after)) continue; // .orbx is another folder
+      if (r !== root || !/^\\+(copias\\+aisladas|herramientas)(\\|$|["'\s])/.test(after)) return true;
+    }
   }
   return pathWords(command).some((w) => isOrbData(w, internalDir, cwd));
 }

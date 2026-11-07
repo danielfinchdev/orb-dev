@@ -179,7 +179,7 @@ export default {
   "msg.ctx.connectorClash": "connector «{name}» clashes with another one with almost the same name (case, - or _): rename it",
   "msg.ctx.mcpList": "mcpServers must be a list",
   "msg.ctx.missingAgentCfg": "the configuration for {id} is missing",
-  "msg.ctx.backupInCore": "backups cannot go inside core: if it were deleted, they would go with it",
+  "msg.ctx.backupInHome": "backups cannot go inside Orb's folder (if it were deleted, they would go with it) nor in a folder that holds it",
   "msg.ctx.mobileBool": "mobile.enabled must be true or false",
   "msg.ctx.mobilePort": "the mobile port",
   "msg.ctx.needName": "the assistant needs a name",
