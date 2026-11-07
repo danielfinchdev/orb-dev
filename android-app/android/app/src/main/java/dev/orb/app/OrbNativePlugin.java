@@ -53,8 +53,11 @@ public class OrbNativePlugin extends Plugin {
 
     @Override
     public void load() {
+        // Only a share is taken (and then not again after a restart). Any other launch intent stays as it is: a tapped
+        // notification or its «Aprobar», «Rechazar» or «Responder» with the app closed reach the notifications plugin,
+        // which reads that same intent after this.
         pending = readShare(getActivity().getIntent());
-        getActivity().setIntent(new Intent(getActivity(), MainActivity.class)); // handled: not again after a restart
+        if (pending != null) getActivity().setIntent(new Intent(getActivity(), MainActivity.class));
         // Without this, Capacitor's activity just closes on «back» (the page has no history of its own).
         getActivity().getOnBackPressedDispatcher().addCallback(getActivity(), new OnBackPressedCallback(true) {
             @Override

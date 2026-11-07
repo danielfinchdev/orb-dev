@@ -77,6 +77,10 @@ test('«atrás» de Android: cierra lo abierto, sube un nivel y solo sale desde 
   assert.match(java, /getOnBackPressedDispatcher\(\)\.addCallback\(getActivity\(\), new OnBackPressedCallback\(true\)/);
   assert.match(java, /if \(hasListeners\("back"\)\) \{\s*notifyListeners\("back", new JSObject\(\), false\);/);
   assert.match(java, /public void minimize\(PluginCall call\)[\s\S]*moveTaskToBack\(true\)/);
+  // F5b (A3): the launch intent is replaced only after a share: a notification's action with the app closed reaches
+  // the notifications plugin.
+  assert.match(java, /if \(pending != null\) getActivity\(\)\.setIntent\(/);
+  assert.equal(java.match(/setIntent\(/g).length, 1);
   const app = read('src/ui/lib/app-bridge.js');
   assert.match(app, /orb\.onBack = /); assert.match(app, /n\.addListener\('back'/); assert.match(app, /\.minimize\(\)/);
   const main = read('src/ui/main.jsx');
