@@ -73,7 +73,7 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
       };
       orb.takeShared = () => { const s = shared; shared = null; return s; };
       orb.hasShared = () => shared != null;
-      // 3.6 (messaging, M4): the chats' notifications as a messaging app's. The Orb builds each one for this person
+      // 3.6 (messaging, M4): the chats' notifications as a messaging app's. The Orb builds each one
       // (src/core/notes.mjs: the sender's picture, the chat's name, the text as chosen for the lock screen, muted chats
       // none) and sends it as «note» over the live connection; shown while the app is in the background (there is no
       // push service: they arrive while Android keeps the app alive). One per chat: new lines join it. «Responder» writes

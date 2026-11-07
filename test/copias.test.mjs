@@ -25,7 +25,7 @@ function seed() {
   board.createConversation({ title: 'Casa' });
   fs.mkdirSync(ctx.paths.projectLogs, { recursive: true });
   fs.writeFileSync(projectLog(), 'A Ana le gusta el té verde.\n');
-  board.setting('pin_probe', 'hash-de-prueba'); // stands in for the persons' PIN hashes (same database)
+  board.setting('pin_probe', 'hash-de-prueba'); // stands in for a secret kept in the database
   fs.mkdirSync(ctx.paths.logs, { recursive: true });
   fs.writeFileSync(path.join(ctx.paths.logs, 'GENERAL.md'), '# Bitácora\nLínea de prueba\n');
   const secret = crypto.randomBytes(32);

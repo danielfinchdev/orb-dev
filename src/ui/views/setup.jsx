@@ -1,7 +1,6 @@
 // First run: the assistant's name, what to call the user and where its folder goes. Everything lives in that folder.
-// 3.7: the 3.5.1 welcome again (the owner's wish). What 3.6 added is done without asking: whoever sets Orb up is its
-// admin (the owner person, named after «¿Y cómo te llamo a ti?»), this PC's language and time zone, backups on (the
-// default). More users: Ajustes › Magic Link › Usuarios.
+// 3.7: the 3.5.1 welcome again (the owner's wish). Done without asking: this PC's language and time zone in the settings,
+// backups on (the default).
 import { useState } from 'react';
 import { FolderOpen, ArrowRight } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';

@@ -1,6 +1,6 @@
 // A phone or a browser linked with the PC, for the tests: it pairs with the QR (or the short code), calls the API and
 // listens to the live events, all sealed with its own key, as the page does (src/ui/lib/web-bridge.js). Kept in memory.
-// createPhone({ name, kind }) → { connect({ qr } | { code, address }), call(id, method, params, { ticket }), on(event, fn),
+// createPhone({ name, kind }) → { connect({ qr } | { code, address }), call(id, method, params), on(event, fn),
 // peers(), raw(id), stop() }; id null: the first link.
 import * as C from '../../src/core/mobile-crypto.mjs';
 import { parseLinkPayload, normalAddress, normalCode, PROTOCOL, MIN_PROTOCOL } from '../../src/core/link-payload.mjs';
@@ -104,8 +104,8 @@ export function createPhone({ name = 'Móvil de prueba', kind = 'phone' } = {}) 
       stream(p);
       return { id: p.id, fp: p.pc };
     },
-    async call(id, method, params = {}, { ticket } = {}) {
-      const r = await request(peerOf(id), '/api/call', 'call', { method, params: params ?? {}, ...(ticket ? { ticket } : {}) });
+    async call(id, method, params = {}) {
+      const r = await request(peerOf(id), '/api/call', 'call', { method, params: params ?? {} });
       if (!r.ok) throw err(r.error ?? 'error', { status: r.status, reason: r.reason });
       return r.result;
     },

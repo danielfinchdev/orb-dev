@@ -1,6 +1,6 @@
 // Settings: the assistant, its brain, how tasks run, usage caps, extra MCP connectors and the assistant's folder.
-// 3.6 (DESIGN-SYSTEM §2.3): six sections — General, Magic Link (Usuarios, Dispositivos, Orbs enlazados), Agentes y uso,
-// Datos, Avanzado and Acerca de. «Mi perfil» is not a section: the user menu opens it in this same window, on its own.
+// 3.6 (DESIGN-SYSTEM §2.3): six sections — General, Magic Link (Dispositivos), Agentes y uso, Datos, Avanzado and
+// Acerca de.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { DatabaseBackup, Settings, FlaskConical, FolderOpen, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, Wrench, ChevronRight, SlidersHorizontal, Radar, Cpu, Info, ExternalLink, ShieldBan } from 'lucide-react';
