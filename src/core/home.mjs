@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import { PRODUCT, folderName } from './product.mjs';
 import { APPEARANCE_DEFAULTS } from './appearance.mjs';
 import { translate } from './i18n.mjs';
-import { CORE_DIR, CATEGORIES } from './layout.mjs';
+import { CORE_DIR, CATEGORIES, DEFAULT_PROTECTED } from './layout.mjs';
 import { migrateWorkspace, protectCore } from './core-folder.mjs';
 
 export const CONFIG_FILE = 'orb.json';
@@ -14,10 +14,6 @@ export const CONFIG_FILE = 'orb.json';
 // take work only when their program is installed on this PC.
 export const AGENT_IDS = ['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot'];
 export const AGENT_LABELS = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor', gemini: 'Gemini', opencode: 'OpenCode', qwen: 'Qwen Code', copilot: 'GitHub Copilot' };
-
-// 3.5: what nobody touches by default: the usual password managers and secret stores (the user edits the list).
-// 3.7: and the usual data folders of a Vaultwarden / Bitwarden self-host (vw-data, bwdata).
-export const DEFAULT_PROTECTED = Object.freeze(['vaultwarden', 'bitwarden', 'keepass', 'keepassxc', '.kdbx', '1password', 'lastpass', '.password-store', '.gnupg', '.ssh/id_', 'vw-data', 'bwdata']);
 
 export const DEFAULT_CONFIG = Object.freeze({
   version: 5,
@@ -100,7 +96,7 @@ export const DEFAULT_CONFIG = Object.freeze({
 // Orb 3.7 kept .orb, orb.json, bitacora, mcp-servers and android\adb-tools at the top (LEGACY). .orb and orb.json are
 // Orb's own data and move into core when the engine starts; the others move only when the user says so in the window
 // (src/core/core-folder.mjs › planWorkspace). A bitacora or adb-tools left at the top is used where it is (paths).
-export { CORE_DIR, CATEGORIES, PLATFORMS, MULTI, SHARED_DIR, DEFAULT_CATEGORY } from './layout.mjs';
+export { CORE_DIR, CATEGORIES, PLATFORMS, MULTI, SHARED_DIR, DEFAULT_CATEGORY, DEFAULT_PROTECTED } from './layout.mjs';
 export const INTERNAL_DIR = CORE_DIR;
 export const LOGS_DIR = 'bitacora';
 export const MCP_DIR = 'mcp';

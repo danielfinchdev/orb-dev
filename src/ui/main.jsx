@@ -4,11 +4,11 @@ import './lib/web-bridge.js'; // then: in a phone's browser (or the app) it prov
 import './app.css';
 // 3.6: the Android app's «glass» look, only in the Android build (the other builds drop this line and its CSS).
 if (import.meta.env.MODE === 'android') (await import('./lib/glass.js')).enableGlass();
-import { StrictMode, useEffect, useMemo, useState } from 'react';
+import { StrictMode, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Toaster } from 'sonner';
+import { Toaster, toast } from 'sonner';
 import { notify } from '@/lib/notify.js';
-import { Menu, Smartphone, ScanLine, Link2, RotateCw, FolderOpen, Download, KeyRound, ArrowLeft } from 'lucide-react';
+import { Menu, Smartphone, ScanLine, Link2, RotateCw, FolderOpen, Download, KeyRound, ArrowLeft, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
 import { MobileTabs, MoreView } from '@/components/mobile-tabs.jsx';
@@ -24,7 +24,11 @@ import { ActionShortcuts } from '@/components/project-tools.jsx';
 import { Scene } from '@/components/scene.jsx';
 import { GamesDialog } from '@/games/games.jsx';
 import { Robot } from '@/components/robot.jsx';
-import { useStore, setState, getState, refresh, refreshSoon, bridge, act, go, applyTheme, openTerminal, startTour, anyChatBusy, phoneLayout, loadOrbInbox, loadOrbInboxSoon } from '@/lib/store.js';
+import { useStore, setState, getState, refresh, refreshSoon, bridge, act, go, goBack, resetRoute, setViews, applyTheme, openTerminal, startTour, anyChatBusy, phoneLayout, loadOrbInbox, loadOrbInboxSoon } from '@/lib/store.js';
+import { restoreRoute, keyboardOpen } from '@/lib/phone-nav.js';
+import { isOffline, retryDelay } from '@/lib/net.js';
+import { ago } from '@/lib/utils.js';
+import { ErrorBoundary } from '@/components/error-boundary.jsx';
 import { Tour } from '@/components/tour.jsx';
 import { AGENT } from '@/lib/labels.js';
 import { WindowControls } from '@/components/window-controls.jsx';
@@ -60,21 +64,60 @@ const VIEWS = bridge.mobile
   : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView,
     // 2.7.3: Orb Light (the portable .exe) has no God mode.
     ...(bridge.light ? {} : { expert: ExpertView }) };
+setViews(Object.keys(VIEWS));
+const routeKey = (route) => `${route.view}:${route.id ?? ''}:${route.project ?? ''}`;
+
+// 3.8: the floating tab bar hides while the on-screen keyboard is up (it rose over the keyboard): a text field has the
+// focus and the window lost height (lib/phone-nav.js › keyboardOpen).
+const EDITABLE = 'input:not([type="checkbox"], [type="radio"], [type="range"], [type="button"], [type="submit"]), textarea, [contenteditable="true"]';
+function useKeyboard() {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    let full = window.innerHeight;
+    const check = () => {
+      const editing = Boolean(document.activeElement?.matches?.(EDITABLE));
+      if (!editing) full = Math.max(full, window.innerHeight);
+      setOpen(keyboardOpen({ editing, height: window.visualViewport?.height ?? window.innerHeight, fullHeight: full }));
+    };
+    const later = () => setTimeout(check, 60); // focusout: wait for the next field to take the focus
+    window.addEventListener('focusin', check); window.addEventListener('focusout', later);
+    window.addEventListener('resize', check); window.visualViewport?.addEventListener('resize', check);
+    return () => { window.removeEventListener('focusin', check); window.removeEventListener('focusout', later); window.removeEventListener('resize', check); window.visualViewport?.removeEventListener('resize', check); };
+  }, []);
+  return open;
+}
+
+// 3.8: the link with the PC dropped while the app is open (web-bridge.js: link:offline / link:online): a thin line at
+// the top of the screen, in the flow (it never covers the status bar or the header), and a refresh when it is back.
+function useLinkDown() {
+  const [down, setDown] = useState(false);
+  useEffect(() => bridge.on('*', (event) => {
+    if (event === 'link:offline') setDown(true);
+    if (event === 'link:online') { setDown(false); refreshSoon(); }
+  }), []);
+  return down;
+}
 
 // The phone's frame: the screen (each with its own header) and the tabs at the bottom.
 function MobileShell() {
+  const t = useT();
   const route = useStore((s) => s.route);
   const View = VIEWS[route.view] ?? ChatView;
+  const keyboard = useKeyboard();
+  const down = useLinkDown();
   // 3.6 (M3): a conversation (with Orbe, new or not, or directly with an agent) takes the whole screen (with its back
   // arrow); the tabs are on the list.
   const fullChat = route.view === 'chat' || route.view === 'session';
   return (
     <div className="mobile-shell flex h-full flex-col">
+      {down ? <div className="bg-warning text-warning-foreground flex shrink-0 items-center justify-center gap-2 px-4 py-1.5 text-[12.5px] font-medium" role="status" data-testid="link-down"><WifiOff className="size-3.5" />{t('app.offlineBar')}</div> : null}
       <main className="theme-scene flex min-h-0 min-w-0 flex-1 flex-col">
         <Scene />
-        <View key={`${route.view}:${route.id ?? ''}:${route.project ?? ''}`} route={route} />
+        <ErrorBoundary key={routeKey(route)} onHome={resetRoute}>
+          <View key={routeKey(route)} route={route} />
+        </ErrorBoundary>
       </main>
-      {fullChat ? null : <MobileTabs />}
+      {fullChat || keyboard ? null : <MobileTabs />}
       <Notices />
       <OrbInfoHost />
     </div>
@@ -117,7 +160,9 @@ function Shell() {
           <button className="hover:bg-accent grid size-9 cursor-pointer place-items-center rounded-lg" onClick={() => setDrawer(true)} aria-label={t('app.menu')}><Menu className="size-5" /></button>
           <Robot size={26} mood={mood} /><span className="min-w-0 flex-1 truncate text-[15px] font-medium">{app.config.assistantName}</span>
         </div>
-        <View key={`${route.view}:${route.id ?? ''}:${route.project ?? ''}`} route={route} />
+        <ErrorBoundary key={routeKey(route)} onHome={resetRoute}>
+          <View key={routeKey(route)} route={route} />
+        </ErrorBoundary>
       </main>
       {/* 3.6 (M3): the info pane on the right (a chat, a project). */}
       <OrbInfoHost />
@@ -137,7 +182,7 @@ let coreLost = false;
 function Root() {
   const t = useT();
   const ready = useStore((s) => s.ready);
-  const [phase, setPhase] = useState('loading'); // loading | setup | pair | update | core | migration | master | unlock | layout | app | error
+  const [phase, setPhase] = useState('loading'); // loading | setup | pair | update | offline | core | migration | master | unlock | layout | app | error
   const [error, setError] = useState('');
   const [migration, setMigration] = useState(null);
   const [core, setCore] = useState(null);
@@ -152,6 +197,8 @@ function Root() {
       if (info.needsPairing) return alive && setPhase('pair');
       // 3.6: this app is older than what the Orb asks for (protocol of the link): update first.
       if (info.needsUpdate) return alive && setPhase('update');
+      // 3.8: the phone cannot reach its PC (off, asleep, another network, Orb closed): a calm screen that keeps trying.
+      if (info.offline) return alive && setPhase('offline');
       // The engine may still be starting: retry for a few seconds.
       for (let i = 0; i < 40 && alive; i++) {
         try {
@@ -165,16 +212,20 @@ function Root() {
           // 3.8: folders of an earlier Orb at the top of the workspace that the user has not decided about (this PC only).
           if (!bridge.mobile) { const lp = await bridge.call('app.layoutPlan'); if (lp?.pending) { setLayout(lp); return alive && setPhase('layout'); } }
           await refresh();
-          try {
-            const saved = JSON.parse(localStorage.getItem('orb.route') || 'null');
-            const exists = saved?.view === 'session' ? getState().sessions.some((s) => s.id === saved.id) : saved?.view === 'chat' && saved.id != null ? getState().conversations.some((c) => c.id === saved.id) : true;
-            if (saved?.view && VIEWS[saved.view] && exists) setState({ route: saved });
-            // 3.6 (M3): the phone opens on the Orb zone's chat list (or where it was left).
-            else if (phoneLayout()) setState({ route: { view: 'chats' } });
-          } catch { /* default */ }
+          // 3.8: the saved route only if it still exists (lib/phone-nav.js › restoreRoute): the phone opens on its chat
+          // list unless it was left in a chat that is still there or on one of its tabs; a broken one is forgotten.
+          let saved = null; try { saved = JSON.parse(localStorage.getItem('orb.route') || 'null'); } catch { /* broken: home */ }
+          const { sessions, conversations } = getState();
+          const route = restoreRoute(saved, { views: Object.keys(VIEWS), phone: phoneLayout(), sessions, conversations });
+          setState({ route });
+          try { localStorage.setItem('orb.route', JSON.stringify(route)); } catch { /* storage unavailable */ }
           loadOrbInbox(); // 3.6 (M3): the unread badges
           return setPhase('app');
-        } catch (e) { setError(String(e?.message ?? e)); await new Promise((r) => setTimeout(r, 250)); }
+        } catch (e) {
+          // 3.8: the phone lost its PC while starting: the same calm screen, never «No se pudo iniciar Orb».
+          if (bridge.mobile && isOffline(e)) { setState({ info: { ...getState().info, offline: true } }); return alive && setPhase('offline'); }
+          setError(String(e?.message ?? e)); await new Promise((r) => setTimeout(r, 250));
+        }
       }
       if (alive) setPhase('error');
     })();
@@ -189,6 +240,30 @@ function Root() {
     return () => { window.removeEventListener('keydown', key); off(); };
   }, [phase]);
   useEffect(() => { const off = () => setPhase('pair'); window.addEventListener('orb:unpaired', off); return () => window.removeEventListener('orb:unpaired', off); }, []);
+  // 3.8: Android's back button or gesture, and a phone browser's back: inside the app (lib/phone-nav.js › backStep).
+  const phaseRef = useRef(phase); phaseRef.current = phase;
+  useEffect(() => {
+    if (!bridge.mobile) return undefined;
+    let lastExit = 0;
+    const back = () => {
+      const overlay = document.querySelector(OVERLAYS);
+      const step = phaseRef.current === 'app' ? goBack({ overlay: Boolean(overlay) }) : overlay ? { close: true } : { exit: true };
+      if (step?.close) { (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true })); return 'stay'; }
+      if (!step?.exit) return 'stay';
+      // The first screen: twice within 2 s leaves (the app goes to the background; a browser goes back).
+      if (Date.now() - lastExit < 2000) return 'exit';
+      lastExit = Date.now();
+      toast(tNow('app.backExit'), { duration: 2000 });
+      return 'stay';
+    };
+    if (bridge.onBack) return bridge.onBack(() => { if (back() === 'exit') bridge.minimize?.(); });
+    // A phone's browser: one entry of its history stands for «inside Orb»; going back from it runs the same steps.
+    if (!phoneLayout()) return undefined;
+    history.pushState({ orb: 'back' }, '');
+    const pop = () => { if (back() === 'exit') history.back(); else history.pushState({ orb: 'back' }, ''); };
+    window.addEventListener('popstate', pop);
+    return () => window.removeEventListener('popstate', pop);
+  }, []);
   // 3.5, the Android app: something shared from another app («Compartir con Orb») opens the chat, which takes it.
   useEffect(() => {
     if (phase !== 'app' || !bridge.takeShared) return undefined;
@@ -197,8 +272,9 @@ function Root() {
     window.addEventListener('orb:shared', open);
     return () => window.removeEventListener('orb:shared', open);
   }, [phase]);
-  // Screens without a top bar of their own (welcome, loading, error): a strip at the top still moves the window.
-  const strip = <div className="app-titlebar fixed inset-x-0 top-0 z-40 h-14" aria-hidden="true" />;
+  // Screens without a top bar of their own (welcome, loading, error): a strip at the top still moves the window (the
+  // PC's only: on a phone it would only take the taps at the top of the screen).
+  const strip = bridge.mobile ? null : <div className="app-titlebar fixed inset-x-0 top-0 z-40 h-14" aria-hidden="true" />;
   useEffect(() => {
     if (phase !== 'app') return undefined;
     return bridge.on('*', (event, payload) => {
@@ -226,9 +302,9 @@ function Root() {
   // 3.8: a browser opened from the QR: the master password before linking.
   if (phase === 'pair' && getState().info?.pairLink && bridge.pairPending) return <>{strip}<BrowserPair /></>;
   if (phase === 'pair') return (
-    <div className="brand-sky grid h-full place-items-center p-6 text-center">
+    <div className="brand-sky flex h-full overflow-y-auto p-6 pt-20 text-center">
       {strip}
-      <div className="bg-card/95 grid max-w-sm gap-3 rounded-3xl p-7 shadow-2xl">
+      <div className="bg-card/95 m-auto grid w-full max-w-sm gap-3 rounded-3xl p-7 shadow-2xl">
         <div className="-mt-16 flex justify-center"><Robot size={110} mood="idle" /></div>
         <h1 className="text-xl">{t('app.pairTitle')}</h1>
         <p className="text-muted-foreground text-sm">{t('app.pairBody1')}<b>{t('app.pairBodyPath')}</b>{t('app.pairBody2')}</p>
@@ -238,6 +314,7 @@ function Root() {
     </div>
   );
   if (phase === 'update') return <>{strip}<UpdateNeeded info={getState().info} /></>;
+  if (phase === 'offline') return <PcOffline info={getState().info} onRelink={() => setPhase('pair')} />;
   if (phase === 'core') return <>{strip}<CoreMissing state={core} /></>;
   if (phase === 'master') return <>{strip}<MasterCreate upgrade onDone={() => location.reload()} /></>;
   if (phase === 'unlock') return <>{strip}<MasterLocked state={masterState} onDone={() => location.reload()} /></>;
@@ -247,6 +324,50 @@ function Root() {
   if (phase !== 'app' || !ready) return <div className="grid h-full place-items-center">{strip}<Robot size={80} mood="thinking" /></div>;
   // 3.6 (M4): a tapped notification opens its chat (lib/notes.js).
   return bridge.mobile ? <><NoteOpener /><Shell /></> : <Shell />;
+}
+
+// What counts as «something open over the screen» for back: a dialog or sheet, the menu ☰, a menu or a list.
+const OVERLAYS = '[data-slot="dialog-content"], [data-slot="drawer-content"], [data-slot="menu-content"], [data-slot="select-content"], [role="dialog"]';
+
+// 3.8: the phone cannot reach its PC. It keeps trying (3 s, 6 s, 12 s… up to 30 s, and at once when the phone comes back
+// to the app or to a network) and opens Orb as soon as the PC answers.
+function PcOffline({ info, onRelink }) {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const [wait, setWait] = useState(null); // seconds to the next try
+  const tries = useRef(0);
+  const timer = useRef(null);
+  const tryNow = useRef(null);
+  tryNow.current = async () => {
+    clearInterval(timer.current); setBusy(true); setWait(null);
+    let back = false;
+    try { const r = await bridge.info(); back = !r.offline; } catch { /* still away */ }
+    if (back) { location.reload(); return; }
+    setBusy(false);
+    let left = Math.round(retryDelay(tries.current++) / 1000);
+    setWait(left);
+    timer.current = setInterval(() => { left -= 1; if (left <= 0) tryNow.current(); else setWait(left); }, 1000);
+  };
+  useEffect(() => {
+    tryNow.current();
+    const soon = () => { if (document.visibilityState === 'visible') { tries.current = 0; tryNow.current(); } };
+    document.addEventListener('visibilitychange', soon); window.addEventListener('online', soon);
+    return () => { clearInterval(timer.current); document.removeEventListener('visibilitychange', soon); window.removeEventListener('online', soon); };
+  }, []);
+  const relink = async () => { clearInterval(timer.current); await bridge.unlink?.(); onRelink(); };
+  return (
+    <div className="brand-sky flex h-full overflow-y-auto p-6 pt-20" data-testid="pc-offline">
+      <div className="bg-card/95 m-auto grid w-full max-w-sm gap-3 rounded-3xl p-7 text-center shadow-2xl">
+        <div className="-mt-16 flex justify-center"><Robot size={110} mood={busy ? 'thinking' : 'sleeping'} /></div>
+        <h1 className="text-xl">{info?.pcName ? t('app.offlineTitleNamed', { name: info.pcName }) : t('app.offlineTitle')}</h1>
+        <p className="text-muted-foreground text-sm">{t('app.offlineBody')}</p>
+        {info?.seenAt ? <p className="text-muted-foreground text-xs">{t('app.offlineSeen', { when: ago(info.seenAt) })}</p> : null}
+        <Button size="lg" disabled={busy} onClick={() => { tries.current = 0; tryNow.current(); }} data-testid="pc-offline-retry">{busy ? <Spinner /> : <RotateCw />}{t('app.offlineRetry')}</Button>
+        <p className="text-muted-foreground min-h-4 text-xs" aria-live="polite">{wait ? t('app.offlineNext', { s: wait }) : ''}</p>
+        {bridge.unlink ? <Button variant="ghost" size="sm" onClick={relink} data-testid="pc-offline-relink"><Link2 />{t('app.offlineRelink')}</Button> : null}
+      </div>
+    </div>
+  );
 }
 
 // 3.8: the data of Orb 3.7 could not be updated (src/core/migrate-38.mjs): what to do, where the copy is («Abrir
@@ -299,7 +420,7 @@ function PairPassword({ name, fp = null, confirmFp = false, busy, error, onSubmi
       <h1 className="text-center text-xl">{name ? t('app.linkPassTitleNamed', { name }) : t('app.linkPassTitle')}</h1>
       {fp ? (
         <div className="bg-muted/60 grid gap-1 rounded-xl px-3 py-2 text-center" data-testid="pair-fp">
-          <span className="font-mono text-sm font-medium">{t('app.linkFp', { fp })}</span>
+          <span className="font-mono text-sm font-medium tracking-wide break-words">{t('app.linkFp', { fp })}</span>
           <span className="text-muted-foreground text-xs">{t('app.linkFpCheck')}</span>
           {confirmFp ? <label className="flex cursor-pointer items-center justify-center gap-2 text-[13px]"><Checkbox checked={sure} onCheckedChange={(c) => setSure(c === true)} data-testid="pair-fp-ok" />{t('app.linkFpConfirm')}</label> : null}
         </div>
@@ -326,8 +447,8 @@ function BrowserPair() {
     finally { setBusy(false); }
   };
   return (
-    <div className="brand-sky grid h-full place-items-center overflow-y-auto p-6" data-testid="browser-pair">
-      <div className="bg-card/95 grid w-full max-w-sm gap-3 rounded-3xl p-7 shadow-2xl">
+    <div className="brand-sky flex h-full overflow-y-auto p-6 pt-20" data-testid="browser-pair">
+      <div className="bg-card/95 m-auto grid w-full max-w-sm gap-3 rounded-3xl p-7 shadow-2xl">
         <div className="-mt-16 flex justify-center"><Robot size={110} mood={busy ? 'thinking' : 'idle'} /></div>
         {/* 3.8: never the master password in a page that came without encryption (plain http on the Wi-Fi). */}
         {link?.insecure ? <p className="text-destructive text-center text-sm" role="alert" data-testid="pair-http">{t('app.linkHttp')}</p>
@@ -361,16 +482,16 @@ function AppLink() {
   };
   const field = (k) => ({ value: form[k], onChange: (e) => setForm({ ...form, [k]: e.target.value }) });
   if (link) return (
-    <div className="brand-sky grid h-full place-items-center overflow-y-auto p-6" data-testid="app-link">
-      <div className="bg-card/95 grid w-full max-w-sm gap-3 rounded-3xl p-7 shadow-2xl">
+    <div className="brand-sky flex h-full overflow-y-auto p-6 pt-20" data-testid="app-link">
+      <div className="bg-card/95 m-auto grid w-full max-w-sm gap-3 rounded-3xl p-7 shadow-2xl">
         <div className="-mt-16 flex justify-center"><Robot size={110} mood={busy ? 'thinking' : 'idle'} /></div>
         <PairPassword key={link.fp ?? ''} name={link.name} fp={link.fp} confirmFp={link.short} busy={busy} error={error} onSubmit={pair} onBack={() => { setLink(null); setError(''); }} />
       </div>
     </div>
   );
   return (
-    <div className="brand-sky grid h-full place-items-center overflow-y-auto p-6 text-center" data-testid="app-link">
-      <div className="bg-card/95 grid w-full max-w-sm gap-3 rounded-3xl p-7 shadow-2xl">
+    <div className="brand-sky flex h-full overflow-y-auto p-6 pt-20 text-center" data-testid="app-link">
+      <div className="bg-card/95 m-auto grid w-full max-w-sm gap-3 rounded-3xl p-7 shadow-2xl">
         <div className="-mt-16 flex justify-center"><Robot size={110} mood={busy ? 'thinking' : 'idle'} /></div>
         <h1 className="text-xl">{t('app.linkTitle')}</h1>
         <p className="text-muted-foreground text-sm">{t('app.linkBody')}</p>
@@ -401,7 +522,8 @@ function ThemedToaster() {
   }, []);
   // 3.1: below the window's header (offset), so a passing notice never covers the menu or the window buttons.
   // 3.2: one on screen at a time (the newest); the others are under the bell of the top bar.
-  return <Toaster position="top-center" offset={72} mobileOffset={72} visibleToasts={1} theme={dark ? 'dark' : 'light'} richColors closeButton toastOptions={{ className: 'font-sans' }} />;
+  // 3.8: on a phone, below the status bar as well (edge to edge, the page starts under it).
+  return <Toaster position="top-center" offset={72} mobileOffset={{ top: 'calc(env(safe-area-inset-top, 0px) + 64px)' }} visibleToasts={1} theme={dark ? 'dark' : 'light'} richColors closeButton toastOptions={{ className: 'font-sans' }} />;
 }
 
 applyTheme();
@@ -412,7 +534,7 @@ window.addEventListener('blur', idle); window.addEventListener('focus', idle); d
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <TooltipProvider>
-      <Root />
+      <ErrorBoundary onHome={() => { resetRoute(); location.reload(); }}><Root /></ErrorBoundary>
       <DialogHost />
       <ImagePreviewHost />
       <WindowControls />

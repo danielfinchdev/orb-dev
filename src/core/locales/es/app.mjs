@@ -62,5 +62,19 @@ export default {
   'update.notes': 'Novedades',
   'update.close': 'Cerrar',
   "app.linkOldOrb": "Ese Orb es de una versión anterior: actualízalo o escanea su código QR.",
-  "app.noticeHidden": "Tienes un mensaje nuevo"
+  "app.noticeHidden": "Tienes un mensaje nuevo",
+  "app.pcOffline": "No se puede alcanzar tu PC.",
+  "app.pcSlow": "Tu PC no ha respondido a tiempo. Inténtalo de nuevo.",
+  "app.offlineTitle": "Tu PC está apagado o no se puede alcanzar",
+  "app.offlineTitleNamed": "{name} está apagado o no se puede alcanzar",
+  "app.offlineBody": "Comprueba que el PC está encendido, con Orb abierto, y que el móvil está en la misma wifi o con Tailscale activo.",
+  "app.offlineRetry": "Reintentar",
+  "app.offlineNext": "Se volverá a intentar en {s} s.",
+  "app.offlineSeen": "Última conexión: {when}.",
+  "app.offlineRelink": "Vincular con otro PC",
+  "app.offlineBar": "Sin conexión con tu PC. Reintentando…",
+  "app.backExit": "Pulsa otra vez para salir",
+  "app.crashTitle": "Algo falló en esta pantalla",
+  "app.crashBody": "Orb ha vuelto a un punto seguro. Si se repite, cierra la app y vuelve a abrirla.",
+  "app.crashHome": "Volver al inicio"
 };

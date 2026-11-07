@@ -1,7 +1,7 @@
 // Tasks: the board. Filters, approvals, details and every action on a task (undo, retry, model, merge, pull request, OK).
 import { useEffect, useState } from 'react';
 import { Check, X, Zap, RotateCw, Square, Shuffle, Undo2, MessageSquare, GitMerge, GitPullRequest, Trash2, ListTodo, ThumbsUp, ChevronRight, ScanSearch, Hourglass, GitBranch } from 'lucide-react';
-import { PageHeader } from '@/components/page.jsx';
+import { PageHeader, PageBody, BackButton } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { Markdown } from '@/components/markdown.jsx';
 import { useLiveTasks, liveOf, LiveTask, ProgressBar } from '@/components/live-tasks.jsx';
@@ -11,7 +11,7 @@ import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, Empty, Field, Input, Textarea } from '@/components/ui/basic.jsx';
 import { Tabs, TabsList, TabsTrigger, Select, Collapsible, CollapsibleTrigger, CollapsibleContent, BubbleTip } from '@/components/ui/overlay.jsx';
-import { useStore, call, act, go, bridge } from '@/lib/store.js';
+import { useStore, call, act, go, bridge, phoneLayout } from '@/lib/store.js';
 import { AGENT, STATUS, REASONING, MODE, SENSITIVE, options } from '@/lib/labels.js';
 import { ago, fmtTime, cn } from '@/lib/utils.js';
 import { t, useT } from '@/lib/i18n.js';
@@ -146,40 +146,67 @@ function TaskDetail({ id, live }) {
   );
 }
 
+// 3.8, the phone: the filter chosen stays when a task is opened and closed again.
+let phoneFilter = null;
+
 export function TasksView({ route }) {
   const tr = useT();
   const all = useStore((s) => s.tasks);
+  const phone = phoneLayout();
   // From a folder of the left menu: only that project's tasks (with a button to see them all).
   const tasks = route.project ? all.filter((t) => t.project === route.project) : all;
-  const [filter, setFilter] = useState(() => (route.id ? 'todas' : tasks.some((x) => x.status === 'awaiting_approval') ? 'aprobar' : tasks.some((x) => ['running', 'queued'].includes(x.status)) ? 'encurso' : 'todas'));
+  const [filter, setFilterState] = useState(() => (phone && phoneFilter) || (route.id && !phone ? 'todas' : tasks.some((x) => x.status === 'awaiting_approval') ? 'aprobar' : tasks.some((x) => ['running', 'queued'].includes(x.status)) ? 'encurso' : 'todas'));
+  const setFilter = (f) => { setFilterState(f); if (phone) phoneFilter = f; };
   const [selected, setSelected] = useState(route.id ?? null);
   const rows = tasks.filter(FILTERS.find(([k]) => k === filter)[2]);
   const live = useLiveTasks();
-  // The first task of the list is shown when nothing (or something no longer listed) is selected.
-  useEffect(() => { if (rows.length && !rows.some((t) => t.id === selected)) setSelected(rows[0].id); }, [filter, rows.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The first task of the list is shown when nothing (or something no longer listed) is selected (the PC: list and
+  // detail side by side; the phone opens a task on a screen of its own).
+  useEffect(() => { if (!phone && rows.length && !rows.some((t) => t.id === selected)) setSelected(rows[0].id); }, [filter, rows.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const list = route.project ? { view: 'tasks', project: route.project } : { view: 'tasks' };
+  // 3.8, the phone: a task on its own screen, with the back arrow to the list (also Android's back).
+  if (phone && route.id != null) return (
+    <>
+      <PageHeader back={<BackButton to={list} />} title={tr('tasks.taskTitle', { id: route.id })} />
+      <PageBody className="px-3 py-3"><TaskDetail id={route.id} live={liveOf(live, route.id)} /></PageBody>
+    </>
+  );
+  const open = (t) => (phone ? go({ ...list, id: t.id }) : setSelected(t.id));
   return (
     <>
       <PageHeader icon={<ListTodo className="text-primary size-5" />} title={route.project ? tr('tasks.titleProject', { project: route.project }) : tr('nav.tasks')} meta={tr('tasks.meta')}>
         {route.project ? <Button size="sm" variant="ghost" onClick={() => go('tasks')}><X />{tr('tasks.allProjects')}</Button> : null}
       </PageHeader>
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 md:pb-28">
+      <PageBody className="md:pb-28">
         <Tabs value={filter} onValueChange={setFilter} className="mb-4">
-          <TabsList>{FILTERS.map(([key, label, fn]) => { const n = tasks.filter(fn).length; return <TabsTrigger key={key} value={key}>{tr(label)}{key !== 'todas' && n ? <span className="text-muted-foreground text-xs">{n}</span> : null}</TabsTrigger>; })}</TabsList>
+          {/* The phone: chips that wrap to a second line instead of a strip cut at the edge. */}
+          <TabsList className={phone ? 'h-auto w-full flex-wrap gap-1' : undefined} data-testid="task-filters">{FILTERS.map(([key, label, fn]) => { const n = tasks.filter(fn).length; return <TabsTrigger key={key} value={key} className={phone ? 'h-8 flex-none' : undefined}>{tr(label)}{key !== 'todas' && n ? <span className="text-muted-foreground text-xs">{n}</span> : null}</TabsTrigger>; })}</TabsList>
         </Tabs>
         <div className="grid items-start gap-4 lg:grid-cols-[minmax(320px,1fr)_minmax(400px,1.25fr)]">
           <Card className="gap-0 overflow-hidden py-0">
-            {rows.length ? rows.map((t) => (
-              <button key={t.id} onClick={() => setSelected(t.id)} className={cn('flex w-full cursor-pointer items-center gap-3 border-b px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-accent/50', selected === t.id && 'bg-accent')}>
-                <AgentIcon agent={t.assigned_to ?? t.agent} />
-                <div className="min-w-0 flex-1"><div className="truncate text-[14px]">{t.title}</div><div className="text-muted-foreground truncate text-xs">#{t.id} · {t.project} · {AGENT[t.assigned_to ?? t.agent] ?? t.agent} · {ago(t.updated_at)}</div>
-                  {t.status === 'running' && liveOf(live, t.id) ? <div className="mt-1.5 flex items-center gap-2"><ProgressBar percent={liveOf(live, t.id).percent} quiet={liveOf(live, t.id).quietMin >= 5} className="h-1" /><span className="text-muted-foreground shrink-0 text-[11px] tabular-nums">{liveOf(live, t.id).percent != null ? `${liveOf(live, t.id).percent} %` : tr('tasks.steps', { n: liveOf(live, t.id).steps })}</span></div> : null}</div>
-                <StatusBadge status={t.status} undone={t.undone} />
-              </button>
-            )) : <Empty icon={ListTodo} title={filter === 'aprobar' ? tr('tasks.empty.approve') : tr('tasks.empty.none')}>{tr('tasks.empty.hint')}</Empty>}
+            {rows.length ? rows.map((t) => {
+              const progress = t.status === 'running' && liveOf(live, t.id) ? <div className="mt-1.5 flex items-center gap-2"><ProgressBar percent={liveOf(live, t.id).percent} quiet={liveOf(live, t.id).quietMin >= 5} className="h-1" /><span className="text-muted-foreground shrink-0 text-[11px] tabular-nums">{liveOf(live, t.id).percent != null ? `${liveOf(live, t.id).percent} %` : tr('tasks.steps', { n: liveOf(live, t.id).steps })}</span></div> : null;
+              return (
+                <button key={t.id} onClick={() => open(t)} className={cn('flex w-full cursor-pointer items-center gap-3 border-b px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-accent/50', !phone && selected === t.id && 'bg-accent')} data-testid="task-row">
+                  <AgentIcon agent={t.assigned_to ?? t.agent} className={phone ? 'self-start mt-0.5' : undefined} />
+                  {/* The phone: the title on up to two lines, and under it the state and where (the agent is the icon). */}
+                  {phone ? (
+                    <div className="min-w-0 flex-1">
+                      <div className="line-clamp-2 text-[14px] leading-snug">{t.title}</div>
+                      <div className="mt-1 flex min-w-0 items-center gap-2"><StatusBadge status={t.status} undone={t.undone} /><span className="text-muted-foreground truncate text-xs">{t.project} · {ago(t.updated_at)}</span></div>
+                      {progress}
+                    </div>
+                  ) : (<>
+                    <div className="min-w-0 flex-1"><div className="truncate text-[14px]">{t.title}</div><div className="text-muted-foreground truncate text-xs">#{t.id} · {t.project} · {AGENT[t.assigned_to ?? t.agent] ?? t.agent} · {ago(t.updated_at)}</div>{progress}</div>
+                    <StatusBadge status={t.status} undone={t.undone} />
+                  </>)}
+                </button>
+              );
+            }) : <Empty icon={ListTodo} title={filter === 'aprobar' ? tr('tasks.empty.approve') : tr('tasks.empty.none')}>{tr('tasks.empty.hint')}</Empty>}
           </Card>
-          {selected ? <TaskDetail id={selected} live={liveOf(live, selected)} /> : <Card><Empty icon={ListTodo} title={tr('tasks.pick')}>{tr('tasks.pickHint')}</Empty></Card>}
+          {phone ? null : selected ? <TaskDetail id={selected} live={liveOf(live, selected)} /> : <Card><Empty icon={ListTodo} title={tr('tasks.pick')}>{tr('tasks.pickHint')}</Empty></Card>}
         </div>
-      </div>
+      </PageBody>
     </>
   );
 }

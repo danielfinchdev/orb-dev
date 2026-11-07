@@ -4,6 +4,7 @@ import { useRef, useSyncExternalStore } from 'react';
 import { toast } from 'sonner';
 import { errorText } from './utils.js';
 import { bumpNav, navTicket, stillHere } from './nav.js';
+import { cleanRoute, backStep } from './phone-nav.js';
 import { t } from './i18n.js';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from '../../core/appearance.mjs';
 
@@ -75,8 +76,12 @@ export function endTour() {
   if (getState().app?.config?.ui?.tourDone !== true) call('config.save', { patch: { ui: { tourDone: true } } }).catch(() => {});
 }
 
+// 3.8: the screens this build has (main.jsx says it once): a route of a screen that is gone (a bot's of 3.7, from an old
+// notification or link) opens the chats instead of a blank screen (lib/phone-nav.js).
+let views = null;
+export const setViews = (names) => { views = names; };
 export function go(route) {
-  const next = typeof route === 'string' ? { view: route } : route;
+  const next = cleanRoute(route, { views, phone: phoneLayout() }) ?? { view: phoneLayout() ? 'chats' : 'chat' };
   if (next.view === 'settings') { openSettings(next.section); return; }
   bumpNav(); // even to the same screen («Nuevo chat» while on a new chat): the user chose where to be
   setState({ route: next });
@@ -86,6 +91,19 @@ export function go(route) {
 
 // The screens that keep their id in the saved route (the last conversation or session).
 const KEEPS_ID = new Set(['session', 'chat']);
+// 3.8: Android's back (or a phone browser's): one level up (lib/phone-nav.js › backStep). → the step taken, or what the
+// caller must do ({ close }: what is open over the screen; { exit }: the first screen).
+export function goBack({ overlay = false } = {}) {
+  const step = backStep({ route: state.route, overlay, phone: phoneLayout() });
+  if (step?.go) go(step.go);
+  return step;
+}
+// 3.8: a screen that failed to draw: the saved route goes (the app must never reopen on it) and the home screen shows.
+export function resetRoute() {
+  try { localStorage.removeItem('orb.route'); } catch { /* storage unavailable */ }
+  bumpNav();
+  setState({ route: { view: phoneLayout() ? 'chats' : 'chat' } });
+}
 
 // 3.6 (messaging, M3): the chat list (inbox.list zone «orb»: pins, mutes, unread and the last line of each
 // conversation with Orbe). Always this Orb's (the conversations live here, never on a linked server). An Orb without

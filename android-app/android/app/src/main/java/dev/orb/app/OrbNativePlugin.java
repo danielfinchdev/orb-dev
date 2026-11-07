@@ -12,6 +12,8 @@ import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import android.util.Base64;
 
+import androidx.activity.OnBackPressedCallback;
+
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -36,7 +38,9 @@ import javax.crypto.spec.GCMParameterSpec;
  * - a small key store: values encrypted with an AES key that lives in the Android Keystore and never leaves the phone
  *   (this phone's keys for the linked Orb);
  * - «Compartir con Orb»: what another app shares (text and pictures) is handed to the page;
- * - the phone's model, for the name of the linked device.
+ * - the phone's model, for the name of the linked device;
+ * - Android's back button or gesture: handed to the page («back»), which goes back inside the app; on its first screen
+ *   the page asks to minimize the app (never to close it).
  */
 @CapacitorPlugin(name = "OrbNative")
 public class OrbNativePlugin extends Plugin {
@@ -51,6 +55,25 @@ public class OrbNativePlugin extends Plugin {
     public void load() {
         pending = readShare(getActivity().getIntent());
         getActivity().setIntent(new Intent(getActivity(), MainActivity.class)); // handled: not again after a restart
+        // Without this, Capacitor's activity just closes on «back» (the page has no history of its own).
+        getActivity().getOnBackPressedDispatcher().addCallback(getActivity(), new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (hasListeners("back")) {
+                    notifyListeners("back", new JSObject(), false);
+                    return;
+                }
+                setEnabled(false); // the page is not listening yet: Android's own behaviour
+                getActivity().getOnBackPressedDispatcher().onBackPressed();
+                setEnabled(true);
+            }
+        });
+    }
+
+    @PluginMethod
+    public void minimize(PluginCall call) {
+        getActivity().runOnUiThread(() -> getActivity().moveTaskToBack(true));
+        call.resolve();
     }
 
     @Override

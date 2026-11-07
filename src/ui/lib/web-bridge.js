@@ -3,6 +3,7 @@
 // imported before anything else. Not imported statically: i18n.js needs the store, which reads window.orb when it loads
 // (and this file defines it); the encryption code is loaded only on the phone.
 import * as L from './link-payload.js'; // tiny and pure: what a QR or a typed code says (also the Android app's)
+import { timedFetch, fetchWithin, isOffline, TIMEOUTS } from './net.js';
 const tl = async (key, vars) => (await import('./i18n.js')).t(key, vars);
 const crypto$ = () => import('../../core/mobile-crypto.mjs');
 // 3.5: the Android app (src/ui/lib/app-bridge.js, loaded first) gives this bridge its own host: where the Orb is (the
@@ -34,13 +35,28 @@ if (!window.orb) {
   };
   const unpaired = () => { keep(null); session = null; window.dispatchEvent(new Event('orb:unpaired')); };
   // Where the Orb answers: this page's own server in a browser; in the app, the linked Orb's addresses (urls), the one
-  // that answered last first. A network error moves to the next one.
+  // that answered last first. A network error or no answer in time (3.8: lib/net.js) moves to the next one; none
+  // answering is «the PC cannot be reached» (offline: true), told to the window as link:offline (and link:online again).
   const at = (p) => (host ? `${saved?.urls?.[saved.at ?? 0] ?? ''}${p}` : p);
-  const reach = async (p, init) => {
+  let reachable = true;
+  const seen = (ok) => {
+    if (ok) { try { if (Date.now() - Number(localStorage.getItem('orb.visto') ?? 0) > 60_000) localStorage.setItem('orb.visto', String(Date.now())); } catch { /* storage unavailable */ } }
+    if (ok === reachable) return;
+    reachable = ok; fire(ok ? 'link:online' : 'link:offline', {});
+  };
+  // once: a request that changes something on the PC (a call, an upload) that ran out of time is not sent again to the
+  // next address (the PC may have done it); the next request starts there.
+  const reach = async (p, init, ms = TIMEOUTS.call, { once = false } = {}) => {
     const n = host ? Math.max(1, saved?.urls?.length ?? 1) : 1;
     for (let i = 0; ; i++) {
-      try { return await fetch(at(p), init); }
-      catch (e) { if (i + 1 >= n || init?.signal?.aborted) throw e; saved.at = ((saved.at ?? 0) + 1) % n; store.set(saved); }
+      try { const res = await timedFetch(at(p), init, ms); seen(true); return res; }
+      catch (e) {
+        if (init?.signal?.aborted) throw e;
+        const last = i + 1 >= n;
+        if (host && n > 1 && (!last || e.timeout)) { saved.at = ((saved.at ?? 0) + 1) % n; store.set(saved); }
+        if (once && e.timeout) throw Object.assign(new Error(await tl('app.pcSlow')), { offline: true, timeout: true });
+        if (last) { seen(false); throw Object.assign(new Error(await tl('app.pcOffline')), { offline: true }); }
+      }
     }
   };
   const headersOf = (s) => ({ 'X-Orb-Device': s.id });
@@ -66,12 +82,12 @@ if (!window.orb) {
     if (msg.r !== nonce) throw new Error(await tl('app.badAnswer'));
     return msg;
   };
-  const post = async (url, kind, body, retry = true) => {
+  const post = async (url, kind, body, retry = true, ms = TIMEOUTS.call) => {
     const s = await ready(); if (!s) { unpaired(); throw new Error(await tl('app.notLinked')); }
     const C = await crypto$();
     const box = C.seal(s.key, { t: stamp(), m: kind, b: body }, C.AAD.request(s.id));
-    const res = await reach(url, { method: 'POST', credentials: 'omit', headers: { ...headersOf(s), 'Content-Type': 'application/json' }, body: JSON.stringify(box) });
-    if (retry && await clockFixed(res)) return post(url, kind, body, false);
+    const res = await reach(url, { method: 'POST', credentials: 'omit', headers: { ...headersOf(s), 'Content-Type': 'application/json' }, body: JSON.stringify(box) }, ms, { once: kind !== 'me' });
+    if (retry && await clockFixed(res)) return post(url, kind, body, false, ms);
     return answer(res, s, box.n);
   };
   // The envelope of a request whose body is not JSON (live events, pictures): in a header.
@@ -84,7 +100,8 @@ if (!window.orb) {
     try {
       const s = await ready(); if (!s) return;
       const C = await crypto$();
-      const res = await reach('/api/events', { headers: { ...headersOf(s), 'X-Orb-Auth': await authHeader(s, 'events') }, credentials: 'omit', signal: ctrl.signal });
+      // The time limit is for the answer's headers only: the stream itself stays open as long as the PC keeps it.
+      const res = await reach('/api/events', { headers: { ...headersOf(s), 'X-Orb-Auth': await authHeader(s, 'events') }, credentials: 'omit', signal: ctrl.signal }, TIMEOUTS.events);
       if (res.status === 401) return unpaired();
       if (await clockFixed(res)) wait = 100; // again at once, with the PC's time
       if (!res.ok) throw new Error(res.status); // retried with the growing pause, not every second
@@ -112,7 +129,7 @@ if (!window.orb) {
     const C = await crypto$();
     const auth = await authHeader(s, 'upload');
     const body = C.sealBytes(s.key, new Uint8Array(await file.arrayBuffer()), C.AAD.upload(s.id));
-    const res = await reach('/api/upload', { method: 'POST', credentials: 'omit', headers: { ...headersOf(s), 'X-Orb-Auth': auth, 'Content-Type': 'application/octet-stream' }, body });
+    const res = await reach('/api/upload', { method: 'POST', credentials: 'omit', headers: { ...headersOf(s), 'X-Orb-Auth': auth, 'Content-Type': 'application/octet-stream' }, body }, TIMEOUTS.upload, { once: true });
     if (retry && await clockFixed(res)) return uploadOne(file, false);
     const msg = await answer(res, s, auth.split('.')[0]);
     if (!msg.ok) throw new Error(msg.error);
@@ -148,7 +165,7 @@ if (!window.orb) {
   const resolveLink = async (link) => {
     let p = link;
     if (!p.pc) {
-      const r = await fetch(`${p.urls[0]}/api/hello`, { credentials: 'omit' }).catch(() => null);
+      const r = await timedFetch(`${p.urls[0]}/api/hello`, { credentials: 'omit' }, TIMEOUTS.hello).catch(() => null);
       if (!r) throw new Error(await tl('app.linkOffline'));
       const d = await r.json().catch(() => ({}));
       if (!r.ok || typeof d?.pc !== 'string') throw new Error(await tl('app.linkNoShortCode'));
@@ -176,7 +193,7 @@ if (!window.orb) {
     let last = null;
     for (const base of p.urls) {
       let r;
-      try { r = await C.linkDevice({ base, pcPub, secret, via, name, kind, v: L.PROTOCOL, min: L.MIN_PROTOCOL, password: String(password ?? ''), now: stamp }); }
+      try { r = await C.linkDevice({ base, pcPub, secret, via, name, kind, v: L.PROTOCOL, min: L.MIN_PROTOCOL, password: String(password ?? ''), now: stamp, fetch: fetchWithin(TIMEOUTS.pair) }); }
       catch (e) {
         if (e.code === 'offline') { last = new Error(await tl('app.linkOffline')); continue; } // not reachable this way: the next address
         if (e.code === 'badAnswer') throw new Error(await tl('app.badAnswer'));
@@ -239,8 +256,13 @@ if (!window.orb) {
       }
       // 3.6: the page says its protocol; an Orb that needs a newer one answers 426 (or a min above ours): update first.
       let r = null;
-      try { r = await post('/api/me', 'me', { v: L.PROTOCOL }); me = r.ok ? r.result : null; }
-      catch { if (!await record()) return { mobile: true, needsPairing: true, needsSetup: false, pairError, app: Boolean(host) }; }
+      try { r = await post('/api/me', 'me', { v: L.PROTOCOL }, true, TIMEOUTS.me); me = r.ok ? r.result : null; }
+      catch (e) {
+        if (!await record()) return { mobile: true, needsPairing: true, needsSetup: false, pairError, app: Boolean(host) };
+        // 3.8: the PC is off, asleep, out of this network or Orb is closed: a calm screen that keeps trying (main.jsx),
+        // never «No se pudo iniciar Orb».
+        if (isOffline(e)) return { mobile: true, needsSetup: false, offline: true, pcName: saved?.name ?? null, seenAt: Number(localStorage.getItem('orb.visto') ?? 0) || null, app: Boolean(host) };
+      }
       const gap = r && !r.ok && (r.status === 426 || r.update) ? { has: L.PROTOCOL, need: L.PROTOCOL + 1 } : L.updateNeeded(me);
       if (gap) return { mobile: true, needsSetup: false, needsUpdate: { message: (r && !r.ok && r.error) || await tl('app.updateNeeded'), ...gap, ...(host ? { app: true } : {}) }, app: Boolean(host) };
       connect();

@@ -40,7 +40,7 @@ export default {
   'settings.section.avanzado': 'Avanzado',
   'settings.section.acerca': 'Acerca de',
   'settings.sectionDesc.general': 'Asistente, idioma, carpeta de trabajo, apariencia y actualizaciones.',
-  'settings.sectionDesc.magiclink': 'Quién puede entrar en este Orb: el móvil y los navegadores enlazados.',
+  'settings.sectionDesc.magiclink': 'Los móviles y navegadores enlazados con este PC.',
   'settings.sectionDesc.agentes': 'Cómo trabajan las conversaciones y las tareas, y cuánto uso pueden gastar.',
   'settings.sectionDesc.avanzado': 'Herramientas de los agentes y God mode.',
   'settings.sectionDesc.acerca': 'Versión, comentarios y otras aplicaciones.',

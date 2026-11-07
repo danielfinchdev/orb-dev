@@ -72,6 +72,14 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
         return true;
       };
       orb.unlink = async () => { pieces.unpaired(); return true; };
+      // 3.8: Android's back button or gesture (OrbNativePlugin hands it over: main.jsx goes back inside the app) and,
+      // on the first screen, the app goes to the background instead of closing.
+      orb.onBack = (fn) => {
+        let handle = null; let gone = false;
+        Native().then((n) => n.addListener('back', () => fn())).then((h) => { if (gone) h?.remove?.(); else handle = h; }).catch(() => {});
+        return () => { gone = true; handle?.remove?.(); };
+      };
+      orb.minimize = async () => { try { await (await Native()).minimize(); } catch { /* an older app: stays */ } };
       // Dictation with Android's own speech recognition (the WebView has no Web Speech API).
       orb.dictate = async (lang) => {
         const { SpeechRecognition } = await import('@capacitor-community/speech-recognition');

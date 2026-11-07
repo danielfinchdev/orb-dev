@@ -62,5 +62,19 @@ export default {
   'update.notes': 'What’s new',
   'update.close': 'Close',
   "app.linkOldOrb": "That Orb is from an older version: update it or scan its QR code.",
-  "app.noticeHidden": "You have a new message"
+  "app.noticeHidden": "You have a new message",
+  "app.pcOffline": "Your PC can't be reached.",
+  "app.pcSlow": "Your PC didn't answer in time. Try again.",
+  "app.offlineTitle": "Your PC is off or can't be reached",
+  "app.offlineTitleNamed": "{name} is off or can't be reached",
+  "app.offlineBody": "Check that the PC is on with Orb open, and that the phone is on the same Wi-Fi or has Tailscale on.",
+  "app.offlineRetry": "Try again",
+  "app.offlineNext": "Trying again in {s} s.",
+  "app.offlineSeen": "Last connected: {when}.",
+  "app.offlineRelink": "Link with another PC",
+  "app.offlineBar": "No connection with your PC. Retrying…",
+  "app.backExit": "Press again to exit",
+  "app.crashTitle": "Something went wrong on this screen",
+  "app.crashBody": "Orb went back to a safe point. If it happens again, close the app and open it again.",
+  "app.crashHome": "Back to start"
 };

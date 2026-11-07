@@ -2,15 +2,15 @@
 import { useEffect, useState } from 'react';
 import { FolderKanban, FolderPlus, FolderOpen, Pin, MessageSquare, BookOpen, Unlink, GitBranch, Save, Upload, RefreshCw, GitPullRequest, Folder, ScanSearch, ShieldCheck, PencilLine } from 'lucide-react';
 import { toast } from 'sonner';
-import { PageHeader } from '@/components/page.jsx';
+import { PageHeader, PageBody, BackButton } from '@/components/page.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { createProjectFlow, linkFolderFlow, cloneRepoFlow, CATEGORIES } from '@/components/project-actions.jsx';
 import { askReview, askSecurityReview } from './tasks.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Empty, Field, Input, PathText, Spinner } from '@/components/ui/basic.jsx';
 import { Checkbox, BubbleTip } from '@/components/ui/overlay.jsx';
-import { useStore, call, act, go, bridge, refresh } from '@/lib/store.js';
-import { cn } from '@/lib/utils.js';
+import { useStore, call, act, go, bridge, refresh, phoneLayout } from '@/lib/store.js';
+import { cn, baseName } from '@/lib/utils.js';
 import { GithubIcon } from '@/components/agent-icon.jsx';
 import { useT, useLocale } from '@/lib/i18n.js';
 
@@ -92,7 +92,8 @@ function ProjectDetail({ p, onRenamed }) {
     <Card className="gap-5">
       <CardHeader className="flex-row items-start gap-3">
         <Folder className="text-primary mt-0.5 size-5 shrink-0" />
-        <div className="min-w-0 flex-1"><CardTitle className="flex items-center gap-2 text-[17px]">{p.name}</CardTitle><CardDescription className="mt-1 font-mono text-xs break-all">{p.path}</CardDescription></div>
+        {/* 3.8: the phone shows where it is in Orb's words (category › folder), never the PC's path. */}
+        <div className="min-w-0 flex-1"><CardTitle className="flex items-center gap-2 text-[17px]">{p.name}</CardTitle>{bridge.mobile ? <CardDescription className="mt-1 text-xs break-words">{t(`comp.projects.category.${p.category ?? 'other'}`)} › {baseName(p.path)}</CardDescription> : <CardDescription className="mt-1 font-mono text-xs break-all">{p.path}</CardDescription>}</div>
         {p.active ? <Badge><Pin />{t('projects.workProject')}</Badge> : null}
       </CardHeader>
       <CardContent className="flex flex-wrap gap-2">
@@ -132,17 +133,27 @@ export function ProjectsView({ route }) {
   const t = useT();
   const projects = useStore((s) => s.projects);
   const app = useStore((s) => s.app);
-  const [selected, setSelected] = useState(route.name ?? app.activeProject?.name ?? projects[0]?.name ?? null);
+  const phone = phoneLayout();
+  const [selected, setSelected] = useState(route.name ?? (phone ? null : app.activeProject?.name ?? projects[0]?.name ?? null));
   const current = projects.find((p) => p.name === selected) ?? null;
-  const pick = (p) => p && setSelected(p.name);
+  // 3.8, the phone: a project opens on a screen of its own (the back arrow, or Android's back, returns to the list).
+  const open = (name) => (phone ? go({ view: 'projects', name }) : setSelected(name));
+  const pick = (p) => p && open(p.name);
+  const shown = phone && route.name ? projects.find((p) => p.name === route.name) : null;
+  if (shown) return (
+    <>
+      <PageHeader back={<BackButton to={{ view: 'projects' }} />} title={shown.name} />
+      <PageBody className="px-3 py-3"><ProjectDetail key={shown.name} p={shown} onRenamed={(name) => go({ view: 'projects', name })} /></PageBody>
+    </>
+  );
   return (
     <>
-      <PageHeader icon={<FolderKanban className="text-primary size-5" />} title={t('projects.title')} meta={app.home ? t('projects.meta', { home: app.home }) : t('projects.metaRemote')}>
+      <PageHeader icon={<FolderKanban className="text-primary size-5" />} title={t('projects.title')} meta={app.home && !bridge.mobile ? t('projects.meta', { home: app.home }) : t('projects.metaRemote')}>
         {bridge.mobile ? null : <><Button size="sm" variant="ghost" onClick={async () => pick(await cloneRepoFlow())}><GithubIcon />{t('projects.clone')}</Button>
         <Button size="sm" variant="ghost" onClick={async () => pick(await linkFolderFlow())}><FolderOpen />{t('projects.link')}</Button></>}
         <Button size="sm" onClick={async () => pick(await createProjectFlow())}><FolderPlus />{t('projects.create')}</Button>
       </PageHeader>
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 md:pb-28">
+      <PageBody className="md:pb-28">
         <div className="grid gap-4">
           {bridge.mobile ? null : <><GithubCard /><ContributionGraph /></>}
           <div className="grid items-start gap-4 lg:grid-cols-[minmax(280px,1fr)_minmax(400px,1.4fr)]">
@@ -154,9 +165,10 @@ export function ProjectsView({ route }) {
                   <div key={cat ?? 'other'} data-testid={`category-${cat ?? 'other'}`}>
                     <div className="text-muted-foreground bg-muted/40 border-b px-4 py-1.5 text-[11px] font-medium tracking-wide uppercase">{t(`comp.projects.category.${cat ?? 'other'}`)}</div>
                     {list.map((p) => (
-                      <button key={p.name} onClick={() => setSelected(p.name)} className={cn('flex w-full cursor-pointer items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-accent/50', selected === p.name && 'bg-accent')}>
+                      <button key={p.name} onClick={() => open(p.name)} className={cn('flex w-full cursor-pointer items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-accent/50', !phone && selected === p.name && 'bg-accent')} data-testid="project-row">
                         <Folder className={cn('size-4 shrink-0', p.active ? 'text-primary' : 'text-muted-foreground')} />
-                        <div className="grid min-w-0 flex-1"><div className="truncate">{p.name}</div><PathText path={p.path} className="text-muted-foreground text-[11px]" /></div>
+                        {/* The phone: the name only (the category is the group's title); the PC also shows the folder. */}
+                        <div className="grid min-w-0 flex-1"><div className="truncate">{p.name}</div>{bridge.mobile ? null : <PathText path={p.path} className="text-muted-foreground text-[11px]" />}</div>
                         {p.open ? <Badge variant="info">{t(p.open === 1 ? 'projects.openOne' : 'projects.openOther', { n: p.open })}</Badge> : null}
                         {p.active ? <Pin className="text-primary size-3.5" /> : null}
                       </button>
@@ -165,10 +177,10 @@ export function ProjectsView({ route }) {
                 ) : null;
               }) : <Empty icon={FolderKanban} title={t('projects.empty.title')}>{app.home ? t('projects.empty.hint', { home: app.home }) : t('projects.empty.hintRemote')}</Empty>}
             </Card>
-            {current ? <ProjectDetail key={current.name} p={current} onRenamed={setSelected} /> : <Card><Empty icon={Folder} title={t('projects.pick')} /></Card>}
+            {phone ? null : current ? <ProjectDetail key={current.name} p={current} onRenamed={setSelected} /> : <Card><Empty icon={Folder} title={t('projects.pick')} /></Card>}
           </div>
         </div>
-      </div>
+      </PageBody>
     </>
   );
 }

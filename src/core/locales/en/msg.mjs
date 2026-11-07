@@ -344,7 +344,7 @@ export default {
   "msg.remote.imageTooBig": "the image exceeds 10 MB",
   "msg.api.f.vía": "connection",
   "msg.link.needName": "type a name",
-  "msg.link.noCode": "no code is active. Make one on the other Orb",
+  "msg.link.noCode": "no code is active. Make a new one on the PC, in Settings › Magic Link",
   "msg.remote.badJson": "invalid JSON",
   "msg.remote.badQr": "the QR code is invalid or has expired. Generate a new one on the PC",
   "msg.remote.cannotSaveImage": "could not save the image",
@@ -503,6 +503,6 @@ export default {
   "msg.installer.agentDone": "Installed",
   "msg.installer.agentTimeout": "Could not install: 15 minutes went by without finishing",
   "msg.link.httpBrowser": "A browser does not link over plain Wi-Fi (the master password is never typed in a page without encryption): use the secure Tailscale address (https) or the Android app.",
-  "msg.link.notForOrb": "This code is not for an Orb. On the other Orb, choose “Another Orb of mine” when you make the code.",
+  "msg.link.notForOrb": "This code only links a phone or a browser.",
   "msg.remote.pushHidden": "You have a new message",
 };

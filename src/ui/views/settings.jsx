@@ -3,7 +3,7 @@
 // Acerca de.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { DatabaseBackup, Settings, FlaskConical, FolderOpen, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, Wrench, ChevronRight, SlidersHorizontal, Radar, Cpu, Info, ExternalLink, ShieldBan, KeyRound } from 'lucide-react';
+import { DatabaseBackup, Settings, FlaskConical, FolderOpen, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, Wrench, ChevronRight, SlidersHorizontal, Radar, Cpu, Info, ExternalLink, ShieldBan, KeyRound, RotateCcw } from 'lucide-react';
 import { ToolIcon } from '@/components/agent-icon.jsx';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, APPEARANCE_DEFAULTS } from '../../core/appearance.mjs';
 import { PRODUCT, AUTHOR } from '../../core/product.mjs';
@@ -27,6 +27,7 @@ import { MagicLinkPanel, SubSection } from './magic-link.jsx';
 import { DataCards } from './data.jsx';
 import { connectorKeys } from './master.jsx';
 import { unlockCore } from '@/lib/core-access.js';
+import { DEFAULT_PROTECTED } from '../../core/layout.mjs';
 
 // unlock: the master password's token, for a change that needs it (src/core/permissions.mjs › needsUnlock).
 async function save(patch, ok = t('settings.saved'), unlock = null) {
@@ -444,7 +445,8 @@ function BrowserCard({ c }) {
 }
 
 // «Cosas que nadie toca» (config.protected, src/core/guard.mjs › protectedHit): names, paths or containers no agent
-// touches. Chips to remove, a field to add; saved at once.
+// touches. Chips to remove, a field to add; saved at once. 3.8: taking off one of the defaults (a password manager) asks
+// first, and «Restaurar los de serie» brings back the ones missing (adding needs no password).
 function ProtectedCard({ c }) {
   const t = useT();
   const [draft, setDraft] = useState('');
@@ -458,6 +460,12 @@ function ProtectedCard({ c }) {
     return save({ protected: clean.slice(0, 50) }, t('settings.protectedSaved'), unlock);
   };
   const add = async () => { if (draft.trim().length >= 2 && await store([...list, draft])) setDraft(''); };
+  const isDefault = (x) => DEFAULT_PROTECTED.some((d) => d.toLowerCase() === x.toLowerCase());
+  const remove = async (x) => {
+    if (isDefault(x) && !await confirm(t('settings.protectedRemoveTitle', { name: x }), t('settings.protectedRemoveBody'), { ok: t('settings.remove'), danger: true })) return;
+    await store(list.filter((y) => y !== x));
+  };
+  const missing = DEFAULT_PROTECTED.filter((d) => !list.some((x) => x.toLowerCase() === d.toLowerCase()));
   return (
     <Card data-testid="protected-card">
       <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><ShieldBan className="text-primary size-5" /><div><CardTitle>{t('settings.protected')}</CardTitle><CardDescription>{t('settings.protectedHint')}</CardDescription></div></CardHeader>
@@ -467,7 +475,7 @@ function ProtectedCard({ c }) {
             {list.map((x) => (
               <Badge key={x} variant="secondary" className="gap-1 font-mono" data-testid="protected-item">
                 {x}
-                <button type="button" className="hover:text-destructive -mr-0.5 rounded-sm" aria-label={t('settings.protectedRemove', { name: x })} onClick={() => store(list.filter((y) => y !== x))}><X className="size-3" /></button>
+                <button type="button" className="hover:text-destructive -mr-0.5 rounded-sm" aria-label={t('settings.protectedRemove', { name: x })} onClick={() => remove(x)} data-testid="protected-remove"><X className="size-3" /></button>
               </Badge>
             ))}
           </div>
@@ -476,6 +484,7 @@ function ProtectedCard({ c }) {
           <Input value={draft} maxLength={200} onChange={(e) => setDraft(e.target.value)} placeholder={t('settings.protectedPh')} data-testid="protected-input" />
           <Button type="submit" size="sm" variant="outline" disabled={draft.trim().length < 2 || list.length >= 50}><Plus />{t('settings.protectedAdd')}</Button>
         </form>
+        {missing.length ? <div><Button size="sm" variant="ghost" onClick={() => store([...list, ...missing])} data-testid="protected-defaults"><RotateCcw />{t('settings.protectedDefaults')}</Button></div> : null}
       </CardContent>
     </Card>
   );

@@ -19,7 +19,7 @@ test('la página y la app hablan el protocolo del Orb y piden actualizar solo si
   assert.equal(updateNeeded(null), null, 'un Orb antiguo sin min');
   assert.deepEqual(updateNeeded({ v: 5, min: 5 }), { has: 4, need: 5 });
   const web = read('src/ui/lib/web-bridge.js');
-  assert.match(web, /post\('\/api\/me', 'me', \{ v: L\.PROTOCOL \}\)/, '/api/me lleva la versión');
+  assert.match(web, /post\('\/api\/me', 'me', \{ v: L\.PROTOCOL \}[,)]/, '/api/me lleva la versión');
   assert.match(web, /needsUpdate/);
   assert.match(web, /me: \(\) => me/);
 });

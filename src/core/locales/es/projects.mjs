@@ -64,7 +64,7 @@ export default {
   'projects.prs': 'Pull requests abiertos',
   'projects.title': 'Proyectos',
   'projects.meta': 'Cada carpeta dentro de windows, linux, ios, android, web o multi en {home} es un proyecto',
-  'projects.metaRemote': 'Cada carpeta dentro de windows, linux, ios, android, web o multi en el PC es un proyecto',
+  'projects.metaRemote': 'Tus proyectos del PC',
   'projects.clone': 'Clonar',
   'projects.link': 'Vincular carpeta',
   'projects.create': 'Nuevo proyecto',

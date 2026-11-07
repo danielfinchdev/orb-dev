@@ -40,7 +40,7 @@ export default {
   'settings.section.avanzado': 'Advanced',
   'settings.section.acerca': 'About',
   'settings.sectionDesc.general': 'Assistant, language, working folder, appearance and updates.',
-  'settings.sectionDesc.magiclink': 'Who can enter this Orb: the linked phone and browsers.',
+  'settings.sectionDesc.magiclink': 'The phones and browsers linked with this PC.',
   'settings.sectionDesc.agentes': 'How conversations and tasks work, and how much usage they may spend.',
   'settings.sectionDesc.avanzado': 'Agent tools and God mode.',
   'settings.sectionDesc.acerca': 'Version, feedback and other apps.',

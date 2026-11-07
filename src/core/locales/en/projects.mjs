@@ -64,7 +64,7 @@ export default {
   'projects.prs': 'Open pull requests',
   'projects.title': 'Projects',
   'projects.meta': 'Each folder inside windows, linux, ios, android, web or multi in {home} is a project',
-  'projects.metaRemote': 'Each folder inside windows, linux, ios, android, web or multi on the PC is a project',
+  'projects.metaRemote': 'Your projects on the PC',
   'projects.clone': 'Clone',
   'projects.link': 'Link folder',
   'projects.create': 'New project',
