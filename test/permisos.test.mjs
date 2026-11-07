@@ -383,7 +383,7 @@ test('MCP: cada proceso tiene su ticket; el de un proceso cerrado no vuelve a va
 // F2.6c (P3): the guard refuses Orb's data folder by its RESOLVED path, not by names: working on a project that mentions
 // ORB_HOME or has its own orb.db is normal work; «total» asks instead of refusing.
 test('guardia: la carpeta de datos de Orb por su ruta resuelta, sin falsos positivos por nombre', () => {
-  const internalDir = path.join(t.home, '.orb');
+  const internalDir = path.join(t.home, 'core');
   const cwd = path.join(t.home, 'web');
   const verdict = (command, permission = 'editar', extra = {}) => decide({ permission, tool: 'Bash', command, internalDir, cwd, ...extra }).decision;
   for (const command of ['grep -rn ORB_HOME src', 'rg "orb.db"', 'ORB_HOME=/tmp/x node --test test/a.test.mjs', 'sqlite3 my-orb.db "select 1"', 'sqlite3 orb.db .tables',
@@ -392,13 +392,13 @@ test('guardia: la carpeta de datos de Orb por su ruta resuelta, sin falsos posit
   assert.equal(decide({ permission: 'editar', tool: 'Read', paths: ['C:/proj/orb.db'], internalDir, cwd }).decision, 'allow', 'el orb.db de otro proyecto');
   // Orb's own folder, however it is written: absolute (other case, other separator), relative to the agent's folder, in a script.
   const db = path.join(internalDir, 'datos', 'orb.db');
-  for (const command of [`sqlite3 "${db}" .tables`, `type ${db.toUpperCase().replace(/\\/g, '/')}`, 'cat ../.orb/datos/orb.db', 'copy ..\\.orb\\datos\\orb.db-wal .', `node -e "require('fs').writeFileSync('${db.replace(/\\/g, '/')}', '')"`,
+  for (const command of [`sqlite3 "${db}" .tables`, `type ${db.toUpperCase().replace(/\\/g, '/')}`, 'cat ../core/datos/orb.db', 'copy ..\\core\\datos\\orb.db-wal .', `node -e "require('fs').writeFileSync('${db.replace(/\\/g, '/')}', '')"`,
     `echo x > ${path.join(internalDir, 'ejecuciones', 'a.log')}`]) {
     assert.equal(verdict(command), 'deny', command);
     assert.equal(verdict(command, 'total'), 'ask', `total pregunta: ${command}`);
   }
-  for (const tool of ['Read', 'Edit', 'Write']) assert.equal(decide({ permission: 'editar', tool, paths: ['../.orb/datos/control-desarrollo.json'], internalDir, cwd }).decision, 'deny', tool);
-  // An isolated copy lives inside .orb and is the task's own folder.
+  for (const tool of ['Read', 'Edit', 'Write']) assert.equal(decide({ permission: 'editar', tool, paths: ['../core/datos/control-desarrollo.json'], internalDir, cwd }).decision, 'deny', tool);
+  // An isolated copy lives inside core and is the task's own folder.
   const copy = path.join(internalDir, 'copias', 'aisladas', 'web-3');
   assert.equal(decide({ permission: 'editar', tool: 'Edit', paths: ['src/a.js'], internalDir, cwd: copy }).decision, 'allow');
   assert.equal(decide({ permission: 'editar', tool: 'Bash', command: 'npm test && cd .. && ls', internalDir, cwd: copy }).decision, 'allow');
@@ -408,7 +408,7 @@ test('guardia: la carpeta de datos de Orb por su ruta resuelta, sin falsos posit
 
 // F2.6c (P1): the project's agent settings (Claude's .claude/settings*.json, Cursor's hooks, rules and servers) ask first.
 test('guardia: cambiar los ajustes de agentes del proyecto pide permiso', () => {
-  const internalDir = path.join(t.home, '.orb'); const cwd = path.join(t.home, 'web');
+  const internalDir = path.join(t.home, 'core'); const cwd = path.join(t.home, 'web');
   for (const file of ['.claude/settings.json', '.claude\\settings.local.json', 'sub/.cursor/hooks.json', '.cursor/cli.json', '.cursor/mcp.json']) {
     for (const tool of ['Edit', 'Write']) {
       assert.equal(decide({ permission: 'editar', tool, paths: [file], internalDir, cwd }).decision, 'ask', `${tool} ${file}`);
@@ -458,7 +458,7 @@ test('una tarea manual cogida en 3.7, sin conversación que la reclame, vuelve a
 test('móvil: ningún método «remote» devuelve carpetas del PC', async () => {
   const conv = board.createConversation({ title: 'Con rutas', project: 'web' }).id;
   const task = board.createTask({ project: 'web', title: 'Con carpeta', description: 'x', conversation_id: conv }, 'orb');
-  board.patch(task.id, { workdir: path.join(t.home, '.orb', 'copias', 'aisladas', String(task.id)) }, 'orb', 'task.updated');
+  board.patch(task.id, { workdir: path.join(t.home, 'core', 'copias', 'aisladas', String(task.id)) }, 'orb', 'task.updated');
   const s = sessions.create({ kind: 'chat', agent: 'claude', project: 'web', cwd: board.project('web').path, title: 'Directa con carpeta' });
   sessions.addItem(s.id, 'assistant', 'text', 'hola');
   const reads = /\.(list|get|state|live|items|queue|info|options|catalog|guide|now|search|load|read|status|icons|branch)$/;
@@ -506,14 +506,14 @@ test('una llamada sin principal se niega, también la de un método inofensivo',
 
 // The phone's own checks (remote.mjs › guardCall): never full access, never a picture that is not its own upload.
 test('móvil: sin acceso total y sin imágenes que no subió él', async () => {
-  const uploadsDir = path.join(t.home, '.orb', 'adjuntos-movil');
+  const uploadsDir = path.join(t.home, 'core', 'adjuntos-movil');
   assert.match(guardCall(board, 'sessions.create', { agent: 'claude', permission: 'total' }, { uploadsDir }), /acceso total/);
   assert.match(guardCall(board, 'tasks.create', { project: 'web', permission: 'total' }, { uploadsDir }), /acceso total/);
   const total = board.run("INSERT INTO sessions (id, kind, agent, cwd, permission, title, status, created_at, updated_at) VALUES ('total-1', 'chat', 'claude', '.', 'total', 't', 'idle', '', '')");
   assert.ok(total.changes);
   assert.match(guardCall(board, 'sessions.send', { id: 'total-1', text: 'hola' }, { uploadsDir }), /acceso total/);
   assert.equal(guardCall(board, 'sessions.stop', { id: 'total-1' }, { uploadsDir }), null, 'pararla sí');
-  assert.match(guardCall(board, 'chat.send', { text: 'x', images: [path.join(t.home, 'orb.json')] }, { uploadsDir }), /imágenes subidas/);
+  assert.match(guardCall(board, 'chat.send', { text: 'x', images: [path.join(t.home, 'core', 'orb.json')] }, { uploadsDir }), /imágenes subidas/);
   assert.match(guardCall(board, 'chat.send', { text: 'x', images: [path.join(uploadsDir, '..', 'datos', 'orb.db')] }, { uploadsDir }), /imágenes subidas/);
   assert.match(guardCall(board, 'chat.send', { text: 'x', images: [path.join(uploadsDir, 'foto.png')] }), /imágenes subidas/, 'sin carpeta de subidas, ninguna');
   assert.equal(guardCall(board, 'chat.send', { text: 'x', images: [path.join(uploadsDir, 'foto.png')] }, { uploadsDir }), null);

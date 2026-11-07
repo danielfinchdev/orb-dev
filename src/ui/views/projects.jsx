@@ -148,7 +148,7 @@ export function ProjectsView({ route }) {
           <div className="grid items-start gap-4 lg:grid-cols-[minmax(280px,1fr)_minmax(400px,1.4fr)]">
             <Card className="gap-0 overflow-hidden py-0">
               {projects.length ? [...CATEGORIES, null].map((cat) => {
-                // Grouped by category (windows, ios, android, web); linked folders outside Orb's folder go last.
+                // Grouped by category (windows, linux, ios, android, web, multi); linked folders outside Orb's folder go last.
                 const list = projects.filter((p) => (p.category ?? null) === cat);
                 return list.length ? (
                   <div key={cat ?? 'other'} data-testid={`category-${cat ?? 'other'}`}>

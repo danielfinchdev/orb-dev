@@ -65,11 +65,11 @@ try {
   assert.ok(config.tz, 'zona horaria del PC');
   assert.ok((await call('backup.status')).enabled, 'copias activas sin preguntar');
   const home = path.join(base, 'Orb');
-  for (const f of ['orb.json', '.orb/datos/orb.db', 'bitacora/GENERAL.md', 'mcp-servers', 'windows', 'ios', 'android', 'web']) assert.ok(fs.existsSync(path.join(home, f)), `falta ${f}`);
+  for (const f of ['core/orb.json', 'core/datos/orb.db', 'core/bitacora/GENERAL.md', 'core/mcp', 'windows', 'linux', 'ios', 'android', 'web', 'multi']) assert.ok(fs.existsSync(path.join(home, f)), `falta ${f}`);
   // The approval secret is kept encrypted by the system when it can be (then the plain file is gone).
   const encrypted = await app.evaluate(({ safeStorage }) => safeStorage.isEncryptionAvailable());
-  assert.ok(fs.existsSync(path.join(home, '.orb/datos', encrypted ? 'clave.enc' : 'clave.bin')));
-  if (encrypted) assert.ok(!fs.existsSync(path.join(home, '.orb/datos/clave.bin')), 'sin clave en texto plano');
+  assert.ok(fs.existsSync(path.join(home, 'core/datos', encrypted ? 'clave.enc' : 'clave.bin')));
+  if (encrypted) assert.ok(!fs.existsSync(path.join(home, 'core/datos/clave.bin')), 'sin clave en texto plano');
   console.log(`  clave de aprobaciones: ${encrypted ? 'cifrada por el sistema' : 'archivo (este sistema no tiene cifrado)'}`);
 
   // ---- the guided tour (2.6): the robot starts it by itself on the first launch; one step forward, then «Saltar
@@ -117,7 +117,7 @@ try {
   const finished = await until(async () => { const t = await call('tasks.get', { id: task.id }); return ['done', 'failed', 'blocked'].includes(t.status) && t; }, 'tarea terminada', 30000);
   assert.equal(finished.status, 'done', finished.result);
   assert.ok(fs.existsSync(path.join(home, 'web', 'webviaproject', 'hecho-por-claude.txt')));
-  assert.match(fs.readFileSync(path.join(home, 'bitacora', 'proyectos', 'webviaproject.md'), 'utf8'), /Tarea #\d+: Tarea del asistente/);
+  assert.match(fs.readFileSync(path.join(home, 'core', 'bitacora', 'proyectos', 'webviaproject.md'), 'utf8'), /Tarea #\d+: Tarea del asistente/);
 
   // ---- the way back: review, report, OK
   step = 'informe y OK';

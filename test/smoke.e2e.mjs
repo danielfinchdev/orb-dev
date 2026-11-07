@@ -18,7 +18,7 @@ const OUT = path.join(ROOT, 'test-results'); fs.mkdirSync(OUT, { recursive: true
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-humo-'));
 const base = path.join(tmp, 'Documentos'); fs.mkdirSync(base);
 const { home } = createHome(base, { assistantName: 'Nova', userName: 'Ana' });
-writeJson(path.join(home, 'orb.json'), merge(loadConfig(home), { ui: { tourDone: true } })); // 2.6: no guided tour in the tests
+writeJson(path.join(home, 'core', 'orb.json'), merge(loadConfig(home), { ui: { tourDone: true } })); // 2.6: no guided tour in the tests
 assert.equal(path.basename(home), 'Orb', 'la carpeta es siempre Orb, se llame como se llame el asistente');
 const userData = path.join(tmp, 'datos-app'); fs.mkdirSync(userData);
 fs.writeFileSync(path.join(userData, 'ubicacion.json'), JSON.stringify({ home }));

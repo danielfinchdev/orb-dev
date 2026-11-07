@@ -14,11 +14,11 @@ export default {
 
   // ---- tutoriales
   'help.tut.start.title': 'Primeros pasos',
-  'help.tut.start.l1': 'Orb trabaja en la carpeta del asistente (por ejemplo, D:\\Orb), organizada en cuatro categorías: windows, ios, android y web.',
+  'help.tut.start.l1': 'Orb trabaja en su carpeta (por defecto, C:\\Orb), organizada en seis categorías: windows, linux, ios, android, web y multi.',
   'help.tut.start.l2': 'Cada carpeta de una categoría es un proyecto. Las que crees en el Explorador aparecen automáticamente.',
-  'help.tut.start.l3': 'bitacora, mcp-servers y .orb son carpetas internas de Orb y no se pueden usar como proyectos.',
+  'help.tut.start.l3': 'core es la carpeta interna de Orb (oculta) y no se puede usar como proyecto.',
   'help.tut.start.l4': 'Crea tu primer proyecto desde el selector de proyecto del chat o en Proyectos: nuevo, vincular una carpeta o clonar un repositorio.',
-  'help.tut.start.l5': 'Si marcas varias plataformas, Orb crea un proyecto en cada categoría y una carpeta común para el código compartido.',
+  'help.tut.start.l5': 'Un proyecto multiplataforma vive en multi: un solo repositorio con una carpeta por plataforma y «compartido» para lo común.',
   'help.tut.start.go': 'Ir a Proyectos',
 
   'help.tut.chat.title': 'El chat con {name}',
@@ -117,7 +117,7 @@ export default {
   'help.tut.privacy.l1': 'Orb no usa servidores en la nube: todo funciona en tu PC. Solo salen a internet los agentes, con sus propias cuentas, y el acceso del móvil si lo activas.',
   'help.tut.privacy.l2': 'El inicio de sesión lo gestiona el programa oficial de cada agente. Orb nunca ve tus contraseñas ni guarda claves de API.',
   'help.tut.privacy.l3': 'Las acciones de riesgo (push, publicar, descargar y ejecutar, eliminar carpetas, cambios en el sistema) se confirman con Permitir / Permitir siempre / Denegar. Los agentes nunca publican por su cuenta.',
-  'help.tut.privacy.l4': 'Los agentes no pueden acceder a los datos internos de Orb (.orb). Cada uno se identifica con una firma propia, así que no puede suplantar a otro ni cerrar tareas ajenas.',
+  'help.tut.privacy.l4': 'Los agentes no pueden acceder a los datos internos de Orb (core). Cada uno se identifica con una firma propia, así que no puede suplantar a otro ni cerrar tareas ajenas.',
   'help.tut.privacy.l5': 'Lo que devuelven los agentes se trata como datos, nunca como órdenes. Las bitácoras ocultan los secretos.',
 
   // ---- atajos (help.key.<n>.k = teclas, .v = qué hace)
@@ -142,7 +142,7 @@ export default {
   'help.faq.1.q': '¿Necesito una cuenta de pago?',
   'help.faq.1.a': 'Necesitas una cuenta propia de al menos un agente (Claude Code, Codex, Cursor, Gemini CLI…). Orb usa su programa oficial y tu sesión, sin costes adicionales.',
   'help.faq.2.q': '¿Dónde se guardan mis datos?',
-  'help.faq.2.a': 'En la carpeta del asistente (por ejemplo, D:\\Orb): orb.json con los ajustes, los proyectos por categoría, las bitácoras en bitacora y la base de datos y las copias para deshacer en .orb. Nada se sube a la nube.',
+  'help.faq.2.a': 'En la carpeta de Orb (por defecto, C:\\Orb): los proyectos por categoría y, en core (oculta), los ajustes, las bitácoras, la base de datos y las copias para deshacer. Las copias de seguridad van fuera de esa carpeta (en Ajustes › Datos se ve dónde). Nada se sube a la nube.',
   'help.faq.3.q': '¿Qué cambia al activar o desactivar el «Orquestador»?',
   'help.faq.3.a': 'Con «Orquestador», {name} solo coordina: lee el proyecto y reparte instrucciones entre los agentes, que hacen el trabajo. Sin él, hablas directamente con el agente que elijas, que edita y ejecuta en la carpeta del proyecto, pide permiso para lo arriesgado y nunca hace push ni publica.',
   'help.faq.4.q': '¿Por qué una tarea está pendiente de aprobación?',
@@ -184,7 +184,7 @@ export default {
   'help.tour.chat.title': 'Escríbeme aquí',
   'help.tour.chat.text': 'Cuéntame qué necesitas: lo convierto en tareas para los agentes, las superviso y te aviso al terminar. Intro envía, Mayús+Intro añade una línea y @ adjunta contexto.',
   'help.tour.project.title': 'Proyecto',
-  'help.tour.project.text': 'Elige en qué proyecto trabajamos o crea uno nuevo. Cada proyecto es una carpeta dentro de windows, ios, android o web.',
+  'help.tour.project.text': 'Elige en qué proyecto trabajamos o crea uno nuevo. Cada proyecto es una carpeta dentro de windows, linux, ios, android, web o multi.',
   'help.tour.brain.title': 'Cerebro',
   'help.tour.brain.text': 'El agente y el modelo que trabajan por mí. Si una elección puede agotar tu uso, te aviso.',
   'help.tour.reasoning.title': 'Razonamiento',

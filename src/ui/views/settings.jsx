@@ -232,7 +232,7 @@ function McpCard({ c }) {
       return true;
     }
   });
-  // Orb's mcp-servers folder: each subfolder is a server; one click adds it with the command that starts it.
+  // Orb's MCP folder (core\mcp): each subfolder is a server; one click adds it with the command that starts it.
   const [folder, setFolder] = useState(null);
   const loadFolder = () => call('mcp.folder').then(setFolder).catch(() => setFolder(null));
   useEffect(() => { if (!bridge.mobile) loadFolder(); }, [c.mcpServers.length]);
@@ -302,7 +302,7 @@ function UpdatesCard() {
   );
 }
 
-// Android's adb: downloaded by Orb into android\adb-tools (and in the agents' PATH).
+// Android's adb: downloaded by Orb into core\herramientas\adb (and in the agents' PATH).
 function AndroidCard() {
   const t = useT();
   const [st, setSt] = useState(null);

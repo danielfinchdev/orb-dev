@@ -7,12 +7,12 @@ import path from 'node:path';
 import readline from 'node:readline';
 import net from 'node:net';
 import { useHome, ctx, tr } from '../core/context.mjs';
-import { isHome, CATEGORIES, AGENT_LABELS } from '../core/home.mjs';
+import { isHome, CATEGORIES, PLATFORMS, AGENT_LABELS } from '../core/home.mjs';
 import { budgetConfig, waitReason, modelLimits } from '../core/budget.mjs';
 import { accountLabel, accountsOf } from '../core/accounts.mjs';
 import { oneLine } from '../core/safety.mjs';
 import { git, copyIntoWorkdir } from '../core/workspace.mjs';
-import { createProjects } from '../core/projects.mjs';
+import { newProject } from '../core/projects.mjs';
 import { createSchedule, EVERY } from '../core/schedules.mjs';
 import { mustOwnTask, ownsTask } from '../core/permissions.mjs';
 import { redeem, ticketFromArgs } from './auth-client.mjs';
@@ -292,16 +292,16 @@ const tools = [
   { name: 'orb_read_messages', description: 'Lee tus mensajes sin leer (y los marca como leídos).', inputSchema: { type: 'object', properties: {} },
     run: () => { const rows = board.inbox(ME, true, mayRead, INBOX); return rows.length ? rows : 'Sin mensajes nuevos.'; } },
   ...(BOSS ? [
-    { name: 'orb_add_project', description: `Registra una carpeta existente como proyecto (dentro de una categoría de ${ctx.paths.projects}: windows, ios, android o web; o en las carpetas permitidas).`,
+    { name: 'orb_add_project', description: `Registra una carpeta existente como proyecto (dentro de una categoría de ${ctx.paths.projects}: ${CATEGORIES.join(', ')}; o en las carpetas permitidas).`,
       inputSchema: { type: 'object', required: ['name', 'path'], properties: { name: str('Nombre corto'), path: str('Ruta absoluta de la carpeta'), notes: str('Notas opcionales') } },
       run: (a) => board.addProject(a, ME) },
-    { name: 'orb_create_project', description: `Crea un proyecto nuevo: carpeta propia en su categoría de ${ctx.paths.projects}, con git y su bitácora. Con varias plataformas es multiplataforma: crea <name>-<plataforma> en cada categoría (tienda-android, tienda-ios…), unidos en un grupo, y una carpeta común ${path.join(ctx.home, 'comun', '<name>')} para lo que comparten. Si ${USER} no ha dicho la plataforma, pregúntasela antes con orb_ask (multi: true).`,
-      inputSchema: { type: 'object', required: ['name'], properties: { name: str('Nombre del proyecto'), categories: { type: 'array', items: { type: 'string', enum: CATEGORIES }, minItems: 1, maxItems: 4, description: 'Plataformas: windows, ios, android, web (una o varias)' }, category: { type: 'string', enum: CATEGORIES, description: 'Una sola plataforma (como categories con una)' }, notes: str('Notas opcionales') } },
+    { name: 'orb_create_project', description: `Crea un proyecto nuevo: carpeta propia en su categoría de ${ctx.paths.projects}, con git y su bitácora. Un proyecto para varias plataformas es multiplataforma (category "multi" y platforms): una sola carpeta y un solo repositorio, con una subcarpeta por plataforma y "compartido" para lo que comparten. Si ${USER} no ha dicho la plataforma, pregúntasela antes con orb_ask (multi: true).`,
+      inputSchema: { type: 'object', required: ['name'], properties: { name: str('Nombre del proyecto'), category: { type: 'string', enum: CATEGORIES, description: `Categoría: ${CATEGORIES.join(', ')} (multi = multiplataforma)` }, platforms: { type: 'array', items: { type: 'string', enum: PLATFORMS }, minItems: 1, maxItems: PLATFORMS.length, description: 'Solo con category multi: sus plataformas' }, notes: str('Notas opcionales') } },
       run: (a) => {
-        const made = createProjects(board, { name: a.name, notes: a.notes, categories: a.categories?.length ? a.categories : [a.category] }, ME);
+        const made = newProject(board, { name: a.name, notes: a.notes, category: a.category, platforms: a.platforms }, ME);
         // A conversation without a project yet works in the one it just made (and so may keep its log).
-        if (CONV && made[0] && !board.conversation(CONV)?.project) { try { board.setConversationProject(CONV, made[0].name, ME); } catch { /* made anyway */ } }
-        return made.map((p) => ({ name: p.name, path: p.path, grupo: p.grupo ?? null }));
+        if (CONV && made && !board.conversation(CONV)?.project) { try { board.setConversationProject(CONV, made.name, ME); } catch { /* made anyway */ } }
+        return { name: made.name, path: made.path };
       } },
     { name: 'orb_set_project', description: 'Fija el proyecto de esta conversación. Todas sus tareas nuevas irán ahí. Vacío = ninguno.',
       inputSchema: { type: 'object', properties: { name: str('Nombre del proyecto registrado (vacío para quitarlo)') } },

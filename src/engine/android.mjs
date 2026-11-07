@@ -1,4 +1,4 @@
-// Android's tools (adb, fastboot): Orb keeps them in <home>\android\adb-tools and downloads Google's platform-tools there
+// Android's tools (adb, fastboot): Orb keeps them in <home>\core\herramientas\adb and downloads Google's platform-tools there
 // when they are missing, so agents working on Android projects find adb without the user installing anything.
 // The folder goes first in the PATH of the engine (and so of every agent it starts).
 import fs from 'node:fs';

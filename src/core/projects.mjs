@@ -1,10 +1,10 @@
-// Projects live inside the categories of the assistant's folder (D:\Orb\<windows|ios|android|web>\<proyecto>). The app
-// creates them with git from the start (so every task can be undone and isolated copies are possible), and any folder the
-// user creates by hand inside a category shows up too. Orb's own folders (bitacora, mcp-servers, .orb) are never projects.
+// Projects live inside the categories of the workspace (C:\Orb\<windows|linux|ios|android|web|multi>\<proyecto>). The
+// app creates them with git from the start (so every task can be undone and isolated copies are possible), and any folder
+// the user creates by hand inside a category shows up too. Orb's own folder (core) is never a project.
 import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from './context.mjs';
-import { folderName, isReservedName, isReservedInCategory, isCategory, categoryOf, folderKey, IGNORED_PROJECTS, CATEGORIES, DEFAULT_CATEGORY } from './home.mjs';
+import { folderName, isReservedName, isReservedInCategory, isCategory, categoryOf, folderKey, IGNORED_PROJECTS, CATEGORIES, DEFAULT_CATEGORY, PLATFORMS, MULTI, SHARED_DIR } from './home.mjs';
 import { git, ORB_GIT } from './workspace.mjs';
 import { projectNameProblem } from './product.mjs';
 
@@ -22,11 +22,15 @@ export function checkProjectName(name) {
 }
 
 
-export function createProject(board, { name, notes = '', category }, actor) {
+// 3.8: a multiplatform project (category multi) is one folder and one repository: a subfolder per platform and
+// compartido\ for what they share (API, design, texts, images), with a LEEME.md that says so. `platforms`: the ones it
+// has (at least one; web if none).
+export function createProject(board, { name, notes = '', category, platforms = [] }, actor) {
   const clean = String(name ?? '').normalize('NFC').trim();
   checkProjectName(clean);
   if (board.project(clean)) throw new Error(tr('msg.projects.exists', { name: clean }));
   const cat = checkCategory(category);
+  const parts = cat === MULTI ? checkPlatforms(platforms) : [];
   const dir = folderName(clean, 'proyecto');
   if (isReservedName(dir)) throw new Error(tr('msg.projects.reserved', { dir, name: ctx.config.assistantName }));
   const folder = path.join(ctx.paths.categories[cat], dir);
@@ -38,7 +42,13 @@ export function createProject(board, { name, notes = '', category }, actor) {
   if (init.status !== 0 && init.status !== -1) { init = git(folder, 'init', '-q'); if (init.status === 0) git(folder, 'symbolic-ref', 'HEAD', 'refs/heads/main'); }
   if (init.status === 0) {
     fs.writeFileSync(path.join(folder, '.gitignore'), 'node_modules/\ndist/\n.env\n.env.*\n*.env\n!.env.example\n.orb-adjuntos/\nBITACORA.md\n');
-    git(folder, 'add', '.gitignore');
+  }
+  if (parts.length) {
+    for (const sub of [...parts, SHARED_DIR]) { fs.mkdirSync(path.join(folder, sub), { recursive: true }); fs.writeFileSync(path.join(folder, sub, '.gitkeep'), ''); }
+    fs.writeFileSync(path.join(folder, 'LEEME.md'), tr('msg.projects.multiReadme', { name: clean, list: parts.map((x) => `${x}/`).join(', '), shared: `${SHARED_DIR}/` }));
+  }
+  if (init.status === 0) {
+    git(folder, 'add', '.');
     git(folder, ...ORB_GIT, 'commit', '-q', '-m', tr('sys.projects.firstCommit'));
   }
   return board.addProject({ name: clean, path: folder, notes }, actor);
@@ -95,24 +105,21 @@ export function renameProject(board, { name, to }, actor) {
   return board.project(next);
 }
 
-// 2.7: a project for one platform or for several. Several = a multiplatform group: one project per platform in its own
-// category, named <name>-<platform> (tienda-android, tienda-ios…), linked by their group, plus a shared folder
-// <home>/comun/<name> for what they have in common (API, design, texts, images) that every one of them reads.
-export function createProjects(board, { name, notes = '', categories }, actor) {
-  const cats = [...new Set((Array.isArray(categories) && categories.length ? categories : [undefined]).map(checkCategory))];
-  if (cats.length === 1) return [createProject(board, { name, notes, category: cats[0] }, actor)];
-  const base = checkProjectName(name);
-  const names = cats.map((c) => `${base}-${c}`);
-  for (const n of names) if (board.project(n)) throw new Error(tr('msg.projects.exists', { name: n }));
-  const made = names.map((n, i) => createProject(board, { name: n, notes, category: cats[i] }, actor));
-  const common = commonFolder(base);
-  fs.mkdirSync(common, { recursive: true });
-  const readme = path.join(common, 'LEEME.md');
-  if (!fs.existsSync(readme)) fs.writeFileSync(readme, tr('msg.projects.commonReadme', { name: base, list: names.join(', ') }));
-  for (const p of made) board.run('UPDATE projects SET grupo = ? WHERE name = ?', base, p.name);
-  board.changed('projects');
-  return made.map((p) => board.project(p.name));
+const checkPlatforms = (list) => {
+  const out = [...new Set((Array.isArray(list) ? list : []).map((x) => String(x ?? '').trim().toLowerCase()).filter(Boolean))];
+  for (const x of out) if (!PLATFORMS.includes(x)) throw new Error(tr('msg.projects.badCategory', { category: x, list: PLATFORMS.join(', ') }));
+  return out.length ? PLATFORMS.filter((x) => out.includes(x)) : [DEFAULT_CATEGORY];
+};
+
+// One platform → its category; several (or multi) → one multiplatform project in multi with them.
+export function newProject(board, { name, notes = '', category, platforms }, actor) {
+  const list = Array.isArray(platforms) ? platforms : [];
+  if (String(category ?? '').toLowerCase() === MULTI || list.length > 1) return createProject(board, { name, notes, category: MULTI, platforms: list }, actor);
+  return createProject(board, { name, notes, category: category || list[0] }, actor);
 }
+
+// 2.7–3.7: a multiplatform project was a group (tienda-android, tienda-ios… with a shared folder <home>/comun/<name>).
+// None is made any more (multi instead); the groups of a workspace of those versions still work together.
 export const commonFolder = (group) => path.join(ctx.home, 'comun', folderName(group, 'proyecto'));
 // The group of a project: its sister projects (with their folders) and the shared folder; null if it is on its own.
 export function groupOf(board, project) {

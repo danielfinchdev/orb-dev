@@ -1,7 +1,7 @@
 // Approvals of sensitive tasks: only the app (a click by the user) signs them; the scheduler verifies them.
 // The signature is an HMAC with the assistant's secret. In the app the secret is kept encrypted by Windows (DPAPI, through
 // Electron's safeStorage) and handed to the engine in memory, so an agent that reads files cannot forge an approval.
-// Without the app (tests, or a system without safeStorage) it falls back to <home>/.orb/datos/clave.bin.
+// Without the app (tests, or a system without safeStorage) it falls back to <home>/core/datos/clave.bin.
 // The MCP server never gets the secret: it cannot sign, and it treats unverifiable approvals as missing (safe side).
 import crypto from 'node:crypto';
 import { ctx } from './context.mjs';

@@ -1,10 +1,10 @@
 // 3.8: the one-time move of a 3.5–3.7 data folder to Orb 3.8, which has no bots, replicas, links between Orbs, Orb
 // Terminal, several users, lent accounts or shared projects. Run by db.mjs when this home's database opens (any process;
-// one at a time: an exclusive transaction on .orb/datos/migracion-3.8.lock.db, released by the system if the process dies).
-//   1. orb.json as it was (.orb/datos/migracion-3.8/orb-3.7.json, written once: everything else is built from it; never in
-//      the archive or a backup, it has other users' keys) and a checked copy of the database (.orb/datos/orb-pre-3.8.db:
+// one at a time: an exclusive transaction on core/datos/migracion-3.8.lock.db, released by the system if the process dies).
+//   1. orb.json as it was (core/datos/migracion-3.8/orb-3.7.json, written once: everything else is built from it; never in
+//      the archive or a backup, it has other users' keys) and a checked copy of the database (core/datos/orb-pre-3.8.db:
 //      VACUUM INTO a .tmp, quick_check, fsync, rename; remade when the database changed since: FINGERPRINT).
-//   2. One transaction: the readable archive (.orb/archivo-3.7/: the bots, each other user's data, the removed settings,
+//   2. One transaction: the readable archive (core/archivo-3.7/: the bots, each other user's data, the removed settings,
 //      orb.json without other users' keys) is written and the files are COPIED into it (nothing is moved or deleted yet);
 //      then the replicas' triggers, the bots' and other users' rows, the tables and indexes, the devices' old columns and
 //      the old settings go; the owner's rows lose their person (person_id NULL, dropped in 3.9) and the chat-list marks take
@@ -37,8 +37,8 @@ const SCRUBBED = 'migrated_3_8_scrubbed';
 export const ARCHIVE_DIR = 'archivo-3.7';
 export const PRE_COPY = 'orb-pre-3.8.db';
 export const ORIGINAL_CONFIG = 'orb-3.7.json';
-export const WORK_DIR = 'migracion-3.8'; // .orb/datos: orb.json as it was, until finish()
-const RUN_FILE = 'migracion-3.8.json'; // .orb/datos: the archive and copy of the run not finished yet
+export const WORK_DIR = 'migracion-3.8'; // core/datos: orb.json as it was, until finish()
+const RUN_FILE = 'migracion-3.8.json'; // core/datos: the archive and copy of the run not finished yet
 export const LOCK_FILE = 'migracion-3.8.lock.db';
 export const SCRUB_AFTER_MS = 30 * 86_400_000;
 // How long a process waits for another one migrating the same folder (ORB_MIGRATION_LOCK_MS: tests).
@@ -719,7 +719,7 @@ function migrate(db, home) {
 }
 
 // ---- the data of 3.7 kept after the migration
-// The archives (.orb/archivo-3.7*) and the copies of the database (.orb/datos/orb-pre-3.8*). → { archives, copies, bytes }.
+// The archives (core/archivo-3.7*) and the copies of the database (core/datos/orb-pre-3.8*). → { archives, copies, bytes }.
 export function legacyData(home) {
   const p = paths(home);
   const list = (dir, test) => { try { return fs.readdirSync(dir).filter(test).map((n) => path.join(dir, n)); } catch { return []; } };

@@ -8,11 +8,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, saveConfig, tr } from '../core/context.mjs';
-import { AGENT_IDS, categoryOf, CATEGORIES } from '../core/home.mjs';
+import { AGENT_IDS, categoryOf, CATEGORIES, PLATFORMS } from '../core/home.mjs';
 import { accountsOf, accountDir, accountLabel, accounts as allAccounts } from '../core/accounts.mjs';
 import { usageReport, modelName } from '../core/budget.mjs';
 import { brainOf } from './orchestrator.mjs';
-import { createProjects, syncProjects, checkProjectName, renameProject } from '../core/projects.mjs';
+import { newProject, syncProjects, checkProjectName, renameProject } from '../core/projects.mjs';
 import { PRODUCT } from '../core/product.mjs';
 import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../core/schedules.mjs';
 import { oneLine, redactSecrets, localStamp } from '../core/safety.mjs';
@@ -172,12 +172,11 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return board.projects().map((p) => ({ ...p, inHome: insideHome(p.path), category: categoryOf(realHome, p.path), active: active === p.name,
         open: board.one("SELECT COUNT(*) AS n FROM tasks WHERE project = ? AND status IN ('queued', 'awaiting_approval', 'running')", p.name).n }));
     },
-    // 2.7: several platforms at once (categories) = a multiplatform group; returns the first project and the whole list.
-    'projects.create': ({ name, notes, category, categories }) => {
-      const cats = Array.isArray(categories) && categories.length ? categories.slice(0, 4).map((c) => oneOf(c, CATEGORIES, 'categoría')) : [oneOf(category, CATEGORIES, 'categoría', undefined)];
-      const made = createProjects(board, { name: str(name, 'nombre', 60), notes: str(notes, 'notas', 2000, { optional: true }), categories: cats }, 'usuario');
-      return { ...made[0], all: made.map((p) => p.name) };
-    },
+    // 3.8: category multi (or several platforms) = one multiplatform project with a folder per platform.
+    'projects.create': ({ name, notes, category, platforms }) => board.project(newProject(board, {
+      name: str(name, 'nombre', 60), notes: str(notes, 'notas', 2000, { optional: true }), category: oneOf(category, CATEGORIES, 'categoría', undefined),
+      platforms: Array.isArray(platforms) ? platforms.slice(0, PLATFORMS.length).map((c) => oneOf(c, PLATFORMS, 'plataforma')) : []
+    }, 'usuario').name),
     'projects.import': ({ name, folder }) => board.addProject({ name: checkProjectName(str(name, 'nombre', 60)), path: str(folder, 'carpeta', 1000) }, 'usuario', { fromUser: true }),
     'projects.remove': ({ name }) => board.removeProject(project(name).name, 'usuario'),
     // 3.2.1: a new name (and folder) for a project with nothing working in it (core/projects.mjs renameProject).

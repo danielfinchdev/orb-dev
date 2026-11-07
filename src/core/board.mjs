@@ -64,9 +64,9 @@ export function checkModel(agent, model, listed = []) {
   return model;
 }
 
-// Projects live in the categories of the assistant's folder (each subfolder of windows, ios, android or web is one). Agents (MCP) may only register folders there or in the
+// Projects live in the categories of the workspace (each subfolder of windows, linux, ios, android, web or multi is one). Agents (MCP) may only register folders there or in the
 // extra roots of the settings; the user can also link any outside folder from the app (fromUser). Never a drive root, the
-// assistant's folder itself, its own folders (.orb, bitacora, mcp-servers), a category folder itself (inside the assistant's
+// workspace itself, Orb's own folders (core, and the ones of older versions), a category folder itself (inside the
 // folder a project is always <category>\<project>) or a folder that contains the assistant's.
 export function checkProjectPath(target, { fromUser = false } = {}) {
   let r; try { r = fs.realpathSync(target); } catch { throw new Error(tr('msg.board.pathMissing', { target })); }

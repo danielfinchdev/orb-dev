@@ -80,15 +80,15 @@ test('restore on a clean machine with the recovery code brings everything back',
     const target = path.join(clean, 'Orb');
     // The new machine has another secret: only the code opens it.
     await assert.rejects(K.restoreInto(target, moved, { secret: crypto.randomBytes(32) }), { code: 'needsPassphrase' });
-    assert.ok(!fs.existsSync(path.join(target, 'orb.json')));
+    assert.ok(!fs.existsSync(path.join(target, 'core', 'orb.json')));
     const r = await K.restoreInto(target, moved, { secret: crypto.randomBytes(32), passphrase: code });
     assert.ok(r.files >= 5);
-    assert.ok(fs.existsSync(path.join(target, 'orb.json')));
-    assert.equal(fs.readFileSync(path.join(target, 'bitacora', 'proyectos', 'casa.md'), 'utf8').trim(), 'A Ana le gusta el té verde.');
-    assert.match(fs.readFileSync(path.join(target, 'bitacora', 'GENERAL.md'), 'utf8'), /Línea de prueba/);
+    assert.ok(fs.existsSync(path.join(target, 'core', 'orb.json')));
+    assert.equal(fs.readFileSync(path.join(target, 'core', 'bitacora', 'proyectos', 'casa.md'), 'utf8').trim(), 'A Ana le gusta el té verde.');
+    assert.match(fs.readFileSync(path.join(target, 'core', 'bitacora', 'GENERAL.md'), 'utf8'), /Línea de prueba/);
     // The secret travels inside (the approvals keep working there).
-    assert.ok(fs.readFileSync(path.join(target, '.orb', 'datos', 'clave.bin')).equals(s.secret));
-    const db = new DatabaseSync(path.join(target, '.orb', 'datos', 'orb.db'), { readOnly: true });
+    assert.ok(fs.readFileSync(path.join(target, 'core', 'datos', 'clave.bin')).equals(s.secret));
+    const db = new DatabaseSync(path.join(target, 'core', 'datos', 'orb.db'), { readOnly: true });
     try {
       assert.equal(db.prepare('SELECT title FROM conversations WHERE id = ?').get(s.conv.id).title, 'Leo');
       assert.equal(db.prepare('SELECT body FROM chat WHERE conversation_id = ?').get(s.conv.id).body, 'Regar las plantas');
@@ -118,7 +118,7 @@ test('restore in place swaps at the next start; what was there is kept aside', a
     assert.ok(r && fs.existsSync(r.aside));
     assert.equal(r.secretChanged, true); // the old folder had no clave.bin of its own
     assert.match(fs.readFileSync(projectLog(), 'utf8'), /té verde/);
-    assert.match(fs.readFileSync(path.join(r.aside, 'bitacora', 'proyectos', 'casa.md'), 'utf8'), /Cambiado/);
+    assert.match(fs.readFileSync(path.join(r.aside, 'core', 'bitacora', 'proyectos', 'casa.md'), 'utf8'), /Cambiado/);
     useHome(s.home);
     const b2 = new Board();
     try { assert.equal(b2.one('SELECT COUNT(*) AS n FROM chat').n, 1); } finally { b2.db.close(); }
@@ -140,7 +140,7 @@ test('several 1 MiB chunks: a big file round-trips; swapping or changing a middl
     const out = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-grande-'));
     try {
       await K.restoreInto(out, file, { secret: s.secret });
-      assert.ok(fs.readFileSync(path.join(out, 'bitacora', 'proyectos', 'grande.bin')).equals(big));
+      assert.ok(fs.readFileSync(path.join(out, 'core', 'bitacora', 'proyectos', 'grande.bin')).equals(big));
       const bad = path.join(out, 'mal.orbbak');
       const changed = Buffer.from(raw); changed[frames[1][0] + 100] ^= 0xff; fs.writeFileSync(bad, changed);
       await assert.rejects(K.verifyBackup(bad, { secret: s.secret }), { code: 'damaged' });

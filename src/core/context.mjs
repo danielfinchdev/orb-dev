@@ -33,14 +33,14 @@ export function saveConfig(patch) {
 }
 
 // An account's login folder holds that subscription's credentials: never where agents work (the assistant's folder, a
-// project, the allowed roots) and never on a network share. Only the app's own .orb/cuentas is fine inside the folder.
+// project, the allowed roots) and never on a network share. Only the app's own core/cuentas is fine inside the folder.
 export function checkAccountHome(home, c = ctx.config, projects = []) {
   const raw = String(home);
   if (/^(\\\\|\/\/)/.test(raw)) throw new Error(tr('msg.ctx.accountNet'));
   const norm = (p) => path.resolve(p).toLowerCase().replace(/[\\/]+$/, '');
   const target = norm(raw);
   const inside = (dir) => { const d = norm(dir); return target === d || target.startsWith(d + path.sep); };
-  if (ctx.home && inside(ctx.home) && !inside(path.join(ctx.paths?.internal ?? path.join(ctx.home, '.orb'), 'cuentas'))) throw new Error(tr('msg.ctx.accountInHome'));
+  if (ctx.home && inside(ctx.home) && !inside(path.join(ctx.paths?.internal ?? paths(ctx.home).internal, 'cuentas'))) throw new Error(tr('msg.ctx.accountInHome'));
   for (const dir of [...(c?.projectRoots ?? []), ...projects]) if (dir && inside(dir)) throw new Error(tr('msg.ctx.accountInDir', { dir }));
 }
 

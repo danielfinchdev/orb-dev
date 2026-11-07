@@ -111,9 +111,9 @@ export function riskOf(command, lang = 'es') {
   return null;
 }
 
-// 3.8: Orb's data folder (today the assistant's .orb; one place to change it) is never an agent's business: what a tool
+// 3.8: Orb's data folder (core, src/core/home.mjs › paths().internal) is never an agent's business: what a tool
 // names or a command mentions is resolved (against the agent's folder) and refused when it falls inside it. The isolated
-// copies (.orb\copias\aisladas) are where isolated tasks work, so those stay open. Matched by RESOLVED path, not by name:
+// copies (core\copias\aisladas) are where isolated tasks work, so those stay open. Matched by RESOLVED path, not by name:
 // a project may well have its own orb.db or talk about ORB_HOME. Not a boundary: a shell of the same Windows user can
 // always reach the folder some other way (cd .. a few times, a script); the agents' identity no longer depends on its
 // database (agent-auth.mjs), so what is left is the integrity of Orb's data against an agent bent on it (accepted).

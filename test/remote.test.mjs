@@ -148,7 +148,7 @@ test('el móvil hace lo suyo y nada más (acciones del PC, acceso total, archivo
   await denied('sessions.send', { id: total.id, text: 'hola' });
   for (const method of ['config.save', 'accounts.add', 'installer.start', 'remote.pair', 'remote.configure', 'projects.import', 'projects.createPr', 'agents.login', 'agents.loginCode', 'agents.install']) await denied(method, {});
   await denied('sessions.create', { agent: 'codex', permission: 'total' });
-  await denied('sessions.send', { id: 'x', text: 'hola', images: [path.join(t.home, 'orb.json')] });
+  await denied('sessions.send', { id: 'x', text: 'hola', images: [path.join(t.home, 'core', 'orb.json')] });
   // A picture uploaded from the phone: encrypted, and checked by its bytes.
   const upload = async (bytes) => {
     const auth = C.sealText(p.key, { t: Date.now(), m: 'upload' }, C.AAD.request(p.id));
@@ -160,7 +160,7 @@ test('el móvil hace lo suyo y nada más (acciones del PC, acceso total, archivo
   const up = await upload(new Uint8Array(png));
   // F2.6c (P7): the phone gets the picture's name, never the PC's folder; it sends that name back with its message.
   assert.match(up.result.path, /^\d+-[0-9a-f]{8}\.png$/);
-  assert.equal(fs.readFileSync(path.join(t.home, '.orb', 'adjuntos-movil', up.result.path)).equals(png), true);
+  assert.equal(fs.readFileSync(path.join(t.home, 'core', 'adjuntos-movil', up.result.path)).equals(png), true);
   const withPicture = await p.call('sessions.send', { id: 'no-existe', text: 'hola', images: [up.result.path] });
   assert.notEqual(withPicture.status, 403, 'su propia imagen, por su nombre, sí');
   assert.ok(!String(withPicture.error ?? '').includes(t.home), 'los errores tampoco llevan la carpeta');

@@ -70,7 +70,7 @@ export class Scheduler {
   }
 
   // 3.2.1: isolated copies left over from a previous run (a task's process still held the folder open when Orb tried to
-  // remove it, or Orb was closed before joining). At startup, folders under .orb\copias\aisladas that no git worktree and
+  // remove it, or Orb was closed before joining). At startup, folders under core\copias\aisladas that no git worktree and
   // no open task refers to any more are removed, and git forgets the worktrees it can no longer find.
   pruneCopies() {
     let dirs = []; try { dirs = fs.readdirSync(ctx.paths.worktrees, { withFileTypes: true }); } catch { return; }
@@ -99,7 +99,7 @@ export class Scheduler {
   }
 
   // Undo checkpoints do not pile up: those of tasks over for more than `days` go (the copy of the folder, or the hidden
-  // git refs), and so do copies no task refers to any more. Only Orb's own folders t<id>-<time> in .orb\copias\fotos.
+  // git refs), and so do copies no task refers to any more. Only Orb's own folders t<id>-<time> in core\copias\fotos.
   pruneCheckpoints(days = 30) {
     const { board } = this;
     const old = Date.now() - days * 86_400_000;
@@ -851,7 +851,7 @@ No hagas commit, merge, rebase ni cambies de rama: deja los cambios en los archi
     this.board.settingJson(`integrate:${task.id}`, null);
     this.board.event(task.id, 'orb', 'task.integrated', `unida a la carpeta por la tarea #${by.id}`);
   }
-  // The copy (worktree) and its branch, once their work is in the folder. Only Orb's own copies under .orb\copias\aisladas.
+  // The copy (worktree) and its branch, once their work is in the folder. Only Orb's own copies under core\copias\aisladas.
   dropCopy(task, project) {
     const inside = task.workdir && path.resolve(task.workdir).toLowerCase().startsWith(path.resolve(ctx.paths.worktrees).toLowerCase() + path.sep);
     if (inside && fs.existsSync(task.workdir)) {

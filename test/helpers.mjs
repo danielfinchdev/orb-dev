@@ -23,7 +23,7 @@ export function tempHome(patch = {}) {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-test-'));
   const { home } = createHome(base, { userName: 'Ana' });
   const config = merge(loadConfig(home), merge({ agents: OFF }, patch));
-  writeJson(path.join(home, 'orb.json'), config);
+  writeJson(path.join(home, 'core', 'orb.json'), config);
   useHome(home);
   // On Windows a database still open (this process or an engine that is closing) cannot be deleted: try for a moment and
   // leave the rest to the system's temp cleanup rather than failing the tests.
@@ -65,7 +65,7 @@ export async function startEngine(home, { env = {} } = {}) {
 
 // Lines the fake agents wrote to a run's registro.jsonl (a task: its id; a conversation: conversaciones/<id>).
 export function fakeLog(home, run) {
-  const file = path.join(home, '.orb', 'ejecuciones', String(run), 'registro.jsonl');
+  const file = path.join(home, 'core', 'ejecuciones', String(run), 'registro.jsonl');
   let text = ''; try { text = fs.readFileSync(file, 'utf8'); } catch { return []; }
   return text.split('\n').filter((l) => l.startsWith('{"fake"')).map((l) => JSON.parse(l));
 }

@@ -13,6 +13,6 @@ export default {
   'setup.changeLocation': 'Change location…',
   'setup.pickLocation': 'Choose location…',
   'setup.example': 'For example, D:\\ to create D:\\{name}',
-  'setup.folderNote': 'Your projects, logs and my data are stored here. If you pick a folder I’ve used before, I’ll keep using it.',
+  'setup.folderNote': 'Your projects go here, each in its category, plus my hidden core folder with my data. If you pick a folder I’ve used before, I’ll keep using it.',
   'setup.create': 'Create and start'
 };

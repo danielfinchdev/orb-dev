@@ -13,11 +13,11 @@ export default {
 
   // ---- tutorials
   'help.tut.start.title': 'Getting started',
-  'help.tut.start.l1': 'Orb works in the assistant’s folder (for example, D:\\Orb), organised into four categories: windows, ios, android and web.',
+  'help.tut.start.l1': 'Orb works in its folder (C:\\Orb by default), organised into six categories: windows, linux, ios, android, web and multi.',
   'help.tut.start.l2': 'Every folder in a category is a project. Folders you create in File Explorer appear automatically.',
-  'help.tut.start.l3': 'bitacora, mcp-servers and .orb are Orb’s internal folders and can’t be used as projects.',
+  'help.tut.start.l3': 'core is Orb’s internal (hidden) folder and can’t be used as a project.',
   'help.tut.start.l4': 'Create your first project from the chat’s project selector or in Projects: new, link a folder or clone a repository.',
-  'help.tut.start.l5': 'If you select several platforms, Orb creates a project in each category plus a shared folder for common code.',
+  'help.tut.start.l5': 'A multiplatform project lives in multi: one repository with a folder per platform and «compartido» for what they share.',
   'help.tut.start.go': 'Go to Projects',
 
   'help.tut.chat.title': 'Chatting with {name}',
@@ -116,7 +116,7 @@ export default {
   'help.tut.privacy.l1': 'Orb uses no cloud servers: everything runs on your PC. Only the agents, with their own accounts, and phone access (if enabled) reach the internet.',
   'help.tut.privacy.l2': 'Sign-in is handled by each agent’s official program. Orb never sees your passwords or stores API keys.',
   'help.tut.privacy.l3': 'Risky actions (push, publishing, download and run, deleting folders, system changes) are confirmed with Allow / Always allow / Deny. Agents never publish on their own.',
-  'help.tut.privacy.l4': 'Agents can’t access Orb’s internal data (.orb). Each one identifies itself with its own signature, so it can’t impersonate another or close someone else’s task.',
+  'help.tut.privacy.l4': 'Agents can’t access Orb’s internal data (core). Each one identifies itself with its own signature, so it can’t impersonate another or close someone else’s task.',
   'help.tut.privacy.l5': 'Whatever the agents return is treated as data, never as instructions. Logs hide secrets.',
 
   // ---- shortcuts (help.key.<n>.k = keys, .v = what it does)
@@ -141,7 +141,7 @@ export default {
   'help.faq.1.q': 'Do I need a paid account?',
   'help.faq.1.a': 'You need your own account for at least one agent (Claude Code, Codex, Cursor, Gemini CLI…). Orb uses its official program and your session, at no extra cost.',
   'help.faq.2.q': 'Where is my data stored?',
-  'help.faq.2.a': 'In the assistant’s folder (for example, D:\\Orb): orb.json with the settings, projects by category, logs in bitacora, and the database and undo copies in .orb. Nothing is uploaded to the cloud.',
+  'help.faq.2.a': 'In Orb’s folder (C:\\Orb by default): projects by category and, in core (hidden), the settings, logs, database and undo copies. Backups go outside that folder (Settings › Data shows where). Nothing is uploaded to the cloud.',
   'help.faq.3.q': 'What changes when “Orchestrator” is on or off?',
   'help.faq.3.a': 'With “Orchestrator”, {name} only coordinates: it reads the project and hands out instructions to the agents, who do the work. Without it, you talk directly to the agent you choose, which edits and runs commands in the project folder, asks before anything risky and never pushes or publishes.',
   'help.faq.4.q': 'Why is a task awaiting approval?',
@@ -183,7 +183,7 @@ export default {
   'help.tour.chat.title': 'Write to me here',
   'help.tour.chat.text': 'Tell me what you need: I turn it into tasks for the agents, supervise them and let you know when they’re done. Enter sends, Shift+Enter adds a line and @ attaches context.',
   'help.tour.project.title': 'Project',
-  'help.tour.project.text': 'Choose which project we work on or create a new one. Each project is a folder inside windows, ios, android or web.',
+  'help.tour.project.text': 'Choose which project we work on or create a new one. Each project is a folder inside windows, linux, ios, android, web or multi.',
   'help.tour.brain.title': 'Brain',
   'help.tour.brain.text': 'The agent and model that work for me. If a choice could drain your quota, I’ll let you know.',
   'help.tour.reasoning.title': 'Reasoning',

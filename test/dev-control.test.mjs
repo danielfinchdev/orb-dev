@@ -27,9 +27,9 @@ test('con ella: estado, aprobar una tarea y la clave obligatoria', async () => {
   await until(() => fs.existsSync(file), 'archivo de control');
   const pointer = JSON.parse(fs.readFileSync(file, 'utf8'));
   assert.ok(!pointer.token && !JSON.stringify(pointer).includes('token'), 'el archivo de la carpeta temporal no lleva la clave');
-  assert.match(pointer.keyFile, /[\\/]\.orb[\\/]datos[\\/]/, 'la clave vive en los datos privados de Orb');
+  assert.match(pointer.keyFile, /[\\/]core[\\/]datos[\\/]/, 'la clave vive en los datos privados de Orb');
   const { decide } = await import('../src/core/guard.mjs');
-  assert.equal(decide({ tool: 'Read', paths: [pointer.keyFile], internalDir: path.join(t.home, '.orb') }).decision, 'deny', 'ningún agente puede leerla');
+  assert.equal(decide({ tool: 'Read', paths: [pointer.keyFile], internalDir: path.join(t.home, 'core') }).decision, 'deny', 'ningún agente puede leerla');
   const info = JSON.parse(fs.readFileSync(pointer.keyFile, 'utf8'));
   assert.match(info.url, /^http:\/\/127\.0\.0\.1:\d+$/);
   const odd = await fetch(`${info.url}/snapshot`, { headers: { authorization: `Bearer ${'ñ'.repeat(48)}` } });

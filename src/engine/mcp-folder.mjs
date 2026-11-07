@@ -1,4 +1,4 @@
-// The MCP servers' folder (<home>\mcp-servers): Orb's configuration, not a project. Each subfolder is a server; Ajustes
+// The MCP servers' folder (<home>\core\mcp): Orb's configuration, not a project. Each subfolder is a server; Ajustes
 // lists them with the command that starts them, so adding one to the agents is one click.
 import fs from 'node:fs';
 import path from 'node:path';

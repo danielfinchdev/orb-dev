@@ -12,16 +12,20 @@
 // cut or extended chunk does not open. The body is a plain stream of entries (u32 length · {p,s} · bytes); the first
 // entry is manifest.json (sha256 of every file), whose own hash is in the header.
 //
-// What goes in: the database (VACUUM INTO, so it is consistent while the engine runs), orb.json, bitacora/ (general and
-// project logs), the whiteboards of the projects, the app's secret, the recovery wrap, the archives of 3.7 (.orb/archivo-3.7
-// and dated ones, src/core/migrate-38.mjs; never sign-in folders). Optional: the project folders and the agents' login
-// folders (off).
+// What goes in: the database (VACUUM INTO, so it is consistent while the engine runs), orb.json, the logs (general and
+// project), the skills and the MCP servers (without their dependencies), the whiteboards of the projects, the app's
+// secret, the recovery wrap, the archives of 3.7 (core/archivo-3.7 and dated ones, src/core/migrate-38.mjs; never sign-in
+// folders). Optional: the project folders and the agents' login folders (off). 3.8: the names inside are relative to the
+// workspace (core/datos/orb.db, core/bitacora/…); a copy made by 3.7 (.orb/…, orb.json, bitacora/… at the top) restores
+// into core (legacyName) and the paths of its orb.json and database are pointed into core (src/core/core-folder.mjs ›
+// rewritePaths).
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
-import { paths, INTERNAL_DIR, BOTS_DIR, LOGS_DIR, CONFIG_FILE } from './home.mjs';
+import { paths, INTERNAL_DIR, BOTS_DIR, LEGACY } from './home.mjs';
+import { rewritePaths } from './core-folder.mjs';
 import { tr } from './context.mjs';
 import { ARCHIVE_DIR, forgetRun } from './migrate-38.mjs';
 
@@ -120,8 +124,17 @@ export const walkFiles = (dir, skip = () => false) => {
 const NO_COPY = new Set(['node_modules', '.git', '.venv', '__pycache__', 'dist', 'build', '.next', '.cache']);
 const DATA_FILES = ['clave.bin', 'copia-clave.json', 'orb-id.json'];
 const rel = (home, file) => path.relative(home, file).split(path.sep).join('/');
-// The names inside a backup are relative to the Orb folder (.orb/…, bitacora/…).
+// The names inside a backup are relative to the workspace (core/…, web/<project>/pizarra/…).
 export const archiveName = (home, file) => rel(home, file);
+// A name written by Orb 3.7 (its folders at the top of the workspace) → where it goes now; others as they are.
+export function legacyName(name) {
+  const s = String(name).split('/');
+  if (s[0] === LEGACY.internal) return [INTERNAL_DIR, ...s.slice(1)].join('/');
+  if (s.length === 1 && s[0] === LEGACY.config) return `${INTERNAL_DIR}/${LEGACY.config}`;
+  if (s[0] === LEGACY.logs && s.length > 1) return [INTERNAL_DIR, 'bitacora', ...s.slice(1)].join('/');
+  if (s[0] === LEGACY.mcp && s.length > 1) return [INTERNAL_DIR, 'mcp', ...s.slice(1)].join('/');
+  return name;
+}
 export const homePath = (home, name) => path.join(home, ...String(name).split('/'));
 const insideOf = (root, p) => { const r = path.relative(root, p); return Boolean(r) && !r.startsWith('..') && !path.isAbsolute(r); };
 
@@ -144,11 +157,13 @@ async function stageFiles(home, stage, { secret, includeProjects = false, includ
     try { db.exec('PRAGMA busy_timeout = 8000'); db.prepare('VACUUM INTO ?').run(dbOut); } finally { db.close(); }
     files.push(`${INTERNAL_DIR}/datos/orb.db`);
   }
-  if (fs.existsSync(p.config)) await put(p.config, CONFIG_FILE);
+  if (fs.existsSync(p.config)) await put(p.config, archiveName(home, p.config));
   // The secret that seals the approvals and the recovery wrap: on a new machine they keep working.
   if (secret) { await fsp.writeFile(path.join(stage, INTERNAL_DIR, 'datos', 'clave.bin'), Buffer.from(secret), { mode: 0o600 }); files.push(`${INTERNAL_DIR}/datos/clave.bin`); }
   for (const name of DATA_FILES.filter((n) => n !== 'clave.bin')) { const f = path.join(p.data, name); if (fs.existsSync(f)) await put(f, `${INTERNAL_DIR}/datos/${name}`); }
   for (const f of walkFiles(p.logs)) await put(f, archiveName(home, f));
+  for (const f of walkFiles(p.skills)) await put(f, archiveName(home, f));
+  for (const f of walkFiles(p.mcp, (n) => NO_COPY.has(n))) await put(f, archiveName(home, f));
   // The projects: their whiteboards always, the whole folder only if asked (without dependencies and build output).
   let projects = [];
   if (fs.existsSync(dbOut)) {
@@ -325,7 +340,7 @@ const safeName = (name) => typeof name === 'string' && name.length < 1000 && !na
 
 // Decrypts everything and checks every file against the manifest. With `into`, also writes the files there.
 async function walkBackup(file, keys, into = null) {
-  let manifest = null; let want = null; const seen = new Set(); let bytes = 0;
+  let manifest = null; let want = null; const seen = new Set(); let bytes = 0; let legacy = false;
   const header = await readBody(file, keys, async (name, size, pieces) => {
     if (name === 'manifest.json') {
       if (manifest) throw new BackupError('damaged');
@@ -339,13 +354,14 @@ async function walkBackup(file, keys, into = null) {
     if (!entry || seen.has(name) || entry.s !== size || !safeName(name)) throw new BackupError('damaged');
     const hash = crypto.createHash('sha256');
     let out = null;
-    if (into) { const dest = path.join(into, ...name.split('/')); await fsp.mkdir(path.dirname(dest), { recursive: true }); out = await fsp.open(dest, 'w', 0o600); }
+    const to = legacyName(name); if (to !== name) legacy = true;
+    if (into) { const dest = path.join(into, ...to.split('/')); await fsp.mkdir(path.dirname(dest), { recursive: true }); out = await fsp.open(dest, 'w', 0o600); }
     try { await pieces(async (p) => { hash.update(p); if (out) await out.write(p); }); } finally { await out?.close(); }
     if (hash.digest('hex') !== entry.h) throw new BackupError('damaged');
     seen.add(name); bytes += size;
   });
   if (!manifest || manifest.hash !== header.manifest_hash || seen.size !== want.size) throw new BackupError('damaged');
-  return { header, files: seen.size, bytes };
+  return { header, files: seen.size, bytes, legacy };
 }
 export const verifyBackup = (file, keys = {}) => walkBackup(file, keys);
 
@@ -392,25 +408,25 @@ export async function stageRestore(home, file, keys = {}) {
       const d = new DatabaseSync(db);
       try { const ok = d.prepare('PRAGMA integrity_check').get(); if (Object.values(ok)[0] !== 'ok') throw new BackupError('damaged'); d.prepare('SELECT COUNT(*) AS n FROM sqlite_master').get(); } finally { d.close(); }
     }
-    fs.writeFileSync(path.join(tmp, 'listo.json'), JSON.stringify({ from: path.basename(file), header: { id: r.header.id, orbId: r.header.orbId, incarnation: r.header.incarnation, created: r.header.created, version: r.header.version, move: r.header.move }, at: new Date().toISOString() }));
+    fs.writeFileSync(path.join(tmp, 'listo.json'), JSON.stringify({ from: path.basename(file), legacy: r.legacy, header: { id: r.header.id, orbId: r.header.orbId, incarnation: r.header.incarnation, created: r.header.created, version: r.header.version, move: r.header.move }, at: new Date().toISOString() }));
     await fsp.rm(ready, { recursive: true, force: true });
     await fsp.rename(tmp, ready);
     return { files: r.files, bytes: r.bytes, header: r.header };
   } catch (error) { await fsp.rm(tmp, { recursive: true, force: true }); throw error; }
 }
 
-// The swap units: what is replaced as a whole (a log folder, a whiteboard, a project; the bots' folder of a 3.7 copy) or
-// one file.
+// The swap units: what is replaced as a whole (a folder of core such as the logs, a whiteboard, a project; the bots'
+// folder of a 3.7 copy) or one file (orb.json and each file of core/datos).
 function unitOf(name) {
   const s = name.split('/');
   if (s[0] === INTERNAL_DIR) return s.slice(0, s[1] === 'datos' ? 3 : 2).join('/');
-  if (s[0] === BOTS_DIR || s[0] === LOGS_DIR || s.length === 1) return s[0];
+  if (s[0] === BOTS_DIR || s.length === 1) return s[0];
   const i = s.indexOf('pizarra');
   return i > 0 ? s.slice(0, i + 1).join('/') : s.slice(0, Math.min(2, s.length - 1)).join('/');
 }
 
 // Called by the engine before the database is opened: a restore that is ready replaces what it holds;
-// what was there before goes to .orb/antes-de-restaurar-<fecha>. → null, or { from, header, secretChanged }.
+// what was there before goes to core/antes-de-restaurar-<fecha>. → null, or { from, header, secretChanged }.
 export function applyPendingRestore(home) {
   const ready = pendingDir(home);
   let info; try { info = JSON.parse(fs.readFileSync(path.join(ready, 'listo.json'), 'utf8')); } catch { return null; }
@@ -434,6 +450,8 @@ export function applyPendingRestore(home) {
   fs.rmSync(ready, { recursive: true, force: true });
   // 3.8: a database of 3.7 restored now is migrated again with an archive and a copy of its own.
   if (units.has(`${INTERNAL_DIR}/datos/orb.db`)) forgetRun(home);
+  // A copy made by 3.7: the paths of its orb.json and database point into core.
+  if (info.legacy) rewritePaths(home);
   let newKey = null; try { newKey = fs.readFileSync(path.join(paths(home).data, 'clave.bin')); } catch { /* none */ }
   return { from: info.from, header: info.header, aside, secretChanged: Boolean(newKey && !(oldKey && oldKey.equals(newKey))), secret: newKey };
 }

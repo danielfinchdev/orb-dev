@@ -129,7 +129,7 @@ test('ciclo completo: el asistente crea la tarea, el agente la hace, el asistent
 
 test('parar al asistente y escribirle enseguida: el mensaje nuevo espera a que acabe el turno parado', async () => {
   const { conversation } = await call('chat.send', { text: 'DUERME PARA_LENTO' });
-  const log = path.join(t.home, '.orb', 'ejecuciones', 'asistente.log');
+  const log = path.join(t.home, 'core', 'ejecuciones', 'asistente.log');
   await until(() => { try { return fs.readFileSync(log, 'utf8').includes('DUERME PARA_LENTO'); } catch { return false; } }, 'el asistente empezó');
   await call('chat.stop', { conversation });
   await call('chat.send', { text: 'hola tras parar', conversation });
@@ -149,7 +149,7 @@ test('2.6: el cerebro del asistente puede ser cualquier agente instalado (Codex)
   assert.equal((await call('conversations.list')).find((c) => c.id === conversation).agent, 'codex', 'la conversación nueva empieza con el cerebro elegido');
   const answer = await until(async () => (await call('chat.list', { conversation })).find((m) => m.role === 'orb'), 'respuesta de Codex como cerebro', 15000);
   assert.match(answer.body, /^Codex empieza:/, 'responde Codex');
-  const log = fs.readFileSync(path.join(t.home, '.orb', 'ejecuciones', 'asistente.log'), 'utf8');
+  const log = fs.readFileSync(path.join(t.home, 'core', 'ejecuciones', 'asistente.log'), 'utf8');
   assert.match(log, /"fake":"codex"[^\n]*Eres/, 'Codex recibe las instrucciones del asistente al empezar');
   // The brain of one conversation changes only that one (and the next new ones).
   await until(async () => !(await busy(conversation)), 'fin del turno');
@@ -213,7 +213,7 @@ test('conversación directa con Codex: en directo y la segunda vez continúa la 
 test('varias cuentas: si una cuenta de Codex llega a su límite de uso, el trabajo va a la otra con su propia carpeta', async () => {
   const acc = await call('accounts.add', { agent: 'codex', label: 'Codex Pro' });
   assert.equal(acc.id, 'codex-2');
-  assert.ok(acc.home.includes(path.join('.orb', 'cuentas', 'codex-2')));
+  assert.ok(acc.home.includes(path.join('core', 'cuentas', 'codex-2')));
   await assert.rejects(call('accounts.add', { agent: 'cursor', label: 'otra' }), /solo admite una cuenta/);
   // The main Codex account runs out of quota: the next Codex task goes to the second account.
   const quota = await call('tasks.create', { project: 'web', title: 'Uso', description: 'algo', agent: 'codex' });

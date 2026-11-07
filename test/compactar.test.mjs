@@ -17,7 +17,7 @@ import * as codex from '../src/agents/codex.mjs';
 let t; let engine;
 afterEach(async () => { await engine?.stop(); engine = null; t?.cleanup(); });
 const lines = async (call, conversation) => call('chat.list', { conversation });
-const assistantLog = (home) => { try { return fs.readFileSync(path.join(home, '.orb', 'ejecuciones', 'asistente.log'), 'utf8'); } catch { return ''; } };
+const assistantLog = (home) => { try { return fs.readFileSync(path.join(home, 'core', 'ejecuciones', 'asistente.log'), 'utf8'); } catch { return ''; } };
 
 test('Orbe: con el contexto casi lleno, «Compactar» usa la compactación del agente y la conversación sigue', async () => {
   t = tempHome();

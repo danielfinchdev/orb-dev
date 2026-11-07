@@ -1,4 +1,5 @@
-// First run: the assistant's name, what to call the user and where its folder goes. Everything lives in that folder.
+// First run: the assistant's name, what to call the user and where its folder goes (C:\Orb unless the user picks another
+// place). Everything lives in that folder.
 // 3.7: the 3.5.1 welcome again (the owner's wish). Done without asking: this PC's language and time zone in the settings,
 // backups on (the default).
 import { useState } from 'react';
@@ -7,7 +8,7 @@ import { Robot } from '@/components/robot.jsx';
 import { Installer, InstallProgress, useFunPhrase } from '@/components/installer.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Input, Field, Spinner } from '@/components/ui/basic.jsx';
-import { bridge, call } from '@/lib/store.js';
+import { bridge, call, getState } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
 import { toast } from 'sonner';
 import { errorText } from '@/lib/utils.js';
@@ -20,7 +21,8 @@ export function Setup({ onDone }) {
   const t = useT();
   const [name, setName] = useState(PRODUCT.assistant);
   const [user, setUser] = useState('');
-  const [base, setBase] = useState(null);
+  // 3.8: C:\Orb already chosen (app:info › defaultBase); «Cambiar ubicación…» picks another place.
+  const [base, setBase] = useState(() => getState().info?.defaultBase ?? null);
   const [busy, setBusy] = useState(false);
   const [mood, setMood] = useState('happy');
   const [step, setStep] = useState('datos'); // datos → equipo (Windows: install what is missing) → app

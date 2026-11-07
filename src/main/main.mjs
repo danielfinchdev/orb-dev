@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createHome, isHome, loadConfig, writeJson } from '../core/home.mjs';
+import { createHome, isHome, loadConfig, writeJson, paths, homeKey, LEGACY } from '../core/home.mjs';
 import { createAgentBrowser } from './browser.mjs';
 import { openTerminal } from './terminal.mjs';
 import { findEditors, openInEditor, runAction } from './editors.mjs';
@@ -76,7 +76,7 @@ function findExistingHome() {
   // Drive letters only exist on Windows; on Linux / macOS, Documents/Orb and ~/Orb.
   const drives = process.platform !== 'win32' ? [] : 'CDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((l) => `${l}:\\`).filter((d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
   const candidates = new Set([...drives.map((d) => path.join(d, PRODUCT.folder)), path.join(app.getPath('documents'), PRODUCT.folder), path.join(app.getPath('home'), PRODUCT.folder)]);
-  const used = (h) => { try { return fs.statSync(path.join(h, 'orb.json')).mtimeMs; } catch { return 0; } };
+  const used = (h) => { for (const f of [paths(h).config, path.join(h, LEGACY.config)]) { try { return fs.statSync(f).mtimeMs; } catch { /* the other one */ } } return 0; };
   return [...candidates].filter((h) => isHome(h)).sort((a, b) => used(b) - used(a))[0] ?? null;
 }
 
@@ -102,31 +102,42 @@ const zoomBy = (dir) => setZoom(dir === 'reset' ? 1 : zoom + (dir === 'in' ? ZOO
 // 3.7, Linux: true when the desktop has no keyring (safeStorage would only use a fixed key): the window is told once.
 let weakKeyring = false;
 // The approval secret, encrypted by the system (Windows: DPAPI via safeStorage; Linux: the desktop's keyring) in
-// .orb/datos/clave.enc. The plain clave.bin that the first run writes is converted and removed, so no agent can read the
-// secret from disk. Returns the secret as hex, or null
-// when encryption is not available (then the engine uses clave.bin).
+// core\datos\clave.enc. The plain clave.bin that the first run writes is converted and removed, so no agent can read the
+// secret from disk. 3.8: a copy of clave.enc is kept outside the workspace (this app's data folder, one per workspace):
+// the backups are sealed with this secret, so a core deleted by mistake can still be restored from them. A workspace of
+// Orb 3.7 still has it in .orb\datos until the engine moves that folder into core (src/core/core-folder.mjs): read there
+// and never written into core before the move. Returns the secret as hex, or null when encryption is not available
+// (then the engine uses clave.bin).
+const SECRET_COPY = (h) => path.join(app.getPath('userData'), 'claves', `${homeKey(h)}.enc`);
 function approvalSecret(h) {
   const available = safeStorage.isEncryptionAvailable();
   let backend = null; try { backend = process.platform === 'linux' ? safeStorage.getSelectedStorageBackend() : null; } catch { /* older Electron */ }
-  const dir = path.join(h, '.orb', 'datos');
-  const enc = path.join(dir, 'clave.enc'); const plain = path.join(dir, 'clave.bin');
+  const legacy = path.join(h, LEGACY.internal, 'datos');
+  const dir = fs.existsSync(legacy) && !fs.existsSync(paths(h).core) ? legacy : paths(h).data;
+  const enc = path.join(dir, 'clave.enc'); const plain = path.join(dir, 'clave.bin'); const copy = SECRET_COPY(h);
+  const open = (file) => { try { const hex = safeStorage.decryptString(fs.readFileSync(file)); return /^[0-9a-f]{64}$/.test(hex) ? hex : null; } catch { return null; } };
+  const keep = (sealed) => { try { fs.mkdirSync(path.dirname(copy), { recursive: true }); if (!fs.existsSync(copy) || !fs.readFileSync(copy).equals(sealed)) fs.writeFileSync(copy, sealed); } catch { /* the next start */ } };
   if (keyringWeak(process.platform, available, backend)) {
     weakKeyring = process.platform === 'linux';
     // A key already kept that way (Orb run from the code on Linux) is still read, so links and approvals stay.
-    if (available) { try { const hex = safeStorage.decryptString(fs.readFileSync(enc)); if (/^[0-9a-f]{64}$/.test(hex)) return hex; } catch { /* none */ } }
+    if (available) { const hex = open(enc); if (hex) return hex; }
     return null;
   }
-  try {
-    if (fs.existsSync(enc)) {
-      const hex = safeStorage.decryptString(fs.readFileSync(enc));
-      if (/^[0-9a-f]{64}$/.test(hex)) { fs.rmSync(plain, { force: true }); return hex; }
-    }
-  } catch { /* another Windows user or another PC: a new secret (old approvals are asked again) */ }
-  let hex; try { const b = fs.readFileSync(plain); hex = b.length >= 32 ? b.subarray(0, 32).toString('hex') : null; } catch { hex = null; }
-  hex ??= crypto.randomBytes(32).toString('hex');
+  let hex = open(enc);
+  if (hex) { fs.rmSync(plain, { force: true }); keep(fs.readFileSync(enc)); return hex; }
+  // core\datos\clave.enc is gone (core deleted or damaged; a new workspace has its clave.bin instead): the copy
+  // outside the workspace, put back.
+  hex = fs.existsSync(enc) || fs.existsSync(plain) ? null : open(copy);
+  if (!hex) {
+    // Another Windows user or another PC: a new secret (old approvals are asked again).
+    try { const b = fs.readFileSync(plain); hex = b.length >= 32 ? b.subarray(0, 32).toString('hex') : null; } catch { hex = null; }
+    hex ??= crypto.randomBytes(32).toString('hex');
+  }
+  const sealed = safeStorage.encryptString(hex);
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(enc, safeStorage.encryptString(hex));
+  fs.writeFileSync(enc, sealed);
   fs.rmSync(plain, { force: true });
+  keep(sealed);
   return hex;
 }
 
@@ -141,7 +152,7 @@ function startEngine(h) {
     env: { ...process.env, ORB_MCP_SCRIPT: path.join(UNPACKED, 'mcp', 'server.mjs'),
       ORB_DEV_CONTROL: isDev && process.env.ORB_DEV_CONTROL === '1' ? '1' : '0' }
   });
-  const logFile = path.join(h, '.orb', 'ejecuciones', 'motor-salida.log');
+  const logFile = path.join(paths(h).runs, 'motor-salida.log');
   const append = (chunk) => { try { fs.appendFileSync(logFile, chunk); } catch { /* ignore */ } };
   engine.stdout?.on('data', append); engine.stderr?.on('data', append);
   engineReady = new Promise((resolve, reject) => {
@@ -259,7 +270,10 @@ ipcMain.handle('app:runAction', guard(async (action) => {
   return true;
 }));
 ipcMain.handle('app:showBrowser', guard(async () => { agentBrowser?.show(); return agentBrowser?.state() ?? null; }));
-ipcMain.handle('app:info', guard(async () => ({ version: VERSION, home, needsSetup: !home, platform: process.platform, defaultBase: process.env.ORB_DEFAULT_BASE || app.getPath('documents') })));
+// 3.8: the workspace goes to C:\Orb unless the user picks another place (the welcome shows it already chosen); elsewhere
+// ~/Orb.
+const defaultBase = () => (process.platform === 'win32' ? path.win32.join(process.env.SystemDrive || 'C:', '\\') : app.getPath('home'));
+ipcMain.handle('app:info', guard(async () => ({ version: VERSION, home, needsSetup: !home, platform: process.platform, defaultBase: process.env.ORB_DEFAULT_BASE || defaultBase() })));
 
 ipcMain.handle('app:pickFolder', guard(async (title) => {
   const r = await dialog.showOpenDialog(win, { title: String(title ?? T('sys.dialog.pickFolder')).slice(0, 100), properties: ['openDirectory', 'createDirectory'] });

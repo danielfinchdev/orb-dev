@@ -27,7 +27,7 @@ const OUT = path.join(ROOT, 'test-results'); fs.mkdirSync(OUT, { recursive: true
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-actualizar-'));
 // A throwaway Orb folder, so the app opens straight into its main screen (the card lives there, not in the welcome).
 const { home } = createHome(tmp, { assistantName: 'Orb', userName: 'Ana' });
-writeJson(path.join(home, 'orb.json'), merge(loadConfig(home), { ui: { tourDone: true } })); // 2.6: no guided tour in the tests
+writeJson(path.join(home, 'core', 'orb.json'), merge(loadConfig(home), { ui: { tourDone: true } })); // 2.6: no guided tour in the tests
 const userData = path.join(tmp, 'datos-app'); fs.mkdirSync(userData);
 fs.writeFileSync(path.join(userData, 'ubicacion.json'), JSON.stringify({ home }));
 
