@@ -814,19 +814,27 @@ launched hidden, with its output read by Orb, and it stores the session in the a
   The server trades the ticket for its grant when it starts (`src/mcp/auth-client.mjs`): who it is (agent, task,
   conversation, or the coordinator of one conversation), the assistant folder and the browser's key; it asks the engine
   again on every call. The ticket is bound to the connection that holds it (a second one waits up to 3 s for the first to
-  close, for Cursor, which starts its servers every turn), so the copy in the agent's environment is worth nothing while
-  the server runs. Tickets end with their agent's process (`Sessions.closeLive`, `Lane.closeLive`), with the
-  conversation and with the engine: nothing of an earlier run is valid (the hashes 3.8 kept in `settings` are deleted at
-  start). There is no coordinator without a conversation.
+  close), so the copy in the agent's environment is worth nothing while the server runs. A ticket is traded once: the
+  server acks the grant, and from then on only the reconnect secret that came with it (kept in the server's memory)
+  trades it again, so a ticket set free by a dead server is no use to whoever copied it. Cursor, which starts its servers
+  again every turn, gets new reusable tickets every turn (`mcpServersOf`, `mcpServersEachTurn`), released when the turn
+  ends. A slow hello is retried and a check the engine does not answer in time is a retryable «busy» error, never «not
+  signed»; connections that never say hello are closed after 10 s. Tickets end with their agent's process (also when it
+  dies mid-turn), with `Sessions.closeLive` / `Lane.closeLive`, with the conversation and with the engine: nothing of an
+  earlier run is valid (the hashes 3.8 kept in `settings` are deleted at start). There is no coordinator without a
+  conversation.
 - **The user's connectors (3.8):** an agent gets `src/mcp/launch.mjs` and a ticket instead of the connector; the
   launcher gets the real command, arguments and keys from the engine and starts it (and stops its whole tree when the
-  ticket is taken back). So no connector key is on a command line, in the agent's environment (its shell) or in a session
+  ticket is taken back). On Windows (`src/mcp/win-spawn.mjs`) an npm shim (`npx.cmd`, a global package's cmd-shim) runs
+  as its script with node and an `.exe` directly, so arguments such as `C:\dir\`, `%VAR%` or quotes arrive intact; any
+  other batch file goes through cmd.exe with MSVCRT and double cmd escaping. A program is looked up only in the PATH
+  (never the current folder, the project): not found is an error. Connector names that would share an environment
+  variable (`git-hub` / `git_hub`, case) are refused. So no connector key is on a command line, in the agent's environment (its shell) or in a session
   log. What is in an agent's environment (tickets, the pipe) is handed by name: Claude's `--mcp-config` names
   `${VAR}` (`mcpEnvByRef` in `common.mjs`), Cursor's `.cursor/mcp.json` `${env:VAR}`, Codex `env_vars` with a name per
   server (`mcpSecrets` in `codex.mjs`, and `shell_environment_policy.exclude=["ORB_*"]` keeps them out of its commands),
   and the ACP agents get them over stdin (`session/new`), with every value hidden in `registro.jsonl`
-  (`hidingEnvValues` in `live.mjs`). The guard denies commands that name the database (`orb.db`), `ORB_HOME`, the
-  tickets or the pipe. Residual: an agent that kills its own launcher can redeem that ticket from its shell and read
+  (`hidingEnvValues` in `live.mjs`). Residual: an agent that kills its own launcher can redeem that ticket from its shell and read
   that connector's keys (the connector is one the user enabled for that agent). In coordinator mode Codex uses
   `untrusted` + `read-only`, so every command goes through the guard, which denies it in `leer`.
 - **Pending assistant notices (2.6):** `orchestrator_pending` stores the engine notices not yet answered
@@ -839,13 +847,30 @@ launched hidden, with its output read by Orb, and it stores the session in the a
   conversations of one agent are two identities. Workers of one conversation may message each other's tasks by number;
   read marks are per task (`claude#3`).
 - **Agents:** clean environment (without the app's secret variables), permission guard, internal data off limits and
-  warnings for pushes or mass deletions. 3.8: Claude runs without the project's hooks (`disableAllHooks` in its flag
-  settings): a task could leave a `.claude/settings.json` hook that later agents in that folder would run. Residual:
-  Cursor's own project hooks are not turned off; what they could read is only tickets already held by their servers.
+  warnings for pushes or mass deletions.
+- **Orb's data folder (3.8, `isOrbData` in `guard.mjs`):** matched by RESOLVED path (against the agent's folder, any case
+  or separator, symlinks followed), not by names: a project may have its own `orb.db` or talk about `ORB_HOME`. Denied,
+  and in «total» it asks. Isolated copies (`.orb/copias/aisladas`) stay open. Not a boundary: a shell of the same Windows
+  user can always reach the folder another way; the agents' identity does not depend on its database any more (tickets,
+  above), so what is left is the integrity of Orb's data against an agent bent on it, accepted. The folder is one value
+  (`ctx.paths.internal`), so moving it (F3) moves the check.
+- **Project agent settings (3.8):** a task can write the project's agent settings that later agents (other
+  conversations) would load. Claude runs without the project's hooks (`disableAllHooks`) and with
+  `allowManagedPermissionRulesOnly` (managed settings), so a project's `permissions.allow` never skips Orb's guard
+  (`canUseTool`); a project whose `.claude/settings*.json` would run programs or change the environment (`env`,
+  `apiKeyHelper` and the other helpers, aws/gcp refresh, `processWrapper`, status lines, plugins: `projectSettingsRisk`
+  in `claude.mjs`) starts without its settings files, and its CLAUDE.md goes through the system prompt; the conversation
+  says so. Checked with the real Claude Code against a local stand-in of the API (`test/fixtures/fake-anthropic.mjs`).
+  Cursor's turns run without the project's allow rules and hooks (`.cursor/hooks.json` is emptied for the turn and put
+  back). Changing `.claude/settings*.json` or `.cursor/{hooks,cli,mcp}.json` asks first (Edit/Write and commands that
+  name them). Settings › Agents explains it. Residual: an agent that writes those files from a script without naming
+  them changes what already running Claude processes of that folder reload (later ones are checked at start).
 - **Agent text:** when it goes back to the assistant it is marked as "data, not instructions".
-- **No PC folders on the phone (3.8):** every answer and event a phone or browser gets goes through `withoutPaths`
-  (`remote.mjs`): a value that is an absolute path becomes its place in the assistant folder (or its last part), and the
-  assistant folder's path is cut from texts. Deleting a conversation cancels its unfinished tasks (they would otherwise
+- **No PC folders on the phone (3.8):** every answer, error and event a phone or browser gets goes through
+  `withoutPaths` (`remote.mjs`): a value that is one whole absolute path (outside free-text fields) becomes its place in
+  the assistant folder (or its last part); in free text, keys and deep values only the assistant folder is cut, in any
+  case and separator. `whiteboard.load` goes back as saved (only its attachments are filtered). `/api/upload` answers
+  with the picture's name, which the PC resolves to its folder. Deleting a conversation cancels its unfinished tasks (they would otherwise
   share messages with the tasks of no conversation), and manual tasks a 3.7 agent took without a conversation go back to
   the queue at start (`board.releaseUnclaimed`).
 - More detail in `docs/historico/AUDITORIA-v2.md` and `docs/historico/AUDITORIA-v2-segunda.md`.
