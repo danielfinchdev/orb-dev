@@ -18,6 +18,8 @@ import { mustOwnTask, ownsTask } from '../core/permissions.mjs';
 import { redeem, ticketFromArgs } from './auth-client.mjs';
 
 const AUTH = await redeem(process.env.ORB_AUTH_PIPE, ticketFromArgs());
+// An agent that stopped expanding ${VAR} in its MCP config would leave every tool «not signed»: said in its log.
+if (/^\$\{/.test(ticketFromArgs())) process.stderr.write('Orb: el agente no expandió la variable del ticket (${…}); este proceso no está firmado\n');
 const GRANT = AUTH?.reply ?? null;
 // Not signed (no ticket, or one the engine does not know): ORB_HOME only to answer that every tool is refused.
 const home = GRANT?.home ?? process.env.ORB_HOME;

@@ -1,7 +1,7 @@
 // Agent adapters (2.3): the registry with ORB_FAKE_AGENTS, Codex's live session against a fake "codex app-server"
 // (permissions, MCP by -c, resume and fork, approvals through the guard, steer, interrupt, context and real usage),
 // Cursor's streaming CLI against a fake CLI (read-only mode, resume, long prompts by file, stop) and the clean environment.
-import { fake, until } from './helpers.mjs';
+import { fake, until, ROOT } from './helpers.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -10,7 +10,8 @@ import path from 'node:path';
 import * as claude from '../src/agents/claude.mjs';
 import * as codex from '../src/agents/codex.mjs';
 import * as cursor from '../src/agents/cursor.mjs';
-import { cleanEnv } from '../src/agents/common.mjs';
+import { cleanEnv, mcpEnvByRef, killTree } from '../src/agents/common.mjs';
+import { spawn } from 'node:child_process';
 import { ADAPTERS, adapter } from '../src/agents/index.mjs';
 import { AGENT_IDS } from '../src/core/home.mjs';
 
@@ -80,6 +81,24 @@ test('Claude: los secretos del MCP van en su entorno y la línea de órdenes sol
   assert.equal(seen.env.ORB_MCP_otro_API_KEY, 'clave-del-conector-3');
   // N13: no hooks of the project's .claude/settings*.json (they would run with this agent's environment).
   assert.equal(JSON.parse(seen.args[seen.args.indexOf('--settings') + 1]).disableAllHooks, true);
+});
+
+// N12: the real Claude Code of the SDK expands ${ORB_MCP_…} in --mcp-config from its environment (as Orb hands every MCP
+// server's ticket). No network or account: its API points at a closed local port and its folder is a temporary one; the
+// test ends as soon as the server has started.
+const SDK_CLAUDE = path.join(ROOT, 'node_modules', '@anthropic-ai', `claude-agent-sdk-${process.platform}-${process.arch}`, process.platform === 'win32' ? 'claude.exe' : 'claude');
+test('Claude Code real: expande ${ORB_MCP_…} de su entorno al arrancar un servidor MCP', { skip: !fs.existsSync(SDK_CLAUDE) && 'sin el Claude Code del SDK' }, async () => {
+  const out = path.join(dir, 'mcp-visto.json');
+  const server = path.join(dir, 'mcp-que-mira.mjs');
+  fs.writeFileSync(server, `import fs from 'node:fs'; fs.writeFileSync(process.argv[2], JSON.stringify({ ticket: process.env.ORB_TICKET_orb ?? null })); process.stdin.resume();\n`);
+  const { servers, env } = mcpEnvByRef({ orb: { command: process.execPath, args: [server, out], env: { ORB_TICKET_orb: 'ticket-de-prueba-123' } } }, (name) => `\${${name}}`);
+  const config = path.join(dir, 'claude-config'); fs.mkdirSync(config, { recursive: true });
+  const child = spawn(SDK_CLAUDE, ['-p', 'hola', '--mcp-config', JSON.stringify({ mcpServers: servers }), '--strict-mcp-config', '--max-turns', '1'], { cwd: dir, windowsHide: true, stdio: 'ignore',
+    env: { ...cleanEnv({}), ...env, CLAUDE_CONFIG_DIR: config, ANTHROPIC_API_KEY: 'sk-ant-prueba', ANTHROPIC_BASE_URL: 'http://127.0.0.1:9', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1', DISABLE_AUTOUPDATER: '1' } });
+  try {
+    const seen = await until(() => { try { return JSON.parse(fs.readFileSync(out, 'utf8')); } catch { return null; } }, 'el servidor MCP arrancado por Claude Code', 60000);
+    assert.deepEqual(seen, { ticket: 'ticket-de-prueba-123' });
+  } finally { killTree(child); }
 });
 
 function openCodex(options = {}) {
