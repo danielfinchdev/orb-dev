@@ -41,7 +41,7 @@ export default {
   'orbchats.rename': 'Renombrar',
   'orbchats.delete': 'Eliminar el chat',
   'orbchats.deleteTitle': '¿Eliminar el chat «{title}»?',
-  'orbchats.deleteBody': 'Se eliminan sus mensajes. Sus tareas siguen en Tareas.',
+  'orbchats.deleteBody': 'Se eliminan sus mensajes y se cancelan sus tareas sin terminar. Las terminadas siguen en Tareas.',
   'orbchats.deleted': 'Chat eliminado',
   // Conversación
   'orbchats.newChatTitle': 'Nuevo chat',

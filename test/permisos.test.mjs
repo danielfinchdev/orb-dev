@@ -10,7 +10,7 @@ import { tempHome, ROOT } from './helpers.mjs';
 import { Board } from '../src/core/board.mjs';
 import { createProject } from '../src/core/projects.mjs';
 import { METHODS, REMOTE_METHODS, CHANNELS, PermissionError, principalOf, allowed, authorize, ownsTask } from '../src/core/permissions.mjs';
-import { guardCall, shapeResult } from '../src/engine/remote.mjs';
+import { guardCall, shapeResult, withoutPaths } from '../src/engine/remote.mjs';
 import { ctx } from '../src/core/context.mjs';
 import crypto from 'node:crypto';
 import { Sessions, mcpServersFor } from '../src/engine/sessions.mjs';
@@ -383,6 +383,71 @@ test('guardia: ni ORB_HOME, ni orb.db, ni los tickets de Orb en un comando', () 
     assert.equal(decide({ permission: 'total', tool: 'Bash', command, internalDir: path.join(t.home, '.orb') }).decision, 'deny', command);
   }
   for (const command of ['npm test', 'cat orb.dbx', 'echo robot.db', 'git log --oneline']) assert.notEqual(decide({ permission: 'total', tool: 'Bash', command, internalDir: path.join(t.home, '.orb') }).decision, 'deny', command);
+});
+
+// N9: a deleted conversation's unfinished tasks stop with it (they would join the scope of the tasks of no conversation);
+// the finished ones stay, out of any conversation.
+test('borrar una conversación cancela sus tareas sin terminar y para la que trabaja', async () => {
+  const conv = board.createConversation({ title: 'Se borra' }).id;
+  const queued = board.createTask({ project: 'web', title: 'En cola', description: 'x', conversation_id: conv }, 'orb');
+  const working = board.createTask({ project: 'web', title: 'Trabajando', description: 'x', conversation_id: conv }, 'orb');
+  const finished = board.createTask({ project: 'web', title: 'Hecha', description: 'x', conversation_id: conv }, 'orb');
+  board.patch(working.id, { status: 'running', assigned_to: 'claude' }, 'claude', 'task.claimed');
+  board.patch(finished.id, { status: 'done', result: 'ok' }, 'claude', 'task.updated');
+  const stopped = [];
+  scheduler.running.set(working.id, { agent: 'claude', sessionId: 'sesion-que-trabaja' });
+  const stop = sessions.stop; sessions.stop = (id) => { stopped.push(id); return true; };
+  try {
+    await api.call('conversations.remove', { id: conv }, desktop);
+    assert.equal(board.task(queued.id).status, 'cancelled');
+    assert.equal(board.task(working.id).status, 'cancelled');
+    assert.deepEqual(stopped, ['sesion-que-trabaja'], 'su proceso se para');
+    assert.equal(board.task(finished.id).status, 'done');
+    assert.equal(board.task(finished.id).conversation_id, null);
+  } finally { sessions.stop = stop; scheduler.running.delete(working.id); }
+});
+
+// N11: a manual task a 3.7 agent took (running, claimed by no conversation) goes back to the queue when the engine starts.
+test('una tarea manual cogida en 3.7, sin conversación que la reclame, vuelve a la cola', () => {
+  const orphan = board.createTask({ project: 'web', title: 'Huérfana', description: 'x', agent: 'claude', launch: 'manual' }, 'usuario');
+  const claimed = board.createTask({ project: 'web', title: 'Reclamada', description: 'x', agent: 'claude', launch: 'manual' }, 'usuario');
+  board.patch(orphan.id, { status: 'running', assigned_to: 'claude' }, 'claude', 'task.claimed');
+  board.patch(claimed.id, { status: 'running', assigned_to: 'claude', claimed_session: 'directa-viva' }, 'claude', 'task.claimed');
+  assert.ok(board.releaseUnclaimed().includes(orphan.id));
+  assert.equal(board.task(orphan.id).status, 'queued');
+  assert.equal(board.task(claimed.id).status, 'running', 'la de una conversación directa sigue siendo suya');
+  board.cancel(orphan.id, 'usuario'); board.cancel(claimed.id, 'usuario');
+});
+
+// N10: no folder of this PC in what a phone or browser gets: every 'remote' method that reads, on a fixture with a project,
+// a conversation with its task, and a direct conversation and a task run (their cwd and copy).
+test('móvil: ningún método «remote» devuelve carpetas del PC', async () => {
+  const conv = board.createConversation({ title: 'Con rutas', project: 'web' }).id;
+  const task = board.createTask({ project: 'web', title: 'Con carpeta', description: 'x', conversation_id: conv }, 'orb');
+  board.patch(task.id, { workdir: path.join(t.home, '.orb', 'copias', 'aisladas', String(task.id)) }, 'orb', 'task.updated');
+  const s = sessions.create({ kind: 'chat', agent: 'claude', project: 'web', cwd: board.project('web').path, title: 'Directa con carpeta' });
+  sessions.addItem(s.id, 'assistant', 'text', 'hola');
+  const reads = /\.(list|get|state|live|items|queue|info|options|catalog|guide|now|search|load|read|status|icons|branch)$/;
+  const params = { id: task.id, name: 'web', project: 'web', conversation: conv, q: 'con', session: s.id };
+  const absolute = /^(?:[A-Za-z]:[\\/]|\\\\|\/(?:Users|home|root|mnt|tmp|var)\/)/;
+  const leaks = [];
+  const walk = (v, where) => {
+    if (typeof v === 'string') { if (absolute.test(v) || v.includes(t.home)) leaks.push(`${where}: ${v}`); return; }
+    if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) walk(x, `${where}.${k}`);
+  };
+  let tried = 0;
+  for (const m of [...REMOTE_METHODS].filter((x) => reads.test(x))) {
+    for (const p of [params, { ...params, id: s.id }, {}]) {
+      let out; try { out = await api.call(m, p, phone); } catch { continue; }
+      tried++; walk(shapeResult(m, out), m);
+    }
+  }
+  assert.ok(tried >= 15, `métodos probados: ${tried}`);
+  assert.deepEqual(leaks, []);
+  // What they had becomes its place in the assistant folder.
+  assert.equal(withoutPaths({ path: path.join(t.home, 'proyectos', 'web') }).path, 'proyectos/web');
+  assert.equal(withoutPaths(['D:\\otra\\carpeta\\app'])[0], 'app');
+  sessions.closeLive(s.id);
 });
 
 // B1: a call that does not say who makes it is refused (never this PC by default).

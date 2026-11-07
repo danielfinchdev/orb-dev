@@ -78,13 +78,29 @@ export function guardCall(board, method, params, { allowed = REMOTE_METHODS, upl
 // nuevo»). 3.8: 'all' and 'chat' show the same (the bots' messages, hidden with 'chat', are gone).
 export const PREVIEWS = ['all', 'chat', 'none'];
 export const pushPreview = (config) => (PREVIEWS.includes(config?.mobile?.preview) ? config.mobile.preview : 'chat');
+// 3.8: no folder of this PC reaches a phone or browser. Every value that is a whole absolute path (a project's folder, a
+// task's copy, a conversation's cwd…) goes as its place inside the assistant folder («proyectos/web/tienda»), or just
+// its last part when it is outside; inside a text (an activity line), the assistant folder's own path is cut. (Other
+// paths an agent wrote in its text go as they are.)
+const ABSOLUTE = /^(?:[A-Za-z]:[\\/]|\\\\|\/(?:Users|home|root|mnt|media|var|tmp|opt|private|Volumes|srv|data)\/)/;
+function placeOf(file) {
+  const rel = ctx.home ? path.relative(ctx.home, file) : '';
+  return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? rel.split(/[\\/]+/).join('/') : path.basename(file.replace(/[\\/]+$/, '')) || '…';
+}
+export function withoutPaths(value, depth = 0) {
+  if (typeof value === 'string') return ABSOLUTE.test(value) ? placeOf(value) : ctx.home && value.includes(ctx.home) ? value.split(`${ctx.home}${path.sep}`).join('').split(ctx.home).join('…') : value;
+  if (!value || typeof value !== 'object' || depth > 12) return value;
+  if (Array.isArray(value)) return value.map((v) => withoutPaths(v, depth + 1));
+  return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, withoutPaths(v, depth + 1)]));
+}
+
 // What a call from outside gets back: the settings without secrets, and no folder of this PC (its home, the assistant's
-// paths, the working project's path).
+// paths; any other path as its place in the assistant folder).
 export function shapeResult(method, result) {
-  if (method !== 'app.state' || !result) return result;
+  if (method !== 'app.state' || !result) return withoutPaths(result);
   const { home: _home, paths: _paths, ...rest } = result;
   const activeProject = rest.activeProject ? (({ path: _path, ...p }) => p)(rest.activeProject) : rest.activeProject;
-  return { ...rest, activeProject, config: phoneConfig(rest.config) };
+  return withoutPaths({ ...rest, activeProject, config: phoneConfig(rest.config) });
 }
 
 // 3.5: only the home network, Tailscale and this PC itself may talk to Orb: 127.0.0.0/8, 10/8, 172.16/12, 192.168/16,
@@ -702,7 +718,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       if (event === 'chat:new') notify(payload);
       if (!clients.size || !EVENTS.has(event)) return;
       // The settings themselves never travel to a phone (the page just reloads what it is allowed to see).
-      const value = { e: event, p: event === 'config:changed' ? null : payload };
+      const value = { e: event, p: event === 'config:changed' ? null : withoutPaths(payload) };
       for (const c of clients) {
         if (c.res.writableLength > STREAM_BACKLOG) { try { c.res.destroy(); } catch { /* gone */ } clients.delete(c); continue; }
         try { c.res.write(`data: ${sealText(c.key, value, AAD.event(c.device))}\n\n`); } catch { clients.delete(c); }

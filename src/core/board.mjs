@@ -502,6 +502,13 @@ export class Board {
     });
   }
 
+  // 3.8: manual tasks an agent took before 3.8 (running, claimed by no direct conversation) go back to the queue: only
+  // the conversation that claimed a manual task may work on it, and these have none. Called when the engine starts.
+  releaseUnclaimed() {
+    return this.all("SELECT id FROM tasks WHERE status = 'running' AND launch = 'manual' AND claimed_session IS NULL")
+      .map((t) => this.patch(t.id, { status: 'queued', assigned_to: null, pid: null }, 'orb', 'task.updated', 'running').id);
+  }
+
   // ---- messages between agents, the assistant and the user
   // from_task: the sender's own task (a worker); task_id: the task the message is about or for.
   send({ from, to, body, task_id, from_task = null }) {

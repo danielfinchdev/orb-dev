@@ -97,6 +97,7 @@ async function run(board, { home, version, restored }) {
   // 3.8: who each agent's MCP process is lives only in this process's memory (agent-auth.mjs); the signatures that
   // earlier versions kept in the database are gone at start (they sign nothing).
   board.run("DELETE FROM settings WHERE key = 'orchestrator_key_hash' OR key LIKE 'orchestrator_conv:%' OR key LIKE 'agent_id:%'");
+  try { const released = board.releaseUnclaimed(); if (released.length) log(`tareas manuales sin conversación devueltas a la cola: ${released.join(', ')}`); } catch (error) { log(`liberar tareas manuales: ${error.message}`); }
   const sessions = new Sessions(board, { emit, log });
   const { plainAction, looksEnglish } = await import('../core/guard.mjs');
   const { adapter } = await import('../agents/index.mjs');

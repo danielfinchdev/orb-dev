@@ -281,6 +281,11 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'conversations.remove': ({ id }) => {
       const c = conversationId(id);
       orchestrator.drop(c);
+      // 3.8: its tasks still to do (queued, waiting or working) stop with it: they would go on in the scope of the tasks
+      // of no conversation, sharing messages with the manual and scheduled ones. The finished ones stay in Tareas.
+      for (const t of board.all('SELECT id, status FROM tasks WHERE conversation_id = ?', c)) {
+        if (!board.isFinished(t.status)) { try { scheduler.cancel(t.id, 'usuario'); } catch { /* finished meanwhile */ } }
+      }
       board.run('DELETE FROM chat WHERE conversation_id = ?', c);
       board.run('UPDATE tasks SET conversation_id = NULL WHERE conversation_id = ?', c);
       board.run('DELETE FROM conversations WHERE id = ?', c);

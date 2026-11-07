@@ -843,6 +843,11 @@ launched hidden, with its output read by Orb, and it stores the session in the a
   settings): a task could leave a `.claude/settings.json` hook that later agents in that folder would run. Residual:
   Cursor's own project hooks are not turned off; what they could read is only tickets already held by their servers.
 - **Agent text:** when it goes back to the assistant it is marked as "data, not instructions".
+- **No PC folders on the phone (3.8):** every answer and event a phone or browser gets goes through `withoutPaths`
+  (`remote.mjs`): a value that is an absolute path becomes its place in the assistant folder (or its last part), and the
+  assistant folder's path is cut from texts. Deleting a conversation cancels its unfinished tasks (they would otherwise
+  share messages with the tasks of no conversation), and manual tasks a 3.7 agent took without a conversation go back to
+  the queue at start (`board.releaseUnclaimed`).
 - More detail in `docs/historico/AUDITORIA-v2.md` and `docs/historico/AUDITORIA-v2-segunda.md`.
 
 ## 29. Packaging, versions and CI

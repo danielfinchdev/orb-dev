@@ -40,7 +40,7 @@ export default {
   'orbchats.rename': 'Rename',
   'orbchats.delete': 'Delete chat',
   'orbchats.deleteTitle': 'Delete the chat «{title}»?',
-  'orbchats.deleteBody': 'Its messages are deleted. Its tasks stay in Tasks.',
+  'orbchats.deleteBody': 'Its messages are deleted and its unfinished tasks are cancelled. Finished ones stay in Tasks.',
   'orbchats.deleted': 'Chat deleted',
   // Conversation
   'orbchats.newChatTitle': 'New chat',
