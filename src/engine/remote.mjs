@@ -246,13 +246,12 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     res.end(type.startsWith('application/json') ? JSON.stringify(body) : body);
   };
 
-  // A device served: a phone or a browser, used in the last 30 days, the owner's. 3.8: a linked Orb or an Orb Terminal
-  // of before, or a device another user paired in 3.6–3.7 (person_id), is never served (the 3.8 migration removes them;
-  // this holds while a database could not be migrated yet).
-  const ownerOf = () => { try { return board.one("SELECT id FROM persons WHERE role = 'owner' AND deleted_at IS NULL")?.id ?? null; } catch { return null; } };
+  // A device served: a phone or a browser, used in the last 30 days, without a person. 3.8: a linked Orb or an Orb
+  // Terminal of before, or any device paired in 3.6–3.7 that still has a person (the 3.8 migration clears the owner's and
+  // removes the rest), is never served.
   const validDevice = (d) => Boolean(d?.public_key && (!d.kind || PAIR_KINDS.includes(d.kind))
     && Date.now() - Date.parse(d.last_seen ?? d.created_at) <= SESSION_DAYS * 86_400_000
-    && (d.person_id == null || d.person_id === ownerOf()));
+    && d.person_id == null);
   const keyOf = (d) => { if (!keys.has(d.id)) keys.set(d.id, sessionKey(own.priv, b64.dec(d.public_key))); return keys.get(d.id); };
   const deviceOf = (req) => {
     const id = String(req.headers['x-orb-device'] ?? '');

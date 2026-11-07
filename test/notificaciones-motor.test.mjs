@@ -95,6 +95,27 @@ test('el permiso de una tarea llega con Aprobar y Rechazar; el token vale una ve
   assert.equal((await noteAction(p.data.acts.allow)).status, 401, 'el primer intento gasta los dos tokens del aviso');
 });
 
+// 3.8 (revisión F2.5, B6): a device that still has a person (one of 3.6–3.7 the migration did not clear) gets no
+// notifications, and its buttons do not work (remote.mjs › validDevice: only devices without a person are served).
+test('un dispositivo con persona (de otro usuario de 3.7) no recibe avisos y sus botones no valen', async () => {
+  const n = { ana: pushes(ana.endpoint).length, tablet: pushes(tablet.endpoint).length };
+  await A.call('tasks.create', { project: 'web', title: 'Subir de otro', description: 'PIDE_PERMISO', agent: 'codex' });
+  const onTablet = await until(() => pushes(tablet.endpoint).slice(n.tablet).find((x) => x.data.kind === 'approval'), 'el permiso en la tablet', 30_000);
+  const onAna = await until(() => pushes(ana.endpoint).slice(n.ana).find((x) => x.data.kind === 'approval'), 'el permiso en el móvil', 30_000);
+  const db = new Board();
+  // A migrated 3.7 database keeps devices.person_id (dropped in 3.9); a new one has no such column.
+  if (!db.all('PRAGMA table_info(devices)').some((c) => c.name === 'person_id')) db.run('ALTER TABLE devices ADD COLUMN person_id TEXT');
+  db.run("UPDATE devices SET person_id = 'p-otra' WHERE id = ?", tablet.id);
+  try {
+    assert.equal((await noteAction(onTablet.data.acts.allow)).status, 401, 'su «Aprobar» no vale');
+    assert.equal((await noteAction(onAna.data.acts.deny)).status, 200, 'el del móvil del dueño sí');
+    const before = pushes(tablet.endpoint).length; const k = pushes(ana.endpoint).length;
+    await A.call('chat.send', { text: 'una respuesta más', conversation: conv });
+    await until(() => pushes(ana.endpoint).slice(k).find((x) => x.data.tag === `orb-conversation:${conv}`), 'el aviso al móvil del dueño', 30_000);
+    assert.equal(pushes(tablet.endpoint).length, before, 'ninguno al de otra persona');
+  } finally { db.run('UPDATE devices SET person_id = NULL WHERE id = ?', tablet.id); db.db.close(); }
+});
+
 // 3.8 (B2): pushes and their buttons follow the same rule as a call (remote.mjs › validDevice): a device unused for 30
 // days gets no more notifications, and its buttons on the ones it already has no longer work.
 test('un móvil caducado no recibe avisos y los botones de los que ya tiene no valen', async () => {
