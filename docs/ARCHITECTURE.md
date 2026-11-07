@@ -574,6 +574,17 @@ Mobile, with two routes that are switched on separately:
   its time (only after opening the request with the phone's key, or the QR's when pairing). The phone web app adopts it
   and retries once. Before, it answered 401 and the phone unpaired itself.
 - It also works over http (wifi), where the browser does not offer its crypto: it uses the `@noble/*` libraries.
+- **PC off or out of reach (3.8):** every request of the phone has its own time limit (`src/ui/lib/net.js`: quick checks
+  8 s, calls 45 s, uploads 60 s, the live stream only until its headers). No answer moves to the PC's next address; a
+  call or an upload that ran out of time is not sent again elsewhere (the PC may have done it). When no address answers,
+  the app opens on «Tu PC está apagado o no se puede alcanzar» and keeps trying (3 s, 6 s… up to 30 s, and at once when
+  the phone comes back to the app or to a network); a drop while the app is open shows a thin line at the top
+  (`link:offline` / `link:online`).
+- **Navigation on the phone (3.8, `src/ui/lib/phone-nav.js`):** the app opens on its chat list unless it was left in a
+  chat that still exists or on one of its tabs; routes of screens that are gone (the bots of 3.7) fall back to the chats;
+  a screen that fails to draw forgets the saved route (`ErrorBoundary`). Android's back (handed over by
+  `OrbNativePlugin`) and a phone browser's back close what is open, then go up one level, and only leave from the chats
+  (twice; the app goes to the background).
 - Removing a phone in Settings deletes its key: it is locked out immediately. Phones from 2.3.2 or earlier (no own key)
   have to be paired again.
 

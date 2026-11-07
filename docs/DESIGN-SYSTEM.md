@@ -362,10 +362,14 @@ coloured shadow; floating ones a deeper shadow. **Never glass on glass**: what s
   material; while open it is the one transient blurred layer.
 - **Floating tab bar**: inset 12 px from the sides and 10 px above the safe area, 62 px tall, full radius, thin
   material with blur. Active tab: primary colour and a 14 % primary capsule behind the icon. Labels 10.5 px / 600.
-  Count badges with dark text on `warning`.
+  Count badges with dark text on `warning`. Since 3.8 it is a pill in the flow under the screen (not over it), so no
+  list ends under it; it hides while the on-screen keyboard is up and in a conversation (full screen).
 - **Top**: the screen bar has no surface: ☰, then a large title (22 px / 600) on the field; content scrolling under it fades over 14 px instead of being cut.
+- **Status bar** (edge to edge, Android 15+): the page itself (`#root`) leaves `env(safe-area-inset-*)` free, so no bar,
+  banner or welcome screen ever draws a control under it; overlays outside the page (sheets, the drawer, notifications)
+  keep clear of it themselves. A bar never adds the inset again.
 - **Cards**: regular material, radius 22, no blur.
-- **Composer**: regular material, radius 26, focus = 1.5 px ring at 55 %; it sits above the tab bar.
+- **Composer**: regular material, radius 26, focus = 1.5 px ring at 55 %; it keeps clear of the gesture bar.
 - **Sheets**: every dialog on the phone is a bottom sheet: full width, radius 28 at the top, a 36×5 grabber, thick
   material with blur, a dimming scrim without blur, buttons 44 px high. Rises in 320 ms with `--ease-drawer`, leaves the
   same way.
