@@ -28,12 +28,12 @@ async function open(userData, env = {}) {
   let app = null; let page; let stop;
   if (exe) {
     const port = 9300 + Math.floor(Math.random() * 500);
-    const child = spawn(exe, [`--remote-debugging-port=${port}`], { env: { ...process.env, ORB_NO_BRIDGE: '1', ORB_USER_DATA: userData, ...env }, stdio: 'ignore' });
+    const child = spawn(exe, [`--remote-debugging-port=${port}`], { env: { ...process.env, ORB_USER_DATA: userData, ...env }, stdio: 'ignore' });
     const browser = await until(() => chromium.connectOverCDP(`http://127.0.0.1:${port}`), 'la ventana de la app');
     page = await until(() => browser.contexts().flatMap((c) => c.pages()).find((p) => p.url().endsWith('index.html')), 'la página principal');
     stop = async () => { await browser.close().catch(() => {}); try { if (process.platform === 'win32') spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' }); else child.kill(); } catch { /* gone */ } await new Promise((r) => setTimeout(r, 1500)); };
   } else {
-    app = await electron.launch({ executablePath: electronBin, args: [ROOT], env: { ...process.env, ORB_NO_BRIDGE: '1', ORB_USER_DATA: userData, ...env } });
+    app = await electron.launch({ executablePath: electronBin, args: [ROOT], env: { ...process.env, ORB_USER_DATA: userData, ...env } });
     page = await app.firstWindow();
     stop = async () => { await app.close().catch(() => {}); };
   }

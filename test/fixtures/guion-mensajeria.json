@@ -1,9 +1,0 @@
-[
-  { "when": "Pausa a Correo", "reply": "Vale. Te dejo la tarjeta para pausar a Correo mientras estás de vacaciones; en cuanto la apruebes, deja de leer el correo hasta que vuelvas.", "calls": [["bot_pause", { "name": "Correo", "reason": "estás de vacaciones" }]] },
-  { "when": "cita del dentista", "reply": "Apuntado: el jueves a las 10:00, dentista. Te aviso el miércoles por la tarde y una hora antes." },
-  { "when": "¿qué tengo mañana?", "reply": "Mañana tienes el dentista a las 10:00 y, por la tarde, la compra semanal." },
-  { "when": "lista para el sábado", "reply": "Hecha: 18 productos por secciones (fruta, lácteos, despensa y limpieza). ¿Te la mando cuando la revises?" },
-  { "when": "lista de la compra", "reply": "Te he preparado la lista de la semana: 18 productos. Quité lo que ya tienes en la despensa." },
-  { "when": "algo importante en el correo", "reply": "Tres cosas: la factura de la luz, la confirmación del vuelo del viernes y una reunión el lunes a las 10:00." },
-  { "when": "plan de la semana", "reply": "Tu semana: lunes reunión a las 10:00, miércoles gimnasio, jueves dentista y sábado compra." }
-]

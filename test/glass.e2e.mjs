@@ -49,8 +49,6 @@ try {
   await call('tasks.create', { project: 'mi-web', title: 'Revisar los enlaces rotos de la portada', description: 'ESCRIBE la portada', agent: 'claude' });
   await call('tasks.create', { project: 'mi-web', title: 'Publicar la web', description: 'haz push a producción', agent: 'codex' });
   await until(async () => (await call('tasks.list')).some((x) => x.status === 'done'), 'tarea hecha', 30000);
-  await call('bots.create', { name: 'Jefe', icon: '🧠', role_text: 'Reparte lo que pido', is_chief: true });
-  await call('bots.create', { name: 'Agenda', icon: '📅', role_text: 'Mi calendario', tools: ['recordatorios'] });
 
   step = 'vincular';
   const { url } = await call('remote.pair');
@@ -125,28 +123,6 @@ try {
     await shot('09-menu');
     assert.ok((await blurred()).length <= 2, 'el menú es la única capa pasajera');
     await page.keyboard.press('Escape'); await page.waitForTimeout(300);
-
-    step = `${scheme}: bots`;
-    // 3.6 (M2): the Bots zone opens on its chat list (tabs Chats · Recordatorios · Casa); a chat takes the whole screen.
-    await page.click('[data-testid=nav-menu]:visible'); await page.click('[data-testid=mode-bots]');
-    await tab('nav-bot-chats');
-    await page.waitForSelector('[data-testid=bot-inbox]');
-    await shot('10-bot-chats');
-    assert.ok((await blurred()).length <= 1, 'la lista de chats: solo la barra de pestañas');
-    await page.locator('[data-testid=side-bot-Jefe]:visible').click();
-    await page.waitForSelector('[data-testid=bot-chat-input]');
-    await shot('10b-bot-chat');
-    await page.click('[data-testid=bot-chat-head]');
-    await page.waitForSelector('[data-testid=chat-info]'); await page.waitForTimeout(400);
-    await shot('10c-bot-info');
-    assert.ok((await blurred()).length <= 2, 'la información es la única capa pasajera');
-    await page.click('[data-testid=chat-info-close]'); await page.waitForTimeout(300);
-    await page.click('[data-testid=chat-back]');
-    await page.click('[data-testid=nav-menu]:visible'); await page.click('[data-testid=nav-bots]');
-    await page.waitForSelector('[data-testid=bot-Agenda]');
-    await shot('11-bots');
-    await page.click('[data-testid=nav-menu]:visible'); await page.click('[data-testid=mode-orb]');
-    await page.waitForSelector('[data-testid=nav-tasks]:visible');
   }
   step = 'menos transparencia';
   await transparency('reduce');

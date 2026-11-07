@@ -132,7 +132,7 @@ try {
     await theme(page, dark);
     await page.evaluate(() => localStorage.removeItem('orb.route'));
     await page.reload();
-    await page.waitForSelector('[data-testid=mode-switch]');
+    await page.waitForSelector('[data-testid=orb-inbox]');
 
     step = `PC ${scheme}: lista por proyecto`;
     await page.waitForSelector(`[data-testid=orb-group-mi-web] ${row('Revisar los enlaces rotos')}`);
@@ -158,7 +158,7 @@ try {
     assert.match(await page.textContent('[data-testid=chat-task-approval]'), /«Publicar la web» necesita tu aprobación/);
     assert.match(await page.textContent('[data-testid=orb-chat-status]'), /mi-web · Esperando tu aprobación/);
     assert.equal(await page.locator('[data-testid=live-strip]').count(), 0, 'las tareas en una línea, no en un bloque aparte');
-    assert.doesNotMatch(await page.textContent('[data-testid=chat-lines]'), /orb_|BOT_CALL|\{"/, 'sin llamadas de herramientas a la vista');
+    assert.doesNotMatch(await page.textContent('[data-testid=chat-lines]'), /orb_|\{"/, 'sin llamadas de herramientas a la vista');
     await page.waitForSelector('[data-testid=reasoning-picker]');
     if (!dark) await until(async () => (await pc.call('inbox.list', { zone: 'orb' })).items.find((x) => x.id === s.links.id)?.unread === 0, 'leído al abrirlo', 10000);
     await page.waitForSelector(`${row('Revisar los enlaces rotos')}[data-unread="0"]`);

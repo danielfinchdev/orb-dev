@@ -1,8 +1,8 @@
 // 3.6 «Personas», end to end without any window: the PC's own interface (the built renderer in headless Edge, with a
 // stand-in for Electron's bridge that talks to the engine like the app does), Leo's phone and Leo's browser (linked with
 // a QR made «para Leo»). Ana (the admin) goes through the welcome (3.5.1's), adds Leo in Ajustes,
-// applies «Casa» from «Nuevo bot», has her own bot, project and chat; Leo, on every channel, sees nothing of hers. Also the person
-// menu, switching with a PIN, the engine's lock, Ajustes › Personas / Mi perfil / Datos, «¿Para quién?», the share dialog
+// has her own project and chat; Leo, on every channel, sees nothing of hers. Also the person
+// menu, switching with a PIN, the engine's lock, Ajustes › Personas / Mi perfil / Datos, «¿Para quién?»
 // and «Prestar a…». Screenshots: test-results/personas-*.png. The engine runs with the fake agents in a throwaway folder.
 // Run: npm run build && node test/personas.e2e.mjs
 import { chromium } from 'playwright-core';
@@ -74,12 +74,9 @@ const errors = [];
 const watch = (page, who) => { page.on('pageerror', (e) => errors.push(`${who}: ${e.message} ${String(e.stack).split(String.fromCharCode(10)).slice(1, 4).join(' / ')}`)); page.on('console', (m) => { if (m.type() === 'error' && !/status of (409|404|426)|Failed to load resource/.test(m.text())) errors.push(`${who}: ${m.text()}`); }); };
 const shots = [];
 const shotOf = (page) => async (name) => { const file = path.join(OUT, `personas-${name}.png`); await page.waitForTimeout(350); await page.addStyleTag({ content: '[data-sonner-toaster] { visibility: hidden !important; }' }); await page.screenshot({ path: file }); shots.push(file); };
-// Ana's things: none of these words may reach Leo, on any channel (also the bots «Casa» made for her in the wizard).
-const CASA = JSON.parse(fs.readFileSync(path.join(ROOT, 'src', 'core', 'templates', 'es', 'casa.json'), 'utf8')).bots.map((b) => b.name);
-const ANA = ['ana-web-secreta', 'Diario de Ana', 'Mensaje privado de Ana', 'Regar las plantas de Ana', ...CASA];
+// Ana's things: none of these words may reach Leo, on any channel.
+const ANA = ['ana-web-secreta', 'Mensaje privado de Ana'];
 const leaks = (text) => ANA.filter((w) => String(text).includes(w));
-const p2 = (x) => String(x).padStart(2, '0');
-const at = (d, h, m) => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(h)}:${p2(m)}`;
 
 let step = 'inicio';
 const pcCtx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, locale: 'es-ES' });
@@ -94,8 +91,7 @@ const menu = async (item) => {
 };
 try {
   // ---- 1. the welcome (as 3.5.1): the assistant's name, what to call her, the folder. Nothing about people or uses:
-  // Ana becomes the admin without being asked. Leo is added in Ajustes › Magic Link › Usuarios, and «Casa» is a
-  // template of «Nuevo bot».
+  // Ana becomes the admin without being asked. Leo is added in Ajustes › Magic Link › Usuarios.
   step = 'bienvenida';
   await pc.goto(pcUrl);
   await pc.waitForSelector('[data-testid=setup-datos]');
@@ -121,31 +117,14 @@ try {
   await pc.waitForSelector('[data-testid=person-row-Leo]');
   await pc.keyboard.press('Escape');
 
-  step = 'plantilla en Nuevo bot';
-  await pc.click('[data-testid=mode-bots]');
-  await pc.waitForSelector('[data-testid=bots-nav]');
-  await pc.click('[data-testid=bots-places-more]'); await pc.click('[data-testid=nav-bots]');
-  await pc.locator('[data-testid=bots-new], [data-testid=bots-create-first]').first().click();
-  await pc.waitForSelector('[data-testid=bot-create]');
-  await pc.click('[data-testid=bot-templates-open]');
-  await pc.waitForSelector('[data-testid=bot-template-casa]');
-  assert.equal(await pc.locator('[data-testid=bot-template-vacio]').count(), 0, 'sin «Empezar vacío»');
-  await shot('03-nuevo-bot-plantilla');
-  await pc.click('[data-testid=bot-template-use-casa]');
-  await pc.waitForSelector('[data-testid=bot-create]', { state: 'detached' });
-  await pc.click('[data-testid=mode-orb]');
   people = await call('persons.list');
   const leo = people.find((p) => p.name === 'Leo'); const ana = people.find((p) => p.role === 'owner');
   assert.ok(leo && ana, 'Leo añadido desde Ajustes');
-  const botNames = (await call('bots.list')).bots.map((b) => b.name);
-  assert.ok(CASA.every((n) => botNames.includes(n)), `la plantilla «Casa», tal cual: ${botNames.join(', ')}`);
   assert.ok((await call('backup.status')).enabled, 'copias activas sin preguntar');
 
   // ---- 2. Ana's own things (this window is Ana's).
   step = 'cosas de Ana';
   await call('projects.create', { name: 'ana-web-secreta' });
-  const diario = await call('bots.create', { name: 'Diario de Ana', icon: '📓', role_text: 'Llevas mi diario.', tools: ['recordatorios'] });
-  await call('bots.reminders.create', { id: diario.id, text: 'Regar las plantas de Ana', when: at(new Date(Date.now() + 26 * 3_600_000), 10, 0) });
   await call('chat.send', { text: 'Mensaje privado de Ana' });
   await until(async () => (await call('conversations.list')).length > 0, 'conversación de Ana');
   await pc.reload(); await pc.waitForSelector('[data-testid=person-menu]');
@@ -188,16 +167,7 @@ try {
   await shot('10-para-quien');
   await pc.keyboard.press('Escape');
 
-  step = 'compartir y prestar';
-  await pc.click('[data-testid=mode-bots]');
-  await pc.click('[data-testid=bots-places-more]'); await pc.click('[data-testid=nav-bots]');
-  await pc.click('[data-testid="bot-edit-Diario de Ana"]');
-  await pc.waitForSelector('[data-testid=bot-spend]');
-  await pc.click('[data-testid=share-bot]');
-  await pc.waitForSelector('[data-testid=share-row-Leo]');
-  await shot('11-compartir');
-  await pc.keyboard.press('Escape');
-  await pc.click('[data-testid=mode-orb]');
+  step = 'prestar';
   if (!(await pc.locator('[data-testid=nav-agents]:visible').count())) await pc.click('[data-testid=sidebar-footer-toggle]');
   await pc.click('[data-testid=nav-agents]');
   await pc.waitForSelector('[data-testid=usage-by-person]');
@@ -229,21 +199,15 @@ try {
   await shot('13b-saludo-leo');
   await call('persons.setPin', { pin: '2468' });
   await call('projects.create', { name: 'leo-deberes' });
-  await call('bots.create', { name: 'Agenda de Leo', icon: '📅', role_text: 'Mi agenda.' });
   await call('chat.send', { text: 'Hola soy Leo' });
   await pc.reload(); await pc.waitForSelector('[data-testid=chat-input]');
   await pc.waitForTimeout(800);
   assert.deepEqual(leaks(await pc.textContent('body')), [], 'el PC como Leo');
-  for (const m of ['projects.list', 'conversations.list', 'bots.list', 'tasks.list', 'bots.reminders.list', 'app.state', 'shares.list', 'usage.get']) {
+  for (const m of ['projects.list', 'conversations.list', 'tasks.list', 'app.state', 'shares.list', 'usage.get']) {
     const r = JSON.stringify(await pc.evaluate((x) => window.orb.call(x).catch((e) => ({ error: e.message })), m));
     assert.deepEqual(leaks(r), [], `${m} en el PC como Leo`);
   }
   await shot('13c-pc-leo');
-  await pc.click('[data-testid=mode-bots]'); await pc.click('[data-testid=bots-places-more]'); await pc.click('[data-testid=nav-bots]');
-  await pc.waitForSelector('[data-testid="bot-Agenda de Leo"]');
-  assert.deepEqual(leaks(await pc.textContent('body')), [], 'los bots de Leo');
-  await shot('14-pc-leo-bots');
-  await pc.click('[data-testid=mode-orb]');
 
   step = 'bloqueo';
   await menu('person-lock');
@@ -290,15 +254,10 @@ try {
   await phone.click('[data-testid=nav-profile]');
   await phone.waitForSelector('[data-testid=profile-card]');
   await pshot('19-movil-perfil');
-  await phone.click('[data-testid=nav-menu]:visible'); await phone.click('[data-testid=mode-bots]'); await phone.waitForSelector('[data-testid=bot-inbox]'); await phone.waitForTimeout(400); await phone.click('[data-testid=nav-menu]:visible'); await phone.click('[data-testid=nav-bots]:visible');
-  await phone.waitForSelector('[data-testid="bot-Agenda de Leo"]');
-  assert.deepEqual(leaks(await phone.textContent('body')), [], 'los bots del móvil de Leo');
-  for (const m of ['projects.list', 'conversations.list', 'bots.list', 'tasks.list', 'bots.reminders.list', 'app.state', 'link.status', 'shares.list']) {
+  for (const m of ['projects.list', 'conversations.list', 'tasks.list', 'app.state', 'shares.list']) {
     const r = JSON.stringify(await phone.evaluate((x) => window.orb.call(x).catch((e) => ({ error: e.message })), m));
     assert.deepEqual(leaks(r), [], `${m} desde el móvil de Leo`);
   }
-  // Leo cannot make a QR for Ana nor read her bot.
-  await assert.rejects(phone.evaluate((id) => window.orb.call('bots.get', { id }), diario.id), 'el bot de Ana');
 
   // ---- 5. Leo's browser on a computer.
   step = 'navegador de Leo';

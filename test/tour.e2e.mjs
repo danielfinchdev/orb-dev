@@ -151,8 +151,6 @@ async function attempt(page, label, fn) {
   }
 }
 const quiet = (p) => p.catch(() => null);
-const p2 = (x) => String(x).padStart(2, '0');
-const at = (d, h, m) => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(h)}:${p2(m)}`;
 
 // ---- moving around
 // 3.6: on the phone a conversation is a full screen of its own (a back arrow, no tabs).
@@ -194,25 +192,20 @@ const SRC = {
   tutorials: ['Tutorials and help', 'src/ui/views/tutorials.jsx'], board: ['Whiteboard (Pizarra)', 'src/ui/views/whiteboard.jsx'],
   expert: ['God mode (expert)', 'src/ui/views/expert.jsx'],
   link: ['Magic Link', 'src/ui/views/magic-link.jsx'], profile: ['My profile', 'src/ui/views/persons.jsx (ProfileView)'],
-  chats: ['Chats list', 'src/ui/main.jsx (ChatsView) + components/sidebar.jsx'], more: ['More menu', 'src/ui/components/mobile-tabs.jsx (MoreView)'],
-  'bot-chat': ['Bots chat', 'src/ui/views/bots/chat.jsx'], 'bot-group': ['Bot group chat', 'src/ui/views/bots/chat.jsx'], bots: ['Bots list', 'src/ui/views/bots/list.jsx'],
-  'bot-groups': ['Bot groups', 'src/ui/views/bots/more.jsx (BotGroupsView)'], 'bot-reminders': ['Reminders', 'src/ui/views/bots/more.jsx (BotRemindersView)'],
-  'bot-memory': ['Bots memory', 'src/ui/views/bots/more.jsx (BotMemoryView)'], 'bot-home': ['Home (Home Assistant)', 'src/ui/views/bots/more.jsx (BotHomeView)'],
-  'bot-server': ['Bots server', 'src/ui/views/bots/more.jsx (BotServerView)'], 'bot-settings': ['Bots settings', 'src/ui/views/bots/more.jsx (BotSettingsView)']
+  chats: ['Chats list', 'src/ui/main.jsx (ChatsView) + components/sidebar.jsx'], more: ['More menu', 'src/ui/components/mobile-tabs.jsx (MoreView)']
 };
-const PC_VIEWS = ['chat', 'tasks', 'projects', 'agents', 'logs', 'activity', 'schedules', 'phone', 'tutorials', 'board', 'expert', 'bot-chat', 'bots', 'bot-groups', 'bot-reminders', 'bot-memory', 'bot-home', 'bot-server', 'bot-settings'];
-const PHONE_VIEWS = ['chat', 'chats', 'more', 'tasks', 'projects', 'logs', 'activity', 'schedules', 'phone', 'profile', 'tutorials', 'board', 'bot-chat', 'bots', 'bot-reminders', 'bot-home', 'bot-groups', 'bot-memory', 'bot-server', 'bot-settings'];
-const WEB_VIEWS = ['chat', 'tasks', 'projects', 'logs', 'bot-chat', 'bots', 'bot-reminders'];
+const PC_VIEWS = ['chat', 'tasks', 'projects', 'agents', 'logs', 'activity', 'schedules', 'phone', 'tutorials', 'board', 'expert'];
+const PHONE_VIEWS = ['chat', 'chats', 'more', 'tasks', 'projects', 'logs', 'activity', 'schedules', 'phone', 'profile', 'tutorials', 'board'];
+const WEB_VIEWS = ['chat', 'tasks', 'projects', 'logs'];
 // 3.6: six sections (their parts are taken scrolling); «Mi perfil» is a window of its own (the user menu, 2+ users).
-const SETTINGS = [['general', 'General (assistant, folder, appearance, updates)'], ['magiclink', 'Magic Link (users, devices, linked Orbs)'], ['agentes', 'Agents (chat, tasks, test)'], ['datos', 'Data and backups'], ['avanzado', 'Advanced (tools, God mode)'], ['acerca', 'About (contribute, more apps)'], ['perfil', 'My profile']];
+const SETTINGS = [['general', 'General (assistant, folder, appearance, updates)'], ['magiclink', 'Magic Link (users, devices)'], ['agentes', 'Agents (chat, tasks, test)'], ['datos', 'Data and backups'], ['avanzado', 'Advanced (tools, God mode)'], ['acerca', 'About (contribute, more apps)'], ['perfil', 'My profile']];
 
 async function views(page, list, state, { scroll = true } = {}) {
   for (const v of list) {
     await attempt(page, `${v} ${state}`, async () => {
       const route = { view: v };
       await nav(page, route);
-      const area = v.startsWith('bot') ? 'bots' : 'orb';
-      await shot(page, { area, screen: v, state, src: SRC[v][1], desc: `${SRC[v][0]} — ${state}`, scroll });
+      await shot(page, { area: 'orb', screen: v, state, src: SRC[v][1], desc: `${SRC[v][0]} — ${state}`, scroll });
     });
   }
 }
@@ -292,7 +285,7 @@ try {
     await loaded(page);
   };
   if (phone) { step = 'enlazar el móvil'; await linkDevice(phone, 'phone'); }
-  if (web) { step = 'enlazar el navegador'; await linkDevice(web, 'browser'); for (const d of await call('link.devices')) if (d.kind === 'browser') await quiet(call('link.setAdmin', { id: d.id, admin: true })); await web.reload(); await loaded(web); }
+  if (web) { step = 'enlazar el navegador'; await linkDevice(web, 'browser'); await web.reload(); await loaded(web); }
 
   for (const dark of [false, true]) {
     step = `vacío ${dark ? 'oscuro' : 'claro'}`;
@@ -341,21 +334,7 @@ try {
   await quiet(call('sessions.send', { id: s1.id, text: 'TABLA_MARKDOWN' }));
   const s2 = await call('sessions.create', { agent: 'codex', project: 'mi-web', permission: 'editar', title: 'Publicar con Codex' });
   await quiet(call('sessions.send', { id: s2.id, text: 'Publica los cambios PIDE_PERMISO' }));
-  // Bots, a group, reminders, a pending card.
-  const jefe = await call('bots.create', { name: 'Jefe', icon: '🧠', role_text: 'Recibe lo que pido, lo reparte a los demás y me avisa cuando está.', is_chief: true, tools: ['internet', 'recordatorios'] });
-  const agenda = await call('bots.create', { name: 'Agenda', icon: '📅', role_text: 'Llevas mi calendario y mis citas. Avísame la víspera de cada una.', tools: ['recordatorios', 'calendario'], exclusive: ['calendario'], agent: 'codex' });
-  await call('bots.create', { name: 'Compras', icon: '🛒', role_text: 'Comparas precios y preparas la compra. Nunca compras sin mi OK.', tools: ['internet', 'navegador'], effort: 'high' });
-  const when = new Date(Date.now() + 26 * 3_600_000);
-  await call('bots.reminders.create', { id: agenda.id, text: 'Cita con el dentista', when: at(when, 10, 0) });
-  await call('bots.reminders.create', { id: agenda.id, text: 'Revisar la semana', when: at(when, 18, 30), every: 'weekly' });
-  await call('bots.reminders.create', { id: jefe.id, text: 'Pagar el alquiler', when: at(new Date(Date.now() + 5 * 86_400_000), 9, 0), every: 'monthly' });
-  const casa = await call('bots.groups.create', { name: 'Casa', icon: '🏠', members: [jefe.id, agenda.id] });
-  await quiet(call('bots.groups.send', { id: casa.id, text: '¿Qué tenemos mañana?' }));
-  await quiet(call('bots.send', { id: jefe.id, text: 'Crea un bot para el correo\nBOT_CALL bot_create {"name":"Correo","icon":"✉️","role_text":"Mira el correo y me resume lo importante","tools":["correo"]}' }));
-  await quiet(until(async () => JSON.stringify(await call('bots.cards', {})).includes('pending'), 'tarjeta pendiente', 20000));
-  await quiet(call('bots.memory.set', { id: 'global', text: '- Ana prefiere los avisos por la mañana.\n- La compra se hace los sábados.' }));
   // Sharing and lending.
-  await quiet(call('shares.set', { type: 'bot', id: agenda.id, person: leo.id, right: 'talk' }));
   await quiet(call('shares.set', { type: 'project', id: 'app-tienda', person: leo.id, right: 'view' }));
   await quiet(call('accounts.lend', { id: 'claude', person: leo.id, daily_turns: 50, dev: true }));
   await quiet(call('whiteboard.save', { project: 'mi-web', elements: [], appState: {} }));
@@ -415,18 +394,9 @@ try {
       await attempt(P, 'sidebar search', async () => { await P.fill('[data-testid=sidebar-search-input]', 'web'); await P.waitForTimeout(500); await shot(P, { area: 'menu', screen: 'sidebar-search', state: 'results', src: 'src/ui/components/sidebar.jsx (search)', desc: 'Sidebar search results for «web»' }); await P.fill('[data-testid=sidebar-search-input]', ''); });
       await attempt(P, 'sidebar filter', async () => { await P.click('[data-testid=sidebar-filter]'); await P.waitForTimeout(400); await shot(P, { area: 'menu', screen: 'sidebar-filter', state: 'open', src: 'src/ui/components/sidebar.jsx (filter)', desc: 'Sidebar filter popover' }); await P.keyboard.press('Escape'); });
       await attempt(P, 'sidebar collapsed', async () => { await P.click('[data-testid=sidebar-collapse]'); await shot(P, { area: 'menu', screen: 'sidebar', state: 'collapsed', src: 'src/ui/components/theme-toggle.jsx + components/page.jsx', desc: 'Sidebar folded away, the screen takes the whole width' }); await P.click('[data-testid=sidebar-expand]'); });
-      await attempt(P, 'mode switch bots', async () => { await nav(P, { view: 'chat' }); await P.click('[data-testid=mode-bots]'); await shot(P, { area: 'menu', screen: 'mode-switch', state: 'bots', src: 'src/ui/components/mode-switch.jsx + components/bots-nav.jsx', desc: 'Mode switch moved to Bots (bots sidebar)' }); await P.click('[data-testid=mode-orb]'); });
       await attempt(P, 'games', async () => { await nav(P, { view: 'chat' }); await P.click('[data-testid=bar-games]'); await P.waitForSelector('[data-testid=games-dialog]'); await shot(P, { area: 'games', screen: 'games', state: 'list', src: 'src/ui/games/games.jsx', desc: 'Mini games dialog' });
         for (const g of ['snake', 'chess', 'tetris']) { await attempt(P, `game ${g}`, async () => { if (await P.getByRole('button', { name: 'Volver a los juegos' }).isVisible().catch(() => false)) await P.getByRole('button', { name: 'Volver a los juegos' }).click(); await P.click(`[data-testid=game-${g}]`); await P.waitForTimeout(1200); await shot(P, { area: 'games', screen: g, state: 'playing', src: `src/ui/games/${g}.jsx`, desc: `Game: ${g}` }); }); }
         await P.keyboard.press('Escape'); });
-      await attempt(P, 'bot chat with card', async () => { await nav(P, { view: 'bot-chat', id: jefe.id }); await P.waitForSelector('[data-testid=bot-chat-input]'); await shot(P, { area: 'bots', screen: 'bot-chat', state: 'jefe-pending-card', src: 'src/ui/views/bots/chat.jsx (cards)', desc: 'Chat with the chief bot, an approval card pending', scroll: true }); });
-      await attempt(P, 'group chat', async () => { await nav(P, { view: 'bot-group', id: casa.id }); await P.waitForSelector('[data-testid=bot-chat-input]'); await shot(P, { area: 'bots', screen: 'bot-group', state: 'casa', src: 'src/ui/views/bots/chat.jsx', desc: 'Group chat «Casa»' }); });
-      await attempt(P, 'bot editor', async () => { await nav(P, { view: 'bots', id: agenda.id }); await P.waitForSelector('[data-testid=bot-editor]'); await shot(P, { area: 'bots', screen: 'bot-editor', state: 'agenda', src: 'src/ui/views/bots/list.jsx (BotEditor)', desc: 'Bot editor (Agenda): role, tools, brain, account, caps', scroll: true }); });
-      await attempt(P, 'bot share', async () => { await P.click('[data-testid=share-bot]'); await P.waitForSelector('[data-testid=share-dialog]'); await shot(P, { area: 'dialog', screen: 'share', state: 'bot', src: 'src/ui/components/share-dialog.jsx', desc: 'Share a bot with another user' }); await P.keyboard.press('Escape'); });
-      await attempt(P, 'bot delete confirm', async () => { await P.click('[data-testid=bot-delete]'); await P.waitForSelector('[role=alertdialog], [role=dialog]'); await shot(P, { area: 'dialog', screen: 'confirm', state: 'delete-bot', src: 'src/ui/components/dialogs.jsx (confirm, danger)', desc: 'Confirmation dialog (delete a bot)' }); await P.getByRole('button', { name: 'Cancelar' }).click(); });
-      await attempt(P, 'new bot', async () => { await nav(P, { view: 'bots', id: 'new' }); await P.waitForSelector('[data-testid=bot-create]'); await shot(P, { area: 'bots', screen: 'bot-create', state: 'new', src: 'src/ui/views/bots/create.jsx (CreateBot)', desc: 'New bot: name, shape and colour' }); });
-      await attempt(P, 'new group', async () => { await nav(P, { view: 'bot-groups' }); await P.click('[data-testid=group-new]'); await P.waitForTimeout(400); await shot(P, { area: 'dialog', screen: 'new-group', state: 'open', src: 'src/ui/views/bots/more.jsx (BotGroupsView)', desc: 'New bot group' }); await P.keyboard.press('Escape'); });
-      await attempt(P, 'new reminder', async () => { await nav(P, { view: 'bot-reminders' }); await P.click('[data-testid=reminder-new]'); await P.waitForTimeout(400); await shot(P, { area: 'dialog', screen: 'new-reminder', state: 'open', src: 'src/ui/views/bots/more.jsx (BotRemindersView)', desc: 'New reminder' }); await P.keyboard.press('Escape'); });
       await attempt(P, 'new schedule', async () => { await nav(P, { view: 'schedules' }); await P.click('[data-testid=new-schedule]'); await dialog(P); await shot(P, { area: 'dialog', screen: 'new-schedule', state: 'open', src: 'src/ui/views/schedules.jsx', desc: 'New scheduled task', scroll: true }); await P.keyboard.press('Escape'); });
       await attempt(P, 'lend dialog', async () => { await nav(P, { view: 'agents' }); const lend = P.locator('[data-testid^=lend-]').filter({ hasText: 'Prestar' }).first(); await lend.click(); await P.waitForSelector('[data-testid=lend-terms]'); await shot(P, { area: 'dialog', screen: 'lend', state: 'open', src: 'src/ui/views/agents.jsx (lendDialog)', desc: '«Prestar a…» an account to another user, with caps and terms' }); await P.keyboard.press('Escape'); });
       await attempt(P, 'magic link qr', async () => { await P.evaluate(() => window.__orbFire('ui:navigate', { view: 'settings', section: 'magiclink' })); await P.waitForSelector('[data-testid=settings-dialog]'); await P.click('[data-testid=settings-nav-magiclink]'); await P.click('[data-testid=link-make]'); await P.waitForSelector('[data-testid=link-qr]'); await shot(P, { area: 'dialog', screen: 'magic-link', state: 'qr', src: 'src/ui/views/magic-link.jsx (MagicLinkPanel)', desc: 'Magic Link QR and code, «¿Para qué usuario?»', scroll: true }); await P.keyboard.press('Escape'); });
@@ -446,7 +416,7 @@ try {
       for (const skin of SKINS.slice(1)) {
         step = `tema ${skin}`;
         await setLook(P, { ...look, skin });
-        await views(P, ['chat', 'tasks', 'projects', 'bot-chat', 'bots'], st, { scroll: false });
+        await views(P, ['chat', 'tasks', 'projects'], st, { scroll: false });
         await attempt(P, `conversation ${skin}`, async () => { await nav(P, { view: 'chat', id: conv.id }); await shot(P, { area: 'orb', screen: 'chat', state: 'conversation', src: 'src/ui/views/chat.jsx + themes.css', desc: `Orb chat, conversation, skin ${skin}` }); });
         await attempt(P, `settings ${skin}`, async () => { await P.evaluate(() => window.__orbFire('ui:navigate', { view: 'settings', section: 'apariencia' })); await P.waitForSelector('[data-testid=settings-dialog]'); await P.click('[data-testid=settings-nav-general]'); await P.click('[data-testid=settings-sub-apariencia]'); await shot(P, { area: 'settings', screen: 'apariencia', state: st, src: 'src/ui/views/settings.jsx + components/skin-preview.jsx', desc: `Settings › Appearance, skin ${skin}` }); await P.keyboard.press('Escape'); });
       }
@@ -458,13 +428,9 @@ try {
       const M = phone;
       await setLook(M, look);
       await views(M, PHONE_VIEWS, st);
-      await attempt(M, 'phone more bots', async () => { await nav(M, { view: 'bot-chats' }); await M.click('[data-testid=nav-menu]:visible'); await M.waitForSelector('[data-testid=mobile-more-bots]'); await M.waitForTimeout(400); await shot(M, { area: 'bots', screen: 'menu', state: st, src: 'src/ui/components/mobile-menu.jsx', desc: 'The phone menu ☰ in Bots mode' }); await M.keyboard.press('Escape'); });
       await attempt(M, 'phone conversation', async () => { await nav(M, { view: 'chat', id: conv.id }); await shot(M, { area: 'orb', screen: 'chat', state: 'conversation-long-code-table', src: 'src/ui/views/chat.jsx', desc: 'Orb chat on the phone, long text, code and table', scroll: true }); });
       await attempt(M, 'phone session', async () => { await nav(M, { view: 'session', id: s1.id }); await shot(M, { area: 'orb', screen: 'session', state: 'image-and-table', src: 'src/ui/views/session.jsx', desc: 'Conversation with Claude on the phone', scroll: true }); });
       await attempt(M, 'phone approval', async () => { await nav(M, { view: 'session', id: s2.id }); await M.waitForSelector('[data-testid=approval-card]'); await shot(M, { area: 'orb', screen: 'session', state: 'approval-card-pending', src: 'src/ui/views/session.jsx (ApprovalCard)', desc: 'Permission card on the phone' }); });
-      await attempt(M, 'phone bot card', async () => { await nav(M, { view: 'bot-chat', id: jefe.id }); await M.waitForSelector('[data-testid=bot-chat-input]'); await shot(M, { area: 'bots', screen: 'bot-chat', state: 'jefe-pending-card', src: 'src/ui/views/bots/chat.jsx', desc: 'Chief bot chat with a pending card on the phone', scroll: true }); });
-      await attempt(M, 'phone group', async () => { await nav(M, { view: 'bot-group', id: casa.id }); await shot(M, { area: 'bots', screen: 'bot-group', state: 'casa', src: 'src/ui/views/bots/chat.jsx', desc: 'Group chat on the phone' }); });
-      await attempt(M, 'phone bot detail', async () => { await nav(M, { view: 'bots', id: agenda.id }); await shot(M, { area: 'bots', screen: 'bot-editor', state: 'agenda-readonly', src: 'src/ui/views/bots/list.jsx', desc: 'A bot opened on the phone (changes are made on the PC)', scroll: true }); });
       await tasksDetail(M, st);
       await attempt(M, 'phone person menu', async () => { await nav(M, { view: 'chats' }); await M.click('[data-testid=nav-menu]:visible'); await M.waitForSelector('[data-testid=mobile-menu]'); await M.waitForTimeout(400); await shot(M, { area: 'menu', screen: 'menu', state: 'with-users', src: 'src/ui/components/mobile-menu.jsx + components/person-menu.jsx', desc: 'The phone menu ☰ with several users' }); await M.keyboard.press('Escape'); });
     }
@@ -494,8 +460,6 @@ try {
       await L.waitForSelector('[data-testid=mobile-menu] [data-testid=person-card-name] >> text=Leo');
       await shot(L, { area: 'menu', screen: 'menu', state: 'leo-person-card', src: 'src/ui/components/mobile-menu.jsx + components/person-menu.jsx (PersonCard)', desc: 'Leo\'s phone: the ☰ menu with his user card' });
       await L.keyboard.press('Escape');
-      await nav(L, { view: 'bots' });
-      await shot(L, { area: 'bots', screen: 'bots', state: 'leo-shared-with-me', src: 'src/ui/views/bots/list.jsx + components/share-dialog.jsx (SharedWithMe)', desc: 'Leo\'s bots: Agenda shared with him' });
       await nav(L, { view: 'profile' });
       await shot(L, { area: 'orb', screen: 'profile', state: 'leo-borrowed-account', src: 'src/ui/views/persons.jsx', desc: 'Leo\'s profile with a borrowed account', scroll: true });
     });

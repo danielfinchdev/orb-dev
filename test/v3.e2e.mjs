@@ -19,7 +19,7 @@ fs.mkdirSync(path.join(home, 'web', 'tienda'), { recursive: true });
 const userData = path.join(tmp, 'datos-app'); fs.mkdirSync(userData);
 fs.writeFileSync(path.join(userData, 'ubicacion.json'), JSON.stringify({ home }));
 const electronBin = (await import('electron')).default;
-const app = await electron.launch({ executablePath: electronBin, args: [ROOT, ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], env: { ...process.env, ORB_NO_BRIDGE: '1', ORB_NO_UPDATE: '1', ORB_USER_DATA: userData, ORB_FAKE_AGENTS: path.join(ROOT, 'test', 'fixtures', 'fake-live.mjs') } });
+const app = await electron.launch({ executablePath: electronBin, args: [ROOT, ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], env: { ...process.env, ORB_NO_UPDATE: '1', ORB_USER_DATA: userData, ORB_FAKE_AGENTS: path.join(ROOT, 'test', 'fixtures', 'fake-live.mjs') } });
 const win = await app.firstWindow();
 const errors = [];
 win.on('pageerror', (e) => errors.push(e.message));
