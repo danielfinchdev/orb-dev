@@ -57,6 +57,7 @@ const CONV = BOSS ? CONV_ID : null;
 // worker, its task and the subtasks it delegated; a direct conversation, the manual task it claimed. Not signed: nothing
 // (every tool is refused below).
 const WHO = Object.freeze({ signed: SIGNED, boss: BOSS, conversation: CONV, task: SIGNED_TASK ?? null, session: SIGNED_SESSION, agent: ME });
+const TASK_ID = Number(SIGNED_TASK) || null;
 // A signature ends with its task's or conversation's process (or with the conversation): checked again on every call.
 const stillSigned = () => {
   if (!WHO.signed) return false;
@@ -79,13 +80,25 @@ const listsTask = (t, projects) => ownsTask(board, WHO, t.id) || (BOSS && projec
 // inside one: an agent reads (and sends) only about its own tasks and those of its conversation.
 const scopeOf = (id) => board.conversationOfTask(id) ?? null;
 const myScope = () => (BOSS ? CONV : TASK_ID ? scopeOf(TASK_ID) : undefined);
-const mayRead = (m) => (m.task_id == null ? BOSS : ownsTask(board, WHO, m.task_id) || ((BOSS || Boolean(TASK_ID)) && scopeOf(m.task_id) === myScope()));
+// A message for one task (a worker naming a sibling, the coordinator naming a worker's task), not about the sender's own.
+const forOneTask = (m) => m.task_id != null && (m.from_task ?? null) !== m.task_id;
+// 3.8: a worker reads what is about its own tasks and, of its conversation, what goes to all or to its agent without
+// naming another task; the coordinator, everything of its conversation; a direct conversation, its claimed task's.
+const mayRead = (m) => (m.task_id == null ? BOSS : ownsTask(board, WHO, m.task_id)
+  || (BOSS && scopeOf(m.task_id) === myScope())
+  || (Boolean(TASK_ID) && scopeOf(m.task_id) === myScope() && (m.to_agent === 'all' || !forOneTask(m))));
+// Read marks are this process's own (a worker's, its task's): two tasks of one agent do not take each other's messages.
+const INBOX = { reader: BOSS ? 'orb' : TASK_ID ? `${ME}#${TASK_ID}` : SIGNED_SESSION ? `${ME}@${SIGNED_SESSION}` : ME,
+  mine: (m) => m.from_agent === ME && (BOSS || (m.from_task ?? null) === (TASK_ID ?? null)) };
 function sendMessage(a) {
   const task = a.task_id ?? TASK_ID ?? undefined;
-  if (task != null) seeTask(task);
-  // To an agent (or all): about one of its own tasks; Orb delivers it only inside that task's conversation.
+  // A worker may write to a sibling task of its own conversation (its brief tells it to), by that task's number.
+  if (task != null && !ownsTask(board, WHO, task)) {
+    if (!(WHO.signed && TASK_ID && board.task(task) && scopeOf(task) === myScope())) refuse(TASK_ID ? 'msg.authz.notYourScope' : 'msg.authz.notYourTask', { id: task });
+  }
+  // To an agent (or all): about one of its tasks; Orb delivers it only inside that task's conversation.
   if (!['orb', 'usuario'].includes(a.to) && task == null) refuse('msg.authz.messageNeedsTask');
-  return board.send({ ...a, task_id: task, from: ME });
+  return board.send({ ...a, task_id: task, from: ME, from_task: TASK_ID });
 }
 // 3.8: the logs of the projects its conversation works on, and the general one.
 function myLog(project) {
@@ -102,7 +115,7 @@ function boardSummary() {
   const out = board.summary(null, CONV); const projects = convProjects();
   // Every count of the PC, but only the tasks it may list.
   out.active = out.active.filter((t) => listsTask(t, projects));
-  out.unreadForYou = board.inbox(ME, false, mayRead).length;
+  out.unreadForYou = board.inbox(ME, false, mayRead, INBOX).length;
   return out;
 }
 const QUESTIONS = CONV ? `pending_questions:${CONV}` : 'pending_questions';
@@ -121,7 +134,7 @@ const AVAILABLE = board.availableAgents() ?? AGENTS;
 const INSTRUCTIONS = `${NAME} es el tablero común de los agentes ${ofUser()} disponibles en este PC (${AVAILABLE.join(', ') || 'ninguno'}). Tú eres "${ME}".
 ${BOSS ? `ERES EL COORDINADOR: crea tareas autocontenidas (orb_create_task) solo para esos agentes (${AVAILABLE.map((a) => `${a}: ${ctx.config.agents[a]?.strengths}`).join('; ')}), con depends_on para el orden. Límite: tareas por agente cada ${budgetConfig().windowHours} h.`
     : `SI TE HAN ASIGNADO UNA TAREA #N (eres trabajador):
-- Los mensajes de ${NAME} y de otros agentes te llegan mientras trabajas (si no, léelos con orb_read_messages). Si necesitas algo de otro agente, orb_send_message (to: agente o "all" de tu misma conversación, "usuario" para preguntar a ${USER}, o "orb" para el coordinador).
+- Los mensajes de ${NAME} y de otros agentes te llegan mientras trabajas (si no, léelos con orb_read_messages). Si necesitas algo de otro agente, orb_send_message (to: su agente y task_id: su tarea, de tu misma conversación; "all" para todas; "usuario" para preguntar a ${USER}, o "orb" para el coordinador).
 - Termina SIEMPRE con orb_update_task: status "done" con result (qué cambiaste y cómo probarlo), o "blocked"/"failed" con el motivo.
 - Si una parte de tu tarea la haría mejor otro agente (otro proveedor u otro modelo), puedes delegarla con orb_delegate y esperar su resultado con orb_wait_tasks. Encargos cortos y autocontenidos; no delegues todo.
 - No hagas push, no publiques, no borres nada fuera de tu carpeta de trabajo y no uses credenciales.
@@ -190,7 +203,6 @@ function createTask(a) {
 // Delegation (2.3): an agent working on task #N hands part of it to another agent or model. The subtask hangs from #N
 // (parent_id); it goes straight to the queue when the user trusts delegation (Ajustes) and nothing looks risky, and waits
 // for the user's approval otherwise.
-const TASK_ID = Number(SIGNED_TASK) || null;
 function delegate(a) {
   if (!TASK_ID) throw new Error(tr('sys.mcp.delegateNeedsTask'));
   if (ctx.config.delegation?.enabled === false) throw new Error(tr('sys.mcp.delegationOff', { user: USER }));
@@ -277,7 +289,7 @@ const tools = [
     // back to the same task).
     run: (a) => sendMessage(a) },
   { name: 'orb_read_messages', description: 'Lee tus mensajes sin leer (y los marca como leídos).', inputSchema: { type: 'object', properties: {} },
-    run: () => { const rows = board.inbox(ME, true, mayRead); return rows.length ? rows : 'Sin mensajes nuevos.'; } },
+    run: () => { const rows = board.inbox(ME, true, mayRead, INBOX); return rows.length ? rows : 'Sin mensajes nuevos.'; } },
   ...(BOSS ? [
     { name: 'orb_add_project', description: `Registra una carpeta existente como proyecto (dentro de una categoría de ${ctx.paths.projects}: windows, ios, android o web; o en las carpetas permitidas).`,
       inputSchema: { type: 'object', required: ['name', 'path'], properties: { name: str('Nombre corto'), path: str('Ruta absoluta de la carpeta'), notes: str('Notas opcionales') } },

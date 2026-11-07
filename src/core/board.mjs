@@ -503,24 +503,26 @@ export class Board {
   }
 
   // ---- messages between agents, the assistant and the user
-  send({ from, to, body, task_id }) {
+  // from_task: the sender's own task (a worker); task_id: the task the message is about or for.
+  send({ from, to, body, task_id, from_task = null }) {
     if (!body) throw new Error(tr('sys.board.bodyRequired'));
     if (![...AGENTS, 'all', 'usuario', 'orb'].includes(to)) throw new Error(tr('sys.board.badRecipient', { to, list: AGENTS.join(', ') }));
     body = String(body).slice(0, 8000);
     // 3.2.1: the agent by its name («Cursor», not «cursor»).
     const who = from === 'orb' ? assistantName() : AGENT_LABELS[from] ?? from;
     if (to === 'usuario') this.addChat('system', `💬 ${who}${task_id ? tr('msg.board.taskRef', { id: task_id }) : ''}: ${body}`, task_id ? { task: Number(task_id) } : null);
-    const { lastInsertRowid } = this.run('INSERT INTO messages (from_agent, to_agent, task_id, body, at) VALUES (?, ?, ?, ?, ?)', String(from), to, task_id ?? null, body, now());
+    const { lastInsertRowid } = this.run('INSERT INTO messages (from_agent, to_agent, task_id, from_task, body, at) VALUES (?, ?, ?, ?, ?, ?)', String(from), to, task_id ?? null, from_task ?? null, body, now());
     this.changed('messages');
     return { id: Number(lastInsertRowid), from, to, task_id: task_id ?? null };
   }
 
   // visible(m): which of them this reader may see (an agent's MCP: only its own tasks' and conversation's); only those
-  // are returned and marked as read.
-  inbox(agent, markRead = true, visible = () => true) {
-    const rows = this.all(`SELECT m.* FROM messages m WHERE (m.to_agent = ? OR m.to_agent = 'all') AND m.from_agent != ?
-      AND NOT EXISTS (SELECT 1 FROM message_reads r WHERE r.message_id = m.id AND r.agent = ?) ORDER BY m.id LIMIT 1000`, agent, agent, agent).filter(visible).slice(0, 100);
-    if (markRead) for (const m of rows) this.run('INSERT OR IGNORE INTO message_reads (message_id, agent) VALUES (?, ?)', m.id, agent);
+  // are returned and marked as read. 3.8: reader, whose read marks they are (a worker's are its task's, «claude#3», so two
+  // tasks of one agent do not take each other's messages); mine(m), a message it sent itself (left out).
+  inbox(agent, markRead = true, visible = () => true, { reader = agent, mine = (m) => m.from_agent === agent } = {}) {
+    const rows = this.all(`SELECT m.* FROM messages m WHERE (m.to_agent = ? OR m.to_agent = 'all')
+      AND NOT EXISTS (SELECT 1 FROM message_reads r WHERE r.message_id = m.id AND r.agent = ?) ORDER BY m.id LIMIT 1000`, agent, reader).filter((m) => !mine(m) && visible(m)).slice(0, 100);
+    if (markRead) for (const m of rows) this.run('INSERT OR IGNORE INTO message_reads (message_id, agent) VALUES (?, ?)', m.id, reader);
     return rows;
   }
 

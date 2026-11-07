@@ -266,3 +266,17 @@ test('los mensajes entre agentes llegan mientras trabajan', async () => {
   assert.ok(kinds(heard).includes('message.delivered'));
   await engine.taskDone(sender.id, 20000);
 });
+
+// 3.8 (review F2.6, N2): two workers of one orchestrated conversation coordinate as their brief tells them: the second
+// writes to the first by its task number (to: its agent, task_id: its number) and the first gets it while it works.
+test('una conversación orquestada con dos trabajadores: uno escribe al otro por su número, como dice su encargo', async () => {
+  const { conversation } = await call('chat.send', { text: 'CREA_PAREJA web' });
+  const listener = await until(async () => (await call('tasks.list')).find((x) => x.title === 'Escucha' && x.conversation_id === conversation), 'la tarea que escucha');
+  const sender = await until(async () => (await call('tasks.list')).find((x) => x.title === 'Avisa' && x.conversation_id === conversation), 'la tarea que avisa');
+  const heard = await engine.taskDone(listener.id, 30000);
+  assert.match(heard.result, /MENSAJE DE CODEX \(tarea #\d+\).*la API está en \/api\/v2/, heard.result);
+  assert.ok(kinds(heard).includes('message.delivered'));
+  const said = await engine.taskDone(sender.id, 30000);
+  assert.doesNotMatch(said.result, /Error|no es de/, said.result);
+  assert.match(said.result, new RegExp(`aviso: [\\s\\S]*"task_id": ${listener.id}\\b`), 'el mensaje es para la tarea hermana');
+});

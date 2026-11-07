@@ -202,7 +202,8 @@ test('MCP: cada agente lee solo los mensajes de sus tareas y de su conversación
   board.run('DELETE FROM messages');
   const ids = {
     own: board.send({ from: 'orb', to: 'claude', body: 'para A', task_id: a.id }).id,
-    sameConv: board.send({ from: 'codex', to: 'claude', body: 'de A2', task_id: a2.id }).id,
+    sameConv: board.send({ from: 'codex', to: 'claude', body: 'de A2', task_id: a2.id, from_task: a2.id }).id,
+    forSibling: board.send({ from: 'orb', to: 'claude', body: 'PARA A2', task_id: a2.id }).id,
     foreign: board.send({ from: 'codex', to: 'claude', body: 'AJENO de B', task_id: b.id }).id,
     loose: board.send({ from: 'codex', to: 'all', body: 'SIN TAREA' }).id,
     toBoss: board.send({ from: 'claude', to: 'orb', body: 'al jefe de A', task_id: a.id }).id,
@@ -214,9 +215,11 @@ test('MCP: cada agente lee solo los mensajes de sus tareas y de su conversación
     for (const c of [worker, boss]) await c.rpc('initialize', {});
     const read = JSON.parse((await worker.call('orb_read_messages')).text).map((m) => m.id).sort();
     assert.deepEqual(read, [ids.own, ids.sameConv].sort());
-    const marked = board.all("SELECT message_id FROM message_reads WHERE agent = 'claude'").map((r) => r.message_id);
-    assert.ok(!marked.includes(ids.foreign) && !marked.includes(ids.loose), 'los ajenos siguen sin leer para su destinatario');
-    assert.equal(board.inbox('claude', false).length, 2, 'el trabajador de B aún los tiene');
+    const marked = board.all('SELECT message_id FROM message_reads WHERE agent = ?', `claude#${a.id}`).map((r) => r.message_id);
+    assert.deepEqual(marked.sort(), read, 'marcados como leídos solo para su tarea');
+    // N8: another claude task of the same conversation still has the messages A read (read marks are per task).
+    const sibling = (m) => m.task_id === a2.id || (m.task_id === a.id && m.from_task === a.id);
+    assert.deepEqual(board.inbox('claude', false, sibling, { reader: `claude#${a2.id}` }).map((m) => m.id).sort(), [ids.forSibling, ids.sameConv].sort());
     const bossRead = (await boss.call('orb_read_messages')).text;
     assert.match(bossRead, /al jefe de A/); assert.doesNotMatch(bossRead, /AL JEFE DE B/);
   } finally { worker.close(); boss.close(); }
@@ -284,6 +287,38 @@ test('los mensajes entre agentes no salen de su conversación', () => {
     assert.deepEqual(got.far, [], 'otra conversación no recibe nada');
   } finally {
     for (const [task, key] of [[near, 'near'], [far, 'far']]) { scheduler.running.delete(task.id); sessions.lives.delete(`entrega-${key}`); }
+  }
+});
+
+// N2: a worker writes to a sibling task of its own conversation by its number (as its brief says), and Orb hands the
+// message to that task only; a task of another conversation stays out of reach.
+test('MCP: un trabajador escribe a una tarea hermana de su conversación por su número, y solo a esa', async () => {
+  const mine = board.createConversation({ title: 'Hermanas' }).id; const other = board.createConversation({ title: 'Otras' }).id;
+  const a = board.createTask({ project: 'web', title: 'Hermana A', description: 'x', conversation_id: mine }, 'orb');
+  const b = board.createTask({ project: 'web', title: 'Hermana B', description: 'x', conversation_id: mine }, 'orb');
+  const c = board.createTask({ project: 'web', title: 'Hermana C', description: 'x', conversation_id: mine }, 'orb');
+  const far = board.createTask({ project: 'web', title: 'Lejana', description: 'x', conversation_id: other }, 'orb');
+  const worker = mcp({ ORB_AGENT: 'claude', ORB_AGENT_TOKEN: agentToken(board, 'claude', a.id, 'sesion-hermana') });
+  const got = { b: [], c: [] };
+  for (const [task, key] of [[b, 'b'], [c, 'c']]) {
+    scheduler.running.set(task.id, { agent: 'codex', sessionId: `hermana-${key}` });
+    sessions.lives.set(`hermana-${key}`, { live: { caps: { steer: true }, steer: ({ text }) => { got[key].push(text); return true; } } });
+  }
+  try {
+    await worker.rpc('initialize', {});
+    board.setting('msg_delivered', String(board.one('SELECT COALESCE(MAX(id), 0) AS n FROM messages').n));
+    assert.equal((await worker.call('orb_send_message', { to: 'codex', body: 'la API está en /api/v2', task_id: b.id })).error, false);
+    const row = board.one('SELECT * FROM messages ORDER BY id DESC LIMIT 1');
+    assert.deepEqual([row.task_id, row.from_task], [b.id, a.id]);
+    const refused = await worker.call('orb_send_message', { to: 'codex', body: 'x', task_id: far.id });
+    assert.equal(refused.error, true); assert.match(refused.text, /no es de tu conversación/);
+    scheduler.deliverMessages();
+    assert.equal(got.b.length, 1); assert.match(got.b[0], /MENSAJE DE CLAUDE.*\/api\/v2/);
+    assert.deepEqual(got.c, [], 'la otra hermana no lo recibe');
+    assert.ok(board.one('SELECT 1 AS x FROM message_reads WHERE message_id = ? AND agent = ?', row.id, `codex#${b.id}`), 'leído por esa tarea');
+  } finally {
+    worker.close();
+    for (const [task, key] of [[b, 'b'], [c, 'c']]) { scheduler.running.delete(task.id); sessions.lives.delete(`hermana-${key}`); }
   }
 });
 

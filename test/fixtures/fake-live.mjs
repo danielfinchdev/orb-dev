@@ -22,6 +22,10 @@
 //   TABLA_MARKDOWN     answers in GFM: a table, a task list and strikethrough
 //   CIERRA_Y_CUELGA    closes its task (orb_update_task done) and then never ends its turn
 //   MANDA_MENSAJE <agente> <texto>   sends a message to another agent through Orb (orb_send_message)
+//   CREA_PAREJA <p>    (3.8, the coordinator) creates two read-only tasks in <p>: «Escucha» (claude, ESPERA_CORRECCION)
+//                      and «Avisa» (codex, AVISA_HERMANA)
+//   AVISA_HERMANA <texto>   (3.8) writes to the first task its brief lists among the others of its conversation, as the
+//                      brief says (to: its agent, task_id: its number)
 //   LEE <ruta>         (3.6, one per line) reads a file: the real guard decides
 //   ORB_FAKE_SCRIPT=<file.json>     (3.6, screenshots) [{ "when": "text", "reply": "…", "calls": [["tool", {args}]] }]: a
 //                      message containing «when» gets that natural reply (and makes those Orb tool calls, silently),
@@ -134,6 +138,12 @@ function createFakeLive(agent, label, caps, o) {
       item('tool', 'tool', { id: `t${++seq}`, name: 'orb:orb_create_task', input: proj[1] });
       item('tool', 'tool_result', { id: `t${seq}`, output: out.slice(0, 300), error: false });
     }
+    const pair = scan.match(/CREA_PAREJA (\S+)/);
+    if (pair) {
+      for (const [title, description, who] of [['Escucha', 'ESPERA_CORRECCION', 'claude'], ['Avisa', 'AVISA_HERMANA la API está en /api/v2', 'codex']]) {
+        notes.push(`creada: ${(await mcpCall(orb, 'orb_create_task', { project: pair[1], title, description, agent: who, readonly: true })).slice(0, 200)}`);
+      }
+    }
     // 2.7: a picture the agent made (as Codex's image_gen leaves it: a PNG file and an image item).
     if (/CREA_IMAGEN/.test(scan) && o.internalDir) {
       const dir = path.join(o.internalDir, 'imagenes'); fs.mkdirSync(dir, { recursive: true });
@@ -185,6 +195,12 @@ function createFakeLive(agent, label, caps, o) {
     // 3.1: a message to another agent through Orb (orb_send_message), as a worker would send it.
     const say = scan.match(/MANDA_MENSAJE (\w+) (.+)/);
     if (say) notes.push(`mensaje: ${await mcpCall(orb, 'orb_send_message', { to: say[1], body: say[2].trim() })}`);
+    const sister = scan.match(/AVISA_HERMANA (.+)/);
+    if (sister) {
+      await sleep(1500); // the sibling is running by then
+      const other = text.match(/## Otras tareas de este proyecto ahora mismo[^\n]*\n- #(\d+) .*?\((\w+), /);
+      notes.push(`aviso: ${other ? await mcpCall(orb, 'orb_send_message', { to: other[2], task_id: Number(other[1]), body: sister[1].trim() }) : 'sin otras tareas'}`);
+    }
     // 3.6: a scripted, natural answer for the screenshots (ORB_FAKE_SCRIPT); its tool calls leave no notes in the reply.
     const scripted = SCRIPT.find((x) => x.when && text.includes(x.when)) ?? null;
     for (const [tool, args] of scripted?.calls ?? []) {
