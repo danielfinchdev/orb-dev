@@ -1,7 +1,7 @@
-// 3.6 (mensajería, paso M4), de punta a punta con el motor: los avisos llegan solo a los móviles de quien ve el chat
-// (Ana sí, Leo no), con el dibujo de Orbe; los silenciados no avisan; «Aprobar» / «Rechazar» desde el aviso del navegador
-// (POST /api/note-action, una sola vez, como ese móvil); con PIN, nada se hace desde el aviso; la app abierta recibe el
-// aviso como evento «note».
+// 3.6 (mensajería, paso M4), de punta a punta con el motor: los avisos llegan a los móviles enlazados, con el dibujo de
+// Orbe; los silenciados no avisan; «Responder» se escribe en el propio aviso (3.8.0: la app no tiene bloqueo propio);
+// «Aprobar» / «Rechazar» desde el aviso del navegador (POST /api/note-action, una sola vez, como ese móvil); la app
+// abierta recibe el aviso como evento «note».
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -12,13 +12,13 @@ import { tempHome, startEngine, until } from './helpers.mjs';
 import { createPhone } from './fixtures/phone-client.mjs';
 import * as C from '../src/core/mobile-crypto.mjs';
 
-let A; let t; let port; let dir; let pushLog; let leo; let conv;
+let A; let t; let port; let dir; let pushLog; let conv;
 const links = [];
 const device = (name, kind = 'phone') => { const l = createPhone({ name, kind }); links.push(l); return l; };
 // A phone with notifications on and its app closed: its pushes go to the mock log.
-async function pushDevice(person, tag) {
+async function pushDevice(tag) {
   const l = device(`Avisos ${tag}`);
-  const peer = await l.connect({ qr: (await A.call('link.qr', { person })).url });
+  const peer = await l.connect({ qr: (await A.call('link.qr', {})).url });
   const raw = l.raw(peer.id);
   const sub = { endpoint: `https://fcm.googleapis.com/fcm/send/${tag}-${crypto.randomUUID()}`, keys: { p256dh: Buffer.concat([Buffer.from([4]), crypto.randomBytes(64)]).toString('base64url'), auth: crypto.randomBytes(16).toString('base64url') } };
   const r = await raw.post('/api/push', raw.box('push', { subscription: sub }));
@@ -29,7 +29,7 @@ async function pushDevice(person, tag) {
 const pushes = (endpoint) => { try { return fs.readFileSync(pushLog, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((x) => !endpoint || x.endpoint === endpoint); } catch { return []; } };
 const base = () => `http://127.0.0.1:${port}`;
 const noteAction = (token) => fetch(`${base()}/api/note-action`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: base() }, body: JSON.stringify({ token }) });
-let ana; let leoPhone;
+let ana; let tablet;
 
 before(async () => {
   port = 20000 + Math.floor(Math.random() * 20000);
@@ -38,21 +38,20 @@ before(async () => {
   t = tempHome({ mobile: { enabled: true, port, name: 'Casa', preview: 'all' } });
   A = await startEngine(t.home, { env: { ORB_REMOTE_BIND: '127.0.0.1', ORB_PUSH_LOG: pushLog } });
   await until(async () => (await A.call('remote.status')).running, 'acceso');
-  leo = await A.call('persons.create', { name: 'Leo' });
-  ana = await pushDevice(undefined, 'ana');
-  leoPhone = await pushDevice(leo.id, 'leo');
+  ana = await pushDevice('ana');
+  tablet = await pushDevice('tablet');
   await A.call('projects.create', { name: 'web' });
 });
 after(async () => { for (const l of links) { try { l.stop(); } catch { /* stopped */ } } await A?.stop?.(); t?.cleanup(); });
 
-test('la respuesta de Orbe avisa con su dibujo y abre esa conversación; Leo nada', async () => {
+test('la respuesta de Orbe avisa con su dibujo y abre esa conversación, en cada móvil enlazado', async () => {
   const n = pushes(ana.endpoint).length;
   const r = await A.call('chat.send', { text: 'hola Orbe' });
   conv = r.conversation;
   const p = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.tag === `orb-conversation:${r.conversation}`), 'el aviso de Orbe', 30_000);
   assert.equal(p.data.icon, '/icon.png');
   assert.deepEqual(p.data.route, { view: 'chat', id: r.conversation });
-  assert.ok(!pushes(leoPhone.endpoint).length, 'nada al móvil de Leo');
+  await until(() => pushes(tablet.endpoint).find((x) => x.data.tag === `orb-conversation:${r.conversation}`), 'también a la tablet', 30_000);
 });
 
 test('silenciado: sin aviso', async () => {
@@ -65,14 +64,11 @@ test('silenciado: sin aviso', async () => {
   await A.call('inbox.mute', { kind: 'conversation', id: conv, muted: false });
 });
 
-test('con el bloqueo de la app (PIN): Responder abre la app', async () => {
-  await A.call('persons.setPin', { pin: '2468' });
-  try {
-    const n = pushes(ana.endpoint).length;
-    await A.call('chat.send', { text: 'hola con candado', conversation: conv });
-    const m = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.tag === `orb-conversation:${conv}` && x.data.kind === 'message'), 'el mensaje', 30_000);
-    assert.deepEqual(m.data.actions.map((a) => [a.id, Boolean(a.open), Boolean(a.input)]), [['reply', true, false]], 'sin escribir en el aviso');
-  } finally { await A.call('persons.setPin', { pin: null, current: '2468' }); }
+test('Responder se escribe en el propio aviso', async () => {
+  const n = pushes(ana.endpoint).length;
+  await A.call('chat.send', { text: 'hola de nuevo', conversation: conv });
+  const m = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.tag === `orb-conversation:${conv}` && x.data.kind === 'message'), 'el mensaje', 30_000);
+  assert.deepEqual(m.data.actions.map((a) => [a.id, Boolean(a.open)]), [['reply', false]]);
 });
 
 test('la app abierta recibe el aviso como evento «note» (lo muestra Android en segundo plano)', async () => {
@@ -88,15 +84,12 @@ test('la app abierta recibe el aviso como evento «note» (lo muestra Android en
   l.stop();
 });
 
-test('el permiso de una tarea llega con Aprobar y Rechazar; con un PIN puesto después su token ya no vale', async () => {
+test('el permiso de una tarea llega con Aprobar y Rechazar; el token vale una vez', async () => {
   const n = pushes(ana.endpoint).length;
   await A.call('tasks.create', { project: 'web', title: 'Subir', description: 'PIDE_PERMISO', agent: 'codex' });
   const p = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.kind === 'approval'), 'el permiso', 30_000);
   assert.ok(p.data.acts.allow && p.data.acts.deny);
-  await A.call('persons.setPin', { pin: '1357' });
-  try {
-    const r = await noteAction(p.data.acts.allow);
-    assert.equal(r.status, 403); assert.equal((await r.json()).reason, 'locked');
-  } finally { await A.call('persons.setPin', { pin: null, current: '1357' }); }
-  assert.equal((await noteAction(p.data.acts.deny)).status, 401, 'el primer intento gasta los dos tokens del aviso');
+  const r = await noteAction(p.data.acts.deny);
+  assert.equal(r.status, 200, JSON.stringify(await r.clone().json()));
+  assert.equal((await noteAction(p.data.acts.allow)).status, 401, 'el primer intento gasta los dos tokens del aviso');
 });

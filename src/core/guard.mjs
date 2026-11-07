@@ -8,8 +8,6 @@
 //   editar     (default) edit files and run commands in its folder; risky commands ask first
 //   preguntar  edit files; every command asks first (for when you want to watch closely)
 //   total      no checks at all (asked once when chosen; never from the phone)
-import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { translate } from './i18n.mjs';
 import { ctx } from './context.mjs';
@@ -159,105 +157,18 @@ export function protectedHit(text, list = protectedList()) {
   return list.find((e) => entryRe(e).test(t)) ?? null;
 }
 export const touchesProtected = (text, list) => protectedHit(text, list) !== null;
-// ---- the secrets of the agents, of Orb and of the browsers, fixed whatever the user's list says (and checked on the real
-// path, so a link or «..» does not get round it): a confined session (confineFor) never reads them.
-const SECRET_NAME = /(^|[\\/])(\.claude|\.claude\.json|\.codex|\.ssh|\.gnupg|\.aws|\.azure|\.kube|\.docker|\.netrc|\.npmrc|\.git-credentials|\.orb-terminal|\.orb|\.password-store|\.mozilla|\.credentials\.json|auth\.json|clave\.bin|enlaces\.json|orb\.db|id_rsa|id_ecdsa|id_ed25519|\.env|login data|cookies|key4\.db|logins\.json|user data)([\\/.]|$)/i;
-export function secretDirs() {
-  const h = os.homedir();
-  const under = (...p) => path.join(h, ...p);
-  const list = [under('.claude'), under('.codex'), under('.ssh'), under('.gnupg'), under('.aws'), under('.orb-terminal'), under('.config', 'gcloud'), under('.config', 'gh'),
-    under('.mozilla'), under('.config', 'google-chrome'), under('.config', 'chromium'), under('.config', 'microsoft-edge'), under('.config', 'BraveSoftware'),
-    under('Library', 'Application Support', 'Google', 'Chrome'), under('Library', 'Application Support', 'Firefox'),
-    under('AppData', 'Local', 'Google', 'Chrome', 'User Data'), under('AppData', 'Local', 'Microsoft', 'Edge', 'User Data'), under('AppData', 'Roaming', 'Mozilla'),
-    under('AppData', 'Local', 'BraveSoftware'), under('AppData', 'Roaming', 'Orb'), under('.config', 'Orb'), under('.config', 'orb-server')];
-  for (const k of ['CLAUDE_CONFIG_DIR', 'CODEX_HOME']) if (process.env[k]) list.push(process.env[k]);
-  for (const a of ctx.config?.accounts ?? []) if (a?.home) list.push(String(a.home));
-  if (ctx.home) list.push(path.join(ctx.home, '.orb'));
-  if (ctx.paths?.internal) list.push(ctx.paths.internal);
-  return list.map((d) => path.resolve(d));
-}
-const lower = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
-const inside = (p, dir) => { const a = lower(path.resolve(p)); const d = lower(path.resolve(dir)); return a === d || a.startsWith(d.endsWith(path.sep) ? d : d + path.sep); };
-// The fixed part of a glob pattern («../../**/x» → «../..»), to see where it reaches.
-const globBase = (pattern) => { const parts = String(pattern).replace(/\\/g, '/').split('/'); const i = parts.findIndex((x) => /[*?[{]/.test(x)); return (i < 0 ? parts : parts.slice(0, i)).join('/') || '.'; };
-
-// ---- 3.6 (A9): a session of someone other than the owner works only inside its project's folder. confine: { roots,
-// others, secrets } (confineFor): every path and pattern must fall inside a root, on its real path too (a link or «..»
-// does not get round it); never another project's folder, Orb's own folder or a secret. A command that names a folder of
-// this PC's user outside its roots is refused too.
-export function confineFor({ roots = [], others = [] } = {}) {
-  const realOf = (p) => { try { return fs.realpathSync.native(p); } catch { return path.resolve(p); } };
-  const list = roots.filter(Boolean).map((r) => path.resolve(r));
-  return { roots: [...new Set([...list, ...list.map(realOf)])], others: others.filter(Boolean).map((r) => path.resolve(r)).filter((o) => !list.some((r) => inside(r, o) || inside(o, r))),
-    secrets: [...secretDirs(), ...(ctx.home ? [path.join(ctx.home, '.orb')] : []), ...(ctx.paths?.internal ? [ctx.paths.internal] : [])] };
-}
-const UP_TOKEN = /(?:^|[\s"'=(])((?:[^\s"'|;&<>()]*[\\/])?\.\.(?:[\\/][^\s"'|;&<>()]*)?)(?=$|[\s"'|;&<>()])/g;
-const ABS_TOKEN = /(?:^|[\s"'=(])((?:[a-zA-Z]:[\\/]|\\\\|\/|~[\\/])[^\s"'|;&<>()]*)/g;
-// The real path of a path that may not exist yet: its nearest existing folder resolved (links included), plus the rest.
-const realDeep = (p) => {
-  let cur = path.resolve(p); const rest = [];
-  for (let i = 0; i < 64; i++) {
-    try { return path.join(fs.realpathSync.native(cur), ...rest.reverse()); } catch { /* not there yet */ }
-    const up = path.dirname(cur); if (up === cur) break;
-    rest.push(path.basename(cur)); cur = up;
-  }
-  return path.resolve(p);
-};
-export function confineCheck({ paths = [], patterns = [], command = '', confine, lang = 'es' }) {
-  const real = realDeep;
-  if (!confine || typeof confine !== 'object') return null;
-  const T = (k) => translate(lang, `msg.guard.${k}`);
-  // 3.6: { exclude, cwd } (the owner's assistant): everything stays as it was but other people's folders.
-  if (Array.isArray(confine.exclude)) {
-    const hit = (p) => confine.exclude.some((d) => inside(p, d) || inside(real(p), d));
-    const at = (p) => (path.isAbsolute(p) ? path.resolve(p) : path.resolve(confine.cwd ?? process.cwd(), p));
-    for (const raw of [...paths, ...patterns].filter(Boolean).map(String)) if (hit(at(paths.includes(raw) ? raw : globBase(raw)))) return { decision: 'deny', reason: T('confined') };
-    for (const m of String(command ?? '').matchAll(ABS_TOKEN)) if (hit(path.resolve(m[1]))) return { decision: 'deny', reason: T('confined') };
-    return null;
-  }
-  const roots = confine.roots ?? []; const base = roots[0] ?? process.cwd();
-  const at = (p) => (path.isAbsolute(p) ? path.resolve(p) : path.resolve(base, p));
-  const within = (p) => roots.some((r) => inside(p, r));
-  const blocked = (p) => (confine.secrets ?? []).some((d) => inside(p, d)) || (confine.others ?? []).some((d) => inside(p, d));
-  for (const raw of [...paths, ...patterns].filter(Boolean).map(String)) {
-    if (SECRET_NAME.test(raw.replace(/\\/g, '/'))) return { decision: 'deny', reason: T('confinedSecret') };
-    const p = at(paths.includes(raw) ? raw : globBase(raw)); const r = real(p);
-    if (!within(p) || !within(r)) return { decision: 'deny', reason: T('confined') };
-  }
-  const text = String(command ?? '');
-  if (text) {
-    if (SECRET_NAME.test(text.replace(/\\/g, '/'))) return { decision: 'deny', reason: T('confinedSecret') };
-    const home = os.homedir();
-    for (const m of text.matchAll(ABS_TOKEN)) {
-      const tok = m[1].replace(/^~(?=[\\/])/, home);
-      const p = path.resolve(tok); const r = real(p);
-      if (within(p) && within(r)) continue;
-      if (blocked(p) || blocked(r)) return { decision: 'deny', reason: T('confined') };
-      if (inside(p, home) || (ctx.home && inside(p, ctx.home))) return { decision: 'deny', reason: T('confined') };
-    }
-    // 3.6: a relative path that climbs out («../otro-proyecto/archivo»), from the working folder.
-    for (const m of text.matchAll(UP_TOKEN)) {
-      const p = path.resolve(base, m[1]); const r = real(p);
-      if (!within(p) || !within(r)) return { decision: 'deny', reason: T('confined') };
-    }
-  }
-  return null;
-}
-
-// decide({ permission, tool, kind, command, paths, patterns, internalDir, lang, confine }) → (lang: language of the
+// decide({ permission, tool, kind, command, paths, patterns, internalDir, lang }) → (lang: language of the
 // reasons, default 'es') { decision: 'allow' | 'ask' | 'deny', reason }
 // 3.7: no agent ever raises its privileges, whatever its permission (also «total»): sudo, doas, pkexec, su or
 // run0.
 const ESCALATE = /\b(sudo|doas|pkexec|run0)\b|(^|[;&|(`]|\$\()\s*su(\s|$)|\/etc\/sudoers/i;
 export const escalates = (command) => ESCALATE.test(String(command ?? ''));
-export function decide({ permission = 'editar', tool, kind, command = '', paths = [], patterns = [], internalDir, lang = 'es', confine = null }) {
+export function decide({ permission = 'editar', tool, kind, command = '', paths = [], patterns = [], internalDir, lang = 'es' }) {
   const T = (k) => translate(lang, `msg.guard.${k}`);
   const cls = toolClass(tool, kind);
   const text = [command, ...paths, ...patterns].join(' ');
   if (touchesInternal(text, internalDir)) return { decision: 'deny', reason: T('internal') };
   if (escalates(command)) return { decision: 'deny', reason: T('sudo') };
-  const confined = confineCheck({ paths, patterns, command, confine, lang });
-  if (confined) return confined;
   const hit = protectedHit(text);
   if (hit) return { decision: 'deny', reason: translate(lang, 'msg.guard.protected', { name: hit }) };
   if (permission === 'total') return { decision: 'allow', reason: T('full') };

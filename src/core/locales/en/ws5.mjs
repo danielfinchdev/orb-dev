@@ -1,6 +1,5 @@
 // 3.6 "Personas", WS5: backups, moving the Orb, exporting and deleting a person, time zones
 export default {
-  'data.person.deletedLine': '(message deleted)',
   'data.tz.late': '{n} min late',
   'data.backup.restored': 'Backup restored (from {created}).',
   'data.backup.dailyFailed': 'Today\'s backup could not be made: {error}. It will try again in an hour.',

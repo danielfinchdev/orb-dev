@@ -59,12 +59,10 @@ try {
   }
   await win.waitForSelector('[data-testid=chat-greeting]');
   for (const sel of ['wizard-quien', 'wizard-para']) assert.equal(await win.locator(`[data-testid=${sel}]`).count(), 0, sel);
-  // What 3.6 asked is done without asking: Ana is the admin, with this PC's time zone; backups on.
-  assert.equal((await call('app.state')).config.assistantName, 'Orbe');
-  const people = await call('persons.list');
-  assert.equal(people.length, 1, 'una sola persona');
-  assert.equal(people[0].role, 'owner'); assert.equal(people[0].name, 'Ana');
-  assert.ok(people[0].tz, 'zona horaria del PC');
+  // What 3.6 asked is done without asking: the user's name and this PC's time zone in the settings; backups on.
+  const config = (await call('app.state')).config;
+  assert.equal(config.assistantName, 'Orbe'); assert.equal(config.userName, 'Ana');
+  assert.ok(config.tz, 'zona horaria del PC');
   assert.ok((await call('backup.status')).enabled, 'copias activas sin preguntar');
   const home = path.join(base, 'Orb');
   for (const f of ['orb.json', '.orb/datos/orb.db', 'bitacora/GENERAL.md', 'mcp-servers', 'windows', 'ios', 'android', 'web']) assert.ok(fs.existsSync(path.join(home, f)), `falta ${f}`);

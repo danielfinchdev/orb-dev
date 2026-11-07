@@ -6,7 +6,7 @@ import path from 'node:path';
 import { tempHome } from './helpers.mjs';
 import { openDb } from '../src/core/db.mjs';
 import { Board } from '../src/core/board.mjs';
-import { POLICY, EVENTS } from '../src/core/policy.mjs';
+import { METHODS } from '../src/core/permissions.mjs';
 
 const t = tempHome();
 after(() => t.cleanup());
@@ -19,8 +19,7 @@ test('una base nueva: sin tablas ni disparadores de las réplicas, y sin método
   const c = board.createConversation({ title: 'Hola' });
   board.addChat('usuario', 'una línea', null, c.id);
   assert.equal(board.chat(c.id).length, 1);
-  assert.deepEqual(Object.keys(POLICY).filter((m) => /^(bots|replica|templates|centro)\./.test(m)), []);
-  assert.deepEqual(Object.keys(EVENTS).filter((e) => /^(bot\.|bots\.|link:queue)/.test(e)), []);
+  assert.deepEqual(Object.keys(METHODS).filter((m) => /^(bots|replica|templates|centro)\./.test(m)), []);
 });
 
 test('una base de 3.7 con los disparadores de las réplicas sigue funcionando', () => {

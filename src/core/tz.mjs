@@ -1,5 +1,5 @@
-// 3.6: time zones without dependencies (only Intl). Schedules keep a WALL time («every day at 09:00») and
-// the zone of the person who made them; the instant (UTC) of each run is worked out here, so a PC in UTC fires a
+// 3.6: time zones without dependencies (only Intl). Schedules keep a WALL time («every day at 09:00») in the
+// owner's zone; the instant (UTC) of each run is worked out here, so a PC in UTC fires a
 // Madrid schedule at 09:00 in Madrid, also across both daylight-saving changes.
 //   zonedToUtc('2026-03-29T02:30', 'Europe/Madrid')  → Date (spring forward: the first valid minute, 03:00; fall back:
 //                                                       the first of the two 02:30)
@@ -20,8 +20,10 @@ const pad = (n, w = 2) => String(n).padStart(w, '0');
 const MIN = 60_000;
 const DAY = 86_400_000;
 
-// The zone of this machine (the fallback for a person without one).
+// The zone of this machine (the fallback when the settings name none).
 export const systemTz = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; } };
+// The owner's zone: the settings' tz (orb.json), else this machine's.
+export const ownerTz = (config) => (isValidTz(config?.tz) ? config.tz : systemTz());
 export function isValidTz(tz) {
   if (typeof tz !== 'string' || !tz || tz.length > 64) return false;
   try { formatter(tz); return true; } catch { return false; }

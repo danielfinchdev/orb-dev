@@ -2,9 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { openDb, taskOptions, checkPolicy } from './db.mjs';
-import { ctx, tr, personSetting as personSettingOf } from './context.mjs';
-import { ownerId as findOwner, personName as nameOf } from './persons.mjs';
-import { scopeSql, rightOn } from './authz.mjs';
+import { ctx, tr } from './context.mjs';
 import { AGENT_IDS, AGENT_LABELS, folderName, projectLogHeader, isConfigName, categoryOf, CATEGORIES } from './home.mjs';
 import { oneLine, MAX_DESCRIPTION } from './safety.mjs';
 import { contentHash, sign, verify, detectSensitivity, deletionAskedByUser, defaultApprovalKey } from './approval.mjs';
@@ -20,8 +18,6 @@ const parse = (task) => task && { ...task, mode: task.mode ?? 'carpeta', readonl
 
 // The user's name as the assistant writes it ("el usuario" when not set).
 export const userName = () => ctx.config?.userName?.trim() || 'el usuario';
-// 3.6: a person's name (the owner's: userName, as before). userName() stays the owner's.
-export const personName = (board, id) => nameOf(board, id);
 // "de Ana" / "del usuario" (Spanish contracts de + el).
 export const ofUser = () => (ctx.config?.userName?.trim() ? `de ${ctx.config.userName.trim()}` : 'del usuario');
 // The same two for what the user reads in the app (chat notices), in the language of the settings.
@@ -99,13 +95,8 @@ export class Board {
 
   // The engine listens to push changes to the window; MCP processes have no listeners (the engine polls the database).
   onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
-  // 3.6: hints { person, res } say whose change it is (the router of WS2 tells only them); never content.
+  // hints: what changed exactly (a chat line's conversation), for the listeners that need it; never content.
   changed(what, hints = null) { for (const fn of this.listeners) { try { fn(what, hints); } catch { /* a listener must never break a write */ } } }
-
-  // ---- 3.6 «Personas»: the owner, a person's name and their own settings.
-  ownerId() { return (this._owner ??= findOwner(this) ?? null); }
-  personName(id) { return nameOf(this, id); }
-  personSetting(pid, key, value) { return personSettingOf(pid ?? this.ownerId(), key, value, this.db); }
 
   all(sql, ...params) { return this.db.prepare(sql).all(...params); }
   one(sql, ...params) { return this.db.prepare(sql).get(...params); }
@@ -135,55 +126,37 @@ export class Board {
     if (list && !list.includes(agent)) throw new Error(tr('sys.board.agentUnavailable', { agent, list: list.length ? list.join(', ') : tr('sys.board.noAgentsAvailable') }));
   }
 
-  // 3.6: person: whose activity it is (default: the task's, else none = the owner's).
-  event(taskId, actor, kind, detail = '', { person = null } = {}) {
-    const who = person ?? (taskId != null ? this.one('SELECT person_id FROM tasks WHERE id = ?', Number(taskId))?.person_id ?? null : null);
-    this.run('INSERT INTO events (task_id, actor, kind, detail, at, person_id) VALUES (?, ?, ?, ?, ?, ?)', taskId ?? null, String(actor), kind, String(detail).slice(0, 4000), now(), who);
-    this.changed('events', who ? { person: who } : null);
+  event(taskId, actor, kind, detail = '') {
+    this.run('INSERT INTO events (task_id, actor, kind, detail, at) VALUES (?, ?, ?, ?, ?)', taskId ?? null, String(actor), kind, String(detail).slice(0, 4000), now());
+    this.changed('events');
   }
 
   // ---- projects
   // Agents (MCP) can only create projects; moving one to another folder is a user action (fromUser).
-  // 3.6: person: whose a new project is (default: the owner's); an existing one keeps its person.
-  addProject({ name, path: folder, notes = '' }, actor, { fromUser = false, person = null } = {}) {
+  addProject({ name, path: folder, notes = '' }, actor, { fromUser = false } = {}) {
     name = oneLine(name, 60);
     if (!name || !folder) throw new Error(tr('sys.board.nameAndPath'));
     const existing = this.project(name);
     if (existing && !same(existing.path, folder) && !fromUser) throw new Error(tr('sys.board.projectElsewhere', { name: existing.name }));
     const checked = existing && same(existing.path, folder) ? existing.path : checkProjectPath(folder, { fromUser });
-    // 3.6: a folder is one person's: never inside (or around) the folder of someone else's project, nor that same
-    // folder under another name (it would open that person's files to whoever registers it).
-    const owner = this.ownerId(); const whose = (p) => p.person_id ?? owner;
-    const me = existing ? whose(existing) : person ?? owner;
-    const nested = (a, b) => { const rel = path.relative(path.resolve(a), path.resolve(b)); return !rel || (!rel.startsWith('..') && !path.isAbsolute(rel)); };
-    if (this.projects().some((p) => whose(p) !== me && (nested(p.path, checked) || nested(checked, p.path)))) throw new Error(tr('sys.board.folderOfOther'));
     // One folder, one project: the same folder under another name is the project that already exists.
     const twin = !existing && this.projects().find((p) => same(p.path, checked));
     if (twin) return twin;
-    this.run(`INSERT INTO projects (name, path, notes, created_at, person_id) VALUES (?, ?, ?, ?, ?)
-              ON CONFLICT(name) DO UPDATE SET path = excluded.path, notes = excluded.notes`, name, checked, String(notes ?? '').slice(0, 2000), now(), existing ? existing.person_id ?? null : person ?? null);
+    this.run(`INSERT INTO projects (name, path, notes, created_at) VALUES (?, ?, ?, ?)
+              ON CONFLICT(name) DO UPDATE SET path = excluded.path, notes = excluded.notes`, name, checked, String(notes ?? '').slice(0, 2000), now());
     this.ensureProjectLog(name);
-    // 3.6 (WS2): the activity line is the project's person's (not everyone's feed).
-    this.event(null, actor, 'project.saved', `${name} -> ${checked}`, { person: existing ? existing.person_id ?? null : person ?? null });
+    this.event(null, actor, 'project.saved', `${name} -> ${checked}`);
     this.changed('projects');
     return this.project(name);
   }
   project(name) { return this.one('SELECT * FROM projects WHERE name = ?', String(name ?? '')); }
-  // 3.6: principal: only that person's projects.
-  projects({ principal = null } = {}) {
-    if (!principal) return this.all('SELECT * FROM projects ORDER BY name');
-    const s = scopeSql(principal, 'project', 'p');
-    return this.all(`SELECT * FROM projects p WHERE ${s.where} ORDER BY name`, ...s.args);
-  }
-  // 3.6: whether a person is the owner (null: the owner, as everywhere).
-  isOwnerPerson(person) { return !person || person === this.ownerId(); }
+  projects() { return this.all('SELECT * FROM projects ORDER BY name'); }
   removeProject(name, actor) {
     const project = this.project(name); if (!project) throw new Error(tr('msg.board.noProject', { name }));
     const open = this.one("SELECT COUNT(*) AS n FROM tasks WHERE project = ? AND status IN ('queued', 'awaiting_approval', 'running')", project.name).n;
     if (open) throw new Error(tr('msg.board.projectOpenTasks', { open }));
     this.run('DELETE FROM projects WHERE name = ?', project.name);
     if (this.setting('active_project') === project.name) this.setting('active_project', '');
-    try { this.run("DELETE FROM person_settings WHERE key = 'active_project' AND value = ?", JSON.stringify(project.name)); } catch { /* before 3.6 */ }
     this.event(null, actor, 'project.removed', `${project.name} (la carpeta no se borra)`);
     this.changed('projects');
   }
@@ -197,31 +170,25 @@ export class Board {
   }
 
   // Working folder of the session ("today we work on X"): every new task goes there.
-  // 3.6: each person has their own (person null: the owner's, kept where 3.5.1 kept it).
-  activeName(person = null) { return this.isOwnerPerson(person) ? this.setting('active_project') || '' : this.personSetting(person, 'active_project') || ''; }
-  activeProject(person = null) { const name = this.activeName(person); return name ? this.project(name) ?? null : null; }
-  setActiveProject(name, actor, person = null) {
-    const own = this.isOwnerPerson(person);
-    const save = (v) => (own ? this.setting('active_project', v) : this.personSetting(person, 'active_project', v || null));
-    const hints = own ? null : { person };
-    if (!name) { save(''); this.event(null, actor, 'project.active', 'ninguno', { person: own ? null : person }); this.changed('projects', hints); return null; }
+  activeName() { return this.setting('active_project') || ''; }
+  activeProject() { const name = this.activeName(); return name ? this.project(name) ?? null : null; }
+  setActiveProject(name, actor) {
+    if (!name) { this.setting('active_project', ''); this.event(null, actor, 'project.active', 'ninguno'); this.changed('projects'); return null; }
     const project = this.project(name); if (!project) throw new Error(tr('sys.board.unknownProject', { name }));
     // 3.2: the same folder again (the assistant sets it on each request) says nothing: the notice came out again and again.
-    if (this.activeName(person) === project.name) return project;
-    save(project.name);
-    this.event(null, actor, 'project.active', `${project.name} -> ${project.path}`, { person: own ? null : person });
-    this.notice(tr('msg.board.activeFolder', { name: project.name, path: project.path }), 'info', { person: own ? null : person });
-    this.changed('projects', hints);
+    if (this.activeName() === project.name) return project;
+    this.setting('active_project', project.name);
+    this.event(null, actor, 'project.active', `${project.name} -> ${project.path}`);
+    this.notice(tr('msg.board.activeFolder', { name: project.name, path: project.path }), 'info');
+    this.changed('projects');
     return project;
   }
 
   // ---- tasks
   task(id) { return parse(this.one('SELECT * FROM tasks WHERE id = ?', Number(id))); }
 
-  // 3.6: principal: only that person's tasks.
-  tasks({ project, status, agent, limit = 100, principal = null } = {}) {
+  tasks({ project, status, agent, limit = 100 } = {}) {
     const where = []; const params = [];
-    if (principal) { const s = scopeSql(principal, 'task', 'tasks'); where.push(s.where); params.push(...s.args); }
     if (project) { where.push('project = ? COLLATE NOCASE'); params.push(project); }
     if (status) { where.push('status = ?'); params.push(status); }
     if (agent) { where.push('(agent = ? OR assigned_to = ?)'); params.push(agent, agent); }
@@ -240,11 +207,9 @@ export class Board {
   }
 
   // Open tasks however old (so none disappears) plus the last `finished` closed ones.
-  // 3.6: principal: only the tasks that person may see (theirs).
-  panelTasks(finished = 100, { principal = null } = {}) {
-    const s = principal ? scopeSql(principal, 'task', 'tasks') : { where: '1=1', args: [] };
-    const open = this.all(`SELECT * FROM tasks WHERE status NOT IN ('done', 'cancelled') AND ${s.where} ORDER BY id DESC`, ...s.args);
-    const closed = this.all(`SELECT * FROM tasks WHERE status IN ('done', 'cancelled') AND ${s.where} ORDER BY id DESC LIMIT ?`, ...s.args, Number(finished));
+  panelTasks(finished = 100) {
+    const open = this.all("SELECT * FROM tasks WHERE status NOT IN ('done', 'cancelled') ORDER BY id DESC");
+    const closed = this.all("SELECT * FROM tasks WHERE status IN ('done', 'cancelled') ORDER BY id DESC LIMIT ?", Number(finished));
     return [...open, ...closed].sort((a, b) => b.id - a.id).map(parse);
   }
 
@@ -252,7 +217,7 @@ export class Board {
   // readonly: the task only reads (research, review): it may run at the same time as others in the same folder.
   // 3.2: conversation_id: the conversation that asked for it (its report goes back there); a subtask, a review or a join
   // task belongs to the one of the task it comes from.
-  createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null, level = null, fixedBrief = false, internal = false, conversation_id = null, person = null }, actor) {
+  createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null, level = null, fixedBrief = false, internal = false, conversation_id = null }, actor) {
     if (!MODES.includes(mode)) throw new Error(tr('sys.board.badMode'));
     const proj = this.project(project);
     if (!proj) throw new Error(tr('sys.board.unknownProject', { name: project }));
@@ -261,10 +226,7 @@ export class Board {
     const conversation = convId ? this.conversation(convId) : null;
     // The folder the work must stay in: the conversation's project (3.2: several conversations work at once, each in its
     // own), else the working folder of the app.
-    // 3.6: whose the task is: given, else its conversation's, the task it comes from or its schedule's (null: the owner).
-    const from = parent_id ?? review_of;
-    const who = person ?? conversation?.person_id ?? (from ? this.task(from)?.person_id : null) ?? (schedule_id ? this.one('SELECT person_id FROM schedules WHERE id = ?', Number(schedule_id))?.person_id : null) ?? null;
-    const active = conversation ? (conversation.project ? this.project(conversation.project) : null) : this.activeProject(who);
+    const active = conversation ? (conversation.project ? this.project(conversation.project) : null) : this.activeProject();
     // 2.7: the projects of a multiplatform group work together: a task may go to a sister of the active project.
     // 3.1: internal: a task the engine itself needs in that project (joining a copy), whatever project is active now.
     if (!internal && active && proj.name !== active.name && actor !== 'usuario' && !(active.grupo && proj.grupo === active.grupo)) throw new Error(tr('sys.board.otherFolder', { name: active.name, path: active.path, user: userName() }));
@@ -280,8 +242,7 @@ export class Board {
     this.checkAvailable(agent);
     if (!['auto', 'manual'].includes(launch)) throw new Error(tr('sys.board.badLaunch'));
     if (!Array.isArray(depends_on) || depends_on.length > 20) throw new Error(tr('sys.board.dependsMax'));
-    // 3.6: a dependency hands its result to this task: only a task its person may see (another person's is «missing»).
-    for (const dep of depends_on) if (!this.task(dep) || !rightOn(this, who ?? this.ownerId(), { type: 'task', id: dep })) throw new Error(tr('sys.board.dependsMissing', { id: dep }));
+    for (const dep of depends_on) if (!this.task(dep)) throw new Error(tr('sys.board.dependsMissing', { id: dep }));
     if (!Array.isArray(sensitivity)) throw new Error(tr('sys.board.sensitivityList'));
     const unknown = sensitivity.filter((s) => !ctx.config.sensitive.includes(s));
     if (unknown.length) throw new Error(tr('sys.board.badSensitivity', { list: unknown.join(', ') }));
@@ -317,9 +278,9 @@ export class Board {
     if (actor !== 'orb' && actor !== 'usuario' && !trusted) { tags.push('creada_por_agente'); reasons.push(tr('msg.board.reasonByAgent', { actor, name: assistantName() })); }
     const status = tags.length ? 'awaiting_approval' : 'queued';
     const at = now();
-    const { lastInsertRowid } = this.run(`INSERT INTO tasks (project, title, description, agent, account, model, reasoning, fast, launch, priority, depends_on, sensitivity, status, created_by, project_path, created_at, updated_at, mode, readonly, parent_id, review_of, schedule_id, level, conversation_id, person_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, proj.name, title, String(description), agent, account || null, model, reasoning, Number(fast), launch, Math.min(Math.max(Number(priority) || 2, 1), 3),
-      JSON.stringify(depends_on.map(Number)), JSON.stringify([...new Set(tags)]), status, String(actor), proj.path, at, at, mode, Number(Boolean(readonly)), parent_id ? Number(parent_id) : null, review_of ? Number(review_of) : null, schedule_id ? Number(schedule_id) : null, ['simple', 'normal', 'complejo'].includes(level) ? level : null, convId ?? null, who);
+    const { lastInsertRowid } = this.run(`INSERT INTO tasks (project, title, description, agent, account, model, reasoning, fast, launch, priority, depends_on, sensitivity, status, created_by, project_path, created_at, updated_at, mode, readonly, parent_id, review_of, schedule_id, level, conversation_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, proj.name, title, String(description), agent, account || null, model, reasoning, Number(fast), launch, Math.min(Math.max(Number(priority) || 2, 1), 3),
+      JSON.stringify(depends_on.map(Number)), JSON.stringify([...new Set(tags)]), status, String(actor), proj.path, at, at, mode, Number(Boolean(readonly)), parent_id ? Number(parent_id) : null, review_of ? Number(review_of) : null, schedule_id ? Number(schedule_id) : null, ['simple', 'normal', 'complejo'].includes(level) ? level : null, convId ?? null);
     const id = Number(lastInsertRowid);
     this.event(id, actor, 'task.created', status);
     if (askedNote) this.event(id, 'orb', 'note', askedNote);
@@ -541,29 +502,21 @@ export class Board {
   }
 
   // ---- messages between agents, the assistant and the user
-  // 3.6: person: whose agent sends it (default: its task's; none: the owner's). It reaches only that person's agents and
-  // chat (an agent never talks into another person's work).
-  send({ from, to, body, task_id, person = null }) {
+  send({ from, to, body, task_id }) {
     if (!body) throw new Error(tr('sys.board.bodyRequired'));
     if (![...AGENTS, 'all', 'usuario', 'orb'].includes(to)) throw new Error(tr('sys.board.badRecipient', { to, list: AGENTS.join(', ') }));
     body = String(body).slice(0, 8000);
     // 3.2.1: the agent by its name («Cursor», not «cursor»).
     const who = from === 'orb' ? assistantName() : AGENT_LABELS[from] ?? from;
-    const owner = this.ownerId();
-    const whose = person ?? (task_id ? this.one('SELECT person_id FROM tasks WHERE id = ?', Number(task_id))?.person_id ?? null : null);
-    const pid = whose && whose !== owner ? whose : null;
-    if (to === 'usuario') this.addChat('system', `💬 ${who}${task_id ? tr('msg.board.taskRef', { id: task_id }) : ''}: ${body}`, task_id ? { task: Number(task_id) } : null, undefined, { person: pid });
-    const { lastInsertRowid } = this.run('INSERT INTO messages (from_agent, to_agent, task_id, body, at, person_id) VALUES (?, ?, ?, ?, ?, ?)', String(from), to, task_id ?? null, body, now(), pid);
+    if (to === 'usuario') this.addChat('system', `💬 ${who}${task_id ? tr('msg.board.taskRef', { id: task_id }) : ''}: ${body}`, task_id ? { task: Number(task_id) } : null);
+    const { lastInsertRowid } = this.run('INSERT INTO messages (from_agent, to_agent, task_id, body, at) VALUES (?, ?, ?, ?, ?)', String(from), to, task_id ?? null, body, now());
     this.changed('messages');
     return { id: Number(lastInsertRowid), from, to, task_id: task_id ?? null };
   }
 
-  // 3.6: person: whose agent reads (null: the owner's): only the messages of that person's agents.
-  inbox(agent, markRead = true, { person = null } = {}) {
-    const other = person && person !== this.ownerId() ? person : null;
-    const mine = other ? 'm.person_id = ?' : 'm.person_id IS NULL';
-    const rows = this.all(`SELECT m.* FROM messages m WHERE (m.to_agent = ? OR m.to_agent = 'all') AND m.from_agent != ? AND ${mine}
-      AND NOT EXISTS (SELECT 1 FROM message_reads r WHERE r.message_id = m.id AND r.agent = ?) ORDER BY m.id LIMIT 100`, agent, agent, ...(other ? [other] : []), agent);
+  inbox(agent, markRead = true) {
+    const rows = this.all(`SELECT m.* FROM messages m WHERE (m.to_agent = ? OR m.to_agent = 'all') AND m.from_agent != ?
+      AND NOT EXISTS (SELECT 1 FROM message_reads r WHERE r.message_id = m.id AND r.agent = ?) ORDER BY m.id LIMIT 100`, agent, agent, agent);
     if (markRead) for (const m of rows) this.run('INSERT OR IGNORE INTO message_reads (message_id, agent) VALUES (?, ?)', m.id, agent);
     return rows;
   }
@@ -575,18 +528,15 @@ export class Board {
     let context = null; try { context = r.context ? JSON.parse(r.context) : null; } catch { /* none */ }
     return { ...r, titled: Boolean(r.titled), context };
   }
-  // 3.6: principal: only that person's conversations (they are always private).
-  conversations({ limit = 300, principal = null } = {}) {
-    const s = principal ? scopeSql(principal, 'conversation', 'conversations') : { where: '1=1', args: [] };
-    return this.all(`SELECT * FROM conversations WHERE bot_id IS NULL AND group_id IS NULL AND ${s.where} ORDER BY updated_at DESC, id DESC LIMIT ?`, ...s.args, Math.min(Math.max(Number(limit) || 300, 1), 2000)).map((r) => this.conversation(r.id) ?? r);
+  conversations({ limit = 300 } = {}) {
+    return this.all('SELECT * FROM conversations WHERE bot_id IS NULL AND group_id IS NULL ORDER BY updated_at DESC, id DESC LIMIT ?', Math.min(Math.max(Number(limit) || 300, 1), 2000)).map((r) => this.conversation(r.id) ?? r);
   }
-  // 3.6: person: whose it is (default: the owner).
-  createConversation({ title = '', project = null, agent = 'claude', account = null, model = null, reasoning = 'medium', person = null } = {}) {
+  createConversation({ title = '', project = null, agent = 'claude', account = null, model = null, reasoning = 'medium' } = {}) {
     if (project && !this.project(project)) throw new Error(tr('sys.board.unknownProject', { name: project }));
-    const at = now(); const who = person ?? this.ownerId();
-    const { lastInsertRowid } = this.run(`INSERT INTO conversations (title, titled, project, agent, account, model, reasoning, created_at, updated_at, person_id) VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      oneLine(title || tr('msg.board.newConversation'), 80), project ? this.project(project).name : null, agent, account || null, model || null, reasoning || 'medium', at, at, who);
-    this.changed('conversations', { person: who });
+    const at = now();
+    const { lastInsertRowid } = this.run('INSERT INTO conversations (title, titled, project, agent, account, model, reasoning, created_at, updated_at) VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?)',
+      oneLine(title || tr('msg.board.newConversation'), 80), project ? this.project(project).name : null, agent, account || null, model || null, reasoning || 'medium', at, at);
+    this.changed('conversations');
     return this.conversation(Number(lastInsertRowid));
   }
   updateConversation(id, fields) {
@@ -611,7 +561,7 @@ export class Board {
     const project = name ? this.project(name) : null;
     if (name && !project) throw new Error(tr('sys.board.unknownProject', { name }));
     if ((c.project ?? null) !== (project?.name ?? null)) this.updateConversation(c.id, { project: project?.name ?? null });
-    this.setActiveProject(project?.name ?? '', actor, c.person_id ?? null);
+    this.setActiveProject(project?.name ?? '', actor);
     return project;
   }
   // The conversation a task belongs to: its own, or the one of the task it comes from (a subtask, a review, a join).
@@ -632,32 +582,26 @@ export class Board {
   // ---- the assistant's chat and the activity feed
   // meta: extra data of a chat line, e.g. { kind: 'report', tasks: [ids] } for the assistant's report that waits for the user's OK.
   // 3.2: conversation: the one the line belongs to; when not given, the one of the task the line is about (meta.task).
-  // 3.6: person: who wrote the line (the window's notices: whom they are for).
-  addChat(role, body, meta = null, conversation = undefined, { person = null } = {}) {
+  addChat(role, body, meta = null, conversation = undefined) {
     const conv = conversation !== undefined ? conversation : meta?.task ? this.conversationOfTask(meta.task) : null;
     const at = now();
-    // 3.6: a line about a task outside any conversation (made by hand or by a schedule) is for that task's person.
-    const who = person ?? (conv == null && meta?.task ? this.one('SELECT person_id FROM tasks WHERE id = ?', Number(meta.task))?.person_id ?? null : null);
-    const { lastInsertRowid } = this.run('INSERT INTO chat (role, body, meta, at, conversation_id, person_id) VALUES (?, ?, ?, ?, ?, ?)', role, String(body), meta ? JSON.stringify(meta) : null, at, conv ?? null, who);
+    const { lastInsertRowid } = this.run('INSERT INTO chat (role, body, meta, at, conversation_id) VALUES (?, ?, ?, ?, ?)', role, String(body), meta ? JSON.stringify(meta) : null, at, conv ?? null);
     if (conv && role !== 'notice') this.run('UPDATE conversations SET updated_at = ? WHERE id = ?', at, Number(conv));
-    // 3.6 (messaging lists): which conversation got which line (the lists count unread lines and tell its people).
-    this.changed('chat', conv != null && role !== 'notice' ? { conversation: Number(conv), line: Number(lastInsertRowid), role, author: who } : null);
+    // 3.6 (messaging lists): which conversation got which line (the lists count unread lines).
+    this.changed('chat', conv != null && role !== 'notice' ? { conversation: Number(conv), line: Number(lastInsertRowid), role } : null);
     return { id: Number(lastInsertRowid), conversation: conv ?? null };
   }
   // 2.7: a notice that only informs (the working folder changed, the brain in use, a schedule created…): the window shows
   // it as a passing notification instead of a grey line in the chat. tone: info | success | warning. Kept in the table
   // (role 'notice') so the engine sees it whichever process wrote it, but left out of the chat.
-  // 3.6: person: the one the notice is for (default: the owner; owner: true also tells the owner when it is someone else's).
-  notice(body, tone = 'info', { person = null, owner = false } = {}) { return this.addChat('notice', body, { tone, ...(person ? { person } : {}), ...(owner ? { owner: true } : {}) }, undefined, { person }); }
+  notice(body, tone = 'info') { return this.addChat('notice', body, { tone }); }
   // Changes the extra data of a chat message (e.g. an approval card that was answered).
   patchChatMeta(id, meta) { this.run('UPDATE chat SET meta = ? WHERE id = ?', JSON.stringify(meta), Number(id)); this.changed('chat'); }
   // The chat lines of a conversation (not the notices), oldest first: the last `limit`, or only those before a line id.
   // conversation null: the lines of no conversation (about tasks made outside one: by hand, by a schedule).
-  // 3.6: principal: for the lines of no conversation, only that person's (the owner's: theirs and the ones without a person).
-  chat(conversation, limit = 200, { before = null, principal = null } = {}) {
-    const s = conversation == null && principal ? scopeSql(principal, 'chat', 'chat') : null;
-    const where = conversation == null ? `conversation_id IS NULL${s ? ` AND ${s.where}` : ''}` : 'conversation_id = ?';
-    return this.all(`SELECT * FROM (SELECT * FROM chat WHERE role != 'notice' AND ${where}${before ? ' AND id < ?' : ''} ORDER BY id DESC LIMIT ?) ORDER BY id`, ...(conversation == null ? s?.args ?? [] : [Number(conversation)]), ...(before ? [Number(before)] : []), limit)
+  chat(conversation, limit = 200, { before = null } = {}) {
+    const where = conversation == null ? 'conversation_id IS NULL' : 'conversation_id = ?';
+    return this.all(`SELECT * FROM (SELECT * FROM chat WHERE role != 'notice' AND ${where}${before ? ' AND id < ?' : ''} ORDER BY id DESC LIMIT ?) ORDER BY id`, ...(conversation == null ? [] : [Number(conversation)]), ...(before ? [Number(before)] : []), limit)
       .map((r) => { let meta = null; try { meta = r.meta ? JSON.parse(r.meta) : null; } catch { /* ignore */ } return { ...r, meta }; });
   }
   // One chat line by its id (any conversation), with its extra data.
@@ -685,22 +629,20 @@ export class Board {
   }
 
   // 3.2: conversation: the coordinator's, whose project is the one it works in (others may have set the app's folder).
-  // 3.6: principal: only what that person may see (their tasks and projects).
-  summary(agent, conversation = null, { principal = null } = {}) {
-    const s = principal ? scopeSql(principal, 'task', 'tasks') : { where: '1=1', args: [] };
-    const counts = Object.fromEntries(this.all(`SELECT status, COUNT(*) AS n FROM tasks WHERE ${s.where} GROUP BY status`, ...s.args).map((r) => [r.status, r.n]));
-    const active = this.all(`SELECT * FROM tasks WHERE status NOT IN ('done', 'cancelled') AND ${s.where} ORDER BY priority, id LIMIT 50`, ...s.args).map(parse);
+  summary(agent, conversation = null) {
+    const counts = Object.fromEntries(this.all('SELECT status, COUNT(*) AS n FROM tasks GROUP BY status').map((r) => [r.status, r.n]));
+    const active = this.all("SELECT * FROM tasks WHERE status NOT IN ('done', 'cancelled') ORDER BY priority, id LIMIT 50").map(parse);
     const conv = conversation ? this.conversation(conversation) : null;
-    const project = conv ? (conv.project ? this.project(conv.project) : null) : this.activeProject(principal?.person ?? null);
+    const project = conv ? (conv.project ? this.project(conv.project) : null) : this.activeProject();
     return {
       paused: this.setting('paused') === '1',
-      activeProject: project ? `${project.name} — ${project.path}` : `ninguno (pregunta a ${principal ? this.personName(principal.person) : userName()} en qué proyecto se trabaja)`,
+      activeProject: project ? `${project.name} — ${project.path}` : `ninguno (pregunta a ${userName()} en qué proyecto se trabaja)`,
       projectsFolder: ctx.paths.projects,
       categories: CATEGORIES.map((c) => `${c} — ${ctx.paths.categories[c]}`),
-      projects: this.projects({ principal }).map((p) => `${p.name} — ${p.path}`),
+      projects: this.projects().map((p) => `${p.name} — ${p.path}`),
       counts,
       active: active.map((t) => ({ id: t.id, project: t.project, title: t.title, agent: t.assigned_to ?? t.agent, launch: t.launch, status: t.status, depends_on: t.depends_on })),
-      unreadForYou: agent ? this.inbox(agent, false, { person: principal?.person ?? null }).length : undefined
+      unreadForYou: agent ? this.inbox(agent, false).length : undefined
     };
   }
 

@@ -21,9 +21,7 @@ import { IS_WIN } from '../agents/common.mjs';
 import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal, open, sealText, openText, openBytes, AAD, CLOCK_SKEW_MS, shortSecret } from '../core/mobile-crypto.mjs';
 import { newVapidKeys, checkSubscription, sendPush } from './webpush.mjs';
 import { PROTOCOL, MIN_PROTOCOL, versionOfProtocol, CODE_ALPHABET, shortCodeLabel } from '../core/link-payload.mjs';
-import { PHONE_SET as ALLOWED } from '../core/policy.mjs';
-import { principalOf, reaches, audienceOf, ownerOfBoard } from '../core/authz.mjs';
-import { checkTicket, getPerson } from '../core/persons.mjs';
+import { REMOTE_METHODS, principalOf } from '../core/permissions.mjs';
 
 const RENDERER = path.resolve(process.env.ORB_RENDERER || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'renderer'));
 const SESSION_DAYS = 30; // a phone unused for this long has to be paired again
@@ -49,19 +47,19 @@ export function phoneConfig(c) {
   };
 }
 
-// What a phone or a browser may call (ALLOWED): src/core/policy.mjs PHONE_SET. Never by the kind a device says it is,
-// and nothing with total access.
+// What a phone or a browser may call: the methods src/core/permissions.mjs marks 'remote'. Never by the kind a device
+// says it is, and nothing with total access.
 // 3.5.1: what the owner may choose when making a QR (the kind of device it is for).
 export const PAIR_KINDS = ['phone', 'browser'];
 export const KINDS = PAIR_KINDS;
 const EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'notice', 'session:item', 'session:update', 'session:removed', 'config:changed', 'session:delta', 'session:queue', 'approval:changed',
-  // 3.6 (messaging lists): a chat list changed (only to its person)
+  // 3.6 (messaging lists): a chat list changed
   'inbox:changed']);
 const PAIR_FAILS_MAX = 20; // wrong attempts (all addresses together) that cancel the code on screen
 
 // The checks of a call coming from a phone or a browser: null when it may run, or why not. `uploadsDir`: the pictures
 // that may go with it.
-export function guardCall(board, method, params, { allowed = ALLOWED, uploadsDir = null } = {}) {
+export function guardCall(board, method, params, { allowed = REMOTE_METHODS, uploadsDir = null } = {}) {
   if (!allowed.has(method)) return tr('msg.remote.pcOnly');
   if (method === 'agents.login' && params.console) return tr('msg.remote.pcOnly');
   if (params.permission === 'total') return tr('msg.remote.totalPcOnly');
@@ -79,13 +77,6 @@ export function guardCall(board, method, params, { allowed = ALLOWED, uploadsDir
 // nuevo»). 3.8: 'all' and 'chat' show the same (the bots' messages, hidden with 'chat', are gone).
 export const PREVIEWS = ['all', 'chat', 'none'];
 export const pushPreview = (config) => (PREVIEWS.includes(config?.mobile?.preview) ? config.mobile.preview : 'chat');
-// What a notification says: its own title and text, or (preview «none») only the assistant's name and «Tienes un mensaje
-// nuevo». 3.6: preview: the person's own choice (Mi perfil), else the settings' (as in 3.5.1).
-export function pushContent({ title, body }, config, preview = null) {
-  const v = PREVIEWS.includes(preview) ? preview : pushPreview(config); const name = config?.assistantName ?? 'Orb';
-  const shown = v !== 'none';
-  return shown ? { title: String(title ?? name).slice(0, 80), body: String(body ?? '').slice(0, 200) } : { title: name, body: tr('msg.remote.pushHidden') };
-}
 // What a call from outside gets back (the settings without secrets).
 export const shapeResult = (method, result) => (method === 'app.state' && result ? { ...result, config: phoneConfig(result.config) } : result);
 
@@ -184,7 +175,7 @@ const HEADERS = {
 // The installed app's service worker: shows the notifications the PC sends and opens the app when one is tapped.
 // 3.6 (messaging, M4): one notification per chat (tag): new lines join it (the last five, and how many in the title);
 // the sender's picture (icon); «Responder» opens the chat; «Aprobar» / «Rechazar» answer the card right there with a
-// one-time token of this device (POST /api/note-action), or open the chat when the card needs the PIN. Tapping opens the
+// one-time token of this device (POST /api/note-action); a card whose text is hidden opens the chat. Tapping opens the
 // exact chat (an open window is told: postMessage { orbOpen }; else /#abrir=…).
 export const SERVICE_WORKER = `self.addEventListener('install',()=>self.skipWaiting());
 self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));
@@ -217,17 +208,12 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   let pairing = null; // { code, short, expires, route, fails }
   const orbName = () => orbNameOf(ctx.config);
   const failures = new Map(); // address -> timestamps of wrong pairing attempts (one noisy device cannot lock out the others)
-  const clients = new Set(); // live-event streams: { res, device, key, person }
+  const clients = new Set(); // live-event streams: { res, device, key }
   const seen = new Map(); // device id -> Map(nonce -> expiry): requests already answered (replays are refused)
   const keys = new Map(); // device id -> session key
-  // 3.6: whose a device is (a row from before 3.6, without a person, is the owner's), and each person's own folder of
-  // pictures (a phone may only attach the ones its person uploaded).
-  const owner = () => ownerOfBoard(board);
-  const personOf = (d) => d?.person_id ?? owner();
-  const nameOf = (pid) => getPerson(board, pid)?.name ?? null;
-  const uploadsRoot = () => path.join(ctx.paths.internal, 'adjuntos-movil');
-  const uploads = (person = owner()) => path.join(uploadsRoot(), String(person ?? 'dueno').replace(/[^\w-]/g, '_'));
-  const previewOf = (pid) => { try { return board.personSetting(pid, 'preview') ?? null; } catch { return null; } };
+  // The phones' pictures (a phone may only attach the ones uploaded from a linked device). 3.6-3.7 kept them in a
+  // subfolder per person: those are still inside, and pruneUploads clears them with the rest.
+  const uploads = () => path.join(ctx.paths.internal, 'adjuntos-movil');
   // What this Orb says of itself on every hello and /api/me (3.6, protocol 3).
   const versions = () => ({ v: PROTOCOL, min: MIN_PROTOCOL, version });
   const metaV = (d) => Number(parseMeta(d).v ?? 2);
@@ -364,7 +350,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       touch(device, req);
       res.writeHead(200, { ...HEADERS, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
       res.write(': hola\n\n');
-      const client = { res, device: device.id, key: keyOf(device), at: Date.now(), person: personOf(device) };
+      const client = { res, device: device.id, key: keyOf(device), at: Date.now() };
       const mine = [...clients].filter((c) => c.device === device.id);
       if (mine.length >= STREAMS_PER_DEVICE) { try { mine[0].res.end(); } catch { /* closed */ } clients.delete(mine[0]); }
       clients.add(client);
@@ -384,13 +370,11 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     touch(device, req);
 
     if (what === 'me') {
-      // 3.6: who this device is for here, and the versions of both sides (the client says its own).
+      // 3.6: this device's name here, and the versions of both sides (the client says its own).
       const cv = Number(msg.body?.v);
       if (Number.isFinite(cv) && cv > 0 && cv !== metaV(device)) board.run('UPDATE devices SET meta = ? WHERE id = ?', JSON.stringify({ ...parseMeta(device), v: cv }), device.id);
       if (tooOld(cv)) return reply(res, device, msg.nonce, { ok: false, status: 426, update: 'me', error: tr('msg.link.updateClient', { has: versionOfProtocol(cv), need: versionOfProtocol(MIN_PROTOCOL) }) });
-      const pid = personOf(device);
-      return reply(res, device, msg.nonce, { ok: true, result: { device: device.name, name: ctx.config.assistantName, orb: orbName(), ...versions(), pc: pcFingerprint, push: Boolean(device.push), vapid: own.vapid.publicKey,
-        person: { id: pid, name: nameOf(pid) } } });
+      return reply(res, device, msg.nonce, { ok: true, result: { device: device.name, name: ctx.config.assistantName, orb: orbName(), ...versions(), pc: pcFingerprint, push: Boolean(device.push), vapid: own.vapid.publicKey } });
     }
     if (what === 'push') {
       // Turn notifications on (a subscription made by this phone's browser) or off (null).
@@ -404,16 +388,13 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const method = String(msg.body?.method ?? '');
     const params = msg.body?.params && typeof msg.body.params === 'object' ? msg.body.params : {};
     const deny = (error) => reply(res, device, msg.nonce, { ok: false, status: 403, error });
-    // 3.6: a strong ticket (a PIN typed on this device in the last minutes, persons.verifyPin) goes with the call that
-    // needs it.
-    const strongUntil = checkTicket(typeof msg.body?.ticket === 'string' ? msg.body.ticket : null, personOf(device), device.id) || null;
-    const principal = principalOf(board, { device, ceiling: ALLOWED, strongUntil });
+    const principal = principalOf({ device });
     // 2.6: which account the assistant spends is chosen on the PC (the brain's agent and model, also from the phone).
     if (method === 'chat.settings' && params.account !== undefined) delete params.account;
-    const why = guardCall(board, method, params, { uploadsDir: uploads(personOf(device)) });
+    const why = guardCall(board, method, params, { uploadsDir: uploads() });
     if (why) return deny(why);
     try {
-      // 3.6: as the device's person, within what this device may call (WS2: the router and per-person shaping).
+      // What this device may call (src/core/permissions.mjs), and the settings without paths or secrets (phoneConfig).
       const result = shapeResult(method, (await api.call(method, params, principal)) ?? null);
       return reply(res, device, msg.nonce, { ok: true, result });
     }
@@ -462,20 +443,18 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const kind = kindForPairing(pairing.device, typeof proof.kind === 'string' ? proof.kind : kindOf({ name: proof.name }));
     if (!kind) return send(res, 403, { error: tr('msg.link.notForOrb') });
     const { route } = pairing;
-    // 3.6: whom the QR was made for («¿Para quién?»), whatever the device says.
-    const person = pairing.person ?? owner();
     pairing = null; // one use
     const id = crypto.randomUUID();
     const name = oneLine(typeof proof.name === 'string' && proof.name ? proof.name : tr('msg.remote.defaultName'), 60);
-    board.run('INSERT INTO devices (id, name, token_hash, created_at, last_seen, public_key, route, kind, ip, meta, kind_ok, person_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)',
-      id, name, `clave:${id}`, now(), now(), body.pub, route, kind, who, JSON.stringify({ v: Number(proof.v ?? 2) || 2 }), person);
+    board.run('INSERT INTO devices (id, name, token_hash, created_at, last_seen, public_key, route, kind, ip, meta, kind_ok) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)',
+      id, name, `clave:${id}`, now(), now(), body.pub, route, kind, who, JSON.stringify({ v: Number(proof.v ?? 2) || 2 }));
     board.event(null, 'usuario', 'device.paired', name);
-    board.notice(tr('msg.remote.deviceLinked', { name }), 'success', person === owner() ? {} : { person, owner: true });
+    board.notice(tr('msg.remote.deviceLinked', { name }), 'success');
     // The answer is sealed with the new session key: the phone checks it really is the PC of the QR. 3.5.1: and with the
     // code's key too, so a device that got a key from someone in the middle finds out (nobody else has the code).
     const key = sessionKey(own.priv, devPub); keys.set(id, key);
     linkChanged();
-    return send(res, 200, { id, box: seal(key, { id, name: ctx.config.assistantName, orb: orbName(), ...versions(), pc: pcFingerprint, person: { id: person, name: nameOf(person) } }, AAD.paired(id)),
+    return send(res, 200, { id, box: seal(key, { id, name: ctx.config.assistantName, orb: orbName(), ...versions(), pc: pcFingerprint }, AAD.paired(id)),
       confirm: seal(pairingKey(own.priv, devPub, secretOf), { id, pc: pcFingerprint }, AAD.confirm(id)) });
   }
 
@@ -486,7 +465,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   // A picture from the phone (encrypted): checked by its first bytes (not its name), stored in the app's folder, path returned.
   let uploading = 0;
   async function upload(req, res, device) {
-    const mine = uploads(personOf(device));
+    const mine = uploads();
     const auth = openHeader(req, device, 'upload');
     if (!auth) { req.resume(); return send(res, 401, { error: tr('msg.remote.notLinked') }); }
     if (auth.clock) { req.resume(); return clockOff(res); }
@@ -507,7 +486,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     finally { uploading--; }
   }
   // Old pictures go (7 days), and the oldest ones too while the folder would pass its quota.
-  // 3.6: the pictures of every person (each in its folder; the ones of 3.5 at the top too), the oldest first.
+  // The oldest first (3.6-3.7's per-person subfolders too).
   async function pruneUploads(incoming = 0) {
     const list = [];
     const walk = async (dir, depth) => {
@@ -518,7 +497,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
         try { const st = await fs.promises.stat(full); list.push({ f: full, at: st.mtimeMs, size: st.size }); } catch { /* gone */ }
       }
     };
-    await walk(uploadsRoot(), 0);
+    await walk(uploads(), 0);
     list.sort((a, b) => a.at - b.at);
     let total = list.reduce((n, x) => n + x.size, 0) + incoming;
     for (const x of list) {
@@ -531,16 +510,14 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   // Notifications: a new message in the assistant's chat (an answer, a task that needs approval, finished or failed work)
   // goes to the phones that turned them on and do not have the app open right now.
   // 3.6 (M4): as a messaging app's (deliverNote): the chat's name and picture, one per chat, its actions; muted: none.
-  function notify(payload, audience = null) {
+  function notify(payload) {
     if (!payload || payload.role === 'usuario') return;
-    const aud = audience ?? audienceOf(board, 'chat:new', payload);
-    deliverNote({ audience: aud, conversation: payload.conversation ?? null, line: { id: payload.id ?? null, role: payload.role, body: payload.body, meta: payload.meta ?? null } });
+    deliverNote({ conversation: payload.conversation ?? null, line: { id: payload.id ?? null, role: payload.role, body: payload.body, meta: payload.meta ?? null } });
   }
 
-  // ---- 3.6 (messaging, M4): notifications as a messaging app's (src/core/notes.mjs builds them, per person).
+  // ---- 3.6 (messaging, M4): notifications as a messaging app's (src/core/notes.mjs builds them).
   const NOTE_TOKEN_MS = 24 * 3_600_000;
-  const noteTokens = new Map(); // one-time token → { device, person, call: [method, params], group, until }
-  const hasPinOf = (pid) => { try { return Boolean(board.one('SELECT pin_hash FROM persons WHERE id = ?', String(pid))?.pin_hash); } catch { return false; } };
+  const noteTokens = new Map(); // one-time token → { device, call: [method, params], group, until }
   const noteWords = () => ({ hidden: tr('msg.remote.pushHidden'), reply: tr('msg.notes.reply'), allow: tr('msg.notes.allow'), deny: tr('msg.notes.deny'), open: tr('msg.notes.open') });
   // Which chat a conversation is: one with the assistant (none: the assistant's main chat).
   function chatOf(conversation) {
@@ -555,7 +532,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   const dress = (note) => ({ ...note, largeIcon: 'av_orb' });
   // The answers a notification of the phone's browser may give right there: one token per action, only for this device,
   // used once (either answer spends both).
-  function mintActs(device, person, note) {
+  function mintActs(device, note) {
     const out = {}; const group = crypto.randomBytes(8).toString('hex');
     for (const [k, t] of noteTokens) if (t.until <= Date.now()) noteTokens.delete(k);
     if (noteTokens.size > 2000) noteTokens.clear();
@@ -564,62 +541,49 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       const r = actionRoute(note, a.id);
       if (!r.call) continue;
       const token = crypto.randomBytes(24).toString('base64url');
-      noteTokens.set(token, { device: String(device), person: String(person), call: r.call, group, until: Date.now() + NOTE_TOKEN_MS });
+      noteTokens.set(token, { device: String(device), call: r.call, group, until: Date.now() + NOTE_TOKEN_MS });
       out[a.id] = token;
     }
     return out;
   }
-  // One line of a chat, to everyone of the audience: each person's note (their preview, their mute, their PIN); the apps
-  // open now get it as a sealed «note» event (the Android app shows it while in the background), the others a Web Push.
-  function deliverNote({ audience, conversation = null, line }) {
+  // One line of a chat, to every linked device (the preview and the mute of Ajustes); the apps open now get it as a
+  // sealed «note» event (the Android app shows it while in the background), the others a Web Push.
+  function deliverNote({ conversation = null, line }) {
     let chat; try { chat = chatOf(conversation); } catch { chat = null; }
     if (!chat) return false;
-    const words = noteWords(); const notes = new Map();
-    const noteFor = (pid) => {
-      if (!notes.has(pid)) {
-        let muted = false; try { muted = conversation != null && isMuted(board, pid, conversation); } catch { /* no marks yet */ }
-        const n = buildNote({ chat, line, preview: previewOf(pid) ?? pushPreview(ctx.config), muted, hasPin: hasPinOf(pid), assistantName: ctx.config.assistantName ?? 'Orb', words });
-        notes.set(pid, n ? dress(n) : null);
-      }
-      return notes.get(pid);
-    };
-    const isFor = (pid) => reaches(board, audience, pid);
+    let muted = false; try { muted = conversation != null && isMuted(board, conversation); } catch { /* no marks yet */ }
+    const built = buildNote({ chat, line, preview: pushPreview(ctx.config), muted, assistantName: ctx.config.assistantName ?? 'Orb', words: noteWords() });
+    const n = built ? dress(built) : null;
+    if (!n) return false;
     const openNow = new Set();
     for (const c of clients) {
       openNow.add(c.device);
-      if (!isFor(c.person)) continue;
-      const n = noteFor(c.person); if (!n) continue;
       try { c.res.write(`data: ${sealText(c.key, { e: 'note', p: n }, AAD.event(c.device))}\n\n`); } catch { /* gone */ }
     }
-    for (const d of board.all('SELECT id, push, person_id FROM devices WHERE push IS NOT NULL')) {
+    for (const d of board.all('SELECT id, push FROM devices WHERE push IS NOT NULL')) {
       if (openNow.has(d.id)) continue;
-      const pid = personOf(d);
-      if (!isFor(pid)) continue;
-      const n = noteFor(pid); if (!n) continue;
       let sub; try { sub = JSON.parse(d.push); } catch { continue; }
       const data = { title: n.title, body: n.body, hidden: n.hidden, tag: `orb-${n.key}`, icon: n.icon, url: '/', route: n.route, kind: n.kind,
-        actions: n.actions.map(({ id, title, open: o }) => ({ id, title, ...(o ? { open: true } : {}) })), card: n.card ?? null, acts: mintActs(d.id, pid, n) };
+        actions: n.actions.map(({ id, title, open: o }) => ({ id, title, ...(o ? { open: true } : {}) })), card: n.card ?? null, acts: mintActs(d.id, n) };
       sendPush(sub, data, own.vapid)
         .then((r) => { if (r === 'gone') board.run('UPDATE devices SET push = NULL WHERE id = ?', d.id); })
         .catch(() => {});
     }
     return true;
   }
-  // POST /api/note-action { token }: the answer chosen on a notification, run as that device (its person, its rights:
-  // the same checks as a call from it; a card that needs the PIN is refused and the phone opens the chat instead).
+  // POST /api/note-action { token }: the answer chosen on a notification, run as that device (the same checks as a call
+  // from it).
   async function noteAction(req, res) {
     let body; try { body = await readJson(req, 4_000); } catch (error) { return send(res, error.status ?? 400, { ok: false, error: error.message }); }
     const t = typeof body?.token === 'string' ? noteTokens.get(body.token) : null;
     if (!t || t.until <= Date.now()) return send(res, 401, { ok: false, error: tr('msg.notes.expired') });
     for (const [k, x] of noteTokens) if (x.group === t.group) noteTokens.delete(k);
     const device = board.one('SELECT * FROM devices WHERE id = ?', t.device);
-    if (!device?.public_key || !device.push || personOf(device) !== t.person) return send(res, 401, { ok: false, error: tr('msg.notes.expired') });
-    // The app lock (a PIN set since the notification went out) is never skipped: open the app instead.
-    if (hasPinOf(t.person)) return send(res, 403, { ok: false, reason: 'locked', error: tr('msg.notes.expired') });
+    if (!device?.public_key || !device.push) return send(res, 401, { ok: false, error: tr('msg.notes.expired') });
     const [method, given] = t.call; const params = { ...given };
-    const why = guardCall(board, method, params, { uploadsDir: uploads(personOf(device)) });
+    const why = guardCall(board, method, params, { uploadsDir: uploads() });
     if (why) return send(res, 403, { ok: false, error: why });
-    const principal = principalOf(board, { device, ceiling: ALLOWED });
+    const principal = principalOf({ device });
     try {
       await api.call(method, params, principal);
       touch(device, req);
@@ -710,8 +674,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   // ---- 3.5 Magic Link: the linked phones and browsers.
   const onlineIds = () => new Set([...clients].map((c) => c.device));
   function deviceView(d, on = onlineIds()) {
-    const pid = personOf(d);
-    return { id: d.id, name: d.name, kind: d.kind ?? kindOf({ name: d.name }), createdAt: d.created_at, lastSeen: d.last_seen ?? null, ip: d.ip ?? null, person: pid, personName: nameOf(pid), v: metaV(d),
+    return { id: d.id, name: d.name, kind: d.kind ?? kindOf({ name: d.name }), createdAt: d.created_at, lastSeen: d.last_seen ?? null, ip: d.ip ?? null, v: metaV(d),
       route: d.route ?? null, push: Boolean(d.push), online: on.has(d.id) };
   }
   const devices = () => { const on = onlineIds(); return board.all('SELECT * FROM devices WHERE public_key IS NOT NULL ORDER BY created_at DESC').map((d) => deviceView(d, on)); };
@@ -726,16 +689,12 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
 
   const remote = {
     // Engine events go to the paired phones too (only the ones the interface needs), each sealed for its phone.
-    // 3.6: audience (from the router, src/engine/router.mjs): each stream gets the event only if it is for its person.
-    broadcast(event, payload, audience = null, to = null) {
-      const aud = audience ?? audienceOf(board, event, payload);
-      const isFor = to ?? ((pid) => reaches(board, aud, pid));
-      if (event === 'chat:new') notify(payload, aud);
+    broadcast(event, payload) {
+      if (event === 'chat:new') notify(payload);
       if (!clients.size || !EVENTS.has(event)) return;
       // The settings themselves never travel to a phone (the page just reloads what it is allowed to see).
       const value = { e: event, p: event === 'config:changed' ? null : payload };
       for (const c of clients) {
-        if (!isFor(c.person)) continue;
         if (c.res.writableLength > STREAM_BACKLOG) { try { c.res.destroy(); } catch { /* gone */ } clients.delete(c); continue; }
         try { c.res.write(`data: ${sealText(c.key, value, AAD.event(c.device))}\n\n`); } catch { clients.delete(c); }
       }
@@ -764,22 +723,21 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       return { enabled: Boolean(ctx.config.mobile?.enabled), running: Boolean(state.running), routes: state.routes ?? [], error: state.error ?? null, pc: pcFingerprint,
         wifi: ctx.config.mobile?.wifi !== false, tailscale: ctx.config.mobile?.tailscale !== false, name: orbName(),
         lanHttp: ctx.config.mobile?.lanHttp === true, preview: pushPreview(ctx.config),
-        devices: board.all('SELECT id, name, created_at, last_seen, route, kind, ip, person_id, push IS NOT NULL AS push FROM devices ORDER BY created_at DESC').map(({ person_id: pid, ...d }) => ({ ...d, person: pid ?? owner(), push: Boolean(d.push) })) };
+        devices: board.all('SELECT id, name, created_at, last_seen, route, kind, ip, push IS NOT NULL AS push FROM devices ORDER BY created_at DESC').map((d) => ({ ...d, push: Boolean(d.push) })) };
     },
     // A one-time QR for 5 minutes, for one of the ways in (Wi-Fi or Tailscale). The code and this PC's key travel in the
     // URL fragment (#), which the browser never sends to any server.
     // 3.5 (protocol v2): the fragment also names this Orb and its other addresses (Wi-Fi, Tailscale, name.local); and a
     // short code (8 letters and digits) can be typed by hand instead, together with the address.
     // 3.5.1: device: what it is for (phone or browser), chosen here by the owner, never by the device.
-    // 3.6: person: whom the device is for (the QR's «¿Para quién?»; api-link.mjs checks who may choose it).
-    pair(kind, { device = null, person = null } = {}) {
+    pair(kind, { device = null } = {}) {
       if (!state.running) throw new Error(tr('msg.remote.enableFirst'));
       const route = state.routes.find((r) => r.kind === kind) ?? state.routes[0];
       const code = crypto.randomBytes(18).toString('base64url');
       const short = Array.from({ length: 8 }, () => CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)]).join('');
       const forKind = PAIR_KINDS.includes(device) ? device : null;
       pairing = { code, short, short3: shortSecret(short, b64.enc(own.pub)), expires: Date.now() + PAIR_MINUTES * 60_000, route: route.kind, fails: 0,
-        device: forKind, person: person ?? owner() };
+        device: forKind };
       const others = state.routes.filter((r) => r !== route).map((r) => r.url);
       // 3.6 (A11): the name of this computer on the home network (name.local) too, for when the Wi-Fi address changes.
       if (state.local && !others.includes(state.local) && route.url !== state.local) others.push(state.local);
@@ -787,7 +745,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       if (others.length) frag.set('a', others.join(','));
       return { url: `${route.url}#${frag}`, payload: { v: PROTOCOL, urls: [route.url, ...others], pc: b64.enc(own.pub), code, name: orbName(), expiresAt: pairing.expires },
         code: shortCodeLabel(short), address: route.url, expiresAt: pairing.expires, kind: route.kind, secure: route.secure, pc: pcFingerprint, name: orbName(),
-        device: forKind, person: { id: pairing.person, name: nameOf(pairing.person) },
+        device: forKind,
         browserOk: Boolean(route.secure) || route.address === '127.0.0.1' || route.kind === 'tailscale' || ctx.config.mobile?.lanHttp === true };
     },
     revoke(id) {

@@ -280,7 +280,7 @@ export function createActions({ driver, T, language = () => 'es', onChallenge = 
 // The pipe's name: a named pipe on Windows, a socket file elsewhere (the engine checks this shape before trusting it).
 export const pipeName = (id) => (process.platform === 'win32' ? `\\\\.\\pipe\\orb-navegador-${id}` : path.join(os.tmpdir(), `orb-navegador-${id}.sock`));
 
-// The control pipe: one JSON message per line. First { hello: key, agent, session, task, person } with the key the engine
+// The control pipe: one JSON message per line. First { hello: key, agent, session, task } with the key the engine
 // gave that conversation, then { id, action, args }. One action at a time per page; closing never waits behind a page
 // that does not answer.
 //   pages: { get(key), dead(tab), create(key, who) (may be async), close(tab) }
@@ -307,12 +307,11 @@ export function servePipe({ token, T, log = () => {}, pages, actions, before = (
         const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
         let msg; try { msg = JSON.parse(line); } catch { socket.destroy(); return; }
         if (!who) {
-          // 3.6: person: whose browser profile (signed in the key; empty: the owner's).
-          const agent = String(msg?.agent ?? ''); const session = String(msg?.session ?? ''); const task = String(msg?.task ?? ''); const person = String(msg?.person ?? '');
-          if (!/^[a-z0-9_:-]{1,30}$/i.test(agent) || !/^[\w-]{1,80}$/.test(session) || !/^\d{0,9}$/.test(task) || !/^[\w-]{0,40}$/.test(person)) { socket.destroy(); return; }
-          const given = Buffer.from(String(msg.hello ?? '')); const want = Buffer.from(browserKey(token, { agent, session, task, person }));
+          const agent = String(msg?.agent ?? ''); const session = String(msg?.session ?? ''); const task = String(msg?.task ?? '');
+          if (!/^[a-z0-9_:-]{1,30}$/i.test(agent) || !/^[\w-]{1,80}$/.test(session) || !/^\d{0,9}$/.test(task)) { socket.destroy(); return; }
+          const given = Buffer.from(String(msg.hello ?? '')); const want = Buffer.from(browserKey(token, { agent, session, task }));
           if (given.length !== want.length || !crypto.timingSafeEqual(given, want)) { socket.destroy(); return; }
-          who = { agent, task, person }; key = `${agent}:${session}${person ? `:${person}` : ''}`;
+          who = { agent, task }; key = `${agent}:${session}`;
           clearTimeout(helloTimer);
           send({ ok: true });
           continue;

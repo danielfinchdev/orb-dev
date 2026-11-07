@@ -9,6 +9,7 @@ import { useHome, ctx, tr } from '../core/context.mjs';
 import { isHome, ensureLayout } from '../core/home.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { PRODUCT } from '../core/product.mjs';
+import { DESKTOP } from '../core/permissions.mjs';
 
 const transport = (() => {
   if (process.parentPort) return { send: (m) => process.parentPort.postMessage(m), on: (fn) => process.parentPort.on('message', (e) => fn(e.data)) };
@@ -17,19 +18,14 @@ const transport = (() => {
 })();
 let remote = null; // phone access (src/engine/remote.mjs), when turned on
 let devControl = null; // 3.1: the developer's control line (src/engine/dev-control.mjs), only in Orb.dev
-// 3.6 «Personas»: every event goes through the router (src/engine/router.mjs), which works out once who it is for and
-// gives each sink only what its person may see: this PC's window (whoever sits at it), the phones and browsers and the
-// developer's control line (the owner's). Before the engine has started (no
-// router yet), straight to the window.
-let router = null;
+// Every event goes to this PC's window, the linked phones and browsers (remote.mjs picks what they need) and the
+// developer's control line.
 const toWindow = (event, payload) => { try { transport.send({ type: 'event', event, payload }); } catch { /* window gone */ } };
-const emit = (event, payload, hint = null) => { if (router) router.route(event, payload, hint); else toWindow(event, payload); };
-// What the app itself (the main process) needs whoever sits at the window: the settings (menu language) and the agents'
-// browser; while the window is locked, only the lock's own events.
-const APP_EVENTS = new Set(['config:changed', 'agentBrowser:closeTask']);
-const LOCK_EVENTS = /^(persons:|app:lock)/;
-// While locked, this PC's window may only unlock (and see who may unlock it).
-const LOCKED_OK = new Set(['persons.unlock', 'app.lockState', 'app.state']);
+const emit = (event, payload) => {
+  toWindow(event, payload);
+  try { remote?.broadcast(event, payload); } catch (error) { log(`móvil: ${event}: ${error.message}`); }
+  try { devControl?.broadcast(event, payload); } catch (error) { log(`control: ${event}: ${error.message}`); }
+};
 
 let api = null;
 let logFile = null;
@@ -62,22 +58,6 @@ async function start(home, version, secret, browser) {
   const { Scheduler } = await import('./scheduler.mjs');
   const { buildApi } = await import('./api.mjs');
   const board = new Board();
-  {
-    const { createRouter } = await import('./router.mjs');
-    const { ownerOfBoard } = await import('../core/authz.mjs');
-    const { phoneConfig } = await import('./remote.mjs');
-    router = createRouter({ board, log });
-    router.add('window', (event, payload, audience, to) => {
-      const d = api?.desktop ?? { person: null, locked: false };
-      const person = d.person ?? ownerOfBoard(board);
-      if (d.locked && !LOCK_EVENTS.test(event) && !APP_EVENTS.has(event)) return;
-      if (!APP_EVENTS.has(event) && !to(person)) return;
-      // Someone other than the owner at the window: the settings without secrets (as a phone gets them).
-      toWindow(event, event === 'config:changed' && person !== ownerOfBoard(board) ? phoneConfig(payload) : payload);
-    });
-    router.add('remote', (event, payload, audience, to) => remote?.broadcast(event, payload, audience, to));
-    router.add('dev', (event, payload, audience, to) => { if (devControl && to(ownerOfBoard(board))) devControl.broadcast(event, payload); });
-  }
   // Only the coordinator's chat process gets this key; the MCP accepts the identity "orb" only with it.
   const orchKey = crypto.randomBytes(24).toString('hex');
   board.setting('orchestrator_key_hash', crypto.createHash('sha256').update(orchKey).digest('hex'));
@@ -100,10 +80,8 @@ async function start(home, version, secret, browser) {
     const shown = summary && !(ctx.config.language !== 'en' && looksEnglish(summary)) ? (summary.length > 160 ? `${summary.slice(0, 160).replace(/\s+\S*$/, '')}…` : summary) : '';
     const says = shown ? tr('msg.engine.agentSays', { text: shown }) : '';
     let agent = s.agent; try { agent = adapter(s.agent).label; } catch { /* id */ }
-    // 3.6: the line is for the task's person (a task of no conversation is still somebody's).
-    const person = board.one('SELECT person_id FROM tasks WHERE id = ?', Number(s.task_id))?.person_id ?? null;
     board.addChat('system', tr(wait > 0 ? 'msg.engine.taskNeedsPermissionWait' : 'msg.engine.taskNeedsPermission', { id: s.task_id, agent, what, reason: item.body?.reason ?? '', min: wait }) + says,
-      { kind: 'task-approval', session: s.id, task: s.task_id, request: item.body?.id, detail: String(item.body?.title ?? '').slice(0, 2000) }, undefined, { person });
+      { kind: 'task-approval', session: s.id, task: s.task_id, request: item.body?.id, detail: String(item.body?.title ?? '').slice(0, 2000) });
   };
   // 3.1: the chat line of a task's permission shows how it ended (answered here or in the task, nobody answered, the task
   // stopped), instead of staying «pending» with buttons that no longer work.
@@ -116,8 +94,7 @@ async function start(home, version, secret, browser) {
   };
   sessions.onApprovalExpired = (s, item) => {
     if (s?.kind !== 'task') return;
-    const person = board.one('SELECT person_id FROM tasks WHERE id = ?', Number(s.task_id))?.person_id ?? null;
-    board.notice(tr('msg.engine.permissionTimedOut', { id: s.task_id, title: plainAction(item.body?.title ?? '', { lang: ctx.config.language }), min: Number(ctx.config.approvalWaitMinutes ?? 10) }), 'warning', { person });
+    board.notice(tr('msg.engine.permissionTimedOut', { id: s.task_id, title: plainAction(item.body?.title ?? '', { lang: ctx.config.language }), min: Number(ctx.config.approvalWaitMinutes ?? 10) }), 'warning');
   };
   // 3.2: a new conversation gets its title from Orb (the lightest model of its agent), once; the quick one stays if not.
   const { autoTitle } = await import('./titles.mjs');
@@ -144,26 +121,13 @@ async function start(home, version, secret, browser) {
 
   // Changes made by this process are pushed right away; changes made by MCP processes (other connections) are found with
   // PRAGMA data_version, which only moves when another connection commits.
-  // 3.6: a change that names its person ({ person } or { res }) is told only to them; any other, to everyone (the list
-  // says what changed, never its content).
-  const { peopleWith } = await import('../core/authz.mjs');
-  let pending = new Map(); let flush = null; // what -> 'all' | Set(person)
-  const changed = (what, hints = null) => {
-    let who = pending.get(what);
-    if (who !== 'all') {
-      const named = [];
-      if (hints?.person) named.push(String(hints.person));
-      if (hints?.res) { try { named.push(...peopleWith(board, hints.res)); } catch { /* gone */ } }
-      if (!named.length) who = 'all'; else { who ??= new Set(); for (const p of named) who.add(p); }
-      pending.set(what, who);
-    }
+  // The list says what changed, never its content.
+  let pending = new Set(); let flush = null;
+  const changed = (what) => {
+    pending.add(what);
     flush ??= setTimeout(() => {
-      flush = null; const batch = pending; pending = new Map();
-      const all = [...batch].filter(([, w]) => w === 'all').map(([k]) => k);
-      if (all.length) emit('board:changed', all);
-      const byPerson = new Map();
-      for (const [k, w] of batch) if (w !== 'all') for (const p of w) { if (!byPerson.has(p)) byPerson.set(p, []); byPerson.get(p).push(k); }
-      for (const [p, list] of byPerson) emit('board:changed', list, { person: p });
+      flush = null; const list = [...pending]; pending = new Set();
+      emit('board:changed', list);
       api.notifyNewChat();
     }, 120);
   };
@@ -225,13 +189,8 @@ transport.on(async (msg) => {
   if (msg.type !== 'call') return;
   try {
     if (!api) throw new Error(tr('sys.engine.notStarted', { name: PRODUCT.name }));
-    // 3.6: this PC's window calls as the person sitting at it (the owner until persons.switch). A locked window may only
-    // unlock (engine-enforced).
-    const method = String(msg.method);
-    let result;
-    if (api.desktop.locked && method === 'app.state') result = api.lockState();
-    else if (api.desktop.locked && !LOCKED_OK.has(method)) throw Object.assign(new Error(tr('msg.persons.lockedWindow')), { userFacing: true });
-    else result = await api.call(method, msg.params ?? {}, api.desktopPrincipal());
+    // This PC's window: every method (src/core/permissions.mjs).
+    const result = await api.call(String(msg.method), msg.params ?? {}, DESKTOP);
     transport.send({ type: 'reply', id: msg.id, ok: true, result: result === undefined ? null : result });
   } catch (error) {
     if (!error?.userFacing) log(`${msg.method}: ${error?.stack ?? error}`);

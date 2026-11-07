@@ -22,7 +22,7 @@
 //   TABLA_MARKDOWN     answers in GFM: a table, a task list and strikethrough
 //   CIERRA_Y_CUELGA    closes its task (orb_update_task done) and then never ends its turn
 //   MANDA_MENSAJE <agente> <texto>   sends a message to another agent through Orb (orb_send_message)
-//   LEE <ruta>         (3.6, one per line) reads a file: the real guard decides, with the session's confinement
+//   LEE <ruta>         (3.6, one per line) reads a file: the real guard decides
 //   ORB_FAKE_SCRIPT=<file.json>     (3.6, screenshots) [{ "when": "text", "reply": "…", "calls": [["tool", {args}]] }]: a
 //                      message containing «when» gets that natural reply (and makes those Orb tool calls, silently),
 //                      so the screenshots show real-looking conversations instead of the test keywords.
@@ -191,11 +191,11 @@ function createFakeLive(agent, label, caps, o) {
       await mcpCall(orb, tool, args ?? {});
       item('tool', 'tool', { id: `t${++seq}`, name: tool, input: JSON.stringify(args ?? {}) });
     }
-    // 3.6: LEE <ruta> (one per line): reading a file, as the real guard decides it (with the session's confinement).
+    // 3.6: LEE <ruta> (one per line): reading a file, as the real guard decides it.
     for (const m of scan.matchAll(/^LEE (.+)$/gm)) {
       const file = m[1].trim();
-      const verdict = decide({ permission, tool: 'Read', paths: [file], internalDir: o.internalDir, confine: o.confine || null });
-      record({ read: file, decision: verdict.decision, confined: Boolean(o.confine), addDirs: o.addDirs ?? [] });
+      const verdict = decide({ permission, tool: 'Read', paths: [file], internalDir: o.internalDir });
+      record({ read: file, decision: verdict.decision, addDirs: o.addDirs ?? [] });
       notes.push(`LEE ${verdict.decision}`);
     }
     if (/PIDE_PERMISO/.test(scan)) {

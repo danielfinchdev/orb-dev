@@ -29,7 +29,7 @@ export const FORMAT = 1;
 export const CHUNK = 1 << 20;
 export const EXT = '.orbbak';
 // (A copy of kind «move», made by Orb 3.7's «Mover a otro PC», still lists and restores; none is made any more.)
-export const KINDS = ['manual', 'daily', 'preupdate', 'premigration', 'export'];
+export const KINDS = ['manual', 'daily', 'preupdate', 'premigration'];
 const SCRYPT = { N: 2 ** 15, r: 8, p: 1 };
 const MAX_HEADER = 64 * 1024;
 
@@ -94,11 +94,6 @@ export function orbIdOf(home) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, `${JSON.stringify(id, null, 2)}\n`);
   return id;
-}
-export function setOrbId(home, patch) {
-  const next = { ...orbIdOf(home), ...patch };
-  fs.writeFileSync(identityFile(home), `${JSON.stringify(next, null, 2)}\n`);
-  return next;
 }
 
 // ---- where the copies go
@@ -443,14 +438,3 @@ export async function restoreInto(target, file, keys = {}) {
   return { ...r, aside: applied?.aside ?? null };
 }
 
-// A few files sealed with a passphrase in the same format (a person's export with a passphrase). → header
-export async function sealFiles(out, files, { passphrase, meta = {} }) {
-  const stage = await fsp.mkdtemp(path.join(path.dirname(out), '.preparando-'));
-  try {
-    const manifest = { format: FORMAT, files: [] };
-    for (const f of files) { const dest = path.join(stage, ...f.name.split('/')); await fsp.mkdir(path.dirname(dest), { recursive: true }); await fsp.writeFile(dest, f.data); manifest.files.push({ p: f.name, s: f.data.length, h: sha256(f.data) }); }
-    return await writeOrbbak(out, stage, manifest, { passphrase, meta: { kind: 'export', created: new Date().toISOString(), move: false, ...meta } });
-  } finally { await fsp.rm(stage, { recursive: true, force: true }); }
-}
-// Unseals such a file into a folder (and checks every file).
-export const unsealInto = (file, dir, keys) => walkBackup(file, keys, dir);

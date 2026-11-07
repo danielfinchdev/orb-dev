@@ -22,9 +22,7 @@ import help from './en/help.mjs';
 import greet from './en/greet.mjs';
 import whiteboard from './en/whiteboard.mjs';
 import link from './en/link.mjs';
-import ws1 from './en/ws1.mjs';
-import ws2 from './en/ws2.mjs';
-import ws3 from './en/ws3.mjs';
+import permisos from './en/permisos.mjs';
 import ws5 from './en/ws5.mjs';
 import ws6 from './en/ws6.mjs';
 import ws6android from './en/ws6-android.mjs';
@@ -57,9 +55,7 @@ export default {
   ...greet,
   ...whiteboard,
   ...link,
-  ...ws1,
-  ...ws2,
-  ...ws3,
+  ...permisos,
   ...ws5,
   ...ws6,
   ...ws6android,

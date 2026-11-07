@@ -1,6 +1,5 @@
 // 3.6 «Personas», WS5: copias de seguridad, mover el Orb, exportar y borrar una persona, zonas horarias
 export default {
-  'data.person.deletedLine': '(mensaje borrado)',
   'data.tz.late': 'con {n} min de retraso',
   'data.backup.restored': 'Copia de seguridad restaurada (del {created}).',
   'data.backup.dailyFailed': 'No se pudo hacer la copia de seguridad de hoy: {error}. Se vuelve a probar dentro de una hora.',

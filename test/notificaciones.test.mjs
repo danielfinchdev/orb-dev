@@ -1,6 +1,6 @@
 // 3.6 (mensajería, paso M4): los avisos del móvil como los de una app de mensajería (src/core/notes.mjs): el dibujo de
-// Orbe, el nombre del chat, el texto según la privacidad de cada persona, uno por chat, silenciados sin aviso, y las
-// acciones (Responder, Aprobar, Rechazar; con PIN, en la app). Y el service worker que los muestra.
+// Orbe, el nombre del chat, el texto según la privacidad elegida, uno por chat, silenciados sin aviso, y las acciones
+// (Responder, Aprobar, Rechazar). Y el service worker que los muestra.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildNote, collapse, actionRoute, routeOf, chatKey, noteId, lineKind, NOTE_IDS } from '../src/core/notes.mjs';
@@ -49,14 +49,6 @@ test('el permiso de un agente se contesta (sessions.approve); una tarea se aprue
   assert.ok(actionRoute(blind, 'allow').open && !actionRoute(blind, 'allow').call);
   // Tocar el aviso: el chat.
   assert.deepEqual(actionRoute(ap, 'tap'), { open: { view: 'chat', id: 12 } });
-});
-
-test('bloqueo de la app (PIN): Responder, Aprobar y Rechazar abren la app; nada se hace desde el aviso', () => {
-  const m = buildNote({ chat: orbChat, line: msg('hola'), preview: 'all', hasPin: true, words });
-  assert.deepEqual(m.actions, [{ id: 'reply', title: 'Responder', open: true }], 'sin caja de texto');
-  assert.deepEqual(actionRoute(m, 'reply', { text: 'escrito igual' }), { open: { view: 'chat', id: 12 } });
-  const ap = buildNote({ chat: orbChat, line: { role: 'system', body: 'x', meta: { kind: 'approval', session: 's', request: 'r', status: 'pending' } }, preview: 'all', hasPin: true, words });
-  for (const a of ['allow', 'deny']) assert.ok(!actionRoute(ap, a).call, a);
 });
 
 test('Responder: al chat de Orbe; sin texto, abre el chat', () => {

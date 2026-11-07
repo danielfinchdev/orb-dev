@@ -1,7 +1,7 @@
 // 3.6 (messaging, M4): a notification as in a messaging app. Orbe's picture, the chat's name as the title, the text as the
-// person chose for the lock screen (Mi perfil › preview), one notification per chat (new lines join it) and its actions:
+// owner chose for the lock screen (Ajustes › Magic Link), one notification per chat (new lines join it) and its actions:
 // «Responder», and «Aprobar» / «Rechazar» on an agent's permission request. Pure: the engine (src/engine/remote.mjs)
-// gives it the chat and the line, per person; the phone's browser (service worker) and the Android app
+// gives it the chat and the line; the phone's browser (service worker) and the Android app
 // (src/ui/lib/app-bridge.js) show what comes out.
 //
 // note = { key, id, route, title, body, hidden, kind, icon, largeIcon, actions: [{ id, title, input?, open? }], card?,
@@ -31,10 +31,10 @@ export function lineKind(line) {
 
 const cut = (s, n) => { const t = String(s ?? '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
 
-// One person's notification of one line, or null (a muted chat; a line that needs none).
-// input: { chat, line: { id, role, body, meta }, preview, muted, hasPin, assistantName, words }
+// The notification of one line, or null (a muted chat; a line that needs none).
+// input: { chat, line: { id, role, body, meta }, preview, muted, assistantName, words }
 // words: { hidden, reply, allow, deny, open } (the texts, in the Orb's language).
-export function buildNote({ chat, line, preview = 'chat', muted = false, hasPin = false, assistantName = 'Orb', words = {} }) {
+export function buildNote({ chat, line, preview = 'chat', muted = false, assistantName = 'Orb', words = {} }) {
   if (!chat || !line) return null;
   const kind = lineKind(line);
   if (!kind) return null;
@@ -56,21 +56,15 @@ export function buildNote({ chat, line, preview = 'chat', muted = false, hasPin 
   if (line.id != null) note.line = Number(line.id);
   // The actions: a permission request is answered right there (unless its text is hidden: then «Aprobar» opens the app);
   // a message gets «Responder».
-  // 3.6 (M4): the app lock (the person's PIN, and the fingerprint with it) is never skipped: with it, every action opens
-  // the app (lock first, then the chat).
-  const locked = Boolean(hasPin);
-  if (locked) note.locked = true;
   if (kind === 'approval') {
     note.card = { method: 'sessions.approve', id: String(line.meta.session), request: String(line.meta.request) };
-    const needsApp = locked || !shown;
-    note.actions = [{ id: 'deny', title: w.deny }, { id: 'allow', title: w.allow }].map((a) => (needsApp ? { ...a, open: true } : a));
+    note.actions = [{ id: 'deny', title: w.deny }, { id: 'allow', title: w.allow }].map((a) => (shown ? a : { ...a, open: true }));
   } else if (kind === 'task') {
     // Approving a task signs its exact version (what, where, why): always in the app, with its confirmation.
     note.card = { method: 'tasks.approve', task: Number(line.meta.task) };
     note.actions = [{ id: 'allow', title: w.allow, open: true }];
   } else if (kind === 'message') {
-    // Locked: «Responder» opens the app (no text typed on the notification).
-    note.actions = [locked ? { id: 'reply', title: w.reply, open: true } : { id: 'reply', title: w.reply, input: true }];
+    note.actions = [{ id: 'reply', title: w.reply, input: true }];
   }
   return note;
 }
@@ -83,11 +77,11 @@ export function collapse(previous, note, { max = 5 } = {}) {
 }
 
 // What to do when an action of a notification is chosen: { call: [method, params] } to run it right there, { open: route,
-// approve? } to open the chat (and the PIN or the task's approval there), or { reply: … } to send the text typed.
+// approve? } to open the chat (and the task's approval there), or { reply: … } to send the text typed.
 export function actionRoute(note, actionId, { text = null } = {}) {
   const open = { open: note.route };
   if (actionId === 'reply') {
-    if (note.locked || note.actions?.find((x) => x.id === 'reply')?.open) return open;
+    if (note.actions?.find((x) => x.id === 'reply')?.open) return open;
     const body = String(text ?? '').trim();
     if (!body) return open;
     const r = note.route;

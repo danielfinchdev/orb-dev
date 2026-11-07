@@ -25,24 +25,20 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
   const tabs = new Map(); // conversation (or connection) -> tab
   let pip = null; let pipTab = null; let mode = 'normal';
 
-  // 3.6: one browser profile per person (the owner keeps the 3.5 one): cookies and sign-ins of one person's agents
-  // never reach another person's pages. Kept on disk (persist:), each person's apart: a sign-in made in one person's
-  // browser is still there next time, and only for that person.
-  const profiles = new Map();
-  const sessionFor = (person = '') => {
-    const key = String(person || '');
-    let ses = profiles.get(key);
-    if (ses) return ses;
-    ses = session.fromPartition(key ? `persist:orb-web-${key.replace(/[^\w-]/g, '_')}` : 'persist:navegador-agente');
+  // The agents' browser profile, kept on disk (persist:): a sign-in made in it is still there next time.
+  let profile = null;
+  const browserSession = () => {
+    if (profile) return profile;
+    const ses = session.fromPartition('persist:navegador-agente');
     ses.setPermissionRequestHandler((_wc, _p, cb) => cb(false));
     ses.setPermissionCheckHandler(() => false);
     ses.setDevicePermissionHandler(() => false);
     ses.on('will-download', (e) => e.preventDefault());
     ses.setUserAgent(ses.getUserAgent().replace(/\s(orb[\w.-]*|Electron)\/\S+/gi, ''));
-    profiles.set(key, ses);
+    profile = ses;
     return ses;
   };
-  sessionFor('');
+  browserSession();
 
   // ---- the little window
   function placePip(size = SIZES[mode]) {
@@ -122,7 +118,7 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
   ipcMain.on('pip:action', onPipAction);
 
   // ---- pages
-  function newTab(key, { agent, task, person = '' }) {
+  function newTab(key, { agent, task }) {
     if (tabs.size >= MAX_TABS) {
       // Only a page no agent is using makes room; pages in use are never taken away.
       const idle = [...tabs.values()].filter((t) => t.users <= 0).sort((a, b) => a.used - b.used)[0];
@@ -131,7 +127,7 @@ export function createAgentBrowser({ label = (a) => a, pipEnabled = () => true, 
     }
     const win = new BrowserWindow({
       show: false, width: VIEW.width, height: VIEW.height, useContentSize: true, paintWhenInitiallyHidden: true,
-      webPreferences: { offscreen: true, session: sessionFor(person), sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, devTools: false, spellcheck: false, disableDialogs: true, autoplayPolicy: 'document-user-activation-required' }
+      webPreferences: { offscreen: true, session: browserSession(), sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, devTools: false, spellcheck: false, disableDialogs: true, autoplayPolicy: 'document-user-activation-required' }
     });
     const tab = { key, agent, task, win, users: 0, timer: null, painting: true, url: '', title: '', loading: false, used: Date.now(), dismissed: false, action: '' };
     const wc = win.webContents;

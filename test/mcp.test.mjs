@@ -113,7 +113,7 @@ test('herramientas del navegador: solo si la app lo ofrece, y se presentan con s
   });
   await new Promise((r) => server.listen(pipe, r));
   const none = client({ ORB_AGENT: 'claude' });
-  const nav = client({ ORB_AGENT: 'claude', ORB_BROWSER_PIPE: pipe, ORB_BROWSER_TOKEN: 'f'.repeat(48), ORB_SESSION: 'conv-1', ORB_TASK_ID: '7' });
+  const nav = client({ ORB_AGENT: 'claude', ORB_AGENT_TOKEN: agentToken(board, 'claude', 7), ORB_BROWSER_PIPE: pipe, ORB_BROWSER_TOKEN: 'f'.repeat(48), ORB_SESSION: 'conv-1', ORB_TASK_ID: '7' });
   try {
     await none.rpc('initialize', {}); await nav.rpc('initialize', {});
     assert.ok(!(await none.tools()).some((n) => n.startsWith('orb_browser_')), 'sin la app no hay navegador');

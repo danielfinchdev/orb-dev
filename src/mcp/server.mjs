@@ -9,14 +9,13 @@ import crypto from 'node:crypto';
 import net from 'node:net';
 import { useHome, ctx, tr } from '../core/context.mjs';
 import { isHome, CATEGORIES, AGENT_LABELS } from '../core/home.mjs';
-import { budgetConfig, waitReason, modelLimits, accountsFor } from '../core/budget.mjs';
-import { accountLabel } from '../core/accounts.mjs';
+import { budgetConfig, waitReason, modelLimits } from '../core/budget.mjs';
+import { accountLabel, accountsOf } from '../core/accounts.mjs';
 import { oneLine } from '../core/safety.mjs';
 import { git, copyIntoWorkdir } from '../core/workspace.mjs';
 import { createProjects } from '../core/projects.mjs';
 import { createSchedule, EVERY } from '../core/schedules.mjs';
-import { principalOf, can, must } from '../core/authz.mjs';
-import { mayDev } from '../core/policy.mjs';
+import { mustOwnTask } from '../core/permissions.mjs';
 
 const home = process.env.ORB_HOME;
 if (!home || !isHome(home)) { process.stderr.write('ORB_HOME no apunta a la carpeta de un asistente\n'); process.exit(1); }
@@ -32,17 +31,17 @@ function identity() {
   if (claimed !== 'orb') {
     const token = process.env.ORB_AGENT_TOKEN ?? '';
     const signed = /^[0-9a-f]{64}$/.test(token) ? board.settingJson(`agent_id:${crypto.createHash('sha256').update(token).digest('hex')}`) : null;
-    return signed && signed.agent === claimed && AGENTS.includes(claimed) ? { me: claimed, task: signed.task ?? null, person: signed.person ?? null, signed: true } : { me: 'desconocido', task: null, signed: false };
+    return signed && signed.agent === claimed && AGENTS.includes(claimed) ? { me: claimed, task: signed.task ?? null, signed: true } : { me: 'desconocido', task: null, signed: false };
   }
   const hash = board.setting('orchestrator_key_hash');
   const given = crypto.createHash('sha256').update(process.env.ORB_ORCH_KEY ?? '').digest('hex');
   const boss = Boolean(hash && process.env.ORB_ORCH_KEY && hash.length === given.length && crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(given)));
   return { me: boss ? 'orb' : 'agente-sin-clave', task: null, signed: boss };
 }
-const { me: ME, task: SIGNED_TASK, person: SIGNED_PERSON, signed: SIGNED } = identity();
+const { me: ME, task: SIGNED_TASK, signed: SIGNED } = identity();
 const BOSS = ME === 'orb';
 // 3.2: the coordinator's conversation: its questions, the tasks it creates and its project belong to that conversation.
-// 3.6: signed with the coordinator's key, so the conversation (and whose it is) cannot be swapped.
+// 3.6: signed with the coordinator's key, so the conversation cannot be swapped.
 const CONV = (() => {
   if (!BOSS) return null;
   const id = Number(process.env.ORB_CONVERSATION) || null; const sig = String(process.env.ORB_CONVERSATION_TOKEN ?? '');
@@ -50,19 +49,14 @@ const CONV = (() => {
   const want = crypto.createHmac('sha256', String(process.env.ORB_ORCH_KEY)).update(`conversation|${id}`).digest('hex');
   return sig.length === want.length && crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(want)) ? id : null;
 })();
-// 3.6: who this process works for: the coordinator's conversation's person, or the person Orb signed the worker for. Its
-// tools only see and change what that person may (authz). An agent Orb did not sign works for nobody.
-const PERSON = BOSS ? (CONV ? board.conversation(CONV)?.person_id ?? null : null) : SIGNED_PERSON ?? (SIGNED_TASK ? board.task(SIGNED_TASK)?.person_id ?? null : null);
-// A conversation named without its signature: nobody (never the owner by default).
+// A conversation named without its signature: nobody (never the whole board by default).
 const FORGED = BOSS && Boolean(process.env.ORB_CONVERSATION) && !CONV;
-const P = SIGNED && !FORGED ? principalOf(board, { agentToken: { agent: ME, task: SIGNED_TASK ?? null, conversation: CONV, person: PERSON } }) : Object.freeze({ person: 'nadie', role: 'user', channel: 'agent', rights: { approve: false, dev: false, admin: false } });
-const OTHER = P.role !== 'owner'; // someone other than the owner (their own general log, their own name)
-const seeTask = (id, right = 'view') => must(board, P, right, { type: 'task', id: Number(id) }, { method: 'mcp' });
-const seeProject = (name, right = 'view') => must(board, P, right, { type: 'project', id: String(name ?? '') }, { method: 'mcp' });
-const devIn = (project) => { if (!mayDev(board, P, project)) throw new Error(tr('msg.authz.noDev')); };
-const logPerson = () => (SIGNED && !FORGED ? P.person : 'nadie');
+// What this process may act on (src/core/permissions.mjs › ownsTask): the coordinator, its conversation's tasks; a
+// worker, its task and the subtasks it delegated. Not signed, or forged: nothing (every tool is refused below).
+const WHO = Object.freeze({ signed: SIGNED && !FORGED, boss: BOSS, conversation: CONV, task: SIGNED_TASK ?? null, agent: ME });
+const seeTask = (id) => mustOwnTask(board, WHO, id);
 const QUESTIONS = CONV ? `pending_questions:${CONV}` : 'pending_questions';
-const NAME = assistantName(); const USER = OTHER && SIGNED && !FORGED ? board.personName(P.person) : userName();
+const NAME = assistantName(); const USER = userName();
 // 3.2.1: the author of the assistant's own log entries with the brain of its conversation («Orbe (Claude · claude-opus-5-5)»;
 // it was «Orbe ()» with the default model).
 const brainAuthor = () => {
@@ -90,7 +84,7 @@ const str = (description) => ({ type: 'string', description });
 
 // Only the coordinator: files from the main folder (or another task's copy) into a task's isolated copy.
 function giveFiles({ task_id, files, from_task }) {
-  seeTask(task_id, 'edit'); if (from_task !== undefined) seeTask(from_task);
+  seeTask(task_id); if (from_task !== undefined) seeTask(from_task);
   const task = board.task(task_id); if (!task) throw new Error(tr('sys.mcp.noTask', { id: task_id }));
   const project = board.project(task.project);
   if (!task.workdir || !fs.existsSync(task.workdir) || !project || path.resolve(task.workdir) === path.resolve(project.path)) throw new Error(tr('sys.mcp.noIsolatedCopy', { id: task_id }));
@@ -106,7 +100,7 @@ function giveFiles({ task_id, files, from_task }) {
   if (!Array.isArray(files) || !files.length || files.length > 50) throw new Error(tr('sys.mcp.filesRange'));
   const out = copyIntoWorkdir(source, inCopy(task.workdir), files);
   board.event(task.id, ME, 'files.given', `${out.copied.join(', ') || 'nada'}${out.skipped.length ? ` · no copiados: ${out.skipped.join('; ')}` : ''}`);
-  if (out.copied.length) board.notice(tr('msg.mcp.filesCopied', { name: NAME, n: out.copied.length, id: task.id, list: oneLine(out.copied.join(', '), 200) }), 'info', { person: OTHER ? task.person_id ?? null : null });
+  if (out.copied.length) board.notice(tr('msg.mcp.filesCopied', { name: NAME, n: out.copied.length, id: task.id, list: oneLine(out.copied.join(', '), 200) }), 'info');
   return out;
 }
 
@@ -133,12 +127,13 @@ function suggestBoard(a) {
 
 // 3.2: a task of the coordinator belongs to its conversation; a conversation without a project yet takes the task's.
 function createTask(a) {
-  seeProject(a.project, 'talk'); devIn(a.project);
-  const task = board.createTask({ ...a, level: a.nivel, conversation_id: CONV, person: PERSON }, ME);
+  // A dependency hands its result to this task: only one of this conversation's own tasks.
+  for (const dep of Array.isArray(a.depends_on) ? a.depends_on : []) seeTask(dep);
+  const task = board.createTask({ ...a, level: a.nivel, conversation_id: CONV }, ME);
   if (CONV && !board.conversation(CONV)?.project) { try { board.setConversationProject(CONV, task.project, ME); } catch { /* the task is made anyway */ } }
   // 3.2.1: an agent whose accounts are all paused (usage limit) or out of usage: the coordinator learns it at once, so it
   // tells the user and offers another agent instead of leaving the task waiting for hours without a word.
-  const waits = waitReason(board, task.agent, { account: task.account, model: task.model, person: PERSON });
+  const waits = waitReason(board, task.agent, { account: task.account, model: task.model });
   return waits ? { ...task, waits } : task;
 }
 
@@ -190,8 +185,7 @@ function taskBrief(id) {
     messages: d.messages.slice(-20).map((m) => ({ ...m, body: oneLine(m.body, 600) })),
     dependencies: d.dependencies.map((x) => x && { ...x, result: oneLine(x.result, 1500) }) };
 }
-// 3.6: only the accounts the person this process works for may spend (never the names of anyone else's).
-const myAccounts = () => { try { return [...new Map(AGENTS.flatMap((a) => accountsFor(board, P.person, a, { usable: false })).map((a) => [a.id, a])).values()]; } catch { return []; } };
+const myAccounts = () => { try { return AGENTS.flatMap((a) => accountsOf(a)); } catch { return []; } };
 const modelsHelp = () => AVAILABLE.map((a) => `${a}: ${modelsOf(a).join(', ') || 'predeterminado'}`).join(' | ');
 const tools = [
   ...(TASK_ID && !BOSS ? [
@@ -207,10 +201,10 @@ const tools = [
       run: (a) => waitTasks(a) }
   ] : []),
   { name: 'orb_board', description: 'Resumen del tablero: proyectos, tareas activas, contadores y mensajes sin leer.', inputSchema: { type: 'object', properties: {} }, readOnly: true,
-    run: () => board.summary(ME, CONV, { principal: P }) },
+    run: () => board.summary(ME, CONV) },
   { name: 'orb_list_tasks', description: 'Lista tareas, con filtros opcionales.', readOnly: true,
     inputSchema: { type: 'object', properties: { project: str('Proyecto'), status: { type: 'string', enum: STATUSES }, agent: str('Agente'), limit: { type: 'integer', minimum: 1, maximum: 200 } } },
-    run: (a) => board.tasks({ ...a, principal: P }).map(({ id, project, title, agent, assigned_to, run_account, status, branch, depends_on }) => ({ id, project, title, agent: assigned_to ?? agent, ...(run_account ? { account: accountLabel(run_account) } : {}), status, branch, depends_on })) },
+    run: (a) => board.tasks(a).map(({ id, project, title, agent, assigned_to, run_account, status, branch, depends_on }) => ({ id, project, title, agent: assigned_to ?? agent, ...(run_account ? { account: accountLabel(run_account) } : {}), status, branch, depends_on })) },
   { name: 'orb_get_task', description: 'Detalle de una tarea: descripción, resultado, eventos, mensajes y dependencias.', readOnly: true,
     inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'integer' } } }, run: (a) => (seeTask(a.id), taskBrief(a.id)) },
   { name: 'orb_update_task', description: 'Informa del progreso de una tarea: estado, nota o resultado final.',
@@ -219,14 +213,13 @@ const tools = [
       progress: { type: 'integer', minimum: 0, maximum: 100, description: 'Cuánto llevas de la tarea (0-100, estimación). Se ve en directo.' },
       ...(BOSS ? { agent: { type: 'string', enum: [...AVAILABLE, 'any'], description: 'Reasignar una tarea que no está en curso' }, model: str(`Cambiar el modelo. ${modelsHelp()}`),
         reasoning: { type: 'string', enum: ['low', 'medium', 'high'] } } : {}) } },
-    run: (a) => (seeTask(a.id, 'edit'), ack(board.updateTask(a.id, a, ME, { taskId: TASK_ID ?? '' }))) },
+    run: (a) => (seeTask(a.id), ack(board.updateTask(a.id, a, ME, { taskId: TASK_ID ?? '' }))) },
   { name: 'orb_claim_next', description: 'Coge la siguiente tarea manual disponible para ti y la marca como en curso.',
     inputSchema: { type: 'object', properties: { project: str('Limitar a un proyecto') } },
-    // 3.6: only a task of the person this process works for.
     run: (a) => {
       const t = board.transaction(() => {
         board.revalidateQueued();
-        const found = board.readyTasks('manual').find((x) => (x.agent === ME || x.agent === 'any') && (!a.project || x.project.toLowerCase() === String(a.project).toLowerCase()) && can(board, P, 'edit', { type: 'task', id: x.id }));
+        const found = board.readyTasks('manual').find((x) => (x.agent === ME || x.agent === 'any') && (!a.project || x.project.toLowerCase() === String(a.project).toLowerCase()));
         return found ? board.patch(found.id, { status: 'running', assigned_to: ME }, ME, 'task.claimed', 'queued') : null;
       });
       return t ? board.taskDetail(t.id) : 'No hay tareas manuales pendientes para ti.';
@@ -235,20 +228,19 @@ const tools = [
     inputSchema: { type: 'object', required: ['to', 'body'], properties: { to: str(`${AVAILABLE.join(', ')}, all, orb o usuario`), body: str('Mensaje'), task_id: { type: 'integer' } } },
     // 3.1: a worker's message carries its own task when it names none, so Orb knows who sent it (and does not hand it
     // back to the same task).
-    // 3.6: signed with the person this process works for: it only reaches that person's agents and chat.
-    run: (a) => { if (a.task_id != null) seeTask(a.task_id); return board.send({ ...a, task_id: a.task_id ?? TASK_ID ?? undefined, from: ME, person: logPerson() }); } },
+    run: (a) => { if (a.task_id != null) seeTask(a.task_id); return board.send({ ...a, task_id: a.task_id ?? TASK_ID ?? undefined, from: ME }); } },
   { name: 'orb_read_messages', description: 'Lee tus mensajes sin leer (y los marca como leídos).', inputSchema: { type: 'object', properties: {} },
-    run: () => { const rows = board.inbox(ME, true, { person: logPerson() }); return rows.length ? rows : 'Sin mensajes nuevos.'; } },
+    run: () => { const rows = board.inbox(ME, true); return rows.length ? rows : 'Sin mensajes nuevos.'; } },
   { name: 'orb_add_project', description: `Registra una carpeta existente como proyecto (dentro de una categoría de ${ctx.paths.projects}: windows, ios, android o web; o en las carpetas permitidas).`,
     inputSchema: { type: 'object', required: ['name', 'path'], properties: { name: str('Nombre corto'), path: str('Ruta absoluta de la carpeta'), notes: str('Notas opcionales') } },
-    run: (a) => { const known = board.project(a.name); if (known) seeProject(known.name, 'edit'); else devIn(null); return board.addProject(a, ME, { person: OTHER ? PERSON : null }); } },
+    run: (a) => board.addProject(a, ME) },
   ...(BOSS ? [
     { name: 'orb_create_project', description: `Crea un proyecto nuevo: carpeta propia en su categoría de ${ctx.paths.projects}, con git y su bitácora. Con varias plataformas es multiplataforma: crea <name>-<plataforma> en cada categoría (tienda-android, tienda-ios…), unidos en un grupo, y una carpeta común ${path.join(ctx.home, 'comun', '<name>')} para lo que comparten. Si ${USER} no ha dicho la plataforma, pregúntasela antes con orb_ask (multi: true).`,
       inputSchema: { type: 'object', required: ['name'], properties: { name: str('Nombre del proyecto'), categories: { type: 'array', items: { type: 'string', enum: CATEGORIES }, minItems: 1, maxItems: 4, description: 'Plataformas: windows, ios, android, web (una o varias)' }, category: { type: 'string', enum: CATEGORIES, description: 'Una sola plataforma (como categories con una)' }, notes: str('Notas opcionales') } },
-      run: (a) => (devIn(null), createProjects(board, { name: a.name, notes: a.notes, categories: a.categories?.length ? a.categories : [a.category], person: OTHER ? PERSON : null }, ME)).map((p) => ({ name: p.name, path: p.path, grupo: p.grupo ?? null })) },
+      run: (a) => createProjects(board, { name: a.name, notes: a.notes, categories: a.categories?.length ? a.categories : [a.category] }, ME).map((p) => ({ name: p.name, path: p.path, grupo: p.grupo ?? null })) },
     { name: 'orb_set_project', description: 'Fija el proyecto de esta conversación. Todas sus tareas nuevas irán ahí. Vacío = ninguno.',
       inputSchema: { type: 'object', properties: { name: str('Nombre del proyecto registrado (vacío para quitarlo)') } },
-      run: (a) => { if (a.name) seeProject(a.name); return CONV ? board.setConversationProject(CONV, a.name, ME) : board.setActiveProject(a.name, ME, OTHER ? PERSON : null); } },
+      run: (a) => (CONV ? board.setConversationProject(CONV, a.name, ME) : board.setActiveProject(a.name, ME)) },
     { name: 'orb_create_task', description: 'Crea una tarea. Las tareas auto se lanzan solas cuando sus dependencias están hechas.',
       inputSchema: { type: 'object', required: ['project', 'title', 'description'], properties: {
         project: str('Nombre del proyecto registrado'), title: str('Título corto'),
@@ -264,17 +256,17 @@ const tools = [
       run: (a) => ack(createTask(a)) },
     { name: 'orb_read_log', description: 'Lee una bitácora: la de un proyecto o la "general". Devuelve las entradas más recientes completas. Sin project: lista las bitácoras.', readOnly: true,
       inputSchema: { type: 'object', properties: { project: str('Proyecto registrado o "general"'), chars: { type: 'integer', minimum: 1000, maximum: 40000 }, entera: { type: 'boolean' } } },
-      run: (a) => { if (a.project && !/^(general|central)$/i.test(a.project)) seeProject(a.project); return readLog(board, a.project, { chars: a.chars, whole: a.entera === true, person: logPerson() }); } },
+      run: (a) => readLog(board, a.project, { chars: a.chars, whole: a.entera === true }) },
     { name: 'orb_write_log', description: 'Añade una entrada al FINAL de una bitácora (proyecto o "general"), firmada y con el formato estándar. Nunca borra. Sin contraseñas ni datos personales.',
       inputSchema: { type: 'object', required: ['project', 'tema', 'hecho'], properties: { project: str('Proyecto o "general"'), tema: str('Tema corto'), pedido: str('Qué se pidió'), hecho: str('Qué se decidió o hizo'), revertir: str('Cómo revertirlo'), estado: str('Estado / pendiente') } },
-      run: (a) => { if (!/^(general|central)$/i.test(String(a.project ?? ''))) seeProject(a.project, 'talk'); return writeLog(board, a.project, a, brainAuthor(), { person: logPerson() }); } },
+      run: (a) => writeLog(board, a.project, a, brainAuthor()) },
     { name: 'orb_schedule', description: `Programa una tarea que se repite (p. ej. cada lunes a las 9 revisar dependencias). ${USER} la aprueba una vez en la app antes de que funcione sola.`,
       inputSchema: { type: 'object', required: ['project', 'title', 'description', 'every'], properties: {
         project: str('Proyecto registrado'), title: str('Título corto'), description: str('Encargo autocontenido y compacto'),
         agent: { type: 'string', enum: [...AVAILABLE, 'any'] }, model: str('Modelo (opcional; requiere agent)'), readonly: { type: 'boolean' },
         every: { type: 'string', enum: EVERY, description: 'hourly, every_hours (con hours), daily (con at_time) o weekly (con weekdays y at_time)' },
         at_time: str('Hora HH:MM (daily y weekly)'), hours: { type: 'integer', minimum: 1, maximum: 168 }, weekdays: { type: 'array', items: { type: 'integer', minimum: 0, maximum: 6 }, description: '0 domingo … 6 sábado' } } },
-      run: (a) => { seeProject(a.project, 'talk'); devIn(a.project); return createSchedule(board, { ...a, person: PERSON }, ME); } },
+      run: (a) => createSchedule(board, a, ME) },
     // 2.7: a question with options, shown in the chat as a card the user answers with a click (or skips). It does not
     // wait: the answer comes as the user's next message.
     { name: 'orb_ask', description: `Pregunta a ${USER} con opciones (una tarjeta en el chat). Úsala cuando deba elegir entre 2-4 caminos claros. No espera: termina tu turno y su respuesta llegará como su próximo mensaje.`,
@@ -303,7 +295,7 @@ function browser(action, args = {}) {
       const socket = net.connect(PIPE);
       let buf = ''; let hello = false;
       socket.setEncoding('utf8');
-      socket.on('connect', () => socket.write(`${JSON.stringify({ hello: PIPE_TOKEN, agent: process.env.ORB_AGENT ?? '', task: process.env.ORB_TASK_ID ?? '', session: process.env.ORB_SESSION ?? '', ...(process.env.ORB_BROWSER_PERSON ? { person: process.env.ORB_BROWSER_PERSON } : {}) })}\n`));
+      socket.on('connect', () => socket.write(`${JSON.stringify({ hello: PIPE_TOKEN, agent: process.env.ORB_AGENT ?? '', task: process.env.ORB_TASK_ID ?? '', session: process.env.ORB_SESSION ?? '' })}\n`));
       socket.on('data', (chunk) => {
         buf += chunk; let nl;
         while ((nl = buf.indexOf('\n')) >= 0) {
@@ -327,7 +319,7 @@ function browser(action, args = {}) {
 }
 const ref = { type: 'integer', minimum: 1, description: 'Número del elemento en la última orb_browser_snapshot' };
 if (PIPE && PIPE_TOKEN) tools.push(
-  { name: 'orb_browser_open', description: `Abre una página web en el navegador del agente (la app la muestra en directo a ${USER}) y devuelve su texto y elementos numerados. Sirve para probar webs (también http://localhost:puerto) o consultar páginas. Solo tiene las sesiones iniciadas en este navegador por ${USER} (nunca las de otra persona).`,
+  { name: 'orb_browser_open', description: `Abre una página web en el navegador del agente (la app la muestra en directo a ${USER}) y devuelve su texto y elementos numerados. Sirve para probar webs (también http://localhost:puerto) o consultar páginas. Solo tiene las sesiones iniciadas en este navegador por ${USER}.`,
     inputSchema: { type: 'object', required: ['url'], properties: { url: str('Dirección (https://… o localhost:puerto)') } }, run: (a) => browser('open', a) },
   { name: 'orb_browser_snapshot', description: 'Vuelve a leer la página abierta: texto visible y elementos numerados para pulsar o escribir.', readOnly: true,
     inputSchema: { type: 'object', properties: {} }, run: () => browser('snapshot') },
@@ -369,6 +361,8 @@ readline.createInterface({ input: process.stdin }).on('line', async (line) => {
         // Strict arguments: anything outside the schema (e.g. a forged "from") is refused instead of being passed on.
         const extra = Object.keys(args).filter((k) => !(k in (tool.inputSchema.properties ?? {})));
         if (extra.length) throw new Error(tr('sys.mcp.extraArgs', { list: extra.join(', ') }));
+        // An agent Orb did not sign (or with a forged conversation) acts on nothing.
+        if (!WHO.signed) throw new Error(tr('msg.authz.unsigned'));
         const out = await tool.run(args);
         return reply(msg.id, { result: out?.content ? out : text(out) }); // tools with pictures return MCP content themselves
       } catch (error) { return reply(msg.id, { result: { ...text(`Error: ${error.message}`), isError: true } }); }

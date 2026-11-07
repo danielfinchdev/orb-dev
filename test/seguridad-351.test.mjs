@@ -11,7 +11,8 @@ import crypto from 'node:crypto';
 import { tempHome, startEngine, until, ROOT } from './helpers.mjs';
 import { createPhone } from './fixtures/phone-client.mjs';
 import * as C from '../src/core/mobile-crypto.mjs';
-import { kindForPairing, plainHttpBrowser, pushContent, pushPreview, phoneConfig } from '../src/engine/remote.mjs';
+import { kindForPairing, plainHttpBrowser, pushPreview, phoneConfig } from '../src/engine/remote.mjs';
+import { buildNote } from '../src/core/notes.mjs';
 import { openDb } from '../src/core/db.mjs';
 
 const env = { ORB_REMOTE_BIND: '127.0.0.1', ORB_WOL_DRY: '1' };
@@ -115,11 +116,12 @@ test('por la wifi sin cifrar un navegador no se enlaza, salvo que el usuario lo 
   assert.equal(plainHttpBrowser({ ...page, localAddress: '::ffff:100.64.0.9' }), false, 'la dirección de Tailscale');
 });
 
-test('avisos: el texto se ve salvo que la persona elija «nada»', () => {
+test('avisos: el texto se ve salvo que el dueño elija «nada»', () => {
   const cfg = (preview) => ({ assistantName: 'Orbe', mobile: preview ? { preview } : {} });
   assert.equal(pushPreview(cfg()), 'chat');
-  assert.deepEqual(pushContent({ title: 'Orbe', body: 'La tarea ha terminado' }, cfg()), { title: 'Orbe', body: 'La tarea ha terminado' });
-  assert.equal(pushContent({ title: 'Orbe', body: 'Hola' }, cfg('none')).body, 'Tienes un mensaje nuevo');
-  assert.equal(pushContent({ title: 'Orbe', body: 'Hola' }, cfg('all')).body, 'Hola');
+  const note = (preview) => buildNote({ chat: { kind: 'conversation', id: 1, name: 'Web' }, line: { id: 1, role: 'orb', body: 'La tarea ha terminado' }, preview: pushPreview(cfg(preview)), assistantName: 'Orbe' });
+  assert.equal(note().body, 'La tarea ha terminado');
+  assert.equal(note('none').body, 'Tienes un mensaje nuevo');
+  assert.equal(note('all').body, 'La tarea ha terminado');
   assert.equal(phoneConfig(cfg('none')).mobile.preview, 'none', 'la app lo sabe');
 });

@@ -2,9 +2,8 @@
 // sessions (direct conversations and task runs) with their items.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx, tr, migrateConfigPersons } from './context.mjs';
+import { ctx, tr } from './context.mjs';
 import { titleFrom } from './titles.mjs';
-import { dbLike, ensureOwner, ownerId, systemTz } from './persons.mjs';
 
 // node:sqlite may print an ExperimentalWarning; it would pollute the MCP stdout/stderr and the logs.
 const emitWarning = process.emitWarning;
@@ -239,31 +238,8 @@ CREATE TABLE IF NOT EXISTS bot_reminders (
   created_by TEXT NOT NULL DEFAULT 'usuario',
   created_at TEXT NOT NULL
 );
--- 3.6 «Personas» (docs/PERSONAS-INTERNALS.md): the people of this Orb, their own settings,
--- what each one spent, each bot's live conversation per person, the history of the memories, the forwarded calls
--- already answered and the audit of refused calls (ids and names only, never content).
-CREATE TABLE IF NOT EXISTS persons (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('owner', 'user')),
-  language TEXT,
-  tz TEXT,
-  pin_hash TEXT,
-  pin_salt TEXT,
-  pin_fails INTEGER NOT NULL DEFAULT 0,
-  pin_locked_until TEXT,
-  caps TEXT NOT NULL DEFAULT '{}',
-  color TEXT,
-  created_at TEXT NOT NULL,
-  deleted_at TEXT
-);
-CREATE UNIQUE INDEX IF NOT EXISTS persons_owner ON persons (role) WHERE role = 'owner' AND deleted_at IS NULL;
-CREATE TABLE IF NOT EXISTS person_settings (
-  person_id TEXT NOT NULL,
-  key TEXT NOT NULL,
-  value TEXT NOT NULL,
-  PRIMARY KEY (person_id, key)
-);
+-- What each turn spent (3.6; person_id: 3.6-3.7 rows only, never written since 3.8), each bot's live conversation and the
+-- history of the memories (3.6-3.7: the 3.8 migration archives and drops them), the forwarded calls already answered.
 CREATE TABLE IF NOT EXISTS usage_ledger (
   id INTEGER PRIMARY KEY,
   at TEXT,
@@ -304,20 +280,10 @@ CREATE TABLE IF NOT EXISTS link_seen (
   result TEXT,
   at TEXT
 );
-CREATE TABLE IF NOT EXISTS audit (
-  id INTEGER PRIMARY KEY,
-  at TEXT,
-  person_id TEXT,
-  device_id TEXT,
-  channel TEXT,
-  method TEXT,
-  resource TEXT,
-  decision TEXT,
-  reason TEXT
-);
--- 3.6 (messaging lists): each person's own marks on a chat of the lists (a bot, a group, a conversation with Orbe):
--- pinned and its order, the section it is in (kept while pinned: unpinning puts it back), muted, and the last chat
--- line read (0: none yet, the person's starting point in settings «inbox_since:<person>» counts instead).
+-- 3.6 (messaging lists): the marks on a chat of the lists (a conversation with Orbe or a direct one): pinned and its
+-- order, the section it is in (kept while pinned: unpinning puts it back), muted, and the last chat line read (0: none
+-- yet, the starting point in settings «inbox_since:<key>» counts instead). person_id: the key of the lists' owner
+-- (src/core/inbox.mjs › ME since 3.8; a person's id in 3.6-3.7, which the 3.8 migration rewrites).
 CREATE TABLE IF NOT EXISTS inbox_items (
   person_id TEXT NOT NULL,
   kind TEXT NOT NULL CHECK (kind IN ('bot', 'group', 'conversation', 'session')),
@@ -329,7 +295,7 @@ CREATE TABLE IF NOT EXISTS inbox_items (
   last_read INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (person_id, kind, item_id)
 );
--- The sections a person makes in each zone's list («Casa», «Trabajo»…).
+-- The sections made in each zone's list («Casa», «Trabajo»…).
 CREATE TABLE IF NOT EXISTS inbox_sections (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   person_id TEXT NOT NULL,
@@ -373,68 +339,13 @@ export function checkPolicy({ model, reasoning, fast }) {
 export function openDb(filename = ctx.paths?.db) {
   if (!filename) throw new Error(tr('sys.db.noHome'));
   if (filename !== ':memory:') fs.mkdirSync(path.dirname(filename), { recursive: true });
-  const existed = filename !== ':memory:' && fs.existsSync(filename);
   const db = new DatabaseSync(filename);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 8000; PRAGMA foreign_keys = ON;');
-  if (existed) preCopy(db, filename);
   db.exec(SCHEMA);
-  migrate(db, { file: filename });
+  migrate(db);
   return db;
 }
 
-// 3.6: before the first change of a database made by an older Orb, a copy of it as it was (<data>/orb-pre-3.6.db), once.
-const PRE_COPY = 'orb-pre-3.6.db';
-function preCopy(db, filename) {
-  let migrated = false; let old = false;
-  try { migrated = Boolean(db.prepare("SELECT value FROM settings WHERE key = 'persons_migrated'").get()); old = true; } catch { /* no settings table: an empty file */ }
-  if (migrated || !old) return;
-  const target = path.join(path.dirname(filename), PRE_COPY);
-  if (fs.existsSync(target)) return;
-  // Another process (an MCP server) may be making it at the same moment: VACUUM INTO refuses a file that exists.
-  try { db.prepare('VACUUM INTO ?').run(target); } catch { /* made by the other process, or no room: the migration goes on */ }
-}
-
-// 3.6 «Personas»: once per database, inside one write lock (the engine and the MCP servers open it at the same time):
-// the owner is made and becomes the person of every row; each bot's live conversation is the owner's; reminders get
-// their wall time and time zone; the settings' accounts and connectors are the owner's. Idempotent: each step only fills
-// what is missing. (3.8: the bots' tables stay until the 3.8 migration archives and drops them.)
-function migratePersons(db, { file }) {
-  const b = dbLike(db);
-  const main = Boolean(file && file !== ':memory:' && ctx.paths?.db && path.resolve(file) === path.resolve(ctx.paths.db));
-  const done = () => b.one("SELECT value FROM settings WHERE key = 'persons_migrated'");
-  let owner = done() ? ownerId(b) : null;
-  let now = false;
-  if (!owner) {
-    db.exec('BEGIN IMMEDIATE');
-    try {
-      owner = ensureOwner(b);
-      if (!done()) {
-        now = true;
-        for (const t of PERSON_TABLES) b.run(`UPDATE ${t} SET person_id = ? WHERE person_id IS NULL`, owner);
-        b.run('INSERT OR IGNORE INTO bot_sessions (bot_id, person_id, session_id, turns) SELECT id, ?, session_id, turns FROM bots WHERE session_id IS NOT NULL OR turns > 0', owner);
-        const tz = b.one('SELECT tz FROM persons WHERE id = ?', owner)?.tz || systemTz();
-        for (const r of b.all('SELECT id, start_at FROM bot_reminders WHERE local_at IS NULL')) b.run('UPDATE bot_reminders SET local_at = ?, tz = COALESCE(tz, ?) WHERE id = ?', wallTime(r.start_at, tz), tz, r.id);
-        b.run("INSERT OR REPLACE INTO settings (key, value) VALUES ('persons_migrated', '1')");
-      }
-      db.exec('COMMIT');
-    } catch (error) { db.exec('ROLLBACK'); throw error; }
-  }
-  if (main) {
-    ctx.owner = owner; ctx.personStore = db;
-    if (now) { try { migrateConfigPersons(owner); } catch { /* the settings stay as they are: a missing person reads as the owner */ } }
-  }
-}
-// «2026-03-29T09:00» in that time zone for an ISO instant (null when it is not one).
-export function wallTime(iso, tz) {
-  const t = Date.parse(String(iso ?? '')); if (!Number.isFinite(t)) return null;
-  try {
-    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(t)).map((p) => [p.type, p.value]));
-    return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
-  } catch { return null; }
-}
-
-// 3.6: the tables whose rows belong to a person (person_id).
-export const PERSON_TABLES = ['conversations', 'chat', 'tasks', 'sessions', 'schedules', 'projects', 'bots', 'bot_groups', 'bot_reminders', 'bot_requests', 'link_queue', 'events', 'devices'];
 // Columns added after a database was created (each one only if it is missing).
 // tasks.account: account chosen on purpose for the task (optional); tasks.run_account: account it last ran on.
 // 2.3: sessions.context (how full the context is, JSON), sessions.settled (done, moved down in the menu), sessions.parent_id
@@ -463,10 +374,6 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   ['chat', 'conversation_id', 'INTEGER'], ['tasks', 'conversation_id', 'INTEGER'],
   // 3.5: a bot's own conversation (bot_id) and a group's (group_id); the assistant's conversations have neither.
   ['conversations', 'bot_id', 'INTEGER'], ['conversations', 'group_id', 'INTEGER'],
-  // 3.6 «Personas»: whose each row is (NULL on rows written by code that does not stamp it yet: they are the owner's).
-  // Children inherit it from their parent (session_items/session_queue → session, messages → task, members → group).
-  // chat.person_id: the author of a line in a shared group.
-  ...PERSON_TABLES.map((t) => [t, 'person_id', 'TEXT']),
   // 3.6: reminders in the wall time of a time zone (local_at in tz), whether a missed one is skipped and how late it rang.
   ['bot_reminders', 'tz', 'TEXT'], ['bot_reminders', 'local_at', 'TEXT'], ['bot_reminders', 'skip_missed', 'INTEGER NOT NULL DEFAULT 0'], ['bot_reminders', 'fired_late_ms', 'INTEGER'],
   // 3.6: who may answer a bot's card (JSON list of person ids) and who did.
@@ -476,12 +383,12 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   // 3.6: a bot's daily caps { daily_turns, daily_tokens, daily_usd }.
   ['bots', 'caps', 'TEXT'],
   // 3.6: a bot's avatar { shape, color } (src/core/avatar.mjs); the ones before get a fixed one from their id.
-  ['bots', 'avatar', 'TEXT'],
-  // 3.6: whose agent sent a message between agents (NULL: the owner's): it only reaches that person's agents.
-  ['messages', 'person_id', 'TEXT']];
+  ['bots', 'avatar', 'TEXT']];
+// (3.6-3.7's person_id columns — whose each row was — are no longer added: only a 3.7 database has them, never written
+// since 3.8; the 3.8 migration empties them and 3.9 drops them.)
 // (3.7's replica columns — bots/bot_groups uid, home, home_epoch, home_state, home_fork, needs; uid of bot_reminders, chat,
 // memory_log and bot_requests — are no longer added: only a 3.7 database has them, with the home_* triggers that use them.)
-export function migrate(db, { file = null } = {}) {
+export function migrate(db) {
   // 3.2: whether a direct conversation already has its title (Orb names a new one from its first message); the ones made
   // before keep theirs.
   // 3.7: two processes may open a new or older database at the same moment (the engine and a bot's MCP server): the
@@ -506,14 +413,7 @@ export function migrate(db, { file = null } = {}) {
     CREATE INDEX IF NOT EXISTS chat_conversation ON chat (conversation_id, id);
     CREATE INDEX IF NOT EXISTS tasks_conversation ON tasks (conversation_id);
     CREATE INDEX IF NOT EXISTS conversations_bot ON conversations (bot_id, group_id);
-    CREATE INDEX IF NOT EXISTS conversations_person ON conversations (person_id);
-    CREATE INDEX IF NOT EXISTS tasks_person ON tasks (person_id);
-    CREATE INDEX IF NOT EXISTS sessions_person ON sessions (person_id);
-    CREATE INDEX IF NOT EXISTS bots_person ON bots (person_id);
-    CREATE INDEX IF NOT EXISTS devices_person ON devices (person_id);
     CREATE UNIQUE INDEX IF NOT EXISTS link_queue_request ON link_queue (request_id) WHERE request_id IS NOT NULL;`);
-  // 3.6 (B6): a bot's name is unique for its person (an old database with two bots of the same name keeps working).
-  try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS bots_person_name ON bots (person_id, name COLLATE NOCASE)'); } catch { /* duplicates from before */ }
   // 3.6: the direct conversations with an agent get marks too (pinned, muted): an inbox_items made before that only took
   // bots, groups and conversations is rebuilt with the wider check (same rows).
   // Inside a write lock and checked again there: the engine and the MCP servers may open the database at the same moment.
@@ -531,7 +431,6 @@ export function migrate(db, { file = null } = {}) {
     } catch (error) { db.exec('ROLLBACK'); throw error; }
   }
   migrateConversations(db);
-  migratePersons(db, { file });
   // 3.8: the bots' replicas are gone. A new database gets neither their tables (bot_changes, replica_cursor, bot_moves,
   // link_persons) nor their triggers (home_*); a 3.7 one keeps both, which still work because the bots' tables are still
   // in SCHEMA, until the 3.8 migration drops them (triggers first).

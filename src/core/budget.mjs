@@ -8,7 +8,7 @@
 // with roomier limits, so the app no longer stops working long before the subscription would.
 import { ctx, tr } from './context.mjs';
 import { localeOf } from './i18n.mjs';
-import { localDay } from './tz.mjs';
+import { localDay, ownerTz } from './tz.mjs';
 import { account as findAccount, accounts, accountsOf, usableAccounts } from './accounts.mjs';
 
 export const budgetConfig = () => {
@@ -192,10 +192,8 @@ export function rankAccounts(board, candidates, model) {
     .sort((a, b) => a.used - b.used || a.index - b.index);
 }
 
-// 3.6: person: only that person's own accounts.
-export function usageReport(board, { person = null } = {}) {
-  const mine = person ? accounts().filter((a) => accountPerson(board, a) === person) : accounts();
-  return mine.map((acc) => {
+export function usageReport(board) {
+  return accounts().map((acc) => {
     const r = rules(acc.id, board); const used = windowUsage(board, acc.id);
     const real = realRate(board, acc.id);
     // 3.2.1: why it is paused (usage, or a reason such as no login) and the models without usage of this account.
@@ -208,10 +206,9 @@ export function usageReport(board, { person = null } = {}) {
 
 // 3.2.1: why a task for this agent (and account, and model) would wait now, when every account it could use is paused or
 // out of usage; '' when one of them can take it. For the assistant, right when it hands the task out.
-// 3.6: person: only that person's own accounts.
-export function waitReason(board, agent, { account = null, model = null, person = null } = {}) {
+export function waitReason(board, agent, { account = null, model = null } = {}) {
   if (!agent || agent === 'any') return '';
-  const list = (person ? accountsFor(board, person, agent) : usableAccounts(agent)).filter((a) => !account || a.id === account);
+  const list = usableAccounts(agent).filter((a) => !account || a.id === account);
   if (!list.length) return '';
   const checks = list.map((a) => canLaunch(board, a.id, model));
   return checks.every((c) => !c.ok) ? checks.map((c) => c.reason).join('; ') : '';
@@ -262,47 +259,24 @@ export function pauseAccount(board, id, ms, reason) {
   return until;
 }
 
-// ---- 3.6 «Personas» (WS3): accounts per person. An account is its person's (accounts[].person; none = the owner's).
-// Every turn is written after it runs (recordSpend, usage_ledger); the day is the spender's, in their time zone.
-const boardOwner = (board) => { try { return board.ownerId?.() ?? board.one("SELECT id FROM persons WHERE role = 'owner' AND deleted_at IS NULL LIMIT 1")?.id ?? null; } catch { return null; } };
-const personOr = (board, person) => person ?? boardOwner(board);
-// Whose an account is (a person id; the owner when it says none).
-export const accountPerson = (board, acc) => (acc ? acc.person ?? boardOwner(board) : null);
-export function personTz(board, person) { try { return board.one('SELECT tz FROM persons WHERE id = ?', String(person ?? ''))?.tz || null; } catch { return null; } }
-// The calendar day (YYYY-MM-DD) of a moment for a person, in their time zone.
-export function dayOf(board, person, at = new Date()) { return localDay(at instanceof Date ? at : new Date(at), personTz(board, personOr(board, person))); }
-
-// The accounts of an agent a person may spend: their own, in the settings' order. usable: false also lists the ones
-// turned off (the owner's old fallback of defaultAccount).
-export function accountsFor(board, person, agent, { usable = true } = {}) {
-  const p = personOr(board, person);
-  return (usable ? usableAccounts(agent) : accountsOf(agent)).filter((a) => accountPerson(board, a) === p);
-}
-// Whether a person may choose that account (theirs).
-export function mayUseAccount(board, person, accountId) {
-  const acc = findAccount(accountId); if (!acc) return false;
-  return accountsFor(board, person, acc.agent, { usable: false }).some((a) => a.id === acc.id);
-}
-// The account a run spends: the one chosen on purpose when that person may use it (null when they may not: the caller
-// refuses), else their first usable account, else their first one even if turned off.
-export function pickAccount(board, { person = null, agent, preferred = null } = {}) {
-  const p = personOr(board, person);
+// The account a run spends: the one chosen on purpose (if it is of that agent), else the agent's first usable one, else
+// its first one even if turned off.
+export function pickAccount(board, { agent, preferred = null } = {}) {
   const chosen = preferred ? findAccount(preferred) : null;
-  if (chosen && chosen.agent === agent) return mayUseAccount(board, p, chosen.id) ? chosen : null;
-  return accountsFor(board, p, agent)[0] ?? accountsFor(board, p, agent, { usable: false })[0] ?? null;
+  if (chosen && chosen.agent === agent) return chosen;
+  return usableAccounts(agent)[0] ?? accountsOf(agent)[0] ?? null;
 }
 
-// What one turn spent (usage_ledger; day in the spender's time zone). usage: what the agent reported ({ inputTokens,
+// What one turn spent (usage_ledger; the day in the owner's time zone). usage: what the agent reported ({ inputTokens,
 // outputTokens, costUsd } or the snake_case names); one turn per call unless usage.userTurns says.
-export function recordSpend(board, { person = null, account = null, conversation = null, session = null, task = null, usage = {} } = {}) {
+export function recordSpend(board, { account = null, conversation = null, session = null, task = null, usage = {} } = {}) {
   const at = new Date();
-  const p = personOr(board, person);
-  const day = dayOf(board, p, at);
+  const day = localDay(at, ownerTz(ctx.config));
   const u = usage ?? {};
   const n = (v) => (v != null && Number.isFinite(Number(v)) ? Number(v) : null);
   try {
-    board.run('INSERT INTO usage_ledger (at, day, person_id, account_id, conversation_id, session_id, task_id, turns, tokens_in, tokens_out, usd) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      at.toISOString(), day, p, account, conversation == null ? null : Number(conversation), session == null ? null : String(session), task == null ? null : Number(task),
+    board.run('INSERT INTO usage_ledger (at, day, account_id, conversation_id, session_id, task_id, turns, tokens_in, tokens_out, usd) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      at.toISOString(), day, account, conversation == null ? null : Number(conversation), session == null ? null : String(session), task == null ? null : Number(task),
       n(u.userTurns) ?? 1, n(u.tokens_in ?? u.input_tokens ?? u.inputTokens), n(u.tokens_out ?? u.output_tokens ?? u.outputTokens), n(u.usd ?? u.cost_usd ?? u.costUsd));
   } catch { /* a database before 3.6 */ }
   return { day };

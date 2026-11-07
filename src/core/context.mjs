@@ -14,50 +14,7 @@ export const tr = (key, vars) => translate(ctx.config?.language ?? 'es', key, va
 
 export function useHome(home) {
   ctx.home = home; ctx.paths = paths(home); ctx.config = loadConfig(home);
-  ctx.owner = null; ctx.personStore = null; // 3.6: set when this home's database is opened (db.mjs)
   return ctx;
-}
-
-// ---- 3.6 «Personas»: settings of each person (table person_settings) and the settings' migration.
-// What is each person's own (the rest of orb.json stays global, the owner's). For the owner, a key with no row yet reads
-// where 3.5.1 kept it (legacy), so one person behaves exactly as before; the first write through personSetting makes
-// the row. Keys: language, tz (also columns of persons), preview (notifications on a locked phone), brain (the
-// assistant's agent/model/account), active_project, protected (personal additions).
-export const PERSON_KEYS = ['language', 'tz', 'preview', 'brain', 'active_project', 'protected'];
-const LEGACY = {
-  language: () => ctx.config?.language,
-  preview: () => ctx.config?.mobile?.preview,
-  brain: () => { const o = ctx.config?.orchestrator; return o ? { agent: o.agent ?? 'claude', model: o.model ?? null, account: o.account ?? null } : undefined; },
-  active_project: (store) => store?.prepare("SELECT value FROM settings WHERE key = 'active_project'").get()?.value
-};
-// personSetting(pid, key) → the value (parsed JSON) or undefined; personSetting(pid, key, value) saves it (null removes
-// the row). store: a node:sqlite database (default: this home's, opened by db.mjs); a Board passes its own.
-export function personSetting(pid, key, value, store = ctx.personStore) {
-  if (!PERSON_KEYS.includes(key)) throw new Error(`unknown person setting: ${key}`);
-  if (!store) throw new Error('no database for person settings');
-  const id = String(pid ?? ctx.owner ?? '');
-  if (value === undefined) {
-    const row = store.prepare('SELECT value FROM person_settings WHERE person_id = ? AND key = ?').get(id, key);
-    if (row) { try { return JSON.parse(row.value); } catch { return row.value; } }
-    const owner = store.prepare("SELECT id FROM persons WHERE role = 'owner' AND deleted_at IS NULL LIMIT 1").get()?.id;
-    return id === owner ? LEGACY[key]?.(store) ?? undefined : undefined;
-  }
-  if (value === null) store.prepare('DELETE FROM person_settings WHERE person_id = ? AND key = ?').run(id, key);
-  else store.prepare('INSERT INTO person_settings (person_id, key, value) VALUES (?, ?, ?) ON CONFLICT(person_id, key) DO UPDATE SET value = excluded.value').run(id, key, JSON.stringify(value));
-  return value;
-}
-// The accounts and the connectors of orb.json are the owner's (accounts[].person, mcpServers[].person). Only what is
-// missing is filled. Once, at the migration; the file is read again right before (another process may have just saved
-// it). An account or connector without person (added later by older code) is the owner's.
-export function migrateConfigPersons(owner) {
-  if (!owner || !ctx.paths?.config || !fs.existsSync(ctx.paths.config)) return false;
-  let raw; try { raw = JSON.parse(fs.readFileSync(ctx.paths.config, 'utf8')); } catch { return false; }
-  const missing = (list) => Array.isArray(list) && list.some((x) => x && typeof x === 'object' && !x.person);
-  const stamp = (list) => (Array.isArray(list) ? list.map((x) => (x && typeof x === 'object' && !x.person ? { ...x, person: owner } : x)) : list);
-  if (!missing(raw.accounts) && !missing(raw.mcpServers)) return false;
-  writeJson(ctx.paths.config, { ...raw, ...(raw.accounts ? { accounts: stamp(raw.accounts) } : {}), ...(raw.mcpServers ? { mcpServers: stamp(raw.mcpServers) } : {}) });
-  if (ctx.config) ctx.config = { ...ctx.config, accounts: stamp(ctx.config.accounts ?? []), mcpServers: stamp(ctx.config.mcpServers ?? []) };
-  return true;
 }
 
 // Settings saved from the app. Only known top-level keys are accepted.
@@ -161,7 +118,7 @@ export function validateConfig(c) {
   // 3.5: «Cosas que nadie toca»: up to 50 names, paths or containers (2-200 characters each).
   if (c.protected !== undefined && (!Array.isArray(c.protected) || c.protected.length > 50 || c.protected.some((x) => typeof x !== 'string' || x.trim().length < 2 || x.length > 200))) throw new Error(tr('msg.ctx.badAppearance', { name: 'protected' }));
   // 3.6: backups (src/core/backup.mjs): on/off, another folder (absolute), and whether project folders and the agents'
-  // login folders go in too (both off). tz: this Orb's time zone until each person has their own (src/core/tz.mjs).
+  // login folders go in too (both off). tz: the owner's time zone (the daily backup, the day of the usage ledger).
   if (c.backup !== undefined) {
     if (!c.backup || typeof c.backup !== 'object' || Array.isArray(c.backup)) throw new Error(tr('msg.ctx.badAppearance', { name: 'backup' }));
     bool(c.backup.enabled, 'backup.enabled'); bool(c.backup.projects, 'backup.projects'); bool(c.backup.accounts, 'backup.accounts');
