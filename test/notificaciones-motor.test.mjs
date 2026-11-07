@@ -96,6 +96,19 @@ test('el permiso de una tarea llega con Aprobar y Rechazar; el token vale una ve
   assert.equal((await noteAction(p.data.acts.allow)).status, 401, 'el primer intento gasta los dos tokens del aviso');
 });
 
+// 3.8 (review F2.3, M4): «Aprobar» from the phone's notification really approves (the agent goes on with what it asked),
+// and the same notification's «Rechazar» is spent with it.
+test('«Aprobar» desde el aviso del móvil aprueba el permiso; después su «Rechazar» ya no vale', async () => {
+  const n = pushes(ana.endpoint).length;
+  const task = await A.call('tasks.create', { project: 'web', title: 'Subir aprobado', description: 'PIDE_PERMISO', agent: 'codex' });
+  const p = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.kind === 'approval'), 'el permiso', 30_000);
+  const r = await noteAction(p.data.acts.allow);
+  assert.equal(r.status, 200, JSON.stringify(await r.clone().json()));
+  const done = await until(async () => { const x = await A.call('tasks.get', { id: task.id }); return x.status === 'done' ? x : null; }, 'la tarea sigue y termina', 30_000);
+  assert.match(done.result, /permiso concedido \(allow\)/, done.result);
+  assert.equal((await noteAction(p.data.acts.deny)).status, 401, 'el «Rechazar» del mismo aviso ya no vale');
+});
+
 // 3.8 (revisión F2.5, B6): a device that still has a person (one of 3.6–3.7 the migration did not clear) gets no
 // notifications, and its buttons do not work (remote.mjs › validDevice: only devices without a person are served).
 test('un dispositivo con persona (de otro usuario de 3.7) no recibe avisos y sus botones no valen', async () => {
