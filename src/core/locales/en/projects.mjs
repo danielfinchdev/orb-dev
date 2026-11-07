@@ -64,6 +64,7 @@ export default {
   'projects.prs': 'Open pull requests',
   'projects.title': 'Projects',
   'projects.meta': 'Each folder inside windows, ios, android or web in {home} is a project',
+  'projects.metaRemote': 'Each folder inside windows, ios, android or web on the PC is a project',
   'projects.clone': 'Clone',
   'projects.link': 'Link folder',
   'projects.create': 'New project',
@@ -71,5 +72,6 @@ export default {
   'projects.openOther': '{n} open',
   'projects.empty.title': 'No projects',
   'projects.empty.hint': 'Create a project, clone a repository or add a folder in windows, ios, android or web inside {home}.',
+  'projects.empty.hintRemote': 'Create a project or, from the PC, add a folder in windows, ios, android or web.',
   'projects.pick': 'Select a project'
 };

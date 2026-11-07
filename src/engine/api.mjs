@@ -32,7 +32,7 @@ import { titleFrom } from '../core/titles.mjs';
 import { autoTitle } from './titles.mjs';
 import { projectIcon, setProjectIcon, clearProjectIcon, renameProjectIcon } from './project-icons.mjs';
 import { git, slug } from '../core/workspace.mjs';
-import { authorize, DESKTOP } from '../core/permissions.mjs';
+import { authorize, PermissionError } from '../core/permissions.mjs';
 import { fld, fail, str, int, oneOf, images, DECISION } from './api-common.mjs';
 import { linkMethods } from './api-link.mjs';
 import { accountMethods } from './api-accounts.mjs';
@@ -242,10 +242,19 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'chat.list': ({ conversation, before }) => board.chat(conversation == null ? null : conversationId(conversation), before ? 120 : 160, { before: before ? int(before, 'mensaje') : null }).map(withAccepted),
     // A message to a conversation with the assistant; without one, it starts a new conversation (in the project given, or
     // the working folder). → { conversation }
-    'chat.send': ({ text, conversation, project: name }) => {
+    // brain ({ agent, model, reasoning }): 3.8, a new conversation started from a phone with the brain chosen there (the
+    // one new conversations start with is this PC's setting).
+    'chat.send': ({ text, conversation, project: name, brain }, principal) => {
       const t = str(text, 'mensaje', 20000);
       const id = conversation == null ? null : conversationId(conversation);
       const proj = name === undefined ? undefined : name ? project(name).name : null;
+      if (brain !== undefined) {
+        if (id || !brain || typeof brain !== 'object' || Array.isArray(brain)) fail(tr('msg.api.badParams'));
+        const c = orchestrator.startConversation({ text: t, project: proj });
+        const pick = Object.fromEntries(['agent', 'model', 'reasoning'].filter((k) => brain[k] !== undefined).map((k) => [k, brain[k]]));
+        try { methods['chat.settings']({ conversation: c.id, ...pick }, principal); } catch (error) { board.run('DELETE FROM conversations WHERE id = ?', c.id); board.changed('conversations'); throw error; }
+        return orchestrator.ask(t, expandMentions(board, sessions, t), { conversation: c.id, project: proj });
+      }
       if (!id && (brainOf().agent || 'claude') === 'cursor') fail(tr('msg.api.cursorNoCoordinate'));
       return orchestrator.ask(t, expandMentions(board, sessions, t), { conversation: id, project: proj });
     },
@@ -356,7 +365,11 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     // The assistant's brain (2.6: any installed agent and model, with its reasoning and account). 3.2: of a conversation
     // (conversation given) and, always, the one new conversations start with; orchestrate: whether a new conversation is
     // with the assistant (on) or directly with the agent chosen (off: the user hands out the work).
-    'chat.settings': ({ conversation, agent, model, reasoning, orchestrate, account: acc }) => {
+    // 3.8: a linked phone or browser changes only that conversation's brain; the one new conversations start with (and
+    // «orchestrate») is a setting of this PC.
+    'chat.settings': ({ conversation, agent, model, reasoning, orchestrate, account: acc }, principal) => {
+      const remote = principal?.channel !== 'desktop';
+      if (remote && (conversation == null || orchestrate !== undefined)) throw new PermissionError('config.save');
       const o = brainOf();
       const conv = conversation == null ? null : board.conversation(conversationId(conversation));
       const base = conv ? { agent: conv.agent, account: conv.account, model: conv.model, reasoning: conv.reasoning } : o;
@@ -374,7 +387,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
           // 2.6: a model Claude Code itself offers (discovered) joins the assistant's models, so the settings stay valid.
           const offered = (board.settingJson('models:claude') ?? []).find((x) => x.id === m);
           if (!offered || !/^[\w.:-]{1,80}$/.test(m)) fail(tr('msg.api.modelUnavailable'));
-          patch.models = [...o.models, { id: m, label: offered.label }];
+          if (!remote) patch.models = [...o.models, { id: m, label: offered.label }];
         }
         if (m && !/^[A-Za-z0-9][\w.:\-/[\]=,@]{0,79}$/.test(m)) fail(tr('msg.api.modelUnavailable'));
         patch.model = m || (brain === 'claude' ? 'claude-sonnet-5-5' : '');
@@ -399,8 +412,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
         // afresh with the logs instead of failing to resume.
         if ((patch.agent && patch.agent !== before.agent) || (patch.account !== undefined && patch.account !== before.account)) orchestrator.forget(conv.id);
       }
-      // The choice is also the one the next new conversation starts with.
-      { const c = saveConfig({ orchestrator: patch }); emit('config:changed', c); }
+      // On this PC the choice is also the one the next new conversation starts with.
+      if (!remote) { const c = saveConfig({ orchestrator: patch }); emit('config:changed', c); }
       const info = orchestrator.info(conv?.id ?? null);
       const level = { low: tr('msg.api.reasoningLow'), medium: tr('msg.api.reasoningMedium'), high: tr('msg.api.reasoningHigh'), xhigh: tr('msg.api.reasoningXhigh') }[info.reasoning] ?? info.reasoning;
       if ((patch.model !== undefined && patch.model !== before.model) || (patch.agent && patch.agent !== (before.agent ?? 'claude')) || (patch.reasoning && patch.reasoning !== before.reasoning)) board.notice(tr('msg.api.assistantBrain', { name: assistantName(), agent: info.agentLabel, label: info.modelLabel, reasoning: level }), 'info');
@@ -574,14 +587,15 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     ...data.methods
   };
   return {
-    // principal: who calls, built only by the entry points (remote.mjs for a linked device). Without one, this PC (its
-    // window, dev-control, the engine itself).
-    async call(method, params, principal = DESKTOP) {
+    // principal: who calls, built only by the entry points (engine.mjs and dev-control.mjs: this PC; remote.mjs: a
+    // linked device). A call without one is refused (never this PC by default).
+    async call(method, params, principal) {
+      if (!principal) throw new PermissionError(method);
       const fn = Object.hasOwn(methods, method) ? methods[method] : null;
       if (!fn) fail(tr('msg.api.unknownAction', { method }));
       if (params === null || typeof params !== 'object' || Array.isArray(params)) fail(tr('msg.api.badParams'));
       authorize(principal, method);
-      const out = await fn(params);
+      const out = await fn(params, principal);
       // 3.1: an agent turned on or off, checked again, or an account added or removed: the list of available agents is
       // updated at once (the next task may already be for it).
       if (/^(config\.save|agents\.(status|check)|accounts\.(add|update|remove))$/.test(method)) { try { scheduler.refreshAvailable(true); } catch { /* next tick */ } }

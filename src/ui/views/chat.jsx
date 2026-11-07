@@ -431,7 +431,11 @@ export function ChatView({ route, onConversation, project: inProject }) {
   }, []);
   const name = app.config.assistantName;
   const chat = chatOf(app, id) ?? {};
-  const defaults = app.assistant ?? {};
+  // 3.8: on a phone, the brain and «Orquestador» of a NEW conversation are chosen for that conversation alone (the ones
+  // new conversations start with are a setting of the PC).
+  const [draft, setDraft] = useState(null);
+  const local = Boolean(bridge.mobile) && id == null;
+  const defaults = { ...(app.assistant ?? {}), ...(local ? draft ?? {} : {}) };
   useEffect(() => { setRows([]); setOlder([]); setMore(false); }, [id]);
   useEffect(() => {
     if (id == null) return undefined;
@@ -497,7 +501,8 @@ export function ChatView({ route, onConversation, project: inProject }) {
     try {
       if (orchestrate) {
         // 3.2: the first message makes the conversation (in the working folder): then the screen is that conversation.
-        const r = await act(call('chat.send', { text: msg, ...(inProject ? { project: inProject } : {}) }));
+        const chosen = local && draft ? Object.fromEntries(['agent', 'model', 'reasoning'].filter((k) => draft[k] !== undefined).map((k) => [k, draft[k]])) : {};
+        const r = await act(call('chat.send', { text: msg, ...(inProject ? { project: inProject } : {}), ...(Object.keys(chosen).length ? { brain: chosen } : {}) }));
         if (!r) { if (!moved()) setText(msg); return; }
         await refresh().catch(() => {});
         if (moved()) { leftBehind({ view: 'chat', id: r.conversation }, getState().conversations.find((c) => c.id === r.conversation)?.title ?? msg.slice(0, 60)); return; }
@@ -515,7 +520,10 @@ export function ChatView({ route, onConversation, project: inProject }) {
       }
     } finally { setSending(false); }
   };
-  const settings = async (patch) => { const r = await act(call('chat.settings', { ...patch, ...(id != null ? { conversation: id } : {}) })); if (r) { setState((s) => ({ app: { ...s.app, ...(id == null ? { assistant: r } : {}) } })); refreshSoon(); } return r; };
+  const settings = async (patch) => {
+    if (local) { setDraft((d) => ({ ...(d ?? {}), ...patch })); return true; }
+    const r = await act(call('chat.settings', { ...patch, ...(id != null ? { conversation: id } : {}) })); if (r) { setState((s) => ({ app: { ...s.app, ...(id == null ? { assistant: r } : {}) } })); refreshSoon(); } return r;
+  };
   // 3.2.1: the assistant cannot coordinate with Cursor as its brain (Cursor takes no tools of Orb's): turning the
   // «Orquestador» on moves the brain to Claude (or Codex) and says so, instead of doing nothing.
   const coordinator = ['claude', 'codex'].find((a) => catalog?.some((x) => x.id === a)) ?? null;

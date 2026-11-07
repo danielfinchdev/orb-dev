@@ -11,6 +11,7 @@ import { ctx } from '../src/core/context.mjs';
 import { Board, tagWords } from '../src/core/board.mjs';
 import { Orchestrator, answerOf } from '../src/engine/orchestrator.mjs';
 import { buildApi } from '../src/engine/api.mjs';
+import { DESKTOP } from '../src/core/permissions.mjs';
 import { plainAction, looksEnglish, deleteTarget } from '../src/core/guard.mjs';
 import { bumpNav, navTicket, stillHere } from '../src/ui/lib/nav.js';
 import { readableCommand, readableInput, prettyModel } from '../src/ui/lib/tools.js';
@@ -106,7 +107,7 @@ test('68 y 56: rechazar una tarea lo dice en su conversación y avisa al asisten
   assert.equal(notice.meta.task, task.id, 'con su tarea, para los botones del chat');
   const internal = [];
   const api = buildApi({ board, sessions: {}, orchestrator: { internal: (...args) => internal.push(args) }, scheduler: {}, emit: () => {}, log: () => {}, version: 'test' });
-  const out = await api.call('tasks.approve', { id: task.id, decision: 'rejected', hash: board.previewHash(board.task(task.id)) });
+  const out = await api.call('tasks.approve', { id: task.id, decision: 'rejected', hash: board.previewHash(board.task(task.id)) }, DESKTOP);
   assert.equal(out.status, 'cancelled');
   assert.equal(internal.length, 1, 'el asistente se entera');
   assert.match(internal[0][0], /ha rechazado la tarea #\d+/);

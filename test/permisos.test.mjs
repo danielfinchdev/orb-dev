@@ -10,7 +10,8 @@ import { tempHome, ROOT } from './helpers.mjs';
 import { Board } from '../src/core/board.mjs';
 import { createProject } from '../src/core/projects.mjs';
 import { METHODS, REMOTE_METHODS, CHANNELS, PermissionError, principalOf, allowed, authorize, ownsTask } from '../src/core/permissions.mjs';
-import { guardCall } from '../src/engine/remote.mjs';
+import { guardCall, shapeResult } from '../src/engine/remote.mjs';
+import { ctx } from '../src/core/context.mjs';
 import { Sessions, agentToken, registerConversationKey, revokeAgentTokens } from '../src/engine/sessions.mjs';
 import { Orchestrator } from '../src/engine/orchestrator.mjs';
 import { Scheduler } from '../src/engine/scheduler.mjs';
@@ -303,4 +304,60 @@ test('MCP: la firma caduca al cerrarse el proceso de la tarea o al borrarse la c
     assert.match((await boss.call('orb_board')).text, /no ha firmado/);
   } finally { worker.close(); boss.close(); }
   revokeAgentTokens(board, 'sesion-caduca');
+});
+
+// B1: a call that does not say who makes it is refused (never this PC by default).
+test('una llamada sin principal se niega, también la de un método inofensivo', async () => {
+  for (const m of ['projects.list', 'app.state', 'config.save']) {
+    await assert.rejects(api.call(m, {}), (e) => e instanceof PermissionError && e.status === 403, m);
+    await assert.rejects(api.call(m, {}, null), PermissionError, m);
+  }
+  assert.ok(Array.isArray(await api.call('projects.list', {}, desktop)));
+});
+
+// The phone's own checks (remote.mjs › guardCall): never full access, never a picture that is not its own upload.
+test('móvil: sin acceso total y sin imágenes que no subió él', async () => {
+  const uploadsDir = path.join(t.home, '.orb', 'adjuntos-movil');
+  assert.match(guardCall(board, 'sessions.create', { agent: 'claude', permission: 'total' }, { uploadsDir }), /acceso total/);
+  assert.match(guardCall(board, 'tasks.create', { project: 'web', permission: 'total' }, { uploadsDir }), /acceso total/);
+  const total = board.run("INSERT INTO sessions (id, kind, agent, cwd, permission, title, status, created_at, updated_at) VALUES ('total-1', 'chat', 'claude', '.', 'total', 't', 'idle', '', '')");
+  assert.ok(total.changes);
+  assert.match(guardCall(board, 'sessions.send', { id: 'total-1', text: 'hola' }, { uploadsDir }), /acceso total/);
+  assert.equal(guardCall(board, 'sessions.stop', { id: 'total-1' }, { uploadsDir }), null, 'pararla sí');
+  assert.match(guardCall(board, 'chat.send', { text: 'x', images: [path.join(t.home, 'orb.json')] }, { uploadsDir }), /imágenes subidas/);
+  assert.match(guardCall(board, 'chat.send', { text: 'x', images: [path.join(uploadsDir, '..', 'datos', 'orb.db')] }, { uploadsDir }), /imágenes subidas/);
+  assert.match(guardCall(board, 'chat.send', { text: 'x', images: [path.join(uploadsDir, 'foto.png')] }), /imágenes subidas/, 'sin carpeta de subidas, ninguna');
+  assert.equal(guardCall(board, 'chat.send', { text: 'x', images: [path.join(uploadsDir, 'foto.png')] }, { uploadsDir }), null);
+});
+
+// M4: the phone chooses the brain of one conversation; the one new conversations start with is the PC's.
+test('móvil: cambia el cerebro de una conversación, nunca el de las nuevas', async () => {
+  const conv = board.createConversation({ title: 'Cerebro' }).id;
+  const before = JSON.stringify(ctx.config.orchestrator);
+  for (const p of [phone, browser]) {
+    await assert.rejects(api.call('chat.settings', { reasoning: 'high' }, p), PermissionError, 'sin conversación');
+    await assert.rejects(api.call('chat.settings', { conversation: conv, orchestrate: false }, p), PermissionError, 'el modo de las nuevas');
+  }
+  const info = await api.call('chat.settings', { conversation: conv, reasoning: 'low' }, phone);
+  assert.equal(info.reasoning, 'low');
+  assert.equal(board.conversation(conv).reasoning, 'low');
+  assert.equal(JSON.stringify(ctx.config.orchestrator), before, 'config.orchestrator no cambia');
+  // A new conversation from the phone with its own brain.
+  const { conversation } = await api.call('chat.send', { text: 'hola', brain: { reasoning: 'high' } }, phone);
+  assert.equal(board.conversation(conversation).reasoning, 'high');
+  assert.equal(JSON.stringify(ctx.config.orchestrator), before);
+  // On the PC the choice is also the one new conversations start with.
+  await api.call('chat.settings', { reasoning: 'high' }, desktop);
+  assert.equal(ctx.config.orchestrator.reasoning, 'high');
+});
+
+// B3: the state a phone gets has no folder of this PC.
+test('móvil: el estado de la app llega sin carpetas del PC', async () => {
+  board.setActiveProject('web', 'usuario');
+  const state = await api.call('app.state', {}, phone);
+  assert.ok(state.home && state.paths && state.activeProject.path, 'el PC sí las tiene');
+  const shaped = shapeResult('app.state', state);
+  assert.equal(shaped.home, undefined); assert.equal(shaped.paths, undefined);
+  assert.equal(shaped.activeProject.name, 'web'); assert.equal(shaped.activeProject.path, undefined);
+  assert.ok(!JSON.stringify(shaped).includes(JSON.stringify(t.home).slice(1, -1)), 'ninguna ruta de la carpeta de Orb');
 });

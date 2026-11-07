@@ -137,7 +137,7 @@ export function ProjectsView({ route }) {
   const pick = (p) => p && setSelected(p.name);
   return (
     <>
-      <PageHeader icon={<FolderKanban className="text-primary size-5" />} title={t('projects.title')} meta={t('projects.meta', { home: app.home })}>
+      <PageHeader icon={<FolderKanban className="text-primary size-5" />} title={t('projects.title')} meta={app.home ? t('projects.meta', { home: app.home }) : t('projects.metaRemote')}>
         {bridge.mobile ? null : <><Button size="sm" variant="ghost" onClick={async () => pick(await cloneRepoFlow())}><GithubIcon />{t('projects.clone')}</Button>
         <Button size="sm" variant="ghost" onClick={async () => pick(await linkFolderFlow())}><FolderOpen />{t('projects.link')}</Button></>}
         <Button size="sm" onClick={async () => pick(await createProjectFlow())}><FolderPlus />{t('projects.create')}</Button>
@@ -163,7 +163,7 @@ export function ProjectsView({ route }) {
                     ))}
                   </div>
                 ) : null;
-              }) : <Empty icon={FolderKanban} title={t('projects.empty.title')}>{t('projects.empty.hint', { home: app.home })}</Empty>}
+              }) : <Empty icon={FolderKanban} title={t('projects.empty.title')}>{app.home ? t('projects.empty.hint', { home: app.home }) : t('projects.empty.hintRemote')}</Empty>}
             </Card>
             {current ? <ProjectDetail key={current.name} p={current} onRenamed={setSelected} /> : <Card><Empty icon={Folder} title={t('projects.pick')} /></Card>}
           </div>

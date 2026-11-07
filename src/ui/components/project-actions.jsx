@@ -33,7 +33,8 @@ const PlatformsField = ({ v, set }) => (
     </div>
   </Field>
 );
-const folderOf = (v, c) => `${home()}${sep()}${c}${sep()}${v.name.trim().replace(/[<>:"/\\|?*]/g, '')}${v.categories.length > 1 ? `-${c}` : ''}`;
+// On a phone (no folder of the PC is sent to it) the path starts at the category.
+const folderOf = (v, c) => [home(), c, `${v.name.trim().replace(/[<>:"/\\|?*]/g, '')}${v.categories.length > 1 ? `-${c}` : ''}`].filter(Boolean).join(sep());
 
 export async function createProjectFlow() {
   const p = await form(t('comp.projects.newTitle'), {

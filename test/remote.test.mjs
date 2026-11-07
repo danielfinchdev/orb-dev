@@ -163,6 +163,21 @@ test('el móvil hace lo suyo y nada más (acciones del PC, acceso total, archivo
   assert.equal((await upload(new Uint8Array(Buffer.from('MZ ejecutable')))).status, 415);
 });
 
+// 3.8 (M4, B3), through the encrypted /api/call: no folder of the PC, and the brain of one conversation only.
+test('el móvil no recibe carpetas del PC ni cambia el cerebro de las conversaciones nuevas', async () => {
+  const p = globalThis.phone1;
+  const state = (await p.call('app.state')).result;
+  assert.equal(state.home, undefined); assert.equal(state.paths, undefined);
+  assert.equal(state.activeProject?.path, undefined);
+  const before = JSON.stringify((await call('app.state')).config.orchestrator);
+  const refused = await p.call('chat.settings', { reasoning: 'low' });
+  assert.equal(refused.ok, false); assert.equal(refused.status, 403);
+  const { conversation } = (await p.call('chat.send', { text: 'hola desde el móvil', brain: { reasoning: 'low' } })).result;
+  const changed = await p.call('chat.settings', { conversation, reasoning: 'high' });
+  assert.equal(changed.ok, true, changed.error); assert.equal(changed.result.reasoning, 'high');
+  assert.equal(JSON.stringify((await call('app.state')).config.orchestrator), before, 'lo de las nuevas sigue igual');
+});
+
 test('avisos: solo servicios de avisos conocidos', async () => {
   const p = globalThis.phone1;
   const send = async (subscription) => { const box = p.box('push', { subscription }); return C.open(p.key, await (await p.post('/api/push', box)).json(), C.AAD.response(p.id)); };

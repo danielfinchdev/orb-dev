@@ -78,8 +78,14 @@ export function guardCall(board, method, params, { allowed = REMOTE_METHODS, upl
 // nuevo»). 3.8: 'all' and 'chat' show the same (the bots' messages, hidden with 'chat', are gone).
 export const PREVIEWS = ['all', 'chat', 'none'];
 export const pushPreview = (config) => (PREVIEWS.includes(config?.mobile?.preview) ? config.mobile.preview : 'chat');
-// What a call from outside gets back (the settings without secrets).
-export const shapeResult = (method, result) => (method === 'app.state' && result ? { ...result, config: phoneConfig(result.config) } : result);
+// What a call from outside gets back: the settings without secrets, and no folder of this PC (its home, the assistant's
+// paths, the working project's path).
+export function shapeResult(method, result) {
+  if (method !== 'app.state' || !result) return result;
+  const { home: _home, paths: _paths, ...rest } = result;
+  const activeProject = rest.activeProject ? (({ path: _path, ...p }) => p)(rest.activeProject) : rest.activeProject;
+  return { ...rest, activeProject, config: phoneConfig(rest.config) };
+}
 
 // 3.5: only the home network, Tailscale and this PC itself may talk to Orb: 127.0.0.0/8, 10/8, 172.16/12, 192.168/16,
 // 100.64/10 (Tailscale) and, in IPv6, ::1 and Tailscale's fd7a:115c:a1e0::/48.
@@ -402,7 +408,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       const result = shapeResult(method, (await api.call(method, params, principal)) ?? null);
       return reply(res, device, msg.nonce, { ok: true, result });
     }
-    catch (error) { return reply(res, device, msg.nonce, { ok: false, error: oneLine(error?.message ?? String(error), 1000), ...(error?.reason ? { reason: error.reason, status: error.status ?? 403 } : {}) }); }
+    catch (error) { return reply(res, device, msg.nonce, { ok: false, error: oneLine(error?.message ?? String(error), 1000), ...(error?.reason ? { reason: error.reason, status: error.status ?? 403 } : error?.status === 403 ? { status: 403 } : {}) }); }
   }
 
   // 3.5: what a device that has only the short code needs to know (only while a code is on screen). urls: the other

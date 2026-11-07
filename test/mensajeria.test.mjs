@@ -8,12 +8,13 @@ import { Sessions } from '../src/engine/sessions.mjs';
 import { Orchestrator } from '../src/engine/orchestrator.mjs';
 import { Scheduler } from '../src/engine/scheduler.mjs';
 import { buildApi } from '../src/engine/api.mjs';
+import { DESKTOP } from '../src/core/permissions.mjs';
 import { ctx } from '../src/core/context.mjs';
 
 let t; let board; let api;
 const events = [];
 const ids = {};
-const call = (method, params = {}) => api.call(method, params);
+const call = (method, params = {}) => api.call(method, params, DESKTOP);
 const item = (list, kind, id) => list.items.find((x) => x.kind === kind && x.id === Number(id));
 const conv = (title) => board.createConversation({ title }).id;
 const orbSays = (c, text) => board.addChat('orb', text, null, c);

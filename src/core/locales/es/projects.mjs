@@ -64,6 +64,7 @@ export default {
   'projects.prs': 'Pull requests abiertos',
   'projects.title': 'Proyectos',
   'projects.meta': 'Cada carpeta dentro de windows, ios, android o web en {home} es un proyecto',
+  'projects.metaRemote': 'Cada carpeta dentro de windows, ios, android o web en el PC es un proyecto',
   'projects.clone': 'Clonar',
   'projects.link': 'Vincular carpeta',
   'projects.create': 'Nuevo proyecto',
@@ -71,5 +72,6 @@ export default {
   'projects.openOther': '{n} abiertas',
   'projects.empty.title': 'No hay proyectos',
   'projects.empty.hint': 'Crea un proyecto, clona un repositorio o añade una carpeta en windows, ios, android o web dentro de {home}.',
+  'projects.empty.hintRemote': 'Crea un proyecto o, desde el PC, añade una carpeta en windows, ios, android o web.',
   'projects.pick': 'Selecciona un proyecto'
 };

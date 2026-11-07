@@ -979,8 +979,15 @@ kinds of caller:
   coordinator reads and writes the logs of its conversation's projects and the general one; only the coordinator
   registers projects.
 
+A phone or a browser changes the brain of one conversation only (`chat.settings` with `conversation`; a new one
+from the phone takes its brain in `chat.send › brain`): the brain new conversations start with and «Orquestador» are
+this PC's (`config.orchestrator`). The state it gets (`app.state`, `remote.mjs › shapeResult`) has no folder of this PC
+(`home`, `paths`, the working project's path), and its notifications and their buttons follow the same rule as its
+calls (`validDevice`: a phone or a browser, used in the last 30 days, the owner's).
+
 **Files.** `src/core/permissions.mjs` (the table, `principalOf`, `authorize`, `ownsTask`); `src/engine/api.mjs ›
-call` checks every call before the method runs; `src/engine/remote.mjs` builds a device's principal and also checks
+call` checks every call before the method runs and refuses one that does not say who makes it (the engine and
+dev-control pass `DESKTOP`; the methods get the principal as their second argument); `src/engine/remote.mjs` builds a device's principal and also checks
 `REMOTE_METHODS` itself (`guardCall`, with the pictures and the full-access rules); `src/mcp/server.mjs` builds the
 agent's `WHO` from its signature (`identity()`, `stillSigned()`).
 
