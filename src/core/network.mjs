@@ -73,28 +73,11 @@ export async function devices({ sweep = false } = {}) {
 
 // ---- Android phones and TVs (adb). The adb of Orb (Ajustes › Herramientas › Android) or the one in PATH.
 const SERIAL = /^[\w.:\-]{1,80}$/;
-const HOSTPORT = /^\d{1,3}(\.\d{1,3}){3}:\d{2,5}$/;
 export function adbDevices(adb) {
   return run(adb, ['devices', '-l']).then((r) => r.out.split(/\r?\n/).slice(1).map((l) => l.trim()).filter(Boolean).map((l) => {
     const [serial, state, ...rest] = l.split(/\s+/); const kv = Object.fromEntries(rest.map((x) => x.split(':')).filter((p) => p.length === 2));
     return { serial, state, model: kv.model?.replace(/_/g, ' ') ?? null, device: kv.device ?? null, wireless: /:\d+$|_adb-tls-connect/.test(serial) };
   }));
-}
-export async function adbPair(adb, hostport, code) {
-  if (!HOSTPORT.test(hostport) || !/^\d{6}$/.test(code)) throw new Error('bad pairing data');
-  const r = await run(adb, ['pair', hostport, code], 30000);
-  return { ok: /success/i.test(r.out), detail: (r.out || r.err).trim().slice(0, 300) };
-}
-export async function adbConnect(adb, hostport) {
-  if (!HOSTPORT.test(hostport)) throw new Error('bad address');
-  const r = await run(adb, ['connect', hostport], 20000);
-  return { ok: /connected to/i.test(r.out) && !/fail|unable|cannot/i.test(r.out), detail: (r.out || r.err).trim().slice(0, 300) };
-}
-// 3.7 (WS9): «Desconectar ADB» in Conexiones (only while the adb of the user's session is running; never in tests).
-export async function adbDisconnect(adb, serial) {
-  if (!SERIAL.test(serial)) throw new Error('bad device');
-  const r = await run(adb, ['disconnect', serial], 10000);
-  return { ok: r.ok && !/error|no such/i.test(r.out), detail: (r.out || r.err).trim().slice(0, 300) };
 }
 // How a paired device is: model, Android, battery, memory, storage and the apps using the most memory.
 export async function adbInfo(adb, serial) {

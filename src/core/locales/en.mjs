@@ -42,7 +42,6 @@ import navegadorServer from './en/navegador-server.mjs';
 import oce from './en/oce.mjs';
 import vault from './en/vault.mjs';
 import servidorUi from './en/servidor-ui.mjs';
-import ws9 from './en/ws9.mjs';
 
 export default {
   ...base,
@@ -87,6 +86,5 @@ export default {
   ...navegadorServer,
   ...oce,
   ...vault,
-  ...servidorUi,
-  ...ws9
+  ...servidorUi
 };

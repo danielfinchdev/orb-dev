@@ -19,7 +19,6 @@ import { browserMethods } from '../engine/api-browser.mjs';
 import { serverAllows, serverCeiling, PRODUCT_SERVER } from './server-product.mjs';
 import { adminState } from '../core/server-admin.mjs';
 import { vaultMethods } from './api-vault.mjs';
-import { connectionMethods } from '../engine/api-connections.mjs';
 
 // engines: src/server/engines.mjs (createEngines), update: src/server/update.mjs (createUpdater); both optional (tests).
 export function buildServerApi({ board, emit, log, version, remoteRef = { current: null }, bots = null, engines = null, updater = null, vault = null }) {
@@ -67,9 +66,7 @@ export function buildServerApi({ board, emit, log, version, remoteRef = { curren
     ...data.methods,
     ...shares.methods,
     // 3.7 (WS6): the person's password vault (vault_fill types from it; nothing of it is ever returned).
-    ...vaultMethods({ board, log, vault }),
-    // 3.7 (WS9): «Conexiones» (the app asks this Server for its own rows: its phones, vault, live views, accounts, RAM).
-    ...connectionMethods(shared)
+    ...vaultMethods({ board, log, vault })
   };
   // Only what the server does: what the shared parts also have for the PC (agents.install, data.* of projects…) is left out.
   const methods = Object.fromEntries(Object.entries(all).filter(([k]) => serverAllows(k)));

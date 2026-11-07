@@ -24,7 +24,6 @@ import { LANGUAGES } from '../../core/i18n.mjs';
 import { useUpdate, updateActions, notesUrl } from '@/components/update-card.jsx';
 import { play } from '@/lib/sounds.js';
 import { MagicLinkPanel, SubSection } from './magic-link.jsx';
-import { ConnectionsPanel } from './connections.jsx';
 import { PersonsCard, ProfileCards } from './persons.jsx';
 import { DataCards } from './data.jsx';
 import { showPersonUi, showPersonsSettings, isOwner } from '@/lib/persons.js';
@@ -636,9 +635,8 @@ const SECTIONS = [
   { id: 'general', icon: SlidersHorizontal, groups: ['apariencia', 'actualizaciones'],
     cards: (c, app) => <><AssistantCard c={c} /><FolderCard c={c} home={app.home} /><SubSection id="apariencia" title={t('settings.group.apariencia')}><AppearanceCard c={c} /><InterfaceCard c={c} /></SubSection><SubSection id="actualizaciones" title={t('settings.group.actualizaciones')}><UpdatesCard /></SubSection></> },
   // Who can enter this Orb: its users, their devices and the Orbs linked with it.
-  // 3.7 (WS9): and «Conexiones», everything connected to it in one list.
-  { id: 'magiclink', icon: Radar, groups: (me) => [...(showPersonsSettings(me) ? ['usuarios'] : []), 'dispositivos', ...(bridge.mobile ? [] : ['server']), 'orbs', 'conexiones'],
-    cards: (c, app, me) => <><MagicLinkPanel grouped users={showPersonsSettings(me) ? <PersonsCard /> : null} phoneAccess={<MobileCard />} /><SubSection id="conexiones" title={t('settings.group.conexiones')}><ConnectionsPanel /></SubSection></> },
+  { id: 'magiclink', icon: Radar, groups: (me) => [...(showPersonsSettings(me) ? ['usuarios'] : []), 'dispositivos', ...(bridge.mobile ? [] : ['server']), 'orbs'],
+    cards: (c, app, me) => <><MagicLinkPanel grouped users={showPersonsSettings(me) ? <PersonsCard /> : null} phoneAccess={<MobileCard />} /></> },
   { id: 'agentes', icon: Cpu, cards: (c) => <><ChatCard c={c} /><TasksCard c={c} />{bridge.mobile ? null : <TestCard />}</> },
   { id: 'datos', icon: DatabaseBackup, when: (me) => isOwner(me), cards: () => <DataCards /> },
   // 3.7: «Monitoreo» is no longer here (a bot with the «Equipo» tools does it); sharing with Open Control Edge stays.
@@ -650,7 +648,7 @@ const SECTIONS = [
     cards: (c, app) => <><AboutCard version={app.version} /><SubSection id="contribuye" title={t('settings.group.contribuye')}><SupportCard /><FeedbackCard /></SubSection><SubSection id="apps" title={t('settings.group.apps')}><MoreAppsCard /></SubSection></> }
 ];
 // The names of before 3.6 (links in tutorials, notices and the sidebar) → [section, part].
-const ALIASES = { personas: ['magiclink', 'usuarios'], conexiones: ['magiclink', 'conexiones'], servidor: ['magiclink', 'server'], contrasenas: ['magiclink', 'contrasenas'], movil: ['magiclink', 'dispositivos'], apariencia: ['general', 'apariencia'], actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'],
+const ALIASES = { personas: ['magiclink', 'usuarios'], conexiones: ['magiclink', 'dispositivos'], servidor: ['magiclink', 'server'], contrasenas: ['magiclink', 'contrasenas'], movil: ['magiclink', 'dispositivos'], apariencia: ['general', 'apariencia'], actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'],
   herramientas: ['avanzado', 'herramientas'], experto: ['avanzado', 'experto'], monitor: ['avanzado', 'herramientas'], contribuye: ['acerca', 'contribuye'], apps: ['acerca', 'apps'] };
 export function resolveSection(open) {
   if (!open || open === true) return ['general', null];
@@ -668,7 +666,7 @@ export function SettingsDialog() {
   const [wanted, part] = resolveSection(open);
   const openedAt = useStore((s) => s.settingsAt);
   // The part asked for (a link to «Usuarios», a notice about updates…): scrolled into view once the section is drawn.
-  // Some parts appear only after their data loads (Orb Server, Conexiones): it waits for them for a moment, and the
+  // Some parts appear only after their data loads (Orb Server): it waits for them for a moment, and the
   // sections above them may still grow, so it follows for a second. Clicking the same part again scrolls again.
   useEffect(() => {
     if (!open || !part) return undefined;

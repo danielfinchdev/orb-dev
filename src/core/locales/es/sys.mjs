@@ -279,7 +279,6 @@ export default {
   'sys.push.unknownService': 'servicio de notificaciones no reconocido',
 
   // Herramientas de Android (adb)
-  'msg.android.off': 'Android está desactivado en este Orb.',
   'sys.android.noDownload': 'no hay descarga para {platform}',
   'sys.android.downloadHttp': 'descarga: HTTP {status}',
   'sys.android.noAdb': 'el paquete no incluye adb',

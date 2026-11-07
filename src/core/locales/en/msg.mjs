@@ -181,7 +181,6 @@ export default {
   "msg.ctx.mobileBool": "mobile.enabled must be true or false",
   "msg.ctx.badRole": "role must be one of: {roles}",
   "msg.api.centroOff": "This is not available on the server: do it from Orb on your PC.",
-  "msg.api.windowsOnly": "This only works on Windows.",
   "msg.ctx.mobilePort": "the mobile port",
   "msg.ctx.needName": "the assistant needs a name",
   "msg.ctx.numRange": "{name} must be a number between {min} and {max}",

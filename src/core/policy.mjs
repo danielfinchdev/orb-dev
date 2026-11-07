@@ -111,8 +111,7 @@ const CORE = {
   'mentions.options': { list: 'project' },
   'approvals.list': { list: 'session' },
   // this PC's tools (PC only by the ceiling; the owner's)
-  'android.status': { ownerOnly: true }, 'android.install': { ownerOnly: true }, 'android.devices': { ownerOnly: true }, 'android.pair': { ownerOnly: true }, 'android.connect': { ownerOnly: true }, 'android.info': { ownerOnly: true },
-  'net.wifi': { ownerOnly: true }, 'net.nearby': { ownerOnly: true }, 'net.devices': { ownerOnly: true }, 'net.rename': { ownerOnly: true }, 'net.remote': { ownerOnly: true },
+  'android.status': { ownerOnly: true }, 'android.install': { ownerOnly: true },
   'github.status': { ownerOnly: true }, 'github.contributions': { ownerOnly: true }, 'github.login': { ownerOnly: true },
   'expert.tree': { ownerOnly: true }, 'expert.read': { ownerOnly: true }, 'expert.status': { ownerOnly: true }, 'expert.diff': { ownerOnly: true }, 'expert.log': { ownerOnly: true }, 'expert.system': { ownerOnly: true },
   'actions.list': { ownerOnly: true }, 'actions.save': { ownerOnly: true }, 'actions.remove': { ownerOnly: true },
@@ -522,18 +521,7 @@ for (const set of [PHONE_SET, ORB_SET, CONSOLE_SET]) for (const m of VAULT_METHO
 // Calls that carry a secret in their parameters: never kept in a queue or a log of calls (remote.mjs).
 export const SECRET_PARAMS = new Set(['vault.setup']);
 
-// ---- 3.7 (WS9): «Conexiones» (src/engine/api-connections.mjs). Each person lists and closes their own connections (the
-// methods filter and check each row: a device, link, session or view of theirs); the admin everyone's, of the others only
-// names and states. From any screen of the person; never relayed to a workshop (remote.mjs › devForwards).
-export const CONNECTION_METHODS = ['connections.list', 'connections.close', 'connections.reconnect'];
-const CONNECTIONSP = {
-  'connections.list': { public: true },
-  'connections.close': { public: true },
-  'connections.reconnect': { public: true }
-};
-for (const set of [PHONE_SET, ORB_SET, CONSOLE_SET]) for (const m of CONNECTION_METHODS) set.add(m);
-
-export const POLICY = Object.freeze({ ...CORE, ...GATEWAY, ...ORBMODE, ...BOTSP, ...DATA, ...INBOX, ...UI, ...HOME, ...SERVERP, ...BROWSERP, ...VAULTP, ...CONNECTIONSP });
+export const POLICY = Object.freeze({ ...CORE, ...GATEWAY, ...ORBMODE, ...BOTSP, ...DATA, ...INBOX, ...UI, ...HOME, ...SERVERP, ...BROWSERP, ...VAULTP });
 export const policyOf = (method) => {
   const m = String(method);
   if (Object.hasOwn(POLICY, m)) return POLICY[m];
@@ -604,9 +592,7 @@ const EVENTS_HOME = {
   'bot.home': (p) => (p?.id ? bot(p.id) : 'owner'),
   'bots.move': (p) => (p?.person ? { person: p.person } : p?.id ? bot(p.id) : 'owner')
 };
-// 3.7 (WS9): «Conexiones» changed: no content (each screen asks connections.list again with its own rights).
-const EVENTS_CONNECTIONS = { 'connections:changed': 'all' };
-export const EVENTS = Object.freeze({ ...EVENTS_CORE, ...EVENTS_GATEWAY, ...EVENTS_ORBMODE, ...EVENTS_BOTSP, ...EVENTS_DATA, ...EVENTS_INBOX, ...EVENTS_UI, ...EVENTS_HOME, ...EVENTS_BROWSER, ...EVENTS_CONNECTIONS });
+export const EVENTS = Object.freeze({ ...EVENTS_CORE, ...EVENTS_GATEWAY, ...EVENTS_ORBMODE, ...EVENTS_BOTSP, ...EVENTS_DATA, ...EVENTS_INBOX, ...EVENTS_UI, ...EVENTS_HOME, ...EVENTS_BROWSER });
 export function eventRule(event) {
   const e = String(event);
   if (Object.hasOwn(EVENTS, e)) return EVENTS[e];

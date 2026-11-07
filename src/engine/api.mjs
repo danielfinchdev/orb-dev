@@ -24,9 +24,7 @@ import { ofUserLabel, userLabel, assistantName } from '../core/board.mjs';
 import * as github from './github.mjs';
 import * as installer from './installer.mjs';
 import * as expert from './expert.mjs';
-import { adbStatus, ensureAdb, adbPath, markAdbUsed, adbDisabled } from './android.mjs';
-import * as net from '../core/network.mjs';
-import { spawn } from 'node:child_process';
+import { adbStatus, ensureAdb } from './android.mjs';
 import { mcpFolder } from './mcp-folder.mjs';
 import { modelCatalog, chooseModel, LEVELS, REASONING_LEVELS, levelsOf } from './catalog.mjs';
 import { whiteboard } from './whiteboard.mjs';
@@ -46,14 +44,13 @@ import { dataApi, MOVED_OK } from './api-data.mjs';
 import { inboxMethods } from './api-inbox.mjs';
 import { browserMethods } from './api-browser.mjs';
 import { shareApi } from './api-shares.mjs';
-import { connectionMethods, sshOpen, noteAdbDevices } from './api-connections.mjs';
 
 export { fail, str, int, oneOf } from './api-common.mjs';
 // 3.5: what a server without a window (Orb Server) does not do, whatever its role: the PC's development tools (God mode and expert view,
 // and opening Remote Desktop or a console). Conversations, tasks, schedules, the phone
 // access and the MCP servers stay.
 // 3.5: the agents' sign-in no longer needs a console (agents.login gives the link and code), so it works on the server too.
-const CENTRO_OFF = /^(expert.|actions.|net.remote$|installer.start$|github.login$)/;
+const CENTRO_OFF = /^(expert.|actions.|installer.start$|github.login$)/;
 export const centroAllows = (method) => !CENTRO_OFF.test(String(method));
 
 export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef = { current: null }, bots = null }) {
@@ -302,38 +299,6 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'mcp.folder': () => mcpFolder(),
     'android.status': () => adbStatus(),
     'android.install': () => ensureAdb({ log, force: true }),
-    // 2.7: Monitoreo del equipo › Red (core/network.mjs): real readings of Windows, PC only.
-    'net.wifi': () => net.wifi(),
-    'net.nearby': () => net.nearby(),
-    'net.devices': async ({ sweep }) => {
-      const r = await net.devices({ sweep: sweep === true });
-      const names = board.settingJson('net_names') ?? {};
-      return { ...r, devices: r.devices.map((d) => ({ ...d, alias: names[d.mac] ?? null })) };
-    },
-    'net.rename': ({ mac, name }) => {
-      const m = str(mac, 'mac', 17); if (!/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(m)) fail(tr('msg.api.invalid', { name: 'mac' }));
-      const names = board.settingJson('net_names') ?? {}; const n = oneLine(str(name, 'nombre', 40, { optional: true }) ?? '', 40).trim();
-      if (n) names[m] = n; else delete names[m];
-      board.settingJson('net_names', names); return true;
-    },
-    // Another computer of the network, without Orb on it: Windows' own Remote Desktop, or SSH in a terminal (each asks for
-    // its own login; Orb never sees it).
-    'net.remote': ({ ip, kind, user }, principal) => {
-      if (process.platform !== 'win32') fail(tr('msg.api.windowsOnly'));
-      const host = str(ip, 'ip', 15); if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) fail(tr('msg.api.invalid', { name: 'ip' }));
-      const how = oneOf(kind, ['rdp', 'ssh'], 'tipo');
-      if (how === 'rdp') { spawn('mstsc.exe', [`/v:${host}`], { detached: true, stdio: 'ignore', windowsHide: false }).unref(); return true; }
-      const who = str(user, 'usuario', 32); if (!/^[\w.-]{1,32}$/.test(who)) fail(tr('msg.api.invalid', { name: 'usuario' }));
-      // 3.7 (WS9): its own console, tracked, so Conexiones lists it and «Cerrar túnel» ends it.
-      return sshOpen({ host, user: who, person: principal?.channel === 'system' ? null : principal?.person ?? null });
-    },
-    // Android phones and TVs by adb (wireless pairing with the code the device shows). Each use notes that Orb started
-    // adb, so the engine stops its server when it closes (android.stopAdb).
-    // 3.7 (WS9): what it found is kept for Conexiones (which never asks adb itself).
-    'android.devices': async () => { if (adbDisabled() || !adbStatus().ready) return { ready: false, devices: [] }; markAdbUsed(); const devices = await net.adbDevices(adbPath()); noteAdbDevices(board, devices); return { ready: true, devices }; },
-    'android.pair': ({ host, code }) => (adbDisabled() ? fail(tr('msg.android.off')) : markAdbUsed(), net.adbPair(adbPath(), str(host, 'dirección', 21), str(code, 'código', 6))),
-    'android.connect': ({ host }) => (adbDisabled() ? fail(tr('msg.android.off')) : markAdbUsed(), net.adbConnect(adbPath(), str(host, 'dirección', 21))),
-    'android.info': ({ serial }) => (adbDisabled() ? fail(tr('msg.android.off')) : markAdbUsed(), net.adbInfo(adbPath(), str(serial, 'dispositivo', 80))),
 
     'github.status': () => github.status(),
     'github.contributions': () => github.contributions(),
@@ -702,7 +667,6 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     ...gatewayMethods(shared),
     ...inboxMethods(shared),
     ...browserMethods(shared), // 3.7 (WS5): «Ver navegador del Server»
-    ...connectionMethods(shared), // 3.7 (WS9): «Conexiones»
     ...data.methods
   };
   // 3.6: the approval cards a person may answer (of their own sessions and tasks, and those of projects shared with them).

@@ -338,8 +338,6 @@ export function createLink({ file, secret, identity = () => ({}), onRequest = nu
     peers: () => list(),
     // 3.5: say again who this Orb is to every linked Orb on now (after its role changed in Ajustes).
     refresh() { for (const p of peers.values()) if (p.online && !p.rec.revoked) helloAfterConnect(p).catch((e) => log(`enlace: hola: ${e.message}`)); },
-    // 3.7 (WS9): «Reconectar» in Conexiones: an Orb that is off is tried again now instead of after its wait.
-    retry(id) { const p = peerOf(id); if (!started || p.rec.revoked || p.online) return false; clearTimeout(p.timer); p.wait = 1000; stream(p); return true; },
     // Link with the QR (its text) or with the short code and the other Orb's address.
     // 3.6: person: whose link it is on this side (the person who links; null = the owner).
     async connect({ qr, code, address, fp, person = null } = {}) {

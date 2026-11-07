@@ -275,7 +275,6 @@ export default {
   'sys.push.unknownService': 'unrecognised notification service',
 
   // Android tools (adb)
-  'msg.android.off': 'Android is turned off in this Orb.',
   'sys.android.noDownload': 'no download available for {platform}',
   'sys.android.downloadHttp': 'download: HTTP {status}',
   'sys.android.noAdb': 'the package does not include adb',
