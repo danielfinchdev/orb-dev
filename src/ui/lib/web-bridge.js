@@ -213,13 +213,11 @@ if (!window.orb) {
   window.orb = {
     mobile: true,
     protocol: L.PROTOCOL,
-    // 3.6: what the Orb said on /api/me (the person this device is for, its versions).
+    // 3.6: what the Orb said on /api/me (its versions).
     me: () => me,
     push,
-    // 3.6 (M4): opts.ticket: a strong ticket (persons.verifyPin) for a call that needs the PIN; a refusal keeps its reason
-    // (error.reason: 'strong' when it needs one).
-    async call(method, params, opts = {}) {
-      const r = await post('/api/call', 'call', { method, params: params ?? {}, ...(typeof opts?.ticket === 'string' ? { ticket: opts.ticket } : {}) });
+    async call(method, params) {
+      const r = await post('/api/call', 'call', { method, params: params ?? {} });
       if (!r.ok) throw Object.assign(new Error(r.error), r.reason ? { reason: r.reason } : {});
       return r.result;
     },

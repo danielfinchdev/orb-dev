@@ -35,9 +35,8 @@ export function Setup({ onDone }) {
     try {
       const language = hereLanguage();
       await bridge.setup({ base, assistantName: shown, userName: user.trim(), language });
-      // The engine runs in the new folder now: the admin (made from userName) gets this PC's language and time zone.
-      await call('config.save', { patch: { language } }).catch(() => {});
-      await call('persons.update', { language, tz: hereTz() }).catch(() => {});
+      // The engine runs in the new folder now: it gets this PC's language and time zone.
+      await call('config.save', { patch: { language, tz: hereTz() } }).catch(() => {});
       setMood('happy');
       const info = await bridge.info();
       if (info.platform === 'win32') { setBusy(false); setStep('equipo'); } else setTimeout(onDone, 700);

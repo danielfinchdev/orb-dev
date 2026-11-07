@@ -68,7 +68,7 @@ function ChatInfo({ conv }) {
   const locale = useLocale();
   const catalog = useCatalog();
   const name = useStore((s) => s.app?.config?.assistantName ?? 'Orbe');
-  const you = useStore((s) => s.me?.person?.name) || t('orbchats.exportYou');
+  const you = useStore((s) => s.app?.config?.userName?.trim()) || t('orbchats.exportYou');
   const tasks = useStore((s) => s.tasks.filter((x) => x.conversation_id === conv.id));
   const chat = useStore((s) => (s.app?.chats ?? []).find((c) => c.conversation === conv.id) ?? null);
   const item = useOrbItems().find((x) => x.key === `conversation:${conv.id}`) ?? null;

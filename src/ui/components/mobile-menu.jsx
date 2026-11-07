@@ -1,12 +1,10 @@
 // 3.6, the phone (browser and Android app): the menu ☰ at the top left of every screen opens a drawer from the left edge
-// with, in this order: who is using this device (with two or more users), the other screens and the phone's own
-// settings. The bottom tabs are the main screens. The PC keeps its sidebar.
+// with the other screens and the phone's own settings. The bottom tabs are the main screens. The PC keeps its sidebar.
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { Menu, X, CalendarClock, PenTool, BookOpen, GraduationCap, Smartphone, Moon } from 'lucide-react';
 import { useState } from 'react';
 import { NavItem } from './sidebar.jsx';
 import { Switch } from './ui/overlay.jsx';
-import { PersonCard } from './person-menu.jsx';
 import { Robot } from './robot.jsx';
 import { useStore, go, applyTheme, isDark } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
@@ -25,8 +23,6 @@ export function MoreContent() {
   const night = (on) => { const next = on ? 'oscuro' : 'claro'; applyTheme(next); setDark(on); try { localStorage.setItem('orb.theme', next); } catch { /* storage unavailable */ } };
   return (
     <>
-      {/* 3.6: with two or more users, whose this device is. */}
-      <PersonCard />
       <Group>
         <NavItem icon={CalendarClock} label={t('nav.schedules')} onClick={() => go('schedules')} testid="nav-schedules" />
         <NavItem icon={PenTool} label={t('nav.board')} onClick={() => go('board')} testid="nav-board" />

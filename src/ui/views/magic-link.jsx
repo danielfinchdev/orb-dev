@@ -8,12 +8,10 @@ import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, Field, Input } from '@/components/ui/basic.jsx';
 import { BubbleTip, Select } from '@/components/ui/overlay.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
-import { useStore, call, act, bridge, loadMe } from '@/lib/store.js';
+import { call, act, bridge } from '@/lib/store.js';
 import { countdown, sortDevices } from '@/lib/link.js';
 import { cn, ago } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
-import { personsOn, devicesByPerson } from '@/lib/persons.js';
-import { PersonDot } from '@/components/person-menu.jsx';
 
 const KIND_ICON = { phone: Smartphone, browser: Globe };
 
@@ -26,13 +24,6 @@ function PairCard() {
   const t = useT();
   const [qr, setQr] = useState(null);
   const [device, setDevice] = useState('phone');
-  // 3.6: «¿Para quién?»: the device is of the person chosen here (the owner may choose anyone, or someone new).
-  const me = useStore((s) => s.me);
-  const people = useStore((s) => s.people ?? []);
-  const [forWho, setForWho] = useState('');
-  const [newName, setNewName] = useState('');
-  const many = personsOn(me);
-  const owner = me?.role === 'owner';
   const [now, setNow] = useState(Date.now());
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -40,9 +31,7 @@ function PairCard() {
   useEffect(() => { if (!qr) return undefined; const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, [qr]);
   const make = async () => {
     setBusy(true);
-    const who = forWho === '__new' ? { newPerson: newName.trim() } : forWho && forWho !== me?.person?.id ? { person: forWho } : {};
-    const r = await act(call('link.qr', { device, ...who }));
-    if (r && who.newPerson) loadMe();
+    const r = await act(call('link.qr', { device }));
     if (r) setQr({ ...r, svg: await QRCode.toString(r.url, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }) });
     setBusy(false); setNow(Date.now());
   };
@@ -72,21 +61,12 @@ function PairCard() {
           </div>
         ) : (
           <div className="grid gap-3">
-            {many || owner ? (
-              <Field label={t('link.forWho')}>
-                <div className="grid gap-2 sm:flex sm:items-center">
-                  <Select className="w-full sm:w-72" value={forWho || me?.person?.id || ''} onValueChange={setForWho} data-testid="link-for-who" title={t('link.forWho')}
-                    options={[...(owner ? (many ? people : [me?.person].filter(Boolean)) : [me?.person].filter(Boolean)).map((p) => ({ value: p.id, label: p.id === me?.person?.id ? t('link.forMe', { name: p.name }) : p.name })), ...(owner ? [{ value: '__new', label: t('link.forNew') }] : [])]} />
-                  {forWho === '__new' ? <Input className="sm:w-56" value={newName} maxLength={40} onChange={(e) => setNewName(e.target.value)} placeholder={t('link.forNewPh')} data-testid="link-for-new" /> : null}
-                </div>
-              </Field>
-            ) : null}
             <Field label={t('link.forWhat')}>
               <Select className="w-full sm:w-72" value={device} onValueChange={setDevice} data-testid="link-for" title={t('link.forWhat')} options={PAIR_FOR.map((k) => ({ value: k, label: t(`link.for.${k}`) }))} />
             </Field>
             <p className="text-muted-foreground text-xs">{t('link.preferHttps')}</p>
             <div className="flex flex-wrap items-center gap-2">
-              <Button onClick={make} disabled={busy || (forWho === '__new' && !newName.trim())} aria-busy={busy} data-testid="link-make">{busy ? <LoaderCircle className="animate-spin" /> : <QrCode />}{expired ? t('link.again') : t('link.make')}</Button>
+              <Button onClick={make} disabled={busy} aria-busy={busy} data-testid="link-make">{busy ? <LoaderCircle className="animate-spin" /> : <QrCode />}{expired ? t('link.again') : t('link.make')}</Button>
               {expired ? <span className="text-muted-foreground text-xs">{t('link.expired')}</span> : null}
             </div>
           </div>
@@ -113,20 +93,13 @@ function OutsideGuide() {
 
 function DevicesCard({ devices, reload }) {
   const t = useT();
-  // 3.6: with two or more people, the devices of each one under their name (the owner sees everyone's).
-  const me = useStore((s) => s.me);
-  const people = useStore((s) => s.people ?? []);
-  const groups = personsOn(me) ? devicesByPerson(devices, people) : [{ person: null, name: '', devices }];
   const rename = (d) => form(t('link.renameTitle'), { initial: { name: d.name }, body: (v, set) => <Input autoFocus value={v.name} maxLength={60} onChange={(e) => set({ name: e.target.value })} />, ok: t('link.save'), onOk: async (v) => { await call('link.rename', { id: d.id, name: v.name.trim() || d.name }); reload(); return true; } });
   const revoke = async (d) => { if (await confirm(t('link.revokeTitle', { name: d.name }), t('link.revokeBody'), { ok: t('link.revoke'), danger: true })) { await act(call('link.revoke', { id: d.id }), t('link.revoked')); reload(); } };
   return (
     <Card data-testid="link-devices">
       <CardHeader><CardTitle>{t('link.devices')}</CardTitle><CardDescription>{t('link.devicesHint')}</CardDescription></CardHeader>
       <CardContent className="grid gap-1.5">
-        {!devices.length ? <p className="text-muted-foreground text-sm">{t('link.noDevices')}</p> : groups.map((g) => (
-          <div key={g.person ?? 'all'} className="grid gap-1.5" data-testid="link-device-group">
-            {g.person ? <div className="text-muted-foreground flex items-center gap-1.5 pt-1 text-xs font-medium" data-testid={`link-group-${g.name}`}><PersonDot name={g.name} size="sm" />{g.name}</div> : null}
-            {sortDevices(g.devices).map((d) => {
+        {!devices.length ? <p className="text-muted-foreground text-sm">{t('link.noDevices')}</p> : sortDevices(devices).map((d) => {
           const Icon = KIND_ICON[d.kind] ?? Smartphone;
           return (
             <div key={d.id} className="flex items-center gap-3 rounded-xl border px-3 py-2" data-testid="link-device">
@@ -139,9 +112,7 @@ function DevicesCard({ devices, reload }) {
               <BubbleTip title={t('link.revoke')}><Button size="icon-sm" variant="danger" aria-label={t('link.revoke')} onClick={() => revoke(d)} data-testid="link-revoke"><Trash2 /></Button></BubbleTip>
             </div>
           );
-            })}
-          </div>
-        ))}
+        })}
       </CardContent>
     </Card>
   );
@@ -159,9 +130,9 @@ export function SubSection({ id, title, children }) {
   );
 }
 
-// Everything of Magic Link. 3.6: in Ajustes it is «who can enter this Orb»: Usuarios (users, given by Ajustes) and
-// Dispositivos (access from the phone, linking one and the linked ones).
-export function MagicLinkPanel({ grouped = false, users = null, phoneAccess = null }) {
+// Everything of Magic Link. In Ajustes it is «who can enter this Orb»: Dispositivos (access from the phone, linking one
+// and the linked ones).
+export function MagicLinkPanel({ grouped = false, phoneAccess = null }) {
   const t = useT();
   const [devices, setDevices] = useState(null);
   const load = () => call('link.devices').then(setDevices).catch(() => setDevices([]));
@@ -175,7 +146,6 @@ export function MagicLinkPanel({ grouped = false, users = null, phoneAccess = nu
   const title = (id) => (grouped ? t(`settings.group.${id}`) : null);
   return (
     <div className="grid gap-4 [&>*]:min-w-0" data-testid="magic-link">
-      {users ? <SubSection id="usuarios" title={title('usuarios')}>{users}</SubSection> : null}
       <SubSection id="dispositivos" title={title('dispositivos')}>
         {phoneAccess}
         <PairCard />

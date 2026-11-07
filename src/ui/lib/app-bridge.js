@@ -77,11 +77,10 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
       // (src/core/notes.mjs: the sender's picture, the chat's name, the text as chosen for the lock screen, muted chats
       // none) and sends it as «note» over the live connection; shown while the app is in the background (there is no
       // push service: they arrive while Android keeps the app alive). One per chat: new lines join it. «Responder» writes
-      // back from the notification; «Aprobar» / «Rechazar» answer a card (one that needs the PIN opens the app for it).
+      // back from the notification; «Aprobar» / «Rechazar» answer a card.
       const threads = new Map(); // chat key → { lines, count }
       const LN = async () => (await import('@capacitor/local-notifications')).LocalNotifications;
-      const slim = (n) => ({ key: n.key, route: n.route, kind: n.kind, card: n.card ?? null, ...(n.locked ? { locked: true } : {}), actions: (n.actions ?? []).map(({ id, open }) => ({ id, ...(open ? { open: true } : {}) })) });
-      // With the app lock on (note.locked), «Responder» has no text box: it opens the app (lock, then the chat).
+      const slim = (n) => ({ key: n.key, route: n.route, kind: n.kind, card: n.card ?? null, actions: (n.actions ?? []).map(({ id, open }) => ({ id, ...(open ? { open: true } : {}) })) });
       const typeOf = (n) => (n.actions?.some((a) => a.id === 'reply') ? (n.actions.find((a) => a.id === 'reply').input ? 'orb-msg' : 'orb-msg-open') : n.actions?.some((a) => a.id === 'deny') ? 'orb-card' : n.actions?.some((a) => a.id === 'allow') ? 'orb-task' : undefined);
       const openNote = (detail) => window.dispatchEvent(new CustomEvent('orb:open-note', { detail }));
       (async () => {
@@ -105,8 +104,6 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
               const done = actionId === 'reply' ? 'notes.sent' : actionId === 'allow' ? 'notes.allowed' : 'notes.denied';
               parts.fire('notice', { body: await tl(done), tone: 'success' });
             } catch (e) {
-              // A card that needs the PIN after all: asked in the app.
-              if (e?.reason === 'strong' && actionId === 'allow') return openNote({ route: note.route, approve: note.card });
               parts.fire('notice', { body: await tl('notes.failed', { error: e?.message ?? String(e) }), tone: 'error' });
             }
             return openNote({ route: note.route });
@@ -137,14 +134,6 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
           if (ours.length) await L.removeDeliveredNotifications({ notifications: ours });
         } catch { /* nothing shown */ }
       });
-      // 3.6: the app lock's fingerprint or face (Android's own prompt); the PIN stays the way in without it.
-      orb.appLock = {
-        available: async () => { try { return Boolean((await (await Native()).biometricAvailable())?.available); } catch { return false; } },
-        verify: async (reason) => {
-          try { return Boolean((await (await Native()).biometricVerify({ title: await tl('app.lockBiometricTitle'), subtitle: reason ? String(reason).slice(0, 120) : '', cancel: await tl('app.lockBiometricCancel') }))?.ok); }
-          catch { return false; }
-        }
-      };
       // 3.8: the bots' reminders are gone. The ones 3.7 scheduled on this phone (ids 50000-50999) are cancelled once.
       (async () => {
         if (localStorage.getItem('orb.reminders38') === '1') return;

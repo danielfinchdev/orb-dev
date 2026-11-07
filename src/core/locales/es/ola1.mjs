@@ -46,7 +46,6 @@ export default {
   'settings.sectionDesc.acerca': 'Versión, comentarios y otras aplicaciones.',
   'settings.group.apariencia': 'Apariencia',
   'settings.group.actualizaciones': 'Actualizaciones',
-  'settings.group.usuarios': 'Usuarios',
   'settings.group.dispositivos': 'Dispositivos',
   'settings.group.herramientas': 'Herramientas',
   'settings.group.experto': 'God mode',
@@ -56,8 +55,6 @@ export default {
   'about.developer': 'Desarrollador',
   'about.license': 'Licencia',
   // Usuarios
-  'persons.actions': 'Acciones de {name}',
-  'persons.edit': 'Editar nombre',
   // Textos que apuntaban a las secciones de antes
   'help.faq.10.a': 'El tema Profesional no muestra el robot ni animaciones; cámbialo en Ajustes › General, donde también se activa o desactiva el robot flotante.',
   // Pie de la barra lateral en un navegador enlazado: el engranaje abre este dispositivo y Magic Link

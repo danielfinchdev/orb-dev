@@ -21,7 +21,6 @@ import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { Switch, Tip, BubbleTip, Popover, PopoverTrigger, PopoverContent } from '@/components/ui/overlay.jsx';
 import { bridge, useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere, openOrbInfo, closeOrbInfo, loadOrbInboxSoon, phoneLayout } from '@/lib/store.js';
-import { userNameOf } from '@/lib/persons.js';
 import { notify } from '@/lib/notify.js';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { pickGreeting, pickSubtitle, suggestionsFor } from '@/lib/greeting.js';
@@ -472,7 +471,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const orchestrate = conv ? true : defaults.orchestrate !== false;
   const bubble = useUsageBubble(catalog, brain);
   const greeting = useGreeting();
-  const userName = useStore((st) => userNameOf(st.me, st.app?.config));
+  const userName = useStore((st) => st.app?.config?.userName?.trim() || '');
   const [sending, setSending] = useState(false);
   // 3.2.1: in God mode, a new conversation goes to the project chosen there, and the bar says that one.
   const projects = useStore((s) => s.projects);

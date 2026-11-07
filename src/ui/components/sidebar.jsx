@@ -7,8 +7,7 @@ import { Tip, BubbleTip } from './ui/overlay.jsx';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { PRODUCT } from '../../core/product.mjs';
-import { PersonMenu, BrowserSettingsMenu } from './person-menu.jsx';
-import { personsOn } from '@/lib/persons.js';
+import { BrowserSettingsMenu } from './browser-settings-menu.jsx';
 import { OrbInbox } from '@/views/orb/inbox.jsx';
 
 // The assistant's wordmark ORB·E, drawn its own way in each theme (app.css .wordmark): spaced capitals with a dot of the
@@ -70,8 +69,7 @@ function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
   const t = useT();
   const memories = is('logs') || is('activity');
   // 3.6: the same slots and icons on the PC and in a linked browser (Ajustes, Agentes, Memorias, Tutoriales); what a
-  // browser does not have is left out (Agentes, the bug), never swapped for other icons. Its gear opens this device and
-  // Magic Link (person-menu.jsx).
+  // browser does not have is left out (Agentes, the bug), never swapped for other icons. Its gear opens this device.
   const items = [
     { icon: Settings, label: t('nav.settings'), active: settingsOpen || is('phone') || is('link'), onClick: () => openSettings(), testid: 'nav-settings' },
     ...(bridge.mobile ? [] : [{ icon: Bot, label: t('nav.agents'), active: is('agents'), onClick: () => go('agents'), testid: 'nav-agents' }]),
@@ -80,12 +78,8 @@ function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
     { icon: GraduationCap, label: t('nav.tutorials'), active: is('tutorials'), onClick: () => go('tutorials'), testid: 'nav-tutorials' }
   ];
   const toggle = open ? t('nav.footerFold') : t('nav.footerUnfold');
-  // 3.6: with two or more users the gear is the user's initial and opens a small menu (person-menu.jsx); with one, the gear.
-  const me = useStore((s) => s.me);
-  const users = personsOn(me) && Boolean(me?.person);
-  const row = (i) => (i.testid !== 'nav-settings' ? null
-    : users ? <PersonMenu key={i.testid} list={open} active={i.active} />
-      : bridge.mobile ? <BrowserSettingsMenu key={i.testid} list={open} active={i.active} /> : null);
+  // A linked browser's gear opens this device's settings (browser-settings-menu.jsx).
+  const row = (i) => (i.testid === 'nav-settings' && bridge.mobile ? <BrowserSettingsMenu key={i.testid} list={open} active={i.active} /> : null);
   return (
     <div className="side-foot relative border-t px-3 pt-2.5 pb-2" data-testid="sidebar-footer" data-open={open}>
       <Tip label={toggle}>

@@ -1,5 +1,5 @@
-// 3.6, the Android app and the phone's page: the protocol they speak (and when they must update) and the app lock's
-// pieces (app-bridge.js, OrbNativePlugin.java).
+// 3.6, the Android app and the phone's page: the protocol they speak (and when they must update), and what the app
+// does on its own (app-bridge.js, OrbNativePlugin.java).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -23,17 +23,15 @@ test('la página y la app hablan el protocolo del Orb y piden actualizar solo si
   assert.match(web, /me: \(\) => me/);
 });
 
-test('la app: bloqueo con huella del sistema; los recordatorios de 3.7 se anulan una vez', () => {
+test('la app: sin bloqueo propio en 3.8.0; los recordatorios de 3.7 se anulan una vez', () => {
   const app = read('src/ui/lib/app-bridge.js');
-  assert.match(app, /orb\.appLock = \{/);
-  assert.match(app, /biometricAvailable/); assert.match(app, /biometricVerify/);
+  assert.doesNotMatch(app, /appLock|biometric/, '3.8.0: sin bloqueo con PIN ni huella (llega con la contraseña maestra)');
   assert.doesNotMatch(app, /bots\.reminders\.list/);
   assert.match(app, /x\.id >= 50_000 && x\.id < 51_000/, '3.8: los recordatorios que dejó 3.7 en el móvil se anulan');
   assert.doesNotMatch(app, /config\?\.mobile\?\.preview \?\? 'chat';\n\s*const title/, 'el aviso del chat usa la preferencia de la persona');
   const java = read('android-app/android/app/src/main/java/dev/orb/app/OrbNativePlugin.java');
-  assert.match(java, /public void biometricAvailable\(PluginCall call\)/);
-  assert.match(java, /public void biometricVerify\(PluginCall call\)/);
-  assert.match(read('android-app/android/app/src/main/AndroidManifest.xml'), /android\.permission\.USE_BIOMETRIC/);
+  assert.doesNotMatch(java, /Biometric/);
+  assert.doesNotMatch(read('android-app/android/app/src/main/AndroidManifest.xml'), /USE_BIOMETRIC/);
   const { version } = JSON.parse(read('package.json'));
   assert.equal(JSON.parse(read('android-app/package.json')).version, version);
 });

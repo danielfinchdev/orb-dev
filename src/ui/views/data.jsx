@@ -8,7 +8,6 @@ import { Badge, Card, CardContent, CardHeader, CardTitle, CardFooter, Field, Inp
 import { form } from '@/components/dialogs.jsx';
 import { call, act, bridge, useStore, getState, setState, openSettings } from '@/lib/store.js';
 import { notify } from '@/lib/notify.js';
-import { isOwner } from '@/lib/persons.js';
 import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
 
 const size = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
@@ -91,15 +90,17 @@ function BackupsCard() {
 export function DataCards() { return <BackupsCard />; }
 
 // 3.6: backups are on from the first day, sealed with this PC's key. A few days later, once, a quiet suggestion to make
-// the recovery code (Ajustes › Datos), so a copy also opens on another PC. Never on a phone, only for the admin.
+// the recovery code (Ajustes › Datos), so a copy also opens on another PC. Never on a phone.
 export const RECOVERY_AFTER_MS = 3 * 86_400_000;
+const firstSeen = () => {
+  try { const v = Number(localStorage.getItem('orb.firstSeen')); if (v > 0) return v; localStorage.setItem('orb.firstSeen', String(Date.now())); } catch { /* storage unavailable */ }
+  return Date.now();
+};
 export function RecoveryNotice() {
-  const me = useStore((s) => s.me);
   const done = useStore((s) => s.app?.config?.ui?.recoveryNoticed === true);
   useEffect(() => {
-    if (bridge.mobile || done || !isOwner(me)) return undefined;
-    const since = Date.parse(me?.person?.created_at ?? '');
-    if (!Number.isFinite(since) || Date.now() - since < RECOVERY_AFTER_MS) return undefined;
+    if (bridge.mobile || done) return undefined;
+    if (Date.now() - firstSeen() < RECOVERY_AFTER_MS) return undefined;
     const id = setTimeout(async () => {
       const st = await call('backup.status').catch(() => null);
       if (!st) return;
@@ -109,6 +110,6 @@ export function RecoveryNotice() {
       notify({ title: tNow('datos.codeNoticeTitle'), body: tNow('datos.codeNoticeBody'), tone: 'info', action: { label: tNow('datos.codeNoticeOpen'), onClick: () => openSettings('datos') } }, { ms: 15000 });
     }, 20_000);
     return () => clearTimeout(id);
-  }, [me?.person?.id, done]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [done]);
   return null;
 }

@@ -42,12 +42,9 @@ import { TutorialsView } from '@/views/tutorials.jsx';
 import { WhiteboardView } from '@/views/whiteboard.jsx';
 import { OrbChatsView } from '@/views/orb/inbox.jsx';
 import { OrbInfoHost } from '@/views/orb/info.jsx';
-// 3.6 «Personas»
-import { LockScreen, PhoneLock, UpdateNeeded } from '@/components/lock-screen.jsx';
+import { UpdateNeeded } from '@/components/update-needed.jsx';
 import { NoteOpener } from '@/lib/notes.js';
-import { ProfileView } from '@/views/persons.jsx';
 import { RecoveryNotice } from '@/views/data.jsx';
-import { personSwitched } from '@/lib/store.js';
 
 const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
 // 2.7, the phone: the conversations («Chats») and «Más» are screens of their own; Agentes and Modo experto are PC only.
@@ -55,7 +52,7 @@ const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
 const ChatsView = OrbChatsView;
 // 3.8: a route of a screen that is gone (a bot's, saved before or in an old notification) falls back to the chat.
 const VIEWS = bridge.mobile
-  ? { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, profile: ProfileView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
+  ? { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, chats: ChatsView, more: MoreView, board: WhiteboardView }
   : { chat: ChatView, session: SessionView, tasks: TasksView, projects: ProjectsView, agents: AgentsView, logs: MemoriesView, activity: MemoriesView, schedules: SchedulesView, phone: PhoneView, tutorials: TutorialsView, board: WhiteboardView,
     // 2.7.3: Orb Light (the portable .exe) has no God mode.
     ...(bridge.light ? {} : { expert: ExpertView }) };
@@ -135,7 +132,6 @@ function Shell() {
 function Root() {
   const t = useT();
   const ready = useStore((s) => s.ready);
-  const locked = useStore((s) => s.locked);
   const [phase, setPhase] = useState('loading'); // loading | setup | app | error
   const [error, setError] = useState('');
   useEffect(() => {
@@ -201,10 +197,6 @@ function Root() {
       if (event === 'inbox:changed') loadOrbInboxSoon(120);
       // 3.6 (M3): the chat list follows what its conversations do (a new line comes with inbox:changed).
       if (event === 'chat:state' && !payload?.partial) loadOrbInboxSoon(400);
-      // 3.6 «Personas»: someone else at this PC, the window locked or unlocked, the people changed.
-      if (event === 'persons:switched') personSwitched();
-      if (event === 'persons:locked') setState((st) => ({ locked: st.locked || { locked: true } })); // keeps «Cambiar de usuario»
-      if (event === 'persons:unlocked' && getState().locked) refresh().then(() => { if (getState().app?.config) setState({ locked: false }); }).catch(() => {});
       if (event === 'engine:stopped') notify({ body: tNow('app.engineStopped'), tone: 'error' });
       if (event === 'engine:restarted') { notify({ body: tNow('app.engineRestarted'), tone: 'warning' }); refreshSoon(); }
     });
@@ -224,11 +216,10 @@ function Root() {
     </div>
   );
   if (phase === 'update') return <>{strip}<UpdateNeeded info={getState().info} /></>;
-  if (phase === 'app' && locked) return <LockScreen />;
   if (phase === 'error') return <div className="grid h-full place-items-center p-8 text-center">{strip}<div><Robot size={90} mood="worried" /><h1 className="mt-4 text-xl">{t('app.errorTitle')}</h1><p className="text-muted-foreground mt-1 max-w-md text-sm">{error}</p></div></div>;
   if (phase !== 'app' || !ready) return <div className="grid h-full place-items-center">{strip}<Robot size={80} mood="thinking" /></div>;
-  // 3.6 (M4): a tapped notification opens its chat once the phone is unlocked (lib/notes.js).
-  return bridge.mobile ? <PhoneLock><NoteOpener /><Shell /></PhoneLock> : <Shell />;
+  // 3.6 (M4): a tapped notification opens its chat (lib/notes.js).
+  return bridge.mobile ? <><NoteOpener /><Shell /></> : <Shell />;
 }
 
 // 3.5, the Android app: link it with an Orb by scanning its QR (Ajustes › Móvil), or by hand when the camera cannot.

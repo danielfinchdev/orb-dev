@@ -1,7 +1,7 @@
 // 3.6 (messaging, M4): what the window does with a notification that was tapped (the phone's browser: its service
 // worker, src/engine/remote.mjs; the Android app: lib/app-bridge.js). It opens the exact chat and, when «Aprobar» could
 // not be done right there (a task whose exact version is approved here), asks here.
-// Opened only once the phone is unlocked (NoteOpener lives inside PhoneLock): what arrives before waits.
+// Opened once the app is on screen (NoteOpener): what arrives before waits.
 import { useEffect } from 'react';
 import { call, act, go } from './store.js';
 import { t } from './i18n.js';

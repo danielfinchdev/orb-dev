@@ -24,9 +24,7 @@ import { LANGUAGES } from '../../core/i18n.mjs';
 import { useUpdate, updateActions, notesUrl } from '@/components/update-card.jsx';
 import { play } from '@/lib/sounds.js';
 import { MagicLinkPanel, SubSection } from './magic-link.jsx';
-import { PersonsCard, ProfileCards } from './persons.jsx';
 import { DataCards } from './data.jsx';
-import { showPersonUi, showPersonsSettings, isOwner, PREVIEWS, previewOf } from '@/lib/persons.js';
 
 async function save(patch, ok = t('settings.saved')) {
   const config = await act(call('config.save', { patch }), ok);
@@ -42,18 +40,16 @@ function Row({ label, hint, children }) {
 function AssistantCard({ c }) {
   const t = useT();
   const [v, setV] = useState({ assistantName: c.assistantName, userName: c.userName, language: c.language });
-  // 3.6: with two or more users, each one's name is in Mi perfil.
-  const many = showPersonUi(useStore((st) => st.me));
   return (
     <Card>
       <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Robot size={40} /><div><CardTitle>{t('settings.assistant')}</CardTitle><CardDescription>{t('settings.assistantDesc')}</CardDescription></div></CardHeader>
       <CardContent className="grid gap-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label={t('settings.assistantName')} hint={t('settings.assistantNameHint')}><Input value={v.assistantName} onChange={(e) => setV({ ...v, assistantName: e.target.value })} maxLength={40} /></Field>
-          {many ? null : <Field label={t('settings.userName')}><Input value={v.userName} onChange={(e) => setV({ ...v, userName: e.target.value })} maxLength={40} /></Field>}          <Field label={t('settings.language')} hint={t('settings.languageHint')}><Select className="w-full" value={v.language} onValueChange={(language) => { setV({ ...v, language }); save({ language }); }} options={Object.entries(LANGUAGES).map(([value, label]) => ({ value, label }))} /></Field>
+          <Field label={t('settings.userName')}><Input value={v.userName} onChange={(e) => setV({ ...v, userName: e.target.value })} maxLength={40} /></Field>          <Field label={t('settings.language')} hint={t('settings.languageHint')}><Select className="w-full" value={v.language} onValueChange={(language) => { setV({ ...v, language }); save({ language }); }} options={Object.entries(LANGUAGES).map(([value, label]) => ({ value, label }))} /></Field>
         </div>
       </CardContent>
-      <CardFooter><Button size="sm" onClick={() => save({ assistantName: v.assistantName.trim(), ...(many ? {} : { userName: v.userName.trim() }), language: v.language })}>{t('settings.save')}</Button></CardFooter>
+      <CardFooter><Button size="sm" onClick={() => save({ assistantName: v.assistantName.trim(), userName: v.userName.trim(), language: v.language })}>{t('settings.save')}</Button></CardFooter>
     </Card>
   );
 }
@@ -649,16 +645,21 @@ function AboutCard({ version }) {
   );
 }
 
+// What a notification shows on a locked phone. 3.8: «all» (before, the bots' messages too) shows the same as «chat»:
+// it is offered no more and reads as «chat».
+const PREVIEWS = ['chat', 'none'];
+const previewOf = (v) => (v === 'none' ? 'none' : 'chat');
+
 // Ajustes is a window over the app: six sections on the left (DESIGN-SYSTEM §2.3). groups: the parts of a section, each
 // with its heading; the active section lists them under its name in the menu, to jump to one.
 const SECTIONS = [
   { id: 'general', icon: SlidersHorizontal, groups: ['apariencia', 'actualizaciones'],
     cards: (c, app) => <><AssistantCard c={c} /><FolderCard c={c} home={app.home} /><SubSection id="apariencia" title={t('settings.group.apariencia')}><AppearanceCard c={c} /><InterfaceCard c={c} /></SubSection><SubSection id="actualizaciones" title={t('settings.group.actualizaciones')}><UpdatesCard /></SubSection></> },
-  // Who can enter this Orb: its users and their devices.
-  { id: 'magiclink', icon: Radar, groups: (me) => [...(showPersonsSettings(me) ? ['usuarios'] : []), 'dispositivos'],
-    cards: (c, app, me) => <><MagicLinkPanel grouped users={showPersonsSettings(me) ? <PersonsCard /> : null} phoneAccess={<MobileCard />} /></> },
+  // Who can enter this Orb: the linked phones and browsers.
+  { id: 'magiclink', icon: Radar, groups: ['dispositivos'],
+    cards: () => <MagicLinkPanel grouped phoneAccess={<MobileCard />} /> },
   { id: 'agentes', icon: Cpu, cards: (c) => <><ChatCard c={c} /><TasksCard c={c} />{bridge.mobile ? null : <TestCard />}</> },
-  { id: 'datos', icon: DatabaseBackup, when: (me) => isOwner(me), cards: () => <DataCards /> },
+  { id: 'datos', icon: DatabaseBackup, cards: () => <DataCards /> },
   { id: 'avanzado', icon: Wrench, groups: () => ['herramientas', ...(fullPc() ? ['experto'] : [])],
     cards: (c) => <><SubSection id="herramientas" title={t('settings.group.herramientas')}><BrowserCard c={c} /><McpCard c={c} /><ProtectedCard c={c} /><AndroidCard /></SubSection>
       {/* 2.7.3: Orb Light (the portable .exe) leaves out God mode. */}
@@ -667,20 +668,19 @@ const SECTIONS = [
     cards: (c, app) => <><AboutCard version={app.version} /><SubSection id="contribuye" title={t('settings.group.contribuye')}><SupportCard /><FeedbackCard /></SubSection><SubSection id="apps" title={t('settings.group.apps')}><MoreAppsCard /></SubSection></> }
 ];
 // The names of before 3.6 (links in tutorials, notices and the sidebar) → [section, part].
-const ALIASES = { personas: ['magiclink', 'usuarios'], conexiones: ['magiclink', 'dispositivos'], movil: ['magiclink', 'dispositivos'], apariencia: ['general', 'apariencia'], actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'],
+const ALIASES = { conexiones: ['magiclink', 'dispositivos'], movil: ['magiclink', 'dispositivos'], apariencia: ['general', 'apariencia'], actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'],
   herramientas: ['avanzado', 'herramientas'], experto: ['avanzado', 'experto'], monitor: ['avanzado', 'herramientas'], contribuye: ['acerca', 'contribuye'], apps: ['acerca', 'apps'] };
 export function resolveSection(open) {
   if (!open || open === true) return ['general', null];
   const [id, part = null] = String(open).split(':');
   return ALIASES[id] ? [ALIASES[id][0], part ?? ALIASES[id][1] ?? null] : [id, part];
 }
-const groupsOf = (section, me) => (typeof section.groups === 'function' ? section.groups(me) : section.groups ?? []);
+const groupsOf = (section) => (typeof section.groups === 'function' ? section.groups() : section.groups ?? []);
 
 export function SettingsDialog() {
   const t = useT();
   const open = useStore((s) => s.settings);
   const app = useStore((s) => s.app);
-  const me = useStore((s) => s.me);
   const [wanted, part] = resolveSection(open);
   const openedAt = useStore((s) => s.settingsAt);
   // The part asked for (a link to «Usuarios», a notice about updates…): scrolled into view once the section is drawn.
@@ -702,27 +702,21 @@ export function SettingsDialog() {
     return () => { stop(); window.removeEventListener('wheel', stop); window.removeEventListener('touchmove', stop); window.removeEventListener('keydown', stop); };
   }, [open, part, openedAt]);
   if (!app) return null;
-  // «Mi perfil» (the user menu, with two or more users): this same window, on its own, without the sections.
-  const profile = wanted === 'perfil' && showPersonUi(me);
-  const sections = SECTIONS.filter((s) => !s.when || s.when(me));
-  const section = sections.find((s) => s.id === wanted) ?? sections[0];
+  const section = SECTIONS.find((s) => s.id === wanted) ?? SECTIONS[0];
   const c = app.config;
   return (
     <Dialog open={Boolean(open)} onOpenChange={(o) => { if (!o) closeSettings(); }}>
-      <DialogContent className={cn('flex h-[min(780px,90vh)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none', profile ? 'w-[min(760px,94vw)]' : 'w-[min(1080px,94vw)]')} data-testid={profile ? 'profile-dialog' : 'settings-dialog'} aria-describedby={undefined}>
+      <DialogContent className="flex h-[min(780px,90vh)] w-[min(1080px,94vw)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none" data-testid="settings-dialog" aria-describedby={undefined}>
         <div className="flex h-16 shrink-0 items-center border-b px-6 pr-14">
-          <DialogTitle className="text-lg font-medium">{profile ? t('persons.myProfile') : t('settings.title')}</DialogTitle>
+          <DialogTitle className="text-lg font-medium">{t('settings.title')}</DialogTitle>
         </div>
-        {profile ? (
-          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 pt-6 pb-8"><div className="mx-auto grid max-w-2xl gap-4 [&>*]:min-w-0"><ProfileCards /></div></div>
-        ) : (
-          <div className="flex min-h-0 flex-1">
+        <div className="flex min-h-0 flex-1">
             <nav className="flex w-56 shrink-0 flex-col max-sm:w-16" aria-label={t('settings.title')}>
               <div className="grid min-h-0 flex-1 content-start gap-1 overflow-y-auto px-3 pt-4 pb-4">
-                {sections.map((sec) => {
+                {SECTIONS.map((sec) => {
                   const { id, icon: Icon } = sec;
                   const on = section.id === id;
-                  const groups = on ? groupsOf(sec, me) : [];
+                  const groups = on ? groupsOf(sec) : [];
                   return (
                     <div key={id} className="grid gap-0.5">
                       <button type="button" onClick={() => openSettings(id)} data-testid={`settings-nav-${id}`} aria-label={t(`settings.section.${id}`)} aria-current={on ? 'page' : undefined}
@@ -746,11 +740,10 @@ export function SettingsDialog() {
               {/* min-w-0 on the cards: a long one-line text inside (a path, a wide control) must not widen the column in a narrow window */}
               <div className="mx-auto grid max-w-3xl gap-4 [&>*]:min-w-0">
                 <div className="grid gap-1 pb-1"><h2 className="text-2xl font-medium">{t(`settings.section.${section.id}`)}</h2><p className="text-muted-foreground text-sm">{t(`settings.sectionDesc.${section.id}`)}</p></div>
-                {section.cards(c, app, me)}
+                {section.cards(c, app)}
               </div>
             </div>
           </div>
-        )}
       </DialogContent>
     </Dialog>
   );
