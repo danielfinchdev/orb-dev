@@ -334,9 +334,8 @@ try {
   await quiet(call('sessions.send', { id: s1.id, text: 'TABLA_MARKDOWN' }));
   const s2 = await call('sessions.create', { agent: 'codex', project: 'mi-web', permission: 'editar', title: 'Publicar con Codex' });
   await quiet(call('sessions.send', { id: s2.id, text: 'Publica los cambios PIDE_PERMISO' }));
-  // Sharing and lending.
+  // Sharing.
   await quiet(call('shares.set', { type: 'project', id: 'app-tienda', person: leo.id, right: 'view' }));
-  await quiet(call('accounts.lend', { id: 'claude', person: leo.id, daily_turns: 50, dev: true }));
   await quiet(call('whiteboard.save', { project: 'mi-web', elements: [], appState: {} }));
 
   // A task that is running while the tasks screens are taken (DUERME lasts 30 s).
@@ -398,7 +397,6 @@ try {
         for (const g of ['snake', 'chess', 'tetris']) { await attempt(P, `game ${g}`, async () => { if (await P.getByRole('button', { name: 'Volver a los juegos' }).isVisible().catch(() => false)) await P.getByRole('button', { name: 'Volver a los juegos' }).click(); await P.click(`[data-testid=game-${g}]`); await P.waitForTimeout(1200); await shot(P, { area: 'games', screen: g, state: 'playing', src: `src/ui/games/${g}.jsx`, desc: `Game: ${g}` }); }); }
         await P.keyboard.press('Escape'); });
       await attempt(P, 'new schedule', async () => { await nav(P, { view: 'schedules' }); await P.click('[data-testid=new-schedule]'); await dialog(P); await shot(P, { area: 'dialog', screen: 'new-schedule', state: 'open', src: 'src/ui/views/schedules.jsx', desc: 'New scheduled task', scroll: true }); await P.keyboard.press('Escape'); });
-      await attempt(P, 'lend dialog', async () => { await nav(P, { view: 'agents' }); const lend = P.locator('[data-testid^=lend-]').filter({ hasText: 'Prestar' }).first(); await lend.click(); await P.waitForSelector('[data-testid=lend-terms]'); await shot(P, { area: 'dialog', screen: 'lend', state: 'open', src: 'src/ui/views/agents.jsx (lendDialog)', desc: '«Prestar a…» an account to another user, with caps and terms' }); await P.keyboard.press('Escape'); });
       await attempt(P, 'magic link qr', async () => { await P.evaluate(() => window.__orbFire('ui:navigate', { view: 'settings', section: 'magiclink' })); await P.waitForSelector('[data-testid=settings-dialog]'); await P.click('[data-testid=settings-nav-magiclink]'); await P.click('[data-testid=link-make]'); await P.waitForSelector('[data-testid=link-qr]'); await shot(P, { area: 'dialog', screen: 'magic-link', state: 'qr', src: 'src/ui/views/magic-link.jsx (MagicLinkPanel)', desc: 'Magic Link QR and code, «¿Para qué usuario?»', scroll: true }); await P.keyboard.press('Escape'); });
       await attempt(P, 'whiteboard panel', async () => { await nav(P, { view: 'board' }); await P.waitForTimeout(1500); if (await P.locator('[data-testid=whiteboard-show-panel]').isVisible().catch(() => false)) await P.click('[data-testid=whiteboard-show-panel]'); await shot(P, { area: 'orb', screen: 'board', state: 'panel', src: 'src/ui/views/whiteboard.jsx + components/excalidraw-board.jsx', desc: 'Whiteboard with its side panel' }); });
       await attempt(P, 'expert populated', async () => { await nav(P, { view: 'expert' }); await P.waitForTimeout(1200); await shot(P, { area: 'orb', screen: 'expert', state: 'project-mi-web', src: 'src/ui/views/expert.jsx', desc: 'God mode with mi-web (tree, git, system)' }); });

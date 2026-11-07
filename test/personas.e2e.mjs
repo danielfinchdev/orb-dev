@@ -171,8 +171,6 @@ try {
   if (!(await pc.locator('[data-testid=nav-agents]:visible').count())) await pc.click('[data-testid=sidebar-footer-toggle]');
   await pc.click('[data-testid=nav-agents]');
   await pc.waitForSelector('[data-testid=usage-by-person]');
-  const lend = pc.locator('[data-testid^=lend-]').filter({ hasText: 'Prestar' }).first();
-  if (await lend.count()) { await lend.click(); await pc.waitForSelector('[data-testid=lend-terms]'); await shot('12-prestar'); await pc.keyboard.press('Escape'); }
   else await shot('12-uso');
 
   // ---- 3. Leo sits at this PC (no PIN yet), gets his own things and a PIN; he sees nothing of Ana.

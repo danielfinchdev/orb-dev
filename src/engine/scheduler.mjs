@@ -26,7 +26,7 @@ import { installed } from '../agents/index.mjs';
 import { runDue } from '../core/schedules.mjs';
 import { explainFailure } from '../core/agent-errors.mjs';
 import { usableAccounts, account as findAccount, accountLabel } from '../core/accounts.mjs';
-import { accountsFor, checkSpend, spendText } from '../core/budget.mjs';
+import { accountsFor } from '../core/budget.mjs';
 import { oneLine, redactSecrets, secretFiles, isSecretPath, stagedSecrets, MAX_DEP_RESULT } from '../core/safety.mjs';
 import { ATTACH_DIR } from './sessions.mjs';
 import { logTask } from './logs.mjs';
@@ -249,12 +249,8 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
       // Only agents whose program is on this PC take work (an "any" task never goes to one that is not installed).
       const types = (task.agent === 'any' ? order.filter((a) => enabled.includes(a)) : [task.agent].filter((a) => enabled.includes(a))).filter((a) => installed(a));
       // Every enabled account of those agents; a task pinned to an account only goes there.
-      // 3.6: only the accounts the task's person may spend (their own, and the ones lent to them for Orb mode), and a
-      // borrowed one only while its loan allows it (caps, reserve, end date).
-      const allowed = types.flatMap((a) => accountsFor(board, task.person_id ?? null, a, { purpose: 'dev' })).filter((acc) => !task.account || acc.id === task.account);
-      const spendChecks = allowed.map((acc) => ({ acc, check: checkSpend(board, { person: task.person_id ?? null, account: acc.id }) }));
-      const candidates = spendChecks.filter((x) => x.check.ok).map((x) => x.acc);
-      if (allowed.length && !candidates.length) { const first = spendChecks[0]; this.notice(task, spendText(first.check, { account: first.acc.id })); continue; }
+      // 3.6: only the accounts the task's person may spend.
+      const candidates = types.flatMap((a) => accountsFor(board, task.person_id ?? null, a)).filter((acc) => !task.account || acc.id === task.account);
       // 3.1: a task for an agent this PC cannot run (uninstalled or turned off after it was created) does not wait for
       // ever: it goes to any available agent. Not a sensitive one: its approval was for that agent, so the user decides.
       const available = board.availableAgents();

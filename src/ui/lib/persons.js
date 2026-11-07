@@ -46,37 +46,6 @@ export function devicesByPerson(devices, persons = [], ownerId = null) {
   return [...groups.values()].sort((a, b) => (a.owner === b.owner ? a.name.localeCompare(b.name) : a.owner ? -1 : 1));
 }
 
-// Agentes › Cuentas: whose an account is for the person looking (accounts[].person; none = the owner's) and the loans
-// they got (accounts.loans().got).
-export const accountOwner = (acc, ownerId) => acc?.person ?? ownerId ?? null;
-export function accountRole(acc, me, loans, ownerId) {
-  const mine = me?.person?.id ?? ownerId;
-  if (accountOwner(acc, ownerId) === mine) return 'own';
-  if ((loans?.got ?? []).some((l) => l.account === acc.id)) return 'borrowed';
-  return 'other';
-}
-// «de Ana · te quedan 34 turnos hoy»: what is left of a loan, the tightest cap first ({ key, vars } for the locale).
-export function loanLeftText(loan) {
-  const l = loan?.left ?? {};
-  if (loan?.expired) return { key: 'persons.loan.expired', vars: {} };
-  if (l.turns != null) return { key: 'persons.loan.leftTurns', vars: { n: l.turns } };
-  if (l.tokens != null) return { key: 'persons.loan.leftTokens', vars: { n: l.tokens } };
-  if (l.usd != null) return { key: 'persons.loan.leftUsd', vars: { n: l.usd } };
-  return { key: 'persons.loan.noCap', vars: {} };
-}
-// What the «Prestar a…» form sends (accounts.lend): empty caps are no cap; 3.8: only to program (no bots).
-export function lendPayload(account, v) {
-  const n = (x) => (x === '' || x == null || !Number.isFinite(Number(x)) ? null : Number(x));
-  const days = n(v.days);
-  return {
-    id: account, person: v.person,
-    daily_turns: n(v.turns), daily_tokens: n(v.tokens), daily_usd: n(v.usd),
-    reserve_pct: Math.min(95, Math.max(0, n(v.reserve) ?? 20)),
-    bots: false, dev: true,
-    expires_at: days && days > 0 ? new Date(Date.now() + days * 86_400_000).toISOString() : null
-  };
-}
-
 // Share dialog: who it can go to (everyone but oneself and the resource's person), with the right each one has now.
 export function shareRows(persons = [], shares = [], { me = null, owner = null } = {}) {
   const has = new Map((shares ?? []).map((s) => [s.person, s.right]));
@@ -91,13 +60,6 @@ export function sharedWithMe(withMe = [], { projects = [] } = {}) {
 export function sharedBy(withMe = [], type, id) {
   const s = withMe.find((x) => x.type === type && String(x.id).toLowerCase() === String(id).toLowerCase());
   return s ? { by: s.by, right: s.right } : null;
-}
-
-// The usage table «Quién ha gastado qué» (usage.byPerson): sorted by today's spend, the total on top.
-export function usageRows(rows = []) {
-  const list = [...rows].sort((a, b) => (b.today?.turns ?? 0) - (a.today?.turns ?? 0) || (b.month?.turns ?? 0) - (a.month?.turns ?? 0));
-  const total = list.reduce((s, r) => ({ today: s.today + (r.today?.turns ?? 0), month: s.month + (r.month?.turns ?? 0), usd: Math.round((s.usd + (r.month?.usd ?? 0)) * 100) / 100 }), { today: 0, month: 0, usd: 0 });
-  return { list, total };
 }
 
 // Protocol of the links (src/core/link-payload.mjs › PROTOCOL): an Orb that asks for more than this app speaks must be updated.

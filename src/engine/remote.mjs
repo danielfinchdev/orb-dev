@@ -528,22 +528,6 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     }
   }
 
-  // 3.6: a notification goes to the devices of the people it is for, with each person's own preview (Mi perfil), never
-  // to a device whose app is open right now.
-  // 3.6 (messaging lists): skip(person): someone it is not for after all (a chat they muted).
-  function pushTo(audience, { title, body }, tag) {
-    const openNow = new Set([...clients].map((c) => c.device));
-    for (const d of board.all('SELECT id, push, person_id FROM devices WHERE push IS NOT NULL')) {
-      if (openNow.has(d.id)) continue;
-      const pid = personOf(d);
-      if (!reaches(board, audience, pid)) continue;
-      let sub; try { sub = JSON.parse(d.push); } catch { continue; }
-      const note = pushContent({ title, body }, ctx.config, previewOf(pid));
-      sendPush(sub, { ...note, tag, url: '/' }, own.vapid)
-        .then((r) => { if (r === 'gone') board.run('UPDATE devices SET push = NULL WHERE id = ?', d.id); })
-        .catch(() => {});
-    }
-  }
   // Notifications: a new message in the assistant's chat (an answer, a task that needs approval, finished or failed work)
   // goes to the phones that turned them on and do not have the app open right now.
   // 3.6 (M4): as a messaging app's (deliverNote): the chat's name and picture, one per chat, its actions; muted: none.
@@ -723,12 +707,6 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     return Promise.all(closing);
   }
 
-  // A notice for one person (else the owner), e.g. a turn the account limits refused: to every phone of theirs with
-  // notifications on that does not have the app open.
-  function pushNote({ title, body, person = null } = {}) {
-    pushTo(person ? { persons: new Set([String(person)]) } : { owner: true }, { title, body }, 'orb-notice');
-  }
-
   // ---- 3.5 Magic Link: the linked phones and browsers.
   const onlineIds = () => new Set([...clients].map((c) => c.device));
   function deviceView(d, on = onlineIds()) {
@@ -747,7 +725,6 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   }
 
   const remote = {
-    push: pushNote,
     // Engine events go to the paired phones too (only the ones the interface needs), each sealed for its phone.
     // 3.6: audience (from the router, src/engine/router.mjs): each stream gets the event only if it is for its person.
     broadcast(event, payload, audience = null, to = null) {

@@ -6,7 +6,7 @@ import { Board } from '../src/core/board.mjs';
 import { openDb } from '../src/core/db.mjs';
 import { ctx, personSetting } from '../src/core/context.mjs';
 import * as P from '../src/core/persons.mjs';
-import { pickAccount, checkSpend, recordSpend } from '../src/core/budget.mjs';
+import { pickAccount, recordSpend } from '../src/core/budget.mjs';
 import { principalOf } from '../src/core/authz.mjs';
 import { buildApi } from '../src/engine/api.mjs';
 
@@ -128,10 +128,9 @@ test('resumen del dueño: solo números, nunca títulos ni contenido', () => {
   assert.ok(!JSON.stringify(o).includes('hola'), 'sin contenido');
 });
 
-test('cuentas: pickAccount hace lo de antes, checkSpend deja y recordSpend anota el gasto con el día de la persona', () => {
+test('cuentas: pickAccount hace lo de antes y recordSpend anota el gasto con el día de la persona', () => {
   assert.equal(pickAccount(board, { agent: 'claude' })?.agent, 'claude');
   assert.equal(pickAccount(board, { agent: 'claude', preferred: 'codex' })?.agent, 'claude', 'una cuenta de otro agente no vale');
-  assert.deepEqual(checkSpend(board, { person: owner, account: 'claude' }), { ok: true });
   const { day } = recordSpend(board, { person: owner, account: 'claude', usage: { input_tokens: 10, output_tokens: 5 } });
   const r = board.one('SELECT * FROM usage_ledger ORDER BY id DESC LIMIT 1');
   assert.equal(r.day, day); assert.equal(r.turns, 1); assert.equal(r.tokens_in, 10); assert.equal(r.tokens_out, 5);

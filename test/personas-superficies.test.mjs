@@ -87,9 +87,9 @@ async function seed(who) {
   const w = `qz${who}`; const r = R[who];
   r.project = `${w}-proyecto`;
   if (who === 'leo') {
-    // Ana lends Leo her Claude account for Orb mode (WS3 loans), then Leo sits at the window.
-    await A.call('accounts.lend', { id: 'claude', person: leo.id, daily_turns: 500, dev: true });
+    // Leo sits at the window and adds his own Claude account.
     assert.equal((await A.call('persons.switch', { id: leo.id })).ok, true);
+    await A.call('accounts.add', { agent: 'claude', label: 'Claude de Leo' });
   }
   try {
     await A.call('projects.create', { name: r.project });

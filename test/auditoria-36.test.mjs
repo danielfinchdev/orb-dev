@@ -99,7 +99,7 @@ const orbLines = async (conv) => (await A.call('chat.list', { conversation: conv
 async function seed(who) {
   const w = word(who); const r = R[who]; r.who = who;
   r.project = `${w}-proyecto`;
-  if (who === 'leo') assert.equal((await A.call('persons.switch', { id: leo.id })).ok, true);
+  if (who === 'leo') { assert.equal((await A.call('persons.switch', { id: leo.id })).ok, true); await A.call('accounts.add', { agent: 'claude', label: 'Claude de Leo' }); }
   try {
     const p = await A.call('projects.create', { name: r.project });
     r.projectPath = p.path;
@@ -127,7 +127,6 @@ before(async () => {
   await A.call('control.pause');
   leo = await A.call('persons.create', { name: 'Leo', caps: { dev: true } });
   ana = (await A.call('persons.list')).find((p) => p.role === 'owner');
-  await A.call('accounts.lend', { id: 'claude', person: leo.id, daily_turns: 500, dev: true });
   await seed('ana');
   // Leo's numbers far from Ana's: a call with one of his ids never lands on another thing of hers by chance.
   { const d = db(); try { for (const tb of ['tasks', 'schedules', 'conversations', 'chat']) { d.prepare('DELETE FROM sqlite_sequence WHERE name = ?').run(tb); d.prepare('INSERT INTO sqlite_sequence (name, seq) VALUES (?, 5000)').run(tb); } } finally { d.close(); } }
@@ -234,13 +233,6 @@ test('el asistente de Leo no lee archivos de Ana; el de Ana tampoco los de Leo',
   const anaConv = (await A.call('chat.send', { text: `mira esto\nLEE ${R.leo.file}\nLEE ${R.ana.file}` })).conversation;
   const anaReply = await until(async () => (await orbLines(anaConv)).find((l) => /LEE/.test(l.body)), 'respuesta de Orbe (Ana)');
   assert.match(anaReply.body, /LEE deny \| LEE allow/, anaReply.body);
-});
-
-test('el uso por persona son números; Leo no lo ve', async () => {
-  const rows = await A.call('usage.byPerson');
-  for (const r of rows) assert.deepEqual(Object.keys(r).sort(), ['month', 'name', 'person', 'today']);
-  assert.equal((await A.call('persons.switch', { id: leo.id })).ok, true);
-  try { await assert.rejects(A.call('usage.byPerson'), (e) => /admin|No tienes/i.test(e.message)); } finally { assert.equal((await A.call('persons.switch', { id: ana.id })).ok, true); }
 });
 
 test('el guardia: una ruta relativa que sale de la carpeta, y la exclusión del asistente de la dueña', () => {

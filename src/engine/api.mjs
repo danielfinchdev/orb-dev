@@ -10,7 +10,7 @@ import path from 'node:path';
 import { ctx, saveConfig, tr } from '../core/context.mjs';
 import { AGENT_IDS, categoryOf, CATEGORIES } from '../core/home.mjs';
 import { accountsOf, accountDir, accountLabel, accounts as allAccounts } from '../core/accounts.mjs';
-import { usageReport, modelName, mayUseAccount, accountPerson, usageByPerson } from '../core/budget.mjs';
+import { usageReport, modelName, mayUseAccount, accountPerson } from '../core/budget.mjs';
 import { brainOf } from './orchestrator.mjs';
 import { createProjects, syncProjects, checkProjectName, renameProject } from '../core/projects.mjs';
 import { PRODUCT } from '../core/product.mjs';
@@ -426,7 +426,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
         patch.agent = agent;
       }
       const brain = patch.agent ?? base.agent ?? 'claude';
-      if (acc !== undefined) { patch.account = str(acc, 'cuenta', 40); if (patch.account && who?.channel !== 'system' && !mayUseAccount(board, who.person, patch.account, { purpose: 'orbe' })) fail(tr('msg.spend.notYours')); }
+      if (acc !== undefined) { patch.account = str(acc, 'cuenta', 40); if (patch.account && who?.channel !== 'system' && !mayUseAccount(board, who.person, patch.account)) fail(tr('msg.spend.notYours')); }
       else if (patch.agent && patch.agent !== (base.agent ?? 'claude')) patch.account = brain; // another agent: its own account
       if (model !== undefined) {
         const m = String(model ?? '');
@@ -616,10 +616,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return (needle ? rows.filter((r) => `${r.actor} ${r.kind} ${r.detail} ${r.title ?? ''}`.toLowerCase().includes(needle)) : rows).map((r) => ({ ...r, detail: redactSecrets(r.detail) }));
     },
     // 3.2.1: only the accounts of the agents this PC can run (not every agent Orb knows).
-    // 3.6: the accounts the caller may spend (their own and the ones lent to them, with what is left today).
+    // 3.6: the accounts the caller may spend (their own).
     'usage.get': (p, who) => { const avail = board.availableAgents(); return usageReport(board, { person: scopeOf(who) ? who.person : null }).filter((u) => !avail || avail.includes(u.agent)); },
-    // 3.6: for the owner, what each person spent (numbers only, never on what).
-    'usage.byPerson': () => usageByPerson(board),
     // 2.6: the accounts working right now (the assistant's brain and the agents' running sessions), with the windows of
     // their plan the agents reported (session, weekly…), for the panel of the context ring.
     'usage.now': (p, who) => {
@@ -658,9 +656,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     const list = sessions.allPendingApprovals();
     return scopeOf(who) ? list.filter((a) => can(board, who, 'talk', { type: 'session', id: a.session_id })) : list;
   }
-  // 3.6: an account chosen on purpose must be one the caller may spend (theirs or lent to them for Orb mode).
+  // 3.6: an account chosen on purpose must be one the caller may spend (theirs).
   function ownAccount(who, id) {
-    if (!id || !scopeOf(who) || mayUseAccount(board, who.person, id, { purpose: 'dev' })) return id;
+    if (!id || !scopeOf(who) || mayUseAccount(board, who.person, id)) return id;
     return fail(tr('msg.spend.notYours'));
   }
 

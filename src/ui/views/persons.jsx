@@ -215,8 +215,6 @@ function MyAccountsCard() {
   const t = useT();
   const me = useStore((s) => s.me);
   const accounts = useStore((s) => s.app?.config?.accounts ?? []);
-  const [loans, setLoans] = useState(null);
-  useEffect(() => { call('accounts.loans').then(setLoans).catch(() => setLoans(null)); }, []);
   const owner = me?.role === 'owner';
   const mine = accounts.filter((a) => (a.person ?? (owner ? me?.person?.id : null)) === me?.person?.id);
   const add = async (agent) => {
@@ -230,9 +228,6 @@ function MyAccountsCard() {
       <CardContent className="grid gap-1.5">
         {!mine.length ? <p className="text-muted-foreground text-sm">{t('profile.noAccounts')}</p> : mine.map((a) => (
           <div key={a.id} className="flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2"><span className="min-w-0 flex-1 truncate text-[13px] font-medium">{a.label}</span><SignIn acc={a} onDone={() => refresh().catch(() => {})} /></div>
-        ))}
-        {(loans?.got ?? []).map((l) => (
-          <div key={l.account} className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-[13px]" data-testid="profile-borrowed"><span className="min-w-0 flex-1 truncate">{l.label}</span><Badge variant="secondary" className="font-normal">{t('persons.loan.from', { name: personNameOf(l.lender) })}</Badge></div>
         ))}
       </CardContent>
       <CardFooter className="flex-wrap">{OWN_AGENTS.map((a) => <Button key={a} size="sm" variant="outline" onClick={() => add(a)} data-testid={`profile-add-${a}`}><Plus />{t('profile.addAccount', { agent: a === 'claude' ? 'Claude' : 'Codex' })}</Button>)}</CardFooter>

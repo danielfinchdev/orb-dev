@@ -13,7 +13,7 @@ import { CURSOR_FILES } from '../agents/cursor.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { git, isGitRepo, repoRoot } from '../core/workspace.mjs';
 import { account as findAccount, accountEnv } from '../core/accounts.mjs';
-import { pickAccount, checkSpend, recordSpend, spendText } from '../core/budget.mjs';
+import { pickAccount, recordSpend } from '../core/budget.mjs';
 import { scopeSql } from '../core/authz.mjs';
 import { confineFor } from '../core/guard.mjs';
 import { browserKey } from '../core/browser-key.mjs';
@@ -141,7 +141,6 @@ export class Sessions {
     this.onApprovalDone = () => {}; // set by the engine: that notice shows how it ended (allowed, denied, nobody answered)
     this.onApprovalExpired = () => {};
     this.onRate = () => {};     // set by the engine: the real usage each account reports (budget)
-    this.onBlocked = () => {};  // 3.6: set by the engine: a turn refused by a loan's limits (a line + a push to that person)
     // Sessions left "running" by a closed app: their process is gone. Marked "interrupted" so they can continue.
     board.run("UPDATE sessions SET status = 'interrupted' WHERE status = 'running'");
     // Approval cards left open by a closed app can no longer be answered.
@@ -495,15 +494,6 @@ export class Sessions {
     // The conversation's own account: if it was removed, the turn does not silently move to another subscription.
     const acc = s.account ? findAccount(s.account) : pickAccount(this.board, { person: s.person_id ?? null, agent: s.agent });
     if (!acc) throw new Error(tr('msg.sessions.accountGone', { account: s.account }));
-    // 3.6: a borrowed account within its loan (caps, reserve, end date); refused, the person who spends is told.
-    const spend = checkSpend(this.board, { person: s.person_id ?? null, account: acc.id });
-    if (!spend.ok) {
-      const why = spendText(spend, { account: acc.id });
-      this.addItem(id, 'error', 'text', why);
-      try { this.onBlocked(s, why); } catch (error) { this.log(`aviso de uso: ${error.message}`); }
-      onFinish?.({ code: -1, state: { final: why, text: '', isError: true }, stderr: why, logFile: null, stopped: false, blocked: spend });
-      return null;
-    }
     const a = adapter(s.agent);
     const attached = placeAttachments(images, s.cwd);
     if (showUser) this.addItem(id, 'user', 'text', attached.length ? { text, images: attached } : text);
@@ -589,8 +579,6 @@ export class Sessions {
     if (!s.cli_session) return { ok: true, how: 'none' };
     const acc = s.account ? findAccount(s.account) : pickAccount(this.board, { person: s.person_id ?? null, agent: s.agent });
     if (!acc) throw new Error(tr('msg.sessions.accountGone', { account: s.account }));
-    const spend = checkSpend(this.board, { person: s.person_id ?? null, account: acc.id });
-    if (!spend.ok) throw new Error(spendText(spend, { account: acc.id }));
     const entry = this.getLive(s, acc);
     if (typeof entry.live.compact !== 'function') throw new Error(tr('msg.sessions.cannotCompact', { label: a.label }));
     const run = { agent: s.agent, stopped: false, startedAt: Date.now(), lastAt: Date.now(), steps: 0, last: tr('msg.sessions.compacting'), live: entry.live, waitMs: 0, pausedAt: null, compacting: true };

@@ -239,8 +239,8 @@ CREATE TABLE IF NOT EXISTS bot_reminders (
   created_by TEXT NOT NULL DEFAULT 'usuario',
   created_at TEXT NOT NULL
 );
--- 3.6 «Personas» (docs/PERSONAS-INTERNALS.md): the people of this Orb, their own settings, what they share, the accounts
--- lent, what each one spent, each bot's live conversation per person, the history of the memories, the forwarded calls
+-- 3.6 «Personas» (docs/PERSONAS-INTERNALS.md): the people of this Orb, their own settings, what they share,
+-- what each one spent, each bot's live conversation per person, the history of the memories, the forwarded calls
 -- already answered and the audit of refused calls (ids and names only, never content).
 CREATE TABLE IF NOT EXISTS persons (
   id TEXT PRIMARY KEY,
@@ -272,20 +272,6 @@ CREATE TABLE IF NOT EXISTS shares (
   granted_by TEXT,
   created_at TEXT,
   PRIMARY KEY (resource_type, resource_id, person_id)
-);
-CREATE TABLE IF NOT EXISTS account_loans (
-  account_id TEXT NOT NULL,
-  lender TEXT NOT NULL,
-  person_id TEXT NOT NULL,
-  daily_turns INTEGER,
-  daily_tokens INTEGER,
-  daily_usd REAL,
-  reserve_pct INTEGER NOT NULL DEFAULT 20,
-  bots INTEGER NOT NULL DEFAULT 1,
-  dev INTEGER NOT NULL DEFAULT 0,
-  expires_at TEXT,
-  created_at TEXT,
-  PRIMARY KEY (account_id, person_id)
 );
 CREATE TABLE IF NOT EXISTS usage_ledger (
   id INTEGER PRIMARY KEY,

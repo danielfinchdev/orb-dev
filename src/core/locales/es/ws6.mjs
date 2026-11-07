@@ -1,5 +1,5 @@
-// 3.6 «Personas», WS6: las pantallas de las personas (menú, bloqueo, Ajustes › Personas, Mi perfil y Datos, compartir,
-// préstamos de cuentas, uso por persona, el asistente de bienvenida).
+// 3.6 «Personas», WS6: las pantallas de las personas (menú, bloqueo, Ajustes › Personas, Mi perfil y Datos, compartir y
+// el asistente de bienvenida).
 export default {
   'settings.section.perfil': 'Mi perfil',
   'settings.section.personas': 'Usuarios',
@@ -62,38 +62,6 @@ export default {
   'persons.revokeBody': 'Se cierra la sesión en {n} dispositivos. Para volver, hay que enlazarlos otra vez.',
   'persons.revoke': 'Cerrar sesión',
   'persons.revoked': 'Dispositivos de {name} cerrados.',
-  // préstamos
-  'persons.loan.from': 'de {name}',
-  'persons.loan.leftTurns': 'te quedan {n} respuestas hoy',
-  'persons.loan.leftTokens': 'te quedan {n} tokens hoy',
-  'persons.loan.leftUsd': 'te quedan {n} $ hoy',
-  'persons.loan.noCap': 'sin tope diario',
-  'persons.loan.expired': 'el préstamo ha terminado',
-  'lend.button': 'Prestar a…',
-  'lend.title': 'Prestar {label}',
-  'lend.person': 'A quién',
-  'lend.turns': 'Respuestas al día',
-  'lend.tokens': 'Tokens al día',
-  'lend.usd': 'Dólares al día',
-  'lend.noCap': 'Sin tope',
-  'lend.reserve': 'Reserva para ti (%)',
-  'lend.reserveHint': 'Parte del uso de la cuenta que se reserva para ti.',
-  'lend.days': 'Durante (días)',
-  'lend.daysHint': 'Vacío: sin fecha de fin.',
-  'lend.forever': 'Siempre',
-  'lend.terms': 'Muchas suscripciones personales no permiten que la use otra persona. Revisa las condiciones de tu plan antes de prestarla.',
-  'lend.ok': 'Prestar',
-  'lend.done': 'Cuenta prestada a {name}.',
-  'lend.nobody': 'No hay nadie más en este Orb.',
-  'lend.lentTo': 'Prestada a {name}',
-  'lend.stop': 'Dejar de prestar',
-  'lend.stopped': 'Ya no se presta a {name}.',
-  // uso por persona
-  'whoSpent.title': 'Quién ha gastado qué',
-  'whoSpent.today': '{n} hoy',
-  'whoSpent.month': '{n} en 30 días',
-  'whoSpent.usd': '{n} $',
-  'whoSpent.total': 'Todo el Orb: {today} respuestas hoy, {month} en 30 días.',
   // compartir
   'share.button': 'Compartir',
   'share.title': 'Compartir {name}',

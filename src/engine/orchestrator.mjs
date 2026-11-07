@@ -16,7 +16,7 @@ import { accountEnv } from '../core/accounts.mjs';
 import { briefing, personScope } from './logs.mjs';
 import { confineFor } from '../core/guard.mjs';
 import { rememberModels } from './catalog.mjs';
-import { recordRate, pickAccount, checkSpend, recordSpend, spendText, accountsFor } from '../core/budget.mjs';
+import { recordRate, pickAccount, recordSpend, accountsFor } from '../core/budget.mjs';
 import { AGENT_LABELS } from '../core/home.mjs';
 
 // The models an agent takes for a task: the configured ones and the ones the agent itself listed (2.6, models:<agent>).
@@ -50,7 +50,7 @@ export function persona(board = null, person = null) {
   const c = ctx.config; const me = assistantName(); const other = Boolean(person && board?.isOwnerPerson?.(person) === false);
   const boss = other ? personName(board, person) : userName(); const ofBoss = other ? `de ${boss}` : ofUser();
   // 3.6: only the accounts that person may spend (theirs and the ones lent to them): never the names of anyone else's.
-  const accountsOf = (a) => (board ? accountsFor(board, person, a, { purpose: 'dev', usable: false }) : c.accounts ?? []).filter((x) => x.agent === a && x.enabled !== false);
+  const accountsOf = (a) => (board ? accountsFor(board, person, a, { usable: false }) : c.accounts ?? []).filter((x) => x.agent === a && x.enabled !== false);
   // 3.1: only the agents this PC can run, each with its accounts and their plans (engine/plans.mjs).
   const available = AGENTS.filter((a) => c.agents[a]?.enabled && accountsOf(a).length && installed(a));
   const planOf = (x) => board?.settingJson?.(`plan:${x.id}`)?.label;
@@ -179,8 +179,6 @@ class Lane {
     try {
       let live = null;
       try { this.ensureLive(); live = this.live; } catch { live = null; }
-      const spend = live ? checkSpend(this.board, { person: c.person_id ?? null, account: this.liveAccount }) : { ok: true };
-      if (!spend.ok) throw Object.assign(new Error(spendText(spend, { account: this.liveAccount })), { userFacing: true });
       if (typeof live?.compact === 'function') {
         const r = await live.compact({ instructions: COMPACT_FOCUS }).catch((error) => ({ ok: false, error: error.message }));
         if (r?.ok) how = 'compacted'; else this.orch.log(`compactar la conversación ${this.id}: ${r?.error ?? 'sin respuesta'}`);
@@ -286,7 +284,7 @@ class Lane {
   account(c) {
     const o = ctx.config.orchestrator ?? {};
     const agent = c.agent || o.agent || 'claude';
-    const acc = pickAccount(this.board, { person: c.person_id ?? null, agent, preferred: c.account, purpose: 'orbe' });
+    const acc = pickAccount(this.board, { person: c.person_id ?? null, agent, preferred: c.account });
     if (acc) return acc;
     if (this.board.isOwnerPerson(c.person_id)) return { id: agent, agent };
     throw Object.assign(new Error(tr('msg.spend.noAccount')), { userFacing: true });
@@ -405,14 +403,6 @@ class Lane {
       this.busy = false; this.push(); return { ok: false };
     }
     c = this.conv();
-    // 3.6: a borrowed account within its loan (caps, reserve, end date): refused, the person is told (and only them).
-    const spend = checkSpend(this.board, { person: c.person_id ?? null, account: this.liveAccount });
-    if (!spend.ok) {
-      const why = spendText(spend, { account: this.liveAccount });
-      this.say('system', why, { kind: 'blocked', reason: spend.reason });
-      try { this.orch.onBlocked?.(c, why); } catch { /* the line is there */ }
-      this.busy = false; this.push(); return { ok: false, blocked: true };
-    }
     const project = c.project ? this.board.project(c.project) : null;
     const other = !this.board.isOwnerPerson(c.person_id);
     // A brain other than Claude gets its instructions at the start of the conversation (Claude has them as system prompt).

@@ -136,14 +136,6 @@ async function start(home, version, secret, browser) {
   // 3.7: Monitoreo del equipo and Opti Bot are gone: their settings and conversation are tidied once (engine/retired.mjs).
   { const { tidyRetired } = await import('./retired.mjs'); tidyRetired(board, log); }
   api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef });
-  // 3.6: a turn refused by a loan's limits: a notice and a push to the person who spends, and only them.
-  const blocked = (person, why) => {
-    const who = person && !board.isOwnerPerson(person) ? person : null;
-    board.notice(why, 'warning', { person: who });
-    try { remoteRef.current?.push?.({ title: ctx.config.assistantName, body: why, person: person ?? board.ownerId() }); } catch { /* no phones */ }
-  };
-  sessions.onBlocked = (s, why) => blocked(s?.person_id ?? null, why);
-  orchestrator.onBlocked = (c, why) => blocked(c?.person_id ?? null, why);
   remote = remoteRef.current = createRemote({ board, api, log, emit, version });
   // 3.1: only an unpacked Orb.dev started with ORB_DEV_CONTROL=1 (main.mjs decides; never an installed Orb).
   if (process.env.ORB_DEV_CONTROL === '1') {

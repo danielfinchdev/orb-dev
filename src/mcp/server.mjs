@@ -191,7 +191,7 @@ function taskBrief(id) {
     dependencies: d.dependencies.map((x) => x && { ...x, result: oneLine(x.result, 1500) }) };
 }
 // 3.6: only the accounts the person this process works for may spend (never the names of anyone else's).
-const myAccounts = () => { try { return [...new Map(AGENTS.flatMap((a) => accountsFor(board, P.person, a, { purpose: 'dev', usable: false })).map((a) => [a.id, a])).values()]; } catch { return []; } };
+const myAccounts = () => { try { return [...new Map(AGENTS.flatMap((a) => accountsFor(board, P.person, a, { usable: false })).map((a) => [a.id, a])).values()]; } catch { return []; } };
 const modelsHelp = () => AVAILABLE.map((a) => `${a}: ${modelsOf(a).join(', ') || 'predeterminado'}`).join(' | ');
 const tools = [
   ...(TASK_ID && !BOSS ? [

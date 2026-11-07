@@ -71,7 +71,7 @@ const CORE = {
   'installer.start': { ownerOnly: true },
   'mcp.folder': { ownerOnly: true },
   'activity.list': { ownerOnly: true, list: 'event' },
-  'usage.get': { public: true }, // WS3: own usage + loans
+  'usage.get': { public: true }, // WS3: own usage
   'usage.now': { public: true },
   'models.guide': { public: true },
   'models.catalog': { public: true },
@@ -171,7 +171,7 @@ const CORE = {
   'link.devices': { ownerOnly: true }, // WS2: own devices for everyone
   'link.revoke': { ownerOnly: true },
   'link.rename': { ownerOnly: true },
-  // agents and accounts (WS3: own accounts for everyone, loans)
+  // agents and accounts (WS3: own accounts for everyone)
   'agents.status': { public: true },
   'agents.check': { ownerOnly: true },
   'agents.login': { ownerOnly: true },
@@ -260,14 +260,10 @@ const ORBMODE = {
   'accounts.update': { res: (p) => account(p.id), right: 'own' },
   'accounts.remove': { res: (p) => account(p.id), right: 'own' },
   'accounts.clearCooldown': { res: (p) => account(p.account), right: 'own' },
-  'accounts.lend': { res: (p) => account(p.id), right: 'own' },
-  'accounts.unlend': { res: (p) => account(p.id), right: 'own' },
-  'accounts.loans': { public: true },
   'agents.login': { res: (p) => account(p.account ?? p.agent), right: 'own' },
   'agents.loginCode': { public: true }, // the method checks the sign-in is of the caller's own account
   'agents.loginCancel': { public: true },
   'agents.loginState': { public: true },
-  'usage.byPerson': { ownerOnly: true },
   // sharing (the method checks: the resource's person, or «edit» to share it to view or talk; never to oneself)
   'shares.list': { public: true },
   'shares.set': { public: true },

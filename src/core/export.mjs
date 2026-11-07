@@ -132,7 +132,6 @@ export function deletePerson(board, pid, { home } = {}) {
     for (const t of ['person_settings', 'inbox_items', 'inbox_sections']) if (T(t)) board.run(`DELETE FROM ${t} WHERE person_id = ?`, pid);
     if (T('shares')) board.run('DELETE FROM shares WHERE person_id = ? OR granted_by = ?', pid, pid);
     board.run('DELETE FROM settings WHERE key = ?', `inbox_since:${pid}`);
-    if (T('account_loans')) board.run('DELETE FROM account_loans WHERE person_id = ? OR lender = ?', pid, pid);
     // The spending stays in the totals, without who.
     if (T('usage_ledger')) board.run("UPDATE usage_ledger SET person_id = 'deleted' WHERE person_id = ?", pid);
     if (T('audit')) board.run("UPDATE audit SET person_id = 'deleted' WHERE person_id = ?", pid);
