@@ -141,9 +141,9 @@ test('11 y 20: los comandos y las llamadas de las herramientas se leen sin escap
   const codex = `"C:\\\\WINDOWS\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe" -Command '$paths = @('"'"'D:\\\\Orb\\\\web'"'"'); Get-ChildItem $paths'`;
   assert.equal(readableCommand(codex), "$paths = @('D:\\Orb\\web'); Get-ChildItem $paths");
   assert.equal(readableCommand('npm run dev'), 'npm run dev');
-  assert.equal(readableInput('{"action":"clean_temp","reason":"x"}', 'mcp__bot__pc_propose'), 'clean_temp');
+  assert.equal(readableInput('{"action":"clean_temp","reason":"x"}', 'mcp__opti__opti_propose'), 'clean_temp');
   assert.equal(readableInput('{"command":"npm test"}', 'Bash'), 'npm test');
-  assert.equal(readableInput('select:mcp__bot__pc_health,mcp__bot__pc_propose', 'ToolSearch'), '', 'buscar sus herramientas no tiene nada que leer');
+  assert.equal(readableInput('select:mcp__opti__opti_health,mcp__opti__opti_propose', 'ToolSearch'), '', 'buscar sus herramientas no tiene nada que leer');
   assert.equal(readableInput('{"a":1, "b"', 'x'), '', 'un JSON cortado no se enseña');
   assert.equal(prettyModel('claude-sonnet-5-5'), 'Sonnet 5.5');
   assert.equal(prettyModel('gpt-6-luna'), 'GPT-6-Luna');

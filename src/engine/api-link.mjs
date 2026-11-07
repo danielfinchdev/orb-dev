@@ -48,11 +48,10 @@ export function linkMethods({ board, emit, remoteRef }) {
     'remote.revoke': ({ id }) => remoteRef.current.revoke(str(id, 'dispositivo', 64)),
     // ---- 3.5 Magic Link (PC only)
     // A QR (and a short code) to link a phone or a browser. Turns the access on if it was off.
-    // 3.5.1: device: what it is for (phone or browser), chosen here, never by the device; approve: it may answer the
-    // bots' cards (default yes).
+    // 3.5.1: device: what it is for (phone or browser), chosen here, never by the device.
     // 3.6: person (id or name): whom the device is for; newPerson: a name, for someone new (the owner makes them now).
     // Everyone makes QRs for themselves; for someone else, only the owner.
-    'link.qr': async ({ kind, device, approve, person, newPerson }, who) => {
+    'link.qr': async ({ kind, device, person, newPerson }, who) => {
       const via = oneOf(kind, ['wifi', 'tailscale'], 'vía', undefined);
       const forKind = device == null || device === '' ? null : oneOf(device, PAIR_KINDS, 'dispositivo');
       let target = who.person;
@@ -65,10 +64,8 @@ export function linkMethods({ board, emit, remoteRef }) {
         if (!ctx.config.mobile?.enabled) { const c = saveConfig({ mobile: { enabled: true } }); emit('config:changed', c); }
         await remoteRef.current.start();
       }
-      return remoteRef.current.pair(via, { device: forKind, approve: approve !== false, person: target });
+      return remoteRef.current.pair(via, { device: forKind, person: target });
     },
-    // 3.5.1: «Puede aprobar» (the bots' cards) for a linked device.
-    'link.setApprove': ({ id, approve }) => remoteRef.current.setApprove(str(id, 'dispositivo', 64), approve === true),
     'link.devices': (_, who) => remoteRef.current.devices().filter((d) => who.role === 'owner' || d.person === who.person),
     'link.revoke': ({ id }, who) => remoteRef.current.revoke(mineDevice(str(id, 'dispositivo', 64), who)),
     'link.rename': ({ id, name }, who) => remoteRef.current.rename(mineDevice(str(id, 'dispositivo', 64), who), str(name, 'nombre', 60))

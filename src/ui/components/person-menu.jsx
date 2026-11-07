@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/basic.jsx';
 import { Input } from '@/components/ui/basic.jsx';
 import { form } from '@/components/dialogs.jsx';
 import { NavItem } from '@/components/sidebar.jsx';
-import { useStore, call, bridge, setState, getState, go, openSettings, modeOf } from '@/lib/store.js';
+import { useStore, call, bridge, setState, go, openSettings } from '@/lib/store.js';
 import { personsOn, initials, pinRefusal, isOwner } from '@/lib/persons.js';
 import { cn } from '@/lib/utils.js';
 import { t, useT } from '@/lib/i18n.js';
@@ -48,7 +48,7 @@ function useActions() {
   const me = useStore((s) => s.me);
   if (!personsOn(me) || !me.person) return null;
   return [
-    { id: 'person-profile', icon: UserRound, label: t('persons.myProfile'), run: () => (bridge.mobile ? go({ view: 'profile', ...(modeOf(getState().route) === 'bots' ? { mode: 'bots' } : {}) }) : openSettings('perfil')) },
+    { id: 'person-profile', icon: UserRound, label: t('persons.myProfile'), run: () => (bridge.mobile ? go({ view: 'profile' }) : openSettings('perfil')) },
     ...(bridge.mobile ? [] : [{ id: 'person-switch', icon: ArrowLeftRight, label: t('persons.switchUser'), run: () => lockNow(true) }]),
     // Without a PIN a phone has nothing to unlock with.
     ...(!bridge.mobile || me.person.hasPin ? [{ id: 'person-lock', icon: Lock, label: t('persons.lock'), run: () => lockNow() }] : [])

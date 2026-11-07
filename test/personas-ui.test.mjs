@@ -1,13 +1,12 @@
 // 3.6 «Personas», the interface (src/ui/lib/persons.js and the screens): with one person nothing of people shows; the
-// devices grouped by person; loans and the bot's account picker; sharing; the wizard and its templates (generic, es+en);
+// devices grouped by person; loans and the bot's account picker; sharing; the welcome screen;
 // usage per person; the phone's lock; every text the new screens use exists in both languages.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { ROOT, tempHome } from './helpers.mjs';
+import { ROOT } from './helpers.mjs';
 import * as P from '../src/ui/lib/persons.js';
-import { botPayload, capsPayload, newBotDraft } from '../src/ui/lib/bots.js';
 import { POLICY, PHONE_SET } from '../src/core/policy.mjs';
 import es from '../src/core/locales/es.mjs';
 import en from '../src/core/locales/en.mjs';
@@ -28,8 +27,6 @@ test('con una sola persona no se ve nada de personas (como la 3.5.1)', () => {
   assert.equal(P.showPersonsSettings(meLeo), false);
   assert.equal(P.showPersonsSettings(meAna, { mobile: true }), false);
   assert.equal(P.showPersonUi(meLeo), true);
-  // El editor de bots no manda topes si no se tocaron.
-  assert.equal('caps' in botPayload({ ...newBotDraft(), name: 'X' }), false);
 });
 
 test('los dispositivos van agrupados por persona, el dueño primero; sin persona = del dueño', () => {
@@ -57,8 +54,6 @@ test('cuentas: propias, prestadas y lo que queda del préstamo; el selector del 
   assert.ok(Date.parse(lend.expires_at) > Date.now() + 6 * 86_400_000);
   assert.equal(P.lendPayload('claude', { person: 'p-leo', reserve: '200' }).reserve_pct, 95);
   assert.equal(P.lendPayload('claude', { person: 'p-leo' }).expires_at, null);
-  assert.deepEqual(capsPayload({ daily_turns: '20', daily_usd: '' }), { daily_turns: 20, daily_tokens: null, daily_usd: null });
-  assert.equal(capsPayload({ daily_turns: '' }), null);
 });
 
 test('compartir: nunca con uno mismo ni con quien ya es el dueño; «Compartido conmigo» con sus nombres', () => {
@@ -91,31 +86,12 @@ test('uso por persona: ordenado por hoy, con el total', () => {
   assert.deepEqual(total, { today: 11, month: 70, usd: 1.75 });
 });
 
-test('la bienvenida es la de la 3.5.1 (nombre del asistente, cómo te llamo, carpeta, preparar el PC) y las plantillas están en «Nuevo bot»', async () => {
+test('la bienvenida es la de la 3.5.1 (nombre del asistente, cómo te llamo, carpeta, preparar el PC)', () => {
   const setup = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'views', 'setup.jsx'), 'utf8');
   for (const k of ['setup.nameLabel', 'setup.userLabel', 'setup.whereFolder', 'setup.prepareTitle', 'setup.prepareDesc']) assert.ok(setup.includes(`'${k}'`), k);
   assert.match(setup, /<Installer[ >]/, 'preparar el PC con los instaladores oficiales');
   assert.doesNotMatch(setup, /wizard\.|persons\.create|templates\.apply/, 'sin las pantallas de la 3.6');
   assert.ok(!Object.keys(es).some((k) => k.startsWith('wizard.')) && !Object.keys(en).some((k) => k.startsWith('wizard.')), 'sin textos del asistente de la 3.6');
-  const create = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'views', 'bots', 'create.jsx'), 'utf8');
-  assert.match(create, /'templates\.list'/); assert.match(create, /'templates\.apply'/);
-  const t = tempHome();
-  try {
-    const { listTemplates, applyTemplate } = await import('../src/core/templates.mjs');
-    for (const lang of ['es', 'en']) {
-      const list = listTemplates(lang);
-      assert.deepEqual(list.map((x) => x.id).sort(), ['casa', 'desarrollo', 'mantenimiento', 'negocio', 'vacio'], lang); // 3.7: «Mantenimiento del PC», opcional (no está en el asistente)
-      // genéricas: ningún nombre de persona ni de casa concreta
-      assert.doesNotMatch(JSON.stringify(list), /Dani|María|Ana|Leo/, `plantillas genéricas (${lang})`);
-    }
-    const casa = listTemplates('es').find((x) => x.id === 'casa');
-    const { Board } = await import('../src/core/board.mjs');
-    const board = new Board();
-    const made = applyTemplate(board, { id: 'casa', lang: 'es', tz: 'Europe/Madrid' });
-    assert.equal(made.bots.length, casa.bots.length);
-    assert.equal(made.reminders.length, casa.reminders.length);
-    board.close?.();
-  } finally { t.cleanup(); }
 });
 
 test('el saludo y los avisos usan el nombre de quien está, no el del admin', async () => {
@@ -135,7 +111,7 @@ test('los métodos nuevos tienen su regla y el móvil puede cambiar lo suyo', ()
 });
 
 test('todos los textos de las pantallas nuevas existen en los dos idiomas (también los compuestos)', () => {
-  const files = ['components/person-menu.jsx', 'components/lock-screen.jsx', 'components/share-dialog.jsx', 'views/persons.jsx', 'views/data.jsx', 'views/setup.jsx', 'views/agents.jsx', 'views/bots/more.jsx', 'views/bots/list.jsx', 'views/bots/create.jsx', 'views/magic-link.jsx'];
+  const files = ['components/person-menu.jsx', 'components/lock-screen.jsx', 'components/share-dialog.jsx', 'views/persons.jsx', 'views/data.jsx', 'views/setup.jsx', 'views/agents.jsx', 'views/magic-link.jsx'];
   const used = new Set();
   for (const f of files) {
     const code = fs.readFileSync(path.join(ROOT, 'src', 'ui', f), 'utf8');

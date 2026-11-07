@@ -6,8 +6,6 @@ import { errorText } from './utils.js';
 import { bumpNav, navTicket, stillHere } from './nav.js';
 import { t } from './i18n.js';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from '../../core/appearance.mjs';
-import { modeOf } from './bots.js';
-import { fallbackInbox } from './inbox.js';
 
 // The bridge to the PC: Electron's preload, or the phone's web bridge (src/ui/lib/web-bridge.js). Read when used, not when
 // this module loads: the bundler may load this module before the phone's bridge has defined window.orb.
@@ -82,53 +80,14 @@ export function go(route) {
   if (next.view === 'settings') { openSettings(next.section); return; }
   bumpNav(); // even to the same screen («Nuevo chat» while on a new chat): the user chose where to be
   setState({ route: next });
-  const keep = KEEPS_ID.has(next.view) ? next : { view: next.view, ...(next.mode === 'bots' ? { mode: 'bots' } : {}) };
+  const keep = KEEPS_ID.has(next.view) ? next : { view: next.view };
   try { localStorage.setItem('orb.route', JSON.stringify(keep)); } catch { /* storage unavailable */ }
-  rememberMode(keep);
 }
 
-// 3.5: the two modes, «Orb» (the app as always) and «Bots». Each one remembers its last screen (on this device) and the
-// mode in use is kept in the settings of the assistant's folder (ui.mode), so the PC opens in the same one.
-const KEEPS_ID = new Set(['session', 'chat', 'bot-chat', 'bot-group', 'bots']);
-const MODES_KEY = 'orb.modos';
-const lastOf = () => { try { return JSON.parse(localStorage.getItem(MODES_KEY) || '{}') ?? {}; } catch { return {}; } };
-function rememberMode(route) { try { localStorage.setItem(MODES_KEY, JSON.stringify({ ...lastOf(), [modeOf(route)]: route })); } catch { /* storage unavailable */ } }
-// 3.6 (M2): the phone opens the Bots zone on its chat list («bot-chats»); the PC on the last chat (its list is beside).
-// 3.6 (M3): the same for the Orb zone: the phone on its chat list («chats»), the PC on the last conversation.
-export const modeHome = (mode) => lastOf()[mode] ?? (mode === 'bots' ? { view: phoneLayout() ? 'bot-chats' : 'bot-chat' } : { view: phoneLayout() ? 'chats' : 'chat' });
-export function setMode(mode) {
-  const next = mode === 'bots' ? 'bots' : 'orb';
-  if (modeOf(state.route) !== next) go(modeHome(next));
-  if (!bridge.mobile && state.app?.config?.ui?.mode !== next) call('config.save', { patch: { ui: { mode: next } } }).then((config) => setState((s) => ({ app: s.app ? { ...s.app, config } : s.app }))).catch(() => {});
-}
-export { modeOf };
+// The screens that keep their id in the saved route (the last conversation or session).
+const KEEPS_ID = new Set(['session', 'chat']);
 
-// 3.5: the bots (bots.list), shared by the menu and the screens of the Bots mode; read again when a bot changes
-// (bot.updated) and when the screens move on (version). What each bot is doing now comes live (bot.state).
-export const botCall = (method, params) => call(method, params);
-// A live event of the bots (bot.message, bot.state, bot.updated).
-export const onBotEvent = (name, fn) => bridge.on(name, fn);
-let botsTimer = null;
-export async function loadBots() {
-  try { const bots = await botCall('bots.list'); setState((s) => ({ bots, botsError: null, botStates: Object.fromEntries((bots.states ?? []).map((x) => [x.bot, x])) })); return bots; }
-  catch (error) { setState({ botsError: errorText(error) }); return null; }
-}
-export function loadBotsSoon() { clearTimeout(botsTimer); botsTimer = setTimeout(() => { loadBots(); }, 150); }
-// 3.6 (messaging, M2): the Bots zone's chat list (inbox.list: pins, sections, unread, last message), read again when it
-// changes (inbox:changed, a bot's line or state). An Orb that does not answer inbox.list gets the same shape from
-// bots.list (no pins, sections or unread). The changes (pin, mute, sections…) go through inboxAct.
-let inboxTimer = null;
-export async function loadInbox() {
-  try { const inbox = await botCall('inbox.list', { zone: 'bots' }); setState({ inbox }); return inbox; }
-  catch {
-    const b = getState().bots ?? await loadBots();
-    const inbox = fallbackInbox(b?.bots ?? [], b?.groups ?? [], getState().botStates ?? {});
-    setState({ inbox }); return inbox;
-  }
-}
-export function loadInboxSoon(ms = 200) { clearTimeout(inboxTimer); inboxTimer = setTimeout(() => { loadInbox(); }, ms); }
-export async function inboxAct(method, params, okText) { const r = await act(botCall(method, params), okText); loadInboxSoon(0); return r; }
-// 3.6 (messaging, M3): the Orb zone's chat list (inbox.list zone «orb»: pins, mutes, unread and the last line of each
+// 3.6 (messaging, M3): the chat list (inbox.list zone «orb»: pins, mutes, unread and the last line of each
 // conversation with Orbe). Always this Orb's (the conversations live here, never on a linked server). An Orb without
 // inbox.list leaves it empty: the list is then made from the conversations alone (lib/inbox.js › orbItems).
 let orbTimer = null;
@@ -142,10 +101,6 @@ export async function orbAct(method, params, okText) { const r = await act(call(
 // name }; null: closed.
 export const openOrbInfo = (info) => setState({ orbInfo: info });
 export const closeOrbInfo = () => setState({ orbInfo: null });
-export function botStateChanged(p) {
-  if (p?.bot == null) return;
-  setState((s) => ({ botStates: { ...(s.botStates ?? {}), [p.bot]: p } }));
-}
 
 // 3.6 «Personas»: who is using this window or device (persons.me: { person, role, rights, personsCount }). An Orb before
 // 3.6 has no persons.me: then it is one person, the owner (nothing of people shows). The server decides what each one
@@ -179,13 +134,13 @@ export async function refresh() {
 // 3.6: the language of the person at the window (Mi perfil), else the Orb's.
 export const uiLanguage = (s) => (Number(s.me?.personsCount ?? 1) > 1 && s.me?.person?.language) || s.app?.config?.language || 'es';
 // 3.6: someone else sat down (persons.switch / persons.unlock): everything is read again as them; what was on screen
-// (a conversation, a bot) may not be theirs, so the window goes back to the start of its mode.
+// (a conversation) may not be theirs, so the window goes back to the start.
 export async function personSwitched() {
-  setState({ route: { view: 'chat' }, bots: null, botStates: {}, inbox: null, orbInbox: null, orbInfo: null, settings: null, share: null });
-  try { localStorage.removeItem('orb.route'); localStorage.removeItem(MODES_KEY); } catch { /* storage unavailable */ }
+  setState({ route: { view: 'chat' }, orbInbox: null, orbInfo: null, settings: null, share: null });
+  try { localStorage.removeItem('orb.route'); } catch { /* storage unavailable */ }
   await refresh().catch(() => {});
   if (getState().app?.config) setState({ locked: false });
-  loadBots(); loadInbox(); loadOrbInbox();
+  loadOrbInbox();
 }
 
 let iconsFor = null;

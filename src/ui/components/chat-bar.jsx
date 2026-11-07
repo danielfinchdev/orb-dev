@@ -1,5 +1,5 @@
-// 3.6 (messaging): the bar of a conversation in both zones: (phone: the back arrow) the header pill, which opens the
-// chat's info, and its buttons on the right. Bots: views/bots/chat.jsx; Orb: views/chat.jsx.
+// 3.6 (messaging): the bar of a conversation (views/chat.jsx): (phone: the back arrow) the header pill, which opens the
+// chat's info, and its buttons on the right.
 import { ChevronLeft } from 'lucide-react';
 import { Button } from './ui/button.jsx';
 import { SidebarToggle } from './theme-toggle.jsx';
@@ -7,7 +7,7 @@ import { useStore, go, phoneLayout } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
-export function ChatBar({ back, title, children, testid = 'bot-chat-bar', className }) {
+export function ChatBar({ back, title, children, testid = 'chat-bar', className }) {
   const phone = phoneLayout();
   const folded = useStore((s) => s.sidebarCollapsed);
   return (

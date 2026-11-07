@@ -308,7 +308,7 @@ function ChatApproval({ m }) {
 }
 
 // 3.2.1: a task that waits for the user's approval, with «Aprobar» and «Rechazar» right in the chat (before, only in
-// Tareas). Once answered, how it ended. 3.6 (M3): a card, as in the Bots zone: «"Publicar la web" necesita tu aprobación»,
+// Tareas). Once answered, how it ended. 3.6 (M3): a card: «"Publicar la web" necesita tu aprobación»,
 // the reason in words and Rechazar · Ver la tarea · Aprobar.
 const whyOf = (body) => /\(([^()]*)\)\.?\s*$/.exec(String(body ?? ''))?.[1]?.trim() || null;
 function TaskApprovalLine({ m }) {

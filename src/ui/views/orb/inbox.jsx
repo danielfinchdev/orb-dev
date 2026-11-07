@@ -1,5 +1,5 @@
-// 3.6 (messaging, step M3): the Orb zone's chat list (docs/DESIGN-SYSTEM.md › 2.5, mockup mensajeria.html ?z=orb). On the
-// PC it is the left pane under «Orb | Bots»; on the phone the «Chats» tab. From the top: search (titles, projects, the
+// 3.6 (messaging, step M3): the chat list (docs/DESIGN-SYSTEM.md › 2.5, mockup mensajeria.html ?z=orb). On the PC it is
+// the left pane; on the phone the «Chats» tab. From the top: search (titles, projects, the
 // messages and «#12» for a task) with its filter, «+» (Nuevo chat, Nuevo proyecto), the zone's other places (PC: Tareas,
 // Proyectos, Programadas, Pizarra, and «Más» with God mode when it is on), what others shared, the pinned
 // chats, then one group per project (its coloured initials, folding) with its chats. Each row: Orbe's head with the

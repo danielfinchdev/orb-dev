@@ -36,11 +36,5 @@ export default {
   "link.forWhat": "What are you linking?",
   "link.for.phone": "My phone",
   "link.for.browser": "A browser",
-  "link.forApprove": "Can approve what the bots ask for",
-  "link.forApproveHint": "Opening the door, buying, sending an email… Untick it if the device is not only yours.",
   "link.preferHttps": "The safest way is the Tailscale https address. Over home Wi-Fi (http), link the Android app.",
-  "link.approve": "Can approve",
-  "link.approveHint": "Can answer the bots’ cards (home, purchases, sending)",
-  "link.approveOn": "{name} can approve now",
-  "link.approveOff": "{name} can no longer approve"
 };

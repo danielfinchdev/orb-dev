@@ -211,7 +211,6 @@ const CORE = {
   'remote.pair': { ownerOnly: true },
   'remote.revoke': { ownerOnly: true },
   'link.qr': { ownerOnly: true }, // WS2: a QR for oneself; for others owner only
-  'link.setApprove': { ownerOnly: true },
   'link.devices': { ownerOnly: true }, // WS2: own devices for everyone
   'link.revoke': { ownerOnly: true },
   'link.rename': { ownerOnly: true },

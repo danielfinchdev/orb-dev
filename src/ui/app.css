@@ -477,10 +477,8 @@ html[data-skin="retro"] .tour-bubble { width: 25rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   .animate-in, .animate-out { --tw-enter-translate-x: 0; --tw-enter-translate-y: 0; --tw-enter-scale: 1; --tw-exit-translate-x: 0; --tw-exit-translate-y: 0; --tw-exit-scale: 1; }
-  .mode-thumb { transition: none; }
 }
 html[data-motion="minima"] :is(.animate-in, .animate-out) { --tw-enter-translate-x: 0; --tw-enter-translate-y: 0; --tw-enter-scale: 1; --tw-exit-translate-x: 0; --tw-exit-translate-y: 0; --tw-exit-scale: 1; }
-html[data-motion="minima"] .mode-thumb { transition: none; }
 
 /* 3.6: the composer's contextual action slot (components/context-slot.jsx, DESIGN-SYSTEM §2.2): one suggestion at a
    time, in with a 150 ms fade and a 2 px rise, out with a fade; reduced motion keeps the fade only. */
@@ -492,54 +490,12 @@ html[data-motion="minima"] .mode-thumb { transition: none; }
 @media (prefers-reduced-motion: reduce) { .context-slot-item { animation-name: slot-fade; } }
 html[data-motion="minima"] .context-slot-item { animation-name: slot-fade; }
 
-/* 3.6: the bots' avatars (components/bot-avatar.jsx, DESIGN-SYSTEM §2.5). Idle: breathing, a blink at its own moment and
-   a look around; message: a bounce; working: a wiggle with the eyes up; paused: slow breathing and a «z»; happy: a hop.
-   Still with reduced motion, minimal motion (Ajustes) or a modest phone (glass-lite); small ones (< 28 px) only blink. */
-.bav-wrap { position: relative; display: inline-block; flex: none; line-height: 0; vertical-align: middle; }
-.bav { overflow: visible; display: block; }
-.bav .bav-body { transform-box: view-box; transform-origin: 50px 90px; }
-.bav :is(.bav-eyes, .bav-eye, .bav-z) { transform-box: view-box; }
-.bav[data-state="working"] .bav-eyes { transform: translate(1.5px, -4px); }
-.bav-small .bav-shadow { display: none; }
-.bav-chief { position: absolute; right: -6%; bottom: -4%; display: grid; place-items: center; border-radius: 999px; background: var(--warning); color: var(--warning-foreground, oklch(0.25 0.05 70)); box-shadow: 0 0 0 2px var(--background); }
-@media (prefers-reduced-motion: no-preference) {
-  html:not([data-motion="minima"]):not(.glass-lite) .bav:not(.bav-still) .bav-body { animation: bav-breathe 3.6s ease-in-out infinite; }
-  html:not([data-motion="minima"]):not(.glass-lite) .bav:not(.bav-still) .bav-eye { animation: bav-blink 4.2s infinite var(--bav-blink, 0s); }
-  html:not([data-motion="minima"]):not(.glass-lite) .bav-wrap:not(.bav-small) .bav:not(.bav-still)[data-state="idle"] .bav-eyes { animation: bav-look 7s ease-in-out infinite var(--bav-look, 0s); }
-  html:not([data-motion="minima"]):not(.glass-lite) .bav:not(.bav-still)[data-state="message"] .bav-body { animation: bav-bounce 0.9s cubic-bezier(0.3, 0.7, 0.4, 1) 1; }
-  html:not([data-motion="minima"]):not(.glass-lite) .bav:not(.bav-still)[data-state="working"] .bav-body { animation: bav-wiggle 1.4s ease-in-out infinite; }
-  html:not([data-motion="minima"]):not(.glass-lite) .bav:not(.bav-still)[data-state="paused"] .bav-body { animation: bav-breathe 6s ease-in-out infinite; }
-  html:not([data-motion="minima"]):not(.glass-lite) .bav:not(.bav-still)[data-state="paused"] .bav-z { animation: bav-z 3s ease-out infinite; }
-  html:not([data-motion="minima"]):not(.glass-lite) .bav:not(.bav-still)[data-state="happy"] .bav-body { animation: bav-hop 1s cubic-bezier(0.3, 0.7, 0.4, 1) 2; }
-}
-@keyframes bav-breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.035, 0.965); } }
-@keyframes bav-blink { 0%, 93%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.28); } }
-@keyframes bav-look { 0%, 30%, 100% { transform: translate(0, 0); } 40%, 55% { transform: translate(-3px, -1px); } 65%, 80% { transform: translate(3px, 0); } }
-@keyframes bav-bounce { 0% { transform: translateY(0) scale(1, 1); } 25% { transform: translateY(0) scale(1.08, 0.9); } 50% { transform: translateY(-14px) scale(0.95, 1.06); } 75% { transform: translateY(0) scale(1.05, 0.94); } 100% { transform: translateY(0) scale(1, 1); } }
-@keyframes bav-wiggle { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-6deg); } 75% { transform: rotate(6deg); } }
-@keyframes bav-hop { 0%, 100% { transform: translateY(0) scale(1, 1); } 30% { transform: translateY(-10px) scale(0.96, 1.05); } 55% { transform: translateY(0) scale(1.07, 0.93); } 75% { transform: translateY(-4px); } }
-@keyframes bav-z { 0% { transform: translate(0, 0); opacity: 0; } 30% { opacity: 0.55; } 100% { transform: translate(6px, -12px); opacity: 0; } }
-
-/* The avatar picker (create a bot, its editor): a grid of the twelve shapes and a row of the ten colours. */
-.avatar-shapes { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
-.avatar-shape { display: grid; place-items: center; aspect-ratio: 1; border-radius: 14px; border: 1px solid var(--border); background: var(--card); cursor: pointer; transition: background-color 120ms var(--ease-out), border-color 120ms var(--ease-out); }
-.avatar-shape:hover { background: var(--accent); }
-.avatar-shape[aria-checked="true"] { border: 2px solid var(--primary); background: var(--accent); }
-.avatar-shape:focus-visible, .avatar-color:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-.avatar-colors { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; justify-items: center; }
-.avatar-color { width: 100%; max-width: 30px; aspect-ratio: 1; border-radius: 999px; cursor: pointer; box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.35); }
-.avatar-color[aria-checked="true"] { outline: 2.5px solid var(--foreground); outline-offset: 2px; }
-html.glass .avatar-shape { border-color: var(--glass-stroke); background: var(--glass-regular); box-shadow: inset 0 1px 0 var(--glass-edge); }
-html.glass .avatar-shape[aria-checked="true"] { border-color: var(--primary); background: color-mix(in oklch, var(--primary) 14%, var(--glass-solid)); }
-/* The new-bot sheet: a dialog on the PC; on the phone it takes the whole screen (on Android a glass sheet). */
+/* A full sheet (a chat's info): a dialog on the PC; on the phone it takes the whole screen (on Android a glass sheet). */
 @media (max-width: 640px) {
   [data-slot="dialog-content"][data-sheet="full"] { inset: 0; --tw-translate-x: 0; --tw-translate-y: 0; translate: none; --tw-enter-scale: 1; --tw-exit-scale: 1; width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; padding: calc(12px + env(safe-area-inset-top, 0px)) 18px calc(18px + env(safe-area-inset-bottom, 0px)); align-content: start; }
   html.glass [data-slot="dialog-content"][data-sheet="full"] { top: calc(10px + env(safe-area-inset-top, 0px)); bottom: 0; height: auto; max-height: none; padding-top: 26px; border-radius: var(--glass-r-sheet) var(--glass-r-sheet) 0 0; }
 }
 
-/* 3.6 (messaging, M2): a bot's message in the Bots zone, as a messaging app's bubble (the user's is .bg-bubble). */
-.bot-bubble { background: var(--card); border: 1px solid var(--border); border-radius: 18px 18px 18px 6px; padding: 0.55rem 0.95rem 0.6rem; box-shadow: 0 1px 2px rgb(0 0 0 / 0.04); }
-html.glass .bot-bubble { background: var(--glass-regular); border-color: var(--glass-stroke); box-shadow: inset 0 1px 0 var(--glass-edge); }
 /* A chat's long-press menu on the phone: a sheet from the bottom edge (on Android the glass sheet does the same). */
 @media (max-width: 640px) {
   html:not(.glass) [data-slot="dialog-content"][data-sheet="bottom"] { top: auto; bottom: 0; left: 0; right: 0; translate: none; width: 100%; max-width: 100%; border-radius: 22px 22px 0 0; border-width: 1px 0 0; padding: 18px 14px calc(14px + env(safe-area-inset-bottom, 0px)); --tw-enter-scale: 1; --tw-exit-scale: 1; --tw-enter-translate-y: 100%; --tw-exit-translate-y: 100%; --tw-duration: 280ms; --tw-ease: var(--ease-drawer); }

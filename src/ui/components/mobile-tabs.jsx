@@ -1,20 +1,17 @@
 // 2.7, the phone: a simpler app. The sections are tabs at the bottom (3.6 M3: Chats, Tareas, Proyectos; the rest is in
 // the menu ☰ of each screen's bar, components/mobile-menu.jsx) instead of the sidebar. What only makes sense on the PC
 // (Agentes, Ajustes, Modo experto, minijuegos, the themes) is not here.
-import { MessagesSquare, ListTodo, FolderKanban, Ellipsis, Bell, Home } from 'lucide-react';
+import { MessagesSquare, ListTodo, FolderKanban, Ellipsis } from 'lucide-react';
 import { PageHeader } from './page.jsx';
-import { useStore, go, modeOf } from '@/lib/store.js';
+import { useStore, go } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { MoreContent } from './mobile-menu.jsx';
 import { unreadOf } from '@/lib/inbox.js';
 
 // Which tab a screen belongs to.
-// 3.6 (M3): the Orb zone: Chats · Tareas · Proyectos (a conversation belongs to Chats).
-const TAB_OF = { chat: 'chats', session: 'chats', new: 'chats', chats: 'chats', tasks: 'tasks', projects: 'projects',
-  // 3.5: the Bots mode has its own tabs (Chat, Bots, Recordatorios, Casa, Más)
-  // 3.6 (M2): Chats · Recordatorios · Casa
-  'bot-chats': 'bot-chats', 'bot-chat': 'bot-chats', 'bot-group': 'bot-chats', 'bot-reminders': 'bot-reminders', 'bot-home': 'bot-home' };
+// 3.6 (M3): Chats · Tareas · Proyectos (a conversation belongs to Chats).
+const TAB_OF = { chat: 'chats', session: 'chats', new: 'chats', chats: 'chats', tasks: 'tasks', projects: 'projects' };
 export const tabOf = (view) => TAB_OF[view] ?? 'more';
 
 export function MobileTabs() {
@@ -27,13 +24,7 @@ export function MobileTabs() {
   const working = sessions.some((s) => s.kind === 'chat' && s.status === 'running') || (app.chats ?? []).some((c) => c.busy);
   const orbUnread = useStore((s) => unreadOf(s.orbInbox));
   const current = tabOf(route.view);
-  const botsBusy = useStore((s) => Object.values(s.botStates ?? {}).some((x) => x.busy));
-  const unread = useStore((s) => unreadOf(s.inbox));
-  const tabs = modeOf(route) === 'bots' ? [
-    { id: 'bot-chats', icon: MessagesSquare, label: t('nav.chats'), testid: 'nav-bot-chats', count: unread, tone: 'primary', dot: botsBusy },
-    { id: 'bot-reminders', icon: Bell, label: t('nav.botReminders'), testid: 'nav-bot-reminders' },
-    { id: 'bot-home', icon: Home, label: t('nav.botHome'), testid: 'nav-bot-home' }
-  ] : [
+  const tabs = [
     { id: 'chats', icon: MessagesSquare, label: t('nav.chats'), testid: 'nav-chats', count: orbUnread, tone: 'primary', dot: working },
     { id: 'tasks', icon: ListTodo, label: t('nav.tasks'), testid: 'nav-tasks', count: approvals },
     { id: 'projects', icon: FolderKanban, label: t('nav.projects'), testid: 'nav-projects' }

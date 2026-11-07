@@ -1,7 +1,7 @@
 // 3.6 (mensajería, paso M4), de punta a punta con el motor: los avisos llegan solo a los móviles de quien ve el chat
-// (Ana sí, Leo no), con el nombre y el avatar del bot; los silenciados no avisan; «Aprobar» / «Rechazar» desde el aviso
-// del navegador (POST /api/note-action, una sola vez, como ese móvil); con PIN, «Aprobar» abre la app (no hay token);
-// la app abierta recibe el aviso como evento «note»; los avatares se sirven como PNG.
+// (Ana sí, Leo no), con el dibujo de Orbe; los silenciados no avisan; «Aprobar» / «Rechazar» desde el aviso del navegador
+// (POST /api/note-action, una sola vez, como ese móvil); con PIN, nada se hace desde el aviso; la app abierta recibe el
+// aviso como evento «note».
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -12,7 +12,7 @@ import { tempHome, startEngine, until } from './helpers.mjs';
 import { createPhone } from './fixtures/phone-client.mjs';
 import * as C from '../src/core/mobile-crypto.mjs';
 
-let A; let t; let port; let dir; let pushLog; let leo; let botId; let conv;
+let A; let t; let port; let dir; let pushLog; let leo; let conv;
 const links = [];
 const device = (name, kind = 'phone') => { const l = createPhone({ name, kind }); links.push(l); return l; };
 // A phone with notifications on and its app closed: its pushes go to the mock log.
@@ -41,75 +41,37 @@ before(async () => {
   leo = await A.call('persons.create', { name: 'Leo' });
   ana = await pushDevice(undefined, 'ana');
   leoPhone = await pushDevice(leo.id, 'leo');
-  const bot = await A.call('bots.create', { name: 'Agenda', role_text: 'Citas', avatar: { shape: 'gota', color: 'coral' } });
-  botId = bot.id;
+  await A.call('projects.create', { name: 'web' });
 });
 after(async () => { for (const l of links) { try { l.stop(); } catch { /* stopped */ } } await A?.stop?.(); t?.cleanup(); });
 
-test('un mensaje de un bot: aviso con su nombre y avatar, solo al móvil de Ana; Leo nada', async () => {
-  const r = await A.call('bots.send', { id: botId, text: 'hola Agenda' });
+test('la respuesta de Orbe avisa con su dibujo y abre esa conversación; Leo nada', async () => {
+  const n = pushes(ana.endpoint).length;
+  const r = await A.call('chat.send', { text: 'hola Orbe' });
   conv = r.conversation;
-  const p = await until(() => pushes(ana.endpoint).find((x) => x.data.tag === `orb-bot:${botId}` && x.data.kind === 'message'), 'el aviso de Ana', 30_000);
-  assert.equal(p.data.title, 'Agenda');
-  assert.equal(p.data.icon, '/avatars/gota-coral.png');
-  assert.deepEqual(p.data.route, { view: 'bot-chat', id: String(botId) });
-  assert.deepEqual(p.data.actions.map((a) => a.id), ['reply']);
+  const p = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.tag === `orb-conversation:${r.conversation}`), 'el aviso de Orbe', 30_000);
+  assert.equal(p.data.icon, '/icon.png');
+  assert.deepEqual(p.data.route, { view: 'chat', id: r.conversation });
   assert.ok(!pushes(leoPhone.endpoint).length, 'nada al móvil de Leo');
-  // El dibujo se sirve (solo formas y colores).
-  const img = await fetch(`${base()}${p.data.icon}`);
-  assert.equal(img.status, 200); assert.equal(img.headers.get('content-type'), 'image/png');
-  assert.equal((await fetch(`${base()}/avatars/nada-raro.png`)).status, 404);
 });
 
 test('silenciado: sin aviso', async () => {
-  await A.call('inbox.mute', { kind: 'bot', id: botId });
+  await A.call('inbox.mute', { kind: 'conversation', id: conv });
   const n = pushes(ana.endpoint).length;
-  await A.call('bots.send', { id: botId, text: 'otra vez' });
-  await until(async () => (await A.call('bots.chat', { id: botId })).lines.filter((l) => l.role === 'bot').length >= 2, 'la respuesta', 30_000);
-  await new Promise((r) => setTimeout(r, 400));
-  assert.equal(pushes(ana.endpoint).length, n, 'silenciado: nada');
-  await A.call('inbox.mute', { kind: 'bot', id: botId, muted: false });
+  await A.call('chat.send', { text: 'otra vez', conversation: conv });
+  await until(async () => (await A.call('chat.list', { conversation: conv })).filter((l) => l.role === 'orb').length >= 2, 'la respuesta', 30_000);
+  await new Promise((r) => setTimeout(r, 500));
+  assert.equal(pushes(ana.endpoint).slice(n).filter((x) => x.data.tag === `orb-conversation:${conv}`).length, 0);
+  await A.call('inbox.mute', { kind: 'conversation', id: conv, muted: false });
 });
 
-test('una tarjeta no sensible y sin bloqueo: Aprobar desde el aviso (una vez, como ese móvil)', async () => {
-  const jefe = await A.call('bots.create', { name: 'Jefe', role_text: 'Reparte', is_chief: true });
-  await A.call('bots.create', { name: 'Otro', role_text: 'Nada' });
-  const n = pushes(ana.endpoint).length;
-  await A.call('bots.send', { id: jefe.id, text: 'BOT_CALL bot_pause {"name":"Otro","reason":"no se usa"}' });
-  const p = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.kind === 'card'), 'el aviso de la tarjeta', 30_000);
-  assert.deepEqual(p.data.actions.map((a) => [a.id, Boolean(a.open)]), [['deny', false], ['allow', false]], 'se contesta ahí');
-  assert.ok(p.data.acts.allow && p.data.acts.deny);
-  const res = await noteAction(p.data.acts.allow);
-  assert.equal(res.status, 200, await res.clone().text());
-  const card = (await A.call('bots.chat', { id: jefe.id })).lines.find((l) => l.id === p.data.card.item);
-  assert.notEqual(card.meta.status, 'pending', 'contestada');
-  assert.equal(card.meta.by?.device, ana.id, 'como ese móvil');
-  assert.equal((await noteAction(p.data.acts.allow)).status, 401, 'una sola vez');
-  assert.equal((await noteAction(p.data.acts.deny)).status, 401, 'la otra respuesta también se gasta');
-  assert.equal((await noteAction('inventado')).status, 401);
-});
-
-test('una tarjeta sensible: Aprobar y Rechazar abren la app (sin tokens)', async () => {
-  const n = pushes(ana.endpoint).length;
-  await A.call('bots.send', { id: botId, text: 'BOT_CALL bot_confirm {"action":"comprar","detail":"Leche","url":"https://tienda.example"}' });
-  const p = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.kind === 'card'), 'el aviso de la tarjeta', 30_000);
-  assert.deepEqual(p.data.actions.map((a) => [a.id, Boolean(a.open)]), [['deny', true], ['allow', true]]);
-  assert.deepEqual(p.data.acts, {});
-});
-
-test('con el bloqueo de la app (PIN): nada se hace desde el aviso; Responder abre la app', async () => {
+test('con el bloqueo de la app (PIN): Responder abre la app', async () => {
   await A.call('persons.setPin', { pin: '2468' });
   try {
     const n = pushes(ana.endpoint).length;
-    await A.call('bots.send', { id: botId, text: 'hola con candado' });
-    const m = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.kind === 'message'), 'el mensaje', 30_000);
+    await A.call('chat.send', { text: 'hola con candado', conversation: conv });
+    const m = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.tag === `orb-conversation:${conv}` && x.data.kind === 'message'), 'el mensaje', 30_000);
     assert.deepEqual(m.data.actions.map((a) => [a.id, Boolean(a.open), Boolean(a.input)]), [['reply', true, false]], 'sin escribir en el aviso');
-    const k = pushes(ana.endpoint).length;
-    const jefe = (await A.call('bots.list')).bots.find((b) => b.name === 'Jefe');
-    await A.call('bots.send', { id: jefe.id, text: 'BOT_CALL bot_pause {"name":"Agenda","reason":"vacaciones"}' });
-    const c = await until(() => pushes(ana.endpoint).slice(k).find((x) => x.data.kind === 'card'), 'la tarjeta', 30_000);
-    assert.ok(c.data.actions.every((a) => a.open), 'aprobar y rechazar, en la app');
-    assert.deepEqual(c.data.acts, {}, 'sin tokens');
   } finally { await A.call('persons.setPin', { pin: null, current: '2468' }); }
 });
 
@@ -119,34 +81,22 @@ test('la app abierta recibe el aviso como evento «note» (lo muestra Android en
   await until(() => l.peers().find((x) => x.id === peer.id)?.online, 'en directo');
   const notes = []; l.on('note', (p) => notes.push(p));
   const before = pushes(ana.endpoint).length;
-  await A.call('bots.send', { id: botId, text: 'y ahora' });
-  const n = await until(() => notes.find((x) => x.key === `bot:${botId}`), 'la nota', 30_000);
-  assert.equal(n.title, 'Agenda'); assert.equal(n.largeIcon, 'av_gota_coral');
+  await A.call('chat.send', { text: 'y ahora', conversation: conv });
+  const n = await until(() => notes.find((x) => x.key === `conversation:${conv}`), 'la nota', 30_000);
+  assert.equal(n.largeIcon, 'av_orb');
   assert.ok(pushes(ana.endpoint).length >= before, 'el otro móvil (cerrado) sigue con su push');
   l.stop();
 });
 
-test('zona Orb: la respuesta de Orbe avisa con su dibujo y abre esa conversación', async () => {
+test('el permiso de una tarea llega con Aprobar y Rechazar; con un PIN puesto después su token ya no vale', async () => {
   const n = pushes(ana.endpoint).length;
-  const r = await A.call('chat.send', { text: 'hola Orbe' });
-  const p = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.tag === `orb-conversation:${r.conversation}`), 'el aviso de Orbe', 30_000);
-  assert.equal(p.data.icon, '/icon.png');
-  assert.deepEqual(p.data.route, { view: 'chat', id: r.conversation });
-  assert.ok(!pushes(leoPhone.endpoint).length, 'nada al móvil de Leo');
-});
-
-test('un PIN puesto después del aviso: su token ya no aprueba (abre la app)', async () => {
-  const jefe = (await A.call('bots.list')).bots.find((b) => b.name === 'Jefe');
-  await A.call('bots.create', { name: 'Tercero', role_text: 'Nada' });
-  const n = pushes(ana.endpoint).length;
-  await A.call('bots.send', { id: jefe.id, text: 'BOT_CALL bot_pause {"name":"Tercero","reason":"no se usa"}' });
-  const p = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.kind === 'card'), 'la tarjeta', 30_000);
-  assert.ok(p.data.acts.allow);
+  await A.call('tasks.create', { project: 'web', title: 'Subir', description: 'PIDE_PERMISO', agent: 'codex' });
+  const p = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.kind === 'approval'), 'el permiso', 30_000);
+  assert.ok(p.data.acts.allow && p.data.acts.deny);
   await A.call('persons.setPin', { pin: '1357' });
   try {
     const r = await noteAction(p.data.acts.allow);
     assert.equal(r.status, 403); assert.equal((await r.json()).reason, 'locked');
-    const card = (await A.call('bots.chat', { id: jefe.id })).lines.find((l) => l.id === p.data.card.item);
-    assert.equal(card.meta.status, 'pending', 'sin contestar');
   } finally { await A.call('persons.setPin', { pin: null, current: '1357' }); }
+  assert.equal((await noteAction(p.data.acts.deny)).status, 401, 'el primer intento gasta los dos tokens del aviso');
 });

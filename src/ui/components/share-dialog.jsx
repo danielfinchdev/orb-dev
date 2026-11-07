@@ -1,4 +1,4 @@
-// 3.6 «Personas»: share a bot, a group or a project with other people of this Orb: to see it, to talk with it (or work
+// 3.6 «Personas»: share a project with other people of this Orb: to see it, to talk with it (or work
 // in the project) or to change it. Only who may share it sees the button (the server checks it again). Also the badge
 // «Compartido por Ana» and the list «Compartido conmigo».
 import { useEffect, useState } from 'react';
@@ -7,13 +7,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, Select } from '@/comp
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { PersonDot } from '@/components/person-menu.jsx';
-import { BotAvatar, GroupAvatar } from '@/components/bot-avatar.jsx';
-import { useStore, call, act, setState, go, refreshSoon, loadBotsSoon } from '@/lib/store.js';
+import { useStore, call, act, setState, go, refreshSoon } from '@/lib/store.js';
 import { RIGHTS, personsOn, shareRows, sharedWithMe, sharedBy } from '@/lib/persons.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
-// { type: 'bot' | 'group' | 'project', id, name, owner? }
+// { type: 'project', id, name, owner? }
 export const openShare = (res) => setState({ share: res });
 
 export function ShareButton({ type, id, name, owner, size = 'sm', className }) {
@@ -49,7 +48,7 @@ export function ShareHost() {
       ? await act(call('shares.remove', { type: res.type, id: String(res.id), person }), t('share.removed'))
       : await act(call('shares.set', { type: res.type, id: String(res.id), person, right }), t('share.saved'));
     setBusy(null);
-    if (ok) { load(); refreshSoon(); if (res.type !== 'project') loadBotsSoon(); }
+    if (ok) { load(); refreshSoon(); }
   };
   const options = [{ value: 'none', label: t('share.right.none') }, ...RIGHTS.map((r) => ({ value: r, label: t(`share.right.${r}`) }))];
   return (
@@ -85,21 +84,20 @@ export function SharedBadge({ type, id, className }) {
 }
 
 // The sidebar's «Compartido conmigo»: what others shared with this person, each opening its screen.
-export function SharedWithMe({ kinds = ['project', 'bot', 'group'], className }) {
+export function SharedWithMe({ kinds = ['project'], className }) {
   const t = useT();
   const shared = useStore((s) => s.shared?.withMe);
-  const bots = useStore((s) => s.bots);
   const projects = useStore((s) => s.projects);
-  const list = sharedWithMe(shared ?? [], { bots: bots?.bots ?? [], groups: bots?.groups ?? [], projects }).filter((x) => kinds.includes(x.type));
+  const list = sharedWithMe(shared ?? [], { projects }).filter((x) => kinds.includes(x.type));
   if (!list.length) return null;
-  const open = (x) => (x.type === 'project' ? go({ view: 'projects', project: x.name }) : x.type === 'bot' ? go({ view: 'bot-chat', id: Number(x.id) }) : go({ view: 'bot-group', id: Number(x.id) }));
+  const open = (x) => go({ view: 'projects', project: x.name });
   return (
     <div className={cn('pt-3', className)} data-testid="shared-with-me">
       <div className="text-muted-foreground flex items-center gap-1.5 px-2.5 pb-1 text-[11px] tracking-wide uppercase"><Users className="size-3" />{t('share.withMe')}<span className="opacity-70">· {list.length}</span></div>
       <div className="grid gap-px">
         {list.map((x) => (
           <button key={`${x.type}:${x.id}`} type="button" onClick={() => open(x)} className="hover:bg-accent/60 flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px]" data-testid={`shared-${x.type}-${x.name}`}>
-            {x.type === 'bot' ? <BotAvatar bot={x.item ?? { id: x.id }} size={18} still /> : x.type === 'group' ? <GroupAvatar members={(x.item?.members ?? []).map((m) => (bots?.bots ?? []).find((b) => b.id === Number(m?.id ?? m)))} size={18} /> : <span className="w-[18px] shrink-0 text-center">{x.icon || '📁'}</span>}
+            <span className="w-[18px] shrink-0 text-center">{x.icon || '📁'}</span>
             <span className="min-w-0 flex-1 truncate">{x.name}</span>
             <span className="text-muted-foreground shrink-0 text-[11px]">{t('share.by', { name: x.by })}</span>
           </button>

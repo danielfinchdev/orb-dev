@@ -6,7 +6,7 @@ import QRCode from 'qrcode';
 import { QrCode, Smartphone, Globe, Pencil, Trash2, X, Copy, Check, LoaderCircle, ShieldCheck, TriangleAlert, ChevronDown, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, Field, Input } from '@/components/ui/basic.jsx';
-import { BubbleTip, Select, Switch, Checkbox } from '@/components/ui/overlay.jsx';
+import { BubbleTip, Select } from '@/components/ui/overlay.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { useStore, call, act, bridge, loadMe } from '@/lib/store.js';
 import { countdown, sortDevices } from '@/lib/link.js';
@@ -19,14 +19,13 @@ const KIND_ICON = { phone: Smartphone, browser: Globe };
 
 function Dot({ on }) { const t = useT(); return <span className={cn('size-2 shrink-0 rounded-full', on ? 'bg-success' : 'bg-muted-foreground/40')} role="img" aria-label={on ? t('link.online') : t('link.offline')} />; }
 
-// The QR with its short code and how long it lasts. 3.5.1: first, what it is for (a phone or a browser) and whether that
-// device may answer the bots' cards: decided here, the device cannot change it.
+// The QR with its short code and how long it lasts. 3.5.1: first, what it is for (a phone or a browser): decided here,
+// the device cannot change it.
 const PAIR_FOR = ['phone', 'browser'];
 function PairCard() {
   const t = useT();
   const [qr, setQr] = useState(null);
   const [device, setDevice] = useState('phone');
-  const [approve, setApprove] = useState(true);
   // 3.6: «¿Para quién?»: the device is of the person chosen here (the owner may choose anyone, or someone new).
   const me = useStore((s) => s.me);
   const people = useStore((s) => s.people ?? []);
@@ -42,7 +41,7 @@ function PairCard() {
   const make = async () => {
     setBusy(true);
     const who = forWho === '__new' ? { newPerson: newName.trim() } : forWho && forWho !== me?.person?.id ? { person: forWho } : {};
-    const r = await act(call('link.qr', { device, approve, ...who }));
+    const r = await act(call('link.qr', { device, ...who }));
     if (r && who.newPerson) loadMe();
     if (r) setQr({ ...r, svg: await QRCode.toString(r.url, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }) });
     setBusy(false); setNow(Date.now());
@@ -85,7 +84,6 @@ function PairCard() {
             <Field label={t('link.forWhat')}>
               <Select className="w-full sm:w-72" value={device} onValueChange={setDevice} data-testid="link-for" title={t('link.forWhat')} options={PAIR_FOR.map((k) => ({ value: k, label: t(`link.for.${k}`) }))} />
             </Field>
-            <label className="flex cursor-pointer items-start gap-2 text-sm"><Checkbox checked={approve} onCheckedChange={(v) => setApprove(Boolean(v))} data-testid="link-for-approve" /><span>{t('link.forApprove')}<span className="text-muted-foreground block text-xs">{t('link.forApproveHint')}</span></span></label>
             <p className="text-muted-foreground text-xs">{t('link.preferHttps')}</p>
             <div className="flex flex-wrap items-center gap-2">
               <Button onClick={make} disabled={busy || (forWho === '__new' && !newName.trim())} aria-busy={busy} data-testid="link-make">{busy ? <LoaderCircle className="animate-spin" /> : <QrCode />}{expired ? t('link.again') : t('link.make')}</Button>
@@ -121,8 +119,6 @@ function DevicesCard({ devices, reload }) {
   const groups = personsOn(me) ? devicesByPerson(devices, people) : [{ person: null, name: '', devices }];
   const rename = (d) => form(t('link.renameTitle'), { initial: { name: d.name }, body: (v, set) => <Input autoFocus value={v.name} maxLength={60} onChange={(e) => set({ name: e.target.value })} />, ok: t('link.save'), onOk: async (v) => { await call('link.rename', { id: d.id, name: v.name.trim() || d.name }); reload(); return true; } });
   const revoke = async (d) => { if (await confirm(t('link.revokeTitle', { name: d.name }), t('link.revokeBody'), { ok: t('link.revoke'), danger: true })) { await act(call('link.revoke', { id: d.id }), t('link.revoked')); reload(); } };
-  // 3.5.1: may it answer the bots' cards.
-  const approveOn = async (d, on) => { await act(call('link.setApprove', { id: d.id, approve: on }), on ? t('link.approveOn', { name: d.name }) : t('link.approveOff', { name: d.name })); reload(); };
   return (
     <Card data-testid="link-devices">
       <CardHeader><CardTitle>{t('link.devices')}</CardTitle><CardDescription>{t('link.devicesHint')}</CardDescription></CardHeader>
@@ -139,10 +135,6 @@ function DevicesCard({ devices, reload }) {
                 <div className="flex min-w-0 items-center gap-2"><Dot on={d.online} /><span className="truncate text-sm font-medium">{d.name}</span></div>
                 <div className="text-muted-foreground truncate text-xs">{[t(`link.kind.${d.kind}`), d.online ? t('link.onNow') : d.lastSeen ? t('link.seen', { when: ago(d.lastSeen) }) : t('link.never')].filter(Boolean).join(' · ')}</div>
               </div>
-              <label className="text-muted-foreground flex shrink-0 cursor-pointer items-center gap-1.5 text-xs" title={t('link.approveHint')}>
-                <Switch checked={d.approve !== false} onCheckedChange={(on) => approveOn(d, on)} aria-label={t('link.approve')} data-testid="link-approve" />
-                <span className="hidden sm:inline">{t('link.approve')}</span>
-              </label>
               <BubbleTip title={t('link.rename')}><Button size="icon-sm" variant="ghost" aria-label={t('link.rename')} onClick={() => rename(d)}><Pencil /></Button></BubbleTip>
               <BubbleTip title={t('link.revoke')}><Button size="icon-sm" variant="danger" aria-label={t('link.revoke')} onClick={() => revoke(d)} data-testid="link-revoke"><Trash2 /></Button></BubbleTip>
             </div>

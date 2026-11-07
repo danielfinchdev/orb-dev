@@ -7,12 +7,9 @@ import { Tip, BubbleTip } from './ui/overlay.jsx';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { PRODUCT } from '../../core/product.mjs';
-import { ModeSwitch } from './mode-switch.jsx';
 import { PersonMenu, BrowserSettingsMenu } from './person-menu.jsx';
 import { personsOn } from '@/lib/persons.js';
-import { BotsInbox } from '@/views/bots/inbox.jsx';
 import { OrbInbox } from '@/views/orb/inbox.jsx';
-import { modeOf } from '@/lib/store.js';
 
 // The assistant's wordmark ORB·E, drawn its own way in each theme (app.css .wordmark): spaced capitals with a dot of the
 // theme's colour in Orb, a techno one underlined in Vaporwave…
@@ -127,7 +124,7 @@ export function Sidebar({ mood }) {
   const { width, setWidth, startResize } = useSidebarWidth();
   const is = (view) => route.view === view;
   return (
-    // 3.6 (M2, M3): both zones are a messaging app's chat list, with the places' labels under the search: at least 340 px.
+    // 3.6 (M3): the chat list of a messaging app, with the places' labels under the search: at least 340 px.
     <aside className="bg-sidebar relative flex h-full shrink-0 flex-col border-r" style={{ width: Math.max(width, 340) }}>
       {bridge.mobile ? null : <div className="sidebar-resize" role="separator" aria-orientation="vertical" aria-label={t('comp.sidebar.resize')} onPointerDown={startResize} onDoubleClick={() => setWidth(SIDEBAR_DEFAULT)} data-testid="sidebar-resize" />}
       <div className="theme-band side-band app-titlebar flex h-14 shrink-0 items-center gap-2 border-b px-4">
@@ -145,10 +142,8 @@ export function Sidebar({ mood }) {
           <SidebarToggle />
         </div>
       </div>
-      {/* 3.5: «Orb | Bots»: the app as always, or the user's bots with their own menu. */}
-      <div className="px-3 pt-3 pb-1"><ModeSwitch /></div>
-      {/* 3.6: each zone is a messaging app's chat list: Bots (views/bots/inbox.jsx, M2) and Orb (views/orb/inbox.jsx, M3). */}
-      <div className="flex min-h-0 flex-1 flex-col pt-2">{modeOf(route) === 'bots' ? <BotsInbox /> : <OrbInbox />}</div>
+      {/* 3.6 (M3): the chat list of a messaging app (views/orb/inbox.jsx). */}
+      <div className="flex min-h-0 flex-1 flex-col pt-2"><OrbInbox /></div>
       <SidebarFooter version={app.version} is={is} settingsOpen={settingsOpen} open={sections.footer === true} onOpen={(v) => setSection('footer', v)} />
     </aside>
   );

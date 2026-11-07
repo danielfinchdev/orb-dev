@@ -163,17 +163,6 @@ test('el móvil hace lo suyo y nada más (acciones del PC, acceso total, archivo
   assert.equal((await upload(new Uint8Array(Buffer.from('MZ ejecutable')))).status, 415);
 });
 
-test('3.5: un bot sabe que le escriben desde el móvil por el tipo del dispositivo, no por lo que este mande', async () => {
-  const p = globalThis.phone1;
-  const { bots } = await call('bots.list');
-  const r = await p.call('bots.send', { id: bots[0].id, text: 'Hola desde el móvil', via: 'browser' });
-  assert.equal(r.ok, true, r.error);
-  const file = path.join(t.base, 'fake.jsonl');
-  const turn = () => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)).find((l) => /Hola desde el móvil/.test(l.text ?? '')) : null);
-  await until(() => turn(), 'el bot recibe el mensaje', 20000);
-  assert.match(turn().text, /te escribe desde el móvil/);
-});
-
 test('avisos: solo servicios de avisos conocidos', async () => {
   const p = globalThis.phone1;
   const send = async (subscription) => { const box = p.box('push', { subscription }); return C.open(p.key, await (await p.post('/api/push', box)).json(), C.AAD.response(p.id)); };

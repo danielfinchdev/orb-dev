@@ -46,7 +46,7 @@ function toolIcon(name = '') {
   return Wrench;
 }
 
-// 3.2.1: a tool's name as people read it: the tools of Orb and Opti Bot by what they do («Creando una tarea»), the
+// 3.2.1: a tool's name as people read it: the tools of Orb (and of Opti Bot, in its old conversation) by what they do («Creando una tarea»), the
 // agents' own (Read, Bash…) as they are, never «mcp__opti__opti_propose» or «ToolSearch».
 function toolName(t, name) {
   const bare = bareTool(name);
@@ -120,7 +120,7 @@ function Block({ b, agent, brain, sessionId, project, catalog }) {
 }
 
 // 3.7: a proposal Opti Bot left in its conversation before «Monitoreo del equipo» was removed (2.7–3.6): read only, as it
-// ended. The same changes are proposed now by a bot with the «Equipo» tools (src/mcp/bot.mjs › pc_propose).
+// ended.
 const OLD_STATUS = { done: ['done', 'success'], running: ['expired', 'secondary'], pending: ['expired', 'secondary'], failed: ['failed', 'secondary'], cancelled: ['failed', 'secondary'], denied: ['denied', 'secondary'], expired: ['expired', 'secondary'] };
 function OptiOldCard({ body = {} }) {
   const t = useT();
@@ -131,11 +131,11 @@ function OptiOldCard({ body = {} }) {
       <div className="flex items-start gap-2.5">
         <ShieldAlert className="text-muted-foreground mt-0.5 size-4 shrink-0" />
         <div className="min-w-0 flex-1">
-          <div className="font-medium">{t('session.optiOld', { action: t(`msg.bots.pc.${body.action}`) })}{target ? <span className="text-muted-foreground font-normal"> · {target}</span> : null}</div>
+          <div className="font-medium">{t('session.optiOld', { action: t(`session.opti.${body.action}`) })}{target ? <span className="text-muted-foreground font-normal"> · {target}</span> : null}</div>
           {body.reason ? <div className="text-muted-foreground mt-0.5">{body.reason}</div> : null}
           {body.result ? <div className="mt-1.5 whitespace-pre-wrap">{body.result}</div> : null}
         </div>
-        <Badge variant={tone}>{t(`bots.card.${label}`)}</Badge>
+        <Badge variant={tone}>{t(`session.optiStatus.${label}`)}</Badge>
       </div>
     </div>
   );

@@ -36,11 +36,5 @@ export default {
   "link.forWhat": "¿Qué vas a enlazar?",
   "link.for.phone": "Mi móvil",
   "link.for.browser": "Un navegador",
-  "link.forApprove": "Puede aprobar lo que piden los bots",
-  "link.forApproveHint": "Abrir la puerta, comprar, enviar un correo… Quítalo si el aparato no es solo tuyo.",
   "link.preferHttps": "Lo más seguro es la dirección https de Tailscale. Por la wifi de casa (http) enlaza la app de Android.",
-  "link.approve": "Puede aprobar",
-  "link.approveHint": "Puede responder a las tarjetas de los bots (la casa, compras, envíos)",
-  "link.approveOn": "{name} ya puede aprobar",
-  "link.approveOff": "{name} ya no puede aprobar"
 };

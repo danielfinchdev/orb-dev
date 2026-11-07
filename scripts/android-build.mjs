@@ -1,5 +1,5 @@
 // 3.5: builds the Android app «Orb» (android-app/, Capacitor) into dist/Orb-<version>-android.apk:
-//   0. the notifications' pictures (res/drawable-nodpi/av_*.png),
+//   0. the notifications' picture (res/drawable-nodpi/av_orb.png),
 //   1. the interface in the app's mode (vite build --mode android → android-app/www),
 //   2. cap sync (copies it into the Android project with the plugins),
 //   3. Gradle (assembleRelease, signed with this PC's own key; --debug: assembleDebug).
@@ -55,13 +55,12 @@ async function signingKey() {
   return { ORB_KEYSTORE: store, ORB_KEYSTORE_PASS: fs.readFileSync(passFile, 'utf8').trim(), ORB_KEY_ALIAS: 'orb' };
 }
 
-// 3.6 (messaging, M4): the pictures of the notifications (the app shows only its own resources): one per bot avatar
-// (av_<shape>_<color>.png, drawn from src/core/avatar.mjs) and Orb's (av_orb.png). Made on every build, not kept in git.
+// 3.6 (messaging, M4): the picture of the notifications (the app shows only its own resources): Orb's (av_orb.png), copied
+// on every build, not kept in git. 3.8: the bots' avatars (av_<shape>_<color>.png) left by older builds are removed.
 async function notificationIcons() {
   const dir = path.join(APP, 'android', 'app', 'src', 'main', 'res', 'drawable-nodpi');
   fs.mkdirSync(dir, { recursive: true });
-  const { allAvatarPngs } = await import('../src/engine/avatar-png.mjs');
-  for (const { name, png } of allAvatarPngs(192)) fs.writeFileSync(path.join(dir, `${name}.png`), png);
+  for (const f of fs.readdirSync(dir)) if (/^av_.+\.png$/.test(f) && f !== 'av_orb.png') fs.rmSync(path.join(dir, f));
   fs.copyFileSync(path.join(ROOT, 'src', 'ui', 'public', 'icon.png'), path.join(dir, 'av_orb.png'));
 }
 

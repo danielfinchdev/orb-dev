@@ -4,8 +4,6 @@
 // Orb» from other apps and notifications. Does nothing outside the app (Electron or a phone's browser). Must be imported
 // before web-bridge.js. The plugins load only inside the app.
 import * as L from './link-payload.js';
-import { upcomingReminderNotes, REMINDER_IDS } from './reminder-notes.js';
-import { dedupeReminders } from './homes.js';
 import * as N from '../../core/notes.mjs';
 
 const native = Boolean(window.Capacitor?.isNativePlatform?.());
@@ -139,12 +137,6 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
           if (ours.length) await L.removeDeliveredNotifications({ notifications: ours });
         } catch { /* nothing shown */ }
       });
-      // 3.6: what this person chose for the lock screen (persons.prefs.get), else the Orb's setting (before 3.6).
-      const previewOf = async () => {
-        const mine = await orb.call('persons.prefs.get').catch(() => null);
-        if (mine?.preview) return mine.preview;
-        return (await orb.call('app.state').catch(() => null))?.config?.mobile?.preview ?? 'chat';
-      };
       // 3.6: the app lock's fingerprint or face (Android's own prompt); the PIN stays the way in without it.
       orb.appLock = {
         available: async () => { try { return Boolean((await (await Native()).biometricAvailable())?.available); } catch { return false; } },
@@ -153,32 +145,15 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
           catch { return false; }
         }
       };
-      // 3.6: the bots' reminders of the next 48 h, scheduled on the phone (they sound with the app closed or offline).
-      // Only when notifications are on; read again when a bot or the board changes, or another person is linked.
-      let remindTimer = null;
-      const scheduleReminders = async () => {
-        if (!(await pieces.record())) return;
+      // 3.8: the bots' reminders are gone. The ones 3.7 scheduled on this phone (ids 50000-50999) are cancelled once.
+      (async () => {
+        if (localStorage.getItem('orb.reminders38') === '1') return;
         const { LocalNotifications } = await import('@capacitor/local-notifications');
-        const pending = (await LocalNotifications.getPending().catch(() => null))?.notifications ?? [];
-        const ours = pending.filter((x) => x.id >= REMINDER_IDS.first && x.id < REMINDER_IDS.first + REMINDER_IDS.size);
-        if (ours.length) await LocalNotifications.cancel({ notifications: ours.map((x) => ({ id: x.id })) }).catch(() => {});
-        if (localStorage.getItem(NOTIFY) !== '1') return;
-        const reminders = await orb.call('bots.reminders.list').catch(() => null);
-        if (!Array.isArray(reminders)) return;
-        const bots = await orb.call('bots.list').catch(() => null);
-        const names = new Map((bots?.bots ?? []).map((b) => [b.id, b.name]));
-        // 3.7 (WS4): one per reminder (its uid: the same one may come as a bot's copy), and only those this Orb rings.
-        const notes = upcomingReminderNotes(dedupeReminders(reminders), Date.now(), {
-          preview: await previewOf(),
-          titleFor: (r) => names.get(r.bot_id) ?? '',
-          hidden: { title: await tl('app.reminderTitle'), body: await tl('app.reminderHidden') }
-        });
-        if (notes.length) await LocalNotifications.schedule({ notifications: notes.map((x) => ({ id: x.id, title: x.title, body: x.body, group: x.group, schedule: { at: new Date(x.at), allowWhileIdle: true } })) }).catch(() => {});
-      };
-      const remindSoon = () => { clearTimeout(remindTimer); remindTimer = setTimeout(() => { scheduleReminders().catch(() => {}); }, 1500); };
-      for (const e of ['bot.updated', 'board:changed', 'persons:switched']) orb.on(e, remindSoon);
-      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') remindSoon(); });
-      remindSoon();
+        const pending = (await LocalNotifications.getPending())?.notifications ?? [];
+        const old = pending.filter((x) => x.id >= 50_000 && x.id < 51_000);
+        if (old.length) await LocalNotifications.cancel({ notifications: old.map((x) => ({ id: x.id })) });
+        localStorage.setItem('orb.reminders38', '1');
+      })().catch(() => {});
       orb.push = {
         supported: () => true,
         installed: () => true,
@@ -189,10 +164,9 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
           const p = await LocalNotifications.requestPermissions();
           if (p.display !== 'granted') throw new Error(await tl('app.pushDeniedApp'));
           localStorage.setItem(NOTIFY, '1');
-          remindSoon();
           return true;
         },
-        async disable() { localStorage.setItem(NOTIFY, '0'); remindSoon(); return false; }
+        async disable() { localStorage.setItem(NOTIFY, '0'); return false; }
       };
       // What another app shared: on start and each time the app is opened with something new.
       Native().then(async (nat) => {

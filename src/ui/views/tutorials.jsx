@@ -2,7 +2,7 @@
 // keyboard shortcuts and the frequently asked questions, all searchable; and the button that replays the robot's guided
 // tour (components/tour.jsx). Texts: help.* in the locales.
 import { useState } from 'react';
-import { GraduationCap, Search, Rocket, MessageSquare, Brain, MessageSquarePlus, ListTodo, FolderKanban, Bot, Gauge, CalendarClock, BookOpen, Smartphone, SquareTerminal, Gamepad2, Palette, ShieldCheck, PenTool, HeartPulse, Keyboard, CircleHelp, ChevronRight, Play, ArrowRight } from 'lucide-react';
+import { GraduationCap, Search, Rocket, MessageSquare, Brain, MessageSquarePlus, ListTodo, FolderKanban, Bot, Gauge, CalendarClock, BookOpen, Smartphone, SquareTerminal, Gamepad2, Palette, ShieldCheck, PenTool, Keyboard, CircleHelp, ChevronRight, Play, ArrowRight } from 'lucide-react';
 import { PageHeader } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -25,8 +25,6 @@ const TUTORIALS = [
   { id: 'usage', icon: Gauge, lines: 3, go: () => openSettings('tareas'), pc: true },
   { id: 'schedules', icon: CalendarClock, lines: 3, go: () => go('schedules') },
   { id: 'logs', icon: BookOpen, lines: 3, go: () => go('logs') },
-  // 3.7: «Monitoreo del equipo» is gone; looking after the PC is a bot with the «Equipo» tools.
-  { id: 'pccare', icon: HeartPulse, lines: 3, go: () => go({ view: 'bots' }) },
   { id: 'phone', icon: Smartphone, lines: 3, go: () => openSettings('movil'), pc: true },
   { id: 'expert', icon: SquareTerminal, lines: 2, go: () => openSettings('experto'), pc: true },
   { id: 'games', icon: Gamepad2, lines: 2, go: () => openGames(), pc: true },

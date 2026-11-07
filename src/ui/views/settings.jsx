@@ -3,7 +3,7 @@
 // Datos, Avanzado and Acerca de. «Mi perfil» is not a section: the user menu opens it in this same window, on its own.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { DatabaseBackup, Settings, FlaskConical, FolderOpen, HeartPulse, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, Wrench, ChevronRight, SlidersHorizontal, Radar, Cpu, Info, ExternalLink } from 'lucide-react';
+import { DatabaseBackup, Settings, FlaskConical, FolderOpen, HeartPulse, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, Wrench, ChevronRight, SlidersHorizontal, Radar, Cpu, Info, ExternalLink, ShieldBan } from 'lucide-react';
 import { ToolIcon } from '@/components/agent-icon.jsx';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, APPEARANCE_DEFAULTS } from '../../core/appearance.mjs';
 import { PRODUCT, AUTHOR } from '../../core/product.mjs';
@@ -13,7 +13,7 @@ import { Robot } from '@/components/robot.jsx';
 import { SkinPreview } from '@/components/skin-preview.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea, Kbd, PathText, Spinner } from '@/components/ui/basic.jsx';
+import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea, Kbd, PathText, Spinner } from '@/components/ui/basic.jsx';
 import { Select, Switch, Checkbox, Dialog, DialogContent, DialogTitle, BubbleTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
 import { ModelGuide } from '@/components/model-guide.jsx';
 import { AGENT } from '@/lib/labels.js';
@@ -437,6 +437,41 @@ function BrowserCard({ c }) {
   );
 }
 
+// «Cosas que nadie toca» (config.protected, src/core/guard.mjs › protectedHit): names, paths or containers no agent
+// touches. Chips to remove, a field to add; saved at once.
+function ProtectedCard({ c }) {
+  const t = useT();
+  const [draft, setDraft] = useState('');
+  const list = Array.isArray(c.protected) ? c.protected : [];
+  const store = (items) => {
+    const seen = new Set();
+    const clean = items.map((x) => String(x ?? '').trim()).filter((x) => x.length >= 2 && !seen.has(x.toLowerCase()) && seen.add(x.toLowerCase()));
+    return save({ protected: clean.slice(0, 50) }, t('settings.protectedSaved'));
+  };
+  const add = async () => { if (draft.trim().length >= 2 && await store([...list, draft])) setDraft(''); };
+  return (
+    <Card data-testid="protected-card">
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><ShieldBan className="text-primary size-5" /><div><CardTitle>{t('settings.protected')}</CardTitle><CardDescription>{t('settings.protectedHint')}</CardDescription></div></CardHeader>
+      <CardContent className="grid gap-3">
+        {list.length ? (
+          <div className="flex flex-wrap gap-1.5">
+            {list.map((x) => (
+              <Badge key={x} variant="secondary" className="gap-1 font-mono" data-testid="protected-item">
+                {x}
+                <button type="button" className="hover:text-destructive -mr-0.5 rounded-sm" aria-label={t('settings.protectedRemove', { name: x })} onClick={() => store(list.filter((y) => y !== x))}><X className="size-3" /></button>
+              </Badge>
+            ))}
+          </div>
+        ) : <p className="text-muted-foreground text-sm">{t('settings.protectedEmpty')}</p>}
+        <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); add(); }}>
+          <Input value={draft} maxLength={200} onChange={(e) => setDraft(e.target.value)} placeholder={t('settings.protectedPh')} data-testid="protected-input" />
+          <Button type="submit" size="sm" variant="outline" disabled={draft.trim().length < 2 || list.length >= 50}><Plus />{t('settings.protectedAdd')}</Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
 // Interface: its size on this PC (also Ctrl + / Ctrl - / Ctrl 0) and the terminal that Ctrl+J opens.
 export const sizes = () => [{ value: '0.87', label: t('settings.size.small') }, { value: '1', label: t('settings.size.normal') }, { value: '1.15', label: t('settings.size.large') }];
 function InterfaceCard({ c }) {
@@ -641,7 +676,7 @@ const SECTIONS = [
   { id: 'datos', icon: DatabaseBackup, when: (me) => isOwner(me), cards: () => <DataCards /> },
   // 3.7: «Monitoreo» is no longer here (a bot with the «Equipo» tools does it); sharing with Open Control Edge stays.
   { id: 'avanzado', icon: Wrench, groups: () => ['herramientas', ...(fullPc() ? ['experto'] : [])],
-    cards: (c) => <><SubSection id="herramientas" title={t('settings.group.herramientas')}><BrowserCard c={c} /><McpCard c={c} /><AndroidCard />{fullPc() ? <OceCard c={c} /> : null}</SubSection>
+    cards: (c) => <><SubSection id="herramientas" title={t('settings.group.herramientas')}><BrowserCard c={c} /><McpCard c={c} /><ProtectedCard c={c} /><AndroidCard />{fullPc() ? <OceCard c={c} /> : null}</SubSection>
       {/* 2.7.3: Orb Light (the portable .exe) leaves out God mode. */}
       {fullPc() ? <SubSection id="experto" title={t('settings.group.experto')}><ExpertCard c={c} /></SubSection> : null}</> },
   { id: 'acerca', icon: Info, groups: ['contribuye', 'apps'],
