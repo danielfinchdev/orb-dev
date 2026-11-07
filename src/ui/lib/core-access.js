@@ -1,14 +1,40 @@
-// 3.8: Orb's core folder seen from the window.
-//   unlockCore: every action of the window that touches core (opening it, restoring a backup over it, choosing where its
-//     backups go) asks here first. Today it always lets them through; the master password (3.8, next step) is asked here,
-//     so that is the only place to change.
+// 3.8: Orb's core folder and the master password seen from the window. No JSX here (the tests load it in Node): the
+// dialog that asks for the password (components/master-dialogs.jsx) registers itself with setMasterAsker.
+//   unlockCore: every guarded action of the window (opening core, restoring a backup, choosing where backups go,
+//     deleting the data of Orb 3.7, a connector's keys, unlinking a phone) asks here first. → the unlock token the engine
+//     wants with that call (src/engine/api-master.mjs), or null when the user cancelled. One unlock lasts 5 minutes, or
+//     until the window locks or closes (the engine says 'master:locked').
+//   passwordStrength: the hint under a new password.
 //   coreView: what the screen «Falta la carpeta core» shows (views/core-missing.jsx), kept apart so it can be tested
 //     without a window. state: app.coreState ({ missing, home, reason, backup, error, folder }).
 
-// action: 'open' | 'restore' | 'backupFolder'. → true when the action may go on.
+let held = null; // { unlock, until }
+let asker = null; // (action) => Promise<{ unlock, until } | null>
+export const setMasterAsker = (fn) => { asker = fn; };
+// A token the engine just gave (master.create, master.change, master.forgot) is kept the same way.
+export const keepUnlock = (r) => { held = r?.unlock ? { unlock: r.unlock, until: Number(r.until) || 0 } : held; return r?.unlock ?? null; };
+export const dropUnlock = () => { held = null; };
+// Still good for a few seconds more (the call that uses it must arrive in time).
+export const heldUnlock = (now = Date.now()) => (held && held.until - 5000 > now ? held.unlock : null);
+
+// action: 'open' | 'restore' | 'backupFolder' | 'legacy' | 'secrets' | 'unlink'.
 export async function unlockCore(action) {
-  void action; // which one: the master password will say it
-  return true;
+  const have = heldUnlock();
+  if (have) return have;
+  if (!asker) return null;
+  return keepUnlock(await asker(action));
+}
+
+// 0 (too short) … 4 (strong): length first, then kinds of characters, and a few common patterns count less.
+export function passwordStrength(password, min = 8) {
+  const p = String(password ?? '');
+  const n = [...p].length;
+  if (n < min) return 0;
+  const kinds = [/[a-z]/, /[A-Z]/, /\d/, /[^A-Za-z0-9]/].filter((r) => r.test(p)).length;
+  let score = n >= 16 ? 3 : n >= 12 ? 2 : 1;
+  if (kinds >= 3) score++;
+  if (/^(.)\1+$/.test(p) || /^(?:0?123456789|qwerty|password|contrase(?:ñ|n)a)/i.test(p)) score = 1;
+  return Math.max(1, Math.min(4, score));
 }
 
 // → { body, vars, passphrase, restore, folder }: the text (key and values), whether the recovery code is asked, whether

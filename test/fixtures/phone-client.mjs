@@ -1,13 +1,15 @@
 // A phone or a browser linked with the PC, for the tests: it pairs with the QR (or the short code), calls the API and
 // listens to the live events, all sealed with its own key, as the page does (src/ui/lib/web-bridge.js). Kept in memory.
-// createPhone({ name, kind }) → { connect({ qr } | { code, address }), call(id, method, params), on(event, fn),
-// peers(), raw(id), stop() }; id null: the first link.
+// createPhone({ name, kind, password }) → { connect({ qr } | { code, address }), call(id, method, params), on(event, fn),
+// peers(), raw(id), stop() }; id null: the first link. 3.8: password, the PC's master password it links with (the PC of a
+// test makes it with TEST_MASTER).
 import * as C from '../../src/core/mobile-crypto.mjs';
 import { parseLinkPayload, normalAddress, normalCode, PROTOCOL, MIN_PROTOCOL } from '../../src/core/link-payload.mjs';
 
 const err = (message, extra = {}) => Object.assign(new Error(message), extra);
+export const TEST_MASTER = 'contraseña maestra de prueba';
 
-export function createPhone({ name = 'Móvil de prueba', kind = 'phone' } = {}) {
+export function createPhone({ name = 'Móvil de prueba', kind = 'phone', password = TEST_MASTER } = {}) {
   const peers = new Map(); // id -> { id, key, base, skew, online, ctrl }
   const listeners = new Map();
   let stopped = false;
@@ -67,12 +69,12 @@ export function createPhone({ name = 'Móvil de prueba', kind = 'phone' } = {}) 
     const { priv, pub } = C.newKeyPair();
     const secret = via === 'code3' ? await C.shortSecretAsync(normalCode(code), C.b64.enc(pcPub)) : code;
     let skew = 0;
-    const body = () => ({ via, pub: C.b64.enc(pub), proof: C.seal(C.pairingKey(priv, pcPub, secret), { pub: C.b64.enc(pub), name, kind, t: Date.now() + skew, v: PROTOCOL, min: MIN_PROTOCOL }, C.AAD.pair) });
+    const body = () => ({ via, pub: C.b64.enc(pub), proof: C.seal(C.pairingKey(priv, pcPub, secret), { pub: C.b64.enc(pub), name, kind, t: Date.now() + skew, v: PROTOCOL, min: MIN_PROTOCOL, master: password }, C.AAD.pair) });
     const send = () => fetch(`${base}/api/pair`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body()) });
     let res = await send(); let data = null;
     if (res.status === 409) { const d = await res.json().catch(() => ({})); if (Number.isFinite(d.now)) { skew = d.now - Date.now(); res = await send(); } else data = d; }
     data ??= await res.json().catch(() => ({}));
-    if (!res.ok) throw err(data.error ?? `error ${res.status}`, { status: res.status });
+    if (!res.ok) throw err(data.error ?? `error ${res.status}`, { status: res.status, reason: data.reason });
     const key = C.sessionKey(priv, pcPub);
     let ok; try { ok = C.open(key, data.box, C.AAD.paired(data.id)); } catch { ok = null; }
     if (ok?.id !== data.id) throw err('el PC no es el del código');

@@ -1,7 +1,7 @@
 // app.*
 export default {
   'app.linkTitle': "Link with your Orb",
-  'app.linkBody': "On your Orb, open Settings → Magic Link, tap “Show the QR code” and scan it.",
+  'app.linkBody': "On your Orb, open Settings → Magic Link, tap “Show the QR code” and scan it. Then type the PC's master password.",
   'app.linkScan': "Scan the QR code",
   'app.linkManual': "Link without the camera",
   'app.linkPaste': "Your Orb's link",
@@ -36,7 +36,7 @@ export default {
   'app.pairTitle': 'Pair this device',
   'app.pairBody1': 'On your PC, open ',
   'app.pairBodyPath': 'Settings → Magic Link',
-  'app.pairBody2': ', click “Show the QR code” and scan it with this phone.',
+  'app.pairBody2': ', click “Show the QR code” and scan it with this phone. It will ask for the PC master password.',
   'app.pairPrivate': 'Works on your Wi-Fi or via Tailscale. The connection to your PC is encrypted.',
   'app.badAnswer': "The connection to your PC could not be verified. Pair this phone again.",
   'app.oldQr': "This QR code is from an earlier version. Generate a new one on the PC.",

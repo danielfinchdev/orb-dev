@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { tempHome, startEngine, until } from './helpers.mjs';
-import { createPhone } from './fixtures/phone-client.mjs';
+import { createPhone, TEST_MASTER } from './fixtures/phone-client.mjs';
 import * as C from '../src/core/mobile-crypto.mjs';
 import { Board } from '../src/core/board.mjs';
 
@@ -39,6 +39,7 @@ before(async () => {
   t = tempHome({ mobile: { enabled: true, port, name: 'Casa', preview: 'all' } });
   A = await startEngine(t.home, { env: { ORB_REMOTE_BIND: '127.0.0.1', ORB_PUSH_LOG: pushLog } });
   await until(async () => (await A.call('remote.status')).running, 'acceso');
+  await A.call('master.create', { password: TEST_MASTER }); // 3.8: phones link with the master password
   ana = await pushDevice('ana');
   tablet = await pushDevice('tablet');
   await A.call('projects.create', { name: 'web' });

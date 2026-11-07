@@ -12,8 +12,9 @@ import { tempHome, ROOT, until } from './helpers.mjs';
 import * as C from '../src/core/mobile-crypto.mjs';
 import { privateSource } from '../src/engine/remote.mjs';
 import { parseLinkPayload, normalCode, normalAddress } from '../src/core/link-payload.mjs';
-import { createPhone } from './fixtures/phone-client.mjs';
+import { createPhone, TEST_MASTER } from './fixtures/phone-client.mjs';
 
+let unlock = null;
 let t; let engine; let n = 0; const pending = new Map(); let base; let port;
 const call = (method, params = {}) => new Promise((resolve, reject) => { const id = ++n; pending.set(id, { resolve, reject }); engine.send({ type: 'call', id, method, params }); });
 
@@ -26,15 +27,16 @@ before(async () => {
   await new Promise((resolve, reject) => { engine.once('message', (m) => (m.type === 'started' && m.ok ? resolve() : reject(new Error(m.error)))); engine.send({ type: 'start', home: t.home, version: 'test' }); });
   base = `http://127.0.0.1:${port}`;
   await until(async () => (await call('remote.status')).running, 'servidor del móvil');
+  unlock = (await call('master.create', { password: TEST_MASTER })).unlock; // 3.8: phones link with the master password
 });
 after(() => { engine?.send({ type: 'shutdown' }); t?.cleanup(); });
 
 // A phone, as the page does it (src/ui/lib/web-bridge.js).
 function phone() {
   const me = { kp: C.newKeyPair(), id: null, key: null, pc: null };
-  me.pairBody = (code, pcPub, { name = 'Android', at = Date.now() } = {}) => {
+  me.pairBody = (code, pcPub, { name = 'Android', at = Date.now(), master = TEST_MASTER, v = 4 } = {}) => {
     const pub = C.b64.enc(me.kp.pub);
-    return { pub, proof: C.seal(C.pairingKey(me.kp.priv, pcPub, code), { pub, name, t: at }, C.AAD.pair) };
+    return { pub, proof: C.seal(C.pairingKey(me.kp.priv, pcPub, code), { pub, name, t: at, v, master }, C.AAD.pair) };
   };
   me.box = (kind, body, { at = Date.now() } = {}) => C.seal(me.key, { t: at, m: kind, b: body }, C.AAD.request(me.id));
   me.post = async (pathname, box, { id = me.id, headers = {} } = {}) => fetch(base + pathname, { method: 'POST', headers: { 'X-Orb-Device': id, 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(box) });
@@ -213,7 +215,8 @@ test('eventos en directo cifrados y revocar el acceso', async () => {
   assert.equal(event.e, 'board:changed');
   assert.ok(!text.includes('board:changed'), 'el evento no se lee por el camino');
   ctrl.abort();
-  await call('remote.revoke', { id: p.id });
+  await assert.rejects(call('remote.revoke', { id: p.id }), /contraseña maestra/, '3.8: quitar un móvil pide la contraseña maestra');
+  await call('remote.revoke', { id: p.id, unlock });
   assert.equal((await p.post('/api/call', p.box('call', { method: 'app.state' }))).status, 401, 'tras revocarlo ya no entra');
 });
 
@@ -245,7 +248,7 @@ test('solo redes privadas, Tailscale y este PC; QR v1 y v2; código corto', asyn
   // The QR names this PC and its other addresses, never a role; the short code links too (one use).
   const q = await call('link.qr', { device: 'phone' });
   assert.match(q.code, /^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
-  assert.equal(q.payload.v, 3, 'protocolo 3 (3.6)');
+  assert.equal(q.payload.v, 4, 'protocolo 4 (3.8)');
   assert.equal(new URLSearchParams(new URL(q.url).hash.slice(1)).get('r'), null);
   const hello = await (await fetch(`${base}/api/hello`)).json();
   assert.ok(Array.isArray(hello.urls) && hello.urls.length >= 1, 'las direcciones de este PC');

@@ -3,7 +3,7 @@
 // Acerca de.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { DatabaseBackup, Settings, FlaskConical, FolderOpen, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, Wrench, ChevronRight, SlidersHorizontal, Radar, Cpu, Info, ExternalLink, ShieldBan } from 'lucide-react';
+import { DatabaseBackup, Settings, FlaskConical, FolderOpen, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, Wrench, ChevronRight, SlidersHorizontal, Radar, Cpu, Info, ExternalLink, ShieldBan, KeyRound } from 'lucide-react';
 import { ToolIcon } from '@/components/agent-icon.jsx';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, APPEARANCE_DEFAULTS } from '../../core/appearance.mjs';
 import { PRODUCT, AUTHOR } from '../../core/product.mjs';
@@ -25,6 +25,7 @@ import { useUpdate, updateActions, notesUrl } from '@/components/update-card.jsx
 import { play } from '@/lib/sounds.js';
 import { MagicLinkPanel, SubSection } from './magic-link.jsx';
 import { DataCards } from './data.jsx';
+import { connectorKeys } from './master.jsx';
 
 async function save(patch, ok = t('settings.saved')) {
   const config = await act(call('config.save', { patch }), ok);
@@ -264,6 +265,7 @@ function McpCard({ c }) {
           <div key={s.name} className="flex min-w-0 items-center gap-3 rounded-lg border px-3 py-2">
             <div className="min-w-0 flex-1"><div className="text-sm">{s.name}</div><div className="text-muted-foreground truncate font-mono text-xs">{s.command} {(s.args ?? []).join(' ')}</div></div>
             <span className="text-muted-foreground text-xs">{s.agents?.length ? s.agents.join(', ') : t('settings.all')}</span>
+            {!bridge.mobile ? <BubbleTip title={t('master.keys')}><Button variant="ghost" size="icon-sm" aria-label={t('master.keys')} onClick={() => connectorKeys(s)} data-testid="mcp-keys"><KeyRound /></Button></BubbleTip> : null}
             <Button variant="danger" size="icon-sm" onClick={async () => { if (await confirm(t('settings.mcpRemoveTitle'), t('settings.mcpRemoveBody', { name: s.name }), { ok: t('settings.remove'), danger: true })) save({ mcpServers: c.mcpServers.filter((_, j) => j !== i) }); }}><Trash2 /></Button>
           </div>
         )) : <p className="text-muted-foreground text-sm">{t('settings.none')}</p>}

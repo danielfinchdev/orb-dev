@@ -104,6 +104,7 @@ before(async () => {
   engine.on('message', (m) => { if (m.type === 'reply') { const p = pending.get(m.id); pending.delete(m.id); m.ok ? p.resolve(m.result) : p.reject(new Error(m.error)); } });
   await new Promise((resolve, reject) => { engine.once('message', (m) => (m.type === 'started' && m.ok ? resolve() : reject(new Error(m.error)))); engine.send({ type: 'start', home: t.home, version: 'test' }); });
   await until(async () => (await call('remote.status')).running, 'servidor del móvil');
+  await call('master.create', { password: 'contraseña del PC' }); // 3.8: linking needs it
 });
 after(() => { engine?.send({ type: 'shutdown' }); t?.cleanup(); });
 
@@ -119,7 +120,7 @@ test('el PC deja pasar la página de la app (CORS) y a nadie más; todo sigue ci
   const { url } = await call('remote.pair', {});
   const q = parseLinkPayload(url);
   const pcPub = C.b64.dec(q.pc); const kp = C.newKeyPair(); const pub = C.b64.enc(kp.pub);
-  const proof = C.seal(C.pairingKey(kp.priv, pcPub, pairingSecret(q)), { pub, name: 'Pixel 9 (app)', t: Date.now(), role: 'ventana' }, C.AAD.pair);
+  const proof = C.seal(C.pairingKey(kp.priv, pcPub, pairingSecret(q)), { pub, name: 'Pixel 9 (app)', t: Date.now(), role: 'ventana', v: 4, master: 'contraseña del PC' }, C.AAD.pair);
   const paired = await raw('POST', '/api/pair', { Origin: 'http://localhost', 'Content-Type': 'application/json' }, JSON.stringify({ via: q.via, pub, proof }));
   assert.equal(paired.status, 200);
   assert.equal(paired.headers['access-control-allow-origin'], 'http://localhost', 'la respuesta lleva el permiso para la app');

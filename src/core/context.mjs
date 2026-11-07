@@ -6,7 +6,9 @@ import { paths, loadConfig, writeJson, merge, AGENT_IDS, relabelEmptyLogs } from
 import { translate } from './i18n.mjs';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from './appearance.mjs';
 
-export const ctx = { home: null, paths: null, config: null, secret: null }; // secret: approval secret handed by the app (memory only)
+// secret: approval secret handed by the app (memory only). master: the master password and Orb's own secrets (3.8,
+// src/core/master.mjs), opened by the engine.
+export const ctx = { home: null, paths: null, config: null, secret: null, master: null };
 
 // Message in the language of the settings (Spanish until a configuration is loaded).
 export const tr = (key, vars) => translate(ctx.config?.language ?? 'es', key, vars);

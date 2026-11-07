@@ -8,7 +8,7 @@ import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Toaster } from 'sonner';
 import { notify } from '@/lib/notify.js';
-import { Menu, Smartphone, ScanLine, Link2, RotateCw, FolderOpen, Download } from 'lucide-react';
+import { Menu, Smartphone, ScanLine, Link2, RotateCw, FolderOpen, Download, KeyRound, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
 import { MobileTabs, MoreView } from '@/components/mobile-tabs.jsx';
@@ -30,6 +30,7 @@ import { AGENT } from '@/lib/labels.js';
 import { WindowControls } from '@/components/window-controls.jsx';
 import { useT, t as tNow } from '@/lib/i18n.js';
 import { Setup } from '@/views/setup.jsx';
+import { MasterCreate, MasterLocked } from '@/views/master.jsx';
 import { CoreMissing } from '@/views/core-missing.jsx';
 import { ChatView } from '@/views/chat.jsx';
 import { SessionView } from '@/views/session.jsx';
@@ -135,7 +136,7 @@ let coreLost = false;
 function Root() {
   const t = useT();
   const ready = useStore((s) => s.ready);
-  const [phase, setPhase] = useState('loading'); // loading | setup | core | migration | app | error
+  const [phase, setPhase] = useState('loading'); // loading | setup | pair | update | core | migration | master | unlock | app | error
   const [error, setError] = useState('');
   const [migration, setMigration] = useState(null);
   const [core, setCore] = useState(null);
@@ -155,6 +156,9 @@ function Root() {
           if (!bridge.mobile) { const c = await bridge.call('app.coreState'); if (c?.missing) { setCore(c); return alive && setPhase('core'); } }
           // 3.8: the data of 3.7 could not be updated: Orb does not run on them (this PC only).
           if (!bridge.mobile) { const m = await bridge.call('app.migrationState'); if (m?.failed) { setMigration(m); return alive && setPhase('migration'); } }
+          // 3.8: the master password: made once (an Orb updated to 3.8 has none yet), or typed when this PC cannot open
+          // Orb's keys by itself (this PC only).
+          if (!bridge.mobile) { const ms = await bridge.call('master.state'); if (!ms?.exists) return alive && setPhase('master'); if (ms.locked) return alive && setPhase('unlock'); }
           await refresh();
           try {
             const saved = JSON.parse(localStorage.getItem('orb.route') || 'null');
@@ -214,6 +218,8 @@ function Root() {
   }, [phase]);
   if (phase === 'setup') return <>{strip}<Setup onDone={async () => { await refresh(); setPhase('app'); }} /></>;
   if (phase === 'pair' && bridge.link) return <>{strip}<AppLink /></>;
+  // 3.8: a browser opened from the QR: the master password before linking.
+  if (phase === 'pair' && getState().info?.pairLink && bridge.pairPending) return <>{strip}<BrowserPair /></>;
   if (phase === 'pair') return (
     <div className="brand-sky grid h-full place-items-center p-6 text-center">
       {strip}
@@ -228,6 +234,8 @@ function Root() {
   );
   if (phase === 'update') return <>{strip}<UpdateNeeded info={getState().info} /></>;
   if (phase === 'core') return <>{strip}<CoreMissing state={core} /></>;
+  if (phase === 'master') return <>{strip}<MasterCreate upgrade onDone={() => location.reload()} /></>;
+  if (phase === 'unlock') return <>{strip}<MasterLocked onDone={() => location.reload()} /></>;
   if (phase === 'migration') return <>{strip}<MigrationFailed state={migration} /></>;
   if (phase === 'error') return <div className="grid h-full place-items-center p-8 text-center">{strip}<div><Robot size={90} mood="worried" /><h1 className="mt-4 text-xl">{t('app.errorTitle')}</h1><p className="text-muted-foreground mt-1 max-w-md text-sm">{error}</p></div></div>;
   if (phase !== 'app' || !ready) return <div className="grid h-full place-items-center">{strip}<Robot size={80} mood="thinking" /></div>;
@@ -272,20 +280,75 @@ function MigrationFailed({ state }) {
   );
 }
 
+// 3.8: the PC's master password, the second step of linking (the app after scanning, a browser opened from the QR). It
+// travels inside the sealed proof of the pairing and is never kept on the phone.
+function PairPassword({ name, busy, error, onSubmit, onBack = null }) {
+  const t = useT();
+  const [password, setPassword] = useState('');
+  return (
+    <form className="grid gap-3 text-left" onSubmit={(e) => { e.preventDefault(); if (password) onSubmit(password); }} data-testid="pair-password">
+      <h1 className="text-center text-xl">{name ? t('app.linkPassTitleNamed', { name }) : t('app.linkPassTitle')}</h1>
+      <p className="text-muted-foreground text-center text-sm">{t('app.linkPassBody')}</p>
+      <Input type="password" autoComplete="current-password" autoFocus aria-label={t('app.linkPassLabel')} placeholder={t('app.linkPassLabel')} value={password} onChange={(e) => setPassword(e.target.value)} enterKeyHint="go" data-testid="pair-password-input" />
+      <Button type="submit" size="lg" disabled={busy || !password}>{busy ? <Spinner /> : <KeyRound />}{t('app.linkPassGo')}</Button>
+      {onBack ? <Button type="button" variant="ghost" size="sm" onClick={onBack}><ArrowLeft />{t('app.linkBack')}</Button> : null}
+      {error ? <p className="text-destructive text-center text-sm" role="alert">{error}</p> : null}
+    </form>
+  );
+}
+
+function BrowserPair() {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(getState().info?.pairError ?? '');
+  const [gone, setGone] = useState(false);
+  const submit = async (password) => {
+    setBusy(true); setError('');
+    try { await bridge.pairPending(password); location.reload(); }
+    catch (e) { setError(String(e?.message ?? e)); if (e?.reason === 'newCode' || e?.status === 426) setGone(true); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="brand-sky grid h-full place-items-center overflow-y-auto p-6" data-testid="browser-pair">
+      <div className="bg-card/95 grid w-full max-w-sm gap-3 rounded-3xl p-7 shadow-2xl">
+        <div className="-mt-16 flex justify-center"><Robot size={110} mood={busy ? 'thinking' : 'idle'} /></div>
+        {gone ? <p className="text-destructive text-center text-sm" role="alert">{error}</p> : <PairPassword name={getState().info?.pairLink?.name} busy={busy} error={error} onSubmit={submit} />}
+        <p className="text-muted-foreground flex items-center justify-center gap-1.5 text-xs"><Smartphone className="size-3.5" />{t('app.pairPrivate')}</p>
+      </div>
+    </div>
+  );
+}
+
 // 3.5, the Android app: link it with an Orb by scanning its QR (Ajustes › Móvil), or by hand when the camera cannot.
+// 3.8: then the PC's master password.
 function AppLink() {
   const t = useT();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(getState().info?.pairError ?? '');
   const [manual, setManual] = useState(false);
   const [form, setForm] = useState({ text: '', code: '', address: '' });
+  const [link, setLink] = useState(null); // { input, name }: read, waiting for the password
   const run = async (get) => {
     setBusy(true); setError('');
-    try { const input = await get(); if (input == null) return; await bridge.link(input); location.reload(); }
+    try { const input = await get(); if (input == null) return; const p = await bridge.checkLink(input); setLink({ input, name: p?.name ?? null }); }
     catch (e) { setError(String(e?.message ?? e)); }
     finally { setBusy(false); }
   };
+  const pair = async (password) => {
+    setBusy(true); setError('');
+    try { await bridge.link(link.input, { password }); location.reload(); }
+    catch (e) { setError(String(e?.message ?? e)); if (e?.reason === 'newCode' || e?.status === 426) setLink(null); }
+    finally { setBusy(false); }
+  };
   const field = (k) => ({ value: form[k], onChange: (e) => setForm({ ...form, [k]: e.target.value }) });
+  if (link) return (
+    <div className="brand-sky grid h-full place-items-center overflow-y-auto p-6" data-testid="app-link">
+      <div className="bg-card/95 grid w-full max-w-sm gap-3 rounded-3xl p-7 shadow-2xl">
+        <div className="-mt-16 flex justify-center"><Robot size={110} mood={busy ? 'thinking' : 'idle'} /></div>
+        <PairPassword name={link.name} busy={busy} error={error} onSubmit={pair} onBack={() => { setLink(null); setError(''); }} />
+      </div>
+    </div>
+  );
   return (
     <div className="brand-sky grid h-full place-items-center overflow-y-auto p-6 text-center" data-testid="app-link">
       <div className="bg-card/95 grid w-full max-w-sm gap-3 rounded-3xl p-7 shadow-2xl">

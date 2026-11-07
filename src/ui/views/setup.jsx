@@ -1,7 +1,7 @@
 // First run: the assistant's name, what to call the user and where its folder goes (C:\Orb unless the user picks another
 // place). Everything lives in that folder.
 // 3.7: the 3.5.1 welcome again (the owner's wish). Done without asking: this PC's language and time zone in the settings,
-// backups on (the default).
+// backups on (the default). 3.8: then the master password (views/master.jsx), before anything else.
 import { useState } from 'react';
 import { FolderOpen, ArrowRight } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
@@ -13,6 +13,7 @@ import { useT } from '@/lib/i18n.js';
 import { toast } from 'sonner';
 import { errorText } from '@/lib/utils.js';
 import { PRODUCT } from '../../core/product.mjs';
+import { MasterCreate } from './master.jsx';
 
 const hereTz = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; } };
 const hereLanguage = () => (/^en/i.test(navigator.language ?? '') ? 'en' : 'es');
@@ -25,7 +26,7 @@ export function Setup({ onDone }) {
   const [base, setBase] = useState(() => getState().info?.defaultBase ?? null);
   const [busy, setBusy] = useState(false);
   const [mood, setMood] = useState('happy');
-  const [step, setStep] = useState('datos'); // datos → equipo (Windows: install what is missing) → app
+  const [step, setStep] = useState('datos'); // datos → maestra (the master password) → equipo (Windows: install what is missing) → app
   const shown = name.trim() || PRODUCT.assistant;
   const sep = base?.includes('\\') ? '\\' : '/';
   // The same rule the app uses (homeFor): always <base>/Orb, whatever the assistant is called, unless the base already is it.
@@ -39,11 +40,11 @@ export function Setup({ onDone }) {
       // The engine runs in the new folder now: it gets this PC's language and time zone.
       await call('config.save', { patch: { language, tz: hereTz() } }).catch(() => {});
       setMood('happy');
-      const info = await bridge.info();
-      if (info.platform === 'win32') { setBusy(false); setStep('equipo'); } else setTimeout(onDone, 700);
+      setBusy(false); setStep('maestra');
     }
     catch (error) { setMood('worried'); toast.error(errorText(error)); setBusy(false); }
   };
+  if (step === 'maestra') return <MasterCreate onDone={async () => { const info = await bridge.info(); if (info.platform === 'win32') setStep('equipo'); else onDone(); }} />;
   if (step === 'equipo') return <Prepare name={shown} onDone={onDone} />;
   return (
     <div className="brand-sky flex h-full overflow-auto px-6 pt-24 pb-6">

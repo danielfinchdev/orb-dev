@@ -9,6 +9,7 @@
 // parameters: { channel, device? } or, for an agent, { channel: 'agent', agent, task, conversation }.
 // No engine imports: the MCP processes load this file too.
 import { tr } from './context.mjs';
+import { isRef } from './connector-secrets.mjs';
 
 export const CHANNELS = ['desktop', 'phone', 'browser', 'agent'];
 const REMOTE = new Set(['phone', 'browser']);
@@ -59,10 +60,26 @@ export const METHODS = Object.freeze({
   'agents.loginState': 'pc', 'agents.install': 'pc', 'agents.installState': 'pc',
   'accounts.add': 'pc', 'accounts.scan': 'pc', 'accounts.update': 'pc', 'accounts.remove': 'pc', 'accounts.clearCooldown': 'pc',
   // backups
-  'backup.status': 'pc', 'backup.list': 'pc', 'backup.now': 'pc', 'backup.verify': 'pc', 'backup.restore': 'pc', 'backup.recovery': 'pc', 'legacy.status': 'pc', 'legacy.delete': 'pc'
+  'backup.status': 'pc', 'backup.list': 'pc', 'backup.now': 'pc', 'backup.verify': 'pc', 'backup.restore': 'pc', 'backup.recovery': 'pc', 'legacy.status': 'pc', 'legacy.delete': 'pc',
+  // 3.8: the master password and the connectors' keys
+  'master.state': 'pc', 'master.create': 'pc', 'master.unlock': 'pc', 'master.lock': 'pc', 'master.check': 'pc', 'master.change': 'pc', 'master.forgot': 'pc',
+  'secrets.connector': 'pc', 'secrets.saveConnector': 'pc'
 });
 // What a linked phone or browser may call (the rest is this PC's).
 export const REMOTE_METHODS = Object.freeze(new Set(Object.keys(METHODS).filter((m) => METHODS[m] === 'remote')));
+
+// 3.8: what this PC's window may only do right after the master password (a token of 5 minutes, src/engine/api-master.mjs):
+// restoring a backup, deleting the data of Orb 3.7, unlinking a phone, seeing or changing a connector's keys, opening
+// core (main.mjs asks master.check) and, in config.save, choosing where the backups go or writing a connector's keys in
+// clear. Changing the password asks for the current one instead.
+export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector']));
+export function needsUnlock(method, params) {
+  if (UNLOCK_METHODS.has(method)) return true;
+  if (method !== 'config.save') return false;
+  const patch = params?.patch ?? {};
+  if (patch.backup && typeof patch.backup === 'object' && Object.hasOwn(patch.backup, 'folder')) return true;
+  return Array.isArray(patch.mcpServers) && patch.mcpServers.some((s) => s?.env && typeof s.env === 'object' && Object.values(s.env).some((v) => !isRef(v)));
+}
 
 // A refused call: 403, with a message the user may read.
 export class PermissionError extends Error {

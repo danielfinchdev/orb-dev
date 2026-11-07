@@ -14,7 +14,7 @@
 //
 // What goes in: the database (VACUUM INTO, so it is consistent while the engine runs), orb.json, the logs (general and
 // project), the skills and the MCP servers (without their dependencies), the whiteboards of the projects, the app's
-// secret, the recovery wrap, the archives of 3.7 (core/archivo-3.7 and dated ones, src/core/migrate-38.mjs; never sign-in
+// secret, the recovery wrap, the master password's sealed files (core/secretos, 3.8), the archives of 3.7 (core/archivo-3.7 and dated ones, src/core/migrate-38.mjs; never sign-in
 // folders). Optional: the project folders and the agents' login folders (off). 3.8: the names inside are relative to the
 // workspace (core/datos/orb.db, core/bitacora/…); a copy made by 3.7 (.orb/…, orb.json, bitacora/… at the top) restores
 // into core (legacyName) and the paths of its orb.json and database are pointed into core (src/core/core-folder.mjs ›
@@ -29,6 +29,7 @@ import { paths, homeKey, INTERNAL_DIR, BOTS_DIR, LEGACY } from './home.mjs';
 import { rewritePaths, coreHealth } from './core-folder.mjs';
 import { tr } from './context.mjs';
 import { ARCHIVE_DIR, forgetRun } from './migrate-38.mjs';
+import { KEPT as SECRET_FILES } from './master.mjs';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
 
@@ -214,6 +215,9 @@ async function stageFiles(home, stage, { secret, includeProjects = false, includ
   // The secret that seals the approvals and the recovery wrap: on a new machine they keep working.
   if (secret) { await fsp.writeFile(path.join(stage, INTERNAL_DIR, 'datos', 'clave.bin'), Buffer.from(secret), { mode: 0o600 }); files.push(`${INTERNAL_DIR}/datos/clave.bin`); }
   for (const name of DATA_FILES.filter((n) => n !== 'clave.bin')) { const f = path.join(p.data, name); if (fs.existsSync(f)) await put(f, `${INTERNAL_DIR}/datos/${name}`); }
+  // 3.8: the master password's files (core\secretos): the secrets stay sealed with the data key, which opens with the
+  // master password (any PC) or this PC's secret. The count of wrong passwords stays on this PC.
+  for (const name of SECRET_FILES) { const f = path.join(p.secrets, name); if (fs.existsSync(f)) await put(f, archiveName(home, f)); }
   for (const f of walkFiles(p.logs)) await put(f, archiveName(home, f));
   for (const f of walkFiles(p.skills)) await put(f, archiveName(home, f));
   for (const f of walkFiles(p.mcp, (n) => NO_COPY.has(n))) await put(f, archiveName(home, f));

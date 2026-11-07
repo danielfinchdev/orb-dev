@@ -8,7 +8,7 @@ import path from 'node:path';
 import http from 'node:http';
 import crypto from 'node:crypto';
 import { tempHome, startEngine, until, ROOT } from './helpers.mjs';
-import { createPhone } from './fixtures/phone-client.mjs';
+import { createPhone, TEST_MASTER } from './fixtures/phone-client.mjs';
 import * as C from '../src/core/mobile-crypto.mjs';
 import { kindForPairing, plainHttpBrowser, pushPreview, phoneConfig } from '../src/engine/remote.mjs';
 import { buildNote } from '../src/core/notes.mjs';
@@ -25,6 +25,7 @@ before(async () => {
   tSrv = tempHome({ mobile: { enabled: true, port, name: 'Servidor' } });
   srv = await startEngine(tSrv.home, { env });
   await until(async () => (await srv.call('remote.status')).running, 'acceso del servidor');
+  await srv.call('master.create', { password: TEST_MASTER }); // 3.8: phones link with the master password
 });
 after(async () => {
   for (const l of links) l.stop();

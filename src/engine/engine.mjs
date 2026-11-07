@@ -33,12 +33,14 @@ const log = (line) => { try { if (logFile) { rotateIfBig(logFile); fs.appendFile
 process.on('uncaughtException', (error) => log(`uncaughtException: ${error?.stack ?? error}`));
 process.on('unhandledRejection', (error) => log(`unhandledRejection: ${error?.stack ?? error}`));
 
-async function start(home, version, secret, browser) {
+let mirror = null; // 3.8: the copy of core\secretos outside the workspace (the app's data folder), when the app gives one
+async function start(home, version, secret, browser, keep = null) {
   if (!home || !path.isAbsolute(home)) throw new Error(tr('sys.engine.notHome', { home }));
   // The approval secret comes from the app (kept encrypted by Windows); without it, the file fallback is used.
   if (typeof secret === 'string' && /^[0-9a-f]{64}$/.test(secret)) ctx.secret = Buffer.from(secret, 'hex');
   // The agents' browser lives in the app (main process): its pipe and token go to the agents' MCP servers.
   if (typeof browser?.pipe === 'string' && /^[0-9a-f]{48}$/.test(browser.token ?? '') && /orb-navegador-[0-9a-f]{16}(\.sock)?$/.test(browser.pipe)) ctx.browser = { pipe: browser.pipe, token: browser.token };
+  if (typeof keep === 'string' && path.isAbsolute(keep)) mirror = keep;
   // 3.8: the folders of Orb 3.7 move into core (src/core/core-folder.mjs); then, if core or part of it is gone (deleted
   // by mistake while Orb was closed, or noticed by the watcher in run()), what is missing comes back from the newest
   // backup, which lives outside the workspace. Without a backup, or with one this PC cannot open, the window shows why
@@ -46,6 +48,8 @@ async function start(home, version, secret, browser) {
   if (!fs.existsSync(home)) throw new Error(tr('sys.engine.notHome', { home }));
   const { migrateWorkspace } = await import('../core/core-folder.mjs');
   migrateWorkspace(home);
+  // 3.8: the master password's files come back first from their copy outside core (newer than any backup).
+  { const { restoreMissing } = await import('../core/master.mjs'); try { restoreMissing(paths(home).secrets, mirror); } catch (error) { console.error(`secretos: ${error.message}`); } }
   const { repairCore } = await import('../core/backup.mjs');
   const repair = await repairCore(home, { secret: secretOf(home) });
   if (!repair.ok) return coreBlocked({ home, version, repair });
@@ -206,14 +210,21 @@ async function run(board, { home, version, restored, repair }) {
   const remoteRef = { current: null };
   // 3.7: Monitoreo del equipo and Opti Bot are gone: their settings and conversation are tidied once (engine/retired.mjs).
   { const { tidyRetired } = await import('./retired.mjs'); tidyRetired(board, log); }
-  api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef });
+  // 3.8: the master password and Orb's own secrets (src/core/master.mjs): opened with this PC's secret, or locked until
+  // the password is typed (another PC, another Windows user). What earlier versions kept in clear moves into it now.
+  const { openMaster, migrateSecrets } = await import('./api-master.mjs');
+  ctx.master = openMaster(home, secretOf(home), { mirror, log });
+  try { migrateSecrets(board, ctx.master, { log, emit }); } catch (error) { log(`secretos: ${error.message}`); }
+  // Unlocked later (the password on another PC): the phone access opens then.
+  const onUnlocked = () => { if (ctx.config.mobile?.enabled) remote?.start().catch((error) => log(`móvil: ${error.message}`)); };
+  api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, onUnlocked });
   remote = remoteRef.current = createRemote({ board, api, log, emit, version });
   // 3.1: only an unpacked Orb.dev started with ORB_DEV_CONTROL=1 (main.mjs decides; never an installed Orb).
   if (process.env.ORB_DEV_CONTROL === '1') {
     const { startDevControl } = await import('./dev-control.mjs');
     devControl = startDevControl({ api, board, sessions, log, home, internalDir: ctx.paths.internal });
   }
-  if (ctx.config.mobile?.enabled) remote.start().catch((error) => log(`móvil: ${error.message}`));
+  if (ctx.config.mobile?.enabled && ctx.master.unlocked()) remote.start().catch((error) => log(`móvil: ${error.message}`));
 
   // Changes made by this process are pushed right away; changes made by MCP processes (other connections) are found with
   // PRAGMA data_version, which only moves when another connection commits.
@@ -306,7 +317,7 @@ function coreLost(home, board) {
 transport.on(async (msg) => {
   if (!msg || typeof msg !== 'object') return;
   if (msg.type === 'start') {
-    try { transport.send({ type: 'started', ok: true, result: await start(msg.home, msg.version, msg.secret, msg.browser) }); }
+    try { transport.send({ type: 'started', ok: true, result: await start(msg.home, msg.version, msg.secret, msg.browser, msg.keep) }); }
     catch (error) { transport.send({ type: 'started', ok: false, error: error.message }); }
     return;
   }

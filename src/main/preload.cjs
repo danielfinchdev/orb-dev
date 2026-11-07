@@ -27,7 +27,8 @@ contextBridge.exposeInMainWorld('orb', {
   pickImages: () => ipcRenderer.invoke('app:pickImages'),
   pickProgram: (title) => ipcRenderer.invoke('app:pickProgram', title),
   pickFiles: (title) => ipcRenderer.invoke('app:pickFiles', title),
-  openPath: (folder) => ipcRenderer.invoke('app:openPath', folder),
+  // 3.8: unlock: the master password's token, for core (main.mjs checks it with the engine).
+  openPath: (folder, unlock) => ipcRenderer.invoke('app:openPath', folder, unlock ?? null),
   openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),
   showBrowser: () => ipcRenderer.invoke('app:showBrowser'),
   // Size of the interface on this PC (1 = normal): read with zoom(), change with zoom(value).

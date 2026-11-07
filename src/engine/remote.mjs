@@ -20,7 +20,7 @@ import { quickRun } from '../agents/index.mjs';
 import { IS_WIN } from '../agents/common.mjs';
 import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal, open, sealText, openText, openBytes, AAD, CLOCK_SKEW_MS, shortSecret } from '../core/mobile-crypto.mjs';
 import { newVapidKeys, checkSubscription, sendPush } from './webpush.mjs';
-import { PROTOCOL, MIN_PROTOCOL, versionOfProtocol, CODE_ALPHABET, shortCodeLabel } from '../core/link-payload.mjs';
+import { PROTOCOL, MIN_PROTOCOL, PAIR_PROTOCOL, versionOfProtocol, CODE_ALPHABET, shortCodeLabel } from '../core/link-payload.mjs';
 import { REMOTE_METHODS, principalOf } from '../core/permissions.mjs';
 import { isLegacy } from '../core/migrate-38.mjs';
 
@@ -57,6 +57,8 @@ const EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'notice', 'se
   // 3.6 (messaging lists): a chat list changed
   'inbox:changed']);
 const PAIR_FAILS_MAX = 20; // wrong attempts (all addresses together) that cancel the code on screen
+// 3.8: wrong master passwords one code allows (they do not use it up); then a new code is needed.
+export const PAIR_PASSWORD_TRIES = 5;
 
 // The checks of a call coming from a phone or a browser: null when it may run, or why not. `uploadsDir`: the pictures
 // that may go with it.
@@ -260,17 +262,24 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   // 3.6: a client too old for this Orb is told to update (in its own words: «Actualiza …»).
   const tooOld = (v) => Number.isFinite(Number(v)) && Number(v) > 0 && Number(v) < MIN_PROTOCOL;
 
-  // This PC's own keys: X25519 for the phones, VAPID for notifications. Made once, kept in the database.
-  const own = (() => {
-    let k = board.settingJson('remote_keys');
+  // This PC's own keys: X25519 for the phones, VAPID for notifications. Made once. 3.8: kept in the master password's
+  // vault (src/core/master.mjs; the database of 3.7 had them in clear: moved by api-master.mjs › migrateSecrets), read
+  // when first needed. Without the vault open (another PC: the password was not typed yet) the access does not start.
+  let ownKeys = null;
+  const own = () => {
+    if (ownKeys) return ownKeys;
+    const m = ctx.master;
+    if (m && !m.unlocked()) throw Object.assign(new Error(tr('msg.master.locked')), { userFacing: true });
+    let k = m ? m.get('remote_keys') : board.settingJson('remote_keys');
     if (!k?.priv || !k?.vapid?.publicKey) {
       k = { priv: b64.enc(newKeyPair().priv), vapid: newVapidKeys() };
-      board.settingJson('remote_keys', k);
+      if (m) m.set('remote_keys', k); else board.settingJson('remote_keys', k);
     }
     const priv = b64.dec(k.priv);
-    return { priv, pub: publicKeyOf(priv), vapid: k.vapid };
-  })();
-  const pcFingerprint = fingerprint(own.pub);
+    ownKeys = { priv, pub: publicKeyOf(priv), vapid: k.vapid, fp: fingerprint(publicKeyOf(priv)) };
+    return ownKeys;
+  };
+  const pcFingerprint = () => own().fp;
   // Phones paired by 2.3.2 and older (a reusable token, no key of their own) cannot use the encrypted channel: they go.
   board.run('DELETE FROM devices WHERE public_key IS NULL');
 
@@ -285,7 +294,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   const validDevice = (d) => Boolean(d?.public_key && (!d.kind || PAIR_KINDS.includes(d.kind))
     && Date.now() - Date.parse(d.last_seen ?? d.created_at) <= SESSION_DAYS * 86_400_000
     && d.person_id == null);
-  const keyOf = (d) => { if (!keys.has(d.id)) keys.set(d.id, sessionKey(own.priv, b64.dec(d.public_key))); return keys.get(d.id); };
+  const keyOf = (d) => { if (!keys.has(d.id)) keys.set(d.id, sessionKey(own().priv, b64.dec(d.public_key))); return keys.get(d.id); };
   const deviceOf = (req) => {
     const id = String(req.headers['x-orb-device'] ?? '');
     if (!/^[0-9a-f-]{36}$/.test(id)) return null;
@@ -416,7 +425,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       const cv = Number(msg.body?.v);
       if (Number.isFinite(cv) && cv > 0 && cv !== metaV(device)) board.run('UPDATE devices SET meta = ? WHERE id = ?', JSON.stringify({ ...parseMeta(device), v: cv }), device.id);
       if (tooOld(cv)) return reply(res, device, msg.nonce, { ok: false, status: 426, update: 'me', error: tr('msg.link.updateClient', { has: versionOfProtocol(cv), need: versionOfProtocol(MIN_PROTOCOL) }) });
-      return reply(res, device, msg.nonce, { ok: true, result: { device: device.name, name: ctx.config.assistantName, orb: orbName(), ...versions(), pc: pcFingerprint, push: Boolean(device.push), vapid: own.vapid.publicKey } });
+      return reply(res, device, msg.nonce, { ok: true, result: { device: device.name, name: ctx.config.assistantName, orb: orbName(), ...versions(), pc: pcFingerprint(), push: Boolean(device.push), vapid: own().vapid.publicKey } });
     }
     if (what === 'push') {
       // Turn notifications on (a subscription made by this phone's browser) or off (null).
@@ -450,7 +459,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   function helloInfo(res) {
     if (!pairing || Date.now() > pairing.expires) return send(res, 404, { error: tr('msg.link.noCode') });
     // short: 3 (3.5.1): the short code is tied to this key (link.mjs › connect refuses an Orb without it).
-    return send(res, 200, { v: PROTOCOL, short: 3, pc: b64.enc(own.pub), fp: pcFingerprint, name: orbName(), urls: (state.routes ?? []).map((r) => r.url) });
+    return send(res, 200, { v: PROTOCOL, short: 3, pc: b64.enc(own().pub), fp: pcFingerprint(), name: orbName(), urls: (state.routes ?? []).map((r) => r.url) });
   }
 
   // Pairing: the phone sends its public key and a proof sealed with the key of this QR (the one-time code never travels).
@@ -476,16 +485,27 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     if (devPub.length !== 32) return fail();
     // The short code: code3 (3.5.1, stretched and tied to this key); code (3.5.0) still opens, for older apps.
     const secretOf = body.via === 'code3' ? pairing.short3 : body.via === 'code' ? `corto:${pairing.short}` : pairing.code;
-    let proof; try { proof = open(pairingKey(own.priv, devPub, secretOf), body.proof, AAD.pair); } catch { return fail(); }
+    let proof; try { proof = open(pairingKey(own().priv, devPub, secretOf), body.proof, AAD.pair); } catch { return fail(); }
     if (!proof || proof.pub !== body.pub) return fail();
     // The QR was right but the phone's clock is off: it tries again with the PC's time (the QR is not used up).
     if (!(Math.abs(Date.now() - Number(proof.t)) <= CLOCK_SKEW_MS)) return clockOff(res);
-    // 3.6: a device too old for this Orb is told to update first (the QR is not used up).
-    if (tooOld(proof.v)) return send(res, 426, { error: tr('msg.link.updateClient', { has: versionOfProtocol(proof.v), need: versionOfProtocol(MIN_PROTOCOL) }), update: 'me' });
+    // 3.6: a device too old for this Orb is told to update first (the QR is not used up). 3.8: linking needs protocol 4
+    // (the master password); an app of 3.7 sends none and is told to update.
+    if (!(Number(proof.v) >= PAIR_PROTOCOL)) return send(res, 426, { error: tr('msg.link.updatePair', { need: versionOfProtocol(PAIR_PROTOCOL) }), update: 'pair' });
     // 3.5.1: what the device is was chosen when the QR was made; a device that says otherwise is refused (the QR stays).
     // 3.8: another Orb is never linked.
     const kind = kindForPairing(pairing.device, typeof proof.kind === 'string' ? proof.kind : kindOf({ name: proof.name }));
     if (!kind) return send(res, 403, { error: tr('msg.link.notForOrb') });
+    // 3.8: the master password, inside the proof sealed with the code's key (never in clear, never written down). A wrong
+    // one does not use the code up: five per code, then a new code; and the waits of src/core/master.mjs for all of them.
+    const issued = pairing;
+    const pass = await passwordOk(typeof proof.master === 'string' ? proof.master : '');
+    if (pass) {
+      if (pass.reason === 'password' && pairing === issued && ++issued.passFails >= PAIR_PASSWORD_TRIES) { pairing = null; log('enlace: demasiadas contraseñas incorrectas; código anulado'); return send(res, 403, { error: tr('msg.link.passTooMany'), reason: 'newCode' }); }
+      if (pass.reason === 'password') return send(res, 403, { error: tr('msg.link.passWrong', { n: Math.max(1, PAIR_PASSWORD_TRIES - issued.passFails) }), reason: 'password', left: Math.max(1, PAIR_PASSWORD_TRIES - issued.passFails) });
+      return send(res, pass.status, { error: pass.error, reason: pass.reason });
+    }
+    if (pairing !== issued || Date.now() > issued.expires) return fail(); // used or gone while the password was checked
     const { route } = pairing;
     pairing = null; // one use
     const id = crypto.randomUUID();
@@ -496,10 +516,20 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     board.notice(tr('msg.remote.deviceLinked', { name }), 'success');
     // The answer is sealed with the new session key: the phone checks it really is the PC of the QR. 3.5.1: and with the
     // code's key too, so a device that got a key from someone in the middle finds out (nobody else has the code).
-    const key = sessionKey(own.priv, devPub); keys.set(id, key);
+    const key = sessionKey(own().priv, devPub); keys.set(id, key);
     linkChanged();
-    return send(res, 200, { id, box: seal(key, { id, name: ctx.config.assistantName, orb: orbName(), ...versions(), pc: pcFingerprint }, AAD.paired(id)),
-      confirm: seal(pairingKey(own.priv, devPub, secretOf), { id, pc: pcFingerprint }, AAD.confirm(id)) });
+    return send(res, 200, { id, box: seal(key, { id, name: ctx.config.assistantName, orb: orbName(), ...versions(), pc: pcFingerprint() }, AAD.paired(id)),
+      confirm: seal(pairingKey(own().priv, devPub, secretOf), { id, pc: pcFingerprint() }, AAD.confirm(id)) });
+  }
+
+  // The master password a linking device sent: null when it is right, else { status, error?, reason }.
+  async function passwordOk(password) {
+    const m = ctx.master;
+    if (!m?.hasPassword()) return { status: 403, error: tr('msg.link.noMaster'), reason: 'noMaster' };
+    const r = await m.verify(password, 'pair');
+    if (r.ok) return null;
+    if (r.reason === 'wait') return { status: 429, error: tr('msg.link.passWait', { s: Math.max(1, Math.ceil((Date.parse(r.until) - Date.now()) / 1000)) }), reason: 'wait' };
+    return { status: 403, reason: 'password' };
   }
 
   // 3.5.1: a request from a browser's page that came over plain http on the home network (not this PC, not Tailscale's
@@ -609,7 +639,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       let sub; try { sub = JSON.parse(d.push); } catch { continue; }
       const data = { title: n.title, body: n.body, hidden: n.hidden, tag: `orb-${n.key}`, icon: n.icon, url: '/', route: n.route, kind: n.kind,
         actions: n.actions.map(({ id, title, open: o }) => ({ id, title, ...(o ? { open: true } : {}) })), card: n.card ?? null, acts: mintActs(d.id, n) };
-      sendPush(sub, data, own.vapid)
+      sendPush(sub, data, own().vapid)
         .then((r) => { if (r === 'gone') board.run('UPDATE devices SET push = NULL WHERE id = ?', d.id); })
         .catch(() => {});
     }
@@ -747,6 +777,8 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       if (servers.length) return Promise.resolve(state);
       // 3.8: never on a database of 3.5–3.7 the 3.8 migration could not finish yet (its devices may be other users').
       if (isLegacy(board.db)) { const e = new Error(tr('msg.remote.notMigrated')); e.userFacing = true; return Promise.reject(e); }
+      // 3.8: and never while the vault with this PC's keys is locked (it opens with the master password).
+      try { own(); } catch (error) { return Promise.reject(error); }
       starting ??= startNow().finally(() => { starting = null; });
       // The Wi-Fi address changes with the network (or comes back after it was gone): the servers follow it.
       watcher ??= setInterval(() => {
@@ -766,7 +798,8 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       await unserve();
     },
     status() {
-      return { enabled: Boolean(ctx.config.mobile?.enabled), running: Boolean(state.running), routes: state.routes ?? [], error: state.error ?? null, pc: pcFingerprint,
+      let pc = null; try { pc = pcFingerprint(); } catch { /* the vault is locked */ }
+      return { enabled: Boolean(ctx.config.mobile?.enabled), running: Boolean(state.running), routes: state.routes ?? [], error: state.error ?? null, pc,
         wifi: ctx.config.mobile?.wifi !== false, tailscale: ctx.config.mobile?.tailscale !== false, name: orbName(),
         lanHttp: ctx.config.mobile?.lanHttp === true, preview: pushPreview(ctx.config),
         devices: board.all('SELECT id, name, created_at, last_seen, route, kind, ip, push IS NOT NULL AS push FROM devices ORDER BY created_at DESC').map((d) => ({ ...d, push: Boolean(d.push) })) };
@@ -782,15 +815,15 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       const code = crypto.randomBytes(18).toString('base64url');
       const short = Array.from({ length: 8 }, () => CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)]).join('');
       const forKind = PAIR_KINDS.includes(device) ? device : null;
-      pairing = { code, short, short3: shortSecret(short, b64.enc(own.pub)), expires: Date.now() + PAIR_MINUTES * 60_000, route: route.kind, fails: 0,
+      pairing = { code, short, short3: shortSecret(short, b64.enc(own().pub)), expires: Date.now() + PAIR_MINUTES * 60_000, route: route.kind, fails: 0, passFails: 0,
         device: forKind };
       const others = state.routes.filter((r) => r !== route).map((r) => r.url);
       // 3.6 (A11): the name of this computer on the home network (name.local) too, for when the Wi-Fi address changes.
       if (state.local && !others.includes(state.local) && route.url !== state.local) others.push(state.local);
-      const frag = new URLSearchParams({ vincular: code, pc: b64.enc(own.pub), v: String(PROTOCOL), n: orbName() });
+      const frag = new URLSearchParams({ vincular: code, pc: b64.enc(own().pub), v: String(PROTOCOL), n: orbName() });
       if (others.length) frag.set('a', others.join(','));
-      return { url: `${route.url}#${frag}`, payload: { v: PROTOCOL, urls: [route.url, ...others], pc: b64.enc(own.pub), code, name: orbName(), expiresAt: pairing.expires },
-        code: shortCodeLabel(short), address: route.url, expiresAt: pairing.expires, kind: route.kind, secure: route.secure, pc: pcFingerprint, name: orbName(),
+      return { url: `${route.url}#${frag}`, payload: { v: PROTOCOL, urls: [route.url, ...others], pc: b64.enc(own().pub), code, name: orbName(), expiresAt: pairing.expires },
+        code: shortCodeLabel(short), address: route.url, expiresAt: pairing.expires, kind: route.kind, secure: route.secure, pc: pcFingerprint(), name: orbName(),
         device: forKind,
         browserOk: Boolean(route.secure) || route.address === '127.0.0.1' || route.kind === 'tailscale' || ctx.config.mobile?.lanHttp === true };
     },
@@ -804,7 +837,19 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       return true;
     },
     devices,
-    fingerprint: () => pcFingerprint,
+    fingerprint: () => pcFingerprint(),
+    // 3.8: «He olvidado la contraseña»: every linked phone and browser goes (they link again with the new password), and
+    // the keys are read again (a new vault makes new ones). → how many went.
+    revokeAll() {
+      const list = board.all('SELECT id, name FROM devices');
+      board.run('DELETE FROM devices');
+      keys.clear(); seen.clear(); pairing = null; ownKeys = null;
+      for (const c of clients) { try { c.res.end(); } catch { /* closed */ } }
+      clients.clear();
+      if (list.length) board.event(null, 'usuario', 'device.revokedAll', String(list.length));
+      linkChanged();
+      return list.length;
+    },
     rename(id, name) {
       const d = board.one('SELECT id FROM devices WHERE id = ?', String(id)); if (!d) throw new Error(tr('msg.remote.noDevice'));
       const clean = oneLine(String(name ?? ''), 60).trim(); if (!clean) throw new Error(tr('msg.link.needName'));

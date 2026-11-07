@@ -194,7 +194,10 @@ test('engine: backup.now, list, verify, recovery code and restore staged for the
     await assert.rejects(e.call('backup.verify', { file: 'no-existe.orbbak' }), /No encuentro esa copia/);
     await assert.rejects(e.call('backup.verify', { file: '../../orb.json' }), /no es una copia/);
     await e.call('schedules.create', { project: 'casa', title: 'Después', description: 'd', every: 'daily' });
-    const r = await e.call('backup.restore', { file: made.file });
+    // 3.8: restoring needs the master password (a fresh unlock).
+    await assert.rejects(e.call('backup.restore', { file: made.file }), /contraseña maestra/);
+    const { unlock } = await e.call('master.create', { password: 'contraseña de copias' });
+    const r = await e.call('backup.restore', { file: made.file, unlock });
     assert.equal(r.restartNeeded, true);
     await e.stop(); stopped = true;
     const again = await startEngine(home);
@@ -241,12 +244,14 @@ test('3.8: Ajustes › Datos elige otra carpeta de copias, nunca dentro de core'
   const e = await startEngine(home);
   try {
     assert.equal((await e.call('backup.status')).custom, false);
-    await assert.rejects(e.call('config.save', { patch: { backup: { folder: path.join(home, 'core', 'copias') } } }), /dentro de core/);
+    const { unlock } = await e.call('master.create', { password: 'contraseña de copias' });
+    await assert.rejects(e.call('config.save', { patch: { backup: { folder: path.join(home, 'core', 'copias') } }, unlock }), /dentro de core/);
     const mine = path.join(path.dirname(home), 'mis-copias');
-    await e.call('config.save', { patch: { backup: { folder: mine } } });
+    await assert.rejects(e.call('config.save', { patch: { backup: { folder: mine } } }), /contraseña maestra/, '3.8: sin desbloquear, no');
+    await e.call('config.save', { patch: { backup: { folder: mine } }, unlock });
     const st = await e.call('backup.status');
     assert.equal(st.folder, mine); assert.equal(st.custom, true);
-    await e.call('config.save', { patch: { backup: { folder: '' } } });
+    await e.call('config.save', { patch: { backup: { folder: '' } }, unlock });
     assert.equal((await e.call('backup.status')).folder, K.defaultBackupDir(home));
   } finally { await e.stop(); cleanup(); }
 });

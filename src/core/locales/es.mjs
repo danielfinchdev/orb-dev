@@ -26,6 +26,7 @@ import permisos from './es/permisos.mjs';
 import ws5 from './es/ws5.mjs';
 import ws6 from './es/ws6.mjs';
 import ws6android from './es/ws6-android.mjs';
+import master from './es/master.mjs';
 import ola1 from './es/ola1.mjs';
 import mensajeria from './es/mensajeria.mjs';
 import orbchats from './es/orbchats.mjs';
@@ -59,6 +60,7 @@ export default {
   ...ws5,
   ...ws6,
   ...ws6android,
+  ...master,
   ...ola1,
   ...mensajeria,
   ...orbchats,

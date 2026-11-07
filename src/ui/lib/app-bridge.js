@@ -54,10 +54,12 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
         const { barcodes } = await BarcodeScanner.scan({ formats: [BarcodeFormat.QrCode] });
         return barcodes?.[0]?.rawValue ?? null;
       };
-      // Link with what was scanned or typed: the QR's text, a pasted link, or the short code and the address.
-      orb.link = async (input) => {
-        let p; try { p = typeof input === 'string' ? L.parseLinkPayload(input) : L.parseManual(input); } catch (e) { throw new Error(await tl(e.key ?? 'app.linkBadQr')); }
-        await pieces.pairWith(p);
+      // Link with what was scanned or typed: the QR's text, a pasted link, or the short code and the address. 3.8: read
+      // first (checkLink: { name }), then linked with the PC's master password ({ password }).
+      const parse = async (input) => { try { return typeof input === 'string' ? L.parseLinkPayload(input) : L.parseManual(input); } catch (e) { throw new Error(await tl(e.key ?? 'app.linkBadQr')); } };
+      orb.checkLink = async (input) => { const p = await parse(input); return { name: p.name ?? null }; };
+      orb.link = async (input, { password = '' } = {}) => {
+        await pieces.pairWith(await parse(input), { password });
         return true;
       };
       orb.unlink = async () => { pieces.unpaired(); return true; };

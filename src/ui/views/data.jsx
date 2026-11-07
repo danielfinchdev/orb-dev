@@ -9,6 +9,7 @@ import { form, confirm } from '@/components/dialogs.jsx';
 import { call, act, bridge, useStore, getState, setState, openSettings } from '@/lib/store.js';
 import { notify } from '@/lib/notify.js';
 import { unlockCore } from '@/lib/core-access.js';
+import { MasterCard } from '@/views/master.jsx';
 import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
 
 const size = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
@@ -43,18 +44,19 @@ function BackupsCard() {
   const when = (iso) => (iso ? new Date(iso).toLocaleString(locale, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
   const now = async () => { setBusy(true); const r = await act(call('backup.now', {}), t('datos.made')); setBusy(false); if (r) load(); };
   const restore = async (b) => {
-    if (!(await unlockCore('restore'))) return;
+    const unlock = await unlockCore('restore');
+    if (!unlock) return;
     const r = await form(t('datos.restoreTitle'), {
       description: t('datos.restoreDesc', { when: when(b.created) }),
       initial: { passphrase: '' },
       body: (v, set) => <Field label={t('datos.restorePass')} hint={t('datos.restorePassHint')}><Input type="password" autoComplete="off" value={v.passphrase} onChange={(e) => set({ passphrase: e.target.value })} /></Field>,
       ok: t('datos.restore'),
-      onOk: async (v) => { await call('backup.verify', { file: b.name, passphrase: v.passphrase || null }); return call('backup.restore', { file: b.name, passphrase: v.passphrase || null }); }
+      onOk: async (v) => { await call('backup.verify', { file: b.name, passphrase: v.passphrase || null }); return call('backup.restore', { file: b.name, passphrase: v.passphrase || null, unlock }); }
     });
     if (r) toast.success(t('datos.restoreReady'), { duration: 10000 });
   };
   // 3.8: where the copies go: outside Orb's folder by default; another folder (never inside core) or back to the default.
-  const setFolder = async (folder) => { if (!(await unlockCore('backupFolder'))) return; if (await act(call('config.save', { patch: { backup: { folder } } }), t('datos.folderChanged'))) load(); };
+  const setFolder = async (folder) => { const unlock = await unlockCore('backupFolder'); if (!unlock) return; if (await act(call('config.save', { patch: { backup: { folder } }, unlock }), t('datos.folderChanged'))) load(); };
   const pickFolder = async () => { const f = await bridge.pickFolder?.(t('datos.pickFolder')); if (f) setFolder(f); };
   const pickFile = async () => {
     const files = await bridge.pickFiles?.(t('datos.pickFile'));
@@ -106,7 +108,8 @@ function LegacyCard() {
   if (!st || !(st.archives.length + st.copies.length)) return null;
   const remove = async () => {
     if (!(await confirm(t('datos.legacyConfirmTitle'), t('datos.legacyConfirmDesc', { archives: st.archives.join(', ') || '—' }), { ok: t('datos.legacyDelete'), danger: true }))) return;
-    setBusy(true); const r = await act(call('legacy.delete', {}), t('datos.legacyDeleted')); setBusy(false); if (r) load();
+    const unlock = await unlockCore('legacy'); if (!unlock) return;
+    setBusy(true); const r = await act(call('legacy.delete', { unlock }), t('datos.legacyDeleted')); setBusy(false); if (r) load();
   };
   return (
     <Card data-testid="legacy-card">
@@ -117,13 +120,13 @@ function LegacyCard() {
   );
 }
 
-// 3.8: core, Orb's own folder (hidden): what it holds and «Abrir core» (through unlockCore, which the master password will
-// guard).
+// 3.8: core, Orb's own folder (hidden): what it holds and «Abrir core» (after the master password: unlockCore; the main
+// process checks the token with the engine before opening it).
 function CoreCard() {
   const t = useT();
   const dir = useStore((s) => s.app?.paths?.core);
   if (!dir || !bridge.openPath) return null;
-  const open = async () => { if (await unlockCore('open')) act(bridge.openPath(dir)); };
+  const open = async () => { const unlock = await unlockCore('open'); if (unlock) act(bridge.openPath(dir, unlock)); };
   return (
     <Card data-testid="core-card">
       <CardHeader className="flex-row items-start gap-3"><FolderLock className="text-primary mt-0.5 size-5 shrink-0" /><CardTitle className="mt-1">{t('datos.coreTitle')}</CardTitle></CardHeader>
@@ -133,7 +136,7 @@ function CoreCard() {
   );
 }
 
-export function DataCards() { return <><BackupsCard /><CoreCard /><LegacyCard /></>; }
+export function DataCards() { return <><MasterCard /><BackupsCard /><CoreCard /><LegacyCard /></>; }
 
 // 3.6: backups are on from the first day, sealed with this PC's key. A few days later, once, a quiet suggestion to make
 // the recovery code (Ajustes › Datos), so a copy also opens on another PC. Never on a phone.

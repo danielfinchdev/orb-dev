@@ -10,6 +10,7 @@ import { ctx, tr, connectorKey } from '../core/context.mjs';
 import { adapter, executable } from '../agents/index.mjs';
 import { orbMcpServer, connectorLauncher } from '../agents/common.mjs';
 import { agentAuth } from './agent-auth.mjs';
+import { resolveEnv } from '../core/connector-secrets.mjs';
 import { CURSOR_FILES } from '../agents/cursor.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { git, isGitRepo, repoRoot } from '../core/workspace.mjs';
@@ -65,7 +66,8 @@ export function mcpServersFor(agent, { taskId = '', orchestrator = false, browse
     for (const s of ctx.config.mcpServers ?? []) {
       if (s.enabled === false || (s.agents?.length && !s.agents.includes(agent)) || taken.has(connectorKey(s.name))) continue;
       taken.add(connectorKey(s.name)); // F2.6c: never two servers on one variable name (config checks it too)
-      servers[s.name] = ticketed(s.name, connectorLauncher(), { launch: { command: s.command, args: s.args ?? [], env: s.env ?? {} } });
+      // 3.8: its keys come out of the vault here, only for its launcher (orb.json has references).
+      servers[s.name] = ticketed(s.name, connectorLauncher(), { launch: { command: s.command, args: s.args ?? [], env: resolveEnv(ctx.master, s) } });
     }
   }
   return Object.defineProperty(servers, 'release', { value: () => { for (const t of tickets) agentAuth.revoke(t); } });

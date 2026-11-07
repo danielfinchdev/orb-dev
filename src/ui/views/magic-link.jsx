@@ -1,14 +1,15 @@
 // 3.5: Magic Link, in Ajustes on the PC. «Enlazar dispositivo» shows a QR and a short code (5 minutes, one use) for a
 // phone or a browser; and the list of linked devices, each with whether it is on, when it was last seen, rename and
-// close its session.
+// close its session. 3.8: the phone asks for the master password to link, and unlinking one asks for it here.
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { QrCode, Smartphone, Globe, Pencil, Trash2, X, Copy, Check, LoaderCircle, ShieldCheck, TriangleAlert, ChevronDown, ExternalLink } from 'lucide-react';
+import { QrCode, Smartphone, Globe, Pencil, Trash2, X, Copy, Check, LoaderCircle, ShieldCheck, TriangleAlert, ChevronDown, ExternalLink, KeyRound } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, Field, Input } from '@/components/ui/basic.jsx';
 import { BubbleTip, Select } from '@/components/ui/overlay.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { call, act, bridge } from '@/lib/store.js';
+import { unlockCore } from '@/lib/core-access.js';
 import { countdown, sortDevices } from '@/lib/link.js';
 import { cn, ago } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
@@ -45,6 +46,7 @@ function PairCard() {
             <img alt={t('link.qrAlt')} className="size-52 rounded-lg bg-white p-2" src={`data:image/svg+xml;utf8,${encodeURIComponent(qr.svg)}`} data-testid="link-qr" />
             <div className="grid gap-2 text-center sm:text-left">
               <p className="text-sm">{t('link.scan')}</p>
+              <p className="text-muted-foreground flex items-center justify-center gap-1.5 text-xs sm:justify-start" data-testid="link-pass-note"><KeyRound className="size-3.5 shrink-0" />{t('link.passNote')}</p>
               <div className="text-muted-foreground text-xs">{t('link.orCode')}</div>
               <div className="flex items-center justify-center gap-2 sm:justify-start">
                 <span className="bg-muted rounded-lg px-3 py-1.5 font-mono text-2xl font-semibold tracking-widest tabular-nums select-all" data-testid="link-code">{qr.code}</span>
@@ -94,7 +96,11 @@ function OutsideGuide() {
 function DevicesCard({ devices, reload }) {
   const t = useT();
   const rename = (d) => form(t('link.renameTitle'), { initial: { name: d.name }, body: (v, set) => <Input autoFocus value={v.name} maxLength={60} onChange={(e) => set({ name: e.target.value })} />, ok: t('link.save'), onOk: async (v) => { await call('link.rename', { id: d.id, name: v.name.trim() || d.name }); reload(); return true; } });
-  const revoke = async (d) => { if (await confirm(t('link.revokeTitle', { name: d.name }), t('link.revokeBody'), { ok: t('link.revoke'), danger: true })) { await act(call('link.revoke', { id: d.id }), t('link.revoked')); reload(); } };
+  const revoke = async (d) => {
+    if (!(await confirm(t('link.revokeTitle', { name: d.name }), t('link.revokeBody'), { ok: t('link.revoke'), danger: true }))) return;
+    const unlock = await unlockCore('unlink'); if (!unlock) return;
+    await act(call('link.revoke', { id: d.id, unlock }), t('link.revoked')); reload();
+  };
   return (
     <Card data-testid="link-devices">
       <CardHeader><CardTitle>{t('link.devices')}</CardTitle><CardDescription>{t('link.devicesHint')}</CardDescription></CardHeader>

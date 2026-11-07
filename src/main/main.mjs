@@ -1,7 +1,7 @@
 // Electron main process: one window, the first-run setup, the engine process and a narrow, checked bridge between them.
 // The window has no Node access (sandbox + context isolation); it can only call the engine's actions and a few
 // file dialogs exposed by the preload script.
-import { app, BrowserWindow, ipcMain, dialog, shell, Notification, Menu, protocol, net, utilityProcess, session, nativeTheme, safeStorage, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell, Notification, Menu, protocol, net, utilityProcess, session, nativeTheme, safeStorage, nativeImage, powerMonitor } from 'electron';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -111,6 +111,8 @@ let weakKeyring = false;
 // and never written into core before the move. Returns the secret as hex, or null when encryption is not available
 // (then the engine uses clave.bin).
 const SECRET_COPY = (h) => path.join(app.getPath('userData'), 'claves', `${homeKey(h)}.enc`);
+// 3.8: and of the master password's files (core\secretos: the data key wrapped, the secrets sealed), kept by the engine.
+const SECRETS_COPY = (h) => path.join(app.getPath('userData'), 'claves', `${homeKey(h)}-secretos`);
 function approvalSecret(h) {
   const available = safeStorage.isEncryptionAvailable();
   let backend = null; try { backend = process.platform === 'linux' ? safeStorage.getSelectedStorageBackend() : null; } catch { /* older Electron */ }
@@ -176,7 +178,7 @@ function startEngine(h) {
   });
   let secret = null; try { secret = approvalSecret(h); } catch { /* falls back to the file */ }
   const browser = agentBrowser ? { pipe: agentBrowser.pipe, token: agentBrowser.token } : null;
-  engine.postMessage({ type: 'start', home: h, version: VERSION, secret, browser });
+  engine.postMessage({ type: 'start', home: h, version: VERSION, secret, browser, keep: SECRETS_COPY(h) });
   return engineReady;
 }
 
@@ -296,8 +298,18 @@ ipcMain.handle('app:pickImages', guard(async () => {
   const r = await dialog.showOpenDialog(win, { title: T('sys.dialog.refImages'), properties: ['openFile', 'multiSelections'], filters: [{ name: T('sys.dialog.images'), extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'] }] });
   return r.canceled ? [] : r.filePaths.slice(0, 10);
 }));
-ipcMain.handle('app:openPath', guard(async (target) => {
+// 3.8: core itself (all of it at once) and its secrets open only with a fresh unlock of the master password, checked by
+// the engine. Its tool folders (MCP servers, skills, adb, logs) and the data folder a failed migration points to open as
+// before: the window offers them where they are needed, also before there is a password.
+const guardedCore = (target) => {
+  if (!home) return false;
+  const t = path.resolve(target).toLowerCase();
+  const core = path.resolve(paths(home).core).toLowerCase(); const secrets = path.resolve(paths(home).secrets).toLowerCase();
+  return t === core || t === secrets || t.startsWith(secrets + path.sep);
+};
+ipcMain.handle('app:openPath', guard(async (target, unlock) => {
   if (typeof target !== 'string' || !path.isAbsolute(target)) throw new Error(T('sys.main.badPath'));
+  if (guardedCore(target)) { await engineReady; await callEngine('master.check', { unlock: typeof unlock === 'string' ? unlock : '' }, 10_000); }
   let st; try { st = fs.statSync(target); } catch { throw new Error(T('sys.main.folderMissing')); }
   if (!st.isDirectory()) throw new Error(T('sys.main.foldersOnly')); // never run a file
   const err = await shell.openPath(target); if (err) throw new Error(err);
@@ -414,7 +426,11 @@ app.on('second-instance', () => { if (win && !win.isDestroyed()) { if (win.isMin
 app.on('before-quit', () => { quitting = true; agentBrowser?.shutdown(); try { engine?.postMessage({ type: 'shutdown' }); } catch { /* gone */ } });
 app.on('window-all-closed', () => app.quit());
 
+// 3.8: the window's unlock of the master password ends when Windows locks or the PC sleeps.
+const lockMaster = () => { if (engine) callEngine('master.lock', {}, 5000).catch(() => {}); };
+
 app.whenReady().then(async () => {
+  for (const e of ['lock-screen', 'suspend']) powerMonitor.on(e, lockMaster);
   // Our pages come from orb://app/ (only files inside src/renderer); nothing else is served.
   protocol.handle('orb', (request) => {
     const url = new URL(request.url);

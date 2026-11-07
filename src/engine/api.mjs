@@ -38,10 +38,12 @@ import { linkMethods } from './api-link.mjs';
 import { accountMethods } from './api-accounts.mjs';
 import { dataApi } from './api-data.mjs';
 import { inboxMethods } from './api-inbox.mjs';
+import { masterMethods, checkUnlock } from './api-master.mjs';
+import { sealConnectors } from '../core/connector-secrets.mjs';
 
 export { fail, str, int, oneOf } from './api-common.mjs';
 
-export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef = { current: null } }) {
+export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef = { current: null }, onUnlocked = () => {} }) {
   const realHome = (() => { try { return fs.realpathSync(ctx.home); } catch { return ctx.home; } })();
   let catalogCache = null; // models.catalog, for a few seconds (see there)
   const insideHome = (p) => { const rel = path.relative(realHome, p); return Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel); };
@@ -159,7 +161,10 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return { ok: true };
     },
     'config.save': ({ patch }) => {
-      const c = saveConfig(patch ?? {}); emit('config:changed', c);
+      // 3.8: a connector's keys never reach orb.json: they go into the vault and orb.json keeps references.
+      const p = patch ?? {};
+      const sealed = Array.isArray(p.mcpServers) ? sealConnectors(ctx.master, p.mcpServers) : null;
+      const c = saveConfig(sealed ? { ...p, mcpServers: sealed } : p); emit('config:changed', c);
       return c;
     },
 
@@ -594,7 +599,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     ...accountMethods(shared),
     ...linkMethods(shared),
     ...inboxMethods(shared),
-    ...data.methods
+    ...data.methods,
+    ...masterMethods({ ...shared, onUnlocked })
   };
   return {
     // principal: who calls, built only by the entry points (engine.mjs and dev-control.mjs: this PC; remote.mjs: a
@@ -605,6 +611,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       if (!fn) fail(tr('msg.api.unknownAction', { method }));
       if (params === null || typeof params !== 'object' || Array.isArray(params)) fail(tr('msg.api.badParams'));
       authorize(principal, method);
+      // 3.8: and, for what the master password guards, a fresh unlock of this PC's window (src/engine/api-master.mjs).
+      checkUnlock(method, params);
       const out = await fn(params, principal);
       // 3.1: an agent turned on or off, checked again, or an account added or removed: the list of available agents is
       // updated at once (the next task may already be for it).

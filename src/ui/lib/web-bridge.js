@@ -131,15 +131,18 @@ if (!window.orb) {
 
   // Pairing from the QR: #vincular=<one-time code>&pc=<the PC's public key> (or what the app scanned or was typed in,
   // src/ui/lib/link-payload.js). The code never travels: the phone proves it read it by sealing its own public key with
-  // a key derived from it.
+  // a key derived from it. 3.8: the link waits for the PC's master password (main.jsx asks for it: pairPending).
+  let pending = null;
   const pairFromHash = async () => {
     const h = new URLSearchParams(location.hash.slice(1));
     if (!h.get('vincular')) return;
     history.replaceState(null, '', location.pathname);
     if (!h.get('pc')) throw new Error(await tl('app.oldQr'));
-    await pairWith({ urls: [''], code: h.get('vincular'), pc: h.get('pc'), via: 'qr' }); // in a browser: this page's own server
+    pending = { urls: [''], code: h.get('vincular'), pc: h.get('pc'), via: 'qr', name: h.get('n') }; // in a browser: this page's own server
   };
-  const pairWith = async (link) => {
+  // password: the PC's master password. It goes inside the proof, sealed with the code's key: never in clear, never kept.
+  // A refusal says why (reason: 'password' wrong, the code still good; 'newCode' too many, 'wait'; status 426: update).
+  const pairWith = async (link, { password = '' } = {}) => {
     const C = await crypto$();
     let p = link; let pc = p.pc;
     // The short code does not carry the Orb's key: the Orb gives it (GET /api/hello, Magic Link); a wrong one fails below.
@@ -161,7 +164,7 @@ if (!window.orb) {
     const via = p.via === 'code' ? 'code3' : p.via;
     // 3.5 (Magic Link): it also says what it is (a phone or a computer's browser), for the list of linked devices.
     const kind = host || /iPhone|iPad|Android|Mobile/.test(navigator.userAgent) ? 'phone' : 'browser';
-    const proof = () => C.seal(C.pairingKey(priv, pcPub, secret), { pub: C.b64.enc(pub), name, kind, t: stamp() }, C.AAD.pair);
+    const proof = () => C.seal(C.pairingKey(priv, pcPub, secret), { pub: C.b64.enc(pub), name, kind, t: stamp(), v: L.PROTOCOL, min: L.MIN_PROTOCOL, master: String(password ?? '') }, C.AAD.pair);
     let last = null;
     for (const base of p.urls) {
       const send = () => fetch(`${base}/api/pair`, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ via, pub: C.b64.enc(pub), proof: proof() }) });
@@ -169,7 +172,7 @@ if (!window.orb) {
       try { res = await send(); if (await clockFixed(res)) res = await send(); }
       catch { last = new Error(await tl('app.linkOffline')); continue; } // not reachable this way: the next address
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? await tl('app.httpError', { n: res.status }));
+      if (!res.ok) throw Object.assign(new Error(data.error ?? await tl('app.httpError', { n: res.status })), { status: res.status, reason: data.reason ?? null });
       // The PC answers with the new session key: if it opens, this is really the PC of the QR.
       const key = C.sessionKey(priv, pcPub);
       let ok; try { ok = C.open(key, data.box, C.AAD.paired(data.id)); } catch { ok = null; }
@@ -225,7 +228,8 @@ if (!window.orb) {
     async info() {
       let pairError = null;
       try { await pairFromHash(); } catch (e) { pairError = e.message; }
-      if (!await record()) return { mobile: true, needsPairing: true, needsSetup: false, pairError, app: Boolean(host) };
+      // A new QR opened on a page already linked links it again (after the password), as before 3.8.
+      if (!await record() || pending) return { mobile: true, needsPairing: true, needsSetup: false, pairError, app: Boolean(host), pairLink: pending ? { name: pending.name ?? null } : null };
       // 3.6: the page says its protocol; an Orb that needs a newer one answers 426 (or a min above ours): update first.
       let r = null;
       try { r = await post('/api/me', 'me', { v: L.PROTOCOL }); me = r.ok ? r.result : null; }
@@ -239,6 +243,12 @@ if (!window.orb) {
         navigator.serviceWorker.addEventListener('message', (e) => { if (e.data?.orbOpen) window.dispatchEvent(new CustomEvent('orb:open-note', { detail: e.data.orbOpen })); });
       }
       return { mobile: true, needsSetup: false, platform: host ? 'android' : 'web', pc: me?.pc ?? saved?.fp ?? null };
+    },
+    // 3.8: the link read from the QR (a browser), with the master password typed on this page.
+    async pairPending(password) {
+      if (!pending) throw new Error(await tl('app.linkBadQr'));
+      try { await pairWith(pending, { password }); pending = null; return true; }
+      catch (e) { if (e.reason === 'newCode' || e.status === 426) pending = null; throw e; }
     },
     setup: async () => { throw new Error(await tl('app.pcOnly')); },
     switchHome: async () => { throw new Error(await tl('app.pcOnly')); },
