@@ -156,7 +156,7 @@ export default {
   "msg.ctx.accountHomeAbs": "la carpeta de la cuenta {label} debe ser una ruta absoluta",
   "msg.ctx.accountId": "ID de cuenta no válido o duplicado: {id}",
   "msg.ctx.accountInDir": "la carpeta de una cuenta no puede estar dentro de {dir}",
-  "msg.ctx.accountInHome": "la carpeta de una cuenta no puede estar dentro de la carpeta del asistente",
+  'msg.ctx.accountInHome': 'la carpeta de una cuenta no puede estar dentro de la carpeta de Orb',
   "msg.ctx.accountName": "la cuenta {id} necesita un nombre",
   "msg.ctx.accountNet": "la carpeta de una cuenta no puede estar en una unidad de red",
   "msg.ctx.accountsList": "accounts debe ser una lista",

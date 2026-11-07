@@ -156,7 +156,7 @@ export default {
   "msg.ctx.accountHomeAbs": "the folder for account {label} must be an absolute path",
   "msg.ctx.accountId": "invalid or duplicate account ID: {id}",
   "msg.ctx.accountInDir": "an account folder cannot be inside {dir}",
-  "msg.ctx.accountInHome": "an account folder cannot be inside the assistant folder",
+  'msg.ctx.accountInHome': 'an account folder cannot be inside the Orb folder',
   "msg.ctx.accountName": "account {id} needs a name",
   "msg.ctx.accountNet": "an account folder cannot be on a network drive",
   "msg.ctx.accountsList": "accounts must be a list",

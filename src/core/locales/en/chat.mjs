@@ -133,7 +133,7 @@ export default {
   'bar.noticesClear': 'Clear all',
   'bar.project': 'Working folder',
   'bar.projectText': 'New tasks run here. Change it from the message box.',
-  'bar.noProject': 'No working folder',
+  'bar.noProject': 'No project',
   'chat.playButton': 'Play in the meantime',
   'chat.calendarOpen': 'Show the calendar',
   'chat.openBoard': 'Open the whiteboard',

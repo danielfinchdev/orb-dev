@@ -133,7 +133,7 @@ export default {
   'bar.noticesClear': 'Borrar todo',
   'bar.project': 'Carpeta de trabajo',
   'bar.projectText': 'Las tareas nuevas se ejecutan aquí. Cámbiala desde el cuadro de mensaje.',
-  'bar.noProject': 'Sin carpeta de trabajo',
+  'bar.noProject': 'Sin proyecto',
   'chat.playButton': 'Jugar mientras tanto',
   'chat.calendarOpen': 'Ver el calendario',
   'chat.openBoard': 'Abrir la pizarra',

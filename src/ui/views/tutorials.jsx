@@ -35,7 +35,7 @@ const PC_ONLY = new Set(['agents', 'usage', 'expert', 'games', 'looks']);
 // 2.7.3: what Orb Light (the portable .exe) does not have.
 const NOT_LIGHT = new Set(['expert', 'games']);
 const KEYS = 8; // help.key.1…8
-const FAQS = 16; // help.faq.1…16
+const FAQS = 17; // help.faq.1…17
 const range = (n) => Array.from({ length: n }, (_, i) => i + 1);
 // Search without accents or case: «bitacora» finds «Bitácoras».
 const fold = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();

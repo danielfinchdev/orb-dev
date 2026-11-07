@@ -1,7 +1,7 @@
 // Ajustes › Datos (backups and the recovery code) and the Magic Link guide for using Orb outside home.
 export default {
   'settings.section.datos': 'Data',
-  'settings.sectionDesc.datos': 'Backups and the recovery code.',
+  'settings.sectionDesc.datos': 'Master password, backups, the core folder and Orb 3.7 data.',
   'datos.backupsTitle': 'Backups',
   'datos.folder': 'Folder',
   'datos.pickFolder': 'Choose the backups folder',
@@ -42,7 +42,7 @@ export default {
   'datos.restorePassHint': 'Only if the backup was made on another PC.',
   'datos.restoreReady': 'Backup checked. Restart Orb to use it.',
   'datos.legacyTitle': 'Orb 3.7 data',
-  'datos.legacyDesc': 'What there was in Orb 3.7 (bots, other users) and the copy of its database: {size}. Orb does not use them.',
+  'datos.legacyDesc': 'What Orb 3.7 kept and Orb 3.8 no longer uses, with the copy of its database: {size}.',
   'datos.legacyDelete': 'Delete the Orb 3.7 data',
   'datos.legacyConfirmTitle': 'Delete the Orb 3.7 data?',
   'datos.legacyConfirmDesc': 'The folders {archives} and the copy of the old database are deleted for good. Backups already made keep them.',

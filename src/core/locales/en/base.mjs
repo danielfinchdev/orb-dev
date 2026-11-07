@@ -18,7 +18,7 @@ export default {
   'nav.newTask': 'New task',
   'nav.backToChat': 'Back to the conversation with {name}',
   'nav.folders': 'Projects',
-  'nav.loose': 'No folder',
+  'nav.loose': 'No project',
   'nav.noProject': 'No project',
   // 3.2: sidebar foot
   'nav.memories': 'Memories',

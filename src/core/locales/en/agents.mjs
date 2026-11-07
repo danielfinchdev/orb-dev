@@ -28,7 +28,7 @@ export default {
   'agents.scanAddedMany': 'Accounts added: {n}',
   'agents.sessionFolder': 'Session folder',
   'agents.folderHintCustom': 'This folder will be used. Useful if you’re already signed in there.',
-  'agents.folderHintEmpty': 'If you leave it empty, a new folder is created inside the assistant folder.',
+  'agents.folderHintEmpty': 'If you leave it empty, a new folder is created inside the Orb folder.',
   'agents.folderPlaceholder': 'New (recommended)',
   'agents.pickFolder': 'Existing session folder',
   'agents.add': 'Add',

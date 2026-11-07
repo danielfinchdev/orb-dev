@@ -257,7 +257,7 @@ try {
     await pc.fill('[data-testid=master-new]', TEST_MASTER);
     await pc.fill('[data-testid=master-again]', TEST_MASTER);
     await pc.click('[data-testid=master-ack]');
-    await shot(pc, { area: 'wizard', screen: 'master', state: 'filled', src: M, desc: 'Master password filled in, strength shown, «Si la olvidas, no se puede recuperar» ticked' });
+    await shot(pc, { area: 'wizard', screen: 'master', state: 'filled', src: M, desc: 'Master password filled in, strength shown, «Entiendo que Orb no puede mostrármela si la olvido» ticked' });
     await pc.click('[data-testid=master-ack]'); // createMaster ticks it again (it checks the button waits for it)
     await createMaster(pc);
     await pc.waitForSelector('[data-testid=setup-prepare]', { timeout: 20000 });

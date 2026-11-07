@@ -76,7 +76,7 @@ export default {
   'help.tut.usage.l1': 'El círculo junto al cuadro de mensaje indica cuánto contexto ocupa la conversación. Cuanto más lleno, más consume cada respuesta; al pasar del 60 %, {name} renueva su contexto en esa misma conversación y retoma lo importante de la bitácora y los últimos mensajes.',
   'help.tut.usage.l2': 'Púlsalo para ver los tokens de contexto y el uso de tus planes: la sesión de 5 horas, la semana y cuándo se reinician.',
   'help.tut.usage.l3': 'Claude y Codex informan de su uso real. Al llegar al límite configurado (92 % por defecto), las tareas nuevas esperan o pasan a otra cuenta.',
-  'help.tut.usage.go': 'Abrir Tareas y usos',
+  'help.tut.usage.go': 'Abrir Agentes y uso',
 
   'help.tut.schedules.title': 'Tareas programadas',
   'help.tut.schedules.l1': 'Repite una tarea automáticamente: cada hora, cada N horas, a diario o ciertos días de la semana.',
@@ -84,18 +84,18 @@ export default {
   'help.tut.schedules.l3': 'Las que propone {name} requieren tu aprobación una vez.',
   'help.tut.schedules.go': 'Ir a Programadas',
 
-  'help.tut.logs.title': 'Bitácoras y Actividad',
+  'help.tut.logs.title': 'Memorias y Actividad',
   'help.tut.logs.l1': 'Las bitácoras son la memoria de {name}: una general y una por proyecto, en la carpeta bitacora. Solo se añaden entradas y los secretos se ocultan.',
   'help.tut.logs.l2': '{name} y el planificador las actualizan al cerrar cada tarea, así cada conversación nueva sabe qué se hizo antes.',
   'help.tut.logs.l3': 'Actividad registra cada acción del tablero (quién, qué y cuándo), con buscador.',
-  'help.tut.logs.go': 'Ir a Bitácoras',
+  'help.tut.logs.go': 'Ir a Memorias',
 
 
-  'help.tut.phone.title': 'Móvil',
-  'help.tut.phone.l1': 'Activa «Móvil» en Ajustes y escanea el QR con el teléfono: por tu wifi, sin instalar nada, o por Tailscale, también fuera de casa.',
-  'help.tut.phone.l2': 'La conexión está cifrada de extremo a extremo. Cada QR sirve una sola vez y, si quitas el móvil en Ajustes, se desconecta al instante.',
+  'help.tut.phone.title': 'Magic Link',
+  'help.tut.phone.l1': 'En Ajustes › Magic Link, activa el acceso y escanea el QR: con la app de Orb para Android (por tu wifi o por Tailscale, también fuera de casa) o con el navegador del móvil, por Tailscale con HTTPS. Después escribe tu contraseña maestra en el móvil.',
+  'help.tut.phone.l2': 'La conexión está cifrada de extremo a extremo y la contraseña no sale del móvil. Cada QR sirve una sola vez y, si cierras la sesión de un móvil en Magic Link, se desconecta al instante.',
   'help.tut.phone.l3': 'Desde el móvil puedes chatear, aprobar y seguir las tareas. Los ajustes, las cuentas, las instalaciones y el acceso a archivos quedan reservados al PC.',
-  'help.tut.phone.go': 'Abrir Móvil',
+  'help.tut.phone.go': 'Abrir Magic Link',
 
   'help.tut.expert.title': 'God mode',
   'help.tut.expert.l1': 'Actívalo en Ajustes › Avanzado (solo en el PC y en ventanas anchas).',
@@ -115,7 +115,7 @@ export default {
 
   'help.tut.privacy.title': 'Privacidad y seguridad',
   'help.tut.privacy.l1': 'Orb no usa servidores en la nube: todo funciona en tu PC. Solo salen a internet los agentes, con sus propias cuentas, y el acceso del móvil si lo activas.',
-  'help.tut.privacy.l2': 'El inicio de sesión lo gestiona el programa oficial de cada agente. Orb nunca ve tus contraseñas ni guarda claves de API.',
+  'help.tut.privacy.l2': 'El inicio de sesión lo gestiona el programa oficial de cada agente: Orb nunca ve tus contraseñas. Las claves de los conectores se guardan cifradas con tu contraseña maestra y los agentes no las ven.',
   'help.tut.privacy.l3': 'Las acciones de riesgo (push, publicar, descargar y ejecutar, eliminar carpetas, cambios en el sistema) se confirman con Permitir / Permitir siempre / Denegar. Los agentes nunca publican por su cuenta.',
   'help.tut.privacy.l4': 'Los agentes no pueden acceder a los datos internos de Orb (core). Cada uno se identifica con una firma propia, así que no puede suplantar a otro ni cerrar tareas ajenas.',
   'help.tut.privacy.l5': 'Lo que devuelven los agentes se trata como datos, nunca como órdenes. Las bitácoras ocultan los secretos.',
@@ -170,7 +170,9 @@ export default {
   'help.faq.15.q': '¿Dónde están mis conversaciones?',
   'help.faq.15.a': 'En el menú, en «Conversaciones», y dentro de cada proyecto. Pulsa una para volver a ella. «Nuevo chat» empieza otra, con su propio título y proyecto.',
   'help.faq.16.q': '¿Qué es «Iniciar test»?',
-  'help.faq.16.a': 'Una prueba de funcionamiento: {name}, con el Orquestador activado, pide a varios modelos una web de prueba y la abre. Aparece en el chat la primera vez que abres Orb cada día y siempre está en Ajustes › General.',
+  'help.faq.16.a': 'Una prueba de funcionamiento: {name}, con el Orquestador activado, pide a varios modelos una web de prueba y la abre. Aparece en el chat la primera vez que abres Orb cada día y siempre está en Ajustes › Agentes y uso.',
+  'help.faq.17.q': '¿Qué hago si olvido la contraseña maestra?',
+  'help.faq.17.a': 'Pulsa «He olvidado la contraseña» en Ajustes › Datos o en la pantalla que te la pide. Con el código de recuperación de tus copias de seguridad pones otra y conservas las claves de tus conectores. Sin él, puedes empezar de cero: se borran esas claves y tendrás que volver a enlazar tus móviles; tus proyectos y conversaciones no se tocan.',
 
   // ---- tutorial guiado (el robot recorre la app)
   'help.tour.aria': 'Tutorial guiado',
@@ -212,7 +214,7 @@ export default {
   'help.tour.tutorials.title': 'Tutoriales',
   'help.tour.tutorials.text': 'Guías, preguntas frecuentes, atajos de teclado y la opción de repetir este recorrido.',
   'help.tour.settings.title': 'Ajustes',
-  'help.tour.settings.text': 'Perfil e idioma, apariencia, tareas y usos, móvil, herramientas, God mode y actualizaciones.',
+  'help.tour.settings.text': 'General, Magic Link, Agentes y uso, Datos, Avanzado y Acerca de.',
   'help.tour.end.title': 'Todo listo',
   'help.tour.end.text': 'Elige un proyecto, cuéntame qué necesitas y empezamos.',
   // 3.2: conversaciones, menú lateral, buscador y globito

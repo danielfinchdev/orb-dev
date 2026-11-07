@@ -2,7 +2,6 @@
 export default {
   'session.agent': 'Agent',
   'session.account': 'Account',
-  'session.assistantFolderLower': 'assistant folder',
   'session.model': 'Model',
   'session.reasoning': 'Reasoning',
   'session.permissions': 'Permissions',

@@ -51,7 +51,7 @@ export default {
   'sys.main.badLink': 'enlace no válido',
   'sys.main.httpsOnly': 'solo se pueden abrir enlaces https',
   'sys.main.alreadySetup': 'la app ya está configurada',
-  'sys.main.notHome': 'esa carpeta no es la de un asistente (falta orb.json)',
+  'sys.main.notHome': 'esa carpeta no es una carpeta de Orb (le falta core)',
   // Contribuye (envío de comentarios)
   'sys.feedback.empty': 'Escribe un mensaje antes de enviarlo',
   'sys.feedback.timeout': 'Tiempo de espera agotado',
@@ -177,7 +177,7 @@ export default {
   'sys.logs.directRevert': 'desde el historial de git del proyecto (God mode › Cambios) o pidiéndoselo al agente en la misma conversación',
   'sys.logs.andMore': ' y {n} más',
   // Inicio de Orb
-  'sys.engine.notHome': 'no es la carpeta de un asistente: {home}',
+  'sys.engine.notHome': 'no es una carpeta de Orb: {home}',
   'sys.engine.notStarted': '{name} todavía no se ha iniciado',
   // Tareas programadas
   'sys.schedules.badEvery': 'every debe ser {list}',
@@ -239,7 +239,7 @@ export default {
   // Opciones de las tareas y base de datos
   'sys.db.badReasoning': 'reasoning debe ser low, medium, high o xhigh',
   'sys.db.badFast': 'fast debe ser true o false',
-  'sys.db.noHome': 'no hay carpeta del asistente',
+  'sys.db.noHome': 'no hay carpeta de Orb',
   // Móvil y notificaciones en el móvil
   'sys.remote.tooLarge': 'el contenido es demasiado grande',
   'sys.push.badSubscription': 'suscripción no válida',

@@ -75,7 +75,7 @@ export default {
   'help.tut.usage.l1': 'The ring next to the message box shows how much context the conversation uses. The fuller it is, the more each answer costs; past 60 %, {name} renews its context in the same conversation and picks up what matters from the log and the last messages.',
   'help.tut.usage.l2': 'Click it to see the context tokens and your plans’ usage: the 5-hour session, the week and when they reset.',
   'help.tut.usage.l3': 'Claude and Codex report their real usage. At the configured limit (92 % by default), new tasks wait or move to another account.',
-  'help.tut.usage.go': 'Open Tasks and usage',
+  'help.tut.usage.go': 'Open Agents and usage',
 
   'help.tut.schedules.title': 'Scheduled tasks',
   'help.tut.schedules.l1': 'Repeat a task automatically: every hour, every N hours, daily or on certain weekdays.',
@@ -83,18 +83,18 @@ export default {
   'help.tut.schedules.l3': 'Schedules proposed by {name} need your approval once.',
   'help.tut.schedules.go': 'Go to Scheduled',
 
-  'help.tut.logs.title': 'Logs and Activity',
+  'help.tut.logs.title': 'Memories and Activity',
   'help.tut.logs.l1': 'Logs are {name}’s memory: one general log and one per project, in the bitacora folder. Entries are only appended and secrets are hidden.',
   'help.tut.logs.l2': '{name} and the scheduler update them when each task closes, so every new conversation knows what was done before.',
   'help.tut.logs.l3': 'Activity records every action on the board (who, what and when), with search.',
-  'help.tut.logs.go': 'Go to Logs',
+  'help.tut.logs.go': 'Go to Memories',
 
 
-  'help.tut.phone.title': 'Phone',
-  'help.tut.phone.l1': 'Turn on "Phone" in Settings and scan the QR code with your phone: over your Wi-Fi, with nothing to install, or via Tailscale, even away from home.',
-  'help.tut.phone.l2': 'The connection is end-to-end encrypted. Each QR code works only once, and removing the phone in Settings disconnects it instantly.',
+  'help.tut.phone.title': 'Magic Link',
+  'help.tut.phone.l1': 'In Settings › Magic Link, turn access on and scan the QR code: with the Orb app for Android (over your Wi-Fi or via Tailscale, even away from home) or with the phone’s browser, via Tailscale with HTTPS. Then type your master password on the phone.',
+  'help.tut.phone.l2': 'The connection is end-to-end encrypted and the password never leaves the phone. Each QR code works only once, and signing a phone out in Magic Link disconnects it instantly.',
   'help.tut.phone.l3': 'From your phone you can chat, approve and follow tasks. Settings, accounts, installs and file access stay on the PC.',
-  'help.tut.phone.go': 'Open Phone',
+  'help.tut.phone.go': 'Open Magic Link',
 
   'help.tut.expert.title': 'God mode',
   'help.tut.expert.l1': 'Turn it on in Settings › Advanced (PC only, in wide windows).',
@@ -114,7 +114,7 @@ export default {
 
   'help.tut.privacy.title': 'Privacy and security',
   'help.tut.privacy.l1': 'Orb uses no cloud servers: everything runs on your PC. Only the agents, with their own accounts, and phone access (if enabled) reach the internet.',
-  'help.tut.privacy.l2': 'Sign-in is handled by each agent’s official program. Orb never sees your passwords or stores API keys.',
+  'help.tut.privacy.l2': 'Sign-in is handled by each agent’s official program: Orb never sees your passwords. Connector keys are stored encrypted with your master password and the agents never see them.',
   'help.tut.privacy.l3': 'Risky actions (push, publishing, download and run, deleting folders, system changes) are confirmed with Allow / Always allow / Deny. Agents never publish on their own.',
   'help.tut.privacy.l4': 'Agents can’t access Orb’s internal data (core). Each one identifies itself with its own signature, so it can’t impersonate another or close someone else’s task.',
   'help.tut.privacy.l5': 'Whatever the agents return is treated as data, never as instructions. Logs hide secrets.',
@@ -169,7 +169,9 @@ export default {
   'help.faq.15.q': 'Where are my conversations?',
   'help.faq.15.a': 'In the menu, under “Conversations”, and inside each project. Click one to go back to it. “New chat” starts another one, with its own title and project.',
   'help.faq.16.q': 'What is "Start test"?',
-  'help.faq.16.a': 'A health check: {name}, with Orchestrator on, asks several models for a test web page and opens it. It shows in the chat the first time you open Orb each day and is always in Settings › General.',
+  'help.faq.16.a': 'A health check: {name}, with Orchestrator on, asks several models for a test web page and opens it. It shows in the chat the first time you open Orb each day and is always in Settings › Agents and usage.',
+  'help.faq.17.q': 'What if I forget the master password?',
+  'help.faq.17.a': 'Press “I forgot the password” in Settings › Data or on the screen that asks for it. With your backups’ recovery code you set another one and keep your connector keys. Without it, you can start from scratch: those keys are deleted and you will have to link your phones again; your projects and conversations are not touched.',
 
   // ---- guided tour (the robot walks through the app)
   'help.tour.aria': 'Guided tour',
@@ -211,7 +213,7 @@ export default {
   'help.tour.tutorials.title': 'Tutorials',
   'help.tour.tutorials.text': 'Guides, FAQ, keyboard shortcuts and the option to replay this tour.',
   'help.tour.settings.title': 'Settings',
-  'help.tour.settings.text': 'Profile and language, appearance, tasks and quota, phone, tools, God mode and updates.',
+  'help.tour.settings.text': 'General, Magic Link, Agents and usage, Data, Advanced and About.',
   'help.tour.end.title': 'You’re all set',
   'help.tour.end.text': 'Pick a project, tell me what you need and let’s get started.',
   // 3.2: conversaciones, menú lateral, buscador y globito

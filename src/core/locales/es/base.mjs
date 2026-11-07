@@ -18,7 +18,7 @@ export default {
   'nav.newTask': 'Nueva tarea',
   'nav.backToChat': 'Volver a la conversación con {name}',
   'nav.folders': 'Proyectos',
-  'nav.loose': 'Sin carpeta',
+  'nav.loose': 'Sin proyecto',
   'nav.noProject': 'Sin proyecto',
   // 3.2: pie del menú
   'nav.memories': 'Memorias',

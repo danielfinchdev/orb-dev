@@ -1,7 +1,7 @@
 // Ajustes › Datos (backups and the recovery code) and the Magic Link guide for using Orb outside home.
 export default {
   'settings.section.datos': 'Datos',
-  'settings.sectionDesc.datos': 'Copias de seguridad y código de recuperación.',
+  'settings.sectionDesc.datos': 'Contraseña maestra, copias de seguridad, carpeta core y datos de Orb 3.7.',
   // Ajustes › Datos
   'datos.backupsTitle': 'Copias de seguridad',
   'datos.folder': 'Carpeta',
@@ -43,7 +43,7 @@ export default {
   'datos.restorePassHint': 'Solo si la copia se hizo en otro PC.',
   'datos.restoreReady': 'Copia comprobada. Reinicia Orb para usarla.',
   'datos.legacyTitle': 'Datos de Orb 3.7',
-  'datos.legacyDesc': 'Lo que había en Orb 3.7 (bots, otros usuarios) y la copia de su base de datos: {size}. Orb no los usa.',
+  'datos.legacyDesc': 'Lo que guardaba Orb 3.7 y Orb 3.8 ya no usa, con la copia de su base de datos: {size}.',
   'datos.legacyDelete': 'Borrar los datos de Orb 3.7',
   'datos.legacyConfirmTitle': '¿Borrar los datos de Orb 3.7?',
   'datos.legacyConfirmDesc': 'Se borran para siempre las carpetas {archives} y la copia de la base de datos de antes. Las copias de seguridad ya hechas los conservan.',

@@ -35,7 +35,7 @@ export async function createMaster(page, { password = TEST_MASTER, thorough = fa
     assert.ok(await ok.isDisabled(), 'the repeat must match');
   }
   await page.fill('[data-testid=master-again]', password);
-  assert.ok(await ok.isDisabled(), 'not without ticking «Si la olvidas, no se puede recuperar»');
+  assert.ok(await ok.isDisabled(), 'not without ticking «Entiendo que Orb no puede mostrármela si la olvido»');
   await page.click('[data-testid=master-ack]');
   assert.equal(await page.getAttribute('[data-testid=master-ack]', 'data-state'), 'checked');
   await ok.click();

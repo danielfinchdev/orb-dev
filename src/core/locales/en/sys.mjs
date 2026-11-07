@@ -49,7 +49,7 @@ export default {
   'sys.main.badLink': 'invalid link',
   'sys.main.httpsOnly': 'only https links can be opened',
   'sys.main.alreadySetup': 'the app is already set up',
-  'sys.main.notHome': 'that folder is not an assistant folder (orb.json is missing)',
+  'sys.main.notHome': 'that folder is not an Orb folder (its core is missing)',
   // Contribute (feedback)
   'sys.feedback.empty': 'Write a message before sending it',
   'sys.feedback.timeout': 'The request timed out',
@@ -174,7 +174,7 @@ export default {
   'sys.logs.directRevert': 'from the project’s git history (God mode › Changes) or by asking the agent in the same conversation',
   'sys.logs.andMore': ' and {n} more',
   // Start-up
-  'sys.engine.notHome': 'not an assistant folder: {home}',
+  'sys.engine.notHome': 'not an Orb folder: {home}',
   'sys.engine.notStarted': '{name} has not started yet',
   // Scheduled tasks
   'sys.schedules.badEvery': 'every must be {list}',
@@ -235,7 +235,7 @@ export default {
   // Task options and database
   'sys.db.badReasoning': 'reasoning must be low, medium, high or xhigh',
   'sys.db.badFast': 'fast must be true or false',
-  'sys.db.noHome': 'there is no assistant folder',
+  'sys.db.noHome': 'there is no Orb folder',
   // Phone and phone notifications
   'sys.remote.tooLarge': 'the content is too large',
   'sys.push.badSubscription': 'invalid subscription',

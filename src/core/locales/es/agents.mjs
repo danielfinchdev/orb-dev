@@ -28,7 +28,7 @@ export default {
   'agents.scanAddedMany': 'Cuentas añadidas: {n}',
   'agents.sessionFolder': 'Carpeta de la sesión',
   'agents.folderHintCustom': 'Se usará esta carpeta. Útil si ya tienes una sesión iniciada en ella.',
-  'agents.folderHintEmpty': 'Si lo dejas vacío, se crea una carpeta nueva dentro de la del asistente.',
+  'agents.folderHintEmpty': 'Si lo dejas vacío, se crea una carpeta nueva dentro de la carpeta de Orb.',
   'agents.folderPlaceholder': 'Nueva (recomendado)',
   'agents.pickFolder': 'Carpeta de sesión existente',
   'agents.add': 'Añadir',

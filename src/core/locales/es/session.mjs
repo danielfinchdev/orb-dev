@@ -2,7 +2,6 @@
 export default {
   'session.agent': 'Agente',
   'session.account': 'Cuenta',
-  'session.assistantFolderLower': 'carpeta del asistente',
   'session.model': 'Modelo',
   'session.reasoning': 'Razonamiento',
   'session.permissions': 'Permisos',
