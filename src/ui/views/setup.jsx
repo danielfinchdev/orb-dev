@@ -3,6 +3,8 @@
 // 3.7: the 3.5.1 welcome again (the owner's wish). Done without asking: this PC's language and time zone in the settings,
 // backups on (the default). 3.8: then, when the folder has folders of an earlier Orb, what to do with them
 // (views/layout.jsx: nothing moves without the user's choice), and the master password (views/master.jsx).
+// config.setupPending is on from the folder's creation to the last step: a welcome closed halfway goes on where it
+// stopped (resume: { step, plan, name }, lib/startup.js), never with the words of an Orb updated from 3.7.
 import { useState } from 'react';
 import { FolderOpen, ArrowRight } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
@@ -20,16 +22,16 @@ import { LayoutReview } from './layout.jsx';
 const hereTz = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; } };
 const hereLanguage = () => (/^en/i.test(navigator.language ?? '') ? 'en' : 'es');
 
-export function Setup({ onDone }) {
+export function Setup({ onDone, resume = null }) {
   const t = useT();
-  const [name, setName] = useState(PRODUCT.assistant);
+  const [name, setName] = useState(resume?.name || PRODUCT.assistant);
   const [user, setUser] = useState('');
   // 3.8: C:\Orb already chosen (app:info › defaultBase); «Cambiar ubicación…» picks another place.
   const [base, setBase] = useState(() => getState().info?.defaultBase ?? null);
   const [busy, setBusy] = useState(false);
   const [mood, setMood] = useState('happy');
-  const [step, setStep] = useState('datos'); // datos → carpetas (folders of an earlier Orb, if any) → maestra (the master password) → equipo (Windows: install what is missing) → app
-  const [plan, setPlan] = useState(null);
+  const [step, setStep] = useState(resume?.step ?? 'datos'); // datos → carpetas (folders of an earlier Orb, if any) → maestra (the master password) → equipo (Windows: install what is missing) → app
+  const [plan, setPlan] = useState(resume?.plan ?? null);
   const shown = name.trim() || PRODUCT.assistant;
   const sep = base?.includes('\\') ? '\\' : '/';
   // The same rule the app uses (homeFor): always <base>/Orb, whatever the assistant is called, unless the base already is it.
@@ -41,7 +43,7 @@ export function Setup({ onDone }) {
       const language = hereLanguage();
       await bridge.setup({ base, assistantName: shown, userName: user.trim(), language });
       // The engine runs in the new folder now: it gets this PC's language and time zone.
-      await call('config.save', { patch: { language, tz: hereTz() } }).catch(() => {});
+      await call('config.save', { patch: { language, tz: hereTz(), setupPending: true } }).catch(() => {});
       setMood('happy');
       const lp = await call('app.layoutPlan').catch(() => null);
       setBusy(false);
@@ -49,9 +51,14 @@ export function Setup({ onDone }) {
     }
     catch (error) { setMood('worried'); toast.error(errorText(error)); setBusy(false); }
   };
-  if (step === 'carpetas') return <LayoutReview plan={plan} onDone={() => setStep('maestra')} />;
-  if (step === 'maestra') return <MasterCreate onDone={async () => { const info = await bridge.info(); if (info.platform === 'win32') setStep('equipo'); else onDone(); }} />;
-  if (step === 'equipo') return <Prepare name={shown} onDone={onDone} />;
+  // The welcome is over: the next start opens Orb.
+  const finish = async () => { await call('config.save', { patch: { setupPending: false } }).catch(() => {}); onDone(); };
+  const afterMaster = async () => { const info = await bridge.info(); if (info.platform === 'win32') setStep('equipo'); else await finish(); };
+  // A welcome that goes on may already have its master password (it stopped at «Ordenar carpetas» after making it).
+  const afterFolders = async () => { const ms = await call('master.state').catch(() => null); if (ms?.exists) await afterMaster(); else setStep('maestra'); };
+  if (step === 'carpetas') return <LayoutReview plan={plan} onDone={afterFolders} />;
+  if (step === 'maestra') return <MasterCreate onDone={afterMaster} />;
+  if (step === 'equipo') return <Prepare name={shown} onDone={finish} />;
   return (
     <div className="brand-sky flex h-full overflow-auto px-6 pt-24 pb-6">
       <form onSubmit={create} data-testid="setup-datos" className="bg-card/95 text-card-foreground m-auto grid w-full max-w-[460px] gap-5 rounded-3xl border border-white/40 p-8 shadow-2xl backdrop-blur">

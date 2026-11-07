@@ -11,7 +11,7 @@ import { sealConnectors, connectorSecrets, refOf, secretId, ENV_NAME, bindMissin
 import { needsUnlock } from '../core/permissions.mjs';
 import { isRecoveryCode, hasRecovery } from '../core/backup.mjs';
 import { str } from './api-common.mjs';
-import { scrubVaultedSecrets } from '../core/migrate-38.mjs';
+import { scrubVaultedSecrets, DONE_AT } from '../core/migrate-38.mjs';
 
 const userError = (key, vars, extra = {}) => Object.assign(new Error(tr(key, vars)), { userFacing: true, status: 403, ...extra });
 const WORDS = { short: 'msg.master.short', long: 'msg.master.long', exists: 'msg.master.exists', lost: 'msg.master.lost', locked: 'msg.master.locked', damaged: 'msg.master.damaged', none: 'msg.master.none' };
@@ -94,7 +94,8 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
     'master.state': () => {
       const m = master();
       let recovery = false; try { recovery = hasRecovery(ctx.home, machineSecret()); } catch { recovery = false; }
-      return { ...m.state(), canForget: m.unlocked() && recovery, minLength: MIN_LENGTH, unlockMinutes: UNLOCK_MS / 60_000 };
+      // upgraded: the data came from Orb 3.7 (the first start of 3.8 asks for the password with its own words).
+      return { ...m.state(), canForget: m.unlocked() && recovery, minLength: MIN_LENGTH, unlockMinutes: UNLOCK_MS / 60_000, upgraded: Boolean(board.setting(DONE_AT)) };
     },
     // The first one (the welcome, or the first start of 3.8): no current one to ask for. → a token (the window is unlocked).
     'master.create': async ({ password: p }) => {

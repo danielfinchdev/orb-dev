@@ -134,7 +134,7 @@ function coreBlocked({ home, version, repair }) {
   return { home, name: PRODUCT.assistant, core };
 }
 
-// While the data could not be updated: only the window's two calls about it. → what start() returns.
+// While the data could not be updated: only the window's calls about it (and core is whole). → what start() returns.
 let migration = null; // { failed: true, reason, backup, data, committed }
 async function blocked(board, info) {
   const { migrationFailure, unfinished, isLegacy } = await import('../core/migrate-38.mjs');
@@ -153,6 +153,8 @@ async function blocked(board, info) {
   };
   api = {
     async call(method) {
+      // core is whole (the window asks this first: src/ui/lib/startup.js).
+      if (method === 'app.coreState') return null;
       if (method === 'app.migrationState') return migration;
       if (method === 'app.migrationRetry') { retrying ??= retry().finally(() => { retrying = null; }); return retrying; }
       throw Object.assign(new Error(tr('data.migration38.blocked')), { userFacing: true });

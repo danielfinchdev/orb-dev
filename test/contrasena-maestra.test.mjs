@@ -228,7 +228,7 @@ test('el motor: secretos de 3.7 fuera de la base y de orb.json, acciones protegi
     assert.ok(!db.includes(C.b64.enc(priv)) && !db.includes('VAPID_PRIVADA_X'), 'la clave del PC ya no está en la base (ni en sus páginas libres)');
     const config = fs.readFileSync(path.join(t.home, 'core', 'orb.json'), 'utf8');
     assert.ok(!config.includes('ghp_DE_PRUEBA_123') && config.includes('orb-secret:mcp/github/GITHUB_TOKEN'), 'orb.json guarda la referencia');
-    assert.deepEqual(await e.call('master.state'), { exists: false, lost: false, locked: false, changedAt: null, canForget: false, minLength: 10, unlockMinutes: 5 });
+    assert.deepEqual(await e.call('master.state'), { exists: false, lost: false, locked: false, changedAt: null, canForget: false, minLength: 10, unlockMinutes: 5, upgraded: false });
     // Guarded: nothing without the password (there is none yet), then nothing without a fresh unlock.
     await assert.rejects(e.call('secrets.connector', { name: 'github' }), /Crea primero la contraseña maestra/);
     await assert.rejects(e.call('master.create', { password: 'corta' }), /al menos 10/);

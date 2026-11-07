@@ -26,6 +26,7 @@ import { GamesDialog } from '@/games/games.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { useStore, setState, getState, refresh, refreshSoon, bridge, act, go, goBack, resetRoute, setViews, applyTheme, openTerminal, startTour, anyChatBusy, phoneLayout, loadOrbInbox, loadOrbInboxSoon } from '@/lib/store.js';
 import { restoreRoute, keyboardOpen } from '@/lib/phone-nav.js';
+import { startupPhase } from '@/lib/startup.js';
 import { isOffline, retryDelay } from '@/lib/net.js';
 import { ago } from '@/lib/utils.js';
 import { ErrorBoundary } from '@/components/error-boundary.jsx';
@@ -188,6 +189,7 @@ function Root() {
   const [core, setCore] = useState(null);
   const [layout, setLayout] = useState(null);
   const [masterState, setMasterState] = useState(null);
+  const [resume, setResume] = useState(null); // a welcome left halfway: { step, plan }
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -202,15 +204,17 @@ function Root() {
       // The engine may still be starting: retry for a few seconds.
       for (let i = 0; i < 40 && alive; i++) {
         try {
-          // 3.8: core is gone and Orb could not bring it back by itself (this PC only).
-          if (!bridge.mobile) { const c = await bridge.call('app.coreState'); if (c?.missing) { setCore(c); return alive && setPhase('core'); } }
-          // 3.8: the data of 3.7 could not be updated: Orb does not run on them (this PC only).
-          if (!bridge.mobile) { const m = await bridge.call('app.migrationState'); if (m?.failed) { setMigration(m); return alive && setPhase('migration'); } }
-          // 3.8: the master password: made once (an Orb updated to 3.8 has none yet), or typed when this PC cannot open
-          // Orb's keys by itself, or its file is missing (this PC only).
-          if (!bridge.mobile) { const ms = await bridge.call('master.state'); if (!ms?.exists) return alive && setPhase('master'); if (ms.locked || ms.lost) { setMasterState(ms); return alive && setPhase('unlock'); } }
-          // 3.8: folders of an earlier Orb at the top of the workspace that the user has not decided about (this PC only).
-          if (!bridge.mobile) { const lp = await bridge.call('app.layoutPlan'); if (lp?.pending) { setLayout(lp); return alive && setPhase('layout'); } }
+          // 3.8 (this PC only): core gone, the data of 3.7 not updated, the master password (typed, or made once), a
+          // welcome left halfway, folders of an earlier Orb to decide about (lib/startup.js).
+          const start = await startupPhase((method) => bridge.call(method), { mobile: bridge.mobile });
+          if (start.phase !== 'app') {
+            if (start.phase === 'core') setCore(start.data);
+            else if (start.phase === 'migration') setMigration(start.data);
+            else if (start.phase === 'unlock' || start.phase === 'master') setMasterState(start.data);
+            else if (start.phase === 'layout') setLayout(start.data);
+            else if (start.phase === 'setup') setResume(start.data);
+            return alive && setPhase(start.phase);
+          }
           await refresh();
           // 3.8: the saved route only if it still exists (lib/phone-nav.js › restoreRoute): the phone opens on its chat
           // list unless it was left in a chat that is still there or on one of its tabs; a broken one is forgotten.
@@ -297,7 +301,7 @@ function Root() {
       if (event === 'engine:restarted') { if (coreLost) { location.reload(); return; } notify({ body: tNow('app.engineRestarted'), tone: 'warning' }); refreshSoon(); }
     });
   }, [phase]);
-  if (phase === 'setup') return <>{strip}<Setup onDone={async () => { await refresh(); setPhase('app'); }} /></>;
+  if (phase === 'setup') return <>{strip}<Setup resume={resume} onDone={async () => { await refresh(); setPhase('app'); }} /></>;
   if (phase === 'pair' && bridge.link) return <>{strip}<AppLink /></>;
   // 3.8: a browser opened from the QR: the master password before linking.
   if (phase === 'pair' && getState().info?.pairLink && bridge.pairPending) return <>{strip}<BrowserPair /></>;
@@ -316,7 +320,7 @@ function Root() {
   if (phase === 'update') return <>{strip}<UpdateNeeded info={getState().info} /></>;
   if (phase === 'offline') return <PcOffline info={getState().info} onRelink={() => setPhase('pair')} />;
   if (phase === 'core') return <>{strip}<CoreMissing state={core} /></>;
-  if (phase === 'master') return <>{strip}<MasterCreate upgrade onDone={() => location.reload()} /></>;
+  if (phase === 'master') return <>{strip}<MasterCreate upgrade={Boolean(masterState?.upgraded)} onDone={() => location.reload()} /></>;
   if (phase === 'unlock') return <>{strip}<MasterLocked state={masterState} onDone={() => location.reload()} /></>;
   if (phase === 'layout') return <>{strip}<LayoutReview plan={layout} onDone={() => location.reload()} /></>;
   if (phase === 'migration') return <>{strip}<MigrationFailed state={migration} /></>;

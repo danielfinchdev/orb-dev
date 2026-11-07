@@ -70,10 +70,9 @@ export const DEFAULT_CONFIG = Object.freeze({
   delegation: { enabled: true, trusted: true, maxPerTask: 4 },
   mcpServers: [],
   projectRoots: [],
-  // pip: the little window that shows the agent's browser; sounds and motion: the robot's; menuBar: Windows' menu bar
-  // (Archivo, Edición, Ver), hidden unless turned on in Ajustes.
+  // pip: the little window that shows the agent's browser; sounds and motion: the robot's.
   // skin, font, codeFont, codeTheme: Ajustes → Apariencia (src/core/appearance.mjs).
-  ui: { companion: true, theme: 'sistema', pip: true, sounds: true, volume: 0.5, motion: 'completa', menuBar: false, ...APPEARANCE_DEFAULTS },
+  ui: { companion: true, theme: 'sistema', pip: true, sounds: true, volume: 0.5, motion: 'completa', ...APPEARANCE_DEFAULTS },
   // Expert mode (PC only): an IDE-like view with the panels chosen here around the assistant's chat.
   expert: { enabled: false, panels: { explorer: true, git: true, history: true, running: true, usage: true, system: true, activity: true } },
   browser: { enabled: true }, // the agents' browser (pages drawn by the app, driven through the MCP tools)
@@ -295,7 +294,7 @@ export function configFrom(stored) {
   // 3.7: «Monitoreo del equipo» and Opti Bot are gone. 3.8: the bots, Open Control Edge and the «Orb | Bots» mode too.
   // Their settings go (the file loses them at the next save).
   delete config.monitor; delete config.bots; delete config.oce;
-  if (config.ui) delete config.ui.mode;
+  if (config.ui) { delete config.ui.mode; delete config.ui.menuBar; } // menuBar: Windows' menu bar is always hidden now
   // 3.8: the phone never types the master password on a page without encryption: «mobile.lanHttp» is gone.
   if (config.mobile) delete config.mobile.lanHttp;
   // Folders made by older versions: agents added later get their default account and their place in the order.

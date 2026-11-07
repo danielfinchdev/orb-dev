@@ -20,6 +20,7 @@ import { ARCHIVE_DIR, PRE_COPY, MARK, DROPPED_TABLES, ORIGINAL_CONFIG, LOCK_FILE
 import { syncProjects } from '../src/core/projects.mjs';
 import { IGNORED_PROJECTS } from '../src/core/home.mjs';
 import { migrationView, folderOf } from '../src/ui/lib/migration.js';
+import { startupPhase } from '../src/ui/lib/startup.js';
 import * as C from '../src/core/mobile-crypto.mjs';
 import { newVapidKeys } from '../src/engine/webpush.mjs';
 import { createBackup, restoreInto } from '../src/core/backup.mjs';
@@ -636,6 +637,11 @@ test('M2: si la migración falla, Orb no funciona sobre los datos de 3.7 (ni mó
     assert.equal(m.failed, true); assert.ok(m.reason);
     assert.equal(m.backup, path.join(datosOf(u), PRE_COPY));
     await assert.rejects(engine.call('app.state'), /Orb no funciona hasta actualizar tus datos/);
+    // F5b (A2): the window's first questions, as main.jsx asks them, reach the screen «No se pudieron actualizar…».
+    assert.equal(await engine.call('app.coreState'), null);
+    const start = await startupPhase((method) => engine.call(method));
+    assert.equal(start.phase, 'migration');
+    assert.equal(start.data.failed, true);
     await assert.rejects(engine.call('remote.status'), /Orb no funciona hasta actualizar tus datos/);
     await assert.rejects(fetch(`http://127.0.0.1:${port}/api/me`, { method: 'POST' }), 'el acceso del móvil no se abre');
     await wait(2000);
