@@ -1,12 +1,14 @@
 # The desktop downloads, built and checked on a real machine of each system and published together as a GitHub release:
-#   Orb-<versión>-instalador.exe      the whole app: installs for the user and updates itself (recommended)
-#   Orb-<versión>-light-portable.exe  Orb Light: the essentials, nothing to install (it only tells of new versions)
-#   Orb-<versión>-linux-<arch>.AppImage  3.7: Linux, nothing to install, updates itself (latest-linux*.yml)
-#   Orb-<versión>-linux-<arch>.deb       3.7: Linux (Debian, Ubuntu…), installed with the system; it tells of new versions
+#   Orb-<version>-instalador.exe      the whole app: installs for the user and updates itself (recommended)
+#   Orb-<version>-light-portable.exe  Orb Light: the essentials, nothing to install (it only tells of new versions)
+#   Orb-<version>-linux-<arch>.AppImage  Linux, nothing to install, updates itself (latest-linux*.yml)
+#   Orb-<version>-linux-<arch>.deb       Linux (Debian, Ubuntu…), installed with the system; it tells of new versions
 # Publishing a version = changing "version" in package.json on main: when that version has no release yet, this builds it,
 # tests it (also the packaged app on Windows and Linux) and publishes it as release v<version>, creating the tag. From the Actions
 # tab ("Run workflow") it does the same; a version already published is only built and checked (files kept in the run).
-name: Versión para Windows y Linux
+# The Android app (Orb-<version>-android.apk) is built and signed on the owner's PC (npm run android:build, its signing
+# key never leaves it) and attached to the release by hand.
+name: Release for Windows and Linux
 
 on:
   push:
@@ -29,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: v
-        name: ¿Versión nueva?
+        name: New version?
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -51,12 +53,12 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: sudo apt-get update && sudo apt-get install -y xvfb
-      - name: La app entera con Electron
+      - name: The whole app with Electron
         run: xvfb-run -a npm run test:app
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: capturas-pruebas
+          name: test-screenshots
           path: test-results/
 
   windows:
@@ -69,9 +71,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Construir el instalador y Orb Light (portable)
+      - name: Build the installer and Orb Light (portable)
         run: npx vite build && npx electron-builder --win nsis portable --x64 --publish never
-      - name: Probar la app empaquetada en Windows
+      - name: Test the packaged app on Windows
         run: node test/smoke.e2e.mjs
         env:
           ORB_E2E_EXE: dist/win-unpacked/Orb.exe
@@ -85,7 +87,7 @@ jobs:
             dist/latest.yml
             test-results/
 
-  # 3.7: the Linux app (AppImage and .deb, x64 and arm64), built on Ubuntu; the x64 one is opened and checked like on Windows.
+  # The Linux app (AppImage and .deb, x64 and arm64), built on Ubuntu; the x64 one is opened and checked like on Windows.
   linux:
     needs: [version, pruebas]
     runs-on: ubuntu-latest
@@ -96,10 +98,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Construir la AppImage y el .deb
+      - name: Build the AppImage and the .deb
         run: npx vite build && npx electron-builder --linux AppImage deb --x64 --arm64 --publish never
       - run: sudo apt-get update && sudo apt-get install -y xvfb
-      - name: Probar la app empaquetada en Linux
+      - name: Test the packaged app on Linux
         run: xvfb-run -a node test/smoke.e2e.mjs
         env:
           ORB_E2E_EXE: dist/linux-unpacked/orb-dev
@@ -124,7 +126,7 @@ jobs:
         with:
           pattern: orb-dev-*
           merge-multiple: true
-      - name: Publicar la versión
+      - name: Publish the release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.version.outputs.version }}

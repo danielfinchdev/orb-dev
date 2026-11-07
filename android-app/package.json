@@ -1,8 +1,8 @@
 {
   "name": "orb-android",
-  "version": "3.7.0",
+  "version": "3.8.0",
   "private": true,
-  "description": "La app Orb para Android (Capacitor). Usa los paquetes del repositorio (node_modules de la raíz); se compila con npm run android:build.",
+  "description": "The Orb app for Android (Capacitor). It uses the repository packages (the root node_modules); build it with npm run android:build.",
   "dependencies": {
     "@capacitor-community/speech-recognition": "^7.0.1",
     "@capacitor-mlkit/barcode-scanning": "^8.2.2",
