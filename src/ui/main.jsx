@@ -8,7 +8,7 @@ import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Toaster } from 'sonner';
 import { notify } from '@/lib/notify.js';
-import { Menu, Smartphone, ScanLine, Link2, RotateCw } from 'lucide-react';
+import { Menu, Smartphone, ScanLine, Link2, RotateCw, FolderOpen, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
 import { MobileTabs, MoreView } from '@/components/mobile-tabs.jsx';
@@ -17,13 +17,14 @@ import { DialogHost } from '@/components/dialogs.jsx';
 import { ImagePreviewHost } from '@/components/image-viewer.jsx';
 import { Sidebar } from '@/components/sidebar.jsx';
 import { Companion } from '@/components/companion.jsx';
-import { UpdateCard } from '@/components/update-card.jsx';
+import { UpdateCard, useUpdate, updateActions } from '@/components/update-card.jsx';
+import { migrationView } from '@/lib/migration.js';
 import { Notices } from '@/components/notices.jsx';
 import { ActionShortcuts } from '@/components/project-tools.jsx';
 import { Scene } from '@/components/scene.jsx';
 import { GamesDialog } from '@/games/games.jsx';
 import { Robot } from '@/components/robot.jsx';
-import { useStore, setState, getState, refresh, refreshSoon, bridge, go, applyTheme, openTerminal, startTour, anyChatBusy, phoneLayout, loadOrbInbox, loadOrbInboxSoon } from '@/lib/store.js';
+import { useStore, setState, getState, refresh, refreshSoon, bridge, act, go, applyTheme, openTerminal, startTour, anyChatBusy, phoneLayout, loadOrbInbox, loadOrbInboxSoon } from '@/lib/store.js';
 import { Tour } from '@/components/tour.jsx';
 import { AGENT } from '@/lib/labels.js';
 import { WindowControls } from '@/components/window-controls.jsx';
@@ -226,11 +227,14 @@ function Root() {
   return bridge.mobile ? <><NoteOpener /><Shell /></> : <Shell />;
 }
 
-// 3.8: the data of Orb 3.7 could not be updated (src/core/migrate-38.mjs): why, where the copy is, and «Reintentar».
+// 3.8: the data of Orb 3.7 could not be updated (src/core/migrate-38.mjs): what to do, where the copy is («Abrir
+// carpeta»), «Reintentar», a new version of Orb (the way out when the cause is Orb's own) and the reason under «Detalles».
 function MigrationFailed({ state }) {
   const t = useT();
   const [s, setS] = useState(state);
   const [busy, setBusy] = useState(false);
+  const v = migrationView(s, useUpdate());
+  const u = v.update;
   const retry = async () => {
     setBusy(true);
     try { const r = await bridge.call('app.migrationRetry'); if (r?.failed) setS(r); else location.reload(); }
@@ -242,10 +246,19 @@ function MigrationFailed({ state }) {
       <div className="grid max-w-md gap-3">
         <div className="flex justify-center"><Robot size={90} mood={busy ? 'thinking' : 'worried'} /></div>
         <h1 className="text-xl">{t('data.migration38.title')}</h1>
-        <p className="text-muted-foreground text-sm">{t('data.migration38.body')}</p>
-        <p className="text-sm" role="alert">{t('data.migration38.reason', { reason: s.reason })}</p>
+        <p className="text-muted-foreground text-sm">{t(v.body)}</p>
+        <p className="text-sm" role="alert">{t('data.migration38.help')}</p>
         <p className="text-muted-foreground text-xs break-all">{s.backup ? t('data.migration38.backup', { path: s.backup }) : t('data.migration38.noBackup', { path: s.data })}</p>
-        <div className="flex justify-center"><Button disabled={busy} onClick={retry} data-testid="migration-retry">{busy ? <Spinner /> : <RotateCw />}{t('data.migration38.retry')}</Button></div>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button disabled={busy} onClick={retry} data-testid="migration-retry">{busy ? <Spinner /> : <RotateCw />}{t('data.migration38.retry')}</Button>
+          {v.folder && bridge.openPath ? <Button variant="outline" onClick={() => act(bridge.openPath(v.folder))}><FolderOpen />{t('data.migration38.openFolder')}</Button> : null}
+          {u?.action === 'check' ? <Button variant="outline" disabled={u.busy} onClick={updateActions.check} data-testid="migration-update">{u.busy ? <Spinner /> : <Download />}{t('data.migration38.checkUpdate')}</Button> : null}
+          {u?.action === 'update' ? <Button variant="outline" onClick={() => updateActions.update({ portable: u.portable })} data-testid="migration-update"><Download />{t(u.portable ? 'update.download' : 'update.update')} {u.version}</Button> : null}
+          {u?.action === 'restart' ? <Button variant="outline" onClick={updateActions.restart} data-testid="migration-update"><RotateCw />{t('update.restart')}</Button> : null}
+        </div>
+        {u?.percent != null ? <p className="text-muted-foreground text-xs">{t('update.downloading', { percent: u.percent })}</p> : null}
+        {u?.none ? <p className="text-muted-foreground text-xs">{t('data.migration38.noUpdate')}</p> : null}
+        <details className="text-muted-foreground text-left text-xs"><summary className="cursor-pointer text-center">{t('data.migration38.details')}</summary><p className="mt-2 break-words">{t('data.migration38.reason', { reason: s.reason })}</p></details>
       </div>
     </div>
   );

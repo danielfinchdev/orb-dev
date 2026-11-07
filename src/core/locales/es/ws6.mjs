@@ -34,6 +34,12 @@ export default {
   'datos.restorePass': 'Código de recuperación',
   'datos.restorePassHint': 'Solo si la copia se hizo en otro PC.',
   'datos.restoreReady': 'Copia comprobada. Reinicia Orb para usarla.',
+  'datos.legacyTitle': 'Datos de Orb 3.7',
+  'datos.legacyDesc': 'Lo que había en Orb 3.7 (bots, otros usuarios) y la copia de su base de datos: {size}. Orb no los usa.',
+  'datos.legacyDelete': 'Borrar los datos de Orb 3.7',
+  'datos.legacyConfirmTitle': '¿Borrar los datos de Orb 3.7?',
+  'datos.legacyConfirmDesc': 'Se borran para siempre las carpetas {archives} y la copia de la base de datos de antes. Las copias de seguridad ya hechas los conservan.',
+  'datos.legacyDeleted': 'Datos de Orb 3.7 borrados.',
   // Magic Link
   'datos.codeNoticeTitle': 'Crea tu código de recuperación',
   'datos.codeNoticeBody': 'Con él podrás abrir tus copias de seguridad en otro PC.',

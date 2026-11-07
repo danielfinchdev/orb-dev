@@ -5,6 +5,7 @@ import path from 'node:path';
 import { ctx, tr } from '../core/context.mjs';
 import { readKey } from '../core/home.mjs';
 import * as K from '../core/backup.mjs';
+import { legacyData, deleteLegacyData } from '../core/migrate-38.mjs';
 import { utcToZoned, localDay, ownerTz } from '../core/tz.mjs';
 
 const fail = (message) => { const e = new Error(message); e.userFacing = true; throw e; };
@@ -83,6 +84,13 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
       if (value.length < 12 || value.length > 200) fail(tr('data.backup.err.shortPassphrase'));
       K.setRecovery(ctx.home, secret(), value);
       return { code: code ? null : value, at: new Date().toISOString() };
+    },
+    // 3.8: what Orb 3.7 left (the archives and the copies of its database), and «Borrar los datos de Orb 3.7».
+    'legacy.status': () => { const d = legacyData(ctx.home); return { archives: d.archives.map((f) => path.basename(f)), copies: d.copies.map((f) => path.basename(f)), bytes: d.bytes }; },
+    'legacy.delete': () => {
+      const d = deleteLegacyData(board.db, ctx.home);
+      log(`3.8: datos de Orb 3.7 borrados: ${[...d.archives, ...d.copies].map((f) => path.basename(f)).join(', ') || 'ninguno'}`);
+      return { deleted: d.archives.length + d.copies.length, bytes: d.bytes };
     },
   };
   return { methods, tick, run };

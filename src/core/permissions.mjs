@@ -59,7 +59,7 @@ export const METHODS = Object.freeze({
   'agents.loginState': 'pc', 'agents.install': 'pc', 'agents.installState': 'pc',
   'accounts.add': 'pc', 'accounts.scan': 'pc', 'accounts.update': 'pc', 'accounts.remove': 'pc', 'accounts.clearCooldown': 'pc',
   // backups
-  'backup.status': 'pc', 'backup.list': 'pc', 'backup.now': 'pc', 'backup.verify': 'pc', 'backup.restore': 'pc', 'backup.recovery': 'pc'
+  'backup.status': 'pc', 'backup.list': 'pc', 'backup.now': 'pc', 'backup.verify': 'pc', 'backup.restore': 'pc', 'backup.recovery': 'pc', 'legacy.status': 'pc', 'legacy.delete': 'pc'
 });
 // What a linked phone or browser may call (the rest is this PC's).
 export const REMOTE_METHODS = Object.freeze(new Set(Object.keys(METHODS).filter((m) => METHODS[m] === 'remote')));

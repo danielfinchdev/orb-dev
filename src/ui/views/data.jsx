@@ -2,10 +2,10 @@
 // opens them on another PC, restoring one, and moving this Orb to another PC. src/engine/api-data.mjs does the work.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { HardDriveDownload, KeyRound, RotateCcw, LoaderCircle, ShieldCheck, TriangleAlert, Copy, FolderOpen } from 'lucide-react';
+import { HardDriveDownload, KeyRound, RotateCcw, LoaderCircle, ShieldCheck, TriangleAlert, Copy, FolderOpen, Archive, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardFooter, Field, Input } from '@/components/ui/basic.jsx';
-import { form } from '@/components/dialogs.jsx';
+import { form, confirm } from '@/components/dialogs.jsx';
 import { call, act, bridge, useStore, getState, setState, openSettings } from '@/lib/store.js';
 import { notify } from '@/lib/notify.js';
 import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
@@ -87,7 +87,29 @@ function BackupsCard() {
   );
 }
 
-export function DataCards() { return <BackupsCard />; }
+// 3.8: what Orb 3.7 left after the migration (src/core/migrate-38.mjs): its archives and the copies of its database, only
+// while there are any, with «Borrar los datos de Orb 3.7».
+function LegacyCard() {
+  const t = useT();
+  const [st, setSt] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const load = () => call('legacy.status').then(setSt).catch(() => {});
+  useEffect(() => { load(); }, []);
+  if (!st || !(st.archives.length + st.copies.length)) return null;
+  const remove = async () => {
+    if (!(await confirm(t('datos.legacyConfirmTitle'), t('datos.legacyConfirmDesc', { archives: st.archives.join(', ') || '—' }), { ok: t('datos.legacyDelete'), danger: true }))) return;
+    setBusy(true); const r = await act(call('legacy.delete', {}), t('datos.legacyDeleted')); setBusy(false); if (r) load();
+  };
+  return (
+    <Card data-testid="legacy-card">
+      <CardHeader className="flex-row items-start gap-3"><Archive className="text-primary mt-0.5 size-5 shrink-0" /><CardTitle className="mt-1">{t('datos.legacyTitle')}</CardTitle></CardHeader>
+      <CardContent><p className="text-muted-foreground text-xs">{t('datos.legacyDesc', { size: size(st.bytes) })}</p></CardContent>
+      <CardFooter><Button size="sm" variant="destructive" onClick={remove} disabled={busy} data-testid="legacy-delete">{busy ? <LoaderCircle className="animate-spin" /> : <Trash2 />}{t('datos.legacyDelete')}</Button></CardFooter>
+    </Card>
+  );
+}
+
+export function DataCards() { return <><BackupsCard /><LegacyCard /></>; }
 
 // 3.6: backups are on from the first day, sealed with this PC's key. A few days later, once, a quiet suggestion to make
 // the recovery code (Ajustes › Datos), so a copy also opens on another PC. Never on a phone.
