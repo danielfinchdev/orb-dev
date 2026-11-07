@@ -46,6 +46,7 @@ change and which other features it connects to.
 34. [Permissions (3.8)](#34-permissions-38)
 35. [From 3.7 to 3.8 (migration)](#35-from-37-to-38-migration)
 36. [The workspace and core (3.8)](#36-the-workspace-and-core-38)
+37. [The master password and Magic Link (3.8)](#37-the-master-password-and-magic-link-38)
 
 ---
 
@@ -106,7 +107,7 @@ C:\Orb\                   (C:\Orb by default; always <chosen folder>\Orb, the sa
     bitacora\             GENERAL.md (general memory) and proyectos\ (one per project), in the Settings language
     skills\ mcp\          the agents' skills; the MCP servers (managed in Settings)
     herramientas\adb\     Google's adb and fastboot, downloaded by the app
-    secretos\             reserved for the secrets sealed with the master password
+    secretos\             the master password's files: the data key, wrapped, and Orb's own secrets (section 37)
   windows\ linux\ ios\ android\ web\
                           categories: each folder inside one of them is a project
                           (the ones the app creates and the ones you create in Explorer)
@@ -562,6 +563,7 @@ Mobile, with two routes that are switched on separately:
   minutes: `#vincular=<code>&pc=<key>` (after `#`, the browser does not send it to any server).
 - The phone creates its own key and sends only its public part and a proof sealed with a key derived from the code.
   **The code never travels**: a photographed or copied QR is useless once used, and a link without the phone is worthless.
+- 3.8: the proof also carries the PC's master password, typed on the phone; without it nothing links (section 37).
 - The PC's reply is sealed with the session key: the phone checks it is talking to the PC from the QR (the PC
   fingerprint shows in the QR and on the phone).
 - After that, every request, response, live event and image is encrypted with XChaCha20-Poly1305 under a key that only
@@ -734,6 +736,10 @@ launched hidden, with its output read by Orb, and it stores the session in the a
   subfolders with the command that starts them (`src/engine/mcp-folder.mjs`: `bin`/`main` from package.json or typical
   files like `src/server.js` or `server.py`) and adds them with one click ("Use").
 - They are passed to the chosen agents along with Orb's MCP (`mcpServersFor` in `sessions.mjs`).
+- 3.8: a connector's keys (its `env`) are kept in the master password's vault, never in orb.json, which keeps a
+  reference in their place (`orb-secret:mcp/<connector>/<NAME>`, `src/core/connector-secrets.mjs`). The engine puts the
+  value back only for the connector's launcher. Settings › Connectors › «Claves» shows and changes them after the master
+  password (section 37).
 - Claude uses `--strict-mcp-config`, so it only loads the ones Orb passes and not all of the user's. This saves tokens.
 
 ## 26. Languages
@@ -1156,12 +1162,86 @@ builds them.
   11, a deny ACE did not stop a rename by the owner. So core relies on being hidden, on the agents' guard (section 28:
   `isOrbData` denies `paths().internal`, i.e. all of core, except the isolated copies in `core\copias\aisladas`) and on
   the watcher and the backups above.
-- **Master password hooks** (next step): `core\secretos\` is created empty, and every window action on core (open it,
-  restore a copy, choose where copies go) goes through `unlockCore` in `src/ui/lib/core-access.js`, which lets them
-  through today.
+- **Master password**: every window action on core (open it, restore a copy, choose where copies go) goes through
+  `unlockCore` in `src/ui/lib/core-access.js`, which asks for the master password (section 37).
 
 Tests: `test/core-carpeta.test.mjs` (a new workspace; a 3.7 workspace moved with its paths and a working isolated copy;
 a move cut halfway; renames that fail; core deleted with Orb closed; only orb.json missing with a newer database; core
 deleted while the engine runs; no copy, «Seguir sin copia» and a copy that needs its recovery code; the screen),
 `test/copias.test.mjs` (where copies go, old ones adopted, never inside core), `test/multiplataforma.test.mjs` and
 `test/migracion-38.test.mjs` (the engine on a 3.7-shaped workspace).
+
+## 37. The master password and Magic Link (3.8)
+
+One password, made once, protects what Orb keeps for itself and the actions that could hurt. Code: `src/core/master.mjs`
+(the crypto, no engine imports), `src/engine/api-master.mjs` (the API and the guard), `src/core/connector-secrets.mjs`,
+`src/ui/views/master.jsx` and `src/ui/lib/core-access.js`.
+
+**Keys** (`core\secretos\`):
+- A random **data key** (32 bytes) encrypts Orb's own secrets: the PC's X25519 and VAPID keys for the phones (the
+  database's `remote_keys` in 3.7, in clear) and the connectors' keys (the `env` of each MCP server, in orb.json in
+  3.7). They live in `secretos.json`, one JSON map sealed with XChaCha20-Poly1305 (additional data `orb-secretos-v1`).
+- `maestra.json`: the data key wrapped by a key made from the password with scrypt (N = 2^17, r = 8, p = 1, 16-byte
+  salt; the parameters are stored, so a test-cost file opens the same way). An HMAC of that key checks the password in
+  constant time before the wrap is opened (itself authenticated). The password is never stored.
+- `maestra-pc.json`: the same data key wrapped by a key derived (HKDF) from this PC's secret, the one Windows keeps
+  sealed (DPAPI through Electron's `safeStorage`, `core\datos\clave.enc`, handed to the engine in memory at start). So
+  Orb starts and works without asking for the password; it is asked only for guarded actions and to link a phone.
+  Without a usable OS keyring (Linux without one) that secret is `clave.bin`, as for approvals.
+- The data key is made at the first start of 3.8 (new workspace or one of 3.7), wrapped for this PC only; the
+  password wraps it when it is made. From then on, the secrets of earlier versions move into the vault
+  (`migrateSecrets`): `remote_keys` is deleted from the database with `secure_delete` and an emptied journal, and orb.json
+  keeps a reference (`orb-secret:mcp/<connector>/<NAME>`) per connector key. A value is always looked up by its own
+  connector and variable name, never by the reference text.
+- `intentos.json`: wrong passwords, per channel (`pc`: this PC's window; `pair`: phones linking). After five in a row,
+  30 s of wait, doubled after each new one (15 min at most); kept across restarts; a right one resets the count.
+- A copy of `maestra.json`, `maestra-pc.json` and `secretos.json` lives outside the workspace, next to the copy of
+  `clave.enc` (`%APPDATA%\Orb.dev\claves\<workspace>-secretos`, passed by `main.mjs` as `keep`). Before the database
+  opens, what is missing in core comes back from it (it is newer than any backup).
+- On another PC (or another Windows user) the PC's wrap does not open: the window shows «Escribe tu contraseña maestra»
+  (`MasterLocked`), the phone access does not start, and a right password opens the data key and wraps it for this PC.
+
+**Making it** (welcome after the folder; an Orb updated to 3.8 shows the same screen once and cannot skip it): at least
+8 characters (12 or more advised, with a strength hint), typed twice, and a box to tick under «Si la olvidas, no se
+puede recuperar» with what that means.
+
+**Guarded actions.** `needsUnlock` (`src/core/permissions.mjs`) lists them: restoring a backup, deleting the data of Orb
+3.7, unlinking a phone (`link.revoke`, `remote.revoke`), a connector's keys (`secrets.connector`,
+`secrets.saveConnector`), `config.save` that chooses the backups' folder or writes a connector key in clear, and opening
+core in the Explorer (`main.mjs` asks the engine `master.check` before `app:openPath` on core itself or on
+`core\secretos`; core's tool folders open as before). The dispatcher refuses them without a fresh token: `master.unlock`
+(the password) gives one for 5 minutes, kept in the engine's memory and the window's (`unlockCore`, which asks with a
+dialog). It ends with `master.lock`, called by `main.mjs` when Windows locks or the PC sleeps; and with the window,
+which keeps it in memory only. Changing the password asks for the current one.
+
+**Change and forgot.** `master.change` wraps the same data key with the new password: nothing else is encrypted again
+and linked phones stay. «He olvidado la contraseña» (`master.forgot`, with an explicit confirmation) works on this PC
+because its own wrap opens the data key: it is wrapped with the new password and **every linked phone and browser is
+unlinked** (they link again with the new one). Where the PC's wrap does not open, nothing can be recovered: the secrets
+are wiped, a new data key starts and the phones are unlinked (the window says so before). On another PC, a backup is
+opened with this PC's key, the master password or the recovery code (section 36); the secrets inside stay sealed with
+the data key.
+
+**Backups** carry `core\secretos` (never `intentos.json`): the database and orb.json no longer hold any secret in clear,
+and the vault inside opens with the password (or the PC secret the backup also carries, as before for approvals).
+
+**Magic Link with the password** (protocol 4, `src/core/link-payload.mjs`):
+- Linking = the QR (or the short code) + the PC's master password typed on the phone. The password goes inside the
+  proof the phone already seals with the code's key (`proof.master`, `web-bridge.js › pairWith`): never in clear, never
+  logged, never kept on the phone. The PC checks it (`verify(…, 'pair')`) before the device is added.
+- A wrong password answers 403 (`reason: 'password'`, tries left) and does **not** use the code up; five wrong ones on
+  one code cancel it (`reason: 'newCode'`); the `pair` channel's waits apply to all codes together (429). Without a
+  master password on the PC nobody links (`noMaster`).
+- `PAIR_PROTOCOL = 4`: a proof without `v >= 4` (an app of 3.7, which sends no password) gets 426 «Actualiza la app»
+  and the code stays. `MIN_PROTOCOL` stays 2, so phones linked before keep working for calls.
+- The page in a phone's browser no longer links by itself when it opens from the QR: it asks for the password first
+  (`pairPending`); the Android app asks for it after scanning or typing the code (`checkLink`, then `link(input,
+  { password })`).
+- The PC's keys for the phones are read from the vault when first needed (`remote.mjs › own`); `revokeAll` unlinks every
+  device (the forgotten password).
+
+Tests: `test/contrasena-maestra.test.mjs` (the round trip and a changed file; waits that grow and survive a restart;
+the token's 5 minutes and the lock; the copy outside core; connectors' references; what is guarded; the engine moving
+3.7's secrets, refusing guarded calls without a fresh token, another PC locked until the password, and a backup with
+nothing in clear; linking with the right and the wrong password, five per code, the global wait, an app of 3.7; change
+and forgot), `test/remote.test.mjs`, `test/android.test.mjs` and `test/copias.test.mjs`.
