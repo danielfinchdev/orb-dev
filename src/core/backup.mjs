@@ -28,7 +28,8 @@ export const MAGIC = Buffer.from('ORBBAK1\n');
 export const FORMAT = 1;
 export const CHUNK = 1 << 20;
 export const EXT = '.orbbak';
-export const KINDS = ['manual', 'daily', 'preupdate', 'premigration', 'move', 'export'];
+// (A copy of kind «move», made by Orb 3.7's «Mover a otro PC», still lists and restores; none is made any more.)
+export const KINDS = ['manual', 'daily', 'preupdate', 'premigration', 'export'];
 const SCRYPT = { N: 2 ** 15, r: 8, p: 1 };
 const MAX_HEADER = 64 * 1024;
 
@@ -84,12 +85,12 @@ export function recoveryOf(home, secret) {
 }
 export const hasRecovery = (home, secret) => Boolean(recoveryOf(home, secret));
 
-// ---- this Orb's identity (move detection: the same orbId on two machines is a clone; a move adds one to incarnation)
+// ---- this Orb's identity (the same orbId on two machines is a clone)
 const identityFile = (home) => path.join(paths(home).data, 'orb-id.json');
 export function orbIdOf(home) {
   const file = identityFile(home);
-  try { const x = JSON.parse(fs.readFileSync(file, 'utf8')); if (/^[0-9a-f]{32}$/.test(x.orbId)) return { orbId: x.orbId, incarnation: Number(x.incarnation) || 1, moved: x.moved ?? null }; } catch { /* made below */ }
-  const id = { orbId: crypto.randomBytes(16).toString('hex'), incarnation: 1, moved: null };
+  try { const x = JSON.parse(fs.readFileSync(file, 'utf8')); if (/^[0-9a-f]{32}$/.test(x.orbId)) return { orbId: x.orbId, incarnation: Number(x.incarnation) || 1 }; } catch { /* made below */ }
+  const id = { orbId: crypto.randomBytes(16).toString('hex'), incarnation: 1 };
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, `${JSON.stringify(id, null, 2)}\n`);
   return id;
@@ -234,8 +235,8 @@ async function writeOrbbak(out, stage, manifest, { secret, recovery = null, pass
   return header;
 }
 
-// A backup now. → { file, header }. kind: manual | daily | preupdate | premigration | move.
-export async function createBackup({ home, secret = null, kind = 'manual', version = null, folder = null, passphrase = null, includeProjects = false, includeAccounts = false, move = false, log = () => {}, now = new Date() } = {}) {
+// A backup now. → { file, header }. kind: manual | daily | preupdate | premigration.
+export async function createBackup({ home, secret = null, kind = 'manual', version = null, folder = null, passphrase = null, includeProjects = false, includeAccounts = false, log = () => {}, now = new Date() } = {}) {
   if (!KINDS.includes(kind)) throw new BackupError('badKind');
   const dir = folder ?? backupDir(home);
   await fsp.mkdir(dir, { recursive: true });
@@ -245,8 +246,8 @@ export async function createBackup({ home, secret = null, kind = 'manual', versi
     const { manifest } = await stageFiles(home, stage, { secret, includeProjects, includeAccounts, log });
     const recovery = passphrase ? null : (secret ? recoveryOf(home, secret) : null);
     const file = path.join(dir, `orb-${stamp(now)}-${kind}${EXT}`);
-    const header = await writeOrbbak(file, stage, manifest, { secret: move ? null : secret, recovery, passphrase,
-      meta: { orbId: id.orbId, incarnation: id.incarnation, version, created: now.toISOString(), kind, move: Boolean(move) } });
+    const header = await writeOrbbak(file, stage, manifest, { secret, recovery, passphrase,
+      meta: { orbId: id.orbId, incarnation: id.incarnation, version, created: now.toISOString(), kind, move: false } });
     log(`copia hecha: ${path.basename(file)}`);
     return { file, header };
   } finally { await fsp.rm(stage, { recursive: true, force: true, maxRetries: 5 }); }

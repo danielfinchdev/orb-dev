@@ -2,10 +2,10 @@
 // opens them on another PC, restoring one, and moving this Orb to another PC. src/engine/api-data.mjs does the work.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { HardDriveDownload, KeyRound, RotateCcw, Truck, LoaderCircle, ShieldCheck, TriangleAlert, Copy, FolderOpen, Undo2 } from 'lucide-react';
+import { HardDriveDownload, KeyRound, RotateCcw, LoaderCircle, ShieldCheck, TriangleAlert, Copy, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
-import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input } from '@/components/ui/basic.jsx';
-import { confirm, form } from '@/components/dialogs.jsx';
+import { Badge, Card, CardContent, CardHeader, CardTitle, CardFooter, Field, Input } from '@/components/ui/basic.jsx';
+import { form } from '@/components/dialogs.jsx';
 import { call, act, bridge, useStore, getState, setState, openSettings } from '@/lib/store.js';
 import { notify } from '@/lib/notify.js';
 import { isOwner } from '@/lib/persons.js';
@@ -88,41 +88,7 @@ function BackupsCard() {
   );
 }
 
-function MoveCard() {
-  const t = useT();
-  const [moved, setMoved] = useState(undefined);
-  const load = () => call('data.moveStatus').then((r) => setMoved(r.moved ?? null)).catch(() => setMoved(null));
-  useEffect(() => { load(); }, []);
-  if (moved === undefined) return null;
-  const exportIt = async () => {
-    if (!(await confirm(t('datos.moveTitle'), t('datos.moveBody'), { ok: t('datos.moveGo') }))) return;
-    const r = await form(t('datos.moveTitle'), {
-      description: t('datos.movePassDesc'),
-      initial: { passphrase: '', again: '' },
-      body: (v, set) => (<>
-        <Field label={t('datos.movePass')} hint={t('datos.movePassHint')}><Input type="password" autoComplete="new-password" autoFocus value={v.passphrase} onChange={(e) => set({ passphrase: e.target.value })} /></Field>
-        <Field label={t('datos.movePassAgain')}><Input type="password" autoComplete="new-password" value={v.again} onChange={(e) => set({ again: e.target.value })} /></Field>
-      </>),
-      ok: t('datos.moveGo'),
-      onOk: (v) => { if (v.passphrase.length < 12) throw new Error(t('datos.movePassHint')); if (v.passphrase !== v.again) throw new Error(t('datos.movePassMismatch')); return call('data.moveExport', { passphrase: v.passphrase }); }
-    });
-    if (r) { toast.success(t('datos.moveDone', { file: r.file }), { duration: 12000 }); load(); }
-  };
-  return (
-    <Card data-testid="move-card" className={moved ? 'border-warning/60' : undefined}>
-      <CardHeader className="flex-row items-start gap-3"><Truck className="text-primary mt-0.5 size-5 shrink-0" /><div><CardTitle>{t('datos.moveCardTitle')}</CardTitle>{moved ? <CardDescription className="mt-1">{t('datos.movedAway')}</CardDescription> : null}</div></CardHeader>
-      <CardContent className="text-muted-foreground text-xs">{t('datos.moveImportNote')}</CardContent>
-      <CardFooter className="flex-wrap">
-        {moved ? <>
-          <Button size="sm" variant="outline" onClick={async () => { if (await act(call('data.moveUndo'), t('datos.restart'))) load(); }}><Undo2 />{t('datos.moveUndo')}</Button>
-          <Button size="sm" variant="ghost" onClick={async () => { if (await confirm(t('datos.keepBothTitle'), t('datos.keepBothBody'), { ok: t('datos.keepBoth') }) && await act(call('data.moveKeepBoth'), t('datos.restart'))) load(); }}>{t('datos.keepBoth')}</Button>
-        </> : <Button size="sm" variant="outline" onClick={exportIt} data-testid="move-export"><Truck />{t('datos.moveGo')}</Button>}
-      </CardFooter>
-    </Card>
-  );
-}
-
-export function DataCards() { return <><BackupsCard /><MoveCard /></>; }
+export function DataCards() { return <BackupsCard />; }
 
 // 3.6: backups are on from the first day, sealed with this PC's key. A few days later, once, a quiet suggestion to make
 // the recovery code (Ajustes › Datos), so a copy also opens on another PC. Never on a phone, only for the admin.

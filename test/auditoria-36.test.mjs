@@ -31,7 +31,7 @@ const all = (q, ...args) => { const d = db(); try { return d.prepare(q).all(...a
 // The window's own methods (the lock screen), what would undo the test (removing or renaming people, PINs) and what
 // touches this PC (installs, Remote Desktop, the phone access, restoring a backup, moving the Orb).
 const SKIP = new Set(['persons.switch', 'persons.lock', 'persons.unlock', 'app.lockState', 'persons.remove', 'persons.rename', 'persons.setPin', 'data.deletePerson',
-  'installer.start', 'agents.install', 'github.login', 'backup.restore', 'backup.now', 'data.moveExport', 'data.moveUndo', 'data.moveKeepBoth',
+  'installer.start', 'agents.install', 'github.login', 'backup.restore', 'backup.now',
   'remote.enable', 'remote.configure', 'remote.revoke', 'config.save', 'control.pause', 'control.resume', 'link.revoke', 'link.qr',
   'agents.login', 'agents.loginCode', 'agents.loginCancel', 'agents.check', 'accounts.scan', 'backup.verify', 'backup.recovery',
   // creates that would make the caller's own things named with the other person's word (each one checked on its own below)

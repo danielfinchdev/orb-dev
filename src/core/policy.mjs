@@ -268,8 +268,6 @@ const DATA = {
   // Backups hold everyone's data: only the owner makes, lists, checks or restores them.
   'backup.status': { ownerOnly: true }, 'backup.list': { ownerOnly: true }, 'backup.now': { ownerOnly: true }, 'backup.verify': { ownerOnly: true },
   'backup.restore': { ownerOnly: true }, 'backup.recovery': { ownerOnly: true },
-  // Moving the whole Orb is the owner's.
-  'data.moveExport': { ownerOnly: true }, 'data.moveStatus': { ownerOnly: true }, 'data.moveUndo': { ownerOnly: true }, 'data.moveKeepBoth': { ownerOnly: true },
   // A person's export: only their own (the owner gets someone's only through deleting them).
   'data.exportPerson': { check: selfOnly },
   'data.deletePerson': { check: selfOrOwner }
@@ -342,7 +340,7 @@ const EVENTS_ORBMODE = {
   // a line of no conversation (a task made by hand or by a schedule): its task's person
   'chat:new': (p) => (p?.conversation != null ? conv(p.conversation) : p?.person ? { person: p.person } : 'owner')
 };
-const EVENTS_DATA = { 'backup:done': 'owner', 'backup:restoreReady': 'owner', 'data:moved': 'owner', 'data:personExported': (p) => (p?.person ? { person: p.person } : 'owner') };
+const EVENTS_DATA = { 'backup:done': 'owner', 'backup:restoreReady': 'owner', 'data:personExported': (p) => (p?.person ? { person: p.person } : 'owner') };
 // 3.6 (messaging lists): a chat of someone's list changed (a new line, a pin, read): only that person, ids only.
 const EVENTS_INBOX = { 'inbox:changed': (p) => (p?.person ? { person: p.person } : 'owner') };
 const EVENTS_UI = {};

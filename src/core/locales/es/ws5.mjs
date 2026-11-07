@@ -14,7 +14,4 @@ export default {
   'data.backup.err.notBackup': 'Ese archivo no es una copia de Orb (.orbbak).',
   'data.backup.err.missing': 'No encuentro esa copia.',
   'data.backup.err.shortPassphrase': 'El código tiene que tener al menos 12 caracteres.',
-  'data.move.notMove': 'Esa copia no es para mover un Orb: usa «Restaurar».',
-  'data.move.movedAway': 'Este Orb se ha movido a otro equipo y ya no se usa aquí. En Ajustes › Datos puedes deshacerlo o mantener los dos.',
-  'data.server.notEmpty': 'Esa carpeta ya tiene un Orb. Elige una carpeta nueva.'
 };

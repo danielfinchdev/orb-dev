@@ -1,43 +1,14 @@
-// 3.6: moving an Orb to another machine, and (with persons) exporting or deleting one person's data.
-//   moveExport: a .orbbak marked move:true that opens only with a passphrase; this Orb is then marked «moved» (it stops
-//               serving phones until the user chooses «mantener ambos» or undoes the move).
-//   moveImport: on the new machine, into a folder that is not an Orb: the same orbId with incarnation + 1.
+// 3.6: (with persons) exporting or deleting one person's data.
 //   personFiles / exportPerson: one person's data (a .zip, or sealed with a passphrase); deletePerson: everything of them
 //               goes (rows and files) into a 30-day trash, their lines in others' conversations become «(mensaje borrado)».
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
-import crypto from 'node:crypto';
-import { isHome, paths } from './home.mjs';
+import { paths } from './home.mjs';
 import { tr } from './context.mjs';
-import { createBackup, restoreInto, orbIdOf, setOrbId, readHeader, openKey, sealFiles } from './backup.mjs';
+import { sealFiles } from './backup.mjs';
 
 const fail = (key, vars) => { const e = new Error(tr(key, vars)); e.userFacing = true; throw e; };
-
-export async function moveExport({ home, secret, passphrase, version = null, folder = null, log = () => {} }) {
-  if (!passphrase || String(passphrase).length < 12) fail('data.backup.err.shortPassphrase');
-  const r = await createBackup({ home, secret, kind: 'move', version, folder, passphrase, move: true, log });
-  setOrbId(home, { moved: { at: new Date().toISOString(), file: r.file.split(/[\\/]/).pop() } });
-  return r;
-}
-// The user changed their mind (the copy was not imported anywhere): this Orb serves again, as before.
-export const moveUndo = (home) => setOrbId(home, { moved: null });
-// Both Orbs stay: this one becomes a new Orb (new orbId), so nobody takes it for the one that moved.
-export const moveKeepBoth = (home) => setOrbId(home, { orbId: crypto.randomBytes(16).toString('hex'), incarnation: 1, moved: null });
-export const movedAway = (home) => orbIdOf(home).moved ?? null;
-
-export async function moveImport({ target, file, passphrase }) {
-  if (fs.existsSync(target) && (isHome(target) || fs.readdirSync(target).length)) fail('data.server.notEmpty');
-  const { header } = await readHeader(file);
-  if (!header.move) fail('data.move.notMove');
-  openKey(header, { passphrase }); // a wrong passphrase leaves nothing behind
-  const fresh = !fs.existsSync(target);
-  let r;
-  try { r = await restoreInto(target, file, { passphrase }); }
-  catch (error) { if (fresh) fs.rmSync(target, { recursive: true, force: true }); throw error; }
-  const id = setOrbId(target, { orbId: header.orbId, incarnation: (Number(header.incarnation) || 1) + 1, moved: null });
-  return { ...r, orbId: id.orbId, incarnation: id.incarnation };
-}
 
 // ---- one person's data (3.6, persons). Export: a folder (zip) with everything that is theirs and nothing of anyone
 // else; delete: their rows and files go (into a 30-day trash), their lines in others' conversations say «(mensaje borrado)».

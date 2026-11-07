@@ -14,7 +14,4 @@ export default {
   'data.backup.err.notBackup': 'That file is not an Orb backup (.orbbak).',
   'data.backup.err.missing': 'I cannot find that backup.',
   'data.backup.err.shortPassphrase': 'The code must be at least 12 characters long.',
-  'data.move.notMove': 'That backup is not for moving an Orb: use "Restore".',
-  'data.move.movedAway': 'This Orb was moved to another computer and is no longer used here. In Settings › Data you can undo it or keep both.',
-  'data.server.notEmpty': 'That folder already holds an Orb. Pick a new folder.'
 };

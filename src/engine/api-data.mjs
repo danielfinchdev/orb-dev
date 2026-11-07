@@ -1,16 +1,14 @@
-// 3.6 (WS5): the engine's data methods: encrypted backups (src/core/backup.mjs) and moving the Orb to another machine. The daily copy at 03:00 (the owner's time zone) runs
-// from the engine's loop (tick). This PC's window only: no phone calls these.
+// 3.6 (WS5): the engine's data methods: encrypted backups (src/core/backup.mjs). The daily copy at 03:00 (the owner's
+// time zone) runs from the engine's loop (tick). Moving to another PC is a backup restored there with the recovery code. This PC's window only: no phone calls these.
 import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr, saveConfig } from '../core/context.mjs';
 import { readKey, paths } from '../core/home.mjs';
 import { ownerId, getPerson, mustPerson, dropTickets } from '../core/persons.mjs';
 import * as K from '../core/backup.mjs';
-import { moveExport, moveUndo, moveKeepBoth, movedAway, exportPerson, deletePerson, purgePersonsTrash } from '../core/export.mjs';
+import { exportPerson, deletePerson, purgePersonsTrash } from '../core/export.mjs';
 import { utcToZoned, localDay, isValidTz, systemTz } from '../core/tz.mjs';
 
-// 3.6: what an Orb that moved away still answers (the rest is refused until the move is undone or both are kept).
-export const MOVED_OK = /^(app\.state|data\.move(Status|Undo|KeepBoth)|backup\.(status|list|verify))$/;
 const fail = (message) => { const e = new Error(message); e.userFacing = true; throw e; };
 // 3.6: the owner's zone (persons.tz), else the Orb's own setting, else this machine's.
 export const ownerTz = (board = null) => {
@@ -38,7 +36,7 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
     running = (async () => {
       try {
         const r = await K.createBackup({ home: ctx.home, secret: secret(), kind, version, folder: folder(), log, ...opts(), ...extra });
-        const gone = kind === 'move' ? [] : await K.pruneBackups(folder()).catch(() => []);
+        const gone = await K.pruneBackups(folder()).catch(() => []);
         board.setting('backup_last', JSON.stringify({ at: r.header.created, kind, file: path.basename(r.file), ok: true }));
         emit('backup:done', { kind, file: path.basename(r.file), size: fs.statSync(r.file).size, pruned: gone.length });
         return { file: path.basename(r.file), path: r.file, created: r.header.created, files: r.header.counts.files, recovery: Boolean(r.header.wrapped.passphrase), pruned: gone.length };
@@ -94,16 +92,6 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
       K.setRecovery(ctx.home, secret(), value);
       return { code: code ? null : value, at: new Date().toISOString() };
     },
-    // Moving the Orb: a copy that opens only with the passphrase, made to be imported on the new machine (orb-nucleo
-    // mover importar, or the wizard). This Orb then stops serving (ctx.moved) until the move is undone or both are kept.
-    'data.moveExport': async ({ passphrase }) => {
-      const p = pass(passphrase); if (!p || p.length < 12) fail(tr('data.backup.err.shortPassphrase'));
-      if (running) await running.catch(() => {});
-      const r = await moveExport({ home: ctx.home, secret: secret(), passphrase: p, version, folder: folder(), log });
-      ctx.moved = movedAway(ctx.home);
-      emit('data:moved', { moved: ctx.moved });
-      return { file: path.basename(r.file), path: r.file, created: r.header.created, orbId: r.header.orbId, incarnation: r.header.incarnation };
-    },
     // One person's data: their own export (a .zip, or sealed with a passphrase), into Orb's exports folder.
     'data.exportPerson': async ({ id, passphrase }, who) => {
       const pid = mustPerson(board, id ?? who?.person ?? ownerId(board)).id;
@@ -112,11 +100,7 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
       return { file: path.basename(r.file), path: r.file, files: r.files };
     },
     // Deleting a person (themselves, or the owner deleting someone): their export and files wait 30 days in the trash.
-    'data.deletePerson': ({ id }, who) => removePersonData(id ?? who?.person),
-    'data.moveStatus': () => ({ moved: movedAway(ctx.home) }),
-    'data.moveUndo': () => { moveUndo(ctx.home); ctx.moved = null; emit('data:moved', { moved: null }); return { moved: null, restartNeeded: true }; },
-    // «Mantener ambos»: this one becomes a new Orb (the links it had are with the one that moved: they are made again).
-    'data.moveKeepBoth': () => { const id = moveKeepBoth(ctx.home); ctx.moved = null; emit('data:moved', { moved: null }); return { orbId: id.orbId, restartNeeded: true }; }
+    'data.deletePerson': ({ id }, who) => removePersonData(id ?? who?.person)
   };
   // persons.remove (src/engine/api-persons.mjs) does the same.
   function removePersonData(id) {

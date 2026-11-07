@@ -39,7 +39,7 @@ import { accountMethods } from './api-accounts.mjs';
 import { personMethods } from './api-persons.mjs';
 import { renamePerson } from '../core/persons.mjs';
 import { gatewayMethods } from './api-gateway.mjs';
-import { dataApi, MOVED_OK } from './api-data.mjs';
+import { dataApi } from './api-data.mjs';
 import { inboxMethods } from './api-inbox.mjs';
 
 export { fail, str, int, oneOf } from './api-common.mjs';
@@ -173,9 +173,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       // 3.2: kept, the finished tasks the user brought back (a finished task goes to «Completadas» by itself).
       completed: board.settingJson(sideKey('sidebar_completed', who)) ?? [], kept: board.settingJson(sideKey('sidebar_kept', who)) ?? [],
       // 3.2.1: the agents this PC can run now (installed, on, with an account): the lists of the window offer only these.
-      agentsAvailable: board.availableAgents(),
-      // 3.6: this Orb was moved to another machine (Ajustes › Datos): it serves nothing until the user decides.
-      moved: ctx.moved ?? null
+      agentsAvailable: board.availableAgents()
     }),
     'conversations.list': (p, who) => conversationList(who),
     // 3.2: completed by hand (or open again): a task («t<id>»), a direct conversation («s<id>») or a conversation with the
@@ -661,7 +659,6 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const who = principal ?? principalOf(board, { system: true });
       const fn = Object.hasOwn(methods, method) ? methods[method] : null;
       if (!fn) fail(tr('msg.api.unknownAction', { method }));
-      if (ctx.moved && !MOVED_OK.test(method)) fail(tr('data.move.movedAway'));
       if (params === null || typeof params !== 'object' || Array.isArray(params)) fail(tr('msg.api.badParams'));
       authorize(board, who, method, params);
       const out = await fn(params, who);
