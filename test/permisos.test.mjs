@@ -481,6 +481,17 @@ test('móvil: ningún método «remote» devuelve carpetas del PC', async () => 
   // What they had becomes its place in the assistant folder.
   assert.equal(withoutPaths({ path: path.join(t.home, 'proyectos', 'web') }).path, 'proyectos/web');
   assert.equal(withoutPaths(['D:\\otra\\carpeta\\app'])[0], 'app');
+  // F2.6c (P6/P7): free text keeps its words (a message that starts with a path, the whiteboard) and only loses the
+  // assistant folder, in any case and with either separator; keys and deep values too.
+  assert.equal(withoutPaths({ body: 'C:\\proyecto\\x no compila' }).body, 'C:\\proyecto\\x no compila');
+  assert.equal(withoutPaths({ title: 'D:\\otra\\carpeta' }).title, 'D:\\otra\\carpeta');
+  const home = t.home;
+  assert.equal(withoutPaths({ body: `mira ${home.toUpperCase().replace(/\\/g, '/')}/web/a.js y ${home}.` }).body, 'mira web/a.js y ….');
+  assert.deepEqual(Object.keys(withoutPaths({ [path.join(home, 'web')]: 1 })), ['web']);
+  let deep = { cwd: path.join(home, 'web') }; for (let i = 0; i < 20; i++) deep = { x: deep };
+  assert.ok(!JSON.stringify(withoutPaths(deep)).toLowerCase().includes(path.basename(home).toLowerCase()), 'también a más de 12 niveles');
+  const wb = shapeResult('whiteboard.load', { elements: [{ text: 'C:\\Users\\x\\notas' }], attachments: [{ path: path.join(home, 'web', 'a.png') }] });
+  assert.equal(wb.elements[0].text, 'C:\\Users\\x\\notas', 'la pizarra vuelve igual'); assert.equal(wb.attachments[0].path, 'web/a.png');
   sessions.closeLive(s.id);
 });
 

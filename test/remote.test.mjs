@@ -158,8 +158,12 @@ test('el móvil hace lo suyo y nada más (acciones del PC, acceso total, archivo
   };
   const png = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da63f8ffff3f0005fe02fea7d6a0f10000000049454e44ae426082', 'hex');
   const up = await upload(new Uint8Array(png));
-  assert.ok(up.result.path.includes(path.join('.orb', 'adjuntos-movil')));
-  assert.equal(fs.readFileSync(up.result.path).equals(png), true);
+  // F2.6c (P7): the phone gets the picture's name, never the PC's folder; it sends that name back with its message.
+  assert.match(up.result.path, /^\d+-[0-9a-f]{8}\.png$/);
+  assert.equal(fs.readFileSync(path.join(t.home, '.orb', 'adjuntos-movil', up.result.path)).equals(png), true);
+  const withPicture = await p.call('sessions.send', { id: 'no-existe', text: 'hola', images: [up.result.path] });
+  assert.notEqual(withPicture.status, 403, 'su propia imagen, por su nombre, sí');
+  assert.ok(!String(withPicture.error ?? '').includes(t.home), 'los errores tampoco llevan la carpeta');
   assert.equal((await upload(new Uint8Array(Buffer.from('MZ ejecutable')))).status, 415);
 });
 

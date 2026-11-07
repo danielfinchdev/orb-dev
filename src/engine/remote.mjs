@@ -78,25 +78,42 @@ export function guardCall(board, method, params, { allowed = REMOTE_METHODS, upl
 // nuevo»). 3.8: 'all' and 'chat' show the same (the bots' messages, hidden with 'chat', are gone).
 export const PREVIEWS = ['all', 'chat', 'none'];
 export const pushPreview = (config) => (PREVIEWS.includes(config?.mobile?.preview) ? config.mobile.preview : 'chat');
-// 3.8: no folder of this PC reaches a phone or browser. Every value that is a whole absolute path (a project's folder, a
+// 3.8: no folder of this PC reaches a phone or browser. A value that is one whole absolute path (a project's folder, a
 // task's copy, a conversation's cwd…) goes as its place inside the assistant folder («proyectos/web/tienda»), or just
-// its last part when it is outside; inside a text (an activity line), the assistant folder's own path is cut. (Other
-// paths an agent wrote in its text go as they are.)
+// its last part when it is outside; in any other text (a chat message, an activity line, an error, a key), only the assistant folder's own
+// path is cut, written in any case and with either separator. F2.6c: free text is never replaced whole (a message that
+// starts with C:\ keeps its words). (Other paths an agent wrote in its text go as they are.)
 const ABSOLUTE = /^(?:[A-Za-z]:[\\/]|\\\\|\/(?:Users|home|root|mnt|media|var|tmp|opt|private|Volumes|srv|data)\/)/;
+const UPLOAD_NAME = /^\d+-[0-9a-f]{8}\.(png|jpg|webp|gif)$/;
+// Fields of free text (what people and agents write): never replaced whole, only the assistant folder is cut.
+const TEXT_FIELD = /^(body|text|title|description|message|note|notes|result|summary|content|prompt|question|answer|label|reason|error|detail|final|output|input|brief|elements)$/i;
+// A whole value that is one path (a single line, no sentence in it), in any other field.
+const isPath = (v) => ABSOLUTE.test(v) && v.length <= 400 && !/[\r\n]|[.,;:!?]\s/.test(v);
 function placeOf(file) {
   const rel = ctx.home ? path.relative(ctx.home, file) : '';
   return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? rel.split(/[\\/]+/).join('/') : path.basename(file.replace(/[\\/]+$/, '')) || '…';
 }
-export function withoutPaths(value, depth = 0) {
-  if (typeof value === 'string') return ABSOLUTE.test(value) ? placeOf(value) : ctx.home && value.includes(ctx.home) ? value.split(`${ctx.home}${path.sep}`).join('').split(ctx.home).join('…') : value;
-  if (!value || typeof value !== 'object' || depth > 12) return value;
-  if (Array.isArray(value)) return value.map((v) => withoutPaths(v, depth + 1));
-  return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, withoutPaths(v, depth + 1)]));
+// The assistant folder inside a text: «<home>\x» → «x», the folder alone → «…» (in JSON its \ are doubled: matched too).
+const homePattern = () => {
+  if (!ctx.home) return null;
+  const parts = path.resolve(ctx.home).split(/[\\/]+/).filter(Boolean).map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const SEP = '[\\\\/]+';
+  return new RegExp(`${/^[\\/]/.test(path.resolve(ctx.home)) ? SEP : ''}${parts.join(SEP)}(?:(${SEP})|(?![\\w-]|\\.\\w))`, 'gi');
+};
+const cutHome = (text, re) => (re ? text.replace(re, (m, sep) => (sep ? '' : '…')) : text);
+export function withoutPaths(value, depth = 0, key = '', re = homePattern()) {
+  if (typeof value === 'string') return !TEXT_FIELD.test(key) && isPath(value) ? placeOf(value) : cutHome(value, re);
+  if (!value || typeof value !== 'object') return value;
+  if (depth > 12) { try { return JSON.parse(cutHome(JSON.stringify(value), re)); } catch { return null; } }
+  if (Array.isArray(value)) return value.map((v) => withoutPaths(v, depth + 1, key, re));
+  return Object.fromEntries(Object.entries(value).map(([k, v]) => [cutHome(k, re), withoutPaths(v, depth + 1, k, re)]));
 }
 
 // What a call from outside gets back: the settings without secrets, and no folder of this PC (its home, the assistant's
 // paths; any other path as its place in the assistant folder).
 export function shapeResult(method, result) {
+  // F2.6c: the whiteboard comes back to the PC as it went (whiteboard.save): only its attachments are cut.
+  if (method === 'whiteboard.load' && result) return { ...result, attachments: withoutPaths(result.attachments) };
   if (method !== 'app.state' || !result) return withoutPaths(result);
   const { home: _home, paths: _paths, ...rest } = result;
   const activeProject = rest.activeProject ? (({ path: _path, ...p }) => p)(rest.activeProject) : rest.activeProject;
@@ -416,6 +433,8 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const principal = principalOf({ device });
     // 2.6: which account the assistant spends is chosen on the PC (the brain's agent and model, also from the phone).
     if (method === 'chat.settings' && params.account !== undefined) delete params.account;
+    // F2.6c: a picture it uploaded comes back by the name /api/upload gave it (never a path of the PC).
+    if (Array.isArray(params.images)) params.images = params.images.map((f) => (typeof f === 'string' && UPLOAD_NAME.test(f) ? path.join(uploads(), f) : f));
     const why = guardCall(board, method, params, { uploadsDir: uploads() });
     if (why) return deny(why);
     try {
@@ -423,7 +442,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       const result = shapeResult(method, (await api.call(method, params, principal)) ?? null);
       return reply(res, device, msg.nonce, { ok: true, result });
     }
-    catch (error) { return reply(res, device, msg.nonce, { ok: false, error: oneLine(error?.message ?? String(error), 1000), ...(error?.reason ? { reason: error.reason, status: error.status ?? 403 } : error?.status === 403 ? { status: 403 } : {}) }); }
+    catch (error) { return reply(res, device, msg.nonce, { ok: false, error: withoutPaths(oneLine(error?.message ?? String(error), 1000)), ...(error?.reason ? { reason: error.reason, status: error.status ?? 403 } : error?.status === 403 ? { status: 403 } : {}) }); }
   }
 
   // 3.5: what a device that has only the short code needs to know (only while a code is on screen). urls: the other
@@ -506,7 +525,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       await pruneUploads(b.length);
       const file = path.join(mine, `${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${ext}`);
       await fs.promises.writeFile(file, b);
-      return reply(res, device, auth.nonce, { ok: true, result: { path: file } });
+      return reply(res, device, auth.nonce, { ok: true, result: { path: path.basename(file) } }); // its name: the PC knows where
     } catch (error) { log(`móvil: subida: ${error.message}`); return reply(res, device, auth.nonce, { ok: false, error: tr('msg.remote.cannotSaveImage') }); }
     finally { uploading--; }
   }
@@ -614,7 +633,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       touch(device, req);
       return send(res, 200, { ok: true });
     } catch (error) {
-      return send(res, error.status === 403 ? 403 : 400, { ok: false, error: oneLine(error?.message ?? String(error), 300), ...(error.reason ? { reason: error.reason } : {}) });
+      return send(res, error.status === 403 ? 403 : 400, { ok: false, error: withoutPaths(oneLine(error?.message ?? String(error), 300)), ...(error.reason ? { reason: error.reason } : {}) });
     }
   }
 
