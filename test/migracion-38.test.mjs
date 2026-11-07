@@ -330,8 +330,9 @@ test('el acceso del móvil: no se abre sobre una base sin migrar y nunca sirve u
   await assert.rejects(remote.start(), /3\.7/);
   legacy.db.close();
 
-  // The engine on a 3.7 home with the phone access on: migrated before the access opens; Dani's phone is served, Ana's
-  // is not (gone), and a device with another person (a database not migrated yet) is refused.
+  // The engine on a 3.7 home with the phone access on: migrated before the access opens; Ana's phone is gone, and Dani's
+  // too (F3b-fix: a phone of before 3.8 never proved the master password; he is told to link it again), and a device
+  // with another person (a database not migrated yet) is refused.
   const port = 20000 + Math.floor(Math.random() * 20000);
   const u = tempHome({ mobile: { enabled: true, port } }); homes.push(u);
   const pc = C.newKeyPair();
@@ -346,15 +347,19 @@ test('el acceso del móvil: no se abre sobre una base sin migrar y nunca sirve u
       const box = C.seal(key, { t: Date.now(), m: 'me', b: { v: 3 } }, C.AAD.request(id));
       return (await fetch(`http://127.0.0.1:${port}/api/me`, { method: 'POST', headers: { 'X-Orb-Device': id, 'Content-Type': 'application/json' }, body: JSON.stringify(box) })).status;
     };
-    assert.equal(await me(ids.dDani, phones.dani), 200, 'el móvil del dueño sigue enlazado');
+    assert.equal(await me(ids.dDani, phones.dani), 401, 'el móvil del dueño, enlazado antes de 3.8, se vuelve a enlazar');
     assert.equal(await me(ids.dAna, phones.ana), 401, 'el de Ana ya no');
     assert.match(fs.readFileSync(path.join(u.home, 'core', 'ejecuciones', 'motor.log'), 'utf8'), /3\.8: datos de 3\.7 migrados: 2 bots .*1 usuarios \(Ana\)/);
     const db = new DatabaseSync(path.join(u.home, 'core', 'datos', 'orb.db'));
     db.exec('PRAGMA busy_timeout = 5000');
-    assert.match(db.prepare("SELECT body FROM chat WHERE role = 'notice' ORDER BY id DESC").all().map((r) => r.body).join(' | '), /Orb 3\.8 ya no tiene bots ni usuarios\. Hemos guardado lo anterior en .*archivo-3\.7/, 'el aviso al dueño');
-    db.prepare("UPDATE devices SET person_id = 'p-otro' WHERE id = ?").run(ids.dDani);
+    const said = db.prepare("SELECT body FROM chat WHERE role = 'notice' ORDER BY id DESC").all().map((r) => r.body).join(' | ');
+    assert.match(said, /Orb 3\.8 ya no tiene bots ni usuarios\. Hemos guardado lo anterior en .*archivo-3\.7/, 'el aviso al dueño');
+    assert.match(said, /Vuelve a enlazar tu móvil con Magic Link/);
+    // A device of 3.8 that still has a person (a database not migrated yet) is never served.
+    const other = '33333333-3333-3333-3333-333333333333';
+    db.prepare("INSERT INTO devices (id, name, token_hash, created_at, last_seen, public_key, route, kind, meta, person_id) VALUES (?, 'Otro', ?, ?, ?, ?, 'wifi', 'phone', ?, 'p-otro')").run(other, `clave:${other}`, new Date().toISOString(), new Date().toISOString(), C.b64.enc(phones.dani.pub), JSON.stringify({ v: 4 }));
     db.close();
-    assert.equal(await me(ids.dDani, phones.dani), 401, 'un dispositivo de otra persona nunca actúa como el dueño');
+    assert.equal(await me(other, phones.dani), 401, 'un dispositivo de otra persona nunca actúa como el dueño');
   } finally { await engine.stop(); }
 });
 

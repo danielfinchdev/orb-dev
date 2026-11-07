@@ -26,9 +26,11 @@ import { play } from '@/lib/sounds.js';
 import { MagicLinkPanel, SubSection } from './magic-link.jsx';
 import { DataCards } from './data.jsx';
 import { connectorKeys } from './master.jsx';
+import { unlockCore } from '@/lib/core-access.js';
 
-async function save(patch, ok = t('settings.saved')) {
-  const config = await act(call('config.save', { patch }), ok);
+// unlock: the master password's token, for a change that needs it (src/core/permissions.mjs › needsUnlock).
+async function save(patch, ok = t('settings.saved'), unlock = null) {
+  const config = await act(call('config.save', { patch, ...(unlock ? { unlock } : {}) }), ok);
   if (config) { setState({ app: { ...getState().app, config } }); applyTheme(config.ui?.theme); applyAppearance(config.ui); }
   return config;
 }
@@ -269,7 +271,13 @@ function McpCard({ c }) {
             <div className="min-w-0 flex-1"><div className="text-sm">{s.name}</div><div className="text-muted-foreground truncate font-mono text-xs">{s.command} {(s.args ?? []).join(' ')}</div></div>
             <span className="text-muted-foreground text-xs">{s.agents?.length ? s.agents.join(', ') : t('settings.all')}</span>
             {!bridge.mobile ? <BubbleTip title={t('master.keys')}><Button variant="ghost" size="icon-sm" aria-label={t('master.keys')} onClick={() => connectorKeys(s)} data-testid="mcp-keys"><KeyRound /></Button></BubbleTip> : null}
-            <Button variant="danger" size="icon-sm" onClick={async () => { if (await confirm(t('settings.mcpRemoveTitle'), t('settings.mcpRemoveBody', { name: s.name }), { ok: t('settings.remove'), danger: true })) save({ mcpServers: c.mcpServers.filter((_, j) => j !== i) }); }}><Trash2 /></Button>
+            <Button variant="danger" size="icon-sm" onClick={async () => {
+              if (!await confirm(t('settings.mcpRemoveTitle'), t('settings.mcpRemoveBody', { name: s.name }), { ok: t('settings.remove'), danger: true })) return;
+              // 3.8: a connector with keys goes (and its keys with it) only after the master password.
+              const unlock = Object.keys(s.env ?? {}).length ? await unlockCore('connector') : null;
+              if (Object.keys(s.env ?? {}).length && !unlock) return;
+              save({ mcpServers: c.mcpServers.filter((_, j) => j !== i) }, undefined, unlock);
+            }}><Trash2 /></Button>
           </div>
         )) : <p className="text-muted-foreground text-sm">{t('settings.none')}</p>}
       </CardContent>
@@ -386,10 +394,7 @@ function MobileCard() {
         {st.enabled && st.error && st.running ? <p className="text-muted-foreground text-xs">{st.error}</p> : null}
         {/* 3.5: the QR, the short code and the linked devices are in Magic Link, below. */}
         {st.running && route('wifi') ? <p className="text-muted-foreground text-xs">{t('settings.mobileWifiNote')}</p> : null}
-        {/* 3.5.1: browsers over the home Wi-Fi (plain http) only if the user allows it; what notifications show when locked. */}
-        {st.enabled && st.wifi ? (
-          <Row label={t('settings.mobileLanHttp')} hint={t('settings.mobileLanHttpHint')}><Switch data-testid="mobile-lan-http" checked={Boolean(st.lanHttp)} onCheckedChange={(on) => configure({ lanHttp: on })} /></Row>
-        ) : null}
+        {/* 3.5.1: what notifications show when locked. */}
         {st.enabled ? (
           <Row label={t('settings.mobilePreview')} hint={t(`settings.mobilePreview.${previewOf(st.preview)}Hint`)}>
             <Select value={previewOf(st.preview)} onValueChange={(preview) => configure({ preview })} data-testid="mobile-preview" title={t('settings.mobilePreview')}
@@ -444,10 +449,13 @@ function ProtectedCard({ c }) {
   const t = useT();
   const [draft, setDraft] = useState('');
   const list = Array.isArray(c.protected) ? c.protected : [];
-  const store = (items) => {
+  const store = async (items) => {
     const seen = new Set();
     const clean = items.map((x) => String(x ?? '').trim()).filter((x) => x.length >= 2 && !seen.has(x.toLowerCase()) && seen.add(x.toLowerCase()));
-    return save({ protected: clean.slice(0, 50) }, t('settings.protectedSaved'));
+    // 3.8: taking something off the list asks for the master password first.
+    const unlock = list.some((x) => !clean.includes(x)) ? await unlockCore('protected') : null;
+    if (list.some((x) => !clean.includes(x)) && !unlock) return undefined;
+    return save({ protected: clean.slice(0, 50) }, t('settings.protectedSaved'), unlock);
   };
   const add = async () => { if (draft.trim().length >= 2 && await store([...list, draft])) setDraft(''); };
   return (

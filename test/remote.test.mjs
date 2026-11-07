@@ -34,9 +34,9 @@ after(() => { engine?.send({ type: 'shutdown' }); t?.cleanup(); });
 // A phone, as the page does it (src/ui/lib/web-bridge.js).
 function phone() {
   const me = { kp: C.newKeyPair(), id: null, key: null, pc: null };
-  me.pairBody = (code, pcPub, { name = 'Android', at = Date.now(), master = TEST_MASTER, v = 4 } = {}) => {
+  me.pairBody = (code, pcPub, { name = 'Android', at = Date.now(), v = 4 } = {}) => {
     const pub = C.b64.enc(me.kp.pub);
-    return { pub, proof: C.seal(C.pairingKey(me.kp.priv, pcPub, code), { pub, name, t: at, v, master }, C.AAD.pair) };
+    return { step: 'start', pub, proof: C.seal(C.pairingKey(me.kp.priv, pcPub, code), { pub, name, t: at, v }, C.AAD.pair) };
   };
   me.box = (kind, body, { at = Date.now() } = {}) => C.seal(me.key, { t: at, m: kind, b: body }, C.AAD.request(me.id));
   me.post = async (pathname, box, { id = me.id, headers = {} } = {}) => fetch(base + pathname, { method: 'POST', headers: { 'X-Orb-Device': id, 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(box) });
@@ -51,10 +51,19 @@ function phone() {
   return me;
 }
 const qr = async (kind) => { const { url, pc } = await call('remote.pair', kind ? { kind } : {}); const h = new URLSearchParams(new URL(url).hash.slice(1)); return { code: h.get('vincular'), pc: C.b64.dec(h.get('pc')), fp: pc, url }; };
-const pair = async (p, q, opts) => {
-  const res = await fetch(`${base}/api/pair`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p.pairBody(q.code, q.pc, opts)) });
+// 3.8: two steps, the second with the master password's proof (src/core/mobile-crypto.mjs › linkDevice, by hand).
+const postPair = (body) => fetch(`${base}/api/pair`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+const pair = async (p, q, { password = TEST_MASTER, ...opts } = {}) => {
+  const res = await postPair(p.pairBody(q.code, q.pc, opts));
   if (res.status !== 200) return res.status;
-  const data = await res.json();
+  const c = C.open(C.pairingKey(p.kp.priv, q.pc, q.code), (await res.json()).box, C.AAD.pairChallenge);
+  const ver = await C.verifierOf(password, c.kdf);
+  const transcript = C.pakeTranscript({ via: 'qr', devPub: p.kp.pub, pcPub: q.pc, sid: c.sid, kdf: c.kdf });
+  const K = C.pakeKey({ secret: q.code, dhDevice: C.sharedSecret(p.kp.priv, q.pc), dhPassword: C.sharedSecret(ver.priv, q.pc), transcript });
+  const fin = await postPair({ step: 'finish', sid: c.sid, pub: C.b64.enc(p.kp.pub), mac: C.b64.enc(C.pakeMac(K, C.MAC_PHONE)) });
+  if (fin.status !== 200) return fin.status;
+  const data = await fin.json();
+  assert.ok(C.sameBytes(C.b64.dec(data.mac), C.pakeMac(K, C.macPc(data.id))), 'el PC demuestra que es el del código');
   p.key = C.sessionKey(p.kp.priv, q.pc); p.id = data.id;
   const ok = C.open(p.key, data.box, C.AAD.paired(data.id));
   assert.equal(ok.id, data.id); p.pc = ok.pc;

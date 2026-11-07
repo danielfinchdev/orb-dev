@@ -55,11 +55,20 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
         return barcodes?.[0]?.rawValue ?? null;
       };
       // Link with what was scanned or typed: the QR's text, a pasted link, or the short code and the address. 3.8: read
-      // first (checkLink: { name }), then linked with the PC's master password ({ password }).
+      // first (checkLink: { name, fp, short }; a typed short code asks the Orb for its key now, and the person compares its
+      // fingerprint with the PC's screen before the password), then linked with the PC's master password ({ password })
+      // and the very key that was shown.
       const parse = async (input) => { try { return typeof input === 'string' ? L.parseLinkPayload(input) : L.parseManual(input); } catch (e) { throw new Error(await tl(e.key ?? 'app.linkBadQr')); } };
-      orb.checkLink = async (input) => { const p = await parse(input); return { name: p.name ?? null }; };
+      let checked = null; // { input, link }
+      orb.checkLink = async (input) => {
+        const link = await pieces.resolveLink(await parse(input));
+        checked = { input, link };
+        return { name: link.name ?? null, fp: link.fp, short: link.via === 'code' };
+      };
       orb.link = async (input, { password = '' } = {}) => {
-        await pieces.pairWith(await parse(input), { password });
+        const link = checked?.input === input ? checked.link : await pieces.resolveLink(await parse(input));
+        await pieces.pairWith(link, { password });
+        checked = null;
         return true;
       };
       orb.unlink = async () => { pieces.unpaired(); return true; };

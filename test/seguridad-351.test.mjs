@@ -67,16 +67,17 @@ test('código corto: atado a la clave del Orb; un intermediario que cambia la cl
   const ok = await client('Móvil', 'phone').connect({ code: q.code, address: `127.0.0.1:${port}`, fp: q.pc });
   assert.equal(ok.fp, q.pc);
 
-  // Someone in the middle answers with its own key: it can seal the session but not prove it had the code.
+  // Someone in the middle answers with its own key: without the code it cannot answer the first step (nor, 3.8, prove the
+  // master password's verifier at the end).
   const evil = C.newKeyPair();
   let older = false;
   const mitm = http.createServer(async (req, res) => {
     if (req.url === '/api/hello') { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ v: 2, ...(older ? {} : { short: 3 }), pc: C.b64.enc(evil.pub), fp: C.fingerprint(evil.pub), name: 'Servidor', urls: [] })); }
     let body = ''; for await (const c of req) body += c;
-    const b = JSON.parse(body); const id = crypto.randomUUID();
-    const key = C.sessionKey(evil.priv, C.b64.dec(b.pub));
+    const b = JSON.parse(body); const sid = crypto.randomUUID();
+    const kdf = { N: 2 ** 15, r: 8, p: 1, salt: C.b64.enc(crypto.randomBytes(16)) };
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ id, box: C.seal(key, { id, orb: 'Servidor', role: 'centro' }, C.AAD.paired(id)), confirm: C.seal(C.pairingKey(evil.priv, C.b64.dec(b.pub), 'corto3:adivinado'), { id }, C.AAD.confirm(id)) }));
+    return res.end(JSON.stringify({ sid, box: C.seal(C.pairingKey(evil.priv, C.b64.dec(b.pub), 'corto3:adivinado'), { sid, kdf }, C.AAD.pairChallenge) }));
   });
   await new Promise((r) => mitm.listen(0, '127.0.0.1', r));
   const mport = mitm.address().port;
@@ -87,11 +88,11 @@ test('código corto: atado a la clave del Orb; un intermediario que cambia la cl
   } finally { mitm.close(); }
 });
 
-test('por la wifi sin cifrar un navegador no se enlaza, salvo que el usuario lo permita', () => {
+test('por la wifi sin cifrar un navegador no se enlaza (3.8: nunca, ahí no se escribe la contraseña maestra)', () => {
   const routes = [{ kind: 'wifi', address: '192.168.1.5' }, { kind: 'tailscale', address: '100.64.0.9' }];
   const page = { origin: 'http://192.168.1.5:3131', localAddress: '192.168.1.5', routes };
   assert.equal(plainHttpBrowser(page), true, 'un navegador por la wifi');
-  assert.equal(plainHttpBrowser({ ...page, lanHttp: true }), false, 'permitido en Ajustes');
+  assert.equal(plainHttpBrowser({ ...page, lanHttp: true }), true, '3.8: ya no hay ajuste que lo permita');
   assert.equal(plainHttpBrowser({ ...page, origin: undefined }), false, 'la terminal u otro Orb');
   assert.equal(plainHttpBrowser({ ...page, app: true }), false, 'la app de Android');
   assert.equal(plainHttpBrowser({ ...page, localAddress: '127.0.0.1' }), false, 'https de Tailscale (llega por este PC)');

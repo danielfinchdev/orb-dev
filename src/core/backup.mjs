@@ -93,6 +93,14 @@ export function recoveryOf(home, secret) {
   try { return { kdf: raw.kdf, kek: unwrap(machineKek(secret), raw.kek, 'orbbak:recovery'), at: raw.at }; } catch { return null; }
 }
 export const hasRecovery = (home, secret) => Boolean(recoveryOf(home, secret));
+// 3.8: whether a code is this machine's recovery code (what «He olvidado la contraseña» asks for). → true | false, or
+// null when this machine has none set.
+export function isRecoveryCode(home, secret, code) {
+  const rec = recoveryOf(home, secret);
+  if (!rec) return null;
+  let kek; try { kek = passKek(code, rec.kdf); } catch { return false; }
+  return kek.length === rec.kek.length && crypto.timingSafeEqual(Buffer.from(kek), Buffer.from(rec.kek));
+}
 
 // ---- this Orb's identity (the same orbId on two machines is a clone)
 const identityFile = (home) => path.join(paths(home).data, 'orb-id.json');

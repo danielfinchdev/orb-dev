@@ -85,6 +85,17 @@ export function parseManual({ text, code, address } = {}) {
   return { v: 2, urls: [base], pc: null, code: c, name: null, role: null, via: 'code' };
 }
 
+// 3.8: whether a page may ask for the PC's master password: the Android app (its own code), https, this device, or the
+// Tailscale address (WireGuard encrypts it). Never a page that came in plain http over the Wi-Fi (it could have been
+// changed on the way). location: { protocol, hostname }.
+export function passwordPageOk({ protocol, hostname } = {}, { app = false } = {}) {
+  if (app || protocol === 'https:') return true;
+  const h = String(hostname ?? '').toLowerCase().replace(/^\[|\]$/g, '');
+  if (h === 'localhost' || h === '::1' || /^127\./.test(h) || /\.ts\.net$/.test(h)) return true;
+  const m = /^100\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(h);
+  return Boolean(m && Number(m[1]) >= 64 && Number(m[1]) <= 127);
+}
+
 // The secret both sides derive the pairing key from (link.mjs › pairAt): the QR's code as is, the short one marked.
 export const pairingSecret = (p) => (p.via === 'code' ? `corto:${normalCode(p.code)}` : p.code);
 

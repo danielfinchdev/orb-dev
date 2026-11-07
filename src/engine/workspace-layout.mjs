@@ -35,6 +35,9 @@ export async function layoutApply(choices, { emit = () => {}, log = () => {} } =
 let keys = null; // the folder of the app's copies of the sealed secrets (main.mjs), when the app gives it
 export function guardOutside({ mirror } = {}) {
   if (typeof mirror === 'string' && path.isAbsolute(mirror)) keys = path.dirname(mirror);
+  // 3.8: and the app's «Local State» next to that folder (it holds the key Windows seals Orb's secret with), when the
+  // copy is where the app keeps it (<app data>\claves\…).
+  const state = keys && path.basename(keys) === 'claves' ? path.join(path.dirname(keys), 'Local State') : null;
   // Never one that holds the workspace itself (that would shut the agents out of their projects).
-  setGuardedRoots([backupRoot(), backupDir(ctx.home, ctx.config), keys].filter((d) => d && !inside(d, ctx.home)));
+  setGuardedRoots([backupRoot(), backupDir(ctx.home, ctx.config), keys, state].filter((d) => d && !inside(d, ctx.home)));
 }

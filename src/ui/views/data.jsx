@@ -15,8 +15,11 @@ import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
 const size = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
 
 // The recovery code: made here and shown once, to write down (copies made from then on open with it on another PC).
+// 3.8: after the master password (the code opens the backups and «He olvidado la contraseña»).
 export async function newRecoveryCode() {
-  const r = await act(call('backup.recovery', {}));
+  const unlock = await unlockCore('recovery');
+  if (!unlock) return null;
+  const r = await act(call('backup.recovery', { unlock }));
   if (!r?.code) return null;
   await form(tNow('datos.codeTitle'), {
     description: tNow('datos.codeDesc'),
@@ -51,7 +54,7 @@ function BackupsCard() {
       initial: { passphrase: '' },
       body: (v, set) => <Field label={t('datos.restorePass')} hint={t('datos.restorePassHint')}><Input type="password" autoComplete="off" value={v.passphrase} onChange={(e) => set({ passphrase: e.target.value })} /></Field>,
       ok: t('datos.restore'),
-      onOk: async (v) => { await call('backup.verify', { file: b.name, passphrase: v.passphrase || null }); return call('backup.restore', { file: b.name, passphrase: v.passphrase || null, unlock }); }
+      onOk: async (v) => { await call('backup.verify', { file: b.name, passphrase: v.passphrase || null, unlock }); return call('backup.restore', { file: b.name, passphrase: v.passphrase || null, unlock }); }
     });
     if (r) toast.success(t('datos.restoreReady'), { duration: 10000 });
   };

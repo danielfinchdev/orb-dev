@@ -141,9 +141,22 @@ export function isOrbData(target, internalDir, cwd) {
   return guardedRoots.some(within);
 }
 // The words of a command that may be paths (a=b and --opt=b give b), without quotes.
+// 3.8: the folders a command may name through the environment (%APPDATA%, $env:APPDATA, $APPDATA, ${env:APPDATA}, ~ and the
+// like): written out, so the checks below see the real path (the copies of Orb's secrets live under %APPDATA%).
+const ENV_DIRS = ['APPDATA', 'LOCALAPPDATA', 'USERPROFILE', 'HOME', 'PROGRAMDATA', 'TEMP', 'TMP'];
+export function expandEnv(command) {
+  let t = String(command ?? '');
+  for (const name of ENV_DIRS) {
+    const value = process.env[name] ?? (name === 'HOME' || name === 'USERPROFILE' ? os.homedir() : null);
+    if (!value) continue;
+    t = t.replace(new RegExp(`%${name}%|\\$\\{env:${name}\\}|\\$env:${name}\\b|\\$\\{${name}\\}|\\$${name}\\b`, 'gi'), () => value);
+  }
+  return t.replace(/(^|[\s"'=(])~(?=[\\/])/g, (_m, pre) => `${pre}${os.homedir()}`);
+}
 const pathWords = (command) => String(command ?? '').split(/[\s|&;<>()`]+/).map((w) => w.replace(/^["']+|["',]+$/g, '').replace(/^[^=]*=(?=.*[\\/~.])/, '')).filter((w) => /[\\/]|^~|^\.\.?$/.test(w));
-function touchesInternal({ command, paths, patterns, internalDir, cwd }) {
+function touchesInternal({ command: given, paths, patterns, internalDir, cwd }) {
   if (!internalDir) return false;
+  const command = expandEnv(given);
   if ([...paths, ...patterns].some((p) => isOrbData(p, internalDir, cwd))) return true;
   // The folder written out anywhere in the command (in a script's string too), with either separator or case.
   const t = String(command ?? '').replace(/\//g, '\\').toLowerCase();

@@ -292,10 +292,12 @@ ipcMain.handle('app:pickImages', guard(async () => {
 // 3.8: core itself (all of it at once) and its secrets open only with a fresh unlock of the master password, checked by
 // the engine. Its tool folders (MCP servers, adb, logs) and the data folder a failed migration points to open as
 // before: the window offers them where they are needed, also before there is a password.
+// Compared by the real path (a junction, a short 8.3 name or the \\?\ prefix lead to the same folder).
+const realLower = (p) => { let r = path.resolve(p); try { r = fs.realpathSync.native(r); } catch { /* not there: as written */ } return r.replace(/^\\\\\?\\/, '').toLowerCase(); };
 const guardedCore = (target) => {
   if (!home) return false;
-  const t = path.resolve(target).toLowerCase();
-  const core = path.resolve(paths(home).core).toLowerCase(); const secrets = path.resolve(paths(home).secrets).toLowerCase();
+  const t = realLower(target);
+  const core = realLower(paths(home).core); const secrets = realLower(paths(home).secrets);
   return t === core || t === secrets || t.startsWith(secrets + path.sep);
 };
 ipcMain.handle('app:openPath', guard(async (target, unlock) => {
@@ -417,11 +419,11 @@ app.on('second-instance', () => { if (win && !win.isDestroyed()) { if (win.isMin
 app.on('before-quit', () => { quitting = true; agentBrowser?.shutdown(); try { engine?.postMessage({ type: 'shutdown' }); } catch { /* gone */ } });
 app.on('window-all-closed', () => app.quit());
 
-// 3.8: the window's unlock of the master password ends when Windows locks or the PC sleeps.
+// 3.8: the window's unlock of the master password ends when Windows locks, the PC sleeps or shuts down.
 const lockMaster = () => { if (engine) callEngine('master.lock', {}, 5000).catch(() => {}); };
 
 app.whenReady().then(async () => {
-  for (const e of ['lock-screen', 'suspend']) powerMonitor.on(e, lockMaster);
+  for (const e of ['lock-screen', 'suspend', 'shutdown', 'user-did-resign-active']) powerMonitor.on(e, lockMaster);
   // Our pages come from orb://app/ (only files inside src/renderer); nothing else is served.
   protocol.handle('orb', (request) => {
     const url = new URL(request.url);

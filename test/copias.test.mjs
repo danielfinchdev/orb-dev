@@ -181,7 +181,10 @@ test('engine: backup.now, list, verify, recovery code and restore staged for the
   try {
     const st = await e.call('backup.status');
     assert.equal(st.recovery, false); assert.equal(st.enabled, true);
-    const { code } = await e.call('backup.recovery', {});
+    // 3.8: a new recovery code, checking a copy and restoring one need the master password (a fresh unlock).
+    await assert.rejects(e.call('backup.recovery', {}), /contraseña maestra/);
+    const { unlock } = await e.call('master.create', { password: 'contraseña de copias' });
+    const { code } = await e.call('backup.recovery', { unlock });
     assert.match(code, /^([A-Z2-9]{4}-){7}[A-Z2-9]{4}$/);
     assert.equal((await e.call('backup.status')).recovery, true);
     await e.call('projects.create', { name: 'casa' });
@@ -190,13 +193,12 @@ test('engine: backup.now, list, verify, recovery code and restore staged for the
     assert.ok(made.file.endsWith('.orbbak') && made.recovery);
     const list = await e.call('backup.list');
     assert.equal(list.length, 1); assert.equal(list[0].kind, 'manual');
-    assert.equal((await e.call('backup.verify', { file: made.file })).ok, true);
-    await assert.rejects(e.call('backup.verify', { file: 'no-existe.orbbak' }), /No encuentro esa copia/);
-    await assert.rejects(e.call('backup.verify', { file: '../../orb.json' }), /no es una copia/);
+    await assert.rejects(e.call('backup.verify', { file: made.file }), /contraseña maestra/);
+    assert.equal((await e.call('backup.verify', { file: made.file, unlock })).ok, true);
+    await assert.rejects(e.call('backup.verify', { file: 'no-existe.orbbak', unlock }), /No encuentro esa copia/);
+    await assert.rejects(e.call('backup.verify', { file: '../../orb.json', unlock }), /no es una copia/);
     await e.call('schedules.create', { project: 'casa', title: 'Después', description: 'd', every: 'daily' });
-    // 3.8: restoring needs the master password (a fresh unlock).
     await assert.rejects(e.call('backup.restore', { file: made.file }), /contraseña maestra/);
-    const { unlock } = await e.call('master.create', { password: 'contraseña de copias' });
     const r = await e.call('backup.restore', { file: made.file, unlock });
     assert.equal(r.restartNeeded, true);
     await e.stop(); stopped = true;

@@ -165,10 +165,11 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       board.changed('sidebar');
       return { ok: true };
     },
-    'config.save': ({ patch }) => {
-      // 3.8: a connector's keys never reach orb.json: they go into the vault and orb.json keeps references.
+    'config.save': ({ patch, unlock }) => {
+      // 3.8: a connector's keys never reach orb.json: they go into the vault and orb.json keeps references. With the window
+      // unlocked (a change that needs it: checkUnlock), the keys are tied to the connectors' commands as they are now.
       const p = patch ?? {};
-      const sealed = Array.isArray(p.mcpServers) ? sealConnectors(ctx.master, p.mcpServers) : null;
+      const sealed = Array.isArray(p.mcpServers) ? sealConnectors(ctx.master, p.mcpServers, { trusted: Boolean(ctx.master?.checkToken(unlock)) }) : null;
       const c = saveConfig(sealed ? { ...p, mcpServers: sealed } : p); emit('config:changed', c);
       if (p.backup) guardOutside(); // the chosen backups' folder, kept from the agents
       return c;

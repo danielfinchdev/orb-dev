@@ -223,7 +223,7 @@ async function run(board, { home, version, restored, repair }) {
   // 3.8: the master password and Orb's own secrets (src/core/master.mjs): opened with this PC's secret, or locked until
   // the password is typed (another PC, another Windows user). What earlier versions kept in clear moves into it now.
   const { openMaster, migrateSecrets } = await import('./api-master.mjs');
-  ctx.master = openMaster(home, secretOf(home), { mirror, log });
+  ctx.master = openMaster(home, secretOf(home), { mirror, log, notice: (text) => board.notice(text, 'warning') });
   try { migrateSecrets(board, ctx.master, { log, emit }); } catch (error) { log(`secretos: ${error.message}`); }
   // Unlocked later (the password on another PC): the phone access opens then.
   const onUnlocked = () => { if (ctx.config.mobile?.enabled) remote?.start().catch((error) => log(`móvil: ${error.message}`)); };

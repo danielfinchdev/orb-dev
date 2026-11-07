@@ -119,14 +119,17 @@ test('el PC deja pasar la página de la app (CORS) y a nadie más; todo sigue ci
   // Pair from the app's page with the QR, as web-bridge.js › pairWith does it.
   const { url } = await call('remote.pair', {});
   const q = parseLinkPayload(url);
-  const pcPub = C.b64.dec(q.pc); const kp = C.newKeyPair(); const pub = C.b64.enc(kp.pub);
-  const proof = C.seal(C.pairingKey(kp.priv, pcPub, pairingSecret(q)), { pub, name: 'Pixel 9 (app)', t: Date.now(), role: 'ventana', v: 4, master: 'contraseña del PC' }, C.AAD.pair);
-  const paired = await raw('POST', '/api/pair', { Origin: 'http://localhost', 'Content-Type': 'application/json' }, JSON.stringify({ via: q.via, pub, proof }));
-  assert.equal(paired.status, 200);
-  assert.equal(paired.headers['access-control-allow-origin'], 'http://localhost', 'la respuesta lleva el permiso para la app');
-  const { id, box } = JSON.parse(paired.body);
-  const key = C.sessionKey(kp.priv, pcPub);
-  assert.equal(C.open(key, box, C.AAD.paired(id)).id, id);
+  const pcPub = C.b64.dec(q.pc);
+  // Both steps of linking (3.8, the master password never sent) from the app's page (its Origin).
+  const allowed = [];
+  const appFetch = async (u, init) => {
+    const r = await raw('POST', new URL(u).pathname, { Origin: 'http://localhost', 'Content-Type': 'application/json' }, init.body);
+    allowed.push(r.headers['access-control-allow-origin']);
+    return new Response(r.body, { status: r.status });
+  };
+  const linked = await C.linkDevice({ base: 'http://app', pcPub, secret: pairingSecret(q), via: q.via, name: 'Pixel 9 (app)', kind: 'phone', v: 4, min: 2, password: 'contraseña del PC', fetch: appFetch });
+  assert.deepEqual(allowed, ['http://localhost', 'http://localhost'], 'las respuestas llevan el permiso para la app');
+  const { id, key } = linked;
   const req = C.seal(key, { t: Date.now(), m: 'me', b: null }, C.AAD.request(id));
   const me = await raw('POST', '/api/me', { Origin: 'http://localhost', 'Content-Type': 'application/json', 'X-Orb-Device': id }, JSON.stringify(req));
   assert.equal(me.status, 200);

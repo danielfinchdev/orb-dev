@@ -2,14 +2,14 @@
 // listens to the live events, all sealed with its own key, as the page does (src/ui/lib/web-bridge.js). Kept in memory.
 // createPhone({ name, kind, password }) → { connect({ qr } | { code, address }), call(id, method, params), on(event, fn),
 // peers(), raw(id), stop() }; id null: the first link. 3.8: password, the PC's master password it links with (the PC of a
-// test makes it with TEST_MASTER).
+// test makes it with TEST_MASTER). onFetch: the fetch its linking goes through (a test records the exchange).
 import * as C from '../../src/core/mobile-crypto.mjs';
 import { parseLinkPayload, normalAddress, normalCode, PROTOCOL, MIN_PROTOCOL } from '../../src/core/link-payload.mjs';
 
 const err = (message, extra = {}) => Object.assign(new Error(message), extra);
 export const TEST_MASTER = 'contraseña maestra de prueba';
 
-export function createPhone({ name = 'Móvil de prueba', kind = 'phone', password = TEST_MASTER } = {}) {
+export function createPhone({ name = 'Móvil de prueba', kind = 'phone', password = TEST_MASTER, onFetch = null } = {}) {
   const peers = new Map(); // id -> { id, key, base, skew, online, ctrl }
   const listeners = new Map();
   let stopped = false;
@@ -65,25 +65,17 @@ export function createPhone({ name = 'Móvil de prueba', kind = 'phone', passwor
     } catch { /* closed */ }
     p.online = false;
   }
+  // The same exchange as the page (src/core/mobile-crypto.mjs › linkDevice): the password never leaves this phone.
   async function pairAt(base, pcPub, code, via) {
-    const { priv, pub } = C.newKeyPair();
     const secret = via === 'code3' ? await C.shortSecretAsync(normalCode(code), C.b64.enc(pcPub)) : code;
-    let skew = 0;
-    const body = () => ({ via, pub: C.b64.enc(pub), proof: C.seal(C.pairingKey(priv, pcPub, secret), { pub: C.b64.enc(pub), name, kind, t: Date.now() + skew, v: PROTOCOL, min: MIN_PROTOCOL, master: password }, C.AAD.pair) });
-    const send = () => fetch(`${base}/api/pair`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body()) });
-    let res = await send(); let data = null;
-    if (res.status === 409) { const d = await res.json().catch(() => ({})); if (Number.isFinite(d.now)) { skew = d.now - Date.now(); res = await send(); } else data = d; }
-    data ??= await res.json().catch(() => ({}));
-    if (!res.ok) throw err(data.error ?? `error ${res.status}`, { status: res.status, reason: data.reason });
-    const key = C.sessionKey(priv, pcPub);
-    let ok; try { ok = C.open(key, data.box, C.AAD.paired(data.id)); } catch { ok = null; }
-    if (ok?.id !== data.id) throw err('el PC no es el del código');
-    // With the short code the PC proves it had the code too (a key swapped on the way cannot).
-    if (via === 'code3') {
-      let sure; try { sure = C.open(C.pairingKey(priv, pcPub, secret), data.confirm, C.AAD.confirm(data.id)); } catch { sure = null; }
-      if (sure?.id !== data.id) throw err('el PC no es el del código');
+    let r;
+    try { r = await C.linkDevice({ base, pcPub, secret, via, name, kind, v: PROTOCOL, min: MIN_PROTOCOL, password, fetch: onFetch ?? fetch }); }
+    catch (e) {
+      if (e.code === 'badAnswer') throw err('el PC no es el del código', { code: 'badAnswer' });
+      if (e.code === 'offline') throw err('el PC no responde', { status: 0, offline: true });
+      throw err(e.message, { status: e.status, reason: e.reason });
     }
-    return { id: data.id, key, base, skew, online: false, ctrl: null, pc: ok.pc };
+    return { id: r.id, key: r.key, base, skew: r.skew, online: false, ctrl: null, pc: r.info?.pc ?? r.pc };
   }
   return {
     on(event, fn) { if (!listeners.has(event)) listeners.set(event, new Set()); listeners.get(event).add(fn); return () => listeners.get(event)?.delete(fn); },
@@ -98,8 +90,9 @@ export function createPhone({ name = 'Móvil de prueba', kind = 'phone', passwor
         if (!res.ok) throw err(h.error ?? `error ${res.status}`, { status: res.status });
         // The short code tied to the PC's key (3.5.1): an older answer, or one changed on the way, only with the QR.
         if (!(Number(h.short) >= 3)) throw err('ese Orb es de una versión anterior: enlaza con su QR');
-        if (fp && String(fp).toLowerCase() !== String(h.fp ?? '').toLowerCase()) throw err('la huella no coincide: no lo enlaces');
         urls = [base]; pcPub = C.b64.dec(h.pc); secret = code; via = 'code3';
+        // The fingerprint is worked out from the key received (never the other side's word) and compared with the PC's.
+        if (fp && String(fp).toLowerCase() !== C.fingerprint(pcPub)) throw err('la huella no coincide: no lo enlaces');
       }
       const p = await pairAt(urls[0], pcPub, secret, via);
       peers.set(p.id, p);

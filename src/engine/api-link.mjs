@@ -14,13 +14,11 @@ export function linkMethods({ emit, remoteRef }) {
       return remoteRef.current.status();
     },
     // The ways in: home Wi-Fi and/or Tailscale (the servers reopen with the new choice).
-    // 3.5.1: lanHttp: browsers may link over the home Wi-Fi in plain http (off by default); preview: what notifications
-    // show on a locked phone ('all', 'chat' or 'none').
-    'remote.configure': async ({ wifi, tailscale, lanHttp, preview }) => {
+    // preview (3.5.1): what notifications show on a locked phone ('all', 'chat' or 'none').
+    'remote.configure': async ({ wifi, tailscale, preview }) => {
       const patch = {};
       if (typeof wifi === 'boolean') patch.wifi = wifi;
       if (typeof tailscale === 'boolean') patch.tailscale = tailscale;
-      if (typeof lanHttp === 'boolean') patch.lanHttp = lanHttp;
       if (preview !== undefined) patch.preview = oneOf(preview, PREVIEWS, 'avisos');
       if (wifi === undefined && tailscale === undefined) { const c = saveConfig({ mobile: patch }); emit('config:changed', c); return remoteRef.current.status(); }
       const c = saveConfig({ mobile: patch }); emit('config:changed', c);

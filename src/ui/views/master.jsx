@@ -1,7 +1,8 @@
 // 3.8: the master password in the window. MasterCreate: the welcome's step after the folder, and the one screen an Orb
 // updated to 3.8 shows once (it cannot be skipped). MasterLocked: this PC cannot open Orb's keys by itself (another PC,
-// another Windows user). The dialog that asks for it before a guarded action (registered with lib/core-access.js), the
-// card of Ajustes › Datos (change it, «He olvidado la contraseña») and a connector's keys.
+// another Windows user) or its file is missing. The dialog that asks for it before a guarded action (registered with
+// lib/core-access.js), the card of Ajustes › Datos (change it, «He olvidado la contraseña»: with the backups' recovery
+// code, or «Borrar secretos y empezar de cero») and a connector's keys.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { KeyRound, LockKeyhole, TriangleAlert, ArrowRight } from 'lucide-react';
@@ -9,13 +10,13 @@ import { Robot } from '@/components/robot.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
 import { Checkbox } from '@/components/ui/overlay.jsx';
-import { form } from '@/components/dialogs.jsx';
+import { form, choose } from '@/components/dialogs.jsx';
 import { call, bridge, getState, setState } from '@/lib/store.js';
-import { setMasterAsker, keepUnlock, dropUnlock, unlockCore, passwordStrength } from '@/lib/core-access.js';
+import { setMasterAsker, keepUnlock, dropUnlock, unlockCore, passwordStrength, MASTER_MIN } from '@/lib/core-access.js';
 import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
 import { errorText, cn } from '@/lib/utils.js';
 
-const MIN = 8;
+const MIN = MASTER_MIN;
 const BAR = ['bg-destructive', 'bg-destructive', 'bg-warning', 'bg-success', 'bg-success'];
 
 // The new password twice, its strength and, when asked, the box «Entiendo que…».
@@ -82,37 +83,68 @@ export function MasterCreate({ onDone, upgrade = false }) {
   );
 }
 
-// The forgotten password: a new one, after saying what it does (wipe: this PC cannot open the keys by itself).
-export async function forgotFlow({ wipe = false } = {}) {
-  const r = await form(tNow('master.forgotTitle'), {
-    description: tNow(wipe ? 'master.forgotDescWipe' : 'master.forgotDesc'),
-    initial: { next: '', again: '', ack: false },
-    body: (v, set) => <NewPassword v={v} set={set} ack={tNow('master.forgotAck')} autoFocus />,
+// «He olvidado la contraseña» with the backups' recovery code: the secrets stay (a new data key), every phone is unlinked.
+async function forgotWithCode() {
+  return form(tNow('master.forgotTitle'), {
+    description: tNow('master.forgotDesc'),
+    initial: { code: '', next: '', again: '', ack: false },
+    body: (v, set) => (<>
+      <Field label={tNow('master.forgotCode')}><Input autoFocus autoComplete="off" spellCheck={false} autoCapitalize="characters" className="font-mono" value={v.code} onChange={(e) => set({ code: e.target.value })} placeholder="XXXX-XXXX-…" data-testid="master-code" /></Field>
+      <NewPassword v={v} set={set} ack={tNow('master.forgotAck')} />
+    </>),
     ok: tNow('master.forgotOk'),
-    onOk: async (v) => { if (!ready(v)) throw new Error(tNow(v.next !== v.again ? 'master.mismatch' : 'master.fillAll')); return call('master.forgot', { password: v.next, confirm: true }); }
+    onOk: async (v) => { if (!v.code.trim() || !ready(v)) throw new Error(tNow(v.next !== v.again ? 'master.mismatch' : 'master.fillAll')); return call('master.forgot', { code: v.code, password: v.next, confirm: true }); }
   });
+}
+// «Borrar secretos y empezar de cero»: without the code (or on a PC that cannot open them). Backups are never touched.
+async function resetFlow() {
+  return form(tNow('master.reset'), {
+    description: tNow('master.resetDesc'),
+    initial: { next: '', again: '', ack: false },
+    body: (v, set) => <NewPassword v={v} set={set} ack={tNow('master.resetAck')} autoFocus />,
+    ok: tNow('master.resetOk'),
+    onOk: async (v) => { if (!ready(v)) throw new Error(tNow(v.next !== v.again ? 'master.mismatch' : 'master.fillAll')); return call('master.reset', { password: v.next, confirm: true }); }
+  });
+}
+// canForget: this PC can keep the secrets (it opened them and has a recovery code); otherwise only starting from scratch.
+export async function forgotFlow({ canForget = false } = {}) {
+  let r = null;
+  if (!canForget) r = await resetFlow();
+  else {
+    const how = await choose(tNow('master.forgot'), tNow('master.forgotChoose'), [
+      { value: 'code', label: tNow('master.forgotWithCode'), hint: tNow('master.forgotWithCodeHint') },
+      { value: 'reset', label: tNow('master.reset'), hint: tNow('master.resetHint'), variant: 'danger' }
+    ], { testid: 'master-forgot-choice' });
+    if (how === 'code') r = await forgotWithCode();
+    else if (how === 'reset') r = await resetFlow();
+  }
   if (r?.unlock) keepUnlock(r);
   return r;
 }
 
-export function MasterLocked({ onDone }) {
+// This PC cannot open the keys by itself (the password opens them), or the password's file is missing (lost: no
+// password to type; the recovery code, or starting from scratch).
+export function MasterLocked({ onDone, state = null }) {
   const t = useT();
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const lost = Boolean(state?.lost);
   const submit = async (e) => {
     e.preventDefault(); setBusy(true);
     try { keepUnlock(await call('master.unlock', { password })); onDone?.(); }
     catch (error) { toast.error(errorText(error)); setBusy(false); }
   };
-  const forgot = async () => { if (await forgotFlow({ wipe: true })) onDone?.(); };
+  const forgot = async () => { if (await forgotFlow({ canForget: Boolean(state?.canForget) })) onDone?.(); };
   return (
     <div className="brand-sky flex h-full overflow-auto px-6 pt-24 pb-6">
       <form onSubmit={submit} className="bg-card/95 text-card-foreground m-auto grid w-full max-w-[420px] gap-4 rounded-3xl border border-white/40 p-8 shadow-2xl backdrop-blur" data-testid="master-locked">
-        <div className="-mt-20 flex justify-center"><Robot size={110} mood={busy ? 'thinking' : 'idle'} /></div>
-        <div className="text-center"><h1 className="text-xl">{t('master.lockedTitle')}</h1><p className="text-muted-foreground mt-2 text-sm leading-relaxed">{t('master.lockedBody')}</p></div>
-        <Field label={t('master.password')}><Input type="password" autoComplete="current-password" autoFocus value={password} onChange={(e) => setPassword(e.target.value)} data-testid="master-password" /></Field>
-        <Button type="submit" size="lg" disabled={!password || busy}>{busy ? <Spinner className="border-white/40 border-t-white" /> : <LockKeyhole />}{t('master.unlock')}</Button>
-        <Button type="button" variant="ghost" size="sm" onClick={forgot}>{t('master.forgot')}</Button>
+        <div className="-mt-20 flex justify-center"><Robot size={110} mood={busy ? 'thinking' : lost ? 'worried' : 'idle'} /></div>
+        <div className="text-center"><h1 className="text-xl">{t(lost ? 'master.lostTitle' : 'master.lockedTitle')}</h1><p className="text-muted-foreground mt-2 text-sm leading-relaxed">{t(lost ? 'master.lostBody' : 'master.lockedBody')}</p></div>
+        {lost ? null : (<>
+          <Field label={t('master.password')}><Input type="password" autoComplete="current-password" autoFocus value={password} onChange={(e) => setPassword(e.target.value)} data-testid="master-password" /></Field>
+          <Button type="submit" size="lg" disabled={!password || busy}>{busy ? <Spinner className="border-white/40 border-t-white" /> : <LockKeyhole />}{t('master.unlock')}</Button>
+        </>)}
+        <Button type="button" variant={lost ? 'default' : 'ghost'} size="sm" onClick={forgot} data-testid="master-forgot">{t('master.forgot')}</Button>
       </form>
     </div>
   );
@@ -149,7 +181,7 @@ export function MasterCard() {
     });
     if (r?.unlock) { keepUnlock(r); toast.success(t('master.changed')); load(); }
   };
-  const forgot = async () => { if (await forgotFlow()) load(); };
+  const forgot = async () => { if (await forgotFlow({ canForget: st.canForget })) load(); };
   const when = st.changedAt ? new Date(st.changedAt).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }) : null;
   return (
     <Card data-testid="master-card">

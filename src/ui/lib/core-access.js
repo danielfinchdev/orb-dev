@@ -19,7 +19,7 @@ export const dropUnlock = () => { held = null; };
 // Still good for a few seconds more (the call that uses it must arrive in time).
 export const heldUnlock = (now = Date.now()) => (held && held.until - 5000 > now ? held.unlock : null);
 
-// action: 'open' | 'restore' | 'backupFolder' | 'legacy' | 'secrets' | 'unlink'.
+// action: 'open' | 'restore' | 'backupFolder' | 'recovery' | 'legacy' | 'secrets' | 'connector' | 'protected' | 'unlink'.
 export async function unlockCore(action) {
   const have = heldUnlock();
   if (have) return have;
@@ -27,8 +27,10 @@ export async function unlockCore(action) {
   return keepUnlock(await asker(action));
 }
 
+// The master password's shortest length (src/core/master.mjs › MIN_LENGTH; the engine checks it too).
+export const MASTER_MIN = 10;
 // 0 (too short) … 4 (strong): length first, then kinds of characters, and a few common patterns count less.
-export function passwordStrength(password, min = 8) {
+export function passwordStrength(password, min = MASTER_MIN) {
   const p = String(password ?? '');
   const n = [...p].length;
   if (n < min) return 0;

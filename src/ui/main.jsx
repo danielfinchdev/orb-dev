@@ -4,7 +4,7 @@ import './lib/web-bridge.js'; // then: in a phone's browser (or the app) it prov
 import './app.css';
 // 3.6: the Android app's «glass» look, only in the Android build (the other builds drop this line and its CSS).
 if (import.meta.env.MODE === 'android') (await import('./lib/glass.js')).enableGlass();
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Toaster } from 'sonner';
 import { notify } from '@/lib/notify.js';
@@ -12,7 +12,7 @@ import { Menu, Smartphone, ScanLine, Link2, RotateCw, FolderOpen, Download, KeyR
 import { Button } from '@/components/ui/button.jsx';
 import { Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
 import { MobileTabs, MoreView } from '@/components/mobile-tabs.jsx';
-import { TooltipProvider } from '@/components/ui/overlay.jsx';
+import { TooltipProvider, Checkbox } from '@/components/ui/overlay.jsx';
 import { DialogHost } from '@/components/dialogs.jsx';
 import { ImagePreviewHost } from '@/components/image-viewer.jsx';
 import { Sidebar } from '@/components/sidebar.jsx';
@@ -142,6 +142,7 @@ function Root() {
   const [migration, setMigration] = useState(null);
   const [core, setCore] = useState(null);
   const [layout, setLayout] = useState(null);
+  const [masterState, setMasterState] = useState(null);
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -159,8 +160,8 @@ function Root() {
           // 3.8: the data of 3.7 could not be updated: Orb does not run on them (this PC only).
           if (!bridge.mobile) { const m = await bridge.call('app.migrationState'); if (m?.failed) { setMigration(m); return alive && setPhase('migration'); } }
           // 3.8: the master password: made once (an Orb updated to 3.8 has none yet), or typed when this PC cannot open
-          // Orb's keys by itself (this PC only).
-          if (!bridge.mobile) { const ms = await bridge.call('master.state'); if (!ms?.exists) return alive && setPhase('master'); if (ms.locked) return alive && setPhase('unlock'); }
+          // Orb's keys by itself, or its file is missing (this PC only).
+          if (!bridge.mobile) { const ms = await bridge.call('master.state'); if (!ms?.exists) return alive && setPhase('master'); if (ms.locked || ms.lost) { setMasterState(ms); return alive && setPhase('unlock'); } }
           // 3.8: folders of an earlier Orb at the top of the workspace that the user has not decided about (this PC only).
           if (!bridge.mobile) { const lp = await bridge.call('app.layoutPlan'); if (lp?.pending) { setLayout(lp); return alive && setPhase('layout'); } }
           await refresh();
@@ -239,7 +240,7 @@ function Root() {
   if (phase === 'update') return <>{strip}<UpdateNeeded info={getState().info} /></>;
   if (phase === 'core') return <>{strip}<CoreMissing state={core} /></>;
   if (phase === 'master') return <>{strip}<MasterCreate upgrade onDone={() => location.reload()} /></>;
-  if (phase === 'unlock') return <>{strip}<MasterLocked onDone={() => location.reload()} /></>;
+  if (phase === 'unlock') return <>{strip}<MasterLocked state={masterState} onDone={() => location.reload()} /></>;
   if (phase === 'layout') return <>{strip}<LayoutReview plan={layout} onDone={() => location.reload()} /></>;
   if (phase === 'migration') return <>{strip}<MigrationFailed state={migration} /></>;
   if (phase === 'error') return <div className="grid h-full place-items-center p-8 text-center">{strip}<div><Robot size={90} mood="worried" /><h1 className="mt-4 text-xl">{t('app.errorTitle')}</h1><p className="text-muted-foreground mt-1 max-w-md text-sm">{error}</p></div></div>;
@@ -286,16 +287,26 @@ function MigrationFailed({ state }) {
 }
 
 // 3.8: the PC's master password, the second step of linking (the app after scanning, a browser opened from the QR). It
-// travels inside the sealed proof of the pairing and is never kept on the phone.
-function PairPassword({ name, busy, error, onSubmit, onBack = null }) {
+// never leaves the phone (src/core/mobile-crypto.mjs › linkDevice proves it is known) and is never kept. fp: the PC's
+// fingerprint, to compare with the PC's screen (with a typed short code it must be confirmed first: confirmFp).
+function PairPassword({ name, fp = null, confirmFp = false, busy, error, onSubmit, onBack = null }) {
   const t = useT();
   const [password, setPassword] = useState('');
+  const [sure, setSure] = useState(!confirmFp);
+  const field = useMemo(() => `p${Math.random().toString(36).slice(2)}`, []); // no saved password offered for this address
   return (
-    <form className="grid gap-3 text-left" onSubmit={(e) => { e.preventDefault(); if (password) onSubmit(password); }} data-testid="pair-password">
+    <form className="grid gap-3 text-left" onSubmit={(e) => { e.preventDefault(); if (password && sure) onSubmit(password); }} data-testid="pair-password" autoComplete="off">
       <h1 className="text-center text-xl">{name ? t('app.linkPassTitleNamed', { name }) : t('app.linkPassTitle')}</h1>
+      {fp ? (
+        <div className="bg-muted/60 grid gap-1 rounded-xl px-3 py-2 text-center" data-testid="pair-fp">
+          <span className="font-mono text-sm font-medium">{t('app.linkFp', { fp })}</span>
+          <span className="text-muted-foreground text-xs">{t('app.linkFpCheck')}</span>
+          {confirmFp ? <label className="flex cursor-pointer items-center justify-center gap-2 text-[13px]"><Checkbox checked={sure} onCheckedChange={(c) => setSure(c === true)} data-testid="pair-fp-ok" />{t('app.linkFpConfirm')}</label> : null}
+        </div>
+      ) : null}
       <p className="text-muted-foreground text-center text-sm">{t('app.linkPassBody')}</p>
-      <Input type="password" autoComplete="current-password" autoFocus aria-label={t('app.linkPassLabel')} placeholder={t('app.linkPassLabel')} value={password} onChange={(e) => setPassword(e.target.value)} enterKeyHint="go" data-testid="pair-password-input" />
-      <Button type="submit" size="lg" disabled={busy || !password}>{busy ? <Spinner /> : <KeyRound />}{t('app.linkPassGo')}</Button>
+      <Input type="password" name={field} autoComplete="off" autoFocus={!confirmFp} disabled={!sure} aria-label={t('app.linkPassLabel')} placeholder={t('app.linkPassLabel')} value={password} onChange={(e) => setPassword(e.target.value)} enterKeyHint="go" data-testid="pair-password-input" />
+      <Button type="submit" size="lg" disabled={busy || !password || !sure}>{busy ? <Spinner /> : <KeyRound />}{t('app.linkPassGo')}</Button>
       {onBack ? <Button type="button" variant="ghost" size="sm" onClick={onBack}><ArrowLeft />{t('app.linkBack')}</Button> : null}
       {error ? <p className="text-destructive text-center text-sm" role="alert">{error}</p> : null}
     </form>
@@ -307,6 +318,7 @@ function BrowserPair() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(getState().info?.pairError ?? '');
   const [gone, setGone] = useState(false);
+  const link = getState().info?.pairLink;
   const submit = async (password) => {
     setBusy(true); setError('');
     try { await bridge.pairPending(password); location.reload(); }
@@ -317,7 +329,9 @@ function BrowserPair() {
     <div className="brand-sky grid h-full place-items-center overflow-y-auto p-6" data-testid="browser-pair">
       <div className="bg-card/95 grid w-full max-w-sm gap-3 rounded-3xl p-7 shadow-2xl">
         <div className="-mt-16 flex justify-center"><Robot size={110} mood={busy ? 'thinking' : 'idle'} /></div>
-        {gone ? <p className="text-destructive text-center text-sm" role="alert">{error}</p> : <PairPassword name={getState().info?.pairLink?.name} busy={busy} error={error} onSubmit={submit} />}
+        {/* 3.8: never the master password in a page that came without encryption (plain http on the Wi-Fi). */}
+        {link?.insecure ? <p className="text-destructive text-center text-sm" role="alert" data-testid="pair-http">{t('app.linkHttp')}</p>
+          : gone ? <p className="text-destructive text-center text-sm" role="alert">{error}</p> : <PairPassword name={link?.name} fp={link?.fp} busy={busy} error={error} onSubmit={submit} />}
         <p className="text-muted-foreground flex items-center justify-center gap-1.5 text-xs"><Smartphone className="size-3.5" />{t('app.pairPrivate')}</p>
       </div>
     </div>
@@ -332,10 +346,10 @@ function AppLink() {
   const [error, setError] = useState(getState().info?.pairError ?? '');
   const [manual, setManual] = useState(false);
   const [form, setForm] = useState({ text: '', code: '', address: '' });
-  const [link, setLink] = useState(null); // { input, name }: read, waiting for the password
+  const [link, setLink] = useState(null); // { input, name, fp, short }: read, waiting for the password
   const run = async (get) => {
     setBusy(true); setError('');
-    try { const input = await get(); if (input == null) return; const p = await bridge.checkLink(input); setLink({ input, name: p?.name ?? null }); }
+    try { const input = await get(); if (input == null) return; const p = await bridge.checkLink(input); setLink({ input, name: p?.name ?? null, fp: p?.fp ?? null, short: Boolean(p?.short) }); }
     catch (e) { setError(String(e?.message ?? e)); }
     finally { setBusy(false); }
   };
@@ -350,7 +364,7 @@ function AppLink() {
     <div className="brand-sky grid h-full place-items-center overflow-y-auto p-6" data-testid="app-link">
       <div className="bg-card/95 grid w-full max-w-sm gap-3 rounded-3xl p-7 shadow-2xl">
         <div className="-mt-16 flex justify-center"><Robot size={110} mood={busy ? 'thinking' : 'idle'} /></div>
-        <PairPassword name={link.name} busy={busy} error={error} onSubmit={pair} onBack={() => { setLink(null); setError(''); }} />
+        <PairPassword key={link.fp ?? ''} name={link.name} fp={link.fp} confirmFp={link.short} busy={busy} error={error} onSubmit={pair} onBack={() => { setLink(null); setError(''); }} />
       </div>
     </div>
   );

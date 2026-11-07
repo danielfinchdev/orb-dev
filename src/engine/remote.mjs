@@ -18,7 +18,8 @@ import { ctx, tr } from '../core/context.mjs';
 import { oneLine } from '../core/safety.mjs';
 import { quickRun } from '../agents/index.mjs';
 import { IS_WIN } from '../agents/common.mjs';
-import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal, open, sealText, openText, openBytes, AAD, CLOCK_SKEW_MS, shortSecret } from '../core/mobile-crypto.mjs';
+import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal, open, sealText, openText, openBytes, AAD, CLOCK_SKEW_MS, shortSecret, sharedSecret, pakeTranscript, pakeKey, pakeMac, MAC_PHONE, macPc, sameBytes, pairKdfOk } from '../core/mobile-crypto.mjs';
+import { PAIR_ID } from '../core/master.mjs';
 import { newVapidKeys, checkSubscription, sendPush } from './webpush.mjs';
 import { PROTOCOL, MIN_PROTOCOL, PAIR_PROTOCOL, versionOfProtocol, CODE_ALPHABET, shortCodeLabel } from '../core/link-payload.mjs';
 import { REMOTE_METHODS, principalOf } from '../core/permissions.mjs';
@@ -149,15 +150,16 @@ export const localName = (host = os.hostname()) => { const h = String(host ?? ''
 const isLoopback = (ip) => /^(127\.|::1$)/.test(String(ip ?? '').replace(/^::ffff:/, ''));
 // 3.5.1: whether a pairing comes from a browser's page over plain http on the home network: not a program (no Origin: another
 // Orb), not the Android app, not this PC (or Tailscale's https, which arrives through loopback), not the
-// Tailscale address; and the user did not allow it (lanHttp).
-export function plainHttpBrowser({ origin, app = false, localAddress, routes = [], lanHttp = false }) {
-  if (lanHttp || !origin || app) return false;
+// Tailscale address. 3.8: never (the setting that allowed it is gone: the master password is typed in that page).
+export function plainHttpBrowser({ origin, app = false, localAddress, routes = [] }) {
+  if (!origin || app) return false;
   const local = String(localAddress ?? '').replace(/^::ffff:/, '');
   if (isLoopback(local)) return false;
   const r = (routes ?? []).find((x) => x.address === local);
   return !(r && r.kind === 'tailscale');
 }
 const parseMeta = (d) => { try { return d?.meta ? JSON.parse(d.meta) : {}; } catch { return {}; } };
+const metaVOf = (d) => Number(parseMeta(d).v ?? 2);
 // 3.5: the Android app's page (Capacitor) is not served by this PC but by the app itself (http://localhost): it may call
 // the API, where everything is still sealed with the phone's own key, and its WebView has to be told so (CORS).
 const APP_ORIGINS = new Set(['http://localhost', 'https://localhost', 'capacitor://localhost']);
@@ -282,6 +284,14 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   const pcFingerprint = () => own().fp;
   // Phones paired by 2.3.2 and older (a reusable token, no key of their own) cannot use the encrypted channel: they go.
   board.run('DELETE FROM devices WHERE public_key IS NULL');
+  // 3.8: a phone or browser linked before 3.8 never proved the master password: at the first start of 3.8 they all go,
+  // and the owner is told to link them again (once).
+  if (!board.setting('relink_38')) {
+    const old = board.all('SELECT id, meta FROM devices').filter((d) => metaVOf(d) < PAIR_PROTOCOL);
+    for (const d of old) board.run('DELETE FROM devices WHERE id = ?', d.id);
+    if (old.length) { board.event(null, 'usuario', 'device.revokedAll', String(old.length)); board.notice(tr('msg.link.relink38', { n: old.length }), 'warning'); log(`3.8: ${old.length} dispositivo(s) enlazados antes de 3.8 desenlazados`); }
+    board.setting('relink_38', new Date().toISOString());
+  }
 
   const send = (res, status, body, type = 'application/json; charset=utf-8', extra = {}) => {
     res.writeHead(status, { ...HEADERS, 'Content-Type': type, 'Cache-Control': 'no-store', ...extra });
@@ -462,8 +472,14 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     return send(res, 200, { v: PROTOCOL, short: 3, pc: b64.enc(own().pub), fp: pcFingerprint(), name: orbName(), urls: (state.routes ?? []).map((r) => r.url) });
   }
 
-  // Pairing: the phone sends its public key and a proof sealed with the key of this QR (the one-time code never travels).
-  // 3.5: or with the key of the short code typed by hand (via: 'code'). Phones and browsers alike.
+  // Linking (3.8, two steps; src/core/mobile-crypto.mjs › linkDevice has the phone's side). Phones and browsers alike.
+  //   start   the phone sends its public key and a proof sealed with the key of this QR (the one-time code never travels),
+  //           or of the short code typed by hand (via: 'code3'); the PC answers, sealed with that same key, a session id
+  //           and the salt and cost of the master password's verifier.
+  //   finish  the phone's MAC over the exchange, keyed with the code, ECDH(phone, PC) and ECDH(password key, PC): right
+  //           only when it knew the password, which never travels. The PC answers with its own MAC (only the real PC can).
+  // A wrong password does not use the code up: five per code, then a new code; and the waits of src/core/master.mjs (the
+  // 'pair' channel) for all of them together.
   async function pair(req, res) {
     const who = ipOf(req) || '?';
     const recent = (failures.get(who) ?? []).filter((t) => Date.now() - t < 10 * 60_000);
@@ -477,64 +493,80 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     };
     let body; try { body = await readJson(req, 10_000); } catch { return fail(); }
     if (!pairing || Date.now() > pairing.expires || !body || typeof body.pub !== 'string') return fail();
-    // 3.5.1: a page served over the home Wi-Fi in plain http could have been changed on the way: a browser links only over
-    // https (Tailscale), the Tailscale address or this PC itself, unless the user allowed it (Ajustes › Magic Link). The
+    // 3.5.1: a page served over the home Wi-Fi in plain http could have been changed on the way (and, 3.8, the master
+    // password is typed in it): a browser links only over https (Tailscale), the Tailscale address or this PC itself. The
     // Android app brings its own code and checks the key, so it may.
     if (plainBrowser(req)) return send(res, 403, { error: tr('msg.link.httpBrowser') });
     let devPub; try { devPub = b64.dec(body.pub); } catch { return fail(); }
     if (devPub.length !== 32) return fail();
-    // The short code: code3 (3.5.1, stretched and tied to this key); code (3.5.0) still opens, for older apps.
-    const secretOf = body.via === 'code3' ? pairing.short3 : body.via === 'code' ? `corto:${pairing.short}` : pairing.code;
-    let proof; try { proof = open(pairingKey(own().priv, devPub, secretOf), body.proof, AAD.pair); } catch { return fail(); }
+    if (body.step === 'finish') return finishPair(res, body, devPub, fail, who);
+    // The short code: code3 (3.5.1, stretched and tied to this key).
+    const secretOf = body.via === 'code3' ? pairing.short3 : pairing.code;
+    const codeKey = pairingKey(own().priv, devPub, secretOf);
+    let proof; try { proof = open(codeKey, body.proof, AAD.pair); } catch { return fail(); }
     if (!proof || proof.pub !== body.pub) return fail();
     // The QR was right but the phone's clock is off: it tries again with the PC's time (the QR is not used up).
     if (!(Math.abs(Date.now() - Number(proof.t)) <= CLOCK_SKEW_MS)) return clockOff(res);
     // 3.6: a device too old for this Orb is told to update first (the QR is not used up). 3.8: linking needs protocol 4
-    // (the master password); an app of 3.7 sends none and is told to update.
-    if (!(Number(proof.v) >= PAIR_PROTOCOL)) return send(res, 426, { error: tr('msg.link.updatePair', { need: versionOfProtocol(PAIR_PROTOCOL) }), update: 'pair' });
+    // and its two steps (the master password); an app of 3.7 is told to update.
+    if (!(Number(proof.v) >= PAIR_PROTOCOL) || body.step !== 'start') return send(res, 426, { error: tr('msg.link.updatePair', { need: versionOfProtocol(PAIR_PROTOCOL) }), update: 'pair' });
     // 3.5.1: what the device is was chosen when the QR was made; a device that says otherwise is refused (the QR stays).
     // 3.8: another Orb is never linked.
     const kind = kindForPairing(pairing.device, typeof proof.kind === 'string' ? proof.kind : kindOf({ name: proof.name }));
     if (!kind) return send(res, 403, { error: tr('msg.link.notForOrb') });
-    // 3.8: the master password, inside the proof sealed with the code's key (never in clear, never written down). A wrong
-    // one does not use the code up: five per code, then a new code; and the waits of src/core/master.mjs for all of them.
+    const m = ctx.master;
+    if (!m?.hasPassword()) return send(res, 403, { error: tr('msg.link.noMaster'), reason: 'noMaster' });
+    const until = m.waitOf('pair');
+    if (until) return send(res, 429, { error: tr('msg.link.passWait', { s: Math.max(1, Math.ceil((until - Date.now()) / 1000)) }), reason: 'wait' });
+    let verifier = null; try { verifier = m.get(PAIR_ID); } catch { verifier = null; }
+    if (!verifier?.pub || !pairKdfOk(verifier.kdf)) return send(res, 403, { error: tr('msg.link.noVerifier'), reason: 'noVerifier' });
+    // One exchange per device key, a few at a time, while the code lives.
+    const sid = crypto.randomBytes(16).toString('base64url');
+    const kdf = { N: verifier.kdf.N, r: verifier.kdf.r, p: verifier.kdf.p, salt: verifier.kdf.salt };
+    for (const [k, x] of pairing.pending) if (x.pub === body.pub) pairing.pending.delete(k);
+    if (pairing.pending.size >= 8) pairing.pending.delete(pairing.pending.keys().next().value);
+    pairing.pending.set(sid, { pub: body.pub, via: body.via === 'code3' ? 'code3' : 'qr', secret: secretOf, kdf, verifier: verifier.pub, kind, name: proof.name, v: proof.v });
+    return send(res, 200, { sid, box: seal(codeKey, { sid, kdf }, AAD.pairChallenge) });
+  }
+
+  async function finishPair(res, body, devPub, fail, who) {
     const issued = pairing;
-    const pass = await passwordOk(typeof proof.master === 'string' ? proof.master : '');
-    if (pass) {
-      if (pass.reason === 'password' && pairing === issued && ++issued.passFails >= PAIR_PASSWORD_TRIES) { pairing = null; log('enlace: demasiadas contraseñas incorrectas; código anulado'); return send(res, 403, { error: tr('msg.link.passTooMany'), reason: 'newCode' }); }
-      if (pass.reason === 'password') return send(res, 403, { error: tr('msg.link.passWrong', { n: Math.max(1, PAIR_PASSWORD_TRIES - issued.passFails) }), reason: 'password', left: Math.max(1, PAIR_PASSWORD_TRIES - issued.passFails) });
-      return send(res, pass.status, { error: pass.error, reason: pass.reason });
+    const x = typeof body.sid === 'string' ? issued.pending.get(body.sid) : null;
+    if (!x || x.pub !== body.pub) return fail();
+    issued.pending.delete(body.sid); // one try per exchange
+    let mac; try { mac = b64.dec(body.mac); } catch { mac = null; }
+    let K = null;
+    try {
+      const transcript = pakeTranscript({ via: x.via, devPub, pcPub: own().pub, sid: body.sid, kdf: x.kdf });
+      K = pakeKey({ secret: x.secret, dhDevice: sharedSecret(own().priv, devPub), dhPassword: sharedSecret(own().priv, b64.dec(x.verifier)), transcript });
+    } catch { return fail(); }
+    const r = await ctx.master.attempt('pair', () => sameBytes(mac, pakeMac(K, MAC_PHONE)));
+    if (!r.ok) {
+      if (r.reason === 'wait') return send(res, 429, { error: tr('msg.link.passWait', { s: Math.max(1, Math.ceil((Date.parse(r.until) - Date.now()) / 1000)) }), reason: 'wait' });
+      if (r.reason === 'tries') return send(res, 503, { error: tr('msg.master.tries'), reason: 'tries' });
+      if (pairing === issued && ++issued.passFails >= PAIR_PASSWORD_TRIES) { pairing = null; log('enlace: demasiadas contraseñas incorrectas; código anulado'); return send(res, 403, { error: tr('msg.link.passTooMany'), reason: 'newCode' }); }
+      const left = Math.max(1, PAIR_PASSWORD_TRIES - issued.passFails);
+      return send(res, 403, { error: tr('msg.link.passWrong', { n: left }), reason: 'password', left });
     }
     if (pairing !== issued || Date.now() > issued.expires) return fail(); // used or gone while the password was checked
     const { route } = pairing;
     pairing = null; // one use
     const id = crypto.randomUUID();
-    const name = oneLine(typeof proof.name === 'string' && proof.name ? proof.name : tr('msg.remote.defaultName'), 60);
+    const name = oneLine(typeof x.name === 'string' && x.name ? x.name : tr('msg.remote.defaultName'), 60);
     board.run('INSERT INTO devices (id, name, token_hash, created_at, last_seen, public_key, route, kind, ip, meta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      id, name, `clave:${id}`, now(), now(), body.pub, route, kind, who, JSON.stringify({ v: Number(proof.v ?? 2) || 2 }));
+      id, name, `clave:${id}`, now(), now(), body.pub, route, x.kind, who, JSON.stringify({ v: Number(x.v) || PAIR_PROTOCOL }));
     board.event(null, 'usuario', 'device.paired', name);
     board.notice(tr('msg.remote.deviceLinked', { name }), 'success');
-    // The answer is sealed with the new session key: the phone checks it really is the PC of the QR. 3.5.1: and with the
-    // code's key too, so a device that got a key from someone in the middle finds out (nobody else has the code).
+    // The PC's MAC proves it is the PC of the code and of the verifier; the answer is sealed with the new session key.
     const key = sessionKey(own().priv, devPub); keys.set(id, key);
     linkChanged();
-    return send(res, 200, { id, box: seal(key, { id, name: ctx.config.assistantName, orb: orbName(), ...versions(), pc: pcFingerprint() }, AAD.paired(id)),
-      confirm: seal(pairingKey(own().priv, devPub, secretOf), { id, pc: pcFingerprint() }, AAD.confirm(id)) });
-  }
-
-  // The master password a linking device sent: null when it is right, else { status, error?, reason }.
-  async function passwordOk(password) {
-    const m = ctx.master;
-    if (!m?.hasPassword()) return { status: 403, error: tr('msg.link.noMaster'), reason: 'noMaster' };
-    const r = await m.verify(password, 'pair');
-    if (r.ok) return null;
-    if (r.reason === 'wait') return { status: 429, error: tr('msg.link.passWait', { s: Math.max(1, Math.ceil((Date.parse(r.until) - Date.now()) / 1000)) }), reason: 'wait' };
-    return { status: 403, reason: 'password' };
+    return send(res, 200, { id, mac: b64.enc(pakeMac(K, macPc(id))), box: seal(key, { id, name: ctx.config.assistantName, orb: orbName(), ...versions(), pc: pcFingerprint() }, AAD.paired(id)) });
   }
 
   // 3.5.1: a request from a browser's page that came over plain http on the home network (not this PC, not Tailscale's
-  // https through loopback, not the Tailscale address), while the user did not allow it.
-  const plainBrowser = (req) => plainHttpBrowser({ origin: req.headers.origin, app: Boolean(appOrigin(req)), localAddress: req.socket?.localAddress, routes: state.routes, lanHttp: ctx.config.mobile?.lanHttp === true });
+  // https through loopback, not the Tailscale address).
+  const plainBrowser = (req) => plainHttpBrowser({ origin: req.headers.origin, app: Boolean(appOrigin(req)), localAddress: req.socket?.localAddress, routes: state.routes });
+
 
   // A picture from the phone (encrypted): checked by its first bytes (not its name), stored in the app's folder, path returned.
   let uploading = 0;
@@ -801,7 +833,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       let pc = null; try { pc = pcFingerprint(); } catch { /* the vault is locked */ }
       return { enabled: Boolean(ctx.config.mobile?.enabled), running: Boolean(state.running), routes: state.routes ?? [], error: state.error ?? null, pc,
         wifi: ctx.config.mobile?.wifi !== false, tailscale: ctx.config.mobile?.tailscale !== false, name: orbName(),
-        lanHttp: ctx.config.mobile?.lanHttp === true, preview: pushPreview(ctx.config),
+        preview: pushPreview(ctx.config),
         devices: board.all('SELECT id, name, created_at, last_seen, route, kind, ip, push IS NOT NULL AS push FROM devices ORDER BY created_at DESC').map((d) => ({ ...d, push: Boolean(d.push) })) };
     },
     // A one-time QR for 5 minutes, for one of the ways in (Wi-Fi or Tailscale). The code and this PC's key travel in the
@@ -815,7 +847,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       const code = crypto.randomBytes(18).toString('base64url');
       const short = Array.from({ length: 8 }, () => CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)]).join('');
       const forKind = PAIR_KINDS.includes(device) ? device : null;
-      pairing = { code, short, short3: shortSecret(short, b64.enc(own().pub)), expires: Date.now() + PAIR_MINUTES * 60_000, route: route.kind, fails: 0, passFails: 0,
+      pairing = { code, short, short3: shortSecret(short, b64.enc(own().pub)), expires: Date.now() + PAIR_MINUTES * 60_000, route: route.kind, fails: 0, passFails: 0, pending: new Map(),
         device: forKind };
       const others = state.routes.filter((r) => r !== route).map((r) => r.url);
       // 3.6 (A11): the name of this computer on the home network (name.local) too, for when the Wi-Fi address changes.
@@ -825,7 +857,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       return { url: `${route.url}#${frag}`, payload: { v: PROTOCOL, urls: [route.url, ...others], pc: b64.enc(own().pub), code, name: orbName(), expiresAt: pairing.expires },
         code: shortCodeLabel(short), address: route.url, expiresAt: pairing.expires, kind: route.kind, secure: route.secure, pc: pcFingerprint(), name: orbName(),
         device: forKind,
-        browserOk: Boolean(route.secure) || route.address === '127.0.0.1' || route.kind === 'tailscale' || ctx.config.mobile?.lanHttp === true };
+        browserOk: Boolean(route.secure) || route.address === '127.0.0.1' || route.kind === 'tailscale' };
     },
     revoke(id) {
       const d = board.one('SELECT * FROM devices WHERE id = ?', String(id)); if (!d) throw new Error(tr('msg.remote.noDevice'));

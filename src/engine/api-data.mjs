@@ -7,6 +7,7 @@ import { readKey } from '../core/home.mjs';
 import * as K from '../core/backup.mjs';
 import { legacyData, deleteLegacyData } from '../core/migrate-38.mjs';
 import { utcToZoned, localDay, ownerTz } from '../core/tz.mjs';
+import { refused } from './api-master.mjs';
 
 const fail = (message) => { const e = new Error(message); e.userFacing = true; throw e; };
 export const DAILY_HOUR = 3;
@@ -70,7 +71,20 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
     'backup.list': async () => (await K.listBackups(folder())).map(({ file, ...b }) => ({ ...b, path: file })),
     // kind: manual (Ajustes › Datos) or preupdate (the app, before installing a new version).
     'backup.now': ({ kind }) => run(['preupdate', 'premigration'].includes(kind) ? kind : 'manual'),
-    'backup.verify': async ({ file, passphrase }) => { const r = await K.verifyBackup(fileOf(file), { secret: secret(), passphrase: pass(passphrase) }); return { ok: true, files: r.files, bytes: r.bytes, created: r.header.created, version: r.header.version }; },
+    // 3.8: guarded (the master password), and a recovery code typed here has the waits of any password: no trying codes.
+    'backup.verify': async ({ file, passphrase }) => {
+      const full = fileOf(file); const p = pass(passphrase);
+      const check = () => K.verifyBackup(full, { secret: secret(), passphrase: p });
+      let r = null;
+      if (!p || !ctx.master) r = await check();
+      else {
+        let error = null;
+        const t = await ctx.master.attempt('recovery', async () => { try { r = await check(); return true; } catch (e) { error = e; return e?.code !== 'wrongPassphrase'; } });
+        if (!t.ok) throw refused(t, { code: true });
+        if (error) throw error;
+      }
+      return { ok: true, files: r.files, bytes: r.bytes, created: r.header.created, version: r.header.version };
+    },
     // The copy is checked and unpacked now; it replaces the data at the next start of the engine (restartNeeded).
     'backup.restore': async ({ file, passphrase }) => {
       const r = await K.stageRestore(ctx.home, fileOf(file), { secret: secret(), passphrase: pass(passphrase) });

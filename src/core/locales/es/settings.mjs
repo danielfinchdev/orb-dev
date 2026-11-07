@@ -311,8 +311,6 @@ export default {
   'settings.parallelChats': 'Conversaciones con Orbe a la vez',
   'settings.parallelChatsHint': 'Cuántas conversaciones contesta Orbe al mismo tiempo (de 1 a 6). Las demás esperan su turno.',
   'guide.readOnly': 'Revisiones y pruebas (solo lectura): {list}',
-  "settings.mobileLanHttp": "Enlazar navegadores por la wifi sin cifrar",
-  "settings.mobileLanHttpHint": "Desactivado es más seguro: alguien en tu wifi podría cambiar la página. La app de Android se enlaza igual.",
   "settings.mobilePreview": "En la pantalla de bloqueo",
   "settings.mobilePreview.chat": "Mostrar el mensaje",
   "settings.mobilePreview.none": "No mostrar nada",

@@ -9,7 +9,7 @@
 // parameters: { channel, device? } or, for an agent, { channel: 'agent', agent, task, conversation }.
 // No engine imports: the MCP processes load this file too.
 import { tr } from './context.mjs';
-import { isRef } from './connector-secrets.mjs';
+import { isRef, touchesKeys } from './connector-secrets.mjs';
 
 export const CHANNELS = ['desktop', 'phone', 'browser', 'agent'];
 const REMOTE = new Set(['phone', 'browser']);
@@ -62,23 +62,29 @@ export const METHODS = Object.freeze({
   // backups
   'backup.status': 'pc', 'backup.list': 'pc', 'backup.now': 'pc', 'backup.verify': 'pc', 'backup.restore': 'pc', 'backup.recovery': 'pc', 'legacy.status': 'pc', 'legacy.delete': 'pc',
   // 3.8: the master password and the connectors' keys
-  'master.state': 'pc', 'master.create': 'pc', 'master.unlock': 'pc', 'master.lock': 'pc', 'master.check': 'pc', 'master.change': 'pc', 'master.forgot': 'pc',
+  'master.state': 'pc', 'master.create': 'pc', 'master.unlock': 'pc', 'master.lock': 'pc', 'master.check': 'pc', 'master.change': 'pc', 'master.forgot': 'pc', 'master.reset': 'pc',
   'secrets.connector': 'pc', 'secrets.saveConnector': 'pc'
 });
 // What a linked phone or browser may call (the rest is this PC's).
 export const REMOTE_METHODS = Object.freeze(new Set(Object.keys(METHODS).filter((m) => METHODS[m] === 'remote')));
 
 // 3.8: what this PC's window may only do right after the master password (a token of 5 minutes, src/engine/api-master.mjs):
-// restoring a backup, deleting the data of Orb 3.7, unlinking a phone, seeing or changing a connector's keys, opening
-// core (main.mjs asks master.check) and, in config.save, choosing where the backups go or writing a connector's keys in
-// clear. Changing the password asks for the current one instead.
-export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector']));
-export function needsUnlock(method, params) {
+// restoring a backup, checking one or making a new recovery code (the code opens the backups, and a check would try codes),
+// deleting the data of Orb 3.7, unlinking a phone, seeing or changing a connector's keys, opening core (main.mjs asks
+// master.check) and, in config.save, choosing where the backups go, writing a connector's keys in clear, changing a
+// connector that has keys (its command, its arguments, its name, removing it or one of its keys) and taking a path off
+// «Cosas que nadie toca». current: the settings now (the engine's), to compare with. Changing the password asks for the
+// current one instead.
+export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.recovery', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector']));
+export function needsUnlock(method, params, current = {}) {
   if (UNLOCK_METHODS.has(method)) return true;
   if (method !== 'config.save') return false;
   const patch = params?.patch ?? {};
   if (patch.backup && typeof patch.backup === 'object' && Object.hasOwn(patch.backup, 'folder')) return true;
-  return Array.isArray(patch.mcpServers) && patch.mcpServers.some((s) => s?.env && typeof s.env === 'object' && Object.values(s.env).some((v) => !isRef(v)));
+  if (Array.isArray(patch.protected) && (current?.protected ?? []).some((x) => !patch.protected.includes(x))) return true;
+  if (!Array.isArray(patch.mcpServers)) return false;
+  if (patch.mcpServers.some((s) => s?.env && typeof s.env === 'object' && Object.values(s.env).some((v) => !isRef(v)))) return true;
+  return touchesKeys(current?.mcpServers ?? [], patch.mcpServers);
 }
 
 // A refused call: 403, with a message the user may read.
