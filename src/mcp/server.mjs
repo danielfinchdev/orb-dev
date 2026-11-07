@@ -23,6 +23,9 @@ useHome(home);
 const { Board, AGENTS, STATUSES, assistantName, userName, ofUser } = await import('../core/board.mjs');
 const { readLog, writeLog, logFiles, findLog } = await import('../engine/logs.mjs');
 const board = new Board(undefined, { noKey: true }); // the MCP never holds the approval secret
+// 3.8: never on data of 3.7 the 3.8 migration could not update (other users' rows; the engine does not run on them either).
+{ const { isLegacy } = await import('../core/migrate-38.mjs'); if (isLegacy(board.db)) { process.stderr.write(`${tr('data.migration38.blocked')}
+`); process.exit(1); } }
 
 // A worker is who Orb signed it as (agent, task and conversation, see agentToken in engine/sessions.mjs), not what its
 // environment claims: an agent that starts this server itself cannot pose as another agent, another task or the user.

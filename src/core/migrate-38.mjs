@@ -1,24 +1,36 @@
 // 3.8: the one-time move of a 3.5–3.7 data folder to Orb 3.8, which has no bots, replicas, links between Orbs, Orb
-// Terminal, several users, lent accounts or shared projects. Run by db.mjs when this home's database opens (any process).
-//   1. A copy of the database as it was (.orb/datos/orb-pre-3.8.db) and a readable archive (.orb/archivo-3.7/): the bots
-//      (rows as JSON, their conversations, their folder and trash), each other user's data, the removed settings and the
-//      sealed enlaces.json. Nothing is deleted before both are written; if they cannot be, the next start tries again.
-//   2. orb.json: the owner's own settings (name, time zone, brain, phone previews) move in; what 3.8 no longer has goes.
-//   3. One transaction: the replicas' triggers first, then the bots' and other users' rows, then the tables and indexes,
-//      the devices' old columns and the old settings; the owner's rows lose their person (person_id NULL, dropped in 3.9)
-//      and the chat-list marks take the fixed key 'owner'. The setting «migrated_3_8» marks it done.
-// Idempotent: an interrupted run starts again from the top (the archive is rewritten, folders already moved stay moved).
+// Terminal, several users, lent accounts or shared projects. Run by db.mjs when this home's database opens (any process;
+// one at a time: .orb/datos/migracion-3.8.lock).
+//   1. orb.json as it was (archivo-3.7/orb-3.7.json, written once: everything else is built from it) and a checked copy of
+//      the database (.orb/datos/orb-pre-3.8.db: VACUUM INTO a .tmp, quick_check, fsync, rename).
+//   2. One transaction: the readable archive (.orb/archivo-3.7/: the bots, each other user's data, the removed settings),
+//      then the replicas' triggers, the bots' and other users' rows, the tables and indexes, the devices' old columns and
+//      the old settings; the owner's rows lose their person (person_id NULL, dropped in 3.9) and the chat-list marks take
+//      the fixed key 'owner'. The setting «migrated_3_8» marks it done.
+//   3. orb.json is written only after the COMMIT (the database holds it until then: a crash in between finishes it at the
+//      next start).
+// A run that fails leaves the database as it was (Orb does not work on it: engine.mjs) and the next one goes on with the
+// same archive and copy (migracion-3.8.json). A 3.7 database restored later is a new run: a dated archive and copy.
+// The other users' sign-in folders are deleted (only their accounts' names are archived) and their projects' folders in
+// the categories are no longer listed (IGNORED_PROJECTS). Nothing is written outside the data folder but the 3.7
+// bridge's file (insideData).
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx, validateConfig } from './context.mjs';
-import { paths, loadConfig, configFrom, writeJson, BOTS_DIR } from './home.mjs';
+import { ctx, validateConfig, tr } from './context.mjs';
+import { paths, loadConfig, configFrom, writeJson, categoryOf, folderKey, IGNORED_PROJECTS, BOTS_DIR } from './home.mjs';
 import { isValidTz } from './tz.mjs';
 import { ME } from './inbox.mjs';
 
 export const MARK = 'migrated_3_8';
 export const NOTICE = 'migrated_3_8_notice'; // what the engine logs and tells the owner once (takeNotice)
+const NEXT_CONFIG = 'migrated_3_8_config'; // the orb.json to write once the transaction is committed
 export const ARCHIVE_DIR = 'archivo-3.7';
 export const PRE_COPY = 'orb-pre-3.8.db';
+export const ORIGINAL_CONFIG = 'orb-3.7.json';
+const RUN_FILE = 'migracion-3.8.json'; // .orb/datos: the archive and copy of the run not finished yet
+export const LOCK_FILE = 'migracion-3.8.lock';
+// How long a process waits for another one migrating the same folder (ORB_MIGRATION_LOCK_MS: tests).
+const lockWait = () => Number(process.env.ORB_MIGRATION_LOCK_MS ?? 60_000);
 
 // The tables 3.8 no longer has (their indexes go with them).
 const BOT_TABLES = ['bot_group_members', 'bot_groups', 'bot_reminders', 'bot_requests', 'bot_sessions', 'memory_log', 'bots'];
@@ -36,12 +48,19 @@ const OLD_SETTINGS = ['bots_seeded', 'template_applied', 'orb_self', 'home_migra
 // agent_id: the agents' signatures (the engine makes new ones at every start; 3.7's also named bots and persons).
 const OLD_PREFIXES = ['bot_taint:', 'bot_grant:', 'bot_unconfined:', 'bot_held:', 'bot_handoff:', 'ha_allow:', 'oce_alerted:', 'browser_pace:', 'browser_mass:',
   'vault_ok:', 'vault_down:', 'agent_id:'];
+// A task's own settings (<prefix><id>), gone with the other users' tasks (archived with them).
+const TASK_SETTINGS = ['accepted:', 'budget_ok:', 'integrate:', 'quiet_notice:', 'checkpoint:', 'undone:', 'review:'];
 // The settings of a person's lists: <name>:<person> in 3.6–3.7 (inbox_since:owner since 3.8, the others without a key).
 const LIST_SETTINGS = { inbox_since: `inbox_since:${ME}`, sidebar_completed: 'sidebar_completed', sidebar_kept: 'sidebar_kept' };
 const PREVIEWS = ['all', 'chat', 'none'];
 // 3.7's bridge with Open Control Edge wrote orb.json in %LOCALAPPDATA%\OrbPuente (oce.json there is OCE's: never touched).
-// ORB_BRIDGE_DIR: another folder (the tests never touch the real one).
-const bridgeDir = () => process.env.ORB_BRIDGE_DIR || (process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'OrbPuente') : null);
+// ORB_BRIDGE_DIR: another folder, only for the tests. A test without it never touches this PC's (node --test sets
+// NODE_TEST_CONTEXT in every test process, and the processes they start inherit it).
+export const bridgeDir = () => {
+  if (process.env.ORB_BRIDGE_DIR) return process.env.ORB_BRIDGE_DIR;
+  if (process.env.NODE_TEST_CONTEXT) return null;
+  return process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'OrbPuente') : null;
+};
 
 const has = (db, table) => Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table));
 const cols = (db, table) => (has(db, table) ? db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name) : []);
@@ -49,97 +68,248 @@ const all = (db, sql, ...args) => db.prepare(sql).all(...args).map((r) => ({ ...
 const one = (db, sql, ...args) => db.prepare(sql).get(...args);
 const marks = (list) => list.map(() => '?').join(', ');
 const parse = (v) => { try { return JSON.parse(v); } catch { return v; } };
-const slug = (s) => String(s ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'usuario';
+const slug = (s) => String(s ?? '').normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'usuario';
+const safeId = (id) => String(id).replace(/[^\w-]/g, '_');
 const homeTriggers = (db) => db.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'home\\_%' ESCAPE '\\'").all().map((r) => r.name);
+const tables = (db) => db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all().map((r) => r.name);
+const userError = (message) => Object.assign(new Error(message), { userFacing: true });
 
 // Whether a database still has anything of 3.5–3.7.
 export function isLegacy(db) {
   return DROPPED_TABLES.some((t) => has(db, t)) || homeTriggers(db).length > 0 || cols(db, 'devices').some((c) => DEVICE_COLUMNS.includes(c));
 }
 
+// Whether the migration may write a path: inside the data folder (home), or 3.7's bridge file.
+export function insideData(home, target) {
+  const r = path.resolve(target);
+  const rel = path.relative(path.resolve(home), r);
+  if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) return true;
+  const bridge = bridgeDir();
+  return Boolean(bridge) && r === path.resolve(bridge, 'orb.json');
+}
+
+// ---- the owner and the others
+// The owner of 3.6–3.7: the active owner; else a deleted owner; else the oldest active person allowed to administer;
+// else the only person there is. Other people's rows and none of these: the migration stops (nothing is deleted).
+function ownerOf(db) {
+  if (!has(db, 'persons')) return null;
+  const pick = (sql) => one(db, sql)?.id ?? null;
+  const caps = cols(db, 'persons').includes('caps');
+  return pick("SELECT id FROM persons WHERE role = 'owner' AND deleted_at IS NULL ORDER BY created_at LIMIT 1")
+    ?? pick("SELECT id FROM persons WHERE role = 'owner' ORDER BY created_at LIMIT 1")
+    ?? (caps ? pick("SELECT id FROM persons WHERE deleted_at IS NULL AND (CASE WHEN json_valid(caps) THEN json_extract(caps, '$.admin') END) = 1 ORDER BY created_at LIMIT 1") : null)
+    ?? (one(db, 'SELECT COUNT(*) AS n FROM persons').n === 1 ? pick('SELECT id FROM persons') : null);
+}
+
 // The owner, the other people (also deleted ones and ids of rows nobody owns any more) and the conversations of bots.
 function whoIs(db) {
-  const owner = has(db, 'persons') ? one(db, "SELECT id FROM persons WHERE role = 'owner' AND deleted_at IS NULL ORDER BY created_at LIMIT 1")?.id ?? null : null;
+  const owner = ownerOf(db);
   const others = new Set(has(db, 'persons') ? all(db, 'SELECT id FROM persons').map((r) => r.id) : []);
   for (const t of PERSON_ROWS) {
-    if (!cols(db, t).includes('person_id') || t === 'usage_ledger' || t === 'chat') continue;
+    if (!cols(db, t).includes('person_id')) continue;
     for (const r of all(db, `SELECT DISTINCT person_id FROM ${t} WHERE person_id IS NOT NULL`)) others.add(r.person_id);
   }
   others.delete(owner);
+  if (!owner && others.size) throw userError(tr('data.migration38.noOwner'));
   const c = cols(db, 'conversations');
   const botConvs = c.includes('bot_id') ? all(db, 'SELECT id FROM conversations WHERE bot_id IS NOT NULL OR group_id IS NOT NULL').map((r) => r.id) : [];
-  return { owner, others: [...others], botConvs, c };
+  return { owner, others: [...others], botConvs };
 }
 
-// ---- 1. the archive (written before anything is deleted)
-const write = (file, value) => { fs.mkdirSync(path.dirname(file), { recursive: true }); writeJson(file, value); };
-// A folder or file moved into the archive (merged when an earlier, interrupted run already moved part of it).
-function moveInto(from, to) {
-  if (!fs.existsSync(from)) return false;
-  fs.mkdirSync(path.dirname(to), { recursive: true });
-  if (!fs.existsSync(to)) { try { fs.renameSync(from, to); return true; } catch { /* another drive or in use: copy */ } }
-  fs.cpSync(from, to, { recursive: true, force: true });
-  fs.rmSync(from, { recursive: true, force: true });
-  return true;
+// ---- files: only inside the data folder (insideData)
+function fileOps(home) {
+  const guard = (target) => { if (!insideData(home, target)) throw new Error(`3.8: ${target} está fuera de la carpeta de datos`); return target; };
+  const write = (file, value) => { guard(file); fs.mkdirSync(path.dirname(file), { recursive: true }); writeJson(file, value); };
+  const remove = (target) => { guard(target); fs.rmSync(target, { recursive: true, force: true }); };
+  // A folder or file moved into the archive (merged when an earlier, interrupted run already moved part of it).
+  const moveInto = (from, to) => {
+    guard(from); guard(to);
+    if (!fs.existsSync(from)) return false;
+    fs.mkdirSync(path.dirname(to), { recursive: true });
+    if (!fs.existsSync(to)) { try { fs.renameSync(from, to); return true; } catch { /* another drive or in use: copy */ } }
+    fs.cpSync(from, to, { recursive: true, force: true });
+    fs.rmSync(from, { recursive: true, force: true });
+    return true;
+  };
+  return { guard, write, remove, moveInto };
 }
+
+// ---- the run: its archive folder and copy (dated names when an earlier migration's are there: a 3.7 copy restored later)
+const stamp = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+function runOf(p, ops) {
+  const file = path.join(p.data, RUN_FILE);
+  try {
+    const r = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (typeof r?.archive === 'string' && typeof r?.copy === 'string' && !/[\\/]/.test(r.archive + r.copy)) return r;
+  } catch { /* a new run */ }
+  const free = (dir, base, ext = '') => {
+    if (!fs.existsSync(path.join(dir, base + ext))) return base + ext;
+    for (let i = 1; ; i++) { const name = `${base}-${stamp()}${i > 1 ? `-${i}` : ''}${ext}`; if (!fs.existsSync(path.join(dir, name))) return name; }
+  };
+  const run = { archive: free(p.internal, ARCHIVE_DIR), copy: free(p.data, PRE_COPY.replace(/\.db$/, ''), '.db'), started: new Date().toISOString() };
+  ops.write(file, run);
+  return run;
+}
+// A restored database starts a new run (backup.mjs).
+export function forgetRun(home) { try { fs.rmSync(path.join(paths(home).data, RUN_FILE), { force: true }); } catch { /* none */ } }
+
+// ---- one process at a time (the engine, an MCP server started by an agent, a second window)
+const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+function stale(file) {
+  let info = null; try { info = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { /* being written, or broken */ }
+  if (!info?.pid) { try { return Date.now() - fs.statSync(file).mtimeMs > 10_000; } catch { return true; } }
+  if (info.pid === process.pid) return true; // this process's own, left by a run that died here
+  let alive = true; try { process.kill(info.pid, 0); } catch (error) { alive = error.code === 'EPERM'; }
+  return !alive || !(Date.now() - Date.parse(info.at) < 30 * 60_000);
+}
+function lock(p) {
+  const file = path.join(p.data, LOCK_FILE);
+  fs.mkdirSync(p.data, { recursive: true });
+  const end = Date.now() + lockWait();
+  for (;;) {
+    try {
+      const fd = fs.openSync(file, 'wx');
+      try { fs.writeSync(fd, JSON.stringify({ pid: process.pid, at: new Date().toISOString() })); } finally { fs.closeSync(fd); }
+      return () => fs.rmSync(file, { force: true });
+    } catch (error) { if (error.code !== 'EEXIST') throw error; }
+    if (stale(file)) { fs.rmSync(file, { force: true }); continue; }
+    if (Date.now() >= end) throw userError(tr('data.migration38.busy'));
+    sleep(150);
+  }
+}
+
+// ---- 1. the copy of the database, checked before anything is deleted
+function checkCopy(file, expected) {
+  if (!fs.existsSync(file) || fs.statSync(file).size === 0) return false;
+  let db = null;
+  try {
+    db = new (process.getBuiltinModule('node:sqlite').DatabaseSync)(file, { readOnly: true });
+    if (db.prepare('PRAGMA quick_check').get()?.quick_check !== 'ok') return false;
+    const names = tables(db);
+    return expected.every((t) => names.includes(t));
+  } catch { return false; } finally { try { db?.close(); } catch { /* closed */ } }
+}
+const fsync = (file) => { const fd = fs.openSync(file, 'r+'); try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); } };
+function preCopy(db, file, ops) {
+  const expected = tables(db);
+  if (fs.existsSync(file)) {
+    if (checkCopy(file, expected)) return;
+    ops.moveInto(file, `${file}.roto-${stamp()}`); // not trusted, and not deleted either
+  }
+  const tmp = `${file}.tmp`;
+  ops.remove(tmp);
+  try {
+    db.prepare('VACUUM INTO ?').run(ops.guard(tmp));
+    fsync(tmp);
+    if (!checkCopy(tmp, expected)) throw new Error('quick_check');
+    fs.renameSync(tmp, file);
+  } catch (error) {
+    ops.remove(tmp);
+    throw userError(tr('data.migration38.badCopy', { error: error?.message ?? String(error) }));
+  }
+}
+
+// ---- 2. the archive (inside the transaction: nobody else writes meanwhile)
 const rowsOf = (db, table, where = '', ...args) => (has(db, table) ? all(db, `SELECT * FROM ${table} ${where}`, ...args) : []);
 const withoutSecrets = (rows) => rows.map(({ token_hash: _t, public_key: _k, push: _p, pin_hash: _h, pin_salt: _s, ...r }) => r);
-
-function archiveBots(db, dir, { botConvs }) {
-  const out = path.join(dir, 'bots');
-  write(path.join(out, 'bots.json'), rowsOf(db, 'bots'));
-  write(path.join(out, 'grupos.json'), rowsOf(db, 'bot_groups').map((g) => ({ ...g, members: rowsOf(db, 'bot_group_members', 'WHERE group_id = ? ORDER BY position', g.id) })));
-  write(path.join(out, 'recordatorios.json'), rowsOf(db, 'bot_reminders'));
-  write(path.join(out, 'peticiones.json'), rowsOf(db, 'bot_requests'));
-  write(path.join(out, 'memorias-historial.json'), rowsOf(db, 'memory_log'));
-  write(path.join(out, 'sesiones.json'), rowsOf(db, 'bot_sessions'));
-  for (const id of botConvs) write(path.join(out, 'conversaciones', `${id}.json`), { conversation: one(db, 'SELECT * FROM conversations WHERE id = ?', id), chat: all(db, 'SELECT * FROM chat WHERE conversation_id = ? ORDER BY id', id) });
+// An account or connector of another user without what could open it (keys, tokens, the connectors' environment).
+const SECRET = /key|token|secret|pass|auth|cookie|env|header|credential/i;
+function scrub(x) {
+  if (!x || typeof x !== 'object') return x;
+  const out = {}; const hidden = [];
+  for (const [k, v] of Object.entries(x)) {
+    if (k === 'person') continue;
+    if (SECRET.test(k)) { hidden.push(...(v && typeof v === 'object' && !Array.isArray(v) ? Object.keys(v).map((n) => `${k}.${n}`) : [k])); continue; }
+    out[k] = k === 'args' && Array.isArray(v) ? v.map((a) => (SECRET.test(String(a)) ? '(oculto)' : a)) : v;
+  }
+  if (hidden.length) out.ocultos = hidden;
+  return out;
 }
 
-// One other user: everything that is theirs, readable (rows as JSON), and their files.
-function archivePerson(db, dir, pid, { p, raw }) {
+function archiveBots(db, dir, { botConvs }, ops) {
+  const out = path.join(dir, 'bots');
+  ops.write(path.join(out, 'bots.json'), rowsOf(db, 'bots'));
+  ops.write(path.join(out, 'grupos.json'), rowsOf(db, 'bot_groups').map((g) => ({ ...g, members: rowsOf(db, 'bot_group_members', 'WHERE group_id = ? ORDER BY position', g.id) })));
+  ops.write(path.join(out, 'recordatorios.json'), rowsOf(db, 'bot_reminders'));
+  ops.write(path.join(out, 'peticiones.json'), rowsOf(db, 'bot_requests'));
+  ops.write(path.join(out, 'memorias-historial.json'), rowsOf(db, 'memory_log'));
+  ops.write(path.join(out, 'sesiones.json'), rowsOf(db, 'bot_sessions'));
+  for (const id of botConvs) ops.write(path.join(out, 'conversaciones', `${id}.json`), { conversation: one(db, 'SELECT * FROM conversations WHERE id = ?', id), chat: all(db, 'SELECT * FROM chat WHERE conversation_id = ? ORDER BY id', id) });
+}
+
+// One other user: everything that is theirs, readable (rows as JSON), and their files. Their sign-in folders are deleted.
+function archivePerson(db, dir, pid, { p, raw, who, ops }) {
   const person = has(db, 'persons') ? one(db, 'SELECT * FROM persons WHERE id = ?', pid) : null;
   const out = path.join(dir, 'usuarios', `${slug(person?.name)}-${slug(pid)}`);
   const mine = (t) => (cols(db, t).includes('person_id') ? rowsOf(db, t, 'WHERE person_id = ?', pid) : []);
-  write(path.join(out, 'usuario.json'), person ? withoutSecrets([{ ...person }])[0] : { id: pid });
-  write(path.join(out, 'ajustes.json'), Object.fromEntries(rowsOf(db, 'person_settings', 'WHERE person_id = ?', pid).map((r) => [r.key, parse(r.value)])));
-  for (const c of mine('conversations')) write(path.join(out, 'conversaciones', `${c.id}.json`), { conversation: c, chat: all(db, 'SELECT * FROM chat WHERE conversation_id = ? ORDER BY id', c.id) });
-  for (const s of mine('sessions')) write(path.join(out, 'sesiones', `${slug(s.id)}.json`), { session: s, items: rowsOf(db, 'session_items', 'WHERE session_id = ? ORDER BY id', s.id) });
-  write(path.join(out, 'tareas.json'), mine('tasks').map((t) => ({ ...t, messages: rowsOf(db, 'messages', 'WHERE task_id = ? ORDER BY id', t.id), events: rowsOf(db, 'events', 'WHERE task_id = ? ORDER BY id', t.id) })));
-  write(path.join(out, 'proyectos.json'), mine('projects'));
-  write(path.join(out, 'programadas.json'), mine('schedules'));
-  write(path.join(out, 'dispositivos.json'), withoutSecrets(mine('devices')));
-  write(path.join(out, 'uso.json'), mine('usage_ledger'));
-  write(path.join(out, 'cuentas.json'), { accounts: (raw.accounts ?? []).filter((a) => a?.person === pid), mcpServers: (raw.mcpServers ?? []).filter((m) => m?.person === pid) });
-  const safe = String(pid).replace(/[^\w-]/g, '_');
-  moveInto(path.join(p.internal, 'imagenes', safe), path.join(out, 'imagenes'));
-  moveInto(path.join(p.internal, 'adjuntos-movil', safe), path.join(out, 'adjuntos-movil'));
-  moveInto(path.join(p.internal, 'cuentas', safe), path.join(out, 'cuentas'));
-  moveInto(path.join(p.logs, `general-${safe}.md`), path.join(out, 'bitacora-general.md'));
+  ops.write(path.join(out, 'usuario.json'), person ? withoutSecrets([{ ...person }])[0] : { id: pid });
+  ops.write(path.join(out, 'ajustes.json'), Object.fromEntries(rowsOf(db, 'person_settings', 'WHERE person_id = ?', pid).map((r) => [r.key, parse(r.value)])));
+  const convs = mine('conversations');
+  for (const c of convs) ops.write(path.join(out, 'conversaciones', `${c.id}.json`), { conversation: c, chat: all(db, 'SELECT * FROM chat WHERE conversation_id = ? ORDER BY id', c.id) });
+  // Their lines elsewhere (notices without a conversation, lines in someone else's conversation).
+  const own = new Set(convs.map((c) => c.id));
+  ops.write(path.join(out, 'chat-suelto.json'), mine('chat').filter((l) => !own.has(l.conversation_id)));
+  const sessions = mine('sessions');
+  for (const s of sessions) ops.write(path.join(out, 'sesiones', `${slug(s.id)}.json`), { session: s, items: rowsOf(db, 'session_items', 'WHERE session_id = ? ORDER BY id', s.id) });
+  const tasks = mine('tasks');
+  const taskSettings = (id) => Object.fromEntries(TASK_SETTINGS.map((k) => [k.slice(0, -1), one(db, 'SELECT value FROM settings WHERE key = ?', `${k}${id}`)?.value]).filter(([, v]) => v != null).map(([k, v]) => [k, parse(v)]));
+  ops.write(path.join(out, 'tareas.json'), tasks.map((t) => ({ ...t, messages: rowsOf(db, 'messages', 'WHERE task_id = ? ORDER BY id', t.id), events: rowsOf(db, 'events', 'WHERE task_id = ? ORDER BY id', t.id), settings: taskSettings(t.id) })));
+  const projects = mine('projects');
+  ops.write(path.join(out, 'proyectos.json'), projects);
+  ops.write(path.join(out, 'programadas.json'), mine('schedules'));
+  ops.write(path.join(out, 'dispositivos.json'), withoutSecrets(mine('devices')));
+  ops.write(path.join(out, 'uso.json'), mine('usage_ledger'));
+  const accounts = (raw.accounts ?? []).filter((a) => a?.person === pid);
+  ops.write(path.join(out, 'cuentas.json'), { accounts: accounts.map(scrub), mcpServers: (raw.mcpServers ?? []).filter((m) => m?.person === pid).map(scrub) });
+  const safe = safeId(pid);
+  ops.moveInto(path.join(p.internal, 'imagenes', safe), path.join(out, 'imagenes'));
+  ops.moveInto(path.join(p.internal, 'adjuntos-movil', safe), path.join(out, 'adjuntos-movil'));
+  ops.moveInto(path.join(p.logs, `general-${safe}.md`), path.join(out, 'bitacora-general.md'));
+  // The logs (registro*.jsonl) of their tasks' and direct conversations' runs go with them; the rest of those folders
+  // (MCP configurations, scratch files) and their coordinator's folder of 3.7 (<runs>/personas/<id>) are deleted.
+  const runs = [...tasks.map((t) => [path.join(p.runs, String(t.id)), path.join(out, 'ejecuciones', 'tareas', String(t.id))]),
+    ...sessions.filter((s) => s.kind !== 'task').map((s) => [path.join(p.runs, 'conversaciones', s.id), path.join(out, 'ejecuciones', 'conversaciones', slug(s.id))])];
+  for (const [from, to] of runs) {
+    if (!fs.existsSync(from) || !fs.statSync(from).isDirectory()) continue;
+    for (const name of fs.readdirSync(from)) if (/^registro.*\.jsonl$/.test(name)) ops.moveInto(path.join(from, name), path.join(to, name));
+    ops.remove(from);
+  }
+  ops.remove(path.join(p.runs, 'personas', safe));
+  // Their sign-in folders are never kept (they sign in again in their own Orb): Orb's folder for them, and an account's
+  // own folder when it is inside Orb's accounts folder and no account of the owner uses it.
+  ops.remove(path.join(p.internal, 'cuentas', safe));
+  const kept = new Set((raw.accounts ?? []).filter((a) => a?.person == null || a.person === who.owner).map((a) => a?.home && path.resolve(a.home)).filter(Boolean));
+  for (const a of accounts) {
+    if (typeof a?.home !== 'string' || !a.home || kept.has(path.resolve(a.home))) continue;
+    const rel = path.relative(path.join(p.internal, 'cuentas'), path.resolve(a.home));
+    if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) ops.remove(a.home);
+  }
+  return { name: person?.name ?? null, projects };
 }
 
 // orb.json without what 3.8 no longer has (the removed part is archived), with the owner's own settings.
-function nextConfig(raw, { owner, others, ownerSettings, person }) {
+function nextConfig(raw, { owner, ownerSettings, person }) {
   const removed = {};
   const next = { ...raw };
   for (const k of ['bots', 'oce', 'monitor', 'role', 'devTarget']) if (k in next) { removed[k] = next[k]; delete next[k]; }
   if (next.ui && typeof next.ui === 'object' && 'mode' in next.ui) { removed['ui.mode'] = next.ui.mode; next.ui = { ...next.ui }; delete next.ui.mode; }
   if (next.browser && typeof next.browser === 'object' && 'sites' in next.browser) { removed['browser.sites'] = next.browser.sites; next.browser = { ...next.browser }; delete next.browser.sites; }
-  // Accounts and connectors: the other users' go (archived with them), the owner's lose their «person».
+  // Accounts and connectors: anyone else's go (archived with them, or as an unknown user's), the owner's lose «person».
   for (const k of ['accounts', 'mcpServers']) {
     if (!Array.isArray(next[k])) continue;
-    next[k] = next[k].filter((x) => !(x && typeof x === 'object' && x.person && x.person !== owner && others.includes(x.person))).map((x) => {
+    next[k] = next[k].filter((x) => !(x && typeof x === 'object' && x.person && x.person !== owner)).map((x) => {
       if (!x || typeof x !== 'object' || !('person' in x)) return x;
       const { person: _p, ...rest } = x; return rest;
     });
   }
-  // The owner's settings of 3.6–3.7 (persons and person_settings) where 3.8 reads them.
+  // The owner's settings of 3.6–3.7 (persons and person_settings) where 3.8 reads them. The language of person_settings
+  // is the one 3.7 used; the name and the zone only fill what orb.json lacks.
   if (person) {
     if (!String(next.userName ?? '').trim() && person.name) next.userName = person.name;
     const tz = ownerSettings.tz ?? person.tz;
     if (!next.tz && isValidTz(tz)) next.tz = tz;
-    const language = ownerSettings.language ?? person.language;
-    if (!next.language && ['es', 'en'].includes(language)) next.language = language;
+    if (['es', 'en'].includes(ownerSettings.language)) next.language = ownerSettings.language;
+    else if (!next.language && ['es', 'en'].includes(person.language)) next.language = person.language;
   }
   if (PREVIEWS.includes(ownerSettings.preview)) next.mobile = { ...next.mobile, preview: ownerSettings.preview };
   const brain = ownerSettings.brain;
@@ -152,43 +322,59 @@ function nextConfig(raw, { owner, others, ownerSettings, person }) {
   return { next, removed };
 }
 
-function archiveAll(db, { p, who, raw }) {
-  const dir = path.join(p.internal, ARCHIVE_DIR);
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, 'LEEME.txt'), [
+// → the folders (folderKey) of the other users' projects in the categories.
+function archiveAll(db, { p, dir, copy, who, raw, ops }) {
+  archiveBots(db, dir, who, ops);
+  ops.write(path.join(dir, 'tablas', 'personas.json'), withoutSecrets(rowsOf(db, 'persons')));
+  ops.write(path.join(dir, 'tablas', 'ajustes-del-dueno.json'), Object.fromEntries((who.owner ? rowsOf(db, 'person_settings', 'WHERE person_id = ?', who.owner) : []).map((r) => [r.key, parse(r.value)])));
+  ops.write(path.join(dir, 'tablas', 'compartidos.json'), rowsOf(db, 'shares'));
+  ops.write(path.join(dir, 'tablas', 'prestamos.json'), rowsOf(db, 'account_loans'));
+  ops.write(path.join(dir, 'tablas', 'auditoria.json'), rowsOf(db, 'audit'));
+  ops.write(path.join(dir, 'tablas', 'cola-enlaces.json'), rowsOf(db, 'link_queue'));
+  const people = who.others.map((pid) => archivePerson(db, dir, pid, { p, raw, who, ops }));
+  // Accounts and connectors of a person this database does not know (never given to the owner).
+  const known = new Set([who.owner, ...who.others]);
+  const lost = (k) => (Array.isArray(raw[k]) ? raw[k] : []).filter((x) => x && typeof x === 'object' && x.person && !known.has(x.person)).map((x) => ({ ...scrub(x), person: x.person }));
+  if (lost('accounts').length || lost('mcpServers').length) ops.write(path.join(dir, 'usuarios', 'desconocido', 'cuentas.json'), { accounts: lost('accounts'), mcpServers: lost('mcpServers') });
+  // Files of 3.5–3.7: the bots' folder and trash, the deleted users' trash, the sealed keys of the links, the bridge's file.
+  ops.moveInto(path.join(p.home, BOTS_DIR), path.join(dir, 'bots', 'carpeta'));
+  ops.moveInto(path.join(p.internal, 'bots-borrados'), path.join(dir, 'bots', 'borrados'));
+  ops.moveInto(path.join(p.internal, 'personas-borradas'), path.join(dir, 'usuarios', 'borrados'));
+  ops.moveInto(path.join(p.data, 'enlaces.json'), path.join(dir, 'enlaces.json'));
+  const bridge = bridgeDir(); if (bridge) ops.moveInto(path.join(bridge, 'orb.json'), path.join(dir, 'orb-puente.json'));
+  // The owner's own images and phone uploads of 3.6–3.7 (one subfolder per person) go back to where 3.8 keeps them; the
+  // owner's coordinator folder of 3.7 (<runs>/personas/<id>) is scratch.
+  if (who.owner) {
+    const safe = safeId(who.owner);
+    for (const sub of ['imagenes', 'adjuntos-movil']) {
+      const from = path.join(p.internal, sub, safe);
+      if (!fs.existsSync(from)) continue;
+      for (const name of fs.readdirSync(from)) { const to = path.join(p.internal, sub, name); if (!fs.existsSync(to)) ops.moveInto(path.join(from, name), to); }
+      ops.remove(from);
+    }
+    ops.remove(path.join(p.runs, 'personas', safe));
+  }
+  const ignored = []; const lines = [];
+  for (const x of people) {
+    const name = x.name ?? 'Un usuario sin nombre';
+    lines.push(`- ${name} tendrá que volver a iniciar sesión en su propio Orb: aquí se han borrado sus sesiones (de sus cuentas solo queda el nombre).`);
+    const folders = x.projects.filter((pr) => typeof pr.path === 'string' && categoryOf(p.home, pr.path));
+    for (const pr of folders) ignored.push(folderKey(pr.path));
+    if (folders.length) lines.push(`  Las carpetas de ${name} siguen en ${folders.map((pr) => path.relative(p.home, pr.path)).join(', ')}; Orb no las lista (Proyectos › Añadir las vuelve a listar).`);
+  }
+  fs.writeFileSync(ops.guard(path.join(dir, 'LEEME.txt')), [
     'Orb 3.8 ya no tiene bots, réplicas, enlaces entre Orbs, Orb Terminal ni varios usuarios.',
     'Aquí está lo que había en Orb 3.7, para consultarlo (Orb no lo usa):',
     '- bots/: los bots, grupos, recordatorios, peticiones y el historial de memorias (JSON), sus conversaciones,',
     '  su carpeta (bots/carpeta: memorias y archivos) y su papelera (bots/borrados).',
-    '- usuarios/: lo de cada usuario que no era el dueño (conversaciones, tareas, proyectos, dispositivos, uso, archivos).',
+    '- usuarios/: lo de cada usuario que no era el dueño (conversaciones, mensajes sueltos, tareas y sus registros,',
+    '  proyectos, programadas, dispositivos, gasto, archivos y el nombre de sus cuentas, sin claves).',
     '- tablas/: personas, compartidos, préstamos de cuentas, auditoría y la cola de enlaces.',
-    '- orb-json-retirado.json: los ajustes de orb.json que 3.8 ya no usa. enlaces.json: claves de los enlaces (cifradas).',
-    `La base de datos completa de antes está en ${path.join(p.data, PRE_COPY)}.`, ''].join('\n'));
-  archiveBots(db, dir, who);
-  write(path.join(dir, 'tablas', 'personas.json'), withoutSecrets(rowsOf(db, 'persons')));
-  write(path.join(dir, 'tablas', 'ajustes-del-dueno.json'), Object.fromEntries((who.owner ? rowsOf(db, 'person_settings', 'WHERE person_id = ?', who.owner) : []).map((r) => [r.key, parse(r.value)])));
-  write(path.join(dir, 'tablas', 'compartidos.json'), rowsOf(db, 'shares'));
-  write(path.join(dir, 'tablas', 'prestamos.json'), rowsOf(db, 'account_loans'));
-  write(path.join(dir, 'tablas', 'auditoria.json'), rowsOf(db, 'audit'));
-  write(path.join(dir, 'tablas', 'cola-enlaces.json'), rowsOf(db, 'link_queue'));
-  for (const pid of who.others) archivePerson(db, dir, pid, { p, raw });
-  // Files of 3.5–3.7: the bots' folder and trash, the deleted users' trash, the sealed keys of the links, the bridge's file.
-  moveInto(path.join(p.home, BOTS_DIR), path.join(dir, 'bots', 'carpeta'));
-  moveInto(path.join(p.internal, 'bots-borrados'), path.join(dir, 'bots', 'borrados'));
-  moveInto(path.join(p.internal, 'personas-borradas'), path.join(dir, 'usuarios', 'borrados'));
-  moveInto(path.join(p.data, 'enlaces.json'), path.join(dir, 'enlaces.json'));
-  const bridge = bridgeDir(); if (bridge) moveInto(path.join(bridge, 'orb.json'), path.join(dir, 'orb-puente.json'));
-  // The owner's own images and phone uploads of 3.6–3.7 (one subfolder per person) go back to where 3.8 keeps them.
-  if (who.owner) {
-    const safe = String(who.owner).replace(/[^\w-]/g, '_');
-    for (const sub of ['imagenes', 'adjuntos-movil']) {
-      const from = path.join(p.internal, sub, safe);
-      if (!fs.existsSync(from)) continue;
-      for (const name of fs.readdirSync(from)) { const to = path.join(p.internal, sub, name); if (!fs.existsSync(to)) moveInto(path.join(from, name), to); }
-      fs.rmSync(from, { recursive: true, force: true });
-    }
-  }
-  return dir;
+    `- ${ORIGINAL_CONFIG}: orb.json tal como estaba. orb-json-retirado.json: los ajustes que 3.8 ya no usa.`,
+    '- enlaces.json: claves de los enlaces (cifradas).',
+    ...lines,
+    `La base de datos completa de antes está en ${copy}.`, ''].join('\n'));
+  return ignored;
 }
 
 // ---- 3. the database (one transaction)
@@ -209,7 +395,7 @@ function migrateRows(db, who) {
   forConversations(who.botConvs);
   if (has(db, 'inbox_items')) run("DELETE FROM inbox_items WHERE kind IN ('bot', 'group')");
   if (has(db, 'inbox_sections')) run("DELETE FROM inbox_sections WHERE zone = 'bots'");
-  // The other users (already archived).
+  // The other users (already archived), their spending too (in their uso.json: it is not the owner's).
   if (who.others.length) {
     const ids = who.others; const inOthers = `person_id IN (${marks(ids)})`;
     const own = (t) => cols(db, t).includes('person_id');
@@ -223,9 +409,13 @@ function migrateRows(db, who) {
       }
     }
     if (own('tasks')) {
-      for (const { id } of all(db, `SELECT id FROM tasks WHERE ${inOthers}`, ...ids)) { run('DELETE FROM messages WHERE task_id = ?', id); run('DELETE FROM events WHERE task_id = ?', id); run('DELETE FROM tasks WHERE id = ?', id); }
+      for (const { id } of all(db, `SELECT id FROM tasks WHERE ${inOthers}`, ...ids)) {
+        run('DELETE FROM messages WHERE task_id = ?', id); run('DELETE FROM events WHERE task_id = ?', id);
+        delSettings(TASK_SETTINGS.map((k) => `${k}${id}`));
+        run('DELETE FROM tasks WHERE id = ?', id);
+      }
     }
-    for (const t of ['schedules', 'projects', 'events', 'devices', 'messages']) if (own(t)) run(`DELETE FROM ${t} WHERE ${inOthers}`, ...ids);
+    for (const t of ['schedules', 'projects', 'events', 'devices', 'messages', 'usage_ledger']) if (own(t)) run(`DELETE FROM ${t} WHERE ${inOthers}`, ...ids);
     run('DELETE FROM message_reads WHERE message_id NOT IN (SELECT id FROM messages)');
     for (const t of ['inbox_items', 'inbox_sections']) if (has(db, t)) run(`DELETE FROM ${t} WHERE ${inOthers}`, ...ids);
     for (const pid of ids) delSettings(Object.keys(LIST_SETTINGS).map((k) => `${k}:${pid}`));
@@ -252,7 +442,8 @@ function migrateRows(db, who) {
   for (const prefix of OLD_PREFIXES) run('DELETE FROM settings WHERE substr(key, 1, ?) = ?', prefix.length, prefix);
 }
 
-// Why the last run in this process could not finish (the data stay as they were; the next start tries again).
+// Why the last run in this process could not finish, and where its copy is: null or { reason, backup }. The data stay
+// as they were and Orb does not work on them until a run finishes (engine.mjs).
 let failure = null;
 export const migrationFailure = () => failure;
 // What was done, once (the engine logs it and tells the owner). → null or { archive, backup, bots, users, conversations }.
@@ -263,56 +454,89 @@ export function takeNotice(board) {
 }
 
 // → null (nothing done) or what was done { archive, backup, bots, users, conversations }. Never throws: a database that
-// cannot be copied or archived (no room, a file in use) is left as it was.
+// cannot be copied or archived (no room, a file in use, no owner) is left as it was and migrationFailure() says why.
 export function migrateTo38(db, { home = ctx.home } = {}) {
-  try { failure = null; return migrate(db, home); } catch (error) { failure = error?.message ?? String(error); return null; }
+  try { failure = null; return migrate(db, home); } catch (error) {
+    let backup = null;
+    try { const r = JSON.parse(fs.readFileSync(path.join(paths(home).data, RUN_FILE), 'utf8')); const f = path.join(paths(home).data, r.copy); if (fs.existsSync(f)) backup = f; } catch { /* no copy yet */ }
+    failure = { reason: error?.message ?? String(error), backup };
+    return null;
+  }
 }
-function migrate(db, home) {
-  const state = () => one(db, 'SELECT value FROM settings WHERE key = ?', MARK)?.value;
-  if (state()) return null;
+
+// After the COMMIT (or at the next start, if the process ended in between): orb.json, then the run is over.
+function finish(db, home) {
   const p = paths(home);
-  let raw = null; try { raw = JSON.parse(fs.readFileSync(p.config, 'utf8')); } catch { /* none yet, or not valid: loadConfig says so */ }
+  const next = one(db, 'SELECT value FROM settings WHERE key = ?', NEXT_CONFIG)?.value;
+  if (next) {
+    writeJson(p.config, JSON.parse(next));
+    if (ctx.home && path.resolve(home) === path.resolve(ctx.home)) ctx.config = loadConfig(home);
+    db.prepare('DELETE FROM settings WHERE key = ?').run(NEXT_CONFIG);
+  }
+  forgetRun(home);
+}
+
+function migrate(db, home) {
+  const p = paths(home);
+  const state = () => one(db, 'SELECT value FROM settings WHERE key = ?', MARK)?.value;
+  if (state()) { finish(db, home); return null; }
   if (!isLegacy(db)) {
     // A new 3.8 database (or one older than 3.5): only orb.json may hold settings of 3.7.
+    let raw = null; try { raw = JSON.parse(fs.readFileSync(p.config, 'utf8')); } catch { /* none yet, or not valid: loadConfig says so */ }
     if (raw && typeof raw === 'object') {
-      const { next, removed } = nextConfig(raw, { owner: null, others: [], ownerSettings: {}, person: null });
+      const { next, removed } = nextConfig(raw, { owner: null, ownerSettings: {}, person: null });
       if (Object.keys(removed).length) { writeJson(p.config, next); ctx.config = loadConfig(home); }
     }
     db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)').run(MARK, '1');
     return null;
   }
-  // The copy of the database as it was (never over an earlier one: that is the oldest state).
-  const copy = path.join(p.data, PRE_COPY);
-  if (!fs.existsSync(copy)) db.prepare('VACUUM INTO ?').run(copy);
-  const who = whoIs(db);
-  const person = who.owner ? one(db, 'SELECT * FROM persons WHERE id = ?', who.owner) : null;
-  const ownerSettings = Object.fromEntries((who.owner && has(db, 'person_settings') ? all(db, 'SELECT key, value FROM person_settings WHERE person_id = ?', who.owner) : []).map((r) => [r.key, parse(r.value)]));
-  const archive = archiveAll(db, { p, who, raw: raw ?? {} });
-  // orb.json: the owner's brain only when it is valid there (an account that no longer exists keeps Ajustes' brain).
-  if (raw && typeof raw === 'object') {
-    let { next, removed } = nextConfig(raw, { ...who, ownerSettings, person });
-    const valid = (c) => { try { validateConfig(configFrom(c)); return true; } catch { return false; } };
-    if (ownerSettings.brain && !valid(next)) {
-      const plain = nextConfig(raw, { ...who, ownerSettings: { ...ownerSettings, brain: null }, person });
-      if (valid(plain.next)) ({ next, removed } = plain);
-    }
-    write(path.join(archive, 'orb-json-retirado.json'), removed);
-    writeJson(p.config, next);
-    ctx.config = loadConfig(home);
-  }
-  const bots = has(db, 'bots') ? one(db, 'SELECT COUNT(*) AS n FROM bots').n : 0;
-  const users = who.others.map((pid) => (has(db, 'persons') ? one(db, 'SELECT name FROM persons WHERE id = ?', pid)?.name : null) ?? pid);
-  const activeProject = typeof ownerSettings.active_project === 'string' ? ownerSettings.active_project : null;
-  const done = { archive, backup: copy, bots, users, conversations: who.botConvs.length };
-  db.exec('BEGIN IMMEDIATE');
+  const release = lock(p);
   try {
-    if (!state()) {
-      migrateRows(db, who);
-      if (activeProject != null) db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('active_project', ?)").run(activeProject);
-      db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(NOTICE, JSON.stringify(done));
-      db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(MARK, '1');
-    }
-    db.exec('COMMIT');
-  } catch (error) { db.exec('ROLLBACK'); throw error; }
-  return done;
+    if (state()) { finish(db, home); return null; } // another process finished it meanwhile
+    const ops = fileOps(home);
+    const run = runOf(p, ops);
+    const dir = path.join(p.internal, run.archive);
+    const copy = path.join(p.data, run.copy);
+    fs.mkdirSync(ops.guard(dir), { recursive: true });
+    // orb.json as it was, once: what is archived and the new orb.json come from this file, never from a rewritten one.
+    const original = path.join(dir, ORIGINAL_CONFIG);
+    if (!fs.existsSync(original) && fs.existsSync(p.config)) { const tmp = ops.guard(`${original}.tmp`); fs.copyFileSync(p.config, tmp); fs.renameSync(tmp, original); }
+    let raw = null; try { raw = JSON.parse(fs.readFileSync(original, 'utf8')); } catch { /* no orb.json, or not valid: left alone */ }
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) raw = null;
+    preCopy(db, copy, ops);
+    let done = null;
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      if (!state()) {
+        const who = whoIs(db);
+        const person = who.owner ? one(db, 'SELECT * FROM persons WHERE id = ?', who.owner) : null;
+        const ownerSettings = Object.fromEntries((who.owner && has(db, 'person_settings') ? all(db, 'SELECT key, value FROM person_settings WHERE person_id = ?', who.owner) : []).map((r) => [r.key, parse(r.value)]));
+        const ignored = archiveAll(db, { p, dir, copy, who, raw: raw ?? {}, ops });
+        // orb.json: the owner's brain only when it is valid there (an account that no longer exists keeps Ajustes' brain).
+        let next = null;
+        if (raw) {
+          let made = nextConfig(raw, { ...who, ownerSettings, person });
+          const valid = (c) => { try { validateConfig(configFrom(c)); return true; } catch { return false; } };
+          if (ownerSettings.brain && !valid(made.next)) { const plain = nextConfig(raw, { ...who, ownerSettings: { ...ownerSettings, brain: null }, person }); if (valid(plain.next)) made = plain; }
+          ops.write(path.join(dir, 'orb-json-retirado.json'), made.removed);
+          next = made.next;
+        }
+        const bots = has(db, 'bots') ? one(db, 'SELECT COUNT(*) AS n FROM bots').n : 0;
+        const users = who.others.map((pid) => (has(db, 'persons') ? one(db, 'SELECT name FROM persons WHERE id = ?', pid)?.name : null) ?? pid);
+        done = { archive: dir, backup: copy, bots, users, conversations: who.botConvs.length };
+        migrateRows(db, who);
+        const get = (k) => one(db, 'SELECT value FROM settings WHERE key = ?', k)?.value;
+        const set = (k, v) => db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(k, v);
+        // 3.7 kept the owner's working folder in settings: person_settings' only when that one is empty.
+        if (typeof ownerSettings.active_project === 'string' && !get('active_project')) set('active_project', ownerSettings.active_project);
+        if (ignored.length) { const before = parse(get(IGNORED_PROJECTS) ?? '[]'); set(IGNORED_PROJECTS, JSON.stringify([...new Set([...(Array.isArray(before) ? before : []), ...ignored])])); }
+        if (next) set(NEXT_CONFIG, JSON.stringify(next));
+        set(NOTICE, JSON.stringify(done));
+        set(MARK, '1');
+      }
+      db.exec('COMMIT');
+    } catch (error) { try { db.exec('ROLLBACK'); } catch { /* not open */ } throw error; }
+    finish(db, home);
+    return done;
+  } finally { release(); }
 }

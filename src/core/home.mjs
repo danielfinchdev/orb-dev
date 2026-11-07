@@ -135,6 +135,11 @@ export function categoryOf(home, folder) {
   const parts = rel.split(/[\\/]/);
   return parts.length >= 2 && isCategory(parts[0]) && !isReservedInCategory(parts[0], parts[1]) ? lower(parts[0]) : null;
 }
+// A folder as the project list compares them (real path, any case).
+export const folderKey = (folder) => { try { return fs.realpathSync(folder).toLowerCase(); } catch { return path.resolve(folder).toLowerCase(); } };
+// 3.8: the folders of other users' projects of 3.7 that stay in the categories, which Orb no longer lists (JSON list of
+// folderKey; the 3.8 migration writes it, adding one of them by hand takes it out).
+export const IGNORED_PROJECTS = 'projects_ignored';
 
 const isObject = (v) => v && typeof v === 'object' && !Array.isArray(v);
 // Deep merge where arrays and scalars of `over` replace those of `base`.

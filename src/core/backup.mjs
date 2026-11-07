@@ -13,8 +13,9 @@
 // entry is manifest.json (sha256 of every file), whose own hash is in the header.
 //
 // What goes in: the database (VACUUM INTO, so it is consistent while the engine runs), orb.json, bitacora/ (general and
-// project logs), the whiteboards of the projects, the app's secret, the recovery wrap, the archive of 3.7 (.orb/archivo-3.7,
-// src/core/migrate-38.mjs; the other users' account folders in it only with the accounts). Optional: the project folders and the agents' login folders (off).
+// project logs), the whiteboards of the projects, the app's secret, the recovery wrap, the archives of 3.7 (.orb/archivo-3.7
+// and dated ones, src/core/migrate-38.mjs; never sign-in folders). Optional: the project folders and the agents' login
+// folders (off).
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -22,7 +23,7 @@ import crypto from 'node:crypto';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
 import { paths, INTERNAL_DIR, BOTS_DIR, LOGS_DIR, CONFIG_FILE } from './home.mjs';
 import { tr } from './context.mjs';
-import { ARCHIVE_DIR } from './migrate-38.mjs';
+import { ARCHIVE_DIR, forgetRun } from './migrate-38.mjs';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
 
@@ -125,6 +126,7 @@ export const homePath = (home, name) => path.join(home, ...String(name).split('/
 const insideOf = (root, p) => { const r = path.relative(root, p); return Boolean(r) && !r.startsWith('..') && !path.isAbsolute(r); };
 
 // Copies what goes in to `stage` (a mini Orb folder) and returns the manifest.
+const archiveDirs = (internal) => { try { return fs.readdirSync(internal).filter((n) => n === ARCHIVE_DIR || n.startsWith(`${ARCHIVE_DIR}-`)).map((n) => path.join(internal, n)); } catch { return []; } };
 async function stageFiles(home, stage, { secret, includeProjects = false, includeAccounts = false, log = () => {} }) {
   const p = paths(home);
   const files = [];
@@ -161,7 +163,8 @@ async function stageFiles(home, stage, { secret, includeProjects = false, includ
     for (const f of walkFiles(board)) await put(f, inside ? rel(home, f) : `${INTERNAL_DIR}/pizarras-de-fuera/${String(pr.name).replace(/[^\w.-]+/g, '_')}/${path.relative(board, f).split(path.sep).join('/')}`);
   }
   if (includeAccounts) for (const f of walkFiles(path.join(p.internal, 'cuentas'))) await put(f, archiveName(home, f));
-  for (const f of walkFiles(path.join(p.internal, ARCHIVE_DIR), (n) => n === 'cuentas' && !includeAccounts)) await put(f, archiveName(home, f));
+  // 3.8: the archives of 3.7 (one per migration), never with sign-in folders (an archive of an early 3.8 build may have some).
+  for (const dir of archiveDirs(p.internal)) for (const f of walkFiles(dir, (n) => n === 'cuentas')) await put(f, archiveName(home, f));
   const manifest = { format: FORMAT, files: [] };
   let bytes = 0;
   for (const name of files) {
@@ -429,6 +432,8 @@ export function applyPendingRestore(home) {
     move(path.join(ready, ...u.split('/')), target);
   }
   fs.rmSync(ready, { recursive: true, force: true });
+  // 3.8: a database of 3.7 restored now is migrated again with an archive and a copy of its own.
+  if (units.has(`${INTERNAL_DIR}/datos/orb.db`)) forgetRun(home);
   let newKey = null; try { newKey = fs.readFileSync(path.join(paths(home).data, 'clave.bin')); } catch { /* none */ }
   return { from: info.from, header: info.header, aside, secretChanged: Boolean(newKey && !(oldKey && oldKey.equals(newKey))), secret: newKey };
 }

@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from './context.mjs';
-import { folderName, isReservedName, isReservedInCategory, isCategory, categoryOf, CATEGORIES, DEFAULT_CATEGORY } from './home.mjs';
+import { folderName, isReservedName, isReservedInCategory, isCategory, categoryOf, folderKey, IGNORED_PROJECTS, CATEGORIES, DEFAULT_CATEGORY } from './home.mjs';
 import { git, ORB_GIT } from './workspace.mjs';
 import { projectNameProblem } from './product.mjs';
 
@@ -125,18 +125,20 @@ export function groupOf(board, project) {
 // Keeps the project list in step with the categories: new subfolders become projects, and projects whose folder inside the
 // assistant's folder was deleted, or that are not a project folder of a category (2.3.0 took the categories and Orb's own
 // folders for projects), are dropped unless they still have open tasks. Linked outside folders are left alone.
+// 3.8: the folders of other users' projects of 3.7 (IGNORED_PROJECTS) are not listed.
 export function syncProjects(board) {
   const home = ctx.paths.home;
-  const norm = (p) => { try { return fs.realpathSync(p).toLowerCase(); } catch { return path.resolve(p).toLowerCase(); } };
+  const norm = folderKey;
   const registered = board.projects();
   const byPath = new Map(registered.map((p) => [norm(p.path), p]));
+  const ignored = new Set(board.settingJson(IGNORED_PROJECTS) ?? []);
   let changed = false;
   for (const cat of CATEGORIES) {
     let entries; try { entries = fs.readdirSync(ctx.paths.categories[cat], { withFileTypes: true }); } catch { continue; }
     for (const e of entries) {
       if (!e.isDirectory() || isReservedInCategory(cat, e.name)) continue;
       const folder = path.join(ctx.paths.categories[cat], e.name);
-      if (byPath.has(norm(folder))) continue;
+      if (byPath.has(norm(folder)) || ignored.has(norm(folder))) continue;
       let name = e.name; let i = 2;
       while (board.project(name)) name = `${e.name} (${i++})`;
       try { board.addProject({ name, path: folder }, 'orb', { fromUser: true }); changed = true; } catch { /* unreadable folder: skipped */ }
@@ -149,4 +151,12 @@ export function syncProjects(board) {
     try { board.removeProject(p.name, 'orb'); changed = true; } catch { /* open tasks: kept */ }
   }
   return changed;
+}
+
+// 3.8: a folder added by hand is listed again even if it was another user's project of 3.7.
+export function unignoreProject(board, folder) {
+  const list = board.settingJson(IGNORED_PROJECTS);
+  if (!Array.isArray(list)) return;
+  const key = folderKey(folder);
+  if (list.includes(key)) board.settingJson(IGNORED_PROJECTS, list.filter((k) => k !== key));
 }
