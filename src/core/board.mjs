@@ -492,12 +492,13 @@ export class Board {
     return this.all("SELECT * FROM tasks WHERE status = 'queued' AND launch = ? ORDER BY priority ASC, id ASC", launch).map(parse).filter((t) => this.approvalOk(t) && this.depsDone(t));
   }
 
-  claimNext(agent, project) {
+  // session: the direct conversation that takes it (the only one that may work on it afterwards).
+  claimNext(agent, project, session = null) {
     return this.transaction(() => {
       this.revalidateQueued();
       const task = this.readyTasks('manual').find((t) => (t.agent === agent || t.agent === 'any') && (!project || t.project.toLowerCase() === String(project).toLowerCase()));
       if (!task) return null;
-      return this.patch(task.id, { status: 'running', assigned_to: agent }, agent, 'task.claimed', 'queued');
+      return this.patch(task.id, { status: 'running', assigned_to: agent, claimed_session: session ? String(session) : null }, agent, 'task.claimed', 'queued');
     });
   }
 
@@ -514,9 +515,11 @@ export class Board {
     return { id: Number(lastInsertRowid), from, to, task_id: task_id ?? null };
   }
 
-  inbox(agent, markRead = true) {
+  // visible(m): which of them this reader may see (an agent's MCP: only its own tasks' and conversation's); only those
+  // are returned and marked as read.
+  inbox(agent, markRead = true, visible = () => true) {
     const rows = this.all(`SELECT m.* FROM messages m WHERE (m.to_agent = ? OR m.to_agent = 'all') AND m.from_agent != ?
-      AND NOT EXISTS (SELECT 1 FROM message_reads r WHERE r.message_id = m.id AND r.agent = ?) ORDER BY m.id LIMIT 100`, agent, agent, agent);
+      AND NOT EXISTS (SELECT 1 FROM message_reads r WHERE r.message_id = m.id AND r.agent = ?) ORDER BY m.id LIMIT 1000`, agent, agent, agent).filter(visible).slice(0, 100);
     if (markRead) for (const m of rows) this.run('INSERT OR IGNORE INTO message_reads (message_id, agent) VALUES (?, ?)', m.id, agent);
     return rows;
   }

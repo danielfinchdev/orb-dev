@@ -268,7 +268,9 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   ['chat', 'conversation_id', 'INTEGER'], ['tasks', 'conversation_id', 'INTEGER'],
   // 3.5–3.7: a bot's own conversation (bot_id) and a group's (group_id). 3.8 has none (the 3.8 migration archives them);
   // the conversations are still read with «bot_id IS NULL AND group_id IS NULL» until 3.9 drops the columns.
-  ['conversations', 'bot_id', 'INTEGER'], ['conversations', 'group_id', 'INTEGER']];
+  ['conversations', 'bot_id', 'INTEGER'], ['conversations', 'group_id', 'INTEGER'],
+  // 3.8: the direct conversation (session) that claimed a manual task: only that one may work on it.
+  ['tasks', 'claimed_session', 'TEXT']];
 // (3.6-3.7's person_id columns and chat.uid are no longer added: only a 3.7 database has them, emptied by the 3.8
 // migration (src/core/migrate-38.mjs) and dropped in 3.9.)
 export function migrate(db) {

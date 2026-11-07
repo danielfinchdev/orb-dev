@@ -808,10 +808,14 @@ launched hidden, with its output read by Orb, and it stores the session in the a
 - **Window:** `sandbox` and context isolation, CSP without `eval`, Markdown is rendered without HTML and every call is
   checked in the main process.
 - **Approval key:** encrypted by Windows (DPAPI). The engine receives it only in memory and the MCP never has it.
-- **Coordinator identity:** its key goes only to its own MCP process (through the SDK, in memory). Only its hash stays in
-  the database. With Codex as the brain (2.6), the key and tokens do not go in its arguments (any process could see
-  them): they travel in Codex's environment and it passes them by name to the MCP (`env_vars`, `mcpSecrets` in
-  `codex.mjs`). In coordinator mode Codex uses `untrusted` + `read-only`, so every command goes through the guard, which
+- **Coordinator identity:** each conversation's coordinator gets a key of its own, derived from the engine's
+  (`conversationKey` in `sessions.mjs`, HMAC of the engine's key, new at every start); the database keeps its hash
+  (`orchestrator_conv:<id>`) until the conversation is deleted. A key that leaks signs only that conversation, and there
+  is no coordinator without a conversation. No secret of an MCP server (keys, tokens, a connector's environment) goes on
+  an agent's command line, which any process of the user can read: Claude gets them in its environment and
+  `--mcp-config` only names them (`${VAR}`, which Claude Code expands; `mcpEnvByRef` in `common.mjs`), Cursor's
+  `.cursor/mcp.json` names them as `${env:VAR}`, Codex passes them by name (`env_vars`, `mcpSecrets` in `codex.mjs`) and
+  the ACP agents receive them over their stdin (`session/new`). In coordinator mode Codex uses `untrusted` + `read-only`, so every command goes through the guard, which
   denies it in `leer`.
 - **Pending assistant notices (2.6):** `orchestrator_pending` stores the engine notices not yet answered
   (`keep`/`resume` in `orchestrator.mjs`); when the app closes, the one in progress is repeated when it is reopened, and
@@ -821,7 +825,9 @@ launched hidden, with its output read by Orb, and it stores the session in the a
   keeps the hash, `agent_id:*`). The MCP takes agent and task from the signature, not from `ORB_AGENT` or `ORB_TASK_ID`:
   an agent that starts the MCP on its own cannot impersonate another or close someone else's task (`agentToken()` in
   `sessions.mjs`, `identity()` in `src/mcp/server.mjs`). 3.8: an unsigned process gets every tool refused, and a signed
-  one acts only on its own conversation or task (section 34).
+  one acts only on its own conversation or task (section 34). The signature also names the conversation (session) it
+  runs in, so two direct conversations of one agent are two identities, and it ends with the agent's process
+  (`Sessions.closeLive`): the MCP checks it again on every call.
 - **Agents:** clean environment (without the app's secret variables), permission guard, internal data off limits and
   warnings for pushes or mass deletions.
 - **Agent text:** when it goes back to the assistant it is marked as "data, not instructions".
@@ -963,14 +969,20 @@ kinds of caller:
   and projects, send messages, approve or reject, start and stop tasks, read the status…). Settings, accounts, backups,
   Magic Link, this PC's tools and anything that deletes outside a conversation are `'pc'`.
 - **An agent** (its MCP tools, `src/mcp/server.mjs`): no API method. Its tools act only on what Orb signed it for
-  (`ownsTask`): the coordinator, the tasks of its own conversation (signed with its key); a worker, its task and the
-  subtasks it delegated; a signed agent without a task, only the manual task it claimed. An agent Orb did not sign, or a
-  coordinator with a forged conversation, gets every tool refused.
+  (`ownsTask`): the coordinator, the tasks of its own conversation (signed with that conversation's key); a worker, its
+  task and the subtasks it delegated; a direct conversation with an agent, only the manual task that conversation
+  claimed (`orb_claim_next`, offered to direct conversations only; `tasks.claimed_session`). An agent Orb did not sign,
+  a signature that ended (its process closed, its conversation deleted), a coordinator without a conversation or with
+  another conversation's key gets every tool refused. The lists (`orb_board`, `orb_list_tasks`) show a worker its own
+  tasks and a coordinator its conversation's and its projects'; messages are read and delivered only inside the
+  conversation of the task they are about (a message to another agent must name one of the sender's tasks); the
+  coordinator reads and writes the logs of its conversation's projects and the general one; only the coordinator
+  registers projects.
 
 **Files.** `src/core/permissions.mjs` (the table, `principalOf`, `authorize`, `ownsTask`); `src/engine/api.mjs ›
 call` checks every call before the method runs; `src/engine/remote.mjs` builds a device's principal and also checks
 `REMOTE_METHODS` itself (`guardCall`, with the pictures and the full-access rules); `src/mcp/server.mjs` builds the
-agent's `WHO` from its signature (`identity()`, `CONV`, `FORGED`).
+agent's `WHO` from its signature (`identity()`, `stillSigned()`).
 
 **Inside.** A method without a line in `METHODS` is refused everywhere: `test/permisos.test.mjs` walks every API method
 against the table, checks that a phone or a browser is refused every PC-only method before anything runs, and that an

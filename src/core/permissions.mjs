@@ -93,21 +93,23 @@ export function authorize(principal, method) {
 // ---- agents. An agent's MCP process works for what Orb signed it for (src/mcp/server.mjs builds `who`):
 //   { signed: false }                                   nobody: every tool refused
 //   { signed: true, boss: true, conversation }          the coordinator of one conversation: that conversation's tasks
+//                                                       (a coordinator without a conversation: nothing)
 //   { signed: true, task }                              a worker: its task and the subtasks it delegated
-//   { signed: true, agent }                             a signed agent without a task (a direct conversation): only the
-//                                                       manual tasks it claimed (assigned to it and running)
+//   { signed: true, agent, session }                    a direct conversation with an agent (no task): only the manual
+//                                                       task it claimed itself (running, claimed by that conversation)
 // ownsTask: whether it may read the detail of a task, change it or wait for it. Its dependencies' results come inside
 // its own task's detail.
 export function ownsTask(board, who, id) {
   if (!who?.signed) return false;
-  const one = (tid) => { try { return board.one('SELECT id, conversation_id, parent_id, assigned_to, status, launch FROM tasks WHERE id = ?', Number(tid)); } catch { return null; } };
+  if (who.boss && !who.conversation) return false;
+  const one = (tid) => { try { return board.one('SELECT id, conversation_id, parent_id, assigned_to, status, launch, claimed_session FROM tasks WHERE id = ?', Number(tid)); } catch { return null; } };
   let t = one(id);
   if (!t) return false;
-  if (!who.boss && !who.task) return t.assigned_to === who.agent && t.status === 'running' && t.launch === 'manual';
+  if (!who.boss && !who.task) return Boolean(who.session) && t.assigned_to === who.agent && t.status === 'running' && t.launch === 'manual' && t.claimed_session === String(who.session);
   // up the chain of subtasks (a delegated task hangs from the one that delegated it)
   for (let depth = 0; t && depth < 20; depth++, t = t.parent_id ? one(t.parent_id) : null) {
     if (who.task && t.id === Number(who.task)) return true;
-    if (who.boss && (who.conversation ? t.conversation_id === Number(who.conversation) : t.conversation_id == null)) return true;
+    if (who.boss && t.conversation_id === Number(who.conversation)) return true;
   }
   return false;
 }

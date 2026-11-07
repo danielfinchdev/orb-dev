@@ -1,20 +1,20 @@
 // MCP server: who is who (the coordinator only with the secret key), which tools each one gets and strict arguments.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import crypto from 'node:crypto';
 import path from 'node:path';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 import { tempHome, ROOT } from './helpers.mjs';
 import { Board } from '../src/core/board.mjs';
 import { createProject } from '../src/core/projects.mjs';
-import { agentToken } from '../src/engine/sessions.mjs';
+import { agentToken, registerConversationKey } from '../src/engine/sessions.mjs';
 
 let t; let board; const KEY = 'clave-de-prueba';
+// The coordinator of a new conversation (its own key, derived from the engine's).
+const bossEnv = (project = 'web') => { const conv = board.createConversation({ title: 'Coordinador', project }).id; return { ORB_AGENT: 'orb', ORB_CONVERSATION: String(conv), ORB_ORCH_KEY: registerConversationKey(board, KEY, conv) }; };
 before(() => {
   t = tempHome(); board = new Board();
   createProject(board, { name: 'web' }, 'usuario');
-  board.setting('orchestrator_key_hash', crypto.createHash('sha256').update(KEY).digest('hex'));
 });
 after(() => t.cleanup());
 
@@ -32,8 +32,8 @@ function client(env) {
 }
 
 test('el coordinador solo se reconoce con la clave secreta', async () => {
-  const boss = client({ ORB_AGENT: 'orb', ORB_ORCH_KEY: KEY });
-  const fake = client({ ORB_AGENT: 'orb', ORB_ORCH_KEY: 'otra' });
+  const boss = client(bossEnv());
+  const fake = client({ ...bossEnv(), ORB_ORCH_KEY: 'otra' });
   const worker = client({ ORB_AGENT: 'codex', ORB_AGENT_TOKEN: agentToken(board, 'codex') });
   const user = client({ ORB_AGENT: 'usuario' });
   try {
@@ -54,7 +54,7 @@ test('el coordinador solo se reconoce con la clave secreta', async () => {
 });
 
 test('el coordinador crea proyectos, escribe bitácoras y no puede leer otra cosa que bitácoras', async () => {
-  const boss = client({ ORB_AGENT: 'orb', ORB_ORCH_KEY: KEY });
+  const boss = client(bossEnv(null));
   try {
     await boss.rpc('initialize', {});
     const p = await boss.call('orb_create_project', { name: 'tienda' });
@@ -65,7 +65,11 @@ test('el coordinador crea proyectos, escribe bitácoras y no puede leer otra cos
     assert.match(r.text, /Decidimos usar Codex/);
     assert.doesNotMatch(r.text, /ghp_/, 'los secretos no llegan a la bitácora');
     assert.equal((await boss.call('orb_read_log', { project: '../../datos/clave.bin' })).error, true);
-  } finally { boss.close(); }
+    assert.equal((await boss.call('orb_read_log', { project: 'web' })).error, true, 'la bitácora de un proyecto de otra conversación');
+    assert.equal((await boss.call('orb_write_log', { project: 'web', tema: 'x', hecho: 'y' })).error, true);
+    assert.match((await boss.call('orb_read_log', {})).text, /^general: [\s\S]*tienda: /);
+    assert.doesNotMatch((await boss.call('orb_read_log', {})).text, /^web: /m, 'ni la lista muestra las de otros proyectos');
+  } finally { boss.close(); board.setActiveProject('web', 'usuario'); }
 });
 
 test('un agente que arranca el MCP por su cuenta no se hace pasar por otro agente ni por otra tarea', async () => {
@@ -93,7 +97,7 @@ test('el MCP no tiene la clave de aprobaciones: no puede firmar ni invalida las 
   const task = board.createTask({ project: 'web', title: 'Publicar', description: 'publica la web', agent: 'claude', launch: 'manual' }, 'orb');
   const ok = board.approve(task.id, 'approved', 'usuario', board.previewHash(task));
   assert.equal(ok.status, 'queued');
-  const worker = client({ ORB_AGENT: 'claude', ORB_AGENT_TOKEN: agentToken(board, 'claude') });
+  const worker = client({ ORB_AGENT: 'claude', ORB_AGENT_TOKEN: agentToken(board, 'claude', '', 'conversacion-directa') });
   try {
     await worker.rpc('initialize', {});
     // claim_next re-checks approvals: without the secret it must not push signed tasks back to approval…

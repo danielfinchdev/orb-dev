@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, describeInput, cleanEnv, within, discoverDir, killTree } from './common.mjs';
+import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, describeInput, cleanEnv, within, discoverDir, killTree, mcpEnvByRef } from './common.mjs';
 import { Turn, Approvals } from './live.mjs';
 import { decide, describeAction } from '../core/guard.mjs';
 import { tr } from '../core/context.mjs';
@@ -199,16 +199,19 @@ export function createLive(o) {
 
   const start = async () => {
     const { query: sdkQuery } = await import('@anthropic-ai/claude-agent-sdk');
+    // The SDK hands mcpServers to Claude Code as --mcp-config <json>: the values go in Claude Code's environment and the
+    // config only names them (Claude Code expands ${VAR} in --mcp-config, as in .mcp.json).
+    const mcp = mcpEnvByRef(o.mcpServers, (name) => `\${${name}}`);
     const options = {
       cwd: o.cwd,
       pathToClaudeCodeExecutable: o.exe.cmd,
-      env: cleanEnv(o.env ?? {}),
+      env: cleanEnv({ ...(o.env ?? {}), ...mcp.env }),
       model: o.model || undefined,
       effort: o.reasoning || 'medium',
       includePartialMessages: true,
       settingSources: LEAN_SOURCES,
       extraArgs: { 'strict-mcp-config': null },
-      mcpServers: o.mcpServers ?? {},
+      mcpServers: mcp.servers,
       additionalDirectories: o.addDirs ?? [],
       abortController: abort,
       canUseTool,

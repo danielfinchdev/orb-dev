@@ -39,19 +39,31 @@ export const browserOn = () => Boolean(ctx.browser) && ctx.config.browser?.enabl
 // What the agent process needs in its environment for the browser tools: the key of this conversation's page only.
 export const browserEnv = (agent, session, task = '') => (browserOn() ? { ORB_BROWSER_TOKEN: browserKey(ctx.browser.token, { agent, session: String(session), task: String(task || '') }) } : {});
 
-// Orb's signature of who a worker's MCP process is (agent and task): made with a key that lives only in the engine's
-// memory (a new one each start, which retires the old signatures); the database keeps just the hash, for the MCP to look
-// it up. The same agent and task always get the same signature, so the table does not grow with every turn.
-// Its tools act only on that task (src/core/permissions.mjs › ownsTask).
-export function agentToken(board, agent, taskId = '') {
+// Orb's signature of who a worker's MCP process is (agent, task and the conversation it runs in): made with a key that
+// lives only in the engine's memory (a new one each start, which retires the old signatures); the database keeps just
+// the hash, for the MCP to look it up on every call. It ends with the agent's process (Sessions.closeLive), so a task or
+// conversation that is over leaves no valid signature behind, and two direct conversations of one agent are two
+// identities. Its tools act only on that task (src/core/permissions.mjs › ownsTask).
+export function agentToken(board, agent, taskId = '', session = '') {
   if (!agentKey) { agentKey = crypto.randomBytes(32); board.run("DELETE FROM settings WHERE key LIKE 'agent_id:%'"); }
-  const token = crypto.createHmac('sha256', agentKey).update(`${agent}|${taskId}`).digest('hex');
-  board.settingJson(`agent_id:${crypto.createHash('sha256').update(token).digest('hex')}`, { agent, task: taskId ? Number(taskId) : null });
+  const token = crypto.createHmac('sha256', agentKey).update(`${agent}|${taskId}|${session}`).digest('hex');
+  board.settingJson(`agent_id:${crypto.createHash('sha256').update(token).digest('hex')}`, { agent, task: taskId ? Number(taskId) : null, session: session ? String(session) : null });
   return token;
 }
-// 3.6: the coordinator's conversation, signed with its key (its MCP process checks it was not changed).
-export const conversationSig = (orchKey, conversation) => crypto.createHmac('sha256', String(orchKey)).update(`conversation|${conversation}`).digest('hex');
+// The signatures of one conversation's (or task run's) agent process, when it closes.
+export function revokeAgentTokens(board, session) {
+  board.run("DELETE FROM settings WHERE key LIKE 'agent_id:%' AND json_extract(value, '$.session') = ?", String(session));
+}
 let agentKey = null;
+// 3.8: the coordinator of one conversation gets a key of its own, derived from the engine's (never the engine's key
+// itself): a key that leaks signs nothing but that conversation. The database keeps its hash until the conversation goes.
+export const conversationKey = (orchKey, conversation) => crypto.createHmac('sha256', String(orchKey)).update(`conv|${conversation}`).digest('hex');
+export function registerConversationKey(board, orchKey, conversation) {
+  const key = conversationKey(orchKey, conversation);
+  board.setting(`orchestrator_conv:${Number(conversation)}`, crypto.createHash('sha256').update(key).digest('hex'));
+  return key;
+}
+export const revokeConversationKey = (board, conversation) => board.run('DELETE FROM settings WHERE key = ?', `orchestrator_conv:${Number(conversation)}`);
 
 // MCP servers handed to an agent: the assistant's board (with the browser tools when the app offers them) plus the
 // user's own connectors enabled for that agent. session: which conversation, so its next turn reuses the same page.
@@ -59,9 +71,10 @@ let agentKey = null;
 export function mcpServersFor(agent, { board, taskId = '', orchestrator = false, browser = !orchestrator, session = '', orchKey = '', conversation = null } = {}) {
   const who = orchestrator ? 'orb' : agent;
   const env = { ORB_HOME: ctx.home, ORB_AGENT: who, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}), ...(orchestrator && conversation ? { ORB_CONVERSATION: String(conversation) } : {}) };
-  if (!orchestrator && board) env.ORB_AGENT_TOKEN = agentToken(board, who, taskId);
-  // The coordinator's key goes to its own MCP process only (handed in memory by the SDK, never written to a file).
-  if (orchestrator && orchKey) { env.ORB_ORCH_KEY = orchKey; if (conversation) env.ORB_CONVERSATION_TOKEN = conversationSig(orchKey, conversation); }
+  if (!orchestrator && board) env.ORB_AGENT_TOKEN = agentToken(board, who, taskId, session);
+  // The coordinator gets its conversation's key only (a coordinator without a conversation gets none). Secrets never go
+  // on a command line: each adapter hands the MCP server's env through the agent's own environment (see the adapters).
+  if (orchestrator && orchKey && conversation && board) env.ORB_ORCH_KEY = registerConversationKey(board, orchKey, conversation);
   if (browser && session && browserOn()) {
     env.ORB_BROWSER_PIPE = ctx.browser.pipe;
     env.ORB_SESSION = String(session);
@@ -259,6 +272,8 @@ export class Sessions {
   liveKey(s, acc) { return [s.agent, acc.id, s.cwd, s.reasoning].join('|'); }
 
   closeLive(id) {
+    // Its agent's signature ends with its process (a new process gets a new one).
+    try { revokeAgentTokens(this.board, id); } catch { /* the database is closing */ }
     const entry = this.lives.get(id); if (!entry) return;
     this.lives.delete(id);
     try { entry.live.close(); } catch { /* gone */ }
@@ -361,7 +376,7 @@ export class Sessions {
     }
     if (ev.type === 'context') { if (ev.size) this.update(id, { context: { used: ev.used, size: ev.size, at: now() } }); return; }
     if (ev.type === 'rate') { const s = this.get(id); try { this.onRate(s?.account ?? s?.agent, ev); } catch { /* budget only */ } return; }
-    if (ev.type === 'exit') { if (!this.running.has(id) && this.lives.get(id)?.live.isClosed?.()) this.lives.delete(id); }
+    if (ev.type === 'exit') { if (!this.running.has(id) && this.lives.get(id)?.live.isClosed?.()) { this.lives.delete(id); try { revokeAgentTokens(this.board, id); } catch { /* closing */ } } }
   }
 
   // 3.1: whether a command only stops processes this task started itself: every number it names is a process launched

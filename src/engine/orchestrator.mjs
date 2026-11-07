@@ -11,7 +11,7 @@ import { executable, installed, adapter } from '../agents/index.mjs';
 import * as claude from '../agents/claude.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { titleFrom } from '../core/titles.mjs';
-import { mcpServersFor } from './sessions.mjs';
+import { mcpServersFor, revokeConversationKey } from './sessions.mjs';
 import { accountEnv } from '../core/accounts.mjs';
 import { briefing } from './logs.mjs';
 import { rememberModels } from './catalog.mjs';
@@ -426,8 +426,8 @@ class Lane {
 // The assistant: every conversation with the user goes to its brain (Claude Code by default, on the user's own
 // subscription) with a coordinator persona. 3.2: one Lane per conversation, several at once.
 export class Orchestrator {
-  // key: secret handed only to the assistant's MCP processes (in memory, through the SDK) so the MCP recognises the
-  // coordinator. title(conversation, text): names a new conversation (engine/titles.mjs).
+  // key: the engine's secret; each conversation's coordinator gets only a key derived from it (sessions.mjs ›
+  // conversationKey), by which its MCP process recognises it. title(conversation, text): names a new conversation (engine/titles.mjs).
   constructor(board, key, { emit = () => {}, log = () => {}, title = null } = {}) {
     this.board = board; this.key = key; this.emit = emit; this.log = log; this.title = title;
     this.lanes = new Map(); this.closing = false;
@@ -551,6 +551,8 @@ export class Orchestrator {
     const pending = (this.board.settingJson('orchestrator_pending') ?? []).filter((q) => q.conversation !== key);
     this.board.settingJson('orchestrator_pending', pending.length ? pending : null);
     this.board.setting(`report_queue:c${key}`, '');
+    // Its coordinator's key signs nothing any more.
+    revokeConversationKey(this.board, key);
   }
   // 3.2: a conversation quiet for a day with nothing of it still open (no task, no question waiting, nothing to answer) is
   // done by itself; written in again, it opens.

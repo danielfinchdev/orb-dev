@@ -112,6 +112,24 @@ export function orbMcpServer(env = {}) {
   return { command: process.execPath, args: [script], env: { ELECTRON_RUN_AS_NODE: '1', ...env } };
 }
 
+// 3.8: the MCP servers' environment (Orb's signatures, a connector's keys) never goes on a command line, which any
+// process of the user can read: each value moves to the agent's own environment under a name of its own, and the
+// server's config keeps only a reference the agent expands when it starts the server (ref(name): "${NAME}" for Claude
+// Code, "${env:NAME}" for Cursor). → { servers, env }
+export function mcpEnvByRef(servers, ref) {
+  const out = {}; const env = {};
+  for (const [name, s] of Object.entries(servers ?? {})) {
+    const { env: own, ...rest } = s ?? {};
+    const refs = {};
+    for (const [k, v] of Object.entries(own ?? {})) {
+      const key = `ORB_MCP_${name}_${k}`.replace(/[^A-Za-z0-9_]/g, '_');
+      env[key] = String(v); refs[k] = ref(key);
+    }
+    out[name] = Object.keys(refs).length ? { ...rest, env: refs } : rest;
+  }
+  return { servers: out, env };
+}
+
 // Bounded text for the UI (tool inputs and outputs can be huge).
 export const clip = (value, max = 4000) => {
   const s = typeof value === 'string' ? value : JSON.stringify(value ?? '');

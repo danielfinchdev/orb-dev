@@ -5,7 +5,7 @@
 // On Windows the CLI is installed as %LOCALAPPDATA%\cursor-agent\versions\<v>\ with its own node.exe and index.js.
 import fs from 'node:fs';
 import path from 'node:path';
-import { IS_WIN, firstFile, inPath, appDataDirs, userHome, clip, describeInput, readOutput } from './common.mjs';
+import { IS_WIN, firstFile, inPath, appDataDirs, userHome, clip, describeInput, readOutput, mcpEnvByRef } from './common.mjs';
 import { Turn, spawnAgent, killTree } from './live.mjs';
 import { tr } from '../core/context.mjs';
 import { isModelLimitText, parseReset, untilText } from '../core/budget.mjs';
@@ -179,16 +179,8 @@ export function prepareCursorFolder(cwd, { mcpServers = {}, deny = [] } = {}) {
     fs.writeFileSync(file, JSON.stringify(merge(before ? read(file) ?? {} : {}), null, 2));
   };
   try {
-    const servers = {};
-    for (const [name, s] of Object.entries(mcpServers)) {
-      const { env: own, ...rest } = s;
-      const refs = {};
-      for (const [k, v] of Object.entries(own ?? {})) {
-        const ref = `ORB_MCP_${name}_${k}`.replace(/[^A-Za-z0-9_]/g, '_');
-        env[ref] = String(v); refs[k] = `\${env:${ref}}`;
-      }
-      servers[name] = Object.keys(refs).length ? { ...rest, env: refs } : rest;
-    }
+    const { servers, env: values } = mcpEnvByRef(mcpServers, (name) => `\${env:${name}}`);
+    Object.assign(env, values);
     if (Object.keys(servers).length) put('mcp.json', (cur) => ({ ...cur, mcpServers: servers }));
     // Cursor validates the file strictly: permissions needs both lists, allow too (found in a real run: «Required»).
     if (deny.length) put('cli.json', (cur) => ({ ...cur, permissions: { ...(cur.permissions ?? {}), allow: Array.isArray(cur.permissions?.allow) ? cur.permissions.allow : [], deny: [...new Set([...(cur.permissions?.deny ?? []), ...deny])] } }));

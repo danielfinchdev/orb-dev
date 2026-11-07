@@ -58,9 +58,10 @@ async function start(home, version, secret, browser) {
   const { Scheduler } = await import('./scheduler.mjs');
   const { buildApi } = await import('./api.mjs');
   const board = new Board();
-  // Only the coordinator's chat process gets this key; the MCP accepts the identity "orb" only with it.
+  // The coordinators' keys derive from this one, new at each start (sessions.mjs › conversationKey): the ones of before
+  // sign nothing any more.
   const orchKey = crypto.randomBytes(24).toString('hex');
-  board.setting('orchestrator_key_hash', crypto.createHash('sha256').update(orchKey).digest('hex'));
+  board.run("DELETE FROM settings WHERE key = 'orchestrator_key_hash' OR key LIKE 'orchestrator_conv:%'");
   const sessions = new Sessions(board, { emit, log });
   const { plainAction, looksEnglish } = await import('../core/guard.mjs');
   const { adapter } = await import('../agents/index.mjs');

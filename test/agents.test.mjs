@@ -56,6 +56,24 @@ test('Claude: modo de permisos del SDK según el permiso de Orb', () => {
   assert.ok(claude.COORDINATOR_DENIED.includes('Bash') && claude.COORDINATOR_DENIED.includes('Edit'), 'el asistente no ejecuta ni edita');
 });
 
+// 3.8 (M3): the SDK puts mcpServers on Claude Code's command line (--mcp-config): any process of the user can read it.
+test('Claude: los secretos del MCP van en su entorno y la línea de órdenes solo los nombra', async () => {
+  const file = path.join(dir, 'claude-args.json');
+  const live = claude.createLive({ exe: { cmd: fake('fake-claude.mjs'), pre: [] }, cwd: dir, env: { FAKE_ARGS_FILE: file },
+    mcpServers: { orb: { command: 'node', args: ['server.mjs'], env: { ORB_HOME: 'C:\\o', ORB_ORCH_KEY: 'clave-secreta-1', ORB_AGENT_TOKEN: 'firma-secreta-2' } }, otro: { command: 'npx', args: ['x'], env: { API_KEY: 'clave-del-conector-3' } } } });
+  lives.push(live);
+  await live.send({ text: 'hola' });
+  const seen = await until(() => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; } }, 'Claude falso arrancado');
+  const line = seen.args.join(' ');
+  for (const secret of ['clave-secreta-1', 'firma-secreta-2', 'clave-del-conector-3']) assert.ok(!line.includes(secret), `${secret} no está en los argumentos`);
+  const config = JSON.parse(seen.args[seen.args.indexOf('--mcp-config') + 1]);
+  assert.equal(config.mcpServers.orb.env.ORB_ORCH_KEY, '${ORB_MCP_orb_ORB_ORCH_KEY}');
+  assert.equal(config.mcpServers.otro.env.API_KEY, '${ORB_MCP_otro_API_KEY}');
+  assert.equal(seen.env.ORB_MCP_orb_ORB_ORCH_KEY, 'clave-secreta-1', 'Claude Code los expande desde su entorno');
+  assert.equal(seen.env.ORB_MCP_orb_ORB_AGENT_TOKEN, 'firma-secreta-2');
+  assert.equal(seen.env.ORB_MCP_otro_API_KEY, 'clave-del-conector-3');
+});
+
 function openCodex(options = {}) {
   const log = path.join(dir, `codex-${lives.length}.jsonl`);
   const events = [];

@@ -182,8 +182,8 @@ export class Scheduler {
   }
 
   // 3.1: Orb is the hub between the agents. A message (orb_send_message) reaches whoever it is for while they work:
-  // - to an agent: every running task of that agent (only the one named in task_id, when it is one of them), at its next
-  //   step, for the agents that can take a message mid-turn (Claude, Codex); the others read it with orb_read_messages;
+  // - to an agent: every running task of that agent in the same conversation as the task it is about (only the one named
+  //   in task_id, when it is one of them), at its next step, for the agents that can take a message mid-turn (Claude, Codex); the others read it with orb_read_messages;
   // - to "orb": the assistant gets it as an engine notice and answers or acts with the board.
   deliverMessages() {
     const { board } = this;
@@ -203,7 +203,11 @@ ${String(m.body).slice(0, 3000)}
 Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message (to: "${m.from_agent}"${m.task_id ? `, task_id: ${m.task_id}` : ''}): le llega mientras trabaja. Si hace falta ${userName()}, díselo en 1-2 líneas.`, null, null, { conversation: from ? board.conversationOfTask(from.id) : null, project: from?.project ?? null });
         continue;
       }
-      const targets = [...this.running.entries()].filter(([id, r]) => (m.to_agent === 'all' || r.agent === m.to_agent) && !(r.agent === m.from_agent && id === m.task_id));
+      // 3.8: an agent's message is about one of its tasks and reaches only the tasks of that task's conversation (the
+      // tasks of no conversation, among themselves).
+      if (!m.task_id) continue;
+      const scope = board.conversationOfTask(m.task_id) ?? null;
+      const targets = [...this.running.entries()].filter(([id, r]) => (m.to_agent === 'all' || r.agent === m.to_agent) && !(r.agent === m.from_agent && id === m.task_id) && (board.conversationOfTask(id) ?? null) === scope);
       const named = targets.filter(([id]) => id === m.task_id);
       for (const [id, r] of named.length && m.to_agent !== 'all' ? named : targets) {
         const entry = this.sessions.lives.get(r.sessionId);
