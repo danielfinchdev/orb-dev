@@ -13,7 +13,10 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
   const tl = (key, vars) => parts.tl(key, vars); // web-bridge.js's (the texts load with the interface)
   const core$ = () => import('@capacitor/core');
   let orbNative = null;
-  const Native = async () => (orbNative ??= (await core$()).registerPlugin('OrbNative'));
+  // A Capacitor plugin is a Proxy that answers every property, `then` too: returned from an async function it is awaited
+  // as a promise that never settles (the app stayed on the loading robot). Hide `then`.
+  const noThen = (p) => new Proxy(p, { get: (t, k) => (k === 'then' ? undefined : t[k]) });
+  const Native = async () => (orbNative ??= noThen((await core$()).registerPlugin('OrbNative')));
   const KEY = 'orb.movil';
   const NOTIFY = 'orb.avisos';
 
