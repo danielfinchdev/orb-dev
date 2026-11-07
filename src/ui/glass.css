@@ -114,7 +114,7 @@ html.glass [data-slot="dialog-overlay"] { background: var(--glass-scrim); backdr
   html.glass [data-slot="dialog-content"] [data-slot="button"] { min-height: 44px; border-radius: 14px; }
 }
 
-/* ---- The menu ☰: a glass sheet from the left edge (the transient blurred layer), with «Orb | Bots» as a glass capsule. ---- */
+/* ---- The menu ☰: a glass sheet from the left edge (the transient blurred layer). ---- */
 html.glass [data-slot="drawer-content"] {
   border: 0; border-radius: 0 var(--glass-r-sheet) var(--glass-r-sheet) 0;
   background: var(--glass-thick); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);

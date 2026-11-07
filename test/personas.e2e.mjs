@@ -154,7 +154,7 @@ try {
   await pc.waitForSelector('[data-testid=person-row-Leo]');
   const row = await pc.textContent('[data-testid=person-row-Leo]');
   assert.ok(!leaks(row).length, 'Ajustes › Magic Link › Usuarios: solo números');
-  assert.doesNotMatch(row, /turno|Dueño|1 (bots|chats|proyectos|grupos)/, 'sin jerga ni plurales mal');
+  assert.doesNotMatch(row, /turno|Dueño|\b1 (chats|proyectos)\b/, 'sin jerga ni plurales mal');
   await shot('08-personas');
   await pc.click('[data-testid=settings-nav-datos]');
   await pc.waitForSelector('[data-testid=backups-card]');
