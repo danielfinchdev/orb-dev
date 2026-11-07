@@ -131,6 +131,8 @@ export function validateConfig(c) {
     if (!c.backup || typeof c.backup !== 'object' || Array.isArray(c.backup)) throw new Error(tr('msg.ctx.badAppearance', { name: 'backup' }));
     bool(c.backup.enabled, 'backup.enabled'); bool(c.backup.projects, 'backup.projects'); bool(c.backup.accounts, 'backup.accounts');
     if (c.backup.folder !== undefined && c.backup.folder !== '' && (typeof c.backup.folder !== 'string' || !path.isAbsolute(c.backup.folder) || c.backup.folder.length > 500)) throw new Error(tr('msg.ctx.badAppearance', { name: 'backup.folder' }));
+    // 3.8: never inside core: a core deleted by mistake would take its copies with it.
+    if (c.backup.folder && ctx.home) { const core = path.resolve(paths(ctx.home).core).toLowerCase(); const f = path.resolve(c.backup.folder).toLowerCase(); if (f === core || f.startsWith(core + path.sep)) throw new Error(tr('msg.ctx.backupInCore')); }
   }
   if (c.tz !== undefined && c.tz !== '' && !(typeof c.tz === 'string' && c.tz.length <= 64 && (() => { try { new Intl.DateTimeFormat('en', { timeZone: c.tz }); return true; } catch { return false; } })())) throw new Error(tr('msg.ctx.badAppearance', { name: 'tz' }));
   if (c.approvalWaitMinutes !== undefined) int(c.approvalWaitMinutes, 0, 240, 'approvalWaitMinutes');

@@ -5,6 +5,11 @@ export default {
   // Ajustes › Datos
   'datos.backupsTitle': 'Copias de seguridad',
   'datos.folder': 'Carpeta',
+  'datos.pickFolder': 'Elige la carpeta de las copias',
+  'datos.folderChanged': 'Carpeta de las copias cambiada. Las copias anteriores siguen donde estaban.',
+  'datos.folderOutside': 'Fuera de la carpeta de Orb: si se borra core, las copias siguen aquí.',
+  'datos.folderChange': 'Cambiar carpeta…',
+  'datos.folderDefault': 'Usar la predeterminada',
   'datos.lastOk': 'Última copia: {when}',
   'datos.lastFailed': 'La última copia falló ({when}): {error}',
   'datos.none': 'Todavía no hay copias.',

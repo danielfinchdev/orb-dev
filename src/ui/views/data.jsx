@@ -51,6 +51,9 @@ function BackupsCard() {
     });
     if (r) toast.success(t('datos.restoreReady'), { duration: 10000 });
   };
+  // 3.8: where the copies go: outside Orb's folder by default; another folder (never inside core) or back to the default.
+  const setFolder = async (folder) => { if (await act(call('config.save', { patch: { backup: { folder } } }), t('datos.folderChanged'))) load(); };
+  const pickFolder = async () => { const f = await bridge.pickFolder?.(t('datos.pickFolder')); if (f) setFolder(f); };
   const pickFile = async () => {
     const files = await bridge.pickFiles?.(t('datos.pickFile'));
     const file = Array.isArray(files) ? files[0] : files;
@@ -61,7 +64,8 @@ function BackupsCard() {
       <CardHeader className="flex-row items-start gap-3"><HardDriveDownload className="text-primary mt-0.5 size-5 shrink-0" /><CardTitle className="mt-1">{t('datos.backupsTitle')}</CardTitle></CardHeader>
       <CardContent className="grid gap-3">
         <div className="text-muted-foreground grid gap-1 text-xs">
-          <span>{t('datos.folder')}: <span className="text-foreground font-mono break-all">{st.folder}</span></span>
+          <span>{t('datos.folder')}: <span className="text-foreground font-mono break-all" data-testid="backup-folder">{st.folder}</span></span>
+          {!st.custom ? <span>{t('datos.folderOutside')}</span> : null}
           <span data-testid="backup-last">{st.last ? (st.last.ok ? t('datos.lastOk', { when: when(st.last.at) }) : t('datos.lastFailed', { when: when(st.last.at), error: st.last.error ?? '' })) : t('datos.none')}</span>
           {!st.recovery ? <span className="text-warning flex items-center gap-1"><TriangleAlert className="size-3.5" />{t('datos.noCode')}</span> : <span className="flex items-center gap-1"><ShieldCheck className="text-success size-3.5" />{t('datos.withCode')}</span>}
         </div>
@@ -82,6 +86,8 @@ function BackupsCard() {
         <Button size="sm" onClick={now} disabled={busy || st.running} data-testid="backup-now">{busy || st.running ? <LoaderCircle className="animate-spin" /> : <HardDriveDownload />}{t('datos.now')}</Button>
         <Button size="sm" variant="outline" onClick={async () => { if (await newRecoveryCode()) load(); }} data-testid="backup-code"><KeyRound />{st.recovery ? t('datos.codeAgain') : t('datos.codeMake')}</Button>
         {bridge.pickFiles ? <Button size="sm" variant="ghost" onClick={pickFile}><FolderOpen />{t('datos.restoreFile')}</Button> : null}
+        {bridge.pickFolder ? <Button size="sm" variant="ghost" onClick={pickFolder} data-testid="backup-folder-change"><FolderOpen />{t('datos.folderChange')}</Button> : null}
+        {st.custom ? <Button size="sm" variant="ghost" onClick={() => setFolder('')}><RotateCcw />{t('datos.folderDefault')}</Button> : null}
       </CardFooter>
     </Card>
   );

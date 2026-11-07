@@ -48,6 +48,8 @@ async function start(home, version, secret, browser) {
   if (typeof browser?.pipe === 'string' && /^[0-9a-f]{48}$/.test(browser.token ?? '') && /orb-navegador-[0-9a-f]{16}(\.sock)?$/.test(browser.pipe)) ctx.browser = { pipe: browser.pipe, token: browser.token };
   logFile = path.join(ctx.paths.runs, 'motor.log');
   fs.mkdirSync(ctx.paths.runs, { recursive: true });
+  // 3.8: the backups of 3.7 (inside the data folder, now core) go where backups go now, outside the workspace.
+  try { const { adoptOldBackups } = await import('../core/backup.mjs'); const n = adoptOldBackups(home, ctx.config); if (n) log(`copias: ${n} copia(s) de 3.7 movidas fuera de core`); } catch (error) { log(`copias de 3.7: ${error.message}`); }
   // Android's adb: in the PATH of every agent, downloaded in the background the first time.
   const { addAdbToPath, ensureAdb } = await import('./android.mjs');
   addAdbToPath(); ensureAdb({ log });

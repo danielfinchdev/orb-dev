@@ -21,10 +21,11 @@
 // rewritePaths).
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
-import { paths, INTERNAL_DIR, BOTS_DIR, LEGACY } from './home.mjs';
+import { paths, homeKey, INTERNAL_DIR, BOTS_DIR, LEGACY } from './home.mjs';
 import { rewritePaths } from './core-folder.mjs';
 import { tr } from './context.mjs';
 import { ARCHIVE_DIR, forgetRun } from './migrate-38.mjs';
@@ -104,8 +105,60 @@ export function orbIdOf(home) {
 }
 
 // ---- where the copies go
-export const backupDir = (home, config = null) => (config?.backup?.folder && path.isAbsolute(config.backup.folder) ? config.backup.folder : path.join(paths(home).internal, 'copias-seguridad'));
-const stamp = (d = new Date()) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z').replace('T', '-');
+// 3.8: outside the workspace, so that deleting core (or the whole workspace) does not take its copies with it:
+// %LOCALAPPDATA%\Orb\copias\<workspace> on Windows (per user, never roaming: copies can be big; no administrator; the
+// uninstaller leaves it), ~/.local/share/Orb/copias/<workspace> elsewhere. The user may pick another folder (Ajustes ›
+// Datos), never inside core. Wherever they go, the newest copy is noted in the default folder (ultima.json), which is
+// how Orb finds it again when core is gone. ORB_BACKUP_ROOT moves the default (tests); under node --test without it, a
+// temporary folder: tests never touch this PC's real one.
+export function backupRoot() {
+  if (process.env.ORB_BACKUP_ROOT) return process.env.ORB_BACKUP_ROOT;
+  if (process.env.NODE_TEST_CONTEXT) return path.join(os.tmpdir(), 'orb-pruebas-copias');
+  if (process.platform === 'win32') return path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'Orb', 'copias');
+  return path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'Orb', 'copias');
+}
+export const defaultBackupDir = (home) => path.join(backupRoot(), homeKey(home));
+export const backupDir = (home, config = null) => (config?.backup?.folder && path.isAbsolute(config.backup.folder) ? config.backup.folder : defaultBackupDir(home));
+// Up to 3.7 the copies lived inside the data folder (now core\copias-seguridad).
+export const oldBackupDir = (home) => path.join(paths(home).core, 'copias-seguridad');
+const LAST = 'ultima.json';
+export function rememberBackup(home, file, header) {
+  const dir = defaultBackupDir(home);
+  fs.mkdirSync(dir, { recursive: true });
+  const tmp = path.join(dir, `${LAST}.${process.pid}.tmp`);
+  fs.writeFileSync(tmp, `${JSON.stringify({ file, created: header.created, kind: header.kind }, null, 2)}\n`);
+  fs.renameSync(tmp, path.join(dir, LAST));
+}
+// The newest copy of this workspace that can be read: the one noted, the default folder and the chosen one. → entry of
+// listBackups or null.
+export async function latestBackup(home, config = null) {
+  const found = new Map();
+  try { const last = JSON.parse(fs.readFileSync(path.join(defaultBackupDir(home), LAST), 'utf8')); if (typeof last?.file === 'string' && fs.existsSync(last.file)) for (const b of await listBackups(path.dirname(last.file))) found.set(b.file, b); } catch { /* none noted */ }
+  for (const dir of new Set([defaultBackupDir(home), backupDir(home, config)])) for (const b of await listBackups(dir)) found.set(b.file, b);
+  return [...found.values()].filter((b) => !b.damaged && b.created).sort((a, b) => b.created.localeCompare(a.created))[0] ?? null;
+}
+// The copies 3.7 left inside core move to where copies go now (renamed; copied, checked and deleted across volumes).
+// → how many moved.
+export function adoptOldBackups(home, config = null) {
+  const from = oldBackupDir(home);
+  let names; try { names = fs.readdirSync(from).filter((n) => n.endsWith(EXT)); } catch { return 0; }
+  const to = backupDir(home, config);
+  fs.mkdirSync(to, { recursive: true });
+  let n = 0;
+  for (const name of names) {
+    const src = path.join(from, name); let dst = path.join(to, name);
+    if (fs.existsSync(dst)) { if (fs.statSync(dst).size === fs.statSync(src).size) { fs.rmSync(src, { force: true }); continue; } dst = path.join(to, name.replace(EXT, `-3.7${EXT}`)); }
+    try { fs.renameSync(src, dst); } catch {
+      fs.copyFileSync(src, `${dst}.tmp`);
+      if (fs.statSync(`${dst}.tmp`).size !== fs.statSync(src).size) { fs.rmSync(`${dst}.tmp`, { force: true }); continue; }
+      fs.renameSync(`${dst}.tmp`, dst); fs.rmSync(src, { force: true });
+    }
+    n++;
+  }
+  try { fs.rmdirSync(from); } catch { /* something else in it: left */ }
+  return n;
+}
+const stamp =(d = new Date()) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z').replace('T', '-');
 
 // ---- what goes in (archive paths are relative to the Orb folder, with /)
 export const walkFiles = (dir, skip = () => false) => {
@@ -264,6 +317,7 @@ export async function createBackup({ home, secret = null, kind = 'manual', versi
     const file = path.join(dir, `orb-${stamp(now)}-${kind}${EXT}`);
     const header = await writeOrbbak(file, stage, manifest, { secret, recovery, passphrase,
       meta: { orbId: id.orbId, incarnation: id.incarnation, version, created: now.toISOString(), kind, move: false } });
+    try { rememberBackup(home, file, header); } catch (error) { log(`copia: no se pudo anotar la última: ${error.message}`); }
     log(`copia hecha: ${path.basename(file)}`);
     return { file, header };
   } finally { await fsp.rm(stage, { recursive: true, force: true, maxRetries: 5 }); }

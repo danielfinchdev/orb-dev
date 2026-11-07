@@ -205,3 +205,48 @@ test('engine: backup.now, list, verify, recovery code and restore staged for the
   } finally { if (!stopped) await e.stop(); cleanup(); }
 });
 
+
+test('3.8: las copias van fuera de la carpeta de Orb, las de 3.7 se mudan allí y nunca pueden ir dentro de core', async () => {
+  const s = seed();
+  try {
+    const def = K.defaultBackupDir(s.home);
+    assert.equal(path.dirname(def), process.env.ORB_BACKUP_ROOT, 'carpeta propia de este espacio en la raíz de copias');
+    assert.ok(!path.relative(s.home, def).match(/^[^.]/) || path.relative(s.home, def).startsWith('..'), 'fuera del espacio de trabajo');
+    const { file } = await K.createBackup({ home: s.home, secret: s.secret, kind: 'manual', version: 'test' });
+    assert.equal(path.dirname(file), def);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(def, 'ultima.json'), 'utf8')).file, file, 'la última, anotada fuera de core');
+    // A copy of 3.7, inside the old data folder: moved where copies go now, and found.
+    const old = K.oldBackupDir(s.home);
+    fs.mkdirSync(old, { recursive: true });
+    const older = (await K.createBackup({ home: s.home, secret: s.secret, kind: 'daily', version: '3.7.0', folder: old, now: new Date('2026-10-01T03:00:00Z') })).file;
+    assert.equal(K.adoptOldBackups(s.home), 1);
+    assert.ok(!fs.existsSync(old) && fs.existsSync(path.join(def, path.basename(older))));
+    assert.equal(K.adoptOldBackups(s.home), 0, 'la segunda vez, nada');
+    assert.equal((await K.latestBackup(s.home)).file, file);
+    // Another folder chosen by the user: the newest copy is still found from the note in the default folder.
+    const mine = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-mis-copias-'));
+    const later = await K.createBackup({ home: s.home, secret: s.secret, kind: 'manual', version: 'test', folder: mine, now: new Date(Date.now() + 60_000) });
+    assert.equal((await K.latestBackup(s.home)).file, later.file);
+    fs.rmSync(mine, { recursive: true, force: true });
+    // A 3.7 copy's names go into core.
+    assert.equal(K.legacyName('.orb/datos/orb.db'), 'core/datos/orb.db');
+    assert.equal(K.legacyName('orb.json'), 'core/orb.json');
+    assert.equal(K.legacyName('bitacora/proyectos/x.md'), 'core/bitacora/proyectos/x.md');
+    assert.equal(K.legacyName('web/tienda/pizarra/a.png'), 'web/tienda/pizarra/a.png');
+  } finally { s.cleanup(); }
+});
+
+test('3.8: Ajustes › Datos elige otra carpeta de copias, nunca dentro de core', async () => {
+  const { home, cleanup } = tempHome();
+  const e = await startEngine(home);
+  try {
+    assert.equal((await e.call('backup.status')).custom, false);
+    await assert.rejects(e.call('config.save', { patch: { backup: { folder: path.join(home, 'core', 'copias') } } }), /dentro de core/);
+    const mine = path.join(path.dirname(home), 'mis-copias');
+    await e.call('config.save', { patch: { backup: { folder: mine } } });
+    const st = await e.call('backup.status');
+    assert.equal(st.folder, mine); assert.equal(st.custom, true);
+    await e.call('config.save', { patch: { backup: { folder: '' } } });
+    assert.equal((await e.call('backup.status')).folder, K.defaultBackupDir(home));
+  } finally { await e.stop(); cleanup(); }
+});
