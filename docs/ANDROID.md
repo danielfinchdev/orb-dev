@@ -19,29 +19,40 @@ with the same key; if the key changes (another PC), uninstall the app first.
 ## Linking it to your Orb
 
 1. The phone has to reach your Orb: on the same home Wi-Fi, or with **Tailscale** on in the phone (works from
-   anywhere).
-2. In your Orb, open **Settings → Magic Link**, turn on access and tap **Pair over Wi-Fi** or **Pair over Tailscale**.
+   anywhere). Your Orb must be on.
+2. In your Orb, open **Settings → Magic Link**, turn on access and show the QR code (over Wi-Fi or Tailscale).
 3. In the app, tap **Scan the QR code** and point at the QR. The first time, Android may take a few seconds to prepare
-   the scanner.
-4. Without a camera: tap **Link without the camera** and paste the QR link, or type the short code and your Orb's
-   address (the short code comes with Magic Link).
+   the scanner. Without a camera: tap **Link without the camera** and paste the QR link, or type the short code and
+   your Orb's address.
+4. The app shows your Orb's fingerprint: it must be the same one the PC shows. With the short code you confirm it with
+   **Coincide con la del PC** before going on.
+5. Type your **master password**. The phone never sends it: it proves it knows it, and the PC proves it is your PC.
+   A wrong password does not spend the code; after 5 wrong tries the code is cancelled and you make a new one.
 
 The QR expires after 5 minutes and works only once. From then on everything is encrypted with a key of this phone's
-own, kept in the Android keystore. To remove access, revoke it in your Orb (**Settings → Magic Link**).
+own, kept in the Android keystore. To remove access, sign the phone out in your Orb (**Settings → Magic Link**).
+
+**Coming from Orb 3.7:** a 3.7 app cannot link with Orb 3.8 (it says «Actualiza la app»): install the 3.8 APK. Phones
+linked in 3.7 are unlinked once when the PC first opens 3.8; link them again with Magic Link.
+
+## Using it
+
+- **Back button**: closes the open sheet or menu, then goes back to the list, then to Chats; on Chats, press it twice
+  to leave.
+- **PC off or unreachable**: the app says so, shows when it last connected and retries on its own (and when you come
+  back to the app or the network returns).
+- PC-only things (Settings, agents' accounts, backups, `core`) are not on the phone.
 
 ## Notifications, dictation and sharing
 
 - **Notifications**: turn them on in the app, in **More → This phone**. They arrive while Android keeps the app open in
   the background; if Android closes it, you see them when you open it again.
-- **Messages** (3.6): each chat's notification shows Orb's picture, the chat's
+- **Messages**: each chat's notification shows Orb's picture, the chat's
   name and the text as chosen in **Settings › Magic Link** (on the lock screen); new messages of the same chat join one
   notification. **Reply** writes back from the notification; on a card, **Approve** and **Reject** answer it (a
   sensitive card opens the app instead). Muted chats do not notify. Tapping opens that chat.
-- **Reminders** (3.8): Orb has no bots any more, so the app schedules nothing on the phone; the reminders an older
-  version left there are cancelled once.
-- **No app lock in 3.8.0**: the phone is protected by its encrypted link with the PC (a lock with the master password
-  comes later).
-- **Updates** (3.6): when your Orb needs a newer app, the app says so instead of failing.
+- **No app lock**: the phone is protected by its encrypted link with the PC and by the phone's own screen lock.
+- **Updates**: when your Orb needs a newer app, the app says so instead of failing.
 - **Dictation**: the microphone button, next to **Send**. It uses the phone's own speech recognition.
 - **Share with Orb**: in any app, **Share → Orb**. Text and links appear in the chat, ready to send; images are
   uploaded encrypted to your Orb and the chat gets their path.
@@ -69,5 +80,4 @@ from the QR, `src/ui/lib/link-payload.js`.
 ## Still missing
 
 - Notifications with the app fully closed (Firebase push, with its Google account and `google-services.json`).
-- Linking with the short code depends on Magic Link (`/api/hello` on your Orb).
 - Shared images reach the chat as a path; Orb's chat cannot attach images yet.

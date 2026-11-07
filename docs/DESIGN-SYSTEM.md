@@ -103,11 +103,11 @@ Six sections. Each section is a vertical stack of cards; each card = title, at m
 | General | `SlidersHorizontal` | Assistant (name, your name, language), working folder, Apariencia (theme, day/night, motion, font), Actualizaciones |
 | Magic Link | `Radar` (wifi/radar style) | Dispositivos (access from the phone, link a device with QR, linked devices) |
 | Agentes y uso | `Cpu` | Agents and accounts, tasks and spending (the "ahorro ↔ uso" slider), conversation reset, test of the day |
-| Datos | `DatabaseBackup` | Backups, recovery code, restore (moving to another PC: a backup restored there with the code) |
+| Datos | `DatabaseBackup` | Backups (and their folder), recovery code, restore (moving to another PC: a backup restored there with the code), Carpeta core, Contraseña maestra, Datos de Orb 3.7 (after an update) |
 | Avanzado | `Wrench` | Herramientas (browser, MCP, Android), «Cosas que nadie toca», God mode |
 | Acerca de | `Info` | Version, Contribuye (support, report a problem), Más aplicaciones, licence |
 
-Your name and language live in General (3.8: one owner per PC, no users or profiles).
+Your name and language live in General: one owner per PC, no users or profiles.
 
 ### 2.4 Phone (browser and Android app)
 
@@ -117,7 +117,7 @@ Your name and language live in General (3.8: one owner per PC, no users or profi
 │                           │   │ Programadas …      │  Orb's other screens
 │        content            │   │                    │
 │ ╭───────────────────────╮ │   │ AJUSTES            │
-│ │ Orbe Chats Tareas Proy│ │   │ Este móvil, Magic  │
+│ │ Chats  Tareas  Proyect│ │   │ Este móvil, Magic  │
 │ ╰───────────────────────╯ │   │ Link, Modo oscuro  │
 └───────────────────────────┘   └────────────────────┘
 ```
@@ -127,7 +127,7 @@ Your name and language live in General (3.8: one owner per PC, no users or profi
 - **Drawer ☰** (`components/mobile-menu.jsx`; on Android a glass sheet from the left): the robot, the assistant's name
   and close; Orb's other screens (Programadas, Pizarra, Memorias, Tutoriales); group `Ajustes`: Este móvil, Magic Link, Modo oscuro. Any choice
   closes it.
-- **Tabs**: four, Orb's main screens: `Orbe · Chats · Tareas · Proyectos`. Badges: a number for things waiting on the
+- **Tabs**: three, Orb's main screens: `Chats · Tareas · Proyectos` (`components/mobile-tabs.jsx`). Badges: a number for things waiting on the
   user (dark text on `warning`), a dot for activity.
 - PC-only things (Ajustes dialog, Agentes, God mode, games, themes) never appear on the phone.
 - Dialogs become bottom sheets on the phone (Android glass) and full-width dialogs in a phone browser.
@@ -136,7 +136,7 @@ Your name and language live in General (3.8: one owner per PC, no users or profi
 
 The approved direction: the whole app works like a messaging app, built for the Orb zone. The mockups are in
 `docs/diseno/maquetas/mensajeria.html` (`node scripts/maquetas.mjs` saves them as screenshots); where they differ from
-what is built, sections 2.1–2.4 describe the shipped app. 3.8: the Bots zone, its avatars and the reminders were removed.
+what is built, sections 2.1–2.4 describe the shipped app.
 
 - **Desktop and wide browser, three panes.** Left: the head, search + new chat, Orb's other places as four labelled
   icons (Tareas, Proyectos, Programadas, Pizarra), then the chat list; the sidebar footer exactly as in 2.1. Center: the
@@ -265,7 +265,6 @@ All in `src/ui/components/ui/` unless noted. Do not build a one-off when one of 
 | Nothing to show | `Empty` (icon, title, one line, optional action) | Says what will appear here and how to get it. One empty state per screen, not one per pane. |
 | Something happened | `notify()` (sonner) | One at a time, under the bell afterwards. Errors stay until closed. |
 | Status label | `Badge` (`success`, `warning`, `destructive`, `info`, `secondary`) | Short state words from WRITING-GUIDE ("En curso", "Completada"). |
-| Person | `PersonDot` (initials) | `shrink-0`. Same size per context: 20 (lists), 28 (menus), 40 (cards). |
 | Agent | `AgentIcon` | Brand marks of the agents only next to their name. |
 | Progress | `Spinner` (unknown), bar (known %) | |
 | Page frame | `PageHeader` + `PageBody` (`page.jsx`) | |
@@ -405,8 +404,8 @@ Use it on every UI change. A "no" is an issue; P1 if it breaks a principle for m
 confusing, P3 polish.
 
 **Placement and structure**
-- [ ] Each element is where section 2 says (sidebar footer as in 3.5, with the initial for 2+ users; settings in
-      their six sections; composer rows as specified; phone ☰ drawer and four tabs).
+- [ ] Each element is where section 2 says (sidebar footer as in 2.1; settings in
+      their six sections; composer rows as specified; phone ☰ drawer and three tabs).
 - [ ] One primary action per view/card; secondary actions are quieter or in an overflow menu.
 - [ ] Nothing is explained twice on the same screen; helper text is present only where a wrong choice is likely.
 - [ ] PC-only features do not appear on the phone; hover-only features have a tap path.

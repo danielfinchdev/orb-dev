@@ -1,16 +1,100 @@
 ## Download
 
-- **`Orb-3.7.0-instalador.exe`** (recommended, the full Windows app): installs for your user, without administrator
+- **`Orb-3.8.0-instalador.exe`** (recommended, the full Windows app): installs for your user, without administrator
   rights, and updates itself.
-- **`Orb-3.7.0-light-portable.exe`** (Orb Light, no install needed).
-- **`Orb-3.7.0-android.apk`**: the Orb app for Android. Links to your Orb by scanning a QR code.
-- **`Orb-3.7.0-linux-x86_64.AppImage`** / **`Orb-3.7.0-linux-amd64.deb`** (also arm64): the Orb app for a Linux
+- **`Orb-3.8.0-light-portable.exe`** (Orb Light, no install needed).
+- **`Orb-3.8.0-android.apk`**: the Orb app for Android. Links to your PC by scanning a QR code. **Phones need this
+  version**: the 3.7 app cannot link with Orb 3.8.
+- **`Orb-3.8.0-linux-x86_64.AppImage`** / **`Orb-3.8.0-linux-amd64.deb`** (also arm64): the Orb app for a Linux
   desktop.
-- **`orb-server-3.7.0-linux-x64.tar.gz`** / **`…-linux-arm64.tar.gz`** and **`install.sh`**: Orb Server, for an
-  always-on Linux machine. You don't need to download them by hand: the app gives you a one-line install command.
-- **`orb-terminal-3.7.0`**: Orb in the terminal (Windows and Linux, requires Node 22).
 
 Windows 10/11. Since it isn't signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
+
+## What's new in 3.8.0
+
+**Orb is a multi-agent coding app again.** 3.8 goes back to what Orb is for: one app on your PC that coordinates the
+AI coding agents of your own subscriptions (Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Qwen Code, GitHub
+Copilot), with the orchestrator, manual mode and God mode. One PC has one owner, and your phone links straight to it.
+
+**Removed.** These features are gone: bots, bot groups and their memories, reminders, Casa (Home Assistant),
+Optimus and the Open Control Edge bridge, Orb Server (and its browser, password vault and administration), links
+between Orbs, Orb Terminal, bot replicas, the Connections panel, several users per Orb (Admin / Users, PINs and the
+phone lock), lending accounts, sharing projects, «Mover a otro PC» and the «Orb | Bots» switch. The God mode terminal
+(Ctrl+J) stays. To move to a new PC, restore a backup there with your recovery code.
+
+**What happens to your 3.7 data.** The first time 3.8 opens, before changing anything, Orb makes a full copy of the
+3.7 database (`core\datos\orb-pre-3.8.db`) and an archive you can read (`core\archivo-3.7\`): your bots with their
+conversations, memories and reminders, and each other user with their conversations, tasks, projects and devices.
+Then it removes them from the live data. Your own chats, tasks, projects, schedules and accounts stay as they were.
+If the update cannot finish, Orb does not run on half-updated data: it shows what happened, where the copy is, and a
+«Reintentar» button. Other users' signed-in agent sessions are deleted (they sign in again on their own Orb); the
+archive and the copy are included in your backups. Settings › Data › «Datos de Orb 3.7» shows how much they take and
+deletes them when you no longer need them. If you used Home Assistant, revoke the token you gave Orb.
+
+**A new workspace: `C:\Orb` with `core`.**
+- The workspace is `C:\Orb` by default: a hidden `core\` folder with everything Orb needs (settings, database, logs,
+  MCP servers, tools such as adb, sealed secrets) and the categories `windows`, `linux`, `ios`, `android`, `web` and
+  the new **`multi`**: a multiplatform project in one repository, with a folder per platform and `compartido\`.
+- Updating from 3.7, Orb's own data (`.orb`, `orb.json`) moves into `core` by itself. For your folders (`bitacora`,
+  `android\adb-tools`, each folder of `mcp-servers`) a new «Ordenar carpetas» screen shows what it would do and moves
+  nothing until you choose; an MCP server you wrote becomes a project, never part of `core`.
+- Agents are kept out of `core`. If it is deleted, Orb restores what is missing from the latest backup (only `core`,
+  never your projects); if there is no backup, a screen explains your options.
+- Backups now live outside the workspace, in `%LOCALAPPDATA%\Orb\copias` (or a folder you choose, never inside the
+  workspace). The ones 3.7 made are moved there.
+
+**Master password.**
+- New installs create one in the welcome; an updated Orb asks for it once. At least 10 characters, with a strength
+  meter and a clear warning: **it cannot be recovered**.
+- It seals Orb's secrets (MCP connectors' keys, the keys for your phones) in `core\secretos`; they no longer sit in
+  clear in `orb.json` or the database. On this PC they open on their own; on another PC or Windows user, Orb asks for
+  the password.
+- Opening `core`, restoring a backup, making a new recovery code, signing a device out and changing protected settings
+  ask for it. Settings › Data › «Contraseña maestra» changes it; «He olvidado la contraseña» needs your backups'
+  recovery code, or starts the secrets from scratch (your backups are not touched).
+- Wrong attempts make Orb wait longer each time, and the app tells you after 5 in a row.
+
+**Magic Link, phone only.**
+- Magic Link links your phone (the Android app, or a phone browser over Tailscale's secure address) with this PC and
+  nothing else. The phone checks the PC's fingerprint and asks for your master password; it proves it knows it without
+  ever sending it, and the PC proves it is really your PC.
+- **Re-link your phones:** phones linked in 3.7 are unlinked once when 3.8 starts. The 3.7 Android app cannot link
+  with 3.8 («Actualiza la app»): install the 3.8 APK, then link again.
+- The password is never typed on a page without encryption: a phone browser over plain home Wi-Fi does not link (use
+  the Android app or Tailscale).
+
+**On the phone.**
+- The status bar no longer covers the top of the screen, the tab bar no longer hides the end of lists, and it hides
+  while the keyboard is up.
+- The Android back button works: it closes sheets and menus, goes back to the list and, on Chats, leaves after a
+  second press.
+- When your PC is off or unreachable, the app says so, shows when it last connected and retries on its own; a saved
+  screen that no longer exists opens the chats instead of a blank page.
+- Tasks and projects read better at phone size: filters that wrap, two-line titles, details on their own screen and no
+  Windows paths.
+
+**Security.**
+- A single, small permissions module for one owner: the PC window can do everything; the phone has a closed list of
+  actions (no settings, accounts, backups or `core`); agents act only on their own conversation and tasks.
+- Each agent process gets its identity from the engine by a one-use ticket over a local pipe. Agents never see Orb's
+  keys or the connectors' keys in their command line, environment or logs.
+- Project settings can no longer weaken the guard: Claude ignores a project's permission rules and its hooks, risky
+  `.claude/settings*.json` keys mean Claude starts without them (with a notice), and writing those files asks you
+  first. Cursor's project hooks and allow lists are paused during Orb's turns.
+- Connectors launched through Orb on Windows get their arguments exactly as written (no `cmd.exe` quoting tricks).
+- The phone never receives paths of your PC.
+
+**Other.**
+- Projects: linked folders that no longer exist drop off the list, and same-name projects in two categories read
+  «name (web)» instead of «name (2)».
+- «Cosas que nadie toca» asks before removing a default entry and can restore the defaults.
+
+**Upgrading from 3.7.**
+1. Update the PC app as usual (Orb makes a backup first). On first start it migrates your data and may show
+   «Ordenar carpetas»; then create your master password.
+2. Install the 3.8 Android app and link your phone again with Magic Link.
+3. Optional, later: delete the Orb 3.7 data from Settings › Data once you have checked everything.
+4. If you ran Orb Server or Orb Terminal, uninstall them: 3.8 does not use them.
 
 ## What's new in 3.7.0
 
