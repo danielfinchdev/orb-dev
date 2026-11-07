@@ -55,12 +55,9 @@ rules come from), `src/ui/app.css` (tokens), `src/ui/themes.css` (visual themes)
   Proyectos, Conversaciones). No mode switch: Orb is the only mode.
 - **Sidebar footer** (as in 3.5, owner's decision): a small arrow on the separator line folds/unfolds it; folded, one
   row of icon buttons with tooltips `Ajustes · Agentes · Memorias · Tutoriales`, and on the right the bug (report a
-  problem) and the version; unfolded, the same as a list with names. No separate user block. **With 2+ users** the gear
-  shows the current user's initial and opens a small menu upwards (header: avatar, name, `Admin` badge): `Ajustes`,
-  `Mi perfil`, `Cambiar de usuario`, separator, `Bloquear`. With one user the gear opens Ajustes directly. A linked
-  browser with the PC layout shows the **same slots and icons** in the same order; what it lacks is hidden, never
-  swapped (no `Agentes`, no bug). Its gear opens a small menu `Este dispositivo · Magic Link` (with 2+ users the
-  initial's menu holds those two, `Mi perfil` and `Bloquear`).
+  problem) and the version; unfolded, the same as a list with names. No user block (3.8: one owner per PC): the gear
+  opens Ajustes directly. A linked browser with the PC layout shows the **same slots and icons** in the same order;
+  what it lacks is hidden, never swapped (no `Agentes`, no bug). Its gear opens a small menu `Este dispositivo`.
 - **Top bar** (56 px): left, the screen title (chat: the clock); center, the context (chat: the conversation title and
   its project, or the working project); right, at most three icon buttons of that screen, then the window controls.
   A screen's primary action may be a labelled button at the right (`Nuevo proyecto`); secondary actions go
@@ -104,27 +101,21 @@ Six sections. Each section is a vertical stack of cards; each card = title, at m
 | Section | Icon (lucide) | Contents |
 |---|---|---|
 | General | `SlidersHorizontal` | Assistant (name, your name, language), working folder, Apariencia (theme, day/night, motion, font), Actualizaciones |
-| Magic Link | `Radar` (wifi/radar style) | Usuarios (admin only, 2+ users or to add one), Dispositivos (link a device with QR, linked devices), Orbs enlazados |
+| Magic Link | `Radar` (wifi/radar style) | Dispositivos (access from the phone, link a device with QR, linked devices) |
 | Agentes y uso | `Cpu` | Agents and accounts, tasks and spending (the "ahorro ↔ uso" slider), conversation reset, test of the day |
-| Datos | `DatabaseBackup` | Backups, recovery code, restore, move Orb (admin only) |
+| Datos | `DatabaseBackup` | Backups, recovery code, restore (moving to another PC: a backup restored there with the code) |
 | Avanzado | `Wrench` | Herramientas (browser, MCP, Android), «Cosas que nadie toca», God mode |
 | Acerca de | `Info` | Version, Contribuye (support, report a problem), Más aplicaciones, licence |
 
-`Mi perfil` is **not** a settings section: it opens from the initial in the sidebar footer and from the phone's
-menu ☰. With a single user, profile fields (your name, language) live in General.
-
-**Usuarios screen rules**: one explanation per screen (the section subtitle, or the card description, not both); per
-user: avatar, name, role badge (`Admin` or nothing; never `Dueño`/`Persona`), one summary line ("2 dispositivos · visto
-hoy") and at most two counters (chats, proyectos) with correct plurals (`Intl.PluralRules`); no internal words
-("turnos"); actions in an overflow menu (Editar, Permisos, Quitar PIN, Eliminar in red after a separator).
+Your name and language live in General (3.8: one owner per PC, no users or profiles).
 
 ### 2.4 Phone (browser and Android app)
 
 ```
 ┌───────────────────────────┐   ┌────────────────────┐
 │ ☰ Title           [🔔][⏸] │   │ robot Orbe       ✕ │  drawer ☰, from the left
-│                           │   │ (A) Ana  Mi perfil │  2+ users, then Bloquear
-│        content            │   │ Programadas …      │  Orb's other screens
+│                           │   │ Programadas …      │  Orb's other screens
+│        content            │   │                    │
 │ ╭───────────────────────╮ │   │ AJUSTES            │
 │ │ Orbe Chats Tareas Proy│ │   │ Este móvil, Magic  │
 │ ╰───────────────────────╯ │   │ Link, Modo oscuro  │
@@ -134,8 +125,7 @@ hoy") and at most two counters (chats, proyectos) with correct plurals (`Intl.Pl
 - **No mode switch** (Orb is the only mode). Every screen's bar starts with the menu ☰ (top left, 40 px target),
   then the title and at most two icon buttons on the right.
 - **Drawer ☰** (`components/mobile-menu.jsx`; on Android a glass sheet from the left): the robot, the assistant's name
-  and close; with 2+ users the user card (avatar + name → `Mi perfil`, then `Bloquear`); Orb's other screens
-  (Programadas, Pizarra, Memorias, Tutoriales); group `Ajustes`: Este móvil, Magic Link, Modo oscuro. Any choice
+  and close; Orb's other screens (Programadas, Pizarra, Memorias, Tutoriales); group `Ajustes`: Este móvil, Magic Link, Modo oscuro. Any choice
   closes it.
 - **Tabs**: four, Orb's main screens: `Orbe · Chats · Tareas · Proyectos`. Badges: a number for things waiting on the
   user (dark text on `warning`), a dot for activity.
@@ -160,18 +150,16 @@ what is built, sections 2.1–2.4 describe the shipped app. 3.8: the Bots zone, 
 - **Phone.** Opens on the chat list; ☰ top left (user, Ajustes and the places that are not tabs); tabs Chats · Tareas ·
   Proyectos; a floating button to create. Android in the glass language: the chat header is a glass pill over the
   colour field.
-- **Built (M4): notifications as a messaging app's.** `src/core/notes.mjs` builds each one per person: Orb's icon as the
-  picture, the chat's name as the title, the text as chosen in Mi perfil (`none`: not even who), one notification per
+- **Built (M4): notifications as a messaging app's.** `src/core/notes.mjs` builds each one: Orb's icon as the
+  picture, the chat's name as the title, the text as chosen in Ajustes › Magic Link (`none`: not even who), one notification per
   chat (new lines join it: the last five and the count), muted chats silent. They cover Orb chats, agent approvals and
-  tasks. Actions: «Responder» (inline on Android; opens the chat in a browser), «Aprobar» / «Rechazar» on a card. The
-  app lock is never skipped: with a PIN (and the fingerprint with it) every action opens the app (lock, then the chat).
-  Without it, a card is answered there only when it is not sensitive and its text shows; a sensitive card, a task (its
+  tasks. Actions: «Responder» (inline on Android; opens the chat in a browser), «Aprobar» / «Rechazar» on a card. A card is answered there only when it is not sensitive and its text shows; a sensitive card, a task (its
   exact version is signed in the app) or a hidden card opens the chat and asks there (`lib/notes.js`, `decideCard`,
   also used by the card in the chat). Tapping opens the exact chat.
 - **Built (M3): the Orb zone.** `views/orb/inbox.jsx` (the chat list: search over titles, projects, messages and «#id»
   of a task, with a filter by state and agent; «+» with Nuevo chat / Nuevo proyecto; on the PC the places Tareas (with
   what waits for approval) · Proyectos · Programadas · Pizarra and «Más» with God mode when it is on;
-  what others shared; pinned chats on top; one collapsible group per project with its coloured initials and a ⋯ (new
+  pinned chats on top; one collapsible group per project with its coloured initials and a ⋯ (new
   chat there, project info), «Sin proyecto» last; completed chats behind «Ver completados». Each row: Orbe's head with
   the project's badge (a direct conversation: its agent's mark), title, time, its latest progress (`orbProgress` in
   `lib/inbox.js`: waiting for approval / a question / a permission first, then a running task, then how its last task
@@ -183,7 +171,7 @@ what is built, sections 2.1–2.4 describe the shipped app. 3.8: the Bots zone, 
   composer; what is on screen is marked read. `views/orb/info.jsx` (`OrbInfoHost`, opened through `openOrbInfo`): a
   chat (project with its picker and the arrow to the project's info, model, reasoning, orchestrator, «Tareas de este
   chat», notifications, attachments on the whiteboard, Compactar, Exportar as Markdown, Fijar, Completar, Eliminar) and a
-  project (new chat there, chats, tasks, Programadas, Pizarra, Bitácora, Compartir with 2+ users, Ajustes del proyecto,
+  project (new chat there, chats, tasks, Programadas, Pizarra, Bitácora, Ajustes del proyecto,
   God mode on the PC). Phone: the Orb zone opens on its list (`chats`), tabs Chats · Tareas · Proyectos, a conversation
   (also a direct one) full screen with its back arrow; ☰ keeps Programadas, Pizarra, Memorias and Tutoriales. The
   standalone screens (Tareas, Proyectos, Programadas, Pizarra, God mode) stay as they were.
@@ -329,7 +317,7 @@ All in `src/ui/components/ui/` unless noted. Do not build a one-off when one of 
 Full rules in [WRITING-GUIDE.md](WRITING-GUIDE.md). The essentials for reviewers:
 
 - Spanish first, "tú", neutral-professional. English equally polished, not literal.
-- Buttons: infinitive verb + object if needed ("Guardar", "Añadir usuario"). States: short ("En curso").
+- Buttons: infinitive verb + object if needed ("Guardar", "Añadir cuenta"). States: short ("En curso").
 - No exclamation marks, emojis, slang, buzzwords, or internal names (no "lane", "turno", "WS", "engine", "taller" in
   UI copy unless it is the feature's public name).
 - Correct plurals always (`1 chat`, `2 chats`; `1 proyecto`, never `1 proyectos`).
@@ -340,9 +328,7 @@ Full rules in [WRITING-GUIDE.md](WRITING-GUIDE.md). The essentials for reviewers
 |---|---|---|
 | The program | Orb | Orb |
 | The robot / assistant | Orbe (default name, user can change) | Orbe |
-| People using one Orb | Usuarios / usuario | Users / user |
-| The person who administers | Admin | Admin |
-| Linking devices and Orbs | Magic Link | Magic Link |
+| Linking the phone and browsers | Magic Link | Magic Link |
 | Expert view | God mode | God mode |
 | Agent instructions | instrucciones | instructions |
 | Delete | Eliminar | Delete |
@@ -430,7 +416,7 @@ confusing, P3 polish.
 
 **Copy**
 - [ ] Professional "tú" tone, no colloquialisms, no internal jargon, no exclamation marks or emojis.
-- [ ] Fixed names from section 7 (Usuarios, Admin, Orbe, Magic Link); English locale reviewed too.
+- [ ] Fixed names from section 7 (Orbe, Magic Link, God mode); English locale reviewed too.
 - [ ] Buttons are verbs; errors say what failed and what to do.
 
 **Motion and touch**

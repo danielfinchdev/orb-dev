@@ -1,4 +1,4 @@
-// 3.6 «Personas», WS5: copias de seguridad, mover el Orb, exportar y borrar una persona, zonas horarias
+// 3.6: copias de seguridad y zonas horarias.
 export default {
   'data.tz.late': 'con {n} min de retraso',
   'data.backup.restored': 'Copia de seguridad restaurada (del {created}).',

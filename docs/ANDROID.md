@@ -34,13 +34,13 @@ own, kept in the Android keystore. To remove access, revoke it in your Orb (**Se
 - **Notifications**: turn them on in the app, in **More → This phone**. They arrive while Android keeps the app open in
   the background; if Android closes it, you see them when you open it again.
 - **Messages** (3.6): each chat's notification shows Orb's picture, the chat's
-  name and the text as you chose in **My profile**; new messages of the same chat join one notification. **Reply**
-  writes back from the notification; on a card, **Approve** and **Reject** answer it. With the app lock on (a PIN), or
-  for a sensitive card, they open the app instead (lock first, then the chat). Muted chats do not notify. Tapping opens that chat.
+  name and the text as chosen in **Settings › Magic Link** (on the lock screen); new messages of the same chat join one
+  notification. **Reply** writes back from the notification; on a card, **Approve** and **Reject** answer it (a
+  sensitive card opens the app instead). Muted chats do not notify. Tapping opens that chat.
 - **Reminders** (3.8): Orb has no bots any more, so the app schedules nothing on the phone; the reminders an older
   version left there are cancelled once.
-- **App lock** (3.6): if your person has a PIN, the app asks for it when it opens, or your fingerprint or face when the
-  phone has one set up. The header says who the app is connected as.
+- **No app lock in 3.8.0**: the phone is protected by its encrypted link with the PC (a lock with the master password
+  comes later).
 - **Updates** (3.6): when your Orb needs a newer app, the app says so instead of failing.
 - **Dictation**: the microphone button, next to **Send**. It uses the phone's own speech recognition.
 - **Share with Orb**: in any app, **Share → Orb**. Text and links appear in the chat, ready to send; images are

@@ -624,7 +624,7 @@ app open. On iPhone they work with Orb added to the home screen.
   `mobile.lanHttp` is on (Settings › Phone access); the Android app, loopback (Tailscale https) and the
   Tailscale address are not affected.
 - **Notifications (3.5.1):** `mobile.preview` (`all`, `chat` by default, `none`): what a notification shows on a locked
-  phone (`remote.mjs › pushContent`).
+  phone (`src/core/notes.mjs › buildNote`).
 - **To another Orb:** `taller.<method>` (or `{ method, target: 'taller' }`) is forwarded to the coding Orb if it is in
   `ALLOWED` (no settings, accounts, full access or images). If the workshop is off: error with `offline: true`,
   `lastSeen` and `canWake`; `taller.status`, `taller.wake` (UDP magic packet to the stored MACs, `src/core/wol.mjs`),
@@ -646,11 +646,6 @@ app open. On iPhone they work with Orb added to the home screen.
   `bots.home.v1`, `replica.v1`, plus `server`, `browser.live.v1`, `vault.v1`). `server-pair.mjs › serverSkew` says who
   has to update (the server serves app N and N-1; a 3.6 server gets the in-place upgrade command,
   `link.server.install`); `missingCap` the text when the server lacks something. `link.server.status` shows both.
-- **Who is who (3.7):** `link_persons` on both Orbs, only confirmed by the owner (`link.server.persons`,
-  `link.server.map({ remote, local } | { remote, create } | { local, createThere })`, `link.server.unmap`; link op
-  `persons` on the server). `forward.mjs › whoAsks` runs a forwarded call as the mapped person; anyone else is refused
-  and audited (`unmappedPerson`). The server sends a mapped person's Orb mode to the owner's PC (`devTargetDevice`,
-  `mayForward`) and the PC's events for them carry `to`.
 - **Hub handoff (3.7):** with a server linked, the app asks it for one-time offers for its phones (link op
   `handoff`, `offers`) and sends each one `link:handoff` on its own link; the device (Node link, Android app; a
   browser's page gets `orb:handoff` with the address) links there and drops the old link; the server tells the app
@@ -825,7 +820,8 @@ launched hidden, with its output read by Orb, and it stores the session in the a
   task it works on (HMAC with a key that only exists in the engine's memory and changes on every start; the database
   keeps the hash, `agent_id:*`). The MCP takes agent and task from the signature, not from `ORB_AGENT` or `ORB_TASK_ID`:
   an agent that starts the MCP on its own cannot impersonate another or close someone else's task (`agentToken()` in
-  `sessions.mjs`, `identity()` in `src/mcp/server.mjs`).
+  `sessions.mjs`, `identity()` in `src/mcp/server.mjs`). 3.8: an unsigned process gets every tool refused, and a signed
+  one acts only on its own conversation or task (section 34).
 - **Agents:** clean environment (without the app's secret variables), permission guard, internal data off limits and
   warnings for pushes or mass deletions.
 - **Agent text:** when it goes back to the assistant it is marked as "data, not instructions".
@@ -958,32 +954,26 @@ belongs to the conversation that asked for it: its report goes back there.
   ones completed; the last one stays open with the assistant's live session) and the assistant's tasks are distributed
   by date.
 
-## 34. Users (3.6)
+## 34. Permissions (3.8)
 
-**What it does.** Several users share one Orb: an owner, who manages it, and the other users. Each one has their own
-conversations, projects, schedules, memories, accounts and devices, and sees only those and what is
-shared with them. With a single user all of it is hidden and Orb behaves as 3.5.1. User guide:
-[`USERS.md`](USERS.md); the details of the model, authorization, events and loans:
-[`PERSONAS-INTERNALS.md`](PERSONAS-INTERNALS.md).
+**What it does.** One PC, one owner. Who may do what is decided in one place, `src/core/permissions.mjs`, for three
+kinds of caller:
+- **This PC** (its Orb window, dev-control and the engine itself): every method.
+- **A linked phone or browser** (Magic Link): only the methods the table `METHODS` marks `'remote'` (view chats, tasks
+  and projects, send messages, approve or reject, start and stop tasks, read the status…). Settings, accounts, backups,
+  Magic Link, this PC's tools and anything that deletes outside a conversation are `'pc'`.
+- **An agent** (its MCP tools, `src/mcp/server.mjs`): no API method. Its tools act only on what Orb signed it for
+  (`ownsTask`): the coordinator, the tasks of its own conversation (signed with its key); a worker, its task and the
+  subtasks it delegated; a signed agent without a task, only the manual task it claimed. An agent Orb did not sign, or a
+  coordinator with a forged conversation, gets every tool refused.
 
-**Files.**
-- Data and rules: `src/core/db.mjs` (tables `persons`, `person_settings`, `shares`, `account_loans`, `usage_ledger`,
-  `link_seen`, `audit`; `person_id` on the person-owned tables), `src/core/persons.mjs`
-  (people, PINs, strong tickets), `src/core/authz.mjs` + `src/core/policy.mjs` (who may call what; deny by default),
-  `src/core/shape.mjs` (what each caller gets back), `src/core/budget.mjs` (own accounts, loans, caps, the ledger),
-  `src/core/tz.mjs` (wall-clock times per zone), `src/core/backup.mjs` and `src/core/export.mjs` (backups, export,
-  delete, move).
-- Engine: `src/engine/api-persons.mjs`, `api-gateway.mjs` (window lock), `api-accounts.mjs`, `api-data.mjs`,
-  `router.mjs` (each event only to its audience), `forward.mjs` (workshop calls run as the person of the link).
-- Interface: the wizard (`src/ui/views/setup.jsx`), the user menu and the lock screen (`src/ui/components/`), Settings
-  › Users / My profile / Data, the share dialog, "Lend to…" in Agents. `state.me` in the store (`persons.me`), read
-  again on `persons:switched`; the engine is the authority, the interface only hides.
-- Phone and Android: `src/ui/lib/web-bridge.js` sends its protocol (3) on `/api/me` and shows an update screen when the
-  Orb needs a newer one; `src/ui/lib/app-bridge.js` adds the fingerprint lock (`appLock`, `OrbNativePlugin.java`,
-  Android's BiometricPrompt) and cancels once the reminders 3.7 left scheduled on the phone.
+**Files.** `src/core/permissions.mjs` (the table, `principalOf`, `authorize`, `ownsTask`); `src/engine/api.mjs ›
+call` checks every call before the method runs; `src/engine/remote.mjs` builds a device's principal and also checks
+`REMOTE_METHODS` itself (`guardCall`, with the pictures and the full-access rules); `src/mcp/server.mjs` builds the
+agent's `WHO` from its signature (`identity()`, `CONV`, `FORGED`).
 
-**Inside.** Every entry point (window, linked device, workshop link, Orb Server's socket, agents' tools) builds a
-principal; `api.call` authorizes it before the method runs. A row without `person_id` is the owner's, so data from
-before 3.6 needs nothing. Tests: `personas-modelo`, `authz`, `migracion-36`, `personas-superficies`, `enlace-36`,
-`personas-orb`, `prestamos`, `copias`, `exportar-borrar`, `mover-orb`, `zona-horaria`, `android-36`,
-`personas-ui` and the e2e `personas.e2e.mjs`.
+**Inside.** A method without a line in `METHODS` is refused everywhere: `test/permisos.test.mjs` walks every API method
+against the table, checks that a phone or a browser is refused every PC-only method before anything runs, and that an
+unsigned or forged agent sees nothing while a signed one stays within its own conversation or task. Until the 3.8
+migration (its own step) a 3.7 database keeps its `persons`, `person_settings`, `shares`, `account_loans` and
+`link_persons` tables and its `person_id` columns; 3.8 writes none of them and reads none of them.

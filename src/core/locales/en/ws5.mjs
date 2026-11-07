@@ -1,4 +1,4 @@
-// 3.6 "Personas", WS5: backups, moving the Orb, exporting and deleting a person, time zones
+// 3.6: backups and time zones.
 export default {
   'data.tz.late': '{n} min late',
   'data.backup.restored': 'Backup restored (from {created}).',

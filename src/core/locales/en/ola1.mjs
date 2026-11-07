@@ -1,4 +1,4 @@
-// 3.6, design wave 1: the composer (action slot, reasoning and orchestrator), Settings in six sections, the Users screen
+// 3.6, design wave 1: the composer (action slot, reasoning and orchestrator), Settings in six sections
 // and compacting conversations. Loaded last: it also corrects some earlier texts.
 export default {
   // Reasoning: the brain button and its menu
@@ -40,7 +40,7 @@ export default {
   'settings.section.avanzado': 'Advanced',
   'settings.section.acerca': 'About',
   'settings.sectionDesc.general': 'Assistant, language, working folder, appearance and updates.',
-  'settings.sectionDesc.magiclink': 'Who can enter this Orb: its users, their devices and the linked Orbs.',
+  'settings.sectionDesc.magiclink': 'Who can enter this Orb: the linked phone and browsers.',
   'settings.sectionDesc.agentes': 'How conversations and tasks work, and how much usage they may spend.',
   'settings.sectionDesc.avanzado': 'Agent tools and God mode.',
   'settings.sectionDesc.acerca': 'Version, feedback and other apps.',
@@ -54,7 +54,6 @@ export default {
   'settings.mobile': 'Access from other devices',
   'about.developer': 'Developer',
   'about.license': 'Licence',
-  // Users
   // Texts that pointed to the old sections
   'help.faq.10.a': 'The Professional theme hides the robot and animations; change it in Settings › General, where the floating robot is also turned on or off.',
   // Pie de la barra lateral en un navegador enlazado: el engranaje abre este dispositivo y Magic Link

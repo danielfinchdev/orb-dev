@@ -1,5 +1,5 @@
-// 3.6, ola 1 de diseño: el compositor (hueco de acción, razonamiento y orquestador), Ajustes en seis secciones, la pantalla
-// Usuarios y la compactación de conversaciones. Va la última: también corrige algunos textos anteriores.
+// 3.6, ola 1 de diseño: el compositor (hueco de acción, razonamiento y orquestador), Ajustes en seis secciones
+// y la compactación de conversaciones. Va la última: también corrige algunos textos anteriores.
 export default {
   // Razonamiento: botón del cerebro con su menú
   'reasoning.xhigh': 'Extra',
@@ -40,7 +40,7 @@ export default {
   'settings.section.avanzado': 'Avanzado',
   'settings.section.acerca': 'Acerca de',
   'settings.sectionDesc.general': 'Asistente, idioma, carpeta de trabajo, apariencia y actualizaciones.',
-  'settings.sectionDesc.magiclink': 'Quién puede entrar en este Orb: sus usuarios, sus dispositivos y los Orbs enlazados.',
+  'settings.sectionDesc.magiclink': 'Quién puede entrar en este Orb: el móvil y los navegadores enlazados.',
   'settings.sectionDesc.agentes': 'Cómo trabajan las conversaciones y las tareas, y cuánto uso pueden gastar.',
   'settings.sectionDesc.avanzado': 'Herramientas de los agentes y God mode.',
   'settings.sectionDesc.acerca': 'Versión, comentarios y otras aplicaciones.',
@@ -54,7 +54,6 @@ export default {
   'settings.mobile': 'Acceso desde otros dispositivos',
   'about.developer': 'Desarrollador',
   'about.license': 'Licencia',
-  // Usuarios
   // Textos que apuntaban a las secciones de antes
   'help.faq.10.a': 'El tema Profesional no muestra el robot ni animaciones; cámbialo en Ajustes › General, donde también se activa o desactiva el robot flotante.',
   // Pie de la barra lateral en un navegador enlazado: el engranaje abre este dispositivo y Magic Link
