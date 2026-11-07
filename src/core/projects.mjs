@@ -136,11 +136,20 @@ export function groupOf(board, project) {
 export function syncProjects(board) {
   const home = ctx.paths.home;
   const norm = folderKey;
-  const registered = board.projects();
-  const byPath = new Map(registered.map((p) => [norm(p.path), p]));
   const ignoredList = board.settingJson(IGNORED_PROJECTS);
   const ignored = new Set(Array.isArray(ignoredList) ? ignoredList : []);
   let changed = false;
+  // First what is gone, so a folder found again (or moved into the workspace) gets its own name, not «name (2)».
+  // Inside the workspace: a folder deleted or no longer in a category. Outside: a linked folder that no longer exists
+  // (one of an earlier workspace, a moved folder), unless its whole drive is missing (a disk unplugged for a while).
+  // A project with open tasks stays (removeProject refuses).
+  for (const p of board.projects()) {
+    const rel = path.relative(home, p.path);
+    const inside = Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel);
+    if (inside ? fs.existsSync(p.path) && categoryOf(home, p.path) : !rel || fs.existsSync(p.path) || !fs.existsSync(path.parse(p.path).root)) continue;
+    try { board.removeProject(p.name, 'orb'); changed = true; } catch { /* open tasks: kept */ }
+  }
+  const byPath = new Map(board.projects().map((p) => [norm(p.path), p]));
   const present = new Set();
   for (const cat of CATEGORIES) {
     let entries; try { entries = fs.readdirSync(ctx.paths.categories[cat], { withFileTypes: true }); } catch { continue; }
@@ -149,16 +158,18 @@ export function syncProjects(board) {
       const folder = path.join(ctx.paths.categories[cat], e.name);
       present.add(norm(folder));
       if (byPath.has(norm(folder)) || ignored.has(norm(folder))) continue;
-      let name = e.name; let i = 2;
-      while (board.project(name)) name = `${e.name} (${i++})`;
+      // The same folder name in two categories: the second says which one («app (android)»), never a bare number.
+      let name = e.name;
+      if (board.project(name)) { name = `${e.name} (${cat})`; for (let i = 2; board.project(name); i++) name = `${e.name} (${cat} ${i})`; }
       try { board.addProject({ name, path: folder }, 'orb', { fromUser: true }); changed = true; } catch { /* unreadable folder: skipped */ }
     }
   }
-  for (const p of registered) {
-    const rel = path.relative(home, p.path);
-    if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) continue;
-    if (fs.existsSync(p.path) && categoryOf(home, p.path)) continue;
-    try { board.removeProject(p.name, 'orb'); changed = true; } catch { /* open tasks: kept */ }
+  // A project registered as «name (2)» before 3.8 (its name was held by a stale twin) takes its folder's name back once
+  // that name is free.
+  for (const p of board.projects()) {
+    const m = /^(.+) \(\d+\)$/.exec(p.name);
+    if (!m || m[1] !== path.basename(p.path) || folderName(m[1], '') !== m[1] || board.project(m[1]) || !categoryOf(home, p.path)) continue;
+    try { renameProject(board, { name: p.name, to: m[1] }, 'orb'); changed = true; } catch { /* busy or not a valid name: next time */ }
   }
   // Folders not listed that no longer exist leave the list (board.addProject takes out the ones added again).
   if ([...ignored].some((k) => !present.has(k))) board.settingJson(IGNORED_PROJECTS, [...ignored].filter((k) => present.has(k)));

@@ -54,7 +54,10 @@ function build37(file, pc, { home = null, language = null } = {}) {
   // Ana's project in a category of the home (its folder stays there), Dani's linked from outside.
   const anaFolder = home ? path.join(home, 'web', 'web-ana') : 'C:/x/web-ana';
   if (home) fs.mkdirSync(anaFolder, { recursive: true });
-  run("INSERT INTO projects (name, path, created_at, person_id) VALUES ('web-dani', 'C:/x/web-dani', ?, ?), ('web-ana', ?, ?, ?)", NOW, OWNER, anaFolder, NOW, ANA);
+  // 3.8 (F4): a linked folder that no longer exists leaves the list (syncProjects), so Dani's is a real one.
+  const daniFolder = home ? path.join(path.dirname(home), 'enlazadas', 'web-dani') : 'C:/x/web-dani';
+  if (home) fs.mkdirSync(daniFolder, { recursive: true });
+  run("INSERT INTO projects (name, path, created_at, person_id) VALUES ('web-dani', ?, ?, ?), ('web-ana', ?, ?, ?)", daniFolder, NOW, OWNER, anaFolder, NOW, ANA);
   const conv = (title, pid, extra = {}) => Number(run('INSERT INTO conversations (title, titled, created_at, updated_at, person_id, bot_id, group_id) VALUES (?, 1, ?, ?, ?, ?, ?)', title, NOW, NOW, pid, extra.bot ?? null, extra.group ?? null).lastInsertRowid);
   const line = (c, role, body, pid) => run('INSERT INTO chat (role, body, at, conversation_id, person_id) VALUES (?, ?, ?, ?, ?)', role, body, NOW, c, pid);
   const ids = {};
