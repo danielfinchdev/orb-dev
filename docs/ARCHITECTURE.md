@@ -71,13 +71,10 @@ Data: <assistant folder>/.orb/datos/orb.db (SQLite, src/core/db.mjs)
   2. `src/agents` are the adapters.
   3. `src/engine` puts the pieces together.
   4. `src/ui` is the interface.
-- **The PC's own health (3.7)** has no screen of its own any more: «Monitoreo del equipo» and Opti Bot (2.7–3.6) were
-  removed, and what they did is the bots' **«Equipo» / "Computer"** tool group (docs/BOTS.md): `src/core/pc-health.mjs`
-  and `src/core/network.mjs` read (fixed PowerShell, Windows parts behind `process.platform === 'win32'`),
-  `src/core/pc-actions.mjs` runs an approved `pc` card (same closed list; UAC only for that action), `src/mcp/bot.mjs`
-  offers `pc_*`. Sharing with Open Control Edge (`engine/bridge.mjs`) is `orb.json › oce.share` (it was
-  `monitor.shareWithOce`; `loadConfig` and `engine/retired.mjs` move it once, archive Opti Bot's old conversation and
-  expire its waiting proposals, deleting nothing).
+- **The PC's own health** is not Orb's business any more: «Monitoreo del equipo» and Opti Bot (2.7–3.6) went in 3.7,
+  and the bots (with their «Equipo» tools), Optimus and the bridge with Open Control Edge in 3.8. `engine/retired.mjs`
+  archives Opti Bot's old conversation once and expires its waiting proposals, deleting nothing; `loadConfig` drops the
+  old `monitor`, `bots` and `oce` settings.
 
 ## 2. First launch and the assistant folder
 
@@ -964,18 +961,18 @@ belongs to the conversation that asked for it: its report goes back there.
 ## 34. Users (3.6)
 
 **What it does.** Several users share one Orb: an owner, who manages it, and the other users. Each one has their own
-conversations, bots, projects, reminders, schedules, memories, accounts and devices, and sees only those and what is
+conversations, projects, schedules, memories, accounts and devices, and sees only those and what is
 shared with them. With a single user all of it is hidden and Orb behaves as 3.5.1. User guide:
 [`USERS.md`](USERS.md); the details of the model, authorization, events and loans:
 [`PERSONAS-INTERNALS.md`](PERSONAS-INTERNALS.md).
 
 **Files.**
 - Data and rules: `src/core/db.mjs` (tables `persons`, `person_settings`, `shares`, `account_loans`, `usage_ledger`,
-  `bot_sessions`, `memory_log`, `link_seen`, `audit`; `person_id` on the person-owned tables), `src/core/persons.mjs`
+  `link_seen`, `audit`; `person_id` on the person-owned tables), `src/core/persons.mjs`
   (people, PINs, strong tickets), `src/core/authz.mjs` + `src/core/policy.mjs` (who may call what; deny by default),
   `src/core/shape.mjs` (what each caller gets back), `src/core/budget.mjs` (own accounts, loans, caps, the ledger),
   `src/core/tz.mjs` (wall-clock times per zone), `src/core/backup.mjs` and `src/core/export.mjs` (backups, export,
-  delete, move), `src/core/templates.mjs` (the wizard's templates).
+  delete, move).
 - Engine: `src/engine/api-persons.mjs`, `api-gateway.mjs` (window lock), `api-accounts.mjs`, `api-data.mjs`,
   `router.mjs` (each event only to its audience), `forward.mjs` (workshop calls run as the person of the link).
 - Interface: the wizard (`src/ui/views/setup.jsx`), the user menu and the lock screen (`src/ui/components/`), Settings
@@ -983,11 +980,10 @@ shared with them. With a single user all of it is hidden and Orb behaves as 3.5.
   again on `persons:switched`; the engine is the authority, the interface only hides.
 - Phone and Android: `src/ui/lib/web-bridge.js` sends its protocol (3) on `/api/me` and shows an update screen when the
   Orb needs a newer one; `src/ui/lib/app-bridge.js` adds the fingerprint lock (`appLock`, `OrbNativePlugin.java`,
-  Android's BiometricPrompt) and schedules the next 48 h of reminders as local notifications
-  (`src/ui/lib/reminder-notes.js`).
+  Android's BiometricPrompt) and cancels once the reminders 3.7 left scheduled on the phone.
 
 **Inside.** Every entry point (window, linked device, workshop link, Orb Server's socket, agents' tools) builds a
 principal; `api.call` authorizes it before the method runs. A row without `person_id` is the owner's, so data from
 before 3.6 needs nothing. Tests: `personas-modelo`, `authz`, `migracion-36`, `personas-superficies`, `enlace-36`,
-`personas-orb`, `prestamos`, `copias`, `exportar-borrar`, `mover-orb`, `zona-horaria`, `plantillas`, `android-36`,
+`personas-orb`, `prestamos`, `copias`, `exportar-borrar`, `mover-orb`, `zona-horaria`, `android-36`,
 `personas-ui` and the e2e `personas.e2e.mjs`.

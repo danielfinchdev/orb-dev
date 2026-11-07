@@ -33,13 +33,12 @@ own, kept in the Android keystore. To remove access, revoke it in your Orb (**Se
 
 - **Notifications**: turn them on in the app, in **More → This phone**. They arrive while Android keeps the app open in
   the background; if Android closes it, you see them when you open it again.
-- **Messages** (3.6): each chat's notification shows who writes (the bot's avatar, Orb for the Orb zone), the chat's
+- **Messages** (3.6): each chat's notification shows Orb's picture, the chat's
   name and the text as you chose in **My profile**; new messages of the same chat join one notification. **Reply**
   writes back from the notification; on a card, **Approve** and **Reject** answer it. With the app lock on (a PIN), or
   for a sensitive card, they open the app instead (lock first, then the chat). Muted chats do not notify. Tapping opens that chat.
-- **Reminders** (3.6): with notifications on, the app schedules your bots' reminders of the next two days on the
-  phone itself, so they ring even with the app closed or offline. Their text shows only if you chose "everything" for
-  the lock screen in **My profile**.
+- **Reminders** (3.8): Orb has no bots any more, so the app schedules nothing on the phone; the reminders an older
+  version left there are cancelled once.
 - **App lock** (3.6): if your person has a PIN, the app asks for it when it opens, or your fingerprint or face when the
   phone has one set up. The header says who the app is connected as.
 - **Updates** (3.6): when your Orb needs a newer app, the app says so instead of failing.

@@ -92,7 +92,6 @@ D:\Orb\                   (always <chosen folder>\Orb, the same for everyone)
   with usage left and only waits when the limit is reached.
 - **A whiteboard per project** to draw, write and attach references that Orb·e takes into account when planning.
 - **From your phone**, with nothing to install: chat, approvals and task tracking, with end-to-end encryption.
-- **Look after your PC with a bot**: give it the "Computer" tools (or start from the "PC maintenance" template) and it checks the PC's health, security, network and Orb's backups; any change needs your approval.
 - **GitHub integration** through `gh`: publish projects, push branches and create pull requests.
 - **God mode** for those who want to see more: files, git changes, history and activity around the chat.
 - **In Spanish and English**, with themes, light and dark mode, and MCP connectors to extend the agents' tools.
