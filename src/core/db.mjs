@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from './context.mjs';
 import { titleFrom } from './titles.mjs';
+import { migrateTo38 } from './migrate-38.mjs';
 
 // node:sqlite may print an ExperimentalWarning; it would pollute the MCP stdout/stderr and the logs.
 const emitWarning = process.emitWarning;
@@ -117,17 +118,6 @@ CREATE TABLE IF NOT EXISTS devices (
   created_at TEXT NOT NULL,
   last_seen TEXT
 );
--- 3.5 (Magic Link): calls for the linked workshop Orb left waiting while it was off (sent when it comes back).
-CREATE TABLE IF NOT EXISTS link_queue (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  method TEXT NOT NULL,
-  params TEXT NOT NULL DEFAULT '{}',
-  from_device TEXT,
-  created_at TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pendiente',
-  result TEXT,
-  done_at TEXT
-);
 -- 2.3: messages waiting for a running turn (sent in order when it ends, or steered into it).
 CREATE TABLE IF NOT EXISTS session_queue (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -175,71 +165,7 @@ CREATE TABLE IF NOT EXISTS conversations (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
--- 3.5–3.7: the bots' tables (bots … memory_log, and their columns in ADDED). 3.8 has no bots: they stay here only so the
--- older migrations below (migratePersons) and a 3.7 database's home_* triggers keep working until the 3.8 migration
--- archives and drops them.
--- 3.5: the user's own bots (none fixed in the code: only an empty «Asistente» on the first run). Each one has its brain
--- (any installed agent, model and effort), its tool groups and accounts, the topics only it handles (exclusive) and whether
--- it is the chief. Its live conversation id (session_id) continues after a restart.
-CREATE TABLE IF NOT EXISTS bots (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL,
-  icon TEXT NOT NULL DEFAULT '',
-  role_text TEXT NOT NULL DEFAULT '',
-  agent TEXT NOT NULL DEFAULT 'claude',
-  model TEXT,
-  effort TEXT NOT NULL DEFAULT 'medium',
-  tools TEXT NOT NULL DEFAULT '[]',
-  accounts TEXT NOT NULL DEFAULT '{}',
-  exclusive TEXT NOT NULL DEFAULT '[]',
-  is_chief INTEGER NOT NULL DEFAULT 0,
-  paused INTEGER NOT NULL DEFAULT 0,
-  session_id TEXT,
-  turns INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS bot_groups (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL,
-  icon TEXT NOT NULL DEFAULT '',
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS bot_group_members (
-  group_id INTEGER NOT NULL,
-  bot_id INTEGER NOT NULL,
-  position INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (group_id, bot_id)
-);
--- 3.5: what a bot's tools (src/mcp/bot.mjs, another process) ask the engine to do: a message to another bot, a card the
--- user approves (create/change/pause a bot, a change on the server, Home Assistant, a purchase…), grouped questions.
-CREATE TABLE IF NOT EXISTS bot_requests (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  bot_id INTEGER NOT NULL,
-  kind TEXT NOT NULL,
-  payload TEXT NOT NULL DEFAULT '{}',
-  status TEXT NOT NULL DEFAULT 'pending',
-  result TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
--- 3.5: the bots' reminders: once, daily, weekly, monthly or yearly; each one goes to its bot's chat and to the phone.
-CREATE TABLE IF NOT EXISTS bot_reminders (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  bot_id INTEGER NOT NULL,
-  text TEXT NOT NULL,
-  every TEXT NOT NULL DEFAULT 'once',
-  start_at TEXT NOT NULL,
-  weekdays TEXT NOT NULL DEFAULT '[]',
-  next_run TEXT,
-  last_run TEXT,
-  enabled INTEGER NOT NULL DEFAULT 1,
-  created_by TEXT NOT NULL DEFAULT 'usuario',
-  created_at TEXT NOT NULL
-);
--- What each turn spent (3.6; person_id: 3.6-3.7 rows only, never written since 3.8), each bot's live conversation and the
--- history of the memories (3.6-3.7: the 3.8 migration archives and drops them), the forwarded calls already answered.
+-- 3.6: what each turn spent (person_id and bot_id: 3.6-3.7 rows only, never written since 3.8; dropped in 3.9).
 CREATE TABLE IF NOT EXISTS usage_ledger (
   id INTEGER PRIMARY KEY,
   at TEXT,
@@ -256,30 +182,6 @@ CREATE TABLE IF NOT EXISTS usage_ledger (
   usd REAL
 );
 CREATE INDEX IF NOT EXISTS usage_day ON usage_ledger (day, account_id, person_id, bot_id);
-CREATE TABLE IF NOT EXISTS bot_sessions (
-  bot_id INTEGER NOT NULL,
-  person_id TEXT NOT NULL,
-  session_id TEXT,
-  turns INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (bot_id, person_id)
-);
-CREATE TABLE IF NOT EXISTS memory_log (
-  id INTEGER PRIMARY KEY,
-  at TEXT,
-  person_id TEXT,
-  scope TEXT,
-  actor TEXT,
-  op TEXT,
-  status TEXT CHECK (status IN ('applied', 'pending', 'rejected', 'undone')),
-  text TEXT,
-  before TEXT
-);
-CREATE TABLE IF NOT EXISTS link_seen (
-  request_id TEXT PRIMARY KEY,
-  peer TEXT,
-  result TEXT,
-  at TEXT
-);
 -- 3.6 (messaging lists): the marks on a chat of the lists (a conversation with Orbe or a direct one): pinned and its
 -- order, the section it is in (kept while pinned: unpinning puts it back), muted, and the last chat line read (0: none
 -- yet, the starting point in settings «inbox_since:<key>» counts instead). person_id: the key of the lists' owner
@@ -305,8 +207,6 @@ CREATE TABLE IF NOT EXISTS inbox_sections (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS inbox_sections_person ON inbox_sections (person_id, zone, position);
-CREATE INDEX IF NOT EXISTS bot_requests_status ON bot_requests (status, id);
-CREATE INDEX IF NOT EXISTS bot_reminders_next ON bot_reminders (enabled, next_run);
 CREATE INDEX IF NOT EXISTS conversations_updated ON conversations (status, updated_at);
 CREATE INDEX IF NOT EXISTS session_queue_session ON session_queue (session_id, position, id);
 CREATE INDEX IF NOT EXISTS events_task ON events (task_id, id);
@@ -343,6 +243,8 @@ export function openDb(filename = ctx.paths?.db) {
   db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 8000; PRAGMA foreign_keys = ON;');
   db.exec(SCHEMA);
   migrate(db);
+  // 3.8: this home's database of 3.5–3.7 is archived and tidied once (after the older migrations above).
+  if (filename !== ':memory:' && ctx.paths?.db && path.resolve(filename) === path.resolve(ctx.paths.db)) migrateTo38(db);
   return db;
 }
 
@@ -360,34 +262,15 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   ['projects', 'grupo', 'TEXT'],
   // 2.3.3: each phone has its own key (end-to-end encryption), the way it was paired and its notifications.
   ['devices', 'public_key', 'TEXT'], ['devices', 'route', 'TEXT'], ['devices', 'push', 'TEXT'],
-  // 3.5 (Magic Link): what was linked (phone, browser or another Orb), the role of a linked Orb, its last address and
-  // what it told about itself (hostname, MAC addresses for Wake-on-LAN, version).
-  ['devices', 'kind', 'TEXT'], ['devices', 'role', 'TEXT'], ['devices', 'ip', 'TEXT'], ['devices', 'meta', 'TEXT'],
-  // 3.5: «Puede administrar» (Ajustes › Magic Link): the device manages this Orb's bots and links from afar.
-  ['devices', 'admin', 'INTEGER NOT NULL DEFAULT 0'],
-  // 3.5.1: the rights chosen by whoever made the QR: kind_ok (the device is the kind the QR was made for; an «orb» that
-  // only said so is 0 until the owner confirms it), approve (may answer the bots' cards), dev_ok (an Orb the owner
-  // confirmed as the one that programs for this one). Who answered each bot's card.
-  ['devices', 'kind_ok', 'INTEGER'], ['devices', 'approve', 'INTEGER NOT NULL DEFAULT 1'], ['devices', 'dev_ok', 'INTEGER NOT NULL DEFAULT 0'],
-  ['bot_requests', 'decided_by', 'TEXT'],
+  // 3.5 (Magic Link): what was linked (phone or browser), its last address and what it told about itself (version).
+  ['devices', 'kind', 'TEXT'], ['devices', 'ip', 'TEXT'], ['devices', 'meta', 'TEXT'],
   // 3.2: the conversation a chat line belongs to and the one that asked for a task.
   ['chat', 'conversation_id', 'INTEGER'], ['tasks', 'conversation_id', 'INTEGER'],
-  // 3.5: a bot's own conversation (bot_id) and a group's (group_id); the assistant's conversations have neither.
-  ['conversations', 'bot_id', 'INTEGER'], ['conversations', 'group_id', 'INTEGER'],
-  // 3.6: reminders in the wall time of a time zone (local_at in tz), whether a missed one is skipped and how late it rang.
-  ['bot_reminders', 'tz', 'TEXT'], ['bot_reminders', 'local_at', 'TEXT'], ['bot_reminders', 'skip_missed', 'INTEGER NOT NULL DEFAULT 0'], ['bot_reminders', 'fired_late_ms', 'INTEGER'],
-  // 3.6: who may answer a bot's card (JSON list of person ids) and who did.
-  ['bot_requests', 'approvers', 'TEXT'], ['bot_requests', 'answered_by', 'TEXT'],
-  // 3.6: a forwarded call's own id (the same id twice runs once; status may also be 'desconocido').
-  ['link_queue', 'request_id', 'TEXT'],
-  // 3.6: a bot's daily caps { daily_turns, daily_tokens, daily_usd }.
-  ['bots', 'caps', 'TEXT'],
-  // 3.6: a bot's avatar { shape, color } (src/core/avatar.mjs); the ones before get a fixed one from their id.
-  ['bots', 'avatar', 'TEXT']];
-// (3.6-3.7's person_id columns — whose each row was — are no longer added: only a 3.7 database has them, never written
-// since 3.8; the 3.8 migration empties them and 3.9 drops them.)
-// (3.7's replica columns — bots/bot_groups uid, home, home_epoch, home_state, home_fork, needs; uid of bot_reminders, chat,
-// memory_log and bot_requests — are no longer added: only a 3.7 database has them, with the home_* triggers that use them.)
+  // 3.5–3.7: a bot's own conversation (bot_id) and a group's (group_id). 3.8 has none (the 3.8 migration archives them);
+  // the conversations are still read with «bot_id IS NULL AND group_id IS NULL» until 3.9 drops the columns.
+  ['conversations', 'bot_id', 'INTEGER'], ['conversations', 'group_id', 'INTEGER']];
+// (3.6-3.7's person_id columns and chat.uid are no longer added: only a 3.7 database has them, emptied by the 3.8
+// migration (src/core/migrate-38.mjs) and dropped in 3.9.)
 export function migrate(db) {
   // 3.2: whether a direct conversation already has its title (Orb names a new one from its first message); the ones made
   // before keep theirs.
@@ -401,9 +284,6 @@ export function migrate(db) {
     const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
     if (!has) addColumn(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
   }
-  // 3.5.1: devices linked before: phones, browsers and terminals keep their rights; a device that said it was an «orb» is
-  // asked again (the owner confirms it in Ajustes › Magic Link) and loses «Puede administrar» meanwhile.
-  db.exec("UPDATE devices SET kind_ok = CASE WHEN kind = 'orb' THEN 0 ELSE 1 END, admin = CASE WHEN kind = 'orb' THEN 0 ELSE admin END, dev_ok = 0 WHERE kind_ok IS NULL");
   // 3.0: indexes for lookups that run on every refresh of an open task or at start (on columns that may have just been
   // added above, so not in SCHEMA).
   db.exec(`CREATE INDEX IF NOT EXISTS messages_task ON messages (task_id, id);
@@ -411,9 +291,7 @@ export function migrate(db) {
     CREATE INDEX IF NOT EXISTS tasks_review ON tasks (review_of);
     CREATE INDEX IF NOT EXISTS session_items_approval ON session_items (id) WHERE kind = 'approval';
     CREATE INDEX IF NOT EXISTS chat_conversation ON chat (conversation_id, id);
-    CREATE INDEX IF NOT EXISTS tasks_conversation ON tasks (conversation_id);
-    CREATE INDEX IF NOT EXISTS conversations_bot ON conversations (bot_id, group_id);
-    CREATE UNIQUE INDEX IF NOT EXISTS link_queue_request ON link_queue (request_id) WHERE request_id IS NOT NULL;`);
+    CREATE INDEX IF NOT EXISTS tasks_conversation ON tasks (conversation_id);`);
   // 3.6: the direct conversations with an agent get marks too (pinned, muted): an inbox_items made before that only took
   // bots, groups and conversations is rebuilt with the wider check (same rows).
   // Inside a write lock and checked again there: the engine and the MCP servers may open the database at the same moment.
@@ -431,9 +309,6 @@ export function migrate(db) {
     } catch (error) { db.exec('ROLLBACK'); throw error; }
   }
   migrateConversations(db);
-  // 3.8: the bots' replicas are gone. A new database gets neither their tables (bot_changes, replica_cursor, bot_moves,
-  // link_persons) nor their triggers (home_*); a 3.7 one keeps both, which still work because the bots' tables are still
-  // in SCHEMA, until the 3.8 migration drops them (triggers first).
   // 2.7.3: the notices saved as grey system lines before 2.7 (working folder, mode, brain, new conversation…) become
   // notices too, so the old ones leave the chat like the new ones. Only system lines with those exact openings. 3.0: once
   // per database (no grey line of those is written any more), not at every start of the engine and of each MCP server.

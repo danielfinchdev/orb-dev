@@ -241,6 +241,10 @@ export function relabelEmptyLogs(home, before, after) {
 export function loadConfig(home) {
   let stored = {};
   try { stored = JSON.parse(fs.readFileSync(paths(home).config, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw new Error(`${CONFIG_FILE} no es válido: ${error.message}`); }
+  return configFrom(stored);
+}
+// The configuration a stored orb.json gives: the defaults filled in and the settings of older versions updated.
+export function configFrom(stored) {
   const config = merge(DEFAULT_CONFIG, stored);
   // 2.3 balance: the old fixed caps (6 tasks, 2 heavy per window; 20 turns) were too tight. Values the user never changed
   // move to the new ones; anything the user set by hand stays.

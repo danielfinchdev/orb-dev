@@ -1,4 +1,4 @@
--- The schema of an Orb 3.5.1 database (dumped from that version's openDb), for test/migracion-36.test.mjs.
+-- The schema of an Orb 3.5.1 database (dumped from that version's openDb), for test/migracion-38.test.mjs.
 CREATE TABLE bot_group_members (
   group_id INTEGER NOT NULL,
   bot_id INTEGER NOT NULL,

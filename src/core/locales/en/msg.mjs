@@ -352,6 +352,7 @@ export default {
   "msg.remote.imageTypes": "only PNG, JPG, WEBP or GIF images are supported",
   "msg.remote.internalError": "internal error",
   "msg.remote.noDevice": "that device does not exist",
+  "msg.remote.notMigrated": "Phone access stays closed until the data of Orb 3.7 has been moved. Close and open Orb again.",
   "msg.remote.noTailscale": "Tailscale was not detected on this PC. It is only required for access from outside your local network.",
   "msg.remote.notLinked": "this device is not paired",
   "msg.remote.clock": "the phone's time does not match the PC's",

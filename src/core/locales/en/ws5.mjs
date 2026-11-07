@@ -2,6 +2,7 @@
 export default {
   'data.tz.late': '{n} min late',
   'data.backup.restored': 'Backup restored (from {created}).',
+  'data.migrated38': 'Orb 3.8 no longer has bots or users. What was there is saved in {path}.',
   'data.backup.dailyFailed': 'Today\'s backup could not be made: {error}. It will try again in an hour.',
   'data.backup.err.badKind': 'That kind of backup does not exist.',
   'data.backup.err.damaged': 'The backup is damaged or someone changed it: it cannot be used.',

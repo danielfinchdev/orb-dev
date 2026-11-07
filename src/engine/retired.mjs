@@ -1,19 +1,6 @@
-// 3.7: what is left of features Orb no longer has, tidied once when the engine starts. «Monitoreo del equipo» and Opti Bot
-// (2.7–3.6) are gone. Nothing of the user's is deleted: Opti Bot's conversation stays as an archived chat (its proposals
-// still waiting say they expired), and its settings leave orb.json.
-import fs from 'node:fs';
-import { ctx } from '../core/context.mjs';
-import { writeJson } from '../core/home.mjs';
-
-// orb.json without «monitor» (loadConfig already dropped it from ctx.config). → true when the file changed.
-export function migrateRetiredConfig(file = ctx.paths?.config) {
-  if (!file || !fs.existsSync(file)) return false;
-  let raw; try { raw = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return false; }
-  if (!raw || typeof raw !== 'object' || raw.monitor === undefined) return false;
-  const { monitor: _monitor, ...rest } = raw;
-  writeJson(file, rest);
-  return true;
-}
+// 3.7: Opti Bot (2.7–3.6) is gone, tidied once when the engine starts. Nothing of the user's is deleted: its conversation
+// stays as an archived chat (its proposals still waiting say they expired). (Its «monitor» settings leave orb.json with
+// the 3.8 migration, src/core/migrate-38.mjs.)
 
 // Opti Bot's conversation and its pending cards. → { session, expired } (what was tidied; null when nothing).
 export function retireOpti(board) {
@@ -33,6 +20,5 @@ export function retireOpti(board) {
 }
 
 export function tidyRetired(board, log = () => {}) {
-  try { if (migrateRetiredConfig()) log('3.7: orb.json sin «monitor» (Monitoreo del equipo ya no existe)'); } catch (error) { log(`retirados: ${error.message}`); }
   try { const r = retireOpti(board); if (r?.session) log(`3.7: la conversación de Opti Bot queda archivada (${r.expired} propuestas caducadas)`); } catch (error) { log(`retirados: ${error.message}`); }
 }

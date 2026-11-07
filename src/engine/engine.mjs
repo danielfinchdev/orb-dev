@@ -151,6 +151,16 @@ async function start(home, version, secret, browser) {
   board.onChange((what) => { if (what === 'tasks') setImmediate(loop); });
   log(`motor arrancado (versión ${version}) en ${home}`);
   if (restored) { log(`copia restaurada: ${restored.from} (lo anterior está en ${restored.aside})`); board.notice(tr('data.backup.restored', { created: String(restored.header?.created ?? '').slice(0, 16).replace('T', ' ') }), 'success'); }
+  // 3.8: a data folder of 3.5–3.7 was moved to 3.8 when its database opened (src/core/migrate-38.mjs): said once.
+  {
+    const { takeNotice, migrationFailure } = await import('../core/migrate-38.mjs');
+    const m = takeNotice(board);
+    if (m) {
+      log(`3.8: datos de 3.7 migrados: ${m.bots} bots y ${m.conversations} conversaciones de bots, ${m.users.length} usuarios (${m.users.join(', ') || 'ninguno'}) archivados en ${m.archive}; copia de la base en ${m.backup}`);
+      board.notice(tr('data.migrated38', { path: m.archive }), 'info');
+    }
+    if (migrationFailure()) log(`3.8: la migración no se pudo hacer (se reintenta al abrir): ${migrationFailure()}`);
+  }
   // Which agents this PC has, as the engine sees them (with the app's environment): first thing to look at if «Agentes»
   // says one is missing.
   const { ADAPTERS } = await import('../agents/index.mjs');

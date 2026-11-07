@@ -13,7 +13,8 @@
 // entry is manifest.json (sha256 of every file), whose own hash is in the header.
 //
 // What goes in: the database (VACUUM INTO, so it is consistent while the engine runs), orb.json, bitacora/ (general and
-// project logs), the whiteboards of the projects, the app's secret, the recovery wrap. Optional: the project folders and the agents' login folders (off).
+// project logs), the whiteboards of the projects, the app's secret, the recovery wrap, the archive of 3.7 (.orb/archivo-3.7,
+// src/core/migrate-38.mjs; the other users' account folders in it only with the accounts). Optional: the project folders and the agents' login folders (off).
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -21,6 +22,7 @@ import crypto from 'node:crypto';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
 import { paths, INTERNAL_DIR, BOTS_DIR, LOGS_DIR, CONFIG_FILE } from './home.mjs';
 import { tr } from './context.mjs';
+import { ARCHIVE_DIR } from './migrate-38.mjs';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
 
@@ -159,6 +161,7 @@ async function stageFiles(home, stage, { secret, includeProjects = false, includ
     for (const f of walkFiles(board)) await put(f, inside ? rel(home, f) : `${INTERNAL_DIR}/pizarras-de-fuera/${String(pr.name).replace(/[^\w.-]+/g, '_')}/${path.relative(board, f).split(path.sep).join('/')}`);
   }
   if (includeAccounts) for (const f of walkFiles(path.join(p.internal, 'cuentas'))) await put(f, archiveName(home, f));
+  for (const f of walkFiles(path.join(p.internal, ARCHIVE_DIR), (n) => n === 'cuentas' && !includeAccounts)) await put(f, archiveName(home, f));
   const manifest = { format: FORMAT, files: [] };
   let bytes = 0;
   for (const name of files) {

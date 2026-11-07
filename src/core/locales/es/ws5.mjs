@@ -2,6 +2,7 @@
 export default {
   'data.tz.late': 'con {n} min de retraso',
   'data.backup.restored': 'Copia de seguridad restaurada (del {created}).',
+  'data.migrated38': 'Orb 3.8 ya no tiene bots ni usuarios. Hemos guardado lo anterior en {path}.',
   'data.backup.dailyFailed': 'No se pudo hacer la copia de seguridad de hoy: {error}. Se vuelve a probar dentro de una hora.',
   'data.backup.err.badKind': 'Ese tipo de copia no existe.',
   'data.backup.err.damaged': 'La copia está dañada o alguien la ha cambiado: no se puede usar.',

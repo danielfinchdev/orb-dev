@@ -22,6 +22,7 @@ import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal
 import { newVapidKeys, checkSubscription, sendPush } from './webpush.mjs';
 import { PROTOCOL, MIN_PROTOCOL, versionOfProtocol, CODE_ALPHABET, shortCodeLabel } from '../core/link-payload.mjs';
 import { REMOTE_METHODS, principalOf } from '../core/permissions.mjs';
+import { isLegacy } from '../core/migrate-38.mjs';
 
 const RENDERER = path.resolve(process.env.ORB_RENDERER || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'renderer'));
 const SESSION_DAYS = 30; // a phone unused for this long has to be paired again
@@ -239,16 +240,19 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     res.end(type.startsWith('application/json') ? JSON.stringify(body) : body);
   };
 
+  // A device served: a phone or a browser, used in the last 30 days, the owner's. 3.8: a linked Orb or an Orb Terminal
+  // of before, or a device another user paired in 3.6–3.7 (person_id), is never served (the 3.8 migration removes them;
+  // this holds while a database could not be migrated yet).
+  const ownerOf = () => { try { return board.one("SELECT id FROM persons WHERE role = 'owner' AND deleted_at IS NULL")?.id ?? null; } catch { return null; } };
+  const validDevice = (d) => Boolean(d?.public_key && (!d.kind || PAIR_KINDS.includes(d.kind))
+    && Date.now() - Date.parse(d.last_seen ?? d.created_at) <= SESSION_DAYS * 86_400_000
+    && (d.person_id == null || d.person_id === ownerOf()));
   const keyOf = (d) => { if (!keys.has(d.id)) keys.set(d.id, sessionKey(own.priv, b64.dec(d.public_key))); return keys.get(d.id); };
   const deviceOf = (req) => {
     const id = String(req.headers['x-orb-device'] ?? '');
     if (!/^[0-9a-f-]{36}$/.test(id)) return null;
     const d = board.one('SELECT * FROM devices WHERE id = ?', id);
-    if (!d?.public_key) return null;
-    // 3.8: a linked Orb or an Orb Terminal of before is not served (the 3.8 migration removes them).
-    if (d.kind && !PAIR_KINDS.includes(d.kind)) return null;
-    if (Date.now() - Date.parse(d.last_seen ?? d.created_at) > SESSION_DAYS * 86_400_000) return null;
-    return d;
+    return validDevice(d) ? d : null;
   };
   const touch = (d, req) => {
     const ip = req ? ipOf(req) : d.ip;
@@ -446,7 +450,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     pairing = null; // one use
     const id = crypto.randomUUID();
     const name = oneLine(typeof proof.name === 'string' && proof.name ? proof.name : tr('msg.remote.defaultName'), 60);
-    board.run('INSERT INTO devices (id, name, token_hash, created_at, last_seen, public_key, route, kind, ip, meta, kind_ok) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)',
+    board.run('INSERT INTO devices (id, name, token_hash, created_at, last_seen, public_key, route, kind, ip, meta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       id, name, `clave:${id}`, now(), now(), body.pub, route, kind, who, JSON.stringify({ v: Number(proof.v ?? 2) || 2 }));
     board.event(null, 'usuario', 'device.paired', name);
     board.notice(tr('msg.remote.deviceLinked', { name }), 'success');
@@ -560,8 +564,8 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       openNow.add(c.device);
       try { c.res.write(`data: ${sealText(c.key, { e: 'note', p: n }, AAD.event(c.device))}\n\n`); } catch { /* gone */ }
     }
-    for (const d of board.all('SELECT id, push FROM devices WHERE push IS NOT NULL')) {
-      if (openNow.has(d.id)) continue;
+    for (const d of board.all('SELECT * FROM devices WHERE push IS NOT NULL')) {
+      if (openNow.has(d.id) || !validDevice(d)) continue;
       let sub; try { sub = JSON.parse(d.push); } catch { continue; }
       const data = { title: n.title, body: n.body, hidden: n.hidden, tag: `orb-${n.key}`, icon: n.icon, url: '/', route: n.route, kind: n.kind,
         actions: n.actions.map(({ id, title, open: o }) => ({ id, title, ...(o ? { open: true } : {}) })), card: n.card ?? null, acts: mintActs(d.id, n) };
@@ -579,7 +583,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     if (!t || t.until <= Date.now()) return send(res, 401, { ok: false, error: tr('msg.notes.expired') });
     for (const [k, x] of noteTokens) if (x.group === t.group) noteTokens.delete(k);
     const device = board.one('SELECT * FROM devices WHERE id = ?', t.device);
-    if (!device?.public_key || !device.push) return send(res, 401, { ok: false, error: tr('msg.notes.expired') });
+    if (!validDevice(device) || !device.push) return send(res, 401, { ok: false, error: tr('msg.notes.expired') });
     const [method, given] = t.call; const params = { ...given };
     const why = guardCall(board, method, params, { uploadsDir: uploads() });
     if (why) return send(res, 403, { ok: false, error: why });
@@ -701,6 +705,8 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     },
     start() {
       if (servers.length) return Promise.resolve(state);
+      // 3.8: never on a database of 3.5–3.7 the 3.8 migration could not finish yet (its devices may be other users').
+      if (isLegacy(board.db)) { const e = new Error(tr('msg.remote.notMigrated')); e.userFacing = true; return Promise.reject(e); }
       starting ??= startNow().finally(() => { starting = null; });
       // The Wi-Fi address changes with the network (or comes back after it was gone): the servers follow it.
       watcher ??= setInterval(() => {

@@ -4,7 +4,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import crypto from 'node:crypto';
@@ -13,10 +12,9 @@ import { createPhone } from './fixtures/phone-client.mjs';
 import * as C from '../src/core/mobile-crypto.mjs';
 import { kindForPairing, plainHttpBrowser, pushPreview, phoneConfig } from '../src/engine/remote.mjs';
 import { buildNote } from '../src/core/notes.mjs';
-import { openDb } from '../src/core/db.mjs';
 
 const env = { ORB_REMOTE_BIND: '127.0.0.1', ORB_WOL_DRY: '1' };
-let srv; let tSrv; let port; let base; let dir;
+let srv; let tSrv; let port; let base;
 const links = [];
 const client = (name, kind) => { const l = createPhone({ name, kind }); links.push(l); return l; };
 
@@ -27,13 +25,11 @@ before(async () => {
   tSrv = tempHome({ mobile: { enabled: true, port, name: 'Servidor' } });
   srv = await startEngine(tSrv.home, { env });
   await until(async () => (await srv.call('remote.status')).running, 'acceso del servidor');
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-351-'));
 });
 after(async () => {
   for (const l of links) l.stop();
   await srv?.stop();
   tSrv?.cleanup();
-  try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* temp */ }
 });
 
 test('el tipo lo decide quien hace el QR; otro Orb o una terminal nunca se enlazan', async () => {
@@ -54,21 +50,6 @@ test('el tipo lo decide quien hace el QR; otro Orb o una terminal nunca se enlaz
   // The old routes between Orbs are gone.
   for (const r of ['/api/link', '/api/server-pair']) assert.equal((await fetch(`${base}${r}`, { method: 'POST', headers: { 'X-Orb-Device': me.id, 'Content-Type': 'application/json' }, body: '{}' })).status, 404);
   assert.equal((await fetch(`${base}/api/server-hello`)).status, 401, 'nada que ver sin un dispositivo enlazado');
-});
-
-test('los Orbs enlazados antes de la 3.5.1 se vuelven a confirmar y pierden «Puede administrar» en la base de datos', () => {
-  const file = path.join(dir, 'vieja.db');
-  const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
-  const old = new DatabaseSync(file);
-  old.exec(`CREATE TABLE devices (id TEXT PRIMARY KEY, name TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL, last_seen TEXT, public_key TEXT, route TEXT, push TEXT, kind TEXT, role TEXT, ip TEXT, meta TEXT, admin INTEGER NOT NULL DEFAULT 0);
-    INSERT INTO devices (id, name, token_hash, created_at, public_key, kind, role, admin) VALUES ('a', 'Orb dudoso', 'x1', '2026-11-01', 'k', 'orb', 'taller', 1);
-    INSERT INTO devices (id, name, token_hash, created_at, public_key, kind, admin) VALUES ('b', 'Móvil', 'x2', '2026-11-01', 'k', 'phone', 1);`);
-  old.close();
-  const db = openDb(file);
-  const rows = Object.fromEntries(db.prepare('SELECT id, kind_ok, admin, approve, dev_ok FROM devices').all().map((r) => [r.id, { ...r }]));
-  db.close();
-  assert.deepEqual(rows.a, { id: 'a', kind_ok: 0, admin: 0, approve: 1, dev_ok: 0 }, 'el Orb, a confirmar y sin administrar');
-  assert.deepEqual(rows.b, { id: 'b', kind_ok: 1, admin: 1, approve: 1, dev_ok: 0 }, 'el móvil sigue igual');
 });
 
 test('código corto: atado a la clave del Orb; un intermediario que cambia la clave no engaña', async () => {

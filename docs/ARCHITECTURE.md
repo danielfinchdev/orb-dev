@@ -974,6 +974,30 @@ agent's `WHO` from its signature (`identity()`, `CONV`, `FORGED`).
 
 **Inside.** A method without a line in `METHODS` is refused everywhere: `test/permisos.test.mjs` walks every API method
 against the table, checks that a phone or a browser is refused every PC-only method before anything runs, and that an
-unsigned or forged agent sees nothing while a signed one stays within its own conversation or task. Until the 3.8
-migration (its own step) a 3.7 database keeps its `persons`, `person_settings`, `shares`, `account_loans` and
-`link_persons` tables and its `person_id` columns; 3.8 writes none of them and reads none of them.
+unsigned or forged agent sees nothing while a signed one stays within its own conversation or task. A phone or a browser
+is served only while it is the owner's: a device with another person's `person_id` (a 3.7 database) never is, and the
+phone access does not open on a database the 3.8 migration (§35) could not finish.
+
+## 35. From 3.7 to 3.8 (migration)
+
+`src/core/migrate-38.mjs`, run once by `openDb` on this home's database (after the older migrations), so before the
+engine opens the phone access, and again after a 3.7 backup is restored. Setting `migrated_3_8` marks it done; a new
+3.8 database only gets the mark.
+
+1. **Before anything is deleted**: `.orb/datos/orb-pre-3.8.db` (VACUUM INTO, never over an earlier one) and the readable
+   archive `.orb/archivo-3.7/` (`LEEME.txt`; `bots/`: rows as JSON, the bots' conversations, the old `bots/` folder and
+   `bots-borrados`; `usuarios/<name>-<id>/`: each other user's conversations, sessions, tasks, projects, schedules,
+   devices, usage, accounts and files; `tablas/`; `orb-json-retirado.json`; the sealed `enlaces.json`; the bridge's
+   `%LOCALAPPDATA%\OrbPuente\orb.json`). If either cannot be written nothing is deleted and the next start tries again
+   (the engine logs why).
+2. **orb.json**: `bots`, `oce`, `monitor`, `role`, `devTarget`, `ui.mode`, `browser.sites` and the other users' accounts and
+   connectors go; `person` leaves the rest. The owner's `userName`, `tz`, phone previews (`mobile.preview`) and brain
+   (`orchestrator`, when valid) come from `persons`/`person_settings`; `active_project` goes to settings.
+3. **One transaction**: the `home_*` triggers first; the bots' and groups' conversations and list marks; the other users'
+   rows; the owner's rows get `person_id = NULL` (the columns go in 3.9) and the list marks the key `'owner'`; devices of
+   kind `orb`/`terminal`; the tables of bots, replicas, links and persons and their indexes; the devices' columns `role`,
+   `admin`, `kind_ok`, `approve`, `dev_ok`; the old settings.
+
+The engine tells the owner once («Orb 3.8 ya no tiene bots ni usuarios…», `data.migrated38`) and logs what was done.
+Backups include `archivo-3.7/` (its account folders only with «include accounts»). Tests: `test/migracion-38.test.mjs`
+(3.7 with two users, 3.6 and 3.5.1 databases, the phone access, backups).
