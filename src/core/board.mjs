@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { openDb, taskOptions, checkPolicy } from './db.mjs';
 import { ctx, tr } from './context.mjs';
-import { AGENT_IDS, AGENT_LABELS, folderName, projectLogHeader, isConfigName, categoryOf, CATEGORIES } from './home.mjs';
+import { AGENT_IDS, AGENT_LABELS, folderName, projectLogHeader, isConfigName, categoryOf, CATEGORIES, folderKey, IGNORED_PROJECTS } from './home.mjs';
 import { oneLine, MAX_DESCRIPTION } from './safety.mjs';
 import { contentHash, sign, verify, detectSensitivity, deletionAskedByUser, defaultApprovalKey } from './approval.mjs';
 import { PRODUCT } from './product.mjs';
@@ -145,6 +145,9 @@ export class Board {
     this.run(`INSERT INTO projects (name, path, notes, created_at) VALUES (?, ?, ?, ?)
               ON CONFLICT(name) DO UPDATE SET path = excluded.path, notes = excluded.notes`, name, checked, String(notes ?? '').slice(0, 2000), now());
     this.ensureProjectLog(name);
+    // 3.8: a folder added (by hand, or by an agent) is listed again even if it was another user's project of 3.7.
+    const ignored = this.settingJson(IGNORED_PROJECTS);
+    if (Array.isArray(ignored) && ignored.includes(folderKey(checked))) this.settingJson(IGNORED_PROJECTS, ignored.filter((k) => k !== folderKey(checked)));
     this.event(null, actor, 'project.saved', `${name} -> ${checked}`);
     this.changed('projects');
     return this.project(name);

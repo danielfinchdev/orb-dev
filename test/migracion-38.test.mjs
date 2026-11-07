@@ -16,8 +16,10 @@ import { writeJson } from '../src/core/home.mjs';
 import { openDb } from '../src/core/db.mjs';
 import { Board } from '../src/core/board.mjs';
 import { marks } from '../src/core/inbox.mjs';
-import { ARCHIVE_DIR, PRE_COPY, MARK, DROPPED_TABLES, ORIGINAL_CONFIG, LOCK_FILE, takeNotice, migrationFailure, isLegacy, insideData, bridgeDir } from '../src/core/migrate-38.mjs';
-import { syncProjects, unignoreProject } from '../src/core/projects.mjs';
+import { ARCHIVE_DIR, PRE_COPY, MARK, DROPPED_TABLES, ORIGINAL_CONFIG, LOCK_FILE, WORK_DIR, SCRUB_AFTER_MS, takeNotice, migrationFailure, isLegacy, unfinished, insideData, bridgeDir, scrub, scrubPreCopies, legacyData, deleteLegacyData } from '../src/core/migrate-38.mjs';
+import { syncProjects } from '../src/core/projects.mjs';
+import { IGNORED_PROJECTS } from '../src/core/home.mjs';
+import { migrationView, folderOf } from '../src/ui/lib/migration.js';
 import * as C from '../src/core/mobile-crypto.mjs';
 import { newVapidKeys } from '../src/engine/webpush.mjs';
 import { createBackup, restoreInto } from '../src/core/backup.mjs';
@@ -150,7 +152,13 @@ test('una base 3.7 de dos usuarios: copia y archivo primero, luego fuera bots, r
   assert.equal(old.prepare('SELECT COUNT(*) AS n FROM bots').get().n, 2, 'la copia tiene la base tal cual');
   old.close();
   assert.ok(fs.existsSync(archived(t, 'LEEME.txt')));
-  assert.equal(fs.readFileSync(archived(t, ORIGINAL_CONFIG), 'utf8'), before, 'orb.json tal como estaba');
+  // orb.json as it was, but without Ana's keys (it goes into every backup); the original is gone once the new one is written.
+  const kept = JSON.parse(before);
+  const archivedConfig = readJson(archived(t, ORIGINAL_CONFIG));
+  assert.deepEqual(archivedConfig.bots, kept.bots, 'orb.json tal como estaba');
+  assert.deepEqual(archivedConfig.mcpServers.find((m) => m.name === 'de-ana'), { name: 'de-ana', command: 'x', args: ['(oculto)'], ocultos: ['env.API_KEY'], person: ANA });
+  assert.ok(!JSON.stringify(archivedConfig).includes('secreto-de-ana'));
+  assert.ok(!fs.existsSync(path.join(t.home, '.orb', 'datos', WORK_DIR)), 'el orb.json original ya no está');
   assert.ok(!fs.existsSync(path.join(t.home, '.orb', 'datos', LOCK_FILE)) && !fs.existsSync(path.join(t.home, '.orb', 'datos', 'migracion-3.8.json')));
   assert.deepEqual(readJson(archived(t, 'bots', 'bots.json')).map((b) => b.name), ['Casa', 'Bot de Ana']);
   assert.equal(readJson(archived(t, 'bots', 'grupos.json'))[0].members.length, 2);
@@ -240,12 +248,14 @@ test('una base 3.7 de dos usuarios: copia y archivo primero, luego fuera bots, r
   assert.match(fs.readFileSync(archived(t, 'LEEME.txt'), 'utf8'), /Las carpetas de Ana siguen en web[\\/]web-ana; Orb no las lista/);
   syncProjects(board);
   assert.deepEqual(board.projects().map((x) => x.name), ['web-dani']);
-  unignoreProject(board, path.join(t.home, 'web', 'web-ana'));
+  board.addProject({ name: 'web-ana', path: path.join(t.home, 'web', 'web-ana') }, 'usuario', { fromUser: true });
+  assert.deepEqual(board.settingJson(IGNORED_PROJECTS), [], 'añadida a mano, ya no se ignora');
   syncProjects(board);
   assert.deepEqual(board.projects().map((x) => x.name).sort(), ['web-ana', 'web-dani']);
   // Told once.
   const notice = takeNotice(board);
   assert.equal(notice.bots, 2); assert.deepEqual(notice.users, ['Ana']); assert.equal(notice.archive, archived(t));
+  assert.equal(notice.haToken, true, 'había un token de Home Assistant: el aviso dice que se revoque');
   assert.equal(takeNotice(board), null);
   board.db.close();
 
@@ -372,9 +382,18 @@ const own = (board) => board.all('SELECT title FROM conversations WHERE bot_id I
 const breakTransaction = (t) => raw37(t, (db) => db.exec('CREATE VIEW ve_role AS SELECT role FROM devices'));
 const fixTransaction = (t) => raw37(t, (db) => db.exec('DROP VIEW ve_role'));
 
-test('A1: si la transacción falla tras la copia no se borra nada, orb.json no se toca, y el reintento deja el archivo completo', () => {
-  const { t } = setup37();
+// The files of 3.7 a run moves or deletes once committed (each one, as files37 makes it).
+const files37Of = (t) => [path.join(t.home, 'bots', 'personas', OWNER, 'memoria-global.md'), path.join(t.home, '.orb', 'bots-borrados', 'viejo', 'memoria.md'),
+  path.join(t.home, '.orb', 'datos', 'enlaces.json'), path.join(process.env.ORB_BRIDGE_DIR, 'orb.json'), path.join(t.home, '.orb', 'imagenes', ANA, 'a.png'),
+  path.join(t.home, '.orb', 'imagenes', OWNER, 'b.png'), path.join(t.home, '.orb', 'cuentas', ANA, 'claude-ana', 'credenciales.json'),
+  path.join(t.home, '.orb', 'cuentas', 'claude-ana', '.credentials.json'), path.join(t.home, '.orb', 'ejecuciones', 'personas', ANA, 'nota.md'),
+  path.join(t.home, '.orb', 'ejecuciones', 'personas', OWNER, 'nota.md'), path.join(t.home, 'bitacora', `general-${ANA}.md`)];
+
+test('A1/A2: si la transacción falla tras la copia no se mueve ni se borra nada (BD, orb.json y ficheros), y el reintento deja el archivo completo', () => {
+  const { t, ids } = setup37();
   const orbBefore = fs.readFileSync(path.join(t.home, 'orb.json'), 'utf8');
+  const before = files37Of(t).map((f) => [f, fs.readFileSync(f, 'utf8')]);
+  before.push([path.join(t.home, '.orb', 'ejecuciones', String(ids.tAna), 'mcp.json'), fs.readFileSync(path.join(t.home, '.orb', 'ejecuciones', String(ids.tAna), 'mcp.json'), 'utf8')]);
   breakTransaction(t);
   let board = new Board();
   const f = migrationFailure();
@@ -385,7 +404,10 @@ test('A1: si la transacción falla tras la copia no se borra nada, orb.json no s
   assert.equal(board.one('SELECT COUNT(*) AS n FROM persons').n, 2);
   assert.equal(board.setting(MARK), undefined);
   assert.equal(fs.readFileSync(path.join(t.home, 'orb.json'), 'utf8'), orbBefore, 'orb.json sin tocar');
-  assert.ok(!fs.existsSync(path.join(datosOf(t), LOCK_FILE)), 'sin bloqueo colgado');
+  for (const [f, text] of before) assert.equal(fs.existsSync(f) && fs.readFileSync(f, 'utf8'), text, `${path.relative(t.base, f)} sigue en su sitio`);
+  assert.equal(f.committed, false, 'Orb 3.7 puede volver a abrir estos datos');
+  assert.ok(fs.existsSync(path.join(datosOf(t), WORK_DIR, ORIGINAL_CONFIG)), 'el orb.json original, fuera del archivo');
+  assert.ok(!fs.existsSync(archived(t, 'imagenes')) && fs.existsSync(archived(t, 'usuarios', `Ana-${ANA}`, 'imagenes', 'a.png')), 'en el archivo solo hay copias');
   const copyAt = fs.statSync(path.join(datosOf(t), PRE_COPY)).mtimeMs;
   board.db.close();
 
@@ -398,26 +420,63 @@ test('A1: si la transacción falla tras la copia no se borra nada, orb.json no s
   assert.deepEqual(readJson(path.join(ana, 'cuentas.json')).accounts.map((a) => a.id), ['claude-ana'], 'las cuentas de Ana siguen en el archivo');
   assert.deepEqual(readJson(path.join(ana, 'cuentas.json')).mcpServers.map((m) => m.name), ['de-ana']);
   assert.equal(readJson(archived(t, 'orb-json-retirado.json')).role, 'centro', 'y los ajustes retirados');
-  assert.equal(fs.readFileSync(archived(t, ORIGINAL_CONFIG), 'utf8'), orbBefore);
+  assert.ok(!fs.readFileSync(archived(t, ORIGINAL_CONFIG), 'utf8').includes('secreto-de-ana'));
   assert.equal(fs.statSync(path.join(datosOf(t), PRE_COPY)).mtimeMs, copyAt, 'la copia buena de antes se usa, no se rehace');
+  for (const [f] of before) if (!f.includes(`${path.sep}imagenes${path.sep}${OWNER}`)) assert.ok(!fs.existsSync(f), `${path.relative(t.base, f)} ya no está`);
+  assert.equal(fs.readFileSync(path.join(t.home, '.orb', 'imagenes', 'b.png'), 'utf8'), 'x', 'las imágenes del dueño, en su sitio de 3.8');
   assert.ok(!fs.readdirSync(path.join(t.home, '.orb')).some((n) => n.startsWith(`${ARCHIVE_DIR}-`)), 'el mismo archivo, no otro');
   assert.equal(readJson(path.join(t.home, 'orb.json')).role, undefined);
   assert.deepEqual(own(board), ['Plan de Dani']);
   board.db.close();
 });
 
-test('A1: si el proceso acaba entre el COMMIT y orb.json, el siguiente arranque escribe orb.json', () => {
+test('R3: si orb.json no se puede escribir tras el COMMIT, Orb no arranca (ni con la configuración de 3.7) y el siguiente arranque lo termina', () => {
   const { t } = setup37();
-  new Board().db.close();
-  const done = readJson(path.join(t.home, 'orb.json'));
-  // As if the process had ended right after the COMMIT: orb.json as it was, the new one still in the database.
-  fs.writeFileSync(path.join(t.home, 'orb.json'), fs.readFileSync(archived(t, ORIGINAL_CONFIG)));
-  raw37(t, (db) => db.prepare("INSERT INTO settings (key, value) VALUES ('migrated_3_8_config', ?)").run(JSON.stringify(done)));
-  const board = new Board();
-  assert.deepEqual(readJson(path.join(t.home, 'orb.json')), done);
-  assert.equal(ctx.config.userName, 'Dani');
-  assert.equal(board.setting('migrated_3_8_config'), undefined);
+  const file = path.join(t.home, 'orb.json');
+  fs.chmodSync(file, 0o444); // read-only (or held by an antivirus): the rename over it fails
+  let board = new Board();
+  const f = migrationFailure();
+  assert.match(f?.reason ?? '', /orb\.json/);
+  assert.equal(f.committed, true, 'la BD ya es de 3.8');
+  assert.ok(!isLegacy(board.db) && unfinished(board.db), 'Orb no arranca sobre esto');
+  assert.ok(!ctx.config.accounts.some((a) => a.id === 'claude-ana' || a.id === 'claude-gone'), 'ni en memoria las cuentas de otros');
+  assert.ok(!(ctx.config.mcpServers ?? []).some((m) => m.name === 'de-ana'));
+  assert.deepEqual(fs.readdirSync(t.home).filter((n) => n.endsWith('.tmp')), [], 'sin temporal huérfano');
+  assert.equal(takeNotice(board) != null, true);
   board.db.close();
+  // Writable again: the next start finishes (the files' plan runs again without harm).
+  fs.chmodSync(file, 0o644);
+  board = new Board();
+  assert.equal(migrationFailure(), null);
+  assert.ok(!unfinished(board.db));
+  const raw = readJson(file);
+  assert.equal(raw.role, undefined); assert.equal(raw.userName, 'Dani');
+  assert.ok(!raw.accounts.some((a) => a.id === 'claude-ana'));
+  assert.ok(!fs.existsSync(path.join(datosOf(t), WORK_DIR)) && !fs.existsSync(path.join(datosOf(t), 'migracion-3.8.json')));
+  board.db.close();
+});
+
+test('R3: la configuración pendiente nunca pisa los cambios hechos después en orb.json', () => {
+  const { t } = setup37();
+  const file = path.join(t.home, 'orb.json');
+  fs.chmodSync(file, 0o444);
+  new Board().db.close();
+  assert.equal(migrationFailure()?.committed, true);
+  // Meanwhile orb.json changes (by hand, or Orb 3.7 opened again): still 3.7's, with a change of the user.
+  fs.chmodSync(file, 0o644);
+  const changed = readJson(file); changed.assistantName = 'Mi Orb'; writeJson(file, changed);
+  const board = new Board();
+  assert.equal(migrationFailure(), null);
+  const raw = readJson(file);
+  assert.equal(raw.assistantName, 'Mi Orb', 'el cambio se queda');
+  assert.equal(raw.role, undefined, 'y lo de 3.7 se quita igual');
+  assert.ok(!raw.accounts.some((a) => a.id === 'claude-ana') && !raw.mcpServers.some((m) => m.name === 'de-ana'));
+  assert.equal(raw.orchestrator.model, 'claude-opus-5-5', 'con los ajustes del dueño de 3.7');
+  // Already written: opened again, nothing changes.
+  board.db.close();
+  const text = fs.readFileSync(file, 'utf8');
+  new Board().db.close();
+  assert.equal(fs.readFileSync(file, 'utf8'), text);
 });
 
 test('A2: una copia previa vacía o a medias nunca se da por buena: se aparta y se hace otra comprobada', () => {
@@ -495,11 +554,12 @@ test('M4: restaurar dos veces una copia de 3.7 ya migrada da cada vez un archivo
   assert.ok(fs.readFileSync(path.join(datosOf(t), PRE_COPY)).equals(firstCopy), 'ni la primera copia');
 });
 
-test('B5: un proceso vivo con el bloqueo no deja migrar; dos procesos a la vez migran una sola vez', async () => {
+test('B5: un proceso vivo con el bloqueo no deja migrar; al morir lo suelta; dos procesos a la vez migran una sola vez', async () => {
   const { t } = setup37();
   const lockFile = path.join(datosOf(t), LOCK_FILE);
-  const holder = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore' });
-  fs.writeFileSync(lockFile, JSON.stringify({ pid: holder.pid, at: new Date().toISOString() }));
+  // Another process holds the lock (an exclusive transaction on the lock's database), then dies without letting it go.
+  const holder = spawn(process.execPath, ['-e', "const d = new (process.getBuiltinModule('node:sqlite').DatabaseSync)(process.argv[1]); d.exec('BEGIN EXCLUSIVE'); process.stdout.write('ok'); setTimeout(() => {}, 60000);", lockFile], { stdio: ['ignore', 'pipe', 'inherit'] });
+  await once(holder.stdout, 'data');
   process.env.ORB_MIGRATION_LOCK_MS = '300';
   try {
     const board = new Board();
@@ -509,7 +569,7 @@ test('B5: un proceso vivo con el bloqueo no deja migrar; dos procesos a la vez m
     board.db.close();
   } finally { delete process.env.ORB_MIGRATION_LOCK_MS; holder.kill(); }
   await once(holder, 'exit');
-  // Its process gone, the lock is stale. Two processes open the folder at once.
+  // Its process gone, the system let the lock go. Two processes open the folder at once.
   const src = (f) => JSON.stringify(pathToFileURL(path.join(ROOT, 'src', 'core', f)).href);
   const script = `import { useHome } from ${src('context.mjs')}; import { Board } from ${src('board.mjs')}; import { migrationFailure } from ${src('migrate-38.mjs')};
 useHome(process.env.ORB_TEST_HOME); const b = new Board(); process.stdout.write(JSON.stringify({ failure: migrationFailure() })); b.db.close();`;
@@ -569,4 +629,154 @@ test('M2: si la migración falla, Orb no funciona sobre los datos de 3.7 (ni mó
     assert.ok(!(await engine.call('conversations.list')).some((c) => c.title === 'Secreto de Ana'));
     await until(async () => (await engine.call('remote.status')).running, 'el móvil, ya con los datos de 3.8');
   } finally { await engine.stop(); }
+});
+
+// ---- F2.5c: the review of F2.5b (orb-3.8-revision-F2.5b.md)
+const walk = (dir) => { const out = []; const go = (d) => { let l = []; try { l = fs.readdirSync(d, { withFileTypes: true }); } catch { return; } for (const e of l) { const f = path.join(d, e.name); if (e.isDirectory()) go(f); else out.push(f); } }; go(dir); return out; };
+const archives = (home) => fs.readdirSync(path.join(home, '.orb')).filter((n) => n.startsWith(ARCHIVE_DIR)).map((n) => path.join(home, '.orb', n));
+
+test('A1/B2: ni el archivo ni las copias de seguridad llevan claves de otros usuarios (por nombre ni por valor)', async () => {
+  const { t } = setup37();
+  const file = path.join(t.home, 'orb.json');
+  const raw = readJson(file);
+  raw.mcpServers = raw.mcpServers.map((m) => (m.name === 'de-ana' ? { ...m, command: 'npx servidor sk-ant-abcdefgh123456', url: 'https://ana:clave-de-ana@host/x?sig=zzz-de-ana', args: ['--token=abc', '--api-key', 'valor-suelto-de-ana', 'ghp_abcdefghijklmnop1234'] } : m));
+  writeJson(file, raw);
+  new Board().db.close();
+  assert.equal(migrationFailure(), null);
+  const secrets = ['secreto-de-ana', 'token=abc', 'sk-ant-abcdefgh123456', 'clave-de-ana', 'zzz-de-ana', 'valor-suelto-de-ana', 'ghp_abcdefghijklmnop1234'];
+  const leaks = (files) => files.flatMap((f) => { const text = fs.readFileSync(f, 'latin1'); return secrets.filter((s) => text.includes(s)).map((s) => `${path.basename(f)}: ${s}`); });
+  assert.deepEqual(leaks(archives(t.home).flatMap(walk)), [], 'en el archivo');
+  const kept = readJson(path.join(archived(t), 'usuarios', `Ana-${ANA}`, 'cuentas.json')).mcpServers[0];
+  assert.equal(kept.url, 'https://(oculto)@host/x?sig=(oculto)'); assert.deepEqual(kept.args, ['(oculto)', '(oculto)', '(oculto)', '[secreto oculto]']);
+  const secret = crypto.randomBytes(32);
+  for (const includeAccounts of [false, true]) {
+    const { file: copy } = await createBackup({ home: t.home, secret, version: 'test', includeAccounts });
+    const target = path.join(t.base, `restaurada-${includeAccounts}`);
+    await restoreInto(target, copy, { secret });
+    assert.deepEqual(leaks(walk(target)), [], `en la copia de seguridad (cuentas: ${includeAccounts})`);
+  }
+});
+
+test('B3: la base viva no guarda lo borrado en páginas libres (VACUUM tras migrar)', () => {
+  const { t } = setup37();
+  const board = new Board();
+  assert.equal(board.one('PRAGMA freelist_count').freelist_count, 0);
+  board.db.close();
+  for (const f of ['orb.db', 'orb.db-wal']) { const p = path.join(datosOf(t), f); if (fs.existsSync(p)) assert.ok(!fs.readFileSync(p, 'latin1').includes('mi secreto'), f); }
+});
+
+test('M2: una imagen del dueño con el nombre de otra se renombra (nunca se borra) y el chat que la nombra apunta a su sitio nuevo', () => {
+  const { t, ids } = setup37();
+  const imgs = path.join(t.home, '.orb', 'imagenes');
+  fs.writeFileSync(path.join(imgs, 'b.png'), 'otra');
+  const old = path.join(imgs, OWNER, 'b.png');
+  raw37(t, (db) => db.prepare("INSERT INTO chat (role, body, meta, at, conversation_id, person_id) VALUES ('usuario', ?, ?, ?, ?, ?)").run(`mira ${old}`, JSON.stringify({ images: [old] }), NOW, ids.cDani, OWNER));
+  const board = new Board();
+  assert.equal(fs.readFileSync(path.join(imgs, 'b.png'), 'utf8'), 'otra');
+  const moved = path.join(imgs, 'b (3.7).png');
+  assert.equal(fs.readFileSync(moved, 'utf8'), 'x', 'la del dueño, renombrada');
+  assert.ok(!fs.existsSync(path.join(imgs, OWNER)));
+  const line = board.one('SELECT body, meta FROM chat WHERE body LIKE ?', 'mira %');
+  assert.equal(line.body, `mira ${moved}`); assert.deepEqual(JSON.parse(line.meta).images, [moved]);
+  board.db.close();
+});
+
+test('M3: las copias aisladas y las fotos de las tareas de otros se archivan antes de que Orb las limpie', () => {
+  const { t, ids } = setup37();
+  const work = path.join(t.home, '.orb', 'copias', 'aisladas', 'web-ana-7');
+  const put = (p, text = 'x') => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, text); };
+  put(path.join(work, 'cambio.txt'), 'sin commit'); put(path.join(work, 'node_modules', 'pkg', 'index.js'));
+  put(path.join(t.home, '.orb', 'copias', 'fotos', `t${ids.tAna}-123`, 'antes.txt'), 'foto');
+  raw37(t, (db) => db.prepare("UPDATE tasks SET workdir = ?, branch = 'orb/t2-web-ana' WHERE id = ?").run(work, ids.tAna));
+  new Board().db.close();
+  const ana = archived(t, 'usuarios', `Ana-${ANA}`, 'copias');
+  assert.equal(fs.readFileSync(path.join(ana, 'aisladas', 'web-ana-7', 'cambio.txt'), 'utf8'), 'sin commit');
+  assert.ok(!fs.existsSync(path.join(ana, 'aisladas', 'web-ana-7', 'node_modules')), 'sin dependencias');
+  assert.equal(fs.readFileSync(path.join(ana, 'fotos', `t${ids.tAna}-123`, 'antes.txt'), 'utf8'), 'foto');
+  assert.match(fs.readFileSync(archived(t, 'LEEME.txt'), 'utf8'), /Las ramas de sus tareas siguen en sus repositorios: orb\/t2-web-ana/);
+});
+
+test('M4: los proyectos de otros compartidos con el dueño o usados por lo suyo pasan a ser del dueño (no se borran ni se ignoran)', () => {
+  const { t } = setup37();
+  const lib = path.join(t.home, 'web', 'lib-ana'); fs.mkdirSync(lib, { recursive: true });
+  raw37(t, (db) => {
+    db.prepare("INSERT INTO shares (resource_type, resource_id, person_id, right, created_at) VALUES ('project', 'web-ana', ?, 'edit', ?)").run(OWNER, NOW);
+    db.prepare("INSERT INTO projects (name, path, created_at, person_id) VALUES ('lib-ana', ?, ?, ?), ('solo-ana', 'C:/x/solo-ana', ?, ?)").run(lib, NOW, ANA, NOW, ANA);
+    db.prepare("INSERT INTO schedules (project, title, description, every, created_at, person_id) VALUES ('lib-ana', 'De Dani en lib', 'd', 'daily', ?, ?)").run(NOW, OWNER);
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(IGNORED_PROJECTS, JSON.stringify([path.join(t.home, 'web', 'ya-no-existe').toLowerCase()]));
+  });
+  const board = new Board();
+  assert.deepEqual(board.all('SELECT name, person_id FROM projects ORDER BY name').map((r) => [r.name, r.person_id]), [['lib-ana', null], ['web-ana', null], ['web-dani', null]]);
+  assert.ok(!(board.settingJson(IGNORED_PROJECTS) ?? []).some((k) => k.includes('web-ana') || k.includes('lib-ana')));
+  assert.match(fs.readFileSync(archived(t, 'LEEME.txt'), 'utf8'), /Sus proyectos (web-ana, lib-ana|lib-ana, web-ana) ahora son tuyos/);
+  syncProjects(board);
+  assert.deepEqual(board.projects().map((x) => x.name).sort(), ['lib-ana', 'web-ana', 'web-dani']);
+  assert.deepEqual(board.settingJson(IGNORED_PROJECTS), [], 'las carpetas que ya no existen salen de la lista');
+  board.db.close();
+});
+
+test('M5: una copia previa válida pero desfasada (se volvió a usar 3.7 entre intentos) se rehace', () => {
+  const { t } = setup37();
+  breakTransaction(t);
+  new Board().db.close();
+  assert.ok(migrationFailure());
+  // Orb 3.7 used again for a while.
+  raw37(t, (db) => db.prepare("INSERT INTO conversations (title, titled, created_at, updated_at, person_id) VALUES ('De después', 1, ?, ?, ?)").run(NOW, NOW, OWNER));
+  fixTransaction(t);
+  const board = new Board();
+  assert.equal(migrationFailure(), null);
+  const copy = new DatabaseSync(path.join(datosOf(t), PRE_COPY), { readOnly: true });
+  assert.equal(copy.prepare("SELECT COUNT(*) AS n FROM conversations WHERE title = 'De después'").get().n, 1, 'la copia tiene lo de después');
+  copy.close();
+  assert.deepEqual(fs.readdirSync(datosOf(t)).filter((n) => n.includes('intento')), [], 'la vieja se borra al terminar');
+  board.db.close();
+});
+
+test('M7: 30 días después, las copias de la BD de 3.7 pierden sus claves; «Borrar los datos de Orb 3.7» lo borra todo', () => {
+  const { t } = setup37();
+  const board = new Board();
+  const now = Date.now();
+  assert.equal(scrubPreCopies(board.db, { home: t.home, now: now + 86_400_000 }), null, 'aún no');
+  assert.equal(scrubPreCopies(board.db, { home: t.home, now: now + SCRUB_AFTER_MS + 60_000 }), 1);
+  const copy = new DatabaseSync(path.join(datosOf(t), PRE_COPY), { readOnly: true });
+  assert.equal(copy.prepare('SELECT COUNT(*) AS n FROM persons WHERE pin_hash IS NOT NULL').get().n, 0);
+  assert.equal(copy.prepare("SELECT COUNT(*) AS n FROM devices WHERE token_hash NOT LIKE 'borrado:%' OR public_key IS NOT NULL").get().n, 0);
+  assert.equal(copy.prepare("SELECT COUNT(*) AS n FROM settings WHERE key LIKE 'secret:%' OR key = 'remote_keys' OR key LIKE 'agent_id:%'").get().n, 0);
+  assert.equal(copy.prepare('SELECT COUNT(*) AS n FROM bots').get().n, 2, 'el resto se queda');
+  assert.equal(copy.prepare('PRAGMA freelist_count').get().freelist_count, 0);
+  copy.close();
+  assert.ok(!fs.readFileSync(path.join(datosOf(t), PRE_COPY), 'latin1').includes('clave:'), 'ni en páginas libres');
+  assert.equal(scrubPreCopies(board.db, { home: t.home, now: now + SCRUB_AFTER_MS * 2 }), null, 'una vez');
+  // «Borrar los datos de Orb 3.7»: never while a run is unfinished.
+  board.run("INSERT INTO settings (key, value) VALUES ('migrated_3_8_files', '[]')");
+  assert.throws(() => deleteLegacyData(board.db, t.home), /todavía/);
+  board.run("DELETE FROM settings WHERE key = 'migrated_3_8_files'");
+  const found = legacyData(t.home);
+  assert.equal(found.archives.length, 1); assert.equal(found.copies.length, 1); assert.ok(found.bytes > 0);
+  deleteLegacyData(board.db, t.home);
+  assert.deepEqual(legacyData(t.home), { archives: [], copies: [], bytes: 0 });
+  assert.ok(!fs.existsSync(archived(t)));
+  board.db.close();
+});
+
+test('B2: scrub oculta el valor tras una opción de secreto y lo que parece una clave en cualquier texto', () => {
+  assert.deepEqual(scrub({ name: 'x', command: 'run sk-abcdefghijk', args: ['--api-key', 'abc', '--port', '80', 'xai-abcdefgh1'], url: 'https://u:p@h/?token=t&a=1', env: { K: 'v' }, person: 'p' }),
+    { name: 'x', command: 'run [secreto oculto]', args: ['(oculto)', '(oculto)', '--port', '80', '[secreto oculto]'], url: 'https://(oculto)@h/?token=(oculto)&a=1', ocultos: ['env.K'] });
+});
+
+test('M6: la pantalla de bloqueo dice la verdad, abre la carpeta de la copia y ofrece buscar una actualización', () => {
+  const s = { failed: true, reason: 'EPERM', backup: 'C:\\Orb\\.orb\\datos\\orb-pre-3.8.db', data: 'C:\\Orb\\.orb\\datos\\orb.db', committed: false };
+  assert.equal(folderOf(s.backup), 'C:\\Orb\\.orb\\datos');
+  assert.equal(migrationView(s, null).body, 'data.migration38.body');
+  assert.equal(migrationView({ ...s, committed: true }, null).body, 'data.migration38.bodyCommitted');
+  assert.equal(migrationView(s, null).update, null, 'sin actualizador (desde el código)');
+  assert.equal(migrationView(s, { state: 'off' }).update, null);
+  assert.equal(migrationView(s, { state: 'idle' }).update.action, 'check');
+  assert.equal(migrationView(s, { state: 'none' }).update.none, true);
+  assert.equal(migrationView(s, { state: 'checking' }).update.busy, true);
+  const available = migrationView(s, { state: 'available', version: '3.8.1' }).update;
+  assert.deepEqual([available.action, available.version], ['update', '3.8.1']);
+  assert.equal(migrationView(s, { state: 'downloading', percent: 40 }).update.percent, 40);
+  assert.equal(migrationView(s, { state: 'downloaded' }).update.action, 'restart');
+  assert.equal(migrationView({ ...s, backup: null }, null).folder, 'C:\\Orb\\.orb\\datos', 'sin copia: la carpeta de la base');
 });

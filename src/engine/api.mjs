@@ -12,7 +12,7 @@ import { AGENT_IDS, categoryOf, CATEGORIES } from '../core/home.mjs';
 import { accountsOf, accountDir, accountLabel, accounts as allAccounts } from '../core/accounts.mjs';
 import { usageReport, modelName } from '../core/budget.mjs';
 import { brainOf } from './orchestrator.mjs';
-import { createProjects, syncProjects, checkProjectName, renameProject, unignoreProject } from '../core/projects.mjs';
+import { createProjects, syncProjects, checkProjectName, renameProject } from '../core/projects.mjs';
 import { PRODUCT } from '../core/product.mjs';
 import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../core/schedules.mjs';
 import { oneLine, redactSecrets, localStamp } from '../core/safety.mjs';
@@ -178,11 +178,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const made = createProjects(board, { name: str(name, 'nombre', 60), notes: str(notes, 'notas', 2000, { optional: true }), categories: cats }, 'usuario');
       return { ...made[0], all: made.map((p) => p.name) };
     },
-    'projects.import': ({ name, folder }) => {
-      const p = board.addProject({ name: checkProjectName(str(name, 'nombre', 60)), path: str(folder, 'carpeta', 1000) }, 'usuario', { fromUser: true });
-      unignoreProject(board, p?.path ?? folder);
-      return p;
-    },
+    'projects.import': ({ name, folder }) => board.addProject({ name: checkProjectName(str(name, 'nombre', 60)), path: str(folder, 'carpeta', 1000) }, 'usuario', { fromUser: true }),
     'projects.remove': ({ name }) => board.removeProject(project(name).name, 'usuario'),
     // 3.2.1: a new name (and folder) for a project with nothing working in it (core/projects.mjs renameProject).
     'projects.rename': ({ name, to }) => {

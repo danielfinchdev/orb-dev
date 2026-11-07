@@ -131,13 +131,16 @@ export function syncProjects(board) {
   const norm = folderKey;
   const registered = board.projects();
   const byPath = new Map(registered.map((p) => [norm(p.path), p]));
-  const ignored = new Set(board.settingJson(IGNORED_PROJECTS) ?? []);
+  const ignoredList = board.settingJson(IGNORED_PROJECTS);
+  const ignored = new Set(Array.isArray(ignoredList) ? ignoredList : []);
   let changed = false;
+  const present = new Set();
   for (const cat of CATEGORIES) {
     let entries; try { entries = fs.readdirSync(ctx.paths.categories[cat], { withFileTypes: true }); } catch { continue; }
     for (const e of entries) {
       if (!e.isDirectory() || isReservedInCategory(cat, e.name)) continue;
       const folder = path.join(ctx.paths.categories[cat], e.name);
+      present.add(norm(folder));
       if (byPath.has(norm(folder)) || ignored.has(norm(folder))) continue;
       let name = e.name; let i = 2;
       while (board.project(name)) name = `${e.name} (${i++})`;
@@ -150,13 +153,7 @@ export function syncProjects(board) {
     if (fs.existsSync(p.path) && categoryOf(home, p.path)) continue;
     try { board.removeProject(p.name, 'orb'); changed = true; } catch { /* open tasks: kept */ }
   }
+  // Folders not listed that no longer exist leave the list (board.addProject takes out the ones added again).
+  if ([...ignored].some((k) => !present.has(k))) board.settingJson(IGNORED_PROJECTS, [...ignored].filter((k) => present.has(k)));
   return changed;
-}
-
-// 3.8: a folder added by hand is listed again even if it was another user's project of 3.7.
-export function unignoreProject(board, folder) {
-  const list = board.settingJson(IGNORED_PROJECTS);
-  if (!Array.isArray(list)) return;
-  const key = folderKey(folder);
-  if (list.includes(key)) board.settingJson(IGNORED_PROJECTS, list.filter((k) => k !== key));
 }

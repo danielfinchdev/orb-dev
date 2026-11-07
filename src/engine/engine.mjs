@@ -53,27 +53,28 @@ async function start(home, version, secret, browser) {
   addAdbToPath(); ensureAdb({ log });
   const { Board } = await import('../core/board.mjs');
   // 3.8: a data folder of 3.5–3.7 is moved to 3.8 when its database opens (src/core/migrate-38.mjs). If that could not be
-  // done, Orb does not run on the data of 3.7 (other users' conversations, schedules and devices): no scheduler, agents
-  // or phone access; the window shows why, where the copy is and «Reintentar» (blocked below).
+  // done (or its files and orb.json could not be finished), Orb does not run on those data (other users' conversations,
+  // schedules, devices, accounts and connectors): no scheduler, agents or phone access; the window shows why, where the
+  // copy is, «Reintentar» and «Buscar actualización» (blocked below).
   const board = new Board();
-  const { isLegacy } = await import('../core/migrate-38.mjs');
-  if (isLegacy(board.db)) return blocked(board, { home, version, restored });
+  const { unfinished } = await import('../core/migrate-38.mjs');
+  if (unfinished(board.db)) return blocked(board, { home, version, restored });
   return run(board, { home, version, restored });
 }
 
 // While the data could not be updated: only the window's two calls about it. → what start() returns.
-let migration = null; // { failed: true, reason, backup, data }
+let migration = null; // { failed: true, reason, backup, data, committed }
 async function blocked(board, info) {
-  const { migrationFailure, isLegacy } = await import('../core/migrate-38.mjs');
+  const { migrationFailure, unfinished, isLegacy } = await import('../core/migrate-38.mjs');
   const f = migrationFailure();
-  migration = { failed: true, reason: f?.reason ?? tr('data.migration38.blocked'), backup: f?.backup ?? null, data: ctx.paths.db };
+  migration = { failed: true, reason: f?.reason ?? tr('data.migration38.blocked'), backup: f?.backup ?? null, data: ctx.paths.db, committed: f?.committed ?? !isLegacy(board.db) };
   log(`3.8: la migración no se pudo hacer; Orb no arranca sobre los datos de 3.7: ${migration.reason}`);
   let retrying = null;
   const retry = async () => {
     try { board.db.close(); } catch { /* closed */ }
     const { Board } = await import('../core/board.mjs');
     const next = new Board();
-    if (isLegacy(next.db)) { await blocked(next, info); return migration; }
+    if (unfinished(next.db)) { await blocked(next, info); return migration; }
     migration = null;
     await run(next, info);
     return { failed: false };
@@ -194,8 +195,14 @@ async function run(board, { home, version, restored }) {
     const m = takeNotice(board);
     if (m) {
       log(`3.8: datos de 3.7 migrados: ${m.bots} bots y ${m.conversations} conversaciones de bots, ${m.users.length} usuarios (${m.users.join(', ') || 'ninguno'}) archivados en ${m.archive}; copia de la base en ${m.backup}`);
-      board.notice(tr('data.migrated38', { path: m.archive }), 'info');
+      board.notice(`${tr('data.migrated38', { path: m.archive })}${m.haToken ? ` ${tr('data.migrated38.haToken')}` : ''}`, 'info');
     }
+    // 30 days later, the copies of the database of 3.7 lose its secrets (PIN hashes, devices' keys, Home Assistant's token).
+    try {
+      const { scrubPreCopies } = await import('../core/migrate-38.mjs');
+      const n = scrubPreCopies(board.db);
+      if (n) { log(`3.8: claves quitadas de ${n} copia(s) de la base de datos de 3.7`); board.notice(tr('data.migration38.scrubbed'), 'info'); }
+    } catch (error) { log(`3.8: limpiar la copia de 3.7: ${error.message}`); }
   }
   // Which agents this PC has, as the engine sees them (with the app's environment): first thing to look at if «Agentes»
   // says one is missing.

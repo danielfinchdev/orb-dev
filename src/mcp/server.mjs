@@ -28,8 +28,9 @@ useHome(home);
 const { Board, AGENTS, STATUSES, assistantName, userName, ofUser } = await import('../core/board.mjs');
 const { readLog, writeLog, logFiles, findLog } = await import('../engine/logs.mjs');
 const board = new Board(undefined, { noKey: true }); // the MCP never holds the approval secret
-// 3.8: never on data of 3.7 the 3.8 migration could not update (other users' rows; the engine does not run on them either).
-{ const { isLegacy } = await import('../core/migrate-38.mjs'); if (isLegacy(board.db)) { process.stderr.write(`${tr('data.migration38.blocked')}
+// 3.8: never on data of 3.7 the 3.8 migration could not update or finish (other users' rows and keys; the engine does not
+// run on them either).
+{ const { unfinished } = await import('../core/migrate-38.mjs'); if (unfinished(board.db)) { process.stderr.write(`${tr('data.migration38.blocked')}
 `); process.exit(1); } }
 
 // Who the engine says this process is (sessions.mjs › mcpServersFor), never what its environment claims: an agent that

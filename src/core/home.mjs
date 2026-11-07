@@ -282,11 +282,13 @@ export function configFrom(stored) {
   return config;
 }
 
-// Atomic write: a crash in the middle never leaves a half-written file.
+// Atomic write: a crash in the middle never leaves a half-written file, and a failed one never leaves its temporary file.
 export function writeJson(file, value) {
   const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`);
-  fs.renameSync(tmp, file);
+  try {
+    fs.writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`);
+    fs.renameSync(tmp, file);
+  } catch (error) { try { fs.rmSync(tmp, { force: true }); } catch { /* best effort */ } throw error; }
 }
 
 export function readKey(home) {
