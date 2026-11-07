@@ -30,6 +30,7 @@ import { AGENT } from '@/lib/labels.js';
 import { WindowControls } from '@/components/window-controls.jsx';
 import { useT, t as tNow } from '@/lib/i18n.js';
 import { Setup } from '@/views/setup.jsx';
+import { CoreMissing } from '@/views/core-missing.jsx';
 import { ChatView } from '@/views/chat.jsx';
 import { SessionView } from '@/views/session.jsx';
 import { TasksView } from '@/views/tasks.jsx';
@@ -130,12 +131,14 @@ function Shell() {
   );
 }
 
+let coreLost = false;
 function Root() {
   const t = useT();
   const ready = useStore((s) => s.ready);
-  const [phase, setPhase] = useState('loading'); // loading | setup | migration | app | error
+  const [phase, setPhase] = useState('loading'); // loading | setup | core | migration | app | error
   const [error, setError] = useState('');
   const [migration, setMigration] = useState(null);
+  const [core, setCore] = useState(null);
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -148,6 +151,8 @@ function Root() {
       // The engine may still be starting: retry for a few seconds.
       for (let i = 0; i < 40 && alive; i++) {
         try {
+          // 3.8: core is gone and Orb could not bring it back by itself (this PC only).
+          if (!bridge.mobile) { const c = await bridge.call('app.coreState'); if (c?.missing) { setCore(c); return alive && setPhase('core'); } }
           // 3.8: the data of 3.7 could not be updated: Orb does not run on them (this PC only).
           if (!bridge.mobile) { const m = await bridge.call('app.migrationState'); if (m?.failed) { setMigration(m); return alive && setPhase('migration'); } }
           await refresh();
@@ -202,7 +207,9 @@ function Root() {
       // 3.6 (M3): the chat list follows what its conversations do (a new line comes with inbox:changed).
       if (event === 'chat:state' && !payload?.partial) loadOrbInboxSoon(400);
       if (event === 'engine:stopped') notify({ body: tNow('app.engineStopped'), tone: 'error' });
-      if (event === 'engine:restarted') { notify({ body: tNow('app.engineRestarted'), tone: 'warning' }); refreshSoon(); }
+      // 3.8: core went missing while Orb ran: the engine starts again and brings it back (or says why it cannot).
+      if (event === 'core:lost') coreLost = true;
+      if (event === 'engine:restarted') { if (coreLost) { location.reload(); return; } notify({ body: tNow('app.engineRestarted'), tone: 'warning' }); refreshSoon(); }
     });
   }, [phase]);
   if (phase === 'setup') return <>{strip}<Setup onDone={async () => { await refresh(); setPhase('app'); }} /></>;
@@ -220,6 +227,7 @@ function Root() {
     </div>
   );
   if (phase === 'update') return <>{strip}<UpdateNeeded info={getState().info} /></>;
+  if (phase === 'core') return <>{strip}<CoreMissing state={core} /></>;
   if (phase === 'migration') return <>{strip}<MigrationFailed state={migration} /></>;
   if (phase === 'error') return <div className="grid h-full place-items-center p-8 text-center">{strip}<div><Robot size={90} mood="worried" /><h1 className="mt-4 text-xl">{t('app.errorTitle')}</h1><p className="text-muted-foreground mt-1 max-w-md text-sm">{error}</p></div></div>;
   if (phase !== 'app' || !ready) return <div className="grid h-full place-items-center">{strip}<Robot size={80} mood="thinking" /></div>;

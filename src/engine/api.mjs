@@ -122,7 +122,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
 
   const methods = {
     'app.state': () => ({
-      version, home: ctx.home, paths: { projects: ctx.paths.projects, logs: ctx.paths.logs, mcp: ctx.paths.mcp, categories: ctx.paths.categories }, categories: CATEGORIES,
+      version, home: ctx.home, paths: { core: ctx.paths.core, projects: ctx.paths.projects, logs: ctx.paths.logs, mcp: ctx.paths.mcp, categories: ctx.paths.categories }, categories: CATEGORIES,
       config: ctx.config, paused: board.setting('paused') === '1', activeProject: board.activeProject(),
       approvals: sessions.allPendingApprovals().map((a) => ({ id: a.id, session_id: a.session_id, body: { title: a.body?.title, reason: a.body?.reason }, session: a.session })),
       counts: Object.fromEntries(board.all('SELECT status, COUNT(*) AS n FROM tasks GROUP BY status').map((r) => [r.status, r.n])),
@@ -137,6 +137,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     // 3.8: the data of 3.7 were updated (or never were 3.7): engine.mjs answers these two itself while they could not be.
     'app.migrationState': () => ({ failed: false }),
     'app.migrationRetry': () => ({ failed: false }),
+    // 3.8: core is whole (engine.mjs › coreBlocked answers these two while it is not).
+    'app.coreState': () => null,
+    'app.coreRepair': () => ({ missing: false }),
     'conversations.list': () => conversationList(),
     // 3.2: completed by hand (or open again): a task («t<id>»), a direct conversation («s<id>») or a conversation with the
     // assistant («c<id>»).

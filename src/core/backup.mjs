@@ -26,7 +26,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
 import { paths, homeKey, INTERNAL_DIR, BOTS_DIR, LEGACY } from './home.mjs';
-import { rewritePaths } from './core-folder.mjs';
+import { rewritePaths, coreHealth } from './core-folder.mjs';
 import { tr } from './context.mjs';
 import { ARCHIVE_DIR, forgetRun } from './migrate-38.mjs';
 
@@ -481,7 +481,9 @@ function unitOf(name) {
 
 // Called by the engine before the database is opened: a restore that is ready replaces what it holds;
 // what was there before goes to core/antes-de-restaurar-<fecha>. → null, or { from, header, secretChanged }.
-export function applyPendingRestore(home) {
+// onlyMissing (3.8, a core deleted or damaged: repairCore): only what is not there any more is put back; what is still
+// there (a newer database, the logs) stays as it is.
+export function applyPendingRestore(home, { onlyMissing = false } = {}) {
   const ready = pendingDir(home);
   let info; try { info = JSON.parse(fs.readFileSync(path.join(ready, 'listo.json'), 'utf8')); } catch { return null; }
   fs.rmSync(path.join(ready, 'listo.json'), { force: true });
@@ -490,10 +492,15 @@ export function applyPendingRestore(home) {
   for (const f of walkFiles(ready)) units.add(unitOf(rel(ready, f)));
   // A unit inside another one (a whiteboard inside a whole project) travels with it.
   for (const u of [...units]) if ([...units].some((o) => o !== u && u.startsWith(`${o}/`))) units.delete(u);
+  if (onlyMissing) {
+    for (const u of [...units]) if (fs.existsSync(homePath(home, u))) units.delete(u);
+    // The secret sealed by Windows (clave.enc) is the same one: its plain copy is not put back beside it.
+    if (fs.existsSync(path.join(paths(home).data, 'clave.enc'))) units.delete(`${INTERNAL_DIR}/datos/clave.bin`);
+  }
   const move = (from, to) => { fs.mkdirSync(path.dirname(to), { recursive: true }); try { fs.renameSync(from, to); } catch { fs.cpSync(from, to, { recursive: true }); fs.rmSync(from, { recursive: true, force: true }); } };
   const oldKey = (() => { try { return fs.readFileSync(path.join(paths(home).data, 'clave.bin')); } catch { return null; } })();
   // The database's journal files and the Windows-sealed secret go with the old database.
-  for (const extra of ['orb.db-wal', 'orb.db-shm', ...(units.has(`${INTERNAL_DIR}/datos/clave.bin`) ? ['clave.enc'] : [])]) {
+  for (const extra of [...(units.has(`${INTERNAL_DIR}/datos/orb.db`) || !onlyMissing ? ['orb.db-wal', 'orb.db-shm'] : []), ...(units.has(`${INTERNAL_DIR}/datos/clave.bin`) ? ['clave.enc'] : [])]) {
     const f = path.join(paths(home).data, extra); if (fs.existsSync(f)) move(f, path.join(aside, INTERNAL_DIR, 'datos', extra));
   }
   for (const u of [...units].sort()) {
@@ -507,7 +514,26 @@ export function applyPendingRestore(home) {
   // A copy made by 3.7: the paths of its orb.json and database point into core.
   if (info.legacy) rewritePaths(home);
   let newKey = null; try { newKey = fs.readFileSync(path.join(paths(home).data, 'clave.bin')); } catch { /* none */ }
-  return { from: info.from, header: info.header, aside, secretChanged: Boolean(newKey && !(oldKey && oldKey.equals(newKey))), secret: newKey };
+  return { from: info.from, header: info.header, aside, units: [...units], secretChanged: Boolean(newKey && !(oldKey && oldKey.equals(newKey))), secret: newKey };
+}
+
+// ---- 3.8: core missing or damaged (src/engine/engine.mjs, before the database opens)
+// What is missing is put back from the newest copy of this workspace (latestBackup, or `file`). Without core's orb.json
+// and no copy, Orb cannot go on by itself (the window offers to start again or to pick a copy); a database that is not
+// there and no copy at all is a workspace made a moment ago. → { ok, restored?, fresh?, reason?, backup?, missing }
+// reason: 'noBackup' | 'needsPassphrase' | 'damaged'.
+export async function repairCore(home, { secret = null, passphrase = null, file = null, config = null } = {}) {
+  const health = coreHealth(home);
+  if (health.ok) return { ok: true, missing: [] };
+  const lostConfig = health.missing.includes('core') || health.missing.includes('config');
+  const backup = file ? { file, created: null } : await latestBackup(home, config);
+  if (!backup) return lostConfig ? { ok: false, reason: 'noBackup', missing: health.missing } : { ok: true, fresh: true, missing: health.missing };
+  try { await stageRestore(home, backup.file, { secret, passphrase }); } catch (error) {
+    const reason = ['needsPassphrase', 'otherMachine', 'wrongPassphrase', 'noKey'].includes(error?.code) ? 'needsPassphrase' : 'damaged';
+    return { ok: false, reason, error: error.message, backup: { file: backup.file, created: backup.created }, missing: health.missing };
+  }
+  const applied = applyPendingRestore(home, { onlyMissing: true });
+  return { ok: true, restored: { from: applied?.from, created: applied?.header?.created ?? backup.created, units: applied?.units ?? [], secret: applied?.secretChanged ? applied.secret : null }, missing: health.missing };
 }
 
 // Restore into a folder that is not an Orb yet (a clean machine, or «Mover»): unpack and swap at once.

@@ -63,8 +63,10 @@ const config = () => { if (!cachedConfig && home) { try { cachedConfig = loadCon
 const langOf = (c) => (c?.language === 'en' ? 'en' : 'es');
 const T = (key, vars) => translate(langOf(config()), key, vars);
 
+// 3.8: a saved workspace whose core is gone is still this PC's workspace: the engine puts core back from the newest backup
+// or the window says why it cannot (only a workspace folder that is gone altogether brings the welcome back).
 function readLocation() {
-  try { const h = JSON.parse(fs.readFileSync(LOCATION(), 'utf8')).home; return h && isHome(h) ? h : null; } catch { return null; }
+  try { const h = JSON.parse(fs.readFileSync(LOCATION(), 'utf8')).home; return h && (isHome(h) || fs.existsSync(h)) ? h : null; } catch { return null; }
 }
 function saveLocation(h) { fs.mkdirSync(path.dirname(LOCATION()), { recursive: true }); writeJson(LOCATION(), { home: h }); }
 

@@ -2,12 +2,13 @@
 // opens them on another PC, restoring one, and moving this Orb to another PC. src/engine/api-data.mjs does the work.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { HardDriveDownload, KeyRound, RotateCcw, LoaderCircle, ShieldCheck, TriangleAlert, Copy, FolderOpen, Archive, Trash2 } from 'lucide-react';
+import { HardDriveDownload, KeyRound, RotateCcw, LoaderCircle, ShieldCheck, TriangleAlert, Copy, FolderOpen, Archive, Trash2, FolderLock } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardFooter, Field, Input } from '@/components/ui/basic.jsx';
 import { form, confirm } from '@/components/dialogs.jsx';
 import { call, act, bridge, useStore, getState, setState, openSettings } from '@/lib/store.js';
 import { notify } from '@/lib/notify.js';
+import { unlockCore } from '@/lib/core-access.js';
 import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
 
 const size = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
@@ -42,6 +43,7 @@ function BackupsCard() {
   const when = (iso) => (iso ? new Date(iso).toLocaleString(locale, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
   const now = async () => { setBusy(true); const r = await act(call('backup.now', {}), t('datos.made')); setBusy(false); if (r) load(); };
   const restore = async (b) => {
+    if (!(await unlockCore('restore'))) return;
     const r = await form(t('datos.restoreTitle'), {
       description: t('datos.restoreDesc', { when: when(b.created) }),
       initial: { passphrase: '' },
@@ -52,7 +54,7 @@ function BackupsCard() {
     if (r) toast.success(t('datos.restoreReady'), { duration: 10000 });
   };
   // 3.8: where the copies go: outside Orb's folder by default; another folder (never inside core) or back to the default.
-  const setFolder = async (folder) => { if (await act(call('config.save', { patch: { backup: { folder } } }), t('datos.folderChanged'))) load(); };
+  const setFolder = async (folder) => { if (!(await unlockCore('backupFolder'))) return; if (await act(call('config.save', { patch: { backup: { folder } } }), t('datos.folderChanged'))) load(); };
   const pickFolder = async () => { const f = await bridge.pickFolder?.(t('datos.pickFolder')); if (f) setFolder(f); };
   const pickFile = async () => {
     const files = await bridge.pickFiles?.(t('datos.pickFile'));
@@ -115,7 +117,23 @@ function LegacyCard() {
   );
 }
 
-export function DataCards() { return <><BackupsCard /><LegacyCard /></>; }
+// 3.8: core, Orb's own folder (hidden): what it holds and «Abrir core» (through unlockCore, which the master password will
+// guard).
+function CoreCard() {
+  const t = useT();
+  const dir = useStore((s) => s.app?.paths?.core);
+  if (!dir || !bridge.openPath) return null;
+  const open = async () => { if (await unlockCore('open')) act(bridge.openPath(dir)); };
+  return (
+    <Card data-testid="core-card">
+      <CardHeader className="flex-row items-start gap-3"><FolderLock className="text-primary mt-0.5 size-5 shrink-0" /><CardTitle className="mt-1">{t('datos.coreTitle')}</CardTitle></CardHeader>
+      <CardContent className="grid gap-1 text-xs"><p className="text-muted-foreground">{t('datos.coreDesc')}</p><span className="font-mono break-all">{dir}</span></CardContent>
+      <CardFooter><Button size="sm" variant="outline" onClick={open} data-testid="core-open"><FolderOpen />{t('datos.coreOpen')}</Button></CardFooter>
+    </Card>
+  );
+}
+
+export function DataCards() { return <><BackupsCard /><CoreCard /><LegacyCard /></>; }
 
 // 3.6: backups are on from the first day, sealed with this PC's key. A few days later, once, a quiet suggestion to make
 // the recovery code (Ajustes › Datos), so a copy also opens on another PC. Never on a phone.

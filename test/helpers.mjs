@@ -41,7 +41,7 @@ export async function until(fn, what, ms = 15000) {
 }
 
 // The engine in its own process, as the app runs it: call(method, params) → result; events are collected.
-export async function startEngine(home, { env = {} } = {}) {
+export async function startEngine(home, { env = {}, secret } = {}) {
   const child = fork(path.join(ROOT, 'src', 'engine', 'engine.mjs'), [], { stdio: ['ignore', 'inherit', 'inherit', 'ipc'], env: { ...process.env, ...env } });
   let n = 0; const pending = new Map(); const events = [];
   child.on('message', (m) => {
@@ -53,7 +53,7 @@ export async function startEngine(home, { env = {} } = {}) {
     // Events may come before 'started' (e.g. a task that continues after a restart): wait for that message only.
     const onStart = (m) => { if (m?.type !== 'started') return; child.off('message', onStart); if (m.ok) resolve(); else reject(new Error(m.error)); };
     child.on('message', onStart);
-    child.send({ type: 'start', home, version: 'test' });
+    child.send({ type: 'start', home, version: 'test', secret });
   });
   const call = (method, params = {}) => new Promise((resolve, reject) => { const id = ++n; pending.set(id, { resolve, reject }); child.send({ type: 'call', id, method, params }); });
   const taskDone = (id, ms = 20000) => until(async () => { const x = await call('tasks.get', { id }); return !['queued', 'running'].includes(x.status) && x.pid == null && x; }, `tarea #${id}`, ms);

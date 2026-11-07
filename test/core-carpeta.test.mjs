@@ -8,7 +8,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import './helpers.mjs';
+import { tempHome, startEngine, wait } from './helpers.mjs';
+import { coreView } from '../src/ui/lib/core-access.js';
 import { createHome, isHome, paths, loadConfig } from '../src/core/home.mjs';
 import { migrateWorkspace, coreHealth, MOVE_STATE, CONFLICTS_DIR } from '../src/core/core-folder.mjs';
 import { git } from '../src/core/workspace.mjs';
@@ -142,4 +143,91 @@ test('si no se puede renombrar (archivo abierto, otro disco): copia, comprueba, 
   const aside = fs.readdirSync(path.join(p.core, CONFLICTS_DIR));
   assert.equal(read(path.join(p.core, CONFLICTS_DIR, aside[0], '.orb', 'datos', 'clave.bin')), 'k'.repeat(32), 'lo viejo distinto queda aparte');
   assert.ok(!fs.readdirSync(p.data).some((n) => n.endsWith('.copia')), 'sin copias a medias');
+});
+
+// ---- core gone: what is missing comes back from the newest backup (outside the workspace)
+const SECRET = 'ab'.repeat(32);
+const notices = (home) => { const db = new DatabaseSync(paths(home).db, { readOnly: true }); try { return db.prepare("SELECT body FROM chat WHERE role = 'notice'").all().map((r) => r.body).join(' | '); } finally { db.close(); } };
+
+test('core borrada con Orb cerrado: al arrancar vuelve de la última copia, con aviso', async () => {
+  const t = tempHome();
+  try {
+    let e = await startEngine(t.home, { secret: SECRET });
+    await e.call('projects.create', { name: 'tienda' });
+    await e.call('backup.now', {});
+    await e.stop();
+    fs.rmSync(paths(t.home).core, { recursive: true, force: true, maxRetries: 10 });
+    assert.equal(coreHealth(t.home).missing[0], 'core');
+    e = await startEngine(t.home, { secret: SECRET });
+    try {
+      assert.equal(await e.call('app.coreState'), null);
+      assert.ok((await e.call('projects.list')).some((p) => p.name === 'tienda'), 'la base, de vuelta');
+      assert.ok(coreHealth(t.home).ok);
+    } finally { await e.stop(); }
+    assert.match(notices(t.home), /Faltaba la carpeta core/);
+  } finally { t.cleanup(); }
+});
+
+test('solo falta orb.json: vuelve de la copia y la base, más nueva que la copia, se queda', async () => {
+  const t = tempHome();
+  try {
+    let e = await startEngine(t.home, { secret: SECRET });
+    await e.call('backup.now', {});
+    await e.call('projects.create', { name: 'despues' });
+    await e.stop();
+    fs.rmSync(paths(t.home).config);
+    e = await startEngine(t.home, { secret: SECRET });
+    try { assert.ok((await e.call('projects.list')).some((p) => p.name === 'despues'), 'lo hecho después de la copia sigue'); } finally { await e.stop(); }
+    assert.ok(fs.existsSync(paths(t.home).config));
+  } finally { t.cleanup(); }
+});
+
+test('core borrada mientras Orb trabaja: el motor se detiene (para que la app lo arranque) y vuelve restaurada', async () => {
+  const t = tempHome();
+  try {
+    const e = await startEngine(t.home, { secret: SECRET });
+    await e.call('backup.now', {});
+    const exited = new Promise((r) => e.child.once('exit', (code) => r(code)));
+    fs.rmSync(paths(t.home).config); // the database is open: on Windows only part of core can go
+    assert.equal(await Promise.race([exited, wait(15000).then(() => 'sigue')]), 75);
+    assert.ok(e.events.some((m) => m.event === 'core:lost'));
+    const again = await startEngine(t.home, { secret: SECRET });
+    try { assert.equal(await again.call('app.coreState'), null); } finally { await again.stop(); }
+    assert.ok(fs.existsSync(paths(t.home).config));
+  } finally { t.cleanup(); }
+});
+
+test('sin copia: Orb espera y la ventana ofrece seguir sin copia; una copia que este PC no abre pide el código', async () => {
+  const t = tempHome();
+  try {
+    fs.rmSync(paths(t.home).core, { recursive: true, force: true });
+    const e = await startEngine(t.home);
+    try {
+      const st = await e.call('app.coreState');
+      assert.equal(st.missing, true); assert.equal(st.reason, 'noBackup');
+      await assert.rejects(e.call('app.state'), /carpeta core/);
+      assert.deepEqual(await e.call('app.coreRepair', { fresh: true }), { missing: false });
+      assert.equal(await e.call('app.coreState'), null);
+      assert.ok((await e.call('app.state')).config);
+      await e.call('backup.recovery', { code: 'AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH' });
+      await e.call('backup.now', {});
+    } finally { await e.stop(); }
+    // Another secret (another PC, or the sealed key gone): the copy needs its recovery code.
+    fs.rmSync(paths(t.home).core, { recursive: true, force: true, maxRetries: 10 });
+    const f = await startEngine(t.home, { secret: 'cd'.repeat(32) });
+    try {
+      const st = await f.call('app.coreState');
+      assert.equal(st.reason, 'needsPassphrase'); assert.ok(st.backup?.file);
+      assert.equal((await f.call('app.coreRepair', { passphrase: 'mal' })).reason, 'needsPassphrase');
+      assert.deepEqual(await f.call('app.coreRepair', { passphrase: 'AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH' }), { missing: false });
+      assert.ok((await f.call('app.state')).config);
+    } finally { await f.stop(); }
+  } finally { t.cleanup(); }
+});
+
+test('la pantalla «Falta la carpeta core»: qué dice y qué ofrece', () => {
+  assert.deepEqual(coreView({ missing: true, home: 'C:\Orb', reason: 'noBackup', folder: 'X' }), { body: 'data.core.noBackup', vars: { home: 'C:\Orb' }, passphrase: false, restore: false, folder: 'X' });
+  const v = coreView({ reason: 'needsPassphrase', backup: { created: '2026-11-07T03:00:00Z' } }, { when: (d) => d.slice(0, 10) });
+  assert.deepEqual([v.body, v.vars.created, v.passphrase, v.restore], ['data.core.needsPassphrase', '2026-11-07', true, true]);
+  assert.equal(coreView({ reason: 'damaged', backup: {} }).body, 'data.core.damaged');
 });

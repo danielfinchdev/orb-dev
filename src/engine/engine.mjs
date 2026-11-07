@@ -5,7 +5,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { useHome, ctx, tr } from '../core/context.mjs';
-import { isHome, ensureLayout } from '../core/home.mjs';
+import { ensureLayout, paths } from '../core/home.mjs';
+import { coreHealth } from '../core/core-folder.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { PRODUCT } from '../core/product.mjs';
 import { DESKTOP } from '../core/permissions.mjs';
@@ -33,19 +34,35 @@ process.on('uncaughtException', (error) => log(`uncaughtException: ${error?.stac
 process.on('unhandledRejection', (error) => log(`unhandledRejection: ${error?.stack ?? error}`));
 
 async function start(home, version, secret, browser) {
-  if (!home || !isHome(home)) throw new Error(tr('sys.engine.notHome', { home }));
-  ensureLayout(home); // the fixed folders, and folders made by older versions put in order
-  useHome(home);
+  if (!home || !path.isAbsolute(home)) throw new Error(tr('sys.engine.notHome', { home }));
   // The approval secret comes from the app (kept encrypted by Windows); without it, the file fallback is used.
   if (typeof secret === 'string' && /^[0-9a-f]{64}$/.test(secret)) ctx.secret = Buffer.from(secret, 'hex');
+  // The agents' browser lives in the app (main process): its pipe and token go to the agents' MCP servers.
+  if (typeof browser?.pipe === 'string' && /^[0-9a-f]{48}$/.test(browser.token ?? '') && /orb-navegador-[0-9a-f]{16}(\.sock)?$/.test(browser.pipe)) ctx.browser = { pipe: browser.pipe, token: browser.token };
+  // 3.8: the folders of Orb 3.7 move into core (src/core/core-folder.mjs); then, if core or part of it is gone (deleted
+  // by mistake while Orb was closed, or noticed by the watcher in run()), what is missing comes back from the newest
+  // backup, which lives outside the workspace. Without a backup, or with one this PC cannot open, the window shows why
+  // and what can be done (coreBlocked). All of it before the database opens.
+  if (!fs.existsSync(home)) throw new Error(tr('sys.engine.notHome', { home }));
+  const { migrateWorkspace } = await import('../core/core-folder.mjs');
+  migrateWorkspace(home);
+  const { repairCore } = await import('../core/backup.mjs');
+  const repair = await repairCore(home, { secret: secretOf(home) });
+  if (!repair.ok) return coreBlocked({ home, version, repair });
+  return open({ home, version, repair });
+}
+// The secret the backups are sealed with: the app's, or the plain one of a run without the app (never made here).
+const secretOf = (home) => ctx.secret ?? (() => { try { const k = fs.readFileSync(paths(home).key); return k.length >= 32 ? k : null; } catch { return null; } })();
+
+async function open({ home, version, repair = null }) {
+  ensureLayout(home); // the fixed folders, and folders made by older versions put in order
+  useHome(home);
   // 3.6: a backup restored from Ajustes › Datos replaces the data now, before the database
   // opens (what was there goes to core/antes-de-restaurar-<fecha>). Its secret (links, approvals) comes with it.
   const { applyPendingRestore } = await import('../core/backup.mjs');
   let restored = null;
   try { restored = applyPendingRestore(home); } catch (error) { console.error(`restaurar: ${error.message}`); }
   if (restored) { useHome(home); if (restored.secretChanged && restored.secret?.length >= 32) ctx.secret = Buffer.from(restored.secret.subarray(0, 32)); }
-  // The agents' browser lives in the app (main process): its pipe and token go to the agents' MCP servers.
-  if (typeof browser?.pipe === 'string' && /^[0-9a-f]{48}$/.test(browser.token ?? '') && /orb-navegador-[0-9a-f]{16}(\.sock)?$/.test(browser.pipe)) ctx.browser = { pipe: browser.pipe, token: browser.token };
   logFile = path.join(ctx.paths.runs, 'motor.log');
   fs.mkdirSync(ctx.paths.runs, { recursive: true });
   // 3.8: the backups of 3.7 (inside the data folder, now core) go where backups go now, outside the workspace.
@@ -60,8 +77,47 @@ async function start(home, version, secret, browser) {
   // copy is, «Reintentar» and «Buscar actualización» (blocked below).
   const board = new Board();
   const { unfinished } = await import('../core/migrate-38.mjs');
-  if (unfinished(board.db)) return blocked(board, { home, version, restored });
-  return run(board, { home, version, restored });
+  if (repair?.restored) log(`core: faltaba ${repair.missing.join(', ')}; restaurado de la copia ${repair.restored.from} (${repair.restored.units.join(', ')})`);
+  if (unfinished(board.db)) return blocked(board, { home, version, restored, repair });
+  return run(board, { home, version, restored, repair });
+}
+
+// 3.8: core is gone (or its settings) and Orb could not put it back by itself: only the window's calls about it.
+let core = null; // { missing: true, home, reason, backup, error, folder }
+function coreBlocked({ home, version, repair }) {
+  core = { missing: true, home, reason: repair.reason, backup: repair.backup ?? null, error: repair.error ?? null, folder: null };
+  import('../core/backup.mjs').then((K) => { if (core) core.folder = K.defaultBackupDir(home); }).catch(() => {});
+  console.error(`core: falta ${repair.missing.join(', ')} y no se pudo restaurar (${repair.reason})`);
+  let busy = null;
+  // passphrase: the recovery code of the copy; file: another copy (.orbbak); fresh: go on without a copy (core made
+  // again with the default settings; the projects stay in their folders).
+  const repairNow = async ({ passphrase = null, file = null, fresh = false } = {}) => {
+    let next = { ok: true, missing: [] };
+    if (fresh === true) {
+      const { paths: of, DEFAULT_CONFIG, writeJson } = await import('../core/home.mjs');
+      const cfg = of(home).config;
+      fs.mkdirSync(path.dirname(cfg), { recursive: true });
+      if (!fs.existsSync(cfg)) writeJson(cfg, DEFAULT_CONFIG);
+    } else {
+      const { repairCore } = await import('../core/backup.mjs');
+      next = await repairCore(home, { secret: secretOf(home), passphrase: typeof passphrase === 'string' && passphrase ? passphrase.slice(0, 200) : null,
+        file: typeof file === 'string' && /\.orbbak$/i.test(file) && path.isAbsolute(file) && fs.existsSync(file) ? file : null });
+      if (!next.ok) { core = { ...core, reason: next.reason, backup: next.backup ?? core.backup, error: next.error ?? null }; return core; }
+    }
+    core = null;
+    await open({ home, version, repair: next });
+    return { missing: false };
+  };
+  api = {
+    async call(method, params) {
+      if (method === 'app.coreState') return core;
+      if (method === 'app.coreRepair') { busy ??= repairNow(params ?? {}).finally(() => { busy = null; }); return busy; }
+      if (method === 'app.migrationState') return { failed: false };
+      throw Object.assign(new Error(tr('data.core.blocked')), { userFacing: true });
+    },
+    shutdown() {}
+  };
+  return { home, name: PRODUCT.assistant, core };
 }
 
 // While the data could not be updated: only the window's two calls about it. → what start() returns.
@@ -92,7 +148,7 @@ async function blocked(board, info) {
   return { home: info.home, name: ctx.config.assistantName, migration };
 }
 
-async function run(board, { home, version, restored }) {
+async function run(board, { home, version, restored, repair }) {
   const { Sessions } = await import('./sessions.mjs');
   const { Orchestrator } = await import('./orchestrator.mjs');
   const { Scheduler } = await import('./scheduler.mjs');
@@ -180,7 +236,13 @@ async function run(board, { home, version, restored }) {
     if (ticking) return; ticking = true;
     try {
       // Folders created or deleted by hand in the assistant's folder show up in the app within a few seconds.
-      if (Date.now() - lastSync > 5000) { lastSync = Date.now(); syncProjects(board); }
+      if (Date.now() - lastSync > 5000) {
+        lastSync = Date.now();
+        // 3.8: core (or its settings or database) gone while Orb runs: everything stops and the engine ends; the app
+        // starts it again and the start puts back what is missing from the newest backup (or shows why it cannot).
+        if (!coreHealth(home).ok) { coreLost(home, board); return; }
+        syncProjects(board);
+      }
       const v = board.one('PRAGMA data_version').data_version;
       if (v !== dataVersion) { dataVersion = v; changed('external'); }
       scheduler.tick();
@@ -190,6 +252,7 @@ async function run(board, { home, version, restored }) {
   setInterval(loop, 1500);
   board.onChange((what) => { if (what === 'tasks') setImmediate(loop); });
   log(`motor arrancado (versión ${version}) en ${home}`);
+  if (repair?.restored) board.notice(tr('data.core.restored', { created: String(repair.restored.created ?? '').slice(0, 16).replace('T', ' ') }), 'warning');
   if (restored) { log(`copia restaurada: ${restored.from} (lo anterior está en ${restored.aside})`); board.notice(tr('data.backup.restored', { created: String(restored.header?.created ?? '').slice(0, 16).replace('T', ' ') }), 'success'); }
   // 3.8: a data folder of 3.5–3.7 was moved to 3.8 when its database opened (src/core/migrate-38.mjs): said once.
   {
@@ -225,6 +288,19 @@ async function run(board, { home, version, restored }) {
   const owed = orchestrator.resume();
   if (owed) log(`asistente: ${owed} aviso(s) pendientes recuperados`);
   return { home, name: ctx.config.assistantName, migration: null };
+}
+
+// core gone while running (see run): said to the window, everything stopped, and the engine ends so the app starts it
+// again (exit code 75).
+let lost = false;
+function coreLost(home, board) {
+  if (lost) return; lost = true;
+  log(`core: falta (${coreHealth(home).missing.join(', ')}); el motor se detiene para restaurarla`);
+  emit('core:lost', {});
+  emit('notice', { body: tr('data.core.lost'), tone: 'warning' });
+  try { api?.shutdown(); } catch { /* stopping anyway */ }
+  try { remote?.stop(); } catch { /* stopping anyway */ }
+  setTimeout(() => { try { board.db.close(); } catch { /* closed */ } process.exit(75); }, 500);
 }
 
 transport.on(async (msg) => {
