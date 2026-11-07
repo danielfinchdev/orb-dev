@@ -105,7 +105,7 @@ C:\Orb\                   (C:\Orb by default; always <chosen folder>\Orb, the sa
     datos\                database, sealed secret, identity
     ejecuciones\ copias\  task runs; isolated copies and undo checkpoints
     bitacora\             GENERAL.md (general memory) and proyectos\ (one per project), in the Settings language
-    skills\ mcp\          the agents' skills; the MCP servers (managed in Settings)
+    mcp\                  the MCP servers Orb manages (Settings › MCP)
     herramientas\adb\     Google's adb and fastboot, downloaded by the app
     secretos\             the master password's files: the data key, wrapped, and Orb's own secrets (section 37)
   windows\ linux\ ios\ android\ web\
@@ -122,8 +122,8 @@ C:\Orb\                   (C:\Orb by default; always <chosen folder>\Orb, the sa
 - **core** is never a project and cannot be linked as one; nothing else at the top is Orb's.
 - **adb**: at startup, if `core\herramientas\adb\adb.exe` is missing, the engine downloads Google's platform-tools there
   (`src/engine/android.mjs`) and puts that folder first in the agents' PATH. Settings → Android shows the status.
-- **Older folders**: `ensureLayout` (every start) moves what Orb 3.7 kept at the top into core (section 36), creates
-  whatever is missing and moves 2.3.0's `bitacoras\` into the log folder (if a file exists in both, the old entries are
+- **Older folders**: `ensureLayout` (every start) moves Orb 3.7's own data into core (its other folders move only as the
+  user chooses, section 36), creates whatever is missing and moves 2.3.0's `bitacoras\` into the log folder (if a file exists in both, the old entries are
   appended at the end). It only discards the empty logs that 2.3.0 created for the categories and configuration folders
   it mistook for projects; those "projects" go away on their own (`syncProjects`).
 
@@ -866,7 +866,9 @@ launched hidden, with its output read by Orb, and it stores the session in the a
   warnings for pushes or mass deletions.
 - **Orb's data folder (3.8, `isOrbData` in `guard.mjs`):** matched by RESOLVED path (against the agent's folder, any case
   or separator, symlinks followed), not by names: a project may have its own `orb.db` or talk about `ORB_HOME`. Denied,
-  and in «total» it asks. Isolated copies (`core/copias/aisladas`) stay open. Not a boundary: a shell of the same Windows
+  and in «total» it asks. Isolated copies (`core/copias/aisladas`) and the tools (`core/herramientas`, adb by its full
+  path) stay open. The same goes for what Orb keeps about the workspace outside it (`setGuardedRoots`: the backups' root
+  and chosen folder, the app's `claves` folder; section 36). Not a boundary: a shell of the same Windows
   user can always reach the folder another way; the agents' identity does not depend on its database any more (tickets,
   above), so what is left is the integrity of Orb's data against an agent bent on it, accepted. The folder is one value
   (`ctx.paths.internal`): all of `core` since 3.8 (section 36).
@@ -1114,62 +1116,106 @@ other users' isolated copies, shared projects, the 30-day scrub, the blocked scr
 
 The workspace is `C:\Orb` by default (the welcome shows it already chosen; «Cambiar ubicación…» picks another base,
 `app:info › defaultBase`, `ORB_DEFAULT_BASE` in tests). It holds `core\` and the six categories, and nothing else of
-Orb's (section 2). A folder called Orb that already has other things (notes, projects, an older Orb's folders) is used as
-it is: nothing in it is overwritten. All of Orb's own paths come from `paths()` in `src/core/home.mjs`; nothing else
-builds them.
+Orb's (section 2). A folder called Orb that already has other things (notes, projects, `personal\`, an older Orb's
+folders) is used as it is: nothing in it is overwritten or moved without the user's say. Only the categories' subfolders
+are projects: any other top-level folder is the user's and is never listed. All of Orb's own paths come from `paths()`
+in `src/core/home.mjs`; nothing else builds them.
 
-- **Moving 3.7's folders** (`migrateWorkspace`, `src/core/core-folder.mjs`, called by `ensureLayout` at every start and
-  by `createHome`, so before the database opens and before the 3.8 migration of the database, which then finds it in
-  `core\datos`): `.orb` → `core`, `orb.json` → `core\orb.json`, `bitacora` → `core\bitacora` (logs merged, never
-  overwritten), `mcp-servers` → `core\mcp`, `android\adb-tools` → `core\herramientas\adb`. Each one is renamed in one
-  step when it can be; otherwise (a file held open, another volume) entry by entry: copied beside its place, checked
-  (size and sha256), switched in by a rename, and only then the old one deleted. A file that already differs in core is
-  kept in `core\conflictos-migracion\<date>\`, never lost. `core\migracion-carpetas.json` is written before anything
-  moves (inside `.orb`, so it travels with it) and removed at the end: a run that stopped halfway is finished by the next
-  start; with nothing to move, nothing happens. Then `rewritePaths` points into core every absolute path that pointed
-  into those folders: orb.json (accounts' folders, connectors' scripts), every text column of the database (plain and
-  JSON-escaped; a project whose name only looks like an old folder is left alone) and the isolated copies' git
-  worktrees (`<repo>\.git\worktrees\<n>\gitdir`, as `git worktree repair` writes it). The app's main process reads the
-  sealed secret from `.orb\datos` until the engine has moved it, and never writes into core before the move. 3.7's
-  `bots\` stays at the top for the 3.8 migration of the database, which archives it.
-- **Backups outside core** (`src/core/backup.mjs`): `%LOCALAPPDATA%\Orb\copias\<workspace>` on Windows
-  (`~/.local/share/Orb/copias/<workspace>` elsewhere; `<workspace>` is `homeKey`, e.g. `C-Orb`): per user, never roaming
+- **Orb 3.7's own data** (`migrateWorkspace`, `src/core/core-folder.mjs`, called by `ensureLayout` at every start and by
+  `createHome`, so before the database opens and before the 3.8 migration of the database, which then finds it in
+  `core\datos`): `.orb` → `core`, `orb.json` → `core\orb.json`. Only a folder that has them is taken for a 3.7
+  workspace. They are Orb's, so they move without asking.
+- **The folders the user decides about** (`planWorkspace` / `applyLayout`; the window's «Ordenar carpetas»,
+  `views/layout.jsx`, after the welcome and when an updated Orb finds them: `app.layoutPlan`, `app.layoutApply`, PC
+  only): `bitacora\` (default: into `core\bitacora`, logs merged, never overwritten), `android\adb-tools\` (default:
+  `core\herramientas\adb`) and each folder of `mcp-servers\`. A server the user writes (a git repository, `AGENTS.md`,
+  `BITACORA.md`, `CLAUDE.md`, `package.json` or `pyproject.toml`) is a **project**: it moves into a category (`windows` by
+  default, any other in the list) or stays, never into core. Any other server may also go to `core\mcp`, which holds only
+  the servers Orb manages. Each row can be «Dejar donde está»; «Dejar todo como está» keeps them all. Nothing moves until
+  «Aplicar». What is kept is remembered (`core\carpetas.json`) and not asked again, and a kept `bitacora` or `adb-tools`
+  is used where it is (`paths().logs`, `paths().adb`), so the user's own rules that point to `C:\Orb\bitacora` keep
+  working. Ajustes › MCP lists the projects that are MCP servers (`mcp.folder › projects`: their name says mcp or they
+  depend on an MCP SDK) beside `core\mcp`, with «Usar». A server's own credentials stay in its project folder (the
+  user's files); they enter a backup only when the user includes project folders, and every backup is encrypted. The
+  keys of Orb's connectors live in the master password's vault (section 37).
+- **Moving**: before anything moves, every folder to move is checked to be free (on Windows a folder some program uses
+  as its working folder, or with a file open, cannot be renamed: tried with a rename beside it and back). If one is not,
+  nothing moves and the window says «No se puede mover …: algún programa la está usando… Ciérralo y pulsa
+  «Reintentar»» (`LayoutBusy`, code `busy`). Each folder is renamed in one step when it can be; across volumes, or into a
+  folder that already exists, entry by entry: copied beside its place, checked (size and sha256), switched in by a
+  rename, and only then the old one deleted. A file that already differs in core, or a folder where a file is (or the
+  other way round), is kept in `core\conflictos-migracion\<date>\`, never lost. `core\migracion-carpetas.json` lists the
+  moves before anything moves (inside `.orb` for Orb's own data, so it travels with it) and is removed at the end: a run
+  that stopped halfway is finished by the next start; with nothing to move, nothing happens. Then `rewritePaths` points
+  every absolute path into what moved to its new place: orb.json (accounts' folders, connectors' scripts), every text
+  column of the database (plain and JSON-escaped; a project whose name only looks like an old folder is left alone) and
+  the isolated copies' git worktrees (`<repo>\.git\worktrees\<n>\gitdir`, as `git worktree repair` writes it). What the
+  user wrote (the user's chat lines, conversation messages and queued messages) keeps the paths they typed; only Orb's
+  own `.orb\` paths there (an image Orb attached) follow. Programs outside Orb that use the old paths are the user's to
+  update (the screen says so). The app's main process reads the sealed secret from `.orb\datos` until the engine has
+  moved it, and never writes into core before the move. 3.7's `bots\` stays at the top for the 3.8 migration of the
+  database, which archives it.
+- **Backups outside the workspace** (`src/core/backup.mjs`): `%LOCALAPPDATA%\Orb\copias\<workspace>` on Windows
+  (`~/.local/share/Orb/copias/<workspace>` elsewhere; `<workspace>` is `homeKey`: the folder's name and 8 hex of the
+  sha256 of its whole path in any case, e.g. `orb-1a2b3c4d`, so two workspaces never share it and a long path never makes
+  a long name; what the first 3.8 builds kept under the old name, `C-Orb`, is taken over once): per user, never roaming
   (copies can be big), no administrator, outside both core and the workspace, and the uninstaller leaves it, so deleting
   core (or the whole workspace) does not take the copies with it. Ajustes › Datos can pick another folder, never inside
-  core (`validateConfig`). Wherever they go, the newest copy is noted in the default folder (`ultima.json`); that is how
-  `latestBackup` finds it without core. The copies 3.7 kept in its data folder (`core\copias-seguridad`) move there at
-  start (`adoptOldBackups`). Names inside a copy are relative to the workspace (`core/datos/orb.db`, `core/bitacora/…`,
-  plus `core/skills` and `core/mcp` without dependencies); a 3.7 copy (`.orb/…`, `orb.json`, `bitacora/…`) restores into
-  core (`legacyName`) and its paths are rewritten. The app keeps a copy of the sealed secret (`clave.enc`) in its own
-  data folder (`%APPDATA%\Orb.dev\claves\<workspace>.enc`) and puts it back when core loses it, so the copies, sealed
-  with that secret, still open on this PC.
+  the workspace nor one that holds it (`validateConfig`, by real path: a junction counts); one inside it that 3.7 allowed
+  is dropped from the settings at start (`keepBackupsOutside`). Wherever they go, the newest copy is noted in the default
+  folder (`ultima.json`, with the workspace's `orbId` and the folders copies went to); that is how Orb finds them
+  without core. Only the default folder, the chosen one and the folders noted there are read, never a network path the
+  settings do not name. The copies 3.7 kept in its data folder (`core\copias-seguridad`) move there at start
+  (`adoptOldBackups`; across volumes checked by sha256; never into a folder inside the workspace, and never deleted when
+  the chosen folder is that very one). Names inside a copy are relative to the workspace (`core/datos/orb.db`,
+  `core/bitacora/…`, `core/mcp` without dependencies, or `bitacora/…` for a log folder kept at the top); a 3.7 copy
+  (`.orb/…`, `orb.json`, `bitacora/…`) restores into core (`legacyName`, only for a copy made by 3.7) and its paths are
+  rewritten. The app keeps a copy of the sealed secret (`clave.enc`) in its own data folder
+  (`%APPDATA%\Orb.dev\claves\<workspace>.enc`, `src/main/approval-secret.mjs`) and puts it back when core loses it, so
+  the copies, sealed with that secret, still open on this PC. A `clave.enc` that cannot be read gives way to that copy
+  and is kept aside (`clave.<date>.ilegible.enc`), and the copy is never replaced by a different secret: the old one is
+  kept as `<workspace>.<date>.enc` first.
 - **core missing** (`repairCore` in `backup.mjs`, called by `engine.mjs › start` before the database opens): when core,
-  its orb.json or its database is gone, only what is missing is put back from the newest copy (`applyPendingRestore`
-  with `onlyMissing`: a database newer than the copy stays), and the owner is told («Faltaba la carpeta core…»). A
-  database that is missing with no copy at all is a workspace made a moment ago. Without core's settings and no usable
-  copy (none, one this PC cannot open, a damaged one) the engine waits (`coreBlocked`: `app.coreState`,
-  `app.coreRepair`, PC only) and the window shows «Falta la carpeta core» (`views/core-missing.jsx`,
-  `lib/core-access.js › coreView`): the recovery code, another copy, or «Seguir sin copia» (core made again with the
-  default settings; the projects stay in their folders). While Orb runs, the engine's loop checks core every 5 s
-  (`coreHealth`); if it goes it emits `core:lost`, stops the agents and ends (exit code 75): the app starts the engine
-  again (`startEngine` restarts it) and the start restores it; the window reloads. A saved workspace whose core is gone
-  is still opened (`readLocation`); a workspace folder that is gone altogether brings the welcome back.
-- **Protection** (`protectCore`, every start): core gets the hidden and system attributes, so Explorer does not show it
-  even with «show hidden files». No access rule (ACE) is set: deleting a folder on NTFS is allowed by DELETE on the
-  folder *or* FILE_DELETE_CHILD on its parent, and the owner has full control of the workspace, so a deny-DELETE on core
-  alone does not stop a rename or a move to the recycle bin; denying FILE_DELETE_CHILD on the workspace would also stop
-  the user deleting their own top-level folders, and an inherited deny would block Orb's own writes. Measured on Windows
-  11, a deny ACE did not stop a rename by the owner. So core relies on being hidden, on the agents' guard (section 28:
-  `isOrbData` denies `paths().internal`, i.e. all of core, except the isolated copies in `core\copias\aisladas`) and on
-  the watcher and the backups above.
+  its orb.json or its database is gone, only what is missing **of core** is put back (`applyPendingRestore` with
+  `onlyMissing`: a database newer than the copy stays; a project or whiteboard the user deleted stays deleted), from the
+  newest copy of this workspace that opens (`backupCandidates`: newest first, only those with this workspace's `orbId`
+  — from core, or from `ultima.json` when core is gone —; one this PC cannot open by itself, or a damaged one, gives way
+  to the next), and the owner is told («Faltaba la carpeta core…»). A database that is missing with no copy at all is a
+  workspace made a moment ago. Without core's settings and no usable copy the engine waits (`coreBlocked`:
+  `app.coreState`, `app.coreRepair`, PC only) and the window shows «Falta la carpeta core» (`views/core-missing.jsx`,
+  `lib/core-access.js › coreView`): the recovery code of the newest copy that needs it, another copy, or «Seguir sin
+  copia» (core made again with the default settings in the window's language; the projects stay in their folders). That
+  last one is offered at once only when there is no usable copy; with a copy that only needs its code it is behind «No
+  tengo el código». Either way the copies there were are first put aside in `antes-de-empezar-de-nuevo-<date>\` inside
+  their folder (`setAsideBackups`), where the retention never deletes them and nothing restores them by itself. While Orb
+  runs, the engine's loop checks core every 5 s (`coreHealth`); if it goes it emits `core:lost`, stops the agents and
+  ends (exit code 75): the app starts the engine again (`startEngine` restarts it) and the start restores it; the window
+  reloads. A saved workspace whose core is gone is still opened (`readLocation`); a workspace folder that is gone
+  altogether brings the welcome back.
+- **Protection** (`protectCore`, every start): core gets the hidden attribute only (a system attribute would make the
+  user's own backup tools, such as robocopy `/XA:SH`, skip it). No access rule (ACE) is set: deleting a folder on NTFS is
+  allowed by DELETE on the folder *or* FILE_DELETE_CHILD on its parent, and the owner has full control of the workspace,
+  so a deny-DELETE on core alone does not stop a rename or a move to the recycle bin; denying FILE_DELETE_CHILD on the
+  workspace would also stop the user deleting their own top-level folders, and an inherited deny would block Orb's own
+  writes. Measured on Windows 11, a deny ACE did not stop a rename by the owner. So core relies on being hidden, on the
+  agents' guard (section 28: `isOrbData` denies `paths().internal`, i.e. all of core, except the isolated copies in
+  `core\copias\aisladas` and the tools in `core\herramientas`, which agents run by their full path; and the roots the
+  engine names with `setGuardedRoots`: the backups' root, the chosen backups' folder and the app's `claves` folder, never
+  one that holds the workspace; Cursor gets the same as deny rules) and on the watcher and the backups above. The guard
+  is not a boundary (section 28), and Ajustes › Datos says so.
 - **Master password**: every window action on core (open it, restore a copy, choose where copies go) goes through
   `unlockCore` in `src/ui/lib/core-access.js`, which asks for the master password (section 37).
 
-Tests: `test/core-carpeta.test.mjs` (a new workspace; a 3.7 workspace moved with its paths and a working isolated copy;
-a move cut halfway; renames that fail; core deleted with Orb closed; only orb.json missing with a newer database; core
-deleted while the engine runs; no copy, «Seguir sin copia» and a copy that needs its recovery code; the screen),
-`test/copias.test.mjs` (where copies go, old ones adopted, never inside core), `test/multiplataforma.test.mjs` and
-`test/migracion-38.test.mjs` (the engine on a 3.7-shaped workspace).
+Tests: `test/core-carpeta.test.mjs` (a new workspace; a 3.7 workspace: its own data moved, the rest on the user's
+choice, with its paths, the user's text left alone and a working isolated copy; a move cut halfway; another volume and a
+file where a folder was; a folder in use: nothing moves, the message, «Reintentar»; core deleted with Orb closed; only
+orb.json missing with a newer database; core deleted while the engine runs; no copy, «Seguir sin copia» and a copy that
+needs its recovery code; the screen), `test/espacio-dueno.test.mjs` (the owner's real `C:\Orb` without `.orb`: nothing
+moves at the welcome, his bitacora kept and used where it is, his MCP server moved as a project and offered in Ajustes ›
+MCP, `personal\` untouched and unlisted, only core restored; the copy that comes back; `homeKey`; 3.7 copies in a folder
+inside `.orb`; «Seguir sin copia» keeps the copies; the guard outside the workspace; the vault's secrets out of the 3.7
+archive; the sealed secret's copy), `test/copias.test.mjs` (where copies go, old ones adopted, never inside the
+workspace), `test/multiplataforma.test.mjs` and `test/migracion-38.test.mjs` (the engine on a 3.7-shaped workspace).
 
 ## 37. The master password and Magic Link (3.8)
 

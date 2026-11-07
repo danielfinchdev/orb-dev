@@ -66,7 +66,7 @@ pauses Cursor for a day and, if the task was for "any agent", assigns it to anot
 
 ```
 C:\Orb\                   (C:\Orb by default; always <chosen folder>\Orb)
-  core\                   Orb's own folder, hidden: settings, database, logs, skills, MCP servers, tools (adb)
+  core\                   Orb's own folder, hidden: settings, database, logs, MCP servers, tools (adb)
   windows\ linux\ ios\ android\ web\
                           categories: each folder inside one of them is a project
                           (the ones the app creates and the ones you create in Explorer)
@@ -74,8 +74,10 @@ C:\Orb\                   (C:\Orb by default; always <chosen folder>\Orb)
 ```
 
 Backups go outside the workspace (`%LOCALAPPDATA%\Orb\copias` by default, or a folder you choose in Settings › Data).
-If `core` is deleted, Orb brings back what is missing from the latest backup. A workspace of Orb 3.7 (`.orb`,
-`orb.json`, `bitacora`, `mcp-servers` at the top) is moved into `core` the first time 3.8 opens it.
+If `core` is deleted, Orb brings back what is missing from the latest backup. In a workspace of Orb 3.7, its own data
+(`.orb`, `orb.json`) moves into `core` the first time 3.8 opens it; for `bitacora`, `android\adb-tools` and each
+folder of `mcp-servers`, Orb shows what it would do and moves nothing until you choose (an MCP server you write
+becomes a project in a category).
 
 ## Highlights
 
