@@ -1,7 +1,7 @@
 // 3.6 (messaging, step M3): the info of a chat with Orbe and of a project (mockup mensajeria.html ?z=orb&s=info). The PC:
 // a pane on the right of the conversation, closed with ✕; the phone: the whole screen (a glass sheet on Android). Opened
 // by clicking the conversation's header, from a chat's menu or from a project's heading in the list (lib/store.js ›
-// openOrbInfo). The frame, groups and rows are the Bots zone's (views/bots/info.jsx).
+// openOrbInfo). The frame, groups and rows: components/info-frame.jsx.
 // A chat: Orbe, its title (rename), when it started; Proyecto (opens the project's info) and «Cambiar de proyecto»,
 // Modelo, Razonamiento, Orquestador; «Tareas de este chat» with their state (each opens in Tareas); Notificaciones; Archivos
 // adjuntos (the project's whiteboard), Compactar, Exportar, Fijar, Marcar como completado; Eliminar (red, last).
@@ -20,7 +20,7 @@ import { form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Input, Spinner } from '@/components/ui/basic.jsx';
 import { Switch, BubbleTip } from '@/components/ui/overlay.jsx';
-import { InfoFrame, List, Row } from '@/views/bots/info.jsx';
+import { InfoFrame, List, Row } from '@/components/info-frame.jsx';
 import { useStore, call, act, go, setState, newChat, orbAct, closeOrbInfo, openOrbInfo, refreshSoon, phoneLayout, fullPc } from '@/lib/store.js';
 import { personsOn } from '@/lib/persons.js';
 import { notify } from '@/lib/notify.js';

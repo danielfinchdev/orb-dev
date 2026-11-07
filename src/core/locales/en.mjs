@@ -24,6 +24,7 @@ import whiteboard from './en/whiteboard.mjs';
 import bots from './en/bots.mjs';
 import term from './en/term.mjs';
 import botsui from './en/botsui.mjs';
+import link from './en/link.mjs';
 import ws1 from './en/ws1.mjs';
 import ws2 from './en/ws2.mjs';
 import ws3 from './en/ws3.mjs';
@@ -69,6 +70,7 @@ export default {
   ...bots,
   ...term,
   ...botsui,
+  ...link,
   ...ws1,
   ...ws2,
   ...ws3,

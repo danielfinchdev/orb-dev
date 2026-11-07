@@ -14,7 +14,8 @@ import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardF
 import { BubbleTip, Select, Switch, Checkbox } from '@/components/ui/overlay.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { useStore, call, act, bridge, loadCentro, setState } from '@/lib/store.js';
-import { countdown, parseLinkInput, sortDevices, canManageLinks, roleKey, ROLE_CHOICES, botsLocationCard, devChoices } from '@/lib/bots.js';
+import { countdown, parseLinkInput, sortDevices, canManageLinks } from '@/lib/link.js';
+import { roleKey, ROLE_CHOICES, botsLocationCard, devChoices } from '@/lib/bots.js';
 import { cn, ago, errorText } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { personsOn, devicesByPerson } from '@/lib/persons.js';

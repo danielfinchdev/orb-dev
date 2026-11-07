@@ -1,5 +1,5 @@
-// 3.5, the interface of the Bots mode and Magic Link (src/ui/lib/bots.js): the two modes, the bot a chat opens with,
-// what the editor sends, what a pasted link says, the devices' order, the workshop's banner and the live chat lines.
+// 3.5, the interface of the Bots mode (src/ui/lib/bots.js): the two modes, the bot a chat opens with, what the editor
+// sends, the workshop's banner and the live chat lines. Magic Link's pieces: test/link-ui.test.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -41,22 +41,6 @@ test('el editor manda solo lo que el motor acepta, con las listas limpias', () =
   assert.equal(U.newBotDraft().icon, '🤖');
 });
 
-test('enlazar con otro Orb: el texto del QR, o el código y la dirección en cualquier orden', () => {
-  assert.deepEqual(U.parseLinkInput('http://100.64.0.2:3131/#vincular=abc&pc=xyz&v=2'), { qr: 'http://100.64.0.2:3131/#vincular=abc&pc=xyz&v=2' });
-  assert.deepEqual(U.parseLinkInput('{"v":2,"urls":["http://a:1"],"pc":"x","code":"y"}').qr.startsWith('{'), true);
-  assert.deepEqual(U.parseLinkInput('abcd-efgh 100.64.0.2:3131'), { code: 'ABCD-EFGH', address: 'http://100.64.0.2:3131' });
-  assert.deepEqual(U.parseLinkInput('http://casa.ts.net:3131 ABCDEFGH'), { code: 'ABCD-EFGH', address: 'http://casa.ts.net:3131' });
-  assert.deepEqual(U.parseLinkInput('ABCD-EFGH', '192.168.1.5:3131'), { code: 'ABCD-EFGH', address: 'http://192.168.1.5:3131' });
-  assert.equal(U.parseLinkInput('ABCD-EFGH'), null, 'falta la dirección');
-  assert.equal(U.parseLinkInput(''), null);
-});
-
-test('dispositivos: primero los conectados y luego por último uso', () => {
-  const list = U.sortDevices([{ id: 'a', lastSeen: '2026-01-01' }, { id: 'b', online: true, lastSeen: '2025-01-01' }, { id: 'c', lastSeen: '2026-06-01' }]);
-  assert.deepEqual(list.map((d) => d.id), ['b', 'c', 'a']);
-  assert.deepEqual(U.sortDevices(null), []);
-});
-
 test('el aviso del taller solo en un centro con taller enlazado', () => {
   assert.equal(U.tallerBanner(null), null);
   assert.equal(U.tallerBanner({ role: 'taller', dev: 'local', taller: { name: 'X' } }), null, 'el trabajo se hace aquí');
@@ -64,9 +48,7 @@ test('el aviso del taller solo en un centro con taller enlazado', () => {
   assert.deepEqual(U.tallerBanner({ role: 'centro', dev: 'remote', taller: { name: 'Portátil', online: false, lastSeen: 't', canWake: true, queued: 2 } }), { name: 'Portátil', online: false, lastSeen: 't', canWake: true, queued: 2 });
 });
 
-test('la cuenta atrás del código y la fecha de un recordatorio', () => {
-  assert.equal(U.countdown(1000 + 299_000, 1000), '4:59');
-  assert.equal(U.countdown(0, 5000), '0:00');
+test('la fecha de un recordatorio', () => {
   assert.match(U.localWhen(new Date(2026, 2, 4, 9, 5)), /^2026-03-04T09:05$/);
 });
 

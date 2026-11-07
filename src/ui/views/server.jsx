@@ -21,7 +21,7 @@ import { choose } from '@/components/dialogs.jsx';
 import { useStore, call, act, bridge, setState, loadCentro, phoneLayout, openSettings } from '@/lib/store.js';
 import { useServer, useHomes, loadServer, loadServerGuide, loadHomes, serverHome, serverCall, serverListen, hasCap, openBrowserLive, closeBrowserLive, homesChanged, onServer } from '@/lib/server.js';
 import { movableHere, planMove, moveReport, mappingRows, guideSteps, firstOpenStep, tn } from '@/lib/homes.js';
-import { countdown } from '@/lib/bots.js';
+import { countdown } from '@/lib/link.js';
 import { moveBot, offerMerge } from './bots/home.jsx';
 import { useBots, BotFace } from './bots/common.jsx';
 import { AUTHOR } from '../../core/product.mjs';

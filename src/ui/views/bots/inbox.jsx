@@ -4,7 +4,8 @@
 // below; dragged to reorder on the PC), the user's sections (folding) and «Sin asignar». Each row: avatar, name, time,
 // the last message (a forward arrow when one bot wrote to another) and the unread count. Right click or ⋯ (PC) and a long
 // press (phone) open the chat's menu: pin, move to a section, mute, mark as read, delete the chat.
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { usePress } from '@/lib/use-press.js';
 import { Search, Plus, X, Bell, Home, BookOpen, Server, Ellipsis, ChevronRight, Pin, PinOff, BellOff, FolderInput, Trash2, CheckCheck, Bot, Users, Settings2, Pencil, Forward, FolderPlus, Check, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { PageHeader } from '@/components/page.jsx';
@@ -38,24 +39,6 @@ export function ItemAvatar({ item, size = 44, bots, botsById }) {
   if (item.kind === 'group') return <GroupFace group={{ members: item.members ?? [] }} bots={bots} size={size} />;
   const bot = botsById.get(item.id) ?? { id: item.id, name: item.title };
   return <BotFace bot={bot} size={size} busy={item.state === 'working'} chief={item.chief} />;
-}
-
-// ---- a long press (touch) or a right click (mouse) opens the menu; the click that follows a long press is swallowed.
-export function usePress(onMenu, ms = 480) {
-  const timer = useRef(null); const start = useRef(null); const fired = useRef(false);
-  const clear = () => { clearTimeout(timer.current); timer.current = null; };
-  return {
-    onPointerDown: (e) => {
-      fired.current = false;
-      if (e.pointerType === 'mouse') return;
-      start.current = [e.clientX, e.clientY];
-      timer.current = setTimeout(() => { fired.current = true; navigator.vibrate?.(8); onMenu(); }, ms);
-    },
-    onPointerMove: (e) => { if (timer.current && start.current && Math.hypot(e.clientX - start.current[0], e.clientY - start.current[1]) > 8) clear(); },
-    onPointerUp: clear, onPointerCancel: clear, onPointerLeave: clear,
-    onContextMenu: (e) => { e.preventDefault(); if (!fired.current && !timer.current) onMenu(); },
-    onClickCapture: (e) => { if (fired.current) { e.preventDefault(); e.stopPropagation(); fired.current = false; } }
-  };
 }
 
 // ---- what can be done with a chat (the same list in the PC's menu and the phone's sheet)

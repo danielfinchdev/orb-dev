@@ -19,7 +19,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { confirm } from '@/components/dialogs.jsx';
 import { useStore, go, call, act, newChat, orbAct, loadOrbInbox, openOrbInfo, closeOrbInfo, getState, phoneLayout, fullPc, refreshSoon, setState } from '@/lib/store.js';
 import { orbItems, orbProgress, groupOrb, shortTime } from '@/lib/inbox.js';
-import { usePress } from '@/views/bots/inbox.jsx';
+import { usePress } from '@/lib/use-press.js';
 import { AGENT, STATUS } from '@/lib/labels.js';
 import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';

@@ -1,6 +1,5 @@
-// 3.5: the pure pieces of the «Bots» mode and of Magic Link (no React, no store): which mode a screen is in, the bot a
-// chat opens with, what a pasted link says, the order of the linked devices, the workshop's banner and the countdown of
-// a code. Tested in test/bots-ui.test.mjs.
+// 3.5: the pure pieces of the «Bots» mode (no React, no store): which mode a screen is in, the bot a chat opens with,
+// what the editor sends and the workshop's banner. Magic Link's: lib/link.js. Tested in test/bots-ui.test.mjs.
 import { parseAvatar } from '../../core/avatar.mjs';
 
 // The screens of the «Bots» mode; any other belongs to «Orb».
@@ -44,30 +43,12 @@ export function capsPayload(c) {
   return Object.values(out).every((v) => v == null) ? null : out;
 }
 
-// What the user pasted to link with another Orb: the QR's text (its link or its JSON), or a short code and an address
-// («ABCD-EFGH http://100.64.0.2:7777», in any order, or each in its own box). null when it says nothing usable.
-export function parseLinkInput(text, address = '') {
-  const s = String(text ?? '').trim();
-  if (!s && !address) return null;
-  if (/#vincular=|[?&]vincular=/.test(s) || s.startsWith('{')) return { qr: s };
-  const code = /\b([A-Z0-9]{4})-?([A-Z0-9]{4})\b/i.exec(s);
-  const addr = String(address ?? '').trim() || (/\b(https?:\/\/[^\s]+)/i.exec(s)?.[1] ?? /\b((?:\d{1,3}\.){3}\d{1,3}(?::\d+)?|[a-z0-9-]+(?:\.[a-z0-9-]+)+(?::\d+)?)\b/i.exec(s.replace(code?.[0] ?? '', ''))?.[1] ?? '');
-  if (!code || !addr) return null;
-  return { code: `${code[1]}-${code[2]}`.toUpperCase(), address: /^https?:\/\//i.test(addr) ? addr : `http://${addr}` };
-}
-
-// The linked devices: the ones on now first, then by last use (newest first).
-export function sortDevices(list) {
-  return [...(Array.isArray(list) ? list : [])].sort((a, b) => Number(Boolean(b.online)) - Number(Boolean(a.online)) || String(b.lastSeen ?? '').localeCompare(String(a.lastSeen ?? '')));
-}
-
 // 3.5: where the bots are used from: '' (this Orb's own) or 'centro.' (those of the linked Orb chosen in «¿Dónde quieres
 // tus bots?»). Being linked with an Orb that keeps bots is not enough: the user chooses (centro.status › active).
 export const botsPrefix = (centro) => (centro?.linked && centro.active ? 'centro.' : '');
 // Whether this window may create, change and delete bots: the PC app always; a linked device only if the Orb lets it
 // (app.state › access, from «Puede administrar» in Magic Link, or another Orb of the user's).
 export const canManageBots = ({ mobile, access } = {}) => !mobile || Boolean(access?.bots);
-export const canManageLinks = ({ mobile, access } = {}) => !mobile || Boolean(access?.links);
 // The role of an Orb in words (link.role.*): «todo», «centro» or «taller» (none: an Orb from before 3.5, «todo»).
 export const ROLE_CHOICES = ['todo', 'centro', 'taller'];
 export const roleKey = (role) => `link.role.${ROLE_CHOICES.includes(role) ? role : 'todo'}`;
@@ -90,12 +71,6 @@ export function tallerBanner(status) {
   const t = status?.taller;
   if (!t || (status?.dev && status.dev !== 'remote')) return null;
   return { name: t.name ?? '', online: Boolean(t.online), lastSeen: t.lastSeen ?? null, canWake: Boolean(t.canWake), queued: Number(t.queued) || 0 };
-}
-
-// «4:59» until a code expires (0:00 when it has).
-export function countdown(expiresAt, now = Date.now()) {
-  const s = Math.max(0, Math.ceil((Number(expiresAt) - now) / 1000));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 // A date for <input type="datetime-local"> and for bots.reminders.create (AAAA-MM-DDTHH:MM, local time).
