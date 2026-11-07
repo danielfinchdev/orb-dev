@@ -215,7 +215,7 @@ test('3.8: las copias van fuera de la carpeta de Orb, las de 3.7 se mudan allí 
   const s = seed();
   try {
     const def = K.defaultBackupDir(s.home);
-    assert.equal(path.dirname(def), process.env.ORB_BACKUP_ROOT, 'carpeta propia de este espacio en la raíz de copias');
+    assert.equal(path.dirname(def), path.resolve(process.env.ORB_BACKUP_ROOT), 'carpeta propia de este espacio en la raíz de copias');
     assert.ok(!path.relative(s.home, def).match(/^[^.]/) || path.relative(s.home, def).startsWith('..'), 'fuera del espacio de trabajo');
     const { file } = await K.createBackup({ home: s.home, secret: s.secret, kind: 'manual', version: 'test' });
     assert.equal(path.dirname(file), def);
