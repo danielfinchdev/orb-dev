@@ -224,7 +224,7 @@ const fromApp = (event) => {
 };
 const guard = (fn) => async (event, ...args) => { if (!fromApp(event)) throw new Error(T('sys.main.badOrigin')); return fn(...args); };
 
-const ENGINE_METHOD = /^[a-z]+\.[A-Za-z]+$/;
+const ENGINE_METHOD = /^[a-z]+(\.[A-Za-z]+){1,3}$/;
 ipcMain.handle('engine:call', guard(async (method, params) => {
   if (typeof method !== 'string' || !ENGINE_METHOD.test(method)) throw new Error(T('sys.main.badAction'));
   await engineReady;
