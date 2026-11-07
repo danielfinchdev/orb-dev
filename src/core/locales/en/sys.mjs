@@ -198,6 +198,7 @@ export default {
   'sys.agents.exitedCode': '{name} closed (code {code}). {detail}',
   'sys.agents.exitedWith': '{name} closed: {error}',
   'sys.agents.exitedEarly': '{name} closed before finishing.',
+  'sys.agents.projectSettingsSkipped': "Orb did not load the project's .claude/settings files because they run programs or change the environment ({keys}). Its CLAUDE.md files are still used.",
   'sys.agents.stopped': 'Stopped.',
   'sys.agents.limit': '{name} usage limit reached',
   'sys.agents.resumeFailed': '{name} could not resume the conversation: {error}',

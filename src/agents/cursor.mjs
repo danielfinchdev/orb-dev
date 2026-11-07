@@ -183,7 +183,10 @@ export function prepareCursorFolder(cwd, { mcpServers = {}, deny = [] } = {}) {
     Object.assign(env, values);
     if (Object.keys(servers).length) put('mcp.json', (cur) => ({ ...cur, mcpServers: servers }));
     // Cursor validates the file strictly: permissions needs both lists, allow too (found in a real run: «Required»).
-    if (deny.length) put('cli.json', (cur) => ({ ...cur, permissions: { ...(cur.permissions ?? {}), allow: Array.isArray(cur.permissions?.allow) ? cur.permissions.allow : [], deny: [...new Set([...(cur.permissions?.deny ?? []), ...deny])] } }));
+    // 3.8 (F2.6c): without the project's own allow rules while Orb runs it (a task could have left them for the next
+    // agents), and without the project's hooks (.cursor/hooks.json), which would run with this agent's environment.
+    if (deny.length) put('cli.json', (cur) => ({ ...cur, permissions: { ...(cur.permissions ?? {}), allow: [], deny: [...new Set([...(cur.permissions?.deny ?? []), ...deny])] } }));
+    if (fs.existsSync(path.join(dir, 'hooks.json'))) put('hooks.json', () => ({ version: 1, hooks: {} }));
   } catch (error) { PREPARED.delete(key); throw error; }
   let done = false;
   const restore = () => {

@@ -22,6 +22,33 @@ export const COORDINATOR_DENIED = ['Bash', 'Edit', 'Write', 'NotebookEdit', 'Mul
 // Lighter processes: only the project's own settings, and only the MCP servers Orb passes (strict-mcp-config).
 export const LEAN_SOURCES = ['project', 'local'];
 
+// 3.8 (F2.6c): what in a project's .claude/settings*.json would let one agent change the next ones (a task can write that
+// folder; the next agent may be another conversation's): programs Claude runs by itself (apiKeyHelper ran from a trusted
+// project's settings in a real run, even with an API key set; the other *Helper, aws*/gcp* refresh, processWrapper,
+// fileSuggestion, status lines), the environment of its commands and MCP servers (env: NODE_OPTIONS, PATH) and plugins.
+// hooks are off anyway (disableAllHooks) and permission rules do not count (allowManagedPermissionRulesOnly). A file
+// Orb cannot read as JSON counts too. → ["settings.json: env", …]
+const RISKY_KEY = /^env$|helper|authrefresh|credential|wrapper|suggestion|statusline|plugin|marketplace|shell/i;
+export function projectSettingsRisk(cwd) {
+  const found = [];
+  for (const name of ['settings.json', 'settings.local.json']) {
+    const file = path.join(cwd, '.claude', name);
+    if (!fs.existsSync(file)) continue;
+    let json; try { json = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { found.push(name); continue; }
+    if (!json || typeof json !== 'object' || Array.isArray(json)) { found.push(name); continue; }
+    for (const key of Object.keys(json)) if (RISKY_KEY.test(key)) found.push(`${name}: ${key}`);
+  }
+  return found;
+}
+// The project's CLAUDE.md files, for a Claude started without the project's settings (which also stops it reading them).
+export function projectNotes(cwd) {
+  const parts = [];
+  for (const name of ['CLAUDE.md', path.join('.claude', 'CLAUDE.md'), 'CLAUDE.local.md']) {
+    try { const text = fs.readFileSync(path.join(cwd, name), 'utf8').trim(); if (text) parts.push(`# ${name.replace(/\\/g, '/')}\n${text.slice(0, 40000)}`); } catch { /* none */ }
+  }
+  return parts.length ? `Instrucciones del proyecto (sus archivos CLAUDE.md):\n\n${parts.join('\n\n')}` : '';
+}
+
 export function detect(cfg = {}) {
   const home = userHome();
   const pkg = (dir) => path.join(dir, 'node_modules', '@anthropic-ai', 'claude-code', 'bin', IS_WIN ? 'claude.exe' : 'claude');
@@ -126,7 +153,7 @@ export function createLive(o) {
     const paths = [toolInput?.file_path, toolInput?.path, toolInput?.notebook_path].filter(Boolean);
     // Glob and Grep patterns are checked too (where they reach).
     const patterns = [toolInput?.pattern, toolInput?.glob].filter((x) => typeof x === 'string' && x);
-    const verdict = decide({ permission, tool: toolName, command, paths, patterns: toolName === 'Grep' ? patterns.slice(1) : patterns, internalDir: o.internalDir, lang: o.lang });
+    const verdict = decide({ permission, tool: toolName, command, paths, patterns: toolName === 'Grep' ? patterns.slice(1) : patterns, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang });
     if (verdict.decision === 'allow') return { behavior: 'allow', updatedInput: toolInput };
     if (verdict.decision === 'deny') return { behavior: 'deny', message: `Orb no lo permite: ${verdict.reason}.` };
     // 3.1: summary: what the agent itself says the command is for (Claude's Bash tool asks it for a description).
@@ -202,6 +229,14 @@ export function createLive(o) {
     // The SDK hands mcpServers to Claude Code as --mcp-config <json>: the values go in Claude Code's environment and the
     // config only names them (Claude Code expands ${VAR} in --mcp-config, as in .mcp.json).
     const mcp = mcpEnvByRef(o.mcpServers, (name) => `\${${name}}`);
+    // 3.8 (F2.6c): a project whose settings would run programs or change the environment is started without its settings
+    // files; its CLAUDE.md still reaches Claude, through the system prompt.
+    const risky = o.cwd ? projectSettingsRisk(o.cwd) : [];
+    const notes = risky.length ? projectNotes(o.cwd) : '';
+    if (risky.length) {
+      log(`ajustes del proyecto sin cargar: ${risky.join(', ')}`);
+      onEvent({ type: 'item', role: 'system', kind: 'status', body: tr('sys.agents.projectSettingsSkipped', { keys: risky.join(', ') }) });
+    }
     const options = {
       cwd: o.cwd,
       pathToClaudeCodeExecutable: o.exe.cmd,
@@ -209,7 +244,7 @@ export function createLive(o) {
       model: o.model || undefined,
       effort: o.reasoning || 'medium',
       includePartialMessages: true,
-      settingSources: LEAN_SOURCES,
+      settingSources: risky.length ? [] : LEAN_SOURCES,
       extraArgs: { 'strict-mcp-config': null },
       mcpServers: mcp.servers,
       additionalDirectories: o.addDirs ?? [],
@@ -220,6 +255,10 @@ export function createLive(o) {
       // 3.8: no hooks of the project's .claude/settings*.json: a task could leave one there that later agents in the same
       // folder (other conversations) would run with their environment. (Managed policy hooks still apply.)
       settings: { fastMode: false, disableAllHooks: true },
+      // 3.8 (F2.6c): nor its permission rules: an allow rule there (Bash, Edit…) would let Claude act without asking Orb's
+      // guard (canUseTool), past «leer», «probar» and «Cosas que nadie toca». Only policy rules count (checked with the
+      // real Claude Code: a trusted project's "allow": ["Bash"] no longer skips the guard, and CLAUDE.md still loads).
+      managedSettings: { allowManagedPermissionRulesOnly: true },
       // 3.2.1: spawn Claude Code ourselves so Orb knows its process (live.pid) and can stop its whole tree when the task
       // ends — otherwise its background shells (bash.exe) can outlive the turn, holding an isolated copy's folder open and
       // leaving test servers behind. The signal is forwarded by the SDK after its own graceful stdin-close window.
@@ -232,7 +271,8 @@ export function createLive(o) {
     };
     if (o.resumeId) options.resume = o.resumeId; else if (o.newSessionId) options.sessionId = o.newSessionId;
     if (o.forkSession) options.forkSession = true;
-    if (o.systemPrompt) options.systemPrompt = { type: 'preset', preset: 'claude_code', append: o.systemPrompt };
+    const append = [o.systemPrompt, notes].filter(Boolean).join('\n\n');
+    if (append) options.systemPrompt = { type: 'preset', preset: 'claude_code', append };
     if (o.tools?.allowed?.length) options.allowedTools = o.tools.allowed;
     const disallowed = [...(o.tools?.disallowed ?? []), ...(permission === 'leer' ? ['Bash', 'Edit', 'Write', 'NotebookEdit', 'MultiEdit'] : permission === 'probar' ? ['Edit', 'Write', 'NotebookEdit', 'MultiEdit'] : [])];
     if (disallowed.length) options.disallowedTools = disallowed;

@@ -376,13 +376,43 @@ test('MCP: cada proceso tiene su ticket; el de un proceso cerrado no vuelve a va
   } finally { for (const c of [old, now, boss]) c.close(); sessions.closeLive('sesion-rota'); }
 });
 
-// N1: an agent's shell cannot reach Orb's data by another name (ORB_HOME, the database's name, its tickets and pipe).
-test('guardia: ni ORB_HOME, ni orb.db, ni los tickets de Orb en un comando', () => {
-  for (const command of ['type %ORB_HOME%\\.orb\\datos\\x', 'Get-Content $env:ORB_HOME/x', 'cat "$ORB_HOME/x"', 'python -c "import os; print(os.environ[\'ORB_HOME\'])"',
-    'sqlite3 orb.db "select 1"', 'copy C:\\x\\orb.db-wal .', 'echo $env:ORB_TICKET_orb', 'set | findstr ORB_MCP_github_TOKEN', 'node -e "net.connect(process.env.ORB_AUTH_PIPE)"']) {
-    assert.equal(decide({ permission: 'total', tool: 'Bash', command, internalDir: path.join(t.home, '.orb') }).decision, 'deny', command);
+// F2.6c (P3): the guard refuses Orb's data folder by its RESOLVED path, not by names: working on a project that mentions
+// ORB_HOME or has its own orb.db is normal work; «total» asks instead of refusing.
+test('guardia: la carpeta de datos de Orb por su ruta resuelta, sin falsos positivos por nombre', () => {
+  const internalDir = path.join(t.home, '.orb');
+  const cwd = path.join(t.home, 'web');
+  const verdict = (command, permission = 'editar', extra = {}) => decide({ permission, tool: 'Bash', command, internalDir, cwd, ...extra }).decision;
+  for (const command of ['grep -rn ORB_HOME src', 'rg "orb.db"', 'ORB_HOME=/tmp/x node --test test/a.test.mjs', 'sqlite3 my-orb.db "select 1"', 'sqlite3 orb.db .tables',
+    'echo $env:ORB_TICKET_orb', 'Get-ChildItem \\\\.\\pipe\\', 'cat ../web-2/orb.db', 'npm test']) assert.equal(verdict(command), 'allow', command);
+  assert.equal(decide({ permission: 'editar', tool: 'Grep', patterns: [], paths: ['src'], internalDir, cwd }).decision, 'allow');
+  assert.equal(decide({ permission: 'editar', tool: 'Read', paths: ['C:/proj/orb.db'], internalDir, cwd }).decision, 'allow', 'el orb.db de otro proyecto');
+  // Orb's own folder, however it is written: absolute (other case, other separator), relative to the agent's folder, in a script.
+  const db = path.join(internalDir, 'datos', 'orb.db');
+  for (const command of [`sqlite3 "${db}" .tables`, `type ${db.toUpperCase().replace(/\\/g, '/')}`, 'cat ../.orb/datos/orb.db', 'copy ..\\.orb\\datos\\orb.db-wal .', `node -e "require('fs').writeFileSync('${db.replace(/\\/g, '/')}', '')"`,
+    `echo x > ${path.join(internalDir, 'ejecuciones', 'a.log')}`]) {
+    assert.equal(verdict(command), 'deny', command);
+    assert.equal(verdict(command, 'total'), 'ask', `total pregunta: ${command}`);
   }
-  for (const command of ['npm test', 'cat orb.dbx', 'echo robot.db', 'git log --oneline']) assert.notEqual(decide({ permission: 'total', tool: 'Bash', command, internalDir: path.join(t.home, '.orb') }).decision, 'deny', command);
+  for (const tool of ['Read', 'Edit', 'Write']) assert.equal(decide({ permission: 'editar', tool, paths: ['../.orb/datos/control-desarrollo.json'], internalDir, cwd }).decision, 'deny', tool);
+  // An isolated copy lives inside .orb and is the task's own folder.
+  const copy = path.join(internalDir, 'copias', 'aisladas', 'web-3');
+  assert.equal(decide({ permission: 'editar', tool: 'Edit', paths: ['src/a.js'], internalDir, cwd: copy }).decision, 'allow');
+  assert.equal(decide({ permission: 'editar', tool: 'Bash', command: 'npm test && cd .. && ls', internalDir, cwd: copy }).decision, 'allow');
+  assert.equal(decide({ permission: 'editar', tool: 'Bash', command: 'cat ../../../datos/orb.db', internalDir, cwd: copy }).decision, 'deny');
+  assert.equal(verdict(`ls ${internalDir}x`), 'allow', 'otra carpeta que empieza igual');
+});
+
+// F2.6c (P1): the project's agent settings (Claude's .claude/settings*.json, Cursor's hooks, rules and servers) ask first.
+test('guardia: cambiar los ajustes de agentes del proyecto pide permiso', () => {
+  const internalDir = path.join(t.home, '.orb'); const cwd = path.join(t.home, 'web');
+  for (const file of ['.claude/settings.json', '.claude\\settings.local.json', 'sub/.cursor/hooks.json', '.cursor/cli.json', '.cursor/mcp.json']) {
+    for (const tool of ['Edit', 'Write']) {
+      assert.equal(decide({ permission: 'editar', tool, paths: [file], internalDir, cwd }).decision, 'ask', `${tool} ${file}`);
+      assert.equal(decide({ permission: 'total', tool, paths: [file], internalDir, cwd }).decision, 'allow', `total: ${tool} ${file}`);
+    }
+    assert.equal(decide({ permission: 'editar', tool: 'Bash', command: `echo {} > ${file}`, internalDir, cwd }).decision, 'ask', file);
+  }
+  for (const file of ['.claude/agents/x.md', 'CLAUDE.md', '.cursor/rules/a.mdc', 'src/settings.json']) assert.equal(decide({ permission: 'editar', tool: 'Write', paths: [file], internalDir, cwd }).decision, 'allow', file);
 });
 
 // N9: a deleted conversation's unfinished tasks stop with it (they would join the scope of the tasks of no conversation);

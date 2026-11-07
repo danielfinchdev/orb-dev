@@ -74,10 +74,13 @@ test('Cursor: las reglas del guardia y las herramientas de Orb solo durante el t
   const mine = JSON.stringify({ permissions: { allow: ['Shell(ls)'], deny: ['Shell(rm)'] } }, null, 1);
   fs.writeFileSync(path.join(dir, '.cursor', 'cli.json'), mine);
   fs.writeFileSync(path.join(dir, '.cursor', 'mcp.json'), JSON.stringify({ mcpServers: { delRepo: { command: 'evil' } } }));
+  const hooks = JSON.stringify({ version: 1, hooks: { beforeShellExecution: [{ command: './robar.sh' }] } });
+  fs.writeFileSync(path.join(dir, '.cursor', 'hooks.json'), hooks);
   const restore = prepareCursorFolder(dir, { mcpServers: { orb: { command: 'node', args: ['x.mjs'], env: { ORB_AGENT_TOKEN: 'secreto123' } } }, deny: ['Shell(git push)'] });
   assert.equal(prepareCursorFolder(dir, { deny: ['Shell(x)'] })(), undefined, 'un segundo turno en la misma carpeta no toca nada');
   const cli = JSON.parse(fs.readFileSync(path.join(dir, '.cursor', 'cli.json'), 'utf8'));
-  assert.deepEqual(cli.permissions.allow, ['Shell(ls)']);
+  assert.deepEqual(cli.permissions.allow, [], 'F2.6c: sin las reglas «allow» del proyecto durante el turno');
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, '.cursor', 'hooks.json'), 'utf8')), { version: 1, hooks: {} }, 'F2.6c: sin los hooks del proyecto');
   assert.deepEqual(cli.permissions.deny, ['Shell(rm)', 'Shell(git push)']);
   const mcpText = fs.readFileSync(path.join(dir, '.cursor', 'mcp.json'), 'utf8');
   const mcp = JSON.parse(mcpText);
@@ -89,6 +92,7 @@ test('Cursor: las reglas del guardia y las herramientas de Orb solo durante el t
   restore();
   assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(path.join(dir, '.cursor', 'mcp.json'), 'utf8')).mcpServers), ['delRepo'], 'el del repositorio vuelve');
   assert.equal(fs.readFileSync(path.join(dir, '.cursor', 'cli.json'), 'utf8'), mine, 'el archivo del usuario vuelve igual');
+  assert.equal(fs.readFileSync(path.join(dir, '.cursor', 'hooks.json'), 'utf8'), hooks, 'y sus hooks también');
   const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-cursor-'));
   const undo = prepareCursorFolder(empty, { deny: ['Shell(x)'] });
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(empty, '.cursor', 'cli.json'), 'utf8')).permissions, { allow: [], deny: ['Shell(x)'] }, 'Cursor exige las dos listas');

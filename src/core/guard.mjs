@@ -8,6 +8,8 @@
 //   editar     (default) edit files and run commands in its folder; risky commands ask first
 //   preguntar  edit files; every command asks first (for when you want to watch closely)
 //   total      no checks at all (asked once when chosen; never from the phone)
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { translate } from './i18n.mjs';
 import { ctx } from './context.mjs';
@@ -109,20 +111,48 @@ export function riskOf(command, lang = 'es') {
   return null;
 }
 
-// Paths that are never an agent's business: the assistant's own data (database, secret, logs of runs, undo checkpoints).
-// The isolated copies (.orb\copias\aisladas) are where isolated tasks work, so those stay open.
-const OPEN_INTERNAL = '\\copias\\aisladas\\';
-// 3.8: nor by another way of writing it: the database by its name, the assistant folder through ORB_HOME ($env:ORB_HOME,
-// %ORB_HOME%, $ORB_HOME, os.environ…), or Orb's tickets and pipe for its MCP servers (agent-auth.mjs).
-const INTERNAL_NAMES = /(^|[^a-z0-9_])(orb\.db(-wal|-shm)?|orb_home|orb_ticket_\w*|orb_auth_pipe|orb_mcp_\w*)($|[^a-z0-9_])|orb-agentes-[0-9a-f]/;
-function touchesInternal(text, internalDir) {
-  if (INTERNAL_NAMES.test(String(text ?? '').toLowerCase())) return true;
-  if (!internalDir) return false;
-  const t = String(text ?? '').replace(/\//g, '\\').toLowerCase();
-  const d = path.resolve(internalDir).replace(/\//g, '\\').toLowerCase();
-  for (let i = t.indexOf(d); i >= 0; i = t.indexOf(d, i + 1)) if (!t.startsWith(OPEN_INTERNAL, i + d.length)) return true;
-  return /(^|[\s"'\\])\.orb\\+(datos|ejecuciones|copias(?!\\+aisladas\\))/.test(t);
+// 3.8: Orb's data folder (today the assistant's .orb; one place to change it) is never an agent's business: what a tool
+// names or a command mentions is resolved (against the agent's folder) and refused when it falls inside it. The isolated
+// copies (.orb\copias\aisladas) are where isolated tasks work, so those stay open. Matched by RESOLVED path, not by name:
+// a project may well have its own orb.db or talk about ORB_HOME. Not a boundary: a shell of the same Windows user can
+// always reach the folder some other way (cd .. a few times, a script); the agents' identity no longer depends on its
+// database (agent-auth.mjs), so what is left is the integrity of Orb's data against an agent bent on it (accepted).
+const OPEN_INTERNAL = ['copias', 'aisladas'];
+const norm = (p) => path.resolve(p).replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
+export function isOrbData(target, internalDir, cwd) {
+  if (!internalDir || !target) return false;
+  let p = String(target).trim().replace(/^~(?=[\\/]|$)/, os.homedir());
+  if (!path.isAbsolute(p) && !path.win32.isAbsolute(p)) { if (!cwd) return false; p = path.resolve(cwd, p); }
+  let full = norm(p);
+  try { full = norm(fs.realpathSync.native(p)); } catch { /* not there (yet): as written */ }
+  const root = norm(internalDir);
+  if (full !== root && !full.startsWith(`${root}\\`)) return false;
+  const rest = full.slice(root.length + 1).split('\\');
+  return !(rest[0] === OPEN_INTERNAL[0] && rest[1] === OPEN_INTERNAL[1]);
 }
+// The words of a command that may be paths (a=b and --opt=b give b), without quotes.
+const pathWords = (command) => String(command ?? '').split(/[\s|&;<>()`]+/).map((w) => w.replace(/^["']+|["',]+$/g, '').replace(/^[^=]*=(?=.*[\\/~.])/, '')).filter((w) => /[\\/]|^~|^\.\.?$/.test(w));
+function touchesInternal({ command, paths, patterns, internalDir, cwd }) {
+  if (!internalDir) return false;
+  if ([...paths, ...patterns].some((p) => isOrbData(p, internalDir, cwd))) return true;
+  // The folder written out anywhere in the command (in a script's string too), with either separator or case.
+  const t = String(command ?? '').replace(/\//g, '\\').toLowerCase();
+  const root = norm(internalDir);
+  for (let i = t.indexOf(root); i >= 0; i = t.indexOf(root, i + 1)) {
+    const after = t.slice(i + root.length);
+    if (/^[^\\]/.test(after) && !/^["'\s;|&)]/.test(after)) continue; // .orbx is another folder
+    if (!/^\\+copias\\+aisladas(\\|$|["'\s])/.test(after)) return true;
+  }
+  return pathWords(command).some((w) => isOrbData(w, internalDir, cwd));
+}
+
+// 3.8: the project's agent settings: a task could leave there rules or programs that later agents in the same folder
+// (other conversations) would take as the user's (Claude's permissions.allow skips Orb's guard; env, apiKeyHelper and the
+// like run programs). Changing them asks first, whatever the permission but «total». See also claude.mjs (what Orb
+// loads of them) and cursor.mjs (its hooks are off while Orb runs it).
+const AGENT_CONFIG = /(^|[\\/])\.claude[\\/]+settings[^\\/]*\.json$|(^|[\\/])\.cursor[\\/]+(hooks|cli|mcp)\.json$/i;
+const AGENT_CONFIG_IN = /\.claude[\\/]+settings|\.cursor[\\/]+(hooks|cli|mcp)\.json/i;
+export const isAgentConfig = (p) => AGENT_CONFIG.test(String(p ?? '').trim());
 
 // 3.2.1: whether a shell command writes a file of the project (for the read-only guard). A redirection (`>`, `>>`, not
 // `2>`/`>&`), or a cmdlet that writes a file (Out-File, Set-Content, Add-Content, New-Item -ItemType File, tee), to a
@@ -161,17 +191,18 @@ export function protectedHit(text, list = protectedList()) {
   return list.find((e) => entryRe(e).test(t)) ?? null;
 }
 export const touchesProtected = (text, list) => protectedHit(text, list) !== null;
-// decide({ permission, tool, kind, command, paths, patterns, internalDir, lang }) → (lang: language of the
-// reasons, default 'es') { decision: 'allow' | 'ask' | 'deny', reason }
+// decide({ permission, tool, kind, command, paths, patterns, internalDir, cwd, lang }) → (cwd: the agent's folder, to
+// resolve relative paths; lang: language of the reasons, default 'es') { decision: 'allow' | 'ask' | 'deny', reason }
+// Orb's data folder: denied, and in «total» it asks (the user may want an agent to look, but it is never silent).
 // 3.7: no agent ever raises its privileges, whatever its permission (also «total»): sudo, doas, pkexec, su or
 // run0.
 const ESCALATE = /\b(sudo|doas|pkexec|run0)\b|(^|[;&|(`]|\$\()\s*su(\s|$)|\/etc\/sudoers/i;
 export const escalates = (command) => ESCALATE.test(String(command ?? ''));
-export function decide({ permission = 'editar', tool, kind, command = '', paths = [], patterns = [], internalDir, lang = 'es' }) {
+export function decide({ permission = 'editar', tool, kind, command = '', paths = [], patterns = [], internalDir, cwd, lang = 'es' }) {
   const T = (k) => translate(lang, `msg.guard.${k}`);
   const cls = toolClass(tool, kind);
   const text = [command, ...paths, ...patterns].join(' ');
-  if (touchesInternal(text, internalDir)) return { decision: 'deny', reason: T('internal') };
+  if (touchesInternal({ command, paths, patterns, internalDir, cwd })) return { decision: permission === 'total' ? 'ask' : 'deny', reason: T('internal') };
   if (escalates(command)) return { decision: 'deny', reason: T('sudo') };
   const hit = protectedHit(text);
   if (hit) return { decision: 'deny', reason: translate(lang, 'msg.guard.protected', { name: hit }) };
@@ -179,10 +210,12 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
   if (cls === 'read' || cls === 'orb') return { decision: 'allow', reason: T('readOnlyTool') };
   if (permission === 'leer') return { decision: 'deny', reason: T('readOnlyChat') };
   if (permission === 'probar' && cls === 'edit') return { decision: 'deny', reason: T('testOnly') };
+  if (cls === 'edit' && paths.some(isAgentConfig)) return { decision: 'ask', reason: T('agentConfig') };
   if (cls === 'edit') return { decision: 'allow', reason: T('edits') };
   if (cls === 'exec') {
     const risk = riskOf(command, lang);
     if (risk) return { decision: 'ask', reason: risk };
+    if (AGENT_CONFIG_IN.test(command)) return { decision: 'ask', reason: T('agentConfig') };
     // 3.2.1: a read-only task must not write files. Running the tests or the build is fine, but a command that redirects
     // into a project file (echo >> BITACORA.md, Set-Content, Out-File…) outside a build folder asks first: with nobody to
     // answer, a task's permission times out and is denied, so the write never happens.

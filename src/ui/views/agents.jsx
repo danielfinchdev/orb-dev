@@ -351,6 +351,8 @@ export function AgentsView() {
           ) : null}
           {/* Two cards per row from 1024 px, three on very wide windows: each card needs room for its account rows. */}
           <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3 [&>*]:min-w-0">{agents ? agents.map((a) => <AgentCard key={a.id} a={a} reload={() => load(true)} />) : <Card className="items-center"><Spinner /></Card>}</div>
+          {/* 3.8 (F2.6c): what Orb leaves out of a project's agent settings (claude.mjs, cursor.mjs, guard.mjs). */}
+          <Card><CardHeader><CardTitle>{t('agents.projectSettingsTitle')}</CardTitle><CardDescription>{t('agents.projectSettingsDesc')}</CardDescription></CardHeader></Card>
           <Card>
             <CardHeader><CardTitle>{t('agents.usageTitle')}</CardTitle><CardDescription>{t('agents.usageDesc', { pct: Math.round((usage[0]?.stopAt ?? 0.92) * 100), hours: usage[0]?.windowHours ?? 5 })}</CardDescription></CardHeader>
             <CardContent className="grid gap-4">

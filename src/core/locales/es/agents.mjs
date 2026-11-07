@@ -88,6 +88,8 @@ export default {
   'agents.checkAll': 'Comprobar todo',
   'agents.installTitle': 'Instalar agentes y herramientas',
   'agents.installDesc': 'Con el instalador oficial de cada uno. El progreso se muestra aquí.',
+  'agents.projectSettingsTitle': 'Ajustes de agentes de los proyectos',
+  'agents.projectSettingsDesc': 'Con Orb, los agentes no ejecutan los hooks del proyecto (.claude/settings.json, .cursor/hooks.json) ni siguen sus reglas de permisos: decide Orb. Si los ajustes de Claude del proyecto ejecutan programas o cambian el entorno, no se cargan (su CLAUDE.md sí). Antes de que un agente cambie esos archivos, Orb te pide permiso.',
   'agents.noGit': 'Git no está instalado',
   'agents.noGitDesc': 'Las tareas se pueden deshacer igualmente, pero sin Git no hay ramas, copias aisladas ni integración con GitHub.',
   'agents.getGit': 'Descargar Git',

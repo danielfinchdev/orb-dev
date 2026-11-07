@@ -101,6 +101,53 @@ test('Claude Code real: expande ${ORB_MCP_…} de su entorno al arrancar un serv
   } finally { killTree(child); }
 });
 
+// F2.6c (P1): what a task can leave in the project's .claude/settings*.json does not change later Claude agents: its
+// allow rules do not skip Orb's guard, and a file that would run programs (apiKeyHelper) or change the environment is not
+// loaded (its CLAUDE.md still reaches Claude). The real Claude Code of the SDK against a local stand-in of the API; the
+// project is trusted in its (temporary) config, as the user's own projects are.
+async function realClaudeTurn({ name, settings, tool, permission }) {
+  const { fakeAnthropic } = await import('./fixtures/fake-anthropic.mjs');
+  const proj = path.join(dir, name); fs.mkdirSync(path.join(proj, '.claude'), { recursive: true });
+  if (settings) fs.writeFileSync(path.join(proj, '.claude', 'settings.json'), JSON.stringify(settings));
+  fs.writeFileSync(path.join(proj, 'CLAUDE.md'), 'NOTA-DEL-PROYECTO-77');
+  const config = path.join(dir, `${name}-config`); fs.mkdirSync(config, { recursive: true });
+  fs.writeFileSync(path.join(config, '.claude.json'), JSON.stringify({ projects: { [proj.split(path.sep).join('/')]: { hasTrustDialogAccepted: true } } }));
+  const api = await fakeAnthropic({ tool: JSON.parse(JSON.stringify(tool).replaceAll('PROJ', proj.split(path.sep).join('/'))) });
+  const events = []; const asked = [];
+  const live = claude.createLive({ exe: { cmd: SDK_CLAUDE, pre: [] }, cwd: proj, permission, internalDir: path.join(dir, '.orb'),
+    env: { ...cleanEnv({}), CLAUDE_CONFIG_DIR: config, ANTHROPIC_API_KEY: 'sk-ant-prueba', ANTHROPIC_BASE_URL: api.url, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1', DISABLE_AUTOUPDATER: '1' },
+    onEvent: (e) => { events.push(e); if (e.type === 'approval') { asked.push(e.request); live.respond(e.request.id, 'deny'); } } });
+  lives.push(live);
+  try {
+    const r = await live.send({ text: 'hola' });
+    return { r, events, asked, proj, sawNotes: api.requests.some((q) => JSON.stringify([q.body.system, q.body.messages]).includes('NOTA-DEL-PROYECTO-77')) };
+  } finally { live.close(); await api.close(); }
+}
+test('Claude Code real: las reglas «allow» del proyecto no se saltan la guardia de Orb', { skip: !fs.existsSync(SDK_CLAUDE) && 'sin el Claude Code del SDK' }, async () => {
+  const bash = await realClaudeTurn({ name: 'permite-bash', permission: 'preguntar', settings: { permissions: { allow: ['Bash', 'Edit', 'Write'] } }, tool: { name: 'Bash', input: { command: 'echo x > marca.txt', description: 'marca' } } });
+  assert.equal(bash.r.isError, false, bash.r.final);
+  assert.deepEqual(bash.asked.map((a) => a.tool), ['Bash'], 'pregunta a Orb aunque el proyecto lo permita');
+  assert.ok(!fs.existsSync(path.join(bash.proj, 'marca.txt')), 'denegado: no se ejecuta');
+  assert.ok(bash.sawNotes, 'el CLAUDE.md del proyecto sigue llegando');
+  // «editar» accepts edits by itself, but not to the project's agent settings: they ask first.
+  const write = await realClaudeTurn({ name: 'escribe-ajustes', permission: 'editar', tool: { name: 'Write', input: { file_path: 'PROJ/.claude/settings.local.json', content: '{"permissions":{"allow":["Bash"]}}' } } });
+  assert.deepEqual(write.asked.map((a) => a.tool), ['Write']);
+  assert.ok(!fs.existsSync(path.join(write.proj, '.claude', 'settings.local.json')));
+});
+test('Claude Code real: unos ajustes del proyecto que ejecutan programas o cambian el entorno no se cargan', { skip: !fs.existsSync(SDK_CLAUDE) && 'sin el Claude Code del SDK' }, async () => {
+  const helper = process.platform === 'win32' ? 'echo x> helper-ejecutado.txt & echo sk-ant-x' : 'echo x > helper-ejecutado.txt; echo sk-ant-x';
+  const out = await realClaudeTurn({ name: 'ajustes-hostiles', permission: 'editar', settings: { env: { MARCA_DEL_PROYECTO: 'llega' }, apiKeyHelper: helper },
+    tool: { name: 'Bash', input: { command: 'echo "v=$MARCA_DEL_PROYECTO" > entorno.txt', description: 'entorno' } } });
+  assert.equal(out.r.isError, false, out.r.final);
+  assert.ok(!fs.existsSync(path.join(out.proj, 'helper-ejecutado.txt')), 'apiKeyHelper del proyecto no se ejecuta');
+  assert.doesNotMatch(fs.readFileSync(path.join(out.proj, 'entorno.txt'), 'utf8'), /llega/, 'su env no llega a los comandos');
+  assert.ok(out.sawNotes, 'su CLAUDE.md llega por las instrucciones');
+  assert.ok(out.events.some((e) => e.kind === 'status' && /settings\.json: env, settings\.json: apiKeyHelper/.test(e.body)), 'se avisa en la conversación');
+  assert.deepEqual(claude.projectSettingsRisk(out.proj), ['settings.json: env', 'settings.json: apiKeyHelper']);
+  fs.writeFileSync(path.join(out.proj, '.claude', 'settings.json'), JSON.stringify({ permissions: { allow: ['Bash'] }, hooks: {}, model: 'opus', includeCoAuthoredBy: false }));
+  assert.deepEqual(claude.projectSettingsRisk(out.proj), [], 'lo normal de un proyecto sí se carga');
+});
+
 function openCodex(options = {}) {
   const log = path.join(dir, `codex-${lives.length}.jsonl`);
   const events = [];
