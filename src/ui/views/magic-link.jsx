@@ -124,7 +124,7 @@ function DevicesCard({ devices, reload }) {
   );
 }
 
-// 3.6: a part of a settings section, with its heading (Ajustes › Magic Link › Usuarios…); id: the anchor the menu jumps to.
+// 3.6: a part of a settings section, with its heading (Ajustes › Datos › Copias…); id: the anchor the menu jumps to.
 // Without a title (a phone's own screen), only its cards.
 export function SubSection({ id, title, children }) {
   if (!title) return children;

@@ -1,6 +1,5 @@
 // 3.6: backups and time zones.
 export default {
-  'data.tz.late': '{n} min late',
   'data.backup.restored': 'Backup restored (from {created}).',
   'data.core.restored': 'The core folder (or part of it) was missing: Orb brought back what was missing from the backup of {created}. Changes made after that backup are not there.',
   'data.core.lost': 'Orb’s core folder is missing. Orb stops to bring it back from the latest backup.',

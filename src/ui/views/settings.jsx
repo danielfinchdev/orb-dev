@@ -705,7 +705,7 @@ export function SettingsDialog() {
   const app = useStore((s) => s.app);
   const [wanted, part] = resolveSection(open);
   const openedAt = useStore((s) => s.settingsAt);
-  // The part asked for (a link to «Usuarios», a notice about updates…): scrolled into view once the section is drawn.
+  // The part asked for (a link to «Copias de seguridad», a notice about updates…): scrolled into view once the section is drawn.
   // Some parts appear only after their data loads: it waits for them for a moment, and the sections above them may
   // still grow, so it follows for a second. Clicking the same part again scrolls again.
   useEffect(() => {

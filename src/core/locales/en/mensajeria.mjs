@@ -27,7 +27,6 @@ export default {
   'chats.dictateOff': 'Dictation is not available in this browser.',
   'chats.dictateDenied': 'Microphone permission is missing. Turn it on in the browser settings.',
   // Chat info
-  'chats.library': 'Library',
   'chats.notifications': 'Notifications',
   'chats.notifyOn': 'Lets you know when it finishes something or needs your approval.',
   'chats.notifyOff': 'Muted: it only lets you know about approvals and questions.',

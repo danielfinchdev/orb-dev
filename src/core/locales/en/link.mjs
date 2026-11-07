@@ -1,7 +1,5 @@
-// Magic Link (link.*): linking the phone and the browser with this PC, and the list of devices. nav.modeOrb: the name of the Orb zone.
+// Magic Link (link.*): linking the phone and the browser with this PC, and the list of devices.
 export default {
-  'nav.modeOrb': 'Orb',
-  'link.title': 'Magic Link',
   'link.pairTitle': 'Link a device',
   'link.pairHint': 'A phone or a browser. The code lasts 5 minutes and works once.',
   'link.make': 'Show the QR code',

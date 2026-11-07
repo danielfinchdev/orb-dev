@@ -18,7 +18,6 @@ export default {
   'chat.orchestratorLocked': 'In this conversation {name} coordinates the agents. To talk to an agent directly, start a new chat with the Orchestrator off.',
   'chat.orchestratorOn': 'On. Turn it off to talk directly to the chosen agent.',
   'chat.orchestratorOff': 'Off: you talk directly to the chosen agent.',
-  'chat.orchestratorHint': 'On, {name} coordinates the agents and hands out the work. Off, you talk directly to the chosen agent.',
   // Compact
   'compact.button': 'Compact',
   'compact.busy': 'Compacting…',

@@ -18,7 +18,6 @@ export default {
   'chat.orchestratorLocked': 'En esta conversación {name} coordina a los agentes. Para hablar directamente con un agente, empieza un chat nuevo con el Orquestador desactivado.',
   'chat.orchestratorOn': 'Activado. Desactívalo para hablar directamente con el agente elegido.',
   'chat.orchestratorOff': 'Desactivado: hablas directamente con el agente elegido.',
-  'chat.orchestratorHint': 'Activado, {name} coordina a los agentes y reparte el trabajo. Desactivado, hablas directamente con el agente elegido.',
   // Compactar
   'compact.button': 'Compactar',
   'compact.busy': 'Compactando…',

@@ -296,6 +296,8 @@ export function configFrom(stored) {
   // Their settings go (the file loses them at the next save).
   delete config.monitor; delete config.bots; delete config.oce;
   if (config.ui) delete config.ui.mode;
+  // 3.8: the phone never types the master password on a page without encryption: «mobile.lanHttp» is gone.
+  if (config.mobile) delete config.mobile.lanHttp;
   // Folders made by older versions: agents added later get their default account and their place in the order.
   for (const a of AGENT_IDS) {
     if (!config.accounts.some((x) => x.agent === a)) config.accounts.push({ id: a, agent: a, label: AGENT_LABELS[a], home: '', enabled: true });

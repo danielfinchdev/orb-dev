@@ -1,5 +1,6 @@
-// base: nav.* e inbox.*
+// base: nav.* and inbox.*
 export default {
+  'nav.modeOrb': 'Orb',
   'nav.tasks': 'Tareas',
   'nav.projects': 'Proyectos',
   'nav.schedules': 'Programadas',
@@ -19,10 +20,6 @@ export default {
   'nav.folders': 'Proyectos',
   'nav.loose': 'Sin carpeta',
   'nav.noProject': 'Sin proyecto',
-  'inbox.waiting': 'Por aprobar',
-  'inbox.issues': 'Incidencias',
-  'inbox.working': 'En curso',
-  'inbox.settle': 'Marcar como resuelto',
   // 3.2: pie del menú
   'nav.memories': 'Memorias',
   'nav.memoriesHint': 'Bitácoras y actividad: lo que Orb recuerda.',

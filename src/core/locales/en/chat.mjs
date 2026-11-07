@@ -30,11 +30,8 @@ export default {
   'chat.freeModeBody': 'Without «Orchestrator», new conversations are directly with the agent you choose below: it works in the project folder and you hand out the work. You can have as many at once as you like.',
   'chat.freeModeOk': 'Talk directly',
   'chat.orchestrator': 'Orchestrator',
-  'chat.orchestratorHint': 'On, the new conversation is with Orbe, who coordinates the agents and saves tokens. Off, you talk directly to the agent chosen.',
   'chat.resumed': 'Tasks resumed',
   'chat.paused': 'Tasks paused',
-  'chat.reset': 'Reset conversation',
-  'chat.resetBody': '{name} will forget this conversation. Tasks and logs are kept.',
   'chat.helloUser': 'Hello, {user}. I’m {name}.',
   'chat.hello': 'Hello. I’m {name}.',
   'chat.intro': 'What are we working on today?',
@@ -43,7 +40,6 @@ export default {
   'chat.queued': '{n} queued',
   // 3.0: earlier conversations, «New task» and the test of the day
   'chat.older': 'See earlier messages',
-  'chat.thisConversation': 'This conversation',
   'newTask.title': 'New task',
   'newTask.meta': 'You hand out the work: each message is a task',
   'newTask.hello': 'You’re in charge',
@@ -214,7 +210,6 @@ export default {
   'notice.attention': 'Needs your attention',
   'notice.open': 'View',
   // 3.2: conversaciones, menú lateral, buscador y globito
-  'chat.rename': 'Change the title',
   'chat.renameTitle': 'Conversation title',
   'chat.placeholderDirect': 'Write to {agent}…',
   'chat.waitingTurn': 'Waiting its turn: other conversations are answering.',

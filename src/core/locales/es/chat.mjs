@@ -30,11 +30,8 @@ export default {
   'chat.freeModeBody': 'Sin «Orquestador», las conversaciones nuevas son directamente con el agente que elijas abajo: trabaja en la carpeta del proyecto y tú repartes el trabajo. Puedes tener tantas a la vez como quieras.',
   'chat.freeModeOk': 'Hablar directamente',
   'chat.orchestrator': 'Orquestador',
-  'chat.orchestratorHint': 'Activado, la conversación nueva es con Orbe, que coordina a los agentes y ahorra tokens. Desactivado, hablas directamente con el agente elegido.',
   'chat.resumed': 'Tareas reanudadas',
   'chat.paused': 'Tareas en pausa',
-  'chat.reset': 'Reiniciar conversación',
-  'chat.resetBody': '{name} olvidará esta conversación. Las tareas y las bitácoras se conservan.',
   'chat.helloUser': 'Hola, {user}. Soy {name}.',
   'chat.hello': 'Hola. Soy {name}.',
   'chat.intro': '¿En qué trabajamos hoy?',
@@ -43,7 +40,6 @@ export default {
   'chat.queued': '{n} en cola',
   // 3.0: las conversaciones anteriores, «Nueva tarea» y el test del día
   'chat.older': 'Ver mensajes anteriores',
-  'chat.thisConversation': 'Esta conversación',
   'newTask.title': 'Nueva tarea',
   'newTask.meta': 'Tú repartes el trabajo: cada mensaje es una tarea',
   'newTask.hello': 'Tú diriges',
@@ -214,7 +210,6 @@ export default {
   'notice.attention': 'Requiere tu atención',
   'notice.open': 'Ver',
   // 3.2: conversaciones, menú lateral, buscador y globito
-  'chat.rename': 'Cambiar el título',
   'chat.renameTitle': 'Título de la conversación',
   'chat.placeholderDirect': 'Escribe a {agent}…',
   'chat.waitingTurn': 'Espera su turno: hay otras conversaciones respondiendo.',

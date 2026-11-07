@@ -17,7 +17,6 @@ const formatter = (tz) => {
 };
 const WEEKDAYS = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
 const pad = (n, w = 2) => String(n).padStart(w, '0');
-const MIN = 60_000;
 const DAY = 86_400_000;
 
 // The zone of this machine (the fallback when the settings name none).
@@ -122,14 +121,5 @@ export function nextLocalRun(rule, tz, after = Date.now()) {
   return null;
 }
 
-// How late a run fired: whole minutes when more than 2 (the «con N min de retraso» of the chat line), else 0.
-export function minutesLate(due, firedAt = Date.now()) {
-  const d = due instanceof Date ? due.getTime() : Date.parse(due);
-  const f = firedAt instanceof Date ? firedAt.getTime() : Number(firedAt);
-  if (!Number.isFinite(d) || !Number.isFinite(f) || f - d <= 2 * MIN) return 0;
-  return Math.round((f - d) / MIN);
-}
-// skip_missed: a one-off fires late; a repeating one that is late skips this run (its next one comes).
-export const shouldFireLate = ({ every, skip_missed: skip = true }) => every === 'once' || !skip;
 // Local date ('YYYY-MM-DD') of an instant in a zone (daily backups, usage days).
 export const localDay = (date, tz) => utcToZoned(date, tz).iso.slice(0, 10);
