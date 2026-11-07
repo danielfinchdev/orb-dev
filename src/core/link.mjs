@@ -14,6 +14,7 @@ import os from 'node:os';
 import path from 'node:path';
 import nodeCrypto from 'node:crypto';
 import * as C from './mobile-crypto.mjs';
+import { PROTOCOL, MIN_PROTOCOL, versionOfProtocol, CODE_ALPHABET, shortCodeLabel } from './link-payload.mjs';
 // The same as home.mjs › hostsBots / doesDev (not imported: the terminal client ships this file without home.mjs).
 const hostsBots = (role) => role !== 'taller';
 const doesDev = (role) => role !== 'centro';
@@ -21,8 +22,8 @@ const doesDev = (role) => role !== 'centro';
 // 3.6 «Personas»: protocol 3. Each side says { v, min, version, features } (hello, /api/me): v what it speaks, min the
 // oldest it still accepts. Phones and terminals of protocol 2 keep working (MIN_PROTOCOL); forwarding calls of people
 // other than the owner needs a workshop of protocol 3 (FORWARD_MIN: it must know who asks, A13).
-export const PROTOCOL = 3;
-export const MIN_PROTOCOL = 2;
+// (PROTOCOL, MIN_PROTOCOL, versionOfProtocol, CODE_ALPHABET and shortCodeLabel: link-payload.mjs, the phone's path.)
+export { PROTOCOL, MIN_PROTOCOL, versionOfProtocol, CODE_ALPHABET, shortCodeLabel };
 export const FORWARD_MIN = 3;
 // 3.7 (WS3): bots.home.v1 (one home per bot, moves by uid) and replica.v1 (live copies pulled from the home).
 // 3.7 (WS8): oce.v1: this Orb answers oce.status / oce.values (read-only Open Control Edge readings, src/engine/oce.mjs).
@@ -46,8 +47,6 @@ export function versionGap(mine = {}, theirs = {}) {
   if (tv < Number(mine.min ?? MIN_PROTOCOL)) return 'them';
   return null;
 }
-// The app version an Orb of a protocol has at least (for «tiene 3.5, hace falta 3.6»).
-export const versionOfProtocol = (v) => (Number(v) >= 3 ? '3.6' : Number(v) === 2 ? '3.5' : '3.4');
 // Live events of a workshop the centre passes on to its phones (the same ones a phone gets from its own PC).
 export const RELAY_EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'notice', 'session:item', 'session:update', 'session:removed', 'config:changed', 'session:delta', 'session:queue', 'approval:changed']);
 // 3.7 (WS2): the live events of the bots this Orb runs, mirrored to an Orb of 3.7 that keeps bots (its phones get them as
@@ -58,10 +57,7 @@ export const BOT_RELAY_EVENTS = new Set(['bot.updated', 'bot.message', 'bot.stat
 export const HANDOFF_EVENTS = new Set(['link:handoff', 'link:handback']);
 // Tests only: everything this side seals for the other Orb is written to this file (the payload scan of WS2).
 const TRACE = process.env.ORB_FAKE_AGENTS && process.env.ORB_LINK_TRACE ? process.env.ORB_LINK_TRACE : null;
-// The short code typed by hand: 8 letters and digits that cannot be confused (no 0/O, 1/I/L, U).
-export const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTVWXYZ23456789';
 export const normalCode = (code) => String(code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
-export const shortCodeLabel = (code) => normalCode(code).replace(/(.{4})(?=.)/g, '$1-');
 
 const err = (message, extra = {}) => Object.assign(new Error(message), extra);
 

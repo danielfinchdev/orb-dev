@@ -5,15 +5,15 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT } from './helpers.mjs';
-import { PROTOCOL, updateNeeded } from '../src/ui/lib/link-payload.js';
-import { PROTOCOL as ORB_PROTOCOL, MIN_PROTOCOL } from '../src/core/link.mjs';
+import { PROTOCOL, MIN_PROTOCOL, updateNeeded } from '../src/ui/lib/link-payload.js';
 import { upcomingReminderNotes, REMINDER_IDS, HORIZON_MS } from '../src/ui/lib/reminder-notes.js';
 
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 
 test('la página y la app hablan el protocolo del Orb y piden actualizar solo si hace falta', () => {
-  assert.equal(PROTOCOL, ORB_PROTOCOL);
-  assert.ok(PROTOCOL >= MIN_PROTOCOL);
+  // 3.7 apps keep working with a 3.8 PC: the same protocol and the same oldest one accepted.
+  assert.equal(PROTOCOL, 3);
+  assert.equal(MIN_PROTOCOL, 2);
   assert.equal(updateNeeded({ v: 3, min: 2 }), null);
   assert.equal(updateNeeded({ v: 3, min: 3 }), null);
   assert.equal(updateNeeded(null), null, 'un Orb antiguo sin min');

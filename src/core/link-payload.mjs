@@ -94,9 +94,16 @@ export function pickBridge({ hasOrb = false, native = false } = {}) {
   return native ? 'app' : 'web';
 }
 
-// 3.6: the protocol of the page and the Android app (the Orb's own is src/core/link.mjs › PROTOCOL). /api/me says the
-// oldest client the Orb still serves (min): a page or an app older than that is asked to update.
+// 3.6: the protocol of the link (this PC, the page and the Android app). Each side says { v, min } (hello, /api/me): v what
+// it speaks, min the oldest it still accepts. A page or an app older than the PC's min is asked to update; phones of
+// protocol 2 keep working (MIN_PROTOCOL).
 export const PROTOCOL = 3;
+export const MIN_PROTOCOL = 2;
+// The app version a side of a protocol has at least (for «tiene 3.5, hace falta 3.6»).
+export const versionOfProtocol = (v) => (Number(v) >= 3 ? '3.6' : Number(v) === 2 ? '3.5' : '3.4');
+// The short code typed by hand: 8 letters and digits that cannot be confused (no 0/O, 1/I/L, U), shown as «ABCD-EFGH».
+export const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTVWXYZ23456789';
+export const shortCodeLabel = (code) => String(code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16).replace(/(.{4})(?=.)/g, '$1-');
 // → null (fine) or { has, need } (the protocols: this client's and the one the Orb needs).
 export function updateNeeded(me, mine = PROTOCOL) {
   const need = Number(me?.min);
