@@ -72,9 +72,10 @@ test('la bienvenida en el C:\\Orb del dueño: no mueve nada, pregunta, y lo que 
   assert.equal(p.logs, at('bitacora'), 'la bitácora del dueño se usa donde está');
   assert.equal(p.adb, at('android', 'adb-tools'));
   assert.match(read(p.generalLog), /entrada del dueño/);
-  // What the window lists, with its defaults: logs and adb into core; his MCP server is a project (in windows).
+  // What the window lists, with its defaults: his bitacora stays where it is (not an Orb 3.7 workspace, and his rules for
+  // agents read it there), adb into core, his MCP server is a project (in windows).
   const plan = planWorkspace(home);
-  assert.deepEqual(plan.items.map((it) => [it.id, it.choice, it.project]), [['bitacora', 'move', false], ['adb', 'move', false], ['mcp:gmail-multi-mcp', 'windows', true]]);
+  assert.deepEqual(plan.items.map((it) => [it.id, it.choice, it.project]), [['bitacora', 'keep', false], ['adb', 'move', false], ['mcp:gmail-multi-mcp', 'windows', true]]);
   const gmailItem = plan.items[2];
   assert.ok(!gmailItem.choices.includes('mcp'), 'un servidor que escribe el usuario nunca va a core');
   assert.deepEqual(layoutOptions(gmailItem).map((o) => o.value), ['windows', 'linux', 'ios', 'android', 'web', 'multi', 'keep']);

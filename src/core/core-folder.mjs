@@ -67,7 +67,14 @@ export function legacyMoves(home) {
 const USER_MARKS = ['.git', 'AGENTS.md', 'BITACORA.md', 'CLAUDE.md', 'package.json', 'pyproject.toml'];
 // A server folder the user wrote (or develops): a project, not a part of Orb.
 export const isUserProject = (dir) => USER_MARKS.some((n) => exists(path.join(dir, n)));
-const decisions = (home) => readJson(path.join(home, CORE_DIR, LAYOUT_FILE))?.decided ?? {};
+const layoutFile = (home) => path.join(home, CORE_DIR, LAYOUT_FILE);
+const decisions = (home) => readJson(layoutFile(home))?.decided ?? {};
+// An Orb 3.7 workspace (its .orb moved into core: migrateWorkspace marks it) whose bitacora holds only what Orb wrote
+// there (GENERAL.md, proyectos): moving it into core is the default. Anywhere else (a folder the user made by hand, files
+// of the user's in it, like the rules for agents that other tools read) it stays where it is unless the user moves it.
+const ORB_LOGS = ['general.md', 'proyectos'];
+const logsOnlyOrbs = (dir) => { try { return fs.readdirSync(dir).every((n) => n.startsWith('.') || ORB_LOGS.includes(n.toLowerCase())); } catch { return false; } };
+const wasOrb37 = (home) => readJson(layoutFile(home))?.from37 === true || isDir(path.join(home, LEGACY.internal));
 // A name free in `dir` (name, name-2, name-3…).
 const freeIn = (dir, name) => { let n = name; for (let i = 2; exists(path.join(dir, n)); i++) n = `${name}-${i}`; return path.join(dir, n); };
 
@@ -80,7 +87,7 @@ export function planWorkspace(home) {
   const items = [];
   const add = (it) => items.push({ ...it, kept: done[it.id] === 'keep' });
   const logs = path.join(home, LEGACY.logs);
-  if (isDir(logs)) add({ id: 'bitacora', kind: 'logs', name: LEGACY.logs, from: logs, project: false, choice: 'move', choices: ['move', 'keep'] });
+  if (isDir(logs)) add({ id: 'bitacora', kind: 'logs', name: LEGACY.logs, from: logs, project: false, choice: wasOrb37(home) && logsOnlyOrbs(logs) ? 'move' : 'keep', choices: ['move', 'keep'] });
   const adb = path.join(home, ...LEGACY.adb);
   if (isDir(adb)) add({ id: 'adb', kind: 'adb', name: LEGACY.adb.join(path.sep), from: adb, project: false, choice: 'move', choices: ['move', 'keep'] });
   const servers = path.join(home, LEGACY.mcp);
@@ -132,7 +139,7 @@ export function applyLayout(home, choices = {}, { language = 'es' } = {}) {
   }
   const held = moves.filter((m) => isHeld(m.from)).map((m) => m.from);
   if (held.length) throw new LayoutBusy(held, language);
-  writeJsonAtomic(path.join(home, CORE_DIR, LAYOUT_FILE), { v: 1, decided: { ...decisions(home), ...decided } });
+  writeJsonAtomic(layoutFile(home), { ...(readJson(layoutFile(home)) ?? {}), v: 1, decided: { ...decisions(home), ...decided } });
   if (!moves.length) return null;
   const [state] = notes(home);
   writeJsonAtomic(state, { v: 2, home, started: new Date().toISOString(), moves: [...(readJson(state)?.moves ?? []), ...moves] });
@@ -213,7 +220,10 @@ export function migrateWorkspace(home, { language = 'es' } = {}) {
     // Written before anything moves, where it moves along: inside .orb when that becomes core in one rename.
     writeJsonAtomic(isDir(path.join(home, LEGACY.internal)) && !exists(p.core) ? oldState : state, { v: 2, home, started: new Date().toISOString(), moves: ownMoves(home) });
   }
-  return finish(home, exists(state) ? state : oldState, language);
+  const r = finish(home, exists(state) ? state : oldState, language);
+  // Remembered: this was an Orb 3.7 workspace (planWorkspace › the default for its bitacora).
+  if (own.some((m) => m.from === path.join(home, LEGACY.internal))) writeJsonAtomic(layoutFile(home), { v: 1, decided: {}, ...(readJson(layoutFile(home)) ?? {}), from37: true });
+  return r;
 }
 
 // Inside `root` (also through a junction or a link, and for a folder not made yet: its nearest existing parent counts).

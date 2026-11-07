@@ -40,6 +40,7 @@ export function LayoutReview({ plan, onDone }) {
                 <div className="text-sm">{t(layoutTitle(it))}</div>
                 <div className="text-muted-foreground truncate font-mono text-xs">{it.name}</div>
                 {it.project ? <div className="text-muted-foreground text-xs">{t('layout.mcpProject')}</div> : null}
+                {it.kind === 'logs' ? <div className="text-muted-foreground text-xs" data-testid="layout-logs-note">{t('layout.logsNote')}</div> : null}
               </div>
               <Select className="w-full sm:w-56" value={choices[it.id]} disabled={busy} onValueChange={(v) => setChoices({ ...choices, [it.id]: v })}
                 options={layoutOptions(it).map((o) => ({ value: o.value, label: t(o.key, o.vars) }))} data-testid={`layout-choice-${it.id}`} />

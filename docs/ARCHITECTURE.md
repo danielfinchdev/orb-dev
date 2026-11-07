@@ -776,7 +776,7 @@ launched hidden, with its output read by Orb, and it stores the session in the a
   `main.mjs`/`preload.cjs`), styled per theme in `themes.css` (`.win-control`); `--wco-inset` is their fixed width with
   `html.has-win-controls`. The top bars (`.app-titlebar` in `app.css`) move the window
   (double-click: maximize) and leave room for the buttons (`--wco-inset`, `.wco-pad`). Without the Windows bar there is
-  no menu bar (`applyMenuBar()` in `src/main/main.mjs` keeps it hidden; the old `ui.menuBar` setting does nothing) and
+  no menu bar (`applyMenuBar()` in `src/main/main.mjs` keeps it hidden; the old `ui.menuBar` setting is dropped when orb.json loads) and
   the menu remains only for its shortcuts (zoom, Ctrl+J, F11).
 - **Contribute and More apps** (`src/main/feedback.mjs`, in the main process because the window does not go out to the
   internet): the developer's PayPal; feedback via FormSubmit (to the developer's inbox) with up to 3 PNG/JPEG
@@ -830,7 +830,8 @@ launched hidden, with its output read by Orb, and it stores the session in the a
 - **Orb's data folder (`isOrbData` in `guard.mjs`):** matched by RESOLVED path (against the agent's folder, any case
   or separator, symlinks followed), not by names: a project may have its own `orb.db` or talk about `ORB_HOME`. Denied,
   and in «total» it asks. Isolated copies (`core/copias/aisladas`) and the tools (`core/herramientas`, adb by its full
-  path) stay open. The same goes for what Orb keeps about the workspace outside it (`setGuardedRoots`: the backups' root
+  path) stay open; the logs moved into core (`core/bitacora`) are open to reading tools only (the user's rules for
+  agents may point there; they are written through Orb's own tools). The same goes for what Orb keeps about the workspace outside it (`setGuardedRoots`: the backups' root
   and chosen folder, the app's `claves` folder and its `Local State`; section 36; also when a command names them through
   `%APPDATA%`, `$env:APPDATA` or `~`, written out by `expandEnv`). Not a boundary: a shell of the same Windows
   user can always reach the folder another way; the agents' identity does not depend on its database any more (tickets,
@@ -1092,7 +1093,9 @@ in `src/core/home.mjs`; nothing else builds them.
   workspace. They are Orb's, so they move without asking.
 - **The folders the user decides about** (`planWorkspace` / `applyLayout`; the window's «Ordenar carpetas»,
   `views/layout.jsx`, after the welcome and when an updated Orb finds them: `app.layoutPlan`, `app.layoutApply`, PC
-  only): `bitacora\` (default: into `core\bitacora`, logs merged, never overwritten), `android\adb-tools\` (default:
+  only): `bitacora\` (default: into `core\bitacora`, logs merged, never overwritten, only in an Orb 3.7 workspace —
+  its `.orb` moved, remembered as `from37` in `core\carpetas.json` — whose `bitacora` holds only Orb's `GENERAL.md` and
+  `proyectos`; anywhere else it stays by default, and its row says that other tools may use that path), `android\adb-tools\` (default:
   `core\herramientas\adb`) and each folder of `mcp-servers\`. A server the user writes (a git repository, `AGENTS.md`,
   `BITACORA.md`, `CLAUDE.md`, `package.json` or `pyproject.toml`) is a **project**: it moves into a category (`windows` by
   default, any other in the list) or stays, never into core. Any other server may also go to `core\mcp`, which holds only
@@ -1164,7 +1167,8 @@ in `src/core/home.mjs`; nothing else builds them.
   workspace would also stop the user deleting their own top-level folders, and an inherited deny would block Orb's own
   writes. Measured on Windows 11, a deny ACE did not stop a rename by the owner. So core relies on being hidden, on the
   agents' guard (section 28: `isOrbData` denies `paths().internal`, i.e. all of core, except the isolated copies in
-  `core\copias\aisladas` and the tools in `core\herramientas`, which agents run by their full path; and the roots the
+  `core\copias\aisladas` and the tools in `core\herramientas`, which agents run by their full path, and `core\bitacora`
+  for reading tools only; and the roots the
   engine names with `setGuardedRoots`: the backups' root, the chosen backups' folder, the app's `claves` folder and its
   `Local State` (section 37), never
   one that holds the workspace; Cursor gets the same as deny rules) and on the watcher and the backups above. The guard

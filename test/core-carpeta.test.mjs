@@ -89,7 +89,7 @@ test('un espacio de 3.7: sus datos pasan a core solos; bitacora, adb-tools y mcp
   assert.equal(read(path.join(p.data, 'clave.bin')), 'k'.repeat(32));
   assert.equal(read(path.join(p.core, 'imagenes', 'foto.png')), 'png');
   assert.equal(loadConfig(home).accounts.find((a) => a.id === 'codex-2').home, path.join(p.core, 'cuentas', 'codex-2'));
-  // What the window shows: nothing has moved, each with its default.
+  // What the window shows: nothing has moved, each with its default (an Orb 3.7 bitacora with only Orb's files: into core).
   const plan = planWorkspace(home);
   assert.equal(plan.pending, true);
   assert.deepEqual(plan.items.map((it) => [it.id, it.choice, it.project]), [['bitacora', 'move', false], ['adb', 'move', false], ['mcp:correo', 'mcp', false]]);
@@ -183,7 +183,8 @@ test('una carpeta en uso (Windows): no se mueve nada, el aviso dice cuál cerrar
   try {
     assert.throws(() => applyLayout(home, { bitacora: 'move', 'mcp:correo': 'windows' }), (e) => e.code === 'busy' && e.userFacing && /No se puede mover .*correo.*Ciérralo y pulsa «Reintentar»\. No se ha movido nada\./.test(e.message));
     assert.ok(fs.existsSync(path.join(home, 'bitacora', 'GENERAL.md')) && fs.existsSync(path.join(server, 'index.js')), 'nada movido');
-    assert.ok(!fs.existsSync(path.join(paths(home).core, MOVE_STATE)) && !fs.existsSync(path.join(paths(home).core, LAYOUT_FILE)), 'ni a medias ni decidido');
+    assert.ok(!fs.existsSync(path.join(paths(home).core, MOVE_STATE)), 'ni a medias');
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(paths(home).core, LAYOUT_FILE), 'utf8')), { v: 1, decided: {}, from37: true }, 'nada decidido (solo que era un Orb 3.7)');
   } finally { child.kill(); await new Promise((r) => child.once('exit', r)); }
   applyLayout(home, { bitacora: 'move', 'mcp:correo': 'windows' });
   assert.equal(read(path.join(home, 'windows', 'correo', 'index.js')), '// servidor');
@@ -277,4 +278,13 @@ test('la pantalla «Falta la carpeta core»: qué dice y qué ofrece', () => {
   assert.deepEqual([v.body, v.vars.created, v.passphrase, v.restore, v.fresh], ['data.core.needsPassphrase', '2026-11-07', true, true, 'noCode'], 'con una copia que solo pide su código, «Seguir sin copia» queda tras «No tengo el código»');
   assert.equal(coreView({ reason: 'damaged', backup: {} }).body, 'data.core.damaged');
   assert.equal(coreView({ reason: 'damaged', backup: {} }).fresh, 'yes');
+});
+
+test('F5b (A1): una bitácora de 3.7 con archivos que no son de Orb (normas para agentes) se queda donde está por defecto', () => {
+  const { home } = orb37();
+  put(path.join(home, 'bitacora', 'bitacora_project.md'), 'normas que leen otras herramientas');
+  migrateWorkspace(home);
+  const item = planWorkspace(home).items.find((it) => it.id === 'bitacora');
+  assert.equal(item.choice, 'keep');
+  assert.deepEqual(item.choices, ['move', 'keep'], 'moverla sigue siendo posible');
 });

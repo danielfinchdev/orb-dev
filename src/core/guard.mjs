@@ -119,9 +119,15 @@ export function riskOf(command, lang = 'es') {
 // name: a project may well have its own orb.db or talk about ORB_HOME. Not a boundary: a shell of the same Windows user
 // can always reach the folder some other way (cd .. a few times, a script); the agents' identity no longer depends on
 // its database (agent-auth.mjs), so what is left is the integrity of Orb's data against an agent bent on it (accepted).
+// The logs moved into core (core\bitacora) are open to a READING tool (the user's rules for agents may point there);
+// they are written only through Orb's own tools.
 const OPEN_INTERNAL = [['copias', 'aisladas'], ['herramientas']];
+const READ_INTERNAL = [['bitacora']];
 const norm = (p) => path.resolve(p).replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
-const openInCore = (rest) => OPEN_INTERNAL.some((o) => o.every((part, i) => rest[i] === part));
+const under = (rest) => (o) => o.every((part, i) => rest[i] === part);
+const openInCore = (rest, read = false) => OPEN_INTERNAL.some(under(rest)) || (read && READ_INTERNAL.some(under(rest)));
+const OPEN_TEXT = /^\\+(copias\\+aisladas|herramientas)(\\|$|["'\s])/;
+const READ_TEXT = /^\\+bitacora(\\|$|["'\s])/;
 let guardedRoots = []; let guardedAsGiven = [];
 // The engine names them once it knows them (src/engine/engine.mjs › open). guardedRootsNow: as given (Cursor's rules).
 export function setGuardedRoots(list) {
@@ -129,7 +135,7 @@ export function setGuardedRoots(list) {
   guardedRoots = [...new Set(guardedAsGiven.map(norm))];
 }
 export const guardedRootsNow = () => [...guardedAsGiven];
-export function isOrbData(target, internalDir, cwd) {
+export function isOrbData(target, internalDir, cwd, { read = false } = {}) {
   if (!internalDir || !target) return false;
   let p = String(target).trim().replace(/^~(?=[\\/]|$)/, os.homedir());
   if (!path.isAbsolute(p) && !path.win32.isAbsolute(p)) { if (!cwd) return false; p = path.resolve(cwd, p); }
@@ -137,7 +143,7 @@ export function isOrbData(target, internalDir, cwd) {
   try { full = norm(fs.realpathSync.native(p)); } catch { /* not there (yet): as written */ }
   const within = (root) => full === root || full.startsWith(`${root}\\`);
   const root = norm(internalDir);
-  if (within(root)) return !openInCore(full.slice(root.length + 1).split('\\'));
+  if (within(root)) return !openInCore(full.slice(root.length + 1).split('\\'), read);
   return guardedRoots.some(within);
 }
 // The words of a command that may be paths (a=b and --opt=b give b), without quotes.
@@ -154,10 +160,10 @@ export function expandEnv(command) {
   return t.replace(/(^|[\s"'=(])~(?=[\\/])/g, (_m, pre) => `${pre}${os.homedir()}`);
 }
 const pathWords = (command) => String(command ?? '').split(/[\s|&;<>()`]+/).map((w) => w.replace(/^["']+|["',]+$/g, '').replace(/^[^=]*=(?=.*[\\/~.])/, '')).filter((w) => /[\\/]|^~|^\.\.?$/.test(w));
-function touchesInternal({ command: given, paths, patterns, internalDir, cwd }) {
+function touchesInternal({ command: given, paths, patterns, internalDir, cwd, read = false }) {
   if (!internalDir) return false;
   const command = expandEnv(given);
-  if ([...paths, ...patterns].some((p) => isOrbData(p, internalDir, cwd))) return true;
+  if ([...paths, ...patterns].some((p) => isOrbData(p, internalDir, cwd, { read }))) return true;
   // The folder written out anywhere in the command (in a script's string too), with either separator or case.
   const t = String(command ?? '').replace(/\//g, '\\').toLowerCase();
   const root = norm(internalDir);
@@ -165,10 +171,10 @@ function touchesInternal({ command: given, paths, patterns, internalDir, cwd }) 
     for (let i = t.indexOf(r); i >= 0; i = t.indexOf(r, i + 1)) {
       const after = t.slice(i + r.length);
       if (/^[^\\]/.test(after) && !/^["'\s;|&)]/.test(after)) continue; // .orbx is another folder
-      if (r !== root || !/^\\+(copias\\+aisladas|herramientas)(\\|$|["'\s])/.test(after)) return true;
+      if (r !== root || !(OPEN_TEXT.test(after) || (read && READ_TEXT.test(after)))) return true;
     }
   }
-  return pathWords(command).some((w) => isOrbData(w, internalDir, cwd));
+  return pathWords(command).some((w) => isOrbData(w, internalDir, cwd, { read }));
 }
 
 // 3.8: the project's agent settings: a task could leave there rules or programs that later agents in the same folder
@@ -227,7 +233,7 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
   const T = (k) => translate(lang, `msg.guard.${k}`);
   const cls = toolClass(tool, kind);
   const text = [command, ...paths, ...patterns].join(' ');
-  if (touchesInternal({ command, paths, patterns, internalDir, cwd })) return { decision: permission === 'total' ? 'ask' : 'deny', reason: T('internal') };
+  if (touchesInternal({ command, paths, patterns, internalDir, cwd, read: cls === 'read' })) return { decision: permission === 'total' ? 'ask' : 'deny', reason: T('internal') };
   if (escalates(command)) return { decision: 'deny', reason: T('sudo') };
   const hit = protectedHit(text);
   if (hit) return { decision: 'deny', reason: translate(lang, 'msg.guard.protected', { name: hit }) };

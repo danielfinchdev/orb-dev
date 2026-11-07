@@ -38,7 +38,7 @@ deletes them when you no longer need them. If you used Home Assistant, revoke th
 - Updating from 3.7, Orb's own data (`.orb`, `orb.json`) moves into `core` by itself. For your folders (`bitacora`,
   `android\adb-tools`, each folder of `mcp-servers`) a new «Ordenar carpetas» screen shows what it would do and moves
   nothing until you choose; an MCP server you wrote becomes a project, never part of `core`.
-- Agents are kept out of `core`. If it is deleted, Orb restores what is missing from the latest backup (only `core`,
+- Agents are kept out of `core` (a `bitacora` moved there can still be read by them). If it is deleted, Orb restores what is missing from the latest backup (only `core`,
   never your projects); if there is no backup, a screen explains your options.
 - Backups now live outside the workspace, in `%LOCALAPPDATA%\Orb\copias` (or a folder you choose, never inside the
   workspace). The ones 3.7 made are moved there.

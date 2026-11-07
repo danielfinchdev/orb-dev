@@ -31,7 +31,13 @@ const CASES = [
   ['los datos internos del asistente (comando)', { tool: 'Bash', command: 'type .orb\\datos\\clave.bin', cwd: path.dirname(internal) }, { leer: 'deny', probar: 'deny', editar: 'deny', preguntar: 'deny', total: 'ask' }],
   ['las fotos para deshacer', { tool: 'Read', paths: [path.join(internal, 'copias', 'fotos', 't1', 'a.js')] }, { leer: 'deny', probar: 'deny', editar: 'deny', preguntar: 'deny', total: 'ask' }],
   ['la copia aislada de una tarea (también dentro de .orb)', { tool: 'Edit', paths: [path.join(internal, 'copias', 'aisladas', 'web-3', 'src', 'a.js')] }, { leer: 'deny', probar: 'deny', editar: 'allow', preguntar: 'allow', total: 'allow' }],
-  ['un comando en la copia aislada', { tool: 'Bash', command: 'cd .orb/copias/aisladas/web-3 && npm test', cwd: path.dirname(internal) }, { leer: 'deny', probar: 'allow', editar: 'allow', preguntar: 'ask', total: 'allow' }]
+  ['un comando en la copia aislada', { tool: 'Bash', command: 'cd .orb/copias/aisladas/web-3 && npm test', cwd: path.dirname(internal) }, { leer: 'deny', probar: 'allow', editar: 'allow', preguntar: 'ask', total: 'allow' }],
+  // F5b (A1): the logs moved into core can be read (the user's rules for agents may point there), never written.
+  ['leer la bitácora movida a core', { tool: 'Read', paths: [path.join(internal, 'bitacora', 'bitacora_project.md')] }, { leer: 'allow', probar: 'allow', editar: 'allow', preguntar: 'allow', total: 'allow' }],
+  ['buscar en la bitácora de core (Grep)', { tool: 'Grep', patterns: [path.join(internal, 'bitacora')] }, { leer: 'allow', probar: 'allow', editar: 'allow', preguntar: 'allow', total: 'allow' }],
+  ['escribir en la bitácora de core', { tool: 'Edit', paths: [path.join(internal, 'bitacora', 'GENERAL.md')] }, { leer: 'deny', probar: 'deny', editar: 'deny', preguntar: 'deny', total: 'ask' }],
+  ['un comando sobre la bitácora de core', { tool: 'Bash', command: 'type .orb\\bitacora\\GENERAL.md', cwd: path.dirname(internal) }, { leer: 'deny', probar: 'deny', editar: 'deny', preguntar: 'deny', total: 'ask' }],
+  ['salir de la bitácora de core hacia los datos', { tool: 'Read', paths: [path.join(internal, 'bitacora', '..', 'datos', 'orb.db')] }, { leer: 'deny', probar: 'deny', editar: 'deny', preguntar: 'deny', total: 'ask' }]
 ];
 
 test('el guardia: tabla de casos en los cinco modos de permiso', () => {
