@@ -217,7 +217,9 @@ export function createLive(o) {
       canUseTool,
       permissionMode: permissionModeOf(permission),
       stderr: (d) => log(`stderr: ${d}`),
-      settings: { fastMode: false },
+      // 3.8: no hooks of the project's .claude/settings*.json: a task could leave one there that later agents in the same
+      // folder (other conversations) would run with their environment. (Managed policy hooks still apply.)
+      settings: { fastMode: false, disableAllHooks: true },
       // 3.2.1: spawn Claude Code ourselves so Orb knows its process (live.pid) and can stop its whole tree when the task
       // ends — otherwise its background shells (bash.exe) can outlive the turn, holding an isolated copy's folder open and
       // leaving test servers behind. The signal is forwarded by the SDK after its own graceful stdin-close window.

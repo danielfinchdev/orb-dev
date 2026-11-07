@@ -839,7 +839,9 @@ launched hidden, with its output read by Orb, and it stores the session in the a
   conversations of one agent are two identities. Workers of one conversation may message each other's tasks by number;
   read marks are per task (`claude#3`).
 - **Agents:** clean environment (without the app's secret variables), permission guard, internal data off limits and
-  warnings for pushes or mass deletions.
+  warnings for pushes or mass deletions. 3.8: Claude runs without the project's hooks (`disableAllHooks` in its flag
+  settings): a task could leave a `.claude/settings.json` hook that later agents in that folder would run. Residual:
+  Cursor's own project hooks are not turned off; what they could read is only tickets already held by their servers.
 - **Agent text:** when it goes back to the assistant it is marked as "data, not instructions".
 - More detail in `docs/historico/AUDITORIA-v2.md` and `docs/historico/AUDITORIA-v2-segunda.md`.
 

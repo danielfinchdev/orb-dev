@@ -78,6 +78,8 @@ test('Claude: los secretos del MCP van en su entorno y la línea de órdenes sol
   assert.equal(seen.env.ORB_MCP_orb_ORB_ORCH_KEY, 'clave-secreta-1', 'Claude Code los expande desde su entorno');
   assert.equal(seen.env.ORB_MCP_orb_ORB_AGENT_TOKEN, 'firma-secreta-2');
   assert.equal(seen.env.ORB_MCP_otro_API_KEY, 'clave-del-conector-3');
+  // N13: no hooks of the project's .claude/settings*.json (they would run with this agent's environment).
+  assert.equal(JSON.parse(seen.args[seen.args.indexOf('--settings') + 1]).disableAllHooks, true);
 });
 
 function openCodex(options = {}) {
