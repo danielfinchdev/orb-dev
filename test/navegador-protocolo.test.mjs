@@ -1,16 +1,24 @@
 // 3.7 (WS5): the agents' browser speaks one pipe protocol. The suite runs against the app's browser code (its Electron
-// driver, src/main/browser-driver.mjs, over a stand-in webContents driving the local Edge or Chromium, headless). Secret
-// fields never leave the page.
+// driver, src/main/browser-driver.mjs, over a stand-in webContents driving the local Edge or Chromium, headless) and,
+// 3.8.1 (D2), against the engine's browser with its DevTools driver (src/engine/agent-browser.mjs, browser-cdp.mjs).
+// Secret fields never leave the page.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import net from 'node:net';
+import path from 'node:path';
 import http from 'node:http';
+import { spawn, execFileSync } from 'node:child_process';
 import { browserKey } from '../src/core/browser-key.mjs';
 import { createActions, servePipe, KEYS, dialogsHook } from '../src/core/browser-protocol.mjs';
 import { electronDriver } from '../src/main/browser-driver.mjs';
+import { createCdpBrowser } from '../src/engine/agent-browser.mjs';
+import { connectCdp, readDevToolsActivePort } from '../src/engine/cdp.mjs';
 import { translate } from '../src/core/i18n.mjs';
+
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const until = async (fn, what, ms = 15000) => { const end = Date.now() + ms; while (Date.now() < end) { try { const v = await fn(); if (v) return v; } catch { /* not yet */ } await wait(100); } throw new Error(`timeout: ${what}`); };
 
 // A local Chromium to drive: Edge on Windows, Chrome or Chromium elsewhere (the suite is skipped without one).
 const EXE = [
@@ -35,6 +43,7 @@ const PAGES = {
     <a href="/dos">Siguiente</a><div id=echo></div><div id=out></div>
     <script>p.addEventListener('input', () => { echo.textContent = 'eco ' + p.value; }); console.error('fallo de prueba');</script>`,
   '/dos': '<!doctype html><title>Dos</title><p>segunda página</p><input name=otp autocomplete=one-time-code placeholder=Código>',
+  '/popup': '<!doctype html><title>Popup</title><a href="/dos" target="_blank">Abrir en otra ventana</a>',
   '/favicon.ico': ''
 };
 before(async () => {
@@ -187,3 +196,72 @@ test('navegador de la app (driver de Electron): el protocolo de las herramientas
   try { await suite(t, b); } finally { await b.close(); }
 });
 
+// ---- 3.8.1 (D2): the engine's browser (src/engine/agent-browser.mjs) with its DevTools driver, over pages of the local
+// Edge or Chromium started headless with a DevTools port on a throwaway profile, as the hidden WebView2 windows of Tauri
+// will be. Without --remote-allow-origins: Node's WebSocket sends no Origin, so it gets in; a web page would not.
+async function launchChromium() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-test-cdp-'));
+  const child = spawn(EXE, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${dir}`, '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--disable-sync', 'about:blank'], { stdio: 'ignore' });
+  const active = await until(() => readDevToolsActivePort(dir), 'DevToolsActivePort', 20000);
+  return {
+    ...active,
+    // Closed through its own DevTools (Edge may hand over to a process of another id, which a kill by id would miss).
+    async close() {
+      try { const c = await connectCdp(active.ws, { timeoutMs: 3000 }); await Promise.race([c.send('Browser.close').catch(() => {}), wait(3000)]); c.close(); } catch { /* already gone */ }
+      try { if (process.platform === 'win32') execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' }); else child.kill('SIGKILL'); } catch { /* gone */ }
+      await wait(500); try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch { /* temp */ }
+    }
+  };
+}
+async function cdpHarness() {
+  const chromium = await launchChromium();
+  const control = await connectCdp(chromium.ws); // the app's side: makes and closes the pages
+  const opened = [];
+  const windows = {
+    endpoint: async () => chromium.ws,
+    open: async () => { const { targetId } = await control.send('Target.createTarget', { url: 'about:blank' }); opened.push(targetId); return targetId; },
+    close: (targetId) => control.send('Target.closeTarget', { targetId })
+  };
+  const activity = [];
+  const b = createCdpBrowser({ windows, onActivity: (tab, action) => activity.push(`${tab.agent}:${action}`) });
+  await b.ready;
+  return { pipe: b.pipe, token: b.token, chromium, control, opened, activity, b, async close() { b.shutdown(); control.close(); await chromium.close(); } };
+}
+
+test('navegador del motor (driver CDP): el mismo protocolo y los mismos secretos', { skip }, async (t) => {
+  const h = await cdpHarness();
+  try {
+    await suite(t, h);
+    assert.ok(h.activity.includes('claude:open') && h.activity.includes('claude:screenshot'), h.activity.join(' '));
+    assert.equal(h.b.state().tabs.length, 0, 'close: sin páginas');
+    // A page that opens a popup: it opens in the same page, never another window.
+    const c = await connect(h.pipe, h.token, { agent: 'codex', session: 'conv-2', task: '7' });
+    let r = await c.act('open', { url: `${base}/popup` });
+    assert.equal(r.ok, true, r.error);
+    const pages = async () => (await h.control.send('Target.getTargets')).targetInfos.filter((i) => i.type === 'page' && h.opened.includes(i.targetId));
+    r = await c.act('click', { ref: 1 });
+    await until(async () => (await c.act('snapshot')).result?.includes('Página: Dos'), 'la ventana emergente abre en la misma página', 10000);
+    assert.equal((await pages()).length, 1, 'una sola página del agente');
+    assert.deepEqual(h.b.state().tabs.map((x) => [x.agent, x.task]), [['codex', '7']]);
+    // A task that ends closes its pages.
+    h.b.closeTask('7');
+    await until(async () => (await pages()).length === 0, 'página cerrada al terminar la tarea', 5000);
+    c.end();
+  } finally { await h.close(); }
+});
+
+test('CDP: una conexión con Origin (una página web) no entra; la del motor, sin Origin, sí', { skip }, async () => {
+  const chromium = await launchChromium();
+  try {
+    const ok = await connectCdp(chromium.ws);
+    assert.ok((await ok.send('Browser.getVersion')).product);
+    ok.close();
+    const refused = await new Promise((resolve) => {
+      const ws = new WebSocket(chromium.ws, { headers: { origin: 'https://ejemplo.com' } });
+      ws.addEventListener('open', () => { ws.close(); resolve(false); });
+      ws.addEventListener('error', () => resolve(true));
+    });
+    assert.equal(refused, true, 'una página web no puede manejar el navegador de los agentes');
+    await assert.rejects(connectCdp('ws://192.168.1.10:9222/devtools/browser/x'), /solo este equipo/);
+  } finally { await chromium.close(); }
+});

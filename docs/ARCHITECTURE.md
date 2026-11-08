@@ -544,6 +544,10 @@ as a **bounded excerpt**, not in full, and marked as "data, not instructions".
 - A **mini window** at the top right shows what they do live.
 - Files:
   - `src/main/browser.mjs` (hidden pages, the mini window and the per-conversation keyed pipe);
+  - `src/core/browser-protocol.mjs` (the actions, page scripts and pipe every driver shares);
+  - 3.8.1, on the way to Tauri: `src/engine/agent-browser.mjs` (the same pages and pipe without Electron, so they can
+    live in the engine), driven over the DevTools protocol (`src/engine/browser-cdp.mjs`, `src/engine/cdp.mjs`, Node's
+    own WebSocket, no `--remote-allow-origins`); the app only provides the pages (hidden WebView2 windows);
   - the tools in `src/mcp/server.mjs`;
   - `src/core/browser-key.mjs`.
 

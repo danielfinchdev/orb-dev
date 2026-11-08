@@ -1,5 +1,6 @@
-// 3.7 (WS5): what the agents' browser does (the app's, src/main/browser.mjs, Electron). It speaks a line-JSON pipe with
-// the MCP server of each agent (src/mcp/server.mjs: orb_browser_*).
+// 3.7 (WS5): what the agents' browser does (the app's, src/main/browser.mjs, Electron; 3.8.1: the engine's,
+// src/engine/agent-browser.mjs, over the DevTools protocol). It speaks a line-JSON pipe with the MCP server of each agent
+// (src/mcp/server.mjs: orb_browser_*).
 //
 // Here: the limits, the keys, the scripts that run in the page's isolated world (what can be clicked or typed into, and
 // the secret fields that never leave the page), the actions built on a small «driver» (what each browser knows how to do
