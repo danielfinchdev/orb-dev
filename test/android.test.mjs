@@ -139,7 +139,8 @@ test('el PC deja pasar la página de la app (CORS) y a nadie más; todo sigue ci
 });
 
 // 3.8.1: the small notification icon (status bar) is the short «o•» of the app icon, made by scripts/icono.mjs: a white
-// silhouette on transparent (Android draws only its alpha), 24 dp in every density, with room around it.
+// silhouette on transparent (Android draws only its alpha), 24 dp in every density, the drawing in Material's 20 dp
+// content area, and the «o» and the «•» apart even at mdpi and hdpi (H1c-fix: they touched there and read as a blob).
 test('el icono pequeño de los avisos de Android: silueta blanca «o•» en todas las densidades', async () => {
   const { PNG } = (await import('pngjs')).default;
   const res = path.join(ROOT, 'android-app', 'android', 'app', 'src', 'main', 'res');
@@ -148,16 +149,26 @@ test('el icono pequeño de los avisos de Android: silueta blanca «o•» en tod
   for (const [density, k] of Object.entries({ mdpi: 1, hdpi: 1.5, xhdpi: 2, xxhdpi: 3, xxxhdpi: 4 })) {
     const img = PNG.sync.read(fs.readFileSync(path.join(res, `drawable-${density}`, 'ic_stat_orb.png')));
     assert.deepEqual([img.width, img.height], [24 * k, 24 * k], density);
-    let seen = 0; let edge = 0;
+    let seen = 0; const margin = Math.floor(2 * k); let out = 0;
     for (let y = 0; y < img.height; y++) for (let x = 0; x < img.width; x++) {
       const i = (y * img.width + x) * 4;
       if (!img.data[i + 3]) continue;
       seen++;
       assert.deepEqual([...img.data.subarray(i, i + 3)], [255, 255, 255], `${density}: solo blanco (${x},${y})`);
-      if (x === 0 || y === 0 || x === img.width - 1 || y === img.height - 1) edge++;
+      if (x < margin || y < margin || x >= img.width - margin || y >= img.height - margin) out++;
     }
-    assert.equal(edge, 0, `${density}: con margen`);
+    assert.equal(out, 0, `${density}: dentro de los 20 dp útiles`);
     covered[density] = seen / (img.width * img.height);
+    // Two shapes (the «o» and the orb), not one: the pixels that show (alpha ≥ 64), joined side by side.
+    const on = (x, y) => x >= 0 && y >= 0 && x < img.width && y < img.height && img.data[(y * img.width + x) * 4 + 3] >= 64;
+    const seenAt = new Set(); let shapes = 0;
+    for (let y = 0; y < img.height; y++) for (let x = 0; x < img.width; x++) {
+      if (!on(x, y) || seenAt.has(y * img.width + x)) continue;
+      shapes++;
+      const stack = [[x, y]];
+      while (stack.length) { const [a, b] = stack.pop(); if (!on(a, b) || seenAt.has(b * img.width + a)) continue; seenAt.add(b * img.width + a); stack.push([a + 1, b], [a - 1, b], [a, b + 1], [a, b - 1]); }
+    }
+    assert.equal(shapes, 2, `${density}: la «o» y el «•» separados`);
   }
   // The same drawing in each density: the share it covers barely changes; and the orb is cut from the «o» (not a blob).
   const shares = Object.values(covered);

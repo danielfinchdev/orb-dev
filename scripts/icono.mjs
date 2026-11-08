@@ -181,20 +181,30 @@ console.log(`✔ Android: mipmap-{${Object.keys(DENSITIES).join(',')}}/{${Object
 
 // ---- Android notification icon (drawable-*/ic_stat_orb.png): the status bar draws only the alpha of a small icon, so it
 // is the short «o•» as a white silhouette on transparent: the «o» and the orb, with the pale ring between them cut out.
-// 24 dp per density (24 to 96 px), the drawing centred in the middle 22 dp. Every pixel is white; only its alpha varies.
+// 24 dp per density (24 to 96 px), the drawing in Material's 20 dp content area (2 dp of margin all round). Every pixel
+// is white; only its alpha varies. At low densities (mdpi, hdpi) the cut between the «o» and the orb is widened to at
+// least GAP_PX pixels, so they never touch and read as one blob. (Tauri: the same drawable-* files and the name
+// «ic_stat_orb» go to its notification plugin; today android-app/capacitor.config.json › LocalNotifications.smallIcon.)
 {
+  const GAP_PX = 1.6;
   const o = small.layers.filter((l) => l.tag !== 'rect');
-  const ring = o.find((l) => l.tag === 'circle'); // the first circle: the tile's colour around the orb
+  const [ring, orb] = o.filter((l) => l.tag === 'circle'); // the tile's colour around the orb, and the orb
+  const centre = (l) => { const p = l.polys[0]; const xs = p.map((q) => q[0]); const ys = p.map((q) => q[1]); return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2, (Math.max(...xs) - Math.min(...xs)) / 2]; };
+  const [cx, cy, orbR] = centre(orb); const ringR = centre(ring)[2];
   const white = () => [255, 255, 255];
-  const pts = o.flatMap((l) => l.polys.flat());
+  const pts = o.filter((l) => l !== ring).flatMap((l) => l.polys.flat());
   const [x0, x1, y0, y1] = [Math.min(...pts.map((q) => q[0])), Math.max(...pts.map((q) => q[0])), Math.min(...pts.map((q) => q[1])), Math.max(...pts.map((q) => q[1]))];
-  const k = (small.size * 22 / 24) / Math.max(x1 - x0, y1 - y0), mx = (x0 + x1) / 2, my = (y0 + y1) / 2, h = small.size / 2;
-  const fit = (l) => ({ ...l, paint: l === ring ? () => null : white, polys: l.polys.map((poly) => poly.map(([x, y]) => [h + (x - mx) * k, h + (y - my) * k])) });
-  const stat = { size: small.size, layers: o.map(fit) };
+  const k = (small.size * 20 / 24) / Math.max(x1 - x0, y1 - y0), mx = (x0 + x1) / 2, my = (y0 + y1) / 2, h = small.size / 2;
+  const move = ([x, y]) => [h + (x - mx) * k, h + (y - my) * k];
   for (const [density, d] of Object.entries(DENSITIES)) {
+    const px = 24 * d;
+    const perUnit = (px / small.size) * k; // output pixels per unit of the SVG
+    const cutR = Math.max(ringR, orbR + GAP_PX / perUnit);
+    const cut = { ...ring, polys: [Array.from({ length: 361 }, (_, i) => [cx + cutR * Math.cos((i * Math.PI) / 180), cy + cutR * Math.sin((i * Math.PI) / 180)])] };
+    const layers = o.map((l) => (l === ring ? cut : l)).map((l) => ({ ...l, paint: l === cut ? () => null : white, polys: l.polys.map((poly) => poly.map(move)) }));
     const dir = path.join(RES, `drawable-${density}`);
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, 'ic_stat_orb.png'), render(stat, 24 * d));
+    fs.writeFileSync(path.join(dir, 'ic_stat_orb.png'), render({ size: small.size, layers }, px));
   }
-  console.log(`✔ Android: drawable-{${Object.keys(DENSITIES).join(',')}}/ic_stat_orb.png (silueta blanca «o•»)`);
+  console.log(`✔ Android: drawable-{${Object.keys(DENSITIES).join(',')}}/ic_stat_orb.png (silueta blanca «o•», 20 dp útiles)`);
 }
