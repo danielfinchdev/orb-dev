@@ -992,7 +992,7 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
 ## 28. Security
 
 - **Window:** `sandbox` and context isolation, CSP without `eval`, Markdown is rendered without HTML and every call is
-  checked in the main process.
+  checked by the app (Rust) and the engine.
 - **Approval key:** encrypted by Windows (DPAPI). The engine receives it only in memory and the MCP never has it.
 - **Agent identity (`src/engine/agent-auth.mjs`):** who an agent's MCP process is lives only in the engine's
   memory, never in the database or a file an agent could write. `mcpServersFor` (`sessions.mjs`) gives every MCP
@@ -1091,8 +1091,15 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   release:firmar -- <version>` (`scripts/release-firmar.mjs`) downloads that installer, signs it for its version with the
   updater key (`C:\orb-project\claves`, never in GitHub), refuses any key but the one in `tauri.conf.json`, writes
   `latest.json`, `latest.yml` and `Orb-<version>-instalador.exe` (`scripts/release-manifests.mjs`) and creates the
-  release with `gh`. Recommended on GitHub (not set by Orb): protect `main`, 2FA, and an environment with a reviewer for
-  anything that could publish.
+  release with `gh`. Before signing (review D10 M2) it refuses a version not newer than the last release, an installer
+  from a run that is not of main's tip (the newest successful push run, or `--run` of main; package.json there must say
+  that version) and an installer whose `Orb.exe` (extracted with 7-Zip) does not trust the updater key of
+  `tauri.conf.json` or carries anything of the test build. The release goes on that commit (an annotated tag
+  `v<version>`, `--target`), with the download section and «What's new in <version>» of `docs/CHANGELOG.md` as notes.
+  Recommended on GitHub (not set by Orb): protect `main`, 2FA, and an environment with a reviewer for anything that
+  could publish.
+- **No DevTools in the published app**: Electron's `ORB_DEVTOOLS=1` is gone with Electron. DevTools exist only in debug
+  builds (`npm start`) and the e2e build; to look into a problem in the packaged app, use the logs in `core\logs`.
 - **Linux:** planned for a later version (Orb 3.7's Linux builds and `docs/LINUX.md` stay as they were).
 - The SDK's copy of Claude Code (238 MB) **is not packaged**: the user's is used.
 - The app icon is drawn in `build/icon-src/*.svg`; `npm run icon` renders `build/icon.ico` (10 sizes, the short «o•»
@@ -1393,7 +1400,7 @@ in `src/core/home.mjs`; nothing else builds them.
   the isolated copies' git worktrees (`<repo>\.git\worktrees\<n>\gitdir`, as `git worktree repair` writes it). What the
   user wrote (the user's chat lines, conversation messages and queued messages) keeps the paths they typed; only Orb's
   own `.orb\` paths there (an image Orb attached) follow. Programs outside Orb that use the old paths are the user's to
-  update (the screen says so). The app's main process reads the sealed secret from `.orb\datos` until the engine has
+  update (the screen says so). The app reads the sealed secret from `.orb\datos` until the engine has
   moved it, and never writes into core before the move. 3.7's `bots\` stays at the top for the 3.8 migration of the
   database, which archives it.
 - **Backups outside the workspace** (`src/core/backup.mjs`): `%LOCALAPPDATA%\Orb\copias\<workspace>` on Windows
