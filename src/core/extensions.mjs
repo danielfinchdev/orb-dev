@@ -236,6 +236,8 @@ export function checkMcp(dir, { tr = null } = {}) {
   if (isLink(dir)) throw new ExtensionError('ext.err.link', { file: path.basename(dir) }, tr);
   const start = startCommand(dir);
   if (!start) throw new ExtensionError('ext.err.noStart', {}, tr);
+  const local = localDep(dir);
+  if (local) throw new ExtensionError('ext.err.localDep', { dep: local }, tr);
   checkTree(dir, 'mcp', tr);
   return { ...start, description: mcpDescription(dir) };
 }
@@ -301,12 +303,59 @@ function carrySecrets(from, to) {
   } });
 }
 
-// ---- dependencies: installed by Orb only when a server is turned on, never running a package's scripts
+/// ---- dependencies: installed by Orb only when a server is turned on, never running a package's scripts
 const MANIFESTS = ['package.json', 'package-lock.json', 'npm-shrinkwrap.json'];
 // A node server whose package.json names dependencies that are not there.
 export function needsDeps(dir) {
   let pkg = null; try { pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')); } catch { return false; }
   return Boolean(Object.keys(pkg?.dependencies ?? {}).length) && !isDir(path.join(dir, 'node_modules'));
+}
+// A dependency taken from a folder of the PC instead of the registry (file:, link:, workspace:, portal:, a git repository
+// of a local folder, or a path): npm makes it a link to that folder (install-links=false, npm's default), so the server
+// in core would load code from a folder agents still write.
+const LOCAL_SPEC = /^\s*(file|link|workspace|portal|git\+file):|^\s*(\.{1,2}([\\/]|$)|[\\/]|~[\\/]|[a-z]:)/i;
+// The first local dependency a server names (package.json: its dependency lists, overrides and workspaces; the lock: a
+// package that is a link or comes from a file), or null.
+export function localDep(dir) {
+  const read = (f) => { try { return JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); } catch { return null; } };
+  const pkg = read('package.json');
+  if (pkg && typeof pkg === 'object') {
+    if (pkg.workspaces) return 'workspaces';
+    for (const key of ['dependencies', 'optionalDependencies', 'peerDependencies', 'devDependencies', 'bundleDependencies', 'bundledDependencies']) {
+      for (const [name, spec] of Object.entries(pkg[key] && typeof pkg[key] === 'object' && !Array.isArray(pkg[key]) ? pkg[key] : {})) if (typeof spec === 'string' && LOCAL_SPEC.test(spec)) return `${name}: ${spec}`;
+    }
+    const overrides = (o, at) => { for (const [k, v] of Object.entries(o ?? {})) { if (typeof v === 'string' && LOCAL_SPEC.test(v)) return `${at}${k}: ${v}`; if (v && typeof v === 'object') { const r = overrides(v, `${at}${k} › `); if (r) return r; } } return null; };
+    const o = typeof pkg.overrides === 'object' ? overrides(pkg.overrides, 'overrides › ') : null;
+    if (o) return o;
+  }
+  for (const f of ['package-lock.json', 'npm-shrinkwrap.json']) {
+    const lock = read(f);
+    for (const [at, p] of Object.entries(lock?.packages ?? {})) {
+      if (!p || typeof p !== 'object') continue;
+      if (p.link || (typeof p.resolved === 'string' && LOCAL_SPEC.test(p.resolved)) || (at && !/^(.*\/)?node_modules\//.test(at))) return `${f}: ${at || '.'}`;
+    }
+    for (const [name, p] of Object.entries(lock?.dependencies ?? {})) if (typeof p?.version === 'string' && LOCAL_SPEC.test(p.version)) return `${f}: ${name}`;
+  }
+  return null;
+}
+// The first link (a symbolic link or a junction) anywhere in a folder, node_modules too, that leads out of it (or
+// nowhere): its relative path, or null. Read from the directory entries (no stat per file), so a big node_modules is quick.
+export function linkOut(dir) {
+  let root; try { root = norm(fs.realpathSync.native(dir)); } catch { return null; }
+  const walk = (d, rel) => {
+    let list; try { list = fs.readdirSync(d, { withFileTypes: true }); } catch { return null; }
+    for (const e of list) {
+      const full = path.join(d, e.name); const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isSymbolicLink()) {
+        let real = null; try { real = norm(fs.realpathSync.native(full)); } catch { real = null; }
+        if (!real || (real !== root && !real.startsWith(root + path.sep))) return r;
+        continue;
+      }
+      if (e.isDirectory()) { const found = walk(full, r); if (found) return found; }
+    }
+    return null;
+  };
+  return isLink(dir) ? '.' : walk(dir, '');
 }
 // A program run without blocking the engine. → { status, stderr }
 export function runProcess(command, args, { cwd, timeout = 120_000, env = process.env } = {}) {
@@ -320,16 +369,23 @@ export function runProcess(command, args, { cwd, timeout = 120_000, env = proces
   });
 }
 // npm install in `dir`: no scripts of the package or of its dependencies (--ignore-scripts), and the folder's own npm and
-// yarn settings set aside first (renamed: they may name programs npm runs). → true when it installed something.
+// yarn settings set aside first (renamed: they may name programs npm runs). No local dependency (localDep: refused
+// before), packages copied, never linked (--install-links), no workspaces; and after it, no link that leads out of the
+// folder (else its node_modules goes and it is refused). → true when it installed something.
 export async function installDeps(dir, { tr = null, run = runProcess } = {}) {
   if (!needsDeps(dir)) return false;
+  const local = localDep(dir);
+  if (local) throw new ExtensionError('ext.err.localDep', { dep: local }, tr);
   for (const f of fs.readdirSync(dir)) if (TOOL_CONFIG.test(f)) fs.renameSync(path.join(dir, f), path.join(dir, `${f}.ignorado-por-orb`));
   const win = process.platform === 'win32';
-  const env = { ...process.env, npm_config_ignore_scripts: 'true' };
-  const r = await run(win ? 'npm.cmd' : 'npm', ['install', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund'], { cwd: dir, timeout: 300_000, env });
+  const env = { ...process.env, npm_config_ignore_scripts: 'true', npm_config_install_links: 'true', npm_config_workspaces: 'false' };
+  const r = await run(win ? 'npm.cmd' : 'npm', ['install', '--omit=dev', '--ignore-scripts', '--install-links=true', '--no-workspaces', '--no-audit', '--no-fund'], { cwd: dir, timeout: 300_000, env });
   if (r.status !== 0) throw new ExtensionError('ext.err.install', { error: String(r.stderr || '').trim().split('\n').slice(-1)[0] || 'npm' }, tr);
+  const out = linkOut(dir);
+  if (out) { fs.rmSync(path.join(dir, 'node_modules'), { recursive: true, force: true }); throw new ExtensionError('ext.err.link', { file: out }, tr); }
   return true;
 }
+
 // The dependencies of a new version: the ones of core when its package.json and lock did not change (no download), else
 // installed now (in the quarantine, before it moves). → 'reuse', 'installed' or null
 async function prepareDeps(current, next, { tr, install }) {
@@ -385,10 +441,11 @@ export function skillsWith(config, name, patch) {
   return [...list, { name, enabled: false, source: 'usuario', ...prev, ...patch }].sort((a, b) => (a.name < b.name ? -1 : 1));
 }
 // A server of core\mcp turned on or off: its connector (made from the command that starts it, when there is none yet).
-// A folder that is a link or reaches outside core is never turned on.
+// A folder that is a link or reaches outside core, or holds a link that leads out of it (node_modules too), is never
+// turned on.
 export function mcpWith(config, core, name, enabled, { source } = {}) {
   const dir = path.join(extensionPaths(core).mcp, name);
-  if (enabled && !realFolder(extensionPaths(core).mcp, dir)) return null;
+  if (enabled && (!realFolder(extensionPaths(core).mcp, dir) || linkOut(dir))) return null;
   const servers = config.mcpServers ?? [];
   const i = servers.findIndex((s) => (s.args ?? []).some((a) => typeof a === 'string' && path.isAbsolute(a) && norm(a).startsWith(norm(dir) + path.sep)));
   if (i >= 0) return servers.map((s, j) => (j === i ? { ...s, enabled, ...(source ? { source } : {}) } : s));
@@ -398,14 +455,16 @@ export function mcpWith(config, core, name, enabled, { source } = {}) {
   return [...servers.filter((s) => s.name !== name), { name, command: start.command, args: start.args, agents: [], enabled, source: source ?? 'usuario' }];
 }
 // Whether a connector may start: one whose program is in a folder of core\mcp only when that folder really is in core
-// (not a link or a junction put there to run something else).
+// (not a link or a junction put there to run something else) and nothing in it (node_modules too) links out of it: a
+// dependency installed as a link to a folder agents write would load their code.
 export function connectorSafe(core, server) {
   const root = extensionPaths(core).mcp;
   for (const a of server?.args ?? []) {
     if (typeof a !== 'string' || !path.isAbsolute(a)) continue;
     const rel = path.relative(root, a);
     if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) continue;
-    if (!realFolder(root, path.join(root, rel.split(path.sep)[0]))) return false;
+    const top = path.join(root, rel.split(path.sep)[0]);
+    if (!realFolder(root, top) || linkOut(top)) return false;
   }
   return true;
 }
@@ -492,6 +551,8 @@ const busy = (error, name, tr) => (['EBUSY', 'EPERM', 'EACCES'].includes(error.c
 function reuseDeps(core, name, to) {
   const old = path.join(extensionPaths(core).mcp, OLD_DIR, name, 'node_modules');
   try { if (isDir(old) && !isLink(old) && !exists(path.join(to, 'node_modules'))) fs.renameSync(old, path.join(to, 'node_modules')); } catch { /* the server says it lacks them when it starts */ }
+  // A link in them that leads out of the new folder: they go (the server says it lacks them; turning it on installs).
+  if (linkOut(to)) fs.rmSync(path.join(to, 'node_modules'), { recursive: true, force: true });
 }
 const quarantineFor = (core, id) => path.join(extensionPaths(core).quarantine, `${id}-${crypto.randomBytes(3).toString('hex')}`);
 // A quarantine Orb made (inside core\datos\cuarentena, a real folder) with the same files as when it was checked.

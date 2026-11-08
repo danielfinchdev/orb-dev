@@ -92,3 +92,60 @@ test('A1 con el Claude Code real: ninguna forma de allowed-tools se salta la gua
   assert.deepEqual(probe.asked, ['Bash'], '«probar» pregunta antes de escribir un archivo');
   assert.ok(!fs.existsSync(path.join(proj, 'marca.txt')));
 });
+
+const junction = (target, at) => { fs.mkdirSync(path.dirname(at), { recursive: true }); fs.symlinkSync(target, at, 'junction'); };
+const tr = (k, v) => `${k} ${JSON.stringify(v ?? {})}`;
+const mcpRequest = (core, name, files) => {
+  const r = X.draftExtension(core, { kind: 'mcp', name, description: 'Servidor de prueba.' });
+  for (const [f, text] of Object.entries(files)) put(path.join(r.dir, f), text);
+  return r;
+};
+const pkg = (extra) => JSON.stringify({ name: 'demo', main: 'server.mjs', dependencies: { '@modelcontextprotocol/sdk': '^1.0.0' }, ...extra });
+
+test('A2: una dependencia local (file:, link:, workspace:, portal:, ruta) o workspaces se rechaza antes de instalar', async () => {
+  const root = scratch(); const core = path.join(root, 'core');
+  for (const [i, extra] of [
+    { dependencies: { lib: 'file:../../preparacion/lib' } }, { dependencies: { lib: 'link:../lib' } }, { dependencies: { lib: 'workspace:*' } },
+    { optionalDependencies: { lib: 'portal:../lib' } }, { dependencies: { lib: 'C:/Orb/windows/proj' } }, { dependencies: { lib: '../lib' } },
+    { dependencies: { lib: 'git+file:///C:/x' } }, { workspaces: ['packages/*'] }, { overrides: { a: { b: 'file:../b' } } }, { devDependencies: { t: 'file:..' } }
+  ].entries()) {
+    const r = mcpRequest(core, `local${i}`, { 'package.json': pkg(extra), 'server.mjs': '//' });
+    assert.throws(() => X.requestActivation(core, r, { tr }), /ext\.err\.localDep/, JSON.stringify(extra));
+  }
+  // A lock that names a link or a file: as well.
+  const lock = mcpRequest(core, 'lock', { 'package.json': pkg({}), 'server.mjs': '//', 'package-lock.json': JSON.stringify({ lockfileVersion: 3, packages: { '': {}, 'node_modules/lib': { resolved: '../lib', link: true }, '../lib': { version: '1.0.0' } } }) });
+  assert.throws(() => X.requestActivation(core, lock, { tr }), /ext\.err\.localDep/);
+  // Registry ranges, git and https are fine.
+  const ok = mcpRequest(core, 'normal', { 'package.json': pkg({ dependencies: { a: '~1.2.3', b: '^2', c: 'github:ana/c', d: 'https://x/d.tgz', e: 'npm:f@1' } }), 'server.mjs': '//' });
+  assert.equal(X.requestActivation(core, ok, { tr }).status, 'pending');
+  // A server already in core that names one is not installed either.
+  put(path.join(core, 'mcp', 'viejo', 'package.json'), pkg({ dependencies: { lib: 'file:../../preparacion/lib' } })); put(path.join(core, 'mcp', 'viejo', 'server.mjs'), '//');
+  let ran = false;
+  await assert.rejects(X.installFor(core, 'viejo', { install: (dir) => X.installDeps(dir, { run: async () => { ran = true; return { status: 0 }; } }) }), /ext\.err\.localDep/);
+  assert.equal(ran, false, 'npm no llega a ejecutarse');
+});
+
+test('A2: npm instala copias (--install-links, --no-workspaces) y un enlace que sale de la carpeta tras instalar se rechaza', async () => {
+  const root = scratch(); const core = path.join(root, 'core');
+  const lib = path.join(core, 'preparacion', 'lib'); put(path.join(lib, 'index.js'), 'module.exports = 1;');
+  put(path.join(core, 'mcp', 'srv', 'package.json'), pkg({})); put(path.join(core, 'mcp', 'srv', 'server.mjs'), '//');
+  const calls = [];
+  // PoC: what npm 11 did with install-links=false: node_modules\lib a junction to a folder agents write.
+  const run = async (cmd, args, opts) => { calls.push({ args, env: opts.env }); junction(lib, path.join(opts.cwd, 'node_modules', 'lib')); return { status: 0 }; };
+  await assert.rejects(X.installFor(core, 'srv', { install: (dir) => X.installDeps(dir, { run, tr }) }), /ext\.err\.link.*node_modules\/lib/);
+  for (const a of ['--ignore-scripts', '--install-links=true', '--no-workspaces']) assert.ok(calls[0].args.includes(a), a);
+  assert.equal(calls[0].env.npm_config_install_links, 'true');
+  assert.ok(!fs.existsSync(path.join(core, 'mcp', 'srv', 'node_modules')), 'node_modules se borra');
+  assert.ok(fs.existsSync(path.join(lib, 'index.js')), 'borrar la unión no toca su destino');
+  // A link that stays inside (node_modules\.bin on Linux): fine.
+  const inside = path.join(root, 'dentro'); put(path.join(inside, 'node_modules', 'a', 'x.js'));
+  junction(path.join(inside, 'node_modules', 'a'), path.join(inside, 'node_modules', 'b'));
+  assert.equal(X.linkOut(inside), null);
+  // A server of core with such a link (made before this check): it does not start, and is not turned on.
+  junction(lib, path.join(core, 'mcp', 'srv', 'node_modules', 'lib'));
+  const server = { name: 'srv', command: 'node', args: [path.join(core, 'mcp', 'srv', 'server.mjs')] };
+  assert.equal(X.connectorSafe(core, server), false);
+  assert.equal(X.mcpWith({}, core, 'srv', true), null);
+  fs.unlinkSync(path.join(core, 'mcp', 'srv', 'node_modules', 'lib'));
+  assert.equal(X.connectorSafe(core, server), true);
+});

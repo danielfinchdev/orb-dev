@@ -92,6 +92,7 @@ export default {
   'ext.err.noFolder': 'No existe la carpeta {path}.',
   'ext.err.fromCore': 'Esa carpeta ya está dentro de core (o la contiene).',
   'ext.err.install': 'No se pudieron descargar los paquetes que necesita: {error}',
+  'ext.err.localDep': 'Usa código de una carpeta del PC ({dep}): Orb solo instala paquetes descargados. Quita esa dependencia o pon el código dentro del servidor.',
   'ext.err.unknownKind': 'No es una skill (falta SKILL.md) ni un servidor MCP que Orb sepa arrancar.',
   'ext.err.notFound': 'No se encuentra {name}.',
   'ext.err.noRequest': 'Esa petición no existe o no es tuya.',

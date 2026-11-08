@@ -92,6 +92,7 @@ export default {
   'ext.err.noFolder': 'The folder {path} does not exist.',
   'ext.err.fromCore': 'That folder is already inside core (or holds it).',
   'ext.err.install': 'The packages it needs could not be downloaded: {error}',
+  'ext.err.localDep': 'It uses code from a folder of this PC ({dep}): Orb only installs downloaded packages. Remove that dependency or put the code inside the server.',
   'ext.err.unknownKind': 'It is not a skill (no SKILL.md) nor an MCP server Orb knows how to start.',
   'ext.err.notFound': '{name} was not found.',
   'ext.err.noRequest': 'That request does not exist or is not yours.',
