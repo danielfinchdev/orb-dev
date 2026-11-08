@@ -3,7 +3,7 @@
 // 32 px and less, where the word can't be read). This script renders them, with no extra dependencies, into:
 //   build/icons/NxN.png (16 to 1024 px, Linux), build/icon.png (512 px: window, notifications), build/icon.ico (every
 //   size Windows uses: .exe, installer, taskbar, the window on Windows), src/ui/public/icon.png (favicon, PWA, the
-//   photo of Android notifications, «Acerca de»), src/ui/public/icon-maskable.png (PWA), the Android launcher icons and
+//   photo of Android notifications), src/ui/public/icon-o.png (the short «o•»: «Acerca de»), src/ui/public/icon-maskable.png (PWA), the Android launcher icons and
 //   the small notification icon of Android (see below).
 // It understands only what those SVGs use: <linearGradient> (userSpaceOnUse), <rect rx>, <circle> and <path> with
 // absolute M/L/Q/C/Z. The letters are Outfit SemiBold (OFL) outlines.                    Usage: npm run icon
@@ -140,8 +140,10 @@ fs.mkdirSync(path.join(ROOT, 'build', 'icons'), { recursive: true });
 for (const [size, png] of pngs) fs.writeFileSync(path.join(ROOT, 'build', 'icons', `${size}x${size}.png`), png);
 fs.writeFileSync(path.join(ROOT, 'build', 'icon.png'), pngs.get(512));
 fs.writeFileSync(path.join(ROOT, 'src', 'ui', 'public', 'icon.png'), pngs.get(512));
+// The short «o•» for the window's own small places (the «Acerca de» card): 128 px, sharp at 40 px on any screen.
+fs.writeFileSync(path.join(ROOT, 'src', 'ui', 'public', 'icon-o.png'), render(small, 128));
 fs.writeFileSync(path.join(ROOT, 'build', 'icon.ico'), ico(ICO_SIZES.map((size) => ({ size, png: pngs.get(size) }))));
-console.log(`✔ build/icons (${PNG_SIZES.join(', ')} px), build/icon.png, build/icon.ico y src/ui/public/icon.png`);
+console.log(`✔ build/icons (${PNG_SIZES.join(', ')} px), build/icon.png, build/icon.ico, src/ui/public/icon.png e icon-o.png`);
 // The PWA's «maskable» icon (the phone's browser crops it to its own shape): the tile's gradient edge to edge and the word
 // at 80 %, inside the safe circle of 80 % of the side that every mask keeps.
 {
