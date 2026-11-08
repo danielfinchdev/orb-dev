@@ -276,3 +276,18 @@ test('3.8.1 (decision 20 d): a backup never carries this PC\'s secret; one made 
     assert.match(new K.BackupError('oldKey').message, /versión anterior de Orb.*ya no se puede restaurar/);
   } finally { t.cleanup(); }
 });
+
+test('review M2: restored on another PC with the recovery code, the code keeps working there (and the scheduled copies keep its wrap)', async () => {
+  const t = tempHome();
+  try {
+    const pcA = crypto.randomBytes(32); const pcB = crypto.randomBytes(32);
+    const code = K.newRecoveryCode();
+    K.setRecovery(t.home, pcA, code, { kdf: { N: 2 ** 10, r: 8, p: 1 } });
+    const { file } = await K.createBackup({ home: t.home, secret: pcA });
+    const into = path.join(t.base, 'otro-pc');
+    await K.restoreInto(into, file, { secret: pcB, passphrase: code });
+    assert.equal(K.isRecoveryCode(into, pcB, code), true, 'el código vale en el PC nuevo');
+    await K.restoreInto(path.join(t.base, 'mismo-pc'), file, { secret: pcA });
+    assert.equal(K.isRecoveryCode(path.join(t.base, 'mismo-pc'), pcA, code), true, 'en el mismo PC, tal cual');
+  } finally { t.cleanup(); }
+});

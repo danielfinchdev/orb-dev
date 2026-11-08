@@ -169,6 +169,7 @@ export default {
   'sys.engine.previousBack': '{name} is back on the old key. The new key has been kept aside.',
   'sys.engine.previousFailed': 'Could not go back to the old key: {name} keeps the new key. Try again from Settings › Data.',
   'sys.engine.previousNew': '{name} is back on the new key. The old key has been kept aside.',
+  'sys.engine.recoveryRestored': 'The restored backup brought the recovery code of another PC, which does not work here: scheduled backups go out without it. Make a new one in Settings › Data.',
   'sys.engine.recoveryOtherKey': 'Your recovery code was made with the other key and no longer works on this PC: scheduled backups go out without it. Make a new one in Settings › Data.',
   'sys.engine.secretBusy': 'Windows cannot read the encrypted key of this workspace right now. Wait a moment and press “Retry”.',
   'sys.engine.secretOld': 'This workspace has the key of Orb 3.8.0, which this version no longer opens. Start with a new key: nothing is deleted; your secrets will open with your master password and approvals will be asked again.',

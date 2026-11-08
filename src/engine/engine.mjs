@@ -413,6 +413,7 @@ async function run(board, { home, version, restored, repair }) {
   setInterval(loop, 1500);
   board.onChange((what) => { if (what === 'tasks') setImmediate(loop); });
   log(`motor arrancado (versión ${version}) en ${home}`);
+  if (repair?.restored?.recoveryOther || restored?.recoveryOther) board.notice(tr('sys.engine.recoveryRestored'), 'warning');
   if (repair?.restored) board.notice(tr('data.core.restored', { created: String(repair.restored.created ?? '').slice(0, 16).replace('T', ' ') }), 'warning');
   // Review D10 B9: «two keys» is said once for each clave.enc of Orb 3.8.0, not at every start.
   for (const key of keyNotices.splice(0)) board.notice(tr(key, { name: PRODUCT.name }), 'warning');

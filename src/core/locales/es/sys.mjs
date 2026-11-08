@@ -172,6 +172,7 @@ export default {
   'sys.engine.previousBack': '{name} ha vuelto a la clave anterior. La clave nueva se ha guardado aparte.',
   'sys.engine.previousFailed': 'No se pudo volver a la clave anterior: {name} sigue con la clave nueva. Inténtalo otra vez desde Ajustes › Datos.',
   'sys.engine.previousNew': '{name} ha vuelto a la clave nueva. La clave anterior se ha guardado aparte.',
+  'sys.engine.recoveryRestored': 'La copia restaurada traía el código de recuperación de otro PC, que aquí no sirve: las copias programadas salen sin él. Crea uno nuevo en Ajustes › Datos.',
   'sys.engine.recoveryOtherKey': 'Tu código de recuperación se creó con la otra clave y ya no sirve en este PC: las copias programadas salen sin él. Crea uno nuevo en Ajustes › Datos.',
   'sys.engine.secretBusy': 'Windows no deja leer ahora la clave cifrada de este espacio de trabajo. Espera un momento y pulsa «Reintentar».',
   'sys.engine.secretOld': 'Este espacio de trabajo tiene la clave de Orb 3.8.0, que esta versión ya no abre. Empieza con una clave nueva: no se borra nada; tus secretos se abrirán con tu contraseña maestra y se volverán a pedir las aprobaciones.',

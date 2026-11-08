@@ -544,7 +544,17 @@ export async function stageRestore(home, file, keys = {}) {
       const d = new DatabaseSync(db);
       try { const ok = d.prepare('PRAGMA integrity_check').get(); if (Object.values(ok)[0] !== 'ok') throw new BackupError('damaged'); d.prepare('SELECT COUNT(*) AS n FROM sqlite_master').get(); } finally { d.close(); }
     }
-    fs.writeFileSync(path.join(tmp, 'listo.json'), JSON.stringify({ from: path.basename(file), legacy: r.legacy, header: { id: r.header.id, orbId: r.header.orbId, incarnation: r.header.incarnation, created: r.header.created, version: r.header.version, move: r.header.move }, at: new Date().toISOString() }));
+    // Review M2: the recovery wrap is sealed with the backup key of the PC that made the copy, and this PC's secret never
+    // travels: on another PC it would not open (the code would stop working and the scheduled copies would go out
+    // without it). With the code used for this restore it is sealed again for this PC; without it, this PC's own wrap
+    // stays (the copy's is not put back) and the user is told to make a new code.
+    let recoveryOther = false;
+    const staged = recoveryFile(tmp);
+    if (fs.existsSync(staged) && !(keys.secret && recoveryOf(tmp, keys.secret))) {
+      if (keys.secret && keys.passphrase) setRecovery(tmp, keys.secret, keys.passphrase);
+      else { fs.rmSync(staged, { force: true }); recoveryOther = true; }
+    }
+    fs.writeFileSync(path.join(tmp, 'listo.json'), JSON.stringify({ recoveryOther, from: path.basename(file), legacy: r.legacy, header: { id: r.header.id, orbId: r.header.orbId, incarnation: r.header.incarnation, created: r.header.created, version: r.header.version, move: r.header.move }, at: new Date().toISOString() }));
     await fsp.rm(ready, { recursive: true, force: true });
     await fsp.rename(tmp, ready);
     return { files: r.files, bytes: r.bytes, header: r.header };
@@ -592,7 +602,7 @@ export function applyPendingRestore(home, { onlyMissing = false } = {}) {
   if (units.has(`${INTERNAL_DIR}/datos/orb.db`)) forgetRun(home);
   // A copy made by 3.7: the paths of its orb.json and database point into core.
   if (info.legacy) rewritePaths(home);
-  return { from: info.from, header: info.header, aside, units: [...units] };
+  return { from: info.from, header: info.header, aside, units: [...units], recoveryOther: info.recoveryOther === true };
 }
 
 // ---- 3.8: core missing or damaged (src/engine/engine.mjs, before the database opens)
@@ -616,7 +626,7 @@ export async function repairCore(home, { secret = null, passphrase = null, file 
       continue;
     }
     const applied = applyPendingRestore(home, { onlyMissing: true });
-    return { ok: true, restored: { from: applied?.from, created: applied?.header?.created ?? backup.created, units: applied?.units ?? [] }, missing: health.missing };
+    return { ok: true, restored: { from: applied?.from, created: applied?.header?.created ?? backup.created, units: applied?.units ?? [], recoveryOther: applied?.recoveryOther === true }, missing: health.missing };
   }
   return { ok: false, ...failed, missing: health.missing };
 }
