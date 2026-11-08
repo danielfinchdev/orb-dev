@@ -32,6 +32,9 @@ for (const need of [path.join(INSTALLED, 'Orb.exe'), path.join(INSTALLED, 'resou
   if (!fs.existsSync(need)) { console.error(`falta ${need}`); process.exit(2); }
 }
 
+// The hooks wait for every Orb.exe of this user to end before 3.8.0's uninstaller runs (review D9 M5): with another
+// Orb open (the user's, another test's) the bridge rightly stops, so this cannot run then.
+if (/Orb\.exe/i.test(execFileSync('tasklist', ['/FI', 'IMAGENAME eq Orb.exe', '/NH'], { encoding: 'utf8' }))) { console.error('hay un Orb.exe abierto: ciérralo (o espera a la otra prueba) y vuelve a lanzar esta'); process.exit(2); }
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const until = async (fn, what, ms = 60000, every = 250) => { const end = Date.now() + ms; while (Date.now() < end) { try { const v = await fn(); if (v) return v; } catch { /* not yet */ } await wait(every); } throw new Error(`no llegó: ${what}`); };
 const ps = (script) => execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8' });

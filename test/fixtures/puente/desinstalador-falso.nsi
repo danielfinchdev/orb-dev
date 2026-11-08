@@ -15,6 +15,11 @@ Section
   FileOpen $1 "${LOG}" w
   FileWrite $1 "$0"
   FileClose $1
+  ; EXIT (test/puente-ganchos.e2e.mjs): fails as the real one does when Orb 3.8.0 cannot be closed: nothing removed.
+  !ifdef EXIT
+    SetErrorLevel ${EXIT}
+    Quit
+  !endif
   ; Its shortcuts, its uninstall entry and its folder (run in place with _?=, it cannot delete itself).
   Delete "${DESKTOP_LINK}"
   Delete "${START_LINK}"
