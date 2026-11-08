@@ -61,7 +61,9 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
     notify('item/started', { threadId, item: { id: 'cc1', type: 'contextCompaction' } });
     notify('thread/tokenUsage/updated', { threadId, tokenUsage: { last: { inputTokens: 300 }, total: { inputTokens: 300, outputTokens: 0 }, modelContextWindow: 272000 } });
     notify('item/completed', { threadId, item: { id: 'cc1', type: 'contextCompaction' } });
-    return void notify('turn/completed', { threadId, turn: { id: turnId, status: 'completed' } });
+    // FAKE_COMPACT_SLOW_END: the compaction's turn ends a moment after its summary (as a busy pipe can deliver it).
+    const end = () => notify('turn/completed', { threadId, turn: { id: turnId, status: 'completed' } });
+    return void (process.env.FAKE_COMPACT_SLOW_END === '1' ? setTimeout(end, 300) : end());
   }
   if (method === 'turn/steer') { write({ id, result: {} }); return void wake?.(params.input?.[0]?.text ?? ''); }
   if (method === 'turn/interrupt') { write({ id, result: {} }); return void wake?.('interrupt'); }

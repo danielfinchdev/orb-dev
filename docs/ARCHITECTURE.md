@@ -777,27 +777,40 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   file/ext protocols are off, and **nothing of the repository runs**: `core.hooksPath` and `--template` point to an empty
   folder, `--no-recurse-submodules`, `core.symlinks=false`, `GIT_LFS_SKIP_SMUDGE`), into the **quarantine**
   (`core\datos\cuarentena`, which no agent may write) with `copyTree`: file by file, never following a link (a symlink,
-  junction or hard link refuses the import), without `.git`, dependencies (`node_modules`, `.venv`, `venv`,
+  junction or hard link refuses the import; each file is opened, checked to be the same file by its id and copied from
+  that handle, its main content only, so NTFS alternate data streams stay behind), without `.git`, dependencies (`node_modules`, `.venv`, `venv`,
   `__pycache__`, `.cache`) or the package managers' settings (`.npmrc`, `.yarnrc*`, `.pnpmfile.cjs`,
   `pnpm-workspace.yaml`). A folder inside core (also through a junction) or one that holds core is refused. Then checked
   (`checkSkill`: SKILL.md, a valid name and a description; `checkMcp`: a start command; both: no link, at most 20 MB /
   2000 files for a skill and 200 MB / 5000 for a server, over everything that moves) and moved into core **off**
   (`source: importado`). Nothing is installed on import.
 - **Dependencies** are installed only when the user turns a server on (after the dialog) or approves an agent's server:
-  `npm install --omit=dev --ignore-scripts` (no `preinstall`/`install`/`postinstall` of the package or of any
-  dependency), with the folder's `.npmrc`/`.yarnrc*` renamed out of the way first (they may name programs npm runs).
-  A new version whose package.json and lock did not change keeps the dependencies of the version in core.
+  `npm install --omit=dev --ignore-scripts --install-links=true --no-workspaces --no-save` (no
+  `preinstall`/`install`/`postinstall` of the package or of any dependency; packages copied, never linked; nothing
+  written but `node_modules`), with the folder's `.npmrc`/`.yarnrc*` renamed out of the way first (they may name programs
+  npm runs). A **local dependency** (`file:`, `link:`, `workspace:`, `portal:`, `git+file:`, a path, `workspaces`, in
+  package.json, its overrides or the lock: `localDep`) is refused before anything runs (`checkMcp`, `installDeps`): npm
+  would make it a junction to a folder agents still write. After installing, `linkOut` walks the whole folder
+  (`node_modules` too) and a link that leads out of it removes `node_modules` and fails; a server holding one is neither
+  turned on (`mcpWith`) nor started (`connectorSafe`), reused dependencies with one are dropped, and «Mover a core»
+  (`moveIntoCore`) refuses a project with one. A new version whose package.json and lock did not change keeps the
+  dependencies of the version in core.
 - **How agents get the skills that are on** (`exposeSkills`, kept in `api-extensions.mjs › liveSkills` and made again
   when `skills` changes): `core\skills\.activas` is a Claude Code plugin Orb makes (`.claude-plugin\plugin.json`, name
-  `orb-skills`, and `skills\<name>`, a junction to `core\skills\<name>` for each skill that is on; a copy where a junction
-  cannot be made). Each skill that is on is checked again there (a link or a folder out of core, a wrong name, too big:
-  left out). A skill whose SKILL.md declares `allowed-tools` or `hooks` gets a **copy without them** instead of a
-  junction: checked with the real Claude Code, `allowed-tools: Bash` let a Bash command run without Orb's `canUseTool`,
-  and a ``!`command` `` in the text ran when the skill loaded; the latter is off for every skill
-  (`disableSkillShellExecution`, `claude.mjs`). The row says so («Pide usar herramientas sin preguntarte…»). Per agent:
+  `orb-skills`, and `skills\<name>`, always a **copy made by Orb**, never a junction). Each skill that is on is checked
+  again there (a link or a folder out of core, a wrong name, too big: left out). The copy's SKILL.md has a frontmatter
+  **written by Orb** (`orbSkillText`: only `name` and `description`, as JSON strings) and the skill's text after it;
+  nothing else of the original frontmatter reaches Claude. Checked with the real Claude Code: `allowed-tools: Bash` let
+  a Bash command run without Orb's `canUseTool`, also when the key was quoted (`"allowed-tools"`), a YAML merge key
+  (`<<: *a`) or an explicit key (`? allowed-tools`), which a regular expression did not see; with the regenerated
+  frontmatter none of them does (`test/extensiones-seguridad.test.mjs` runs that scenario with the SDK's `claude.exe`
+  against a local stand-in of the API). A ``!`command` `` in the text ran when the skill loaded; that is off for every
+  skill (`disableSkillShellExecution`, `claude.mjs`). A copy is kept while neither the skill nor the copy changed (their
+  fingerprints in `.activas\.copias.json`). The row warns when the frontmatter names `allowed-tools` or `hooks` in any
+  form («Pide usar herramientas sin preguntarte…»). Per agent:
   - **Claude Code**: the SDK's `plugins: [{ type: 'local', path }]` (`--plugin-dir`); Claude lists them as
     `orb-skills:<name>` and loads one when it fits (checked with the real Claude Code: `supportedCommands()` lists the
-    plugin's skill, junctions included). The assistant (coordinator) gets it too.
+    plugin's skill). The assistant (coordinator) gets it too.
   - **Codex**: the app-server's `skills/extraRoots/set` with `core\skills\.activas\skills`, before `thread/start`
     (checked with codex-cli 0.166: `skills/list` shows them; an older Codex without the method just goes without).
     Nothing is written in the user's `CODEX_HOME`.
@@ -815,7 +828,7 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   (a SKILL.md skeleton, or a Node / Python MCP server), or a copy of the current one with `mejorar: true` (a new
   version: its code only, never its secrets, dependencies or links). `core\preparacion` is the only part of core agents
   may write (guard `OPEN_INTERNAL`). Improving a server that **holds keys** (its connector has some, or its folder has
-  secret files) waits for the user: the request is `asking`, a card asks «¿Dejar que … mejore …?», and only once allowed
+  secret or git-ignored files) waits for the user: the request is `asking`, a card asks «¿Dejar que … mejore …?», and only once allowed
   (`extensions.approve` → `allowDraft`) is the copy made; the agent calls `orb_create_mcp` again to get it. The request
   lives in the database (`extension_requests`, never in the folder the agent writes), with who made it; only that agent,
   or one of the same conversation (the coordinator makes it and a task's agent writes it, as the persona says), may call
@@ -829,12 +842,20 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   «Descartar» (PC only; the phone says «Actívalo desde el PC»). «Activar» always opens a dialog first: what it means (a
   server runs on the PC with the user's permissions, in every agent), whether it will download packages, and **every
   file** that will be turned on. `extensions.approve` checks the quarantine's fingerprint again, installs a server's
-  dependencies there (or keeps core's), moves **exactly that copy** into core, turns it on (`source: creado`) and marks
+  dependencies there (or keeps core's), checks the fingerprint **once more right before moving** (installing may take
+  minutes), moves **exactly that copy** into core, turns it on (`source: creado`) and marks
   the card; a new version replaces the old one, kept in `core\mcp\.anterior\<name>` (`core\skills\.anterior\<name>`
-  for a skill), and keeps the old version's secrets. `extensions.reject` deletes the folder and its quarantine.
+  for a skill), and keeps the old version's secrets: a new version's own secret files are left out of the quarantine (the
+  dialog says so) and core's always win (`carrySecrets` writes over them), so an agent cannot swap the server's account.
+  `extensions.reject` deletes the folder and its quarantine.
 - **Improving a server of core** («Editar en un proyecto», `extensions.edit`): a copy (git and dependencies too, never its
-  secrets nor a link: `secretTest` — `tokens/`, `secrets/`, `credentials/`, `.env*`, `*.pem`, `*.key`, `*token*.json`,
-  `client_secret*.json`… plus what the server declares in package.json › `orb.secrets` or `.orb-secrets`) goes to
+  secrets nor a link: `secretTest` — `tokens/`, `secrets/`, `credentials/`, WhatsApp session folders (`.wwebjs_auth`,
+  `auth_info*`, `store/`, `auth/` and `session(s)/` outside code folders), `.env*`, `*.pem`, `*.key`, `*token*.json`,
+  `client_secret*.json`, `*.keys.json`, `.git-credentials`, `credentials`, `auth*.json`, `oauth*.json`, `api_key*`,
+  cookies, sessions, Playwright's `storage_state.json`, databases, also as `.bak`/`.old`/`.orig`… plus what the server
+  declares in package.json › `orb.secrets` or `.orb-secrets`; nor what its `.gitignore` files leave out of git, read by
+  Orb without running git (`gitignored`), build output aside; `.git/config` goes without credentials in remote
+  addresses, `[credential]` or `extraheader` (`cleanGitConfig`), and without `FETCH_HEAD`) goes to
   `<workspace>\<category>\<name>` (or `name-2`…) and becomes a project; agents work on it like on any project while the
   version in core keeps running. `extension_edits` remembers it (the row says «en edición», the project «copia para
   editar …»). «Aplicar cambios» (`extensions.applyCheck`, refused while the project has tasks pending or running: the
@@ -887,6 +908,32 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
 - **Mode** light, dark or system; interface **size** with Ctrl +, Ctrl - and Ctrl 0; **Ctrl J** opens a terminal in the
   folder.
 - **Wording:** tone and vocabulary in [`WRITING-GUIDE.md`](WRITING-GUIDE.md).
+
+### Performance (3.8.1)
+
+- **Lazy screens** (`main.jsx`): only the chats, a conversation and the start's master password screen are in the
+  entry chunk. The other screens, Settings, the games and the tour are lazy chunks (`lazyScreen` in `lib/lazy.js`) that
+  load in the background once the app is up (`loadTheRest`, on the phone too); Settings and the games mount the first
+  time they open and then stay (`OnceOpened`). A failed load (a phone's browser gets the files from the PC over the
+  network) is not kept: the `ErrorBoundary` recognises it (`isLoadError`) and shows «Sin conexión» with «Reintentar»,
+  which makes the screen again (`retryLoads`; the same file with a query if the browser kept the failure; after two
+  failed retries, a reload). Settings, the games and the tour have their own boundary: they close and say why.
+- **Long lists:** messages (`.lazy-lines`, all but the newest twelve) and chat rows (`.lazy-row`) use
+  `content-visibility: auto` (app.css); the chat list draws its first 40 rows with the screen and the rest while idle
+  (`useGrowing` in `views/orb/inbox.jsx`). A conversation at its bottom stays there when its lines change height
+  (`useAutoScroll` in `chat.jsx`: a `ResizeObserver` while the user has not scrolled up).
+- **Fewer redraws:** `Markdown` is memoised on its text, a refetched conversation keeps unchanged lines, an agent's
+  blocks compare by content and a chat row only redraws when what it shows changes (`keepSame`, `sameBlock`,
+  `sameItem` in `lib/memo.js`, tested in `test/memo-ui.test.mjs`); the models' catalog stays the same object while it
+  does not change (`useCatalog`). `chat:state` events are applied once per frame, or within 100 ms and on
+  `visibilitychange` when the window draws no frames (`frameBatch` in `lib/batch.js`). Memoised dates move on at
+  midnight and with a new time zone (`lib/clock.js`, `useDay`), and the date formatters are cached per language and
+  zone.
+- **Robot:** a still robot has no compositor layer and builds the visor's code rows only the first time it shows them
+  (`orb.jsx`, app.css). Avoid `will-change`, `backdrop-filter` and blend modes on elements repeated in long lists.
+- **Measuring:** `scripts/medir.mjs` (start, memory, CPU at rest, scrolling smoothness; `--hidden` keeps the window
+  offscreen via `ORB_HIDDEN_WINDOW=1`; `--profile <dir>` saves a trace, CPU profiles, the compositor's layers and a
+  heap snapshot).
 
 ### Tutorials and guided tour
 
@@ -986,10 +1033,16 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   a file not made yet (its nearest existing parent, and a link whose target is missing, are followed), so a junction
   made earlier cannot send a write into core; and a command that makes a link (`mklink`, `New-Item -ItemType
   Junction|SymbolicLink|HardLink`, `fsutil hardlink|reparsepoint`, `ln`, .NET `CreateSymbolicLink`, Node
-  `fs.symlink`/`fs.link`, Python `os.symlink`/`os.link`…) that names core, runs inside it or points into it is denied. The same goes for what Orb keeps about the workspace outside it (`setGuardedRoots`: the backups' root
+  `fs.symlink`/`fs.link`, Python `os.symlink`/`os.link`…) that names core, runs inside it or points into it is denied.
+  The `cd`s of a compound command are followed (`workDirs`: `cd`, `chdir`, `pushd`/`popd`, `Set-Location`/`sl`,
+  `Push-Location`/`Pop-Location`, `cd..`, `cd /d`, through `;`, `&&`, `||`, `&`, `|`, new lines and brackets, also inside
+  `cmd /c`, `bash -c` and `powershell -Command`; Git Bash paths such as `/c/...` read as Windows paths): a part that runs
+  inside core (but its open folders) is denied whatever it names, and every word of it, also one without a slash (a
+  junction's name), is resolved from there. So `core/datos` (with the quarantine), `core/skills` and `core/mcp` are
+  denied to tools and to commands, also through `cd .. && cd core && …` or a junction to the workspace. The same goes for what Orb keeps about the workspace outside it (`setGuardedRoots`: the backups' root
   and chosen folder, the app's `claves` folder and its `Local State`; section 36; also when a command names them through
-  `%APPDATA%`, `$env:APPDATA` or `~`, written out by `expandEnv`). Not a boundary: a shell of the same Windows
-  user can always reach the folder another way; the agents' identity does not depend on its database any more (tickets,
+  `%APPDATA%`, `$env:APPDATA` or `~`, written out by `expandEnv`). Still not a boundary: a script or a program of the
+  same Windows user can always reach the folder another way (its own `chdir`, a path built while it runs, a variable); the agents' identity does not depend on its database any more (tickets,
   above), so what is left is the integrity of Orb's data against an agent bent on it, accepted. The folder is one value
   (`ctx.paths.internal`): all of `core` since 3.8 (section 36).
 - **Project agent settings:** a task can write the project's agent settings that later agents (other
@@ -1064,6 +1117,7 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
 |---|---|
 | `npm test` | Every `test/*.test.mjs` (including that the es/en dictionaries match and that the English has no Spanish) of the engine with fake agents (`test/fixtures/fake-live.mjs` via `ORB_FAKE_AGENTS`), the real protocols against fake servers (ACP, codex app-server, Cursor CLI), the guard, sessions, tasks, delegation, Task Review, usage, permissions, the phone access, the master password and migrations |
 | `npm run test:app` | The whole app with Electron |
+| `node scripts/medir.mjs --hidden` | Performance of the packaged app (`electron-builder --win dir` first): start, memory, CPU at rest and scrolling (§27, Performance) |
 | `node test/explora.e2e.mjs` | Walkthrough with screenshots in `test-results/explora/`: first launch ("Preparing your PC", with the folder dialog mocked), every view and Settings section in day and night, the five themes, narrow window. With `ORB_LANG=en`, the same in English (`explora-en/`). Notes go to `notas.txt` |
 | `node test/real.e2e.mjs claude,codex,cursor` | **Real agents**: conversations, assistant task, report, undo, approval, steering, queue, fork, Task Review and scheduled tasks |
 | `ORB_E2E_EXE=dist/win-unpacked/Orb.exe node test/packaged-live.e2e.mjs` | The packaged app with real Claude |

@@ -135,9 +135,29 @@ export function groupOf(board, project) {
 // folders for projects), are dropped unless they still have open tasks. Linked outside folders are left alone.
 // 3.8: the folders of other users' projects of 3.7 (IGNORED_PROJECTS) are not listed; 3.8.1: nor the finished ones.
 const FINISHED_GONE_MS = 30 * 24 * 3_600_000;
+// 3.8.1: what the last pass found with nothing to change, per board: the engine looks every 5 s (and each list asked for
+// every 2 s), and the real path of every folder (folderKey) costs a disk lookup per part of the path (~65 ms with 50
+// projects). The same projects, folders, existence and lists as then: nothing can have changed, nothing is looked up.
+const settled = new WeakMap();
+// Whether a project's folder is still where a project of the list may be. Inside the workspace: it exists and is in a
+// category. Outside: a linked folder that exists, or whose whole drive is missing (a disk unplugged for a while).
+const inPlace = (home, p) => {
+  const rel = path.relative(home, p.path);
+  const inside = Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel);
+  return inside ? Boolean(fs.existsSync(p.path) && categoryOf(home, p.path)) : !rel || fs.existsSync(p.path) || !fs.existsSync(path.parse(p.path).root);
+};
+const openTasks = (board, name) => board.one("SELECT COUNT(*) AS n FROM tasks WHERE project = ? AND status IN ('queued', 'awaiting_approval', 'running')", name).n;
+const fingerprint = (board, home, ignored, deleting) => {
+  const cats = CATEGORIES.map((cat) => { try { return fs.readdirSync(ctx.paths.categories[cat], { withFileTypes: true }).map((e) => `${e.isDirectory() ? 'd' : 'f'}${e.name}`).join('/'); } catch { return '-'; } });
+  // A project out of place stays while it has open tasks: how many it has is part of what was found.
+  const projects = board.all('SELECT name, path FROM projects ORDER BY name').map((p) => `${p.name}|${p.path}|${inPlace(home, p) ? '' : openTasks(board, p.name)}`);
+  return JSON.stringify([home, cats, projects, [...ignored].sort(), [...deleting].sort()]);
+};
 export function syncProjects(board) {
   const home = ctx.paths.home;
-  const norm = folderKey;
+  // Each folder's real path once per pass (it was asked up to three times).
+  const keys = new Map();
+  const norm = (folder) => { let k = keys.get(folder); if (k === undefined) { k = folderKey(folder); keys.set(folder, k); } return k; };
   const ignoredList = board.settingJson(IGNORED_PROJECTS);
   const ignored = new Set(Array.isArray(ignoredList) ? ignoredList : []);
   // 3.8.1: the finished projects (project-close.mjs) are not brought back. One whose folder is not found leaves that list
@@ -157,16 +177,15 @@ export function syncProjects(board) {
   // Bin) until the engine finishes it.
   settleDeleting(board, home);
   const deleting = new Set(deletingProjects(board).map((x) => x.name));
-  let changed = false;
+  const print = fingerprint(board, home, ignored, deleting);
+  if (settled.get(board) === print) return false;
+  let changed = false; let again = false; // again: something to look at again next time (changed, or failed for now)
   // First what is gone, so a folder found again (or moved into the workspace) gets its own name, not «name (2)».
   // Inside the workspace: a folder deleted or no longer in a category. Outside: a linked folder that no longer exists
   // (one of an earlier workspace, a moved folder), unless its whole drive is missing (a disk unplugged for a while).
   // A project with open tasks stays (removeProject refuses).
   for (const p of board.projects()) {
-    if (deleting.has(p.name)) continue;
-    const rel = path.relative(home, p.path);
-    const inside = Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel);
-    if (inside ? fs.existsSync(p.path) && categoryOf(home, p.path) : !rel || fs.existsSync(p.path) || !fs.existsSync(path.parse(p.path).root)) continue;
+    if (deleting.has(p.name) || inPlace(home, p)) continue;
     try { board.removeProject(p.name, 'orb'); changed = true; } catch { /* open tasks: kept */ }
   }
   const byPath = new Map(board.projects().map((p) => [norm(p.path), p]));
@@ -181,7 +200,7 @@ export function syncProjects(board) {
       // The same folder name in two categories: the second says which one («app (android)»), never a bare number.
       let name = e.name;
       if (board.project(name)) { name = `${e.name} (${cat})`; for (let i = 2; board.project(name); i++) name = `${e.name} (${cat} ${i})`; }
-      try { board.addProject({ name, path: folder }, 'orb', { fromUser: true }); changed = true; } catch { /* unreadable folder: skipped */ }
+      try { board.addProject({ name, path: folder }, 'orb', { fromUser: true }); changed = true; } catch { again = true; /* unreadable folder: skipped */ }
     }
   }
   // A project registered as «name (2)» before 3.8 (its name was held by a stale twin) takes its folder's name back once
@@ -189,10 +208,11 @@ export function syncProjects(board) {
   for (const p of board.projects()) {
     const m = /^(.+) \(\d+\)$/.exec(p.name);
     if (!m || m[1] !== path.basename(p.path) || folderName(m[1], '') !== m[1] || board.project(m[1]) || !categoryOf(home, p.path)) continue;
-    try { renameProject(board, { name: p.name, to: m[1] }, 'orb'); changed = true; } catch { /* busy or not a valid name: next time */ }
+    try { renameProject(board, { name: p.name, to: m[1] }, 'orb'); changed = true; } catch { again = true; /* busy or not a valid name: next time */ }
   }
   // Folders not listed that no longer exist leave the list (board.addProject takes out the ones added again).
   const others = [...ignored].filter((k) => !finished.some((x) => x.key === k));
-  if (others.some((k) => !present.has(k))) board.settingJson(IGNORED_PROJECTS, others.filter((k) => present.has(k)));
+  if (others.some((k) => !present.has(k))) { board.settingJson(IGNORED_PROJECTS, others.filter((k) => present.has(k))); again = true; }
+  if (changed || again) settled.delete(board); else settled.set(board, print);
   return changed;
 }

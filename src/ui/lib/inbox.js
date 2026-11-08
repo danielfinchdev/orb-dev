@@ -1,15 +1,17 @@
 // 3.6 (messaging, step M3): the pure pieces of the chat list (no React, no store): the unread count, the short time of a
 // row, the rows themselves (conversations with Orbe and direct ones with an agent), their progress line and their
 // grouping. The data comes from inbox.list (src/engine/api-inbox.mjs). Tested in test/mensajeria-orb.test.mjs.
+import { timeZone } from './clock.js';
 
 // What is unread (muted chats do not count), for the badges.
 export const unreadOf = (data) => (Array.isArray(data?.items) ? data.items.reduce((n, x) => n + (x.muted ? 0 : Number(x.unread) || 0), 0) : 0);
 
-// One formatter per language and shape: toLocale…String builds a new one on every call, and the list has hundreds of rows.
+// One formatter per language, shape and time zone: toLocale…String builds a new one on every call, and the list has
+// hundreds of rows (a formatter keeps the zone it was made with: lib/clock.js says when the system's changed).
 const FORMATS = { time: { hour: '2-digit', minute: '2-digit' }, weekday: { weekday: 'short' }, date: { day: 'numeric', month: 'short' } };
 const formatters = new Map();
 const format = (locale, shape, d) => {
-  const k = `${locale}|${shape}`;
+  const k = `${locale}|${shape}|${timeZone()}`;
   if (!formatters.has(k)) formatters.set(k, new Intl.DateTimeFormat(locale, FORMATS[shape]));
   return formatters.get(k).format(d);
 };

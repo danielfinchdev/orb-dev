@@ -12,8 +12,11 @@ import { statusAll, status as agentStatus, openLogin, startAccountLogin, forgetI
 import { sendCode as loginSendCode, cancelLogin, loginInfo, allLogins } from '../agents/login.mjs';
 import { translate } from '../core/i18n.mjs';
 import { refreshModels, refreshAllModels } from './catalog.mjs';
-import * as installer from './installer.mjs';
 import { fail, str, oneOf } from './api-common.mjs';
+
+// 3.8.1: the installer is loaded the first time an install is asked for (not at the engine's start).
+let installerModule = null;
+const inst = () => (installerModule ??= import('./installer.mjs'));
 
 export function accountMethods({ board, emit, log }) {
   return {
@@ -53,7 +56,8 @@ export function accountMethods({ board, emit, log }) {
     'agents.loginCancel': ({ id }) => cancelLogin(str(id, 'inicio de sesión', 80)),
     'agents.loginState': ({ id }) => (id ? loginInfo(str(id, 'inicio de sesión', 80)) : allLogins()),
     // 3.5: install or update Claude Code or Codex with one button, hidden and for this user only (installer.mjs).
-    'agents.install': ({ agent }) => {
+    'agents.install': async ({ agent }) => {
+      const installer = await inst();
       const a = oneOf(agent, installer.AGENT_INSTALL, 'agente');
       try {
         return installer.installAgent(a, emit, {
@@ -62,7 +66,7 @@ export function accountMethods({ board, emit, log }) {
         });
       } catch (error) { fail(error.message); }
     },
-    'agents.installState': ({ agent }) => installer.agentInstallState(oneOf(agent, installer.AGENT_INSTALL, 'agente')),
+    'agents.installState': async ({ agent }) => { const installer = await inst(); return installer.agentInstallState(oneOf(agent, installer.AGENT_INSTALL, 'agente')); },
     // ---- accounts: several subscriptions of the same agent
     'accounts.add': ({ agent, label, home }) => {
       agent = oneOf(agent, AGENT_IDS, 'agente');

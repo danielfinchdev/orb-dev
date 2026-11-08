@@ -74,7 +74,7 @@ test('la guardia: las skills de core se leen; ejecutar uno de sus scripts pregun
   assert.equal(d({ tool: 'Read', paths: [at('datos', 'orb.db')] }).decision, 'deny');
 });
 
-test('lo que cargan los agentes: un plugin de Orb con un enlace por skill activa; se rehace al cambiar', () => {
+test('lo que cargan los agentes: un plugin de Orb con una copia por skill activa; se rehace al cambiar', () => {
   const core = path.join(scratch(), 'core');
   skillAt(path.join(core, 'skills', 'facturas'), 'facturas');
   skillAt(path.join(core, 'skills', 'informes'), 'informes', 'Hace informes semanales.');
@@ -82,15 +82,15 @@ test('lo que cargan los agentes: un plugin de Orb con un enlace por skill activa
   assert.deepEqual(live.list.map((s) => s.name), ['facturas']);
   assert.equal(JSON.parse(fs.readFileSync(path.join(live.plugin, '.claude-plugin', 'plugin.json'), 'utf8')).name, 'orb-skills');
   const link = path.join(live.root, 'facturas');
-  assert.ok(fs.lstatSync(link).isSymbolicLink() || fs.statSync(link).isDirectory());
-  assert.equal(fs.readFileSync(path.join(link, 'SKILL.md'), 'utf8'), fs.readFileSync(path.join(core, 'skills', 'facturas', 'SKILL.md'), 'utf8'));
+  assert.ok(!fs.lstatSync(link).isSymbolicLink() && fs.statSync(link).isDirectory(), 'una copia (H1c-fix2: nunca una unión)');
+  assert.equal(fs.readFileSync(path.join(link, 'SKILL.md'), 'utf8'), '---\nname: "facturas"\ndescription: "Revisa facturas y avisa de las que faltan."\n---\n\n# facturas\nPasos.\n');
   assert.ok(!fs.existsSync(path.join(live.root, 'informes')));
   live = X.exposeSkills(core, { skills: [{ name: 'informes', enabled: true }] });
   assert.deepEqual(fs.readdirSync(live.root).sort(), ['informes']);
   assert.ok(fs.existsSync(path.join(core, 'skills', 'facturas', 'SKILL.md')), 'quitar el enlace nunca borra la skill');
   // The brief of an agent without skills of its own names each one and its SKILL.md.
   const brief = X.skillsBrief(live.list);
-  assert.match(brief, /## Skills de Orb/); assert.ok(brief.includes(path.join(core, 'skills', 'informes', 'SKILL.md')));
+  assert.match(brief, /## Skills de Orb/); assert.ok(brief.includes(path.join(live.root, 'informes', 'SKILL.md')));
   assert.equal(X.skillsBrief([]), '');
   assert.equal(claude.nativeSkills, true); assert.equal(codex.nativeSkills, true);
 });
@@ -542,7 +542,7 @@ test('M3/M4: lo que una skill pide a Claude Code (allowed-tools) no llega; una s
   assert.equal(fs.lstatSync(at).isSymbolicLink(), false, 'una copia, no una unión');
   const text = fs.readFileSync(path.join(at, 'SKILL.md'), 'utf8');
   assert.doesNotMatch(text, /allowed-tools|Bash|hooks|PreToolUse/);
-  assert.match(text, /name: atajos\ndescription: Hace cosas\./);
+  assert.match(text, /^---\nname: "atajos"\ndescription: "Hace cosas\."\n---\n/);
   assert.ok(fs.existsSync(path.join(at, 'scripts', 'paso.py')));
   assert.match(fs.readFileSync(path.join(dir, 'SKILL.md'), 'utf8'), /allowed-tools/, 'la de core no se toca');
   // A skill put by hand in core\skills as a junction to a folder outside: left out (and the list says so).

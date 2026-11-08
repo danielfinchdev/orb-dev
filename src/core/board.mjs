@@ -14,7 +14,21 @@ export const STATUSES = ['queued', 'awaiting_approval', 'running', 'done', 'fail
 const FINISHED = new Set(['done', 'failed', 'cancelled']);
 const MODES = ['carpeta', 'aislada'];
 const now = () => new Date().toISOString();
-const parse = (task) => task && { ...task, mode: task.mode ?? 'carpeta', readonly: Boolean(task.readonly), ...taskOptions({ reasoning: task.reasoning ?? undefined, fast: task.fast == null ? undefined : Boolean(task.fast) }), depends_on: JSON.parse(task.depends_on), sensitivity: JSON.parse(task.sensitivity) };
+// A conversation's row as the rest of Orb reads it (titled as a boolean, its context meter parsed).
+// 3.8.1: both change the row SQLite just made (a new object each time) instead of copying it: copying the ~35 columns
+// of every task of the lists cost more than the query.
+const conversationRow = (r) => {
+  let context = null; try { context = r.context ? JSON.parse(r.context) : null; } catch { /* none */ }
+  r.titled = Boolean(r.titled); r.context = context;
+  return r;
+};
+const parse = (task) => {
+  if (!task) return task;
+  const { reasoning, fast } = taskOptions({ reasoning: task.reasoning ?? undefined, fast: task.fast == null ? undefined : Boolean(task.fast) });
+  task.mode ??= 'carpeta'; task.readonly = Boolean(task.readonly); task.reasoning = reasoning; task.fast = fast;
+  task.depends_on = JSON.parse(task.depends_on); task.sensitivity = JSON.parse(task.sensitivity);
+  return task;
+};
 
 // The user's name as the assistant writes it ("el usuario" when not set).
 export const userName = () => ctx.config?.userName?.trim() || 'el usuario';
@@ -98,9 +112,19 @@ export class Board {
   // hints: what changed exactly (a chat line's conversation), for the listeners that need it; never content.
   changed(what, hints = null) { for (const fn of this.listeners) { try { fn(what, hints); } catch { /* a listener must never break a write */ } } }
 
-  all(sql, ...params) { return this.db.prepare(sql).all(...params); }
-  one(sql, ...params) { return this.db.prepare(sql).get(...params); }
-  run(sql, ...params) { return this.db.prepare(sql).run(...params); }
+  all(sql, ...params) { return this.stmt(sql).all(...params); }
+  one(sql, ...params) { return this.stmt(sql).get(...params); }
+  run(sql, ...params) { return this.stmt(sql).run(...params); }
+  // 3.8.1: each query is compiled once and kept (the lists of the window run the same few hundred queries on every
+  // refresh; compiling one costs more than running it). Bounded: SQL built with a variable number of fields or
+  // placeholders could otherwise grow it without end. SQLite compiles a kept statement again by itself when the schema
+  // changes.
+  stmt(sql) {
+    if (this._stmtDb !== this.db) { this._stmts = new Map(); this._stmtDb = this.db; }
+    let s = this._stmts.get(sql);
+    if (!s) { if (this._stmts.size >= 400) this._stmts.clear(); s = this.db.prepare(sql); this._stmts.set(sql, s); }
+    return s;
+  }
 
   transaction(fn) {
     this.db.exec('BEGIN IMMEDIATE');
@@ -546,12 +570,10 @@ export class Board {
   // ---- 3.2: the conversations with the assistant (each with its title, project, brain and its agent's conversation id)
   conversation(id) {
     const r = id == null ? null : this.one('SELECT * FROM conversations WHERE id = ?', Number(id));
-    if (!r) return null;
-    let context = null; try { context = r.context ? JSON.parse(r.context) : null; } catch { /* none */ }
-    return { ...r, titled: Boolean(r.titled), context };
+    return r ? conversationRow(r) : null;
   }
   conversations({ limit = 300 } = {}) {
-    return this.all('SELECT * FROM conversations WHERE bot_id IS NULL AND group_id IS NULL ORDER BY updated_at DESC, id DESC LIMIT ?', Math.min(Math.max(Number(limit) || 300, 1), 2000)).map((r) => this.conversation(r.id) ?? r);
+    return this.all('SELECT * FROM conversations WHERE bot_id IS NULL AND group_id IS NULL ORDER BY updated_at DESC, id DESC LIMIT ?', Math.min(Math.max(Number(limit) || 300, 1), 2000)).map(conversationRow);
   }
   createConversation({ title = '', project = null, agent = 'claude', account = null, model = null, reasoning = 'medium' } = {}) {
     if (project && !this.project(project)) throw new Error(tr('sys.board.unknownProject', { name: project }));

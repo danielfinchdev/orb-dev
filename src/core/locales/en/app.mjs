@@ -87,5 +87,8 @@ export default {
   "app.backExit": "Press again to exit",
   "app.crashTitle": "Something went wrong on this screen",
   "app.crashBody": "Orb went back to a safe point. If it happens again, close the app and open it again.",
-  "app.crashHome": "Back to start"
+  "app.crashHome": "Back to start",
+  "app.loadOfflineTitle": "No connection",
+  "app.loadOfflineBody": "This screen could not be loaded. Check the connection and try again.",
+  "app.loadOfflineToast": "Could not open: no connection."
 };

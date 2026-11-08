@@ -87,5 +87,8 @@ export default {
   "app.backExit": "Pulsa otra vez para salir",
   "app.crashTitle": "Algo falló en esta pantalla",
   "app.crashBody": "Orb ha vuelto a un punto seguro. Si se repite, cierra la app y vuelve a abrirla.",
-  "app.crashHome": "Volver al inicio"
+  "app.crashHome": "Volver al inicio",
+  "app.loadOfflineTitle": "Sin conexión",
+  "app.loadOfflineBody": "No se pudo cargar esta pantalla. Comprueba la conexión y vuelve a intentarlo.",
+  "app.loadOfflineToast": "No se pudo abrir: sin conexión."
 };

@@ -53,3 +53,21 @@ test('hallazgo 25: una tarea de solo lectura que escribe BITACORA.md la deja com
     board.db.close();
   } finally { h.cleanup(); }
 });
+
+test('3.8.1: mayHaveWorktrees lo sabe por los archivos (sin git): sin repositorio, sin copias y con una copia', async () => {
+  const h = tempHome();
+  try {
+    const { mayHaveWorktrees } = await import('../src/core/workspace.mjs');
+    const plain = path.join(h.home, 'web', 'sin-git'); fs.mkdirSync(plain, { recursive: true });
+    const repo = path.join(h.home, 'web', 'con-git'); fs.mkdirSync(repo, { recursive: true }); gitInit(repo);
+    const inner = path.join(repo, 'sub'); fs.mkdirSync(inner);
+    const seen = new Map();
+    assert.equal(mayHaveWorktrees(plain, seen), false, 'sin repositorio');
+    assert.equal(mayHaveWorktrees(repo, seen), false, 'repositorio sin copias');
+    assert.equal(mayHaveWorktrees(inner, seen), false, 'una subcarpeta del repositorio');
+    spawnSync('git', ['-C', repo, 'worktree', 'add', '-q', '-b', 'orb/1-x', path.join(h.base, 'copia-1')]);
+    assert.equal(mayHaveWorktrees(repo), true, 'con una copia (git worktree)');
+    assert.equal(mayHaveWorktrees(inner), true);
+    assert.equal(mayHaveWorktrees(path.join(h.base, 'copia-1')), true, 'la copia misma (.git es un archivo): no se puede saber, se pregunta a git');
+  } finally { h.cleanup(); }
+});

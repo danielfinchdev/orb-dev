@@ -6,8 +6,8 @@
 //     `skills` ([{ name, enabled, source }]) and `mcpServers` (the connectors, as before, with `source`). A folder with no
 //     entry is off.
 //   - How agents get the skills on (exposeSkills): core\skills\.activas is a Claude Code plugin made by Orb
-//     (.claude-plugin\plugin.json + skills\<name>, a junction to core\skills\<name> for each skill that is on; a copy where
-//     junctions cannot be made). Claude gets it as a plugin (SDK `plugins`), Codex as an extra root of skills (app-server
+//     (.claude-plugin\plugin.json + skills\<name>, a copy of core\skills\<name> for each skill that is on, never a junction,
+//     its SKILL.md with a frontmatter Orb writes: only name and description). Claude gets it as a plugin (SDK `plugins`), Codex as an extra root of skills (app-server
 //     `skills/extraRoots/set`); the other agents get the list (name, description, path of its SKILL.md) in their brief.
 //     Agents read core\skills (src/core/guard.mjs); nobody but Orb writes there.
 //   - Bringing one in (importExtension): from a folder (copied) or a git repository (cloned, https only), checked
@@ -48,11 +48,26 @@ const LIMITS = { skill: { bytes: 20 * 1024 * 1024, files: 2000 }, mcp: { bytes: 
 export const DEP_DIRS = new Set(['node_modules', '.git', '.venv', 'venv', '__pycache__', '.cache']);
 const TOOL_CONFIG = /^(\.npmrc|\.yarnrc(\.ya?ml)?|\.yarn|\.pnpmfile\.c?js|pnpm-workspace\.ya?ml|\.pnpmrc)$/i;
 const SKIP = (name) => DEP_DIRS.has(name) || TOOL_CONFIG.test(name);
-// A server's secrets (tokens, keys, credentials): never copied out of core («mejorar», «Editar en un proyecto»); a new
-// version keeps the ones of core. Known names, plus what the server declares (package.json › orb.secrets, or one
-// pattern per line in .orb-secrets).
-const SECRET_DIR = /^\.?(tokens?|secrets?|credentials?)$/i;
-const SECRET_FILE = /^(\.env(?!\.(example|sample|template|dist)$)(\..+)?|\.netrc|\.pypirc|\.npmrc|id_(rsa|dsa|ecdsa|ed25519)(\.pub)?|.*\.(pem|key|p12|pfx|jks|keystore)|client_secrets?.*\.json|service[-_]?account.*\.json|.*(token|credential|secret)s?[^/]*\.(json|txt|ya?ml|dat|db|sqlite3?|pickle|pkl|bin|cache|enc))$/i;
+// A server's secrets (tokens, keys, credentials, sessions): never copied out of core («mejorar», «Editar en un proyecto»);
+// a new version always keeps the ones of core. Known names, plus what the server declares (package.json › orb.secrets,
+// or one pattern per line in .orb-secrets). A folder: tokens/, secrets/, credentials/ and the session folders of WhatsApp
+// servers anywhere; auth/, session(s)/ and store/ when they are not in a folder of code (src, lib…: there they are
+// code). A file: keys, tokens, cookies, sessions and databases of any kind, also with .bak, .old or .orig after them.
+const SECRET_DIR = /^\.?(tokens?|secrets?|credentials?|wwebjs_auth|wwebjs_cache|auth_info.*|baileys_auth.*)$/i;
+const SESSION_DIR = /^\.?(auth|session|sessions|store)$/i;
+const CODE_DIR = /(^|\/)(src|lib|app|apps|components|pages|packages|test|tests|dist|build)\//i;
+const DATA_EXT = String.raw`(\.(json|txt|ya?ml|env|cfg|conf|ini|toml|dat|bin|enc|key|pem|pickle|pkl|cache))?`;
+const SECRET_FILE = new RegExp(`^(?:${[
+  String.raw`\.env(?!\.(example|sample|template|dist)$)(\..+)?`, String.raw`\.netrc`, String.raw`\.pypirc`, String.raw`\.npmrc`, String.raw`\.git-credentials`, 'credentials',
+  String.raw`id_(rsa|dsa|ecdsa|ed25519)(\.pub)?`, String.raw`.*\.(pem|key|p12|pfx|jks|keystore)`, String.raw`client_secrets?.*\.json`, String.raw`service[-_]?account.*\.json`,
+  String.raw`.*(token|credential|secret)s?[^/]*\.(json|txt|ya?ml|dat|db|sqlite3?|pickle|pkl|bin|cache|enc)`,
+  String.raw`.*\.keys?\.json`, String.raw`keys?\.json`, String.raw`o?auth([-_.][^/]*)?\.json`, String.raw`api[-_]?keys?([-_][^/.]*)?${DATA_EXT}`, String.raw`cookies?([-_][^/.]*)?${DATA_EXT}`,
+  String.raw`.*session.*\.(json|db|sqlite3?)`, String.raw`storage[-_]?state.*\.json`, String.raw`.*\.(db|sqlite3?)(-journal|-wal|-shm)?`
+].map((p) => `(?:${p})`).join('|')})$`, 'i');
+const BACKUP = /(\.(bak|old|orig|save|backup|tmp)|~)+$/i;
+const secretName = (name, rel, isDirectory) => (isDirectory
+  ? SECRET_DIR.test(name) || (SESSION_DIR.test(name) && !CODE_DIR.test(rel))
+  : SECRET_FILE.test(name) || SECRET_FILE.test(name.replace(BACKUP, '')));
 
 const isDir = (p) => { try { return fs.statSync(p).isDirectory(); } catch { return false; } };
 const isFile = (p) => { try { return fs.statSync(p).isFile(); } catch { return false; } };
@@ -116,9 +131,10 @@ export function mcpDescription(dir) {
 }
 
 // ---- skills: what SKILL.md says (its frontmatter: name and description; a value may go on over the next lines).
+const FRONTMATTER = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---\s*(?:\r?\n|$)/;
 export function skillMeta(dir) {
   let text; try { text = fs.readFileSync(path.join(dir, SKILL_FILE), 'utf8'); } catch { return null; }
-  const m = /^﻿?---\r?\n([\s\S]*?)\r?\n---\s*(?:\r?\n|$)/.exec(text);
+  const m = FRONTMATTER.exec(text);
   const fm = {};
   if (m) {
     let key = null;
@@ -166,9 +182,11 @@ function checkTree(dir, kind, tr) {
   if (t.files > lim.files || t.bytes > lim.bytes) throw new ExtensionError('ext.err.tooBig', { mb: Math.round(lim.bytes / 1048576), files: lim.files }, tr);
   return t;
 }
-// A copy that never follows a link: each entry is looked at (lstat) and copied right then; a file must still be the same
-// file inside the folder after its copy (a swap for a link or a junction meanwhile is caught). links: 'refuse' (throw,
-// the default) or 'skip'. kind: the size limit of a skill or a server ('mcp' by default; null: none). → { files, bytes }
+// A copy that never follows a link: each entry is looked at (lstat) and copied right then. A file is opened and checked
+// to be that same file (its id, from the open handle: a folder above swapped for a junction meanwhile is caught), and
+// copied from that handle, its main content only (NTFS alternate data streams, which no list or fingerprint sees, stay
+// behind). links: 'refuse' (throw, the default) or 'skip'. kind: the size limit of a skill or a server ('mcp' by
+// default; null: none). → { files, bytes }
 export function copyTree(src, dest, { kind = 'mcp', skip = SKIP, links = 'refuse', tr = null } = {}) {
   if (isLink(src)) throw new ExtensionError('ext.err.link', { file: path.basename(src) }, tr);
   const root = norm(fs.realpathSync.native(src));
@@ -179,47 +197,47 @@ export function copyTree(src, dest, { kind = 'mcp', skip = SKIP, links = 'refuse
     fs.mkdirSync(to, { recursive: true });
     for (const e of fs.readdirSync(from, { withFileTypes: true })) {
       const full = path.join(from, e.name); const r = rel ? `${rel}/${e.name}` : e.name;
-      let st; try { st = fs.lstatSync(full); } catch { continue; }
+      let st; try { st = fs.lstatSync(full, { bigint: true }); } catch { continue; }
       if (skip?.(e.name, r, st.isDirectory())) continue;
       if (st.isSymbolicLink()) { if (links === 'refuse') refuse(r); continue; }
       if (st.isDirectory()) { walk(full, path.join(to, e.name), r); continue; }
       if (!st.isFile()) continue;
-      if (st.nlink > 1 && links === 'refuse') refuse(r);
-      if (++files > lim.files || (bytes += st.size) > lim.bytes) throw new ExtensionError('ext.err.tooBig', { mb: Math.round(lim.bytes / 1048576), files: lim.files }, tr);
+      if (st.nlink > 1n && links === 'refuse') refuse(r);
+      if (++files > lim.files || (bytes += Number(st.size)) > lim.bytes) throw new ExtensionError('ext.err.tooBig', { mb: Math.round(lim.bytes / 1048576), files: lim.files }, tr);
       const real = norm(fs.realpathSync.native(full));
       if (!real.startsWith(root + path.sep)) refuse(r);
-      fs.copyFileSync(full, path.join(to, e.name), fs.constants.COPYFILE_EXCL);
-      const again = fs.lstatSync(full);
-      if (again.isSymbolicLink() || again.ino !== st.ino || again.dev !== st.dev) refuse(r);
+      const fd = fs.openSync(full, 'r');
+      try {
+        const open = fs.fstatSync(fd, { bigint: true });
+        if (!open.isFile() || open.ino !== st.ino || open.dev !== st.dev) refuse(r);
+        fs.writeFileSync(path.join(to, e.name), fs.readFileSync(fd), { flag: 'wx' });
+      } finally { fs.closeSync(fd); }
     }
   };
   try { walk(src, dest, ''); } catch (error) { fs.rmSync(dest, { recursive: true, force: true }); throw error; }
   return { files, bytes };
 }
 // What a skill's SKILL.md asks of Claude Code beyond its text: tools it may use without asking (allowed-tools), hooks,
-// or commands run when it loads (!`…`). Checked with the real Claude Code: allowed-tools skips Orb's guard (canUseTool),
-// so the copy agents load leaves it out (exposeSkills); the commands are off (src/agents/claude.mjs ›
-// disableSkillShellExecution) and so are hooks (disableAllHooks).
+// or commands run when it loads (!`…`). Only for the list (the row warns): Claude never gets these, whatever the YAML
+// says (exposeSkills gives it a SKILL.md whose frontmatter Orb writes); the commands are off anyway
+// (src/agents/claude.mjs › disableSkillShellExecution) and so are hooks (disableAllHooks). Any spelling counts (a quoted
+// key, a merge key, an explicit key): the frontmatter's text is searched, not parsed.
 export function skillAsks(dir) {
   let text; try { text = fs.readFileSync(path.join(dir, SKILL_FILE), 'utf8'); } catch { return null; }
-  const m = /^﻿?---\r?\n([\s\S]*?)\r?\n---\s*(?:\r?\n|$)/.exec(text);
+  const m = FRONTMATTER.exec(text);
   const fm = m ? m[1] : '';
   const body = m ? text.slice(m[0].length) : text;
-  const asks = { tools: /^allowed[-_]tools\s*:/im.test(fm), hooks: /^hooks\s*:/im.test(fm), commands: /!`[^`\n]+`/.test(body) };
+  const asks = { tools: /allowed[-_\s]?tools/i.test(fm), hooks: /\bhooks\b/i.test(fm), commands: /!`[^`\n]+`/.test(body) };
   return asks.tools || asks.hooks || asks.commands ? asks : null;
 }
-// SKILL.md without allowed-tools and hooks in its frontmatter (and the lines that go on with them).
-export function withoutPermissions(text) {
-  const m = /^(﻿?---\r?\n)([\s\S]*?)(\r?\n---\s*(?:\r?\n|$))/.exec(text);
-  if (!m) return text;
-  const out = []; let dropping = false;
-  for (const line of m[2].split(/\r?\n/)) {
-    if (/^[A-Za-z_][\w-]*\s*:/.test(line)) dropping = /^(allowed[-_]tools|hooks)\s*:/i.test(line);
-    else if (dropping && /^(\s|-)/.test(line)) continue;
-    else dropping = false;
-    if (!dropping) out.push(line);
-  }
-  return `${m[1]}${out.join('\n')}${m[3]}${text.slice(m[0].length)}`;
+// The SKILL.md Claude gets: a frontmatter written by Orb with only the name and the description (JSON strings, which YAML
+// reads as they are), then the skill's text as it is. Nothing of the original frontmatter reaches Claude: a key Orb's
+// reading misses (allowed-tools in quotes or through a YAML merge key, checked with the real Claude Code) cannot either.
+export function orbSkillText(text, { name, description }) {
+  const m = /^\uFEFF?---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/.exec(text);
+  const body = m ? text.slice(m[0].length) : String(text).replace(/^\uFEFF/, '');
+  const clean = (v) => String(v ?? '').replace(/[\u0000-\u001f\u007f\u0085\u2028\u2029]+/g, ' ').trim();
+  return `---\nname: ${JSON.stringify(clean(name))}\ndescription: ${JSON.stringify(clean(description))}\n---\n${body}`;
 }
 // A skill: SKILL.md with a valid name (the one given, or its folder's) and a description. → { name, description }
 export function checkSkill(dir, { name = null, tr = null } = {}) {
@@ -238,6 +256,8 @@ export function checkMcp(dir, { tr = null } = {}) {
   if (isLink(dir)) throw new ExtensionError('ext.err.link', { file: path.basename(dir) }, tr);
   const start = startCommand(dir);
   if (!start) throw new ExtensionError('ext.err.noStart', {}, tr);
+  const local = localDep(dir);
+  if (local) throw new ExtensionError('ext.err.localDep', { dep: local }, tr);
   checkTree(dir, 'mcp', tr);
   return { ...start, description: mcpDescription(dir) };
 }
@@ -273,34 +293,115 @@ function declaredSecrets(dirs) {
     return p.replace(/\/+$/, '').includes('/') ? (rel) => re.test(rel) : (rel) => re.test(rel.split('/').pop());
   });
 }
-// A test for what is a secret in these folders: (name, rel, isDir) → true.
+// A test for what is a secret in these folders, by its name or what the server declares: (name, rel, isDir) → true.
 export function secretTest(...dirs) {
   const declared = declaredSecrets(dirs);
-  return (name, rel, isDirectory) => (isDirectory ? SECRET_DIR.test(name) : SECRET_FILE.test(name)) || declared.some((t) => t(rel));
+  return (name, rel, isDirectory) => secretName(name, rel, isDirectory) || declared.some((t) => t(rel));
 }
-// Whether a server of core holds keys: its connector has some (in the vault), or its folder has secret files.
+// What a folder's .gitignore files leave out of git (and its .git\info\exclude), read by Orb: git is never run there (its
+// settings could start a program). → (rel, isDir) → true when ignored. Each .gitignore counts for its folder and below,
+// the last pattern that matches wins (a later «!» brings a path back), and an ignored folder is left out whole.
+export function gitignored(dir) {
+  const cache = new Map();
+  const esc = (c) => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const compile = (line) => {
+    let re = '';
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '*' && line[i + 1] === '*' && (i === 0 || line[i - 1] === '/') && (i + 2 === line.length || line[i + 2] === '/')) {
+        if (i + 2 === line.length) re += '.*'; else { re += '(?:.*/)?'; i += 2; continue; }
+        i++; continue;
+      }
+      if (c === '*') re += '[^/]*';
+      else if (c === '?') re += '[^/]';
+      else if (c === '[' && line.indexOf(']', i + 2) > 0) { const end = line.indexOf(']', i + 2); re += `[${line.slice(i + 1, end).replace(/^!/, '^').replace(/\\/g, '\\\\')}]`; i = end; }
+      else if (c === '\\' && i + 1 < line.length) re += esc(line[++i]);
+      else re += esc(c);
+    }
+    try { return new RegExp(`^${re}$`, 'i'); } catch { return null; }
+  };
+  const rulesOf = (sub) => {
+    if (cache.has(sub)) return cache.get(sub);
+    const files = [path.join(dir, ...sub.split('/').filter(Boolean), '.gitignore')];
+    if (!sub) files.unshift(path.join(dir, '.git', 'info', 'exclude'));
+    const rules = [];
+    for (const f of files) {
+      let text = ''; try { if (!isLink(f)) text = fs.readFileSync(f, 'utf8'); } catch { continue; }
+      for (let line of text.split(/\r?\n/).slice(0, 2000)) {
+        line = line.replace(/(?<!\\)\s+$/, '');
+        if (!line || line.startsWith('#')) continue;
+        const negate = line.startsWith('!'); if (negate) line = line.slice(1);
+        line = line.replace(/^\\(?=[#!])/, '');
+        const dirOnly = line.endsWith('/'); line = line.replace(/\/+$/, '');
+        const anchored = line.includes('/'); line = line.replace(/^\/+/, '');
+        const test = line ? compile(line) : null;
+        if (test) rules.push({ test, negate, dirOnly, anchored });
+      }
+    }
+    cache.set(sub, rules);
+    return rules;
+  };
+  return (rel, isDirectory) => {
+    const parts = String(rel).split('/'); let ignored = false;
+    for (let depth = 0; depth < parts.length; depth++) {
+      const inside = parts.slice(depth).join('/');
+      for (const r of rulesOf(parts.slice(0, depth).join('/'))) {
+        if (r.dirOnly && !isDirectory) continue;
+        if (r.anchored ? r.test.test(inside) : r.test.test(parts[parts.length - 1])) ignored = !r.negate;
+      }
+    }
+    return ignored;
+  };
+}
+// Build output: left out of git, but no secret (copied out, not counted, never carried over a new version's own).
+const BUILD_OUT = /^(dist|build|out|coverage|\.next|\.nuxt|\.turbo|\.parcel-cache|target|\.nyc_output)$/i;
+// What never goes out of core in a copy («mejorar», «Editar en un proyecto»): the secrets and what the server's
+// .gitignore leaves out of git (a private log, a list of accounts, a session…), its dependencies and build output aside.
+export function privateTest(...dirs) {
+  const secret = secretTest(...dirs); const ignored = dirs.filter(Boolean).map(gitignored);
+  return (name, rel, isDirectory) => secret(name, rel, isDirectory) || (!DEP_DIRS.has(name) && !BUILD_OUT.test(name) && ignored.some((t) => t(rel, isDirectory)));
+}
+// Whether a server of core holds keys: its connector has some (in the vault), or its folder has secret or git-ignored
+// files (when unsure, the user is asked).
 export function holdsKeys(core, config, name) {
   const dir = path.join(extensionPaths(core).mcp, String(name));
   const entry = (config?.mcpServers ?? []).find((s) => (s.args ?? []).some((a) => typeof a === 'string' && path.isAbsolute(a) && norm(a).startsWith(norm(dir) + path.sep)));
   if (Object.keys(entry?.env ?? {}).length) return true;
-  const secret = secretTest(dir); let found = false;
-  walkTree(dir, { skip: (n, rel, d) => { if (found || DEP_DIRS.has(n)) return true; if (secret(n, rel, d)) { found = true; return true; } return false; } });
+  const hidden = privateTest(dir); let found = false;
+  walkTree(dir, { skip: (n, rel, d) => { if (found || DEP_DIRS.has(n)) return true; if (hidden(n, rel, d)) { found = true; return true; } return false; } });
   return found;
 }
-// The secrets of the version in core go on into the new one (where it has none of its own with that path).
+// What the version in core keeps into the new one: its secrets ALWAYS, over whatever the new one has with that path (an
+// agent cannot swap the server's account); what core's .gitignore leaves out (not build output) only where the new one
+// has nothing.
 function carrySecrets(from, to) {
   if (!isDir(from)) return;
-  const secret = secretTest(from);
+  const secret = secretTest(from); const ignored = gitignored(from);
   walkTree(from, { skip: (n, rel, d) => {
     if (DEP_DIRS.has(n) || TOOL_CONFIG.test(n)) return true;
-    if (!secret(n, rel, d)) return false;
+    const isSecret = secret(n, rel, d);
+    if (!isSecret && (BUILD_OUT.test(n) || !ignored(rel, d))) return false;
     const src = path.join(from, ...rel.split('/')); const dest = path.join(to, ...rel.split('/'));
-    if (!exists(dest)) {
-      if (d) { if (!isLink(src)) copyTree(src, dest, { skip: null, links: 'skip' }); }
-      else if (!isLink(src)) { fs.mkdirSync(path.dirname(dest), { recursive: true }); fs.copyFileSync(src, dest); }
-    }
+    if (isLink(src)) return true;
+    if (isSecret) fs.rmSync(dest, { recursive: true, force: true });
+    else if (exists(dest)) return true;
+    if (d) copyTree(src, dest, { kind: null, skip: null, links: 'skip' });
+    else { fs.mkdirSync(path.dirname(dest), { recursive: true }); fs.copyFileSync(src, dest); }
     return true;
   } });
+}
+// A git setting file copied out of core (.git\config): the remotes without user or token in their address, and no
+// credential settings or extra HTTP headers (a token may sit in any of them).
+export function cleanGitConfig(text) {
+  const out = []; let drop = false;
+  for (const line of String(text).split(/\r?\n/)) {
+    const section = /^\s*\[\s*([^\]\s"]+)/.exec(line);
+    if (section) drop = /^credential$/i.test(section[1]);
+    if (drop) continue;
+    if (/^\s*(extraheader|password|token|helper|sslkey|sslcertpasswordprotected)\s*=/i.test(line)) continue;
+    out.push(line.replace(/(\b[a-z][\w+.-]*:\/\/)[^/@\s]+@/gi, '$1'));
+  }
+  return out.join('\n');
 }
 
 // ---- dependencies: installed by Orb only when a server is turned on, never running a package's scripts
@@ -309,6 +410,53 @@ const MANIFESTS = ['package.json', 'package-lock.json', 'npm-shrinkwrap.json'];
 export function needsDeps(dir) {
   let pkg = null; try { pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')); } catch { return false; }
   return Boolean(Object.keys(pkg?.dependencies ?? {}).length) && !isDir(path.join(dir, 'node_modules'));
+}
+// A dependency taken from a folder of the PC instead of the registry (file:, link:, workspace:, portal:, a git repository
+// of a local folder, or a path): npm makes it a link to that folder (install-links=false, npm's default), so the server
+// in core would load code from a folder agents still write.
+const LOCAL_SPEC = /^\s*(file|link|workspace|portal|git\+file):|^\s*(\.{1,2}([\\/]|$)|[\\/]|~[\\/]|[a-z]:)/i;
+// The first local dependency a server names (package.json: its dependency lists, overrides and workspaces; the lock: a
+// package that is a link or comes from a file), or null.
+export function localDep(dir) {
+  const read = (f) => { try { return JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); } catch { return null; } };
+  const pkg = read('package.json');
+  if (pkg && typeof pkg === 'object') {
+    if (pkg.workspaces) return 'workspaces';
+    for (const key of ['dependencies', 'optionalDependencies', 'peerDependencies', 'devDependencies', 'bundleDependencies', 'bundledDependencies']) {
+      for (const [name, spec] of Object.entries(pkg[key] && typeof pkg[key] === 'object' && !Array.isArray(pkg[key]) ? pkg[key] : {})) if (typeof spec === 'string' && LOCAL_SPEC.test(spec)) return `${name}: ${spec}`;
+    }
+    const overrides = (o, at) => { for (const [k, v] of Object.entries(o ?? {})) { if (typeof v === 'string' && LOCAL_SPEC.test(v)) return `${at}${k}: ${v}`; if (v && typeof v === 'object') { const r = overrides(v, `${at}${k} › `); if (r) return r; } } return null; };
+    const o = typeof pkg.overrides === 'object' ? overrides(pkg.overrides, 'overrides › ') : null;
+    if (o) return o;
+  }
+  for (const f of ['package-lock.json', 'npm-shrinkwrap.json']) {
+    const lock = read(f);
+    for (const [at, p] of Object.entries(lock?.packages ?? {})) {
+      if (!p || typeof p !== 'object') continue;
+      if (p.link || (typeof p.resolved === 'string' && LOCAL_SPEC.test(p.resolved)) || (at && !/^(.*\/)?node_modules\//.test(at))) return `${f}: ${at || '.'}`;
+    }
+    for (const [name, p] of Object.entries(lock?.dependencies ?? {})) if (typeof p?.version === 'string' && LOCAL_SPEC.test(p.version)) return `${f}: ${name}`;
+  }
+  return null;
+}
+// The first link (a symbolic link or a junction) anywhere in a folder, node_modules too, that leads out of it (or
+// nowhere): its relative path, or null. Read from the directory entries (no stat per file), so a big node_modules is quick.
+export function linkOut(dir) {
+  let root; try { root = norm(fs.realpathSync.native(dir)); } catch { return null; }
+  const walk = (d, rel) => {
+    let list; try { list = fs.readdirSync(d, { withFileTypes: true }); } catch { return null; }
+    for (const e of list) {
+      const full = path.join(d, e.name); const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isSymbolicLink()) {
+        let real = null; try { real = norm(fs.realpathSync.native(full)); } catch { real = null; }
+        if (!real || (real !== root && !real.startsWith(root + path.sep))) return r;
+        continue;
+      }
+      if (e.isDirectory()) { const found = walk(full, r); if (found) return found; }
+    }
+    return null;
+  };
+  return isLink(dir) ? '.' : walk(dir, '');
 }
 // A program run without blocking the engine. → { status, stderr }
 export function runProcess(command, args, { cwd, timeout = 120_000, env = process.env } = {}) {
@@ -322,16 +470,24 @@ export function runProcess(command, args, { cwd, timeout = 120_000, env = proces
   });
 }
 // npm install in `dir`: no scripts of the package or of its dependencies (--ignore-scripts), and the folder's own npm and
-// yarn settings set aside first (renamed: they may name programs npm runs). → true when it installed something.
+// yarn settings set aside first (renamed: they may name programs npm runs). No local dependency (localDep: refused
+// before), packages copied, never linked (--install-links), no workspaces, nothing written but node_modules (--no-save);
+// and after it, no link that leads out of the folder (else its node_modules goes and it is refused). → true when it
+// installed something.
 export async function installDeps(dir, { tr = null, run = runProcess } = {}) {
   if (!needsDeps(dir)) return false;
+  const local = localDep(dir);
+  if (local) throw new ExtensionError('ext.err.localDep', { dep: local }, tr);
   for (const f of fs.readdirSync(dir)) if (TOOL_CONFIG.test(f)) fs.renameSync(path.join(dir, f), path.join(dir, `${f}.ignorado-por-orb`));
   const win = process.platform === 'win32';
-  const env = { ...process.env, npm_config_ignore_scripts: 'true' };
-  const r = await run(win ? 'npm.cmd' : 'npm', ['install', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund'], { cwd: dir, timeout: 300_000, env });
+  const env = { ...process.env, npm_config_ignore_scripts: 'true', npm_config_install_links: 'true', npm_config_workspaces: 'false' };
+  const r = await run(win ? 'npm.cmd' : 'npm', ['install', '--omit=dev', '--ignore-scripts', '--install-links=true', '--no-workspaces', '--no-save', '--no-audit', '--no-fund'], { cwd: dir, timeout: 300_000, env });
   if (r.status !== 0) throw new ExtensionError('ext.err.install', { error: String(r.stderr || '').trim().split('\n').slice(-1)[0] || 'npm' }, tr);
+  const out = linkOut(dir);
+  if (out) { fs.rmSync(path.join(dir, 'node_modules'), { recursive: true, force: true }); throw new ExtensionError('ext.err.link', { file: out }, tr); }
   return true;
 }
+
 // The dependencies of a new version: the ones of core when its package.json and lock did not change (no download), else
 // installed now (in the quarantine, before it moves). → 'reuse', 'installed' or null
 async function prepareDeps(current, next, { tr, install }) {
@@ -339,6 +495,14 @@ async function prepareDeps(current, next, { tr, install }) {
   const same = (f) => { try { return fs.readFileSync(path.join(current, f)).equals(fs.readFileSync(path.join(next, f))); } catch { return !exists(path.join(current, f)) && !exists(path.join(next, f)); } };
   if (isDir(path.join(current, 'node_modules')) && !isLink(path.join(current, 'node_modules')) && MANIFESTS.every(same)) return 'reuse';
   return (await install(next, { tr })) ? 'installed' : null;
+}
+// prepareDeps, and then the quarantine's fingerprint once more, right before it moves: installing may take minutes, and
+// what moves must still be what the user approved (npm writes nothing but node_modules: --no-save). → as prepareDeps
+async function depsThenCheck(current, q, hash, name, { tr, install }) {
+  const deps = await prepareDeps(current, q, { tr, install });
+  let same = false; try { same = fingerprint(q) === hash; } catch { same = false; }
+  if (!same) throw new ExtensionError('ext.err.changed', { name }, tr);
+  return deps;
 }
 
 // ---- the list (Ajustes › Skills y MCP)
@@ -375,8 +539,8 @@ export function listExtensions(core, config = {}, { projects = [], requests = []
     return { kind: 'project', name: pr.name, dir: pr.path, command: start.command, args: start.args, connector: entry?.name ?? null, editOf: Object.entries(edits ?? {}).find(([, p]) => typeof p === 'string' && norm(p) === norm(pr.path))?.[0] ?? null };
   });
   // What agents made and wait for the user: what the user would bring in is the quarantine's copy (its folder and files).
-  const pending = (requests ?? []).filter((r) => r?.status === 'pending' || r?.status === 'asking').map(({ id, kind, name, description, status, quarantine, dir, by, files, total, bytes, asks, deps, update, asked }) => ({
-    id, kind, name, description, status, dir: quarantine ?? dir ?? null, by, files: files ?? [], total: total ?? (files ?? []).length, bytes: bytes ?? null, asks: asks ?? null, deps: deps ?? false, update: update ?? null, asked }));
+  const pending = (requests ?? []).filter((r) => r?.status === 'pending' || r?.status === 'asking').map(({ id, kind, name, description, status, quarantine, dir, by, files, total, bytes, asks, deps, update, asked, kept }) => ({
+    id, kind, name, description, status, dir: quarantine ?? dir ?? null, by, files: files ?? [], total: total ?? (files ?? []).length, bytes: bytes ?? null, asks: asks ?? null, deps: deps ?? false, update: update ?? null, asked, kept: kept ?? [] }));
   return { dirs: { skills: P.skills, mcp: P.mcp }, skills, mcp, connectors, projects: fromProjects, pending };
 }
 
@@ -387,10 +551,11 @@ export function skillsWith(config, name, patch) {
   return [...list, { name, enabled: false, source: 'usuario', ...prev, ...patch }].sort((a, b) => (a.name < b.name ? -1 : 1));
 }
 // A server of core\mcp turned on or off: its connector (made from the command that starts it, when there is none yet).
-// A folder that is a link or reaches outside core is never turned on.
+// A folder that is a link or reaches outside core, or holds a link that leads out of it (node_modules too), is never
+// turned on.
 export function mcpWith(config, core, name, enabled, { source } = {}) {
   const dir = path.join(extensionPaths(core).mcp, name);
-  if (enabled && !realFolder(extensionPaths(core).mcp, dir)) return null;
+  if (enabled && (!realFolder(extensionPaths(core).mcp, dir) || linkOut(dir))) return null;
   const servers = config.mcpServers ?? [];
   const i = servers.findIndex((s) => (s.args ?? []).some((a) => typeof a === 'string' && path.isAbsolute(a) && norm(a).startsWith(norm(dir) + path.sep)));
   if (i >= 0) return servers.map((s, j) => (j === i ? { ...s, enabled, ...(source ? { source } : {}) } : s));
@@ -400,22 +565,27 @@ export function mcpWith(config, core, name, enabled, { source } = {}) {
   return [...servers.filter((s) => s.name !== name), { name, command: start.command, args: start.args, agents: [], enabled, source: source ?? 'usuario' }];
 }
 // Whether a connector may start: one whose program is in a folder of core\mcp only when that folder really is in core
-// (not a link or a junction put there to run something else).
+// (not a link or a junction put there to run something else) and nothing in it (node_modules too) links out of it: a
+// dependency installed as a link to a folder agents write would load their code.
 export function connectorSafe(core, server) {
   const root = extensionPaths(core).mcp;
   for (const a of server?.args ?? []) {
     if (typeof a !== 'string' || !path.isAbsolute(a)) continue;
     const rel = path.relative(root, a);
     if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) continue;
-    if (!realFolder(root, path.join(root, rel.split(path.sep)[0]))) return false;
+    const top = path.join(root, rel.split(path.sep)[0]);
+    if (!realFolder(root, top) || linkOut(top)) return false;
   }
   return true;
 }
 
 // ---- what the agents load (core\skills\.activas)
 // The skills that are on, checked as when they came in (a link, a junction or a folder out of core, a wrong name, too
-// big: left out). A skill that asks for tools without asking or for hooks gets a copy without that (skillAsks);
-// the others, a junction to their folder. → { plugin, root, list: [{ name, description, file }], skipped: [name] }
+// big: left out). Each one is always a COPY made by Orb (never a junction to its folder): its files as they are, and its
+// SKILL.md with a frontmatter Orb writes (orbSkillText: only name and description). A copy is kept while neither the
+// skill nor the copy changed (their fingerprints, in .activas\.copias.json); else it is made again.
+// → { plugin, root, list: [{ name, description, file }], skipped: [name] } (file: the copy's SKILL.md)
+const COPIES = '.copias.json';
 export function exposeSkills(core, config = {}) {
   const P = extensionPaths(core);
   const into = path.join(P.live, 'skills');
@@ -424,42 +594,39 @@ export function exposeSkills(core, config = {}) {
   const want = JSON.stringify({ name: PLUGIN_NAME, description: 'Skills de Orb (core\\skills)', version: '1.0.0' }, null, 2);
   try { if (fs.readFileSync(manifest, 'utf8') !== want) throw new Error('changed'); } catch { fs.mkdirSync(path.dirname(manifest), { recursive: true }); fs.writeFileSync(manifest, want); }
   const on = new Set((config.skills ?? []).filter((s) => s?.enabled === true && SKILL_NAME.test(s.name ?? '')).map((s) => s.name));
-  const list = []; const skipped = []; const strip = new Set();
+  const list = []; const skipped = [];
   for (const name of [...on].sort()) {
     const dir = path.join(P.skills, name);
     let meta = null;
     try { if (!realFolder(P.skills, dir)) throw new Error('link'); meta = checkSkill(dir, { name }); } catch { on.delete(name); if (exists(dir)) skipped.push(name); continue; }
-    const asks = skillAsks(dir);
-    if (asks?.tools || asks?.hooks) strip.add(name);
-    list.push({ name, description: meta.description, file: path.join(dir, SKILL_FILE) });
+    list.push({ name, description: meta.description, file: path.join(into, name, SKILL_FILE) });
   }
+  // What is there and is not a copy of a skill that is on goes (a link: only the link, never what it points to).
   let have = []; try { have = fs.readdirSync(into, { withFileTypes: true }); } catch { have = []; }
   for (const e of have) {
     const at = path.join(into, e.name);
     let st; try { st = fs.lstatSync(at); } catch { continue; }
-    if (st.isSymbolicLink()) {
-      const real = (p) => { try { return norm(fs.realpathSync.native(p)); } catch { return null; } };
-      const target = real(at);
-      if (on.has(e.name) && !strip.has(e.name) && target && target === real(path.join(P.skills, e.name))) continue;
-      fs.unlinkSync(at); // the link only (a junction or a symlink): never what it points to
-    } else fs.rmSync(at, { recursive: true, force: true }); // a copy (no links in it): made again below
+    if (st.isSymbolicLink()) fs.unlinkSync(at);
+    else if (!on.has(e.name) || !st.isDirectory()) fs.rmSync(at, { recursive: true, force: true });
   }
-  const copy = (name) => {
-    const at = path.join(into, name);
-    copyTree(path.join(P.skills, name), at, { kind: 'skill' });
-    const f = path.join(at, SKILL_FILE);
-    if (strip.has(name)) fs.writeFileSync(f, withoutPermissions(fs.readFileSync(f, 'utf8')));
-  };
-  for (const name of on) {
-    const at = path.join(into, name);
-    if (exists(at)) continue;
+  const marks = path.join(P.live, COPIES);
+  let known = {}; try { known = JSON.parse(fs.readFileSync(marks, 'utf8')) ?? {}; } catch { known = {}; }
+  const made = {};
+  const print = (dir) => { try { return fingerprint(dir); } catch { return null; } };
+  for (const s of list) {
+    const src = path.join(P.skills, s.name); const at = path.join(into, s.name);
     try {
-      if (strip.has(name)) copy(name);
-      else { try { fs.symlinkSync(path.join(P.skills, name), at, 'junction'); } catch { copy(name); } }
-    } catch { skipped.push(name); fs.rmSync(at, { recursive: true, force: true }); }
+      const from = fingerprint(src);
+      if (known[s.name]?.from === from && exists(at) && print(at) === known[s.name].copy) { made[s.name] = known[s.name]; continue; }
+      fs.rmSync(at, { recursive: true, force: true });
+      copyTree(src, at, { kind: 'skill' });
+      const f = path.join(at, SKILL_FILE);
+      fs.writeFileSync(f, orbSkillText(fs.readFileSync(f, 'utf8'), s));
+      made[s.name] = { from, copy: fingerprint(at) };
+    } catch { skipped.push(s.name); fs.rmSync(at, { recursive: true, force: true }); }
   }
-  const out = list.filter((s) => !skipped.includes(s.name)).map((s) => (strip.has(s.name) ? { ...s, file: path.join(into, s.name, SKILL_FILE) } : s));
-  return { plugin: P.live, root: into, list: out, skipped };
+  try { fs.writeFileSync(marks, JSON.stringify(made)); } catch { /* made again next time */ }
+  return { plugin: P.live, root: into, list: list.filter((s) => !skipped.includes(s.name)), skipped };
 }
 
 // The lines a brief carries for an agent that has no skills of its own (Cursor, the ACP agents).
@@ -494,6 +661,8 @@ const busy = (error, name, tr) => (['EBUSY', 'EPERM', 'EACCES'].includes(error.c
 function reuseDeps(core, name, to) {
   const old = path.join(extensionPaths(core).mcp, OLD_DIR, name, 'node_modules');
   try { if (isDir(old) && !isLink(old) && !exists(path.join(to, 'node_modules'))) fs.renameSync(old, path.join(to, 'node_modules')); } catch { /* the server says it lacks them when it starts */ }
+  // A link in them that leads out of the new folder: they go (the server says it lacks them; turning it on installs).
+  if (linkOut(to)) fs.rmSync(path.join(to, 'node_modules'), { recursive: true, force: true });
 }
 const quarantineFor = (core, id) => path.join(extensionPaths(core).quarantine, `${id}-${crypto.randomBytes(3).toString('hex')}`);
 // A quarantine Orb made (inside core\datos\cuarentena, a real folder) with the same files as when it was checked.
@@ -582,13 +751,14 @@ const MCP_PY = (name, description) => ({
   'pyproject.toml': `[project]\nname = "${name}"\nversion = "0.1.0"\ndescription = "${description.replace(/"/g, "'")}"\ndependencies = ["mcp"]\n`,
   'server.py': `# ${description}\nfrom mcp.server.fastmcp import FastMCP\n\nmcp = FastMCP("${name}")\n\n# @mcp.tool()\n# def nombre(parametro: str) -> str:\n#     """Qué hace."""\n\nif __name__ == "__main__":\n    mcp.run()\n`
 });
-// The copy an agent starts from when it improves one of core: its code only (no secrets, dependencies, git or links).
+// The copy an agent starts from when it improves one of core: its code only (no secrets, nothing its .gitignore leaves
+// out of git, no dependencies, git or links).
 function draftCopy(core, request) {
   const P = extensionPaths(core);
   const current = path.join(request.kind === 'skill' ? P.skills : P.mcp, request.name);
   if (!realFolder(request.kind === 'skill' ? P.skills : P.mcp, current)) throw new ExtensionError('ext.err.notFound', { name: request.name });
-  const secret = secretTest(current);
-  copyTree(current, request.dir, { kind: request.kind, skip: (n, rel, d) => SKIP(n) || secret(n, rel, d), links: 'skip' });
+  const hidden = privateTest(current);
+  copyTree(current, request.dir, { kind: request.kind, skip: (n, rel, d) => SKIP(n) || hidden(n, rel, d), links: 'skip' });
 }
 // A new request: its folder (a copy of the current version when it improves one of core), with a starting point. A
 // server that holds keys (holdsKeys) is not copied until the user allows it: the request waits ('asking').
@@ -625,7 +795,8 @@ export function allowDraft(core, request, { tr = null } = {}) {
 }
 // The agent asks for it to be turned on: its folder is copied into the quarantine (agents cannot write there; links
 // refused anywhere, dependencies and package manager settings left out, the size limit over all of it), checked there,
-// and the fingerprint and list of that copy kept: what the user sees and approves is what moves. → the request
+// and the fingerprint and list of that copy kept: what the user sees and approves is what moves. A new version of a
+// server leaves its own secret files out (kept: the dialog says so): the ones of core stay (carrySecrets). → the request
 export function requestActivation(core, request, { tr = null } = {}) {
   if (!request || request.status !== 'drafting' || !/^[\w-]+$/.test(String(request.id ?? ''))) throw new ExtensionError('ext.err.noRequest', {}, tr);
   const P = extensionPaths(core);
@@ -635,12 +806,14 @@ export function requestActivation(core, request, { tr = null } = {}) {
   if (request.quarantine) fs.rmSync(request.quarantine, { recursive: true, force: true });
   fs.mkdirSync(P.quarantine, { recursive: true });
   const q = quarantineFor(core, request.id);
+  const kept = [];
+  const secret = request.update && request.kind === 'mcp' ? secretTest(src, path.join(P.mcp, request.name)) : null;
   try {
-    copyTree(src, q, { kind: request.kind, tr });
+    copyTree(src, q, { kind: request.kind, tr, skip: (n, rel, d) => SKIP(n) || Boolean(secret?.(n, rel, d) && kept.push(rel)) });
     if (request.kind === 'skill') checkSkill(q, { name: request.name, tr }); else checkMcp(q, { tr });
     const t = walkTree(q);
     return { ...request, status: 'pending', asked: new Date().toISOString(), quarantine: q, hash: fingerprint(q), files: t.files.map((f) => f.rel).sort(), total: t.files.length, bytes: t.bytes,
-      asks: request.kind === 'skill' ? skillAsks(q) : null, deps: request.kind === 'mcp' && needsDeps(q) };
+      asks: request.kind === 'skill' ? skillAsks(q) : null, deps: request.kind === 'mcp' && needsDeps(q), kept: kept.sort() };
   } catch (error) { fs.rmSync(q, { recursive: true, force: true }); throw error; }
 }
 // The user approved: the quarantine's copy (the same files as when it was asked) goes into core and on; a server's
@@ -658,7 +831,7 @@ export async function activateRequest(core, config, request, { tr = null, instal
   } else {
     checkMcp(q, { tr });
     if (!request.update && (config.mcpServers ?? []).some((s) => s.name === request.name)) throw new ExtensionError('ext.err.mcpExists', { name: request.name }, tr);
-    const deps = await prepareDeps(current, q, { tr, install });
+    const deps = await depsThenCheck(current, q, request.hash, request.name, { tr, install });
     if (request.update) carrySecrets(current, q);
     to = placeInCore(core, 'mcp', request.name, q, { replace: Boolean(request.update), tr });
     if (deps === 'reuse') reuseDeps(core, request.name, to);
@@ -692,16 +865,18 @@ export async function installFor(core, name, { tr = null, install = installDeps 
 }
 
 // ---- improving a server of core in a project
-// Copied to <home>\<category>\<name> (or name-2…), its git history and dependencies too, never its secrets (they stay in
-// core and go on into the new version) nor a link. → the project folder
+// Copied to <home>\<category>\<name> (or name-2…), its git history and dependencies too, never its secrets nor what its
+// .gitignore leaves out of git (they stay in core and go on into the new version), nor a link; git's settings without
+// credentials (cleanGitConfig) and without FETCH_HEAD (the address it fetched from). → the project folder
 export function editInProject(home, core, name, category = 'windows', { tr = null } = {}) {
   const from = path.join(extensionPaths(core).mcp, String(name));
   if (!MCP_NAME.test(String(name)) || !realFolder(extensionPaths(core).mcp, from)) throw new ExtensionError('ext.err.notFound', { name }, tr);
   if (!CATEGORIES.includes(category)) throw new ExtensionError('ext.err.notFound', { name: category }, tr);
   let to = path.join(home, category, name);
   for (let i = 2; exists(to); i++) to = path.join(home, category, `${name}-${i}`);
-  const secret = secretTest(from);
-  copyTree(from, to, { kind: null, skip: (n, rel, d) => TOOL_CONFIG.test(n) || secret(n, rel, d), links: 'skip' });
+  const hidden = privateTest(from);
+  copyTree(from, to, { kind: null, skip: (n, rel, d) => TOOL_CONFIG.test(n) || /^\.git\/(.+\/)?FETCH_HEAD$/i.test(rel) || hidden(n, rel, d), links: 'skip' });
+  for (const f of walkTree(path.join(to, '.git'), { skip: null }).files) if (/^config(\.worktree)?$/i.test(path.basename(f.full))) fs.writeFileSync(f.full, cleanGitConfig(fs.readFileSync(f.full, 'utf8')));
   return to;
 }
 // What «Aplicar cambios» would change: { added, changed, removed } (relative paths; dependencies and secrets aside).
@@ -735,7 +910,7 @@ export async function applyEdit(core, config, name, prepared, { tr = null, insta
   const q = prepared.quarantine;
   const current = path.join(extensionPaths(core).mcp, name);
   checkMcp(q, { tr });
-  const deps = await prepareDeps(current, q, { tr, install });
+  const deps = await depsThenCheck(current, q, prepared.hash, name, { tr, install });
   carrySecrets(current, q);
   const to = placeInCore(core, 'mcp', name, q, { replace: true, tr });
   if (deps === 'reuse') reuseDeps(core, name, to);

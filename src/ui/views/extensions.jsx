@@ -192,6 +192,7 @@ async function answerRequest(r, approve, run, done = (x) => x) {
       <div className="grid gap-2 text-sm" data-testid="ext-confirm">
         {r.deps ? <p>{t('ext.confirmDeps')}</p> : null}
         {r.asks?.tools || r.asks?.hooks ? <p className="text-warning">{t('ext.asksNote')}</p> : null}
+        {r.kept?.length ? <p className="text-warning" data-testid="ext-confirm-kept">{t('ext.keptNote', { files: r.kept.slice(0, 5).join(', ') + (r.kept.length > 5 ? '…' : '') })}</p> : null}
         <p className="text-muted-foreground">{t('ext.filesTitle', { n: r.total ?? r.files?.length ?? 0 })}</p>
         <div className="bg-muted/50 max-h-60 overflow-auto rounded-md p-2 font-mono text-[11px]" data-testid="ext-confirm-files">{(r.files ?? []).map((f) => <div key={f}>{f}</div>)}</div>
         {r.dir ? <div><Button type="button" size="xs" variant="outline" onClick={() => act(bridge.openPath(r.dir))}><FolderOpen />{t('ext.openFolder')}</Button></div> : null}

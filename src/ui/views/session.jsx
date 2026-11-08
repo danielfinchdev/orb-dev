@@ -23,6 +23,7 @@ import { useStore, call, act, go, bridge, refresh, getState } from '@/lib/store.
 import { AGENT, PERMISSION, REASONING, STATUS, DECISION, CAN_STEER as AGENT_CAN_STEER, CAN_COMPACT, options } from '@/lib/labels.js';
 import { baseName, cn } from '@/lib/utils.js';
 import { useT, t, useLocale, currentLocale } from '@/lib/i18n.js';
+import { sameBlock } from '@/lib/memo.js';
 
 // Items → blocks: a tool call and its result become one block (the latest call with that id gets the result).
 function toBlocks(items) {
@@ -88,9 +89,7 @@ function statusText(body, agent, catalog) {
 
 const FILE_ICON = { add: FilePlus2, delete: FileMinus2 };
 // The blocks are made again from the items whenever one arrives: a block whose content is the same is not drawn again
-// (nor while the agent's answer streams, which redraws the view many times a second).
-const sameBlock = (a, b) => a.type === b.type && a.key === b.key && a.item === b.item && a.call === b.call && a.result === b.result
-  && (a.files === b.files || (a.files?.length === b.files?.length && a.files.every((f, i) => f === b.files[i])));
+// (nor while the agent's answer streams, which redraws the view many times a second): lib/memo.js › sameBlock.
 const Block = memo(function Block({ b, agent, brain, sessionId, project, catalog }) {
   const t = useT();
   const locale = useLocale();

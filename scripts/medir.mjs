@@ -182,10 +182,17 @@ const pageTimes = (page) => page.evaluate(async (sel) => {
     const mo = new MutationObserver(() => { if (seen() && !mark()) { mo.disconnect(); clearInterval(poll); resolve({ t: performance.timeOrigin + performance.now(), late: false }); } });
     mo.observe(document, { childList: true, subtree: true });
   });
+  // The whole chat list drawn: the main screen draws its first rows and the rest while idle (views/orb/inbox.jsx ›
+  // useGrowing); the moment the last row was added (none added for 1.5 s, 20 s at most).
+  const fullList = await new Promise((resolve) => {
+    const rows = () => document.querySelectorAll('.lazy-row').length;
+    let n = rows(); let last = performance.timeOrigin + performance.now();
+    const id = setInterval(() => { const m = rows(); const now = performance.timeOrigin + performance.now(); if (m !== n) { n = m; last = now; } else if (now - last > 1500 || now - ready.t > 20000) { clearInterval(id); resolve({ t: last, rows: n }); } }, 10);
+  });
   const paint = Object.fromEntries(performance.getEntriesByType('paint').map((e) => [e.name, at(e.startTime)]));
   // A hidden window paints nothing: the page's scripts loaded and ran (DOMContentLoaded) is the next best mark.
   const nav = performance.getEntriesByType('navigation')[0];
-  return { navStart: performance.timeOrigin, fp: paint['first-paint'] ?? null, fcp: paint['first-contentful-paint'] ?? null, dcl: nav ? at(nav.domContentLoadedEventEnd) : null, ready: ready.t, readyLate: ready.late };
+  return { navStart: performance.timeOrigin, fp: paint['first-paint'] ?? null, fcp: paint['first-contentful-paint'] ?? null, dcl: nav ? at(nav.domContentLoadedEventEnd) : null, ready: ready.t, readyLate: ready.late, fullList: fullList.t, fullListRows: fullList.rows };
 }, READY);
 
 // rAF deltas while an element scrolls down and back up by `px`, `step` px a frame; plus long animation frames.
@@ -261,7 +268,7 @@ for (let i = 1; i <= RUNS; i++) {
   const pt = await pageTimes(run.page);
   if (startCdp) { const { profile } = await startCdp.send('Profiler.stop'); fs.writeFileSync(path.join(profileDir, 'arranque.cpuprofile'), JSON.stringify(profile)); await startCdp.detach(); }
   const engine = await until(() => engineReadyAt(run.t0), 'motor arrancado en motor.log', 60000, 100);
-  results.starts.push({ run: i, toNavStartMs: Math.round(pt.navStart - run.t0), toFirstPaintMs: pt.fcp ? Math.round(pt.fcp - run.t0) : null, toScriptsReadyMs: pt.dcl ? Math.round(pt.dcl - run.t0) : null, toEngineReadyMs: Math.round(engine - run.t0), toMainScreenMs: Math.round(pt.ready - run.t0), mainScreenLate: pt.readyLate });
+  results.starts.push({ run: i, toNavStartMs: Math.round(pt.navStart - run.t0), toFirstPaintMs: pt.fcp ? Math.round(pt.fcp - run.t0) : null, toScriptsReadyMs: pt.dcl ? Math.round(pt.dcl - run.t0) : null, toEngineReadyMs: Math.round(engine - run.t0), toMainScreenMs: Math.round(pt.ready - run.t0), mainScreenLate: pt.readyLate, toFullListMs: Math.round(pt.fullList - run.t0), fullListRows: pt.fullListRows });
   console.error(`arranque ${i}: ${JSON.stringify(results.starts.at(-1))}`);
   if (i < RUNS) { await quit(run); continue; }
 
@@ -366,7 +373,7 @@ results.sizes = {
 // ---- summary and machine
 const warm = results.starts.slice(1);
 const summary = (k) => ({ first: results.starts[0]?.[k] ?? null, warmMedian: median(warm.map((s) => s[k])), warmP95: pct(warm.map((s) => s[k]), 95) });
-results.summary = { firstPaint: summary('toFirstPaintMs'), scriptsReady: summary('toScriptsReadyMs'), engineReady: summary('toEngineReadyMs'), mainScreen: summary('toMainScreenMs') };
+results.summary = { firstPaint: summary('toFirstPaintMs'), scriptsReady: summary('toScriptsReadyMs'), engineReady: summary('toEngineReadyMs'), mainScreen: summary('toMainScreenMs'), fullList: summary('toFullListMs') };
 let windows = os.release(); try { windows = execFileSync('powershell.exe', ['-NoProfile', '-Command', '(Get-CimInstance Win32_OperatingSystem).Caption + " " + (Get-CimInstance Win32_OperatingSystem).BuildNumber'], { encoding: 'utf8' }).trim(); } catch { /* the release number */ }
 const git = (...a) => { try { return execFileSync('git', a, { cwd: ROOT, encoding: 'utf8' }).trim(); } catch { return null; } };
 let monitors = null; try { monitors = [JSON.parse(execFileSync('powershell.exe', ['-NoProfile', '-Command', 'Get-CimInstance Win32_VideoController | Select-Object Name,CurrentHorizontalResolution,CurrentVerticalResolution,CurrentRefreshRate | ConvertTo-Json -Compress'], { encoding: 'utf8' }) || '[]')].flat(); } catch { /* not known */ }

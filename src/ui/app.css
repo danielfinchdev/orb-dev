@@ -165,10 +165,14 @@ html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-di
 
 /* Markdown written by the agents */
 /* Long lists (the messages of a conversation, the chat list): what is far off screen is not laid out or painted until it
-   comes near (content-visibility); its last known height keeps the scroll bar steady. The newest messages always are, so
-   that opening a conversation lands exactly at its bottom. The clip margin lets shadows and rings show as before. */
+   comes near (content-visibility); its last known height keeps the scroll bar steady. The newest messages always are; if
+   older ones on screen change height when drawn, the conversation goes back to its bottom (chat.jsx › useAutoScroll).
+   The clip margin lets shadows and rings show as before. */
 .lazy-lines > :nth-last-child(n+13) { content-visibility: auto; contain-intrinsic-size: auto 120px; overflow-clip-margin: 16px; }
 .lazy-row { content-visibility: auto; contain-intrinsic-size: auto 56px; overflow-clip-margin: 8px; }
+/* A screen whose file is still on its way (main.jsx › Loading): the spinner only after a moment, never a flash. */
+.screen-loading { animation: screen-loading-in .2s ease .4s both; }
+@keyframes screen-loading-in { from { opacity: 0; } to { opacity: 1; } }
 .prose-chat { line-height: 1.6; overflow-wrap: anywhere; }
 .prose-chat p { margin: 0 0 .6em; } .prose-chat p:last-child { margin-bottom: 0; }
 .prose-chat ul, .prose-chat ol { margin: .3em 0 .6em; padding-left: 1.3em; } .prose-chat ul { list-style: disc; } .prose-chat ol { list-style: decimal; }

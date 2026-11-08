@@ -295,7 +295,10 @@ export function migrate(db) {
     CREATE INDEX IF NOT EXISTS tasks_review ON tasks (review_of);
     CREATE INDEX IF NOT EXISTS session_items_approval ON session_items (id) WHERE kind = 'approval';
     CREATE INDEX IF NOT EXISTS chat_conversation ON chat (conversation_id, id);
-    CREATE INDEX IF NOT EXISTS tasks_conversation ON tasks (conversation_id);`);
+    CREATE INDEX IF NOT EXISTS tasks_conversation ON tasks (conversation_id);
+    -- 3.8.1: the assistant's questions that wait for the user (the chat list asks on every refresh; without it, the whole
+    -- chat table was read each time).
+    CREATE INDEX IF NOT EXISTS chat_questions ON chat (conversation_id) WHERE meta LIKE '%"kind":"question"%';`);
   // 3.6: the direct conversations with an agent get marks too (pinned, muted): an inbox_items made before that only took
   // bots, groups and conversations is rebuilt with the wider check (same rows).
   // Inside a write lock and checked again there: the engine and the MCP servers may open the database at the same moment.

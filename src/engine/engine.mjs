@@ -154,7 +154,7 @@ async function start(home, version, secret, browser, keep = null, userData = nul
 const secretOf = (home) => ctx.secret ?? (() => { try { const k = fs.readFileSync(paths(home).key); return k.length >= 32 ? k : null; } catch { return null; } })();
 
 async function open({ home, version, repair = null }) {
-  ensureLayout(home); // the fixed folders, and folders made by older versions put in order
+  ensureLayout(home, null, { wait: false }); // the fixed folders, and folders made by older versions put in order
   // 3.8: a backups' folder inside the workspace (allowed by 3.7) is not used any more: dropped from the settings.
   { const { keepBackupsOutside } = await import('../core/core-folder.mjs'); try { keepBackupsOutside(home); } catch (error) { console.error(`copias: ${error.message}`); } }
   useHome(home);

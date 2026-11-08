@@ -159,8 +159,11 @@ test('al terminar una tarea, Orb para el servidor que dejó en marcha en su carp
   const saved = process.env.ORB_FAKE_AGENTS; delete process.env.ORB_FAKE_AGENTS;
   try { Scheduler.prototype.stopLeftovers.call(self, { id: 9, workdir: dir }); } finally { process.env.ORB_FAKE_AGENTS = saved; }
   const alive = (c) => { try { process.kill(c.pid, 0); return true; } catch { return false; } };
-  await wait(500);
+  // Stop-Process only starts the end of a process (TerminateProcess returns at once): on a busy PC a fixed half second
+  // was sometimes too little. Its own exit says when it is gone.
+  const gone = left.exitCode !== null || left.signalCode !== null || await Promise.race([new Promise((r) => left.once('exit', () => r(true))), wait(10000).then(() => false)]);
   try {
+    assert.ok(gone, 'el que dejó la tarea, parado');
     assert.equal(alive(left), false, 'el que dejó la tarea, parado');
     assert.equal(alive(before), true, 'el que ya estaba antes, intacto');
     assert.equal(alive(elsewhere), true, 'el de otra carpeta, intacto');

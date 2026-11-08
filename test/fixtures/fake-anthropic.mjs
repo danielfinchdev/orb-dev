@@ -1,9 +1,10 @@
 // A stand-in for the Anthropic API on 127.0.0.1, so the real Claude Code of the SDK can run a turn without network or
 // account: the first request of a turn that offers tools answers with the tool call the test asks for; once the tool's
 // result comes back (or when no tools are offered), it answers with plain text. Every request is kept in `requests`.
+// steps: several tool calls in a row instead (the next one after each tool result; text when they run out).
 import http from 'node:http';
 
-export async function fakeAnthropic({ tool }) {
+export async function fakeAnthropic({ tool, steps = null }) {
   const requests = [];
   const server = http.createServer((req, res) => {
     let body = '';
@@ -13,9 +14,10 @@ export async function fakeAnthropic({ tool }) {
       requests.push({ url: req.url, body: json });
       if (!/\/v1\/messages(\?|$)/.test(req.url)) { res.writeHead(404, { 'content-type': 'application/json' }); res.end('{"type":"error","error":{"type":"not_found_error","message":"no"}}'); return; }
       const all = json.messages ?? [];
-      const answered = all.some((m) => Array.isArray(m.content) && m.content.some((c) => c.type === 'tool_result'));
-      const offers = (json.tools ?? []).some((t) => t.name === tool.name);
-      const blocks = !answered && offers ? [{ type: 'tool_use', id: `toolu_${requests.length}`, name: tool.name, input: tool.input }] : [{ type: 'text', text: 'listo' }];
+      const results = all.filter((m) => Array.isArray(m.content) && m.content.some((c) => c.type === 'tool_result')).length;
+      const next = steps ? steps[results] : results ? null : tool;
+      const offers = next && (json.tools ?? []).some((t) => t.name === next.name);
+      const blocks = offers ? [{ type: 'tool_use', id: `toolu_${requests.length}`, name: next.name, input: next.input }] : [{ type: 'text', text: 'listo' }];
       const message = { id: `msg_${requests.length}`, type: 'message', role: 'assistant', model: json.model ?? 'claude-x', content: blocks, stop_reason: blocks[0].type === 'tool_use' ? 'tool_use' : 'end_turn', stop_sequence: null, usage: { input_tokens: 10, output_tokens: 5 } };
       if (!json.stream) { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(message)); return; }
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' });

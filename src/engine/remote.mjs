@@ -10,7 +10,6 @@ import { buildNote, actionRoute } from '../core/notes.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import http from 'node:http';
 import { execFile } from 'node:child_process';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -700,11 +699,12 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   }
 
   // ---- listening: one http server per address; the Tailscale https name goes through `tailscale serve` to loopback.
-  const listen = (address, port) => new Promise((resolve) => {
+  // 3.8.1: node:http is loaded when the access starts (~18 ms the engine's start no longer waits for).
+  const listen = async (address, port) => { const { default: http } = await import('node:http'); return new Promise((resolve) => {
     const srv = http.createServer((req, res) => { handle(req, res).catch((error) => { log(`móvil: ${error.stack}`); try { send(res, 500, { error: tr('msg.remote.internalError') }); } catch { /* sent */ } }); });
     srv.headersTimeout = 15_000; srv.requestTimeout = 60_000;    srv.once('error', (error) => resolve({ error }));
     srv.listen(port, address, () => resolve({ srv }));
-  });
+  }); };
   async function serveHttps(port) {
     const r = await quickRun(tailscaleExe(), ['serve', '--bg', `--https=${port}`, `http://127.0.0.1:${port}`], { timeoutMs: 30_000 });
     if (r.ok) { served = port; return true; }

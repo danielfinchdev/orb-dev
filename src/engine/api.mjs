@@ -22,14 +22,10 @@ import { PERMISSIONS } from './sessions.mjs';
 import { readLog, writeLog, logFiles } from './logs.mjs';
 import { expandMentions, mentionOptions } from './mentions.mjs';
 import { ofUserLabel, userLabel, userName, assistantName } from '../core/board.mjs';
-import * as github from './github.mjs';
-import * as installer from './installer.mjs';
-import * as expert from './expert.mjs';
 import { adbStatus, ensureAdb } from './android.mjs';
 import { extensionMethods } from './api-extensions.mjs';
 import { layoutPlan, layoutApply, guardOutside } from './workspace-layout.mjs';
 import { modelCatalog, chooseModel, LEVELS, REASONING_LEVELS, levelsOf } from './catalog.mjs';
-import { whiteboard } from './whiteboard.mjs';
 import { titleFrom } from '../core/titles.mjs';
 import { autoTitle } from './titles.mjs';
 import { projectIcon, setProjectIcon, clearProjectIcon, renameProjectIcon } from './project-icons.mjs';
@@ -46,6 +42,13 @@ import { sealConnectors } from '../core/connector-secrets.mjs';
 
 export { fail, str, int, oneOf } from './api-common.mjs';
 
+// 3.8.1: what only some calls need is loaded the first time one of them comes (the engine's start does not wait for it).
+const lazy = (load) => { let p = null; return () => (p ??= load()); };
+const gh = lazy(() => import('./github.mjs'));
+const inst = lazy(() => import('./installer.mjs'));
+const exp = lazy(() => import('./expert.mjs'));
+const boards = lazy(() => import('./whiteboard.mjs'));
+
 export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef = { current: null }, onUnlocked = () => {} }) {
   const realHome = (() => { try { return fs.realpathSync(ctx.home); } catch { return ctx.home; } })();
   let catalogCache = null; // models.catalog, for a few seconds (see there)
@@ -53,7 +56,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
   const project = (name) => board.project(str(name, 'proyecto', 200)) ?? fail(tr('msg.api.noProject', { name }));
   let lastChat = board.one('SELECT MAX(id) AS id FROM chat')?.id ?? 0;
   const conversationId = (id) => { const c = board.conversation(int(id, 'conversación')); if (!c) fail(tr('msg.board.noConversation')); return c.id; };
-  const wb = whiteboard(board);
+  let whiteboardOf = null; const wb = async () => (whiteboardOf ??= (await boards()).whiteboard(board));
   // 2.7: a picture the window may show: an image file inside Orb's folder, a project, or an agent account's own folder
   // (Codex keeps what it makes in <CODEX_HOME>/generated_images). 25 MB at most.
   const allowedImage = (file) => {
@@ -180,16 +183,17 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     },
 
     // Git is needed for undo with history, isolated copies and GitHub: the Agents screen warns when it is missing.
-    'installer.check': () => installer.check(),
-    'installer.start': ({ ids }) => { if (!Array.isArray(ids) || ids.some((x) => typeof x !== 'string')) fail(tr('msg.api.badList')); return installer.start(ids, emit); },
-    'installer.progress': () => installer.progress(),
+    'installer.check': async () => (await inst()).check(),
+    'installer.start': async ({ ids }) => { if (!Array.isArray(ids) || ids.some((x) => typeof x !== 'string')) fail(tr('msg.api.badList')); return (await inst()).start(ids, emit); },
+    'installer.progress': async () => (await inst()).progress(),
     'system.check': async () => { const r = await quickRun('git', ['--version'], { timeoutMs: 8000 }); return { platform: process.platform, git: r.ok ? r.out.replace(/^git version\s*/, '') : null }; },
 
     'projects.list': () => {
       syncSoon();
       const active = board.activeName();
-      return board.projects().map((p) => ({ ...p, inHome: insideHome(p.path), category: categoryOf(realHome, p.path), active: active === p.name,
-        open: board.one("SELECT COUNT(*) AS n FROM tasks WHERE project = ? AND status IN ('queued', 'awaiting_approval', 'running')", p.name).n }));
+      // 3.8.1: the open tasks of every project in one query (it was one per project).
+      const open = new Map(board.all("SELECT project, COUNT(*) AS n FROM tasks WHERE status IN ('queued', 'awaiting_approval', 'running') GROUP BY project").map((r) => [r.project, r.n]));
+      return board.projects().map((p) => ({ ...p, inHome: insideHome(p.path), category: categoryOf(realHome, p.path), active: active === p.name, open: open.get(p.name) ?? 0 }));
     },
     // 3.8: category multi (or several platforms) = one multiplatform project with a folder per platform.
     'projects.create': ({ name, notes, category, platforms }) => board.project(newProject(board, {
@@ -262,15 +266,15 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return { ok: true };
     },
     'projects.clearIcon': ({ name }) => { const icon = clearProjectIcon(project(name)); board.changed('projects'); return icon; },
-    'projects.info': ({ name }) => github.projectInfo(project(name)),
-    'projects.commit': ({ name, message }) => github.commitAll(project(name), str(message, 'mensaje', 200)),
-    'projects.merge': ({ name, branch }) => github.mergeBranch(project(name), str(branch, 'rama', 120)),
-    'projects.push': ({ name, branch }) => github.push(project(name), str(branch, 'rama', 120)),
-    'projects.createPr': ({ name, branch, title, body, base }) => github.createPr(project(name), { branch: str(branch, 'rama', 120), title: str(title, 'título', 200), body: str(body, 'descripción', 20000, { optional: true }), base: str(base, 'rama base', 120, { optional: true }) || undefined }),
-    'projects.createRepo': ({ name, repo, isPrivate }) => github.createRepo(project(name), { name: str(repo, 'repositorio', 100), isPrivate: isPrivate !== false }),
+    'projects.info': async ({ name }) => (await gh()).projectInfo(project(name)),
+    'projects.commit': async ({ name, message }) => (await gh()).commitAll(project(name), str(message, 'mensaje', 200)),
+    'projects.merge': async ({ name, branch }) => (await gh()).mergeBranch(project(name), str(branch, 'rama', 120)),
+    'projects.push': async ({ name, branch }) => (await gh()).push(project(name), str(branch, 'rama', 120)),
+    'projects.createPr': async ({ name, branch, title, body, base }) => (await gh()).createPr(project(name), { branch: str(branch, 'rama', 120), title: str(title, 'título', 200), body: str(body, 'descripción', 20000, { optional: true }), base: str(base, 'rama base', 120, { optional: true }) || undefined }),
+    'projects.createRepo': async ({ name, repo, isPrivate }) => (await gh()).createRepo(project(name), { name: str(repo, 'repositorio', 100), isPrivate: isPrivate !== false }),
     'projects.clone': async ({ repo, name, category }) => {
       if (name) checkProjectName(name);
-      const folder = await github.clone(str(repo, 'repositorio', 300), str(name, 'nombre', 60, { optional: true }), oneOf(category, CATEGORIES, 'categoría', undefined));
+      const folder = await (await gh()).clone(str(repo, 'repositorio', 300), str(name, 'nombre', 60, { optional: true }), oneOf(category, CATEGORIES, 'categoría', undefined));
       return board.addProject({ name: oneLine(name || path.basename(folder), 60), path: folder }, 'usuario', { fromUser: true });
     },
 
@@ -278,9 +282,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'android.status': () => adbStatus(),
     'android.install': () => ensureAdb({ log, force: true }),
 
-    'github.status': () => github.status(),
-    'github.contributions': () => github.contributions(),
-    'github.login': () => github.login(),
+    'github.status': async () => (await gh()).status(),
+    'github.contributions': async () => (await gh()).contributions(),
+    'github.login': async () => (await gh()).login(),
 
     // 3.2: a conversation's lines (the last 160, or 120 more before a line).
     // Without a conversation: the lines of none (tasks made by hand or by a schedule), which the window shows as notices.
@@ -379,12 +383,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return { path: path.join(dir, base), name: base };
     },
     // 2.7: the Pizarra of each project (src/engine/whiteboard.mjs), saved in <project>/pizarra.
-    'whiteboard.load': ({ project }) => wb.load({ project: str(project, 'proyecto', 200) }),
-    'whiteboard.save': ({ project, elements, appState, files, png }) => wb.save({ project: str(project, 'proyecto', 200), elements, appState, files, png }),
-    'whiteboard.attach': ({ project, paths }) => wb.attach({ project: str(project, 'proyecto', 200), paths }),
-    'whiteboard.note': ({ project, file, note }) => wb.note({ project: str(project, 'proyecto', 200), file: str(file, 'archivo', 200), note }),
-    'whiteboard.remove': ({ project, file }) => wb.remove({ project: str(project, 'proyecto', 200), file: str(file, 'archivo', 200) }),
-    'whiteboard.folder': ({ project }) => wb.folder({ project: str(project, 'proyecto', 200) }),
+    'whiteboard.load': async ({ project }) => (await wb()).load({ project: str(project, 'proyecto', 200) }),
+    'whiteboard.save': async ({ project, elements, appState, files, png }) => (await wb()).save({ project: str(project, 'proyecto', 200), elements, appState, files, png }),
+    'whiteboard.attach': async ({ project, paths }) => (await wb()).attach({ project: str(project, 'proyecto', 200), paths }),
+    'whiteboard.note': async ({ project, file, note }) => (await wb()).note({ project: str(project, 'proyecto', 200), file: str(file, 'archivo', 200), note }),
+    'whiteboard.remove': async ({ project, file }) => (await wb()).remove({ project: str(project, 'proyecto', 200), file: str(file, 'archivo', 200) }),
+    'whiteboard.folder': async ({ project }) => (await wb()).folder({ project: str(project, 'proyecto', 200) }),
     // 2.7: the answer to a question card (orb_ask): the options picked and/or own words, or skipped. The card keeps it and
     // the assistant gets it as the user's next message, in the conversation of the question.
     'chat.answer': ({ id, choices, other, skip }) => {
@@ -493,8 +497,15 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     // 3.0: the list of every view, sent on each refresh: long texts cut (the whole task is tasks.get) and no approval
     // signatures (only the detail needs them).
     'tasks.list': ({ limit }) => {
-      const undone = new Set(board.all("SELECT key FROM settings WHERE key LIKE 'undone:%' AND value <> '' AND value <> 'null'").map((r) => Number(r.key.slice('undone:'.length))));
-      return board.panelTasks(Math.min(Number(limit) || 150, 500)).map(({ approval_hash, approval_sig, ...task }) => ({ ...task, description: cut(task.description), result: cut(task.result), ...(undone.has(task.id) ? { undone: true } : {}) }));
+      // 3.8.1: a range of the settings' key (its index), not LIKE (which read every setting: one per accepted task, …).
+      const undone = new Set(board.all("SELECT key FROM settings WHERE key >= 'undone:' AND key < 'undone;' AND value <> '' AND value <> 'null'").map((r) => Number(r.key.slice('undone:'.length))));
+      // 3.8.1: the rows are new objects: changed in place (copying each task twice cost more than reading it).
+      return board.panelTasks(Math.min(Number(limit) || 150, 500)).map((task) => {
+        delete task.approval_hash; delete task.approval_sig;
+        task.description = cut(task.description); task.result = cut(task.result);
+        if (undone.has(task.id)) task.undone = true;
+        return task;
+      });
     },
     'tasks.live': () => scheduler.live(),
     'tasks.get': ({ id }) => {
@@ -623,12 +634,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
         .map((u) => ({ account: u.account, agent: u.agent, label: u.label, windows: u.windows ?? [], cooldownUntil: u.cooldownUntil ?? null, brain: u.account === brainAccount }));
     },
     // Expert mode (PC only, read-only): the project's files, git and the machine's load.
-    'expert.tree': ({ project: name, dir }) => expert.tree(project(name).path, str(dir, 'carpeta', 1000, { optional: true })),
-    'expert.read': ({ project: name, path: file }) => expert.readFile(project(name).path, str(file, 'archivo', 1000)),
-    'expert.status': ({ project: name }) => expert.gitStatus(project(name).path),
-    'expert.diff': ({ project: name, path: file }) => expert.gitDiff(project(name).path, str(file, 'archivo', 1000, { optional: true })),
-    'expert.log': ({ project: name, limit }) => expert.gitLog(project(name).path, limit),
-    'expert.system': () => ({ ...expert.systemStats(ctx.home), running: sessions.runningCount(), byAgent: Object.fromEntries(AGENT_IDS.map((a) => [a, sessions.runningCount(a)])) }),
+    'expert.tree': async ({ project: name, dir }) => (await exp()).tree(project(name).path, str(dir, 'carpeta', 1000, { optional: true })),
+    'expert.read': async ({ project: name, path: file }) => (await exp()).readFile(project(name).path, str(file, 'archivo', 1000)),
+    'expert.status': async ({ project: name }) => (await exp()).gitStatus(project(name).path),
+    'expert.diff': async ({ project: name, path: file }) => (await exp()).gitDiff(project(name).path, str(file, 'archivo', 1000, { optional: true })),
+    'expert.log': async ({ project: name, limit }) => (await exp()).gitLog(project(name).path, limit),
+    'expert.system': async () => ({ ...(await exp()).systemStats(ctx.home), running: sessions.runningCount(), byAgent: Object.fromEntries(AGENT_IDS.map((a) => [a, sessions.runningCount(a)])) }),
     'control.pause': () => { board.setting('paused', '1'); board.changed('settings'); return true; },
     'control.resume': () => { board.setting('paused', '0'); board.changed('settings'); return true; },
     ...accountMethods(shared),
