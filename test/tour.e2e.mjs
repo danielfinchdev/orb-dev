@@ -3,7 +3,7 @@
 // NNN-area-screen-state-theme-device.png plus test-results/tour/INDEX.md (one line per picture and its component).
 // No window ever opens: headless Edge (Chromium on Linux). The engine runs with the fake agents in a throwaway folder and
 // serves on loopback; three kinds of "device" look at it:
-//   pc    the PC's own window: the built renderer served here, with a stand-in for Electron's bridge.
+//   pc    the PC's own window: the built renderer served here, with a stand-in for the app's bridge (src/ui/lib/tauri-bridge.js).
 //   web   a computer's browser linked with a QR (PC layout, linked-device features only).
 //   phone a phone's browser linked with a QR (touch, 390x844).
 // First the welcome wizard and a fresh, empty Orb; then sample data (generic: «mi-web»…) and every screen again.
@@ -38,7 +38,7 @@ const call = (method, params = {}) => new Promise((resolve, reject) => { const i
 await new Promise((resolve, reject) => { engine.once('message', (m) => (m.type === 'started' && m.ok ? resolve() : reject(new Error(m.error)))); engine.send({ type: 'start', home: t.home, version: '3.6.0' }); });
 await until(async () => (await call('remote.status')).running, 'acceso del Orb');
 
-// ---- the PC's window: the renderer served here and Electron's bridge (src/main/preload.cjs) as calls to this process.
+// ---- the PC's window: the renderer served here and a stand-in for the app's bridge (window.orb of src/ui/lib/tauri-bridge.js) as calls to this process.
 let needsSetup = true;
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.json': 'application/json', '.wasm': 'application/wasm', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.mp3': 'audio/mpeg', '.wav': 'audio/wav' };
 const shim = http.createServer(async (req, res) => {

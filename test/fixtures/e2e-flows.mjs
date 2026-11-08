@@ -1,12 +1,12 @@
 // Shared steps of the e2e scripts (test/*.e2e.mjs only; the unit tests never load this). 3.8:
-// - sandboxEnv: what keeps a launched app (Electron or a packaged build) away from this PC's real folders.
+// - sandboxEnv: what keeps a launched Orb (test/fixtures/launch-orb.mjs) away from this PC's real folders.
 // - throughStart: every screen between the welcome (or the start of an updated Orb) and the app itself: «Ordenar
 //   carpetas» (views/layout.jsx, only when there is something to move), «Crea tu contraseña maestra» (views/master.jsx,
 //   mandatory) and, on Windows after the welcome, «Preparando tu PC» (views/setup.jsx › Prepare).
 // - createMaster: the master password screen: both fields, the box «Si la olvidas…», continue.
 // - pairBrowser: a phone's or a computer's browser opened from the QR: the PC's master password before it links
 //   (main.jsx › BrowserPair; the two-step /api/pair of src/core/mobile-crypto.mjs › linkDevice).
-// Works with any Playwright Page (Electron's window, a page over CDP, a headless browser).
+// Works with any Playwright Page (Orb's window over CDP, a headless browser).
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { TEST_MASTER } from './phone-client.mjs';

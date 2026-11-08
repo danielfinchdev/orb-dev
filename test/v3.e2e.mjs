@@ -1,8 +1,8 @@
 // Orb 3.0 in the real window (fake agents): no «Orbe» item, the robot at the top goes back to the conversation, «Nuevo
 // chat» starts a clean one and the previous one is still there (3.2: in the menu), «Iniciar test» on the first opening of
 // the day, direct conversations with an agent with «Orquestador» off (several at once), Security Review in Proyectos and
-// the corner robot out of sight until the pointer comes near. Run: npm run build && node test/v3.e2e.mjs (screenshots in test-results/).
-import { _electron as electron } from 'playwright-core';
+// the corner robot out of sight until the pointer comes near. Run on the test build of Orb, hidden (test/fixtures/launch-orb.mjs):
+// npm run tauri:build:e2e && node test/v3.e2e.mjs (screenshots in test-results/).
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -10,6 +10,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHome, loadConfig, writeJson, merge } from '../src/core/home.mjs';
 import { throughStart, sandboxEnv } from './fixtures/e2e-flows.mjs';
+import { launchOrb } from './fixtures/launch-orb.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'test-results'); fs.mkdirSync(OUT, { recursive: true });
@@ -19,15 +20,16 @@ writeJson(path.join(home, 'core', 'orb.json'), merge(loadConfig(home), { ui: { t
 fs.mkdirSync(path.join(home, 'web', 'tienda'), { recursive: true });
 const userData = path.join(tmp, 'datos-app'); fs.mkdirSync(userData);
 fs.writeFileSync(path.join(userData, 'ubicacion.json'), JSON.stringify({ home }));
-const electronBin = (await import('electron')).default;
-const app = await electron.launch({ executablePath: electronBin, args: [ROOT, ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], env: { ...process.env, ...sandboxEnv(tmp), ORB_NO_UPDATE: '1', ORB_USER_DATA: userData, ORB_FAKE_AGENTS: path.join(ROOT, 'test', 'fixtures', 'fake-live.mjs') } });
-const win = await app.firstWindow();
+const orb = await launchOrb({ userData, env: { ...sandboxEnv(tmp), ORB_FAKE_AGENTS: path.join(ROOT, 'test', 'fixtures', 'fake-live.mjs') } });
+const win = orb.page;
 const errors = [];
 win.on('pageerror', (e) => errors.push(e.message));
 await win.setViewportSize({ width: 1360, height: 860 });
 const call = (method, params = {}) => win.evaluate(([m, p]) => window.orb.call(m, p), [method, params]);
 const count = (sel) => win.locator(sel).count();
 const shot = (name) => win.screenshot({ path: path.join(OUT, `v3-${name}.png`) });
+// 3.6: «Nuevo chat» is in the menu of the list's «+».
+const newChat = async () => { if (!(await win.locator('[data-testid=new-conversation]').isVisible())) await win.click('[data-testid=chats-new]'); await win.click('[data-testid=new-conversation]'); };
 const until = async (fn, what, ms = 20000) => { const end = Date.now() + ms; while (Date.now() < end) { const v = await fn(); if (v) return v; await win.waitForTimeout(200); } throw new Error(`no llegó: ${what}`); };
 let step = 'inicio';
 try {
@@ -35,7 +37,7 @@ try {
   step = 'contraseña maestra';
   await throughStart(win, { ready: '[data-testid=sidebar-home]' });
   step = 'menú sin «Orbe»';
-  await win.locator('[data-testid=new-conversation]').waitFor({ timeout: 30000 });
+  await win.locator('[data-testid=chats-new]').waitFor({ timeout: 30000 });
   assert.equal(await count('[data-testid=nav-chat]'), 0, 'ya no hay elemento «Orbe» en el menú');
   assert.equal(await count('[data-testid=sidebar-home]'), 1, 'el robot de arriba vuelve a la conversación');
   assert.equal(await count('[data-testid=new-task]'), 0, 'con el Orquestador activado, solo «Nuevo chat»');
@@ -50,12 +52,12 @@ try {
   // 3.2: the first message makes a conversation of its own, and the screen is that conversation.
   const first = await until(async () => (await call('conversations.list'))[0], 'conversación creada');
   await until(async () => (await call('chat.list', { conversation: first.id })).some((m) => m.role === 'orb'), 'respuesta del asistente');
-  await win.locator('[data-testid=bar-title]').waitFor();
+  await win.locator('[data-testid=bar-title-text]').waitFor();
   assert.equal(await count('[data-testid=chat-test]'), 0, 'tras hablar con Orb, el botón de test se va');
   await win.click('[data-testid=nav-tasks]');
   await win.click('[data-testid=sidebar-home]');
   await until(async () => (await win.locator('text=Hola, ¿qué tal?').count()) > 0, 'el robot de arriba vuelve a la misma conversación');
-  await win.click('[data-testid=new-conversation]');
+  await newChat();
   await win.locator('[data-testid=chat-greeting]').waitFor();
   assert.equal(await win.locator('[data-testid=chat-lines] >> text=Hola, ¿qué tal?').count(), 0, 'Nuevo chat empieza una conversación limpia');
   assert.equal(await count('[data-testid=chat-older]'), 0, 'sin «Ver conversación anterior»: cada una está en el menú');
@@ -65,14 +67,14 @@ try {
 
   step = 'conversaciones directas';
   // 3.2: with «Orquestador» off the user talks directly to the agent chosen, in as many conversations at once as wanted.
-  await win.click('[data-testid=new-conversation]');
+  await newChat();
   await win.click('[data-testid=orchestrator-check]');
   await win.getByRole('button', { name: 'Hablar directamente' }).click();
   await until(async () => (await call('app.state')).config.orchestrator.orchestrate === false, 'Orquestador desactivado');
   await call('projects.setActive', { name: 'tienda' });
   await until(async () => (await win.locator('[data-testid=project-picker]').innerText()).includes('tienda'), 'la carpeta elegida en el cuadro');
   for (const text of ['Revisa el README', 'Añade una página de contacto']) {
-    await win.click('[data-testid=new-conversation]');
+    await newChat();
     await win.fill('[data-testid=chat-input]', text);
     await win.keyboard.press('Enter');
     await win.locator('[data-testid=session-input]').waitFor({ timeout: 15000 });
@@ -111,4 +113,4 @@ try {
   assert.deepEqual(errors, [], 'sin errores en la ventana');
   console.log('✔ Orb 3.0/3.2: conversaciones, conversaciones directas, Iniciar test, Security Review y robot de la esquina');
 } catch (e) { await shot('fallo').catch(() => {}); console.error(`✖ ${step}: ${e.message}`); process.exitCode = 1; }
-finally { await app.close().catch(() => {}); fs.rmSync(tmp, { recursive: true, force: true }); }
+finally { await orb.close().catch(() => {}); fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); }

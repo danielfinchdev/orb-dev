@@ -1,30 +1,26 @@
-// The PACKAGED app with a real agent: the live engine (Claude Agent SDK inside app.asar.unpacked) starts, a conversation
-// streams an answer and a second turn continues it. Uses the user's Claude Code login (Haiku, a tiny task).
-//   ORB_E2E_EXE=dist/win-unpacked/Orb.exe node test/packaged-live.e2e.mjs
-import { chromium } from 'playwright-core';
+// The built Orb with a real agent: the live engine (the Claude Agent SDK in Orb's own app\src, run by its bundled node)
+// starts, a conversation streams an answer and a second turn continues it. Uses the user's Claude Code login (Haiku, a
+// tiny task): only by hand on the owner's PC. On the test build of Orb, hidden (test/fixtures/launch-orb.mjs):
+//   npm run tauri:build:e2e && node test/packaged-live.e2e.mjs [--exe <Orb.exe of a test build>]
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
 import { createHome, loadConfig, writeJson, merge } from '../src/core/home.mjs';
 import { throughStart, sandboxEnv } from './fixtures/e2e-flows.mjs';
+import { launchOrb } from './fixtures/launch-orb.mjs';
 
-const exe = process.env.ORB_E2E_EXE;
-if (!exe || !fs.existsSync(exe)) { console.error('ORB_E2E_EXE debe apuntar a la app empaquetada'); process.exit(2); }
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-empaquetada-'));
 const base = path.join(tmp, 'Documentos'); fs.mkdirSync(base);
 const { home } = createHome(base, { assistantName: 'Orb', userName: 'Alex' });
 writeJson(path.join(home, 'core', 'orb.json'), merge(loadConfig(home), { ui: { tourDone: true } })); // 2.6: no guided tour in the tests
 const userData = path.join(tmp, 'datos'); fs.mkdirSync(userData);
 fs.writeFileSync(path.join(userData, 'ubicacion.json'), JSON.stringify({ home }));
-const port = 9300 + Math.floor(Math.random() * 500);
-const app = spawn(exe, [`--remote-debugging-port=${port}`], { env: { ...process.env, ...sandboxEnv(tmp), ORB_USER_DATA: userData }, stdio: 'ignore' });
 const until = async (fn, what, ms = 120000) => { const end = Date.now() + ms; while (Date.now() < end) { try { const v = await fn(); if (v) return v; } catch { /* not yet */ } await new Promise((r) => setTimeout(r, 500)); } throw new Error(`no llegó: ${what}`); };
-let browser;
+let orb;
 try {
-  browser = await until(() => chromium.connectOverCDP(`http://127.0.0.1:${port}`), 'la ventana', 60000);
-  const page = await until(() => browser.contexts().flatMap((c) => c.pages()).find((p) => p.url().endsWith('index.html')), 'la página', 60000);
+  orb = await launchOrb({ userData, env: sandboxEnv(tmp) });
+  const page = orb.page;
   // 3.8: a folder made before the first start has no master password yet: «Crea tu contraseña maestra» once.
   await throughStart(page, { ready: '[data-testid=chat-greeting]', timeout: 90000 });
   const call = (method, params = {}) => page.evaluate(([m, p]) => window.orb.call(m, p), [method, params]);
@@ -46,7 +42,6 @@ try {
   console.error(`✖ ${error.stack}`);
   process.exitCode = 1;
 } finally {
-  await browser?.close().catch(() => {});
-  try { spawn('taskkill', ['/PID', String(app.pid), '/T', '/F'], { stdio: 'ignore' }); } catch { /* gone */ }
+  await orb?.close().catch(() => {});
   setTimeout(() => { try { fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5 }); } catch { /* in use */ } }, 2000);
 }
