@@ -184,6 +184,9 @@ export default {
   'sys.engine.sealedSecret': 'Windows could not open the encrypted key of this workspace. Close Orb and open it again.',
   'sys.engine.otherApp': 'This workspace is already open in another {name} on this PC (maybe an earlier version). Close it and press “Retry”.',
   'sys.engine.twoKeys': 'The earlier version of {name} (3.8.0) made its own key in this workspace. If you open it again, it will not share approvals, the linked phone or backups with this one. Use only this version.',
+  'sys.engine.previousOpens': 'Windows can open the old key of this workspace again. To go back to it, go to Settings › Data.',
+  'sys.engine.previousBack': '{name} is back on the old key. The new key has been kept aside.',
+  'sys.engine.previousFailed': 'Could not go back to the old key: {name} keeps the new key. Try again from Settings › Data.',
   'sys.engine.secretBusy': 'Windows cannot read the encrypted key of this workspace right now. Wait a moment and press “Retry”.',
   'sys.engine.secretUnreadable': 'Windows cannot open the encrypted key of this workspace (it may belong to another Windows user or be damaged). Press “Retry” or start with a new key: approvals will be asked again.',
   // Scheduled tasks

@@ -20,7 +20,7 @@ export const dropUnlock = () => { held = null; };
 export const heldUnlock = (now = Date.now()) => (held && held.until - 5000 > now ? held.unlock : null);
 
 // action: 'open' | 'restore' | 'backupFolder' | 'recovery' | 'legacy' | 'secrets' | 'connector' | 'protected' | 'unlink' |
-// 'deleteProject' | 'removeExtension'.
+// 'deleteProject' | 'removeExtension' | 'previousKey'.
 // 3.8.1: FRESH_ACTIONS ask for the password every time (src/core/permissions.mjs › FRESH_UNLOCK): a held unlock does
 // not count, and their token (for that action only) is not kept for the next one.
 export const FRESH_ACTIONS = Object.freeze(['deleteProject']);

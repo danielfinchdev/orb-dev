@@ -163,3 +163,38 @@ test('two apps at once: one waits for the other (clave.lock); a lock left by a d
   fs.closeSync(fd); fs.rmSync(lock, { force: true });
   assert.equal(await waiting, s);
 });
+
+test('after «Empezar con una clave nueva»: when Windows opens the old key again the user is offered it, and going back keeps the new one aside', async () => {
+  const k = setup();
+  const old = load380({ dir: k.dir, copy: k.copy, ...electron });
+  let windowsOpensV10 = false;
+  const t = (over = {}) => tauri({ unseal: async (b) => { const s = b.toString('latin1'); if (s.startsWith('ORB2')) return s.slice(4); if (s.startsWith('v10') && windowsOpensV10) return s.slice(3); throw coded('dpapi'); }, ...over });
+  const fresh = await loadHostSecret({ dir: k.dir, copy: k.copy, ...t(), allowNew: true });
+  assert.notEqual(fresh, old);
+  assert.ok(fs.existsSync(path.join(k.dir, 'clave-anterior.json')), 'lo que no abrió queda anotado');
+  const warned = [];
+  const warn = (code) => warned.push(code);
+  assert.equal(await loadHostSecret({ dir: k.dir, copy: k.copy, ...t(), warn }), fresh);
+  assert.deepEqual(warned, [], 'mientras no abre, nada');
+  windowsOpensV10 = true; // Windows can open 3.8.0's clave.enc again
+  assert.equal(await loadHostSecret({ dir: k.dir, copy: k.copy, ...t(), warn }), fresh, 'sin pedirlo, sigue la nueva');
+  assert.ok(warned.includes('previousOpens'));
+  fs.writeFileSync(path.join(k.dir, 'clave-volver.json'), '{}'); // backup.previousKey
+  warned.length = 0;
+  assert.equal(await loadHostSecret({ dir: k.dir, copy: k.copy, ...t(), warn }), old, 'pedido: vuelve la anterior');
+  assert.ok(warned.includes('previousBack'));
+  assert.equal(read(k.enc2), `ORB2${old}`); assert.equal(read(k.copy2), `ORB2${old}`);
+  assert.ok(files(k.dir).some((n) => /^clave2\..*\.nueva\.enc$/.test(n) && read(path.join(k.dir, n)) === `ORB2${fresh}`), 'la nueva, apartada');
+  assert.equal(fs.existsSync(path.join(k.dir, 'clave-anterior.json')), false); assert.equal(fs.existsSync(path.join(k.dir, 'clave-volver.json')), false);
+  warned.length = 0;
+  assert.equal(await loadHostSecret({ dir: k.dir, copy: k.copy, ...t(), warn }), old);
+  assert.deepEqual(warned, []);
+});
+
+test('Local State not there: «for now» while missingIsBusy (the first starts), then the user\'s call', async () => {
+  const k = setup();
+  load380({ dir: k.dir, copy: k.copy, ...electron });
+  const missing = tauri({ unseal: async () => { throw coded('missing'); } });
+  await assert.rejects(loadHostSecret({ dir: k.dir, copy: k.copy, ...missing, missingIsBusy: true }), (e) => e.code === 'busy');
+  await assert.rejects(loadHostSecret({ dir: k.dir, copy: k.copy, ...missing }), (e) => e.code === 'unreadable');
+});

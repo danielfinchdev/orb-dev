@@ -85,17 +85,23 @@ const validSecret = (s) => typeof s === 'string' && /^[0-9a-f]{64}$/.test(s);
 const startError = (key, code, detail) => Object.assign(new Error(tr(key)), { code, detail });
 // What the user should know about the keys, said once the database is open (board.notice in run()).
 const keyNotices = [];
+const KEY_NOTICES = { twoKeys: 'sys.engine.twoKeys', previousOpens: 'sys.engine.previousOpens', previousBack: 'sys.engine.previousBack', previousFailed: 'sys.engine.previousFailed' };
+// Electron's Local State not there counts as «for now» for the first two starts of this engine (each tried three times):
+// a roaming profile or OneDrive may not have brought it yet. After that it is how the key is (the user decides).
+let missingStarts = 0;
 async function secretFromApp(home, userData, newSecret) {
   const { loadHostSecret, hostSealing, SecretError } = await import('./approval-secret.mjs');
   const warn = (code, detail) => {
     console.error(`clave: ${code} (${detail})`);
-    if (code === 'twoKeys' && !keyNotices.includes('sys.engine.twoKeys')) keyNotices.push('sys.engine.twoKeys');
+    if (code === 'previousOpens') ctx.previousKey = true;
+    if (KEY_NOTICES[code] && !keyNotices.includes(KEY_NOTICES[code])) keyNotices.push(KEY_NOTICES[code]);
   };
+  const missingIsBusy = ++missingStarts <= 2;
   for (let attempt = 1; ; attempt++) {
     try {
       const probe = await hostCall('host.seal', { text: '0'.repeat(64) });
       if (!probe?.data) throw new SecretError('busy', 'host.seal sin datos');
-      return await loadHostSecret({ dir: secretDir(home), copy: secretCopy(userData, home), ...hostSealing(hostCall), allowNew: newSecret === true, warn });
+      return await loadHostSecret({ dir: secretDir(home), copy: secretCopy(userData, home), ...hostSealing(hostCall), allowNew: newSecret === true, warn, missingIsBusy });
     } catch (error) {
       const code = error instanceof SecretError ? error.code : 'busy';
       console.error(`clave: ${code} (${error.message})`);

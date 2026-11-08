@@ -42,7 +42,7 @@ function writeWhole(file, bytes) {
   try { fs.renameSync(tmp, file); } catch (error) { fs.rmSync(tmp, { force: true }); throw error; }
 }
 // A copy kept aside before the file is replaced (never moved: the old one stays in place until the new one is there).
-const keepAside = (file, label) => fs.copyFileSync(file, aside(file, label), fs.constants.COPYFILE_EXCL);
+const keepAside = (file, label) => { const to = aside(file, label); fs.copyFileSync(file, to, fs.constants.COPYFILE_EXCL); return to; };
 
 // One app at a time around the key files (Electron and Tauri opened at once, two starts in a row). On Windows the lock
 // is a handle open with no sharing (libuv's UV_FS_O_EXLOCK): nobody else can open, rename or delete the file while it is
@@ -148,6 +148,13 @@ export const secret2Files = (dir, copy) => ({ enc2: path.join(dir, 'clave2.enc')
 // are for now; the rest is how the key is.
 const TRANSIENT = new Set(['io', 'timeout', 'noApp']);
 
+// After «Empezar con una clave nueva» (allowNew): the sealed keys that did not open then, kept where they are or aside
+// (clave-anterior.json in core\datos). At every later start, if Windows opens one of them again, the user is offered to go
+// back to it (warn 'previousOpens'; src/engine/api-data.mjs › backup.previousKey asks for it with clave-volver.json, and
+// the next start does it: the new key is kept aside in turn).
+export const PREVIOUS_FILE = 'clave-anterior.json';
+export const BACK_FILE = 'clave-volver.json';
+
 // → { hex } | { absent } | { busy, why } | { bad, why }
 async function tryOpen(file, unseal) {
   let bytes;
@@ -195,6 +202,27 @@ async function restoredAfter(dir, file, hex, unseal) {
   return false;
 }
 
+// The way back after «Empezar con una clave nueva» (PREVIOUS_FILE). → the secret to use now.
+async function previousKey({ dir, enc2, copy2, hex, seal, unseal, warn }) {
+  const record = path.join(dir, PREVIOUS_FILE); const back = path.join(dir, BACK_FILE);
+  let files; try { files = JSON.parse(fs.readFileSync(record, 'utf8'))?.files; } catch { fs.rmSync(back, { force: true }); return hex; }
+  if (!Array.isArray(files) || !files.some((f) => typeof f === 'string' && fs.existsSync(f))) { fs.rmSync(record, { force: true }); fs.rmSync(back, { force: true }); return hex; }
+  let old = null;
+  for (const f of files) { const r = typeof f === 'string' ? await tryOpen(f, unseal) : {}; if (r.hex && r.hex !== hex) { old = r.hex; break; } }
+  if (!old) { fs.rmSync(back, { force: true }); return hex; }
+  if (!fs.existsSync(back)) { warn('previousOpens', 'clave anterior'); return hex; }
+  // Asked for: the key from before in this app's files, the new one kept aside (never offered again).
+  let fresh = null;
+  try { fresh = await seal(old); if ((await unseal(fresh)) !== old) fresh = null; } catch { fresh = null; }
+  if (!fresh) { warn('previousFailed', 'no se pudo sellar'); return hex; }
+  for (const file of [enc2, copy2]) {
+    try { if (fs.existsSync(file)) keepAside(file, 'nueva'); writeWhole(file, fresh); } catch (error) { if (file === enc2) { warn('previousFailed', error.message); return hex; } }
+  }
+  fs.rmSync(record, { force: true }); fs.rmSync(back, { force: true });
+  warn('previousBack', 'clave anterior');
+  return old;
+}
+
 // Create a file only if it is not there (a hard link of a whole temporary: never replaces what another app wrote in
 // between). → whether it was made.
 function createOnly(file, bytes) {
@@ -215,7 +243,9 @@ function createOnly(file, bytes) {
 // same secret after 3.8.1, a clave.enc that is not there at all is made, as 3.8.0 would seal it, when Orb on Electron
 // has run on this PC (its Local State exists); one that exists is never replaced. If it opens to another secret (3.8.0
 // made its own before), the user is told: the two apps would not share approvals, links or backups.
-export async function loadHostSecret({ dir, copy, seal, unseal, sealV10 = null, allowNew = false, warn = () => {} }) {
+// missingIsBusy: Electron's Local State not there counts as «for now» (a roaming profile or OneDrive not synced yet), as
+// the engine does for the first starts.
+export async function loadHostSecret({ dir, copy, seal, unseal, sealV10 = null, allowNew = false, warn = () => {}, missingIsBusy = false }) {
   const enc = path.join(dir, 'clave.enc'); const plain = path.join(dir, 'clave.bin');
   const { enc2, copy2 } = secret2Files(dir, copy);
   return withLock(dir, 10_000, async (locked) => {
@@ -225,13 +255,15 @@ export async function loadHostSecret({ dir, copy, seal, unseal, sealV10 = null, 
     let hex = null; let found = false;
     // A restored backup's key wins over everything from before the restore (kept aside below, never overwritten).
     const restored = restoredKey(dir);
+    const unsealed = missingIsBusy ? async (b) => { try { return await unseal(b); } catch (error) { throw error?.code === 'missing' ? Object.assign(new Error(error.message), { code: 'io' }) : error; } } : unseal;
+    let lost = []; // allowNew: the sealed files that did not open, for the way back
     if (restored) hex = restored;
     else {
       const others = async () => { const out = []; for (const f of [copy2, enc, copy]) { const r = await tryOpen(f, unseal); if (r.hex) out.push(r.hex); } return out; };
       await adoptTmp(enc2, unseal, others); await adoptTmp(copy2, unseal, async () => { const r = await tryOpen(enc2, unseal); return r.hex ? [r.hex] : others(); });
       let from = null;
       for (const file of [enc2, copy2, enc, copy]) {
-        const r = await tryOpen(file, unseal); seen.set(file, r);
+        const r = await tryOpen(file, unsealed); seen.set(file, r);
         if (r.busy) throw new SecretError('busy', `${path.basename(file)}: ${r.why}`);
         if (r.hex) { hex = r.hex; found = true; from = file; break; }
       }
@@ -245,6 +277,7 @@ export async function loadHostSecret({ dir, copy, seal, unseal, sealV10 = null, 
       const sealedExists = [...seen.values()].some((r) => !r.absent);
       if (!hex) {
         if (sealedExists && !allowNew) throw new SecretError('unreadable', [...seen].map(([f, r]) => `${path.basename(f)}: ${r.why ?? 'no está'}`).join(', '));
+        if (sealedExists) lost = [...seen].filter(([, r]) => !r.absent).map(([f]) => f);
         try { const b = fs.readFileSync(plain); hex = !sealedExists && b.length >= 32 ? b.subarray(0, 32).toString('hex') : null; } catch { hex = null; }
         hex ??= crypto.randomBytes(32).toString('hex');
       }
@@ -260,7 +293,7 @@ export async function loadHostSecret({ dir, copy, seal, unseal, sealV10 = null, 
       for (const file of checked ? todo : []) {
         try {
           const r = seen.get(file);
-          if (!r.absent) keepAside(file, r.hex ? '' : 'ilegible'); // another secret, or one that does not open: kept
+          if (!r.absent) { const to = keepAside(file, r.hex ? '' : 'ilegible'); lost = lost.map((f) => (f === file ? to : f)); } // another secret, or one that does not open: kept
           writeWhole(file, fresh);
           if (file === enc2) kept = true;
         } catch { /* the next start */ }
@@ -269,6 +302,8 @@ export async function loadHostSecret({ dir, copy, seal, unseal, sealV10 = null, 
     // A secret that exists nowhere else (new, restored, or from clave.bin) must be on disk before it is used.
     if (!found && !kept) throw new SecretError('busy', 'no se pudo guardar la clave');
     if (kept) forgetRestored(dir);
+    if (lost.length && kept) { try { writeWhole(path.join(dir, PREVIOUS_FILE), Buffer.from(JSON.stringify({ files: lost, at: new Date().toISOString() }))); } catch { /* no way back offered */ } }
+    else if (found && !allowNew) hex = await previousKey({ dir, enc2, copy2, hex, seal, unseal, warn });
     // Orb 3.8.0's clave.enc (review D-fix M1).
     const v10 = await state(enc);
     if (v10.absent && sealV10) {

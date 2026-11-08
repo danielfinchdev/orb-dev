@@ -46,5 +46,6 @@ export default {
   'data.backup.err.noKey': 'No hay con qué cerrar la copia: pon un código de recuperación.',
   'data.backup.err.notBackup': 'Ese archivo no es una copia de Orb (.orbbak).',
   'data.backup.err.missing': 'No encuentro esa copia.',
+  'data.backup.err.noPreviousKey': 'Windows no puede abrir la clave anterior ahora.',
   'data.backup.err.shortPassphrase': 'El código tiene que tener al menos 12 caracteres.',
 };

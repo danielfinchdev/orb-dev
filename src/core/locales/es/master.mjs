@@ -48,6 +48,7 @@ export default {
   'master.ask.protected': 'Para quitar algo de «Cosas que nadie toca».',
   'master.ask.unlink': 'Para cerrar la sesión de un dispositivo.',
   'master.ask.deleteProject': 'Para eliminar un proyecto y su carpeta.',
+  'master.ask.previousKey': 'Para volver a la clave anterior.',
   'master.ask.removeExtension': 'Para quitar una skill, un servidor MCP o un conector de Orb.',
   'master.askNote': 'Queda desbloqueado {n} minutos o hasta que bloquees el PC.',
   'master.askEveryTime': 'Para esto Orb la pide siempre.',

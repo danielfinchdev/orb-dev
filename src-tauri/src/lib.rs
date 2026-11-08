@@ -71,7 +71,13 @@ async fn app_info(window: WebviewWindow) -> Result<Value, String> {
   }
   // Why the start failed, when the window offers something for it (secretBusy, secretUnreadable).
   let start_error = match &status {
-    engine::Status::Failed(e) => engine.start_code().map(|code| json!({ "code": code, "message": e })),
+    // With «Empezar con una clave nueva» the window says what is lost: whether a recovery code and a master password
+    // exist in this workspace's core (review D-fix M2).
+    engine::Status::Failed(e) => engine.start_code().map(|code| {
+      let core = home.as_ref().map(|h| std::path::Path::new(h).join("core"));
+      let has = |rel: &[&str]| core.as_ref().is_some_and(|c| rel.iter().fold(c.clone(), |p, r| p.join(r)).is_file());
+      json!({ "code": code, "message": e, "recovery": has(&["datos", "copia-clave.json"]), "master": has(&["secretos", "maestra.json"]) })
+    }),
     _ => None,
   };
   // 3.8: the workspace goes to C:\Orb unless the user picks another place (the welcome shows it already chosen).

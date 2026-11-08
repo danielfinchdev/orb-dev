@@ -11,10 +11,10 @@ import { Toaster, toast } from 'sonner';
 import { notify } from '@/lib/notify.js';
 import { Menu, Smartphone, ScanLine, Link2, RotateCw, FolderOpen, Download, KeyRound, ArrowLeft, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
-import { Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
+import { Field, Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
 import { MobileTabs, MoreView } from '@/components/mobile-tabs.jsx';
 import { TooltipProvider, Checkbox } from '@/components/ui/overlay.jsx';
-import { DialogHost, confirm } from '@/components/dialogs.jsx';
+import { DialogHost, confirm, form } from '@/components/dialogs.jsx';
 import { ImagePreviewHost } from '@/components/image-viewer.jsx';
 import { Sidebar } from '@/components/sidebar.jsx';
 import { Companion } from '@/components/companion.jsx';
@@ -401,7 +401,7 @@ function Root() {
         {/* 3.8.1 (Tauri): start the engine again; after sealed keys that do not open, also with a new key (asked first). */}
         {bridge.retryStart ? <Button size="lg" onClick={() => bridge.retryStart().catch(() => {}).finally(() => location.reload())} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
         {bridge.retryStart && startError?.code === 'secretUnreadable' ? <Button variant="ghost" size="sm" data-testid="app-error-new-secret" onClick={async () => {
-          if (!(await confirm(t('app.newSecretTitle'), t('app.newSecretBody'), { ok: t('app.newSecretOk'), danger: true }))) return;
+          if (!(await askNewSecret(startError))) return;
           await bridge.retryStart({ newSecret: true }).catch(() => {}); location.reload();
         }}>{t('app.newSecretOk')}</Button> : null}
         {bridge.mobile && bridge.unlink ? <Button variant="ghost" size="sm" onClick={async () => { if (await relinkPhone(getState().info?.pcName)) setPhase('pair'); }} data-testid="app-error-relink"><Link2 />{t('app.offlineRelink')}</Button> : null}
@@ -500,6 +500,22 @@ function MigrationFailed({ state }) {
 
 // 3.8: the PC's master password, the second step of linking (the app after scanning, a browser opened from the QR). It
 // never leaves the phone (src/core/mobile-crypto.mjs › linkDevice proves it is known) and is never kept. fp: the PC's
+// 3.8.1 (Tauri, review D-fix M2): «Empezar con una clave nueva» says what is lost (startError: recovery, master = the
+// recovery code and the master password exist in core). Without a recovery code the backups made until now will not
+// open any more: the word EMPEZAR must be typed.
+async function askNewSecret(startError) {
+  const lines = [t('app.newSecretIntro'), startError?.master ? t('app.newSecretMaster') : null, startError?.recovery ? t('app.newSecretRecovery') : t('app.newSecretNoRecovery'), t('app.newSecretBack')].filter(Boolean).join('\n\n');
+  if (startError?.recovery) return confirm(t('app.newSecretTitle'), lines, { ok: t('app.newSecretOk'), danger: true });
+  const word = t('app.newSecretWord');
+  return Boolean(await form(t('app.newSecretTitle'), {
+    description: lines,
+    initial: { word: '' },
+    body: (v, set) => <Field label={t('app.newSecretType', { word })}><Input autoComplete="off" value={v.word} onChange={(e) => set({ word: e.target.value })} data-testid="new-secret-word" /></Field>,
+    ok: t('app.newSecretOk'),
+    onOk: (v) => { if (v.word.trim().toUpperCase() !== word.toUpperCase()) throw new Error(t('app.newSecretWrong', { word })); return true; }
+  }));
+}
+
 // fingerprint, to compare with the PC's screen (with a typed short code it must be confirmed first: confirmFp).
 function PairPassword({ name, fp = null, confirmFp = false, busy, error, onSubmit, onBack = null }) {
   const t = useT();

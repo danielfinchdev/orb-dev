@@ -46,5 +46,6 @@ export default {
   'data.backup.err.noKey': 'Nothing to lock the backup with: set a recovery code.',
   'data.backup.err.notBackup': 'That file is not an Orb backup (.orbbak).',
   'data.backup.err.missing': 'I cannot find that backup.',
+  'data.backup.err.noPreviousKey': 'Windows cannot open the old key now.',
   'data.backup.err.shortPassphrase': 'The code must be at least 12 characters long.',
 };

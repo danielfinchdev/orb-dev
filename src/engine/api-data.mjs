@@ -3,7 +3,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from '../core/context.mjs';
-import { readKey } from '../core/home.mjs';
+import { readKey, paths } from '../core/home.mjs';
+import { BACK_FILE } from './approval-secret.mjs';
 import * as K from '../core/backup.mjs';
 import { legacyData, deleteLegacyData } from '../core/migrate-38.mjs';
 import { utcToZoned, localDay, ownerTz } from '../core/tz.mjs';
@@ -66,7 +67,7 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
     'backup.status': () => {
       let last = null; try { last = JSON.parse(board.setting('backup_last') ?? 'null'); } catch { last = null; }
       const rec = K.recoveryOf(ctx.home, secret());
-      return { enabled: ctx.config.backup?.enabled !== false, folder: folder(), custom: folder() !== K.defaultBackupDir(ctx.home), recovery: Boolean(rec), recoveryAt: rec?.at ?? null, last, running: Boolean(running), tz: ownerTz(ctx.config), hour: DAILY_HOUR, ...opts() };
+      return { enabled: ctx.config.backup?.enabled !== false, folder: folder(), custom: folder() !== K.defaultBackupDir(ctx.home), recovery: Boolean(rec), recoveryAt: rec?.at ?? null, previousKey: Boolean(ctx.previousKey), last, running: Boolean(running), tz: ownerTz(ctx.config), hour: DAILY_HOUR, ...opts() };
     },
     'backup.list': async () => (await K.listBackups(folder())).map(({ file, ...b }) => ({ ...b, path: file })),
     // kind: manual (Ajustes › Datos) or preupdate (the app, before installing a new version).
@@ -93,6 +94,13 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
       return { ok: true, files: r.files, created: r.header.created, restartNeeded: true };
     },
     // The recovery code: a new one is made and shown once (the user writes it down); copies from now on open with it.
+    // 3.8.1 (Tauri): after «Empezar con una clave nueva», Windows opens the key from before again: go back to it at the
+    // next start (src/engine/approval-secret.mjs › previousKey). Guarded like the recovery code.
+    'backup.previousKey': () => {
+      if (!ctx.previousKey) fail(tr('data.backup.err.noPreviousKey'));
+      fs.writeFileSync(path.join(paths(ctx.home).data, BACK_FILE), JSON.stringify({ at: new Date().toISOString() }));
+      return { restart: true };
+    },
     'backup.recovery': ({ code }) => {
       const value = code == null || code === '' ? K.newRecoveryCode() : String(code);
       if (value.length < 12 || value.length > 200) fail(tr('data.backup.err.shortPassphrase'));
