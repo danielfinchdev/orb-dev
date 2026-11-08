@@ -370,8 +370,9 @@ export function runProcess(command, args, { cwd, timeout = 120_000, env = proces
 }
 // npm install in `dir`: no scripts of the package or of its dependencies (--ignore-scripts), and the folder's own npm and
 // yarn settings set aside first (renamed: they may name programs npm runs). No local dependency (localDep: refused
-// before), packages copied, never linked (--install-links), no workspaces; and after it, no link that leads out of the
-// folder (else its node_modules goes and it is refused). → true when it installed something.
+// before), packages copied, never linked (--install-links), no workspaces, nothing written but node_modules (--no-save);
+// and after it, no link that leads out of the folder (else its node_modules goes and it is refused). → true when it
+// installed something.
 export async function installDeps(dir, { tr = null, run = runProcess } = {}) {
   if (!needsDeps(dir)) return false;
   const local = localDep(dir);
@@ -379,7 +380,7 @@ export async function installDeps(dir, { tr = null, run = runProcess } = {}) {
   for (const f of fs.readdirSync(dir)) if (TOOL_CONFIG.test(f)) fs.renameSync(path.join(dir, f), path.join(dir, `${f}.ignorado-por-orb`));
   const win = process.platform === 'win32';
   const env = { ...process.env, npm_config_ignore_scripts: 'true', npm_config_install_links: 'true', npm_config_workspaces: 'false' };
-  const r = await run(win ? 'npm.cmd' : 'npm', ['install', '--omit=dev', '--ignore-scripts', '--install-links=true', '--no-workspaces', '--no-audit', '--no-fund'], { cwd: dir, timeout: 300_000, env });
+  const r = await run(win ? 'npm.cmd' : 'npm', ['install', '--omit=dev', '--ignore-scripts', '--install-links=true', '--no-workspaces', '--no-save', '--no-audit', '--no-fund'], { cwd: dir, timeout: 300_000, env });
   if (r.status !== 0) throw new ExtensionError('ext.err.install', { error: String(r.stderr || '').trim().split('\n').slice(-1)[0] || 'npm' }, tr);
   const out = linkOut(dir);
   if (out) { fs.rmSync(path.join(dir, 'node_modules'), { recursive: true, force: true }); throw new ExtensionError('ext.err.link', { file: out }, tr); }
@@ -393,6 +394,14 @@ async function prepareDeps(current, next, { tr, install }) {
   const same = (f) => { try { return fs.readFileSync(path.join(current, f)).equals(fs.readFileSync(path.join(next, f))); } catch { return !exists(path.join(current, f)) && !exists(path.join(next, f)); } };
   if (isDir(path.join(current, 'node_modules')) && !isLink(path.join(current, 'node_modules')) && MANIFESTS.every(same)) return 'reuse';
   return (await install(next, { tr })) ? 'installed' : null;
+}
+// prepareDeps, and then the quarantine's fingerprint once more, right before it moves: installing may take minutes, and
+// what moves must still be what the user approved (npm writes nothing but node_modules: --no-save). → as prepareDeps
+async function depsThenCheck(current, q, hash, name, { tr, install }) {
+  const deps = await prepareDeps(current, q, { tr, install });
+  let same = false; try { same = fingerprint(q) === hash; } catch { same = false; }
+  if (!same) throw new ExtensionError('ext.err.changed', { name }, tr);
+  return deps;
 }
 
 // ---- the list (Ajustes › Skills y MCP)
@@ -717,7 +726,7 @@ export async function activateRequest(core, config, request, { tr = null, instal
   } else {
     checkMcp(q, { tr });
     if (!request.update && (config.mcpServers ?? []).some((s) => s.name === request.name)) throw new ExtensionError('ext.err.mcpExists', { name: request.name }, tr);
-    const deps = await prepareDeps(current, q, { tr, install });
+    const deps = await depsThenCheck(current, q, request.hash, request.name, { tr, install });
     if (request.update) carrySecrets(current, q);
     to = placeInCore(core, 'mcp', request.name, q, { replace: Boolean(request.update), tr });
     if (deps === 'reuse') reuseDeps(core, request.name, to);
@@ -794,7 +803,7 @@ export async function applyEdit(core, config, name, prepared, { tr = null, insta
   const q = prepared.quarantine;
   const current = path.join(extensionPaths(core).mcp, name);
   checkMcp(q, { tr });
-  const deps = await prepareDeps(current, q, { tr, install });
+  const deps = await depsThenCheck(current, q, prepared.hash, name, { tr, install });
   carrySecrets(current, q);
   const to = placeInCore(core, 'mcp', name, q, { replace: true, tr });
   if (deps === 'reuse') reuseDeps(core, name, to);

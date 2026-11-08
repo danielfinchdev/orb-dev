@@ -133,7 +133,7 @@ test('A2: npm instala copias (--install-links, --no-workspaces) y un enlace que 
   // PoC: what npm 11 did with install-links=false: node_modules\lib a junction to a folder agents write.
   const run = async (cmd, args, opts) => { calls.push({ args, env: opts.env }); junction(lib, path.join(opts.cwd, 'node_modules', 'lib')); return { status: 0 }; };
   await assert.rejects(X.installFor(core, 'srv', { install: (dir) => X.installDeps(dir, { run, tr }) }), /ext\.err\.link.*node_modules\/lib/);
-  for (const a of ['--ignore-scripts', '--install-links=true', '--no-workspaces']) assert.ok(calls[0].args.includes(a), a);
+  for (const a of ['--ignore-scripts', '--install-links=true', '--no-workspaces', '--no-save']) assert.ok(calls[0].args.includes(a), a);
   assert.equal(calls[0].env.npm_config_install_links, 'true');
   assert.ok(!fs.existsSync(path.join(core, 'mcp', 'srv', 'node_modules')), 'node_modules se borra');
   assert.ok(fs.existsSync(path.join(lib, 'index.js')), 'borrar la unión no toca su destino');
@@ -148,4 +148,26 @@ test('A2: npm instala copias (--install-links, --no-workspaces) y un enlace que 
   assert.equal(X.mcpWith({}, core, 'srv', true), null);
   fs.unlinkSync(path.join(core, 'mcp', 'srv', 'node_modules', 'lib'));
   assert.equal(X.connectorSafe(core, server), true);
+});
+
+test('M1: si la cuarentena cambia mientras se instalan los paquetes, «Activar» se detiene y nada llega a core', async () => {
+  const core = path.join(scratch(), 'core');
+  const r = mcpRequest(core, 'lento', { 'package.json': pkg({}), 'server.mjs': '// bueno' });
+  const asked = X.requestActivation(core, r, { tr });
+  // PoC: another process rewrites the server while npm runs (here, the install itself).
+  const install = async (dir) => { await new Promise((res) => setTimeout(res, 50)); fs.writeFileSync(path.join(asked.quarantine, 'server.mjs'), '// EVIL after approval'); put(path.join(dir, 'node_modules', 'x', 'i.js')); return true; };
+  await assert.rejects(X.activateRequest(core, { mcpServers: [] }, asked, { tr, install }), /ext\.err\.changed/);
+  assert.ok(!fs.existsSync(path.join(core, 'mcp', 'lento')), 'nada en core');
+  // Without a change, node_modules written by the install does not count, and it moves.
+  const r2 = mcpRequest(core, 'bien', { 'package.json': pkg({}), 'server.mjs': '// bueno' });
+  const asked2 = X.requestActivation(core, r2, { tr });
+  const out = await X.activateRequest(core, { mcpServers: [] }, asked2, { tr, install: async (dir) => { put(path.join(dir, 'node_modules', 'x', 'i.js')); return true; } });
+  assert.equal(fs.readFileSync(path.join(out.to, 'server.mjs'), 'utf8'), '// bueno');
+  assert.ok(fs.existsSync(path.join(out.to, 'node_modules', 'x', 'i.js')));
+  // «Aplicar cambios» too.
+  const project = path.join(path.dirname(core), 'proyecto'); put(path.join(project, 'package.json'), pkg({ version: '2.0.0' })); put(path.join(project, 'server.mjs'), '// v2'); // another manifest: it installs
+  const prepared = X.prepareApply(core, 'bien', project, { tr });
+  const swap = async () => { fs.writeFileSync(path.join(prepared.quarantine, 'server.mjs'), '// EVIL'); return true; };
+  await assert.rejects(X.applyEdit(core, {}, 'bien', prepared, { tr, install: swap }), /ext\.err\.changed/);
+  assert.equal(fs.readFileSync(path.join(core, 'mcp', 'bien', 'server.mjs'), 'utf8'), '// bueno');
 });
