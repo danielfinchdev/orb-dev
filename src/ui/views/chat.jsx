@@ -4,6 +4,7 @@
 // small switch: on = with the assistant, who coordinates the agents; off = directly with the agent chosen).
 // 3.2: each conversation is its own (route.id), several at once.
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { routeKey, takeDraft } from '@/lib/reload.js';
 import { ArrowUp, Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign, ChevronLeft, ChevronRight, PenTool, History, FlaskConical, Folder, Mic, Shrink, ListChecks, Ellipsis, Info, BellOff, MessageSquare } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Markdown } from '@/components/markdown.jsx';
@@ -104,6 +105,9 @@ export function Composer({ value, onChange, onSend, onStop, busy, placeholder, t
   useEffect(() => { const el = ta.current; if (!el) return; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 260)}px`; }, [value]);
   const [dropping, setDropping] = useState(false);
   const m = useMentions(value, onChange, ta);
+  // 3.8.2: what this box had when F5 reloaded the window comes back on the same screen (lib/reload.js).
+  const here = useStore((s) => routeKey(s.route));
+  useEffect(() => { if (!testid) return; const draft = takeDraft(testid, getState().route); if (draft && !value.trim()) onChange(draft); }, [testid, here]); // eslint-disable-line react-hooks/exhaustive-deps
   // Not in the desktop app (bridge.desktop: WebView2 has the API but no speech service, and no microphone).
   const dictateWith = bridge.dictate ? (lang) => bridge.dictate(lang) : WebSpeech && !bridge.desktop ? webDictate : null;
   // 3.5, the Android app: dictate with the phone's own speech recognition (what is said is added to the text).

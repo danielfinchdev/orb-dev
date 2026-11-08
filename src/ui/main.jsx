@@ -29,6 +29,7 @@ import { restoreRoute, keyboardOpen } from '@/lib/phone-nav.js';
 import { startupPhase } from '@/lib/startup.js';
 import { watchIdle, lockMinutesOf } from '@/lib/idle-lock.js';
 import { dropUnlock } from '@/lib/core-access.js';
+import { isReloadKey, reloadOrb } from '@/lib/reload.js';
 import { isOffline, retryLoop } from '@/lib/net.js';
 import { ago } from '@/lib/utils.js';
 import { ErrorBoundary } from '@/components/error-boundary.jsx';
@@ -320,6 +321,13 @@ function Root() {
       if (alive) setPhase('error');
     })();
     return () => { alive = false; };
+  }, []);
+  // 3.8.2: F5 reloads Orb's window on the PC, on every screen (the engine goes on; unsent messages come back).
+  useEffect(() => {
+    if (!bridge.desktop) return undefined;
+    const key = (e) => { if (isReloadKey(e)) { e.preventDefault(); reloadOrb(getState().route); } };
+    window.addEventListener('keydown', key, true);
+    return () => window.removeEventListener('keydown', key, true);
   }, []);
   // Ctrl+J: a terminal in the folder on screen (also from the menu Ver → Abrir terminal).
   useEffect(() => {

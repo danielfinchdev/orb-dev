@@ -1008,7 +1008,8 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   `html.has-win-controls`. The top bars (`.app-titlebar` in `app.css`) move the window
   (double-click: maximize) and leave room for the buttons (`--wco-inset`, `.wco-pad`). Without the Windows bar there is
   no menu bar (the old `ui.menuBar` setting is dropped when orb.json loads); its shortcuts (zoom, Ctrl+J, F11) live in
-  `tauri-bridge.js`.
+  `tauri-bridge.js`. F5 reloads the window (`main.jsx`, `lib/reload.js`): the engine keeps running and the unsent text
+  of the message boxes comes back on the same screen.
 - **Contribute and More apps** (`src/engine/feedback.mjs`, `app.feedbackSend` / `app.moreApps`, in the engine because the
   window does not go out to the internet; the screenshot and the picked files come from the app): the developer's PayPal; feedback via FormSubmit (to the developer's inbox) with up to 3 PNG/JPEG
   screenshots of the window or from files; and the other apps with their latest version from GitHub Releases.

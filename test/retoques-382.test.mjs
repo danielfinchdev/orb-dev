@@ -63,3 +63,34 @@ test('the cost line can be hidden in Apariencia and the message time shows on ho
     assert.ok(dict['appearance.usageLine'] && dict['appearance.usageLineHint'], lang);
   }
 });
+
+test('F5 reloads the window and hands each unsent message back to its box, once', async () => {
+  const { saveDrafts, takeDraft, isReloadKey, reloadOrb, routeKey } = await import('../src/ui/lib/reload.js');
+  const mem = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k), size: () => m.size }; };
+  assert.equal(isReloadKey({ key: 'F5' }), true);
+  assert.equal(isReloadKey({ key: 'F5', shiftKey: true }), true);
+  for (const mod of ['ctrlKey', 'altKey', 'metaKey']) assert.equal(isReloadKey({ key: 'F5', [mod]: true }), false, mod);
+  assert.equal(isReloadKey({ key: 'r', ctrlKey: true }), false);
+  const s = mem(); const route = { view: 'session', id: 's1' };
+  saveDrafts(route, { 'session-input': 'a medio escribir', 'chat-input': '   ' }, s, 1000);
+  assert.equal(takeDraft('session-input', { view: 'chat' }, s, 1500), null, 'another screen');
+  assert.equal(takeDraft('session-input', route, s, 1500), 'a medio escribir');
+  assert.equal(takeDraft('session-input', route, s, 1600), null, 'only once');
+  assert.equal(s.size(), 0);
+  saveDrafts(route, { 'session-input': 'viejo' }, s, 1000);
+  assert.equal(takeDraft('session-input', route, s, 1000 + 61_000), null, 'too old');
+  saveDrafts(route, {}, s); assert.equal(s.size(), 0);
+  assert.equal(routeKey({ view: 'chat' }), 'chat:');
+  // reloadOrb reads the composers on screen, then reloads.
+  let reloaded = false;
+  const doc = { querySelectorAll: () => [{ dataset: { testid: 'chat-input' }, value: 'hola' }] };
+  const saved = new Map(); globalThis.window = { sessionStorage: { getItem: (k) => saved.get(k) ?? null, setItem: (k, v) => saved.set(k, v), removeItem: (k) => saved.delete(k) } };
+  try {
+    reloadOrb({ view: 'chat', id: 7 }, doc, { reload: () => { reloaded = true; } });
+    assert.equal(reloaded, true);
+    assert.equal(takeDraft('chat-input', { view: 'chat', id: 7 }), 'hola');
+  } finally { delete globalThis.window; }
+  const main = read('main.jsx');
+  assert.match(main, /if \(isReloadKey\(e\)\) \{ e\.preventDefault\(\); reloadOrb\(getState\(\)\.route\); \}/);
+  assert.match(read('views', 'chat.jsx'), /const draft = takeDraft\(testid, getState\(\)\.route\); if \(draft && !value\.trim\(\)\) onChange\(draft\);/);
+});
