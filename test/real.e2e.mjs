@@ -1,12 +1,14 @@
 // The app with the REAL agents installed on this PC (uses the user's own accounts, small tasks on cheap models):
 // a direct conversation with each agent, the assistant creating a task, the report and undo. Screenshots and a log in
-// test-results/real/.   node test/real.e2e.mjs [claude,codex,cursor]
-import { _electron as electron } from 'playwright-core';
+// test-results/real/. Only by hand, on the owner's PC with his real CLIs logged in (never in CI). On the test build of
+// Orb, hidden (test/fixtures/launch-orb.mjs):   npm run tauri:build:e2e && node test/real.e2e.mjs [claude,codex,cursor]
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHome, loadConfig, writeJson, merge } from '../src/core/home.mjs';
+import { throughStart, sandboxEnv } from './fixtures/e2e-flows.mjs';
+import { launchOrb } from './fixtures/launch-orb.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'test-results', 'real'); fs.mkdirSync(OUT, { recursive: true });
@@ -14,28 +16,27 @@ const AGENTS = (process.argv[2] ?? 'claude,codex,cursor').split(',');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-real-'));
 const base = path.join(tmp, 'Documentos'); fs.mkdirSync(base);
 const { home } = createHome(base, { assistantName: 'Orb', userName: 'Alex' });
-writeJson(path.join(home, 'orb.json'), merge(loadConfig(home), { ui: { tourDone: true } })); // 2.6: no guided tour in the tests
+writeJson(path.join(home, 'core', 'orb.json'), merge(loadConfig(home), { ui: { tourDone: true } })); // 2.6: no guided tour in the tests
 const userData = path.join(tmp, 'datos'); fs.mkdirSync(userData);
 fs.writeFileSync(path.join(userData, 'ubicacion.json'), JSON.stringify({ home }));
 const log = [];
 const note = (s) => { const line = `[${new Date().toISOString().slice(11, 19)}] ${s}`; log.push(line); console.log(line); };
 
-const app = await electron.launch({ executablePath: (await import('electron')).default, args: [ROOT], env: { ...process.env, ORB_NO_BRIDGE: '1', ORB_USER_DATA: userData } });
-const page = await app.firstWindow();
+const orb = await launchOrb({ userData, env: sandboxEnv(tmp) });
+const page = orb.page;
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 const call = (method, params = {}) => page.evaluate(([m, p]) => window.orb.call(m, p), [method, params]);
 const shot = async (name) => {
   await page.waitForTimeout(500);
-  const png = await app.evaluate(async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().endsWith('index.html')).webContents.capturePage()).toPNG().toString('base64'));
-  fs.writeFileSync(path.join(OUT, `${name}.png`), Buffer.from(png, 'base64'));
+  await page.screenshot({ path: path.join(OUT, `${name}.png`) });
 };
 const until = async (fn, what, ms = 180000) => { const end = Date.now() + ms; while (Date.now() < end) { const v = await fn(); if (v) return v; await page.waitForTimeout(1000); } throw new Error(`no llegó: ${what}`); };
 
 try {
-  await page.waitForSelector('[data-testid=chat-greeting]', { timeout: 30000 });
-  if (await page.isVisible('text=Preparando tu PC')) await page.click('text=Continuar');
+  // 3.8: a folder made before the first start has no master password yet: «Crea tu contraseña maestra» once.
+  await throughStart(page, { ready: '[data-testid=chat-greeting]' });
   note(`agentes: ${JSON.stringify((await call('agents.status', { refresh: true })).map((a) => ({ id: a.id, installed: a.installed, login: a.login, models: a.models })))}`);
   const project = await call('projects.create', { name: 'prueba-real' });
   note(`proyecto: ${JSON.stringify(project).slice(0, 200)}`);
@@ -132,6 +133,6 @@ try {
   process.exitCode = 1;
 } finally {
   fs.writeFileSync(path.join(OUT, 'registro.txt'), log.join('\n'));
-  await app.close().catch(() => {});
+  await orb.close().catch(() => {});
   fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5 });
 }

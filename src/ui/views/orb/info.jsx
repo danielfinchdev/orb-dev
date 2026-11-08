@@ -1,28 +1,26 @@
 // 3.6 (messaging, step M3): the info of a chat with Orbe and of a project (mockup mensajeria.html ?z=orb&s=info). The PC:
 // a pane on the right of the conversation, closed with ✕; the phone: the whole screen (a glass sheet on Android). Opened
 // by clicking the conversation's header, from a chat's menu or from a project's heading in the list (lib/store.js ›
-// openOrbInfo). The frame, groups and rows are the Bots zone's (views/bots/info.jsx).
+// openOrbInfo). The frame, groups and rows: components/info-frame.jsx.
 // A chat: Orbe, its title (rename), when it started; Proyecto (opens the project's info) and «Cambiar de proyecto»,
 // Modelo, Razonamiento, Orquestador; «Tareas de este chat» with their state (each opens in Tareas); Notificaciones; Archivos
 // adjuntos (the project's whiteboard), Compactar, Exportar, Fijar, Marcar como completado; Eliminar (red, last).
 // A project: its initials or icon, name and folder, «Nuevo chat aquí»; Chats, Tareas, Programadas, Pizarra, Bitácora,
 // Compartir (with two or more users), Ajustes del proyecto (Proyectos) and, on the PC with God mode on, «Abrir en God mode».
 import { useEffect, useState } from 'react';
-import { Folder, ChevronRight, Sparkles, Bell, ListTodo, Paperclip, Shrink, Download, Pin, PinOff, CircleCheck, Undo2, Trash2, Pencil, MessageSquarePlus, MessagesSquare, CalendarClock, PenTool, BookOpen, Share2, Settings2, SquareTerminal } from 'lucide-react';
+import { Folder, ChevronRight, Sparkles, Bell, ListTodo, Paperclip, Shrink, Download, Pin, PinOff, CircleCheck, Undo2, Trash2, Pencil, MessageSquarePlus, MessagesSquare, CalendarClock, PenTool, BookOpen, Settings2, SquareTerminal } from 'lucide-react';
 import { BrainIcon } from '@/components/brain-icon.jsx';
 import { OrchestratorIcon } from '@/components/orchestrator-icon.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
 import { ProjectPicker } from '@/components/project-actions.jsx';
 import { BrainPicker, ReasoningMenu, useCatalog } from '@/components/brain-picker.jsx';
-import { openShare } from '@/components/share-dialog.jsx';
 import { form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Input, Spinner } from '@/components/ui/basic.jsx';
 import { Switch, BubbleTip } from '@/components/ui/overlay.jsx';
-import { InfoFrame, List, Row } from '@/views/bots/info.jsx';
+import { InfoFrame, List, Row } from '@/components/info-frame.jsx';
 import { useStore, call, act, go, setState, newChat, orbAct, closeOrbInfo, openOrbInfo, refreshSoon, phoneLayout, fullPc } from '@/lib/store.js';
-import { personsOn } from '@/lib/persons.js';
 import { notify } from '@/lib/notify.js';
 import { STATUS } from '@/lib/labels.js';
 import { cn } from '@/lib/utils.js';
@@ -70,7 +68,7 @@ function ChatInfo({ conv }) {
   const locale = useLocale();
   const catalog = useCatalog();
   const name = useStore((s) => s.app?.config?.assistantName ?? 'Orbe');
-  const you = useStore((s) => s.me?.person?.name) || t('orbchats.exportYou');
+  const you = useStore((s) => s.app?.config?.userName?.trim()) || t('orbchats.exportYou');
   const tasks = useStore((s) => s.tasks.filter((x) => x.conversation_id === conv.id));
   const chat = useStore((s) => (s.app?.chats ?? []).find((c) => c.conversation === conv.id) ?? null);
   const item = useOrbItems().find((x) => x.key === `conversation:${conv.id}`) ?? null;
@@ -152,9 +150,7 @@ function ProjectInfo({ name }) {
   const chats = useStore((s) => s.conversations.filter((c) => c.project === name).length + s.sessions.filter((x) => x.kind === 'chat' && x.project === name).length);
   const open = useStore((s) => s.tasks.filter((x) => x.project === name && OPEN.includes(x.status)).length);
   const total = useStore((s) => s.tasks.filter((x) => x.project === name).length);
-  const me = useStore((s) => s.me);
   const god = useStore((s) => Boolean(s.app?.config?.expert?.enabled)) && fullPc();
-  const mine = !p?.person_id || p.person_id === me?.person?.id;
   const active = async (then) => { await act(call('projects.setActive', { name })); leave(then); };
   return (
     <InfoFrame title={t('orbchats.projectInfo')} onClose={closeOrbInfo}>
@@ -172,7 +168,6 @@ function ProjectInfo({ name }) {
         <Row icon={BookOpen} label={t('orbchats.pLog')} onClick={() => leave({ view: 'logs', name })} testid="project-info-log" />
       </List>
       <List>
-        {personsOn(me) && mine && p ? <Row icon={Share2} label={t('orbchats.pShare')} onClick={() => openShare({ type: 'project', id: name, name, owner: p.person_id ?? null })} testid="project-info-share" /> : null}
         <Row icon={Settings2} label={t('orbchats.pSettings')} onClick={() => leave({ view: 'projects', name })} testid="project-info-settings" />
         {god ? <Row icon={SquareTerminal} label={t('orbchats.pGod')} onClick={() => { setState({ expertProject: name }); leave({ view: 'expert' }); }} testid="project-info-god" /> : null}
       </List>

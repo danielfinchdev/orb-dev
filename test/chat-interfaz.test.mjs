@@ -11,6 +11,7 @@ import { ctx } from '../src/core/context.mjs';
 import { Board, tagWords } from '../src/core/board.mjs';
 import { Orchestrator, answerOf } from '../src/engine/orchestrator.mjs';
 import { buildApi } from '../src/engine/api.mjs';
+import { DESKTOP } from '../src/core/permissions.mjs';
 import { plainAction, looksEnglish, deleteTarget } from '../src/core/guard.mjs';
 import { bumpNav, navTicket, stillHere } from '../src/ui/lib/nav.js';
 import { readableCommand, readableInput, prettyModel } from '../src/ui/lib/tools.js';
@@ -26,7 +27,7 @@ const tick = () => new Promise((r) => setImmediate(r));
 // An assistant whose turns are held until the test lets them finish (as in asistente.test.mjs), with a live process that
 // records any attempt to put a message into the running turn.
 function assistant(board) {
-  const o = new Orchestrator(board, 'clave');
+  const o = new Orchestrator(board);
   o.turns = []; o.steered = [];
   const make = o.lane.bind(o);
   o.lane = (id) => {
@@ -79,7 +80,7 @@ test('45: la respuesta de un turno es su mensaje final, no todos los intermedios
 
 test('55: «Detener» deja lo que ya había escrito, marcado como respuesta detenida', () => {
   const board = new Board();
-  const o = new Orchestrator(board, 'clave');
+  const o = new Orchestrator(board);
   const c = board.createConversation({ title: 'Explicación' });
   const lane = o.lane(c.id);
   lane.busy = true; lane.said = ['Primero, el motor.']; lane.partial = 'Después, la ventana';
@@ -106,7 +107,7 @@ test('68 y 56: rechazar una tarea lo dice en su conversación y avisa al asisten
   assert.equal(notice.meta.task, task.id, 'con su tarea, para los botones del chat');
   const internal = [];
   const api = buildApi({ board, sessions: {}, orchestrator: { internal: (...args) => internal.push(args) }, scheduler: {}, emit: () => {}, log: () => {}, version: 'test' });
-  const out = await api.call('tasks.approve', { id: task.id, decision: 'rejected', hash: board.previewHash(board.task(task.id)) });
+  const out = await api.call('tasks.approve', { id: task.id, decision: 'rejected', hash: board.previewHash(board.task(task.id)) }, DESKTOP);
   assert.equal(out.status, 'cancelled');
   assert.equal(internal.length, 1, 'el asistente se entera');
   assert.match(internal[0][0], /ha rechazado la tarea #\d+/);
@@ -141,9 +142,9 @@ test('11 y 20: los comandos y las llamadas de las herramientas se leen sin escap
   const codex = `"C:\\\\WINDOWS\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe" -Command '$paths = @('"'"'D:\\\\Orb\\\\web'"'"'); Get-ChildItem $paths'`;
   assert.equal(readableCommand(codex), "$paths = @('D:\\Orb\\web'); Get-ChildItem $paths");
   assert.equal(readableCommand('npm run dev'), 'npm run dev');
-  assert.equal(readableInput('{"action":"clean_temp","reason":"x"}', 'mcp__bot__pc_propose'), 'clean_temp');
+  assert.equal(readableInput('{"action":"clean_temp","reason":"x"}', 'mcp__opti__opti_propose'), 'clean_temp');
   assert.equal(readableInput('{"command":"npm test"}', 'Bash'), 'npm test');
-  assert.equal(readableInput('select:mcp__bot__pc_health,mcp__bot__pc_propose', 'ToolSearch'), '', 'buscar sus herramientas no tiene nada que leer');
+  assert.equal(readableInput('select:mcp__opti__opti_health,mcp__opti__opti_propose', 'ToolSearch'), '', 'buscar sus herramientas no tiene nada que leer');
   assert.equal(readableInput('{"a":1, "b"', 'x'), '', 'un JSON cortado no se enseña');
   assert.equal(prettyModel('claude-sonnet-5-5'), 'Sonnet 5.5');
   assert.equal(prettyModel('gpt-6-luna'), 'GPT-6-Luna');

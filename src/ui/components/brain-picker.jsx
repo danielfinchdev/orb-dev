@@ -11,12 +11,15 @@ import { notify } from '@/lib/notify.js';
 import { prettyModel } from '@/lib/tools.js';
 import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
+import { keepIfSame } from '@/lib/memo.js';
 
-// The installed agents with their models (engine: models.catalog), read again when the settings change.
+// The installed agents with their models (engine: models.catalog), read again when the settings change. 3.8.1 (H4a): the
+// same catalog stays the same object (the memoised blocks of a direct conversation compare it by reference, and the app's
+// version changes several times a second while an agent works).
 export function useCatalog() {
   const version = useStore((s) => s.version);
   const [catalog, setCatalog] = useState(null);
-  useEffect(() => { let alive = true; call('models.catalog').then((c) => alive && setCatalog(c)).catch(() => alive && setCatalog([])); return () => { alive = false; }; }, [version]);
+  useEffect(() => { let alive = true; call('models.catalog').then((c) => alive && setCatalog((prev) => keepIfSame(prev, c))).catch(() => alive && setCatalog((prev) => keepIfSame(prev, []))); return () => { alive = false; }; }, [version]);
   return catalog;
 }
 

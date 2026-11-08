@@ -1,21 +1,20 @@
-// 3.7 (WS5): the agents' browser speaks one pipe protocol, whoever draws the pages. The same suite runs against the
-// app's browser code (its Electron driver, src/main/browser-driver.mjs, over a stand-in webContents) and against Orb
-// Server's browser (src/server/browser.mjs, a real Chromium through playwright-core; here the local Edge or Chromium,
-// headless, without Xvfb). Secret fields never leave the page; the live view streams and takes input; only the profile's
-// own person may view it.
+// 3.7 (WS5): the agents' browser speaks one pipe protocol. 3.8.1 (D2, D7): the suite runs against the engine's browser
+// with its DevTools driver (src/engine/host-browser.mjs, agent-browser.mjs, browser-cdp.mjs), with a stand-in for the
+// app's side (Rust's browser.rs) over pages of the local Edge, headless.
+// Secret fields never leave the page.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import net from 'node:net';
 import path from 'node:path';
 import http from 'node:http';
-import { tempHome } from './helpers.mjs';
 import { browserKey } from '../src/core/browser-key.mjs';
-import { createActions, servePipe, KEYS, focus, dialogsHook } from '../src/core/browser-protocol.mjs';
-import { electronDriver } from '../src/main/browser-driver.mjs';
-import { createServerBrowser } from '../src/server/browser.mjs';
+import { createActions, servePipe, KEYS, dialogsHook } from '../src/core/browser-protocol.mjs';
+import { createHostBrowser } from '../src/engine/host-browser.mjs';
 import { translate } from '../src/core/i18n.mjs';
+
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const until = async (fn, what, ms = 15000) => { const end = Date.now() + ms; while (Date.now() < end) { try { const v = await fn(); if (v) return v; } catch { /* not yet */ } await wait(100); } throw new Error(`timeout: ${what}`); };
 
 // A local Chromium to drive: Edge on Windows, Chrome or Chromium elsewhere (the suite is skipped without one).
 const EXE = [
@@ -40,9 +39,8 @@ const PAGES = {
     <a href="/dos">Siguiente</a><div id=echo></div><div id=out></div>
     <script>p.addEventListener('input', () => { echo.textContent = 'eco ' + p.value; }); console.error('fallo de prueba');</script>`,
   '/dos': '<!doctype html><title>Dos</title><p>segunda página</p><input name=otp autocomplete=one-time-code placeholder=Código>',
-  '/favicon.ico': '',
-  '/vivo': '<!doctype html><title>Vivo</title><input id=v placeholder=Vivo style="position:fixed;left:0;top:0;width:400px;height:100px"><button style="position:fixed;left:0;top:200px">Listo</button>',
-  '/captcha': '<!doctype html><title>Comprobación</title><div class="g-recaptcha" data-sitekey="x" style="width:300px;height:80px"></div>'
+  '/popup': '<!doctype html><title>Popup</title><a href="/dos" target="_blank">Abrir en otra ventana</a>',
+  '/favicon.ico': ''
 };
 before(async () => {
   site = http.createServer((req, res) => { const body = PAGES[new URL(req.url, 'http://x').pathname]; res.writeHead(body != null ? 200 : 404, { 'content-type': 'text/html; charset=utf-8' }); res.end(body ?? 'no'); });
@@ -69,88 +67,7 @@ async function connect(pipe, token, who = { agent: 'claude', session: 'conv-1', 
   };
 }
 
-// ---- the app's browser, with its own driver over a stand-in for Electron's webContents (a page of the local Chromium).
-async function stubWebContents(page, context) {
-  const cdp = await context.newCDPSession(page);
-  await cdp.send('Page.enable');
-  const main = (await cdp.send('Page.getFrameTree')).frameTree.frame.id;
-  let ctxId = null; let loading = false; let history = 0; let chain = Promise.resolve();
-  cdp.on('Page.frameNavigated', (e) => { if (!e.frame.parentId) { ctxId = null; history++; } });
-  cdp.on('Page.frameStartedLoading', (e) => { if (e.frameId === main) loading = true; });
-  cdp.on('Page.frameStoppedLoading', (e) => { if (e.frameId === main) loading = false; });
-  const queue = (fn) => { chain = chain.then(fn).catch(() => {}); return chain; };
-  const byElectron = Object.fromEntries(Object.values(KEYS).map((d) => [d.electron, d]));
-  return {
-    async executeJavaScriptInIsolatedWorld(_world, [{ code }]) {
-      await chain;
-      for (let i = 0; ; i++) {
-        try {
-          if (!ctxId) ctxId = (await cdp.send('Page.createIsolatedWorld', { frameId: main, worldName: 'electron-1717' })).executionContextId;
-          const r = await cdp.send('Runtime.evaluate', { expression: code, contextId: ctxId, returnByValue: true, awaitPromise: true });
-          if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? 'error');
-          return r.result.value;
-        } catch (error) { if (i >= 2 || !/context/i.test(error.message)) throw error; ctxId = null; }
-      }
-    },
-    executeJavaScript: (code) => page.evaluate(code),
-    loadURL: (url) => page.goto(url, { waitUntil: 'load' }).then(() => {}),
-    isLoading: () => loading,
-    sendInputEvent(ev) {
-      queue(async () => {
-        if (ev.type.startsWith('mouse')) await cdp.send('Input.dispatchMouseEvent', { type: { mouseMove: 'mouseMoved', mouseDown: 'mousePressed', mouseUp: 'mouseReleased' }[ev.type], x: ev.x, y: ev.y, button: ev.button ?? 'none', clickCount: ev.clickCount ?? 0 });
-        else if (ev.type === 'char') await cdp.send('Input.dispatchKeyEvent', { type: 'char', text: ev.keyCode });
-        else { const d = byElectron[ev.keyCode]; await cdp.send('Input.dispatchKeyEvent', { type: ev.type === 'keyDown' ? 'rawKeyDown' : 'keyUp', key: d.key, code: d.code, windowsVirtualKeyCode: d.vk }); }
-      });
-    },
-    focus() {},
-    insertText: (text) => queue(() => page.keyboard.insertText(text)),
-    navigationHistory: { canGoBack: () => history > 1, goBack: () => { history -= 2; page.goBack().catch(() => {}); } },
-    capturePage: async () => { await chain; const jpg = await page.screenshot({ type: 'jpeg', quality: 70 }); return { resize: () => ({ toJPEG: () => jpg }) }; },
-    getURL: () => page.url(),
-    startPainting() {}, stopPainting() {}, invalidate() {},
-    forcefullyCrashRenderer: () => { page.close().catch(() => {}); }
-  };
-}
-async function electronHarness({ vaultFill }) {
-  const { chromium } = await import('playwright-core');
-  const browser = await chromium.launch({ executablePath: EXE, headless: true });
-  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
-  const token = 'e'.repeat(48);
-  const tabs = new Map();
-  const actions = createActions({ driver: electronDriver(T), T, vaultFill });
-  async function create(key, who) {
-    const page = await context.newPage();
-    const wc = await stubWebContents(page, context);
-    const tab = { key, ...who, win: { webContents: wc, isDestroyed: () => page.isClosed() }, users: 0, painting: true, console: [], dialogAnswer: { accept: false, text: '' } };
-    page.on('console', (m) => { if (m.type() === 'error') tab.console.push({ level: 'error', message: m.text(), source: '', line: 0 }); });
-    // Electron puts its alert/confirm/prompt in place on every page (dom-ready): the same here.
-    page.on('domcontentloaded', () => { wc.executeJavaScript(dialogsHook(tab.dialogAnswer)).catch(() => {}); });
-    tabs.set(key, tab);
-    return tab;
-  }
-  const served = servePipe({ token, T, actions, pages: { get: (k) => tabs.get(k), dead: (t) => t.win.isDestroyed(), create, close: (t) => { tabs.delete(t.key); t.win.webContents.forcefullyCrashRenderer(); } } });
-  await served.ready;
-  return { pipe: served.pipe, token, profileDir: null, async close() { served.close(); await browser.close(); } };
-}
-
-// ---- Orb Server's browser, as the engine starts it (headless here: no Xvfb on Windows).
-let humans = [];
-function serverHarness({ vaultFill, root }) {
-  const sb = createServerBrowser({ root, display: 'headless', executable: EXE, scope: false, ownerId: () => 'dueno', readMeminfo: () => 'MemAvailable:   8000000 kB', vaultFill,
-    onHuman: (h) => { humans.push(h); } });
-  return sb.ready.then(() => ({ pipe: sb.pipe, token: sb.token, sb, close: () => sb.shutdown() }));
-}
-
-// The vault's hook (WS6 writes the real one): types a user name it never returns into the field with the focus and marks it.
-const VAULT_USER = 'usuario-de-la-boveda';
-const vaultFill = async (_tab, _args, page) => {
-  if (!(await page.world(focus(1, true)))) return { ok: false, reason: 'no_field' };
-  await page.insertText(VAULT_USER);
-  await page.markFilled(1);
-  return { ok: true, secret: VAULT_USER }; // anything else it returns never reaches the agent
-};
-
-async function suite(t, browser, { server = false } = {}) {
+async function suite(t, browser) {
   // A key for another conversation (or none) is cut off before any action.
   const forged = await connect(browser.pipe, browser.token, { agent: 'claude', session: 'conv-1', task: '' }, 'f'.repeat(64));
   assert.equal(forged.ok, false, 'clave falsa: conexión cortada');
@@ -180,13 +97,6 @@ async function suite(t, browser, { server = false } = {}) {
     assert.ok(r.result.image.startsWith('/9j/'), 'una JPEG');
     assert.match(r.result.text, /tapados/);
 
-    // The vault's fill: the agent only gets ok; what it typed is not in any snapshot of this page.
-    r = await c.act('vault_fill', { site: 'example.com' });
-    assert.equal(r.result, 'ok');
-    r = await c.act('snapshot');
-    assert.ok(!r.result.includes(VAULT_USER), 'lo que rellenó la bóveda no sale');
-    assert.match(r.result, /\[1\] input:text "Usuario" \(relleno, oculto\)/);
-
     // The page's confirm(), answered as the agent said.
     r = await c.act('dialog', { accept: true });
     assert.match(r.result, /se aceptan/);
@@ -200,23 +110,12 @@ async function suite(t, browser, { server = false } = {}) {
     assert.equal((await c.act('scroll', { direction: 'down', amount: 100 })).ok, true);
     assert.equal((await c.act('wait', { text: 'Hola', ms: 2000 })).ok, true);
 
-    // A page that asks for a code: Orb Server tells the person and the agent to wait for them.
+    // Another page, then back to the form.
     r = await c.act('open', { url: `${base}/dos` });
     assert.match(r.result, /Página: Dos/);
-    if (server) {
-      assert.match(r.result, /AVISO: esta página pide un código/);
-      assert.equal(humans.at(-1)?.kind, 'code');
-      r = await c.act('open', { url: `${base}/captcha` });
-      assert.match(r.result, /CAPTCHA/);
-      assert.equal(humans.at(-1)?.kind, 'captcha');
-      assert.equal((await c.act('back')).ok, true);
-    }
-    // Back to the form: a new document, so the vault's mark is gone with the old one (until navigation).
     r = await c.act('back');
     assert.equal(r.ok, true, r.error);
     assert.match(r.result, /Página: Login/);
-    r = await c.act('type', { ref: 1, text: 'visible-ahora' });
-    assert.match(r.result, /"visible-ahora"/, 'tras navegar, el campo ya no está marcado');
 
     assert.match((await c.act('volar')).error, /acción no válida/);
     assert.match((await c.act('close')).result, /Navegador cerrado/);
@@ -224,93 +123,116 @@ async function suite(t, browser, { server = false } = {}) {
   } finally { c.end(); }
 }
 
-test('navegador de la app (driver de Electron): el protocolo de las herramientas y los secretos', { skip }, async (t) => {
-  const b = await electronHarness({ vaultFill });
-  try { await suite(t, b); } finally { await b.close(); }
+// ---- 3.8.1 (D2, D7): the engine's browser as under Tauri (src/engine/host-browser.mjs). The app's side, which Rust does
+// with hidden WebView2 windows (src-tauri/src/browser.rs), is played here by pages of a headless Edge: the same host.*
+// calls and browserEvent messages, the DevTools events Rust listens to, and Orb's own events. Rust refuses a new window
+// before it exists; Edge cannot, so this stand-in closes it as soon as it appears and counts it: the test checks that the
+// agent's page is the only page left (a leak fails it). The refusals themselves are checked against the real WebView2 in
+// test/tauri-navegador.e2e.mjs.
+const EVENTS = ['Page.frameNavigated', 'Page.navigatedWithinDocument', 'Page.frameStartedLoading', 'Page.frameStoppedLoading', 'Page.loadEventFired', 'Page.javascriptDialogOpening', 'Page.screencastFrame', 'Runtime.executionContextsCleared', 'Runtime.executionContextDestroyed', 'Runtime.consoleAPICalled', 'Runtime.exceptionThrown', 'Log.entryAdded', 'Inspector.targetCrashed', 'Inspector.detached'];
+async function hostHarness({ frameMs = 0 } = {}) {
+  const { chromium } = await import('playwright-core');
+  const pw = await chromium.launch({ executablePath: EXE, headless: true });
+  const context = await pw.newContext({ viewport: { width: 1280, height: 800 } });
+  const pages = new Map(); let next = 0; const popups = []; const pip = []; const frames = { inFlight: 0, maxInFlight: 0, delivered: 0, received: 0 };
+  let hb = null;
+  const event = (page, method, params) => hb?.event({ type: 'browserEvent', page, method, params });
+  async function call(method, params = {}) {
+    if (method === 'host.browser.open') {
+      const id = ++next; const page = await context.newPage(); const cdp = await context.newCDPSession(page);
+      pages.set(id, { page, cdp });
+      for (const name of EVENTS) cdp.on(name, (p) => { if (name === 'Page.screencastFrame') frames.received++; event(id, name, p); });
+      page.on('popup', async (p) => {
+        popups.push(p);
+        await p.waitForURL((u) => u.href !== 'about:blank', { timeout: 5000 }).catch(() => {});
+        const url = p.url(); await p.close().catch(() => {});
+        event(id, 'Orb.popup', { url });
+      });
+      page.on('load', async () => { event(id, 'Orb.title', { title: await page.title().catch(() => '') }); });
+      return { page: id };
+    }
+    if (method === 'host.browser.cdp') return pages.get(params.page).cdp.send(params.method, params.params);
+    if (method === 'host.browser.close') { const p = pages.get(params.page); pages.delete(params.page); await p?.page.close().catch(() => {}); return true; }
+    if (method === 'host.pip.frame') {
+      frames.inFlight++; frames.maxInFlight = Math.max(frames.maxInFlight, frames.inFlight);
+      await wait(frameMs); frames.inFlight--; frames.delivered++; return true;
+    }
+    if (method.startsWith('host.pip.')) { pip.push([method, params.mode ?? params.state?.agent ?? null]); return true; }
+    throw new Error(`host: ${method} desconocido`);
+  }
+  hb = createHostBrowser({ call, label: (a) => ({ claude: 'Claude', codex: 'Codex' })[a] ?? a });
+  await hb.ready;
+  const pageCount = () => context.pages().filter((p) => !p.isClosed()).length;
+  return { pipe: hb.pipe, token: hb.token, hb, pages, popups, pip, frames, pageCount, async close() { hb.shutdown(); await pw.close(); } };
+}
+
+test('navegador del motor (como en Tauri): el mismo protocolo y los mismos secretos', { skip }, async (t) => {
+  const h = await hostHarness();
+  try {
+    await suite(t, h);
+    assert.ok(h.pip.some(([m, a]) => m === 'host.pip.show' && a === 'normal'), 'la ventanita aparece al abrir una página');
+    assert.ok(h.pip.some(([m, a]) => m === 'host.pip.state' && a === 'Claude'), 'con el nombre del agente');
+    assert.equal(h.hb.state().tabs.length, 0, 'close: sin páginas');
+    await until(() => h.pageCount() === 0, 'la página se cerró de verdad', 5000);
+  } finally { await h.close(); }
 });
 
-test('navegador del Server: el mismo protocolo, perfil por persona y «Necesito que lo hagas tú»', { skip }, async (t) => {
-  const h = tempHome(); humans = [];
-  const root = path.join(h.base, 'browser');
-  const b = await serverHarness({ vaultFill, root });
+test('navegador del motor: una ventana emergente abre en la misma página y no queda ninguna otra', { skip }, async () => {
+  const h = await hostHarness();
   try {
-    await suite(t, b, { server: true });
-    assert.ok(fs.existsSync(path.join(root, 'dueno')), 'perfil del dueño en browser/<persona>');
-    // Another person's agent: their own profile, apart.
-    const leo = await connect(b.pipe, b.token, { agent: 'claude', session: 'conv-2', task: '', person: 'leo' });
-    assert.equal(leo.ok, true);
-    // With one Chromium at a time, the owner's (idle now) makes room for Leo's.
-    const r = await leo.act('open', { url: `${base}/dos` });
+    const c = await connect(h.pipe, h.token, { agent: 'codex', session: 'conv-2', task: '7' });
+    let r = await c.act('open', { url: `${base}/popup` });
     assert.equal(r.ok, true, r.error);
-    assert.ok(fs.existsSync(path.join(root, 'leo')), 'perfil de Leo aparte');
-    assert.deepEqual(b.sb.state().instances.map((i) => i.person), ['leo']);
-    leo.end();
-  } finally { await b.close(); h.cleanup(); }
+    r = await c.act('click', { ref: 1 });
+    await until(async () => (await c.act('snapshot')).result?.includes('Página: Dos'), 'la ventana emergente abre en la misma página', 10000);
+    assert.equal(h.popups.length, 1, 'la página pidió una ventana');
+    await until(() => h.pageCount() === 1, 'ninguna otra página abierta', 5000);
+    await wait(500);
+    assert.equal(h.pageCount(), 1, 'una sola página: la del agente');
+    assert.ok(h.popups.every((p) => p.isClosed()), 'ninguna ventana emergente viva');
+    assert.deepEqual(h.hb.state().tabs.map((x) => [x.agent, x.task]), [['codex', '7']]);
+    // What the app refuses reaches the agent as console errors: a download, an address that is not a web page.
+    const [id] = h.pages.keys();
+    h.hb.event({ page: id, method: 'Orb.blocked', params: { kind: 'download', url: `${base}/archivo.zip` } });
+    h.hb.event({ page: id, method: 'Orb.popup', params: { url: 'file:///C:/Windows/win.ini' } });
+    r = await c.act('console', {});
+    assert.match(r.result, /refused a download.*archivo\.zip/s);
+    assert.match(r.result, /not http\(s\).*win\.ini/s);
+    assert.match((await c.act('snapshot')).result, /Página: Dos/, 'la dirección file: no se abrió');
+    // A task that ends closes its pages.
+    h.hb.closeTask('7');
+    await until(() => h.pageCount() === 0, 'página cerrada al terminar la tarea', 5000);
+    c.end();
+  } finally { await h.close(); }
 });
 
-test('vista en directo: imágenes con su acuse, entrada del usuario, los bots esperan y solo la ve su persona', { skip }, async () => {
-  const h = tempHome();
-  const { Board } = await import('../src/core/board.mjs');
-  const { createPerson } = await import('../src/core/persons.mjs');
-  const { ctx } = await import('../src/core/context.mjs');
-  const { browserMethods } = await import('../src/engine/api-browser.mjs');
-  const { authorize, AuthzError } = await import('../src/core/authz.mjs');
-  const board = new Board();
-  const owner = board.ownerId();
-  const leoId = createPerson(board, { name: 'Leo' }).id;
-  const sb = createServerBrowser({ root: path.join(h.base, 'browser'), display: 'headless', executable: EXE, scope: false, ownerId: () => owner, readMeminfo: () => 'MemAvailable: 8000000 kB', timings: { instances: 2 } });
-  await sb.ready;
-  ctx.serverBrowser = sb;
-  const events = [];
-  const api = browserMethods({ board, emit: (event, payload) => events.push({ event, payload }) });
-  const P = (person, device, role = 'user') => ({ person, role, channel: 'phone', device, rights: { approve: true, dev: false, admin: false } });
-  const ownerP = P(owner, 'movil-dueno', 'owner'); const leoP = P(leoId, 'movil-leo');
-  let bot = null;
+test('navegador del motor: la ventanita recibe los fotogramas de uno en uno aunque la app vaya lenta', { skip }, async () => {
+  const h = await hostHarness({ frameMs: 600 });
+  PAGES['/anima'] = '<!doctype html><title>Anima</title><div id=b style="width:300px;height:300px;background:red"></div><script>let i=0;setInterval(()=>{b.style.background="hsl("+(i++*20)+",80%,50%)";b.textContent=i},16)</script>';
   try {
-    // The owner's bot has a page open; the owner opens the live view of it.
-    bot = await connect(sb.pipe, sb.token, { agent: 'bot:1', session: 'bot-1', task: '' });
-    assert.equal((await bot.act('open', { url: `${base}/vivo` })).ok, true);
-    const live = await api['browser.live.start']({ width: 400, dpr: 3 }, ownerP);
-    assert.ok(live.sid);
-    assert.equal(live.width, 600, 'ancho del dispositivo × 1,5 como mucho');
-    const frames = () => events.filter((e) => e.event === 'browser:live' && e.payload.sid === live.sid && e.payload.data);
-    const deadline = Date.now() + 10_000;
-    while (!frames().length && Date.now() < deadline) await new Promise((r) => setTimeout(r, 50));
-    const first = frames()[0];
-    assert.ok(first, 'llega una imagen');
-    assert.equal(first.payload.device, 'movil-dueno', 'solo para el dispositivo que la abrió');
-    assert.equal(first.payload.person, owner);
-    assert.ok(first.payload.data.startsWith('/9j/'), 'JPEG');
-    // One picture on its way at a time: no more until it is acknowledged.
-    await new Promise((r) => setTimeout(r, 600));
-    assert.equal(frames().length, 1, 'sin acuse no hay más imágenes');
-    await api['browser.live.input']({ sid: live.sid, ack: first.payload.seq }, ownerP);
+    const c = await connect(h.pipe, h.token);
+    assert.equal((await c.act('open', { url: `${base}/anima` })).ok, true);
+    await until(() => h.frames.delivered >= 3, 'fotogramas en la ventanita', 15000);
+    await wait(1500);
+    assert.equal(h.frames.maxInFlight, 1, 'nunca dos fotogramas a la vez hacia la app');
+    // The page keeps at most two frames unacknowledged (a page animating at 60 fps would send ~300 in this time).
+    await wait(4000);
+    assert.ok(h.frames.received <= h.frames.delivered * 3 + 4, `recibidos ${h.frames.received}, entregados ${h.frames.delivered}`);
+    // As a pill, no pictures.
+    h.hb.pip('pildora');
+    await wait(800);
+    const at = h.frames.delivered; await wait(1500);
+    assert.ok(h.frames.delivered <= at + 1, 'en píldora no hay fotogramas');
+    c.end();
+  } finally { delete PAGES['/anima']; await h.close(); }
+});
 
-    // The person taps the user field and types in their phone's own field: it reaches the page.
-    await api['browser.live.input']({ sid: live.sid, events: [{ type: 'tap', x: 100 / 1280, y: 50 / 800 }] }, ownerP);
-    const typed = await api['browser.live.input']({ sid: live.sid, events: [{ type: 'text', text: 'hola-en-directo' }] }, ownerP);
-    assert.equal(typed.using, true);
-    const seen = await bot.act('snapshot');
-    assert.match(seen.result, /"hola-en-directo"/, 'el bot puede leer');
-    // While the person uses it, the bot's actions wait.
-    assert.match((await bot.act('click', { ref: 2 })).error, /el usuario está usando el navegador/);
-    await api['browser.live.input']({ sid: live.sid, release: true }, ownerP);
-    assert.equal((await bot.act('click', { ref: 2 })).ok, true, '«Devolver a los bots»');
-
-    // Only the profile's own person: the owner cannot open Leo's, nor drive Leo's view.
-    await assert.rejects(() => api['browser.live.start']({ width: 400, person: leoId }, ownerP), /Solo puedes ver tu propio navegador/);
-    assert.throws(() => authorize(board, ownerP, 'browser.live.start', { person: leoId }), AuthzError);
-    const leoLive = await api['browser.live.start']({ width: 360, dpr: 1 }, leoP);
-    await assert.rejects(() => api['browser.live.input']({ sid: leoLive.sid, events: [{ type: 'text', text: 'x' }] }, ownerP), /Solo puedes ver tu propio navegador/);
-    await assert.rejects(() => api['browser.live.stop']({ sid: leoLive.sid }, P(leoId, 'otro-dispositivo')), /Solo puedes ver/, 'ni desde otro dispositivo');
-    const denied = board.all("SELECT method, resource, decision FROM audit WHERE decision = 'deny' AND method LIKE 'browser.live.%'");
-    assert.ok(denied.some((a) => a.method === 'browser.live.start' && a.resource === `person:${leoId}`), 'queda en la auditoría');
-    assert.ok(denied.some((a) => a.method === 'browser.live.input'));
-    assert.ok(board.all("SELECT 1 FROM audit WHERE decision = 'allow' AND method = 'browser.live.start'").length >= 2, 'cada apertura también');
-    assert.ok(fs.existsSync(path.join(h.base, 'browser', leoId)), 'Leo ve su propio perfil');
-    // Pictures are never kept anywhere: closing ends the stream.
-    await api['browser.live.stop']({ sid: live.sid }, ownerP);
-    assert.ok(events.some((e) => e.payload.sid === live.sid && e.payload.state === 'stopped'));
-    await assert.rejects(() => api['browser.live.input']({ sid: live.sid, ack: 1 }, ownerP), /cerrada/);
-  } finally { bot?.end(); ctx.serverBrowser = null; await sb.shutdown(); h.cleanup(); }
+test('navegador del motor: sin puerto de depuración; el navegador de Tauri solo se maneja por el canal del motor', () => {
+  // The engine has no DevTools client of its own, and Rust starts the agents' browser without a DevTools port.
+  const dir = new URL('../src/engine/', import.meta.url);
+  const engine = fs.readdirSync(dir).filter((f) => f.endsWith('.mjs')).map((f) => fs.readFileSync(new URL(f, dir), 'utf8')).join('\n');
+  assert.doesNotMatch(engine, /new WebSocket\(|DevToolsActivePort|remote-debugging/);
+  const rust = fs.readFileSync(new URL('../src-tauri/src/browser.rs', import.meta.url), 'utf8');
+  assert.match(rust, /CallDevToolsProtocolMethod/);
+  assert.doesNotMatch(rust, /remote-debugging/);
 });

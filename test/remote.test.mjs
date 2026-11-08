@@ -1,6 +1,7 @@
 // Phone access: pairing with a one-time QR and the phone's own key, every message encrypted end to end, replays and
 // tampering refused, host/origin checks, the phone's limited actions, encrypted uploads and live events, notifications
-// and revocation. The server binds to loopback here (ORB_REMOTE_BIND) instead of the Wi-Fi or Tailscale address.
+// and revocation; the QR used once and too many tries cut. The server binds to loopback here (ORB_REMOTE_BIND) instead
+// of the Wi-Fi or Tailscale address.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -9,7 +10,11 @@ import { fork } from 'node:child_process';
 import http from 'node:http';
 import { tempHome, ROOT, until } from './helpers.mjs';
 import * as C from '../src/core/mobile-crypto.mjs';
+import { privateSource } from '../src/engine/remote.mjs';
+import { parseLinkPayload, normalCode, normalAddress } from '../src/core/link-payload.mjs';
+import { createPhone, TEST_MASTER } from './fixtures/phone-client.mjs';
 
+let unlock = null;
 let t; let engine; let n = 0; const pending = new Map(); let base; let port;
 const call = (method, params = {}) => new Promise((resolve, reject) => { const id = ++n; pending.set(id, { resolve, reject }); engine.send({ type: 'call', id, method, params }); });
 
@@ -22,15 +27,16 @@ before(async () => {
   await new Promise((resolve, reject) => { engine.once('message', (m) => (m.type === 'started' && m.ok ? resolve() : reject(new Error(m.error)))); engine.send({ type: 'start', home: t.home, version: 'test' }); });
   base = `http://127.0.0.1:${port}`;
   await until(async () => (await call('remote.status')).running, 'servidor del móvil');
+  unlock = (await call('master.create', { password: TEST_MASTER })).unlock; // 3.8: phones link with the master password
 });
 after(() => { engine?.send({ type: 'shutdown' }); t?.cleanup(); });
 
 // A phone, as the page does it (src/ui/lib/web-bridge.js).
 function phone() {
   const me = { kp: C.newKeyPair(), id: null, key: null, pc: null };
-  me.pairBody = (code, pcPub, { name = 'Android', at = Date.now() } = {}) => {
+  me.pairBody = (code, pcPub, { name = 'Android', at = Date.now(), v = 4 } = {}) => {
     const pub = C.b64.enc(me.kp.pub);
-    return { pub, proof: C.seal(C.pairingKey(me.kp.priv, pcPub, code), { pub, name, t: at }, C.AAD.pair) };
+    return { step: 'start', pub, proof: C.seal(C.pairingKey(me.kp.priv, pcPub, code), { pub, name, t: at, v }, C.AAD.pair) };
   };
   me.box = (kind, body, { at = Date.now() } = {}) => C.seal(me.key, { t: at, m: kind, b: body }, C.AAD.request(me.id));
   me.post = async (pathname, box, { id = me.id, headers = {} } = {}) => fetch(base + pathname, { method: 'POST', headers: { 'X-Orb-Device': id, 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(box) });
@@ -45,10 +51,19 @@ function phone() {
   return me;
 }
 const qr = async (kind) => { const { url, pc } = await call('remote.pair', kind ? { kind } : {}); const h = new URLSearchParams(new URL(url).hash.slice(1)); return { code: h.get('vincular'), pc: C.b64.dec(h.get('pc')), fp: pc, url }; };
-const pair = async (p, q, opts) => {
-  const res = await fetch(`${base}/api/pair`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p.pairBody(q.code, q.pc, opts)) });
+// 3.8: two steps, the second with the master password's proof (src/core/mobile-crypto.mjs › linkDevice, by hand).
+const postPair = (body) => fetch(`${base}/api/pair`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+const pair = async (p, q, { password = TEST_MASTER, ...opts } = {}) => {
+  const res = await postPair(p.pairBody(q.code, q.pc, opts));
   if (res.status !== 200) return res.status;
-  const data = await res.json();
+  const c = C.open(C.pairingKey(p.kp.priv, q.pc, q.code), (await res.json()).box, C.AAD.pairChallenge);
+  const ver = await C.verifierOf(password, c.kdf);
+  const transcript = C.pakeTranscript({ via: 'qr', devPub: p.kp.pub, pcPub: q.pc, sid: c.sid, kdf: c.kdf });
+  const K = C.pakeKey({ secret: q.code, dhDevice: C.sharedSecret(p.kp.priv, q.pc), dhPassword: C.sharedSecret(ver.priv, q.pc), transcript });
+  const fin = await postPair({ step: 'finish', sid: c.sid, pub: C.b64.enc(p.kp.pub), mac: C.b64.enc(C.pakeMac(K, C.MAC_PHONE)) });
+  if (fin.status !== 200) return fin.status;
+  const data = await fin.json();
+  assert.ok(C.sameBytes(C.b64.dec(data.mac), C.pakeMac(K, C.macPc(data.id))), 'el PC demuestra que es el del código');
   p.key = C.sessionKey(p.kp.priv, q.pc); p.id = data.id;
   const ok = C.open(p.key, data.box, C.AAD.paired(data.id));
   assert.equal(ok.id, data.id); p.pc = ok.pc;
@@ -77,7 +92,16 @@ test('sirve la web app instalable y solo responde a su propio nombre', async () 
   assert.match(html, /manifest\.webmanifest/);
   assert.match(html, /apple-touch-icon/);
   assert.match(page.headers.get('content-security-policy'), /script-src 'self'/);
-  assert.equal((await (await fetch(`${base}/manifest.webmanifest`)).json()).display, 'standalone');
+  const manifest = await (await fetch(`${base}/manifest.webmanifest`)).json();
+  assert.equal(manifest.display, 'standalone');
+  // 3.8.1: the «maskable» icon fills the whole canvas (the phone crops it to its own shape).
+  const maskable = manifest.icons.find((i) => i.purpose === 'maskable');
+  assert.equal(maskable.src, '/icon-maskable.png');
+  const icon = await fetch(`${base}${maskable.src}`);
+  assert.equal(icon.status, 200);
+  const { PNG } = (await import('pngjs')).default;
+  const img = PNG.sync.read(Buffer.from(await icon.arrayBuffer()));
+  for (const [x, y] of [[0, 0], [img.width - 1, 0], [0, img.height - 1], [img.width - 1, img.height - 1]]) assert.equal(img.data[(y * img.width + x) * 4 + 3], 255, `esquina ${x},${y} opaca`);
   assert.match(await (await fetch(`${base}/sw.js`)).text(), /showNotification/);
   // fetch() cannot change Host: a raw request plays the DNS-rebinding page.
   const status = await new Promise((resolve, reject) => http.get({ host: '127.0.0.1', port, path: '/api/me', headers: { Host: 'atacante.example' } }, (r) => { r.resume(); resolve(r.statusCode); }).on('error', reject));
@@ -144,7 +168,7 @@ test('el móvil hace lo suyo y nada más (acciones del PC, acceso total, archivo
   await denied('sessions.send', { id: total.id, text: 'hola' });
   for (const method of ['config.save', 'accounts.add', 'installer.start', 'remote.pair', 'remote.configure', 'projects.import', 'projects.createPr', 'agents.login', 'agents.loginCode', 'agents.install']) await denied(method, {});
   await denied('sessions.create', { agent: 'codex', permission: 'total' });
-  await denied('sessions.send', { id: 'x', text: 'hola', images: [path.join(t.home, 'orb.json')] });
+  await denied('sessions.send', { id: 'x', text: 'hola', images: [path.join(t.home, 'core', 'orb.json')] });
   // A picture uploaded from the phone: encrypted, and checked by its bytes.
   const upload = async (bytes) => {
     const auth = C.sealText(p.key, { t: Date.now(), m: 'upload' }, C.AAD.request(p.id));
@@ -154,20 +178,28 @@ test('el móvil hace lo suyo y nada más (acciones del PC, acceso total, archivo
   };
   const png = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da63f8ffff3f0005fe02fea7d6a0f10000000049454e44ae426082', 'hex');
   const up = await upload(new Uint8Array(png));
-  assert.ok(up.result.path.includes(path.join('.orb', 'adjuntos-movil')));
-  assert.equal(fs.readFileSync(up.result.path).equals(png), true);
+  // F2.6c (P7): the phone gets the picture's name, never the PC's folder; it sends that name back with its message.
+  assert.match(up.result.path, /^\d+-[0-9a-f]{8}\.png$/);
+  assert.equal(fs.readFileSync(path.join(t.home, 'core', 'adjuntos-movil', up.result.path)).equals(png), true);
+  const withPicture = await p.call('sessions.send', { id: 'no-existe', text: 'hola', images: [up.result.path] });
+  assert.notEqual(withPicture.status, 403, 'su propia imagen, por su nombre, sí');
+  assert.ok(!String(withPicture.error ?? '').includes(t.home), 'los errores tampoco llevan la carpeta');
   assert.equal((await upload(new Uint8Array(Buffer.from('MZ ejecutable')))).status, 415);
 });
 
-test('3.5: un bot sabe que le escriben desde el móvil por el tipo del dispositivo, no por lo que este mande', async () => {
+// 3.8 (M4, B3), through the encrypted /api/call: no folder of the PC, and the brain of one conversation only.
+test('el móvil no recibe carpetas del PC ni cambia el cerebro de las conversaciones nuevas', async () => {
   const p = globalThis.phone1;
-  const { bots } = await call('bots.list');
-  const r = await p.call('bots.send', { id: bots[0].id, text: 'Hola desde el móvil', via: 'browser' });
-  assert.equal(r.ok, true, r.error);
-  const file = path.join(t.base, 'fake.jsonl');
-  const turn = () => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)).find((l) => /Hola desde el móvil/.test(l.text ?? '')) : null);
-  await until(() => turn(), 'el bot recibe el mensaje', 20000);
-  assert.match(turn().text, /te escribe desde el móvil/);
+  const state = (await p.call('app.state')).result;
+  assert.equal(state.home, undefined); assert.equal(state.paths, undefined);
+  assert.equal(state.activeProject?.path, undefined);
+  const before = JSON.stringify((await call('app.state')).config.orchestrator);
+  const refused = await p.call('chat.settings', { reasoning: 'low' });
+  assert.equal(refused.ok, false); assert.equal(refused.status, 403);
+  const { conversation } = (await p.call('chat.send', { text: 'hola desde el móvil', brain: { reasoning: 'low' } })).result;
+  const changed = await p.call('chat.settings', { conversation, reasoning: 'high' });
+  assert.equal(changed.ok, true, changed.error); assert.equal(changed.result.reasoning, 'high');
+  assert.equal(JSON.stringify((await call('app.state')).config.orchestrator), before, 'lo de las nuevas sigue igual');
 });
 
 test('avisos: solo servicios de avisos conocidos', async () => {
@@ -182,6 +214,11 @@ test('avisos: solo servicios de avisos conocidos', async () => {
   assert.equal((await call('remote.status')).devices.find((d) => d.id === p.id).push, false);
   const me = C.open(p.key, await (await p.post('/api/me', p.box('me', null))).json(), C.AAD.response(p.id));
   assert.match(me.result.vapid, /^[A-Za-z0-9_-]{80,90}$/, 'la clave pública para suscribirse');
+  // An app older than what this Orb still talks to is told to update (426, review F2.2 M1); the current one is not.
+  const old = C.open(p.key, await (await p.post('/api/me', p.box('me', { v: 1 }))).json(), C.AAD.response(p.id));
+  assert.equal(old.ok, false); assert.equal(old.status, 426); assert.equal(old.update, 'me');
+  assert.match(old.error, /actualiza/i);
+  assert.equal(C.open(p.key, await (await p.post('/api/me', p.box('me', { v: 3 }))).json(), C.AAD.response(p.id)).ok, true);
 });
 
 test('eventos en directo cifrados y revocar el acceso', async () => {
@@ -201,7 +238,8 @@ test('eventos en directo cifrados y revocar el acceso', async () => {
   assert.equal(event.e, 'board:changed');
   assert.ok(!text.includes('board:changed'), 'el evento no se lee por el camino');
   ctrl.abort();
-  await call('remote.revoke', { id: p.id });
+  await assert.rejects(call('remote.revoke', { id: p.id }), /contraseña maestra/, '3.8: quitar un móvil pide la contraseña maestra');
+  await call('remote.revoke', { id: p.id, unlock });
   assert.equal((await p.post('/api/call', p.box('call', { method: 'app.state' }))).status, 401, 'tras revocarlo ya no entra');
 });
 
@@ -217,4 +255,45 @@ test('reabrir el acceso (cambio de red o de vía) conserva los móviles vinculad
   assert.equal((await call('remote.enable', { enabled: false })).running, false);
   await assert.rejects(fetch(`${base}/`), 'apagado: nada escucha');
   assert.equal((await call('remote.enable', { enabled: true })).running, true);
+});
+
+test('solo redes privadas, Tailscale y este PC; QR v1 y v2; código corto', async () => {
+  for (const ip of ['127.0.0.1', '::1', '::ffff:192.168.1.20', '10.0.0.5', '172.16.3.4', '172.31.0.1', '100.64.0.1', '100.127.255.254', 'fd7a:115c:a1e0::1']) assert.ok(privateSource(ip), ip);
+  for (const ip of ['8.8.8.8', '172.32.0.1', '100.128.0.1', '192.169.0.1', '2001:db8::1', '', undefined]) assert.ok(!privateSource(ip), String(ip));
+  const pc = C.b64.enc(C.newKeyPair().pub);
+  const v1 = parseLinkPayload(`http://192.168.1.5:3131/#vincular=abc&pc=${encodeURIComponent(pc)}`);
+  assert.deepEqual([v1.v, v1.urls, v1.code, v1.pc], [1, ['http://192.168.1.5:3131'], 'abc', pc]);
+  const v2 = parseLinkPayload(`https://casa.ts.net:3131/#vincular=abc&pc=${encodeURIComponent(pc)}&v=2&n=Casa&a=${encodeURIComponent('http://100.64.0.2:3131')}`);
+  assert.deepEqual([v2.v, v2.name], [2, 'Casa']);
+  assert.deepEqual([...v2.urls].sort(), ['http://100.64.0.2:3131', 'https://casa.ts.net:3131']);
+  assert.equal(normalCode('abcd-efgh'), 'ABCDEFGH');
+  assert.equal(normalAddress('100.64.0.2'), 'http://100.64.0.2:3131');
+  // The QR names this PC and its other addresses, never a role; the short code links too (one use).
+  const q = await call('link.qr', { device: 'phone' });
+  assert.match(q.code, /^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+  assert.equal(q.payload.v, 4, 'protocolo 4 (3.8)');
+  assert.equal(new URLSearchParams(new URL(q.url).hash.slice(1)).get('r'), null);
+  const hello = await (await fetch(`${base}/api/hello`)).json();
+  assert.ok(Array.isArray(hello.urls) && hello.urls.length >= 1, 'las direcciones de este PC');
+  assert.equal(hello.role, undefined);
+  const byCode = createPhone({ name: 'Con el código', kind: 'phone' });
+  try {
+    const me = await byCode.connect({ code: q.code.toLowerCase(), address: `127.0.0.1:${port}`, fp: q.pc });
+    assert.equal(me.fp, q.pc);
+    assert.ok((await call('link.devices')).some((d) => d.id === me.id && d.kind === 'phone'));
+    await assert.rejects(createPhone().connect({ code: q.code, address: `127.0.0.1:${port}` }), 'el mismo código no sirve dos veces');
+  } finally { byCode.stop(); }
+});
+
+// Last: it leaves this address without more tries for a while.
+test('el QR ya usado no sirve y demasiados intentos se cortan', async () => {
+  const q = await call('link.qr');
+  const fresh = createPhone({ name: 'Otro', kind: 'browser' });
+  try {
+    await fresh.connect({ qr: q.url });
+    await assert.rejects(fresh.connect({ qr: q.url }), (e) => e.status === 401, 'un solo uso');
+    let last = 0;
+    for (let i = 0; i < 12; i++) { last = (await fetch(`${base}/api/pair`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"pub":"x"}' })).status; }
+    assert.equal(last, 429, 'demasiados intentos desde la misma dirección');
+  } finally { fresh.stop(); }
 });

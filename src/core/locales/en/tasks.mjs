@@ -53,6 +53,7 @@ export default {
   'tasks.pr.created': 'Pull request created',
   'tasks.pr.open': 'Open in GitHub',
   'tasks.taskNo': 'Task #{id} · {project}',
+  'tasks.taskTitle': 'Task #{id}',
   'tasks.accepted': 'Accepted',
   'tasks.approve.title': 'Approve task #{id}',
   'tasks.approve.body': '{title}\nAgent: {agent}\nFolder: {path}\nReason: {reason}\n\nIf the task is modified, it will require your approval again.',

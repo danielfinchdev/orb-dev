@@ -6,6 +6,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { tempHome } from './helpers.mjs';
 import { createHome, folderName, isHome, ensureLayout, projectLogHeader, loadConfig } from '../src/core/home.mjs';
+import { applyLayout } from '../src/core/core-folder.mjs';
 import { PRODUCT } from '../src/core/product.mjs';
 import { ctx, saveConfig } from '../src/core/context.mjs';
 import { Board, checkProjectPath } from '../src/core/board.mjs';
@@ -20,17 +21,19 @@ before(() => { t = tempHome(); board = new Board(); project = createProject(boar
 after(() => t.cleanup());
 
 test('el primer arranque crea la carpeta del asistente con todo lo necesario', () => {
-  for (const f of ['orb.json', '.orb/datos/clave.bin', '.orb/ejecuciones', '.orb/copias', 'bitacora/GENERAL.md', 'bitacora/proyectos', 'mcp-servers', 'windows', 'ios', 'android', 'web']) assert.ok(fs.existsSync(path.join(t.home, f)), f);
+  for (const f of ['core/orb.json', 'core/datos/clave.bin', 'core/ejecuciones', 'core/copias', 'core/bitacora/GENERAL.md', 'core/bitacora/proyectos', 'core/mcp', 'core/herramientas', 'core/secretos', 'windows', 'linux', 'ios', 'android', 'web', 'multi']) assert.ok(fs.existsSync(path.join(t.home, f)), f);
+  assert.deepEqual(fs.readdirSync(t.home).sort(), ['android', 'core', 'ios', 'linux', 'multi', 'web', 'windows'], 'nada más arriba');
   assert.ok(!fs.existsSync(path.join(t.home, 'bitacoras')), 'una sola carpeta de bitácoras');
-  assert.equal(fs.statSync(path.join(t.home, '.orb/datos/clave.bin')).size, 32);
+  assert.equal(fs.statSync(path.join(t.home, 'core/datos/clave.bin')).size, 32);
   assert.equal(path.basename(t.home), 'Orb');
   assert.equal(ctx.config.assistantName, 'Orbe', 'el robot se llama Orbe por defecto; su carpeta sigue siendo Orb');
-  // Reusing an existing home, and refusing a non-empty folder that is not one.
+  // Reusing an existing home; a folder Orb with other things in it keeps them (nothing is overwritten).
   assert.equal(createHome(t.home).home, t.home);
   assert.equal(createHome(t.base, { assistantName: 'Otro' }).home, t.home, 'siempre <carpeta elegida>/Orb, se llame como se llame');
   const other = fs.mkdtempSync(path.join(t.base, 'otra-'));
-  fs.mkdirSync(path.join(other, 'Orb')); fs.writeFileSync(path.join(other, 'Orb', 'x.txt'), '1');
-  assert.throws(() => createHome(other, { assistantName: 'Nova' }), /no está vacía/);
+  fs.mkdirSync(path.join(other, 'Orb', 'personal'), { recursive: true }); fs.writeFileSync(path.join(other, 'Orb', 'personal', 'x.txt'), '1');
+  assert.equal(createHome(other, { assistantName: 'Nova' }).home, path.join(other, 'Orb'));
+  assert.equal(fs.readFileSync(path.join(other, 'Orb', 'personal', 'x.txt'), 'utf8'), '1');
   // Choosing a folder already called Orb uses it as it is (no Orb inside Orb).
   const named = path.join(fs.mkdtempSync(path.join(t.base, 'base-')), 'Orb'); fs.mkdirSync(named);
   assert.equal(createHome(named, { assistantName: 'Nova' }).home, named);
@@ -39,7 +42,7 @@ test('el primer arranque crea la carpeta del asistente con todo lo necesario', (
 
 test('bitácoras en el idioma elegido; al cambiarlo, las que solo tienen la cabecera la cambian y las demás no', () => {
   const { home } = createHome(fs.mkdtempSync(path.join(t.base, 'en-')), { assistantName: 'Nova', language: 'en' });
-  assert.match(fs.readFileSync(path.join(home, 'bitacora', 'GENERAL.md'), 'utf8'), /^# Nova’s general log\n/);
+  assert.match(fs.readFileSync(path.join(home, 'core', 'bitacora', 'GENERAL.md'), 'utf8'), /^# Nova’s general log\n/);
   const general = ctx.paths.generalLog; const web = board.projectLogFile('web');
   const notes = board.ensureProjectLog('Con notas'); fs.appendFileSync(notes, '\n### 2026-10-10 12:00 — Ana — algo\n');
   assert.equal(fs.readFileSync(web, 'utf8'), projectLogHeader('web'));
@@ -54,7 +57,7 @@ test('bitácoras en el idioma elegido; al cambiarlo, las que solo tienen la cabe
 });
 
 test('2.4 y 2.6: quien tenía el nombre por defecto («Orb», «Orb·e») pasa a Orbe; un nombre elegido a mano se queda', () => {
-  const old = (stored) => { const home = fs.mkdtempSync(path.join(t.base, 'nombre-')); fs.writeFileSync(path.join(home, 'orb.json'), JSON.stringify(stored)); return loadConfig(home); };
+  const old = (stored) => { const home = fs.mkdtempSync(path.join(t.base, 'nombre-')); fs.mkdirSync(path.join(home, 'core')); fs.writeFileSync(path.join(home, 'core', 'orb.json'), JSON.stringify(stored)); return loadConfig(home); };
   assert.equal(old({ version: 3, assistantName: 'Orb' }).assistantName, 'Orbe');
   assert.equal(old({ version: 4, assistantName: 'Orb·e' }).assistantName, 'Orbe', 'el de la 2.4 pasa a Orbe');
   assert.equal(old({ version: 5, assistantName: 'Orb·e' }).assistantName, 'Orb·e', 'si en la 2.6 lo escribes así, se respeta');
@@ -64,24 +67,28 @@ test('2.4 y 2.6: quien tenía el nombre por defecto («Orb», «Orb·e») pasa a
   assert.equal(PRODUCT.folder, 'Orb');
 });
 
-test('una carpeta de la 2.3.0 se ordena: bitacoras pasa a bitacora sin perder nada', () => {
+test('una carpeta de la 2.3.0 se ordena: bitacoras pasa a la bitácora de core sin perder nada', () => {
   const base = fs.mkdtempSync(path.join(t.base, 'vieja-'));
   const home = path.join(base, 'Orb'); fs.mkdirSync(path.join(home, 'bitacoras', 'proyectos'), { recursive: true });
   fs.writeFileSync(path.join(home, 'orb.json'), '{}');
   fs.writeFileSync(path.join(home, 'bitacoras', 'GENERAL.md'), '# Bitácora general de Orb\n\nCabecera.\n\n### 2026-10-01 — entrada vieja\n- Hecho: algo\n');
   fs.writeFileSync(path.join(home, 'bitacoras', 'proyectos', 'android.md'), projectLogHeader('android'));
   fs.writeFileSync(path.join(home, 'bitacoras', 'proyectos', 'galactica.md'), `${projectLogHeader('galactica')}\n### entrada\n`);
+  // And the bitacora of 3.7 at the top: used where it is until the user says to move it into core (3.8).
   fs.mkdirSync(path.join(home, 'bitacora'));
   fs.writeFileSync(path.join(home, 'bitacora', 'GENERAL.md'), '# Bitácora general de Orb\n\nCabecera.\n\n### 2026-10-09 — entrada nueva\n');
   fs.writeFileSync(path.join(home, 'bitacora', 'indice.md'), 'del usuario\n');
   ensureLayout(home);
-  assert.ok(!fs.existsSync(path.join(home, 'bitacoras')));
-  const general = fs.readFileSync(path.join(home, 'bitacora', 'GENERAL.md'), 'utf8');
+  assert.ok(!fs.existsSync(path.join(home, 'bitacoras')) && !fs.existsSync(path.join(home, 'orb.json')));
+  assert.match(fs.readFileSync(path.join(home, 'bitacora', 'GENERAL.md'), 'utf8'), /entrada nueva[\s\S]*entrada vieja/, 'bitacoras se une a la bitácora en uso');
+  applyLayout(home, { bitacora: 'move' });
+  assert.ok(!fs.existsSync(path.join(home, 'bitacora')));
+  const general = fs.readFileSync(path.join(home, 'core', 'bitacora', 'GENERAL.md'), 'utf8');
   assert.match(general, /entrada nueva[\s\S]*entrada vieja/); assert.equal(general.match(/^# /gm).length, 1);
-  assert.match(fs.readFileSync(path.join(home, 'bitacora', 'proyectos', 'galactica.md'), 'utf8'), /### entrada/);
-  assert.ok(!fs.existsSync(path.join(home, 'bitacora', 'proyectos', 'android.md')), 'la bitácora vacía de una categoría no se trae');
-  assert.equal(fs.readFileSync(path.join(home, 'bitacora', 'indice.md'), 'utf8'), 'del usuario\n');
-  for (const d of ['windows', 'ios', 'android', 'web', 'mcp-servers']) assert.ok(fs.existsSync(path.join(home, d)), d);
+  assert.match(fs.readFileSync(path.join(home, 'core', 'bitacora', 'proyectos', 'galactica.md'), 'utf8'), /### entrada/);
+  assert.ok(!fs.existsSync(path.join(home, 'core', 'bitacora', 'proyectos', 'android.md')), 'la bitácora vacía de una categoría no se trae');
+  assert.equal(fs.readFileSync(path.join(home, 'core', 'bitacora', 'indice.md'), 'utf8'), 'del usuario\n');
+  for (const d of ['windows', 'linux', 'ios', 'android', 'web', 'multi', 'core/mcp', 'core/orb.json']) assert.ok(fs.existsSync(path.join(home, d)), d);
 });
 
 test('los nombres se convierten en nombres de carpeta válidos en Windows', () => {
@@ -108,8 +115,8 @@ test('los proyectos nuevos van en una categoría de la carpeta del asistente, co
   const app = createProject(board, { name: 'app-movil', category: 'android' }, 'usuario');
   assert.equal(app.path, fs.realpathSync(path.join(t.home, 'android', 'app-movil')));
   board.removeProject('app-movil', 'usuario');
-  assert.throws(() => createProject(board, { name: 'x', category: 'linux' }, 'usuario'), /categoría/);
-  for (const name of ['bitacora', 'bitacoras', 'mcp-servers', 'adb-tools']) assert.throws(() => createProject(board, { name }, 'usuario'), /reservado/, name);
+  assert.throws(() => createProject(board, { name: 'x', category: 'macos' }, 'usuario'), /categoría/);
+  for (const name of ['core', 'bitacora', 'bitacoras', 'mcp-servers', 'adb-tools']) assert.throws(() => createProject(board, { name }, 'usuario'), /reservado/, name);
   assert.ok(fs.existsSync(path.join(project.path, '.git')));
   assert.match(fs.readFileSync(path.join(project.path, '.gitignore'), 'utf8'), /\.env/);
   assert.ok(fs.existsSync(board.projectLogFile('web')));
@@ -122,9 +129,10 @@ test('un agente solo registra carpetas dentro de la del asistente; el usuario pu
   assert.equal(board.addProject({ name: 'x', path: outside }, 'usuario', { fromUser: true }).name, 'x');
   assert.equal(board.addProject({ name: 'otro nombre', path: outside }, 'usuario', { fromUser: true }).name, 'x', 'una carpeta, un proyecto');
   assert.throws(() => checkProjectPath(t.home, { fromUser: true }), /es la carpeta de/);
-  assert.throws(() => checkProjectPath(path.join(t.home, '.orb'), { fromUser: true }), /interna/);
-  assert.throws(() => checkProjectPath(path.join(t.home, 'bitacora'), { fromUser: true }), /interna/);
-  assert.throws(() => checkProjectPath(path.join(t.home, 'mcp-servers'), { fromUser: true }), /interna/);
+  assert.throws(() => checkProjectPath(path.join(t.home, 'core'), { fromUser: true }), /interna/);
+  assert.throws(() => checkProjectPath(path.join(t.home, 'core', 'bitacora'), { fromUser: true }), /interna/);
+  fs.mkdirSync(path.join(t.home, 'mcp-servers'), { recursive: true });
+  assert.throws(() => checkProjectPath(path.join(t.home, 'mcp-servers'), { fromUser: true }), /interna/, 'la de 3.7 tampoco');
   assert.throws(() => checkProjectPath(path.join(t.home, 'web'), { fromUser: true }), /categoría/);
   fs.mkdirSync(path.join(t.home, 'android', 'adb-tools'), { recursive: true });
   assert.throws(() => checkProjectPath(path.join(t.home, 'android', 'adb-tools'), { fromUser: true }), /categoría/);
@@ -137,13 +145,13 @@ test('las carpetas creadas a mano en una categoría aparecen como proyectos y de
   fs.mkdirSync(path.join(t.home, 'windows', 'kill-socials'));
   fs.mkdirSync(path.join(t.home, 'android', 'adb-tools'), { recursive: true });
   fs.mkdirSync(path.join(t.home, 'web', '.claude'));
-  fs.mkdirSync(path.join(t.home, 'mcp-servers', 'gmail-multi-mcp'));
+  fs.mkdirSync(path.join(t.home, 'mcp-servers', 'gmail-multi-mcp'), { recursive: true });
   fs.mkdirSync(path.join(t.home, 'suelta'));
   assert.equal(syncProjects(board), true);
   assert.equal(board.project('webviaproject').path, fs.realpathSync(path.join(t.home, 'web', 'webviaproject')));
   assert.ok(board.project('kill-socials'));
   assert.equal(syncProjects(board), false, 'sin cambios la segunda vez');
-  for (const name of ['bitacora', 'bitacoras', '.orb', 'mcp-servers', 'gmail-multi-mcp', 'adb-tools', '.claude', 'suelta', 'windows', 'android', 'ios']) assert.ok(!board.project(name), name);
+  for (const name of ['core', 'bitacora', 'bitacoras', '.orb', 'mcp-servers', 'gmail-multi-mcp', 'adb-tools', '.claude', 'suelta', 'windows', 'android', 'ios']) assert.ok(!board.project(name), name);
   fs.rmSync(path.join(t.home, 'web', 'webviaproject'), { recursive: true });
   assert.equal(syncProjects(board), true);
   assert.equal(board.project('webviaproject'), undefined);
@@ -155,6 +163,39 @@ test('los proyectos que la 2.3.0 sacó de las categorías y de la configuración
   assert.ok(board.project('android'));
   assert.equal(syncProjects(board), true);
   assert.ok(!board.project('android') && !board.project('mcp-servers'));
+});
+
+test('3.8: proyectos viejos de fuera que ya no existen se quitan; sin «(2)»: un nombre repetido dice su categoría', () => {
+  // A linked folder of an earlier workspace (gone) held the name: the folder found now in the workspace takes it.
+  const gone = path.join(t.base, 'Orb-viejo', 'web', 'erp');
+  board.run('INSERT INTO projects (name, path, notes, created_at) VALUES (?, ?, ?, ?)', 'erp', gone, '', Date.now());
+  // 3.7 registered the new one as «erp (2)»: it takes its folder's name back.
+  fs.mkdirSync(path.join(t.home, 'web', 'erp'));
+  board.run('INSERT INTO projects (name, path, notes, created_at) VALUES (?, ?, ?, ?)', 'erp (2)', fs.realpathSync(path.join(t.home, 'web', 'erp')), '', Date.now());
+  // A linked folder that exists, and one whose drive is not there (a disk unplugged): both stay.
+  const linked = fs.mkdtempSync(path.join(t.base, 'enlazada-'));
+  board.addProject({ name: 'enlazada', path: linked }, 'usuario', { fromUser: true });
+  // (A drive letter: only Windows has a whole drive that can be missing.)
+  const win = process.platform === 'win32';
+  if (win) board.run('INSERT INTO projects (name, path, notes, created_at) VALUES (?, ?, ?, ?)', 'usb', 'Q:\\no-hay-disco\\usb', '', Date.now());
+  // Gone, but with an open task: stays.
+  const busy = path.join(t.base, 'Orb-viejo', 'web', 'ocupado');
+  board.run('INSERT INTO projects (name, path, notes, created_at) VALUES (?, ?, ?, ?)', 'ocupado', busy, '', Date.now());
+  const task = board.createTask({ project: 'ocupado', title: 'x', description: 'algo' }, 'orb');
+  // The same folder name in two categories.
+  fs.mkdirSync(path.join(t.home, 'android', 'app')); fs.mkdirSync(path.join(t.home, 'web', 'app'));
+  assert.equal(syncProjects(board), true);
+  assert.equal(board.project('erp').path, fs.realpathSync(path.join(t.home, 'web', 'erp')), 'el de la carpeta del espacio se queda con el nombre');
+  assert.ok(!board.project('erp (2)'));
+  assert.ok(board.project('enlazada') && (!win || board.project('usb')) && board.project('ocupado'));
+  assert.equal(board.project('app').path, fs.realpathSync(path.join(t.home, 'android', 'app')));
+  assert.equal(board.project('app (web)').path, fs.realpathSync(path.join(t.home, 'web', 'app')));
+  assert.equal(syncProjects(board), false, 'sin cambios la segunda vez');
+  board.run("UPDATE tasks SET status = 'cancelled' WHERE id = ?", task.id);
+  assert.equal(syncProjects(board), true);
+  assert.ok(!board.project('ocupado'), 'sin tareas abiertas ya se quita');
+  for (const n of ['erp', 'enlazada', ...(win ? ['usb'] : []), 'app', 'app (web)']) board.removeProject(n, 'usuario');
+  for (const d of ['web/erp', 'android/app', 'web/app']) fs.rmSync(path.join(t.home, d), { recursive: true });
 });
 
 test('aprobaciones: palabras de riesgo, tareas de agentes y razonamiento alto esperan; lo normal va a la cola', () => {

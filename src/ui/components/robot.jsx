@@ -11,12 +11,13 @@ const POSE = { hello: 'wave' }; // the rest follows the mood (orb.jsx keeps pose
 // head: only the helmet, by default under 56 px. size: the width it takes (the whole robot is a bit narrower than tall).
 // live: this one does little things on its own now and then (keep it to the one robot in view).
 // skin: for windows without the store (the browser's little window gets it from the main process).
-export function Robot({ size = 48, mood = 'idle', className, title = 'Orb', still = false, head = size < 56, pose, live = false, gesture, onPoke, skin: given }) {
+// active: something is going on that the mood does not show (agents working): it floats meanwhile (3.8.1, H4e).
+export function Robot({ size = 48, mood = 'idle', className, title = 'Orb', still = false, head = size < 56, pose, live = false, active = false, gesture, onPoke, skin: given }) {
   const stored = useStore((s) => s.app?.config?.ui?.skin);
   const skin = given ?? stored;
   if (skin === 'profesional') return null;
   return (
     <Orb pose={head ? 'head' : pose ?? POSE[mood] ?? 'stand'} size={head ? size : Math.round(size * 0.8)} mood={mood === 'hello' ? 'idle' : mood}
-      title={title} still={still} live={live} gesture={gesture} onPoke={onPoke} className={className} />
+      title={title} still={still} live={live} active={active} greet={mood === 'hello'} gesture={gesture} onPoke={onPoke} className={className} />
   );
 }

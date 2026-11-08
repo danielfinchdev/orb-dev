@@ -11,12 +11,10 @@ import { createProject, renameProject } from '../src/core/projects.mjs';
 import { projectNameProblem } from '../src/core/product.mjs';
 import { isSecretPath, looksSecretText, secretsInDiff, localStamp, localText, sizeText } from '../src/core/safety.mjs';
 import { deletionAskedByUser, filesToDelete } from '../src/core/approval.mjs';
-import { programLabel, backup } from '../src/core/pc-health.mjs';
 import { git } from '../src/core/workspace.mjs';
 import { commitAll, unpushedSecrets } from '../src/engine/github.mjs';
 import { Scheduler, contractNote } from '../src/engine/scheduler.mjs';
 import { drawingContents } from '../src/engine/whiteboard.mjs';
-import { checkPcAction } from '../src/core/pc-actions.mjs';
 import { cutWords, agentAuthor, changedFiles, logDirect } from '../src/engine/logs.mjs';
 
 const GHP = `ghp_${'a1B2c3D4e5'.repeat(4)}`;
@@ -106,28 +104,14 @@ test('34: renombrar un proyecto mueve su carpeta, su bitácora y sus referencias
   assert.equal(board.project('viejo'), undefined);
 });
 
-test('22 y 27: horas locales y tamaños legibles en las copias y la pizarra', () => {
+test('22 y 27: horas locales y tamaños legibles en la pizarra', () => {
   const d = new Date(2026, 9, 14, 9, 35, 36);
   assert.equal(localStamp(d), '20261014-093536'); assert.equal(localText(d), '2026-10-14 09:35');
   assert.equal(sizeText(445 * 1024), '445 KB'); assert.equal(sizeText(0), '0 KB'); assert.equal(sizeText(300), '1 KB');
   assert.equal(sizeText(3.14 * 1048576), '3.1 MB'); assert.equal(sizeText(25 * 1048576), '25 MB');
-  const before = Date.now();
-  const b = backup(t.home, board.db);
-  assert.match(b.name, /^\d{8}-\d{6}$/); assert.match(b.size, /^\d+(\.\d)? (KB|MB)$/);
-  const [y, mo, da, h] = [b.name.slice(0, 4), b.name.slice(4, 6), b.name.slice(6, 8), b.name.slice(9, 11)].map(Number);
-  assert.ok(Math.abs(new Date(y, mo - 1, da, h).getTime() - before) < 2 * 3600_000, 'el nombre va en la hora del PC');
   assert.equal(drawingContents([]), 'El dibujo está vacío.');
   assert.equal(drawingContents([{ type: 'text', text: 'Hola' }]), 'Contiene: 1 texto.', 'un texto no es un dibujo vacío');
   assert.equal(drawingContents([{ type: 'rectangle' }, { type: 'rectangle' }, { type: 'text' }, { type: 'arrow', isDeleted: true }]), 'Contiene: 1 texto, 2 rectángulos.');
-});
-
-// 3.7: Opti Bot is gone; its proposals are a bot's pc_propose cards now (test/equipo.test.mjs), with the same names.
-test('31: la tarjeta de un cambio en el PC enseña el nombre del programa, no el interno', () => {
-  assert.equal(programLabel('MicrosoftEdgeAutoLaunch_60E4EE12BF689B5262806EAC5AE6112E'), 'Microsoft Edge');
-  assert.equal(programLabel('OneDrive'), 'OneDrive');
-  assert.equal(programLabel('Teams.exe'), 'Teams');
-  assert.equal(checkPcAction({ action: 'disable_startup', name: 'MicrosoftEdgeAutoLaunch_60E4EE12BF689B5262806EAC5AE6112E', reason: 'arranca solo' }).label, 'Microsoft Edge');
-  assert.equal(checkPcAction({ action: 'end_process', pid: 4321, name: 'Teams.exe', reason: 'colgado' }).label, 'Teams');
 });
 
 test('58: una sola regla para los borrados: el pedido actual pide borrar y nombra los archivos que borra la tarea', () => {

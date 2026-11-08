@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "pip",
+  "description": "The little window of the agents' browser: it listens to its pictures and state and may call pip_action (its buttons). Nothing else.",
+  "windows": ["pip"],
+  "platforms": ["windows"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "allow-pip-action"
+  ]
+}

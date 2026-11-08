@@ -421,10 +421,13 @@ html[data-skin="nube"] .win-control.win-close:hover { background-color: var(--pr
 /* ---- Orb: the bar stays as it is; behind the chat, the robot's periwinkle sky with a few soft clouds drifting. ---- */
 .scene-orb .scene-blur { background: radial-gradient(60% 50% at 30% 0%, #c3cbff, transparent 70%), radial-gradient(50% 60% at 90% 100%, #a7b1f6, transparent 70%); --scene-opacity: 0.5; }
 html.dark .scene-orb .scene-blur { background: radial-gradient(60% 50% at 30% 0%, #2b3270, transparent 70%), radial-gradient(50% 60% at 90% 100%, #1d2257, transparent 70%); --scene-opacity: 0.75; }
-/* Orb's wash is soft already: the pane only smooths the clouds. */
-.scene-orb { --frost-tint: 40%; --frost-filter: blur(8px); }
-html.dark .scene-orb { --frost-tint: 45%; --frost-filter: blur(8px); }
-.orb-cloud { width: 260px; height: 72px; border-radius: 999px; background: radial-gradient(closest-side, rgb(255 255 255 / 0.75), rgb(255 255 255 / 0.3) 60%, transparent); animation: cloud-drift linear infinite; }
+/* Orb's wash is soft already: the pane only smooths the clouds. 3.8.1 (H4d): so each cloud carries that blur itself
+   (the same 8 px; a blur of a moving piece is the moving blurred piece) and the pane only tints. A backdrop-filter over
+   the whole screen had to blur everything under it again on every frame the clouds moved (≈6 ms of GPU per frame on
+   the Tasks screen); a cloud's own blur is drawn once into its layer and slides. */
+.scene-orb { --frost-tint: 40%; --frost-filter: none; }
+html.dark .scene-orb { --frost-tint: 45%; --frost-filter: none; }
+.orb-cloud { width: 260px; height: 72px; border-radius: 999px; background: radial-gradient(closest-side, rgb(255 255 255 / 0.75), rgb(255 255 255 / 0.3) 60%, transparent); filter: blur(8px); animation: cloud-drift linear infinite; }
 html.dark .orb-cloud { background: radial-gradient(closest-side, rgb(160 170 255 / 0.18), rgb(160 170 255 / 0.06) 60%, transparent); }
 @keyframes cloud-drift { from { transform: translateX(-30vw); } to { transform: translateX(130vw); } }
 
@@ -497,10 +500,14 @@ html.dark .scene-vaporwave .scene-blur { background: var(--vw-night); }
 .vw-mount.front { background: var(--vw-mount); height: 12%; clip-path: polygon(0 100%, 9% 62%, 18% 80%, 27% 50%, 36% 76%, 45% 58%, 53% 84%, 62% 52%, 71% 78%, 80% 44%, 89% 72%, 100% 56%, 100% 100%); }
 .vw-city { left: 0; right: 0; bottom: 27.5%; height: 11%; color: #0a0318; }
 .vw-city svg { display: block; width: 100%; height: 100%; }
-.vw-floor { left: -50%; right: -50%; bottom: -10%; height: 40%; transform-origin: 50% 0; transform: perspective(260px) rotateX(62deg);
-  background: linear-gradient(var(--vw-grid) 2px, transparent 2px) 0 0 / 60px 60px, linear-gradient(90deg, var(--vw-grid) 2px, transparent 2px) 0 0 / 60px 60px;
-  mask-image: linear-gradient(to bottom, transparent, #000 35%); animation: vw-rush 1.6s linear infinite; filter: drop-shadow(0 0 6px rgb(255 79 200 / 0.8)); }
-@keyframes vw-rush { from { background-position: 0 0, 0 0; } to { background-position: 0 60px, 0 0; } }
+/* 3.8.1 (H4f): the grid rushes on the compositor: it is drawn once on a ::before one tile (60 px) taller than the floor,
+   which slides down a tile and starts again (the same picture as moving the background 60 px, without repainting the
+   whole floor on every frame). */
+.vw-floor { left: -50%; right: -50%; bottom: -10%; height: 40%; transform-origin: 50% 0; transform: perspective(260px) rotateX(62deg); overflow: hidden;
+  mask-image: linear-gradient(to bottom, transparent, #000 35%); filter: drop-shadow(0 0 6px rgb(255 79 200 / 0.8)); }
+.vw-floor::before { content: ""; position: absolute; inset: -60px 0 0 0; animation: vw-rush 1.6s linear infinite;
+  background: linear-gradient(var(--vw-grid) 2px, transparent 2px) 0 0 / 60px 60px, linear-gradient(90deg, var(--vw-grid) 2px, transparent 2px) 0 0 / 60px 60px; }
+@keyframes vw-rush { from { transform: translateY(0); } to { transform: translateY(60px); } }
 /* DAY components: Windows 95 in pastel. Cards, dialogs and the message box are windows (bevelled edges, a pastel title
    strip on top, a hard pink offset shadow); buttons are bevelled; tabs and the active menu item sink in; the sidebar is a
    grey panel; titles are outlined (white fill, ink outline, pink offset shadow). */
@@ -672,7 +679,9 @@ html.dark[data-skin="nube"] {
   --cd-frame: color-mix(in oklch, var(--primary) 70%, transparent); --cd-pad: color-mix(in oklch, var(--primary) 35%, transparent);
   --cd-toy-opacity: 0.55; --cd-toy-shadow: rgb(0 0 0 / 0.5);
 }
-@media (prefers-reduced-motion: no-preference) { html[data-skin="nube"]:not([data-motion="minima"]) .theme-band::before { animation: cd-band 36s linear infinite; } }
+/* 3.8.1 (H4f): background-position is painted on the main thread, so it steps every ~0.5 px (≈13 times a second; the
+   sweets crawl 5–6 px a second) instead of repainting the band 60 times a second for moves too small to see. */
+@media (prefers-reduced-motion: no-preference) { html[data-skin="nube"]:not([data-motion="minima"]) .theme-band::before { animation: cd-band 36s steps(460) infinite; } }
 @keyframes cd-band { from { background-position: 0 0, 40px 16px, 120px 34px; } to { background-position: 0 0, 230px 16px, -110px 34px; } }
 .scene-nube .scene-blur { --scene-opacity: 1; background: var(--cd-page); }
 /* The blobs: soft-edged ellipses of one pastel each, breathing and drifting very slowly. */

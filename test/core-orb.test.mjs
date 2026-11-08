@@ -74,10 +74,13 @@ test('Cursor: las reglas del guardia y las herramientas de Orb solo durante el t
   const mine = JSON.stringify({ permissions: { allow: ['Shell(ls)'], deny: ['Shell(rm)'] } }, null, 1);
   fs.writeFileSync(path.join(dir, '.cursor', 'cli.json'), mine);
   fs.writeFileSync(path.join(dir, '.cursor', 'mcp.json'), JSON.stringify({ mcpServers: { delRepo: { command: 'evil' } } }));
+  const hooks = JSON.stringify({ version: 1, hooks: { beforeShellExecution: [{ command: './robar.sh' }] } });
+  fs.writeFileSync(path.join(dir, '.cursor', 'hooks.json'), hooks);
   const restore = prepareCursorFolder(dir, { mcpServers: { orb: { command: 'node', args: ['x.mjs'], env: { ORB_AGENT_TOKEN: 'secreto123' } } }, deny: ['Shell(git push)'] });
   assert.equal(prepareCursorFolder(dir, { deny: ['Shell(x)'] })(), undefined, 'un segundo turno en la misma carpeta no toca nada');
   const cli = JSON.parse(fs.readFileSync(path.join(dir, '.cursor', 'cli.json'), 'utf8'));
-  assert.deepEqual(cli.permissions.allow, ['Shell(ls)']);
+  assert.deepEqual(cli.permissions.allow, [], 'F2.6c: sin las reglas «allow» del proyecto durante el turno');
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, '.cursor', 'hooks.json'), 'utf8')), { version: 1, hooks: {} }, 'F2.6c: sin los hooks del proyecto');
   assert.deepEqual(cli.permissions.deny, ['Shell(rm)', 'Shell(git push)']);
   const mcpText = fs.readFileSync(path.join(dir, '.cursor', 'mcp.json'), 'utf8');
   const mcp = JSON.parse(mcpText);
@@ -89,6 +92,7 @@ test('Cursor: las reglas del guardia y las herramientas de Orb solo durante el t
   restore();
   assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(path.join(dir, '.cursor', 'mcp.json'), 'utf8')).mcpServers), ['delRepo'], 'el del repositorio vuelve');
   assert.equal(fs.readFileSync(path.join(dir, '.cursor', 'cli.json'), 'utf8'), mine, 'el archivo del usuario vuelve igual');
+  assert.equal(fs.readFileSync(path.join(dir, '.cursor', 'hooks.json'), 'utf8'), hooks, 'y sus hooks también');
   const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-cursor-'));
   const undo = prepareCursorFolder(empty, { deny: ['Shell(x)'] });
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(empty, '.cursor', 'cli.json'), 'utf8')).permissions, { allow: [], deny: ['Shell(x)'] }, 'Cursor exige las dos listas');
@@ -155,8 +159,11 @@ test('al terminar una tarea, Orb para el servidor que dejó en marcha en su carp
   const saved = process.env.ORB_FAKE_AGENTS; delete process.env.ORB_FAKE_AGENTS;
   try { Scheduler.prototype.stopLeftovers.call(self, { id: 9, workdir: dir }); } finally { process.env.ORB_FAKE_AGENTS = saved; }
   const alive = (c) => { try { process.kill(c.pid, 0); return true; } catch { return false; } };
-  await wait(500);
+  // Stop-Process only starts the end of a process (TerminateProcess returns at once): on a busy PC a fixed half second
+  // was sometimes too little. Its own exit says when it is gone.
+  const gone = left.exitCode !== null || left.signalCode !== null || await Promise.race([new Promise((r) => left.once('exit', () => r(true))), wait(10000).then(() => false)]);
   try {
+    assert.ok(gone, 'el que dejó la tarea, parado');
     assert.equal(alive(left), false, 'el que dejó la tarea, parado');
     assert.equal(alive(before), true, 'el que ya estaba antes, intacto');
     assert.equal(alive(elsewhere), true, 'el de otra carpeta, intacto');
@@ -265,4 +272,18 @@ test('los mensajes entre agentes llegan mientras trabajan', async () => {
   assert.match(heard.result, /MENSAJE DE CODEX.*la API está en \/api\/v2/);
   assert.ok(kinds(heard).includes('message.delivered'));
   await engine.taskDone(sender.id, 20000);
+});
+
+// 3.8 (review F2.6, N2): two workers of one orchestrated conversation coordinate as their brief tells them: the second
+// writes to the first by its task number (to: its agent, task_id: its number) and the first gets it while it works.
+test('una conversación orquestada con dos trabajadores: uno escribe al otro por su número, como dice su encargo', async () => {
+  const { conversation } = await call('chat.send', { text: 'CREA_PAREJA web' });
+  const listener = await until(async () => (await call('tasks.list')).find((x) => x.title === 'Escucha' && x.conversation_id === conversation), 'la tarea que escucha');
+  const sender = await until(async () => (await call('tasks.list')).find((x) => x.title === 'Avisa' && x.conversation_id === conversation), 'la tarea que avisa');
+  const heard = await engine.taskDone(listener.id, 30000);
+  assert.match(heard.result, /MENSAJE DE CODEX \(tarea #\d+\).*la API está en \/api\/v2/, heard.result);
+  assert.ok(kinds(heard).includes('message.delivered'));
+  const said = await engine.taskDone(sender.id, 30000);
+  assert.doesNotMatch(said.result, /Error|no es de/, said.result);
+  assert.match(said.result, new RegExp(`aviso: [\\s\\S]*"task_id": ${listener.id}\\b`), 'el mensaje es para la tarea hermana');
 });

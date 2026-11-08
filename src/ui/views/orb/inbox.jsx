@@ -1,25 +1,26 @@
-// 3.6 (messaging, step M3): the Orb zone's chat list (docs/DESIGN-SYSTEM.md › 2.5, mockup mensajeria.html ?z=orb). On the
-// PC it is the left pane under «Orb | Bots»; on the phone the «Chats» tab. From the top: search (titles, projects, the
+// 3.6 (messaging, step M3): the chat list (docs/DESIGN-SYSTEM.md › 2.5, mockup mensajeria.html ?z=orb). On the PC it is
+// the left pane; on the phone the «Chats» tab. From the top: search (titles, projects, the
 // messages and «#12» for a task) with its filter, «+» (Nuevo chat, Nuevo proyecto), the zone's other places (PC: Tareas,
-// Proyectos, Programadas, Pizarra, and «Más» with God mode when it is on), what others shared, the pinned
-// chats, then one group per project (its coloured initials, folding) with its chats. Each row: Orbe's head with the
-// project's badge (a direct conversation: its agent's mark), the title, the time, its latest progress (a running task,
+// Proyectos, Programadas, Pizarra, and «Más» with God mode when it is on), the pinned
+// chats, then one group per project (its coloured initials, folding) with its chats. Each row: the project's icon with
+// the mark of who answers in its corner (OrbAvatar), the title, the time, its latest progress (a running task,
 // «Esperando tu aprobación», how its last task ended, else its last line) and the unread count. Right click or ⋯ (PC) and
 // a long press (phone) open the chat's menu: info, pin, mute, mark read, complete or reopen, delete.
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ListTodo, FolderKanban, CalendarClock, PenTool, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
-import { SharedWithMe } from '@/components/share-dialog.jsx';
 import { createProjectFlow } from '@/components/project-actions.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, DropdownMenuCheckboxItem, Collapsible, CollapsibleTrigger, CollapsibleContent, Dialog, DialogContent, DialogTitle, DialogDescription, Tip } from '@/components/ui/overlay.jsx';
 import { confirm } from '@/components/dialogs.jsx';
 import { useStore, go, call, act, newChat, orbAct, loadOrbInbox, openOrbInfo, closeOrbInfo, getState, phoneLayout, fullPc, refreshSoon, setState } from '@/lib/store.js';
 import { orbItems, orbProgress, groupOrb, shortTime } from '@/lib/inbox.js';
-import { usePress } from '@/views/bots/inbox.jsx';
+import { sameItem } from '@/lib/memo.js';
+import { useDay } from '@/lib/use-day.js';
+import { usePress } from '@/lib/use-press.js';
 import { AGENT, STATUS } from '@/lib/labels.js';
 import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
@@ -46,19 +47,39 @@ export const openOrbItem = (x) => go(x.kind === 'session' ? { view: 'session', i
 const isOpen = (route, x) => (x.kind === 'session' ? route.view === 'session' : route.view === 'chat') && route.id === x.id;
 const conversationRef = (x) => ({ kind: x.kind === 'session' ? 'session' : 'conversation', id: x.id });
 
-// Orbe's head with the project's badge; a direct conversation: its agent's mark in a soft circle.
+// 3.8.1 (H1e): the chat's avatar. Big: its project's icon (its own picture or its coloured initials); without a project,
+// Orbe's head. In the corner: the marks of the agents that worked in it (lib/inbox.js › agentsOf: the brain or a direct
+// conversation's agent first, then its tasks' agents), stacked like avatars, the first on top; past three, two and
+// «+N». An agent Orb no longer knows gets the neutral mark.
+const STACK = 3;
 export function OrbAvatar({ item, size = 40 }) {
+  const t = useT();
+  const locale = useLocale();
   const skin = useStore((s) => s.app?.config?.ui?.skin);
-  const badge = Math.round(size * 0.42);
-  const body = item.kind === 'session'
-    ? <span className="bg-muted grid place-items-center rounded-full" style={{ width: size, height: size }}><AgentIcon agent={item.agent} className={cn(item.busy && 'animate-pulse')} /></span>
+  const badge = Math.max(16, Math.round(size * 0.44));
+  const agents = item.agents ?? (item.agent ? [item.agent] : []);
+  const shown = agents.length > STACK ? agents.slice(0, STACK - 1) : agents;
+  const more = agents.length - shown.length;
+  const step = Math.round(badge * 0.55);
+  const who = agents.length ? new Intl.ListFormat(locale, { type: 'conjunction' }).format(agents.map((a) => AGENT[a] ?? a)) : '';
+  const body = item.project
+    ? <ProjectIcon name={item.project} size={size} />
     : skin === 'profesional'
       ? <span className="bg-primary/12 text-primary grid place-items-center rounded-full" style={{ width: size, height: size }}><Sparkles className="size-1/2" /></span>
       : <Robot size={size} still mood={item.busy ? 'thinking' : 'idle'} />;
   return (
-    <span className="relative inline-grid shrink-0" style={{ width: size, height: size }} data-testid="orb-avatar">
+    <span className="relative inline-grid shrink-0" style={{ width: size, height: size }} role="img" aria-label={who ? `${item.project ?? t('orbchats.noProject')} · ${who}` : (item.project ?? t('orbchats.noProject'))} data-testid="orb-avatar">
       {body}
-      {item.project ? <span className="ring-sidebar absolute -right-0.5 -bottom-0.5 grid place-items-center rounded-[6px] ring-2" style={{ width: badge, height: badge }}><ProjectIcon name={item.project} size={badge} /></span> : null}
+      {agents.length ? (
+        <span className={cn('orb-avatar-badges', item.busy && 'animate-pulse')} data-badges={agents.join(' ')}>
+          {shown.map((a, i) => (
+            <span key={a} className="orb-avatar-badge" style={{ width: badge, height: badge, right: -3 + i * step, zIndex: STACK - i }} data-badge={a}>
+              <AgentIcon agent={a} className="size-[64%]" />
+            </span>
+          ))}
+          {more ? <span className="orb-avatar-badge orb-avatar-more" style={{ width: badge, height: badge, right: -3 + (shown.length - 1) * step + Math.round(badge * 0.85), fontSize: Math.round(badge * 0.5) }} data-badge="more">+{more}</span> : null}
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -140,19 +161,20 @@ function OrbSheet({ item, onClose }) {
 }
 
 // ---- a row of the list
-function OrbRow({ item, phone, onSheet }) {
+// Memoised: the list is made again on every refresh of the app's state, and hundreds of rows drew again each time (and
+// every row whenever the screen changed). A row draws again when what it shows changes, or when it opens or closes.
+const OrbRow = memo(function OrbRow({ item, phone, onSheet }) {
   const t = useT();
   const locale = useLocale();
-  const route = useStore((s) => s.route);
+  const active = useStore((s) => isOpen(s.route, item));
   const assistant = useStore((s) => s.app?.config?.assistantName ?? 'Orbe');
   const [menu, setMenu] = useState(false);
   const press = usePress(() => (phone ? onSheet(item) : setMenu(true)));
-  const active = isOpen(route, item);
   const p = orbProgress(item, t, { assistant });
   const time = item.at ? shortTime(item.at, { locale, yesterday: t('chats.yesterday') }) : '';
   const strong = item.unread && !item.muted;
   return (
-    <div className={cn('group/row relative flex items-center rounded-xl', active ? 'bg-accent' : 'hover:bg-accent/50')} data-testid={`orb-row-${item.title}`} data-kind={item.kind} data-unread={item.unread || 0} {...press}>
+    <div className={cn('lazy-row group/row relative flex items-center rounded-xl', active ? 'bg-accent' : 'hover:bg-accent/50')} data-testid={`orb-row-${item.title}`} data-kind={item.kind} data-unread={item.unread || 0} {...press}>
       <button type="button" onClick={() => openOrbItem(item)} className={cn('flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-2.5 text-left', phone ? 'py-2.5' : 'py-2')} data-testid={`item-${item.kind === 'session' ? 's' : 'c'}${item.id}`}>
         <OrbAvatar item={item} size={phone ? 46 : 40} />
         <span className="min-w-0 flex-1">
@@ -178,7 +200,7 @@ function OrbRow({ item, phone, onSheet }) {
       {phone ? null : <OrbMenu item={item} open={menu} setOpen={setMenu} className="mr-1" />}
     </div>
   );
-}
+}, (a, b) => a.phone === b.phone && a.onSheet === b.onSheet && a.day === b.day && sameItem(a.item, b.item));
 
 // ---- a project's heading: its initials in colour, its name; folds its chats; its ⋯: new chat there, its info
 function ProjectHead({ group, open, phone }) {
@@ -208,6 +230,20 @@ function ProjectHead({ group, open, phone }) {
       ) : null}
     </div>
   );
+}
+
+// 3.8.1 (H4a): a long list draws its first rows at once and the rest right after, a step each time the window is idle:
+// the app's first screen does not wait for hundreds of rows nobody sees yet.
+function useGrowing(total, first = 40, step = 80) {
+  const [n, setN] = useState(first);
+  useEffect(() => {
+    if (n >= total) return undefined;
+    const idle = window.requestIdleCallback ?? ((fn) => setTimeout(fn, 16));
+    const cancel = window.cancelIdleCallback ?? clearTimeout;
+    const id = idle(() => setN((x) => x + step), { timeout: 300 });
+    return () => cancel(id);
+  }, [n, total]);
+  return n;
 }
 
 // Folded projects, remembered on this device.
@@ -327,8 +363,12 @@ export function OrbInbox({ page = false }) {
   const [sheet, setSheet] = useState(null);
   const sheetItem = sheet ? items.find((x) => x.key === sheet) ?? null : null;
   const parts = useMemo(() => groupOrb(items, { showDone, filter }), [items, showDone, filter]);
-  const rowProps = { phone, onSheet: (x) => setSheet(x.key) };
+  const onSheet = useCallback((x) => setSheet(x.key), []);
+  // the day: «ayer» and the times of the rows move on at midnight
+  const day = useDay();
+  const rowProps = { phone, onSheet, day };
   const agents = useMemo(() => [...new Set(items.map((x) => x.agent).filter(Boolean))], [items]);
+  const shown = useGrowing(parts.pinned.length + parts.groups.reduce((n, g) => n + (folded[g.project ?? ''] ? 0 : g.items.length), 0));
 
   const q = query.trim().toLowerCase();
   const searching = q.length > 0;
@@ -380,13 +420,12 @@ export function OrbInbox({ page = false }) {
       {!results.projects.length && !results.chats.length && !results.tasks.length && !found?.messages?.length ? <p className="text-muted-foreground px-3 py-4 text-sm">{t('chats.noResults')}</p> : null}
     </div>
   );
-  else body = (
+  else { let left = shown; const take = (list) => { const part = list.slice(0, Math.max(0, left)); left -= part.length; return part; }; body = (
     <>
-      <SharedWithMe kinds={['project']} className="px-1" />
       {parts.pinned.length ? (
         <div className="pt-2" data-testid="orb-pinned">
           <div className="text-muted-foreground flex items-center gap-1.5 px-2 py-1.5 text-[11.5px] font-semibold tracking-wide uppercase"><Pin className="size-3.5" />{t('chats.pinned')}</div>
-          <div className="grid gap-0.5">{parts.pinned.map((x) => <OrbRow key={x.key} item={x} {...rowProps} />)}</div>
+          <div className="grid gap-0.5">{take(parts.pinned).map((x) => <OrbRow key={x.key} item={x} {...rowProps} />)}</div>
         </div>
       ) : null}
       {parts.groups.map((g) => {
@@ -396,7 +435,7 @@ export function OrbInbox({ page = false }) {
           <Collapsible key={id || 'none'} open={open} onOpenChange={(v) => setFolded(id, v)} className="pt-2" data-testid={`orb-group-${g.project ?? 'none'}`}>
             <ProjectHead group={g} open={open} phone={phone} />
             <CollapsibleContent className="grid gap-0.5">
-              {g.items.map((x) => <OrbRow key={x.key} item={x} {...rowProps} />)}
+              {(open ? take(g.items) : []).map((x) => <OrbRow key={x.key} item={x} {...rowProps} />)}
               {!g.items.length && g.hidden ? <p className="text-muted-foreground px-3 py-1 text-xs">{t('orbchats.showDone', { n: g.hidden })}</p> : null}
             </CollapsibleContent>
           </Collapsible>
@@ -409,7 +448,8 @@ export function OrbInbox({ page = false }) {
         </button>
       ) : null}
     </>
-  );
+  ); }
+
 
   return (
     <div className={cn('flex min-h-0 flex-1 flex-col', page && 'bg-background')} data-testid="orb-inbox">

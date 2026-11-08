@@ -10,44 +10,48 @@ import { baseName } from '@/lib/utils.js';
 import { GithubIcon } from '@/components/agent-icon.jsx';
 import { t, useT } from '@/lib/i18n.js';
 import { projectNameProblem } from '../../core/product.mjs';
+import { CATEGORIES, PLATFORMS, MULTI, SHARED_DIR, DEFAULT_CATEGORY } from '../../core/layout.mjs';
 
 const home = () => getState().app?.home ?? '';
 const sep = () => (home().includes('\\') ? '\\' : '/');
-// Projects of Orb's folder live in one of its categories (windows, ios, android, web).
-export const CATEGORIES = ['windows', 'ios', 'android', 'web'];
+// Projects of Orb's folder live in one of its categories (windows, linux, ios, android, web, multi: src/core/layout.mjs).
+export { CATEGORIES };
 const CategoryField = ({ v, set }) => (
   <Field label={t('comp.projects.category')} hint={t('comp.projects.categoryHint')}>
-    <Select className="w-full" value={v.category} onValueChange={(category) => set({ category })} options={CATEGORIES.map((value) => ({ value, label: t(`comp.projects.category.${value}`) }))} />
+    <Select className="w-full" value={v.category} onValueChange={(category) => set({ category })} options={CATEGORIES.map((value) => ({ value, label: t(`comp.projects.category.${value}`) }))} data-testid="project-category" />
   </Field>
 );
 
-// 2.7: one platform or several: several at once is a multiplatform project (tienda-android, tienda-ios… linked, with a
-// shared folder), each in its own category.
+// 3.8: a multiplatform project (multi) is one folder and one repository: a subfolder per platform it has (at least one)
+// and «compartido» for what they share.
 const PlatformsField = ({ v, set }) => (
-  <Field label={t('comp.projects.platforms')} hint={v.categories.length > 1 ? t('comp.projects.multiHint', { n: v.categories.length }) : t('comp.projects.platformsHint')}>
+  <Field label={t('comp.projects.platforms')} hint={t('comp.projects.platformsHint')}>
     <div className="flex flex-wrap gap-1.5" role="group" aria-label={t('comp.projects.platforms')}>
-      {CATEGORIES.map((c) => {
-        const on = v.categories.includes(c);
-        return <Button key={c} type="button" size="sm" variant={on ? 'default' : 'outline'} aria-pressed={on} onClick={() => set({ categories: on ? (v.categories.length > 1 ? v.categories.filter((x) => x !== c) : v.categories) : [...v.categories, c] })} data-testid={`platform-${c}`}>{on ? <Check /> : null}{t(`comp.projects.category.${c}`)}</Button>;
+      {PLATFORMS.map((c) => {
+        const on = v.platforms.includes(c);
+        return <Button key={c} type="button" size="sm" variant={on ? 'default' : 'outline'} aria-pressed={on} onClick={() => set({ platforms: on ? (v.platforms.length > 1 ? v.platforms.filter((x) => x !== c) : v.platforms) : PLATFORMS.filter((x) => x === c || v.platforms.includes(x)) })} data-testid={`platform-${c}`}>{on ? <Check /> : null}{t(`comp.projects.category.${c}`)}</Button>;
       })}
     </div>
   </Field>
 );
-const folderOf = (v, c) => `${home()}${sep()}${c}${sep()}${v.name.trim().replace(/[<>:"/\\|?*]/g, '')}${v.categories.length > 1 ? `-${c}` : ''}`;
+// On a phone (no folder of the PC is sent to it) the path starts at the category.
+const folderOf = (v) => [home(), v.category, v.name.trim().replace(/[<>:"/\\|?*]/g, '')].filter(Boolean).join(sep());
+const folderHint = (v) => (v.category === MULTI ? t('comp.projects.multiFolderHint', { path: folderOf(v), list: [...v.platforms, SHARED_DIR].join(', ') }) : t('comp.projects.folderHint', { path: folderOf(v) }));
 
 export async function createProjectFlow() {
   const p = await form(t('comp.projects.newTitle'), {
     description: t('comp.projects.newDesc'),
-    initial: { name: '', notes: '', categories: ['web'] },
+    initial: { name: '', notes: '', category: DEFAULT_CATEGORY, platforms: ['android', 'web'] },
     body: (v, set) => (<>
-      <PlatformsField v={v} set={set} />
-      <Field label={t('comp.projects.name')} hint={v.name.trim() && projectNameProblem(v.name) ? <span className="text-destructive">{t(projectNameProblem(v.name), { name: v.name.trim() })}</span> : v.name.trim() ? (v.categories.length > 1 ? t('comp.projects.foldersHint', { list: v.categories.map((c) => `${v.name.trim()}-${c}`).join(', ') }) : t('comp.projects.folderHint', { path: folderOf(v, v.categories[0]) })) : null}><Input autoFocus value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder="webviaproject" maxLength={60} /></Field>
+      <CategoryField v={v} set={set} />
+      {v.category === MULTI ? <PlatformsField v={v} set={set} /> : null}
+      <Field label={t('comp.projects.name')} hint={v.name.trim() && projectNameProblem(v.name) ? <span className="text-destructive">{t(projectNameProblem(v.name), { name: v.name.trim() })}</span> : v.name.trim() ? folderHint(v) : null}><Input autoFocus value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder="webviaproject" maxLength={60} /></Field>
       <Field label={t('comp.projects.about')} hint={t('comp.projects.aboutHint')}><Textarea value={v.notes} onChange={(e) => set({ notes: e.target.value })} rows={3} /></Field>
     </>),
     ok: t('comp.projects.create'),
-    onOk: (v) => call('projects.create', { name: v.name.trim(), notes: v.notes.trim(), categories: v.categories })
+    onOk: (v) => call('projects.create', { name: v.name.trim(), notes: v.notes.trim(), category: v.category, ...(v.category === MULTI ? { platforms: v.platforms } : {}) })
   });
-  if (p) { toast.success(p.all?.length > 1 ? t('comp.projects.createdMany', { list: p.all.join(', ') }) : t('comp.projects.created', { name: p.name })); await refresh().catch(() => {}); }
+  if (p) { toast.success(t('comp.projects.created', { name: p.name })); await refresh().catch(() => {}); }
   return p;
 }
 

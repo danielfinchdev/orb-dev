@@ -1,8 +1,8 @@
-// 3.6 «Personas», WS6: la app de Android y la página del móvil (versión, bloqueo con huella, recordatorios).
+// The Android app and the phone's page: the app is older than what the Orb asks for.
 export default {
   'app.updateNeeded': 'Actualiza la app: este Orb necesita una versión más nueva.',
-  'app.lockBiometricTitle': 'Desbloquear Orb',
-  'app.lockBiometricCancel': 'Usar el PIN',
-  'app.reminderTitle': 'Recordatorio',
-  'app.reminderHidden': 'Tienes un recordatorio'
+  'msg.link.updateClient': 'Actualiza esta app: tiene la {has} y hace falta la {need}.',
+  'appUpdate.title': 'Actualiza la app',
+  'appUpdate.body': 'Este Orb necesita una versión más nueva de la app.',
+  'appUpdate.download': 'Descargar la versión nueva'
 };

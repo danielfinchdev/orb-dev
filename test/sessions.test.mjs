@@ -242,3 +242,16 @@ test('una conversación no se borra mientras trabaja; la de una tarea se borra c
   assert.throws(() => sessions.create({ agent: 'claude', cwd: project.path, account: 'codex' }), /no es de claude/);
   assert.throws(() => sessions.create({ agent: 'claude', cwd: `${project.path}-no-existe` }), /no existe/);
 });
+
+// F2.6c (P8): an agent process that dies mid-turn takes its MCP tickets with it at once (a process it left behind could
+// otherwise trade them while the task is still marked as running).
+test('si el proceso del agente muere a mitad de turno, sus tickets se revocan', async () => {
+  const { agentAuth } = await import('../src/engine/agent-auth.mjs');
+  const ticket = agentAuth.issue({ session: 'muere-1', reply: {} });
+  sessions.lives.set('muere-1', { live: { isClosed: () => true, close() {} }, lastUsed: Date.now() });
+  sessions.running.set('muere-1', { agent: 'claude', startedAt: Date.now() });
+  try {
+    sessions.onLiveEvent('muere-1', { type: 'exit', code: 1 });
+    assert.equal(agentAuth.valid(ticket), false);
+  } finally { sessions.running.delete('muere-1'); sessions.lives.delete('muere-1'); }
+});

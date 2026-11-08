@@ -1,5 +1,5 @@
-// 3.6: encrypted backups (src/core/backup.mjs and the backup.* calls). A copy holds the database (bots, reminders,
-// settings…), orb.json, the bots' memories, the logs, the links and their secret; a changed chunk does not open; on a
+// 3.6: encrypted backups (src/core/backup.mjs and the backup.* calls). A copy holds the database (conversations,
+// settings…), orb.json, the logs and the app's secret; a changed chunk does not open; on a
 // clean machine it opens only with the recovery code; restoring swaps the data at the next start of the engine.
 import './helpers.mjs';
 import test from 'node:test';
@@ -11,26 +11,25 @@ import crypto from 'node:crypto';
 import { tempHome, startEngine } from './helpers.mjs';
 import { useHome, ctx } from '../src/core/context.mjs';
 import { Board } from '../src/core/board.mjs';
-import * as B from '../src/core/bots.mjs';
 import * as K from '../src/core/backup.mjs';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
 
-// An Orb with a bot, its memory, a reminder, a group, a log line and a sealed links file.
+// An Orb with two conversations (one with a line), a project's log, the general log and a setting.
+const projectLog = () => path.join(ctx.paths.projectLogs, 'casa.md');
 function seed() {
   const t = tempHome();
   const board = new Board();
-  const bot = B.createBot(board, { name: 'Leo', icon: '🤖', role_text: 'Ayuda con la casa', tools: ['internet', 'recordatorios'] });
-  B.writeMemory(bot.id, 'A Ana le gusta el té verde.', { mode: 'replace' });
-  B.writeMemory('global', 'Notas globales de prueba.', { mode: 'replace' });
-  B.createReminder(board, { bot_id: bot.id, text: 'Regar las plantas', every: 'daily', when: new Date(Date.now() + 3_600_000).toISOString() });
-  B.createGroup(board, { name: 'Casa', members: [bot.id] });
-  board.setting('pin_probe', 'hash-de-prueba'); // stands in for the persons' PIN hashes (same database)
+  const conv = board.createConversation({ title: 'Leo' });
+  board.run('INSERT INTO chat (role, body, at, conversation_id) VALUES (?, ?, ?, ?)', 'usuario', 'Regar las plantas', new Date().toISOString(), conv.id);
+  board.createConversation({ title: 'Casa' });
+  fs.mkdirSync(ctx.paths.projectLogs, { recursive: true });
+  fs.writeFileSync(projectLog(), 'A Ana le gusta el té verde.\n');
+  board.setting('pin_probe', 'hash-de-prueba'); // stands in for a secret kept in the database
   fs.mkdirSync(ctx.paths.logs, { recursive: true });
   fs.writeFileSync(path.join(ctx.paths.logs, 'GENERAL.md'), '# Bitácora\nLínea de prueba\n');
-  fs.writeFileSync(path.join(ctx.paths.data, 'enlaces.json'), JSON.stringify({ box: 'sellado' }));
   const secret = crypto.randomBytes(32);
-  return { ...t, board, bot, secret };
+  return { ...t, board, conv, secret };
 }
 
 test('a copy round-trips: verify, tampered chunk fails, wrong or missing code refused', async () => {
@@ -45,7 +44,7 @@ test('a copy round-trips: verify, tampered chunk fails, wrong or missing code re
     assert.match(header.orbId, /^[0-9a-f]{32}$/); assert.equal(header.incarnation, 1);
     // The header says what it is, never what it holds.
     const raw = fs.readFileSync(file);
-    for (const secretText of ['té verde', 'Regar las plantas', 'Notas globales', 'hash-de-prueba']) assert.ok(!raw.includes(Buffer.from(secretText)), `en claro: ${secretText}`);
+    for (const secretText of ['té verde', 'Regar las plantas', 'Línea de prueba', 'hash-de-prueba']) assert.ok(!raw.includes(Buffer.from(secretText)), `en claro: ${secretText}`);
     const ok = await K.verifyBackup(file, { secret: s.secret });
     assert.ok(ok.files >= 5);
     // With the recovery code typed differently (lower case, spaces) it opens too.
@@ -81,27 +80,26 @@ test('restore on a clean machine with the recovery code brings everything back',
     const target = path.join(clean, 'Orb');
     // The new machine has another secret: only the code opens it.
     await assert.rejects(K.restoreInto(target, moved, { secret: crypto.randomBytes(32) }), { code: 'needsPassphrase' });
-    assert.ok(!fs.existsSync(path.join(target, 'orb.json')));
+    assert.ok(!fs.existsSync(path.join(target, 'core', 'orb.json')));
     const r = await K.restoreInto(target, moved, { secret: crypto.randomBytes(32), passphrase: code });
     assert.ok(r.files >= 5);
-    assert.ok(fs.existsSync(path.join(target, 'orb.json')));
-    assert.equal(fs.readFileSync(path.join(target, 'bots', String(s.bot.id), 'memoria.md'), 'utf8').trim(), 'A Ana le gusta el té verde.');
-    assert.match(fs.readFileSync(path.join(target, 'bitacora', 'GENERAL.md'), 'utf8'), /Línea de prueba/);
-    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(target, '.orb', 'datos', 'enlaces.json'), 'utf8')), { box: 'sellado' });
-    // The secret travels inside (the links and approvals keep working there).
-    assert.ok(fs.readFileSync(path.join(target, '.orb', 'datos', 'clave.bin')).equals(s.secret));
-    const db = new DatabaseSync(path.join(target, '.orb', 'datos', 'orb.db'), { readOnly: true });
+    assert.ok(fs.existsSync(path.join(target, 'core', 'orb.json')));
+    assert.equal(fs.readFileSync(path.join(target, 'core', 'bitacora', 'proyectos', 'casa.md'), 'utf8').trim(), 'A Ana le gusta el té verde.');
+    assert.match(fs.readFileSync(path.join(target, 'core', 'bitacora', 'GENERAL.md'), 'utf8'), /Línea de prueba/);
+    // 3.8.1: this PC's secret never travels (the new PC has its own).
+    assert.equal(fs.existsSync(path.join(target, 'core', 'datos', 'clave.bin')), false);
+    const db = new DatabaseSync(path.join(target, 'core', 'datos', 'orb.db'), { readOnly: true });
     try {
-      assert.equal(db.prepare('SELECT name FROM bots WHERE id = ?').get(s.bot.id).name, 'Leo');
-      assert.equal(db.prepare('SELECT text FROM bot_reminders WHERE bot_id = ?').get(s.bot.id).text, 'Regar las plantas');
-      assert.equal(db.prepare('SELECT COUNT(*) AS n FROM bot_groups').get().n, 1);
+      assert.equal(db.prepare('SELECT title FROM conversations WHERE id = ?').get(s.conv.id).title, 'Leo');
+      assert.equal(db.prepare('SELECT body FROM chat WHERE conversation_id = ?').get(s.conv.id).body, 'Regar las plantas');
+      assert.equal(db.prepare('SELECT COUNT(*) AS n FROM conversations').get().n, 2);
       assert.equal(db.prepare("SELECT value FROM settings WHERE key = 'pin_probe'").get().value, 'hash-de-prueba');
     } finally { db.close(); }
     // The same Orb (same orbId), so peers know it.
     assert.equal(K.orbIdOf(target).orbId, K.orbIdOf(s.home).orbId);
-    // And it starts: the engine opens the restored folder with its bots.
+    // And it starts: the engine opens the restored folder with its conversations.
     const e = await startEngine(target);
-    try { const list = await e.call('bots.list'); assert.ok(list.bots.some((b) => b.name === 'Leo')); } finally { await e.stop(); }
+    try { const list = await e.call('conversations.list'); assert.ok(list.some((c) => c.title === 'Leo')); } finally { await e.stop(); }
   } finally { s.board.db.close(); s.cleanup(); fs.rmSync(clean, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });
 
@@ -109,21 +107,20 @@ test('restore in place swaps at the next start; what was there is kept aside', a
   const s = seed();
   try {
     const { file } = await K.createBackup({ home: s.home, secret: s.secret, version: 'test' });
-    B.writeMemory(s.bot.id, 'Cambiado después de la copia.', { mode: 'replace' });
-    s.board.run('DELETE FROM bot_reminders');
+    fs.writeFileSync(projectLog(), 'Cambiado después de la copia.\n');
+    s.board.run('DELETE FROM chat');
     s.board.db.close();
     const staged = await K.stageRestore(s.home, file, { secret: s.secret });
     assert.ok(staged.files >= 5);
     // Nothing changes until the swap.
-    assert.match(fs.readFileSync(B.memoryFile(s.bot.id), 'utf8'), /Cambiado/);
+    assert.match(fs.readFileSync(projectLog(), 'utf8'), /Cambiado/);
     const r = K.applyPendingRestore(s.home);
     assert.ok(r && fs.existsSync(r.aside));
-    assert.equal(r.secretChanged, true); // the old folder had no clave.bin of its own
-    assert.match(fs.readFileSync(B.memoryFile(s.bot.id), 'utf8'), /té verde/);
-    assert.match(fs.readFileSync(path.join(r.aside, 'bots', String(s.bot.id), 'memoria.md'), 'utf8'), /Cambiado/);
+    assert.match(fs.readFileSync(projectLog(), 'utf8'), /té verde/);
+    assert.match(fs.readFileSync(path.join(r.aside, 'core', 'bitacora', 'proyectos', 'casa.md'), 'utf8'), /Cambiado/);
     useHome(s.home);
     const b2 = new Board();
-    try { assert.equal(b2.one('SELECT COUNT(*) AS n FROM bot_reminders').n, 1); } finally { b2.db.close(); }
+    try { assert.equal(b2.one('SELECT COUNT(*) AS n FROM chat').n, 1); } finally { b2.db.close(); }
     assert.equal(K.applyPendingRestore(s.home), null); // once
   } finally { s.cleanup(); }
 });
@@ -132,7 +129,7 @@ test('several 1 MiB chunks: a big file round-trips; swapping or changing a middl
   const s = seed();
   try {
     const big = crypto.randomBytes(Math.floor(2.5 * K.CHUNK));
-    fs.writeFileSync(path.join(ctx.paths.bots, String(s.bot.id), 'grande.bin'), big);
+    fs.writeFileSync(path.join(ctx.paths.projectLogs, 'grande.bin'), big);
     const { file, header } = await K.createBackup({ home: s.home, secret: s.secret });
     const { bodyAt } = await K.readHeader(file);
     const raw = fs.readFileSync(file);
@@ -142,7 +139,7 @@ test('several 1 MiB chunks: a big file round-trips; swapping or changing a middl
     const out = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-grande-'));
     try {
       await K.restoreInto(out, file, { secret: s.secret });
-      assert.ok(fs.readFileSync(path.join(out, 'bots', String(s.bot.id), 'grande.bin')).equals(big));
+      assert.ok(fs.readFileSync(path.join(out, 'core', 'bitacora', 'proyectos', 'grande.bin')).equals(big));
       const bad = path.join(out, 'mal.orbbak');
       const changed = Buffer.from(raw); changed[frames[1][0] + 100] ^= 0xff; fs.writeFileSync(bad, changed);
       await assert.rejects(K.verifyBackup(bad, { secret: s.secret }), { code: 'damaged' });
@@ -183,50 +180,114 @@ test('engine: backup.now, list, verify, recovery code and restore staged for the
   try {
     const st = await e.call('backup.status');
     assert.equal(st.recovery, false); assert.equal(st.enabled, true);
-    const { code } = await e.call('backup.recovery', {});
+    // 3.8: a new recovery code, checking a copy and restoring one need the master password (a fresh unlock).
+    await assert.rejects(e.call('backup.recovery', {}), /contraseña maestra/);
+    const { unlock } = await e.call('master.create', { password: 'contraseña de copias' });
+    const { code } = await e.call('backup.recovery', { unlock });
     assert.match(code, /^([A-Z2-9]{4}-){7}[A-Z2-9]{4}$/);
     assert.equal((await e.call('backup.status')).recovery, true);
-    await e.call('bots.create', { name: 'Ana bot' });
+    await e.call('projects.create', { name: 'casa' });
+    await e.call('schedules.create', { project: 'casa', title: 'Antes', description: 'd', every: 'daily' });
     const made = await e.call('backup.now', {});
     assert.ok(made.file.endsWith('.orbbak') && made.recovery);
     const list = await e.call('backup.list');
     assert.equal(list.length, 1); assert.equal(list[0].kind, 'manual');
-    assert.equal((await e.call('backup.verify', { file: made.file })).ok, true);
-    await assert.rejects(e.call('backup.verify', { file: 'no-existe.orbbak' }), /No encuentro esa copia/);
-    await assert.rejects(e.call('backup.verify', { file: '../../orb.json' }), /no es una copia/);
-    await e.call('bots.create', { name: 'Después' });
-    const r = await e.call('backup.restore', { file: made.file });
+    await assert.rejects(e.call('backup.verify', { file: made.file }), /contraseña maestra/);
+    assert.equal((await e.call('backup.verify', { file: made.file, unlock })).ok, true);
+    await assert.rejects(e.call('backup.verify', { file: 'no-existe.orbbak', unlock }), /No encuentro esa copia/);
+    await assert.rejects(e.call('backup.verify', { file: '../../orb.json', unlock }), /no es una copia/);
+    await e.call('schedules.create', { project: 'casa', title: 'Después', description: 'd', every: 'daily' });
+    await assert.rejects(e.call('backup.restore', { file: made.file }), /contraseña maestra/);
+    const r = await e.call('backup.restore', { file: made.file, unlock });
     assert.equal(r.restartNeeded, true);
     await e.stop(); stopped = true;
     const again = await startEngine(home);
     try {
-      const names = (await again.call('bots.list')).bots.map((b) => b.name);
-      assert.ok(names.includes('Ana bot') && !names.includes('Después'), names.join(', '));
+      const names = (await again.call('schedules.list')).map((x) => x.title);
+      assert.ok(names.includes('Antes') && !names.includes('Después'), names.join(', '));
     } finally { await again.stop(); }
   } finally { if (!stopped) await e.stop(); cleanup(); }
 });
 
-test('Orb Server: a copy before a new version, and orb-server copia ahora | lista | restaurar', async () => {
-  const { backupOnUpgrade } = await import('../src/server/host.mjs');
-  const { execFileSync } = await import('node:child_process');
-  const { ROOT } = await import('./helpers.mjs');
+
+test('3.8: las copias van fuera de la carpeta de Orb, las de 3.7 se mudan allí y nunca pueden ir dentro de core', async () => {
   const s = seed();
-  s.board.db.close();
   try {
-    const first = await backupOnUpgrade(s.home, '3.6.0');
-    assert.ok(first && first.endsWith('-preupdate.orbbak'), 'an Orb from before 3.6 gets a copy');
-    assert.equal(await backupOnUpgrade(s.home, '3.6.0'), null);
-    const next = await backupOnUpgrade(s.home, '3.6.1');
-    assert.equal((await K.readHeader(next)).header.version, '3.6.0');
-    const env = { ...process.env, ORB_LANG: 'es', LANG: 'es_ES.UTF-8', NO_COLOR: '1' };
-    const run = (...args) => execFileSync(process.execPath, [path.join(ROOT, 'src', 'server', 'orb-server.mjs'), ...args, '--home', s.home], { env, encoding: 'utf8', windowsHide: true, timeout: 120_000 });
-    assert.match(run('copia', 'ahora'), /orbbak/);
-    const list = run('copia', 'lista');
-    assert.match(list, /manual/); assert.match(list, /preupdate/);
-    const manual = K.listBackups(K.backupDir(s.home));
-    const file = (await manual).find((b) => b.kind === 'manual').file;
-    B.writeMemory(s.bot.id, 'Otro texto.', { mode: 'replace' });
-    run('copia', 'restaurar', file);
-    assert.match(fs.readFileSync(B.memoryFile(s.bot.id), 'utf8'), /té verde/);
+    const def = K.defaultBackupDir(s.home);
+    assert.equal(path.dirname(def), path.resolve(process.env.ORB_BACKUP_ROOT), 'carpeta propia de este espacio en la raíz de copias');
+    assert.ok(!path.relative(s.home, def).match(/^[^.]/) || path.relative(s.home, def).startsWith('..'), 'fuera del espacio de trabajo');
+    const { file } = await K.createBackup({ home: s.home, secret: s.secret, kind: 'manual', version: 'test' });
+    assert.equal(path.dirname(file), def);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(def, 'ultima.json'), 'utf8')).file, file, 'la última, anotada fuera de core');
+    // A copy of 3.7, inside the old data folder: moved where copies go now, and found.
+    const old = K.oldBackupDir(s.home);
+    fs.mkdirSync(old, { recursive: true });
+    const older = (await K.createBackup({ home: s.home, secret: s.secret, kind: 'daily', version: '3.7.0', folder: old, now: new Date('2026-10-01T03:00:00Z') })).file;
+    assert.equal(K.adoptOldBackups(s.home), 1);
+    assert.ok(!fs.existsSync(old) && fs.existsSync(path.join(def, path.basename(older))));
+    assert.equal(K.adoptOldBackups(s.home), 0, 'la segunda vez, nada');
+    assert.equal((await K.latestBackup(s.home)).file, file);
+    // Another folder chosen by the user: the newest copy is still found from the note in the default folder.
+    const mine = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-mis-copias-'));
+    const later = await K.createBackup({ home: s.home, secret: s.secret, kind: 'manual', version: 'test', folder: mine, now: new Date(Date.now() + 60_000) });
+    assert.equal((await K.latestBackup(s.home)).file, later.file);
+    fs.rmSync(mine, { recursive: true, force: true });
+    // A 3.7 copy's names go into core.
+    assert.equal(K.legacyName('.orb/datos/orb.db'), 'core/datos/orb.db');
+    assert.equal(K.legacyName('orb.json'), 'core/orb.json');
+    assert.equal(K.legacyName('bitacora/proyectos/x.md'), 'core/bitacora/proyectos/x.md');
+    assert.equal(K.legacyName('web/tienda/pizarra/a.png'), 'web/tienda/pizarra/a.png');
   } finally { s.cleanup(); }
+});
+
+test('3.8: Ajustes › Datos elige otra carpeta de copias, nunca dentro del espacio (tampoco por una unión) ni una que lo contenga', async () => {
+  const { home, cleanup } = tempHome();
+  const e = await startEngine(home);
+  try {
+    assert.equal((await e.call('backup.status')).custom, false);
+    const { unlock } = await e.call('master.create', { password: 'contraseña de copias' });
+    await assert.rejects(e.call('config.save', { patch: { backup: { folder: path.join(home, 'core', 'copias') } }, unlock }), /dentro de la carpeta de Orb/);
+    await assert.rejects(e.call('config.save', { patch: { backup: { folder: path.join(home, 'web', 'copias') } }, unlock }), /dentro de la carpeta de Orb/, 'tampoco en un proyecto');
+    await assert.rejects(e.call('config.save', { patch: { backup: { folder: path.dirname(home) } }, unlock }), /ni en una carpeta que la contenga/);
+    const link = path.join(path.dirname(home), 'enlace-a-orb');
+    fs.symlinkSync(home, link, 'junction');
+    await assert.rejects(e.call('config.save', { patch: { backup: { folder: path.join(link, 'web') } }, unlock }), /dentro de la carpeta de Orb/, 'una unión que lleva dentro');
+    const mine = path.join(path.dirname(home), 'mis-copias');
+    await assert.rejects(e.call('config.save', { patch: { backup: { folder: mine } } }), /contraseña maestra/, '3.8: sin desbloquear, no');
+    await e.call('config.save', { patch: { backup: { folder: mine } }, unlock });
+    const st = await e.call('backup.status');
+    assert.equal(st.folder, mine); assert.equal(st.custom, true);
+    await e.call('config.save', { patch: { backup: { folder: '' } }, unlock });
+    assert.equal((await e.call('backup.status')).folder, K.defaultBackupDir(home));
+  } finally { await e.stop(); cleanup(); }
+});
+
+test('3.8.1 (decision 20 d): a backup never carries this PC\'s secret; one made before (with clave.bin) is refused with a clear message', async () => {
+  const t = tempHome();
+  try {
+    fs.mkdirSync(ctx.paths.data, { recursive: true });
+    fs.writeFileSync(ctx.paths.key, crypto.randomBytes(32));
+    const { file } = await K.createBackup({ home: t.home, secret: crypto.randomBytes(32), passphrase: 'codigo-de-prueba-largo' });
+    const into = path.join(t.base, 'limpia');
+    await K.restoreInto(into, file, { passphrase: 'codigo-de-prueba-largo' });
+    assert.equal(fs.existsSync(path.join(into, 'core', 'datos', 'clave.bin')), false, 'sin clave.bin en la copia');
+    for (const name of ['core/datos/clave.bin', '.orb/datos/clave.bin']) assert.equal(K.oldKeyEntry(name), true, name);
+    for (const name of ['core/archivo-3.7/datos/clave.bin', 'mi-proyecto/datos/clave.bin', 'core/datos/copia-clave.json']) assert.equal(K.oldKeyEntry(name), false, name);
+    assert.match(new K.BackupError('oldKey').message, /versión anterior de Orb.*ya no se puede restaurar/);
+  } finally { t.cleanup(); }
+});
+
+test('review M2: restored on another PC with the recovery code, the code keeps working there (and the scheduled copies keep its wrap)', async () => {
+  const t = tempHome();
+  try {
+    const pcA = crypto.randomBytes(32); const pcB = crypto.randomBytes(32);
+    const code = K.newRecoveryCode();
+    K.setRecovery(t.home, pcA, code, { kdf: { N: 2 ** 10, r: 8, p: 1 } });
+    const { file } = await K.createBackup({ home: t.home, secret: pcA });
+    const into = path.join(t.base, 'otro-pc');
+    await K.restoreInto(into, file, { secret: pcB, passphrase: code });
+    assert.equal(K.isRecoveryCode(into, pcB, code), true, 'el código vale en el PC nuevo');
+    await K.restoreInto(path.join(t.base, 'mismo-pc'), file, { secret: pcA });
+    assert.equal(K.isRecoveryCode(path.join(t.base, 'mismo-pc'), pcA, code), true, 'en el mismo PC, tal cual');
+  } finally { t.cleanup(); }
 });

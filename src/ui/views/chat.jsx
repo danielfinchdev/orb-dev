@@ -7,6 +7,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowUp, Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign, ChevronLeft, ChevronRight, PenTool, History, FlaskConical, Folder, Mic, Shrink, ListChecks, Ellipsis, Info, BellOff, MessageSquare } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Markdown } from '@/components/markdown.jsx';
+import { ExtensionRequestCard } from './extensions.jsx';
 import { ProjectPicker } from '@/components/project-actions.jsx';
 import { useLiveTasks, liveOf, ProgressBar, elapsed } from '@/components/live-tasks.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
@@ -21,7 +22,6 @@ import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { Switch, Tip, BubbleTip, Popover, PopoverTrigger, PopoverContent } from '@/components/ui/overlay.jsx';
 import { bridge, useStore, call, act, setState, getState, go, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere, openOrbInfo, closeOrbInfo, loadOrbInboxSoon, phoneLayout } from '@/lib/store.js';
-import { userNameOf } from '@/lib/persons.js';
 import { notify } from '@/lib/notify.js';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { pickGreeting, pickSubtitle, suggestionsFor } from '@/lib/greeting.js';
@@ -33,26 +33,40 @@ import { ContextSlot } from '@/components/context-slot.jsx';
 import { cn } from '@/lib/utils.js';
 import { DECISION, AGENT, STATUS } from '@/lib/labels.js';
 import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
+import { keepSame } from '@/lib/memo.js';
+import { timeZone } from '@/lib/clock.js';
+import { useDay } from '@/lib/use-day.js';
 
 
+// A conversation stays at its bottom while the user has not scrolled up (`stick`): when a line arrives (deps) and,
+// 3.8.1 (H4a), whenever the lines change height (older messages drawn late by content-visibility, markdown, pictures)
+// or the area does (the composer grows): a ResizeObserver on the scrolling area and on its lines.
 export function useAutoScroll(deps) {
-  const ref = useRef(null);
+  const node = useRef(null);
   const stick = useRef(true);
-  useEffect(() => { const el = ref.current; if (el && stick.current) el.scrollTop = el.scrollHeight; }, deps); // eslint-disable-line react-hooks/exhaustive-deps
-  const onScroll = () => { const el = ref.current; if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 140; };
+  const observer = useRef(null);
+  const toBottom = useCallback(() => { const el = node.current; if (el && stick.current) el.scrollTop = el.scrollHeight; }, []);
+  useEffect(toBottom, deps); // eslint-disable-line react-hooks/exhaustive-deps
+  const ref = useCallback((el) => {
+    observer.current?.disconnect(); observer.current = null;
+    node.current = el;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const o = new ResizeObserver(toBottom);
+    o.observe(el); if (el.firstElementChild) o.observe(el.firstElementChild);
+    observer.current = o;
+  }, [toBottom]);
+  const onScroll = () => { const el = node.current; if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 140; };
   return { ref, onScroll };
 }
 
 // "@" picker: while typing @word, a list of tasks, conversations and logs to attach as context (token @tarea:12…).
-// 3.6 (M2): own: the options given by the caller (a group's members: «@Agenda»); else the assistant's (mentions.options).
-function useMentions(value, onChange, ta, own = null) {
-  const [fetched, setOptions] = useState(null);
-  const options = own ?? fetched;
+function useMentions(value, onChange, ta) {
+  const [options, setOptions] = useState(null);
   const [index, setIndex] = useState(0);
   const caret = ta.current?.selectionStart ?? value.length;
   const match = /(^|\s)@([\wÀ-ɏ-]*)$/.exec(value.slice(0, caret));
   const query = match ? match[2].toLowerCase() : null;
-  useEffect(() => { if (!own && query !== null && !options) call('mentions.options').then(setOptions).catch(() => setOptions([])); }, [query !== null]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (query !== null && !options) call('mentions.options').then(setOptions).catch(() => setOptions([])); }, [query !== null]); // eslint-disable-line react-hooks/exhaustive-deps
   const fold = (x) => String(x ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
   const list = query === null ? [] : (options ?? []).filter((o) => fold(`${o.label} ${o.hint ?? ''}`).includes(fold(query))).slice(0, 8);
   useEffect(() => setIndex(0), [query]);
@@ -72,9 +86,9 @@ function useMentions(value, onChange, ta, own = null) {
   return { list, index, pick, onKey };
 }
 
-// 3.6 (M2): mentions may be a list of options ({ token, label, hint, icon }) instead of the assistant's; the microphone also
-// dictates in a computer's browser that has speech recognition (not in the PC app, whose engine has none).
-const WebSpeech = typeof window !== 'undefined' && !/Electron/i.test(navigator.userAgent) ? (window.SpeechRecognition || window.webkitSpeechRecognition || null) : null;
+// mentions: false hides the «@» picker. 3.6 (M2): the microphone also dictates in a computer's browser that has speech
+// recognition (not in the PC app, whose engine has none).
+const WebSpeech = typeof window !== 'undefined' ? (window.SpeechRecognition || window.webkitSpeechRecognition || null) : null;
 function webDictate(lang) {
   return new Promise((resolve, reject) => {
     const r = new WebSpeech(); r.lang = lang === 'en' ? 'en-US' : 'es-ES'; r.interimResults = false; r.maxAlternatives = 1;
@@ -89,8 +103,9 @@ export function Composer({ value, onChange, onSend, onStop, busy, placeholder, t
   const ta = useRef(null);
   useEffect(() => { const el = ta.current; if (!el) return; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 260)}px`; }, [value]);
   const [dropping, setDropping] = useState(false);
-  const m = useMentions(value, onChange, ta, Array.isArray(mentions) ? mentions : null);
-  const dictateWith = bridge.dictate ? (lang) => bridge.dictate(lang) : WebSpeech ? webDictate : null;
+  const m = useMentions(value, onChange, ta);
+  // Not in the desktop app (bridge.desktop: WebView2 has the API but no speech service, and no microphone).
+  const dictateWith = bridge.dictate ? (lang) => bridge.dictate(lang) : WebSpeech && !bridge.desktop ? webDictate : null;
   // 3.5, the Android app: dictate with the phone's own speech recognition (what is said is added to the text).
   const [hearing, setHearing] = useState(false);
   const dictate = async () => {
@@ -105,7 +120,7 @@ export function Composer({ value, onChange, onSend, onStop, busy, placeholder, t
         {mentions && m.list.length ? null : notice}
         {mentions && m.list.length ? (
           <div className="bg-popover text-popover-foreground absolute right-3 bottom-full left-3 z-20 mb-2 overflow-hidden rounded-xl border shadow-lg" data-testid="mention-list">
-            <div className="text-muted-foreground border-b px-3 py-1.5 text-[11px]">{Array.isArray(mentions) ? t('chats.mentionHeader') : t('chat.mentionHeader')}</div>
+            <div className="text-muted-foreground border-b px-3 py-1.5 text-[11px]">{t('chat.mentionHeader')}</div>
             {m.list.map((o, i) => (
               <button key={o.token} onMouseDown={(e) => { e.preventDefault(); m.pick(o); }} className={cn('flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-[13px]', i === m.index ? 'bg-accent' : 'hover:bg-accent/60')}>
                 {o.icon ?? <AtSign className="text-muted-foreground size-3.5 shrink-0" />}<span className="min-w-0 flex-1 truncate">{o.label}</span><span className="text-muted-foreground shrink-0 text-[11px]">{o.hint}</span>
@@ -195,14 +210,23 @@ function MonthCalendar({ today }) {
     </div>
   );
 }
-// The time a message was written, small at its bottom right (the day too when it is not today).
+// The time a message was written, small at its bottom right (the day too when it is not today). One formatter per
+// language and time zone (toLocale…String builds one on every call, for every message). The message is memoised: the
+// time follows the day by itself (lib/clock.js: after midnight, today's messages get their day; a new zone, new times).
+const msgFormats = new Map();
+const msgFormat = (locale, day) => {
+  const k = `${locale}|${day}|${timeZone()}`;
+  if (!msgFormats.has(k)) msgFormats.set(k, new Intl.DateTimeFormat(locale, day ? { day: 'numeric', month: 'short' } : { hour: '2-digit', minute: '2-digit' }));
+  return msgFormats.get(k);
+};
 function MsgTime({ at }) {
   const locale = useLocale();
+  useDay();
   if (!at) return null;
   const d = new Date(at); if (Number.isNaN(d.getTime())) return null;
   const today = d.toDateString() === new Date().toDateString();
-  const time = d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
-  return <time className="msg-time" dateTime={d.toISOString()}>{today ? time : `${d.toLocaleDateString(locale, { day: 'numeric', month: 'short' })} ${time}`}</time>;
+  const time = msgFormat(locale, false).format(d);
+  return <time className="msg-time" dateTime={d.toISOString()}>{today ? time : `${msgFormat(locale, true).format(d)} ${time}`}</time>;
 }
 
 // Memoised: the list (up to 120 lines) is not drawn again while the assistant streams its answer.
@@ -245,6 +269,8 @@ const Message = memo(function Message({ m, name, onChanges }) {
     );
   }
   if (m.meta?.kind === 'approval' || m.meta?.kind === 'task-approval') return <ChatApproval m={m} />;
+  // 3.8.1: an agent made a skill or an MCP server and asks for it to be turned on.
+  if (m.meta?.kind === 'extension' && m.meta.extension) return <ExtensionRequestCard m={m} />;
   if (m.meta?.kind === 'attention' && m.meta.task) return <TaskApprovalLine m={m} />;
   // 2.6: the assistant's suggestion to play while the agents work, with the button that opens the games.
   if (m.meta?.kind === 'games') return (
@@ -308,7 +334,7 @@ function ChatApproval({ m }) {
 }
 
 // 3.2.1: a task that waits for the user's approval, with «Aprobar» and «Rechazar» right in the chat (before, only in
-// Tareas). Once answered, how it ended. 3.6 (M3): a card, as in the Bots zone: «"Publicar la web" necesita tu aprobación»,
+// Tareas). Once answered, how it ended. 3.6 (M3): a card: «"Publicar la web" necesita tu aprobación»,
 // the reason in words and Rechazar · Ver la tarea · Aprobar.
 const whyOf = (body) => /\(([^()]*)\)\.?\s*$/.exec(String(body ?? ''))?.[1]?.trim() || null;
 function TaskApprovalLine({ m }) {
@@ -434,12 +460,16 @@ export function ChatView({ route, onConversation, project: inProject }) {
   }, []);
   const name = app.config.assistantName;
   const chat = chatOf(app, id) ?? {};
-  const defaults = app.assistant ?? {};
+  // 3.8: on a phone, the brain and «Orquestador» of a NEW conversation are chosen for that conversation alone (the ones
+  // new conversations start with are a setting of the PC).
+  const [draft, setDraft] = useState(null);
+  const local = Boolean(bridge.mobile) && id == null;
+  const defaults = { ...(app.assistant ?? {}), ...(local ? draft ?? {} : {}) };
   useEffect(() => { setRows([]); setOlder([]); setMore(false); }, [id]);
   useEffect(() => {
     if (id == null) return undefined;
     let alive = true;
-    call('chat.list', { conversation: id }).then((r) => { if (alive) { setRows(r); setMore(r.length >= 160); } }).catch(() => {});
+    call('chat.list', { conversation: id }).then((r) => { if (alive) { setRows((prev) => keepSame(prev, r)); setMore(r.length >= 160); } }).catch(() => {});
     return () => { alive = false; };
   }, [id, version]);
   // A long conversation shows its last 160 lines; the earlier ones, on request.
@@ -474,7 +504,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const orchestrate = conv ? true : defaults.orchestrate !== false;
   const bubble = useUsageBubble(catalog, brain);
   const greeting = useGreeting();
-  const userName = useStore((st) => userNameOf(st.me, st.app?.config));
+  const userName = useStore((st) => st.app?.config?.userName?.trim() || '');
   const [sending, setSending] = useState(false);
   // 3.2.1: in God mode, a new conversation goes to the project chosen there, and the bar says that one.
   const projects = useStore((s) => s.projects);
@@ -491,7 +521,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
     dismissTest();
     if (id != null) {
       if ((await act(call('chat.send', { text: msg, conversation: id }))) === undefined) setText(msg);
-      else call('chat.list', { conversation: id }).then((r) => { if (getState().route?.id === id) setRows(r); }).catch(() => {});
+      else call('chat.list', { conversation: id }).then((r) => { if (getState().route?.id === id) setRows((prev) => keepSame(prev, r)); }).catch(() => {});
       return;
     }
     setSending(true);
@@ -500,7 +530,8 @@ export function ChatView({ route, onConversation, project: inProject }) {
     try {
       if (orchestrate) {
         // 3.2: the first message makes the conversation (in the working folder): then the screen is that conversation.
-        const r = await act(call('chat.send', { text: msg, ...(inProject ? { project: inProject } : {}) }));
+        const chosen = local && draft ? Object.fromEntries(['agent', 'model', 'reasoning'].filter((k) => draft[k] !== undefined).map((k) => [k, draft[k]])) : {};
+        const r = await act(call('chat.send', { text: msg, ...(inProject ? { project: inProject } : {}), ...(Object.keys(chosen).length ? { brain: chosen } : {}) }));
         if (!r) { if (!moved()) setText(msg); return; }
         await refresh().catch(() => {});
         if (moved()) { leftBehind({ view: 'chat', id: r.conversation }, getState().conversations.find((c) => c.id === r.conversation)?.title ?? msg.slice(0, 60)); return; }
@@ -518,7 +549,10 @@ export function ChatView({ route, onConversation, project: inProject }) {
       }
     } finally { setSending(false); }
   };
-  const settings = async (patch) => { const r = await act(call('chat.settings', { ...patch, ...(id != null ? { conversation: id } : {}) })); if (r) { setState((s) => ({ app: { ...s.app, ...(id == null ? { assistant: r } : {}) } })); refreshSoon(); } return r; };
+  const settings = async (patch) => {
+    if (local) { setDraft((d) => ({ ...(d ?? {}), ...patch })); return true; }
+    const r = await act(call('chat.settings', { ...patch, ...(id != null ? { conversation: id } : {}) })); if (r) { setState((s) => ({ app: { ...s.app, ...(id == null ? { assistant: r } : {}) } })); refreshSoon(); } return r;
+  };
   // 3.2.1: the assistant cannot coordinate with Cursor as its brain (Cursor takes no tools of Orb's): turning the
   // «Orquestador» on moves the brain to Claude (or Codex) and says so, instead of doing nothing.
   const coordinator = ['claude', 'codex'].find((a) => catalog?.some((x) => x.id === a)) ?? null;
@@ -596,7 +630,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
         ) : null}
       </ChatBar>
       <div ref={scroll.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex max-w-3xl flex-col gap-5 px-5 py-6" data-testid="chat-lines">
+        <div className="lazy-lines mx-auto flex max-w-3xl flex-col gap-5 px-5 py-6" data-testid="chat-lines">
           {more ? <Button variant="ghost" size="sm" className="text-muted-foreground mx-auto" onClick={loadOlder} disabled={loading} data-testid="chat-older"><History />{t('chat.older')}</Button> : null}
           {id == null && !sending ? (
             <div className="flex flex-col items-center gap-3 pt-10 text-center">

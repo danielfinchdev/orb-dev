@@ -1,8 +1,12 @@
-# The Windows download, published as a GitHub release when "version" in package.json changes on main:
-#   Orb-<versión>-instalador.exe   installs for the user and updates itself (latest.yml)
-# Tests run on pull requests (pruebas.yml), not here. The Android APK, Orb Server (Linux) and the terminal client are built
-# and signed on the owner's PC and added to the same release (Orb Server's manifest is signed with the offline key).
-name: Versión para Windows
+# The Windows download (Orb on Tauri), built and checked on a clean Windows machine. This workflow builds and tests
+# ONLY: it holds no signing key and cannot write to the repository or its releases (review D9 A1/M1). Publishing is done
+# on the owner's PC: `npm run release:firmar -- <version>` downloads the installer this run made, signs it with the
+# updater key (which never leaves that PC), writes latest.json (Orb on Tauri) and latest.yml (Orb 3.8.0's updater, the
+# bridge) and creates release v<version> with gh.
+# Runs when "version" in package.json changes on main and that version has no release yet, or from the Actions tab.
+# Linux: planned for a later version (docs/ARCHITECTURE.md); the Android app is built and signed on the owner's PC too.
+# Actions are pinned by commit (the tag in the comment).
+name: Release build
 
 on:
   push:
@@ -14,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   version:
@@ -23,9 +27,11 @@ jobs:
       version: ${{ steps.v.outputs.version }}
       new: ${{ steps.v.outputs.new }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - id: v
-        name: ¿Versión nueva?
+        name: New version?
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -33,49 +39,41 @@ jobs:
           echo "version=$V" >> "$GITHUB_OUTPUT"
           if gh release view "v$V" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "new=false" >> "$GITHUB_OUTPUT"; else echo "new=true" >> "$GITHUB_OUTPUT"; fi
 
-
   windows:
     needs: version
     if: needs.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
+      - name: Rust
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: src-tauri
       - run: npm ci
-      - name: La app nunca sale con la suma de install.sh de relleno
-        run: node scripts/release.mjs check-server-release
-      - name: Construir el instalador
-        run: npx vite build && npx electron-builder --win nsis --x64 --publish never
-      - uses: actions/upload-artifact@v4
+      - run: npm run check
+      - run: npm test
+        timeout-minutes: 25
+      - run: cargo test --workspace --lib --locked
+        working-directory: src-tauri
+      - name: Build the installer (Tauri), not signed (signing happens on the owner's PC)
+        shell: bash
+        run: npx tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}' -- --locked && node scripts/tauri-check-release.mjs
+      - name: Open the packaged Orb and check it works (smoke test)
+        run: node test/smoke.e2e.mjs --exe src-tauri/target/release/Orb.exe
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: orb-dev-windows
-          path: |
-            dist/*.exe
-            dist/*.blockmap
-            dist/latest.yml
-
-  publicar:
-    needs: [version, windows]
-    if: needs.version.outputs.new == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+          name: orb-windows-${{ needs.version.outputs.version }}
+          path: src-tauri/target/release/bundle/nsis/Orb_${{ needs.version.outputs.version }}_x64-setup.exe
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: failure()
         with:
-          pattern: orb-dev-*
-          merge-multiple: true
-      - name: Publicar la versión
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ needs.version.outputs.version }}
-          target_commitish: ${{ github.sha }}
-          name: Orb ${{ needs.version.outputs.version }}
-          make_latest: true
-          body_path: docs/CHANGELOG.md
-          files: |
-            dist/Orb-*.exe
-            dist/Orb-*.blockmap
-            dist/latest.yml
+          name: test-results
+          path: test-results/

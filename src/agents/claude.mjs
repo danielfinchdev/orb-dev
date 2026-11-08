@@ -6,8 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, describeInput, cleanEnv, within, discoverDir, killTree, confineArgs } from './common.mjs';
+import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, describeInput, cleanEnv, within, discoverDir, killTree, mcpEnvByRef } from './common.mjs';
 import { Turn, Approvals } from './live.mjs';
 import { decide, describeAction } from '../core/guard.mjs';
 import { tr } from '../core/context.mjs';
@@ -23,15 +22,37 @@ export const COORDINATOR_DENIED = ['Bash', 'Edit', 'Write', 'NotebookEdit', 'Mul
 // Lighter processes: only the project's own settings, and only the MCP servers Orb passes (strict-mcp-config).
 export const LEAN_SOURCES = ['project', 'local'];
 
+// 3.8 (F2.6c): what in a project's .claude/settings*.json would let one agent change the next ones (a task can write that
+// folder; the next agent may be another conversation's): programs Claude runs by itself (apiKeyHelper ran from a trusted
+// project's settings in a real run, even with an API key set; the other *Helper, aws*/gcp* refresh, processWrapper,
+// fileSuggestion, status lines), the environment of its commands and MCP servers (env: NODE_OPTIONS, PATH) and plugins.
+// hooks are off anyway (disableAllHooks) and permission rules do not count (allowManagedPermissionRulesOnly). A file
+// Orb cannot read as JSON counts too. → ["settings.json: env", …]
+const RISKY_KEY = /^env$|helper|authrefresh|credential|wrapper|suggestion|statusline|plugin|marketplace|shell/i;
+export function projectSettingsRisk(cwd) {
+  const found = [];
+  for (const name of ['settings.json', 'settings.local.json']) {
+    const file = path.join(cwd, '.claude', name);
+    if (!fs.existsSync(file)) continue;
+    let json; try { json = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { found.push(name); continue; }
+    if (!json || typeof json !== 'object' || Array.isArray(json)) { found.push(name); continue; }
+    for (const key of Object.keys(json)) if (RISKY_KEY.test(key)) found.push(`${name}: ${key}`);
+  }
+  return found;
+}
+// The project's CLAUDE.md files, for a Claude started without the project's settings (which also stops it reading them).
+export function projectNotes(cwd) {
+  const parts = [];
+  for (const name of ['CLAUDE.md', path.join('.claude', 'CLAUDE.md'), 'CLAUDE.local.md']) {
+    try { const text = fs.readFileSync(path.join(cwd, name), 'utf8').trim(); if (text) parts.push(`# ${name.replace(/\\/g, '/')}\n${text.slice(0, 40000)}`); } catch { /* none */ }
+  }
+  return parts.length ? `Instrucciones del proyecto (sus archivos CLAUDE.md):\n\n${parts.join('\n\n')}` : '';
+}
+
 export function detect(cfg = {}) {
   const home = userHome();
   const pkg = (dir) => path.join(dir, 'node_modules', '@anthropic-ai', 'claude-code', 'bin', IS_WIN ? 'claude.exe' : 'claude');
-  // 3.7: Orb Server downloads its own Claude on demand (src/server/engines.mjs) and runs it through engines/claude/run,
-  // in its own systemd scope and with no_new_privs: that one first.
-  const engine = process.env.ORB_ENGINES && !IS_WIN ? [path.join(process.env.ORB_ENGINES, 'claude', 'run')] : [];
-  const candidates = [cfg.path, ...engine, ...inPath('claude'), path.join(home, '.local', 'bin', IS_WIN ? 'claude.exe' : 'claude'), ...npmPrefixes('claude').map(pkg)];
-  // 3.5: Orb Server (the server, ORB_NUCLEO) brings the Agent SDK's own Claude Code for Linux: used when none is installed.
-  if (process.env.ORB_NUCLEO === '1' && !IS_WIN) candidates.push(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'node_modules', '@anthropic-ai', `claude-agent-sdk-${process.platform}-${process.arch}`, 'claude'));
+  const candidates = [cfg.path, ...inPath('claude'), path.join(home, '.local', 'bin', IS_WIN ? 'claude.exe' : 'claude'), ...npmPrefixes('claude').map(pkg)];
   const cmd = firstFile(candidates);
   return cmd ? { cmd, pre: [] } : null;
 }
@@ -108,10 +129,14 @@ const RESULT_KEY = { error_during_execution: 'sys.agents.result.duringExecution'
 // 3.2.1: whether a result answers a message of Orb's (sent with origin «human»), not a notice Claude handles by itself.
 export const answersOrb = (m) => !(m?.origin?.kind && m.origin.kind !== 'human');
 
+// 3.8.1: Claude loads the skills of core by itself (a plugin); agents without this get them in their brief.
+export const nativeSkills = true;
+
 export const permissionModeOf = (p) => (p === 'total' ? 'bypassPermissions' : p === 'editar' ? 'acceptEdits' : 'default');
 
 // options: exe, cwd, model, reasoning, permission, resumeId, newSessionId, forkSession, mcpServers, env, systemPrompt
-// (appended to Claude Code's own), tools ({ allowed, disallowed }), addDirs, budgetUsd, internalDir, log, onEvent
+// (appended to Claude Code's own), tools ({ allowed, disallowed }), addDirs, budgetUsd, internalDir, log, onEvent, skills
+// (3.8.1: { plugin, root, list }, the skills of core that are on)
 export function createLive(o) {
   const onEvent = o.onEvent ?? (() => {});
   const log = o.log ?? (() => {});
@@ -130,12 +155,9 @@ export function createLive(o) {
   const canUseTool = async (toolName, toolInput, ctx = {}) => {
     const command = toolInput?.command ?? '';
     const paths = [toolInput?.file_path, toolInput?.path, toolInput?.notebook_path].filter(Boolean);
-    // 3.6: a confined session: Grep and Glob without a path search the working folder, which is checked too.
-    if (o.confine && !paths.length && (toolName === 'Grep' || toolName === 'Glob') && o.cwd) paths.push(o.cwd);
-    // 3.5.1: o.bot is the bot's guard (its folder, what it read this turn): patterns and the address are checked too.
+    // Glob and Grep patterns are checked too (where they reach).
     const patterns = [toolInput?.pattern, toolInput?.glob].filter((x) => typeof x === 'string' && x);
-    const url = typeof toolInput?.url === 'string' ? toolInput.url : null;
-    const verdict = decide({ permission, tool: toolName, command, paths, patterns: toolName === 'Grep' ? patterns.slice(1) : patterns, url, internalDir: o.internalDir, lang: o.lang, bot: o.bot || false, confine: o.confine || null });
+    const verdict = decide({ permission, tool: toolName, command, paths, patterns: toolName === 'Grep' ? patterns.slice(1) : patterns, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang });
     if (verdict.decision === 'allow') return { behavior: 'allow', updatedInput: toolInput };
     if (verdict.decision === 'deny') return { behavior: 'deny', message: `Orb no lo permite: ${verdict.reason}.` };
     // 3.1: summary: what the agent itself says the command is for (Claude's Bash tool asks it for a description).
@@ -208,28 +230,47 @@ export function createLive(o) {
 
   const start = async () => {
     const { query: sdkQuery } = await import('@anthropic-ai/claude-agent-sdk');
+    // The SDK hands mcpServers to Claude Code as --mcp-config <json>: the values go in Claude Code's environment and the
+    // config only names them (Claude Code expands ${VAR} in --mcp-config, as in .mcp.json).
+    const mcp = mcpEnvByRef(o.mcpServers, (name) => `\${${name}}`);
+    // 3.8 (F2.6c): a project whose settings would run programs or change the environment is started without its settings
+    // files; its CLAUDE.md still reaches Claude, through the system prompt.
+    const risky = o.cwd ? projectSettingsRisk(o.cwd) : [];
+    const notes = risky.length ? projectNotes(o.cwd) : '';
+    if (risky.length) {
+      log(`ajustes del proyecto sin cargar: ${risky.join(', ')}`);
+      onEvent({ type: 'item', role: 'system', kind: 'status', body: tr('sys.agents.projectSettingsSkipped', { keys: risky.join(', ') }) });
+    }
     const options = {
       cwd: o.cwd,
       pathToClaudeCodeExecutable: o.exe.cmd,
-      env: cleanEnv(o.env ?? {}),
+      env: cleanEnv({ ...(o.env ?? {}), ...mcp.env }),
       model: o.model || undefined,
       effort: o.reasoning || 'medium',
       includePartialMessages: true,
-      settingSources: LEAN_SOURCES,
+      settingSources: risky.length ? [] : LEAN_SOURCES,
       extraArgs: { 'strict-mcp-config': null },
-      mcpServers: o.mcpServers ?? {},
+      mcpServers: mcp.servers,
       additionalDirectories: o.addDirs ?? [],
       abortController: abort,
       canUseTool,
       permissionMode: permissionModeOf(permission),
       stderr: (d) => log(`stderr: ${d}`),
-      settings: { fastMode: false },
+      // 3.8: no hooks of the project's .claude/settings*.json: a task could leave one there that later agents in the same
+      // folder (other conversations) would run with their environment. (Managed policy hooks still apply.)
+      // 3.8.1: nor the commands a skill or a slash command runs when it loads (!`…` in its text): checked with the real
+      // Claude Code, they ran without asking canUseTool. (A skill's allowed-tools skipped it too: the skills of core reach
+      // Claude without it, src/core/extensions.mjs › exposeSkills.)
+      settings: { fastMode: false, disableAllHooks: true, disableSkillShellExecution: true },
+      // 3.8 (F2.6c): nor its permission rules: an allow rule there (Bash, Edit…) would let Claude act without asking Orb's
+      // guard (canUseTool), past «leer», «probar» and «Cosas que nadie toca». Only policy rules count (checked with the
+      // real Claude Code: a trusted project's "allow": ["Bash"] no longer skips the guard, and CLAUDE.md still loads).
+      managedSettings: { allowManagedPermissionRulesOnly: true },
       // 3.2.1: spawn Claude Code ourselves so Orb knows its process (live.pid) and can stop its whole tree when the task
       // ends — otherwise its background shells (bash.exe) can outlive the turn, holding an isolated copy's folder open and
       // leaving test servers behind. The signal is forwarded by the SDK after its own graceful stdin-close window.
       spawnClaudeCodeProcess: (opts) => {
-        const c = confineArgs(opts.command, opts.args); // 3.7: no_new_privs on Orb Server with the admin helper
-        child = spawn(c.cmd, c.args, { cwd: opts.cwd, env: opts.env, signal: opts.signal, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], detached: !IS_WIN }); // 3.5: own process group on Linux (killTree)
+        child = spawn(opts.command, opts.args, { cwd: opts.cwd, env: opts.env, signal: opts.signal, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], detached: !IS_WIN }); // 3.5: own process group on Linux (killTree)
         live.pid = child.pid ?? null;
         try { child.stderr?.setEncoding('utf8'); child.stderr?.on('data', (d) => log(`stderr: ${d}`)); child.stderr?.on('error', () => {}); } catch { /* best effort */ }
         return child;
@@ -237,12 +278,16 @@ export function createLive(o) {
     };
     if (o.resumeId) options.resume = o.resumeId; else if (o.newSessionId) options.sessionId = o.newSessionId;
     if (o.forkSession) options.forkSession = true;
-    if (o.systemPrompt) options.systemPrompt = { type: 'preset', preset: 'claude_code', append: o.systemPrompt };
+    const append = [o.systemPrompt, notes].filter(Boolean).join('\n\n');
+    if (append) options.systemPrompt = { type: 'preset', preset: 'claude_code', append };
     if (o.tools?.allowed?.length) options.allowedTools = o.tools.allowed;
     const disallowed = [...(o.tools?.disallowed ?? []), ...(permission === 'leer' ? ['Bash', 'Edit', 'Write', 'NotebookEdit', 'MultiEdit'] : permission === 'probar' ? ['Edit', 'Write', 'NotebookEdit', 'MultiEdit'] : [])];
     if (disallowed.length) options.disallowedTools = disallowed;
     if (permission === 'total') options.allowDangerouslySkipPermissions = true;
     if (o.budgetUsd) options.maxBudgetUsd = o.budgetUsd;
+    // 3.8.1: the skills of core that are on, as a plugin Orb makes (src/core/extensions.mjs › exposeSkills): Claude lists
+    // them («orb-skills:<name>») and loads one when it fits. Checked with the real Claude Code (supportedCommands).
+    if (o.skills?.list?.length) options.plugins = [{ type: 'local', path: o.skills.plugin }];
     query = sdkQuery({ prompt: input, options });
     (async () => {
       // 3.0: the streamed pieces of each answer are not written to the run log one by one (a disk write per token); the

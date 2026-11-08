@@ -27,11 +27,17 @@ const CASES = [
   ['ACP: kind execute', { tool: 'Ejecutar', kind: 'execute', command: 'ls' }, { leer: 'deny', probar: 'allow', editar: 'allow', preguntar: 'ask', total: 'allow' }],
   ['ACP: kind read', { tool: 'cat', kind: 'read' }, { leer: 'allow', probar: 'allow', editar: 'allow', preguntar: 'allow', total: 'allow' }],
   ['ACP: kind delete', { tool: 'rm', kind: 'delete', paths: ['a.txt'] }, { leer: 'deny', probar: 'deny', editar: 'allow', preguntar: 'allow', total: 'allow' }],
-  ['los datos internos del asistente (ruta)', { tool: 'Read', paths: [path.join(internal, 'datos', 'orb.db')] }, { leer: 'deny', probar: 'deny', editar: 'deny', preguntar: 'deny', total: 'deny' }],
-  ['los datos internos del asistente (comando)', { tool: 'Bash', command: 'type .orb\\datos\\clave.bin' }, { leer: 'deny', probar: 'deny', editar: 'deny', preguntar: 'deny', total: 'deny' }],
-  ['las fotos para deshacer', { tool: 'Read', paths: [path.join(internal, 'copias', 'fotos', 't1', 'a.js')] }, { leer: 'deny', probar: 'deny', editar: 'deny', preguntar: 'deny', total: 'deny' }],
+  ['los datos internos del asistente (ruta)', { tool: 'Read', paths: [path.join(internal, 'datos', 'orb.db')] }, { leer: 'deny', probar: 'deny', editar: 'deny', preguntar: 'deny', total: 'ask' }],
+  ['los datos internos del asistente (comando)', { tool: 'Bash', command: 'type .orb\\datos\\clave.bin', cwd: path.dirname(internal) }, { leer: 'deny', probar: 'deny', editar: 'deny', preguntar: 'deny', total: 'ask' }],
+  ['las fotos para deshacer', { tool: 'Read', paths: [path.join(internal, 'copias', 'fotos', 't1', 'a.js')] }, { leer: 'deny', probar: 'deny', editar: 'deny', preguntar: 'deny', total: 'ask' }],
   ['la copia aislada de una tarea (también dentro de .orb)', { tool: 'Edit', paths: [path.join(internal, 'copias', 'aisladas', 'web-3', 'src', 'a.js')] }, { leer: 'deny', probar: 'deny', editar: 'allow', preguntar: 'allow', total: 'allow' }],
-  ['un comando en la copia aislada', { tool: 'Bash', command: 'cd .orb/copias/aisladas/web-3 && npm test' }, { leer: 'deny', probar: 'allow', editar: 'allow', preguntar: 'ask', total: 'allow' }]
+  ['un comando en la copia aislada', { tool: 'Bash', command: 'cd .orb/copias/aisladas/web-3 && npm test', cwd: path.dirname(internal) }, { leer: 'deny', probar: 'allow', editar: 'allow', preguntar: 'ask', total: 'allow' }],
+  // F5b (A1): the logs moved into core can be read (the user's rules for agents may point there), never written.
+  ['leer la bitácora movida a core', { tool: 'Read', paths: [path.join(internal, 'bitacora', 'bitacora_project.md')] }, { leer: 'allow', probar: 'allow', editar: 'allow', preguntar: 'allow', total: 'allow' }],
+  ['buscar en la bitácora de core (Grep)', { tool: 'Grep', patterns: [path.join(internal, 'bitacora')] }, { leer: 'allow', probar: 'allow', editar: 'allow', preguntar: 'allow', total: 'allow' }],
+  ['escribir en la bitácora de core', { tool: 'Edit', paths: [path.join(internal, 'bitacora', 'GENERAL.md')] }, { leer: 'deny', probar: 'deny', editar: 'deny', preguntar: 'deny', total: 'ask' }],
+  ['un comando sobre la bitácora de core', { tool: 'Bash', command: 'type .orb\\bitacora\\GENERAL.md', cwd: path.dirname(internal) }, { leer: 'deny', probar: 'deny', editar: 'deny', preguntar: 'deny', total: 'ask' }],
+  ['salir de la bitácora de core hacia los datos', { tool: 'Read', paths: [path.join(internal, 'bitacora', '..', 'datos', 'orb.db')] }, { leer: 'deny', probar: 'deny', editar: 'deny', preguntar: 'deny', total: 'ask' }]
 ];
 
 test('el guardia: tabla de casos en los cinco modos de permiso', () => {
@@ -43,6 +49,18 @@ test('el guardia: tabla de casos en los cinco modos de permiso', () => {
       assert.ok(out.reason, `${what}: siempre explica el motivo`);
     }
   }
+});
+
+test('3.8.1: escribir en la bitácora general de core se niega con el camino bueno (las herramientas de Orb)', () => {
+  const logs = decide({ permission: 'editar', internalDir: internal, tool: 'Edit', paths: [path.join(internal, 'bitacora', 'bitacora_project.md')] });
+  assert.equal(logs.decision, 'deny');
+  assert.match(logs.reason, /bitácora general de core.*orb_write_log/);
+  const shell = decide({ permission: 'editar', internalDir: internal, tool: 'Bash', command: `echo x >> ${path.join(internal, 'bitacora', 'GENERAL.md')}` });
+  assert.match(shell.reason, /orb_write_log/);
+  const data = decide({ permission: 'editar', internalDir: internal, tool: 'Edit', paths: [path.join(internal, 'datos', 'orb.db')] });
+  assert.equal(data.reason, 'accede a datos internos de Orb', 'el resto de core, con el motivo de siempre');
+  const both = decide({ permission: 'editar', internalDir: internal, tool: 'Bash', command: `copy ${path.join(internal, 'datos', 'orb.db')} ${path.join(internal, 'bitacora', 'x.md')}` });
+  assert.equal(both.reason, 'accede a datos internos de Orb');
 });
 
 test('enviar datos a tu propio PC (probar una API local) no pregunta; a otra dirección, sí', () => {
@@ -153,4 +171,29 @@ test('la tarjeta de aprobación dice en una línea qué quiere hacer el agente',
   assert.equal(describeAction({ tool: 'Edit', paths: ['a.js', 'b.js'] }), 'Edit: a.js, b.js');
   assert.equal(describeAction({ tool: 'Permisos', title: 'Salir de la carpeta' }), 'Salir de la carpeta');
   assert.equal(describeAction({ tool: 'Bash', command: 'x'.repeat(1000) }).length, 400);
+});
+
+// «Cosas que nadie toca» (config.protected): by default the password managers' folders and containers (DEFAULT_PROTECTED),
+// whatever the permission, and the user's own list replaces it.
+test('lo protegido (de serie, los gestores de contraseñas) no se toca nunca, ni con acceso total', async () => {
+  const { ctx } = await import('../src/core/context.mjs');
+  const before = ctx.config;
+  try {
+    ctx.config = { ...(before ?? {}), protected: undefined };
+    const deny = decide({ permission: 'leer', tool: 'Read', paths: ['/srv/vaultwarden/data/db.sqlite3'] });
+    assert.equal(deny.decision, 'deny'); assert.match(deny.reason, /protegido \(vaultwarden\)/);
+    assert.equal(decide({ permission: 'total', tool: 'Bash', command: 'docker exec vaultwarden ls' }).decision, 'deny', 'ni con acceso total');
+    assert.equal(decide({ permission: 'total', tool: 'Bash', command: 'docker restart bitwarden' }).decision, 'deny');
+    assert.equal(decide({ permission: 'total', tool: 'Read', paths: ['/opt/vw-data/db.sqlite3'] }).decision, 'deny');
+    assert.equal(decide({ permission: 'total', tool: 'Bash', command: 'tar czf x.tgz /srv/bwdata' }).decision, 'deny');
+    assert.equal(decide({ permission: 'total', tool: 'Read', paths: ['C:\\Users\\u\\.ssh\\id_ed25519'] }).decision, 'deny', 'las claves de .ssh');
+    assert.equal(decide({ permission: 'total', tool: 'Read', paths: ['/home/u/.ssh/known_hosts'] }).decision, 'allow', 'lo demás de .ssh sí');
+    assert.equal(decide({ permission: 'total', tool: 'Bash', command: 'cat /data/keepassxc-notes.txt' }).decision, 'deny');
+    assert.equal(decide({ permission: 'total', tool: 'Bash', command: 'npm run compass' }).decision, 'allow', 'una palabra entera, no un trozo');
+    // The user's list: an entry of theirs is kept, and removing a default one frees it.
+    ctx.config = { ...(before ?? {}), protected: ['bitwarden', '/srv/copias', 'mi-nas'] };
+    assert.equal(decide({ permission: 'total', tool: 'Bash', command: 'rm -r /srv/copias/2024' }).decision, 'deny');
+    assert.match(decide({ permission: 'total', tool: 'Bash', command: 'docker restart mi-nas' }).reason, /mi-nas/);
+    assert.equal(decide({ permission: 'total', tool: 'Bash', command: 'docker exec vaultwarden ls' }).decision, 'allow', 'ya no está en la lista');
+  } finally { ctx.config = before; }
 });

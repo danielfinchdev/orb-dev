@@ -1,0 +1,64 @@
+[package]
+name = "orb"
+version = "3.8.1"
+description = "Orb: one app for your AI coding agents"
+authors = ["Orb"]
+license = "MIT"
+edition = "2021"
+rust-version = "1.85"
+
+[lib]
+name = "orb_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[features]
+# Test and measurement builds only: the window's DevTools port (ORB_E2E_CDP_PORT) and a window never shown
+# (ORB_HIDDEN_WINDOW=1), both only with a separate data folder (ORB_USER_DATA).
+e2e = []
+
+[build-dependencies]
+tauri-build = { version = "=2.7.3", features = [] }
+
+[dependencies]
+tauri = { version = "=2.12.4", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["sync", "time"] }
+base64 = "=0.22.1"
+# The phone's end-to-end encryption (phone_crypto.rs, the same as src/core/mobile-crypto.mjs).
+chacha20poly1305 = { version = "=0.10.1", features = ["getrandom"] }
+x25519-dalek = { version = "=2.0.1", features = ["static_secrets"] }
+hkdf = "=0.12.4"
+sha2 = "=0.10.9"
+
+# The desktop app's plugins (Android has none of these windows, installers or updates).
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-single-instance = "=2.5.4"
+tauri-plugin-dialog = "=2.8.3"
+tauri-plugin-opener = "=2.7.2"
+tauri-plugin-updater = "=2.14.0"
+# The master password and Orb's secrets, out of the engine (vault_host.rs).
+orb-vault = { path = "vault" }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "=0.21.1" # phone_crypto.rs › jni_api (the same copy Tauri uses)
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "=0.62.2", features = ["Data_Xml_Dom", "Foundation", "UI_Notifications", "Win32_Foundation", "Win32_Security", "Win32_System_Com", "Win32_System_JobObjects", "Win32_System_LibraryLoader", "Win32_System_RemoteDesktop", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows-core = "=0.62.2" # the #[implement] of delete.rs (the same copy windows uses)
+webview2-com = "=0.39.1"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+# unwind, not abort (review D10 M3): with abort a panic ends Orb at once, and the catch_unwind around each job of the
+# agents' browser thread (browser.rs) and of the guard window (desktop.rs) would do nothing in the published build. The
+# cost is the unwinding tables: a few percent more exe size and no measurable speed difference in Orb (no hot loops).
+panic = "unwind"
+strip = true
+
+# The vault (the master password and Orb's secrets, out of the engine) is a crate of its own: Orb.exe links it, and the
+# tests run its orb-vault binary (scripts/vault-build.mjs).
+[workspace]
+members = [".", "vault"]

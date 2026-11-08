@@ -1,5 +1,5 @@
-// 3.6, ola 1 de diseño: el compositor (hueco de acción, razonamiento y orquestador), Ajustes en seis secciones, la pantalla
-// Usuarios y la compactación de conversaciones. Va la última: también corrige algunos textos anteriores.
+// 3.6, ola 1 de diseño: el compositor (hueco de acción, razonamiento y orquestador), Ajustes en seis secciones
+// y la compactación de conversaciones. Va la última: también corrige algunos textos anteriores.
 export default {
   // Razonamiento: botón del cerebro con su menú
   'reasoning.xhigh': 'Extra',
@@ -18,7 +18,6 @@ export default {
   'chat.orchestratorLocked': 'En esta conversación {name} coordina a los agentes. Para hablar directamente con un agente, empieza un chat nuevo con el Orquestador desactivado.',
   'chat.orchestratorOn': 'Activado. Desactívalo para hablar directamente con el agente elegido.',
   'chat.orchestratorOff': 'Desactivado: hablas directamente con el agente elegido.',
-  'chat.orchestratorHint': 'Activado, {name} coordina a los agentes y reparte el trabajo. Desactivado, hablas directamente con el agente elegido.',
   // Compactar
   'compact.button': 'Compactar',
   'compact.busy': 'Compactando…',
@@ -38,17 +37,17 @@ export default {
   'settings.section.magiclink': 'Magic Link',
   'settings.section.agentes': 'Agentes y uso',
   'settings.section.avanzado': 'Avanzado',
+  'settings.section.extensiones': 'Skills y MCP',
   'settings.section.acerca': 'Acerca de',
   'settings.sectionDesc.general': 'Asistente, idioma, carpeta de trabajo, apariencia y actualizaciones.',
-  'settings.sectionDesc.magiclink': 'Quién puede entrar en este Orb: sus usuarios, sus dispositivos y los Orbs enlazados.',
+  'settings.sectionDesc.magiclink': 'Los móviles y navegadores enlazados con este PC.',
   'settings.sectionDesc.agentes': 'Cómo trabajan las conversaciones y las tareas, y cuánto uso pueden gastar.',
   'settings.sectionDesc.avanzado': 'Herramientas de los agentes y God mode.',
+  'settings.sectionDesc.extensiones': 'Lo que saben hacer tus agentes: skills y servidores MCP, todos en la carpeta core.',
   'settings.sectionDesc.acerca': 'Versión, comentarios y otras aplicaciones.',
   'settings.group.apariencia': 'Apariencia',
   'settings.group.actualizaciones': 'Actualizaciones',
-  'settings.group.usuarios': 'Usuarios',
   'settings.group.dispositivos': 'Dispositivos',
-  'settings.group.orbs': 'Orbs enlazados',
   'settings.group.herramientas': 'Herramientas',
   'settings.group.experto': 'God mode',
   'settings.group.contribuye': 'Contribuye',
@@ -56,9 +55,6 @@ export default {
   'settings.mobile': 'Acceso desde otros dispositivos',
   'about.developer': 'Desarrollador',
   'about.license': 'Licencia',
-  // Usuarios
-  'persons.actions': 'Acciones de {name}',
-  'persons.edit': 'Editar nombre',
   // Textos que apuntaban a las secciones de antes
   'help.faq.10.a': 'El tema Profesional no muestra el robot ni animaciones; cámbialo en Ajustes › General, donde también se activa o desactiva el robot flotante.',
   // Pie de la barra lateral en un navegador enlazado: el engranaje abre este dispositivo y Magic Link

@@ -2,7 +2,7 @@
 // keyboard shortcuts and the frequently asked questions, all searchable; and the button that replays the robot's guided
 // tour (components/tour.jsx). Texts: help.* in the locales.
 import { useState } from 'react';
-import { GraduationCap, Search, Rocket, MessageSquare, Brain, MessageSquarePlus, ListTodo, FolderKanban, Bot, Gauge, CalendarClock, BookOpen, Smartphone, SquareTerminal, Gamepad2, Palette, ShieldCheck, PenTool, HeartPulse, Keyboard, CircleHelp, ChevronRight, Play, ArrowRight } from 'lucide-react';
+import { GraduationCap, Search, Rocket, MessageSquare, Brain, MessageSquarePlus, ListTodo, FolderKanban, Bot, Gauge, CalendarClock, BookOpen, Smartphone, SquareTerminal, Gamepad2, Palette, ShieldCheck, PenTool, Keyboard, CircleHelp, ChevronRight, Play, ArrowRight } from 'lucide-react';
 import { PageHeader } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -25,8 +25,6 @@ const TUTORIALS = [
   { id: 'usage', icon: Gauge, lines: 3, go: () => openSettings('tareas'), pc: true },
   { id: 'schedules', icon: CalendarClock, lines: 3, go: () => go('schedules') },
   { id: 'logs', icon: BookOpen, lines: 3, go: () => go('logs') },
-  // 3.7: «Monitoreo del equipo» is gone; looking after the PC is a bot with the «Equipo» tools.
-  { id: 'pccare', icon: HeartPulse, lines: 3, go: () => go({ view: 'bots' }) },
   { id: 'phone', icon: Smartphone, lines: 3, go: () => openSettings('movil'), pc: true },
   { id: 'expert', icon: SquareTerminal, lines: 2, go: () => openSettings('experto'), pc: true },
   { id: 'games', icon: Gamepad2, lines: 2, go: () => openGames(), pc: true },
@@ -34,10 +32,8 @@ const TUTORIALS = [
   { id: 'privacy', icon: ShieldCheck, lines: 5 }
 ];
 const PC_ONLY = new Set(['agents', 'usage', 'expert', 'games', 'looks']);
-// 2.7.3: what Orb Light (the portable .exe) does not have.
-const NOT_LIGHT = new Set(['expert', 'games']);
 const KEYS = 8; // help.key.1…8
-const FAQS = 16; // help.faq.1…16
+const FAQS = 17; // help.faq.1…17
 const range = (n) => Array.from({ length: n }, (_, i) => i + 1);
 // Search without accents or case: «bitacora» finds «Bitácoras».
 const fold = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -80,7 +76,7 @@ export function TutorialsView() {
   const query = fold(q.trim());
   const hit = (...parts) => !query || parts.some((p) => fold(p).includes(query));
   // 2.7: the phone leaves out what it does not have (agents, settings, expert mode, games, themes).
-  const tutorials = TUTORIALS.filter((item) => !(bridge.mobile && PC_ONLY.has(item.id)) && !(bridge.light && NOT_LIGHT.has(item.id))).filter((item) => hit(t(`help.tut.${item.id}.title`, { name }), ...range(item.lines).map((n) => t(`help.tut.${item.id}.l${n}`, { name }))));
+  const tutorials = TUTORIALS.filter((item) => !(bridge.mobile && PC_ONLY.has(item.id))).filter((item) => hit(t(`help.tut.${item.id}.title`, { name }), ...range(item.lines).map((n) => t(`help.tut.${item.id}.l${n}`, { name }))));
   const keys = bridge.mobile ? [] : range(KEYS).filter((n) => hit(t(`help.key.${n}.k`), t(`help.key.${n}.v`)));
   const faqs = range(FAQS).filter((n) => hit(t(`help.faq.${n}.q`, { name }), t(`help.faq.${n}.a`, { name })));
   const nothing = !tutorials.length && !keys.length && !faqs.length;

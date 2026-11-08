@@ -1,5 +1,6 @@
 // The little always-on-top window: live picture of the page the agent is using, who it is and what it just did.
 // Expand, collapse to a pill, or close until the next activity.
+import './lib/tauri-pip-bridge.js';
 import './app.css';
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';

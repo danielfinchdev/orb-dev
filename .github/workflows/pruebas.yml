@@ -1,6 +1,6 @@
-# Tests on every push and pull request, on Windows and Linux (also the whole app with Electron on both). Publishes nothing: releases are
-# built by release.yml when the version changes on main.
-name: Pruebas
+# Tests on every push and pull request, on Windows and Linux (the engine and the interface's logic). Publishes nothing:
+# release builds are made by release.yml when the version changes on main. Read-only token; actions pinned by commit.
+name: Tests
 
 on:
   push:
@@ -11,6 +11,9 @@ concurrency:
   group: pruebas-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   pruebas:
     strategy:
@@ -19,8 +22,10 @@ jobs:
         os: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
@@ -28,13 +33,3 @@ jobs:
       - run: npm run check
       - run: npm test
         timeout-minutes: 20
-      # 3.7: the whole app with Electron on both systems (Linux has no screen: a virtual one).
-      - if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y xvfb
-      - name: La app entera con Electron
-        run: ${{ runner.os == 'Linux' && 'xvfb-run -a ' || '' }}npm run test:app
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: capturas-${{ matrix.os }}
-          path: test-results/

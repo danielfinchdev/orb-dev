@@ -1,13 +1,12 @@
-// 3.7: the desktop app on Linux: the terminals Ctrl+J and the project's actions open, how a copy updates (AppImage
-// itself, .deb only tells), the keyring check, programs started from an AppImage, and the packaging / release config.
+// 3.7: the engine's side of a Linux desktop: the terminals Ctrl+J and the project's actions open, and the editors found
+// outside the desktop's PATH (the Linux app itself comes back in a later version).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { terminalPlan, linuxTerminal, externalEnv, terminalChoices, LINUX_TERMINALS } from '../src/main/terminal.mjs';
-import { actionPlan, findEditors } from '../src/main/editors.mjs';
-import { linuxKind, keyringWeak } from '../src/main/linux.mjs';
+import { terminalPlan, linuxTerminal, externalEnv, terminalChoices, LINUX_TERMINALS } from '../src/engine/terminal.mjs';
+import { actionPlan, findEditors } from '../src/engine/editors.mjs';
 import { ROOT } from './helpers.mjs';
 
 const found = { warp: null, linux: 'x-terminal-emulator', installed: ['x-terminal-emulator', 'gnome-terminal', 'konsole', 'xterm'] };
@@ -48,37 +47,4 @@ test('los editores en Linux se buscan también fuera del PATH del escritorio (sn
   } finally { fs.rmSync(home, { recursive: true, force: true }); }
 });
 
-test('cómo se actualiza cada copia en Linux, y el aviso de llavero', () => {
-  assert.equal(linuxKind('linux', { APPIMAGE: '/home/ana/Apps/Orb.AppImage' }), 'appimage');
-  assert.equal(linuxKind('linux', {}), 'package');
-  assert.equal(linuxKind('win32', { APPIMAGE: 'x' }), null);
-  assert.equal(keyringWeak('linux', true, 'gnome_libsecret'), false);
-  assert.equal(keyringWeak('linux', true, 'kwallet6'), false);
-  assert.equal(keyringWeak('linux', true, 'basic_text'), true);
-  assert.equal(keyringWeak('linux', false, null), true);
-  assert.equal(keyringWeak('win32', true, null), false);
-  // A program started from the AppImage (an editor, a terminal) does not inherit its variables.
-  const env = externalEnv({ PATH: '/usr/bin', APPIMAGE: '/a/Orb.AppImage', APPDIR: '/tmp/.mount_Orb', ARGV0: 'Orb', OWD: '/home/ana' });
-  assert.deepEqual(env, { PATH: '/usr/bin' });
-  const plain = { PATH: '/usr/bin' };
-  assert.equal(externalEnv(plain), plain);
-});
 
-test('el empaquetado para Linux y su publicación con las de Windows', () => {
-  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-  const linux = pkg.build.linux;
-  const targets = Object.fromEntries(linux.target.map((t) => [t.target, t.arch]));
-  assert.deepEqual(Object.keys(targets).sort(), ['AppImage', 'deb']);
-  for (const arch of Object.values(targets)) assert.deepEqual(arch, ['x64', 'arm64']);
-  assert.equal(linux.icon, 'build/icons');
-  assert.ok(pkg.build.files.includes('build/icon.png'), 'el icono va dentro (ventana y avisos)');
-  assert.equal(linux.desktop.entry.StartupWMClass, pkg.productName, 'el dock agrupa la ventana con su icono');
-  assert.equal(pkg.desktopName, `${linux.executableName}.desktop`);
-  assert.ok(pkg.homepage && /<.+@.+>/.test(linux.maintainer), 'el .deb necesita página y responsable');
-  // 3.7: the release publishes only the Windows installer (Linux app builds stay in the config, not published).
-  const release = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'release.yml'), 'utf8');
-  for (const f of ['dist/Orb-*.exe', 'dist/latest.yml']) assert.ok(release.includes(f), f);
-  const pruebas = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'pruebas.yml'), 'utf8');
-  assert.match(pruebas, /windows-latest, ubuntu-latest/);
-  assert.match(pruebas, /npm run test:app/);
-});

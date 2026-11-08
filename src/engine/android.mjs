@@ -1,4 +1,4 @@
-// Android's tools (adb, fastboot): Orb keeps them in <home>\android\adb-tools and downloads Google's platform-tools there
+// Android's tools (adb, fastboot): Orb keeps them in <home>\core\herramientas\adb and downloads Google's platform-tools there
 // when they are missing, so agents working on Android projects find adb without the user installing anything.
 // The folder goes first in the PATH of the engine (and so of every agent it starts).
 import fs from 'node:fs';
@@ -21,18 +21,6 @@ export const adbPath = () => path.join(ctx.paths.adb, exe('adb'));
 // Windows ask for permission, and the tests make a fresh folder each time.
 export const adbDisabled = () => process.env.ORB_NO_ADB === '1' || Boolean(process.env.ORB_FAKE_AGENTS);
 export const adbStatus = () => ({ ...state, dir: ctx.paths.adb, ready: fs.existsSync(adbPath()) });
-
-// 3.2.1: the first adb command starts a server that stays resident. Orb notes when it used adb this session, so it can
-// stop that server when it closes (`adb kill-server`) without touching a server the user runs for Android Studio.
-let adbUsed = false;
-export const markAdbUsed = () => { adbUsed = true; };
-// 3.7 (WS9): whether the adb server of this session is Orb's (the user used an Android feature since Orb started).
-export const adbInUse = () => adbUsed && !adbDisabled();
-export function stopAdb() {
-  if (!adbUsed || adbDisabled() || !fs.existsSync(adbPath())) return;
-  adbUsed = false;
-  try { spawnSync(adbPath(), ['kill-server'], { windowsHide: true, timeout: 5000 }); } catch { /* already gone */ }
-}
 
 // adb's folder first in this process's PATH (Windows names the variable "Path").
 export function addAdbToPath() {

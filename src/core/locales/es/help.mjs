@@ -14,11 +14,11 @@ export default {
 
   // ---- tutoriales
   'help.tut.start.title': 'Primeros pasos',
-  'help.tut.start.l1': 'Orb trabaja en la carpeta del asistente (por ejemplo, D:\\Orb), organizada en cuatro categorías: windows, ios, android y web.',
+  'help.tut.start.l1': 'Orb trabaja en su carpeta (por defecto, C:\\Orb), organizada en seis categorías: windows, linux, ios, android, web y multi.',
   'help.tut.start.l2': 'Cada carpeta de una categoría es un proyecto. Las que crees en el Explorador aparecen automáticamente.',
-  'help.tut.start.l3': 'bitacora, mcp-servers y .orb son carpetas internas de Orb y no se pueden usar como proyectos.',
+  'help.tut.start.l3': 'core es la carpeta interna de Orb (oculta) y no se puede usar como proyecto.',
   'help.tut.start.l4': 'Crea tu primer proyecto desde el selector de proyecto del chat o en Proyectos: nuevo, vincular una carpeta o clonar un repositorio.',
-  'help.tut.start.l5': 'Si marcas varias plataformas, Orb crea un proyecto en cada categoría y una carpeta común para el código compartido.',
+  'help.tut.start.l5': 'Un proyecto multiplataforma vive en multi: un solo repositorio con una carpeta por plataforma y «compartido» para lo común.',
   'help.tut.start.go': 'Ir a Proyectos',
 
   'help.tut.chat.title': 'El chat con {name}',
@@ -76,7 +76,7 @@ export default {
   'help.tut.usage.l1': 'El círculo junto al cuadro de mensaje indica cuánto contexto ocupa la conversación. Cuanto más lleno, más consume cada respuesta; al pasar del 60 %, {name} renueva su contexto en esa misma conversación y retoma lo importante de la bitácora y los últimos mensajes.',
   'help.tut.usage.l2': 'Púlsalo para ver los tokens de contexto y el uso de tus planes: la sesión de 5 horas, la semana y cuándo se reinician.',
   'help.tut.usage.l3': 'Claude y Codex informan de su uso real. Al llegar al límite configurado (92 % por defecto), las tareas nuevas esperan o pasan a otra cuenta.',
-  'help.tut.usage.go': 'Abrir Tareas y usos',
+  'help.tut.usage.go': 'Abrir Agentes y uso',
 
   'help.tut.schedules.title': 'Tareas programadas',
   'help.tut.schedules.l1': 'Repite una tarea automáticamente: cada hora, cada N horas, a diario o ciertos días de la semana.',
@@ -84,23 +84,18 @@ export default {
   'help.tut.schedules.l3': 'Las que propone {name} requieren tu aprobación una vez.',
   'help.tut.schedules.go': 'Ir a Programadas',
 
-  'help.tut.logs.title': 'Bitácoras y Actividad',
+  'help.tut.logs.title': 'Memorias y Actividad',
   'help.tut.logs.l1': 'Las bitácoras son la memoria de {name}: una general y una por proyecto, en la carpeta bitacora. Solo se añaden entradas y los secretos se ocultan.',
   'help.tut.logs.l2': '{name} y el planificador las actualizan al cerrar cada tarea, así cada conversación nueva sabe qué se hizo antes.',
   'help.tut.logs.l3': 'Actividad registra cada acción del tablero (quién, qué y cuándo), con buscador.',
-  'help.tut.logs.go': 'Ir a Bitácoras',
+  'help.tut.logs.go': 'Ir a Memorias',
 
-  'help.tut.pccare.title': 'Cuidar el PC con un bot',
-  'help.tut.pccare.l1': 'Dale a un bot la herramienta «Equipo» (o usa la plantilla «Mantenimiento del PC» al crear un bot): revisa el rendimiento, la red, el antivirus, los programas de inicio y las copias de Orb.',
-  'help.tut.pccare.l2': 'Solo consulta. Cualquier cambio (limpiar temporales, cerrar un programa, analizar con el antivirus) te lo propone en una tarjeta y solo se hace si lo apruebas.',
-  'help.tut.pccare.l3': 'Si una acción necesita permisos de administrador, Windows te los pide en ese momento y solo para esa acción.',
-  'help.tut.pccare.go': 'Ir a los bots',
 
-  'help.tut.phone.title': 'Móvil',
-  'help.tut.phone.l1': 'Activa «Móvil» en Ajustes y escanea el QR con el teléfono: por tu wifi, sin instalar nada, o por Tailscale, también fuera de casa.',
-  'help.tut.phone.l2': 'La conexión está cifrada de extremo a extremo. Cada QR sirve una sola vez y, si quitas el móvil en Ajustes, se desconecta al instante.',
+  'help.tut.phone.title': 'Magic Link',
+  'help.tut.phone.l1': 'En Ajustes › Magic Link, activa el acceso y escanea el QR: con la app de Orb para Android (por tu wifi o por Tailscale, también fuera de casa) o con el navegador del móvil, por Tailscale con HTTPS. Después escribe tu contraseña maestra en el móvil.',
+  'help.tut.phone.l2': 'La conexión está cifrada de extremo a extremo y la contraseña no sale del móvil. Cada QR sirve una sola vez y, si cierras la sesión de un móvil en Magic Link, se desconecta al instante.',
   'help.tut.phone.l3': 'Desde el móvil puedes chatear, aprobar y seguir las tareas. Los ajustes, las cuentas, las instalaciones y el acceso a archivos quedan reservados al PC.',
-  'help.tut.phone.go': 'Abrir Móvil',
+  'help.tut.phone.go': 'Abrir Magic Link',
 
   'help.tut.expert.title': 'God mode',
   'help.tut.expert.l1': 'Actívalo en Ajustes › Avanzado (solo en el PC y en ventanas anchas).',
@@ -120,9 +115,9 @@ export default {
 
   'help.tut.privacy.title': 'Privacidad y seguridad',
   'help.tut.privacy.l1': 'Orb no usa servidores en la nube: todo funciona en tu PC. Solo salen a internet los agentes, con sus propias cuentas, y el acceso del móvil si lo activas.',
-  'help.tut.privacy.l2': 'El inicio de sesión lo gestiona el programa oficial de cada agente. Orb nunca ve tus contraseñas ni guarda claves de API.',
+  'help.tut.privacy.l2': 'El inicio de sesión lo gestiona el programa oficial de cada agente: Orb nunca ve tus contraseñas. Las claves de los conectores se guardan cifradas con tu contraseña maestra y los agentes no las ven.',
   'help.tut.privacy.l3': 'Las acciones de riesgo (push, publicar, descargar y ejecutar, eliminar carpetas, cambios en el sistema) se confirman con Permitir / Permitir siempre / Denegar. Los agentes nunca publican por su cuenta.',
-  'help.tut.privacy.l4': 'Los agentes no pueden acceder a los datos internos de Orb (.orb). Cada uno se identifica con una firma propia, así que no puede suplantar a otro ni cerrar tareas ajenas.',
+  'help.tut.privacy.l4': 'Los agentes no pueden acceder a los datos internos de Orb (core). Cada uno se identifica con una firma propia, así que no puede suplantar a otro ni cerrar tareas ajenas.',
   'help.tut.privacy.l5': 'Lo que devuelven los agentes se trata como datos, nunca como órdenes. Las bitácoras ocultan los secretos.',
 
   // ---- atajos (help.key.<n>.k = teclas, .v = qué hace)
@@ -147,7 +142,7 @@ export default {
   'help.faq.1.q': '¿Necesito una cuenta de pago?',
   'help.faq.1.a': 'Necesitas una cuenta propia de al menos un agente (Claude Code, Codex, Cursor, Gemini CLI…). Orb usa su programa oficial y tu sesión, sin costes adicionales.',
   'help.faq.2.q': '¿Dónde se guardan mis datos?',
-  'help.faq.2.a': 'En la carpeta del asistente (por ejemplo, D:\\Orb): orb.json con los ajustes, los proyectos por categoría, las bitácoras en bitacora y la base de datos y las copias para deshacer en .orb. Nada se sube a la nube.',
+  'help.faq.2.a': 'En la carpeta de Orb (por defecto, C:\\Orb): los proyectos por categoría y, en core (oculta), los ajustes, las bitácoras, la base de datos y las copias para deshacer. Las copias de seguridad van fuera de esa carpeta (en Ajustes › Datos se ve dónde). Nada se sube a la nube.',
   'help.faq.3.q': '¿Qué cambia al activar o desactivar el «Orquestador»?',
   'help.faq.3.a': 'Con «Orquestador», {name} solo coordina: lee el proyecto y reparte instrucciones entre los agentes, que hacen el trabajo. Sin él, hablas directamente con el agente que elijas, que edita y ejecuta en la carpeta del proyecto, pide permiso para lo arriesgado y nunca hace push ni publica.',
   'help.faq.4.q': '¿Por qué una tarea está pendiente de aprobación?',
@@ -165,7 +160,7 @@ export default {
   'help.faq.10.q': '¿Por qué no veo el robot?',
   'help.faq.10.a': 'El tema Profesional no muestra el robot ni animaciones; cámbialo en Ajustes › General. El robot flotante se activa o desactiva en Ajustes › General.',
   'help.faq.11.q': '¿Cómo se actualiza Orb?',
-  'help.faq.11.a': 'La versión instalada busca actualizaciones al abrirse y cada 4 horas. «Descargar e instalar» descarga la nueva versión y «Reiniciar e instalar» la instala. También puedes buscarlas en Ajustes › General. Orb Light (portable) avisa y abre la descarga.',
+  'help.faq.11.a': 'La versión instalada busca actualizaciones al abrirse y cada 4 horas. «Descargar e instalar» descarga la nueva versión y «Reiniciar e instalar» la instala. También puedes buscarlas en Ajustes › General.',
   'help.faq.12.q': 'Una tarea de Cursor falla por «plan sin acceso». ¿Qué hago?',
   'help.faq.12.a': 'El plan gratuito de Cursor no permite usar su agente desde otras aplicaciones. Orb pausa Cursor un día y, si la tarea era para «cualquier agente», la asigna a otro. Con un plan de pago funciona con normalidad.',
   'help.faq.13.q': '¿Cómo envío comentarios o apoyo el proyecto?',
@@ -175,7 +170,9 @@ export default {
   'help.faq.15.q': '¿Dónde están mis conversaciones?',
   'help.faq.15.a': 'En el menú, en «Conversaciones», y dentro de cada proyecto. Pulsa una para volver a ella. «Nuevo chat» empieza otra, con su propio título y proyecto.',
   'help.faq.16.q': '¿Qué es «Iniciar test»?',
-  'help.faq.16.a': 'Una prueba de funcionamiento: {name}, con el Orquestador activado, pide a varios modelos una web de prueba y la abre. Aparece en el chat la primera vez que abres Orb cada día y siempre está en Ajustes › General.',
+  'help.faq.16.a': 'Una prueba de funcionamiento: {name}, con el Orquestador activado, pide a varios modelos una web de prueba y la abre. Aparece en el chat la primera vez que abres Orb cada día y siempre está en Ajustes › Agentes y uso.',
+  'help.faq.17.q': '¿Qué hago si olvido la contraseña maestra?',
+  'help.faq.17.a': 'Pulsa «He olvidado la contraseña» en Ajustes › Datos o en la pantalla que te la pide. Con el código de recuperación de tus copias de seguridad pones otra y conservas las claves de tus conectores. Sin él, puedes empezar de cero: se borran esas claves y tendrás que volver a enlazar tus móviles; tus proyectos y conversaciones no se tocan.',
 
   // ---- tutorial guiado (el robot recorre la app)
   'help.tour.aria': 'Tutorial guiado',
@@ -189,7 +186,7 @@ export default {
   'help.tour.chat.title': 'Escríbeme aquí',
   'help.tour.chat.text': 'Cuéntame qué necesitas: lo convierto en tareas para los agentes, las superviso y te aviso al terminar. Intro envía, Mayús+Intro añade una línea y @ adjunta contexto.',
   'help.tour.project.title': 'Proyecto',
-  'help.tour.project.text': 'Elige en qué proyecto trabajamos o crea uno nuevo. Cada proyecto es una carpeta dentro de windows, ios, android o web.',
+  'help.tour.project.text': 'Elige en qué proyecto trabajamos o crea uno nuevo. Cada proyecto es una carpeta dentro de windows, linux, ios, android, web o multi.',
   'help.tour.brain.title': 'Cerebro',
   'help.tour.brain.text': 'El agente y el modelo que trabajan por mí. Si una elección puede agotar tu uso, te aviso.',
   'help.tour.reasoning.title': 'Razonamiento',
@@ -217,7 +214,7 @@ export default {
   'help.tour.tutorials.title': 'Tutoriales',
   'help.tour.tutorials.text': 'Guías, preguntas frecuentes, atajos de teclado y la opción de repetir este recorrido.',
   'help.tour.settings.title': 'Ajustes',
-  'help.tour.settings.text': 'Perfil e idioma, apariencia, tareas y usos, móvil, herramientas, God mode y actualizaciones.',
+  'help.tour.settings.text': 'General, Magic Link, Agentes y uso, Skills y MCP, Datos, Avanzado y Acerca de.',
   'help.tour.end.title': 'Todo listo',
   'help.tour.end.text': 'Elige un proyecto, cuéntame qué necesitas y empezamos.',
   // 3.2: conversaciones, menú lateral, buscador y globito

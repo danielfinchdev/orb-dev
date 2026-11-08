@@ -22,7 +22,7 @@
 //   { type: 'exit', code, stderr }            the process ended
 // TurnResult: { final, text, isError, stopReason, usage, limit }
 import { spawn } from 'node:child_process';
-import { killTree, cleanEnv, confineArgs } from './common.mjs';
+import { killTree, cleanEnv } from './common.mjs';
 import { tr } from '../core/context.mjs';
 
 export const DECISIONS = ['allow', 'always', 'deny'];
@@ -42,9 +42,16 @@ export class Turn {
   }
 }
 
-// Tokens Orb hands to the agents' MCP servers ({"ORB_BROWSER_TOKEN":"…"} or {"name":"ORB_…TOKEN","value":"…"}) stay out
-// of the session logs.
+// Orb's variables named like a token or a key ({"ORB_…TOKEN":"…"} or {"name":"ORB_…KEY","value":"…"}) stay out of the session logs.
 const LOGGED_SECRET = /(ORB_[A-Z_]*(?:TOKEN|KEY)"(?:\s*,\s*"value")?\s*:\s*")[^"]*/g;
+
+// 3.8: what Orb hands an agent's MCP servers in their env (tickets; a connector's keys if any reach here) never gets to a
+// session log, whatever the variable is called: the log hides those values themselves.
+export function hidingEnvValues(log, servers) {
+  const values = [...new Set(Object.values(servers ?? {}).flatMap((s) => Object.values(s?.env ?? {})).map(String).filter((v) => v.length >= 8))];
+  if (!values.length) return log;
+  return (line) => log(values.reduce((text, v) => text.split(v).join('***'), String(line)));
+}
 
 // JSON-RPC 2.0 over a child's stdin/stdout, one message per line (Codex app-server and ACP agents).
 export class JsonRpcPeer {
@@ -103,8 +110,7 @@ export class JsonRpcPeer {
 // Starts an agent's process for a live session: no shell, clean environment, stderr kept for error messages.
 export function spawnAgent(cmd, args, { cwd, env = {}, log = () => {} } = {}) {
   // 3.5: on Linux and macOS in a process group of its own (detached), so killTree stops its children too.
-  const c = confineArgs(cmd, args); // 3.7: no_new_privs on Orb Server with the admin helper
-  const child = spawn(c.cmd, c.args, { cwd, env: cleanEnv(env), windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
+  const child = spawn(cmd, args, { cwd, env: cleanEnv(env), windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
   let stderr = '';
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', (c) => { stderr = (stderr + c).slice(-8000); log(`stderr: ${c}`); });

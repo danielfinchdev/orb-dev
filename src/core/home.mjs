@@ -3,30 +3,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { spawnSync } from 'node:child_process';
 import { PRODUCT, folderName } from './product.mjs';
 import { APPEARANCE_DEFAULTS } from './appearance.mjs';
 import { translate } from './i18n.mjs';
+import { CORE_DIR, CATEGORIES, DEFAULT_PROTECTED } from './layout.mjs';
+import { migrateWorkspace, protectCore } from './core-folder.mjs';
 
 export const CONFIG_FILE = 'orb.json';
 // 2.3: besides Claude Code, Codex and Cursor, the agents that speak ACP (src/agents/acp.mjs). They show up in Agentes and
 // take work only when their program is installed on this PC.
 export const AGENT_IDS = ['claude', 'codex', 'cursor', 'gemini', 'opencode', 'qwen', 'copilot'];
 export const AGENT_LABELS = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor', gemini: 'Gemini', opencode: 'OpenCode', qwen: 'Qwen Code', copilot: 'GitHub Copilot' };
-
-// 3.5: the role of this Orb (orb.json «role»), chosen by the user in Ajustes › Magic Link on any Orb: «todo» (centre and
-// workshop at once: the default of a PC on its own, also when the key is missing), «centro» (always on: keeps the bots) or
-// «taller» (programs and builds). Orb Server (src/server/host.mjs) starts a new folder as «centro»; whether there is a
-// window or not is a different thing (ctx.headless), never the role.
-export const ROLES = ['todo', 'centro', 'taller'];
-export const hostsBots = (role) => role !== 'taller'; // «centro» and «todo» keep bots for the Orbs linked with them
-export const doesDev = (role) => role !== 'centro'; // «taller» and «todo» program and build
-
-// 3.5: what nobody touches by default: the usual password managers and secret stores (the user edits the list).
-// 3.7 (WS6): and the usual data folders of a Vaultwarden / Bitwarden self-host (vw-data, bwdata) and Orb Server's own
-// sealed vault sign-ins (~/orb-server/data/vault*): only the vault's official API, through Orb Server, reaches a vault.
-export const VAULT_PROTECTED = Object.freeze(['vaultwarden', 'bitwarden', 'vw-data', 'bwdata', 'orb-server/data/vault']);
-export const DEFAULT_PROTECTED = Object.freeze(['vaultwarden', 'bitwarden', 'keepass', 'keepassxc', '.kdbx', '1password', 'lastpass', '.password-store', '.gnupg', '.ssh/id_', 'vw-data', 'bwdata', 'orb-server/data/vault']);
 
 export const DEFAULT_CONFIG = Object.freeze({
   version: 5,
@@ -82,109 +69,115 @@ export const DEFAULT_CONFIG = Object.freeze({
   // queue (instead of waiting for approval), up to maxPerTask per task.
   delegation: { enabled: true, trusted: true, maxPerTask: 4 },
   mcpServers: [],
+  // 3.8.1: the skills of core\skills that are on ([{ name, enabled, source }]; one without an entry is off).
+  skills: [],
   projectRoots: [],
-  // pip: the little window that shows the agent's browser; sounds and motion: the robot's; menuBar: Windows' menu bar
-  // (Archivo, Edición, Ver), hidden unless turned on in Ajustes.
+  // pip: the little window that shows the agent's browser; sounds and motion: the robot's. lockMinutes (3.8.1): Orb's lock
+  // screen after that long without use (src/ui/lib/idle-lock.js).
   // skin, font, codeFont, codeTheme: Ajustes → Apariencia (src/core/appearance.mjs).
-  ui: { companion: true, theme: 'sistema', pip: true, sounds: true, volume: 0.5, motion: 'completa', menuBar: false, ...APPEARANCE_DEFAULTS },
+  ui: { companion: true, theme: 'sistema', pip: true, sounds: true, volume: 0.5, motion: 'completa', lockMinutes: 15, ...APPEARANCE_DEFAULTS },
   // Expert mode (PC only): an IDE-like view with the panels chosen here around the assistant's chat.
   expert: { enabled: false, panels: { explorer: true, git: true, history: true, running: true, usage: true, system: true, activity: true } },
   browser: { enabled: true }, // the agents' browser (pages drawn by the app, driven through the MCP tools)
   // Phone access (off until the user turns it on): through the home Wi-Fi and/or Tailscale (https when the tailnet has it).
   mobile: { enabled: false, port: 3131, wifi: true, tailscale: true },
-  // 3.5: the user's bots (src/engine/bots.mjs). rules: the golden rules every bot gets (Ajustes › Bots); by default only
-  // «nothing is sent, bought or booked without my OK». homeAssistant: the address of the user's Home Assistant (its token
-  // is kept in the database, never here). idleMinutes: a bot's process closes after this long without use.
-  bots: { rules: ['Nada se envía, compra ni reserva sin mi aprobación.'], homeAssistant: { url: '' }, idleMinutes: 10, location: 'local' },
-  // 3.5: where the Orb mode of a phone or a terminal linked with this Orb goes: '' (by itself: here when this Orb programs,
-  // else the linked Orb that does), 'local' or the id of a linked Orb (Ajustes › Magic Link › «Orb para programar»).
-  devTarget: '',
-  // 3.5: «Cosas que nadie toca» (Ajustes › Bots): names, paths or containers that no agent and no bot touches, whatever
-  // the permission (a command, a path, a server action or a bot's memory that names one is denied).
+  // 3.5: «Cosas que nadie toca» (Ajustes › Avanzado): names, paths or containers that no agent touches, whatever the
+  // permission (a command or a path that names one is denied).
   protected: [...DEFAULT_PROTECTED]
 });
 
-// Layout of the assistant's folder: always <chosen folder>\Orb, the same for every user (e.g. D:\Orb):
-//   orb.json                      settings
-//   windows\ ios\ android\ web\   categories: every subfolder of one of them is a project (made by the app or by hand)
-//   android\adb-tools\            Android's adb and fastboot, downloaded by the app (not a project)
-//   bitacora\                     Orb's configuration: the general log and one per project (bitacora\proyectos)
-//   mcp-servers\                  Orb's configuration: the MCP servers; never a project, only managed from Ajustes
-//   .orb\                         the app's own data, hidden: database, secret, task runs, isolated copies, undo checkpoints
-export const INTERNAL_DIR = '.orb';
+// Layout of the workspace (3.8): always <chosen folder>\Orb, the same for every user (C:\Orb by default):
+//   core\                       Orb's own folder, hidden: everything Orb needs to work
+//     orb.json                  settings
+//     datos\                    database, secret, identity; ejecuciones\ task runs; copias\ isolated copies and undo points
+//     bitacora\                 the general log and one per project (bitacora\proyectos)
+//     mcp\                      every MCP server (each subfolder is one; Ajustes › Skills y MCP)
+//     skills\                   every skill (each subfolder, with its SKILL.md); .activas: what the agents load
+//     preparacion\              what an agent makes (a skill or a server) until the user turns it on
+//     herramientas\adb\         what Orb downloads to build and test (Android's adb and fastboot)
+//     secretos\                 the secrets sealed with the master password
+//   windows\ linux\ ios\ android\ web\ multi\   categories: every subfolder of one of them is a project
+// Orb 3.7 kept .orb, orb.json, bitacora, mcp-servers and android\adb-tools at the top (LEGACY). .orb and orb.json are
+// Orb's own data and move into core when the engine starts; the others move only when the user says so in the window
+// (src/core/core-folder.mjs › planWorkspace). A bitacora or adb-tools left at the top is used where it is (paths).
+export { CORE_DIR, CATEGORIES, PLATFORMS, MULTI, SHARED_DIR, DEFAULT_CATEGORY, DEFAULT_PROTECTED } from './layout.mjs';
+export const INTERNAL_DIR = CORE_DIR;
 export const LOGS_DIR = 'bitacora';
-export const MCP_DIR = 'mcp-servers';
+export const MCP_DIR = 'mcp';
+export const SKILLS_DIR = 'skills'; // 3.8.1: every skill (src/core/extensions.mjs)
+export const STAGING_DIR = 'preparacion'; // 3.8.1: what an agent makes before the user turns it on (the only part of core agents write)
 export const OLD_LOGS_DIR = 'bitacoras'; // 2.3.0 and older
-export const BOTS_DIR = 'bots'; // 3.5: the bots' memories (bots\<id>\memoria.md and bots\memoria-global.md)
-export const CATEGORIES = ['windows', 'ios', 'android', 'web'];
-export const DEFAULT_CATEGORY = 'web';
-export const ADB_DIR = 'adb-tools';
+// 3.5–3.7: the bots' memories. 3.8: no bots; an old bots\ folder is never taken for a project (the 3.8 migration archives it).
+export const BOTS_DIR = 'bots';
+// Where Orb 3.7 kept what now lives in core (relative to the workspace).
+export const LEGACY = Object.freeze({ internal: '.orb', config: CONFIG_FILE, logs: 'bitacora', mcp: 'mcp-servers', adb: ['android', 'adb-tools'] });
+const OLD_ADB_DIR = LEGACY.adb[1];
 const lower = (name) => String(name ?? '').toLowerCase();
-// Top-level folders that belong to Orb itself (configuration), never to the user's projects.
-export const isConfigName = (name) => /^\./.test(String(name)) || [LOGS_DIR, MCP_DIR, OLD_LOGS_DIR, BOTS_DIR, 'node_modules', '$recycle.bin', 'system volume information'].includes(lower(name));
+const isDirSync = (p) => { try { return fs.statSync(p).isDirectory(); } catch { return false; } };
+// Top-level folders that belong to Orb itself (or did in older versions), never to the user's projects.
+export const isConfigName = (name) => /^\./.test(String(name)) || [CORE_DIR, LEGACY.logs, LEGACY.mcp, OLD_LOGS_DIR, BOTS_DIR, 'node_modules', '$recycle.bin', 'system volume information'].includes(lower(name));
 export const isCategory = (name) => CATEGORIES.includes(lower(name));
-// Folders inside a category that are never projects (hidden ones, the Android tools).
-export const isReservedInCategory = (category, name) => /^\./.test(String(name)) || ['node_modules', '$recycle.bin'].includes(lower(name)) || (lower(category) === 'android' && lower(name) === ADB_DIR);
+// Folders inside a category that are never projects (hidden ones, 3.7's Android tools until they move into core).
+export const isReservedInCategory = (category, name) => /^\./.test(String(name)) || ['node_modules', '$recycle.bin'].includes(lower(name)) || (lower(category) === 'android' && lower(name) === OLD_ADB_DIR);
 // Names a project can never take (they would read as one of Orb's own folders).
-export const isReservedName = (name) => isConfigName(name) || lower(name) === ADB_DIR;
+export const isReservedName = (name) => isConfigName(name) || lower(name) === OLD_ADB_DIR;
 
-// 3.7 (Orb Server): the server's own folder (~/orb-server, ORB_HOME) has another layout, made for a machine without
-// projects: app/<version> + current (the program), bots/, browser/<person>/, data/ (what .orb is on a PC: database,
-// secret, links, copies), engines/ (Claude, Codex, Chromium, downloaded on demand), logs/ (the runs and the bitácora).
-//   paths(home)                 the layout found on disk (a folder with data/datos and no .orb is a server's)
-//   paths(home, { layout })     'pc' or 'server' on purpose (createHome of a new server folder)
-export const SERVER_DIRS = Object.freeze({ app: 'app', bots: BOTS_DIR, browser: 'browser', data: 'data', engines: 'engines', logs: 'logs' });
-const layouts = new Map(); // home -> 'pc' | 'server', looked at once per folder (forgetLayout after a migration)
-export function layoutOf(home) {
-  const key = path.resolve(String(home ?? ''));
-  if (layouts.has(key)) return layouts.get(key);
-  const server = !fs.existsSync(path.join(key, INTERNAL_DIR)) && fs.existsSync(path.join(key, SERVER_DIRS.data, 'datos'));
-  const found = server ? 'server' : 'pc';
-  if (server || fs.existsSync(path.join(key, INTERNAL_DIR))) layouts.set(key, found); // a folder not made yet is looked at again
-  return found;
-}
-export const forgetLayout = (home) => { if (home) layouts.delete(path.resolve(home)); else layouts.clear(); };
-export const isServerLayout = (home) => layoutOf(home) === 'server';
-
-export function paths(home, { layout = null } = {}) {
-  if ((layout ?? layoutOf(home)) === 'server') {
-    const internal = path.join(home, SERVER_DIRS.data);
-    const data = path.join(internal, 'datos');
-    const runs = path.join(home, SERVER_DIRS.logs);
-    const logs = path.join(runs, LOGS_DIR);
-    const copies = path.join(internal, 'copias');
-    return {
-      layout: 'server', home, internal, config: path.join(home, CONFIG_FILE), data, db: path.join(data, 'orb.db'), key: path.join(data, 'clave.bin'),
-      logs, generalLog: path.join(logs, 'GENERAL.md'), projectLogs: path.join(logs, 'proyectos'),
-      mcp: path.join(internal, MCP_DIR), bots: path.join(home, SERVER_DIRS.bots), adb: path.join(home, SERVER_DIRS.engines, ADB_DIR),
-      // No projects on a server: no categories are made (the API that would use them is not there either).
-      projects: home, categories: {},
-      runs, copies, worktrees: path.join(copies, 'aisladas'), checkpoints: path.join(copies, 'fotos'),
-      app: path.join(home, SERVER_DIRS.app), browser: path.join(home, SERVER_DIRS.browser), engines: path.join(home, SERVER_DIRS.engines)
-    };
-  }
-  const internal = path.join(home, INTERNAL_DIR);
-  const data = path.join(internal, 'datos');
-  const logs = path.join(home, LOGS_DIR);
-  const copies = path.join(internal, 'copias');
+// What the user decided in «Ordenar carpetas» about the logs at the top (core\carpetas.json, core-folder.mjs).
+const logsDecision = (core) => { try { return JSON.parse(fs.readFileSync(path.join(core, 'carpetas.json'), 'utf8'))?.decided?.bitacora ?? null; } catch { return null; } };
+export function paths(home) {
+  const core = path.join(home, CORE_DIR);
+  const data = path.join(core, 'datos');
+  // A log folder or Android tools left at the top (kept by the user, or not decided about yet) are used there.
+  // 3.8.1: the logs at the top are the general log only when the user kept them there, or before deciding while core has
+  // no general log of its own (a 3.7 workspace). Once they moved into core (or a workspace that always had them there),
+  // a bitacora that shows up at the top again (a tool outside Orb writing to the old path) never takes core's place
+  // («Ordenar carpetas» offers to merge it into core).
+  const keptLogs = path.join(home, LEGACY.logs);
+  const keptAdb = path.join(home, ...LEGACY.adb);
+  const coreLogs = path.join(core, LOGS_DIR);
+  const decided = isDirSync(keptLogs) ? logsDecision(core) : 'move';
+  const logs = decided === 'keep' || (decided === null && !fs.existsSync(path.join(coreLogs, 'GENERAL.md'))) ? keptLogs : coreLogs;
+  const copies = path.join(core, 'copias');
+  const tools = path.join(core, 'herramientas');
   return {
-    layout: 'pc', home, internal, config: path.join(home, CONFIG_FILE), data, db: path.join(data, 'orb.db'), key: path.join(data, 'clave.bin'),
+    home, core, internal: core, config: path.join(core, CONFIG_FILE), data, db: path.join(data, 'orb.db'), key: path.join(data, 'clave.bin'),
     logs, generalLog: path.join(logs, 'GENERAL.md'), projectLogs: path.join(logs, 'proyectos'),
-    mcp: path.join(home, MCP_DIR), bots: path.join(home, BOTS_DIR), adb: path.join(home, 'android', ADB_DIR),
+    mcp: path.join(core, MCP_DIR), skills: path.join(core, SKILLS_DIR), staging: path.join(core, STAGING_DIR), tools, adb: isDirSync(keptAdb) ? keptAdb : path.join(tools, 'adb'), secrets: path.join(core, 'secretos'),
     projects: home, categories: Object.fromEntries(CATEGORIES.map((c) => [c, path.join(home, c)])),
-    runs: path.join(internal, 'ejecuciones'),
+    runs: path.join(core, 'ejecuciones'),
     copies, worktrees: path.join(copies, 'aisladas'), checkpoints: path.join(copies, 'fotos')
   };
 }
 
+// A workspace's name for what Orb keeps about it outside it (its backups, a copy of its sealed secret): the folder's name
+// and a short hash of its whole path in any case (C:\Orb → orb-<8 hex>). Two workspaces never share it, and a long path
+// does not make a long name.
+export const homeKey = (home) => {
+  const full = path.resolve(home);
+  const name = path.basename(full).toLowerCase().replace(/[^\w.-]+/g, '_').slice(0, 40) || 'orb';
+  return `${name}-${crypto.createHash('sha256').update(full.toLowerCase()).digest('hex').slice(0, 8)}`;
+};
+// The name the first 3.8 builds used (C:\Orb → C-Orb): what was kept under it is taken over once (backup.mjs, desktop-home.mjs).
+export const oldHomeKey = (home) => path.resolve(home).replace(/[:\\/]+/g, '-').replace(/^-+|-+$/g, '') || 'orb';
+
 // Category of a project folder inside Orb's folder: <home>\<category>\<project>[\…]. null for anything else (outside,
-// a category folder itself, Orb's configuration folders, the Android tools).
+// a category folder itself, Orb's configuration folders, 3.7's Android tools). A multiplatform project is the folder
+// under multi (multi\<project>\android is part of <project>).
 export function categoryOf(home, folder) {
   const rel = path.relative(home, folder);
   if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return null;
   const parts = rel.split(/[\\/]/);
   return parts.length >= 2 && isCategory(parts[0]) && !isReservedInCategory(parts[0], parts[1]) ? lower(parts[0]) : null;
 }
+// A folder as the project list compares them (real path, any case).
+export const folderKey = (folder) => { try { return fs.realpathSync(folder).toLowerCase(); } catch { return path.resolve(folder).toLowerCase(); } };
+// 3.8: the folders of other users' projects of 3.7 that stay in the categories, which Orb no longer lists (JSON list of
+// folderKey; the 3.8 migration writes it, adding one of them by hand takes it out).
+export const IGNORED_PROJECTS = 'projects_ignored';
+// 3.8.1: the projects the user finished (src/core/project-close.mjs): their folders stay, Orb no longer lists them.
+export const FINISHED_PROJECTS = 'projects_finished';
+// 3.8.1: the projects being deleted (between the engine's check and the end of the Recycle Bin: project-close.mjs).
+export const DELETING_PROJECTS = 'projects_deleting';
 
 const isObject = (v) => v && typeof v === 'object' && !Array.isArray(v);
 // Deep merge where arrays and scalars of `over` replace those of `base`.
@@ -197,8 +190,10 @@ export function merge(base, over) {
 
 export { folderName };
 
+// A workspace: core\orb.json, or orb.json at the top (Orb 3.7, moved into core when the engine starts).
 export function isHome(dir) {
-  try { return fs.statSync(path.join(dir, CONFIG_FILE)).isFile(); } catch { return false; }
+  const file = (f) => { try { return fs.statSync(f).isFile(); } catch { return false; } };
+  return file(path.join(dir, CORE_DIR, CONFIG_FILE)) || file(path.join(dir, LEGACY.config));
 }
 
 // The folder a chosen base turns into: <base>\Orb whatever the assistant is called (or the base itself when it already is
@@ -208,45 +203,48 @@ export function homeFor(base) {
   return path.join(base, PRODUCT.folder);
 }
 
-// First run: <base>\Orb with its folders, config, secret and the general log. An existing home is reused as is.
-export function createHome(base, { assistantName = PRODUCT.assistant, userName = '', language = 'es', layout = 'pc' } = {}) {
+// First run: <base>\Orb with core, the categories, config, secret and the general log. An existing workspace is reused as
+// it is; a folder called Orb with other things in it (projects, notes, the folders of an older Orb) keeps them: nothing
+// in it is overwritten or moved. Only Orb 3.7's own data (.orb, orb.json) moves into core; its logs, MCP servers and
+// Android tools stay where they are until the user decides in the window (src/core/core-folder.mjs › planWorkspace).
+export function createHome(base, { assistantName = PRODUCT.assistant, userName = '', language = 'es' } = {}) {
   const T = (key, vars) => translate(language, key, vars);
   if (!base || !path.isAbsolute(base)) throw new Error(T('msg.home.absolute'));
   let stat; try { stat = fs.statSync(base); } catch { throw new Error(T('msg.home.noFolder', { base })); }
   if (!stat.isDirectory()) throw new Error(T('msg.home.notFolder', { base }));
   // A drive root is fine as a base: the home is always a subfolder of it.
-  // 3.7: a server's folder is the one given (~/orb-server), never <base>/Orb.
-  const home = layout === 'server' ? base : homeFor(base);
+  const home = homeFor(base);
   if (isHome(home)) { ensureLayout(home); return { home, created: false }; }
-  // (a server's folder may already hold the program the installer unpacked in app/, and the rest of its own folders)
-  const own = (n) => layout === 'server' && Object.values(SERVER_DIRS).includes(n);
-  if (fs.existsSync(home) && fs.readdirSync(home).filter((n) => !own(n)).length) throw new Error(T('msg.home.notEmpty', { home }));
-  const p = paths(home, { layout });
-  for (const dir of [p.data, p.runs, p.worktrees, p.checkpoints, ...(layout === 'server' ? [p.app, p.bots, p.browser, p.engines] : [])]) fs.mkdirSync(dir, { recursive: true });
-  forgetLayout(home);
+  migrateWorkspace(home);
+  const p = paths(home);
+  for (const dir of [p.data, p.runs, p.worktrees, p.checkpoints]) fs.mkdirSync(dir, { recursive: true });
   const config = merge(DEFAULT_CONFIG, { assistantName: String(assistantName || PRODUCT.assistant).trim().slice(0, 40) || PRODUCT.assistant, userName: String(userName ?? '').trim().slice(0, 40), language: language === 'en' ? 'en' : 'es' });
   writeJson(p.config, config);
-  fs.writeFileSync(p.key, crypto.randomBytes(32), { mode: 0o600 });
-  hideOnWindows(p.internal);
+  if (!fs.existsSync(p.key)) fs.writeFileSync(p.key, crypto.randomBytes(32), { mode: 0o600 });
   ensureLayout(home, config);
   return { home, created: true };
 }
 
-// The fixed folders (categories, bitacora, mcp-servers) exist in every Orb folder. Folders made by 2.3.0 and older are put
-// in order: their "bitacoras" moves into "bitacora" (one log folder only), dropping only the empty logs 2.3.0 wrote for the
-// category and configuration folders it took for projects. Nothing with content is deleted.
-export function ensureLayout(home, config = null) {
+// Every start: Orb 3.7's own data moves into core (src/core/core-folder.mjs), and the fixed folders (core's, the six
+// categories) exist. Folders made by 2.3.0 and older are put in order: their "bitacoras" moves into the log
+// folder, dropping only the empty logs 2.3.0 wrote for the category and configuration folders it took for projects.
+// Nothing with content is deleted. core is hidden again (src/core/core-folder.mjs › protectCore; wait false: without
+// waiting for it, as the engine starts: the promise of whether it worked is returned).
+export function ensureLayout(home, config = null, { wait = true } = {}) {
+  migrateWorkspace(home);
   const p = paths(home);
-  for (const dir of [p.logs, p.projectLogs, p.mcp, ...Object.values(p.categories)]) fs.mkdirSync(dir, { recursive: true });
+  for (const dir of [p.data, p.runs, p.logs, p.projectLogs, p.mcp, p.skills, p.tools, p.secrets, ...Object.values(p.categories)]) fs.mkdirSync(dir, { recursive: true });
   const old = path.join(home, OLD_LOGS_DIR);
   if (fs.existsSync(old)) { try { moveLogs(old, p.logs); } catch { /* left as it is; tried again on the next start */ } }
   if (!fs.existsSync(p.generalLog)) {
     let c = config; if (!c) { try { c = loadConfig(home); } catch { c = DEFAULT_CONFIG; } }
     fs.writeFileSync(p.generalLog, generalLogHeader(c));
   }
+  return protectCore(home, { wait });
 }
 
-function moveLogs(from, to) {
+// Moves a log folder into another: a file that exists in both keeps the new one and gets the old entries at its end.
+export function moveLogs(from, to) {
   for (const e of fs.readdirSync(from, { withFileTypes: true })) {
     const src = path.join(from, e.name); const dst = path.join(to, e.name);
     if (e.isDirectory()) { fs.mkdirSync(dst, { recursive: true }); moveLogs(src, dst); continue; }
@@ -262,12 +260,6 @@ function moveLogs(from, to) {
     }
   }
   try { fs.rmdirSync(from); } catch { /* something could not be merged: kept */ }
-}
-
-// The app's internal folder is hidden in the Explorer (only on Windows; elsewhere the leading dot already hides it).
-export function hideOnWindows(dir) {
-  if (process.platform !== 'win32') return;
-  try { spawnSync('attrib', ['+h', dir], { windowsHide: true, timeout: 5000 }); } catch { /* cosmetic */ }
 }
 
 // The headers of the logs, in the language of the settings.
@@ -295,6 +287,10 @@ export function relabelEmptyLogs(home, before, after) {
 export function loadConfig(home) {
   let stored = {};
   try { stored = JSON.parse(fs.readFileSync(paths(home).config, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw new Error(`${CONFIG_FILE} no es válido: ${error.message}`); }
+  return configFrom(stored);
+}
+// The configuration a stored orb.json gives: the defaults filled in and the settings of older versions updated.
+export function configFrom(stored) {
   const config = merge(DEFAULT_CONFIG, stored);
   // 2.3 balance: the old fixed caps (6 tasks, 2 heavy per window; 20 turns) were too tight. Values the user never changed
   // move to the new ones; anything the user set by hand stays.
@@ -313,17 +309,14 @@ export function loadConfig(home) {
     if (config.assistantName.trim() === 'Orb·e') config.assistantName = PRODUCT.assistant;
     config.version = 5;
   }
-  // 3.5: an Orb without a role (every folder before 3.5) is «todo» (context.mjs › role()): centre and workshop at once,
-  // nothing to set up; Orb Server writes «centro» in a folder without one (src/server/host.mjs). A value Orb does not know
-  // is dropped (so it is «todo» too).
-  if (config.role !== undefined && !ROLES.includes(config.role)) delete config.role;
-  // 3.7: «Monitoreo del equipo» and Opti Bot are gone (what they did is a bot's «Equipo» tools now): their settings go,
-  // except the one that is not theirs, sharing with Open Control Edge (monitor.shareWithOce → oce.share). The file loses
-  // the old key at the next save (or at once, migrateRetiredConfig in engine/retired.mjs).
-  if (config.monitor !== undefined) {
-    if (config.monitor?.shareWithOce === false && config.oce?.share === undefined) config.oce = { ...(config.oce ?? {}), share: false };
-    delete config.monitor;
-  }
+  // 3.8: Orbs no longer link with each other: this Orb's role (todo / centro / taller) and «Orb para programar» go.
+  delete config.role; delete config.devTarget;
+  // 3.7: «Monitoreo del equipo» and Opti Bot are gone. 3.8: the bots, Open Control Edge and the «Orb | Bots» mode too.
+  // Their settings go (the file loses them at the next save).
+  delete config.monitor; delete config.bots; delete config.oce;
+  if (config.ui) { delete config.ui.mode; delete config.ui.menuBar; } // menuBar: Windows' menu bar is always hidden now
+  // 3.8: the phone never types the master password on a page without encryption: «mobile.lanHttp» is gone.
+  if (config.mobile) delete config.mobile.lanHttp;
   // Folders made by older versions: agents added later get their default account and their place in the order.
   for (const a of AGENT_IDS) {
     if (!config.accounts.some((x) => x.agent === a)) config.accounts.push({ id: a, agent: a, label: AGENT_LABELS[a], home: '', enabled: true });
@@ -332,18 +325,20 @@ export function loadConfig(home) {
   return config;
 }
 
-// Atomic write: a crash in the middle never leaves a half-written file.
+// Atomic write: a crash in the middle never leaves a half-written file, and a failed one never leaves its temporary file.
 export function writeJson(file, value) {
   const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`);
-  fs.renameSync(tmp, file);
+  try {
+    fs.writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`);
+    fs.renameSync(tmp, file);
+  } catch (error) { try { fs.rmSync(tmp, { force: true }); } catch { /* best effort */ } throw error; }
 }
 
 export function readKey(home) {
   const file = paths(home).key;
   try {
     const key = fs.readFileSync(file);
-    // 3.5: on Linux (Orb Server) this file is the secret itself: readable by its owner only, also when copied from elsewhere.
+    // 3.5: on Linux this file is the secret itself: readable by its owner only, also when copied from elsewhere.
     if (key.length >= 32) { if (process.platform !== 'win32') { try { if ((fs.statSync(file).mode & 0o077) !== 0) fs.chmodSync(file, 0o600); } catch { /* best effort */ } } return key; }
   } catch { /* created below */ }
   const key = crypto.randomBytes(32);

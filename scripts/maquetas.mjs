@@ -9,7 +9,6 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'test-results', 'maquetas'); fs.mkdirSync(OUT, { recursive: true });
 const page0 = pathToFileURL(path.join(ROOT, 'docs', 'diseno', 'maquetas', 'mensajeria.html')).href;
-const avatars = pathToFileURL(path.join(ROOT, 'docs', 'diseno', 'maquetas', 'avatares.html')).href;
 const exe = ['/opt/pw-browsers/chromium/chrome-linux/chrome'].find((f) => fs.existsSync(f));
 const browser = await chromium.launch(exe ? { executablePath: exe, args: ['--no-sandbox'] } : { channel: process.platform === 'win32' ? 'msedge' : 'chrome', headless: true });
 const SIZE = { desktop: { width: 1440, height: 900, deviceScaleFactor: 1 }, phone: { width: 390, height: 844, deviceScaleFactor: 2 }, glass: { width: 390, height: 844, deviceScaleFactor: 2 } };
@@ -20,8 +19,8 @@ for (const d of ['desktop', 'phone', 'glass']) {
   const page = await ctx.newPage();
   const cdp = await ctx.newCDPSession(page);
   await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'no-preference' }] });
-  for (const z of ['bots', 'orb']) {
-    const screens = d === 'desktop' ? ['chat', 'info', ...(z === 'bots' ? ['create'] : [])] : ['list', 'chat', 'info', ...(z === 'bots' ? ['create'] : [])];
+  for (const z of ['orb']) {
+    const screens = d === 'desktop' ? ['chat', 'info'] : ['list', 'chat', 'info'];
     for (const s of screens) for (const t of ['light', 'dark']) {
       await page.goto(`${page0}?d=${d}&z=${z}&s=${s}&t=${t}`);
       await page.evaluate(() => document.fonts.ready);
@@ -33,7 +32,7 @@ for (const d of ['desktop', 'phone', 'glass']) {
   }
   await ctx.close();
 }
-// The avatar family: the sheet (shapes × colours) and the frames of each state's animation.
+// The orchestrator's icons.
 {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, locale: 'es-ES' });
   const page = await ctx.newPage();
@@ -42,13 +41,6 @@ for (const d of ['desktop', 'phone', 'glass']) {
     await page.goto(`${orch}?t=${t}`);
     await page.evaluate(() => document.fonts.ready);
     const file = path.join(OUT, `orquestador-iconos-${t}.png`);
-    await page.screenshot({ path: file, fullPage: true });
-    shots.push(file);
-  }
-  for (const v of ['sheet', 'states']) for (const t of ['light', 'dark']) {
-    await page.goto(`${avatars}?v=${v}&t=${t}`);
-    await page.evaluate(() => document.fonts.ready);
-    const file = path.join(OUT, `avatares-${v}-${t}.png`);
     await page.screenshot({ path: file, fullPage: true });
     shots.push(file);
   }

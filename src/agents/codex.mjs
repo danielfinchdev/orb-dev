@@ -7,23 +7,17 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { IS_WIN, firstFile, inPath, npmPrefixes, appDataDirs, userHome, clip, discoverDir } from './common.mjs';
-import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree } from './live.mjs';
+import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree, hidingEnvValues } from './live.mjs';
 import { decide } from '../core/guard.mjs';
 import { tr } from '../core/context.mjs';
+
+// Who connects to the app-server (def. 11: the product's version, read from Orb's own package.json).
+const CLIENT = { name: 'orb_dev', title: 'Orb', version: (() => { try { return JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version; } catch { return '0.0.0'; } })() };
 
 export const id = 'codex';
 export const label = 'Codex';
 export const kind = 'app-server';
-// 3.6 (S1): a bot with Codex as its brain runs with no shell at all and no local file viewer, so a mail or a web that
-// tells it to read the user's keys has nothing to read them with (its only tools are the bot's MCP ones; its folder is its
-// working directory, read-only). The keys, as Codex's configuration reference documents them
-// (https://learn.chatgpt.com/docs/config-file/config-reference: «features.shell_tool: Enable command execution tools»,
-// «features.unified_exec», «features.view_image», «web_search: disabled | cached | indexed | live»), passed with -c.
-// An older Codex that ignored them is caught at its first command (createLive › botConfine.onBreakout) and refused.
-export const BOT_CONFINE = ['features.shell_tool=false', 'features.unified_exec=false', 'features.view_image=false'];
-export const BOT_CONFINE_DOC = 'https://learn.chatgpt.com/docs/config-file/config-reference';
-export const botConfineArgs = ({ web = false } = {}) => [...BOT_CONFINE, `web_search="${web ? 'live' : 'disabled'}"`].flatMap((kv) => ['-c', kv]);
-export const caps = { images: true, steer: true, fork: true, approvals: true, models: true, context: true, compact: true, botConfinement: { keys: BOT_CONFINE, doc: BOT_CONFINE_DOC } };
+export const caps = { images: true, steer: true, fork: true, approvals: true, models: true, context: true, compact: true };
 
 export function detect(cfg = {}) {
   const vendor = (dir) => ['x86_64-pc-windows-msvc', 'aarch64-pc-windows-msvc'].flatMap((triple) => ['codex-win32-x64', 'codex-win32-arm64'].map((p) =>
@@ -31,9 +25,7 @@ export function detect(cfg = {}) {
   // The Codex app also leaves its CLI in <Local>\OpenAI\Codex\bin\<build>\codex.exe (the newest build wins).
   const appBuilds = (local) => { const base = path.join(local, 'OpenAI', 'Codex', 'bin'); try { return fs.readdirSync(base).map((b) => path.join(base, b, 'codex.exe')).filter((f) => firstFile([f])).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs); } catch { return []; } };
   // 3.5: on Linux and macOS Orb installs it for the user only (npm --prefix ~/.local): its bin folder may not be in PATH.
-  // 3.7: Orb Server's own Codex (src/server/engines.mjs), in its scope and with no_new_privs, first.
-  const engine = process.env.ORB_ENGINES && !IS_WIN ? [path.join(process.env.ORB_ENGINES, 'codex', 'run')] : [];
-  const candidates = [cfg.path, ...engine, ...inPath('codex'), ...(IS_WIN ? [...npmPrefixes('codex').flatMap(vendor), ...appDataDirs().flatMap((d) => appBuilds(d.local))] : [path.join(userHome(), '.local', 'bin', 'codex')])];
+  const candidates = [cfg.path, ...inPath('codex'), ...(IS_WIN ? [...npmPrefixes('codex').flatMap(vendor), ...appDataDirs().flatMap((d) => appBuilds(d.local))] : [path.join(userHome(), '.local', 'bin', 'codex')])];
   const cmd = firstFile(candidates);
   return cmd ? { cmd, pre: [] } : null;
 }
@@ -52,7 +44,7 @@ export async function accountInfo(exe, dir, { timeoutMs = 20000 } = {}) {
   try {
     child = spawnAgent(exe.cmd, [...exe.pre, 'app-server'], { cwd: os.tmpdir(), env: { CODEX_HOME: dir }, log: () => {} });
     peer = new JsonRpcPeer(child, { onNotification: () => {}, onRequest: async () => ({}), log: () => {} });
-    await peer.request('initialize', { clientInfo: { name: 'orb_dev', title: 'Orb', version: '2.7.0' }, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs });
+    await peer.request('initialize', { clientInfo: CLIENT, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs });
     peer.notify('initialized', {});
     const r = await peer.request('account/read', { refreshToken: false }, { timeoutMs });
     const acc = r?.account; if (!acc) return null;
@@ -67,24 +59,32 @@ export async function accountInfo(exe, dir, { timeoutMs = 20000 } = {}) {
 
 const toml = (value) => JSON.stringify(value); // JSON strings and arrays are valid TOML values
 
-// Secrets (the coordinator's key, the agents' tokens) never go on the command line, which any process of the user can
-// read: they ride in Codex's own environment and Codex forwards them by name to the MCP server (env_vars).
-const SECRET = /KEY|TOKEN|SECRET/i;
+// 3.8: no value of an MCP server's env goes on the command line, which any process of the user can read: each one rides
+// in Codex's own environment under a name of its own (ORB_MCP_<server>_<name>, so two connectors' API_KEY never clash) and
+// the server gets it by that name (env_vars); the config names only what is plainly not secret (PLAIN). Orb's servers
+// read their ticket from the variable their --ticket-env names; connectors start through launch.mjs, which gets their
+// real keys from the engine. Codex's own commands never see any of it (shell_environment_policy, see start()).
+const PLAIN = new Set(['ORB_AUTH_PIPE']);
+const envName = (server, key) => `ORB_MCP_${server}_${key}`.replace(/[^A-Za-z0-9_]/g, '_');
 export function mcpSecrets(servers) {
-  return Object.fromEntries(Object.values(servers ?? {}).flatMap((s) => Object.entries(s.env ?? {}).filter(([k]) => SECRET.test(k)).map(([k, v]) => [k, String(v)])));
+  return Object.fromEntries(Object.entries(servers ?? {}).flatMap(([name, s]) => Object.entries(s.env ?? {}).filter(([k]) => !PLAIN.has(k)).map(([k, v]) => [envName(name, k), String(v)])));
 }
 
 // MCP servers through -c overrides (no config file is written in the user's Codex folder).
 export function mcpArgs(servers) {
   const args = [];
   for (const [name, s] of Object.entries(servers ?? {})) {
-    args.push('-c', `mcp_servers.${name}.command=${toml(s.command)}`, '-c', `mcp_servers.${name}.args=${toml(s.args ?? [])}`);
-    const env = Object.entries(s.env ?? {}).filter(([k]) => !SECRET.test(k));
-    const secret = Object.keys(s.env ?? {}).filter((k) => SECRET.test(k));
+    const secret = Object.keys(s.env ?? {}).filter((k) => !PLAIN.has(k));
+    // The secret's own name in the server's env is the renamed one: the ticket's --ticket-env follows it.
+    const rename = (a) => { const m = /^--ticket-env=(.+)$/.exec(a); return m && secret.includes(m[1]) ? `--ticket-env=${envName(name, m[1])}` : a; };
+    args.push('-c', `mcp_servers.${name}.command=${toml(s.command)}`, '-c', `mcp_servers.${name}.args=${toml((s.args ?? []).map(rename))}`);
+    const env = Object.entries(s.env ?? {}).filter(([k]) => PLAIN.has(k));
     if (env.length) args.push('-c', `mcp_servers.${name}.env={${env.map(([k, v]) => `${k}=${toml(String(v))}`).join(', ')}}`);
-    if (secret.length) args.push('-c', `mcp_servers.${name}.env_vars=${toml(secret)}`);
+    if (secret.length) args.push('-c', `mcp_servers.${name}.env_vars=${toml(secret.map((k) => envName(name, k)))}`);
     if (name === 'orb') args.push('-c', `mcp_servers.${name}.default_tools_approval_mode="approve"`, '-c', `mcp_servers.${name}.tool_timeout_sec=960`);
   }
+  // Orb's variables (tickets, the pipe) stay out of the commands Codex runs.
+  if (Object.keys(servers ?? {}).length) args.push('-c', 'shell_environment_policy.exclude=["ORB_*"]');
   return args;
 }
 
@@ -127,7 +127,7 @@ export async function discoverModels(exe, cfg = {}, env = {}) {
   child.on('error', () => peer.close());
   child.on('exit', () => peer.close());
   try {
-    await peer.request('initialize', { clientInfo: { name: 'orb_dev', title: 'Orb', version: '2.6.0' }, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs: 30000 });
+    await peer.request('initialize', { clientInfo: CLIENT, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs: 30000 });
     peer.notify('initialized', {});
     const list = []; let cursor = null;
     for (let page = 0; page < 5; page++) {
@@ -152,35 +152,20 @@ export function turnUsage(u, turn) {
   return { inputTokens: total.inputTokens == null ? null : spent('inputTokens') - cached, outputTokens: total.outputTokens == null ? null : spent('outputTokens'), cacheReadTokens: total.cachedInputTokens == null ? null : cached };
 }
 
-// options: exe, cwd, model, reasoning, permission, resumeId, forkSession, mcpServers, env, internalDir, log, onEvent
+// options: exe, cwd, model, reasoning, permission, resumeId, forkSession, mcpServers, env, internalDir, log, onEvent, skills
+// 3.8.1: Codex loads the skills of core by itself (an extra root); agents without this get them in their brief.
+export const nativeSkills = true;
 export function createLive(o) {
   const onEvent = o.onEvent ?? (() => {});
-  const log = o.log ?? (() => {});
+  const log = hidingEnvValues(o.log ?? (() => {}), o.mcpServers);
   const approvals = new Approvals(onEvent);
   let permission = o.permission ?? 'editar';
   let model = o.model || null;
   let child = null; let peer = null; let threadId = null; let turn = null; let turnId = null; let started = null; let closed = false; let compacting = null;
   const live = { sessionId: o.resumeId ?? null, caps, pid: null, get busy() { return Boolean(turn && !turn.done); } };
 
-  // 3.6 (S1): a confined bot (o.botConfine) must never run a command, change a file or use a tool it was not given: if
-  // Codex does (an older version that ignored the settings), the turn stops, the session closes and the engine is told.
-  const confine = o.botConfine || null;
-  const FORBIDDEN = new Set(['commandExecution', 'fileChange', 'dynamicToolCall', 'collabAgentToolCall', 'imageGeneration']);
-  const breakout = (why) => {
-    if (!confine || closed) return;
-    try { confine.onBreakout?.(why); } catch { /* the engine's business */ }
-    Promise.resolve(live.interrupt()).catch(() => {}).finally(() => live.close());
-  };
-  const confinedItem = (item) => {
-    if (!confine || !item) return false;
-    if (FORBIDDEN.has(item.type)) return true;
-    if (item.type === 'mcpToolCall' && !(confine.servers ?? []).includes(item.server)) return true;
-    if (item.type === 'webSearch' && !confine.web) return true;
-    return false;
-  };
   const guardAsk = async ({ itemId, command, paths = [], tool, kind }) => {
-    if (confine && (kind === 'execute' || kind === 'edit')) { breakout(kind); return 'deny'; }
-    const verdict = decide({ permission, tool, kind, command, paths, internalDir: o.internalDir, lang: o.lang, bot: o.bot || false, confine: o.confine || null });
+    const verdict = decide({ permission, tool, kind, command, paths, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang });
     if (verdict.decision !== 'ask') return verdict.decision;
     return approvals.ask({ id: itemId, tool, title: command || paths.join(', ') || tool, reason: verdict.reason, input: clip(command || paths.join(', '), 400) });
   };
@@ -203,7 +188,6 @@ export function createLive(o) {
       return { decision: d === 'deny' ? { denied: { rejection: 'El usuario no lo ha permitido.' } } : 'approved' };
     }
     if (method === 'item/permissions/requestApproval') {
-      if (confine) { breakout('permissions'); return { permissions: {}, scope: 'turn' }; }
       // Asking for more than the sandbox gives (another folder, network…): the user decides.
       const d = await approvals.ask({ id: p.itemId, tool: tr('sys.agents.permissions'), title: p.reason || tr('sys.agents.morePermissions', { name: 'Codex' }), reason: tr('sys.agents.morePermissionsWhy'), input: clip(p.permissions, 400) });
       return { permissions: d === 'deny' ? {} : p.permissions, scope: d === 'always' ? 'session' : 'turn' };
@@ -217,13 +201,23 @@ export function createLive(o) {
     if (p.threadId && threadId && p.threadId !== threadId) return; // a subagent's own thread: its steps arrive as items of ours
     if (method === 'item/agentMessage/delta') { onEvent({ type: 'delta', text: p.delta }); return; }
     if (method === 'item/started') {
-      if (confinedItem(p.item)) { breakout(p.item.type); return; }
       const tool = ITEM_TOOL(p.item); if (tool) onEvent({ type: 'item', role: 'tool', kind: 'tool', body: { id: p.item.id, ...tool } });
       return;
     }
-    // 3.6: the end of a compaction (thread/compact/start): the item of the summary or the thread's own notice.
+    // 3.6: the end of a compaction (thread/compact/start): the item of the summary or the thread's own notice. 3.8.1: the
+    // compaction runs as a turn of its own; when the server says so (turn/started), it ends with that turn's
+    // turn/completed, which could otherwise arrive after the next turn/start and end that turn empty.
+    if (method === 'turn/started' && compacting && !compacting.done && !compacting.turnId) { compacting.turnId = p.turn?.id ?? null; return; }
     if ((method === 'thread/compacted' || (method === 'item/completed' && p.item?.type === 'contextCompaction')) && compacting && !compacting.done) {
-      onEvent({ type: 'compacted', before: null, after: null }); compacting.finish({}); return;
+      if (!compacting.compacted) onEvent({ type: 'compacted', before: null, after: null });
+      compacting.compacted = true;
+      if (!compacting.turnId) compacting.finish({});
+      return;
+    }
+    if (method === 'turn/completed' && compacting && !compacting.done && compacting.turnId && p.turn?.id === compacting.turnId) {
+      const failed = p.turn.status === 'failed' && !compacting.compacted;
+      compacting.finish(failed ? { isError: true, final: p.turn.error?.message ?? 'thread/compact/start' } : {});
+      return;
     }
     if (method === 'item/completed') {
       const item = p.item;
@@ -288,7 +282,7 @@ export function createLive(o) {
   };
 
   const start = async () => {
-    const args = [...o.exe.pre, 'app-server', ...mcpArgs(o.mcpServers), ...(confine ? botConfineArgs(confine) : [])];
+    const args = [...o.exe.pre, 'app-server', ...mcpArgs(o.mcpServers)];
     child = spawnAgent(o.exe.cmd, args, { cwd: o.cwd, env: { ...(o.env ?? {}), ...mcpSecrets(o.mcpServers) }, log });
     live.pid = child.pid;
     peer = new JsonRpcPeer(child, { onNotification, onRequest, log });
@@ -298,9 +292,12 @@ export function createLive(o) {
       if (turn && !turn.done) turn.finish({ isError: true, final: turn.text || tr('sys.agents.exitedCode', { name: 'Codex', code, detail: child.stderrText().trim().split('\n').slice(-2).join(' ') }).trim() });
     });
     child.on('error', (error) => { closed = true; if (turn && !turn.done) turn.finish({ isError: true, final: tr('sys.agents.startFailed', { name: 'Codex', error: error.message }) }); });
-    await peer.request('initialize', { clientInfo: { name: 'orb_dev', title: 'Orb', version: '2.4.2' }, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs: 30000 });
+    await peer.request('initialize', { clientInfo: CLIENT, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs: 30000 });
     peer.notify('initialized', {});
-    const common = { cwd: o.cwd, model, ...(confine ? { approvalPolicy: 'untrusted', sandbox: 'read-only' } : policy(permission)), config: { model_reasoning_effort: effort(o.reasoning), service_tier: 'default' } };
+    // 3.8.1: the skills of core that are on (src/core/extensions.mjs › exposeSkills), one more root where Codex looks for
+    // skills, before the thread starts (checked with the real app-server: skills/list shows them). Older versions: none.
+    if (o.skills?.list?.length) await peer.request('skills/extraRoots/set', { extraRoots: [o.skills.root] }, { timeoutMs: 15000 }).catch((error) => log(`skills: ${error?.message ?? error}`));
+    const common = { cwd: o.cwd, model, ...policy(permission), config: { model_reasoning_effort: effort(o.reasoning), service_tier: 'default' } };
     let res;
     if (o.resumeId && o.forkSession) res = await peer.request('thread/fork', { threadId: o.resumeId, ...common }, { timeoutMs: 60000 });
     else if (o.resumeId) res = await peer.request('thread/resume', { threadId: o.resumeId, ...common }, { timeoutMs: 60000 });

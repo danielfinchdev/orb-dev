@@ -7,33 +7,22 @@
 // copied link or QR is useless. The PC can revoke any phone. What a phone may do is a subset of the PC's actions.
 import { isMuted, itemOfConversation } from '../core/inbox.mjs';
 import { buildNote, actionRoute } from '../core/notes.mjs';
-import { avatarOf } from '../core/avatar.mjs';
-import { groupMembers } from '../core/bots.mjs';
-import { pngForPath, avatarUrl, groupUrl, androidIconName } from './avatar-png.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import http from 'node:http';
 import { execFile } from 'node:child_process';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { ctx, tr, isHeadless, role as myRole, keepsBots, programs } from '../core/context.mjs';
-import { ROLES, hostsBots, doesDev } from '../core/home.mjs';
+import { ctx, tr } from '../core/context.mjs';
 import { oneLine } from '../core/safety.mjs';
 import { quickRun } from '../agents/index.mjs';
 import { IS_WIN } from '../agents/common.mjs';
-import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal, open, sealText, openText, openBytes, AAD, CLOCK_SKEW_MS, shortSecret } from '../core/mobile-crypto.mjs';
+import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal, open, sealText, openText, openBytes, AAD, CLOCK_SKEW_MS, shortSecret, pairKdfOk } from '../core/mobile-crypto.mjs';
 import { newVapidKeys, checkSubscription, sendPush } from './webpush.mjs';
-import { wake, normalMac } from '../core/wol.mjs';
-import { PROTOCOL, MIN_PROTOCOL, FORWARD_MIN, capsFor, versionOfProtocol, versionGap, CODE_ALPHABET, RELAY_EVENTS, BOT_RELAY_EVENTS, shortCodeLabel, normalCode, parseQr } from '../core/link.mjs';
-import { SERVER_CODE_MINUTES, SERVER_CODE_LENGTH, serverSecret, openServerProof, sealServerAnswer, serverSkew } from '../core/server-pair.mjs';
-import { mappedPerson } from '../core/link-persons.mjs';
-import { createPerson, listPersons } from '../core/persons.mjs';
-import { PHONE_SET as ALLOWED, BOTS_OWNER, ORB_SET, CONSOLE_SET, CENTRO_PHONE, SECRET_PARAMS } from '../core/policy.mjs';
-import { principalOf, reaches, audienceOf, ownerOfBoard, peopleWith, audit } from '../core/authz.mjs';
-import { checkTicket, getPerson } from '../core/persons.mjs';
-import { MAGIC as BACKUP_MAGIC, backupDir } from '../core/backup.mjs';
-import { cloneVerdict } from '../core/export.mjs';
+import { PROTOCOL, MIN_PROTOCOL, PAIR_PROTOCOL, versionOfProtocol, CODE_ALPHABET, shortCodeLabel } from '../core/link-payload.mjs';
+import { REMOTE_METHODS, principalOf } from '../core/permissions.mjs';
+import { isLegacy } from '../core/migrate-38.mjs';
+import { ownPorts } from './host.mjs';
 
 const RENDERER = path.resolve(process.env.ORB_RENDERER || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'renderer'));
 const SESSION_DAYS = 30; // a phone unused for this long has to be paired again
@@ -59,78 +48,21 @@ export function phoneConfig(c) {
   };
 }
 
-// What a phone may call (ALLOWED): src/core/policy.mjs PHONE_SET (3.6: the ceiling of phones, browsers and terminals).
-// 3.5: a device the user marked «Puede administrar» (Ajustes › Magic Link › Dispositivos enlazados) manages this Orb's
-// bots and links from afar (a server without a window needs one; `orb-server enlazar` gives it to the first device it
-// links). Never by the kind a device says it is, and still nothing with total access.
-// The bots of a centre are the user's: their own Orb linked to it (a device of kind «orb») manages them too.
-// 3.6: the lists live in src/core/policy.mjs (the ceilings of each channel); these names stay for the rest of the code.
-export { BOTS_OWNER };
-export const ORB_ALLOWED = ORB_SET;
-// What a workshop passes on to its centre (centro.<method>): the bots, nothing else.
-// 3.6 (M2): and the chat list of the Bots zone (inbox.*), so the bots of a centre keep their pins, sections and unread.
-export const CENTRO_FORWARD = new Set([...ORB_ALLOWED].filter((m) => m.startsWith('bots.') || m.startsWith('inbox.')));
-// 3.7 (WS4): the app's Ajustes › Orb Server: its state and update, its password vault (the caller's own account there)
-// and «Ver navegador del Server». The Server checks each one again (owner, «Puede administrar», own profile).
-for (const m of ['server.status', 'server.engines', 'server.engines.install', 'server.update.status', 'server.update.check', 'server.update.apply',
-  'vault.status', 'vault.setup', 'vault.test', 'vault.forget', 'browser.live.start', 'browser.live.input', 'browser.live.stop']) CENTRO_FORWARD.add(m);
-export const CONSOLE_ALLOWED = CONSOLE_SET;
-// What a centre sends to the Orbs linked with it (their Bots mode shows the centre's bots, live).
-const BOT_EVENTS = new Set(['bot.updated', 'bot.message', 'bot.state', 'bot.home']);
-// What the access of a device allows on this Orb (role: this Orb's): everything of the console for a device marked
-// «Puede administrar», the bots for another Orb of the user when this one keeps bots («centro» or «todo»), else a phone's.
-// 3.5.1: «orb» counts only when this Orb's owner chose it when making the QR (confirmed); what a device says it is never
-// gives it more.
-export const allowedFor = (role, kind, admin = false, confirmed = true) => (admin ? CONSOLE_ALLOWED : kind === 'orb' && confirmed && hostsBots(role) ? ORB_ALLOWED : ALLOWED);
-// 3.5.1: what the owner may choose when making a QR (the kind of device it is for); the device's rights are decided there.
-export const PAIR_KINDS = ['phone', 'browser', 'orb', 'terminal'];
-// The rights of a device to answer a bot's card: «approve» for any card (a lock, a purchase, a tool that sends…);
-// changing bots and the server also need the rights of the bots' owner (the PC, «Puede administrar» or a confirmed Orb).
-export const approverOf = (device, allowed) => ({ device: device.id, name: device.name, approve: Number(device.approve ?? 1) === 1, owner: allowed.has('bots.update') });
-// 3.5: what a phone or a terminal does in the Orb mode: it goes to the Orb that programs (Ajustes › Magic Link › «Orb
-// para programar») when it is not this one. The bots, the links and this Orb's own state stay here.
-// 3.7 (WS9): «Conexiones» is always of the Orb the device is linked to.
-export const devForwards = (method) => ALLOWED.has(method) && !/^(bots\.|app\.state$|connections\.)/.test(method);
+// What a phone or a browser may call: the methods src/core/permissions.mjs marks 'remote'. Never by the kind a device
+// says it is, and nothing with total access.
+// 3.5.1: what the owner may choose when making a QR (the kind of device it is for).
+export const PAIR_KINDS = ['phone', 'browser'];
 const EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'notice', 'session:item', 'session:update', 'session:removed', 'config:changed', 'session:delta', 'session:queue', 'approval:changed',
-  // 3.5 (Magic Link): which linked Orbs are on, and the calls left waiting for the workshop.
-  'link:status', 'link:queue',
-  // 3.5 (bots)
-  'bot.updated', 'bot.message', 'bot.state',
-  // 3.7 (WS3): a bot changed home (or is being moved)
-  'bot.home', 'bots.move',
-  // 3.6 (messaging lists): a chat list changed (only to its person)
-  'inbox:changed',
-  // 3.7 (WS5): «Ver navegador del Server» (its pictures only to the device that opened it) and «Necesito que lo hagas tú»
-  'browser:live', 'browser:human',
-  // 3.7 (WS9): «Conexiones» changed (no content)
-  'connections:changed']);
-// 3.5 «Solo Orb»: the server (Orb Server, without a window) has no screen of its own, so a linked phone signs its agents in: it gets the
-// link and the code, and pastes Claude's code back. On a PC the sign-in stays on the PC.
-// (CENTRO_PHONE, in src/core/policy.mjs)
-// 3.5: what a phone may also ask: the links' state and its workshop through the centre (taller.*).
-const LINK_ALLOWED = new Set(['link.status']);
-// What may be forwarded to each role (the workshop checks it again on its side): the same work a phone may do there.
-export const ROLE_FORWARD = { taller: ALLOWED };
-// 3.5: «terminal» is the orb command-line client (src/terminal): the same rights as a browser.
-export const KINDS = ['phone', 'browser', 'orb', 'terminal'];
-const FORWARD_MS = Number(process.env.ORB_FAKE_AGENTS && process.env.ORB_FORWARD_MS) || 60_000; // a forwarded call the workshop does not answer in a minute fails
-// 3.6: backups another Orb keeps here (link op backup.put): at most this size each, and the last few of each Orb.
-const BACKUP_PUT_MAX = Number(process.env.ORB_FAKE_AGENTS && process.env.ORB_BACKUP_PUT_MAX) || 2 * 1024 * 1024 * 1024;
-const BACKUP_PUT_KEEP = 3;
+  // 3.6 (messaging lists): a chat list changed
+  'inbox:changed']);
 const PAIR_FAILS_MAX = 20; // wrong attempts (all addresses together) that cancel the code on screen
-// 3.7 (WS2): «Añadir Orb Server»: the code of the install command is cancelled after a few wrong tries; the one-time
-// offers an Orb makes for a device it hands to another (link:handoff, 10 min) or back (link:handback, a few days: the
-// device may be off when the Server is unlinked).
-const SERVER_FAILS_MAX = 5;
-const HANDOFF_MS = 10 * 60_000;
-const HANDBACK_MS = 3 * 86_400_000;
-const HANDOFF_KINDS = ['phone', 'browser', 'terminal'];
+// 3.8: wrong master passwords one code allows (they do not use it up); then a new code is needed.
+export const PAIR_PASSWORD_TRIES = 5;
 
-// The checks of a call coming from outside (a phone, or the centre forwarding a phone's call): null when it may run, or
-// why not. `uploadsDir`: the pictures that may go with it (none when forwarded).
-export function guardCall(board, method, params, { allowed = ALLOWED, uploadsDir = null } = {}) {
-  if (!allowed.has(method) && !(isHeadless() && CENTRO_PHONE.has(method))) return tr('msg.remote.pcOnly');
-  if (method === 'agents.login' && params.console) return tr('msg.remote.pcOnly');
+// The checks of a call coming from a phone or a browser: null when it may run, or why not. `uploadsDir`: the pictures
+// that may go with it.
+export function guardCall(board, method, params, { allowed = REMOTE_METHODS, uploadsDir = null } = {}) {
+  if (!allowed.has(method)) return tr('msg.remote.pcOnly');
   if (params.permission === 'total') return tr('msg.remote.totalPcOnly');
   // A conversation the PC gave total access to is driven from the PC only.
   if (method.startsWith('sessions.') && method !== 'sessions.stop' && params.id !== undefined && board.one('SELECT permission FROM sessions WHERE id = ?', String(params.id))?.permission === 'total') return tr('msg.remote.totalConvPcOnly');
@@ -142,20 +74,51 @@ export function guardCall(board, method, params, { allowed = ALLOWED, uploadsDir
   }
   return null;
 }
-// 3.5.1: what a notification shows on a locked phone: 'all', 'chat' (the default: the bots' messages and cards hidden) or
-// 'none' (only «Tienes un mensaje nuevo»).
+// 3.5.1: what a notification shows on a locked phone: 'all', 'chat' (the default) or 'none' (only «Tienes un mensaje
+// nuevo»). 3.8: 'all' and 'chat' show the same (the bots' messages, hidden with 'chat', are gone).
 export const PREVIEWS = ['all', 'chat', 'none'];
 export const pushPreview = (config) => (PREVIEWS.includes(config?.mobile?.preview) ? config.mobile.preview : 'chat');
-// What a notification says: what ('chat': the assistant's chat, 'bots': a bot's message, card or reminder) with its own
-// title and text, or only the assistant's name and «Tienes un mensaje nuevo».
-// 3.6: preview: the person's own choice (Mi perfil), else the settings' (as in 3.5.1).
-export function pushContent(what, { title, body }, config, preview = null) {
-  const v = PREVIEWS.includes(preview) ? preview : pushPreview(config); const name = config?.assistantName ?? 'Orb';
-  const shown = v === 'all' || (v === 'chat' && what === 'chat');
-  return shown ? { title: String(title ?? name).slice(0, 80), body: String(body ?? '').slice(0, 200) } : { title: name, body: tr('msg.remote.pushHidden') };
+// 3.8: no folder of this PC reaches a phone or browser. A value that is one whole absolute path (a project's folder, a
+// task's copy, a conversation's cwd…) goes as its place inside the assistant folder («proyectos/web/tienda»), or just
+// its last part when it is outside; in any other text (a chat message, an activity line, an error, a key), only the assistant folder's own
+// path is cut, written in any case and with either separator. F2.6c: free text is never replaced whole (a message that
+// starts with C:\ keeps its words). (Other paths an agent wrote in its text go as they are.)
+const ABSOLUTE = /^(?:[A-Za-z]:[\\/]|\\\\|\/(?:Users|home|root|mnt|media|var|tmp|opt|private|Volumes|srv|data)\/)/;
+const UPLOAD_NAME = /^\d+-[0-9a-f]{8}\.(png|jpg|webp|gif)$/;
+// Fields of free text (what people and agents write): never replaced whole, only the assistant folder is cut.
+const TEXT_FIELD = /^(body|text|title|description|message|note|notes|result|summary|content|prompt|question|answer|label|reason|error|detail|final|output|input|brief|elements)$/i;
+// A whole value that is one path (a single line, no sentence in it), in any other field.
+const isPath = (v) => ABSOLUTE.test(v) && v.length <= 400 && !/[\r\n]|[.,;:!?]\s/.test(v);
+function placeOf(file) {
+  const rel = ctx.home ? path.relative(ctx.home, file) : '';
+  return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? rel.split(/[\\/]+/).join('/') : file.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || '…'; // either separator: a Windows path on any system
 }
-// What a call from outside gets back (the settings without secrets).
-export const shapeResult = (method, result) => (method === 'app.state' && result ? { ...result, config: phoneConfig(result.config) } : result);
+// The assistant folder inside a text: «<home>\x» → «x», the folder alone → «…» (in JSON its \ are doubled: matched too).
+const homePattern = () => {
+  if (!ctx.home) return null;
+  const parts = path.resolve(ctx.home).split(/[\\/]+/).filter(Boolean).map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const SEP = '[\\\\/]+';
+  return new RegExp(`${/^[\\/]/.test(path.resolve(ctx.home)) ? SEP : ''}${parts.join(SEP)}(?:(${SEP})|(?![\\w-]|\\.\\w))`, 'gi');
+};
+const cutHome = (text, re) => (re ? text.replace(re, (m, sep) => (sep ? '' : '…')) : text);
+export function withoutPaths(value, depth = 0, key = '', re = homePattern()) {
+  if (typeof value === 'string') return !TEXT_FIELD.test(key) && isPath(value) ? placeOf(value) : cutHome(value, re);
+  if (!value || typeof value !== 'object') return value;
+  if (depth > 12) { try { return JSON.parse(cutHome(JSON.stringify(value), re)); } catch { return null; } }
+  if (Array.isArray(value)) return value.map((v) => withoutPaths(v, depth + 1, key, re));
+  return Object.fromEntries(Object.entries(value).map(([k, v]) => [cutHome(k, re), withoutPaths(v, depth + 1, k, re)]));
+}
+
+// What a call from outside gets back: the settings without secrets, and no folder of this PC (its home, the assistant's
+// paths; any other path as its place in the assistant folder).
+export function shapeResult(method, result) {
+  // F2.6c: the whiteboard comes back to the PC as it went (whiteboard.save): only its attachments are cut.
+  if (method === 'whiteboard.load' && result) return { ...result, attachments: withoutPaths(result.attachments) };
+  if (method !== 'app.state' || !result) return withoutPaths(result);
+  const { home: _home, paths: _paths, ...rest } = result;
+  const activeProject = rest.activeProject ? (({ path: _path, ...p }) => p)(rest.activeProject) : rest.activeProject;
+  return withoutPaths({ ...rest, activeProject, config: phoneConfig(rest.config) });
+}
 
 // 3.5: only the home network, Tailscale and this PC itself may talk to Orb: 127.0.0.0/8, 10/8, 172.16/12, 192.168/16,
 // 100.64/10 (Tailscale) and, in IPv6, ::1 and Tailscale's fd7a:115c:a1e0::/48.
@@ -171,33 +134,34 @@ export function privateSource(address) {
 // The name another device sees for this Orb: the one set in Ajustes, or the computer's name.
 export const orbNameOf = (config) => oneLine(String(config?.mobile?.name || os.hostname() || config?.assistantName || 'Orb'), 60);
 const ipOf = (req) => String(req.socket?.remoteAddress ?? '').replace(/^::ffff:/, '');
-const kindOf = (proof) => (KINDS.includes(proof?.kind) ? proof.kind : /iphone|ipad|android/i.test(String(proof?.name ?? '')) ? 'phone' : 'browser');
-// 3.5.1: the kind of a new device: the one the QR was made for. A QR made without saying takes what a phone, a browser
-// or a terminal says it is (they have the same rights), never «orb»; null: the device does not match the QR.
+const kindOf = (proof) => (PAIR_KINDS.includes(proof?.kind) ? proof.kind : /iphone|ipad|android/i.test(String(proof?.name ?? '')) ? 'phone' : 'browser');
+// 3.5.1: the kind of a new device: the one the QR was made for. A QR made without saying takes what a phone or a browser
+// says it is (they have the same rights). 3.8: another Orb or an Orb Terminal is never linked (null).
 export function kindForPairing(issued, claimed) {
-  if (issued === 'orb') return claimed === 'orb' ? 'orb' : null;
-  if (claimed === 'orb') return null;
+  if (claimed === 'orb' || claimed === 'terminal') return null;
   if (PAIR_KINDS.includes(issued)) return issued;
-  return ['phone', 'browser', 'terminal'].includes(claimed) ? claimed : 'phone';
+  return PAIR_KINDS.includes(claimed) ? claimed : 'phone';
 }
 // 3.6 (A11): «<computer>.local» when the computer's name is a valid host name (letters, digits and dashes).
 export const localName = (host = os.hostname()) => { const h = String(host ?? '').toLowerCase().replace(/\.local$/, ''); return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(h) ? `${h}.local` : null; };
 const isLoopback = (ip) => /^(127\.|::1$)/.test(String(ip ?? '').replace(/^::ffff:/, ''));
-// 3.5.1: whether a pairing comes from a browser's page over plain http on the home network: not a program (no Origin: the
-// terminal, another Orb), not the Android app, not this PC (or Tailscale's https, which arrives through loopback), not the
-// Tailscale address; and the user did not allow it (lanHttp).
-export function plainHttpBrowser({ origin, app = false, localAddress, routes = [], lanHttp = false }) {
-  if (lanHttp || !origin || app) return false;
+// 3.5.1: whether a pairing comes from a browser's page over plain http on the home network: not a program (no Origin: another
+// Orb), not the Android app, not this PC (or Tailscale's https, which arrives through loopback), not the
+// Tailscale address. 3.8: never (the setting that allowed it is gone: the master password is typed in that page).
+export function plainHttpBrowser({ origin, app = false, localAddress, routes = [] }) {
+  if (!origin || app) return false;
   const local = String(localAddress ?? '').replace(/^::ffff:/, '');
   if (isLoopback(local)) return false;
   const r = (routes ?? []).find((x) => x.address === local);
   return !(r && r.kind === 'tailscale');
 }
 const parseMeta = (d) => { try { return d?.meta ? JSON.parse(d.meta) : {}; } catch { return {}; } };
-const linkError = (message, extra = {}) => Object.assign(new Error(message), { userFacing: true, extra });
-// 3.5: the Android app's page (Capacitor) is not served by this PC but by the app itself (http://localhost): it may call
-// the API, where everything is still sealed with the phone's own key, and its WebView has to be told so (CORS).
-const APP_ORIGINS = new Set(['http://localhost', 'https://localhost', 'capacitor://localhost']);
+const metaVOf = (d) => Number(parseMeta(d).v ?? 2);
+// 3.5: the Android app's page is not served by this PC but by the app itself: it may call the API, where everything is
+// still sealed with the phone's own key, and its WebView has to be told so (CORS). 3.8.1 (Tauri): http://tauri.localhost
+// only. The Capacitor app's origins (localhost, capacitor://) are gone (review D8 B1: a page on this PC's localhost, such
+// as an agent's, would pass for the app; the phone is reinstalled with 3.8.1, definition item 18).
+const APP_ORIGINS = new Set(['http://tauri.localhost', 'https://tauri.localhost']);
 const APP_CORS = { 'Access-Control-Allow-Methods': 'GET, POST', 'Access-Control-Allow-Headers': 'Content-Type, X-Orb-Device, X-Orb-Auth', 'Access-Control-Allow-Private-Network': 'true', 'Access-Control-Max-Age': '600', Vary: 'Origin' };
 const appOrigin = (req) => { const o = String(req.headers.origin ?? '').toLowerCase(); return APP_ORIGINS.has(o) ? o : null; };
 
@@ -254,7 +218,7 @@ const HEADERS = {
 // The installed app's service worker: shows the notifications the PC sends and opens the app when one is tapped.
 // 3.6 (messaging, M4): one notification per chat (tag): new lines join it (the last five, and how many in the title);
 // the sender's picture (icon); «Responder» opens the chat; «Aprobar» / «Rechazar» answer the card right there with a
-// one-time token of this device (POST /api/note-action), or open the chat when the card needs the PIN. Tapping opens the
+// one-time token of this device (POST /api/note-action); a card whose text is hidden opens the chat. Tapping opens the
 // exact chat (an open window is told: postMessage { orbOpen }; else /#abrir=…).
 export const SERVICE_WORKER = `self.addEventListener('install',()=>self.skipWaiting());
 self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));
@@ -277,8 +241,7 @@ e.waitUntil(fetch('/api/note-action',{method:'POST',credentials:'omit',headers:{
 .then(r=>r.ok?r.json():null).then(x=>{if(!x||!x.ok)return openApp(d.route)}).catch(()=>openApp(d.route)));return}
 e.waitUntil(openApp(d.route,a==='allow'&&def&&def.open?d.card:null))});`;
 
-// 3.7 (WS2): features(): what this Orb says it can do (src/core/link.mjs › capsFor).
-export function createRemote({ board, api, log, emit = () => {}, version = null, features = () => capsFor({ server: ctx.product === 'server' }) }) {
+export function createRemote({ board, api, log, emit = () => {}, version = null }) {
   let servers = []; // http servers (one per address)
   let state = { running: false, routes: [], error: null };
   let generation = 0; // moved by stop(): a start() still waiting for Tailscale gives up
@@ -286,60 +249,66 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
   let watcher = null;
   let served = null; // the https port `tailscale serve` is forwarding for us (turned off on stop)
   let pairing = null; // { code, short, expires, route, fails }
-  // 3.7 (WS2): the install command's code («Añadir Orb Server»): { code, secret, expires, fails, person }, one at a time.
-  let serverPairing = null;
-  // One-time offers for a device handed to this Orb (or an Orb Server linking to its app): id -> the same fields as
-  // `pairing` plus { meta } (who asked for it and for which device there).
-  const handoffs = new Map();
-  const forwarded = new Map(); // 3.5: calls sent to the workshop waiting for its answer: id -> { resolve, reject, device, timer }
-  let flushing = false; // the workshop's waiting calls are being sent
-  const role = () => myRole();
   const orbName = () => orbNameOf(ctx.config);
   const failures = new Map(); // address -> timestamps of wrong pairing attempts (one noisy device cannot lock out the others)
-  const clients = new Set(); // live-event streams: { res, device, key, person }
+  const clients = new Set(); // live-event streams: { res, device, key }
   const seen = new Map(); // device id -> Map(nonce -> expiry): requests already answered (replays are refused)
   const keys = new Map(); // device id -> session key
-  // 3.6: whose a device is (a row from before 3.6, without a person, is the owner's), and each person's own folder of
-  // pictures (a phone may only attach the ones its person uploaded).
-  const owner = () => ownerOfBoard(board);
-  const personOf = (d) => d?.person_id ?? owner();
-  const nameOf = (pid) => getPerson(board, pid)?.name ?? null;
-  const uploadsRoot = () => path.join(ctx.paths.internal, 'adjuntos-movil');
-  const uploads = (person = owner()) => path.join(uploadsRoot(), String(person ?? 'dueno').replace(/[^\w-]/g, '_'));
-  const previewOf = (pid) => { try { return board.personSetting(pid, 'preview') ?? null; } catch { return null; } };
+  // The phones' pictures (a phone may only attach the ones uploaded from a linked device). 3.6-3.7 kept them in a
+  // subfolder per person: those are still inside, and pruneUploads clears them with the rest.
+  const uploads = () => path.join(ctx.paths.internal, 'adjuntos-movil');
   // What this Orb says of itself on every hello and /api/me (3.6, protocol 3).
-  const versions = () => ({ v: PROTOCOL, min: MIN_PROTOCOL, version, features: features() });
+  const versions = () => ({ v: PROTOCOL, min: MIN_PROTOCOL, version });
   const metaV = (d) => Number(parseMeta(d).v ?? 2);
   // 3.6: a client too old for this Orb is told to update (in its own words: «Actualiza …»).
   const tooOld = (v) => Number.isFinite(Number(v)) && Number(v) > 0 && Number(v) < MIN_PROTOCOL;
 
-  // This PC's own keys: X25519 for the phones, VAPID for notifications. Made once, kept in the database.
-  const own = (() => {
-    let k = board.settingJson('remote_keys');
+  // This PC's own keys: X25519 for the phones, VAPID for notifications. Made once. 3.8: kept in the master password's
+  // vault (src/core/master.mjs; the database of 3.7 had them in clear: moved by api-master.mjs › migrateSecrets), read
+  // when first needed. Without the vault open (another PC: the password was not typed yet) the access does not start.
+  let ownKeys = null;
+  const own = () => {
+    if (ownKeys) return ownKeys;
+    const m = ctx.master;
+    if (m && !m.unlocked()) throw Object.assign(new Error(tr('msg.master.locked')), { userFacing: true });
+    let k = m ? m.get('remote_keys') : board.settingJson('remote_keys');
     if (!k?.priv || !k?.vapid?.publicKey) {
       k = { priv: b64.enc(newKeyPair().priv), vapid: newVapidKeys() };
-      board.settingJson('remote_keys', k);
+      if (m) m.set('remote_keys', k); else board.settingJson('remote_keys', k);
     }
     const priv = b64.dec(k.priv);
-    return { priv, pub: publicKeyOf(priv), vapid: k.vapid };
-  })();
-  const pcFingerprint = fingerprint(own.pub);
+    ownKeys = { priv, pub: publicKeyOf(priv), vapid: k.vapid, fp: fingerprint(publicKeyOf(priv)) };
+    return ownKeys;
+  };
+  const pcFingerprint = () => own().fp;
   // Phones paired by 2.3.2 and older (a reusable token, no key of their own) cannot use the encrypted channel: they go.
   board.run('DELETE FROM devices WHERE public_key IS NULL');
+  // 3.8: a phone or browser linked before 3.8 never proved the master password: at the first start of 3.8 they all go,
+  // and the owner is told to link them again (once).
+  if (!board.setting('relink_38')) {
+    const old = board.all('SELECT id, meta FROM devices').filter((d) => metaVOf(d) < PAIR_PROTOCOL);
+    for (const d of old) board.run('DELETE FROM devices WHERE id = ?', d.id);
+    if (old.length) { board.event(null, 'usuario', 'device.revokedAll', String(old.length)); board.notice(tr('msg.link.relink38', { n: old.length }), 'warning'); log(`3.8: ${old.length} dispositivo(s) enlazados antes de 3.8 desenlazados`); }
+    board.setting('relink_38', new Date().toISOString());
+  }
 
   const send = (res, status, body, type = 'application/json; charset=utf-8', extra = {}) => {
     res.writeHead(status, { ...HEADERS, 'Content-Type': type, 'Cache-Control': 'no-store', ...extra });
     res.end(type.startsWith('application/json') ? JSON.stringify(body) : body);
   };
 
-  const keyOf = (d) => { if (!keys.has(d.id)) keys.set(d.id, sessionKey(own.priv, b64.dec(d.public_key))); return keys.get(d.id); };
+  // A device served: a phone or a browser, used in the last 30 days, without a person. 3.8: a linked Orb or an Orb
+  // Terminal of before, or any device paired in 3.6–3.7 that still has a person (the 3.8 migration clears the owner's and
+  // removes the rest), is never served.
+  const validDevice = (d) => Boolean(d?.public_key && (!d.kind || PAIR_KINDS.includes(d.kind))
+    && Date.now() - Date.parse(d.last_seen ?? d.created_at) <= SESSION_DAYS * 86_400_000
+    && d.person_id == null);
+  const keyOf = (d) => { if (!keys.has(d.id)) keys.set(d.id, sessionKey(own().priv, b64.dec(d.public_key))); return keys.get(d.id); };
   const deviceOf = (req) => {
     const id = String(req.headers['x-orb-device'] ?? '');
     if (!/^[0-9a-f-]{36}$/.test(id)) return null;
     const d = board.one('SELECT * FROM devices WHERE id = ?', id);
-    if (!d?.public_key) return null;
-    if (Date.now() - Date.parse(d.last_seen ?? d.created_at) > SESSION_DAYS * 86_400_000) return null;
-    return d;
+    return validDevice(d) ? d : null;
   };
   const touch = (d, req) => {
     const ip = req ? ipOf(req) : d.ip;
@@ -396,19 +365,12 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
     if (pathname === '/manifest.webmanifest') {
       const name = ctx.config.assistantName;
       return send(res, 200, JSON.stringify({ name, short_name: name, id: '/', start_url: '/', scope: '/', display: 'standalone', orientation: 'portrait', background_color: '#1d2257', theme_color: '#5b6ee8',
-        icons: [{ src: '/icon.png', sizes: '512x512', type: 'image/png', purpose: 'any' }, { src: '/icon.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }] }), TYPES['.webmanifest']);
+        icons: [{ src: '/icon.png', sizes: '512x512', type: 'image/png', purpose: 'any' }, { src: '/icon-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }] }), TYPES['.webmanifest']);
     }
     if (pathname === '/sw.js') return send(res, 200, SERVICE_WORKER, TYPES['.js'], { 'Service-Worker-Allowed': '/' });
-    // 3.6 (M4): the bots' avatars for the notifications (only shapes and colours: nothing of anyone's).
-    if (pathname.startsWith('/avatars/')) {
-      const png = pngForPath(pathname);
-      if (!png) return send(res, 404, 'no encontrado', 'text/plain');
-      res.writeHead(200, { ...HEADERS, 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=604800' });
-      return res.end(png);
-    }
     let rel; try { rel = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, ''); } catch { return send(res, 404, 'no encontrado', 'text/plain'); }
     // Only what the phone's page needs (not the desktop-only pages such as the agent's browser window).
-    if (!(rel === 'index.html' || rel === 'icon.png' || /^assets\/[\w.-]+$/.test(rel) || /^(robot|apps)\/[\w-]+\.png$/.test(rel) || /^juegos\/ajedrez\/rhosgfx\/[wb][KQRBNP]\.svg$/.test(rel) || /^excalidraw\/fonts\/[A-Za-z]+\/[\w.-]+\.woff2$/.test(rel))) return send(res, 404, 'no encontrado', 'text/plain');
+    if (!(rel === 'index.html' || rel === 'icon.png' || rel === 'icon-o.png' || rel === 'icon-maskable.png' || /^assets\/[\w.-]+$/.test(rel) || /^(robot|apps)\/[\w-]+\.png$/.test(rel) || /^juegos\/ajedrez\/rhosgfx\/[wb][KQRBNP]\.svg$/.test(rel) || /^excalidraw\/fonts\/[A-Za-z]+\/[\w.-]+\.woff2$/.test(rel))) return send(res, 404, 'no encontrado', 'text/plain');
     const file = path.normalize(path.join(RENDERER, rel));
     if (!file.startsWith(RENDERER + path.sep)) return send(res, 404, 'no encontrado', 'text/plain');
     fs.readFile(file, (error, data) => {
@@ -431,13 +393,10 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
     if (app) { res.setHeader('Access-Control-Allow-Origin', app); for (const [k, v] of Object.entries(APP_CORS)) res.setHeader(k, v); }
     if (req.method === 'OPTIONS') { req.resume(); return send(res, app ? 204 : 403, '', 'text/plain'); }
     if (req.method === 'GET' && p === '/api/hello') return helloInfo(res);
-    if (req.method === 'GET' && p === '/api/server-hello') return serverHello(req, res);
     if (req.method === 'GET' && !p.startsWith('/api/')) return serveStatic(req, res, p);
     if (!originOk(req)) return send(res, 403, { error: 'origen no permitido' });
 
     if (req.method === 'POST' && p === '/api/pair') return pair(req, res);
-    // 3.7 (WS2): an Orb Server installed with this app's command pairs with it.
-    if (req.method === 'POST' && p === '/api/server-pair') return serverPair(req, res);
     // 3.6 (M4): «Aprobar» / «Rechazar» from a notification of the phone's browser (its service worker has no keys).
     if (req.method === 'POST' && p === '/api/note-action') return noteAction(req, res);
 
@@ -451,47 +410,31 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
       touch(device, req);
       res.writeHead(200, { ...HEADERS, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
       res.write(': hola\n\n');
-      const client = { res, device: device.id, key: keyOf(device), kind: device.kind ?? kindOf({ name: device.name }), role: device.role ?? null, at: Date.now(), person: personOf(device) };
+      const client = { res, device: device.id, key: keyOf(device), at: Date.now() };
       const mine = [...clients].filter((c) => c.device === device.id);
       if (mine.length >= STREAMS_PER_DEVICE) { try { mine[0].res.end(); } catch { /* closed */ } clients.delete(mine[0]); }
       clients.add(client);
-      if (client.kind === 'orb') linkChanged();
-      // 3.7 (WS2): a device handed to this Orb whose way back waits (its Orb Server was unlinked while it was off), or one
-      // this Orb has to hand to its Orb Server.
-      else {
-        sendPendingHandback(device.id);
-        try { remote.onDeviceOnline?.(deviceView(device)); } catch (error) { log(`enlace: ${error.message}`); }
-      }
       const ping = setInterval(() => { try { res.write(': ping\n\n'); } catch { /* closed */ } }, 25_000);
-      req.on('close', () => {
-        clearInterval(ping); clients.delete(client);
-        if (client.kind === 'orb' && ![...clients].some((c) => c.device === client.device)) {
-          board.run('UPDATE devices SET last_seen = ? WHERE id = ?', now(), client.device);
-          for (const [id, f] of forwarded) if (f.device === client.device) { forwarded.delete(id); clearTimeout(f.timer); f.reject(offline(board.one('SELECT * FROM devices WHERE id = ?', client.device))); }
-          linkChanged();
-        }
-      });
+      req.on('close', () => { clearInterval(ping); clients.delete(client); });
       return undefined;
     }
     if (req.method !== 'POST') return send(res, 404, { error: 'no encontrado' });
     if (p === '/api/upload') return upload(req, res, device);
 
-    const what = { '/api/call': 'call', '/api/me': 'me', '/api/push': 'push', '/api/link': 'link' }[p];
+    const what = { '/api/call': 'call', '/api/me': 'me', '/api/push': 'push' }[p];
     if (!what) { req.resume(); return send(res, 404, { error: 'no encontrado' }); }
-    let box; try { box = await readJson(req, what === 'link' ? 4_000_000 : 400_000); } catch (error) { return send(res, error.status ?? 400, { error: error.message }); }
+    let box; try { box = await readJson(req); } catch (error) { return send(res, error.status ?? 400, { error: error.message }); }
     const msg = openRequest(device, box, what);
     if (!msg) return send(res, 401, { error: tr('msg.remote.notLinked') });
     if (msg.clock) return clockOff(res);
     touch(device, req);
 
     if (what === 'me') {
-      // 3.6: who this device is for here, and the versions of both sides (the client says its own).
+      // 3.6: this device's name here, and the versions of both sides (the client says its own).
       const cv = Number(msg.body?.v);
       if (Number.isFinite(cv) && cv > 0 && cv !== metaV(device)) board.run('UPDATE devices SET meta = ? WHERE id = ?', JSON.stringify({ ...parseMeta(device), v: cv }), device.id);
       if (tooOld(cv)) return reply(res, device, msg.nonce, { ok: false, status: 426, update: 'me', error: tr('msg.link.updateClient', { has: versionOfProtocol(cv), need: versionOfProtocol(MIN_PROTOCOL) }) });
-      const pid = personOf(device);
-      return reply(res, device, msg.nonce, { ok: true, result: { device: device.name, name: ctx.config.assistantName, orb: orbName(), role: role(), ...versions(), pc: pcFingerprint, push: Boolean(device.push), vapid: own.vapid.publicKey,
-        person: { id: pid, name: nameOf(pid) } } });
+      return reply(res, device, msg.nonce, { ok: true, result: { device: device.name, name: ctx.config.assistantName, orb: orbName(), ...versions(), pc: pcFingerprint(), push: Boolean(device.push), vapid: own().vapid.publicKey } });
     }
     if (what === 'push') {
       // Turn notifications on (a subscription made by this phone's browser) or off (null).
@@ -501,387 +444,133 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
         return reply(res, device, msg.nonce, { ok: true, result: { push: Boolean(sub) } });
       } catch (error) { return reply(res, device, msg.nonce, { ok: false, error: error.message }); }
     }
-    if (what === 'link') return linkOp(res, device, msg);
     // what === 'call'
-    let method = String(msg.body?.method ?? '');
+    const method = String(msg.body?.method ?? '');
     const params = msg.body?.params && typeof msg.body.params === 'object' ? msg.body.params : {};
-    // 3.5: { method, target: 'taller' } is the same as taller.<method>: the centre passes it on to its workshop.
-    if (msg.body?.target === 'taller' && !method.startsWith('taller.')) method = `taller.${method}`;
     const deny = (error) => reply(res, device, msg.nonce, { ok: false, status: 403, error });
-    // 3.6: «Puede administrar» counts only on a device of the owner; a strong ticket (a PIN typed on this device in the
-    // last minutes, persons.verifyPin) goes with the call that needs it.
-    const admin = Boolean(device.admin) && personOf(device) === owner();
-    const allowed = allowedFor(role(), device.kind, admin, Number(device.kind_ok) === 1);
-    const strongUntil = checkTicket(typeof msg.body?.ticket === 'string' ? msg.body.ticket : null, personOf(device), device.id) || null;
-    const principal = principalOf(board, { device: admin === Boolean(device.admin) ? device : { ...device, admin: 0 }, ceiling: allowed, strongUntil });
-    const failed = (error) => reply(res, device, msg.nonce, { ok: false, status: error.extra?.status ?? error.status ?? 400, error: oneLine(error?.message ?? String(error), 1000), ...(error.reason ? { reason: error.reason } : {}), ...(error.extra ?? {}) });
-    if (method.startsWith('taller.')) {
-      try { return reply(res, device, msg.nonce, { ok: true, result: (await remote.taller(method.slice(7), params, { from: device.id, principal })) ?? null }); }
-      catch (error) { return failed(error); }
-    }
-    if (LINK_ALLOWED.has(method)) return reply(res, device, msg.nonce, { ok: true, result: remote.linkStatus({ forPhone: true, person: personOf(device) }) });
-    // 3.5: the Orb mode of a phone or a terminal is the work of the Orb that programs: there it goes, when it is another one.
-    // 3.6: the one of this device's person.
-    if (device.kind !== 'orb' && devForwards(method) && devTargetDevice(personOf(device))) {
-      try { return reply(res, device, msg.nonce, { ok: true, result: (await remote.taller(method, params, { from: device.id, principal })) ?? null }); }
-      catch (error) { return failed(error); }
-    }
+    const principal = principalOf({ device });
     // 2.6: which account the assistant spends is chosen on the PC (the brain's agent and model, also from the phone).
     if (method === 'chat.settings' && params.account !== undefined) delete params.account;
-    // 3.5: a bot learns that the user writes from a phone or a terminal (from the device's kind, never from what it sends).
-    if (method === 'bots.send' || method === 'bots.groups.send') { delete params.via; if (device.kind === 'phone' || device.kind === 'terminal') params.via = device.kind; }
-    // 3.5.1: who answers a bot's card (kept with the card) and with which rights: set here, never by what the device sends.
-    if (method === 'bots.decide') { delete params.by; params.by = approverOf(device, allowed); }
-    const why = guardCall(board, method, params, { uploadsDir: uploads(personOf(device)), allowed });
+    // F2.6c: a picture it uploaded comes back by the name /api/upload gave it (never a path of the PC).
+    if (Array.isArray(params.images)) params.images = params.images.map((f) => (typeof f === 'string' && UPLOAD_NAME.test(f) ? path.join(uploads(), f) : f));
+    const why = guardCall(board, method, params, { uploadsDir: uploads() });
     if (why) return deny(why);
     try {
-      // 3.6: as the device's person, within what this device may call (WS2: the router and per-person shaping).
-      let result = shapeResult(method, (await api.call(method, params, principal)) ?? null);
-      // What this device may do here (the interface shows or hides the buttons for it).
-      if (method === 'app.state' && result) result = { ...result, access: { admin, bots: allowed.has('bots.create'), links: allowed.has('link.qr'), approve: Number(device.approve ?? 1) === 1 } };
+      // What this device may call (src/core/permissions.mjs), and the settings without paths or secrets (phoneConfig).
+      const result = shapeResult(method, (await api.call(method, params, principal)) ?? null);
       return reply(res, device, msg.nonce, { ok: true, result });
     }
-    catch (error) { return reply(res, device, msg.nonce, { ok: false, error: oneLine(error?.message ?? String(error), 1000), ...(error?.reason ? { reason: error.reason, status: error.status ?? 403 } : {}) }); }
+    catch (error) { return reply(res, device, msg.nonce, { ok: false, error: withoutPaths(oneLine(error?.message ?? String(error), 1000)), ...(error?.reason ? { reason: error.reason, status: error.status ?? 403 } : error?.status === 403 ? { status: 403 } : {}) }); }
   }
 
-  // 3.5: what another Orb sends on its link: who it is (hello), answers to forwarded calls (reply), its live events
-  // (events) and «forget me» (bye).
-  async function linkOp(res, device, msg) {
-    const op = String(msg.body?.op ?? '');
-    const ok = (result = true) => reply(res, device, msg.nonce, { ok: true, result });
-    const no = (error, status = 403) => reply(res, device, msg.nonce, { ok: false, status, error });
-    if (op === 'bye') { remote.revoke(device.id, { quiet: true }); return ok(); }
-    if (device.kind !== 'orb') return no(tr('msg.remote.pcOnly'));
-    const b = msg.body ?? {};
-    if (op === 'backup.put') return backupPut(res, device, msg, b);
-    // 3.7 (WS2): the owner's PC asks for one-time offers for its phones (hub handoff) or sends their way back; the persons
-    // of this Orb mapped to persons of that one. Only from the owner's Orb the owner confirmed here, never a copy.
-    if (op === 'handoff' || op === 'persons') {
-      if (Number(device.kind_ok) !== 1 || parseMeta(device).clone || personOf(device) !== owner()) return no(tr('msg.remote.pcOnly'));
-      try { return ok(op === 'handoff' ? handoffOp(device, b) : personsOp(device, b)); }
-      catch (error) { return no(oneLine(error?.message ?? String(error), 500), error.status ?? 400); }
-    }
-    // 3.7 (WS3): the bots' homes and copies (src/engine/replica.mjs), only with an Orb the owner confirmed, never a copy.
-    if (op === 'replica') {
-      if (Number(device.kind_ok) !== 1 || parseMeta(device).clone || !remote.onHomeCall) return no(tr('msg.remote.pcOnly'));
-      try { return ok((await remote.onHomeCall(orbPeer(device), String(b.method ?? ''), b.params && typeof b.params === 'object' ? b.params : {})) ?? null); }
-      catch (error) { return reply(res, device, msg.nonce, { ok: false, status: error.status ?? 400, error: oneLine(error?.message ?? String(error), 1000), ...(error.notHome ? { notHome: true } : {}) }); }
-    }
-    if (op === 'hello') {
-      const before = parseMeta(device);
-      // 3.6: the other Orb's identity: a newer incarnation is the same Orb moved; an older one, or the same one on another
-      // machine, a copy: not served, and its person is told.
-      const seen = b.orb && /^[0-9a-f]{32}$/.test(String(b.orb.orbId ?? '')) ? { orbId: String(b.orb.orbId), incarnation: Number(b.orb.incarnation) || 1, host: b.orb.host ? oneLine(String(b.orb.host), 80) : null } : null;
-      const verdict = seen ? cloneVerdict(before.orb ?? null, seen) : 'new';
-      if (verdict === 'clone') {
-        if (!before.clone) { board.run('UPDATE devices SET meta = ? WHERE id = ?', JSON.stringify({ ...before, clone: true }), device.id); board.notice(tr('msg.link.clone', { name: device.name }), 'warning', { person: personOf(device), owner: personOf(device) !== owner() }); }
-        return no(tr('msg.link.cloneRefused'), 409);
-      }
-      if (verdict === 'moved') board.notice(tr('msg.link.moved', { name: device.name }), 'info', { person: personOf(device) });
-      const meta = { ...before, host: oneLine(String(b.host ?? ''), 80) || null, macs: (Array.isArray(b.macs) ? b.macs : []).map(normalMac).filter(Boolean).slice(0, 8),
-        version: b.version ? oneLine(String(b.version), 40) : null, platform: b.platform ? oneLine(String(b.platform), 20) : null,
-        // 3.6: the protocol it speaks (an Orb of 3.5 says none: 2) and its identity.
-        v: Number(b.v ?? 2) || 2, min: Number(b.min ?? 1) || 1, features: Array.isArray(b.features) ? b.features.map(String).slice(0, 20) : [], ...(seen ? { orb: seen, clone: false } : {}) };
-      const r = ROLES.includes(b.role) ? b.role : device.role;
-      board.run('UPDATE devices SET meta = ?, role = ? WHERE id = ?', JSON.stringify(meta), r ?? null, device.id);
-      for (const c of clients) if (c.device === device.id) c.role = r;
-      // 3.5.1: an Orb that says it programs is not the Orb mode of this one's phones until the owner confirms it here
-      // (Ajustes › Magic Link); the owner is told when it starts saying so.
-      if (doesDev(r ?? 'centro') && Number(device.dev_ok) !== 1 && device.role !== r) board.notice(tr('msg.link.confirmTaller', { name: device.name }), 'warning');
-      // wantsEvents: whether this Orb wants its live events (only from the one its phones' Orb mode goes to).
-      // 3.6: whom this link is for here, the versions, and this Orb's identity (the other side checks it the same way).
-      const pid = personOf(device);
-      let myId = null; try { const { orbIdOf } = await import('../core/backup.mjs'); const x = orbIdOf(ctx.home); myId = { orbId: x.orbId, incarnation: x.incarnation, host: os.hostname().slice(0, 80) }; } catch { /* none */ }
-      ok({ role: role(), name: orbName(), ...versions(), person: { id: pid, name: nameOf(pid) }, ...(myId ? { orb: myId } : {}), wantsEvents: devTargetDevice(pid)?.id === device.id });
-      linkChanged();
-      if (devTargetDevice(pid)?.id === device.id) flushQueue().catch((error) => log(`enlace: cola: ${error.message}`));
-      return undefined;
-    }
-    if (op === 'reply') {
-      const f = forwarded.get(String(b.id ?? ''));
-      if (!f || f.device !== device.id) return no('respuesta sin petición', 404);
-      forwarded.delete(String(b.id)); clearTimeout(f.timer);
-      if (b.ok) f.resolve(b.result ?? null); else f.reject(linkError(oneLine(String(b.error ?? 'error'), 1000), { status: Number(b.status) || 400 }));
-      return ok();
-    }
-    if (op === 'events') {
-      // Only the Orb this one sends the Orb mode to (its phones see what it does); any other is thanked and ignored.
-      // 3.6: the workshop of the device's person, and its events go to that person's devices only.
-      // 3.7 (WS2): `to`: a person of this Orb mapped to one of that Orb (link_persons, confirmed); the bots' events of any
-      // confirmed Orb of 3.7 (the bots it runs), mirrored as taller:bot.* (with the bot's and the line's uid).
-      const pid = personOf(device);
-      const workshop = (who) => doesDev(device.role ?? 'centro') && Number(device.dev_ok) === 1 && devTargetDevice(who)?.id === device.id;
-      let any = false;
-      for (const ev of (Array.isArray(b.list) ? b.list : []).slice(0, 200)) {
-        if (typeof ev?.e !== 'string') continue;
-        const to = ev.to == null ? pid : String(ev.to);
-        if (to !== pid && !mappedOn(device, to)) continue;
-        if (BOT_RELAY_EVENTS.has(ev.e)) {
-          if (Number(device.kind_ok) !== 1 || parseMeta(device).clone || seenMirror(ev)) continue;
-          emit(`taller:${ev.e}`, ev.p ?? null, { person: to }); any = true;
-          try { remote.onMirror?.(orbPeer(device), ev); } catch { /* replica */ }
-        } else if (RELAY_EVENTS.has(ev.e) && workshop(to)) { emit(`taller:${ev.e}`, ev.e === 'config:changed' ? null : ev.p ?? null, { person: to }); any = true; }
-      }
-      return ok(any);
-    }
-    return no('operación desconocida', 404);
-  }
-
-  // 3.6: a backup another Orb keeps here (it stays encrypted: this Orb cannot open it), sent in pieces. Only from an Orb
-  // of the owner that the owner confirmed; at most BACKUP_PUT_MAX bytes; the last BACKUP_PUT_KEEP of each Orb are kept.
-  const putting = new Map(); // upload id -> { device, file, size, total, name }
-  async function backupPut(res, device, msg, b) {
-    const ok = (result = true) => reply(res, device, msg.nonce, { ok: true, result });
-    const no = (error, status = 403) => reply(res, device, msg.nonce, { ok: false, status, error });
-    if (Number(device.kind_ok) !== 1 || personOf(device) !== owner()) return no(tr('msg.link.backupNotYours'));
-    const name = String(b.name ?? '');
-    const total = Number(b.total); const offset = Number(b.offset);
-    if (!/^orb-[\w-]{1,80}\.orbbak$/.test(name) || !Number.isInteger(total) || total < BACKUP_MAGIC.length || !Number.isInteger(offset) || offset < 0) return no(tr('msg.link.backupBad'), 400);
-    if (total > BACKUP_PUT_MAX) return no(tr('msg.link.backupTooBig', { mb: Math.round(BACKUP_PUT_MAX / 1048576) }), 413);
-    let data; try { data = Buffer.from(String(b.data ?? ''), 'base64'); } catch { return no(tr('msg.link.backupBad'), 400); }
-    const upload = String(b.upload ?? '').replace(/[^\w]/g, '').slice(0, 40);
-    const dir = path.join(backupDir(ctx.home, ctx.config), 'de-otros-orbs', device.id.replace(/[^\w-]/g, ''));
-    let u = putting.get(upload);
-    if (offset === 0) {
-      if (!data.subarray(0, BACKUP_MAGIC.length).equals(BACKUP_MAGIC)) return no(tr('msg.link.backupBad'), 400);
-      await fs.promises.mkdir(dir, { recursive: true });
-      u = { device: device.id, file: path.join(dir, `${name}.parcial`), final: path.join(dir, name), size: 0, total };
-      await fs.promises.writeFile(u.file, Buffer.alloc(0));
-      putting.set(upload, u);
-    }
-    if (!u || u.device !== device.id || u.total !== total || offset !== u.size || u.size + data.length > total) return no(tr('msg.link.backupBad'), 409);
-    await fs.promises.appendFile(u.file, data); u.size += data.length;
-    if (u.size < total) return ok({ stored: false, size: u.size });
-    putting.delete(upload);
-    await fs.promises.rename(u.file, u.final);
-    // Only the last few of this Orb stay.
-    const mine = (await fs.promises.readdir(dir)).filter((f) => f.endsWith('.orbbak')).sort();
-    for (const f of mine.slice(0, Math.max(0, mine.length - BACKUP_PUT_KEEP))) await fs.promises.rm(path.join(dir, f), { force: true }).catch(() => {});
-    board.event(null, 'usuario', 'backup.fromOrb', device.name);
-    return ok({ stored: true, size: u.size, name });
-  }
-
-  // 3.5: what a device that has only the short code needs to know (only while a code is on screen).
+  // 3.5: what a device that has only the short code needs to know (only while a code is on screen). urls: the other
+  // addresses of this same PC (Wi-Fi, Tailscale, name.local).
   function helloInfo(res) {
     if (!pairing || Date.now() > pairing.expires) return send(res, 404, { error: tr('msg.link.noCode') });
-    // short: 3 (3.5.1): the short code is tied to this key (link.mjs › connect refuses an Orb without it).
-    return send(res, 200, { v: PROTOCOL, short: 3, pc: b64.enc(own.pub), fp: pcFingerprint, name: orbName(), role: role(), urls: (state.routes ?? []).map((r) => r.url) });
+    // short: 3 (3.5.1): the short code is tied to this key (src/ui/lib/web-bridge.js refuses an Orb without it).
+    return send(res, 200, { v: PROTOCOL, short: 3, pc: b64.enc(own().pub), fp: pcFingerprint(), name: orbName(), urls: (state.routes ?? []).map((r) => r.url) });
   }
 
-  // Pairing: the phone sends its public key and a proof sealed with the key of this QR (the one-time code never travels).
-  // 3.5: or with the key of the short code typed by hand (via: 'code'). Phones, browsers and other Orbs alike.
+  // Linking (3.8, two steps; src/core/mobile-crypto.mjs › linkDevice has the phone's side). Phones and browsers alike.
+  //   start   the phone sends its public key and a proof sealed with the key of this QR (the one-time code never travels),
+  //           or of the short code typed by hand (via: 'code3'); the PC answers, sealed with that same key, a session id
+  //           and the salt and cost of the master password's verifier.
+  //   finish  the phone's MAC over the exchange, keyed with the code, ECDH(phone, PC) and ECDH(password key, PC): right
+  //           only when it knew the password, which never travels. The PC answers with its own MAC (only the real PC can).
+  // A wrong password does not use the code up: five per code, then a new code; and the waits of src/core/master.mjs (the
+  // 'pair' channel) for all of them together.
   async function pair(req, res) {
     const who = ipOf(req) || '?';
     const recent = (failures.get(who) ?? []).filter((t) => Date.now() - t < 10 * 60_000);
     failures.set(who, recent);
     if (recent.length >= 10) { req.resume(); return send(res, 429, { error: tr('msg.remote.tooMany') }); }
-    const pairingNow = pairingState();
     const fail = () => {
       recent.push(Date.now());
       // Many wrong tries in all (from any address): the code on screen is no longer good.
-      if (pairingNow && ++pairingNow.fails >= PAIR_FAILS_MAX) { clearPairing(); log('enlace: demasiados intentos; código anulado'); }
+      if (pairing && ++pairing.fails >= PAIR_FAILS_MAX) { pairing = null; log('enlace: demasiados intentos; código anulado'); }
       return send(res, 401, { error: tr('msg.remote.badQr') });
     };
     let body; try { body = await readJson(req, 10_000); } catch { return fail(); }
-    // 3.7 (WS2): a one-time offer made for one device (h: its id) instead of the QR on screen.
-    const offer = typeof body?.h === 'string' ? handoffs.get(body.h) ?? null : null;
-    if (typeof body?.h === 'string' && (!offer || Date.now() > offer.expires)) { if (offer) handoffs.delete(body.h); recent.push(Date.now()); return send(res, 401, { error: tr('msg.remote.badQr') }); }
-    const pairing = offer ?? pairingNow;
     if (!pairing || Date.now() > pairing.expires || !body || typeof body.pub !== 'string') return fail();
-    // 3.5.1: a page served over the home Wi-Fi in plain http could have been changed on the way: a browser links only over
-    // https (Tailscale), the Tailscale address or this PC itself, unless the user allowed it (Ajustes › Magic Link). The
-    // Android app and the terminal bring their own code and check the key, so they may.
+    // 3.5.1: a page served over the home Wi-Fi in plain http could have been changed on the way (and, 3.8, the master
+    // password is typed in it): a browser links only over https (Tailscale), the Tailscale address or this PC itself. The
+    // Android app brings its own code and checks the key, so it may.
     if (plainBrowser(req)) return send(res, 403, { error: tr('msg.link.httpBrowser') });
     let devPub; try { devPub = b64.dec(body.pub); } catch { return fail(); }
     if (devPub.length !== 32) return fail();
-    // The short code: code3 (3.5.1, stretched and tied to this key); code (3.5.0) still opens, for older apps.
-    const secretOf = body.via === 'code3' ? pairing.short3 : body.via === 'code' ? `corto:${pairing.short}` : pairing.code;
-    let proof; try { proof = open(pairingKey(own.priv, devPub, secretOf), body.proof, AAD.pair); } catch { return fail(); }
+    if (body.step === 'finish') return finishPair(res, body, devPub, fail, who);
+    // The short code: code3 (3.5.1, stretched and tied to this key).
+    const secretOf = body.via === 'code3' ? pairing.short3 : pairing.code;
+    const codeKey = pairingKey(own().priv, devPub, secretOf);
+    let proof; try { proof = open(codeKey, body.proof, AAD.pair); } catch { return fail(); }
     if (!proof || proof.pub !== body.pub) return fail();
     // The QR was right but the phone's clock is off: it tries again with the PC's time (the QR is not used up).
     if (!(Math.abs(Date.now() - Number(proof.t)) <= CLOCK_SKEW_MS)) return clockOff(res);
-    // 3.6: a device too old for this Orb is told to update first (the QR is not used up).
-    if (tooOld(proof.v)) return send(res, 426, { error: tr('msg.link.updateClient', { has: versionOfProtocol(proof.v), need: versionOfProtocol(MIN_PROTOCOL) }), update: 'me' });
-    // 3.5.1: what the device is was chosen when the QR was made; a device that says otherwise is refused (the QR stays).
-    const kind = kindForPairing(pairing.device, KINDS.includes(proof.kind) ? proof.kind : kindOf({ name: proof.name }));
-    if (!kind) return send(res, 403, { error: tr(pairing.device === 'orb' ? 'msg.link.wantsOrb' : 'msg.link.notForOrb') });
-    const { route, admin: wantedAdmin, approve, dev } = pairing;
-    // 3.6: whom the QR was made for («¿Para quién?»), whatever the device says; «Puede administrar» only for the owner.
-    const person = pairing.person ?? owner();
-    const askedAdmin = person === owner() ? wantedAdmin : false;
-    if (offer) handoffs.delete(body.h); else clearPairing(); // one use
-    const id = crypto.randomUUID();
-    const name = oneLine(typeof proof.name === 'string' && proof.name ? proof.name : tr(kind === 'orb' ? 'msg.link.defaultOrb' : 'msg.remote.defaultName'), 60);
-    const peerRole = kind === 'orb' && ROLES.includes(proof.role) ? proof.role : null;
-    // «Puede administrar»: asked by whoever made the QR (true: the PC, `orb-server enlazar --admin` on the server itself or
-    // a device that administers), or 'first': the first device of a server without a window gets it.
-    const admin = askedAdmin === true || (askedAdmin === 'first' && !board.one('SELECT id FROM devices WHERE admin = 1 AND public_key IS NOT NULL'));
-    const meta = { ...(kind === 'orb' ? { host: oneLine(String(proof.host ?? ''), 80) || null, macs: (Array.isArray(proof.macs) ? proof.macs : []).map(normalMac).filter(Boolean).slice(0, 8), version: proof.version ? oneLine(String(proof.version), 40) : null } : {}), v: Number(proof.v ?? 2) || 2,
-      // 3.7 (WS2): handed here by another Orb (its device there), or back from the Orb Server.
-      ...(offer?.meta?.from ? { handoff: { from: offer.meta.from, ref: offer.meta.ref ?? null, at: now() } } : {}) };
-    const devOk = kind === 'orb' && dev ? 1 : 0;
-    board.run('INSERT INTO devices (id, name, token_hash, created_at, last_seen, public_key, route, kind, role, ip, meta, admin, kind_ok, approve, dev_ok, person_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)',
-      id, name, `clave:${id}`, now(), now(), body.pub, route, kind, peerRole, who, JSON.stringify(meta), admin ? 1 : 0, approve === false ? 0 : 1, devOk, person);
-    board.event(null, 'usuario', 'device.paired', name);
-    const wantsDev = Boolean(peerRole && doesDev(peerRole) && !programs());
-    board.notice(tr(wantsDev ? (devOk ? 'msg.link.tallerLinked' : 'msg.link.confirmTaller') : 'msg.remote.deviceLinked', { name }), wantsDev && !devOk ? 'warning' : 'success', person === owner() ? {} : { person, owner: true });
-    // The answer is sealed with the new session key: the phone checks it really is the PC of the QR. 3.5.1: and with the
-    // code's key too, so a device that got a key from someone in the middle finds out (nobody else has the code).
-    const key = sessionKey(own.priv, devPub); keys.set(id, key);
-    linkChanged();
-    // 3.7 (WS2): the Orb that handed it here learns it is done (it forgets its old link); a device back here, this Orb.
-    if (offer?.meta?.from) sendToDevice(offer.meta.from, 'hub:handoffDone', { ref: offer.meta.ref ?? null });
-    if (offer?.meta) { try { remote.onHandoff?.({ id, ref: offer.meta.ref ?? null, back: Boolean(offer.meta.back), kind, person }); } catch (error) { log(`enlace: ${error.message}`); } }
-    return send(res, 200, { id, box: seal(key, { id, name: ctx.config.assistantName, orb: orbName(), role: role(), ...versions(), pc: pcFingerprint, person: { id: person, name: nameOf(person) } }, AAD.paired(id)),
-      confirm: seal(pairingKey(own.priv, devPub, secretOf), { id, pc: pcFingerprint }, AAD.confirm(id)) });
+    // 3.6: a device too old for this Orb is told to update first (the QR is not used up). 3.8: linking needs protocol 4
+    // and its two steps (the master password); an app of 3.7 is told to update.
+    if (!(Number(proof.v) >= PAIR_PROTOCOL) || body.step !== 'start') return send(res, 426, { error: tr('msg.link.updatePair', { need: versionOfProtocol(PAIR_PROTOCOL) }), update: 'pair' });
+    // 3.5.1: what the device is was chosen when the QR was made: that kind wins over what the device says (kindForPairing;
+    // one made for no kind takes the device's word). Another Orb or an Orb Terminal is refused (the QR stays).
+    // 3.8: another Orb is never linked.
+    const kind = kindForPairing(pairing.device, typeof proof.kind === 'string' ? proof.kind : kindOf({ name: proof.name }));
+    if (!kind) return send(res, 403, { error: tr('msg.link.notForOrb') });
+    const m = ctx.master;
+    if (!m?.hasPassword()) return send(res, 403, { error: tr('msg.link.noMaster'), reason: 'noMaster' });
+    const until = m.waitOf('pair');
+    if (until) return send(res, 429, { error: tr('msg.link.passWait', { s: Math.max(1, Math.ceil((until - Date.now()) / 1000)) }), reason: 'wait' });
+    // 3.8.1: the verifier itself stays in the vault (Rust); only its salt and cost come out, for the phone.
+    let vkdf = null; try { vkdf = m.pairInfo(); } catch { vkdf = null; }
+    if (!vkdf || !pairKdfOk(vkdf)) return send(res, 403, { error: tr('msg.link.noVerifier'), reason: 'noVerifier' });
+    // One exchange per device key, a few at a time, while the code lives.
+    const sid = crypto.randomBytes(16).toString('base64url');
+    const kdf = { N: vkdf.N, r: vkdf.r, p: vkdf.p, salt: vkdf.salt };
+    for (const [k, x] of pairing.pending) if (x.pub === body.pub) pairing.pending.delete(k);
+    if (pairing.pending.size >= 8) pairing.pending.delete(pairing.pending.keys().next().value);
+    pairing.pending.set(sid, { pub: body.pub, via: body.via === 'code3' ? 'code3' : 'qr', secret: secretOf, kdf, kind, name: proof.name, v: proof.v });
+    return send(res, 200, { sid, box: seal(codeKey, { sid, kdf }, AAD.pairChallenge) });
   }
 
-  // ---- 3.7 (WS2): «Añadir Orb Server» (src/core/server-pair.mjs), and the one-time offers of the hub handoff.
-  function pairingState() { return pairing; }
-  function clearPairing() { pairing = null; }
-  const serverActive = () => Boolean(serverPairing && Date.now() <= serverPairing.expires);
-  // GET /api/server-hello: this app's key, only while an install command's code is on screen.
-  function serverHello(req, res) {
-    if (!serverActive()) return send(res, 404, { error: tr('msg.server.noCode') });
-    return send(res, 200, { v: PROTOCOL, server: 1, pc: b64.enc(own.pub), fp: pcFingerprint, name: orbName(), version, features: features() });
-  }
-  // POST /api/server-pair: the Orb Server proves it has the code (sealed with it, tied to this key) and brings its own
-  // one-time offer; this app uses the code up and links to it with that offer (onServerOffer: src/engine/hub.mjs).
-  async function serverPair(req, res) {
-    const who = ipOf(req) || '?';
-    const recent = (failures.get(who) ?? []).filter((t) => Date.now() - t < 10 * 60_000);
-    failures.set(who, recent);
-    if (recent.length >= 10) { req.resume(); return send(res, 429, { error: tr('msg.remote.tooMany') }); }
-    const bad = () => {
-      recent.push(Date.now());
-      if (serverPairing && ++serverPairing.fails >= SERVER_FAILS_MAX) { serverPairing = null; log('enlace: demasiados intentos con el código del Server; anulado'); }
-      return send(res, 401, { error: tr('msg.server.badCode') });
-    };
-    let body; try { body = await readJson(req, 20_000); } catch { return bad(); }
-    if (!serverActive()) return send(res, 401, { error: tr('msg.server.noCode') });
-    const opened = openServerProof(own.priv, body, serverPairing.secret);
-    if (!opened) return bad();
-    const { pk, msg } = opened;
-    if (!(Math.abs(Date.now() - Number(msg.t)) <= CLOCK_SKEW_MS)) return clockOff(res);
-    // An Orb Server too old (or too new) for this app: nothing is linked and the code is kept.
-    const gap = versionGap({ v: PROTOCOL, min: MIN_PROTOCOL }, { v: msg.v, min: msg.min });
-    if (gap) return send(res, 426, { error: tr(gap === 'me' ? 'msg.server.skewOldApp' : 'msg.server.skewOldServer', { has: msg.version ?? '?', need: version ?? '?' }), update: gap === 'me' ? 'app' : 'server' });
-    let offer; try { offer = parseQr(msg.offer); } catch { return bad(); }
-    const person = serverPairing.person;
-    serverPairing = null; // one use: whatever happens next
-    if (!remote.onServerOffer) return send(res, 503, { error: tr('msg.link.unavailable') });
-    let peer;
-    try { peer = await remote.onServerOffer({ offer: msg.offer, server: { name: oneLine(String(msg.name ?? ''), 60) || offer.name, version: msg.version ? oneLine(String(msg.version), 40) : null, features: Array.isArray(msg.features) ? msg.features.map(String).slice(0, 20) : [] }, person }); }
-    catch (error) { return send(res, 502, { error: oneLine(error?.message ?? String(error), 300) }); }
-    board.event(null, 'usuario', 'server.paired', peer?.name ?? offer.name ?? '');
-    const skew = serverSkew({ app: version, server: msg.version, features: Array.isArray(msg.features) ? msg.features : null });
-    return send(res, 200, { box: sealServerAnswer(pk, { peer: peer?.id ?? null, name: orbName(), version, skew }) });
-  }
-  // A one-time offer for one device (the payload of a QR plus h, its id): kind and person decided here.
-  // meta: { from, ref } (the Orb that asked for it and its device there) or { back: true, ref } (a device coming back).
-  function makeOffer({ kind, person = null, approve = true, admin = false, dev = false, ms = HANDOFF_MS, meta = null }) {
-    if (!state.running) throw linkError(tr('msg.remote.enableFirst'), { status: 503 });
-    for (const [k, o] of handoffs) if (o.expires < Date.now()) handoffs.delete(k);
-    if (handoffs.size > 500) throw linkError(tr('msg.remote.tooMany'), { status: 429 });
-    const route = state.routes.find((r) => r.kind === 'tailscale') ?? state.routes[0];
-    const h = crypto.randomUUID(); const code = crypto.randomBytes(18).toString('base64url');
-    handoffs.set(h, { code, expires: Date.now() + ms, route: route.kind, fails: 0, admin: admin === 'first' && isHeadless() ? 'first' : false, device: kind, approve: approve !== false, dev: kind === 'orb' && dev === true, person: person ?? owner(), meta });
-    const others = state.routes.filter((r) => r !== route).map((r) => r.url);
-    if (state.local && !others.includes(state.local) && route.url !== state.local) others.push(state.local);
-    const frag = new URLSearchParams({ vincular: code, pc: b64.enc(own.pub), v: String(PROTOCOL), n: orbName(), r: role(), h });
-    if (others.length) frag.set('a', others.join(','));
-    return { v: PROTOCOL, urls: [route.url, ...others], pc: b64.enc(own.pub), code, h, name: orbName(), role: role(), url: `${route.url}#${frag}`, expiresAt: Date.now() + ms };
-  }
-  // A sealed event for every live stream of one device. → whether one got it.
-  function sendToDevice(deviceId, event, payload) {
-    let sent = false;
-    for (const c of [...clients]) {
-      if (c.device !== deviceId) continue;
-      try { c.res.write(`data: ${sealText(c.key, { e: event, p: payload }, AAD.event(c.device))}\n\n`); sent = true; } catch { clients.delete(c); }
+  async function finishPair(res, body, devPub, fail, who) {
+    const issued = pairing;
+    const x = typeof body.sid === 'string' ? issued.pending.get(body.sid) : null;
+    if (!x || x.pub !== body.pub) return fail();
+    issued.pending.delete(body.sid); // one try per exchange
+    // 3.8.1: the key confirmation is checked in the vault (Rust), with the verifier and this PC's key there: K never
+    // reaches the engine. The PC's own MAC comes back for the id this device will get.
+    const id = crypto.randomUUID();
+    let r;
+    try { r = await ctx.master.serial(() => ctx.master.pairFinish({ via: x.via, devPub: body.pub, pcPub: b64.enc(own().pub), sid: body.sid, kdf: x.kdf, secret: x.secret, mac: typeof body.mac === 'string' ? body.mac : '', id })); } catch { return fail(); }
+    if (r.reason === 'noVerifier' || r.reason === 'bad') return fail();
+    if (!r.ok) {
+      if (r.reason === 'wait') return send(res, 429, { error: tr('msg.link.passWait', { s: Math.max(1, Math.ceil((Date.parse(r.until) - Date.now()) / 1000)) }), reason: 'wait' });
+      if (r.reason === 'tries') return send(res, 503, { error: tr('msg.master.tries'), reason: 'tries' });
+      if (pairing === issued && ++issued.passFails >= PAIR_PASSWORD_TRIES) { pairing = null; log('enlace: demasiadas contraseñas incorrectas; código anulado'); return send(res, 403, { error: tr('msg.link.passTooMany'), reason: 'newCode' }); }
+      const left = Math.max(1, PAIR_PASSWORD_TRIES - issued.passFails);
+      return send(res, 403, { error: tr('msg.link.passWrong', { n: left }), reason: 'password', left });
     }
-    return sent;
-  }
-  // Whether a person of this Orb is mapped (and confirmed) to a person of the Orb of that device (link_persons).
-  const mappedOn = (d, person) => { try { return person != null && mappedPerson(board, orbPeer(d), String(person)) != null; } catch { return false; } };
-  // The same line mirrored twice (sent again after a reconnect) reaches the phones once.
-  const mirrored = new Map();
-  function seenMirror(ev) {
-    const uid = ev?.p?.uid ?? null;
-    if (!uid || ev.e !== 'bot.message' || ev.p?.updated) return false;
-    const k = `${ev.to ?? ''}:${uid}`; const at = Date.now();
-    for (const [x, t] of mirrored) if (at - t > 10 * 60_000) mirrored.delete(x);
-    if (mirrored.has(k)) return true;
-    mirrored.set(k, at); if (mirrored.size > 5000) mirrored.delete(mirrored.keys().next().value);
-    return false;
-  }
-  // link op 'handoff' from the owner's PC: offers for its devices ({ action: 'offers', list: [{ ref, kind, person, name,
-  // approve }] }, person: who that is here, the PC's own person or one mapped for it), or their way back ({ action:
-  // 'back', list: [{ ref, offer, hub }] }: to the devices it handed here, now or when they connect).
-  function handoffOp(device, b) {
-    const list = (Array.isArray(b.list) ? b.list : []).slice(0, 100);
-    if (b.action === 'offers') {
-      return list.map((it) => {
-        const ref = String(it?.ref ?? '').slice(0, 64);
-        const person = it?.person == null ? personOf(device) : String(it.person);
-        if (!ref || !HANDOFF_KINDS.includes(it?.kind)) return { ref, error: 'kind' };
-        if (person !== personOf(device) && !mappedOn(device, person)) return { ref, error: 'unmapped' };
-        if (!getPerson(board, person)) return { ref, error: 'unmapped' };
-        return { ref, offer: makeOffer({ kind: it.kind, person, approve: it.approve !== false, meta: { from: device.id, ref } }), hub: { name: orbName(), fp: pcFingerprint } };
-      });
-    }
-    if (b.action === 'back') {
-      const pending = board.settingJson('handback_pending') ?? {};
-      let sent = 0; let queued = 0;
-      const mine = board.all('SELECT * FROM devices WHERE public_key IS NOT NULL').filter((d) => parseMeta(d).handoff?.from === device.id);
-      for (const it of list) {
-        const d = mine.find((x) => parseMeta(x).handoff?.ref === String(it?.ref ?? ''));
-        if (!d || !it?.offer) continue;
-        const p = { offer: it.offer, hub: it.hub ?? null, back: true };
-        if (sendToDevice(d.id, 'link:handback', p)) sent++;
-        else { pending[d.id] = { ...p, until: Date.now() + HANDBACK_MS }; queued++; }
-      }
-      board.settingJson('handback_pending', pending);
-      return { sent, queued };
-    }
-    throw linkError('operación desconocida', { status: 404 });
-  }
-  function sendPendingHandback(deviceId) {
-    const pending = board.settingJson('handback_pending');
-    if (!pending?.[deviceId]) return;
-    const p = pending[deviceId]; delete pending[deviceId];
-    board.settingJson('handback_pending', pending);
-    if (p.until > Date.now()) setTimeout(() => sendToDevice(deviceId, 'link:handback', { offer: p.offer, hub: p.hub, back: true }), 50).unref?.();
-  }
-  // link op 'persons' from the owner's PC: who is who on both Orbs. list → this Orb's persons and the mapping with that
-  // PC; map { remote, local | create } (local: a person here; create: a name, someone new here); unmap { remote }.
-  function personsOp(device, b) {
-    const peerKey = parseMeta(device).orb?.orbId ?? device.id;
-    const rowsFor = () => board.all('SELECT local_person AS local, remote_person AS remote, confirmed_at AS confirmedAt FROM link_persons WHERE peer IN (?, ?)', peerKey, device.id);
-    if (b.action === 'list') return { persons: listPersons(board).map((p) => ({ id: p.id, name: p.name, role: p.role })), mapped: rowsFor(), person: personOf(device) };
-    const remotePerson = oneLine(String(b.remote ?? ''), 40);
-    if (!remotePerson) throw linkError(tr('msg.persons.noPerson'), { status: 400 });
-    if (b.action === 'unmap') { board.run('DELETE FROM link_persons WHERE peer IN (?, ?) AND remote_person = ?', peerKey, device.id, remotePerson); return { ok: true }; }
-    if (b.action === 'map') {
-      let local = b.local != null ? String(b.local) : null;
-      if (!local && b.create) { local = createPerson(board, { name: oneLine(String(b.create), 40) }).id; board.changed('persons'); }
-      if (!local || !getPerson(board, local)) throw linkError(tr('msg.persons.noPerson'), { status: 404 });
-      if (local === personOf(device)) throw linkError(tr('msg.server.mapOwner'), { status: 409 });
-      board.run('DELETE FROM link_persons WHERE peer IN (?, ?) AND (remote_person = ? OR local_person = ?)', peerKey, device.id, remotePerson, local);
-      board.run('INSERT INTO link_persons (peer, local_person, remote_person, confirmed_at) VALUES (?, ?, ?, ?)', peerKey, local, remotePerson, now());
-      audit(board, principalOf(board, { device }), 'link.persons.map', { type: 'person', id: local }, 'allow', 'owner');
-      return { ok: true, local, name: getPerson(board, local)?.name ?? null };
-    }
-    throw linkError('operación desconocida', { status: 404 });
+    if (pairing !== issued || Date.now() > issued.expires) return fail(); // used or gone while the password was checked
+    const { route } = pairing;
+    pairing = null; // one use
+    const name = oneLine(typeof x.name === 'string' && x.name ? x.name : tr('msg.remote.defaultName'), 60);
+    board.run('INSERT INTO devices (id, name, token_hash, created_at, last_seen, public_key, route, kind, ip, meta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      id, name, `clave:${id}`, now(), now(), body.pub, route, x.kind, who, JSON.stringify({ v: Number(x.v) || PAIR_PROTOCOL }));
+    board.event(null, 'usuario', 'device.paired', name);
+    board.notice(tr('msg.remote.deviceLinked', { name }), 'success');
+    // The PC's MAC proves it is the PC of the code and of the verifier; the answer is sealed with the new session key.
+    const key = sessionKey(own().priv, devPub); keys.set(id, key);
+    linkChanged();
+    return send(res, 200, { id, mac: r.pcMac, box: seal(key, { id, name: ctx.config.assistantName, orb: orbName(), ...versions(), pc: pcFingerprint() }, AAD.paired(id)) });
   }
 
   // 3.5.1: a request from a browser's page that came over plain http on the home network (not this PC, not Tailscale's
-  // https through loopback, not the Tailscale address), while the user did not allow it.
-  const plainBrowser = (req) => plainHttpBrowser({ origin: req.headers.origin, app: Boolean(appOrigin(req)), localAddress: req.socket?.localAddress, routes: state.routes, lanHttp: ctx.config.mobile?.lanHttp === true });
+  // https through loopback, not the Tailscale address).
+  const plainBrowser = (req) => plainHttpBrowser({ origin: req.headers.origin, app: Boolean(appOrigin(req)), localAddress: req.socket?.localAddress, routes: state.routes });
+
 
   // A picture from the phone (encrypted): checked by its first bytes (not its name), stored in the app's folder, path returned.
   let uploading = 0;
   async function upload(req, res, device) {
-    const mine = uploads(personOf(device));
+    const mine = uploads();
     const auth = openHeader(req, device, 'upload');
     if (!auth) { req.resume(); return send(res, 401, { error: tr('msg.remote.notLinked') }); }
     if (auth.clock) { req.resume(); return clockOff(res); }
@@ -897,12 +586,12 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
       await pruneUploads(b.length);
       const file = path.join(mine, `${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${ext}`);
       await fs.promises.writeFile(file, b);
-      return reply(res, device, auth.nonce, { ok: true, result: { path: file } });
+      return reply(res, device, auth.nonce, { ok: true, result: { path: path.basename(file) } }); // its name: the PC knows where
     } catch (error) { log(`móvil: subida: ${error.message}`); return reply(res, device, auth.nonce, { ok: false, error: tr('msg.remote.cannotSaveImage') }); }
     finally { uploading--; }
   }
   // Old pictures go (7 days), and the oldest ones too while the folder would pass its quota.
-  // 3.6: the pictures of every person (each in its folder; the ones of 3.5 at the top too), the oldest first.
+  // The oldest first (3.6-3.7's per-person subfolders too).
   async function pruneUploads(incoming = 0) {
     const list = [];
     const walk = async (dir, depth) => {
@@ -913,7 +602,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
         try { const st = await fs.promises.stat(full); list.push({ f: full, at: st.mtimeMs, size: st.size }); } catch { /* gone */ }
       }
     };
-    await walk(uploadsRoot(), 0);
+    await walk(uploads(), 0);
     list.sort((a, b) => a.at - b.at);
     let total = list.reduce((n, x) => n + x.size, 0) + incoming;
     for (const x of list) {
@@ -923,59 +612,32 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
     }
   }
 
-  // 3.6: a notification goes to the devices of the people it is for, with each person's own preview (Mi perfil), never
-  // to a device whose app is open right now.
-  // 3.6 (messaging lists): skip(person): someone it is not for after all (a chat they muted).
-  // 3.7 (WS4): route: what a tap opens (the page reads /#abrir=…, src/ui/lib/notes.js), e.g. «Ver navegador del Server».
-  function pushTo(audience, what, { title, body }, tag, skip = null, route = null) {
-    const openNow = new Set([...clients].map((c) => c.device));
-    for (const d of board.all('SELECT id, push, person_id FROM devices WHERE push IS NOT NULL')) {
-      if (openNow.has(d.id)) continue;
-      const pid = personOf(d);
-      if (!reaches(board, audience, pid)) continue;
-      if (skip?.(pid)) continue;
-      let sub; try { sub = JSON.parse(d.push); } catch { continue; }
-      const note = pushContent(what, { title, body }, ctx.config, previewOf(pid));
-      sendPush(sub, { ...note, tag, url: route ? `/#abrir=${encodeURIComponent(JSON.stringify({ route }))}` : '/' }, own.vapid)
-        .then((r) => { if (r === 'gone') board.run('UPDATE devices SET push = NULL WHERE id = ?', d.id); })
-        .catch(() => {});
-    }
-  }
   // Notifications: a new message in the assistant's chat (an answer, a task that needs approval, finished or failed work)
   // goes to the phones that turned them on and do not have the app open right now.
   // 3.6 (M4): as a messaging app's (deliverNote): the chat's name and picture, one per chat, its actions; muted: none.
-  function notify(payload, audience = null) {
+  function notify(payload) {
     if (!payload || payload.role === 'usuario') return;
-    const aud = audience ?? audienceOf(board, 'chat:new', payload);
-    deliverNote({ audience: aud, conversation: payload.conversation ?? null, line: { id: payload.id ?? null, role: payload.role, body: payload.body, meta: payload.meta ?? null } });
+    deliverNote({ conversation: payload.conversation ?? null, line: { id: payload.id ?? null, role: payload.role, body: payload.body, meta: payload.meta ?? null } });
   }
 
-  // ---- 3.6 (messaging, M4): notifications as a messaging app's (src/core/notes.mjs builds them, per person).
+  // ---- 3.6 (messaging, M4): notifications as a messaging app's (src/core/notes.mjs builds them).
   const NOTE_TOKEN_MS = 24 * 3_600_000;
-  const noteTokens = new Map(); // one-time token → { device, person, call: [method, params], group, until }
-  const hasPinOf = (pid) => { try { return Boolean(board.one('SELECT pin_hash FROM persons WHERE id = ?', String(pid))?.pin_hash); } catch { return false; } };
+  const noteTokens = new Map(); // one-time token → { device, call: [method, params], group, until }
   const noteWords = () => ({ hidden: tr('msg.remote.pushHidden'), reply: tr('msg.notes.reply'), allow: tr('msg.notes.allow'), deny: tr('msg.notes.deny'), open: tr('msg.notes.open') });
-  // Which chat a conversation is: a bot's, a group's or one with the assistant (none: the assistant's main chat).
+  // Which chat a conversation is: one with the assistant (none: the assistant's main chat).
   function chatOf(conversation) {
     const name = ctx.config.assistantName ?? 'Orb';
     if (conversation == null) return { kind: 'orb', id: null, name };
     const it = itemOfConversation(board, conversation);
-    if (!it) return null;
-    if (it.kind === 'bot') { const b = board.one('SELECT id, name, avatar FROM bots WHERE id = ?', Number(it.id)); return b ? { kind: 'bot', id: it.id, name: b.name, avatar: avatarOf(b) } : null; }
-    if (it.kind === 'group') { const g = board.one('SELECT id, name FROM bot_groups WHERE id = ?', Number(it.id)); return g ? { kind: 'group', id: it.id, name: g.name, members: groupMembers(board, g.id).map(avatarOf) } : null; }
+    if (it?.kind !== 'conversation') return null;
     const c = board.one('SELECT id, title FROM conversations WHERE id = ?', Number(it.id));
     return c ? { kind: 'conversation', id: c.id, name: c.title || name } : null;
   }
-  // The picture: an address for the phone's browser (/avatars/…), a picture of its own for the Android app (av_…).
-  const dress = (note) => {
-    const i = note.icon;
-    const icon = typeof i === 'string' ? i : i?.avatar ? avatarUrl(i.avatar) : i?.members ? groupUrl(i.members) : '/icon.png';
-    const largeIcon = typeof i === 'string' ? 'av_orb' : i?.avatar ? androidIconName(i.avatar) : i?.members?.length ? androidIconName(i.members[0]) : 'av_orb';
-    return { ...note, icon, largeIcon };
-  };
+  // The picture: Orb's own for the Android app (av_orb, copied from the app's icon by scripts/android-web.mjs).
+  const dress = (note) => ({ ...note, largeIcon: 'av_orb' });
   // The answers a notification of the phone's browser may give right there: one token per action, only for this device,
   // used once (either answer spends both).
-  function mintActs(device, person, note) {
+  function mintActs(device, note) {
     const out = {}; const group = crypto.randomBytes(8).toString('hex');
     for (const [k, t] of noteTokens) if (t.until <= Date.now()) noteTokens.delete(k);
     if (noteTokens.size > 2000) noteTokens.clear();
@@ -984,82 +646,65 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
       const r = actionRoute(note, a.id);
       if (!r.call) continue;
       const token = crypto.randomBytes(24).toString('base64url');
-      noteTokens.set(token, { device: String(device), person: String(person), call: r.call, group, until: Date.now() + NOTE_TOKEN_MS });
+      noteTokens.set(token, { device: String(device), call: r.call, group, until: Date.now() + NOTE_TOKEN_MS });
       out[a.id] = token;
     }
     return out;
   }
-  // One line of a chat, to everyone of the audience: each person's note (their preview, their mute, their PIN); the apps
-  // open now get it as a sealed «note» event (the Android app shows it while in the background), the others a Web Push.
-  function deliverNote({ audience, conversation = null, line, sensitive = false }) {
+  // One line of a chat, to every linked device (the preview and the mute of Ajustes); the apps open now get it as a
+  // sealed «note» event (the Android app shows it while in the background), the others a Web Push.
+  function deliverNote({ conversation = null, line }) {
     let chat; try { chat = chatOf(conversation); } catch { chat = null; }
     if (!chat) return false;
-    const words = noteWords(); const notes = new Map();
-    const noteFor = (pid) => {
-      if (!notes.has(pid)) {
-        let muted = false; try { muted = conversation != null && isMuted(board, pid, conversation); } catch { /* no marks yet */ }
-        const n = buildNote({ chat, line, preview: previewOf(pid) ?? pushPreview(ctx.config), muted, hasPin: hasPinOf(pid), sensitive, assistantName: ctx.config.assistantName ?? 'Orb', words });
-        notes.set(pid, n ? dress(n) : null);
-      }
-      return notes.get(pid);
-    };
-    const isFor = (pid) => reaches(board, audience, pid);
+    let muted = false; try { muted = conversation != null && isMuted(board, conversation); } catch { /* no marks yet */ }
+    const built = buildNote({ chat, line, preview: pushPreview(ctx.config), muted, assistantName: ctx.config.assistantName ?? 'Orb', words: noteWords() });
+    const n = built ? dress(built) : null;
+    if (!n) return false;
     const openNow = new Set();
     for (const c of clients) {
-      if (c.kind === 'orb') continue;
       openNow.add(c.device);
-      if (!isFor(c.person)) continue;
-      const n = noteFor(c.person); if (!n) continue;
       try { c.res.write(`data: ${sealText(c.key, { e: 'note', p: n }, AAD.event(c.device))}\n\n`); } catch { /* gone */ }
     }
-    for (const d of board.all('SELECT id, push, person_id FROM devices WHERE push IS NOT NULL')) {
-      if (openNow.has(d.id)) continue;
-      const pid = personOf(d);
-      if (!isFor(pid)) continue;
-      const n = noteFor(pid); if (!n) continue;
+    for (const d of board.all('SELECT * FROM devices WHERE push IS NOT NULL')) {
+      if (openNow.has(d.id) || !validDevice(d)) continue;
       let sub; try { sub = JSON.parse(d.push); } catch { continue; }
       const data = { title: n.title, body: n.body, hidden: n.hidden, tag: `orb-${n.key}`, icon: n.icon, url: '/', route: n.route, kind: n.kind,
-        actions: n.actions.map(({ id, title, open: o }) => ({ id, title, ...(o ? { open: true } : {}) })), card: n.card ?? null, acts: mintActs(d.id, pid, n) };
-      sendPush(sub, data, own.vapid)
+        actions: n.actions.map(({ id, title, open: o }) => ({ id, title, ...(o ? { open: true } : {}) })), card: n.card ?? null, acts: mintActs(d.id, n) };
+      sendPush(sub, data, own().vapid)
         .then((r) => { if (r === 'gone') board.run('UPDATE devices SET push = NULL WHERE id = ?', d.id); })
         .catch(() => {});
     }
     return true;
   }
-  // POST /api/note-action { token }: the answer chosen on a notification, run as that device (its person, its rights:
-  // the same checks as a call from it; a card that needs the PIN is refused and the phone opens the chat instead).
+  // POST /api/note-action { token }: the answer chosen on a notification, run as that device (the same checks as a call
+  // from it).
   async function noteAction(req, res) {
     let body; try { body = await readJson(req, 4_000); } catch (error) { return send(res, error.status ?? 400, { ok: false, error: error.message }); }
     const t = typeof body?.token === 'string' ? noteTokens.get(body.token) : null;
     if (!t || t.until <= Date.now()) return send(res, 401, { ok: false, error: tr('msg.notes.expired') });
     for (const [k, x] of noteTokens) if (x.group === t.group) noteTokens.delete(k);
     const device = board.one('SELECT * FROM devices WHERE id = ?', t.device);
-    if (!device?.public_key || !device.push || personOf(device) !== t.person) return send(res, 401, { ok: false, error: tr('msg.notes.expired') });
-    // The app lock (a PIN set since the notification went out) is never skipped: open the app instead.
-    if (hasPinOf(t.person)) return send(res, 403, { ok: false, reason: 'locked', error: tr('msg.notes.expired') });
+    if (!validDevice(device) || !device.push) return send(res, 401, { ok: false, error: tr('msg.notes.expired') });
     const [method, given] = t.call; const params = { ...given };
-    const admin = Boolean(device.admin) && personOf(device) === owner();
-    const allowed = allowedFor(role(), device.kind, admin, Number(device.kind_ok) === 1);
-    if (!allowed.has(method)) return send(res, 403, { ok: false, error: tr('msg.remote.pcOnly') });
-    if (method === 'bots.decide') params.by = approverOf(device, allowed);
-    const why = guardCall(board, method, params, { uploadsDir: uploads(personOf(device)), allowed });
+    const why = guardCall(board, method, params, { uploadsDir: uploads() });
     if (why) return send(res, 403, { ok: false, error: why });
-    const principal = principalOf(board, { device: admin === Boolean(device.admin) ? device : { ...device, admin: 0 }, ceiling: allowed });
+    const principal = principalOf({ device });
     try {
       await api.call(method, params, principal);
       touch(device, req);
       return send(res, 200, { ok: true });
     } catch (error) {
-      return send(res, error.status === 403 ? 403 : 400, { ok: false, error: oneLine(error?.message ?? String(error), 300), ...(error.reason ? { reason: error.reason } : {}) });
+      return send(res, error.status === 403 ? 403 : 400, { ok: false, error: withoutPaths(oneLine(error?.message ?? String(error), 300)), ...(error.reason ? { reason: error.reason } : {}) });
     }
   }
 
   // ---- listening: one http server per address; the Tailscale https name goes through `tailscale serve` to loopback.
-  const listen = (address, port) => new Promise((resolve) => {
+  // 3.8.1: node:http is loaded when the access starts (~18 ms the engine's start no longer waits for).
+  const listen = async (address, port) => { const { default: http } = await import('node:http'); return new Promise((resolve) => {
     const srv = http.createServer((req, res) => { handle(req, res).catch((error) => { log(`móvil: ${error.stack}`); try { send(res, 500, { error: tr('msg.remote.internalError') }); } catch { /* sent */ } }); });
     srv.headersTimeout = 15_000; srv.requestTimeout = 60_000;    srv.once('error', (error) => resolve({ error }));
-    srv.listen(port, address, () => resolve({ srv }));
-  });
+    srv.listen(port, address, () => { ownPorts.add(srv.address().port); resolve({ srv }); });
+  }); };
   async function serveHttps(port) {
     const r = await quickRun(tailscaleExe(), ['serve', '--bg', `--https=${port}`, `http://127.0.0.1:${port}`], { timeoutMs: 30_000 });
     if (r.ok) { served = port; return true; }
@@ -1132,172 +777,40 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
     return Promise.all(closing);
   }
 
-  // 3.5: a notification of the bots (a reminder, a bot's answer, a card waiting): to every phone with notifications on
-  // that does not have the app open.
-  // 3.6: for whom: person, else the people of its conversation (a bot's chat: its talker; a group: its people), else the
-  // bot's, else the owner.
-  // 3.6 (M4): with the line (line: { id, role, body, meta }), as a messaging app's notification (deliverNote).
-  function pushNote({ title, body, person = null, conversation = null, bot = null, line = null, sensitive = false, route = null } = {}) {
-    const audience = person ? { persons: new Set([String(person)]) }
-      : conversation != null ? audienceOf(board, 'bot.message', { conversation })
-        : bot != null ? { persons: peopleWith(board, { type: 'bot', id: bot }) } : { owner: true };
-    if (line && conversation != null && deliverNote({ audience, conversation, line, sensitive })) return;
-    pushTo(audience, 'bots', { title, body }, 'orb-bot', null, route && typeof route === 'object' && typeof route.view === 'string' ? { view: route.view } : null);
-  }
-
-  // ---- 3.5 Magic Link: linked devices, the workshop seen from the centre, forwarding, Wake-on-LAN and the waiting queue.
+  // ---- 3.5 Magic Link: the linked phones and browsers.
   const onlineIds = () => new Set([...clients].map((c) => c.device));
   function deviceView(d, on = onlineIds()) {
-    const meta = parseMeta(d);
-    const kind = d.kind ?? kindOf({ name: d.name });
-    // 3.5.1: approve (may answer the bots' cards), confirmed (an Orb the owner chose when making its QR or confirmed
-    // after), devOk (may be the Orb that programs for this one) and devPending (says it programs, not confirmed yet).
-    const pid = personOf(d);
-    return { id: d.id, name: d.name, kind, role: d.role ?? null, createdAt: d.created_at, lastSeen: d.last_seen ?? null, ip: d.ip ?? null, person: pid, personName: nameOf(pid), v: Number(meta.v ?? 2), clone: Boolean(meta.clone),
-      route: d.route ?? null, push: Boolean(d.push), online: on.has(d.id), host: meta.host ?? null, version: meta.version ?? null, canWake: Boolean(meta.macs?.length), admin: Boolean(d.admin),
-      approve: Number(d.approve ?? 1) === 1, confirmed: kind !== 'orb' || Number(d.kind_ok) === 1, devOk: Number(d.dev_ok) === 1, devPending: kind === 'orb' && ['taller', 'todo'].includes(d.role) && Number(d.dev_ok) !== 1 };
+    return { id: d.id, name: d.name, kind: d.kind ?? kindOf({ name: d.name }), createdAt: d.created_at, lastSeen: d.last_seen ?? null, ip: d.ip ?? null, v: metaV(d),
+      route: d.route ?? null, push: Boolean(d.push), online: on.has(d.id) };
   }
   const devices = () => { const on = onlineIds(); return board.all('SELECT * FROM devices WHERE public_key IS NOT NULL ORDER BY created_at DESC').map((d) => deviceView(d, on)); };
-  // 3.7 (WS3): a linked Orb as the bots' homes see it (src/core/link-persons.mjs › peer): its identity, whose link it is
-  // here and whether it is on.
-  const orbPeer = (d, on = onlineIds()) => { const meta = parseMeta(d); return { via: 'device', id: d.id, key: meta.orb?.orbId ?? null, name: d.name, online: on.has(d.id), person: personOf(d), remotePerson: null, features: meta.features ?? [], role: d.role ?? null }; };
-  // The linked Orbs that program («taller» or «todo»).
-  // 3.5.1: only the ones the owner confirmed here (an Orb cannot make itself the workshop by saying so).
-  const tallers = () => board.all("SELECT * FROM devices WHERE kind = 'orb' AND kind_ok = 1 AND dev_ok = 1 AND role IN ('taller', 'todo') AND public_key IS NOT NULL ORDER BY COALESCE(last_seen, created_at) DESC");
-  // 3.5: where the Orb mode of this Orb's phones goes: the Orb chosen in «Orb para programar»; else this one if it programs
-  // (null); else the linked one that does (the one on right now, or else the last one seen).
-  // 3.6: each person's own: the workshops linked for them (the owner's also chooses with «Orb para programar»).
-  const devTargetDevice = (person = owner()) => {
-    // 3.7 (WS2): and the workshop of the owner where this person is mapped to someone there (link_persons, confirmed).
-    const list = tallers().filter((d) => personOf(d) === person || mappedOn(d, person));
-    if (person === owner()) { const pick = String(ctx.config?.devTarget ?? ''); if (pick && pick !== 'local') { const d = list.find((x) => x.id === pick); if (d) return d; } }
-    if (programs() && (person === owner() || !list.length)) return null;
-    const on = onlineIds(); return list.find((d) => on.has(d.id)) ?? list[0] ?? null;
-  };
-  // The queue of one person (rows of 3.5, without a person, are the owner's).
-  const queueScope = (person) => (person === owner() ? { where: '(person_id = ? OR person_id IS NULL)', args: [person] } : { where: 'person_id = ?', args: [person] });
-  const pendingCount = (person = owner()) => { const q = queueScope(person); return board.one(`SELECT COUNT(*) AS n FROM link_queue WHERE status = 'pendiente' AND ${q.where}`, ...q.args)?.n ?? 0; };
-  const tallerView = (d) => ({ ...deviceView(d), queued: pendingCount(personOf(d)) });
-  const offline = (d) => linkError(tr('msg.link.tallerOffline', { name: d?.name ?? tr('msg.link.defaultOrb') }), { status: 503, offline: true, lastSeen: d?.last_seen ?? null, canWake: Boolean(parseMeta(d).macs?.length) });
   let changeTimer = null;
   function linkChanged() {
     changeTimer ??= setTimeout(() => {
       changeTimer = null;
-      // 3.6: each person gets the state of their own devices; the owner, everyone's.
-      try {
-        emit('link:devices', devices());
-        const people = new Set([owner(), ...[...clients].map((c) => c.person)]);
-        for (const pid of people) emit('link:status', remote.linkStatus({ forPhone: true, person: pid }), { person: pid });
-      } catch (error) { log(`enlace: ${error.message}`); }
+      try { emit('link:devices', devices()); } catch (error) { log(`enlace: ${error.message}`); }
     }, 80);
     changeTimer.unref?.();
   }
-  // What the centre may pass on to its workshop (checked again there, with its own database).
-  function forwardCheck(method, params) {
-    if (!ROLE_FORWARD.taller.has(method)) throw linkError(tr('msg.remote.pcOnly'), { status: 403 });
-    if (params?.permission === 'total') throw linkError(tr('msg.remote.totalPcOnly'), { status: 403 });
-    if (params?.images !== undefined) throw linkError(tr('msg.link.noImages'), { status: 403 });
-  }
-  // A call for the workshop goes down its own live stream (it may be behind a router or asleep: the centre never has to
-  // reach it); its answer comes back as a 'reply' on /api/link.
-  // 3.6 (A13, A12): with who asked here ({ person, device, channel, rights }) and a request_id the workshop remembers (the
-  // same request sent again runs once there). A timeout is «desconocido»: the workshop may have done it.
-  const asSent = (principal) => (principal ? { person: principal.person, device: principal.device ?? null, channel: principal.channel, rights: { approve: Boolean(principal.rights?.approve) } } : null);
-  function forward(d, method, params, { principal = null, requestId = crypto.randomUUID() } = {}) {
-    const streams = [...clients].filter((c) => c.device === d.id).sort((a, b) => b.at - a.at);
-    if (!streams.length) return Promise.reject(offline(d));
-    const id = crypto.randomUUID();
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { forwarded.delete(id); reject(linkError(tr('msg.link.tallerUnknown', { name: d.name }), { status: 504, unknown: true, requestId })); }, FORWARD_MS);
-      timer.unref?.();
-      forwarded.set(id, { resolve, reject, device: d.id, timer });
-      try { streams[0].res.write(`data: ${sealText(streams[0].key, { e: 'link:request', p: { id, method, params, request_id: requestId, principal: asSent(principal), v: PROTOCOL } }, AAD.event(d.id))}\n\n`); }
-      catch { forwarded.delete(id); clearTimeout(timer); reject(offline(d)); }
-    });
-  }
-  // 3.6 (A13): whether this person's call may go to that workshop: only to a workshop linked for them; a workshop of 3.5
-  // (protocol 2) does not know people, so it gets the owner's calls only. Audited either way.
-  function mayForward(d, principal, method) {
-    if (!principal || principal.channel === 'system') return;
-    const res = { type: 'device', id: d.id };
-    const deny = (reason, message) => { audit(board, principal, `taller.${method}`, res, 'deny', reason); throw linkError(message, { status: reason === 'oldWorkshop' ? 426 : 403, reason }); };
-    if (principal.person !== personOf(d) && !mappedOn(d, principal.person)) deny('notYourTaller', tr('msg.link.notYourTaller'));
-    if (metaV(d) < FORWARD_MIN && principal.person !== owner()) deny('oldWorkshop', tr('msg.link.updateOrb', { name: d.name, has: parseMeta(d).version ?? versionOfProtocol(metaV(d)), need: versionOfProtocol(FORWARD_MIN) }));
-    audit(board, principal, `taller.${method}`, res, 'allow', 'forward');
-  }
-  // The principal of a queued call when it is sent (its person, and the device that asked, if it is still linked).
-  const queuedPrincipal = (row) => {
-    const dev = row.from_device ? board.one('SELECT * FROM devices WHERE id = ?', row.from_device) : null;
-    const pid = row.person_id ?? owner();
-    if (dev && personOf(dev) === pid) return principalOf(board, { device: dev });
-    return principalOf(board, { forwarded: true, person: pid });
-  };
-  // The calls left for the workshop while it was off, sent in order as soon as it says hello.
-  async function flushQueue() {
-    if (flushing) return;
-    flushing = true;
-    const done = new Map(); // person -> { n, name }
-    const skip = new Set(); // people whose workshop is off now
-    try {
-      for (;;) {
-        const rows = board.all("SELECT * FROM link_queue WHERE status = 'pendiente' ORDER BY id LIMIT 200");
-        const row = rows.find((r) => !skip.has(r.person_id ?? owner())); if (!row) break;
-        const pid = row.person_id ?? owner();
-        const d = devTargetDevice(pid);
-        if (!d || !onlineIds().has(d.id)) { skip.add(pid); continue; }
-        let params = {}; try { params = JSON.parse(row.params); } catch { /* none */ }
-        // 3.6 (A12): every queued call has its request_id (one of 3.5 gets one now, kept).
-        let requestId = row.request_id;
-        if (!requestId) { requestId = crypto.randomUUID(); board.run('UPDATE link_queue SET request_id = ? WHERE id = ?', requestId, row.id); }
-        try {
-          const principal = queuedPrincipal(row);
-          mayForward(d, principal, row.method);
-          const result = await forward(d, row.method, params, { principal, requestId });
-          board.run("UPDATE link_queue SET status = 'hecho', result = ?, done_at = ? WHERE id = ?", JSON.stringify(result ?? null).slice(0, 20_000), now(), row.id);
-          emit('link:queue', { id: row.id, status: 'hecho', method: row.method, person: pid });
-          const c = done.get(pid) ?? { n: 0, name: d.name }; c.n++; done.set(pid, c);
-        } catch (error) {
-          if (error.extra?.offline) { skip.add(pid); continue; } // it went away again: the rest waits
-          // A timeout leaves it «desconocido» (it may have run there): «comprobar» sends the same request_id again.
-          const status = error.extra?.unknown ? 'desconocido' : 'error';
-          board.run('UPDATE link_queue SET status = ?, result = ?, done_at = ? WHERE id = ?', status, JSON.stringify({ error: oneLine(error.message, 500) }), now(), row.id);
-          emit('link:queue', { id: row.id, status, method: row.method, error: oneLine(error.message, 300), person: pid });
-        }
-      }
-    } finally { flushing = false; }
-    for (const [pid, c] of done) board.notice(tr('msg.link.queueDone', { n: c.n, name: c.name }), 'success', pid === owner() ? {} : { person: pid });
-  }
 
   const remote = {
-    push: pushNote,
     // Engine events go to the paired phones too (only the ones the interface needs), each sealed for its phone.
-    // 3.5: a linked Orb gets only what is meant for it (the calls it is asked to run), never the interface's events; the
-    // workshop's own events reach the phones as taller:<event>.
-    // 3.6: audience (from the router, src/engine/router.mjs): each stream gets the event only if it is for its person.
-    broadcast(event, payload, audience = null, to = null) {
-      const aud = audience ?? audienceOf(board, event, payload);
-      const isFor = to ?? ((pid) => reaches(board, aud, pid));
-      if (event === 'chat:new') notify(payload, aud);
-      if (!clients.size || !(EVENTS.has(event) || event.startsWith('taller:') || (event === 'agents:login' && isHeadless()))) return;
+    broadcast(event, payload) {
+      if (event === 'chat:new') notify(payload);
+      if (!clients.size || !EVENTS.has(event)) return;
       // The settings themselves never travel to a phone (the page just reloads what it is allowed to see).
-      const value = { e: event, p: event === 'config:changed' || event === 'taller:config:changed' ? null : payload };
-      // 3.5: the events of the Orb that programs for this one's phones (only that one sends them, see linkOp 'events') also
-      // reach them under their own name, for their Orb mode (which goes there).
-      // 3.7 (WS2): not the mirrored bots' events (taller:bot.*): their ids are of the other Orb.
-      const plain = event.startsWith('taller:') && !event.startsWith('taller:bot.') ? { e: event.slice(7), p: value.p } : null;
+      const value = { e: event, p: event === 'config:changed' ? null : withoutPaths(payload) };
       for (const c of clients) {
-        if (!isFor(c.person)) continue;
-        if (event === 'browser:live' && payload?.device && c.device !== payload.device) continue;
-        if (c.kind === 'orb' && !(BOT_EVENTS.has(event) && keepsBots()) && !event.startsWith('browser:')) continue;
         if (c.res.writableLength > STREAM_BACKLOG) { try { c.res.destroy(); } catch { /* gone */ } clients.delete(c); continue; }
-        try {
-          c.res.write(`data: ${sealText(c.key, value, AAD.event(c.device))}\n\n`);
-          if (plain && c.kind !== 'orb') c.res.write(`data: ${sealText(c.key, plain, AAD.event(c.device))}\n\n`);
-        } catch { clients.delete(c); }
+        try { c.res.write(`data: ${sealText(c.key, value, AAD.event(c.device))}\n\n`); } catch { clients.delete(c); }
       }
     },
     start() {
       if (servers.length) return Promise.resolve(state);
+      // 3.8: never on a database of 3.5–3.7 the 3.8 migration could not finish yet (its devices may be other users').
+      if (isLegacy(board.db)) { const e = new Error(tr('msg.remote.notMigrated')); e.userFacing = true; return Promise.reject(e); }
+      // 3.8: and never while the vault with this PC's keys is locked (it opens with the master password).
+      try { own(); } catch (error) { return Promise.reject(error); }
       starting ??= startNow().finally(() => { starting = null; });
       // The Wi-Fi address changes with the network (or comes back after it was gone): the servers follow it.
       watcher ??= setInterval(() => {
@@ -1313,86 +826,61 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
       clearInterval(watcher); watcher = null;
       await starting?.catch(() => {}); // a start() still waiting for the network gives up and closes what it bound
       for (const c of clients) { try { c.res.end(); } catch { /* closed */ } }
-      for (const [id, f] of forwarded) { forwarded.delete(id); clearTimeout(f.timer); f.reject(linkError(tr('msg.link.stopped'), { status: 503 })); }
       clients.clear(); await closeAll(); pairing = null; state = { running: false, routes: [], error: null };
       await unserve();
     },
     status() {
-      return { enabled: Boolean(ctx.config.mobile?.enabled), running: Boolean(state.running), routes: state.routes ?? [], error: state.error ?? null, pc: pcFingerprint,
-        wifi: ctx.config.mobile?.wifi !== false, tailscale: ctx.config.mobile?.tailscale !== false, role: role(), name: orbName(),
-        lanHttp: ctx.config.mobile?.lanHttp === true, preview: pushPreview(ctx.config),
-        devices: board.all('SELECT id, name, created_at, last_seen, route, kind, role, ip, person_id, push IS NOT NULL AS push FROM devices ORDER BY created_at DESC').map(({ person_id: pid, ...d }) => ({ ...d, person: pid ?? owner(), push: Boolean(d.push) })) };
+      let pc = null; try { pc = pcFingerprint(); } catch { /* the vault is locked */ }
+      return { enabled: Boolean(ctx.config.mobile?.enabled), running: Boolean(state.running), routes: state.routes ?? [], error: state.error ?? null, pc,
+        wifi: ctx.config.mobile?.wifi !== false, tailscale: ctx.config.mobile?.tailscale !== false, name: orbName(),
+        preview: pushPreview(ctx.config),
+        devices: board.all('SELECT id, name, created_at, last_seen, route, kind, ip, push IS NOT NULL AS push FROM devices ORDER BY created_at DESC').map((d) => ({ ...d, push: Boolean(d.push) })) };
     },
     // A one-time QR for 5 minutes, for one of the ways in (Wi-Fi or Tailscale). The code and this PC's key travel in the
     // URL fragment (#), which the browser never sends to any server.
-    // 3.5 (protocol v2): the fragment also names this Orb, its role and its other addresses; and a short code (8 letters
-    // and digits) can be typed by hand instead, together with the address.
-    // admin: the device that uses it may administer this Orb (only for a server without a window, only its first one).
-    // 3.5.1: device: what it is for (phone, browser, orb, terminal), chosen here by the owner, never by the device;
-    // approve: whether it may answer the bots' cards (default yes); dev: for an Orb, whether it may be the one that
-    // programs for this one; admin: true (whoever makes the QR is the owner: the PC, the server's own terminal or a device
-    // that administers) or 'first' (only while no device administers, on a server without a window).
-    // 3.6: person: whom the device is for (the QR's «¿Para quién?»; api-link.mjs checks who may choose it).
-    pair(kind, { admin = false, device = null, approve = true, dev = false, person = null } = {}) {
+    // 3.5 (protocol v2): the fragment also names this Orb and its other addresses (Wi-Fi, Tailscale, name.local); and a
+    // short code (8 letters and digits) can be typed by hand instead, together with the address.
+    // 3.5.1: device: what it is for (phone or browser), chosen here by the owner, never by the device.
+    pair(kind, { device = null } = {}) {
       if (!state.running) throw new Error(tr('msg.remote.enableFirst'));
       const route = state.routes.find((r) => r.kind === kind) ?? state.routes[0];
       const code = crypto.randomBytes(18).toString('base64url');
       const short = Array.from({ length: 8 }, () => CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)]).join('');
       const forKind = PAIR_KINDS.includes(device) ? device : null;
-      pairing = { code, short, short3: shortSecret(short, b64.enc(own.pub)), expires: Date.now() + PAIR_MINUTES * 60_000, route: route.kind, fails: 0,
-        admin: admin === true && isHeadless() ? true : admin === 'first' && isHeadless() ? 'first' : false, device: forKind, approve: approve !== false, dev: forKind === 'orb' && dev === true,
-        person: person ?? owner() };
+      pairing = { code, short, short3: shortSecret(short, b64.enc(own().pub)), expires: Date.now() + PAIR_MINUTES * 60_000, route: route.kind, fails: 0, passFails: 0, pending: new Map(),
+        device: forKind };
       const others = state.routes.filter((r) => r !== route).map((r) => r.url);
       // 3.6 (A11): the name of this computer on the home network (name.local) too, for when the Wi-Fi address changes.
       if (state.local && !others.includes(state.local) && route.url !== state.local) others.push(state.local);
-      const frag = new URLSearchParams({ vincular: code, pc: b64.enc(own.pub), v: String(PROTOCOL), n: orbName(), r: role() });
+      const frag = new URLSearchParams({ vincular: code, pc: b64.enc(own().pub), v: String(PROTOCOL), n: orbName() });
       if (others.length) frag.set('a', others.join(','));
-      return { url: `${route.url}#${frag}`, payload: { v: PROTOCOL, urls: [route.url, ...others], pc: b64.enc(own.pub), code, name: orbName(), role: role(), expiresAt: pairing.expires },
-        code: shortCodeLabel(short), address: route.url, expiresAt: pairing.expires, kind: route.kind, secure: route.secure, pc: pcFingerprint, name: orbName(), role: role(),
-        device: forKind, admin: pairing.admin === true, approve: pairing.approve, person: { id: pairing.person, name: nameOf(pairing.person) },
-        browserOk: Boolean(route.secure) || route.address === '127.0.0.1' || route.kind === 'tailscale' || ctx.config.mobile?.lanHttp === true };
+      return { url: `${route.url}#${frag}`, payload: { v: PROTOCOL, urls: [route.url, ...others], pc: b64.enc(own().pub), code, name: orbName(), expiresAt: pairing.expires },
+        code: shortCodeLabel(short), address: route.url, expiresAt: pairing.expires, kind: route.kind, secure: route.secure, pc: pcFingerprint(), name: orbName(),
+        device: forKind,
+        browserOk: Boolean(route.secure) || route.address === '127.0.0.1' || route.kind === 'tailscale' };
     },
-    revoke(id, { quiet = false } = {}) {
+    revoke(id) {
       const d = board.one('SELECT * FROM devices WHERE id = ?', String(id)); if (!d) throw new Error(tr('msg.remote.noDevice'));
       board.run('DELETE FROM devices WHERE id = ?', d.id);
       keys.delete(d.id); seen.delete(d.id);
-      // 3.7 (WS3): an Orb unlinked: the copies of its bots here are kept, frozen (Restaurar aquí).
-      if (d.kind === 'orb') { try { remote.onOrbGone?.(orbPeer(d, new Set())); } catch (error) { log(`enlace: ${error.message}`); } }
       for (const c of clients) if (c.device === d.id) { try { c.res.end(); } catch { /* closed */ } clients.delete(c); }
-      for (const [fid, f] of forwarded) if (f.device === d.id) { forwarded.delete(fid); clearTimeout(f.timer); f.reject(offline(d)); }
-      board.event(null, 'usuario', quiet ? 'device.unlinked' : 'device.revoked', d.name);
+      board.event(null, 'usuario', 'device.revoked', d.name);
       linkChanged();
       return true;
     },
-    // ---- 3.5 Magic Link
     devices,
-    // ---- 3.7 (WS2): «Añadir Orb Server» and the hub handoff (src/engine/hub.mjs sets the callbacks).
-    // onServerOffer({ offer, server, person }) → the link made; onHandoff({ id, ref, back, kind, person }) a device paired
-    // with one of this Orb's offers; onDeviceOnline(device) a phone or terminal connected; onMirror(peer, ev) a mirrored
-    // bot event arrived.
-    onServerOffer: null, onHandoff: null, onDeviceOnline: null, onMirror: null,
-    // The install command's code: 10 minutes, one use, tied to this app's key. → { code, expiresAt, fp, address, urls }
-    serverCode({ kind = null, person = null } = {}) {
-      if (!state.running) throw new Error(tr('msg.remote.enableFirst'));
-      const route = state.routes.find((r) => r.kind === kind) ?? state.routes.find((r) => r.kind === 'tailscale') ?? state.routes[0];
-      const code = Array.from({ length: SERVER_CODE_LENGTH }, () => CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)]).join('');
-      serverPairing = { code, secret: serverSecret(code, b64.enc(own.pub)), expires: Date.now() + (Number(process.env.ORB_FAKE_AGENTS && process.env.ORB_SERVER_CODE_MS) || SERVER_CODE_MINUTES * 60_000), fails: 0, person: person ?? owner() };
-      return { code: shortCodeLabel(code), expiresAt: serverPairing.expires, fp: pcFingerprint, address: route.url.replace(/\/$/, ''), kind: route.kind, urls: state.routes.map((r) => r.url) };
-    },
-    serverCodeState: () => (serverActive() ? { active: true, expiresAt: serverPairing.expires } : { active: false }),
-    cancelServerCode() { serverPairing = null; return true; },
-    handoffOffer: (opts) => makeOffer(opts),
-    sendToDevice,
-    fingerprint: () => pcFingerprint,
-    features: () => features(), version: () => version,
-    // 3.7 (WS3): the confirmed Orbs linked here, and a call to one of them down its live stream (its answer comes back
-    // as a reply). onHomeCall / onOrbGone are set by the engine (src/engine/replica.mjs).
-    onHomeCall: null, onOrbGone: null,
-    orbPeers() { const on = onlineIds(); return board.all("SELECT * FROM devices WHERE kind = 'orb' AND kind_ok = 1 AND public_key IS NOT NULL").filter((d) => !parseMeta(d).clone).map((d) => orbPeer(d, on)); },
-    callOrb(id, method, params = {}) {
-      const d = board.one("SELECT * FROM devices WHERE id = ? AND kind = 'orb' AND kind_ok = 1", String(id));
-      if (!d) return Promise.reject(linkError(tr('msg.remote.noDevice'), { status: 404 }));
-      return forward(d, method, params, { principal: null });
+    fingerprint: () => pcFingerprint(),
+    // 3.8: «He olvidado la contraseña»: every linked phone and browser goes (they link again with the new password), and
+    // the keys are read again (a new vault makes new ones). → how many went.
+    revokeAll() {
+      const list = board.all('SELECT id, name FROM devices');
+      board.run('DELETE FROM devices');
+      keys.clear(); seen.clear(); pairing = null; ownKeys = null;
+      for (const c of clients) { try { c.res.end(); } catch { /* closed */ } }
+      clients.clear();
+      if (list.length) board.event(null, 'usuario', 'device.revokedAll', String(list.length));
+      linkChanged();
+      return list.length;
     },
     rename(id, name) {
       const d = board.one('SELECT id FROM devices WHERE id = ?', String(id)); if (!d) throw new Error(tr('msg.remote.noDevice'));
@@ -1400,120 +888,6 @@ export function createRemote({ board, api, log, emit = () => {}, version = null,
       board.run('UPDATE devices SET name = ? WHERE id = ?', clean, d.id);
       linkChanged();
       return deviceView(board.one('SELECT * FROM devices WHERE id = ?', d.id));
-    },
-    // 3.5: this Orb's role or its «Orb para programar» changed: the linked Orbs are asked to say hello again (and so learn
-    // whether their live events are wanted here), and the phones get the new state.
-    relinkOrbs() {
-      for (const c of [...clients]) if (c.kind === 'orb') { try { c.res.write(`data: ${sealText(c.key, { e: 'link:rehello', p: null }, AAD.event(c.device))}\n\n`); } catch { clients.delete(c); } }
-      linkChanged();
-      if (devTargetDevice()) flushQueue().catch((error) => log(`enlace: cola: ${error.message}`));
-    },
-    // 3.5: «Puede administrar» on or off for a linked device (its next call already has it or not).
-    setAdmin(id, admin) {
-      const d = board.one('SELECT id, name, person_id FROM devices WHERE id = ?', String(id)); if (!d) throw new Error(tr('msg.remote.noDevice'));
-      // 3.6: «Puede administrar» only on a device of the owner.
-      if (admin && personOf(d) !== owner()) throw Object.assign(new Error(tr('msg.link.adminOwnerOnly')), { userFacing: true });
-      board.run('UPDATE devices SET admin = ? WHERE id = ?', admin ? 1 : 0, d.id);
-      board.event(null, 'usuario', admin ? 'device.admin' : 'device.noAdmin', d.name);
-      linkChanged();
-      return deviceView(board.one('SELECT * FROM devices WHERE id = ?', d.id));
-    },
-    // 3.5.1: whether a linked device may answer the bots' cards.
-    setApprove(id, on) {
-      const d = board.one('SELECT id, name FROM devices WHERE id = ?', String(id)); if (!d) throw new Error(tr('msg.remote.noDevice'));
-      board.run('UPDATE devices SET approve = ? WHERE id = ?', on ? 1 : 0, d.id);
-      board.event(null, 'usuario', on ? 'device.approve' : 'device.noApprove', d.name);
-      linkChanged();
-      return deviceView(board.one('SELECT * FROM devices WHERE id = ?', d.id));
-    },
-    // 3.5.1: the owner confirms here that a linked device is one of their Orbs (what: 'orb'), or that it may be the Orb
-    // that programs for this one (what: 'taller', which confirms it is an Orb too).
-    confirm(id, what) {
-      const d = board.one('SELECT * FROM devices WHERE id = ?', String(id)); if (!d) throw new Error(tr('msg.remote.noDevice'));
-      if (d.kind !== 'orb') throw new Error(tr('msg.link.notAnOrb'));
-      board.run(what === 'taller' ? 'UPDATE devices SET kind_ok = 1, dev_ok = 1 WHERE id = ?' : 'UPDATE devices SET kind_ok = 1 WHERE id = ?', d.id);
-      board.event(null, 'usuario', what === 'taller' ? 'device.tallerOk' : 'device.orbOk', d.name);
-      if (what === 'taller') remote.relinkOrbs(); else linkChanged();
-      return deviceView(board.one('SELECT * FROM devices WHERE id = ?', d.id));
-    },
-    // Who is linked and who is on. For a phone, without the addresses.
-    // 3.6 (B2): person: whose state it is. A person sees their own devices; the owner sees the names of everyone's (who is
-    // on and when is not told to the others).
-    linkStatus({ forPhone = false, person = owner() } = {}) {
-      const all = devices();
-      const list = person === owner() ? all : all.filter((d) => d.person === person);
-      const t = devTargetDevice(person);
-      // dev: where the Orb mode of a phone goes: 'local' (this Orb programs), 'remote' (to «taller») or 'none'.
-      return { role: role(), name: orbName(), ...versions(), running: Boolean(state.running), dev: t ? 'remote' : programs() ? 'local' : 'none',
-        ...(forPhone ? {} : { devTarget: person === owner() ? String(ctx.config?.devTarget ?? '') : '', tallers: tallers().filter((d) => person === owner() || personOf(d) === person).map((d) => deviceView(d)) }),
-        devices: forPhone ? list.map(({ id, name, kind, role: r, online, lastSeen, person: p, personName }) => ({ id, name, kind, role: r, online, lastSeen, person: p, personName })) : list,
-        taller: t ? (forPhone ? (({ ip: _ip, ...rest }) => rest)(tallerView(t)) : tallerView(t)) : null };
-    },
-    // taller.<sub> on the centre: status, wake, queue and queued are answered here; anything else goes to the workshop.
-    // 3.6: principal: who asks (a device here, or this Orb's window); the workshop is that person's, the queue too.
-    async taller(sub, params = {}, { from = null, principal = null } = {}) {
-      sub = String(sub ?? '');
-      const pid = principal && principal.channel !== 'system' ? principal.person : owner();
-      const d = devTargetDevice(pid);
-      if (sub === 'status') return d ? tallerView(d) : { linked: false, online: false, local: programs() };
-      if (sub === 'queued') {
-        const q = queueScope(pid);
-        return board.all(`SELECT * FROM link_queue WHERE ${q.where} ORDER BY id DESC LIMIT 50`, ...q.args).map((r) => { let result = null; try { result = r.result ? JSON.parse(r.result) : null; } catch { /* plain */ } return { id: r.id, method: r.method, status: r.status, createdAt: r.created_at, doneAt: r.done_at, result }; });
-      }
-      // 3.6 (A12): «comprobar / reintentar» a call left «desconocido» or failed: the same request_id goes again (if the
-      // workshop did it, it answers what it answered then).
-      if (sub === 'retry') {
-        const q = queueScope(pid);
-        const row = board.one(`SELECT * FROM link_queue WHERE id = ? AND ${q.where}`, Number(params.id), ...q.args);
-        if (!row) throw linkError(tr('msg.link.noQueued'), { status: 404 });
-        if (!['desconocido', 'error'].includes(row.status)) return { id: row.id, status: row.status };
-        board.run("UPDATE link_queue SET status = 'pendiente', done_at = NULL WHERE id = ?", row.id);
-        emit('link:queue', { id: row.id, status: 'pendiente', method: row.method, person: pid });
-        if (d && onlineIds().has(d.id)) await flushQueue().catch((error) => log(`enlace: cola: ${error.message}`));
-        const after = board.one('SELECT status FROM link_queue WHERE id = ?', row.id);
-        return { id: row.id, status: after?.status ?? 'pendiente' };
-      }
-      if (!d) {
-        // Someone else's workshop is not for this person (and is not named: they learn nothing of it).
-        if (principal && tallers().some((x) => personOf(x) !== pid)) audit(board, principal, `taller.${sub}`, null, 'deny', 'noOwnTaller');
-        throw programs() ? linkError(tr('msg.link.notCentro'), { status: 409 }) : linkError(tr('msg.link.noTaller'), { status: 404 });
-      }
-      if (sub === 'wake') {
-        const macs = parseMeta(d).macs ?? [];
-        if (!macs.length) throw linkError(tr('msg.link.noMacs', { name: d.name }), { status: 409 });
-        const r = await wake(macs);
-        board.event(null, 'usuario', 'device.wake', d.name);
-        log(`enlace: despertar ${d.name}: ${r.sent} paquete(s)`);
-        return { ...r, name: d.name, online: onlineIds().has(d.id) };
-      }
-      if (sub === 'queue') {
-        const method = String(params.method ?? ''); const inner = params.params && typeof params.params === 'object' ? params.params : {};
-        // 3.7 (WS6): the vault is the Server's own; a call with a secret in it is never kept in a queue.
-        if (/^vault\./.test(method) || SECRET_PARAMS.has(method)) throw linkError(tr('msg.remote.pcOnly'), { status: 403 });
-        forwardCheck(method, inner);
-        mayForward(d, principal, method);
-        const requestId = crypto.randomUUID();
-        const id = board.run('INSERT INTO link_queue (method, params, from_device, created_at, person_id, request_id) VALUES (?, ?, ?, ?, ?, ?)', method, JSON.stringify(inner).slice(0, 200_000), from, now(), pid, requestId).lastInsertRowid;
-        emit('link:queue', { id: Number(id), status: 'pendiente', method, person: pid });
-        if (onlineIds().has(d.id)) flushQueue().catch((error) => log(`enlace: cola: ${error.message}`));
-        return { id: Number(id), queued: true, online: onlineIds().has(d.id) };
-      }
-      if (/^vault\./.test(sub) || SECRET_PARAMS.has(sub)) throw linkError(tr('msg.remote.pcOnly'), { status: 403 });
-      forwardCheck(sub, params);
-      mayForward(d, principal, sub);
-      if (!onlineIds().has(d.id)) throw offline(d);
-      const requestId = crypto.randomUUID();
-      try { return await forward(d, sub, params, { principal, requestId }); }
-      catch (error) {
-        // 3.6 (A12): no answer in time: kept in the queue as «desconocido», to check (or retry) with the same request_id.
-        if (error.extra?.unknown) {
-          const qid = board.run("INSERT INTO link_queue (method, params, from_device, created_at, person_id, request_id, status, done_at) VALUES (?, ?, ?, ?, ?, ?, 'desconocido', ?)",
-            sub, JSON.stringify(params ?? {}).slice(0, 200_000), from, now(), pid, requestId, now()).lastInsertRowid;
-          error.extra.queueId = Number(qid);
-          emit('link:queue', { id: Number(qid), status: 'desconocido', method: sub, person: pid });
-        }
-        throw error;
-      }
     }
   };
   return remote;

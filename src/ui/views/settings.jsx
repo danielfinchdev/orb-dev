@@ -1,9 +1,9 @@
-// Settings: the assistant, its brain, how tasks run, usage caps, extra MCP connectors and the assistant's folder.
-// 3.6 (DESIGN-SYSTEM §2.3): six sections — General, Magic Link (Usuarios, Dispositivos, Orbs enlazados), Agentes y uso,
-// Datos, Avanzado and Acerca de. «Mi perfil» is not a section: the user menu opens it in this same window, on its own.
+// Settings: the assistant, its brain, how tasks run, usage caps, skills and MCP servers and the assistant's folder.
+// 3.6 (DESIGN-SYSTEM §2.3): six sections — General, Magic Link (Dispositivos), Agentes y uso, Datos, Avanzado and
+// Acerca de.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { DatabaseBackup, Settings, FlaskConical, FolderOpen, HeartPulse, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, Wrench, ChevronRight, SlidersHorizontal, Radar, Cpu, Info, ExternalLink } from 'lucide-react';
+import { DatabaseBackup, Settings, FlaskConical, FolderOpen, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, Wrench, ChevronRight, SlidersHorizontal, Radar, Cpu, Info, ExternalLink, ShieldBan, RotateCcw, Puzzle } from 'lucide-react';
 import { ToolIcon } from '@/components/agent-icon.jsx';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, APPEARANCE_DEFAULTS } from '../../core/appearance.mjs';
 import { PRODUCT, AUTHOR } from '../../core/product.mjs';
@@ -13,7 +13,7 @@ import { Robot } from '@/components/robot.jsx';
 import { SkinPreview } from '@/components/skin-preview.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea, Kbd, PathText, Spinner } from '@/components/ui/basic.jsx';
+import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea, Kbd, PathText, Spinner } from '@/components/ui/basic.jsx';
 import { Select, Switch, Checkbox, Dialog, DialogContent, DialogTitle, BubbleTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
 import { ModelGuide } from '@/components/model-guide.jsx';
 import { AGENT } from '@/lib/labels.js';
@@ -24,13 +24,14 @@ import { LANGUAGES } from '../../core/i18n.mjs';
 import { useUpdate, updateActions, notesUrl } from '@/components/update-card.jsx';
 import { play } from '@/lib/sounds.js';
 import { MagicLinkPanel, SubSection } from './magic-link.jsx';
-import { ConnectionsPanel } from './connections.jsx';
-import { PersonsCard, ProfileCards } from './persons.jsx';
 import { DataCards } from './data.jsx';
-import { showPersonUi, showPersonsSettings, isOwner } from '@/lib/persons.js';
+import { ExtensionsPanel } from './extensions.jsx';
+import { unlockCore } from '@/lib/core-access.js';
+import { DEFAULT_PROTECTED } from '../../core/layout.mjs';
 
-async function save(patch, ok = t('settings.saved')) {
-  const config = await act(call('config.save', { patch }), ok);
+// unlock: the master password's token, for a change that needs it (src/core/permissions.mjs › needsUnlock).
+async function save(patch, ok = t('settings.saved'), unlock = null) {
+  const config = await act(call('config.save', { patch, ...(unlock ? { unlock } : {}) }), ok);
   if (config) { setState({ app: { ...getState().app, config } }); applyTheme(config.ui?.theme); applyAppearance(config.ui); }
   return config;
 }
@@ -43,18 +44,16 @@ function Row({ label, hint, children }) {
 function AssistantCard({ c }) {
   const t = useT();
   const [v, setV] = useState({ assistantName: c.assistantName, userName: c.userName, language: c.language });
-  // 3.6: with two or more users, each one's name is in Mi perfil.
-  const many = showPersonUi(useStore((st) => st.me));
   return (
     <Card>
       <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Robot size={40} /><div><CardTitle>{t('settings.assistant')}</CardTitle><CardDescription>{t('settings.assistantDesc')}</CardDescription></div></CardHeader>
       <CardContent className="grid gap-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label={t('settings.assistantName')} hint={t('settings.assistantNameHint')}><Input value={v.assistantName} onChange={(e) => setV({ ...v, assistantName: e.target.value })} maxLength={40} /></Field>
-          {many ? null : <Field label={t('settings.userName')}><Input value={v.userName} onChange={(e) => setV({ ...v, userName: e.target.value })} maxLength={40} /></Field>}          <Field label={t('settings.language')} hint={t('settings.languageHint')}><Select className="w-full" value={v.language} onValueChange={(language) => { setV({ ...v, language }); save({ language }); }} options={Object.entries(LANGUAGES).map(([value, label]) => ({ value, label }))} /></Field>
+          <Field label={t('settings.userName')}><Input value={v.userName} onChange={(e) => setV({ ...v, userName: e.target.value })} maxLength={40} /></Field>          <Field label={t('settings.language')} hint={t('settings.languageHint')}><Select className="w-full" value={v.language} onValueChange={(language) => { setV({ ...v, language }); save({ language }); }} options={Object.entries(LANGUAGES).map(([value, label]) => ({ value, label }))} /></Field>
         </div>
       </CardContent>
-      <CardFooter><Button size="sm" onClick={() => save({ assistantName: v.assistantName.trim(), ...(many ? {} : { userName: v.userName.trim() }), language: v.language })}>{t('settings.save')}</Button></CardFooter>
+      <CardFooter><Button size="sm" onClick={() => save({ assistantName: v.assistantName.trim(), userName: v.userName.trim(), language: v.language })}>{t('settings.save')}</Button></CardFooter>
     </Card>
   );
 }
@@ -218,66 +217,6 @@ const SPEND_PRESETS = [
   { maxParallel: 6, perAgent: 2, timeoutMinutes: 120, stopAt: 0.99, maxTasks: 50, maxHeavy: 20, high: false, maxPerTask: 10, trusted: true, review: true }
 ];
 
-function McpCard({ c }) {
-  const t = useT();
-  const add = () => form(t('settings.mcpAddTitle'), {
-    description: t('settings.mcpAddDesc'),
-    initial: { name: '', command: '', args: '', agents: '' },
-    body: (v, set) => (<>
-      <Field label={t('settings.mcpName')}><Input autoFocus value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder={t('settings.mcpNamePh')} /></Field>
-      <Field label={t('settings.mcpCommand')}><Input value={v.command} onChange={(e) => set({ command: e.target.value })} placeholder="npx" /></Field>
-      <Field label={t('settings.mcpArgs')} hint={t('settings.mcpArgsHint')}><Input value={v.args} onChange={(e) => set({ args: e.target.value })} placeholder="@playwright/mcp@latest" /></Field>
-      <Field label={t('settings.mcpAgents')} hint={t('settings.mcpAgentsHint')}><Input value={v.agents} onChange={(e) => set({ agents: e.target.value })} /></Field>
-    </>),
-    ok: t('settings.add'),
-    onOk: async (v) => {
-      const entry = { name: v.name.trim(), command: v.command.trim(), args: v.args.trim() ? v.args.trim().split(/\s+/) : [], agents: v.agents.split(',').map((x) => x.trim()).filter(Boolean), enabled: true };
-      const config = await call('config.save', { patch: { mcpServers: [...c.mcpServers, entry] } });
-      setState({ app: { ...getState().app, config } });
-      return true;
-    }
-  });
-  // Orb's mcp-servers folder: each subfolder is a server; one click adds it with the command that starts it.
-  const [folder, setFolder] = useState(null);
-  const loadFolder = () => call('mcp.folder').then(setFolder).catch(() => setFolder(null));
-  useEffect(() => { if (!bridge.mobile) loadFolder(); }, [c.mcpServers.length]);
-  const use = async (s) => {
-    const entry = { name: s.name, command: s.command, args: s.args, agents: [], enabled: true };
-    const config = await act(call('config.save', { patch: { mcpServers: [...c.mcpServers, entry] } }), t('settings.mcpAdded', { name: s.name }));
-    if (config) setState({ app: { ...getState().app, config } });
-  };
-  return (
-    <Card>
-      <CardHeader><CardTitle>{t('settings.mcp')}</CardTitle><CardDescription>{t('settings.mcpDesc')}</CardDescription></CardHeader>
-      <CardContent className="grid gap-2">
-        {folder ? (
-          <div className="grid min-w-0 gap-2" data-testid="mcp-folder">
-            <div className="flex min-w-0 items-center gap-2">
-              <div className="grid min-w-0 flex-1"><div className="text-muted-foreground text-xs">{t('settings.mcpFolder')}</div><PathText path={folder.dir} className="text-xs" /></div>
-              <BubbleTip title={t('settings.open')}><Button size="icon-sm" variant="ghost" onClick={() => act(bridge.openPath(folder.dir))} aria-label={t('settings.open')}><FolderOpen /></Button></BubbleTip>
-            </div>
-            {folder.servers.map((s) => (
-              <div key={s.dir} className="flex min-w-0 items-center gap-3 rounded-lg border border-dashed px-3 py-2">
-                <div className="min-w-0 flex-1"><div className="text-sm">{s.name}</div><div className="text-muted-foreground truncate font-mono text-xs">{s.command ? `${s.command} ${s.args.join(' ')}` : t('settings.mcpNoStart')}</div></div>
-                {s.configured ? <span className="text-muted-foreground text-xs">{t('settings.mcpInUse', { name: s.configured })}</span>
-                  : s.command ? <Button size="sm" variant="outline" onClick={() => use(s)}><Plus />{t('settings.mcpUse')}</Button> : null}
-              </div>
-            ))}
-          </div>
-        ) : null}
-        {c.mcpServers.length ? c.mcpServers.map((s, i) => (
-          <div key={s.name} className="flex min-w-0 items-center gap-3 rounded-lg border px-3 py-2">
-            <div className="min-w-0 flex-1"><div className="text-sm">{s.name}</div><div className="text-muted-foreground truncate font-mono text-xs">{s.command} {(s.args ?? []).join(' ')}</div></div>
-            <span className="text-muted-foreground text-xs">{s.agents?.length ? s.agents.join(', ') : t('settings.all')}</span>
-            <Button variant="danger" size="icon-sm" onClick={async () => { if (await confirm(t('settings.mcpRemoveTitle'), t('settings.mcpRemoveBody', { name: s.name }), { ok: t('settings.remove'), danger: true })) save({ mcpServers: c.mcpServers.filter((_, j) => j !== i) }); }}><Trash2 /></Button>
-          </div>
-        )) : <p className="text-muted-foreground text-sm">{t('settings.none')}</p>}
-      </CardContent>
-      <CardFooter><Button size="sm" variant="outline" onClick={add}><Plus />{t('settings.mcpAdd')}</Button></CardFooter>
-    </Card>
-  );
-}
-
 // New versions of Orb (GitHub Releases): the installed version, «Buscar actualizaciones» and the same steps as the card.
 function UpdatesCard() {
   const t = useT();
@@ -290,7 +229,7 @@ function UpdatesCard() {
   }[st.state] ?? '';
   return (
     <Card data-testid="updates-card">
-      <CardHeader><CardTitle>{t('settings.updates')}</CardTitle><CardDescription>{st.portable ? t(st.linux === 'package' ? 'settings.update.linuxPackage' : 'settings.update.portable') : t('settings.updatesDesc')}</CardDescription></CardHeader>
+      <CardHeader><CardTitle>{t('settings.updates')}</CardTitle><CardDescription>{st.portable ? t('settings.update.portable') : t('settings.updatesDesc')}</CardDescription></CardHeader>
       <CardContent className="grid gap-1">
         <div className="text-sm">{t('settings.update.current', { version: st.current })}</div>
         {line ? <div className={cn('text-xs', st.state === 'error' ? 'text-destructive' : 'text-muted-foreground')}>{line}</div> : null}
@@ -307,7 +246,7 @@ function UpdatesCard() {
   );
 }
 
-// Android's adb: downloaded by Orb into android\adb-tools (and in the agents' PATH).
+// Android's adb: downloaded by Orb into core\herramientas\adb (and in the agents' PATH).
 function AndroidCard() {
   const t = useT();
   const [st, setSt] = useState(null);
@@ -386,14 +325,11 @@ function MobileCard() {
         {st.enabled && st.error && st.running ? <p className="text-muted-foreground text-xs">{st.error}</p> : null}
         {/* 3.5: the QR, the short code and the linked devices are in Magic Link, below. */}
         {st.running && route('wifi') ? <p className="text-muted-foreground text-xs">{t('settings.mobileWifiNote')}</p> : null}
-        {/* 3.5.1: browsers over the home Wi-Fi (plain http) only if the user allows it; what notifications show when locked. */}
-        {st.enabled && st.wifi ? (
-          <Row label={t('settings.mobileLanHttp')} hint={t('settings.mobileLanHttpHint')}><Switch data-testid="mobile-lan-http" checked={Boolean(st.lanHttp)} onCheckedChange={(on) => configure({ lanHttp: on })} /></Row>
-        ) : null}
+        {/* 3.5.1: what notifications show when locked. */}
         {st.enabled ? (
-          <Row label={t('settings.mobilePreview')} hint={t(`settings.mobilePreview.${st.preview ?? 'chat'}Hint`)}>
-            <Select value={st.preview ?? 'chat'} onValueChange={(preview) => configure({ preview })} data-testid="mobile-preview" title={t('settings.mobilePreview')}
-              options={['all', 'chat', 'none'].map((v) => ({ value: v, label: t(`settings.mobilePreview.${v}`) }))} />
+          <Row label={t('settings.mobilePreview')} hint={t(`settings.mobilePreview.${previewOf(st.preview)}Hint`)}>
+            <Select value={previewOf(st.preview)} onValueChange={(preview) => configure({ preview })} data-testid="mobile-preview" title={t('settings.mobilePreview')}
+              options={PREVIEWS.map((v) => ({ value: v, label: t(`settings.mobilePreview.${v}`) }))} />
           </Row>
         ) : null}
       </CardContent>
@@ -413,7 +349,7 @@ function PhoneCard() {
       <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Smartphone className="text-primary size-5" /><div><CardTitle>{t('settings.phone')}</CardTitle><CardDescription>{installed ? t('settings.phoneInstalled') : t(p.ios() ? 'settings.phoneInstallIos' : 'settings.phoneInstallAndroid')}</CardDescription></div></CardHeader>
       <CardContent className="grid gap-2">
         {p.supported() && (installed || !p.ios()) ? (
-          <Row label={t('settings.phonePush')} hint={t('settings.phonePushHint')}>
+          <Row label={t('settings.phonePush')} hint={t(p.whenClosed?.() === false ? 'settings.phonePushHintApp' : 'settings.phonePushHint')}>
             <Switch checked={on} onCheckedChange={async (next) => { const r = await act(next ? p.enable() : p.disable()); if (r !== undefined) setOn(r); }} />
           </Row>
         ) : <p className="text-muted-foreground text-sm">{t(p.supported() ? 'settings.phonePushInstallFirst' : 'settings.phonePushNeedsHttps')}</p>}
@@ -438,12 +374,58 @@ function BrowserCard({ c }) {
   );
 }
 
+// «Cosas que nadie toca» (config.protected, src/core/guard.mjs › protectedHit): names, paths or containers no agent
+// touches. Chips to remove, a field to add; saved at once. 3.8: taking off one of the defaults (a password manager) asks
+// first, and «Restaurar los de serie» brings back the ones missing (adding needs no password).
+function ProtectedCard({ c }) {
+  const t = useT();
+  const [draft, setDraft] = useState('');
+  const list = Array.isArray(c.protected) ? c.protected : [];
+  const store = async (items) => {
+    const seen = new Set();
+    const clean = items.map((x) => String(x ?? '').trim()).filter((x) => x.length >= 2 && !seen.has(x.toLowerCase()) && seen.add(x.toLowerCase()));
+    // 3.8: taking something off the list asks for the master password first.
+    const unlock = list.some((x) => !clean.includes(x)) ? await unlockCore('protected') : null;
+    if (list.some((x) => !clean.includes(x)) && !unlock) return undefined;
+    return save({ protected: clean.slice(0, 50) }, t('settings.protectedSaved'), unlock);
+  };
+  const add = async () => { if (draft.trim().length >= 2 && await store([...list, draft])) setDraft(''); };
+  const isDefault = (x) => DEFAULT_PROTECTED.some((d) => d.toLowerCase() === x.toLowerCase());
+  const remove = async (x) => {
+    if (isDefault(x) && !await confirm(t('settings.protectedRemoveTitle', { name: x }), t('settings.protectedRemoveBody'), { ok: t('settings.remove'), danger: true })) return;
+    await store(list.filter((y) => y !== x));
+  };
+  const missing = DEFAULT_PROTECTED.filter((d) => !list.some((x) => x.toLowerCase() === d.toLowerCase()));
+  return (
+    <Card data-testid="protected-card">
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><ShieldBan className="text-primary size-5" /><div><CardTitle>{t('settings.protected')}</CardTitle><CardDescription>{t('settings.protectedHint')}</CardDescription></div></CardHeader>
+      <CardContent className="grid gap-3">
+        {list.length ? (
+          <div className="flex flex-wrap gap-1.5">
+            {list.map((x) => (
+              <Badge key={x} variant="secondary" className="gap-1 font-mono" data-testid="protected-item">
+                {x}
+                <button type="button" className="hover:text-destructive -mr-0.5 rounded-sm" aria-label={t('settings.protectedRemove', { name: x })} onClick={() => remove(x)} data-testid="protected-remove"><X className="size-3" /></button>
+              </Badge>
+            ))}
+          </div>
+        ) : <p className="text-muted-foreground text-sm">{t('settings.protectedEmpty')}</p>}
+        <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); add(); }}>
+          <Input value={draft} maxLength={200} onChange={(e) => setDraft(e.target.value)} placeholder={t('settings.protectedPh')} data-testid="protected-input" />
+          <Button type="submit" size="sm" variant="outline" disabled={draft.trim().length < 2 || list.length >= 50}><Plus />{t('settings.protectedAdd')}</Button>
+        </form>
+        {missing.length ? <div><Button size="sm" variant="ghost" onClick={() => store([...list, ...missing])} data-testid="protected-defaults"><RotateCcw />{t('settings.protectedDefaults')}</Button></div> : null}
+      </CardContent>
+    </Card>
+  );
+}
+
 // Interface: its size on this PC (also Ctrl + / Ctrl - / Ctrl 0) and the terminal that Ctrl+J opens.
 export const sizes = () => [{ value: '0.87', label: t('settings.size.small') }, { value: '1', label: t('settings.size.normal') }, { value: '1.15', label: t('settings.size.large') }];
 function InterfaceCard({ c }) {
   const t = useT();
   const [zoom, setZoom] = useState(null);
-  // 3.7: on Linux, its usual terminals (src/main/terminal.mjs LINUX_TERMINALS) instead of Windows' ones.
+  // 3.7: on Linux, its usual terminals (src/engine/terminal.mjs LINUX_TERMINALS) instead of Windows' ones.
   const linux = window.orb?.platform === 'linux';
   const terminals = linux ? { auto: t('settings.term.auto'), warp: 'Warp', 'x-terminal-emulator': t('settings.term.system'), 'gnome-terminal': 'GNOME Terminal', konsole: 'Konsole', 'xfce4-terminal': 'Xfce Terminal', kitty: 'kitty', alacritty: 'Alacritty', xterm: 'XTerm' }
     : window.orb?.platform && window.orb.platform !== 'win32' ? { auto: t('settings.term.auto'), warp: 'Warp' }
@@ -478,21 +460,6 @@ function InterfaceCard({ c }) {
 }
 
 // Expert mode: an IDE-like view (PC only) with the panels the user picks.
-// 2.7: the bridge with Open Control Edge (engine/bridge.mjs): on unless turned off. 3.7: its own card (it was part of
-// «Monitoreo del equipo», which is gone), config oce.share. 3.7 (WS8): «Crear Optimus automáticamente», oce.optimus.
-function OceCard({ c }) {
-  const t = useT();
-  return (
-    <Card data-testid="oce-card">
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><HeartPulse className="text-success size-5" /><div><CardTitle>{t('settings.oce')}</CardTitle><CardDescription>{t('settings.oceDesc')}</CardDescription></div></CardHeader>
-      <CardContent>
-        <Row label={t('settings.oceShare')}><Switch checked={c.oce?.share !== false} onCheckedChange={(share) => save({ oce: { share } }, share ? t('settings.oceShared') : t('settings.oceNotShared'))} data-testid="oce-share" /></Row>
-        <Row label={t('settings.oceOptimus')} hint={t('settings.oceOptimusHint')}><Switch checked={c.oce?.optimus !== false} onCheckedChange={(optimus) => save({ oce: { optimus } }, optimus ? t('settings.oceOptimusOn') : t('settings.oceOptimusOff'))} data-testid="oce-optimus" /></Row>
-      </CardContent>
-    </Card>
-  );
-}
-
 function ExpertCard({ c }) {
   const t = useT();
   const on = c.expert?.enabled === true; const panels = c.expert?.panels ?? {};
@@ -521,7 +488,7 @@ export function PhoneView() {
   );
 }
 
-// Contribute: a contribution through PayPal and feedback straight to the developer's inbox (src/main/feedback.mjs).
+// Contribute: a contribution through PayPal and feedback straight to the developer's inbox (src/engine/feedback.mjs).
 function SupportCard() {
   const t = useT();
   return (
@@ -619,7 +586,7 @@ function AboutCard({ version }) {
   const t = useT();
   return (
     <Card data-testid="settings-about">
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Robot size={40} /><div><CardTitle>{PRODUCT.name} {version}</CardTitle></div></CardHeader>
+      <CardHeader className="flex-row items-center gap-3"><img src="./icon-o.png" alt="" className="size-10 shrink-0 rounded-[22%]" data-testid="about-icon" /><div><CardTitle>{PRODUCT.name} {version}</CardTitle></div></CardHeader>
       <CardContent className="grid gap-1 text-sm">
         <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">{t('about.developer')}</span>
           <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="hover:text-primary inline-flex cursor-pointer items-center gap-1.5 font-medium" data-testid="about-github"><ToolIcon tool="gh" className="size-4" />@{AUTHOR.github}<ExternalLink className="text-muted-foreground size-3.5" /></button>
@@ -630,46 +597,48 @@ function AboutCard({ version }) {
   );
 }
 
+// What a notification shows on a locked phone. 3.8: «all» (before, the bots' messages too) shows the same as «chat»:
+// it is offered no more and reads as «chat».
+const PREVIEWS = ['chat', 'none'];
+const previewOf = (v) => (v === 'none' ? 'none' : 'chat');
+
 // Ajustes is a window over the app: six sections on the left (DESIGN-SYSTEM §2.3). groups: the parts of a section, each
 // with its heading; the active section lists them under its name in the menu, to jump to one.
 const SECTIONS = [
   { id: 'general', icon: SlidersHorizontal, groups: ['apariencia', 'actualizaciones'],
     cards: (c, app) => <><AssistantCard c={c} /><FolderCard c={c} home={app.home} /><SubSection id="apariencia" title={t('settings.group.apariencia')}><AppearanceCard c={c} /><InterfaceCard c={c} /></SubSection><SubSection id="actualizaciones" title={t('settings.group.actualizaciones')}><UpdatesCard /></SubSection></> },
-  // Who can enter this Orb: its users, their devices and the Orbs linked with it.
-  // 3.7 (WS9): and «Conexiones», everything connected to it in one list.
-  { id: 'magiclink', icon: Radar, groups: (me) => [...(showPersonsSettings(me) ? ['usuarios'] : []), 'dispositivos', ...(bridge.mobile ? [] : ['server']), 'orbs', 'conexiones'],
-    cards: (c, app, me) => <><MagicLinkPanel grouped users={showPersonsSettings(me) ? <PersonsCard /> : null} phoneAccess={<MobileCard />} /><SubSection id="conexiones" title={t('settings.group.conexiones')}><ConnectionsPanel /></SubSection></> },
+  // Who can enter this Orb: the linked phones and browsers.
+  { id: 'magiclink', icon: Radar, groups: ['dispositivos'],
+    cards: () => <MagicLinkPanel grouped phoneAccess={<MobileCard />} /> },
   { id: 'agentes', icon: Cpu, cards: (c) => <><ChatCard c={c} /><TasksCard c={c} />{bridge.mobile ? null : <TestCard />}</> },
-  { id: 'datos', icon: DatabaseBackup, when: (me) => isOwner(me), cards: () => <DataCards /> },
-  // 3.7: «Monitoreo» is no longer here (a bot with the «Equipo» tools does it); sharing with Open Control Edge stays.
+  // 3.8.1: every skill and MCP server of core (src/ui/views/extensions.jsx); this PC only.
+  { id: 'extensiones', icon: Puzzle, pcOnly: true, cards: () => <ExtensionsPanel /> },
+  { id: 'datos', icon: DatabaseBackup, cards: () => <DataCards /> },
   { id: 'avanzado', icon: Wrench, groups: () => ['herramientas', ...(fullPc() ? ['experto'] : [])],
-    cards: (c) => <><SubSection id="herramientas" title={t('settings.group.herramientas')}><BrowserCard c={c} /><McpCard c={c} /><AndroidCard />{fullPc() ? <OceCard c={c} /> : null}</SubSection>
-      {/* 2.7.3: Orb Light (the portable .exe) leaves out God mode. */}
+    cards: (c) => <><SubSection id="herramientas" title={t('settings.group.herramientas')}><BrowserCard c={c} /><ProtectedCard c={c} /><AndroidCard /></SubSection>
       {fullPc() ? <SubSection id="experto" title={t('settings.group.experto')}><ExpertCard c={c} /></SubSection> : null}</> },
   { id: 'acerca', icon: Info, groups: ['contribuye', 'apps'],
     cards: (c, app) => <><AboutCard version={app.version} /><SubSection id="contribuye" title={t('settings.group.contribuye')}><SupportCard /><FeedbackCard /></SubSection><SubSection id="apps" title={t('settings.group.apps')}><MoreAppsCard /></SubSection></> }
 ];
 // The names of before 3.6 (links in tutorials, notices and the sidebar) → [section, part].
-const ALIASES = { personas: ['magiclink', 'usuarios'], conexiones: ['magiclink', 'conexiones'], servidor: ['magiclink', 'server'], contrasenas: ['magiclink', 'contrasenas'], movil: ['magiclink', 'dispositivos'], apariencia: ['general', 'apariencia'], actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'],
-  herramientas: ['avanzado', 'herramientas'], experto: ['avanzado', 'experto'], monitor: ['avanzado', 'herramientas'], contribuye: ['acerca', 'contribuye'], apps: ['acerca', 'apps'] };
+const ALIASES = { conexiones: ['magiclink', 'dispositivos'], movil: ['magiclink', 'dispositivos'], apariencia: ['general', 'apariencia'], actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'],
+  herramientas: ['avanzado', 'herramientas'], mcp: ['extensiones'], skills: ['extensiones'], experto: ['avanzado', 'experto'], monitor: ['avanzado', 'herramientas'], contribuye: ['acerca', 'contribuye'], apps: ['acerca', 'apps'] };
 export function resolveSection(open) {
   if (!open || open === true) return ['general', null];
   const [id, part = null] = String(open).split(':');
   return ALIASES[id] ? [ALIASES[id][0], part ?? ALIASES[id][1] ?? null] : [id, part];
 }
-const groupsOf = (section, me) => (typeof section.groups === 'function' ? section.groups(me) : section.groups ?? []);
+const groupsOf = (section) => (typeof section.groups === 'function' ? section.groups() : section.groups ?? []);
 
 export function SettingsDialog() {
   const t = useT();
   const open = useStore((s) => s.settings);
   const app = useStore((s) => s.app);
-  const me = useStore((s) => s.me);
-  const server = useStore((s) => s.server);
   const [wanted, part] = resolveSection(open);
   const openedAt = useStore((s) => s.settingsAt);
-  // The part asked for (a link to «Usuarios», a notice about updates…): scrolled into view once the section is drawn.
-  // Some parts appear only after their data loads (Orb Server, Conexiones): it waits for them for a moment, and the
-  // sections above them may still grow, so it follows for a second. Clicking the same part again scrolls again.
+  // The part asked for (a link to «Copias de seguridad», a notice about updates…): scrolled into view once the section is drawn.
+  // Some parts appear only after their data loads: it waits for them for a moment, and the sections above them may
+  // still grow, so it follows for a second. Clicking the same part again scrolls again.
   useEffect(() => {
     if (!open || !part) return undefined;
     let frame = 0; const until = performance.now() + 1500;
@@ -687,27 +656,21 @@ export function SettingsDialog() {
     return () => { stop(); window.removeEventListener('wheel', stop); window.removeEventListener('touchmove', stop); window.removeEventListener('keydown', stop); window.removeEventListener('pointerdown', stop, { capture: true }); };
   }, [open, part, openedAt]);
   if (!app) return null;
-  // «Mi perfil» (the user menu, with two or more users): this same window, on its own, without the sections.
-  const profile = wanted === 'perfil' && showPersonUi(me);
-  const sections = SECTIONS.filter((s) => !s.when || s.when(me, server));
-  const section = sections.find((s) => s.id === wanted) ?? sections[0];
+  const section = SECTIONS.find((s) => s.id === wanted && (!s.pcOnly || !bridge.mobile)) ?? SECTIONS[0];
   const c = app.config;
   return (
     <Dialog open={Boolean(open)} onOpenChange={(o) => { if (!o) closeSettings(); }}>
-      <DialogContent className={cn('flex h-[min(780px,90vh)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none', profile ? 'w-[min(760px,94vw)]' : 'w-[min(1080px,94vw)]')} data-testid={profile ? 'profile-dialog' : 'settings-dialog'} aria-describedby={undefined}>
+      <DialogContent className="flex h-[min(780px,90vh)] w-[min(1080px,94vw)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none" data-testid="settings-dialog" aria-describedby={undefined}>
         <div className="flex h-16 shrink-0 items-center border-b px-6 pr-14">
-          <DialogTitle className="text-lg font-medium">{profile ? t('persons.myProfile') : t('settings.title')}</DialogTitle>
+          <DialogTitle className="text-lg font-medium">{t('settings.title')}</DialogTitle>
         </div>
-        {profile ? (
-          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 pt-6 pb-8"><div className="mx-auto grid max-w-2xl gap-4 [&>*]:min-w-0"><ProfileCards /></div></div>
-        ) : (
-          <div className="flex min-h-0 flex-1">
+        <div className="flex min-h-0 flex-1">
             <nav className="flex w-56 shrink-0 flex-col max-sm:w-16" aria-label={t('settings.title')}>
               <div className="grid min-h-0 flex-1 content-start gap-1 overflow-y-auto px-3 pt-4 pb-4">
-                {sections.map((sec) => {
+                {SECTIONS.filter((sec) => !sec.pcOnly || !bridge.mobile).map((sec) => {
                   const { id, icon: Icon } = sec;
                   const on = section.id === id;
-                  const groups = on ? groupsOf(sec, me) : [];
+                  const groups = on ? groupsOf(sec) : [];
                   return (
                     <div key={id} className="grid gap-0.5">
                       <button type="button" onClick={() => openSettings(id)} data-testid={`settings-nav-${id}`} aria-label={t(`settings.section.${id}`)} aria-current={on ? 'page' : undefined}
@@ -731,11 +694,10 @@ export function SettingsDialog() {
               {/* min-w-0 on the cards: a long one-line text inside (a path, a wide control) must not widen the column in a narrow window */}
               <div className="mx-auto grid max-w-3xl gap-4 [&>*]:min-w-0">
                 <div className="grid gap-1 pb-1"><h2 className="text-2xl font-medium">{t(`settings.section.${section.id}`)}</h2><p className="text-muted-foreground text-sm">{t(`settings.sectionDesc.${section.id}`)}</p></div>
-                {section.cards(c, app, me)}
+                {section.cards(c, app)}
               </div>
             </div>
           </div>
-        )}
       </DialogContent>
     </Dialog>
   );

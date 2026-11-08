@@ -22,7 +22,8 @@ export function useLiveTasks() {
     if (!running) { setLive([]); return undefined; }
     let alive = true;
     const load = () => call('tasks.live').then((r) => alive && setLive(r ?? [])).catch(() => {});
-    load(); const t = setInterval(load, 2000);
+    // (a hidden window skips the polls: nobody sees the bars; the next one after it shows comes within 2 s)
+    load(); const t = setInterval(() => { if (!document.hidden) load(); }, 2000);
     return () => { alive = false; clearInterval(t); };
   }, [running]);
   return live;
@@ -35,7 +36,7 @@ export function ProgressBar({ percent, quiet, className }) {
     <div className={cn('bg-muted relative h-1.5 w-full overflow-hidden rounded-full', className)} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent ?? undefined}>
       {percent != null
         ? <div className={cn('h-full rounded-full transition-[width] duration-700', quiet ? 'bg-warning' : 'bg-primary')} style={{ width: `${Math.max(3, percent)}%` }} />
-        : <div className={cn('absolute inset-y-0 w-1/3 rounded-full', quiet ? 'bg-warning/70' : 'bg-primary/70 animate-[orb-indeterminate_1.6s_ease-in-out_infinite]')} />}
+        : <div className={cn('absolute inset-y-0 left-0 w-1/3 rounded-full', quiet ? 'bg-warning/70' : 'bg-primary/70 animate-[orb-indeterminate_1.6s_ease-in-out_infinite]')} />}
     </div>
   );
 }

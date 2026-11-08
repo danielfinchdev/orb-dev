@@ -6,16 +6,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { ctx, tr } from '../core/context.mjs';
+import { ctx, tr, connectorKey } from '../core/context.mjs';
 import { adapter, executable } from '../agents/index.mjs';
-import { orbMcpServer } from '../agents/common.mjs';
+import { liveSkills } from './api-extensions.mjs';
+import { orbMcpServer, connectorLauncher } from '../agents/common.mjs';
+import { agentAuth } from './agent-auth.mjs';
+import { connectorLaunch } from '../core/connector-secrets.mjs';
+import { connectorSafe } from '../core/extensions.mjs';
 import { CURSOR_FILES } from '../agents/cursor.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { git, isGitRepo, repoRoot } from '../core/workspace.mjs';
 import { account as findAccount, accountEnv } from '../core/accounts.mjs';
-import { pickAccount, checkSpend, recordSpend, spendText } from '../core/budget.mjs';
-import { scopeSql } from '../core/authz.mjs';
-import { confineFor } from '../core/guard.mjs';
+import { pickAccount, recordSpend } from '../core/budget.mjs';
 import { browserKey } from '../core/browser-key.mjs';
 import { PERMISSIONS, plainAction, pidKills, unwrapShell } from '../core/guard.mjs';
 import { processList, taskProcesses } from '../core/procs.mjs';
@@ -38,50 +40,45 @@ const parseItem = (row) => { let body = row.body; if (/^[[{]/.test(body)) { try 
 const bodyText = (body) => (typeof body === 'string' ? body : body?.text ?? '');
 
 export const browserOn = () => Boolean(ctx.browser) && ctx.config.browser?.enabled !== false;
-// What the agent process needs in its environment for the browser tools: the key of this conversation's page only.
-// 3.6 (WS4): person: whose browser profile the pages use (src/main/browser.mjs: one per person; none = the owner's).
-export const browserEnv = (agent, session, task = '', person = null) => (browserOn() ? { ORB_BROWSER_TOKEN: browserKey(ctx.browser.token, { agent, session: String(session), task: String(task || ''), person: person ? String(person) : '' }), ...(person ? { ORB_BROWSER_PERSON: String(person) } : {}) } : {});
-
-// Orb's signature of who a worker's MCP process is (agent and task): made with a key that lives only in the engine's
-// memory (a new one each start, which retires the old signatures); the database keeps just the hash, for the MCP to look
-// it up. The same agent and task always get the same signature, so the table does not grow with every turn.
-// 3.6: and the person it works for (a task's, a direct conversation's): its tools see only what that person may see.
-export function agentToken(board, agent, taskId = '', person = null) {
-  if (!agentKey) { agentKey = crypto.randomBytes(32); board.run("DELETE FROM settings WHERE key LIKE 'agent_id:%'"); }
-  const token = crypto.createHmac('sha256', agentKey).update(`${agent}|${taskId}|${person ?? ''}`).digest('hex');
-  board.settingJson(`agent_id:${crypto.createHash('sha256').update(token).digest('hex')}`, { agent, task: taskId ? Number(taskId) : null, person: person ?? null });
-  return token;
-}
-// 3.6: the coordinator's conversation, signed with its key (its MCP process checks it was not changed).
-export const conversationSig = (orchKey, conversation) => crypto.createHmac('sha256', String(orchKey)).update(`conversation|${conversation}`).digest('hex');
-let agentKey = null;
 
 // MCP servers handed to an agent: the assistant's board (with the browser tools when the app offers them) plus the
-// user's own connectors enabled for that agent. session: which conversation, so its next turn reuses the same page.
-// 3.2: conversation: the coordinator's conversation (its questions, tasks and project are that conversation's).
-export function mcpServersFor(agent, { board, taskId = '', orchestrator = false, browser = !orchestrator, session = '', orchKey = '', conversation = null, person = null } = {}) {
+// user's own connectors enabled for that agent. session: which conversation or task run (its agent process), so its next
+// turn reuses the same page. 3.2: conversation: the coordinator's conversation (its questions, tasks and project).
+// 3.8: who each server is, and a connector's command and keys, stay in the engine's memory (agent-auth.mjs): the config
+// carries only the pipe and a ticket per server, new for every agent process and taken back when it closes
+// (Sessions.closeLive, the coordinator's Lane.closeLive). A worker's tools act only on its task (permissions.mjs ›
+// ownsTask); two direct conversations of one agent are two identities.
+// F2.6c: reusable: Cursor's tickets, new every turn (mcpServersEachTurn) and released when the turn ends (.release()).
+export function mcpServersFor(agent, { taskId = '', orchestrator = false, browser = !orchestrator, session = '', conversation = null, reusable = false } = {}) {
   const who = orchestrator ? 'orb' : agent;
-  const env = { ORB_HOME: ctx.home, ORB_AGENT: who, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}), ...(orchestrator && conversation ? { ORB_CONVERSATION: String(conversation) } : {}) };
-  if (!orchestrator && board) env.ORB_AGENT_TOKEN = agentToken(board, who, taskId, person);
-  // The coordinator's key goes to its own MCP process only (handed in memory by the SDK, never written to a file).
-  if (orchestrator && orchKey) { env.ORB_ORCH_KEY = orchKey; if (conversation) env.ORB_CONVERSATION_TOKEN = conversationSig(orchKey, conversation); }
-  if (browser && session && browserOn()) {
-    env.ORB_BROWSER_PIPE = ctx.browser.pipe;
-    env.ORB_SESSION = String(session);
-    Object.assign(env, browserEnv(who, session, taskId, person && board && !board.isOwnerPerson?.(person) ? person : null));
-  }
-  const servers = { orb: orbMcpServer(env) };
+  const sid = session ? String(session) : null;
+  const ticketed = (name, base, reply) => {
+    const variable = `ORB_TICKET_${name}`.replace(/[^A-Za-z0-9_]/g, '_');
+    const ticket = agentAuth.issue({ session: sid, reply, reusable });
+    tickets.push(ticket);
+    return { ...base, args: [...base.args, `--ticket-env=${variable}`], env: { ...base.env, ORB_AUTH_PIPE: agentAuth.address, [variable]: ticket } };
+  };
+  const tickets = [];
+  // The browser's key for this conversation's page only.
+  const nav = browser && sid && browserOn() ? { pipe: ctx.browser.pipe, session: sid, token: browserKey(ctx.browser.token, { agent: who, session: sid, task: String(taskId || '') }) } : null;
+  const servers = { orb: ticketed('orb', orbMcpServer(), { home: ctx.home, browser: nav,
+    who: { agent: who, boss: orchestrator, conversation: orchestrator && conversation ? Number(conversation) : null, task: !orchestrator && taskId ? Number(taskId) : null, session: sid } }) };
   if (!orchestrator) {
-    const owner = board?.ownerId?.() ?? null;
+    const taken = new Set(['orb']);
     for (const s of ctx.config.mcpServers ?? []) {
-      if (s.enabled === false || (s.agents?.length && !s.agents.includes(agent))) continue;
-      // 3.6: a connector is its person's (mcpServers[].person; none = the owner's): only their own agents get it.
-      if ((s.person ?? owner) !== (person ?? owner)) continue;
-      servers[s.name] = { command: s.command, args: s.args ?? [], ...(s.env ? { env: s.env } : {}) };
+      if (s.enabled === false || (s.agents?.length && !s.agents.includes(agent)) || taken.has(connectorKey(s.name))) continue;
+      // 3.8.1: a server of core\mcp whose folder is a link or a junction (or reaches out of core) never starts.
+      if (!connectorSafe(ctx.paths.core, s)) continue;
+      taken.add(connectorKey(s.name)); // F2.6c: never two servers on one variable name (config checks it too)
+      // 3.8: its keys only for its launcher (orb.json has references). 3.8.1: as a one-time grant of the vault, made when
+      // the launcher trades its ticket: the keys go from the vault to the launcher, never through the engine.
+      servers[s.name] = ticketed(s.name, connectorLauncher(), () => ({ launch: { command: s.command, args: s.args ?? [], ...connectorLaunch(ctx.master, s) } }));
     }
   }
-  return servers;
+  return Object.defineProperty(servers, 'release', { value: () => { for (const t of tickets) agentAuth.revoke(t); } });
 }
+// What an adapter gets: its servers, or (an agent that starts them again every turn) a function giving new ones.
+export const mcpServersOf = (a, agent, opts) => (a.mcpServersEachTurn ? () => mcpServersFor(agent, { ...opts, reusable: true }) : mcpServersFor(agent, opts));
 
 // Reference pictures: copied into <folder>/.orb-adjuntos/<stamp>/ so every agent can read them, and kept out of git.
 export function placeAttachments(files, cwd) {
@@ -141,7 +138,6 @@ export class Sessions {
     this.onApprovalDone = () => {}; // set by the engine: that notice shows how it ended (allowed, denied, nobody answered)
     this.onApprovalExpired = () => {};
     this.onRate = () => {};     // set by the engine: the real usage each account reports (budget)
-    this.onBlocked = () => {};  // 3.6: set by the engine: a turn refused by a loan's limits (a line + a push to that person)
     // Sessions left "running" by a closed app: their process is gone. Marked "interrupted" so they can continue.
     board.run("UPDATE sessions SET status = 'interrupted' WHERE status = 'running'");
     // Approval cards left open by a closed app can no longer be answered.
@@ -152,20 +148,16 @@ export class Sessions {
     this.sweeper.unref?.();
   }
 
-  // 3.6: principal: only that person's (a task's session is its task's person's).
-  list({ archived = false, kind, principal = null } = {}) {
-    const s = principal ? scopeSql(principal, 'session', 'sessions') : { where: '1=1', args: [] };
-    return this.board.all(`SELECT * FROM sessions WHERE archived = ? ${kind ? 'AND kind = ?' : ''} AND ${s.where} ORDER BY updated_at DESC LIMIT 300`, Number(archived), ...(kind ? [kind] : []), ...s.args).map(parseRow);
+  list({ archived = false, kind } = {}) {
+    return this.board.all(`SELECT * FROM sessions WHERE archived = ? ${kind ? 'AND kind = ?' : ''} ORDER BY updated_at DESC LIMIT 300`, Number(archived), ...(kind ? [kind] : [])).map(parseRow);
   }
   get(id) { return parseRow(this.board.one('SELECT * FROM sessions WHERE id = ?', String(id))); }
   must(id) { const s = this.get(id); if (!s) throw new Error(tr('msg.sessions.noConversation')); return s; }
 
-  // 3.6: person: whose it is (a task's: its task's person); the account must be one that person may spend.
-  create({ kind = 'chat', agent, account = null, model = null, reasoning = 'medium', permission = 'editar', project = null, cwd, title, taskId = null, parentId = null, person = null }) {
+  create({ kind = 'chat', agent, account = null, model = null, reasoning = 'medium', permission = 'editar', project = null, cwd, title, taskId = null, parentId = null }) {
     adapter(agent);
     if (account && findAccount(account) && findAccount(account).agent !== agent) throw new Error(tr('msg.sessions.accountNotOf', { account, agent }));
-    const acc = pickAccount(this.board, { person, agent, preferred: account });
-    if (!acc && account && findAccount(account)?.agent === agent) throw Object.assign(new Error(tr('msg.spend.notYours')), { userFacing: true });
+    const acc = pickAccount(this.board, { agent, preferred: account });
     if (!acc || acc.agent !== agent) throw new Error(tr('msg.sessions.accountNotOf', { account, agent }));
     if (!PERMISSIONS.includes(permission)) throw new Error(tr('msg.sessions.badPermission'));
     if (!cwd || !fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) throw new Error(tr('msg.sessions.noCwd', { cwd }));
@@ -173,8 +165,8 @@ export class Sessions {
     // No model chosen = the agent's default from Agentes (Sonnet for Claude), never its CLI's own default (which can be the
     // most expensive one).
     const chosen = model || ctx.config.agents[agent]?.defaultModel || null;
-    this.board.run(`INSERT INTO sessions (id, kind, agent, account, model, reasoning, permission, project, cwd, task_id, title, status, parent_id, created_at, updated_at, person_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'idle', ?, ?, ?, ?)`, id, kind, agent, acc.id, chosen, reasoning, permission, project, cwd, taskId, oneLine(title || tr('msg.sessions.defaultTitle'), 80), parentId, at, at, person ?? null);
+    this.board.run(`INSERT INTO sessions (id, kind, agent, account, model, reasoning, permission, project, cwd, task_id, title, status, parent_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'idle', ?, ?, ?)`, id, kind, agent, acc.id, chosen, reasoning, permission, project, cwd, taskId, oneLine(title || tr('msg.sessions.defaultTitle'), 80), parentId, at, at);
     const s = this.get(id); this.emit('session:update', s); return s;
   }
 
@@ -203,7 +195,7 @@ export class Sessions {
     this.board.run('DELETE FROM session_items WHERE session_id = ?', id);
     this.board.run('DELETE FROM session_queue WHERE session_id = ?', id);
     this.board.run('DELETE FROM sessions WHERE id = ?', id);
-    this.emit('session:removed', { id, ...(s.person_id ? { person: s.person_id } : {}) });
+    this.emit('session:removed', { id });
   }
 
   // History in pages: the newest `limit` items, or those before `before` (older pages) / after `after` (new ones).
@@ -270,6 +262,8 @@ export class Sessions {
   liveKey(s, acc) { return [s.agent, acc.id, s.cwd, s.reasoning].join('|'); }
 
   closeLive(id) {
+    // Its MCP servers' grants end with its process (a new process gets new tickets).
+    agentAuth.revokeSession(id);
     const entry = this.lives.get(id); if (!entry) return;
     this.lives.delete(id);
     try { entry.live.close(); } catch { /* gone */ }
@@ -312,11 +306,10 @@ export class Sessions {
       promptDir,
       exe, cwd: s.cwd, model: s.model, reasoning: s.reasoning, permission: s.permission,
       resumeId: forkFrom || s.cli_session || null, forkSession: Boolean(forkFrom), newSessionId,
-      mcpServers: mcpServersFor(s.agent, { board: this.board, taskId, session: s.id, person: s.person_id ?? null }), budgetUsd,
-      // 3.6 (A9): someone else's than the owner's works only inside its project's folder (no other project, no secrets).
-      ...(this.board.isOwnerPerson(s.person_id) ? {} : { confine: confineFor({ roots: [s.cwd], others: this.board.projects().filter((p) => p.name !== s.project).map((p) => p.path) }) }),
-      env: { ...accountEnv(acc), ...browserEnv(s.agent, s.id, taskId, this.board.isOwnerPerson(s.person_id) ? null : s.person_id), ORB_HOME: ctx.home, ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
+      mcpServers: mcpServersOf(a, s.agent, { taskId, session: s.id }), budgetUsd,
+      env: { ...accountEnv(acc), ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
       internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog, cfg: ctx.config.agents[s.agent] ?? {},
+      skills: liveSkills(), // 3.8.1: the skills of core that are on (Claude and Codex load them themselves)
       onEvent: (ev) => this.onLiveEvent(s.id, ev)
     });
     this.lives.set(s.id, entry);
@@ -374,7 +367,8 @@ export class Sessions {
     }
     if (ev.type === 'context') { if (ev.size) this.update(id, { context: { used: ev.used, size: ev.size, at: now() } }); return; }
     if (ev.type === 'rate') { const s = this.get(id); try { this.onRate(s?.account ?? s?.agent, ev); } catch { /* budget only */ } return; }
-    if (ev.type === 'exit') { if (!this.running.has(id) && this.lives.get(id)?.live.isClosed?.()) this.lives.delete(id); }
+    // F2.6c: the process is gone: its tickets go with it at once, even mid-turn (a process it left behind could trade them).
+    if (ev.type === 'exit') { if (this.lives.get(id)?.live.isClosed?.()) { agentAuth.revokeSession(id); if (!this.running.has(id)) this.lives.delete(id); } }
   }
 
   // 3.1: whether a command only stops processes this task started itself: every number it names is a process launched
@@ -492,18 +486,11 @@ export class Sessions {
     const s = this.must(id);
     if (this.running.has(id)) throw new Error(tr('msg.sessions.stillWorking'));
     if (!String(text ?? '').trim() && !images.length) throw new Error(tr('msg.sessions.writeMessage'));
+    // 3.8.1: its project is being deleted (project-close.mjs): no new turn in a folder that is going away.
+    if (s.kind !== 'task' && s.project && this.board.isDeleting(s.project)) throw new Error(tr('msg.projects.deleting', { name: s.project }));
     // The conversation's own account: if it was removed, the turn does not silently move to another subscription.
-    const acc = s.account ? findAccount(s.account) : pickAccount(this.board, { person: s.person_id ?? null, agent: s.agent });
+    const acc = s.account ? findAccount(s.account) : pickAccount(this.board, { agent: s.agent });
     if (!acc) throw new Error(tr('msg.sessions.accountGone', { account: s.account }));
-    // 3.6: a borrowed account within its loan (caps, reserve, end date); refused, the person who spends is told.
-    const spend = checkSpend(this.board, { person: s.person_id ?? null, account: acc.id });
-    if (!spend.ok) {
-      const why = spendText(spend, { account: acc.id });
-      this.addItem(id, 'error', 'text', why);
-      try { this.onBlocked(s, why); } catch (error) { this.log(`aviso de uso: ${error.message}`); }
-      onFinish?.({ code: -1, state: { final: why, text: '', isError: true }, stderr: why, logFile: null, stopped: false, blocked: spend });
-      return null;
-    }
     const a = adapter(s.agent);
     const attached = placeAttachments(images, s.cwd);
     if (showUser) this.addItem(id, 'user', 'text', attached.length ? { text, images: attached } : text);
@@ -550,7 +537,7 @@ export class Sessions {
       const limited = Boolean(result.limit);
       this.update(id, { status: limited ? 'limited' : failed ? 'error' : 'idle' });
       if (before) { try { logDirect(this.board, this.get(id) ?? s, { before, request: text, answer: result.text || result.final }); } catch (error) { this.log(`bitácora de la conversación ${id}: ${error.message}`); } }
-      try { recordSpend(this.board, { person: s.person_id ?? null, account: acc.id, session: s.id, task: taskId ?? null, usage: result.usage ?? {} }); } catch (error) { this.log(`uso ${id}: ${error.message}`); }
+      try { recordSpend(this.board, { account: acc.id, session: s.id, task: taskId ?? null, usage: result.usage ?? {} }); } catch (error) { this.log(`uso ${id}: ${error.message}`); }
       const state = { final: result.final, text: result.text, isError: result.isError, usage: result.usage, cliSession: this.get(id)?.cli_session };
       finished = true;
       try { onFinish?.({ code: result.isError ? 1 : 0, state, stderr: result.isError ? result.final : '', logFile: entry.logFile, stopped: run.stopped, timedOut: Boolean(run.timedOut), limit: result.limit }); }
@@ -587,10 +574,8 @@ export class Sessions {
     const a = adapter(s.agent);
     if (!a.caps?.compact) throw new Error(tr('msg.sessions.cannotCompact', { label: a.label }));
     if (!s.cli_session) return { ok: true, how: 'none' };
-    const acc = s.account ? findAccount(s.account) : pickAccount(this.board, { person: s.person_id ?? null, agent: s.agent });
+    const acc = s.account ? findAccount(s.account) : pickAccount(this.board, { agent: s.agent });
     if (!acc) throw new Error(tr('msg.sessions.accountGone', { account: s.account }));
-    const spend = checkSpend(this.board, { person: s.person_id ?? null, account: acc.id });
-    if (!spend.ok) throw new Error(spendText(spend, { account: acc.id }));
     const entry = this.getLive(s, acc);
     if (typeof entry.live.compact !== 'function') throw new Error(tr('msg.sessions.cannotCompact', { label: a.label }));
     const run = { agent: s.agent, stopped: false, startedAt: Date.now(), lastAt: Date.now(), steps: 0, last: tr('msg.sessions.compacting'), live: entry.live, waitMs: 0, pausedAt: null, compacting: true };
@@ -625,7 +610,7 @@ export class Sessions {
     if (this.running.has(id)) throw new Error(tr('msg.sessions.forkWait'));
     const a = adapter(s.agent);
     const copy = this.create({ kind: 'chat', agent: s.agent, account: s.account, model: s.model, reasoning: s.reasoning, permission: s.permission,
-      project: s.project, cwd: s.cwd, title: title || tr('msg.sessions.forkTitle', { title: s.title }), parentId: s.id, person: s.person_id ?? null });
+      project: s.project, cwd: s.cwd, title: title || tr('msg.sessions.forkTitle', { title: s.title }), parentId: s.id });
     this.board.run('UPDATE sessions SET titled = 1 WHERE id = ?', copy.id); // 3.2: its title stays (not renamed by its next message)
     const old = this.board.all("SELECT role, kind, body, at FROM session_items WHERE session_id = ? AND kind = 'text' AND role IN ('user', 'assistant') ORDER BY id DESC LIMIT 40", s.id).reverse();
     for (const it of old) this.board.run('INSERT INTO session_items (session_id, role, kind, body, at) VALUES (?, ?, ?, ?, ?)', copy.id, it.role, it.kind, it.body, it.at);

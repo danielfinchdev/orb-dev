@@ -6,11 +6,11 @@ export default {
   'msg.notes.deny': 'Reject',
   'msg.notes.open': 'Open',
   'msg.notes.expired': 'This notification has expired. Open it in Orb.',
-  'notes.pinTitle': 'Confirm with your PIN',
-  'notes.pinDesc': 'Enter your PIN to approve this.',
   'notes.count': '{n} new messages',
+  'notes.sending': 'Sending…',
   'notes.sent': 'Reply sent',
   'notes.allowed': 'Approved',
   'notes.denied': 'Rejected',
-  'notes.failed': "Couldn't do it from the notification: {error}"
+  'notes.failed': "Couldn't do it from the notification: {error}",
+  'notes.locked': 'Unlock the phone to do it from the notification, or tap it to open the chat.'
 };

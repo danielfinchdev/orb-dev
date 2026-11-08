@@ -1,14 +1,14 @@
 // (3.5: moved from src/ui/lib/link-payload.js, which re-exports it.) What the Android app (and the phone's browser) reads to link with an Orb: the QR's text or what is typed by hand.
 // Pure functions, no browser or crypto: kept in one small file so a change of the Magic Link format only touches this
-// (test/android.test.mjs). The same formats as src/core/link.mjs › parseQr:
+// (test/android.test.mjs). The formats:
 // - v1 QR: «http://ip:port/#vincular=<one-time code>&pc=<the Orb's public key>»
-// - v2 QR: the same plus «&v=2&n=<name>&r=<role>&a=<other addresses, comma separated>»
+// - v2 QR: the same plus «&v=2&n=<name>&a=<other addresses, comma separated>» (an Orb before 3.8 also sent r=<role>)
 // - JSON: { v, urls | url, pc, code, name, role }
 // - typed by hand: the short code (8 letters and digits) and the Orb's address; its key comes from GET /api/hello.
 
 export const DEFAULT_PORT = '3131';
 
-// The short code: letters and digits that cannot be confused (as link.mjs › normalCode).
+// The short code: letters and digits that cannot be confused (the PC normalizes it the same way).
 export const normalCode = (code) => String(code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/O/g, '0').slice(0, 16);
 
 const fail = (key) => Object.assign(new Error(key), { key });
@@ -85,18 +85,41 @@ export function parseManual({ text, code, address } = {}) {
   return { v: 2, urls: [base], pc: null, code: c, name: null, role: null, via: 'code' };
 }
 
-// The secret both sides derive the pairing key from (link.mjs › pairAt): the QR's code as is, the short one marked.
+// 3.8: whether a page may ask for the PC's master password: the Android app (its own code), https, this device, or the
+// Tailscale address (WireGuard encrypts it). Never a page that came in plain http over the Wi-Fi (it could have been
+// changed on the way). location: { protocol, hostname }.
+export function passwordPageOk({ protocol, hostname } = {}, { app = false } = {}) {
+  if (app || protocol === 'https:') return true;
+  const h = String(hostname ?? '').toLowerCase().replace(/^\[|\]$/g, '');
+  if (h === 'localhost' || h === '::1' || /^127\./.test(h) || /\.ts\.net$/.test(h)) return true;
+  const m = /^100\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(h);
+  return Boolean(m && Number(m[1]) >= 64 && Number(m[1]) <= 127);
+}
+
+// The secret both sides derive the pairing key from (src/ui/lib/web-bridge.js on the phone, src/engine/remote.mjs on the
+// PC): the QR's code as is, the short one marked.
 export const pairingSecret = (p) => (p.via === 'code' ? `corto:${normalCode(p.code)}` : p.code);
 
-// Which window.orb the page gets: Electron's preload (already there), the Android app (Capacitor) or the browser's.
+// Which window.orb the page gets: the desktop app's (Tauri's bridge, already there), the Android app (Tauri's Android
+// build: app-bridge.js) or the browser's.
 export function pickBridge({ hasOrb = false, native = false } = {}) {
-  if (hasOrb) return 'electron';
+  if (hasOrb) return 'desktop';
   return native ? 'app' : 'web';
 }
 
-// 3.6: the protocol of the page and the Android app (the Orb's own is src/core/link.mjs › PROTOCOL). /api/me says the
-// oldest client the Orb still serves (min): a page or an app older than that is asked to update.
-export const PROTOCOL = 3;
+// 3.6: the protocol of the link (this PC, the page and the Android app). Each side says { v, min } (hello, /api/me): v what
+// it speaks, min the oldest it still accepts. A page or an app older than the PC's min is asked to update; phones of
+// protocol 2 keep working (MIN_PROTOCOL).
+// 3.8 (protocol 4): linking a new device needs the master password, which only a page or an app of 3.8 sends. So a
+// device links only with protocol 4 or newer (PAIR_PROTOCOL); one linked before keeps working (MIN_PROTOCOL stays).
+export const PROTOCOL = 4;
+export const MIN_PROTOCOL = 2;
+export const PAIR_PROTOCOL = 4;
+// The app version a side of a protocol has at least (for «tiene 3.5, hace falta 3.6»).
+export const versionOfProtocol = (v) => (Number(v) >= 4 ? '3.8' : Number(v) === 3 ? '3.6' : Number(v) === 2 ? '3.5' : '3.4');
+// The short code typed by hand: 8 letters and digits that cannot be confused (no 0/O, 1/I/L, U), shown as «ABCD-EFGH».
+export const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTVWXYZ23456789';
+export const shortCodeLabel = (code) => String(code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16).replace(/(.{4})(?=.)/g, '$1-');
 // → null (fine) or { has, need } (the protocols: this client's and the one the Orb needs).
 export function updateNeeded(me, mine = PROTOCOL) {
   const need = Number(me?.min);

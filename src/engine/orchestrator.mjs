@@ -6,17 +6,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { ctx, tr } from '../core/context.mjs';
-import { AGENTS, assistantName, userName, ofUser, personName } from '../core/board.mjs';
+import { AGENTS, assistantName, userName, ofUser } from '../core/board.mjs';
 import { executable, installed, adapter } from '../agents/index.mjs';
 import * as claude from '../agents/claude.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { titleFrom } from '../core/titles.mjs';
-import { mcpServersFor } from './sessions.mjs';
+import { mcpServersOf } from './sessions.mjs';
+import { agentAuth } from './agent-auth.mjs';
 import { accountEnv } from '../core/accounts.mjs';
-import { briefing, personScope } from './logs.mjs';
-import { confineFor } from '../core/guard.mjs';
+import { briefing } from './logs.mjs';
 import { rememberModels } from './catalog.mjs';
-import { recordRate, pickAccount, checkSpend, recordSpend, spendText, accountsFor } from '../core/budget.mjs';
+import { recordRate, pickAccount, recordSpend } from '../core/budget.mjs';
 import { AGENT_LABELS } from '../core/home.mjs';
 
 // The models an agent takes for a task: the configured ones and the ones the agent itself listed (2.6, models:<agent>).
@@ -45,12 +45,10 @@ const SPEND_AUTO = [
   'NIVEL DE GASTO: máximo uso. Prioriza la calidad: trabajo en paralelo entre agentes y Task Review de lo que se entrega.'
 ];
 
-// 3.6: person: whose conversation it is (the persona names them; null: the owner, as before).
-export function persona(board = null, person = null) {
-  const c = ctx.config; const me = assistantName(); const other = Boolean(person && board?.isOwnerPerson?.(person) === false);
-  const boss = other ? personName(board, person) : userName(); const ofBoss = other ? `de ${boss}` : ofUser();
-  // 3.6: only the accounts that person may spend (theirs and the ones lent to them): never the names of anyone else's.
-  const accountsOf = (a) => (board ? accountsFor(board, person, a, { purpose: 'dev', usable: false }) : c.accounts ?? []).filter((x) => x.agent === a && x.enabled !== false);
+export function persona(board = null) {
+  const c = ctx.config; const me = assistantName();
+  const boss = userName(); const ofBoss = ofUser();
+  const accountsOf = (a) => (c.accounts ?? []).filter((x) => x.agent === a && x.enabled !== false);
   // 3.1: only the agents this PC can run, each with its accounts and their plans (engine/plans.mjs).
   const available = AGENTS.filter((a) => c.agents[a]?.enabled && accountsOf(a).length && installed(a));
   const planOf = (x) => board?.settingJson?.(`plan:${x.id}`)?.label;
@@ -80,7 +78,7 @@ ${c.budget?.autoModel !== false ? `MODELO Y RAZONAMIENTO: los elige ${me} solo, 
     : `Razonamiento "medium" por defecto. "high" solo para algo muy complicado${c.policy?.highNeedsApproval !== false ? ` (esa tarea espera la aprobación ${ofBoss}; díselo)` : ''}.`}
 AHORRO: cada suscripción tiene un límite de uso y ${me} limita las tareas por agente cada ${c.budget?.windowHours ?? 5} h. ${(c.budget?.autoModel !== false ? SPEND_AUTO : SPEND)[c.budget?.profile ?? 2] ?? ''} Si un pedido necesita más de 3 tareas, propón el plan (una tabla corta: tarea → agente → depende de) y pide el visto bueno con orb_ask (opciones «Lanzar el plan (Recomendado)» y «Cambiar algo»); créalas cuando lo apruebe. Si una tarea espera por el límite de uso o falla por él, no la dupliques: propón otro agente. No vigiles el tablero en bucle: ${me} te avisa cuando algo termina, se bloquea o un agente te escribe.
 CONTROL: puedes escribir a un agente que está trabajando (orb_send_message con to: su agente y task_id): le llega en su siguiente paso. Los agentes te escriben a ti (to: "orb") y te llega como AVISO DEL SISTEMA. Puedes cancelar una tarea en curso que ya no tiene sentido (orb_update_task status "cancelled"). Una tarea que vuelve a la cola (status "queued") continúa su propia conversación, sin empezar de cero.
-PROYECTOS: cada proyecto vive en una categoría de ${ctx.paths.projects}: windows, ios, android o web (por defecto web). Los nuevos se crean con orb_create_project indicando category (carpeta propia, con git). Las carpetas bitacora y mcp-servers son la configuración de ${me}: no son proyectos y no se tocan. Fija el proyecto de trabajo con orb_set_project; todas las tareas van ahí. Si no hay proyecto fijado y el pedido toca código, pregunta cuál. Para crear un proyecto necesitas su plataforma: si ${boss} no la ha dicho, pregúntasela con orb_ask (multi: true; opciones Windows, iOS, Android y Web) antes de crearlo. Si elige varias es multiplataforma: orb_create_project con categories crea <nombre>-android, <nombre>-ios… unidos en un grupo, con una carpeta común para lo que comparten; mantenlos coordinados.
+PROYECTOS: cada proyecto vive en una categoría de ${ctx.paths.projects}: windows, linux, ios, android, web o multi (por defecto web). Los nuevos se crean con orb_create_project indicando category (carpeta propia, con git). La carpeta core es de ${me}: no es un proyecto y no se toca. Fija el proyecto de trabajo con orb_set_project; todas las tareas van ahí. Si no hay proyecto fijado y el pedido toca código, pregunta cuál. Para crear un proyecto necesitas su plataforma: si ${boss} no la ha dicho, pregúntasela con orb_ask (multi: true; opciones Windows, Linux, iOS, Android y Web) antes de crearlo. Si elige varias es multiplataforma: orb_create_project con category multi y platforms crea una sola carpeta (un repositorio) con una subcarpeta por plataforma y compartido para lo que comparten; mantén las plataformas coordinadas.
 PEDIDOS GRANDES: si un pedido es muy complejo (varias pantallas, un diseño, un flujo con muchos pasos, algo que se explica mejor dibujado) y la pizarra del proyecto está vacía o no lo cubre, antes de crear tareas usa orb_pizarra para recomendar a ${boss} que lo dibuje y adjunte allí lo necesario (le sale un botón que la abre), y termina tu turno.
 DECIDE TÚ: si ${boss} pide que decidas tú o que no le preguntes (como en la prueba automática de Orb), no uses orb_ask ni orb_pizarra ni pidas el visto bueno del plan: elige lo razonable, dilo en una línea y lanza las tareas (lo que necesita aprobación sigue esperándola).
 PIZARRA: cada proyecto tiene su pizarra en <proyecto>/pizarra, donde ${boss} dibuja, escribe y adjunta lo que quiere: PIZARRA.md (sus textos y los adjuntos con su nota), pizarra.png (el dibujo entero: míralo con Read, las flechas y formas también cuentan) y adjuntos/ (fotos, vídeos, documentos). Léela al planificar en ese proyecto y siempre que ${boss} la mencione; trátala como su especificación. En los encargos, da a cada agente las rutas de la pizarra que necesite (la imagen, un adjunto concreto). Es material de ${boss}: no la modifiques.
@@ -90,18 +88,13 @@ CONVERSACIONES: ${boss} puede tener varias conversaciones contigo a la vez (cada
 MENSAJES SEGUIDOS: si ${boss} te escribe otra vez antes de que acabes, ese mensaje se suma al anterior: atiende los dos. Si se contradicen (por ejemplo, otro proyecto), pregúntale con orb_ask. Nunca abandones un pedido sin decirlo.
 AVISOS DEL SISTEMA: si un mensaje empieza por "AVISO DEL SISTEMA", no es ${boss}: resuélvelo con las herramientas y cuéntaselo en 1-2 líneas.
 BITÁCORAS (tu memoria): lee con orb_read_log (project = proyecto o "general") al empezar en un proyecto, cuando pregunten cómo va algo y antes de planificar. Escribe con orb_write_log (solo añade): decisiones y preferencias ${ofBoss}, el plan acordado y, al terminar un pedido, un resumen en la del proyecto y una línea en la general. Los agentes no escriben bitácoras: lo haces tú (y ${me} anota cada tarea terminada).
+SKILLS Y SERVIDORES MCP: si ${boss} pide «créame una skill (o un MCP) para…», llama a orb_create_skill u orb_create_mcp (te da una carpeta y un id; con mejorar: true, una versión nueva de una que ya está en Orb), crea una tarea para que un agente escriba ahí los archivos (pásale la carpeta y el id, y que al terminar llame a orb_request_activation) y dile a ${boss} que la activará desde la tarjeta de la app. Mejorar un servidor que guarda claves necesita antes su permiso (tarjeta «Permitir»; luego vuelves a llamar a orb_create_mcp con mejorar: true). Nunca se escriben directamente en core.
 PUBLICAR: nunca hagas push, pull requests ni publiques nada. Si ${boss} lo pide, dile que lo haga con el botón de GitHub de la tarea o del proyecto.
 Al crear tareas, responde en 2-4 líneas qué hará cada agente. Nunca muestres claves ni contraseñas.`;
 }
 
-// 3.6: the brain a person's new conversations start with: the owner's is Ajustes' (orb.json «orchestrator», as before);
-// anyone else's, their own (person setting «brain»), over the same defaults.
-export function brainOf(board, person = null) {
-  const o = ctx.config.orchestrator ?? {};
-  if (!person || board?.isOwnerPerson?.(person) !== false) return o;
-  let own = null; try { own = board.personSetting(person, 'brain'); } catch { /* none */ }
-  return { ...o, agent: own?.agent ?? o.agent, model: own?.model ?? (own?.agent && own.agent !== o.agent ? null : o.model), account: own?.account ?? null, reasoning: own?.reasoning ?? o.reasoning, orchestrate: own?.orchestrate ?? o.orchestrate };
-}
+// The brain new conversations start with: Ajustes' (orb.json «orchestrator»).
+export const brainOf = () => ctx.config.orchestrator ?? {};
 
 const STOP_GRACE_MS = 10_000; // how long a stopped turn may take to wind down before its process is closed
 // 3.2: a conversation's process closes after this long without use (the conversation itself continues later, by resume).
@@ -165,7 +158,8 @@ class Lane {
   pushSoon() { if (!this.pushTimer) { this.pushTimer = setTimeout(() => this.push(), 80); this.pushTimer.unref?.(); } }
   say(role, body, meta = null) { return this.board.addChat(role, body, meta, this.id); }
 
-  closeLive() { try { this.live?.close(); } catch { /* gone */ } this.live = null; this.liveKey = ''; }
+  // 3.8: its coordinator's grant ends with its process (a new process gets a new ticket).
+  closeLive() { agentAuth.revokeSession(`asistente-${this.id}`); try { this.live?.close(); } catch { /* gone */ } this.live = null; this.liveKey = ''; }
   // 3.6: «Compactar»: the brain's own compaction when its agent has one (Claude /compact, Codex's thread compaction): the
   // same conversation goes on from a summary. Otherwise (or if it fails) it is renewed: the next message starts afresh
   // with the briefing, the logs and its last lines, as when the context fills up by itself. → { ok, how }
@@ -179,8 +173,6 @@ class Lane {
     try {
       let live = null;
       try { this.ensureLive(); live = this.live; } catch { live = null; }
-      const spend = live ? checkSpend(this.board, { person: c.person_id ?? null, account: this.liveAccount }) : { ok: true };
-      if (!spend.ok) throw Object.assign(new Error(spendText(spend, { account: this.liveAccount })), { userFacing: true });
       if (typeof live?.compact === 'function') {
         const r = await live.compact({ instructions: COMPACT_FOCUS }).catch((error) => ({ ok: false, error: error.message }));
         if (r?.ok) how = 'compacted'; else this.orch.log(`compactar la conversación ${this.id}: ${r?.error ?? 'sin respuesta'}`);
@@ -239,7 +231,7 @@ class Lane {
     }
     this.orch.keep(item, true);
     const waitMs = outcome.limit?.resetAt && outcome.limit.resetAt > Date.now() ? outcome.limit.resetAt - Date.now() + 60_000 : [60_000, 180_000, 360_000][item.attempts - 1] ?? 360_000;
-    if (item.attempts === 1) this.board.notice(tr('msg.orch.noticeRetry', { name: assistantName(), min: Math.max(1, Math.round(waitMs / 60_000)) }), 'warning', { person: this.board.isOwnerPerson(this.person) ? null : this.person });
+    if (item.attempts === 1) this.board.notice(tr('msg.orch.noticeRetry', { name: assistantName(), min: Math.max(1, Math.round(waitMs / 60_000)) }), 'warning');
     // To the conversation's lane as it is then (this one may have been closed meanwhile, or the conversation removed).
     const timer = setTimeout(() => {
       if (this.orch.closing || !this.board.conversation(this.id)) return;
@@ -281,34 +273,24 @@ class Lane {
 
   // The live process of this conversation's brain, created on demand; another model, reasoning or account starts a new
   // process (the conversation itself continues with resume). The assistant only coordinates: it works in its own folder.
-  get person() { return this.conv()?.person_id ?? null; }
-  // 3.6: the account the conversation's person may spend (theirs, or lent to them); none: the turn is refused.
+  // The account the conversation spends (its own, else the agent's first one).
   account(c) {
     const o = ctx.config.orchestrator ?? {};
     const agent = c.agent || o.agent || 'claude';
-    const acc = pickAccount(this.board, { person: c.person_id ?? null, agent, preferred: c.account, purpose: 'orbe' });
-    if (acc) return acc;
-    if (this.board.isOwnerPerson(c.person_id)) return { id: agent, agent };
-    throw Object.assign(new Error(tr('msg.spend.noAccount')), { userFacing: true });
+    return pickAccount(this.board, { agent, preferred: c.account }) ?? { id: agent, agent };
   }
   ensureLive() {
     const c = this.conv(); const o = ctx.config.orchestrator ?? {};
     const agent = c.agent || o.agent || 'claude';
     const acc = this.account(c);
     const isClaude = agent === 'claude';
-    // 3.6: the assistant of someone other than the owner reads only that person's projects (and the ones shared with
-    // them), from a folder of its own: never the runs of everyone's tasks, Orb's folder or another person's projects.
-    const other = !this.board.isOwnerPerson(c.person_id);
-    const cwd = other ? path.join(ctx.paths.runs, 'personas', String(c.person_id).replace(/[^\w-]/g, '_')) : ctx.paths.runs;
-    // The owner's keeps its reach, but never the folders of other people's projects nor their assistants' folders.
-    const visible = this.board.projects({ principal: personScope(this.board, c.person_id ?? this.board.ownerId()) });
-    const hidden = this.board.projects().filter((p) => !visible.some((v) => v.name === p.name)).map((p) => p.path);
-    const confine = other ? confineFor({ roots: [cwd, ...visible.map((p) => p.path)], others: hidden }) : { exclude: [...hidden, path.join(ctx.paths.runs, 'personas')], cwd };
+    const cwd = ctx.paths.runs;
+    const visible = this.board.projects();
     const model = c.model || (isClaude ? 'claude-sonnet-5-5' : null);
     const key = [agent, cwd, model, c.reasoning, acc.id, ...visible.map((p) => p.path)].join('|');
     if (this.live && this.liveKey === key && !this.live.isClosed()) return;
     this.closeLive();
-    const dirs = (other ? visible.map((p) => p.path) : [...Object.values(ctx.paths.categories), ...(ctx.config.projectRoots ?? []), ...visible.map((p) => p.path)]).filter((d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
+    const dirs = [...Object.values(ctx.paths.categories), ...(ctx.config.projectRoots ?? []), ...visible.map((p) => p.path)].filter((d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
     fs.mkdirSync(cwd, { recursive: true });
     fs.mkdirSync(ctx.paths.runs, { recursive: true });
     rotateIfBig(this.orch.logFile);
@@ -320,14 +302,16 @@ class Lane {
     // Through the registry (not claude.mjs directly), so ORB_FAKE_AGENTS also replaces the assistant's own Claude in tests.
     // Claude takes the persona as its system prompt and a list of tools; the other agents get the persona at the start
     // of the conversation (run()) and the coordinator is held to read-only by its permission.
-    this.live = adapter(agent).createLive({
+    const a = adapter(agent);
+    this.live = a.createLive({
       exe: executable(agent), cwd, model, reasoning: c.reasoning || 'medium',
       permission: 'leer', resumeId: c.session_id || null, newSessionId: isClaude ? newId : null,
-      mcpServers: mcpServersFor(agent, { board: this.board, orchestrator: true, browser: false, session: `asistente-${this.id}`, orchKey: this.orch.key, conversation: this.id }),
-      env: { ...accountEnv(acc), ORB_HOME: ctx.home, ORB_AGENT: 'orb' },
-      ...(isClaude ? { systemPrompt: persona(this.board, c.person_id ?? null) } : {}),
+      mcpServers: mcpServersOf(a, agent, { orchestrator: true, browser: false, session: `asistente-${this.id}`, conversation: this.id }),
+      env: { ...accountEnv(acc), ORB_AGENT: 'orb' },
+      ...(isClaude ? { systemPrompt: persona(this.board) } : {}),
       tools: isClaude ? { allowed: ['mcp__orb', 'Read', 'Glob', 'Grep'], disallowed: claude.COORDINATOR_DENIED } : undefined,
-      addDirs: [...new Set(dirs)].filter((d) => d !== cwd).slice(0, 40), internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog, confine,
+      addDirs: [...new Set(dirs)].filter((d) => d !== cwd).slice(0, 40), internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog,
+      // 3.8.1 (review H1c B10): no skills of core here: the coordinator has Skill denied; the agents of its tasks get them.
       onEvent: (ev) => this.onEvent(ev)
     });
     this.liveKey = key;
@@ -345,7 +329,7 @@ class Lane {
     if (at <= seen) return '';
     this.board.setting(key, String(at));
     if (!c.session_id) return ''; // the briefing of the new conversation already has it
-    return `\n\n(AVISO DEL SISTEMA: ${personName(this.board, c.person_id ?? null)} ha cambiado la pizarra de ${project.name} desde la última vez. Léela antes de seguir: ${md} y el dibujo en ${path.join(project.path, 'pizarra', 'pizarra.png')}.)`;
+    return `\n\n(AVISO DEL SISTEMA: ${userName()} ha cambiado la pizarra de ${project.name} desde la última vez. Léela antes de seguir: ${md} y el dibujo en ${path.join(project.path, 'pizarra', 'pizarra.png')}.)`;
   }
 
   // 2.7: the questions with options the assistant asked in this turn (orb_ask), as cards below its answer.
@@ -373,13 +357,14 @@ class Lane {
     if (ev.type === 'rate') { try { recordRate(this.board, this.liveAccount ?? this.liveAgent, ev); } catch { /* budget only */ } return; }
     if (ev.type === 'context' && ev.size) { this.board.updateConversation(this.id, { context: { used: ev.used, size: ev.size } }); this.push(); return; }
     // Only the process that ended is dropped: a replaced live's late exit must not detach the one in use.
-    if (ev.type === 'exit' && !this.busy && this.live?.isClosed()) this.live = null;
+    // F2.6c: the coordinator's process is gone: its tickets go with it at once (even mid-turn).
+    if (ev.type === 'exit' && this.live?.isClosed()) { agentAuth.revokeSession(`asistente-${this.id}`); if (!this.busy) this.live = null; }
   }
 
   // The last lines of the conversation before the message being answered, for a conversation taken up again afresh.
   recent() {
     const rows = this.board.all("SELECT role, body FROM chat WHERE conversation_id = ? AND role IN ('usuario', 'orb') ORDER BY id DESC LIMIT 9", this.id).reverse().slice(0, -1);
-    const who = personName(this.board, this.person);
+    const who = userName();
     return rows.map((r) => `${r.role === 'usuario' ? who : assistantName()}: ${oneLine(r.body, 500)}`).join('\n');
   }
 
@@ -391,7 +376,7 @@ class Lane {
     // Renewed when its context is filling up (or after many turns): cheaper than dragging a long conversation along.
     if (c.session_id && ((c.context?.size && c.context.used / c.context.size >= (o.renewAt ?? 0.6)) || c.turns >= (o.maxTurns ?? 60))) {
       this.forget();
-      this.board.notice(tr('msg.orch.renewed'), 'info', { person: this.board.isOwnerPerson(c.person_id) ? null : c.person_id });
+      this.board.notice(tr('msg.orch.renewed'), 'info');
       c = this.conv();
     }
     // 3.2: taken up again after hours: afresh, with the logs and its last lines (not the whole conversation reloaded).
@@ -405,20 +390,11 @@ class Lane {
       this.busy = false; this.push(); return { ok: false };
     }
     c = this.conv();
-    // 3.6: a borrowed account within its loan (caps, reserve, end date): refused, the person is told (and only them).
-    const spend = checkSpend(this.board, { person: c.person_id ?? null, account: this.liveAccount });
-    if (!spend.ok) {
-      const why = spendText(spend, { account: this.liveAccount });
-      this.say('system', why, { kind: 'blocked', reason: spend.reason });
-      try { this.orch.onBlocked?.(c, why); } catch { /* the line is there */ }
-      this.busy = false; this.push(); return { ok: false, blocked: true };
-    }
     const project = c.project ? this.board.project(c.project) : null;
-    const other = !this.board.isOwnerPerson(c.person_id);
     // A brain other than Claude gets its instructions at the start of the conversation (Claude has them as system prompt).
-    const intro = fresh && this.liveAgent !== 'claude' ? `${persona(this.board, c.person_id ?? null)}\n\n` : '';
+    const intro = fresh && this.liveAgent !== 'claude' ? `${persona(this.board)}\n\n` : '';
     const recent = fresh && lastAnswer ? this.recent() : '';
-    const prompt = fresh ? `${intro}${briefing(this.board, { project, recent, person: c.person_id ?? null })}\n\n## Mensaje ${other ? `de ${personName(this.board, c.person_id)}` : ofUser()}\n${text}` : text;
+    const prompt = fresh ? `${intro}${briefing(this.board, { project, recent })}\n\n## Mensaje ${ofUser()}\n${text}` : text;
     this.board.updateConversation(this.id, { turns: (c.turns ?? 0) + 1 });
     const generation = this.generation;
     // 3.1: 20 minutes for a coordinating turn (reviewing several finished tasks can take a while; 10 cut reports short).
@@ -426,7 +402,7 @@ class Lane {
     const live = this.live;
     let result;
     try { result = await live.send({ text: prompt }); } finally { clearTimeout(timer); }
-    try { recordSpend(this.board, { person: c.person_id ?? null, account: this.liveAccount, conversation: this.id, usage: result?.usage ?? {} }); } catch { /* usage only */ }
+    try { recordSpend(this.board, { account: this.liveAccount, conversation: this.id, usage: result?.usage ?? {} }); } catch { /* usage only */ }
     if (generation !== this.generation) return undefined; // stopped: nothing to publish
     // A stale conversation id fails before any answer: forget it and try once more with a fresh conversation.
     if (result.isError && allowRetry && !result.text && !fresh) { this.forget(); return this.run(text, false, meta, { internal }); }
@@ -456,10 +432,10 @@ class Lane {
 // The assistant: every conversation with the user goes to its brain (Claude Code by default, on the user's own
 // subscription) with a coordinator persona. 3.2: one Lane per conversation, several at once.
 export class Orchestrator {
-  // key: secret handed only to the assistant's MCP processes (in memory, through the SDK) so the MCP recognises the
-  // coordinator. title(conversation, text): names a new conversation (engine/titles.mjs).
-  constructor(board, key, { emit = () => {}, log = () => {}, title = null } = {}) {
-    this.board = board; this.key = key; this.emit = emit; this.log = log; this.title = title;
+  // Each conversation's coordinator is recognised by its MCP process through a ticket of the engine (agent-auth.mjs).
+  // title(conversation, text): names a new conversation (engine/titles.mjs).
+  constructor(board, { emit = () => {}, log = () => {}, title = null } = {}) {
+    this.board = board; this.emit = emit; this.log = log; this.title = title;
     this.lanes = new Map(); this.closing = false;
     this.sweeper = setInterval(() => this.closeIdle(), 60_000); this.sweeper.unref?.();
   }
@@ -475,10 +451,9 @@ export class Orchestrator {
   state(id) { return this.lanes.get(Number(id))?.state() ?? { conversation: Number(id), busy: false, partial: '', tools: [], queued: 0, waiting: false, context: this.board.conversation(id)?.context ?? null }; }
 
   // The brain of a conversation (or the one a new conversation starts with: Ajustes and the last choice).
-  // 3.6: person: whose new conversations (without id); a conversation's own brain is its own.
-  info(id = null, person = null) {
+  info(id = null) {
     const c = id ? this.board.conversation(id) : null;
-    const o = brainOf(this.board, c ? c.person_id ?? null : person);
+    const o = brainOf();
     const agent = c?.agent || o.agent || 'claude';
     const modelId = c ? c.model : o.model;
     // 2.6: the brain can be any agent: its model's label comes from the assistant's list (Claude) or what the agent reported.
@@ -489,39 +464,36 @@ export class Orchestrator {
   }
 
   // A new conversation, on its first message: the brain chosen for new ones and the working folder (or the one given).
-  // 3.6: person: whose it is (their brain, their working folder).
-  startConversation({ text = '', project, person = null } = {}) {
-    const o = brainOf(this.board, person);
-    const name = project === undefined ? this.board.activeProject(person)?.name ?? null : project;
-    return this.board.createConversation({ title: titleFrom(text) || tr('msg.board.newConversation'), project: name, agent: o.agent || 'claude', account: o.account || null, model: o.model || null, reasoning: o.reasoning || 'medium', person });
+  startConversation({ text = '', project } = {}) {
+    const o = brainOf();
+    const name = project === undefined ? this.board.activeProject()?.name ?? null : project;
+    return this.board.createConversation({ title: titleFrom(text) || tr('msg.board.newConversation'), project: name, agent: o.agent || 'claude', account: o.account || null, model: o.model || null, reasoning: o.reasoning || 'medium' });
   }
 
   // A message of the user: in its conversation (a new one when none is given). → { conversation }
-  // 3.6: person: who writes (a new conversation is theirs).
-  ask(text, context = '', { conversation = null, project, person = null } = {}) {
+  ask(text, context = '', { conversation = null, project } = {}) {
     text = String(text ?? '').trim();
     if (!text) throw new Error(tr('msg.orch.writeMessage'));
     if (text.length > 20000) throw new Error(tr('msg.orch.tooLong'));
     let c = conversation ? this.board.conversation(conversation) : null;
     if (conversation && !c) throw new Error(tr('msg.board.noConversation'));
     const isNew = !c;
-    if (!c) c = this.startConversation({ text, project, person });
-    this.board.addChat('usuario', text, null, c.id, { person: c.person_id ?? null });
+    if (!c) c = this.startConversation({ text, project });
+    this.board.addChat('usuario', text, null, c.id);
     if (c.status === 'done') this.board.setConversationDone(c.id, false); // written in again: open again
     if (isNew || !c.titled) { try { this.title?.(c, text); } catch (error) { this.log(`título de la conversación ${c.id}: ${error.message}`); } }
     const lane = this.lane(c.id);
     context += lane.whiteboardNote();
     // 3.2.1: never into the running turn (see queueUserMessage): every message of the user gets its own answer.
-    const item = queueUserMessage(lane, text + context, personName(this.board, c.person_id ?? null));
+    const item = queueUserMessage(lane, text + context, userName());
     lane.next();
     return { conversation: c.id, queued: lane.current !== item };
   }
 
   // A notice from the engine (tasks finished, a task got blocked, an agent's message…): handled in the conversation that
   // asked for that work, without a user message. meta goes with the answer (e.g. the report that waits for the OK).
-  // 3.6: person: whose work it is (a task's person): without a conversation, one of theirs.
-  internal(text, chatLine, meta = null, { conversation = null, project = null, person = null } = {}) {
-    const id = (conversation && this.board.conversation(conversation)?.id) || this.conversationFor(project, person);
+  internal(text, chatLine, meta = null, { conversation = null, project = null } = {}) {
+    const id = (conversation && this.board.conversation(conversation)?.id) || this.conversationFor(project);
     if (chatLine) this.board.addChat('system', chatLine, null, id);
     this.board.setConversationDone(id, false); // there is news: open again
     const item = { id: crypto.randomUUID(), text, meta, internal: true, conversation: id };
@@ -533,16 +505,13 @@ export class Orchestrator {
 
   // For work that belongs to no conversation (made before 3.2, or by a schedule): the latest conversation of that project
   // (without a project, the latest one), or a new one for it.
-  conversationFor(project, person = null) {
-    // 3.6: only that person's conversations (the owner's: theirs and the ones without a person).
-    const own = this.board.isOwnerPerson(person) ? '(person_id = ? OR person_id IS NULL)' : 'person_id = ?';
-    const pid = person ?? this.board.ownerId();
-    const found = project ? this.board.one(`SELECT id FROM conversations WHERE project = ? COLLATE NOCASE AND bot_id IS NULL AND group_id IS NULL AND ${own} ORDER BY updated_at DESC, id DESC LIMIT 1`, project, pid)?.id
-      : this.board.one(`SELECT id FROM conversations WHERE bot_id IS NULL AND group_id IS NULL AND ${own} ORDER BY updated_at DESC, id DESC LIMIT 1`, pid)?.id;
+  conversationFor(project) {
+    const found = project ? this.board.one('SELECT id FROM conversations WHERE project = ? COLLATE NOCASE AND bot_id IS NULL AND group_id IS NULL ORDER BY updated_at DESC, id DESC LIMIT 1', project)?.id
+      : this.board.one('SELECT id FROM conversations WHERE bot_id IS NULL AND group_id IS NULL ORDER BY updated_at DESC, id DESC LIMIT 1')?.id;
     if (found) return found;
-    const o = brainOf(this.board, person);
+    const o = brainOf();
     const c = this.board.createConversation({ title: project ? tr('msg.orch.workOf', { project }) : tr('msg.board.newConversation'), project: project && this.board.project(project) ? project : null,
-      agent: o.agent || 'claude', account: o.account || null, model: o.model || null, reasoning: o.reasoning || 'medium', person: this.board.isOwnerPerson(person) ? null : person });
+      agent: o.agent || 'claude', account: o.account || null, model: o.model || null, reasoning: o.reasoning || 'medium' });
     this.board.updateConversation(c.id, { titled: true });
     return c.id;
   }
@@ -588,6 +557,8 @@ export class Orchestrator {
     const pending = (this.board.settingJson('orchestrator_pending') ?? []).filter((q) => q.conversation !== key);
     this.board.settingJson('orchestrator_pending', pending.length ? pending : null);
     this.board.setting(`report_queue:c${key}`, '');
+    // Its coordinator's grant ends with it (also with no process open now).
+    agentAuth.revokeSession(`asistente-${key}`);
   }
   // 3.2: a conversation quiet for a day with nothing of it still open (no task, no question waiting, nothing to answer) is
   // done by itself; written in again, it opens.

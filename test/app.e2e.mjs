@@ -1,14 +1,17 @@
 // End-to-end test of the desktop app with fake agents (no real CLI or account needed).
-// Runs the real Electron app (under Xvfb on Linux: `xvfb-run -a npm run test:app`), goes through the first run, the
-// assistant's chat (which creates a task through the MCP server), a task run, a direct conversation and every view.
-// Screenshots go to test-results/.
-import { _electron as electron } from 'playwright-core';
+// Runs the real Orb on Tauri (its test build, window hidden, driven over CDP: test/fixtures/launch-orb.mjs; Windows:
+// npm run tauri:build:e2e && npm run test:app), goes through the first run, the assistant's chat (which creates a task
+// through the MCP server), a task run, a direct conversation and every view. Screenshots go to test-results/.
+// What would show something on the desktop is not done here (the window stays hidden): picking a folder in Windows'
+// dialog, maximising, and opening an editor or a terminal (their plans: cargo test › tools.rs).
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import http from 'node:http';
+import { throughStart, sandboxEnv } from './fixtures/e2e-flows.mjs';
+import { launchOrb } from './fixtures/launch-orb.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'test-results');
@@ -16,16 +19,13 @@ fs.mkdirSync(OUT, { recursive: true });
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-e2e-'));
 const base = path.join(tmp, 'Documentos'); fs.mkdirSync(base);
 const fake = (name) => path.join(ROOT, 'test', 'fixtures', name);
-const electronBin = (await import('electron')).default;
 // Playwright also watches the agents' hidden pages and tries to dismiss their alert() boxes, which the app already blocks.
 process.on('unhandledRejection', (e) => { if (/No dialog is showing/.test(String(e?.message))) return; console.error(e); process.exitCode = 1; });
 
-// ORB_E2E_EXE: test a packaged build instead of the sources (e.g. dist/linux-unpacked/orb).
-const packaged = process.env.ORB_E2E_EXE;
-// 2.3: the fake agents live inside the engine (ORB_FAKE_AGENTS), so nothing is launched as a program (also on Windows).
-const app = await electron.launch({ executablePath: packaged || electronBin, args: [...(packaged ? [] : [ROOT]), '--lang=es-ES', ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], env: { ...process.env, ORB_NO_BRIDGE: '1', ORB_USER_DATA: path.join(tmp, 'datos-app'), ORB_DEFAULT_BASE: base, ORB_FAKE_AGENTS: fake('fake-live.mjs'), ORB_FAKE_UPDATE: '9.9.9' } });
+// 2.3: the fake agents live inside the engine (ORB_FAKE_AGENTS), so nothing is launched as a program.
+const orb = await launchOrb({ userData: path.join(tmp, 'datos-app'), env: { ...sandboxEnv(tmp), ORB_DEFAULT_BASE: base, ORB_FAKE_AGENTS: fake('fake-live.mjs'), ORB_FAKE_UPDATE: '9.9.9', ORB_NO_UPDATE: '' } });
 const errors = [];
-const win = await app.firstWindow();
+const win = orb.page;
 win.on('pageerror', (e) => errors.push(e.message));
 win.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 await win.setViewportSize({ width: 1360, height: 860 });
@@ -36,43 +36,52 @@ let step = 'inicio';
 try {
   // ---- first run
   step = 'primer arranque';
+  // 3.8: the welcome never sees the real C:\Orb (ORB_DEFAULT_BASE) nor this PC's backups (sandboxEnv).
+  assert.ok(base.startsWith(os.tmpdir()), 'carpeta temporal');
   const button = (name) => win.getByRole('button', { name, exact: true });
   const dialogButton = (name) => win.getByRole('dialog').getByRole('button', { name, exact: true });
-  // 3.7: the 3.5.1 welcome again: the assistant's name, what to call you, where its folder goes; on Windows then
-  // «Preparando tu PC» (the official installers of what is missing). No questions about people or uses.
+  // 3.7: the 3.5.1 welcome again: the assistant's name, what to call you, where its folder goes (3.8: already chosen,
+  // C:\Orb on a real PC: ORB_DEFAULT_BASE here); 3.8: then «Ordenar carpetas» (only with folders of an earlier Orb) and
+  // «Crea tu contraseña maestra» (mandatory); on Windows then «Preparando tu PC» (the official installers of what is
+  // missing). No questions about people or uses.
   await win.waitForSelector('[data-testid=setup-datos]');
-  await app.evaluate(({ dialog }, folder) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] }); }, base);
   await win.fill('[data-testid=setup-assistant]', 'Orbe');
   await win.fill('[data-testid=setup-user]', 'Ana');
-  assert.ok(await win.isDisabled('[data-testid=setup-create]'), 'sin carpeta no se puede seguir');
-  await win.click('[data-testid=setup-folder]');
   await win.locator('[data-testid=setup-target]', { hasText: path.join(base, 'Orb') }).waitFor();
+  assert.ok(await win.isEnabled('[data-testid=setup-create]'), '3.8: la carpeta viene ya elegida');
+  // «Cambiar ubicación…» opens Windows' own folder dialog (Rust): not clicked with the window hidden.
+  assert.equal(await win.locator('[data-testid=setup-folder]').count(), 1, '«Cambiar ubicación…»');
   await win.waitForTimeout(500);
   await shot('01-bienvenida');
   await win.click('[data-testid=setup-create]');
-  await win.getByTestId('chat-greeting').or(win.getByTestId('setup-prepare')).first().waitFor();
-  if (await win.isVisible('[data-testid=setup-prepare]')) {
-    await win.getByText('Preparando tu PC').waitFor();
-    await win.waitForTimeout(800);
-    await shot('01b-preparo-equipo');
-    await win.click('[data-testid=setup-continue]');
-  }
-  await win.waitForSelector('[data-testid=chat-greeting]');
+  const screens = await throughStart(win, {
+    ready: '[data-testid=chat-greeting]', thorough: true,
+    onScreen: async (name) => {
+      if (name === 'layout') { await win.waitForTimeout(400); await shot('01a-ordenar-carpetas'); }
+      if (name === 'master') {
+        await win.getByText('Crea tu contraseña maestra').waitFor();
+        await win.locator('[data-testid=master-warning]').waitFor();
+        await win.waitForTimeout(400); await shot('01a-contrasena-maestra');
+      }
+      if (name === 'prepare') { await win.getByText('Preparando tu PC').waitFor(); await win.waitForTimeout(800); await shot('01b-preparo-equipo'); }
+    }
+  });
+  assert.ok(screens.includes('master'), `la contraseña maestra es obligatoria (pantallas: ${screens.join(' → ')})`);
+  assert.equal(screens.includes('layout'), false, 'una carpeta nueva no tiene nada que ordenar');
+  const ms = await call('master.state');
+  assert.ok(ms.exists && !ms.locked, 'contraseña maestra creada y la ventana abierta');
   for (const sel of ['wizard-quien', 'wizard-para']) assert.equal(await win.locator(`[data-testid=${sel}]`).count(), 0, sel);
-  // What 3.6 asked is done without asking: Ana is the admin, with this PC's time zone; backups on.
-  assert.equal((await call('app.state')).config.assistantName, 'Orbe');
-  const people = await call('persons.list');
-  assert.equal(people.length, 1, 'una sola persona');
-  assert.equal(people[0].role, 'owner'); assert.equal(people[0].name, 'Ana');
-  assert.ok(people[0].tz, 'zona horaria del PC');
+  // What 3.6 asked is done without asking: the user's name and this PC's time zone in the settings; backups on.
+  const config = (await call('app.state')).config;
+  assert.equal(config.assistantName, 'Orbe'); assert.equal(config.userName, 'Ana');
+  assert.ok(config.tz, 'zona horaria del PC');
   assert.ok((await call('backup.status')).enabled, 'copias activas sin preguntar');
   const home = path.join(base, 'Orb');
-  for (const f of ['orb.json', '.orb/datos/orb.db', 'bitacora/GENERAL.md', 'mcp-servers', 'windows', 'ios', 'android', 'web']) assert.ok(fs.existsSync(path.join(home, f)), `falta ${f}`);
-  // The approval secret is kept encrypted by the system when it can be (then the plain file is gone).
-  const encrypted = await app.evaluate(({ safeStorage }) => safeStorage.isEncryptionAvailable());
-  assert.ok(fs.existsSync(path.join(home, '.orb/datos', encrypted ? 'clave.enc' : 'clave.bin')));
-  if (encrypted) assert.ok(!fs.existsSync(path.join(home, '.orb/datos/clave.bin')), 'sin clave en texto plano');
-  console.log(`  clave de aprobaciones: ${encrypted ? 'cifrada por el sistema' : 'archivo (este sistema no tiene cifrado)'}`);
+  for (const f of ['core/orb.json', 'core/datos/orb.db', 'core/bitacora/GENERAL.md', 'core/mcp', 'windows', 'linux', 'ios', 'android', 'web', 'multi']) assert.ok(fs.existsSync(path.join(home, f)), `falta ${f}`);
+  // The approval secret is kept encrypted by Windows (DPAPI, ORB2 in clave2.enc) and the plain file is gone.
+  await until(() => fs.existsSync(path.join(home, 'core/datos/clave2.enc')), 'clave cifrada por Windows');
+  assert.ok(fs.readFileSync(path.join(home, 'core/datos/clave2.enc')).subarray(0, 4).equals(Buffer.from('ORB2')), 'ORB2');
+  assert.ok(!fs.existsSync(path.join(home, 'core/datos/clave.bin')), 'sin clave en texto plano');
 
   // ---- the guided tour (2.6): the robot starts it by itself on the first launch; one step forward, then «Saltar
   // tutorial»; it is remembered in the assistant's folder and never comes back on its own.
@@ -119,7 +128,7 @@ try {
   const finished = await until(async () => { const t = await call('tasks.get', { id: task.id }); return ['done', 'failed', 'blocked'].includes(t.status) && t; }, 'tarea terminada', 30000);
   assert.equal(finished.status, 'done', finished.result);
   assert.ok(fs.existsSync(path.join(home, 'web', 'webviaproject', 'hecho-por-claude.txt')));
-  assert.match(fs.readFileSync(path.join(home, 'bitacora', 'proyectos', 'webviaproject.md'), 'utf8'), /Tarea #\d+: Tarea del asistente/);
+  assert.match(fs.readFileSync(path.join(home, 'core', 'bitacora', 'proyectos', 'webviaproject.md'), 'utf8'), /Tarea #\d+: Tarea del asistente/);
 
   // ---- the way back: review, report, OK
   step = 'informe y OK';
@@ -197,7 +206,7 @@ try {
   await new Promise((r) => site.listen(0, '127.0.0.1', r));
   const browsing = await call('sessions.create', { agent: 'claude', project: 'webviaproject', permission: 'editar', title: 'Navegador' });
   await call('sessions.send', { id: browsing.id, text: `NAVEGA http://127.0.0.1:${site.address().port}/` });
-  const pip = await until(() => app.windows().find((w) => w.url().endsWith('pip.html')), 'ventanita del navegador');
+  const pip = await until(() => orb.browser.contexts().flatMap((c) => c.pages()).find((w) => w.url().endsWith('pip.html')), 'ventanita del navegador');
   const navFile = path.join(home, 'web', 'webviaproject', 'navegador.txt');
   await until(() => fs.existsSync(navFile), 'el agente usó el navegador', 30000);
   const nav = fs.readFileSync(navFile, 'utf8');
@@ -209,11 +218,12 @@ try {
   await pip.waitForSelector('[data-testid=pip] img');
   await pip.waitForTimeout(500);
   await pip.screenshot({ path: path.join(OUT, '05b-ventanita-navegador.png') });
-  const bounds = await app.evaluate(({ BrowserWindow, screen }) => { const w = BrowserWindow.getAllWindows().find((b) => b.webContents.getURL().endsWith('pip.html')); return { b: w.getBounds(), top: w.isAlwaysOnTop(), wa: screen.getPrimaryDisplay().workArea }; });
-  assert.ok(bounds.top, 'siempre encima');
-  assert.ok(bounds.b.x + bounds.b.width > bounds.wa.x + bounds.wa.width - 60 && bounds.b.y < bounds.wa.y + 60, 'arriba a la derecha');
+  // Hidden in this test (its place on screen and «always on top» are in the list of checks with a window); what it was
+  // asked to do is in <data>\pip-e2e.jsonl.
+  const pipLog = () => fs.readFileSync(path.join(tmp, 'datos-app', 'pip-e2e.jsonl'), 'utf8');
+  await until(() => /"show":"normal"/.test(pipLog()), 'la ventanita se pide');
   await pip.getByRole('button', { name: 'Contraer' }).click();
-  await until(async () => (await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((b) => b.webContents.getURL().endsWith('pip.html')).getBounds().height)) < 60, 'contraída');
+  await until(() => /"show":"pildora"/.test(pipLog()), 'contraída');
   await pip.getByRole('button', { name: 'Mostrar' }).click();
   site.close();
 
@@ -255,6 +265,13 @@ try {
   await section('acerca');
   await win.locator('[data-testid=settings-about]', { hasText: '@danielfinchdev' }).waitFor();
   await win.locator('[data-testid=settings-about]', { hasText: /Orb \d+\.\d+\.\d+/ }).waitFor();
+  // 3.8: «Datos» has the master password's card (change it, «He olvidado la contraseña»).
+  await section('datos');
+  await win.locator('[data-testid=master-card] [data-testid=master-change]').waitFor();
+  await win.waitForTimeout(300);
+  await shot('10j-ajustes-datos');
+  // 3.8: one person per Orb: no Usuarios, PIN nor admin anywhere in Ajustes.
+  for (const id of ['usuarios', 'personas', 'conexiones', 'servidor']) assert.equal(await win.locator(`[data-testid=settings-nav-${id}]`).count(), 0, `sin la sección ${id}`);
   await section('general');
   await win.locator('[data-testid=skin-picker]').waitFor();
   await shot('10e-ajustes-apariencia');
@@ -276,16 +293,10 @@ try {
   assert.equal(bar.drag, 'drag', 'la cabecera mueve la ventana');
   assert.equal(bar.wco, false, 'sin los botones de Windows');
   assert.ok(bar.pad > 100, `hueco para los botones (${bar.pad} px)`);
-  const mainWin = (fn) => app.evaluate(({ BrowserWindow }, f) => { const w = BrowserWindow.getAllWindows().find((b) => b.webContents.getURL().endsWith('index.html')); return f === 'max' ? w.isMaximized() : w.isMinimized(); }, fn);
   await win.locator('[data-testid=window-close]').waitFor();
-  // Maximising needs a window manager: on Windows (and macOS), not in the CI's bare Linux display (xvfb).
-  if (process.platform !== 'linux') {
-    await win.click('[data-testid=window-maximize]');
-    await until(() => mainWin('max'), 'maximizada con el botón propio');
-    await win.locator('[data-testid=window-maximize][aria-label=Restaurar]').waitFor();
-    await win.click('[data-testid=window-maximize]');
-    await until(async () => !(await mainWin('max')), 'restaurada');
-  }
+  // Maximising would show the hidden window: only its state is asked here (the buttons, in the list with a window).
+  await win.locator('[data-testid=window-maximize]').waitFor();
+  assert.equal((await win.evaluate(() => window.orb.windowControls.act('state'))).maximized, false);
   await section('contribuye');
   await win.locator('[data-testid=feedback-message]').waitFor();
   await shot('10h-ajustes-contribuye');
@@ -296,27 +307,27 @@ try {
 
   // ---- interface size: Ctrl + / Ctrl - / Ctrl 0 and the presets in Ajustes (kept per PC)
   step = 'tamaño de la interfaz';
-  const factor = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((b) => b.webContents.getURL().endsWith('index.html')).webContents.getZoomFactor());
-  // Keys as Windows sends them (Playwright's own keyboard skips the window's before-input-event, where the app reads them).
-  const ctrl = (keyCode) => app.evaluate(({ BrowserWindow }, k) => BrowserWindow.getAllWindows().find((b) => b.webContents.getURL().endsWith('index.html')).webContents.sendInputEvent({ type: 'keyDown', keyCode: k, modifiers: ['control'] }), keyCode);
-  assert.ok(Math.abs((await factor()) - 1.15) < 0.01, 'por defecto «Normal», algo mayor que antes');
-  await ctrl('=');
-  await until(async () => Math.abs((await factor()) - 1.1 * 1.15) < 0.01, 'Ctrl + agranda');
-  await ctrl('-'); await ctrl('-');
-  await until(async () => Math.abs((await factor()) - 0.9 * 1.15) < 0.01, 'Ctrl - reduce');
-  await ctrl('0');
-  await until(async () => Math.abs((await factor()) - 1.15) < 0.01, 'Ctrl 0 vuelve a normal');
+  // The interface's size (×1.15 on top in WebView2: window.rs › ZOOM_BASE); the keys are read by the page itself.
+  const factor = () => win.evaluate(() => window.orb.zoom());
+  const ctrl = (key) => win.keyboard.press(`Control+${key}`);
+  assert.ok(Math.abs((await factor()) - 1) < 0.01, 'por defecto «Normal»');
+  await ctrl('Equal');
+  await until(async () => Math.abs((await factor()) - 1.1) < 0.01, 'Ctrl + agranda');
+  await ctrl('Minus'); await ctrl('Minus');
+  await until(async () => Math.abs((await factor()) - 0.9) < 0.01, 'Ctrl - reduce');
+  await ctrl('Digit0');
+  await until(async () => Math.abs((await factor()) - 1) < 0.01, 'Ctrl 0 vuelve a normal');
   await win.getByText('Tamaño de la interfaz', { exact: true }).waitFor();
   // Settings scroll to the section they open: let that end before the menu opens (it would open off screen).
   const sizeBox = win.getByRole('combobox').filter({ hasText: 'Normal' });
   await sizeBox.scrollIntoViewIfNeeded(); await win.waitForTimeout(800); await sizeBox.scrollIntoViewIfNeeded();
   await sizeBox.click();
   await win.getByRole('option', { name: 'Grande' }).click();
-  await until(async () => Math.abs((await factor()) - 1.15 * 1.15) < 0.01, 'tamaño grande');
+  await until(async () => Math.abs((await factor()) - 1.15) < 0.01, 'tamaño grande');
   assert.equal(JSON.parse(fs.readFileSync(path.join(tmp, 'datos-app', 'interfaz.json'), 'utf8')).zoom, 1.15);
   await win.waitForTimeout(400);
   await shot('10a-ajustes-grande');
-  await ctrl('0');
+  await ctrl('Digit0');
   // A switch of Ajustes applies at once, also clicking its text (before, it waited for «Guardar»).
   await section('tareas');
   const autoRun = (await call('app.state')).config.autoRun;
@@ -335,7 +346,7 @@ try {
   // ---- a new version (ORB_FAKE_UPDATE: no network): the card in the corner and the Updates card in Ajustes
   step = 'actualización';
   await win.evaluate(() => window.orb.update.check()); // the app also checks by itself 15 s after opening
-  await win.waitForSelector('[data-testid=update-card] >> text=Nueva versión disponible 9.9.9');
+  await win.waitForSelector('[data-testid=update-card] >> text=Nueva versión disponible: 9.9.9');
   await section('actualizaciones');
   await win.waitForSelector('[data-testid=updates-card] >> text=Nueva versión disponible: 9.9.9');
   await win.waitForTimeout(500); // the card fades in
@@ -400,7 +411,7 @@ try {
   await win.waitForSelector('[data-testid=expert-system] >> text=Memoria');
   await win.waitForTimeout(400);
   await shot('10b-modo-experto');
-  // 3.6: the bar's buttons never go under the window's minimise / maximise / close, also in a narrower window.
+  // 3.8.1: the bar's buttons never go under the window's minimise / maximise / close, also in a narrower window.
   const clearOfControls = async (label) => {
     const [iw, sw] = await win.evaluate(() => [innerWidth, document.documentElement.scrollWidth]);
     assert.ok(sw <= iw + 1, `${label}: la ventana se sale por los lados`);
@@ -425,17 +436,11 @@ try {
   await until(async () => (await call('app.state')).config.expert.panels.activity === false, 'panel quitado');
   await win.keyboard.press('Escape');
   await until(async () => (await win.locator('[data-testid=panel-activity]').count()) === 0, 'panel oculto');
-  assert.equal((await call('expert.read', { project: 'webviaproject', path: '../../orb.json' }).catch((e) => e.message)).includes('fuera del proyecto'), true);
-  // 3.2: «Abrir en» and the project's actions (what would open or run is caught here: no editor nor terminal opens).
+  assert.match(String(await call('expert.read', { project: 'webviaproject', path: '../../core/orb.json' }).catch((e) => e.message ?? e)), /fuera del proyecto/);
+  // 3.2: «Abrir en» and the project's actions. Opening or running them would show an editor or a terminal on the
+  // desktop: here only the button and the saved action (what would start: cargo test › tools.rs).
   step = 'acciones del God mode';
-  await app.evaluate(({ ipcMain }) => {
-    globalThis.__ran = []; globalThis.__opened = [];
-    ipcMain.removeHandler('app:runAction'); ipcMain.handle('app:runAction', (_e, a) => { globalThis.__ran.push(a); return true; });
-    ipcMain.removeHandler('app:openIn'); ipcMain.handle('app:openIn', (_e, which, dir) => { globalThis.__opened.push([which, dir]); return true; });
-  });
-  await win.click('[data-testid=open-in-main]');
-  await until(async () => (await app.evaluate(() => globalThis.__opened.length)) === 1, 'abrir la carpeta');
-  assert.match((await app.evaluate(() => globalThis.__opened[0][1])), /webviaproject$/);
+  await win.locator('[data-testid=open-in-main]').waitFor();
   await win.click('[data-testid=actions-menu]');
   await win.click('[data-testid=action-add]');
   await win.fill('[data-testid=action-name]', 'Probar');
@@ -449,11 +454,8 @@ try {
   await win.click('[data-testid=actions-menu]');
   await win.getByRole('menuitem', { name: /Probar/ }).waitFor();
   await shot('10b3-acciones');
-  await win.getByRole('menuitem', { name: /Probar/ }).click();
-  await until(async () => (await app.evaluate(() => globalThis.__ran.length)) === 1, 'acción lanzada');
-  assert.equal(await app.evaluate(() => globalThis.__ran[0].command), 'npm test');
-  await win.keyboard.press('Control+Shift+KeyT');
-  await until(async () => (await app.evaluate(() => globalThis.__ran.length)) === 2, 'acción lanzada con su atajo');
+  assert.equal((await call('actions.list', { project: 'webviaproject' }))[0].command, 'npm test');
+  await win.keyboard.press('Escape');
 
   // ---- free mode and model choice from the chat
   step = 'modo libre';
@@ -559,6 +561,6 @@ try {
   console.error(`✖ falló en «${step}»: ${error.stack}\nerrores de la página: ${errors.join(' | ')}`);
   process.exitCode = 1;
 } finally {
-  await app.close().catch(() => {});
-  fs.rmSync(tmp, { recursive: true, force: true });
+  await orb.close().catch(() => {});
+  fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
 }

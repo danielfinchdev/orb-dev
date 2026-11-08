@@ -3,17 +3,16 @@
 // user's approval once before it runs on its own; one created by the user is approved already. A schedule never piles
 // up work: while its last task is still open, the next run waits.
 import { oneLine } from './safety.mjs';
-import { tr } from './context.mjs';
+import { ctx, tr } from './context.mjs';
 import { AGENT_IDS as AGENTS } from './home.mjs';
-import { nextLocalRun, systemTz } from './tz.mjs';
-import { scopeSql } from './authz.mjs';
+import { nextLocalRun, systemTz, ownerTz } from './tz.mjs';
 
 export const EVERY = ['hourly', 'every_hours', 'daily', 'weekly'];
 const now = () => new Date();
 const parseRow = (r) => r && { ...r, enabled: Boolean(r.enabled), approved: Boolean(r.approved), readonly: Boolean(r.readonly), weekdays: JSON.parse(r.weekdays || '[]') };
 
 // every: hourly | every_hours (N hours, in `hours`) | daily (at at_time) | weekly (weekdays 0-6, Sunday = 0, at at_time).
-// 3.6: the wall time is the schedule's person's (tz; default this machine's), right across daylight-saving changes.
+// 3.6: the wall time is the owner's (tz; default this machine's), right across daylight-saving changes.
 export function nextRun({ every, at_time: at = '09:00', weekdays = [], hours = 6 }, from = now(), tz = null) {
   if (!EVERY.includes(every)) throw new Error(tr('msg.schedules.badEvery'));
   const time = /^\d{1,2}:\d{2}$/.test(String(at ?? '')) ? at : '09:00';
@@ -21,8 +20,6 @@ export function nextRun({ every, at_time: at = '09:00', weekdays = [], hours = 6
   if (!next) throw new Error(tr('msg.schedules.badEvery'));
   return next;
 }
-// The time zone of a schedule's person (null: this machine's).
-export const tzOf = (board, person) => { try { return (person ? board.one('SELECT tz FROM persons WHERE id = ?', String(person))?.tz : board.one("SELECT tz FROM persons WHERE role = 'owner' AND deleted_at IS NULL LIMIT 1")?.tz) || null; } catch { return null; } };
 
 export function describe(s) {
   const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'].map((d) => tr(`msg.schedules.day.${d}`));
@@ -33,10 +30,8 @@ export function describe(s) {
   return s.every;
 }
 
-// 3.6: principal: only that person's schedules and those of the projects shared with them.
-export function listSchedules(board, { principal = null } = {}) {
-  const s = principal ? scopeSql(principal, 'schedule', 'schedules') : { where: '1=1', args: [] };
-  return board.all(`SELECT * FROM schedules WHERE ${s.where} ORDER BY id`, ...s.args).map(parseRow);
+export function listSchedules(board) {
+  return board.all('SELECT * FROM schedules ORDER BY id').map(parseRow);
 }
 export const getSchedule = (board, id) => parseRow(board.one('SELECT * FROM schedules WHERE id = ?', Number(id)));
 
@@ -54,15 +49,13 @@ export function createSchedule(board, a, actor) {
   validate(board, a);
   // every_hours keeps its N in at_time's place ("6") so the table stays simple.
   const at = a.every === 'every_hours' ? String(Math.max(1, Math.min(168, Number(a.hours) || 6))) : a.at_time || '09:00';
-  // 3.6: whose it is (a.person, given by the API or the coordinator's conversation; null: the owner).
-  const person = a.person ?? null;
-  const next = nextRun({ every: a.every, at_time: a.every === 'every_hours' ? '00:00' : at, weekdays: a.weekdays ?? [], hours: Number(at) }, now(), tzOf(board, person));
+  const next = nextRun({ every: a.every, at_time: a.every === 'every_hours' ? '00:00' : at, weekdays: a.weekdays ?? [], hours: Number(at) }, now(), ownerTz(ctx.config));
   const approved = actor === 'usuario' ? 1 : 0;
-  const { lastInsertRowid } = board.run(`INSERT INTO schedules (project, title, description, agent, model, readonly, every, at_time, weekdays, enabled, approved, next_run, created_at, person_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`, board.project(a.project).name, oneLine(a.title, 120), String(a.description).slice(0, 8000), a.agent || 'any', a.model || null, Number(Boolean(a.readonly)), a.every, at, JSON.stringify(a.weekdays ?? []), approved, next.toISOString(), now().toISOString(), person);
+  const { lastInsertRowid } = board.run(`INSERT INTO schedules (project, title, description, agent, model, readonly, every, at_time, weekdays, enabled, approved, next_run, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`, board.project(a.project).name, oneLine(a.title, 120), String(a.description).slice(0, 8000), a.agent || 'any', a.model || null, Number(Boolean(a.readonly)), a.every, at, JSON.stringify(a.weekdays ?? []), approved, next.toISOString(), now().toISOString());
   const s = getSchedule(board, Number(lastInsertRowid));
-  board.notice(tr('msg.schedules.created', { title: s.title, when: describe({ ...s, hours: at }), project: s.project }) + (approved ? '' : tr('msg.schedules.needsApproval')), 'success', { person: board.isOwnerPerson?.(person) === false ? person : null });
-  board.changed('schedules', person ? { person } : null);
+  board.notice(tr('msg.schedules.created', { title: s.title, when: describe({ ...s, hours: at }), project: s.project }) + (approved ? '' : tr('msg.schedules.needsApproval')), 'success');
+  board.changed('schedules');
   return s;
 }
 
@@ -87,7 +80,7 @@ export function runSchedule(board, s, actor = 'usuario') {
   const gone = s.agent && s.agent !== 'any' && board.availableAgents() && !board.availableAgents().includes(s.agent);
   const task = board.createTask({ project: s.project, title: tr('msg.schedules.runTitle', { title: s.title }), description: s.description, agent: gone ? 'any' : s.agent, model: gone ? null : s.model, readonly: s.readonly, schedule_id: s.id }, s.approved ? 'usuario' : actor);
   if (gone) board.event(task.id, 'orb', 'note', `${s.agent} no está disponible en este PC: la ejecución va a cualquier agente disponible`);
-  const next = nextRun({ every: s.every, at_time: s.every === 'every_hours' ? '00:00' : s.at_time, weekdays: s.weekdays, hours: Number(s.at_time) }, now(), tzOf(board, s.person_id));
+  const next = nextRun({ every: s.every, at_time: s.every === 'every_hours' ? '00:00' : s.at_time, weekdays: s.weekdays, hours: Number(s.at_time) }, now(), ownerTz(ctx.config));
   board.run('UPDATE schedules SET last_run = ?, last_task = ?, next_run = ? WHERE id = ?', now().toISOString(), task.id, next.toISOString(), s.id);
   board.changed('schedules');
   return task;

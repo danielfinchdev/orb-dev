@@ -1,19 +1,18 @@
-// Exploratory pass over the PACKAGED app (no agents needed): the welcome screen and the first run («Preparando tu PC»),
-// every view in day and night, each section of Ajustes, the five visual themes, a narrow window and the settings'
-// switches and checks, with screenshots in test-results/explora/ (explora-en/ with ORB_LANG=en) and the page errors
-// collected. Not an assertion test: it is for looking at.   ORB_E2E_EXE=dist/win-unpacked/Orb.exe node test/explora.e2e.mjs
-import { _electron as electron, chromium } from 'playwright-core';
-import { spawn } from 'node:child_process';
+// Exploratory pass over Orb (no agents needed): the welcome screen and the first run («Preparando tu PC»), every view in
+// day and night, each section of Ajustes, the five visual themes, a narrow window and the settings' switches and checks,
+// with screenshots in test-results/explora/ (explora-en/ with ORB_LANG=en) and the page errors collected. Not an
+// assertion test: it is for looking at. On the test build of Orb, hidden (test/fixtures/launch-orb.mjs):
+//   npm run tauri:build:e2e && node test/explora.e2e.mjs
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHome, loadConfig, writeJson, merge } from '../src/core/home.mjs';
 import { SKINS } from '../src/core/appearance.mjs';
+import { throughStart, sandboxEnv } from './fixtures/e2e-flows.mjs';
+import { launchOrb } from './fixtures/launch-orb.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const exe = process.env.ORB_E2E_EXE; // optional: a packaged build instead of the sources
-const electronBin = (await import('electron')).default;
 const LANG = process.env.ORB_LANG || '';
 const OUT = path.join(ROOT, 'test-results', LANG ? `explora-${LANG}` : 'explora'); fs.mkdirSync(OUT, { recursive: true });
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-explora-'));
@@ -21,34 +20,19 @@ const until = async (fn, what, ms = 30000) => { const end = Date.now() + ms; whi
 const notes = [];
 const note = (s) => { notes.push(s); console.log(`  · ${s}`); };
 
-// The sources run under Playwright's Electron driver; a packaged build refuses --inspect (a security fuse), so it is
-// driven through the window's DevTools port instead (as smoke.e2e): then `app` is null and the pictures and the window
-// size go through the page.
+// Orb's window over CDP: the pictures and the window size go through the page (the window itself stays hidden).
 async function open(userData, env = {}) {
-  let app = null; let page; let stop;
-  if (exe) {
-    const port = 9300 + Math.floor(Math.random() * 500);
-    const child = spawn(exe, [`--remote-debugging-port=${port}`], { env: { ...process.env, ORB_NO_BRIDGE: '1', ORB_USER_DATA: userData, ...env }, stdio: 'ignore' });
-    const browser = await until(() => chromium.connectOverCDP(`http://127.0.0.1:${port}`), 'la ventana de la app');
-    page = await until(() => browser.contexts().flatMap((c) => c.pages()).find((p) => p.url().endsWith('index.html')), 'la página principal');
-    stop = async () => { await browser.close().catch(() => {}); try { if (process.platform === 'win32') spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' }); else child.kill(); } catch { /* gone */ } await new Promise((r) => setTimeout(r, 1500)); };
-  } else {
-    app = await electron.launch({ executablePath: electronBin, args: [ROOT], env: { ...process.env, ORB_NO_BRIDGE: '1', ORB_USER_DATA: userData, ...env } });
-    page = await app.firstWindow();
-    stop = async () => { await app.close().catch(() => {}); };
-  }
+  const orb = await launchOrb({ userData, env: { ...sandboxEnv(tmp), ...env } });
+  const page = orb.page; const stop = () => orb.close();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`${m.type()}: ${m.text()}`); });
-  return { app, page, errors, close: stop };
+  return { page, errors, close: stop };
 }
-// The window's own capture (what the user sees, with the interface zoom and the screen scaling); the page's with a
-// packaged build.
-const shooter = (app, page) => async (name) => {
+// The page's picture (with the interface zoom).
+const shooter = (page) => async (name) => {
   await page.waitForTimeout(500);
-  if (!app) { await page.screenshot({ path: path.join(OUT, `${name}.png`) }); return; }
-  const png = await app.evaluate(async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().endsWith('index.html')).webContents.capturePage()).toPNG().toString('base64'));
-  fs.writeFileSync(path.join(OUT, `${name}.png`), Buffer.from(png, 'base64'));
+  await page.screenshot({ path: path.join(OUT, `${name}.png`) });
 };
 // Ajustes closes with Escape; if it does not (noted: that is a finding), the X closes it so the tour goes on.
 const closeSettings = async (page, where) => {
@@ -67,25 +51,22 @@ try {
   {
     const userData = path.join(tmp, 'nuevo'); fs.mkdirSync(userData);
     const base = path.join(tmp, 'PrimerPC'); fs.mkdirSync(base);
-    const { app, page, errors, close } = await open(userData, { ORB_DEFAULT_BASE: base });
-    const shot = shooter(app, page);
-    // 3.7: the 3.5.1 welcome: the assistant's name, what to call you, the folder; on Windows «Preparando tu PC».
+    const { page, errors, close } = await open(userData, { ORB_DEFAULT_BASE: base });
+    const shot = shooter(page);
+    // 3.7: the 3.5.1 welcome: the assistant's name, what to call you, the folder (3.8: already chosen: ORB_DEFAULT_BASE);
+    // 3.8: «Ordenar carpetas» when there is something to move and «Crea tu contraseña maestra»; on Windows «Preparando
+    // tu PC».
     await page.waitForSelector('[data-testid=setup-datos]');
     note(`ventana inicial: ${(await page.evaluate(() => [innerWidth, innerHeight])).join('x')}`);
     await page.fill('[data-testid=setup-user]', 'Ana');
     await shot('00-bienvenida');
-    if (app) {
-      await app.evaluate(({ dialog }, folder) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] }); }, base);
-      await page.click('[data-testid=setup-folder]');
-      await page.click('[data-testid=setup-create]');
-      await page.getByTestId('sidebar-home').or(page.getByTestId('setup-prepare')).first().waitFor({ timeout: 30000 });
-      if (await page.isVisible('[data-testid=setup-prepare]')) { await shot('00b-preparo-equipo'); await page.click('[data-testid=setup-continue]'); }
-    } else {
-      // A packaged build: Windows' folder dialog cannot be answered from here, so the same call the button makes.
-      await page.evaluate((folder) => window.orb.setup({ base: folder, assistantName: 'Orbe', userName: 'Ana' }), base);
-      await page.reload();
-    }
-    await page.waitForSelector('[data-testid=sidebar-home]', { timeout: 30000 });
+    const screens = { layout: '00a-ordenar-carpetas', master: '00a-contrasena-maestra', prepare: '00b-preparo-equipo' };
+    const onScreen = (name) => shot(screens[name]);
+    // The folder comes chosen (ORB_DEFAULT_BASE): «Cambiar ubicación…» would open Windows' own dialog.
+    await page.click('[data-testid=setup-create]');
+    const seen = await throughStart(page, { ready: '[data-testid=sidebar-home]', onScreen });
+    note(`pantallas de bienvenida: ${seen.join(' → ') || 'ninguna'}`);
+    if (!seen.includes('master')) note('no salió «Crea tu contraseña maestra»');
     await shot('01c-primer-chat');
     note(`errores en bienvenida: ${errors.join(' | ') || 'ninguno'}`);
     await close();
@@ -94,15 +75,16 @@ try {
   // ---- 2. an assistant already created: every view
   const base = path.join(tmp, 'Documentos'); fs.mkdirSync(base);
   const { home } = createHome(base, { assistantName: 'Orb', userName: 'Alex' });
-  writeJson(path.join(home, 'orb.json'), merge(loadConfig(home), { ui: { tourDone: true } })); // 2.6: no guided tour in the tests
+  writeJson(path.join(home, 'core', 'orb.json'), merge(loadConfig(home), { ui: { tourDone: true } })); // 2.6: no guided tour in the tests
   fs.mkdirSync(path.join(home, 'web', 'webviaproject', 'src'), { recursive: true });
   fs.writeFileSync(path.join(home, 'web', 'webviaproject', 'src', 'index.html'), '<h1>hola</h1>\n');
   const userData = path.join(tmp, 'datos'); fs.mkdirSync(userData);
   fs.writeFileSync(path.join(userData, 'ubicacion.json'), JSON.stringify({ home }));
-  const { app, page, errors, close } = await open(userData);
-  const shot = shooter(app, page);
+  const { page, errors, close } = await open(userData);
+  const shot = shooter(page);
   const call = (method, params = {}) => page.evaluate(([m, p]) => window.orb.call(m, p), [method, params]);
-  await page.waitForSelector('[data-testid=chat-greeting]', { timeout: 30000 });
+  // 3.8: a folder made before the first start has no master password yet: «Crea tu contraseña maestra» once.
+  await throughStart(page, { ready: '[data-testid=chat-greeting]' });
   // ORB_LANG=en: the same tour in English (the interface and the engine's notices follow config.language).
   if (LANG) { await call('config.save', { patch: { language: LANG } }); await page.reload(); await page.waitForSelector('[data-testid=sidebar-home]'); }
   if (await page.isVisible('text=Preparando tu PC')) { await shot('01-preparo-equipo'); await page.click('text=Continuar'); }
@@ -115,7 +97,7 @@ try {
     else { await page.click('[data-testid=chats-new]'); await page.click('[data-testid=new-conversation]'); }
   };
   const views = [['sidebar-home', 'chat'], ['nav-tasks', 'tareas'], ['nav-projects', 'proyectos'], ['nav-agents', 'agentes'], ['nav-memories', 'bitacoras'], ['memories-activity', 'actividad'], ['nav-settings', 'ajustes']];
-  const SECTIONS = ['general', 'magiclink', 'agentes', 'avanzado', 'acerca'];
+  const SECTIONS = ['general', 'magiclink', 'agentes', 'datos', 'avanzado', 'acerca'];
   for (const theme of ['dia', 'noche']) {
     await setDark(theme === 'noche');
     for (const [nav, name] of views) {
@@ -182,8 +164,7 @@ try {
 
   // ---- 4. narrow window and a small laptop height
   for (const [w, h, name] of [[420, 860, 'estrecha'], [1280, 640, 'portatil-bajo']]) {
-    if (app) await app.evaluate(({ BrowserWindow }, [w, h]) => BrowserWindow.getAllWindows().find((b) => b.webContents.getURL().endsWith('index.html')).setContentSize(w, h), [w, h]);
-    else await page.setViewportSize({ width: w, height: h });
+    await page.setViewportSize({ width: w, height: h });
     for (const [nav, view] of [['sidebar-home', 'chat'], ['nav-tasks', 'tareas'], ['nav-settings', 'ajustes']]) {
       if (w < 700) { await page.getByRole('button', { name: /^(Menú|Menu)$/ }).click(); await page.locator(`[data-testid=${nav}]:visible`).click(); } else if (nav === 'sidebar-home') await goChat(); else await page.click(`[data-testid=${nav}]`);
       const [sw, iw] = await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);

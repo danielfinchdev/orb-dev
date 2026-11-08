@@ -40,7 +40,7 @@ export default {
   'expert.measuring': 'measuring…',
   'expert.memory': 'Memory',
   'expert.memoryOf': '{used} of {total}',
-  'expert.disk': 'Disk (assistant folder)',
+  'expert.disk': 'Disk (Orb folder)',
   'expert.diskFree': '{size} free',
   'expert.engine': 'Orb memory: {size}',
   'expert.agentsWorking': 'Active agents: {n}',

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Orb's launch colour (the same as Orb 3.8.0's splash). -->
+    <color name="orb_splash">#1D2257</color>
+</resources>

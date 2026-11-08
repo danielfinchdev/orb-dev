@@ -1,9 +1,8 @@
-// 3.6: time zones (src/core/tz.mjs). A centre in UTC runs Leo's reminders at his wall time in Europe/Madrid, also
-// across both daylight-saving changes; 02:30 on the spring-forward night fires at 03:00; late runs say how late.
+// 3.6: time zones (src/core/tz.mjs). A PC in UTC runs Leo's schedules at his wall time in Europe/Madrid, also
+// across both daylight-saving changes; 02:30 on the spring-forward night fires at 03:00.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { zonedToUtc, utcToZoned, nextLocalRun, minutesLate, shouldFireLate, isValidTz, offsetAt, localDay } from '../src/core/tz.mjs';
-import { translate } from '../src/core/i18n.mjs';
+import { zonedToUtc, utcToZoned, nextLocalRun, isValidTz, offsetAt, localDay } from '../src/core/tz.mjs';
 
 const MAD = 'Europe/Madrid';
 const iso = (d) => d.toISOString();
@@ -29,7 +28,7 @@ test('spring forward: 02:30 does not exist and becomes 03:00; fall back: first o
   assert.equal(iso(zonedToUtc('2026-10-25T02:30', MAD)), '2026-10-25T00:30:00.000Z');
 });
 
-test('daily 09:00 in Madrid seen from a UTC centre, across both changes', () => {
+test('daily 09:00 in Madrid seen from a PC in UTC, across both changes', () => {
   const rule = { every: 'daily', start: '2026-03-01T09:00' };
   const runs = []; let at = Date.parse('2026-03-27T12:00:00Z');
   for (let i = 0; i < 4; i++) { const d = nextLocalRun(rule, MAD, at); runs.push(iso(d)); at = d.getTime(); }
@@ -65,13 +64,3 @@ test('once, weekly, monthly (short months), yearly (29 February) and hourly', ()
   assert.equal(iso(nextLocalRun({ every: 'daily', time: '07:15' }, MAD, Date.parse('2026-11-04T12:00:00Z'))), '2026-11-05T06:15:00.000Z');
 });
 
-test('late runs say how late; repeating ones skip, one-offs fire', () => {
-  const due = new Date('2026-11-04T08:00:00Z');
-  assert.equal(minutesLate(due, Date.parse('2026-11-04T08:01:30Z')), 0);
-  assert.equal(minutesLate(due, Date.parse('2026-11-04T08:17:00Z')), 17);
-  assert.equal(translate('es', 'data.tz.late', { n: 17 }), 'con 17 min de retraso');
-  assert.equal(translate('en', 'data.tz.late', { n: 17 }), '17 min late');
-  assert.ok(shouldFireLate({ every: 'once' }));
-  assert.ok(!shouldFireLate({ every: 'daily', skip_missed: true }));
-  assert.ok(shouldFireLate({ every: 'daily', skip_missed: false }));
-});

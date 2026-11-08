@@ -1,7 +1,7 @@
 // Agent adapters (2.3): the registry with ORB_FAKE_AGENTS, Codex's live session against a fake "codex app-server"
 // (permissions, MCP by -c, resume and fork, approvals through the guard, steer, interrupt, context and real usage),
 // Cursor's streaming CLI against a fake CLI (read-only mode, resume, long prompts by file, stop) and the clean environment.
-import { fake, until } from './helpers.mjs';
+import { fake, until, ROOT } from './helpers.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -10,7 +10,8 @@ import path from 'node:path';
 import * as claude from '../src/agents/claude.mjs';
 import * as codex from '../src/agents/codex.mjs';
 import * as cursor from '../src/agents/cursor.mjs';
-import { cleanEnv } from '../src/agents/common.mjs';
+import { cleanEnv, mcpEnvByRef, killTree } from '../src/agents/common.mjs';
+import { spawn } from 'node:child_process';
 import { ADAPTERS, adapter } from '../src/agents/index.mjs';
 import { AGENT_IDS } from '../src/core/home.mjs';
 
@@ -33,18 +34,24 @@ test('ORB_FAKE_AGENTS cambia todos los agentes del registro por el falso', () =>
 });
 
 test('Codex: el MCP de Orb va por -c con rutas de Windows escapadas para TOML', () => {
-  const args = codex.mcpArgs({ orb: { command: 'C:\\Program Files\\Orb\\Orb.exe', args: ['C:\\x\\server.mjs'], env: { ORB_HOME: 'C:\\Users\\Ana\\Orb' } }, otro: { command: 'npx', args: [] } });
+  const args = codex.mcpArgs({ orb: { command: 'C:\\Program Files\\Orb\\Orb.exe', args: ['C:\\x\\server.mjs'], env: { ORB_AUTH_PIPE: '\\\\.\\pipe\\orb-agentes-1' } }, otro: { command: 'npx', args: [] } });
   assert.ok(args.includes('mcp_servers.orb.command="C:\\\\Program Files\\\\Orb\\\\Orb.exe"'));
   assert.ok(args.includes('mcp_servers.orb.args=["C:\\\\x\\\\server.mjs"]'));
-  assert.ok(args.includes('mcp_servers.orb.env={ORB_HOME="C:\\\\Users\\\\Ana\\\\Orb"}'));
+  assert.ok(args.includes('mcp_servers.orb.env={ORB_AUTH_PIPE="\\\\\\\\.\\\\pipe\\\\orb-agentes-1"}'));
   assert.ok(args.includes('mcp_servers.orb.default_tools_approval_mode="approve"'), 'las herramientas del tablero no piden permiso');
   assert.ok(!args.some((a) => a.startsWith('mcp_servers.otro.default_tools')), 'los conectores del usuario sí');
-  // 2.6: the coordinator's key and the agents' tokens never on the command line: by name, through Codex's environment.
-  const servers = { orb: { command: 'node', args: [], env: { ORB_HOME: 'C:\\o', ORB_ORCH_KEY: 'secreto', ORB_AGENT_TOKEN: 'tk' } } };
+  // 3.8 (N3, N4): no value but the plainly public ones on the command line, whatever its name (PASSWORD, DATABASE_URL…):
+  // each one through Codex's environment under a name of its own (two connectors' API_KEY do not clash), the ticket's
+  // --ticket-env following it, and none of Orb's variables in the commands Codex runs.
+  const servers = { orb: { command: 'node', args: ['server.mjs', '--ticket-env=ORB_TICKET_orb'], env: { ORB_AUTH_PIPE: 'tubo', ORB_TICKET_orb: 'ticket-secreto' } },
+    uno: { command: 'npx', args: [], env: { API_KEY: 'clave-uno', DATABASE_URL: 'postgres://u:pass@h/db' } }, dos: { command: 'npx', args: [], env: { API_KEY: 'clave-dos' } } };
   const withSecrets = codex.mcpArgs(servers);
-  assert.ok(!withSecrets.some((a) => a.includes('secreto') || a.includes('tk"')), 'ningún secreto en los argumentos');
-  assert.ok(withSecrets.includes('mcp_servers.orb.env_vars=["ORB_ORCH_KEY","ORB_AGENT_TOKEN"]'));
-  assert.deepEqual(codex.mcpSecrets(servers), { ORB_ORCH_KEY: 'secreto', ORB_AGENT_TOKEN: 'tk' });
+  for (const v of ['ticket-secreto', 'clave-uno', 'clave-dos', 'pass@h']) assert.ok(!withSecrets.some((a) => a.includes(v)), `${v} no está en los argumentos`);
+  assert.ok(withSecrets.includes('mcp_servers.orb.args=["server.mjs","--ticket-env=ORB_MCP_orb_ORB_TICKET_orb"]'));
+  assert.ok(withSecrets.includes('mcp_servers.orb.env={ORB_AUTH_PIPE="tubo"}'));
+  assert.ok(withSecrets.includes('mcp_servers.uno.env_vars=["ORB_MCP_uno_API_KEY","ORB_MCP_uno_DATABASE_URL"]'));
+  assert.ok(withSecrets.includes('shell_environment_policy.exclude=["ORB_*"]'));
+  assert.deepEqual(codex.mcpSecrets(servers), { ORB_MCP_orb_ORB_TICKET_orb: 'ticket-secreto', ORB_MCP_uno_API_KEY: 'clave-uno', ORB_MCP_uno_DATABASE_URL: 'postgres://u:pass@h/db', ORB_MCP_dos_API_KEY: 'clave-dos' });
   assert.equal(args.filter((a) => a === '-c').length, args.length / 2);
 });
 
@@ -54,6 +61,91 @@ test('Claude: modo de permisos del SDK según el permiso de Orb', () => {
   assert.equal(claude.permissionModeOf('preguntar'), 'default');
   assert.equal(claude.permissionModeOf('leer'), 'default');
   assert.ok(claude.COORDINATOR_DENIED.includes('Bash') && claude.COORDINATOR_DENIED.includes('Edit'), 'el asistente no ejecuta ni edita');
+});
+
+// 3.8 (M3): the SDK puts mcpServers on Claude Code's command line (--mcp-config): any process of the user can read it.
+test('Claude: los secretos del MCP van en su entorno y la línea de órdenes solo los nombra', async () => {
+  const file = path.join(dir, 'claude-args.json');
+  const live = claude.createLive({ exe: { cmd: fake('fake-claude.mjs'), pre: [] }, cwd: dir, env: { FAKE_ARGS_FILE: file },
+    mcpServers: { orb: { command: 'node', args: ['server.mjs'], env: { ORB_HOME: 'C:\\o', ORB_ORCH_KEY: 'clave-secreta-1', ORB_AGENT_TOKEN: 'firma-secreta-2' } }, otro: { command: 'npx', args: ['x'], env: { API_KEY: 'clave-del-conector-3' } } } });
+  lives.push(live);
+  await live.send({ text: 'hola' });
+  const seen = await until(() => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; } }, 'Claude falso arrancado');
+  const line = seen.args.join(' ');
+  for (const secret of ['clave-secreta-1', 'firma-secreta-2', 'clave-del-conector-3']) assert.ok(!line.includes(secret), `${secret} no está en los argumentos`);
+  const config = JSON.parse(seen.args[seen.args.indexOf('--mcp-config') + 1]);
+  assert.equal(config.mcpServers.orb.env.ORB_ORCH_KEY, '${ORB_MCP_orb_ORB_ORCH_KEY}');
+  assert.equal(config.mcpServers.otro.env.API_KEY, '${ORB_MCP_otro_API_KEY}');
+  assert.equal(seen.env.ORB_MCP_orb_ORB_ORCH_KEY, 'clave-secreta-1', 'Claude Code los expande desde su entorno');
+  assert.equal(seen.env.ORB_MCP_orb_ORB_AGENT_TOKEN, 'firma-secreta-2');
+  assert.equal(seen.env.ORB_MCP_otro_API_KEY, 'clave-del-conector-3');
+  // N13: no hooks of the project's .claude/settings*.json (they would run with this agent's environment).
+  assert.equal(JSON.parse(seen.args[seen.args.indexOf('--settings') + 1]).disableAllHooks, true);
+});
+
+// N12: the real Claude Code of the SDK expands ${ORB_MCP_…} in --mcp-config from its environment (as Orb hands every MCP
+// server's ticket). No network or account: its API points at a closed local port and its folder is a temporary one; the
+// test ends as soon as the server has started.
+const SDK_CLAUDE = path.join(ROOT, 'node_modules', '@anthropic-ai', `claude-agent-sdk-${process.platform}-${process.arch}`, process.platform === 'win32' ? 'claude.exe' : 'claude');
+test('Claude Code real: expande ${ORB_MCP_…} de su entorno al arrancar un servidor MCP', { skip: !fs.existsSync(SDK_CLAUDE) && 'sin el Claude Code del SDK' }, async () => {
+  const out = path.join(dir, 'mcp-visto.json');
+  const server = path.join(dir, 'mcp-que-mira.mjs');
+  fs.writeFileSync(server, `import fs from 'node:fs'; fs.writeFileSync(process.argv[2], JSON.stringify({ ticket: process.env.ORB_TICKET_orb ?? null })); process.stdin.resume();\n`);
+  const { servers, env } = mcpEnvByRef({ orb: { command: process.execPath, args: [server, out], env: { ORB_TICKET_orb: 'ticket-de-prueba-123' } } }, (name) => `\${${name}}`);
+  const config = path.join(dir, 'claude-config'); fs.mkdirSync(config, { recursive: true });
+  const child = spawn(SDK_CLAUDE, ['-p', 'hola', '--mcp-config', JSON.stringify({ mcpServers: servers }), '--strict-mcp-config', '--max-turns', '1'], { cwd: dir, windowsHide: true, stdio: 'ignore',
+    env: { ...cleanEnv({}), ...env, CLAUDE_CONFIG_DIR: config, ANTHROPIC_API_KEY: 'sk-ant-prueba', ANTHROPIC_BASE_URL: 'http://127.0.0.1:9', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1', DISABLE_AUTOUPDATER: '1' } });
+  try {
+    const seen = await until(() => { try { return JSON.parse(fs.readFileSync(out, 'utf8')); } catch { return null; } }, 'el servidor MCP arrancado por Claude Code', 60000);
+    assert.deepEqual(seen, { ticket: 'ticket-de-prueba-123' });
+  } finally { killTree(child); }
+});
+
+// F2.6c (P1): what a task can leave in the project's .claude/settings*.json does not change later Claude agents: its
+// allow rules do not skip Orb's guard, and a file that would run programs (apiKeyHelper) or change the environment is not
+// loaded (its CLAUDE.md still reaches Claude). The real Claude Code of the SDK against a local stand-in of the API; the
+// project is trusted in its (temporary) config, as the user's own projects are.
+async function realClaudeTurn({ name, settings, tool, permission }) {
+  const { fakeAnthropic } = await import('./fixtures/fake-anthropic.mjs');
+  const proj = path.join(dir, name); fs.mkdirSync(path.join(proj, '.claude'), { recursive: true });
+  if (settings) fs.writeFileSync(path.join(proj, '.claude', 'settings.json'), JSON.stringify(settings));
+  fs.writeFileSync(path.join(proj, 'CLAUDE.md'), 'NOTA-DEL-PROYECTO-77');
+  const config = path.join(dir, `${name}-config`); fs.mkdirSync(config, { recursive: true });
+  fs.writeFileSync(path.join(config, '.claude.json'), JSON.stringify({ projects: { [proj.split(path.sep).join('/')]: { hasTrustDialogAccepted: true } } }));
+  const api = await fakeAnthropic({ tool: JSON.parse(JSON.stringify(tool).replaceAll('PROJ', proj.split(path.sep).join('/'))) });
+  const events = []; const asked = [];
+  const live = claude.createLive({ exe: { cmd: SDK_CLAUDE, pre: [] }, cwd: proj, permission, internalDir: path.join(dir, '.orb'),
+    env: { ...cleanEnv({}), CLAUDE_CONFIG_DIR: config, ANTHROPIC_API_KEY: 'sk-ant-prueba', ANTHROPIC_BASE_URL: api.url, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1', DISABLE_AUTOUPDATER: '1' },
+    onEvent: (e) => { events.push(e); if (e.type === 'approval') { asked.push(e.request); live.respond(e.request.id, 'deny'); } } });
+  lives.push(live);
+  try {
+    const r = await live.send({ text: 'hola' });
+    return { r, events, asked, proj, sawNotes: api.requests.some((q) => JSON.stringify([q.body.system, q.body.messages]).includes('NOTA-DEL-PROYECTO-77')) };
+  } finally { live.close(); await api.close(); }
+}
+test('Claude Code real: las reglas «allow» del proyecto no se saltan la guardia de Orb', { skip: !fs.existsSync(SDK_CLAUDE) && 'sin el Claude Code del SDK' }, async () => {
+  const bash = await realClaudeTurn({ name: 'permite-bash', permission: 'preguntar', settings: { permissions: { allow: ['Bash', 'Edit', 'Write'] } }, tool: { name: 'Bash', input: { command: 'echo x > marca.txt', description: 'marca' } } });
+  assert.equal(bash.r.isError, false, bash.r.final);
+  assert.deepEqual(bash.asked.map((a) => a.tool), ['Bash'], 'pregunta a Orb aunque el proyecto lo permita');
+  assert.ok(!fs.existsSync(path.join(bash.proj, 'marca.txt')), 'denegado: no se ejecuta');
+  assert.ok(bash.sawNotes, 'el CLAUDE.md del proyecto sigue llegando');
+  // «editar» accepts edits by itself, but not to the project's agent settings: they ask first.
+  const write = await realClaudeTurn({ name: 'escribe-ajustes', permission: 'editar', tool: { name: 'Write', input: { file_path: 'PROJ/.claude/settings.local.json', content: '{"permissions":{"allow":["Bash"]}}' } } });
+  assert.deepEqual(write.asked.map((a) => a.tool), ['Write']);
+  assert.ok(!fs.existsSync(path.join(write.proj, '.claude', 'settings.local.json')));
+});
+test('Claude Code real: unos ajustes del proyecto que ejecutan programas o cambian el entorno no se cargan', { skip: !fs.existsSync(SDK_CLAUDE) && 'sin el Claude Code del SDK' }, async () => {
+  const helper = process.platform === 'win32' ? 'echo x> helper-ejecutado.txt & echo sk-ant-x' : 'echo x > helper-ejecutado.txt; echo sk-ant-x';
+  const out = await realClaudeTurn({ name: 'ajustes-hostiles', permission: 'editar', settings: { env: { MARCA_DEL_PROYECTO: 'llega' }, apiKeyHelper: helper },
+    tool: { name: 'Bash', input: { command: 'echo "v=$MARCA_DEL_PROYECTO" > entorno.txt', description: 'entorno' } } });
+  assert.equal(out.r.isError, false, out.r.final);
+  assert.ok(!fs.existsSync(path.join(out.proj, 'helper-ejecutado.txt')), 'apiKeyHelper del proyecto no se ejecuta');
+  assert.doesNotMatch(fs.readFileSync(path.join(out.proj, 'entorno.txt'), 'utf8'), /llega/, 'su env no llega a los comandos');
+  assert.ok(out.sawNotes, 'su CLAUDE.md llega por las instrucciones');
+  assert.ok(out.events.some((e) => e.kind === 'status' && /settings\.json: env, settings\.json: apiKeyHelper/.test(e.body)), 'se avisa en la conversación');
+  assert.deepEqual(claude.projectSettingsRisk(out.proj), ['settings.json: env', 'settings.json: apiKeyHelper']);
+  fs.writeFileSync(path.join(out.proj, '.claude', 'settings.json'), JSON.stringify({ permissions: { allow: ['Bash'] }, hooks: {}, model: 'opus', includeCoAuthoredBy: false }));
+  assert.deepEqual(claude.projectSettingsRisk(out.proj), [], 'lo normal de un proyecto sí se carga');
 });
 
 function openCodex(options = {}) {

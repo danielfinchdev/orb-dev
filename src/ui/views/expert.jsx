@@ -314,7 +314,7 @@ export function ExpertView() {
     <>
       <div className="m-auto max-w-sm p-6 lg:hidden"><Empty icon={Monitor} title={t('expert.tooNarrow')}>{t('expert.tooNarrowBody')}</Empty></div>
       <div className="hidden min-h-0 flex-1 flex-col lg:flex" data-testid="expert-view">
-        {/* 3.6: the bar is a container: it leaves room for the window's buttons (wco-pad) and, the narrower it is, the more
+        {/* 3.8.1: the bar is a container: it leaves room for the window's buttons (wco-pad) and, the narrower it is, the more
             of its buttons show only their icon (with a tooltip), so nothing ever slides under the minimise / close. */}
         <header className="topbar theme-band app-titlebar wco-pad @container/bar flex h-14 shrink-0 items-center gap-2 overflow-hidden border-b px-3" data-testid="expert-bar">
           {folded ? <SidebarToggle collapsed /> : null}

@@ -1,17 +1,16 @@
 // Approvals of sensitive tasks: only the app (a click by the user) signs them; the scheduler verifies them.
-// The signature is an HMAC with the assistant's secret. In the app the secret is kept encrypted by Windows (DPAPI, through
-// Electron's safeStorage) and handed to the engine in memory, so an agent that reads files cannot forge an approval.
-// Without the app (tests, or a system without safeStorage) it falls back to <home>/.orb/datos/clave.bin.
+// The signature is an HMAC with a key made from this PC's secret. In the app the secret stays sealed by Windows in Rust
+// (src-tauri/vault/src/machine.rs) and the engine holds only this key in memory, so an agent that reads files cannot
+// forge an approval. Without the app (tests, or a system without that sealing) it comes from <home>/core/datos/clave.bin.
 // The MCP server never gets the secret: it cannot sign, and it treats unverifiable approvals as missing (safe side).
 import crypto from 'node:crypto';
 import { ctx } from './context.mjs';
-import { readKey } from './home.mjs';
+import { machineKeys } from './machine-keys.mjs';
 
-export const approvalKey = (secret) => crypto.createHmac('sha256', secret).update('orb-approval-v2').digest();
 let cached = null;
 export function defaultApprovalKey() {
-  if (ctx.secret) return approvalKey(ctx.secret);
-  if (!cached || cached.home !== ctx.home) cached = { home: ctx.home, key: approvalKey(readKey(ctx.home)) };
+  if (ctx.keys) return ctx.keys.approval;
+  if (!cached || cached.home !== ctx.home) cached = { home: ctx.home, key: machineKeys().approval };
   return cached.key;
 }
 

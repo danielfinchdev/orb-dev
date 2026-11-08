@@ -1,37 +1,33 @@
 {
   "name": "orb-dev",
   "productName": "Orb",
-  "version": "3.7.0",
-  "description": "Orb·e: tu director de bolsillo. Planifica tu proyecto por fases y escribe un encargo claro para cada agente (Claude Code, Codex, Cursor, Gemini, OpenCode, Qwen, Copilot), sin gastar tokens de más. Te entrega resultados comprobados.",
+  "version": "3.8.1",
+  "description": "Orb: one app for your AI coding agents (Claude Code, Codex, Cursor, Gemini, OpenCode, Qwen, Copilot). Its assistant plans the work, writes a clear brief for each agent and brings back checked results.",
   "private": true,
   "type": "module",
-  "main": "src/main/main.mjs",
-  "desktopName": "orb-dev.desktop",
   "author": "Orb",
   "homepage": "https://github.com/danielfinchdev/orb-dev",
   "license": "MIT",
   "scripts": {
     "build": "vite build",
-    "start": "vite build && electron .",
+    "start": "tauri dev",
     "start:control": "vite build && node scripts/start-control.mjs",
     "check": "node scripts/check.mjs",
-    "test": "vite build --logLevel warn && node --test test/*.test.mjs",
-    "test:app": "vite build && node test/app.e2e.mjs",
+    "test": "vite build --logLevel warn && node scripts/vault-build.mjs && node --test test/*.test.mjs",
+    "vault": "node scripts/vault-build.mjs",
+    "test:app": "node test/app.e2e.mjs",
     "icon": "node scripts/icono.mjs",
-    "dist": "vite build && electron-builder --win nsis",
-    "dist:linux": "vite build && electron-builder --linux AppImage deb",
-    "dist:server": "node scripts/dist-servidor.mjs",
-    "dist:servidor": "node scripts/dist-servidor.mjs",
-    "release:keygen": "node scripts/release.mjs keygen",
-    "release:sign": "node scripts/release.mjs sign",
-    "dist:terminal": "node scripts/dist-terminal.mjs",
-    "terminal": "node src/terminal/orb-cli.mjs",
-    "servidor:instalar": "node scripts/instalar-servidor.mjs",
-    "server": "node src/server/orb-server.mjs",
-    "nucleo": "node src/server/orb-server.mjs",
     "test:movil": "vite build && node test/mobile.e2e.mjs",
-    "test:capturas": "vite build && node test/capturas.e2e.mjs",
+    "test:android-app": "node test/android-app.e2e.mjs",
     "test:glass": "node test/glass.e2e.mjs",
+    "test:tauri-navegador": "node test/tauri-navegador.e2e.mjs",
+    "test:tauri-actualizar": "node test/tauri-actualizar.e2e.mjs",
+    "test:puente-electron": "node test/puente-electron.e2e.mjs",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build -- --locked && node scripts/tauri-check-release.mjs",
+    "tauri:build:e2e": "node scripts/tauri-check-release.mjs --build-e2e",
+    "release:firmar": "node scripts/release-firmar.mjs",
     "android:build": "node scripts/android-build.mjs",
     "android:build:debug": "node scripts/android-build.mjs --debug"
   },
@@ -39,12 +35,6 @@
     "node": ">=22.13"
   },
   "devDependencies": {
-    "@capacitor-community/speech-recognition": "^7.0.1",
-    "@capacitor-mlkit/barcode-scanning": "^8.2.2",
-    "@capacitor/android": "^8.6.0",
-    "@capacitor/cli": "^8.6.0",
-    "@capacitor/core": "^8.6.0",
-    "@capacitor/local-notifications": "^8.3.1",
     "@excalidraw/excalidraw": "^0.18.1",
     "@fontsource-variable/fira-code": "^5.3.0",
     "@fontsource-variable/fredoka": "^5.3.0",
@@ -65,21 +55,22 @@
     "@radix-ui/react-dialog": "^1.1.23",
     "@radix-ui/react-dropdown-menu": "^2.1.24",
     "@radix-ui/react-popover": "^1.2.0",
-    "@radix-ui/react-scroll-area": "^1.2.18",
     "@radix-ui/react-select": "^2.3.7",
     "@radix-ui/react-slot": "^1.3.3",
     "@radix-ui/react-switch": "^1.3.7",
     "@radix-ui/react-tabs": "^1.1.21",
     "@radix-ui/react-tooltip": "^1.2.16",
     "@tailwindcss/vite": "^4.3.3",
+    "@tauri-apps/api": "2.12.4",
+    "@tauri-apps/cli": "2.12.4",
     "@vitejs/plugin-react": "^6.1.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "electron": "44.5.1",
-    "electron-builder": "26.15.3",
     "highlight.js": "~11.11.2",
     "lowlight": "^3.3.0",
     "lucide-react": "^1.52.0",
+    "playwright-core": "1.63.0",
+    "pngjs": "^5.0.0",
     "qrcode": "^1.5.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
@@ -92,120 +83,11 @@
     "tw-animate-css": "^1.4.0",
     "vite": "^8.3.2"
   },
-  "build": {
-    "appId": "dev.orb.app",
-    "productName": "Orb",
-    "copyright": "Orb",
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "danielfinchdev",
-        "repo": "orb-dev"
-      }
-    ],
-    "directories": {
-      "output": "dist",
-      "buildResources": "build"
-    },
-    "files": [
-      "src/**/*",
-      "!src/ui/**",
-      "!android-app/**",
-      "build/icon.png",
-      "build/icon.ico",
-      "package.json",
-      "!node_modules/playwright-core/**",
-      "!node_modules/@anthropic-ai/claude-agent-sdk-*/**",
-      "!node_modules/@anthropic-ai/sdk/**",
-      "!node_modules/@modelcontextprotocol/**",
-      "!node_modules/**/*.d.ts",
-      "!node_modules/**/*.map",
-      "!node_modules/**/README*",
-      "!node_modules/**/CHANGELOG*"
-    ],
-    "asarUnpack": [
-      "src/**",
-      "node_modules/@anthropic-ai/claude-agent-sdk/**",
-      "node_modules/zod/**",
-      "node_modules/@noble/**"
-    ],
-    "win": {
-      "icon": "build/icon.ico",
-      "artifactName": "Orb-${version}-windows.${ext}",
-      "target": [
-        "nsis"
-      ]
-    },
-    "portable": {
-      "artifactName": "Orb-${version}-light-portable.exe"
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
-      "uninstallDisplayName": "${productName}",
-      "artifactName": "Orb-${version}-instalador.exe"
-    },
-    "electronFuses": {
-      "runAsNode": true,
-      "enableCookieEncryption": true,
-      "enableNodeOptionsEnvironmentVariable": false,
-      "enableNodeCliInspectArguments": false,
-      "grantFileProtocolExtraPrivileges": false
-    },
-    "linux": {
-      "executableName": "orb-dev",
-      "icon": "build/icons",
-      "artifactName": "Orb-${version}-linux-${arch}.${ext}",
-      "category": "Development",
-      "synopsis": "Your pocket director: one chat for your AI coding agents",
-      "description": "Orb coordinates your AI agents (Claude Code, Codex, Cursor, Gemini CLI, OpenCode, Qwen Code, GitHub Copilot) from a single chat. Everything runs on your computer, with your own accounts.",
-      "maintainer": "danielfinchdev <danielfinchdev@users.noreply.github.com>",
-      "vendor": "Orb",
-      "desktop": {
-        "entry": {
-          "Name": "Orb",
-          "GenericName": "AI agents director",
-          "Comment": "One chat for your AI coding agents",
-          "Comment[es]": "Un chat para tus agentes de IA",
-          "Keywords": "AI;agents;Claude;Codex;Cursor;chat;IA;agentes;",
-          "StartupWMClass": "Orb",
-          "StartupNotify": "true"
-        }
-      },
-      "target": [
-        {
-          "target": "AppImage",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "deb",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
-      ]
-    },
-    "deb": {
-      "recommends": [
-        "gnome-keyring | kwalletmanager"
-      ]
-    }
-  },
-  "allowScripts": {
-    "electron@44.5.1": true
-  },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.289",
     "@noble/ciphers": "2.4.0",
     "@noble/curves": "2.4.0",
     "@noble/hashes": "2.4.0",
-    "electron-updater": "6.8.10",
-    "playwright-core": "1.63.0",
     "zod": "^4.6.5"
   }
 }

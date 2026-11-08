@@ -40,7 +40,7 @@ export default {
   'expert.measuring': 'midiendo…',
   'expert.memory': 'Memoria',
   'expert.memoryOf': '{used} de {total}',
-  'expert.disk': 'Disco (carpeta del asistente)',
+  'expert.disk': 'Disco (carpeta de Orb)',
   'expert.diskFree': '{size} libres',
   'expert.engine': 'Memoria de Orb: {size}',
   'expert.agentsWorking': 'Agentes activos: {n}',

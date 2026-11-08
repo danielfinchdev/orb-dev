@@ -31,10 +31,9 @@ html.glass {
   --glass-r-sheet: 28px;
   --glass-r-card: 22px;
   --glass-r-control: 12px;
-  /* The floating tab bar and the room it takes at the bottom of each screen. */
+  /* The floating tab bar. */
   --dock-h: 62px;
   --dock-gap: 10px;
-  --dock-space: calc(var(--dock-h) + var(--dock-gap) * 2 + env(safe-area-inset-bottom, 0px));
 }
 html.glass.dark {
   --glass-thin: rgb(34 36 52 / 0.56);
@@ -50,16 +49,15 @@ html.glass.dark {
   --glass-field: radial-gradient(70% 45% at 10% 0%, #262c6e 0%, transparent 70%), radial-gradient(60% 40% at 100% 28%, #3a1f5c 0%, transparent 72%), radial-gradient(80% 45% at 40% 100%, #12305a 0%, transparent 70%), var(--background);
 }
 
-/* ---- The colour field: static, under every screen; the animated scene and its frosted pane are off. ---- */
-html.glass .mobile-shell { position: relative; background: var(--glass-field); }
+/* ---- The colour field: static, under every screen (and under the status bar: it is drawn on the page itself); the
+   animated scene and its frosted pane are off. ---- */
+html.glass body { background: var(--glass-field); }
+html.glass .mobile-shell { position: relative; }
 html.glass .mobile-shell .scene { display: none; }
 html.glass .mobile-shell :is(.topbar, .theme-scene) { background: transparent; border-color: transparent; backdrop-filter: none; }
 
-/* ---- Top: the screen's bar is a large title straight on the field, after the menu ☰. ---- */
-html.glass [data-slot="drawer-content"] [data-testid="mode-switch"] { background: var(--glass-regular); border-radius: 999px; padding: 4px; box-shadow: inset 0 1px 0 var(--glass-edge), 0 0 0 1px var(--glass-stroke); }
-html.glass [data-slot="drawer-content"] .mode-thumb { inset-block: 4px; left: 4px; width: calc(50% - 5px); border-radius: 999px; background: var(--glass-solid); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 4px 10px -4px rgb(40 50 130 / 0.3); }
-html.glass.dark [data-slot="drawer-content"] .mode-thumb { background: rgb(74 78 108 / 0.9); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 4px 10px -4px rgb(0 0 0 / 0.6); }
-html.glass [data-slot="drawer-content"] [role="tab"] { border-radius: 999px; padding-block: 6px; }
+/* ---- Top: the screen's bar is a large title straight on the field, after the menu ☰. The status bar's room is the
+   page's own (app.css › #root), never each bar's. ---- */
 html.glass .mobile-shell .topbar { min-height: 3.25rem; padding-block: 0.5rem; }
 html.glass .mobile-shell .topbar h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.15; }
 html.glass .mobile-shell .topbar-chat h1 { font-size: inherit; }
@@ -80,14 +78,13 @@ html.glass .mobile-shell [data-slot="composer"] {
   box-shadow: inset 0 1px 0 var(--glass-edge), 0 0 0 1px var(--glass-stroke), var(--glass-shadow);
 }
 html.glass .mobile-shell [data-slot="composer"]:focus-within { box-shadow: inset 0 1px 0 var(--glass-edge), 0 0 0 1.5px color-mix(in oklch, var(--ring) 55%, transparent), var(--glass-shadow); --tw-ring-shadow: 0 0 #0000; }
-html.glass .mobile-shell .composer-dock { padding-inline: 12px; padding-bottom: calc(var(--dock-space) + 2px); }
-/* The screens leave room for the tab bar at the end of their scroll; the chat's own list does not (the composer does). */
-html.glass .mobile-shell main .overflow-y-auto { padding-bottom: calc(var(--dock-space) + 12px); }
-html.glass .mobile-shell main .overflow-y-auto:has(~ .composer-dock) { padding-bottom: 12px; }
+/* A conversation takes the whole screen (no tab bar): the composer only keeps clear of the gesture bar. */
+html.glass .mobile-shell .composer-dock { padding-inline: 12px; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); }
 
-/* ---- The floating tab bar: the one always-on blurred layer. ---- */
+/* ---- The floating tab bar: the one always-on blurred layer. 3.8: a pill in the flow, under the screen (not over it),
+   so no list ever ends under it, whatever its scroll is made of. ---- */
 html.glass .mobile-tabs {
-  position: absolute; z-index: 30; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom, 0px) + var(--dock-gap));
+  position: relative; z-index: 30; margin: 0 12px calc(env(safe-area-inset-bottom, 0px) + var(--dock-gap));
   height: var(--dock-h); padding: 0 6px; align-items: center; border: 0; border-radius: 999px;
   background: var(--glass-thin); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
   box-shadow: inset 0 1px 0 var(--glass-edge), 0 0 0 1px var(--glass-stroke), var(--glass-shadow-float);
@@ -106,7 +103,7 @@ html.glass [data-slot="dialog-overlay"] { background: var(--glass-scrim); backdr
 @media (max-width: 640px) {
   html.glass [data-slot="dialog-content"] {
     top: auto; bottom: 0; left: 0; right: 0; width: 100%; max-width: 100%; translate: 0 0;
-    max-height: 90dvh; padding: 26px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+    max-height: min(90dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 12px)); padding: 26px 20px calc(20px + env(safe-area-inset-bottom, 0px));
     border: 0; border-radius: var(--glass-r-sheet) var(--glass-r-sheet) 0 0;
     background: var(--glass-thick); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
     box-shadow: inset 0 1px 0 var(--glass-edge), 0 -1px 0 var(--glass-stroke), 0 -18px 48px -20px rgb(0 0 0 / 0.35);
@@ -118,7 +115,7 @@ html.glass [data-slot="dialog-overlay"] { background: var(--glass-scrim); backdr
   html.glass [data-slot="dialog-content"] [data-slot="button"] { min-height: 44px; border-radius: 14px; }
 }
 
-/* ---- The menu ☰: a glass sheet from the left edge (the transient blurred layer), with «Orb | Bots» as a glass capsule. ---- */
+/* ---- The menu ☰: a glass sheet from the left edge (the transient blurred layer). ---- */
 html.glass [data-slot="drawer-content"] {
   border: 0; border-radius: 0 var(--glass-r-sheet) var(--glass-r-sheet) 0;
   background: var(--glass-thick); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);

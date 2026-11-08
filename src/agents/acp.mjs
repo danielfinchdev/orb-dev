@@ -5,8 +5,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, readOutput, discoverDir } from './common.mjs';
-import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree } from './live.mjs';
+import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, readOutput, discoverDir, nodeRuntime } from './common.mjs';
+import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree, hidingEnvValues } from './live.mjs';
 import { decide } from '../core/guard.mjs';
 import { tr } from '../core/context.mjs';
 
@@ -77,7 +77,7 @@ export function acpModels(res) {
 export function acpAgent(id, spec) {
   const caps = { images: false, steer: false, fork: false, approvals: true, models: false, context: true };
   const detect = (cfg = {}) => {
-    if (cfg.path && firstFile([cfg.path])) return /\.(c|m)?js$/i.test(cfg.path) ? { cmd: firstFile(inPath('node')) ?? process.execPath, pre: [cfg.path] } : { cmd: cfg.path, pre: [] };
+    if (cfg.path && firstFile([cfg.path])) return /\.(c|m)?js$/i.test(cfg.path) ? { cmd: firstFile(inPath('node')) ?? nodeRuntime(), pre: [cfg.path] } : { cmd: cfg.path, pre: [] };
     return npmBin(spec.pkg, spec.bin) ?? (firstFile(inPath(spec.bin)) ? { cmd: firstFile(inPath(spec.bin)), pre: [] } : null);
   };
   const loginState = () => (spec.login.some((f) => firstFile([path.join(userHome(), f)])) ? 'si' : 'desconocido');
@@ -85,7 +85,7 @@ export function acpAgent(id, spec) {
 
   function createLive(o) {
     const onEvent = o.onEvent ?? (() => {});
-    const log = o.log ?? (() => {});
+    const log = hidingEnvValues(o.log ?? (() => {}), o.mcpServers);
     const approvals = new Approvals(onEvent);
     let permission = o.permission ?? 'editar';
     let child = null; let peer = null; let sessionId = o.resumeId ?? null; let turn = null; let started = null; let closed = false;
@@ -116,7 +116,7 @@ export function acpAgent(id, spec) {
         const tc = p.toolCall ?? {};
         const command = tc.rawInput?.command ? [].concat(tc.rawInput.command).join(' ') : '';
         const paths = (tc.locations ?? []).map((l) => l.path).filter(Boolean);
-        const verdict = decide({ permission, tool: tc.name ?? tc.title, kind: tc.kind, command, paths, internalDir: o.internalDir, lang: o.lang, bot: o.bot || false, confine: o.confine || null });
+        const verdict = decide({ permission, tool: tc.name ?? tc.title, kind: tc.kind, command, paths, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang });
         let d = verdict.decision;
         if (d === 'ask') d = await approvals.ask({ id: tc.toolCallId ?? `p-${Date.now()}`, tool: tc.title ?? tc.kind ?? tr('sys.agents.tool.action'), title: command || tc.title || paths.join(', '), reason: verdict.reason, input: clip(tc.rawInput ?? tc.title, 400) });
         // In order of preference (not in the order the agent lists its options): "always" must pick allow_always even

@@ -1,11 +1,11 @@
-// 3.6: time zones without dependencies (only Intl). Reminders and schedules keep a WALL time («every day at 09:00») and
-// the zone of the person who made them; the instant (UTC) of each run is worked out here, so a server in UTC fires a
-// Madrid reminder at 09:00 in Madrid, also across both daylight-saving changes.
+// 3.6: time zones without dependencies (only Intl). Schedules keep a WALL time («every day at 09:00») in the
+// owner's zone; the instant (UTC) of each run is worked out here, so a PC in UTC fires a
+// Madrid schedule at 09:00 in Madrid, also across both daylight-saving changes.
 //   zonedToUtc('2026-03-29T02:30', 'Europe/Madrid')  → Date (spring forward: the first valid minute, 03:00; fall back:
 //                                                       the first of the two 02:30)
 //   utcToZoned(date, tz)                              → { year, month, day, hour, minute, second, weekday, iso }
 //   nextLocalRun(rule, tz, after)                     → Date of the first run after `after` (or null)
-// WS3/WS4 call nextLocalRun from core/schedules and core/bots (one function for every repeating thing).
+// core/schedules calls nextLocalRun (one function for every repeating thing).
 const FORMATTERS = new Map();
 const formatter = (tz) => {
   let f = FORMATTERS.get(tz);
@@ -17,11 +17,12 @@ const formatter = (tz) => {
 };
 const WEEKDAYS = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
 const pad = (n, w = 2) => String(n).padStart(w, '0');
-const MIN = 60_000;
 const DAY = 86_400_000;
 
-// The zone of this machine (the fallback for a person without one).
+// The zone of this machine (the fallback when the settings name none).
 export const systemTz = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; } };
+// The owner's zone: the settings' tz (orb.json), else this machine's.
+export const ownerTz = (config) => (isValidTz(config?.tz) ? config.tz : systemTz());
 export function isValidTz(tz) {
   if (typeof tz !== 'string' || !tz || tz.length > 64) return false;
   try { formatter(tz); return true; } catch { return false; }
@@ -120,14 +121,5 @@ export function nextLocalRun(rule, tz, after = Date.now()) {
   return null;
 }
 
-// How late a run fired: whole minutes when more than 2 (the «con N min de retraso» of the chat line), else 0.
-export function minutesLate(due, firedAt = Date.now()) {
-  const d = due instanceof Date ? due.getTime() : Date.parse(due);
-  const f = firedAt instanceof Date ? firedAt.getTime() : Number(firedAt);
-  if (!Number.isFinite(d) || !Number.isFinite(f) || f - d <= 2 * MIN) return 0;
-  return Math.round((f - d) / MIN);
-}
-// skip_missed: a one-off fires late; a repeating one that is late skips this run (its next one comes).
-export const shouldFireLate = ({ every, skip_missed: skip = true }) => every === 'once' || !skip;
 // Local date ('YYYY-MM-DD') of an instant in a zone (daily backups, usage days).
 export const localDay = (date, tz) => utcToZoned(date, tz).iso.slice(0, 10);

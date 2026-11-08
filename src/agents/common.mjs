@@ -8,19 +8,6 @@ import { fileURLToPath } from 'node:url';
 
 export const IS_WIN = process.platform === 'win32';
 
-// 3.7 (Orb Server): when the root-owned admin helper is installed (sudoers lets this user run it), every agent process
-// starts with no_new_privs (setpriv), whatever program it is (the engines' run script, a Claude or Codex found in PATH,
-// the SDK's own), so a bot can never reach sudo. Without the helper, and on Windows and macOS, the command is left as is.
-const ADMIN_HELPER = '/usr/local/libexec/orb-server-admin';
-const SETPRIV = ['/usr/bin/setpriv', '/bin/setpriv', '/usr/sbin/setpriv', '/sbin/setpriv'];
-export function confineArgs(cmd, args = [], { platform = process.platform, helper = null, setpriv } = {}) {
-  if (platform !== 'linux') return { cmd, args };
-  if (!(helper ?? fs.existsSync(ADMIN_HELPER))) return { cmd, args };
-  const sp = setpriv === undefined ? SETPRIV.find((f) => fs.existsSync(f)) ?? null : setpriv;
-  if (!sp) throw new Error('setpriv (util-linux) is missing: the agent does not start without no_new_privs');
-  return { cmd: sp, args: ['--no-new-privs', '--', cmd, ...args] };
-}
-
 // First existing file of a list (null if none).
 export const firstFile = (list) => list.find((f) => { try { return f && fs.statSync(f).isFile(); } catch { return false; } }) ?? null;
 
@@ -80,7 +67,7 @@ export function killTree(child) {
   try {
     if (IS_WIN) { const k = spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }); k.on('error', () => {}); }
     else {
-      // 3.5 (Linux, Orb Server): the agents start as leaders of their own process group (spawnAgent), so the whole group
+      // 3.5 (Linux): the agents start as leaders of their own process group (spawnAgent), so the whole group
       // goes, as taskkill /T does on Windows; a process that is not a leader (the SDK's own) only by itself. If the group
       // ignores the request, it is killed a few seconds later.
       const pid = child.pid;
@@ -118,17 +105,36 @@ export function readOutput(cmd, args, { env = {}, cwd = discoverDir(), timeoutMs
 // A promise that gives up after ms (with null), for the steps of a discovery that may hang.
 export const within = (promise, ms) => Promise.race([promise, new Promise((resolve) => { setTimeout(() => resolve(null), ms).unref?.(); })]);
 
-// How an agent process starts the assistant's MCP server: the same runtime as the engine (the app's own executable in
-// "run as node" mode when packaged), the server script and the assistant folder. Nothing secret goes in here.
-export function orbMcpServer(env = {}) {
-  const script = process.env.ORB_MCP_SCRIPT || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'mcp', 'server.mjs');
-  return { command: process.execPath, args: [script], env: { ELECTRON_RUN_AS_NODE: '1', ...env } };
-}
+// The Node that runs Orb's own scripts for the agents: ORB_NODE when the app names one (the bundled node.exe), otherwise
+// the engine's own runtime (the same Node).
+export const nodeRuntime = () => process.env.ORB_NODE || process.execPath;
 
-// 3.5: the tools of one of the user's bots (src/mcp/bot.mjs).
-export function botMcpServer(env = {}) {
-  const script = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'mcp', 'bot.mjs');
-  return { command: process.execPath, args: [script], env: { ELECTRON_RUN_AS_NODE: '1', ...env } };
+// How an agent process starts the assistant's MCP server (server.mjs) or one of the user's connectors (launch.mjs, which
+// gets the connector's real command and keys from the engine): nodeRuntime() and the script. Nothing secret goes in here.
+// (ORB_MCP_SCRIPT: another copy of the server, when the app names one; launch.mjs sits next to it.)
+const mcpDir = () => (process.env.ORB_MCP_SCRIPT ? path.dirname(process.env.ORB_MCP_SCRIPT) : path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'mcp'));
+export function orbMcpServer(env = {}) {
+  const script = process.env.ORB_MCP_SCRIPT || path.join(mcpDir(), 'server.mjs');
+  return { command: nodeRuntime(), args: [script], env };
+}
+export const connectorLauncher = (env = {}) => ({ command: nodeRuntime(), args: [path.join(mcpDir(), 'launch.mjs')], env });
+
+// 3.8: the MCP servers' environment (Orb's signatures, a connector's keys) never goes on a command line, which any
+// process of the user can read: each value moves to the agent's own environment under a name of its own, and the
+// server's config keeps only a reference the agent expands when it starts the server (ref(name): "${NAME}" for Claude
+// Code, "${env:NAME}" for Cursor). → { servers, env }
+export function mcpEnvByRef(servers, ref) {
+  const out = {}; const env = {};
+  for (const [name, s] of Object.entries(servers ?? {})) {
+    const { env: own, ...rest } = s ?? {};
+    const refs = {};
+    for (const [k, v] of Object.entries(own ?? {})) {
+      const key = `ORB_MCP_${name}_${k}`.replace(/[^A-Za-z0-9_]/g, '_');
+      env[key] = String(v); refs[k] = ref(key);
+    }
+    out[name] = Object.keys(refs).length ? { ...rest, env: refs } : rest;
+  }
+  return { servers: out, env };
 }
 
 // Bounded text for the UI (tool inputs and outputs can be huge).

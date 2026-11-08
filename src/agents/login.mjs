@@ -83,7 +83,7 @@ export function cancelLogin(id) {
   return true;
 }
 
-// Waits until a login ends (tests and the server's terminal command).
+// Waits until a login ends (tests).
 export const waitLogin = (id) => new Promise((resolve) => { const l = logins.get(id); if (!l || l.state !== 'esperando') return resolve(loginInfo(id)); l.waiters.push(() => resolve(loginInfo(id))); });
 
 // Starts a sign-in. agent: 'claude' | 'codex'; exe: { cmd, pre }; env: the account's (CLAUDE_CONFIG_DIR / CODEX_HOME);

@@ -12,7 +12,7 @@ after(() => t.cleanup());
 
 // An assistant whose turns are held until the test lets them finish.
 function assistant(board) {
-  const o = new Orchestrator(board, 'clave');
+  const o = new Orchestrator(board);
   o.turns = [];
   const make = o.lane.bind(o);
   o.lane = (id) => {

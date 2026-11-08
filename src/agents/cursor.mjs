@@ -5,15 +5,19 @@
 // On Windows the CLI is installed as %LOCALAPPDATA%\cursor-agent\versions\<v>\ with its own node.exe and index.js.
 import fs from 'node:fs';
 import path from 'node:path';
-import { IS_WIN, firstFile, inPath, appDataDirs, userHome, clip, describeInput, readOutput } from './common.mjs';
+import { IS_WIN, firstFile, inPath, appDataDirs, userHome, clip, describeInput, readOutput, mcpEnvByRef } from './common.mjs';
 import { Turn, spawnAgent, killTree } from './live.mjs';
 import { tr } from '../core/context.mjs';
 import { isModelLimitText, parseReset, untilText } from '../core/budget.mjs';
+import { guardedRootsNow, appRootsNow } from '../core/guard.mjs';
 
 export const id = 'cursor';
 export const label = 'Cursor';
 export const kind = 'cli-stream';
 export const caps = { images: false, steer: false, fork: false, approvals: false, models: true, context: false };
+// F2.6c: Cursor starts its MCP servers again every turn, so they get new tickets every turn (o.mcpServers is then a
+// function), taken back when the turn ends (src/engine/agent-auth.mjs).
+export const mcpServersEachTurn = true;
 
 // In this user's Local AppData or in one moved to another drive (appDataDirs).
 function windowsEntry() {
@@ -142,10 +146,12 @@ export function cursorRules(permission, internalDir) {
   // «Revisar y probar»: commands yes, changing files no.
   if (permission === 'probar') deny.push('Write(**)');
   if (internalDir) {
-    for (const sub of ['datos', 'ejecuciones', path.join('copias', 'fotos')]) {
-      const dir = path.join(internalDir, sub);
+    // 3.8: and what Orb keeps about the workspace outside it (its backups, the copies of its sealed secrets).
+    for (const dir of [...['datos', 'ejecuciones', path.join('copias', 'fotos'), 'secretos'].map((sub) => path.join(internalDir, sub)), ...guardedRootsNow()]) {
       for (const p of [dir, dir.replace(/\\/g, '/')]) deny.push(`Read(${p}/**)`, `Write(${p}/**)`);
     }
+    // 3.8.1: the folder Orb is installed in: readable, never written.
+    for (const dir of appRootsNow()) for (const p of [dir, dir.replace(/\\/g, '/')]) deny.push(`Write(${p}/**)`);
   }
   return [...new Set(deny)];
 }
@@ -179,19 +185,14 @@ export function prepareCursorFolder(cwd, { mcpServers = {}, deny = [] } = {}) {
     fs.writeFileSync(file, JSON.stringify(merge(before ? read(file) ?? {} : {}), null, 2));
   };
   try {
-    const servers = {};
-    for (const [name, s] of Object.entries(mcpServers)) {
-      const { env: own, ...rest } = s;
-      const refs = {};
-      for (const [k, v] of Object.entries(own ?? {})) {
-        const ref = `ORB_MCP_${name}_${k}`.replace(/[^A-Za-z0-9_]/g, '_');
-        env[ref] = String(v); refs[k] = `\${env:${ref}}`;
-      }
-      servers[name] = Object.keys(refs).length ? { ...rest, env: refs } : rest;
-    }
+    const { servers, env: values } = mcpEnvByRef(mcpServers, (name) => `\${env:${name}}`);
+    Object.assign(env, values);
     if (Object.keys(servers).length) put('mcp.json', (cur) => ({ ...cur, mcpServers: servers }));
     // Cursor validates the file strictly: permissions needs both lists, allow too (found in a real run: «Required»).
-    if (deny.length) put('cli.json', (cur) => ({ ...cur, permissions: { ...(cur.permissions ?? {}), allow: Array.isArray(cur.permissions?.allow) ? cur.permissions.allow : [], deny: [...new Set([...(cur.permissions?.deny ?? []), ...deny])] } }));
+    // 3.8 (F2.6c): without the project's own allow rules while Orb runs it (a task could have left them for the next
+    // agents), and without the project's hooks (.cursor/hooks.json), which would run with this agent's environment.
+    if (deny.length) put('cli.json', (cur) => ({ ...cur, permissions: { ...(cur.permissions ?? {}), allow: [], deny: [...new Set([...(cur.permissions?.deny ?? []), ...deny])] } }));
+    if (fs.existsSync(path.join(dir, 'hooks.json'))) put('hooks.json', () => ({ version: 1, hooks: {} }));
   } catch (error) { PREPARED.delete(key); throw error; }
   let done = false;
   const restore = () => {
@@ -229,7 +230,9 @@ export function createLive(o) {
     // run (--approve-mcps), and the guard as deny rules; both only for this turn. A command left running in the background
     // (a dev server) no longer keeps the CLI waiting for ever after its answer (--background-shell-timeout).
     let restore = Object.assign(() => {}, { env: {} });
-    try { restore = prepareCursorFolder(o.cwd, { mcpServers: o.mcpServers ?? {}, deny: cursorRules(permission, o.internalDir) }); }
+    const servers = (typeof o.mcpServers === 'function' ? o.mcpServers() : o.mcpServers) ?? {};
+    current.promise.finally(() => servers.release?.());
+    try { restore = prepareCursorFolder(o.cwd, { mcpServers: servers, deny: cursorRules(permission, o.internalDir) }); }
     catch (error) { log(`preparar .cursor: ${error.message}`); }
     current.promise.finally(() => restore());
     const args = [...o.exe.pre, '-p', '--output-format', 'stream-json', '--stream-partial-output', '--trust', '--workspace', o.cwd, '--approve-mcps', '--background-shell-timeout', '60'];

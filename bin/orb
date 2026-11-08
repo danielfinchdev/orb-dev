@@ -1,7 +1,0 @@
-#!/bin/sh
-# Orb en la terminal: el cliente «orb» (src/terminal/orb-cli.mjs). Usa el Node que venga al lado (paquete del servidor)
-# o el del sistema (Node 22 o más nuevo).
-DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")" && pwd)"
-ROOT="$(cd "$DIR/.." && pwd)"
-if [ -x "$ROOT/node/bin/node" ]; then NODE="$ROOT/node/bin/node"; else NODE="${ORB_NODE:-node}"; fi
-exec "$NODE" "$ROOT/src/terminal/orb-cli.mjs" "$@"

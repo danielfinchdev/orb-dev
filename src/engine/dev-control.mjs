@@ -1,6 +1,6 @@
 // 3.1, development only: a control line from the developer's terminal to Orb.dev's engine, so the app can be watched and
 // driven (tasks, chat, permissions, approvals) without clicking in its window. It exists only when the app runs unpacked
-// AND it was started with ORB_DEV_CONTROL=1 (main.mjs never passes it to an installed Orb). Local only (127.0.0.1), and
+// AND it was started with ORB_DEV_CONTROL=1 (the app never passes it to an installed Orb). Local only (127.0.0.1), and
 // every request needs the random key written, with the port, to a file only this user can read (ORB_DEV_CONTROL_FILE, or
 // %TEMP%\orb-dev-control.json). The client is scripts/orb-dev.mjs.
 //   POST /call      { method, params } → the same API the window uses (the answer of api.call)
@@ -11,6 +11,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { DESKTOP } from '../core/permissions.mjs';
+import { ownPorts } from './host.mjs';
 
 export function startDevControl({ api, board, sessions, log = () => {}, home, internalDir }) {
   const token = crypto.randomBytes(24).toString('hex');
@@ -40,18 +42,22 @@ export function startDevControl({ api, board, sessions, log = () => {}, home, in
         clients.add(res); req.on('close', () => clients.delete(res));
         return;
       }
-      if (req.method === 'GET' && req.url === '/snapshot') return send(res, 200, { ok: true, result: { ...snapshot(), live: await api.call('tasks.live', {}, api.desktopPrincipal?.()).catch(() => []) } });
+      if (req.method === 'GET' && req.url === '/snapshot') return send(res, 200, { ok: true, result: { ...snapshot(), live: await api.call('tasks.live', {}, DESKTOP).catch(() => []) } });
       if (req.method === 'POST' && req.url === '/call') {
         let raw = ''; for await (const chunk of req) { raw += chunk; if (raw.length > 1_000_000) throw new Error('petición demasiado grande'); }
         const { method, params } = JSON.parse(raw || '{}');
         log(`control de desarrollo: ${method}`);
-        return send(res, 200, { ok: true, result: (await api.call(String(method), params ?? {}, api.desktopPrincipal?.())) ?? null });
+        // 3.8.1: what starts a program on this PC outside the approvals (a terminal, an editor, a project's action) is the
+        // window's alone: this line's key lives in %TEMP%, which the agents can read.
+        if (/^app\.(openTerminal|openIn|runAction)$/.test(String(method))) return send(res, 403, { ok: false, error: 'no disponible desde el control de desarrollo' });
+        return send(res, 200, { ok: true, result: (await api.call(String(method), params ?? {}, DESKTOP)) ?? null });
       }
       send(res, 404, { ok: false, error: 'no existe' });
     } catch (error) { send(res, 200, { ok: false, error: error.message }); }
   });
   server.listen(0, '127.0.0.1', () => {
     const { port } = server.address();
+    ownPorts.add(port);
     fs.mkdirSync(path.dirname(keyFile), { recursive: true });
     fs.writeFileSync(keyFile, JSON.stringify({ url: `http://127.0.0.1:${port}`, token, home, pid: process.pid, startedAt: new Date().toISOString() }, null, 2), { mode: 0o600 });
     fs.writeFileSync(file, JSON.stringify({ keyFile, home, pid: process.pid }, null, 2));

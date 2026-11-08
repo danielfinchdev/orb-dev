@@ -1,7 +1,7 @@
 // A direct conversation with one agent, live: the answer streams as it is written, commands and changed
 // files appear as the agent works, risky actions wait for a click (approval cards), messages written meanwhile correct the
 // agent on the fly or wait in a queue, and the context meter shows how full the conversation is. Task runs open here too.
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { Info, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, X, ListTodo, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { Markdown } from '@/components/markdown.jsx';
@@ -23,9 +23,10 @@ import { useStore, call, act, go, bridge, refresh, getState } from '@/lib/store.
 import { AGENT, PERMISSION, REASONING, STATUS, DECISION, CAN_STEER as AGENT_CAN_STEER, CAN_COMPACT, options } from '@/lib/labels.js';
 import { baseName, cn } from '@/lib/utils.js';
 import { useT, t, useLocale, currentLocale } from '@/lib/i18n.js';
+import { sameBlock } from '@/lib/memo.js';
 
 // Items → blocks: a tool call and its result become one block (the latest call with that id gets the result).
-function toBlocks(items) {
+function toBlocks(items, t) {
   const blocks = []; const tools = new Map();
   for (const it of items) {
     if (it.kind === 'tool') { const b = { type: 'tool', key: it.id, call: it.body, result: null }; if (it.body?.id) tools.set(it.body.id, b); blocks.push(b); continue; }
@@ -46,7 +47,7 @@ function toolIcon(name = '') {
   return Wrench;
 }
 
-// 3.2.1: a tool's name as people read it: the tools of Orb and Opti Bot by what they do («Creando una tarea»), the
+// 3.2.1: a tool's name as people read it: the tools of Orb (and of Opti Bot, in its old conversation) by what they do («Creando una tarea»), the
 // agents' own (Read, Bash…) as they are, never «mcp__opti__opti_propose» or «ToolSearch».
 function toolName(t, name) {
   const bare = bareTool(name);
@@ -87,7 +88,9 @@ function statusText(body, agent, catalog) {
 }
 
 const FILE_ICON = { add: FilePlus2, delete: FileMinus2 };
-function Block({ b, agent, brain, sessionId, project, catalog }) {
+// The blocks are made again from the items whenever one arrives: a block whose content is the same is not drawn again
+// (nor while the agent's answer streams, which redraws the view many times a second): lib/memo.js › sameBlock.
+const Block = memo(function Block({ b, agent, brain, sessionId, project, catalog }) {
   const t = useT();
   const locale = useLocale();
   if (b.type === 'tool') return <ToolBlock b={b} />;
@@ -117,10 +120,10 @@ function Block({ b, agent, brain, sessionId, project, catalog }) {
   if (it.role === 'error') return <div className="bg-destructive/10 text-destructive rounded-xl px-3.5 py-2.5 text-[13px] whitespace-pre-wrap break-words">{typeof body === 'string' ? body : JSON.stringify(body)}</div>;
   if (it.kind === 'status' && typeof body === 'string') return <div className="text-muted-foreground text-center text-xs">{statusText(body, brain ?? agent, catalog)}</div>;
   return <div className="text-muted-foreground text-center text-xs">{typeof body === 'string' ? body : JSON.stringify(body)}</div>;
-}
+}, (prev, next) => sameBlock(prev.b, next.b) && prev.agent === next.agent && prev.brain === next.brain && prev.sessionId === next.sessionId && prev.project === next.project && prev.catalog === next.catalog);
 
 // 3.7: a proposal Opti Bot left in its conversation before «Monitoreo del equipo» was removed (2.7–3.6): read only, as it
-// ended. The same changes are proposed now by a bot with the «Equipo» tools (src/mcp/bot.mjs › pc_propose).
+// ended.
 const OLD_STATUS = { done: ['done', 'success'], running: ['expired', 'secondary'], pending: ['expired', 'secondary'], failed: ['failed', 'secondary'], cancelled: ['failed', 'secondary'], denied: ['denied', 'secondary'], expired: ['expired', 'secondary'] };
 function OptiOldCard({ body = {} }) {
   const t = useT();
@@ -131,11 +134,11 @@ function OptiOldCard({ body = {} }) {
       <div className="flex items-start gap-2.5">
         <ShieldAlert className="text-muted-foreground mt-0.5 size-4 shrink-0" />
         <div className="min-w-0 flex-1">
-          <div className="font-medium">{t('session.optiOld', { action: t(`msg.bots.pc.${body.action}`) })}{target ? <span className="text-muted-foreground font-normal"> · {target}</span> : null}</div>
+          <div className="font-medium">{t('session.optiOld', { action: t(`session.opti.${body.action}`) })}{target ? <span className="text-muted-foreground font-normal"> · {target}</span> : null}</div>
           {body.reason ? <div className="text-muted-foreground mt-0.5">{body.reason}</div> : null}
           {body.result ? <div className="mt-1.5 whitespace-pre-wrap">{body.result}</div> : null}
         </div>
-        <Badge variant={tone}>{t(`bots.card.${label}`)}</Badge>
+        <Badge variant={tone}>{t(`session.optiStatus.${label}`)}</Badge>
       </div>
     </div>
   );
@@ -313,7 +316,8 @@ export function SessionView({ route }) {
     const offQueue = bridge.on('session:queue', (q) => { if (q.id === route.id) setQueue(q.queue); });
     return () => { alive = false; offItem(); offDelta(); offQueue(); };
   }, [route.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const blocks = useMemo(() => toBlocks(items), [items]);
+  const tb = useT(); // H4a B2: «Resultado» in the language on screen
+  const blocks = useMemo(() => toBlocks(items, tb), [items, tb]);
   const scroll = useAutoScroll([blocks.length, items.at(-1)?.id, partial.length > 0, Math.floor(partial.length / 200)]);
   useEffect(() => { if (s && s.status !== 'running') setPartial(''); }, [s?.status]); // eslint-disable-line react-hooks/exhaustive-deps
   const catalog = useCatalog();
@@ -337,7 +341,8 @@ export function SessionView({ route }) {
     if (older) { setItems((prev) => [...older, ...prev]); setMore(older.length >= PAGE); }
   };
   const addImages = (paths) => setImages((prev) => [...new Set([...prev, ...(paths ?? []).filter(Boolean)])].slice(0, 10));
-  const fromTransfer = (dt) => [...(dt?.files ?? [])].filter((f) => /^image\//.test(f.type)).map((f) => bridge.pathForFile(f)).filter(Boolean);
+  // The files' real paths (a promise); the list is read before the event ends.
+  const fromTransfer = (dt) => Promise.all([...(dt?.files ?? [])].filter((f) => /^image\//.test(f.type)).map((f) => bridge.pathForFile(f))).then((p) => p.filter(Boolean));
   // While the agent works, Enter corrects it on the fly (it reads the message at its next step) and Ctrl+Enter queues
   // the message for after the turn. Agents that cannot be corrected on the fly always queue.
   const send = async ({ alt = false } = {}) => {
@@ -379,7 +384,7 @@ export function SessionView({ route }) {
         </>)}
       </PageHeader>
       <div ref={scroll.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex max-w-3xl flex-col gap-3.5 px-5 py-6">
+        <div className="lazy-lines mx-auto flex max-w-3xl flex-col gap-3.5 px-5 py-6">
           {more ? <Button variant="ghost" size="sm" className="self-center" onClick={loadOlder}><ChevronUp />{t('session.older')}</Button> : null}
           {blocks.length ? blocks.map((b) => <Block key={b.key} b={b} agent={s.agent} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />)
             : <Empty title={t('session.emptyTitle', { agent: AGENT[s.agent] })}>{t('session.workIn')} <span className="font-mono text-xs">{s.cwd}</span> {t('session.withPerm', { perm: PERMISSION[s.permission] })}</Empty>}
@@ -412,8 +417,8 @@ export function SessionView({ route }) {
       ) : null}
       <Composer value={text} onChange={setText} onSend={send} canSend={Boolean(text.trim() || images.length)} onStop={() => act(call('sessions.stop', { id: s.id }))} busy={running} testid="session-input"
         placeholder={running ? (AGENT_CAN_STEER[s.agent] ? t('session.phSteer', { agent: AGENT[s.agent] }) : t('session.phWait', { agent: AGENT[s.agent] })) : s.kind === 'task' ? t('session.phTask') : t('session.ph', { agent: AGENT[s.agent] })}
-        onPaste={(e) => { const f = fromTransfer(e.clipboardData); if (f.length) addImages(f); }}
-        onDrop={(e) => addImages(fromTransfer(e.dataTransfer))}
+        onPaste={(e) => { fromTransfer(e.clipboardData).then((f) => { if (f.length) addImages(f); }); }}
+        onDrop={(e) => { fromTransfer(e.dataTransfer).then(addImages); }}
         top={images.length || compactable ? <>{compactable ? <ContextSlot items={[{ key: 'compact', node: <CompactButton onCompact={compact} busy={compacting} /> }]} /> : null}<div className="flex min-w-0 flex-wrap items-center gap-2">{pictures}</div></> : null}
         bottom={<>
           <Tip label={t('session.attach')}><Button variant="ghost" size="icon-sm" aria-label={t('session.attach')} onClick={async () => addImages(await bridge.pickImages())}><Paperclip /></Button></Tip>

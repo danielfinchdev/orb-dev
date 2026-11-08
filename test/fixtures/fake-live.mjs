@@ -5,6 +5,8 @@
 //   ESCRIBE            writes hecho-por-<agente>.txt in its folder
 //   CREA_TAREA <p>     creates a task in project <p> through Orb's real MCP server (orb_create_task)
 //   NAVEGA <url>       uses the agents' browser through the MCP (orb_browser_*) and writes navegador.txt
+//   NAVEGA_GUION <file.json>   (3.8.1) runs [["orb_browser_…", {args}], ["sleep", {ms}]…] through the MCP and writes each
+//                      answer to navegador-guion.json (a screenshot as «captura: <base64 length>»)
 //   PROGRESO           reports progress 40 % (orb_update_task) and works 2.5 s more
 //   TERMINA <id>       closes task <id> as done (orb_update_task)
 //   DELEGA <n> [agente] [ESPERA]   delegates n read-only subtasks (orb_delegate) and, with ESPERA, waits for them (orb_wait_tasks)
@@ -22,10 +24,13 @@
 //   TABLA_MARKDOWN     answers in GFM: a table, a task list and strikethrough
 //   CIERRA_Y_CUELGA    closes its task (orb_update_task done) and then never ends its turn
 //   MANDA_MENSAJE <agente> <texto>   sends a message to another agent through Orb (orb_send_message)
-//   LEE <ruta>         (3.6, one per line) reads a file: the real guard decides, with the session's confinement
-//   BOT_CALL <tool> <json>           (3.5, one per line) calls a tool of the bot's own MCP server (src/mcp/bot.mjs)
+//   CREA_PAREJA <p>    (3.8, the coordinator) creates two read-only tasks in <p>: «Escucha» (claude, ESPERA_CORRECCION)
+//                      and «Avisa» (codex, AVISA_HERMANA)
+//   AVISA_HERMANA <texto>   (3.8) writes to the first task its brief lists among the others of its conversation, as the
+//                      brief says (to: its agent, task_id: its number)
+//   LEE <ruta>         (3.6, one per line) reads a file: the real guard decides
 //   ORB_FAKE_SCRIPT=<file.json>     (3.6, screenshots) [{ "when": "text", "reply": "…", "calls": [["tool", {args}]] }]: a
-//                      message containing «when» gets that natural reply (and makes those bot tool calls, silently),
+//                      message containing «when» gets that natural reply (and makes those Orb tool calls, silently),
 //                      so the screenshots show real-looking conversations instead of the test keywords.
 //   Task Review        a review prompt: answers "VEREDICTO: CORRECTO" (or "CON FALLOS" when the reviewed work says FALLOS)
 //
@@ -43,25 +48,35 @@ import { decide } from '../../src/core/guard.mjs';
 const SCRIPT = (() => { try { return process.env.ORB_FAKE_SCRIPT ? JSON.parse(fs.readFileSync(process.env.ORB_FAKE_SCRIPT, 'utf8')) : []; } catch { return []; } })();
 
 
-// One call to a tool of the "orb" MCP server, started exactly as the real agents start it (command, args, env).
+// One call to a tool of the "orb" MCP server, started exactly as the real agents start it (command, args, env) and, as
+// they do, once per agent process: its ticket is traded once (F2.6c), so the same server answers every call.
+const PROCS = new WeakMap();
+function mcpProc(server) {
+  let p = PROCS.get(server);
+  if (p && !p.dead) return p;
+  const child = spawn(server.command, server.args ?? [], { env: { ...process.env, ...(server.env ?? {}) }, stdio: ['pipe', 'pipe', 'inherit'], windowsHide: true });
+  const replies = new Map(); let seq = 0;
+  p = { child, dead: false, rpc: (method, params) => new Promise((r) => { const id = ++seq; replies.set(id, r); child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`); }) };
+  child.on('exit', () => { p.dead = true; for (const r of replies.values()) r({ error: { message: 'el servidor MCP se cerró' } }); });
+  readline.createInterface({ input: child.stdout }).on('line', (l) => { let m; try { m = JSON.parse(l); } catch { return; } const r = replies.get(m.id); replies.delete(m.id); r?.(m); });
+  p.ready = p.rpc('initialize', { protocolVersion: '2025-06-18' });
+  PROCS.set(server, p);
+  return p;
+}
+const closeMcp = (server) => { const p = server && PROCS.get(server); if (p) { p.dead = true; try { p.child.stdin.end(); } catch { /* gone */ } } };
 async function mcpCall(server, name, args, whole = false) {
   if (!server) throw new Error('sin servidor MCP de Orb');
-  const child = spawn(server.command, server.args ?? [], { env: { ...process.env, ...(server.env ?? {}) }, stdio: ['pipe', 'pipe', 'inherit'], windowsHide: true });
-  const replies = new Map();
-  readline.createInterface({ input: child.stdout }).on('line', (l) => { let m; try { m = JSON.parse(l); } catch { return; } replies.get(m.id)?.(m); });
-  const rpc = (id, method, params) => new Promise((r) => { replies.set(id, r); child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`); });
-  try {
-    await rpc(1, 'initialize', { protocolVersion: '2025-06-18' });
-    const out = await rpc(2, 'tools/call', { name, arguments: args });
-    if (whole) return out.result;
-    return out.result?.content?.[0]?.text ?? JSON.stringify(out);
-  } finally { child.stdin.end(); }
+  const p = mcpProc(server);
+  await p.ready;
+  const out = await p.rpc('tools/call', { name, arguments: args });
+  if (whole) return out.result;
+  return out.result?.content?.[0]?.text ?? JSON.stringify(out);
 }
 
 export function fakeAdapter(id, real) {
   const caps = { ...(real?.caps ?? { images: false, steer: false, fork: false, approvals: true, models: true, context: true }) };
   return {
-    id, label: real?.label ?? id, kind: 'fake', caps, install: null, spec: real?.spec,
+    id, label: real?.label ?? id, kind: 'fake', caps, install: null, spec: real?.spec, nativeSkills: real?.nativeSkills, // 3.8.1: as the real one
     // The "program" is Node itself, so «Agentes» can ask its version.
     detect: () => ({ cmd: process.execPath, pre: [] }),
     loginState: () => 'si',
@@ -135,6 +150,12 @@ function createFakeLive(agent, label, caps, o) {
       item('tool', 'tool', { id: `t${++seq}`, name: 'orb:orb_create_task', input: proj[1] });
       item('tool', 'tool_result', { id: `t${seq}`, output: out.slice(0, 300), error: false });
     }
+    const pair = scan.match(/CREA_PAREJA (\S+)/);
+    if (pair) {
+      for (const [title, description, who] of [['Escucha', 'ESPERA_CORRECCION', 'claude'], ['Avisa', 'AVISA_HERMANA la API está en /api/v2', 'codex']]) {
+        notes.push(`creada: ${(await mcpCall(orb, 'orb_create_task', { project: pair[1], title, description, agent: who, readonly: true })).slice(0, 200)}`);
+      }
+    }
     // 2.7: a picture the agent made (as Codex's image_gen leaves it: a PNG file and an image item).
     if (/CREA_IMAGEN/.test(scan) && o.internalDir) {
       const dir = path.join(o.internalDir, 'imagenes'); fs.mkdirSync(dir, { recursive: true });
@@ -164,6 +185,20 @@ function createFakeLive(agent, label, caps, o) {
       fs.writeFileSync(path.join(o.cwd, 'navegador.txt'), log.join('\n----\n'));
       item('tool', 'tool', { id: `t${++seq}`, name: 'orb:orb_browser_open', input: nav[1] });
     }
+    const script = scan.match(/NAVEGA_GUION (\S+)/);
+    if (script) {
+      const out = [];
+      for (const [name, args] of JSON.parse(fs.readFileSync(script[1], 'utf8'))) {
+        if (name === 'sleep') { await new Promise((r) => setTimeout(r, Number(args?.ms) || 0)); out.push(''); continue; }
+        try {
+          const shot = name === 'orb_browser_screenshot';
+          const r = await mcpCall(orb, name, args ?? {}, shot);
+          out.push(shot ? `captura: ${r?.content?.find((c) => c.type === 'image')?.data?.length ?? 0}` : r);
+        } catch (error) { out.push(`ERROR ${error.message}`); }
+      }
+      fs.writeFileSync(path.join(o.cwd, 'navegador-guion.json'), JSON.stringify(out, null, 1));
+      item('tool', 'tool', { id: `t${++seq}`, name: 'orb:orb_browser_open', input: script[1] });
+    }
     const progress = /PROGRESO/.test(scan) && text.match(/Tarea #(\d+)/);
     if (progress) { await mcpCall(orb, 'orb_update_task', { id: Number(progress[1]), progress: 40, note: 'probando el formulario' }); await sleep(2500); }
     const delegate = scan.match(/DELEGA (\d+)(?: (claude|codex|cursor|gemini|opencode|qwen|copilot|any))?/);
@@ -186,24 +221,23 @@ function createFakeLive(agent, label, caps, o) {
     // 3.1: a message to another agent through Orb (orb_send_message), as a worker would send it.
     const say = scan.match(/MANDA_MENSAJE (\w+) (.+)/);
     if (say) notes.push(`mensaje: ${await mcpCall(orb, 'orb_send_message', { to: say[1], body: say[2].trim() })}`);
+    const sister = scan.match(/AVISA_HERMANA (.+)/);
+    if (sister) {
+      await sleep(1500); // the sibling is running by then
+      const other = text.match(/## Otras tareas de este proyecto ahora mismo[^\n]*\n- #(\d+) .*?\((\w+), /);
+      notes.push(`aviso: ${other ? await mcpCall(orb, 'orb_send_message', { to: other[2], task_id: Number(other[1]), body: sister[1].trim() }) : 'sin otras tareas'}`);
+    }
     // 3.6: a scripted, natural answer for the screenshots (ORB_FAKE_SCRIPT); its tool calls leave no notes in the reply.
     const scripted = SCRIPT.find((x) => x.when && text.includes(x.when)) ?? null;
     for (const [tool, args] of scripted?.calls ?? []) {
-      await mcpCall(o.mcpServers?.bot, tool, args ?? {});
-      item('tool', 'tool', { id: `t${++seq}`, name: `bot:${tool}`, input: JSON.stringify(args ?? {}) });
+      await mcpCall(orb, tool, args ?? {});
+      item('tool', 'tool', { id: `t${++seq}`, name: tool, input: JSON.stringify(args ?? {}) });
     }
-    // 3.5: a bot uses its own tools (the real src/mcp/bot.mjs, started as the real agents start it).
-    for (const m of scan.matchAll(/^BOT_CALL (\w+) (\{.*\})\s*$/gm)) {
-      let args = {}; try { args = JSON.parse(m[2]); } catch { /* bad test json */ }
-      const out = await mcpCall(o.mcpServers?.bot, m[1], args);
-      item('tool', 'tool', { id: `t${++seq}`, name: `bot:${m[1]}`, input: m[2] });
-      notes.push(`${m[1]}: ${out}`);
-    }
-    // 3.6: LEE <ruta> (one per line): reading a file, as the real guard decides it (with the session's confinement).
+    // 3.6: LEE <ruta> (one per line): reading a file, as the real guard decides it.
     for (const m of scan.matchAll(/^LEE (.+)$/gm)) {
       const file = m[1].trim();
-      const verdict = decide({ permission, tool: 'Read', paths: [file], internalDir: o.internalDir, confine: o.confine || null });
-      record({ read: file, decision: verdict.decision, confined: Boolean(o.confine), addDirs: o.addDirs ?? [] });
+      const verdict = decide({ permission, tool: 'Read', paths: [file], internalDir: o.internalDir });
+      record({ read: file, decision: verdict.decision, addDirs: o.addDirs ?? [] });
       notes.push(`LEE ${verdict.decision}`);
     }
     if (/PIDE_PERMISO/.test(scan)) {
@@ -259,7 +293,7 @@ function createFakeLive(agent, label, caps, o) {
     if (closed) throw new Error(`la sesión de ${label} se ha cerrado`);
     if (turn && !turn.done) throw new Error('el agente sigue trabajando');
     turn = new Turn(); const current = turn; turns++; steers = []; slowStop = /PARA_LENTO/.test(text);
-    record({ turn: turns, text, ...(turns === 1 && o.systemPrompt ? { systemPrompt: o.systemPrompt } : {}), ...(turns === 1 && o.tools ? { tools: o.tools } : {}), ...(turns === 1 ? { mcp: Object.keys(o.mcpServers ?? {}), bot: Boolean(o.bot) } : {}) });
+    record({ turn: turns, text, ...(turns === 1 && o.systemPrompt ? { systemPrompt: o.systemPrompt } : {}), ...(turns === 1 && o.tools ? { tools: o.tools } : {}), ...(turns === 1 ? { mcp: Object.keys(o.mcpServers ?? {}) } : {}) });
     if (/REVIENTA/.test(text)) { turn = null; throw new Error('el adaptador falso revienta'); }
     if (turns === 1) { onEvent({ type: 'session', id: sessionId }); item('system', 'status', `${label} (falso)${model ? ` · ${model}` : ''}`); }
     work(text, current).catch((error) => { if (!current.done) { item('error', 'text', error.message); current.finish({ isError: true, final: `${label}: ${error.message}` }); } });
@@ -295,6 +329,7 @@ function createFakeLive(agent, label, caps, o) {
   live.close = () => {
     if (closed) return; closed = true;
     approvals.clear(); wake?.done();
+    for (const server of Object.values(o.mcpServers ?? {})) closeMcp(server);
     if (turn && !turn.done) turn.finish({ isError: true, final: turn.text || `${label} se cerró.` });
     onEvent({ type: 'exit', code: 0, stderr: '' });
   };

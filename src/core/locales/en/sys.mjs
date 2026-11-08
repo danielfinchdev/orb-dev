@@ -1,23 +1,6 @@
-// sys.*: main process texts (Windows menu, dialogs, notifications) and system errors the user may see.
+// sys.*: desktop app texts (dialogs, notifications) and system errors the user may see.
 export default {
-  // Windows menu
-  'sys.menu.file': 'File',
-  'sys.menu.quit': 'Exit',
-  'sys.menu.edit': 'Edit',
-  'sys.menu.undo': 'Undo',
-  'sys.menu.redo': 'Redo',
-  'sys.menu.cut': 'Cut',
-  'sys.menu.copy': 'Copy',
-  'sys.menu.paste': 'Paste',
-  'sys.menu.selectAll': 'Select all',
-  'sys.menu.view': 'View',
-  'sys.menu.zoomReset': 'Actual size',
-  'sys.menu.zoomIn': 'Zoom in',
-  'sys.menu.zoomOut': 'Zoom out',
-  'sys.menu.terminal': 'Open terminal',
-  'sys.menu.fullscreen': 'Full screen',
-
-  // Main process dialogs and notifications
+  // The app's dialogs and notifications
   'sys.dialog.runningTitle': 'Tasks in progress',
   'sys.dialog.closeOne': 'There is 1 task in progress. If you close now, it will stop and be marked as failed (you can retry it).',
   'sys.dialog.closeMany': 'There are {n} tasks in progress. If you close now, they will stop and be marked as failed (you can retry them).',
@@ -33,16 +16,16 @@ export default {
   'sys.dialog.allFiles': 'All files',
   'sys.dialog.refImages': 'Reference images',
   'sys.dialog.images': 'Images',
-  'sys.main.startFailed': '{name} could not start',
-  'sys.main.keyringWeak': 'Your desktop has no keyring (GNOME Keyring or KWallet), so Orb’s key is kept unencrypted in a file in its folder. Everything works the same; to protect it, install gnome-keyring or kwallet and restart Orb.',
   'sys.main.notice': '{name} · Notification',
-
+  'sys.main.noticePrivate': 'New message (unlock Windows to see it)',
   // Main process errors
   'sys.main.engineStopped': '{name} has stopped',
   'sys.main.engineStartStopped': '{name} stopped while starting',
+  'sys.main.migratedFromElectron': '{name} has moved to its new base. The interface preferences (theme, open view, notifications) are back to their defaults.',
+  'sys.main.noJob': '{name} could not watch the engine’s processes: if it is closed abruptly, agents may be left running. Details in motor-salida.log.',
   'sys.main.engineOff': '{name} is not running',
   'sys.main.engineTimeout': '{name} did not respond in time',
-  'sys.main.badOrigin': 'origin not allowed',
+  'sys.main.folderProbeStuck': 'Orb could not give the project\'s folder its name back (some program, such as the antivirus, took it just then). It is now at {path}. Press “Retry” in a moment: Orb will try to give it back.',
   'sys.main.badAction': 'invalid action',
   'sys.main.noFolderYet': 'there is no folder yet',
   'sys.main.badPath': 'invalid path',
@@ -51,20 +34,17 @@ export default {
   'sys.main.badLink': 'invalid link',
   'sys.main.httpsOnly': 'only https links can be opened',
   'sys.main.alreadySetup': 'the app is already set up',
-  'sys.main.notHome': 'that folder is not an assistant folder (orb.json is missing)',
-
+  'sys.main.notHome': 'that folder is not an Orb folder (its core is missing)',
   // Contribute (feedback)
   'sys.feedback.empty': 'Write a message before sending it',
   'sys.feedback.timeout': 'The request timed out',
   'sys.feedback.offline': 'No connection',
   'sys.feedback.failed': 'The message could not be sent',
-
   // Terminal (Ctrl+J)
   'sys.terminal.notInstalled': '{name} is not installed on this PC',
   'sys.terminal.none': 'no terminal was found on this PC',
   'sys.terminal.folderOnly': 'a terminal can only be opened in a folder',
   'sys.terminal.openFailed': 'could not open {name}: {error}',
-
   // Agents' browser
   'sys.browser.title': 'Agent browser',
   'sys.browser.noUrl': 'the address is missing',
@@ -97,7 +77,6 @@ export default {
   'sys.browser.do.dialogAccept': 'will accept the page’s dialogs',
   'sys.browser.do.dialogCancel': 'will cancel the page’s dialogs',
   'sys.browser.do.console': 'reads the console',
-
   // Agents' MCP tools
   'sys.mcp.noTask': 'task #{id} does not exist',
   'sys.mcp.noIsolatedCopy': 'task #{id} has no isolated copy (tasks in the project folder already see every file)',
@@ -110,30 +89,10 @@ export default {
   'sys.mcp.idsRange': 'ids: between 1 and 10 tasks',
   'sys.mcp.askNeedsOptions': 'orb_ask needs a question and between 2 and 4 options',
   'sys.mcp.boardNeedsText': 'orb_pizarra needs the advice (message)',
-  // 3.7: the changes a bot with «Equipo» proposes on the PC (core/pc-actions.mjs; until 3.6, Opti Bot)
-  'sys.pc.badAction': 'That action is not on the list. Available: {list}',
-  'sys.pc.reduced': 'Reduced version: processes, startup programs and the antivirus are only shown on Windows',
-  'sys.pc.needsReason': 'explain why you propose the action',
-  'sys.pc.needsPid': 'end_process needs the process Id',
-  'sys.pc.needsName': 'disable_startup needs the exact program name',
-  'sys.pc.windowsOnly': 'This action only works on Windows.',
-  'sys.pc.uacCancelled': 'Not done: the Windows administrator prompt was cancelled.',
-  'sys.pc.done': 'Done.',
-  'sys.pc.failed': 'It could not be done.',
-  'sys.pc.cleaned': 'Temporary files removed: {n} ({mb} MB freed). {skipped} were in use and were left.',
-  'sys.pc.noProcess': 'Process {pid} no longer exists.',
-  'sys.pc.processChanged': 'Process {pid} is now another program ({name}): it was not closed.',
-  'sys.pc.protected': '{name} is part of Windows, its security or Orb: it is not closed.',
-  'sys.pc.processClosed': 'Closed {name} (process {pid}).',
-  'sys.pc.noStartup': 'There is no startup program called “{name}”.',
-  'sys.pc.startupFolder': '“{name}” starts from the Startup folder: turn it off in Task Manager › Startup apps.',
-  'sys.pc.otherUser': '“{name}” starts for another Windows user: it is not changed from here.',
-  'sys.pc.startupOff': '“{name}” will no longer start with Windows (it can be turned back on in Task Manager).',
   'sys.mcp.browserClosed': "the app's browser has closed",
   'sys.mcp.browserUnavailable': "the app's browser is not available (check that the app is open)",
   'sys.mcp.browserTimeout': 'the browser did not respond in time',
   'sys.mcp.extraArgs': 'arguments not allowed: {list}',
-
   // Board (tasks, projects and messages)
   'sys.board.outside': 'the path is outside the {name} folder ({home}): {target}. {user} can link it from the app.',
   'sys.board.nameAndPath': 'name and path are required',
@@ -151,7 +110,6 @@ export default {
   'sys.board.badLaunch': 'launch must be auto or manual',
   'sys.board.dependsMax': 'depends_on: at most 20 tasks',
   'sys.board.dependsMissing': 'depends_on: task #{id} does not exist',
-  'sys.board.folderOfOther': 'That folder is not available: it belongs to another project. Choose another one.',
   'sys.board.sensitivityList': 'sensitivity must be a list',
   'sys.board.badSensitivity': 'invalid sensitivity: {list}',
   'sys.board.onlyAssistant': "only {name} can change a task's agent, model, reasoning or fast",
@@ -167,9 +125,10 @@ export default {
   'sys.board.systemOnly': 'only the system can set tasks to pending approval',
   'sys.board.bodyRequired': 'body is required',
   'sys.board.badRecipient': 'invalid recipient: {to} (use {list}, all, usuario or orb)',
-
   // Logs
   'sys.logs.none': 'there is no log for "{project}": use "general" or a registered project',
+  'sys.logs.noFile': 'there is no file "{file}" beside the general log (there are: {files})',
+  'sys.logs.readOnly': '{name} is read-only: nothing was written',
   'sys.logs.required': 'tema and hecho are required',
   // Headers and fields of the logs (.md files the user reads)
   'sys.logs.generalHeader': '# {name}’s general log\n\n{name}’s memory: what was asked, what was done and what is pending across all projects.\nEntries are only added at the end; nothing written is ever deleted or edited. No passwords, tokens or personal data.\n',
@@ -201,16 +160,24 @@ export default {
   'sys.logs.directFiles': 'files changed: {list}.',
   'sys.logs.directRevert': 'from the project’s git history (God mode › Changes) or by asking the agent in the same conversation',
   'sys.logs.andMore': ' and {n} more',
-
   // Start-up
-  'sys.engine.notHome': 'not an assistant folder: {home}',
+  'sys.engine.notHome': 'not an Orb folder: {home}',
   'sys.engine.notStarted': '{name} has not started yet',
-
+  'sys.engine.sealedSecret': 'Windows could not open the encrypted key of this workspace. Close Orb and open it again.',
+  'sys.engine.otherApp': 'This workspace is already open in another {name} on this PC (maybe an earlier version). Close it and press “Retry”.',
+  'sys.engine.previousOpens': 'Windows can open the old key of this workspace again. To go back to it, go to Settings › Data.',
+  'sys.engine.previousBack': '{name} is back on the old key. The new key has been kept aside.',
+  'sys.engine.previousFailed': 'Could not go back to the old key: {name} keeps the new key. Try again from Settings › Data.',
+  'sys.engine.previousNew': '{name} is back on the new key. The old key has been kept aside.',
+  'sys.engine.recoveryRestored': 'The restored backup brought the recovery code of another PC, which does not work here: scheduled backups go out without it. Make a new one in Settings › Data.',
+  'sys.engine.recoveryOtherKey': 'Your recovery code was made with the other key and no longer works on this PC: scheduled backups go out without it. Make a new one in Settings › Data.',
+  'sys.engine.secretBusy': 'Windows cannot read the encrypted key of this workspace right now. Wait a moment and press “Retry”.',
+  'sys.engine.secretOld': 'This workspace has the key of Orb 3.8.0, which this version no longer opens. Start with a new key: nothing is deleted; your secrets will open with your master password and approvals will be asked again.',
+  'sys.engine.secretUnreadable': 'Windows cannot open the encrypted key of this workspace (it may belong to another Windows user or be damaged). Press “Retry” or start with a new key: approvals will be asked again.',
   // Scheduled tasks
   'sys.schedules.badEvery': 'every must be {list}',
   'sys.schedules.badTime': 'at_time must use the HH:MM format',
   'sys.schedules.badWeekdays': 'weekdays: numbers from 0 (Sunday) to 6',
-
   // Agents
   'sys.agents.notSupported': 'not supported',
   'sys.agents.methodNotSupported': 'not supported: {method}',
@@ -229,6 +196,7 @@ export default {
   'sys.agents.exitedCode': '{name} closed (code {code}). {detail}',
   'sys.agents.exitedWith': '{name} closed: {error}',
   'sys.agents.exitedEarly': '{name} closed before finishing.',
+  'sys.agents.projectSettingsSkipped': "Orb did not load the project's .claude/settings files because they run programs or change the environment ({keys}). Its CLAUDE.md files are still used.",
   'sys.agents.stopped': 'Stopped.',
   'sys.agents.limit': '{name} usage limit reached',
   'sys.agents.resumeFailed': '{name} could not resume the conversation: {error}',
@@ -253,7 +221,6 @@ export default {
   'sys.agents.tool.imageGen': 'Create image',
   'sys.agents.tool.subagent': 'Subagent: {tool}',
   'sys.agents.tool.action': 'action',
-
   // Running tasks
   'sys.scheduler.accountOff': 'the account {account} is turned off or no longer exists',
   'sys.scheduler.notInstalled': '{name} is not installed on this PC (install it from Agents or reassign the task)',
@@ -263,19 +230,15 @@ export default {
   'sys.scheduler.secretFiles': 'the automatic commit was not made: some files look like secrets ({list})',
   'sys.scheduler.secretFilesIn': 'the automatic commit was not made: some files look like secrets ({list}). Check {dir}',
   'sys.scheduler.commitFailed': 'the automatic commit failed ({error}); the changes are still unsaved in {dir}',
-
   // Task options and database
   'sys.db.badReasoning': 'reasoning must be low, medium, high or xhigh',
   'sys.db.badFast': 'fast must be true or false',
-  'sys.db.noHome': 'there is no assistant folder',
-
+  'sys.db.noHome': 'there is no Orb folder',
   // Phone and phone notifications
   'sys.remote.tooLarge': 'the content is too large',
   'sys.push.badSubscription': 'invalid subscription',
   'sys.push.unknownService': 'unrecognised notification service',
-
   // Android tools (adb)
-  'msg.android.off': 'Android is turned off in this Orb.',
   'sys.android.noDownload': 'no download available for {platform}',
   'sys.android.downloadHttp': 'download: HTTP {status}',
   'sys.android.noAdb': 'the package does not include adb',
@@ -307,6 +270,8 @@ export default {
   'sys.events.status.cancelled': 'cancelled',
   'sys.events.status.other': '{status}',
   'sys.projects.firstCommit': 'Project created',
+  'sys.projects.archived.finished': '{name}: finished',
+  'sys.projects.archived.deleted': '{name}: deleted',
   'sys.sessions.imageHint': '(Note from Orb: if this message asks for a picture, make just one unless it asks for several. Any text inside the picture goes in the language of the message.)',
   'sys.sessions.imageEditHint': '(Note from Orb: to change the picture, pass it as a reference image to the image generation tool and make one new picture with the change. Do not build it with scripts or by pasting pieces: it loses quality.)'
 };

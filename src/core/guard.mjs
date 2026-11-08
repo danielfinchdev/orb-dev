@@ -111,16 +111,208 @@ export function riskOf(command, lang = 'es') {
   return null;
 }
 
-// Paths that are never an agent's business: the assistant's own data (database, secret, logs of runs, undo checkpoints).
-// The isolated copies (.orb\copias\aisladas) are where isolated tasks work, so those stay open.
-const OPEN_INTERNAL = '\\copias\\aisladas\\';
-function touchesInternal(text, internalDir) {
-  if (!internalDir) return false;
-  const t = String(text ?? '').replace(/\//g, '\\').toLowerCase();
-  const d = path.resolve(internalDir).replace(/\//g, '\\').toLowerCase();
-  for (let i = t.indexOf(d); i >= 0; i = t.indexOf(d, i + 1)) if (!t.startsWith(OPEN_INTERNAL, i + d.length)) return true;
-  return /(^|[\s"'\\])\.orb\\+(datos|ejecuciones|copias(?!\\+aisladas\\))/.test(t);
+// 3.8: Orb's data folder (core, src/core/home.mjs › paths().internal) is never an agent's business: what a tool
+// names or a command mentions is resolved (against the agent's folder) and refused when it falls inside it. The isolated
+// copies (core\copias\aisladas) are where isolated tasks work, and core\herramientas holds the tools agents run (adb by
+// its full path), so those stay open. The same goes for what Orb keeps about the workspace outside it (setGuardedRoots:
+// the backups' folders and the copies of its sealed secrets), with nothing open there. Matched by RESOLVED path, not by
+// name: a project may well have its own orb.db or talk about ORB_HOME. The `cd`s of a compound command are followed
+// (3.8.1, workDirs), but it is still not a boundary: a script or a program of the same Windows user can always reach the
+// folder some other way (its own chdir, a path built at run time); the agents' identity no longer depends on its
+// database (agent-auth.mjs), so what is left is the integrity of Orb's data against an agent bent on it (accepted).
+// The logs moved into core (core\bitacora) are open to a READING tool (the user's rules for agents may point there);
+// they are written only through Orb's own tools. 3.8.1: the skills (core\skills) too: agents read them (their SKILL.md
+// and files); a command that runs one of their scripts asks first, and nobody writes there. What an agent makes for the
+// user to turn on goes in core\preparacion, open like the isolated copies (src/core/extensions.mjs).
+const OPEN_INTERNAL = [['copias', 'aisladas'], ['herramientas'], ['preparacion']];
+const READ_INTERNAL = [['bitacora'], ['skills']];
+const norm = (p) => path.resolve(p).replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
+// 3.8.1: where a path really is: links and junctions followed, also for a file not made yet (its nearest existing parent
+// is resolved), so a junction made earlier (in a project or in core\preparacion) cannot send a write into core.
+const realOf = (p) => {
+  let at = path.resolve(p); const rest = [];
+  for (let i = 0; i < 64; i++) {
+    try { return path.join(fs.realpathSync.native(at), ...rest.reverse()); } catch { /* not there: its parent */ }
+    // A link whose target is not there (yet): where it points.
+    try { if (fs.lstatSync(at).isSymbolicLink()) { at = path.resolve(path.dirname(at), fs.readlinkSync(at)); continue; } } catch { /* not a link */ }
+    const up = path.dirname(at); if (up === at) break;
+    rest.push(path.basename(at)); at = up;
+  }
+  return path.resolve(p);
+};
+// A folder as given and where it really is (links followed, and the long name of an 8.3 one such as C:\Users\RUNNER~1, which
+// a TEMP or a user name longer than eight letters gives): what a path is compared with, since realOf gives the long one.
+const rootsOf = (dir) => [...new Set([norm(dir), norm(realOf(dir))])];
+const under = (rest) => (o) => o.every((part, i) => rest[i] === part);
+// read: true (every folder a reading tool may see), false, or the names of the ones that count (['skills']).
+const readable = (read) => (read === true ? READ_INTERNAL : Array.isArray(read) ? READ_INTERNAL.filter((o) => read.includes(o[0])) : []);
+const openInCore = (rest, read = false) => OPEN_INTERNAL.some(under(rest)) || readable(read).some(under(rest));
+const OPEN_TEXT = /^\\+(copias\\+aisladas|herramientas|preparacion)(\\|$|["'\s])/;
+const READ_TEXT = { bitacora: /^\\+bitacora(\\|$|["'\s])/, skills: /^\\+skills(\\|$|["'\s])/ };
+const readText = (read, after) => readable(read).some((o) => READ_TEXT[o[0]].test(after));
+let guardedRoots = []; let guardedAsGiven = [];
+// The engine names them once it knows them (src/engine/engine.mjs › open). guardedRootsNow: as given (Cursor's rules).
+export function setGuardedRoots(list) {
+  guardedAsGiven = [...new Set((list ?? []).filter((d) => typeof d === 'string' && path.isAbsolute(d)).map((d) => path.resolve(d)))];
+  guardedRoots = [...new Set(guardedAsGiven.flatMap(rootsOf))];
 }
+export const guardedRootsNow = () => [...guardedAsGiven];
+// 3.8.1: the folder Orb is installed in (its node.exe and the engine's code, which every agent's MCP server runs, and Orb.exe
+// itself): under a per-user install the user, so any agent, could write there and have its code run with all of Orb's
+// secrets. A reading tool may look; nothing may write, move or delete there, nor run a command that names it.
+let appRoots = []; let appAsGiven = [];
+export function setAppRoots(list) {
+  appAsGiven = [...new Set((list ?? []).filter((d) => typeof d === 'string' && path.isAbsolute(d)).map((d) => path.resolve(d)))];
+  appRoots = [...new Set(appAsGiven.flatMap(rootsOf))];
+}
+export const appRootsNow = () => [...appAsGiven];
+export function isOrbData(target, internalDir, cwd, { read = false } = {}) {
+  if (!internalDir || !target) return false;
+  let p = winPath(String(target).trim()).replace(/^~(?=[\\/]|$)/, os.homedir());
+  if (!path.isAbsolute(p) && !path.win32.isAbsolute(p)) { if (!cwd) return false; p = path.resolve(cwd, p); }
+  const full = norm(realOf(p));
+  const within = (root) => full === root || full.startsWith(`${root}\\`);
+  const root = rootsOf(internalDir).find(within);
+  if (root) return !openInCore(full.slice(root.length + 1).split('\\'), read);
+  if (read !== true && appRoots.some(within)) return true;
+  return guardedRoots.some(within);
+}
+// The words of a command that may be paths (a=b and --opt=b give b), without quotes.
+// 3.8: the folders a command may name through the environment (%APPDATA%, $env:APPDATA, $APPDATA, ${env:APPDATA}, ~ and the
+// like): written out, so the checks below see the real path (the copies of Orb's secrets live under %APPDATA%).
+const ENV_DIRS = ['APPDATA', 'LOCALAPPDATA', 'USERPROFILE', 'HOME', 'PROGRAMDATA', 'TEMP', 'TMP'];
+export function expandEnv(command) {
+  let t = String(command ?? '');
+  for (const name of ENV_DIRS) {
+    const value = process.env[name] ?? (name === 'HOME' || name === 'USERPROFILE' ? os.homedir() : null);
+    if (!value) continue;
+    t = t.replace(new RegExp(`%${name}%|\\$\\{env:${name}\\}|\\$env:${name}\\b|\\$\\{${name}\\}|\\$${name}\\b`, 'gi'), () => value);
+  }
+  return t.replace(/(^|[\s"'=(])~(?=[\\/])/g, (_m, pre) => `${pre}${os.homedir()}`);
+}
+const pathWords = (command) => String(command ?? '').split(/[\s|&;<>()`]+/).map((w) => w.replace(/^["']+|["',]+$/g, '').replace(/^[^=]*=(?=.*[\\/~.])/, '')).filter((w) => /[\\/]|^~|^\.\.?$/.test(w));
+// 3.8.1 (H1c-fix2): the folder each part of a command runs in. `cd`, `chdir`, `pushd`, `popd`, `Set-Location`, `sl`,
+// `Push-Location` and `Pop-Location` (bash, cmd and PowerShell; also `cd..`, `cd\x` and `cd /d`) are followed from the
+// agent's folder through ; && || & | new lines and brackets, and inside `cmd /c`, `bash -c` or `powershell -Command`.
+// Quotes do not stop the split (a stray split only makes the check stricter). → [{ dir, words, moved }] (dir: null when
+// it cannot be told; moved: a `cd` changed it).
+const CD_CMD = /^(cd|chdir|pushd|set-location|sl|push-location)$/i;
+const POP_CMD = /^(popd|pop-location)$/i;
+const SHELL_CMD = /^(cmd|bash|sh|zsh|dash|powershell|pwsh|wsl)$/i;
+const RUN_FLAG = /^(\/c|\/k|-c|-command|-commandwithargs)$/i;
+// A Git Bash, Cygwin or WSL path of a Windows drive (/c/Users…, /cygdrive/c/…, /mnt/c/…) as Windows writes it.
+export const winPath = (p) => (process.platform === 'win32' ? String(p).replace(/^\/(?:cygdrive\/|mnt\/)?([a-z])(?=\/|$)/i, (_m, d) => `${d.toUpperCase()}:`) : String(p));
+const bare = (w) => String(w ?? '').replace(/^["'`]+|["'`,;]+$/g, '').replace(/^\d*[<>]+&?/, '').replace(/^[^=\\/]*=(?=.)/, '');
+export function workDirs(command, cwd) {
+  const out = [];
+  let dir = cwd ? path.resolve(cwd) : null; let prev = dir; const stack = [];
+  const resolveDir = (target) => {
+    const t = winPath(bare(target));
+    if (!t) return dir;
+    if (t === '-') return prev;
+    if (t === '~') return os.homedir();
+    if (path.isAbsolute(t) || path.win32.isAbsolute(t)) return path.resolve(t);
+    return dir ? path.resolve(dir, t) : null;
+  };
+  for (const part of String(command ?? '').split(/\r?\n|[;&|(){}]/)) {
+    let w = words(part).map(bare).filter(Boolean);
+    // A shell inside the command: what it runs is read as part of this one.
+    for (let i = 0; i < 4 && w.length && SHELL_CMD.test(w[0].replace(/^.*[\\/]/, '').replace(/\.exe$/i, '')); i++) {
+      const at = w.findIndex((x, j) => j > 0 && RUN_FLAG.test(x));
+      w = at > 0 ? w.slice(at + 1) : w.slice(1).filter((x) => !x.startsWith('-'));
+    }
+    if (!w.length) continue;
+    out.push({ dir, words: w, moved: dir !== (cwd ? path.resolve(cwd) : null) });
+    const first = w[0].replace(/^@/, '');
+    const glued = /^(cd|chdir)([\\/.].*)$/i.exec(first); // cmd: cd.. and cd\folder
+    const cmd = glued ? glued[1] : first;
+    if (CD_CMD.test(cmd)) {
+      const args = glued ? [glued[2]] : w.slice(1);
+      let target = null;
+      for (let i = 0; i < args.length; i++) {
+        const a = args[i];
+        if (/^-(path|literalpath)$/i.test(a)) { target = args[i + 1] ?? null; break; }
+        if (/^(\/d|-[a-z]+|--)$/i.test(a)) continue;
+        target = a; break;
+      }
+      if (target === null) continue; // cd alone: cmd prints the folder, PowerShell may go home (never into core)
+      const next = resolveDir(target);
+      if (/^(pushd|push-location)$/i.test(cmd)) stack.push(dir);
+      prev = dir; dir = next;
+      out.push({ dir, words: [], moved: true });
+    } else if (POP_CMD.test(cmd)) { prev = dir; dir = stack.length ? stack.pop() : dir; out.push({ dir, words: [], moved: true }); }
+  }
+  return out;
+}
+// 3.8.1 (review final M3, hardening only: not a boundary): the same command with its quotes and escapes taken out
+// (`pers''onal`, "pers"onal, PowerShell's `, cmd's ^, bash's \x between letters) is checked too: any of them that names
+// a closed folder refuses it.
+const unquoted = (c) => String(c ?? '').replace(/['"`^]/g, '');
+const unescaped = (c) => unquoted(c).replace(/(?<=[A-Za-z0-9_.-])\\(?=[A-Za-z0-9_.-])/g, '');
+// A word with a wildcard (`pers*`, `C:/Orb/*/x`, `p?rsonal`) that could expand into a closed folder (core, the owner's
+// personal folder, the copies outside): its segments, resolved from the folder it runs in, matched against each root's.
+const GLOB = /[*?[]/;
+const globRe = (seg) => new RegExp(`^${seg.replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.').replace(/\[!/g, '[^')}$`, 'i');
+function globReaches(word, dir, roots) {
+  const w = winPath(String(word ?? '')).replace(/^~(?=[\\/]|$)/, os.homedir());
+  if (!GLOB.test(w)) return false;
+  const abs = path.isAbsolute(w) || path.win32.isAbsolute(w) ? w : dir ? `${dir}\\${w}` : null;
+  if (!abs) return false;
+  const segs = []; // resolved by hand, segment by segment ('..' and '.' as a shell takes them)
+  for (const s of abs.split(/[\\/]+/)) { if (!s || s === '.') continue; if (s === '..') segs.pop(); else segs.push(s); }
+  return roots.some((r) => {
+    const rs = r.split('\\').filter(Boolean);
+    const n = Math.min(segs.length, rs.length);
+    // No wildcard on the way to the root: the literal checks see it.
+    if (!segs.slice(0, n).some((s) => GLOB.test(s))) return false;
+    for (let i = 0; i < n; i++) { if (GLOB.test(segs[i]) ? !globRe(segs[i]).test(rs[i]) : segs[i].toLowerCase() !== rs[i]) return false; }
+    return true;
+  });
+}
+function touchesInternal(args) {
+  const variants = [...new Set([args.command, unquoted(args.command), unescaped(args.command)].map((c) => String(c ?? '')))];
+  return variants.some((command) => touchesOnce({ ...args, command }));
+}
+function touchesOnce({ command: given, paths, patterns, internalDir, cwd, read = false }) {
+  if (!internalDir) return false;
+  const command = expandEnv(given);
+  if ([...paths, ...patterns].some((p) => isOrbData(p, internalDir, cwd, { read }))) return true;
+  // The folder written out anywhere in the command (in a script's string too), with either separator or case.
+  const t = String(command ?? '').replace(/\//g, '\\').toLowerCase();
+  const coreRoots = rootsOf(internalDir);
+  for (const r of [...coreRoots, ...guardedRoots, ...(read === true ? [] : appRoots)]) {
+    for (let i = t.indexOf(r); i >= 0; i = t.indexOf(r, i + 1)) {
+      const after = t.slice(i + r.length);
+      if (/^[^\\]/.test(after) && !/^["'\s;|&)]/.test(after)) continue; // .orbx is another folder
+      if (!coreRoots.includes(r) || !(OPEN_TEXT.test(after) || readText(read, after))) return true;
+    }
+  }
+  if (pathWords(command).some((w) => isOrbData(w, internalDir, cwd, { read }))) return true;
+  // 3.8.1 (H1c-fix2): each part of the command in the folder it really runs in (after its `cd`s): a part that runs in
+  // core (but its open folders) is refused whatever it names, and each word, also one without a slash (a junction's
+  // name), is resolved there. (An agent whose own folder is inside core, a run's: its plain words are not looked at.)
+  const start = cwd ? norm(realOf(cwd)) : null;
+  const startInCore = Boolean(start) && coreRoots.some((root) => start === root || start.startsWith(`${root}\\`));
+  const roots = [...coreRoots, ...guardedRoots, ...(read === true ? [] : appRoots)];
+  for (const part of workDirs(command, cwd)) {
+    if (part.moved && part.dir && isOrbData(part.dir, internalDir, null, { read })) return true;
+    for (const w of part.words) {
+      if (globReaches(w, part.dir, roots)) return true;
+      if (/^-/.test(w) && !/[\\/]/.test(w)) continue;
+      if (!part.moved && startInCore && !/[\\/~]|^\.\.?$/.test(w)) continue;
+      if (isOrbData(w, internalDir, part.dir, { read })) return true;
+    }
+  }
+  return false;
+}
+
+// 3.8: the project's agent settings: a task could leave there rules or programs that later agents in the same folder
+// (other conversations) would take as the user's (Claude's permissions.allow skips Orb's guard; env, apiKeyHelper and the
+// like run programs). Changing them asks first, whatever the permission but «total». See also claude.mjs (what Orb
+// loads of them) and cursor.mjs (its hooks are off while Orb runs it).
+const AGENT_CONFIG = /(^|[\\/])\.claude[\\/]+settings[^\\/]*\.json$|(^|[\\/])\.cursor[\\/]+(hooks|cli|mcp)\.json$/i;
+const AGENT_CONFIG_IN = /\.claude[\\/]+settings|\.cursor[\\/]+(hooks|cli|mcp)\.json/i;
+export const isAgentConfig = (p) => AGENT_CONFIG.test(String(p ?? '').trim());
 
 // 3.2.1: whether a shell command writes a file of the project (for the read-only guard). A redirection (`>`, `>>`, not
 // `2>`/`>&`), or a cmdlet that writes a file (Out-File, Set-Content, Add-Content, New-Item -ItemType File, tee), to a
@@ -142,210 +334,101 @@ export function writesProjectFile(command) {
   return to.map(unq).some((t) => t && !NULLISH.test(t) && !BUILD_DIR.test(t));
 }
 
-// 3.5: «Cosas que nadie toca» (config.protected, Ajustes › Bots): names, paths or containers that are nobody's business,
-// whatever the permission. A path, a command, a container or a memory that names one is denied. By default the usual
+// 3.5: «Cosas que nadie toca» (config.protected, Ajustes › Avanzado): names, paths or containers that are nobody's
+// business, whatever the permission. A path, a command or a container that names one is denied. By default the usual
 // password managers and secret stores (DEFAULT_PROTECTED); the user adds or removes entries. Matched without case, with
 // \ read as / and a name is a whole word (keepass does not match keepassxc, but both are on the list).
 export const protectedList = () => {
   const list = ctx.config?.protected;
   return (Array.isArray(list) ? list : DEFAULT_PROTECTED).map((x) => String(x ?? '').trim()).filter((x) => x.length >= 2);
 };
-// 3.7 (WS6): Orb Server's own vault folder is always checked, whatever the list says.
-const ALWAYS_PROTECTED = ['orb-server/data/vault'];
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const entryRe = (e) => new RegExp(`${/^[a-z0-9]/i.test(e) ? '(?<![a-z0-9])' : ''}${esc(e.replace(/\\/g, '/'))}${/[a-z0-9]$/i.test(e) ? '(?![a-z0-9])' : ''}`, 'i');
 // The first protected entry that the text names, or null.
 export function protectedHit(text, list = protectedList()) {
   const t = String(text ?? '').replace(/\\/g, '/');
   if (!t) return null;
-  return list.find((e) => entryRe(e).test(t)) ?? ALWAYS_PROTECTED.find((e) => entryRe(e).test(t)) ?? null;
+  return list.find((e) => entryRe(e).test(t)) ?? null;
 }
 export const touchesProtected = (text, list) => protectedHit(text, list) !== null;
-// 3.5: what a bot never does without the user's click: send (mail, messages), buy, book, pay, submit, share, create or
-// delete calendar events. Matched on the tool's own name (connectors: send_message, create_event…).
-export const OUTWARD = /(^|[_.:-])(send|reply|forward|share|post|publish|submit|purchase|buy|checkout|order|book|reserve|pay|transfer|create_event|update_event|delete_event|respond_to_event|trash|delete)/i;
-
-// ---- 3.5.1: what a bot may read and where it may go. A bot has no files but its own folder (bots\<id>, where its memory
-// is); the secrets of the agents, of Orb and of the browsers are named here too, fixed, whatever the user's list says
-// (and checked on the real path, so a link or «..» does not get round it). After it read something from outside in a
-// turn (a web, the browser, a mail or any connector, a server log), opening another site or a connector tool that changes
-// something asks the user first: what it read could be telling it to send the user's data away.
-const SECRET_NAME = /(^|[\\/])(\.claude|\.claude\.json|\.codex|\.ssh|\.gnupg|\.aws|\.azure|\.kube|\.docker|\.netrc|\.npmrc|\.git-credentials|\.orb-terminal|\.orb|\.password-store|\.mozilla|\.credentials\.json|auth\.json|clave\.bin|enlaces\.json|orb\.db|id_rsa|id_ecdsa|id_ed25519|\.env|login data|cookies|key4\.db|logins\.json|user data)([\\/.]|$)/i;
-export function botSecretDirs() {
-  const h = os.homedir();
-  const under = (...p) => path.join(h, ...p);
-  const list = [under('.claude'), under('.codex'), under('.ssh'), under('.gnupg'), under('.aws'), under('.orb-terminal'), under('.config', 'gcloud'), under('.config', 'gh'),
-    under('.mozilla'), under('.config', 'google-chrome'), under('.config', 'chromium'), under('.config', 'microsoft-edge'), under('.config', 'BraveSoftware'),
-    under('Library', 'Application Support', 'Google', 'Chrome'), under('Library', 'Application Support', 'Firefox'),
-    under('AppData', 'Local', 'Google', 'Chrome', 'User Data'), under('AppData', 'Local', 'Microsoft', 'Edge', 'User Data'), under('AppData', 'Roaming', 'Mozilla'),
-    under('AppData', 'Local', 'BraveSoftware'), under('AppData', 'Roaming', 'Orb'), under('.config', 'Orb'), under('.config', 'orb-server')];
-  for (const k of ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'ORB_VAULT_KEY_DIR']) if (process.env[k]) list.push(process.env[k]);
-  for (const a of ctx.config?.accounts ?? []) if (a?.home) list.push(String(a.home));
-  if (ctx.home) list.push(path.join(ctx.home, '.orb'));
-  if (ctx.paths?.internal) list.push(ctx.paths.internal);
-  return list.map((d) => path.resolve(d));
-}
-// The rules Claude Code itself applies to the bots (deny wins over everything): the secrets under the home folder.
-export const botDenyRules = () => ['.claude', '.codex', '.ssh', '.gnupg', '.aws', '.orb-terminal', '.config/gcloud', '.config/gh', '.mozilla'].map((d) => `Read(~/${d}/**)`).concat('Read(~/.claude.json)');
-// The tools whose answer comes from outside (the rest of the turn is careful).
-export const taintsBot = (name) => /^(webfetch|websearch|fetch|web_search)$/i.test(String(name ?? '')) || /orb_browser_/.test(String(name ?? '')) || /^mcp__(?!bot__)/.test(String(name ?? '')) || /^mcp__bot__srv_logs$/.test(String(name ?? ''));
-const READ_NAME = /^(get|list|search|read|find|fetch|query|view|lookup|count|describe|download|export)([_-]|$)/i;
-const lower = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
-const inside = (p, dir) => { const a = lower(path.resolve(p)); const d = lower(path.resolve(dir)); return a === d || a.startsWith(d.endsWith(path.sep) ? d : d + path.sep); };
-const real = (p) => { try { return fs.realpathSync.native(p); } catch { return p; } };
-// The fixed part of a glob pattern («../../**/x» → «../..»), to see where it reaches.
-const globBase = (pattern) => { const parts = String(pattern).replace(/\\/g, '/').split('/'); const i = parts.findIndex((x) => /[*?[{]/.test(x)); return (i < 0 ? parts : parts.slice(0, i)).join('/') || '.'; };
-const hostOfUrl = (url) => { try { return new URL(/^[a-z][\w+.-]*:\/\//i.test(String(url)) ? String(url) : `https://${url}`).hostname.toLowerCase().replace(/^www\./, ''); } catch { return ''; } };
-export function botCheck({ tool, paths = [], patterns = [], url = null, bot, lang = 'es' }) {
-  if (!bot || typeof bot !== 'object') return null;
-  const T = (k) => translate(lang, `msg.guard.${k}`);
-  const dir = bot.dir ? path.resolve(bot.dir) : null;
-  const secrets = botSecretDirs();
-  const at = (p) => (dir && !path.isAbsolute(p) ? path.resolve(dir, p) : path.resolve(p));
-  const wanted = [...paths.filter(Boolean).map(String).map((p) => at(p)), ...patterns.filter(Boolean).map(String).map((p) => at(globBase(p)))];
-  for (const raw of [...paths, ...patterns].filter(Boolean)) if (SECRET_NAME.test(String(raw).replace(/\\/g, '/'))) return { decision: 'deny', reason: T('botSecret') };
-  // 3.6 (S1): the real path counts on its own (a link inside the bot's folder that points outside is outside), also for a
-  // file that does not exist yet (its nearest existing folder, resolved).
-  const realDir = dir ? realDeep(dir) : null;
-  const inDir = (x) => inside(x, dir) || inside(x, realDir);
-  for (const p of wanted) {
-    const r = realDeep(p);
-    if (secrets.some((d) => inside(p, d) || inside(r, d))) return { decision: 'deny', reason: T('botSecret') };
-    if (dir && (!inDir(p) || !inDir(r))) return { decision: 'deny', reason: T('botOwnFolder') };
-  }
-  // 3.6: a shared bot keeps each person's memory of it in personas/<person>.md: in one person's turn the others' files
-  // are not its business (on the real path too), nor a search or a pattern that would sweep that folder while it holds
-  // someone else's file.
-  if (dir) {
-    const people = path.join(dir, 'personas');
-    const own = bot.person ? path.join(people, `${String(bot.person).replace(/[^\w-]/g, '_')}.md`) : null;
-    const isOwn = (p) => own && lower(path.resolve(p)) === lower(own);
-    const others = (() => { try { return fs.readdirSync(people).filter((n) => !own || lower(n) !== lower(path.basename(own))).length > 0; } catch { return false; } })();
-    for (const p of paths.filter(Boolean).map(String).map(at)) {
-      const r = real(p);
-      if ((inside(p, people) && !isOwn(p)) || (inside(r, people) && !isOwn(r))) return { decision: 'deny', reason: T('botOtherPerson') };
-      if (others && /^(grep|glob|search|find)$/i.test(String(tool ?? '')) && (inside(people, p) || inside(people, r))) return { decision: 'deny', reason: T('botOtherPerson') };
-    }
-    for (const raw of others ? patterns.filter(Boolean).map(String) : []) {
-      const base = at(globBase(raw)); const rb = real(base);
-      if (inside(base, people) || inside(rb, people)) return { decision: 'deny', reason: T('botOtherPerson') };
-      if (!inside(people, base) && !inside(people, rb)) continue;
-      // The pattern starts above personas\: refused when it can go down into it (** or a first part that matches it).
-      const rest = String(raw).replace(/\\/g, '/').slice(globBase(raw).replace(/\\/g, '/').length).replace(/^\/+/, '');
-      const first = rest.split('/')[0] ?? '';
-      let re = null; try { re = new RegExp(`^${first.replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.').replace(/\[!/g, '[^')}$`, 'i'); } catch { re = null; }
-      if (!re || rest.includes('**') || (rest.includes('/') && re.test('personas'))) return { decision: 'deny', reason: T('botOtherPerson') };
-    }
-  }
-  const name = String(tool ?? '');
-  if (url) {
-    const host = hostOfUrl(url);
-    if (bot.tainted && !bot.hosts?.has(host)) return { decision: 'ask', reason: T('botOutside') };
-    bot.hosts?.add?.(host);
-  }
-  if (bot.tainted && /^mcp__(?!bot__|orb__)/.test(name) && !READ_NAME.test(name.replace(/^mcp__[^_]+__/, ''))) return { decision: 'ask', reason: T('botOutsideWrite') };
-  return null;
-}
-
-// ---- 3.6 (A9): a session of someone other than the owner works only inside its project's folder. confine: { roots,
-// others, secrets } (confineFor): every path and pattern must fall inside a root, on its real path too (a link or «..»
-// does not get round it); never another project's folder, Orb's own folder or a secret. A command that names a folder of
-// this PC's user outside its roots is refused too.
-export function confineFor({ roots = [], others = [] } = {}) {
-  const realOf = (p) => { try { return fs.realpathSync.native(p); } catch { return path.resolve(p); } };
-  const list = roots.filter(Boolean).map((r) => path.resolve(r));
-  return { roots: [...new Set([...list, ...list.map(realOf)])], others: others.filter(Boolean).map((r) => path.resolve(r)).filter((o) => !list.some((r) => inside(r, o) || inside(o, r))),
-    secrets: [...botSecretDirs(), ...(ctx.home ? [path.join(ctx.home, '.orb')] : []), ...(ctx.paths?.internal ? [ctx.paths.internal] : [])] };
-}
-const UP_TOKEN = /(?:^|[\s"'=(])((?:[^\s"'|;&<>()]*[\\/])?\.\.(?:[\\/][^\s"'|;&<>()]*)?)(?=$|[\s"'|;&<>()])/g;
-const ABS_TOKEN = /(?:^|[\s"'=(])((?:[a-zA-Z]:[\\/]|\\\\|\/|~[\\/])[^\s"'|;&<>()]*)/g;
-// The real path of a path that may not exist yet: its nearest existing folder resolved (links included), plus the rest.
-const realDeep = (p) => {
-  let cur = path.resolve(p); const rest = [];
-  for (let i = 0; i < 64; i++) {
-    try { return path.join(fs.realpathSync.native(cur), ...rest.reverse()); } catch { /* not there yet */ }
-    const up = path.dirname(cur); if (up === cur) break;
-    rest.push(path.basename(cur)); cur = up;
-  }
-  return path.resolve(p);
-};
-export function confineCheck({ paths = [], patterns = [], command = '', confine, lang = 'es' }) {
-  const real = realDeep;
-  if (!confine || typeof confine !== 'object') return null;
-  const T = (k) => translate(lang, `msg.guard.${k}`);
-  // 3.6: { exclude, cwd } (the owner's assistant): everything stays as it was but other people's folders.
-  if (Array.isArray(confine.exclude)) {
-    const hit = (p) => confine.exclude.some((d) => inside(p, d) || inside(real(p), d));
-    const at = (p) => (path.isAbsolute(p) ? path.resolve(p) : path.resolve(confine.cwd ?? process.cwd(), p));
-    for (const raw of [...paths, ...patterns].filter(Boolean).map(String)) if (hit(at(paths.includes(raw) ? raw : globBase(raw)))) return { decision: 'deny', reason: T('confined') };
-    for (const m of String(command ?? '').matchAll(ABS_TOKEN)) if (hit(path.resolve(m[1]))) return { decision: 'deny', reason: T('confined') };
-    return null;
-  }
-  const roots = confine.roots ?? []; const base = roots[0] ?? process.cwd();
-  const at = (p) => (path.isAbsolute(p) ? path.resolve(p) : path.resolve(base, p));
-  const within = (p) => roots.some((r) => inside(p, r));
-  const blocked = (p) => (confine.secrets ?? []).some((d) => inside(p, d)) || (confine.others ?? []).some((d) => inside(p, d));
-  for (const raw of [...paths, ...patterns].filter(Boolean).map(String)) {
-    if (SECRET_NAME.test(raw.replace(/\\/g, '/'))) return { decision: 'deny', reason: T('confinedSecret') };
-    const p = at(paths.includes(raw) ? raw : globBase(raw)); const r = real(p);
-    if (!within(p) || !within(r)) return { decision: 'deny', reason: T('confined') };
-  }
-  const text = String(command ?? '');
-  if (text) {
-    if (SECRET_NAME.test(text.replace(/\\/g, '/'))) return { decision: 'deny', reason: T('confinedSecret') };
-    const home = os.homedir();
-    for (const m of text.matchAll(ABS_TOKEN)) {
-      const tok = m[1].replace(/^~(?=[\\/])/, home);
-      const p = path.resolve(tok); const r = real(p);
-      if (within(p) && within(r)) continue;
-      if (blocked(p) || blocked(r)) return { decision: 'deny', reason: T('confined') };
-      if (inside(p, home) || (ctx.home && inside(p, ctx.home))) return { decision: 'deny', reason: T('confined') };
-    }
-    // 3.6: a relative path that climbs out («../otro-proyecto/archivo»), from the working folder.
-    for (const m of text.matchAll(UP_TOKEN)) {
-      const p = path.resolve(base, m[1]); const r = real(p);
-      if (!within(p) || !within(r)) return { decision: 'deny', reason: T('confined') };
-    }
-  }
-  return null;
-}
-
-// decide({ permission, tool, kind, command, paths, internalDir, lang, bot }) → (lang: language of the reasons, default 'es')
-//  { decision: 'allow' | 'ask' | 'deny', reason }
-// bot (3.5): the session is one of the user's bots: its own tools (mcp__bot, the agents' browser) are allowed, and any
-// connector tool that sends, buys, books or deletes asks first, even in read-only mode. 3.5.1: bot may be the bot's guard
-// ({ dir, tainted, hosts }, src/engine/bots.mjs): its folder only, no secrets, care after reading from outside (botCheck);
-// patterns (Glob/Grep) and url (WebFetch, the browser) are checked too.
-// 3.7 (Orb Server): no agent and no bot ever raises its privileges, whatever its permission (also «total»): sudo, doas,
-// pkexec, su, run0 or the server's admin helper. The only way to root is the engine itself, after an approval card,
-// through the root-owned helper (src/core/server-admin.mjs); the agents' processes run with no_new_privs anyway.
-const ESCALATE = /\b(sudo|doas|pkexec|run0)\b|(^|[;&|(`]|\$\()\s*su(\s|$)|orb-server-admin|\/etc\/sudoers/i;
+// decide({ permission, tool, kind, command, paths, patterns, internalDir, cwd, lang }) → (cwd: the agent's folder, to
+// resolve relative paths; lang: language of the reasons, default 'es') { decision: 'allow' | 'ask' | 'deny', reason }
+// Orb's data folder: denied, and in «total» it asks (the user may want an agent to look, but it is never silent).
+// 3.7: no agent ever raises its privileges, whatever its permission (also «total»): sudo, doas, pkexec, su or
+// run0.
+const ESCALATE = /\b(sudo|doas|pkexec|run0)\b|(^|[;&|(`]|\$\()\s*su(\s|$)|\/etc\/sudoers/i;
 export const escalates = (command) => ESCALATE.test(String(command ?? ''));
-export function decide({ permission = 'editar', tool, kind, command = '', paths = [], patterns = [], url = null, internalDir, lang = 'es', bot = false, confine = null }) {
+// 3.8.1: a command that makes a link (a junction, a symbolic or a hard link), in any shell or language: one that names core
+// (or runs inside it) is denied, so nothing in core\preparacion (or anywhere) can point into core and turn an allowed write
+// there into a write in core\skills, core\datos…
+const MAKES_LINK = /\bmklink\b|\b(new-item|ni)\b[^|;&\n]*\b(junction|symboliclink|hardlink)\b|\bfsutil(\.exe)?\s+(hardlink|reparsepoint)\b|(^|[\s;&|(`"'])ln(\.exe)?\s|\bjunction(64)?(\.exe)?\s|create(symbolic|hard)link|createjunction|\b(sym)?linksync\b|\b(fs|fsp|promises)\.(sym)?link\b|\bos\.(sym)?link\b|\.(symlink|hardlink)_to\b|\bmountvol\b/i;
+export const makesLink = (command) => MAKES_LINK.test(String(command ?? ''));
+function linkIntoCore(command, internalDir, cwd) {
+  if (!internalDir || !makesLink(command)) return false;
+  const [root, realRoot = root] = rootsOf(internalDir);
+  const inCore = (p) => { const f = norm(realOf(p)); return [root, realRoot].some((r) => f === r || f.startsWith(`${r}\\`)); };
+  const t = expandEnv(command).replace(/\//g, '\\').toLowerCase();
+  const named = (r) => { for (let i = t.indexOf(r); i >= 0; i = t.indexOf(r, i + 1)) if (/^($|[\\"'\s;|&)])/.test(t.slice(i + r.length))) return true; return false; };
+  if (named(root) || named(realRoot)) return true;
+  if (cwd && inCore(cwd)) return true;
+  if (pathWords(expandEnv(command)).some((w) => { const p = path.isAbsolute(w) || path.win32.isAbsolute(w) ? w : cwd ? path.resolve(cwd, w) : null; return p ? inCore(p) : false; })) return true;
+  // 3.8.1 (H1c-fix2): also after a `cd` (into core\preparacion, say): the folder it runs in, and what it names from there.
+  return workDirs(expandEnv(command), cwd).some((part) => (part.dir && inCore(part.dir))
+    || part.words.some((w) => { const p = winPath(w); const full = path.isAbsolute(p) || path.win32.isAbsolute(p) ? p : part.dir ? path.resolve(part.dir, p) : null; return full ? inCore(full) : false; }));
+}
+// 3.8.1: running a script of a skill of core: one interpreter and one script file in core\skills, as a single plain command
+// (no -c / -e, no chaining, no redirection). It asks; any other command that touches core\skills is denied.
+const RUNNERS = { python: [], python3: [], py: [], node: [], bash: [], sh: [], pwsh: ['-noprofile', '-nologo', '-noninteractive', '-executionpolicy'], powershell: ['-noprofile', '-nologo', '-noninteractive', '-executionpolicy'] };
+function runsSkillScript(command, internalDir, cwd) {
+  const c = unwrapShell(command).trim(); // Codex runs every command as powershell -Command '…'
+  if (!c || /[;&|<>`\r\n]|\$\(/.test(c)) return false;
+  const w = words(c);
+  const exe = String(w[0] ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase();
+  if (!Object.hasOwn(RUNNERS, exe)) return false;
+  let i = 1;
+  if (exe === 'pwsh' || exe === 'powershell') {
+    for (; i < w.length && w[i].toLowerCase() !== '-file'; i++) {
+      const a = w[i].toLowerCase();
+      if (!RUNNERS[exe].includes(a)) return false;
+      if (a === '-executionpolicy') i++;
+    }
+    if (w[i]?.toLowerCase() !== '-file') return false;
+    i++;
+  }
+  const script = w[i];
+  if (!script || !/\.(py|js|mjs|cjs|sh|ps1)$/i.test(script)) return false;
+  const full = path.isAbsolute(script) || path.win32.isAbsolute(script) ? script : cwd ? path.resolve(cwd, script) : null;
+  if (!full) return false;
+  const f = norm(realOf(full));
+  return rootsOf(path.join(internalDir, 'skills')).some((skills) => f.startsWith(`${skills}\\`) && !f.slice(skills.length + 1).startsWith('.'));
+}
+export function decide({ permission = 'editar', tool, kind, command = '', paths = [], patterns = [], internalDir, cwd, lang = 'es' }) {
   const T = (k) => translate(lang, `msg.guard.${k}`);
   const cls = toolClass(tool, kind);
   const text = [command, ...paths, ...patterns].join(' ');
-  if (touchesInternal(text, internalDir)) return { decision: 'deny', reason: T('internal') };
+  if (linkIntoCore(command, internalDir, cwd)) return { decision: permission === 'total' ? 'ask' : 'deny', reason: T('internalLink') };
+  if (touchesInternal({ command, paths, patterns, internalDir, cwd, read: cls === 'read' })) {
+    // 3.8.1: only the general log in core (what a reading tool may see): the reason says how to write to it.
+    const logsOnly = cls !== 'read' && !touchesInternal({ command, paths, patterns, internalDir, cwd, read: ['bitacora'] });
+    // 3.8.1: only the skills of core: a command (one of their scripts) asks first; changing them, never (an agent makes a
+    // new version with orb_create_skill, which the user approves).
+    const skillsOnly = cls !== 'read' && !logsOnly && !touchesInternal({ command, paths, patterns, internalDir, cwd, read: ['skills'] });
+    if (skillsOnly && cls === 'exec' && permission !== 'leer' && !escalates(command) && !protectedHit(text) && runsSkillScript(command, internalDir, cwd)) return { decision: 'ask', reason: T('internalSkillsRun') };
+    return { decision: permission === 'total' ? 'ask' : 'deny', reason: T(logsOnly ? 'internalLogs' : skillsOnly ? 'internalSkills' : 'internal') };
+  }
   if (escalates(command)) return { decision: 'deny', reason: T('sudo') };
-  const confined = confineCheck({ paths, patterns, command, confine, lang });
-  if (confined) return confined;
   const hit = protectedHit(text);
   if (hit) return { decision: 'deny', reason: translate(lang, 'msg.guard.protected', { name: hit }) };
-  const botVerdict = botCheck({ tool, paths, patterns, url, bot, lang });
-  if (botVerdict) return botVerdict;
-  if (bot && (cls === 'mcp' || cls === 'orb')) {
-    if (/^mcp__bot__/.test(String(tool))) return { decision: 'allow', reason: T('connector') };
-    if (OUTWARD.test(String(tool ?? '').replace(/^mcp__[^_]+__/, ''))) return { decision: 'ask', reason: T('outward') };
-    return { decision: 'allow', reason: T('connector') };
-  }
   if (permission === 'total') return { decision: 'allow', reason: T('full') };
   if (cls === 'read' || cls === 'orb') return { decision: 'allow', reason: T('readOnlyTool') };
   if (permission === 'leer') return { decision: 'deny', reason: T('readOnlyChat') };
   if (permission === 'probar' && cls === 'edit') return { decision: 'deny', reason: T('testOnly') };
+  if (cls === 'edit' && paths.some(isAgentConfig)) return { decision: 'ask', reason: T('agentConfig') };
   if (cls === 'edit') return { decision: 'allow', reason: T('edits') };
   if (cls === 'exec') {
     const risk = riskOf(command, lang);
     if (risk) return { decision: 'ask', reason: risk };
+    if (AGENT_CONFIG_IN.test(command)) return { decision: 'ask', reason: T('agentConfig') };
     // 3.2.1: a read-only task must not write files. Running the tests or the build is fine, but a command that redirects
     // into a project file (echo >> BITACORA.md, Set-Content, Out-File…) outside a build folder asks first: with nobody to
     // answer, a task's permission times out and is denied, so the write never happens.

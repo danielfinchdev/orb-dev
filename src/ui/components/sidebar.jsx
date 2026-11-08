@@ -7,12 +7,8 @@ import { Tip, BubbleTip } from './ui/overlay.jsx';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { PRODUCT } from '../../core/product.mjs';
-import { ModeSwitch } from './mode-switch.jsx';
-import { PersonMenu, BrowserSettingsMenu } from './person-menu.jsx';
-import { personsOn } from '@/lib/persons.js';
-import { BotsInbox } from '@/views/bots/inbox.jsx';
+import { BrowserSettingsMenu } from './browser-settings-menu.jsx';
 import { OrbInbox } from '@/views/orb/inbox.jsx';
-import { modeOf } from '@/lib/store.js';
 
 // The assistant's wordmark ORB·E, drawn its own way in each theme (app.css .wordmark): spaced capitals with a dot of the
 // theme's colour in Orb, a techno one underlined in Vaporwave…
@@ -73,22 +69,17 @@ function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
   const t = useT();
   const memories = is('logs') || is('activity');
   // 3.6: the same slots and icons on the PC and in a linked browser (Ajustes, Agentes, Memorias, Tutoriales); what a
-  // browser does not have is left out (Agentes, the bug), never swapped for other icons. Its gear opens this device and
-  // Magic Link (person-menu.jsx).
+  // browser does not have is left out (Agentes, the bug), never swapped for other icons. Its gear opens this device.
   const items = [
-    { icon: Settings, label: t('nav.settings'), active: settingsOpen || is('phone') || is('link'), onClick: () => openSettings(), testid: 'nav-settings' },
+    { icon: Settings, label: t('nav.settings'), active: settingsOpen || is('phone'), onClick: () => openSettings(), testid: 'nav-settings' },
     ...(bridge.mobile ? [] : [{ icon: Bot, label: t('nav.agents'), active: is('agents'), onClick: () => go('agents'), testid: 'nav-agents' }]),
     { icon: BookOpen, label: t('nav.memories'), hint: t('nav.memoriesHint'), active: memories, onClick: () => go('logs'), testid: 'nav-memories' },
     // 2.6: how the app works, the FAQ and the button that replays the guided tour.
     { icon: GraduationCap, label: t('nav.tutorials'), active: is('tutorials'), onClick: () => go('tutorials'), testid: 'nav-tutorials' }
   ];
   const toggle = open ? t('nav.footerFold') : t('nav.footerUnfold');
-  // 3.6: with two or more users the gear is the user's initial and opens a small menu (person-menu.jsx); with one, the gear.
-  const me = useStore((s) => s.me);
-  const users = personsOn(me) && Boolean(me?.person);
-  const row = (i) => (i.testid !== 'nav-settings' ? null
-    : users ? <PersonMenu key={i.testid} list={open} active={i.active} />
-      : bridge.mobile ? <BrowserSettingsMenu key={i.testid} list={open} active={i.active} /> : null);
+  // A linked browser's gear opens this device's settings (browser-settings-menu.jsx).
+  const row = (i) => (i.testid === 'nav-settings' && bridge.mobile ? <BrowserSettingsMenu key={i.testid} list={open} active={i.active} /> : null);
   return (
     <div className="side-foot relative border-t px-3 pt-2.5 pb-2" data-testid="sidebar-footer" data-open={open}>
       <Tip label={toggle}>
@@ -122,19 +113,21 @@ export function Sidebar({ mood }) {
   const route = useStore((s) => s.route);
   const conversations = useStore((s) => s.conversations) ?? [];
   const settingsOpen = useStore((s) => Boolean(s.settings));
+  // 3.8.1 (H4e): while an agent works on a task the robot floats (its face stays as the conversations say).
+  const working = useStore((s) => s.tasks.some((x) => x.status === 'running'));
   const name = app.config.assistantName;
   const [sections, setSection] = useRemembered('orb.secciones', { footer: false });
   const { width, setWidth, startResize } = useSidebarWidth();
   const is = (view) => route.view === view;
   return (
-    // 3.6 (M2, M3): both zones are a messaging app's chat list, with the places' labels under the search: at least 340 px.
+    // 3.6 (M3): the chat list of a messaging app, with the places' labels under the search: at least 340 px.
     <aside className="bg-sidebar relative flex h-full shrink-0 flex-col border-r" style={{ width: Math.max(width, 340) }}>
       {bridge.mobile ? null : <div className="sidebar-resize" role="separator" aria-orientation="vertical" aria-label={t('comp.sidebar.resize')} onPointerDown={startResize} onDoubleClick={() => setWidth(SIDEBAR_DEFAULT)} data-testid="sidebar-resize" />}
       <div className="theme-band side-band app-titlebar flex h-14 shrink-0 items-center gap-2 border-b px-4">
         {/* 3.0: the robot goes back to the conversation in progress (3.2: the last one opened). */}
         <Tip label={t('nav.backToChat', { name })} side="bottom" align="start">
           <button type="button" className="no-drag relative shrink-0 cursor-pointer rounded-full" onClick={() => go(lastChat(route, conversations))} aria-label={t('nav.backToChat', { name })} data-testid="sidebar-home">
-            <Robot size={34} mood={mood} title={name} live />
+            <Robot size={34} mood={mood} title={name} live active={working} />
             {(app.chats ?? []).some((c) => c.busy) ? <span className="bg-primary absolute right-0 bottom-0 size-2 animate-pulse rounded-full" /> : null}
           </button>
         </Tip>
@@ -145,10 +138,8 @@ export function Sidebar({ mood }) {
           <SidebarToggle />
         </div>
       </div>
-      {/* 3.5: «Orb | Bots»: the app as always, or the user's bots with their own menu. */}
-      <div className="px-3 pt-3 pb-1"><ModeSwitch /></div>
-      {/* 3.6: each zone is a messaging app's chat list: Bots (views/bots/inbox.jsx, M2) and Orb (views/orb/inbox.jsx, M3). */}
-      <div className="flex min-h-0 flex-1 flex-col pt-2">{modeOf(route) === 'bots' ? <BotsInbox /> : <OrbInbox />}</div>
+      {/* 3.6 (M3): the chat list of a messaging app (views/orb/inbox.jsx). */}
+      <div className="flex min-h-0 flex-1 flex-col pt-2"><OrbInbox /></div>
       <SidebarFooter version={app.version} is={is} settingsOpen={settingsOpen} open={sections.footer === true} onOpen={(v) => setSection('footer', v)} />
     </aside>
   );

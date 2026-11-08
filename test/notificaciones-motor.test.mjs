@@ -1,7 +1,7 @@
-// 3.6 (mensajería, paso M4), de punta a punta con el motor: los avisos llegan solo a los móviles de quien ve el chat
-// (Ana sí, Leo no), con el nombre y el avatar del bot; los silenciados no avisan; «Aprobar» / «Rechazar» desde el aviso
-// del navegador (POST /api/note-action, una sola vez, como ese móvil); con PIN, «Aprobar» abre la app (no hay token);
-// la app abierta recibe el aviso como evento «note»; los avatares se sirven como PNG.
+// 3.6 (mensajería, paso M4), de punta a punta con el motor: los avisos llegan a los móviles enlazados, con el dibujo de
+// Orbe; los silenciados no avisan; «Responder» se escribe en el propio aviso (3.8.0: la app no tiene bloqueo propio);
+// «Aprobar» / «Rechazar» desde el aviso del navegador (POST /api/note-action, una sola vez, como ese móvil); la app
+// abierta recibe el aviso como evento «note».
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -9,16 +9,17 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { tempHome, startEngine, until } from './helpers.mjs';
-import { createLink } from '../src/core/link.mjs';
+import { createPhone, TEST_MASTER } from './fixtures/phone-client.mjs';
 import * as C from '../src/core/mobile-crypto.mjs';
+import { Board } from '../src/core/board.mjs';
 
-let A; let t; let port; let dir; let pushLog; let leo; let botId; let conv;
+let A; let t; let port; let dir; let pushLog; let conv;
 const links = [];
-const device = (name, kind = 'phone') => { const l = createLink({ file: path.join(dir, `${crypto.randomUUID()}.json`), secret: crypto.randomBytes(32), identity: () => ({ name, kind }) }); links.push(l); return l; };
+const device = (name, kind = 'phone') => { const l = createPhone({ name, kind }); links.push(l); return l; };
 // A phone with notifications on and its app closed: its pushes go to the mock log.
-async function pushDevice(person, tag) {
+async function pushDevice(tag) {
   const l = device(`Avisos ${tag}`);
-  const peer = await l.connect({ qr: (await A.call('link.qr', { person })).url });
+  const peer = await l.connect({ qr: (await A.call('link.qr', {})).url });
   const raw = l.raw(peer.id);
   const sub = { endpoint: `https://fcm.googleapis.com/fcm/send/${tag}-${crypto.randomUUID()}`, keys: { p256dh: Buffer.concat([Buffer.from([4]), crypto.randomBytes(64)]).toString('base64url'), auth: crypto.randomBytes(16).toString('base64url') } };
   const r = await raw.post('/api/push', raw.box('push', { subscription: sub }));
@@ -29,88 +30,47 @@ async function pushDevice(person, tag) {
 const pushes = (endpoint) => { try { return fs.readFileSync(pushLog, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((x) => !endpoint || x.endpoint === endpoint); } catch { return []; } };
 const base = () => `http://127.0.0.1:${port}`;
 const noteAction = (token) => fetch(`${base()}/api/note-action`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: base() }, body: JSON.stringify({ token }) });
-let ana; let leoPhone;
+let ana; let tablet;
 
 before(async () => {
   port = 20000 + Math.floor(Math.random() * 20000);
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-avisos-'));
   pushLog = path.join(dir, 'avisos.jsonl');
-  t = tempHome({ role: 'todo', mobile: { enabled: true, port, name: 'Casa', preview: 'all' } });
+  t = tempHome({ mobile: { enabled: true, port, name: 'Casa', preview: 'all' } });
   A = await startEngine(t.home, { env: { ORB_REMOTE_BIND: '127.0.0.1', ORB_PUSH_LOG: pushLog } });
   await until(async () => (await A.call('remote.status')).running, 'acceso');
-  leo = await A.call('persons.create', { name: 'Leo' });
-  ana = await pushDevice(undefined, 'ana');
-  leoPhone = await pushDevice(leo.id, 'leo');
-  const bot = await A.call('bots.create', { name: 'Agenda', role_text: 'Citas', avatar: { shape: 'gota', color: 'coral' } });
-  botId = bot.id;
+  await A.call('master.create', { password: TEST_MASTER }); // 3.8: phones link with the master password
+  ana = await pushDevice('ana');
+  tablet = await pushDevice('tablet');
+  await A.call('projects.create', { name: 'web' });
 });
 after(async () => { for (const l of links) { try { l.stop(); } catch { /* stopped */ } } await A?.stop?.(); t?.cleanup(); });
 
-test('un mensaje de un bot: aviso con su nombre y avatar, solo al móvil de Ana; Leo nada', async () => {
-  const r = await A.call('bots.send', { id: botId, text: 'hola Agenda' });
+test('la respuesta de Orbe avisa con su dibujo y abre esa conversación, en cada móvil enlazado', async () => {
+  const n = pushes(ana.endpoint).length;
+  const r = await A.call('chat.send', { text: 'hola Orbe' });
   conv = r.conversation;
-  const p = await until(() => pushes(ana.endpoint).find((x) => x.data.tag === `orb-bot:${botId}` && x.data.kind === 'message'), 'el aviso de Ana', 30_000);
-  assert.equal(p.data.title, 'Agenda');
-  assert.equal(p.data.icon, '/avatars/gota-coral.png');
-  assert.deepEqual(p.data.route, { view: 'bot-chat', id: String(botId) });
-  assert.deepEqual(p.data.actions.map((a) => a.id), ['reply']);
-  assert.ok(!pushes(leoPhone.endpoint).length, 'nada al móvil de Leo');
-  // El dibujo se sirve (solo formas y colores).
-  const img = await fetch(`${base()}${p.data.icon}`);
-  assert.equal(img.status, 200); assert.equal(img.headers.get('content-type'), 'image/png');
-  assert.equal((await fetch(`${base()}/avatars/nada-raro.png`)).status, 404);
+  const p = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.tag === `orb-conversation:${r.conversation}`), 'el aviso de Orbe', 30_000);
+  assert.equal(p.data.icon, '/icon.png');
+  assert.deepEqual(p.data.route, { view: 'chat', id: r.conversation });
+  await until(() => pushes(tablet.endpoint).find((x) => x.data.tag === `orb-conversation:${r.conversation}`), 'también a la tablet', 30_000);
 });
 
 test('silenciado: sin aviso', async () => {
-  await A.call('inbox.mute', { kind: 'bot', id: botId });
+  await A.call('inbox.mute', { kind: 'conversation', id: conv });
   const n = pushes(ana.endpoint).length;
-  await A.call('bots.send', { id: botId, text: 'otra vez' });
-  await until(async () => (await A.call('bots.chat', { id: botId })).lines.filter((l) => l.role === 'bot').length >= 2, 'la respuesta', 30_000);
-  await new Promise((r) => setTimeout(r, 400));
-  assert.equal(pushes(ana.endpoint).length, n, 'silenciado: nada');
-  await A.call('inbox.mute', { kind: 'bot', id: botId, muted: false });
+  await A.call('chat.send', { text: 'otra vez', conversation: conv });
+  await until(async () => (await A.call('chat.list', { conversation: conv })).filter((l) => l.role === 'orb').length >= 2, 'la respuesta', 30_000);
+  await new Promise((r) => setTimeout(r, 500));
+  assert.equal(pushes(ana.endpoint).slice(n).filter((x) => x.data.tag === `orb-conversation:${conv}`).length, 0);
+  await A.call('inbox.mute', { kind: 'conversation', id: conv, muted: false });
 });
 
-test('una tarjeta no sensible y sin bloqueo: Aprobar desde el aviso (una vez, como ese móvil)', async () => {
-  const jefe = await A.call('bots.create', { name: 'Jefe', role_text: 'Reparte', is_chief: true });
-  await A.call('bots.create', { name: 'Otro', role_text: 'Nada' });
+test('Responder se escribe en el propio aviso', async () => {
   const n = pushes(ana.endpoint).length;
-  await A.call('bots.send', { id: jefe.id, text: 'BOT_CALL bot_pause {"name":"Otro","reason":"no se usa"}' });
-  const p = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.kind === 'card'), 'el aviso de la tarjeta', 30_000);
-  assert.deepEqual(p.data.actions.map((a) => [a.id, Boolean(a.open)]), [['deny', false], ['allow', false]], 'se contesta ahí');
-  assert.ok(p.data.acts.allow && p.data.acts.deny);
-  const res = await noteAction(p.data.acts.allow);
-  assert.equal(res.status, 200, await res.clone().text());
-  const card = (await A.call('bots.chat', { id: jefe.id })).lines.find((l) => l.id === p.data.card.item);
-  assert.notEqual(card.meta.status, 'pending', 'contestada');
-  assert.equal(card.meta.by?.device, ana.id, 'como ese móvil');
-  assert.equal((await noteAction(p.data.acts.allow)).status, 401, 'una sola vez');
-  assert.equal((await noteAction(p.data.acts.deny)).status, 401, 'la otra respuesta también se gasta');
-  assert.equal((await noteAction('inventado')).status, 401);
-});
-
-test('una tarjeta sensible: Aprobar y Rechazar abren la app (sin tokens)', async () => {
-  const n = pushes(ana.endpoint).length;
-  await A.call('bots.send', { id: botId, text: 'BOT_CALL bot_confirm {"action":"comprar","detail":"Leche","url":"https://tienda.example"}' });
-  const p = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.kind === 'card'), 'el aviso de la tarjeta', 30_000);
-  assert.deepEqual(p.data.actions.map((a) => [a.id, Boolean(a.open)]), [['deny', true], ['allow', true]]);
-  assert.deepEqual(p.data.acts, {});
-});
-
-test('con el bloqueo de la app (PIN): nada se hace desde el aviso; Responder abre la app', async () => {
-  await A.call('persons.setPin', { pin: '2468' });
-  try {
-    const n = pushes(ana.endpoint).length;
-    await A.call('bots.send', { id: botId, text: 'hola con candado' });
-    const m = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.kind === 'message'), 'el mensaje', 30_000);
-    assert.deepEqual(m.data.actions.map((a) => [a.id, Boolean(a.open), Boolean(a.input)]), [['reply', true, false]], 'sin escribir en el aviso');
-    const k = pushes(ana.endpoint).length;
-    const jefe = (await A.call('bots.list')).bots.find((b) => b.name === 'Jefe');
-    await A.call('bots.send', { id: jefe.id, text: 'BOT_CALL bot_pause {"name":"Agenda","reason":"vacaciones"}' });
-    const c = await until(() => pushes(ana.endpoint).slice(k).find((x) => x.data.kind === 'card'), 'la tarjeta', 30_000);
-    assert.ok(c.data.actions.every((a) => a.open), 'aprobar y rechazar, en la app');
-    assert.deepEqual(c.data.acts, {}, 'sin tokens');
-  } finally { await A.call('persons.setPin', { pin: null, current: '2468' }); }
+  await A.call('chat.send', { text: 'hola de nuevo', conversation: conv });
+  const m = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.tag === `orb-conversation:${conv}` && x.data.kind === 'message'), 'el mensaje', 30_000);
+  assert.deepEqual(m.data.actions.map((a) => [a.id, Boolean(a.open)]), [['reply', false]]);
 });
 
 test('la app abierta recibe el aviso como evento «note» (lo muestra Android en segundo plano)', async () => {
@@ -119,34 +79,74 @@ test('la app abierta recibe el aviso como evento «note» (lo muestra Android en
   await until(() => l.peers().find((x) => x.id === peer.id)?.online, 'en directo');
   const notes = []; l.on('note', (p) => notes.push(p));
   const before = pushes(ana.endpoint).length;
-  await A.call('bots.send', { id: botId, text: 'y ahora' });
-  const n = await until(() => notes.find((x) => x.key === `bot:${botId}`), 'la nota', 30_000);
-  assert.equal(n.title, 'Agenda'); assert.equal(n.largeIcon, 'av_gota_coral');
+  await A.call('chat.send', { text: 'y ahora', conversation: conv });
+  const n = await until(() => notes.find((x) => x.key === `conversation:${conv}`), 'la nota', 30_000);
+  assert.equal(n.largeIcon, 'av_orb');
   assert.ok(pushes(ana.endpoint).length >= before, 'el otro móvil (cerrado) sigue con su push');
   l.stop();
 });
 
-test('zona Orb: la respuesta de Orbe avisa con su dibujo y abre esa conversación', async () => {
+test('el permiso de una tarea llega con Aprobar y Rechazar; el token vale una vez', async () => {
   const n = pushes(ana.endpoint).length;
-  const r = await A.call('chat.send', { text: 'hola Orbe' });
-  const p = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.tag === `orb-conversation:${r.conversation}`), 'el aviso de Orbe', 30_000);
-  assert.equal(p.data.icon, '/icon.png');
-  assert.deepEqual(p.data.route, { view: 'chat', id: r.conversation });
-  assert.ok(!pushes(leoPhone.endpoint).length, 'nada al móvil de Leo');
+  await A.call('tasks.create', { project: 'web', title: 'Subir', description: 'PIDE_PERMISO', agent: 'codex' });
+  const p = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.kind === 'approval'), 'el permiso', 30_000);
+  assert.ok(p.data.acts.allow && p.data.acts.deny);
+  const r = await noteAction(p.data.acts.deny);
+  assert.equal(r.status, 200, JSON.stringify(await r.clone().json()));
+  assert.equal((await noteAction(p.data.acts.allow)).status, 401, 'el primer intento gasta los dos tokens del aviso');
 });
 
-test('un PIN puesto después del aviso: su token ya no aprueba (abre la app)', async () => {
-  const jefe = (await A.call('bots.list')).bots.find((b) => b.name === 'Jefe');
-  await A.call('bots.create', { name: 'Tercero', role_text: 'Nada' });
+// 3.8 (review F2.3, M4): «Aprobar» from the phone's notification really approves (the agent goes on with what it asked),
+// and the same notification's «Rechazar» is spent with it.
+test('«Aprobar» desde el aviso del móvil aprueba el permiso; después su «Rechazar» ya no vale', async () => {
   const n = pushes(ana.endpoint).length;
-  await A.call('bots.send', { id: jefe.id, text: 'BOT_CALL bot_pause {"name":"Tercero","reason":"no se usa"}' });
-  const p = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.kind === 'card'), 'la tarjeta', 30_000);
-  assert.ok(p.data.acts.allow);
-  await A.call('persons.setPin', { pin: '1357' });
+  const task = await A.call('tasks.create', { project: 'web', title: 'Subir aprobado', description: 'PIDE_PERMISO', agent: 'codex' });
+  const p = await until(() => pushes(ana.endpoint).slice(n).find((x) => x.data.kind === 'approval'), 'el permiso', 30_000);
+  const r = await noteAction(p.data.acts.allow);
+  assert.equal(r.status, 200, JSON.stringify(await r.clone().json()));
+  const done = await until(async () => { const x = await A.call('tasks.get', { id: task.id }); return x.status === 'done' ? x : null; }, 'la tarea sigue y termina', 30_000);
+  assert.match(done.result, /permiso concedido \(allow\)/, done.result);
+  assert.equal((await noteAction(p.data.acts.deny)).status, 401, 'el «Rechazar» del mismo aviso ya no vale');
+});
+
+// 3.8 (revisión F2.5, B6): a device that still has a person (one of 3.6–3.7 the migration did not clear) gets no
+// notifications, and its buttons do not work (remote.mjs › validDevice: only devices without a person are served).
+test('un dispositivo con persona (de otro usuario de 3.7) no recibe avisos y sus botones no valen', async () => {
+  const n = { ana: pushes(ana.endpoint).length, tablet: pushes(tablet.endpoint).length };
+  await A.call('tasks.create', { project: 'web', title: 'Subir de otro', description: 'PIDE_PERMISO', agent: 'codex' });
+  const onTablet = await until(() => pushes(tablet.endpoint).slice(n.tablet).find((x) => x.data.kind === 'approval'), 'el permiso en la tablet', 30_000);
+  const onAna = await until(() => pushes(ana.endpoint).slice(n.ana).find((x) => x.data.kind === 'approval'), 'el permiso en el móvil', 30_000);
+  const db = new Board();
+  // A migrated 3.7 database keeps devices.person_id (dropped in 3.9); a new one has no such column.
+  if (!db.all('PRAGMA table_info(devices)').some((c) => c.name === 'person_id')) db.run('ALTER TABLE devices ADD COLUMN person_id TEXT');
+  db.run("UPDATE devices SET person_id = 'p-otra' WHERE id = ?", tablet.id);
   try {
-    const r = await noteAction(p.data.acts.allow);
-    assert.equal(r.status, 403); assert.equal((await r.json()).reason, 'locked');
-    const card = (await A.call('bots.chat', { id: jefe.id })).lines.find((l) => l.id === p.data.card.item);
-    assert.equal(card.meta.status, 'pending', 'sin contestar');
-  } finally { await A.call('persons.setPin', { pin: null, current: '1357' }); }
+    assert.equal((await noteAction(onTablet.data.acts.allow)).status, 401, 'su «Aprobar» no vale');
+    assert.equal((await noteAction(onAna.data.acts.deny)).status, 200, 'el del móvil del dueño sí');
+    const before = pushes(tablet.endpoint).length; const k = pushes(ana.endpoint).length;
+    await A.call('chat.send', { text: 'una respuesta más', conversation: conv });
+    await until(() => pushes(ana.endpoint).slice(k).find((x) => x.data.tag === `orb-conversation:${conv}`), 'el aviso al móvil del dueño', 30_000);
+    // A push sent before the device got its person (the previous task's, say) may still land: only this message's counts.
+    assert.equal(pushes(tablet.endpoint).slice(before).filter((x) => x.data.tag === `orb-conversation:${conv}`).length, 0, 'ninguno al de otra persona');
+  } finally { db.run('UPDATE devices SET person_id = NULL WHERE id = ?', tablet.id); db.db.close(); }
+});
+
+// 3.8 (B2): pushes and their buttons follow the same rule as a call (remote.mjs › validDevice): a device unused for 30
+// days gets no more notifications, and its buttons on the ones it already has no longer work.
+test('un móvil caducado no recibe avisos y los botones de los que ya tiene no valen', async () => {
+  const n = { ana: pushes(ana.endpoint).length, tablet: pushes(tablet.endpoint).length };
+  await A.call('tasks.create', { project: 'web', title: 'Subir otra', description: 'PIDE_PERMISO', agent: 'codex' });
+  const onTablet = await until(() => pushes(tablet.endpoint).slice(n.tablet).find((x) => x.data.kind === 'approval'), 'el permiso en la tablet', 30_000);
+  const onAna = await until(() => pushes(ana.endpoint).slice(n.ana).find((x) => x.data.kind === 'approval'), 'el permiso en el móvil', 30_000);
+  const db = new Board();
+  const old = new Date(Date.now() - 31 * 86_400_000).toISOString();
+  db.run('UPDATE devices SET last_seen = ?, created_at = ? WHERE id = ?', old, old, tablet.id);
+  try {
+    assert.equal((await noteAction(onTablet.data.acts.allow)).status, 401, 'su «Aprobar» ya no vale');
+    assert.equal((await noteAction(onAna.data.acts.deny)).status, 200, 'el del móvil vigente sí');
+    const before = pushes(tablet.endpoint).length; const k = pushes(ana.endpoint).length;
+    await A.call('chat.send', { text: 'otra respuesta', conversation: conv });
+    await until(() => pushes(ana.endpoint).slice(k).find((x) => x.data.tag === `orb-conversation:${conv}`), 'el aviso al móvil vigente', 30_000);
+    assert.equal(pushes(tablet.endpoint).length, before, 'ninguno a la tablet caducada');
+  } finally { db.db.close(); }
 });

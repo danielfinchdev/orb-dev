@@ -8,7 +8,6 @@ import path from 'node:path';
 import { tempHome, startEngine, until, fake } from './helpers.mjs';
 import { plainText, findUrl, findCode, failureOf, startLogin, waitLogin, sendCode, cancelLogin, loginInfo } from '../src/agents/login.mjs';
 import { agentInstallCommand, installAgent, agentInstallState } from '../src/engine/installer.mjs';
-import { centroAllows } from '../src/engine/api.mjs';
 
 const t = tempHome();
 process.on('exit', () => t.cleanup());
@@ -126,14 +125,11 @@ test('motor: agents.login de una cuenta nueva da el enlace, avisa al terminar y 
     const st = await e.call('agents.status', {});
     assert.equal(st.find((a) => a.id === 'claude').accounts.find((a) => a.id === acc.id).login, 'si');
     assert.equal((await e.call('agents.loginState', { id: r.id })).state, 'hecho');
-    // Codex in device mode (the server's way), through the engine.
+    // Codex in device mode, through the engine.
     const c = await e.call('agents.login', { account: 'codex', mode: 'device' });
     assert.equal(c.code, 'ABCD-EFGH');
     await assert.rejects(e.call('agents.loginCode', { id: r.id, code: 'abcdefghij#klmnopqrst' }), /ya ha terminado/);
   } finally { await e.stop(); h.cleanup(); }
-  // The server signs in too now (no console needed); the console itself stays off there.
-  assert.equal(centroAllows('agents.login'), true);
-  assert.equal(centroAllows('installer.start'), false);
 });
 
 test('instalar agentes: órdenes oficiales para este usuario, progreso, versión y fallos en palabras', async () => {

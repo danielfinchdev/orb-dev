@@ -1,25 +1,8 @@
-// sys.*: textos del proceso principal (menú de Windows, diálogos, notificaciones) y errores del sistema que pueden
+// sys.*: textos de la app de escritorio (diálogos, notificaciones) y errores del sistema que pueden
 // llegar a quien usa la app (toasts, Ajustes, ventanita del navegador de los agentes). Los errores conservan la
 // minúscula inicial porque se suelen mostrar detrás de otro texto.
 export default {
-  // Menú de Windows (Ajustes → Interfaz)
-  'sys.menu.file': 'Archivo',
-  'sys.menu.quit': 'Salir',
-  'sys.menu.edit': 'Edición',
-  'sys.menu.undo': 'Deshacer',
-  'sys.menu.redo': 'Rehacer',
-  'sys.menu.cut': 'Cortar',
-  'sys.menu.copy': 'Copiar',
-  'sys.menu.paste': 'Pegar',
-  'sys.menu.selectAll': 'Seleccionar todo',
-  'sys.menu.view': 'Ver',
-  'sys.menu.zoomReset': 'Tamaño normal',
-  'sys.menu.zoomIn': 'Aumentar',
-  'sys.menu.zoomOut': 'Reducir',
-  'sys.menu.terminal': 'Abrir terminal',
-  'sys.menu.fullscreen': 'Pantalla completa',
-
-  // Diálogos y notificaciones del proceso principal
+  // Diálogos y notificaciones de la app
   'sys.dialog.runningTitle': 'Hay tareas en curso',
   'sys.dialog.closeOne': 'Hay 1 tarea en curso. Si cierras ahora, se detendrá y quedará como fallida (podrás reintentarla).',
   'sys.dialog.closeMany': 'Hay {n} tareas en curso. Si cierras ahora, se detendrán y quedarán como fallidas (podrás reintentarlas).',
@@ -35,16 +18,16 @@ export default {
   'sys.dialog.allFiles': 'Todos los archivos',
   'sys.dialog.refImages': 'Imágenes de referencia',
   'sys.dialog.images': 'Imágenes',
-  'sys.main.startFailed': 'No se pudo iniciar {name}',
-  'sys.main.keyringWeak': 'Tu escritorio no tiene un llavero (GNOME Keyring o KWallet), así que la clave de Orb se guarda en un archivo de su carpeta sin cifrar. Funciona igual; para protegerla, instala gnome-keyring o kwallet y reinicia Orb.',
   'sys.main.notice': '{name} · Notificación',
-
+  'sys.main.noticePrivate': 'Nuevo mensaje (desbloquea Windows para verlo)',
   // Errores del proceso principal (acaban en un toast)
   'sys.main.engineStopped': '{name} se ha detenido',
   'sys.main.engineStartStopped': '{name} se detuvo al iniciarse',
+  'sys.main.migratedFromElectron': '{name} se ha actualizado a su nueva base. Las preferencias de la interfaz (tema, vista abierta, avisos) vuelven a los valores de siempre.',
+  'sys.main.noJob': '{name} no ha podido vigilar los procesos del motor: si se cierra de golpe, pueden quedar agentes abiertos. Más detalles en motor-salida.log.',
   'sys.main.engineOff': '{name} no está en ejecución',
   'sys.main.engineTimeout': '{name} no respondió a tiempo',
-  'sys.main.badOrigin': 'origen no permitido',
+  'sys.main.folderProbeStuck': 'Orb no pudo devolver su nombre a la carpeta del proyecto (algún programa, como el antivirus, la tomó justo entonces). Ahora está en {path}. Pulsa «Reintentar» en un momento: Orb intentará devolvérselo.',
   'sys.main.badAction': 'acción no válida',
   'sys.main.noFolderYet': 'todavía no hay ninguna carpeta',
   'sys.main.badPath': 'ruta no válida',
@@ -53,20 +36,17 @@ export default {
   'sys.main.badLink': 'enlace no válido',
   'sys.main.httpsOnly': 'solo se pueden abrir enlaces https',
   'sys.main.alreadySetup': 'la app ya está configurada',
-  'sys.main.notHome': 'esa carpeta no es la de un asistente (falta orb.json)',
-
+  'sys.main.notHome': 'esa carpeta no es una carpeta de Orb (le falta core)',
   // Contribuye (envío de comentarios)
   'sys.feedback.empty': 'Escribe un mensaje antes de enviarlo',
   'sys.feedback.timeout': 'Tiempo de espera agotado',
   'sys.feedback.offline': 'Sin conexión',
   'sys.feedback.failed': 'No se pudo enviar el mensaje',
-
   // Terminal (Ctrl+J)
   'sys.terminal.notInstalled': '{name} no está instalado en este PC',
   'sys.terminal.none': 'no se ha encontrado ninguna terminal en este PC',
   'sys.terminal.folderOnly': 'solo se puede abrir una terminal en una carpeta',
   'sys.terminal.openFailed': 'no se pudo abrir {name}: {error}',
-
   // Navegador de los agentes
   'sys.browser.title': 'Navegador del agente',
   'sys.browser.noUrl': 'falta la dirección',
@@ -100,7 +80,6 @@ export default {
   'sys.browser.do.dialogAccept': 'aceptará los avisos de la página',
   'sys.browser.do.dialogCancel': 'cancelará los avisos de la página',
   'sys.browser.do.console': 'lee la consola',
-
   // Herramientas MCP de los agentes
   'sys.mcp.noTask': 'no existe la tarea #{id}',
   'sys.mcp.noIsolatedCopy': 'la tarea #{id} no tiene copia aislada (las tareas en la carpeta del proyecto ya ven todos los archivos)',
@@ -113,30 +92,10 @@ export default {
   'sys.mcp.idsRange': 'ids: entre 1 y 10 tareas',
   'sys.mcp.askNeedsOptions': 'orb_ask necesita una pregunta y entre 2 y 4 opciones',
   'sys.mcp.boardNeedsText': 'orb_pizarra necesita el consejo (message)',
-  // 3.7: los cambios que propone en el PC un bot con «Equipo» (core/pc-actions.mjs; hasta la 3.6, Opti Bot)
-  'sys.pc.badAction': 'Esa acción no está en la lista. Las que hay: {list}',
-  'sys.pc.reduced': 'Versión reducida: los procesos, los programas de inicio y el antivirus solo se ven en Windows',
-  'sys.pc.needsReason': 'explica por qué propones la acción',
-  'sys.pc.needsPid': 'end_process necesita el Id del proceso',
-  'sys.pc.needsName': 'disable_startup necesita el nombre exacto del programa',
-  'sys.pc.windowsOnly': 'Esta acción solo funciona en Windows.',
-  'sys.pc.uacCancelled': 'No se ha hecho: el aviso de administrador de Windows se canceló.',
-  'sys.pc.done': 'Hecho.',
-  'sys.pc.failed': 'No se ha podido hacer.',
-  'sys.pc.cleaned': 'Temporales borrados: {n} ({mb} MB liberados). {skipped} estaban en uso y se han dejado.',
-  'sys.pc.noProcess': 'El proceso {pid} ya no existe.',
-  'sys.pc.processChanged': 'El proceso {pid} ahora es otro programa ({name}): no se ha cerrado.',
-  'sys.pc.protected': '{name} es parte de Windows, de su seguridad o de Orb: no se cierra.',
-  'sys.pc.processClosed': 'Cerrado {name} (proceso {pid}).',
-  'sys.pc.noStartup': 'No hay ningún programa de inicio llamado «{name}».',
-  'sys.pc.startupFolder': '«{name}» arranca desde la carpeta Inicio: desactívalo en el Administrador de tareas › Aplicaciones de arranque.',
-  'sys.pc.otherUser': '«{name}» arranca para otro usuario de Windows: no se toca desde aquí.',
-  'sys.pc.startupOff': '«{name}» ya no arrancará con Windows (se puede volver a activar en el Administrador de tareas).',
   'sys.mcp.browserClosed': 'el navegador de la app se ha cerrado',
   'sys.mcp.browserUnavailable': 'el navegador de la app no está disponible (comprueba que la app está abierta)',
   'sys.mcp.browserTimeout': 'el navegador no respondió a tiempo',
   'sys.mcp.extraArgs': 'argumentos no permitidos: {list}',
-
   // Tablero (tareas, proyectos y mensajes)
   'sys.board.outside': 'la ruta está fuera de la carpeta de {name} ({home}): {target}. {user} puede vincularla desde la app.',
   'sys.board.nameAndPath': 'name y path son obligatorios',
@@ -154,7 +113,6 @@ export default {
   'sys.board.badLaunch': 'launch debe ser auto o manual',
   'sys.board.dependsMax': 'depends_on: como máximo 20 tareas',
   'sys.board.dependsMissing': 'depends_on: no existe la tarea #{id}',
-  'sys.board.folderOfOther': 'Esa carpeta no está disponible: es de otro proyecto. Elige otra.',
   'sys.board.sensitivityList': 'sensitivity debe ser una lista',
   'sys.board.badSensitivity': 'sensitivity no válida: {list}',
   'sys.board.onlyAssistant': 'solo {name} puede cambiar el agente, el modelo, reasoning o fast de una tarea',
@@ -170,9 +128,10 @@ export default {
   'sys.board.systemOnly': 'solo el sistema puede dejar tareas pendientes de aprobación',
   'sys.board.bodyRequired': 'body es obligatorio',
   'sys.board.badRecipient': 'destinatario no válido: {to} (usa {list}, all, usuario u orb)',
-
   // Bitácoras
   'sys.logs.none': 'no hay bitácora para "{project}": usa "general" o un proyecto registrado',
+  'sys.logs.noFile': 'no hay un archivo "{file}" junto a la bitácora general (hay: {files})',
+  'sys.logs.readOnly': '{name} es de solo lectura: no se ha anotado nada',
   'sys.logs.required': 'faltan tema y hecho',
   // Cabeceras y apartados de las bitácoras (archivos .md que lee quien usa la app)
   'sys.logs.generalHeader': '# Bitácora general de {name}\n\nMemoria de {name}: qué se pidió, qué se hizo y qué queda pendiente en todos los proyectos.\nSolo se añade al final; nunca se borra ni se edita lo escrito. Sin contraseñas, tokens ni datos personales.\n',
@@ -204,16 +163,24 @@ export default {
   'sys.logs.directFiles': 'archivos cambiados: {list}.',
   'sys.logs.directRevert': 'desde el historial de git del proyecto (God mode › Cambios) o pidiéndoselo al agente en la misma conversación',
   'sys.logs.andMore': ' y {n} más',
-
   // Inicio de Orb
-  'sys.engine.notHome': 'no es la carpeta de un asistente: {home}',
+  'sys.engine.notHome': 'no es una carpeta de Orb: {home}',
   'sys.engine.notStarted': '{name} todavía no se ha iniciado',
-
+  'sys.engine.sealedSecret': 'Windows no ha podido abrir la clave cifrada de este espacio de trabajo. Cierra Orb y vuelve a abrirlo.',
+  'sys.engine.otherApp': 'Este espacio de trabajo ya está abierto en otro {name} de este PC (quizá una versión anterior). Ciérralo y pulsa «Reintentar».',
+  'sys.engine.previousOpens': 'Windows vuelve a poder abrir la clave anterior de este espacio de trabajo. Si quieres volver a ella, ve a Ajustes › Datos.',
+  'sys.engine.previousBack': '{name} ha vuelto a la clave anterior. La clave nueva se ha guardado aparte.',
+  'sys.engine.previousFailed': 'No se pudo volver a la clave anterior: {name} sigue con la clave nueva. Inténtalo otra vez desde Ajustes › Datos.',
+  'sys.engine.previousNew': '{name} ha vuelto a la clave nueva. La clave anterior se ha guardado aparte.',
+  'sys.engine.recoveryRestored': 'La copia restaurada traía el código de recuperación de otro PC, que aquí no sirve: las copias programadas salen sin él. Crea uno nuevo en Ajustes › Datos.',
+  'sys.engine.recoveryOtherKey': 'Tu código de recuperación se creó con la otra clave y ya no sirve en este PC: las copias programadas salen sin él. Crea uno nuevo en Ajustes › Datos.',
+  'sys.engine.secretBusy': 'Windows no deja leer ahora la clave cifrada de este espacio de trabajo. Espera un momento y pulsa «Reintentar».',
+  'sys.engine.secretOld': 'Este espacio de trabajo tiene la clave de Orb 3.8.0, que esta versión ya no abre. Empieza con una clave nueva: no se borra nada; tus secretos se abrirán con tu contraseña maestra y se volverán a pedir las aprobaciones.',
+  'sys.engine.secretUnreadable': 'Windows no puede abrir la clave cifrada de este espacio de trabajo (puede ser de otro usuario de Windows o estar dañada). Pulsa «Reintentar» o empieza con una clave nueva: se volverán a pedir las aprobaciones.',
   // Tareas programadas
   'sys.schedules.badEvery': 'every debe ser {list}',
   'sys.schedules.badTime': 'at_time debe tener el formato HH:MM',
   'sys.schedules.badWeekdays': 'weekdays: números del 0 (domingo) al 6',
-
   // Agentes
   'sys.agents.notSupported': 'no admitido',
   'sys.agents.methodNotSupported': 'no admitido: {method}',
@@ -232,6 +199,7 @@ export default {
   'sys.agents.exitedCode': '{name} se cerró (código {code}). {detail}',
   'sys.agents.exitedWith': '{name} se cerró: {error}',
   'sys.agents.exitedEarly': '{name} se cerró antes de terminar.',
+  'sys.agents.projectSettingsSkipped': 'Orb no ha cargado los ajustes .claude/settings de este proyecto porque ejecutan programas o cambian el entorno ({keys}). Sus CLAUDE.md sí se usan.',
   'sys.agents.stopped': 'Detenido.',
   'sys.agents.limit': '{name} ha alcanzado su límite de uso',
   'sys.agents.resumeFailed': '{name} no pudo retomar la conversación: {error}',
@@ -257,7 +225,6 @@ export default {
   'sys.agents.tool.imageGen': 'Crear imagen',
   'sys.agents.tool.subagent': 'Subagente: {tool}',
   'sys.agents.tool.action': 'acción',
-
   // Ejecución de tareas
   'sys.scheduler.accountOff': 'la cuenta {account} está desactivada o ya no existe',
   'sys.scheduler.notInstalled': '{name} no está instalado en este PC (instálalo desde Agentes o reasigna la tarea)',
@@ -267,19 +234,15 @@ export default {
   'sys.scheduler.secretFiles': 'no se hizo el commit automático: hay archivos que parecen secretos ({list})',
   'sys.scheduler.secretFilesIn': 'no se hizo el commit automático: hay archivos que parecen secretos ({list}). Revisa {dir}',
   'sys.scheduler.commitFailed': 'el commit automático falló ({error}); los cambios siguen sin guardar en {dir}',
-
   // Opciones de las tareas y base de datos
   'sys.db.badReasoning': 'reasoning debe ser low, medium, high o xhigh',
   'sys.db.badFast': 'fast debe ser true o false',
-  'sys.db.noHome': 'no hay carpeta del asistente',
-
+  'sys.db.noHome': 'no hay carpeta de Orb',
   // Móvil y notificaciones en el móvil
   'sys.remote.tooLarge': 'el contenido es demasiado grande',
   'sys.push.badSubscription': 'suscripción no válida',
   'sys.push.unknownService': 'servicio de notificaciones no reconocido',
-
   // Herramientas de Android (adb)
-  'msg.android.off': 'Android está desactivado en este Orb.',
   'sys.android.noDownload': 'no hay descarga para {platform}',
   'sys.android.downloadHttp': 'descarga: HTTP {status}',
   'sys.android.noAdb': 'el paquete no incluye adb',
@@ -311,6 +274,8 @@ export default {
   'sys.events.status.cancelled': 'cancelada',
   'sys.events.status.other': '{status}',
   'sys.projects.firstCommit': 'Proyecto creado',
+  'sys.projects.archived.finished': '{name}: finalizado',
+  'sys.projects.archived.deleted': '{name}: eliminado',
   'sys.sessions.imageHint': '(Nota de Orb: si este mensaje pide una imagen, genera una sola, salvo que pida varias expresamente. Los textos que vayan dentro de la imagen, en el idioma del mensaje.)',
   'sys.sessions.imageEditHint': '(Nota de Orb: para cambiar la imagen, pásala como imagen de referencia a la herramienta de generar imágenes y genera una sola imagen nueva con el cambio. No la montes con scripts ni pegando trozos: pierde calidad.)'
 };

@@ -1,7 +1,11 @@
 # Orb on Linux (desktop app)
 
+> **3.8.1 and later:** Orb's desktop app moved to a new base (Tauri) on Windows, and the Linux version is **planned for a
+> later release**. Until then, 3.8.1 has no Linux downloads; the Linux builds of 3.7 described below stay on their own
+> release page.
+
 Since 3.7 the Orb app (the same one as on Windows) has Linux downloads. It is for a Linux **desktop** (GNOME, KDE,
-Xfce…). For a server with no screen there is [Orb Server](SERVER.md), a separate product.
+Xfce…).
 
 From [**Releases → latest**](https://github.com/danielfinchdev/orb-dev/releases/latest), x64 (most PCs) or arm64:
 
@@ -25,8 +29,8 @@ chmod +x Orb-*-linux-x86_64.AppImage
   folder must be writable.
 - For a menu entry, use your desktop's AppImage tool (AppImageLauncher, Gear Lever…).
 
-**Update:** Orb checks GitHub at start and every 4 hours. **Ajustes › Actualizaciones** shows a new version; «Actualizar»
-downloads it and «Reiniciar e instalar» swaps the file and opens the new one. Your data is not touched (and Orb makes a
+**Update:** Orb checks GitHub at start and every 4 hours. **Ajustes › Actualizaciones** shows a new version; «Descargar e
+instalar» downloads it and «Reiniciar e instalar» swaps the file and opens the new one. Your data is not touched (and Orb makes a
 backup of it first).
 
 **Uninstall:** delete the `.AppImage` file.
