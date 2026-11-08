@@ -19,7 +19,8 @@ export function layoutPlan() {
 }
 
 // choices: { [id]: choice }. Throws a user-facing error (code 'busy', nothing moved) when a folder is in use. → the plan
-// as it is now, with logsMoved ({ dir, files }) when the logs went into core: the window says once where they are now.
+// as it is now, with logsMoved ({ dir, files }) when the logs went into core and serversMoved ([{ from, to }]) for the MCP
+// servers that moved: the window says once where they are now.
 export async function layoutApply(choices, { emit = () => {}, log = () => {}, board = null } = {}) {
   const clean = {};
   if (choices && typeof choices === 'object' && !Array.isArray(choices)) {
@@ -36,7 +37,7 @@ export async function layoutApply(choices, { emit = () => {}, log = () => {}, bo
   const { addAdbToPath } = await import('./android.mjs');
   addAdbToPath();
   if (r) { log(`carpetas: movidas ${r.moved.join(', ')}`); emit('config:changed', ctx.config); }
-  return { ...layoutPlan(), logsMoved: r?.logs ?? null };
+  return { ...layoutPlan(), logsMoved: r?.logs ?? null, serversMoved: r?.servers ?? [] };
 }
 
 // 3.8.1: the owner's private folder (notes, plans): kept from the agents like core.
@@ -49,7 +50,7 @@ export function guardOutside({ mirror } = {}) {
   // copy is where the app keeps it (<app data>\claves\…).
   const state = keys && path.basename(keys) === 'claves' ? path.join(path.dirname(keys), 'Local State') : null;
   // Never one that holds the workspace itself (that would shut the agents out of their projects).
-  // 3.8.1 (owner's decision 19 g): and the owner's private folder at the top of the workspace (<workspace>personal),
+  // 3.8.1 (owner's decision 19 g): and the owner's private folder at the top of the workspace (<workspace>\personal),
   // which no agent may read or touch (it is not a project).
   setGuardedRoots([...[backupRoot(), backupDir(ctx.home, ctx.config), keys, state].filter((d) => d && !inside(d, ctx.home)), privateDir(ctx.home)]);
   // 3.8.1: and the folder Orb is installed in (writable by the user under a per-user install): agents may read it only.

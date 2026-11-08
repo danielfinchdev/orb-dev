@@ -15,7 +15,7 @@ import { oneOf, str } from './api-common.mjs';
 import {
   listExtensions, skillsWith, mcpWith, importExtension, removeExtension, exposeSkills, activateRequest, editInProject,
   applyEdit, prepareApply, isMcpProject, startCommand, checkSkill, allowDraft, discardRequest, installFor,
-  ExtensionError, REQUESTS, EDITS, MCP_NAME, SKILL_NAME
+  ExtensionError, REQUESTS, EDITS, MCP_NAME, SKILL_NAME, cleanExtensionLeftovers
 } from '../core/extensions.mjs';
 
 // ---- what the agents load (core\skills\.activas), made again when the skills that are on change
@@ -43,7 +43,10 @@ const fail = (key, vars) => { throw new ExtensionError(key, vars, tr); };
 
 export function extensionMethods({ board, emit, log }) {
   const requests = () => { const r = board.settingJson(REQUESTS); return Array.isArray(r) ? r : []; };
-  const saveRequests = (list) => { board.settingJson(REQUESTS, list.slice(-50)); board.changed('settings'); };
+  // 3.8.1 (review H1c B3): the MCP processes change this list too: read and written in one write transaction.
+  const updateRequests = (fn) => { board.transaction(() => board.settingJson(REQUESTS, fn(requests()).slice(-50))); board.changed('settings'); };
+  // B2: and what nothing points to any more goes, once per start.
+  try { const all = requests(); const keep = cleanExtensionLeftovers(ctx.paths.core, all); if (keep.length !== all.length) updateRequests((list) => list.filter((r) => keep.some((k) => k.id === r.id))); } catch (error) { log(`extensiones: limpieza: ${error.message}`); }
   const edits = () => { const e = board.settingJson(EDITS); return e && typeof e === 'object' && !Array.isArray(e) ? e : {}; };
   const list = () => listExtensions(ctx.paths.core, ctx.config, { projects: board.projects(), requests: requests(), edits: edits() });
   // orb.json changed: its connectors' keys follow (a connector that went takes its keys with it; one Orb moved keeps
@@ -144,14 +147,14 @@ export function extensionMethods({ board, emit, log }) {
       const r = request(id);
       if (r.status === 'asking') {
         const next = allowDraft(ctx.paths.core, r, { tr });
-        saveRequests(requests().map((x) => (x.id === r.id ? next : x)));
+        updateRequests((list) => list.map((x) => (x.id === r.id ? next : x)));
         markCards(r.id, 'approved');
         log(`extensiones: permitido mejorar ${r.name}`);
         return list();
       }
       const out = await activateRequest(ctx.paths.core, ctx.config, r, { tr });
       save(out.patch, { moved: Boolean(r.update) });
-      saveRequests(requests().filter((x) => x.id !== r.id));
+      updateRequests((list) => list.filter((x) => x.id !== r.id));
       markCards(r.id, 'approved');
       board.notice(tr(r.kind === 'skill' ? 'ext.approvedSkill' : 'ext.approvedMcp', { name: r.name }), 'success');
       log(`extensiones: ${r.kind} ${r.name} aprobado (${r.update ? 'versión nueva' : 'nuevo'})`);
@@ -161,7 +164,7 @@ export function extensionMethods({ board, emit, log }) {
       const r = request(id);
       if (running.has(`req:${r.id}`)) fail('ext.err.inProgress');
       discardRequest(ctx.paths.core, r);
-      saveRequests(requests().filter((x) => x.id !== r.id));
+      updateRequests((list) => list.filter((x) => x.id !== r.id));
       markCards(r.id, 'rejected');
       log(`extensiones: ${r.kind} ${r.name} descartado`);
       return list();
@@ -192,7 +195,8 @@ export function extensionMethods({ board, emit, log }) {
       emit('config:changed', ctx.config);
       syncProjects(board);
       log(`extensiones: proyecto ${p.name} movido a ${to}`);
-      return list();
+      // 3.8.1 (review H1c M8): where it is now (the window says so: a program outside Orb may use the old path).
+      return { list: list(), moved: { from: p.path, to } };
     },
     // What «Aplicar cambios» would change (the window asks before): the project's version is copied into the quarantine
     // now, and only that copy is applied (a change in the project after this is not).

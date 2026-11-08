@@ -147,9 +147,9 @@ export class LayoutBusy extends Error {
 const BUSY_CODES = ['EBUSY', 'EPERM', 'EACCES', 'ENOTEMPTY'];
 
 // Moves the folders as the user chose. choices: { [item.id]: choice } (an item without one is left as it is,
-// undecided). Throws LayoutBusy (nothing moved) when a folder to move is in use. → { moved, rewritten, logs } or null
+// undecided). Throws LayoutBusy (nothing moved) when a folder to move is in use. → { moved, rewritten, logs, servers } or null
 // (logs: when the logs moved into core, { dir, files, readOnly }: where they are now and the user's own files in them,
-// full paths, and which of those are read-only).
+// full paths, and which of those are read-only; servers: [{ from, to }] of the MCP servers that moved).
 export function applyLayout(home, choices = {}, { language = 'es' } = {}) {
   const { items } = planWorkspace(home);
   const moves = []; const decided = {};
@@ -158,7 +158,7 @@ export function applyLayout(home, choices = {}, { language = 'es' } = {}) {
     if (c === undefined || c === null) continue;
     if (!it.choices.includes(c)) throw Object.assign(new Error(translate(language, 'data.layout.badChoice', { name: it.name })), { userFacing: true });
     decided[it.id] = c;
-    if (c !== 'keep') moves.push({ from: it.from, to: targetOf(home, it, c), ...(it.kind === 'logs' ? { logs: true } : {}) });
+    if (c !== 'keep') moves.push({ from: it.from, to: targetOf(home, it, c), ...(it.kind === 'logs' ? { logs: true } : {}), ...(it.kind === 'mcp' ? { mcp: true } : {}) });
   }
   const held = moves.filter((m) => isHeld(m.from)).map((m) => m.from);
   if (held.length) throw new LayoutBusy(held, language);
@@ -176,6 +176,10 @@ export function applyLayout(home, choices = {}, { language = 'es' } = {}) {
     const readOnly = files.filter((f) => { try { return (fs.statSync(f).mode & 0o200) === 0; } catch { return false; } });
     r.logs = { dir: logsMove.to, files, readOnly };
   }
+  // 3.8.1 (review H1c M8): the MCP servers that moved, from where to where (a program outside Orb, ~/.claude.json for
+  // one, may still start them from the old path).
+  const servers = moves.filter((m) => m.mcp && !exists(m.from)).map(({ from, to }) => ({ from, to }));
+  if (servers.length) r.servers = servers;
   return r;
 }
 

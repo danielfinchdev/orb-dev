@@ -89,6 +89,7 @@ test('la bienvenida en el C:\\Orb del dueño: no mueve nada, pregunta, y lo que 
     // He keeps his bitacora where it is (his global rules read it there) and makes his server a project (as 3.8.0 did).
     const after = await e.call('app.layoutApply', { choices: { bitacora: 'keep', adb: 'move', 'mcp:gmail-multi-mcp': 'windows' } });
     assert.equal(after.pending, false);
+    assert.deepEqual(after.serversMoved, [{ from: at('mcp-servers', 'gmail-multi-mcp'), to: at('windows', 'gmail-multi-mcp') }], 'Orb dice la ruta nueva del servidor (H1c M8)');
     assert.ok(fs.existsSync(at('bitacora', 'bitacora_project.md')) && !fs.existsSync(at('core', 'bitacora', 'bitacora_project.md')));
     assert.throws(() => fs.writeFileSync(at('bitacora', 'bitacora_project.md'), 'x'), 'sigue siendo de solo lectura');
     assert.equal(read(at('core', 'herramientas', 'adb', 'adb.exe')), 'adb');

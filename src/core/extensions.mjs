@@ -112,10 +112,10 @@ export function startCommand(dir) {
   for (const rel of PY_FILES) if (has(rel)) return { command: process.platform === 'win32' ? 'python' : 'python3', args: [path.join(dir, rel)] };
   return null;
 }
-// A folder that is an MCP server (its package.json or pyproject names the MCP SDK, or its name says mcp).
+// A folder that is an MCP server: its package.json or pyproject (or requirements.txt) names the MCP SDK. 3.8.1 (review
+// H1c B13): a name with «mcp» in it is not enough («Mover a core» is offered only to real servers).
 export function isMcpProject(dir) {
   const read = (f) => { try { return fs.readFileSync(path.join(dir, f), 'utf8'); } catch { return ''; } };
-  if (/mcp/i.test(path.basename(dir))) return true;
   let pkg = null; try { pkg = JSON.parse(read('package.json')); } catch { /* not node */ }
   if (pkg && Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }).some((d) => /modelcontextprotocol|(^|[-/])mcp([-/]|$)/i.test(d))) return true;
   return /(^|["'\s])(mcp|fastmcp)([[<>=~"'\s,]|$)/im.test(read('pyproject.toml') + read('requirements.txt'));
@@ -840,6 +840,34 @@ export async function activateRequest(core, config, request, { tr = null, instal
   if (request.kind === 'skill') return { to, patch: { skills: skillsWith(config, request.name, { enabled: true, source: request.update ? (config.skills ?? []).find((s) => s.name === request.name)?.source ?? 'creado' : 'creado' }) } };
   return { to, patch: { mcpServers: refreshStart(core, config, request.name, { enabled: true, source: request.update ? null : 'creado' }) ?? config.mcpServers ?? [] } };
 }
+// 3.8.1 (review H1c B2): at every start, what nothing points to any more goes: folders of core\preparacion and of the
+// quarantine that no request names (after an hour: an import or a draft may be on its way), and requests still being
+// written or waiting for the user after 30 days (with their folders). → the requests to keep.
+export const STALE_DAYS = 30;
+export function cleanExtensionLeftovers(core, requests = [], { now = Date.now() } = {}) {
+  const P = extensionPaths(core);
+  const old = (r) => ['drafting', 'asking'].includes(r?.status) && now - (Date.parse(r.created ?? '') || 0) > STALE_DAYS * 86_400_000;
+  const keep = []; const named = new Set();
+  for (const r of Array.isArray(requests) ? requests : []) {
+    if (old(r)) { discardRequest(core, r); continue; }
+    keep.push(r);
+    for (const d of [r?.dir, r?.quarantine]) if (typeof d === 'string') named.add(norm(d));
+  }
+  for (const root of [P.staging, P.quarantine]) {
+    let list = []; try { list = fs.readdirSync(root, { withFileTypes: true }); } catch { continue; }
+    for (const e of list) {
+      const full = path.join(root, e.name);
+      if (named.has(norm(full))) continue;
+      let young = false; try { young = now - fs.lstatSync(full).mtimeMs < 3_600_000; } catch { continue; }
+      if (young) continue;
+      try { fs.rmSync(full, { recursive: true, force: true }); } catch { /* in use: the next start */ }
+    }
+  }
+  return keep;
+}
+// How many requests one conversation may have open at once (being written, waiting for the user or to be reviewed).
+export const OPEN_PER_CONVERSATION = 5;
+export const openRequestsOf = (requests, conversation) => (Array.isArray(requests) ? requests : []).filter((r) => conversation != null && r?.by?.conversation === conversation && ['drafting', 'asking', 'pending'].includes(r?.status)).length;
 // Discarded: its folder in core\preparacion and its quarantine go.
 export function discardRequest(core, request) {
   const P = extensionPaths(core);

@@ -19,14 +19,17 @@ export function LayoutReview({ plan, onDone }) {
   const [choices, setChoices] = useState(() => Object.fromEntries(items.map((it) => [it.id, it.choice])));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [moved, setMoved] = useState(null); // { dir, files }: the logs, now in core
+  const [moved, setMoved] = useState(null); // { logs: { dir, files } | null, servers: [{ from, to }] }: what moved
   const apply = async (all) => {
     setBusy(true); setError('');
-    try { const r = await bridge.call('app.layoutApply', { choices: all ?? choices }); if (r?.logsMoved) setMoved(r.logsMoved); else onDone(); }
+    try {
+      const r = await bridge.call('app.layoutApply', { choices: all ?? choices });
+      if (r?.logsMoved || r?.serversMoved?.length) setMoved({ logs: r.logsMoved ?? null, servers: r.serversMoved ?? [] }); else onDone();
+    }
     catch (e) { setError(String(e?.message ?? e)); }
     finally { setBusy(false); }
   };
-  if (moved) return <LogsMoved moved={moved} onDone={onDone} />;
+  if (moved) return <Moved logs={moved.logs} servers={moved.servers} onDone={onDone} />;
   const toCore = items.some((it) => ['move', 'mcp'].includes(choices[it.id]));
   return (
     <div className="grid h-full place-items-center overflow-y-auto p-6" data-testid="layout-review">
@@ -61,15 +64,45 @@ export function LayoutReview({ plan, onDone }) {
   );
 }
 
-// The logs are in core now: their exact new place, and what to change outside Orb.
-function LogsMoved({ moved, onDone }) {
+// The logs (and 3.8.1, the MCP servers) are in their new place now: exactly where, and what to change outside Orb.
+function Path({ p, testid }) {
   const t = useT();
-  const files = moved.files?.length ? moved.files : [moved.dir];
-  const copy = (p) => navigator.clipboard?.writeText(p).catch(() => {});
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <span className="min-w-0 flex-1 font-mono text-xs break-all" data-testid={testid}>{p}</span>
+      <Button variant="ghost" size="icon" title={t('layout.copyPath')} aria-label={t('layout.copyPath')} onClick={() => navigator.clipboard?.writeText(p).catch(() => {})}><Copy /></Button>
+    </div>
+  );
+}
+function Moved({ logs, servers = [], onDone }) {
+  const t = useT();
   return (
     <div className="grid h-full place-items-center overflow-y-auto p-6" data-testid="layout-logs-moved">
-      <div className="grid w-full max-w-xl gap-4">
+      <div className="grid w-full max-w-xl gap-5">
         <div className="flex justify-center"><Robot size={80} mood="happy" /></div>
+        {logs ? <LogsMoved moved={logs} /> : null}
+        {servers.length ? (
+          <div className="grid gap-2" data-testid="layout-servers-moved">
+            <div className="text-center"><h1 className="text-xl">{t('layout.serversMovedTitle')}</h1><p className="text-muted-foreground mt-1 text-sm">{t('layout.serversMovedIntro')}</p></div>
+            {servers.map((m) => (
+              <div key={m.to} className="grid gap-1 rounded-lg border px-3 py-2">
+                <span className="text-muted-foreground truncate font-mono text-xs line-through">{m.from}</span>
+                <Path p={m.to} testid="layout-server-path" />
+              </div>
+            ))}
+            <p className="text-muted-foreground text-xs">{t('layout.serversMovedNote')}</p>
+          </div>
+        ) : null}
+        <div className="flex justify-center"><Button onClick={onDone} data-testid="layout-logs-ok"><ArrowRight />{t('layout.continue')}</Button></div>
+      </div>
+    </div>
+  );
+}
+function LogsMoved({ moved }) {
+  const t = useT();
+  const files = moved.files?.length ? moved.files : [moved.dir];
+  return (
+    <div className="grid gap-2">
         <div className="text-center">
           <h1 className="text-xl">{t('layout.logsMovedTitle')}</h1>
           <p className="text-muted-foreground mt-1 text-sm">{t('layout.logsMovedIntro')}</p>
@@ -77,17 +110,12 @@ function LogsMoved({ moved, onDone }) {
         <div className="grid gap-2">
           {files.map((f) => (
             <div key={f} className="grid gap-1 rounded-lg border px-3 py-2">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="min-w-0 flex-1 font-mono text-xs break-all" data-testid="layout-logs-path">{f}</span>
-                <Button variant="ghost" size="icon" title={t('layout.copyPath')} aria-label={t('layout.copyPath')} onClick={() => copy(f)}><Copy /></Button>
-              </div>
+              <Path p={f} testid="layout-logs-path" />
               {moved.readOnly?.includes(f) ? <span className="text-muted-foreground text-xs" data-testid="layout-logs-readonly">{t('layout.logsReadOnly')}</span> : null}
             </div>
           ))}
         </div>
         <p className="text-muted-foreground text-xs">{t('layout.logsMovedNote')}</p>
-        <div className="flex justify-center"><Button onClick={onDone} data-testid="layout-logs-ok"><ArrowRight />{t('layout.continue')}</Button></div>
-      </div>
     </div>
   );
 }

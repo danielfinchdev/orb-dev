@@ -29,7 +29,7 @@ after(() => { for (const d of tmp) fs.rmSync(d, { recursive: true, force: true, 
 const scratch = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-ext-')); tmp.push(d); return d; };
 const put = (p, text = 'x') => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, text); };
 const skillAt = (dir, name, description = 'Revisa facturas y avisa de las que faltan.') => { put(path.join(dir, 'SKILL.md'), `---\nname: ${name}\ndescription: ${description}\n---\n\n# ${name}\nPasos.\n`); put(path.join(dir, 'scripts', 'paso.py'), 'print(1)'); return dir; };
-const serverAt = (dir, name) => { put(path.join(dir, 'package.json'), JSON.stringify({ name, description: `Servidor ${name}`, main: 'src/index.js' })); put(path.join(dir, 'src', 'index.js'), '// servidor'); return dir; };
+const serverAt = (dir, name) => { put(path.join(dir, 'package.json'), JSON.stringify({ name, description: `Servidor ${name}`, main: 'src/index.js', devDependencies: { '@modelcontextprotocol/sdk': '1.0.0' } })); put(path.join(dir, 'src', 'index.js'), '// servidor'); return dir; };
 const PASS = 'una frase larga de prueba';
 
 test('qué es cada carpeta: SKILL.md con nombre y descripción, o un servidor que Orb sabe arrancar; sin enlaces fuera', () => {
@@ -355,7 +355,8 @@ test('«Mover a core» desde Ajustes: un proyecto que es servidor MCP pasa a cor
     const listed = (await e.call('extensions.list')).projects;
     assert.deepEqual(listed.map((p) => p.name), ['notas-mcp']);
     await e.call('config.save', { patch: { mcpServers: [{ name: 'notas', command: 'node', args: [path.join(dir, 'src', 'index.js')], enabled: true }] } });
-    const l = await e.call('extensions.adopt', { project: 'notas-mcp' });
+    const { list: l, moved } = await e.call('extensions.adopt', { project: 'notas-mcp' });
+    assert.deepEqual(moved, { from: dir, to: path.join(h.home, 'core', 'mcp', 'notas-mcp') }, 'la ruta nueva, para avisar (H1c M8)');
     assert.ok(fs.existsSync(path.join(h.home, 'core', 'mcp', 'notas-mcp', 'AGENTS.md')) && !fs.existsSync(dir));
     assert.deepEqual(l.mcp.map((s) => [s.name, s.connector, s.enabled]), [['notas-mcp', 'notas', true]]);
     const cfg = JSON.parse(fs.readFileSync(path.join(h.home, 'core', 'orb.json'), 'utf8'));
@@ -596,4 +597,29 @@ test('al activar un servidor que necesita paquetes, Orb lo avisa antes (no se ac
     await assert.rejects(e.call('extensions.toggle', { kind: 'mcp', name: row.name, enabled: true }), /necesita descargar paquetes/);
     assert.ok(!fs.existsSync(path.join(row.dir, 'node_modules')), 'importar no instaló nada');
   } finally { await e.stop(); h.cleanup(); }
+});
+
+// ---- 3.8.1 (final): leftovers, a cap per conversation and only real MCP servers
+test('lo que ya nadie usa en core\preparacion y la cuarentena se limpia al arrancar; como mucho 5 a medias por conversación; «mcp» en el nombre no basta', () => {
+  const core = path.join(scratch(), 'core');
+  const P = X.extensionPaths(core);
+  const live = X.draftExtension(core, { kind: 'skill', name: 'viva', description: 'Una skill en marcha.', by: { conversation: 7 } });
+  const old = { ...X.draftExtension(core, { kind: 'skill', name: 'vieja', description: 'Una skill olvidada.' }), created: new Date(Date.now() - 31 * 86_400_000).toISOString() };
+  const orphan = path.join(P.staging, 'skill-huerfana-000000'); fs.mkdirSync(orphan, { recursive: true });
+  const fresh = path.join(P.quarantine, 'importar-ahora'); fs.mkdirSync(fresh, { recursive: true });
+  const stale = path.join(P.quarantine, 'importar-ayer'); fs.mkdirSync(stale, { recursive: true });
+  const hourAgo = (Date.now() - 2 * 3_600_000) / 1000; fs.utimesSync(orphan, hourAgo, hourAgo); fs.utimesSync(stale, hourAgo, hourAgo);
+  const keep = X.cleanExtensionLeftovers(core, [live, old]);
+  assert.deepEqual(keep.map((r) => r.id), [live.id], 'la de hace 31 días se descarta');
+  assert.ok(fs.existsSync(live.dir) && !fs.existsSync(old.dir), 'con su carpeta');
+  assert.ok(!fs.existsSync(orphan) && !fs.existsSync(stale), 'lo que ninguna petición nombra, fuera');
+  assert.ok(fs.existsSync(fresh), 'lo de hace un momento (una importación en curso) se queda');
+  const many = Array.from({ length: 5 }, (_, i) => ({ status: ['drafting', 'asking', 'pending'][i % 3], by: { conversation: 7 } }));
+  assert.equal(X.openRequestsOf(many, 7), 5);
+  assert.equal(X.openRequestsOf([...many, { status: 'drafting', by: { conversation: 8 } }], 8), 1);
+  assert.equal(X.OPEN_PER_CONVERSATION, 5);
+  const named = path.join(scratch(), 'mis-notas-mcp'); put(path.join(named, 'index.js'), '// no es un servidor MCP');
+  assert.equal(X.isMcpProject(named), false, 'el nombre no basta');
+  put(path.join(named, 'package.json'), JSON.stringify({ name: 'x', dependencies: { '@modelcontextprotocol/sdk': '1.0.0' } }));
+  assert.equal(X.isMcpProject(named), true, 'con el SDK de MCP, sí');
 });

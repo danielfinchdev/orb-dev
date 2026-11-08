@@ -74,7 +74,7 @@ async function finishFlow(p, t) {
   if (!(await confirm(t('projects.finish.title'), t('projects.finish.body', { name: p.name }), { ok: t('projects.finish.ok') }))) return;
   if ((await act(call('projects.finish', { name: p.name }), t('projects.finish.done'))) !== undefined) await refresh().catch(() => {});
 }
-async function deleteFlow(p, t) {
+export async function deleteProjectFlow(p, t) {
   if (!(await confirm(t('projects.delete.title'), t('projects.delete.body', { name: p.name, path: p.path }), { ok: t('projects.delete.ok'), danger: true }))) return;
   const unlock = await unlockCore('deleteProject');
   if (!unlock) return;
@@ -106,7 +106,7 @@ function ProjectMenu({ p, open, setOpen, phone }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56" data-testid="project-menu-list">
         <DropdownMenuItem onSelect={() => finishFlow(p, t)} data-testid="project-finish"><CircleCheckBig />{t('projects.finish.title')}</DropdownMenuItem>
-        {bridge.mobile || !p.inHome ? null : (<><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onSelect={() => deleteFlow(p, t)} data-testid="project-delete"><Trash2 />{t('projects.delete.title')}</DropdownMenuItem></>)}
+        {bridge.mobile || !p.inHome ? null : (<><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onSelect={() => deleteProjectFlow(p, t)} data-testid="project-delete"><Trash2 />{t('projects.delete.title')}</DropdownMenuItem></>)}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -16,7 +16,7 @@ import { newProject } from '../core/projects.mjs';
 import { createSchedule, EVERY } from '../core/schedules.mjs';
 import { mustOwnTask, ownsTask } from '../core/permissions.mjs';
 import { redeem, ticketFromArgs } from './auth-client.mjs';
-import { draftExtension, requestActivation, fileList, REQUESTS } from '../core/extensions.mjs';
+import { draftExtension, requestActivation, fileList, REQUESTS, OPEN_PER_CONVERSATION, openRequestsOf } from '../core/extensions.mjs';
 
 const AUTH = await redeem(process.env.ORB_AUTH_PIPE, ticketFromArgs());
 // An agent that stopped expanding ${VAR} in its MCP config would leave every tool «not signed»: said in its log.
@@ -204,8 +204,11 @@ function draft(kind, a) {
     if (ready?.status === 'drafting' && ready.allowed) return draftReply(ready);
     if (ready?.status === 'asking') return `Sigue esperando a que ${USER} lo permita. Termina tu turno; cuando lo permita, vuelve a llamar a orb_create_${kind} con mejorar: true.`;
   }
+  // 3.8.1 (review H1c B2): a few open at once per conversation.
+  if (openRequestsOf(requests(), myScopeOf().conversation) >= OPEN_PER_CONVERSATION) return `Esta conversación ya tiene ${OPEN_PER_CONVERSATION} skills o servidores a medias o esperando a ${USER}. Termina o descarta alguno antes de crear otro.`;
   const req = draftExtension(ctx.paths.core, { kind, name: a.name, description: a.description, language: a.lenguaje === 'python' ? 'python' : 'node', update, by: myScopeOf(), config: ctx.config, tr });
-  board.settingJson(REQUESTS, [...requests(), req].slice(-50));
+  // 3.8.1 (review H1c B3): the engine changes this list too: read and written in one write transaction.
+  board.transaction(() => board.settingJson(REQUESTS, [...requests(), req].slice(-50)));
   if (req.status === 'asking') {
     const what = tr('ext.card.mcpKeys', { agent: ME, name: req.name });
     board.addChat('system', what, { kind: 'extension', extension: req.id, ext: req.kind, name: req.name, description: req.description, update: req.update, ask: 'edit', status: 'pending' }, myScopeOf().conversation);
@@ -220,7 +223,7 @@ function askActivation(a) {
   const mine = myScopeOf();
   if (i < 0 || !isMine(list[i], mine)) refuse('ext.err.noRequest');
   const req = requestActivation(ctx.paths.core, list[i], { tr });
-  board.settingJson(REQUESTS, list.map((r, j) => (j === i ? req : r)));
+  board.transaction(() => board.settingJson(REQUESTS, requests().map((r) => (r.id === req.id ? req : r))));
   const what = tr(req.kind === 'skill' ? (req.update ? 'ext.card.skillUpdate' : 'ext.card.skill') : (req.update ? 'ext.card.mcpUpdate' : 'ext.card.mcp'), { agent: ME, name: req.name });
   board.addChat('system', what, { kind: 'extension', extension: req.id, ext: req.kind, name: req.name, description: req.description, files: req.files.slice(0, 20), total: req.total, asks: req.asks, deps: req.deps, update: req.update, status: 'pending' }, mine.conversation);
   board.notice(what, 'info');
