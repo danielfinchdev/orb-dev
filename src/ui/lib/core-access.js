@@ -19,7 +19,8 @@ export const dropUnlock = () => { held = null; };
 // Still good for a few seconds more (the call that uses it must arrive in time).
 export const heldUnlock = (now = Date.now()) => (held && held.until - 5000 > now ? held.unlock : null);
 
-// action: 'open' | 'restore' | 'backupFolder' | 'recovery' | 'legacy' | 'secrets' | 'connector' | 'protected' | 'unlink'.
+// action: 'open' | 'restore' | 'backupFolder' | 'recovery' | 'legacy' | 'secrets' | 'connector' | 'protected' | 'unlink' |
+// 'deleteProject'.
 export async function unlockCore(action) {
   const have = heldUnlock();
   if (have) return have;

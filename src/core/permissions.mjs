@@ -36,6 +36,8 @@ export const METHODS = Object.freeze({
   'projects.remove': 'pc', 'projects.rename': 'pc', 'projects.setActive': 'remote', 'projects.setIcon': 'pc', 'projects.clearIcon': 'pc',
   'projects.branch': 'remote', 'projects.info': 'remote', 'projects.commit': 'pc', 'projects.merge': 'pc', 'projects.push': 'pc',
   'projects.createPr': 'pc', 'projects.createRepo': 'pc', 'projects.review': 'remote', 'projects.securityReview': 'remote',
+  // 3.8.1: finishing a project (its folder stays) also from the phone; deleting it (its folder too) only here.
+  'projects.finish': 'remote', 'projects.finished': 'remote', 'projects.reopen': 'remote', 'projects.deleteCheck': 'pc', 'projects.delete': 'pc',
   'whiteboard.load': 'remote', 'whiteboard.save': 'remote', 'whiteboard.note': 'remote', 'whiteboard.attach': 'pc', 'whiteboard.remove': 'pc', 'whiteboard.folder': 'pc',
   'logs.list': 'remote', 'logs.read': 'remote',
   // tasks
@@ -73,9 +75,9 @@ export const REMOTE_METHODS = Object.freeze(new Set(Object.keys(METHODS).filter(
 // deleting the data of Orb 3.7, unlinking a phone, seeing or changing a connector's keys, opening core (main.mjs asks
 // master.check) and, in config.save, choosing where the backups go, writing a connector's keys in clear, changing a
 // connector that has keys (its command, its arguments, its name, removing it or one of its keys) and taking a path off
-// «Cosas que nadie toca». current: the settings now (the engine's), to compare with. Changing the password asks for the
-// current one instead.
-export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.recovery', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector']));
+// «Cosas que nadie toca»; 3.8.1: deleting a project (its folder). current: the settings now (the engine's), to compare
+// with. Changing the password asks for the current one instead.
+export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.recovery', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'projects.deleteCheck', 'projects.delete']));
 export function needsUnlock(method, params, current = {}) {
   if (UNLOCK_METHODS.has(method)) return true;
   if (method !== 'config.save') return false;

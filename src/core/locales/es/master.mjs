@@ -47,6 +47,7 @@ export default {
   'master.ask.connector': 'Para quitar un conector que tiene claves.',
   'master.ask.protected': 'Para quitar algo de «Cosas que nadie toca».',
   'master.ask.unlink': 'Para cerrar la sesión de un dispositivo.',
+  'master.ask.deleteProject': 'Para eliminar un proyecto y su carpeta.',
   'master.askNote': 'Queda desbloqueado {n} minutos o hasta que bloquees el PC.',
   'master.cardTitle': 'Contraseña maestra',
   'master.cardDesc': 'Protege las claves de tus móviles y conectores, y las acciones sensibles de Orb.',

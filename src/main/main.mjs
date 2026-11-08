@@ -15,6 +15,7 @@ import { PRODUCT } from '../core/product.mjs';
 import { translate } from '../core/i18n.mjs';
 import { keyringWeak } from './linux.mjs';
 import { loadApprovalSecret } from './approval-secret.mjs';
+import { deletableFolder } from '../core/project-close.mjs';
 
 const SRC = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 // Packaged: the code lives in app.asar.unpacked (agents start the MCP server from there with the app's own executable).
@@ -307,6 +308,22 @@ ipcMain.handle('app:openPath', guard(async (target, unlock) => {
   if (!st.isDirectory()) throw new Error(T('sys.main.foldersOnly')); // never run a file
   const err = await shell.openPath(target); if (err) throw new Error(err);
   return true;
+}));
+// 3.8.1: «Eliminar proyecto»: the engine checks the master password's token, that nothing of it works and what may go
+// (projects.deleteCheck); the folder is checked here again by its real path and moved to the Recycle Bin; then the engine
+// takes the project out (projects.delete, trashed). permanent: the user chose to delete it for good after the Recycle
+// Bin could not take it. → { ok: true } or { ok: false, noTrash: true, path } (the window then offers «Borrar para siempre»).
+ipcMain.handle('app:deleteProject', guard(async (name, unlock, permanent) => {
+  if (typeof name !== 'string' || !name || name.length > 200) throw new Error(T('sys.main.badAction'));
+  const token = typeof unlock === 'string' ? unlock : '';
+  await engineReady;
+  if (permanent === true) return { ok: true, ...(await callEngine('projects.delete', { name, unlock: token })) };
+  const { path: folder } = await callEngine('projects.deleteCheck', { name, unlock: token }, 30_000);
+  if (!home) throw new Error(T('sys.main.badPath'));
+  const real = deletableFolder(home, folder);
+  try { await shell.trashItem(real); } catch { return { ok: false, noTrash: true, path: real }; }
+  if (fs.existsSync(real)) return { ok: false, noTrash: true, path: real };
+  return { ok: true, ...(await callEngine('projects.delete', { name, unlock: token, trashed: true })) };
 }));
 ipcMain.handle('app:openExternal', guard(async (url) => {
   let u; try { u = new URL(String(url)); } catch { throw new Error(T('sys.main.badLink')); }

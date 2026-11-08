@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { openDb, taskOptions, checkPolicy } from './db.mjs';
 import { ctx, tr } from './context.mjs';
-import { AGENT_IDS, AGENT_LABELS, folderName, projectLogHeader, isConfigName, categoryOf, CATEGORIES, folderKey, IGNORED_PROJECTS } from './home.mjs';
+import { AGENT_IDS, AGENT_LABELS, folderName, projectLogHeader, isConfigName, categoryOf, CATEGORIES, folderKey, IGNORED_PROJECTS, FINISHED_PROJECTS } from './home.mjs';
 import { oneLine, MAX_DESCRIPTION } from './safety.mjs';
 import { contentHash, sign, verify, detectSensitivity, deletionAskedByUser, defaultApprovalKey } from './approval.mjs';
 import { PRODUCT } from './product.mjs';
@@ -148,6 +148,9 @@ export class Board {
     // 3.8: a folder added (by hand, or by an agent) is listed again even if it was another user's project of 3.7.
     const ignored = this.settingJson(IGNORED_PROJECTS);
     if (Array.isArray(ignored) && ignored.includes(folderKey(checked))) this.settingJson(IGNORED_PROJECTS, ignored.filter((k) => k !== folderKey(checked)));
+    // 3.8.1: and a finished one added again by hand (or by an agent) is open again.
+    const finished = this.settingJson(FINISHED_PROJECTS);
+    if (Array.isArray(finished) && finished.some((x) => x?.key === folderKey(checked))) this.settingJson(FINISHED_PROJECTS, finished.filter((x) => x?.key !== folderKey(checked)));
     this.event(null, actor, 'project.saved', `${name} -> ${checked}`);
     this.changed('projects');
     return this.project(name);

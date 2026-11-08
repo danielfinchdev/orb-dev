@@ -13,6 +13,7 @@ import { accountsOf, accountDir, accountLabel, accounts as allAccounts } from '.
 import { usageReport, modelName } from '../core/budget.mjs';
 import { brainOf } from './orchestrator.mjs';
 import { newProject, syncProjects, checkProjectName, renameProject } from '../core/projects.mjs';
+import { finishProject, finishedProjects, reopenProject, checkDelete, deleteProject } from '../core/project-close.mjs';
 import { PRODUCT } from '../core/product.mjs';
 import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../core/schedules.mjs';
 import { oneLine, redactSecrets, localStamp } from '../core/safety.mjs';
@@ -202,6 +203,19 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return p;
     },
     'projects.setActive': ({ name }) => board.setActiveProject(name ? project(name).name : '', 'usuario'),
+    // 3.8.1: the end of a project (src/core/project-close.mjs). Finished: it leaves Orb, its folder stays (listed in
+    // «Finalizados» to reopen it). Deleted: its folder goes too; main.mjs moves it to the Recycle Bin (projects.deleteCheck
+    // first, then projects.delete with trashed) or, when the user chose so, the engine deletes it for good.
+    'projects.finish': ({ name }) => { const p = project(name); return finishProject(board, p.name, 'usuario', { category: categoryOf(realHome, p.path) }); },
+    'projects.finished': () => finishedProjects(board).map(({ key, name, path: folder, category, at }) => ({ key, name, path: folder, category: category ?? null, at })),
+    'projects.reopen': ({ key }) => reopenProject(board, str(key, 'proyecto', 2000), 'usuario').name,
+    'projects.deleteCheck': ({ name }) => checkDelete(board, ctx.home, project(name).name),
+    'projects.delete': ({ name, trashed }) => {
+      const p = project(name);
+      const out = deleteProject(board, ctx.home, p.name, 'usuario', { trashed: trashed === true });
+      clearProjectIcon(p);
+      return out;
+    },
     // 3.2: the projects' icons (their favicon or app icon, or one chosen here) for the sidebar: { name: dataUrl | null }.
     'projects.icons': () => Object.fromEntries(board.projects().map((x) => [x.name, projectIcon(x)])),
     'projects.setIcon': ({ name, path: file }) => { const p = project(name); const icon = setProjectIcon(p, str(file, 'imagen', 1000)); board.changed('projects'); return icon; },

@@ -127,6 +127,16 @@ C:\Orb\                   (C:\Orb by default; always <chosen folder>\Orb, the sa
   user chooses, section 36), creates whatever is missing and moves 2.3.0's `bitacoras\` into the log folder (if a file exists in both, the old entries are
   appended at the end). It only discards the empty logs that 2.3.0 created for the categories and configuration folders
   it mistook for projects; those "projects" go away on their own (`syncProjects`).
+- **The end of a project** (3.8.1, Proyectos › right click, a long press or «…» on the row; `src/core/project-close.mjs`):
+  «Finalizar proyecto» (also from the phone: `projects.finish`) cancels its pending tasks, puts its tasks, conversations
+  and direct conversations in «Completadas», pauses its schedules and takes it out of Orb while its folder stays;
+  `projects_finished` (a setting) keeps it out of `syncProjects`, and the «Finalizados» tab lists it with «Reabrir»
+  (`projects.reopen`, its schedules back on). «Eliminar proyecto» (PC only, behind the master password:
+  `projects.deleteCheck` / `projects.delete` are in `UNLOCK_METHODS`) moves its folder to the Recycle Bin: `main.mjs ›
+  app:deleteProject` asks the engine to check it, checks the folder again by its real path (`deletableFolder`: only a
+  folder straight inside a category of the workspace, never a link or a junction, a category, core or the workspace),
+  calls `shell.trashItem` and then tells the engine (`trashed`); when the Recycle Bin cannot take it, the window warns
+  and offers «Borrar para siempre». Both refuse while a task of the project runs or a direct conversation answers.
 
 On Windows, it then offers to install whatever is missing (section 24).
 
@@ -1269,7 +1279,8 @@ channel's waits), making a new recovery code (`backup.recovery`: the code opens 
 3.7, unlinking a phone (`link.revoke`, `remote.revoke`), a connector's keys (`secrets.connector`,
 `secrets.saveConnector`), and in `config.save` (compared with the settings in force): choosing the backups' folder,
 writing a connector key in clear, changing a connector that has keys (its command, arguments or name, removing it or one
-of its keys) and taking an entry off «Cosas que nadie toca». Opening core in the Explorer too (`main.mjs` asks the engine
+of its keys) and taking an entry off «Cosas que nadie toca»; 3.8.1: deleting a project with its folder
+(`projects.deleteCheck`, `projects.delete`). Opening core in the Explorer too (`main.mjs` asks the engine
 `master.check` before `app:openPath` on core itself or on `core\secretos`, compared by real path; core's tool folders
 open as before). The dispatcher refuses them without a fresh token: `master.unlock` (the password) gives one for 5
 minutes, kept in the engine's memory and the window's (`unlockCore`, which asks with a dialog). It ends with

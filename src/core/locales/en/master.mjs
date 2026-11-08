@@ -47,6 +47,7 @@ export default {
   'master.ask.connector': 'To remove a connector that has keys.',
   'master.ask.protected': 'To take something off «Things nobody touches».',
   'master.ask.unlink': 'To sign a device out.',
+  'master.ask.deleteProject': 'To delete a project and its folder.',
   'master.askNote': 'It stays unlocked for {n} minutes or until you lock the PC.',
   'master.cardTitle': 'Master password',
   'master.cardDesc': "Protects the keys of your phones and connectors, and Orb's sensitive actions.",

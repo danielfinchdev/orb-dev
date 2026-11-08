@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from './context.mjs';
-import { folderName, isReservedName, isReservedInCategory, isCategory, categoryOf, folderKey, IGNORED_PROJECTS, CATEGORIES, DEFAULT_CATEGORY, PLATFORMS, MULTI, SHARED_DIR } from './home.mjs';
+import { folderName, isReservedName, isReservedInCategory, isCategory, categoryOf, folderKey, IGNORED_PROJECTS, FINISHED_PROJECTS, CATEGORIES, DEFAULT_CATEGORY, PLATFORMS, MULTI, SHARED_DIR } from './home.mjs';
 import { git, ORB_GIT } from './workspace.mjs';
 import { projectNameProblem } from './product.mjs';
 
@@ -132,12 +132,17 @@ export function groupOf(board, project) {
 // Keeps the project list in step with the categories: new subfolders become projects, and projects whose folder inside the
 // assistant's folder was deleted, or that are not a project folder of a category (2.3.0 took the categories and Orb's own
 // folders for projects), are dropped unless they still have open tasks. Linked outside folders are left alone.
-// 3.8: the folders of other users' projects of 3.7 (IGNORED_PROJECTS) are not listed.
+// 3.8: the folders of other users' projects of 3.7 (IGNORED_PROJECTS) are not listed; 3.8.1: nor the finished ones.
 export function syncProjects(board) {
   const home = ctx.paths.home;
   const norm = folderKey;
   const ignoredList = board.settingJson(IGNORED_PROJECTS);
   const ignored = new Set(Array.isArray(ignoredList) ? ignoredList : []);
+  // 3.8.1: the finished projects (project-close.mjs) are not brought back; one whose folder is gone leaves that list.
+  const finishedList = board.settingJson(FINISHED_PROJECTS);
+  const finished = Array.isArray(finishedList) ? finishedList.filter((x) => x && typeof x.key === 'string') : [];
+  if (finished.some((x) => !fs.existsSync(x.path))) board.settingJson(FINISHED_PROJECTS, finished.filter((x) => fs.existsSync(x.path)));
+  for (const x of finished) ignored.add(x.key);
   let changed = false;
   // First what is gone, so a folder found again (or moved into the workspace) gets its own name, not «name (2)».
   // Inside the workspace: a folder deleted or no longer in a category. Outside: a linked folder that no longer exists
@@ -172,6 +177,7 @@ export function syncProjects(board) {
     try { renameProject(board, { name: p.name, to: m[1] }, 'orb'); changed = true; } catch { /* busy or not a valid name: next time */ }
   }
   // Folders not listed that no longer exist leave the list (board.addProject takes out the ones added again).
-  if ([...ignored].some((k) => !present.has(k))) board.settingJson(IGNORED_PROJECTS, [...ignored].filter((k) => present.has(k)));
+  const others = [...ignored].filter((k) => !finished.some((x) => x.key === k));
+  if (others.some((k) => !present.has(k))) board.settingJson(IGNORED_PROJECTS, others.filter((k) => present.has(k)));
   return changed;
 }
