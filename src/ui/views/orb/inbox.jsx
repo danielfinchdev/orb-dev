@@ -18,6 +18,8 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { confirm } from '@/components/dialogs.jsx';
 import { useStore, go, call, act, newChat, orbAct, loadOrbInbox, openOrbInfo, closeOrbInfo, getState, phoneLayout, fullPc, refreshSoon, setState } from '@/lib/store.js';
 import { orbItems, orbProgress, groupOrb, shortTime } from '@/lib/inbox.js';
+import { sameItem } from '@/lib/memo.js';
+import { useDay } from '@/lib/use-day.js';
 import { usePress } from '@/lib/use-press.js';
 import { AGENT, STATUS } from '@/lib/labels.js';
 import { cn } from '@/lib/utils.js';
@@ -141,8 +143,6 @@ function OrbSheet({ item, onClose }) {
 // ---- a row of the list
 // Memoised: the list is made again on every refresh of the app's state, and hundreds of rows drew again each time (and
 // every row whenever the screen changed). A row draws again when what it shows changes, or when it opens or closes.
-const sameValue = (x, y) => Object.is(x, y) || (x !== null && y !== null && typeof x === 'object' && typeof y === 'object' && JSON.stringify(x) === JSON.stringify(y));
-const sameItem = (a, b) => { if (a === b) return true; const ka = Object.keys(a); return ka.length === Object.keys(b).length && ka.every((k) => sameValue(a[k], b[k])); };
 const OrbRow = memo(function OrbRow({ item, phone, onSheet }) {
   const t = useT();
   const locale = useLocale();
@@ -345,7 +345,8 @@ export function OrbInbox({ page = false }) {
   const parts = useMemo(() => groupOrb(items, { showDone, filter }), [items, showDone, filter]);
   const onSheet = useCallback((x) => setSheet(x.key), []);
   // the day: «ayer» and the times of the rows move on at midnight
-  const rowProps = { phone, onSheet, day: new Date().toDateString() };
+  const day = useDay();
+  const rowProps = { phone, onSheet, day };
   const agents = useMemo(() => [...new Set(items.map((x) => x.agent).filter(Boolean))], [items]);
   const shown = useGrowing(parts.pinned.length + parts.groups.reduce((n, g) => n + (folded[g.project ?? ''] ? 0 : g.items.length), 0));
 

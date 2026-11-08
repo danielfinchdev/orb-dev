@@ -33,13 +33,29 @@ import { ContextSlot } from '@/components/context-slot.jsx';
 import { cn } from '@/lib/utils.js';
 import { DECISION, AGENT, STATUS } from '@/lib/labels.js';
 import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
+import { keepSame } from '@/lib/memo.js';
+import { timeZone } from '@/lib/clock.js';
+import { useDay } from '@/lib/use-day.js';
 
 
+// A conversation stays at its bottom while the user has not scrolled up (`stick`): when a line arrives (deps) and,
+// 3.8.1 (H4a), whenever the lines change height (older messages drawn late by content-visibility, markdown, pictures)
+// or the area does (the composer grows): a ResizeObserver on the scrolling area and on its lines.
 export function useAutoScroll(deps) {
-  const ref = useRef(null);
+  const node = useRef(null);
   const stick = useRef(true);
-  useEffect(() => { const el = ref.current; if (el && stick.current) el.scrollTop = el.scrollHeight; }, deps); // eslint-disable-line react-hooks/exhaustive-deps
-  const onScroll = () => { const el = ref.current; if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 140; };
+  const observer = useRef(null);
+  const toBottom = useCallback(() => { const el = node.current; if (el && stick.current) el.scrollTop = el.scrollHeight; }, []);
+  useEffect(toBottom, deps); // eslint-disable-line react-hooks/exhaustive-deps
+  const ref = useCallback((el) => {
+    observer.current?.disconnect(); observer.current = null;
+    node.current = el;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const o = new ResizeObserver(toBottom);
+    o.observe(el); if (el.firstElementChild) o.observe(el.firstElementChild);
+    observer.current = o;
+  }, [toBottom]);
+  const onScroll = () => { const el = node.current; if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 140; };
   return { ref, onScroll };
 }
 
@@ -194,35 +210,22 @@ function MonthCalendar({ today }) {
   );
 }
 // The time a message was written, small at its bottom right (the day too when it is not today). One formatter per
-// language (toLocale…String builds one on every call, for every message).
+// language and time zone (toLocale…String builds one on every call, for every message). The message is memoised: the
+// time follows the day by itself (lib/clock.js: after midnight, today's messages get their day; a new zone, new times).
 const msgFormats = new Map();
 const msgFormat = (locale, day) => {
-  const k = `${locale}|${day}`;
+  const k = `${locale}|${day}|${timeZone()}`;
   if (!msgFormats.has(k)) msgFormats.set(k, new Intl.DateTimeFormat(locale, day ? { day: 'numeric', month: 'short' } : { hour: '2-digit', minute: '2-digit' }));
   return msgFormats.get(k);
 };
 function MsgTime({ at }) {
   const locale = useLocale();
+  useDay();
   if (!at) return null;
   const d = new Date(at); if (Number.isNaN(d.getTime())) return null;
   const today = d.toDateString() === new Date().toDateString();
   const time = msgFormat(locale, false).format(d);
   return <time className="msg-time" dateTime={d.toISOString()}>{today ? time : `${msgFormat(locale, true).format(d)} ${time}`}</time>;
-}
-
-// A list fetched again keeps the lines that did not change as they were, so that their memoised Message is not drawn
-// again (the engine's events refresh the list several times a second while the assistant answers).
-export function keepSame(prev, next) {
-  if (!prev.length) return next;
-  const old = new Map(prev.map((m) => [m.id, m]));
-  let same = prev.length === next.length;
-  const out = next.map((m, i) => {
-    const o = old.get(m.id);
-    const keep = o && o.body === m.body && o.at === m.at && o.role === m.role && JSON.stringify(o.meta ?? null) === JSON.stringify(m.meta ?? null);
-    if (!keep || prev[i] !== o) same = false;
-    return keep ? o : m;
-  });
-  return same ? prev : out;
 }
 
 // Memoised: the list (up to 120 lines) is not drawn again while the assistant streams its answer.

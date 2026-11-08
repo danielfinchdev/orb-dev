@@ -8,7 +8,7 @@ import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { bridge } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
-import { t } from '@/lib/i18n.js';
+import { useT } from '@/lib/i18n.js';
 import { useHighlight } from '@/lib/use-highlight.js';
 import { openImage } from './image-viewer.jsx';
 // The whole window's fonts and code colours (Ajustes → Apariencia): loaded here, after app.css, which main.jsx imports first.
@@ -25,9 +25,12 @@ export function localImagePath(href) {
 }
 const urlTransform = (url) => (localImagePath(url) ? url : defaultUrlTransform(url));
 
+// A picture in the text is shown as its description; the word for it follows the language (the Markdown is memoised).
+function ImageAlt({ alt }) { const t = useT(); return <span className="text-muted-foreground">[{alt || t('comp.markdown.image')}]</span>; }
+
 const components = {
   a: ({ href, children }) => <a onClick={(e) => { e.preventDefault(); const local = localImagePath(href); if (local) openImage(local); else if (/^https:\/\//.test(href ?? '')) bridge.openExternal(href).catch(() => {}); }}>{children}</a>,
-  img: ({ alt }) => <span className="text-muted-foreground">[{alt || t('comp.markdown.image')}]</span>,
+  img: ({ alt }) => <ImageAlt alt={alt} />,
   // A wide table scrolls on its own instead of widening the chat (narrow window, mobile).
   table: ({ children }) => <div className="prose-table"><table>{children}</table></div>
 };

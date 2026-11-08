@@ -890,14 +890,23 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
 ### Performance (3.8.1)
 
 - **Lazy screens** (`main.jsx`): only the chats, a conversation and the start's master password screen are in the
-  entry chunk. The other screens, Settings, the games and the tour are `lazy()` chunks that load in the background once
-  the app is up (`loadTheRest`); Settings and the games mount the first time they open and then stay (`OnceOpened`).
+  entry chunk. The other screens, Settings, the games and the tour are lazy chunks (`lazyScreen` in `lib/lazy.js`) that
+  load in the background once the app is up (`loadTheRest`, on the phone too); Settings and the games mount the first
+  time they open and then stay (`OnceOpened`). A failed load (a phone's browser gets the files from the PC over the
+  network) is not kept: the `ErrorBoundary` recognises it (`isLoadError`) and shows «Sin conexión» with «Reintentar»,
+  which makes the screen again (`retryLoads`; the same file with a query if the browser kept the failure; after two
+  failed retries, a reload). Settings, the games and the tour have their own boundary: they close and say why.
 - **Long lists:** messages (`.lazy-lines`, all but the newest twelve) and chat rows (`.lazy-row`) use
   `content-visibility: auto` (app.css); the chat list draws its first 40 rows with the screen and the rest while idle
-  (`useGrowing` in `views/orb/inbox.jsx`).
-- **Fewer redraws:** `Markdown` is memoised on its text, a refetched conversation keeps unchanged lines (`keepSame` in
-  `chat.jsx`), an agent's blocks compare by content (`sameBlock` in `session.jsx`), a chat row only redraws when what it
-  shows changes, and `chat:state` events are applied once per frame (`chatStateSoon` in `main.jsx`).
+  (`useGrowing` in `views/orb/inbox.jsx`). A conversation at its bottom stays there when its lines change height
+  (`useAutoScroll` in `chat.jsx`: a `ResizeObserver` while the user has not scrolled up).
+- **Fewer redraws:** `Markdown` is memoised on its text, a refetched conversation keeps unchanged lines, an agent's
+  blocks compare by content and a chat row only redraws when what it shows changes (`keepSame`, `sameBlock`,
+  `sameItem` in `lib/memo.js`, tested in `test/memo-ui.test.mjs`); the models' catalog stays the same object while it
+  does not change (`useCatalog`). `chat:state` events are applied once per frame, or within 100 ms and on
+  `visibilitychange` when the window draws no frames (`frameBatch` in `lib/batch.js`). Memoised dates move on at
+  midnight and with a new time zone (`lib/clock.js`, `useDay`), and the date formatters are cached per language and
+  zone.
 - **Robot:** a still robot has no compositor layer and builds the visor's code rows only the first time it shows them
   (`orb.jsx`, app.css). Avoid `will-change`, `backdrop-filter` and blend modes on elements repeated in long lists.
 - **Measuring:** `scripts/medir.mjs` (start, memory, CPU at rest, scrolling smoothness; `--hidden` keeps the window

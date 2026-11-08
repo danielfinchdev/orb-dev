@@ -23,12 +23,14 @@ import { Notices } from '@/components/notices.jsx';
 import { ActionShortcuts } from '@/components/project-tools.jsx';
 import { Scene } from '@/components/scene.jsx';
 import { Robot } from '@/components/robot.jsx';
-import { useStore, setState, getState, refresh, refreshSoon, bridge, act, go, goBack, resetRoute, setViews, applyTheme, openTerminal, startTour, anyChatBusy, phoneLayout, loadOrbInbox, loadOrbInboxSoon } from '@/lib/store.js';
+import { useStore, setState, getState, refresh, refreshSoon, bridge, act, go, goBack, resetRoute, setViews, applyTheme, openTerminal, startTour, closeSettings, anyChatBusy, phoneLayout, loadOrbInbox, loadOrbInboxSoon } from '@/lib/store.js';
 import { restoreRoute, keyboardOpen } from '@/lib/phone-nav.js';
 import { startupPhase } from '@/lib/startup.js';
 import { isOffline, retryLoop } from '@/lib/net.js';
 import { ago } from '@/lib/utils.js';
 import { ErrorBoundary } from '@/components/error-boundary.jsx';
+import { lazyScreen } from '@/lib/lazy.js';
+import { frameBatch } from '@/lib/batch.js';
 import { AGENT } from '@/lib/labels.js';
 import { WindowControls } from '@/components/window-controls.jsx';
 import { useT, t as tNow } from '@/lib/i18n.js';
@@ -42,9 +44,10 @@ import { NoteOpener } from '@/lib/notes.js';
 import { RecoveryNotice } from '@/views/data.jsx';
 
 // 3.8.1 (H4a): the screens other than the chats load the first time they open, so the app starts with less to read; once
-// it is up, they load in the background while the window is idle (opening one later is instant).
+// it is up, they load in the background while the window is idle (opening one later is instant; on a phone's browser
+// they come from the PC over the network). A load that fails can be tried again (lib/lazy.js, ErrorBoundary).
 const later = [];
-const deferred = (load, name) => { later.push(load); return lazy(() => load().then((m) => ({ default: m[name] }))); };
+const deferred = (load, name) => { const Screen = lazyScreen(load, name); later.push(Screen.preload); return Screen; };
 const loadSettings = () => import('@/views/settings.jsx');
 const TasksView = deferred(() => import('@/views/tasks.jsx'), 'TasksView');
 const ProjectsView = deferred(() => import('@/views/projects.jsx'), 'ProjectsView');
@@ -63,14 +66,22 @@ const Setup = lazy(() => import('@/views/setup.jsx').then((m) => ({ default: m.S
 const CoreMissing = lazy(() => import('@/views/core-missing.jsx').then((m) => ({ default: m.CoreMissing })));
 const LayoutReview = lazy(() => import('@/views/layout.jsx').then((m) => ({ default: m.LayoutReview })));
 function loadTheRest() {
-  const run = () => { for (const load of later) load().catch(() => {}); };
+  const run = () => { for (const preload of later) preload(); };
   if (window.requestIdleCallback) requestIdleCallback(run, { timeout: 4000 }); else setTimeout(run, 1500);
 }
+// A screen still loading (only seen when its file is slow to come, as over a phone's network): a spinner that shows
+// after a moment, so a quick load never flashes.
+const Loading = () => <div className="screen-loading grid min-h-0 flex-1 place-items-center" data-testid="screen-loading"><Spinner className="size-5" /></div>;
+// A window over the screen that failed (Ajustes, the games, the tour): it closes and says why; opening it again retries.
+const windowFailed = (close) => ({ offline }) => { close(); notify({ body: tNow(offline ? 'app.loadOfflineToast' : 'app.crashTitle'), tone: 'error' }); };
+const closeSettingsFailed = windowFailed(closeSettings);
+const closeGamesFailed = windowFailed(() => setState({ games: false }));
+const closeTourFailed = windowFailed(() => setState({ tour: null }));
 // Settings and the games are windows over the screen: drawn once first asked for, then kept (they close with their animation).
-function OnceOpened({ when, children }) {
+function OnceOpened({ when, onFail, children }) {
   const opened = useRef(false);
   if (when) opened.current = true;
-  return opened.current ? <Suspense fallback={null}>{children}</Suspense> : null;
+  return opened.current ? <ErrorBoundary onFail={onFail} resetKey={when}><Suspense fallback={null}>{children}</Suspense></ErrorBoundary> : null;
 }
 
 const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
@@ -133,7 +144,7 @@ function MobileShell() {
       <main className="theme-scene flex min-h-0 min-w-0 flex-1 flex-col">
         <Scene />
         <ErrorBoundary key={routeKey(route)} onHome={resetRoute}>
-          <Suspense fallback={null}><View key={routeKey(route)} route={route} /></Suspense>
+          <Suspense fallback={<Loading />}><View key={routeKey(route)} route={route} /></Suspense>
         </ErrorBoundary>
       </main>
       {fullChat || keyboard ? null : <MobileTabs />}
@@ -183,7 +194,7 @@ function Shell() {
           <Robot size={26} mood={mood} /><span className="min-w-0 flex-1 truncate text-[15px] font-medium">{app.config.assistantName}</span>
         </div>
         <ErrorBoundary key={routeKey(route)} onHome={resetRoute}>
-          <Suspense fallback={null}><View key={routeKey(route)} route={route} /></Suspense>
+          <Suspense fallback={<Loading />}><View key={routeKey(route)} route={route} /></Suspense>
         </ErrorBoundary>
       </main>
       {/* 3.6 (M3): the info pane on the right (a chat, a project). */}
@@ -191,32 +202,24 @@ function Shell() {
       {/* The floating robot only where there is room for it: never over forms or conversations (it covered the switches of
           Ajustes and took their clicks), and those views leave room at the bottom so nothing stays under it. */}
       {/* 3.5: a browser linked with an Orb gets the PC's layout, not what only the PC itself does. */}
-      {bridge.mobile ? null : <><UpdateCard /><OnceOpened when={settingsOpen}><SettingsDialog /></OnceOpened><OnceOpened when={gamesOpen}><GamesDialog /></OnceOpened><RecoveryNotice /></>}
+      {bridge.mobile ? null : <><UpdateCard /><OnceOpened when={settingsOpen} onFail={closeSettingsFailed}><SettingsDialog /></OnceOpened><OnceOpened when={gamesOpen} onFail={closeGamesFailed}><GamesDialog /></OnceOpened><RecoveryNotice /></>}
       <Notices />
       {bridge.mobile ? null : <ActionShortcuts project={shortcutProject} />}
       <div className="hidden md:contents"><Companion name={app.config.assistantName} base={mood} hidden={app.config.ui?.companion === false || !COMPANION_VIEWS.has(route.view) || bridge.mobile || Boolean(tour)} /></div>
-      {tour ? <Suspense fallback={null}><Tour key={tour.key} /></Suspense> : null}
+      {tour ? <ErrorBoundary key={tour.key} onFail={closeTourFailed}><Suspense fallback={null}><Tour /></Suspense></ErrorBoundary> : null}
     </div>
   );
 }
 
-// The conversations' states that arrived since the last frame, drawn together (only the newest one of each counts).
-let chatStates = null;
-function chatStateSoon(payload) {
-  if (!chatStates) {
-    chatStates = new Map();
-    const flush = () => {
-      const states = chatStates; chatStates = null;
-      setState((s) => {
-        let chats = s.app?.chats ?? [];
-        for (const p of states.values()) { const others = chats.filter((c) => c.conversation !== p.conversation); chats = p.busy || p.waiting ? [...others, p] : others; }
-        return { app: { ...s.app, chats } };
-      });
-    };
-    if (document.hidden) setTimeout(flush, 100); else requestAnimationFrame(flush);
-  }
-  chatStates.set(payload.conversation, payload);
-}
+// The conversations' states that arrived since the last frame, drawn together (only the newest one of each counts). A
+// window hidden before that frame still gets them (lib/batch.js: 100 ms at the latest, and at once when it hides or shows).
+const chatStates = frameBatch((states) => setState((s) => {
+  let chats = s.app?.chats ?? [];
+  for (const p of states.values()) { const others = chats.filter((c) => c.conversation !== p.conversation); chats = p.busy || p.waiting ? [...others, p] : others; }
+  return { app: { ...s.app, chats } };
+}));
+document.addEventListener('visibilitychange', chatStates.flush);
+const chatStateSoon = (payload) => chatStates.add(payload.conversation, payload);
 
 let coreLost = false;
 // The linking screen's own «back» (AppLink): true when it took the press.
