@@ -151,6 +151,8 @@ impl Engine {
 
   fn spawn(self: &Arc<Self>) -> Result<(), String> {
     let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
+    // A new engine starts without Orb's lock screen (it is kept in the engine's memory): notices show text again.
+    self.screen_locked.store(false, Ordering::SeqCst);
     let mut cmd = Command::new(&self.cfg.node);
     // Node reads NODE_OPTIONS (--require, --import: code run inside the engine), NODE_PATH and the rest of NODE_* from the
     // environment; Electron had them off (its fuse). None of the user's reaches the engine or what it starts.

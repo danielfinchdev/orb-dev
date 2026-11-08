@@ -246,8 +246,11 @@ test('el motor: secretos de 3.7 fuera de la base y de orb.json, acciones protegi
     assert.deepEqual(await e.call('secrets.connector', { name: 'github', unlock: made.unlock }), { name: 'github', env: { GITHUB_TOKEN: 'ghp_DE_PRUEBA_123' } });
     await e.call('secrets.saveConnector', { name: 'github', env: { GITHUB_TOKEN: 'ghp_NUEVO_456', OTRA: 'valor-otra' }, unlock: made.unlock });
     assert.ok(!fs.readFileSync(path.join(t.home, 'core', 'orb.json'), 'utf8').includes('ghp_NUEVO_456'));
+    // The Windows notices (src-tauri/src/notify.rs) follow these events as protocol.rs › screen_lock_of reads them.
+    const noticesHidden = () => e.events.reduce((hidden, m) => (m.event === 'master:unlocked' ? false : m.event === 'master:locked' && typeof m.payload?.screen === 'boolean' ? m.payload.screen : hidden), false);
     await e.call('master.lock');
     await assert.rejects(e.call('master.check', { unlock: made.unlock }), /necesita/, 'bloquear la ventana quita el desbloqueo');
+    await until(() => noticesHidden() === true);
     // 3.8.1: and Orb shows its lock screen (decision 20) until the password is typed; the vault stays open (agents work).
     assert.equal((await e.call('master.state')).screenLocked, true, 'pantalla de bloqueo');
     assert.equal((await e.call('master.state')).locked, false, 'los secretos siguen abiertos para los agentes');
@@ -255,7 +258,9 @@ test('el motor: secretos de 3.7 fuera de la base y de orb.json, acciones protegi
     assert.equal((await e.call('master.state')).screenLocked, true, 'una contraseña mala no la quita');
     await e.call('master.unlock', { password: PASS });
     assert.equal((await e.call('master.state')).screenLocked, false, 'la contraseña la quita');
+    await until(() => noticesHidden() === false);
     await e.call('master.lock', { reason: 'idle' });
+    await until(() => noticesHidden() === true);
     await assert.rejects(e.call('master.unlock', { password: 'mala contraseña' }), /Contraseña incorrecta. Te quedan 4 intentos/);
     for (let i = 0; i < 4; i++) await assert.rejects(e.call('master.unlock', { password: 'mala contraseña' }), /incorrecta/);
     assert.match(notices(t.home), /5 intentos fallidos seguidos de tu contraseña maestra en este PC/, 'el dueño se entera');
