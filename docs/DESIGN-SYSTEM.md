@@ -161,9 +161,10 @@ what is built, sections 2.1–2.4 describe the shipped app.
   what waits for approval) · Proyectos · Programadas · Pizarra and «Más» with God mode when it is on;
   pinned chats on top; one collapsible group per project with its coloured initials and a ⋯ (new
   chat there, project info), «Sin proyecto» last; completed chats behind «Ver completados». Each row: its avatar (3.8.1,
-  `OrbAvatar`: big, the project's icon, or Orbe's head without a project; in the corner, on a small round chip, the mark of
-  who answers: the conversation's brain or a direct conversation's agent, or the orchestrator's when its tasks went to
-  more than one agent), title, time, its latest progress (`orbProgress` in
+  `OrbAvatar`: big, the project's icon, or Orbe's head without a project; in the corner, on small round chips, the marks of
+  the agents that worked in it: the conversation's brain or a direct conversation's agent first, then its tasks'
+  agents, overlapping like a stack of avatars with the first on top; past three, two marks and «+N»; never the
+  orchestrator's icon; its label names them all, e.g. «app-movil · Claude y Codex»), title, time, its latest progress (`orbProgress` in
   `lib/inbox.js`: waiting for approval / a question / a permission first, then a running task, then how its last task
   ended, else its last line) and unread; right click or ⋯ (PC) and a long press (phone) open its menu: info, pin, mute,
   mark read, complete or reopen, delete). The conversation (`views/chat.jsx`): the header pill (Orbe, title, project ·

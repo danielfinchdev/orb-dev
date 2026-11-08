@@ -13,7 +13,6 @@ import { PageHeader } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
-import { OrchestratorIcon } from '@/components/orchestrator-icon.jsx';
 import { createProjectFlow } from '@/components/project-actions.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, DropdownMenuCheckboxItem, Collapsible, CollapsibleTrigger, CollapsibleContent, Dialog, DialogContent, DialogTitle, DialogDescription, Tip } from '@/components/ui/overlay.jsx';
 import { confirm } from '@/components/dialogs.jsx';
@@ -49,13 +48,20 @@ const isOpen = (route, x) => (x.kind === 'session' ? route.view === 'session' : 
 const conversationRef = (x) => ({ kind: x.kind === 'session' ? 'session' : 'conversation', id: x.id });
 
 // 3.8.1 (H1e): the chat's avatar. Big: its project's icon (its own picture or its coloured initials); without a project,
-// Orbe's head. In the corner: who answers, the agent's mark (the conversation's brain, or the agent of a direct one), or
-// the orchestrator's when the work went to more than one agent. An agent Orb no longer knows gets the neutral mark.
+// Orbe's head. In the corner: the marks of the agents that worked in it (lib/inbox.js › agentsOf: the brain or a direct
+// conversation's agent first, then its tasks' agents), stacked like avatars, the first on top; past three, two and
+// «+N». An agent Orb no longer knows gets the neutral mark.
+const STACK = 3;
 export function OrbAvatar({ item, size = 40 }) {
   const t = useT();
+  const locale = useLocale();
   const skin = useStore((s) => s.app?.config?.ui?.skin);
   const badge = Math.max(16, Math.round(size * 0.44));
-  const who = item.orchestrated ? t('orbchats.orchestrator') : (item.agentName ?? AGENT[item.agent] ?? item.agent ?? '');
+  const agents = item.agents ?? (item.agent ? [item.agent] : []);
+  const shown = agents.length > STACK ? agents.slice(0, STACK - 1) : agents;
+  const more = agents.length - shown.length;
+  const step = Math.round(badge * 0.55);
+  const who = agents.length ? new Intl.ListFormat(locale, { type: 'conjunction' }).format(agents.map((a) => AGENT[a] ?? a)) : '';
   const body = item.project
     ? <ProjectIcon name={item.project} size={size} />
     : skin === 'profesional'
@@ -64,9 +70,14 @@ export function OrbAvatar({ item, size = 40 }) {
   return (
     <span className="relative inline-grid shrink-0" style={{ width: size, height: size }} role="img" aria-label={who ? `${item.project ?? t('orbchats.noProject')} · ${who}` : (item.project ?? t('orbchats.noProject'))} data-testid="orb-avatar">
       {body}
-      {item.agent || item.orchestrated ? (
-        <span className={cn('orb-avatar-badge', item.busy && 'animate-pulse')} style={{ width: badge, height: badge }} data-badge={item.orchestrated ? 'orchestrator' : item.agent}>
-          {item.orchestrated ? <OrchestratorIcon className="text-primary size-[64%]" /> : <AgentIcon agent={item.agent} className="size-[64%]" />}
+      {agents.length ? (
+        <span className={cn('orb-avatar-badges', item.busy && 'animate-pulse')} data-badges={agents.join(' ')}>
+          {shown.map((a, i) => (
+            <span key={a} className="orb-avatar-badge" style={{ width: badge, height: badge, right: -3 + i * step, zIndex: STACK - i }} data-badge={a}>
+              <AgentIcon agent={a} className="size-[64%]" />
+            </span>
+          ))}
+          {more ? <span className="orb-avatar-badge orb-avatar-more" style={{ width: badge, height: badge, right: -3 + (shown.length - 1) * step + Math.round(badge * 0.85), fontSize: Math.round(badge * 0.5) }} data-badge="more">+{more}</span> : null}
         </span>
       ) : null}
     </span>
