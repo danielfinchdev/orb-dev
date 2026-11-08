@@ -273,6 +273,7 @@ export default {
   'appearance.noRobot': 'El tema Profesional no muestra el robot, sus animaciones ni sus sonidos.',
   'appearance.usageLine': 'Coste y tokens de cada respuesta',
   'appearance.usageLineHint': 'Muestra el coste y los tokens debajo de cada respuesta de un agente.',
+  'settings.footLicense': 'Licencia MIT',
   'contribute.supportTitle': 'Apoya el desarrollo',
   'contribute.supportDesc': 'Orb es un proyecto independiente. Si te resulta útil, puedes apoyar su desarrollo con una aportación.',
   'contribute.paypal': 'Contribuir con PayPal',

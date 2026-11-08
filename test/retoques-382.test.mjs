@@ -107,3 +107,13 @@ test('the first-run welcome opens maximised and fits the window', () => {
   const rs = fs.readFileSync(path.join(ROOT, 'src-tauri', 'src', 'window.rs'), 'utf8');
   assert.match(rs, /"maximize-on" => \{\s*if !w\.app_handle\(\)\.state::<Ui>\(\)\.hidden && !w\.is_maximized\(\)/);
 });
+
+test('the foot of the Ajustes list shows GitHub, the version and the MIT licence again', async () => {
+  const settings = read('views', 'settings.jsx');
+  const foot = settings.slice(settings.indexOf('data-testid="settings-foot"'), settings.indexOf('</nav>'));
+  assert.match(foot, /bridge\.openExternal\(AUTHOR\.url\)/);
+  assert.match(foot, /\{PRODUCT\.name\} \{app\.version\} · \{t\('settings\.footLicense'\)\}/);
+  assert.match(settings, /data-testid="about-github"/, '«Acerca de» keeps them');
+  const es = (await import('../src/core/locales/es/settings.mjs')).default; const en = (await import('../src/core/locales/en/settings.mjs')).default;
+  assert.equal(es['settings.footLicense'], 'Licencia MIT'); assert.equal(en['settings.footLicense'], 'MIT licence');
+});

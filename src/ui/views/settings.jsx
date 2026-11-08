@@ -582,7 +582,7 @@ function MoreAppsCard() {
   );
 }
 
-// 3.6: «Acerca de»: the version, the developer's GitHub and the licence (they were at the foot of the sections list).
+// 3.6: «Acerca de»: the version, the developer's GitHub and the licence (3.8.2: also at the foot of the sections list).
 function AboutCard({ version }) {
   const t = useT();
   return (
@@ -689,6 +689,15 @@ export function SettingsDialog() {
                     </div>
                   );
                 })}
+              </div>
+              {/* 3.8.2: the developer's GitHub, the version and the licence at the foot of the list again (also in «Acerca de»). */}
+              <div className="grid gap-0.5 px-6 pt-3 pb-5 max-sm:px-3" data-testid="settings-foot">
+                <BubbleTip title={`@${AUTHOR.github}`} text={AUTHOR.url.replace('https://', '')} side="top" align="start">
+                  <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="hover:text-primary flex w-fit cursor-pointer items-center gap-1.5 text-[13px] font-medium" aria-label={AUTHOR.url.replace('https://', '')} data-testid="settings-foot-github">
+                    <ToolIcon tool="gh" className="size-4" /><span className="max-sm:hidden">@{AUTHOR.github}</span>
+                  </button>
+                </BubbleTip>
+                <span className="text-muted-foreground text-xs max-sm:hidden" data-testid="settings-foot-version">{PRODUCT.name} {app.version} · {t('settings.footLicense')}</span>
               </div>
             </nav>
             <div key={section.id} className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 pt-6 pb-8">
