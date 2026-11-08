@@ -840,7 +840,8 @@ launched hidden, with its output read by Orb, and it stores the session in the a
   or separator, symlinks followed), not by names: a project may have its own `orb.db` or talk about `ORB_HOME`. Denied,
   and in «total» it asks. Isolated copies (`core/copias/aisladas`) and the tools (`core/herramientas`, adb by its full
   path) stay open; the logs moved into core (`core/bitacora`) are open to reading tools only (the user's rules for
-  agents may point there; they are written through Orb's own tools). The same goes for what Orb keeps about the workspace outside it (`setGuardedRoots`: the backups' root
+  agents may point there; they are written through Orb's own tools, and a write or a command there is denied with a
+  reason that names `orb_write_log`). The same goes for what Orb keeps about the workspace outside it (`setGuardedRoots`: the backups' root
   and chosen folder, the app's `claves` folder and its `Local State`; section 36; also when a command names them through
   `%APPDATA%`, `$env:APPDATA` or `~`, written out by `expandEnv`). Not a boundary: a shell of the same Windows
   user can always reach the folder another way; the agents' identity does not depend on its database any more (tickets,
@@ -1104,16 +1105,21 @@ in `src/core/home.mjs`; nothing else builds them.
   workspace. They are Orb's, so they move without asking.
 - **The folders the user decides about** (`planWorkspace` / `applyLayout`; the window's «Ordenar carpetas»,
   `views/layout.jsx`, after the welcome and when an updated Orb finds them: `app.layoutPlan`, `app.layoutApply`, PC
-  only): `bitacora\` (default: into `core\bitacora`, logs merged, never overwritten, only in an Orb 3.7 workspace —
-  its `.orb` moved, remembered as `from37` in `core\carpetas.json` — whose `bitacora` holds only Orb's `GENERAL.md` and
-  `proyectos`; anywhere else it stays by default, and its row says that other tools may use that path), `android\adb-tools\` (default:
+  only): `bitacora\` (default: into `core\bitacora`, the general log's place by the owner's definition; logs merged,
+  never overwritten; its row says that other tools may use the old path and that Orb will say which one to put in them.
+  After the move a last screen names the exact new place of each of the user's own files in it, e.g.
+  `C:\Orb\core\bitacora\bitacora_project.md`, for `AGENTS.md`, `CLAUDE.md` and other tools outside Orb, with «Copiar
+  ruta» (`app.layoutApply › logsMoved`). A «Dejar donde está» remembered by 3.8.0, whose default was to keep it, is asked
+  once more in 3.8.1, alone and with «Mover a core»; `carpetas.json › logsAsked` makes the answer final), `android\adb-tools\` (default:
   `core\herramientas\adb`) and each folder of `mcp-servers\`. A server the user writes (a git repository, `AGENTS.md`,
   `BITACORA.md`, `CLAUDE.md`, `package.json` or `pyproject.toml`) is a **project**: it moves into a category (`windows` by
   default, any other in the list) or stays, never into core. Any other server may also go to `core\mcp`, which holds only
   the servers Orb manages. Each row can be «Dejar donde está»; «Dejar todo como está» keeps them all. Nothing moves until
   «Aplicar». What is kept is remembered (`core\carpetas.json`) and not asked again, and a kept `bitacora` or `adb-tools`
   is used where it is (`paths().logs`, `paths().adb`), so the user's own rules that point to `C:\Orb\bitacora` keep
-  working. Ajustes › MCP lists the projects that are MCP servers (`mcp.folder › projects`: their name says mcp or they
+  working. In core the agents read the logs with their reading tools (section 28) and write to them only through Orb:
+  `orb_write_log` / `orb_read_log` with `general` (`GENERAL.md`) or, with `archivo`, one of the user's own `.md` files
+  at the top of the logs folder (`logs.mjs › ownLogFiles`; a read-only one stays untouched). Ajustes › MCP lists the projects that are MCP servers (`mcp.folder › projects`: their name says mcp or they
   depend on an MCP SDK) beside `core\mcp`, with «Usar». A server's own credentials stay in its project folder (the
   user's files); they enter a backup only when the user includes project folders, and every backup is encrypted. The
   keys of Orb's connectors live in the master password's vault (section 37).
@@ -1192,7 +1198,7 @@ choice, with its paths, the user's text left alone and a working isolated copy; 
 file where a folder was; a folder in use: nothing moves, the message, «Reintentar»; core deleted with Orb closed; only
 orb.json missing with a newer database; core deleted while the engine runs; no copy, «Seguir sin copia» and a copy that
 needs its recovery code; the screen), `test/espacio-dueno.test.mjs` (the owner's real `C:\Orb` without `.orb`: nothing
-moves at the welcome, his bitacora kept and used where it is, his MCP server moved as a project and offered in Ajustes ›
+moves at the welcome, his bitacora kept and used where it is, a 3.8.0 «keep» asked once more and the new path named, his MCP server moved as a project and offered in Ajustes ›
 MCP, `personal\` untouched and unlisted, only core restored; the copy that comes back; `homeKey`; 3.7 copies in a folder
 inside `.orb`; «Seguir sin copia» keeps the copies; the guard outside the workspace; the vault's secrets out of the 3.7
 archive; the sealed secret's copy), `test/copias.test.mjs` (where copies go, old ones adopted, never inside the

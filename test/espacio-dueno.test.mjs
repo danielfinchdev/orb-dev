@@ -72,10 +72,10 @@ test('la bienvenida en el C:\\Orb del dueño: no mueve nada, pregunta, y lo que 
   assert.equal(p.logs, at('bitacora'), 'la bitácora del dueño se usa donde está');
   assert.equal(p.adb, at('android', 'adb-tools'));
   assert.match(read(p.generalLog), /entrada del dueño/);
-  // What the window lists, with its defaults: his bitacora stays where it is (not an Orb 3.7 workspace, and his rules for
-  // agents read it there), adb into core, his MCP server is a project (in windows).
+  // What the window lists, with its defaults: his bitacora into core (3.8.1: the owner's definition; the window warns
+  // that his rules for agents may read the old path), adb into core, his MCP server is a project (in windows).
   const plan = planWorkspace(home);
-  assert.deepEqual(plan.items.map((it) => [it.id, it.choice, it.project]), [['bitacora', 'keep', false], ['adb', 'move', false], ['mcp:gmail-multi-mcp', 'windows', true]]);
+  assert.deepEqual(plan.items.map((it) => [it.id, it.choice, it.project]), [['bitacora', 'move', false], ['adb', 'move', false], ['mcp:gmail-multi-mcp', 'windows', true]]);
   const gmailItem = plan.items[2];
   assert.ok(!gmailItem.choices.includes('mcp'), 'un servidor que escribe el usuario nunca va a core');
   assert.deepEqual(layoutOptions(gmailItem).map((o) => o.value), ['windows', 'linux', 'ios', 'android', 'web', 'multi', 'keep']);
@@ -123,6 +123,39 @@ test('la bienvenida en el C:\\Orb del dueño: no mueve nada, pregunta, y lo que 
     assert.ok(!fs.existsSync(at('core', 'bitacora', 'GENERAL.md')), 'la bitácora que guardó arriba no se duplica en core');
     assert.ok(fs.existsSync(paths(home).config));
   } finally { await f.stop(); }
+});
+
+test('3.8.1: un «Dejar donde está» de 3.8.0 en la bitácora se pregunta una vez más (por defecto, a core) y Orb dice la ruta nueva', async () => {
+  const { base, home, at } = ownersOrb();
+  createHome(base, { userName: 'Dani' });
+  quiet(home);
+  // What 3.8.0 left: his bitacora kept at the top (no logsAsked), the rest moved.
+  applyLayout(home, { bitacora: 'keep', adb: 'move', 'mcp:gmail-multi-mcp': 'windows' });
+  const file = path.join(home, 'core', LAYOUT_FILE);
+  const saved = JSON.parse(read(file)); delete saved.logsAsked; writeJson(file, saved);
+  const plan = planWorkspace(home);
+  assert.equal(plan.pending, true, 'se vuelve a preguntar');
+  assert.deepEqual(plan.items.filter((it) => !it.kept).map((it) => [it.id, it.choice]), [['bitacora', 'move']], 'solo la bitácora, con «Mover a core»');
+  const e = await startEngine(home, { secret: SECRET });
+  try {
+    const r = await e.call('app.layoutApply', { choices: { bitacora: 'move' } });
+    assert.equal(r.pending, false);
+    assert.deepEqual(r.logsMoved, { dir: at('core', 'bitacora'), files: ['anexos.md', 'bitacora_project.md'].map((n) => at('core', 'bitacora', n)) }, 'la ruta exacta de sus archivos, para AGENTS.md');
+    assert.equal(read(at('core', 'bitacora', 'bitacora_project.md')), 'índice central');
+    assert.match(read(at('core', 'bitacora', 'GENERAL.md')), /entrada del dueño/);
+    assert.ok(!fs.existsSync(at('bitacora')));
+    assert.equal(paths(home).generalLog, at('core', 'bitacora', 'GENERAL.md'), 'lo que escriben los agentes, en core');
+    // The general log reached from Orb (logs.read: what the window and the agents' tools read).
+    assert.match(await e.call('logs.read', { project: 'general' }), /entrada del dueño/);
+  } finally { await e.stop(); }
+  assert.equal(planWorkspace(home).pending, false, 'no se vuelve a preguntar');
+
+  // Kept again in 3.8.1: respected for good.
+  const other = ownersOrb();
+  createHome(other.base, { userName: 'Dani' });
+  applyLayout(other.home, { bitacora: 'keep', adb: 'move', 'mcp:gmail-multi-mcp': 'windows' });
+  assert.equal(planWorkspace(other.home).pending, false);
+  assert.ok(fs.existsSync(other.at('bitacora', 'bitacora_project.md')));
 });
 
 test('la copia que vuelve: la más nueva de ESTE espacio que se pueda abrir; ultima.json no lleva a otras carpetas', async () => {

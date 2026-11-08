@@ -51,6 +51,18 @@ test('el guardia: tabla de casos en los cinco modos de permiso', () => {
   }
 });
 
+test('3.8.1: escribir en la bitácora general de core se niega con el camino bueno (las herramientas de Orb)', () => {
+  const logs = decide({ permission: 'editar', internalDir: internal, tool: 'Edit', paths: [path.join(internal, 'bitacora', 'bitacora_project.md')] });
+  assert.equal(logs.decision, 'deny');
+  assert.match(logs.reason, /bitácora general de core.*orb_write_log/);
+  const shell = decide({ permission: 'editar', internalDir: internal, tool: 'Bash', command: `echo x >> ${path.join(internal, 'bitacora', 'GENERAL.md')}` });
+  assert.match(shell.reason, /orb_write_log/);
+  const data = decide({ permission: 'editar', internalDir: internal, tool: 'Edit', paths: [path.join(internal, 'datos', 'orb.db')] });
+  assert.equal(data.reason, 'accede a datos internos de Orb', 'el resto de core, con el motivo de siempre');
+  const both = decide({ permission: 'editar', internalDir: internal, tool: 'Bash', command: `copy ${path.join(internal, 'datos', 'orb.db')} ${path.join(internal, 'bitacora', 'x.md')}` });
+  assert.equal(both.reason, 'accede a datos internos de Orb');
+});
+
 test('enviar datos a tu propio PC (probar una API local) no pregunta; a otra dirección, sí', () => {
   assert.equal(riskOf(`$base='http://localhost:3000'; Invoke-RestMethod -Method Post -Uri "$base/api/notes" -Body '{}'`), null);
   assert.equal(riskOf('curl -X POST http://127.0.0.1:8080/api -d x=1'), null);

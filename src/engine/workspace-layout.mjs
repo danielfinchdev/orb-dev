@@ -16,7 +16,7 @@ export function layoutPlan() {
 }
 
 // choices: { [id]: choice }. Throws a user-facing error (code 'busy', nothing moved) when a folder is in use. → the plan
-// as it is now.
+// as it is now, with logsMoved ({ dir, files }) when the logs went into core: the window says once where they are now.
 export async function layoutApply(choices, { emit = () => {}, log = () => {} } = {}) {
   const clean = {};
   if (choices && typeof choices === 'object' && !Array.isArray(choices)) {
@@ -29,7 +29,7 @@ export async function layoutApply(choices, { emit = () => {}, log = () => {} } =
   const { addAdbToPath } = await import('./android.mjs');
   addAdbToPath();
   if (r) { log(`carpetas: movidas ${r.moved.join(', ')}`); emit('config:changed', ctx.config); }
-  return layoutPlan();
+  return { ...layoutPlan(), logsMoved: r?.logs ?? null };
 }
 
 let keys = null; // the folder of the app's copies of the sealed secrets (main.mjs), when the app gives it

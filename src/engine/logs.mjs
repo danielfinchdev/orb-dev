@@ -24,6 +24,23 @@ export function findLog(board, project) {
   return found;
 }
 
+// 3.8.1: the user's own files beside the general log (the one their rules for agents name, e.g. bitacora_project.md):
+// agents read them and append to them through Orb (the logs live in core, closed to their own tools but reading). Only
+// regular .md files at the top of the logs' folder, by name.
+export function ownLogFiles() {
+  const dir = path.dirname(ctx.paths.generalLog);
+  try { return fs.readdirSync(dir, { withFileTypes: true }).filter((e) => e.isFile() && /\.md$/i.test(e.name) && e.name.toLowerCase() !== path.basename(ctx.paths.generalLog).toLowerCase()).map((e) => e.name).sort(); } catch { return []; }
+}
+// [name, file] of a log, or of one of the user's own files beside the general one (file: its name).
+function logOf(board, project, file) {
+  const found = findLog(board, project);
+  if (file === undefined || file === null || file === '') return found;
+  const want = String(file).trim().toLowerCase();
+  const hit = found[0] === 'general' ? ownLogFiles().find((n) => n.toLowerCase() === want) : null;
+  if (!hit) throw new Error(tr('sys.logs.noFile', { file: oneLine(file, 120), files: ownLogFiles().join(', ') || '—' }));
+  return [`general/${hit}`, path.join(path.dirname(ctx.paths.generalLog), hit)];
+}
+
 // Last `max` characters, starting at an entry heading so no entry is cut in half.
 export function tailEntries(text, max) {
   if (text.length <= max) return text;
@@ -32,9 +49,10 @@ export function tailEntries(text, max) {
   return text.slice(start, start + max).trim();
 }
 
-export function readLog(board, project, { chars = 12000, whole = false } = {}) {
+// file: one of the user's own files beside the general log (ownLogFiles), instead of GENERAL.md.
+export function readLog(board, project, { chars = 12000, whole = false, file: own } = {}) {
   if (!project) return logFiles(board).map(([name, file]) => { try { return `${name}: ${fs.statSync(file).size} bytes`; } catch { return `${name}: vacía`; } }).join('\n');
-  const [name, file] = findLog(board, project);
+  const [name, file] = logOf(board, project, own);
   let text; try { text = fs.readFileSync(file, 'utf8'); } catch { return `${name}: todavía no tiene entradas`; }
   const max = whole ? 400_000 : Math.min(Math.max(Number(chars) || 12000, 1000), 40_000);
   const part = tailEntries(text, max);
@@ -42,8 +60,9 @@ export function readLog(board, project, { chars = 12000, whole = false } = {}) {
 }
 
 // One signed entry in the standard format, appended at the end.
-export function writeLog(board, project, { tema, pedido, hecho, revertir, estado }, author) {
-  const [name, file] = findLog(board, project);
+// archivo: one of the user's own files beside the general log (ownLogFiles), instead of GENERAL.md.
+export function writeLog(board, project, { tema, pedido, hecho, revertir, estado, archivo }, author) {
+  const [name, file] = logOf(board, project, archivo);
   if (!clean(tema, 120) || !clean(hecho, 6000)) throw new Error(tr('sys.logs.required'));
   // The fields in the language of the settings: the user reads these files.
   const entry = `\n### ${stamp()} — ${oneLine(author, 80)} — ${oneLine(tema, 120)}
@@ -53,7 +72,9 @@ export function writeLog(board, project, { tema, pedido, hecho, revertir, estado
 - ${tr('sys.logs.status')}: ${clean(estado, 2000) || tr('sys.logs.noPending')}
 `;
   if (!fs.existsSync(file)) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, name === 'general' ? generalLogHeader(ctx.config) : projectLogHeader(name, ctx.config?.language)); }
-  fs.appendFileSync(file, entry);
+  // A file the user made read-only stays so (Orb never changes its attributes).
+  try { fs.appendFileSync(file, entry); }
+  catch (error) { if (['EPERM', 'EACCES'].includes(error.code)) throw new Error(tr('sys.logs.readOnly', { name })); throw error; }
   board.event(null, author, 'log.written', `${name}: ${oneLine(tema, 80)}`);
   return `Anotado al final de la bitácora de ${name}.`;
 }

@@ -142,6 +142,8 @@ export default {
   'sys.board.badRecipient': 'invalid recipient: {to} (use {list}, all, usuario or orb)',
   // Logs
   'sys.logs.none': 'there is no log for "{project}": use "general" or a registered project',
+  'sys.logs.noFile': 'there is no file "{file}" beside the general log (there are: {files})',
+  'sys.logs.readOnly': '{name} is read-only: nothing was written',
   'sys.logs.required': 'tema and hecho are required',
   // Headers and fields of the logs (.md files the user reads)
   'sys.logs.generalHeader': '# {name}’s general log\n\n{name}’s memory: what was asked, what was done and what is pending across all projects.\nEntries are only added at the end; nothing written is ever deleted or edited. No passwords, tokens or personal data.\n',

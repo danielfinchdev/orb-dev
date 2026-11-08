@@ -1,6 +1,7 @@
 // MCP server: who is who (the coordinator only with the secret key), which tools each one gets and strict arguments.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
@@ -77,6 +78,30 @@ test('el coordinador crea proyectos, escribe bitácoras y no puede leer otra cos
     assert.match((await boss.call('orb_read_log', {})).text, /^general: [\s\S]*tienda: /);
     assert.doesNotMatch((await boss.call('orb_read_log', {})).text, /^web: /m, 'ni la lista muestra las de otros proyectos');
   } finally { boss.close(); board.setActiveProject('web', 'usuario'); }
+});
+
+test('3.8.1: la bitácora general en core: el coordinador lee y anota también en los archivos del usuario junto a ella', async () => {
+  const dir = path.dirname(ctx.paths.generalLog);
+  assert.equal(dir, path.join(t.home, 'core', 'bitacora'));
+  fs.writeFileSync(path.join(dir, 'bitacora_project.md'), '# Índice central\n');
+  fs.writeFileSync(path.join(dir, 'solo.md'), '# Solo lectura\n'); fs.chmodSync(path.join(dir, 'solo.md'), 0o444);
+  fs.mkdirSync(path.join(dir, 'sub'), { recursive: true }); fs.writeFileSync(path.join(dir, 'sub', 'x.md'), 'x');
+  const boss = client(bossServer(null));
+  try {
+    await boss.rpc('initialize', {});
+    const w = await boss.call('orb_write_log', { project: 'general', archivo: 'bitacora_project.md', tema: 'Prueba', hecho: 'Anotado desde Orb' });
+    assert.equal(w.error, false, w.text);
+    assert.match(fs.readFileSync(path.join(dir, 'bitacora_project.md'), 'utf8'), /^# Índice central\n[\s\S]*### .* — Prueba\n[\s\S]*Anotado desde Orb/);
+    assert.match((await boss.call('orb_read_log', { project: 'general', archivo: 'BITACORA_PROJECT.md' })).text, /Anotado desde Orb/);
+    assert.match((await boss.call('orb_read_log', {})).text, /general \(archivo "bitacora_project\.md"\)/);
+    for (const archivo of ['../core/orb.json', 'sub/x.md', 'sub\\x.md', 'no-existe.md', 'GENERAL.md']) {
+      assert.equal((await boss.call('orb_write_log', { project: 'general', archivo, tema: 'x', hecho: 'y' })).error, true, archivo);
+    }
+    assert.equal((await boss.call('orb_write_log', { project: 'tienda', archivo: 'bitacora_project.md', tema: 'x', hecho: 'y' })).error, true, 'solo junto a la general');
+    const ro = await boss.call('orb_write_log', { project: 'general', archivo: 'solo.md', tema: 'x', hecho: 'y' });
+    assert.equal(ro.error, true); assert.match(ro.text, /solo lectura/);
+    assert.equal(fs.readFileSync(path.join(dir, 'solo.md'), 'utf8'), '# Solo lectura\n', 'el archivo de solo lectura sigue igual');
+  } finally { boss.close(); fs.chmodSync(path.join(dir, 'solo.md'), 0o666); board.setActiveProject('web', 'usuario'); }
 });
 
 test('un agente que arranca el MCP por su cuenta no se hace pasar por otro agente ni por otra tarea', async () => {

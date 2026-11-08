@@ -184,7 +184,7 @@ test('una carpeta en uso (Windows): no se mueve nada, el aviso dice cuál cerrar
     assert.throws(() => applyLayout(home, { bitacora: 'move', 'mcp:correo': 'windows' }), (e) => e.code === 'busy' && e.userFacing && /No se puede mover .*correo.*Ciérralo y pulsa «Reintentar»\. No se ha movido nada\./.test(e.message));
     assert.ok(fs.existsSync(path.join(home, 'bitacora', 'GENERAL.md')) && fs.existsSync(path.join(server, 'index.js')), 'nada movido');
     assert.ok(!fs.existsSync(path.join(paths(home).core, MOVE_STATE)), 'ni a medias');
-    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(paths(home).core, LAYOUT_FILE), 'utf8')), { v: 1, decided: {}, from37: true }, 'nada decidido (solo que era un Orb 3.7)');
+    assert.equal(fs.existsSync(path.join(paths(home).core, LAYOUT_FILE)), false, 'nada decidido');
   } finally { child.kill(); await new Promise((r) => child.once('exit', r)); }
   applyLayout(home, { bitacora: 'move', 'mcp:correo': 'windows' });
   assert.equal(read(path.join(home, 'windows', 'correo', 'index.js')), '// servidor');
@@ -280,11 +280,11 @@ test('la pantalla «Falta la carpeta core»: qué dice y qué ofrece', () => {
   assert.equal(coreView({ reason: 'damaged', backup: {} }).fresh, 'yes');
 });
 
-test('F5b (A1): una bitácora de 3.7 con archivos que no son de Orb (normas para agentes) se queda donde está por defecto', () => {
+test('3.8.1: la bitácora va a core por defecto, también con archivos del usuario (normas para agentes)', () => {
   const { home } = orb37();
   put(path.join(home, 'bitacora', 'bitacora_project.md'), 'normas que leen otras herramientas');
   migrateWorkspace(home);
   const item = planWorkspace(home).items.find((it) => it.id === 'bitacora');
-  assert.equal(item.choice, 'keep');
-  assert.deepEqual(item.choices, ['move', 'keep'], 'moverla sigue siendo posible');
+  assert.equal(item.choice, 'move');
+  assert.deepEqual(item.choices, ['move', 'keep'], 'dejarla sigue siendo posible');
 });

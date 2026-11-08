@@ -233,7 +233,11 @@ export function decide({ permission = 'editar', tool, kind, command = '', paths 
   const T = (k) => translate(lang, `msg.guard.${k}`);
   const cls = toolClass(tool, kind);
   const text = [command, ...paths, ...patterns].join(' ');
-  if (touchesInternal({ command, paths, patterns, internalDir, cwd, read: cls === 'read' })) return { decision: permission === 'total' ? 'ask' : 'deny', reason: T('internal') };
+  if (touchesInternal({ command, paths, patterns, internalDir, cwd, read: cls === 'read' })) {
+    // 3.8.1: only the general log in core (what a reading tool may see): the reason says how to write to it.
+    const logsOnly = cls !== 'read' && !touchesInternal({ command, paths, patterns, internalDir, cwd, read: true });
+    return { decision: permission === 'total' ? 'ask' : 'deny', reason: T(logsOnly ? 'internalLogs' : 'internal') };
+  }
   if (escalates(command)) return { decision: 'deny', reason: T('sudo') };
   const hit = protectedHit(text);
   if (hit) return { decision: 'deny', reason: translate(lang, 'msg.guard.protected', { name: hit }) };

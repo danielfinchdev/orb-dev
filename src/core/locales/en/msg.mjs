@@ -240,6 +240,7 @@ export default {
   "msg.guard.gitRewrite": "rewrites or discards git changes",
   "msg.guard.github": "uses your GitHub account",
   "msg.guard.internal": "accesses Orb internal data",
+  "msg.guard.internalLogs": "touches the general log in core (read it with Read or orb_read_log, write to it with orb_write_log)",
   "msg.guard.agentConfig": "changes the project's agent settings (.claude or .cursor), which later agents will use",
   "msg.guard.protected": "touches something protected ({name}), which is never touched",
   "msg.guard.plain.stop": "close a running program",

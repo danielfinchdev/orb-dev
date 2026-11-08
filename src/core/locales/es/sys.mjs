@@ -145,6 +145,8 @@ export default {
   'sys.board.badRecipient': 'destinatario no válido: {to} (usa {list}, all, usuario u orb)',
   // Bitácoras
   'sys.logs.none': 'no hay bitácora para "{project}": usa "general" o un proyecto registrado',
+  'sys.logs.noFile': 'no hay un archivo "{file}" junto a la bitácora general (hay: {files})',
+  'sys.logs.readOnly': '{name} es de solo lectura: no se ha anotado nada',
   'sys.logs.required': 'faltan tema y hecho',
   // Cabeceras y apartados de las bitácoras (archivos .md que lee quien usa la app)
   'sys.logs.generalHeader': '# Bitácora general de {name}\n\nMemoria de {name}: qué se pidió, qué se hizo y qué queda pendiente en todos los proyectos.\nSolo se añade al final; nunca se borra ni se edita lo escrito. Sin contraseñas, tokens ni datos personales.\n',
