@@ -8,6 +8,13 @@ Unicode true
 Name "Uninstall Orb (prueba)"
 OutFile "${OUT}"
 RequestExecutionLevel user
+; Version information: Windows Defender's machine-learning check has taken a bare test stub for malware.
+VIProductVersion "3.8.1.0"
+VIAddVersionKey "ProductName" "Orb test fixture"
+VIAddVersionKey "CompanyName" "Orb"
+VIAddVersionKey "FileDescription" "Orb bridge test fixture (test/puente-ganchos.e2e.mjs)"
+VIAddVersionKey "FileVersion" "3.8.1.0"
+VIAddVersionKey "LegalCopyright" "MIT"
 SilentInstall silent
 
 Section

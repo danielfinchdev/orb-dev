@@ -8,11 +8,19 @@ Unicode true
 !define ORB_ELECTRON_DEFAULT_DIR "${DEFAULT_DIR}"
 !define ORB_DATA_DIR "${DATA_DIR}"
 !define ORB_HOOK_LOG "${HOOK_LOG}"
+!define ORB_HOOK_QUIET ; a refusal never waits for a click (no one is at a test)
 !include "${HOOKS}"
 Name "Orb (prueba del puente)"
 OutFile "${OUT}"
 InstallDir "${TARGET}"
 RequestExecutionLevel user
+; Version information: Windows Defender's machine-learning check has taken a bare test stub for malware.
+VIProductVersion "3.8.1.0"
+VIAddVersionKey "ProductName" "Orb test fixture"
+VIAddVersionKey "CompanyName" "Orb"
+VIAddVersionKey "FileDescription" "Orb bridge test fixture (test/puente-ganchos.e2e.mjs)"
+VIAddVersionKey "FileVersion" "3.8.1.0"
+VIAddVersionKey "LegalCopyright" "MIT"
 
 Section Install
   SetOutPath $INSTDIR
