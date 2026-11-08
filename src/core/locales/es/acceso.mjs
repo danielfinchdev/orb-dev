@@ -2,9 +2,9 @@
 export default {
   'msg.guard.adb': 'ejecuta adb; usa las herramientas orb_android_* (adb a mano solo con «Acceso total» y «Usar mi móvil Android»)',
   'msg.grants.chatOnly': 'Solo está disponible en un chat.',
-  'msg.grants.totalNoProject': 'El acceso total al PC solo está disponible en chats sin proyecto.',
-  'msg.grants.totalOn': 'Acceso total al PC activado.',
-  'msg.grants.totalOff': 'Acceso total al PC retirado. El chat vuelve a «Solo lectura».',
+  'msg.grants.totalNeedsPassword': 'El acceso total se activa y se retira en el selector de permisos del chat, con la contraseña maestra.',
+  'msg.grants.totalOn': 'Acceso total activado.',
+  'msg.grants.totalOff': 'Acceso total retirado.',
   'msg.grants.androidOn': 'Uso del móvil Android activado.',
   'msg.grants.androidOff': 'Uso del móvil Android retirado.',
   'msg.android.noAdb': 'No se pudo preparar adb ({error}). Comprueba la conexión e inténtalo de nuevo.',

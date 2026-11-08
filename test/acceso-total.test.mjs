@@ -120,7 +120,13 @@ test('acceso total y móvil: contraseña cada vez, se guardan al reiniciar, se p
     await assert.rejects(e.call('sessions.grantTotal', { id: s.id, unlock: fresh }), /contraseña maestra/, 'un token, una vez');
     const p = await e.call('sessions.create', { agent: 'claude', project: 'web' });
     const fresh2 = (await e.call('master.unlock', { password: PASS, purpose: 'fullAccess' })).unlock;
-    await assert.rejects(e.call('sessions.grantTotal', { id: p.id, unlock: fresh2 }), /sin proyecto/, 'solo sin proyecto');
+    // 3.8.2 (D5): a project's chat gets «Acceso total» the same way (never by sessions.update or at creation).
+    await e.call('sessions.update', { id: p.id, permission: 'probar' });
+    await assert.rejects(e.call('sessions.update', { id: p.id, permission: 'total' }), /contraseña maestra/);
+    await assert.rejects(e.call('sessions.create', { agent: 'claude', project: 'web', permission: 'total' }), /contraseña maestra/);
+    assert.equal((await e.call('sessions.grantTotal', { id: p.id, unlock: fresh2 })).permission, 'total');
+    await assert.rejects(e.call('sessions.update', { id: p.id, permission: 'editar' }), /contraseña maestra/, 'salir de total, solo retirándolo');
+    assert.equal((await e.call('sessions.fork', { id: p.id })).permission, 'editar', 'la copia no lo hereda');
     const fresh3 = (await e.call('master.unlock', { password: PASS, purpose: 'android' })).unlock;
     assert.equal((await e.call('sessions.grantAndroid', { id: p.id, unlock: fresh3 })).android, true, 'el móvil, en cualquier chat');
     // A copy of the chat does not take what the password gave.
@@ -137,14 +143,15 @@ test('acceso total y móvil: contraseña cada vez, se guardan al reiniciar, se p
     const after = await e.call('sessions.list');
     assert.equal(after.find((x) => x.id === s.id).permission, 'leer');
     assert.equal(after.find((x) => x.id === p.id).android, false);
-    assert.equal(after.find((x) => x.id === p.id).permission, 'editar', 'el permiso del proyecto no cambia');
+    assert.equal(after.find((x) => x.id === p.id).permission, 'probar', 'el chat del proyecto vuelve al permiso que tenía');
     const items = await e.call('sessions.items', { id: s.id });
-    assert.ok(items.some((i) => /Acceso total al PC retirado/.test(typeof i.body === 'string' ? i.body : '')), 'se dice en el chat');
+    assert.ok(items.some((i) => /Acceso total retirado/.test(typeof i.body === 'string' ? i.body : '')), 'se dice en el chat');
     // Taking it back by hand needs nothing, and is said too.
     const fresh4 = (await e.call('master.unlock', { password: PASS, purpose: 'android' })).unlock;
     await e.call('sessions.grantAndroid', { id: p.id, unlock: fresh4 });
     assert.equal((await e.call('sessions.revokeGrant', { id: p.id, grant: 'android' })).android, false);
     const log = fs.readFileSync(path.join(t.home, 'core', 'ejecuciones', 'motor.log'), 'utf8');
+    assert.equal((log.match(/acceso: totalOff/g) ?? []).length, 2, 'los dos chats');
     for (const what of ['totalOn', 'androidOn', 'totalOff · chat', 'androidOff']) assert.match(log, new RegExp(`acceso: ${what}`), what);
     assert.match(log, /bloqueo \(sin usar\)/);
   } finally { await e.stop(); t.cleanup(); }

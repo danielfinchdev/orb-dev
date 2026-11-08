@@ -617,8 +617,8 @@ export class Sessions {
     const s = this.must(id);
     if (this.running.has(id)) throw new Error(tr('msg.sessions.forkWait'));
     const a = adapter(s.agent);
-    // 3.8.2: what was given with the master password stays with the original (a copy without a project reads only).
-    const copy = this.create({ kind: 'chat', agent: s.agent, account: s.account, model: s.model, reasoning: s.reasoning, permission: fullPc(s) ? 'leer' : s.permission,
+    // 3.8.2: what was given with the master password stays with the original (D5: also «total» of a project's chat).
+    const copy = this.create({ kind: 'chat', agent: s.agent, account: s.account, model: s.model, reasoning: s.reasoning, permission: s.permission !== 'total' ? s.permission : s.project ? 'editar' : 'leer',
       project: s.project, cwd: s.cwd, title: title || tr('msg.sessions.forkTitle', { title: s.title }), parentId: s.id });
     this.board.run('UPDATE sessions SET titled = 1 WHERE id = ?', copy.id); // 3.2: its title stays (not renamed by its next message)
     const old = this.board.all("SELECT role, kind, body, at FROM session_items WHERE session_id = ? AND kind = 'text' AND role IN ('user', 'assistant') ORDER BY id DESC LIMIT 40", s.id).reverse();

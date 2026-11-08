@@ -5,7 +5,6 @@ export default {
   'session.model': 'Model',
   'session.reasoning': 'Reasoning',
   'session.permissions': 'Permissions',
-  'session.totalBody': 'The agent will be able to perform any action on your PC without asking for permission. Do you want to continue?',
   'session.yes': 'Yes',
   'session.result': 'Result',
   'session.tool': 'Tool',

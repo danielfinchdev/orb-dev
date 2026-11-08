@@ -572,8 +572,10 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const cwd = proj ? proj.path : ctx.paths.projects;
       // Without a project the agent sits in the assistant's own folder (its database, secret and logs): it may only look.
       if (!proj && p.permission && p.permission !== 'leer') fail(tr('msg.api.readOnlyNoProject'));
+      // 3.8.2 (D5): «Acceso total» only through sessions.grantTotal (the master password), never at creation.
+      if (p.permission === 'total') fail(tr('msg.grants.totalNeedsPassword'));
       const created = sessions.create({ kind: 'chat', agent: oneOf(p.agent, AGENT_IDS, 'agente'), account: str(p.account, 'cuenta', 40, { optional: true }) || null, model: str(p.model, 'modelo', 80, { optional: true }) || null,
-        reasoning: oneOf(p.reasoning, REASONING_LEVELS, 'razonamiento', 'medium'), permission: proj ? oneOf(p.permission, PERMISSIONS, 'permiso', 'editar') : 'leer',
+        reasoning: oneOf(p.reasoning, REASONING_LEVELS, 'razonamiento', 'medium'), permission: proj ? oneOf(p.permission, PERMISSIONS.filter((x) => x !== 'total'), 'permiso', 'editar') : 'leer',
         project: proj?.name ?? null, cwd, title: str(p.title, 'título', 80, { optional: true }) || tr('msg.api.chatWith', { agent: p.agent }) });
       // 3.2: a title given here stays; without one, Orb names it from its first message.
       return p.title ? sessions.update(created.id, { titled: true }) : created;
@@ -633,6 +635,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
         if (reasoning === 'xhigh') fail(tr('msg.api.reasoningUnavailable'));
         fields.reasoning = 'high';
       }
+      // 3.8.2 (D5): into or out of «total» only through grants.mjs (password, audit, lock).
+      if (permission !== undefined && (permission === 'total' || s.permission === 'total') && permission !== s.permission) fail(tr('msg.grants.totalNeedsPassword'));
       if (permission !== undefined) { fields.permission = oneOf(permission, PERMISSIONS, 'permiso'); if (!s.project && fields.permission !== 'leer') fail(tr('msg.api.readOnlyNoProject2')); }
       if (archived !== undefined) fields.archived = Boolean(archived);
       return sessions.update(s.id, fields);

@@ -2,9 +2,9 @@
 export default {
   'msg.guard.adb': 'runs adb; use the orb_android_* tools (adb by hand only with “Full access” and “Use my Android phone”)',
   'msg.grants.chatOnly': 'Only available in a chat.',
-  'msg.grants.totalNoProject': 'Full PC access is only available in chats without a project.',
-  'msg.grants.totalOn': 'Full PC access turned on.',
-  'msg.grants.totalOff': 'Full PC access removed. The chat is read-only again.',
+  'msg.grants.totalNeedsPassword': 'Full access is turned on and off in the chat’s permission selector, with the master password.',
+  'msg.grants.totalOn': 'Full access turned on.',
+  'msg.grants.totalOff': 'Full access removed.',
   'msg.grants.androidOn': 'Android phone access turned on.',
   'msg.grants.androidOff': 'Android phone access removed.',
   'msg.android.noAdb': 'Couldn’t set up adb ({error}). Check your connection and try again.',

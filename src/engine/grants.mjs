@@ -1,5 +1,5 @@
 // 3.8.2 (owner's decisions D1, D2): what a chat may do beyond its permission, given with the master password.
-//   «Acceso total al PC»     a chat without a project: permission «total» (src/core/guard.mjs: still never core, the
+//   «Acceso total al PC»     a chat without a project (3.8.2 D5: and «Acceso total» of a chat with a project, the same way): permission «total» (src/core/guard.mjs: still never core, the
 //                            folders kept outside it, Orb's install folder, «Elementos protegidos» or sudo). Claude in
 //                            Chrome when the installed Claude Code has it (src/agents/claude.mjs).
 //   «Usar mi móvil Android»  any chat: Orb's orb_android_* tools (src/engine/android.mjs). «Acceso total al PC» includes it.
@@ -23,13 +23,16 @@ export function grantMethods({ board, sessions, log = () => {}, android = null }
     log(`acceso: ${what} · chat ${s.id} «${String(s.title ?? '').slice(0, 60)}» · ${why}`);
     try { sessions.addItem(s.id, 'system', 'status', tr(`msg.grants.${what}`)); } catch { /* the chat went */ }
   };
-  const holdsTotal = (s) => !s.project && s.permission === 'total';
+  // 3.8.2 (D5): «total» of a chat with a project follows the same rules; taken back, it returns to the permission it had
+  // (kept in settings), or «Editar archivos»; a chat without a project returns to «Solo lectura».
+  const holdsTotal = (s) => s.permission === 'total';
+  const before = (s) => { const k = `grant_prev:${s.id}`; const p = board.settingJson(k); board.settingJson(k, null); return s.project ? (['leer', 'probar', 'editar', 'preguntar'].includes(p) ? p : 'editar') : 'leer'; };
   // Every grant of every chat goes (Orb locked). → how many chats lost one.
   async function revokeAll(why = 'bloqueo') {
-    const rows = board.all("SELECT id FROM sessions WHERE (project IS NULL AND permission = 'total') OR android = 1");
+    const rows = board.all("SELECT id FROM sessions WHERE kind = 'chat' AND (permission = 'total' OR android = 1)");
     for (const { id } of rows) {
       const s = sessions.get(id); if (!s) continue;
-      if (holdsTotal(s)) { sessions.update(s.id, { permission: 'leer' }); audit(s, 'totalOff', why); }
+      if (holdsTotal(s)) { sessions.update(s.id, { permission: before(s) }); audit(s, 'totalOff', why); }
       if (Number(s.android) === 1) { sessions.update(s.id, { android: 0 }); audit(s, 'androidOff', why); }
     }
     try { await android?.stopServer(); } catch (error) { log(`android: ${error.message}`); }
@@ -41,8 +44,8 @@ export function grantMethods({ board, sessions, log = () => {}, android = null }
       // Both guarded (checkUnlock): a token for this action alone, from the password typed right now.
       'sessions.grantTotal': ({ id }) => {
         const s = chat(id);
-        if (s.project) fail(tr('msg.grants.totalNoProject'));
         if (holdsTotal(s)) return s;
+        board.settingJson(`grant_prev:${s.id}`, s.permission);
         const out = sessions.update(s.id, { permission: 'total' });
         audit(s, 'totalOn');
         return out;
@@ -57,7 +60,7 @@ export function grantMethods({ board, sessions, log = () => {}, android = null }
       // Taking one back needs nothing.
       'sessions.revokeGrant': ({ id, grant }) => {
         const s = chat(id); const g = oneOf(grant, GRANTS, 'permiso');
-        if (g === 'total' && holdsTotal(s)) { const out = sessions.update(s.id, { permission: 'leer' }); audit(s, 'totalOff'); return out; }
+        if (g === 'total' && holdsTotal(s)) { const out = sessions.update(s.id, { permission: before(s) }); audit(s, 'totalOff'); return out; }
         if (g === 'android' && Number(s.android) === 1) { const out = sessions.update(s.id, { android: 0 }); audit(s, 'androidOff'); return out; }
         return s;
       }

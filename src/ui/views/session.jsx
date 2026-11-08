@@ -438,8 +438,11 @@ export function SessionView({ route }) {
           {/* 3.2: the model, the permissions and the reasoning under the box, like the chat's brain (the bar keeps the title). */}
           {s.kind === 'chat' ? (<>
             {models.length ? <Select size="sm" value={s.model || models[0].value} title={t('session.model')} options={models} onValueChange={(model) => act(call('sessions.update', { id: s.id, model }), t('session.modelSet', { model: modelName(model) }))} data-testid="session-model" /> : null}
-            {s.project ? <Select size="sm" value={s.permission} title={t('session.permissions')} options={options(PERMISSION).filter((o) => !bridge.mobile || o.value !== 'total')} onValueChange={async (permission) => {
-              if (permission === 'total' && !(await confirm(t('permission.total'), t('session.totalBody'), { ok: t('session.yes'), danger: true }))) return;
+            {/* 3.8.2 (D5): «Acceso total» of a project's chat also asks for the master password every time and goes when
+                Orb locks; taken back, the chat returns to its permission before, then takes the one chosen. */}
+            {s.project ? <Select size="sm" value={s.permission} title={t('session.permissions')} disabled={bridge.mobile && s.permission === 'total'} options={options(PERMISSION).filter((o) => !bridge.mobile || o.value !== 'total')} onValueChange={async (permission) => {
+              if (permission === 'total') { const unlock = await unlockCore('fullAccess'); if (unlock) act(call('sessions.grantTotal', { id: s.id, unlock }), t('session.permissionsChanged')); return; }
+              if (s.permission === 'total') { const back = await act(call('sessions.revokeGrant', { id: s.id, grant: 'total' })); if (!back || back.permission === permission) return; }
               act(call('sessions.update', { id: s.id, permission }), t('session.permissionsChanged'));
             }} data-testid="session-permission" />
               /* 3.8.2 (D1): without a project, «Solo lectura» or «Acceso total al PC» (the master password every time; it goes
@@ -449,7 +452,7 @@ export function SessionView({ route }) {
                 const unlock = await unlockCore('fullAccess');
                 if (unlock) act(call('sessions.grantTotal', { id: s.id, unlock }), t('session.permissionsChanged'));
               }} data-testid="session-permission" />}
-            {!s.project && s.permission === 'total' ? <Tip label={t('session.fullPcTip')}><span tabIndex={0} className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-amber-500/50 bg-amber-500/15 px-2.5 text-[13px] font-medium whitespace-nowrap text-amber-700 dark:text-amber-300" data-testid="session-fullpc"><ShieldAlert className="size-4" />{t('session.fullPcChip')}</span></Tip> : null}
+            {s.permission === 'total' ? <Tip label={t('session.fullPcTip')}><span tabIndex={0} className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-amber-500/50 bg-amber-500/15 px-2.5 text-[13px] font-medium whitespace-nowrap text-amber-700 dark:text-amber-300" data-testid="session-fullpc"><ShieldAlert className="size-4" />{t('session.fullPcChip')}</span></Tip> : null}
             {/* 3.8.2 (D2): «Usar mi móvil Android», in any chat (included in «Acceso total al PC»). */}
             {!s.project && s.permission === 'total' ? null : bridge.mobile ? (s.android ? <span className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-500/50 bg-emerald-500/15 px-2.5 text-[13px] text-emerald-700 dark:text-emerald-300"><Smartphone className="size-4" />{t('session.androidChip')}</span> : null)
               : <Tip label={s.android ? t('session.androidOn') : t('session.android')}><Button variant="ghost" size="sm" aria-label={t('session.android')} aria-pressed={Boolean(s.android)} className={cn('h-8 shrink-0', s.android && 'border border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300')} onClick={async () => {
