@@ -5,6 +5,8 @@
 //   ESCRIBE            writes hecho-por-<agente>.txt in its folder
 //   CREA_TAREA <p>     creates a task in project <p> through Orb's real MCP server (orb_create_task)
 //   NAVEGA <url>       uses the agents' browser through the MCP (orb_browser_*) and writes navegador.txt
+//   NAVEGA_GUION <file.json>   (3.8.1) runs [["orb_browser_…", {args}], ["sleep", {ms}]…] through the MCP and writes each
+//                      answer to navegador-guion.json (a screenshot as «captura: <base64 length>»)
 //   PROGRESO           reports progress 40 % (orb_update_task) and works 2.5 s more
 //   TERMINA <id>       closes task <id> as done (orb_update_task)
 //   DELEGA <n> [agente] [ESPERA]   delegates n read-only subtasks (orb_delegate) and, with ESPERA, waits for them (orb_wait_tasks)
@@ -182,6 +184,20 @@ function createFakeLive(agent, label, caps, o) {
       log.push(await mcpCall(orb, 'orb_browser_press', { key: 'F5' }));
       fs.writeFileSync(path.join(o.cwd, 'navegador.txt'), log.join('\n----\n'));
       item('tool', 'tool', { id: `t${++seq}`, name: 'orb:orb_browser_open', input: nav[1] });
+    }
+    const script = scan.match(/NAVEGA_GUION (\S+)/);
+    if (script) {
+      const out = [];
+      for (const [name, args] of JSON.parse(fs.readFileSync(script[1], 'utf8'))) {
+        if (name === 'sleep') { await new Promise((r) => setTimeout(r, Number(args?.ms) || 0)); out.push(''); continue; }
+        try {
+          const shot = name === 'orb_browser_screenshot';
+          const r = await mcpCall(orb, name, args ?? {}, shot);
+          out.push(shot ? `captura: ${r?.content?.find((c) => c.type === 'image')?.data?.length ?? 0}` : r);
+        } catch (error) { out.push(`ERROR ${error.message}`); }
+      }
+      fs.writeFileSync(path.join(o.cwd, 'navegador-guion.json'), JSON.stringify(out, null, 1));
+      item('tool', 'tool', { id: `t${++seq}`, name: 'orb:orb_browser_open', input: script[1] });
     }
     const progress = /PROGRESO/.test(scan) && text.match(/Tarea #(\d+)/);
     if (progress) { await mcpCall(orb, 'orb_update_task', { id: Number(progress[1]), progress: 40, note: 'probando el formulario' }); await sleep(2500); }
