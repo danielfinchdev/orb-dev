@@ -203,6 +203,21 @@ function MsgTime({ at }) {
   return <time className="msg-time" dateTime={d.toISOString()}>{today ? time : `${d.toLocaleDateString(locale, { day: 'numeric', month: 'short' })} ${time}`}</time>;
 }
 
+// A list fetched again keeps the lines that did not change as they were, so that their memoised Message is not drawn
+// again (the engine's events refresh the list several times a second while the assistant answers).
+export function keepSame(prev, next) {
+  if (!prev.length) return next;
+  const old = new Map(prev.map((m) => [m.id, m]));
+  let same = prev.length === next.length;
+  const out = next.map((m, i) => {
+    const o = old.get(m.id);
+    const keep = o && o.body === m.body && o.at === m.at && o.role === m.role && JSON.stringify(o.meta ?? null) === JSON.stringify(m.meta ?? null);
+    if (!keep || prev[i] !== o) same = false;
+    return keep ? o : m;
+  });
+  return same ? prev : out;
+}
+
 // Memoised: the list (up to 120 lines) is not drawn again while the assistant streams its answer.
 const Message = memo(function Message({ m, name, onChanges }) {
   const t = useT();
@@ -443,7 +458,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
   useEffect(() => {
     if (id == null) return undefined;
     let alive = true;
-    call('chat.list', { conversation: id }).then((r) => { if (alive) { setRows(r); setMore(r.length >= 160); } }).catch(() => {});
+    call('chat.list', { conversation: id }).then((r) => { if (alive) { setRows((prev) => keepSame(prev, r)); setMore(r.length >= 160); } }).catch(() => {});
     return () => { alive = false; };
   }, [id, version]);
   // A long conversation shows its last 160 lines; the earlier ones, on request.
@@ -495,7 +510,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
     dismissTest();
     if (id != null) {
       if ((await act(call('chat.send', { text: msg, conversation: id }))) === undefined) setText(msg);
-      else call('chat.list', { conversation: id }).then((r) => { if (getState().route?.id === id) setRows(r); }).catch(() => {});
+      else call('chat.list', { conversation: id }).then((r) => { if (getState().route?.id === id) setRows((prev) => keepSame(prev, r)); }).catch(() => {});
       return;
     }
     setSending(true);

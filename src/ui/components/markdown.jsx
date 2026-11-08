@@ -2,6 +2,7 @@
 // 3.2.1: a link to a picture on this PC (an agent's "Ver imagen editada") opens Orb's image viewer; any other local path
 // stays a plain text link (nothing an agent writes is ever opened or run).
 // Code blocks that say their language (```js) are coloured with the theme of Ajustes → Apariencia (code.css).
+import { memo } from 'react';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 // GFM: tables, ~~strikethrough~~, - [ ] task lists and bare links, as the agents write them.
 import remarkGfm from 'remark-gfm';
@@ -35,8 +36,9 @@ const remarkPlugins = [remarkGfm];
 
 const FENCE_WITH_LANGUAGE = /(^|\n)[ \t]*(```|~~~)[ \t]*[\w#+.-]/;
 
-export function Markdown({ children, className }) {
+// Memoised on its text: a message drawn again (the list refreshed, the view re-rendered) is not parsed again.
+export const Markdown = memo(function Markdown({ children, className }) {
   const text = String(children ?? '');
   const hl = useHighlight(FENCE_WITH_LANGUAGE.test(text));
   return <div className={cn('prose-chat', className)}><ReactMarkdown skipHtml components={components} remarkPlugins={remarkPlugins} rehypePlugins={hl?.rehypePlugins} urlTransform={urlTransform}>{text}</ReactMarkdown></div>;
-}
+});

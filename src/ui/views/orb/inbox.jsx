@@ -6,7 +6,7 @@
 // project's badge (a direct conversation: its agent's mark), the title, the time, its latest progress (a running task,
 // «Esperando tu aprobación», how its last task ended, else its last line) and the unread count. Right click or ⋯ (PC) and
 // a long press (phone) open the chat's menu: info, pin, mute, mark read, complete or reopen, delete.
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ListTodo, FolderKanban, CalendarClock, PenTool, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { PageHeader } from '@/components/page.jsx';
@@ -139,14 +139,17 @@ function OrbSheet({ item, onClose }) {
 }
 
 // ---- a row of the list
-function OrbRow({ item, phone, onSheet }) {
+// Memoised: the list is made again on every refresh of the app's state, and hundreds of rows drew again each time (and
+// every row whenever the screen changed). A row draws again when what it shows changes, or when it opens or closes.
+const sameValue = (x, y) => Object.is(x, y) || (x !== null && y !== null && typeof x === 'object' && typeof y === 'object' && JSON.stringify(x) === JSON.stringify(y));
+const sameItem = (a, b) => { if (a === b) return true; const ka = Object.keys(a); return ka.length === Object.keys(b).length && ka.every((k) => sameValue(a[k], b[k])); };
+const OrbRow = memo(function OrbRow({ item, phone, onSheet }) {
   const t = useT();
   const locale = useLocale();
-  const route = useStore((s) => s.route);
+  const active = useStore((s) => isOpen(s.route, item));
   const assistant = useStore((s) => s.app?.config?.assistantName ?? 'Orbe');
   const [menu, setMenu] = useState(false);
   const press = usePress(() => (phone ? onSheet(item) : setMenu(true)));
-  const active = isOpen(route, item);
   const p = orbProgress(item, t, { assistant });
   const time = item.at ? shortTime(item.at, { locale, yesterday: t('chats.yesterday') }) : '';
   const strong = item.unread && !item.muted;
@@ -177,7 +180,7 @@ function OrbRow({ item, phone, onSheet }) {
       {phone ? null : <OrbMenu item={item} open={menu} setOpen={setMenu} className="mr-1" />}
     </div>
   );
-}
+}, (a, b) => a.phone === b.phone && a.onSheet === b.onSheet && a.day === b.day && sameItem(a.item, b.item));
 
 // ---- a project's heading: its initials in colour, its name; folds its chats; its ⋯: new chat there, its info
 function ProjectHead({ group, open, phone }) {
@@ -326,7 +329,9 @@ export function OrbInbox({ page = false }) {
   const [sheet, setSheet] = useState(null);
   const sheetItem = sheet ? items.find((x) => x.key === sheet) ?? null : null;
   const parts = useMemo(() => groupOrb(items, { showDone, filter }), [items, showDone, filter]);
-  const rowProps = { phone, onSheet: (x) => setSheet(x.key) };
+  const onSheet = useCallback((x) => setSheet(x.key), []);
+  // the day: «ayer» and the times of the rows move on at midnight
+  const rowProps = { phone, onSheet, day: new Date().toDateString() };
   const agents = useMemo(() => [...new Set(items.map((x) => x.agent).filter(Boolean))], [items]);
 
   const q = query.trim().toLowerCase();
