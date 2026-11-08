@@ -116,9 +116,10 @@ export function riskOf(command, lang = 'es') {
 // copies (core\copias\aisladas) are where isolated tasks work, and core\herramientas holds the tools agents run (adb by
 // its full path), so those stay open. The same goes for what Orb keeps about the workspace outside it (setGuardedRoots:
 // the backups' folders and the copies of its sealed secrets), with nothing open there. Matched by RESOLVED path, not by
-// name: a project may well have its own orb.db or talk about ORB_HOME. Not a boundary: a shell of the same Windows user
-// can always reach the folder some other way (cd .. a few times, a script); the agents' identity no longer depends on
-// its database (agent-auth.mjs), so what is left is the integrity of Orb's data against an agent bent on it (accepted).
+// name: a project may well have its own orb.db or talk about ORB_HOME. The `cd`s of a compound command are followed
+// (3.8.1, workDirs), but it is still not a boundary: a script or a program of the same Windows user can always reach the
+// folder some other way (its own chdir, a path built at run time); the agents' identity no longer depends on its
+// database (agent-auth.mjs), so what is left is the integrity of Orb's data against an agent bent on it (accepted).
 // The logs moved into core (core\bitacora) are open to a READING tool (the user's rules for agents may point there);
 // they are written only through Orb's own tools. 3.8.1: the skills (core\skills) too: agents read them (their SKILL.md
 // and files); a command that runs one of their scripts asks first, and nobody writes there. What an agent makes for the
@@ -155,7 +156,7 @@ export function setGuardedRoots(list) {
 export const guardedRootsNow = () => [...guardedAsGiven];
 export function isOrbData(target, internalDir, cwd, { read = false } = {}) {
   if (!internalDir || !target) return false;
-  let p = String(target).trim().replace(/^~(?=[\\/]|$)/, os.homedir());
+  let p = winPath(String(target).trim()).replace(/^~(?=[\\/]|$)/, os.homedir());
   if (!path.isAbsolute(p) && !path.win32.isAbsolute(p)) { if (!cwd) return false; p = path.resolve(cwd, p); }
   const full = norm(realOf(p));
   const within = (root) => full === root || full.startsWith(`${root}\\`);
@@ -177,6 +178,59 @@ export function expandEnv(command) {
   return t.replace(/(^|[\s"'=(])~(?=[\\/])/g, (_m, pre) => `${pre}${os.homedir()}`);
 }
 const pathWords = (command) => String(command ?? '').split(/[\s|&;<>()`]+/).map((w) => w.replace(/^["']+|["',]+$/g, '').replace(/^[^=]*=(?=.*[\\/~.])/, '')).filter((w) => /[\\/]|^~|^\.\.?$/.test(w));
+// 3.8.1 (H1c-fix2): the folder each part of a command runs in. `cd`, `chdir`, `pushd`, `popd`, `Set-Location`, `sl`,
+// `Push-Location` and `Pop-Location` (bash, cmd and PowerShell; also `cd..`, `cd\x` and `cd /d`) are followed from the
+// agent's folder through ; && || & | new lines and brackets, and inside `cmd /c`, `bash -c` or `powershell -Command`.
+// Quotes do not stop the split (a stray split only makes the check stricter). → [{ dir, words, moved }] (dir: null when
+// it cannot be told; moved: a `cd` changed it).
+const CD_CMD = /^(cd|chdir|pushd|set-location|sl|push-location)$/i;
+const POP_CMD = /^(popd|pop-location)$/i;
+const SHELL_CMD = /^(cmd|bash|sh|zsh|dash|powershell|pwsh|wsl)$/i;
+const RUN_FLAG = /^(\/c|\/k|-c|-command|-commandwithargs)$/i;
+// A Git Bash, Cygwin or WSL path of a Windows drive (/c/Users…, /cygdrive/c/…, /mnt/c/…) as Windows writes it.
+export const winPath = (p) => (process.platform === 'win32' ? String(p).replace(/^\/(?:cygdrive\/|mnt\/)?([a-z])(?=\/|$)/i, (_m, d) => `${d.toUpperCase()}:`) : String(p));
+const bare = (w) => String(w ?? '').replace(/^["'`]+|["'`,;]+$/g, '').replace(/^\d*[<>]+&?/, '').replace(/^[^=\\/]*=(?=.)/, '');
+export function workDirs(command, cwd) {
+  const out = [];
+  let dir = cwd ? path.resolve(cwd) : null; let prev = dir; const stack = [];
+  const resolveDir = (target) => {
+    const t = winPath(bare(target));
+    if (!t) return dir;
+    if (t === '-') return prev;
+    if (t === '~') return os.homedir();
+    if (path.isAbsolute(t) || path.win32.isAbsolute(t)) return path.resolve(t);
+    return dir ? path.resolve(dir, t) : null;
+  };
+  for (const part of String(command ?? '').split(/\r?\n|[;&|(){}]/)) {
+    let w = words(part).map(bare).filter(Boolean);
+    // A shell inside the command: what it runs is read as part of this one.
+    for (let i = 0; i < 4 && w.length && SHELL_CMD.test(w[0].replace(/^.*[\\/]/, '').replace(/\.exe$/i, '')); i++) {
+      const at = w.findIndex((x, j) => j > 0 && RUN_FLAG.test(x));
+      w = at > 0 ? w.slice(at + 1) : w.slice(1).filter((x) => !x.startsWith('-'));
+    }
+    if (!w.length) continue;
+    out.push({ dir, words: w, moved: dir !== (cwd ? path.resolve(cwd) : null) });
+    const first = w[0].replace(/^@/, '');
+    const glued = /^(cd|chdir)([\\/.].*)$/i.exec(first); // cmd: cd.. and cd\folder
+    const cmd = glued ? glued[1] : first;
+    if (CD_CMD.test(cmd)) {
+      const args = glued ? [glued[2]] : w.slice(1);
+      let target = null;
+      for (let i = 0; i < args.length; i++) {
+        const a = args[i];
+        if (/^-(path|literalpath)$/i.test(a)) { target = args[i + 1] ?? null; break; }
+        if (/^(\/d|-[a-z]+|--)$/i.test(a)) continue;
+        target = a; break;
+      }
+      if (target === null) continue; // cd alone: cmd prints the folder, PowerShell may go home (never into core)
+      const next = resolveDir(target);
+      if (/^(pushd|push-location)$/i.test(cmd)) stack.push(dir);
+      prev = dir; dir = next;
+      out.push({ dir, words: [], moved: true });
+    } else if (POP_CMD.test(cmd)) { prev = dir; dir = stack.length ? stack.pop() : dir; out.push({ dir, words: [], moved: true }); }
+  }
+  return out;
+}
 function touchesInternal({ command: given, paths, patterns, internalDir, cwd, read = false }) {
   if (!internalDir) return false;
   const command = expandEnv(given);
@@ -191,7 +245,21 @@ function touchesInternal({ command: given, paths, patterns, internalDir, cwd, re
       if (r !== root || !(OPEN_TEXT.test(after) || readText(read, after))) return true;
     }
   }
-  return pathWords(command).some((w) => isOrbData(w, internalDir, cwd, { read }));
+  if (pathWords(command).some((w) => isOrbData(w, internalDir, cwd, { read }))) return true;
+  // 3.8.1 (H1c-fix2): each part of the command in the folder it really runs in (after its `cd`s): a part that runs in
+  // core (but its open folders) is refused whatever it names, and each word, also one without a slash (a junction's
+  // name), is resolved there. (An agent whose own folder is inside core, a run's: its plain words are not looked at.)
+  const start = cwd ? norm(realOf(cwd)) : null;
+  const startInCore = Boolean(start) && (start === root || start.startsWith(`${root}\\`));
+  for (const part of workDirs(command, cwd)) {
+    if (part.moved && part.dir && isOrbData(part.dir, internalDir, null, { read })) return true;
+    for (const w of part.words) {
+      if (/^-/.test(w) && !/[\\/]/.test(w)) continue;
+      if (!part.moved && startInCore && !/[\\/~]|^\.\.?$/.test(w)) continue;
+      if (isOrbData(w, internalDir, part.dir, { read })) return true;
+    }
+  }
+  return false;
 }
 
 // 3.8: the project's agent settings: a task could leave there rules or programs that later agents in the same folder
@@ -260,7 +328,10 @@ function linkIntoCore(command, internalDir, cwd) {
   const named = (r) => { for (let i = t.indexOf(r); i >= 0; i = t.indexOf(r, i + 1)) if (/^($|[\\"'\s;|&)])/.test(t.slice(i + r.length))) return true; return false; };
   if (named(root) || named(realRoot)) return true;
   if (cwd && inCore(cwd)) return true;
-  return pathWords(expandEnv(command)).some((w) => { const p = path.isAbsolute(w) || path.win32.isAbsolute(w) ? w : cwd ? path.resolve(cwd, w) : null; return p ? inCore(p) : false; });
+  if (pathWords(expandEnv(command)).some((w) => { const p = path.isAbsolute(w) || path.win32.isAbsolute(w) ? w : cwd ? path.resolve(cwd, w) : null; return p ? inCore(p) : false; })) return true;
+  // 3.8.1 (H1c-fix2): also after a `cd` (into core\preparacion, say): the folder it runs in, and what it names from there.
+  return workDirs(expandEnv(command), cwd).some((part) => (part.dir && inCore(part.dir))
+    || part.words.some((w) => { const p = winPath(w); const full = path.isAbsolute(p) || path.win32.isAbsolute(p) ? p : part.dir ? path.resolve(part.dir, p) : null; return full ? inCore(full) : false; }));
 }
 // 3.8.1: running a script of a skill of core: one interpreter and one script file in core\skills, as a single plain command
 // (no -c / -e, no chaining, no redirection). It asks; any other command that touches core\skills is denied.

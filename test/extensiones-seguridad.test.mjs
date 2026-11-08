@@ -10,6 +10,7 @@ import path from 'node:path';
 import { ROOT } from './helpers.mjs';
 import * as X from '../src/core/extensions.mjs';
 import * as claude from '../src/agents/claude.mjs';
+import { decide } from '../src/core/guard.mjs';
 import { cleanEnv } from '../src/agents/common.mjs';
 
 const tmp = [];
@@ -170,4 +171,40 @@ test('M1: si la cuarentena cambia mientras se instalan los paquetes, «Activar»
   const swap = async () => { fs.writeFileSync(path.join(prepared.quarantine, 'server.mjs'), '// EVIL'); return true; };
   await assert.rejects(X.applyEdit(core, {}, 'bien', prepared, { tr, install: swap }), /ext\.err\.changed/);
   assert.equal(fs.readFileSync(path.join(core, 'mcp', 'bien', 'server.mjs'), 'utf8'), '// bueno');
+});
+
+test('M2: la guardia sigue los cd de un comando compuesto (bash, cmd y PowerShell) y deniega la cuarentena y core\\datos|skills|mcp', () => {
+  const root = scratch(); const core = path.join(root, 'core'); const proj = path.join(root, 'web', 'a');
+  for (const d of [path.join(core, 'datos', 'cuarentena', 'skill-x-abc'), path.join(core, 'skills', 'demo'), path.join(core, 'mcp', 'srv'), path.join(core, 'preparacion', 'skill-x'), path.join(proj, 'src')]) fs.mkdirSync(d, { recursive: true });
+  junction(root, path.join(proj, 'h')); // a junction to the workspace (made without naming core)
+  const d = (command, permission = 'editar') => decide({ permission, tool: 'Bash', command, internalDir: core, cwd: proj });
+  const bashRoot = root.replace(/^([A-Za-z]):/, (_m, l) => `/${l.toLowerCase()}`).replace(/\\/g, '/');
+  for (const command of [
+    'cd .. && cd .. && cd core && cd datos && cd cuarentena && cd skill-x-abc && echo x > SKILL.md',
+    'cd h && cd core && cd datos && echo x > orb.db',
+    'cd h\\core\\datos && node mk.js',
+    'cd ..\\..\\core\\datos ; node C:\\otra\\mk.js',
+    'cd ../.. || true\ncd core/mcp/srv\necho x > server.mjs',
+    'cd ..\\.. & cd core\\skills\\demo & echo x > SKILL.md',
+    'cd..\ncd..\ncd core\\datos\ntype nul > orb.db',
+    'Set-Location ..; sl ..; Set-Location -Path core; cd datos; Set-Content orb.db x',
+    'pushd ..\\.. && pushd core\\mcp && echo x > srv\\server.mjs && popd && popd',
+    'cmd /c "cd ..\\..\\core\\skills\\demo && echo x > SKILL.md"',
+    'powershell -NoProfile -Command "cd ..\\..\\core\\datos; ni x.txt"',
+    `cd /d ${path.join(core, 'datos')} && echo x > a`,
+    `cd ${bashRoot}/core/datos && touch a`,
+    '(cd ../../core/datos && echo x > a)',
+    'cd h; cd core; cd datos; cd cuarentena; cp ../../../../evil.md skill-x-abc/SKILL.md'
+  ]) assert.equal(d(command).decision, 'deny', command);
+  // Through a junction named without a slash: its real path counts.
+  assert.equal(d('copy evil.md h').decision, 'allow', 'la carpeta del espacio no es core');
+  junction(path.join(core, 'skills', 'demo'), path.join(proj, 'atajo'));
+  assert.equal(d('copy evil.md atajo').decision, 'deny');
+  fs.unlinkSync(path.join(proj, 'atajo'));
+  // What stays open: core\preparacion, and moving around the project.
+  for (const command of ['cd ..\\..\\core\\preparacion\\skill-x && echo x > SKILL.md', 'cd src && npm test', 'cd .. && ls', 'cd src; cd ..; git status', 'cd && echo hola', 'cd - && ls']) assert.equal(d(command).decision, 'allow', command);
+  assert.match(d('cd ..\\..\\core\\skills\\demo && cat SKILL.md').reason, /orb_create_skill/);
+  // A link made after a cd into core\preparacion is still a link into core.
+  assert.equal(d('cd ..\\..\\core\\preparacion && mklink /J x ..\\datos').decision, 'deny');
+  fs.unlinkSync(path.join(proj, 'h'));
 });
