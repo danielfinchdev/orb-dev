@@ -8,7 +8,7 @@
 
 export const DEFAULT_PORT = '3131';
 
-// The short code: letters and digits that cannot be confused (as link.mjs › normalCode).
+// The short code: letters and digits that cannot be confused (the PC normalizes it the same way).
 export const normalCode = (code) => String(code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/O/g, '0').slice(0, 16);
 
 const fail = (key) => Object.assign(new Error(key), { key });
@@ -96,7 +96,8 @@ export function passwordPageOk({ protocol, hostname } = {}, { app = false } = {}
   return Boolean(m && Number(m[1]) >= 64 && Number(m[1]) <= 127);
 }
 
-// The secret both sides derive the pairing key from (link.mjs › pairAt): the QR's code as is, the short one marked.
+// The secret both sides derive the pairing key from (src/ui/lib/web-bridge.js on the phone, src/engine/remote.mjs on the
+// PC): the QR's code as is, the short one marked.
 export const pairingSecret = (p) => (p.via === 'code' ? `corto:${normalCode(p.code)}` : p.code);
 
 // Which window.orb the page gets: the desktop app's (Tauri's bridge, already there), the Android app (Tauri's Android

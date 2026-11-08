@@ -59,11 +59,15 @@ process.on('unhandledRejection', (error) => log(`unhandledRejection: ${error?.st
 // never ages (a PC asleep or a long migration do not free it), and Windows lets it go when the engine ends, however it
 // ends (a process id given to another program means nothing here).
 let held = null;
+const HOME_WAIT_TRIES = Number(process.env.ORB_HOME_WAIT ?? 20); // seconds the workspace's folder is waited for at the start
 async function holdWorkspace(home) {
   if (held) return;
   const { exclusiveOpen } = await import('./approval-secret.mjs');
   const file = path.join(os.tmpdir(), `orb-motor-${homeKey(home)}.lock`);
-  const fd = exclusiveOpen(file);
+  // 3.8.1 (review D10 B7): held for a moment (the engine before this one still ending, an antivirus looking at it): tried
+  // again for about 2 s before saying another app has it.
+  let fd = exclusiveOpen(file);
+  for (let i = 0; fd === null && i < 8; i++) { await new Promise((r) => setTimeout(r, 250)); fd = exclusiveOpen(file); }
   if (fd === null) throw new Error(tr('sys.engine.otherApp', { name: PRODUCT.name }));
   if (fd === undefined) return; // %TEMP% not writable: not a reason to refuse the start
   try { fs.ftruncateSync(fd); fs.writeSync(fd, String(process.pid)); } catch { /* only informative */ }
@@ -158,6 +162,9 @@ async function start(home, version, secret, browser, keep = null, userData = nul
   // by mistake while Orb was closed, or noticed by the watcher in run()), what is missing comes back from the newest
   // backup, which lives outside the workspace. Without a backup, or with one this PC cannot open, the window shows why
   // and what can be done (coreBlocked). All of it before the database opens.
+  // 3.8.1 (review F3a B2): a workspace on a drive that is waking up or coming back (a USB or network disk) is waited for
+  // a little before saying it is not there.
+  for (let i = 0; !fs.existsSync(home) && i < HOME_WAIT_TRIES; i++) await new Promise((r) => setTimeout(r, 1000));
   if (!fs.existsSync(home)) throw new Error(tr('sys.engine.notHome', { home }));
   const { migrateWorkspace } = await import('../core/core-folder.mjs');
   migrateWorkspace(home); // a folder some program is using: nothing moves and the start fails with a clear message

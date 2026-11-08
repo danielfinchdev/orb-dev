@@ -231,6 +231,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       const stop = (n) => {
         for (const t of board.all("SELECT id FROM tasks WHERE project = ? AND status = 'running'", n)) { try { scheduler.cancel(t.id, 'usuario'); } catch { /* finished meanwhile */ } }
         for (const s of board.all('SELECT id FROM sessions WHERE project = ?', n)) { sessions.stop(s.id); sessions.closeLive(s.id); }
+        // 3.8.1 (H1b-d note): and its tasks' isolated copies (core\copias\aisladas) go with it, never left for ever.
+        for (const t of board.all('SELECT * FROM tasks WHERE project = ? AND workdir IS NOT NULL', n)) { try { scheduler.dropCopy(t, p); } catch (error) { log(`borrar copia #${t.id}: ${error.message}`); } }
       };
       const out = deleteProject(board, ctx.home, p.name, 'usuario', { ticket: typeof ticket === 'string' ? ticket : '', trashed: trashed === true, stop });
       clearProjectIcon(p);

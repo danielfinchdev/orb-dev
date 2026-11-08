@@ -11,6 +11,9 @@ import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree, hidingEnvValues } f
 import { decide } from '../core/guard.mjs';
 import { tr } from '../core/context.mjs';
 
+// Who connects to the app-server (def. 11: the product's version, read from Orb's own package.json).
+const CLIENT = { name: 'orb_dev', title: 'Orb', version: (() => { try { return JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version; } catch { return '0.0.0'; } })() };
+
 export const id = 'codex';
 export const label = 'Codex';
 export const kind = 'app-server';
@@ -41,7 +44,7 @@ export async function accountInfo(exe, dir, { timeoutMs = 20000 } = {}) {
   try {
     child = spawnAgent(exe.cmd, [...exe.pre, 'app-server'], { cwd: os.tmpdir(), env: { CODEX_HOME: dir }, log: () => {} });
     peer = new JsonRpcPeer(child, { onNotification: () => {}, onRequest: async () => ({}), log: () => {} });
-    await peer.request('initialize', { clientInfo: { name: 'orb_dev', title: 'Orb', version: '2.7.0' }, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs });
+    await peer.request('initialize', { clientInfo: CLIENT, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs });
     peer.notify('initialized', {});
     const r = await peer.request('account/read', { refreshToken: false }, { timeoutMs });
     const acc = r?.account; if (!acc) return null;
@@ -124,7 +127,7 @@ export async function discoverModels(exe, cfg = {}, env = {}) {
   child.on('error', () => peer.close());
   child.on('exit', () => peer.close());
   try {
-    await peer.request('initialize', { clientInfo: { name: 'orb_dev', title: 'Orb', version: '2.6.0' }, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs: 30000 });
+    await peer.request('initialize', { clientInfo: CLIENT, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs: 30000 });
     peer.notify('initialized', {});
     const list = []; let cursor = null;
     for (let page = 0; page < 5; page++) {
@@ -289,7 +292,7 @@ export function createLive(o) {
       if (turn && !turn.done) turn.finish({ isError: true, final: turn.text || tr('sys.agents.exitedCode', { name: 'Codex', code, detail: child.stderrText().trim().split('\n').slice(-2).join(' ') }).trim() });
     });
     child.on('error', (error) => { closed = true; if (turn && !turn.done) turn.finish({ isError: true, final: tr('sys.agents.startFailed', { name: 'Codex', error: error.message }) }); });
-    await peer.request('initialize', { clientInfo: { name: 'orb_dev', title: 'Orb', version: '2.4.2' }, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs: 30000 });
+    await peer.request('initialize', { clientInfo: CLIENT, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs: 30000 });
     peer.notify('initialized', {});
     // 3.8.1: the skills of core that are on (src/core/extensions.mjs › exposeSkills), one more root where Codex looks for
     // skills, before the thread starts (checked with the real app-server: skills/list shows them). Older versions: none.

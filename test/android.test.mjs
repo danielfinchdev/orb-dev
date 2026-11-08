@@ -27,7 +27,7 @@ test('QR v2 (Magic Link): varias direcciones, nombre y papel; https primero, lue
   const p = parseLinkPayload(`http://192.168.1.20:3131/#vincular=c0de&pc=${PC}&v=2&n=Servidor&r=centro&a=${encodeURIComponent(others)}`);
   assert.deepEqual(p.urls, ['https://casa.tail1234.ts.net:3131', 'http://100.101.102.103:3131', 'http://192.168.1.20:3131']);
   assert.equal(p.v, 2); assert.equal(p.name, 'Servidor'); assert.equal(p.role, 'centro');
-  // The same as JSON (link.mjs › parseQr also takes it).
+  // The same as JSON (parseLinkPayload also takes it).
   const j = parseLinkPayload(JSON.stringify({ v: 2, urls: ['http://100.64.0.7:3131', 'https://pc.tail.ts.net'], pc: PC, code: 'k', role: 'taller' }));
   assert.deepEqual(j.urls, ['https://pc.tail.ts.net', 'http://100.64.0.7:3131']);
   assert.equal(j.role, 'taller');
@@ -51,7 +51,7 @@ test('a mano: el enlace pegado, o el código corto con la dirección', () => {
   const p = parseManual({ code: 'abcd-efgh', address: '100.64.1.2' });
   assert.deepEqual(p.urls, ['http://100.64.1.2:3131'], 'el puerto de Orb por defecto');
   assert.equal(p.via, 'code'); assert.equal(p.pc, null);
-  assert.equal(pairingSecret(p), 'corto:ABCDEFGH', 'el código corto, normalizado y marcado (link.mjs › pairAt)');
+  assert.equal(pairingSecret(p), 'corto:ABCDEFGH', 'el código corto, normalizado y marcado');
   assert.equal(keyOf(() => parseManual({ code: '', address: '100.64.1.2' })), 'app.linkNoCode');
   assert.equal(keyOf(() => parseManual({ code: 'ABCDEFGH', address: '' })), 'app.linkNoAddress');
   assert.equal(keyOf(() => parseManual({ code: 'ABCDEFGH', address: '1.1.1.1' })), 'app.linkInsecure');
@@ -127,7 +127,8 @@ test('el PC deja pasar la página de la app (CORS) y a nadie más; todo sigue ci
   assert.equal(pre.status, 204);
   assert.equal(pre.headers['access-control-allow-origin'], APP);
   const old = await raw('OPTIONS', '/api/call', { Origin: 'http://localhost', 'Access-Control-Request-Method': 'POST' });
-  assert.equal(old.headers['access-control-allow-origin'], 'http://localhost', 'the 3.8.0 app until the phone updates');
+  assert.equal(old.status, 403, 'una página de localhost (la app de 3.8.0 o la de un agente) no es la app (D8 B1)');
+  assert.equal((await raw('OPTIONS', '/api/call', { Origin: 'capacitor://localhost' })).status, 403);
   assert.match(pre.headers['access-control-allow-headers'], /X-Orb-Device/);
   assert.equal((await raw('OPTIONS', '/api/call', { Origin: 'https://atacante.example' })).status, 403);
   assert.equal((await raw('POST', '/api/call', { Origin: 'https://atacante.example', 'Content-Type': 'application/json' }, '{}')).status, 403, 'otra web: fuera');

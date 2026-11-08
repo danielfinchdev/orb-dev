@@ -214,6 +214,11 @@ test('avisos: solo servicios de avisos conocidos', async () => {
   assert.equal((await call('remote.status')).devices.find((d) => d.id === p.id).push, false);
   const me = C.open(p.key, await (await p.post('/api/me', p.box('me', null))).json(), C.AAD.response(p.id));
   assert.match(me.result.vapid, /^[A-Za-z0-9_-]{80,90}$/, 'la clave pública para suscribirse');
+  // An app older than what this Orb still talks to is told to update (426, review F2.2 M1); the current one is not.
+  const old = C.open(p.key, await (await p.post('/api/me', p.box('me', { v: 1 }))).json(), C.AAD.response(p.id));
+  assert.equal(old.ok, false); assert.equal(old.status, 426); assert.equal(old.update, 'me');
+  assert.match(old.error, /actualiza/i);
+  assert.equal(C.open(p.key, await (await p.post('/api/me', p.box('me', { v: 3 }))).json(), C.AAD.response(p.id)).ok, true);
 });
 
 test('eventos en directo cifrados y revocar el acceso', async () => {

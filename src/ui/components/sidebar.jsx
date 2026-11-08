@@ -71,7 +71,7 @@ function SidebarFooter({ version, is, settingsOpen, open, onOpen }) {
   // 3.6: the same slots and icons on the PC and in a linked browser (Ajustes, Agentes, Memorias, Tutoriales); what a
   // browser does not have is left out (Agentes, the bug), never swapped for other icons. Its gear opens this device.
   const items = [
-    { icon: Settings, label: t('nav.settings'), active: settingsOpen || is('phone') || is('link'), onClick: () => openSettings(), testid: 'nav-settings' },
+    { icon: Settings, label: t('nav.settings'), active: settingsOpen || is('phone'), onClick: () => openSettings(), testid: 'nav-settings' },
     ...(bridge.mobile ? [] : [{ icon: Bot, label: t('nav.agents'), active: is('agents'), onClick: () => go('agents'), testid: 'nav-agents' }]),
     { icon: BookOpen, label: t('nav.memories'), hint: t('nav.memoriesHint'), active: memories, onClick: () => go('logs'), testid: 'nav-memories' },
     // 2.6: how the app works, the FAQ and the button that replays the guided tour.

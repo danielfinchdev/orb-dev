@@ -9,7 +9,20 @@
 import readline from 'node:readline';
 
 // One message, one line: JSON.stringify never leaves a raw line break inside (they are escaped in strings).
-export const encode = (message) => `${JSON.stringify(message)}\n`;
+// 3.8.1 (review D2 B3): what JSON changes without saying so (a Buffer becomes { type, data }, a Map or a Set {}, a
+// BigInt throws) is sent in a form that keeps its meaning (a Buffer as base64, a Map as an object, a Set as a list,
+// a BigInt as text) and written once per kind to stderr (the app's motor-salida.log), so a method that returns one can
+// be found. A Date is already its ISO text.
+const told = new Set();
+const tell = (kind) => { if (!told.has(kind)) { told.add(kind); try { process.stderr.write(`motor: un ${kind} viajó como JSON convertido\n`); } catch { /* no stderr */ } } };
+function replacer(_key, value) {
+  if (value && typeof value === 'object' && value.type === 'Buffer' && Array.isArray(value.data)) { tell('Buffer'); return Buffer.from(value.data).toString('base64'); }
+  if (value instanceof Map) { tell('Map'); return Object.fromEntries(value); }
+  if (value instanceof Set) { tell('Set'); return [...value]; }
+  if (typeof value === 'bigint') { tell('BigInt'); return value.toString(); }
+  return value;
+}
+export const encode = (message) => `${JSON.stringify(message, replacer)}\n`;
 // A line back to a message; anything that is not a JSON object is dropped (null).
 export function decode(line) {
   const text = String(line ?? '').trim();

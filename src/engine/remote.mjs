@@ -52,7 +52,6 @@ export function phoneConfig(c) {
 // says it is, and nothing with total access.
 // 3.5.1: what the owner may choose when making a QR (the kind of device it is for).
 export const PAIR_KINDS = ['phone', 'browser'];
-export const KINDS = PAIR_KINDS;
 const EVENTS = new Set(['board:changed', 'chat:state', 'chat:new', 'notice', 'session:item', 'session:update', 'session:removed', 'config:changed', 'session:delta', 'session:queue', 'approval:changed',
   // 3.6 (messaging lists): a chat list changed
   'inbox:changed']);
@@ -64,7 +63,6 @@ export const PAIR_PASSWORD_TRIES = 5;
 // that may go with it.
 export function guardCall(board, method, params, { allowed = REMOTE_METHODS, uploadsDir = null } = {}) {
   if (!allowed.has(method)) return tr('msg.remote.pcOnly');
-  if (method === 'agents.login' && params.console) return tr('msg.remote.pcOnly');
   if (params.permission === 'total') return tr('msg.remote.totalPcOnly');
   // A conversation the PC gave total access to is driven from the PC only.
   if (method.startsWith('sessions.') && method !== 'sessions.stop' && params.id !== undefined && board.one('SELECT permission FROM sessions WHERE id = ?', String(params.id))?.permission === 'total') return tr('msg.remote.totalConvPcOnly');
@@ -136,7 +134,7 @@ export function privateSource(address) {
 // The name another device sees for this Orb: the one set in Ajustes, or the computer's name.
 export const orbNameOf = (config) => oneLine(String(config?.mobile?.name || os.hostname() || config?.assistantName || 'Orb'), 60);
 const ipOf = (req) => String(req.socket?.remoteAddress ?? '').replace(/^::ffff:/, '');
-const kindOf = (proof) => (KINDS.includes(proof?.kind) ? proof.kind : /iphone|ipad|android/i.test(String(proof?.name ?? '')) ? 'phone' : 'browser');
+const kindOf = (proof) => (PAIR_KINDS.includes(proof?.kind) ? proof.kind : /iphone|ipad|android/i.test(String(proof?.name ?? '')) ? 'phone' : 'browser');
 // 3.5.1: the kind of a new device: the one the QR was made for. A QR made without saying takes what a phone or a browser
 // says it is (they have the same rights). 3.8: another Orb or an Orb Terminal is never linked (null).
 export function kindForPairing(issued, claimed) {
@@ -160,9 +158,10 @@ export function plainHttpBrowser({ origin, app = false, localAddress, routes = [
 const parseMeta = (d) => { try { return d?.meta ? JSON.parse(d.meta) : {}; } catch { return {}; } };
 const metaVOf = (d) => Number(parseMeta(d).v ?? 2);
 // 3.5: the Android app's page is not served by this PC but by the app itself: it may call the API, where everything is
-// still sealed with the phone's own key, and its WebView has to be told so (CORS). 3.8.1 (Tauri): http://tauri.localhost;
-// the Capacitor app of 3.8.0 (http://localhost) until the phone updates.
-const APP_ORIGINS = new Set(['http://tauri.localhost', 'https://tauri.localhost', 'http://localhost', 'https://localhost', 'capacitor://localhost']);
+// still sealed with the phone's own key, and its WebView has to be told so (CORS). 3.8.1 (Tauri): http://tauri.localhost
+// only (review D8 B1: the Capacitor app of 3.8.0 is uninstalled first, owner's decision 18; a page on this PC's
+// localhost, an agent's for one, is not the app).
+const APP_ORIGINS = new Set(['http://tauri.localhost', 'https://tauri.localhost']);
 const APP_CORS = { 'Access-Control-Allow-Methods': 'GET, POST', 'Access-Control-Allow-Headers': 'Content-Type, X-Orb-Device, X-Orb-Auth', 'Access-Control-Allow-Private-Network': 'true', 'Access-Control-Max-Age': '600', Vary: 'Origin' };
 const appOrigin = (req) => { const o = String(req.headers.origin ?? '').toLowerCase(); return APP_ORIGINS.has(o) ? o : null; };
 
@@ -468,7 +467,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   // addresses of this same PC (Wi-Fi, Tailscale, name.local).
   function helloInfo(res) {
     if (!pairing || Date.now() > pairing.expires) return send(res, 404, { error: tr('msg.link.noCode') });
-    // short: 3 (3.5.1): the short code is tied to this key (link.mjs › connect refuses an Orb without it).
+    // short: 3 (3.5.1): the short code is tied to this key (src/ui/lib/web-bridge.js refuses an Orb without it).
     return send(res, 200, { v: PROTOCOL, short: 3, pc: b64.enc(own().pub), fp: pcFingerprint(), name: orbName(), urls: (state.routes ?? []).map((r) => r.url) });
   }
 
@@ -510,7 +509,8 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     // 3.6: a device too old for this Orb is told to update first (the QR is not used up). 3.8: linking needs protocol 4
     // and its two steps (the master password); an app of 3.7 is told to update.
     if (!(Number(proof.v) >= PAIR_PROTOCOL) || body.step !== 'start') return send(res, 426, { error: tr('msg.link.updatePair', { need: versionOfProtocol(PAIR_PROTOCOL) }), update: 'pair' });
-    // 3.5.1: what the device is was chosen when the QR was made; a device that says otherwise is refused (the QR stays).
+    // 3.5.1: what the device is was chosen when the QR was made: that kind wins over what the device says (kindForPairing;
+    // one made for no kind takes the device's word). Another Orb or an Orb Terminal is refused (the QR stays).
     // 3.8: another Orb is never linked.
     const kind = kindForPairing(pairing.device, typeof proof.kind === 'string' ? proof.kind : kindOf({ name: proof.name }));
     if (!kind) return send(res, 403, { error: tr('msg.link.notForOrb') });
