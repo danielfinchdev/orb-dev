@@ -5,6 +5,7 @@
 // Every buffer that carried a password or a secret (the request line, the parsed request, the answer) is wiped after use.
 use crate::crypto::{self, b64url, unb64};
 use crate::grants::Grants;
+use crate::machine::{self, Sealer};
 use crate::locked::{wipe_value, Locked};
 use crate::vault::{self, check_password, Code, Costs, Tried, Vault, PAIR_ID};
 use serde_json::{json, Value};
@@ -20,6 +21,8 @@ pub struct Server {
   /// The tests' copy only (orb-vault --test): the engine's clock (a test moves it forward); Orb.exe uses its own.
   pub caller_clock: bool,
   pub grants: Arc<Grants>,
+  /// How this PC's secret is sealed (machine.rs): DPAPI in Orb.exe, the fake in the tests' copy.
+  pub sealer: Arc<dyn Sealer>,
 }
 
 struct Handle {
@@ -39,6 +42,8 @@ struct Session<'a> {
   vaults: HashMap<u64, Arc<Handle>>,
   next: u64,
   jobs: Arc<Mutex<HashMap<u64, Job>>>,
+  /// This PC's secret once opened ('machine'): this PC's wrap of the data key ('open' with machine: true). Never sent.
+  machine: Option<Locked>,
 }
 
 static JOB_IDS: AtomicU64 = AtomicU64::new(0);
@@ -50,7 +55,7 @@ fn now_ms() -> u64 {
 
 /// Serves one engine until it closes its end. → Ok when it closed, Err on a broken channel.
 pub fn serve(server: &Server, input: &mut impl BufRead, output: &mut impl Write) -> std::io::Result<()> {
-  let mut session = Session { server, vaults: HashMap::new(), next: 0, jobs: Arc::new(Mutex::new(HashMap::new())) };
+  let mut session = Session { server, vaults: HashMap::new(), next: 0, jobs: Arc::new(Mutex::new(HashMap::new())), machine: None };
   let mut line = Vec::with_capacity(4096);
   loop {
     line.clear();
@@ -97,12 +102,14 @@ impl Session<'_> {
     let answer: Answer = match op {
       "hello" => Ok(json!({ "grants": self.server.grants.name(), "test": self.server.costs.test })),
       "kdfOk" => Ok(json!(vault::kdf_ok(req.get("kdf").unwrap_or(&Value::Null), self.server.costs))),
+      "machine" => return self.machine(req),
       "open" => {
-        let secret = req.get("secret").and_then(Value::as_str).and_then(unb64).map(|mut b| {
+        let given = req.get("secret").and_then(Value::as_str).and_then(unb64).map(|mut b| {
           let l = Locked::from_slice(&b);
           zeroize::Zeroize::zeroize(&mut b);
           l
         });
+        let secret = if req.get("machine") == Some(&json!(true)) { self.machine.clone() } else { given };
         let dir = PathBuf::from(s(req, "dir"));
         if !dir.is_absolute() {
           Err(Code::Damaged)
@@ -132,6 +139,38 @@ impl Session<'_> {
     match answer {
       Ok(r) => json!({ "ok": true, "r": r }),
       Err(c) => json!({ "ok": false, "code": c.as_str() }),
+    }
+  }
+
+  /// This PC's secret (machine.rs › load): kept for 'open', and only the keys made from it go back to the engine
+  /// (approvals, backups). The tests' copy takes a test's sealing knobs (fake) and, asked to, says the secret (reveal).
+  fn machine(&mut self, req: &Value) -> Value {
+    let test = self.server.costs.test;
+    if !test && (req.get("fake").is_some() || req.get("reveal").is_some()) {
+      return json!({ "ok": false, "code": "damaged" });
+    }
+    let (dir, copy) = (PathBuf::from(s(req, "dir")), PathBuf::from(s(req, "copy")));
+    if !dir.is_absolute() || !copy.is_absolute() {
+      return json!({ "ok": false, "code": "damaged" });
+    }
+    let fake;
+    let sealer: &dyn Sealer = if test && req.get("fake").is_some() {
+      fake = machine::Fake::from_json(req.get("fake"));
+      &fake
+    } else {
+      self.server.sealer.as_ref()
+    };
+    match machine::load(&dir, &copy, sealer, req.get("allowNew") == Some(&json!(true))) {
+      Ok(o) => {
+        let warns: Vec<Value> = o.warns.iter().map(|(c, d)| json!({ "code": c, "detail": d })).collect();
+        let mut r = json!({ "approval": crypto::b64(crypto::approval_key(o.secret.as_slice()).as_slice()), "backup": crypto::b64(crypto::backup_key(o.secret.as_slice()).as_slice()), "warns": warns });
+        if test && req.get("reveal") == Some(&json!(true)) {
+          r["hex"] = json!(crypto::hex_of(o.secret.as_slice()).as_str().unwrap_or_default());
+        }
+        self.machine = Some(o.secret);
+        json!({ "ok": true, "r": r })
+      }
+      Err(f) => json!({ "ok": false, "code": f.code(), "detail": f.detail() }),
     }
   }
 

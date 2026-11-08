@@ -1,5 +1,5 @@
-// The vault (the master password and Orb's secrets: the orb-vault crate, src-tauri/vault) runs inside Orb.exe, not in
-// the engine: each engine process gets its own channel, a named pipe made before it starts (ORB_VAULT_PIPE) that only
+// The vault (the master password, Orb's secrets and this PC's secret: the orb-vault crate, src-tauri/vault) runs inside
+// Orb.exe, not in the engine: each engine process gets its own channel, a named pipe made before it starts (ORB_VAULT_PIPE) that only
 // its process id may open (src/core/master.mjs connects to it). The connectors' launchers trade their one-time grants on
 // the vault's other pipe. When the engine ends, everything it opened (the data key included) is wiped.
 use orb_vault::{Costs, EngineChannel, Server};
@@ -9,7 +9,7 @@ static SERVER: OnceLock<Option<Arc<Server>>> = OnceLock::new();
 
 fn server() -> Option<Arc<Server>> {
   SERVER
-    .get_or_init(|| orb_vault::start_grants(None).ok().map(|grants| Arc::new(Server { costs: Costs { test: false }, caller_clock: false, grants })))
+    .get_or_init(|| orb_vault::start_grants(None).ok().map(|grants| Arc::new(Server { costs: Costs { test: false }, caller_clock: false, grants, sealer: Arc::new(orb_vault::machine::Dpapi) })))
     .clone()
 }
 

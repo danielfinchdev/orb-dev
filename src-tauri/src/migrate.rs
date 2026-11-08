@@ -3,7 +3,7 @@
 // window says once that Orb moved to its new base (its interface preferences, kept by Electron's Chromium, start again).
 //   - Chromium's caches in %APPDATA%\Orb.dev (Cache, GPUCache, Code Cache, Partitions…) and electron-updater's download
 //     folder (%LOCALAPPDATA%\orb-dev-updater, with the installer that brought 3.8.1).
-//   - Never Local State (the key that opens the secret Electron sealed: secrets.rs), the copies of the keys (claves\),
+//   - Never Local State (Chromium's, holding the key Orb 3.8.0 sealed its secret with), the copies of the keys (claves\),
 //     ubicacion.json or interfaz.json, nor anything of the workspace.
 // The mark is kept, renamed, as a record.
 use std::path::{Path, PathBuf};

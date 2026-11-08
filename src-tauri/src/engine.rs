@@ -108,10 +108,6 @@ impl Engine {
   pub fn user_data(&self) -> PathBuf {
     self.cfg.user_data.clone()
   }
-  /// Electron's Local State in the app's data folder: the key of the secrets Orb 3.8.0 sealed (read only, never changed).
-  pub fn local_state(&self) -> PathBuf {
-    self.cfg.user_data.join("Local State")
-  }
   pub fn home(&self) -> Option<PathBuf> {
     self.home.lock().unwrap().clone()
   }
@@ -261,8 +257,8 @@ impl Engine {
     let mut rx = self.status.subscribe();
     *self.start_code.lock().unwrap() = None;
     self.status.send_replace(Status::Starting);
-    // The engine opens the approval secret itself with this app's sealing (hostSecret: host.seal / host.unseal, DPAPI in
-    // secrets.rs, which still reads Electron's v10 and seals it again as ORB2): src/engine/approval-secret.mjs.
+    // hostSecret: this PC's secret is opened by the vault in this app (orb-vault › machine.rs, DPAPI); the engine asks it
+    // and gets only the keys made from it.
     // The agents' browser lives in the engine, with this app's hidden pages (browser 'host': browser.rs).
     let start = json!({ "type": "start", "home": self.home(), "version": self.cfg.version, "secret": null, "hostSecret": true, "newSecret": new_secret, "browser": "host", "userData": self.cfg.user_data });
     if !self.send(&start) {

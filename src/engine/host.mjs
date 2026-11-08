@@ -1,19 +1,19 @@
 // Calls from the engine to the app that runs it, the other way round of the window's calls: what only the app can do.
 // Open a link or a folder with the system; open a terminal, an editor or a project's action, programs that must outlive
 // Orb (under Tauri the engine runs inside a Job Object that ends with Orb, and only the app can start something outside
-// it); seal or open the approval secret with Windows (host.seal / host.unseal); and, under Tauri, the agents' browser
+// it); and, under Tauri, the agents' browser
 // pages and its little window (host.browser.*, host.pip.*: src/engine/host-browser.mjs).
 // The app picks the program itself (its own list of terminals and editors, absolute paths only): the engine only says
 // which kind, the folder and, for an action, its command. Never a program name, never a shell line.
 // The same transport as the rest of the engine's messages (engine.mjs):
 //   engine → app  { type: 'host', id, method, params }
-//   app → engine  { type: 'hostReply', id, ok, result | error, code? }   (code: a typed error, e.g. host.unseal's)
+//   app → engine  { type: 'hostReply', id, ok, result | error, code? }   (code: a typed error)
 // The app checks every request again (checkHostRequest): the engine is trusted, but a link or a path in it may come from
 // a project's settings or an agent's text.
 import path from 'node:path';
 
 export const BROWSER_METHODS = Object.freeze(['host.browser.open', 'host.browser.cdp', 'host.browser.close', 'host.pip.show', 'host.pip.hide', 'host.pip.state', 'host.pip.frame']);
-export const HOST_METHODS = Object.freeze(['host.openUrl', 'host.openPath', 'host.openTerminal', 'host.openEditor', 'host.runAction', 'host.seal', 'host.unseal', ...BROWSER_METHODS]);
+export const HOST_METHODS = Object.freeze(['host.openUrl', 'host.openPath', 'host.openTerminal', 'host.openEditor', 'host.runAction', ...BROWSER_METHODS]);
 let send = null; let next = 0; const pending = new Map();
 // 3.8.1 (review D8 B1): the ports of this engine's own servers (the phone's access, dev-control). The agents' browser never
 // opens them on this PC's loopback (Rust refuses them: browser_rules.rs › url_allowed).
@@ -73,16 +73,6 @@ export function checkHostRequest(method, params, { isDir } = {}) {
     const command = String(p.command ?? '');
     if (!command.trim() || command.length > 2000 || command.includes('\0')) throw new Error('acción no válida');
     return { command, dir: folder(p.dir, 'carpeta no válida'), choice: TERMINAL_CHOICES.includes(p.choice) ? p.choice : 'auto' };
-  }
-  if (method === 'host.seal') {
-    const text = String(p.text ?? '');
-    if (!/^[0-9a-f]{64}$/.test(text)) throw new Error('secreto no válido');
-    return { text };
-  }
-  if (method === 'host.unseal') {
-    const data = String(p.data ?? '');
-    if (!data || data.length > 22_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) throw new Error('datos no válidos');
-    return { data };
   }
   // The agents' browser: only an app that has it (Tauri) answers, and it checks them with its own rules (which pages,
   // which DevTools methods, which addresses: src-tauri/src/browser_rules.rs).

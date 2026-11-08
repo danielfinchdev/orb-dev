@@ -286,11 +286,18 @@ pub fn guard_against_electron(_: &std::path::Path, _: impl Fn() + Send + Sync + 
 
 #[cfg(all(test, windows))]
 mod electron_tests {
-  /// The real Electron of Orb 3.8.0 (secrets::test_electron), with no window, holding its single-instance lock in
+  /// The Electron of Orb 3.8.0 (44.5.1, the one it ships), without a window: ORB_TEST_ELECTRON, or
+  /// <ORB_BUILD_CACHE>\electron-44.5.1\electron.exe (Electron is not a dependency of this repository). None: skipped.
+  fn test_electron() -> Option<std::path::PathBuf> {
+    let cache = std::env::var_os("ORB_BUILD_CACHE").map(std::path::PathBuf::from).or_else(|| std::env::var_os("LOCALAPPDATA").map(|d| std::path::PathBuf::from(d).join("orb-build-cache")));
+    std::env::var_os("ORB_TEST_ELECTRON").map(std::path::PathBuf::from).or_else(|| cache.map(|c| c.join("electron-44.5.1").join("electron.exe"))).filter(|p| p.exists())
+  }
+
+  /// The real Electron of Orb 3.8.0 (test_electron), with no window, holding its single-instance lock in
   /// a throwaway data folder: seen; another folder is not. Skipped where that Electron is not there.
   #[test]
   fn an_open_electron_orb_is_seen_by_its_data_folder() {
-    let Some(electron) = crate::secrets::test_electron() else {
+    let Some(electron) = test_electron() else {
       eprintln!("sin el Electron de la 3.8.0 (ORB_TEST_ELECTRON o la caché de compilación): prueba omitida");
       return;
     };
@@ -322,7 +329,7 @@ mod electron_tests {
   /// guard is not taken for an Electron by this same program.
   #[test]
   fn electron_opened_afterwards_quits_and_this_orb_is_told() {
-    let Some(electron) = crate::secrets::test_electron() else {
+    let Some(electron) = test_electron() else {
       eprintln!("sin el Electron de la 3.8.0 (ORB_TEST_ELECTRON o la caché de compilación): prueba omitida");
       return;
     };

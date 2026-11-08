@@ -7,7 +7,7 @@
 // The data key is never on disk in clear; it is kept twice, in core\secretos:
 //   maestra.json     wrapped by a key made from the master password (scrypt N=2^17 r8 p1, its own salt): opens on any PC
 //   maestra-pc.json  wrapped by a key derived from this PC's secret (the approval secret Windows keeps sealed,
-//                    core\datos\clave2.enc: src/engine/approval-secret.mjs): Orb starts without asking for the password.
+//                    core\datos\clave2.enc, opened in Rust: vault/src/machine.rs): Orb starts without asking for the password.
 //                    It also says (authenticated) that a password was made, so a deleted maestra.json is noticed.
 //   secretos.json    the secrets themselves, one JSON map sealed with the data key (XChaCha20-Poly1305). It holds the
 //                    phones' verifier of the password too (Magic Link never sends the password; Rust checks the phone's
@@ -127,14 +127,26 @@ const failed = (reply) => (CODES.has(reply.code) ? new MasterError(reply.code) :
 // Whether a maestra.json's cost is one Orb accepts (a planted file can neither make it cheap nor hang it).
 export function kdfOk(kdf) { const r = request({ op: 'kdfOk', kdf: kdf ?? null }); return r.ok && r.r === true; }
 
-// dir: core\secretos. secret: this PC's secret (Buffer, 32 bytes or more), or null when there is none.
+// 3.8.1 (decision 20 d): this PC's secret is opened in Rust (src-tauri/vault/src/machine.rs) from core\datos\clave2.enc
+// or its copy outside (copy: claves\<key>.enc; ORB2 beside it as .v2.enc). It stays there, for this PC's wrap of the data
+// key (new Master(dir, { secret: IN_VAULT })); the engine gets only the keys made from it. fake, reveal: the tests' vault
+// only (its sealing knobs; the secret said back). → { approval, backup, warns: [{ code, detail }] }, or throws with code
+// 'busy' (for now), 'unreadable' (sealed keys that do not open) or 'old' (only Orb 3.8.0's key files).
+export const IN_VAULT = Symbol('machine secret in the vault');
+export function openMachine({ dir, copy, allowNew = false, fake = null, reveal = false }) {
+  const r = request({ op: 'machine', dir: path.resolve(dir), copy: path.resolve(copy), allowNew: allowNew === true, ...(fake ? { fake } : {}), ...(reveal ? { reveal: true } : {}) });
+  if (!r.ok) throw Object.assign(new Error(`clave: ${r.code}${r.detail ? ` (${r.detail})` : ''}`), { code: r.code, detail: r.detail ?? '' });
+  return { approval: Buffer.from(r.r.approval, 'base64'), backup: Buffer.from(r.r.backup, 'base64'), warns: r.r.warns ?? [], ...(r.r.hex ? { hex: r.r.hex } : {}) };
+}
+
+// dir: core\secretos. secret: this PC's secret (Buffer, 32 bytes or more; IN_VAULT: the one the vault opened), or null.
 export class Master {
   constructor(dir, { secret = null, now = () => Date.now() } = {}) {
     this.dir = dir; this.now = now; this.busy = Promise.resolve();
     this.onChange = () => {};
     this.onFails = () => {}; // (channel, fails): FREE_TRIES wrong ones in a row (the engine tells the owner)
-    const s = secret && secret.length >= 32 ? Buffer.from(secret).toString('base64') : null;
-    this.h = this.raw({ op: 'open', dir: path.resolve(dir), secret: s });
+    const s = secret !== IN_VAULT && secret && secret.length >= 32 ? Buffer.from(secret).toString('base64') : null;
+    this.h = this.raw({ op: 'open', dir: path.resolve(dir), secret: s, ...(secret === IN_VAULT ? { machine: true } : {}) });
   }
   // What the vault asks after a request: copy the folder outside core (changed), tell the owner (notices).
   after(reply) {

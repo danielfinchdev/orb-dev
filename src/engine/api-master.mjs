@@ -5,8 +5,9 @@
 // src/core/master.mjs.
 import fs from 'node:fs';
 import { ctx, saveConfig, tr } from '../core/context.mjs';
-import { paths, readKey } from '../core/home.mjs';
-import { Master, MasterError, mirrorTo, restoreMissing, checkPassword, MIN_LENGTH, UNLOCK_MS } from '../core/master.mjs';
+import { paths } from '../core/home.mjs';
+import { machineKeys } from '../core/machine-keys.mjs';
+import { Master, MasterError, IN_VAULT, mirrorTo, restoreMissing, checkPassword, MIN_LENGTH, UNLOCK_MS } from '../core/master.mjs';
 import { sealConnectors, connectorSecrets, refOf, secretId, ENV_NAME, bindMissing } from '../core/connector-secrets.mjs';
 import { needsUnlock, FRESH_UNLOCK, FRESH_PURPOSES } from '../core/permissions.mjs';
 import { isRecoveryCode, hasRecovery } from '../core/backup.mjs';
@@ -80,11 +81,11 @@ export function checkUnlock(method, params) {
 }
 
 export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => {} }) {
-  const master = () => ctx.master ?? (ctx.master = openMaster(ctx.home, ctx.secret ?? (() => { try { return fs.readFileSync(ctx.paths.key); } catch { return null; } })(), { log }));
+  const master = () => ctx.master ?? (ctx.master = openMaster(ctx.home, ctx.keys?.inVault ? IN_VAULT : ctx.secret ?? (() => { try { return fs.readFileSync(ctx.paths.key); } catch { return null; } })(), { log }));
   const opened = () => { migrateSecrets(board, master(), { log, emit }); try { onUnlocked(); } catch (error) { log(`secretos: ${error.message}`); } };
   const password = (v) => (typeof v === 'string' ? v : '');
   const connector = (name) => { const n = str(name, 'conector', 40); const s = (ctx.config.mcpServers ?? []).find((x) => x.name === n); if (!s) throw userError('msg.master.noConnector', { name: n }); return s; };
-  const machineSecret = () => ctx.secret ?? readKey(ctx.home);
+  const machineSecret = () => machineKeys().backup; // this PC's backup key (the recovery wrap)
   // Every phone and browser goes (they link again with the new password); this PC's keys for them are read again.
   const unlinkAll = (why) => {
     let n = 0;

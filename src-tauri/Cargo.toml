@@ -25,7 +25,6 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["sync", "time"] }
 base64 = "=0.22.1"
-aes-gcm = "=0.10.3"
 # The phone's end-to-end encryption (phone_crypto.rs, the same as src/core/mobile-crypto.mjs).
 chacha20poly1305 = { version = "=0.10.1", features = ["getrandom"] }
 x25519-dalek = { version = "=2.0.1", features = ["static_secrets"] }
@@ -45,7 +44,7 @@ orb-vault = { path = "vault" }
 jni = "=0.21.1" # phone_crypto.rs › jni_api (the same copy Tauri uses)
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "=0.62.2", features = ["Data_Xml_Dom", "Foundation", "UI_Notifications", "Win32_Foundation", "Win32_Security", "Win32_Security_Cryptography", "Win32_System_Com", "Win32_System_JobObjects", "Win32_System_LibraryLoader", "Win32_System_RemoteDesktop", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "=0.62.2", features = ["Data_Xml_Dom", "Foundation", "UI_Notifications", "Win32_Foundation", "Win32_Security", "Win32_System_Com", "Win32_System_JobObjects", "Win32_System_LibraryLoader", "Win32_System_RemoteDesktop", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 windows-core = "=0.62.2" # the #[implement] of delete.rs (the same copy windows uses)
 webview2-com = "=0.39.1"
 

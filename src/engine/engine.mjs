@@ -7,6 +7,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { useHome, ctx, tr } from '../core/context.mjs';
 import { ensureLayout, paths } from '../core/home.mjs';
+import { keysOf, machineKeys } from '../core/machine-keys.mjs';
+import { IN_VAULT } from '../core/master.mjs';
 import { coreHealth } from '../core/core-folder.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { PRODUCT } from '../core/product.mjs';
@@ -79,69 +81,69 @@ async function holdWorkspace(home) {
 
 let mirror = null; // 3.8: the copy of core\secretos outside the workspace (the app's data folder), when the app gives one
 const validSecret = (s) => typeof s === 'string' && /^[0-9a-f]{64}$/.test(s);
-// 3.8.1, Tauri: the approval secret, opened and kept by the engine (src/engine/approval-secret.mjs › loadHostSecret) with
-// the app's sealing (host.seal / host.unseal: DPAPI in Rust, which still reads Electron's v10, never changed). The app is
-// asked to seal once first. Never a new secret behind the user's back: a key that cannot be read now is tried again a
-// few times and then the start stops (code 'secretBusy': the window offers «Reintentar»); sealed keys that none opens
-// stop it too (code 'secretUnreadable': «Reintentar» or «Empezar con una clave nueva», newSecret).
+// 3.8.1, Tauri (decision 20 d): this PC's secret is opened by the app's vault (src/core/master.mjs › openMachine, in Rust:
+// src-tauri/vault/src/machine.rs, Windows' DPAPI) and stays there; the engine gets only the keys made from it (ctx.keys).
+// Never a new secret behind the user's back: a key that cannot be read now is tried again a few times and then the start
+// stops (code 'secretBusy': the window offers «Reintentar»); sealed keys that none opens, or only Orb 3.8.0's key files
+// (no longer read), stop it too (code 'secretUnreadable': «Reintentar» or «Empezar con una clave nueva», newSecret;
+// nothing is deleted).
 const startError = (key, code, detail) => Object.assign(new Error(tr(key)), { code, detail });
 // What the user should know about the keys, said once the database is open (board.notice in run()).
 const keyNotices = [];
-const KEY_NOTICES = { twoKeys: 'sys.engine.twoKeys', previousOpens: 'sys.engine.previousOpens', previousBack: 'sys.engine.previousBack', previousNew: 'sys.engine.previousNew', previousFailed: 'sys.engine.previousFailed' };
+const KEY_NOTICES = { previousOpens: 'sys.engine.previousOpens', previousBack: 'sys.engine.previousBack', previousNew: 'sys.engine.previousNew', previousFailed: 'sys.engine.previousFailed' };
 // Whether this start switched keys (the way back): the recovery code made with the other key no longer opens (below).
 let switchedKey = false;
-// Electron's Local State not there counts as «for now» for the first two starts of this engine (each tried three times):
-// a roaming profile or OneDrive may not have brought it yet. After that it is how the key is (the user decides).
-let missingStarts = 0;
 async function secretFromApp(home, userData, newSecret) {
-  const { loadHostSecret, hostSealing, SecretError } = await import('./approval-secret.mjs');
-  const warn = (code, detail) => {
-    console.error(`clave: ${code} (${detail})`);
-    // Ajustes › Datos offers the way back: to the key from before «Empezar con una clave nueva» ('anterior') or, after
-    // going back to it, to the new one again ('nueva').
-    if (code === 'previousOpens' || code === 'previousQuiet') ctx.previousKey = 'anterior';
-    if (code === 'newAvailable') ctx.previousKey = 'nueva';
-    if (code === 'previousBack' || code === 'previousNew') switchedKey = true;
-    if (KEY_NOTICES[code] && !keyNotices.includes(KEY_NOTICES[code])) keyNotices.push(KEY_NOTICES[code]);
-  };
-  const missingIsBusy = ++missingStarts <= 2;
+  const { openMachine } = await import('../core/master.mjs');
   for (let attempt = 1; ; attempt++) {
     try {
-      const probe = await hostCall('host.seal', { text: '0'.repeat(64) });
-      if (!probe?.data) throw new SecretError('busy', 'host.seal sin datos');
-      return await loadHostSecret({ dir: secretDir(home), copy: secretCopy(userData, home), ...hostSealing(hostCall), allowNew: newSecret === true, warn, missingIsBusy });
+      const keys = openMachine({ dir: secretDir(home), copy: secretCopy(userData, home), allowNew: newSecret === true });
+      for (const { code, detail } of keys.warns) {
+        console.error(`clave: ${code} (${detail})`);
+        // Ajustes › Datos offers the way back: to the key from before «Empezar con una clave nueva» ('anterior') or,
+        // after going back to it, to the new one again ('nueva').
+        if (code === 'previousOpens' || code === 'previousQuiet') ctx.previousKey = 'anterior';
+        if (code === 'newAvailable') ctx.previousKey = 'nueva';
+        if (code === 'previousBack' || code === 'previousNew') switchedKey = true;
+        if (KEY_NOTICES[code] && !keyNotices.includes(KEY_NOTICES[code])) keyNotices.push(KEY_NOTICES[code]);
+      }
+      return { approval: keys.approval, backup: keys.backup, inVault: true };
     } catch (error) {
-      const code = error instanceof SecretError ? error.code : 'busy';
-      console.error(`clave: ${code} (${error.message})`);
-      if (code === 'unreadable') throw startError('sys.engine.secretUnreadable', 'secretUnreadable', error.message);
-      if (attempt >= 3) throw startError('sys.engine.secretBusy', 'secretBusy', error.message);
+      const code = error.code ?? 'busy';
+      console.error(`clave: ${error.message}`);
+      if (code === 'old') throw startError('sys.engine.secretOld', 'secretUnreadable', error.detail);
+      if (code === 'unreadable') throw startError('sys.engine.secretUnreadable', 'secretUnreadable', error.detail);
+      if (code === 'noVault' || attempt >= 3) throw startError('sys.engine.secretBusy', 'secretBusy', error.message);
       await new Promise((r) => setTimeout(r, 1500));
     }
   }
 }
-// userData: the app's data folder (the engine keeps the copies outside the workspace there). hostSecret: that app seals the secret itself when asked (host.seal / host.unseal); newSecret: the
+// userData: the app's data folder (the engine keeps the copies outside the workspace there). hostSecret: that app's vault opens this PC's secret (secretFromApp); secret: one given (tests); newSecret: the
 // user chose to start with a new key after the sealed ones could not be opened.
 async function start(home, version, secret, browser, keep = null, userData = null, hostSecret = false, newSecret = false) {
   if (!home || !path.isAbsolute(home)) throw new Error(tr('sys.engine.notHome', { home }));
   await holdWorkspace(home);
+  // This workspace's keys only (a switch of workspace starts again in the same process).
+  let keys = null; ctx.keys = null; ctx.secret = null;
   if (typeof userData === 'string' && path.isAbsolute(userData)) {
     adoptOldKeyNames(userData, home);
     keep ??= secretsCopy(userData, home);
-    if (!validSecret(secret) && hostSecret === true) secret = await secretFromApp(home, userData, newSecret);
+    if (!validSecret(secret) && hostSecret === true) keys = await secretFromApp(home, userData, newSecret);
     // After switching keys, copia-clave.json (the recovery code's wrap, sealed with the other key) does not open: the
     // scheduled copies go out without the code and «He olvidado la contraseña» cannot check it. Said (review D10 M6).
-    if (switchedKey && validSecret(secret)) {
+    if (switchedKey && keys) {
       switchedKey = false;
       const B = await import('../core/backup.mjs');
-      if (fs.existsSync(path.join(paths(home).data, 'copia-clave.json')) && !B.hasRecovery(home, Buffer.from(secret, 'hex')) && !keyNotices.includes('sys.engine.recoveryOtherKey')) keyNotices.push('sys.engine.recoveryOtherKey');
+      if (fs.existsSync(path.join(paths(home).data, 'copia-clave.json')) && !B.hasRecovery(home, keys.backup) && !keyNotices.includes('sys.engine.recoveryOtherKey')) keyNotices.push('sys.engine.recoveryOtherKey');
     }
     // An app that cannot open a sealed secret (in core or its copy outside, which would be put back): never a new plain
     // key instead, or this workspace's approvals and backups would no longer open.
     const { enc2, copy2 } = (await import('./approval-secret.mjs')).secret2Files(secretDir(home), secretCopy(userData, home));
-    if (!validSecret(secret) && [path.join(secretDir(home), 'clave.enc'), secretCopy(userData, home), enc2, copy2].some((f) => fs.existsSync(f))) throw new Error(tr('sys.engine.sealedSecret'));
+    if (!keys && !validSecret(secret) && [path.join(secretDir(home), 'clave.enc'), secretCopy(userData, home), enc2, copy2].some((f) => fs.existsSync(f))) throw new Error(tr('sys.engine.sealedSecret'));
   }
   // The approval secret comes from the app (kept encrypted by Windows); without it, the file fallback is used.
-  if (validSecret(secret)) ctx.secret = Buffer.from(secret, 'hex');
+  // A secret given (tests): the engine has it anyway, and makes the keys itself (src/core/machine-keys.mjs).
+  if (validSecret(secret)) { ctx.secret = Buffer.from(secret, 'hex'); ctx.keys = keysOf(ctx.secret); } else if (keys) { ctx.secret = null; ctx.keys = keys; }
   // The agents' browser (browser 'host'): it lives here, with the app's hidden pages (src/engine/host-browser.mjs).
   if (browser === 'host' && !hostBrowser) {
     const { createHostBrowser } = await import('./host-browser.mjs');
@@ -176,7 +178,10 @@ async function start(home, version, secret, browser, keep = null, userData = nul
   return open({ home, version, repair });
 }
 // The secret the backups are sealed with: the app's, or the plain one of a run without the app (never made here).
-const secretOf = (home) => ctx.secret ?? (() => { try { const k = fs.readFileSync(paths(home).key); return k.length >= 32 ? k : null; } catch { return null; } })();
+// This PC's backup key: from the vault (the app), or from the plain clave.bin of a run without it (never made here).
+const secretOf = (home) => machineKeys({ create: false, home })?.backup ?? null;
+// What opens core\secretos for this PC: the vault's own secret (the app), a given one, or the plain clave.bin.
+const masterSecret = (home) => (ctx.keys?.inVault ? IN_VAULT : ctx.secret ?? (() => { try { const k = fs.readFileSync(paths(home).key); return k.length >= 32 ? k : null; } catch { return null; } })());
 
 async function open({ home, version, repair = null }) {
   // the fixed folders, and folders made by older versions put in order; core hidden without waiting (said if it failed)
@@ -351,7 +356,7 @@ async function run(board, { home, version, restored, repair }) {
   // 3.8: the master password and Orb's own secrets (src/core/master.mjs): opened with this PC's secret, or locked until
   // the password is typed (another PC, another Windows user). What earlier versions kept in clear moves into it now.
   const { openMaster, migrateSecrets } = await import('./api-master.mjs');
-  ctx.master = openMaster(home, secretOf(home), { mirror, log, notice: (text) => board.notice(text, 'warning') });
+  ctx.master = openMaster(home, masterSecret(home), { mirror, log, notice: (text) => board.notice(text, 'warning') });
   try { migrateSecrets(board, ctx.master, { log, emit }); } catch (error) { log(`secretos: ${error.message}`); }
   // Unlocked later (the password on another PC): the phone access opens then.
   // 3.8.1: also the keys of a connector Orb moved while it was locked (src/engine/api-extensions.mjs › rebindMovedOrWait).
@@ -410,9 +415,7 @@ async function run(board, { home, version, restored, repair }) {
   log(`motor arrancado (versión ${version}) en ${home}`);
   if (repair?.restored) board.notice(tr('data.core.restored', { created: String(repair.restored.created ?? '').slice(0, 16).replace('T', ' ') }), 'warning');
   // Review D10 B9: «two keys» is said once for each clave.enc of Orb 3.8.0, not at every start.
-  const { saidFor } = await import('./approval-secret.mjs');
-  const saidBefore = (key) => key === 'sys.engine.twoKeys' && saidFor(board, 'secret.twoKeysSaid', path.join(paths(home).data, 'clave.enc'));
-  for (const key of keyNotices.splice(0)) if (!saidBefore(key)) board.notice(tr(key, { name: PRODUCT.name }), 'warning');
+  for (const key of keyNotices.splice(0)) board.notice(tr(key, { name: PRODUCT.name }), 'warning');
   if (restored) { log(`copia restaurada: ${restored.from} (lo anterior está en ${restored.aside})`); board.notice(tr('data.backup.restored', { created: String(restored.header?.created ?? '').slice(0, 16).replace('T', ' ') }), 'success'); }
   // 3.8: a data folder of 3.5–3.7 was moved to 3.8 when its database opened (src/core/migrate-38.mjs): said once.
   {

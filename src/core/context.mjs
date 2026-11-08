@@ -7,9 +7,10 @@ import { translate } from './i18n.mjs';
 import { inside as insideOf } from './core-folder.mjs';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from './appearance.mjs';
 
-// secret: approval secret handed by the app (memory only). master: the master password and Orb's own secrets (3.8,
+// secret: this PC's secret when the engine was handed it (tests; with the app it stays in Rust). keys: the keys made
+// from it (src/core/machine-keys.mjs; inVault: from the app's vault). master: the master password and Orb's own secrets (3.8,
 // src/core/master.mjs), opened by the engine.
-export const ctx = { home: null, paths: null, config: null, secret: null, master: null };
+export const ctx = { home: null, paths: null, config: null, secret: null, keys: null, master: null };
 
 // Message in the language of the settings (Spanish until a configuration is loaded).
 export const tr = (key, vars) => translate(ctx.config?.language ?? 'es', key, vars);

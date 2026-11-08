@@ -29,7 +29,9 @@ fn main() {
       std::process::exit(3);
     }
   });
-  let server = orb_vault::Server { costs: orb_vault::Costs { test }, caller_clock: test, grants };
+  // This PC's secret: the tests' fake sealing under --test (machine.rs › Fake), Windows' DPAPI otherwise.
+  let sealer: Arc<dyn orb_vault::machine::Sealer> = if test { Arc::new(orb_vault::machine::Fake::default()) } else { Arc::new(orb_vault::machine::Dpapi) };
+  let server = orb_vault::Server { costs: orb_vault::Costs { test }, caller_clock: test, grants, sealer };
   served.store(true, Ordering::SeqCst);
   let _ = ch.serve(&server, None);
 }

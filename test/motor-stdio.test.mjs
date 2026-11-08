@@ -63,11 +63,9 @@ test('host requests are checked by the app: https, this PC\'s pages and Warp\'s 
   assert.throws(() => checkHostRequest('host.runAction', { command: '  ', dir }, { isDir }));
   assert.throws(() => checkHostRequest('host.runAction', { command: 'x', dir: path.resolve('/no-existe') }, { isDir }));
   assert.throws(() => checkHostRequest('host.spawnDetached', { cmd: 'cmd.exe', args: [], cwd: dir }, { isDir }));
-  // The secret: 64 hex characters to seal, a base64 blob to open.
-  assert.deepEqual(checkHostRequest('host.seal', { text: 'ab'.repeat(32) }), { text: 'ab'.repeat(32) });
-  for (const text of ['', 'xyz', 'AB'.repeat(32), 'ab'.repeat(33)]) assert.throws(() => checkHostRequest('host.seal', { text }), undefined, text);
-  assert.ok(checkHostRequest('host.unseal', { data: Buffer.from('ORB2xyz').toString('base64') }));
-  for (const data of ['', 'no es base64!', 'A'.repeat(30_000)]) assert.throws(() => checkHostRequest('host.unseal', { data }));
+  // This PC's secret is the vault's (src-tauri/vault/src/machine.rs): the engine never asks the app to seal or open it.
+  assert.throws(() => checkHostRequest('host.seal', { text: 'ab'.repeat(32) }));
+  assert.throws(() => checkHostRequest('host.unseal', { data: Buffer.from('ORB2xyz').toString('base64') }));
   assert.throws(() => checkHostRequest('host.borrarTodo', {}));
 });
 
@@ -158,15 +156,9 @@ test('the engine answers the Tauri app: locate, setup, switchHome, texts; a seal
   let stderr = ''; child.stderr.on('data', (c) => { stderr += c; });
   const seen = [];
   const send = (m) => child.stdin.write(encode(m));
-  // The app's sealing (host.seal / host.unseal), faked: ORB2 + the text, and Electron's v10 + the text.
+  // Whatever the engine asks the app (host.*): none of it is about the secret any more.
   const sealings = [];
-  const host = (m) => {
-    if (m.method === 'host.seal') return { ok: true, result: { data: Buffer.from(`ORB2${m.params.text}`).toString('base64') } };
-    const b = Buffer.from(m.params.data, 'base64').toString('latin1');
-    if (b.startsWith('ORB2')) return { ok: true, result: { text: b.slice(4) } };
-    if (b.startsWith('v10')) return { ok: true, result: { text: b.slice(3) } };
-    return { ok: false, error: 'formato desconocido' };
-  };
+  const host = () => ({ ok: false, error: 'no en esta prueba' });
   readline.createInterface({ input: child.stdout }).on('line', (line) => {
     const m = decode(line); if (!m) return;
     if (m.type === 'host') { sealings.push(m.method); send({ type: 'hostReply', id: m.id, ...host(m) }); } else seen.push(m);
@@ -211,27 +203,26 @@ test('the engine answers the Tauri app: locate, setup, switchHome, texts; a seal
     fs.rmSync(file);
   }
   assert.deepEqual(sealings, []);
-  // Tauri seals it (hostSecret): sealed keys that none opens stop the start with a code (the window asks the user);
-  // never a new secret behind the user's back.
-  fs.writeFileSync(sealed, 'basura'); fs.writeFileSync(copy, 'basura');
-  seen.length = 0;
-  send({ type: 'start', home, version: 'prueba', userData, hostSecret: true });
-  const unreadable = await until(() => seen.find((m) => m.type === 'started'), 'started', 30000);
-  assert.equal(unreadable.ok, false); assert.equal(unreadable.code, 'secretUnreadable');
+  // Tauri (hostSecret): the vault opens it (the tests' vault seals ORB2 + the text). Only Orb 3.8.0's key files (no longer
+  // read) stop the start with a code (the window offers a new key); never a new secret behind the user's back.
+  fs.writeFileSync(sealed, 'v10basura'); fs.writeFileSync(copy, 'v10basura');
+  const startWith = async (more = {}) => {
+    seen.length = 0;
+    send({ type: 'start', home, version: 'prueba', userData, hostSecret: true, ...more });
+    return until(() => seen.find((m) => m.type === 'started'), 'started', 30000);
+  };
+  const old = await startWith();
+  assert.equal(old.ok, false); assert.equal(old.code, 'secretUnreadable'); assert.match(old.error, /3\.8\.0/);
   assert.equal(fs.existsSync(path.join(path.dirname(sealed), 'clave2.enc')), false);
-  // Electron's v10 opens and is sealed again as ORB2 in Tauri's own files; Electron's (Orb 3.8.0 may run here again) are
-  // never changed, nor Local State (the app's business).
-  fs.writeFileSync(sealed, `v10${secret}`);
-  fs.writeFileSync(copy, `v10${secret}`);
-  seen.length = 0;
-  send({ type: 'start', home, version: 'prueba', userData, hostSecret: true });
-  const started = await until(() => seen.find((m) => m.type === 'started'), 'started', 30000);
+  // ORB2 in core and outside: it opens; 3.8.0's files stay as they were.
+  fs.writeFileSync(path.join(path.dirname(sealed), 'clave2.enc'), `ORB2${secret}`);
+  fs.writeFileSync(copy.replace(/\.enc$/, '.v2.enc'), `ORB2${secret}`);
+  const started = await startWith();
   assert.ok(started.ok, started.error);
-  assert.ok(sealings.includes('host.unseal') && sealings.includes('host.seal'));
-  assert.equal(fs.readFileSync(sealed, 'latin1'), `v10${secret}`);
-  assert.equal(fs.readFileSync(copy, 'latin1'), `v10${secret}`);
+  assert.deepEqual(sealings, [], 'nunca host.seal / host.unseal');
+  assert.equal(fs.readFileSync(sealed, 'latin1'), 'v10basura');
+  assert.equal(fs.readFileSync(copy, 'latin1'), 'v10basura');
   assert.equal(fs.readFileSync(path.join(path.dirname(sealed), 'clave2.enc'), 'latin1'), `ORB2${secret}`);
-  assert.equal(fs.readFileSync(copy.replace(/\.enc$/, '.v2.enc'), 'latin1'), `ORB2${secret}`);
   assert.equal(seen.some((m) => m.id === 99), false);
   child.stdin.end();
   assert.equal(await Promise.race([exited, wait(10000).then(() => 'sigue vivo')]), 0, stderr.slice(-2000));

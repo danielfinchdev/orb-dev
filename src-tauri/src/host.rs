@@ -1,6 +1,6 @@
 // What the engine asks the app to do (src/engine/host.mjs): open a link or a folder with the system; open a terminal, an
 // editor or a project's action (programs that must outlive Orb: started here, outside the engine's Job Object, the
-// program picked here: tools.rs); and seal or open the approval secret with DPAPI (secrets.rs). Every request is checked
+// program picked here: tools.rs). Every request is checked
 // again here (protocol::check_host, the same rules as the engine's). And the agents' browser and its little window
 // (host.browser.*, host.pip.*: browser.rs, pip.rs, checked by browser_rules.rs).
 use crate::protocol::{check_host, HostRequest};
@@ -10,7 +10,7 @@ use std::path::Path;
 use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
 
-/// An error for the engine; `code` when it must tell kinds apart (host.unseal: secrets::UnsealError).
+/// An error for the engine; `code` when it must tell kinds apart.
 pub struct HostError {
   pub message: String,
   pub code: Option<&'static str>,
@@ -62,21 +62,6 @@ pub async fn handle(app: &AppHandle, method: &str, params: &Value) -> Result<Val
       spawn_detached(&p).map_err(|e| t("sys.terminal.openFailed", &[("name", "PowerShell".into()), ("error", e)]))?;
       json!(true)
     }
-    HostRequest::Seal { text, v10 } => {
-      use base64::Engine as _;
-      let mut text = crate::secrets::Secret(text.into_bytes());
-      let plain = std::str::from_utf8(&text.0).unwrap_or_default();
-      // v10: Orb 3.8.0's clave.enc, made only when it is not there (approval-secret.mjs): with the key of Electron's
-      // Local State, which is never changed; 'missing' when Orb on Electron never ran on this PC.
-      let sealed = if v10 { crate::secrets::seal_v10(plain, &engine.local_state()).map_err(|e| HostError { message: e.to_string(), code: Some(e.code()) }) } else { crate::secrets::seal(plain).map_err(HostError::from) };
-      crate::secrets::wipe(&mut text.0);
-      json!({ "data": base64::engine::general_purpose::STANDARD.encode(sealed?) })
-    }
-    // The text goes to the engine, which keeps the secret anyway (the JSON line is the only other copy).
-    HostRequest::Unseal(blob) => match crate::secrets::unseal(&blob, &engine.local_state()) {
-      Ok(text) => json!({ "text": text }),
-      Err(e) => return Err(HostError { message: e.to_string(), code: Some(e.code()) }),
-    },
   })
 }
 

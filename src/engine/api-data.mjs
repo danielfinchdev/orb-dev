@@ -3,7 +3,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from '../core/context.mjs';
-import { readKey, paths } from '../core/home.mjs';
+import { paths } from '../core/home.mjs';
+import { machineKeys } from '../core/machine-keys.mjs';
 import { BACK_FILE } from './approval-secret.mjs';
 import * as K from '../core/backup.mjs';
 import { legacyData, deleteLegacyData } from '../core/migrate-38.mjs';
@@ -17,7 +18,7 @@ const fail = (message) => { const e = new Error(message); e.userFacing = true; t
 export const DAILY_HOUR = 3;
 
 export function dataApi({ board, emit = () => {}, log = () => {}, version = null }) {
-  const secret = () => ctx.secret ?? readKey(ctx.home);
+  const secret = () => machineKeys().backup; // this PC's backup key (src/core/machine-keys.mjs)
   const folder = () => K.backupDir(ctx.home, ctx.config);
   const opts = () => ({ includeProjects: ctx.config.backup?.projects === true, includeAccounts: ctx.config.backup?.accounts === true });
   // A copy named by the list (its file name) or, from the desktop, any .orbbak (restore on a new machine).
@@ -98,7 +99,7 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
     },
     // The recovery code: a new one is made and shown once (the user writes it down); copies from now on open with it.
     // 3.8.1 (Tauri): after «Empezar con una clave nueva», Windows opens the key from before again: go back to it at the
-    // next start (src/engine/approval-secret.mjs › previousKey). Guarded like the recovery code.
+    // next start (src-tauri/vault/src/machine.rs › previous_key). Guarded like the recovery code.
     'backup.previousKey': () => {
       if (!ctx.previousKey) fail(tr('data.backup.err.noPreviousKey'));
       fs.writeFileSync(path.join(paths(ctx.home).data, BACK_FILE), JSON.stringify({ at: new Date().toISOString() }));

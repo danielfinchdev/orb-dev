@@ -3,8 +3,10 @@
 // (src-tauri/src/vault_host.rs); the tests run the same code as the orb-vault binary. The engine's side, with the API
 // the rest of Orb uses, is src/core/master.mjs.
 pub mod crypto;
+pub mod dpapi;
 pub mod grants;
 pub mod locked;
+pub mod machine;
 pub mod server;
 pub mod transport;
 pub mod vault;

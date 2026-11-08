@@ -171,9 +171,6 @@ pub enum HostRequest {
   OpenTerminal { dir: PathBuf, choice: String },
   OpenEditor { which: String, dir: PathBuf },
   RunAction { command: String, dir: PathBuf, choice: String },
-  /// The secret as hex; `v10`: as Electron's safeStorage seals it (for Orb 3.8.0's clave.enc), not ORB2.
-  Seal { text: String, v10: bool },
-  Unseal(Vec<u8>),
 }
 
 const LOOPBACK: [&str; 3] = ["localhost", "127.0.0.1", "[::1]"];
@@ -235,27 +232,6 @@ pub fn check_host(method: &str, params: &Value, is_dir: impl Fn(&Path) -> bool) 
         return Err("acción no válida".into());
       }
       Ok(HostRequest::RunAction { command, dir: folder("dir", "carpeta no válida")?, choice: choice(params) })
-    }
-    "host.seal" => {
-      let t = text("text");
-      if t.len() != 64 || !t.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
-        return Err("secreto no válido".into());
-      }
-      let v10 = match params.get("format").and_then(|f| f.as_str()) {
-        None | Some("orb2") => false,
-        Some("v10") => true,
-        Some(_) => return Err("formato no válido".into()),
-      };
-      Ok(HostRequest::Seal { text: t, v10 })
-    }
-    "host.unseal" => {
-      use base64::Engine as _;
-      let d = text("data");
-      let blob = if d.is_empty() || d.len() > 22_000 { None } else { base64::engine::general_purpose::STANDARD.decode(d).ok() };
-      match blob {
-        Some(b) if !b.is_empty() && b.len() <= crate::secrets::MAX_BLOB => Ok(HostRequest::Unseal(b)),
-        _ => Err("datos no válidos".into()),
-      }
     }
     _ => Err(format!("host: {method} desconocido")),
   }
@@ -383,18 +359,9 @@ mod tests {
     assert!(ok("host.runAction", json!({"command": "  ", "dir": dir})).is_err());
     assert!(ok("host.runAction", json!({"command": "x", "dir": "C:\\no-existe"})).is_err());
     assert!(ok("host.spawnDetached", json!({"cmd": "cmd.exe", "args": [], "cwd": dir})).is_err());
-    // The secret.
-    let hex = "ab".repeat(32);
-    assert_eq!(ok("host.seal", json!({ "text": hex })), Ok(HostRequest::Seal { text: hex.clone(), v10: false }));
-    assert_eq!(ok("host.seal", json!({ "text": hex, "format": "v10" })), Ok(HostRequest::Seal { text: hex.clone(), v10: true }));
-    assert!(ok("host.seal", json!({ "text": hex, "format": "v11" })).is_err());
-    for t in ["", "xyz", &"AB".repeat(32), &"ab".repeat(33)] {
-      assert!(ok("host.seal", json!({ "text": t })).is_err(), "{t}");
-    }
-    assert_eq!(ok("host.unseal", json!({"data": "T1JCMnh5eg=="})), Ok(HostRequest::Unseal(b"ORB2xyz".to_vec())));
-    for d in ["", "no es base64!", &"A".repeat(30_000)] {
-      assert!(ok("host.unseal", json!({ "data": d })).is_err());
-    }
+    // This PC's secret is the vault's (orb-vault › machine.rs): the engine cannot ask to seal or open it.
+    assert!(ok("host.seal", json!({ "text": "ab".repeat(32) })).is_err());
+    assert!(ok("host.unseal", json!({ "data": "T1JCMnh5eg==" })).is_err());
     assert!(ok("host.borrarTodo", json!({})).is_err());
   }
 }

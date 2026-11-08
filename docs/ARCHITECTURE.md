@@ -1441,27 +1441,22 @@ in `src/core/home.mjs`; nothing else builds them.
   the chosen folder is that very one). Names inside a copy are relative to the workspace (`core/datos/orb.db`,
   `core/bitacora/…`, `core/mcp` without dependencies, or `bitacora/…` for a log folder kept at the top); a 3.7 copy
   (`.orb/…`, `orb.json`, `bitacora/…`) restores into core (`legacyName`, only for a copy made by 3.7) and its paths are
-  rewritten. The app keeps a copy of the sealed secret (`clave.enc`) in its own data folder
-  (`%APPDATA%\Orb.dev\claves\<workspace>.enc`, `src/engine/approval-secret.mjs`) and puts it back when core loses it, so
-  the copies, sealed with that secret, still open on this PC. A `clave.enc` that cannot be read gives way to that copy
-  and is kept aside (`clave.<date>.ilegible.enc`), and the copy is never replaced by a different secret: the old one is
-  kept as `<workspace>.<date>.enc` first. 3.8.1 (Tauri): Rust seals it with DPAPI as `ORB2` (`host.seal`/`host.unseal`,
-  `src-tauri/src/secrets.rs`) in files of its own, `clave2.enc` and `<workspace>.v2.enc` (`loadHostSecret`), and reads
-  Electron's `v10` (`clave.enc` and its copy, with the key in `%APPDATA%\Orb.dev\Local State`) only when it has none of
-  its own. It never replaces, moves or renames Electron's files nor Local State: Orb 3.8.0 (still installed, reinstalled
-  or portable) makes a new secret when its `clave.enc` does not open, so where there is no `clave.enc` at all and
-  Electron's Local State exists, Orb makes one as 3.8.0 would seal it (`host.seal` format `v10`, created only if absent);
-  if one exists with another secret, the user is told. Both apps take turns on a workspace with the same secret
-  (`test/clave-compatible.test.mjs` runs 3.8.0's real code). Backups never carry this secret
-  (3.8.1); one made before carries it in `core/datos/clave.bin` and is refused (`data.backup.err.oldKey`). After «Empezar con una clave nueva» the keys that did
-  not open are noted (`clave-anterior.json`); when Windows opens one again, Ajustes › Datos offers to go back to it
-  (`backup.previousKey`, done at the next start, the new key kept aside). Tauri never makes a new secret by itself:
-  `host.unseal` says why a key did not open (`io` for now → the start stops and the window offers «Reintentar»;
-  `missing`, `dpapi`, `tag`, `format` → also «Empezar con una clave nueva», the old files kept aside). Every write goes to
-  a temporary file of its own, flushed, checked (it opens again to the same secret) and renamed over the old one; a
-  `clave.lock` held as a handle with no sharing keeps two starts from doing it at once (the engine's own lock in %TEMP%
-  works the same way: `engine.mjs › holdWorkspace`). DPAPI per user is not a barrier against the agents (same Windows
-  user): it protects the key at rest and from other users.
+  rewritten. **This PC's secret** (3.8.1, decision 20 d) is opened and kept in Rust (`src-tauri/vault/src/machine.rs`,
+  inside Orb.exe's vault): sealed with DPAPI as `ORB2` in `core\datos\clave2.enc` and in a copy in the app's data folder
+  (`%APPDATA%\Orb.dev\claves\<workspace>.v2.enc`) that puts core's back when core loses it. The engine asks for it once
+  per start (`src/core/master.mjs › openMachine`) and gets only the keys made from it (`src/core/machine-keys.mjs`: the
+  approvals' HMAC key and this PC's backup key); the vault keeps the secret for this PC's wrap of the data key. The app
+  no longer offers sealing to the engine (no `host.seal`/`host.unseal`). Orb 3.8.0's key files (`clave.enc`, Electron's
+  `v10`) are not read any more: when only they are there the start stops with `secretUnreadable` and its own message, and
+  the window offers «Empezar con una clave nueva»; nothing is deleted. Backups never carry this secret; one made before
+  3.8.1 carries it in `core/datos/clave.bin` and is refused (`data.backup.err.oldKey`). A sealed key that cannot be read is
+  kept aside (`clave2.<date>.ilegible.enc`) when the user starts with a new key, and noted (`clave-anterior.json`); when
+  Windows opens one again, Ajustes › Datos offers to go back to it (`backup.previousKey`, done at the next start, the new
+  key kept aside). Never a new secret by itself: `io` is for now (the start stops and the window offers «Reintentar»), any
+  other reason is the user's call. Every write goes to a temporary file of its own, flushed, checked (it opens again to
+  the same secret) and renamed over the old one; a `clave.lock` held as a handle with no sharing keeps two starts from
+  doing it at once (the engine's own lock in %TEMP% works the same way: `engine.mjs › holdWorkspace`). DPAPI per user is
+  not a barrier against the agents (same Windows user): it protects the key at rest and from other users.
 - **core missing** (`repairCore` in `backup.mjs`, called by `engine.mjs › start` before the database opens): when core,
   its orb.json or its database is gone, only what is missing **of core** is put back (`applyPendingRestore` with
   `onlyMissing`: a database newer than the copy stays; a project or whiteboard the user deleted stays deleted), from the
@@ -1523,8 +1518,8 @@ polls), issue or check an unlock token, check a phone's key confirmation (`pairF
 Rust), or a one-time grant of a connector's keys, which its launcher (`src/mcp/launch.mjs`) trades on a second pipe
 (`src/mcp/vault-client.mjs`): those keys never pass through the engine. The files on disk are the same as 3.8's. Without
 an app (tests, scripts) the engine starts the `orb-vault` binary (`scripts/vault-build.mjs`, run by `npm test`).
-What stays: the engine still holds the approval secret (approvals, backups), from which this PC's wrap could be derived,
-and the secrets it opens for its own use (this PC's keys for the phones).
+This PC's secret is the vault's too (machine.rs): the engine holds only the keys made from it (approvals, backups), from
+which this PC's wrap cannot be derived, and the secrets it opens for its own use (this PC's keys for the phones).
 
 **Keys** (`core\secretos\`):
 - A random **data key** (32 bytes) encrypts Orb's own secrets: the PC's X25519 and VAPID keys for the phones (the
@@ -1536,7 +1531,7 @@ and the secrets it opens for its own use (this PC's keys for the phones).
   p = 1, a 16-byte salt): a file left there can neither make the check cheap nor hang the engine. An HMAC of that key
   checks the password in constant time before the wrap is opened (itself authenticated). The password is never stored.
 - `maestra-pc.json`: the same data key wrapped by a key derived (HKDF) from this PC's secret, the one Windows keeps
-  sealed (DPAPI, `core\datos\clave2.enc`, opened by the engine at start: `src/engine/approval-secret.mjs`). So
+  sealed (DPAPI, `core\datos\clave2.enc`, opened by the vault at start: `src-tauri/vault/src/machine.rs`). So
   Orb starts and works without asking for the password; it is asked only for guarded actions and to link a phone. It
   also records, authenticated, that a password was made. Without the app (tests) that secret is `clave.bin`, as for approvals.
 - **Which key.** Every wrap carries the id of the data key it holds (`keyId`, an HMAC of the key) in its additional
@@ -1665,7 +1660,7 @@ and the vault inside opens with the password (or the PC secret the backup also c
   device and forgets the cached keys (forgot, reset).
 
 **What it does not protect against.** Code that runs as the same Windows user (malware, or an agent's shell bent on it)
-can ask DPAPI for the key that opens `clave.enc`, and from there `maestra-pc.json` and every secret: the master password
+can ask DPAPI to open `clave2.enc`, and from there `maestra-pc.json` and every secret: the master password
 adds nothing against it. The agents' guard (section 28) keeps their tools away from core, the copies and the app's
 `Local State`, but it is not a boundary. Real isolation would run the agents as another Windows user or in an
 AppContainer (not done yet). Without the Windows profile (a copy of core, a backup), the barrier is the password's

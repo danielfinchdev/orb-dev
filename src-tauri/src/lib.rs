@@ -27,7 +27,6 @@ mod pip;
 mod pipes;
 mod power;
 mod protocol;
-mod secrets;
 mod tools;
 mod trace;
 mod updater;

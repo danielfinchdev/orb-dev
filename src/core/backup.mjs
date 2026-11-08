@@ -55,7 +55,8 @@ const u32 = (n) => { const b = Buffer.alloc(4); b.writeUInt32BE(n); return b; };
 const tick = () => new Promise((r) => setImmediate(r));
 
 // ---- keys
-export const machineKek = (secret) => new Uint8Array(crypto.hkdfSync('sha256', Buffer.from(secret), Buffer.from('orb-backup'), Buffer.from('machine-v1'), 32));
+// `secret` in this file: this PC's backup key (src/core/machine-keys.mjs › backupKeyOf, from the vault with the app).
+const machineKek = (key) => new Uint8Array(Buffer.from(key));
 // A recovery code typed with or without dashes and spaces, in any case, gives the same key; any other passphrase is used
 // as written (NFKC, trimmed).
 export function normalizePassphrase(text) {

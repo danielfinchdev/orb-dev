@@ -73,6 +73,45 @@ pub fn key_id(dek: &[u8]) -> String {
 pub fn check_of(kek: &[u8]) -> [u8; 32] {
   hmac(kek, b"orb-master-check-v1")
 }
+/// The key that signs approvals, made from this PC's secret (src/core/machine-keys.mjs › approvalKeyOf).
+pub fn approval_key(secret: &[u8]) -> Locked {
+  let mut k = hmac(secret, b"orb-approval-v2");
+  let out = Locked::from_slice(&k);
+  zeroize::Zeroize::zeroize(&mut k);
+  out
+}
+/// The key that wraps this PC's backups and its recovery wrap (src/core/machine-keys.mjs › backupKeyOf).
+pub fn backup_key(secret: &[u8]) -> Locked {
+  let mut out = Locked::zeroed(32);
+  Hkdf::<Sha256>::new(Some(b"orb-backup"), secret).expand(b"machine-v1", out.as_mut_slice()).expect("32 bytes");
+  out
+}
+/// Lower-case hex, kept in locked memory (the sealed text of this PC's secret is its hex).
+pub fn hex_of(bytes: &[u8]) -> Locked {
+  const D: &[u8; 16] = b"0123456789abcdef";
+  let mut out = Locked::with_capacity(bytes.len() * 2);
+  for b in bytes {
+    out.extend(&[D[(b >> 4) as usize], D[(b & 15) as usize]]);
+  }
+  out
+}
+/// The bytes of lower-case hex text; None when it is not that.
+pub fn unhex(text: &[u8]) -> Option<Locked> {
+  if text.len() % 2 != 0 {
+    return None;
+  }
+  let v = |c: u8| match c {
+    b'0'..=b'9' => Some(c - b'0'),
+    b'a'..=b'f' => Some(c - b'a' + 10),
+    _ => None,
+  };
+  let mut out = Locked::with_capacity(text.len() / 2);
+  for pair in text.chunks(2) {
+    out.extend(&[(v(pair[0])? << 4) | v(pair[1])?]);
+  }
+  Some(out)
+}
+
 pub fn machine_key(secret: &[u8]) -> Locked {
   let mut out = Locked::zeroed(32);
   Hkdf::<Sha256>::new(Some(b"orb-master"), secret).expand(b"machine-v1", out.as_mut_slice()).expect("32 bytes");
