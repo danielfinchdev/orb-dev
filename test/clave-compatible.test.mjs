@@ -51,14 +51,33 @@ test('3.8.0 → 3.8.1 → 3.8.0 → 3.8.1: always the same secret, and 3.8.0\'s 
   assert.equal(load380({ dir: k.dir, copy: k.copy, ...electron }), s);
 });
 
-test('3.8.1 on a new workspace, then 3.8.0: each keeps its own key, nothing of 3.8.1\'s is lost', async () => {
+test('3.8.1 on a new workspace, then 3.8.0: with the Local State of Electron on this PC, 3.8.0 opens the same key', async () => {
   const k = setup();
   fs.mkdirSync(k.dir, { recursive: true }); fs.writeFileSync(path.join(k.dir, 'clave.bin'), Buffer.alloc(32, 7));
-  const s = await loadHostSecret({ dir: k.dir, copy: k.copy, ...tauri() });
+  const v10 = (hex) => later(Buffer.from(`v10${hex}`));
+  const s = await loadHostSecret({ dir: k.dir, copy: k.copy, ...tauri({ sealV10: v10 }) });
   assert.equal(s, '07'.repeat(32), 'la clave del espacio nuevo'); assert.equal(fs.existsSync(path.join(k.dir, 'clave.bin')), false);
+  assert.equal(read(k.enc), `v10${s}`, 'clave.enc de la 3.8.0 creado');
+  assert.equal(load380({ dir: k.dir, copy: k.copy, ...electron }), s, 'la 3.8.0 abre la misma clave');
+  assert.equal(read(k.copy), `v10${s}`, 'y deja su copia');
+  assert.equal(await loadHostSecret({ dir: k.dir, copy: k.copy, ...tauri({ sealV10: v10 }) }), s);
+  // A clave.enc that exists is never replaced, even by the same app: one of another secret is told, not touched.
+  fs.writeFileSync(k.enc, `v10${'c'.repeat(64)}`);
+  const warned = [];
+  assert.equal(await loadHostSecret({ dir: k.dir, copy: k.copy, ...tauri({ sealV10: v10 }), warn: (code) => warned.push(code) }), s);
+  assert.deepEqual(warned, ['twoKeys']); assert.equal(read(k.enc), `v10${'c'.repeat(64)}`);
+});
+
+test('3.8.1 on a new workspace with no Local State of Electron (3.8.0 never ran here): no clave.enc; if 3.8.0 makes its own later, the user is told', async () => {
+  const k = setup();
+  const missing = async () => { throw coded('missing'); };
+  const warned = [];
+  const s = await loadHostSecret({ dir: k.dir, copy: k.copy, ...tauri({ sealV10: missing }), warn: (code) => warned.push(code) });
+  assert.equal(fs.existsSync(k.enc), false); assert.deepEqual(warned, []);
   load380({ dir: k.dir, copy: k.copy, ...electron }); // 3.8.0 finds no v10: makes its own, in its own files
   assert.equal(read(k.enc2), `ORB2${s}`);
-  assert.equal(await loadHostSecret({ dir: k.dir, copy: k.copy, ...tauri() }), s);
+  assert.equal(await loadHostSecret({ dir: k.dir, copy: k.copy, ...tauri({ sealV10: missing }), warn: (code) => warned.push(code) }), s);
+  assert.deepEqual(warned, ['twoKeys']);
 });
 
 test('a key that cannot be read now stops the start; keys that none opens are the user\'s call; never a new one alone', async () => {
@@ -108,6 +127,12 @@ test('the move to ORB2 is atomic: checked first, a cut write is adopted, a seal 
   fs.rmSync(k.enc); fs.rmSync(k.copy);
   assert.equal(await loadHostSecret({ dir: k.dir, copy: k.copy, ...tauri() }), s);
   assert.equal(read(k.enc2), `ORB2${s}`); assert.equal(files(k.dir).some((n) => n.endsWith('.tmp')), false);
+  // A cut write of ANOTHER secret (a new key whose rename never happened) is not adopted while the rest agree on one.
+  const k3 = setup();
+  const s3 = load380({ dir: k3.dir, copy: k3.copy, ...electron });
+  fs.writeFileSync(`${k3.enc2}.9-ffff.tmp`, `ORB2${'d'.repeat(64)}`);
+  assert.equal(await loadHostSecret({ dir: k3.dir, copy: k3.copy, ...tauri() }), s3);
+  assert.equal(read(k3.enc2), `ORB2${s3}`);
   // A new secret that cannot be kept on disk is never used.
   const k2 = setup();
   await assert.rejects(loadHostSecret({ dir: k2.dir, copy: k2.copy, ...tauri({ seal: async () => { throw new Error('DPAPI'); } }) }), (e) => e.code === 'busy');
@@ -124,4 +149,17 @@ test('two apps at once: one waits for the other (clave.lock); a lock left by a d
   fs.writeFileSync(lock, '999999'); const old = new Date(Date.now() - 60_000); fs.utimesSync(lock, old, old);
   assert.equal(await loadHostSecret({ dir: k.dir, copy: k.copy, ...tauri() }), s);
   assert.equal(fs.existsSync(lock), false);
+  // Held by a live app (on Windows a handle open with no sharing, however old the file): the other one waits, and a
+  // slow unseal (longer than the old 30 s age) never loses it.
+  const { exclusiveOpen } = await import('../src/engine/approval-secret.mjs');
+  const fd = exclusiveOpen(lock); assert.ok(fd > 0);
+  if (process.platform === 'win32') {
+    fs.utimesSync(lock, old, old);
+    assert.equal(exclusiveOpen(lock), null, 'abierto por otro: no se toma');
+    assert.throws(() => fs.rmSync(lock), 'ni se borra');
+  }
+  const waiting = loadHostSecret({ dir: k.dir, copy: k.copy, ...tauri() });
+  await new Promise((r) => setTimeout(r, 300));
+  fs.closeSync(fd); fs.rmSync(lock, { force: true });
+  assert.equal(await waiting, s);
 });

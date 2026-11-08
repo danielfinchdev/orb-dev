@@ -186,6 +186,7 @@ export default {
   'sys.engine.notStarted': '{name} todavía no se ha iniciado',
   'sys.engine.sealedSecret': 'Windows no ha podido abrir la clave cifrada de este espacio de trabajo. Cierra Orb y vuelve a abrirlo.',
   'sys.engine.otherApp': 'Este espacio de trabajo ya está abierto en otro {name} de este PC (quizá una versión anterior). Ciérralo y pulsa «Reintentar».',
+  'sys.engine.twoKeys': 'La versión anterior de {name} (3.8.0) creó su propia clave en este espacio de trabajo. Si la vuelves a abrir, no compartirá con esta las aprobaciones, el móvil enlazado ni las copias de seguridad. Usa solo esta versión.',
   'sys.engine.secretBusy': 'Windows no deja leer ahora la clave cifrada de este espacio de trabajo. Espera un momento y pulsa «Reintentar».',
   'sys.engine.secretUnreadable': 'Windows no puede abrir la clave cifrada de este espacio de trabajo (puede ser de otro usuario de Windows o estar dañada). Pulsa «Reintentar» o empieza con una clave nueva: se volverán a pedir las aprobaciones.',
   // Tareas programadas

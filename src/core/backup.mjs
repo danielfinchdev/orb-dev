@@ -31,6 +31,7 @@ import { tr } from './context.mjs';
 import { ARCHIVE_DIR, forgetRun } from './migrate-38.mjs';
 import { KEPT as SECRET_FILES } from './master.mjs';
 import { LIVE_DIR, OLD_DIR } from './extensions.mjs';
+import { RESTORE_MARKER, markRestoredKey } from './restored-key.mjs';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
 
@@ -560,7 +561,9 @@ function unitOf(name) {
 // what was there before goes to core/antes-de-restaurar-<fecha>. → null, or { from, header, secretChanged }.
 // onlyMissing (3.8, a core deleted or damaged: repairCore): only what is not there any more is put back; what is still
 // there (a newer database, the logs) stays as it is.
-export function applyPendingRestore(home, { onlyMissing = false } = {}) {
+// outside (3.8.1, Tauri): the app's sealed copies of the key outside the workspace (claves\<key>.v2.enc), set aside with
+// core's sealed keys when the backup brings its own key, so that nothing from before the restore wins over it.
+export function applyPendingRestore(home, { onlyMissing = false, outside = [] } = {}) {
   const ready = pendingDir(home);
   let info; try { info = JSON.parse(fs.readFileSync(path.join(ready, 'listo.json'), 'utf8')); } catch { return null; }
   fs.rmSync(path.join(ready, 'listo.json'), { force: true });
@@ -572,14 +575,21 @@ export function applyPendingRestore(home, { onlyMissing = false } = {}) {
   if (onlyMissing) {
     // Only core: a project or a whiteboard the user deleted stays deleted.
     for (const u of [...units]) if (!u.startsWith(`${INTERNAL_DIR}/`) || fs.existsSync(homePath(home, u))) units.delete(u);
-    // The secret sealed by Windows (clave.enc) is the same one: its plain copy is not put back beside it.
-    if (fs.existsSync(path.join(paths(home).data, 'clave.enc'))) units.delete(`${INTERNAL_DIR}/datos/clave.bin`);
+    // A secret sealed by Windows (clave.enc of Electron, clave2.enc of Tauri) is the same one: its plain copy is not put
+    // back beside it.
+    if (['clave.enc', 'clave2.enc'].some((n) => fs.existsSync(path.join(paths(home).data, n)))) units.delete(`${INTERNAL_DIR}/datos/clave.bin`);
   }
   const move = (from, to) => { fs.mkdirSync(path.dirname(to), { recursive: true }); try { fs.renameSync(from, to); } catch { fs.cpSync(from, to, { recursive: true }); fs.rmSync(from, { recursive: true, force: true }); } };
   const oldKey = (() => { try { return fs.readFileSync(path.join(paths(home).data, 'clave.bin')); } catch { return null; } })();
-  // The database's journal files and the Windows-sealed secret go with the old database.
-  for (const extra of [...(units.has(`${INTERNAL_DIR}/datos/orb.db`) || !onlyMissing ? ['orb.db-wal', 'orb.db-shm'] : []), ...(units.has(`${INTERNAL_DIR}/datos/clave.bin`) ? ['clave.enc'] : [])]) {
+  // The database's journal files and the Windows-sealed secrets (and a cut write of one) go with the old database.
+  const newKey = units.has(`${INTERNAL_DIR}/datos/clave.bin`);
+  const sealed = newKey ? (() => { try { return fs.readdirSync(paths(home).data).filter((n) => /^clave2?\.enc(\..+\.tmp)?$/.test(n)); } catch { return []; } })() : [];
+  for (const extra of [...(units.has(`${INTERNAL_DIR}/datos/orb.db`) || !onlyMissing ? ['orb.db-wal', 'orb.db-shm'] : []), ...sealed, ...(newKey ? [RESTORE_MARKER] : [])]) {
     const f = path.join(paths(home).data, extra); if (fs.existsSync(f)) move(f, path.join(aside, INTERNAL_DIR, 'datos', extra));
+  }
+  // The app's copies outside the workspace too: kept beside them under another name (backups made before may need them).
+  if (newKey && !onlyMissing) {
+    for (const f of outside) { try { if (fs.existsSync(f)) fs.renameSync(f, f.replace(/\.enc$/, `.antes-de-restaurar-${stamp()}.enc`)); } catch (error) { console.error(`restaurar: ${path.basename(f)}: ${error.message}`); } }
   }
   for (const u of [...units].sort()) {
     const target = homePath(home, u);
@@ -591,8 +601,10 @@ export function applyPendingRestore(home, { onlyMissing = false } = {}) {
   if (units.has(`${INTERNAL_DIR}/datos/orb.db`)) forgetRun(home);
   // A copy made by 3.7: the paths of its orb.json and database point into core.
   if (info.legacy) rewritePaths(home);
-  let newKey = null; try { newKey = fs.readFileSync(path.join(paths(home).data, 'clave.bin')); } catch { /* none */ }
-  return { from: info.from, header: info.header, aside, units: [...units], secretChanged: Boolean(newKey && !(oldKey && oldKey.equals(newKey))), secret: newKey };
+  let key = null; try { key = fs.readFileSync(path.join(paths(home).data, 'clave.bin')); } catch { /* none */ }
+  // The restored key wins at the next start of either app over what is left from before (approval-secret.mjs).
+  if (newKey && key && !onlyMissing) { try { markRestoredKey(paths(home).data); } catch (error) { console.error(`restaurar: marca de la clave: ${error.message}`); } }
+  return { from: info.from, header: info.header, aside, units: [...units], secretChanged: Boolean(key && !(oldKey && oldKey.equals(key))), secret: key };
 }
 
 // ---- 3.8: core missing or damaged (src/engine/engine.mjs, before the database opens)

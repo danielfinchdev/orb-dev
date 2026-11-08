@@ -55,28 +55,26 @@ process.on('unhandledRejection', (error) => log(`unhandledRejection: ${error?.st
 
 // 3.8.1: one engine per workspace on this PC. Electron and Tauri each keep one app open (their own single-instance
 // locks, which do not see each other): two engines on one database and one key would step on each other. A lock file in
-// %TEMP% (never in the workspace) with this process's id; one left by a process that is gone is taken over.
+// %TEMP% (never in the workspace) kept open with no sharing for the engine's whole life (approval-secret.mjs ›
+// exclusiveOpen): while this engine lives nobody can open, rename or delete it (Storage Sense or a cleaner neither), it
+// never ages (a PC asleep or a long migration do not free it), and Windows lets it go when the engine ends, however it
+// ends (a process id given to another program means nothing here).
 let held = null;
-function holdWorkspace(home) {
+async function holdWorkspace(home) {
   if (held) return;
+  const { exclusiveOpen } = await import('./approval-secret.mjs');
   const file = path.join(os.tmpdir(), `orb-motor-${homeKey(home)}.lock`);
-  for (let i = 0; i < 2; i++) {
-    try { fs.writeFileSync(file, String(process.pid), { flag: 'wx' }); held = file; break; } catch (error) {
-      if (error.code !== 'EEXIST') return; // %TEMP% not writable: not a reason to refuse the start
-      let pid = 0; try { pid = Number(fs.readFileSync(file, 'utf8')) || 0; } catch { /* being written */ }
-      // Alive: that process exists and has touched the file lately (a heartbeat every minute: an id Windows gave to
-      // another program after the engine died does not count).
-      let alive = pid > 0 && pid !== process.pid;
-      try { if (Date.now() - fs.statSync(file).mtimeMs > 3 * 60_000) alive = false; } catch { /* gone */ }
-      if (alive) { try { process.kill(pid, 0); } catch (e) { alive = e.code === 'EPERM'; } }
-      if (alive) throw new Error(tr('sys.engine.otherApp', { name: PRODUCT.name }));
-      fs.rmSync(file, { force: true });
-    }
-  }
-  if (held) setInterval(() => { try { const now = new Date(); fs.utimesSync(held, now, now); } catch { /* gone */ } }, 60_000).unref();
-  process.once('exit', () => { try { if (fs.readFileSync(held, 'utf8') === String(process.pid)) fs.rmSync(held, { force: true }); } catch { /* gone */ } });
+  const fd = exclusiveOpen(file);
+  if (fd === null) throw new Error(tr('sys.engine.otherApp', { name: PRODUCT.name }));
+  if (fd === undefined) return; // %TEMP% not writable: not a reason to refuse the start
+  try { fs.ftruncateSync(fd); fs.writeSync(fd, String(process.pid)); } catch { /* only informative */ }
+  held = { file, fd };
+  // Elsewhere than Windows the file is the lock ('wx'): kept fresh, and removed at the end.
+  if (process.platform !== 'win32') setInterval(() => { try { const now = new Date(); fs.futimesSync(fd, now, now); } catch { /* closed */ } }, 5000).unref();
+  process.once('exit', () => { try { fs.closeSync(fd); fs.rmSync(file, { force: true }); } catch { /* gone, or another engine has it now */ } });
 }
 
+let outsideKeys = []; // 3.8.1 (Tauri): this app's sealed copy of the key outside the workspace (claves\<key>.v2.enc)
 let mirror = null; // 3.8: the copy of core\secretos outside the workspace (the app's data folder), when the app gives one
 const validSecret = (s) => typeof s === 'string' && /^[0-9a-f]{64}$/.test(s);
 // 3.8.1, Tauri: the approval secret, opened and kept by the engine (src/engine/approval-secret.mjs › loadHostSecret) with
@@ -85,13 +83,19 @@ const validSecret = (s) => typeof s === 'string' && /^[0-9a-f]{64}$/.test(s);
 // few times and then the start stops (code 'secretBusy': the window offers «Reintentar»); sealed keys that none opens
 // stop it too (code 'secretUnreadable': «Reintentar» or «Empezar con una clave nueva», newSecret).
 const startError = (key, code, detail) => Object.assign(new Error(tr(key)), { code, detail });
+// What the user should know about the keys, said once the database is open (board.notice in run()).
+const keyNotices = [];
 async function secretFromApp(home, userData, newSecret) {
   const { loadHostSecret, hostSealing, SecretError } = await import('./approval-secret.mjs');
+  const warn = (code, detail) => {
+    console.error(`clave: ${code} (${detail})`);
+    if (code === 'twoKeys' && !keyNotices.includes('sys.engine.twoKeys')) keyNotices.push('sys.engine.twoKeys');
+  };
   for (let attempt = 1; ; attempt++) {
     try {
       const probe = await hostCall('host.seal', { text: '0'.repeat(64) });
       if (!probe?.data) throw new SecretError('busy', 'host.seal sin datos');
-      return await loadHostSecret({ dir: secretDir(home), copy: secretCopy(userData, home), ...hostSealing(hostCall), allowNew: newSecret === true });
+      return await loadHostSecret({ dir: secretDir(home), copy: secretCopy(userData, home), ...hostSealing(hostCall), allowNew: newSecret === true, warn });
     } catch (error) {
       const code = error instanceof SecretError ? error.code : 'busy';
       console.error(`clave: ${code} (${error.message})`);
@@ -106,10 +110,11 @@ async function secretFromApp(home, userData, newSecret) {
 // user chose to start with a new key after the sealed ones could not be opened.
 async function start(home, version, secret, browser, keep = null, userData = null, hostSecret = false, newSecret = false) {
   if (!home || !path.isAbsolute(home)) throw new Error(tr('sys.engine.notHome', { home }));
-  holdWorkspace(home);
+  await holdWorkspace(home);
   if (typeof userData === 'string' && path.isAbsolute(userData)) {
     adoptOldKeyNames(userData, home);
     keep ??= secretsCopy(userData, home);
+    outsideKeys = [(await import('./approval-secret.mjs')).secret2Files(secretDir(home), secretCopy(userData, home)).copy2];
     if (!validSecret(secret) && hostSecret === true) secret = await secretFromApp(home, userData, newSecret);
     // An app that cannot open a sealed secret (in core or its copy outside, which would be put back): never a new plain
     // key instead, or this workspace's approvals and backups would no longer open.
@@ -162,7 +167,7 @@ async function open({ home, version, repair = null }) {
   // opens (what was there goes to core/antes-de-restaurar-<fecha>). Its secret (links, approvals) comes with it.
   const { applyPendingRestore } = await import('../core/backup.mjs');
   let restored = null;
-  try { restored = applyPendingRestore(home); } catch (error) { console.error(`restaurar: ${error.message}`); }
+  try { restored = applyPendingRestore(home, { outside: outsideKeys }); } catch (error) { console.error(`restaurar: ${error.message}`); }
   if (restored) { useHome(home); if (restored.secretChanged && restored.secret?.length >= 32) ctx.secret = Buffer.from(restored.secret.subarray(0, 32)); }
   logFile = path.join(ctx.paths.runs, 'motor.log');
   fs.mkdirSync(ctx.paths.runs, { recursive: true });
@@ -382,6 +387,7 @@ async function run(board, { home, version, restored, repair }) {
   board.onChange((what) => { if (what === 'tasks') setImmediate(loop); });
   log(`motor arrancado (versión ${version}) en ${home}`);
   if (repair?.restored) board.notice(tr('data.core.restored', { created: String(repair.restored.created ?? '').slice(0, 16).replace('T', ' ') }), 'warning');
+  for (const key of keyNotices.splice(0)) board.notice(tr(key, { name: PRODUCT.name }), 'warning');
   if (restored) { log(`copia restaurada: ${restored.from} (lo anterior está en ${restored.aside})`); board.notice(tr('data.backup.restored', { created: String(restored.header?.created ?? '').slice(0, 16).replace('T', ' ') }), 'success'); }
   // 3.8: a data folder of 3.5–3.7 was moved to 3.8 when its database opened (src/core/migrate-38.mjs): said once.
   {

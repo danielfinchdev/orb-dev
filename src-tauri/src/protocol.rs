@@ -152,7 +152,8 @@ pub enum HostRequest {
   OpenTerminal { dir: PathBuf, choice: String },
   OpenEditor { which: String, dir: PathBuf },
   RunAction { command: String, dir: PathBuf, choice: String },
-  Seal(String),
+  /// The secret as hex; `v10`: as Electron's safeStorage seals it (for Orb 3.8.0's clave.enc), not ORB2.
+  Seal { text: String, v10: bool },
   Unseal(Vec<u8>),
 }
 
@@ -221,7 +222,12 @@ pub fn check_host(method: &str, params: &Value, is_dir: impl Fn(&Path) -> bool) 
       if t.len() != 64 || !t.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
         return Err("secreto no válido".into());
       }
-      Ok(HostRequest::Seal(t))
+      let v10 = match params.get("format").and_then(|f| f.as_str()) {
+        None | Some("orb2") => false,
+        Some("v10") => true,
+        Some(_) => return Err("formato no válido".into()),
+      };
+      Ok(HostRequest::Seal { text: t, v10 })
     }
     "host.unseal" => {
       use base64::Engine as _;
@@ -352,7 +358,9 @@ mod tests {
     assert!(ok("host.spawnDetached", json!({"cmd": "cmd.exe", "args": [], "cwd": dir})).is_err());
     // The secret.
     let hex = "ab".repeat(32);
-    assert_eq!(ok("host.seal", json!({ "text": hex })), Ok(HostRequest::Seal(hex.clone())));
+    assert_eq!(ok("host.seal", json!({ "text": hex })), Ok(HostRequest::Seal { text: hex.clone(), v10: false }));
+    assert_eq!(ok("host.seal", json!({ "text": hex, "format": "v10" })), Ok(HostRequest::Seal { text: hex.clone(), v10: true }));
+    assert!(ok("host.seal", json!({ "text": hex, "format": "v11" })).is_err());
     for t in ["", "xyz", &"AB".repeat(32), &"ab".repeat(33)] {
       assert!(ok("host.seal", json!({ "text": t })).is_err(), "{t}");
     }

@@ -3,7 +3,8 @@
 //   ORB2 + CryptProtectData(text, entropy "orb.clave.v2")   what Orb 3.8.1 writes;
 //   v10 + nonce(12) + AES-256-GCM(text)                     what Electron's safeStorage wrote (Orb up to 3.8.0), opened
 //                                                           with the key in <app data>\Local State (os_crypt.encrypted_key
-//                                                           = base64("DPAPI" + a DPAPI blob)). Read only: never written.
+//                                                           = base64("DPAPI" + a DPAPI blob)). Written only to make a
+//                                                           clave.enc that is not there, for Orb 3.8.0 (seal_v10).
 // Local State is never deleted or changed: it is the only way to open older sealed copies.
 use std::path::Path;
 
@@ -76,6 +77,22 @@ impl Drop for Secret {
 pub fn seal(text: &str) -> Result<Vec<u8>, String> {
   let mut out = ORB2.to_vec();
   out.extend(dpapi::protect(text.as_bytes(), ENTROPY)?);
+  Ok(out)
+}
+
+/// As Electron's safeStorage seals on Windows (v10 + a random nonce + AES-256-GCM with the key of `local_state`), so that
+/// Orb 3.8.0 opens it. Local State is only read.
+pub fn seal_v10(text: &str, local_state: &Path) -> Result<Vec<u8>, UnsealError> {
+  use aes_gcm::aead::{Aead, AeadCore, KeyInit, OsRng};
+  use aes_gcm::Aes256Gcm;
+  let state = read_local_state(local_state)?;
+  let key = Secret(electron_key(&state)?);
+  let cipher = Aes256Gcm::new_from_slice(&key.0).map_err(|_| UnsealError::Format)?;
+  let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+  let body = cipher.encrypt(&nonce, text.as_bytes()).map_err(|_| UnsealError::Format)?;
+  let mut out = V10.to_vec();
+  out.extend_from_slice(&nonce);
+  out.extend(body);
   Ok(out)
 }
 
@@ -239,6 +256,23 @@ mod tests {
     assert!(unseal(&broken, Path::new("x")).is_err());
   }
 
+  /// What Orb 3.8.1 seals as v10 for Orb 3.8.0 opens with the same Local State (Electron's own code: the test below with
+  /// the real Electron opens what Electron wrote) and nothing else; without Local State: 'missing'.
+  #[test]
+  fn v10_sealed_here_opens_like_electrons() {
+    let dir = temp("v10-sellar");
+    let _ = electron_like(&dir, SECRET);
+    let state = dir.join("Local State");
+    let before = std::fs::read(&state).unwrap();
+    let blob = seal_v10(SECRET, &state).unwrap();
+    assert!(blob.starts_with(b"v10") && blob.len() == 3 + 12 + SECRET.len() + 16);
+    assert_ne!(seal_v10(SECRET, &state).unwrap(), blob, "a nonce of its own each time");
+    assert_eq!(unseal(&blob, &state).unwrap(), SECRET);
+    assert_eq!(std::fs::read(&state).unwrap(), before, "Local State is never changed");
+    assert_eq!(seal_v10(SECRET, &dir.join("no-esta")), Err(UnsealError::Missing));
+    let _ = std::fs::remove_dir_all(dir);
+  }
+
   #[test]
   fn electron_v10_opens_with_its_local_state_and_nothing_else() {
     let dir = temp("v10");
@@ -302,6 +336,20 @@ app.whenReady().then(() => { fs.writeFileSync(path.join(dir, 'clave.enc'), safeS
     let blob = std::fs::read(dir.join("clave.enc")).unwrap();
     assert!(blob.starts_with(b"v10"), "safeStorage on Windows writes v10");
     assert_eq!(unseal(&blob, &dir.join("datos").join("Local State")).unwrap(), SECRET);
+    // And the other way round: what Rust seals as v10 (for Orb 3.8.0's clave.enc), Electron's safeStorage opens.
+    let ours = seal_v10(SECRET, &dir.join("datos").join("Local State")).unwrap();
+    std::fs::write(dir.join("nuestra.enc"), &ours).unwrap();
+    let script = dir.join("abrir.cjs");
+    std::fs::write(
+      &script,
+      r#"const { app, safeStorage } = require('electron'); const fs = require('fs'); const path = require('path');
+const dir = process.env.ORB_TEST_DIR; app.setPath('userData', path.join(dir, 'datos'));
+app.whenReady().then(() => { fs.writeFileSync(path.join(dir, 'abierta.txt'), safeStorage.decryptString(fs.readFileSync(path.join(dir, 'nuestra.enc')))); app.quit(); });"#,
+    )
+    .unwrap();
+    let status = std::process::Command::new(&electron).arg(&script).env("ORB_TEST_DIR", &dir).env_remove("ELECTRON_RUN_AS_NODE").status().unwrap();
+    assert!(status.success(), "Electron: {status:?}");
+    assert_eq!(std::fs::read_to_string(dir.join("abierta.txt")).unwrap(), SECRET);
     let _ = std::fs::remove_dir_all(dir);
   }
 }

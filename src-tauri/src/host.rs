@@ -62,10 +62,13 @@ pub async fn handle(app: &AppHandle, method: &str, params: &Value) -> Result<Val
       spawn_detached(&p).map_err(|e| t("sys.terminal.openFailed", &[("name", "PowerShell".into()), ("error", e)]))?;
       json!(true)
     }
-    HostRequest::Seal(text) => {
+    HostRequest::Seal { text, v10 } => {
       use base64::Engine as _;
       let mut text = crate::secrets::Secret(text.into_bytes());
-      let sealed = crate::secrets::seal(std::str::from_utf8(&text.0).unwrap_or_default());
+      let plain = std::str::from_utf8(&text.0).unwrap_or_default();
+      // v10: Orb 3.8.0's clave.enc, made only when it is not there (approval-secret.mjs): with the key of Electron's
+      // Local State, which is never changed; 'missing' when Orb on Electron never ran on this PC.
+      let sealed = if v10 { crate::secrets::seal_v10(plain, &engine.local_state()).map_err(|e| HostError { message: e.to_string(), code: Some(e.code()) }) } else { crate::secrets::seal(plain).map_err(HostError::from) };
       crate::secrets::wipe(&mut text.0);
       json!({ "data": base64::engine::general_purpose::STANDARD.encode(sealed?) })
     }
