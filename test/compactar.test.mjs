@@ -118,6 +118,16 @@ test('Codex: «Compactar» pide thread/compact/start del hilo y espera a que ter
   assert.equal((await live.send({ text: 'sigue' })).final, 'Codex: sigue', 'el hilo sigue después');
 });
 
+test('Codex: el fin del turno de la compactación, aunque llegue tarde, no termina vacío el turno siguiente', async () => {
+  const { live, events } = openCodex({ FAKE_COMPACT_SLOW_END: '1' });
+  await live.send({ text: 'hola' });
+  const t0 = Date.now();
+  assert.deepEqual(await live.compact(), { ok: true, error: null });
+  assert.ok(Date.now() - t0 >= 250, 'espera al fin del turno de la compactación');
+  assert.equal(events.filter((e) => e.type === 'compacted').length, 1);
+  assert.equal((await live.send({ text: 'sigue' })).final, 'Codex: sigue');
+});
+
 test('Codex sin thread/compact/start: falla con su mensaje y la sesión sigue viva', async () => {
   const { live } = openCodex({ FAKE_NO_COMPACT: '1' });
   await live.send({ text: 'hola' });

@@ -201,9 +201,20 @@ export function createLive(o) {
       const tool = ITEM_TOOL(p.item); if (tool) onEvent({ type: 'item', role: 'tool', kind: 'tool', body: { id: p.item.id, ...tool } });
       return;
     }
-    // 3.6: the end of a compaction (thread/compact/start): the item of the summary or the thread's own notice.
+    // 3.6: the end of a compaction (thread/compact/start): the item of the summary or the thread's own notice. 3.8.1: the
+    // compaction runs as a turn of its own; when the server says so (turn/started), it ends with that turn's
+    // turn/completed, which could otherwise arrive after the next turn/start and end that turn empty.
+    if (method === 'turn/started' && compacting && !compacting.done && !compacting.turnId) { compacting.turnId = p.turn?.id ?? null; return; }
     if ((method === 'thread/compacted' || (method === 'item/completed' && p.item?.type === 'contextCompaction')) && compacting && !compacting.done) {
-      onEvent({ type: 'compacted', before: null, after: null }); compacting.finish({}); return;
+      if (!compacting.compacted) onEvent({ type: 'compacted', before: null, after: null });
+      compacting.compacted = true;
+      if (!compacting.turnId) compacting.finish({});
+      return;
+    }
+    if (method === 'turn/completed' && compacting && !compacting.done && compacting.turnId && p.turn?.id === compacting.turnId) {
+      const failed = p.turn.status === 'failed' && !compacting.compacted;
+      compacting.finish(failed ? { isError: true, final: p.turn.error?.message ?? 'thread/compact/start' } : {});
+      return;
     }
     if (method === 'item/completed') {
       const item = p.item;
