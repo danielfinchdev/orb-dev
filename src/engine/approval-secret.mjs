@@ -147,23 +147,30 @@ async function restoredAfter(dir, file, hex, unseal) {
 }
 
 // The way back after «Empezar con una clave nueva» (PREVIOUS_FILE). → the secret to use now.
+// And the way back from it (review D10 M6): going back keeps the new key aside and writes PREVIOUS_FILE again pointing at
+// it ({ back: true }), so Ajustes › Datos can offer «Volver a la clave nueva» (warn 'newAvailable': no notice at every
+// start, only the button; and 'previousQuiet' for the way back again). Each way is the same step: the key asked for in this app's files, the other one aside.
 async function previousKey({ dir, enc2, copy2, hex, seal, unseal, warn }) {
   const record = path.join(dir, PREVIOUS_FILE); const back = path.join(dir, BACK_FILE);
-  let files; try { files = JSON.parse(fs.readFileSync(record, 'utf8'))?.files; } catch { fs.rmSync(back, { force: true }); return hex; }
+  let saved; try { saved = JSON.parse(fs.readFileSync(record, 'utf8')); } catch { fs.rmSync(back, { force: true }); return hex; }
+  const files = saved?.files; const toNew = saved?.back === true;
   if (!Array.isArray(files) || !files.some((f) => typeof f === 'string' && fs.existsSync(f))) { fs.rmSync(record, { force: true }); fs.rmSync(back, { force: true }); return hex; }
   let old = null;
   for (const f of files) { const r = typeof f === 'string' ? await tryOpen(f, unseal) : {}; if (r.hex && r.hex !== hex) { old = r.hex; break; } }
   if (!old) { fs.rmSync(back, { force: true }); return hex; }
-  if (!fs.existsSync(back)) { warn('previousOpens', 'clave anterior'); return hex; }
-  // Asked for: the key from before in this app's files, the new one kept aside (never offered again).
+  // A way back the user made by going one way is offered quietly (the button only); the first one is also said.
+  if (!fs.existsSync(back)) { warn(toNew ? 'newAvailable' : saved.quiet ? 'previousQuiet' : 'previousOpens', toNew ? 'clave nueva' : 'clave anterior'); return hex; }
+  // Asked for: that key in this app's files, the one in use now kept aside (and offered back).
   let fresh = null;
   try { fresh = await seal(old); if ((await unseal(fresh)) !== old) fresh = null; } catch { fresh = null; }
   if (!fresh) { warn('previousFailed', 'no se pudo sellar'); return hex; }
+  const kept = [];
   for (const file of [enc2, copy2]) {
-    try { if (fs.existsSync(file)) keepAside(file, 'nueva'); writeWhole(file, fresh); } catch (error) { if (file === enc2) { warn('previousFailed', error.message); return hex; } }
+    try { if (fs.existsSync(file)) kept.push(keepAside(file, toNew ? 'anterior' : 'nueva')); writeWhole(file, fresh); } catch (error) { if (file === enc2) { warn('previousFailed', error.message); return hex; } }
   }
-  fs.rmSync(record, { force: true }); fs.rmSync(back, { force: true });
-  warn('previousBack', 'clave anterior');
+  fs.rmSync(back, { force: true });
+  try { writeWhole(record, Buffer.from(JSON.stringify({ files: kept, at: new Date().toISOString(), back: !toNew, quiet: true }))); } catch { fs.rmSync(record, { force: true }); }
+  warn(toNew ? 'previousNew' : 'previousBack', toNew ? 'clave nueva' : 'clave anterior');
   return old;
 }
 
@@ -201,7 +208,11 @@ export async function loadHostSecret({ dir, copy, seal, unseal, sealV10 = null, 
     const restored = restoredKey(dir);
     const unsealed = missingIsBusy ? async (b) => { try { return await unseal(b); } catch (error) { throw error?.code === 'missing' ? Object.assign(new Error(error.message), { code: 'io' }) : error; } } : unseal;
     let lost = []; // allowNew: the sealed files that did not open, for the way back
-    if (restored) hex = restored;
+    if (restored) {
+      hex = restored;
+      // The way back to a key from before the restore is gone with it (review D10 M4/M5; backup.mjs sets them aside too).
+      for (const f of [PREVIOUS_FILE, BACK_FILE]) fs.rmSync(path.join(dir, f), { force: true });
+    }
     else {
       const others = async () => { const out = []; for (const f of [copy2, enc, copy]) { const r = await tryOpen(f, unseal); if (r.hex) out.push(r.hex); } return out; };
       await adoptTmp(enc2, unseal, others); await adoptTmp(copy2, unseal, async () => { const r = await tryOpen(enc2, unseal); return r.hex ? [r.hex] : others(); });

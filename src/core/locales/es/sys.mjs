@@ -191,6 +191,8 @@ export default {
   'sys.engine.previousOpens': 'Windows vuelve a poder abrir la clave anterior de este espacio de trabajo. Si quieres volver a ella, ve a Ajustes › Datos.',
   'sys.engine.previousBack': '{name} ha vuelto a la clave anterior. La clave nueva se ha guardado aparte.',
   'sys.engine.previousFailed': 'No se pudo volver a la clave anterior: {name} sigue con la clave nueva. Inténtalo otra vez desde Ajustes › Datos.',
+  'sys.engine.previousNew': '{name} ha vuelto a la clave nueva. La clave anterior se ha guardado aparte.',
+  'sys.engine.recoveryOtherKey': 'Tu código de recuperación se creó con la otra clave y ya no sirve en este PC: las copias programadas salen sin él. Crea uno nuevo en Ajustes › Datos.',
   'sys.engine.secretBusy': 'Windows no deja leer ahora la clave cifrada de este espacio de trabajo. Espera un momento y pulsa «Reintentar».',
   'sys.engine.secretUnreadable': 'Windows no puede abrir la clave cifrada de este espacio de trabajo (puede ser de otro usuario de Windows o estar dañada). Pulsa «Reintentar» o empieza con una clave nueva: se volverán a pedir las aprobaciones.',
   // Tareas programadas

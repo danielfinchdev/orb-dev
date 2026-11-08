@@ -563,6 +563,9 @@ function unitOf(name) {
 // there (a newer database, the logs) stays as it is.
 // outside (3.8.1, Tauri): the app's sealed copies of the key outside the workspace (claves\<key>.v2.enc), set aside with
 // core's sealed keys when the backup brings its own key, so that nothing from before the restore wins over it.
+// The way back to a key from before «Empezar con una clave nueva» (src/engine/approval-secret.mjs › PREVIOUS_FILE,
+// BACK_FILE): a restored key replaces it, so it goes aside with the old keys (review D10 M4/M5).
+const KEY_WAY_BACK = ['clave-anterior.json', 'clave-volver.json'];
 export function applyPendingRestore(home, { onlyMissing = false, outside = [] } = {}) {
   const ready = pendingDir(home);
   let info; try { info = JSON.parse(fs.readFileSync(path.join(ready, 'listo.json'), 'utf8')); } catch { return null; }
@@ -584,7 +587,7 @@ export function applyPendingRestore(home, { onlyMissing = false, outside = [] } 
   // The database's journal files and the Windows-sealed secrets (and a cut write of one) go with the old database.
   const newKey = units.has(`${INTERNAL_DIR}/datos/clave.bin`);
   const sealed = newKey ? (() => { try { return fs.readdirSync(paths(home).data).filter((n) => /^clave2?\.enc(\..+\.tmp)?$/.test(n)); } catch { return []; } })() : [];
-  for (const extra of [...(units.has(`${INTERNAL_DIR}/datos/orb.db`) || !onlyMissing ? ['orb.db-wal', 'orb.db-shm'] : []), ...sealed, ...(newKey ? [RESTORE_MARKER] : [])]) {
+  for (const extra of [...(units.has(`${INTERNAL_DIR}/datos/orb.db`) || !onlyMissing ? ['orb.db-wal', 'orb.db-shm'] : []), ...sealed, ...(newKey ? [RESTORE_MARKER, ...KEY_WAY_BACK] : [])]) {
     const f = path.join(paths(home).data, extra); if (fs.existsSync(f)) move(f, path.join(aside, INTERNAL_DIR, 'datos', extra));
   }
   // The app's copies outside the workspace too: kept beside them under another name (backups made before may need them).

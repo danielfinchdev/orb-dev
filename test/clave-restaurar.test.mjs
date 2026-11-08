@@ -98,3 +98,27 @@ test('a marker that is not about the clave.bin there (or no clave.bin) is droppe
   assert.equal(await loadHostSecret({ ...k, ...noV10 }), s);
   assert.equal(fs.existsSync(path.join(k.dir, RESTORE_MARKER)), false);
 });
+
+// Review D10 M4/M5: a way back to a key from before «Empezar con una clave nueva» (clave-anterior.json, and
+// clave-volver.json when «Volver a la clave anterior» was asked for) never undoes a restore that came after it.
+test('a restore drops the way back to an older key: the restored key stays, and no «Volver a la clave anterior» is offered', async () => {
+  const k = mk();
+  const opens = { v: true };
+  const dpapi = { ...tauriSeal, unseal: async (b) => { const s = b.toString('latin1'); if (s.startsWith('ORB2') && (opens.v || !s.includes('cd'.repeat(32)))) return s.slice(4); throw Object.assign(new Error('dpapi'), { code: 'dpapi' }); } };
+  // The old key, then Windows stops opening it: «Empezar con una clave nueva».
+  fs.writeFileSync(k.dir + '/clave2.enc', 'ORB2' + 'cd'.repeat(32));
+  opens.v = false;
+  const fresh = await loadHostSecret({ ...k, ...dpapi, allowNew: true });
+  assert.ok(fs.existsSync(path.join(k.dir, 'clave-anterior.json')));
+  // Windows opens the old one again and the user asks to go back… but restores a backup before the next start.
+  opens.v = true;
+  fs.writeFileSync(path.join(k.dir, 'clave-volver.json'), '{}');
+  restore(k, [secret2Files(k.dir, k.copy).copy2]);
+  for (const start of ['primer', 'segundo', 'tercer']) {
+    const warned = [];
+    assert.equal(await loadHostSecret({ ...k, ...dpapi, warn: (c) => warned.push(c) }), R, `${start} arranque`);
+    assert.deepEqual(warned, [], `${start} arranque: sin oferta de volver`);
+  }
+  assert.notEqual(fresh, R);
+  for (const f of ['clave-anterior.json', 'clave-volver.json']) assert.equal(fs.existsSync(path.join(k.dir, f)), false, f);
+});

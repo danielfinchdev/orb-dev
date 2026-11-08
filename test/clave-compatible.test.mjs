@@ -181,10 +181,20 @@ test('after «Empezar con una clave nueva»: when Windows opens the old key agai
   assert.ok(warned.includes('previousBack'));
   assert.equal(read(k.enc2), `ORB2${old}`); assert.equal(read(k.copy2), `ORB2${old}`);
   assert.ok(files(k.dir).some((n) => /^clave2\..*\.nueva\.enc$/.test(n) && read(path.join(k.dir, n)) === `ORB2${fresh}`), 'la nueva, apartada');
-  assert.equal(fs.existsSync(path.join(k.dir, 'clave-anterior.json')), false); assert.equal(fs.existsSync(path.join(k.dir, 'clave-volver.json')), false);
+  assert.equal(fs.existsSync(path.join(k.dir, 'clave-volver.json')), false);
+  // Review D10 M6: and a way back to the new key, offered quietly (the button in Ajustes › Datos, no notice).
+  assert.equal(JSON.parse(read(path.join(k.dir, 'clave-anterior.json'))).back, true);
   warned.length = 0;
   assert.equal(await loadHostSecret({ dir: k.dir, copy: k.copy, ...t(), warn }), old);
-  assert.deepEqual(warned, []);
+  assert.deepEqual(warned, ['newAvailable']);
+  fs.writeFileSync(path.join(k.dir, 'clave-volver.json'), '{}');
+  warned.length = 0;
+  assert.equal(await loadHostSecret({ dir: k.dir, copy: k.copy, ...t(), warn }), fresh, 'pedido: vuelve la nueva');
+  assert.ok(warned.includes('previousNew'));
+  assert.equal(read(k.enc2), `ORB2${fresh}`);
+  warned.length = 0;
+  assert.equal(await loadHostSecret({ dir: k.dir, copy: k.copy, ...t(), warn }), fresh);
+  assert.deepEqual(warned.filter((c) => c !== 'twoKeys'), ['previousQuiet'], 'la vuelta a la anterior sigue ofrecida, sin aviso en cada arranque');
 });
 
 test('Local State not there: «for now» while missingIsBusy (the first starts), then the user\'s call', async () => {

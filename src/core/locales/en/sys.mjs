@@ -188,6 +188,8 @@ export default {
   'sys.engine.previousOpens': 'Windows can open the old key of this workspace again. To go back to it, go to Settings › Data.',
   'sys.engine.previousBack': '{name} is back on the old key. The new key has been kept aside.',
   'sys.engine.previousFailed': 'Could not go back to the old key: {name} keeps the new key. Try again from Settings › Data.',
+  'sys.engine.previousNew': '{name} is back on the new key. The old key has been kept aside.',
+  'sys.engine.recoveryOtherKey': 'Your recovery code was made with the other key and no longer works on this PC: scheduled backups go out without it. Make a new one in Settings › Data.',
   'sys.engine.secretBusy': 'Windows cannot read the encrypted key of this workspace right now. Wait a moment and press “Retry”.',
   'sys.engine.secretUnreadable': 'Windows cannot open the encrypted key of this workspace (it may belong to another Windows user or be damaged). Press “Retry” or start with a new key: approvals will be asked again.',
   // Scheduled tasks

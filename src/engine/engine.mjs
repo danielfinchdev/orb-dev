@@ -1,5 +1,5 @@
 // The engine: a process of its own (the bundled Node, started by the app, or a plain Node child in tests) that owns the database, the
-// agents' processes and the scheduler. The window talks to it only through messages relayed by the main process:
+// agents' processes and the scheduler. The window talks to it only through messages relayed by the app (Rust):
 // { type: 'call', id, method, params } → { type: 'reply', id, ok, result | error }, and { type: 'event', event, payload }.
 // There is no HTTP server: nothing on the network or in a browser can reach it.
 import fs from 'node:fs';
@@ -84,7 +84,9 @@ const validSecret = (s) => typeof s === 'string' && /^[0-9a-f]{64}$/.test(s);
 const startError = (key, code, detail) => Object.assign(new Error(tr(key)), { code, detail });
 // What the user should know about the keys, said once the database is open (board.notice in run()).
 const keyNotices = [];
-const KEY_NOTICES = { twoKeys: 'sys.engine.twoKeys', previousOpens: 'sys.engine.previousOpens', previousBack: 'sys.engine.previousBack', previousFailed: 'sys.engine.previousFailed' };
+const KEY_NOTICES = { twoKeys: 'sys.engine.twoKeys', previousOpens: 'sys.engine.previousOpens', previousBack: 'sys.engine.previousBack', previousNew: 'sys.engine.previousNew', previousFailed: 'sys.engine.previousFailed' };
+// Whether this start switched keys (the way back): the recovery code made with the other key no longer opens (below).
+let switchedKey = false;
 // Electron's Local State not there counts as «for now» for the first two starts of this engine (each tried three times):
 // a roaming profile or OneDrive may not have brought it yet. After that it is how the key is (the user decides).
 let missingStarts = 0;
@@ -92,7 +94,11 @@ async function secretFromApp(home, userData, newSecret) {
   const { loadHostSecret, hostSealing, SecretError } = await import('./approval-secret.mjs');
   const warn = (code, detail) => {
     console.error(`clave: ${code} (${detail})`);
-    if (code === 'previousOpens') ctx.previousKey = true;
+    // Ajustes › Datos offers the way back: to the key from before «Empezar con una clave nueva» ('anterior') or, after
+    // going back to it, to the new one again ('nueva').
+    if (code === 'previousOpens' || code === 'previousQuiet') ctx.previousKey = 'anterior';
+    if (code === 'newAvailable') ctx.previousKey = 'nueva';
+    if (code === 'previousBack' || code === 'previousNew') switchedKey = true;
     if (KEY_NOTICES[code] && !keyNotices.includes(KEY_NOTICES[code])) keyNotices.push(KEY_NOTICES[code]);
   };
   const missingIsBusy = ++missingStarts <= 2;
@@ -120,6 +126,13 @@ async function start(home, version, secret, browser, keep = null, userData = nul
     keep ??= secretsCopy(userData, home);
     outsideKeys = [(await import('./approval-secret.mjs')).secret2Files(secretDir(home), secretCopy(userData, home)).copy2];
     if (!validSecret(secret) && hostSecret === true) secret = await secretFromApp(home, userData, newSecret);
+    // After switching keys, copia-clave.json (the recovery code's wrap, sealed with the other key) does not open: the
+    // scheduled copies go out without the code and «He olvidado la contraseña» cannot check it. Said (review D10 M6).
+    if (switchedKey && validSecret(secret)) {
+      switchedKey = false;
+      const B = await import('../core/backup.mjs');
+      if (fs.existsSync(path.join(paths(home).data, 'copia-clave.json')) && !B.hasRecovery(home, Buffer.from(secret, 'hex')) && !keyNotices.includes('sys.engine.recoveryOtherKey')) keyNotices.push('sys.engine.recoveryOtherKey');
+    }
     // An app that cannot open a sealed secret (in core or its copy outside, which would be put back): never a new plain
     // key instead, or this workspace's approvals and backups would no longer open.
     const { enc2, copy2 } = (await import('./approval-secret.mjs')).secret2Files(secretDir(home), secretCopy(userData, home));

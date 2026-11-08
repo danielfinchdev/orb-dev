@@ -67,7 +67,7 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
     'backup.status': () => {
       let last = null; try { last = JSON.parse(board.setting('backup_last') ?? 'null'); } catch { last = null; }
       const rec = K.recoveryOf(ctx.home, secret());
-      return { enabled: ctx.config.backup?.enabled !== false, folder: folder(), custom: folder() !== K.defaultBackupDir(ctx.home), recovery: Boolean(rec), recoveryAt: rec?.at ?? null, previousKey: Boolean(ctx.previousKey), last, running: Boolean(running), tz: ownerTz(ctx.config), hour: DAILY_HOUR, ...opts() };
+      return { enabled: ctx.config.backup?.enabled !== false, folder: folder(), custom: folder() !== K.defaultBackupDir(ctx.home), recovery: Boolean(rec), recoveryAt: rec?.at ?? null, previousKey: ctx.previousKey || null, last, running: Boolean(running), tz: ownerTz(ctx.config), hour: DAILY_HOUR, ...opts() };
     },
     'backup.list': async () => (await K.listBackups(folder())).map(({ file, ...b }) => ({ ...b, path: file })),
     // kind: manual (Ajustes › Datos) or preupdate (the app, before installing a new version).

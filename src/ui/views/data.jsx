@@ -58,11 +58,13 @@ function BackupsCard() {
     });
     if (r) toast.success(t('datos.restoreReady'), { duration: 10000 });
   };
+  // The way back after «Empezar con una clave nueva» ('anterior'), and back to the new key after that ('nueva').
+  const way = st.previousKey === 'nueva' ? 'datos.newKey' : 'datos.previousKey';
   const previousKey = async () => {
-    if (!(await confirm(t('datos.previousKeyTitle'), t('datos.previousKeyBody'), { ok: t('datos.previousKeyUse') }))) return;
+    if (!(await confirm(t(`${way}Title`), t(`${way}Body`), { ok: t(`${way}Use`) }))) return;
     const unlock = await unlockCore('previousKey');
     if (!unlock) return;
-    if (await act(call('backup.previousKey', { unlock }))) toast.success(t('datos.previousKeyReady'), { duration: 15000 });
+    if (await act(call('backup.previousKey', { unlock }))) toast.success(t(`${way}Ready`), { duration: 15000 });
   };
   // 3.8: where the copies go: outside Orb's folder by default; another folder (never inside core) or back to the default.
   const setFolder = async (folder) => { const unlock = await unlockCore('backupFolder'); if (!unlock) return; if (await act(call('config.save', { patch: { backup: { folder } }, unlock }), t('datos.folderChanged'))) load(); };
@@ -82,11 +84,12 @@ function BackupsCard() {
           <span data-testid="backup-last">{st.last ? (st.last.ok ? t('datos.lastOk', { when: when(st.last.at) }) : t('datos.lastFailed', { when: when(st.last.at), error: st.last.error ?? '' })) : t('datos.none')}</span>
           {!st.recovery ? <span className="text-warning flex items-center gap-1"><TriangleAlert className="size-3.5" />{t('datos.noCode')}</span> : <span className="flex items-center gap-1"><ShieldCheck className="text-success size-3.5" />{t('datos.withCode')}</span>}
         </div>
-        {/* 3.8.1 (Tauri): after «Empezar con una clave nueva», Windows opens the key from before again: the way back. */}
+        {/* 3.8.1 (Tauri): after «Empezar con una clave nueva», Windows opens the key from before again: the way back (and
+            the way back to the new key after that). */}
         {st.previousKey ? (
           <div className="grid gap-2 rounded-lg border px-3 py-2.5 text-[13px]" data-testid="previous-key">
-            <span>{t('datos.previousKey')}</span>
-            <Button size="sm" variant="outline" className="w-fit" onClick={previousKey} data-testid="previous-key-use"><KeyRound />{t('datos.previousKeyUse')}</Button>
+            <span>{t(way)}</span>
+            <Button size="sm" variant="outline" className="w-fit" onClick={previousKey} data-testid="previous-key-use"><KeyRound />{t(`${way}Use`)}</Button>
           </div>
         ) : null}
         {list.length ? (
