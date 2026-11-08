@@ -32,6 +32,8 @@ export function marks(board) {
   for (const r of board.all('SELECT * FROM inbox_items WHERE person_id = ?', ME)) out.set(keyOf(r.kind, r.item_id), view(r));
   return out;
 }
+// No row: the marks of a chat nobody marked.
+export const noMark = () => ({ ...DEFAULT });
 export const mark = (board, kind, id) => view(board.one('SELECT * FROM inbox_items WHERE person_id = ? AND kind = ? AND item_id = ?', ME, kind, String(id)));
 const COLS = { pinned: 'pinned', pinOrder: 'pin_order', section: 'section_id', muted: 'muted', lastRead: 'last_read' };
 export function setMark(board, kind, id, fields) {
@@ -57,6 +59,12 @@ export function unread(board, conversation, lastRead) {
   if (conversation == null) return 0;
   const from = Math.max(Number(lastRead) || 0, since(board));
   return board.one("SELECT COUNT(*) AS n FROM chat WHERE conversation_id = ? AND id > ? AND role NOT IN ('notice', 'usuario')", Number(conversation), from)?.n ?? 0;
+}
+// 3.8.1: the same for many conversations in one query: [[conversation, lastRead]] → Map conversation → unread.
+export function unreadMany(board, list) {
+  const start = since(board);
+  const pairs = JSON.stringify(list.filter(([c]) => c != null).map(([c, lastRead]) => [Number(c), Math.max(Number(lastRead) || 0, start)]));
+  return new Map(board.all("SELECT j.value ->> 0 AS c, (SELECT COUNT(*) FROM chat WHERE conversation_id = j.value ->> 0 AND id > j.value ->> 1 AND role NOT IN ('notice', 'usuario')) AS n FROM json_each(?) j", pairs).map((r) => [Number(r.c), r.n]));
 }
 export function markRead(board, kind, id, conversation, upTo = null) {
   const last = conversation == null ? 0 : board.one("SELECT MAX(id) AS id FROM chat WHERE conversation_id = ? AND role != 'notice'", Number(conversation))?.id ?? 0;
@@ -124,7 +132,15 @@ export function describeLine(r, { userName = '' } = {}) {
   else from = { type: 'system' };
   return { id: r.id, text: plain(r.body), at: r.at, from, kind: lineKind(r, meta) };
 }
-export const lastLine = (board, conversation) => (conversation == null ? null : board.one("SELECT id, role, body, meta, at FROM chat WHERE conversation_id = ? AND role != 'notice' ORDER BY id DESC LIMIT 1", Number(conversation)) ?? null);
+// The last line of each of these conversations (3.8.1: in one query; it was one per conversation): Map id → row.
+export function lastLines(board, conversations) {
+  const out = new Map();
+  const ids = JSON.stringify(conversations.map(Number).filter(Number.isFinite));
+  for (const r of board.all("SELECT j.value AS c, ch.id, ch.role, ch.body, ch.meta, ch.at FROM json_each(?) j JOIN chat ch ON ch.id = (SELECT id FROM chat WHERE conversation_id = j.value AND role != 'notice' ORDER BY id DESC LIMIT 1)", ids)) {
+    const { c, ...row } = r; out.set(Number(c), row);
+  }
+  return out;
+}
 
 // ---- search: lower case and without accents («cafe» finds «Café»)
 export const fold = (s) => String(s ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();

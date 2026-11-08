@@ -23,7 +23,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { paths, LEGACY, moveLogs, CATEGORIES, CORE_DIR, LOGS_DIR, MCP_DIR } from './home.mjs';
 import { translate } from './i18n.mjs';
 import { isMcpProject, startCommand, linkOut } from './extensions.mjs';
@@ -408,7 +408,10 @@ export function coreHealth(home) {
 // core hidden in the Explorer on Windows (hidden only: a system attribute would make the user's own backup tools skip
 // it); elsewhere nothing (the workspace is the user's). No access rules: see docs/ARCHITECTURE.md (core) for why a deny
 // ACE was left out.
-export function protectCore(home) {
+// 3.8.1: wait false: attrib runs on its own (the engine's start waited ~25 ms for it on every start).
+export function protectCore(home, { wait = true } = {}) {
   if (process.platform !== 'win32') return false;
-  try { return spawnSync('attrib', ['-s', '+h', paths(home).core], { windowsHide: true, timeout: 5000 }).status === 0; } catch { return false; }
+  const args = ['-s', '+h', paths(home).core];
+  if (!wait) { try { const child = spawn('attrib', args, { windowsHide: true, stdio: 'ignore' }); child.on('error', () => {}); child.unref(); return true; } catch { return false; } }
+  try { return spawnSync('attrib', args, { windowsHide: true, timeout: 5000 }).status === 0; } catch { return false; }
 }

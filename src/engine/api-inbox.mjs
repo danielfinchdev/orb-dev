@@ -29,18 +29,22 @@ export function inboxMethods({ board, emit, orchestrator }) {
   // ---- the items of the list
   function items() {
     const marks = I.marks(board);
+    const conversations = board.conversations();
+    const lines = I.lastLines(board, conversations.map((c) => c.id));
+    const unread = I.unreadMany(board, conversations.map((c) => [c.id, (marks.get(I.keyOf('conversation', c.id)) ?? I.noMark()).lastRead]));
     const user = userName();
     const out = [];
     const add = (kind, id, base, conversation) => {
-      const m = marks.get(I.keyOf(kind, id)) ?? I.mark(board, kind, id);
-      const last = I.describeLine(I.lastLine(board, conversation), { userName: user });
+      // 3.8.1: marks() holds every row; a chat without one has the default marks (no query each).
+      const m = marks.get(I.keyOf(kind, id)) ?? I.noMark();
+      const last = I.describeLine(lines.get(Number(conversation)) ?? null, { userName: user });
       out.push({ key: I.keyOf(kind, id), kind, id: Number(id), conversation: conversation ?? null, ...base,
         pinned: m.pinned, pinOrder: m.pinned ? m.pinOrder : null, section: m.section, muted: m.muted,
-        lastMessage: last, unread: I.unread(board, conversation, m.lastRead), at: last?.at ?? base.at ?? null });
+        lastMessage: last, unread: conversation == null ? 0 : unread.get(Number(conversation)) ?? 0, at: last?.at ?? base.at ?? null });
     };
     const running = new Set(board.all("SELECT DISTINCT conversation_id AS c FROM tasks WHERE conversation_id IS NOT NULL AND status = 'running'").map((r) => r.c));
     const paused = board.setting('paused') === '1';
-    for (const c of board.conversations()) {
+    for (const c of conversations) {
       const busy = Boolean(orchestrator?.state?.(c.id)?.busy) || running.has(c.id);
       add('conversation', c.id, { title: c.title, project: c.project ?? null, done: c.status === 'done', avatar: c.project ? { type: 'project', project: c.project } : { type: 'orbe' },
         state: busy ? 'working' : paused ? 'paused' : 'idle', at: c.updated_at }, c.id);

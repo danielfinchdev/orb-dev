@@ -27,6 +27,24 @@ export const REF_PREFIX = 'refs/orb';
 export const ORB_GIT = ['-c', `user.name=${PRODUCT.name}`, '-c', 'user.email=orb@localhost'];
 export const isGitRepo = (dir) => git(dir, 'rev-parse', '--is-inside-work-tree').stdout.trim() === 'true';
 export const repoRoot = (dir) => git(dir, 'rev-parse', '--show-toplevel').stdout.trim().replace(/\//g, path.sep);
+// 3.8.1: whether the repository a folder belongs to may have linked worktrees, told from its files alone (each git call is
+// a process: ~40 ms on Windows, and the engine's start asked two per project). false: no repository, or one whose .git
+// folder has no linked worktree; true: it has some, or it cannot be told this way (a .git file: the folder is itself a
+// worktree or a submodule; GIT_DIR set).
+// cache: a Map shared by the calls of one pass (folders of the same workspace share their parents).
+export function mayHaveWorktrees(dir, cache = new Map()) {
+  if (process.env.GIT_DIR || process.env.GIT_COMMON_DIR) return true;
+  const seen = [];
+  const answer = (v) => { for (const d of seen) cache.set(d, v); return v; };
+  let d = path.resolve(String(dir));
+  for (;;) {
+    if (cache.has(d)) return answer(cache.get(d));
+    seen.push(d);
+    let st = null; try { st = fs.statSync(path.join(d, '.git')); } catch { /* not here */ }
+    if (st) { if (!st.isDirectory()) return answer(true); try { return answer(fs.readdirSync(path.join(d, '.git', 'worktrees')).length > 0); } catch { return answer(false); } }
+    const up = path.dirname(d); if (up === d) return answer(false); d = up;
+  }
+}
 export const changedPaths = (repo) => { const r = git(repo, 'status', '--porcelain=v1', '-z', '-uall'); return r.status === 0 ? porcelainPaths(r.stdout) : null; };
 
 // A commit with the folder exactly as it is now (committed + modified + new files not ignored), on top of HEAD.

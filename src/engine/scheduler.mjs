@@ -20,7 +20,7 @@ export const contractNote = (cwd, task) => (!task.readonly && cwd && fs.existsSy
 import { localeOf } from '../core/i18n.mjs';
 import { PRODUCT } from '../core/product.mjs';
 import { assistantName, ofUser, eventKey, userName } from '../core/board.mjs';
-import { git, prepareWorkdir, takeCheckpoint, changedBetween, undoCheckpoint, snapshotCommit, integrateInto, isGitRepo, repoRoot, ORB_GIT, REF_PREFIX } from '../core/workspace.mjs';
+import { git, prepareWorkdir, takeCheckpoint, changedBetween, undoCheckpoint, snapshotCommit, integrateInto, isGitRepo, repoRoot, mayHaveWorktrees, ORB_GIT, REF_PREFIX } from '../core/workspace.mjs';
 import { rankAccounts, isLimitText, isBudgetText, startCooldown, pauseAccount, taskBudgetUsd, blockModel, isModelLimitText, liftAfterSuccess, untilText, modelName } from '../core/budget.mjs';
 import { installed } from '../agents/index.mjs';
 import { runDue } from '../core/schedules.mjs';
@@ -79,10 +79,12 @@ export class Scheduler {
     const projects = this.board.projects();
     // Folders a live task still works in are kept.
     const keep = new Set();
-    for (const t of this.board.tasks({ limit: 2000 })) if (t.workdir && !['done', 'failed', 'cancelled'].includes(t.status)) keep.add(path.resolve(t.workdir).toLowerCase());
-    // …and the copies git still lists as worktrees of any project.
+    for (const t of this.board.all("SELECT workdir FROM tasks WHERE workdir IS NOT NULL AND status NOT IN ('done', 'failed', 'cancelled')")) keep.add(path.resolve(t.workdir).toLowerCase());
+    // …and the copies git still lists as worktrees of any project (3.8.1: git is asked only about repositories that have
+    // linked worktrees: mayHaveWorktrees).
+    const seen = new Map(); const repos = projects.filter((p) => mayHaveWorktrees(p.path, seen));
     const listed = new Set();
-    for (const p of projects) { try { for (const line of git(p.path, 'worktree', 'list', '--porcelain').stdout.split('\n')) { const m = line.match(/^worktree\s+(.+)$/); if (m) listed.add(path.resolve(m[1].trim().replace(/\//g, path.sep)).toLowerCase()); } } catch { /* not a repo */ } }
+    for (const p of repos) { try { for (const line of git(p.path, 'worktree', 'list', '--porcelain').stdout.split('\n')) { const m = line.match(/^worktree\s+(.+)$/); if (m) listed.add(path.resolve(m[1].trim().replace(/\//g, path.sep)).toLowerCase()); } } catch { /* not a repo */ } }
     for (const d of dirs) {
       if (!d.isDirectory()) continue;
       const dir = path.join(ctx.paths.worktrees, d.name); const low = path.resolve(dir).toLowerCase();
@@ -91,7 +93,7 @@ export class Scheduler {
     }
     // Each repository forgets the worktrees it can no longer find.
     const roots = new Set();
-    for (const p of projects) { let root = null; try { root = repoRoot(p.path); } catch { /* not a repo */ } if (root && !roots.has(root)) { roots.add(root); try { git(p.path, 'worktree', 'prune'); } catch { /* best effort */ } } }
+    for (const p of repos) { let root = null; try { root = repoRoot(p.path); } catch { /* not a repo */ } if (root && !roots.has(root)) { roots.add(root); try { git(p.path, 'worktree', 'prune'); } catch { /* best effort */ } } }
     // Copies noted as orphans (locked when the task ended) are cleared once their folder is gone.
     for (const row of this.board.all("SELECT key, value FROM settings WHERE key LIKE 'orphan_copy:%'")) {
       let info = null; try { info = JSON.parse(row.value); } catch { /* broken */ }

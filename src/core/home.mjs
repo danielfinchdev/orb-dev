@@ -227,8 +227,9 @@ export function createHome(base, { assistantName = PRODUCT.assistant, userName =
 // Every start: Orb 3.7's own data moves into core (src/core/core-folder.mjs), and the fixed folders (core's, the six
 // categories) exist. Folders made by 2.3.0 and older are put in order: their "bitacoras" moves into the log
 // folder, dropping only the empty logs 2.3.0 wrote for the category and configuration folders it took for projects.
-// Nothing with content is deleted. core is hidden again (src/core/core-folder.mjs › protectCore).
-export function ensureLayout(home, config = null) {
+// Nothing with content is deleted. core is hidden again (src/core/core-folder.mjs › protectCore; wait false: without
+// waiting for it, as the engine starts).
+export function ensureLayout(home, config = null, { wait = true } = {}) {
   migrateWorkspace(home);
   const p = paths(home);
   for (const dir of [p.data, p.runs, p.logs, p.projectLogs, p.mcp, p.skills, p.tools, p.secrets, ...Object.values(p.categories)]) fs.mkdirSync(dir, { recursive: true });
@@ -238,7 +239,7 @@ export function ensureLayout(home, config = null) {
     let c = config; if (!c) { try { c = loadConfig(home); } catch { c = DEFAULT_CONFIG; } }
     fs.writeFileSync(p.generalLog, generalLogHeader(c));
   }
-  protectCore(home);
+  protectCore(home, { wait });
 }
 
 // Moves a log folder into another: a file that exists in both keeps the new one and gets the old entries at its end.
