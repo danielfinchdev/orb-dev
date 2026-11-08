@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { ChevronRight, Feather, Scale, Rocket } from 'lucide-react';
 import { AgentIcon } from './agent-icon.jsx';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from './ui/overlay.jsx';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent, InfoTip } from './ui/overlay.jsx';
 import { useStore, call } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
@@ -21,8 +21,8 @@ export function ModelGuide({ auto }) {
   if (!guide?.length) return null;
   return (
     <div className={cn('grid gap-2.5', !auto && 'opacity-60')} data-testid="model-guide">
-      <div className="text-sm font-medium">{t('guide.title')}</div>
-      <p className="text-muted-foreground -mt-1.5 text-xs leading-snug">{auto ? t('guide.hint') : t('guide.hintOff')}</p>
+      {/* 3.8.2: what the table means, behind an «ⓘ» next to its title. */}
+      <div className="flex items-center gap-1.5 text-sm font-medium">{t('guide.title')}<InfoTip text={auto ? t('guide.hint') : t('guide.hintOff')} /></div>
       {guide.map((a) => (
         <div key={a.id} className="grid gap-2 rounded-xl border p-3" data-testid={`model-guide-${a.id}`}>
           <div className="flex items-center gap-2 text-[13.5px] font-medium"><AgentIcon agent={a.id} className="size-4" />{a.label}</div>

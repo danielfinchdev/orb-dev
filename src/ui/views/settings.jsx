@@ -14,7 +14,7 @@ import { SkinPreview } from '@/components/skin-preview.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea, Kbd, PathText, Spinner } from '@/components/ui/basic.jsx';
-import { Select, Switch, Checkbox, Dialog, DialogContent, DialogTitle, BubbleTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
+import { Select, Switch, Checkbox, Dialog, DialogContent, DialogTitle, BubbleTip, InfoTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
 import { ModelGuide } from '@/components/model-guide.jsx';
 import { AGENT } from '@/lib/labels.js';
 import { useStore, call, act, bridge, setState, getState, applyTheme, applyAppearance, go, openTerminal, openSettings, closeSettings, fullPc, runTest } from '@/lib/store.js';
@@ -37,8 +37,17 @@ async function save(patch, ok = t('settings.saved'), unlock = null) {
 }
 const num = (v) => Number(v) || 0;
 // The whole row is the switch's label: clicking its text toggles it too (the switch alone is a small target).
-function Row({ label, hint, children }) {
-  return <label className="-mx-2 flex cursor-pointer items-center justify-between gap-4 rounded-lg px-2 py-1.5 hover:bg-accent/40"><div><div className="text-sm">{label}</div>{hint ? <div className="text-muted-foreground text-xs">{hint}</div> : null}</div>{children}</label>;
+// info: the details that do not fit in the hint, behind an «ⓘ» next to the label (3.8.2).
+function Row({ label, hint, info, children }) {
+  return <label className="-mx-2 flex cursor-pointer items-center justify-between gap-4 rounded-lg px-2 py-1.5 hover:bg-accent/40"><div><div className="flex items-center gap-1.5 text-sm">{label}{info ? <InfoTip text={info} /> : null}</div>{hint ? <div className="text-muted-foreground text-xs">{hint}</div> : null}</div>{children}</label>;
+}
+// A text with keyboard shortcuts in it: each {name} of the text becomes its keys (3.8.2: one key per sentence, so it
+// translates whole, instead of a sentence cut in five).
+function WithKeys({ text, keys }) {
+  return text.split(/(\{\w+\})/).map((part, i) => {
+    const combo = /^\{(\w+)\}$/.test(part) ? keys[part.slice(1, -1)] : null;
+    return combo ? <span key={i} className="whitespace-nowrap">{combo.map((k, j) => <Kbd key={j} className={j ? 'ml-0.5' : undefined}>{k}</Kbd>)}</span> : part;
+  });
 }
 
 function AssistantCard({ c }) {
@@ -166,7 +175,7 @@ function TasksCard({ c }) {
           <p className="text-muted-foreground text-xs leading-snug">{level == null ? t('settings.spendCustomHint') : t(`settings.spend${level}Hint`)}</p>
         </div>
         {/* 2.7: Orb chooses each task's model and reasoning (on by default), and the guide says what it uses for what. */}
-        <Row label={t('settings.autoModel')} hint={t('settings.autoModelHint')}><Switch checked={c.budget?.autoModel !== false} onCheckedChange={(autoModel) => save({ budget: { autoModel } })} data-testid="auto-model" /></Row>
+        <Row label={t('settings.autoModel')} info={t('settings.autoModelHint')}><Switch checked={c.budget?.autoModel !== false} onCheckedChange={(autoModel) => save({ budget: { autoModel } })} data-testid="auto-model" /></Row>
         <ModelGuide auto={c.budget?.autoModel !== false} />
         <Row label={t('settings.autoRun')} hint={t('settings.autoRunHint')}><Switch checked={v.autoRun} onCheckedChange={(autoRun) => { setV({ ...v, autoRun }); save({ autoRun }); }} /></Row>
         {/* 3.1: tasks work at the same time by default; this makes them wait for each other. */}
@@ -191,7 +200,7 @@ function TasksCard({ c }) {
         <div className="grid grid-cols-3 gap-3">
           <Field label={t('settings.stopAt')} hint={t('settings.stopAtHint')}><Input type="number" min={50} max={100} value={v.stopAt} onChange={(e) => setV({ ...v, stopAt: num(e.target.value) })} /></Field>
           <Field label={t('settings.maxPerTask')} hint={t('settings.maxPerTaskHint')}><Input type="number" min={0} max={20} value={v.maxPerTask} onChange={(e) => setV({ ...v, maxPerTask: num(e.target.value) })} /></Field>
-          <Field label={t('settings.approvalWait')} hint={t('settings.approvalWaitHint')}><Input type="number" min={0} max={240} value={v.approvalWait} onChange={(e) => setV({ ...v, approvalWait: num(e.target.value) })} data-testid="approval-wait" /></Field>
+          <Field label={t('settings.approvalWait')} hint={t('settings.approvalWaitHint')}><div className="flex items-center gap-2"><Input type="number" min={0} max={240} value={v.approvalWait} onChange={(e) => setV({ ...v, approvalWait: num(e.target.value) })} aria-label={`${t('settings.approvalWait')} (${t('settings.minutes')})`} data-testid="approval-wait" /><span className="text-muted-foreground text-xs">{t('settings.minutes')}</span></div></Field>
           {/* 3.2: how many conversations the assistant answers at the same time (the others wait their turn). */}
           <Field label={t('settings.parallelChats')} hint={t('settings.parallelChatsHint')}><Input type="number" min={1} max={6} value={v.parallelChats} onChange={(e) => setV({ ...v, parallelChats: num(e.target.value) })} data-testid="parallel-chats" /></Field>
         </div>
@@ -310,7 +319,8 @@ function MobileCard() {
   const route = (kind) => st.routes?.find((r) => r.kind === kind);
   const via = (kind) => {
     const r = route(kind);
-    const hint = r ? `${r.url}${r.secure ? ` · ${t('settings.mobileSecure')}` : ''}` : st.enabled && st[kind] ? t('settings.mobileUnavailable') : t(kind === 'wifi' ? 'settings.mobileWifiHint' : 'settings.mobileTsHint');
+    // 3.8.2: the local network shows its address; Tailscale, what it allows (its address is in the QR dialog).
+    const hint = st.enabled && st[kind] && !r ? t('settings.mobileUnavailable') : kind === 'wifi' ? (r?.url ?? t('settings.mobileWifiHint')) : t('settings.mobileTsHint');
     return (
       <Row label={t(kind === 'wifi' ? 'settings.mobileWifi' : 'settings.mobileTs')} hint={hint}>
         <Switch data-testid={`mobile-${kind}`} checked={st[kind]} onCheckedChange={(on) => configure({ [kind]: on })} />
@@ -321,11 +331,11 @@ function MobileCard() {
     <Card data-testid="mobile-card">
       <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Smartphone className="text-primary size-5" /><div><CardTitle>{t('settings.mobile')}</CardTitle><CardDescription>{t('settings.mobileDesc')}</CardDescription></div></CardHeader>
       <CardContent className="grid gap-4">
-        <Row label={t('settings.mobileAccess')} hint={st.running ? t('settings.mobileOn') : st.error ?? t('settings.disabled')}><Switch checked={st.enabled} onCheckedChange={async (enabled) => { const r = await act(call('remote.enable', { enabled })); if (r) setSt(r); }} /></Row>
+        <Row label={t('settings.mobileAccess')} hint={st.enabled && !st.running ? st.error : null}><Switch checked={st.enabled} onCheckedChange={async (enabled) => { const r = await act(call('remote.enable', { enabled })); if (r) setSt(r); }} /></Row>
         {st.enabled ? <div className="grid gap-1">{via('wifi')}{via('tailscale')}</div> : null}
         {st.enabled && st.error && st.running ? <p className="text-muted-foreground text-xs">{st.error}</p> : null}
-        {/* 3.5: the QR, the short code and the linked devices are in Magic Link, below. */}
-        {st.running && route('wifi') ? <p className="text-muted-foreground text-xs">{t('settings.mobileWifiNote')}</p> : null}
+        {/* 3.5: the QR, the short code and the linked devices are in Magic Link, below. 3.8.2: the firewall is mentioned
+            only when linking over the local network fails (app.linkOfflineWifi, on the device). */}
         {/* 3.5.1: what notifications show when locked. */}
         {st.enabled ? (
           <Row label={t('settings.mobilePreview')} hint={t(`settings.mobilePreview.${previewOf(st.preview)}Hint`)}>
@@ -438,9 +448,9 @@ function InterfaceCard({ c }) {
   const change = async (value) => setZoom(await act(bridge.zoom(Number(value))));
   return (
     <Card>
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><MonitorCog className="text-primary size-5" /><div><CardTitle>{t('settings.interface')}</CardTitle><CardDescription>{t('settings.interfaceDesc')} <Kbd>Ctrl</Kbd> <Kbd>J</Kbd>.</CardDescription></div></CardHeader>
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><MonitorCog className="text-primary size-5" /><div><CardTitle>{t('settings.interface')}</CardTitle><CardDescription><WithKeys text={t('settings.interfaceDesc')} keys={{ shortcut: ['Ctrl', 'J'] }} /></CardDescription></div></CardHeader>
       <CardContent className="grid gap-4">
-        <Field label={t('settings.sizeLabel')} hint={<>{t('settings.sizeHint1')} <Kbd>Ctrl</Kbd> <Kbd>+</Kbd> {t('settings.sizeHint2')} <Kbd>Ctrl</Kbd> <Kbd>-</Kbd> {t('settings.sizeHint3')} <Kbd>Ctrl</Kbd> <Kbd>0</Kbd> {t('settings.sizeHint4')} <Kbd>Ctrl</Kbd> {t('settings.sizeHint5')}</>}>
+        <Field label={t('settings.sizeLabel')} hint={<WithKeys text={t('settings.sizeHint')} keys={{ zoomIn: ['Ctrl', '+'], zoomOut: ['Ctrl', '-'], reset: ['Ctrl', '0'] }} />}>
           <div className="flex flex-wrap items-center gap-2">
             <Select className="w-44" value={preset} placeholder={zoom ? t('settings.custom', { pct: Math.round(zoom * 100) }) : '…'} onValueChange={change} options={SIZES} />
             <BubbleTip title={t('settings.zoomOut')}><Button size="icon-sm" variant="outline" aria-label={t('settings.zoomOut')} onClick={() => change(zoom - 0.1)}><ZoomOut /></Button></BubbleTip>

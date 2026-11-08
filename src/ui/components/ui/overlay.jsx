@@ -8,7 +8,7 @@ import * as SwitchPrimitive from '@radix-ui/react-switch';
 import * as CheckboxPrimitive from '@radix-ui/react-checkbox';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import * as CollapsiblePrimitive from '@radix-ui/react-collapsible';
-import { CheckIcon, ChevronDownIcon, XIcon } from 'lucide-react';
+import { CheckIcon, ChevronDownIcon, InfoIcon, XIcon } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
@@ -90,6 +90,16 @@ export function BubbleTip({ title, text, children, side = 'bottom', align = 'cen
         </TooltipPrimitive.Content>
       </TooltipPrimitive.Portal>
     </TooltipPrimitive.Root>
+  );
+}
+// 3.8.2: an «ⓘ» next to a setting's name: the details that do not fit in its one-line description. A real button, so
+// it is reached with the keyboard and its text is read by screen readers (the bubble also opens on focus).
+export function InfoTip({ text, className }) {
+  if (!text) return null;
+  return (
+    <BubbleTip text={text} wide={false}>
+      <button type="button" aria-label={text} onClick={(e) => e.preventDefault()} className={cn('text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 inline-grid size-4 shrink-0 cursor-help place-items-center rounded-full align-[-2px] outline-none focus-visible:ring-2', className)} data-testid="info-tip"><InfoIcon className="size-3.5" /></button>
+    </BubbleTip>
   );
 }
 // 3.2: a bubble with richer content (the card of a conversation in the sidebar): the same look, any content inside.

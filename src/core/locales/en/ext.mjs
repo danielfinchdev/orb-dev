@@ -2,7 +2,7 @@
 // src/core/extensions.mjs.
 export default {
   'ext.title': 'Skills and MCP servers',
-  'ext.desc': 'What your agents know how to do. They only use what is on; what you import starts off.',
+  'ext.desc': 'Only what is on gets used. Imported items start off.',
   'ext.import': 'Import',
   'ext.importTitle': 'Import a skill or an MCP server',
   'ext.importDesc': 'It is copied into core without running anything and stays off until you turn it on.',
@@ -18,7 +18,7 @@ export default {
   'ext.noSkills': 'No skills yet. Import them or ask in the chat: «make me a skill for…».',
   'ext.noServers': 'No MCP servers in core yet.',
   'ext.connectors': 'Connectors of this PC',
-  'ext.connectorsHint': 'Programs or packages started with a command (for example, npx). They take no folder in core.',
+  'ext.connectorsHint': 'Programs started with a command, such as npx.',
   'ext.projects': 'Projects that are MCP servers',
   'ext.projectsHint': 'You can use them from their project or move them into core.',
   'ext.copyOf': 'copy for editing {name}',
