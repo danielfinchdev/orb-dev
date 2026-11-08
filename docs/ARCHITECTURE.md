@@ -922,7 +922,8 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   (`orb.jsx`, app.css). Avoid `will-change`, `backdrop-filter` and blend modes on elements repeated in long lists.
 - **Measuring:** `scripts/medir.mjs` (start, memory, CPU at rest, scrolling smoothness; `--hidden` keeps the window
   offscreen via `ORB_HIDDEN_WINDOW=1`; `--profile <dir>` saves a trace, CPU profiles, the compositor's layers and a
-  heap snapshot).
+  heap snapshot; `--big` uses a large workspace and times refreshes on the Tasks screen) and `scripts/medir-motor.mjs`
+  (the engine alone: start, memory, call latency and the bytes of a refresh, whole and as feeds, also as a phone gets it).
 
 ### Tutorials and guided tour
 
