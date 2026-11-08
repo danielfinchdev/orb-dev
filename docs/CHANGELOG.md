@@ -3,31 +3,47 @@
 - **`Orb-3.8.1-instalador.exe`** (the Windows app): installs for your user, without administrator rights, and updates
   itself. It needs Microsoft Edge WebView2, which Windows 11 and an up-to-date Windows 10 already have (if it is
   missing, the installer gets it).
-- **`Orb-3.8.1-android.apk`**: the Orb app for Android. Install it over the 3.8.0 app: it stays linked to your PC.
-  **Update Orb on your PC first**: the new app cannot connect to Orb 3.8.0.
+- **`Orb-3.8.1-android.apk`**: the Orb app for Android. Link it to your PC with Magic Link.
 
 Windows 10/11. Since it isn't signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
 
 ## What's new in 3.8.1
 
-**A lighter Orb on Windows.** The desktop app no longer runs on Electron: it is built with Tauri and uses Windows' own
-WebView2. The download is smaller and the agents' browser runs in hidden WebView2 pages.
-Your workspace, chats, projects, approvals, backups and linked phone stay as they were.
+3.8.1 is the first public release of Orb 3.8: it includes everything listed under 3.8.0 below, compared with 3.7.
 
-**Updating from 3.8.0.** Orb 3.8.0 offers the update as usual. «Reiniciar e instalar» removes Orb 3.8.0's program
-(never your data or your workspace) and opens the new Orb. If that is not safe (Orb 3.8.0 installed in a folder that
-holds other files or your data, or another Orb open), nothing is changed, Orb 3.8.0 opens again and the installer says
-what to do. You can also download the installer and run it by hand.
+**Breaking changes.**
+- **Backups made before 3.8.1 can't be restored**, including those made by Orb 3.7. Make a new backup after installing.
+- Key files from Orb 3.8.0 test builds are not opened: Orb offers «Empezar con una clave nueva» and deletes nothing.
+- **A clean install is recommended**: install 3.8.1, create your master password and link your phone again.
 
-**The Android app, rebuilt.** It is smaller (about half the size) and keeps your link with the PC. From a notification
-you can reply, approve or reject without opening the app, also when the app is closed (only with the phone unlocked).
-Links open in the phone's browser. Notifications stay on if Android already allowed them; otherwise the app offers them.
+**A lighter desktop app.** Orb no longer runs on Electron: it is built with Tauri 2 and uses Windows' own WebView2.
+The download is smaller and the agents' browser runs in hidden WebView2 pages.
+
+**The Android app, rebuilt.** Built with Tauri 2 as well, about half the size. From a notification you can reply,
+approve or reject without opening the app, also when it is closed (only with the phone unlocked). Links open in the
+phone's browser.
+
+**Secrets guarded by Orb itself.** The master password, Orb's secrets and this PC's key are opened in a separate,
+locked-down vault inside the Orb program, not in the engine that runs your agents. Connector keys go straight to the
+connector that needs them, and the phone's link check happens in the vault too.
+
+**Lock when idle.** Orb locks its window after a time without use (5, 10, 15, 30 or 60 minutes; 15 by default, in
+Settings › Data) or with «Bloquear ahora», and asks for the master password to come back. Agents, schedules and the
+phone keep working, and notifications hide the agents' text while Orb is locked.
+
+**Core data guarded by the master password.** Agents can't read or change `core` (including its data) or your
+`personal` folder without your password; only the tool folders stay open to them.
+
+**Smoother and lighter.** The robot only floats when something is happening, the animated backgrounds cost much less
+GPU (the «orb» clouds run at 30 fps, Vaporwave's floor moves on the compositor), live task bars stop polling when the
+window is hidden, and screens with many chats, tasks and projects are faster. Chat avatars show the agents working in
+them.
+
+**Fixes.** Restoring a backup on another PC keeps your recovery code working; starting with a new key never deletes
+an unused key file; the agents' browser blocks Orb's own ports whatever host name points to this PC; skills and MCP
+servers are checked before they are used; deleting a project is safer.
 
 **Gone for now.** Orb Light (the portable version) and the Linux desktop app. Linux will come back in a later version.
-
-**Also.** Faster screens with many chats, tasks and projects; safer handling of the key that seals your approvals
-(a restored backup keeps its key, and «Empezar con una clave nueva» says what you lose and lets you go back); skills and
-MCP servers live in `core`, checked before they are used; deleting a project is safer.
 
 ## What's new in 3.8.0
 
