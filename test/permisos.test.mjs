@@ -63,7 +63,7 @@ test('el PC lo puede todo; el móvil y el navegador, solo lo marcado «remote»;
 
 test('lo que solo es del PC: ajustes, cuentas, copias, Magic Link, núcleo y lo que borra fuera de una conversación', () => {
   const pcOnly = ['config.save', 'accounts.add', 'accounts.remove', 'agents.login', 'agents.install', 'backup.now', 'backup.restore', 'backup.recovery',
-    'link.qr', 'link.devices', 'link.revoke', 'remote.enable', 'remote.configure', 'installer.start', 'mcp.folder', 'expert.read',
+    'link.qr', 'link.devices', 'link.revoke', 'remote.enable', 'remote.configure', 'installer.start', 'extensions.list', 'extensions.import', 'extensions.remove', 'extensions.approve', 'expert.read',
     'projects.remove', 'projects.import', 'projects.push', 'conversations.remove', 'sessions.remove', 'schedules.remove', 'tasks.discardBranch'];
   for (const m of pcOnly) assert.equal(METHODS[m], 'pc', m);
   for (const m of ['app.state', 'chat.send', 'chat.list', 'tasks.list', 'tasks.create', 'tasks.approve', 'tasks.cancel', 'sessions.approve', 'sessions.stop', 'projects.list', 'usage.now', 'inbox.list']) assert.equal(METHODS[m], 'remote', m);

@@ -68,7 +68,7 @@ builds the installer, Orb Light, the AppImage and the `.deb`, and publishes them
 
 ```
 C:\Orb\                   (by default; you can pick another folder)
-  core\                   Orb's own folder, hidden: settings, database, logs, MCP servers, tools (adb), sealed secrets
+  core\                   Orb's own folder, hidden: settings, database, logs, skills, MCP servers, tools (adb), sealed secrets
   windows\ linux\ ios\ android\ web\
                           categories: each folder inside one of them is a project
                           (the ones the app creates and the ones you create in Explorer)
@@ -110,7 +110,7 @@ Orb to a new computer.
   Security Review looks for vulnerabilities and exposed secrets across the whole project.
 - **Per project:** a whiteboard to draw and attach references, memories, logbooks and scheduled tasks.
 - **GitHub integration** through `gh`: publish projects, push branches and create pull requests.
-- **In Spanish and English**, with themes, light and dark mode, and MCP connectors to extend the agents' tools.
+- **In Spanish and English**, with themes, light and dark mode, and skills and MCP servers to extend the agents (Settings › Skills and MCP).
 
 ## Run it from source (for development)
 

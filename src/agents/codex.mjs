@@ -149,7 +149,9 @@ export function turnUsage(u, turn) {
   return { inputTokens: total.inputTokens == null ? null : spent('inputTokens') - cached, outputTokens: total.outputTokens == null ? null : spent('outputTokens'), cacheReadTokens: total.cachedInputTokens == null ? null : cached };
 }
 
-// options: exe, cwd, model, reasoning, permission, resumeId, forkSession, mcpServers, env, internalDir, log, onEvent
+// options: exe, cwd, model, reasoning, permission, resumeId, forkSession, mcpServers, env, internalDir, log, onEvent, skills
+// 3.8.1: Codex loads the skills of core by itself (an extra root); agents without this get them in their brief.
+export const nativeSkills = true;
 export function createLive(o) {
   const onEvent = o.onEvent ?? (() => {});
   const log = hidingEnvValues(o.log ?? (() => {}), o.mcpServers);
@@ -278,6 +280,9 @@ export function createLive(o) {
     child.on('error', (error) => { closed = true; if (turn && !turn.done) turn.finish({ isError: true, final: tr('sys.agents.startFailed', { name: 'Codex', error: error.message }) }); });
     await peer.request('initialize', { clientInfo: { name: 'orb_dev', title: 'Orb', version: '2.4.2' }, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs: 30000 });
     peer.notify('initialized', {});
+    // 3.8.1: the skills of core that are on (src/core/extensions.mjs › exposeSkills), one more root where Codex looks for
+    // skills, before the thread starts (checked with the real app-server: skills/list shows them). Older versions: none.
+    if (o.skills?.list?.length) await peer.request('skills/extraRoots/set', { extraRoots: [o.skills.root] }, { timeoutMs: 15000 }).catch((error) => log(`skills: ${error?.message ?? error}`));
     const common = { cwd: o.cwd, model, ...policy(permission), config: { model_reasoning_effort: effort(o.reasoning), service_tier: 'default' } };
     let res;
     if (o.resumeId && o.forkSession) res = await peer.request('thread/fork', { threadId: o.resumeId, ...common }, { timeoutMs: 60000 });

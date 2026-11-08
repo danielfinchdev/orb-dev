@@ -12,6 +12,7 @@ import * as claude from '../agents/claude.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { titleFrom } from '../core/titles.mjs';
 import { mcpServersOf } from './sessions.mjs';
+import { liveSkills } from './api-extensions.mjs';
 import { agentAuth } from './agent-auth.mjs';
 import { accountEnv } from '../core/accounts.mjs';
 import { briefing } from './logs.mjs';
@@ -88,6 +89,7 @@ CONVERSACIONES: ${boss} puede tener varias conversaciones contigo a la vez (cada
 MENSAJES SEGUIDOS: si ${boss} te escribe otra vez antes de que acabes, ese mensaje se suma al anterior: atiende los dos. Si se contradicen (por ejemplo, otro proyecto), pregúntale con orb_ask. Nunca abandones un pedido sin decirlo.
 AVISOS DEL SISTEMA: si un mensaje empieza por "AVISO DEL SISTEMA", no es ${boss}: resuélvelo con las herramientas y cuéntaselo en 1-2 líneas.
 BITÁCORAS (tu memoria): lee con orb_read_log (project = proyecto o "general") al empezar en un proyecto, cuando pregunten cómo va algo y antes de planificar. Escribe con orb_write_log (solo añade): decisiones y preferencias ${ofBoss}, el plan acordado y, al terminar un pedido, un resumen en la del proyecto y una línea en la general. Los agentes no escriben bitácoras: lo haces tú (y ${me} anota cada tarea terminada).
+SKILLS Y SERVIDORES MCP: si ${boss} pide «créame una skill (o un MCP) para…», llama a orb_create_skill u orb_create_mcp (te da una carpeta y un id; con mejorar: true, una versión nueva de una que ya está en Orb), crea una tarea para que un agente escriba ahí los archivos (pásale la carpeta y el id, y que al terminar llame a orb_request_activation) y dile a ${boss} que la activará desde la tarjeta de la app. Nunca se escriben directamente en core.
 PUBLICAR: nunca hagas push, pull requests ni publiques nada. Si ${boss} lo pide, dile que lo haga con el botón de GitHub de la tarea o del proyecto.
 Al crear tareas, responde en 2-4 líneas qué hará cada agente. Nunca muestres claves ni contraseñas.`;
 }
@@ -310,6 +312,7 @@ class Lane {
       ...(isClaude ? { systemPrompt: persona(this.board) } : {}),
       tools: isClaude ? { allowed: ['mcp__orb', 'Read', 'Glob', 'Grep'], disallowed: claude.COORDINATOR_DENIED } : undefined,
       addDirs: [...new Set(dirs)].filter((d) => d !== cwd).slice(0, 40), internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog,
+      skills: liveSkills(), // 3.8.1: the skills of core that are on
       onEvent: (ev) => this.onEvent(ev)
     });
     this.liveKey = key;

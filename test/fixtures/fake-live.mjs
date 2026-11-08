@@ -74,7 +74,7 @@ async function mcpCall(server, name, args, whole = false) {
 export function fakeAdapter(id, real) {
   const caps = { ...(real?.caps ?? { images: false, steer: false, fork: false, approvals: true, models: true, context: true }) };
   return {
-    id, label: real?.label ?? id, kind: 'fake', caps, install: null, spec: real?.spec,
+    id, label: real?.label ?? id, kind: 'fake', caps, install: null, spec: real?.spec, nativeSkills: real?.nativeSkills, // 3.8.1: as the real one
     // The "program" is Node itself, so «Agentes» can ask its version.
     detect: () => ({ cmd: process.execPath, pre: [] }),
     loginState: () => 'si',

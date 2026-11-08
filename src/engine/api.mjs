@@ -26,7 +26,7 @@ import * as github from './github.mjs';
 import * as installer from './installer.mjs';
 import * as expert from './expert.mjs';
 import { adbStatus, ensureAdb } from './android.mjs';
-import { mcpFolder } from './mcp-folder.mjs';
+import { extensionMethods } from './api-extensions.mjs';
 import { layoutPlan, layoutApply, guardOutside } from './workspace-layout.mjs';
 import { modelCatalog, chooseModel, LEVELS, REASONING_LEVELS, levelsOf } from './catalog.mjs';
 import { whiteboard } from './whiteboard.mjs';
@@ -259,8 +259,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return board.addProject({ name: oneLine(name || path.basename(folder), 60), path: folder }, 'usuario', { fromUser: true });
     },
 
-    // Orb's own folders, managed only from Ajustes: the MCP servers' folder and Android's tools.
-    'mcp.folder': () => mcpFolder(board.projects()),
+    // Android's tools, managed only from Ajustes (the skills and MCP servers of core: api-extensions.mjs).
     'android.status': () => adbStatus(),
     'android.install': () => ensureAdb({ log, force: true }),
 
@@ -621,7 +620,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     ...linkMethods(shared),
     ...inboxMethods(shared),
     ...data.methods,
-    ...masterMethods({ ...shared, onUnlocked })
+    ...masterMethods({ ...shared, onUnlocked }),
+    ...extensionMethods(shared)
   };
   return {
     // principal: who calls, built only by the entry points (engine.mjs and dev-control.mjs: this PC; remote.mjs: a

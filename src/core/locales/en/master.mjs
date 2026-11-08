@@ -48,6 +48,7 @@ export default {
   'master.ask.protected': 'To take something off «Things nobody touches».',
   'master.ask.unlink': 'To sign a device out.',
   'master.ask.deleteProject': 'To delete a project and its folder.',
+  'master.ask.removeExtension': 'To remove a skill, an MCP server or a connector from Orb.',
   'master.askNote': 'It stays unlocked for {n} minutes or until you lock the PC.',
   'master.askEveryTime': 'Orb asks for it every time for this.',
   'master.cardTitle': 'Master password',

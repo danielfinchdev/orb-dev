@@ -129,10 +129,14 @@ const RESULT_KEY = { error_during_execution: 'sys.agents.result.duringExecution'
 // 3.2.1: whether a result answers a message of Orb's (sent with origin «human»), not a notice Claude handles by itself.
 export const answersOrb = (m) => !(m?.origin?.kind && m.origin.kind !== 'human');
 
+// 3.8.1: Claude loads the skills of core by itself (a plugin); agents without this get them in their brief.
+export const nativeSkills = true;
+
 export const permissionModeOf = (p) => (p === 'total' ? 'bypassPermissions' : p === 'editar' ? 'acceptEdits' : 'default');
 
 // options: exe, cwd, model, reasoning, permission, resumeId, newSessionId, forkSession, mcpServers, env, systemPrompt
-// (appended to Claude Code's own), tools ({ allowed, disallowed }), addDirs, budgetUsd, internalDir, log, onEvent
+// (appended to Claude Code's own), tools ({ allowed, disallowed }), addDirs, budgetUsd, internalDir, log, onEvent, skills
+// (3.8.1: { plugin, root, list }, the skills of core that are on)
 export function createLive(o) {
   const onEvent = o.onEvent ?? (() => {});
   const log = o.log ?? (() => {});
@@ -278,6 +282,9 @@ export function createLive(o) {
     if (disallowed.length) options.disallowedTools = disallowed;
     if (permission === 'total') options.allowDangerouslySkipPermissions = true;
     if (o.budgetUsd) options.maxBudgetUsd = o.budgetUsd;
+    // 3.8.1: the skills of core that are on, as a plugin Orb makes (src/core/extensions.mjs › exposeSkills): Claude lists
+    // them («orb-skills:<name>») and loads one when it fits. Checked with the real Claude Code (supportedCommands).
+    if (o.skills?.list?.length) options.plugins = [{ type: 'local', path: o.skills.plugin }];
     query = sdkQuery({ prompt: input, options });
     (async () => {
       // 3.0: the streamed pieces of each answer are not written to the run log one by one (a disk write per token); the

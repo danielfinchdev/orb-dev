@@ -254,6 +254,8 @@ async function run(board, { home, version, restored, repair }) {
   let dataVersion = board.one('PRAGMA data_version').data_version;
   const { syncProjects } = await import('../core/projects.mjs');
   syncProjects(board);
+  // 3.8.1: the skills of core that are on, ready for the agents (core\skills\.activas).
+  try { (await import('./api-extensions.mjs')).refreshSkills(); } catch (error) { log(`skills: ${error.message}`); }
   let ticking = false; let lastSync = Date.now();
   const loop = () => {
     if (ticking) return; ticking = true;

@@ -7,6 +7,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowUp, Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign, ChevronLeft, ChevronRight, PenTool, History, FlaskConical, Folder, Mic, Shrink, ListChecks, Ellipsis, Info, BellOff, MessageSquare } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Markdown } from '@/components/markdown.jsx';
+import { ExtensionRequestCard } from './extensions.jsx';
 import { ProjectPicker } from '@/components/project-actions.jsx';
 import { useLiveTasks, liveOf, ProgressBar, elapsed } from '@/components/live-tasks.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
@@ -242,6 +243,8 @@ const Message = memo(function Message({ m, name, onChanges }) {
     );
   }
   if (m.meta?.kind === 'approval' || m.meta?.kind === 'task-approval') return <ChatApproval m={m} />;
+  // 3.8.1: an agent made a skill or an MCP server and asks for it to be turned on.
+  if (m.meta?.kind === 'extension' && m.meta.extension) return <ExtensionRequestCard m={m} />;
   if (m.meta?.kind === 'attention' && m.meta.task) return <TaskApprovalLine m={m} />;
   // 2.6: the assistant's suggestion to play while the agents work, with the button that opens the games.
   if (m.meta?.kind === 'games') return (

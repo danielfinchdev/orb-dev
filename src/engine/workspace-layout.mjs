@@ -1,6 +1,6 @@
 // 3.8: the workspace's folders seen from the window (src/core/core-folder.mjs does the work):
-//   - layoutPlan / layoutApply: the folders Orb 3.7 kept at the top (bitacora, android\adb-tools, mcp-servers\*) and
-//     what the user chose for each; nothing moves before layoutApply.
+//   - layoutPlan / layoutApply: the folders Orb 3.7 kept at the top (bitacora, android\adb-tools, mcp-servers\*) and,
+//     3.8.1, the projects 3.8.0 made of MCP servers; what the user chose for each; nothing moves before layoutApply.
 //   - guardOutside: what Orb keeps about the workspace outside it (the backups' folders, the copies of its sealed
 //     secrets) is named to the guard (src/core/guard.mjs), so agents leave it alone like core.
 import path from 'node:path';
@@ -8,6 +8,7 @@ import { ctx } from '../core/context.mjs';
 import { planWorkspace, applyLayout, inside } from '../core/core-folder.mjs';
 import { paths, loadConfig, ensureLayout } from '../core/home.mjs';
 import { setGuardedRoots } from '../core/guard.mjs';
+import { rebindMoved } from '../core/connector-secrets.mjs';
 import { backupRoot, backupDir } from '../core/backup.mjs';
 
 export function layoutPlan() {
@@ -22,9 +23,12 @@ export async function layoutApply(choices, { emit = () => {}, log = () => {} } =
   if (choices && typeof choices === 'object' && !Array.isArray(choices)) {
     for (const [k, v] of Object.entries(choices).slice(0, 200)) if (typeof v === 'string' && k.length <= 300 && v.length <= 40) clean[k] = v;
   }
+  const before = ctx.config?.mcpServers ?? [];
   const r = applyLayout(ctx.home, clean, { language: ctx.config?.language ?? 'es' });
-  // Where the logs and the Android tools are now, and the paths orb.json had into what moved.
+  // Where the logs and the Android tools are now, and the paths orb.json had into what moved (3.8.1: a server Orb moved
+  // into core\mcp keeps its keys, tied now to its new path).
   ctx.paths = paths(ctx.home); ctx.config = loadConfig(ctx.home);
+  rebindMoved(ctx.master, before, ctx.config.mcpServers ?? []);
   ensureLayout(ctx.home, ctx.config);
   const { addAdbToPath } = await import('./android.mjs');
   addAdbToPath();

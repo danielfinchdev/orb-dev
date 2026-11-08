@@ -19,7 +19,7 @@ const REMOTE = new Set(['phone', 'browser']);
 export const METHODS = Object.freeze({
   // the app and its settings
   'app.state': 'remote', 'app.migrationState': 'pc', 'app.migrationRetry': 'pc', 'app.coreState': 'pc', 'app.coreRepair': 'pc', 'app.layoutPlan': 'pc', 'app.layoutApply': 'pc', 'config.save': 'pc', 'sidebar.complete': 'remote', 'control.pause': 'remote', 'control.resume': 'remote',
-  'system.check': 'pc', 'installer.check': 'pc', 'installer.progress': 'pc', 'installer.start': 'pc', 'mcp.folder': 'pc',
+  'system.check': 'pc', 'installer.check': 'pc', 'installer.progress': 'pc', 'installer.start': 'pc',
   'activity.list': 'remote', 'usage.get': 'remote', 'usage.now': 'remote', 'models.guide': 'remote', 'models.catalog': 'remote',
   'mentions.options': 'remote', 'approvals.list': 'remote',
   // this PC's tools
@@ -65,7 +65,10 @@ export const METHODS = Object.freeze({
   'backup.status': 'pc', 'backup.list': 'pc', 'backup.now': 'pc', 'backup.verify': 'pc', 'backup.restore': 'pc', 'backup.recovery': 'pc', 'legacy.status': 'pc', 'legacy.delete': 'pc',
   // 3.8: the master password and the connectors' keys
   'master.state': 'pc', 'master.create': 'pc', 'master.unlock': 'pc', 'master.lock': 'pc', 'master.check': 'pc', 'master.change': 'pc', 'master.forgot': 'pc', 'master.reset': 'pc',
-  'secrets.connector': 'pc', 'secrets.saveConnector': 'pc'
+  'secrets.connector': 'pc', 'secrets.saveConnector': 'pc',
+  // 3.8.1: Ajustes › Skills y MCP (src/engine/api-extensions.mjs): what agents run comes in and out of core only here
+  'extensions.list': 'pc', 'extensions.toggle': 'pc', 'extensions.import': 'pc', 'extensions.remove': 'pc', 'extensions.approve': 'pc',
+  'extensions.reject': 'pc', 'extensions.edit': 'pc', 'extensions.adopt': 'pc', 'extensions.applyCheck': 'pc', 'extensions.apply': 'pc'
 });
 // What a linked phone or browser may call (the rest is this PC's).
 export const REMOTE_METHODS = Object.freeze(new Set(Object.keys(METHODS).filter((m) => METHODS[m] === 'remote')));
@@ -75,9 +78,10 @@ export const REMOTE_METHODS = Object.freeze(new Set(Object.keys(METHODS).filter(
 // deleting the data of Orb 3.7, unlinking a phone, seeing or changing a connector's keys, opening core (main.mjs asks
 // master.check) and, in config.save, choosing where the backups go, writing a connector's keys in clear, changing a
 // connector that has keys (its command, its arguments, its name, removing it or one of its keys) and taking a path off
-// «Cosas que nadie toca»; 3.8.1: deleting a project (its folder). current: the settings now (the engine's), to compare
+// «Cosas que nadie toca»; 3.8.1: deleting a project (its folder) and removing a skill or an MCP server from core (or a
+// connector). current: the settings now (the engine's), to compare
 // with. Changing the password asks for the current one instead.
-export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.recovery', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'projects.deleteCheck', 'projects.delete']));
+export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.recovery', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'projects.deleteCheck', 'projects.delete', 'extensions.remove']));
 // 3.8.1: the actions that ask for the master password EVERY time, even right after another unlock (the owner: deleting a
 // project «requiere master pass»): method → the purpose its token must carry (src/core/master.mjs › issue(purpose)).
 export const FRESH_UNLOCK = Object.freeze({ 'projects.deleteCheck': 'deleteProject', 'projects.delete': 'deleteProject' });

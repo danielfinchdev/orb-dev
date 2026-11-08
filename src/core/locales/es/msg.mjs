@@ -240,6 +240,8 @@ export default {
   "msg.guard.gitRewrite": "reescribe o descarta cambios de git",
   "msg.guard.github": "usa tu cuenta de GitHub",
   "msg.guard.internal": "accede a datos internos de Orb",
+  "msg.guard.internalSkills": "cambia una skill de core (las skills no se editan: para una versión nueva usa orb_create_skill con mejorar, y la aprueba el usuario)",
+  "msg.guard.internalSkillsRun": "ejecuta algo de una skill de core",
   "msg.guard.internalLogs": "toca la bitácora general de core (se lee con Read u orb_read_log y se escribe con orb_write_log)",
   "msg.guard.agentConfig": "cambia los ajustes de agentes del proyecto (.claude o .cursor), que usarán los agentes siguientes",
   "msg.guard.protected": "toca algo protegido ({name}), que nunca se toca",

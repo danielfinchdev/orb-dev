@@ -69,6 +69,8 @@ export const DEFAULT_CONFIG = Object.freeze({
   // queue (instead of waiting for approval), up to maxPerTask per task.
   delegation: { enabled: true, trusted: true, maxPerTask: 4 },
   mcpServers: [],
+  // 3.8.1: the skills of core\skills that are on ([{ name, enabled, source }]; one without an entry is off).
+  skills: [],
   projectRoots: [],
   // pip: the little window that shows the agent's browser; sounds and motion: the robot's.
   // skin, font, codeFont, codeTheme: Ajustes → Apariencia (src/core/appearance.mjs).
@@ -88,7 +90,9 @@ export const DEFAULT_CONFIG = Object.freeze({
 //     orb.json                  settings
 //     datos\                    database, secret, identity; ejecuciones\ task runs; copias\ isolated copies and undo points
 //     bitacora\                 the general log and one per project (bitacora\proyectos)
-//     mcp\                      the MCP servers Orb manages (each subfolder is one, listed in Ajustes)
+//     mcp\                      every MCP server (each subfolder is one; Ajustes › Skills y MCP)
+//     skills\                   every skill (each subfolder, with its SKILL.md); .activas: what the agents load
+//     preparacion\              what an agent makes (a skill or a server) until the user turns it on
 //     herramientas\adb\         what Orb downloads to build and test (Android's adb and fastboot)
 //     secretos\                 the secrets sealed with the master password
 //   windows\ linux\ ios\ android\ web\ multi\   categories: every subfolder of one of them is a project
@@ -99,6 +103,8 @@ export { CORE_DIR, CATEGORIES, PLATFORMS, MULTI, SHARED_DIR, DEFAULT_CATEGORY, D
 export const INTERNAL_DIR = CORE_DIR;
 export const LOGS_DIR = 'bitacora';
 export const MCP_DIR = 'mcp';
+export const SKILLS_DIR = 'skills'; // 3.8.1: every skill (src/core/extensions.mjs)
+export const STAGING_DIR = 'preparacion'; // 3.8.1: what an agent makes before the user turns it on (the only part of core agents write)
 export const OLD_LOGS_DIR = 'bitacoras'; // 2.3.0 and older
 // 3.5–3.7: the bots' memories. 3.8: no bots; an old bots\ folder is never taken for a project (the 3.8 migration archives it).
 export const BOTS_DIR = 'bots';
@@ -127,7 +133,7 @@ export function paths(home) {
   return {
     home, core, internal: core, config: path.join(core, CONFIG_FILE), data, db: path.join(data, 'orb.db'), key: path.join(data, 'clave.bin'),
     logs, generalLog: path.join(logs, 'GENERAL.md'), projectLogs: path.join(logs, 'proyectos'),
-    mcp: path.join(core, MCP_DIR), tools, adb: isDirSync(keptAdb) ? keptAdb : path.join(tools, 'adb'), secrets: path.join(core, 'secretos'),
+    mcp: path.join(core, MCP_DIR), skills: path.join(core, SKILLS_DIR), staging: path.join(core, STAGING_DIR), tools, adb: isDirSync(keptAdb) ? keptAdb : path.join(tools, 'adb'), secrets: path.join(core, 'secretos'),
     projects: home, categories: Object.fromEntries(CATEGORIES.map((c) => [c, path.join(home, c)])),
     runs: path.join(core, 'ejecuciones'),
     copies, worktrees: path.join(copies, 'aisladas'), checkpoints: path.join(copies, 'fotos')
@@ -215,7 +221,7 @@ export function createHome(base, { assistantName = PRODUCT.assistant, userName =
 export function ensureLayout(home, config = null) {
   migrateWorkspace(home);
   const p = paths(home);
-  for (const dir of [p.data, p.runs, p.logs, p.projectLogs, p.mcp, p.tools, p.secrets, ...Object.values(p.categories)]) fs.mkdirSync(dir, { recursive: true });
+  for (const dir of [p.data, p.runs, p.logs, p.projectLogs, p.mcp, p.skills, p.tools, p.secrets, ...Object.values(p.categories)]) fs.mkdirSync(dir, { recursive: true });
   const old = path.join(home, OLD_LOGS_DIR);
   if (fs.existsSync(old)) { try { moveLogs(old, p.logs); } catch { /* left as it is; tried again on the next start */ } }
   if (!fs.existsSync(p.generalLog)) {

@@ -95,3 +95,20 @@ export function touchesKeys(current = [], next = []) {
   }
   return false;
 }
+
+// 3.8.1: a connector whose folder Orb itself moved (into core\mcp, or a new version of it with «Aplicar cambios»): its
+// keys go on with the new command when they were tied to the old one (a command changed by someone else stays held).
+// before / after: the connectors before and after the move. → how many were tied again.
+export function rebindMoved(master, before = [], after = []) {
+  if (!master?.unlocked()) return 0;
+  let n = 0;
+  for (const s of after ?? []) {
+    if (!s || !hasRefs(s)) continue;
+    const old = (before ?? []).find((x) => x?.name === s.name);
+    if (!old || bindingOf(old) === bindingOf(s)) continue;
+    let held = null; try { held = master.get(bindId(s.name)); } catch { held = null; }
+    if (held !== bindingOf(old)) continue;
+    master.set(bindId(s.name), bindingOf(s)); n++;
+  }
+  return n;
+}
