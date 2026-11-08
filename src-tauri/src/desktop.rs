@@ -45,11 +45,9 @@ pub async fn pick_files(window: &WebviewWindow, title: Option<String>) -> Vec<St
   paths(dialog(window, title, "sys.dialog.pickFiles").blocking_pick_files(), 20)
 }
 
-/// Pictures for an agent's message: up to 10.
-pub async fn pick_images(window: &WebviewWindow) -> Vec<String> {
-  let engine = engine::get(window.app_handle());
-  let picked = dialog(window, None, "sys.dialog.refImages").add_filter(engine.t("sys.dialog.images", &[]), &["png", "jpg", "jpeg", "gif", "webp", "bmp"]).blocking_pick_files();
-  paths(picked, 10)
+/// 3.8.2: files for an agent's message, of any kind: up to 10 (the engine checks each one, src/engine/attachments.mjs).
+pub async fn pick_attachments(window: &WebviewWindow) -> Vec<String> {
+  paths(dialog(window, None, "sys.dialog.attach").blocking_pick_files(), 10)
 }
 
 /// A PNG or JPEG of at most 5 MB, by its first bytes (not its extension), as src/engine/feedback.mjs › readImage.

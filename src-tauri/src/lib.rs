@@ -169,9 +169,9 @@ async fn app_pick_files(window: WebviewWindow, title: Option<String>) -> Result<
 }
 
 #[tauri::command]
-async fn app_pick_images(window: WebviewWindow) -> Result<Vec<String>, String> {
+async fn app_pick_attachments(window: WebviewWindow) -> Result<Vec<String>, String> {
   only_main(&window)?;
-  Ok(desktop::pick_images(&window).await)
+  Ok(desktop::pick_attachments(&window).await)
 }
 
 #[tauri::command]
@@ -336,7 +336,7 @@ pub fn run() {
       app_pick_folder,
       app_pick_program,
       app_pick_files,
-      app_pick_images,
+      app_pick_attachments,
       app_feedback_images,
       app_feedback_capture,
       app_open_path,

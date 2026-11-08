@@ -43,7 +43,7 @@ fn main() {
     "app_pick_folder",
     "app_pick_program",
     "app_pick_files",
-    "app_pick_images",
+    "app_pick_attachments",
     "app_feedback_images",
     "app_feedback_capture",
     "app_open_path",

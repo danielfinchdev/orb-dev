@@ -65,7 +65,7 @@ if (import.meta.env.MODE !== 'android' && window.__TAURI_INTERNALS__ && !window.
     switchHome: (folder) => invoke('app_switch_home', { target: String(folder ?? '') }),
     // Windows' own dialogs, opened by Rust (the page has no dialog permission).
     pickFolder: (title) => invoke('app_pick_folder', { title: text(title) }),
-    pickImages: () => invoke('app_pick_images'),
+    pickAttachments: () => invoke('app_pick_attachments'),
     pickProgram: (title) => invoke('app_pick_program', { title: text(title) }),
     pickFiles: (title) => invoke('app_pick_files', { title: text(title) }),
     // unlock: the master password's token, for core and its secrets (Rust checks it with the engine).

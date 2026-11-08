@@ -63,7 +63,7 @@ export default {
   'session.created': 'Creada',
   'session.close': 'Cerrar',
   'session.gone': 'Esta conversación ya no existe',
-  'session.lookAtImages': 'Revisa estas imágenes.',
+  'session.lookAtFiles': 'Revisa los adjuntos.',
   'session.steerSent': 'Corrección enviada. Se aplicará en el siguiente paso.',
   'session.resentTask': 'Enviado. La tarea vuelve a la cola.',
   'session.queuedToast': 'En cola. Se enviará al terminar el turno actual.',
@@ -103,5 +103,5 @@ export default {
   'session.phWait': 'Se enviará cuando {agent} termine este turno…',
   'session.phTask': 'Escribe al agente de esta tarea (misma conversación)…',
   'session.ph': 'Escribe a {agent}…',
-  'session.attach': 'Adjuntar imágenes de referencia'
+  'session.attach': 'Adjuntar'
 };

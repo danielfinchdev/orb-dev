@@ -63,7 +63,7 @@ export default {
   'session.created': 'Created',
   'session.close': 'Close',
   'session.gone': 'This conversation no longer exists',
-  'session.lookAtImages': 'Review these images.',
+  'session.lookAtFiles': 'Review the attachments.',
   'session.steerSent': 'Correction sent. It will be applied at the next step.',
   'session.resentTask': 'Sent. The task is back in the queue.',
   'session.queuedToast': 'Queued. It will be sent when the current turn ends.',
@@ -103,5 +103,5 @@ export default {
   'session.phWait': 'It will be sent when {agent} finishes this turn…',
   'session.phTask': 'Message this task’s agent (same conversation)…',
   'session.ph': 'Message {agent}…',
-  'session.attach': 'Attach reference images'
+  'session.attach': 'Attach'
 };

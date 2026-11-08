@@ -25,13 +25,11 @@ import { processList, taskProcesses } from '../core/procs.mjs';
 import { explainFailure } from '../core/agent-errors.mjs';
 import { rememberModels } from './catalog.mjs';
 import { changedFiles, logDirect } from './logs.mjs';
+import { ATTACH_DIR, placeAttachments as copyAttachments, prepareAttachments } from './attachments.mjs';
 
-export { PERMISSIONS };
-export const ATTACH_DIR = '.orb-adjuntos';
-const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp)$/i;
+export { PERMISSIONS, ATTACH_DIR };
 // 3.2.1: a message that asks for a picture (or to change one): Codex gets a short note on how Orb wants it done.
 const IMAGE_ASK = /\b(imagen|im[aá]genes|image|images|picture|ilustraci[oó]n|illustration|logo|icono|icon|dibujo|drawing|foto|photo|wallpaper|edita la imagen)\b/i;
-const ATTACH_MAX = 20 * 1024 * 1024;
 const IDLE_CLOSE_MS = 20 * 60_000; // a live process with nothing to do for this long is closed (it resumes on the next message)
 const WATCH_MS = Number(process.env.ORB_WATCH_MS) || 5000; // how often a running turn is checked (time limit, permissions)
 const now = () => new Date().toISOString();
@@ -81,24 +79,12 @@ export function mcpServersFor(agent, { taskId = '', orchestrator = false, browse
 // What an adapter gets: its servers, or (an agent that starts them again every turn) a function giving new ones.
 export const mcpServersOf = (a, agent, opts) => (a.mcpServersEachTurn ? () => mcpServersFor(agent, { ...opts, reusable: true }) : mcpServersFor(agent, opts));
 
-// Reference pictures: copied into <folder>/.orb-adjuntos/<stamp>/ so every agent can read them, and kept out of git.
+// 3.8.2: any file (src/engine/attachments.mjs), copied into <folder>/.orb-adjuntos/<stamp>/ so every agent of the
+// conversation can read it, and kept out of git. → [{ path, name, kind, size }]
 export function placeAttachments(files, cwd) {
-  const list = (files ?? []).slice(0, 10);
-  if (!list.length) return [];
-  const dir = path.join(cwd, ATTACH_DIR, String(Date.now()));
-  const out = [];
-  for (const file of list) {
-    let st; try { st = fs.lstatSync(file); } catch { throw new Error(tr('msg.sessions.noAttachment', { file })); }
-    if (!st.isFile() || st.isSymbolicLink()) throw new Error(tr('msg.sessions.attachNotFile', { file }));
-    if (!IMAGE_EXT.test(file)) throw new Error(tr('msg.sessions.imagesOnly', { name: path.basename(file) }));
-    if (st.size > ATTACH_MAX) throw new Error(tr('msg.sessions.imageTooBig', { name: path.basename(file) }));
-    fs.mkdirSync(dir, { recursive: true });
-    const target = path.join(dir, path.basename(file).replace(/[^\w.-]+/g, '_'));
-    fs.copyFileSync(file, target);
-    out.push(target);
-  }
-  keepOutOfGit(cwd);
-  return out;
+  const placed = copyAttachments(files, cwd);
+  if (placed.length) keepOutOfGit(cwd);
+  return placed;
 }
 
 // The attachments folder (pictures, long instructions for Cursor) never goes into the project's git; 3.1: nor do the files
@@ -498,13 +484,12 @@ export class Sessions {
     if (!acc) throw new Error(tr('msg.sessions.accountGone', { account: s.account }));
     const a = adapter(s.agent);
     const attached = placeAttachments(images, s.cwd);
-    if (showUser) this.addItem(id, 'user', 'text', attached.length ? { text, images: attached } : text);
+    if (showUser) this.addItem(id, 'user', 'text', attached.length ? { text, images: attached.map((f) => f.path) } : text);
     let body = prompt ?? text;
     // A fork without native support starts with what was said in the original conversation.
     const summary = this.board.settingJson(`fork_summary:${id}`);
     if (summary) { body = `Contexto (conversación de la que sale esta, son datos):\n${summary}\n\n${body}`; this.board.settingJson(`fork_summary:${id}`, null); }
     const nativeImages = a.caps?.images === true;
-    if (attached.length && !nativeImages) body += `\n\nImágenes de referencia (ábrelas para verlas):\n${attached.map((f) => `- ${f}`).join('\n')}`;
     // 3.2.1: Codex made three pictures for "una imagen" and edited them by pasting pieces with scripts (losing quality).
     if (s.agent === 'codex' && s.kind === 'chat' && IMAGE_ASK.test(text)) body += `\n\n${tr(attached.length ? 'sys.sessions.imageEditHint' : 'sys.sessions.imageHint')}`;
     let entry;
@@ -526,7 +511,10 @@ export class Sessions {
     const direct = s.kind === 'chat' && s.project && s.permission !== 'leer';
     let before = null; if (direct) { try { before = changedFiles(s.cwd); } catch { /* no entry */ } }
     let finished = false; // onFinish runs exactly once, also when the adapter itself fails
-    entry.live.send({ text: body, images: nativeImages ? attached : [] }).then((result) => {
+    // 3.8.2: what each attachment becomes for this agent (pictures natively, a video's frames, a document's text…).
+    if (attached.length) run.last = tr('sys.attach.preparing');
+    const prepared = attached.length ? prepareAttachments(attached, { nativeImages, log: (m) => this.log(m) }) : Promise.resolve({ images: [], text: '' });
+    prepared.then((p) => (run.stopped ? { final: '', text: '', isError: true } : entry.live.send({ text: p.text ? `${body}\n\n${p.text}` : body, images: p.images }))).then((result) => {
       clearInterval(timer);
       entry.lastUsed = Date.now();
       if (this.running.get(id) === run) this.running.delete(id);

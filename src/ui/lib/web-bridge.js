@@ -299,7 +299,8 @@ if (!window.orb) {
     setup: async () => { throw new Error(await tl('app.pcOnly')); },
     switchHome: async () => { throw new Error(await tl('app.pcOnly')); },
     pickFolder: async () => null,
-    pickImages,
+    // 3.8.2: a linked device still attaches pictures only (they are uploaded to the PC first, remote.mjs).
+    pickAttachments: pickImages,
     openPath: async () => { throw new Error(await tl('app.foldersPc')); },
     openExternal: async (url) => { if (/^https:\/\//.test(url)) window.open(url, '_blank', 'noopener'); },
     pathForFile: () => null

@@ -77,7 +77,7 @@ const desktopBridge = () => {
     setup: async () => post('/__setup'),
     light: false,
     switchHome: async () => null,
-    pickFolder: async () => 'C:\\Users\\ana\\Documents', pickImages: async () => [], pickFiles: async () => null, pickProgram: async () => null,
+    pickFolder: async () => 'C:\\Users\\ana\\Documents', pickAttachments: async () => [], pickFiles: async () => null, pickProgram: async () => null,
     openPath: async () => {}, openExternal: async () => {}, showBrowser: async () => ({ tabs: [] }), zoom: async () => 1, openTerminal: async () => 'Windows Terminal',
     windowControls: { act: async () => ({ maximized: false }), onState: () => () => {} },
     editors: async () => ({ cursor: false, vscode: true }), openIn: async () => null, runAction: async () => null, moreApps: async () => [], pathForFile: () => null,
