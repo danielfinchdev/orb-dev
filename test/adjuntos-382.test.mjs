@@ -10,6 +10,7 @@ import zlib from 'node:zlib';
 import { ctx } from '../src/core/context.mjs';
 import { isOrbData } from '../src/core/guard.mjs';
 import { kindOf, placeAttachments, prepareAttachments, extractText, zipEntries, probeInfo, evenTimes, extractFrames, ATTACH_DIR, ATTACH_MAX, FFMPEG } from '../src/engine/attachments.mjs';
+import { micMode } from '../src/ui/lib/mic.js';
 
 const ui = (...p) => fs.readFileSync(path.join(ROOT, 'src', 'ui', ...p), 'utf8');
 const src = (...p) => fs.readFileSync(path.join(ROOT, 'src', ...p), 'utf8');
@@ -164,4 +165,25 @@ test('«Adjuntar» in the composer: any file, drop and paste too', () => {
   assert.match(ui('lib', 'tauri-bridge.js'), /pickAttachments: \(\) => invoke\('app_pick_attachments'\)/);
   const rust = fs.readFileSync(path.join(ROOT, 'src-tauri', 'src', 'desktop.rs'), 'utf8');
   assert.match(rust, /pub async fn pick_attachments[\s\S]*?dialog\(window, None, "sys\.dialog\.attach"\)\.blocking_pick_files\(\), 10\)/);
+});
+
+test('the microphone per platform (D3): Win+H on Windows, none on a phone', () => {
+  assert.equal(micMode({ desktop: true, windowsDictation: true }), 'windows');
+  assert.equal(micMode({ desktop: true, windowsDictation: false, webSpeech: true }), null);
+  assert.equal(micMode({ androidApp: true, mobile: true, webSpeech: true }), null, 'Android app: the keyboard dictates');
+  assert.equal(micMode({ mobile: true, coarse: true, webSpeech: true }), null, 'a phone browser: the keyboard dictates');
+  assert.equal(micMode({ mobile: true, coarse: false, webSpeech: true }), 'web', 'a computer browser keeps its speech recognition');
+  assert.equal(micMode({ mobile: true, webSpeech: false }), null);
+  const chat = ui('views', 'chat.jsx');
+  const composer = chat.slice(chat.indexOf('export function Composer'), chat.indexOf('// 2.6: the system'));
+  // Between the usage ring (at the end of «bottom») and «enviar», with its label and tooltip.
+  const at = (s) => composer.indexOf(s);
+  assert.ok(at('{bottom}</div>') < at('data-testid="dictate"') && at('data-testid="dictate"') < at('data-testid="send"'));
+  assert.match(composer, /\{mic \? <Tip label=\{t\('chat\.dictate'\)\}><Button [^>]*aria-label=\{t\('chat\.dictate'\)\}/);
+  assert.match(composer, /el\.focus\(\);[\s\S]*?await act\(bridge\.dictateWindows\(\)\.catch\(\(\) => \{ throw new Error\(t\('chat\.dictateFailed'\)\); \}\)\)/);
+  assert.match(ui('lib', 'tauri-bridge.js'), /dictateWindows: \(\) => invoke\('app_dictate'\)/);
+  const rust = fs.readFileSync(path.join(ROOT, 'src-tauri', 'src', 'desktop.rs'), 'utf8');
+  assert.match(rust, /let keys = \[key\(VK_LWIN, false\), key\(h, false\), key\(h, true\), key\(VK_LWIN, true\)\];/);
+  for (const f of ['build.rs', path.join('capabilities', 'main.json')]) assert.match(fs.readFileSync(path.join(ROOT, 'src-tauri', f), 'utf8'), /app_dictate|allow-app-dictate/, f);
+  assert.doesNotMatch(ui('lib', 'app-bridge.js'), /orb\.dictate =/);
 });

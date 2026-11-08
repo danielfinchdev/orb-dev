@@ -174,6 +174,13 @@ async fn app_pick_attachments(window: WebviewWindow) -> Result<Vec<String>, Stri
   Ok(desktop::pick_attachments(&window).await)
 }
 
+/// 3.8.2 (D3): the microphone of the message box opens Windows' own voice typing (Win+H) on the focused box.
+#[tauri::command]
+async fn app_dictate(window: WebviewWindow) -> Result<(), String> {
+  only_main(&window)?;
+  desktop::dictate(&window)
+}
+
 #[tauri::command]
 async fn app_feedback_images(window: WebviewWindow) -> Result<Vec<Value>, String> {
   only_main(&window)?;
@@ -337,6 +344,7 @@ pub fn run() {
       app_pick_program,
       app_pick_files,
       app_pick_attachments,
+      app_dictate,
       app_feedback_images,
       app_feedback_capture,
       app_open_path,

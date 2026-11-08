@@ -89,11 +89,6 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
       // A link out of Orb opens in the phone's browser (review Android A2): the app's WebView only ever shows Orb's page
       // (src-tauri/src/mobile.rs › on_navigation), so window.open would do nothing.
       orb.openExternal = async (url) => { if (/^https:\/\//.test(String(url ?? ''))) await nat('open_url', { url: String(url) }).catch(console.error); };
-      // Dictation with Android's own speech recognition (its own window; the WebView has no Web Speech API).
-      orb.dictate = async (lang) => {
-        try { const r = await nat('dictate', { lang: lang === 'en' ? 'en' : 'es' }); return r?.text ?? ''; }
-        catch (e) { if (said(e).includes('unavailable')) throw new Error(await tl('app.dictateUnavailable')); throw new Error(said(e).trim()); }
-      };
       orb.takeShared = () => { const s = shared; shared = null; return s; };
       orb.hasShared = () => shared != null;
       // 3.6 (messaging, M4): the chats' notifications as a messaging app's. The Orb builds each one

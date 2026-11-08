@@ -21,6 +21,7 @@
     "allow-app-pick-program",
     "allow-app-pick-files",
     "allow-app-pick-attachments",
+    "allow-app-dictate",
     "allow-app-feedback-images",
     "allow-app-feedback-capture",
     "allow-app-open-path",

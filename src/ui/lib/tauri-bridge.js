@@ -58,14 +58,16 @@ if (import.meta.env.MODE !== 'android' && window.__TAURI_INTERNALS__ && !window.
     // opened (info().startError.code === 'secretUnreadable').
     retryStart: (opts) => invoke('app_retry_start', { newSecret: opts?.newSecret === true }),
     platform: 'win32',
-    // The desktop app (review D10 M7): WebView2 here has no speech service and webview.rs denies the microphone, so
-    // the interface never offers to dictate (src/ui/views/chat.jsx).
+    // The desktop app (review D10 M7): WebView2 here has no speech service and webview.rs denies the microphone; 3.8.2
+    // (D3): the microphone opens Windows' own voice typing instead (dictateWindows, src/ui/views/chat.jsx).
     desktop: true,
     setup: (data) => invoke('app_setup', { data: data ?? {} }),
     switchHome: (folder) => invoke('app_switch_home', { target: String(folder ?? '') }),
     // Windows' own dialogs, opened by Rust (the page has no dialog permission).
     pickFolder: (title) => invoke('app_pick_folder', { title: text(title) }),
     pickAttachments: () => invoke('app_pick_attachments'),
+    // 3.8.2 (D3): the microphone opens Windows' voice typing (Win+H) on the focused message box.
+    dictateWindows: () => invoke('app_dictate'),
     pickProgram: (title) => invoke('app_pick_program', { title: text(title) }),
     pickFiles: (title) => invoke('app_pick_files', { title: text(title) }),
     // unlock: the master password's token, for core and its secrets (Rust checks it with the engine).

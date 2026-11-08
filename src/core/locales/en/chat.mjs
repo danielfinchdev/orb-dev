@@ -1,6 +1,7 @@
 // chat.*
 export default {
   'chat.dictate': "Dictate",
+  'chat.dictateFailed': "Couldn't open Windows voice typing. Try Win+H.",
   'chat.suggestion1': 'Create a project called “my-site” with a simple home page',
   'chat.suggestion2': 'How are the tasks going?',
   'chat.suggestion3': 'Review the project and suggest improvements',

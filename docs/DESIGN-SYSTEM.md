@@ -91,7 +91,8 @@ rules come from), `src/ui/app.css` (tokens), `src/ui/themes.css` (visual themes)
   in words once ("Uso bajo / medio / alto / muy alto"; no invented numbers); the **orchestrator**: its icon
   (`components/orchestrator-icon.jsx`, «branches from one point») + a small switch, only on a new conversation; tooltip
   «Orquestador: Orbe reparte el trabajo entre varios agentes» plus its state. Right side: the context meter (only when known),
-  dictation (Android), stop (while busy), send.
+  the microphone (Windows voice typing, Win+H; a computer browser's speech recognition; none on a phone), stop (while
+  busy), send.
 - On the phone the bottom row keeps one line: model picker shows the model only, the reasoning pill keeps its level, the orchestrator is an icon.
 
 ### 2.3 Settings (dialog on the PC, screens on the phone)

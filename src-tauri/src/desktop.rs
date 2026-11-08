@@ -50,6 +50,34 @@ pub async fn pick_attachments(window: &WebviewWindow) -> Vec<String> {
   paths(dialog(window, None, "sys.dialog.attach").blocking_pick_files(), 10)
 }
 
+/// 3.8.2 (D3): Windows' voice typing, as the user would open it: Win+H on the focused window. Windows has no API for it
+/// (it is the touch keyboard's dictation), so the keys are sent with SendInput. It fails when Windows takes none of them
+/// (another program's window in front, a secure desktop); when voice typing is off, Windows itself says so.
+#[cfg(windows)]
+pub fn dictate(window: &WebviewWindow) -> Result<(), String> {
+  use windows::Win32::UI::Input::KeyboardAndMouse::{SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP, VIRTUAL_KEY, VK_LWIN};
+  let _ = window.set_focus();
+  let key = |vk: VIRTUAL_KEY, up: bool| INPUT {
+    r#type: INPUT_KEYBOARD,
+    Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: vk, wScan: 0, dwFlags: if up { KEYEVENTF_KEYUP } else { KEYBD_EVENT_FLAGS(0) }, time: 0, dwExtraInfo: 0 } },
+  };
+  let h = VIRTUAL_KEY(b'H' as u16);
+  let keys = [key(VK_LWIN, false), key(h, false), key(h, true), key(VK_LWIN, true)];
+  let sent = unsafe { SendInput(&keys, std::mem::size_of::<INPUT>() as i32) };
+  if sent as usize == keys.len() {
+    Ok(())
+  } else {
+    // Never leave the Windows key down.
+    unsafe { SendInput(&[key(VK_LWIN, true)], std::mem::size_of::<INPUT>() as i32) };
+    Err("dictation unavailable".into())
+  }
+}
+
+#[cfg(not(windows))]
+pub fn dictate(_window: &WebviewWindow) -> Result<(), String> {
+  Err("dictation unavailable".into())
+}
+
 /// A PNG or JPEG of at most 5 MB, by its first bytes (not its extension), as src/engine/feedback.mjs › readImage.
 pub fn read_image(file: &Path) -> Option<Value> {
   use base64::Engine as _;

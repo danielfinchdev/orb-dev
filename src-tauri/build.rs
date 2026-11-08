@@ -44,6 +44,7 @@ fn main() {
     "app_pick_program",
     "app_pick_files",
     "app_pick_attachments",
+    "app_dictate",
     "app_feedback_images",
     "app_feedback_capture",
     "app_open_path",

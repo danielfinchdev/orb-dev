@@ -1,7 +1,7 @@
 # The Orb app for Android
 
-The same phone UI, as a native app: it scans your Orb's QR with the camera, notifies you of new messages, takes
-dictation with the microphone and receives what you share from other apps ("Share with Orb"). No Play Store needed:
+The same phone UI, as a native app: it scans your Orb's QR with the camera, notifies you of new messages and
+receives what you share from other apps ("Share with Orb"). No Play Store needed:
 it is installed from the APK file.
 
 ## Installing it on the phone
@@ -52,7 +52,7 @@ linked in 3.7 are unlinked once when the PC first opens 3.8; link them again wit
   offers «Reintentar» and «Vincular con otro PC».
 - PC-only things (Settings, agents' accounts, backups, `core`) are not on the phone.
 
-## Notifications, dictation and sharing
+## Notifications and sharing
 
 - **Notifications**: after linking the app offers them in the list of chats (above the tabs, until you answer); later,
   in **More → This phone**. They arrive while
@@ -72,8 +72,7 @@ linked in 3.7 are unlinked once when the PC first opens 3.8; link them again wit
 - **Links** (a chat's links, «Descargar» of a new version, Tailscale) open in the phone's browser: the app's WebView only
   ever shows Orb's own page.
 - **Updates**: when your Orb needs a newer app, the app says so instead of failing.
-- **Dictation**: the microphone button, next to **Send**. It uses the phone's own speech recognition (its own window;
-  the microphone permission is the recognizer's, not Orb's).
+- **Dictation**: the phone keyboard's own microphone (since 3.8.2 the message box has no microphone button on the phone).
 - **Share with Orb**: in any app, **Share → Orb**. Text and links appear in the chat, ready to send; images are
   uploaded encrypted to your Orb and the chat gets their path.
 

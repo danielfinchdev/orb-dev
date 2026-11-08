@@ -5,6 +5,7 @@
 // 3.2: each conversation is its own (route.id), several at once.
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { routeKey, takeDraft } from '@/lib/reload.js';
+import { micMode } from '@/lib/mic.js';
 import { ArrowUp, Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, AtSign, ChevronLeft, ChevronRight, PenTool, History, FlaskConical, Folder, Mic, Shrink, ListChecks, Ellipsis, Info, BellOff, MessageSquare } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Markdown } from '@/components/markdown.jsx';
@@ -88,7 +89,7 @@ function useMentions(value, onChange, ta) {
 }
 
 // mentions: false hides the «@» picker. 3.6 (M2): the microphone also dictates in a computer's browser that has speech
-// recognition (not in the PC app, whose engine has none).
+// recognition (the PC app opens Windows' voice typing instead).
 const WebSpeech = typeof window !== 'undefined' ? (window.SpeechRecognition || window.webkitSpeechRecognition || null) : null;
 function webDictate(lang) {
   return new Promise((resolve, reject) => {
@@ -108,13 +109,20 @@ export function Composer({ value, onChange, onSend, onStop, busy, placeholder, t
   // 3.8.2: what this box had when F5 reloaded the window comes back on the same screen (lib/reload.js).
   const here = useStore((s) => routeKey(s.route));
   useEffect(() => { if (!testid) return; const draft = takeDraft(testid, getState().route); if (draft && !value.trim()) onChange(draft); }, [testid, here]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Not in the desktop app (bridge.desktop: WebView2 has the API but no speech service, and no microphone).
-  const dictateWith = bridge.dictate ? (lang) => bridge.dictate(lang) : WebSpeech && !bridge.desktop ? webDictate : null;
-  // 3.5, the Android app: dictate with the phone's own speech recognition (what is said is added to the text).
+  // 3.8.2 (D3): Windows' voice typing in Orb for Windows, nothing on a phone (its keyboard dictates), the browser's speech
+  // recognition in a computer's browser (lib/mic.js).
+  const mic = micMode({ desktop: Boolean(bridge.desktop), windowsDictation: Boolean(bridge.dictateWindows), androidApp: window.__orbHost?.app === true, mobile: Boolean(bridge.mobile),
+    coarse: typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches, webSpeech: Boolean(WebSpeech) });
   const [hearing, setHearing] = useState(false);
   const dictate = async () => {
+    // Windows writes what is said into the box that has the focus: the message box, with the cursor at the end.
+    if (mic === 'windows') {
+      const el = ta.current; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+      await act(bridge.dictateWindows().catch(() => { throw new Error(t('chat.dictateFailed')); }));
+      return;
+    }
     setHearing(true);
-    try { const said = await act(dictateWith(getState().app?.config?.language ?? 'es')); if (said) onChange(value.trim() ? `${value.trimEnd()} ${said}` : said); }
+    try { const said = await act(webDictate(getState().app?.config?.language ?? 'es')); if (said) onChange(value.trim() ? `${value.trimEnd()} ${said}` : said); }
     finally { setHearing(false); }
   };
   return (
@@ -139,7 +147,7 @@ export function Composer({ value, onChange, onSend, onStop, busy, placeholder, t
           className="placeholder:text-muted-foreground block w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[14.5px] leading-relaxed outline-none" />
         <div className="flex items-center gap-2 px-3 pb-3">
           <div className="flex min-w-0 flex-1 items-center gap-1.5" data-testid="composer-bottom">{bottom}</div>
-          {dictateWith ? <Tip label={t('chat.dictate')}><Button size="icon-sm" variant="ghost" className="rounded-full" onClick={dictate} disabled={disabled || hearing} aria-label={t('chat.dictate')} data-testid="dictate"><Mic className={hearing ? 'text-primary animate-pulse' : undefined} /></Button></Tip> : null}
+          {mic ? <Tip label={t('chat.dictate')}><Button size="icon-sm" variant="ghost" className="rounded-full" onClick={dictate} disabled={disabled || hearing} aria-label={t('chat.dictate')} data-testid="dictate"><Mic className={hearing ? 'text-primary animate-pulse' : undefined} /></Button></Tip> : null}
           {busy && onStop ? <Tip label={t('chat.stop')}><Button size="icon-sm" variant="secondary" onClick={onStop} aria-label={t('chat.stop')}><Square className="size-3.5 fill-current" /></Button></Tip> : null}
           <Button size="icon-sm" className="rounded-full" onClick={() => onSend({ alt: false })} disabled={disabled || !(canSend ?? value.trim())} aria-label={t('chat.send')} data-testid="send"><ArrowUp /></Button>
         </div>
