@@ -339,6 +339,7 @@ export default {
   "msg.projects.notTrashed": "The folder is still in its place: nothing was deleted.",
   "msg.projects.deleting": "“{name}” is being deleted: nothing can start in it.",
   "msg.projects.deleteExpired": "Deleting “{name}” is no longer under way (it was cancelled or took too long). Start again.",
+  "msg.projects.probeStuck": "Orb could not give the project's folder its name back (some program, such as the antivirus, took it just then). It is now at {path}. Press “Retry” in a moment: Orb will try to give it back.",
   "msg.projects.folderInUse": "Some program is using {path}. Close it and press “Retry”: nothing was deleted.",
   "msg.projects.partlyDeleted": "Part of it was deleted, but files are left in {path}. Close whatever is using them and delete the project again.",
   "msg.projects.renameBusy": "{name} has pending or running tasks, or a conversation at work. Rename it when they finish.",

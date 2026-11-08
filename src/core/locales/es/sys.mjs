@@ -46,6 +46,7 @@ export default {
   'sys.main.engineOff': '{name} no está en ejecución',
   'sys.main.engineTimeout': '{name} no respondió a tiempo',
   'sys.main.badOrigin': 'origen no permitido',
+  'sys.main.folderProbeStuck': 'Orb no pudo devolver su nombre a la carpeta del proyecto (algún programa, como el antivirus, la tomó justo entonces). Ahora está en {path}. Pulsa «Reintentar» en un momento: Orb intentará devolvérselo.',
   'sys.main.badAction': 'acción no válida',
   'sys.main.noFolderYet': 'todavía no hay ninguna carpeta',
   'sys.main.badPath': 'ruta no válida',

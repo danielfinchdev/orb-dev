@@ -339,6 +339,7 @@ export default {
   "msg.projects.notTrashed": "La carpeta sigue en su sitio: no se ha eliminado nada.",
   "msg.projects.deleting": "«{name}» se está eliminando: no se puede empezar nada en él.",
   "msg.projects.deleteExpired": "La eliminación de «{name}» ya no está en curso (se canceló o pasó demasiado tiempo). Vuelve a empezar.",
+  "msg.projects.probeStuck": "Orb no pudo devolver su nombre a la carpeta del proyecto (algún programa, como el antivirus, la tomó justo entonces). Ahora está en {path}. Pulsa «Reintentar» en un momento: Orb intentará devolvérselo.",
   "msg.projects.folderInUse": "Algún programa está usando {path}. Ciérralo y pulsa «Reintentar»: no se ha borrado nada.",
   "msg.projects.partlyDeleted": "Se ha borrado una parte, pero quedan archivos en {path}. Cierra lo que los esté usando y vuelve a eliminar el proyecto.",
   "msg.projects.renameBusy": "{name} tiene tareas pendientes o en curso, o una conversación trabajando. Renómbralo cuando terminen.",

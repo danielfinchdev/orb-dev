@@ -44,6 +44,7 @@ export default {
   'sys.main.engineOff': '{name} is not running',
   'sys.main.engineTimeout': '{name} did not respond in time',
   'sys.main.badOrigin': 'origin not allowed',
+  'sys.main.folderProbeStuck': 'Orb could not give the project\'s folder its name back (some program, such as the antivirus, took it just then). It is now at {path}. Press “Retry” in a moment: Orb will try to give it back.',
   'sys.main.badAction': 'invalid action',
   'sys.main.noFolderYet': 'there is no folder yet',
   'sys.main.badPath': 'invalid path',

@@ -42,8 +42,18 @@ fn plain(p: &Path) -> String {
   s.strip_prefix(NO_PREFIX).unwrap_or(&s).to_lowercase()
 }
 
-/// The folder the engine named, checked again here: a real folder of this PC (not a link or a junction), exactly two
-/// levels inside the workspace (<category>\<name>), by its real path. → that real path.
+/// The workspace's categories (src/core/layout.mjs › CATEGORIES): only a project folder inside one of them can go.
+const CATEGORIES: [&str; 6] = ["windows", "linux", "ios", "android", "web", "multi"];
+/// Names inside a category that are never a project (src/core/home.mjs › isReservedInCategory): hidden folders, the
+/// Recycle Bin, node_modules and Orb 3.7's adb folder in android.
+fn reserved_in_category(category: &str, name: &str) -> bool {
+  name.starts_with('.') || name == "node_modules" || name == "$recycle.bin" || (category == "android" && name == "adb-tools")
+}
+
+/// The folder the engine named, checked again here as src/core/project-close.mjs › deletableFolder: a real folder of this
+/// PC (not a link or a junction), exactly two levels inside the workspace (<category>\<name>), by its real path, in one
+/// of the workspace's own category folders (never core, its data or its secrets) and not a reserved name. → that real
+/// path.
 pub fn checked_folder(home: &Path, folder: &str) -> Option<PathBuf> {
   let p = Path::new(folder);
   if !p.is_absolute() || folder.starts_with(r"\\") || folder.starts_with("//") {
@@ -61,26 +71,88 @@ pub fn checked_folder(home: &Path, folder: &str) -> Option<PathBuf> {
   if parts.len() != 2 || parts.iter().any(|x| x.is_empty() || *x == "." || *x == "..") || plain(p) != real_s {
     return None;
   }
+  let (category, name) = (parts[0], parts[1]);
+  if !CATEGORIES.contains(&category) || reserved_in_category(category, name) {
+    return None;
+  }
+  // The category itself is the workspace's own folder (not a link to somewhere else).
+  let cat_real = std::fs::canonicalize(root.join(category)).ok()?;
+  if plain(&cat_real) != format!("{}\\{}", root_s.trim_end_matches('\\'), category) {
+    return None;
+  }
   Some(PathBuf::from(real.to_string_lossy().strip_prefix(NO_PREFIX).unwrap_or(&real.to_string_lossy()).to_string()))
 }
 
-/// Some program is using the folder (its working folder, an open file): Windows does not let it be renamed. Tried with a
-/// rename beside it and back, as src/core/project-close.mjs › folderInUse.
-pub fn folder_in_use(dir: &Path) -> bool {
-  if !dir.is_dir() {
-    return false;
-  }
-  let probe = PathBuf::from(format!("{}.orb-comprobando-{:06x}", dir.to_string_lossy(), std::process::id() ^ (std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos()).unwrap_or(0) & 0xffffff)));
-  if std::fs::rename(dir, &probe).is_err() {
+const PROBE: &str = ".orb-comprobando-";
+
+/// What the in-use probe found.
+#[derive(Debug, PartialEq)]
+pub enum InUse {
+  Free,
+  Busy,
+  /// Renamed for the probe and Windows would not let the name come back (an antivirus or the indexer took it just then):
+  /// the folder is at this path now. Tried again in the background and at the next step (put_back).
+  Stuck(PathBuf),
+}
+
+/// A probe left behind by an earlier step (`<folder>.orb-comprobando-xxxxxx` and no `<folder>`): its name comes back.
+/// → false when it is still there.
+pub fn put_back(dir: &Path) -> bool {
+  if dir.exists() {
     return true;
+  }
+  let (Some(parent), Some(name)) = (dir.parent(), dir.file_name()) else { return true };
+  let prefix = format!("{}{PROBE}", name.to_string_lossy());
+  let Ok(entries) = std::fs::read_dir(parent) else { return true };
+  for e in entries.flatten() {
+    let n = e.file_name().to_string_lossy().to_string();
+    if n.starts_with(&prefix) && n.len() == prefix.len() + 6 && e.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+      return std::fs::rename(e.path(), dir).is_ok();
+    }
+  }
+  true
+}
+
+/// Some program is using the folder (its working folder, an open file): Windows does not let it be renamed. Tried with a
+/// rename beside it and back, as src/core/project-close.mjs › folderInUse. The folder never stays under the probe's
+/// name without saying where it is.
+pub fn folder_in_use(dir: &Path) -> InUse {
+  if !put_back(dir) {
+    return InUse::Busy;
+  }
+  if !dir.is_dir() {
+    return InUse::Free;
+  }
+  let probe = PathBuf::from(format!("{}{PROBE}{:06x}", dir.to_string_lossy(), std::process::id() ^ (std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos()).unwrap_or(0) & 0xffffff)));
+  if std::fs::rename(dir, &probe).is_err() {
+    return InUse::Busy;
   }
   for _ in 0..50 {
     if std::fs::rename(&probe, dir).is_ok() {
-      return false;
+      return InUse::Free;
     }
     std::thread::sleep(Duration::from_millis(100));
   }
-  true
+  // Still kept trying for a while on its own.
+  let (from, to) = (probe.clone(), dir.to_path_buf());
+  let _ = std::thread::Builder::new().name("orb-devolver-nombre".into()).spawn(move || {
+    for _ in 0..120 {
+      if std::fs::rename(&from, &to).is_ok() || !from.exists() {
+        return;
+      }
+      std::thread::sleep(Duration::from_millis(500));
+    }
+  });
+  InUse::Stuck(probe)
+}
+
+/// The window's answer for a folder that is not free (Busy: «Reintentar»; Stuck: the error says where the folder is).
+fn not_free(engine: &Arc<Engine>, deletes: &Deletes, name: &str, d: Pending, real: &Path, found: InUse) -> Result<Value, String> {
+  deletes.set(name, Pending { no_trash: false, ..d });
+  match found {
+    InUse::Stuck(at) => Err(engine.t("sys.main.folderProbeStuck", &[("path", at.to_string_lossy().to_string())])),
+    _ => Ok(json!({ "ok": false, "locked": true, "path": real })),
+  }
 }
 
 pub async fn delete_project(engine: Arc<Engine>, deletes: &Deletes, name: String, unlock: Option<String>, step: Option<String>) -> Result<Value, String> {
@@ -111,10 +183,11 @@ pub async fn delete_project(engine: Arc<Engine>, deletes: &Deletes, name: String
       if s == "retry" {
         return trash_step(&engine, deletes, &home, &name, d).await;
       }
+      put_back(&d.path);
       let real = checked_folder(&home, &d.path.to_string_lossy()).ok_or_else(bad)?;
-      if folder_in_use(&real) {
-        deletes.set(&name, Pending { no_trash: false, ..d });
-        return Ok(json!({ "ok": false, "locked": true, "path": real }));
+      let found = folder_in_use(&real);
+      if found != InUse::Free {
+        return not_free(&engine, deletes, &name, d, &real, found);
       }
       deletes.take(&name); // one try: a delete that stops half-way says what is left, and the project works again
       let out = engine.call("projects.delete", json!({ "name": name, "ticket": d.ticket }), Duration::from_secs(600)).await?;
@@ -145,13 +218,17 @@ pub async fn delete_project(engine: Arc<Engine>, deletes: &Deletes, name: String
 }
 
 async fn trash_step(engine: &Arc<Engine>, deletes: &Deletes, home: &Path, name: &str, d: Pending) -> Result<Value, String> {
+  put_back(&d.path);
   let real = checked_folder(home, &d.path.to_string_lossy()).ok_or_else(|| engine.t("sys.main.badAction", &[]))?;
   let target = real.clone();
-  let trashed = tauri::async_runtime::spawn_blocking(move || trash(&target)).await.map_err(|e| e.to_string())?;
+  // A thread of its own for COM (STA): a pooled blocking thread may have been left in another apartment.
+  let (tx, rx) = tokio::sync::oneshot::channel();
+  std::thread::Builder::new().name("orb-papelera".into()).spawn(move || { let _ = tx.send(trash(&target)); }).map_err(|e| e.to_string())?;
+  let trashed = rx.await.unwrap_or_else(|_| Err("papelera: el hilo terminó".into()));
   if trashed.is_err() || real.exists() {
-    if folder_in_use(&real) {
-      deletes.set(name, Pending { no_trash: false, ..d });
-      return Ok(json!({ "ok": false, "locked": true, "path": real }));
+    let found = folder_in_use(&real);
+    if found != InUse::Free {
+      return not_free(engine, deletes, name, d, &real, found);
     }
     deletes.set(name, Pending { no_trash: true, ..d });
     return Ok(json!({ "ok": false, "noTrash": true, "path": real }));
@@ -236,7 +313,7 @@ pub fn trash(path: &Path) -> Result<(), String> {
     }
   }
 
-  // SAFETY: COM on this thread (a blocking task's) for the length of the operation; every interface is released before
+  // SAFETY: COM on this thread (one of its own: trash_step) for the length of the operation; every interface is released before
   // CoUninitialize.
   unsafe {
     let init = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
@@ -284,6 +361,12 @@ mod tests {
     assert!(checked_folder(&home, "relativa\\demo").is_none());
     assert!(checked_folder(&home, r"\\servidor\recurso\web\demo").is_none());
     assert!(checked_folder(&home, &project.join("a.txt").to_string_lossy()).is_none(), "un archivo");
+    // As deletableFolder: only inside a category, never core (its data, its secrets) nor a reserved name.
+    for (cat, name) in [("core", "datos"), ("core", "secretos"), ("otra", "demo"), ("web", ".git"), ("web", "node_modules"), ("android", "adb-tools")] {
+      let f = home.join(cat).join(name);
+      std::fs::create_dir_all(&f).unwrap();
+      assert!(checked_folder(&home, &f.to_string_lossy()).is_none(), "{cat}\\{name}");
+    }
     // A junction inside the workspace to a folder outside it is never followed.
     let outside = std::env::temp_dir().join(format!("orb-borrar-fuera-{}", std::process::id()));
     std::fs::create_dir_all(&outside).unwrap();
@@ -293,13 +376,18 @@ mod tests {
       assert!(checked_folder(&home, &link.to_string_lossy()).is_none(), "una unión");
     }
     // A file held open: the folder cannot be renamed, so it is in use (and nothing moved).
-    assert!(!folder_in_use(&project));
+    assert_eq!(folder_in_use(&project), InUse::Free);
+    // A probe left behind by an earlier step gets its name back first.
+    let left = home.join("web").join(format!("demo{PROBE}abc123"));
+    std::fs::rename(&project, &left).unwrap();
+    assert_eq!(folder_in_use(&project), InUse::Free);
+    assert!(project.is_dir() && !left.exists(), "devuelta a su nombre");
     use std::os::windows::fs::OpenOptionsExt;
     let held = std::fs::OpenOptions::new().read(true).share_mode(1).open(project.join("a.txt")).unwrap(); // as an editor holds it
     let in_use = folder_in_use(&project);
     drop(held);
     assert!(project.exists());
-    assert!(in_use, "un archivo abierto");
+    assert_eq!(in_use, InUse::Busy, "un archivo abierto");
     if made {
       let _ = std::fs::remove_dir(&link);
     }

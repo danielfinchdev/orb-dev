@@ -41,6 +41,7 @@ const realLower = (p) => fs.realpathSync.native(p).replace(/^\\\\\?\\/, '').toLo
 export function deletableFolder(home, folder) {
   const refuse = () => { throw userError('msg.projects.notDeletable'); };
   if (typeof folder !== 'string' || !path.isAbsolute(folder)) refuse();
+  putBack(folder); // a probe of an earlier try (folderInUse) that could not give the name back then
   let st; try { st = fs.lstatSync(folder); } catch { throw userError('msg.projects.folderGone', { folder }); }
   if (st.isSymbolicLink() || !st.isDirectory()) refuse(); // a link or a junction: never followed out of the workspace
   let real; let root;
@@ -56,13 +57,23 @@ export function deletableFolder(home, folder) {
 
 // Some program is using the folder (its working folder, an open file): Windows does not let it be renamed. Tried with a
 // rename to a name beside it and back (as core-folder.mjs › isHeld) before anything is deleted, so a permanent delete
-// does not stop half-way on a file in use.
+// does not stop half-way on a file in use. The folder never stays under the probe's name without saying where it is:
+// a probe left by an earlier try gets its name back first (putBack).
+const PROBE = '.orb-comprobando-';
+export function putBack(dir) {
+  if (fs.existsSync(dir)) return true;
+  const base = path.basename(dir); let names = [];
+  try { names = fs.readdirSync(path.dirname(dir)).filter((n) => n.startsWith(`${base}${PROBE}`) && n.length === base.length + PROBE.length + 6); } catch { return true; }
+  for (const n of names) { try { fs.renameSync(path.join(path.dirname(dir), n), dir); return true; } catch { return false; } }
+  return true;
+}
 export function folderInUse(dir) {
   if (process.platform !== 'win32') return false;
+  if (!putBack(dir)) return true;
   try { if (!fs.statSync(dir).isDirectory()) return false; } catch { return false; }
-  const probe = `${dir}.orb-comprobando-${crypto.randomBytes(3).toString('hex')}`;
+  const probe = `${dir}${PROBE}${crypto.randomBytes(3).toString('hex')}`;
   try { fs.renameSync(dir, probe); } catch (error) { return ['EBUSY', 'EPERM', 'EACCES'].includes(error.code); }
-  for (let i = 0; ; i++) { try { fs.renameSync(probe, dir); return false; } catch (error) { if (i >= 50) throw error; sleep(100); } }
+  for (let i = 0; ; i++) { try { fs.renameSync(probe, dir); return false; } catch { if (i >= 50) throw userError('msg.projects.probeStuck', { path: probe }); sleep(100); } }
 }
 
 // Something of the project working now: a task running, a direct conversation answering, or (busy) a coordinator in the
