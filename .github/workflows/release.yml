@@ -52,9 +52,10 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm test
+        timeout-minutes: 20
       - run: sudo apt-get update && sudo apt-get install -y xvfb
       - name: The whole app with Electron
-        run: xvfb-run -a npm run test:app
+        run: xvfb-run -a -s "-screen 0 1920x1080x24" npm run test:app
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
