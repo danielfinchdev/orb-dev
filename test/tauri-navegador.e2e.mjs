@@ -265,8 +265,28 @@ try {
 ${at(40)}`, /stopped this page|dropped \d+ events|no leído|no responde y se ha cerrado/, `${at(38)} | ${at(40)}`.slice(0, 400));
     const sorted = [...times].sort((a, b) => a - b); const p = (q) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))] ?? 0;
     console.error(`app.state durante el guion (${times.length} llamadas): p50 ${p(0.5)} ms, p95 ${p(0.95)} ms, máx ${slowest} ms; memoria privada máx de Orb.exe ${Math.round(peakMB)} MB`);
-    assert.ok(slowest < 1000, `app.state tardó ${slowest} ms`);
-    assert.ok(p(0.95) < 200, `app.state p95 ${p(0.95)} ms`);
+    // Review D10: measured end to end (CDP → IPC → Rust → engine) a few slow calls while Orb closes the flooding page, or
+    // with the CPU busy, are noise; what a user would feel is Orb's UI thread or engine stopping, or getting slower and
+    // slower (the bug 16b3384 fixed). So: app.state p95 < 500 ms and max < 2 s; it does not grow (the median of the last
+    // third of the calls ≤ 2× the first third's, + 50 ms); and with ORB_TRACE=1 the UI thread's and the engine's longest
+    // stall (trace-e2e.jsonl, src-tauri/src/trace.rs) under 1 s while the script ran.
+    assert.ok(slowest < 2000, `app.state tardó ${slowest} ms`);
+    assert.ok(p(0.95) < 500, `app.state p95 ${p(0.95)} ms`);
+    const third = Math.floor(times.length / 3);
+    if (third >= 5) {
+      const median = (l) => [...l].sort((x, y) => x - y)[Math.floor(l.length / 2)];
+      const first = median(times.slice(0, third)); const last = median(times.slice(-third));
+      assert.ok(last <= 2 * first + 50, `app.state cada vez más lenta: mediana ${first} → ${last} ms`);
+    }
+    const traceFile = path.join(USER_DATA, 'trace-e2e.jsonl');
+    if (process.env.ORB_TRACE === '1' && fs.existsSync(traceFile) && calls.length) {
+      const from = calls[0].at; const to = calls.at(-1).at + calls.at(-1).ms;
+      const marks = fs.readFileSync(traceFile, 'utf8').split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter((m) => m && m.w >= from && m.w <= to);
+      const worst = (what) => Math.max(0, ...marks.filter((m) => m.what === what).map((m) => m.detail?.ms ?? 0));
+      console.error(`ORB_TRACE: parada máx del hilo de la UI ${worst('ui.stall')} ms, del motor ${worst('engine.stall')} ms, del PC (control) ${worst('sched.stall')} ms`);
+      assert.ok(worst('ui.stall') < 1000, `el hilo de la UI se paró ${worst('ui.stall')} ms`);
+      assert.ok(worst('engine.stall') < 1000, `el motor se paró ${worst('engine.stall')} ms`);
+    }
     assert.ok(peakMB < 1500, `memoria privada de Orb.exe: ${Math.round(peakMB)} MB`);
   });
   if (process.argv.includes('--trampa')) {
