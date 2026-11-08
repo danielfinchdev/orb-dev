@@ -172,6 +172,26 @@ test('copia aislada: trabaja en su rama, el motor hace el commit y se puede inte
   assert.ok(!fs.existsSync(path.join(project.path, 'hecho-por-claude.txt')), 'la carpeta principal no se toca');
   await call('projects.merge', { name: 'web', branch: done.branch });
   assert.ok(fs.existsSync(path.join(project.path, 'hecho-por-claude.txt')));
+  // 3.8.1: once joined, the copy and the branch go and the task no longer offers «Unir / PR / Descartar»
+  const merged = await call('tasks.get', { id: task.id });
+  assert.equal(merged.branch, null); assert.equal(path.resolve(merged.workdir), path.resolve(project.path));
+  assert.ok(!fs.existsSync(done.workdir), 'la copia aislada se borra');
+  assert.equal(git(project.path, 'branch', '--list', done.branch).stdout.trim(), '', 'la rama unida se borra');
+  assert.ok(!git(project.path, 'worktree', 'list').stdout.includes(path.basename(done.workdir)));
+});
+
+test('3.8.1: descartar la rama de una tarea aislada borra su copia y su rama, y la tarea deja de tener rama', async () => {
+  const project = (await call('projects.list'))[0];
+  const task = await call('tasks.create', { project: 'web', title: 'Descartar', description: 'ESCRIBE en la copia', agent: 'claude', mode: 'aislada' });
+  const done = await taskDone(task.id);
+  assert.equal(done.status, 'done', done.result);
+  assert.ok(done.branch && fs.existsSync(done.workdir));
+  assert.deepEqual(await call('tasks.discardBranch', { id: task.id }), { ok: true });
+  const after = await call('tasks.get', { id: task.id });
+  assert.equal(after.branch, null);
+  assert.ok(!fs.existsSync(done.workdir), 'la copia aislada se borra');
+  assert.equal(git(project.path, 'branch', '--list', done.branch).stdout.trim(), '', 'la rama se borra');
+  await assert.rejects(call('tasks.discardBranch', { id: task.id }), /rama propia/);
 });
 
 test('los archivos que parecen secretos no pasan a la copia aislada', async () => {

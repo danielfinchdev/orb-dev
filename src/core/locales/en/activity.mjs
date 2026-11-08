@@ -49,5 +49,7 @@ export default {
   'activity.kind.integrate_error': 'The work could not be joined',
   'activity.kind.integrate_skipped': 'Joining skipped',
   'activity.kind.branch_discarded': 'Branch discarded',
+  'activity.kind.branch_merged': 'Branch merged into the folder',
+  'activity.kind.task_copy_removed': 'Isolated copy removed',
   'activity.kind.followup_sent': 'Follow-up sent'
 };

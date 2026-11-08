@@ -49,5 +49,7 @@ export default {
   'activity.kind.integrate_error': 'No se pudo unir el trabajo',
   'activity.kind.integrate_skipped': 'Unión omitida',
   'activity.kind.branch_discarded': 'Rama descartada',
+  'activity.kind.branch_merged': 'Rama unida a la carpeta',
+  'activity.kind.task_copy_removed': 'Copia aislada borrada',
   'activity.kind.followup_sent': 'Seguimiento enviado'
 };

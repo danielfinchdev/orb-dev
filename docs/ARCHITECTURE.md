@@ -312,6 +312,8 @@ who a new conversation is with:
   repository with no commits (just `git init`) also works: the snapshot is a first commit with no parent.
 - `aislada`: its own branch and copy (`prepareWorkdir`, git worktree). When it finishes an automatic commit is made,
   which is blocked if there are files that look like secrets.
+  Once the user joins it («Unir», `projects.merge`) or discards it (`tasks.discardBranch`), its copy and branch are
+  removed and the task's `branch` is emptied (`dropCopy`), so copies do not pile up and Tasks stops offering them.
 
 **Failures explained.** `src/core/agent-errors.mjs` translates the failure:
 - plan without access, not signed in (including "API key is missing"), model not available, no network or missing program.
@@ -931,7 +933,9 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   zone.
 - **Refreshes as changes:** the lists of every refresh (`tasks.list`, `conversations.list`, `sessions.list`,
   `projects.list` and the chat list's `inbox.list`) take an optional `since: { epoch, v }`. The engine keeps one `Feed`
-  per method and parameters (`src/core/feed.mjs`, `src/engine/feeds.mjs`): each row carries the version at which its JSON
+  per kind of caller (this PC; linked devices in a small cache of their own, so they never push the PC's feeds out),
+  method and the parameters that change the list, normalised (any other is ignored) (`src/core/feed.mjs`,
+  `src/engine/feeds.mjs`): each row carries the version at which its JSON
   last changed, and gone rows, the order of the keys and the rest of the reply (`meta`) carry one too, so a caller gets
   only what moved since its version (`{ feed, epoch, v, base, rows, gone?, order?, meta? }`), or the whole list (`full`)
   when it is new, of another engine run or too far behind. In a feed, `tasks.list` rows are compact (no brief, result,
@@ -942,9 +946,24 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   is tested in `test/feed.test.mjs` (random changes, callers far behind, the engine, the phone's path stripping).
 - **Robot:** a still robot has no compositor layer and builds the visor's code rows only the first time it shows them
   (`orb.jsx`, app.css). Avoid `will-change`, `backdrop-filter` and blend modes on elements repeated in long lists.
+- **Idle animations:** while anything on screen moves (the robot floating, its LED, the «orb» theme's clouds) the
+  compositor draws every frame, so what matters is the GPU cost of each frame, not style work (≈1–5 ms/s of style
+  recalculation at rest). The robot's moves are compositor-only: `transform`/`translate`/`opacity` on HTML elements
+  (looking around and peeking move an HTML box around the face's SVG, not the eyes' group; the visor's glint moves with `translate`, not
+  `left`); only blinking and talking scale the SVG eyes on the main thread. A robot out of view or in a hidden window
+  pauses its animations and schedules no blinks or gestures (`useOnScreen`: one shared `IntersectionObserver`,
+  `data-away`). The robot floats and its LED pulses only while something happens (3.8.1, H4e: thinking, talking, a
+  mood, agents working, the pointer over it, hello, a random moment every 30–90 s): `data-float`/`data-glow`, set by
+  `orb.jsx` and taken away at the end of the sway or pulse in progress (`animationiteration`), where both are at rest,
+  so it never jumps. At rest it only blinks (a few main-thread frames every 3–6 s): with nothing else moving the
+  compositor draws ~2–10 frames a second instead of 60. The «orb» theme blurs each cloud itself (`filter: blur(8px)`) instead of a full-screen
+  `backdrop-filter` that had to blur everything under it again on every frame. Avoid full-screen `backdrop-filter`
+  over anything that moves.
 - **Measuring:** `scripts/medir.mjs` (start, memory, CPU at rest, scrolling smoothness; `--hidden` keeps the window
   offscreen via `ORB_HIDDEN_WINDOW=1`; `--profile <dir>` saves a trace, CPU profiles, the compositor's layers and a
-  heap snapshot; `--big` uses a large workspace and times refreshes on the Tasks screen) and `scripts/medir-motor.mjs`
+  heap snapshot; `--big` uses a large workspace and times refreshes on the Tasks screen; `--anim <s>` / `--anim-only` measure
+  idle animations: main thread, renderer and GPU CPU and, with `--profile`, frames per second and GPU ms per frame,
+  plus the robot floating under the pointer with its dropped frames; `--quiet-scene` pauses the theme's backdrop) and `scripts/medir-motor.mjs`
   (the engine alone: start, memory, call latency and the bytes of a refresh, whole and as feeds, also as a phone gets it).
 
 ### Tutorials and guided tour

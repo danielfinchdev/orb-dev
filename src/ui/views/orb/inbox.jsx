@@ -2,8 +2,8 @@
 // the left pane; on the phone the «Chats» tab. From the top: search (titles, projects, the
 // messages and «#12» for a task) with its filter, «+» (Nuevo chat, Nuevo proyecto), the zone's other places (PC: Tareas,
 // Proyectos, Programadas, Pizarra, and «Más» with God mode when it is on), the pinned
-// chats, then one group per project (its coloured initials, folding) with its chats. Each row: Orbe's head with the
-// project's badge (a direct conversation: its agent's mark), the title, the time, its latest progress (a running task,
+// chats, then one group per project (its coloured initials, folding) with its chats. Each row: the project's icon with
+// the mark of who answers in its corner (OrbAvatar), the title, the time, its latest progress (a running task,
 // «Esperando tu aprobación», how its last task ended, else its last line) and the unread count. Right click or ⋯ (PC) and
 // a long press (phone) open the chat's menu: info, pin, mute, mark read, complete or reopen, delete.
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
@@ -47,19 +47,39 @@ export const openOrbItem = (x) => go(x.kind === 'session' ? { view: 'session', i
 const isOpen = (route, x) => (x.kind === 'session' ? route.view === 'session' : route.view === 'chat') && route.id === x.id;
 const conversationRef = (x) => ({ kind: x.kind === 'session' ? 'session' : 'conversation', id: x.id });
 
-// Orbe's head with the project's badge; a direct conversation: its agent's mark in a soft circle.
+// 3.8.1 (H1e): the chat's avatar. Big: its project's icon (its own picture or its coloured initials); without a project,
+// Orbe's head. In the corner: the marks of the agents that worked in it (lib/inbox.js › agentsOf: the brain or a direct
+// conversation's agent first, then its tasks' agents), stacked like avatars, the first on top; past three, two and
+// «+N». An agent Orb no longer knows gets the neutral mark.
+const STACK = 3;
 export function OrbAvatar({ item, size = 40 }) {
+  const t = useT();
+  const locale = useLocale();
   const skin = useStore((s) => s.app?.config?.ui?.skin);
-  const badge = Math.round(size * 0.42);
-  const body = item.kind === 'session'
-    ? <span className="bg-muted grid place-items-center rounded-full" style={{ width: size, height: size }}><AgentIcon agent={item.agent} className={cn(item.busy && 'animate-pulse')} /></span>
+  const badge = Math.max(16, Math.round(size * 0.44));
+  const agents = item.agents ?? (item.agent ? [item.agent] : []);
+  const shown = agents.length > STACK ? agents.slice(0, STACK - 1) : agents;
+  const more = agents.length - shown.length;
+  const step = Math.round(badge * 0.55);
+  const who = agents.length ? new Intl.ListFormat(locale, { type: 'conjunction' }).format(agents.map((a) => AGENT[a] ?? a)) : '';
+  const body = item.project
+    ? <ProjectIcon name={item.project} size={size} />
     : skin === 'profesional'
       ? <span className="bg-primary/12 text-primary grid place-items-center rounded-full" style={{ width: size, height: size }}><Sparkles className="size-1/2" /></span>
       : <Robot size={size} still mood={item.busy ? 'thinking' : 'idle'} />;
   return (
-    <span className="relative inline-grid shrink-0" style={{ width: size, height: size }} data-testid="orb-avatar">
+    <span className="relative inline-grid shrink-0" style={{ width: size, height: size }} role="img" aria-label={who ? `${item.project ?? t('orbchats.noProject')} · ${who}` : (item.project ?? t('orbchats.noProject'))} data-testid="orb-avatar">
       {body}
-      {item.project ? <span className="ring-sidebar absolute -right-0.5 -bottom-0.5 grid place-items-center rounded-[6px] ring-2" style={{ width: badge, height: badge }}><ProjectIcon name={item.project} size={badge} /></span> : null}
+      {agents.length ? (
+        <span className={cn('orb-avatar-badges', item.busy && 'animate-pulse')} data-badges={agents.join(' ')}>
+          {shown.map((a, i) => (
+            <span key={a} className="orb-avatar-badge" style={{ width: badge, height: badge, right: -3 + i * step, zIndex: STACK - i }} data-badge={a}>
+              <AgentIcon agent={a} className="size-[64%]" />
+            </span>
+          ))}
+          {more ? <span className="orb-avatar-badge orb-avatar-more" style={{ width: badge, height: badge, right: -3 + (shown.length - 1) * step + Math.round(badge * 0.85), fontSize: Math.round(badge * 0.5) }} data-badge="more">+{more}</span> : null}
+        </span>
+      ) : null}
     </span>
   );
 }

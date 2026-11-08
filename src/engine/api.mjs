@@ -270,7 +270,13 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'projects.clearIcon': ({ name }) => { const icon = clearProjectIcon(project(name)); board.changed('projects'); return icon; },
     'projects.info': async ({ name }) => (await gh()).projectInfo(project(name)),
     'projects.commit': async ({ name, message }) => (await gh()).commitAll(project(name), str(message, 'mensaje', 200)),
-    'projects.merge': async ({ name, branch }) => (await gh()).mergeBranch(project(name), str(branch, 'rama', 120)),
+    'projects.merge': async ({ name, branch }) => {
+      const p = project(name); const b = str(branch, 'rama', 120);
+      const out = (await gh()).mergeBranch(p, b);
+      // 3.8.1: the task that owned the branch lets its copy and branch go (src/engine/scheduler.mjs › branchMerged).
+      try { scheduler.branchMerged(p.name, b); } catch (error) { log(`tras unir ${b}: ${error.message}`); }
+      return out;
+    },
     'projects.push': async ({ name, branch }) => (await gh()).push(project(name), str(branch, 'rama', 120)),
     'projects.createPr': async ({ name, branch, title, body, base }) => (await gh()).createPr(project(name), { branch: str(branch, 'rama', 120), title: str(title, 'título', 200), body: str(body, 'descripción', 20000, { optional: true }), base: str(base, 'rama base', 120, { optional: true }) || undefined }),
     'projects.createRepo': async ({ name, repo, isPrivate }) => (await gh()).createRepo(project(name), { name: str(repo, 'repositorio', 100), isPrivate: isPrivate !== false }),
@@ -666,7 +672,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       checkUnlock(method, params);
       let out = await fn(params, principal);
       // 3.8.1 (H4c): the lists of every refresh, as changes since what the caller holds (src/engine/feeds.mjs).
-      if (params.since !== undefined) out = feeds.reply(method, params, out);
+      if (params.since !== undefined) out = feeds.reply(method, params, out, principal);
       // 3.1: an agent turned on or off, checked again, or an account added or removed: the list of available agents is
       // updated at once (the next task may already be for it).
       if (/^(config\.save|agents\.(status|check)|accounts\.(add|update|remove))$/.test(method)) { try { scheduler.refreshAvailable(true); } catch { /* next tick */ } }

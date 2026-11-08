@@ -4,7 +4,7 @@
 //
 //   node scripts/medir.mjs [--exe src-tauri/target-e2e/release/Orb.exe] [--shell tauri|electron] [--runs 5] [--idle 30]
 //                          [--installer <setup.exe>] [--apk <file.apk>] [--out <results.json>] [--hidden] [--profile <dir>]
-//                          [--big]
+//                          [--big] [--anim <s>] [--anim-only] [--quiet-scene]
 //
 // Tauri: measures a build with the `e2e` cargo feature (npm run tauri:build:e2e), the only one that opens the window's
 // DevTools port (ORB_E2E_CDP_PORT; a normal build ignores it and every WEBVIEW2_* variable). --hidden keeps its window
@@ -33,6 +33,15 @@
 // instead of 6 projects and 40 tasks. Refreshes (3.8.1, H4c): on the Tasks screen, a blocked task is retried and
 // cancelled in turn (each change makes the engine tell the window, which refreshes): the time from the change until the
 // filters' counts show it, and the CPU of the window (renderer) and of the engine meanwhile.
+// --anim <s> (3.8.1, H4d): idle animations: on a new chat, the Tasks screen and the long conversation (the robot and the
+// «orb» theme's clouds in view, nobody touching anything), <s> seconds each: the page's main thread per second (style,
+// layout, JavaScript, busy %), the CPU of the renderer and of the GPU process and the animations running; with --profile
+// also a trace of each screen and what the compositor did per frame (frames/s, GPU ms per frame, damaged area, the
+// animations not composited). --anim-only: only the starts and that (10 s unless --anim says otherwise).
+// 3.8.1 (H4e): each screen is measured 12 s after it loads (the welcome robot's hello is over: at rest the robot stands
+// still), plus «robot-activo»: the new chat with the pointer over the sidebar's robot (it floats), with the
+// requestAnimationFrame deltas meanwhile (dropped frames). --quiet-scene pauses the theme's moving backdrop (the «orb»
+// theme's clouds) to see what the robot alone costs.
 import { chromium } from 'playwright-core';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -54,6 +63,9 @@ const apk = arg('apk');
 const hidden = process.argv.includes('--hidden');
 const profileDir = arg('profile') ? path.resolve(arg('profile')) : null;
 const big = process.argv.includes('--big');
+const animOnly = process.argv.includes('--anim-only');
+const animS = Number(arg('anim', animOnly ? 10 : 0));
+const quietScene = process.argv.includes('--quiet-scene');
 if (profileDir) fs.mkdirSync(profileDir, { recursive: true });
 if (!fs.existsSync(exe)) { console.error(`no existe ${exe} (compila antes o pasa --exe)`); process.exit(2); }
 
@@ -133,7 +145,7 @@ const runsDir = path.join(home, 'core', 'ejecuciones');
 function processTree(rootPid) {
   const ps = 'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,CommandLine,WorkingSetSize,PrivatePageCount,KernelModeTime,UserModeTime | ConvertTo-Json -Compress';
   let all = null;
-  for (let i = 0; all == null; i++) { try { all = JSON.parse(execFileSync('powershell.exe', ['-NoProfile', '-Command', ps], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })); } catch (e) { if (i >= 3) throw e; } } // now and then the list comes cut
+  for (let i = 0; all == null; i++) { try { all = JSON.parse(execFileSync('powershell.exe', ['-NoProfile', '-Command', ps], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).replace(/[\u0000-\u001f]/g, ' ')); } catch (e) { if (i >= 3) throw e; } } // now and then the list comes cut (or a command line carries a control character)
   const kids = new Map(); for (const p of all) { if (!kids.has(p.ParentProcessId)) kids.set(p.ParentProcessId, []); kids.get(p.ParentProcessId).push(p); }
   const out = []; const stack = all.filter((p) => p.ProcessId === rootPid);
   while (stack.length) { const p = stack.pop(); out.push(p); stack.push(...(kids.get(p.ProcessId) ?? []).filter((k) => k.ProcessId !== p.ProcessId)); }
@@ -285,6 +297,72 @@ async function heapSnapshot(page, file) {
 let windowInfo = null;
 const results = { target: { exe, shell, version: PKG.version, hiddenWindow: hidden, big, ...(shell === 'tauri' ? { build: 'e2e feature' } : {}) }, starts: [], memory: {}, frames: {}, sizes: {}, machine: {} };
 
+// Idle animations (3.8.1, H4d): on screens where the robot and the «orb» theme's clouds are in view, nobody touching
+// anything, what the window spends per second: the page's main thread (style, layout, JavaScript, all its tasks), the CPU
+// of the renderer and of the GPU process, and which animations are running. --profile also records a trace of each
+// screen (with style invalidations and the animations' compositing) in <dir>/anim-<screen>.trace.json.
+// What the compositor did in a trace: frames drawn per second, the GPU work of each one (viz drawing it, the GPU thread
+// painting its passes), the damaged area (a frame redraws at least that), main-thread frames per second, and the
+// animations Blink could not hand to the compositor.
+function traceFrames(file) {
+  const ev = JSON.parse(fs.readFileSync(file, 'utf8')).traceEvents ?? [];
+  let lo = Infinity; let hi = -Infinity; for (const e of ev) if (e.ts) { if (e.ts < lo) lo = e.ts; if (e.ts > hi) hi = e.ts; }
+  const s = (hi - lo) / 1e6 || 1;
+  const sum = (name) => { let n = 0; let ms = 0; for (const e of ev) if (e.name === name && e.ph === 'X') { n++; ms += e.dur / 1000; } return { n, ms }; };
+  const draw = sum('Display::DrawAndSwap'); const paint = sum('SkiaOutputSurfaceImplOnGpu::FinishPaintRenderPass');
+  const damage = ev.filter((e) => e.name === 'DirectRenderer::DrawFrame ProcessForOverlays').map((e) => /(\d+)x(\d+)/.exec(e.args?.root_damage_rect ?? '')).map((m) => (m ? m[1] * m[2] : 0));
+  // (an id is reused: each failure belongs to the animation that began last with that id)
+  const failed = {}; const names = new Map();
+  for (const e of [...ev].filter((x) => x.name === 'Animation').sort((x, y) => x.ts - y.ts)) {
+    const id = e.id2?.local ?? e.id; const d = e.args?.data ?? {};
+    if (e.ph === 'b') names.set(id, `${d.name || d.displayName || '?'} ${String(d.nodeName ?? '').replace(/ class=/, '.').replace(/'/g, '')}`);
+    else if (d.compositeFailed) { const k = `${names.get(id) ?? '?'} (${d.compositeFailed})`; failed[k] = (failed[k] ?? 0) + 1; }
+  }
+  return { drawsPerSecond: r1(draw.n / s), vizMsPerFrame: r1(draw.ms / Math.max(draw.n, 1)), gpuPaintMsPerFrame: r1(paint.ms / Math.max(draw.n, 1)), damagedKpxPerFrame: Math.round(damage.reduce((a, b) => a + b, 0) / Math.max(damage.length, 1) / 1000),
+    mainFramesPerSecond: r1(sum('ProxyMain::BeginMainFrame').n / s), notComposited: failed };
+}
+
+async function idleAnimations(run) {
+  const { page } = run;
+  const longId = await page.evaluate(async () => (await window.orb.call('conversations.list')).find?.((c) => c.title === 'Conversación larga')?.id ?? null).catch(() => null);
+  const screens = { 'chat-nuevo': { view: 'chat' }, tareas: { view: 'tasks' }, ...(longId ? { 'chat-largo': { view: 'chat', id: longId } } : {}), 'robot-activo': { view: 'chat', hover: '[data-testid=sidebar-home] .orb' } };
+  results.animations = { quietScene };
+  for (const [name, { hover, ...route }] of Object.entries(screens)) {
+    await page.evaluate((r) => { localStorage.setItem('orb.route', JSON.stringify(r)); location.reload(); }, route);
+    await page.waitForSelector(READY, { timeout: 30000 });
+    if (quietScene) await page.addStyleTag({ content: '.scene *, .scene *::before, .scene *::after, .theme-band::before { animation-play-state: paused !important; }' });
+    await wait(12000);
+    if (hover) { await page.hover(hover).catch(() => {}); await wait(1500); }
+    const perf = await page.context().newCDPSession(page); await perf.send('Performance.enable');
+    const th0 = await mainThread(perf); const m0 = memory(run.app.pid); const t0 = Date.now();
+    await wait(animS * 1000);
+    const th1 = await mainThread(perf); const m1 = memory(run.app.pid); const s = (Date.now() - t0) / 1000;
+    const d = threadDelta(th0, th1);
+    const cpu = (k) => r1((100 * Object.keys(m1.byName).filter((n) => n.endsWith(` ${k}`)).reduce((n, x) => n + (m1.byName[x].cpuSec - (m0.byName[x]?.cpuSec ?? 0)), 0)) / s);
+    const running = await page.evaluate(() => { const out = {}; for (const a of document.getAnimations()) { const t = a.effect?.target; const k = `${a.animationName ?? a.constructor.name} ${t?.localName ?? '?'}.${String(t?.className?.baseVal ?? t?.className ?? '').split(' ').slice(0, 2).join('.')} ${a.playState}`; out[k] = (out[k] ?? 0) + 1; } return out; }).catch(() => null);
+    const robots = await page.evaluate(() => ({ all: document.querySelectorAll('.orb').length, still: document.querySelectorAll('.orb.still').length })).catch(() => null);
+    results.animations[name] = { seconds: r1(s), perSecond: d ? { styleMs: r1(d.styleMs / s), layoutMs: r1(d.layoutMs / s), scriptMs: r1(d.scriptMs / s), taskMs: r1(d.taskMs / s) } : null, mainThreadBusyPct: d ? r1(d.taskMs / s / 10) : null,
+      cpuPct: { renderer: cpu('renderer'), gpu: cpu('gpu-process'), all: r1((100 * (m1.cpuSec - m0.cpuSec)) / s) }, robots, running };
+    if (hover) {
+      // smoothness while it floats: 5 s of requestAnimationFrame deltas (a delta over 25 ms = at least one frame dropped)
+      const deltas = await page.evaluate(() => new Promise((done) => { const out = []; let last = null; const end = performance.now() + 5000; const f = (t) => { if (last != null) out.push(t - last); last = t; if (t < end) requestAnimationFrame(f); else done(out); }; requestAnimationFrame(f); })).catch(() => []);
+      results.animations[name].floating = await page.evaluate((sel) => document.querySelector(sel)?.hasAttribute('data-float') ?? null, hover).catch(() => null);
+      results.animations[name].frames60 = { frames: deltas.length, p50: r1(pct(deltas, 50)), p95: r1(pct(deltas, 95)), max: r1(deltas.length ? Math.max(...deltas) : 0), dropped: deltas.filter((d) => d > 25).length };
+    }
+    if (profileDir) {
+      const file = path.join(profileDir, `anim-${name}.trace.json`);
+      await run.browser.startTracing(page, { path: file, categories: ['devtools.timeline', 'disabled-by-default-devtools.timeline', 'disabled-by-default-devtools.timeline.frame', 'disabled-by-default-devtools.timeline.invalidationTracking', 'blink.animations', 'devtools.timeline.async', 'v8.execute', 'blink', 'cc', 'gpu', 'viz'] });
+      await wait(5000);
+      await run.browser.stopTracing();
+      results.animations[name].frames = traceFrames(file);
+    }
+    await perf.detach().catch(() => {});
+    console.error(`animaciones ${name}: ${JSON.stringify(results.animations[name])}`);
+  }
+  await page.evaluate(() => { localStorage.setItem('orb.route', JSON.stringify({ view: 'chat' })); location.reload(); }).catch(() => {});
+  await page.waitForSelector(READY, { timeout: 30000 }).catch(() => {}); await wait(1500);
+}
+
 // ---- 0: the first start of this workspace (master password, folders' review): not timed
 {
   const run = await launch();
@@ -318,6 +396,8 @@ for (let i = 1; i <= RUNS; i++) {
   // the CPU the app used while nobody touched it (all its processes, % of one core), from 5 s after the start to now
   const busy = (a, b, k) => { const x = k ? a.byName[k]?.cpuSec ?? 0 : a.cpuSec; const y = k ? b.byName[k]?.cpuSec ?? 0 : b.cpuSec; return Math.round((1000 * (y - x)) / (b.at - a.at)) / 10; };
   results.cpuIdle = { seconds: Math.round((results.memory.idle.at - settled.at) / 1000), percentOfOneCore: busy(settled, results.memory.idle), byName: Object.fromEntries(Object.keys(results.memory.idle.byName).map((k) => [k, busy(settled, results.memory.idle, k)])) };
+  if (animS > 0) await idleAnimations(run);
+  if (animOnly) { await quit(run); continue; }
   const click = async (sel) => { try { await page.click(sel, { timeout: 5000 }); await wait(700); return true; } catch { return false; } };
   const opened = [];
   // chats of the list (the newest ones on top), the tasks, the projects' info, then the other views

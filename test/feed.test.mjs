@@ -114,6 +114,38 @@ test('feeds: one per method and parameters, the meta of the chat list, compact t
   assert.deepEqual(feeds.reply('app.state', { since: {} }, { a: 1 }), { a: 1 });
 });
 
+test('feeds: only the parameters that change the list count, normalised; linked devices never push out the PC\'s feeds', () => {
+  const feeds = createFeeds({ max: 24, maxRemote: 2 });
+  const rows = [{ id: 1, title: 'x' }];
+  const pc = { channel: 'desktop' }; const phone = { channel: 'phone', device: 'a' };
+  const t1 = feeds.reply('tasks.list', { limit: 200, since: {} }, rows, pc);
+  // the same limit spelled otherwise, and stray parameters: the same feed
+  for (const params of [{ limit: '200' }, { limit: 200, x: 1 }, { limit: 200, junk: 'y'.repeat(1000) }]) {
+    const r = feeds.reply('tasks.list', { ...params, since: { epoch: t1.epoch, v: t1.v } }, rows, pc);
+    assert.equal(r.epoch, t1.epoch); assert.equal(r.full, undefined);
+  }
+  const capped = feeds.reply('tasks.list', { limit: 500, since: {} }, rows, pc);
+  assert.equal(feeds.reply('tasks.list', { limit: 9999, since: { epoch: capped.epoch, v: capped.v } }, rows, pc).epoch, capped.epoch, 'the limit as tasks.list caps it');
+  const arch = feeds.reply('sessions.list', { archived: true, since: {} }, rows, pc);
+  assert.equal(feeds.reply('sessions.list', { archived: 1, since: { epoch: arch.epoch, v: arch.v } }, rows, pc).epoch, arch.epoch);
+  // a phone asking for anything, many times: its own small cache; the PC still gets changes
+  for (let i = 0; i < 50; i++) feeds.reply('tasks.list', { limit: i, x: i, since: {} }, rows, phone);
+  assert.ok(feeds.size().remote <= 2);
+  const again = feeds.reply('tasks.list', { limit: 200, since: { epoch: t1.epoch, v: t1.v } }, rows, pc);
+  assert.equal(again.epoch, t1.epoch); assert.equal(again.full, undefined);
+});
+
+test('feeds: per kind of caller (a list that one day depends on the caller must not share its feed)', () => {
+  const feeds = createFeeds();
+  const rows = [{ id: 1 }];
+  const pc = feeds.reply('conversations.list', { since: {} }, rows, { channel: 'desktop' });
+  const phone = feeds.reply('conversations.list', { since: {} }, rows, { channel: 'phone', device: 'a' });
+  assert.notEqual(pc.epoch, phone.epoch, 'the PC and a phone hold different feeds');
+  // a phone that presents the PC's feed version gets the whole list: never `gone`/`order` worked out for another caller
+  const cross = feeds.reply('conversations.list', { since: { epoch: pc.epoch, v: pc.v } }, rows, { channel: 'phone', device: 'a' });
+  assert.equal(cross.full, true);
+});
+
 let t; let engine;
 afterEach(async () => { await engine?.stop(); engine = null; t?.cleanup(); });
 
