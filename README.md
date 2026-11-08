@@ -140,13 +140,12 @@ npm run icon            # renders every app icon (Windows, favicon, Android) fro
 
 | Folder | Contents |
 |---|---|
-| `src-tauri/` | The desktop app (Tauri 2, Rust): window, secure bridge, engine startup, sealed keys, the agents' browser with its mini window, notices, updates and the installer |
+| `src-tauri/` | The app (Tauri 2, Rust). Desktop: window, secure bridge, engine startup, sealed keys, the agents' browser with its mini window, notices, updates and the installer. Android: `gen/android` (the Kotlin plugin: keystore, share, QR, dictation, notifications) |
 | `src/engine/` | Engine (separate process): API, live sessions, scheduler, orchestrator, logbooks, GitHub, phone access, installer, God mode |
 | `src/core/` | Board, permissions, guard, master password and secrets, workspace and core, backups, usage, undo |
 | `src/agents/` | One adapter per agent: detect it, launch it and parse its events |
 | `src/mcp/` | MCP server used by the agents and the assistant |
 | `src/ui/` | UI (React + shadcn/ui components + Tailwind), shared by the PC and the phone |
-| `android-app/` | The Android app (Capacitor) |
 | `docs/` | All the documentation: index in [`docs/README.md`](docs/README.md) |
 
 ## License

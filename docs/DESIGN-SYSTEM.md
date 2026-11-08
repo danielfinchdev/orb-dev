@@ -374,7 +374,7 @@ coloured shadow; floating ones a deeper shadow. **Never glass on glass**: what s
   same way.
 - **Menus and selects**: thick material with blur, radius 16, items 40 px.
 - **Press**: scale 0.96 + brightness 0.96 in 90 ms on press (feels physical); back with ease-out. Real haptics
-  (Capacitor Haptics) only for commit moments (approve, send) when added; never on every tap.
+  (Android vibration, from the app's plugin) only for commit moments (approve, send) when added; never on every tap.
 
 ### 8.3 Performance budget (Android WebView)
 

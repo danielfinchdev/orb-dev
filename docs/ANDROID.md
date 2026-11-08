@@ -13,8 +13,13 @@ it is installed from the APK file.
    Chrome…). Tap **Settings**, turn on **Allow from this source** and go back.
 4. Tap **Install**. If Google Play Protect warns that it does not know the app, tap **Install anyway**.
 
-To update it, install the new APK on top: the link and the settings are kept. APKs built on this PC are always signed
-with the same key; if the key changes (another PC), uninstall the app first.
+To update it, install the new APK on top: the link is kept. Every APK is signed with the same key (see «Building the
+app»); an APK signed with another key does not install on top.
+
+**Coming from Orb 3.8.0:** the 3.8.1 app is built with Tauri instead of Capacitor. It installs on top and stays linked
+(the same package `dev.orb.app`, the same key and the same Android keystore entry), but its page has a new origin, so
+the interface settings kept by the page (theme, last screen, game records) start again once, and notifications have to
+be turned on again in **More → This phone**. Update the PC first: an Orb 3.8.0 on the PC does not let the 3.8.1 app in.
 
 ## Linking it to your Orb
 
@@ -52,12 +57,15 @@ linked in 3.7 are unlinked once when the PC first opens 3.8; link them again wit
   Android keeps the app open in the background; if Android closes it, you see them when you open it again.
 - **Messages**: each chat's notification shows Orb's picture, the chat's
   name and the text as chosen in **Settings › Magic Link** (on the lock screen); new messages of the same chat join one
-  notification. **Reply** writes back from the notification; on a card, **Approve** and **Reject** answer it (a
-  sensitive card opens the app instead), also when they start the app. Muted chats do not notify. Tapping opens that
-  chat.
+  notification. **Reply** writes back from the notification; on a card, **Approve** and **Reject** answer it. These
+  three are done by the app itself **without opening it**, also after Android closed the app: the notification says
+  «Enviando…» and then whether it worked (a failure stays, with the reason; tapping it opens the chat). A sensitive card
+  (its text hidden on the lock screen) and a task's approval open the app instead, which asks there. Muted chats do not
+  notify. Tapping opens that chat.
 - **No app lock**: the phone is protected by its encrypted link with the PC and by the phone's own screen lock.
 - **Updates**: when your Orb needs a newer app, the app says so instead of failing.
-- **Dictation**: the microphone button, next to **Send**. It uses the phone's own speech recognition.
+- **Dictation**: the microphone button, next to **Send**. It uses the phone's own speech recognition (its own window;
+  the microphone permission is the recognizer's, not Orb's).
 - **Share with Orb**: in any app, **Share → Orb**. Text and links appear in the chat, ready to send; images are
   uploaded encrypted to your Orb and the chat gets their path.
 
@@ -68,20 +76,40 @@ npm run android:build         # dist/Orb-<version>-android.apk (release, signed)
 npm run android:build:debug   # dist/Orb-<version>-android-debug.apk
 ```
 
-It needs, in `%LOCALAPPDATA%\orb-build-cache` (nothing installed and no administrator rights):
+Both build `aarch64` (every current Android phone) and check the APK: package `dev.orb.app`, `versionCode` =
+major·1 000 000 + minor·1000 + patch (Tauri's scheme: 3.8.1 is 3008001, above Capacitor's 30800 for 3.8.0) and, for a
+release, that it is signed with the certificate every Orb for Android has had (SHA-256 `ccd0fffa…ae6f00`).
+
+It needs, in the build cache (`ORB_BUILD_CACHE`, by default `%LOCALAPPDATA%\orb-build-cache`; nothing installed and
+no administrator rights):
 
 - `jdk21\`: Eclipse Temurin JDK 21 as a .zip, unpacked.
 - `sdk\`: the Android command-line tools in `sdk\cmdline-tools\latest`, and with them
-  `sdkmanager --sdk_root=<cache>\sdk "platform-tools" "platforms;android-36" "build-tools;36.0.0"` (licences are
-  accepted with `yes | sdkmanager --licenses`).
+  `sdkmanager --sdk_root=<cache>\sdk "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;29.0.14206865"`
+  (licences are accepted with `yes | sdkmanager --licenses`; Gradle may add the platforms its plugins ask for).
 - `gradle\`: created by the first build (Gradle comes with its own wrapper, checked against its SHA-256).
-- `keys\`: the signing key `orb-release.jks` and its password, created on the first build. **Keep them safe**: without
-  them, the next version will not install on top of the previous one.
+- `keys\`: the signing key `orb-release.jks` and its password `orb-release.pass`. **Keep them safe**: without them,
+  the next version will not install on top of the previous one. The build never makes a new key: without them it stops.
 
-The project is in `android-app/` (Capacitor); the app's side of the UI is `src/ui/lib/app-bridge.js` and what it reads
-from the QR, `src/ui/lib/link-payload.js`.
+And Rust (`rustup`, with the target `aarch64-linux-android`) in the `PATH`, or `RUSTUP_HOME`/`CARGO_HOME` set.
+
+How it is made:
+
+- `src-tauri/` is the same Tauri project as the desktop's; `src-tauri/src/mobile.rs` is the Android entry (no engine,
+  no windows of its own) and `tauri.android.conf.json` the Android settings (the page in `src/renderer-android`, built
+  with `vite build --mode android` by `scripts/android-web.mjs`, and its CSP, which lets it reach the PC).
+- `src-tauri/gen/android/` is the Android project (versioned): the manifest, the icons (`npm run icon` draws them),
+  the signing and Orb's Kotlin code in `app/src/main/java/dev/orb/app/`:
+  - `OrbNativePlugin.kt`, the plugin «orb-native» the page calls: the keystore (`SecureStore.kt`, the same alias, file
+    and format as 3.8.0), «Share with Orb» (`ShareIntent.kt`), the QR (Google's code scanner, no camera permission),
+    dictation, minimize, and the notifications;
+  - `Notes.kt` (the notifications and `NoteReceiver`, which answers a button without opening the app) and `PcCall.kt`
+    (that call to the PC, encrypted by `src-tauri/src/phone_crypto.rs`, the same as `src/core/mobile-crypto.mjs`);
+  - `MainActivity.kt`: the launch screen, edge to edge, and back handed to the page.
+- The page's side is `src/ui/lib/app-bridge.js` and what it reads from the QR, `src/ui/lib/link-payload.js`.
 
 ## Still missing
 
-- Notifications with the app fully closed (Firebase push, with its Google account and `google-services.json`).
+- Receiving notifications while the app is closed (Firebase push, with its Google account and `google-services.json`).
+  The buttons of a notification already shown do work with the app closed.
 - Shared images reach the chat as a path; Orb's chat cannot attach images yet.

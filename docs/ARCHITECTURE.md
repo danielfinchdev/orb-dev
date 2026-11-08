@@ -1098,11 +1098,10 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
 - The app icon is drawn in `build/icon-src/*.svg`; `npm run icon` renders `build/icon.ico` (10 sizes, the short «o•»
   version up to 32 px; also the window's icon on Windows), `build/icons/` (the sizes Tauri bundles), `build/icon.png`,
   `src/ui/public/icon.png`, `src/ui/public/icon-o.png` (the short «o•», 128 px: the «Acerca de» card), `src/ui/public/icon-maskable.png` (the PWA's maskable icon: the
-  tile edge to edge, the word at 80 %), the Android launcher icons (`android-app/android/app/src/main/res/mipmap-*`,
+  tile edge to edge, the word at 80 %), the Android launcher icons (`src-tauri/gen/android/app/src/main/res/mipmap-*`,
   legacy, round and adaptive) and the small notification icon (`drawable-*/ic_stat_orb.png`: the short «o•» as a white
   silhouette on transparent, 24 dp in every density with the drawing in the 20 dp content area, and the cut between the
-  «o» and the orb widened at mdpi/hdpi so they stay apart; `capacitor.config.json` names it in `LocalNotifications.smallIcon`,
-  and the Tauri app must carry the same `drawable-*` files and name to its notification plugin).
+  «o» and the orb widened at mdpi/hdpi so they stay apart; the app's notifications use it by name, `Notes.kt`).
 - **Tests on every push and PR**, on Windows and Linux: `.github/workflows/pruebas.yml`.
 - **Installer**: desktop and Start menu shortcut.
 
