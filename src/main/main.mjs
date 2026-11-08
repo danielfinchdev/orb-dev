@@ -7,10 +7,10 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHome, isHome, loadConfig, writeJson, paths, homeKey, oldHomeKey, LEGACY } from '../core/home.mjs';
 import { createAgentBrowser } from './browser.mjs';
-import { openTerminal } from './terminal.mjs';
-import { findEditors, openInEditor, runAction } from './editors.mjs';
 import { createUpdater, RELEASES_URL } from './updater.mjs';
-import { MAX_IMAGES, captureWindow, readImage, sendFeedback, moreApps } from './feedback.mjs';
+import { MAX_IMAGES, readImage, screenshot } from '../engine/feedback.mjs';
+import { checkHostRequest } from '../engine/host.mjs';
+import { spawnDetached } from '../engine/terminal.mjs';
 import { PRODUCT } from '../core/product.mjs';
 import { translate } from '../core/i18n.mjs';
 import { keyringWeak } from './linux.mjs';
@@ -155,6 +155,7 @@ function startEngine(h) {
       if (msg?.type === 'started') return msg.ok ? resolve(msg.result) : reject(new Error(msg.error));
       if (msg?.type === 'reply') { const p = pending.get(msg.id); if (!p) return; pending.delete(msg.id); clearTimeout(p.timer); return msg.ok ? p.resolve(msg.result) : p.reject(new Error(msg.error)); }
       if (msg?.type === 'event') onEngineEvent(msg.event, msg.payload);
+      if (msg?.type === 'host') onHostCall(msg);
     });
     engine.on('exit', (code) => {
       engine = null; engineReady = null;
@@ -181,6 +182,21 @@ function callEngine(method, params, timeoutMs = 10 * 60_000) {
     pending.set(id, { resolve, reject, timer });
     engine.postMessage({ type: 'call', id, method, params });
   });
+}
+
+// 3.8.1: what the engine asks this app to do (src/engine/host.mjs): open a link or a folder with the system, or start a
+// program that outlives Orb. Every request is checked again here (checkHostRequest).
+const isDir = (p) => { try { return fs.statSync(p).isDirectory(); } catch { return false; } };
+async function onHostCall({ id, method, params }) {
+  const reply = (m) => { try { engine?.postMessage({ type: 'hostReply', id, ...m }); } catch { /* engine gone */ } };
+  try {
+    const p = checkHostRequest(method, params, { isDir });
+    let result = true;
+    if (method === 'host.openUrl') await shell.openExternal(p.url);
+    else if (method === 'host.openPath') { const err = await shell.openPath(p.path); if (err) throw new Error(err); }
+    else if (method === 'host.spawnDetached') result = await spawnDetached(p);
+    reply({ ok: true, result });
+  } catch (error) { reply({ ok: false, error: String(error?.message ?? error) }); }
 }
 
 // 2.6: the window has no Windows title bar, so no menu bar either; the menu stays for its keys (zoom, Ctrl+J, F11).
@@ -236,34 +252,13 @@ ipcMain.handle('engine:call', guard(async (method, params) => {
 }));
 
 ipcMain.handle('app:zoom', guard(async (value) => (value === undefined || value === null ? zoom : setZoom(value))));
-// Ctrl+J: a terminal (Warp, Windows Terminal, PowerShell…; on Linux the system's one or the chosen one) in the folder the
-// window is showing.
-ipcMain.handle('app:openTerminal', guard(async (target) => {
-  const dir = typeof target === 'string' && path.isAbsolute(target) ? target : home;
-  if (!dir) throw new Error(T('sys.main.noFolderYet'));
-  const c = config();
-  return openTerminal(dir, c?.ui?.terminal ?? 'auto', { openExternal: (url) => shell.openExternal(url), language: langOf(c) });
-}));
-// 3.2, God mode: the project in Cursor / VS Code (only the installed ones are offered), and an action of the project run
-// in a terminal window of its own, with its preview (only a page of this PC) opened in the browser after a moment.
-ipcMain.handle('app:editors', guard(async () => { const e = findEditors(); return { cursor: Boolean(e.cursor), vscode: Boolean(e.vscode) }; }));
-ipcMain.handle('app:openIn', guard(async (which, target) => {
-  if (!['cursor', 'vscode', 'explorer'].includes(which) || typeof target !== 'string' || !path.isAbsolute(target)) throw new Error(T('sys.main.badPath'));
-  if (which === 'explorer') { const err = await shell.openPath(target); if (err) throw new Error(err); return true; }
-  await openInEditor(which, target, { language: langOf(config()) });
-  return true;
-}));
-ipcMain.handle('app:runAction', guard(async (action) => {
-  const { dir, command, preview, openPreview } = action ?? {};
-  if (typeof dir !== 'string' || !path.isAbsolute(dir) || typeof command !== 'string' || !command.trim() || command.length > 2000) throw new Error(T('sys.main.badAction'));
-  const c = config();
-  await runAction(command, dir, { choice: c?.ui?.terminal ?? 'auto', language: langOf(c) });
-  if (openPreview && typeof preview === 'string') {
-    let u = null; try { u = new URL(preview); } catch { /* not a link */ }
-    if (u && /^https?:$/.test(u.protocol) && ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname)) setTimeout(() => { shell.openExternal(u.toString()).catch(() => {}); }, 2500);
-  }
-  return true;
-}));
+// 3.8.1: Ctrl+J's terminal, God mode's editors and project actions, the feedback mail and the other apps live in the
+// engine (src/engine/api-app.mjs); the preload keeps its shape, so the window does not change.
+const toEngine = (method, params = {}) => (async () => { if (!engineReady) throw new Error(T('sys.main.engineOff', { name: PRODUCT.name })); await engineReady; return callEngine(method, params); })();
+ipcMain.handle('app:openTerminal', guard(async (target) => toEngine('app.openTerminal', { dir: target })));
+ipcMain.handle('app:editors', guard(async () => toEngine('app.editors')));
+ipcMain.handle('app:openIn', guard(async (which, target) => toEngine('app.openIn', { which, dir: target })));
+ipcMain.handle('app:runAction', guard(async (action) => toEngine('app.runAction', action ?? {})));
 ipcMain.handle('app:showBrowser', guard(async () => { agentBrowser?.show(); return agentBrowser?.state() ?? null; }));
 // 3.8: the workspace goes to C:\Orb unless the user picks another place (the welcome shows it already chosen); elsewhere
 // ~/Orb.
@@ -314,14 +309,20 @@ ipcMain.handle('app:openExternal', guard(async (url) => {
   await shell.openExternal(u.toString());
   return true;
 }));
-// Ajustes → Contribuye (feedback by mail with screenshots) and Más aplicaciones (src/main/feedback.mjs).
-ipcMain.handle('app:feedbackCapture', guard(async () => (win ? captureWindow(win) : null)));
+// Ajustes → Contribuye (feedback by mail with screenshots) and Más aplicaciones (src/engine/feedback.mjs): the window's
+// picture (at most 1920 px wide) and the files picked are taken here, the mail goes from the engine.
+ipcMain.handle('app:feedbackCapture', guard(async () => {
+  if (!win) return null;
+  let image = await win.webContents.capturePage();
+  if (image.getSize().width > 1920) image = image.resize({ width: 1920, quality: 'best' });
+  return screenshot(image.toPNG());
+}));
 ipcMain.handle('app:feedbackImages', guard(async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], filters: [{ name: 'PNG / JPEG', extensions: ['png', 'jpg', 'jpeg'] }] });
   return r.canceled ? [] : r.filePaths.slice(0, MAX_IMAGES).map(readImage).filter(Boolean);
 }));
-ipcMain.handle('app:feedbackSend', guard(async (data) => sendFeedback(data ?? {}, { version: VERSION, language: config()?.language ?? 'es' })));
-ipcMain.handle('app:moreApps', guard(async () => moreApps(VERSION)));
+ipcMain.handle('app:feedbackSend', guard(async (data) => toEngine('app.feedbackSend', data ?? {})));
+ipcMain.handle('app:moreApps', guard(async () => toEngine('app.moreApps')));
 // Updates: state, check now, download, and restart into the new version (asking first if tasks are running).
 ipcMain.handle('app:update', guard(async () => updater.get()));
 ipcMain.handle('app:updateCheck', guard(async () => updater.check()));

@@ -256,7 +256,7 @@ test('3.2: acciones del proyecto: se guardan con su atajo y su vista previa, y s
 });
 
 test('3.2: una acción se abre en una ventana de terminal en la carpeta del proyecto, sin pasar por cmd.exe', async () => {
-  const { actionPlan } = await import('../src/main/editors.mjs');
+  const { actionPlan } = await import('../src/engine/editors.mjs');
   const found = { wt: 'C:\\wt.exe', powershell: 'C:\\ps.exe', cmd: 'C:\\cmd.exe' };
   const wt = actionPlan('npm test; npm run dev', 'D:\\Orb\\web\\a;b', found, 'auto', 'win32');
   assert.equal(wt.cmd, 'C:\\wt.exe');

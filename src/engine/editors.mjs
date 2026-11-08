@@ -3,8 +3,7 @@
 // Programs are started directly, never through cmd.exe, so & ^ % in a folder name are never re-read.
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
-import { findTerminals, linuxTerminal, externalEnv, LINUX_TERMINALS } from './terminal.mjs';
+import { findTerminals, linuxTerminal, spawnDetached, LINUX_TERMINALS } from './terminal.mjs';
 import { translate } from '../core/i18n.mjs';
 
 const exists = (file) => Boolean(file) && fs.existsSync(file);
@@ -30,23 +29,19 @@ export function findEditors(platform = process.platform, env = process.env) {
   return { cursor: inPath(['cursor'], extra), vscode: inPath(['code', 'com.visualstudio.code'], extra) };
 }
 
-const start = (cmd, args, cwd) => new Promise((resolve, reject) => {
-  const child = spawn(cmd, args, { cwd, detached: true, stdio: 'ignore', windowsHide: false, env: externalEnv() });
-  child.once('error', reject);
-  child.once('spawn', () => { child.unref(); resolve(); });
-});
 const folderOf = (dir, language) => {
   let st; try { st = fs.statSync(dir); } catch { throw new Error(translate(language, 'sys.main.folderMissing')); }
   if (!st.isDirectory()) throw new Error(translate(language, 'sys.terminal.folderOnly'));
   return dir;
 };
 
-export async function openInEditor(which, dir, { language = 'es' } = {}) {
+// spawn: how a detached program starts (terminal.mjs › spawnDetached, or the app's when the engine asks).
+export async function openInEditor(which, dir, { language = 'es', spawn = spawnDetached } = {}) {
   folderOf(dir, language);
   const exe = findEditors()[which];
   if (!exe) throw new Error(translate(language, 'sys.terminal.notInstalled', { name: which === 'vscode' ? 'VS Code' : 'Cursor' }));
-  if (process.platform === 'darwin') return start('open', ['-a', exe, dir], dir);
-  return start(exe, [dir], dir);
+  if (process.platform === 'darwin') return spawn({ cmd: 'open', args: ['-a', exe, dir], cwd: dir });
+  return spawn({ cmd: exe, args: [dir], cwd: dir });
 }
 
 // The program to start for an action's command, in a terminal window that stays open with its output. Pure, so it is
@@ -63,9 +58,9 @@ export function actionPlan(command, dir, found, choice = 'auto', platform = proc
   throw new Error(translate(language, 'sys.terminal.none'));
 }
 
-export async function runAction(command, dir, { choice = 'auto', language = 'es' } = {}) {
+export async function runAction(command, dir, { choice = 'auto', language = 'es', spawn = spawnDetached } = {}) {
   folderOf(dir, language);
   const plan = actionPlan(String(command), dir, findTerminals(), choice, process.platform, language);
-  await start(plan.cmd, plan.args, plan.cwd);
+  await spawn({ cmd: plan.cmd, args: plan.args, cwd: plan.cwd });
   return true;
 }

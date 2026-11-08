@@ -11,11 +11,23 @@ import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { PRODUCT } from '../core/product.mjs';
 import { DESKTOP } from '../core/permissions.mjs';
 
+import { stdioTransport } from './stdio.mjs';
+import { attachHost, hostReply } from './host.mjs';
+import { appMethods } from './api-app.mjs';
+
+// Electron's utility process (parentPort), a plain process with JSON lines on stdin/stdout (3.8.1: Tauri starts the
+// bundled node.exe with ORB_ENGINE_STDIO=1; src/engine/stdio.mjs), or a Node child with an IPC channel (the tests).
 const transport = (() => {
   if (process.parentPort) return { send: (m) => process.parentPort.postMessage(m), on: (fn) => process.parentPort.on('message', (e) => fn(e.data)) };
+  if (process.env.ORB_ENGINE_STDIO === '1') return stdioTransport({ onClose: () => shutdown() });
   if (process.send) return { send: (m) => process.send(m), on: (fn) => process.on('message', fn) };
   throw new Error('el motor debe arrancarse desde la app');
 })();
+// The engine's own calls to the app (open a link or a folder, start a program outside the engine): src/engine/host.mjs.
+attachHost((m) => transport.send(m));
+// This PC's tools that need no window (src/engine/api-app.mjs), set when the engine starts: also answered while core or
+// the data are blocked.
+let tools = {};
 let remote = null; // phone access (src/engine/remote.mjs), when turned on
 let devControl = null; // 3.1: the developer's control line (src/engine/dev-control.mjs), only in Orb.dev
 // Every event goes to this PC's window, the linked phones and browsers (remote.mjs picks what they need) and the
@@ -41,6 +53,7 @@ async function start(home, version, secret, browser, keep = null) {
   // The agents' browser lives in the app (main process): its pipe and token go to the agents' MCP servers.
   if (typeof browser?.pipe === 'string' && /^[0-9a-f]{48}$/.test(browser.token ?? '') && /orb-navegador-[0-9a-f]{16}(\.sock)?$/.test(browser.pipe)) ctx.browser = { pipe: browser.pipe, token: browser.token };
   if (typeof keep === 'string' && path.isAbsolute(keep)) mirror = keep;
+  tools = appMethods({ home, version });
   // 3.8: the folders of Orb 3.7 move into core (src/core/core-folder.mjs); then, if core or part of it is gone (deleted
   // by mistake while Orb was closed, or noticed by the watcher in run()), what is missing comes back from the newest
   // backup, which lives outside the workspace. Without a backup, or with one this PC cannot open, the window shows why
@@ -127,6 +140,7 @@ function coreBlocked({ home, version, repair }) {
       if (method === 'app.coreState') return core;
       if (method === 'app.coreRepair') { busy ??= repairNow(params ?? {}).finally(() => { busy = null; }); return busy; }
       if (method === 'app.migrationState') return { failed: false };
+      if (Object.hasOwn(tools, method)) return tools[method](params ?? {});
       throw Object.assign(new Error(tr('data.core.blocked')), { userFacing: true });
     },
     shutdown() {}
@@ -152,11 +166,12 @@ async function blocked(board, info) {
     return { failed: false };
   };
   api = {
-    async call(method) {
+    async call(method, params) {
       // core is whole (the window asks this first: src/ui/lib/startup.js).
       if (method === 'app.coreState') return null;
       if (method === 'app.migrationState') return migration;
       if (method === 'app.migrationRetry') { retrying ??= retry().finally(() => { retrying = null; }); return retrying; }
+      if (Object.hasOwn(tools, method)) return tools[method](params ?? {});
       throw Object.assign(new Error(tr('data.migration38.blocked')), { userFacing: true });
     },
     shutdown() { try { board.db.close(); } catch { /* closed */ } }
@@ -326,6 +341,16 @@ function coreLost(home, board) {
   setTimeout(() => { try { board.db.close(); } catch { /* closed */ } process.exit(75); }, 500);
 }
 
+// The app asked the engine to stop (or, over stdio, closed its end: it quit or died). The phone access may have to turn
+// off `tailscale serve` first (a few seconds at most).
+let stopping = false;
+function shutdown() {
+  if (stopping) return; stopping = true;
+  try { api?.shutdown(); } catch { /* closing anyway */ }
+  try { devControl?.stop(); } catch { /* closing anyway */ }
+  Promise.race([Promise.resolve(remote?.stop()).catch(() => {}), new Promise((r) => setTimeout(r, 4000))]).finally(() => setTimeout(() => process.exit(0), 300));
+}
+
 transport.on(async (msg) => {
   if (!msg || typeof msg !== 'object') return;
   if (msg.type === 'start') {
@@ -333,13 +358,8 @@ transport.on(async (msg) => {
     catch (error) { transport.send({ type: 'started', ok: false, error: error.message }); }
     return;
   }
-  if (msg.type === 'shutdown') {
-    // The phone access may have to turn off `tailscale serve` first (a few seconds at most).
-    try { api?.shutdown(); } catch { /* closing anyway */ }
-    try { devControl?.stop(); } catch { /* closing anyway */ }
-    Promise.race([Promise.resolve(remote?.stop()).catch(() => {}), new Promise((r) => setTimeout(r, 4000))]).finally(() => setTimeout(() => process.exit(0), 300));
-    return;
-  }
+  if (msg.type === 'shutdown') return shutdown();
+  if (msg.type === 'hostReply') { hostReply(msg); return; }
   if (msg.type !== 'call') return;
   try {
     if (!api) throw new Error(tr('sys.engine.notStarted', { name: PRODUCT.name }));

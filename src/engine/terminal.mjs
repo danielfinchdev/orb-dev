@@ -81,8 +81,17 @@ export function terminalPlan(choice, dir, found, platform = process.platform, la
   return { name, cmd: name, args: LINUX_TERMINALS[name]?.open(dir) ?? [], cwd: dir };
 }
 
-// Starts it detached: a console program gets its own window on Windows and outlives the app.
-export async function openTerminal(dir, choice = 'auto', { openExternal, language = 'es' } = {}) {
+// A program started on its own, detached: a console program gets its own window on Windows and outlives the app. The
+// engine asks the app for it (host.spawnDetached, src/engine/host.mjs): under Tauri the engine runs inside a Job Object
+// that ends with Orb, and only the app can start something outside it. This is the plain way (tests, Electron's app).
+export const spawnDetached = ({ cmd, args = [], cwd }) => new Promise((resolve, reject) => {
+  const child = spawn(cmd, args, { cwd, detached: true, stdio: 'ignore', windowsHide: false, env: externalEnv() });
+  child.once('error', reject);
+  child.once('spawn', () => { child.unref(); resolve(true); });
+});
+
+// spawn: how the terminal starts (spawnDetached, or the app's); openExternal: Warp's link.
+export async function openTerminal(dir, choice = 'auto', { openExternal, spawn: start = spawnDetached, language = 'es' } = {}) {
   const T = (key, vars) => translate(language, key, vars);
   let st; try { st = fs.statSync(dir); } catch { throw new Error(T('sys.main.folderMissing')); }
   if (!st.isDirectory()) throw new Error(T('sys.terminal.folderOnly'));
@@ -90,10 +99,6 @@ export async function openTerminal(dir, choice = 'auto', { openExternal, languag
   if (plan.url) {
     try { await openExternal(plan.url); return plan.name; } catch (error) { if (!plan.fallback) throw error; Object.assign(plan, plan.fallback); }
   }
-  await new Promise((resolve, reject) => {
-    const child = spawn(plan.cmd, plan.args, { cwd: plan.cwd, detached: true, stdio: 'ignore', windowsHide: false, env: externalEnv() });
-    child.once('error', (error) => reject(new Error(T('sys.terminal.openFailed', { name: plan.name, error: error.message }))));
-    child.once('spawn', () => { child.unref(); resolve(); });
-  });
+  try { await start({ cmd: plan.cmd, args: plan.args, cwd: plan.cwd }); } catch (error) { throw new Error(T('sys.terminal.openFailed', { name: plan.name, error: error.message })); }
   return plan.name;
 }

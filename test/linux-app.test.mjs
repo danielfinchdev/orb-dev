@@ -5,8 +5,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { terminalPlan, linuxTerminal, externalEnv, terminalChoices, LINUX_TERMINALS } from '../src/main/terminal.mjs';
-import { actionPlan, findEditors } from '../src/main/editors.mjs';
+import { terminalPlan, linuxTerminal, externalEnv, terminalChoices, LINUX_TERMINALS } from '../src/engine/terminal.mjs';
+import { actionPlan, findEditors } from '../src/engine/editors.mjs';
 import { linuxKind, keyringWeak } from '../src/main/linux.mjs';
 import { ROOT } from './helpers.mjs';
 

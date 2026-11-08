@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, readOutput, discoverDir } from './common.mjs';
+import { IS_WIN, firstFile, inPath, npmPrefixes, userHome, clip, readOutput, discoverDir, nodeRuntime } from './common.mjs';
 import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree, hidingEnvValues } from './live.mjs';
 import { decide } from '../core/guard.mjs';
 import { tr } from '../core/context.mjs';
@@ -77,7 +77,7 @@ export function acpModels(res) {
 export function acpAgent(id, spec) {
   const caps = { images: false, steer: false, fork: false, approvals: true, models: false, context: true };
   const detect = (cfg = {}) => {
-    if (cfg.path && firstFile([cfg.path])) return /\.(c|m)?js$/i.test(cfg.path) ? { cmd: firstFile(inPath('node')) ?? process.execPath, pre: [cfg.path] } : { cmd: cfg.path, pre: [] };
+    if (cfg.path && firstFile([cfg.path])) return /\.(c|m)?js$/i.test(cfg.path) ? { cmd: firstFile(inPath('node')) ?? nodeRuntime(), pre: [cfg.path] } : { cmd: cfg.path, pre: [] };
     return npmBin(spec.pkg, spec.bin) ?? (firstFile(inPath(spec.bin)) ? { cmd: firstFile(inPath(spec.bin)), pre: [] } : null);
   };
   const loginState = () => (spec.login.some((f) => firstFile([path.join(userHome(), f)])) ? 'si' : 'desconocido');

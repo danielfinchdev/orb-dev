@@ -1,4 +1,5 @@
-// Ajustes → Contribuye and Más aplicaciones, done in the main process (the window may not reach the internet).
+// Ajustes → Contribuye and Más aplicaciones, done in the engine (the window may not reach the internet): app.feedbackSend
+// and app.moreApps (src/engine/api-app.mjs). The screenshots and the files picked come from the app (readImage, screenshot).
 // Feedback goes without any account through FormSubmit (formsubmit.co), which mails it with its screenshots to the author's
 // inbox: the same inbox and setup as Open Control Edge. The endpoint is the random alias FormSubmit gives after
 // activation, so no address is in the code. Nothing is sent without the user pressing «Enviar».
@@ -31,13 +32,9 @@ export function readImage(file) {
   } catch { return null; }
 }
 
-// The app's window as a PNG (scaled down to at most 1920 px wide).
-export async function captureWindow(win) {
-  let image = await win.webContents.capturePage();
-  const { width } = image.getSize();
-  if (width > 1920) image = image.resize({ width: 1920, quality: 'best' });
-  const bytes = image.toPNG();
-  if (!bytes.length || bytes.length > MAX_IMAGE_BYTES) return null;
+// The app's window as the app captured it (a PNG, at most 1920 px wide), ready to attach; null when too big or empty.
+export function screenshot(bytes) {
+  if (!bytes?.length || bytes.length > MAX_IMAGE_BYTES) return null;
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
   return toImage(`captura-${stamp}.png`, bytes);
 }

@@ -69,6 +69,11 @@ Data: <workspace>/core/datos/orb.db (SQLite, src/core/db.mjs)
   only server is the phone access (section 22), which is off by default and only listens on the home network and
   Tailscale addresses.
 - **The engine** is a separate process (`utilityProcess`). If it crashes, the main process restarts it, up to three times.
+  3.8.1 (on the way to Tauri): the engine also runs as a plain Node process speaking one JSON message per line on
+  stdin/stdout (`ORB_ENGINE_STDIO=1`, `src/engine/stdio.mjs`; console output goes to stderr), and it asks the app for
+  what only the app can do — open a link or a folder, start a program that outlives Orb — with `host.*` messages
+  (`src/engine/host.mjs`). Orb's own Node scripts for the agents run with `ORB_NODE` (the bundled `node.exe`) or the
+  engine's runtime (`src/agents/common.mjs › nodeRuntime`).
 - **The agents** are the official programs the user already has (Claude Code, Codex, Cursor, Gemini CLI…), with their
   own session. Orb never sees credentials.
 - **Layers** (bottom to top):
@@ -654,8 +659,9 @@ phone does not have the app open. On iPhone they work with Orb added to the home
   activity, around the chat. PC only.
 - It is turned on in Settings › Advanced › God mode; the panels can only be ticked with the mode on.
 - Files: `src/engine/expert.mjs` and `src/ui/views/expert.jsx`.
-- **"Open in":** the project in Cursor or VS Code (only the installed ones) or in Explorer (`src/main/editors.mjs`,
-  `app:openIn`; programs are launched directly, never through cmd.exe).
+- **"Open in":** the project in Cursor or VS Code (only the installed ones) or in Explorer (`src/engine/editors.mjs`,
+  `app.openIn`; programs are launched directly, never through cmd.exe, and by the app — `host.spawnDetached` — so they
+  outlive Orb).
 - **Project actions:** each project's own commands (`actions:<project>` on the board, at most 20;
   `actions.list/save/remove`) with a name, a keyboard shortcut and an optional preview, which can only be a page on this
   PC. They are launched from "Actions" or with their shortcut (`ActionShortcuts`: the God mode project, or the working
@@ -787,8 +793,8 @@ launched hidden, with its output read by Orb, and it stores the session in the a
   (double-click: maximize) and leave room for the buttons (`--wco-inset`, `.wco-pad`). Without the Windows bar there is
   no menu bar (`applyMenuBar()` in `src/main/main.mjs` keeps it hidden; the old `ui.menuBar` setting is dropped when orb.json loads) and
   the menu remains only for its shortcuts (zoom, Ctrl+J, F11).
-- **Contribute and More apps** (`src/main/feedback.mjs`, in the main process because the window does not go out to the
-  internet): the developer's PayPal; feedback via FormSubmit (to the developer's inbox) with up to 3 PNG/JPEG
+- **Contribute and More apps** (`src/engine/feedback.mjs`, `app.feedbackSend` / `app.moreApps`, in the engine because the
+  window does not go out to the internet; the screenshot and the picked files come from the app): the developer's PayPal; feedback via FormSubmit (to the developer's inbox) with up to 3 PNG/JPEG
   screenshots of the window or from files; and the other apps with their latest version from GitHub Releases.
 
 ## 28. Security

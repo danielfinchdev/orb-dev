@@ -40,6 +40,7 @@ import { accountMethods } from './api-accounts.mjs';
 import { dataApi } from './api-data.mjs';
 import { inboxMethods } from './api-inbox.mjs';
 import { masterMethods, checkUnlock } from './api-master.mjs';
+import { appMethods } from './api-app.mjs';
 import { sealConnectors } from '../core/connector-secrets.mjs';
 
 export { fail, str, int, oneOf } from './api-common.mjs';
@@ -607,7 +608,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     ...linkMethods(shared),
     ...inboxMethods(shared),
     ...data.methods,
-    ...masterMethods({ ...shared, onUnlocked })
+    ...masterMethods({ ...shared, onUnlocked }),
+    ...appMethods({ home: ctx.home, version }) // 3.8.1: this PC's tools (terminal, editors, feedback…)
   };
   return {
     // principal: who calls, built only by the entry points (engine.mjs and dev-control.mjs: this PC; remote.mjs: a
