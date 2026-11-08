@@ -7,7 +7,7 @@
 //                  as many instances as needed, this Windows user only.
 use crate::grants::Grants;
 use crate::server::{self, Server};
-use std::io::BufReader;
+use std::io::{BufRead, Read};
 use std::sync::Arc;
 
 fn random_name(prefix: &str) -> String {
@@ -28,7 +28,7 @@ mod win {
   use windows::Win32::Security::Authorization::{ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1};
   use windows::Win32::Security::{GetTokenInformation, TokenUser, PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES, TOKEN_QUERY, TOKEN_USER};
   use windows::Win32::Storage::FileSystem::{FILE_FLAGS_AND_ATTRIBUTES, FILE_FLAG_FIRST_PIPE_INSTANCE, PIPE_ACCESS_DUPLEX};
-  use windows::Win32::System::Pipes::{ConnectNamedPipe, CreateNamedPipeW, GetNamedPipeClientProcessId, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES, PIPE_WAIT};
+  use windows::Win32::System::Pipes::{ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, GetNamedPipeClientProcessId, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES, PIPE_WAIT};
   use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
   fn io(e: windows::core::Error) -> std::io::Error {
@@ -102,6 +102,60 @@ mod win {
       Ok(pid)
     }
   }
+  /// Drops the client connected now, so the pipe can wait for the next one.
+  pub fn disconnect(pipe: &File) {
+    // SAFETY: a pipe handle of ours.
+    unsafe {
+      let _ = DisconnectNamedPipe(HANDLE(pipe.as_raw_handle() as _));
+    }
+  }
+}
+
+/// A reader whose buffer is wiped as it is consumed and when it goes (review final B3): the lines carry passwords and
+/// secrets, and std's BufReader keeps its buffer as it is.
+pub struct Wiping<R: Read> {
+  inner: R,
+  buf: Box<[u8]>,
+  pos: usize,
+  filled: usize,
+}
+impl<R: Read> Wiping<R> {
+  pub fn new(inner: R) -> Self {
+    Wiping { inner, buf: vec![0u8; 8192].into_boxed_slice(), pos: 0, filled: 0 }
+  }
+}
+impl<R: Read> Read for Wiping<R> {
+  fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
+    let n = {
+      let have = self.fill_buf()?;
+      let n = have.len().min(out.len());
+      out[..n].copy_from_slice(&have[..n]);
+      n
+    };
+    self.consume(n);
+    Ok(n)
+  }
+}
+impl<R: Read> BufRead for Wiping<R> {
+  fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+    if self.pos >= self.filled {
+      zeroize::Zeroize::zeroize(&mut self.buf[..self.filled]);
+      self.pos = 0;
+      self.filled = 0;
+      self.filled = self.inner.read(&mut self.buf)?;
+    }
+    Ok(&self.buf[self.pos..self.filled])
+  }
+  fn consume(&mut self, n: usize) {
+    let end = (self.pos + n).min(self.filled);
+    zeroize::Zeroize::zeroize(&mut self.buf[self.pos..end]);
+    self.pos = end;
+  }
+}
+impl<R: Read> Drop for Wiping<R> {
+  fn drop(&mut self) {
+    zeroize::Zeroize::zeroize(&mut self.buf[..]);
+  }
 }
 
 /// The engine's channel, made before the engine starts (its name goes in the engine's environment).
@@ -145,17 +199,22 @@ impl EngineChannel {
   /// Serves its one client until it closes. pid: the only process allowed (Orb.exe: the engine's); another is refused.
   #[cfg(windows)]
   pub fn serve(self, server: &Server, pid: Option<u32>) -> std::io::Result<()> {
-    let client = win::accept(&self.pipe)?;
-    if pid.is_some_and(|p| p != client) {
-      return Err(std::io::Error::other("vault: a process that is not the engine"));
+    // Another process of this user that connects first is dropped and the pipe waits for the engine (review final B4: it
+    // could otherwise keep the engine from ever getting its vault).
+    loop {
+      let client = win::accept(&self.pipe)?;
+      if pid.is_none_or(|p| p == client) {
+        break;
+      }
+      win::disconnect(&self.pipe);
     }
-    let mut input = BufReader::new(self.pipe.try_clone()?);
+    let mut input = Wiping::new(self.pipe.try_clone()?);
     let mut output = self.pipe;
     server::serve(server, &mut input, &mut output)
   }
   #[cfg(unix)]
   pub fn serve(self, server: &Server, _pid: Option<u32>) -> std::io::Result<()> {
-    let mut input = BufReader::new(std::fs::File::open(self.dir.join("req"))?);
+    let mut input = Wiping::new(std::fs::File::open(self.dir.join("req"))?);
     let mut output = std::fs::OpenOptions::new().write(true).open(self.dir.join("res"))?;
     let r = server::serve(server, &mut input, &mut output);
     let _ = std::fs::remove_dir_all(&self.dir);
@@ -191,7 +250,7 @@ pub fn start_grants(name: Option<String>) -> std::io::Result<Arc<Grants>> {
         std::thread::spawn(move || {
           if let Ok(read) = pipe.try_clone() {
             let mut pipe = pipe;
-            let _ = g.trade(&mut BufReader::new(read), &mut pipe, now_ms());
+            let _ = g.trade(&mut Wiping::new(read), &mut pipe, now_ms());
           }
         });
       }
@@ -210,11 +269,28 @@ pub fn start_grants(name: Option<String>) -> std::io::Result<Arc<Grants>> {
         std::thread::spawn(move || {
           if let Ok(read) = conn.try_clone() {
             let mut conn = conn;
-            let _ = g.trade(&mut BufReader::new(read), &mut conn, now_ms());
+            let _ = g.trade(&mut Wiping::new(read), &mut conn, now_ms());
           }
         });
       }
     });
     Ok(grants)
+  }
+}
+
+#[cfg(test)]
+mod wiping_tests {
+  use super::*;
+
+  #[test]
+  fn what_was_read_does_not_stay_in_the_buffer() {
+    let mut w = Wiping::new(std::io::Cursor::new(b"{\"password\":\"secreta\"}\n{\"op\":\"x\"}\n".to_vec()));
+    let mut line = vec![];
+    w.read_until(b'\n', &mut line).unwrap();
+    assert_eq!(line, b"{\"password\":\"secreta\"}\n");
+    assert!(!w.buf.windows(7).any(|x| x == b"secreta"), "the first line is wiped once consumed");
+    line.clear();
+    w.read_until(b'\n', &mut line).unwrap();
+    assert!(w.buf.iter().all(|b| *b == 0));
   }
 }

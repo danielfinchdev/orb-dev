@@ -56,7 +56,8 @@ fn now_ms() -> u64 {
 /// Serves one engine until it closes its end. → Ok when it closed, Err on a broken channel.
 pub fn serve(server: &Server, input: &mut impl BufRead, output: &mut impl Write) -> std::io::Result<()> {
   let mut session = Session { server, vaults: HashMap::new(), next: 0, jobs: Arc::new(Mutex::new(HashMap::new())), machine: None };
-  let mut line = Vec::with_capacity(4096);
+  // Room for the longest line at once: it never grows by reallocation (which would leave copies behind unwiped).
+  let mut line = Vec::with_capacity(MAX_LINE + 2);
   loop {
     line.clear();
     let n = input.by_ref().take(MAX_LINE as u64 + 1).read_until(b'\n', &mut line)?;
