@@ -1,6 +1,8 @@
 // 3.8.2 (phase 3): “Full PC access”, “Use my Android phone” and pairing the phone (Settings › Android).
 export default {
   'msg.guard.adb': 'runs adb; use the orb_android_* tools (adb by hand only with “Full access” and “Use my Android phone”)',
+  'msg.guard.driveAlias': 'makes another name for a drive or folder (subst, net use, New-PSDrive), which Orb doesn’t allow',
+  'msg.guard.copyParent': 'copies, moves or packs a folder that holds protected data',
   'sys.browser.protected': 'Orb won’t open this address: it includes a protected item ({name}).',
   'msg.grants.chatOnly': 'Only available in a chat.',
   'msg.grants.totalNeedsPassword': 'Full access is turned on and off in the chat’s permission selector, with the master password.',

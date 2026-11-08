@@ -42,8 +42,9 @@ export async function layoutApply(choices, { emit = () => {}, log = () => {}, bo
 // 3.8.1: the owner's private folder (notes, plans): kept from the agents like core.
 export const PRIVATE_DIR = 'personal';
 export const privateDir = (home) => path.join(home, PRIVATE_DIR);
-// Where adb keeps the key it pairs phones with (ANDROID_USER_HOME, else the user's .android folder).
-export const adbKeyFile = () => path.join(process.env.ANDROID_USER_HOME || path.join(os.homedir(), '.android'), 'adbkey');
+// Where adb keeps the keys it pairs phones with and the phones it knows: the user's .android folder and an
+// ANDROID_USER_HOME, whole (3.8.2 review M2). Orb's own adb uses one inside core\datos (src/engine/android.mjs).
+export const adbHomes = () => [...new Set([path.join(os.homedir(), '.android'), process.env.ANDROID_USER_HOME].filter((d) => d && path.isAbsolute(d)))];
 let keys = null; // the folder of the app's copies of the sealed secrets, when the app gives it
 export function guardOutside({ mirror } = {}) {
   if (typeof mirror === 'string' && path.isAbsolute(mirror)) keys = path.dirname(mirror);
@@ -53,11 +54,12 @@ export function guardOutside({ mirror } = {}) {
   // Never one that holds the workspace itself (that would shut the agents out of their projects).
   // 3.8.1 (owner's decision 19 g): and the owner's private folder at the top of the workspace (<workspace>\personal),
   // which no agent may read or touch (it is not a project).
-  // 3.8.2: and adb's private key (<user>\.android\adbkey): with it any program could reach a paired phone by itself.
-  setGuardedRoots([...[backupRoot(), backupDir(ctx.home, ctx.config), keys, state].filter((d) => d && !inside(d, ctx.home)), privateDir(ctx.home), adbKeyFile()]);
+  // 3.8.2: and adb's folders (its private key: with it any program could reach a paired phone by itself).
+  setGuardedRoots([...[backupRoot(), backupDir(ctx.home, ctx.config), keys, state].filter((d) => d && !inside(d, ctx.home)), privateDir(ctx.home), ...adbHomes()]);
   // 3.8.1: and the folder Orb is installed in (writable by the user under a per-user install): agents may read it only.
+  // 3.8.2 (review A2): so is Orb's adb when it lives outside core (an android\adb-tools kept at the top of the workspace).
   const app = appInstallDir();
-  setAppRoots(app && !inside(app, ctx.home) ? [app] : []);
+  setAppRoots([...(app && !inside(app, ctx.home) ? [app] : []), ctx.paths.adb]);
 }
 
 // The folder of an installed Orb (Orb.exe with node\node.exe and app\ beside it: ORB_NODE, set by the app). Not a build of
