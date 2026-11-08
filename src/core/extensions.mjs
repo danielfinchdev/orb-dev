@@ -6,8 +6,8 @@
 //     `skills` ([{ name, enabled, source }]) and `mcpServers` (the connectors, as before, with `source`). A folder with no
 //     entry is off.
 //   - How agents get the skills on (exposeSkills): core\skills\.activas is a Claude Code plugin made by Orb
-//     (.claude-plugin\plugin.json + skills\<name>, a junction to core\skills\<name> for each skill that is on; a copy where
-//     junctions cannot be made). Claude gets it as a plugin (SDK `plugins`), Codex as an extra root of skills (app-server
+//     (.claude-plugin\plugin.json + skills\<name>, a copy of core\skills\<name> for each skill that is on, never a junction,
+//     its SKILL.md with a frontmatter Orb writes: only name and description). Claude gets it as a plugin (SDK `plugins`), Codex as an extra root of skills (app-server
 //     `skills/extraRoots/set`); the other agents get the list (name, description, path of its SKILL.md) in their brief.
 //     Agents read core\skills (src/core/guard.mjs); nobody but Orb writes there.
 //   - Bringing one in (importExtension): from a folder (copied) or a git repository (cloned, https only), checked
@@ -116,9 +116,10 @@ export function mcpDescription(dir) {
 }
 
 // ---- skills: what SKILL.md says (its frontmatter: name and description; a value may go on over the next lines).
+const FRONTMATTER = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---\s*(?:\r?\n|$)/;
 export function skillMeta(dir) {
   let text; try { text = fs.readFileSync(path.join(dir, SKILL_FILE), 'utf8'); } catch { return null; }
-  const m = /^﻿?---\r?\n([\s\S]*?)\r?\n---\s*(?:\r?\n|$)/.exec(text);
+  const m = FRONTMATTER.exec(text);
   const fm = {};
   if (m) {
     let key = null;
@@ -197,29 +198,26 @@ export function copyTree(src, dest, { kind = 'mcp', skip = SKIP, links = 'refuse
   return { files, bytes };
 }
 // What a skill's SKILL.md asks of Claude Code beyond its text: tools it may use without asking (allowed-tools), hooks,
-// or commands run when it loads (!`…`). Checked with the real Claude Code: allowed-tools skips Orb's guard (canUseTool),
-// so the copy agents load leaves it out (exposeSkills); the commands are off (src/agents/claude.mjs ›
-// disableSkillShellExecution) and so are hooks (disableAllHooks).
+// or commands run when it loads (!`…`). Only for the list (the row warns): Claude never gets these, whatever the YAML
+// says (exposeSkills gives it a SKILL.md whose frontmatter Orb writes); the commands are off anyway
+// (src/agents/claude.mjs › disableSkillShellExecution) and so are hooks (disableAllHooks). Any spelling counts (a quoted
+// key, a merge key, an explicit key): the frontmatter's text is searched, not parsed.
 export function skillAsks(dir) {
   let text; try { text = fs.readFileSync(path.join(dir, SKILL_FILE), 'utf8'); } catch { return null; }
-  const m = /^﻿?---\r?\n([\s\S]*?)\r?\n---\s*(?:\r?\n|$)/.exec(text);
+  const m = FRONTMATTER.exec(text);
   const fm = m ? m[1] : '';
   const body = m ? text.slice(m[0].length) : text;
-  const asks = { tools: /^allowed[-_]tools\s*:/im.test(fm), hooks: /^hooks\s*:/im.test(fm), commands: /!`[^`\n]+`/.test(body) };
+  const asks = { tools: /allowed[-_\s]?tools/i.test(fm), hooks: /\bhooks\b/i.test(fm), commands: /!`[^`\n]+`/.test(body) };
   return asks.tools || asks.hooks || asks.commands ? asks : null;
 }
-// SKILL.md without allowed-tools and hooks in its frontmatter (and the lines that go on with them).
-export function withoutPermissions(text) {
-  const m = /^(﻿?---\r?\n)([\s\S]*?)(\r?\n---\s*(?:\r?\n|$))/.exec(text);
-  if (!m) return text;
-  const out = []; let dropping = false;
-  for (const line of m[2].split(/\r?\n/)) {
-    if (/^[A-Za-z_][\w-]*\s*:/.test(line)) dropping = /^(allowed[-_]tools|hooks)\s*:/i.test(line);
-    else if (dropping && /^(\s|-)/.test(line)) continue;
-    else dropping = false;
-    if (!dropping) out.push(line);
-  }
-  return `${m[1]}${out.join('\n')}${m[3]}${text.slice(m[0].length)}`;
+// The SKILL.md Claude gets: a frontmatter written by Orb with only the name and the description (JSON strings, which YAML
+// reads as they are), then the skill's text as it is. Nothing of the original frontmatter reaches Claude: a key Orb's
+// reading misses (allowed-tools in quotes or through a YAML merge key, checked with the real Claude Code) cannot either.
+export function orbSkillText(text, { name, description }) {
+  const m = /^\uFEFF?---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/.exec(text);
+  const body = m ? text.slice(m[0].length) : String(text).replace(/^\uFEFF/, '');
+  const clean = (v) => String(v ?? '').replace(/[\u0000-\u001f\u007f\u0085\u2028\u2029]+/g, ' ').trim();
+  return `---\nname: ${JSON.stringify(clean(name))}\ndescription: ${JSON.stringify(clean(description))}\n---\n${body}`;
 }
 // A skill: SKILL.md with a valid name (the one given, or its folder's) and a description. → { name, description }
 export function checkSkill(dir, { name = null, tr = null } = {}) {
@@ -414,8 +412,11 @@ export function connectorSafe(core, server) {
 
 // ---- what the agents load (core\skills\.activas)
 // The skills that are on, checked as when they came in (a link, a junction or a folder out of core, a wrong name, too
-// big: left out). A skill that asks for tools without asking or for hooks gets a copy without that (skillAsks);
-// the others, a junction to their folder. → { plugin, root, list: [{ name, description, file }], skipped: [name] }
+// big: left out). Each one is always a COPY made by Orb (never a junction to its folder): its files as they are, and its
+// SKILL.md with a frontmatter Orb writes (orbSkillText: only name and description). A copy is kept while neither the
+// skill nor the copy changed (their fingerprints, in .activas\.copias.json); else it is made again.
+// → { plugin, root, list: [{ name, description, file }], skipped: [name] } (file: the copy's SKILL.md)
+const COPIES = '.copias.json';
 export function exposeSkills(core, config = {}) {
   const P = extensionPaths(core);
   const into = path.join(P.live, 'skills');
@@ -424,42 +425,39 @@ export function exposeSkills(core, config = {}) {
   const want = JSON.stringify({ name: PLUGIN_NAME, description: 'Skills de Orb (core\\skills)', version: '1.0.0' }, null, 2);
   try { if (fs.readFileSync(manifest, 'utf8') !== want) throw new Error('changed'); } catch { fs.mkdirSync(path.dirname(manifest), { recursive: true }); fs.writeFileSync(manifest, want); }
   const on = new Set((config.skills ?? []).filter((s) => s?.enabled === true && SKILL_NAME.test(s.name ?? '')).map((s) => s.name));
-  const list = []; const skipped = []; const strip = new Set();
+  const list = []; const skipped = [];
   for (const name of [...on].sort()) {
     const dir = path.join(P.skills, name);
     let meta = null;
     try { if (!realFolder(P.skills, dir)) throw new Error('link'); meta = checkSkill(dir, { name }); } catch { on.delete(name); if (exists(dir)) skipped.push(name); continue; }
-    const asks = skillAsks(dir);
-    if (asks?.tools || asks?.hooks) strip.add(name);
-    list.push({ name, description: meta.description, file: path.join(dir, SKILL_FILE) });
+    list.push({ name, description: meta.description, file: path.join(into, name, SKILL_FILE) });
   }
+  // What is there and is not a copy of a skill that is on goes (a link: only the link, never what it points to).
   let have = []; try { have = fs.readdirSync(into, { withFileTypes: true }); } catch { have = []; }
   for (const e of have) {
     const at = path.join(into, e.name);
     let st; try { st = fs.lstatSync(at); } catch { continue; }
-    if (st.isSymbolicLink()) {
-      const real = (p) => { try { return norm(fs.realpathSync.native(p)); } catch { return null; } };
-      const target = real(at);
-      if (on.has(e.name) && !strip.has(e.name) && target && target === real(path.join(P.skills, e.name))) continue;
-      fs.unlinkSync(at); // the link only (a junction or a symlink): never what it points to
-    } else fs.rmSync(at, { recursive: true, force: true }); // a copy (no links in it): made again below
+    if (st.isSymbolicLink()) fs.unlinkSync(at);
+    else if (!on.has(e.name) || !st.isDirectory()) fs.rmSync(at, { recursive: true, force: true });
   }
-  const copy = (name) => {
-    const at = path.join(into, name);
-    copyTree(path.join(P.skills, name), at, { kind: 'skill' });
-    const f = path.join(at, SKILL_FILE);
-    if (strip.has(name)) fs.writeFileSync(f, withoutPermissions(fs.readFileSync(f, 'utf8')));
-  };
-  for (const name of on) {
-    const at = path.join(into, name);
-    if (exists(at)) continue;
+  const marks = path.join(P.live, COPIES);
+  let known = {}; try { known = JSON.parse(fs.readFileSync(marks, 'utf8')) ?? {}; } catch { known = {}; }
+  const made = {};
+  const print = (dir) => { try { return fingerprint(dir); } catch { return null; } };
+  for (const s of list) {
+    const src = path.join(P.skills, s.name); const at = path.join(into, s.name);
     try {
-      if (strip.has(name)) copy(name);
-      else { try { fs.symlinkSync(path.join(P.skills, name), at, 'junction'); } catch { copy(name); } }
-    } catch { skipped.push(name); fs.rmSync(at, { recursive: true, force: true }); }
+      const from = fingerprint(src);
+      if (known[s.name]?.from === from && exists(at) && print(at) === known[s.name].copy) { made[s.name] = known[s.name]; continue; }
+      fs.rmSync(at, { recursive: true, force: true });
+      copyTree(src, at, { kind: 'skill' });
+      const f = path.join(at, SKILL_FILE);
+      fs.writeFileSync(f, orbSkillText(fs.readFileSync(f, 'utf8'), s));
+      made[s.name] = { from, copy: fingerprint(at) };
+    } catch { skipped.push(s.name); fs.rmSync(at, { recursive: true, force: true }); }
   }
-  const out = list.filter((s) => !skipped.includes(s.name)).map((s) => (strip.has(s.name) ? { ...s, file: path.join(into, s.name, SKILL_FILE) } : s));
-  return { plugin: P.live, root: into, list: out, skipped };
+  try { fs.writeFileSync(marks, JSON.stringify(made)); } catch { /* made again next time */ }
+  return { plugin: P.live, root: into, list: list.filter((s) => !skipped.includes(s.name)), skipped };
 }
 
 // The lines a brief carries for an agent that has no skills of its own (Cursor, the ACP agents).
