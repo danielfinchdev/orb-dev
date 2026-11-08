@@ -353,6 +353,9 @@ mod tests {
     let project = home.join("web").join("demo");
     std::fs::create_dir_all(&project).unwrap();
     std::fs::write(project.join("a.txt"), "x").unwrap();
+    // Work on the long form of the temp folder: a runner TEMP can be an 8.3 short name (C:\Users\RUNNER~1).
+    let home = PathBuf::from(plain(&std::fs::canonicalize(&home).unwrap()));
+    let project = home.join("web").join("demo");
     let real = checked_folder(&home, &project.to_string_lossy()).expect("la carpeta del proyecto");
     assert_eq!(plain(&real), plain(&std::fs::canonicalize(&project).unwrap()));
     assert!(checked_folder(&home, &home.join("web").to_string_lossy()).is_none(), "la categoría");
