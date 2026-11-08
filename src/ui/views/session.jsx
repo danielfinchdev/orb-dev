@@ -2,7 +2,7 @@
 // files appear as the agent works, risky actions wait for a click (approval cards), messages written meanwhile correct the
 // agent on the fly or wait in a queue, and the context meter shows how full the conversation is. Task runs open here too.
 import { memo, useEffect, useMemo, useState } from 'react';
-import { Info, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, X, ListTodo, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Ellipsis, Gamepad2, Smartphone } from 'lucide-react';
+import { Info, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, RefreshCw, X, ListTodo, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Ellipsis, Gamepad2, Smartphone } from 'lucide-react';
 import { unlockCore } from '@/lib/core-access.js';
 import { toast } from 'sonner';
 import { Markdown } from '@/components/markdown.jsx';
@@ -26,6 +26,7 @@ import { baseName, cn } from '@/lib/utils.js';
 import { useT, t, useLocale, currentLocale } from '@/lib/i18n.js';
 import { sameBlock } from '@/lib/memo.js';
 import { kindOf } from '../../core/attach-kind.mjs';
+import { reloadWait, markReloaded } from '@/lib/usage-reload.js';
 
 // Items → blocks: a tool call and its result become one block (the latest call with that id gets the result).
 function toBlocks(items, t) {
@@ -221,10 +222,21 @@ function UsagePanel({ context, pct }) {
   const version = useStore((s) => s.version);
   const [rows, setRows] = useState(null);
   useEffect(() => { let alive = true; call('usage.now').then((r) => alive && setRows(r)).catch(() => alive && setRows([])); return () => { alive = false; }; }, [version]);
+  // 3.8.2: «Recargar»: the agents ask their plan now; a spinner meanwhile, and again only after 20 s (lib/usage-reload.js).
+  const [reloading, setReloading] = useState(false);
+  const [wait, setWait] = useState(() => reloadWait());
+  useEffect(() => { if (!wait) return undefined; const id = setTimeout(() => setWait(reloadWait()), wait); return () => clearTimeout(id); }, [wait]);
+  const reload = async () => {
+    if (reloading || reloadWait()) return;
+    setReloading(true); markReloaded();
+    try { const r = await act(call('usage.refresh')); if (r) setRows(r); }
+    finally { setReloading(false); setWait(reloadWait()); }
+  };
   return (
     <div className="grid w-80 gap-3 p-2.5 text-[13px]" data-testid="usage-panel">
       <div className="grid gap-1.5">
-        <div className="flex items-baseline justify-between gap-3"><span className="text-muted-foreground">{t('session.usage.context')}</span><span className="tabular-nums">{short(context.used)} / {short(context.size)} ({pct} %)</span></div>
+        <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">{t('session.usage.context')}</span><span className="ml-auto tabular-nums">{short(context.used)} / {short(context.size)} ({pct} %)</span>
+          <Tip label={t('session.usage.reload')}><Button size="icon-sm" variant="ghost" className="size-6" onClick={reload} disabled={reloading || wait > 0} aria-label={t('session.usage.reload')} aria-busy={reloading} data-testid="usage-reload">{reloading ? <Spinner className="size-3" /> : <RefreshCw className="size-3.5" />}</Button></Tip></div>
         <UsageBar pct={pct} />
         <p className="text-muted-foreground text-xs leading-snug">{t('session.contextTip')}</p>
       </div>

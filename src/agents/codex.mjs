@@ -360,6 +360,11 @@ export function createLive(o) {
   live.setModel = (m) => { model = m || null; }; // applied on the next turn/start
   live.setPermission = (p) => { permission = p; };
   live.close = () => { if (closed && !child) return; closed = true; approvals.clear(); peer?.close(); killTree(child); };
+  // 3.8.2: the plan's windows now (the usage panel's «Recargar»), handled as if Codex had sent them.
+  live.refreshUsage = async () => {
+    if (closed || !peer) return false;
+    try { const r = await peer.request('account/rateLimits/read', {}, { timeoutMs: 8000 }); if (!r?.rateLimits) return false; onNotification('account/rateLimits/updated', { rateLimits: r.rateLimits }); return true; } catch { return false; }
+  };
   live.isClosed = () => closed;
   return live;
 }

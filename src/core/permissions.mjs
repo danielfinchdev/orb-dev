@@ -22,7 +22,7 @@ export const METHODS = Object.freeze({
   // 3.8.1: this PC's tools, in the engine (src/engine/api-app.mjs)
   'app.openTerminal': 'pc', 'app.editors': 'pc', 'app.openIn': 'pc', 'app.runAction': 'pc', 'app.feedbackSend': 'pc', 'app.moreApps': 'pc',
   'system.check': 'pc', 'installer.check': 'pc', 'installer.progress': 'pc', 'installer.start': 'pc',
-  'activity.list': 'remote', 'usage.get': 'remote', 'usage.now': 'remote', 'models.guide': 'remote', 'models.catalog': 'remote',
+  'activity.list': 'remote', 'usage.get': 'remote', 'usage.now': 'remote', 'usage.refresh': 'remote', 'models.guide': 'remote', 'models.catalog': 'remote',
   'mentions.options': 'remote', 'approvals.list': 'remote',
   // this PC's tools
   'android.status': 'pc', 'android.install': 'pc',

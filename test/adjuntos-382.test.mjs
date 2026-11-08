@@ -11,6 +11,8 @@ import { ctx } from '../src/core/context.mjs';
 import { isOrbData } from '../src/core/guard.mjs';
 import { kindOf, placeAttachments, prepareAttachments, extractText, zipEntries, probeInfo, evenTimes, extractFrames, ATTACH_DIR, ATTACH_MAX, FFMPEG } from '../src/engine/attachments.mjs';
 import { micMode } from '../src/ui/lib/mic.js';
+import { reloadWait, markReloaded, RELOAD_GAP_MS } from '../src/ui/lib/usage-reload.js';
+import { Sessions } from '../src/engine/sessions.mjs';
 
 const ui = (...p) => fs.readFileSync(path.join(ROOT, 'src', 'ui', ...p), 'utf8');
 const src = (...p) => fs.readFileSync(path.join(ROOT, 'src', ...p), 'utf8');
@@ -186,4 +188,29 @@ test('the microphone per platform (D3): Win+H on Windows, none on a phone', () =
   assert.match(rust, /let keys = \[key\(VK_LWIN, false\), key\(h, false\), key\(h, true\), key\(VK_LWIN, true\)\];/);
   for (const f of ['build.rs', path.join('capabilities', 'main.json')]) assert.match(fs.readFileSync(path.join(ROOT, 'src-tauri', f), 'utf8'), /app_dictate|allow-app-dictate/, f);
   assert.doesNotMatch(ui('lib', 'app-bridge.js'), /orb\.dictate =/);
+});
+
+test('«Recargar» in the usage panel: spinner, 20 s between reloads, the agents asked now', async () => {
+  assert.equal(reloadWait(RELOAD_GAP_MS, 0), 0);
+  markReloaded(50_000);
+  assert.equal(reloadWait(55_000), RELOAD_GAP_MS - 5000);
+  assert.equal(reloadWait(50_000 + RELOAD_GAP_MS), 0);
+  const session = ui('views', 'session.jsx');
+  const panel = session.slice(session.indexOf('function UsagePanel'), session.indexOf('export function ContextMeter'));
+  assert.match(panel, /disabled=\{reloading \|\| wait > 0\} aria-label=\{t\('session\.usage\.reload'\)\} aria-busy=\{reloading\} data-testid="usage-reload">\{reloading \? <Spinner/);
+  assert.match(panel, /call\('usage\.refresh'\)/);
+  const api = src('engine', 'api.mjs');
+  assert.match(api, /'usage\.refresh': async \(\) => \{\s*if \(Date\.now\(\) - usageAskedAt >= 20_000\)/);
+  assert.match(src('core', 'permissions.mjs'), /'usage\.refresh': 'remote'/);
+  // Every open agent process is asked; one without the call (or failing) is skipped.
+  const asked = [];
+  const lives = new Map([
+    ['a', { live: { refreshUsage: async () => { asked.push('a'); return true; } } }],
+    ['b', { live: {} }],
+    ['c', { live: { refreshUsage: () => { throw new Error('closed'); } } }]
+  ]);
+  const promises = Sessions.prototype.refreshUsage.call({ lives });
+  assert.equal(promises.length, 1);
+  await Promise.all(promises);
+  assert.deepEqual(asked, ['a']);
 });

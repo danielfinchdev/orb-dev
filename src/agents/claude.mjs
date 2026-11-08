@@ -217,17 +217,19 @@ export function createLive(o) {
   // 2.6: the plan's windows (session, weekly, weekly of a model) as /usage shows them: Claude only sends them by itself
   // near a limit, so they are asked after a turn, at most every 90 s (experimental SDK call: best effort, any version).
   let usageAt = 0;
-  const planUsage = () => {
+  // 3.8.2: force (the usage panel's «Recargar») asks now, whatever the 90 s; the engine limits how often (usage.refresh).
+  const planUsage = ({ force = false } = {}) => {
     const ask = query?.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET;
-    if (typeof ask !== 'function' || Date.now() - usageAt < 90_000) return;
+    if (typeof ask !== 'function' || (!force && Date.now() - usageAt < 90_000)) return Promise.resolve(false);
     usageAt = Date.now();
-    Promise.resolve(ask.call(query, { skipBehaviors: true })).then((u) => {
+    return Promise.resolve(ask.call(query, { skipBehaviors: true })).then((u) => {
       const r = u?.rate_limits;
-      if (!r) return;
+      if (!r) return false;
       const send = (window, w) => { if (w?.utilization == null) return; onEvent({ type: 'rate', status: 'allowed', resetAt: w.resets_at ? Date.parse(w.resets_at) || null : null, utilization: w.utilization / 100, window }); };
       for (const k of ['five_hour', 'seven_day', 'seven_day_opus', 'seven_day_sonnet']) send(k, r[k]);
       for (const m of r.model_scoped ?? []) if (m?.display_name) send(`seven_day_${String(m.display_name).toLowerCase().replace(/[^a-z0-9]+/g, '_')}`, m);
-    }).catch(() => {});
+      return true;
+    }).catch(() => false);
   };
 
   const start = async () => {
@@ -339,6 +341,7 @@ export function createLive(o) {
   live.setModel = async (model) => { o.model = model; try { await query?.setModel(model || undefined); } catch { /* next start */ } };
   live.setPermission = async (p) => { permission = p; try { await query?.setPermissionMode(permissionModeOf(p)); } catch { /* next start */ } };
   live.close = () => { if (closed && !query) return; closed = true; approvals.clear(); input.close(); try { query?.close(); } catch { /* gone */ } try { abort.abort(); } catch { /* gone */ } try { killTree(child); } catch { /* gone */ } };
+  live.refreshUsage = () => (closed ? Promise.resolve(false) : planUsage({ force: true }));
   live.isClosed = () => closed;
   return live;
 }

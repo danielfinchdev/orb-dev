@@ -46,6 +46,7 @@ export default {
   'session.usage.resetOn': 'Se restablece el {when}',
   'session.usage.resetNow': 'Se restablece ahora',
   'session.usage.noData': 'Su uso aparecerá cuando el agente responda.',
+  'session.usage.reload': 'Recargar el uso',
   'session.details': 'Detalles de la conversación',
   'session.detailsShort': 'Detalles',
   'session.reasoningOf': 'razonamiento {level}',

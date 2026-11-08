@@ -469,6 +469,9 @@ export class Sessions {
     }
   }
 
+  // 3.8.2: every open agent process asks its plan's usage now (the usage panel's «Recargar»). → promises
+  refreshUsage() { return [...this.lives.values()].map((e) => { try { return e.live.refreshUsage?.(); } catch { return null; } }).filter(Boolean); }
+
   stopAll() { for (const id of this.running.keys()) this.stop(id); for (const id of [...this.lives.keys()]) this.closeLive(id); clearInterval(this.sweeper); }
 
   // One turn. options: images (absolute paths), prompt (what the agent receives, if it differs from what the user typed),

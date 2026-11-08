@@ -142,6 +142,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     return android.tool(s, String(args.tool ?? ''), args.args);
   };
   const data = dataApi(shared); // 3.6 (WS5): backups
+  let usageAskedAt = 0; // usage.refresh
 
   const methods = {
     'app.state': () => ({
@@ -655,6 +656,15 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     'usage.get': () => { const avail = board.availableAgents(); return usageReport(board).filter((u) => !avail || avail.includes(u.agent)); },
     // 2.6: the accounts working right now (the assistant's brain and the agents' running sessions), with the windows of
     // their plan the agents reported (session, weekly…), for the panel of the context ring.
+    // 3.8.2: «Recargar» in the usage panel: the open agents ask their plan now (at most every 20 s), then usage.now.
+    'usage.refresh': async () => {
+      if (Date.now() - usageAskedAt >= 20_000) {
+        usageAskedAt = Date.now();
+        const asks = [...sessions.refreshUsage(), ...orchestrator.refreshUsage()];
+        await Promise.race([Promise.allSettled(asks), new Promise((r) => { setTimeout(r, 10_000).unref?.(); })]);
+      }
+      return methods['usage.now']();
+    },
     'usage.now': () => {
       // 3.2: the brain of the conversations answering now (or the one new conversations use).
       const brain = orchestrator.info(null); const answering = orchestrator.states().find((x) => x.busy);

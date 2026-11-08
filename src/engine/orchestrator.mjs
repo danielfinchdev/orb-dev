@@ -443,6 +443,8 @@ export class Orchestrator {
   get logFile() { return path.join(ctx.paths.runs, 'asistente.log'); }
   // How many conversations may be answered at the same time (Ajustes: orchestrator.parallel).
   get maxBusy() { return Math.min(Math.max(Number(ctx.config.orchestrator?.parallel) || 3, 1), 6); }
+  // 3.8.2: the assistant's open agent processes ask their plan's usage now (usage.refresh). → promises
+  refreshUsage() { return [...this.lanes.values()].map((l) => { try { return l.live?.refreshUsage?.(); } catch { return null; } }).filter(Boolean); }
   busyCount() { let n = 0; for (const l of this.lanes.values()) if (l.busy) n++; return n; }
   get busy() { return this.busyCount() > 0; }
   lane(id) { const key = Number(id); let l = this.lanes.get(key); if (!l) { l = new Lane(this, key); this.lanes.set(key, l); } return l; }
