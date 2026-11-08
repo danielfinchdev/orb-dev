@@ -302,6 +302,8 @@ who a new conversation is with:
   repository with no commits (just `git init`) also works: the snapshot is a first commit with no parent.
 - `aislada`: its own branch and copy (`prepareWorkdir`, git worktree). When it finishes an automatic commit is made,
   which is blocked if there are files that look like secrets.
+  Once the user joins it («Unir», `projects.merge`) or discards it (`tasks.discardBranch`), its copy and branch are
+  removed and the task's `branch` is emptied (`dropCopy`), so copies do not pile up and Tasks stops offering them.
 
 **Failures explained.** `src/core/agent-errors.mjs` translates the failure:
 - plan without access, not signed in (including "API key is missing"), model not available, no network or missing program.
@@ -909,7 +911,9 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   zone.
 - **Refreshes as changes:** the lists of every refresh (`tasks.list`, `conversations.list`, `sessions.list`,
   `projects.list` and the chat list's `inbox.list`) take an optional `since: { epoch, v }`. The engine keeps one `Feed`
-  per method and parameters (`src/core/feed.mjs`, `src/engine/feeds.mjs`): each row carries the version at which its JSON
+  per kind of caller (this PC; linked devices in a small cache of their own, so they never push the PC's feeds out),
+  method and the parameters that change the list, normalised (any other is ignored) (`src/core/feed.mjs`,
+  `src/engine/feeds.mjs`): each row carries the version at which its JSON
   last changed, and gone rows, the order of the keys and the rest of the reply (`meta`) carry one too, so a caller gets
   only what moved since its version (`{ feed, epoch, v, base, rows, gone?, order?, meta? }`), or the whole list (`full`)
   when it is new, of another engine run or too far behind. In a feed, `tasks.list` rows are compact (no brief, result,
