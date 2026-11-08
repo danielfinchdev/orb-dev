@@ -7,6 +7,7 @@ import { bumpNav, navTicket, stillHere } from './nav.js';
 import { cleanRoute, backStep } from './phone-nav.js';
 import { t } from './i18n.js';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES } from '../../core/appearance.mjs';
+import { applyFeed, sinceOf } from '../../core/feed.mjs';
 
 // The bridge to the PC: the desktop app's (src/ui/lib/tauri-bridge.js), or the phone's web bridge (src/ui/lib/web-bridge.js). Read when used, not when
 // this module loads: the bundler may load this module before the phone's bridge has defined window.orb.
@@ -111,10 +112,17 @@ export function resetRoute() {
 // conversation with Orbe). Always this Orb's (the conversations live here, never on a linked server). An Orb without
 // inbox.list leaves it empty: the list is then made from the conversations alone (lib/inbox.js › orbItems).
 let orbTimer = null;
-export async function loadOrbInbox() {
-  try { const orbInbox = await call('inbox.list', { zone: 'orb' }); setState({ orbInbox }); return orbInbox; }
-  catch { setState({ orbInbox: { zone: 'orb', items: [], sections: [], unread: 0, fallback: true } }); return null; }
-}
+export const loadOrbInbox = oneAtATime(async () => {
+  try {
+    const out = await feedCall('inbox.list', { zone: 'orb' }, (x) => x.key);
+    const now = getState().orbInbox;
+    // an engine of before 3.8.1: the whole object; nothing moved: the same object (nothing draws again)
+    const orbInbox = out.plain !== undefined ? out.plain : out.list && (out.changed || !now || now.fallback) ? { ...out.meta, items: out.list } : now;
+    if (orbInbox !== now) setState({ orbInbox });
+    return orbInbox;
+  }
+  catch { feeds['inbox.list'] = null; setState({ orbInbox: { zone: 'orb', items: [], sections: [], unread: 0, fallback: true } }); return null; }
+});
 export function loadOrbInboxSoon(ms = 200) { clearTimeout(orbTimer); orbTimer = setTimeout(() => { loadOrbInbox(); }, ms); }
 export async function orbAct(method, params, okText) { const r = await act(call(method, params), okText); loadOrbInboxSoon(0); return r; }
 // The info pane of the Orb zone (views/orb/info.jsx): { type: 'chat' } (the conversation on screen) or { type: 'project',
@@ -122,18 +130,47 @@ export async function orbAct(method, params, okText) { const r = await act(call(
 export const openOrbInfo = (info) => setState({ orbInfo: info });
 export const closeOrbInfo = () => setState({ orbInfo: null });
 
-export async function refresh() {
-  const [app, sessions, projects, tasks, conversations] = await Promise.all([call('app.state'), call('sessions.list'), call('projects.list'), call('tasks.list', { limit: 200 }), call('conversations.list')]);
-  setState((s) => ({ app, sessions, projects, tasks, conversations, ready: true, version: s.version + 1 })); // version: views refetch their own data when it moves
+// 3.8.1 (H4c): the lists of every refresh come as changes since what this window holds (src/core/feed.mjs): only the
+// rows that moved travel (also to the phone, over its encrypted link), and a list where nothing moved keeps the same
+// array, so the screens that read it draw nothing again. One call of each at a time (oneAtATime): a late answer to an
+// older request never undoes a newer one. An engine of before 3.8.1 answers whole (applyFeed takes it as it comes).
+const feeds = {};
+async function feedCall(method, params, key, again = false) {
+  const res = await call(method, { ...params, since: sinceOf(feeds[method]) });
+  const out = applyFeed(feeds[method], res, key);
+  feeds[method] = out.state;
+  if (out.again && !again) return feedCall(method, params, key, true); // could not be applied: the whole list
+  return out;
+}
+const listOf = async (method, params = {}, key = undefined) => (await feedCall(method, params, key)).list;
+// fn runs once at a time; asked while it runs, it runs once more after it (and every caller waits for that one).
+function oneAtATime(fn) {
+  let running = null; let queued = null;
+  const run = () => {
+    if (!running) { running = fn().finally(() => { running = null; }); return running; }
+    queued ??= running.catch(() => {}).then(() => { queued = null; return run(); });
+    return queued;
+  };
+  return run;
+}
+
+const REFRESHED = ['sessions.list', 'projects.list', 'tasks.list', 'conversations.list'];
+export const refresh = oneAtATime(async () => {
+  let app, sessions, projects, tasks, conversations;
+  try { [app, sessions, projects, tasks, conversations] = await Promise.all([call('app.state'), listOf('sessions.list'), listOf('projects.list', {}, (p) => p.name), listOf('tasks.list', { limit: 200 }), listOf('conversations.list')]); }
+  catch (error) { for (const m of REFRESHED) feeds[m] = null; throw error; } // what did arrive is not shown: the next refresh asks for it whole
+  // version: views refetch their own data when it moves. A list missing (an answer that came too late) stays as it was.
+  setState((s) => ({ app, sessions: sessions ?? s.sessions, projects: projects ?? s.projects, tasks: tasks ?? s.tasks, conversations: conversations ?? s.conversations, ready: true, version: s.version + 1 }));
+  const { projects: all } = getState();
   // 3.2: the projects' icons, again only when the list of projects changes (or one is set by hand: loadProjectIcons).
-  const names = projects.map((p) => p.name).join('|');
+  const names = all.map((p) => p.name).join('|');
   if (names !== iconsFor) loadProjectIcons(names);
   let phoneTheme = null; if (bridge.mobile) { try { phoneTheme = localStorage.getItem('orb.theme'); } catch { /* none */ } }
   applyTheme(phoneTheme || app.config.ui?.theme);
   applyAppearance(app.config.ui);
   document.title = app.config.assistantName;
   document.documentElement.lang = uiLanguage(getState()) === 'en' ? 'en' : 'es';
-}
+});
 // The app's language (Ajustes › General).
 export const uiLanguage = (s) => s.app?.config?.language || 'es';
 
@@ -143,12 +180,17 @@ export function loadProjectIcons(names = iconsFor) {
   return call('projects.icons').then((projectIcons) => setState({ projectIcons })).catch(() => {});
 }
 
-let timer = null; let missed = false;
+let timer = null; let missed = false; let firstAsk = 0;
 // 3.0: while the window is not visible (minimised, another tab on the phone) nothing is fetched; one refresh when it
-// shows again. The notifications of the PC come from the main process, not from here.
+// shows again. The notifications of the PC come from the main process, not from here. 3.8.1 (H4c): the engine's events
+// in a row make one refresh 120 ms after the last one, and never more than 1 s after the first one (a steady stream of
+// events no longer puts it off for ever).
 export function refreshSoon() {
   if (document.hidden) { missed = true; return; }
-  clearTimeout(timer); timer = setTimeout(() => refresh().catch(() => {}), 120);
+  const now = Date.now();
+  if (!timer) firstAsk = now;
+  clearTimeout(timer);
+  timer = setTimeout(() => { timer = null; refresh().catch(() => {}); }, Math.max(0, Math.min(120, firstAsk + 1000 - now)));
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && missed) { missed = false; refreshSoon(); } });
 

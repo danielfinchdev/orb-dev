@@ -138,7 +138,10 @@ const FINISHED_GONE_MS = 30 * 24 * 3_600_000;
 // 3.8.1: what the last pass found with nothing to change, per board: the engine looks every 5 s (and each list asked for
 // every 2 s), and the real path of every folder (folderKey) costs a disk lookup per part of the path (~65 ms with 50
 // projects). The same projects, folders, existence and lists as then: nothing can have changed, nothing is looked up.
+// What the fingerprint cannot see (a folder of the path that starts pointing elsewhere with the same names) is looked
+// at anyway by a whole pass at least once a minute (SETTLED_MS).
 const settled = new WeakMap();
+const SETTLED_MS = 60_000;
 // Whether a project's folder is still where a project of the list may be. Inside the workspace: it exists and is in a
 // category. Outside: a linked folder that exists, or whose whole drive is missing (a disk unplugged for a while).
 const inPlace = (home, p) => {
@@ -178,7 +181,8 @@ export function syncProjects(board) {
   settleDeleting(board, home);
   const deleting = new Set(deletingProjects(board).map((x) => x.name));
   const print = fingerprint(board, home, ignored, deleting);
-  if (settled.get(board) === print) return false;
+  const last = settled.get(board);
+  if (last?.print === print && Date.now() - last.at < SETTLED_MS) return false;
   let changed = false; let again = false; // again: something to look at again next time (changed, or failed for now)
   // First what is gone, so a folder found again (or moved into the workspace) gets its own name, not «name (2)».
   // Inside the workspace: a folder deleted or no longer in a category. Outside: a linked folder that no longer exists
@@ -213,6 +217,6 @@ export function syncProjects(board) {
   // Folders not listed that no longer exist leave the list (board.addProject takes out the ones added again).
   const others = [...ignored].filter((k) => !finished.some((x) => x.key === k));
   if (others.some((k) => !present.has(k))) { board.settingJson(IGNORED_PROJECTS, others.filter((k) => present.has(k))); again = true; }
-  if (changed || again) settled.delete(board); else settled.set(board, print);
+  if (changed || again) settled.delete(board); else settled.set(board, { print, at: Date.now() });
   return changed;
 }

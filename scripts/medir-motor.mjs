@@ -10,7 +10,8 @@
 // Memory: working set and private bytes of the engine's process (Get-Process). CPU at rest: the CPU time the engine used
 // during --idle seconds, 5 s after its start. Latency: --calls sequential calls of each method (p50 / p95 / bytes of the
 // JSON reply) and of the window's refresh (store.js › refresh: five calls at once). Load: the latency calls, then a
-// coordinated conversation with the fake agent that creates and runs tasks; memory and CPU after it.
+// coordinated conversation with the fake agent that creates and runs tasks; memory and CPU after it. Refresh payloads
+// (H4c): bytes and time of one refresh the old way and as feeds, also as a phone gets it (see feeds()).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -140,6 +141,52 @@ async function latency(e) {
   return res;
 }
 
+// 3.8.1 (H4c): what one refresh of the window moves (its five calls plus the chat list, which it loads again on every
+// refresh), the old way (whole replies) and as feeds (src/core/feed.mjs): bytes of the JSON, the same reply sealed for a
+// phone (shapeResult without paths, then XChaCha20 and base64, as remote.mjs › reply) and the time of the whole refresh.
+// Feeds: the first refresh (whole lists), refreshes where nothing changed, and refreshes after one task changed (a
+// blocked task retried / cancelled in turn, autoRun off: nothing else moves).
+const PER_REFRESH = [...REFRESH, ['inbox.list', { zone: 'orb' }]];
+const FEED_KEYS = { 'projects.list': (p) => p.name, 'inbox.list': (x) => x.key };
+async function feeds(e) {
+  const { applyFeed, sinceOf } = await import('../src/core/feed.mjs');
+  const { shapeResult } = await import('../src/engine/remote.mjs');
+  const { seal } = await import('../src/core/mobile-crypto.mjs');
+  const crypto = await import('node:crypto');
+  const key = crypto.randomBytes(32);
+  const phoneBytes = (m, r) => JSON.stringify(seal(key, { r: 'x'.repeat(32), ok: true, result: shapeResult(m, r) }, 'medir')).length;
+  const plain = async () => {
+    const a = performance.now();
+    const replies = await Promise.all(PER_REFRESH.map(([m, p]) => e.call(m, p)));
+    const ms = performance.now() - a;
+    return { ms, bytes: replies.reduce((n, r) => n + JSON.stringify(r).length, 0), phone: replies.reduce((n, r, i) => n + phoneBytes(PER_REFRESH[i][0], r), 0), by: Object.fromEntries(replies.map((r, i) => [PER_REFRESH[i][0], JSON.stringify(r).length])) };
+  };
+  const held = {};
+  const fed = async () => {
+    const a = performance.now();
+    const replies = await Promise.all(PER_REFRESH.map(([m, p]) => (m === 'app.state' ? e.call(m, p) : e.call(m, { ...p, since: sinceOf(held[m]) }))));
+    replies.forEach((r, i) => { const m = PER_REFRESH[i][0]; if (m !== 'app.state') held[m] = applyFeed(held[m], r, FEED_KEYS[m]).state; });
+    const ms = performance.now() - a;
+    return { ms, bytes: replies.reduce((n, r) => n + JSON.stringify(r).length, 0), phone: replies.reduce((n, r, i) => n + phoneBytes(PER_REFRESH[i][0], r), 0), by: Object.fromEntries(replies.map((r, i) => [PER_REFRESH[i][0], JSON.stringify(r).length])) };
+  };
+  const blocked = (await e.call('tasks.list', { limit: 200 })).find((t) => t.status === 'blocked')?.id;
+  let flip = false;
+  const change = async () => { await e.call(flip ? 'tasks.cancel' : 'tasks.retry', { id: blocked }); flip = !flip; };
+  const sum = (xs) => ({ p50ms: r2(median(xs.map((x) => x.ms))), p95ms: r2(pct(xs.map((x) => x.ms), 95)), kB: r2(median(xs.map((x) => x.bytes)) / 1024), phoneKB: r2(median(xs.map((x) => x.phone)) / 1024), byKB: Object.fromEntries(Object.keys(xs[0].by).map((m) => [m, r2(median(xs.map((x) => x.by[m])) / 1024)])) });
+  const out = {};
+  for (let i = 0; i < 3; i++) await plain(); // warm
+  const pq = []; for (let i = 0; i < CALLS; i++) pq.push(await plain());
+  out.plainQuiet = sum(pq);
+  const pc = []; for (let i = 0; i < Math.min(CALLS, 40); i++) { await change(); pc.push(await plain()); }
+  out.plainOneChange = sum(pc);
+  out.feedFirst = sum([await fed()]);
+  const fq = []; for (let i = 0; i < CALLS; i++) fq.push(await fed());
+  out.feedQuiet = sum(fq);
+  const fc = []; for (let i = 0; i < Math.min(CALLS, 40); i++) { await change(); fc.push(await fed()); }
+  out.feedOneChange = sum(fc);
+  return out;
+}
+
 // A coordinated conversation with the fake agent: the coordinator creates tasks through the real MCP server and the
 // scheduler runs them (the fake agent writes a file). Each «CREA_TAREA» turn makes one task.
 async function orchestrated(e, n = 4) {
@@ -176,6 +223,7 @@ for (let r = 1; r <= RUNS; r++) {
     run.idle = { ...b, cpuIdlePct: r2(((b.cpuMs - a.cpuMs) / (IDLE_S * 1000)) * 100), cpuIdleMs: b.cpuMs - a.cpuMs };
     run.latency = await latency(e);
     run.afterCalls = procInfo(e.child.pid);
+    if (N.tasks >= 100) { run.feeds = await feeds(e); run.afterFeeds = procInfo(e.child.pid); }
     if (!noLoad) {
       const t = performance.now();
       run.orchestrated = { ...(await orchestrated(e)), ms: Math.round(performance.now() - t) };

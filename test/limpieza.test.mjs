@@ -54,6 +54,35 @@ test('hallazgo 25: una tarea de solo lectura que escribe BITACORA.md la deja com
   } finally { h.cleanup(); }
 });
 
+test('3.8.1: al arrancar se conserva la copia aislada de una tarea terminada sin unir, también si el proyecto es una unión a una subcarpeta del repositorio', async () => {
+  const h = tempHome();
+  try {
+    const { Board } = await import('../src/core/board.mjs');
+    const { Scheduler } = await import('../src/engine/scheduler.mjs');
+    const { mayHaveWorktrees } = await import('../src/core/workspace.mjs');
+    const board = new Board();
+    // the repository lives outside; the project is a junction to one of its subfolders
+    const mono = path.join(h.base, 'mono'); const sub = path.join(mono, 'apps', 'a'); fs.mkdirSync(sub, { recursive: true }); gitInit(mono);
+    const link = path.join(h.home, 'web', 'a'); fs.symlinkSync(sub, link, 'junction');
+    board.run('INSERT INTO projects (name, path, notes, created_at) VALUES (?, ?, ?, ?)', 'a', link, '', new Date().toISOString());
+    fs.mkdirSync(ctx.paths.worktrees, { recursive: true });
+    const copy = path.join(ctx.paths.worktrees, 'a-6');
+    spawnSync('git', ['-C', mono, 'worktree', 'add', '-q', '-b', 'orb/6-x', copy]);
+    assert.ok(fs.existsSync(path.join(copy, 'x.txt')), 'la copia existe');
+    assert.equal(mayHaveWorktrees(link), true, 'por la ruta real: el repositorio tiene copias');
+    const task = board.createTask({ project: 'a', title: 'terminada', description: 'x', agent: 'claude' }, 'usuario');
+    board.patch(task.id, { status: 'done', workdir: copy, branch: 'orb/6-x' }, 'orb', 'task.done');
+    // a copy of a task whose project is no longer listed (no git can be asked about it)
+    const other = path.join(ctx.paths.worktrees, 'quitado-7'); fs.mkdirSync(other);
+    const t2 = board.createTask({ project: 'a', title: 'de un proyecto quitado', description: 'x', agent: 'claude' }, 'usuario');
+    board.patch(t2.id, { status: 'failed', workdir: other, branch: 'orb/7-y' }, 'orb', 'task.failed');
+    new Scheduler(board, {}, { log: () => {} });
+    assert.equal(fs.existsSync(copy), true, 'la copia de la tarea terminada sigue (para «Unir»)');
+    assert.equal(fs.existsSync(other), true, 'una copia con su rama sigue aunque git no la liste');
+    board.db.close();
+  } finally { h.cleanup(); }
+});
+
 test('3.8.1: mayHaveWorktrees lo sabe por los archivos (sin git): sin repositorio, sin copias y con una copia', async () => {
   const h = tempHome();
   try {

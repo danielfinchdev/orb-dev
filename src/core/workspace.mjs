@@ -30,18 +30,21 @@ export const repoRoot = (dir) => git(dir, 'rev-parse', '--show-toplevel').stdout
 // 3.8.1: whether the repository a folder belongs to may have linked worktrees, told from its files alone (each git call is
 // a process: ~40 ms on Windows, and the engine's start asked two per project). false: no repository, or one whose .git
 // folder has no linked worktree; true: it has some, or it cannot be told this way (a .git file: the folder is itself a
-// worktree or a submodule; GIT_DIR set).
-// cache: a Map shared by the calls of one pass (folders of the same workspace share their parents).
+// worktree or a submodule; GIT_DIR set; a file that cannot be read for another reason than not being there).
+// The walk up starts from the folder's real path, as git's (a junction to a subfolder of a repository is in that
+// repository). cache: a Map shared by the calls of one pass (folders of the same workspace share their parents).
+const missing = (error) => error?.code === 'ENOENT' || error?.code === 'ENOTDIR';
 export function mayHaveWorktrees(dir, cache = new Map()) {
   if (process.env.GIT_DIR || process.env.GIT_COMMON_DIR) return true;
   const seen = [];
   const answer = (v) => { for (const d of seen) cache.set(d, v); return v; };
-  let d = path.resolve(String(dir));
+  let d;
+  try { d = fs.realpathSync.native(path.resolve(String(dir))); } catch (error) { return !missing(error); }
   for (;;) {
     if (cache.has(d)) return answer(cache.get(d));
     seen.push(d);
-    let st = null; try { st = fs.statSync(path.join(d, '.git')); } catch { /* not here */ }
-    if (st) { if (!st.isDirectory()) return answer(true); try { return answer(fs.readdirSync(path.join(d, '.git', 'worktrees')).length > 0); } catch { return answer(false); } }
+    let st = null; try { st = fs.statSync(path.join(d, '.git')); } catch (error) { if (!missing(error)) return answer(true); }
+    if (st) { if (!st.isDirectory()) return answer(true); try { return answer(fs.readdirSync(path.join(d, '.git', 'worktrees')).length > 0); } catch (error) { return answer(!missing(error)); } }
     const up = path.dirname(d); if (up === d) return answer(false); d = up;
   }
 }

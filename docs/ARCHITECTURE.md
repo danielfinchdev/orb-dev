@@ -929,11 +929,23 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   `visibilitychange` when the window draws no frames (`frameBatch` in `lib/batch.js`). Memoised dates move on at
   midnight and with a new time zone (`lib/clock.js`, `useDay`), and the date formatters are cached per language and
   zone.
+- **Refreshes as changes:** the lists of every refresh (`tasks.list`, `conversations.list`, `sessions.list`,
+  `projects.list` and the chat list's `inbox.list`) take an optional `since: { epoch, v }`. The engine keeps one `Feed`
+  per method and parameters (`src/core/feed.mjs`, `src/engine/feeds.mjs`): each row carries the version at which its JSON
+  last changed, and gone rows, the order of the keys and the rest of the reply (`meta`) carry one too, so a caller gets
+  only what moved since its version (`{ feed, epoch, v, base, rows, gone?, order?, meta? }`), or the whole list (`full`)
+  when it is new, of another engine run or too far behind. In a feed, `tasks.list` rows are compact (no brief, result,
+  folders or approval fields: the task's screen reads `tasks.get`). Without `since` every method answers as before
+  (older phone apps), and `applyFeed` takes a plain reply whole (an older PC). `store.js` applies the replies
+  (`applyFeed` keeps the same array and row objects when nothing moved), runs one refresh and one chat-list load at a
+  time (`oneAtATime`) and groups the engine's events (120 ms after the last one, at most 1 s after the first). Parity
+  is tested in `test/feed.test.mjs` (random changes, callers far behind, the engine, the phone's path stripping).
 - **Robot:** a still robot has no compositor layer and builds the visor's code rows only the first time it shows them
   (`orb.jsx`, app.css). Avoid `will-change`, `backdrop-filter` and blend modes on elements repeated in long lists.
 - **Measuring:** `scripts/medir.mjs` (start, memory, CPU at rest, scrolling smoothness; `--hidden` keeps the window
   offscreen via `ORB_HIDDEN_WINDOW=1`; `--profile <dir>` saves a trace, CPU profiles, the compositor's layers and a
-  heap snapshot).
+  heap snapshot; `--big` uses a large workspace and times refreshes on the Tasks screen) and `scripts/medir-motor.mjs`
+  (the engine alone: start, memory, call latency and the bytes of a refresh, whole and as feeds, also as a phone gets it).
 
 ### Tutorials and guided tour
 

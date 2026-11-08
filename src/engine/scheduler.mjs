@@ -77,9 +77,10 @@ export class Scheduler {
   pruneCopies() {
     let dirs = []; try { dirs = fs.readdirSync(ctx.paths.worktrees, { withFileTypes: true }); } catch { return; }
     const projects = this.board.projects();
-    // Folders a live task still works in are kept.
+    // Folders a live task still works in are kept, and (3.8.1) the copy of any task that still has its branch (not
+    // joined or discarded yet), whatever its state or its project's: «Unir» needs it, even when git cannot be asked.
     const keep = new Set();
-    for (const t of this.board.all("SELECT workdir FROM tasks WHERE workdir IS NOT NULL AND status NOT IN ('done', 'failed', 'cancelled')")) keep.add(path.resolve(t.workdir).toLowerCase());
+    for (const t of this.board.all("SELECT workdir FROM tasks WHERE workdir IS NOT NULL AND (status NOT IN ('done', 'failed', 'cancelled') OR branch IS NOT NULL)")) keep.add(path.resolve(t.workdir).toLowerCase());
     // …and the copies git still lists as worktrees of any project (3.8.1: git is asked only about repositories that have
     // linked worktrees: mayHaveWorktrees).
     const seen = new Map(); const repos = projects.filter((p) => mayHaveWorktrees(p.path, seen));

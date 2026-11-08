@@ -4,6 +4,7 @@
 //
 //   node scripts/medir.mjs [--exe src-tauri/target-e2e/release/Orb.exe] [--shell tauri|electron] [--runs 5] [--idle 30]
 //                          [--installer <setup.exe>] [--apk <file.apk>] [--out <results.json>] [--hidden] [--profile <dir>]
+//                          [--big]
 //
 // Tauri: measures a build with the `e2e` cargo feature (npm run tauri:build:e2e), the only one that opens the window's
 // DevTools port (ORB_E2E_CDP_PORT; a normal build ignores it and every WEBVIEW2_* variable). --hidden keeps its window
@@ -28,6 +29,10 @@
 // is not done here); runs 2..n are warm. RAM: working set and private bytes of the whole process tree (Win32_Process by
 // ParentProcessId) after --idle seconds and after opening chats, tasks, projects and other views. Smoothness:
 // requestAnimationFrame deltas and long animation frames while scrolling the long chat list and a long conversation.
+// --big: the large workspace of scripts/medir-motor.mjs (50 projects, 2000 tasks almost all finished, some blocked)
+// instead of 6 projects and 40 tasks. Refreshes (3.8.1, H4c): on the Tasks screen, a blocked task is retried and
+// cancelled in turn (each change makes the engine tell the window, which refreshes): the time from the change until the
+// filters' counts show it, and the CPU of the window (renderer) and of the engine meanwhile.
 import { chromium } from 'playwright-core';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -48,6 +53,7 @@ const installer = arg('installer', path.join(ROOT, 'dist', `Orb-${PKG.version}-i
 const apk = arg('apk');
 const hidden = process.argv.includes('--hidden');
 const profileDir = arg('profile') ? path.resolve(arg('profile')) : null;
+const big = process.argv.includes('--big');
 if (profileDir) fs.mkdirSync(profileDir, { recursive: true });
 if (!fs.existsSync(exe)) { console.error(`no existe ${exe} (compila antes o pasa --exe)`); process.exit(2); }
 
@@ -87,7 +93,8 @@ const LONG = 400; // messages in the long conversation
 {
   const { Board } = await import('../src/core/board.mjs');
   const { syncProjects } = await import('../src/core/projects.mjs');
-  for (let p = 1; p <= 6; p++) fs.mkdirSync(path.join(home, 'web', `proyecto-${p}`), { recursive: true });
+  const PROJECTS = big ? 50 : 6;
+  for (let p = 1; p <= PROJECTS; p++) fs.mkdirSync(path.join(home, 'web', `proyecto-${p}`), { recursive: true });
   const board = new Board();
   syncProjects(board);
   const lorem = 'Revisa el componente, ajusta los estilos y comprueba que las pruebas siguen en verde antes de seguir con la siguiente parte del trabajo.';
@@ -97,9 +104,26 @@ const LONG = 400; // messages in the long conversation
   }
   const long = board.createConversation({ title: 'Conversación larga' });
   for (let m = 0; m < LONG; m++) board.addChat(m % 2 ? 'orb' : 'user', `**Mensaje ${m}.** ${lorem}\n\n- punto uno\n- punto dos\n\n\`\`\`js\nconst x = ${m};\n\`\`\``, null, long.id);
-  for (let i = 1; i <= 40; i++) {
-    const t = board.createTask({ project: `proyecto-${(i % 6) + 1}`, title: `Tarea ${i}`, description: lorem, agent: 'claude' }, 'usuario');
-    board.patch(t.id, { status: 'done' }, 'usuario');
+  if (!big) {
+    for (let i = 1; i <= 40; i++) {
+      const t = board.createTask({ project: `proyecto-${(i % 6) + 1}`, title: `Tarea ${i}`, description: lorem, agent: 'claude' }, 'usuario');
+      board.patch(t.id, { status: 'done' }, 'usuario');
+    }
+    const t = board.createTask({ project: 'proyecto-1', title: 'Tarea bloqueada', description: lorem, agent: 'claude' }, 'usuario');
+    board.patch(t.id, { status: 'blocked' }, 'usuario');
+  } else {
+    // as scripts/medir-motor.mjs: almost all finished (done / failed / cancelled), one in a hundred blocked, with events
+    const STATUS = ['done', 'done', 'done', 'done', 'failed', 'cancelled'];
+    board.transaction(() => {
+      for (let i = 1; i <= 2000; i++) {
+        const t = board.createTask({ project: `proyecto-${(i % PROJECTS) + 1}`, title: `Tarea ${i}`, description: `${lorem}
+
+${lorem}`, agent: 'claude' }, 'usuario');
+        board.patch(t.id, { status: 'running', assigned_to: 'claude' }, 'scheduler');
+        board.patch(t.id, { status: i % 100 === 0 ? 'blocked' : STATUS[i % STATUS.length], result: `Hecho: ${lorem}` }, 'claude');
+        if (i % 4 === 0) board.setting(`accepted:${t.id}`, '1');
+      }
+    });
   }
   board.db.close();
 }
@@ -240,6 +264,17 @@ async function pageMemory(page, gc = false) {
     return { jsHeapUsedMB: MB(heap.usedSize), jsHeapTotalMB: MB(heap.totalSize), domNodes: dom.nodes, listeners: dom.jsEventListeners, documents: dom.documents };
   } catch { return null; }
 }
+// The page's main thread (DevTools' Performance metrics, in ms): JavaScript, style, layout and all its tasks. Unlike the
+// renderer process's CPU, it leaves out the compositor (an offscreen window copies frames whatever the page does).
+// cdp: one session kept open from before the first look (the metrics count from its Performance.enable).
+async function mainThread(cdp) {
+  try {
+    const { metrics } = await cdp.send('Performance.getMetrics');
+    const m = Object.fromEntries(metrics.map((x) => [x.name, x.value]));
+    return { scriptMs: m.ScriptDuration * 1000, styleMs: m.RecalcStyleDuration * 1000, layoutMs: m.LayoutDuration * 1000, taskMs: m.TaskDuration * 1000 };
+  } catch { return null; }
+}
+const threadDelta = (a, b) => (a && b ? Object.fromEntries(Object.keys(a).map((k) => [k, Math.round(b[k] - a[k])])) : null);
 async function heapSnapshot(page, file) {
   const cdp = await page.context().newCDPSession(page);
   const out = fs.createWriteStream(file);
@@ -248,7 +283,7 @@ async function heapSnapshot(page, file) {
   await new Promise((r) => out.end(r)); await cdp.detach();
 }
 let windowInfo = null;
-const results = { target: { exe, shell, version: PKG.version, hiddenWindow: hidden, ...(shell === 'tauri' ? { build: 'e2e feature' } : {}) }, starts: [], memory: {}, frames: {}, sizes: {}, machine: {} };
+const results = { target: { exe, shell, version: PKG.version, hiddenWindow: hidden, big, ...(shell === 'tauri' ? { build: 'e2e feature' } : {}) }, starts: [], memory: {}, frames: {}, sizes: {}, machine: {} };
 
 // ---- 0: the first start of this workspace (master password, folders' review): not timed
 {
@@ -303,6 +338,51 @@ for (let i = 1; i <= RUNS; i++) {
   await wait(10000);
   results.memory.afterViews = { ...memory(run.app.pid), opened, page: await pageMemory(page), pageAfterGc: await pageMemory(page, true) };
   if (profileDir) await heapSnapshot(page, path.join(profileDir, 'vistas.heapsnapshot'));
+
+  // refreshes on the Tasks screen: a blocked task retried and cancelled in turn (autoRun is off: nothing else moves)
+  try {
+    await page.evaluate(() => { localStorage.setItem('orb.route', JSON.stringify({ view: 'tasks' })); location.reload(); });
+    await page.waitForSelector('[data-testid=task-filters]', { timeout: 30000 }); await wait(3000);
+    const id = await page.evaluate(async () => (await window.orb.call('tasks.list', { limit: 200 })).find((x) => x.status === 'blocked')?.id ?? null);
+    if (id != null) {
+      const N = 40;
+      const perf = await page.context().newCDPSession(page); await perf.send('Performance.enable');
+      const before = memory(run.app.pid); const heap0 = await pageMemory(page); const th0 = await mainThread(perf);
+      let prof = null;
+      if (profileDir) { prof = await page.context().newCDPSession(page); await prof.send('Profiler.enable'); await prof.send('Profiler.setSamplingInterval', { interval: 200 }); await prof.send('Profiler.start'); }
+      const ms = await page.evaluate(async ({ id, N }) => {
+        const tabs = () => document.querySelector('[data-testid=task-filters]')?.textContent;
+        const out = []; let flip = false;
+        for (let i = 0; i < N; i++) {
+          const was = tabs(); const t0 = performance.now();
+          const seen = new Promise((resolve) => {
+            const mo = new MutationObserver(() => { if (tabs() !== was) { mo.disconnect(); resolve(true); } });
+            mo.observe(document.body, { subtree: true, childList: true, characterData: true });
+            setTimeout(() => { mo.disconnect(); resolve(false); }, 5000);
+          });
+          await window.orb.call(flip ? 'tasks.cancel' : 'tasks.retry', { id }); flip = !flip;
+          if (await seen) out.push(performance.now() - t0);
+          await new Promise((r) => setTimeout(r, 250));
+        }
+        return out;
+      }, { id, N });
+      const after = memory(run.app.pid); const th1 = await mainThread(perf);
+      if (prof) { const { profile } = await prof.send('Profiler.stop'); fs.writeFileSync(path.join(profileDir, 'refrescos.cpuprofile'), JSON.stringify(profile)); await prof.detach(); }
+      const cpu = (k) => Math.round(((after.byName[k]?.cpuSec ?? 0) - (before.byName[k]?.cpuSec ?? 0)) * 1000);
+      results.refreshes = { changes: N, seen: ms.length, p50ms: r1(median(ms)), p95ms: r1(pct(ms, 95)), seconds: Math.round((after.at - before.at) / 100) / 10,
+        cpuMs: Object.fromEntries(Object.keys(after.byName).map((k) => [k, cpu(k)])), mainThread: threadDelta(th0, th1), page: { before: heap0, after: await pageMemory(page), afterGc: await pageMemory(page, true) } };
+      // what keeps moving on this screen (each running animation makes style work every frame)
+      results.refreshes.animations = await page.evaluate(() => { const out = {}; for (const a of document.getAnimations()) { const t = a.effect?.target; const k = `${a.animationName ?? a.constructor.name} ${t?.localName ?? '?'}.${String(t?.className?.baseVal ?? t?.className ?? '').split(' ').slice(0, 3).join('.')}`; out[k] = (out[k] ?? 0) + 1; } return out; }).catch(() => null);
+      // refreshes where no list changes (a setting saved again: the engine tells the window, which refreshes)
+      const q0 = memory(run.app.pid); const tq0 = await mainThread(perf);
+      await page.evaluate(async (N) => { for (let i = 0; i < N; i++) { await window.orb.call('control.resume'); await new Promise((r) => setTimeout(r, 400)); } }, N);
+      const q1 = memory(run.app.pid); const tq1 = await mainThread(perf); await perf.detach().catch(() => {});
+      results.refreshes.quiet = { changes: N, mainThread: threadDelta(tq0, tq1), seconds: Math.round((q1.at - q0.at) / 100) / 10, cpuMs: Object.fromEntries(Object.keys(q1.byName).map((k) => [k, Math.round(((q1.byName[k]?.cpuSec ?? 0) - (q0.byName[k]?.cpuSec ?? 0)) * 1000)])) };
+      console.error(`refrescos: ${JSON.stringify(results.refreshes)}`);
+    }
+  } catch (error) { results.refreshes = { error: error.message }; }
+  await page.evaluate(() => { localStorage.setItem('orb.route', JSON.stringify({ view: 'chat' })); location.reload(); }).catch(() => {});
+  await page.waitForSelector(READY, { timeout: 30000 }).catch(() => {}); await wait(1500);
 
   // the long chat list (the sidebar's inbox) and the long conversation
   await click(READY);
