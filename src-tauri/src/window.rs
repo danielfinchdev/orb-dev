@@ -61,7 +61,8 @@ pub fn create_main(app: &AppHandle, user_data: &std::path::Path, webview_data: P
     .data_directory(webview_data)
     .additional_browser_args(&protocol::browser_args(e2e.cdp_port))
     .zoom_hotkeys_enabled(false)
-    // The page's own drag and drop (the sidebar, the Pizarra) keeps working; dropped files are handled in a later step.
+    // The page's own drag and drop (the sidebar, the Pizarra) keeps working, and so do files dropped from Explorer (the
+    // page reads them as in a browser).
     .disable_drag_drop_handler()
     // Only Orb's pages in this window; a link that opens a new window goes to the browser if it is https.
     // Exactly http://tauri.localhost/ (its default port): another port of *.localhost is loopback, where an agent's dev

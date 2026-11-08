@@ -82,7 +82,7 @@ export function checkHostRequest(method, params, { isDir } = {}) {
     return { data };
   }
   // The agents' browser: only an app that has it (Tauri) answers, and it checks them with its own rules (which pages,
-  // which DevTools methods, which addresses: src-tauri/src/browser_rules.rs). Electron's main process refuses them.
+  // which DevTools methods, which addresses: src-tauri/src/browser_rules.rs).
   if (BROWSER_METHODS.includes(method)) return { ...p };
   throw new Error(`host: ${method} desconocido`);
 }

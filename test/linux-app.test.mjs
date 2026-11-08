@@ -1,5 +1,5 @@
-// 3.7: the desktop app on Linux: the terminals Ctrl+J and the project's actions open, how a copy updates (AppImage
-// itself, .deb only tells), the keyring check, programs started from an AppImage, and the packaging / release config.
+// 3.7: the engine's side of a Linux desktop: the terminals Ctrl+J and the project's actions open, and the editors found
+// outside the desktop's PATH (the Linux app itself comes back in a later version).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

@@ -4,8 +4,8 @@
 // One random data key (32 bytes) encrypts every secret Orb stores (the PC's key for the phones, the connectors' keys).
 // The data key is never on disk in clear; it is kept twice, in core\secretos:
 //   maestra.json     wrapped by a key made from the master password (scrypt, its own salt): opens on any PC
-//   maestra-pc.json  wrapped by a key derived from this PC's secret, the one Windows keeps sealed (DPAPI through Electron's
-//                    safeStorage in the main process, core\datos\clave.enc): Orb starts without asking for the password.
+//   maestra-pc.json  wrapped by a key derived from this PC's secret, the one Windows keeps sealed (DPAPI through the app,
+//                    core\datos\clave2.enc: src/engine/approval-secret.mjs): Orb starts without asking for the password.
 //                    It also says (authenticated) that a password was made, so a deleted maestra.json is noticed.
 //   secretos.json    the secrets themselves, one JSON map sealed with the data key. It holds the phones' verifier of the
 //                    password too (Magic Link never sends the password: src/core/mobile-crypto.mjs › linkDevice).

@@ -18,7 +18,7 @@
 // pending tasks are cancelled and its schedules paused) and returns a one-off ticket; deleteProject (with that ticket)
 // finishes, abortDelete undoes it. One left half-way (the app closed meanwhile, or the ticket expired) is settled by
 // settleDeleting: finished if its folder is gone, undone if it is still there.
-// No engine imports: the engine and the app's main process (the check before the Recycle Bin) use it.
+// No engine imports: the engine uses it, and the tests directly.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';

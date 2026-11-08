@@ -1,22 +1,6 @@
-// sys.*: main process texts (Windows menu, dialogs, notifications) and system errors the user may see.
+// sys.*: desktop app texts (dialogs, notifications) and system errors the user may see.
 export default {
-  // Windows menu
-  'sys.menu.file': 'File',
-  'sys.menu.quit': 'Exit',
-  'sys.menu.edit': 'Edit',
-  'sys.menu.undo': 'Undo',
-  'sys.menu.redo': 'Redo',
-  'sys.menu.cut': 'Cut',
-  'sys.menu.copy': 'Copy',
-  'sys.menu.paste': 'Paste',
-  'sys.menu.selectAll': 'Select all',
-  'sys.menu.view': 'View',
-  'sys.menu.zoomReset': 'Actual size',
-  'sys.menu.zoomIn': 'Zoom in',
-  'sys.menu.zoomOut': 'Zoom out',
-  'sys.menu.terminal': 'Open terminal',
-  'sys.menu.fullscreen': 'Full screen',
-  // Main process dialogs and notifications
+  // The app's dialogs and notifications
   'sys.dialog.runningTitle': 'Tasks in progress',
   'sys.dialog.closeOne': 'There is 1 task in progress. If you close now, it will stop and be marked as failed (you can retry it).',
   'sys.dialog.closeMany': 'There are {n} tasks in progress. If you close now, they will stop and be marked as failed (you can retry them).',
@@ -32,8 +16,6 @@ export default {
   'sys.dialog.allFiles': 'All files',
   'sys.dialog.refImages': 'Reference images',
   'sys.dialog.images': 'Images',
-  'sys.main.startFailed': '{name} could not start',
-  'sys.main.keyringWeak': 'Your desktop has no keyring (GNOME Keyring or KWallet), so Orb’s key is kept unencrypted in a file in its folder. Everything works the same; to protect it, install gnome-keyring or kwallet and restart Orb.',
   'sys.main.notice': '{name} · Notification',
   'sys.main.noticePrivate': 'New message (unlock Windows to see it)',
   // Main process errors
@@ -43,7 +25,6 @@ export default {
   'sys.main.noJob': '{name} could not watch the engine’s processes: if it is closed abruptly, agents may be left running. Details in motor-salida.log.',
   'sys.main.engineOff': '{name} is not running',
   'sys.main.engineTimeout': '{name} did not respond in time',
-  'sys.main.badOrigin': 'origin not allowed',
   'sys.main.folderProbeStuck': 'Orb could not give the project\'s folder its name back (some program, such as the antivirus, took it just then). It is now at {path}. Press “Retry” in a moment: Orb will try to give it back.',
   'sys.main.badAction': 'invalid action',
   'sys.main.noFolderYet': 'there is no folder yet',

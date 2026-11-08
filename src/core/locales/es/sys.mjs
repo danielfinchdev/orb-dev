@@ -1,24 +1,8 @@
-// sys.*: textos del proceso principal (menú de Windows, diálogos, notificaciones) y errores del sistema que pueden
+// sys.*: textos de la app de escritorio (diálogos, notificaciones) y errores del sistema que pueden
 // llegar a quien usa la app (toasts, Ajustes, ventanita del navegador de los agentes). Los errores conservan la
 // minúscula inicial porque se suelen mostrar detrás de otro texto.
 export default {
-  // Menú de Windows (Ajustes → Interfaz)
-  'sys.menu.file': 'Archivo',
-  'sys.menu.quit': 'Salir',
-  'sys.menu.edit': 'Edición',
-  'sys.menu.undo': 'Deshacer',
-  'sys.menu.redo': 'Rehacer',
-  'sys.menu.cut': 'Cortar',
-  'sys.menu.copy': 'Copiar',
-  'sys.menu.paste': 'Pegar',
-  'sys.menu.selectAll': 'Seleccionar todo',
-  'sys.menu.view': 'Ver',
-  'sys.menu.zoomReset': 'Tamaño normal',
-  'sys.menu.zoomIn': 'Aumentar',
-  'sys.menu.zoomOut': 'Reducir',
-  'sys.menu.terminal': 'Abrir terminal',
-  'sys.menu.fullscreen': 'Pantalla completa',
-  // Diálogos y notificaciones del proceso principal
+  // Diálogos y notificaciones de la app
   'sys.dialog.runningTitle': 'Hay tareas en curso',
   'sys.dialog.closeOne': 'Hay 1 tarea en curso. Si cierras ahora, se detendrá y quedará como fallida (podrás reintentarla).',
   'sys.dialog.closeMany': 'Hay {n} tareas en curso. Si cierras ahora, se detendrán y quedarán como fallidas (podrás reintentarlas).',
@@ -34,8 +18,6 @@ export default {
   'sys.dialog.allFiles': 'Todos los archivos',
   'sys.dialog.refImages': 'Imágenes de referencia',
   'sys.dialog.images': 'Imágenes',
-  'sys.main.startFailed': 'No se pudo iniciar {name}',
-  'sys.main.keyringWeak': 'Tu escritorio no tiene un llavero (GNOME Keyring o KWallet), así que la clave de Orb se guarda en un archivo de su carpeta sin cifrar. Funciona igual; para protegerla, instala gnome-keyring o kwallet y reinicia Orb.',
   'sys.main.notice': '{name} · Notificación',
   'sys.main.noticePrivate': 'Nuevo mensaje (desbloquea Windows para verlo)',
   // Errores del proceso principal (acaban en un toast)
@@ -45,7 +27,6 @@ export default {
   'sys.main.noJob': '{name} no ha podido vigilar los procesos del motor: si se cierra de golpe, pueden quedar agentes abiertos. Más detalles en motor-salida.log.',
   'sys.main.engineOff': '{name} no está en ejecución',
   'sys.main.engineTimeout': '{name} no respondió a tiempo',
-  'sys.main.badOrigin': 'origen no permitido',
   'sys.main.folderProbeStuck': 'Orb no pudo devolver su nombre a la carpeta del proyecto (algún programa, como el antivirus, la tomó justo entonces). Ahora está en {path}. Pulsa «Reintentar» en un momento: Orb intentará devolvérselo.',
   'sys.main.badAction': 'acción no válida',
   'sys.main.noFolderYet': 'todavía no hay ninguna carpeta',
