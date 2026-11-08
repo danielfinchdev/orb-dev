@@ -5,7 +5,8 @@
 // (views/layout.jsx: nothing moves without the user's choice), and the master password (views/master.jsx).
 // config.setupPending is on from the folder's creation to the last step: a welcome closed halfway goes on where it
 // stopped (resume: { step, plan, name }, lib/startup.js), never with the words of an Orb updated from 3.7.
-import { useState } from 'react';
+// 3.8.2: maximised, and .onboard / .onboard-card (app.css) shrink the spacing with the window's height.
+import { useEffect, useState } from 'react';
 import { FolderOpen, ArrowRight, LogIn } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Installer, InstallProgress, useFunPhrase } from '@/components/installer.jsx';
@@ -32,6 +33,8 @@ export function Setup({ onDone, resume = null }) {
   const [mood, setMood] = useState('happy');
   const [step, setStep] = useState(resume?.step ?? 'datos'); // datos → carpetas (folders of an earlier Orb, if any) → maestra (the master password) → equipo (Windows: install what is missing) → app
   const [plan, setPlan] = useState(resume?.plan ?? null);
+  // 3.8.2: the welcome opens maximised (its screens fit without scrolling; only the agents' install may scroll).
+  useEffect(() => { bridge.windowControls?.act('maximize-on').catch(() => {}); }, []);
   const shown = name.trim() || PRODUCT.assistant;
   const sep = base?.includes('\\') ? '\\' : '/';
   // The same rule the app uses (homeFor): always <base>/Orb, whatever the assistant is called, unless the base already is it.
@@ -60,8 +63,8 @@ export function Setup({ onDone, resume = null }) {
   if (step === 'maestra') return <MasterCreate onDone={afterMaster} />;
   if (step === 'equipo') return <Prepare name={shown} onDone={() => finish()} onAgents={() => finish({ view: 'agents' })} />;
   return (
-    <div className="brand-sky flex h-full overflow-auto px-6 pt-24 pb-6">
-      <form onSubmit={create} data-testid="setup-datos" className="bg-card/95 text-card-foreground m-auto grid w-full max-w-[460px] gap-5 rounded-3xl border border-white/40 p-8 shadow-2xl backdrop-blur">
+    <div className="brand-sky onboard">
+      <form onSubmit={create} data-testid="setup-datos" className="bg-card/95 text-card-foreground onboard-card m-auto grid w-full max-w-[460px] rounded-3xl border border-white/40 shadow-2xl backdrop-blur">
         <div className="-mt-20 flex justify-center"><Robot size={128} mood={mood} title={shown} /></div>
         <div className="text-center">
           <h1 className="text-2xl">{t('setup.hello', { name: shown })}</h1>
@@ -92,8 +95,8 @@ export function Prepare({ name, onDone, onAgents = null }) {
   const finished = progress?.finished && !progress.interrupted;
   const title = running ? `${phrase}…` : finished ? t('install.ready') : progress?.interrupted ? t('install.interrupted') : t('setup.prepareTitle');
   return (
-    <div className="brand-sky flex h-full overflow-auto px-6 pt-24 pb-6">
-      <div className="bg-card/95 text-card-foreground m-auto grid w-full max-w-[520px] gap-5 rounded-3xl border border-white/40 p-8 shadow-2xl backdrop-blur" data-testid="setup-prepare">
+    <div className="brand-sky onboard">
+      <div className="bg-card/95 text-card-foreground onboard-card m-auto grid w-full max-w-[520px] rounded-3xl border border-white/40 shadow-2xl backdrop-blur" data-testid="setup-prepare">
         <div className="-mt-20 flex justify-center"><Robot size={120} mood={running ? 'thinking' : finished ? 'happy' : 'hello'} title={name} live /></div>
         <div className="grid gap-3 text-center">
           <h1 key={running ? n : title} className="animate-in fade-in slide-in-from-bottom-1 text-2xl duration-500" aria-live="polite" data-testid="prepare-title">{title}</h1>

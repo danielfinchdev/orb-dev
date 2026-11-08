@@ -94,3 +94,16 @@ test('F5 reloads the window and hands each unsent message back to its box, once'
   assert.match(main, /if \(isReloadKey\(e\)\) \{ e\.preventDefault\(\); reloadOrb\(getState\(\)\.route\); \}/);
   assert.match(read('views', 'chat.jsx'), /const draft = takeDraft\(testid, getState\(\)\.route\); if \(draft && !value\.trim\(\)\) onChange\(draft\);/);
 });
+
+test('the first-run welcome opens maximised and fits the window', () => {
+  const setup = read('views', 'setup.jsx');
+  assert.match(setup, /useEffect\(\(\) => \{ bridge\.windowControls\?\.act\('maximize-on'\)\.catch\(\(\) => \{\}\); \}, \[\]\);/);
+  assert.equal([...setup.matchAll(/className="brand-sky onboard"/g)].length, 2);
+  assert.match(read('views', 'master.jsx'), /<div className="brand-sky onboard">\s*<form onSubmit=\{submit\} className="[^"]*onboard-card/);
+  assert.doesNotMatch(setup + read('views', 'master.jsx').split('export function MasterLocked')[0], /pt-24 pb-6/);
+  const css = read('app.css');
+  assert.match(css, /\.onboard \{[^}]*padding: clamp\(/); assert.match(css, /\.onboard-card \{ gap: clamp\(/);
+  // Rust: maximise only a window that is meant to be seen (a hidden test window would show).
+  const rs = fs.readFileSync(path.join(ROOT, 'src-tauri', 'src', 'window.rs'), 'utf8');
+  assert.match(rs, /"maximize-on" => \{\s*if !w\.app_handle\(\)\.state::<Ui>\(\)\.hidden && !w\.is_maximized\(\)/);
+});

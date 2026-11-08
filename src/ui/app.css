@@ -548,3 +548,9 @@ html[data-motion="minima"] .context-slot-item { animation-name: slot-fade; }
 @media (max-width: 640px) {
   html:not(.glass) [data-slot="dialog-content"][data-sheet="bottom"] { top: auto; bottom: 0; left: 0; right: 0; translate: none; width: 100%; max-width: 100%; border-radius: 22px 22px 0 0; border-width: 1px 0 0; padding: 18px 14px calc(14px + env(safe-area-inset-bottom, 0px)); --tw-enter-scale: 1; --tw-exit-scale: 1; --tw-enter-translate-y: 100%; --tw-exit-translate-y: 100%; --tw-duration: 280ms; --tw-ease: var(--ease-drawer); }
 }
+
+/* 3.8.2: the first-run welcome (views/setup.jsx, master.jsx › MasterCreate), maximised: the room above the card (the
+   robot rises out of it), the card's padding and the gaps shrink with the window's height, so its screens fit with no
+   scroll bar. The scroll stays only for what truly cannot fit (the agents' install). */
+.onboard { display: flex; height: 100%; overflow: auto; padding: clamp(4.25rem, 11vh, 6rem) 1.5rem clamp(0.75rem, 2.5vh, 1.5rem); }
+.onboard-card { gap: clamp(0.7rem, 2.2vh, 1.25rem); padding: clamp(1.25rem, 3.6vh, 2rem); }
