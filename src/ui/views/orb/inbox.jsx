@@ -212,6 +212,20 @@ function ProjectHead({ group, open, phone }) {
   );
 }
 
+// 3.8.1 (H4a): a long list draws its first rows at once and the rest right after, a step each time the window is idle:
+// the app's first screen does not wait for hundreds of rows nobody sees yet.
+function useGrowing(total, first = 40, step = 80) {
+  const [n, setN] = useState(first);
+  useEffect(() => {
+    if (n >= total) return undefined;
+    const idle = window.requestIdleCallback ?? ((fn) => setTimeout(fn, 16));
+    const cancel = window.cancelIdleCallback ?? clearTimeout;
+    const id = idle(() => setN((x) => x + step), { timeout: 300 });
+    return () => cancel(id);
+  }, [n, total]);
+  return n;
+}
+
 // Folded projects, remembered on this device.
 function useFolded() {
   const KEY = 'orb.seccionesOrb';
@@ -333,6 +347,7 @@ export function OrbInbox({ page = false }) {
   // the day: «ayer» and the times of the rows move on at midnight
   const rowProps = { phone, onSheet, day: new Date().toDateString() };
   const agents = useMemo(() => [...new Set(items.map((x) => x.agent).filter(Boolean))], [items]);
+  const shown = useGrowing(parts.pinned.length + parts.groups.reduce((n, g) => n + (folded[g.project ?? ''] ? 0 : g.items.length), 0));
 
   const q = query.trim().toLowerCase();
   const searching = q.length > 0;
@@ -384,12 +399,12 @@ export function OrbInbox({ page = false }) {
       {!results.projects.length && !results.chats.length && !results.tasks.length && !found?.messages?.length ? <p className="text-muted-foreground px-3 py-4 text-sm">{t('chats.noResults')}</p> : null}
     </div>
   );
-  else body = (
+  else { let left = shown; const take = (list) => { const part = list.slice(0, Math.max(0, left)); left -= part.length; return part; }; body = (
     <>
       {parts.pinned.length ? (
         <div className="pt-2" data-testid="orb-pinned">
           <div className="text-muted-foreground flex items-center gap-1.5 px-2 py-1.5 text-[11.5px] font-semibold tracking-wide uppercase"><Pin className="size-3.5" />{t('chats.pinned')}</div>
-          <div className="grid gap-0.5">{parts.pinned.map((x) => <OrbRow key={x.key} item={x} {...rowProps} />)}</div>
+          <div className="grid gap-0.5">{take(parts.pinned).map((x) => <OrbRow key={x.key} item={x} {...rowProps} />)}</div>
         </div>
       ) : null}
       {parts.groups.map((g) => {
@@ -399,7 +414,7 @@ export function OrbInbox({ page = false }) {
           <Collapsible key={id || 'none'} open={open} onOpenChange={(v) => setFolded(id, v)} className="pt-2" data-testid={`orb-group-${g.project ?? 'none'}`}>
             <ProjectHead group={g} open={open} phone={phone} />
             <CollapsibleContent className="grid gap-0.5">
-              {g.items.map((x) => <OrbRow key={x.key} item={x} {...rowProps} />)}
+              {(open ? take(g.items) : []).map((x) => <OrbRow key={x.key} item={x} {...rowProps} />)}
               {!g.items.length && g.hidden ? <p className="text-muted-foreground px-3 py-1 text-xs">{t('orbchats.showDone', { n: g.hidden })}</p> : null}
             </CollapsibleContent>
           </Collapsible>
@@ -412,7 +427,8 @@ export function OrbInbox({ page = false }) {
         </button>
       ) : null}
     </>
-  );
+  ); }
+
 
   return (
     <div className={cn('flex min-h-0 flex-1 flex-col', page && 'bg-background')} data-testid="orb-inbox">
