@@ -38,6 +38,7 @@ import { dataApi } from './api-data.mjs';
 import { inboxMethods } from './api-inbox.mjs';
 import { masterMethods, checkUnlock } from './api-master.mjs';
 import { sealConnectors } from '../core/connector-secrets.mjs';
+import { createFeeds } from './feeds.mjs';
 
 export { fail, str, int, oneOf } from './api-common.mjs';
 
@@ -648,6 +649,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     ...masterMethods({ ...shared, onUnlocked }),
     ...extensionMethods(shared)
   };
+  const feeds = createFeeds();
   return {
     // principal: who calls, built only by the entry points (engine.mjs and dev-control.mjs: this PC; remote.mjs: a
     // linked device). A call without one is refused (never this PC by default).
@@ -659,7 +661,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       authorize(principal, method);
       // 3.8: and, for what the master password guards, a fresh unlock of this PC's window (src/engine/api-master.mjs).
       checkUnlock(method, params);
-      const out = await fn(params, principal);
+      let out = await fn(params, principal);
+      // 3.8.1 (H4c): the lists of every refresh, as changes since what the caller holds (src/engine/feeds.mjs).
+      if (params.since !== undefined) out = feeds.reply(method, params, out);
       // 3.1: an agent turned on or off, checked again, or an account added or removed: the list of available agents is
       // updated at once (the next task may already be for it).
       if (/^(config\.save|agents\.(status|check)|accounts\.(add|update|remove))$/.test(method)) { try { scheduler.refreshAvailable(true); } catch { /* next tick */ } }
