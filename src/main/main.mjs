@@ -42,6 +42,9 @@ if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? PRODUCT
 // The app's icon (window, notifications), read through Electron so it also works from inside app.asar (Linux notices get
 // the picture itself: the notification service cannot open a file inside the package).
 const ICON = path.join(SRC, '..', 'build', 'icon.png');
+// 3.8.1: the window on Windows takes the .ico, whose 16–32 px images are the short «o•» (Alt+Tab, and the taskbar when no
+// shortcut gives the icon: Orb Light, npm start); downscaled, the 512 px PNG would show the whole word unreadable.
+const WINDOW_ICON = process.platform === 'win32' ? path.join(SRC, '..', 'build', 'icon.ico') : ICON;
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'orb', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
 
@@ -401,7 +404,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1360, height: 880, minWidth: 400, minHeight: 560, show: false, backgroundColor: dark ? '#16151d' : '#fbfbfe', title: PRODUCT.name, autoHideMenuBar: true,
     titleBarStyle: 'hidden',
-    icon: ICON,
+    icon: WINDOW_ICON,
     webPreferences: { preload: path.join(SRC, 'main', 'preload.cjs'), additionalArguments: LIGHT ? ['--orb-light'] : [], contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, spellcheck: true, devTools: isDev || process.env.ORB_DEVTOOLS === '1' }
   });
   win.once('ready-to-show', () => win.show());

@@ -884,15 +884,17 @@ launched hidden, with its output read by Orb, and it stores the session in the a
 - The Claude SDK and `zod` go in `app.asar.unpacked`, next to the engine (`build.asarUnpack`).
 - The SDK's copy of Claude Code (238 MB) **is not packaged**: the user's is used.
 - The app icon is drawn in `build/icon-src/*.svg`; `npm run icon` renders `build/icon.ico` (10 sizes, the short «o•»
-  version up to 32 px), `build/icons/` (Linux), `build/icon.png`, `src/ui/public/icon.png` and the Android launcher
-  icons (`android-app/android/app/src/main/res/mipmap-*`, legacy, round and adaptive).
+  version up to 32 px; also the window's icon on Windows), `build/icons/` (Linux), `build/icon.png`,
+  `src/ui/public/icon.png` (also the «Acerca de» card), `src/ui/public/icon-maskable.png` (the PWA's maskable icon: the
+  tile edge to edge, the word at 80 %) and the Android launcher icons (`android-app/android/app/src/main/res/mipmap-*`,
+  legacy, round and adaptive).
 - **Tests on every push and PR**, on Windows and Linux: `.github/workflows/pruebas.yml`.
 - **Installer** (NSIS, per user, no admin): desktop and Start menu shortcut. The release also publishes `latest.yml` and
   the `.blockmap` files, which the updater uses.
 
 **Updates** (`src/main/updater.mjs`, `src/ui/components/update-card.jsx`):
 - The installed app uses `electron-updater` with GitHub Releases (`build.publish` in `package.json`; public repository,
-  no token). It checks on open (after 15 s) and every 4 h; it downloads nothing until the user clicks **Update**.
+  no token). It checks on open (after 15 s) and every 4 h; it downloads nothing until the user clicks **Download and install**.
 - States the window receives (`app:update` event): `checking`, `available`, `downloading` (with `percent`), `downloaded`,
   `none`, `error`, `off`. A card at the top right (below the header: it does not cover the menu or the text box) and an "Updates" card in Settings.
 - **Restart and install** (`app:updateInstall`): if tasks are running it asks first; then it stops the engine and calls

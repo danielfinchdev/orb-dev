@@ -656,7 +656,7 @@ function AboutCard({ version }) {
   const t = useT();
   return (
     <Card data-testid="settings-about">
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Robot size={40} /><div><CardTitle>{PRODUCT.name} {version}</CardTitle></div></CardHeader>
+      <CardHeader className="flex-row items-center gap-3"><img src="./icon.png" alt="" className="size-10 shrink-0 rounded-[22%]" data-testid="about-icon" /><div><CardTitle>{PRODUCT.name} {version}</CardTitle></div></CardHeader>
       <CardContent className="grid gap-1 text-sm">
         <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">{t('about.developer')}</span>
           <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="hover:text-primary inline-flex cursor-pointer items-center gap-1.5 font-medium" data-testid="about-github"><ToolIcon tool="gh" className="size-4" />@{AUTHOR.github}<ExternalLink className="text-muted-foreground size-3.5" /></button>

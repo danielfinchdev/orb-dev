@@ -2,8 +2,9 @@
 // vector in build/icon-src/: orbe-style2.svg (the whole word) and orbe-style2-small.svg (the «o» with the orb, used at
 // 32 px and less, where the word can't be read). This script renders them, with no extra dependencies, into:
 //   build/icons/NxN.png (16 to 1024 px, Linux), build/icon.png (512 px: window, notifications), build/icon.ico (every
-//   size Windows uses: .exe, installer, taskbar), src/ui/public/icon.png (favicon, PWA, Android notifications) and
-//   the Android launcher icons (see below).
+//   size Windows uses: .exe, installer, taskbar, the window on Windows), src/ui/public/icon.png (favicon, PWA, the
+//   photo of Android notifications, «Acerca de»), src/ui/public/icon-maskable.png (PWA) and the Android launcher icons
+//   (see below).
 // It understands only what those SVGs use: <linearGradient> (userSpaceOnUse), <rect rx>, <circle> and <path> with
 // absolute M/L/Q/C/Z. The letters are Outfit SemiBold (OFL) outlines.                    Usage: npm run icon
 import fs from 'node:fs';
@@ -105,6 +106,7 @@ function render({ size: vb, layers }, size) {
     for (let sx = 0; sx < W; sx++) {
       if (top[sx] < 0) continue;
       const c = layers[top[sx]].paint((sx + 0.5) / k, y / k), o = (py * size + Math.floor(sx / ss)) * 4;
+      if (!c) continue; // a layer that cuts (paint gives null): what it covers stays transparent
       acc[o] += c[0]; acc[o + 1] += c[1]; acc[o + 2] += c[2]; acc[o + 3]++;
     }
   }
@@ -140,6 +142,15 @@ fs.writeFileSync(path.join(ROOT, 'build', 'icon.png'), pngs.get(512));
 fs.writeFileSync(path.join(ROOT, 'src', 'ui', 'public', 'icon.png'), pngs.get(512));
 fs.writeFileSync(path.join(ROOT, 'build', 'icon.ico'), ico(ICO_SIZES.map((size) => ({ size, png: pngs.get(size) }))));
 console.log(`✔ build/icons (${PNG_SIZES.join(', ')} px), build/icon.png, build/icon.ico y src/ui/public/icon.png`);
+// The PWA's «maskable» icon (the phone's browser crops it to its own shape): the tile's gradient edge to edge and the word
+// at 80 %, inside the safe circle of 80 % of the side that every mask keeps.
+{
+  const t = big.layers.find((l) => l.tag === 'rect'), m = big.layers.filter((l) => l !== t), h = big.size / 2;
+  const full = [[[0, 0], [big.size, 0], [big.size, big.size], [0, big.size]]];
+  const at = (layer, k) => ({ ...layer, polys: layer.polys.map((poly) => poly.map(([x, y]) => [h + (x - h) * k, h + (y - h) * k])) });
+  fs.writeFileSync(path.join(ROOT, 'src', 'ui', 'public', 'icon-maskable.png'), render({ size: big.size, layers: [{ ...t, polys: full }, ...m.map((l) => at(l, 0.8))] }, 512));
+  console.log('✔ src/ui/public/icon-maskable.png (PWA, maskable)');
+}
 
 // ---- Android launcher (android-app/android/app/src/main/res/mipmap-*) from the same whole-word drawing ----
 // Android sizes icons in dp, so every density uses the whole word. Legacy icons (before Android 8): the tile as is
@@ -165,3 +176,4 @@ for (const [density, k] of Object.entries(DENSITIES)) {
   for (const [name, [dp, svg]] of Object.entries(android)) fs.writeFileSync(path.join(dir, `${name}.png`), render(svg, dp * k));
 }
 console.log(`✔ Android: mipmap-{${Object.keys(DENSITIES).join(',')}}/{${Object.keys(android).join(',')}}.png`);
+
