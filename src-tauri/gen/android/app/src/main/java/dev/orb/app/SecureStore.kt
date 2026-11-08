@@ -50,19 +50,32 @@ object SecureStore {
     prefs(context).edit().putString(k, iv.size.toString() + ":" + Base64.encodeToString(iv + box, Base64.NO_WRAP)).apply()
   }
 
-  /** The value, or null: none, or unreadable (the Keystore key is gone: it is removed, the phone links again). */
+  /** The Keystore could not be used right now (busy, locked, a transient error): try again; nothing was removed. */
+  class Busy(cause: Throwable) : Exception(cause)
+
+  /** The value, or null: none, or unreadable for good (the Keystore key is gone or another one, or the value is
+   *  damaged: it is removed, the phone links again). Throws [Busy] on any other error (review Android B1: a passing
+   *  Keystore error, now also read in the background by NoteReceiver, must never unlink the phone). */
   fun get(context: Context, k: String): String? {
     val stored = prefs(context).getString(k, null) ?: return null
+    val sep = stored.indexOf(':')
+    val ivLen = if (sep > 0) stored.substring(0, sep).toIntOrNull() else null
+    val all = try { Base64.decode(stored.substring(sep + 1), Base64.NO_WRAP) } catch (e: IllegalArgumentException) { null }
+    if (ivLen == null || all == null || ivLen <= 0 || ivLen >= all.size) {
+      prefs(context).edit().remove(k).apply()
+      return null
+    }
     return try {
-      val sep = stored.indexOf(':')
-      val ivLen = stored.substring(0, sep).toInt()
-      val all = Base64.decode(stored.substring(sep + 1), Base64.NO_WRAP)
       val c = Cipher.getInstance("AES/GCM/NoPadding")
       c.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, all, 0, ivLen))
       String(c.doFinal(all, ivLen, all.size - ivLen), StandardCharsets.UTF_8)
     } catch (e: Exception) {
-      prefs(context).edit().remove(k).apply()
-      null
+      if (e is javax.crypto.AEADBadTagException || e is java.security.UnrecoverableKeyException || e is android.security.keystore.KeyPermanentlyInvalidatedException) {
+        prefs(context).edit().remove(k).apply()
+        null
+      } else {
+        throw Busy(e)
+      }
     }
   }
 

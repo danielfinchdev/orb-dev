@@ -18,8 +18,9 @@ app»); an APK signed with another key does not install on top.
 
 **Coming from Orb 3.8.0:** the 3.8.1 app is built with Tauri instead of Capacitor. It installs on top and stays linked
 (the same package `dev.orb.app`, the same key and the same Android keystore entry), but its page has a new origin, so
-the interface settings kept by the page (theme, last screen, game records) start again once, and notifications have to
-be turned on again in **More → This phone**. Update the PC first: an Orb 3.8.0 on the PC does not let the 3.8.1 app in.
+the interface settings kept by the page (theme, last screen, game records) start again once. Notifications turn back
+on by themselves when Android already allows them for Orb; otherwise the list of chats offers them. Update the PC first:
+an Orb 3.8.0 on the PC does not let the 3.8.1 app in (the app's «PC is off» screen says so too).
 
 ## Linking it to your Orb
 
@@ -53,16 +54,23 @@ linked in 3.7 are unlinked once when the PC first opens 3.8; link them again wit
 
 ## Notifications, dictation and sharing
 
-- **Notifications**: the app offers them right after linking; later, in **More → This phone**. They arrive while
+- **Notifications**: after linking the app offers them in the list of chats (above the tabs, until you answer); later,
+  in **More → This phone**. They arrive while
   Android keeps the app open in the background; if Android closes it, you see them when you open it again.
 - **Messages**: each chat's notification shows Orb's picture, the chat's
   name and the text as chosen in **Settings › Magic Link** (on the lock screen); new messages of the same chat join one
   notification. **Reply** writes back from the notification; on a card, **Approve** and **Reject** answer it. These
-  three are done by the app itself **without opening it**, also after Android closed the app: the notification says
+  three are done by the app itself **without opening it**, also after Android closed the app, and **only with the phone
+  unlocked** (Android asks to unlock first; before Android 12 the notification says to unlock): the notification says
   «Enviando…» and then whether it worked (a failure stays, with the reason; tapping it opens the chat). A sensitive card
   (its text hidden on the lock screen) and a task's approval open the app instead, which asks there. Muted chats do not
   notify. Tapping opens that chat.
-- **No app lock**: the phone is protected by its encrypted link with the PC and by the phone's own screen lock.
+- **No app lock**: the phone is protected by its encrypted link with the PC and by the phone's own screen lock. Each
+  notification's button carries only a one-time token (no other app can make one up, also to open the app); the tokens
+  of a notification go when one is used, all go when the notifications are cleared or the phone is unlinked, and any
+  older than a day is refused.
+- **Links** (a chat's links, «Descargar» of a new version, Tailscale) open in the phone's browser: the app's WebView only
+  ever shows Orb's own page.
 - **Updates**: when your Orb needs a newer app, the app says so instead of failing.
 - **Dictation**: the microphone button, next to **Send**. It uses the phone's own speech recognition (its own window;
   the microphone permission is the recognizer's, not Orb's).
@@ -73,7 +81,7 @@ linked in 3.7 are unlinked once when the PC first opens 3.8; link them again wit
 
 ```
 npm run android:build         # dist/Orb-<version>-android.apk (release, signed)
-npm run android:build:debug   # dist/Orb-<version>-android-debug.apk
+npm run android:build:debug   # dist/debug/Orb-<version>-android-debug.apk (never beside the one to publish)
 ```
 
 Both build `aarch64` (every current Android phone) and check the APK: package `dev.orb.app`, `versionCode` =

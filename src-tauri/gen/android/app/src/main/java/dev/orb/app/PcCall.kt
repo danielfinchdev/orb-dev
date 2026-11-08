@@ -37,7 +37,8 @@ object PcCall {
   private class Link(val id: String, val priv: String, val pc: String, val urls: List<String>, val at: Int)
 
   private fun link(context: Context): Link? {
-    val raw = SecureStore.get(context, "orb.movil") ?: return null
+    // The Keystore busy right now: «try again» (the phone stays linked).
+    val raw = try { SecureStore.get(context, "orb.movil") } catch (e: SecureStore.Busy) { throw Failed("timeout") } ?: return null
     return try {
       val o = JSONObject(raw)
       val urls = o.optJSONArray("urls") ?: return null

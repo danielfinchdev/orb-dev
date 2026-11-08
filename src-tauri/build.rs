@@ -16,6 +16,7 @@ fn main() {
       "secure_set",
       "secure_remove",
       "minimize",
+      "open_url",
       "info",
       "take_shared",
       "scan_qr",

@@ -2,7 +2,7 @@
 // (engine.rs) and a narrow, checked bridge between them: the window may call only these commands, and only from Orb's
 // own window (capabilities/main.json and a check of the window's label in each one).
 // Android (mobile.rs) is a thin client of the PC with its own native bits: none of the desktop's modules or commands.
-#[cfg(mobile)]
+#[cfg(any(mobile, test))] // also in desktop tests: mobile.rs › own_page
 mod mobile;
 #[cfg(mobile)]
 pub use mobile::run;

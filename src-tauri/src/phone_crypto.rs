@@ -1,6 +1,7 @@
 // The phone's end-to-end encryption with the PC, the same as src/core/mobile-crypto.mjs (the session key, seal and open
 // of a JSON message). Android's notification buttons («Aprobar», «Rechazar», «Responder») answer the PC with it while the
-// app is closed: OrbNotifyReceiver.kt reads this phone's keys from the Keystore and calls the JNI functions at the end.
+// app is closed: Notes.kt › NoteReceiver (through PcCall.kt) reads this phone's keys from the Keystore and calls the JNI
+// functions at the end.
 // The page itself keeps using mobile-crypto.mjs; the test vectors below come from it (test/android-tauri.test.mjs checks
 // them from the JS side too).
 #![cfg_attr(not(any(test, target_os = "android")), allow(dead_code))]

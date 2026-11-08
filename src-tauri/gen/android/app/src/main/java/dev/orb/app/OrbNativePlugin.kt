@@ -32,6 +32,7 @@ import java.lang.ref.WeakReference
  * - secure_get/set/remove: the key store (SecureStore: the same Keystore key and file as Orb 3.8.0);
  * - take_shared and the «shared» event: «Compartir con Orb» (ShareIntent);
  * - info: the phone's model, for the name of the linked device; minimize: to the background instead of closing;
+ * - open_url: a link in the phone's browser (the WebView only ever shows Orb's page: mobile.rs › on_navigation);
  * - scan_qr: Google's code scanner (no camera permission for the app, nothing kept); dictate: Android's own speech
  *   recognition (its own window and microphone permission);
  * - notify, notify_clear, notify_permission, take_note_action and the «note» event: the chats' notifications (Notes).
@@ -56,14 +57,14 @@ class OrbNativePlugin(private val activity: Activity) : Plugin(activity) {
     current = WeakReference(this)
     val intent = activity.intent
     pendingShare = ShareIntent.read(activity, intent)
-    pendingNote = Notes.fromIntent(intent)
+    pendingNote = Notes.fromIntent(activity, intent)
     // Taken once: not again after the activity is recreated.
     if (pendingShare != null || pendingNote != null) activity.intent = Intent(activity, MainActivity::class.java)
   }
 
   override fun onNewIntent(intent: Intent) {
     ShareIntent.read(activity, intent)?.let { trigger("shared", it) }
-    Notes.fromIntent(intent)?.let { note ->
+    Notes.fromIntent(activity, intent)?.let { note ->
       if (hasListener("note")) trigger("note", JSObject.fromJSONObject(note)) else pendingNote = note
     }
   }
@@ -74,7 +75,12 @@ class OrbNativePlugin(private val activity: Activity) : Plugin(activity) {
   fun secureGet(invoke: Invoke) {
     val k = invoke.getArgs().getString("key", null)
     val out = JSObject()
-    if (k != null) SecureStore.get(activity, k)?.let { out.put("value", it) }
+    try {
+      if (k != null) SecureStore.get(activity, k)?.let { out.put("value", it) }
+    } catch (e: SecureStore.Busy) {
+      // The Keystore did not answer now (review Android B1): said, so the page tries again; nothing is removed.
+      return invoke.reject("busy", "busy")
+    }
     invoke.resolve(out)
   }
 
@@ -94,7 +100,11 @@ class OrbNativePlugin(private val activity: Activity) : Plugin(activity) {
 
   @Command
   fun secureRemove(invoke: Invoke) {
-    invoke.getArgs().getString("key", null)?.let { SecureStore.remove(activity, it) }
+    invoke.getArgs().getString("key", null)?.let {
+      SecureStore.remove(activity, it)
+      // Unlinked: no notification's button may reach a PC any more.
+      if (it == "orb.movil") Notes.forget(activity)
+    }
     invoke.resolve()
   }
 
@@ -104,6 +114,20 @@ class OrbNativePlugin(private val activity: Activity) : Plugin(activity) {
   fun minimize(invoke: Invoke) {
     activity.runOnUiThread { activity.moveTaskToBack(true) }
     invoke.resolve()
+  }
+
+  /** A link out of Orb (openExternal): in the phone's browser, never inside the app's WebView. https only. */
+  @Command
+  fun openUrl(invoke: Invoke) {
+    val url = invoke.getArgs().getString("url", null)
+    val uri = try { android.net.Uri.parse(url ?: "") } catch (e: Exception) { null }
+    if (uri == null || uri.scheme != "https" || uri.host.isNullOrEmpty()) return invoke.reject("solo enlaces https")
+    try {
+      activity.startActivity(Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+      invoke.resolve()
+    } catch (e: android.content.ActivityNotFoundException) {
+      invoke.reject("no hay navegador")
+    }
   }
 
   @Command
@@ -180,12 +204,14 @@ class OrbNativePlugin(private val activity: Activity) : Plugin(activity) {
     invoke.resolve()
   }
 
-  /** → { granted }: asks once (Android 13+); before Android 13 whether notifications are on for Orb. */
+  /** → { granted }: asks once (Android 13+); before Android 13 whether notifications are on for Orb. { ask: false }: only
+   *  says whether they are allowed, never asks. */
   @Command
   fun notifyPermission(invoke: Invoke) {
     if (Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
       return invoke.resolve(JSObject().put("granted", NotificationManagerCompat.from(activity).areNotificationsEnabled()))
     }
+    if (!invoke.getArgs().getBoolean("ask", true)) return invoke.resolve(JSObject().put("granted", false))
     requestPermissionForAlias("notifications", invoke, "notifyPermissionDone")
   }
 

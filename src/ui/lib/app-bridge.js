@@ -42,7 +42,13 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
     // The phone's keys and the Orb's addresses: encrypted with a key of the Android Keystore that never leaves the phone
     // (the same key and file as Orb 3.8.0's app: updating keeps the link).
     store: {
-      get: async () => { try { const r = await nat('secure_get', { key: KEY }); return r?.value ? JSON.parse(r.value) : null; } catch { return null; } },
+      // The Keystore busy for a moment (review Android B1): tried again; never taken for «not linked» on the first error.
+      get: async () => {
+        for (let i = 0; ; i++) {
+          try { const r = await nat('secure_get', { key: KEY }); return r?.value ? JSON.parse(r.value) : null; }
+          catch (e) { if (!said(e).includes('busy') || i >= 4) return null; await new Promise((r) => setTimeout(r, 400)); }
+        }
+      },
       set: async (v) => { try { if (v) await nat('secure_set', { key: KEY, value: JSON.stringify(v) }); else await nat('secure_remove', { key: KEY }); } catch (e) { console.error(e); } }
     },
     deviceName: async () => { try { const r = await nat('info'); return r?.model ? `${r.model} (app)` : 'Android'; } catch { return 'Android'; } },
@@ -80,6 +86,9 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
         return () => { gone = true; handle?.unregister?.(); };
       };
       orb.minimize = async () => { try { await nat('minimize'); } catch { /* stays */ } };
+      // A link out of Orb opens in the phone's browser (review Android A2): the app's WebView only ever shows Orb's page
+      // (src-tauri/src/mobile.rs › on_navigation), so window.open would do nothing.
+      orb.openExternal = async (url) => { if (/^https:\/\//.test(String(url ?? ''))) await nat('open_url', { url: String(url) }).catch(console.error); };
       // Dictation with Android's own speech recognition (its own window; the WebView has no Web Speech API).
       orb.dictate = async (lang) => {
         try { const r = await nat('dictate', { lang: lang === 'en' ? 'en' : 'es' }); return r?.text ?? ''; }
@@ -122,11 +131,11 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
       nat('take_note_action').then(take).catch(() => {});
       // The texts the app shows by itself after a button (in the Orb's language).
       const words = async () => {
-        const [sending, sent, allowed, denied, failed, offline, timeout, notLinked, badAnswer] = await Promise.all([
-          tl('notes.sending'), tl('notes.sent'), tl('notes.allowed'), tl('notes.denied'), tl('notes.failed', { error: '{error}' }),
+        const [sending, sent, allowed, denied, failed, locked, offline, timeout, notLinked, badAnswer] = await Promise.all([
+          tl('notes.sending'), tl('notes.sent'), tl('notes.allowed'), tl('notes.denied'), tl('notes.failed', { error: '{error}' }), tl('notes.locked'),
           tl('app.pcOffline'), tl('app.pcSlow'), tl('app.notLinked'), tl('app.badAnswer')
         ]);
-        return { sending, sent, allowed, denied, failed, err_offline: offline, err_timeout: timeout, err_notLinked: notLinked, err_badAnswer: badAnswer };
+        return { sending, sent, allowed, denied, failed, locked, err_offline: offline, err_timeout: timeout, err_notLinked: notLinked, err_badAnswer: badAnswer };
       };
       orb.on('note', async (n) => {
         if (document.visibilityState === 'visible' || localStorage.getItem(NOTIFY) !== '1' || !n?.key) return;
@@ -152,6 +161,16 @@ if (L.pickBridge({ hasOrb: Boolean(window.orb), native }) === 'app') {
         ios: () => false,
         whenClosed: () => false, // no push service: only while Android keeps the app alive in the background
         enabled: () => localStorage.getItem(NOTIFY) === '1',
+        // Never answered here (a new install, or updated from 3.8.0, whose choice stayed with its old origin).
+        undecided: () => localStorage.getItem(NOTIFY) === null,
+        // Turned on without asking when Android already allows Orb's notifications (the person allowed them in 3.8.0).
+        async adopt() {
+          const r = await nat('notify_permission', { ask: false }).catch(() => null);
+          if (!r?.granted) return false;
+          localStorage.setItem(NOTIFY, '1');
+          return true;
+        },
+        decline() { localStorage.setItem(NOTIFY, '0'); },
         async enable() {
           const r = await nat('notify_permission').catch(() => null);
           if (!r?.granted) throw new Error(await tl('app.pushDeniedApp'));

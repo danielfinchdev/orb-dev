@@ -128,3 +128,37 @@ test('el APK: permisos, compartir, avisos sin abrir la app y sin copias de segur
   assert.match(fs.readFileSync(path.join(res, 'values', 'strings.xml'), 'utf8'), /Compartir con Orb/);
   assert.match(fs.readFileSync(path.join(res, 'xml', 'network_security_config.xml'), 'utf8'), /cleartextTrafficPermitted="true"/);
 });
+
+// Review Android A1/A2/M1/M2/M3/B1/B2: what keeps a phone in someone else's hand, another app or a passing error from
+// acting for the person.
+test('seguridad de los avisos y de la WebView: desbloquear, tokens, enlaces fuera y el Keystore', () => {
+  const notes = read(`${KT}/Notes.kt`);
+  // A1: the buttons that act ask to unlock (Android 12+), and the receiver refuses with the phone locked (before 12).
+  assert.match(notes, /Action\.Builder\(0, label, pending\)\.setAuthenticationRequired\(true\)/);
+  assert.match(notes, /isDeviceLocked == true\) \{\s+say\(context, id, title, words\.optString\("locked"/);
+  // M1: opening the app from a notification needs a token of a job kept for opening; no action or note in the intent.
+  assert.doesNotMatch(notes, /putExtra\(EXTRA_(ACTION|NOTE)/);
+  assert.match(notes, /fun fromIntent\(context: Context, intent: Intent\?\): JSONObject\? \{\s+val token = intent\?\.getStringExtra\(EXTRA_TOKEN\) \?: return null/);
+  assert.match(notes, /if \(!job\.optBoolean\("open"\)\) return null/);
+  // M3: one used → its notification's others go; a day old → refused; cleared with the notifications and on unlinking.
+  assert.match(notes, /other\.optInt\("id", -2\) == id\) edit\.remove\(k\)/);
+  assert.match(notes, /MAX_AGE_MS = 24L \* 60 \* 60 \* 1000/);
+  assert.match(notes, /nm\.cancel\(s\.id\)\n\s+forget\(context\)/);
+  assert.match(read(`${KT}/OrbNativePlugin.kt`), /if \(it == "orb\.movil"\) Notes\.forget\(activity\)/);
+  // B2: Capacitor's old channel goes.
+  assert.match(notes, /deleteNotificationChannel\("default"\)/);
+  // A2: only Orb's page in the WebView; links out to the phone's browser, https only.
+  assert.match(read('src-tauri/src/mobile.rs'), /\.on_navigation\(\|_webview, url\| own_page\(url\)\)/);
+  const kt = read(`${KT}/OrbNativePlugin.kt`);
+  assert.match(kt, /fun openUrl\(invoke: Invoke\)[\s\S]+uri\.scheme != "https"[\s\S]+Intent\.ACTION_VIEW/);
+  const bridge = read('src/ui/lib/app-bridge.js');
+  assert.match(bridge, /orb\.openExternal = async \(url\) => \{ if \(\/\^https:/);
+  // B1: only a key that is gone for good removes the link; anything else is «busy» and the page tries again.
+  const store = read(`${KT}/SecureStore.kt`);
+  assert.match(store, /AEADBadTagException \|\| e is java\.security\.UnrecoverableKeyException \|\| e is android\.security\.keystore\.KeyPermanentlyInvalidatedException/);
+  assert.match(store, /throw Busy\(e\)/);
+  assert.match(bridge, /if \(!said\(e\)\.includes\('busy'\) \|\| i >= 4\) return null/);
+  // M2: updated from 3.8.0 (no choice saved): back on when Android allows them, else offered; never asks by itself.
+  assert.match(bridge, /nat\('notify_permission', \{ ask: false \}\)/);
+  assert.match(kt, /getBoolean\("ask", true\)\) return invoke\.resolve\(JSObject\(\)\.put\("granted", false\)\)/);
+});

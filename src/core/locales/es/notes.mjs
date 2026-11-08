@@ -11,5 +11,6 @@ export default {
   'notes.sent': 'Respuesta enviada',
   'notes.allowed': 'Aprobado',
   'notes.denied': 'Rechazado',
-  'notes.failed': 'No se pudo hacer desde el aviso: {error}'
+  'notes.failed': 'No se pudo hacer desde el aviso: {error}',
+  'notes.locked': 'Desbloquea el móvil para hacerlo desde el aviso, o tócalo para abrir el chat.'
 };

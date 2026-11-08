@@ -11,5 +11,6 @@ export default {
   'notes.sent': 'Reply sent',
   'notes.allowed': 'Approved',
   'notes.denied': 'Rejected',
-  'notes.failed': "Couldn't do it from the notification: {error}"
+  'notes.failed': "Couldn't do it from the notification: {error}",
+  'notes.locked': 'Unlock the phone to do it from the notification, or tap it to open the chat.'
 };

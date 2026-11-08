@@ -18,6 +18,10 @@ import java.io.ByteArrayOutputStream
 object ShareIntent {
   private const val MAX_FILES = 10
   private const val MAX_BYTES = 10 * 1024 * 1024
+  // In all (review Android B6): everything goes to the page as base64 over the IPC (a third more), so 10 × 10 MB could
+  // run the app out of memory; and only so many shared items are looked at.
+  private const val MAX_TOTAL = 25 * 1024 * 1024
+  private const val MAX_LOOKED_AT = 50
 
   fun isShare(intent: Intent?): Boolean = intent?.action == Intent.ACTION_SEND || intent?.action == Intent.ACTION_SEND_MULTIPLE
 
@@ -38,11 +42,14 @@ object ShareIntent {
     }
     val files = JSArray()
     val cr = context.contentResolver
-    for (u in uris) {
+    var total = 0
+    for (u in uris.take(MAX_LOOKED_AT)) {
       if (files.length() >= MAX_FILES) break
       val type = cr.getType(u)
       if (type == null || !type.startsWith("image/")) continue
       val data = readAll(cr, u) ?: continue
+      if (total + data.size > MAX_TOTAL) break
+      total += data.size
       val f = JSObject()
       f.put("name", nameOf(cr, u))
       f.put("type", type)

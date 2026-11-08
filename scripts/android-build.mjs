@@ -81,13 +81,17 @@ function checkApk(apk, { release }) {
 }
 
 async function main() {
+  // An APK of this app called 3.8.0 would be taken for Orb 3.8.0's (Capacitor), which links with a 3.8.0 PC; this one
+  // needs Orb 3.8.1 on the PC (review Android B4).
+  if (VERSION_CODE <= 3_008_000) fail(`La versión ${version} no es mayor que 3.8.0: sube la de package.json antes de compilar la app.`);
   const keys = debug ? {} : signingKey();
   await run(process.execPath, [path.join(ROOT, 'node_modules', '@tauri-apps', 'cli', 'tauri.js'), 'android', 'build', '--apk', '--target', 'aarch64', ...(debug ? ['--debug'] : [])], keys);
   const kind = debug ? 'debug' : 'release';
   const out = path.join(ROOT, 'src-tauri', 'gen', 'android', 'app', 'build', 'outputs', 'apk', 'universal', kind, `app-universal-${kind}.apk`);
   if (!fs.existsSync(out)) throw new Error(`no está el APK en ${out}`);
   const info = checkApk(out, { release: !debug });
-  const dest = path.join(ROOT, 'dist', `Orb-${version}-android${debug ? '-debug' : ''}.apk`);
+  // Review Android B4/B5: the debug APK (debuggable, the SDK's key, ~300 MB) lives apart, never beside the one to publish.
+  const dest = debug ? path.join(ROOT, 'dist', 'debug', `Orb-${version}-android-debug.apk`) : path.join(ROOT, 'dist', `Orb-${version}-android.apk`);
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   fs.copyFileSync(out, dest);
   console.log(`APK listo: ${dest} (${(fs.statSync(dest).size / 1048576).toFixed(1)} MB) · ${info.name} ${info.versionName} (${info.code}) · certificado ${info.sha}`);
