@@ -266,7 +266,11 @@ test('el motor: secretos de 3.7 fuera de la base y de orb.json, acciones protegi
     assert.match(notices(t.home), /5 intentos fallidos seguidos de tu contraseña maestra en este PC/, 'el dueño se entera');
   } finally { await e.stop(); }
   fs.rmSync(path.join(t.home, 'core', 'secretos', FILES.tries));
+  // Review final B1: an engine restarted while the app's lock screen was up (a crash) keeps it up; a normal start does not.
+  e = await startEngine(t.home, { secret: hex, screenLocked: true });
+  try { assert.equal((await e.call('master.state')).screenLocked, true, 'reiniciado bajo la pantalla de bloqueo'); } finally { await e.stop(); }
   e = await startEngine(t.home, { secret: hex });
+  assert.equal((await e.call('master.state')).screenLocked, false, 'un arranque normal, sin bloqueo');
   try {
     const { unlock } = await e.call('master.unlock', { password: PASS });
     assert.equal(await e.call('master.check', { unlock }), true);

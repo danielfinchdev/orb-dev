@@ -96,7 +96,7 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
   // Windows locks or the PC sleeps (Rust's power.rs calls master.lock), or by hand, the window shows only the password.
   // The agents keep working (the vault stays open: only the window's tokens go). Kept in memory: a reload of the window
   // finds it locked; a new start of Orb opens as usual (this PC's own key, as at every start).
-  let screen = false;
+  let screen = ctx.screenAtStart === true; // an engine restarted under the lock screen keeps it (the app says so)
   const screenOff = () => { if (screen) { screen = false; emit('master:unlocked', {}); } };
   return {
     // canForget: «He olvidado la contraseña» can keep the secrets (this PC opened them and has a recovery code).

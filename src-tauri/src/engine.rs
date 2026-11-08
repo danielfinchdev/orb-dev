@@ -147,8 +147,6 @@ impl Engine {
 
   fn spawn(self: &Arc<Self>) -> Result<(), String> {
     let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
-    // A new engine starts without Orb's lock screen (it is kept in the engine's memory): notices show text again.
-    self.screen_locked.store(false, Ordering::SeqCst);
     let mut cmd = Command::new(&self.cfg.node);
     // Node reads NODE_OPTIONS (--require, --import: code run inside the engine), NODE_PATH and the rest of NODE_* from the
     // environment; Electron had them off (its fuse). None of the user's reaches the engine or what it starts.
@@ -260,7 +258,8 @@ impl Engine {
     // hostSecret: this PC's secret is opened by the vault in this app (orb-vault › machine.rs, DPAPI); the engine asks it
     // and gets only the keys made from it.
     // The agents' browser lives in the engine, with this app's hidden pages (browser 'host': browser.rs).
-    let start = json!({ "type": "start", "home": self.home(), "version": self.cfg.version, "secret": null, "hostSecret": true, "newSecret": new_secret, "browser": "host", "userData": self.cfg.user_data });
+    // screenLocked (review final B1): an engine that restarts while Orb's lock screen is up (a crash) comes back locked.
+    let start = json!({ "type": "start", "screenLocked": self.screen_locked(), "home": self.home(), "version": self.cfg.version, "secret": null, "hostSecret": true, "newSecret": new_secret, "browser": "host", "userData": self.cfg.user_data });
     if !self.send(&start) {
       let e = self.t_name("sys.main.engineOff");
       self.status.send_replace(Status::Failed(e.clone()));

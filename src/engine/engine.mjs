@@ -501,6 +501,8 @@ const APP_MESSAGES = {
 transport.on(async (msg) => {
   if (!msg || typeof msg !== 'object') return;
   if (msg.type === 'start') {
+    // The app's lock screen was up when this engine (re)started (review final B1): it stays up (api-master.mjs).
+    ctx.screenAtStart = msg.screenLocked === true;
     try { transport.send({ type: 'started', ok: true, result: await start(msg.home, msg.version, msg.secret, msg.browser, msg.keep, msg.userData, msg.hostSecret, msg.newSecret) }); }
     catch (error) { transport.send({ type: 'started', ok: false, error: error.message, ...(error.code && /^secret/.test(error.code) ? { code: error.code } : {}) }); }
     return;
