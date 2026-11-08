@@ -223,6 +223,30 @@ mod imp {
     core: ICoreWebView2,
     emit: Emit,
     _receivers: Vec<ICoreWebView2DevToolsProtocolEventReceiver>,
+    /// Orb's own ports this page's requests are checked on.
+    ports: Vec<u16>,
+  }
+
+  fn add_port_filters(core: &ICoreWebView2, ports: &[u16]) -> windows::core::Result<()> {
+    for p in ports {
+      for scheme in ["http", "https"] {
+        // SAFETY: a live WebView of this thread.
+        unsafe { core.AddWebResourceRequestedFilter(&HSTRING::from(format!("{scheme}://*:{p}/*")), COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL)? };
+      }
+    }
+    Ok(())
+  }
+  /// The ports the engine named since a page opened (a server started later): checked on every open page too.
+  fn refresh_port_filters() {
+    let now = browser_rules::own_ports();
+    PAGES.with(|p| {
+      for page in p.borrow_mut().values_mut() {
+        let new: Vec<u16> = now.iter().copied().filter(|x| !page.ports.contains(x)).collect();
+        if !new.is_empty() && add_port_filters(&page.core, &new).is_ok() {
+          page.ports.extend(new);
+        }
+      }
+    });
   }
 
   /// A page's events through its gate (browser_rules::EventGate): admitted or counted, the count said once a second;
@@ -444,6 +468,7 @@ mod imp {
           match made {
             Ok(page) => {
               PAGES.with(|p| p.borrow_mut().insert(id, page));
+              refresh_port_filters();
               f.call(Ok(()));
             }
             Err(e) => {
@@ -537,17 +562,13 @@ mod imp {
           core.add_FrameNavigationStarting(&NavigationStartingEventHandler::create(Box::new(move |_, a| handler(a))), &mut token)?;
         }
       }
-      // Review D8 B1: nor any request (fetch, an image, a form) to the engine's own servers on this PC's loopback.
+      // Review D8 B1: nor any request (fetch, an image, a form) to the engine's own servers on this PC's loopback. Review
+      // final B2: any host on those ports (url_allowed resolves names), and ports the engine names later are added to the
+      // pages already open (refresh_port_filters).
       let ports = browser_rules::own_ports();
-      if !ports.is_empty() {
+      add_port_filters(&core, &ports)?;
+      {
         let env = core.cast::<ICoreWebView2_2>()?.Environment()?;
-        for p in &ports {
-          for host in ["127.0.0.1", "localhost", "[::1]", "0.0.0.0"] {
-            for scheme in ["http", "https"] {
-              core.AddWebResourceRequestedFilter(&HSTRING::from(format!("{scheme}://{host}:{p}/*")), COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL)?;
-            }
-          }
-        }
         let e = gated.clone();
         core.add_WebResourceRequested(
           &WebResourceRequestedEventHandler::create(Box::new(move |_, args| {
@@ -727,7 +748,7 @@ mod imp {
       core.CallDevToolsProtocolMethod(w!("Page.enable"), w!("{}"), &ignore())?;
       core.CallDevToolsProtocolMethod(w!("Page.setInterceptFileChooserDialog"), w!(r#"{"enabled":true}"#), &ignore())?;
       core.Navigate(w!("about:blank"))?;
-      Ok(Page { hwnd, controller, core, emit: page_emit, _receivers: receivers })
+      Ok(Page { hwnd, controller, core, emit: page_emit, _receivers: receivers, ports })
     }
   }
 

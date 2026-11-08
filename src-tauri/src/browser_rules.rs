@@ -38,8 +38,15 @@ pub fn own_ports() -> Vec<u16> {
   OWN_PORTS.lock().unwrap().clone()
 }
 fn own_port(u: &tauri::Url) -> bool {
-  let ports = OWN_PORTS.lock().unwrap();
-  u.port_or_known_default().is_some_and(|p| ports.contains(&p)) && u.host_str().is_some_and(loopback)
+  let Some(port) = u.port_or_known_default().filter(|p| OWN_PORTS.lock().unwrap().contains(p)) else { return false };
+  u.host_str().is_some_and(|h| loopback(h) || resolves_here(h, port))
+}
+/// Review final B2: a name that resolves to this PC (localtest.me, *.nip.io, a hosts entry, ::ffff:127.0.0.1) is loopback
+/// too. Looked up only for Orb's own ports; a name that does not resolve now cannot be reached either.
+fn resolves_here(host: &str, port: u16) -> bool {
+  use std::net::ToSocketAddrs;
+  let h = host.trim_start_matches('[').trim_end_matches(']');
+  (h, port).to_socket_addrs().is_ok_and(|mut a| a.any(|s| { let ip = s.ip().to_canonical(); ip.is_loopback() || ip.is_unspecified() }))
 }
 
 /// An address the page itself may go to. The main frame: http(s) pages (a local preview included) and the empty page;
@@ -417,7 +424,7 @@ mod tests {
       assert!(url_allowed(url, false), "{url}");
     }
     set_own_ports(&serde_json::json!({ "blockPorts": [8765] }));
-    for url in ["http://127.0.0.1:8765/api/me", "http://localhost:8765/", "http://[::1]:8765/", "http://0.0.0.0:8765/", "http://app.localhost:8765/"] {
+    for url in ["http://127.0.0.1:8765/api/me", "http://localhost:8765/", "http://[::1]:8765/", "http://0.0.0.0:8765/", "http://app.localhost:8765/", "http://[::ffff:127.0.0.1]:8765/"] {
       assert!(!url_allowed(url, true), "{url}");
     }
     assert!(url_allowed("http://127.0.0.1:8766/", true) && url_allowed("https://ejemplo.com:8765/", true));
