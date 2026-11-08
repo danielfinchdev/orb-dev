@@ -23,6 +23,10 @@ pub const RELEASES_URL: &str = "https://github.com/danielfinchdev/orb-dev/releas
 const FIRST: Duration = Duration::from_secs(15);
 const EVERY: Duration = Duration::from_secs(4 * 60 * 60);
 const BACKUP_WAIT: Duration = Duration::from_secs(3 * 60);
+/// Closing Orb waits at most this long for that backup (review D10 B14: no invisible Orb for minutes; reopened meanwhile,
+/// «nothing happens»). The backup started when the download ended, so it is usually done; if not, the version is
+/// installed at the next close or offered at the next start.
+const EXIT_WAIT: Duration = Duration::from_secs(20);
 
 #[derive(Clone, Serialize, Debug, PartialEq)]
 pub struct State {
@@ -325,14 +329,14 @@ fn run_installer(app: &AppHandle, restart: bool) {
 }
 
 /// Orb is closing with a new version downloaded and not installed («Más tarde»): before the engine stops, the backup of
-/// that version is finished (the one under way is waited for, or made now, at most BACKUP_WAIT).
+/// that version is finished (the one under way since the download is waited for, at most EXIT_WAIT).
 pub fn before_exit(app: &AppHandle) {
   if app.try_state::<Updates>().is_none() || feed().is_some() {
     return;
   }
   let st = get(app);
   if let (true, Some(v)) = (st.state == "downloaded", st.version) {
-    tauri::async_runtime::block_on(async { tokio::time::timeout(BACKUP_WAIT, backup(app, &v)).await.unwrap_or(false) });
+    tauri::async_runtime::block_on(async { tokio::time::timeout(EXIT_WAIT, backup(app, &v)).await.unwrap_or(false) });
   }
 }
 

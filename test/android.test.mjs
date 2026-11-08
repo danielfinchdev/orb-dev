@@ -78,7 +78,8 @@ test('la app de Android se compila aparte y no entra en el instalador del PC', (
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
   // The PC's package carries src (without the window's sources), the engine's packages and package.json: never the app.
   const resources = fs.readFileSync(path.join(ROOT, 'scripts', 'tauri-resources.mjs'), 'utf8');
-  assert.match(resources, /copy\(src, path\.join\(dest, 'src'\)/);
+  assert.ok(resources.includes("['ls-files', '-z', '--', 'src']"), 'solo lo que git sigue en src');
+  assert.ok(resources.includes("rel.startsWith('src/ui/')"), 'sin las fuentes de la ventana');
   assert.doesNotMatch(resources, /android|renderer-android/);
   assert.match(pkg.scripts['android:build'], /android-build\.mjs/);
   assert.equal(pkg.scripts.tauri, 'tauri', 'Gradle builds the Rust part through `npm run tauri`');
@@ -126,8 +127,8 @@ test('el PC deja pasar la página de la app (CORS) y a nadie más; todo sigue ci
   const pre = await raw('OPTIONS', '/api/call', { Origin: APP, 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'content-type,x-orb-device' });
   assert.equal(pre.status, 204);
   assert.equal(pre.headers['access-control-allow-origin'], APP);
-  const old = await raw('OPTIONS', '/api/call', { Origin: 'http://localhost', 'Access-Control-Request-Method': 'POST' });
-  assert.equal(old.headers['access-control-allow-origin'], 'http://localhost', 'the 3.8.0 app until the phone updates');
+  // 3.8.1 (D8 B1): a page on this PC's localhost (an agent's) does not pass for the app; neither do Capacitor's origins.
+  for (const origin of ['http://localhost', 'https://localhost', 'capacitor://localhost']) assert.equal((await raw('OPTIONS', '/api/call', { Origin: origin, 'Access-Control-Request-Method': 'POST' })).status, 403, origin);
   assert.match(pre.headers['access-control-allow-headers'], /X-Orb-Device/);
   assert.equal((await raw('OPTIONS', '/api/call', { Origin: 'https://atacante.example' })).status, 403);
   assert.equal((await raw('POST', '/api/call', { Origin: 'https://atacante.example', 'Content-Type': 'application/json' }, '{}')).status, 403, 'otra web: fuera');

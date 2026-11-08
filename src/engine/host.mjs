@@ -15,6 +15,9 @@ import path from 'node:path';
 export const BROWSER_METHODS = Object.freeze(['host.browser.open', 'host.browser.cdp', 'host.browser.close', 'host.pip.show', 'host.pip.hide', 'host.pip.state', 'host.pip.frame']);
 export const HOST_METHODS = Object.freeze(['host.openUrl', 'host.openPath', 'host.openTerminal', 'host.openEditor', 'host.runAction', 'host.seal', 'host.unseal', ...BROWSER_METHODS]);
 let send = null; let next = 0; const pending = new Map();
+// 3.8.1 (review D8 B1): the ports of this engine's own servers (the phone's access, dev-control). The agents' browser never
+// opens them on this PC's loopback (Rust refuses them: browser_rules.rs › url_allowed).
+export const ownPorts = new Set();
 
 // The transport's send: set once the engine's transport exists.
 export function attachHost(fn) { send = fn; }

@@ -60,11 +60,11 @@ jobs:
       - run: npm run check
       - run: npm test
         timeout-minutes: 25
-      - run: cargo test --workspace --lib
+      - run: cargo test --workspace --lib --locked
         working-directory: src-tauri
       - name: Build the installer (Tauri), not signed (signing happens on the owner's PC)
         shell: bash
-        run: npx tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}' && node scripts/tauri-check-release.mjs
+        run: npx tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}' -- --locked && node scripts/tauri-check-release.mjs
       - name: Open the packaged Orb and check it works (smoke test)
         run: node test/smoke.e2e.mjs --exe src-tauri/target/release/Orb.exe
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

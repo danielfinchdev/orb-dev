@@ -154,7 +154,7 @@ impl Engine {
     let mut cmd = Command::new(&self.cfg.node);
     // Node reads NODE_OPTIONS (--require, --import: code run inside the engine), NODE_PATH and the rest of NODE_* from the
     // environment; Electron had them off (its fuse). None of the user's reaches the engine or what it starts.
-    for name in protocol::node_vars(std::env::vars_os().filter_map(|(k, _)| k.into_string().ok())) {
+    for name in protocol::env_matching(protocol::node_vars::<Vec<String>>) {
       cmd.env_remove(name);
     }
     cmd

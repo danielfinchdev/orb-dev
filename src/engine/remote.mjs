@@ -22,6 +22,7 @@ import { newVapidKeys, checkSubscription, sendPush } from './webpush.mjs';
 import { PROTOCOL, MIN_PROTOCOL, PAIR_PROTOCOL, versionOfProtocol, CODE_ALPHABET, shortCodeLabel } from '../core/link-payload.mjs';
 import { REMOTE_METHODS, principalOf } from '../core/permissions.mjs';
 import { isLegacy } from '../core/migrate-38.mjs';
+import { ownPorts } from './host.mjs';
 
 const RENDERER = path.resolve(process.env.ORB_RENDERER || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'renderer'));
 const SESSION_DAYS = 30; // a phone unused for this long has to be paired again
@@ -159,9 +160,10 @@ export function plainHttpBrowser({ origin, app = false, localAddress, routes = [
 const parseMeta = (d) => { try { return d?.meta ? JSON.parse(d.meta) : {}; } catch { return {}; } };
 const metaVOf = (d) => Number(parseMeta(d).v ?? 2);
 // 3.5: the Android app's page is not served by this PC but by the app itself: it may call the API, where everything is
-// still sealed with the phone's own key, and its WebView has to be told so (CORS). 3.8.1 (Tauri): http://tauri.localhost;
-// the Capacitor app of 3.8.0 (http://localhost) until the phone updates.
-const APP_ORIGINS = new Set(['http://tauri.localhost', 'https://tauri.localhost', 'http://localhost', 'https://localhost', 'capacitor://localhost']);
+// still sealed with the phone's own key, and its WebView has to be told so (CORS). 3.8.1 (Tauri): http://tauri.localhost
+// only. The Capacitor app's origins (localhost, capacitor://) are gone (review D8 B1: a page on this PC's localhost, such
+// as an agent's, would pass for the app; the phone is reinstalled with 3.8.1, definition item 18).
+const APP_ORIGINS = new Set(['http://tauri.localhost', 'https://tauri.localhost']);
 const APP_CORS = { 'Access-Control-Allow-Methods': 'GET, POST', 'Access-Control-Allow-Headers': 'Content-Type, X-Orb-Device, X-Orb-Auth', 'Access-Control-Allow-Private-Network': 'true', 'Access-Control-Max-Age': '600', Vary: 'Origin' };
 const appOrigin = (req) => { const o = String(req.headers.origin ?? '').toLowerCase(); return APP_ORIGINS.has(o) ? o : null; };
 
@@ -702,7 +704,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   const listen = async (address, port) => { const { default: http } = await import('node:http'); return new Promise((resolve) => {
     const srv = http.createServer((req, res) => { handle(req, res).catch((error) => { log(`móvil: ${error.stack}`); try { send(res, 500, { error: tr('msg.remote.internalError') }); } catch { /* sent */ } }); });
     srv.headersTimeout = 15_000; srv.requestTimeout = 60_000;    srv.once('error', (error) => resolve({ error }));
-    srv.listen(port, address, () => resolve({ srv }));
+    srv.listen(port, address, () => { ownPorts.add(srv.address().port); resolve({ srv }); });
   }); };
   async function serveHttps(port) {
     const r = await quickRun(tailscaleExe(), ['serve', '--bg', `--https=${port}`, `http://127.0.0.1:${port}`], { timeoutMs: 30_000 });

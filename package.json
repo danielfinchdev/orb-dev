@@ -25,7 +25,7 @@
     "test:puente-electron": "node test/puente-electron.e2e.mjs",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build && node scripts/tauri-check-release.mjs",
+    "tauri:build": "tauri build -- --locked && node scripts/tauri-check-release.mjs",
     "tauri:build:e2e": "node scripts/tauri-check-release.mjs --build-e2e",
     "release:firmar": "node scripts/release-firmar.mjs",
     "android:build": "node scripts/android-build.mjs",

@@ -13,7 +13,7 @@
 // frames unacknowledged, and the engine acknowledges them only once the app has taken a picture (the newest): one frame
 // at a time towards the window, at most two from the page, so a slow app slows the pictures down instead of
 // piling them up in the pipes (src/engine/stdio.mjs).
-import { hostCall } from './host.mjs';
+import { hostCall, ownPorts } from './host.mjs';
 import { createCdpBrowser } from './agent-browser.mjs';
 
 const FRAME_MS = 250;
@@ -25,7 +25,7 @@ export function createHostBrowser({ call = hostCall, language = () => 'es', skin
   const pages = new Map(); // page id -> listeners (method -> Set)
   const windows = {
     async open() {
-      const { page: id } = await call('host.browser.open', {}, 30_000);
+      const { page: id } = await call('host.browser.open', { blockPorts: [...ownPorts] }, 30_000);
       const listeners = new Map();
       pages.set(id, listeners);
       return {

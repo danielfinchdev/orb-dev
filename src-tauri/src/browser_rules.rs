@@ -23,13 +23,32 @@ fn orb_host(host: &str) -> bool {
   ORB_HOSTS.iter().any(|o| h == *o || h.ends_with(&format!(".{o}")))
 }
 
+/// The ports of the engine's own servers (the phone's access, dev-control), as the engine said at the last page it opened
+/// (review D8 B1): an agent's page never reaches them on this PC's loopback.
+static OWN_PORTS: std::sync::Mutex<Vec<u16>> = std::sync::Mutex::new(Vec::new());
+pub fn set_own_ports(params: &Value) {
+  let ports: Vec<u16> = params.get("blockPorts").and_then(Value::as_array).map(|a| a.iter().filter_map(|p| p.as_u64().and_then(|p| u16::try_from(p).ok())).take(16).collect()).unwrap_or_default();
+  *OWN_PORTS.lock().unwrap() = ports;
+}
+fn loopback(host: &str) -> bool {
+  let h = host.trim_end_matches('.').trim_start_matches('[').trim_end_matches(']').to_ascii_lowercase();
+  h == "localhost" || h.ends_with(".localhost") || h == "::1" || h.parse::<std::net::Ipv4Addr>().is_ok_and(|ip| ip.is_loopback() || ip.is_unspecified()) || h == "::"
+}
+pub fn own_ports() -> Vec<u16> {
+  OWN_PORTS.lock().unwrap().clone()
+}
+fn own_port(u: &tauri::Url) -> bool {
+  let ports = OWN_PORTS.lock().unwrap();
+  u.port_or_known_default().is_some_and(|p| ports.contains(&p)) && u.host_str().is_some_and(loopback)
+}
+
 /// An address the page itself may go to. The main frame: http(s) pages (a local preview included) and the empty page;
 /// a frame inside it may also be about:srcdoc, data: or blob: (Chromium keeps those in the page's origin rules). Never
 /// file:, another app's protocol (mailto:, ms-settings:, steam:…), the browser's own pages, or Orb's own hosts.
 pub fn url_allowed(url: &str, main_frame: bool) -> bool {
   let Ok(u) = tauri::Url::parse(url) else { return false };
   match u.scheme() {
-    "http" | "https" => !u.host_str().map(orb_host).unwrap_or(true),
+    "http" | "https" => !u.host_str().map(orb_host).unwrap_or(true) && !own_port(&u),
     "about" => main_frame && url == "about:blank" || !main_frame && matches!(u.path(), "blank" | "srcdoc"),
     "data" | "blob" | "javascript" => !main_frame,
     _ => false,
@@ -314,7 +333,10 @@ fn page(params: &Value) -> Result<u32, String> {
 /// (Page.navigate only to an allowed address), a known size, a JPEG frame.
 pub fn check_browser(method: &str, params: &Value) -> Option<Result<BrowserRequest, String>> {
   Some(match method {
-    "host.browser.open" => Ok(BrowserRequest::Open),
+    "host.browser.open" => {
+      set_own_ports(params);
+      Ok(BrowserRequest::Open)
+    }
     "host.browser.close" => page(params).map(BrowserRequest::Close),
     "host.browser.cdp" => (|| {
       let page = page(params)?;
@@ -394,6 +416,12 @@ mod tests {
     for url in ["about:srcdoc", "about:blank", "data:text/html,x", "blob:https://ejemplo.com/x", "https://ejemplo.com/"] {
       assert!(url_allowed(url, false), "{url}");
     }
+    set_own_ports(&serde_json::json!({ "blockPorts": [8765] }));
+    for url in ["http://127.0.0.1:8765/api/me", "http://localhost:8765/", "http://[::1]:8765/", "http://0.0.0.0:8765/", "http://app.localhost:8765/"] {
+      assert!(!url_allowed(url, true), "{url}");
+    }
+    assert!(url_allowed("http://127.0.0.1:8766/", true) && url_allowed("https://ejemplo.com:8765/", true));
+    set_own_ports(&serde_json::json!({}));
     for url in ["file:///C:/x.html", "ms-settings:", "http://tauri.localhost/", "edge://flags"] {
       assert!(!url_allowed(url, false), "{url}");
     }

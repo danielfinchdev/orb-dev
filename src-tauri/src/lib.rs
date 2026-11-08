@@ -45,6 +45,8 @@ use tauri::{AppHandle, Manager, RunEvent, WebviewWindow};
 const DATA_DIR: &str = "Orb.dev";
 /// The app, for what runs outside Tauri's own callbacks (desktop.rs › guard_against_electron).
 static APP: std::sync::OnceLock<AppHandle> = std::sync::OnceLock::new();
+/// The window that stops an earlier Orb could not be made (review D10 B13): written to the engine's log once it exists.
+static GUARD_FAILED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 fn only_main(window: &WebviewWindow) -> Result<(), String> {
   if window.label() == "main" {
@@ -87,11 +89,12 @@ async fn app_info(window: WebviewWindow) -> Result<Value, String> {
   // Why the start failed, when the window offers something for it (secretBusy, secretUnreadable).
   let start_error = match &status {
     // With «Empezar con una clave nueva» the window says what is lost: whether a recovery code and a master password
-    // exist in this workspace's core (review D-fix M2).
+    // exist in this workspace's core (review D-fix M2), and whether it keeps secrets (review D10 B6: without the master
+    // password they go with the old key).
     engine::Status::Failed(e) => engine.start_code().map(|code| {
       let core = home.as_ref().map(|h| std::path::Path::new(h).join("core"));
       let has = |rel: &[&str]| core.as_ref().is_some_and(|c| rel.iter().fold(c.clone(), |p, r| p.join(r)).is_file());
-      json!({ "code": code, "message": e, "recovery": has(&["datos", "copia-clave.json"]), "master": has(&["secretos", "maestra.json"]) })
+      json!({ "code": code, "message": e, "recovery": has(&["datos", "copia-clave.json"]), "master": has(&["secretos", "maestra.json"]), "vault": has(&["secretos", "secretos.json"]) })
     }),
     _ => None,
   };
@@ -271,7 +274,8 @@ fn engine_paths(app: &AppHandle) -> (PathBuf, PathBuf) {
 pub fn run() {
   // Before any webview or the engine exists: no WEBVIEW2_* from the environment (a DevTools port, another data folder)
   // reaches Orb's window, nor the engine and what it starts (protocol::webview2_vars).
-  for name in protocol::webview2_vars(std::env::vars_os().filter_map(|(k, _)| k.into_string().ok())) {
+  // Names that are not valid Unicode count too (review D4 B9): looked at as text, removed by their own name.
+  for name in protocol::env_matching(protocol::webview2_vars::<Vec<String>>) {
     // SAFETY: still single-threaded: nothing else reads the environment yet.
     unsafe { std::env::remove_var(name) };
   }
@@ -281,11 +285,9 @@ pub fn run() {
   // Orb on Electron (an earlier version still installed) open on the same data: never two at once.
   if separate.is_none() {
     if let Some(dir) = std::env::var_os("APPDATA").map(|d| PathBuf::from(d).join(DATA_DIR)) {
-      if desktop::electron_running(&dir) {
-        return startup_failed("Ya hay otro Orb abierto en este PC (una versión anterior). Ciérralo y vuelve a abrir Orb. / Another Orb (an earlier version) is open on this PC: close it and open Orb again.", None, false);
-      }
-      // And an earlier Orb opened from now on quits by itself, bringing this one to the front (desktop.rs).
-      desktop::guard_against_electron(&dir, || {
+      // An earlier Orb opened from now on quits by itself, bringing this one to the front (desktop.rs). Made before the
+      // check below (review D10 B11): an Electron starting in between is either seen by the check or meets this window.
+      let guarded = desktop::guard_against_electron(&dir, || {
         if let Some(app) = APP.get() {
           let a = app.clone();
           let _ = app.run_on_main_thread(move || {
@@ -297,6 +299,13 @@ pub fn run() {
           });
         }
       });
+      if !guarded {
+        // Review D10 B13: an earlier Orb opened later would not see this one (said in the log of this start).
+        GUARD_FAILED.store(true, std::sync::atomic::Ordering::SeqCst);
+      }
+      if desktop::electron_running(&dir) {
+        return startup_failed("Ya hay otro Orb abierto en este PC (una versión anterior). Ciérralo y vuelve a abrir Orb. / Another Orb (an earlier version) is open on this PC: close it and open Orb again.", None, false);
+      }
     }
   }
   let mut builder = tauri::Builder::default();
@@ -378,6 +387,9 @@ pub fn run() {
           dev_control: cfg!(debug_assertions) && std::env::var("ORB_DEV_CONTROL").as_deref() == Ok("1"),
         },
       );
+      if GUARD_FAILED.load(std::sync::atomic::Ordering::SeqCst) {
+        engine.log_line("no se pudo crear la ventana que detiene a un Orb anterior (Electron) abierto después");
+      }
       // Installed over Orb 3.8.0 (Electron): its leftovers go, and the window says so once (migrate.rs).
       let updater_cache = match &separate {
         None => std::env::var_os("LOCALAPPDATA").map(|d| PathBuf::from(d).join("orb-dev-updater")),

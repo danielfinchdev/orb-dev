@@ -41,7 +41,7 @@ nsis('orb-falso.nsi', { OUT: fakeOrb, MARK: path.join(tmp, 'abierto.txt') });
 // data folder and the workspace given; → run the test installer silently and say what happened. `extra` adds files or
 // folders (ending in \) to the install, `running` keeps its Orb.exe open that many ms while the installer runs,
 // `updated` starts the installer as Orb 3.8.0's updater does (its Orb.exe then writes down that it was opened again).
-function scenario(name, { dir, exit = null, workspace = path.join(tmp, name, 'Orb'), data = path.join(tmp, name, 'Orb.dev'), app = true, extra = [], running = 0, updated = false }) {
+function scenario(name, { dir, exit = null, workspace = path.join(tmp, name, 'Orb'), data = path.join(tmp, name, 'Orb.dev'), app = true, extra = [], running = 0, updated = false, account = 'User' }) {
   const key = `Software\\OrbE2E-${id}-${name}\\Uninstall\\c791290b-4a7b-5a24-9cba-134994a22734`; keys.push(key);
   const log = path.join(tmp, `${name}-desinstalador.txt`);
   const reopened = path.join(tmp, `${name}-reabierta.txt`);
@@ -60,7 +60,7 @@ function scenario(name, { dir, exit = null, workspace = path.join(tmp, name, 'Or
   const target = path.join(tmp, name, 'nuevo');
   const setup = path.join(tmp, `${name}-instalador.exe`);
   const hookLog = path.join(tmp, `${name}-gancho.txt`);
-  nsis('instalador.nsi', { OUT: setup, TAURI_PLUGINS, UNINSTKEY: key, DEFAULT_DIR: path.join(tmp, 'no-existe'), DATA_DIR: data, HOOKS: path.join(ROOT, 'src-tauri', 'nsis', 'hooks.nsh'), TARGET: target, ARGS_LOG: path.join(tmp, `${name}-args.txt`), FAKE_ORB: fakeOrb, HOOK_LOG: hookLog });
+  nsis('instalador.nsi', { OUT: setup, ACCOUNT: account, TAURI_PLUGINS, UNINSTKEY: key, DEFAULT_DIR: path.join(tmp, 'no-existe'), DATA_DIR: data, HOOKS: path.join(ROOT, 'src-tauri', 'nsis', 'hooks.nsh'), TARGET: target, ARGS_LOG: path.join(tmp, `${name}-args.txt`), FAKE_ORB: fakeOrb, HOOK_LOG: hookLog });
   let open = null;
   if (running) { open = spawn(path.join(dir, 'Orb.exe'), [], { stdio: 'ignore' }); }
   const started = Date.now();
@@ -86,6 +86,10 @@ try {
   {
     const r = scenario('falla', { dir: path.join(tmp, 'falla', 'Programs', 'Orb'), exit: 2 });
     check('M3: el desinstalador falla → no se instala nada, la 3.8.0 y su desinstalador siguen, sin marca', () => { assert.notEqual(r.code, 0); assert.ok(r.uninstallerRan, 'se intentó'); assert.ok(!r.installed && !r.mark && r.uninstaller && r.app, JSON.stringify(r)); });
+  }
+  {
+    const r = scenario('elevado', { dir: path.join(tmp, 'elevado', 'Programs', 'Orb'), account: 'Admin' });
+    check('D9 B5: como administrador, el desinstalador de la 3.8.0 (un archivo del usuario) nunca se ejecuta elevado', () => { assert.notEqual(r.code, 0); assert.ok(!r.uninstallerRan && !r.installed && !r.mark && r.uninstaller && r.app, JSON.stringify(r)); assert.equal(r.failed?.reason, 'elevado'); });
   }
   for (const [name, opts, why] of [
     ['espacio', (d) => ({ dir: path.join(d, 'Orb'), workspace: path.join(d, 'Orb') }), 'instalada en el espacio de trabajo'],

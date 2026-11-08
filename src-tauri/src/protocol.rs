@@ -141,6 +141,14 @@ pub fn guarded_core(target: &str, core: &str, inside: &[&str]) -> bool {
   target == core || inside.iter().any(|d| target == *d || target.starts_with(&format!("{d}\\")))
 }
 
+/// The environment's variables a filter of names picks, by their real names (a name that is not valid Unicode is looked
+/// at as lossy text, so it is never skipped).
+pub fn env_matching(pick: fn(Vec<String>) -> Vec<String>) -> Vec<std::ffi::OsString> {
+  let names: Vec<std::ffi::OsString> = std::env::vars_os().map(|(k, _)| k).collect();
+  let picked = pick(names.iter().map(|k| k.to_string_lossy().into_owned()).collect());
+  names.into_iter().filter(|k| picked.contains(&k.to_string_lossy().into_owned())).collect()
+}
+
 /// Node's own variables (NODE_OPTIONS, NODE_PATH, NODE_EXTRA_CA_CERTS…), dropped from the engine's environment: Node
 /// would run --require / --import code from them inside the engine. And OpenSSL's (OPENSSL_CONF, OPENSSL_MODULES…): a
 /// configuration file can load engines or providers, DLLs, into the engine. ORB_NODE is the app's (set for every start).
