@@ -132,7 +132,7 @@ npm run test:movil      # the mobile web app at phone size
 ORB_E2E_EXE=dist/win-unpacked/Orb.exe node test/smoke.e2e.mjs   # tests the packaged app
 npm run dist            # the installer and Orb Light in dist\ (on Windows)
 npm run android:build   # the Android app in dist\ (see docs/ANDROID.md)
-npm run icon            # regenerates the icon from the artwork (docs/diseno/art work); then npm run icon:ico
+npm run icon            # renders every app icon (Windows, Linux, favicon, Android) from build/icon-src/*.svg
 ```
 
 | Folder | Contents |

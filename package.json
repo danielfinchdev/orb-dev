@@ -22,7 +22,6 @@
     "dist:linux": "vite build && electron-builder --linux AppImage deb",
     "test:movil": "vite build && node test/mobile.e2e.mjs",
     "test:glass": "node test/glass.e2e.mjs",
-    "icon:ico": "electron scripts/icono-ico.cjs",
     "android:build": "node scripts/android-build.mjs",
     "android:build:debug": "node scripts/android-build.mjs --debug"
   },
@@ -146,7 +145,7 @@
     },
     "linux": {
       "executableName": "orb-dev",
-      "icon": "build/icon.png",
+      "icon": "build/icons",
       "artifactName": "Orb-${version}-linux-${arch}.${ext}",
       "category": "Development",
       "synopsis": "Your pocket director: one chat for your AI coding agents",

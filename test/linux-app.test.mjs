@@ -70,7 +70,7 @@ test('el empaquetado para Linux y su publicación con las de Windows', () => {
   const targets = Object.fromEntries(linux.target.map((t) => [t.target, t.arch]));
   assert.deepEqual(Object.keys(targets).sort(), ['AppImage', 'deb']);
   for (const arch of Object.values(targets)) assert.deepEqual(arch, ['x64', 'arm64']);
-  assert.equal(linux.icon, 'build/icon.png');
+  assert.equal(linux.icon, 'build/icons');
   assert.ok(pkg.build.files.includes('build/icon.png'), 'el icono va dentro (ventana y avisos)');
   assert.equal(linux.desktop.entry.StartupWMClass, pkg.productName, 'el dock agrupa la ventana con su icono');
   assert.equal(pkg.desktopName, `${linux.executableName}.desktop`);
