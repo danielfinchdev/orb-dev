@@ -172,7 +172,8 @@ test('una base 3.7 de dos usuarios: copia y archivo primero, luego fuera bots, r
   assert.deepEqual(archivedConfig.mcpServers.find((m) => m.name === 'de-ana'), { name: 'de-ana', command: 'x', args: ['(oculto)'], ocultos: ['env.API_KEY'], person: ANA });
   assert.ok(!JSON.stringify(archivedConfig).includes('secreto-de-ana'));
   assert.ok(!fs.existsSync(path.join(t.home, 'core', 'datos', WORK_DIR)), 'el orb.json original ya no está');
-  assert.ok(!fs.existsSync(path.join(t.home, 'core', 'datos', LOCK_FILE)) && !fs.existsSync(path.join(t.home, 'core', 'datos', 'migracion-3.8.json')));
+  assert.ok(!fs.existsSync(path.join(t.home, 'core', 'datos', 'migracion-3.8.json')));
+  assert.equal(fs.existsSync(path.join(t.home, 'core', 'datos', LOCK_FILE)), process.platform !== 'win32', 'el bloqueo: quitado en Windows; fuera, se queda');
   assert.deepEqual(readJson(archived(t, 'bots', 'bots.json')).map((b) => b.name), ['Casa', 'Bot de Ana']);
   assert.equal(readJson(archived(t, 'bots', 'grupos.json'))[0].members.length, 2);
   assert.equal(readJson(archived(t, 'bots', 'recordatorios.json'))[0].text, 'Sacar la basura');
