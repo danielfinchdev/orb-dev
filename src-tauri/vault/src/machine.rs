@@ -428,6 +428,7 @@ pub fn load(dir: &Path, copy: &Path, s: &dyn Sealer, allow_new: bool) -> Result<
     }
   }
   let found = hex.is_some();
+  let mut from_bin = false;
   let mut lost: Vec<PathBuf> = vec![];
   let hex = match hex {
     Some(h) => h,
@@ -444,6 +445,7 @@ pub fn load(dir: &Path, copy: &Path, s: &dyn Sealer, allow_new: bool) -> Result<
       lost = sealed.clone();
       // A plain clave.bin (a workspace made without the app) becomes the sealed key, only when nothing sealed is there.
       let mut bin = if sealed.is_empty() && old_there.is_empty() { fs::read(&plain).ok().filter(|b| b.len() >= 32) } else { None };
+      from_bin = bin.is_some();
       let raw = bin.as_ref().map(|b| Locked::from_slice(&b[..32])).unwrap_or_else(|| crypto::random(32));
       if let Some(b) = bin.as_mut() {
         zeroize::Zeroize::zeroize(b);
@@ -478,7 +480,9 @@ pub fn load(dir: &Path, copy: &Path, s: &dyn Sealer, allow_new: bool) -> Result<
   if !found && !kept {
     return Err(Failure::Busy("no se pudo guardar la clave".into()));
   }
-  if kept {
+  // The plain clave.bin goes only when it became the sealed key; one that was not used (sealed keys or Orb 3.8.0's were
+  // there) is never deleted: it stays where it is.
+  if kept && from_bin {
     let _ = fs::remove_file(&plain);
   }
   let hex = if !lost.is_empty() && kept {
@@ -576,6 +580,7 @@ mod tests {
     let n = load(&k.dir, &k.copy, &ok(), true).unwrap();
     assert_ne!(hex(&n), "09".repeat(32));
     assert_eq!(read(&k.dir.join("clave.enc")), "v10xyz");
+    assert_eq!(fs::read(k.dir.join("clave.bin")).unwrap(), [9u8; 32], "the unused clave.bin is not deleted");
   }
 
   #[test]
