@@ -866,6 +866,23 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   folder.
 - **Wording:** tone and vocabulary in [`WRITING-GUIDE.md`](WRITING-GUIDE.md).
 
+### Performance (3.8.1)
+
+- **Lazy screens** (`main.jsx`): only the chats, a conversation and the start's master password screen are in the
+  entry chunk. The other screens, Settings, the games and the tour are `lazy()` chunks that load in the background once
+  the app is up (`loadTheRest`); Settings and the games mount the first time they open and then stay (`OnceOpened`).
+- **Long lists:** messages (`.lazy-lines`, all but the newest twelve) and chat rows (`.lazy-row`) use
+  `content-visibility: auto` (app.css); the chat list draws its first 40 rows with the screen and the rest while idle
+  (`useGrowing` in `views/orb/inbox.jsx`).
+- **Fewer redraws:** `Markdown` is memoised on its text, a refetched conversation keeps unchanged lines (`keepSame` in
+  `chat.jsx`), an agent's blocks compare by content (`sameBlock` in `session.jsx`), a chat row only redraws when what it
+  shows changes, and `chat:state` events are applied once per frame (`chatStateSoon` in `main.jsx`).
+- **Robot:** a still robot has no compositor layer and builds the visor's code rows only the first time it shows them
+  (`orb.jsx`, app.css). Avoid `will-change`, `backdrop-filter` and blend modes on elements repeated in long lists.
+- **Measuring:** `scripts/medir.mjs` (start, memory, CPU at rest, scrolling smoothness; `--hidden` keeps the window
+  offscreen via `ORB_HIDDEN_WINDOW=1`; `--profile <dir>` saves a trace, CPU profiles, the compositor's layers and a
+  heap snapshot).
+
 ### Tutorials and guided tour
 
 - **Tutorials** (`src/ui/views/tutorials.jsx`, "Tutorials" menu entry, `tutorials` view): cards per topic
@@ -1026,6 +1043,7 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
 |---|---|
 | `npm test` | Every `test/*.test.mjs` (including that the es/en dictionaries match and that the English has no Spanish) of the engine with fake agents (`test/fixtures/fake-live.mjs` via `ORB_FAKE_AGENTS`), the real protocols against fake servers (ACP, codex app-server, Cursor CLI), the guard, sessions, tasks, delegation, Task Review, usage, permissions, the phone access, the master password and migrations |
 | `npm run test:app` | The whole app with Electron |
+| `node scripts/medir.mjs --hidden` | Performance of the packaged app (`electron-builder --win dir` first): start, memory, CPU at rest and scrolling (§27, Performance) |
 | `node test/explora.e2e.mjs` | Walkthrough with screenshots in `test-results/explora/`: first launch ("Preparing your PC", with the folder dialog mocked), every view and Settings section in day and night, the five themes, narrow window. With `ORB_LANG=en`, the same in English (`explora-en/`). Notes go to `notas.txt` |
 | `node test/real.e2e.mjs claude,codex,cursor` | **Real agents**: conversations, assistant task, report, undo, approval, steering, queue, fork, Task Review and scheduled tasks |
 | `ORB_E2E_EXE=dist/win-unpacked/Orb.exe node test/packaged-live.e2e.mjs` | The packaged app with real Claude |
