@@ -236,7 +236,7 @@ fn quick(op: &str, req: &Value, v: &mut Vault, now: u64, server: &Server) -> Ans
     "wait" => Ok(json!(v.wait_of(s(req, "channel"), now))),
     "tryBegin" => Ok(v.begin_try(s(req, "channel"), now).map(|t| t.to_json()).unwrap_or(Value::Null)),
     "tryEnd" => Ok(v.end_try(s(req, "channel"), req.get("ok") == Some(&json!(true)), now).to_json()),
-    "issue" => Ok(v.issue(req.get("purpose").and_then(Value::as_str).map(String::from), now)),
+    "issue" => v.issue(req.get("purpose").and_then(Value::as_str).map(String::from), now),
     "check" => Ok(json!(v.check_token(s(req, "token"), req.get("purpose").and_then(Value::as_str), req.get("consume") == Some(&json!(true)), now))),
     "lock" => {
       v.lock();
@@ -381,6 +381,7 @@ fn verify(h: &Handle, p: &Locked, channel: &str, now: u64) -> Answer {
   }
   let pair = v.new_pair_kdf();
   v.after_verify(key, || verifier_of(p, pair));
+  v.may_issue = true;
   Ok(tried.to_json())
 }
 
@@ -395,7 +396,9 @@ fn slow(op: &str, req: &Value, h: &Handle, now: impl Fn() -> u64) -> Answer {
       let p = password(req, "password");
       checked(&p)?;
       h.vault.lock().unwrap().may_create()?;
-      wrap(h, &p, None, now()).map(|_| json!(true))
+      wrap(h, &p, None, now())?;
+      h.vault.lock().unwrap().may_issue = true;
+      Ok(json!(true))
     }
     "verify" => {
       let channel = match s(req, "channel") {
@@ -413,7 +416,9 @@ fn slow(op: &str, req: &Value, h: &Handle, now: impl Fn() -> u64) -> Answer {
       }
       let created = h.vault.lock().unwrap().master_file().and_then(|m| m.get("created").and_then(Value::as_str).map(String::from));
       wrap(h, &next, created, now())?;
-      h.vault.lock().unwrap().lock();
+      let mut v = h.vault.lock().unwrap();
+      v.lock();
+      v.may_issue = true;
       Ok(json!({ "ok": true }))
     }
     "forgot" | "reset" => {
@@ -432,6 +437,7 @@ fn slow(op: &str, req: &Value, h: &Handle, now: impl Fn() -> u64) -> Answer {
       let mut v = h.vault.lock().unwrap();
       v.clear_tries();
       v.lock();
+      v.may_issue = true;
       Ok(json!({ "ok": true }))
     }
     _ => Err(Code::Damaged),

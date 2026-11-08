@@ -229,6 +229,9 @@ pub struct Vault {
   fails: HashMap<String, u64>,
   fails_until: HashMap<String, u64>,
   had_machine: bool,
+  /// A password (or the recovery code's step) was just checked right in this session: one window token may be issued
+  /// (review final B5: a token is never made out of nothing).
+  pub may_issue: bool,
   /// Something in the folder changed (the engine copies it outside core: src/core/master.mjs › mirrorTo).
   pub changed: bool,
   /// Channels that just reached another FREE_TRIES wrong tries in a row (the engine tells the owner).
@@ -248,6 +251,7 @@ impl Vault {
       fails: HashMap::new(),
       fails_until: HashMap::new(),
       had_machine: false,
+      may_issue: false,
       changed: false,
       notices: Vec::new(),
     }
@@ -581,12 +585,15 @@ impl Vault {
   }
 
   // ---- the window's unlock tokens (memory only)
-  pub fn issue(&mut self, purpose: Option<String>, now: u64) -> Value {
+  pub fn issue(&mut self, purpose: Option<String>, now: u64) -> Result<Value, Code> {
+    if !std::mem::take(&mut self.may_issue) {
+      return Err(Code::Locked);
+    }
     self.tokens.retain(|_, t| t.0 > now);
     let token: String = crypto::random(24).as_slice().iter().map(|b| format!("{b:02x}")).collect();
     let until = now + if purpose.is_some() { FRESH_MS } else { UNLOCK_MS };
     self.tokens.insert(token.clone(), (until, purpose));
-    json!({ "unlock": token, "until": until })
+    Ok(json!({ "unlock": token, "until": until }))
   }
   pub fn check_token(&mut self, token: &str, purpose: Option<&str>, consume: bool, now: u64) -> bool {
     let ok = self.tokens.get(token).is_some_and(|t| t.0 > now && t.1.as_deref() == purpose);
@@ -597,6 +604,7 @@ impl Vault {
   }
   pub fn lock(&mut self) {
     self.tokens.clear();
+    self.may_issue = false;
   }
 
   /// This PC's private key for the phones (the vault's remote_keys), for the linking's key confirmation.

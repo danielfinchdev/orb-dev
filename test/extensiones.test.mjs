@@ -576,9 +576,10 @@ test('M8: con la bóveda cerrada las claves de un conector movido esperan y se a
   assert.deepEqual(saved, []);
 });
 
-test('B1: el token de eliminar un proyecto sirve una sola vez', () => {
+test('B1: el token de eliminar un proyecto sirve una sola vez', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-token-'));
   const m = new Master(dir, { now: () => 1000 }); // 3.8.1: the tokens live in the vault (Rust)
+  await m.create('una contraseña de prueba');
   const { unlock } = m.issue('deleteProject');
   assert.equal(m.checkToken(unlock, 'deleteProject', { consume: true }), true);
   assert.equal(m.checkToken(unlock, 'deleteProject', { consume: true }), false);

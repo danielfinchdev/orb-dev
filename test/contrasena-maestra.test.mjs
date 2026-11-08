@@ -163,11 +163,14 @@ test('contraseñas incorrectas: cinco seguidas y luego esperas que crecen; sin p
   assert.equal((await damaged.verify(PASS)).reason, 'wait');
   fs.rmSync(path.join(dir, FILES.tries));
   const ok = new Master(dir, { secret: secretA, now: () => now }); ok.openWithMachine();
+  await assert.rejects(async () => ok.issue(), /locked/, 'review final B5: no token without a password checked first');
+  assert.equal((await ok.verify(PASS)).ok, true);
   const { unlock, until } = ok.issue();
   assert.equal(until - now, UNLOCK_MS);
   assert.equal(ok.checkToken(unlock), true);
   now += UNLOCK_MS + 1;
   assert.equal(ok.checkToken(unlock), false, 'a los 5 minutos ya no vale');
+  await ok.verify(PASS);
   const second = ok.issue().unlock; ok.lock();
   assert.equal(ok.checkToken(second), false, 'bloquear la ventana lo quita');
   assert.equal(ok.checkToken('inventado'), false);
