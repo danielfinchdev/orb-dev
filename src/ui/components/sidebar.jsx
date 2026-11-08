@@ -113,6 +113,8 @@ export function Sidebar({ mood }) {
   const route = useStore((s) => s.route);
   const conversations = useStore((s) => s.conversations) ?? [];
   const settingsOpen = useStore((s) => Boolean(s.settings));
+  // 3.8.1 (H4e): while an agent works on a task the robot floats (its face stays as the conversations say).
+  const working = useStore((s) => s.tasks.some((x) => x.status === 'running'));
   const name = app.config.assistantName;
   const [sections, setSection] = useRemembered('orb.secciones', { footer: false });
   const { width, setWidth, startResize } = useSidebarWidth();
@@ -125,7 +127,7 @@ export function Sidebar({ mood }) {
         {/* 3.0: the robot goes back to the conversation in progress (3.2: the last one opened). */}
         <Tip label={t('nav.backToChat', { name })} side="bottom" align="start">
           <button type="button" className="no-drag relative shrink-0 cursor-pointer rounded-full" onClick={() => go(lastChat(route, conversations))} aria-label={t('nav.backToChat', { name })} data-testid="sidebar-home">
-            <Robot size={34} mood={mood} title={name} live />
+            <Robot size={34} mood={mood} title={name} live active={working} />
             {(app.chats ?? []).some((c) => c.busy) ? <span className="bg-primary absolute right-0 bottom-0 size-2 animate-pulse rounded-full" /> : null}
           </button>
         </Tip>

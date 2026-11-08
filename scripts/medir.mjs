@@ -4,7 +4,7 @@
 //
 //   node scripts/medir.mjs [--exe dist/win-unpacked/Orb.exe] [--shell electron|tauri] [--runs 5] [--idle 30]
 //                          [--installer <setup.exe>] [--apk <file.apk>] [--out <results.json>] [--hidden] [--profile <dir>]
-//                          [--big] [--anim <s>] [--anim-only]
+//                          [--big] [--anim <s>] [--anim-only] [--quiet-scene]
 //
 // Tauri: measures a build with the `e2e` cargo feature (npm run tauri:build:e2e), the only one that opens the window's
 // DevTools port (ORB_E2E_CDP_PORT; a normal build ignores it and every WEBVIEW2_* variable). --hidden keeps its window
@@ -30,6 +30,10 @@
 // layout, JavaScript, busy %), the CPU of the renderer and of the GPU process and the animations running; with --profile
 // also a trace of each screen and what the compositor did per frame (frames/s, GPU ms per frame, damaged area, the
 // animations not composited). --anim-only: only the starts and that (10 s unless --anim says otherwise).
+// 3.8.1 (H4e): each screen is measured 12 s after it loads (the welcome robot's hello is over: at rest the robot stands
+// still), plus «robot-activo»: the new chat with the pointer over the sidebar's robot (it floats), with the
+// requestAnimationFrame deltas meanwhile (dropped frames). --quiet-scene pauses the theme's moving backdrop (the «orb»
+// theme's clouds) to see what the robot alone costs.
 import { chromium } from 'playwright-core';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -52,6 +56,7 @@ const profileDir = arg('profile') ? path.resolve(arg('profile')) : null;
 const big = process.argv.includes('--big');
 const animOnly = process.argv.includes('--anim-only');
 const animS = Number(arg('anim', animOnly ? 10 : 0));
+const quietScene = process.argv.includes('--quiet-scene');
 if (profileDir) fs.mkdirSync(profileDir, { recursive: true });
 if (!fs.existsSync(exe)) { console.error(`no existe ${exe} (compila antes o pasa --exe)`); process.exit(2); }
 
@@ -285,11 +290,14 @@ function traceFrames(file) {
 async function idleAnimations(run) {
   const { page } = run;
   const longId = await page.evaluate(async () => (await window.orb.call('conversations.list')).find?.((c) => c.title === 'Conversación larga')?.id ?? null).catch(() => null);
-  const screens = { 'chat-nuevo': { view: 'chat' }, tareas: { view: 'tasks' }, ...(longId ? { 'chat-largo': { view: 'chat', id: longId } } : {}) };
-  results.animations = {};
-  for (const [name, route] of Object.entries(screens)) {
+  const screens = { 'chat-nuevo': { view: 'chat' }, tareas: { view: 'tasks' }, ...(longId ? { 'chat-largo': { view: 'chat', id: longId } } : {}), 'robot-activo': { view: 'chat', hover: '[data-testid=sidebar-home] .orb' } };
+  results.animations = { quietScene };
+  for (const [name, { hover, ...route }] of Object.entries(screens)) {
     await page.evaluate((r) => { localStorage.setItem('orb.route', JSON.stringify(r)); location.reload(); }, route);
-    await page.waitForSelector(READY, { timeout: 30000 }); await wait(4000);
+    await page.waitForSelector(READY, { timeout: 30000 });
+    if (quietScene) await page.addStyleTag({ content: '.scene *, .scene *::before, .scene *::after, .theme-band::before { animation-play-state: paused !important; }' });
+    await wait(12000);
+    if (hover) { await page.hover(hover).catch(() => {}); await wait(1500); }
     const perf = await page.context().newCDPSession(page); await perf.send('Performance.enable');
     const th0 = await mainThread(perf); const m0 = memory(run.app.pid); const t0 = Date.now();
     await wait(animS * 1000);
@@ -300,6 +308,12 @@ async function idleAnimations(run) {
     const robots = await page.evaluate(() => ({ all: document.querySelectorAll('.orb').length, still: document.querySelectorAll('.orb.still').length })).catch(() => null);
     results.animations[name] = { seconds: r1(s), perSecond: d ? { styleMs: r1(d.styleMs / s), layoutMs: r1(d.layoutMs / s), scriptMs: r1(d.scriptMs / s), taskMs: r1(d.taskMs / s) } : null, mainThreadBusyPct: d ? r1(d.taskMs / s / 10) : null,
       cpuPct: { renderer: cpu('renderer'), gpu: cpu('gpu-process'), all: r1((100 * (m1.cpuSec - m0.cpuSec)) / s) }, robots, running };
+    if (hover) {
+      // smoothness while it floats: 5 s of requestAnimationFrame deltas (a delta over 25 ms = at least one frame dropped)
+      const deltas = await page.evaluate(() => new Promise((done) => { const out = []; let last = null; const end = performance.now() + 5000; const f = (t) => { if (last != null) out.push(t - last); last = t; if (t < end) requestAnimationFrame(f); else done(out); }; requestAnimationFrame(f); })).catch(() => []);
+      results.animations[name].floating = await page.evaluate((sel) => document.querySelector(sel)?.hasAttribute('data-float') ?? null, hover).catch(() => null);
+      results.animations[name].frames60 = { frames: deltas.length, p50: r1(pct(deltas, 50)), p95: r1(pct(deltas, 95)), max: r1(deltas.length ? Math.max(...deltas) : 0), dropped: deltas.filter((d) => d > 25).length };
+    }
     if (profileDir) {
       const file = path.join(profileDir, `anim-${name}.trace.json`);
       await run.browser.startTracing(page, { path: file, categories: ['devtools.timeline', 'disabled-by-default-devtools.timeline', 'disabled-by-default-devtools.timeline.frame', 'disabled-by-default-devtools.timeline.invalidationTracking', 'blink.animations', 'devtools.timeline.async', 'v8.execute', 'blink', 'cc', 'gpu', 'viz'] });
