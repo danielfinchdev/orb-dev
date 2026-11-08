@@ -8,8 +8,11 @@
 // Tauri: measures a build with the `e2e` cargo feature (npm run tauri:build:e2e), the only one that opens the window's
 // DevTools port (ORB_E2E_CDP_PORT; a normal build ignores it and every WEBVIEW2_* variable). --hidden keeps its window
 // hidden the whole time (ORB_HIDDEN_WINDOW=1: nobody at the PC; the numbers are then of a window never shown).
-// Electron honours ORB_HIDDEN_WINDOW too (an offscreen window that still draws 60 frames a second). --profile: on the last start, a performance trace and a CPU profile of the long
-// conversation's scrolling and a heap snapshot after the views, saved in <dir> (open them in Chrome's DevTools).
+// Electron honours ORB_HIDDEN_WINDOW too (an offscreen window that still draws 60 frames a second; its frames are copied
+// to the main process, whose memory is then not comparable with a shown window's). --profile: on the last start, a CPU
+// profile of the start, a trace and a CPU profile of the long conversation's scrolling, the compositor's layers and
+// a heap snapshot after the views, saved in <dir> (open them in Chrome's DevTools). cpuIdle: the CPU all the processes
+// used at rest, from 5 s after the start until the idle memory point.
 //
 // Start: from spawning the process to the first paint (the page's own paint timing), to the engine being ready (its
 // «motor arrancado» line in motor.log, written with the system clock) and to the main screen being drawn (the sidebar).
@@ -88,7 +91,7 @@ const runsDir = path.join(home, 'core', 'ejecuciones');
 
 // ---- the app's processes
 function processTree(rootPid) {
-  const ps = 'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,CommandLine,WorkingSetSize,PrivatePageCount | ConvertTo-Json -Compress';
+  const ps = 'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,CommandLine,WorkingSetSize,PrivatePageCount,KernelModeTime,UserModeTime | ConvertTo-Json -Compress';
   let all = null;
   for (let i = 0; all == null; i++) { try { all = JSON.parse(execFileSync('powershell.exe', ['-NoProfile', '-Command', ps], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })); } catch (e) { if (i >= 3) throw e; } } // now and then the list comes cut
   const kids = new Map(); for (const p of all) { if (!kids.has(p.ParentProcessId)) kids.set(p.ParentProcessId, []); kids.get(p.ParentProcessId).push(p); }
@@ -103,9 +106,9 @@ function memory(rootPid) {
     const cl = String(p.CommandLine ?? ''); const t = /--type=([\w-]+)/.exec(cl)?.[1]; const u = /--utility-sub-type=([\w.-]+)/.exec(cl)?.[1]; const s = /([\w.-]+\.m?js)\b/i.exec(cl)?.[1];
     return `${p.Name} ${t ? (u ? `${t}:${u}` : t) : s ? `node:${s}` : 'main'}`;
   };
-  const by = {}; for (const p of tree) { const k = kind(p); by[k] ??= { n: 0, ws: 0, priv: 0 }; by[k].n++; by[k].ws += p.WorkingSetSize; by[k].priv += p.PrivatePageCount; }
-  return { processes: tree.length, wsMB: MB(tree.reduce((s, p) => s + p.WorkingSetSize, 0)), privateMB: MB(tree.reduce((s, p) => s + p.PrivatePageCount, 0)),
-    byName: Object.fromEntries(Object.entries(by).map(([k, v]) => [k, { n: v.n, wsMB: MB(v.ws), privateMB: MB(v.priv) }])),
+  const by = {}; for (const p of tree) { const k = kind(p); by[k] ??= { n: 0, ws: 0, priv: 0, cpu: 0 }; by[k].n++; by[k].ws += p.WorkingSetSize; by[k].priv += p.PrivatePageCount; by[k].cpu += (Number(p.KernelModeTime) + Number(p.UserModeTime)) / 1e7; }
+  return { at: Date.now(), cpuSec: tree.reduce((n, p) => n + (Number(p.KernelModeTime) + Number(p.UserModeTime)) / 1e7, 0), processes: tree.length, wsMB: MB(tree.reduce((s, p) => s + p.WorkingSetSize, 0)), privateMB: MB(tree.reduce((s, p) => s + p.PrivatePageCount, 0)),
+    byName: Object.fromEntries(Object.entries(by).map(([k, v]) => [k, { n: v.n, wsMB: MB(v.ws), privateMB: MB(v.priv), cpuSec: Math.round(v.cpu * 100) / 100 }])),
     largestWsMB: MB(Math.max(...tree.map((p) => p.WorkingSetSize))) };
 }
 
@@ -218,16 +221,25 @@ const results = { target: { exe, shell, version: PKG.version, hiddenWindow: hidd
 // ---- 1..n: the start
 for (let i = 1; i <= RUNS; i++) {
   const run = await launch();
+  // --profile: the last start's JavaScript, from the moment DevTools reaches the page until the main screen is drawn
+  let startCdp = null;
+  if (profileDir && i === RUNS) { try { startCdp = await run.page.context().newCDPSession(run.page); await startCdp.send('Profiler.enable'); await startCdp.send('Profiler.setSamplingInterval', { interval: 200 }); await startCdp.send('Profiler.start'); } catch { startCdp = null; } }
   const pt = await pageTimes(run.page);
+  if (startCdp) { const { profile } = await startCdp.send('Profiler.stop'); fs.writeFileSync(path.join(profileDir, 'arranque.cpuprofile'), JSON.stringify(profile)); await startCdp.detach(); }
   const engine = await until(() => engineReadyAt(run.t0), 'motor arrancado en motor.log', 60000, 100);
   results.starts.push({ run: i, toNavStartMs: Math.round(pt.navStart - run.t0), toFirstPaintMs: pt.fcp ? Math.round(pt.fcp - run.t0) : null, toScriptsReadyMs: pt.dcl ? Math.round(pt.dcl - run.t0) : null, toEngineReadyMs: Math.round(engine - run.t0), toMainScreenMs: Math.round(pt.ready - run.t0), mainScreenLate: pt.readyLate });
   console.error(`arranque ${i}: ${JSON.stringify(results.starts.at(-1))}`);
   if (i < RUNS) { await quit(run); continue; }
 
   // ---- memory and smoothness on the last start
-  await wait(IDLE_S * 1000);
+  await wait(Math.min(5, IDLE_S) * 1000);
+  const settled = memory(run.app.pid);
+  await wait(Math.max(0, IDLE_S - 5) * 1000);
   const { page } = run;
   results.memory.idle = { ...memory(run.app.pid), page: await pageMemory(page) };
+  // the CPU the app used while nobody touched it (all its processes, % of one core), from 5 s after the start to now
+  const busy = (a, b, k) => { const x = k ? a.byName[k]?.cpuSec ?? 0 : a.cpuSec; const y = k ? b.byName[k]?.cpuSec ?? 0 : b.cpuSec; return Math.round((1000 * (y - x)) / (b.at - a.at)) / 10; };
+  results.cpuIdle = { seconds: Math.round((results.memory.idle.at - settled.at) / 1000), percentOfOneCore: busy(settled, results.memory.idle), byName: Object.fromEntries(Object.keys(results.memory.idle.byName).map((k) => [k, busy(settled, results.memory.idle, k)])) };
   const click = async (sel) => { try { await page.click(sel, { timeout: 5000 }); await wait(700); return true; } catch { return false; } };
   const opened = [];
   // chats of the list (the newest ones on top), the tasks, the projects' info, then the other views
