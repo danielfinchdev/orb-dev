@@ -812,7 +812,7 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   form («Pide usar herramientas sin preguntarte…»). Per agent:
   - **Claude Code**: the SDK's `plugins: [{ type: 'local', path }]` (`--plugin-dir`); Claude lists them as
     `orb-skills:<name>` and loads one when it fits (checked with the real Claude Code: `supportedCommands()` lists the
-    plugin's skill). The assistant (coordinator) gets it too.
+    plugin's skill). The assistant (coordinator) does not: it has `Skill` denied and leaves that work to its tasks' agents.
   - **Codex**: the app-server's `skills/extraRoots/set` with `core\skills\.activas\skills`, before `thread/start`
     (checked with codex-cli 0.166: `skills/list` shows them; an older Codex without the method just goes without).
     Nothing is written in the user's `CODEX_HOME`.
@@ -1489,7 +1489,8 @@ in `src/core/home.mjs`; nothing else builds them.
   for reading tools only; and the roots the
   engine names with `setGuardedRoots`: the backups' root, the chosen backups' folder, the app's `claves` folder and its
   `Local State` (section 37), never
-  one that holds the workspace; Cursor gets the same as deny rules) and on the watcher and the backups above. The guard
+  one that holds the workspace, and (3.8.1, owner's decision 19 g) the owner's private `<workspace>\personal`, denied
+  to every agent for reading too; Cursor gets the same as deny rules) and on the watcher and the backups above. The guard
   is not a boundary (section 28), and Ajustes › Datos says so.
 - **Master password**: every window action on core (open it, restore a copy, choose where copies go) goes through
   `unlockCore` in `src/ui/lib/core-access.js`, which asks for the master password (section 37).
@@ -1572,10 +1573,18 @@ writing a connector key in clear, changing a connector that has keys (its comman
 of its keys) and taking an entry off «Cosas que nadie toca»; 3.8.1: deleting a project with its folder
 (`projects.deleteCheck`; its end, `projects.delete` / `projects.deleteAbort`, takes the one-off ticket the check returned). Opening core in the Explorer too (`main.mjs` asks the engine
 `master.check` before `app:openPath` on core itself or on `core\secretos`, compared by real path; core's tool folders
-open as before). The dispatcher refuses them without a fresh token: `master.unlock` (the password) gives one for 5
+open as before; 3.8.1: the engine's `guardedCore`, used by `app.openIn`, `app.runAction` and `app.openTerminal`, guards
+everything inside core but `mcp`, `skills`, `preparacion`, `herramientas`, `bitacora` and `copias\aisladas`, so
+`core\datos` too). The dispatcher refuses them without a fresh token: `master.unlock` (the password) gives one for 5
 minutes, kept in the engine's memory and the window's (`unlockCore`, which asks with a dialog). It ends with
 `master.lock`, called by `main.mjs` when Windows locks, the PC sleeps or shuts down; and with the window, which keeps it
-in memory only. Changing the password asks for the current one. `backup.now` stays free. Some actions ask for the
+in memory only. 3.8.1, **Orb's lock screen** (owner's decision 20): `master.lock` (Windows locked, the PC asleep,
+«Bloquear ahora» in Ajustes › Datos, or `ui.lockMinutes` without a key, click, touch, wheel or pointer move in the
+window: 15 by default, `src/ui/lib/idle-lock.js`) also sets the engine's `screenLocked` (memory only; `master.state`
+says it) and emits `master:locked { screen: true }`: the window shows only the password screen (`MasterLocked`, also
+after a reload: `lib/startup.js`) until `master.unlock` (or change, forgot, reset) clears it. The vault stays open:
+agents, schedules and the phone keep working. A new start of Orb opens as before (this PC's key). Changing the password
+asks for the current one. `backup.now` stays free. Some actions ask for the
 password **every time** (`FRESH_UNLOCK` in `permissions.mjs`; 3.8.1: deleting a project): the window asks even with an
 unlock in force (`unlockCore` skips it for `FRESH_ACTIONS`), `master.unlock({ purpose })` gives a token for that action
 only, for 2 minutes and never kept, and the dispatcher accepts nothing else for it (an unlock of 5 minutes does not open

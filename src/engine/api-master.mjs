@@ -91,13 +91,19 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
     try { n = board.one('SELECT COUNT(*) AS n FROM devices').n; if (remoteRef.current) remoteRef.current.revokeAll(); else board.run('DELETE FROM devices'); } catch (error) { log(`${why}: móviles: ${error.message}`); }
     return n;
   };
+  // 3.8.1: Orb's own lock screen (decision 20 of the owner): after the minutes of Ajustes › Datos without use, when
+  // Windows locks or the PC sleeps (Rust's power.rs calls master.lock), or by hand, the window shows only the password.
+  // The agents keep working (the vault stays open: only the window's tokens go). Kept in memory: a reload of the window
+  // finds it locked; a new start of Orb opens as usual (this PC's own key, as at every start).
+  let screen = false;
+  const screenOff = () => { if (screen) { screen = false; emit('master:unlocked', {}); } };
   return {
     // canForget: «He olvidado la contraseña» can keep the secrets (this PC opened them and has a recovery code).
     'master.state': () => {
       const m = master();
       let recovery = false; try { recovery = hasRecovery(ctx.home, machineSecret()); } catch { recovery = false; }
       // upgraded: the data came from Orb 3.7 (the first start of 3.8 asks for the password with its own words).
-      return { ...m.state(), canForget: m.unlocked() && recovery, minLength: MIN_LENGTH, unlockMinutes: UNLOCK_MS / 60_000, upgraded: Boolean(board.setting(DONE_AT)) };
+      return { ...m.state(), canForget: m.unlocked() && recovery, minLength: MIN_LENGTH, unlockMinutes: UNLOCK_MS / 60_000, screenLocked: screen && m.hasPassword(), upgraded: Boolean(board.setting(DONE_AT)) };
     },
     // The first one (the welcome, or the first start of 3.8): no current one to ask for. → a token (the window is unlocked).
     'master.create': async ({ password: p }) => {
@@ -105,6 +111,7 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
       try { await m.create(password(p)); } catch (error) { throw asUser(error); }
       log('contraseña maestra creada');
       if (wasLocked) opened(); else migrateSecrets(board, m, { log, emit });
+      screenOff();
       return m.issue();
     },
     // purpose: one of FRESH_PURPOSES (an action that asks every time): a token for that action only.
@@ -113,17 +120,26 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
       const r = await m.verify(password(p), 'pc');
       if (!r.ok) throw refused(r);
       if (wasLocked) { log('secretos: abiertos con la contraseña maestra'); opened(); }
+      if (screen) log('pantalla de bloqueo: desbloqueada');
+      screenOff();
       return m.issue(FRESH_PURPOSES.includes(purpose) ? purpose : null);
     },
-    // The window locked or closed (the app), or «Bloquear» by hand: every token goes.
-    'master.lock': () => { master().lock(); emit('master:locked', {}); return true; },
+    // Windows locked or the PC sleeps (the app), Orb unused for a while (the window) or «Bloquear» by hand: every token
+    // goes and, with a master password, the window shows the lock screen (screen: true) until it is typed.
+    'master.lock': ({ reason } = {}) => {
+      const m = master(); m.lock();
+      const was = screen; screen = m.hasPassword();
+      if (screen && !was) log(`pantalla de bloqueo${reason === 'idle' ? ' (sin usar)' : ''}`);
+      emit('master:locked', { screen });
+      return true;
+    },
     // Guarded (checkUnlock): whether the window's token is still good (the app asks before opening core in the Explorer).
     'master.check': () => true,
     'master.change': async ({ current, next }) => {
       let r; try { r = await master().change(password(current), password(next)); } catch (error) { throw asUser(error); }
       if (!r.ok) throw refused(r);
       log('contraseña maestra cambiada');
-      emit('master:locked', {});
+      emit('master:locked', {}); screenOff();
       return master().issue();
     },
     // «He olvidado la contraseña»: the backups' recovery code proves it is the owner (with the same waits as a password).
@@ -139,7 +155,7 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
       const unlinked = unlinkAll('olvido');
       log(`contraseña maestra nueva con el código de recuperación (clave de datos nueva); ${unlinked} dispositivo(s) desenlazados`);
       board.notice(tr('msg.master.forgotDone', { n: unlinked }), 'warning');
-      emit('master:locked', {});
+      emit('master:locked', {}); screenOff();
       return { ...m.issue(), unlinked };
     },
     // «Borrar secretos y empezar de cero» (confirm: the user read what it does): without the recovery code, or on a PC that
@@ -152,7 +168,7 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
       const unlinked = unlinkAll('empezar de cero');
       log(`secretos borrados y contraseña maestra nueva; ${unlinked} dispositivo(s) desenlazados`);
       board.notice(tr('msg.master.resetDone', { n: unlinked }), 'warning');
-      emit('master:locked', {});
+      emit('master:locked', {}); screenOff();
       if (wasLocked) opened();
       return { ...m.issue(), unlinked };
     },

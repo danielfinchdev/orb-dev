@@ -228,7 +228,7 @@ test('el motor: secretos de 3.7 fuera de la base y de orb.json, acciones protegi
     assert.ok(!db.includes(C.b64.enc(priv)) && !db.includes('VAPID_PRIVADA_X'), 'la clave del PC ya no está en la base (ni en sus páginas libres)');
     const config = fs.readFileSync(path.join(t.home, 'core', 'orb.json'), 'utf8');
     assert.ok(!config.includes('ghp_DE_PRUEBA_123') && config.includes('orb-secret:mcp/github/GITHUB_TOKEN'), 'orb.json guarda la referencia');
-    assert.deepEqual(await e.call('master.state'), { exists: false, lost: false, locked: false, changedAt: null, canForget: false, minLength: 10, unlockMinutes: 5, upgraded: false });
+    assert.deepEqual(await e.call('master.state'), { exists: false, lost: false, locked: false, changedAt: null, canForget: false, minLength: 10, unlockMinutes: 5, screenLocked: false, upgraded: false });
     // Guarded: nothing without the password (there is none yet), then nothing without a fresh unlock.
     await assert.rejects(e.call('secrets.connector', { name: 'github' }), /Crea primero la contraseña maestra/);
     await assert.rejects(e.call('master.create', { password: 'corta' }), /al menos 10/);
@@ -244,6 +244,14 @@ test('el motor: secretos de 3.7 fuera de la base y de orb.json, acciones protegi
     assert.ok(!fs.readFileSync(path.join(t.home, 'core', 'orb.json'), 'utf8').includes('ghp_NUEVO_456'));
     await e.call('master.lock');
     await assert.rejects(e.call('master.check', { unlock: made.unlock }), /necesita/, 'bloquear la ventana quita el desbloqueo');
+    // 3.8.1: and Orb shows its lock screen (decision 20) until the password is typed; the vault stays open (agents work).
+    assert.equal((await e.call('master.state')).screenLocked, true, 'pantalla de bloqueo');
+    assert.equal((await e.call('master.state')).locked, false, 'los secretos siguen abiertos para los agentes');
+    await assert.rejects(e.call('master.unlock', { password: 'mala contraseña' }), /incorrecta/);
+    assert.equal((await e.call('master.state')).screenLocked, true, 'una contraseña mala no la quita');
+    await e.call('master.unlock', { password: PASS });
+    assert.equal((await e.call('master.state')).screenLocked, false, 'la contraseña la quita');
+    await e.call('master.lock', { reason: 'idle' });
     await assert.rejects(e.call('master.unlock', { password: 'mala contraseña' }), /Contraseña incorrecta. Te quedan 4 intentos/);
     for (let i = 0; i < 4; i++) await assert.rejects(e.call('master.unlock', { password: 'mala contraseña' }), /incorrecta/);
     assert.match(notices(t.home), /5 intentos fallidos seguidos de tu contraseña maestra en este PC/, 'el dueño se entera');

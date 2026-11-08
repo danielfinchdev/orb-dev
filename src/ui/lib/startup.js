@@ -5,7 +5,7 @@
 //   core       core is gone and Orb could not bring it back (data: app.coreState)
 //   migration  the data of 3.7 could not be updated (data: app.migrationState); a blocked engine answers only this
 //              and app.coreState (null), so the screen with «Reintentar» and «Buscar actualización» is reached
-//   unlock     the master password, typed (data: master.state)
+//   unlock     the master password, typed (data: master.state): the PC cannot open the keys alone, or Orb is locked
 //   setup      the welcome was closed before its end (config.setupPending): it goes on where it stopped
 //              (data: { step: 'carpetas' | 'maestra' | 'equipo', plan, name })
 //   master     the master password, made for the first time on an Orb that was already there (data: master.state)
@@ -18,7 +18,8 @@ export async function startupPhase(call, { mobile = false } = {}) {
   const migration = await call('app.migrationState');
   if (migration?.failed) return { phase: 'migration', data: migration };
   const ms = await call('master.state');
-  if (ms?.exists && (ms.locked || ms.lost)) return { phase: 'unlock', data: ms };
+  // 3.8.1: also Orb's own lock screen (Windows locked, the PC asleep or Orb unused for a while), after a reload.
+  if (ms?.exists && (ms.locked || ms.lost || ms.screenLocked)) return { phase: 'unlock', data: ms };
   const plan = await call('app.layoutPlan');
   const state = await call('app.state');
   if (state?.config?.setupPending === true) return { phase: 'setup', data: { step: plan?.pending ? 'carpetas' : !ms?.exists ? 'maestra' : 'equipo', plan, name: state.config.assistantName ?? null } };

@@ -50,6 +50,7 @@ export function checkAccountHome(home, c = ctx.config, projects = []) {
 export function validateConfig(c) {
   const int = (v, min, max, name) => { if (!Number.isInteger(v) || v < min || v > max) throw new Error(tr('msg.ctx.numRange', { name, min, max })); };
   int(c.maxParallel, 1, 10, 'maxParallel'); int(c.perAgent, 1, 5, 'perAgent'); int(c.timeoutMinutes, 5, 600, 'timeoutMinutes');
+  if (c.ui?.lockMinutes !== undefined) int(c.ui.lockMinutes, 1, 240, 'ui.lockMinutes');
   if (!String(c.assistantName ?? '').trim()) throw new Error(tr('msg.ctx.needName'));
   if (!['es', 'en'].includes(c.language)) throw new Error(tr('msg.ctx.badLanguage'));
   for (const id of AGENT_IDS) {

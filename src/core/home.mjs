@@ -72,9 +72,10 @@ export const DEFAULT_CONFIG = Object.freeze({
   // 3.8.1: the skills of core\skills that are on ([{ name, enabled, source }]; one without an entry is off).
   skills: [],
   projectRoots: [],
-  // pip: the little window that shows the agent's browser; sounds and motion: the robot's.
+  // pip: the little window that shows the agent's browser; sounds and motion: the robot's. lockMinutes (3.8.1): Orb's lock
+  // screen after that long without use (src/ui/lib/idle-lock.js).
   // skin, font, codeFont, codeTheme: Ajustes → Apariencia (src/core/appearance.mjs).
-  ui: { companion: true, theme: 'sistema', pip: true, sounds: true, volume: 0.5, motion: 'completa', ...APPEARANCE_DEFAULTS },
+  ui: { companion: true, theme: 'sistema', pip: true, sounds: true, volume: 0.5, motion: 'completa', lockMinutes: 15, ...APPEARANCE_DEFAULTS },
   // Expert mode (PC only): an IDE-like view with the panels chosen here around the assistant's chat.
   expert: { enabled: false, panels: { explorer: true, git: true, history: true, running: true, usage: true, system: true, activity: true } },
   browser: { enabled: true }, // the agents' browser (pages drawn by the app, driven through the MCP tools)

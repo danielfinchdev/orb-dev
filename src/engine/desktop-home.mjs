@@ -69,12 +69,17 @@ export function secretDir(home) {
 }
 
 // 3.8: core itself (all of it at once) and its secrets open in the File Explorer only with a fresh unlock of the master
-// password; its tool folders (MCP servers, adb, logs) open as before. Compared by the real path (a junction, a short 8.3
-// name or the \\?\ prefix lead to the same folder).
+// password. 3.8.1 (owner's decision 19 f, review F3b B1): so does anything else inside core (its data: orb.db,
+// clave.bin, the runs…) but the folders meant to be opened: MCP servers, skills, what an agent prepared, the tools (adb),
+// the logs and the isolated copies tasks work in. Compared by the real path (a junction, a short 8.3 name or the \\?\
+// prefix lead to the same folder).
 const realLower = (p) => { let r = path.resolve(p); try { r = fs.realpathSync.native(r); } catch { /* not there: as written */ } return r.replace(/^\\\\\?\\/, '').toLowerCase(); };
 export function guardedCore(home, target) {
   if (!home || typeof target !== 'string') return false;
   const t = realLower(target);
-  const core = realLower(paths(home).core); const secrets = realLower(paths(home).secrets);
-  return t === core || t === secrets || t.startsWith(secrets + path.sep);
+  const p = paths(home);
+  const core = realLower(p.core);
+  if (t !== core && !t.startsWith(core + path.sep)) return false;
+  const within = (dir) => { const d = realLower(dir); return t === d || t.startsWith(d + path.sep); };
+  return ![p.mcp, p.skills, p.staging, p.tools, p.logs, p.worktrees].some(within);
 }

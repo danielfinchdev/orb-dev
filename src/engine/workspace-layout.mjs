@@ -39,6 +39,9 @@ export async function layoutApply(choices, { emit = () => {}, log = () => {}, bo
   return { ...layoutPlan(), logsMoved: r?.logs ?? null };
 }
 
+// 3.8.1: the owner's private folder (notes, plans): kept from the agents like core.
+export const PRIVATE_DIR = 'personal';
+export const privateDir = (home) => path.join(home, PRIVATE_DIR);
 let keys = null; // the folder of the app's copies of the sealed secrets, when the app gives it
 export function guardOutside({ mirror } = {}) {
   if (typeof mirror === 'string' && path.isAbsolute(mirror)) keys = path.dirname(mirror);
@@ -46,7 +49,9 @@ export function guardOutside({ mirror } = {}) {
   // copy is where the app keeps it (<app data>\claves\…).
   const state = keys && path.basename(keys) === 'claves' ? path.join(path.dirname(keys), 'Local State') : null;
   // Never one that holds the workspace itself (that would shut the agents out of their projects).
-  setGuardedRoots([backupRoot(), backupDir(ctx.home, ctx.config), keys, state].filter((d) => d && !inside(d, ctx.home)));
+  // 3.8.1 (owner's decision 19 g): and the owner's private folder at the top of the workspace (<workspace>personal),
+  // which no agent may read or touch (it is not a project).
+  setGuardedRoots([...[backupRoot(), backupDir(ctx.home, ctx.config), keys, state].filter((d) => d && !inside(d, ctx.home)), privateDir(ctx.home)]);
   // 3.8.1: and the folder Orb is installed in (writable by the user under a per-user install): agents may read it only.
   const app = appInstallDir();
   setAppRoots(app && !inside(app, ctx.home) ? [app] : []);

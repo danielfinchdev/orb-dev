@@ -24,9 +24,11 @@ import { Notices } from '@/components/notices.jsx';
 import { ActionShortcuts } from '@/components/project-tools.jsx';
 import { Scene } from '@/components/scene.jsx';
 import { Robot } from '@/components/robot.jsx';
-import { useStore, setState, getState, refresh, refreshSoon, bridge, act, go, goBack, resetRoute, setViews, applyTheme, openTerminal, startTour, closeSettings, anyChatBusy, phoneLayout, loadOrbInbox, loadOrbInboxSoon } from '@/lib/store.js';
+import { useStore, setState, getState, refresh, refreshSoon, call, bridge, act, go, goBack, resetRoute, setViews, applyTheme, openTerminal, startTour, closeSettings, anyChatBusy, phoneLayout, loadOrbInbox, loadOrbInboxSoon } from '@/lib/store.js';
 import { restoreRoute, keyboardOpen } from '@/lib/phone-nav.js';
 import { startupPhase } from '@/lib/startup.js';
+import { watchIdle, lockMinutesOf } from '@/lib/idle-lock.js';
+import { dropUnlock } from '@/lib/core-access.js';
 import { isOffline, retryLoop } from '@/lib/net.js';
 import { ago } from '@/lib/utils.js';
 import { ErrorBoundary } from '@/components/error-boundary.jsx';
@@ -327,6 +329,22 @@ function Root() {
     const off = bridge.on('ui:terminal', () => openTerminal());
     return () => { window.removeEventListener('keydown', key); off(); };
   }, [phase]);
+  // 3.8.1: Orb's lock screen (decision 20): Windows locked, the PC asleep, «Bloquear» or the minutes of Ajustes › Datos
+  // without use (lib/idle-lock.js). The engine says so with 'master:locked' { screen: true }; the screen comes back,
+  // without reloading, once the password is typed (the agents never stopped).
+  useEffect(() => {
+    if (bridge.mobile || !bridge.on) return undefined;
+    return bridge.on('master:locked', (p) => {
+      if (!p?.screen) return;
+      dropUnlock();
+      setMasterState((s) => ({ ...(s ?? {}), exists: true, locked: false, lost: false, screenLocked: true }));
+      setPhase((now) => (now === 'app' ? 'unlock' : now));
+    });
+  }, []);
+  useEffect(() => {
+    if (phase !== 'app' || bridge.mobile) return undefined;
+    return watchIdle({ minutes: () => lockMinutesOf(getState().app?.config), onIdle: () => { call('master.lock', { reason: 'idle' }).catch(() => {}); } });
+  }, [phase]);
   useEffect(() => { const off = () => setPhase('pair'); window.addEventListener('orb:unpaired', off); return () => window.removeEventListener('orb:unpaired', off); }, []);
   // 3.8: Android's back button or gesture, and a phone browser's back: inside the app (lib/phone-nav.js › backStep).
   const phaseRef = useRef(phase); phaseRef.current = phase;
@@ -411,7 +429,7 @@ function Root() {
   if (phase === 'offline') return <PcOffline info={getState().info} onRelink={() => setPhase('pair')} />;
   if (phase === 'core') return <>{strip}<Suspense fallback={null}><CoreMissing state={core} /></Suspense></>;
   if (phase === 'master') return <>{strip}<MasterCreate upgrade={Boolean(masterState?.upgraded)} onDone={() => location.reload()} /></>;
-  if (phase === 'unlock') return <>{strip}<MasterLocked state={masterState} onDone={() => location.reload()} /></>;
+  if (phase === 'unlock') return <>{strip}<MasterLocked state={masterState} onDone={() => { if (masterState?.screenLocked && getState().ready) { setPhase('app'); refreshSoon(); } else location.reload(); }} /></>;
   if (phase === 'layout') return <>{strip}<Suspense fallback={null}><LayoutReview plan={layout} onDone={() => location.reload()} /></Suspense></>;
   if (phase === 'migration') return <>{strip}<MigrationFailed state={migration} /></>;
   // 3.8 (F5b): on the phone, a way out: try again, or link with another PC.

@@ -11,7 +11,9 @@ import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
 import { Checkbox } from '@/components/ui/overlay.jsx';
 import { form, choose } from '@/components/dialogs.jsx';
-import { call, bridge, getState, setState } from '@/lib/store.js';
+import { call, bridge, getState, setState, act, useStore } from '@/lib/store.js';
+import { Select } from '@/components/ui/overlay.jsx';
+import { LOCK_MINUTES, lockMinutesOf } from '@/lib/idle-lock.js';
 import { setMasterAsker, keepUnlock, dropUnlock, unlockCore, passwordStrength, MASTER_MIN } from '@/lib/core-access.js';
 import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
 import { errorText, cn } from '@/lib/utils.js';
@@ -123,12 +125,14 @@ export async function forgotFlow({ canForget = false } = {}) {
 }
 
 // This PC cannot open the keys by itself (the password opens them), or the password's file is missing (lost: no
-// password to type; the recovery code, or starting from scratch).
+// password to type; the recovery code, or starting from scratch). 3.8.1: also Orb's lock screen (screenLocked: Windows
+// locked, the PC asleep, «Bloquear» or Orb unused for a while; the agents keep working meanwhile).
 export function MasterLocked({ onDone, state = null }) {
   const t = useT();
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const lost = Boolean(state?.lost);
+  const screen = !lost && !state?.locked && Boolean(state?.screenLocked);
   const submit = async (e) => {
     e.preventDefault(); setBusy(true);
     try { keepUnlock(await call('master.unlock', { password })); onDone?.(); }
@@ -137,9 +141,9 @@ export function MasterLocked({ onDone, state = null }) {
   const forgot = async () => { if (await forgotFlow({ canForget: Boolean(state?.canForget) })) onDone?.(); };
   return (
     <div className="brand-sky flex h-full overflow-auto px-6 pt-24 pb-6">
-      <form onSubmit={submit} className="bg-card/95 text-card-foreground m-auto grid w-full max-w-[420px] gap-4 rounded-3xl border border-white/40 p-8 shadow-2xl backdrop-blur" data-testid="master-locked">
+      <form onSubmit={submit} className="bg-card/95 text-card-foreground m-auto grid w-full max-w-[420px] gap-4 rounded-3xl border border-white/40 p-8 shadow-2xl backdrop-blur" data-testid="master-locked" data-screen={screen ? '1' : undefined}>
         <div className="-mt-20 flex justify-center"><Robot size={110} mood={busy ? 'thinking' : lost ? 'worried' : 'idle'} /></div>
-        <div className="text-center"><h1 className="text-xl">{t(lost ? 'master.lostTitle' : 'master.lockedTitle')}</h1><p className="text-muted-foreground mt-2 text-sm leading-relaxed">{t(lost ? 'master.lostBody' : 'master.lockedBody')}</p></div>
+        <div className="text-center"><h1 className="text-xl">{t(lost ? 'master.lostTitle' : screen ? 'master.screenTitle' : 'master.lockedTitle')}</h1><p className="text-muted-foreground mt-2 text-sm leading-relaxed">{t(lost ? 'master.lostBody' : screen ? 'master.screenBody' : 'master.lockedBody')}</p></div>
         {lost ? null : (<>
           <Field label={t('master.password')}><Input type="password" autoComplete="current-password" autoFocus value={password} onChange={(e) => setPassword(e.target.value)} data-testid="master-password" /></Field>
           <Button type="submit" size="lg" disabled={!password || busy}>{busy ? <Spinner className="border-white/40 border-t-white" /> : <LockKeyhole />}{t('master.unlock')}</Button>
@@ -191,8 +195,28 @@ export function MasterCard() {
       <CardFooter className="flex-wrap">
         <Button size="sm" variant="outline" onClick={change} data-testid="master-change"><KeyRound />{t('master.change')}</Button>
         <Button size="sm" variant="ghost" onClick={forgot} data-testid="master-forgot">{t('master.forgot')}</Button>
+        {bridge.mobile ? null : <Button size="sm" variant="ghost" onClick={() => act(call('master.lock', { reason: 'hand' }))} data-testid="master-lock-now"><LockKeyhole />{t('master.lockNow')}</Button>}
       </CardFooter>
+      {bridge.mobile ? null : <LockMinutes />}
     </Card>
+  );
+}
+
+// 3.8.1: after how long without use Orb locks itself (config.ui.lockMinutes; 15 by default).
+function LockMinutes() {
+  const t = useT();
+  const config = useStore((s) => s.app?.config);
+  const value = String(lockMinutesOf(config));
+  const pick = async (v) => {
+    const next = await act(call('config.save', { patch: { ui: { lockMinutes: Number(v) } } }), t('settings.saved'));
+    if (next) setState({ app: { ...getState().app, config: next } });
+  };
+  return (
+    <CardContent className="grid gap-1.5 border-t pt-4">
+      <Field label={t('master.lockAfter')} hint={t('master.lockAfterHint')}>
+        <Select className="w-full sm:w-56" value={value} onValueChange={pick} options={LOCK_MINUTES.map((n) => ({ value: String(n), label: t('master.lockMinutes', { n }) }))} data-testid="master-lock-minutes" />
+      </Field>
+    </CardContent>
   );
 }
 
