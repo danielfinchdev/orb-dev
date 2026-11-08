@@ -411,7 +411,10 @@ async function run(board, { home, version, restored, repair }) {
   board.onChange((what) => { if (what === 'tasks') setImmediate(loop); });
   log(`motor arrancado (versión ${version}) en ${home}`);
   if (repair?.restored) board.notice(tr('data.core.restored', { created: String(repair.restored.created ?? '').slice(0, 16).replace('T', ' ') }), 'warning');
-  for (const key of keyNotices.splice(0)) board.notice(tr(key, { name: PRODUCT.name }), 'warning');
+  // Review D10 B9: «two keys» is said once for each clave.enc of Orb 3.8.0, not at every start.
+  const { saidFor } = await import('./approval-secret.mjs');
+  const saidBefore = (key) => key === 'sys.engine.twoKeys' && saidFor(board, 'secret.twoKeysSaid', path.join(paths(home).data, 'clave.enc'));
+  for (const key of keyNotices.splice(0)) if (!saidBefore(key)) board.notice(tr(key, { name: PRODUCT.name }), 'warning');
   if (restored) { log(`copia restaurada: ${restored.from} (lo anterior está en ${restored.aside})`); board.notice(tr('data.backup.restored', { created: String(restored.header?.created ?? '').slice(0, 16).replace('T', ' ') }), 'success'); }
   // 3.8: a data folder of 3.5–3.7 was moved to 3.8 when its database opened (src/core/migrate-38.mjs): said once.
   {

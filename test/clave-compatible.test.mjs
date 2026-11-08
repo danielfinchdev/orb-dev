@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { loadApprovalSecret as load380 } from './fixtures/approval-secret-3.8.0.mjs';
-import { loadHostSecret, SecretError } from '../src/engine/approval-secret.mjs';
+import { loadHostSecret, SecretError, saidFor } from '../src/engine/approval-secret.mjs';
 
 const bases = [];
 after(() => { for (const b of bases) fs.rmSync(b, { recursive: true, force: true, maxRetries: 5 }); });
@@ -203,4 +203,18 @@ test('Local State not there: «for now» while missingIsBusy (the first starts),
   const missing = tauri({ unseal: async () => { throw coded('missing'); } });
   await assert.rejects(loadHostSecret({ dir: k.dir, copy: k.copy, ...missing, missingIsBusy: true }), (e) => e.code === 'busy');
   await assert.rejects(loadHostSecret({ dir: k.dir, copy: k.copy, ...missing }), (e) => e.code === 'unreadable');
+});
+
+test('review D10 B9: «two keys» is said once for each clave.enc of 3.8.0, again only when it changes', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-dos-claves-'));
+  try {
+    const settings = new Map(); const board = { setting: (k, v) => (v === undefined ? settings.get(k) : settings.set(k, v)) };
+    const enc = path.join(dir, 'clave.enc');
+    assert.equal(saidFor(board, 'secret.twoKeysSaid', enc), false, 'sin fichero: se avisa (no hay nada que recordar)');
+    fs.writeFileSync(enc, `v10${'a'.repeat(64)}`);
+    assert.equal(saidFor(board, 'secret.twoKeysSaid', enc), false, 'la primera vez se avisa');
+    assert.equal(saidFor(board, 'secret.twoKeysSaid', enc), true, 'el siguiente arranque, no');
+    fs.writeFileSync(enc, `v10${'b'.repeat(64)}`);
+    assert.equal(saidFor(board, 'secret.twoKeysSaid', enc), false, 'otra clave de la 3.8.0: se avisa otra vez');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

@@ -288,3 +288,12 @@ export function hostSealing(hostCall) {
     unseal: async (buf) => String((await hostCall('host.unseal', { data: buf.toString('base64') }))?.text ?? '')
   };
 }
+
+// Whether a notice about `file` was already given for the file as it is now (review D10 B9: «two keys» once, not at every
+// start): its fingerprint is kept in the board's setting `key`; a file that changes is said again. → true to stay quiet.
+export function saidFor(board, key, file) {
+  let fp; try { fp = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex').slice(0, 32); } catch { return false; }
+  if (board.setting(key) === fp) return true;
+  board.setting(key, fp);
+  return false;
+}
