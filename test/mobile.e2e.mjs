@@ -91,6 +91,16 @@ try {
   await page.keyboard.press('Escape'); await page.waitForTimeout(300);
   await page.click('[data-testid=nav-chats]'); await page.waitForSelector('[data-testid=mobile-chats]');
   await noSideScroll('chats'); await shot('02b-chats');
+  // 3.8.1: after linking, notifications are offered in the list of chats, in the flow above the tabs (the toast it was
+  // covered the screens' buttons), and only there; «Ahora no» puts it away for good.
+  step = 'oferta de avisos';
+  await page.waitForSelector('[data-testid=notify-offer]');
+  const offer = await page.locator('[data-testid=notify-offer]').evaluate((el) => ({ position: getComputedStyle(el).position, bottom: el.getBoundingClientRect().bottom, tabs: document.querySelector('[data-testid=mobile-tabs]').getBoundingClientRect().top }));
+  assert.ok(!['absolute', 'fixed'].includes(offer.position) && offer.bottom <= offer.tabs + 1, `la oferta de avisos va en su sitio, sobre las pestañas (${JSON.stringify(offer)})`);
+  await page.click('[data-testid=nav-tasks]'); await page.waitForTimeout(300);
+  assert.equal(await page.locator('[data-testid=notify-offer]').count(), 0, 'solo en la lista de chats');
+  await page.click('[data-testid=nav-chats]'); await page.click('[data-testid=notify-offer-later]');
+  assert.equal(await page.locator('[data-testid=notify-offer]').count(), 0, '«Ahora no» la quita');
 
   for (const [testid, name, wait] of [['nav-tasks', '03-tareas', 'Publicar la web'], ['nav-projects', '04-proyectos', 'webviaproject'], ['nav-memories', '05-bitacoras', 'Bitácora general'], ['memories-activity', '06-actividad', 'Tarea creada']]) {
     step = name;

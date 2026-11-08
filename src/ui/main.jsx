@@ -146,7 +146,7 @@ function MobileShell() {
           <Suspense fallback={<Loading />}><View key={routeKey(route)} route={route} /></Suspense>
         </ErrorBoundary>
       </main>
-      {fullChat || keyboard ? null : <MobileTabs />}
+      {fullChat || keyboard ? null : <><NotifyOffer /><MobileTabs /></>}
       <Notices />
       <OrbInfoHost />
     </div>
@@ -223,18 +223,42 @@ const chatStateSoon = (payload) => chatStates.add(payload.conversation, payload)
 let coreLost = false;
 // The linking screen's own «back» (AppLink): true when it took the press.
 const linkBack = { current: null };
-// 3.8 (F5b): right after linking, the phone's notifications (off until turned on) are offered once, saying what they do.
+// 3.8 (F5b): after linking, the phone's notifications (off until turned on) are offered, saying what they do. 3.8.1: in the
+// list of chats, in the flow above the tabs (never over a screen's buttons, as the toast was), until the person answers.
+// The Android app updated from 3.8.0 starts with no choice saved (a new origin: review Android M2): notifications are
+// turned back on by themselves when Android already allows them, else offered the same way.
 const OFFER_NOTIFY = 'orb.ofrecerAvisos';
 const offerNotify = () => { try { localStorage.setItem(OFFER_NOTIFY, '1'); } catch { /* storage unavailable */ } };
 function NotifyOffer() {
+  const t = useT();
+  const view = useStore((s) => s.route.view);
+  const [show, setShow] = useState(false);
   useEffect(() => {
-    let flag = null; try { flag = localStorage.getItem(OFFER_NOTIFY); localStorage.removeItem(OFFER_NOTIFY); } catch { /* storage unavailable */ }
-    const p = bridge.push;
-    if (flag !== '1' || !p || p.enabled() || !p.supported() || (p.ios() && !p.installed())) return;
-    toast(tNow(p.whenClosed?.() === false ? 'app.notifyOfferApp' : 'app.notifyOffer'), { duration: 20000,
-      action: { label: tNow('app.notifyOfferOk'), onClick: async () => { if (await act(p.enable()) !== undefined) toast.success(tNow('app.notifyOn')); } } });
+    let gone = false;
+    (async () => {
+      const p = bridge.push;
+      if (!p || p.enabled() || !p.supported() || (p.ios() && !p.installed())) return;
+      let flag = null; try { flag = localStorage.getItem(OFFER_NOTIFY); } catch { /* storage unavailable */ }
+      if (flag !== '1' && p.undecided?.()) {
+        if (await p.adopt?.().catch(() => false)) return;
+        flag = '1'; offerNotify();
+      }
+      if (flag === '1' && !gone) setShow(true);
+    })();
+    return () => { gone = true; };
   }, []);
-  return null;
+  if (!show || view !== 'chats') return null;
+  const done = () => { try { localStorage.removeItem(OFFER_NOTIFY); } catch { /* storage unavailable */ } setShow(false); };
+  const p = bridge.push;
+  return (
+    <div className="bg-card flex shrink-0 flex-col gap-2 border-t px-4 py-3 text-[13px]" role="region" aria-label={t('app.notifyOfferOk')} data-testid="notify-offer">
+      <span>{t(p?.whenClosed?.() === false ? 'app.notifyOfferApp' : 'app.notifyOffer')}</span>
+      <div className="flex justify-end gap-2">
+        <Button size="sm" variant="ghost" onClick={() => { p?.decline?.(); done(); }} data-testid="notify-offer-later">{t('app.notifyOfferLater')}</Button>
+        <Button size="sm" onClick={async () => { if (await act(p.enable()) !== undefined) { toast.success(tNow('app.notifyOn')); done(); } }} data-testid="notify-offer-ok">{t('app.notifyOfferOk')}</Button>
+      </div>
+    </div>
+  );
 }
 function Root() {
   const t = useT();
@@ -408,7 +432,7 @@ function Root() {
   );
   if (phase !== 'app' || !ready) return <div className="grid h-full place-items-center">{strip}<Robot size={80} mood="thinking" /></div>;
   // 3.6 (M4): a tapped notification opens its chat (lib/notes.js).
-  return bridge.mobile ? <><NoteOpener /><NotifyOffer /><Shell /></> : <Shell />;
+  return bridge.mobile ? <><NoteOpener /><Shell /></> : <Shell />;
 }
 
 // What counts as «something open over the screen» for back: a dialog or sheet, the menu ☰, a menu or a list.
@@ -450,6 +474,8 @@ function PcOffline({ info, onRelink }) {
         <div className="-mt-16 flex justify-center"><Robot size={110} mood={busy ? 'thinking' : 'sleeping'} /></div>
         <h1 className="text-xl">{info?.pcName ? t('app.offlineTitleNamed', { name: info.pcName }) : t('app.offlineTitle')}</h1>
         <p className="text-muted-foreground text-sm">{t('app.offlineBody')}</p>
+        {/* 3.8.1, the Android app: a PC still on Orb 3.8.0 refuses it (another origin) and looks just like one turned off. */}
+        {window.__orbHost?.app ? <p className="text-muted-foreground text-sm" data-testid="pc-offline-old">{t('app.offlineOldPc')}</p> : null}
         {info?.seenAt ? <p className="text-muted-foreground text-xs">{t('app.offlineSeen', { when: ago(info.seenAt) })}</p> : null}
         <Button size="lg" disabled={busy} onClick={() => loop.current?.now({ reset: true })} data-testid="pc-offline-retry">{busy ? <Spinner /> : <RotateCw />}{t('app.offlineRetry')}</Button>
         <p className="text-muted-foreground min-h-4 text-xs" aria-live="polite">{wait ? t('app.offlineNext', { s: wait }) : ''}</p>

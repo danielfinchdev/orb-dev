@@ -95,7 +95,7 @@ test('el teclado esconde la barra de pestañas flotante', () => {
   assert.equal(keyboardOpen({ editing: true, height: 500, fullHeight: 900 }), true);
   assert.equal(keyboardOpen({ editing: true, height: 880, fullHeight: 900 }), false, 'un campo con el foco y el teclado ya cerrado');
   assert.equal(keyboardOpen({ editing: true }), true);
-  assert.match(read('src/ui/main.jsx'), /\{fullChat \|\| keyboard \? null : <MobileTabs \/>\}/);
+  assert.match(read('src/ui/main.jsx'), /\{fullChat \|\| keyboard \? null : <><NotifyOffer \/><MobileTabs \/><\/>\}/);
 });
 
 test('peticiones del móvil con tiempo límite: un PC que no contesta es «sin conexión», no una espera de minutos', async () => {
@@ -251,7 +251,10 @@ test('M5: los avisos del móvil se ofrecen al enlazar y dicen la verdad (en la a
   assert.match(read('src/ui/views/settings.jsx'), /p\.whenClosed\?\.\(\) === false \? 'settings\.phonePushHintApp' : 'settings\.phonePushHint'/);
   const main = read('src/ui/main.jsx');
   assert.equal((main.match(/offerNotify\(\); location\.reload\(\);/g) ?? []).length, 2, 'la app y el navegador, tras enlazar');
-  assert.match(main, /<NoteOpener \/><NotifyOffer \/>/);
+  // 3.8.1: in the flow above the tabs, never a toast over a screen's buttons; and after updating from 3.8.0 (no choice saved).
+  assert.match(main, /<><NotifyOffer \/><MobileTabs \/><\/>/);
+  assert.doesNotMatch(main, /toast\(tNow\(p\.whenClosed/);
+  assert.match(main, /p\.undecided\?\.\(\)\) \{\s+if \(await p\.adopt\?\.\(\)/);
 });
 
 test('B3: atrás desde una tarea abierta en un chat vuelve a ese chat', () => {

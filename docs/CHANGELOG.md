@@ -20,8 +20,8 @@ holds other files or your data, or another Orb open), nothing is changed, Orb 3.
 what to do. You can also download the installer and run it by hand.
 
 **The Android app, rebuilt.** It is smaller (about half the size) and keeps your link with the PC. From a notification
-you can reply, approve or reject without opening the app, also when the app is closed. Notifications are off after the
-update: turn them on again in the app.
+you can reply, approve or reject without opening the app, also when the app is closed (only with the phone unlocked).
+Links open in the phone's browser. Notifications stay on if Android already allowed them; otherwise the app offers them.
 
 **Gone for now.** Orb Light (the portable version) and the Linux desktop app. Linux will come back in a later version.
 
