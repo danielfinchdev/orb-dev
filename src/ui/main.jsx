@@ -4,7 +4,7 @@ import './lib/web-bridge.js'; // then: in a phone's browser (or the app) it prov
 import './app.css';
 // 3.6: the Android app's «glass» look, only in the Android build (the other builds drop this line and its CSS).
 if (import.meta.env.MODE === 'android') (await import('./lib/glass.js')).enableGlass();
-import { StrictMode, useEffect, useMemo, useRef, useState } from 'react';
+import { StrictMode, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Toaster, toast } from 'sonner';
 import { notify } from '@/lib/notify.js';
@@ -22,7 +22,6 @@ import { migrationView } from '@/lib/migration.js';
 import { Notices } from '@/components/notices.jsx';
 import { ActionShortcuts } from '@/components/project-tools.jsx';
 import { Scene } from '@/components/scene.jsx';
-import { GamesDialog } from '@/games/games.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { useStore, setState, getState, refresh, refreshSoon, bridge, act, go, goBack, resetRoute, setViews, applyTheme, openTerminal, startTour, anyChatBusy, phoneLayout, loadOrbInbox, loadOrbInboxSoon } from '@/lib/store.js';
 import { restoreRoute, keyboardOpen } from '@/lib/phone-nav.js';
@@ -30,30 +29,49 @@ import { startupPhase } from '@/lib/startup.js';
 import { isOffline, retryLoop } from '@/lib/net.js';
 import { ago } from '@/lib/utils.js';
 import { ErrorBoundary } from '@/components/error-boundary.jsx';
-import { Tour } from '@/components/tour.jsx';
 import { AGENT } from '@/lib/labels.js';
 import { WindowControls } from '@/components/window-controls.jsx';
 import { useT, t as tNow } from '@/lib/i18n.js';
-import { Setup } from '@/views/setup.jsx';
 import { MasterCreate, MasterLocked } from '@/views/master.jsx';
-import { CoreMissing } from '@/views/core-missing.jsx';
-import { LayoutReview } from '@/views/layout.jsx';
 import { ChatView } from '@/views/chat.jsx';
 import { SessionView } from '@/views/session.jsx';
-import { TasksView } from '@/views/tasks.jsx';
-import { ProjectsView } from '@/views/projects.jsx';
-import { AgentsView } from '@/views/agents.jsx';
-import { MemoriesView } from '@/views/memories.jsx';
-import { SettingsDialog, PhoneView } from '@/views/settings.jsx';
-import { SchedulesView } from '@/views/schedules.jsx';
-import { ExpertView } from '@/views/expert.jsx';
-import { TutorialsView } from '@/views/tutorials.jsx';
-import { WhiteboardView } from '@/views/whiteboard.jsx';
 import { OrbChatsView } from '@/views/orb/inbox.jsx';
 import { OrbInfoHost } from '@/views/orb/info.jsx';
 import { UpdateNeeded } from '@/components/update-needed.jsx';
 import { NoteOpener } from '@/lib/notes.js';
 import { RecoveryNotice } from '@/views/data.jsx';
+
+// 3.8.1 (H4a): the screens other than the chats load the first time they open, so the app starts with less to read; once
+// it is up, they load in the background while the window is idle (opening one later is instant).
+const later = [];
+const deferred = (load, name) => { later.push(load); return lazy(() => load().then((m) => ({ default: m[name] }))); };
+const loadSettings = () => import('@/views/settings.jsx');
+const TasksView = deferred(() => import('@/views/tasks.jsx'), 'TasksView');
+const ProjectsView = deferred(() => import('@/views/projects.jsx'), 'ProjectsView');
+const AgentsView = deferred(() => import('@/views/agents.jsx'), 'AgentsView');
+const MemoriesView = deferred(() => import('@/views/memories.jsx'), 'MemoriesView');
+const SchedulesView = deferred(() => import('@/views/schedules.jsx'), 'SchedulesView');
+const ExpertView = deferred(() => import('@/views/expert.jsx'), 'ExpertView');
+const TutorialsView = deferred(() => import('@/views/tutorials.jsx'), 'TutorialsView');
+const WhiteboardView = deferred(() => import('@/views/whiteboard.jsx'), 'WhiteboardView');
+const PhoneView = deferred(loadSettings, 'PhoneView');
+const SettingsDialog = deferred(loadSettings, 'SettingsDialog');
+const GamesDialog = deferred(() => import('@/games/games.jsx'), 'GamesDialog');
+const Tour = deferred(() => import('@/components/tour.jsx'), 'Tour');
+// The start's own screens: only on a first run, a missing core or folders to review.
+const Setup = lazy(() => import('@/views/setup.jsx').then((m) => ({ default: m.Setup })));
+const CoreMissing = lazy(() => import('@/views/core-missing.jsx').then((m) => ({ default: m.CoreMissing })));
+const LayoutReview = lazy(() => import('@/views/layout.jsx').then((m) => ({ default: m.LayoutReview })));
+function loadTheRest() {
+  const run = () => { for (const load of later) load().catch(() => {}); };
+  if (window.requestIdleCallback) requestIdleCallback(run, { timeout: 4000 }); else setTimeout(run, 1500);
+}
+// Settings and the games are windows over the screen: drawn once first asked for, then kept (they close with their animation).
+function OnceOpened({ when, children }) {
+  const opened = useRef(false);
+  if (when) opened.current = true;
+  return opened.current ? <Suspense fallback={null}>{children}</Suspense> : null;
+}
 
 const COMPANION_VIEWS = new Set(['tasks', 'projects', 'logs', 'activity']);
 // 2.7, the phone: the conversations («Chats») and «Más» are screens of their own; Agentes and Modo experto are PC only.
@@ -115,7 +133,7 @@ function MobileShell() {
       <main className="theme-scene flex min-h-0 min-w-0 flex-1 flex-col">
         <Scene />
         <ErrorBoundary key={routeKey(route)} onHome={resetRoute}>
-          <View key={routeKey(route)} route={route} />
+          <Suspense fallback={null}><View key={routeKey(route)} route={route} /></Suspense>
         </ErrorBoundary>
       </main>
       {fullChat || keyboard ? null : <MobileTabs />}
@@ -143,6 +161,9 @@ function Shell() {
   AGENT.orb = app.config.assistantName;
   // 2.6: the guided tour, once, the first time the app opens after the setup (never on the phone); later from Tutoriales.
   const tour = useStore((s) => s.tour);
+  const settingsOpen = useStore((s) => Boolean(s.settings));
+  const gamesOpen = useStore((s) => Boolean(s.games));
+  useEffect(loadTheRest, []);
   useEffect(() => {
     if (bridge.mobile || getState().app?.config?.ui?.tourDone === true) return undefined;
     const id = setTimeout(startTour, 900);
@@ -162,7 +183,7 @@ function Shell() {
           <Robot size={26} mood={mood} /><span className="min-w-0 flex-1 truncate text-[15px] font-medium">{app.config.assistantName}</span>
         </div>
         <ErrorBoundary key={routeKey(route)} onHome={resetRoute}>
-          <View key={routeKey(route)} route={route} />
+          <Suspense fallback={null}><View key={routeKey(route)} route={route} /></Suspense>
         </ErrorBoundary>
       </main>
       {/* 3.6 (M3): the info pane on the right (a chat, a project). */}
@@ -170,11 +191,11 @@ function Shell() {
       {/* The floating robot only where there is room for it: never over forms or conversations (it covered the switches of
           Ajustes and took their clicks), and those views leave room at the bottom so nothing stays under it. */}
       {/* 3.5: a browser linked with an Orb gets the PC's layout, not what only the PC itself does. */}
-      {bridge.mobile ? null : <><UpdateCard /><SettingsDialog /><GamesDialog /><RecoveryNotice /></>}
+      {bridge.mobile ? null : <><UpdateCard /><OnceOpened when={settingsOpen}><SettingsDialog /></OnceOpened><OnceOpened when={gamesOpen}><GamesDialog /></OnceOpened><RecoveryNotice /></>}
       <Notices />
       {bridge.mobile ? null : <ActionShortcuts project={shortcutProject} />}
       <div className="hidden md:contents"><Companion name={app.config.assistantName} base={mood} hidden={app.config.ui?.companion === false || !COMPANION_VIEWS.has(route.view) || bridge.mobile || Boolean(tour)} /></div>
-      {tour ? <Tour key={tour.key} /> : null}
+      {tour ? <Suspense fallback={null}><Tour key={tour.key} /></Suspense> : null}
     </div>
   );
 }
@@ -318,7 +339,7 @@ function Root() {
       if (event === 'engine:restarted') { if (coreLost) { location.reload(); return; } notify({ body: tNow('app.engineRestarted'), tone: 'warning' }); refreshSoon(); }
     });
   }, [phase]);
-  if (phase === 'setup') return <>{strip}<Setup resume={resume} onDone={async (route) => { await refresh(); setPhase('app'); if (route) go(route); }} /></>;
+  if (phase === 'setup') return <>{strip}<Suspense fallback={null}><Setup resume={resume} onDone={async (route) => { await refresh(); setPhase('app'); if (route) go(route); }} /></Suspense></>;
   if (phase === 'pair' && bridge.link) return <>{strip}<AppLink /></>;
   // 3.8: a browser opened from the QR: the master password before linking.
   if (phase === 'pair' && getState().info?.pairLink && bridge.pairPending) return <>{strip}<BrowserPair /></>;
@@ -336,10 +357,10 @@ function Root() {
   );
   if (phase === 'update') return <>{strip}<UpdateNeeded info={getState().info} /></>;
   if (phase === 'offline') return <PcOffline info={getState().info} onRelink={() => setPhase('pair')} />;
-  if (phase === 'core') return <>{strip}<CoreMissing state={core} /></>;
+  if (phase === 'core') return <>{strip}<Suspense fallback={null}><CoreMissing state={core} /></Suspense></>;
   if (phase === 'master') return <>{strip}<MasterCreate upgrade={Boolean(masterState?.upgraded)} onDone={() => location.reload()} /></>;
   if (phase === 'unlock') return <>{strip}<MasterLocked state={masterState} onDone={() => location.reload()} /></>;
-  if (phase === 'layout') return <>{strip}<LayoutReview plan={layout} onDone={() => location.reload()} /></>;
+  if (phase === 'layout') return <>{strip}<Suspense fallback={null}><LayoutReview plan={layout} onDone={() => location.reload()} /></Suspense></>;
   if (phase === 'migration') return <>{strip}<MigrationFailed state={migration} /></>;
   // 3.8 (F5b): on the phone, a way out: try again, or link with another PC.
   if (phase === 'error') return (
