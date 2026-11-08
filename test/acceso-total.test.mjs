@@ -38,6 +38,8 @@ test('guard «total»: todo menos lo protegido (core, lo guardado fuera, la carp
     const desk = path.join(os.homedir(), 'Desktop', 'nota.txt');
     assert.equal(v({ ...base, tool: 'Write', paths: [desk] }), 'allow');
     assert.equal(v({ ...base, tool: 'Bash', command: 'git push origin main' }), 'allow', 'sin preguntas');
+    // Claude in Chrome: the address it opens counts for «Elementos protegidos» (claude.mjs passes it as a pattern).
+    assert.equal(v({ ...base, tool: 'mcp__claude-in-chrome__navigate', patterns: ['https://casa.lan/vaultwarden/#/vault'] }), 'deny');
     assert.equal(v({ ...base, tool: 'mcp__claude-in-chrome__navigate' }), 'allow', 'Claude in Chrome');
     // The protected set: denied, never asked.
     for (const p of [path.join(core, 'datos', 'orb.db'), path.join(core, 'secretos', 'boveda.enc'), path.join(core, 'orb.json'), path.join(personal, 'plan.md')]) {

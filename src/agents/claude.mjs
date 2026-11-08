@@ -158,7 +158,8 @@ export function createLive(o) {
     const command = toolInput?.command ?? '';
     const paths = [toolInput?.file_path, toolInput?.path, toolInput?.notebook_path].filter(Boolean);
     // Glob and Grep patterns are checked too (where they reach).
-    const patterns = [toolInput?.pattern, toolInput?.glob].filter((x) => typeof x === 'string' && x);
+    // 3.8.2: and the address Claude in Chrome opens (the user's own browser): «Elementos protegidos» counts there too.
+    const patterns = [toolInput?.pattern, toolInput?.glob, /^mcp__claude-in-chrome__/.test(toolName) ? toolInput?.url : null].filter((x) => typeof x === 'string' && x);
     const verdict = decide({ permission, tool: toolName, command, paths, patterns: toolName === 'Grep' ? patterns.slice(1) : patterns, internalDir: o.internalDir, cwd: o.cwd, lang: o.lang, android: Boolean(o.android?.()) });
     if (verdict.decision === 'allow') return { behavior: 'allow', updatedInput: toolInput };
     if (verdict.decision === 'deny') return { behavior: 'deny', message: `Orb no lo permite: ${verdict.reason}.` };
