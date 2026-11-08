@@ -166,8 +166,10 @@ test('Eliminar para siempre: nunca con la carpeta en uso; con la papelera hecha,
   fs.writeFileSync(path.join(p.path, 'a.txt'), 'x');
   // A program with its working folder there (a terminal, a dev server, an idle direct conversation).
   const running = task('enuso'); board.patch(running.id, { status: 'done' }, 'codex', 'task.updated');
-  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 20000)'], { cwd: p.path, stdio: 'ignore', windowsHide: true });
-  await new Promise((r) => child.once('spawn', r));
+  // Its working folder is opened by the new process itself while it starts, after `spawn` has fired (a busy PC made the
+  // first check see a free folder): wait until its script runs.
+  const child = spawn(process.execPath, ['-e', 'process.stdout.write("ok"); setTimeout(() => {}, 20000)'], { cwd: p.path, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
+  await new Promise((r, reject) => { child.stdout.once('data', r); child.once('exit', () => reject(new Error('the child left early'))); });
   try {
     assert.equal(folderInUse(p.path), true);
     const { ticket } = checkDelete(board, t.home, 'enuso');
