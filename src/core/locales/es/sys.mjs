@@ -181,6 +181,7 @@ export default {
   // Inicio de Orb
   'sys.engine.notHome': 'no es una carpeta de Orb: {home}',
   'sys.engine.notStarted': '{name} todavía no se ha iniciado',
+  'sys.engine.sealedSecret': 'Esta compilación de prueba aún no abre la clave cifrada de este espacio de trabajo. Usa la app instalada.',
   // Tareas programadas
   'sys.schedules.badEvery': 'every debe ser {list}',
   'sys.schedules.badTime': 'at_time debe tener el formato HH:MM',

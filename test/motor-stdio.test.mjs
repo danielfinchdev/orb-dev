@@ -4,6 +4,8 @@
 import { tempHome, ROOT, until, wait } from './helpers.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
 import { PassThrough } from 'node:stream';
@@ -116,4 +118,58 @@ test('the engine over stdio: starts, answers, asks the app (host.*) and ends whe
   child.stdin.end();
   const code = await Promise.race([exited, wait(10000).then(() => 'sigue vivo')]);
   assert.equal(code, 0, stderr.slice(-2000));
+});
+
+// 3.8.1 (D3): what the Tauri app asks the engine around the start (it has no Node of its own): where the workspace is,
+// the first-run setup, moving to another workspace and the texts of its own dialogs. The same rules as Electron's main
+// process (src/engine/desktop-home.mjs).
+test('the engine answers the Tauri app: locate, setup, switchHome, texts, and refuses a sealed secret it cannot open', async (t) => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-shell-'));
+  t.after(() => { try { fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch { /* temp folder */ } });
+  const userData = path.join(tmp, 'datos-app'); const base = path.join(tmp, 'Documentos'); fs.mkdirSync(base);
+  const child = spawn(process.execPath, [path.join(ROOT, 'src', 'engine', 'engine.mjs')], { env: { ...process.env, ORB_ENGINE_STDIO: '1' }, stdio: ['pipe', 'pipe', 'pipe'] });
+  const exited = new Promise((r) => child.once('exit', (code) => r(code)));
+  t.after(() => { try { child.kill(); } catch { /* gone */ } });
+  let stderr = ''; child.stderr.on('data', (c) => { stderr += c; });
+  const seen = [];
+  readline.createInterface({ input: child.stdout }).on('line', (line) => { const m = decode(line); if (m) seen.push(m); });
+  const send = (m) => child.stdin.write(encode(m));
+  let n = 0;
+  const ask = async (type, fields = {}) => {
+    const id = ++n; send({ type, id, ...fields });
+    const r = await until(() => seen.find((m) => m.type === 'reply' && m.id === id), type, 20000);
+    if (!r.ok) throw new Error(r.error);
+    return r.result;
+  };
+  // A fresh PC (run from the code: never an existing real folder).
+  assert.deepEqual(await ask('locate', { userData, packaged: false }), { home: null });
+  const { home } = await ask('setup', { userData, base, assistantName: 'Orb', userName: 'Ana', language: 'en' });
+  assert.equal(path.dirname(home), base);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(userData, 'ubicacion.json'), 'utf8')), { home });
+  assert.deepEqual(await ask('locate', { userData }), { home });
+  // Texts of the app's own dialogs, in the workspace's language.
+  const texts = await ask('texts', { home });
+  assert.equal(texts['sys.dialog.closeAnyway'], 'Close anyway');
+  assert.ok(texts['sys.main.engineOff']);
+  assert.ok(Object.keys(texts).every((k) => /^sys\.(main|dialog)\./.test(k)));
+  // Another folder only if it is a workspace.
+  assert.deepEqual(await ask('switchHome', { userData, target: base }), { ok: false });
+  assert.deepEqual(await ask('switchHome', { userData, target: home }), { ok: true });
+  // Not a message the engine knows: nothing comes back for it, and the engine keeps answering.
+  send({ type: 'toString', id: 99 });
+  // A secret sealed by Electron that this app cannot open yet: the engine does not start with a new plain key.
+  const sealed = path.join(home, 'core', 'datos', 'clave.enc');
+  fs.writeFileSync(sealed, 'v10-sellada');
+  send({ type: 'start', home, version: 'prueba', userData });
+  const refused = await until(() => seen.find((m) => m.type === 'started'), 'started', 30000);
+  assert.equal(refused.ok, false);
+  assert.match(refused.error, /clave cifrada|encrypted key/);
+  fs.rmSync(sealed);
+  seen.length = 0;
+  send({ type: 'start', home, version: 'prueba', userData });
+  const started = await until(() => seen.find((m) => m.type === 'started'), 'started', 30000);
+  assert.ok(started.ok, started.error);
+  assert.equal(seen.some((m) => m.id === 99), false);
+  child.stdin.end();
+  assert.equal(await Promise.race([exited, wait(10000).then(() => 'sigue vivo')]), 0, stderr.slice(-2000));
 });

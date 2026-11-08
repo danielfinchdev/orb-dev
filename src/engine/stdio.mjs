@@ -2,6 +2,10 @@
 // with ORB_ENGINE_STDIO=1): one JSON message per line, app → engine on stdin and engine → app on stdout. No port and no
 // named pipe: no other process can talk to the engine. stdout belongs to the channel, so anything else written there
 // (console.log, a library's stray output) goes to stderr, which the app keeps in motor-salida.log.
+// On Windows, writes to these pipes are synchronous: while the app does not read stdout or stderr, this whole process
+// waits (turns, timers, the phone). The app must drain both pipes all the time, each on its own thread, and write stdin
+// from another one (src-tauri/src/pipes.rs); anything sent at a high rate here (frames) must be merged or dropped while
+// one is still pending.
 import readline from 'node:readline';
 
 // One message, one line: JSON.stringify never leaves a raw line break inside (they are escaped in strings).

@@ -5,7 +5,8 @@ import { app, BrowserWindow, ipcMain, dialog, shell, Notification, Menu, protoco
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createHome, isHome, loadConfig, writeJson, paths, homeKey, oldHomeKey, LEGACY } from '../core/home.mjs';
+import { loadConfig, writeJson, paths } from '../core/home.mjs';
+import { locateHome, setupHome, switchHome, secretCopy, secretsCopy, adoptOldKeyNames, secretDir } from '../engine/desktop-home.mjs';
 import { createAgentBrowser } from './browser.mjs';
 import { createUpdater, RELEASES_URL } from './updater.mjs';
 import { MAX_IMAGES, readImage, screenshot } from '../engine/feedback.mjs';
@@ -21,7 +22,6 @@ const SRC = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const UNPACKED = SRC.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
 const RENDERER = path.join(SRC, 'renderer');
 const VERSION = app.getVersion();
-const LOCATION = () => path.join(app.getPath('userData'), 'ubicacion.json');
 // Size of the interface on this PC (Ajustes → Interfaz, Ctrl + / Ctrl - / Ctrl 0, Ctrl + rueda). 1 = «Normal», which is a
 // bit bigger than Chromium's 100% (the first version looked too small on Windows). Kept per PC, also before the setup.
 const INTERFACE = () => path.join(app.getPath('userData'), 'interfaz.json');
@@ -63,24 +63,8 @@ const config = () => { if (!cachedConfig && home) { try { cachedConfig = loadCon
 const langOf = (c) => (c?.language === 'en' ? 'en' : 'es');
 const T = (key, vars) => translate(langOf(config()), key, vars);
 
-// 3.8: a saved workspace whose core is gone is still this PC's workspace: the engine puts core back from the newest backup
-// or the window says why it cannot (only a workspace folder that is gone altogether brings the welcome back).
-function readLocation() {
-  try { const h = JSON.parse(fs.readFileSync(LOCATION(), 'utf8')).home; return h && (isHome(h) || fs.existsSync(h)) ? h : null; } catch { return null; }
-}
-function saveLocation(h) { fs.mkdirSync(path.dirname(LOCATION()), { recursive: true }); writeJson(LOCATION(), { home: h }); }
-
-// A fresh install (no saved location) on a PC that already has an Orb folder uses it as it is: <drive>:\Orb, Documents\Orb
-// or <user>\Orb, the most recently used one if there are several. Nothing is created or overwritten. Not in tests or when
-// running from the code (ORB_USER_DATA or not packaged), so they never pick up a real folder.
-function findExistingHome() {
-  if (!app.isPackaged || process.env.ORB_USER_DATA) return null;
-  // Drive letters only exist on Windows; on Linux / macOS, Documents/Orb and ~/Orb.
-  const drives = process.platform !== 'win32' ? [] : 'CDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((l) => `${l}:\\`).filter((d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
-  const candidates = new Set([...drives.map((d) => path.join(d, PRODUCT.folder)), path.join(app.getPath('documents'), PRODUCT.folder), path.join(app.getPath('home'), PRODUCT.folder)]);
-  const used = (h) => { for (const f of [paths(h).config, path.join(h, LEGACY.config)]) { try { return fs.statSync(f).mtimeMs; } catch { /* the other one */ } } return 0; };
-  return [...candidates].filter((h) => isHome(h)).sort((a, b) => used(b) - used(a))[0] ?? null;
-}
+// Where this PC's workspace is (src/engine/desktop-home.mjs, shared with the Tauri app).
+const USER_DATA = () => app.getPath('userData');
 
 let zoom = 1;
 function readZoom() { try { const z = Number(JSON.parse(fs.readFileSync(INTERFACE(), 'utf8')).zoom); return Number.isFinite(z) ? Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)) : 1; } catch { return 1; } }
@@ -110,22 +94,11 @@ let weakKeyring = false;
 // Orb 3.7 still has it in .orb\datos until the engine moves that folder into core (src/core/core-folder.mjs): read there
 // and never written into core before the move. Returns the secret as hex, or null when encryption is not available
 // (then the engine uses clave.bin).
-const SECRET_COPY = (h) => path.join(app.getPath('userData'), 'claves', `${homeKey(h)}.enc`);
-// 3.8: and of the master password's files (core\secretos: the data key wrapped, the secrets sealed), kept by the engine.
-const SECRETS_COPY = (h) => path.join(app.getPath('userData'), 'claves', `${homeKey(h)}-secretos`);
-// The first 3.8 builds named them after the workspace's whole path (home.mjs › oldHomeKey): taken over once.
-function adoptOldKeyNames(h) {
-  const dir = path.join(app.getPath('userData'), 'claves');
-  for (const [from, to] of [[`${oldHomeKey(h)}.enc`, path.basename(SECRET_COPY(h))], [`${oldHomeKey(h)}-secretos`, path.basename(SECRETS_COPY(h))]]) {
-    try { if (fs.existsSync(path.join(dir, from)) && !fs.existsSync(path.join(dir, to))) fs.renameSync(path.join(dir, from), path.join(dir, to)); } catch { /* the next start */ }
-  }
-}
 function approvalSecret(h) {
-  adoptOldKeyNames(h);
+  adoptOldKeyNames(USER_DATA(), h);
   const available = safeStorage.isEncryptionAvailable();
   let backend = null; try { backend = process.platform === 'linux' ? safeStorage.getSelectedStorageBackend() : null; } catch { /* older Electron */ }
-  const legacy = path.join(h, LEGACY.internal, 'datos');
-  const dir = fs.existsSync(legacy) && !fs.existsSync(paths(h).core) ? legacy : paths(h).data;
+  const dir = secretDir(h);
   if (keyringWeak(process.platform, available, backend)) {
     weakKeyring = process.platform === 'linux';
     // A key already kept that way (Orb run from the code on Linux) is still read, so links and approvals stay.
@@ -133,7 +106,7 @@ function approvalSecret(h) {
     return null;
   }
   // The rest (the copy outside, a clave.enc that cannot be read kept aside): src/main/approval-secret.mjs.
-  return loadApprovalSecret({ dir, copy: SECRET_COPY(h), seal: (hex) => safeStorage.encryptString(hex), unseal: (buf) => safeStorage.decryptString(buf) });
+  return loadApprovalSecret({ dir, copy: secretCopy(USER_DATA(), h), seal: (hex) => safeStorage.encryptString(hex), unseal: (buf) => safeStorage.decryptString(buf) });
 }
 
 let restarts = 0;
@@ -170,7 +143,7 @@ function startEngine(h) {
   });
   let secret = null; try { secret = approvalSecret(h); } catch { /* falls back to the file */ }
   const browser = agentBrowser ? { pipe: agentBrowser.pipe, token: agentBrowser.token } : null;
-  engine.postMessage({ type: 'start', home: h, version: VERSION, secret, browser, keep: SECRETS_COPY(h) });
+  engine.postMessage({ type: 'start', home: h, version: VERSION, secret, browser, keep: secretsCopy(USER_DATA(), h) });
   return engineReady;
 }
 
@@ -342,8 +315,7 @@ ipcMain.handle('app:updateInstall', guard(async () => {
 // First run: creates <base>/<name> (or reuses an existing assistant folder), remembers it and starts the engine.
 ipcMain.handle('app:setup', guard(async ({ base, assistantName, userName, language } = {}) => {
   if (home) throw new Error(T('sys.main.alreadySetup'));
-  const { home: h } = createHome(String(base ?? ''), { assistantName: String(assistantName ?? PRODUCT.assistant), userName: String(userName ?? ''), language: language === 'en' ? 'en' : 'es' });
-  saveLocation(h);
+  const h = setupHome({ userData: USER_DATA(), base, assistantName, userName, language });
   await startEngine(h);
   cachedConfig = null;
   setTitle();
@@ -352,8 +324,7 @@ ipcMain.handle('app:setup', guard(async ({ base, assistantName, userName, langua
 }));
 // Moves to another assistant folder (restart of the engine with the new one).
 ipcMain.handle('app:switchHome', guard(async (target) => {
-  if (typeof target !== 'string' || !isHome(target)) throw new Error(T('sys.main.notHome'));
-  saveLocation(target);
+  if (!switchHome({ userData: USER_DATA(), target })) throw new Error(T('sys.main.notHome'));
   quitting = true; agentBrowser?.shutdown(); try { engine?.postMessage({ type: 'shutdown' }); } catch { /* gone */ }
   app.relaunch(); app.exit(0);
 }));
@@ -438,8 +409,7 @@ app.whenReady().then(async () => {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({ responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': ["default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; worker-src 'self' blob:; connect-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"] } });
   });
-  let h = readLocation();
-  if (!h) { h = findExistingHome(); if (h) saveLocation(h); }
+  const h = locateHome({ userData: USER_DATA(), packaged: app.isPackaged, separateData: Boolean(process.env.ORB_USER_DATA), documents: app.getPath('documents'), profile: app.getPath('home') });
   home = h;
   applyMenu(); // in the language of the settings; built again when it changes (onEngineEvent)
   // The agents' browser: pages drawn off screen and the little window in the top-right corner (ui.pip turns it off).

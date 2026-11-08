@@ -14,6 +14,10 @@ import { DESKTOP } from '../core/permissions.mjs';
 import { stdioTransport } from './stdio.mjs';
 import { attachHost, hostReply } from './host.mjs';
 import { appMethods } from './api-app.mjs';
+import { locateHome, setupHome, switchHome, secretsCopy, adoptOldKeyNames, secretDir } from './desktop-home.mjs';
+import { loadConfig } from '../core/home.mjs';
+import es from '../core/locales/es.mjs';
+import en from '../core/locales/en.mjs';
 
 // Electron's utility process (parentPort), a plain process with JSON lines on stdin/stdout (3.8.1: Tauri starts the
 // bundled node.exe with ORB_ENGINE_STDIO=1; src/engine/stdio.mjs), or a Node child with an IPC channel (the tests).
@@ -46,8 +50,17 @@ process.on('uncaughtException', (error) => log(`uncaughtException: ${error?.stac
 process.on('unhandledRejection', (error) => log(`unhandledRejection: ${error?.stack ?? error}`));
 
 let mirror = null; // 3.8: the copy of core\secretos outside the workspace (the app's data folder), when the app gives one
-async function start(home, version, secret, browser, keep = null) {
+// userData: the app's data folder, from an app that leaves the copies outside the workspace to the engine (Tauri; Electron
+// passes keep itself).
+async function start(home, version, secret, browser, keep = null, userData = null) {
   if (!home || !path.isAbsolute(home)) throw new Error(tr('sys.engine.notHome', { home }));
+  if (typeof userData === 'string' && path.isAbsolute(userData)) {
+    adoptOldKeyNames(userData, home);
+    keep ??= secretsCopy(userData, home);
+    // 3.8.1: the Tauri app does not open the secret sealed by Electron yet (host.unseal comes in a later step). Without it
+    // the engine would fall back to a new plain key and this workspace's approvals and backups would no longer open.
+    if (!(typeof secret === 'string' && /^[0-9a-f]{64}$/.test(secret)) && fs.existsSync(path.join(secretDir(home), 'clave.enc'))) throw new Error(tr('sys.engine.sealedSecret'));
+  }
   // The approval secret comes from the app (kept encrypted by Windows); without it, the file fallback is used.
   if (typeof secret === 'string' && /^[0-9a-f]{64}$/.test(secret)) ctx.secret = Buffer.from(secret, 'hex');
   // The agents' browser lives in the app (main process): its pipe and token go to the agents' MCP servers.
@@ -351,15 +364,37 @@ function shutdown() {
   Promise.race([Promise.resolve(remote?.stop()).catch(() => {}), new Promise((r) => setTimeout(r, 4000))]).finally(() => setTimeout(() => process.exit(0), 300));
 }
 
+// 3.8.1: what an app without Node of its own (Tauri) asks the engine before and around the start, answered as
+// { type: 'reply', id, ok, result | error }: where the workspace is, the first-run setup, moving to another workspace
+// (src/engine/desktop-home.mjs, the same rules as Electron's main process) and the texts of its own dialogs and errors
+// (sys.main.* and sys.dialog.*) in the language of the settings. Not API methods: the window cannot send them.
+const SHELL_TEXTS = /^sys.(main|dialog)./;
+const APP_MESSAGES = {
+  locate: (m) => ({ home: locateHome({ userData: String(m.userData ?? ''), packaged: m.packaged === true, separateData: m.separateData === true, documents: m.documents ?? null, profile: m.profile ?? null }) }),
+  setup: (m) => ({ home: setupHome({ userData: String(m.userData ?? ''), base: m.base, assistantName: m.assistantName, userName: m.userName, language: m.language }) }),
+  switchHome: (m) => ({ ok: switchHome({ userData: String(m.userData ?? ''), target: m.target }) }),
+  texts: (m) => {
+    let lang = ctx.config?.language;
+    if (!lang && typeof m.home === 'string' && m.home) { try { lang = loadConfig(m.home).language; } catch { /* Spanish */ } }
+    const dict = { ...es, ...(lang === 'en' ? en : {}) };
+    return Object.fromEntries(Object.entries(dict).filter(([k]) => SHELL_TEXTS.test(k)));
+  }
+};
+
 transport.on(async (msg) => {
   if (!msg || typeof msg !== 'object') return;
   if (msg.type === 'start') {
-    try { transport.send({ type: 'started', ok: true, result: await start(msg.home, msg.version, msg.secret, msg.browser, msg.keep) }); }
+    try { transport.send({ type: 'started', ok: true, result: await start(msg.home, msg.version, msg.secret, msg.browser, msg.keep, msg.userData) }); }
     catch (error) { transport.send({ type: 'started', ok: false, error: error.message }); }
     return;
   }
   if (msg.type === 'shutdown') return shutdown();
   if (msg.type === 'hostReply') { hostReply(msg); return; }
+  if (Object.hasOwn(APP_MESSAGES, msg.type)) {
+    try { transport.send({ type: 'reply', id: msg.id, ok: true, result: await APP_MESSAGES[msg.type](msg) }); }
+    catch (error) { transport.send({ type: 'reply', id: msg.id, ok: false, error: oneLine(error?.message ?? String(error), 1000) }); }
+    return;
+  }
   if (msg.type !== 'call') return;
   try {
     if (!api) throw new Error(tr('sys.engine.notStarted', { name: PRODUCT.name }));

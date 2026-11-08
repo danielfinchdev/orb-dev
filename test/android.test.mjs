@@ -66,9 +66,9 @@ test('solo direcciones privadas en http: Tailscale, la wifi de casa y este móvi
   assert.deepEqual(orderBases(['http://example.com', 'http://192.168.1.1:3131', 'http://192.168.1.1:3131', 'basura::']), ['http://192.168.1.1:3131'], 'sin repetidas ni públicas en http');
 });
 
-test('qué puente tiene la página: el de Electron, el de la app o el del navegador', () => {
-  assert.equal(pickBridge({ hasOrb: true, native: false }), 'electron');
-  assert.equal(pickBridge({ hasOrb: true, native: true }), 'electron', 'si ya hay uno, se queda');
+test('qué puente tiene la página: el del escritorio, el de la app o el del navegador', () => {
+  assert.equal(pickBridge({ hasOrb: true, native: false }), 'desktop');
+  assert.equal(pickBridge({ hasOrb: true, native: true }), 'desktop', 'si ya hay uno, se queda');
   assert.equal(pickBridge({ native: true }), 'app');
   assert.equal(pickBridge({}), 'web');
 });
