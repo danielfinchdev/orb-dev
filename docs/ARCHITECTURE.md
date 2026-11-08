@@ -133,8 +133,11 @@ C:\Orb\                   (C:\Orb by default; always <chosen folder>\Orb, the sa
   each platform chosen plus `compartido\` and a `LEEME.md` (`createProject` with `platforms`). The 2.7–3.7 groups
   (`<name>-android`, `<name>-ios`… with `comun\<name>`) are no longer made; existing ones still work together.
 - **core** is never a project and cannot be linked as one; nothing else at the top is Orb's.
-- **adb**: at startup, if `core\herramientas\adb\adb.exe` is missing, the engine downloads Google's platform-tools there
-  (`src/engine/android.mjs`) and puts that folder first in the agents' PATH. Settings → Android shows the status.
+- **adb** (3.8.2): the first time it is needed (Settings → Android, or an agent's `orb_android_*` tool) the engine
+  downloads a pinned version of Google's platform-tools (size, Google's SHA-1 and a SHA-256 checked before unpacking)
+  into `core\herramientas\adb` (`src/engine/android.mjs`). It is not in the agents' PATH: agents reach the phone paired
+  in Settings → Android through Orb's tools, only in a chat with «Usar mi móvil Android» (`src/engine/grants.mjs`),
+  and run adb by hand only with «Acceso total» as well. adb's server stops when Orb locks or closes.
 - **Older folders**: `ensureLayout` (every start) moves Orb 3.7's own data into core (its other folders move only as the
   user chooses, section 36), creates whatever is missing and moves 2.3.0's `bitacoras\` into the log folder (if a file exists in both, the old entries are
   appended at the end). It only discards the empty logs that 2.3.0 created for the categories and configuration folders
@@ -1062,8 +1065,8 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-
   warnings for pushes or mass deletions.
 - **Orb's data folder (`isOrbData` in `guard.mjs`):** matched by RESOLVED path (against the agent's folder, any case
   or separator, symlinks followed), not by names: a project may have its own `orb.db` or talk about `ORB_HOME`. Denied,
-  and in «total» it asks. Isolated copies (`core/copias/aisladas`) and the tools (`core/herramientas`, adb by its full
-  path) stay open; the logs moved into core (`core/bitacora`) are open to reading tools only (the user's rules for
+  also in «total» (3.8.2: it asked before). Isolated copies (`core/copias/aisladas`) and the tools (`core/herramientas`)
+  stay open; the logs moved into core (`core/bitacora`) are open to reading tools only (the user's rules for
   agents may point there; they are written through Orb's own tools, and a write or a command there is denied with a
   reason that names `orb_write_log`). 3.8.1: the skills (`core/skills`) are open to reading tools too; a command that
   only runs one of their scripts asks (anything else there is denied), and `core/preparacion` (what an agent makes for
