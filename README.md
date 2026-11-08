@@ -99,6 +99,17 @@ Orb backs up its data every day, outside the workspace (`%LOCALAPPDATA%\Orb\copi
 in Settings › Data), sealed with this PC's key. A **recovery code** opens them on another PC: that is also how you move
 Orb to a new computer.
 
+### Going back to the previous key
+
+If you chose «Empezar con una clave nueva» (start with a new key) and Windows can open the previous key again,
+Settings › Data offers to go back to it. Switching applies the next time Orb starts, and the other key is kept aside so
+you can switch back later. After switching:
+
+- Backups, approvals and linked devices made with the key you switch to work again; those made with the other key stop
+  working.
+- Backups made with the other key only open with their recovery code.
+- A recovery code created with the other key no longer works on this PC: create a new one afterwards.
+
 ## Highlights
 
 - **Tasks under control.** Sensitive actions (publishing, deleting, credentials, payments, high reasoning) wait for your

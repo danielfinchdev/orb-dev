@@ -104,7 +104,7 @@ Six sections. Each section is a vertical stack of cards; each card = title, at m
 | Magic Link | `Radar` (wifi/radar style) | Dispositivos (access from the phone, link a device with QR, linked devices) |
 | Agentes y uso | `Cpu` | Agents and accounts, tasks and spending (the "ahorro ↔ uso" slider), conversation reset, test of the day |
 | Datos | `DatabaseBackup` | Backups (and their folder), recovery code, restore (moving to another PC: a backup restored there with the code), Carpeta core, Contraseña maestra, Datos de Orb 3.7 (after an update) |
-| Avanzado | `Wrench` | Herramientas (browser, MCP, Android), «Cosas que nadie toca», God mode |
+| Avanzado | `Wrench` | Herramientas (browser, MCP, Android), «Elementos protegidos», God mode |
 | Acerca de | `Info` | Version, Contribuye (support, report a problem), Más aplicaciones, licence |
 
 Your name and language live in General: one owner per PC, no users or profiles.

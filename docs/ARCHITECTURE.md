@@ -684,7 +684,8 @@ phone does not have the app open. On iPhone they work with Orb added to the home
   `withoutPaths` (no PC folders on the phone, section 28).
 - Every minute it checks whether the network changed (another wifi, another IP) and reopens access.
 - The first time it listens on the local network, Windows may ask about the firewall: private networks must be
-  allowed. If the PC's local IP changes, a phone linked over wifi falls back to `<computer>.local` or the other
+  allowed. Ajustes does not warn about it in advance (3.8.2): when a device cannot reach any local-network address
+  while linking, its error says so (`app.linkOfflineWifi`, `src/ui/lib/web-bridge.js`). If the PC's local IP changes, a phone linked over wifi falls back to `<computer>.local` or the other
   addresses from its QR; a fixed IP on the router avoids it.
 - Files: `src/engine/remote.mjs`, `src/engine/api-link.mjs`, `src/engine/webpush.mjs`, `src/core/mobile-crypto.mjs`,
   `src/core/link-payload.mjs`, `src/ui/lib/web-bridge.js`, `src/ui/views/magic-link.jsx` and the "Magic Link" and "This
@@ -1585,7 +1586,7 @@ channel's waits), making a new recovery code (`backup.recovery`: the code opens 
 3.7, unlinking a phone (`link.revoke`, `remote.revoke`), a connector's keys (`secrets.connector`,
 `secrets.saveConnector`), and in `config.save` (compared with the settings in force): choosing the backups' folder,
 writing a connector key in clear, changing a connector that has keys (its command, arguments or name, removing it or one
-of its keys) and taking an entry off «Cosas que nadie toca»; 3.8.1: deleting a project with its folder
+of its keys) and taking an entry off «Elementos protegidos»; 3.8.1: deleting a project with its folder
 (`projects.deleteCheck`; its end, `projects.delete` / `projects.deleteAbort`, takes the one-off ticket the check returned). Opening core in the Explorer too (`main.mjs` asks the engine
 `master.check` before `app:openPath` on core itself or on `core\secretos`, compared by real path; core's tool folders
 open as before; 3.8.1: the engine's `guardedCore`, used by `app.openIn`, `app.runAction` and `app.openTerminal`, guards
