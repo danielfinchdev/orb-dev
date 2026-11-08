@@ -60,6 +60,8 @@ jobs:
       - run: npm run check
       - run: npm test
         timeout-minutes: 25
+      - name: Prepare the app resources cargo needs (src-tauri/resources/app)
+        run: node scripts/tauri-resources.mjs
       - run: cargo test --workspace --lib --locked
         working-directory: src-tauri
       - name: Build the installer (Tauri), not signed (signing happens on the owner's PC)
