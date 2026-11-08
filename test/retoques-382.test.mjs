@@ -38,3 +38,13 @@ test('the chat bars keep only the bell and pause; the rest goes into ⋯', () =>
   for (const id of ['open-folder', 'details', 'fork', 'archive', 'bar-games', 'delete']) assert.match(menu, new RegExp(`data-testid="${id}"`), id);
   assert.match(menu, /<DropdownMenuSeparator \/>\s*<DropdownMenuItem variant="destructive" onSelect=\{async \(\) => \{ if \(await confirm\(/);
 });
+
+test('bubbles stay inside the window and the composer folder is a chip like the others', () => {
+  const overlay = read('components', 'ui', 'overlay.jsx');
+  // Both bubbles keep their tail off the rounded corners (it hides instead of looking cut against the window's edge).
+  assert.equal([...overlay.matchAll(/collisionPadding=\{12\} arrowPadding=\{TAIL_PAD\}/g)].length, 2);
+  assert.match(read('components', 'sidebar.jsx'), /side="top" align=\{n === 0 \? 'start' : 'center'\}/);
+  const chip = read('views', 'session.jsx').match(/<span tabIndex=\{0\} className="([^"]+)" data-testid="session-folder">/);
+  assert.ok(chip, 'folder chip');
+  for (const c of ['h-8', 'rounded-lg', 'border', 'px-2.5', 'gap-1.5', 'text-[13px]']) assert.ok(chip[1].split(' ').includes(c), c);
+});

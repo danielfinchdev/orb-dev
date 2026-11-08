@@ -439,7 +439,8 @@ export function SessionView({ route }) {
             }} data-testid="session-permission" />
             <ReasoningMenu catalog={catalog} value={{ agent: s.agent, model: s.model ?? '', account: s.account, reasoning: s.reasoning ?? 'medium' }} onChange={(reasoning) => act(call('sessions.update', { id: s.id, reasoning }))} />
           </>) : null}
-          <Tip label={s.cwd}><span className="text-muted-foreground hidden min-w-0 items-center gap-1 truncate text-xs xl:flex"><FolderOpen className="size-3.5 shrink-0" />{s.project ?? baseName(s.cwd)}</span></Tip>
+          {/* 3.8.2: the folder as a chip of the same height, padding and gap as the model, permissions and reasoning ones. */}
+          <Tip label={s.cwd}><span tabIndex={0} className="border-input text-muted-foreground dark:bg-input/30 hidden h-8 min-w-0 items-center gap-1.5 rounded-lg border px-2.5 text-[13px] whitespace-nowrap shadow-xs outline-none focus-visible:ring-ring/40 focus-visible:ring-[3px] xl:inline-flex" data-testid="session-folder"><FolderOpen className="size-4 shrink-0" /><span className="truncate">{s.project ?? baseName(s.cwd)}</span></span></Tip>
           {s.context ? <span className="text-muted-foreground ml-auto text-xs"><ContextMeter context={s.context} /></span> : null}
         </>} />
     </>

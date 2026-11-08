@@ -73,6 +73,9 @@ export function Select({ value, onValueChange, options, placeholder, className, 
 // and on keyboard focus; the control keeps its own accessible name (aria-label).
 // offset: how far from the control (more when a button sits right next to it, so the bubble never covers it).
 // off: kept closed (its control has a list of its own open, like the bell's).
+// 3.8.2: the bubble stays inside the window (collisionPadding) and its tail never sits on a rounded corner (TAIL_PAD,
+// the largest --tip-radius of the themes): a bubble pushed against the window's edge hides its tail instead of looking cut.
+export const TAIL_PAD = 20;
 export function BubbleTip({ title, text, children, side = 'bottom', align = 'center', wide = false, offset = 8, off = false }) {
   if (!title && !text) return children;
   return (
@@ -80,7 +83,7 @@ export function BubbleTip({ title, text, children, side = 'bottom', align = 'cen
       <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal>
         {/* 3.2.1: a bubble only informs: clicks go through it to whatever it covers (it hid the project picker). */}
-        <TooltipPrimitive.Content side={side} align={align} sideOffset={offset} collisionPadding={12} className={cn('orb-tip pointer-events-none z-50', wide ? 'max-w-80' : 'max-w-[17rem]')} data-testid="bubble-tip">
+        <TooltipPrimitive.Content side={side} align={align} sideOffset={offset} collisionPadding={12} arrowPadding={TAIL_PAD} className={cn('orb-tip pointer-events-none z-50', wide ? 'max-w-80' : 'max-w-[17rem]')} data-testid="bubble-tip">
           {title ? <div className="orb-tip-title text-[13px] leading-snug font-semibold">{title}</div> : null}
           {text ? <p className={cn('orb-tip-text text-[12px] leading-snug', title && 'mt-0.5', wide && 'break-all')}>{text}</p> : null}
           <TooltipPrimitive.Arrow asChild width={16} height={8}><span className="orb-tip-tail" aria-hidden="true" /></TooltipPrimitive.Arrow>
@@ -96,7 +99,7 @@ export function RichTip({ content, children, side = 'right', align = 'start', of
     <TooltipPrimitive.Root delayDuration={450} onOpenChange={(open) => { if (open) onOpen?.(); }}>
       <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal>
-        <TooltipPrimitive.Content side={side} align={align} sideOffset={offset} collisionPadding={12} className="orb-tip orb-card z-50 w-72" data-testid="rich-tip">
+        <TooltipPrimitive.Content side={side} align={align} sideOffset={offset} collisionPadding={12} arrowPadding={TAIL_PAD} className="orb-tip orb-card z-50 w-72" data-testid="rich-tip">
           {content}
           <TooltipPrimitive.Arrow asChild width={16} height={8}><span className="orb-tip-tail" aria-hidden="true" /></TooltipPrimitive.Arrow>
         </TooltipPrimitive.Content>
