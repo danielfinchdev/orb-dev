@@ -1452,11 +1452,8 @@ in `src/core/home.mjs`; nothing else builds them.
   or portable) makes a new secret when its `clave.enc` does not open, so where there is no `clave.enc` at all and
   Electron's Local State exists, Orb makes one as 3.8.0 would seal it (`host.seal` format `v10`, created only if absent);
   if one exists with another secret, the user is told. Both apps take turns on a workspace with the same secret
-  (`test/clave-compatible.test.mjs` runs 3.8.0's real code). A backup restored with another key keeps it:
-  `applyPendingRestore` sets aside `clave.enc`, `clave2.enc` and the outside `.v2.enc` copy and leaves
-  `clave-restaurada.json` (`src/core/restored-key.mjs`, the restored `clave.bin`'s fingerprint), so the next start seals
-  that `clave.bin` over everything from before; a restore made by 3.8.0 itself is recognised by its
-  `antes-de-restaurar-*` folder (`test/clave-restaurar.test.mjs`). After «Empezar con una clave nueva» the keys that did
+  (`test/clave-compatible.test.mjs` runs 3.8.0's real code). Backups never carry this secret
+  (3.8.1); one made before carries it in `core/datos/clave.bin` and is refused (`data.backup.err.oldKey`). After «Empezar con una clave nueva» the keys that did
   not open are noted (`clave-anterior.json`); when Windows opens one again, Ajustes › Datos offers to go back to it
   (`backup.previousKey`, done at the next start, the new key kept aside). Tauri never makes a new secret by itself:
   `host.unseal` says why a key did not open (`io` for now → the start stops and the window offers «Reintentar»;

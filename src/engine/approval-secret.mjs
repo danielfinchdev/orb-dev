@@ -15,7 +15,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { restoredKey, forgetRestored } from '../core/restored-key.mjs';
 
 const HEX = /^[0-9a-f]{64}$/;
 // Milliseconds and a random tail: two files set aside in the same second never overwrite each other.
@@ -130,23 +129,6 @@ async function adoptTmp(file, unseal, others) {
   }
 }
 
-// Whether a restore (src/core/backup.mjs › applyPendingRestore, of any version) set `hex` aside after `file` was last
-// written: the newest corentes-de-restaurar-* folder holding a sealed key holds that one, and it is newer than `file`.
-async function restoredAfter(dir, file, hex, unseal) {
-  const core = path.dirname(dir);
-  let since; try { since = fs.statSync(file).mtimeMs; } catch { return false; }
-  let folders = []; try { folders = fs.readdirSync(core).filter((n) => n.startsWith('antes-de-restaurar-')).map((n) => path.join(core, n)); } catch { return false; }
-  const dated = folders.map((f) => { try { return { f, at: fs.statSync(f).mtimeMs }; } catch { return null; } }).filter(Boolean).sort((a, b) => b.at - a.at);
-  for (const { f, at } of dated) {
-    const keys = ['clave2.enc', 'clave.enc'].map((n) => path.join(f, 'core', 'datos', n)).filter((k) => fs.existsSync(k));
-    if (!keys.length) continue;
-    if (at <= since) return false;
-    for (const k of keys) if ((await tryOpen(k, unseal)).hex === hex) return true;
-    return false;
-  }
-  return false;
-}
-
 // The way back after «Empezar con una clave nueva» (PREVIOUS_FILE). → the secret to use now.
 // And the way back from it (review D10 M6): going back keeps the new key aside and writes PREVIOUS_FILE again pointing at
 // it ({ back: true }), so Ajustes › Datos can offer «Volver a la clave nueva» (warn 'newAvailable': no notice at every
@@ -209,30 +191,15 @@ export async function loadHostSecret({ dir, copy, seal, unseal, sealV10 = null, 
     const seen = new Map();
     const state = async (file) => { if (!seen.has(file)) seen.set(file, await tryOpen(file, unseal)); return seen.get(file); };
     let hex = null; let found = false;
-    // A restored backup's key wins over everything from before the restore (kept aside below, never overwritten).
-    let restored; try { restored = restoredKey(dir); } catch (error) { throw new SecretError('busy', error.message); }
     const unsealed = missingIsBusy ? async (b) => { try { return await unseal(b); } catch (error) { throw error?.code === 'missing' ? Object.assign(new Error(error.message), { code: 'io' }) : error; } } : unseal;
     let lost = []; // allowNew: the sealed files that did not open, for the way back
-    if (restored) {
-      hex = restored;
-      // The way back to a key from before the restore is gone with it (review D10 M4/M5; backup.mjs sets them aside too).
-      for (const f of [PREVIOUS_FILE, BACK_FILE]) fs.rmSync(path.join(dir, f), { force: true });
-    }
-    else {
+    {
       const others = async () => { const out = []; for (const f of [copy2, enc, copy]) { const r = await tryOpen(f, unseal); if (r.hex) out.push(r.hex); } return out; };
       await adoptTmp(enc2, unseal, others); await adoptTmp(copy2, unseal, async () => { const r = await tryOpen(enc2, unseal); return r.hex ? [r.hex] : others(); });
-      let from = null;
       for (const file of [enc2, copy2, enc, copy]) {
         const r = await tryOpen(file, unsealed); seen.set(file, r);
         if (r.busy) throw new SecretError('busy', `${path.basename(file)}: ${r.why}`);
-        if (r.hex) { hex = r.hex; found = true; from = file; break; }
-      }
-      // A backup restored by Orb 3.8.0 after this app last ran: 3.8.0 only knows its own files, so it sealed the
-      // restored key in clave.enc and left the ORB2 ones as they were. Its restore set the key from before aside in
-      // corentes-de-restaurar-<date>: that key is the ORB2 one and the folder is newer than the ORB2 file → clave.enc wins.
-      if (from === enc2 || from === copy2) {
-        const v10 = await state(enc);
-        if (v10.hex && v10.hex !== hex && await restoredAfter(dir, from, hex, unseal)) hex = v10.hex;
+        if (r.hex) { hex = r.hex; found = true; break; }
       }
       const sealedExists = [...seen.values()].some((r) => !r.absent);
       if (!hex) {
@@ -261,7 +228,8 @@ export async function loadHostSecret({ dir, copy, seal, unseal, sealV10 = null, 
     }
     // A secret that exists nowhere else (new, restored, or from clave.bin) must be on disk before it is used.
     if (!found && !kept) throw new SecretError('busy', 'no se pudo guardar la clave');
-    if (kept) forgetRestored(dir);
+    // A plain clave.bin (a workspace made without the app) is not needed once the key is sealed.
+    if (kept) fs.rmSync(plain, { force: true });
     if (lost.length && kept) { try { writeWhole(path.join(dir, PREVIOUS_FILE), Buffer.from(JSON.stringify({ files: lost, at: new Date().toISOString() }))); } catch { /* no way back offered */ } }
     else if (found && !allowNew) hex = await previousKey({ dir, enc2, copy2, hex, seal, unseal, warn });
     // Orb 3.8.0's clave.enc (review D-fix M1).

@@ -40,6 +40,7 @@ export default {
   'data.migration38.badCopy': 'A valid copy of the database could not be made ({error}). Free some disk space and try again.',
   'data.backup.dailyFailed': 'Today\'s backup could not be made: {error}. It will try again in an hour.',
   'data.backup.err.badKind': 'That kind of backup does not exist.',
+  'data.backup.err.oldKey': 'This backup comes from an older version of Orb (before 3.8.1) and can no longer be restored. Make a new backup.',
   'data.backup.err.damaged': 'The backup is damaged or someone changed it: it cannot be used.',
   'data.backup.err.needsPassphrase': 'This backup was made on another computer: type your recovery code.',
   'data.backup.err.wrongPassphrase': 'The recovery code is not right.',

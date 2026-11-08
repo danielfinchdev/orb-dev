@@ -86,8 +86,8 @@ test('restore on a clean machine with the recovery code brings everything back',
     assert.ok(fs.existsSync(path.join(target, 'core', 'orb.json')));
     assert.equal(fs.readFileSync(path.join(target, 'core', 'bitacora', 'proyectos', 'casa.md'), 'utf8').trim(), 'A Ana le gusta el té verde.');
     assert.match(fs.readFileSync(path.join(target, 'core', 'bitacora', 'GENERAL.md'), 'utf8'), /Línea de prueba/);
-    // The secret travels inside (the approvals keep working there).
-    assert.ok(fs.readFileSync(path.join(target, 'core', 'datos', 'clave.bin')).equals(s.secret));
+    // 3.8.1: this PC's secret never travels (the new PC has its own).
+    assert.equal(fs.existsSync(path.join(target, 'core', 'datos', 'clave.bin')), false);
     const db = new DatabaseSync(path.join(target, 'core', 'datos', 'orb.db'), { readOnly: true });
     try {
       assert.equal(db.prepare('SELECT title FROM conversations WHERE id = ?').get(s.conv.id).title, 'Leo');
@@ -116,7 +116,6 @@ test('restore in place swaps at the next start; what was there is kept aside', a
     assert.match(fs.readFileSync(projectLog(), 'utf8'), /Cambiado/);
     const r = K.applyPendingRestore(s.home);
     assert.ok(r && fs.existsSync(r.aside));
-    assert.equal(r.secretChanged, true); // the old folder had no clave.bin of its own
     assert.match(fs.readFileSync(projectLog(), 'utf8'), /té verde/);
     assert.match(fs.readFileSync(path.join(r.aside, 'core', 'bitacora', 'proyectos', 'casa.md'), 'utf8'), /Cambiado/);
     useHome(s.home);
@@ -261,4 +260,19 @@ test('3.8: Ajustes › Datos elige otra carpeta de copias, nunca dentro del espa
     await e.call('config.save', { patch: { backup: { folder: '' } }, unlock });
     assert.equal((await e.call('backup.status')).folder, K.defaultBackupDir(home));
   } finally { await e.stop(); cleanup(); }
+});
+
+test('3.8.1 (decision 20 d): a backup never carries this PC\'s secret; one made before (with clave.bin) is refused with a clear message', async () => {
+  const t = tempHome();
+  try {
+    fs.mkdirSync(ctx.paths.data, { recursive: true });
+    fs.writeFileSync(ctx.paths.key, crypto.randomBytes(32));
+    const { file } = await K.createBackup({ home: t.home, secret: crypto.randomBytes(32), passphrase: 'codigo-de-prueba-largo' });
+    const into = path.join(t.base, 'limpia');
+    await K.restoreInto(into, file, { passphrase: 'codigo-de-prueba-largo' });
+    assert.equal(fs.existsSync(path.join(into, 'core', 'datos', 'clave.bin')), false, 'sin clave.bin en la copia');
+    for (const name of ['core/datos/clave.bin', '.orb/datos/clave.bin']) assert.equal(K.oldKeyEntry(name), true, name);
+    for (const name of ['core/archivo-3.7/datos/clave.bin', 'mi-proyecto/datos/clave.bin', 'core/datos/copia-clave.json']) assert.equal(K.oldKeyEntry(name), false, name);
+    assert.match(new K.BackupError('oldKey').message, /versión anterior de Orb.*ya no se puede restaurar/);
+  } finally { t.cleanup(); }
 });

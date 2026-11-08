@@ -6,7 +6,8 @@
 //   then chunks until the one marked last: u32 length · u8 last · 24-byte nonce · XChaCha20-Poly1305(ciphertext + tag)
 // header: { format, id, orbId, incarnation, version, created, kind, move, cipher, chunk, kdf:{alg:'scrypt',N,r,p,salt},
 //   wrapped:{ machine?, passphrase? }, manifest_hash, counts }
-// The body key is random. It is wrapped by this machine's secret (the app's secret: DPAPI or clave.bin) and, when the
+// The body key is random. It is wrapped by this machine's backup key (made from this PC's secret, which never goes into
+// a backup: 3.8.1, decision 20 d) and, when the
 // user set a recovery code, by that code through scrypt; with the code a backup opens on a clean machine. Every chunk's
 // additional data names the header (its sha256), the chunk's index and whether it is the last one: a changed, swapped,
 // cut or extended chunk does not open. The body is a plain stream of entries (u32 length · {p,s} · bytes); the first
@@ -31,7 +32,6 @@ import { tr } from './context.mjs';
 import { ARCHIVE_DIR, forgetRun } from './migrate-38.mjs';
 import { KEPT as SECRET_FILES } from './master.mjs';
 import { LIVE_DIR, OLD_DIR } from './extensions.mjs';
-import { RESTORE_MARKER, markRestoredKey } from './restored-key.mjs';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
 
@@ -246,7 +246,11 @@ export const walkFiles = (dir, skip = () => false) => {
   return out;
 };
 const NO_COPY = new Set(['node_modules', '.git', '.venv', '__pycache__', 'dist', 'build', '.next', '.cache']);
-const DATA_FILES = ['clave.bin', 'copia-clave.json', 'orb-id.json'];
+const DATA_FILES = ['copia-clave.json', 'orb-id.json'];
+// Backups made before 3.8.1 carry this PC's secret in clear (core/datos/clave.bin): they are not restored any more (the
+// engine never holds that secret: decision 20 d). Their names, as 3.8 and 3.7 wrote them.
+const OLD_KEYS = new Set([`${INTERNAL_DIR}/datos/clave.bin`, `${LEGACY.internal}/datos/clave.bin`]);
+export const oldKeyEntry = (name) => OLD_KEYS.has(String(name));
 const rel = (home, file) => path.relative(home, file).split(path.sep).join('/');
 // The names inside a backup are relative to the workspace (core/…, web/<project>/pizarra/…).
 export const archiveName = (home, file) => rel(home, file);
@@ -282,9 +286,7 @@ async function stageFiles(home, stage, { secret, includeProjects = false, includ
     files.push(`${INTERNAL_DIR}/datos/orb.db`);
   }
   if (fs.existsSync(p.config)) await put(p.config, archiveName(home, p.config));
-  // The secret that seals the approvals and the recovery wrap: on a new machine they keep working.
-  if (secret) { await fsp.writeFile(path.join(stage, INTERNAL_DIR, 'datos', 'clave.bin'), Buffer.from(secret), { mode: 0o600 }); files.push(`${INTERNAL_DIR}/datos/clave.bin`); }
-  for (const name of DATA_FILES.filter((n) => n !== 'clave.bin')) { const f = path.join(p.data, name); if (fs.existsSync(f)) await put(f, `${INTERNAL_DIR}/datos/${name}`); }
+  for (const name of DATA_FILES) { const f = path.join(p.data, name); if (fs.existsSync(f)) await put(f, `${INTERNAL_DIR}/datos/${name}`); }
   // 3.8: the master password's files (core\secretos): the secrets stay sealed with the data key, which opens with the
   // master password (any PC) or this PC's secret. The count of wrong passwords stays on this PC.
   for (const name of SECRET_FILES) { const f = path.join(p.secrets, name); if (fs.existsSync(f)) await put(f, archiveName(home, f)); }
@@ -477,6 +479,7 @@ async function walkBackup(file, keys, into = null) {
       const raw = Buffer.concat(parts);
       manifest = JSON.parse(raw.toString('utf8')); manifest.hash = sha256(raw);
       want = new Map(manifest.files.map((f) => [f.p, f]));
+      if (manifest.files.some((f) => oldKeyEntry(f.p))) throw new BackupError('oldKey');
       // Made by 3.7 (its own folders at the top): its names are read as 3.7 wrote them. A 3.8 copy may hold a log folder
       // the user kept at the top (bitacora/…): that one stays there.
       made37 = manifest.files.some((f) => f.p === LEGACY.config || f.p.startsWith(`${LEGACY.internal}/`));
@@ -558,15 +561,11 @@ function unitOf(name) {
 }
 
 // Called by the engine before the database is opened: a restore that is ready replaces what it holds;
-// what was there before goes to core/antes-de-restaurar-<fecha>. → null, or { from, header, secretChanged }.
+// what was there before goes to core/antes-de-restaurar-<fecha>. → null, or { from, header, aside, units }.
 // onlyMissing (3.8, a core deleted or damaged: repairCore): only what is not there any more is put back; what is still
-// there (a newer database, the logs) stays as it is.
-// outside (3.8.1, Tauri): the app's sealed copies of the key outside the workspace (claves\<key>.v2.enc), set aside with
-// core's sealed keys when the backup brings its own key, so that nothing from before the restore wins over it.
-// The way back to a key from before «Empezar con una clave nueva» (src/engine/approval-secret.mjs › PREVIOUS_FILE,
-// BACK_FILE): a restored key replaces it, so it goes aside with the old keys (review D10 M4/M5).
-const KEY_WAY_BACK = ['clave-anterior.json', 'clave-volver.json'];
-export function applyPendingRestore(home, { onlyMissing = false, outside = [] } = {}) {
+// there (a newer database, the logs) stays as it is. This PC's sealed secret is never part of a backup (3.8.1): the one
+// on disk stays.
+export function applyPendingRestore(home, { onlyMissing = false } = {}) {
   const ready = pendingDir(home);
   let info; try { info = JSON.parse(fs.readFileSync(path.join(ready, 'listo.json'), 'utf8')); } catch { return null; }
   fs.rmSync(path.join(ready, 'listo.json'), { force: true });
@@ -575,24 +574,12 @@ export function applyPendingRestore(home, { onlyMissing = false, outside = [] } 
   for (const f of walkFiles(ready)) units.add(unitOf(rel(ready, f)));
   // A unit inside another one (a whiteboard inside a whole project) travels with it.
   for (const u of [...units]) if ([...units].some((o) => o !== u && u.startsWith(`${o}/`))) units.delete(u);
-  if (onlyMissing) {
-    // Only core: a project or a whiteboard the user deleted stays deleted.
-    for (const u of [...units]) if (!u.startsWith(`${INTERNAL_DIR}/`) || fs.existsSync(homePath(home, u))) units.delete(u);
-    // A secret sealed by Windows (clave.enc of Electron, clave2.enc of Tauri) is the same one: its plain copy is not put
-    // back beside it.
-    if (['clave.enc', 'clave2.enc'].some((n) => fs.existsSync(path.join(paths(home).data, n)))) units.delete(`${INTERNAL_DIR}/datos/clave.bin`);
-  }
+  // Only core: a project or a whiteboard the user deleted stays deleted.
+  if (onlyMissing) for (const u of [...units]) if (!u.startsWith(`${INTERNAL_DIR}/`) || fs.existsSync(homePath(home, u))) units.delete(u);
   const move = (from, to) => { fs.mkdirSync(path.dirname(to), { recursive: true }); try { fs.renameSync(from, to); } catch { fs.cpSync(from, to, { recursive: true }); fs.rmSync(from, { recursive: true, force: true }); } };
-  const oldKey = (() => { try { return fs.readFileSync(path.join(paths(home).data, 'clave.bin')); } catch { return null; } })();
-  // The database's journal files and the Windows-sealed secrets (and a cut write of one) go with the old database.
-  const newKey = units.has(`${INTERNAL_DIR}/datos/clave.bin`);
-  const sealed = newKey ? (() => { try { return fs.readdirSync(paths(home).data).filter((n) => /^clave2?\.enc(\..+\.tmp)?$/.test(n)); } catch { return []; } })() : [];
-  for (const extra of [...(units.has(`${INTERNAL_DIR}/datos/orb.db`) || !onlyMissing ? ['orb.db-wal', 'orb.db-shm'] : []), ...sealed, ...(newKey ? [RESTORE_MARKER, ...KEY_WAY_BACK] : [])]) {
+  // The database's journal files go with the old database.
+  for (const extra of units.has(`${INTERNAL_DIR}/datos/orb.db`) || !onlyMissing ? ['orb.db-wal', 'orb.db-shm'] : []) {
     const f = path.join(paths(home).data, extra); if (fs.existsSync(f)) move(f, path.join(aside, INTERNAL_DIR, 'datos', extra));
-  }
-  // The app's copies outside the workspace too: kept beside them under another name (backups made before may need them).
-  if (newKey && !onlyMissing) {
-    for (const f of outside) { try { if (fs.existsSync(f)) fs.renameSync(f, f.replace(/\.enc$/, `.antes-de-restaurar-${stamp()}.enc`)); } catch (error) { console.error(`restaurar: ${path.basename(f)}: ${error.message}`); } }
   }
   for (const u of [...units].sort()) {
     const target = homePath(home, u);
@@ -604,10 +591,7 @@ export function applyPendingRestore(home, { onlyMissing = false, outside = [] } 
   if (units.has(`${INTERNAL_DIR}/datos/orb.db`)) forgetRun(home);
   // A copy made by 3.7: the paths of its orb.json and database point into core.
   if (info.legacy) rewritePaths(home);
-  let key = null; try { key = fs.readFileSync(path.join(paths(home).data, 'clave.bin')); } catch { /* none */ }
-  // The restored key wins at the next start of either app over what is left from before (approval-secret.mjs).
-  if (newKey && key && !onlyMissing) { try { markRestoredKey(paths(home).data); } catch (error) { console.error(`restaurar: marca de la clave: ${error.message}`); } }
-  return { from: info.from, header: info.header, aside, units: [...units], secretChanged: Boolean(key && !(oldKey && oldKey.equals(key))), secret: key };
+  return { from: info.from, header: info.header, aside, units: [...units] };
 }
 
 // ---- 3.8: core missing or damaged (src/engine/engine.mjs, before the database opens)
@@ -631,7 +615,7 @@ export async function repairCore(home, { secret = null, passphrase = null, file 
       continue;
     }
     const applied = applyPendingRestore(home, { onlyMissing: true });
-    return { ok: true, restored: { from: applied?.from, created: applied?.header?.created ?? backup.created, units: applied?.units ?? [], secret: applied?.secretChanged ? applied.secret : null }, missing: health.missing };
+    return { ok: true, restored: { from: applied?.from, created: applied?.header?.created ?? backup.created, units: applied?.units ?? [] }, missing: health.missing };
   }
   return { ok: false, ...failed, missing: health.missing };
 }

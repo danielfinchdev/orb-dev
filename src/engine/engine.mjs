@@ -77,7 +77,6 @@ async function holdWorkspace(home) {
   process.once('exit', () => { try { fs.closeSync(fd); fs.rmSync(file, { force: true }); } catch { /* gone, or another engine has it now */ } });
 }
 
-let outsideKeys = []; // 3.8.1 (Tauri): this app's sealed copy of the key outside the workspace (claves\<key>.v2.enc)
 let mirror = null; // 3.8: the copy of core\secretos outside the workspace (the app's data folder), when the app gives one
 const validSecret = (s) => typeof s === 'string' && /^[0-9a-f]{64}$/.test(s);
 // 3.8.1, Tauri: the approval secret, opened and kept by the engine (src/engine/approval-secret.mjs › loadHostSecret) with
@@ -128,7 +127,6 @@ async function start(home, version, secret, browser, keep = null, userData = nul
   if (typeof userData === 'string' && path.isAbsolute(userData)) {
     adoptOldKeyNames(userData, home);
     keep ??= secretsCopy(userData, home);
-    outsideKeys = [(await import('./approval-secret.mjs')).secret2Files(secretDir(home), secretCopy(userData, home)).copy2];
     if (!validSecret(secret) && hostSecret === true) secret = await secretFromApp(home, userData, newSecret);
     // After switching keys, copia-clave.json (the recovery code's wrap, sealed with the other key) does not open: the
     // scheduled copies go out without the code and «He olvidado la contraseña» cannot check it. Said (review D10 M6).
@@ -188,11 +186,11 @@ async function open({ home, version, repair = null }) {
   { const { keepBackupsOutside } = await import('../core/core-folder.mjs'); try { keepBackupsOutside(home); } catch (error) { console.error(`copias: ${error.message}`); } }
   useHome(home);
   // 3.6: a backup restored from Ajustes › Datos replaces the data now, before the database
-  // opens (what was there goes to core/antes-de-restaurar-<fecha>). Its secret (links, approvals) comes with it.
+  // opens (what was there goes to core/antes-de-restaurar-<fecha>). This PC's secret stays (never in a backup).
   const { applyPendingRestore } = await import('../core/backup.mjs');
   let restored = null;
-  try { restored = applyPendingRestore(home, { outside: outsideKeys }); } catch (error) { console.error(`restaurar: ${error.message}`); }
-  if (restored) { useHome(home); if (restored.secretChanged && restored.secret?.length >= 32) ctx.secret = Buffer.from(restored.secret.subarray(0, 32)); }
+  try { restored = applyPendingRestore(home); } catch (error) { console.error(`restaurar: ${error.message}`); }
+  if (restored) useHome(home);
   logFile = path.join(ctx.paths.runs, 'motor.log');
   fs.mkdirSync(ctx.paths.runs, { recursive: true });
   // 3.8: the backups' folders and the copies of the sealed secrets are kept from the agents like core.

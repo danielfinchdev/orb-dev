@@ -40,6 +40,7 @@ export default {
   'data.migration38.badCopy': 'No se pudo hacer una copia válida de la base de datos ({error}). Libera espacio en el disco y reintenta.',
   'data.backup.dailyFailed': 'No se pudo hacer la copia de seguridad de hoy: {error}. Se vuelve a probar dentro de una hora.',
   'data.backup.err.badKind': 'Ese tipo de copia no existe.',
+  'data.backup.err.oldKey': 'Esta copia es de una versión anterior de Orb (antes de la 3.8.1) y ya no se puede restaurar. Haz una copia nueva.',
   'data.backup.err.damaged': 'La copia está dañada o alguien la ha cambiado: no se puede usar.',
   'data.backup.err.needsPassphrase': 'Esta copia se hizo en otro equipo: escribe tu código de recuperación.',
   'data.backup.err.wrongPassphrase': 'El código de recuperación no es correcto.',
