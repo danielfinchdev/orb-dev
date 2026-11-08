@@ -28,6 +28,8 @@ use tauri::{AppHandle, Manager, RunEvent, WebviewWindow};
 // %APPDATA%\Orb.dev: the app's data folder of every Orb since 2.3 (src/core/product.mjs › dataDir), also under Tauri, so
 // the location of the workspace, the interface's size and the copies of the keys stay where they are.
 const DATA_DIR: &str = "Orb.dev";
+/// The app, for what runs outside Tauri's own callbacks (desktop.rs › guard_against_electron).
+static APP: std::sync::OnceLock<AppHandle> = std::sync::OnceLock::new();
 
 fn only_main(window: &WebviewWindow) -> Result<(), String> {
   if window.label() == "main" {
@@ -262,6 +264,19 @@ pub fn run() {
       if desktop::electron_running(&dir) {
         return startup_failed("Ya hay otro Orb abierto en este PC (una versión anterior). Ciérralo y vuelve a abrir Orb. / Another Orb (an earlier version) is open on this PC: close it and open Orb again.", None, false);
       }
+      // And an earlier Orb opened from now on quits by itself, bringing this one to the front (desktop.rs).
+      desktop::guard_against_electron(&dir, || {
+        if let Some(app) = APP.get() {
+          let a = app.clone();
+          let _ = app.run_on_main_thread(move || {
+            if let Some(w) = a.get_webview_window("main") {
+              let _ = w.unminimize();
+              let _ = w.show();
+              let _ = w.set_focus();
+            }
+          });
+        }
+      });
     }
   }
   let mut builder = tauri::Builder::default();
@@ -308,6 +323,7 @@ pub fn run() {
     ])
     .setup(move |app| {
       let handle = app.handle().clone();
+      let _ = APP.set(handle.clone());
       let user_data = match &separate {
         Some(dir) => dir.clone(),
         None => app.path().data_dir()?.join(DATA_DIR),

@@ -174,18 +174,111 @@ mod tests {
 /// Orb on Electron (3.8.0 or earlier, still installed) open with this same data folder: Chromium's single-instance lock
 /// is a message-only window of class Chrome_MessageWindow named after the data folder. Tauri's own lock does not see it,
 /// and two engines on one workspace would step on each other (the engine also keeps a lock of its own: engine.mjs).
+/// The window that guard_against_electron leaves (this Orb's, or another Tauri Orb's: the same program) is not Electron.
 #[cfg(windows)]
 pub fn electron_running(user_data: &std::path::Path) -> bool {
   use windows::core::{w, HSTRING};
   use windows::Win32::UI::WindowsAndMessaging::{FindWindowExW, HWND_MESSAGE};
-  // SAFETY: two valid wide strings for the length of the call.
-  unsafe { FindWindowExW(Some(HWND_MESSAGE), None, w!("Chrome_MessageWindow"), &HSTRING::from(user_data.as_os_str())) }.map(|h| !h.is_invalid()).unwrap_or(false)
+  let name = HSTRING::from(user_data.as_os_str());
+  let mut after = None;
+  loop {
+    // SAFETY: two valid wide strings for the length of the call; `after` is a window this loop found.
+    let Ok(h) = (unsafe { FindWindowExW(Some(HWND_MESSAGE), after, w!("Chrome_MessageWindow"), &name) }) else { return false };
+    if h.is_invalid() {
+      return false;
+    }
+    if !same_program(h) {
+      return true;
+    }
+    after = Some(h);
+  }
 }
 #[cfg(not(windows))]
 pub fn electron_running(_: &std::path::Path) -> bool {
   false
 }
 
+/// Whether a window belongs to this Orb's own program (this process, or another start of the same Orb.exe).
+#[cfg(windows)]
+fn same_program(h: windows::Win32::Foundation::HWND) -> bool {
+  use windows::core::PWSTR;
+  use windows::Win32::Foundation::CloseHandle;
+  use windows::Win32::System::Threading::{OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION};
+  use windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
+  let mut pid = 0u32;
+  // SAFETY: a window handle (it may be gone: then pid stays 0) and a valid out pointer.
+  unsafe { GetWindowThreadProcessId(h, Some(&mut pid)) };
+  if pid == 0 {
+    return false;
+  }
+  if pid == std::process::id() {
+    return true;
+  }
+  let Ok(me) = std::env::current_exe() else { return false };
+  // SAFETY: query-only access; the handle is closed below.
+  let Ok(process) = (unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }) else { return false };
+  let mut buf = [0u16; 1024];
+  let mut len = buf.len() as u32;
+  // SAFETY: a buffer of `len` wide characters; the call writes at most that many and sets `len`.
+  let ok = unsafe { QueryFullProcessImageNameW(process, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut len) }.is_ok();
+  // SAFETY: the handle opened above.
+  unsafe { CloseHandle(process).ok() };
+  ok && String::from_utf16_lossy(&buf[..len as usize]).eq_ignore_ascii_case(&me.to_string_lossy())
+}
+
+/// 3.8.1 (review Tauri D-fix M5): Orb 3.8.0 (Electron) opened AFTER this Orb never starts. This Orb leaves the same
+/// message-only window Chromium's single-instance lock looks for (class Chrome_MessageWindow, named after the data
+/// folder), on a thread of its own: Electron's requestSingleInstanceLock finds it, sends it its command line
+/// (WM_COPYDATA), gets «received» and quits, as when the same Electron app is opened twice; this Orb comes to the front
+/// instead (`knock`). Answered at once, so Chromium never takes it for a hung window.
+#[cfg(windows)]
+pub fn guard_against_electron(user_data: &std::path::Path, knock: impl Fn() + Send + Sync + 'static) -> bool {
+  use std::sync::OnceLock;
+  use windows::core::{w, HSTRING};
+  use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
+  use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+  use windows::Win32::UI::WindowsAndMessaging::{CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, RegisterClassW, TranslateMessage, HWND_MESSAGE, MSG, WINDOW_EX_STYLE, WINDOW_STYLE, WM_COPYDATA, WNDCLASSW};
+  static KNOCK: OnceLock<Box<dyn Fn() + Send + Sync>> = OnceLock::new();
+  if KNOCK.set(Box::new(knock)).is_err() {
+    return false; // once per process
+  }
+  extern "system" fn proc(h: HWND, msg: u32, w: WPARAM, l: LPARAM) -> LRESULT {
+    if msg == WM_COPYDATA {
+      if let Some(k) = KNOCK.get() {
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| k()));
+      }
+      return LRESULT(1);
+    }
+    // SAFETY: the default handling of a message of this window.
+    unsafe { DefWindowProcW(h, msg, w, l) }
+  }
+  let name = HSTRING::from(user_data.as_os_str());
+  let (tx, rx) = std::sync::mpsc::channel();
+  let spawned = std::thread::Builder::new().name("orb-instancia-electron".into()).spawn(move || {
+    // SAFETY: a class with a static name and a window procedure that live for the whole process; a message-only window
+    // owned by this thread, whose messages this loop dispatches until the process ends.
+    unsafe {
+      let instance = GetModuleHandleW(None).unwrap_or_default();
+      let class = WNDCLASSW { lpfnWndProc: Some(proc), hInstance: instance.into(), lpszClassName: w!("Chrome_MessageWindow"), ..Default::default() };
+      RegisterClassW(&class);
+      let made = CreateWindowExW(WINDOW_EX_STYLE(0), w!("Chrome_MessageWindow"), &name, WINDOW_STYLE(0), 0, 0, 0, 0, Some(HWND_MESSAGE), None, Some(instance.into()), None);
+      let _ = tx.send(made.is_ok());
+      if made.is_err() {
+        return;
+      }
+      let mut msg = MSG::default();
+      while GetMessageW(&mut msg, None, 0, 0).0 > 0 {
+        let _ = TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+      }
+    }
+  });
+  spawned.is_ok() && rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap_or(false)
+}
+#[cfg(not(windows))]
+pub fn guard_against_electron(_: &std::path::Path, _: impl Fn() + Send + Sync + 'static) -> bool {
+  false
+}
 
 #[cfg(all(test, windows))]
 mod electron_tests {
@@ -219,6 +312,47 @@ mod electron_tests {
     let _ = child.kill();
     let _ = child.wait();
     assert!(seen, "la ventana de instancia única de Electron");
+    let _ = std::fs::remove_dir_all(&dir);
+  }
+
+  /// Review D-fix M5: with this Orb's guard window for a data folder, the real Electron (Orb 3.8.0's) started afterwards
+  /// on that folder does not get its single-instance lock and quits; this Orb is told (to come to the front). And the
+  /// guard is not taken for an Electron by this same program.
+  #[test]
+  fn electron_opened_afterwards_quits_and_this_orb_is_told() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let electron = root.join("node_modules").join("electron").join("dist").join("electron.exe");
+    if !electron.exists() {
+      eprintln!("sin node_modules/electron: prueba omitida");
+      return;
+    }
+    let dir = std::env::temp_dir().join(format!("orb-guarda-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("datos")).unwrap();
+    let data = dir.join("datos");
+    let knocked = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let k = knocked.clone();
+    assert!(super::guard_against_electron(&data, move || k.store(true, std::sync::atomic::Ordering::SeqCst)));
+    assert!(!super::electron_running(&data), "la ventana de este Orb no es un Electron");
+    let script = dir.join("dos.cjs");
+    std::fs::write(&script, "const { app } = require('electron'); const fs = require('fs'); app.setPath('userData', process.env.ORB_TEST_DATA); fs.writeFileSync(process.env.ORB_TEST_OUT, String(app.requestSingleInstanceLock())); app.quit();").unwrap();
+    let out = dir.join("candado.txt");
+    let mut child = std::process::Command::new(&electron).arg(&script).env("ORB_TEST_DATA", &data).env("ORB_TEST_OUT", &out).env_remove("ELECTRON_RUN_AS_NODE").spawn().unwrap();
+    let mut done = None;
+    for _ in 0..200 {
+      if let Ok(Some(status)) = child.try_wait() {
+        done = Some(status);
+        break;
+      }
+      std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    if done.is_none() {
+      let _ = child.kill();
+      let _ = child.wait();
+    }
+    assert!(done.is_some(), "Electron termina solo");
+    assert_eq!(std::fs::read_to_string(&out).unwrap_or_default(), "false", "sin el candado de instancia única");
+    assert!(knocked.load(std::sync::atomic::Ordering::SeqCst), "este Orb se entera");
     let _ = std::fs::remove_dir_all(&dir);
   }
 }
