@@ -46,7 +46,7 @@ contextBridge.exposeInMainWorld('orb', {
   openTerminal: (folder) => ipcRenderer.invoke('app:openTerminal', folder ?? null),
   // 3.2, God mode: open the project in an editor, and run one of its actions in a terminal window.
   editors: () => ipcRenderer.invoke('app:editors'),
-  openIn: (which, folder) => ipcRenderer.invoke('app:openIn', which, folder),
+  openIn: (which, folder, unlock) => ipcRenderer.invoke('app:openIn', which, folder, unlock ?? null),
   runAction: (action) => ipcRenderer.invoke('app:runAction', action),
   // Ajustes → Contribuye: feedback by mail (screenshot of the window, PNG / JPEG files) and the author's other apps.
   feedback: {

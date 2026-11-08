@@ -285,6 +285,10 @@ impl Engine {
         });
       }
       Incoming::Event { event, payload } => {
+        if event == "chat:new" {
+          let log = crate::window::hidden(&self.app).then(|| self.cfg.user_data.join("avisos-e2e.jsonl"));
+          crate::notify::chat_new(&self.app, &payload, log);
+        }
         if event == "config:changed" {
           crate::window::set_title(&self.app, payload.get("assistantName").and_then(Value::as_str));
           let me = self.clone();

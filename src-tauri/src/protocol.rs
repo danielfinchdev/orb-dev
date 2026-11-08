@@ -121,6 +121,11 @@ pub fn webview2_vars<I: IntoIterator<Item = String>>(names: I) -> Vec<String> {
   names.into_iter().filter(|n| n.to_ascii_uppercase().starts_with("WEBVIEW2_")).collect()
 }
 
+/// core itself, or its secrets or anything inside them (real paths, lower case): guarded by the master password.
+pub fn guarded_core(target: &str, core: &str, secrets: &str) -> bool {
+  target == core || target == secrets || target.starts_with(&format!("{secrets}\\"))
+}
+
 /// Node's own variables (NODE_OPTIONS, NODE_PATH, NODE_EXTRA_CA_CERTS…), dropped from the engine's environment: Node
 /// would run --require / --import code from them inside the engine. ORB_NODE is the app's (set for every start).
 pub fn node_vars<I: IntoIterator<Item = String>>(names: I) -> Vec<String> {

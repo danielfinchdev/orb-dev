@@ -1,12 +1,16 @@
 // Orb on Tauri 2 (Windows): one window with the React interface (src/renderer), the engine in its own Node process
 // (engine.rs) and a narrow, checked bridge between them: the window may call only these commands, and only from Orb's
 // own window (capabilities/main.json and a check of the window's label in each one).
+mod desktop;
 mod engine;
 mod host;
+mod notify;
 mod pipes;
+mod power;
 mod protocol;
 mod secrets;
 mod tools;
+mod webview;
 mod window;
 
 use serde_json::{json, Value};
@@ -89,6 +93,54 @@ fn window_act(window: WebviewWindow, action: String) -> Result<Value, String> {
 }
 
 #[tauri::command]
+async fn app_pick_folder(window: WebviewWindow, title: Option<String>) -> Result<Option<String>, String> {
+  only_main(&window)?;
+  Ok(desktop::pick_folder(&window, title).await)
+}
+
+#[tauri::command]
+async fn app_pick_program(window: WebviewWindow, title: Option<String>) -> Result<Option<String>, String> {
+  only_main(&window)?;
+  Ok(desktop::pick_program(&window, title).await)
+}
+
+#[tauri::command]
+async fn app_pick_files(window: WebviewWindow, title: Option<String>) -> Result<Vec<String>, String> {
+  only_main(&window)?;
+  Ok(desktop::pick_files(&window, title).await)
+}
+
+#[tauri::command]
+async fn app_pick_images(window: WebviewWindow) -> Result<Vec<String>, String> {
+  only_main(&window)?;
+  Ok(desktop::pick_images(&window).await)
+}
+
+#[tauri::command]
+async fn app_feedback_images(window: WebviewWindow) -> Result<Vec<Value>, String> {
+  only_main(&window)?;
+  Ok(desktop::feedback_images(&window).await)
+}
+
+#[tauri::command]
+async fn app_feedback_capture(window: WebviewWindow) -> Result<Option<String>, String> {
+  only_main(&window)?;
+  desktop::feedback_capture(&window).await
+}
+
+#[tauri::command]
+async fn app_open_path(window: WebviewWindow, path: String, unlock: Option<String>) -> Result<bool, String> {
+  only_main(&window)?;
+  desktop::open_path(&window, path, unlock).await
+}
+
+#[tauri::command]
+fn app_open_external(window: WebviewWindow, url: String) -> Result<bool, String> {
+  only_main(&window)?;
+  desktop::open_external(&window, url)
+}
+
+#[tauri::command]
 fn window_drag(window: WebviewWindow) -> Result<(), String> {
   only_main(&window)?;
   window.start_dragging().map_err(|e| e.to_string())
@@ -133,7 +185,24 @@ pub fn run() {
   let app = builder
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_opener::init())
-    .invoke_handler(tauri::generate_handler![engine_call, app_info, app_setup, app_switch_home, app_zoom, app_zoom_step, window_act, window_drag])
+    .invoke_handler(tauri::generate_handler![
+      engine_call,
+      app_info,
+      app_setup,
+      app_switch_home,
+      app_zoom,
+      app_zoom_step,
+      window_act,
+      window_drag,
+      app_pick_folder,
+      app_pick_program,
+      app_pick_files,
+      app_pick_images,
+      app_feedback_images,
+      app_feedback_capture,
+      app_open_path,
+      app_open_external
+    ])
     .setup(move |app| {
       let handle = app.handle().clone();
       let user_data = match &separate {

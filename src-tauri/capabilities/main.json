@@ -13,6 +13,14 @@
     "allow-app-zoom",
     "allow-app-zoom-step",
     "allow-window-act",
-    "allow-window-drag"
+    "allow-window-drag",
+    "allow-app-pick-folder",
+    "allow-app-pick-program",
+    "allow-app-pick-files",
+    "allow-app-pick-images",
+    "allow-app-feedback-images",
+    "allow-app-feedback-capture",
+    "allow-app-open-path",
+    "allow-app-open-external"
   ]
 }

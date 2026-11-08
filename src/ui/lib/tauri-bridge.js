@@ -19,6 +19,34 @@ if (window.__TAURI_INTERNALS__ && !window.orb) {
   listen('engine:event', ({ payload }) => fire(payload?.event, payload?.payload));
   const engine = (method, params = {}) => invoke('engine_call', { method: String(method), params: params ?? {} });
   const windowAct = (action) => invoke('window_act', { action: String(action) });
+  const text = (v) => (typeof v === 'string' ? v : null);
+  // The real path of a File the user dropped, pasted or picked in the page: handed to WebView2, which tells Rust its path
+  // ('app:file-path'). null for a pasted picture (it has none) or after 3 s.
+  const fileWaits = new Map(); let fileId = 0;
+  listen('app:file-path', ({ payload }) => { const done = fileWaits.get(payload?.id); if (done) { fileWaits.delete(payload.id); done(text(payload.path)); } });
+  const pathForFile = (file) => new Promise((resolve) => {
+    const id = ++fileId;
+    try { window.chrome.webview.postMessageWithAdditionalObjects(`orb-file:${id}`, [file]); } catch { resolve(null); return; }
+    fileWaits.set(id, resolve);
+    setTimeout(() => { if (fileWaits.delete(id)) resolve(null); }, 3000);
+  });
+  // The window's picture for Ajustes › Contribuye: at most 1920 px wide, named as Electron named it (feedback.mjs).
+  const capture = async () => {
+    const data = await invoke('app_feedback_capture');
+    if (!data) return null;
+    let png = data;
+    const img = new Image(); img.src = `data:image/png;base64,${data}`;
+    await img.decode();
+    if (img.naturalWidth > 1920) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1920; canvas.height = Math.round(img.naturalHeight * 1920 / img.naturalWidth);
+      const g = canvas.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(img, 0, 0, canvas.width, canvas.height);
+      png = canvas.toDataURL('image/png').split(',')[1];
+    }
+    if (png.length > 5 * 1024 * 1024 * 1.37) return null;
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
+    return { name: `captura-${stamp}.png`, type: 'image/png', data: png };
+  };
 
   window.orb = {
     call: (method, params) => engine(method, params),
@@ -33,8 +61,14 @@ if (window.__TAURI_INTERNALS__ && !window.orb) {
     light: false,
     setup: (data) => invoke('app_setup', { data: data ?? {} }),
     switchHome: (folder) => invoke('app_switch_home', { target: String(folder ?? '') }),
-    pickFolder: later, pickImages: later, pickProgram: later, pickFiles: later,
-    openPath: later, openExternal: later,
+    // Windows' own dialogs, opened by Rust (the page has no dialog permission).
+    pickFolder: (title) => invoke('app_pick_folder', { title: text(title) }),
+    pickImages: () => invoke('app_pick_images'),
+    pickProgram: (title) => invoke('app_pick_program', { title: text(title) }),
+    pickFiles: (title) => invoke('app_pick_files', { title: text(title) }),
+    // unlock: the master password's token, for core and its secrets (Rust checks it with the engine).
+    openPath: (folder, unlock) => invoke('app_open_path', { path: String(folder ?? ''), unlock: text(unlock) }),
+    openExternal: (url) => invoke('app_open_external', { url: String(url ?? '') }),
     showBrowser: () => Promise.resolve(null),
     zoom: (value) => invoke('app_zoom', { value: value ?? null }),
     windowControls: {
@@ -48,12 +82,13 @@ if (window.__TAURI_INTERNALS__ && !window.orb) {
     // This PC's tools live in the engine (src/engine/api-app.mjs).
     openTerminal: (folder) => engine('app.openTerminal', { dir: folder ?? null }),
     editors: () => engine('app.editors'),
-    openIn: (which, folder) => engine('app.openIn', { which, dir: folder }),
+    openIn: (which, folder, unlock) => engine('app.openIn', { which, dir: folder, unlock: text(unlock) }),
     runAction: (action) => engine('app.runAction', action ?? {}),
-    feedback: { capture: later, images: later, send: (data) => engine('app.feedbackSend', data ?? {}) },
+    feedback: { capture, images: () => invoke('app_feedback_images'), send: (data) => engine('app.feedbackSend', data ?? {}) },
     moreApps: () => engine('app.moreApps'),
     update: { get: later, check: later, download: later, install: later },
-    pathForFile: () => null
+    // A promise here (Electron's preload answers at once): the callers wait for it either way.
+    pathForFile
   };
 
   // Ctrl and the key, whatever the keyboard: «+» has its own key on a Spanish one, «=» shares it on an English one, and the

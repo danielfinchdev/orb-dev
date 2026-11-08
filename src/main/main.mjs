@@ -238,7 +238,7 @@ ipcMain.handle('app:zoom', guard(async (value) => (value === undefined || value 
 const toEngine = (method, params = {}) => (async () => { if (!engineReady) throw new Error(T('sys.main.engineOff', { name: PRODUCT.name })); await engineReady; return callEngine(method, params); })();
 ipcMain.handle('app:openTerminal', guard(async (target) => toEngine('app.openTerminal', { dir: target })));
 ipcMain.handle('app:editors', guard(async () => toEngine('app.editors')));
-ipcMain.handle('app:openIn', guard(async (which, target) => toEngine('app.openIn', { which, dir: target })));
+ipcMain.handle('app:openIn', guard(async (which, target, unlock) => toEngine('app.openIn', { which, dir: target, unlock })));
 ipcMain.handle('app:runAction', guard(async (action) => toEngine('app.runAction', action ?? {})));
 ipcMain.handle('app:showBrowser', guard(async () => { agentBrowser?.show(); return agentBrowser?.state() ?? null; }));
 // 3.8: the workspace goes to C:\Orb unless the user picks another place (the welcome shows it already chosen); elsewhere

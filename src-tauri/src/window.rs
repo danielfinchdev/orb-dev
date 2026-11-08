@@ -76,6 +76,9 @@ pub fn create_main(app: &AppHandle, user_data: &std::path::Path, webview_data: P
       }
     })
     .build()?;
+  // WebView2's own settings (permissions denied, no autofill, files' paths) and Windows' lock / sleep → master.lock.
+  crate::webview::setup(&window);
+  crate::power::watch(&window);
   let (r, g, b) = if window.theme().ok() == Some(Theme::Dark) { DARK } else { LIGHT };
   let _ = window.set_background_color(Some(tauri::window::Color(r, g, b, 255)));
   // Shown anyway if the page takes long to load (a broken page must not leave Orb invisible).
@@ -101,6 +104,11 @@ pub fn create_main(app: &AppHandle, user_data: &std::path::Path, webview_data: P
     _ => {}
   });
   Ok(())
+}
+
+/// A test build whose window is never shown (nobody at the PC): its notices go to a file instead of the screen.
+pub fn hidden(app: &AppHandle) -> bool {
+  app.try_state::<Ui>().map(|ui| ui.hidden).unwrap_or(false)
 }
 
 pub fn set_title(app: &AppHandle, name: Option<&str>) {

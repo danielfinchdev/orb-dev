@@ -10,6 +10,14 @@ fn main() {
     "app_zoom_step",
     "window_act",
     "window_drag",
+    "app_pick_folder",
+    "app_pick_program",
+    "app_pick_files",
+    "app_pick_images",
+    "app_feedback_images",
+    "app_feedback_capture",
+    "app_open_path",
+    "app_open_external",
   ])))
   .expect("tauri build script");
 }
