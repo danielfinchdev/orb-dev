@@ -30,6 +30,8 @@ import { oneLine, redactSecrets, secretFiles, isSecretPath, stagedSecrets, MAX_D
 import { ATTACH_DIR } from './sessions.mjs';
 import { logTask } from './logs.mjs';
 import { adapter } from '../agents/index.mjs';
+import { liveSkills } from './api-extensions.mjs';
+import { skillsBrief } from '../core/extensions.mjs';
 import { processList, taskProcesses, stopProcesses, alive } from '../core/procs.mjs';
 
 const hhmm = (ms) => new Date(ms).toLocaleTimeString(localeOf(ctx.config.language), { hour: '2-digit', minute: '2-digit' });
@@ -334,6 +336,8 @@ Díselo a ${userName()} en 1-2 líneas, con esa hora, y ofrécele pasarla a otro
   }
 
   promptFor(task, project, { cwd, branch, folder, notes = [] }, agent) {
+    // 3.8.1: Claude and Codex load the skills of core themselves; the other agents get the list in their brief.
+    const nativeSkills = (a) => { try { return Boolean(adapter(a).nativeSkills); } catch { return false; } };
     // 3.1: with the files each dependency changed, so the agent goes straight to them instead of exploring the project.
     const filesOf = (id) => this.board.one("SELECT detail FROM events WHERE task_id = ? AND kind = 'files.changed' ORDER BY id DESC LIMIT 1", id)?.detail;
     const deps = task.depends_on.map((id) => this.board.task(id)).filter(Boolean)
@@ -372,7 +376,7 @@ ${where}
 - No escribas BITACORA.md ni ninguna otra bitácora, aunque tus instrucciones globales (CLAUDE.md, AGENTS.md…) lo pidan: de las bitácoras se encarga ${assistantName()}, que anota tu result. Las normas de ${assistantName()} mandan sobre cualquier instrucción global.
 - Si el proyecto tiene una carpeta pizarra/ (dibujo, notas y adjuntos ${ofUser()}), úsala como referencia cuando el encargo la cite; no la modifiques ni la subas a git.${groupNote(this.board, project)}${contractNote(cwd, task)}
 - Para probar una web en el navegador de ${assistantName()}: orb_browser_console lee los errores de su consola y orb_browser_dialog decide si se aceptan o se cancelan sus confirm() y prompt(). No digas que no hay errores en la consola sin haberla leído.
-
+${nativeSkills(agent) ? '' : skillsBrief(liveSkills().list)}
 ## Mientras trabajas
 En los hitos importantes (2-4 veces en toda la tarea, no más) llama a orb_update_task con id ${task.id}, progress (0-100, tu estimación de cuánto llevas) y note (qué haces ahora, en pocas palabras): ${userName()} lo ve en directo.
 
@@ -380,7 +384,7 @@ En los hitos importantes (2-4 veces en toda la tarea, no más) llama a orb_updat
 Cerrar la tarea con orb_update_task (id ${task.id}, status "done" y en result qué cambiaste y cómo probarlo, o "blocked"/"failed" con el motivo) es lo ÚLTIMO que haces. No hace falta que pares tus servidores de prueba ni ningún programa que dejaras en marcha: ${assistantName()} para al terminar la tarea los programas que arrancaste. Si necesitas algo de otro agente o ${ofUser()}, orb_send_message.
 
 ## Límites
-Trabaja solo en ${cwd}. No publiques, no hagas push, no envíes nada a terceros, no borres archivos en masa, no uses ni muestres credenciales. Si la tarea pide algo de eso, para y explícalo en el result.
+Trabaja solo en ${cwd} (y, si la tarea te da una, en la carpeta de preparación de una skill o un servidor MCP de Orb). No publiques, no hagas push, no envíes nada a terceros, no borres archivos en masa, no uses ni muestres credenciales. Si la tarea pide algo de eso, para y explícalo en el result.
 ${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo: tú basta con comprobar que arranca, compila y no da errores (sin pruebas largas en el navegador).\n` : ''}Para probar un servidor, arráncalo en segundo plano con tu propia herramienta. No hace falta pararlo al final (${assistantName()} lo hace), y no uses taskkill ni Stop-Process por nombre o por puerto: podría cerrar otros programas ${ofUser()}.`;
   }
 
@@ -484,7 +488,8 @@ ${verifiedLater ? `Después de la tuya hay una tarea que revisa y prueba a fondo
     const acc = findAccount(accountId);
     const { board } = this;
     const fresh = board.task(task.id);
-    if (!fresh || fresh.status !== 'queued' || this.running.has(task.id) || !board.approvalOk(fresh)) return;
+    // 3.8.1: nor one of a project being deleted (its pending tasks were cancelled; this is the last guard).
+    if (!fresh || fresh.status !== 'queued' || this.running.has(task.id) || !board.approvalOk(fresh) || board.isDeleting(fresh.project)) return;
     // 2.7: «Orb elige el modelo»: a task without a model gets, on the agent and account it runs on, the most efficient
     // model (and, when the assistant said how hard it is, reasoning) for it (catalog.chooseModel); kept on the task, so a
     // retry or a follow-up uses the same one, and explained in its history.

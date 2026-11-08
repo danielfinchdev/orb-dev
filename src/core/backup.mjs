@@ -13,7 +13,7 @@
 // entry is manifest.json (sha256 of every file), whose own hash is in the header.
 //
 // What goes in: the database (VACUUM INTO, so it is consistent while the engine runs), orb.json, the logs (general and
-// project), the MCP servers Orb manages (core\mcp, without their dependencies), the whiteboards of the projects, the app's
+// project), the MCP servers and the skills (core\mcp, core\skills, without their dependencies), the whiteboards of the projects, the app's
 // secret, the recovery wrap, the master password's sealed files (core/secretos, 3.8), the archives of 3.7 (core/archivo-3.7 and dated ones, src/core/migrate-38.mjs; never sign-in
 // folders). Optional: the project folders and the agents' login folders (off). 3.8: the names inside are relative to the
 // workspace (core/datos/orb.db, core/bitacora/…); a copy made by 3.7 (.orb/…, orb.json, bitacora/… at the top) restores
@@ -30,6 +30,7 @@ import { rewritePaths, coreHealth, inside } from './core-folder.mjs';
 import { tr } from './context.mjs';
 import { ARCHIVE_DIR, forgetRun } from './migrate-38.mjs';
 import { KEPT as SECRET_FILES } from './master.mjs';
+import { LIVE_DIR, OLD_DIR } from './extensions.mjs';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
 
@@ -287,7 +288,9 @@ async function stageFiles(home, stage, { secret, includeProjects = false, includ
   // master password (any PC) or this PC's secret. The count of wrong passwords stays on this PC.
   for (const name of SECRET_FILES) { const f = path.join(p.secrets, name); if (fs.existsSync(f)) await put(f, archiveName(home, f)); }
   for (const f of walkFiles(p.logs)) await put(f, archiveName(home, f));
-  for (const f of walkFiles(p.mcp, (n) => NO_COPY.has(n))) await put(f, archiveName(home, f));
+  // 3.8.1: every server and every skill of core (not the links the agents load, core\skills\.activas, nor the versions
+  // before the last change, .anterior: made again or not needed).
+  for (const dir of [p.mcp, p.skills]) for (const f of walkFiles(dir, (n) => NO_COPY.has(n) || n === LIVE_DIR || n === OLD_DIR)) await put(f, archiveName(home, f));
   // The projects: their whiteboards always, the whole folder only if asked (without dependencies and build output).
   let projects = [];
   if (fs.existsSync(dbOut)) {

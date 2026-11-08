@@ -28,8 +28,10 @@ test('un espacio nuevo: core (oculta, sin atributo de sistema) y las seis catego
   assert.deepEqual(fs.readdirSync(home).sort(), ['android', 'core', 'ios', 'linux', 'multi', 'web', 'windows']);
   const p = paths(home);
   for (const f of [p.config, p.key, p.generalLog]) assert.ok(fs.statSync(f).isFile(), f);
-  for (const d of [p.data, p.runs, p.worktrees, p.checkpoints, p.projectLogs, p.mcp, p.tools, p.secrets]) assert.ok(fs.statSync(d).isDirectory(), d);
-  assert.ok(!fs.existsSync(path.join(p.core, 'skills')), 'sin carpeta de skills que nadie usa');
+  // 3.8.1: core\skills is back (every skill; the agents get the ones that are on: src/core/extensions.mjs).
+  for (const d of [p.data, p.runs, p.worktrees, p.checkpoints, p.projectLogs, p.mcp, p.skills, p.tools, p.secrets]) assert.ok(fs.statSync(d).isDirectory(), d);
+  assert.equal(p.skills, path.join(home, 'core', 'skills'));
+  assert.ok(!fs.existsSync(p.staging), 'core\preparacion solo cuando un agente prepara algo');
   assert.equal(p.adb, path.join(home, 'core', 'herramientas', 'adb'));
   assert.equal(p.logs, path.join(home, 'core', 'bitacora'));
   assert.ok(isHome(home));

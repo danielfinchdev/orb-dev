@@ -34,7 +34,7 @@ change and which other features it connects to.
 22. [Mobile: phone and browser with Magic Link](#22-mobile)
 23. [God mode (expert view)](#23-god-mode-expert-view)
 24. [Installer and session detection](#24-installer-and-session-detection)
-25. [MCP connectors](#25-mcp-connectors)
+25. [Skills and MCP servers](#25-skills-and-mcp-servers)
 26. [Languages](#26-languages)
 27. [Interface: sidebar, inbox, theme, size and robot](#27-interface)
 28. [Security](#28-security)
@@ -111,7 +111,9 @@ C:\Orb\                   (C:\Orb by default; always <chosen folder>\Orb, the sa
     datos\                database, sealed secret, identity
     ejecuciones\ copias\  task runs; isolated copies and undo checkpoints
     bitacora\             GENERAL.md (general memory) and proyectos\ (one per project), in the Settings language
-    mcp\                  the MCP servers Orb manages (Settings › MCP)
+    mcp\                  every MCP server (Settings › Skills y MCP, section 25)
+    skills\               every skill; .activas: the ones on, as the agents load them (section 25)
+    preparacion\          what an agent makes for core until the user turns it on (section 25)
     herramientas\adb\     Google's adb and fastboot, downloaded by the app
     secretos\             the master password's files: the data key, wrapped, and Orb's own secrets (section 37)
   windows\ linux\ ios\ android\ web\
@@ -132,6 +134,29 @@ C:\Orb\                   (C:\Orb by default; always <chosen folder>\Orb, the sa
   user chooses, section 36), creates whatever is missing and moves 2.3.0's `bitacoras\` into the log folder (if a file exists in both, the old entries are
   appended at the end). It only discards the empty logs that 2.3.0 created for the categories and configuration folders
   it mistook for projects; those "projects" go away on their own (`syncProjects`).
+- **The end of a project** (3.8.1, Proyectos › right click, a long press or «…» on the row; `src/core/project-close.mjs`):
+  «Finalizar proyecto» (also from the phone: `projects.finish`) cancels its pending tasks, puts its tasks, conversations
+  and direct conversations in «Completadas», pauses its schedules and takes it out of Orb while its folder stays;
+  `projects_finished` (a setting) keeps it out of `syncProjects` (one whose folder is missing stays there for 30 days:
+  a folder renamed for a while or a disk unplugged is still finished when it is back), and the «Finalizados» tab lists
+  it with «Reabrir» (`projects.reopen`, its schedules back on). Tasks, conversations, direct conversations and schedules
+  are tied to a project by name: when it is finished or deleted they move to a name of their own (`«name»: finalizado` /
+  `«name»: eliminado`; «:» cannot be in a project's name), so a new project with that name starts clean, and a reopened
+  one (under `«name» (category)` when the name was taken) gets them back, with its log, as `renameProject` does.
+  «Eliminar proyecto» (PC only, behind the master password, asked every time: `projects.deleteCheck` is in
+  `UNLOCK_METHODS` and `FRESH_UNLOCK`) moves its folder to the Recycle Bin. `main.mjs › app:deleteProject` asks the
+  engine to check it (`checkDelete`: from then on the project is being deleted — `projects_deleting`; `board.createTask`,
+  the scheduler and its direct conversations refuse —, its pending tasks are cancelled, its schedules paused and the
+  processes of its direct conversations closed; it returns a one-off ticket, valid 30 minutes), checks the folder again
+  by its real path (`deletableFolder`: only a folder straight inside a category of the workspace, never a link or a
+  junction, a category, core or the workspace), calls `shell.trashItem` and then tells the engine (`projects.delete`
+  with the ticket and `trashed`: whatever still works there is stopped, not refused). When the Recycle Bin cannot take
+  it: a folder some program is using (the rename test, `folderInUse`) offers only «Reintentar»; otherwise «Reintentar»
+  or «Borrar para siempre» (accepted by `main.mjs` only after that failure; refused while the folder is in use; one that
+  stops half-way says what is left). Cancelling (`projects.deleteAbort`) gives the project back with its schedules; a
+  delete left half-way (the app closed, the ticket expired) is finished when its folder is gone, undone otherwise
+  (`settleDeleting`, at start and in the project sync). Finishing and checking a delete refuse while a task of the
+  project runs, a direct conversation answers or a coordinator is in the middle of a turn in one of its conversations.
 
 On Windows, it then offers to install whatever is missing (section 24).
 
@@ -720,18 +745,110 @@ launched hidden, with its output read by Orb, and it stores the session in the a
 - Each adapter's `detect()` and `loginState()` (for example, the Codex session is in `~/.codex/auth.json`).
 - `src/core/accounts.mjs`: several accounts per agent; each one has its login folder and its usage.
 
-## 25. MCP connectors
+## 25. Skills and MCP servers
 
-- Extra tools for the agents (databases, Figma…), in Settings.
-- Your own servers go in `<folder>/core/mcp`: it is Orb configuration, not shown as a project. Settings lists its
-  subfolders with the command that starts them (`src/engine/mcp-folder.mjs`: `bin`/`main` from package.json or typical
-  files like `src/server.js` or `server.py`) and adds them with one click ("Use").
-- They are passed to the chosen agents along with Orb's MCP (`mcpServersFor` in `sessions.mjs`).
-- A connector's keys (its `env`) are kept in the master password's vault, never in orb.json, which keeps a
-  reference in their place (`orb-secret:mcp/<connector>/<NAME>`, `src/core/connector-secrets.mjs`). The engine puts the
-  value back only for the connector's launcher. Settings › Advanced › MCP connectors, «Keys» on each connector,
-  shows and changes them after the master password (section 37).
-- Claude uses `--strict-mcp-config`, so it only loads the ones Orb passes and not all of the user's. This saves tokens.
+3.8.1, the owner's definition: **`core\skills` holds every skill and `core\mcp` every MCP server** (the ones Orb installs
+and the ones the user writes). Agents never write in core; the only way in is through the user (Settings, «Importar»)
+or an agent's request the user approves. `src/core/extensions.mjs` does the work (no engine imports: the engine, the
+agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api-extensions.mjs` is its API (PC only).
+
+- **What there is** (`listExtensions`): each folder of `core\skills` with its `SKILL.md` (frontmatter `name` and
+  `description`, the Agent Skills format) and each folder of `core\mcp` with the command that starts it (`startCommand`:
+  `bin`/`main` of package.json or typical files like `src/server.js` or `server.py`). orb.json keeps the state:
+  `skills` (`[{ name, enabled, source }]`) and the connectors (`mcpServers`, with `source`: `orb`, `importado`, `creado`,
+  `usuario`). A folder without an entry is off. Dot folders (`.activas`, `.anterior`) are Orb's.
+- **Settings › Skills y MCP** (its own section, `views/extensions.jsx`, not on the phone): skills, MCP servers of core,
+  the connectors of the PC that are not a folder (a package run with `npx`, a program; «Añadir conector» as before) and
+  the projects that are MCP servers («Usar» from where they are, «Mover a core»: `extensions.adopt`, the same move as
+  «Ordenar carpetas», `core-folder.mjs › moveIntoCore`). Each row: name, description, source, an on/off
+  switch (`extensions.toggle`: a server of core gets its connector made from its start command; a skill is checked with
+  `checkSkill` first, also one put in core by hand; a server whose package.json names dependencies that are not there is
+  turned on only after a dialog says Orb will download them, `install: true`, and then `installDeps` runs), «Keys» (section 37),
+  «Abrir carpeta» and «Quitar» (`extensions.remove`, in `UNLOCK_METHODS`: the master password, since it deletes from
+  core). «Importar» (`extensions.import`, asynchronous: the engine never waits on git): from a folder or a git repository
+  (`git clone --depth 1`, only `https://`, `git@host:` or `ssh://`; `file://`, `ext::` and local paths are refused, the
+  file/ext protocols are off, and **nothing of the repository runs**: `core.hooksPath` and `--template` point to an empty
+  folder, `--no-recurse-submodules`, `core.symlinks=false`, `GIT_LFS_SKIP_SMUDGE`), into the **quarantine**
+  (`core\datos\cuarentena`, which no agent may write) with `copyTree`: file by file, never following a link (a symlink,
+  junction or hard link refuses the import), without `.git`, dependencies (`node_modules`, `.venv`, `venv`,
+  `__pycache__`, `.cache`) or the package managers' settings (`.npmrc`, `.yarnrc*`, `.pnpmfile.cjs`,
+  `pnpm-workspace.yaml`). A folder inside core (also through a junction) or one that holds core is refused. Then checked
+  (`checkSkill`: SKILL.md, a valid name and a description; `checkMcp`: a start command; both: no link, at most 20 MB /
+  2000 files for a skill and 200 MB / 5000 for a server, over everything that moves) and moved into core **off**
+  (`source: importado`). Nothing is installed on import.
+- **Dependencies** are installed only when the user turns a server on (after the dialog) or approves an agent's server:
+  `npm install --omit=dev --ignore-scripts` (no `preinstall`/`install`/`postinstall` of the package or of any
+  dependency), with the folder's `.npmrc`/`.yarnrc*` renamed out of the way first (they may name programs npm runs).
+  A new version whose package.json and lock did not change keeps the dependencies of the version in core.
+- **How agents get the skills that are on** (`exposeSkills`, kept in `api-extensions.mjs › liveSkills` and made again
+  when `skills` changes): `core\skills\.activas` is a Claude Code plugin Orb makes (`.claude-plugin\plugin.json`, name
+  `orb-skills`, and `skills\<name>`, a junction to `core\skills\<name>` for each skill that is on; a copy where a junction
+  cannot be made). Each skill that is on is checked again there (a link or a folder out of core, a wrong name, too big:
+  left out). A skill whose SKILL.md declares `allowed-tools` or `hooks` gets a **copy without them** instead of a
+  junction: checked with the real Claude Code, `allowed-tools: Bash` let a Bash command run without Orb's `canUseTool`,
+  and a ``!`command` `` in the text ran when the skill loaded; the latter is off for every skill
+  (`disableSkillShellExecution`, `claude.mjs`). The row says so («Pide usar herramientas sin preguntarte…»). Per agent:
+  - **Claude Code**: the SDK's `plugins: [{ type: 'local', path }]` (`--plugin-dir`); Claude lists them as
+    `orb-skills:<name>` and loads one when it fits (checked with the real Claude Code: `supportedCommands()` lists the
+    plugin's skill, junctions included). The assistant (coordinator) gets it too.
+  - **Codex**: the app-server's `skills/extraRoots/set` with `core\skills\.activas\skills`, before `thread/start`
+    (checked with codex-cli 0.166: `skills/list` shows them; an older Codex without the method just goes without).
+    Nothing is written in the user's `CODEX_HOME`.
+  - **Cursor and the ACP agents** (Gemini, OpenCode, Qwen, Copilot): no way to hand them extra skills without writing
+    into the project (Cursor reads `.cursor/skills` and `.claude/skills` of the project or the user's home): a task's
+    brief lists them instead (`skillsBrief`: name, description and the full path of its SKILL.md, «read it when it fits»).
+    Not in their direct conversations (the user's text goes as it is), nor in the coordinator's persona when its brain is
+    one of them.
+  - The guard (section 28): `core\skills` is open to reading tools; running one of its scripts **asks** (only one
+    interpreter and one script file of `core\skills`, as a single plain command: `python <script>`, `node <script>`,
+    `powershell -File <script>`; never in «leer»); anything else that touches it (`python -c`, `curl -o`, `tar -C`, a
+    redirection…) is denied with a reason that names `orb_create_skill`.
+- **Made from the chat** (`orb_create_skill`, `orb_create_mcp`, `orb_request_activation` in `src/mcp/server.mjs`, any
+  signed agent): «créame una skill para X» → `draftExtension` makes `core\preparacion\<kind>-<name>-<hex>` with a start
+  (a SKILL.md skeleton, or a Node / Python MCP server), or a copy of the current one with `mejorar: true` (a new
+  version: its code only, never its secrets, dependencies or links). `core\preparacion` is the only part of core agents
+  may write (guard `OPEN_INTERNAL`). Improving a server that **holds keys** (its connector has some, or its folder has
+  secret files) waits for the user: the request is `asking`, a card asks «¿Dejar que … mejore …?», and only once allowed
+  (`extensions.approve` → `allowDraft`) is the copy made; the agent calls `orb_create_mcp` again to get it. The request
+  lives in the database (`extension_requests`, never in the folder the agent writes), with who made it; only that agent,
+  or one of the same conversation (the coordinator makes it and a task's agent writes it, as the persona says), may call
+  `orb_request_activation`: the folder (never a link) is copied with `copyTree` into the quarantine
+  (`core\datos\cuarentena\<id>-<hex>`; a link anywhere refuses it, dependencies and package manager settings are left
+  out, the size limit counts everything that moves), checked there, and that copy's **fingerprint** (one JSON line per
+  folder and per file: kind, relative path, size and sha256, in one fixed order, so no change of the files gives the
+  same fingerprint) and its full list of files are kept. What the agent changes in its folder afterwards never moves. A
+  card goes to the conversation (`meta.kind: 'extension'`, `ExtensionRequestCard` in the chat; also «Esperan tu
+  aprobación» at the top of Settings › Skills y MCP) with «Activar», «Abrir carpeta» (the quarantine's copy) and
+  «Descartar» (PC only; the phone says «Actívalo desde el PC»). «Activar» always opens a dialog first: what it means (a
+  server runs on the PC with the user's permissions, in every agent), whether it will download packages, and **every
+  file** that will be turned on. `extensions.approve` checks the quarantine's fingerprint again, installs a server's
+  dependencies there (or keeps core's), moves **exactly that copy** into core, turns it on (`source: creado`) and marks
+  the card; a new version replaces the old one, kept in `core\mcp\.anterior\<name>` (`core\skills\.anterior\<name>`
+  for a skill), and keeps the old version's secrets. `extensions.reject` deletes the folder and its quarantine.
+- **Improving a server of core** («Editar en un proyecto», `extensions.edit`): a copy (git and dependencies too, never its
+  secrets nor a link: `secretTest` — `tokens/`, `secrets/`, `credentials/`, `.env*`, `*.pem`, `*.key`, `*token*.json`,
+  `client_secret*.json`… plus what the server declares in package.json › `orb.secrets` or `.orb-secrets`) goes to
+  `<workspace>\<category>\<name>` (or `name-2`…) and becomes a project; agents work on it like on any project while the
+  version in core keeps running. `extension_edits` remembers it (the row says «en edición», the project «copia para
+  editar …»). «Aplicar cambios» (`extensions.applyCheck`, refused while the project has tasks pending or running: the
+  project's version is copied into the quarantine and compared with core, secrets aside; then a confirmation;
+  `extensions.apply` with the id of that check): exactly the copy the user saw goes into core with core's secrets, the
+  old one kept in `.anterior`, and its connector starts what the folder says now (its keys follow:
+  `connector-secrets.mjs › rebindMoved`). The same works through an agent with `orb_create_mcp` + `mejorar: true`.
+- **Keys**: a connector's keys (its `env`) live in the master password's vault, never in orb.json, which keeps a
+  reference (`orb-secret:mcp/<connector>/<NAME>`, `src/core/connector-secrets.mjs`); the engine puts the value back only
+  for the connector's launcher. They are tied to the connector's command: when Orb itself moves a server (into
+  `core\mcp`, «Mover a core», «Aplicar cambios») the keys are tied to the new command (`rebindMoved`, only when they were
+  tied to the old one: a command changed by someone else stays held). With the vault locked (no machine secret, the
+  password not typed yet) it is never silent: `rebindOrWait` keeps what has to be tied (names and the two bindings, no
+  key) in the `connector_rebinds` setting, a notice says «Las claves de … se activarán cuando desbloquees Orb», and
+  `settleRebinds` ties them when the vault opens (`engine.mjs › onUnlocked`, and at start when it opens alone).
+- A connector whose program is in a folder of `core\mcp` that is a link or reaches out of core never starts
+  (`connectorSafe`, `mcpServersFor`).
+- They are passed to the chosen agents along with Orb's MCP (`mcpServersFor` in `sessions.mjs`). Claude uses
+  `--strict-mcp-config`, so it only loads the ones Orb passes and not all of the user's. This saves tokens.
+- Backups (section 36) carry `core\mcp` and `core\skills` without dependencies, `.activas` or `.anterior`. A server's own
+  files (e.g. OAuth tokens of `gmail-multi-mcp`) go with it into every backup, which is always encrypted.
 
 ## 26. Languages
 
@@ -856,7 +973,13 @@ launched hidden, with its output read by Orb, and it stores the session in the a
   and in «total» it asks. Isolated copies (`core/copias/aisladas`) and the tools (`core/herramientas`, adb by its full
   path) stay open; the logs moved into core (`core/bitacora`) are open to reading tools only (the user's rules for
   agents may point there; they are written through Orb's own tools, and a write or a command there is denied with a
-  reason that names `orb_write_log`). The same goes for what Orb keeps about the workspace outside it (`setGuardedRoots`: the backups' root
+  reason that names `orb_write_log`). 3.8.1: the skills (`core/skills`) are open to reading tools too; a command that
+  only runs one of their scripts asks (anything else there is denied), and `core/preparacion` (what an agent makes for
+  the user to turn on) is open like the isolated copies (section 25). A path is resolved to where it really is, also for
+  a file not made yet (its nearest existing parent, and a link whose target is missing, are followed), so a junction
+  made earlier cannot send a write into core; and a command that makes a link (`mklink`, `New-Item -ItemType
+  Junction|SymbolicLink|HardLink`, `fsutil hardlink|reparsepoint`, `ln`, .NET `CreateSymbolicLink`, Node
+  `fs.symlink`/`fs.link`, Python `os.symlink`/`os.link`…) that names core, runs inside it or points into it is denied. The same goes for what Orb keeps about the workspace outside it (`setGuardedRoots`: the backups' root
   and chosen folder, the app's `claves` folder and its `Local State`; section 36; also when a command names them through
   `%APPDATA%`, `$env:APPDATA` or `~`, written out by `expandEnv`). Not a boundary: a shell of the same Windows
   user can always reach the folder another way; the agents' identity does not depend on its database any more (tickets,
@@ -889,15 +1012,20 @@ launched hidden, with its output read by Orb, and it stores the session in the a
 - The Claude SDK and `zod` go in `app.asar.unpacked`, next to the engine (`build.asarUnpack`).
 - The SDK's copy of Claude Code (238 MB) **is not packaged**: the user's is used.
 - The app icon is drawn in `build/icon-src/*.svg`; `npm run icon` renders `build/icon.ico` (10 sizes, the short «o•»
-  version up to 32 px), `build/icons/` (Linux), `build/icon.png`, `src/ui/public/icon.png` and the Android launcher
-  icons (`android-app/android/app/src/main/res/mipmap-*`, legacy, round and adaptive).
+  version up to 32 px; also the window's icon on Windows), `build/icons/` (Linux), `build/icon.png`,
+  `src/ui/public/icon.png`, `src/ui/public/icon-o.png` (the short «o•», 128 px: the «Acerca de» card), `src/ui/public/icon-maskable.png` (the PWA's maskable icon: the
+  tile edge to edge, the word at 80 %), the Android launcher icons (`android-app/android/app/src/main/res/mipmap-*`,
+  legacy, round and adaptive) and the small notification icon (`drawable-*/ic_stat_orb.png`: the short «o•» as a white
+  silhouette on transparent, 24 dp in every density with the drawing in the 20 dp content area, and the cut between the
+  «o» and the orb widened at mdpi/hdpi so they stay apart; `capacitor.config.json` names it in `LocalNotifications.smallIcon`,
+  and the Tauri app must carry the same `drawable-*` files and name to its notification plugin).
 - **Tests on every push and PR**, on Windows and Linux: `.github/workflows/pruebas.yml`.
 - **Installer** (NSIS, per user, no admin): desktop and Start menu shortcut. The release also publishes `latest.yml` and
   the `.blockmap` files, which the updater uses.
 
 **Updates** (`src/main/updater.mjs`, `src/ui/components/update-card.jsx`):
 - The installed app uses `electron-updater` with GitHub Releases (`build.publish` in `package.json`; public repository,
-  no token). It checks on open (after 15 s) and every 4 h; it downloads nothing until the user clicks **Update**.
+  no token). It checks on open (after 15 s) and every 4 h; it downloads nothing until the user clicks **Download and install**.
 - States the window receives (`app:update` event): `checking`, `available`, `downloading` (with `percent`), `downloaded`,
   `none`, `error`, `off`. A card at the top right (below the header: it does not cover the menu or the text box) and an "Updates" card in Settings.
 - **Restart and install** (`app:updateInstall`): if tasks are running it asks first; then it stops the engine and calls
@@ -1126,17 +1254,23 @@ in `src/core/home.mjs`; nothing else builds them.
   `C:\Orb\core\bitacora\bitacora_project.md`, for `AGENTS.md`, `CLAUDE.md` and other tools outside Orb, with «Copiar
   ruta» (`app.layoutApply › logsMoved`). A «Dejar donde está» remembered by 3.8.0, whose default was to keep it, is asked
   once more in 3.8.1, alone and with «Mover a core»; `carpetas.json › logsAsked` makes the answer final), `android\adb-tools\` (default:
-  `core\herramientas\adb`) and each folder of `mcp-servers\`. A server the user writes (a git repository, `AGENTS.md`,
-  `BITACORA.md`, `CLAUDE.md`, `package.json` or `pyproject.toml`) is a **project**: it moves into a category (`windows` by
-  default, any other in the list) or stays, never into core. Any other server may also go to `core\mcp`, which holds only
-  the servers Orb manages. Each row can be «Dejar donde está»; «Dejar todo como está» keeps them all. Nothing moves until
+  `core\herramientas\adb`) and each folder of `mcp-servers\`: 3.8.1, every server goes into `core\mcp` by default, also
+  one the user writes (the owner's definition: core holds every MCP server; it keeps working there and is improved in a
+  project, section 25), or into a category as a project, or stays. A workspace set up by 3.8.0 (which made the servers
+  the user writes projects: `carpetas.json` without `mcpAsked`) is asked once about the projects of its categories that
+  are MCP servers (`mcpProject:<category>/<name>`, e.g. `windows\gmail-multi-mcp`, «Mover a core» by default); its
+  connector follows (orb.json's paths rewritten, its keys tied to the new path: `rebindMoved`) and the next project sync
+  drops it from the list; any answer writes `mcpAsked: 2` and is final. Each row can be «Dejar donde está»; «Dejar todo como está» keeps them all. Nothing moves until
   «Aplicar». What is kept is remembered (`core\carpetas.json`) and not asked again, and a kept `bitacora` or `adb-tools`
   is used where it is (`paths().logs`, `paths().adb`), so the user's own rules that point to `C:\Orb\bitacora` keep
-  working. In core the agents read the logs with their reading tools (section 28) and write to them only through Orb:
+  working. Once the logs moved into core (`decided.bitacora: 'move'`; or nothing decided while core already has its
+  `GENERAL.md`, as in a new workspace) core stays the general log: a `bitacora` that shows up at the top again (a tool outside Orb writing to the old path) never takes its place,
+  and «Ordenar carpetas» offers to merge it into core. The last screen also says which of the user's files are read-only
+  (Orb's agents can only read those). In core the agents read the logs with their reading tools (section 28) and write to them only through Orb:
   `orb_write_log` / `orb_read_log` with `general` (`GENERAL.md`) or, with `archivo`, one of the user's own `.md` files
-  at the top of the logs folder (`logs.mjs › ownLogFiles`; a read-only one stays untouched). Ajustes › MCP lists the projects that are MCP servers (`mcp.folder › projects`: their name says mcp or they
-  depend on an MCP SDK) beside `core\mcp`, with «Usar». A server's own credentials stay in its project folder (the
-  user's files); they enter a backup only when the user includes project folders, and every backup is encrypted. The
+  at the top of the logs folder (`logs.mjs › ownLogFiles`; a read-only one stays untouched). Settings › Skills y MCP lists the projects that are MCP servers (their name says mcp or they depend on an MCP SDK)
+  with «Usar» and «Mover a core» (section 25). A server's own credentials go with its folder: in core they enter every
+  backup, which is always encrypted. The
   keys of Orb's connectors live in the master password's vault (section 37).
 - **Moving**: before anything moves, every folder to move is checked to be free (on Windows a folder some program uses
   as its working folder, or with a file open, cannot be renamed: tried with a rename beside it and back). If one is not,
@@ -1215,8 +1349,8 @@ choice, with its paths, the user's text left alone and a working isolated copy; 
 file where a folder was; a folder in use: nothing moves, the message, «Reintentar»; core deleted with Orb closed; only
 orb.json missing with a newer database; core deleted while the engine runs; no copy, «Seguir sin copia» and a copy that
 needs its recovery code; the screen), `test/espacio-dueno.test.mjs` (the owner's real `C:\Orb` without `.orb`: nothing
-moves at the welcome, his bitacora kept and used where it is, a 3.8.0 «keep» asked once more and the new path named, his MCP server moved as a project and offered in Ajustes ›
-MCP, `personal\` untouched and unlisted, only core restored; the copy that comes back; `homeKey`; 3.7 copies in a folder
+moves at the welcome, his bitacora kept and used where it is, a 3.8.0 «keep» asked once more and the new path named, his MCP server moved as a project (his choice) and offered in Ajustes ›
+Skills y MCP, the server 3.8.0 made a project offered once to move into core\mcp, `personal\` untouched and unlisted, only core restored; the copy that comes back; `homeKey`; 3.7 copies in a folder
 inside `.orb`; «Seguir sin copia» keeps the copies; the guard outside the workspace; the vault's secrets out of the 3.7
 archive; the sealed secret's copy), `test/copias.test.mjs` (where copies go, old ones adopted, never inside the
 workspace), `test/multiplataforma.test.mjs` and `test/migracion-38.test.mjs` (the engine on a 3.7-shaped workspace).
@@ -1286,12 +1420,17 @@ channel's waits), making a new recovery code (`backup.recovery`: the code opens 
 3.7, unlinking a phone (`link.revoke`, `remote.revoke`), a connector's keys (`secrets.connector`,
 `secrets.saveConnector`), and in `config.save` (compared with the settings in force): choosing the backups' folder,
 writing a connector key in clear, changing a connector that has keys (its command, arguments or name, removing it or one
-of its keys) and taking an entry off «Cosas que nadie toca». Opening core in the Explorer too (`main.mjs` asks the engine
+of its keys) and taking an entry off «Cosas que nadie toca»; 3.8.1: deleting a project with its folder
+(`projects.deleteCheck`; its end, `projects.delete` / `projects.deleteAbort`, takes the one-off ticket the check returned). Opening core in the Explorer too (`main.mjs` asks the engine
 `master.check` before `app:openPath` on core itself or on `core\secretos`, compared by real path; core's tool folders
 open as before). The dispatcher refuses them without a fresh token: `master.unlock` (the password) gives one for 5
 minutes, kept in the engine's memory and the window's (`unlockCore`, which asks with a dialog). It ends with
 `master.lock`, called by `main.mjs` when Windows locks, the PC sleeps or shuts down; and with the window, which keeps it
-in memory only. Changing the password asks for the current one. `backup.now` stays free.
+in memory only. Changing the password asks for the current one. `backup.now` stays free. Some actions ask for the
+password **every time** (`FRESH_UNLOCK` in `permissions.mjs`; 3.8.1: deleting a project): the window asks even with an
+unlock in force (`unlockCore` skips it for `FRESH_ACTIONS`), `master.unlock({ purpose })` gives a token for that action
+only, for 2 minutes and never kept, and the dispatcher accepts nothing else for it (an unlock of 5 minutes does not open
+it, and its token opens nothing else).
 
 **Change, forgot and starting from scratch.**
 - `master.change` wraps the same data key with the new password: nothing else is encrypted again and linked phones stay.

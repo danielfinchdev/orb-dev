@@ -1,7 +1,7 @@
 // A direct conversation with one agent, live: the answer streams as it is written, commands and changed
 // files appear as the agent works, risky actions wait for a click (approval cards), messages written meanwhile correct the
 // agent on the fly or wait in a queue, and the context meter shows how full the conversation is. Task runs open here too.
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { Info, Paperclip, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, X, ListTodo, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { Markdown } from '@/components/markdown.jsx';
@@ -87,7 +87,11 @@ function statusText(body, agent, catalog) {
 }
 
 const FILE_ICON = { add: FilePlus2, delete: FileMinus2 };
-function Block({ b, agent, brain, sessionId, project, catalog }) {
+// The blocks are made again from the items whenever one arrives: a block whose content is the same is not drawn again
+// (nor while the agent's answer streams, which redraws the view many times a second).
+const sameBlock = (a, b) => a.type === b.type && a.key === b.key && a.item === b.item && a.call === b.call && a.result === b.result
+  && (a.files === b.files || (a.files?.length === b.files?.length && a.files.every((f, i) => f === b.files[i])));
+const Block = memo(function Block({ b, agent, brain, sessionId, project, catalog }) {
   const t = useT();
   const locale = useLocale();
   if (b.type === 'tool') return <ToolBlock b={b} />;
@@ -117,7 +121,7 @@ function Block({ b, agent, brain, sessionId, project, catalog }) {
   if (it.role === 'error') return <div className="bg-destructive/10 text-destructive rounded-xl px-3.5 py-2.5 text-[13px] whitespace-pre-wrap break-words">{typeof body === 'string' ? body : JSON.stringify(body)}</div>;
   if (it.kind === 'status' && typeof body === 'string') return <div className="text-muted-foreground text-center text-xs">{statusText(body, brain ?? agent, catalog)}</div>;
   return <div className="text-muted-foreground text-center text-xs">{typeof body === 'string' ? body : JSON.stringify(body)}</div>;
-}
+}, (prev, next) => sameBlock(prev.b, next.b) && prev.agent === next.agent && prev.brain === next.brain && prev.sessionId === next.sessionId && prev.project === next.project && prev.catalog === next.catalog);
 
 // 3.7: a proposal Opti Bot left in its conversation before «Monitoreo del equipo» was removed (2.7–3.6): read only, as it
 // ended.
@@ -380,7 +384,7 @@ export function SessionView({ route }) {
         </>)}
       </PageHeader>
       <div ref={scroll.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex max-w-3xl flex-col gap-3.5 px-5 py-6">
+        <div className="lazy-lines mx-auto flex max-w-3xl flex-col gap-3.5 px-5 py-6">
           {more ? <Button variant="ghost" size="sm" className="self-center" onClick={loadOlder}><ChevronUp />{t('session.older')}</Button> : null}
           {blocks.length ? blocks.map((b) => <Block key={b.key} b={b} agent={s.agent} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />)
             : <Empty title={t('session.emptyTitle', { agent: AGENT[s.agent] })}>{t('session.workIn')} <span className="font-mono text-xs">{s.cwd}</span> {t('session.withPerm', { perm: PERMISSION[s.permission] })}</Empty>}

@@ -31,6 +31,7 @@ import ola1 from './en/ola1.mjs';
 import mensajeria from './en/mensajeria.mjs';
 import orbchats from './en/orbchats.mjs';
 import notes from './en/notes.mjs';
+import ext from './en/ext.mjs';
 
 export default {
   ...base,
@@ -65,4 +66,5 @@ export default {
   ...mensajeria,
   ...orbchats,
   ...notes,
+  ...ext
 };

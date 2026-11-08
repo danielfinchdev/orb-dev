@@ -69,6 +69,8 @@ export const DEFAULT_CONFIG = Object.freeze({
   // queue (instead of waiting for approval), up to maxPerTask per task.
   delegation: { enabled: true, trusted: true, maxPerTask: 4 },
   mcpServers: [],
+  // 3.8.1: the skills of core\skills that are on ([{ name, enabled, source }]; one without an entry is off).
+  skills: [],
   projectRoots: [],
   // pip: the little window that shows the agent's browser; sounds and motion: the robot's.
   // skin, font, codeFont, codeTheme: Ajustes → Apariencia (src/core/appearance.mjs).
@@ -88,7 +90,9 @@ export const DEFAULT_CONFIG = Object.freeze({
 //     orb.json                  settings
 //     datos\                    database, secret, identity; ejecuciones\ task runs; copias\ isolated copies and undo points
 //     bitacora\                 the general log and one per project (bitacora\proyectos)
-//     mcp\                      the MCP servers Orb manages (each subfolder is one, listed in Ajustes)
+//     mcp\                      every MCP server (each subfolder is one; Ajustes › Skills y MCP)
+//     skills\                   every skill (each subfolder, with its SKILL.md); .activas: what the agents load
+//     preparacion\              what an agent makes (a skill or a server) until the user turns it on
 //     herramientas\adb\         what Orb downloads to build and test (Android's adb and fastboot)
 //     secretos\                 the secrets sealed with the master password
 //   windows\ linux\ ios\ android\ web\ multi\   categories: every subfolder of one of them is a project
@@ -99,6 +103,8 @@ export { CORE_DIR, CATEGORIES, PLATFORMS, MULTI, SHARED_DIR, DEFAULT_CATEGORY, D
 export const INTERNAL_DIR = CORE_DIR;
 export const LOGS_DIR = 'bitacora';
 export const MCP_DIR = 'mcp';
+export const SKILLS_DIR = 'skills'; // 3.8.1: every skill (src/core/extensions.mjs)
+export const STAGING_DIR = 'preparacion'; // 3.8.1: what an agent makes before the user turns it on (the only part of core agents write)
 export const OLD_LOGS_DIR = 'bitacoras'; // 2.3.0 and older
 // 3.5–3.7: the bots' memories. 3.8: no bots; an old bots\ folder is never taken for a project (the 3.8 migration archives it).
 export const BOTS_DIR = 'bots';
@@ -115,19 +121,27 @@ export const isReservedInCategory = (category, name) => /^\./.test(String(name))
 // Names a project can never take (they would read as one of Orb's own folders).
 export const isReservedName = (name) => isConfigName(name) || lower(name) === OLD_ADB_DIR;
 
+// What the user decided in «Ordenar carpetas» about the logs at the top (core\carpetas.json, core-folder.mjs).
+const logsDecision = (core) => { try { return JSON.parse(fs.readFileSync(path.join(core, 'carpetas.json'), 'utf8'))?.decided?.bitacora ?? null; } catch { return null; } };
 export function paths(home) {
   const core = path.join(home, CORE_DIR);
   const data = path.join(core, 'datos');
   // A log folder or Android tools left at the top (kept by the user, or not decided about yet) are used there.
+  // 3.8.1: the logs at the top are the general log only when the user kept them there, or before deciding while core has
+  // no general log of its own (a 3.7 workspace). Once they moved into core (or a workspace that always had them there),
+  // a bitacora that shows up at the top again (a tool outside Orb writing to the old path) never takes core's place
+  // («Ordenar carpetas» offers to merge it into core).
   const keptLogs = path.join(home, LEGACY.logs);
   const keptAdb = path.join(home, ...LEGACY.adb);
-  const logs = isDirSync(keptLogs) ? keptLogs : path.join(core, LOGS_DIR);
+  const coreLogs = path.join(core, LOGS_DIR);
+  const decided = isDirSync(keptLogs) ? logsDecision(core) : 'move';
+  const logs = decided === 'keep' || (decided === null && !fs.existsSync(path.join(coreLogs, 'GENERAL.md'))) ? keptLogs : coreLogs;
   const copies = path.join(core, 'copias');
   const tools = path.join(core, 'herramientas');
   return {
     home, core, internal: core, config: path.join(core, CONFIG_FILE), data, db: path.join(data, 'orb.db'), key: path.join(data, 'clave.bin'),
     logs, generalLog: path.join(logs, 'GENERAL.md'), projectLogs: path.join(logs, 'proyectos'),
-    mcp: path.join(core, MCP_DIR), tools, adb: isDirSync(keptAdb) ? keptAdb : path.join(tools, 'adb'), secrets: path.join(core, 'secretos'),
+    mcp: path.join(core, MCP_DIR), skills: path.join(core, SKILLS_DIR), staging: path.join(core, STAGING_DIR), tools, adb: isDirSync(keptAdb) ? keptAdb : path.join(tools, 'adb'), secrets: path.join(core, 'secretos'),
     projects: home, categories: Object.fromEntries(CATEGORIES.map((c) => [c, path.join(home, c)])),
     runs: path.join(core, 'ejecuciones'),
     copies, worktrees: path.join(copies, 'aisladas'), checkpoints: path.join(copies, 'fotos')
@@ -159,6 +173,10 @@ export const folderKey = (folder) => { try { return fs.realpathSync(folder).toLo
 // 3.8: the folders of other users' projects of 3.7 that stay in the categories, which Orb no longer lists (JSON list of
 // folderKey; the 3.8 migration writes it, adding one of them by hand takes it out).
 export const IGNORED_PROJECTS = 'projects_ignored';
+// 3.8.1: the projects the user finished (src/core/project-close.mjs): their folders stay, Orb no longer lists them.
+export const FINISHED_PROJECTS = 'projects_finished';
+// 3.8.1: the projects being deleted (between the engine's check and the end of the Recycle Bin: project-close.mjs).
+export const DELETING_PROJECTS = 'projects_deleting';
 
 const isObject = (v) => v && typeof v === 'object' && !Array.isArray(v);
 // Deep merge where arrays and scalars of `over` replace those of `base`.
@@ -213,7 +231,7 @@ export function createHome(base, { assistantName = PRODUCT.assistant, userName =
 export function ensureLayout(home, config = null) {
   migrateWorkspace(home);
   const p = paths(home);
-  for (const dir of [p.data, p.runs, p.logs, p.projectLogs, p.mcp, p.tools, p.secrets, ...Object.values(p.categories)]) fs.mkdirSync(dir, { recursive: true });
+  for (const dir of [p.data, p.runs, p.logs, p.projectLogs, p.mcp, p.skills, p.tools, p.secrets, ...Object.values(p.categories)]) fs.mkdirSync(dir, { recursive: true });
   const old = path.join(home, OLD_LOGS_DIR);
   if (fs.existsSync(old)) { try { moveLogs(old, p.logs); } catch { /* left as it is; tried again on the next start */ } }
   if (!fs.existsSync(p.generalLog)) {

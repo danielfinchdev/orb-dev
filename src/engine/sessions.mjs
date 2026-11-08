@@ -8,9 +8,11 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { ctx, tr, connectorKey } from '../core/context.mjs';
 import { adapter, executable } from '../agents/index.mjs';
+import { liveSkills } from './api-extensions.mjs';
 import { orbMcpServer, connectorLauncher } from '../agents/common.mjs';
 import { agentAuth } from './agent-auth.mjs';
 import { resolveEnv } from '../core/connector-secrets.mjs';
+import { connectorSafe } from '../core/extensions.mjs';
 import { CURSOR_FILES } from '../agents/cursor.mjs';
 import { rotateIfBig, oneLine } from '../core/safety.mjs';
 import { git, isGitRepo, repoRoot } from '../core/workspace.mjs';
@@ -65,6 +67,8 @@ export function mcpServersFor(agent, { taskId = '', orchestrator = false, browse
     const taken = new Set(['orb']);
     for (const s of ctx.config.mcpServers ?? []) {
       if (s.enabled === false || (s.agents?.length && !s.agents.includes(agent)) || taken.has(connectorKey(s.name))) continue;
+      // 3.8.1: a server of core\mcp whose folder is a link or a junction (or reaches out of core) never starts.
+      if (!connectorSafe(ctx.paths.core, s)) continue;
       taken.add(connectorKey(s.name)); // F2.6c: never two servers on one variable name (config checks it too)
       // 3.8: its keys come out of the vault here, only for its launcher (orb.json has references).
       servers[s.name] = ticketed(s.name, connectorLauncher(), { launch: { command: s.command, args: s.args ?? [], env: resolveEnv(ctx.master, s) } });
@@ -304,6 +308,7 @@ export class Sessions {
       mcpServers: mcpServersOf(a, s.agent, { taskId, session: s.id }), budgetUsd,
       env: { ...accountEnv(acc), ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
       internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog, cfg: ctx.config.agents[s.agent] ?? {},
+      skills: liveSkills(), // 3.8.1: the skills of core that are on (Claude and Codex load them themselves)
       onEvent: (ev) => this.onLiveEvent(s.id, ev)
     });
     this.lives.set(s.id, entry);
@@ -480,6 +485,8 @@ export class Sessions {
     const s = this.must(id);
     if (this.running.has(id)) throw new Error(tr('msg.sessions.stillWorking'));
     if (!String(text ?? '').trim() && !images.length) throw new Error(tr('msg.sessions.writeMessage'));
+    // 3.8.1: its project is being deleted (project-close.mjs): no new turn in a folder that is going away.
+    if (s.kind !== 'task' && s.project && this.board.isDeleting(s.project)) throw new Error(tr('msg.projects.deleting', { name: s.project }));
     // The conversation's own account: if it was removed, the turn does not silently move to another subscription.
     const acc = s.account ? findAccount(s.account) : pickAccount(this.board, { agent: s.agent });
     if (!acc) throw new Error(tr('msg.sessions.accountGone', { account: s.account }));

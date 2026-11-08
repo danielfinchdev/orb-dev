@@ -4,10 +4,11 @@
 //     is never taken for a 3.7 workspace).
 //   - planWorkspace / applyLayout: the other folders 3.7 kept at the top (bitacora, android\adb-tools, each server in
 //     mcp-servers) are the user's to decide about. The window lists them with what would happen to each (move into
-//     core, move as a project into a category, or keep where it is) and nothing moves until the user confirms. A server
-//     the user wrote (a git repository, AGENTS.md, BITACORA.md, package.json…) is a project, never a part of core. What
-//     the user kept is remembered (core\carpetas.json) and not asked again; a kept bitacora or adb-tools is used where it
-//     is (home.mjs › paths).
+//     core, move as a project into a category, or keep where it is) and nothing moves until the user confirms. 3.8.1:
+//     every MCP server goes into core\mcp by default, also one the user wrote (the owner's definition), and the projects
+//     that are MCP servers are offered once to a workspace set up by 3.8.0 (which made them projects). What the user kept
+//     is remembered (core\carpetas.json) and not asked again; a kept bitacora or adb-tools is used where it is (home.mjs
+//     › paths). moveIntoCore: the same move for one project, from Ajustes › Skills y MCP.
 //   - Moving: one rename when it can be. Before anything moves, every folder is checked to be free (on Windows a
 //     folder some program is using cannot be renamed): if one is not, nothing moves and the window says which one to
 //     close (code 'busy', «Reintentar»). Across volumes, or into a folder that already exists, it is merged file by
@@ -25,6 +26,7 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { paths, LEGACY, moveLogs, CATEGORIES, CORE_DIR, LOGS_DIR, MCP_DIR } from './home.mjs';
 import { translate } from './i18n.mjs';
+import { isMcpProject, startCommand } from './extensions.mjs';
 
 export const MOVE_STATE = 'migracion-carpetas.json'; // in core while the moves are not finished and their paths rewritten
 export const CONFLICTS_DIR = 'conflictos-migracion'; // in core: an old file that differed from the one already in core
@@ -74,6 +76,12 @@ const decisions = (home) => readJson(layoutFile(home))?.decided ?? {};
 // is final.
 const LOGS_ASKED = 2;
 const logsKept = (home, done) => done.bitacora === 'keep' && (readJson(layoutFile(home))?.logsAsked ?? 0) >= LOGS_ASKED;
+// 3.8.1: every MCP server lives in core\mcp (the owner's definition; 3.8.0 made the ones the user writes projects). A
+// workspace that went through «Ordenar carpetas» before 3.8.1 (carpetas.json without mcpAsked) is asked once about the
+// projects of its categories that are MCP servers (e.g. windows\gmail-multi-mcp), with «Mover a core» by default; the
+// answer given then is final, and later ones move from Ajustes › Skills y MCP («Mover a core»).
+const MCP_ASKED = 2;
+const askMcpProjects = (home) => { const f = readJson(layoutFile(home)); return Boolean(f) && (f.mcpAsked ?? 0) < MCP_ASKED; };
 // The user's own files at the top of the logs (not Orb's GENERAL.md, nor proyectos): what other tools read, so the
 // window names where each one is now (views/layout.jsx).
 const userLogFiles = (dir) => { try { return fs.readdirSync(dir, { withFileTypes: true }).filter((e) => e.isFile() && !e.name.startsWith('.') && e.name.toLowerCase() !== 'general.md').map((e) => e.name).sort(); } catch { return []; } };
@@ -94,11 +102,22 @@ export function planWorkspace(home) {
   if (isDir(adb)) add({ id: 'adb', kind: 'adb', name: LEGACY.adb.join(path.sep), from: adb, project: false, choice: 'move', choices: ['move', 'keep'] });
   const servers = path.join(home, LEGACY.mcp);
   let list = []; try { list = fs.readdirSync(servers, { withFileTypes: true }).filter((e) => e.isDirectory() && !e.name.startsWith('.')); } catch { /* none */ }
+  // 3.8.1: every server goes into core\mcp by default, also one the user writes (it keeps working there; Ajustes › Skills
+  // y MCP › «Editar en un proyecto» to improve it); a category is still a choice.
   for (const e of list) {
     const from = path.join(servers, e.name);
-    const project = isUserProject(from);
-    add({ id: `mcp:${e.name}`, kind: 'mcp', name: `${LEGACY.mcp}${path.sep}${e.name}`, from, project,
-      choice: project ? 'windows' : MCP_DIR, choices: [...CATEGORIES, ...(project ? [] : [MCP_DIR]), 'keep'] });
+    add({ id: `mcp:${e.name}`, kind: 'mcp', name: `${LEGACY.mcp}${path.sep}${e.name}`, from, project: isUserProject(from), choice: MCP_DIR, choices: [MCP_DIR, ...CATEGORIES, 'keep'] });
+  }
+  if (askMcpProjects(home)) {
+    for (const cat of CATEGORIES) {
+      let found = []; try { found = fs.readdirSync(path.join(home, cat), { withFileTypes: true }).filter((e) => e.isDirectory() && !e.name.startsWith('.')); } catch { /* none */ }
+      for (const e of found) {
+        const from = path.join(home, cat, e.name);
+        if (!isMcpProject(from) || !startCommand(from)) continue;
+        const id = `mcpProject:${cat}/${e.name}`;
+        items.push({ id, kind: 'mcp', name: `${cat}${path.sep}${e.name}`, from, project: true, choice: MCP_DIR, choices: [MCP_DIR, 'keep'], kept: Boolean(done[id]) });
+      }
+    }
   }
   return { items, pending: items.some((it) => !it.kept) };
 }
@@ -129,7 +148,8 @@ const BUSY_CODES = ['EBUSY', 'EPERM', 'EACCES', 'ENOTEMPTY'];
 
 // Moves the folders as the user chose. choices: { [item.id]: choice } (an item without one is left as it is,
 // undecided). Throws LayoutBusy (nothing moved) when a folder to move is in use. → { moved, rewritten, logs } or null
-// (logs: when the logs moved into core, { dir, files }: where they are now and the user's own files in them, full paths).
+// (logs: when the logs moved into core, { dir, files, readOnly }: where they are now and the user's own files in them,
+// full paths, and which of those are read-only).
 export function applyLayout(home, choices = {}, { language = 'es' } = {}) {
   const { items } = planWorkspace(home);
   const moves = []; const decided = {};
@@ -143,15 +163,33 @@ export function applyLayout(home, choices = {}, { language = 'es' } = {}) {
   const held = moves.filter((m) => isHeld(m.from)).map((m) => m.from);
   if (held.length) throw new LayoutBusy(held, language);
   const saved = readJson(layoutFile(home)) ?? {};
-  writeJsonAtomic(layoutFile(home), { ...saved, v: 1, decided: { ...decisions(home), ...decided }, ...(decided.bitacora ? { logsAsked: LOGS_ASKED } : {}) });
+  writeJsonAtomic(layoutFile(home), { ...saved, v: 1, decided: { ...decisions(home), ...decided }, ...(decided.bitacora ? { logsAsked: LOGS_ASKED } : {}), mcpAsked: MCP_ASKED });
   if (!moves.length) return null;
   const logsMove = moves.find((m) => m.logs);
   const own = logsMove ? userLogFiles(logsMove.from) : [];
   const [state] = notes(home);
   writeJsonAtomic(state, { v: 2, home, started: new Date().toISOString(), moves: [...(readJson(state)?.moves ?? []), ...moves] });
   const r = finish(home, state, language);
-  if (logsMove && !exists(logsMove.from)) r.logs = { dir: logsMove.to, files: own.map((n) => path.join(logsMove.to, n)) };
+  if (logsMove && !exists(logsMove.from)) {
+    const files = own.map((n) => path.join(logsMove.to, n));
+    // The read-only ones: Orb's agents only read them (orb_write_log never changes a file's attributes).
+    const readOnly = files.filter((f) => { try { return (fs.statSync(f).mode & 0o200) === 0; } catch { return false; } });
+    r.logs = { dir: logsMove.to, files, readOnly };
+  }
   return r;
+}
+
+// 3.8.1: a project that is an MCP server moves into core\mcp (Ajustes › Skills y MCP › «Mover a core»): the same steps
+// as «Ordenar carpetas» (checked free first, a note in case it stops halfway, orb.json and the database pointed to the new
+// place). → the new folder. Throws LayoutBusy (nothing moved) when some program is using it.
+export function moveIntoCore(home, from, { language = 'es' } = {}) {
+  const to = path.join(coreMcp(home), path.basename(from));
+  if (exists(to)) throw Object.assign(new Error(translate(language, 'ext.err.mcpExists', { name: path.basename(from) })), { userFacing: true });
+  if (isHeld(from)) throw new LayoutBusy([from], language);
+  const [state] = notes(home);
+  writeJsonAtomic(state, { v: 2, home, started: new Date().toISOString(), moves: [...(readJson(state)?.moves ?? []), { from, to }] });
+  finish(home, state, language);
+  return to;
 }
 
 // The moves of a note (each one skipped when already done), then the paths, then the note goes.

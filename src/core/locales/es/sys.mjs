@@ -279,6 +279,8 @@ export default {
   'sys.events.status.cancelled': 'cancelada',
   'sys.events.status.other': '{status}',
   'sys.projects.firstCommit': 'Proyecto creado',
+  'sys.projects.archived.finished': '{name}: finalizado',
+  'sys.projects.archived.deleted': '{name}: eliminado',
   'sys.sessions.imageHint': '(Nota de Orb: si este mensaje pide una imagen, genera una sola, salvo que pida varias expresamente. Los textos que vayan dentro de la imagen, en el idioma del mensaje.)',
   'sys.sessions.imageEditHint': '(Nota de Orb: para cambiar la imagen, pásala como imagen de referencia a la herramienta de generar imágenes y genera una sola imagen nueva con el cambio. No la montes con scripts ni pegando trozos: pierde calidad.)'
 };

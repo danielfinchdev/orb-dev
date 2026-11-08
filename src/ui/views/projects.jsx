@@ -1,16 +1,18 @@
 // Projects: the folders inside the assistant's folder (plus any linked one), with git and GitHub actions.
 import { useEffect, useState } from 'react';
-import { FolderKanban, FolderPlus, FolderOpen, Pin, MessageSquare, BookOpen, Unlink, GitBranch, Save, Upload, RefreshCw, GitPullRequest, Folder, ScanSearch, ShieldCheck, PencilLine } from 'lucide-react';
+import { FolderKanban, FolderPlus, FolderOpen, Pin, MessageSquare, BookOpen, Unlink, GitBranch, Save, Upload, RefreshCw, GitPullRequest, Folder, ScanSearch, ShieldCheck, PencilLine, Ellipsis, CircleCheckBig, Trash2, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader, PageBody, BackButton } from '@/components/page.jsx';
-import { confirm, form } from '@/components/dialogs.jsx';
+import { confirm, choose, form } from '@/components/dialogs.jsx';
 import { createProjectFlow, linkFolderFlow, cloneRepoFlow, CATEGORIES } from '@/components/project-actions.jsx';
 import { askReview, askSecurityReview } from './tasks.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Empty, Field, Input, PathText, Spinner } from '@/components/ui/basic.jsx';
-import { Checkbox, BubbleTip } from '@/components/ui/overlay.jsx';
+import { Checkbox, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
 import { useStore, call, act, go, bridge, refresh, phoneLayout } from '@/lib/store.js';
-import { cn, baseName } from '@/lib/utils.js';
+import { cn, baseName, errorText } from '@/lib/utils.js';
+import { usePress } from '@/lib/use-press.js';
+import { unlockCore } from '@/lib/core-access.js';
 import { GithubIcon } from '@/components/agent-icon.jsx';
 import { useT, useLocale } from '@/lib/i18n.js';
 
@@ -62,6 +64,87 @@ function ContributionGraph() {
       <div className="text-muted-foreground flex items-center justify-end gap-1 text-[10.5px]">{t('projects.gh.less')}{[0, 1, 2, 3, 4].map((l) => <span key={l} className="gh-cell size-[10px] rounded-[2px]" data-level={l} />)}{t('projects.gh.more')}</div>
     </Card>
   );
+}
+
+// 3.8.1: the end of a project (src/core/project-close.mjs). Finished: it leaves Orb, its folder stays («Finalizados»
+// brings it back). Deleted: its folder goes to the Recycle Bin (main.mjs), behind the master password, only on the PC.
+// When the Recycle Bin cannot take it: a folder some program is using offers only «Reintentar»; otherwise «Reintentar»
+// or «Borrar para siempre» after a stronger warning. Cancelling gives the project back as it was.
+async function finishFlow(p, t) {
+  if (!(await confirm(t('projects.finish.title'), t('projects.finish.body', { name: p.name }), { ok: t('projects.finish.ok') }))) return;
+  if ((await act(call('projects.finish', { name: p.name }), t('projects.finish.done'))) !== undefined) await refresh().catch(() => {});
+}
+async function deleteFlow(p, t) {
+  if (!(await confirm(t('projects.delete.title'), t('projects.delete.body', { name: p.name, path: p.path }), { ok: t('projects.delete.ok'), danger: true }))) return;
+  const unlock = await unlockCore('deleteProject');
+  if (!unlock) return;
+  try {
+    let r = await bridge.deleteProject(p.name, unlock);
+    while (r && !r.ok) {
+      let step = null;
+      if (r.locked) step = await choose(t('projects.delete.locked.title'), t('projects.delete.locked.body', { path: r.path }), [{ value: 'retry', label: t('projects.delete.retry') }]);
+      else if (r.noTrash) step = await choose(t('projects.delete.noTrash.title'), t('projects.delete.noTrash.body', { path: r.path }), [{ value: 'forever', label: t('projects.delete.noTrash.ok'), variant: 'destructive' }, { value: 'retry', label: t('projects.delete.retry') }]);
+      if (!step) { await bridge.deleteProject(p.name, null, 'cancel'); return; }
+      r = await bridge.deleteProject(p.name, null, step);
+      if (r?.ok) { toast.success(t(step === 'forever' ? 'projects.delete.doneForever' : 'projects.delete.done')); return; }
+    }
+    if (r?.ok) toast.success(t('projects.delete.done'));
+  } catch (error) { toast.error(errorText(error)); }
+  finally { await refresh().catch(() => {}); }
+}
+
+// Right click (or a long press on the phone, or its «…»): what can be done with the whole project. Deleting is the PC's
+// and only for a folder inside a category (a linked one is «Desvincular», in its card).
+function ProjectMenu({ p, open, setOpen, phone }) {
+  const t = useT();
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
+      <DropdownMenuTrigger asChild>
+        <button type="button" className={cn('text-muted-foreground hover:text-foreground hover:bg-accent mr-2 grid size-7 shrink-0 cursor-pointer place-items-center rounded-md', phone ? '' : 'opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100')} aria-label={t('projects.menu', { name: p.name })} data-testid="project-menu" onClick={(e) => e.stopPropagation()}>
+          <Ellipsis className="size-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56" data-testid="project-menu-list">
+        <DropdownMenuItem onSelect={() => finishFlow(p, t)} data-testid="project-finish"><CircleCheckBig />{t('projects.finish.title')}</DropdownMenuItem>
+        {bridge.mobile || !p.inHome ? null : (<><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onSelect={() => deleteFlow(p, t)} data-testid="project-delete"><Trash2 />{t('projects.delete.title')}</DropdownMenuItem></>)}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function ProjectRow({ p, selected, phone, onOpen }) { // selected: the name of the project open beside the list
+  const t = useT();
+  const [menu, setMenu] = useState(false);
+  const press = usePress(() => setMenu(true));
+  return (
+    <div className={cn('group/row flex items-center border-b transition-colors hover:bg-accent/50', !phone && selected === p.name && 'bg-accent')} {...press}>
+      <button type="button" onClick={() => onOpen(p.name)} className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-4 py-3 text-left" data-testid="project-row">
+        <Folder className={cn('size-4 shrink-0', p.active ? 'text-primary' : 'text-muted-foreground')} />
+        {/* The phone: the name only (the category is the group's title); the PC also shows the folder. */}
+        <div className="grid min-w-0 flex-1"><div className="truncate">{p.name}</div>{bridge.mobile ? null : <PathText path={p.path} className="text-muted-foreground text-[11px]" />}</div>
+        {p.open ? <Badge variant="info">{t(p.open === 1 ? 'projects.openOne' : 'projects.openOther', { n: p.open })}</Badge> : null}
+        {p.active ? <Pin className="text-primary size-3.5" /> : null}
+      </button>
+      <ProjectMenu p={p} open={menu} setOpen={setMenu} phone={phone} />
+    </div>
+  );
+}
+
+// «Finalizados»: the projects the user finished, with «Reabrir».
+function FinishedList({ list, onReopened }) {
+  const t = useT();
+  const locale = useLocale();
+  const reopen = async (x) => { const name = await act(call('projects.reopen', { key: x.key })); if (name) { toast.success(t('projects.reopen.done', { name })); await refresh().catch(() => {}); onReopened(name); } };
+  return list.map((x) => (
+    <div key={x.key} className="flex items-center gap-3 border-b px-4 py-3" data-testid="project-finished">
+      <CircleCheckBig className="text-muted-foreground size-4 shrink-0" />
+      <div className="grid min-w-0 flex-1">
+        <div className="truncate">{x.name}</div>
+        <div className="text-muted-foreground truncate text-[11px]">{bridge.mobile ? t(`comp.projects.category.${x.category ?? 'other'}`) : x.path} · {t('projects.finished.on', { date: new Date(x.at).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }) })}</div>
+      </div>
+      <Button size="sm" variant="outline" onClick={() => reopen(x)} data-testid="project-reopen"><Undo2 />{t('projects.reopen')}</Button>
+    </div>
+  ));
 }
 
 function ProjectDetail({ p, onRenamed }) {
@@ -133,7 +216,12 @@ export function ProjectsView({ route }) {
   const t = useT();
   const projects = useStore((s) => s.projects);
   const app = useStore((s) => s.app);
+  const version = useStore((s) => s.version);
   const phone = phoneLayout();
+  const [tab, setTab] = useState('active');
+  const [finished, setFinished] = useState([]);
+  useEffect(() => { let alive = true; call('projects.finished').then((l) => alive && setFinished(l ?? [])).catch(() => {}); return () => { alive = false; }; }, [version]);
+  const showing = finished.length ? tab : 'active';
   const [selected, setSelected] = useState(route.name ?? (phone ? null : app.activeProject?.name ?? projects[0]?.name ?? null));
   const current = projects.find((p) => p.name === selected) ?? null;
   // 3.8, the phone: a project opens on a screen of its own (the back arrow, or Android's back, returns to the list).
@@ -158,21 +246,21 @@ export function ProjectsView({ route }) {
           {bridge.mobile ? null : <><GithubCard /><ContributionGraph /></>}
           <div className="grid items-start gap-4 lg:grid-cols-[minmax(280px,1fr)_minmax(400px,1.4fr)]">
             <Card className="gap-0 overflow-hidden py-0">
-              {projects.length ? [...CATEGORIES, null].map((cat) => {
+              {finished.length ? (
+                <div className="flex gap-1 border-b px-2 py-1.5" role="tablist">
+                  {[['active', t('projects.tab.active')], ['finished', t('projects.tab.finished', { n: finished.length })]].map(([id, label]) => (
+                    <button key={id} type="button" role="tab" aria-selected={showing === id} onClick={() => setTab(id)} data-testid={`projects-tab-${id}`}
+                      className={cn('cursor-pointer rounded-md px-2.5 py-1 text-xs font-medium', showing === id ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground')}>{label}</button>
+                  ))}
+                </div>
+              ) : null}
+              {showing === 'finished' ? <FinishedList list={finished} onReopened={(name) => { setTab('active'); open(name); }} /> : projects.length ? [...CATEGORIES, null].map((cat) => {
                 // Grouped by category (windows, linux, ios, android, web, multi); linked folders outside Orb's folder go last.
                 const list = projects.filter((p) => (p.category ?? null) === cat);
                 return list.length ? (
                   <div key={cat ?? 'other'} data-testid={`category-${cat ?? 'other'}`}>
                     <div className="text-muted-foreground bg-muted/40 border-b px-4 py-1.5 text-[11px] font-medium tracking-wide uppercase">{t(`comp.projects.category.${cat ?? 'other'}`)}</div>
-                    {list.map((p) => (
-                      <button key={p.name} onClick={() => open(p.name)} className={cn('flex w-full cursor-pointer items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-accent/50', !phone && selected === p.name && 'bg-accent')} data-testid="project-row">
-                        <Folder className={cn('size-4 shrink-0', p.active ? 'text-primary' : 'text-muted-foreground')} />
-                        {/* The phone: the name only (the category is the group's title); the PC also shows the folder. */}
-                        <div className="grid min-w-0 flex-1"><div className="truncate">{p.name}</div>{bridge.mobile ? null : <PathText path={p.path} className="text-muted-foreground text-[11px]" />}</div>
-                        {p.open ? <Badge variant="info">{t(p.open === 1 ? 'projects.openOne' : 'projects.openOther', { n: p.open })}</Badge> : null}
-                        {p.active ? <Pin className="text-primary size-3.5" /> : null}
-                      </button>
-                    ))}
+                    {list.map((p) => <ProjectRow key={p.name} p={p} selected={selected} phone={phone} onOpen={open} />)}
                   </div>
                 ) : null;
               }) : <Empty icon={FolderKanban} title={t('projects.empty.title')}>{app.home ? t('projects.empty.hint', { home: app.home }) : t('projects.empty.hintRemote')}</Empty>}

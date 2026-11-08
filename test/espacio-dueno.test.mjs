@@ -1,7 +1,7 @@
 // 3.8 (F3a-fix): the owner's real C:\Orb as it is today (android\{adb-tools, family365}, ios\, web\, windows\,
 // bitacora\ with files that are not Orb's, mcp-servers\gmail-multi-mcp\ — a server he writes — and personal\, no .orb)
 // and what Orb does with it: nothing moves without the user's choice, a kept bitacora is used where it is, his MCP server
-// becomes a project (never part of core), personal\ is left alone and unlisted. Then the backups: only core comes back,
+// goes into core\mcp by default (3.8.1; he may still make it a project), personal\ is left alone and unlisted. Then the backups: only core comes back,
 // from the newest copy of this workspace that opens; what Orb keeps outside the workspace is kept from the agents.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -73,13 +73,12 @@ test('la bienvenida en el C:\\Orb del dueño: no mueve nada, pregunta, y lo que 
   assert.equal(p.adb, at('android', 'adb-tools'));
   assert.match(read(p.generalLog), /entrada del dueño/);
   // What the window lists, with its defaults: his bitacora into core (3.8.1: the owner's definition; the window warns
-  // that his rules for agents may read the old path), adb into core, his MCP server is a project (in windows).
+  // that his rules for agents may read the old path), adb into core, and (3.8.1: every MCP server lives in core) his MCP
+  // server into core\mcp too; a category is still a choice.
   const plan = planWorkspace(home);
-  assert.deepEqual(plan.items.map((it) => [it.id, it.choice, it.project]), [['bitacora', 'move', false], ['adb', 'move', false], ['mcp:gmail-multi-mcp', 'windows', true]]);
+  assert.deepEqual(plan.items.map((it) => [it.id, it.choice, it.project]), [['bitacora', 'move', false], ['adb', 'move', false], ['mcp:gmail-multi-mcp', 'mcp', true]]);
   const gmailItem = plan.items[2];
-  assert.ok(!gmailItem.choices.includes('mcp'), 'un servidor que escribe el usuario nunca va a core');
-  assert.deepEqual(layoutOptions(gmailItem).map((o) => o.value), ['windows', 'linux', 'ios', 'android', 'web', 'multi', 'keep']);
-  assert.throws(() => applyLayout(home, { 'mcp:gmail-multi-mcp': 'mcp' }), /no vale/);
+  assert.deepEqual(layoutOptions(gmailItem).map((o) => o.value), ['mcp', 'windows', 'linux', 'ios', 'android', 'web', 'multi', 'keep']);
 
   const e = await startEngine(home, { secret: SECRET });
   try {
@@ -87,7 +86,7 @@ test('la bienvenida en el C:\\Orb del dueño: no mueve nada, pregunta, y lo que 
     assert.equal(lp.pending, true);
     const names = (await e.call('projects.list')).map((x) => x.name).sort();
     assert.deepEqual(names, ['borrado', 'family365', 'open-control-edge', 'tienda'], 'ni personal, ni adb-tools, ni el servidor aún, ni archivos sueltos');
-    // He keeps his bitacora where it is (his global rules read it there) and moves the rest.
+    // He keeps his bitacora where it is (his global rules read it there) and makes his server a project (as 3.8.0 did).
     const after = await e.call('app.layoutApply', { choices: { bitacora: 'keep', adb: 'move', 'mcp:gmail-multi-mcp': 'windows' } });
     assert.equal(after.pending, false);
     assert.ok(fs.existsSync(at('bitacora', 'bitacora_project.md')) && !fs.existsSync(at('core', 'bitacora', 'bitacora_project.md')));
@@ -98,8 +97,8 @@ test('la bienvenida en el C:\\Orb del dueño: no mueve nada, pregunta, y lo que 
     assert.equal(read(at('personal', 'diario.md')), 'mío');
     await until(async () => (await e.call('projects.list')).some((x) => x.name === 'gmail-multi-mcp'), 'el servidor, como proyecto');
     assert.ok(!(await e.call('projects.list')).some((x) => x.name === 'personal'));
-    // Ajustes › MCP offers it from its project folder.
-    const folder = await e.call('mcp.folder');
+    // Ajustes › Skills y MCP offers it from its project folder (to use it there, or move it into core).
+    const folder = await e.call('extensions.list');
     const mine = folder.projects.find((s) => s.name === 'gmail-multi-mcp');
     assert.deepEqual([mine?.command, mine?.args], ['node', [at('windows', 'gmail-multi-mcp', 'src', 'index.js')]]);
     assert.ok(!folder.projects.some((s) => s.name === 'tienda'), 'solo los proyectos que son servidores MCP');
@@ -140,7 +139,7 @@ test('3.8.1: un «Dejar donde está» de 3.8.0 en la bitácora se pregunta una v
   try {
     const r = await e.call('app.layoutApply', { choices: { bitacora: 'move' } });
     assert.equal(r.pending, false);
-    assert.deepEqual(r.logsMoved, { dir: at('core', 'bitacora'), files: ['anexos.md', 'bitacora_project.md'].map((n) => at('core', 'bitacora', n)) }, 'la ruta exacta de sus archivos, para AGENTS.md');
+    assert.deepEqual(r.logsMoved, { dir: at('core', 'bitacora'), files: ['anexos.md', 'bitacora_project.md'].map((n) => at('core', 'bitacora', n)), readOnly: [at('core', 'bitacora', 'bitacora_project.md')] }, 'la ruta exacta de sus archivos, para AGENTS.md, y cuáles son de solo lectura');
     assert.equal(read(at('core', 'bitacora', 'bitacora_project.md')), 'índice central');
     assert.match(read(at('core', 'bitacora', 'GENERAL.md')), /entrada del dueño/);
     assert.ok(!fs.existsSync(at('bitacora')));
@@ -156,6 +155,47 @@ test('3.8.1: un «Dejar donde está» de 3.8.0 en la bitácora se pregunta una v
   applyLayout(other.home, { bitacora: 'keep', adb: 'move', 'mcp:gmail-multi-mcp': 'windows' });
   assert.equal(planWorkspace(other.home).pending, false);
   assert.ok(fs.existsSync(other.at('bitacora', 'bitacora_project.md')));
+});
+
+// 3.8.1 (H1c): every MCP server lives in core\mcp. The owner's 3.8.0 made his gmail-multi-mcp a project in windows\
+// (and Ajustes › MCP used it from there): Orb 3.8.1 offers it once to move into core\mcp (by default), it keeps working
+// (its connector points to the new place, its tokens go with it) and is no longer a project; the answer is final.
+test('3.8.1: el servidor MCP que 3.8.0 dejó como proyecto en windows se ofrece una vez para moverlo a core\\mcp', async () => {
+  const { base, home, at } = ownersOrb();
+  createHome(base, { userName: 'Dani' });
+  quiet(home);
+  applyLayout(home, { bitacora: 'move', adb: 'move', 'mcp:gmail-multi-mcp': 'windows' });
+  // What 3.8.0 left: carpetas.json without mcpAsked, and the server used from its project.
+  const file = path.join(home, 'core', LAYOUT_FILE);
+  const saved = JSON.parse(read(file)); delete saved.mcpAsked; writeJson(file, saved);
+  writeJson(paths(home).config, merge(loadConfig(home), { mcpServers: [{ name: 'gmail', command: 'node', args: [at('windows', 'gmail-multi-mcp', 'src', 'index.js')], enabled: true }] }));
+  put(at('windows', 'tienda-web', 'package.json'), JSON.stringify({ name: 'tienda', main: 'index.js' })); put(at('windows', 'tienda-web', 'index.js'));
+  const plan = planWorkspace(home);
+  assert.equal(plan.pending, true);
+  assert.deepEqual(plan.items.filter((it) => !it.kept).map((it) => [it.id, it.choice, it.choices]), [['mcpProject:windows/gmail-multi-mcp', 'mcp', ['mcp', 'keep']]], 'solo su servidor (no cualquier proyecto con package.json)');
+  const e = await startEngine(home, { secret: SECRET });
+  try {
+    await until(async () => (await e.call('projects.list')).some((x) => x.name === 'gmail-multi-mcp'), 'aún es un proyecto');
+    const r = await e.call('app.layoutApply', { choices: { 'mcpProject:windows/gmail-multi-mcp': 'mcp' } });
+    assert.equal(r.pending, false);
+    assert.equal(read(at('core', 'mcp', 'gmail-multi-mcp', 'tokens', 'cuenta.json')), '{"token":1}');
+    assert.ok(!fs.existsSync(at('windows', 'gmail-multi-mcp')));
+    const cfg = loadConfig(home);
+    assert.deepEqual(cfg.mcpServers.find((s) => s.name === 'gmail').args, [at('core', 'mcp', 'gmail-multi-mcp', 'src', 'index.js')], 'sigue funcionando: su conector apunta a core');
+    const l = await e.call('extensions.list');
+    assert.deepEqual(l.mcp.map((s) => [s.name, s.connector, s.enabled]), [['gmail-multi-mcp', 'gmail', true]]);
+    await until(async () => !(await e.call('projects.list')).some((x) => x.name === 'gmail-multi-mcp'), 'deja de ser un proyecto');
+  } finally { await e.stop(); }
+  assert.equal(planWorkspace(home).pending, false, 'no se vuelve a preguntar');
+  // «Dejar donde está» is final too, and a workspace set up by 3.8.1 is never asked about its projects.
+  const other = ownersOrb();
+  createHome(other.base, { userName: 'Dani' });
+  applyLayout(other.home, { bitacora: 'move', adb: 'move', 'mcp:gmail-multi-mcp': 'windows' });
+  assert.equal(planWorkspace(other.home).pending, false, 'hecho por 3.8.1: ya está decidido');
+  const f2 = path.join(other.home, 'core', LAYOUT_FILE); const s2 = JSON.parse(read(f2)); delete s2.mcpAsked; writeJson(f2, s2);
+  applyLayout(other.home, { 'mcpProject:windows/gmail-multi-mcp': 'keep' });
+  assert.equal(planWorkspace(other.home).pending, false);
+  assert.ok(fs.existsSync(other.at('windows', 'gmail-multi-mcp', 'src', 'index.js')));
 });
 
 test('la copia que vuelve: la más nueva de ESTE espacio que se pueda abrir; ultima.json no lleva a otras carpetas', async () => {

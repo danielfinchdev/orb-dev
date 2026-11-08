@@ -3,11 +3,16 @@
 // folder in %TEMP% with the fake agents: never the real C:\Orb, %APPDATA%\Orb.dev or the installed app.
 //
 //   node scripts/medir.mjs [--exe dist/win-unpacked/Orb.exe] [--shell electron|tauri] [--runs 5] [--idle 30]
-//                          [--installer <setup.exe>] [--apk <file.apk>] [--out <results.json>] [--hidden]
+//                          [--installer <setup.exe>] [--apk <file.apk>] [--out <results.json>] [--hidden] [--profile <dir>]
 //
 // Tauri: measures a build with the `e2e` cargo feature (npm run tauri:build:e2e), the only one that opens the window's
 // DevTools port (ORB_E2E_CDP_PORT; a normal build ignores it and every WEBVIEW2_* variable). --hidden keeps its window
 // hidden the whole time (ORB_HIDDEN_WINDOW=1: nobody at the PC; the numbers are then of a window never shown).
+// Electron honours ORB_HIDDEN_WINDOW too (an offscreen window that still draws 60 frames a second; its frames are copied
+// to the main process, whose memory is then not comparable with a shown window's). --profile: on the last start, a CPU
+// profile of the start, a trace and a CPU profile of the long conversation's scrolling, the compositor's layers and
+// a heap snapshot after the views, saved in <dir> (open them in Chrome's DevTools). cpuIdle: the CPU all the processes
+// used at rest, from 5 s after the start until the idle memory point.
 //
 // Start: from spawning the process to the first paint (the page's own paint timing), to the engine being ready (its
 // «motor arrancado» line in motor.log, written with the system clock) and to the main screen being drawn (the sidebar).
@@ -33,7 +38,8 @@ const IDLE_S = Number(arg('idle', 30));
 const installer = arg('installer', path.join(ROOT, 'dist', `Orb-${PKG.version}-instalador.exe`));
 const apk = arg('apk');
 const hidden = process.argv.includes('--hidden');
-if (hidden && shell !== 'tauri') { console.error('--hidden solo con --shell tauri'); process.exit(2); }
+const profileDir = arg('profile') ? path.resolve(arg('profile')) : null;
+if (profileDir) fs.mkdirSync(profileDir, { recursive: true });
 if (!fs.existsSync(exe)) { console.error(`no existe ${exe} (compila antes o pasa --exe)`); process.exit(2); }
 
 // The test environment before any module of Orb loads (the fake agents are read when src/agents loads).
@@ -85,8 +91,9 @@ const runsDir = path.join(home, 'core', 'ejecuciones');
 
 // ---- the app's processes
 function processTree(rootPid) {
-  const ps = 'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,CommandLine,WorkingSetSize,PrivatePageCount | ConvertTo-Json -Compress';
-  const all = JSON.parse(execFileSync('powershell.exe', ['-NoProfile', '-Command', ps], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }));
+  const ps = 'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,CommandLine,WorkingSetSize,PrivatePageCount,KernelModeTime,UserModeTime | ConvertTo-Json -Compress';
+  let all = null;
+  for (let i = 0; all == null; i++) { try { all = JSON.parse(execFileSync('powershell.exe', ['-NoProfile', '-Command', ps], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })); } catch (e) { if (i >= 3) throw e; } } // now and then the list comes cut
   const kids = new Map(); for (const p of all) { if (!kids.has(p.ParentProcessId)) kids.set(p.ParentProcessId, []); kids.get(p.ParentProcessId).push(p); }
   const out = []; const stack = all.filter((p) => p.ProcessId === rootPid);
   while (stack.length) { const p = stack.pop(); out.push(p); stack.push(...(kids.get(p.ProcessId) ?? []).filter((k) => k.ProcessId !== p.ProcessId)); }
@@ -99,9 +106,9 @@ function memory(rootPid) {
     const cl = String(p.CommandLine ?? ''); const t = /--type=([\w-]+)/.exec(cl)?.[1]; const u = /--utility-sub-type=([\w.-]+)/.exec(cl)?.[1]; const s = /([\w.-]+\.m?js)\b/i.exec(cl)?.[1];
     return `${p.Name} ${t ? (u ? `${t}:${u}` : t) : s ? `node:${s}` : 'main'}`;
   };
-  const by = {}; for (const p of tree) { const k = kind(p); by[k] ??= { n: 0, ws: 0, priv: 0 }; by[k].n++; by[k].ws += p.WorkingSetSize; by[k].priv += p.PrivatePageCount; }
-  return { processes: tree.length, wsMB: MB(tree.reduce((s, p) => s + p.WorkingSetSize, 0)), privateMB: MB(tree.reduce((s, p) => s + p.PrivatePageCount, 0)),
-    byName: Object.fromEntries(Object.entries(by).map(([k, v]) => [k, { n: v.n, wsMB: MB(v.ws), privateMB: MB(v.priv) }])),
+  const by = {}; for (const p of tree) { const k = kind(p); by[k] ??= { n: 0, ws: 0, priv: 0, cpu: 0 }; by[k].n++; by[k].ws += p.WorkingSetSize; by[k].priv += p.PrivatePageCount; by[k].cpu += (Number(p.KernelModeTime) + Number(p.UserModeTime)) / 1e7; }
+  return { at: Date.now(), cpuSec: tree.reduce((n, p) => n + (Number(p.KernelModeTime) + Number(p.UserModeTime)) / 1e7, 0), processes: tree.length, wsMB: MB(tree.reduce((s, p) => s + p.WorkingSetSize, 0)), privateMB: MB(tree.reduce((s, p) => s + p.PrivatePageCount, 0)),
+    byName: Object.fromEntries(Object.entries(by).map(([k, v]) => [k, { n: v.n, wsMB: MB(v.ws), privateMB: MB(v.priv), cpuSec: Math.round(v.cpu * 100) / 100 }])),
     largestWsMB: MB(Math.max(...tree.map((p) => p.WorkingSetSize))) };
 }
 
@@ -116,7 +123,7 @@ async function launch() {
   const port = 9400 + Math.floor(Math.random() * 500);
   // The window's occlusion tracking could pause the frames of a window behind another one: off, the same for every shell.
   const args = shell === 'electron' ? [`--remote-debugging-port=${port}`, '--disable-features=CalculateNativeWinOcclusion'] : [];
-  const env = { ...process.env, ...SANDBOX, ...(shell === 'tauri' ? { ORB_E2E_CDP_PORT: String(port), ...(hidden ? { ORB_HIDDEN_WINDOW: '1' } : {}) } : {}) };
+  const env = { ...process.env, ...SANDBOX, ...(shell === 'tauri' ? { ORB_E2E_CDP_PORT: String(port) } : {}), ...(hidden ? { ORB_HIDDEN_WINDOW: '1' } : {}) };
   const t0 = Date.now();
   const app = spawn(exe, args, { env, stdio: 'ignore' });
   const exited = new Promise((r) => app.once('exit', r));
@@ -143,7 +150,9 @@ const pageTimes = (page) => page.evaluate(async (sel) => {
     mo.observe(document, { childList: true, subtree: true });
   });
   const paint = Object.fromEntries(performance.getEntriesByType('paint').map((e) => [e.name, at(e.startTime)]));
-  return { navStart: performance.timeOrigin, fp: paint['first-paint'] ?? null, fcp: paint['first-contentful-paint'] ?? null, ready: ready.t, readyLate: ready.late };
+  // A hidden window paints nothing: the page's scripts loaded and ran (DOMContentLoaded) is the next best mark.
+  const nav = performance.getEntriesByType('navigation')[0];
+  return { navStart: performance.timeOrigin, fp: paint['first-paint'] ?? null, fcp: paint['first-contentful-paint'] ?? null, dcl: nav ? at(nav.domContentLoadedEventEnd) : null, ready: ready.t, readyLate: ready.late };
 }, READY);
 
 // rAF deltas while an element scrolls down and back up by `px`, `step` px a frame; plus long animation frames.
@@ -172,6 +181,7 @@ const scrollFrames = (page, selector, px = 2000, step = 40) => page.evaluate(asy
       requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
+    setTimeout(resolve, 60000); // a window that draws no frames: give up instead of waiting forever
   });
   await new Promise((r) => setTimeout(r, 200)); obs?.disconnect();
   return { element: `${el.tagName.toLowerCase()}${el.dataset.testid ? `[data-testid=${el.dataset.testid}]` : el.className ? `.${String(el.className).split(' ')[0]}` : ''}`, scrolled: total, deltas, loaf };
@@ -179,7 +189,24 @@ const scrollFrames = (page, selector, px = 2000, step = 40) => page.evaluate(asy
 const frameStats = (s) => (s ? { element: s.element, px: s.scrolled, frames: s.deltas.length, p50: r1(pct(s.deltas, 50)), p95: r1(pct(s.deltas, 95)), max: r1(Math.max(...s.deltas)), // % of frames that took longer than one frame at 60 Hz with margin (25 ms: at least one frame dropped) and than 50 ms
     dropped: r1((100 * s.deltas.filter((d) => d > 25).length) / s.deltas.length), over50: r1((100 * s.deltas.filter((d) => d > 50).length) / s.deltas.length), longFrames: s.loaf.length, longFramesMax: r1(s.loaf.length ? Math.max(...s.loaf) : 0) } : null);
 
-const results = { target: { exe, shell, version: PKG.version, ...(shell === 'tauri' ? { build: 'e2e feature', hiddenWindow: hidden } : {}) }, starts: [], memory: {}, frames: {}, sizes: {}, machine: {} };
+// The page's own memory: the JavaScript heap (used / total) and the DOM's nodes and listeners, from DevTools.
+async function pageMemory(page, gc = false) {
+  try {
+    const cdp = await page.context().newCDPSession(page);
+    if (gc) await cdp.send('HeapProfiler.collectGarbage');
+    const heap = await cdp.send('Runtime.getHeapUsage'); const dom = await cdp.send('Memory.getDOMCounters');
+    await cdp.detach();
+    return { jsHeapUsedMB: MB(heap.usedSize), jsHeapTotalMB: MB(heap.totalSize), domNodes: dom.nodes, listeners: dom.jsEventListeners, documents: dom.documents };
+  } catch { return null; }
+}
+async function heapSnapshot(page, file) {
+  const cdp = await page.context().newCDPSession(page);
+  const out = fs.createWriteStream(file);
+  cdp.on('HeapProfiler.addHeapSnapshotChunk', (e) => out.write(e.chunk));
+  await cdp.send('HeapProfiler.takeHeapSnapshot', { reportProgress: false });
+  await new Promise((r) => out.end(r)); await cdp.detach();
+}
+const results = { target: { exe, shell, version: PKG.version, hiddenWindow: hidden, ...(shell === 'tauri' ? { build: 'e2e feature' } : {}) }, starts: [], memory: {}, frames: {}, sizes: {}, machine: {} };
 
 // ---- 0: the first start of this workspace (master password, folders' review): not timed
 {
@@ -194,16 +221,25 @@ const results = { target: { exe, shell, version: PKG.version, ...(shell === 'tau
 // ---- 1..n: the start
 for (let i = 1; i <= RUNS; i++) {
   const run = await launch();
+  // --profile: the last start's JavaScript, from the moment DevTools reaches the page until the main screen is drawn
+  let startCdp = null;
+  if (profileDir && i === RUNS) { try { startCdp = await run.page.context().newCDPSession(run.page); await startCdp.send('Profiler.enable'); await startCdp.send('Profiler.setSamplingInterval', { interval: 200 }); await startCdp.send('Profiler.start'); } catch { startCdp = null; } }
   const pt = await pageTimes(run.page);
+  if (startCdp) { const { profile } = await startCdp.send('Profiler.stop'); fs.writeFileSync(path.join(profileDir, 'arranque.cpuprofile'), JSON.stringify(profile)); await startCdp.detach(); }
   const engine = await until(() => engineReadyAt(run.t0), 'motor arrancado en motor.log', 60000, 100);
-  results.starts.push({ run: i, toNavStartMs: Math.round(pt.navStart - run.t0), toFirstPaintMs: pt.fcp ? Math.round(pt.fcp - run.t0) : null, toEngineReadyMs: Math.round(engine - run.t0), toMainScreenMs: Math.round(pt.ready - run.t0), mainScreenLate: pt.readyLate });
+  results.starts.push({ run: i, toNavStartMs: Math.round(pt.navStart - run.t0), toFirstPaintMs: pt.fcp ? Math.round(pt.fcp - run.t0) : null, toScriptsReadyMs: pt.dcl ? Math.round(pt.dcl - run.t0) : null, toEngineReadyMs: Math.round(engine - run.t0), toMainScreenMs: Math.round(pt.ready - run.t0), mainScreenLate: pt.readyLate });
   console.error(`arranque ${i}: ${JSON.stringify(results.starts.at(-1))}`);
   if (i < RUNS) { await quit(run); continue; }
 
   // ---- memory and smoothness on the last start
-  await wait(IDLE_S * 1000);
-  results.memory.idle = memory(run.app.pid);
+  await wait(Math.min(5, IDLE_S) * 1000);
+  const settled = memory(run.app.pid);
+  await wait(Math.max(0, IDLE_S - 5) * 1000);
   const { page } = run;
+  results.memory.idle = { ...memory(run.app.pid), page: await pageMemory(page) };
+  // the CPU the app used while nobody touched it (all its processes, % of one core), from 5 s after the start to now
+  const busy = (a, b, k) => { const x = k ? a.byName[k]?.cpuSec ?? 0 : a.cpuSec; const y = k ? b.byName[k]?.cpuSec ?? 0 : b.cpuSec; return Math.round((1000 * (y - x)) / (b.at - a.at)) / 10; };
+  results.cpuIdle = { seconds: Math.round((results.memory.idle.at - settled.at) / 1000), percentOfOneCore: busy(settled, results.memory.idle), byName: Object.fromEntries(Object.keys(results.memory.idle.byName).map((k) => [k, busy(settled, results.memory.idle, k)])) };
   const click = async (sel) => { try { await page.click(sel, { timeout: 5000 }); await wait(700); return true; } catch { return false; } };
   const opened = [];
   // chats of the list (the newest ones on top), the tasks, the projects' info, then the other views
@@ -222,7 +258,8 @@ for (let i = 1; i <= RUNS; i++) {
   for (const t of ['nav-memories', 'nav-tutorials', 'nav-settings']) if (await click(`[data-testid=${t}]`)) opened.push(t);
   await page.keyboard.press('Escape').catch(() => {});
   await wait(10000);
-  results.memory.afterViews = { ...memory(run.app.pid), opened };
+  results.memory.afterViews = { ...memory(run.app.pid), opened, page: await pageMemory(page), pageAfterGc: await pageMemory(page, true) };
+  if (profileDir) await heapSnapshot(page, path.join(profileDir, 'vistas.heapsnapshot'));
 
   // the long chat list (the sidebar's inbox) and the long conversation
   await click(READY);
@@ -233,8 +270,42 @@ for (let i = 1; i <= RUNS; i++) {
     await wait(1500);
     // the biggest scrolling area now is the conversation's messages
     results.frames.longChat = frameStats(await scrollFrames(page, null));
+    if (profileDir) {
+      // the same scrolling again, recorded: a trace (what each frame spent its time on) and the JavaScript's CPU profile
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Profiler.enable'); await cdp.send('Profiler.setSamplingInterval', { interval: 200 }); await cdp.send('Profiler.start');
+      await run.browser.startTracing(page, { path: path.join(profileDir, 'chat-largo.trace.json'), categories: ['devtools.timeline', 'disabled-by-default-devtools.timeline', 'disabled-by-default-devtools.timeline.frame', 'v8.execute', 'blink', 'cc', 'gpu', 'viz', 'benchmark', 'latencyInfo'] });
+      await scrollFrames(page, null);
+      await run.browser.stopTracing();
+      const { profile } = await cdp.send('Profiler.stop');
+      fs.writeFileSync(path.join(profileDir, 'chat-largo.cpuprofile'), JSON.stringify(profile));
+      // the compositor's layers and why each one exists (too many layers make every scrolled frame slow)
+      const layers = await new Promise((resolve) => { cdp.on('LayerTree.layerTreeDidChange', (e) => { if (e.layers) resolve(e.layers); }); cdp.send('LayerTree.enable'); setTimeout(() => resolve([]), 5000); });
+      const reasons = {}; const owners = {};
+      await cdp.send('DOM.enable').catch(() => {});
+      for (const l of layers) {
+        let why = [];
+        try { const r = await cdp.send('LayerTree.compositingReasons', { layerId: l.layerId }); why = r.compositingReasonIds ?? r.compositingReasons ?? []; } catch { /* gone */ }
+        for (const k of why) reasons[k] = (reasons[k] ?? 0) + 1;
+        let who = '?';
+        if (l.backendNodeId) { try { const { node } = await cdp.send('DOM.describeNode', { backendNodeId: l.backendNodeId }); const a = Object.fromEntries((node.attributes ?? []).reduce((acc, v, i, all) => (i % 2 ? acc : [...acc, [v, all[i + 1]]]), [])); who = `${node.localName}${a['data-testid'] ? `[${a['data-testid']}]` : a.class ? `.${a.class.split(' ').slice(0, 2).join('.')}` : ''}`; } catch { /* gone */ } }
+        const key = `${who} ← ${why.join('+') || '-'}`; owners[key] = (owners[key] ?? 0) + 1;
+      }
+      // the elements that can scroll (each one a layer of its own): which and how many
+      const scrollers = await page.evaluate(() => {
+        const out = {};
+        for (const el of document.querySelectorAll('*')) {
+          const cs = getComputedStyle(el); const x = /(auto|scroll|hidden)/.test(cs.overflowX) && el.scrollWidth > el.clientWidth; const y = /(auto|scroll|hidden)/.test(cs.overflowY) && el.scrollHeight > el.clientHeight;
+          if (!x && !y) continue;
+          const k = `${el.localName}.${String(el.className?.baseVal ?? el.className).split(' ').slice(0, 2).join('.')} ${cs.overflowX}/${cs.overflowY} ${x ? 'x' : ''}${y ? 'y' : ''}`; out[k] = (out[k] ?? 0) + 1;
+        }
+        return out;
+      });
+      fs.writeFileSync(path.join(profileDir, 'capas.json'), JSON.stringify({ layers: layers.length, reasons, scrollers, owners: Object.fromEntries(Object.entries(owners).sort((a, b) => b[1] - a[1])) }, null, 1));
+      await cdp.detach();
+    }
   }
-  results.memory.afterScroll = memory(run.app.pid);
+  results.memory.afterScroll = { ...memory(run.app.pid), page: await pageMemory(page) };
   await quit(run);
 }
 
@@ -260,7 +331,7 @@ results.sizes = {
 // ---- summary and machine
 const warm = results.starts.slice(1);
 const summary = (k) => ({ first: results.starts[0]?.[k] ?? null, warmMedian: median(warm.map((s) => s[k])), warmP95: pct(warm.map((s) => s[k]), 95) });
-results.summary = { firstPaint: summary('toFirstPaintMs'), engineReady: summary('toEngineReadyMs'), mainScreen: summary('toMainScreenMs') };
+results.summary = { firstPaint: summary('toFirstPaintMs'), scriptsReady: summary('toScriptsReadyMs'), engineReady: summary('toEngineReadyMs'), mainScreen: summary('toMainScreenMs') };
 let windows = os.release(); try { windows = execFileSync('powershell.exe', ['-NoProfile', '-Command', '(Get-CimInstance Win32_OperatingSystem).Caption + " " + (Get-CimInstance Win32_OperatingSystem).BuildNumber'], { encoding: 'utf8' }).trim(); } catch { /* the release number */ }
 results.machine = { cpu: os.cpus()[0]?.model, cores: os.cpus().length, ramGB: Math.round(os.totalmem() / 1073741824), windows, node: process.version, date: new Date().toISOString() };
 const out = arg('out');

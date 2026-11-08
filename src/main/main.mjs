@@ -17,6 +17,7 @@ import { PRODUCT } from '../core/product.mjs';
 import { translate } from '../core/i18n.mjs';
 import { keyringWeak } from './linux.mjs';
 import { loadApprovalSecret } from '../engine/approval-secret.mjs';
+import { deletableFolder, folderInUse } from '../core/project-close.mjs';
 
 const SRC = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 // Packaged: the code lives in app.asar.unpacked (agents start the MCP server from there with the app's own executable).
@@ -31,6 +32,8 @@ const isDev = !app.isPackaged;
 // 2.7.3: the portable .exe is Orb Light: the essentials, like the phone (no mini-games, God mode, PC Status or themes).
 // The installer is the whole app. ORB_LIGHT=1 shows it from the code too.
 const LIGHT = Boolean(process.env.PORTABLE_EXECUTABLE_FILE) || process.env.ORB_LIGHT === '1';
+// Measurements with nobody at the PC (scripts/medir.mjs --hidden): the window is never shown and keeps drawing frames.
+const HIDDEN_WINDOW = process.env.ORB_HIDDEN_WINDOW === '1';
 
 // ORB_USER_DATA: separate app data (tests, or a portable copy that keeps everything next to it). Otherwise the folder that
 // versions up to 2.3.3 used (%APPDATA%\Orb.dev), although the program is now called Orb.
@@ -42,6 +45,9 @@ if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? PRODUCT
 // The app's icon (window, notifications), read through Electron so it also works from inside app.asar (Linux notices get
 // the picture itself: the notification service cannot open a file inside the package).
 const ICON = path.join(SRC, '..', 'build', 'icon.png');
+// 3.8.1: the window on Windows takes the .ico, whose 16–32 px images are the short «o•» (Alt+Tab, and the taskbar when no
+// shortcut gives the icon: Orb Light, npm start); downscaled, the 512 px PNG would show the whole word unreadable.
+const WINDOW_ICON = process.platform === 'win32' ? path.join(SRC, '..', 'build', 'icon.ico') : ICON;
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'orb', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
 
@@ -277,6 +283,51 @@ ipcMain.handle('app:openPath', guard(async (target, unlock) => {
   const err = await shell.openPath(target); if (err) throw new Error(err);
   return true;
 }));
+// 3.8.1: «Eliminar proyecto». The engine checks the master password's token, that nothing of it works and what may go
+// (projects.deleteCheck: from then on nothing of the project starts, and it returns a one-off ticket); the folder is
+// checked here again by its real path and moved to the Recycle Bin; then the engine takes the project out with that
+// ticket (projects.delete, trashed). When the Recycle Bin cannot take it:
+//   - some program is using the folder → { ok: false, locked: true, path }: the window offers only «Reintentar»;
+//   - otherwise → { ok: false, noTrash: true, path }: «Reintentar» or «Borrar para siempre».
+// step: undefined (start; unlock: the token) | 'retry' | 'forever' (only after a noTrash for that same project) |
+// 'cancel' (the project works again). A delete under way is kept here, by name, with its ticket and folder.
+const deletes = new Map(); // name -> { ticket, path, noTrash }
+async function trashProject(name, d) {
+  const real = deletableFolder(home, d.path);
+  let failed = false;
+  try { await shell.trashItem(real); } catch { failed = true; }
+  if (failed || fs.existsSync(real)) {
+    if (folderInUse(real)) { d.noTrash = false; return { ok: false, locked: true, path: real }; }
+    d.noTrash = true;
+    return { ok: false, noTrash: true, path: real };
+  }
+  deletes.delete(name);
+  return { ok: true, ...(await callEngine('projects.delete', { name, ticket: d.ticket, trashed: true })) };
+}
+ipcMain.handle('app:deleteProject', guard(async (name, unlock, step) => {
+  if (typeof name !== 'string' || !name || name.length > 200) throw new Error(T('sys.main.badAction'));
+  await engineReady;
+  if (!home) throw new Error(T('sys.main.badPath'));
+  const d = deletes.get(name);
+  if (step === 'cancel') { deletes.delete(name); if (d) await callEngine('projects.deleteAbort', { name, ticket: d.ticket }).catch(() => {}); return { ok: false, cancelled: true }; }
+  if (step === 'retry' || step === 'forever') {
+    if (!d || (step === 'forever' && !d.noTrash)) throw new Error(T('sys.main.badAction'));
+    if (step === 'retry') return trashProject(name, d);
+    const real = deletableFolder(home, d.path);
+    if (folderInUse(real)) { d.noTrash = false; return { ok: false, locked: true, path: real }; }
+    deletes.delete(name); // one try: a delete that stops half-way says what is left, and the project works again
+    return { ok: true, ...(await callEngine('projects.delete', { name, ticket: d.ticket }, 600_000)) };
+  }
+  if (d) { deletes.delete(name); await callEngine('projects.deleteAbort', { name, ticket: d.ticket }).catch(() => {}); }
+  const check = await callEngine('projects.deleteCheck', { name, unlock: typeof unlock === 'string' ? unlock : '' }, 30_000);
+  const next = { ticket: check.ticket, path: check.path, noTrash: false };
+  deletes.set(name, next);
+  try { return await trashProject(name, next); } catch (error) {
+    // Not even checked here (the folder is not one Orb may delete): the project works again.
+    if (deletes.get(name) === next) { deletes.delete(name); await callEngine('projects.deleteAbort', { name, ticket: next.ticket }).catch(() => {}); }
+    throw error;
+  }
+}));
 ipcMain.handle('app:openExternal', guard(async (url) => {
   let u; try { u = new URL(String(url)); } catch { throw new Error(T('sys.main.badLink')); }
   if (u.protocol !== 'https:') throw new Error(T('sys.main.httpsOnly'));
@@ -357,10 +408,10 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1360, height: 880, minWidth: 400, minHeight: 560, show: false, backgroundColor: dark ? '#16151d' : '#fbfbfe', title: PRODUCT.name, autoHideMenuBar: true,
     titleBarStyle: 'hidden',
-    icon: ICON,
-    webPreferences: { preload: path.join(SRC, 'main', 'preload.cjs'), additionalArguments: LIGHT ? ['--orb-light'] : [], contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, spellcheck: true, devTools: isDev || process.env.ORB_DEVTOOLS === '1' }
+    icon: WINDOW_ICON,
+    webPreferences: { preload: path.join(SRC, 'main', 'preload.cjs'), additionalArguments: LIGHT ? ['--orb-light'] : [], contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, spellcheck: true, devTools: isDev || process.env.ORB_DEVTOOLS === '1', ...(HIDDEN_WINDOW ? { backgroundThrottling: false, offscreen: true } : {}) }
   });
-  win.once('ready-to-show', () => win.show());
+  win.once('ready-to-show', () => { if (!HIDDEN_WINDOW) win.show(); });
   for (const e of ['maximize', 'unmaximize', 'restore', 'enter-full-screen', 'leave-full-screen']) win.on(e, sendWindowState);
   win.webContents.on('did-finish-load', () => { win?.webContents.setZoomFactor(zoom * ZOOM_BASE); if (weakKeyring) setTimeout(tellKeyring, 8000).unref?.(); });
   win.webContents.on('before-input-event', (e, input) => { const dir = zoomKey(input); if (dir) { e.preventDefault(); zoomBy(dir); } });

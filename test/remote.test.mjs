@@ -92,7 +92,16 @@ test('sirve la web app instalable y solo responde a su propio nombre', async () 
   assert.match(html, /manifest\.webmanifest/);
   assert.match(html, /apple-touch-icon/);
   assert.match(page.headers.get('content-security-policy'), /script-src 'self'/);
-  assert.equal((await (await fetch(`${base}/manifest.webmanifest`)).json()).display, 'standalone');
+  const manifest = await (await fetch(`${base}/manifest.webmanifest`)).json();
+  assert.equal(manifest.display, 'standalone');
+  // 3.8.1: the «maskable» icon fills the whole canvas (the phone crops it to its own shape).
+  const maskable = manifest.icons.find((i) => i.purpose === 'maskable');
+  assert.equal(maskable.src, '/icon-maskable.png');
+  const icon = await fetch(`${base}${maskable.src}`);
+  assert.equal(icon.status, 200);
+  const { PNG } = (await import('pngjs')).default;
+  const img = PNG.sync.read(Buffer.from(await icon.arrayBuffer()));
+  for (const [x, y] of [[0, 0], [img.width - 1, 0], [0, img.height - 1], [img.width - 1, img.height - 1]]) assert.equal(img.data[(y * img.width + x) * 4 + 3], 255, `esquina ${x},${y} opaca`);
   assert.match(await (await fetch(`${base}/sw.js`)).text(), /showNotification/);
   // fetch() cannot change Host: a raw request plays the DNS-rebinding page.
   const status = await new Promise((resolve, reject) => http.get({ host: '127.0.0.1', port, path: '/api/me', headers: { Host: 'atacante.example' } }, (r) => { r.resume(); resolve(r.statusCode); }).on('error', reject));

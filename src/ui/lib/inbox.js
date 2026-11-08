@@ -5,15 +5,24 @@
 // What is unread (muted chats do not count), for the badges.
 export const unreadOf = (data) => (Array.isArray(data?.items) ? data.items.reduce((n, x) => n + (x.muted ? 0 : Number(x.unread) || 0), 0) : 0);
 
+// One formatter per language and shape: toLocale…String builds a new one on every call, and the list has hundreds of rows.
+const FORMATS = { time: { hour: '2-digit', minute: '2-digit' }, weekday: { weekday: 'short' }, date: { day: 'numeric', month: 'short' } };
+const formatters = new Map();
+const format = (locale, shape, d) => {
+  const k = `${locale}|${shape}`;
+  if (!formatters.has(k)) formatters.set(k, new Intl.DateTimeFormat(locale, FORMATS[shape]));
+  return formatters.get(k).format(d);
+};
+
 // The time of a row: the hour today, «Ayer», the weekday within a week, else the day and month.
 export function shortTime(at, { now = new Date(), locale = 'es', yesterday = 'Ayer' } = {}) {
   const d = new Date(at ?? ''); if (Number.isNaN(d.getTime())) return '';
   const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const diff = Math.round((day(now) - day(d)) / 86_400_000);
-  if (diff <= 0) return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  if (diff <= 0) return format(locale, 'time', d);
   if (diff === 1) return yesterday;
-  if (diff < 7) { const w = d.toLocaleDateString(locale, { weekday: 'short' }).replace('.', ''); return w.charAt(0).toUpperCase() + w.slice(1); }
-  return d.toLocaleDateString(locale, { day: 'numeric', month: 'short' }).replace('.', '');
+  if (diff < 7) { const w = format(locale, 'weekday', d).replace('.', ''); return w.charAt(0).toUpperCase() + w.slice(1); }
+  return format(locale, 'date', d).replace('.', '');
 }
 
 // The rows: each conversation with Orbe (conversations.list, with its marks, last line and unread count

@@ -1,4 +1,27 @@
-# Shell launchers keep Unix line ends on every checkout (they run on Linux).
+# Line ends: LF in the repository and in every checkout, whatever core.autocrlf says (tests read sources with regexes,
+# and the Linux CI and launchers need LF). Windows-only scripts keep CRLF.
+* text=auto eol=lf
 *.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
 *.sh text eol=lf
 *.tmpl text eol=lf
+
+# Binaries: never converted nor diffed as text.
+*.png binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.jar binary
+*.jks binary
+*.keystore binary
+*.apk binary
+*.aab binary
+*.zip binary
+*.pdf binary
+*.exe binary
+*.dll binary

@@ -19,12 +19,18 @@ export const dropUnlock = () => { held = null; };
 // Still good for a few seconds more (the call that uses it must arrive in time).
 export const heldUnlock = (now = Date.now()) => (held && held.until - 5000 > now ? held.unlock : null);
 
-// action: 'open' | 'restore' | 'backupFolder' | 'recovery' | 'legacy' | 'secrets' | 'connector' | 'protected' | 'unlink'.
+// action: 'open' | 'restore' | 'backupFolder' | 'recovery' | 'legacy' | 'secrets' | 'connector' | 'protected' | 'unlink' |
+// 'deleteProject' | 'removeExtension'.
+// 3.8.1: FRESH_ACTIONS ask for the password every time (src/core/permissions.mjs › FRESH_UNLOCK): a held unlock does
+// not count, and their token (for that action only) is not kept for the next one.
+export const FRESH_ACTIONS = Object.freeze(['deleteProject']);
 export async function unlockCore(action) {
-  const have = heldUnlock();
+  const fresh = FRESH_ACTIONS.includes(action);
+  const have = fresh ? null : heldUnlock();
   if (have) return have;
   if (!asker) return null;
-  return keepUnlock(await asker(action));
+  const r = await asker(action, { fresh });
+  return fresh ? r?.unlock ?? null : keepUnlock(r);
 }
 
 // The master password's shortest length (src/core/master.mjs › MIN_LENGTH; the engine checks it too).

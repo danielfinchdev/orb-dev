@@ -6,7 +6,7 @@
 // project's badge (a direct conversation: its agent's mark), the title, the time, its latest progress (a running task,
 // «Esperando tu aprobación», how its last task ended, else its last line) and the unread count. Right click or ⋯ (PC) and
 // a long press (phone) open the chat's menu: info, pin, mute, mark read, complete or reopen, delete.
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ListTodo, FolderKanban, CalendarClock, PenTool, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { PageHeader } from '@/components/page.jsx';
@@ -139,19 +139,22 @@ function OrbSheet({ item, onClose }) {
 }
 
 // ---- a row of the list
-function OrbRow({ item, phone, onSheet }) {
+// Memoised: the list is made again on every refresh of the app's state, and hundreds of rows drew again each time (and
+// every row whenever the screen changed). A row draws again when what it shows changes, or when it opens or closes.
+const sameValue = (x, y) => Object.is(x, y) || (x !== null && y !== null && typeof x === 'object' && typeof y === 'object' && JSON.stringify(x) === JSON.stringify(y));
+const sameItem = (a, b) => { if (a === b) return true; const ka = Object.keys(a); return ka.length === Object.keys(b).length && ka.every((k) => sameValue(a[k], b[k])); };
+const OrbRow = memo(function OrbRow({ item, phone, onSheet }) {
   const t = useT();
   const locale = useLocale();
-  const route = useStore((s) => s.route);
+  const active = useStore((s) => isOpen(s.route, item));
   const assistant = useStore((s) => s.app?.config?.assistantName ?? 'Orbe');
   const [menu, setMenu] = useState(false);
   const press = usePress(() => (phone ? onSheet(item) : setMenu(true)));
-  const active = isOpen(route, item);
   const p = orbProgress(item, t, { assistant });
   const time = item.at ? shortTime(item.at, { locale, yesterday: t('chats.yesterday') }) : '';
   const strong = item.unread && !item.muted;
   return (
-    <div className={cn('group/row relative flex items-center rounded-xl', active ? 'bg-accent' : 'hover:bg-accent/50')} data-testid={`orb-row-${item.title}`} data-kind={item.kind} data-unread={item.unread || 0} {...press}>
+    <div className={cn('lazy-row group/row relative flex items-center rounded-xl', active ? 'bg-accent' : 'hover:bg-accent/50')} data-testid={`orb-row-${item.title}`} data-kind={item.kind} data-unread={item.unread || 0} {...press}>
       <button type="button" onClick={() => openOrbItem(item)} className={cn('flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-2.5 text-left', phone ? 'py-2.5' : 'py-2')} data-testid={`item-${item.kind === 'session' ? 's' : 'c'}${item.id}`}>
         <OrbAvatar item={item} size={phone ? 46 : 40} />
         <span className="min-w-0 flex-1">
@@ -177,7 +180,7 @@ function OrbRow({ item, phone, onSheet }) {
       {phone ? null : <OrbMenu item={item} open={menu} setOpen={setMenu} className="mr-1" />}
     </div>
   );
-}
+}, (a, b) => a.phone === b.phone && a.onSheet === b.onSheet && a.day === b.day && sameItem(a.item, b.item));
 
 // ---- a project's heading: its initials in colour, its name; folds its chats; its ⋯: new chat there, its info
 function ProjectHead({ group, open, phone }) {
@@ -207,6 +210,20 @@ function ProjectHead({ group, open, phone }) {
       ) : null}
     </div>
   );
+}
+
+// 3.8.1 (H4a): a long list draws its first rows at once and the rest right after, a step each time the window is idle:
+// the app's first screen does not wait for hundreds of rows nobody sees yet.
+function useGrowing(total, first = 40, step = 80) {
+  const [n, setN] = useState(first);
+  useEffect(() => {
+    if (n >= total) return undefined;
+    const idle = window.requestIdleCallback ?? ((fn) => setTimeout(fn, 16));
+    const cancel = window.cancelIdleCallback ?? clearTimeout;
+    const id = idle(() => setN((x) => x + step), { timeout: 300 });
+    return () => cancel(id);
+  }, [n, total]);
+  return n;
 }
 
 // Folded projects, remembered on this device.
@@ -326,8 +343,11 @@ export function OrbInbox({ page = false }) {
   const [sheet, setSheet] = useState(null);
   const sheetItem = sheet ? items.find((x) => x.key === sheet) ?? null : null;
   const parts = useMemo(() => groupOrb(items, { showDone, filter }), [items, showDone, filter]);
-  const rowProps = { phone, onSheet: (x) => setSheet(x.key) };
+  const onSheet = useCallback((x) => setSheet(x.key), []);
+  // the day: «ayer» and the times of the rows move on at midnight
+  const rowProps = { phone, onSheet, day: new Date().toDateString() };
   const agents = useMemo(() => [...new Set(items.map((x) => x.agent).filter(Boolean))], [items]);
+  const shown = useGrowing(parts.pinned.length + parts.groups.reduce((n, g) => n + (folded[g.project ?? ''] ? 0 : g.items.length), 0));
 
   const q = query.trim().toLowerCase();
   const searching = q.length > 0;
@@ -379,12 +399,12 @@ export function OrbInbox({ page = false }) {
       {!results.projects.length && !results.chats.length && !results.tasks.length && !found?.messages?.length ? <p className="text-muted-foreground px-3 py-4 text-sm">{t('chats.noResults')}</p> : null}
     </div>
   );
-  else body = (
+  else { let left = shown; const take = (list) => { const part = list.slice(0, Math.max(0, left)); left -= part.length; return part; }; body = (
     <>
       {parts.pinned.length ? (
         <div className="pt-2" data-testid="orb-pinned">
           <div className="text-muted-foreground flex items-center gap-1.5 px-2 py-1.5 text-[11.5px] font-semibold tracking-wide uppercase"><Pin className="size-3.5" />{t('chats.pinned')}</div>
-          <div className="grid gap-0.5">{parts.pinned.map((x) => <OrbRow key={x.key} item={x} {...rowProps} />)}</div>
+          <div className="grid gap-0.5">{take(parts.pinned).map((x) => <OrbRow key={x.key} item={x} {...rowProps} />)}</div>
         </div>
       ) : null}
       {parts.groups.map((g) => {
@@ -394,7 +414,7 @@ export function OrbInbox({ page = false }) {
           <Collapsible key={id || 'none'} open={open} onOpenChange={(v) => setFolded(id, v)} className="pt-2" data-testid={`orb-group-${g.project ?? 'none'}`}>
             <ProjectHead group={g} open={open} phone={phone} />
             <CollapsibleContent className="grid gap-0.5">
-              {g.items.map((x) => <OrbRow key={x.key} item={x} {...rowProps} />)}
+              {(open ? take(g.items) : []).map((x) => <OrbRow key={x.key} item={x} {...rowProps} />)}
               {!g.items.length && g.hidden ? <p className="text-muted-foreground px-3 py-1 text-xs">{t('orbchats.showDone', { n: g.hidden })}</p> : null}
             </CollapsibleContent>
           </Collapsible>
@@ -407,7 +427,8 @@ export function OrbInbox({ page = false }) {
         </button>
       ) : null}
     </>
-  );
+  ); }
+
 
   return (
     <div className={cn('flex min-h-0 flex-1 flex-col', page && 'bg-background')} data-testid="orb-inbox">

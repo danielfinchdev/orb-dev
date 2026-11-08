@@ -13,6 +13,7 @@ import { accountsOf, accountDir, accountLabel, accounts as allAccounts } from '.
 import { usageReport, modelName } from '../core/budget.mjs';
 import { brainOf } from './orchestrator.mjs';
 import { newProject, syncProjects, checkProjectName, renameProject } from '../core/projects.mjs';
+import { finishProject, finishedProjects, reopenProject, checkDelete, deleteProject, abortDelete } from '../core/project-close.mjs';
 import { PRODUCT } from '../core/product.mjs';
 import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../core/schedules.mjs';
 import { oneLine, redactSecrets, localStamp } from '../core/safety.mjs';
@@ -25,7 +26,7 @@ import * as github from './github.mjs';
 import * as installer from './installer.mjs';
 import * as expert from './expert.mjs';
 import { adbStatus, ensureAdb } from './android.mjs';
-import { mcpFolder } from './mcp-folder.mjs';
+import { extensionMethods } from './api-extensions.mjs';
 import { layoutPlan, layoutApply, guardOutside } from './workspace-layout.mjs';
 import { modelCatalog, chooseModel, LEVELS, REASONING_LEVELS, levelsOf } from './catalog.mjs';
 import { whiteboard } from './whiteboard.mjs';
@@ -120,6 +121,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     try { writeLog(board, 'general', { ...entry, tema: tr('sys.logs.okGeneralTopic', { project: where, ids: done.map((t) => `#${t.id}`).join(', ') }) }, author); } catch (error) { log(`bitácora general del OK: ${error.message}`); }
     return done.map((t) => t.id);
   };
+  // 3.8.1: a coordinator in the middle of a turn in a conversation of the project (it could create a task right after).
+  const coordinatorBusy = (name) => board.all('SELECT id FROM conversations WHERE project = ?', name).some((c) => orchestrator?.state(c.id)?.busy);
   // What the other parts of the API share.
   const shared = { board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, project, conversationId };
   const data = dataApi(shared); // 3.6 (WS5): backups
@@ -147,7 +150,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     // 3.8: the folders Orb 3.7 kept at the top of the workspace: what would happen to each, and the user's choice
     // (nothing moves before it; src/core/core-folder.mjs).
     'app.layoutPlan': () => layoutPlan(),
-    'app.layoutApply': ({ choices }) => layoutApply(choices, { emit, log }),
+    'app.layoutApply': ({ choices }) => layoutApply(choices, { emit, log, board }),
     'conversations.list': () => conversationList(),
     // 3.2: completed by hand (or open again): a task («t<id>»), a direct conversation («s<id>») or a conversation with the
     // assistant («c<id>»).
@@ -203,6 +206,31 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return p;
     },
     'projects.setActive': ({ name }) => board.setActiveProject(name ? project(name).name : '', 'usuario'),
+    // 3.8.1: the end of a project (src/core/project-close.mjs). Finished: it leaves Orb, its folder stays (listed in
+    // «Finalizados» to reopen it). Deleted: its folder goes too. main.mjs: projects.deleteCheck (the master password; from
+    // then on nothing of the project starts, and it returns a one-off ticket), the Recycle Bin, then projects.delete with
+    // that ticket (trashed; or, when the Recycle Bin could not take it and the user chose so, the engine deletes it for
+    // good) or projects.deleteAbort (cancelled: it works again, its schedules back on).
+    'projects.finish': ({ name }) => { const p = project(name); return finishProject(board, p.name, 'usuario', { category: categoryOf(realHome, p.path), busy: coordinatorBusy }); },
+    'projects.finished': () => finishedProjects(board).map(({ key, name, path: folder, category, at }) => ({ key, name, path: folder, category: category ?? null, at })),
+    'projects.reopen': ({ key }) => reopenProject(board, str(key, 'proyecto', 2000), 'usuario').name,
+    'projects.deleteCheck': ({ name }) => {
+      const out = checkDelete(board, ctx.home, project(name).name, { busy: coordinatorBusy });
+      // Its direct conversations' processes (idle, but working in that folder) are closed, so the folder can go.
+      for (const s of board.all('SELECT id FROM sessions WHERE project = ?', out.name)) sessions.closeLive(s.id);
+      return out;
+    },
+    'projects.delete': ({ name, ticket, trashed }) => {
+      const p = project(name);
+      const stop = (n) => {
+        for (const t of board.all("SELECT id FROM tasks WHERE project = ? AND status = 'running'", n)) { try { scheduler.cancel(t.id, 'usuario'); } catch { /* finished meanwhile */ } }
+        for (const s of board.all('SELECT id FROM sessions WHERE project = ?', n)) { sessions.stop(s.id); sessions.closeLive(s.id); }
+      };
+      const out = deleteProject(board, ctx.home, p.name, 'usuario', { ticket: typeof ticket === 'string' ? ticket : '', trashed: trashed === true, stop });
+      clearProjectIcon(p);
+      return out;
+    },
+    'projects.deleteAbort': ({ name, ticket }) => abortDelete(board, str(name, 'proyecto', 200), typeof ticket === 'string' ? ticket : ''),
     // 3.2: the projects' icons (their favicon or app icon, or one chosen here) for the sidebar: { name: dataUrl | null }.
     'projects.icons': () => Object.fromEntries(board.projects().map((x) => [x.name, projectIcon(x)])),
     'projects.setIcon': ({ name, path: file }) => { const p = project(name); const icon = setProjectIcon(p, str(file, 'imagen', 1000)); board.changed('projects'); return icon; },
@@ -246,8 +274,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
       return board.addProject({ name: oneLine(name || path.basename(folder), 60), path: folder }, 'usuario', { fromUser: true });
     },
 
-    // Orb's own folders, managed only from Ajustes: the MCP servers' folder and Android's tools.
-    'mcp.folder': () => mcpFolder(board.projects()),
+    // Android's tools, managed only from Ajustes (the skills and MCP servers of core: api-extensions.mjs).
     'android.status': () => adbStatus(),
     'android.install': () => ensureAdb({ log, force: true }),
 
@@ -609,6 +636,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit, log, 
     ...inboxMethods(shared),
     ...data.methods,
     ...masterMethods({ ...shared, onUnlocked }),
+    ...extensionMethods(shared),
     ...appMethods({ home: ctx.home, version }) // 3.8.1: this PC's tools (terminal, editors, feedback…)
   };
   return {

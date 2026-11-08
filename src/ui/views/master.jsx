@@ -151,12 +151,13 @@ export function MasterLocked({ onDone, state = null }) {
 }
 
 // Before a guarded action: the password, once every 5 minutes. → { unlock, until } or null.
-setMasterAsker((action) => form(tNow('master.askTitle'), {
-  description: `${tNow(`master.ask.${action}`)} ${tNow('master.askNote', { n: 5 })}`,
+// 3.8.1: an action that asks every time (fresh: deleting a project) says so instead, and its token is for it alone.
+setMasterAsker((action, { fresh = false } = {}) => form(tNow('master.askTitle'), {
+  description: `${tNow(`master.ask.${action}`)} ${fresh ? tNow('master.askEveryTime') : tNow('master.askNote', { n: 5 })}`,
   initial: { password: '' },
   body: (v, set) => <Field label={tNow('master.password')}><Input type="password" autoComplete="current-password" autoFocus value={v.password} onChange={(e) => set({ password: e.target.value })} data-testid="master-ask" /></Field>,
   ok: tNow('master.unlock'),
-  onOk: (v) => call('master.unlock', { password: v.password })
+  onOk: (v) => call('master.unlock', { password: v.password, ...(fresh ? { purpose: action } : {}) })
 }));
 // The window locked (Windows' lock screen), the password changed, or the engine says so: the unlock goes.
 if (typeof window !== 'undefined') bridge.on?.('master:locked', () => dropUnlock());

@@ -1,9 +1,9 @@
-// Settings: the assistant, its brain, how tasks run, usage caps, extra MCP connectors and the assistant's folder.
+// Settings: the assistant, its brain, how tasks run, usage caps, skills and MCP servers and the assistant's folder.
 // 3.6 (DESIGN-SYSTEM §2.3): six sections — General, Magic Link (Dispositivos), Agentes y uso, Datos, Avanzado and
 // Acerca de.
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { DatabaseBackup, Settings, FlaskConical, FolderOpen, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, Wrench, ChevronRight, SlidersHorizontal, Radar, Cpu, Info, ExternalLink, ShieldBan, KeyRound, RotateCcw } from 'lucide-react';
+import { DatabaseBackup, Settings, FlaskConical, FolderOpen, Plus, Trash2, ArrowLeftRight, Smartphone, Globe, PictureInPicture2, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, Wrench, ChevronRight, SlidersHorizontal, Radar, Cpu, Info, ExternalLink, ShieldBan, RotateCcw, Puzzle } from 'lucide-react';
 import { ToolIcon } from '@/components/agent-icon.jsx';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, APPEARANCE_DEFAULTS } from '../../core/appearance.mjs';
 import { PRODUCT, AUTHOR } from '../../core/product.mjs';
@@ -25,7 +25,7 @@ import { useUpdate, updateActions, notesUrl } from '@/components/update-card.jsx
 import { play } from '@/lib/sounds.js';
 import { MagicLinkPanel, SubSection } from './magic-link.jsx';
 import { DataCards } from './data.jsx';
-import { connectorKeys } from './master.jsx';
+import { ExtensionsPanel } from './extensions.jsx';
 import { unlockCore } from '@/lib/core-access.js';
 import { DEFAULT_PROTECTED } from '../../core/layout.mjs';
 
@@ -216,76 +216,6 @@ const SPEND_PRESETS = [
   { maxParallel: 4, perAgent: 2, timeoutMinutes: 90, stopAt: 0.96, maxTasks: 30, maxHeavy: 10, high: false, maxPerTask: 6, trusted: true, review: true },
   { maxParallel: 6, perAgent: 2, timeoutMinutes: 120, stopAt: 0.99, maxTasks: 50, maxHeavy: 20, high: false, maxPerTask: 10, trusted: true, review: true }
 ];
-
-function McpCard({ c }) {
-  const t = useT();
-  const add = () => form(t('settings.mcpAddTitle'), {
-    description: t('settings.mcpAddDesc'),
-    initial: { name: '', command: '', args: '', agents: '' },
-    body: (v, set) => (<>
-      <Field label={t('settings.mcpName')}><Input autoFocus value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder={t('settings.mcpNamePh')} /></Field>
-      <Field label={t('settings.mcpCommand')}><Input value={v.command} onChange={(e) => set({ command: e.target.value })} placeholder="npx" /></Field>
-      <Field label={t('settings.mcpArgs')} hint={t('settings.mcpArgsHint')}><Input value={v.args} onChange={(e) => set({ args: e.target.value })} placeholder="@playwright/mcp@latest" /></Field>
-      <Field label={t('settings.mcpAgents')} hint={t('settings.mcpAgentsHint')}><Input value={v.agents} onChange={(e) => set({ agents: e.target.value })} /></Field>
-    </>),
-    ok: t('settings.add'),
-    onOk: async (v) => {
-      const entry = { name: v.name.trim(), command: v.command.trim(), args: v.args.trim() ? v.args.trim().split(/\s+/) : [], agents: v.agents.split(',').map((x) => x.trim()).filter(Boolean), enabled: true };
-      const config = await call('config.save', { patch: { mcpServers: [...c.mcpServers, entry] } });
-      setState({ app: { ...getState().app, config } });
-      return true;
-    }
-  });
-  // Orb's MCP folder (core\mcp) and the projects that are MCP servers: one click adds each with the command that starts it.
-  const [folder, setFolder] = useState(null);
-  const loadFolder = () => call('mcp.folder').then(setFolder).catch(() => setFolder(null));
-  useEffect(() => { if (!bridge.mobile) loadFolder(); }, [c.mcpServers.length]);
-  const use = async (s) => {
-    const entry = { name: s.name, command: s.command, args: s.args, agents: [], enabled: true };
-    const config = await act(call('config.save', { patch: { mcpServers: [...c.mcpServers, entry] } }), t('settings.mcpAdded', { name: s.name }));
-    if (config) setState({ app: { ...getState().app, config } });
-  };
-  return (
-    <Card>
-      <CardHeader><CardTitle>{t('settings.mcp')}</CardTitle><CardDescription>{t('settings.mcpDesc')}</CardDescription></CardHeader>
-      <CardContent className="grid gap-2">
-        {folder ? (
-          <div className="grid min-w-0 gap-2" data-testid="mcp-folder">
-            <div className="flex min-w-0 items-center gap-2">
-              <div className="grid min-w-0 flex-1"><div className="text-muted-foreground text-xs">{t('settings.mcpFolder')}</div><PathText path={folder.dir} className="text-xs" /></div>
-              <BubbleTip title={t('settings.open')}><Button size="icon-sm" variant="ghost" onClick={() => act(bridge.openPath(folder.dir))} aria-label={t('settings.open')}><FolderOpen /></Button></BubbleTip>
-            </div>
-            {[...folder.servers, ...(folder.projects ?? []).map((s) => ({ ...s, fromProject: true }))].map((s, i, all) => (
-              <div key={s.dir} className="grid min-w-0 gap-1">
-                {s.fromProject && !all[i - 1]?.fromProject ? <div className="text-muted-foreground mt-1 text-xs">{t('settings.mcpProjects')}</div> : null}
-                <div className="flex min-w-0 items-center gap-3 rounded-lg border border-dashed px-3 py-2" data-testid={s.fromProject ? 'mcp-project' : undefined}>
-                  <div className="min-w-0 flex-1"><div className="text-sm">{s.name}</div><div className="text-muted-foreground truncate font-mono text-xs">{s.command ? `${s.command} ${s.args.join(' ')}` : t('settings.mcpNoStart')}</div></div>
-                  {s.configured ? <span className="text-muted-foreground text-xs">{t('settings.mcpInUse', { name: s.configured })}</span>
-                    : s.command ? <Button size="sm" variant="outline" onClick={() => use(s)}><Plus />{t('settings.mcpUse')}</Button> : null}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : null}
-        {c.mcpServers.length ? c.mcpServers.map((s, i) => (
-          <div key={s.name} className="flex min-w-0 items-center gap-3 rounded-lg border px-3 py-2">
-            <div className="min-w-0 flex-1"><div className="text-sm">{s.name}</div><div className="text-muted-foreground truncate font-mono text-xs">{s.command} {(s.args ?? []).join(' ')}</div></div>
-            <span className="text-muted-foreground text-xs">{s.agents?.length ? s.agents.join(', ') : t('settings.all')}</span>
-            {!bridge.mobile ? <BubbleTip title={t('master.keys')}><Button variant="ghost" size="icon-sm" aria-label={t('master.keys')} onClick={() => connectorKeys(s)} data-testid="mcp-keys"><KeyRound /></Button></BubbleTip> : null}
-            <Button variant="danger" size="icon-sm" onClick={async () => {
-              if (!await confirm(t('settings.mcpRemoveTitle'), t('settings.mcpRemoveBody', { name: s.name }), { ok: t('settings.remove'), danger: true })) return;
-              // 3.8: a connector with keys goes (and its keys with it) only after the master password.
-              const unlock = Object.keys(s.env ?? {}).length ? await unlockCore('connector') : null;
-              if (Object.keys(s.env ?? {}).length && !unlock) return;
-              save({ mcpServers: c.mcpServers.filter((_, j) => j !== i) }, undefined, unlock);
-            }}><Trash2 /></Button>
-          </div>
-        )) : <p className="text-muted-foreground text-sm">{t('settings.none')}</p>}
-      </CardContent>
-      <CardFooter><Button size="sm" variant="outline" onClick={add}><Plus />{t('settings.mcpAdd')}</Button></CardFooter>
-    </Card>
-  );
-}
 
 // New versions of Orb (GitHub Releases): the installed version, «Buscar actualizaciones» and the same steps as the card.
 function UpdatesCard() {
@@ -656,7 +586,7 @@ function AboutCard({ version }) {
   const t = useT();
   return (
     <Card data-testid="settings-about">
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Robot size={40} /><div><CardTitle>{PRODUCT.name} {version}</CardTitle></div></CardHeader>
+      <CardHeader className="flex-row items-center gap-3"><img src="./icon-o.png" alt="" className="size-10 shrink-0 rounded-[22%]" data-testid="about-icon" /><div><CardTitle>{PRODUCT.name} {version}</CardTitle></div></CardHeader>
       <CardContent className="grid gap-1 text-sm">
         <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">{t('about.developer')}</span>
           <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="hover:text-primary inline-flex cursor-pointer items-center gap-1.5 font-medium" data-testid="about-github"><ToolIcon tool="gh" className="size-4" />@{AUTHOR.github}<ExternalLink className="text-muted-foreground size-3.5" /></button>
@@ -681,9 +611,11 @@ const SECTIONS = [
   { id: 'magiclink', icon: Radar, groups: ['dispositivos'],
     cards: () => <MagicLinkPanel grouped phoneAccess={<MobileCard />} /> },
   { id: 'agentes', icon: Cpu, cards: (c) => <><ChatCard c={c} /><TasksCard c={c} />{bridge.mobile ? null : <TestCard />}</> },
+  // 3.8.1: every skill and MCP server of core (src/ui/views/extensions.jsx); this PC only.
+  { id: 'extensiones', icon: Puzzle, pcOnly: true, cards: () => <ExtensionsPanel /> },
   { id: 'datos', icon: DatabaseBackup, cards: () => <DataCards /> },
   { id: 'avanzado', icon: Wrench, groups: () => ['herramientas', ...(fullPc() ? ['experto'] : [])],
-    cards: (c) => <><SubSection id="herramientas" title={t('settings.group.herramientas')}><BrowserCard c={c} /><McpCard c={c} /><ProtectedCard c={c} /><AndroidCard /></SubSection>
+    cards: (c) => <><SubSection id="herramientas" title={t('settings.group.herramientas')}><BrowserCard c={c} /><ProtectedCard c={c} /><AndroidCard /></SubSection>
       {/* 2.7.3: Orb Light (the portable .exe) leaves out God mode. */}
       {fullPc() ? <SubSection id="experto" title={t('settings.group.experto')}><ExpertCard c={c} /></SubSection> : null}</> },
   { id: 'acerca', icon: Info, groups: ['contribuye', 'apps'],
@@ -691,7 +623,7 @@ const SECTIONS = [
 ];
 // The names of before 3.6 (links in tutorials, notices and the sidebar) → [section, part].
 const ALIASES = { conexiones: ['magiclink', 'dispositivos'], movil: ['magiclink', 'dispositivos'], apariencia: ['general', 'apariencia'], actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'],
-  herramientas: ['avanzado', 'herramientas'], experto: ['avanzado', 'experto'], monitor: ['avanzado', 'herramientas'], contribuye: ['acerca', 'contribuye'], apps: ['acerca', 'apps'] };
+  herramientas: ['avanzado', 'herramientas'], mcp: ['extensiones'], skills: ['extensiones'], experto: ['avanzado', 'experto'], monitor: ['avanzado', 'herramientas'], contribuye: ['acerca', 'contribuye'], apps: ['acerca', 'apps'] };
 export function resolveSection(open) {
   if (!open || open === true) return ['general', null];
   const [id, part = null] = String(open).split(':');
@@ -725,7 +657,7 @@ export function SettingsDialog() {
     return () => { stop(); window.removeEventListener('wheel', stop); window.removeEventListener('touchmove', stop); window.removeEventListener('keydown', stop); window.removeEventListener('pointerdown', stop, { capture: true }); };
   }, [open, part, openedAt]);
   if (!app) return null;
-  const section = SECTIONS.find((s) => s.id === wanted) ?? SECTIONS[0];
+  const section = SECTIONS.find((s) => s.id === wanted && (!s.pcOnly || !bridge.mobile)) ?? SECTIONS[0];
   const c = app.config;
   return (
     <Dialog open={Boolean(open)} onOpenChange={(o) => { if (!o) closeSettings(); }}>
@@ -736,7 +668,7 @@ export function SettingsDialog() {
         <div className="flex min-h-0 flex-1">
             <nav className="flex w-56 shrink-0 flex-col max-sm:w-16" aria-label={t('settings.title')}>
               <div className="grid min-h-0 flex-1 content-start gap-1 overflow-y-auto px-3 pt-4 pb-4">
-                {SECTIONS.map((sec) => {
+                {SECTIONS.filter((sec) => !sec.pcOnly || !bridge.mobile).map((sec) => {
                   const { id, icon: Icon } = sec;
                   const on = section.id === id;
                   const groups = on ? groupsOf(sec) : [];

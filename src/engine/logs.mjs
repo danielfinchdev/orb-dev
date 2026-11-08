@@ -36,6 +36,8 @@ function logOf(board, project, file) {
   const found = findLog(board, project);
   if (file === undefined || file === null || file === '') return found;
   const want = String(file).trim().toLowerCase();
+  // GENERAL.md by its name is the general log itself.
+  if (found[0] === 'general' && want === path.basename(ctx.paths.generalLog).toLowerCase()) return found;
   const hit = found[0] === 'general' ? ownLogFiles().find((n) => n.toLowerCase() === want) : null;
   if (!hit) throw new Error(tr('sys.logs.noFile', { file: oneLine(file, 120), files: ownLogFiles().join(', ') || '—' }));
   return [`general/${hit}`, path.join(path.dirname(ctx.paths.generalLog), hit)];

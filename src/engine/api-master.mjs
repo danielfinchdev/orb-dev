@@ -8,7 +8,7 @@ import { ctx, saveConfig, tr } from '../core/context.mjs';
 import { paths, readKey } from '../core/home.mjs';
 import { Master, MasterError, mirrorTo, restoreMissing, checkPassword, MIN_LENGTH, UNLOCK_MS } from '../core/master.mjs';
 import { sealConnectors, connectorSecrets, refOf, secretId, ENV_NAME, bindMissing } from '../core/connector-secrets.mjs';
-import { needsUnlock } from '../core/permissions.mjs';
+import { needsUnlock, FRESH_UNLOCK, FRESH_PURPOSES } from '../core/permissions.mjs';
 import { isRecoveryCode, hasRecovery } from '../core/backup.mjs';
 import { str } from './api-common.mjs';
 import { scrubVaultedSecrets, DONE_AT } from '../core/migrate-38.mjs';
@@ -74,7 +74,9 @@ export function checkUnlock(method, params) {
   if (!needsUnlock(method, params, ctx.config)) return;
   const m = ctx.master;
   if (!m?.hasPassword()) throw userError(m?.state().lost ? 'msg.master.lost' : 'msg.master.createFirst', {}, { reason: 'unlock' });
-  if (!m.checkToken(params?.unlock)) throw userError('msg.master.needUnlock', {}, { reason: 'unlock' });
+  // 3.8.1: a token for one action (FRESH_UNLOCK) opens it once: it is used up here.
+  const purpose = FRESH_UNLOCK[method] ?? null;
+  if (!m.checkToken(params?.unlock, purpose, { consume: Boolean(purpose) })) throw userError('msg.master.needUnlock', {}, { reason: 'unlock' });
 }
 
 export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => {} }) {
@@ -105,12 +107,13 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
       if (wasLocked) opened(); else migrateSecrets(board, m, { log, emit });
       return m.issue();
     },
-    'master.unlock': async ({ password: p }) => {
+    // purpose: one of FRESH_PURPOSES (an action that asks every time): a token for that action only.
+    'master.unlock': async ({ password: p, purpose }) => {
       const m = master(); const wasLocked = !m.unlocked();
       const r = await m.verify(password(p), 'pc');
       if (!r.ok) throw refused(r);
       if (wasLocked) { log('secretos: abiertos con la contraseña maestra'); opened(); }
-      return m.issue();
+      return m.issue(FRESH_PURPOSES.includes(purpose) ? purpose : null);
     },
     // The window locked or closed (main.mjs), or «Bloquear» by hand: every token goes.
     'master.lock': () => { master().lock(); emit('master:locked', {}); return true; },

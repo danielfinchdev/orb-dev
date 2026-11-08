@@ -16,6 +16,7 @@ import { newProject } from '../core/projects.mjs';
 import { createSchedule, EVERY } from '../core/schedules.mjs';
 import { mustOwnTask, ownsTask } from '../core/permissions.mjs';
 import { redeem, ticketFromArgs } from './auth-client.mjs';
+import { draftExtension, requestActivation, fileList, REQUESTS } from '../core/extensions.mjs';
 
 const AUTH = await redeem(process.env.ORB_AUTH_PIPE, ticketFromArgs());
 // An agent that stopped expanding ${VAR} in its MCP config would leave every tool «not signed»: said in its log.
@@ -100,6 +101,8 @@ function sendMessage(a) {
   if (owner && !['orb', 'usuario', 'all'].includes(a.to) && owner !== a.to) refuse('msg.authz.wrongAgent', { id: task, agent: owner });
   return board.send({ ...a, task_id: task, from: ME, from_task: TASK_ID });
 }
+// 3.8.1: the general log in core (moved there, or a new workspace) or kept at the top by the user (home.mjs › paths).
+const generalInCore = (() => { const rel = path.relative(ctx.paths.core, ctx.paths.generalLog); return Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel); })();
 // 3.8: the logs of the projects its conversation works on, and the general one.
 function myLog(project) {
   const [name] = findLog(board, project);
@@ -179,6 +182,49 @@ function askUser(a) {
   const list = board.settingJson(QUESTIONS) ?? [];
   board.settingJson(QUESTIONS, [...list, { question, header: clean(a.header, 14), options, multi: a.multi === true }].slice(-3));
   return `Pregunta mostrada a ${USER}. Termina tu turno ahora (una línea como mucho, sin repetir las opciones): su respuesta llegará como su próximo mensaje.`;
+}
+
+// 3.8.1: what this agent made for core (src/core/extensions.mjs). The requests live in the database (agents never write
+// it): who made each one, so only that agent asks for it to be turned on.
+const myScopeOf = () => ({ agent: ME, task: TASK_ID, conversation: BOSS ? CONV : TASK_ID ? scopeOf(TASK_ID) : null, session: SIGNED_SESSION ?? null });
+const requests = () => { const r = board.settingJson(REQUESTS); return Array.isArray(r) ? r : []; };
+// The agent that made a request, or one working in the same conversation (the coordinator makes it, a task's agent writes it).
+const isMine = (r, mine = myScopeOf()) => {
+  const by = r?.by ?? {};
+  if (by.conversation != null && by.conversation === mine.conversation) return true;
+  return Boolean(r) && ['agent', 'task', 'conversation', 'session'].every((k) => (by[k] ?? null) === (mine[k] ?? null));
+};
+const draftReply = (req) => ({ id: req.id, carpeta: req.dir, archivos: fileList(req.dir), siguiente: `Escribe ${req.kind === 'skill' ? 'la skill' : 'el servidor'} en esa carpeta (solo ahí) y, cuando esté listo y probado, llama a orb_request_activation con id ${req.id}.` });
+function draft(kind, a) {
+  const update = a.mejorar === true ? String(a.name ?? '').trim() : null;
+  // Improving a server that holds keys waits for the user (its copy never carries them): once allowed, the same call
+  // gives the folder.
+  if (update) {
+    const ready = requests().find((r) => r.kind === kind && r.update === update && isMine(r) && (r.status === 'drafting' || r.status === 'asking'));
+    if (ready?.status === 'drafting' && ready.allowed) return draftReply(ready);
+    if (ready?.status === 'asking') return `Sigue esperando a que ${USER} lo permita. Termina tu turno; cuando lo permita, vuelve a llamar a orb_create_${kind} con mejorar: true.`;
+  }
+  const req = draftExtension(ctx.paths.core, { kind, name: a.name, description: a.description, language: a.lenguaje === 'python' ? 'python' : 'node', update, by: myScopeOf(), config: ctx.config, tr });
+  board.settingJson(REQUESTS, [...requests(), req].slice(-50));
+  if (req.status === 'asking') {
+    const what = tr('ext.card.mcpKeys', { agent: ME, name: req.name });
+    board.addChat('system', what, { kind: 'extension', extension: req.id, ext: req.kind, name: req.name, description: req.description, update: req.update, ask: 'edit', status: 'pending' }, myScopeOf().conversation);
+    board.notice(what, 'info');
+    return `«${req.name}» guarda claves: ${USER} tiene que permitir que lo mejores (las claves nunca se copian; la versión nueva usará las de Orb). Termina tu turno; cuando lo permita, vuelve a llamar a orb_create_${kind} con mejorar: true.`;
+  }
+  return draftReply(req);
+}
+function askActivation(a) {
+  const list = requests();
+  const i = list.findIndex((r) => r.id === String(a.id ?? ''));
+  const mine = myScopeOf();
+  if (i < 0 || !isMine(list[i], mine)) refuse('ext.err.noRequest');
+  const req = requestActivation(ctx.paths.core, list[i], { tr });
+  board.settingJson(REQUESTS, list.map((r, j) => (j === i ? req : r)));
+  const what = tr(req.kind === 'skill' ? (req.update ? 'ext.card.skillUpdate' : 'ext.card.skill') : (req.update ? 'ext.card.mcpUpdate' : 'ext.card.mcp'), { agent: ME, name: req.name });
+  board.addChat('system', what, { kind: 'extension', extension: req.id, ext: req.kind, name: req.name, description: req.description, files: req.files.slice(0, 20), total: req.total, asks: req.asks, deps: req.deps, update: req.update, status: 'pending' }, mine.conversation);
+  board.notice(what, 'info');
+  return `Pedido a ${USER}: le sale una tarjeta para revisarlo y activarlo. Orb ha guardado una copia de lo que hay ahora: lo que cambies en la carpeta a partir de aquí no se activa (si hace falta, vuelve a pedirlo).`;
 }
 
 // 2.7: the advice to use the Pizarra, as a card with its button, below the answer of this turn (like orb_ask).
@@ -290,6 +336,17 @@ const tools = [
     // 3.1: a worker's message carries its own task when it names none, so Orb knows who sent it (and does not hand it
     // back to the same task).
     run: (a) => sendMessage(a) },
+  // 3.8.1: a skill or an MCP server made from the chat (src/core/extensions.mjs): a folder in core\preparacion to write,
+  // then the user turns it on from the app. Nothing of core is written otherwise.
+  { name: 'orb_create_skill', description: `Prepara una skill nueva de Orb (o una versión mejorada de una que ya existe, con mejorar: true) cuando ${USER} la pida. Devuelve la carpeta donde escribir su SKILL.md (con name y description en el encabezado) y sus archivos de apoyo. Al terminar llama a orb_request_activation: ${USER} la revisa y la activa desde la app.`,
+    inputSchema: { type: 'object', required: ['name', 'description'], properties: { name: str('Nombre: minúsculas, números y guiones (p. ej. revisar-facturas)'), description: str('Qué hace y cuándo usarla, en una o dos frases (los agentes la eligen por esto)'), mejorar: { type: 'boolean', description: 'true para preparar una versión nueva de una skill que ya está en Orb (parte de su copia actual)' } } },
+    run: (a) => draft('skill', a) },
+  { name: 'orb_create_mcp', description: `Prepara un servidor MCP nuevo de Orb (o una versión mejorada de uno que ya existe, con mejorar: true) cuando ${USER} lo pida. Devuelve la carpeta donde escribir su código (con un punto de partida en Node o Python). Puedes instalar sus dependencias ahí para probarlo, pero no se copian: Orb las instala al activarlo. Si guarda claves, mejorarlo necesita el permiso de ${USER}. Al terminar llama a orb_request_activation: ${USER} lo revisa y lo activa desde la app.`,
+    inputSchema: { type: 'object', required: ['name', 'description'], properties: { name: str('Nombre: letras, números, - y _ (p. ej. gmail-multi-mcp)'), description: str('Qué hace, en una o dos frases'), lenguaje: { type: 'string', enum: ['node', 'python'], description: 'Por defecto node' }, mejorar: { type: 'boolean', description: 'true para preparar una versión nueva de un servidor que ya está en Orb (parte de su copia actual)' } } },
+    run: (a) => draft('mcp', a) },
+  { name: 'orb_request_activation', description: `Pide a ${USER} que active lo que preparaste con orb_create_skill u orb_create_mcp (le sale una tarjeta en la app). Compruébalo antes: se activa la copia que Orb guarda al pedirlo.`,
+    inputSchema: { type: 'object', required: ['id'], properties: { id: str('El id que devolvió orb_create_skill u orb_create_mcp') } },
+    run: (a) => askActivation(a) },
   { name: 'orb_read_messages', description: 'Lee tus mensajes sin leer (y los marca como leídos).', inputSchema: { type: 'object', properties: {} },
     run: () => { const rows = board.inbox(ME, true, mayRead, INBOX); return rows.length ? rows : 'Sin mensajes nuevos.'; } },
   ...(BOSS ? [
@@ -323,7 +380,7 @@ const tools = [
     { name: 'orb_read_log', description: `Lee una bitácora: la de un proyecto de esta conversación o la "general" (está en ${path.dirname(ctx.paths.generalLog)}). Devuelve las entradas más recientes completas. Sin project: lista las bitácoras.`, readOnly: true,
       inputSchema: { type: 'object', properties: { project: str('Proyecto registrado o "general"'), archivo: str('Con "general": otro archivo .md de esa carpeta (p. ej. bitacora_project.md)'), chars: { type: 'integer', minimum: 1000, maximum: 40000 }, entera: { type: 'boolean' } } },
       run: (a) => (a.project ? readLog(board, myLog(a.project), { chars: a.chars, whole: a.entera === true, file: a.archivo }) : listLogs()) },
-    { name: 'orb_write_log', description: `Añade una entrada al FINAL de una bitácora (un proyecto de esta conversación o "general"), firmada y con el formato estándar. Nunca borra. Sin contraseñas ni datos personales. La general está en ${path.dirname(ctx.paths.generalLog)} (core): escribe en ella solo con esta herramienta.`,
+    { name: 'orb_write_log', description: `Añade una entrada al FINAL de una bitácora (un proyecto de esta conversación o "general"), firmada y con el formato estándar. Nunca borra. Sin contraseñas ni datos personales. La general está en ${path.dirname(ctx.paths.generalLog)}${generalInCore ? ' (core): escribe en ella solo con esta herramienta' : ''}.`,
       inputSchema: { type: 'object', required: ['project', 'tema', 'hecho'], properties: { project: str('Proyecto o "general"'), archivo: str('Con "general": otro archivo .md de esa carpeta (p. ej. bitacora_project.md)'), tema: str('Tema corto'), pedido: str('Qué se pidió'), hecho: str('Qué se decidió o hizo'), revertir: str('Cómo revertirlo'), estado: str('Estado / pendiente') } },
       run: (a) => writeLog(board, myLog(a.project), a, brainAuthor()) },
     { name: 'orb_schedule', description: `Programa una tarea que se repite (p. ej. cada lunes a las 9 revisar dependencias). ${USER} la aprueba una vez en la app antes de que funcione sola.`,

@@ -2,8 +2,9 @@
 // vector in build/icon-src/: orbe-style2.svg (the whole word) and orbe-style2-small.svg (the «o» with the orb, used at
 // 32 px and less, where the word can't be read). This script renders them, with no extra dependencies, into:
 //   build/icons/NxN.png (16 to 1024 px, Linux), build/icon.png (512 px: window, notifications), build/icon.ico (every
-//   size Windows uses: .exe, installer, taskbar), src/ui/public/icon.png (favicon, PWA, Android notifications) and
-//   the Android launcher icons (see below).
+//   size Windows uses: .exe, installer, taskbar, the window on Windows), src/ui/public/icon.png (favicon, PWA, the
+//   photo of Android notifications), src/ui/public/icon-o.png (the short «o•»: «Acerca de»), src/ui/public/icon-maskable.png (PWA), the Android launcher icons and
+//   the small notification icon of Android (see below).
 // It understands only what those SVGs use: <linearGradient> (userSpaceOnUse), <rect rx>, <circle> and <path> with
 // absolute M/L/Q/C/Z. The letters are Outfit SemiBold (OFL) outlines.                    Usage: npm run icon
 import fs from 'node:fs';
@@ -105,6 +106,7 @@ function render({ size: vb, layers }, size) {
     for (let sx = 0; sx < W; sx++) {
       if (top[sx] < 0) continue;
       const c = layers[top[sx]].paint((sx + 0.5) / k, y / k), o = (py * size + Math.floor(sx / ss)) * 4;
+      if (!c) continue; // a layer that cuts (paint gives null): what it covers stays transparent
       acc[o] += c[0]; acc[o + 1] += c[1]; acc[o + 2] += c[2]; acc[o + 3]++;
     }
   }
@@ -138,8 +140,19 @@ fs.mkdirSync(path.join(ROOT, 'build', 'icons'), { recursive: true });
 for (const [size, png] of pngs) fs.writeFileSync(path.join(ROOT, 'build', 'icons', `${size}x${size}.png`), png);
 fs.writeFileSync(path.join(ROOT, 'build', 'icon.png'), pngs.get(512));
 fs.writeFileSync(path.join(ROOT, 'src', 'ui', 'public', 'icon.png'), pngs.get(512));
+// The short «o•» for the window's own small places (the «Acerca de» card): 128 px, sharp at 40 px on any screen.
+fs.writeFileSync(path.join(ROOT, 'src', 'ui', 'public', 'icon-o.png'), render(small, 128));
 fs.writeFileSync(path.join(ROOT, 'build', 'icon.ico'), ico(ICO_SIZES.map((size) => ({ size, png: pngs.get(size) }))));
-console.log(`✔ build/icons (${PNG_SIZES.join(', ')} px), build/icon.png, build/icon.ico y src/ui/public/icon.png`);
+console.log(`✔ build/icons (${PNG_SIZES.join(', ')} px), build/icon.png, build/icon.ico, src/ui/public/icon.png e icon-o.png`);
+// The PWA's «maskable» icon (the phone's browser crops it to its own shape): the tile's gradient edge to edge and the word
+// at 80 %, inside the safe circle of 80 % of the side that every mask keeps.
+{
+  const t = big.layers.find((l) => l.tag === 'rect'), m = big.layers.filter((l) => l !== t), h = big.size / 2;
+  const full = [[[0, 0], [big.size, 0], [big.size, big.size], [0, big.size]]];
+  const at = (layer, k) => ({ ...layer, polys: layer.polys.map((poly) => poly.map(([x, y]) => [h + (x - h) * k, h + (y - h) * k])) });
+  fs.writeFileSync(path.join(ROOT, 'src', 'ui', 'public', 'icon-maskable.png'), render({ size: big.size, layers: [{ ...t, polys: full }, ...m.map((l) => at(l, 0.8))] }, 512));
+  console.log('✔ src/ui/public/icon-maskable.png (PWA, maskable)');
+}
 
 // ---- Android launcher (android-app/android/app/src/main/res/mipmap-*) from the same whole-word drawing ----
 // Android sizes icons in dp, so every density uses the whole word. Legacy icons (before Android 8): the tile as is
@@ -165,3 +178,33 @@ for (const [density, k] of Object.entries(DENSITIES)) {
   for (const [name, [dp, svg]] of Object.entries(android)) fs.writeFileSync(path.join(dir, `${name}.png`), render(svg, dp * k));
 }
 console.log(`✔ Android: mipmap-{${Object.keys(DENSITIES).join(',')}}/{${Object.keys(android).join(',')}}.png`);
+
+// ---- Android notification icon (drawable-*/ic_stat_orb.png): the status bar draws only the alpha of a small icon, so it
+// is the short «o•» as a white silhouette on transparent: the «o» and the orb, with the pale ring between them cut out.
+// 24 dp per density (24 to 96 px), the drawing in Material's 20 dp content area (2 dp of margin all round). Every pixel
+// is white; only its alpha varies. At low densities (mdpi, hdpi) the cut between the «o» and the orb is widened to at
+// least GAP_PX pixels, so they never touch and read as one blob. (Tauri: the same drawable-* files and the name
+// «ic_stat_orb» go to its notification plugin; today android-app/capacitor.config.json › LocalNotifications.smallIcon.)
+{
+  const GAP_PX = 1.6;
+  const o = small.layers.filter((l) => l.tag !== 'rect');
+  const [ring, orb] = o.filter((l) => l.tag === 'circle'); // the tile's colour around the orb, and the orb
+  const centre = (l) => { const p = l.polys[0]; const xs = p.map((q) => q[0]); const ys = p.map((q) => q[1]); return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2, (Math.max(...xs) - Math.min(...xs)) / 2]; };
+  const [cx, cy, orbR] = centre(orb); const ringR = centre(ring)[2];
+  const white = () => [255, 255, 255];
+  const pts = o.filter((l) => l !== ring).flatMap((l) => l.polys.flat());
+  const [x0, x1, y0, y1] = [Math.min(...pts.map((q) => q[0])), Math.max(...pts.map((q) => q[0])), Math.min(...pts.map((q) => q[1])), Math.max(...pts.map((q) => q[1]))];
+  const k = (small.size * 20 / 24) / Math.max(x1 - x0, y1 - y0), mx = (x0 + x1) / 2, my = (y0 + y1) / 2, h = small.size / 2;
+  const move = ([x, y]) => [h + (x - mx) * k, h + (y - my) * k];
+  for (const [density, d] of Object.entries(DENSITIES)) {
+    const px = 24 * d;
+    const perUnit = (px / small.size) * k; // output pixels per unit of the SVG
+    const cutR = Math.max(ringR, orbR + GAP_PX / perUnit);
+    const cut = { ...ring, polys: [Array.from({ length: 361 }, (_, i) => [cx + cutR * Math.cos((i * Math.PI) / 180), cy + cutR * Math.sin((i * Math.PI) / 180)])] };
+    const layers = o.map((l) => (l === ring ? cut : l)).map((l) => ({ ...l, paint: l === cut ? () => null : white, polys: l.polys.map((poly) => poly.map(move)) }));
+    const dir = path.join(RES, `drawable-${density}`);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'ic_stat_orb.png'), render({ size: small.size, layers }, px));
+  }
+  console.log(`✔ Android: drawable-{${Object.keys(DENSITIES).join(',')}}/ic_stat_orb.png (silueta blanca «o•», 20 dp útiles)`);
+}

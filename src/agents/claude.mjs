@@ -129,10 +129,14 @@ const RESULT_KEY = { error_during_execution: 'sys.agents.result.duringExecution'
 // 3.2.1: whether a result answers a message of Orb's (sent with origin «human»), not a notice Claude handles by itself.
 export const answersOrb = (m) => !(m?.origin?.kind && m.origin.kind !== 'human');
 
+// 3.8.1: Claude loads the skills of core by itself (a plugin); agents without this get them in their brief.
+export const nativeSkills = true;
+
 export const permissionModeOf = (p) => (p === 'total' ? 'bypassPermissions' : p === 'editar' ? 'acceptEdits' : 'default');
 
 // options: exe, cwd, model, reasoning, permission, resumeId, newSessionId, forkSession, mcpServers, env, systemPrompt
-// (appended to Claude Code's own), tools ({ allowed, disallowed }), addDirs, budgetUsd, internalDir, log, onEvent
+// (appended to Claude Code's own), tools ({ allowed, disallowed }), addDirs, budgetUsd, internalDir, log, onEvent, skills
+// (3.8.1: { plugin, root, list }, the skills of core that are on)
 export function createLive(o) {
   const onEvent = o.onEvent ?? (() => {});
   const log = o.log ?? (() => {});
@@ -254,7 +258,10 @@ export function createLive(o) {
       stderr: (d) => log(`stderr: ${d}`),
       // 3.8: no hooks of the project's .claude/settings*.json: a task could leave one there that later agents in the same
       // folder (other conversations) would run with their environment. (Managed policy hooks still apply.)
-      settings: { fastMode: false, disableAllHooks: true },
+      // 3.8.1: nor the commands a skill or a slash command runs when it loads (!`…` in its text): checked with the real
+      // Claude Code, they ran without asking canUseTool. (A skill's allowed-tools skipped it too: the skills of core reach
+      // Claude without it, src/core/extensions.mjs › exposeSkills.)
+      settings: { fastMode: false, disableAllHooks: true, disableSkillShellExecution: true },
       // 3.8 (F2.6c): nor its permission rules: an allow rule there (Bash, Edit…) would let Claude act without asking Orb's
       // guard (canUseTool), past «leer», «probar» and «Cosas que nadie toca». Only policy rules count (checked with the
       // real Claude Code: a trusted project's "allow": ["Bash"] no longer skips the guard, and CLAUDE.md still loads).
@@ -278,6 +285,9 @@ export function createLive(o) {
     if (disallowed.length) options.disallowedTools = disallowed;
     if (permission === 'total') options.allowDangerouslySkipPermissions = true;
     if (o.budgetUsd) options.maxBudgetUsd = o.budgetUsd;
+    // 3.8.1: the skills of core that are on, as a plugin Orb makes (src/core/extensions.mjs › exposeSkills): Claude lists
+    // them («orb-skills:<name>») and loads one when it fits. Checked with the real Claude Code (supportedCommands).
+    if (o.skills?.list?.length) options.plugins = [{ type: 'local', path: o.skills.plugin }];
     query = sdkQuery({ prompt: input, options });
     (async () => {
       // 3.0: the streamed pieces of each answer are not written to the run log one by one (a disk write per token); the

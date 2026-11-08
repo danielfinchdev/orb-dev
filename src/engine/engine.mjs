@@ -281,7 +281,10 @@ async function run(board, { home, version, restored, repair }) {
   ctx.master = openMaster(home, secretOf(home), { mirror, log, notice: (text) => board.notice(text, 'warning') });
   try { migrateSecrets(board, ctx.master, { log, emit }); } catch (error) { log(`secretos: ${error.message}`); }
   // Unlocked later (the password on another PC): the phone access opens then.
-  const onUnlocked = () => { if (ctx.config.mobile?.enabled) remote?.start().catch((error) => log(`móvil: ${error.message}`)); };
+  // 3.8.1: also the keys of a connector Orb moved while it was locked (src/engine/api-extensions.mjs › rebindMovedOrWait).
+  const { settleWaitingKeys } = await import('./api-extensions.mjs');
+  const onUnlocked = () => { settleWaitingKeys(board, log); if (ctx.config.mobile?.enabled) remote?.start().catch((error) => log(`móvil: ${error.message}`)); };
+  if (ctx.master.unlocked()) settleWaitingKeys(board, log);
   api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, onUnlocked });
   remote = remoteRef.current = createRemote({ board, api, log, emit, version });
   // 3.1: only an unpacked Orb.dev started with ORB_DEV_CONTROL=1 (main.mjs decides; never an installed Orb).
@@ -306,7 +309,11 @@ async function run(board, { home, version, restored, repair }) {
   board.onChange(changed);
   let dataVersion = board.one('PRAGMA data_version').data_version;
   const { syncProjects } = await import('../core/projects.mjs');
+  // 3.8.1: a project delete the app left half-way (closed between the check and the end) is finished or undone.
+  try { (await import('../core/project-close.mjs')).settleDeleting(board, home, { all: true }); } catch (error) { log(`eliminar proyecto: ${error.message}`); }
   syncProjects(board);
+  // 3.8.1: the skills of core that are on, ready for the agents (core\skills\.activas).
+  try { (await import('./api-extensions.mjs')).refreshSkills(); } catch (error) { log(`skills: ${error.message}`); }
   let ticking = false; let lastSync = Date.now();
   const loop = () => {
     if (ticking) return; ticking = true;

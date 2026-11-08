@@ -94,9 +94,13 @@ test('3.8.1: la bitácora general en core: el coordinador lee y anota también e
     assert.match(fs.readFileSync(path.join(dir, 'bitacora_project.md'), 'utf8'), /^# Índice central\n[\s\S]*### .* — Prueba\n[\s\S]*Anotado desde Orb/);
     assert.match((await boss.call('orb_read_log', { project: 'general', archivo: 'BITACORA_PROJECT.md' })).text, /Anotado desde Orb/);
     assert.match((await boss.call('orb_read_log', {})).text, /general \(archivo "bitacora_project\.md"\)/);
-    for (const archivo of ['../core/orb.json', 'sub/x.md', 'sub\\x.md', 'no-existe.md', 'GENERAL.md']) {
+    for (const archivo of ['../core/orb.json', 'sub/x.md', 'sub\\x.md', 'no-existe.md']) {
       assert.equal((await boss.call('orb_write_log', { project: 'general', archivo, tema: 'x', hecho: 'y' })).error, true, archivo);
     }
+    // GENERAL.md by its name is the general log itself.
+    const g = await boss.call('orb_write_log', { project: 'general', archivo: 'GENERAL.md', tema: 'La general por su nombre', hecho: 'z' });
+    assert.equal(g.error, false, g.text);
+    assert.match(fs.readFileSync(ctx.paths.generalLog, 'utf8'), /La general por su nombre/);
     assert.equal((await boss.call('orb_write_log', { project: 'tienda', archivo: 'bitacora_project.md', tema: 'x', hecho: 'y' })).error, true, 'solo junto a la general');
     const ro = await boss.call('orb_write_log', { project: 'general', archivo: 'solo.md', tema: 'x', hecho: 'y' });
     assert.equal(ro.error, true); assert.match(ro.text, /solo lectura/);
