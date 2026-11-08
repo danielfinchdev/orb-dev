@@ -71,7 +71,7 @@ mod imp {
     if !on() {
       return;
     }
-    // A panic ends the release build at once (panic = "abort") with nothing on screen: written down first.
+    // A panic (caught or not) is written down first, next to the other marks.
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
       mark("panic", json!({ "info": info.to_string() }));

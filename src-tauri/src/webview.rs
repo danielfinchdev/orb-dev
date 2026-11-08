@@ -4,13 +4,68 @@
 // dropped, pasted or picked in the page (window.orb.pathForFile: the page hands the File to WebView2 with
 // chrome.webview.postMessageWithAdditionalObjects and WebView2 gives Rust its path, as Electron's webUtils did). The page's
 // own drag and drop keeps working (Tauri's drop handler stays off).
+// And what Electron's window never had (review D10 B20): in the published app WebView2's browser shortcuts are off (F5,
+// Ctrl+R and Ctrl+Shift+R would reload the interface and lose what is being written; Ctrl+P prints, Ctrl+F, Alt+←…; the
+// page's own keys — Ctrl+J, F11, Ctrl ±0 — still reach it), pinch zoom is off (Orb has its own zoom), and the right-click
+// menu only keeps editing (cut, copy, paste, select all, undo, redo, emoji, spelling): no Back, Reload, Save as, Print.
 use tauri::{Emitter, WebviewWindow};
+
+/// Whether an item of WebView2's right-click menu (its Name, the same in every language) stays: editing and spelling
+/// only (debug builds also keep «Inspeccionar»). Anything WebView2 adds later goes too.
+pub fn menu_item_kept(name: &str, debug: bool) -> bool {
+  matches!(name, "cut" | "copy" | "paste" | "pasteAndMatchStyle" | "selectAll" | "undo" | "redo" | "emoji" | "copyLinkLocation" | "copyImage" | "writingDirection")
+    || name.to_ascii_lowercase().contains("spell")
+    || (debug && name == "inspectElement")
+}
+
+/// The indexes of the separators to drop (first, last, or right after another one), in order.
+pub fn stray_separators(separators: &[bool]) -> Vec<usize> {
+  let mut drop = Vec::new();
+  let mut previous_kept_is_separator = true; // nothing before the first item
+  for (i, &sep) in separators.iter().enumerate() {
+    if sep && previous_kept_is_separator {
+      drop.push(i);
+    } else {
+      previous_kept_is_separator = sep;
+    }
+  }
+  // a separator left at the end
+  if previous_kept_is_separator {
+    if let Some(last) = (0..separators.len()).rev().find(|i| separators[*i] && !drop.contains(i)) {
+      drop.push(last);
+      drop.sort_unstable();
+    }
+  }
+  drop
+}
+
+#[cfg(test)]
+mod tests {
+  #[test]
+  fn the_right_click_menu_keeps_editing_only() {
+    for kept in ["cut", "copy", "paste", "selectAll", "undo", "redo", "emoji", "spellCheck"] {
+      assert!(super::menu_item_kept(kept, false), "{kept}");
+    }
+    for gone in ["back", "forward", "reload", "saveAs", "print", "inspectElement", "createQrCode", "webCapture", "share", "other", ""] {
+      assert!(!super::menu_item_kept(gone, false), "{gone}");
+    }
+    assert!(super::menu_item_kept("inspectElement", true));
+  }
+
+  #[test]
+  fn stray_separators_go() {
+    assert_eq!(super::stray_separators(&[true, false, true, true, false, true]), vec![0, 3, 5]);
+    assert_eq!(super::stray_separators(&[false, false]), Vec::<usize>::new());
+    assert_eq!(super::stray_separators(&[true, true]), vec![0, 1]);
+    assert_eq!(super::stray_separators(&[]), Vec::<usize>::new());
+  }
+}
 
 #[cfg(windows)]
 mod win {
   use super::*;
   use webview2_com::Microsoft::Web::WebView2::Win32::*;
-  use webview2_com::{CapturePreviewCompletedHandler, PermissionRequestedEventHandler, WebMessageReceivedEventHandler};
+  use webview2_com::{CapturePreviewCompletedHandler, ContextMenuRequestedEventHandler, PermissionRequestedEventHandler, WebMessageReceivedEventHandler};
   use windows::core::{Interface, PWSTR};
   use windows::Win32::System::Com::{IStream, STATSTG, STATFLAG_NONAME, STREAM_SEEK_SET};
 
@@ -45,6 +100,57 @@ mod win {
           let _ = s4.SetIsPasswordAutosaveEnabled(false);
           let _ = s4.SetIsGeneralAutofillEnabled(false);
         }
+        // DevTools' own shortcuts stay in a debug build (npm start).
+        if !cfg!(debug_assertions) {
+          if let Ok(s3) = settings.cast::<ICoreWebView2Settings3>() {
+            let _ = s3.SetAreBrowserAcceleratorKeysEnabled(false);
+          }
+        }
+        if let Ok(s5) = settings.cast::<ICoreWebView2Settings5>() {
+          let _ = s5.SetIsPinchZoomEnabled(false);
+        }
+      }
+      if let Ok(core11) = core.cast::<ICoreWebView2_11>() {
+        let _ = core11.add_ContextMenuRequested(
+          &ContextMenuRequestedEventHandler::create(Box::new(|_, args| {
+            let Some(args) = args else { return Ok(()) };
+            let items = args.MenuItems()?;
+            let mut count = 0u32;
+            items.Count(&mut count)?;
+            // From the end, so the indexes left to look at do not move; separators are tidied after.
+            for i in (0..count).rev() {
+              let item = items.GetValueAtIndex(i)?;
+              let mut kind = COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND::default();
+              item.Kind(&mut kind)?;
+              if kind == COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND_SEPARATOR {
+                continue;
+              }
+              let mut name = PWSTR::null();
+              item.Name(&mut name)?;
+              if !super::menu_item_kept(&take(name), cfg!(debug_assertions)) {
+                items.RemoveValueAtIndex(i)?;
+              }
+            }
+            // No separator first, last or twice in a row; nothing left → no menu at all.
+            let mut count = 0u32;
+            items.Count(&mut count)?;
+            let mut separators = Vec::with_capacity(count as usize);
+            for i in 0..count {
+              let mut kind = COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND::default();
+              items.GetValueAtIndex(i)?.Kind(&mut kind)?;
+              separators.push(kind == COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND_SEPARATOR);
+            }
+            for i in super::stray_separators(&separators).into_iter().rev() {
+              items.RemoveValueAtIndex(i as u32)?;
+            }
+            items.Count(&mut count)?;
+            if count == 0 {
+              args.SetHandled(true)?;
+            }
+            Ok(())
+          })),
+          &mut token,
+        );
       }
       // 'orb-file:<id>' with the File as an additional object → 'app:file-path' { id, path | null }. Only from Orb's own
       // page. A string, because wry's own handler (Tauri's IPC, registered first) fails on any other message and WebView2

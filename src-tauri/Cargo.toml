@@ -51,5 +51,8 @@ webview2-com = "=0.39.1"
 codegen-units = 1
 lto = true
 opt-level = "s"
-panic = "abort"
+# unwind, not abort (review D10 M3): with abort a panic ends Orb at once, and the catch_unwind around each job of the
+# agents' browser thread (browser.rs) and of the guard window (desktop.rs) would do nothing in the published build. The
+# cost is the unwinding tables: a few percent more exe size and no measurable speed difference in Orb (no hot loops).
+panic = "unwind"
 strip = true

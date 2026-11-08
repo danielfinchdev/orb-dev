@@ -88,7 +88,7 @@ function useMentions(value, onChange, ta) {
 
 // mentions: false hides the «@» picker. 3.6 (M2): the microphone also dictates in a computer's browser that has speech
 // recognition (not in the PC app, whose engine has none).
-const WebSpeech = typeof window !== 'undefined' && !/Electron/i.test(navigator.userAgent) ? (window.SpeechRecognition || window.webkitSpeechRecognition || null) : null;
+const WebSpeech = typeof window !== 'undefined' ? (window.SpeechRecognition || window.webkitSpeechRecognition || null) : null;
 function webDictate(lang) {
   return new Promise((resolve, reject) => {
     const r = new WebSpeech(); r.lang = lang === 'en' ? 'en-US' : 'es-ES'; r.interimResults = false; r.maxAlternatives = 1;
@@ -104,7 +104,8 @@ export function Composer({ value, onChange, onSend, onStop, busy, placeholder, t
   useEffect(() => { const el = ta.current; if (!el) return; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 260)}px`; }, [value]);
   const [dropping, setDropping] = useState(false);
   const m = useMentions(value, onChange, ta);
-  const dictateWith = bridge.dictate ? (lang) => bridge.dictate(lang) : WebSpeech ? webDictate : null;
+  // Not in the desktop app (bridge.desktop: WebView2 has the API but no speech service, and no microphone).
+  const dictateWith = bridge.dictate ? (lang) => bridge.dictate(lang) : WebSpeech && !bridge.desktop ? webDictate : null;
   // 3.5, the Android app: dictate with the phone's own speech recognition (what is said is added to the text).
   const [hearing, setHearing] = useState(false);
   const dictate = async () => {

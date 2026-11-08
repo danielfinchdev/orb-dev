@@ -58,6 +58,9 @@ if (import.meta.env.MODE !== 'android' && window.__TAURI_INTERNALS__ && !window.
     // opened (info().startError.code === 'secretUnreadable').
     retryStart: (opts) => invoke('app_retry_start', { newSecret: opts?.newSecret === true }),
     platform: 'win32',
+    // The desktop app (review D10 M7): WebView2 here has no speech service and webview.rs denies the microphone, so
+    // the interface never offers to dictate (src/ui/views/chat.jsx).
+    desktop: true,
     setup: (data) => invoke('app_setup', { data: data ?? {} }),
     switchHome: (folder) => invoke('app_switch_home', { target: String(folder ?? '') }),
     // Windows' own dialogs, opened by Rust (the page has no dialog permission).
