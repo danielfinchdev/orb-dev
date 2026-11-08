@@ -73,6 +73,7 @@ export default {
   "app.newSecretTitle": "Start with a new key?",
   "app.newSecretIntro": "Orb will make a new key for this PC. Approvals will be asked again and the phone will have to be linked again.",
   "app.newSecretMaster": "You will have to type your master password.",
+  "app.newSecretVault": "There is no master password: the saved secrets (the connectors' and the phone's keys) will be lost.",
   "app.newSecretRecovery": "Earlier backups will ask for your recovery code. Afterwards, make a new code in Settings › Data: until then, new backups will not carry it and “I forgot the password” cannot check it.",
   "app.newSecretNoRecovery": "You have no recovery code: the backups made until now will no longer open. Afterwards, make one in Settings › Data.",
   "app.newSecretBack": "The old key is kept aside. If Windows can open it again, Orb will offer to go back to it.",

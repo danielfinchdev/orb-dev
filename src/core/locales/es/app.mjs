@@ -73,6 +73,7 @@ export default {
   "app.newSecretTitle": "¿Empezar con una clave nueva?",
   "app.newSecretIntro": "Orb creará una clave nueva para este PC. Se volverán a pedir las aprobaciones y habrá que enlazar otra vez el móvil.",
   "app.newSecretMaster": "Tendrás que escribir tu contraseña maestra.",
+  "app.newSecretVault": "No hay contraseña maestra: los secretos guardados (claves de los conectores y del móvil) se perderán.",
   "app.newSecretRecovery": "Las copias de seguridad anteriores pedirán tu código de recuperación. Después, crea un código nuevo en Ajustes › Datos: hasta entonces, las copias nuevas no lo llevarán y «He olvidado la contraseña» no podrá comprobarlo.",
   "app.newSecretNoRecovery": "No tienes código de recuperación: las copias de seguridad hechas hasta ahora ya no se podrán abrir. Después, crea uno en Ajustes › Datos.",
   "app.newSecretBack": "La clave anterior se guarda aparte. Si Windows vuelve a poder abrirla, Orb te ofrecerá volver a ella.",

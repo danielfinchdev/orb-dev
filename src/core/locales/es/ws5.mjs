@@ -35,6 +35,8 @@ export default {
   'data.migration38.blocked': 'Orb no funciona hasta actualizar tus datos a Orb 3.8.',
   'data.migration38.busy': 'Otro proceso de Orb está actualizando los datos. Espera un momento y reintenta.',
   'data.migration38.noOwner': 'No se sabe quién es el dueño de este Orb: los usuarios de Orb 3.7 no tienen dueño. No se ha borrado nada.',
+  'data.migration38.otherUserLine': '(mensaje de otro usuario de Orb 3.7)',
+  'data.migration38.noSpace': 'No hay espacio suficiente en el disco para actualizar los datos de Orb: hacen falta {need} MB y quedan {free} MB. Libera espacio y reintenta. No se ha cambiado nada.',
   'data.migration38.badCopy': 'No se pudo hacer una copia válida de la base de datos ({error}). Libera espacio en el disco y reintenta.',
   'data.backup.dailyFailed': 'No se pudo hacer la copia de seguridad de hoy: {error}. Se vuelve a probar dentro de una hora.',
   'data.backup.err.badKind': 'Ese tipo de copia no existe.',

@@ -21,10 +21,15 @@ export function markRestoredKey(dir) {
 }
 
 // → the restored secret as hex, or null (no marker, or one that is not about this clave.bin: then it is removed).
+// A read that fails for now (in use, no access: an antivirus, a sync tool) throws { code: 'busy' } and removes nothing
+// (review D10 B5): only a marker that is not JSON, or whose fingerprint does not match the clave.bin there, goes.
+const busy = (error) => Object.assign(new Error(`clave restaurada: ${error.code ?? error.message}`), { code: 'busy' });
 export function restoredKey(dir) {
   const marker = path.join(dir, RESTORE_MARKER);
-  let want; try { want = JSON.parse(fs.readFileSync(marker, 'utf8'))?.sha256; } catch (error) { if (error.code !== 'ENOENT') fs.rmSync(marker, { force: true }); return null; }
-  let key = null; try { key = fs.readFileSync(path.join(dir, 'clave.bin')); } catch { /* none */ }
+  let raw; try { raw = fs.readFileSync(marker, 'utf8'); } catch (error) { if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return null; throw busy(error); }
+  let want; try { want = JSON.parse(raw)?.sha256; } catch { want = null; }
+  if (typeof want !== 'string') { fs.rmSync(marker, { force: true }); return null; }
+  let key = null; try { key = fs.readFileSync(path.join(dir, 'clave.bin')); } catch (error) { if (error.code !== 'ENOENT') throw busy(error); }
   if (key && key.length >= 32 && fingerprint(key) === want) return key.subarray(0, 32).toString('hex');
   fs.rmSync(marker, { force: true });
   return null;

@@ -528,7 +528,7 @@ function MigrationFailed({ state }) {
 // recovery code and the master password exist in core). Without a recovery code the backups made until now will not
 // open any more: the word EMPEZAR must be typed.
 async function askNewSecret(startError) {
-  const lines = [t('app.newSecretIntro'), startError?.master ? t('app.newSecretMaster') : null, startError?.recovery ? t('app.newSecretRecovery') : t('app.newSecretNoRecovery'), t('app.newSecretBack')].filter(Boolean).join('\n\n');
+  const lines = [t('app.newSecretIntro'), startError?.master ? t('app.newSecretMaster') : startError?.vault ? t('app.newSecretVault') : null, startError?.recovery ? t('app.newSecretRecovery') : t('app.newSecretNoRecovery'), t('app.newSecretBack')].filter(Boolean).join('\n\n');
   if (startError?.recovery) return confirm(t('app.newSecretTitle'), lines, { ok: t('app.newSecretOk'), danger: true });
   const word = t('app.newSecretWord');
   return Boolean(await form(t('app.newSecretTitle'), {

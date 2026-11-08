@@ -249,12 +249,19 @@ export function fingerprint(db) {
 }
 const fsync = (file) => { const fd = fs.openSync(file, 'r+'); try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); } };
 // → the run, with the copy's fingerprint and the outdated copies of earlier attempts (deleted once the run is done).
+// The database's size with its journal, and the free bytes where the copy goes (null: cannot be known here).
+const dbBytes = (p) => [p.db, `${p.db}-wal`].reduce((n, f) => { try { return n + fs.statSync(f).size; } catch { return n; } }, 0);
+function freeBytes(dir) { try { const s = fs.statfsSync(dir); return Number(s.bavail) * Number(s.bsize); } catch { return null; } }
 function preCopy(db, p, run, ops) {
   const file = path.join(p.data, run.copy);
   const expected = tables(db);
   const print = fingerprint(db);
   if (fs.existsSync(file)) {
     if (run.print === print && checkCopy(file, expected)) return run;
+  }
+  // Review F2.5b A2.4: the copy and the migration need about twice the database; without that room nothing is touched.
+  { const need = 2 * dbBytes(p) + 64 * 1024 * 1024; const free = freeBytes(p.data); if (free !== null && free < need) throw userError(tr('data.migration38.noSpace', { need: Math.ceil(need / 1048576), free: Math.floor(free / 1048576) })); }
+  if (fs.existsSync(file)) {
     // Not trusted (empty, cut) or outdated: kept aside until the run is done, never deleted now.
     const bad = checkCopy(file, expected) ? `${file.replace(/\.db$/, '')}-intento-${stamp()}.db` : `${file}.roto-${stamp()}`;
     fs.renameSync(file, ops.guard(bad));
@@ -526,7 +533,9 @@ function migrateRows(db, who) {
     const ids = who.others; const inOthers = `person_id IN (${marks(ids)})`;
     const own = (t) => cols(db, t).includes('person_id');
     if (own('conversations')) forConversations(all(db, `SELECT id FROM conversations WHERE ${inOthers}`, ...ids).map((r) => r.id));
-    if (own('chat')) run(`DELETE FROM chat WHERE ${inOthers}`, ...ids);
+    // Their lines left in the owner's conversations keep their place, without their text (review F2.5b B6: the original
+    // is in their archive, chat-suelto.json).
+    if (own('chat')) run(`UPDATE chat SET body = ?, person_id = NULL WHERE ${inOthers}`, tr('data.migration38.otherUserLine'), ...ids);
     if (own('sessions')) {
       for (const { id } of all(db, `SELECT id FROM sessions WHERE ${inOthers}`, ...ids)) {
         for (const t of ['session_items', 'session_queue']) run(`DELETE FROM ${t} WHERE session_id = ?`, id);
@@ -742,11 +751,16 @@ export function deleteLegacyData(db, home) {
 
 // 30 days after a migration that went well, the copies of the database keep everything but 3.7's secrets: PIN hashes, the
 // devices' keys, Home Assistant's token, the phone access's keys and the agents' signatures; then VACUUM, so they are
-// not left in free pages. → null (not yet, or done before) or how many copies were cleaned.
+// not left in free pages. Copies set aside as broken (.roto-*) are deleted. → null (not yet, or done before) or how
+// many copies were cleaned.
 export function scrubPreCopies(db, { home = ctx.home, now = Date.now() } = {}) {
   const at = Date.parse(setting(db, DONE_AT) ?? '');
   if (!Number.isFinite(at) || setting(db, SCRUBBED) || unfinished(db) || now - at < SCRUB_AFTER_MS) return null;
-  const files = legacyData(home).copies.filter((f) => f.endsWith('.db'));
+  const all = legacyData(home).copies;
+  // A copy set aside as broken (.roto-*: cut or unreadable, never used) may still hold those secrets: it goes now
+  // (review F2.5b M7); a .db copy is cleaned and kept.
+  for (const file of all.filter((f) => path.basename(f).includes('.roto-'))) { try { fs.rmSync(file, { force: true }); } catch { /* busy: the next start */ } }
+  const files = all.filter((f) => f.endsWith('.db'));
   for (const file of files) {
     const copy = new DatabaseSync(file);
     try {
