@@ -55,6 +55,8 @@ export default {
   'datos.legacyTitle': 'Datos de Orb 3.7',
   'datos.legacyDesc': 'Lo que guardaba Orb 3.7 y Orb 3.8 ya no usa, con la copia de su base de datos: {size}.',
   'datos.legacyDelete': 'Borrar los datos de Orb 3.7',
+  'datos.legacyBackups': 'Copias de seguridad de antes de Orb 3.8: {n}.',
+  'datos.legacyKeys': 'Guardan las claves de Orb 3.7 sin tu contraseña maestra. Bórralas cuando ya no las necesites (las copias, desde su carpeta).',
   'datos.legacyConfirmTitle': '¿Borrar los datos de Orb 3.7?',
   'datos.legacyConfirmDesc': 'Se borran para siempre las carpetas {archives} y la copia de la base de datos de antes. Las copias de seguridad ya hechas los conservan.',
   'datos.legacyDeleted': 'Datos de Orb 3.7 borrados.',

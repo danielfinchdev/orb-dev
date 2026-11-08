@@ -117,14 +117,16 @@ function BackupsCard() {
 }
 
 // 3.8: what Orb 3.7 left after the migration (src/core/migrate-38.mjs): its archives and the copies of its database, only
-// while there are any, with «Borrar los datos de Orb 3.7».
+// while there are any, with «Borrar los datos de Orb 3.7». 3.8.1 (review F3b M5): they, and the backups made before 3.8,
+// still hold 3.7's keys without the master password: the card says so.
 function LegacyCard() {
   const t = useT();
   const [st, setSt] = useState(null);
   const [busy, setBusy] = useState(false);
   const load = () => call('legacy.status').then(setSt).catch(() => {});
   useEffect(() => { load(); }, []);
-  if (!st || !(st.archives.length + st.copies.length)) return null;
+  const local = st ? st.archives.length + st.copies.length : 0;
+  if (!st || !(local + (st.oldBackups ?? 0))) return null;
   const remove = async () => {
     if (!(await confirm(t('datos.legacyConfirmTitle'), t('datos.legacyConfirmDesc', { archives: st.archives.join(', ') || '—' }), { ok: t('datos.legacyDelete'), danger: true }))) return;
     const unlock = await unlockCore('legacy'); if (!unlock) return;
@@ -133,8 +135,12 @@ function LegacyCard() {
   return (
     <Card data-testid="legacy-card">
       <CardHeader className="flex-row items-start gap-3"><Archive className="text-primary mt-0.5 size-5 shrink-0" /><CardTitle className="mt-1">{t('datos.legacyTitle')}</CardTitle></CardHeader>
-      <CardContent><p className="text-muted-foreground text-xs">{t('datos.legacyDesc', { size: size(st.bytes) })}</p></CardContent>
-      <CardFooter><Button size="sm" variant="destructive" onClick={remove} disabled={busy} data-testid="legacy-delete">{busy ? <LoaderCircle className="animate-spin" /> : <Trash2 />}{t('datos.legacyDelete')}</Button></CardFooter>
+      <CardContent className="grid gap-1.5">
+        {local > 0 && <p className="text-muted-foreground text-xs">{t('datos.legacyDesc', { size: size(st.bytes) })}</p>}
+        {st.oldBackups > 0 && <p className="text-muted-foreground text-xs" data-testid="legacy-backups">{t('datos.legacyBackups', { n: st.oldBackups })}</p>}
+        <p className="text-warning-foreground dark:text-warning text-xs" data-testid="legacy-keys">{t('datos.legacyKeys')}</p>
+      </CardContent>
+      {local > 0 && <CardFooter><Button size="sm" variant="destructive" onClick={remove} disabled={busy} data-testid="legacy-delete">{busy ? <LoaderCircle className="animate-spin" /> : <Trash2 />}{t('datos.legacyDelete')}</Button></CardFooter>}
     </Card>
   );
 }

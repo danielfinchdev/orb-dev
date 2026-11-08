@@ -52,6 +52,8 @@ export default {
   'datos.restorePassHint': 'Only if the backup was made on another PC.',
   'datos.restoreReady': 'Backup checked. Restart Orb to use it.',
   'datos.legacyTitle': 'Orb 3.7 data',
+  'datos.legacyBackups': 'Backups made before Orb 3.8: {n}.',
+  'datos.legacyKeys': 'They keep the keys of Orb 3.7 without your master password. Delete them when you no longer need them (the backups, from their folder).',
   'datos.legacyDesc': 'What Orb 3.7 kept and Orb 3.8 no longer uses, with the copy of its database: {size}.',
   'datos.legacyDelete': 'Delete the Orb 3.7 data',
   'datos.legacyConfirmTitle': 'Delete the Orb 3.7 data?',

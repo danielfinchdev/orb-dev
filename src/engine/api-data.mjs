@@ -10,6 +10,9 @@ import { legacyData, deleteLegacyData } from '../core/migrate-38.mjs';
 import { utcToZoned, localDay, ownerTz } from '../core/tz.mjs';
 import { refused } from './api-master.mjs';
 
+// A backup's Orb version older than 3.8 (one without a version is not counted).
+export const before38 = (v) => { const m = /^(\d+)\.(\d+)/.exec(String(v ?? '')); return Boolean(m) && (Number(m[1]) < 3 || (Number(m[1]) === 3 && Number(m[2]) < 8)); };
+
 const fail = (message) => { const e = new Error(message); e.userFacing = true; throw e; };
 export const DAILY_HOUR = 3;
 
@@ -108,7 +111,12 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
       return { code: code ? null : value, at: new Date().toISOString() };
     },
     // 3.8: what Orb 3.7 left (the archives and the copies of its database), and «Borrar los datos de Orb 3.7».
-    'legacy.status': () => { const d = legacyData(ctx.home); return { archives: d.archives.map((f) => path.basename(f)), copies: d.copies.map((f) => path.basename(f)), bytes: d.bytes }; },
+    // oldBackups (review F3b M5): the copies made before Orb 3.8 still hold 3.7's keys without the master password.
+    'legacy.status': async () => {
+      const d = legacyData(ctx.home);
+      const oldBackups = (await K.listBackups(folder())).filter((b) => !b.damaged && before38(b.version)).length;
+      return { archives: d.archives.map((f) => path.basename(f)), copies: d.copies.map((f) => path.basename(f)), bytes: d.bytes, oldBackups };
+    },
     'legacy.delete': () => {
       const d = deleteLegacyData(board.db, ctx.home);
       log(`3.8: datos de Orb 3.7 borrados: ${[...d.archives, ...d.copies].map((f) => path.basename(f)).join(', ') || 'ninguno'}`);
