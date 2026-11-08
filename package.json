@@ -1,7 +1,7 @@
 {
   "name": "orb-dev",
   "productName": "Orb",
-  "version": "3.8.0",
+  "version": "3.8.1",
   "description": "Orb: one app for your AI coding agents (Claude Code, Codex, Cursor, Gemini, OpenCode, Qwen, Copilot). Its assistant plans the work, writes a clear brief for each agent and brings back checked results.",
   "private": true,
   "type": "module",
