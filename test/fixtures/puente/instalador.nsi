@@ -2,7 +2,6 @@
 ; same order as Tauri's template (PREINSTALL, the files, POSTINSTALL), but installing a fake Orb into a temporary folder
 ; and pointed at a fake Orb 3.8.0 (a temporary folder and a test registry key), so nothing of the real PC is touched.
 Unicode true
-!addplugindir "${TAURI_PLUGINS}"
 !define MAINBINARYNAME "Orb"
 !define ORB_ELECTRON_UNINSTKEY "${UNINSTKEY}"
 !define ORB_ELECTRON_DEFAULT_DIR "${DEFAULT_DIR}"
@@ -11,6 +10,8 @@ Unicode true
 !define ORB_HOOK_QUIET ; a refusal never waits for a click (no one is at a test)
 !define ORB_HOOK_ACCOUNT "${ACCOUNT}" ; User, or Admin (an elevated installer: review D9 B5)
 !include "${HOOKS}"
+; After the hooks, as in Tauri's template: a plugin call in a hooks Function would not build.
+!addplugindir "${TAURI_PLUGINS}"
 Name "Orb (prueba del puente)"
 OutFile "${OUT}"
 InstallDir "${TARGET}"

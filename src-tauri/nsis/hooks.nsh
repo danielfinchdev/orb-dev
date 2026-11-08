@@ -62,8 +62,13 @@ Var OrbUpdated ; 1 when Orb 3.8.0's updater started this installer (it closed Or
   !endif
   ${If} $OrbUpdated == 1
   ${AndIf} ${FileExists} "$OrbElectronDir\Orb.exe"
-    nsis_tauri_utils::RunAsUser "$OrbElectronDir\Orb.exe" ""
-    Pop $9
+    ; Exec, not nsis_tauri_utils::RunAsUser: Tauri's template includes these hooks before its `!addplugindir`, so a
+    ; plugin call in a Function (this macro runs in OrbRemoveElectron) does not build, and adding the folder here
+    ; makes the template's own one conflict. Orb 3.8.0's updater starts this installer as the user, not elevated.
+    ClearErrors
+    Exec '"$OrbElectronDir\Orb.exe"'
+    StrCpy $9 0
+    ${IfThen} ${Errors} ${|} StrCpy $9 1 ${|}
     !ifdef ORB_HOOK_LOG
       FileOpen $8 "${ORB_HOOK_LOG}" a
       FileWrite $8 "reabierta=$9$\r$\n"
@@ -401,9 +406,13 @@ Function OrbRemoveElectron
       ; PowerShell could not tell: as before, any Orb.exe of this user for 15 s stops the bridge.
       StrCpy $1 0
       ${Do}
-        nsis_tauri_utils::FindProcessCurrentUser "Orb.exe"
-        Pop $0
-        ${If} $0 != 0
+        ; tasklist, not nsis_tauri_utils::FindProcessCurrentUser: no Tauri plugin in these Functions (see OrbRefuse).
+        ReadEnvStr $0 USERNAME
+        nsExec::ExecToStack '"$SYSDIR\tasklist.exe" /FI "IMAGENAME eq Orb.exe" /FI "USERNAME eq $0" /NH /FO CSV'
+        Pop $0 ; exit code
+        Pop $0 ; a CSV line per process, or an INFO line when there is none
+        StrCpy $0 $0 9
+        ${If} $0 != '"Orb.exe"'
           ${ExitDo}
         ${EndIf}
         ${If} $1 >= 30
