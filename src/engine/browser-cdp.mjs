@@ -23,8 +23,11 @@ export async function attachPage(source, tab, { onUpdate = () => {} } = {}) {
     if (tab.console.length > 200) tab.console.shift();
   };
   // What the app refused, told to the agent as console errors (orb_browser_console, and the snapshot's error count).
-  const REFUSED = { navigation: 'Orb blocked a page that is not http(s)', external: 'Orb blocked opening another app', download: 'Orb refused a download (this browser never downloads files)', auth: 'Orb cancelled an HTTP sign-in prompt', permission: 'Orb denied a permission request', file: 'Orb blocked a file chooser (this browser never picks local files)', flood: 'Orb stopped this page: it sent too many events (a console or navigation flood) and was replaced by a blank page' };
-  on('Orb.blocked', ({ kind, url, permission } = {}) => note('error', `${REFUSED[kind] ?? 'Orb blocked'}${permission ? ` (${permission})` : ''}`, url));
+  const REFUSED = { navigation: 'Orb blocked a page that is not http(s)', external: 'Orb blocked opening another app', download: 'Orb refused a download (this browser never downloads files)', auth: 'Orb cancelled an HTTP sign-in prompt', permission: 'Orb denied a permission request', file: 'Orb blocked a file chooser (this browser never picks local files)', flood: 'Orb stopped this page: it sent too many events (a console or navigation flood) and closed it; the next orb_browser_open starts a fresh page' };
+  on('Orb.blocked', ({ kind, url, permission } = {}) => {
+    note('error', `${REFUSED[kind] ?? 'Orb blocked'}${permission ? ` (${permission})` : ''}`, url);
+    if (kind === 'flood') tab.stopped = REFUSED.flood; // what the agent hears next, once the page is gone
+  });
   // A new window the page asked for (window.open, target=_blank): never made; its address opens in this page.
   on('Orb.popup', ({ url } = {}) => {
     if (!url || url === 'about:blank') return;

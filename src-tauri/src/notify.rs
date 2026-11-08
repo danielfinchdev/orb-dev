@@ -4,8 +4,9 @@
 // itself (the installer sets the AUMID dev.orb.app on its shortcuts); a build run from the code has no shortcut, so
 // Windows shows them as PowerShell's. A test build with its window hidden writes them to <test data>\avisos-e2e.jsonl
 // instead of showing them (nobody at the PC).
-//   - Never in the way of the engine: the engine's messages are handled on one task, so a notice only goes into a short
-//     queue; one thread of its own shows them (WinRT's Show waits).
+//   - Never in the way of the engine: the engine's messages are handled on one thread, so a notice only goes into a
+//     short queue; one thread of its own looks at the window (which waits for Orb's UI thread) and shows them (WinRT's
+//     Show waits too).
 //   - Never a flood: at most one per conversation every 3 s and 12 a minute in all; each conversation's replaces its
 //     previous one in the Action Center (tag = the conversation, group = Orb).
 //   - Private: while Windows is locked (the lock screen may show notices) only the title, never the agent's text.
@@ -65,35 +66,32 @@ struct Pending {
   target: Value,
 }
 
-static LIMIT: OnceLock<Mutex<Limiter>> = OnceLock::new();
-static QUEUE: OnceLock<mpsc::SyncSender<Pending>> = OnceLock::new();
+/// A chat:new as it came from the engine, still to be looked at.
+struct Job {
+  payload: Value,
+  test_log: Option<PathBuf>,
+}
 
+static LIMIT: OnceLock<Mutex<Limiter>> = OnceLock::new();
+static QUEUE: OnceLock<mpsc::SyncSender<Job>> = OnceLock::new();
+
+/// Called from the engine's line reader: only queued here. Asking the window whether it is in front (or its title)
+/// waits for Orb's UI thread, so that and the rest happen on the notices' own thread; a busy window never holds up
+/// the engine's messages. Full queue: this one is dropped, never waited for.
 pub fn chat_new(app: &AppHandle, payload: &Value, test_log: Option<PathBuf>) {
-  let Some(w) = app.get_webview_window("main") else { return };
-  let assistant = w.title().ok().filter(|t| !t.trim().is_empty()).unwrap_or_else(|| "Orb".into());
-  let engine = crate::engine::get(app);
-  let header = engine.t("sys.main.notice", &[("name", assistant.clone())]);
-  // In front: focused, shown and not minimised (a hidden window may still say it has the focus).
-  let in_front = w.is_focused().unwrap_or(false) && w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false);
-  let Some((title, mut body, target, tag)) = notice(payload, in_front, &assistant, &header) else { return };
-  if !LIMIT.get_or_init(|| Mutex::new(Limiter::new())).lock().unwrap().allow(&tag, Instant::now()) {
-    return;
-  }
-  if crate::power::session_locked() {
-    body = engine.t("sys.main.noticePrivate", &[]);
-  }
-  if let Some(file) = test_log {
-    use std::io::Write;
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(file) {
-      let _ = writeln!(f, "{}", json!({ "title": title, "body": body, "target": target, "tag": tag }));
-    }
-    return;
-  }
   let queue = QUEUE.get_or_init(|| {
-    let (tx, rx) = mpsc::sync_channel::<Pending>(8);
+    let (tx, rx) = mpsc::sync_channel::<Job>(16);
     let handle = app.clone();
     let _ = std::thread::Builder::new().name("avisos".into()).spawn(move || {
-      for p in rx {
+      for job in rx {
+        let Some(p) = prepare(&handle, &job.payload) else { continue };
+        if let Some(file) = job.test_log {
+          use std::io::Write;
+          if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(file) {
+            let _ = writeln!(f, "{}", json!({ "title": p.title, "body": p.body, "target": p.target, "tag": p.tag }));
+          }
+          continue;
+        }
         if let Err(e) = show(&handle, p) {
           crate::engine::get(&handle).log_line(&format!("aviso: {e}"));
         }
@@ -101,8 +99,25 @@ pub fn chat_new(app: &AppHandle, payload: &Value, test_log: Option<PathBuf>) {
     });
     tx
   });
-  // Full (Windows slow to show them): this one is dropped, never waited for.
-  let _ = queue.try_send(Pending { title, body, tag, target });
+  let _ = queue.try_send(Job { payload: payload.clone(), test_log });
+}
+
+/// The notice for a chat:new, or nothing (the window in front, or past the limits).
+fn prepare(app: &AppHandle, payload: &Value) -> Option<Pending> {
+  let w = app.get_webview_window("main")?;
+  let assistant = w.title().ok().filter(|t| !t.trim().is_empty()).unwrap_or_else(|| "Orb".into());
+  let engine = crate::engine::get(app);
+  let header = engine.t("sys.main.notice", &[("name", assistant.clone())]);
+  // In front: focused, shown and not minimised (a hidden window may still say it has the focus).
+  let in_front = w.is_focused().unwrap_or(false) && w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false);
+  let (title, mut body, target, tag) = notice(payload, in_front, &assistant, &header)?;
+  if !LIMIT.get_or_init(|| Mutex::new(Limiter::new())).lock().unwrap().allow(&tag, Instant::now()) {
+    return None;
+  }
+  if crate::power::session_locked() {
+    body = engine.t("sys.main.noticePrivate", &[]);
+  }
+  Some(Pending { title, body, tag, target })
 }
 
 #[cfg(windows)]

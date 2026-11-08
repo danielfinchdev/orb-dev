@@ -284,7 +284,7 @@ export const pipeName = (id) => (process.platform === 'win32' ? `\\\\.\\pipe\\or
 // The control pipe: one JSON message per line. First { hello: key, agent, session, task } with the key the engine
 // gave that conversation, then { id, action, args }. One action at a time per page; closing never waits behind a page
 // that does not answer.
-//   pages: { get(key), dead(tab), create(key, who) (may be async), close(tab) }
+//   pages: { get(key), dead(tab), why(tab) (optional: why a dead page went, said instead of «no page»), create(key, who) (may be async), close(tab) }
 //   actions: createActions(...) result
 //   before(tab, action, args, who): called before each action (may throw: «el usuario está usando el navegador»)
 //   grabbed(tab) / released(tab): a connection starts / stops using a page (tab.users counts them)
@@ -326,8 +326,9 @@ export function servePipe({ token, T, log = () => {}, pages, actions, before = (
           try {
             let tab = pages.get(key);
             if (!tab || pages.dead(tab)) {
+              const why = tab ? pages.why?.(tab) : null;
               if (tab) pages.close(tab);
-              if (action !== 'open') throw new Error(T('sys.browser.noPage'));
+              if (action !== 'open') throw new Error(why || T('sys.browser.noPage'));
               tab = await pages.create(key, who);
             }
             grab(tab);

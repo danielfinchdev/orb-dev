@@ -100,41 +100,53 @@ pub struct EventGate {
   dropped: u64,
   reported: Instant,
   title: Option<Instant>,
-  /// This second's events, all and of the console (counted as they arrive, admitted or not).
-  window: (Instant, u32, u32),
+  /// This second's events, all and of the console (counted as they arrive, admitted or not), and the bytes read.
+  window: (Instant, u32, u32, u64),
   flooded: bool,
 }
-/// A page past these in one second is flooding: its events reach Orb's UI thread before any filter (WebView2 delivers
-/// them there, big or not), so it is stopped at the source (browser.rs blanks it and tells the agent).
+/// A page past these in one second is flooding: WebView2 hands every event (and its whole JSON, read or not) to the
+/// agents' browser thread before any filter, so it is stopped at the source (browser.rs ends its renderer and tells the
+/// agent). Few but huge events count too: a page logging 2 MB strings sends some 80 a second, 160 MB.
 const FLOOD_ALL: u32 = 1000;
 const FLOOD_CONSOLE: u32 = 200;
+const FLOOD_BYTES: u64 = 16 * 1024 * 1024;
 const RATE: f64 = 100.0;
 const BURST: f64 = 200.0;
 
 impl EventGate {
   pub fn new(now: Instant) -> Self {
-    Self { tokens: BURST, at: now, dropped: 0, reported: now, title: None, window: (now, 0, 0), flooded: false }
+    Self { tokens: BURST, at: now, dropped: 0, reported: now, title: None, window: (now, 0, 0, 0), flooded: false }
   }
   /// True once, when the page starts flooding (see FLOOD_ALL, FLOOD_CONSOLE); call for every event that arrives.
   pub fn flooding(&mut self, method: &str, now: Instant) -> bool {
-    if now.duration_since(self.window.0) >= Duration::from_secs(1) {
-      self.window = (now, 0, 0);
-    }
+    self.roll(now);
     self.window.1 += 1;
     if matches!(method, "Runtime.consoleAPICalled" | "Runtime.exceptionThrown" | "Log.entryAdded") {
       self.window.2 += 1;
     }
-    if !self.flooded && (self.window.1 > FLOOD_ALL || self.window.2 > FLOOD_CONSOLE) {
+    self.check()
+  }
+  /// True once, when the bytes of the events read this second pass FLOOD_BYTES; call with each event's size.
+  pub fn flooding_bytes(&mut self, bytes: usize, now: Instant) -> bool {
+    self.roll(now);
+    self.window.3 += bytes as u64;
+    self.check()
+  }
+  fn roll(&mut self, now: Instant) {
+    if now.duration_since(self.window.0) >= Duration::from_secs(1) {
+      self.window = (now, 0, 0, 0);
+    }
+  }
+  fn check(&mut self) -> bool {
+    if !self.flooded && (self.window.1 > FLOOD_ALL || self.window.2 > FLOOD_CONSOLE || self.window.3 > FLOOD_BYTES) {
       self.flooded = true;
       return true;
     }
     false
   }
-  /// The page was blanked: it may be used again.
-  pub fn reset_flood(&mut self) {
-    self.flooded = false;
-    self.window.1 = 0;
-    self.window.2 = 0;
+  /// Stopped for flooding: nothing more of it is read.
+  pub fn flooded(&self) -> bool {
+    self.flooded
   }
   pub fn admit(&mut self, method: &str, now: Instant) -> bool {
     if method == "Page.screencastFrame" {
@@ -441,6 +453,15 @@ mod tests {
     assert!(!(0..FLOOD_CONSOLE).any(|i| f.flooding("Runtime.consoleAPICalled", t0 + Duration::from_millis(i as u64 * 10))), "200 spread over 2 s is not a flood");
     assert!(!(0..FLOOD_ALL).any(|_| f.flooding("Page.navigatedWithinDocument", t0 + Duration::from_secs(3))));
     assert!(f.flooding("Page.navigatedWithinDocument", t0 + Duration::from_secs(3)));
+    assert!(f.flooded());
+    // Few but huge: 2 MB console lines (the e2e page sends some 80 a second) flood by their bytes.
+    let mut f = EventGate::new(t0);
+    assert!(!(0..8).any(|i| f.flooding_bytes(2_000_000, t0 + Duration::from_millis(i * 10))));
+    assert!(f.flooding_bytes(2_000_000, t0 + Duration::from_millis(90)));
+    assert!(!f.flooding_bytes(2_000_000, t0 + Duration::from_millis(95)), "once");
+    let mut f = EventGate::new(t0);
+    assert!(!(0..40).any(|i| f.flooding_bytes(1_000_000, t0 + Duration::from_millis(i * 100))), "10 MB a second is not a flood");
+    assert!(!f.flooded());
     // A title at most every 250 ms.
     let mut g = EventGate::new(t0);
     assert!(g.admit("Orb.title", t0));

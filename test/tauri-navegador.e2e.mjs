@@ -23,7 +23,7 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import assert from 'node:assert/strict';
-import { spawn, execFileSync } from 'node:child_process';
+import { spawn, execFile, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 
@@ -190,12 +190,15 @@ try {
     seen = { procs: all.length ? all : procs, listening, windows: visibleWindows([...pids, app.pid]), devtoolsFile: fs.existsSync(path.join(agentsDir, 'DevToolsActivePort')) };
   })().catch((error) => { seen = { error: error.message }; });
   // While the flooding page is open: Orb's window keeps answering, and the memory of Orb.exe is watched.
-  let slowest = 0; let peakMB = 0;
+  // Measured without blocking this script's event loop (a synchronous PowerShell call would make a call look slow).
+  let slowest = 0; let peakMB = 0; const times = [];
   const floodWatch = setInterval(async () => {
-    const t0 = Date.now();
+    const t0 = performance.now();
     try { await call('app.state', {}); } catch { /* closing */ }
-    slowest = Math.max(slowest, Date.now() - t0);
-    try { peakMB = Math.max(peakMB, Number(ps(`(Get-Process -Id ${app.pid}).PrivateMemorySize64`).trim()) / 1048576); } catch { /* gone */ }
+    const ms = Math.round(performance.now() - t0); times.push(ms); slowest = Math.max(slowest, ms);
+  }, 250);
+  const memWatch = setInterval(() => {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `(Get-Process -Id ${app.pid}).PrivateMemorySize64`], (error, out) => { if (!error) peakMB = Math.max(peakMB, Number(out.trim()) / 1048576); });
   }, 1000);
   let trapWindows = [];
   const trapWatch = process.argv.includes('--trampa') ? setInterval(() => { try { const pids = asList(agentProcesses()).map((p) => p.ProcessId); trapWindows.push(...visibleWindows([...pids, app.pid]).filter((w) => !/Tao Thread Event Target/.test(w))); } catch { /* none */ } }, 700) : null;
@@ -203,7 +206,7 @@ try {
   const outFile = path.join(project, 'navegador-guion.json');
   const out = JSON.parse(await until(() => fs.existsSync(outFile) && fs.readFileSync(outFile, 'utf8'), 'el guion del agente', 240000, 500));
   await watcher;
-  clearInterval(floodWatch); if (trapWatch) clearInterval(trapWatch);
+  clearInterval(floodWatch); clearInterval(memWatch); if (trapWatch) clearInterval(trapWatch);
   const at = (i) => String(out[i] ?? '');
   fs.writeFileSync(path.join(tmp, 'guion-respuestas.json'), JSON.stringify(out, null, 1));
 
@@ -258,8 +261,10 @@ try {
     // Stopped by Orb (blanked, events dropped or cut) or closed by the engine because it stopped answering: either way gone.
     assert.match(`${at(38)}
 ${at(40)}`, /stopped this page|dropped \d+ events|no leído|no responde y se ha cerrado/, `${at(38)} | ${at(40)}`.slice(0, 400));
-    console.error(`inundación: app.state máx ${slowest} ms, memoria privada máx de Orb.exe ${Math.round(peakMB)} MB`);
-    assert.ok(slowest < 3000, `app.state tardó ${slowest} ms`);
+    const sorted = [...times].sort((a, b) => a - b); const p = (q) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))] ?? 0;
+    console.error(`app.state durante el guion (${times.length} llamadas): p50 ${p(0.5)} ms, p95 ${p(0.95)} ms, máx ${slowest} ms; memoria privada máx de Orb.exe ${Math.round(peakMB)} MB`);
+    assert.ok(slowest < 1000, `app.state tardó ${slowest} ms`);
+    assert.ok(p(0.95) < 200, `app.state p95 ${p(0.95)} ms`);
     assert.ok(peakMB < 1500, `memoria privada de Orb.exe: ${Math.round(peakMB)} MB`);
   });
   if (process.argv.includes('--trampa')) {

@@ -14,6 +14,7 @@ mod power;
 mod protocol;
 mod secrets;
 mod tools;
+mod trace;
 mod webview;
 mod window;
 
@@ -290,6 +291,7 @@ pub fn run() {
         None => app.path().app_local_data_dir()?.join("navegador-agente"),
       };
       browser::init(&handle, agents_data);
+      trace::watch_ui(&handle);
       let e2e = window::e2e(separate.is_some());
       // The little window of the agents' browser shares Orb's window's WebView2 environment (same folder and arguments).
       pip::init(&handle, webview_data.clone(), protocol::browser_args(e2e.cdp_port));

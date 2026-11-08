@@ -16,8 +16,12 @@
 //     far off screen and disabled, so a select's list or a date picker opens where nobody sees it; the clipboard is
 //     never written by a page (pastejacking), and navigator.share and WebAuthn are not there (a script on every
 //     document, before the page's own);
-//   - a page cannot flood Orb: its events are counted (browser_rules::EventGate), read only when small, cut to what
-//     the engine's driver reads (browser_rules::shrink_event), and the queue to the engine is bounded (engine.notify);
+//   - a page cannot flood Orb: every page lives on a thread of its own («orb-agent-browser», an STA with its own message
+//     loop), never on Orb's UI thread, so whatever WebView2 delivers there (each DevTools event with its whole JSON,
+//     read or not) never delays Orb's window; its events are counted (browser_rules::EventGate), read only when small,
+//     cut to what the engine's driver reads (browser_rules::shrink_event), and the queue to the engine is bounded
+//     (engine.notify); a page past the flood limits (events, console lines or bytes a second) is closed at once (its
+//     renderer process goes with it) and the agent is told;
 //   - the browser process gone (a crash, Windows short of memory): its pages are closed and the environment made
 //     again with the next page; a page that never finishes opening frees its place after OPEN_TIMEOUT.
 // The environment (its browser process, some 300 MB) exists only while a page is open: the engine closes idle pages after
@@ -41,19 +45,17 @@ pub fn init(app: &AppHandle, data_dir: PathBuf) {
 
 type Reply = Result<Value, String>;
 
-/// Runs `f` on the main thread (WebView2 lives there) and waits for what it hands to its callback.
-async fn on_main<F>(app: &AppHandle, timeout: Duration, f: F) -> Reply
+/// Runs `f` on the agents' browser thread (its pages live there) and waits for what it hands to its callback.
+async fn on_thread<F>(timeout: Duration, f: F) -> Reply
 where
   F: FnOnce(Box<dyn FnOnce(Reply) + Send>) + Send + 'static,
 {
   let (tx, rx) = tokio::sync::oneshot::channel::<Reply>();
-  app
-    .run_on_main_thread(move || {
-      f(Box::new(move |r| {
-        let _ = tx.send(r);
-      }))
-    })
-    .map_err(|e| e.to_string())?;
+  imp::post(Box::new(move || {
+    f(Box::new(move |r| {
+      let _ = tx.send(r);
+    }))
+  }))?;
   match tokio::time::timeout(timeout, rx).await {
     Ok(Ok(r)) => r,
     Ok(Err(_)) => Err("navegador: sin respuesta".into()),
@@ -62,6 +64,17 @@ where
 }
 
 pub async fn handle(app: &AppHandle, req: BrowserRequest) -> Reply {
+  if !crate::trace::on() {
+    return handle_inner(app, req).await;
+  }
+  let t0 = std::time::Instant::now();
+  let what = format!("{req:?}").chars().take(60).collect::<String>();
+  let r = handle_inner(app, req).await;
+  crate::trace::mark("browser.request", json!({ "req": what, "ms": t0.elapsed().as_millis() as u64, "ok": r.is_ok() }));
+  r
+}
+
+async fn handle_inner(app: &AppHandle, req: BrowserRequest) -> Reply {
   match req {
     BrowserRequest::Open => {
       let st = app.state::<Agents>();
@@ -71,20 +84,21 @@ pub async fn handle(app: &AppHandle, req: BrowserRequest) -> Reply {
       let emit: Emit = std::sync::Arc::new(move |method: &str, params: Value| {
         engine.notify(&json!({ "type": "browserEvent", "page": id, "method": method, "params": params }));
       });
-      let handle = app.clone();
-      on_main(app, Duration::from_secs(40), move |done| imp::open(handle, id, dir, emit, done)).await?;
+      on_thread(Duration::from_secs(40), move |done| imp::open(id, dir, emit, done)).await?;
       Ok(json!({ "page": id }))
     }
-    BrowserRequest::Close(id) => on_main(app, Duration::from_secs(10), move |done| done(imp::close(id).map(|_| json!(true)))).await,
-    BrowserRequest::Cdp { page, method, params } => on_main(app, Duration::from_secs(45), move |done| imp::cdp(page, method, params, done)).await,
+    BrowserRequest::Close(id) => on_thread(Duration::from_secs(10), move |done| done(imp::close(id).map(|_| json!(true)))).await,
+    BrowserRequest::Cdp { page, method, params } => on_thread(Duration::from_secs(45), move |done| imp::cdp(page, method, params, done)).await,
     other => crate::pip::handle(app, other).await,
   }
 }
 
 /// The engine went (a crash or a restart): its pages go with it.
-pub fn close_all(app: &AppHandle) {
-  let _ = app.run_on_main_thread(imp::close_all);
+pub fn close_all() {
+  let _ = imp::post(Box::new(imp::close_all));
 }
+
+type Job = Box<dyn FnOnce() + Send>;
 
 pub type Emit = std::sync::Arc<dyn Fn(&str, Value) + Send + Sync>;
 
@@ -103,8 +117,75 @@ mod imp {
   };
   use windows::core::{w, Interface, HSTRING, PCWSTR, PWSTR};
   use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
+  use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
   use windows::Win32::System::LibraryLoader::GetModuleHandleW;
   use windows::Win32::UI::WindowsAndMessaging::*;
+
+  // ---- The agents' browser thread: an STA with its own message loop, where the environment and every page are made
+  // and used (WebView2 objects belong to the thread that made them). Work comes as jobs over a channel, woken by a
+  // message to a message-only window (a window's messages are delivered even inside a modal loop, a thread's are not).
+  const WM_RUN: u32 = WM_APP + 1;
+  struct Line {
+    jobs: std::sync::mpsc::Sender<Job>,
+    hwnd: isize,
+  }
+  static LINE: std::sync::OnceLock<Result<Line, String>> = std::sync::OnceLock::new();
+  thread_local! {
+    static JOBS: RefCell<Option<std::sync::mpsc::Receiver<Job>>> = const { RefCell::new(None) };
+  }
+
+  unsafe extern "system" fn line_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    if msg == WM_RUN {
+      while let Some(job) = JOBS.with(|j| j.borrow().as_ref().and_then(|r| r.try_recv().ok())) {
+        job();
+      }
+      return LRESULT(0);
+    }
+    unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
+  }
+
+  fn start_line() -> Result<Line, String> {
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel::<Result<isize, String>>();
+    let (jobs, rx) = std::sync::mpsc::channel::<Job>();
+    std::thread::Builder::new()
+      .name("orb-agent-browser".into())
+      .spawn(move || unsafe {
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        JOBS.with(|j| *j.borrow_mut() = Some(rx));
+        let made = (|| -> windows::core::Result<HWND> {
+          let instance = GetModuleHandleW(None)?;
+          let class = w!("OrbAgentBrowserLine");
+          let wc = WNDCLASSW { lpfnWndProc: Some(line_proc), hInstance: instance.into(), lpszClassName: class, ..Default::default() };
+          RegisterClassW(&wc);
+          CreateWindowExW(WINDOW_EX_STYLE(0), class, w!("Orb"), WINDOW_STYLE(0), 0, 0, 0, 0, Some(HWND_MESSAGE), None, Some(instance.into()), None)
+        })();
+        match made {
+          Ok(h) => {
+            let _ = ready_tx.send(Ok(h.0 as isize));
+          }
+          Err(e) => {
+            let _ = ready_tx.send(Err(e.to_string()));
+            return;
+          }
+        }
+        let mut msg = MSG::default();
+        while GetMessageW(&mut msg, None, 0, 0).as_bool() {
+          let _ = TranslateMessage(&msg);
+          DispatchMessageW(&msg);
+        }
+      })
+      .map_err(|e| e.to_string())?;
+    let hwnd = ready_rx.recv().map_err(|_| "navegador: el hilo no arrancó".to_string())??;
+    Ok(Line { jobs, hwnd })
+  }
+
+  /// Runs `job` on the agents' browser thread (started the first time).
+  pub fn post(job: Job) -> Result<(), String> {
+    let line = LINE.get_or_init(start_line).as_ref().map_err(|e| e.clone())?;
+    line.jobs.send(job).map_err(|_| "navegador: el hilo terminó".to_string())?;
+    // SAFETY: a window of ours that lives as long as the process.
+    unsafe { PostMessageW(Some(HWND(line.hwnd as *mut _)), WM_RUN, WPARAM(0), LPARAM(0)) }.map_err(|e| e.to_string())
+  }
 
   // The view the engine emulates is 1280×800 CSS pixels (Emulation.setDeviceMetricsOverride); the hidden window is as
   // big in physical pixels.
@@ -139,30 +220,45 @@ mod imp {
     _receivers: Vec<ICoreWebView2DevToolsProtocolEventReceiver>,
   }
 
-  /// A page's events through its gate (browser_rules::EventGate): admitted or counted, the count said once a second.
+  /// A page's events through its gate (browser_rules::EventGate): admitted or counted, the count said once a second;
+  /// a flooding page is stopped (stop_flooding) and nothing more of it is read.
   #[derive(Clone)]
   struct Gated {
+    id: u32,
     emit: Emit,
     gate: Rc<RefCell<browser_rules::EventGate>>,
-    core: Rc<RefCell<Option<ICoreWebView2>>>,
   }
   impl Gated {
     fn admit(&self, method: &str) -> bool {
       let now = std::time::Instant::now();
       let mut g = self.gate.borrow_mut();
+      if g.flooded() {
+        return false;
+      }
       if g.flooding(method, now) {
-        // Stopped at the source: the page goes blank (its scripts end) and the agent learns why.
-        if let Some(core) = self.core.borrow().as_ref() {
-          let _ = unsafe { core.Navigate(w!("about:blank")) };
-        }
-        (self.emit)("Orb.blocked", json!({ "kind": "flood" }));
-        g.reset_flood();
+        drop(g);
+        self.flood(method);
         return false;
       }
       if let Some(n) = g.report(now) {
         (self.emit)("Orb.dropped", json!({ "count": n }));
       }
       g.admit(method, now)
+    }
+    /// An event of `bytes` was read: false (and the page stopped) when that makes it a flood.
+    fn read(&self, method: &str, bytes: usize) -> bool {
+      let flood = self.gate.borrow_mut().flooding_bytes(bytes, std::time::Instant::now());
+      if flood {
+        self.flood(method);
+      }
+      !flood
+    }
+    fn flood(&self, method: &str) {
+      crate::trace::mark("browser.flood", json!({ "page": self.id, "method": method }));
+      (self.emit)("Orb.blocked", json!({ "kind": "flood" }));
+      let id = self.id;
+      // After this event's handler, not inside it.
+      let _ = post(Box::new(move || stop_flooding(id)));
     }
     fn send(&self, method: &str, params: Value) {
       if self.admit(method) {
@@ -292,7 +388,7 @@ mod imp {
     }
   }
 
-  pub fn open(app: AppHandle, id: u32, dir: PathBuf, emit: Emit, done: Box<dyn FnOnce(Reply) + Send>) {
+  pub fn open(id: u32, dir: PathBuf, emit: Emit, done: Box<dyn FnOnce(Reply) + Send>) {
     let busy = PAGES.with(|p| p.borrow().len()) + OPENING.with(|o| *o.borrow());
     if busy >= browser_rules::MAX_PAGES {
       return done(Err("demasiadas páginas abiertas".into()));
@@ -310,11 +406,11 @@ mod imp {
     // Never answered (the environment or the view hangs): its place is freed; a page that arrives later is closed.
     std::thread::spawn(move || {
       std::thread::sleep(OPEN_TIMEOUT);
-      let _ = app.run_on_main_thread(move || {
+      let _ = post(Box::new(move || {
         if let Some(f) = PENDING.with(|p| p.borrow_mut().remove(&id)) {
           f.call(Err("navegador: tiempo agotado al abrir".into()));
         }
-      });
+      }));
     });
     with_env(
       dir,
@@ -339,7 +435,7 @@ mod imp {
             }
             return Ok(());
           }
-          let made = hr.map_err(|e| e.to_string()).and_then(|_| controller.ok_or_else(|| "sin vista".to_string())).and_then(|c| unsafe { setup(hwnd, c, emit).map_err(|e| e.to_string()) });
+          let made = hr.map_err(|e| e.to_string()).and_then(|_| controller.ok_or_else(|| "sin vista".to_string())).and_then(|c| unsafe { setup(id, hwnd, c, emit).map_err(|e| e.to_string()) });
           match made {
             Ok(page) => {
               PAGES.with(|p| p.borrow_mut().insert(id, page));
@@ -386,14 +482,13 @@ mod imp {
   }
 
   /// The page's settings, limits and events (see the top of this file).
-  unsafe fn setup(hwnd: HWND, controller: ICoreWebView2Controller, page_emit: Emit) -> windows::core::Result<Page> {
-    let gated = Gated { emit: page_emit.clone(), gate: Rc::new(RefCell::new(browser_rules::EventGate::new(std::time::Instant::now()))), core: Rc::new(RefCell::new(None)) };
+  unsafe fn setup(id: u32, hwnd: HWND, controller: ICoreWebView2Controller, page_emit: Emit) -> windows::core::Result<Page> {
+    let gated = Gated { id, emit: page_emit.clone(), gate: Rc::new(RefCell::new(browser_rules::EventGate::new(std::time::Instant::now()))) };
     unsafe {
       controller.SetBounds(RECT { left: 0, top: 0, right: WIDTH, bottom: HEIGHT })?;
       // Drawn although its window is never shown: captures and the little window's pictures need it.
       controller.SetIsVisible(true)?;
       let core = controller.CoreWebView2()?;
-      *gated.core.borrow_mut() = Some(core.clone());
       let s = core.Settings()?;
       s.SetIsWebMessageEnabled(false)?;
       s.SetAreHostObjectsAllowed(false)?;
@@ -565,13 +660,20 @@ mod imp {
         receiver.add_DevToolsProtocolEventReceived(
           &DevToolsProtocolEventReceivedEventHandler::create(Box::new(move |_, args| {
             let Some(a) = args else { return Ok(()) };
+            let t0 = std::time::Instant::now();
             // Counted before it is even read; read and cut only when small enough.
             if !e.admit(name) {
+              crate::trace::tally("browser.event.dropped.us", t0.elapsed().as_micros() as u64);
               return Ok(());
             }
-            if let Some(params) = browser_rules::shrink_event(name, &uri(|p| a.ParameterObjectAsJson(p))) {
+            let json = uri(|p| a.ParameterObjectAsJson(p));
+            if !e.read(name, json.len()) {
+              return Ok(());
+            }
+            if let Some(params) = browser_rules::shrink_event(name, &json) {
               (e.emit)(name, params);
             }
+            crate::trace::tally("browser.event.read.us", t0.elapsed().as_micros() as u64);
             Ok(())
           })),
           &mut token,
@@ -619,13 +721,28 @@ mod imp {
 
   pub fn close(id: u32) -> Result<(), String> {
     if let Some(page) = PAGES.with(|p| p.borrow_mut().remove(&id)) {
+      let t0 = std::time::Instant::now();
       unsafe {
         let _ = page.controller.Close();
         let _ = DestroyWindow(page.hwnd);
       }
+      crate::trace::mark("browser.close", json!({ "page": id, "ms": t0.elapsed().as_millis() as u64 }));
     }
     release_env_if_idle();
     Ok(())
+  }
+
+  /// A flooding page is closed at once on this thread (its view and window go, and with its only frame its renderer
+  /// process: Chromium ends a busy renderer rather than wait for its script), and the engine hears it as a crash, so the
+  /// agent's next action opens a fresh page. Ending the renderer by its process id was tried first
+  /// (ICoreWebView2Environment13::GetProcessExtendedInfos to find the main frame's process): on WebView2 runtime
+  /// 157 that call made Orb exit during a flood, so it is not used.
+  fn stop_flooding(id: u32) {
+    let Some(emit) = PAGES.with(|p| p.borrow().get(&id).map(|pg| pg.emit.clone())) else { return };
+    let t0 = std::time::Instant::now();
+    let _ = close(id);
+    crate::trace::mark("browser.flood.closed", json!({ "page": id, "ms": t0.elapsed().as_millis() as u64 }));
+    emit("Orb.crashed", json!({}));
   }
 
   pub fn close_all() {
@@ -660,7 +777,11 @@ mod imp {
 #[cfg(not(windows))]
 mod imp {
   use super::*;
-  pub fn open(_: AppHandle, _: u32, _: PathBuf, _: Emit, done: Box<dyn FnOnce(Reply) + Send>) {
+  pub fn post(job: Job) -> Result<(), String> {
+    job();
+    Ok(())
+  }
+  pub fn open(_: u32, _: PathBuf, _: Emit, done: Box<dyn FnOnce(Reply) + Send>) {
     done(Err("solo en Windows".into()))
   }
   pub fn close(_: u32) -> Result<(), String> {

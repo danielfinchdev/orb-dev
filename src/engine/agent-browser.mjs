@@ -55,7 +55,7 @@ export function createCdpBrowser({ windows, language = () => 'es', log = () => {
 
   const served = servePipe({
     token, T, log, actions,
-    pages: { get: (key) => tabs.get(key), dead: (tab) => Boolean(tab.crashed || tab.page?.gone), create: (key, who) => newTab(key, who), close: (tab) => { closeTab(tab); } },
+    pages: { get: (key) => tabs.get(key), dead: (tab) => Boolean(tab.crashed || tab.page?.gone), why: (tab) => tab.stopped, create: (key, who) => newTab(key, who), close: (tab) => { closeTab(tab); } },
     grabbed: (tab) => { tab.dismissed = false; }, // a new turn shows the little window again
     before(tab, action, args) { tab.used = Date.now(); tab.action = DESCRIBE[action]?.(args) ?? action; hooks.activity(tab, action); },
     // The agent's turn ended: the page waits for the conversation's next turn and then goes.

@@ -334,10 +334,12 @@ impl Engine {
   }
 
   fn emit_event(&self, event: &str, payload: Value) {
+    crate::trace::tally("ui.emit", 0);
     let _ = self.app.emit_to("main", "engine:event", json!({ "event": event, "payload": payload }));
   }
 
   fn on_line(self: &Arc<Self>, line: &str) {
+    crate::trace::tally("engine.line.bytes", line.len() as u64);
     match protocol::decode(line) {
       Incoming::Reply { id, result } => {
         if let Some(tx) = self.pending.lock().unwrap().remove(&id) {
@@ -392,7 +394,7 @@ impl Engine {
       *proc = None;
     }
     // The agents' browser pages and its little window belonged to the engine that went.
-    crate::browser::close_all(&self.app);
+    crate::browser::close_all();
     if let Some(w) = self.app.get_webview_window("pip") {
       let _ = w.hide();
     }
